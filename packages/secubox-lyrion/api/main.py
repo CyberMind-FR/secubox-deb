@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import urllib.request
@@ -216,6 +217,21 @@ def player_action(pid: str, verbe: str) -> Dict[str, Any]:
             detail=f"action inconnue: {verbe} (attendu: {', '.join(_ACTIONS_SIMPLES)})")
     _lms_rpc(pid, cmd)
     return {"ok": True, "player": pid, "action": verbe}
+
+
+@app.post("/player/{pid}/play-url")
+def player_play_url(pid: str, payload: Dict[str, Any] = Body(default=None)) -> Dict[str, Any]:
+    """CAST — joue une URL (flux) sur un lecteur : le Hall relaie SON audio (radio,
+    diffusion du parc) dans Lyrion. Corps: {"url": "http(s)://…"}. LMS lit les
+    flux directs (mp3/aac/ogg/flac), les radios icecast/shoutcast et les listes
+    m3u/pls. L'URL part en VALEUR JSON vers LMS (jamais un shell) — pas
+    d'injection ; on valide seulement le schéma http(s)."""
+    pid = _exige_pid(pid)
+    url = str((payload or {}).get("url") or "").strip()
+    if not url or not re.match(r"^https?://", url, re.I):
+        raise HTTPException(status_code=400, detail='corps attendu: {"url": "http(s)://…"}')
+    _lms_rpc(pid, ["playlist", "play", url])
+    return {"ok": True, "player": pid, "url": url}
 
 
 @app.post("/player/{pid}/power")

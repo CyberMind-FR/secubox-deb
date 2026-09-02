@@ -1,3 +1,119 @@
+## 2026-09-01 — Lyrion : cardlet RESTAURÉE mais LAN-only (correction, ref #1247)
+
+Correction de tir : le retrait complet de la cardlet était trop large — le
+service LMS + admin devaient rester (ils n'ont jamais été touchés) et la carte
+devait juste être **cachée aux clients WAN**, pas supprimée. Cardlet restaurée
+(version sans SBX-Web) et gatée LAN :
+
+- `index.html` : entrée `{id:"lyrion", …, lan:true}` restaurée ; `<html>` porte
+  `non-lan` par défaut (fail-closed) ; CSS `.non-lan .fcard[data-lan]{display:none}` ;
+  le filtre ajoute `data-lan="1"` ; marqueur `<!--SBX_LAN_FLAG-->` dans le head.
+- `hall.vhost.conf` : relais `location /api/v1/lyrion/` restauré mais **gaté
+  `if ($lan_client = 0) return 403`** ; token CSP `lyrion.gk2` restauré (3 lignes) ;
+  `sub_filter` (portée serveur) remplace SBX_LAN_FLAG par un script qui retire
+  `non-lan` quand `$lan_client=1` (map de secubox-lan-geo.conf, secubox-hub).
+- `cardlets/lyrion.html` : restauré depuis 22826a3c3 (SANS SBX-Web).
+- Le lecteur web SBX-Web (cardlet + backend secubox-lyrion 1.6.7) reste
+  décommissionné — ça, c'était bien voulu.
+
+## 2026-09-01 — Lyrion : cardlet retirée du Hall + lecteur web décommissionné (ref #1247)
+
+Puis (2e passe) **retrait complet de la cardlet Lyrion du Hall** : entrée
+`{id:"lyrion"}` du registre `index.html`, fichier `cardlets/lyrion.html`, relais
+nginx orphelin `location /api/v1/lyrion/` et token CSP `lyrion.gk2.secubox.in`
+(3 lignes frame-src). Le paquet/vhost `secubox-lyrion` lui-même n'est pas touché.
+
+DPI en /mega : page classique sans slicer (ref #1360) — `cardlets/dpi.html`
+détecte `mega=1`, empile les 4 sections dans une page qui défile (plus de
+slicebar ni rotation), caps de lignes relevés.
+
+Décommissionnement de la brique lecteur web SBX-Web, cardlet **et** backend
+(la partie 🎧 « Écouter ici »). Contrôle des lecteurs Squeezebox/Squeezelite et
+cast 📡 conservés. Branche `feature/hall-cardlet-ux`.
+
+- **Cardlet** `secubox-webos/www/hall/cardlets/lyrion.html` : suppression du
+  bouton 🎧 `#listen`, de `<audio id="wa">`, du CSS `.tete .ecoute`, du helper
+  `webIdx()`, du flux `/lyrion-stream.mp3` et des branches d'annonce/commande
+  propres à l'écoute web (bus média, `sbx:'cmd'`).
+- **Hall nginx** `secubox-webos/nginx/hall.vhost.conf` : retrait du `location =
+  /lyrion-stream.mp3` (relais du flux LMS natif).
+- **secubox-lyrion** : suppression de l'unité `sbx-lyrion-webplayer.service`, du
+  conffile `lyrion-webplayer.env`, de la dépendance `squeezelite` (control),
+  de leur install (rules). Le `postinst` coupe/désinstalle l'unité résiduelle
+  sur les box déjà déployées. Changelog `1.6.7-1~bookworm1`. Backend LMS de
+  contrôle (`api/main.py`, slimproto 3483) inchangé.
+- Idée mémoire `idee-cardlet-squeezeradio-lyrion` : sans objet pour cette brique.
+
+## 2026-08-31 — DPI vivant (sbxdpi), sweep « spicy », Lyrion, Agenda NC, notifs profil
+
+Grosse session Hall/parc. Tout déployé live sur gk2 (root@192.168.1.200).
+
+### DPI VIVANT — nDPId émancipé en Go (fin du mode démo)
+- **nDPI 5.x** compilé des sources amont (`utoni/nDPId`, `BUILD_NDPI=ON` — le
+  libndpi 4.2 du système était trop vieux). Paquet **`secubox-dpi-engine`**
+  (nDPId + nDPIsrvd, construit natif arm64 sur la box) : capture eth2 → nDPIsrvd.
+  Piège : nDPId/nDPIsrvd tombent par défaut sur l'utilisateur `nobody` → `-u/-g`.
+- **`sbxdpi`** : nouveau daemon Go dans `secubox-toolbox-ng` (0.3.x, `cmd/sbxdpi/`,
+  5 fichiers calqués sur sbx-sentinel). Dial du distributeur nDPIsrvd (cadrage
+  préfixe 5 chiffres = **longueur du corps**), filtrage go-level déclaratif
+  (`/etc/secubox/dpi/*.txt`, exemption 1ʳᵉ partie via haproxy-routes.json),
+  agrégation plafonnée, snapshot atomique **sur le SSD /data** (jamais l'eMMC),
+  API RO `/api/v1/dpi/*` sur `dpi-live.sock`. Relais nginx Hall → carte DPI
+  **vivante** (protocoles/apps/talkers/risques réels, débit dérivé). ⚠️
+  `aggregator.sock` = passerelle API maîtresse, PAS un socket DPI.
+- **Piège disque** : le build nDPId laisse `/opt/nDPId` ≈ 1,1 Go sur l'eMMC (15 Go)
+  → racine 100 % → SQLite des modules (metanews…) en « disk I/O error », cascade.
+  Nettoyé (2,2 Go libérés), 4 services relancés. Voir memory `dpi-live-sbxdpi`.
+
+### SWEEP « SPICY » + SLICERS
+- **Radio** (0.1.62) : skin spicy (filets dégradés, halos, badge direct, pilules
+  de slice « expanded », pop-in accentué).
+- **PeerTube** (webos) : barre à bullets 5 vues — Récentes / Populaires /
+  Catégories / **Chaînes** / Playlists — + pop-in au survol ; relais `/pt/`
+  étendu à `video-playlists`.
+- **MetaNews** (0.1.32) : slicer « double bullet » par section (🌍 Une + top
+  catégories de l'API `/categories`, filtre `?category=`).
+
+### NEXTCLOUD — onglet AGENDA (CalDAV)
+- `nc_super.agenda()` : PROPFIND des calendriers + REPORT calendar-query 30 j,
+  parsing iCalendar sans dépendance ; route `…/nextcloud/agenda`. Onglet
+  📅 Agenda dans la super-cardlet (lecture seule, prochains évènements).
+
+### LYRION — carte client + agent
+- Carte **Lyrion** (client Squeezebox/LMS) : now-playing, sélecteur de lecteur,
+  transport/volume/power via `secubox-lyrion` relayé `/api/v1/lyrion/`.
+- **Cast** (agent) : `POST /player/{id}/play-url` (LMS `playlist play`) — le Hall
+  diffuse SON audio (bouton 📡) vers la Squeezebox physique.
+- **Lecteur web** (« SBX-Web ») : squeezelite headless `-o null` = **vrai client
+  LMS** (MAC fixe) ; le navigateur écoute le flux LMS natif
+  `/stream.mp3?player=MAC` (abandon d'un premier essai ALSA loopback + ffmpeg +
+  icecast, trop fragile). Unité `sbx-lyrion-webplayer`. ⚠️ Dernier maillon
+  (cast→flux navigateur pour le player à MAC fixe) à finir — l'archi est prouvée.
+
+### NOTIFICATIONS / BUS MÉDIA
+- **Viewer sur le bus média** : la pastille du viewer ne s'évanouit plus au clic
+  (flux LOCAL `dockLocal`, `window.viewerCmd`) — reste en place tant qu'il joue.
+- **Notif du parc** : la bulle reste fixe tant que le curseur est dessus (15 s,
+  suspendu au survol).
+- **Diffusions dans le menu profil** : broadcasts gardés PAR PROFIL, listés au
+  survol (`who-diff`), + **badge** de non-vues sur l'avatar.
+- **Carte sans vhost = pseudo /mega** : DPI · Trafic et Surf & Viewer
+  s'agrandissent en leur propre cardlet (drapeau `noVhost` dans `svcDesc`) au
+  lieu d'un `https://undefined/` bloqué par la CSP.
+
+### Idées notées (memory) : cardlet SqueezeRadio/Lyrion émulateur, accès Zigbee.
+
+---
+
+## 2026-08-31 — Hall : bienvenue, libellés média, « double bullet » (webos)
+
+- **Bienvenue (premier abord)** : carte d'accueil au premier chargement du visiteur (`www/hall/index.html`) — thèse du Hall, **4 gestes** (ranger/épingler/voir/surfer), section **Explorer** (menu Services, survol/dynamisme, puces des cartes, aide ❓), encart **BiB** souverain. Vue une fois via drapeau `localStorage` par profil (`cleProfil('accueil-vu')`) ; ré-ouvrable par « 👋 Revoir l'accueil » du menu profil ; route vers l'Aide. Aucune animation d'entrée (elle se relançait en boucle et laissait l'overlay à opacity 0 — bug attrapé au rendu). Vérifié clair/nuit (Chromium).
+- **surfviewer** : les puces des 3 slices affichent un **émoji de source + un nom lisible** (▶️ YouTube · id, 📹 PeerTube · slug, 🎬 Vimeo, 👽 Reddit, 🐘, 🖼️/🎵/🎞️/📄…) au lieu des URLs brutes ; titre utilisé s'il existe.
+- **« Double bullet »** : barre de slices partagée `www/hall/slicebar.{css,js}` (puces rondes au repos, **pilule allongée** pour la slice active, auto=bleu/manuel=vert, pastille d'hôte cliquable). `cumul` aligné sur ce style. Prochaine passe : radio + podcaster (`/micro`).
+- **Aide dans le menu profil** (mégabarre) : « ❔ Aide du Hall » → vue Aide.
+- **Carte DPI « Trafic vivant »** (`cardlets/dpi.html`, FEATURED `dpi`) : slicée (🌐 Protocoles · 📱 Applications · 🗣️ Talkers · ⚠️ Risques) via la barre à bullets, KPIs (flux/débit/risques), style « spicy » (dégradé, pouls, barres animées). Données best-effort `/api/v1/dpi/*` + jeu de démo étiqueté (collecteur au repos ; endpoints hors origine Hall). À suivre : couche DPI du groupe Sécurité + rapport.
+- **Visite guidée + aides de cartes** : un **❓ par carte** ouvre une **bulle animée** (comportements **génériques** — aperçu vivant, ⠿ ranger / ★ favori, clic = ouvrir, puces cliquables — + **spécifiques** au service). La « Visite guidée » de la bienvenue enchaîne les cartes (allume le ❓, pose la bulle, avance auto/pause au survol/Suivant). Moteur projecteur `window.lanceVisite` conservé en repli (mégabarre/profil). Corrige « Suivant saute à la fin » (l'ancien parcours sautait les cibles absentes hors accueil).
+
 ## 2026-08-30 — Nextcloud Super Cardlet + mégabarre invité (webos 1.0.207)
 
 - **Nextcloud Super Cardlet** (perso, Hall) : `/cardlets/nextcloud-super.html` + `api/nc_super.py`. Onglets Fichiers (navigateur WebDAV), Activité, Partages ; jauge quota ; actions partager (lien public)/supprimer/téléverser. Via le broker `acces.py` — le mot de passe d'app reste dans la box. Routes `require_jwt` `/api/v1/webos/acces/nextcloud/{tableau,fichiers,partages,partager,supprimer,televerser}`. Dép. `python3-multipart`. FEATURED `nextcloud-super` (auth:true).

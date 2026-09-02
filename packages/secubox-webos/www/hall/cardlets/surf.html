@@ -15,6 +15,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Surf</title>
+<link rel="stylesheet" href="../spicy.css">
 <style>
   :root{ --fond:#0a0a0f; --carte:#14141c; --ink:#e8e6d9; --muted:#8a8a99;
          --ligne:#2a2a36; --cyan:#00d4ff; --violet:#6e40c9; }
@@ -143,7 +144,13 @@
   // MEME APLATISSEMENT QUE relais.py / MetaNews : '-' double, '.' en '-'. Une
   // seule regle partout, sinon les origines divergent et le proxy ne route plus.
   function surfOrigine(host) {
-    var plat = String(host || '').trim().toLowerCase().replace(/-/g, '--').replace(/\./g, '-');
+    var h = String(host || '').trim().toLowerCase().replace(/\.$/, '');
+    // .onion v3 (56 car base32) : `surf-<56>-onion` ferait 67 car > 63 (label
+    // DNS) → INnavigable. On droppe `.onion` et on marque par un `0` de tete
+    // (hors base32) → `surf-0<56>` = 62 car. Le relais route en Tor (egress).
+    var mo = h.match(/^([a-z2-7]{56})\.onion$/);
+    if (mo) return 'surf-0' + mo[1] + '.gk2.secubox.in';
+    var plat = h.replace(/-/g, '--').replace(/\./g, '-');
     return 'surf-' + plat + '.gk2.secubox.in';
   }
 
@@ -218,6 +225,8 @@
     var h = String(origine || '').toLowerCase();
     if (h.indexOf('surf-') !== 0 || h.indexOf('.gk2.secubox.in') < 0) return null;
     var plat = h.slice(5, h.indexOf('.gk2.secubox.in'));
+    var mo = plat.match(/^0([a-z2-7]{56})$/);
+    if (mo) return mo[1] + '.onion';
     return plat.replace(/--/g, '\x00').replace(/-/g, '.').replace(/\x00/g, '-');
   }
   // estMediaSurf : l'adresse REELLE (pas l'origine surf) pointe-t-elle un média
@@ -475,3 +484,10 @@
 </script>
 </body>
 </html>
+
+<script src="../aide.js"></script>
+<script>window.SBXAide&&SBXAide({root:document.body,zones:function(){return [
+  {el:document.querySelector('.barre'),label:'Barre — l’adresse à surfer À TRAVERS la box (pisteurs coupés)'},
+  {el:document.getElementById('vue'),label:'Page surfée — servie par le relais, en lecture sobre'},
+  {el:document.getElementById('stats'),label:'Coupé — pisteurs, pubs et cookies bloqués sur la page'}
+].filter(function(z){return z.el;});}});</script>

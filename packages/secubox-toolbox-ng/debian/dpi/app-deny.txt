@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: sbxdpi — DENY list (dpkg conffile, hot-reloaded)
+#
+# One entry per line. Matches an nDPI app ("TLS.Google"), master protocol
+# ("TLS"), category ("Web"), or hostname. Matched flows are dropped from the
+# DPI stats entirely (they still cross the wire — this is dashboard noise
+# reduction, NOT a firewall). Comments after '#'. Case-insensitive.
+#
+# Seeded with the usual link-local chatter that swamps a home/office LAN view.
+# An operator adds/removes lines live; sbxdpi reloads on mtime change.
+mdns
+llmnr
+dhcp
+dhcpv6
+ntp
+ssdp
+dns_over_https

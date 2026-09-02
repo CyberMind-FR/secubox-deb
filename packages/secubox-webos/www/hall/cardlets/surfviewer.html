@@ -19,6 +19,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Surf &amp; Viewer — rappel</title>
+<link rel="stylesheet" href="../slicebar.css">
+<link rel="stylesheet" href="../spicy.css">
 <style>
   :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
          --line-soft:#eef1f7; --cyan:#0784a8; --gold:#b7810a; --up:#0f9d54; --surf2:#f5f7fc; }
@@ -44,22 +46,28 @@
   form.paste button:hover{border-color:var(--cyan);color:var(--cyan)}
   .slices{display:flex;flex-direction:column;gap:6px;overflow-y:auto;scrollbar-width:none;flex:1;min-height:0}
   .slices::-webkit-scrollbar{display:none}
-  .slice{display:flex;flex-direction:column;gap:3px}
-  .slice.empty{display:none}
+  /* SLICÉ (#1352) : une seule slice à la fois, choisie par la barre à bullets du bas. */
+  .slice{display:none;flex-direction:column;gap:3px}
+  .slice.actif{display:flex}
   .slab{display:flex;align-items:center;gap:5px;font-size:.56rem;letter-spacing:.09em;text-transform:uppercase;
     color:var(--faint);font-weight:700}
   .slab .mut{color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0}
   .slab .c{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
-  .strip{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
+  /* EN LISTE (#1352) : un item par ligne, pleine largeur (au lieu d'une bande
+     horizontale à faire défiler). */
+  .strip{display:flex;flex-direction:column;gap:4px;overflow-y:auto;scrollbar-width:none}
   .strip::-webkit-scrollbar{display:none}
-  .chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);
+  .chip{display:flex;width:100%;align-items:center;gap:0;border:1px solid var(--line);
     border-radius:8px;overflow:hidden;background:var(--surf2)}
-  .chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.68rem;
-    padding:4px 8px;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip button.act{flex:1;min-width:0;text-align:left}
+  .chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.72rem;
+    padding:5px 9px;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chip button.act:hover{color:var(--cyan)}
   .chip .mini{padding:4px 6px;border-left:1px solid var(--line);color:var(--faint);font-size:.66rem}
   .chip .mini:hover{color:var(--gold)}
   .chip .cnt{font-variant-numeric:tabular-nums;font-weight:700;color:var(--cyan)}
+  .chip .src{font-size:.78rem;line-height:1;margin-right:1px;vertical-align:-1px}
+  .chip .det{color:var(--faint);font-weight:400;margin-left:3px}
   .empty-all{color:var(--faint);font-size:.72rem;text-align:center;padding:14px 4px}
   .pied{margin-top:auto;display:flex;align-items:center;gap:6px;padding-top:.3rem;border-top:1px solid var(--line);
     font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -75,10 +83,12 @@
     <div class="slice" id="s-fav"><div class="slab">⭐ Favoris <span class="mut">· se partage &amp; se répète</span><span class="c" id="c-fav"></span></div><div class="strip" id="st-fav"></div></div>
     <div class="slice" id="s-diff"><div class="slab">📡 Propositions <span class="mut">· se propose &amp; se cumule</span><span class="c" id="c-diff"></span></div><div class="strip" id="st-diff"></div></div>
     <div class="slice" id="s-hist"><div class="slab">🔗 Liens collés<span class="c" id="c-hist"></span></div><div class="strip" id="st-hist"></div></div>
+    <div class="slice" id="s-global"><div class="slab">🌍 Global <span class="mut">· diffusé au parc, ♥ en tops</span><span class="c" id="c-global"></span></div><div class="strip" id="st-global"></div></div>
     <div class="empty-all" id="vide" hidden>Rien encore — collez un lien, mettez en favori (⭐) ou proposez au parc (📡).</div>
   </div>
-  <div class="pied"><span class="grow">rappel du viewer · même origine</span><span>SBXOS</span></div>
+  <div id="slbar" class="slbar"></div>
 </div>
+<script src="../slicebar.js"></script>
 
 <script>
 (function(){
@@ -89,8 +99,49 @@
   function post(m){ if(parent!==window){ try{ parent.postMessage(m,'*'); }catch(e){} } }
   function bref(u){ return String(u).replace(/^https?:\/\//,'').replace(/^www\./,''); }
 
+  // Un lien média se lit par son NOM, pas par son URL. À défaut de titre (les
+  // favoris et l'historique n'en gardent pas), on compose un libellé humain :
+  // un émoji de SOURCE + le service + un identifiant court (id vidéo, slug).
+  function hote(u){ try{ return new URL(/^https?:\/\//i.test(u)?u:'https://'+u).host.replace(/^www\./,''); }catch(e){ return bref(u).split('/')[0]; } }
+  function source(u){
+    var h=hote(u);
+    if(/youtube|youtu\.be/.test(h)) return {e:'▶️', s:'YouTube'};
+    if(/peertube|\.tube$/.test(h))  return {e:'📹', s:'PeerTube'};
+    if(/vimeo/.test(h))             return {e:'🎬', s:'Vimeo'};
+    if(/twitch/.test(h))            return {e:'🟣', s:'Twitch'};
+    if(/reddit/.test(h))            return {e:'👽', s:'Reddit'};
+    if(/soundcloud|bandcamp/.test(h)) return {e:'🎧', s:h.split('.')[0]};
+    if(/(^|\.)x\.com$|twitter|nitter/.test(h)) return {e:'🐦', s:'X'};
+    if(/mastodon|social\./.test(h)) return {e:'🐘', s:'Mastodon'};
+    if(/\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(u)) return {e:'🖼️', s:'Image'};
+    if(/\.(mp3|ogg|flac|wav|m4a|aac)(\?|$)/i.test(u))    return {e:'🎵', s:'Audio'};
+    if(/\.(mp4|webm|mkv|mov|m3u8)(\?|$)/i.test(u))       return {e:'🎞️', s:'Vidéo'};
+    if(/\.pdf(\?|$)/i.test(u))      return {e:'📄', s:'PDF'};
+    return {e:'🔗', s:h};
+  }
+  function ident(u){
+    try{
+      var url=new URL(/^https?:\/\//i.test(u)?u:'https://'+u), h=url.host.replace(/^www\./,'');
+      if(/youtube|youtu\.be/.test(h)){
+        var v=url.searchParams.get('v') || (h.indexOf('youtu.be')>=0?url.pathname.slice(1):'') ||
+              ((url.pathname.match(/\/(?:embed|shorts|v)\/([^/?#]+)/)||[])[1]||'');
+        return v?v.slice(0,11):'';
+      }
+      var seg=url.pathname.split('/').filter(Boolean).pop()||'';
+      seg=seg.replace(/\.[a-z0-9]{1,5}$/i,'').replace(/[-_]+/g,' ');
+      return seg.slice(0,22);
+    }catch(e){ return ''; }
+  }
+  // Libellé riche (émoji + nom), échappé — à insérer en innerHTML.
+  function joli(u, titre){
+    if(titre && titre.trim() && !/^https?:\/\//i.test(titre.trim()))
+      return esc(titre.trim().slice(0,42));
+    var s=source(u), id=ident(u);
+    return '<span class="src">'+s.e+'</span>'+esc(s.s)+(id?' <span class="det">'+esc(id)+'</span>':'');
+  }
+
   function chip(u, titre, act, extra){
-    var lbl=esc((titre||bref(u)).slice(0,40));
+    var lbl=joli(u, titre);
     var main='<button class="act" type="button" data-u="'+esc(u)+'" data-titre="'+esc(titre||'')+'" data-act="'+act+'" title="'+esc(titre||u)+'">'+lbl+'</button>';
     return '<span class="chip">'+main+(extra||'')+'</span>';
   }
@@ -108,7 +159,7 @@
     // 📡 Propositions : re-proposer (cumule) — badge ×N.
     el('st-diff').innerHTML = diff.map(function(x){
       var n=x.n||1, badge=n>1?' <span class="cnt">×'+n+'</span>':'';
-      return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×)">'+esc((x.titre||bref(x.u)).slice(0,36))+badge+'</button></span>';
+      return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×)">'+joli(x.u,x.titre)+badge+'</button></span>';
     }).join('');
     // 🔗 Liens collés : re-vu.
     el('st-hist').innerHTML = hist.map(function(x){ return chip(x.u, null, 'view', ''); }).join('');
@@ -133,6 +184,12 @@
   // (sinon « le lien ne fait rien »). Les liens LOCAUX (/api/…, /media/…) sont
   // résolus côté Hall par viewerVoir — plus de https://<chemin> mort.
   el('slices').addEventListener('click', function(e){
+    // ♥ GLOBAL (#1360) : un like sur un broadcast du parc (historique partagé).
+    var lk=e.target.closest('[data-like]');
+    if(lk){ var lu=lk.getAttribute('data-like');
+      fetch('/api/v1/webos/public/broadcast/like',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:lu})})
+        .then(function(r){return r.ok?r.json():null;}).then(function(){ rendGlobal(); }).catch(function(){});
+      return; }
     var b=e.target.closest('[data-u]'); if(!b) return;
     var u=b.getAttribute('data-u'), act=b.getAttribute('data-act'), titre=b.getAttribute('data-titre')||'';
     if(act==='share'){
@@ -163,8 +220,50 @@
   setInterval(rend, 4000);
   rend();
 
+  // SLICÉ (#1352) : la barre du bas (bullets « double bullet ») choisit la slice
+  // visible — ⭐ Favoris · 📡 Propositions · 🔗 Liens collés. Manuel (pas de
+  // rotation auto : le contenu ne bouge pas sous les yeux).
+  var _slices=[el('s-fav'), el('s-diff'), el('s-hist'), el('s-global')];
+  function montreSlice(i){ for(var k=0;k<_slices.length;k++){ if(_slices[k]) _slices[k].classList.toggle('actif', k===i); }
+    if(i===3) rendGlobal(); }
+  if(window.SBXSliceBar){
+    SBXSliceBar(el('slbar'), {autoMs:0, onShow:function(i){ montreSlice(i); },
+      slices:[{label:'⭐ Favoris'},{label:'📡 Propositions'},{label:'🔗 Liens collés'},{label:'🌍 Global'}]});
+  } else { montreSlice(0); }
+
+  // 🌍 GLOBAL (#1360) : l'historique des broadcasts du PARC (partagé, backend),
+  // tops par ♥ puis récents. Chaque item : ▶ voir · ♥ liker.
+  function rendGlobal(){
+    fetch('/api/v1/webos/public/broadcasts',{headers:{'Accept':'application/json'}})
+      .then(function(r){return r.ok?r.json():null;}).then(function(g){ if(!g) return;
+        var tops=g.tops||[], rec=g.recents||[];
+        var seen={}, items=[];
+        tops.concat(rec).forEach(function(x){ if(x&&x.url&&!seen[x.url]){ seen[x.url]=1; items.push(x); } });
+        items=items.slice(0,20);
+        el('c-global').textContent=g.total||'';
+        el('st-global').innerHTML=items.map(function(x){
+          var n=x.likes||0, badge=n?(' <span class="cnt">'+n+'</span>'):'';
+          return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.url)+'" data-titre="'+esc(x.titre||'')+'" data-act="view" title="'+esc(x.titre||x.url)+'">'+joli(x.url,x.titre)+'</button>'
+            +'<button class="mini" type="button" data-like="'+esc(x.url)+'" title="J\'aime">♥'+badge+'</button></span>';
+        }).join('');
+        el('s-global').classList.toggle('empty', !items.length);
+      }).catch(function(){});
+  }
+  setInterval(function(){ if(el('s-global').classList.contains('actif')) rendGlobal(); }, 10000);
+
   (function(){ var t=new URLSearchParams(location.search).get('theme');
     if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
   addEventListener('message', function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
 })();
 </script>
+
+<script src="../aide.js"></script>
+<script>window.SBXAide&&SBXAide({
+  slice:function(){var d=document.querySelector('.sbx-dots .on');return d?(d.getAttribute('aria-label')||''):'';},
+  zones:function(){return [
+    {el:document.querySelector('.h'),label:'En-tête — Surf & Viewer'},
+    {el:document.getElementById('paste'),label:'Coller — un lien à voir (média) ou à surfer'},
+    {el:(document.querySelector('.slice.actif')||document.getElementById('slices')),label:'Tranche active — Favoris ⭐ · Propositions 📡 · Liens collés 🔗 · Global 🌍'},
+    {el:document.getElementById('slbar'),label:'Slices — tournent seules ; clic fige, re-clic reprend'}
+  ].filter(function(z){return z.el;});}
+});</script>

@@ -1,0 +1,5 @@
+{
+  "__doc__": "Alias lisibles des terminaux DPI. Copier en device-names.json. Clé = hash device (sha256(pubkey WireGuard)[:16], tel qu'affiché), valeur = nom. Rechargé à chaud. Prioritaire sur tout nom émis par le collector.",
+  "e6b6ca13d7361d7e": "iPhone du salon",
+  "4fec81d90b798c32": "Tablette Android"
+}

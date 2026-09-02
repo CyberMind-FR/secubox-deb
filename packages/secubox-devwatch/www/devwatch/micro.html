@@ -27,10 +27,19 @@
   html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
   body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
   .num{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .7rem .45rem;gap:.35rem}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .7rem .45rem;gap:.35rem;position:relative}
+  /* HOVER-DÉTAILS (#1360) : survol d'un item de liste → pop de détail + conseil. */
+  .dwpop{position:absolute;z-index:30;max-width:236px;background:var(--fond);border:1px solid var(--border);
+    border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.5);padding:8px 10px;font-size:.72rem;line-height:1.4;
+    opacity:0;transform:translateY(4px);pointer-events:none;transition:.15s}
+  .dwpop.on{opacity:1;transform:none}
+  .dwpop b{color:var(--cyan)} .dwpop .adv{display:block;color:var(--muted);margin-top:4px;font-size:.68rem}
   .head{flex:0 0 auto}
-  .h{display:flex;align-items:center;gap:7px}
-  .h .ic{font-size:1rem} .h b{font-size:.86rem;letter-spacing:-.01em}
+  .h{display:flex;align-items:center;gap:7px;position:relative;padding-bottom:6px}
+  /* Filet dégradé « spicy » (#1360) — même langage que la carte DPI. */
+  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+    background:linear-gradient(90deg,var(--up),var(--cyan),var(--violet),var(--gold))}
+  .h .ic{font-size:1.05rem} .h b{font-size:.88rem;letter-spacing:-.01em}
   .h .live{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:.56rem;
     letter-spacing:.09em;text-transform:uppercase;color:var(--up);font-weight:700}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--up);animation:p 2.2s ease-out infinite}
@@ -45,21 +54,26 @@
   .slice-t{font-size:.56rem;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);font-weight:700}
 
   .hero{display:flex;align-items:flex-end;gap:9px}
-  .hero .v{font-weight:800;font-size:2.4rem;line-height:.85}
+  .hero .v{font-weight:800;font-size:2.7rem;line-height:.82;color:var(--cyan);
+    text-shadow:0 0 18px color-mix(in srgb,var(--cyan) 42%,transparent)}
   .hero .meta .l{font-size:.62rem;color:var(--faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
   .hero .meta .t{display:block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;color:var(--up);margin-top:2px}
 
   .duo{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-  .card2{background:var(--surf2);border-radius:9px;padding:10px 9px;text-align:center}
-  .card2 .e{font-size:1rem} .card2 .n{font-weight:800;font-size:1.15rem;margin-top:2px}
+  .card2{background:linear-gradient(160deg,var(--surf2),color-mix(in srgb,var(--cyan) 9%,var(--surf2)));
+    border:1px solid var(--border);border-radius:11px;padding:10px 9px;text-align:center}
+  .card2 .e{font-size:1.05rem} .card2 .n{font-weight:800;font-size:1.2rem;margin-top:2px}
+  .duo .card2:first-child .n{color:var(--cyan)} .duo .card2:last-child .n{color:var(--up)}
   .card2 .g{font-size:.54rem;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
 
   .rel-big{display:flex;align-items:baseline;gap:8px}
-  .rel-big .tag{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:1.1rem;color:var(--cyan)}
+  .rel-big .tag{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:1.25rem;color:var(--cyan);
+    text-shadow:0 0 12px color-mix(in srgb,var(--cyan) 45%,transparent)}
   .rel-big .l{font-size:.58rem;color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
   .mevo{display:flex;align-items:flex-end;gap:3px;height:40px;margin-top:2px}
-  .mevo i{flex:1;min-width:3px;border-radius:2px 2px 0 0;background:var(--muted);opacity:.5}
-  .mevo i.major{background:var(--cyan);opacity:.9} .mevo i.minor{background:var(--gold);opacity:.7}
+  .mevo i{flex:1;min-width:3px;border-radius:3px 3px 0 0;background:linear-gradient(180deg,var(--muted),transparent);opacity:.5;transition:height .5s cubic-bezier(.2,.8,.3,1)}
+  .mevo i.major{background:linear-gradient(180deg,var(--cyan),var(--violet));opacity:1}
+  .mevo i.minor{background:linear-gradient(180deg,var(--gold),transparent);opacity:.8}
   .mevo i.latest{opacity:1;outline:1px solid var(--cyan);outline-offset:1px}
 
   .mlist{display:flex;flex-direction:column;gap:3px}
@@ -210,5 +224,33 @@
   (function(){ var t=new URLSearchParams(location.search).get('theme');
     if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
   addEventListener('message',function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
+})();
+</script>
+
+<!-- HOVER-DÉTAILS (#1360) : survol d'un module / commit → pop de détail + conseil. -->
+<script>
+(function(){
+  var mw=document.querySelector('.mw'); if(!mw) return;
+  if(getComputedStyle(mw).position==='static') mw.style.position='relative';
+  var pop=document.createElement('div'); pop.className='dwpop'; mw.appendChild(pop);
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function at(r){ var mr=mw.getBoundingClientRect();
+    var top=r.top-mr.top-pop.offsetHeight-6; if(top<4) top=r.bottom-mr.top+6;
+    var left=r.left-mr.left; if(left+pop.offsetWidth>mr.width-4) left=mr.width-4-pop.offsetWidth; if(left<4) left=4;
+    pop.style.left=left+'px'; pop.style.top=top+'px'; }
+  function show(html,r){ pop.innerHTML=html; pop.classList.add('on'); at(r); }
+  function hide(){ pop.classList.remove('on'); }
+  document.addEventListener('mouseover',function(e){
+    var row=e.target.closest&&e.target.closest('.mlist-row');
+    if(row){ var b=row.querySelector('b'),i=row.querySelector('i'),s=row.querySelector('s');
+      show('<b>'+esc(b?b.textContent:'')+'</b> '+esc(i?i.textContent:'')
+        +'<span class="adv">Module — dernière révision'+(s&&s.textContent?(' · '+esc(s.textContent)):'')
+        +'. La version bouge à chaque publication ; suivez la cadence dans « Pouls ».</span>', row.getBoundingClientRect()); return; }
+    var com=e.target.closest&&e.target.closest('.commit');
+    if(com){ var sha=com.querySelector('.sha'),msg=com.querySelector('.msg');
+      show('<b>'+esc(sha?sha.textContent:'')+'</b><span class="adv">'+esc(msg?msg.textContent:'')
+        +' — dernier commit du dépôt. « Le suivi complet » ouvre DevWatch en grand.</span>', com.getBoundingClientRect()); return; }
+  });
+  document.addEventListener('mouseout',function(e){ if(e.target.closest&&(e.target.closest('.mlist-row')||e.target.closest('.commit'))) hide(); });
 })();
 </script>

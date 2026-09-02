@@ -6,7 +6,38 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-30*
+*Mis à jour : 2026-08-31*
+
+---
+
+## 2026-08-31 — DPI vivant, sweep spicy, Lyrion, Agenda NC (déployé gk2)
+
+### ✅ Fait — déployé live
+- **DPI vivant** : `secubox-dpi-engine` (nDPId+nDPIsrvd, nDPI 5.x) + **`sbxdpi`**
+  (daemon Go dans secubox-toolbox-ng) → carte DPI réelle (fin du démo). Snapshot
+  **sur SSD /data** (pas l'eMMC). Voir memory `dpi-live-sbxdpi`, README `cmd/sbxdpi/`.
+- **Spicy + slicers** : Radio (0.1.62), PeerTube (5 vues + Chaînes/Playlists),
+  MetaNews (0.1.32, slicer par section via `/categories`).
+- **Nextcloud** : onglet 📅 Agenda (CalDAV : PROPFIND+REPORT, parsing iCal maison).
+- **Lyrion** : ⚠️ L'ancien LMS s'était **planté** (runaway, 6 h CPU) sous la
+  charge de mes tests de flux — service `lyrionmusicserver` DANS le conteneur
+  `lyrion`, redémarré, stable (2 lecteurs).
+  - **2026-09-01 — CARDLET LYRION RESTAURÉE mais LAN-ONLY** (ref #1247, `feature/hall-cardlet-ux`) :
+    après un retrait complet (trop large), remise avec `lan:true` → cachée aux
+    clients WAN (`.non-lan .fcard[data-lan]`), flag injecté par `sub_filter`
+    nginx selon `$lan_client` ; relais `/api/v1/lyrion/` gaté LAN (403 sinon).
+    Paquet/vhost + admin `secubox-lyrion` intacts.
+  - Avant ça, lecteur web 🎧 « SBX-Web » décommissionné (cardlet + backend :
+    unité `sbx-lyrion-webplayer.service`, conffile `lyrion-webplayer.env`, dép.
+    `squeezelite`, relais nginx `/lyrion-stream.mp3`).
+- **Bus média** : pastille du viewer qui reste (dockLocal/viewerCmd) ; diffusions
+  persistées dans le menu profil (survol) + badge de non-vues sur l'avatar ;
+  carte sans vhost → pseudo /mega (drapeau `noVhost`).
+
+### ⬜ Next Up — à finir
+- **secubox-dpi-engine** : le formaliser en paquet source cross-build (aujourd'hui
+  construit natif sur la box) ; nettoyer `/opt/nDPId` après build.
+- Idées notées (memory) : cardlet SqueezeRadio/Lyrion émulateur, accès Zigbee.
 
 ---
 

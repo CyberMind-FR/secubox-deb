@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-sbxui/usr/share/secubox/www/shared/sbxui
+	install -m 0644 www/aide.js      $(CURDIR)/debian/secubox-sbxui/usr/share/secubox/www/shared/sbxui/aide.js
+	install -m 0644 www/slicebar.js  $(CURDIR)/debian/secubox-sbxui/usr/share/secubox/www/shared/sbxui/slicebar.js
+	install -m 0644 www/slicebar.css $(CURDIR)/debian/secubox-sbxui/usr/share/secubox/www/shared/sbxui/slicebar.css
+	install -m 0644 www/spicy.css    $(CURDIR)/debian/secubox-sbxui/usr/share/secubox/www/shared/sbxui/spicy.css

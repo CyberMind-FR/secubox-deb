@@ -1,0 +1,40 @@
+{
+  "_meta": {
+    "version": "0.1.0",
+    "updated": "2026-09-02",
+    "note": "Règles d'enrichissement DPI usage/application/infra (#DPI-sémantique). Format versionné, rechargé à chaud (internal/reload). Seed minimal — la montée en charge se fait par apprentissage assisté (learner), pas par un gros seed opaque.",
+    "confidence": "0..100 ; jamais présentée comme une certitude"
+  },
+  "rules": [
+    {"id": "app-youtube", "application": "YouTube", "usage": "streaming", "content": "video", "infra": "Google", "infra_role": "cdn", "confidence": 92,
+     "match": {"domain_suffix": ["youtube.com", "googlevideo.com", "youtubei.googleapis.com", "ytimg.com"], "ndpi": ["YouTube"]}},
+    {"id": "app-netflix", "application": "Netflix", "usage": "streaming", "content": "video", "infra": "Netflix OpenConnect", "infra_role": "cdn", "confidence": 92,
+     "match": {"domain_suffix": ["netflix.com", "nflxvideo.net", "nflxso.net", "nflxext.com"], "ndpi": ["Netflix"]}},
+    {"id": "app-spotify", "application": "Spotify", "usage": "streaming", "content": "audio", "infra": "Spotify", "infra_role": "cdn", "confidence": 88,
+     "match": {"domain_suffix": ["spotify.com", "scdn.co", "spotifycdn.com"], "ndpi": ["Spotify"]}},
+    {"id": "app-steam", "application": "Steam", "usage": "gaming", "content": "software", "infra": "Valve / Akamai", "infra_role": "cdn", "confidence": 85,
+     "match": {"domain_suffix": ["steamcontent.com", "steamstatic.com", "steampowered.com", "steamserver.net"], "ndpi": ["Steam"]}},
+    {"id": "upd-windows", "application": "Windows Update", "usage": "updates", "content": "software", "infra": "Microsoft", "infra_role": "update_server", "confidence": 90,
+     "match": {"domain_suffix": ["windowsupdate.com", "update.microsoft.com", "delivery.mp.microsoft.com", "dl.delivery.mp.microsoft.com"]}},
+    {"id": "upd-apple", "application": "Apple Software Update", "usage": "updates", "content": "software", "infra": "Apple / Akamai", "infra_role": "update_server", "confidence": 88,
+     "match": {"domain_suffix": ["mesu.apple.com", "swcdn.apple.com", "swscan.apple.com"]}},
+    {"id": "dev-github", "application": "GitHub", "usage": "development", "content": "api", "infra": "GitHub / Fastly", "infra_role": "origin", "confidence": 84,
+     "match": {"domain_suffix": ["github.com", "githubusercontent.com", "githubassets.com", "ghcr.io"], "ndpi": ["GitHub"]}},
+    {"id": "cloud-gdrive", "application": "Google Drive", "usage": "cloud", "content": "file", "infra": "Google", "infra_role": "api", "confidence": 82,
+     "match": {"domain_suffix": ["drive.google.com", "docs.google.com", "clients.google.com"]}},
+    {"id": "social-telegram", "application": "Telegram", "usage": "social", "content": "api", "infra": "Telegram", "infra_role": "origin", "confidence": 88,
+     "match": {"domain_suffix": ["telegram.org", "t.me", "telegram.me", "cdn-telegram.org"], "ndpi": ["Telegram"]}},
+    {"id": "social-meta", "application": "Meta / Facebook", "usage": "social", "content": "api", "infra": "Meta", "infra_role": "origin", "confidence": 82,
+     "match": {"domain_suffix": ["facebook.com", "fbcdn.net", "instagram.com", "cdninstagram.com", "whatsapp.net"]}},
+    {"id": "infra-cloudflare", "usage": "web", "infra": "Cloudflare", "infra_role": "cdn", "confidence": 60,
+     "match": {"domain_suffix": ["cloudflare.com", "cloudflare-dns.com", "cdnjs.cloudflare.com"]}},
+    {"id": "infra-akamai", "usage": "web", "infra": "Akamai", "infra_role": "cdn", "confidence": 55,
+     "match": {"domain_suffix": ["akamaized.net", "akamaihd.net", "akamai.net", "edgekey.net", "edgesuite.net"]}},
+    {"id": "infra-aws", "usage": "cloud", "infra": "AWS", "infra_role": "origin", "confidence": 50,
+     "match": {"domain_suffix": ["amazonaws.com", "cloudfront.net"]}},
+    {"id": "infra-fastly", "usage": "web", "infra": "Fastly", "infra_role": "cdn", "confidence": 55,
+     "match": {"domain_suffix": ["fastly.net", "fastlylb.net"]}},
+    {"id": "track-doubleclick", "application": "Google Ads", "usage": "advertising", "content": "tracking", "infra": "Google", "infra_role": "ads", "confidence": 80,
+     "match": {"domain_suffix": ["doubleclick.net", "googlesyndication.com", "googleadservices.com", "google-analytics.com"]}}
+  ]
+}

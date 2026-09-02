@@ -124,6 +124,131 @@ async def tableau(qui: str) -> dict:
     return {"ok": True, "compte": compte, "hote": hote, "quota": quota, "activite": activite}
 
 
+# ── AGENDA (CalDAV) ───────────────────────────────────────────────────────────
+# Prochains évènements du calendrier de la personne. On parle CalDAV en son nom
+# (même clé d'application que le reste), et on ne rend que titre + date + lieu :
+# jamais la clé, jamais le corps brut d'un évènement. Fail-safe : toute erreur
+# devient une raison courte, l'agenda vide plutôt qu'une exception qui fuit.
+_CAL = "urn:ietf:params:xml:ns:caldav"
+
+
+def _unfold(text: str) -> list[str]:
+    """Déplie les lignes iCalendar (RFC 5545 : repli = CRLF + espace/tab)."""
+    raw = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    out: list[str] = []
+    for ln in raw.split("\n"):
+        if ln[:1] in (" ", "\t") and out:
+            out[-1] += ln[1:]
+        else:
+            out.append(ln)
+    return out
+
+
+def _ical_events(text: str) -> list[dict]:
+    """Extrait les VEVENT (SUMMARY / DTSTART / LOCATION) sans dépendance."""
+    events: list[dict] = []
+    cur: Optional[dict] = None
+    for ln in _unfold(text):
+        if ln == "BEGIN:VEVENT":
+            cur = {}
+        elif ln == "END:VEVENT":
+            if cur is not None:
+                events.append(cur)
+            cur = None
+        elif cur is not None and ":" in ln:
+            key, val = ln.split(":", 1)
+            name = key.split(";", 1)[0].upper()
+            if name == "SUMMARY":
+                cur["summary"] = val
+            elif name == "LOCATION":
+                cur["location"] = val
+            elif name == "DTSTART":
+                cur["dtstart"] = val
+                cur["dtstart_key"] = key
+    return events
+
+
+def _parse_dt(val: str, key: str) -> tuple[int, str, bool]:
+    """(epoch, affichage 'JJ/MM[ HH:MM]', journée entière). Best-effort."""
+    import datetime as _dt
+    v = (val or "").strip()
+    allday = ("VALUE=DATE" in (key or "").upper()) and ("T" not in v)
+    try:
+        y, mo, da = int(v[0:4]), int(v[4:6]), int(v[6:8])
+        if allday:
+            d = _dt.datetime(y, mo, da)
+            return int(d.timestamp()), d.strftime("%d/%m"), True
+        z = v.endswith("Z")
+        s = v[:-1] if z else v
+        hh = int(s[9:11]) if len(s) >= 11 else 0
+        mm = int(s[11:13]) if len(s) >= 13 else 0
+        if z:
+            d = _dt.datetime(y, mo, da, hh, mm, tzinfo=_dt.timezone.utc)
+            loc = d.astimezone()
+            return int(d.timestamp()), loc.strftime("%d/%m %H:%M"), False
+        d = _dt.datetime(y, mo, da, hh, mm)
+        return int(d.timestamp()), d.strftime("%d/%m %H:%M"), False
+    except Exception:
+        return 0, "", False
+
+
+async def agenda(qui: str) -> dict:
+    """Prochains évènements (CalDAV), 30 jours à venir, triés au plus tôt."""
+    c = _ctx(qui)
+    if not c:
+        return _vide("aucun acces")
+    hote, compte, auth = c
+    import datetime as _dt
+    now = _dt.datetime.now(_dt.timezone.utc)
+    start = now.strftime("%Y%m%dT%H%M%SZ")
+    end = (now + _dt.timedelta(days=30)).strftime("%Y%m%dT%H%M%SZ")
+    home = f"https://{hote}/remote.php/dav/calendars/{quote(compte)}/"
+    pf = ('<?xml version="1.0" encoding="utf-8"?>'
+          '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+          '<d:prop><d:resourcetype/><d:displayname/>'
+          '<c:supported-calendar-component-set/></d:prop></d:propfind>')
+    rep = ('<?xml version="1.0" encoding="utf-8"?>'
+           '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+           '<d:prop><c:calendar-data/></d:prop>'
+           '<c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT">'
+           f'<c:time-range start="{start}" end="{end}"/>'
+           '</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>')
+    events: list[dict] = []
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=12, auth=auth) as cli:
+            r = await cli.request("PROPFIND", home, content=pf,
+                                  headers={"Depth": "1", "Content-Type": "application/xml"})
+            if r.status_code not in (200, 207):
+                return _vide("agenda indisponible")
+            cals: list[str] = []
+            root = ET.fromstring(r.text)
+            for resp in root.findall("d:response", _NS):
+                href = resp.findtext("d:href", default="", namespaces=_NS)
+                is_cal = resp.find(".//d:resourcetype/{%s}calendar" % _CAL, _NS) is not None
+                comps = [cc.get("name", "") for cc in resp.findall(".//{%s}comp" % _CAL)]
+                if href and is_cal and (not comps or "VEVENT" in comps):
+                    cals.append(href)
+            for href in cals[:6]:
+                url = f"https://{hote}{href}" if href.startswith("/") else href
+                rr = await cli.request("REPORT", url, content=rep,
+                                       headers={"Depth": "1", "Content-Type": "application/xml"})
+                if rr.status_code not in (200, 207):
+                    continue
+                for cd in ET.fromstring(rr.text).findall(".//{%s}calendar-data" % _CAL):
+                    for ev in _ical_events(cd.text or ""):
+                        if not ev.get("summary"):
+                            continue
+                        ep, disp, jour = _parse_dt(ev.get("dtstart", ""), ev.get("dtstart_key", ""))
+                        events.append({"titre": ev["summary"][:120], "quand": disp,
+                                       "epoch": ep, "jour": jour, "lieu": (ev.get("location") or "")[:60]})
+    except Exception as e:
+        return _vide("agenda indisponible : %s" % type(e).__name__)
+    seuil = int(now.timestamp()) - 3600
+    events = [e for e in events if e["epoch"] >= seuil]
+    events.sort(key=lambda e: e["epoch"] or 9_000_000_000)
+    return {"ok": True, "events": events[:12]}
+
+
 async def fichiers(qui: str, chemin: str = "/") -> dict:
     """Navigateur WebDAV : contenu d'un dossier (PROPFIND depth 1), dossiers
     d'abord puis fichiers du plus récent au plus ancien. Récents en tête."""

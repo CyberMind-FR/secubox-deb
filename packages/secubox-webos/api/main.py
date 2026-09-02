@@ -63,6 +63,9 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
     _charge_broadcast()   # #1224 : reprendre le flux courant apres redemarrage
+    _charge_hist()        # #1360 : historique global des broadcasts + likes
+    if _broadcast.get("actif"):   # le flux courant entre dans l'historique global
+        _hist_ajoute(_broadcast)
     task = asyncio.create_task(_refresh_loop())
     yield
     task.cancel()
@@ -128,6 +131,50 @@ def _sauve_broadcast() -> None:
         pass
 
 
+# HISTORIQUE GLOBAL DES BROADCASTS + LIKES (#1360). Chaque diffusion posee est
+# ajoutee a une liste bornee, partagee par TOUT le parc (contrairement a
+# l'historique perso, en localStorage cote navigateur). Un like par url. Meme
+# modele NO-RETENTION : on ne garde que le pointeur (url + titre), jamais le media.
+_HIST_FILE = Path("/var/cache/secubox/webos/broadcast_hist.json")
+_hist: list = []
+
+
+def _charge_hist() -> None:
+    global _hist
+    try:
+        _hist = json.loads(_HIST_FILE.read_text())
+    except (OSError, ValueError):
+        _hist = []
+
+
+def _sauve_hist() -> None:
+    try:
+        _HIST_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _HIST_FILE.write_text(json.dumps(_hist[:80]))
+    except OSError:
+        pass
+
+
+def _hist_ajoute(b: dict) -> None:
+    global _hist
+    url = (b or {}).get("url", "")
+    if not url:
+        return
+    for h in _hist:
+        if h.get("url") == url:
+            h["ts"] = b.get("ts")
+            h["titre"] = b.get("titre") or h.get("titre")
+            h["par"] = b.get("par") or h.get("par")
+            _hist.remove(h)
+            _hist.insert(0, h)
+            _sauve_hist()
+            return
+    _hist.insert(0, {"url": url, "titre": b.get("titre", ""), "par": b.get("par", ""),
+                     "ts": b.get("ts"), "likes": 0})
+    del _hist[80:]
+    _sauve_hist()
+
+
 @public_router.get("/broadcast")
 async def get_broadcast():
     """Le flux courant du parc, ou {actif:false} si rien ne diffuse."""
@@ -160,8 +207,31 @@ async def set_broadcast(payload: dict):
             "par": str(payload.get("par", ""))[:80],
             "pos": max(0.0, pos), "ts": time.time(),
         }
+    if _broadcast.get("actif"):
+        _hist_ajoute(_broadcast)
     _sauve_broadcast()
     return _broadcast
+
+
+@public_router.get("/broadcasts")
+async def get_broadcasts():
+    """Historique GLOBAL des broadcasts du parc (récents + tops par likes)."""
+    recents = _hist[:24]
+    tops = sorted((h for h in _hist if h.get("likes", 0) > 0),
+                  key=lambda h: h.get("likes", 0), reverse=True)[:12]
+    return {"recents": recents, "tops": tops, "total": len(_hist)}
+
+
+@public_router.post("/broadcast/like")
+async def like_broadcast(payload: dict):
+    """Un ♥ sur un broadcast de l'historique (par url)."""
+    url = str((payload or {}).get("url", "")).strip()
+    for h in _hist:
+        if h.get("url") == url:
+            h["likes"] = int(h.get("likes", 0)) + 1
+            _sauve_hist()
+            return {"url": url, "likes": h["likes"]}
+    return {"url": url, "likes": 0}
 
 
 _rc = {"d": None, "t": 0.0}
@@ -548,6 +618,11 @@ async def nc_fichiers(chemin: str = "/", user=Depends(require_jwt)):
 @router.get("/acces/nextcloud/partages")
 async def nc_partages(user=Depends(require_jwt)):
     return await nc_super.partages(_qui(user))
+
+
+@router.get("/acces/nextcloud/agenda")
+async def nc_agenda(user=Depends(require_jwt)):
+    return await nc_super.agenda(_qui(user))
 
 
 @router.post("/acces/nextcloud/partager")

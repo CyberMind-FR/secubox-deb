@@ -1,3 +1,54 @@
+secubox-radio (0.1.63-1~bookworm1) bookworm; urgency=medium
+
+  * Aide reverse-design émancipée (HIG lane B) : la page radio n'embarque plus
+    un CLONE inline de SBXAide. Elle charge la bibliothèque PARTAGÉE
+    /shared/sbxui/aide.js (paquet secubox-sbxui, servi same-origin sur le vhost
+    radio via l'alias /shared/) et passe un zones() RICHE (Lecteur / File /
+    Antenne / Proposer) — même chrome et même aide que le Hall.
+  * control : Depends secubox-sbxui.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 22:15:00 +0200
+
+secubox-radio (0.1.62-1~bookworm1) bookworm; urgency=medium
+
+  * SKIN SPICY POUR LA RADIO. Filet dégradé sous chaque en-tête, halo sur le
+    titre et la jauge, badge « en direct » en dégradé, gros bouton lecture
+    halo-dégradé, piste en cours liserée. La barre à bullets micro passe en
+    version « expanded » : plus haute, bord haut dégradé, pastille active en
+    pilule dégradée avec halo (auto=violet, manuel=menthe), libellé en dégradé.
+    Pop-in helper accentué (liseré dégradé + halo violet). 100% thème-aware.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 10:19:40 +0200
+
+secubox-radio (0.1.61-1~bookworm1) bookworm; urgency=medium
+
+  * Micro : plus de place sous les bullets (padding) + IN-POP HELP au survol des
+    items (playlist / propositions / messages) : détail + conseil d usage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:56:11 +0200
+
+secubox-radio (0.1.60-1~bookworm1) bookworm; urgency=medium
+
+  * Micro slicer : barre à bullets FIXÉE en bas de la carte (visible dans les
+    ~284px) au lieu d etre poussee sous le pli par le chat.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:49:18 +0200
+
+secubox-radio (0.1.59-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : SLICER 3 vues (Messages / Playlist / Propositions) via barre à
+    bullets « double bullet » en bas, synchronisée à la rotation auto (clic =
+    manuel). Remplace le va-et-vient antenne<->playlist.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:42:39 +0200
+
+secubox-radio (0.1.58-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : habillage spicy (filet dégradé) + aide reverse-design
+    contextuelle (anneaux + pastilles + bulle Hall).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:08:49 +0200
+
 secubox-radio (0.1.57-1~bookworm1) bookworm; urgency=medium
 
   * Detach ⧉ integre au viewer du Hall (#1266) : au lieu d'ouvrir une fenetre,

@@ -1,3 +1,82 @@
+secubox-toolbox-ng (0.3.11-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi L3 (DPI sémantique) : corrélation multi-flux → SESSIONS d'usage.
+    Les flux SORTANTS d'un même device (IP source) et même famille d'usage dans
+    une fenêtre de 5 min forment UNE session (pas une liste de sockets).
+    Endpoint /api/v1/dpi/sessions. Classif per-flow via l'enrichisseur. Tests
+    (corrélation + split fenêtre) verts.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 15:00:00 +0200
+
+secubox-toolbox-ng (0.3.10-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi L1-fin (DPI sémantique) : propage JA4 (fingerprints[]), ports
+    destinataires (ports[]) et la DIRECTION (out_bytes/in_bytes, dérivée de
+    l'IP source locale). Tout additif, non cassant.
+  * sbxdpi LEARNER (L5) : apprentissage assisté OBSERVE→CORRELATE→SUGGEST.
+    Regroupe les destinations non classifiées par domaine racine (eTLD+1
+    approché) et propose une règle domain_suffix prête à relire, avec
+    confiance + raison + exemples. Endpoint /api/v1/dpi/suggestions. AUCUNE
+    promotion automatique (ACCEPT→RULE = acte humain). Tests verts.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 14:30:00 +0200
+
+secubox-toolbox-ng (0.3.9-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi : moteur d'ENRICHISSEMENT usage (DPI sémantique, L2). Règles JSON
+    versionnées /etc/secubox/dpi/rules.json (format _meta mirroir waf-rules.json,
+    rechargé à chaud via internal/reload) : flow/host → application/usage/contenu/
+    infra + rôle, avec confiance et evidence. Nouvel endpoint /api/v1/dpi/usage
+    (usages/providers/applications + unknown-first) dérivé des hosts[]. Additif.
+    Tests : classify (OU multi-signaux), report unknown-first, seed valide.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 12:00:00 +0200
+
+secubox-toolbox-ng (0.3.8-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi : émet désormais les destinations SNI/DNS (snapshot.hosts[] +
+    endpoint /hosts) — le hostname était lu mais jamais propagé (DPI sémantique,
+    phase 1, L1). Pivot des futures règles usage/CDN/provider. Additif, non
+    cassant. Premiers tests Go de sbxdpi (agrégation SNI + non-régression
+    surensemble).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 11:30:00 +0200
+
+secubox-toolbox-ng (0.3.7-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi : SNAPSHOT SUR LE SSD /data, PLUS SUR L'eMMC. Le cache DPI vit
+    désormais dans /data/secubox/sbxdpi (SSD 916 Go) au lieu de
+    /var/cache/secubox/sbxdpi (eMMC racine 15 Go). Petit (cartes plafonnées,
+    ~10-30 Ko) et réécrit atomiquement — la racine ne peut plus se remplir par
+    lui. tmpfiles crée le dossier au bon propriétaire sans toucher au parent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 10:54:28 +0200
+
+secubox-toolbox-ng (0.3.6-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi : cache-snapshot dans un répertoire PROPRE. /var/cache/secubox/dpi
+    appartient déjà à secubox-dpi (user secubox) ; sbxdpi (secubox-toolbox) y
+    écrivait « permission denied » toutes les 30 s et ne pouvait pas warm-start.
+    Le snapshot va désormais dans /var/cache/secubox/sbxdpi (tmpfiles le crée
+    au bon propriétaire, sans toucher au parent partagé).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 10:37:49 +0200
+
+secubox-toolbox-ng (0.3.5-1~bookworm1) bookworm; urgency=medium
+
+  * NOUVELLE COMMANDE sbxdpi : la couche Go qui emancipe nDPId. nDPId (moteur
+    C libre, nDPI 5.x compile depuis les sources amont) classe les flux et
+    pousse du JSON encadre a nDPIsrvd ; sbxdpi COMPOSE ce distributeur en
+    lecture seule, applique le filtrage declaratif du parc (exemption premiere
+    partie via haproxy-routes.json, listes deny/allow, sourdine des risques —
+    memes conffiles *.txt hot-reload que sbx-sentinel), agrege
+    protocoles/apps/categories/talkers/risques en memoire (cartes plafonnees,
+    flush atomique) et sert /api/v1/dpi/ sur /run/secubox/aggregator.sock pour
+    la cardlet DPI du Hall, derriere nginx + JWT FastAPI. DARK a l'install
+    (unite posee, non activee) — on l'active apres le moteur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 09:39:07 +0200
+
 secubox-toolbox-ng (0.3.4-1~bookworm1) bookworm; urgency=medium
 
   * LE JOURNAL DE MENACES S'OUVRE AU GROUPE (#1318). sbx-authwatch ecrit dans

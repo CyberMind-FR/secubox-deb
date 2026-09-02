@@ -37,6 +37,11 @@ override_dh_auto_build:
 	# menaces, pour que la correlation perdue avec CrowdSec revienne sans qu'un
 	# seul consommateur ait a changer.
 	go build -trimpath -ldflags=-s -o sbx-authwatch ./cmd/sbx-authwatch
+	# sbxdpi : la couche Go au-dessus de nDPId. Consomme le flux JSON du
+	# distributeur nDPIsrvd, applique le filtrage declaratif du parc, et sert
+	# les stats DPI agregees sur /run/secubox/aggregator.sock pour la cardlet
+	# DPI du Hall. Meme dessin modulaire que sbx-sentinel (stream + socket RO).
+	go build -trimpath -ldflags=-s -o sbxdpi ./cmd/sbxdpi
 
 # No Go unit tests at package-build time (run in CI on the host arch; the
 # arm64 cross-binary cannot execute its tests here).
@@ -50,6 +55,15 @@ override_dh_auto_install:
 	install -m 0755 sbin/secubox-sentinel-feeds debian/secubox-toolbox-ng/usr/sbin/secubox-sentinel-feeds
 	# #1220 authwatch : binaire, unite et liste blanche.
 	install -m 0755 sbx-authwatch debian/secubox-toolbox-ng/usr/sbin/sbx-authwatch
+	# sbxdpi : binaire, config DPI_* (conffile), et listes de filtrage declaratif.
+	install -m 0755 sbxdpi debian/secubox-toolbox-ng/usr/sbin/sbxdpi
+	install -d debian/secubox-toolbox-ng/etc/secubox
+	install -m 0644 debian/dpi.env debian/secubox-toolbox-ng/etc/secubox/dpi.env
+	install -d debian/secubox-toolbox-ng/etc/secubox/dpi
+	install -m 0644 debian/dpi/app-deny.txt debian/secubox-toolbox-ng/etc/secubox/dpi/app-deny.txt
+	install -m 0644 debian/dpi/app-allow.txt debian/secubox-toolbox-ng/etc/secubox/dpi/app-allow.txt
+	install -m 0644 debian/dpi/risk-mute.txt debian/secubox-toolbox-ng/etc/secubox/dpi/risk-mute.txt
+	install -m 0644 debian/dpi/rules.json debian/secubox-toolbox-ng/etc/secubox/dpi/rules.json
 	# L'unite est posee par dh_installsystemd, qui la trouve dans debian/.
 	# L'installer AUSSI a la main creait deux copies du meme chemin — /lib etant
 	# un lien vers /usr/lib, dpkg refusait l'archive.
@@ -79,9 +93,11 @@ override_dh_auto_install:
 	install -m 0644 tmpfiles/zz-secubox-media-buffer.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
 	# #823 Sentinel: pre-create the verdict-store + overlay dirs (0750 secubox-toolbox)
 	install -m 0644 tmpfiles/zz-secubox-sentinel.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
+	# sbxdpi: pre-create the stats cache dir + the /run/secubox/ndpi socket dir.
+	install -m 0644 tmpfiles/zz-secubox-dpi.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
 
 override_dh_auto_clean:
-	rm -f sbxmitm sbx-sentinel
+	rm -f sbxmitm sbx-sentinel sbx-authwatch sbxdpi
 	rm -rf _gocache _gopath
 
 # DARK: install the unit files into the catalogue but DO NOT enable or start
@@ -99,3 +115,5 @@ override_dh_installsystemd:
 	# #1220 : un service qui BANNIT ne s'active pas tout seul a l'installation.
 	# L'operateur l'observe d'abord (--simulation), puis decide.
 	dh_installsystemd --no-enable --no-start --name=secubox-authwatch secubox-authwatch.service
+	# sbxdpi : DARK aussi. On l'active apres que le moteur (nDPIsrvd+nDPId) tourne.
+	dh_installsystemd --no-enable --no-start --name=sbxdpi sbxdpi.service

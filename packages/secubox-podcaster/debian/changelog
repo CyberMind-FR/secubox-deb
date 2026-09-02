@@ -1,3 +1,10 @@
+secubox-podcaster (1.0.31-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : habillage spicy (accent dégradé, halo, barre vive) + aide
+    reverse-design contextuelle (anneaux + pastilles + bulle Hall).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:06:03 +0200
+
 secubox-podcaster (1.0.30-1~bookworm1) bookworm; urgency=medium
 
   * Continuite micro -> vue pleine (#1266b) : ouvrir la vue pleine embarquee ne

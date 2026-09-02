@@ -1,3 +1,9 @@
+secubox-zia (0.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : habillage spicy + aide reverse-design contextuelle (inline).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:24:46 +0200
+
 secubox-zia (0.1.9-1~bookworm1) bookworm; urgency=medium
 
   * Webui admin ZIA (#1245) : panneau /zia/admin.html (charte hybrid-dark, Courier

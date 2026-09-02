@@ -21,6 +21,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Service — vue micro</title>
+<link rel="stylesheet" href="../spicy.css">
 <style>
   :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#1655a0; }
   @media (prefers-color-scheme: dark) {
@@ -298,3 +299,10 @@
   });
 })();
 </script>
+
+<script src="../aide.js"></script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.querySelector('.tete'),label:'En-tête — le service et son hôte'},
+  {el:document.getElementById('corps'),label:'Accès délégués — comptes et partages ouverts pour ce service'},
+  {el:document.querySelector('.pied'),label:'Pied — ouvrir le service'}
+].filter(function(z){return z.el;});}});</script>

@@ -56,9 +56,25 @@ SUFFIXE = "gk2.secubox.in"
 PREFIXE = "surf"
 
 
+# .onion v3 : 56 caractères base32 [a-z2-7], un seul label, sans point ni tiret.
+# L'aplatissement normal donnerait `surf-<56>-onion` = 67 car. > 63 (limite du
+# label DNS) → le navigateur ne peut même pas former l'hôte, et `.onion` était
+# donc INnavigable dans le BiB. On droppe `.onion` (implicite) et on marque le
+# plat par un `0` de tête — HORS de l'alphabet base32, donc sans ambiguïté avec
+# un hôte aplati (qui contient toujours un `-`) : `surf-0<56>` = 62 car. ≤ 63.
+_RE_ONION_V3 = re.compile(r"^[a-z2-7]{56}$")
+_RE_ORIG_ONION = re.compile(r"^0([a-z2-7]{56})$")
+
+
 def origine_de(hote_cible: str) -> str:
-    """`www.facebook.com` → `surf-www--facebook--com.gk2.secubox.in`."""
-    plat = hote_cible.strip().lower().replace("-", "--").replace(".", "-")
+    """`www.facebook.com` → `surf-www-facebook-com.gk2.secubox.in` ;
+    `<56>.onion` → `surf-0<56>.gk2.secubox.in` (Tor, cf. egress)."""
+    h = hote_cible.strip().lower().rstrip(".")
+    if h.endswith(".onion"):
+        base = h[: -len(".onion")]
+        if _RE_ONION_V3.match(base):
+            return f"{PREFIXE}-0{base}.{SUFFIXE}"
+    plat = h.replace("-", "--").replace(".", "-")
     return f"{PREFIXE}-{plat}.{SUFFIXE}"
 
 
@@ -71,6 +87,9 @@ def cible_de(origine: str) -> str | None:
     if not label.startswith(PREFIXE + "-"):
         return None
     plat = label[len(PREFIXE) + 1:]
+    mo = _RE_ORIG_ONION.match(plat)
+    if mo:
+        return mo.group(1) + ".onion"
     # On défait dans l'ordre inverse : d'abord les `--` en sentinelle, sinon un
     # `-` simple issu d'un point serait pris pour la moitié d'un `--`.
     jeton = "\x00"

@@ -1,3 +1,143 @@
+secubox-dpi (1.4.13-1~bookworm1) bookworm; urgency=medium
+
+  * Collector : un NOM D'APPAREIL HUMAIN (champ `name` du peer wg-peers.json,
+    fourni au provisionnement) prime désormais sur le label/UA — utilisé tel
+    quel (borné 32 car.), sinon repli sur prettyLabel(label, ip). Complète le
+    provisionnement /wg/profile/new?name=… de secubox-toolbox.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 12:20:00 +0200
+
+secubox-dpi (1.4.12-1~bookworm1) bookworm; urgency=medium
+
+  * Collector prettyLabel : noms de terminaux plus robustes pour les labels
+    non-navigateur (agents/bots) — on garde le token avant le premier '/' ou
+    espace puis on borne à 22 car. « curl/7.88.1 » → curl,
+    « facebookexternalhit/1.1 (+http…) » → facebookexternalhit,
+    « test-iphone » → test-iphone. Corrige la fuite d'un label long rendu entier.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 11:40:00 +0200
+
+secubox-dpi (1.4.11-1~bookworm1) bookworm; urgency=medium
+
+  * Collector (Go) : émet désormais le NOM lisible du terminal dans
+    cumulative.json (cumDev.name) — dérivé du `label` du peer WireGuard +
+    IP de tunnel (prettyLabel : iPhone/Android/Mac/… · .octet). Le collector a
+    l'accès légitime à wg-peers.json ; la FastAPI lit `name` sans franchir la
+    séparation CSPN. Résultat : noms de terminaux 100 % automatiques pour les
+    devices actifs, la table d'alias manuelle restant une surcharge.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 11:00:00 +0200
+
+secubox-dpi (1.4.10-1~bookworm1) bookworm; urgency=medium
+
+  * Vue Clients : NOM LISIBLE par terminal (champ `name` ajouté à /clients et
+    /pub/clients). Priorité : (1) table d'alias manuelle éditable
+    /etc/secubox/dpi/device-names.json ({hash:"Nom"}, rechargée à chaud), puis
+    (2) `name`/`label` éventuellement émis par le collector dans cumulative.json.
+    À défaut, l'UI garde le hash court. La FastAPI tourne en `secubox` et NE lit
+    PAS le dir toolbox 0750 (wg-peers.json) : la séparation CSPN est préservée ;
+    l'auto-résolution depuis les peers WG reste au collector (accès légitime).
+  * top_dst passé à 8, countries à 6 (pour le détail dépliable de la card).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 10:00:00 +0200
+
+secubox-dpi (1.4.9-1~bookworm1) bookworm; urgency=medium
+
+  * Vue Clients : détails poussés — chaque terminal porte aussi ses PAYS
+    (géo GeoLite2 de ses destinations IP publiques, top 4) en plus du volume,
+    des usages, des top destinations et des alertes. first_seen/last_seen/flows
+    déjà exposés servent la dernière activité et la durée d'activité côté UI.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 09:00:00 +0200
+
+secubox-dpi (1.4.8-1~bookworm1) bookworm; urgency=medium
+
+  * Vue CLIENTS (terminaux) : nouvelle dérivation par device — volume ↑/↓,
+    familles d'usage, top destinations, nombre d'usages, alertes. Endpoints
+    GET /clients (JWT) et /pub/clients (relais Hall agrégé). Alimente la vue
+    « 👥 Clients » enrichie de la cardlet DPI (cards détaillées, inspirées de
+    l'admin). Dérivé du collector (réel).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 23:15:00 +0200
+
+secubox-dpi (1.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * Routeur PUBLIC agrégé /pub (SANS JWT, GET, lecture seule, non nominatif) :
+    /pub/stats /pub/usage /pub/suggestions /pub/sessions /pub/countries. Même
+    posture que le socket sbxdpi historique (aggregate, no-PII, local) mais
+    alimenté par les dérivations RÉELLES du collector — pour que la cardlet DPI
+    du Hall (connect-src 'self', pas de JWT) affiche enfin du réel, sbxdpi
+    restant dark. Les écritures (rules/accept…) restent hors /pub, sous JWT.
+  * /pub/stats : nouvelle dérivation collector (protocoles master, apps=service,
+    catégories=by_category, talkers=dst, risques=alerts) dans la forme attendue
+    par la cardlet. Dérivations usage/suggestions/sessions/countries extraites
+    en fonctions sync partagées (JWT admin + /pub Hall, un seul calcul).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 19:15:00 +0200
+
+secubox-dpi (1.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * Admin DPI : affichage progressif — top-5 par défaut + « Voir plus » sur
+    TOUTES les listes (sessions, top apps/protocoles, bande passante par
+    terminal, flux actifs, learning). Les listes réelles (40+ entrées) ne
+    débordent plus ; l'état déplié survit aux rafraîchissements.
+  * Nouveau panneau « 🌍 Pays des destinations » : top-5 pays dérivés des IP
+    RÉELLES du collector (services[].dst) via GeoLite2-Country — drapeau,
+    volume, nb d'hôtes et de terminaux. Endpoint GET /countries (JWT, additif,
+    lecture seule, agrégé par pays — pas de PII). Fallback [] si base absente.
+  * Cardlet /mega : même top-5 + « voir plus » via helper progressif partagé.
+  * control : Depends python3-geoip2, geoip-database (base MaxMind).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 18:30:00 +0200
+
+secubox-dpi (1.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * Learner : les suggestions excluent aussi ce que le COLLECTOR classe déjà
+    (service/category), pas seulement les règles — vraies inconnues tierces
+    (github.com, maegia.tv, archive.org…), sans redite ni première-partie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 17:00:00 +0200
+
+secubox-dpi (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * DPI sémantique en DONNÉES RÉELLES tout de suite : /usage, /sessions,
+    /suggestions dérivent du collector (cumulative.json) quand sbxdpi dort —
+    en réutilisant rules.json (host→usage). Vrais usages (ai/cloud/social…),
+    vraies sessions par terminal (device→usage→application→volume·durée),
+    vraies suggestions (domaines inconnus regroupés, ex. anthropic.com,
+    googleapis.com). Filtres première-partie (haproxy-routes.json) + validité
+    d'hôte. Sans activer sbxdpi ni le distributeur ZMQ (rejeté #722/#723).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 16:45:00 +0200
+
+secubox-dpi (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Dashboard /dpi/ : panneau 🧭 Sessions d'usage (via le pont /sessions) —
+    terminal → usage → application → volume · durée · flux, façon vision cible.
+    Gracieux à vide tant que sbxdpi est inactif.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 16:00:00 +0200
+
+secubox-dpi (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * FastAPI : PONT vers sbxdpi — GET /suggestions, /usage, /sessions (JWT)
+    proxifient le moteur live sbxdpi (dpi-live.sock, LAN), fail-empty s'il dort.
+    Unifie les deux surfaces DPI derrière l'admin JWT.
+  * Dashboard /dpi/ : panneau 🎓 Learning fonctionnel — liste les suggestions
+    et « Créer la règle » POST /rules/accept (matérialise la règle → hot-reload)
+    ou « Ignorer ». L'ACCEPT humain vit ici, sous session JWT.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 15:30:00 +0200
+
+secubox-dpi (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * FastAPI : ACCEPT du learner DPI (#DPI-sémantique). GET /rules, POST
+    /rules/accept (JWT, garde-fous : signal requis, id unique, écriture atomique
+    de rules.json → sbxdpi recharge à chaud), POST /rules/ignore. sbxdpi ne
+    s'écrit jamais lui-même (lecture LAN / écriture JWT).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 15:00:00 +0200
+
 secubox-dpi (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Architecture: any — construit aussi pour amd64 (GOARCH dérivé de la cible),

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox #1360 — carte DPI « Trafic vivant » (nDPId / netifyd).
+
+  SLICÉE en /micro (barre à bullets « double bullet ») : 🌐 Protocoles ·
+  📱 Applications · 🧭 Usages · 🗣️ Talkers · ⚠️ Risques. La slice Usages lit
+  `categories[]` (nDPI category) que sbxdpi agrège déjà — début de la vision
+  « usage ». Lit best-effort /api/v1/dpi/* ; à
+  défaut, jeu de DÉMO clairement étiqueté (comme le reste du Hall quand le
+  registre dort). La même lecture nourrit la couche DPI du groupe Sécurité
+  (agrégation WAF).
+
+  En /mega (embed=1&mega=1) — vhost embarqué, la DPI n'ayant pas de vhost propre
+  — PAS de slicer : toutes les sections sont empilées dans une page classique
+  qui défile (cf. CSS `html.mega`).
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPI — Trafic vivant</title>
+<link rel="stylesheet" href="../slicebar.css">
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
+         --line-2:#c5cfd7; --panel:#ffffff; --soft:#f5f7fc; --cyan:#0784a8; --up:#0f9d54;
+         --hot:#d64545; --warn:#c87832; --grape:#6e40c9; --sky:#1655a0; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --line-2:#2d3a4e; --panel:#141a26; --soft:#10151f; --cyan:#28d6ff; --up:#35d07f;
+    --hot:#ff6a6a; --warn:#e0b46a; --grape:#a88bff; --sky:#6aa8e6; } }
+  :root[data-theme="dark"]{ --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779;
+    --line:#232b3b; --line-2:#2d3a4e; --panel:#141a26; --soft:#10151f; --cyan:#28d6ff; --up:#35d07f;
+    --hot:#ff6a6a; --warn:#e0b46a; --grape:#a88bff; --sky:#6aa8e6; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;scrollbar-width:none}
+  html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.45rem;position:relative}
+  /* REVERSE-DESIGN (#1360) — la carte s'annote elle-même, par slice. */
+  .aide-lay{position:absolute;inset:0;z-index:20;display:none}
+  .aide-lay.on{display:block}
+  .aide-scrim{position:absolute;inset:0;background:color-mix(in srgb,#000 30%,transparent)}
+  .aide-ring{position:absolute;border:2px solid var(--cyan);border-radius:8px;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan) 22%,transparent);transition:.2s}
+  .aide-pin{position:absolute;transform:translate(-50%,-50%);min-width:19px;height:19px;border-radius:11px;
+    background:var(--cyan);color:#052430;font-weight:800;font-size:.68rem;display:grid;place-items:center;padding:0 5px;
+    box-shadow:0 2px 6px rgba(0,0,0,.45)}
+  .aide-leg{position:absolute;left:6px;right:6px;bottom:6px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:7px 9px;font-size:.68rem;line-height:1.32;box-shadow:0 8px 22px rgba(0,0,0,.5)}
+  .aide-leg .lt{font-family:"JetBrains Mono",monospace;font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);margin-bottom:3px}
+  .aide-leg ol{margin:0;padding-left:17px} .aide-leg li{margin:1px 0;color:var(--texte)}
+  .aide-x{position:absolute;top:6px;right:6px;border:1px solid var(--line);background:var(--panel);color:var(--texte);
+    border-radius:7px;font-size:.66rem;padding:2px 7px;cursor:pointer}
+  @media(prefers-reduced-motion:reduce){.aide-ring{transition:none}}
+  /* En-tête « spicy » : filet dégradé + pouls. */
+  .h{display:flex;align-items:center;gap:8px;position:relative;padding-bottom:6px}
+  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+    background:linear-gradient(90deg,var(--hot),var(--warn),var(--cyan),var(--grape))}
+  .h .ic{font-size:1.05rem} .h b{font-size:.9rem;letter-spacing:.02em}
+  .h .live{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:.54rem;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--hot);font-weight:700}
+  .h .live i{width:7px;height:7px;border-radius:50%;background:var(--hot);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--hot) 26%,transparent);animation:pl 1.8s infinite}
+  @keyframes pl{50%{opacity:.35}} @media(prefers-reduced-motion:reduce){.h .live i{animation:none}}
+  .h .demo{margin-left:auto;font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+    border:1px solid var(--line);border-radius:20px;padding:1px 7px}
+  .kpis{display:flex;gap:6px}
+  .kpi{flex:1;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:0}
+  .kpi .v{font-family:"JetBrains Mono",monospace;font-size:1rem;font-weight:700;line-height:1;
+    display:flex;align-items:baseline;gap:3px}
+  .kpi .v small{font-size:.6rem;font-weight:400;color:var(--muted)}
+  .kpi .l{font-size:.54rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:3px}
+  .kpi.hot .v{color:var(--hot)} .kpi.cy .v{color:var(--cyan)} .kpi.up .v{color:var(--up)}
+  .vue{flex:1;min-height:0;overflow:hidden;position:relative}
+  /* Un panneau de section = en-tête (sec-t) + contenu (slice). En /micro les
+     panneaux se superposent (slicer, un seul visible) ; en /mega ils forment
+     une grille multicolonnes (cf. html.mega). */
+  .dsec{position:absolute;inset:0;display:none;flex-direction:column;gap:.25rem}
+  .dsec.actif{display:flex}
+  .slice{flex:1;min-height:0;display:flex;flex-direction:column;gap:2px;overflow-y:auto;scrollbar-width:none}
+  .slice::-webkit-scrollbar{display:none}
+  /* Une ligne = un item + une barre proportionnelle (animée). */
+  .row{display:flex;align-items:center;gap:8px;padding:4px 2px;border-bottom:1px dashed var(--line)}
+  .row:last-child{border-bottom:none}
+  .row .e{font-size:.9rem;flex:0 0 auto;width:18px;text-align:center}
+  .row .nm{flex:0 0 40%;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.8rem}
+  .row .bar{flex:1;height:8px;border-radius:5px;background:var(--soft);overflow:hidden;border:1px solid var(--line)}
+  .row .bar i{display:block;height:100%;width:0;border-radius:5px;transition:width .6s cubic-bezier(.2,.8,.3,1);
+    background:linear-gradient(90deg,var(--cyan),var(--sky))}
+  .row.a2 .bar i{background:linear-gradient(90deg,var(--up),var(--cyan))}
+  .row.a3 .bar i{background:linear-gradient(90deg,var(--grape),var(--sky))}
+  .row .n{flex:0 0 auto;font-family:"JetBrains Mono",monospace;font-size:.7rem;color:var(--muted);
+    font-variant-numeric:tabular-nums}
+  /* Risques : pastilles de sévérité. */
+  .risk{display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px dashed var(--line)}
+  .risk:last-child{border-bottom:none}
+  .risk .sev{flex:0 0 auto;width:9px;height:9px;border-radius:50%}
+  .risk.hi .sev{background:var(--hot);box-shadow:0 0 0 3px color-mix(in srgb,var(--hot) 24%,transparent)}
+  .risk.md .sev{background:var(--warn)} .risk.lo .sev{background:var(--cyan)}
+  .risk .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.8rem}
+  .risk .n{flex:0 0 auto;font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--muted)}
+
+  /* ── MODE MEGA (#1360) — vhost embarqué, PAS de cardlet ──────────────────────
+     La DPI n'a pas de vhost : son « /mega » agrandit cette page (embed=1&mega=1).
+     Là, on abandonne le slicer : toutes les données sont empilées dans une page
+     classique qui défile, chaque section précédée de son titre. */
+  .sec-t{display:none;align-items:center;gap:7px;margin:.7rem 0 .2rem;
+    font-family:"JetBrains Mono",monospace;font-size:.6rem;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--cyan)}
+  html.mega,html.mega body{height:auto;min-height:100%;overflow:auto;scrollbar-width:auto}
+  html.mega body::-webkit-scrollbar,html.mega::-webkit-scrollbar{display:initial;width:auto}
+  html.mega .mw{height:auto;min-height:100%;max-width:1100px;margin:0 auto;padding:1rem 1.2rem 2rem;gap:.7rem}
+  /* MEGA : grille multicolonnes de cartes de section, découpage net entre elles. */
+  html.mega .vue{flex:none;overflow:visible;position:static;display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;align-items:start}
+  html.mega .dsec{position:static;display:flex!important;background:var(--soft);
+    border:1px solid var(--line);border-radius:12px;padding:.7rem .9rem .85rem;gap:.45rem;
+    box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  html.mega .slice{overflow:visible;flex:none}
+  html.mega .sec-t{display:flex;align-items:center;gap:6px;margin:0 0 .35rem;padding-bottom:.4rem;
+    border-bottom:1px solid var(--line);font-size:.66rem}
+  /* Risques, Non classifié et Learning (listes) prennent toute la largeur. */
+  html.mega #d-risk,html.mega #d-unknown,html.mega #d-learning{grid-column:1/-1}
+  .sug{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px dashed var(--line)}
+  /* Clients (terminaux) — cards détaillées, inspirées de la vue admin. */
+  .client{display:flex;flex-direction:column;gap:3px;padding:7px 8px;margin-bottom:5px;
+    border:1px solid var(--line);border-radius:9px;background:var(--soft)}
+  .client .ci{display:flex;align-items:center;gap:7px}
+  .client .ci .e{font-size:1rem}
+  .client .ci b{font-weight:700;font-family:ui-monospace,monospace;font-size:.78rem}
+  .client .ci .vol{margin-left:auto;font-weight:700;color:var(--cyan)}
+  .client .ud{font-size:.66rem;color:var(--faint)}
+  .client .ud .al{color:#e0554a;font-weight:700}
+  .client .us{display:flex;flex-wrap:wrap;gap:4px;margin-top:1px}
+  .client .uchip{font-size:.62rem;padding:1px 6px;border-radius:999px;
+    background:color-mix(in srgb,var(--cyan) 12%,transparent);color:var(--cyan)}
+  .client .dst{font-size:.63rem;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .client .ci .fl{font-size:.82rem;letter-spacing:1px}
+  .client .ci .chev{color:var(--faint);font-size:.7rem;transition:transform .15s;margin-left:2px}
+  .client.open .ci .chev{transform:rotate(90deg)}
+  .client{cursor:pointer}
+  .client .meta{font-size:.63rem;color:var(--faint);display:flex;gap:8px;flex-wrap:wrap}
+  /* Détail dépliable au clic sur la card. */
+  .client .cdet{display:none;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);flex-direction:column;gap:7px}
+  .client.open .cdet{display:flex}
+  .cdet .dl{display:flex;flex-direction:column;gap:2px}
+  .cdet .dt{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .cdet .drow{display:flex;align-items:center;gap:6px;font-size:.68rem}
+  .cdet .drow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cdet .drow .bar{width:52px;height:5px;border-radius:3px;background:rgba(128,128,128,.18);overflow:hidden;flex:0 0 auto}
+  .cdet .drow .bar i{display:block;height:100%;background:var(--cyan)}
+  .cdet .drow .n{font-family:ui-monospace,monospace;font-size:.62rem;color:var(--faint);flex:0 0 auto}
+  html.mega #s-clients{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+  .sug:last-child{border-bottom:none}
+  .sug .dom{font-family:"JetBrains Mono",monospace;font-size:.78rem;color:var(--cyan);flex:0 0 auto;max-width:42%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sug .why{flex:1;min-width:0;font-size:.72rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sug .cf{flex:0 0 auto;font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--up);font-weight:600}
+  html.mega #slbar,html.mega .aide-lay{display:none!important}
+  html.mega .h b{font-size:1.05rem}
+  html.mega .kpis{max-width:1100px}
+</style>
+
+<div class="mw">
+  <div class="h"><span class="ic">🔬</span><b>DPI · Trafic vivant</b>
+    <span class="live" id="live"><i></i> live</span>
+    <span class="demo" id="demo" hidden>démo</span></div>
+  <div class="kpis">
+    <div class="kpi cy"><div class="v" id="k-flows">—</div><div class="l">flux actifs</div></div>
+    <div class="kpi up"><div class="v" id="k-bw">—<small>Mb/s</small></div><div class="l">débit</div></div>
+    <div class="kpi hot"><div class="v" id="k-risk">—</div><div class="l">risques</div></div>
+  </div>
+  <div class="vue">
+    <div class="dsec actif" id="d-proto"><div class="sec-t">🌐 Protocoles</div><div class="slice" id="s-proto"></div></div>
+    <div class="dsec" id="d-apps"><div class="sec-t">📱 Applications</div><div class="slice" id="s-apps"></div></div>
+    <div class="dsec" id="d-usage"><div class="sec-t">🧭 Usages</div><div class="slice" id="s-usage"></div></div>
+    <div class="dsec" id="d-talk"><div class="sec-t">🗣️ Talkers</div><div class="slice" id="s-talk"></div></div>
+    <div class="dsec" id="d-clients"><div class="sec-t">👥 Clients</div><div class="slice" id="s-clients"></div></div>
+    <div class="dsec" id="d-pays"><div class="sec-t">🌍 Pays</div><div class="slice" id="s-pays"></div></div>
+    <div class="dsec" id="d-infra"><div class="sec-t">🏢 Infrastructure</div><div class="slice" id="s-infra"></div></div>
+    <div class="dsec" id="d-unknown"><div class="sec-t">❔ Non classifié</div><div class="slice" id="s-unknown"></div></div>
+    <div class="dsec" id="d-learning"><div class="sec-t">🎓 Learning — suggestions</div><div class="slice" id="s-learning"></div></div>
+    <div class="dsec" id="d-risk"><div class="sec-t">⚠️ Risques</div><div class="slice" id="s-risk"></div></div>
+  </div>
+  <div id="slbar"></div>
+
+  <!-- Aide reverse-design : anneaux + pastilles SANS voile (contenu visible).
+       Les légendes s'affichent dans la bulle dédiée côté Hall. -->
+  <div class="aide-lay" id="aidelay"></div>
+</div>
+
+<script src="../slicebar.js"></script>
+<script src="../aide.js"></script>
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+
+  // MODE MEGA : vhost embarqué (embed=1&mega=1), PAS de cardlet. On abandonne le
+  // slicer — page classique, toutes les données empilées (cf. CSS html.mega).
+  var qs=new URLSearchParams(location.search);
+  var MEGA=(qs.get('mega')==='1');
+  if(MEGA) document.documentElement.classList.add('mega');
+
+  // Jeu de DÉMO (nDPI plausible) — remplacé dès que /api/v1/dpi/* répond en JSON.
+  var DEMO={
+    demo:true, flows:1284, bw:47.3, risks:6,
+    proto:[["🔒","TLS 1.3",38],["⚡","QUIC",24],["🌐","HTTP/2",12],["📡","DNS",9],["🧲","BitTorrent",7],["🛡️","WireGuard",5],["✉️","SMTPS",3]],
+    apps:[["▶️","YouTube",29],["🎬","Netflix",18],["☁️","Cloudflare",14],["🐙","GitHub",9],["🎵","Spotify",7],["🪟","Windows Update",6]],
+    usage:[["🎬","Streaming",44],["🌐","Navigation",21],["🎮","Jeu",13],["☁️","Cloud",9],["⬇️","Mises à jour",7],["💬","Social",6]],
+    infra:[["🔎","Google",34],["🎬","Netflix OpenConnect",26],["☁️","Cloudflare",12],["🪟","Microsoft",10],["📦","Akamai / Steam",9]],
+    unknown:[["rr5---sn.googlevideo.com","2.1 Go · co-occurrent YouTube ×47"],["edge-telemetry.example","40 Mo · beaconing 30 s"],["occ-0-2774.1.nflxso.net","1.8 Go · gros downstream"],["*.gvt2.com","petit · périodique"]],
+    learning:[["googlevideo.com","2 sous-domaines non classifiés, 4.0 Go",98],["gvt2.com","6 terminaux, périodique",91],["edge-telemetry.example","beaconing régulier — à examiner",54]],
+    talk:[["💻","desktop-lan · .24",34],["📱","pixel · .51",22],["📺","tv-salon · .77",17],["🖥️","nas · .10",14],["🎮","console · .63",8]],
+    pays:[["🇫🇷","France",52],["🇺🇸","États-Unis",28],["🇨🇦","Canada",9],["🇧🇷","Brésil",5],["🇩🇪","Allemagne",3]],
+    clients:[
+      {device:"a1b2c3d4e5f6",up_bytes:8.6e9,down_bytes:2.1e9,bytes:10.7e9,sessions:3,alerts:2,flows:728052,
+       last_seen:Math.floor(Date.now()/1000)-240, first_seen:Math.floor(Date.now()/1000)-5443200,
+       countries:[{flag:"🇫🇷"},{flag:"🇺🇸"},{flag:"🇨🇦"},{flag:"🇧🇷"}],
+       usages:[{name:"ai",bytes:6.6e8},{name:"cloud",bytes:3.1e8},{name:"social",bytes:1.2e8}],
+       top_dst:[{host:"api.anthropic.com"},{host:"82.67.100.75"},{host:"x.com"}]},
+      {device:"f6a7b8c9d012",up_bytes:5.0e8,down_bytes:1.1e8,bytes:6.1e8,sessions:3,alerts:1,flows:41200,
+       last_seen:Math.floor(Date.now()/1000)-3600, first_seen:Math.floor(Date.now()/1000)-527000,
+       countries:[{flag:"🇺🇸"},{flag:"🇫🇷"},{flag:"🇩🇪"}],
+       usages:[{name:"ai",bytes:2.1e7},{name:"cloud",bytes:8.0e6}],top_dst:[{host:"160.79.104.10"}]},
+      {device:"4fec81d9aa10",up_bytes:3.3e7,down_bytes:5.8e6,bytes:3.9e7,sessions:4,alerts:0,flows:9800,
+       last_seen:Math.floor(Date.now()/1000)-1800, first_seen:Math.floor(Date.now()/1000)-1296000,
+       countries:[{flag:"🇮🇱"},{flag:"🇭🇺"},{flag:"🇺🇸"},{flag:"🇫🇷"}],
+       usages:[{name:"cloud",bytes:2.5e7},{name:"streaming",bytes:7.3e6},{name:"social",bytes:2.0e6}],
+       top_dst:[{host:"www.youtube.com"},{host:"photos.googleapis.com"}]}
+    ],
+    risk:[["hi","Identifiants en clair (HTTP)","3×"],["hi","Certificat auto-signé","2×"],["md","Proto connu sur port non-std","5×"],["md","TLS obsolète (1.0)","1×"],["lo","Paquet malformé","4×"]]
+  };
+
+  // Affichage progressif : top-5 par défaut + « voir plus » (déplie le reste).
+  // Sur données réelles les listes débordent ; on garde la carte lisible. L'état
+  // déplié survit aux rafraîchissements (persisté sur le conteneur).
+  var LIM=5;
+  (function(){ var s=document.createElement('style');
+    s.textContent='.voirplus{display:block;width:100%;margin-top:2px;padding:2px 4px;'
+      +'background:transparent;border:1px dashed var(--faint,#889);border-radius:5px;'
+      +'color:var(--accent,#0cf);font:inherit;font-size:.68rem;cursor:pointer;opacity:.75}'
+      +'.voirplus:hover{opacity:1;border-style:solid}';
+    document.head.appendChild(s); })();
+  function progressif(cont, rows, drawOne, vide, lim){
+    rows=rows||[]; lim=lim||LIM;
+    if(cont._all===undefined) cont._all=false;
+    function paint(){
+      if(!rows.length){ cont.innerHTML='<div class="vide" style="color:var(--faint);font-size:.72rem">'+(vide||'—')+'</div>'; return; }
+      var shown=cont._all?rows:rows.slice(0,lim);
+      var html=shown.map(drawOne).join('');
+      if(rows.length>lim){ html+='<button class="voirplus" type="button">'
+        +(cont._all?'▲ voir moins':'▾ voir plus (+'+(rows.length-lim)+')')+'</button>'; }
+      cont.innerHTML=html;
+      var b=cont.querySelector('.voirplus');
+      if(b) b.onclick=function(){ cont._all=!cont._all; paint(); };
+    }
+    paint();
+  }
+  function barres(cont, rows, cls){
+    var max=(rows||[]).reduce(function(m,r){return Math.max(m,r[2]);},1);
+    progressif(cont, rows, function(r){
+      return '<div class="row '+(cls||'')+'"><span class="e">'+r[0]+'</span>'
+        +'<span class="nm" title="'+esc(r[1])+'">'+esc(r[1])+'</span>'
+        +'<span class="bar"><i style="width:'+Math.round(r[2]/max*100)+'%"></i></span>'
+        +'<span class="n">'+r[2]+'%</span></div>';
+    }, '—');
+  }
+  function risques(cont, rows){
+    progressif(cont, rows, function(r){
+      return '<div class="risk '+r[0]+'"><span class="sev"></span>'
+        +'<span class="nm" title="'+esc(r[1])+'">'+esc(r[1])+'</span><span class="n">'+esc(r[2])+'</span></div>';
+    }, 'Aucun risque relevé.');
+  }
+  // Liste « non classifié » (unknown-first) : nom + un détail (volume, comportement).
+  function inconnus(cont, rows){
+    progressif(cont, rows, function(r){
+      return '<div class="row"><span class="nm" style="flex:0 0 auto;max-width:52%" title="'+esc(r[0])+'">'+esc(r[0])+'</span>'
+        +'<span class="n" style="flex:1;text-align:right;color:var(--faint)">'+esc(r[1])+'</span></div>';
+    }, 'Rien d’inconnu — tout est classé.');
+  }
+  // Suggestions du learner (lecture seule ici — l'ACCEPT se fait dans l'admin,
+  // sous JWT). Chaque ligne : domaine proposé + pourquoi + confiance.
+  function apprend(cont, rows){
+    progressif(cont, rows, function(r){
+      return '<div class="sug"><span class="dom" title="'+esc(r[0])+'">'+esc(r[0])+'</span>'
+        +'<span class="why">'+esc(r[1])+'</span><span class="cf">'+(r[2]||0)+' %</span></div>';
+    }, 'Aucune suggestion — rien de neuf à apprendre.');
+  }
+  // CLIENTS (terminaux) : une card détaillée par device — identité, volume ↑/↓,
+  // familles d'usage (chips), top destinations, alertes. Compacte en /micro,
+  // grille de cards en /mega (cf. CSS html.mega #s-clients). Inspiré de l'admin.
+  function shortDev(d){ d=String(d||''); return d?d.slice(0,8):'?'; }
+  function devEmoji(d){ var s=['💻','📱','📺','🖥️','🎮','⌚']; d=String(d||''); var h=0;
+    for(var i=0;i<d.length;i++) h=(h+d.charCodeAt(i))%s.length; return s[h]; }
+  // Temps lisibles : « il y a X » (dernière activité) et durée d'activité (span).
+  function agoStr(ts){ if(!ts) return '—'; var s=Math.max(0,Math.floor(Date.now()/1000-ts));
+    if(s<90) return s+'s'; if(s<5400) return Math.round(s/60)+'min';
+    if(s<172800) return Math.round(s/3600)+'h'; return Math.round(s/86400)+'j'; }
+  function spanStr(a,b){ var s=Math.max(0,(b||0)-(a||0));
+    if(s<5400) return Math.round(s/60)+' min'; if(s<172800) return (s/3600).toFixed(1)+' h';
+    return (s/86400).toFixed(1)+' j'; }
+  function barreDrow(nm, w, n){
+    return '<div class="drow"><span class="nm">'+nm+'</span>'
+      +(w!=null?'<span class="bar"><i style="width:'+w+'%"></i></span>':'')
+      +'<span class="n">'+n+'</span></div>';
+  }
+  function clients(cont, rows){
+    progressif(cont, rows, function(c){
+      var nom=c.name?esc(c.name):esc(shortDev(c.device));
+      var fl=(c.countries||[]).slice(0,4).map(function(x){ return x.flag||'🏳️'; }).join('');
+      var us=(c.usages||[]).slice(0,3).map(function(u){
+        return '<span class="uchip">'+emUsage(u.name)+' '+esc(u.name)+' '+humain(u.bytes)+'</span>'; }).join('');
+      var dst=(c.top_dst||[]).slice(0,3).map(function(d){ return esc(shortTalk(d.host||d)); }).join(' · ');
+      var al=c.alerts?(' · <span class="al">⚠ '+c.alerts+'</span>'):'';
+      var meta=(c.last_seen||c.first_seen)
+        ? '<div class="meta"><span>🕒 vu il y a '+agoStr(c.last_seen)+'</span><span>⏱ actif '+spanStr(c.first_seen,c.last_seen)+'</span><span>🔀 '+(c.flows||0)+' flux</span></div>'
+        : '';
+      // Détail (déplié au clic) : tous les usages (barres), toutes les destinations, tous les pays.
+      var maxu=(c.usages||[]).reduce(function(m,u){return Math.max(m,u.bytes||0);},1);
+      var detU=(c.usages||[]).map(function(u){
+        return barreDrow(emUsage(u.name)+' '+esc(u.name), Math.round((u.bytes||0)/maxu*100), humain(u.bytes)); }).join('');
+      var detD=(c.top_dst||[]).map(function(d){
+        return barreDrow(esc(d.host||d), null, d.bytes?humain(d.bytes):''); }).join('');
+      var detC=(c.countries||[]).map(function(x){
+        return '<span class="uchip">'+(x.flag||'🏳️')+' '+esc(x.name||x.cc||'')+'</span>'; }).join(' ');
+      var cdet='<div class="cdet">'
+        +(detU?'<div class="dl"><div class="dt">Usages</div>'+detU+'</div>':'')
+        +(detD?'<div class="dl"><div class="dt">Destinations</div>'+detD+'</div>':'')
+        +(detC?'<div class="dl"><div class="dt">Pays</div><div class="us">'+detC+'</div></div>':'')
+        +(c.device?'<div class="meta"><span title="identité R3 (hash de clé WireGuard)">🔑 '+esc(c.device)+'</span></div>':'')
+        +'</div>';
+      return '<div class="client"><div class="ci"><span class="e">'+devEmoji(c.device)+'</span>'
+        +'<b title="'+esc(c.device)+'">'+nom+'</b>'
+        +(fl?'<span class="fl" title="pays des destinations">'+fl+'</span>':'')
+        +'<span class="vol">'+humain(c.bytes)+'</span><span class="chev">▸</span></div>'
+        +'<div class="ud">↑'+humain(c.up_bytes)+' ↓'+humain(c.down_bytes)+' · '+(c.sessions||0)+' usages'+al+'</div>'
+        +meta
+        +(us?'<div class="us">'+us+'</div>':'')
+        +(dst?'<div class="dst">→ '+dst+'</div>':'')
+        +cdet+'</div>';
+    }, 'Aucun terminal observé.');
+    // Clic sur une card → déplie/replie son détail (délégation, survit aux refresh).
+    if(!cont._clickwired){ cont._clickwired=true;
+      cont.addEventListener('click', function(e){
+        if(e.target.closest('.voirplus')) return;
+        var card=e.target.closest('.client'); if(card) card.classList.toggle('open');
+      });
+    }
+  }
+  function rend(d){
+    el('demo').hidden=!d.demo; el('live').style.display=d.demo?'none':'';
+    el('k-flows').textContent=d.flows!=null?d.flows:'—';
+    el('k-bw').innerHTML=(d.bw!=null?d.bw:'—')+'<small>Mb/s</small>';
+    el('k-risk').textContent=d.risks!=null?d.risks:'—';
+    barres(el('s-proto'), d.proto, '');
+    barres(el('s-apps'),  d.apps,  'a2');
+    barres(el('s-usage'), d.usage||[], '');
+    barres(el('s-talk'),  d.talk,  'a3');
+    clients(el('s-clients'), d.clients||[]);
+    barres(el('s-pays'),  d.pays||[], '');
+    risques(el('s-risk'), d.risk);
+    if(d.infra) barres(el('s-infra'), d.infra, 'a2');
+    if(d.unknown) inconnus(el('s-unknown'), d.unknown);
+    if(d.learning) apprend(el('s-learning'), d.learning);
+  }
+  // Volume lisible : octets → Ko/Mo/Go.
+  function humain(o){ o=Number(o)||0; if(o>=1e9)return (o/1e9).toFixed(1)+' Go';
+    if(o>=1e6)return (o/1e6).toFixed(1)+' Mo'; if(o>=1e3)return Math.round(o/1e3)+' Ko'; return o+' o'; }
+  function emInfra(n){ var s=String(n||'').toLowerCase();
+    if(s.indexOf('google')>=0)return '🔎'; if(s.indexOf('netflix')>=0)return '🎬';
+    if(s.indexOf('cloudflare')>=0)return '☁️'; if(s.indexOf('microsoft')>=0)return '🪟';
+    if(s.indexOf('akamai')>=0||s.indexOf('steam')>=0)return '📦'; if(s.indexOf('aws')>=0||s.indexOf('amazon')>=0)return '📦';
+    if(s.indexOf('fastly')>=0)return '⚡'; if(s.indexOf('meta')>=0||s.indexOf('facebook')>=0)return '📘';
+    if(s.indexOf('apple')>=0)return '🍎'; if(s.indexOf('telegram')>=0)return '✈️'; return '🏢'; }
+
+  // ── LECTURE VIVANTE via sbxdpi (nDPI 5.x) ──────────────────────────────────
+  // /api/v1/dpi/stats est servi par sbxdpi (couche Go au-dessus de nDPId) :
+  // compteurs agrégés, sans PII. On mappe sa forme sur l'affichage ; si le
+  // socket dort ou ne répond pas en JSON, la démo étiquetée reste.
+  function emProto(n){ n=String(n||'').toUpperCase();
+    var M={TLS:'🔒',QUIC:'⚡',HTTP:'🌐','HTTP2':'🌐',HTTPS:'🔒',DNS:'📡',MDNS:'📡',
+      BITTORRENT:'🧲',WIREGUARD:'🛡️',OPENVPN:'🛡️',SSH:'🔑',SMTPS:'✉️',SMTP:'✉️',
+      IMAPS:'✉️',NTP:'🕰️',ICMP:'📶',ICMPV6:'📶',SOCKS:'🧦',TELEGRAM:'✈️',
+      TAILSCALE:'🕸️',STUN:'📞',SIP:'📞',RTP:'🎙️',QUICKTIME:'🎬',UNKNOWN:'❔'};
+    return M[n]||'📦'; }
+  function emApp(n){ var s=String(n||'').toLowerCase();
+    if(s.indexOf('youtube')>=0)return '▶️'; if(s.indexOf('netflix')>=0)return '🎬';
+    if(s.indexOf('google')>=0)return '🔎'; if(s.indexOf('cloudflare')>=0)return '☁️';
+    if(s.indexOf('github')>=0)return '🐙'; if(s.indexOf('microsoft')>=0||s.indexOf('windows')>=0)return '🪟';
+    if(s.indexOf('amazon')>=0||s.indexOf('aws')>=0)return '📦'; if(s.indexOf('apple')>=0)return '🍎';
+    if(s.indexOf('facebook')>=0||s.indexOf('meta')>=0)return '📘'; if(s.indexOf('spotify')>=0)return '🎵';
+    if(s.indexOf('tls')>=0)return '🔒'; return '🧩'; }
+  // USAGE (#DPI-sémantique) : nDPI `category` → famille d'usage lisible. Les
+  // catégories nDPI arrivent déjà agrégées de sbxdpi (snapshot.categories[]) —
+  // on ne les jetait plus qu'à l'affichage. Passer de « protocole » à « usage ».
+  function emUsage(n){ var s=String(n||'').toLowerCase();
+    if(/stream|media|video/.test(s))return '🎬'; if(/game|gaming/.test(s))return '🎮';
+    if(/cloud|datatransfer|filetransfer/.test(s))return '☁️'; if(/social|chat/.test(s))return '💬';
+    if(/download|update/.test(s))return '⬇️'; if(/mail|email/.test(s))return '✉️';
+    if(/vpn|remoteaccess|remote/.test(s))return '🛡️'; if(/ad|advertis|track/.test(s))return '📢';
+    if(/web/.test(s))return '🌐'; if(/network|system|conn/.test(s))return '🔧';
+    if(/music|audio/.test(s))return '🎵'; return '🧭'; }
+  function sev3(s){ s=String(s||'').toLowerCase();
+    if(/crit|severe|high|emerg|error/.test(s)) return 'hi';
+    if(/med|warn|moderat|notice/.test(s)) return 'md'; return 'lo'; }
+  // « 192.168.1.24 → 1.2.3.4 » : on garde les derniers octets, lisibles en étroit.
+  function shortTalk(n){ return String(n||'').replace(/(\d+)\.(\d+)\.(\d+)\.(\d+)/g,
+    function(_,a,b,c,d){ return '·'+d; }); }
+
+  var lastBytes=null, lastTs=null;
+  function tente(){
+    fetch('/api/v1/dpi/stats',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){
+        if(!j || j.total_flows==null) throw 0;
+        // Débit instantané : dérivé du cumul d'octets entre deux sondes (Mb/s).
+        var bw=null, now=(j.updated_at||Math.floor(Date.now()/1000));
+        if(lastBytes!=null && now>lastTs){
+          bw=Math.max(0,((j.total_bytes-lastBytes)*8)/((now-lastTs)*1e6));
+          bw=Math.round(bw*10)/10;
+        }
+        lastBytes=j.total_bytes; lastTs=now;
+        // En mega on ne coupe presque pas : la page classique montre TOUT.
+        var NP=MEGA?40:7, NA=MEGA?40:6, NU=MEGA?40:6, NT=MEGA?40:5, NR=MEGA?40:5;
+        function rows(arr,n,em){ return (arr||[]).slice(0,n).map(function(x){
+          return [em(x.name), x.name, Math.max(1,Math.round(x.pct||0))]; }); }
+        var proto=rows(j.protocols,NP,emProto), apps=rows(j.apps,NA,emApp);
+        var usage=rows(j.categories,NU,emUsage);
+        var talk=(j.talkers||[]).slice(0,NT).map(function(x){
+          return ['💻', shortTalk(x.name), Math.max(1,Math.round(x.pct||0))]; });
+        var risk=(j.risks||[]).slice(0,NR).map(function(x){
+          return [sev3(x.severity), x.name, (x.count||0)+'×']; });
+        rend({demo:false,
+          flows:j.total_flows, bw:(bw!=null?bw:'…'), risks:(j.risks?j.risks.length:0),
+          proto:proto.length?proto:DEMO.proto, apps:apps.length?apps:DEMO.apps,
+          usage:usage.length?usage:DEMO.usage,
+          talk:talk.length?talk:DEMO.talk, risk:risk.length?risk:DEMO.risk});
+      })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  // ── VUE USAGE ENRICHIE (#DPI-sémantique L2) via /api/v1/dpi/usage ───────────
+  // Sert les sections mega Infrastructure (providers) et Non classifié (unknown-
+  // first). Servi par sbxdpi (moteur d'enrichissement, règles versionnées). Si
+  // le socket dort, la démo étiquetée reste (rend(DEMO) l'a déjà posée).
+  function tenteUsage(){
+    fetch('/api/v1/dpi/usage',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){
+        if(!j) throw 0;
+        var prov=(j.providers||[]).slice(0,MEGA?40:8).map(function(x){
+          return [emInfra(x.name), x.name, Math.max(1,Math.round(x.pct||0))]; });
+        var unk=(j.unknown||[]).slice(0,MEGA?60:8).map(function(x){
+          return [x.name, humain(x.bytes)+(x.flows?(' · '+x.flows+' flux'):'')]; });
+        if(prov.length) barres(el('s-infra'), prov, 'a2');
+        if(unk.length) inconnus(el('s-unknown'), unk);
+      })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  // Suggestions du learner (#DPI-sémantique L5) — lecture seule.
+  function tenteSug(){
+    fetch('/api/v1/dpi/suggestions',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){
+        if(!Array.isArray(j)) throw 0;
+        var rows=j.slice(0,MEGA?40:6).map(function(s){
+          return [s.domain, (s.reason||''), Math.max(0,Math.round(s.confidence||0))]; });
+        if(rows.length) apprend(el('s-learning'), rows);
+      })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  // Pays des destinations (#DPI-sémantique) — géo des IP réelles via /countries.
+  function paysEm(f){ return f||'🏳️'; }
+  function tentePays(){
+    fetch('/api/v1/dpi/countries',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){
+        if(!Array.isArray(j)||!j.length) throw 0;
+        var rows=j.map(function(c){
+          return [paysEm(c.flag), c.name||c.cc, Math.max(1,Math.round(c.pct||0))]; });
+        barres(el('s-pays'), rows, '');
+      })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  // Clients (terminaux) via /api/v1/dpi/clients (relayé vers /pub/clients).
+  function tenteClients(){
+    fetch('/api/v1/dpi/clients',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){ if(!Array.isArray(j)||!j.length) throw 0; clients(el('s-clients'), j); })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  rend(DEMO); tente(); tenteUsage(); tenteSug(); tentePays(); tenteClients();
+  setInterval(tente, 15000); setInterval(tenteUsage, 20000); setInterval(tenteSug, 30000); setInterval(tentePays, 25000); setInterval(tenteClients, 20000);
+
+  // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).
+  var slices=[el('d-proto'),el('d-apps'),el('d-usage'),el('d-talk'),el('d-clients'),el('d-pays'),el('d-risk')];
+  var curSlice=0;
+
+  // ── AIDE reverse-design (bibliothèque partagée SBXAide) — PAR SLICE ──────────
+  // On fournit un zones() RICHE dont le libellé central change avec la slice
+  // active ; SBXAide dessine anneaux + pastilles in-card (sans voile) et rapporte
+  // {sbx:'aide-zones'} au Hall pour la bulle de légendes (cf. HIG §5.2). Plus de
+  // code inline : c'est la même lib que toutes les cardlets.
+  var mw=document.querySelector('.mw');
+  var SNOM=['Protocoles','Applications','Usages','Talkers','Clients','Pays','Risques'];
+  var DET=['Protocoles — la barre = part du trafic','Applications — top usage',
+           'Usages — famille d’usage (catégorie nDPI)',
+           'Talkers — destinations les plus bavardes',
+           'Clients — un terminal par card : volume ↑/↓, usages, top destinations, alertes',
+           'Pays — géo des destinations (IP réelles, GeoLite2)',
+           'Risques nDPI — pastille = sévérité'];
+  var AIDE=(window.SBXAide) ? SBXAide({
+    root: mw,
+    slice: function(){ return SNOM[curSlice]||''; },
+    zones: function(){ return [
+      {el:el('k-flows').closest('.kpis'), label:'KPIs — flux actifs · débit · risques'},
+      {el:slices[curSlice], label:DET[curSlice]},
+      {el:el('slbar'), label:'Slices — tournent seules ; clic fige, re-clic reprend'}
+    ]; }
+  }) : null;
+  function montre(i){ curSlice=i; for(var k=0;k<slices.length;k++){ slices[k].classList.toggle('actif',k===i); }
+    if(AIDE) AIDE.refresh(); }
+
+  if(MEGA){
+    // Page classique : toutes les slices visibles, empilées ; ni barre ni rotation.
+    for(var k=0;k<slices.length;k++) slices[k].classList.add('actif');
+  } else if(window.SBXSliceBar){
+    SBXSliceBar(el('slbar'), {autoMs:9000, onShow:montre,
+      slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🧭 Usages'},{label:'🗣️ Talkers'},{label:'👥 Clients'},{label:'🌍 Pays'},{label:'⚠️ Risques'}]});
+  } else { montre(0); }
+
+  (function(){ var t=new URLSearchParams(location.search).get('theme');
+    if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
+  addEventListener('message', function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
+})();
+</script>

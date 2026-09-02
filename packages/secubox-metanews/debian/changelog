@@ -1,3 +1,28 @@
+secubox-metanews (0.1.33-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet /micro : auto-rotation RALENTIE (6s→12s), stoppée sous
+    prefers-reduced-motion, et pause « au-dessus » (survol de la carte depuis
+    le Hall via postMessage). Moins de titres qui s'échappent sous les yeux.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 13:00:00 +0200
+
+secubox-metanews (0.1.32-1~bookworm1) bookworm; urgency=medium
+
+  * SLICER « double bullet » DANS LA CARTE MICRO. Une barre à bullets fixée en
+    bas tranche la carte par section : 🌍 Une + les catégories les mieux
+    fournies (general, international, tech…), lues de l'API /categories. Un clic
+    filtre les sujets (?category=), pilule active en dégradé ; la rotation des
+    sujets continue dans la section. Même langage que la radio et PeerTube.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 10:32:22 +0200
+
+secubox-metanews (0.1.31-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : habillage « spicy » (filet dégradé sous l'en-tête, chiffres à
+    halo) + aide reverse-design contextuelle (anneaux + pastilles sur le contenu,
+    sans voile, + report des zones à la bulle dédiée du Hall).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:03:28 +0200
 secubox-metanews (0.1.30-1~bookworm1) bookworm; urgency=medium
 
   * Vue principale : hashtags + sources places ENTRE la ligne de meta

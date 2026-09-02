@@ -1,3 +1,21 @@
+secubox-surf (1.0.19-1~bookworm1) bookworm; urgency=medium
+
+  * egress : résolution ROBUSTE du SOCKS Tor. L'env SECUBOX_TOR_SOCKS gagne ;
+    sinon on sonde loopback puis l'IP LAN réelle auto-détectée (Tor n'est pas
+    sur 127.0.0.1 ici). CLI/sous-process trouvent Tor sans env — .onion OK.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 10:30:00 +0200
+
+secubox-surf (1.0.18-1~bookworm1) bookworm; urgency=medium
+
+  * BiB : navigation .onion possible (Tor). L'aplatissement d'hôte donnait un
+    label DNS de 67 car. (> 63) pour un onion v3 → INnavigable. On droppe
+    `.onion` et on marque le plat par un `0` de tête (hors base32) →
+    `surf-0<56>` = 62 car. `cible_de` reverse via `^0([a-z2-7]{56})$`. L'egress
+    route déjà les .onion en Tor (SECUBOX_TOR_SOCKS=192.168.1.200:9050).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 10:00:00 +0200
+
 secubox-surf (1.0.17-1~bookworm1) bookworm; urgency=medium
 
   * BiB/relais : ne plus casser le JS inline (#1266). reecris_html passait ses

@@ -1,3 +1,17 @@
+secubox-devwatch (1.0.11-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : HOVER-DÉTAILS — survol d\047un module (révisions) ou du dernier
+    commit → pop de détail + conseil d\047usage contextuel.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:15:52 +0200
+
+secubox-devwatch (1.0.10-1~bookworm1) bookworm; urgency=medium
+
+  * Carte /micro : habillage « spicy » cohérent avec la carte DPI — filet
+    dégradé sous l'en-tête, chiffre du pouls en cyan à halo, tuiles effort
+    dégradées + chiffrées en couleur, barres de versions en dégradé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 07:16:51 +0200
 secubox-devwatch (1.0.9-1~bookworm1) bookworm; urgency=medium
 
   * Admin : champ PAT GitHub (#1370). Sans token, l'API publique plafonne à 60 req/h

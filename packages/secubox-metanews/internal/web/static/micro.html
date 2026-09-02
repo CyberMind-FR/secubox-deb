@@ -86,6 +86,38 @@
   @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
   @media (prefers-reduced-motion: reduce) { .pouls { animation:none; opacity:.7 } }
   .vide { font-size:.72rem; color:var(--muted); }
+  /* SPICY (#1360) — filet dégradé sous l'en-tête + chiffres à halo. */
+  .tete { position:relative; padding-bottom:5px; }
+  .tete::after { content:""; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px;
+    background:linear-gradient(90deg, var(--accent), #28d6ff, #f0b429); opacity:.9; }
+  .tete .n, .parts .srcs .mx { text-shadow:0 0 12px color-mix(in srgb, var(--accent) 35%, transparent); }
+  /* Aide reverse-design : anneaux + pastilles (aide.js, inline plus bas). */
+  .sbxaide-ring { position:absolute; border:2px solid var(--accent); border-radius:8px; z-index:41;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent); pointer-events:none; transition:.18s; }
+  .sbxaide-pin { position:absolute; transform:translate(-50%,-50%); min-width:18px; height:18px; border-radius:10px;
+    z-index:42; background:var(--accent); color:#fff; font-weight:800; font-size:.66rem; display:grid; place-items:center;
+    padding:0 5px; box-shadow:0 2px 6px rgba(0,0,0,.45); pointer-events:none; }
+
+  /* ── SLICER « double bullet » : À la une + sections (catégories) ───────────
+     Barre à bullets fixée en bas, pilule active en dégradé qui vit. Même
+     langage que la radio / peertube. */
+  .mw { padding-bottom:34px; }
+  .mn-slbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+              display:flex; align-items:center; gap:8px; padding:7px 12px;
+              font-size:.6rem; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+              background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--fond)),var(--fond));
+              border-top:2px solid transparent;
+              border-image:linear-gradient(90deg,var(--accent),#28d6ff,#f0b429) 1;
+              box-shadow:0 -8px 20px -14px rgba(0,0,0,.55); }
+  .mn-slbar .dots { display:flex; align-items:center; gap:5px; flex-wrap:nowrap; }
+  .mn-slbar .dots button { width:8px; height:8px; padding:0; border:0; border-radius:50%;
+              background:var(--border); cursor:pointer;
+              transition:width .22s ease, background .22s ease, box-shadow .22s ease; }
+  .mn-slbar .dots button.on { width:20px; border-radius:6px;
+              background:linear-gradient(90deg,var(--accent),#28d6ff);
+              box-shadow:0 0 10px -1px var(--accent); }
+  .mn-slbar .lab { margin-left:2px; font-weight:700; letter-spacing:.08em; color:var(--accent);
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 </style>
 
 <div class="mw">
@@ -114,7 +146,11 @@
 <script>
 (function () {
   "use strict";
-  var API = '/api/v1/metanews/topics?limit=24';
+  var curCat = '';   // '' = À la une (tous) ; sinon une catégorie de source
+  function apiURL() {
+    return '/api/v1/metanews/topics?limit=24'
+      + (curCat ? ('&category=' + encodeURIComponent(curCat)) : '');
+  }
   var sujets = [], i = 0, enPause = false;
 
   var esc = function (t) {
@@ -247,23 +283,77 @@
   el('top').addEventListener('mouseleave', function () { el('top')._h = null; stopAp(); montre(); });
 
   function charge() {
-    fetch(API, { headers: { 'Accept': 'application/json' } })
+    fetch(apiURL(), { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         sujets = (d && d.topics) || [];
         el('n').textContent = sujets.length ? sujets.length + ' sujets' : '';
         if (!sujets.length) {
-          el('une-t').textContent = 'Aucun sujet agrégé';
+          el('une-t').textContent = curCat ? 'Rien dans « ' + curCat + ' »' : 'Aucun sujet agrégé';
           el('pouls').style.animation = 'none';
+          el('top').innerHTML = '<div class="tt">↻ en rotation</div>';
           return;
         }
+        el('pouls').style.animation = '';
         montre();
       })
       .catch(function () { el('une-t').textContent = 'MetaNews injoignable'; });
   }
 
+  // ── SLICER « double bullet » (#metanews-slices) ────────────────────────────
+  // À la une + les sections les mieux fournies (catégories de sources). Clic
+  // pour choisir ; la rotation des sujets continue DANS la section. Pas
+  // d'auto-rotation entre sections : chaque section refait un fetch.
+  var VUES = [{ k: '', lab: '🌍 Une' }], slDots = null, slLab = null, vue = 0;
+  function poseSlice() {
+    if (!slDots) return;
+    Array.prototype.forEach.call(slDots.children, function (d, k) { d.classList.toggle('on', k === vue); });
+    slLab.textContent = VUES[vue].lab;
+  }
+  function changeVue(k) {
+    if (k === vue) return;
+    vue = k; curCat = VUES[k].k; poseSlice();
+    i = 0; stopAp(); charge();
+  }
+  function buildSlicer(cats) {
+    var top = Object.keys(cats || {}).map(function (c) { return { c: c, n: cats[c] }; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 5);
+    top.forEach(function (x) { VUES.push({ k: x.c, lab: '🏷️ ' + x.c }); });
+    if (VUES.length < 2) return;   // pas de catégorie → pas de barre
+    var bar = document.createElement('div'); bar.className = 'mn-slbar';
+    slDots = document.createElement('div'); slDots.className = 'dots';
+    slLab = document.createElement('span'); slLab.className = 'lab';
+    VUES.forEach(function (v, k) {
+      var b = document.createElement('button'); b.type = 'button';
+      b.title = v.lab; b.setAttribute('aria-label', v.lab);
+      b.addEventListener('click', function () { changeVue(k); });
+      slDots.appendChild(b);
+    });
+    bar.appendChild(slDots); bar.appendChild(slLab);
+    (document.querySelector('.mw') || document.body).appendChild(bar);
+    poseSlice();
+  }
+  function initSlicer() {
+    fetch('/api/v1/metanews/categories', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { buildSlicer((d && d.categories) || {}); })
+      .catch(function () {});
+  }
+
   charge();
-  setInterval(tourne, 6000);
+  initSlicer();
+  // Auto-rotation RALENTIE (12 s au lieu de 6) et jamais sous reduced-motion.
+  var lent = 12000;
+  try { if (matchMedia('(prefers-reduced-motion: reduce)').matches) lent = 0; } catch (e) {}
+  if (lent) setInterval(tourne, lent);
+  // PAUSE « AU-DESSUS » (#1266) : le Hall signale le survol de la carte dans la
+  // grille (souris au-dessus, hors iframe) par postMessage — on suspend comme
+  // au survol direct.
+  addEventListener('message', function (ev) {
+    var d = ev && ev.data; if (!d || !d.sbx) return;
+    if (d.sbx === 'survol' || d.sbx === 'pause') enPause = true;
+    else if (d.sbx === 'quitte' || d.sbx === 'reprend') { enPause = false; stopAp(); montre(); }
+  });
   // Le fond bouge en dizaines de minutes : recharger plus souvent afficherait
   // les mêmes sujets en chargeant la box.
   setInterval(charge, 300000);
@@ -293,5 +383,42 @@
       document.documentElement.setAttribute('data-theme', d.theme);
     }
   });
+})();
+</script>
+
+<!-- Aide reverse-design (#1360) — inline (cross-origin : pas d'accès à aide.js
+     du Hall). Anneaux + pastilles SUR le contenu (sans voile) + report des zones
+     à la bulle dédiée du Hall, au signal {sbx:'aide'} du ❓. -->
+<script>
+(function(){
+  function post(m){ if(window.parent!==window){ try{window.parent.postMessage(m,'*'); }catch(e){} } }
+  var root=document.querySelector('.mw'); if(!root) return;
+  if(getComputedStyle(root).position==='static') root.style.position='relative';
+  var on=false,tmr=null,nodes=[];
+  function ZONES(){ return [
+    {el:document.querySelector('.tete'),   label:'En-tête — MetaNews et son pouls (carte vivante)'},
+    {el:document.getElementById('une'),    label:'À la une — le sujet en vedette (image + titre)'},
+    {el:document.getElementById('parts'),  label:'Détails — hashtags, sources agrégées, source courante'},
+    {el:document.getElementById('top'),    label:'En rotation — les sujets suivants / l’aperçu survolé'},
+    {el:document.querySelector('.pied'),   label:'Pied — ouvrir MetaNews en grand'}
+  ]; }
+  function clear(){ nodes.forEach(function(n){n.remove();}); nodes=[]; }
+  function draw(){ clear(); var rr=root.getBoundingClientRect(), Z=ZONES();
+    Z.forEach(function(x,k){ if(!x.el)return; var r=x.el.getBoundingClientRect(); if(r.width<2||r.height<2)return;
+      var ring=document.createElement('div'); ring.className='sbxaide-ring';
+      ring.style.left=(r.left-rr.left-2)+'px'; ring.style.top=(r.top-rr.top-2)+'px';
+      ring.style.width=(r.width+4)+'px'; ring.style.height=(r.height+4)+'px'; root.appendChild(ring); nodes.push(ring);
+      var pin=document.createElement('div'); pin.className='sbxaide-pin'; pin.textContent=(k+1);
+      pin.style.left=(r.left-rr.left+10)+'px'; pin.style.top=(r.top-rr.top)+'px'; root.appendChild(pin); nodes.push(pin);
+    });
+    report(rr,Z);
+  }
+  function report(rr,Z){ rr=rr||root.getBoundingClientRect(); Z=Z||ZONES();
+    post({sbx:'aide-zones',slice:'',vw:rr.width,vh:rr.height,
+      zones:Z.map(function(x){ if(!x.el)return null; var r=x.el.getBoundingClientRect(); if(r.width<2||r.height<2)return null;
+        return {label:x.label,x:r.left-rr.left,y:r.top-rr.top,w:r.width,h:r.height};}).filter(Boolean)}); }
+  function show(v){ on=v; if(v){ draw(); if(tmr)clearInterval(tmr); tmr=setInterval(draw,500);} else { if(tmr){clearInterval(tmr);tmr=null;} clear(); } }
+  window.addEventListener('message',function(ev){var d=ev.data; if(!d)return; if(d.sbx==='aide')show(!!d.on); else if(d.sbx==='aide?')report();});
+  window.addEventListener('resize',function(){ if(on)draw(); });
 })();
 </script>

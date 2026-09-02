@@ -1,0 +1,43 @@
+/*
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1352 — la BARRE DE SLICES partagée des cardlets (« double bullet »).
+
+  Une seule barre de pied pour tous les cardlets qui portent des slices :
+    · des PUCES à gauche — une par slice ; la slice active devient une PILULE
+      allongée (« double bullet »), les autres restent rondes ;
+    · une couleur d'état : bleu quand ça TOURNE seul (auto), vert quand on a
+      CHOISI une slice (manuel) ; chaque puce peut aussi porter sa propre teinte ;
+    · un libellé de la slice courante ;
+    · une PASTILLE d'hôte à droite — cliquable, elle ouvre le service dans le Hall ;
+    · un emplacement d'info optionnel (quota, édition…).
+
+  Les couleurs héritent des variables du cardlet hôte (--cyan, --up, --line…),
+  avec un repli intégré : la barre reste correcte même sans thème fourni, en
+  clair comme en nuit.
+*/
+.sbx-bar{display:flex;align-items:center;gap:8px;padding:5px 8px;
+  border-top:1px solid var(--line,#e2e6f0);
+  font-family:inherit;font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted,#5b6478);flex:0 0 auto}
+.sbx-dots{display:flex;align-items:center;gap:5px;flex:0 0 auto}
+.sbx-dots button{width:7px;height:7px;padding:0;border:0;border-radius:50%;cursor:pointer;
+  background:var(--line-2,var(--line,#c5cfd7));flex:0 0 auto;
+  transition:width .22s ease,background .22s ease}
+.sbx-dots button:hover{background:var(--muted,#8a93a6)}
+.sbx-dots button.on{width:17px;border-radius:5px}                 /* la « double bullet » */
+.sbx-dots.auto   button.on{background:var(--cyan,#0784a8)}
+.sbx-dots.manuel button.on{background:var(--up,#0f9d54)}
+.sbx-lab{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-weight:700}
+.sbx-host{flex:0 0 auto;max-width:52%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border:1px solid var(--line,#e2e6f0);border-radius:999px;background:none;
+  color:var(--muted,#5b6478);font:inherit;font-size:.62rem;letter-spacing:.04em;
+  text-transform:none;padding:2px 9px;cursor:pointer;transition:.15s}
+.sbx-host:hover{border-color:var(--cyan,#0784a8);color:var(--cyan,#0784a8)}
+.sbx-info{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;
+  font-variant-numeric:tabular-nums}
+.sbx-info .sbx-ed{cursor:pointer;opacity:.6}
+.sbx-info .sbx-ed:hover{opacity:1;color:var(--cyan,#0784a8)}
+@media(prefers-reduced-motion:reduce){.sbx-dots button{transition:none}}
