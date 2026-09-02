@@ -1,3 +1,11 @@
+secubox-surf (1.0.19-1~bookworm1) bookworm; urgency=medium
+
+  * egress : résolution ROBUSTE du SOCKS Tor. L'env SECUBOX_TOR_SOCKS gagne ;
+    sinon on sonde loopback puis l'IP LAN réelle auto-détectée (Tor n'est pas
+    sur 127.0.0.1 ici). CLI/sous-process trouvent Tor sans env — .onion OK.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 10:30:00 +0200
+
 secubox-surf (1.0.18-1~bookworm1) bookworm; urgency=medium
 
   * BiB : navigation .onion possible (Tor). L'aplatissement d'hôte donnait un

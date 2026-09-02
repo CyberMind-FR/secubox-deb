@@ -31,12 +31,53 @@ from __future__ import annotations
 import httpx
 
 import os
+import socket
 
 # LE SOCKS DE TOR N'EST PAS TOUJOURS SUR LOOPBACK. Sur gk2 il est lié aux IP
-# LAN et mesh (192.168.1.200, 10.10.0.1), pas à 127.0.0.1 — le POC doit donc
-# pouvoir viser l'hôte réel. On garde loopback par défaut (le cas courant) et
-# on laisse l'environnement corriger.
-_TOR_HOTE = os.environ.get("SECUBOX_TOR_SOCKS", "127.0.0.1:9050")
+# LAN et mesh (192.168.1.200, 10.10.0.1), PAS à 127.0.0.1. Supposer loopback
+# rendait `.onion` injoignable dès que l'env n'était pas posé (CLI, sous-process,
+# rendu headless). On résout donc ROBUSTEMENT : l'env explicite gagne ; sinon on
+# SONDE des candidats (loopback, puis l'IP LAN réelle de la board auto-détectée)
+# et on retient le premier dont le port 9050 répond ; fallback loopback.
+
+
+def _sonde_socks(hote_port: str, delai: float = 0.4) -> bool:
+    h, _, p = hote_port.partition(":")
+    try:
+        s = socket.create_connection((h, int(p or 9050)), timeout=delai)
+        s.close()
+        return True
+    except OSError:
+        return False
+
+
+def _ip_locale() -> str | None:
+    """IP sortante primaire, sans émettre de trafic — donne l'IP LAN de la board."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("192.0.2.1", 9))          # TEST-NET-1, jamais routé
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except OSError:
+        return None
+
+
+def _resout_tor_socks() -> str:
+    env = os.environ.get("SECUBOX_TOR_SOCKS")
+    if env:
+        return env
+    candidats = ["127.0.0.1:9050"]
+    ip = _ip_locale()
+    if ip and ip != "127.0.0.1":
+        candidats.append(f"{ip}:9050")
+    for c in candidats:
+        if _sonde_socks(c):
+            return c
+    return candidats[0]
+
+
+_TOR_HOTE = _resout_tor_socks()
 # `socks5://` et non `socks5h://` : httpx (via socksio) resout DEJA le nom au
 # bout du tunnel, ce qui est le comportement du `h`. La forme `socks5h` que
 # comprennent curl et consorts n'est pas reconnue par httpx 0.23 — mais le
