@@ -211,22 +211,234 @@ async def _sbxdpi_get(path: str, default):
     return default
 
 
-@app.get("/suggestions")
-async def dpi_suggestions(user=Depends(require_jwt)):
-    """Suggestions du learner sbxdpi (règles proposées), sous JWT."""
-    return await _sbxdpi_get("/api/v1/dpi/suggestions", [])
+# ── DÉRIVATION DEPUIS LE COLLECTOR (#DPI-sémantique) ─────────────────────────
+# sbxdpi est dark (feed ZMQ rejeté #722/#723) ; MAIS le collector produit déjà
+# des données RÉELLES riches dans cumulative.json : par device, by_category +
+# une liste `services` (dst hostname, bytes, flows, service/category). On dérive
+# usage/sessions/suggestions de LÀ, en réutilisant les règles rules.json (même
+# logique host→usage que l'enrichisseur Go). Repli quand sbxdpi répond vide.
+COLLECTOR_CUMUL = Path("/var/lib/secubox/dpi/cumulative.json")
+# collector category → famille d'usage (vocabulaire des règles)
+_CAT_MAP = {
+    "media": "streaming", "game": "gaming", "gaming": "gaming",
+    "cloud": "cloud", "filehost": "cloud", "messaging": "social",
+    "social": "social", "ai": "ai", "adult": "adult",
+}
+_rules_cache: list = []
+_rules_mtime: float = -1.0
+
+
+def _dpi_rules() -> list:
+    global _rules_cache, _rules_mtime
+    try:
+        mt = DPI_RULES_FILE.stat().st_mtime
+    except OSError:
+        return []
+    if mt != _rules_mtime:
+        _rules_mtime = mt
+        try:
+            _rules_cache = json.loads(DPI_RULES_FILE.read_text()).get("rules", [])
+        except Exception:
+            _rules_cache = []
+    return _rules_cache
+
+
+def _host_suffix(host: str, suffix: str) -> bool:
+    host = (host or "").strip().lower()
+    suffix = (suffix or "").strip().lower()
+    return bool(host) and bool(suffix) and (host == suffix or host.endswith("." + suffix))
+
+
+def _classify(host: str) -> dict:
+    """Mirroir host-only de l'enrichisseur Go : meilleure règle par domain_suffix."""
+    best = {}
+    for r in _dpi_rules():
+        ds = (r.get("match") or {}).get("domain_suffix") or []
+        if any(_host_suffix(host, s) for s in ds):
+            if not best or r.get("confidence", 0) >= best.get("confidence", 0):
+                best = r
+    return best
+
+
+_TWO_LVL = {"co.uk", "org.uk", "gov.uk", "ac.uk", "com.au", "co.jp", "co.nz", "com.br", "com.cn"}
+
+
+def _registrable(host: str) -> str:
+    host = (host or "").strip(".").lower()
+    parts = host.split(".")
+    if len(parts) <= 2:
+        return host
+    last2 = ".".join(parts[-2:])
+    if last2 in _TWO_LVL and len(parts) >= 3:
+        return ".".join(parts[-3:])
+    return last2
+
+
+def _collector_devices() -> list:
+    try:
+        return json.loads(COLLECTOR_CUMUL.read_text()).get("devices", [])
+    except Exception:
+        return []
+
+
+# Première partie : nos propres vhosts (clés de haproxy-routes.json) — comme
+# l'exemption first-party de sbxdpi. On ne SUGGÈRE jamais une règle pour nous.
+BOX_ROUTES = Path("/etc/secubox/waf/haproxy-routes.json")
+_box_cache: set = set()
+_box_mtime: float = -1.0
+
+
+def _box_domains() -> set:
+    global _box_cache, _box_mtime
+    try:
+        mt = BOX_ROUTES.stat().st_mtime
+    except OSError:
+        return _box_cache
+    if mt != _box_mtime:
+        _box_mtime = mt
+        try:
+            _box_cache = {str(k).strip().lower() for k in json.loads(BOX_ROUTES.read_text()).keys()}
+        except Exception:
+            _box_cache = set()
+    return _box_cache
+
+
+def _is_box(host: str) -> bool:
+    h = (host or "").lower()
+    return any(h == d or h.endswith("." + d) for d in _box_domains())
+
+
+def _valid_host(host: str) -> bool:
+    """Écarte les dst qui ne sont pas des hostnames (IP, fragments d'UA…)."""
+    h = (host or "").strip().lower()
+    if not h or " " in h or "." not in h:
+        return False
+    if h.replace(".", "").replace("-", "").isdigit():  # IPv4-ish
+        return False
+    tld = h.rsplit(".", 1)[-1]
+    return tld.isalpha() and len(tld) >= 2
+
+
+def _rank(m: dict, total: int) -> list:
+    out = [{"name": k, "flows": v["flows"], "bytes": v["bytes"],
+            "pct": (v["bytes"] / total * 100) if total else 0.0,
+            "confidence": v["confidence"]} for k, v in m.items() if k]
+    out.sort(key=lambda x: (-x["bytes"], -x["flows"]))
+    return out
+
+
+def _bump(m: dict, key: str, b: int, f: int, conf: int):
+    if not key:
+        return
+    a = m.setdefault(key, {"bytes": 0, "flows": 0, "confidence": 0})
+    a["bytes"] += b
+    a["flows"] += f
+    a["confidence"] = max(a["confidence"], conf)
 
 
 @app.get("/usage")
 async def dpi_usage(user=Depends(require_jwt)):
-    """Vue usage enrichie (usages/providers/applications + unknown-first)."""
-    return await _sbxdpi_get("/api/v1/dpi/usage", {})
+    """Vue usage enrichie. sbxdpi si vivant, sinon dérivée du collector (réel)."""
+    live = await _sbxdpi_get("/api/v1/dpi/usage", {})
+    if live and (live.get("usages") or live.get("unknown")):
+        return live
+    usages, providers, apps = {}, {}, {}
+    unknown, total = [], 0
+    for dev in _collector_devices():
+        for s in dev.get("services", []):
+            host = s.get("dst", "")
+            b = int(s.get("up_bytes", 0) or 0) + int(s.get("down_bytes", 0) or 0)
+            fl = int(s.get("flows", 0) or 0)
+            total += b
+            en = _classify(host)
+            usage = en.get("usage") or _CAT_MAP.get(s.get("category", ""), "")
+            infra = en.get("infra") or s.get("service") or s.get("cloud") or ""
+            app = en.get("application") or s.get("service") or ""
+            conf = en.get("confidence", 0) or (60 if s.get("service") else 0)
+            if not usage and not app:
+                unknown.append({"name": host, "flows": fl, "bytes": b, "pct": 0.0})
+                continue
+            _bump(usages, usage, b, fl, conf)
+            _bump(providers, infra, b, fl, conf)
+            _bump(apps, app, b, fl, conf)
+    unknown.sort(key=lambda x: -x["bytes"])
+    return {"usages": _rank(usages, total), "providers": _rank(providers, total),
+            "applications": _rank(apps, total), "unknown": unknown[:60]}
+
+
+@app.get("/suggestions")
+async def dpi_suggestions(user=Depends(require_jwt)):
+    """Suggestions du learner : sbxdpi si vivant, sinon dérivées du collector."""
+    live = await _sbxdpi_get("/api/v1/dpi/suggestions", [])
+    if live:
+        return live
+    groups: dict = {}
+    for dev in _collector_devices():
+        for s in dev.get("services", []):
+            host = s.get("dst", "")
+            if _classify(host) or not _valid_host(host) or _is_box(host):
+                continue  # déjà classé, IP/non-hostname, ou première partie (nous)
+            dom = _registrable(host)
+            g = groups.setdefault(dom, {"subs": 0, "flows": 0, "bytes": 0, "ex": []})
+            g["subs"] += 1
+            g["flows"] += int(s.get("flows", 0) or 0)
+            g["bytes"] += int(s.get("up_bytes", 0) or 0) + int(s.get("down_bytes", 0) or 0)
+            if len(g["ex"]) < 3:
+                g["ex"].append(host)
+    out = []
+    for dom, g in groups.items():
+        conf = min(95, max(20, 30 + (g["subs"] - 1) * 15 + (25 if g["bytes"] >= 1 << 30 else 10 if g["bytes"] >= 1 << 20 else 0)))
+        out.append({"domain": dom, "subdomains": g["subs"], "flows": g["flows"], "bytes": g["bytes"],
+                    "confidence": conf, "examples": g["ex"],
+                    "reason": f"{g['subs']} sous-domaine(s) non classifié(s), {formatBytesPy(g['bytes'])}",
+                    "proposed_rule": {"id": "learn-" + dom, "usage": "", "confidence": conf,
+                                      "match": {"domain_suffix": [dom]}}})
+    out.sort(key=lambda x: -x["bytes"])
+    return out[:40]
 
 
 @app.get("/sessions")
 async def dpi_sessions(user=Depends(require_jwt)):
-    """Sessions d'usage corrélées (device+usage+fenêtre)."""
-    return await _sbxdpi_get("/api/v1/dpi/sessions", [])
+    """Sessions d'usage : sbxdpi si vivant, sinon dérivées du collector (par
+    device + usage), avec durée = first_seen→last_seen du device."""
+    live = await _sbxdpi_get("/api/v1/dpi/sessions", [])
+    if live:
+        return live
+    by: dict = {}
+    for dev in _collector_devices():
+        did = dev.get("device", "")
+        fs, ls = dev.get("first_seen", 0), dev.get("last_seen", 0)
+        for s in dev.get("services", []):
+            host = s.get("dst", "")
+            en = _classify(host)
+            usage = en.get("usage") or _CAT_MAP.get(s.get("category", ""), "")
+            if not usage:
+                continue
+            k = (did, usage)
+            a = by.get(k)
+            if a is None:
+                a = {"device": did, "usage": usage, "application": en.get("application") or s.get("service") or "",
+                     "infra": en.get("infra") or s.get("service") or "", "start": fs, "last": ls,
+                     "flows": 0, "bytes": 0, "hosts": [], "confidence": 0}
+                by[k] = a
+            a["flows"] += int(s.get("flows", 0) or 0)
+            a["bytes"] += int(s.get("up_bytes", 0) or 0) + int(s.get("down_bytes", 0) or 0)
+            a["confidence"] = max(a["confidence"], en.get("confidence", 0) or (60 if s.get("service") else 0))
+            if host and host not in a["hosts"] and len(a["hosts"]) < 6:
+                a["hosts"].append(host)
+            if not a["application"] and (en.get("application") or s.get("service")):
+                a["application"] = en.get("application") or s.get("service")
+    out = list(by.values())
+    out.sort(key=lambda x: -x["bytes"])
+    return out[:200]
+
+
+def formatBytesPy(o: int) -> str:
+    o = int(o or 0)
+    for unit, div in (("Go", 1 << 30), ("Mo", 1 << 20), ("Ko", 1 << 10)):
+        if o >= div:
+            return f"{o/div:.1f} {unit}"
+    return f"{o} o"
 
 
 app.include_router(auth_router, prefix="/auth")

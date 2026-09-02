@@ -1,3 +1,15 @@
+secubox-dpi (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * DPI sémantique en DONNÉES RÉELLES tout de suite : /usage, /sessions,
+    /suggestions dérivent du collector (cumulative.json) quand sbxdpi dort —
+    en réutilisant rules.json (host→usage). Vrais usages (ai/cloud/social…),
+    vraies sessions par terminal (device→usage→application→volume·durée),
+    vraies suggestions (domaines inconnus regroupés, ex. anthropic.com,
+    googleapis.com). Filtres première-partie (haproxy-routes.json) + validité
+    d'hôte. Sans activer sbxdpi ni le distributeur ZMQ (rejeté #722/#723).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 16:45:00 +0200
+
 secubox-dpi (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * Dashboard /dpi/ : panneau 🧭 Sessions d'usage (via le pont /sessions) —
