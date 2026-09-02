@@ -191,6 +191,44 @@ def dpi_rules_ignore(domain: str, user=Depends(require_jwt)):
     return {"ok": True, "ignored": d}
 
 
+# ── PONT vers sbxdpi (moteur d'enrichissement live, lecture LAN) ─────────────
+# L'admin (sous JWT) doit voir suggestions/usage/sessions calculées par sbxdpi,
+# qui n'écoute qu'en LAN sur dpi-live.sock. On les PROXIFIE ici, sous JWT, en
+# fail-empty si le socket dort (sbxdpi est dark tant que le cutover nDPI n'est
+# pas fait). Unifie les deux surfaces DPI (collector + sbxdpi) derrière l'admin.
+DPI_LIVE_SOCK = "/run/secubox/dpi-live.sock"
+
+
+async def _sbxdpi_get(path: str, default):
+    try:
+        transport = httpx.AsyncHTTPTransport(uds=DPI_LIVE_SOCK)
+        async with httpx.AsyncClient(transport=transport, timeout=3.0) as cli:
+            r = await cli.get("http://sbxdpi" + path)
+            if r.status_code == 200:
+                return r.json()
+    except Exception:
+        pass
+    return default
+
+
+@app.get("/suggestions")
+async def dpi_suggestions(user=Depends(require_jwt)):
+    """Suggestions du learner sbxdpi (règles proposées), sous JWT."""
+    return await _sbxdpi_get("/api/v1/dpi/suggestions", [])
+
+
+@app.get("/usage")
+async def dpi_usage(user=Depends(require_jwt)):
+    """Vue usage enrichie (usages/providers/applications + unknown-first)."""
+    return await _sbxdpi_get("/api/v1/dpi/usage", {})
+
+
+@app.get("/sessions")
+async def dpi_sessions(user=Depends(require_jwt)):
+    """Sessions d'usage corrélées (device+usage+fenêtre)."""
+    return await _sbxdpi_get("/api/v1/dpi/sessions", [])
+
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("dpi")

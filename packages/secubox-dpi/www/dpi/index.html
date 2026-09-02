@@ -174,6 +174,11 @@
             <div class="card"><div class="card-header"><h2>💻 Bandwidth by Device</h2></div><div class="app-list" id="bandwidth-devices"><p class="empty">Loading…</p></div></div>
             <div class="card"><div class="card-header"><h2>🌐 Active Flows <span class="sub">— live window</span></h2></div><div class="app-list" id="active-flows"><p class="empty">Loading…</p></div></div>
         </div>
+
+        <div class="card">
+            <div class="card-header"><h2>🎓 Learning <span class="sub">— suggestions de règles DPI (learner) · valider = créer la règle (hot-reload)</span></h2></div>
+            <div id="dpi-learning"><p class="empty">Loading…</p></div>
+        </div>
     </main>
 
     <script>
@@ -479,15 +484,57 @@
             }).join('');
         }
 
+        // ── LEARNING (#DPI-sémantique) : suggestions du learner sbxdpi (proxifiées
+        //    par la FastAPI sous JWT). Valider CRÉE la règle (POST /rules/accept →
+        //    rules.json → sbxdpi hot-reload). Rien n'est promu sans ce clic humain.
+        function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+        async function postJwt(path, data) {
+            const token = localStorage.getItem('sbx_token');
+            const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+            if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+            if (data) opts.body = JSON.stringify(data);
+            const res = await fetch(path, opts);
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.status);
+            return res.json();
+        }
+        async function loadLearning() {
+            const box = document.getElementById('dpi-learning'); if (!box) return;
+            const sug = await apiAuthed(API + '/suggestions');
+            if (!Array.isArray(sug) || !sug.length) { box.innerHTML = '<p class="empty">Aucune suggestion — rien de neuf à apprendre.</p>'; return; }
+            box.innerHTML = sug.map(function (s, i) {
+                return `<div class="app-item" data-i="${i}" style="align-items:center;gap:10px;">
+                    <span style="font-family:monospace;color:var(--cyber-cyan);flex:0 0 auto;">${esc(s.domain)}</span>
+                    <span style="flex:1;color:var(--text-dim);font-size:.8rem;">${esc(s.reason || '')}</span>
+                    <span style="font-family:monospace;color:var(--matrix-green);">${Math.round(s.confidence || 0)}%</span>
+                    <button class="btn-accept" data-i="${i}" style="cursor:pointer;">✓ Créer la règle</button>
+                    <button class="btn-ignore" data-dom="${esc(s.domain)}" style="cursor:pointer;">Ignorer</button></div>`;
+            }).join('');
+            box.querySelectorAll('.btn-accept').forEach(function (b) {
+                b.addEventListener('click', async function () {
+                    const s = sug[+b.dataset.i]; if (!s || !s.proposed_rule) return;
+                    try { const r = await postJwt(API + '/rules/accept', s.proposed_rule); toast('Règle créée (' + r.count + ' au total)'); loadLearning(); }
+                    catch (e) { toast('Refus : ' + e.message, true); }
+                });
+            });
+            box.querySelectorAll('.btn-ignore').forEach(function (b) {
+                b.addEventListener('click', async function () {
+                    try { await postJwt(API + '/rules/ignore?domain=' + encodeURIComponent(b.dataset.dom), null); toast('Domaine ignoré'); loadLearning(); }
+                    catch (e) { toast('Erreur : ' + e.message, true); }
+                });
+            });
+        }
+
         function refreshAll() {
             loadExfil();       // engine status + devices + stats + top apps/protocols/bw/flows + service cats
             loadMediaTypes();
             loadMediaBuffer();
             loadTimeline();
+            loadLearning();
         }
         refreshAll();
         setInterval(() => { loadExfil(); loadMediaTypes(); loadTimeline(); }, 10000);
         setInterval(loadMediaBuffer, 15000);
+        setInterval(loadLearning, 30000);
     </script>
 </body>
 </html>
