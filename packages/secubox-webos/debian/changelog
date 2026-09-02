@@ -1,3 +1,12 @@
+secubox-webos (1.0.246-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI /mega : branche la vue ENRICHIE (DPI sémantique L2) via
+    /api/v1/dpi/usage — sections mega-only 🏢 Infrastructure (providers) et
+    ❔ Non classifié (unknown-first, pleine largeur). Repli démo étiqueté si
+    sbxdpi dort. Le /micro (slicer) reste inchangé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 14:00:00 +0200
+
 secubox-webos (1.0.245-1~bookworm1) bookworm; urgency=medium
 
   * Hall : PAUSE « au-dessus » — survoler une carte dans la grille suspend
