@@ -1305,11 +1305,10 @@ const FEATURED = [
   // DPI (#1360) : trafic vivant (nDPId/netifyd), carte SLICÉE (protocoles, apps,
   // talkers, risques). Carte-only pour l'instant (données best-effort + démo) ;
   // aussi agrégée en couche du groupe Sécurité (cumul.html).
-  // DPI : /micro = la cardlet vivante ; /mega = la VUE ADMIN (admin…/dpi/), bien
-  // plus riche (Sessions/Learning/Pays/Exfil). auth:true → widget réservé aux
-  // clients authentifiés du Hall (comme Sécurité). megaAdmin:true → l'agrandi
-  // ouvre la console admin au lieu d'agrandir la cardlet.
-  {id:"dpi",        label:"DPI · Trafic", icon:"🔬", color:"#d64545", carte:"/cardlets/dpi.html", h:262, auth:true, megaAdmin:true},
+  // DPI : /micro = cardlet vivante, /mega = la MÊME cardlet agrandie (page pleine
+  // empilée, enrichie — cf. dpi.html html.mega). L'admin reste sur ⚙️, intacte.
+  // auth:true → widget réservé aux clients authentifiés du Hall (comme Sécurité).
+  {id:"dpi",        label:"DPI · Trafic", icon:"🔬", color:"#d64545", carte:"/cardlets/dpi.html", h:262, auth:true},
   // ZIA (#1245) : l'IA locale du Hall, interface du bus d'objets. Carte /micro de
   // chat, servie sous admin.gk2…/zia/ (autorisé dans frame-src) ; les 3 modes
   // visent /zia/. Chat + recherche d'objets + délégation.
@@ -1647,20 +1646,11 @@ function svcDesc(id){
   const noVhost = !!(f && f.carte && !f.url);
   return {id:id, label:(f&&f.label)||s.name||id, icon:(f&&f.icon)||icon(s.icon),
           url:(f&&f.url)||host(s), path:s.path||('/'+id+'/'),
-          carte:(f&&f.carte)||null, noVhost:noVhost,
-          // megaAdmin : le /mega ouvre la console admin (admin…/path/) plutôt que
-          // le vhost public ou l'agrandissement de la cardlet. Cf. DPI (#HIG).
-          megaAdmin:!!(f && f.megaAdmin)};
+          carte:(f&&f.carte)||null, noVhost:noVhost};
 }
 function modeURL(mode){
   if(!_svc) return 'about:blank';
   const thAll=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-  // MEGA = VUE ADMIN (#HIG) : certains services ont une console admin bien plus
-  // riche que leur cardlet ou leur vhost public (ex. DPI : Sessions/Learning/
-  // Pays). Pour eux, TOUT agrandissement ouvre admin…/path/, quel que soit le
-  // mode — la cardlet /micro reste la vue vivante, le /mega devient la console.
-  if(_svc.megaAdmin) return 'https://'+ADMIN_HOST+_svc.path
-    + (_svc.path.indexOf('?')>=0?'&':'?') + 'theme=' + thAll;
   // CARDLET SANS VHOST = PSEUDO /mega (DPI, Surf & Viewer) : ni service distant,
   // ni WebUI admin. `https://undefined/…` (embarqué) et `admin…/dpi/` (⚙️)
   // ouvraient une page vide. QUEL QUE SOIT le mode, on agrandit la cardlet
@@ -1683,7 +1673,7 @@ function modeURL(mode){
 // https://admin.gk2…/<module>/, la page qu'on avait sous les yeux.
 function plainURL(){
   if(!_svc) return '/';
-  if(_mode==='admin' || _svc.megaAdmin) return 'https://'+ADMIN_HOST+_svc.path;
+  if(_mode==='admin') return 'https://'+ADMIN_HOST+_svc.path;
   // Cardlet sans vhost : l'onglet réel ouvre la cardlet elle-même (même origine).
   if(_svc.noVhost && _svc.carte) return location.origin+_svc.carte;
   return 'https://'+_svc.url+(_sub||'/');

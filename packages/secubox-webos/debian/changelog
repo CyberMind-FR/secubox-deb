@@ -1,3 +1,15 @@
+secubox-webos (1.0.252-1~bookworm1) bookworm; urgency=medium
+
+  * DPI : ANNULATION de megaAdmin (1.0.250). Le /mega DPI n'ouvre plus la
+    console admin — il agrandit de nouveau la cardlet elle-même (page pleine
+    empilée). L'admin reste accessible via ⚙️, intacte. `auth:true` conservé.
+  * DPI cardlet : nouvelle vue « 👥 Clients » (terminaux) — une card détaillée
+    par device (identité, volume ↑/↓, chips d'usage, top destinations, alertes),
+    compacte en /micro, grille de cards en /mega — inspirée du rendu admin.
+    Lit /api/v1/dpi/clients (relayé /pub/clients). SBXAide couvre la slice.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 23:15:00 +0200
+
 secubox-webos (1.0.251-1~bookworm1) bookworm; urgency=medium
 
   * Aide contextuelle PARTOUT (HIG lane A) : les 10 cardlets du Hall ont

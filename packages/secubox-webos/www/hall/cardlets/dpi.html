@@ -125,6 +125,20 @@
   /* Risques, Non classifié et Learning (listes) prennent toute la largeur. */
   html.mega #d-risk,html.mega #d-unknown,html.mega #d-learning{grid-column:1/-1}
   .sug{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px dashed var(--line)}
+  /* Clients (terminaux) — cards détaillées, inspirées de la vue admin. */
+  .client{display:flex;flex-direction:column;gap:3px;padding:7px 8px;margin-bottom:5px;
+    border:1px solid var(--line);border-radius:9px;background:var(--soft)}
+  .client .ci{display:flex;align-items:center;gap:7px}
+  .client .ci .e{font-size:1rem}
+  .client .ci b{font-weight:700;font-family:ui-monospace,monospace;font-size:.78rem}
+  .client .ci .vol{margin-left:auto;font-weight:700;color:var(--cyan)}
+  .client .ud{font-size:.66rem;color:var(--faint)}
+  .client .ud .al{color:#e0554a;font-weight:700}
+  .client .us{display:flex;flex-wrap:wrap;gap:4px;margin-top:1px}
+  .client .uchip{font-size:.62rem;padding:1px 6px;border-radius:999px;
+    background:color-mix(in srgb,var(--cyan) 12%,transparent);color:var(--cyan)}
+  .client .dst{font-size:.63rem;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  html.mega #s-clients{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
   .sug:last-child{border-bottom:none}
   .sug .dom{font-family:"JetBrains Mono",monospace;font-size:.78rem;color:var(--cyan);flex:0 0 auto;max-width:42%;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -149,6 +163,7 @@
     <div class="dsec" id="d-apps"><div class="sec-t">📱 Applications</div><div class="slice" id="s-apps"></div></div>
     <div class="dsec" id="d-usage"><div class="sec-t">🧭 Usages</div><div class="slice" id="s-usage"></div></div>
     <div class="dsec" id="d-talk"><div class="sec-t">🗣️ Talkers</div><div class="slice" id="s-talk"></div></div>
+    <div class="dsec" id="d-clients"><div class="sec-t">👥 Clients</div><div class="slice" id="s-clients"></div></div>
     <div class="dsec" id="d-pays"><div class="sec-t">🌍 Pays</div><div class="slice" id="s-pays"></div></div>
     <div class="dsec" id="d-infra"><div class="sec-t">🏢 Infrastructure</div><div class="slice" id="s-infra"></div></div>
     <div class="dsec" id="d-unknown"><div class="sec-t">❔ Non classifié</div><div class="slice" id="s-unknown"></div></div>
@@ -187,6 +202,16 @@
     learning:[["googlevideo.com","2 sous-domaines non classifiés, 4.0 Go",98],["gvt2.com","6 terminaux, périodique",91],["edge-telemetry.example","beaconing régulier — à examiner",54]],
     talk:[["💻","desktop-lan · .24",34],["📱","pixel · .51",22],["📺","tv-salon · .77",17],["🖥️","nas · .10",14],["🎮","console · .63",8]],
     pays:[["🇫🇷","France",52],["🇺🇸","États-Unis",28],["🇨🇦","Canada",9],["🇧🇷","Brésil",5],["🇩🇪","Allemagne",3]],
+    clients:[
+      {device:"a1b2c3d4e5f6",up_bytes:8.6e9,down_bytes:2.1e9,bytes:10.7e9,sessions:3,alerts:2,
+       usages:[{name:"ai",bytes:6.6e8},{name:"cloud",bytes:3.1e8},{name:"social",bytes:1.2e8}],
+       top_dst:[{host:"api.anthropic.com"},{host:"82.67.100.75"},{host:"x.com"}]},
+      {device:"f6a7b8c9d012",up_bytes:5.0e8,down_bytes:1.1e8,bytes:6.1e8,sessions:3,alerts:1,
+       usages:[{name:"ai",bytes:2.1e7},{name:"cloud",bytes:8.0e6}],top_dst:[{host:"160.79.104.10"}]},
+      {device:"4fec81d9aa10",up_bytes:3.3e7,down_bytes:5.8e6,bytes:3.9e7,sessions:4,alerts:0,
+       usages:[{name:"cloud",bytes:2.5e7},{name:"streaming",bytes:7.3e6},{name:"social",bytes:2.0e6}],
+       top_dst:[{host:"www.youtube.com"},{host:"photos.googleapis.com"}]}
+    ],
     risk:[["hi","Identifiants en clair (HTTP)","3×"],["hi","Certificat auto-signé","2×"],["md","Proto connu sur port non-std","5×"],["md","TLS obsolète (1.0)","1×"],["lo","Paquet malformé","4×"]]
   };
 
@@ -245,6 +270,27 @@
         +'<span class="why">'+esc(r[1])+'</span><span class="cf">'+(r[2]||0)+' %</span></div>';
     }, 'Aucune suggestion — rien de neuf à apprendre.');
   }
+  // CLIENTS (terminaux) : une card détaillée par device — identité, volume ↑/↓,
+  // familles d'usage (chips), top destinations, alertes. Compacte en /micro,
+  // grille de cards en /mega (cf. CSS html.mega #s-clients). Inspiré de l'admin.
+  function shortDev(d){ d=String(d||''); return d?d.slice(0,8):'?'; }
+  function devEmoji(d){ var s=['💻','📱','📺','🖥️','🎮','⌚']; d=String(d||''); var h=0;
+    for(var i=0;i<d.length;i++) h=(h+d.charCodeAt(i))%s.length; return s[h]; }
+  function clients(cont, rows){
+    progressif(cont, rows, function(c){
+      var us=(c.usages||[]).slice(0,3).map(function(u){
+        return '<span class="uchip">'+emUsage(u.name)+' '+esc(u.name)+' '+humain(u.bytes)+'</span>'; }).join('');
+      var dst=(c.top_dst||[]).slice(0,3).map(function(d){ return esc(shortTalk(d.host||d)); }).join(' · ');
+      var al=c.alerts?(' · <span class="al">⚠ '+c.alerts+'</span>'):'';
+      return '<div class="client"><div class="ci"><span class="e">'+devEmoji(c.device)+'</span>'
+        +'<b title="'+esc(c.device)+'">'+esc(shortDev(c.device))+'</b>'
+        +'<span class="vol">'+humain(c.bytes)+'</span></div>'
+        +'<div class="ud">↑'+humain(c.up_bytes)+' ↓'+humain(c.down_bytes)+' · '+(c.sessions||0)+' usages'+al+'</div>'
+        +(us?'<div class="us">'+us+'</div>':'')
+        +(dst?'<div class="dst">→ '+dst+'</div>':'')
+        +'</div>';
+    }, 'Aucun terminal observé.');
+  }
   function rend(d){
     el('demo').hidden=!d.demo; el('live').style.display=d.demo?'none':'';
     el('k-flows').textContent=d.flows!=null?d.flows:'—';
@@ -254,6 +300,7 @@
     barres(el('s-apps'),  d.apps,  'a2');
     barres(el('s-usage'), d.usage||[], '');
     barres(el('s-talk'),  d.talk,  'a3');
+    clients(el('s-clients'), d.clients||[]);
     barres(el('s-pays'),  d.pays||[], '');
     risques(el('s-risk'), d.risk);
     if(d.infra) barres(el('s-infra'), d.infra, 'a2');
@@ -382,11 +429,19 @@
       .catch(function(){ /* démo déjà affichée */ });
   }
 
-  rend(DEMO); tente(); tenteUsage(); tenteSug(); tentePays();
-  setInterval(tente, 15000); setInterval(tenteUsage, 20000); setInterval(tenteSug, 30000); setInterval(tentePays, 25000);
+  // Clients (terminaux) via /api/v1/dpi/clients (relayé vers /pub/clients).
+  function tenteClients(){
+    fetch('/api/v1/dpi/clients',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){ if(!Array.isArray(j)||!j.length) throw 0; clients(el('s-clients'), j); })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  rend(DEMO); tente(); tenteUsage(); tenteSug(); tentePays(); tenteClients();
+  setInterval(tente, 15000); setInterval(tenteUsage, 20000); setInterval(tenteSug, 30000); setInterval(tentePays, 25000); setInterval(tenteClients, 20000);
 
   // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).
-  var slices=[el('d-proto'),el('d-apps'),el('d-usage'),el('d-talk'),el('d-pays'),el('d-risk')];
+  var slices=[el('d-proto'),el('d-apps'),el('d-usage'),el('d-talk'),el('d-clients'),el('d-pays'),el('d-risk')];
   var curSlice=0;
 
   // ── AIDE reverse-design (bibliothèque partagée SBXAide) — PAR SLICE ──────────
@@ -395,10 +450,11 @@
   // {sbx:'aide-zones'} au Hall pour la bulle de légendes (cf. HIG §5.2). Plus de
   // code inline : c'est la même lib que toutes les cardlets.
   var mw=document.querySelector('.mw');
-  var SNOM=['Protocoles','Applications','Usages','Talkers','Pays','Risques'];
+  var SNOM=['Protocoles','Applications','Usages','Talkers','Clients','Pays','Risques'];
   var DET=['Protocoles — la barre = part du trafic','Applications — top usage',
            'Usages — famille d’usage (catégorie nDPI)',
-           'Talkers — appareils les plus bavards',
+           'Talkers — destinations les plus bavardes',
+           'Clients — un terminal par card : volume ↑/↓, usages, top destinations, alertes',
            'Pays — géo des destinations (IP réelles, GeoLite2)',
            'Risques nDPI — pastille = sévérité'];
   var AIDE=(window.SBXAide) ? SBXAide({
@@ -418,7 +474,7 @@
     for(var k=0;k<slices.length;k++) slices[k].classList.add('actif');
   } else if(window.SBXSliceBar){
     SBXSliceBar(el('slbar'), {autoMs:9000, onShow:montre,
-      slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🧭 Usages'},{label:'🗣️ Talkers'},{label:'🌍 Pays'},{label:'⚠️ Risques'}]});
+      slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🧭 Usages'},{label:'🗣️ Talkers'},{label:'👥 Clients'},{label:'🌍 Pays'},{label:'⚠️ Risques'}]});
   } else { montre(0); }
 
   (function(){ var t=new URLSearchParams(location.search).get('theme');

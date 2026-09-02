@@ -423,6 +423,41 @@ def _derive_sessions() -> list:
     return out[:200]
 
 
+def _derive_clients() -> list:
+    """Détail par TERMINAL (device) : volume ↑/↓, familles d'usage, top
+    destinations, nombre de sessions d'usage, alertes. Dérivé du collector —
+    c'est la vue « clients » enrichie de la cardlet DPI (mêmes cards que l'admin)."""
+    out = []
+    for dev in _collector_devices():
+        did = dev.get("device", "")
+        up = int(dev.get("up_bytes", 0) or 0)
+        down = int(dev.get("down_bytes", 0) or 0)
+        tot = up + down
+        usages, dsts, fams = {}, {}, set()
+        for s in dev.get("services", []) or []:
+            b = int(s.get("up_bytes", 0) or 0) + int(s.get("down_bytes", 0) or 0)
+            en = _classify(s.get("dst", ""))
+            u = en.get("usage") or _CAT_MAP.get(s.get("category", ""), "")
+            if u:
+                usages[u] = usages.get(u, 0) + b
+                fams.add(u)
+            host = s.get("dst", "")
+            if host:
+                d = dsts.setdefault(host, {"host": host, "bytes": 0,
+                                          "service": s.get("service") or en.get("application") or ""})
+                d["bytes"] += b
+        ulist = sorted(({"name": k, "bytes": v, "pct": (v / tot * 100) if tot else 0.0}
+                        for k, v in usages.items() if k), key=lambda x: -x["bytes"])
+        dlist = sorted(dsts.values(), key=lambda x: -x["bytes"])[:5]
+        out.append({"device": did, "up_bytes": up, "down_bytes": down, "bytes": tot,
+                    "flows": int(dev.get("flows", 0) or 0),
+                    "first_seen": dev.get("first_seen", 0), "last_seen": dev.get("last_seen", 0),
+                    "usages": ulist, "top_dst": dlist,
+                    "sessions": len(fams), "alerts": len(dev.get("alerts", []) or [])})
+    out.sort(key=lambda x: -x["bytes"])
+    return out
+
+
 _RISK_SEV = {"exfil_volume": "high", "beaconing": "medium",
              "new_cloud": "medium", "unclassified_external": "low"}
 
@@ -493,6 +528,13 @@ async def dpi_sessions(user=Depends(require_jwt)):
     device + usage), avec durée = first_seen→last_seen du device."""
     live = await _sbxdpi_get("/api/v1/dpi/sessions", [])
     return live or _derive_sessions()
+
+
+@app.get("/clients")
+async def dpi_clients(user=Depends(require_jwt)):
+    """Détail par terminal (device) — vue clients enrichie."""
+    live = await _sbxdpi_get("/api/v1/dpi/clients", [])
+    return live or _derive_clients()
 
 
 # ── Pays (géo des destinations) ─────────────────────────────────────────────
@@ -625,6 +667,11 @@ def pub_suggestions():
 @pub.get("/sessions")
 def pub_sessions():
     return _derive_sessions()
+
+
+@pub.get("/clients")
+def pub_clients():
+    return _derive_clients()
 
 
 @pub.get("/countries")

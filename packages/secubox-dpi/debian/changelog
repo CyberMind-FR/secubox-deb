@@ -1,3 +1,13 @@
+secubox-dpi (1.4.8-1~bookworm1) bookworm; urgency=medium
+
+  * Vue CLIENTS (terminaux) : nouvelle dérivation par device — volume ↑/↓,
+    familles d'usage, top destinations, nombre d'usages, alertes. Endpoints
+    GET /clients (JWT) et /pub/clients (relais Hall agrégé). Alimente la vue
+    « 👥 Clients » enrichie de la cardlet DPI (cards détaillées, inspirées de
+    l'admin). Dérivé du collector (réel).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 23:15:00 +0200
+
 secubox-dpi (1.4.7-1~bookworm1) bookworm; urgency=medium
 
   * Routeur PUBLIC agrégé /pub (SANS JWT, GET, lecture seule, non nominatif) :
