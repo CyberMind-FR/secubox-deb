@@ -376,8 +376,11 @@ async def dpi_suggestions(user=Depends(require_jwt)):
     for dev in _collector_devices():
         for s in dev.get("services", []):
             host = s.get("dst", "")
-            if _classify(host) or not _valid_host(host) or _is_box(host):
-                continue  # déjà classé, IP/non-hostname, ou première partie (nous)
+            # inconnu = ni règle, ni label collector (service/category), et un
+            # vrai hostname tiers (pas IP, pas nous). C'est ça qu'on propose.
+            if (_classify(host) or s.get("service") or s.get("category")
+                    or not _valid_host(host) or _is_box(host)):
+                continue
             dom = _registrable(host)
             g = groups.setdefault(dom, {"subs": 0, "flows": 0, "bytes": 0, "ex": []})
             g["subs"] += 1

@@ -1,3 +1,11 @@
+secubox-dpi (1.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * Learner : les suggestions excluent aussi ce que le COLLECTOR classe déjà
+    (service/category), pas seulement les règles — vraies inconnues tierces
+    (github.com, maegia.tv, archive.org…), sans redite ni première-partie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 17:00:00 +0200
+
 secubox-dpi (1.4.4-1~bookworm1) bookworm; urgency=medium
 
   * DPI sémantique en DONNÉES RÉELLES tout de suite : /usage, /sessions,
