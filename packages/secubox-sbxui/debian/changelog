@@ -1,0 +1,10 @@
+secubox-sbxui (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet initial : bibliothèque UI partagée du WebOS (objets sbx).
+    Installe SBXSliceBar (slicebar.js/.css), SBXAide (aide.js) et spicy.css
+    sous /usr/share/secubox/www/shared/sbxui/, servi /shared/sbxui/ sur chaque
+    vhost de module. Permet aux modules à origine distincte (ex. secubox-radio)
+    de partager le même slicer + la même aide reverse-design que le Hall.
+    Source de vérité unique ; scripts/sync-sbxui.sh aligne la copie du Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 22:00:00 +0200

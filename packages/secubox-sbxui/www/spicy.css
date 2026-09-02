@@ -1,0 +1,41 @@
+/*
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox #1360 — habillage « SPICY » PARTAGÉ des cardlets.
+
+  Touches communes, à faible risque (ne s'appliquent que là où le motif existe) :
+  filet dégradé sous l'en-tête, chiffres à halo, barres en dégradé, pastilles de
+  slice actives plus vives. Couleurs héritées de la palette du cardlet, avec repli.
+*/
+
+/* Filet dégradé sous l'en-tête — la signature commune. */
+.h, .clh, .head { position: relative; }
+.h::after, .clh::after, .head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg,
+    var(--up,#0f9d54), var(--cyan,#0784a8), var(--violet,#6e40c9), var(--gold,#b7810a));
+  opacity: .9;
+}
+
+/* Les grands chiffres claquent (halo cyan). */
+.kpi .v, .hero .v, .big, .rel-big .tag, .card2 .n, .num.big {
+  text-shadow: 0 0 14px color-mix(in srgb, var(--cyan,#0784a8) 30%, transparent);
+}
+
+/* Barres proportionnelles en dégradé, partout où il y en a. */
+.bar i, .gauge i, .mprog i, .prog i, .mevo i.major {
+  background: linear-gradient(90deg, var(--cyan,#0784a8), var(--sky,#1655a0)) !important;
+}
+
+/* Pastilles de slice actives : un halo qui les fait vivre (déjà « double bullet »). */
+.sbx-dots button.on, .dots .dot-b.on, .dots button.on {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--cyan,#0784a8) 42%, transparent);
+}
+
+/* Boutons d'action : bord vif au survol (repli si le cardlet n'en définit pas). */
+.act:hover, .chip button.act:hover, .open:hover {
+  border-color: var(--cyan,#0784a8);
+}

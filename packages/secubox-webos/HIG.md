@@ -231,14 +231,20 @@ vhost** (ex. `secubox-radio` sous `radio.gk2.secubox.in/static/`) **ne peut pas*
 les inclure (origine + chemin différents, CSP). Aujourd'hui `radio` a donc une
 **aide inline** minimale — c'est l'écart type à résorber.
 
-**Cible (à trancher, cf. §10) :** faire de `sbx` une lib **distribuable** :
-- soit un paquet `secubox-sbxui` (Depends commun) posant `slicebar.js`/`aide.js`/
-  `spicy.css` sous un chemin canonique servi par chaque vhost de module ;
-- soit un **vendoring** synchronisé par script (`scripts/sync-sbxui.sh`) copiant
-  la lib de référence dans chaque paquet, avec vérif de dérive en CI.
+**Tranché (2026-09-02) — paquet dédié `secubox-sbxui`** :
+- Le paquet **`secubox-sbxui`** est la **source de vérité** : il ships
+  `aide.js`, `slicebar.js`, `slicebar.css`, `spicy.css` sous
+  `/usr/share/secubox/www/shared/sbxui/`, servi **`/shared/sbxui/`** sur chaque
+  vhost de module (via l'alias `/shared/` déjà en place, cf. secubox-hub).
+- Un module à **origine distincte** (ex. `secubox-radio`) `Depends: secubox-sbxui`
+  et charge `<script src="/shared/sbxui/aide.js"></script>` (same-origin, LAN) —
+  plus de clone inline. `radio` est le premier consommateur (lane B, faite).
+- Le **Hall** (secubox-webos) garde une **copie locale** sous `/cardlets/../`
+  (includes relatifs, pas de dépendance à `/shared/`) ; `scripts/sync-sbxui.sh`
+  la réaligne sur la source (`--check` = garde-fou de dérive, à câbler en CI).
 
-Tant que ce n'est pas tranché, **une source unique** (le fichier de
-secubox-webos) fait foi ; toute copie est un vendoring temporaire à noter.
+> Source unique = `packages/secubox-sbxui/www/`. On édite LÀ, puis
+> `scripts/sync-sbxui.sh` propage au Hall. Ne jamais éditer une copie directement.
 
 ---
 

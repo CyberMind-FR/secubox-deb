@@ -143,37 +143,20 @@
 </div>
 <script src="/static/radio.js"></script>
 
-<!-- Aide reverse-design (#1360) — inline (cross-origin). Inerte hors embed. -->
-<script>
-(function(){
-  function post(m){ if(window.parent!==window){ try{window.parent.postMessage(m,'*'); }catch(e){} } }
-  var root=document.querySelector('.wrap')||document.body; if(!root) return;
-  if(getComputedStyle(root).position==='static') root.style.position='relative';
-  var on=false,tmr=null,nodes=[];
-  function ZONES(){ return [
-    {el:document.querySelector('header,.tete'), label:'En-t\u00eate & lecteur \u2014 flux en direct, lecture/pause, volume'},
-    {el:document.getElementById('chat'),        label:'Chat \u2014 l\u2019antenne discute (messages du parc)'}
-  ]; }
-  function clear(){ nodes.forEach(function(n){n.remove();}); nodes=[]; }
-  function draw(){ clear(); var rr=root.getBoundingClientRect(), Z=ZONES();
-    Z.forEach(function(x,k){ if(!x.el)return; var r=x.el.getBoundingClientRect(); if(r.width<2||r.height<2)return;
-      var ring=document.createElement('div'); ring.className='sbxaide-ring';
-      ring.style.left=(r.left-rr.left-2)+'px'; ring.style.top=(r.top-rr.top-2)+'px';
-      ring.style.width=(r.width+4)+'px'; ring.style.height=(r.height+4)+'px'; root.appendChild(ring); nodes.push(ring);
-      var pin=document.createElement('div'); pin.className='sbxaide-pin'; pin.textContent=(k+1);
-      pin.style.left=(r.left-rr.left+10)+'px'; pin.style.top=(r.top-rr.top)+'px'; root.appendChild(pin); nodes.push(pin);
-    });
-    report(rr,Z);
-  }
-  function report(rr,Z){ rr=rr||root.getBoundingClientRect(); Z=Z||ZONES();
-    post({sbx:'aide-zones',slice:'',vw:rr.width,vh:rr.height,
-      zones:Z.map(function(x){ if(!x.el)return null; var r=x.el.getBoundingClientRect(); if(r.width<2||r.height<2)return null;
-        return {label:x.label,x:r.left-rr.left,y:r.top-rr.top,w:r.width,h:r.height};}).filter(Boolean)}); }
-  function show(v){ on=v; if(v){ draw(); if(tmr)clearInterval(tmr); tmr=setInterval(draw,500);} else { if(tmr){clearInterval(tmr);tmr=null;} clear(); } }
-  window.addEventListener('message',function(ev){var d=ev.data; if(!d)return; if(d.sbx==='aide')show(!!d.on); else if(d.sbx==='aide?')report();});
-  window.addEventListener('resize',function(){ if(on)draw(); });
-})();
-</script>
+<!-- Aide reverse-design (#1360) — bibliothèque PARTAGÉE SBXAide (paquet
+     secubox-sbxui), servie same-origin sous /shared/sbxui/ (LAN). Émancipée du
+     clone inline : radio partage désormais exactement l'aide du Hall. Inerte
+     hors embed / hors LAN (si /shared/sbxui/aide.js n'est pas servi). Cf. HIG §6. -->
+<script src="/shared/sbxui/aide.js"></script>
+<script>window.SBXAide&&SBXAide({
+  root: document.querySelector('.wrap')||document.body,
+  zones: function(){ return [
+    {el:document.querySelector('.lecteur'),       label:'Lecteur — flux en direct, lecture/pause, volume'},
+    {el:document.querySelector('.playlist'),      label:'File — les morceaux à venir (playlist du parc)'},
+    {el:document.getElementById('chat'),          label:'Antenne — le chat du parc, en direct'},
+    {el:document.querySelector('.proposer-micro'),label:'Proposer — ajouter un morceau à l’antenne'}
+  ].filter(function(z){return z.el;}); }
+});</script>
 </body>
 </html>
 

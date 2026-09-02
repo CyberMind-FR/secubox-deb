@@ -1,3 +1,14 @@
+secubox-radio (0.1.63-1~bookworm1) bookworm; urgency=medium
+
+  * Aide reverse-design émancipée (HIG lane B) : la page radio n'embarque plus
+    un CLONE inline de SBXAide. Elle charge la bibliothèque PARTAGÉE
+    /shared/sbxui/aide.js (paquet secubox-sbxui, servi same-origin sur le vhost
+    radio via l'alias /shared/) et passe un zones() RICHE (Lecteur / File /
+    Antenne / Proposer) — même chrome et même aide que le Hall.
+  * control : Depends secubox-sbxui.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 22:15:00 +0200
+
 secubox-radio (0.1.62-1~bookworm1) bookworm; urgency=medium
 
   * SKIN SPICY POUR LA RADIO. Filet dégradé sous chaque en-tête, halo sur le

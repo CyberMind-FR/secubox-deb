@@ -8,7 +8,7 @@ Homepage: https://secubox.in
 
 Package: secubox-radio
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, acl
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, acl, secubox-sbxui
 Recommends: secubox-ytsas
 Description: SecuBox — radio et television collaboratives synchronisees
  Une playlist partagee ou tout le monde ecoute et regarde la meme chose au
