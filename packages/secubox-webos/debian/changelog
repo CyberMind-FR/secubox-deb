@@ -1,3 +1,13 @@
+secubox-webos (1.0.253-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI · vue Clients : cards enrichies — drapeaux des PAYS du terminal
+    (géo de ses destinations), ligne méta « 🕒 vu il y a … · ⏱ actif … · 🔀 N
+    flux » (dernière activité + durée d'activité), en plus du volume ↑/↓, des
+    chips d'usage et des top destinations. Lit c.countries/first_seen/last_seen
+    de /api/v1/dpi/clients.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 09:00:00 +0200
+
 secubox-webos (1.0.252-1~bookworm1) bookworm; urgency=medium
 
   * DPI : ANNULATION de megaAdmin (1.0.250). Le /mega DPI n'ouvre plus la

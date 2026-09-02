@@ -138,6 +138,8 @@
   .client .uchip{font-size:.62rem;padding:1px 6px;border-radius:999px;
     background:color-mix(in srgb,var(--cyan) 12%,transparent);color:var(--cyan)}
   .client .dst{font-size:.63rem;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .client .ci .fl{font-size:.82rem;letter-spacing:1px}
+  .client .meta{font-size:.63rem;color:var(--faint);display:flex;gap:8px;flex-wrap:wrap}
   html.mega #s-clients{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
   .sug:last-child{border-bottom:none}
   .sug .dom{font-family:"JetBrains Mono",monospace;font-size:.78rem;color:var(--cyan);flex:0 0 auto;max-width:42%;
@@ -203,12 +205,18 @@
     talk:[["💻","desktop-lan · .24",34],["📱","pixel · .51",22],["📺","tv-salon · .77",17],["🖥️","nas · .10",14],["🎮","console · .63",8]],
     pays:[["🇫🇷","France",52],["🇺🇸","États-Unis",28],["🇨🇦","Canada",9],["🇧🇷","Brésil",5],["🇩🇪","Allemagne",3]],
     clients:[
-      {device:"a1b2c3d4e5f6",up_bytes:8.6e9,down_bytes:2.1e9,bytes:10.7e9,sessions:3,alerts:2,
+      {device:"a1b2c3d4e5f6",up_bytes:8.6e9,down_bytes:2.1e9,bytes:10.7e9,sessions:3,alerts:2,flows:728052,
+       last_seen:Math.floor(Date.now()/1000)-240, first_seen:Math.floor(Date.now()/1000)-5443200,
+       countries:[{flag:"🇫🇷"},{flag:"🇺🇸"},{flag:"🇨🇦"},{flag:"🇧🇷"}],
        usages:[{name:"ai",bytes:6.6e8},{name:"cloud",bytes:3.1e8},{name:"social",bytes:1.2e8}],
        top_dst:[{host:"api.anthropic.com"},{host:"82.67.100.75"},{host:"x.com"}]},
-      {device:"f6a7b8c9d012",up_bytes:5.0e8,down_bytes:1.1e8,bytes:6.1e8,sessions:3,alerts:1,
+      {device:"f6a7b8c9d012",up_bytes:5.0e8,down_bytes:1.1e8,bytes:6.1e8,sessions:3,alerts:1,flows:41200,
+       last_seen:Math.floor(Date.now()/1000)-3600, first_seen:Math.floor(Date.now()/1000)-527000,
+       countries:[{flag:"🇺🇸"},{flag:"🇫🇷"},{flag:"🇩🇪"}],
        usages:[{name:"ai",bytes:2.1e7},{name:"cloud",bytes:8.0e6}],top_dst:[{host:"160.79.104.10"}]},
-      {device:"4fec81d9aa10",up_bytes:3.3e7,down_bytes:5.8e6,bytes:3.9e7,sessions:4,alerts:0,
+      {device:"4fec81d9aa10",up_bytes:3.3e7,down_bytes:5.8e6,bytes:3.9e7,sessions:4,alerts:0,flows:9800,
+       last_seen:Math.floor(Date.now()/1000)-1800, first_seen:Math.floor(Date.now()/1000)-1296000,
+       countries:[{flag:"🇮🇱"},{flag:"🇭🇺"},{flag:"🇺🇸"},{flag:"🇫🇷"}],
        usages:[{name:"cloud",bytes:2.5e7},{name:"streaming",bytes:7.3e6},{name:"social",bytes:2.0e6}],
        top_dst:[{host:"www.youtube.com"},{host:"photos.googleapis.com"}]}
     ],
@@ -276,16 +284,29 @@
   function shortDev(d){ d=String(d||''); return d?d.slice(0,8):'?'; }
   function devEmoji(d){ var s=['💻','📱','📺','🖥️','🎮','⌚']; d=String(d||''); var h=0;
     for(var i=0;i<d.length;i++) h=(h+d.charCodeAt(i))%s.length; return s[h]; }
+  // Temps lisibles : « il y a X » (dernière activité) et durée d'activité (span).
+  function agoStr(ts){ if(!ts) return '—'; var s=Math.max(0,Math.floor(Date.now()/1000-ts));
+    if(s<90) return s+'s'; if(s<5400) return Math.round(s/60)+'min';
+    if(s<172800) return Math.round(s/3600)+'h'; return Math.round(s/86400)+'j'; }
+  function spanStr(a,b){ var s=Math.max(0,(b||0)-(a||0));
+    if(s<5400) return Math.round(s/60)+' min'; if(s<172800) return (s/3600).toFixed(1)+' h';
+    return (s/86400).toFixed(1)+' j'; }
   function clients(cont, rows){
     progressif(cont, rows, function(c){
+      var fl=(c.countries||[]).slice(0,4).map(function(x){ return x.flag||'🏳️'; }).join('');
       var us=(c.usages||[]).slice(0,3).map(function(u){
         return '<span class="uchip">'+emUsage(u.name)+' '+esc(u.name)+' '+humain(u.bytes)+'</span>'; }).join('');
       var dst=(c.top_dst||[]).slice(0,3).map(function(d){ return esc(shortTalk(d.host||d)); }).join(' · ');
       var al=c.alerts?(' · <span class="al">⚠ '+c.alerts+'</span>'):'';
+      var meta=(c.last_seen||c.first_seen)
+        ? '<div class="meta"><span>🕒 vu il y a '+agoStr(c.last_seen)+'</span><span>⏱ actif '+spanStr(c.first_seen,c.last_seen)+'</span><span>🔀 '+(c.flows||0)+' flux</span></div>'
+        : '';
       return '<div class="client"><div class="ci"><span class="e">'+devEmoji(c.device)+'</span>'
         +'<b title="'+esc(c.device)+'">'+esc(shortDev(c.device))+'</b>'
+        +(fl?'<span class="fl" title="pays des destinations">'+fl+'</span>':'')
         +'<span class="vol">'+humain(c.bytes)+'</span></div>'
         +'<div class="ud">↑'+humain(c.up_bytes)+' ↓'+humain(c.down_bytes)+' · '+(c.sessions||0)+' usages'+al+'</div>'
+        +meta
         +(us?'<div class="us">'+us+'</div>':'')
         +(dst?'<div class="dst">→ '+dst+'</div>':'')
         +'</div>';

@@ -1,3 +1,12 @@
+secubox-dpi (1.4.9-1~bookworm1) bookworm; urgency=medium
+
+  * Vue Clients : détails poussés — chaque terminal porte aussi ses PAYS
+    (géo GeoLite2 de ses destinations IP publiques, top 4) en plus du volume,
+    des usages, des top destinations et des alertes. first_seen/last_seen/flows
+    déjà exposés servent la dernière activité et la durée d'activité côté UI.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 09:00:00 +0200
+
 secubox-dpi (1.4.8-1~bookworm1) bookworm; urgency=medium
 
   * Vue CLIENTS (terminaux) : nouvelle dérivation par device — volume ↑/↓,

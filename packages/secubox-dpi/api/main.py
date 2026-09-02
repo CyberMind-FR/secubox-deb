@@ -433,7 +433,7 @@ def _derive_clients() -> list:
         up = int(dev.get("up_bytes", 0) or 0)
         down = int(dev.get("down_bytes", 0) or 0)
         tot = up + down
-        usages, dsts, fams = {}, {}, set()
+        usages, dsts, fams, countries = {}, {}, set(), {}
         for s in dev.get("services", []) or []:
             b = int(s.get("up_bytes", 0) or 0) + int(s.get("down_bytes", 0) or 0)
             en = _classify(s.get("dst", ""))
@@ -446,13 +446,26 @@ def _derive_clients() -> list:
                 d = dsts.setdefault(host, {"host": host, "bytes": 0,
                                           "service": s.get("service") or en.get("application") or ""})
                 d["bytes"] += b
+            # Pays du terminal : géo de ses destinations IP publiques.
+            if _is_ip(host):
+                try:
+                    priv = _ipaddr.ip_address(host).is_private
+                except ValueError:
+                    priv = True
+                if not priv:
+                    cc = _country_of(host)
+                    if cc:
+                        a = countries.setdefault(cc[0], {"cc": cc[0], "flag": _flag(cc[0]),
+                                                         "name": cc[1], "bytes": 0})
+                        a["bytes"] += b
         ulist = sorted(({"name": k, "bytes": v, "pct": (v / tot * 100) if tot else 0.0}
                         for k, v in usages.items() if k), key=lambda x: -x["bytes"])
         dlist = sorted(dsts.values(), key=lambda x: -x["bytes"])[:5]
+        clist = sorted(countries.values(), key=lambda x: -x["bytes"])[:4]
         out.append({"device": did, "up_bytes": up, "down_bytes": down, "bytes": tot,
                     "flows": int(dev.get("flows", 0) or 0),
                     "first_seen": dev.get("first_seen", 0), "last_seen": dev.get("last_seen", 0),
-                    "usages": ulist, "top_dst": dlist,
+                    "usages": ulist, "top_dst": dlist, "countries": clist,
                     "sessions": len(fams), "alerts": len(dev.get("alerts", []) or [])})
     out.sort(key=lambda x: -x["bytes"])
     return out
