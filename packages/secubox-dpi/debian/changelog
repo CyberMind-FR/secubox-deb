@@ -1,3 +1,14 @@
+secubox-dpi (1.4.11-1~bookworm1) bookworm; urgency=medium
+
+  * Collector (Go) : émet désormais le NOM lisible du terminal dans
+    cumulative.json (cumDev.name) — dérivé du `label` du peer WireGuard +
+    IP de tunnel (prettyLabel : iPhone/Android/Mac/… · .octet). Le collector a
+    l'accès légitime à wg-peers.json ; la FastAPI lit `name` sans franchir la
+    séparation CSPN. Résultat : noms de terminaux 100 % automatiques pour les
+    devices actifs, la table d'alias manuelle restant une surcharge.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 11:00:00 +0200
+
 secubox-dpi (1.4.10-1~bookworm1) bookworm; urgency=medium
 
   * Vue Clients : NOM LISIBLE par terminal (champ `name` ajouté à /clients et

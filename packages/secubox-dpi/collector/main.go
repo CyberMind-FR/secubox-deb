@@ -214,7 +214,50 @@ func isPrivate(ip string) bool {
 	return p.IsPrivate() || p.IsLoopback() || p.IsLinkLocalUnicast()
 }
 
-// ── wg-peers.json : { "peers": { "<pubkey>": { "ip": "10.99.1.X", ... } } } ──
+// deviceLabels : hash device → nom lisible, dérivé des peers WG (label de
+// provisioning + IP de tunnel). Rempli par loadDeviceMap ; consommé par
+// updateCumulative pour écrire cumDev.Name. Le collector a l'accès légitime à
+// wg-peers.json (la FastAPI, elle, ne l'a pas — séparation CSPN).
+var deviceLabels = map[string]string{}
+
+// prettyLabel réduit un label de provisioning (souvent un User-Agent) à un nom
+// court, suffixé du dernier octet de l'IP de tunnel pour distinguer les doublons.
+func prettyLabel(label, ip string) string {
+	l := strings.TrimSpace(label)
+	low := strings.ToLower(l)
+	switch {
+	case strings.Contains(low, "mozilla/") || strings.Contains(low, "gecko") || strings.Contains(low, "applewebkit"):
+		switch {
+		case strings.Contains(low, "iphone"):
+			l = "iPhone"
+		case strings.Contains(low, "ipad"):
+			l = "iPad"
+		case strings.Contains(low, "android"):
+			l = "Android"
+		case strings.Contains(low, "windows"):
+			l = "Windows"
+		case strings.Contains(low, "macintosh"), strings.Contains(low, "mac os"):
+			l = "Mac"
+		case strings.Contains(low, "linux"):
+			l = "Linux"
+		default:
+			l = "Navigateur"
+		}
+	default:
+		if i := strings.IndexByte(l, '/'); i > 0 && len(l) < 24 {
+			l = l[:i] // curl/7.88.1, wget/… → curl
+		}
+	}
+	if l == "" {
+		l = "R3"
+	}
+	if i := strings.LastIndexByte(ip, '.'); i >= 0 {
+		l = l + " · ." + ip[i+1:]
+	}
+	return l
+}
+
+// ── wg-peers.json : { "peers": { "<pubkey>": { "ip": "10.99.1.X", "label": … } } } ──
 func loadDeviceMap() map[string]string {
 	m := map[string]string{}
 	b, err := os.ReadFile(wgPeersPath)
@@ -223,7 +266,8 @@ func loadDeviceMap() map[string]string {
 	}
 	var doc struct {
 		Peers map[string]struct {
-			IP string `json:"ip"`
+			IP    string `json:"ip"`
+			Label string `json:"label"`
 		} `json:"peers"`
 	}
 	if json.Unmarshal(b, &doc) != nil {
@@ -232,7 +276,9 @@ func loadDeviceMap() map[string]string {
 	for pk, meta := range doc.Peers {
 		if meta.IP != "" {
 			sum := sha256.Sum256([]byte(pk))
-			m[meta.IP] = hex.EncodeToString(sum[:])[:16]
+			h := hex.EncodeToString(sum[:])[:16]
+			m[meta.IP] = h
+			deviceLabels[h] = prettyLabel(meta.Label, meta.IP)
 		}
 	}
 	return m
@@ -475,6 +521,7 @@ func updateHistory(aggs map[string]*agg, alerts []alert, now int64) {
 // unchanged.
 type cumDev struct {
 	Device    string         `json:"device"`
+	Name      string         `json:"name,omitempty"` // nom lisible du peer WG (label + IP tunnel)
 	Flows     int            `json:"flows"`
 	UpBytes   int64          `json:"up_bytes"`
 	DownBytes int64          `json:"down_bytes"`
@@ -524,6 +571,9 @@ func updateCumulative(aggs map[string]*agg, alerts []alert, now int64) {
 		d.UpBytes += a.Up
 		d.DownBytes += a.Down
 		d.LastSeen = now
+		if n := deviceLabels[a.Device]; n != "" {
+			d.Name = n // nom lisible du peer WG, rafraîchi à chaque fenêtre
+		}
 		if a.Category != "" {
 			d.ByCat[a.Category] += a.Flows
 		}
