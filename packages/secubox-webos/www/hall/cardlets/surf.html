@@ -486,4 +486,8 @@
 </html>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({root:document.body,zones:function(){return [
+  {el:document.querySelector('.barre'),label:'Barre — l’adresse à surfer À TRAVERS la box (pisteurs coupés)'},
+  {el:document.getElementById('vue'),label:'Page surfée — servie par le relais, en lecture sobre'},
+  {el:document.getElementById('stats'),label:'Coupé — pisteurs, pubs et cookies bloqués sur la page'}
+].filter(function(z){return z.el;});}});</script>

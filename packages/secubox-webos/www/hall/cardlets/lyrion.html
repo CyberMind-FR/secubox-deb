@@ -266,4 +266,9 @@
 </script>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.querySelector('.tete'),label:'En-tête — Lyrion, état, et choix du lecteur'},
+  {el:document.querySelector('.np'),label:'Lecture en cours — pochette, titre, artiste'},
+  {el:document.getElementById('cmd'),label:'Commandes — précédent/lecture/suivant, allumage, diffuser 📡, volume'},
+  {el:document.getElementById('pied'),label:'Pied — lecteurs Squeezebox du parc'}
+].filter(function(z){return z.el;});}});</script>

@@ -163,6 +163,7 @@
 </div>
 
 <script src="../slicebar.js"></script>
+<script src="../aide.js"></script>
 <script>
 (function(){
   "use strict";
@@ -388,50 +389,29 @@
   var slices=[el('d-proto'),el('d-apps'),el('d-usage'),el('d-talk'),el('d-pays'),el('d-risk')];
   var curSlice=0;
 
-  // ── REVERSE-DESIGN : la carte s'annote elle-même, PAR SLICE ─────────────────
-  // In-card (anneaux + pastilles numérotées + légende) au message {sbx:'aide'} ;
-  // report des zones {sbx:'aide-zones'} pour la grande bulle côté Hall. Défini
-  // AVANT l'init de la barre (montre() y appelle posteZones dès onShow(0)).
-  var aideOn=false, mw=document.querySelector('.mw'), lay=el('aidelay');
+  // ── AIDE reverse-design (bibliothèque partagée SBXAide) — PAR SLICE ──────────
+  // On fournit un zones() RICHE dont le libellé central change avec la slice
+  // active ; SBXAide dessine anneaux + pastilles in-card (sans voile) et rapporte
+  // {sbx:'aide-zones'} au Hall pour la bulle de légendes (cf. HIG §5.2). Plus de
+  // code inline : c'est la même lib que toutes les cardlets.
+  var mw=document.querySelector('.mw');
   var SNOM=['Protocoles','Applications','Usages','Talkers','Pays','Risques'];
-  function post(m){ if(parent!==window){ try{ parent.postMessage(m,'*'); }catch(e){} } }
-  function zones(){
-    var det=['Protocoles — la barre = part du trafic','Applications — top usage',
-             'Usages — famille d’usage (catégorie nDPI)',
-             'Talkers — appareils les plus bavards',
-             'Pays — géo des destinations (IP réelles, GeoLite2)',
-             'Risques nDPI — pastille = sévérité'][curSlice];
-    return [
-      {el:el('k-flows').closest('.kpis'), t:'KPIs — flux actifs · débit · risques'},
-      {el:slices[curSlice], t:det},
-      {el:el('slbar'), t:'Slices — tournent seules ; bullets pour choisir'}
-    ];
-  }
-  function dessineAide(){
-    if(!mw||!lay) return;
-    [].slice.call(lay.querySelectorAll('.aide-ring,.aide-pin')).forEach(function(n){n.remove();});
-    var mr=mw.getBoundingClientRect(), Z=zones();
-    Z.forEach(function(x,i){
-      if(!x.el) return; var r=x.el.getBoundingClientRect();
-      var ring=document.createElement('div'); ring.className='aide-ring';
-      ring.style.left=(r.left-mr.left-2)+'px'; ring.style.top=(r.top-mr.top-2)+'px';
-      ring.style.width=(r.width+4)+'px'; ring.style.height=(r.height+4)+'px'; lay.appendChild(ring);
-      var pin=document.createElement('div'); pin.className='aide-pin'; pin.textContent=(i+1);
-      pin.style.left=(r.left-mr.left+10)+'px'; pin.style.top=(r.top-mr.top)+'px'; lay.appendChild(pin);
-    });
-  }
-  function aide(on){ aideOn=on; lay.classList.toggle('on',on); if(on) dessineAide(); }
-  function posteZones(){
-    if(!mw) return; var mr=mw.getBoundingClientRect();
-    post({sbx:'aide-zones', slice:SNOM[curSlice]||'', vw:mr.width, vh:mr.height,
-      zones:zones().map(function(x){ if(!x.el) return null; var r=x.el.getBoundingClientRect();
-        return {label:x.t, x:r.left-mr.left, y:r.top-mr.top, w:r.width, h:r.height}; }).filter(Boolean)});
-  }
+  var DET=['Protocoles — la barre = part du trafic','Applications — top usage',
+           'Usages — famille d’usage (catégorie nDPI)',
+           'Talkers — appareils les plus bavards',
+           'Pays — géo des destinations (IP réelles, GeoLite2)',
+           'Risques nDPI — pastille = sévérité'];
+  var AIDE=(window.SBXAide) ? SBXAide({
+    root: mw,
+    slice: function(){ return SNOM[curSlice]||''; },
+    zones: function(){ return [
+      {el:el('k-flows').closest('.kpis'), label:'KPIs — flux actifs · débit · risques'},
+      {el:slices[curSlice], label:DET[curSlice]},
+      {el:el('slbar'), label:'Slices — tournent seules ; clic fige, re-clic reprend'}
+    ]; }
+  }) : null;
   function montre(i){ curSlice=i; for(var k=0;k<slices.length;k++){ slices[k].classList.toggle('actif',k===i); }
-    if(aideOn) dessineAide(); posteZones(); }
-  addEventListener('message', function(ev){ var d=ev.data; if(!d) return;
-    if(d.sbx==='aide') aide(!!d.on); else if(d.sbx==='aide?') posteZones(); });
-  addEventListener('resize', function(){ if(aideOn) dessineAide(); });
+    if(AIDE) AIDE.refresh(); }
 
   if(MEGA){
     // Page classique : toutes les slices visibles, empilées ; ni barre ni rotation.

@@ -691,4 +691,9 @@
 </script>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.querySelector('.tete'),label:'En-tête — PeerTube et le nombre de vidéos'},
+  {el:document.getElementById('une'),label:'À la une — vidéo mise en avant (▶ la lit dans le viewer)'},
+  {el:document.getElementById('top'),label:'Top vidéos — les plus regardées récemment'},
+  {el:document.querySelector('.pied'),label:'Pied — ouvrir dans le viewer'}
+].filter(function(z){return z.el;});}});</script>

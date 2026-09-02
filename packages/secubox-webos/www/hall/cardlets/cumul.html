@@ -483,4 +483,8 @@
 </script>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.querySelector('.tete'),label:'En-tête — le groupe agrégé (Sécurité, Cloud…)'},
+  {el:document.getElementById('corps'),label:'Services du groupe — état et chiffres, en rotation'},
+  {el:document.querySelector('.pied'),label:'Pied — ouvre le tableau de bord du groupe'}
+].filter(function(z){return z.el;});}});</script>

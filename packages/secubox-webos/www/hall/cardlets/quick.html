@@ -678,4 +678,8 @@
 </script>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.getElementById('tete'),label:'En-tête — le service (Torrent / YTSaS / Dépôt)'},
+  {el:document.getElementById('items'),label:'Éléments récents — la liste vivante du service'},
+  {el:document.getElementById('acces'),label:'Accès — les actions du service'}
+].filter(function(z){return z.el;});}});</script>

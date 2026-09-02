@@ -288,18 +288,18 @@ piloter ces couches (public / LAN / authentifié / rôles), à définir ultérie
 
 ## 9. Écarts connus & audit
 
-À résorber (objectif « zéro écart » — auditer à chaque tour) :
+Suivi (objectif « zéro écart » — auditer à chaque tour) :
 
-| Écart | Fichier | Action |
-|-------|---------|--------|
-| Aide **inline** (n'utilise pas `SBXAide`) | `cardlets/dpi.html` | Migrer sur `SBXAide` en conservant son `zones()` RICHE par slice. |
-| Aide **mixte** (SBXAide + inline) | `cardlets/lyrion.html` | Nettoyer, tout sur `SBXAide`. |
-| **9 cardlets** en `SBXAide({})` générique | cumul, delegue, lyrion, nextcloud-super, peertube, quick, quifrappe, surf, surfviewer | Donner un `zones()`/`slice()` **riche et contextuel** à chacun. |
-| **radio** : aide inline minimale (`slice:''`), lib non partagée | `secubox-radio/internal/web/static/` | Émanciper (lib partagée §6) + compléter l'aide contextuelle. |
+| Écart | Fichier | État |
+|-------|---------|------|
+| Aide **inline** (n'utilise pas `SBXAide`) | `cardlets/dpi.html` | ✅ **Résorbé (2026-09-02)** — migré sur `SBXAide`, `zones()` riche par slice conservé. |
+| Aide **mixte** (SBXAide + inline) | `cardlets/lyrion.html` | ✅ **Résorbé** — `zones()` enrichi ; le CSS `.sbxaide-ring` en `var(--accent)` est une surcharge de teinte VOLONTAIRE (conservée). |
+| **9 cardlets** en `SBXAide({})` générique | cumul, delegue, lyrion, nextcloud-super, peertube, quick, quifrappe, surf, surfviewer | ✅ **Résorbé** — chacun passe un `zones()` contextuel (surfviewer aussi `slice()`). |
+| **radio** : aide inline minimale (`slice:''`), lib non partagée | `secubox-radio/internal/web/static/` | ⏳ **Lane B** — nécessite la lib partagée entre paquets (§6) avant d'émanciper + compléter. |
 
-> Constat de l'audit initial (2026-09-02) : **DPI est aujourd'hui le SEUL cardlet
-> à fournir une aide riche par contexte** (par slice). Tous les autres retombent
-> sur le fallback générique. La cible est l'inverse : la richesse partout.
+> Audit initial (2026-09-02) : DPI était le SEUL cardlet à aide riche par contexte.
+> **Après lane A : les 10 cardlets du Hall ont une aide contextuelle** (plus aucun
+> `SBXAide({})` nu). Reste **radio** (lane B), bloqué par le partage inter-paquets.
 
 ---
 

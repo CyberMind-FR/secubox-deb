@@ -301,4 +301,8 @@
 </script>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.querySelector('.tete'),label:'En-tête — le service et son hôte'},
+  {el:document.getElementById('corps'),label:'Accès délégués — comptes et partages ouverts pour ce service'},
+  {el:document.querySelector('.pied'),label:'Pied — ouvrir le service'}
+].filter(function(z){return z.el;});}});</script>

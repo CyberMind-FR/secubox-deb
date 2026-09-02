@@ -258,4 +258,12 @@
 </script>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({
+  slice:function(){var d=document.querySelector('.sbx-dots .on');return d?(d.getAttribute('aria-label')||''):'';},
+  zones:function(){return [
+    {el:document.querySelector('.h'),label:'En-tête — Surf & Viewer'},
+    {el:document.getElementById('paste'),label:'Coller — un lien à voir (média) ou à surfer'},
+    {el:(document.querySelector('.slice.actif')||document.getElementById('slices')),label:'Tranche active — Favoris ⭐ · Propositions 📡 · Liens collés 🔗 · Global 🌍'},
+    {el:document.getElementById('slbar'),label:'Slices — tournent seules ; clic fige, re-clic reprend'}
+  ].filter(function(z){return z.el;});}
+});</script>

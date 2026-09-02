@@ -167,4 +167,9 @@
 </script>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.querySelector('.tete'),label:'En-tête — « Qui frappe ? » et le nombre de clusters'},
+  {el:document.querySelector('.chiffres'),label:'Chiffres — attaquants · campagnes · cibles haute valeur'},
+  {el:document.getElementById('camps'),label:'Top campagnes — outil, IP, sondes (barre = volume relatif)'},
+  {el:document.querySelector('.pied'),label:'Pied — ouvre le tableau de bord WAF complet'}
+].filter(function(z){return z.el;});}});</script>

@@ -402,4 +402,9 @@
 </script>
 
 <script src="../aide.js"></script>
-<script>window.SBXAide&&SBXAide({});</script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.querySelector('.tete'),label:'En-tête — Cloud, hôte et quota (jauge)'},
+  {el:document.getElementById('onglets'),label:'Onglets — Fichiers · Agenda · Activité · Partages'},
+  {el:document.getElementById('corps'),label:'Contenu — l’onglet actif (fichiers récents, événements, partages…)'},
+  {el:document.getElementById('pied'),label:'Pied — ouvrir le Cloud, téléverser un fichier'}
+].filter(function(z){return z.el;});}});</script>

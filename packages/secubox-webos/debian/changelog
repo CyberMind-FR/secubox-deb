@@ -1,3 +1,17 @@
+secubox-webos (1.0.251-1~bookworm1) bookworm; urgency=medium
+
+  * Aide contextuelle PARTOUT (HIG lane A) : les 10 cardlets du Hall ont
+    désormais une aide reverse-design riche, par zone/contexte.
+    - dpi.html : migré de l'aide INLINE vers la bibliothèque partagée SBXAide
+      (zones() riche par slice conservé) — plus de code d'aide dupliqué.
+    - cumul, delegue, lyrion, nextcloud-super, peertube, quick, quifrappe,
+      surf, surfviewer : passent un zones() contextuel (libellés spécifiques au
+      service) au lieu du fallback générique SBXAide({}) ; surfviewer expose
+      aussi slice(). Plus aucun SBXAide({}) nu.
+  * Voir packages/secubox-webos/HIG.md §9 (écarts résorbés ; radio = lane B).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 21:30:00 +0200
+
 secubox-webos (1.0.250-1~bookworm1) bookworm; urgency=medium
 
   * Carte DPI : /mega ouvre désormais la VUE ADMIN (admin…/dpi/) — bien plus
