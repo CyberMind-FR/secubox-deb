@@ -65,19 +65,26 @@ Trois formes de carte, choisies par `featCardHTML()` selon le service (par ordre
 
 `modeURL(mode)` décide de la cible du /mega, dans cet ordre :
 
-1. **`megaAdmin:true`** → `https://admin.gk2.secubox.in<path>?theme=…`
-   La /micro reste la cardlet vivante, le /mega ouvre la **console admin**.
-   **Règle HIG : `megaAdmin` quand le service n'a pas de vhost public riche**
-   (ex. **DPI** — sa vue pleine EST le dashboard admin : Sessions/Learning/Pays/
-   Exfil ; **Surf**). Les services de contenu qui ONT une page publique riche
-   (metanews, peertube…) gardent leur **vhost** en /mega ; l'admin reste sur ⚙️.
-2. **`noVhost`** (a `carte`, pas d'`url`) → pseudo-/mega : `carte?embed=1&mega=1&theme=…`
-   (on agrandit la cardlet elle-même, même origine).
-3. **`mode==='admin'`** → `https://admin…<path>?theme=…`.
-4. défaut **embed** → `https://<url>/?embed=1&theme=…`.
+1. **`noVhost`** (a `carte`, pas d'`url` — ex. **DPI**, **Surf**) → pseudo-/mega :
+   `carte?embed=1&mega=1&theme=…`. On **agrandit la cardlet elle-même** (même
+   origine), qui bascule en **page pleine enrichie**. Cette page pleine doit
+   viser la **richesse du rendu admin** (cards détaillées, sections multi-
+   colonnes) — s'en INSPIRER, sans ouvrir la console admin. L'admin reste
+   accessible séparément via **⚙️**.
+2. **`mode==='admin'`** → `https://admin…<path>?theme=…` (le bouton ⚙️).
+3. défaut **embed** → `https://<url>/?embed=1&theme=…` (le vhost public riche —
+   metanews, peertube… gardent leur page publique en /mega).
+
+> **Règle HIG (corrigée 2026-09-02)** : le /mega n'ouvre JAMAIS la console admin
+> à la place de la cardlet. Un service sans vhost public riche (DPI) enrichit sa
+> **propre** page /mega en s'inspirant de l'admin ; l'admin vit sur ⚙️. (La
+> tentative « megaAdmin » — rediriger /mega vers l'admin — a été annulée.)
 
 Côté cardlet, `/mega` se détecte par `?mega=1` (+`embed=1`) et bascule d'un
 **slicer** (une slice + rotation) à une **page empilée multi-colonnes** (`html.mega`).
+Exemple : la cardlet DPI en /mega empile Protocoles/Apps/Usages/Talkers/**Clients**/
+Pays/Risques ; la vue **Clients** rend une **card détaillée par terminal** (volume
+↑/↓, chips d'usage, top destinations, alertes), à la manière de l'admin.
 
 ---
 

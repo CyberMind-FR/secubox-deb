@@ -1,0 +1,472 @@
+<title>SBXOS Interface Guidelines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --paper:#f5f3ec; --panel:#fffdf7; --panel-2:#efece2; --ink:#1b1d24; --dim:#6b6d78;
+  --line:#e4e0d3; --line-2:#d7d2c2;
+  --cyan:#0a91c8; --cyan-ink:#064a63; --cyan-soft:#e0f1f8;
+  --violet:#6e40c9; --violet-soft:#ece5fb;
+  --sky:#2f6fb0; --sky-soft:#e3edf7;
+  --green:#2e7d5b; --green-soft:#e0f0e8;
+  --amber:#a9781a; --amber-soft:#f6ecd4;
+  --red:#c0392b;
+  --shadow:0 1px 2px rgba(30,28,20,.06),0 8px 24px rgba(30,28,20,.07);
+  --radius:14px;
+  --disp:"Bricolage Grotesque",system-ui,sans-serif;
+  --body:"Instrument Sans",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0e1016; --panel:#161922; --panel-2:#1d212b; --ink:#e9e7dd; --dim:#9a9cab;
+  --line:#252a34; --line-2:#323847;
+  --cyan:#38c6ea; --cyan-ink:#bfeaf6; --cyan-soft:#0f2e39;
+  --violet:#a684f0; --violet-soft:#241a3a;
+  --sky:#6aa6e0; --sky-soft:#16273a;
+  --green:#5cc999; --green-soft:#123227;
+  --amber:#e2b45a; --amber-soft:#33280f;
+  --red:#e5766a;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
+}}
+:root[data-theme="dark"]{
+  --paper:#0e1016; --panel:#161922; --panel-2:#1d212b; --ink:#e9e7dd; --dim:#9a9cab;
+  --line:#252a34; --line-2:#323847;
+  --cyan:#38c6ea; --cyan-ink:#bfeaf6; --cyan-soft:#0f2e39;
+  --violet:#a684f0; --violet-soft:#241a3a;
+  --sky:#6aa6e0; --sky-soft:#16273a;
+  --green:#5cc999; --green-soft:#123227;
+  --amber:#e2b45a; --amber-soft:#33280f;
+  --red:#e5766a;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);
+  line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--disp);line-height:1.1;text-wrap:balance;margin:0}
+code,.mono{font-family:var(--mono)}
+a{color:var(--cyan)}
+
+/* ── top bar ─────────────────────────────────────────────── */
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;
+  padding:10px clamp(14px,4vw,40px);background:color-mix(in srgb,var(--paper) 86%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font-family:var(--disp);font-weight:800;letter-spacing:-.01em}
+.brand .glyph{width:26px;height:26px;border-radius:8px;background:var(--cyan);color:#04222e;
+  display:grid;place-items:center;font-size:15px;box-shadow:0 0 0 3px var(--cyan-soft)}
+.topnav{margin-left:auto;display:flex;gap:2px;flex-wrap:wrap}
+.topnav a{font-size:.82rem;color:var(--dim);text-decoration:none;padding:6px 10px;border-radius:8px}
+.topnav a:hover{color:var(--ink);background:var(--panel-2)}
+.tbtn{font:inherit;font-size:.8rem;cursor:pointer;border:1px solid var(--line-2);background:var(--panel);
+  color:var(--ink);border-radius:9px;padding:6px 11px;display:inline-flex;align-items:center;gap:6px}
+.tbtn:hover{border-color:var(--cyan)}
+
+/* ── layout ──────────────────────────────────────────────── */
+main{max-width:1080px;margin:0 auto;padding:0 clamp(14px,4vw,40px) 80px}
+section{padding:56px 0 8px;border-top:1px solid var(--line)}
+section:first-of-type{border-top:none}
+.eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--cyan);font-weight:600;margin-bottom:12px}
+.lead{font-size:1.05rem;color:var(--dim);max-width:64ch}
+h2{font-size:clamp(1.5rem,3.4vw,2.15rem);letter-spacing:-.02em}
+h3{font-size:1.15rem;margin:26px 0 8px;letter-spacing:-.01em}
+p{max-width:70ch}
+
+/* hero */
+.hero{padding:clamp(40px,8vw,88px) 0 40px;border-top:none}
+.hero h1{font-size:clamp(2.4rem,7vw,4.4rem);font-weight:800;letter-spacing:-.035em}
+.hero .k{color:var(--cyan)}
+.hero .lead{font-size:clamp(1.05rem,2.4vw,1.3rem);margin-top:18px}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.pill{font-family:var(--mono);font-size:.7rem;padding:5px 11px;border-radius:999px;
+  border:1px solid var(--line-2);color:var(--dim);background:var(--panel)}
+.pill b{color:var(--ink);font-weight:600}
+
+/* cards / grid */
+.grid{display:grid;gap:16px;margin-top:22px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 18px 16px;box-shadow:var(--shadow)}
+.card h4{font-size:1rem;display:flex;align-items:center;gap:8px}
+.card p{font-size:.9rem;color:var(--dim);margin:.5rem 0 0}
+.tag{font-family:var(--mono);font-size:.64rem;padding:3px 7px;border-radius:6px;font-weight:600}
+.tag.cyan{background:var(--cyan-soft);color:var(--cyan-ink)}
+.tag.violet{background:var(--violet-soft);color:var(--violet)}
+.tag.green{background:var(--green-soft);color:var(--green)}
+.tag.amber{background:var(--amber-soft);color:var(--amber)}
+.tag.sky{background:var(--sky-soft);color:var(--sky)}
+
+/* mock cardlet */
+.stage{display:grid;grid-template-columns:minmax(0,300px) 1fr;gap:26px;align-items:start;margin-top:24px}
+@media(max-width:720px){.stage{grid-template-columns:1fr}}
+.cardlet{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);overflow:hidden;font-size:.82rem}
+.cl-head{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid var(--line)}
+.cl-head .ic{font-size:1.05rem}
+.cl-head b{font-family:var(--disp);font-weight:700}
+.cl-head .live{margin-left:auto;font-family:var(--mono);font-size:.6rem;color:var(--green);display:flex;align-items:center;gap:4px}
+.cl-head .led{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+.cl-corner{position:absolute;top:9px;right:10px;display:flex;gap:5px}
+.cl-corner span{width:22px;height:22px;border-radius:7px;border:1px solid var(--line-2);background:var(--panel-2);
+  display:grid;place-items:center;font-size:.72rem;color:var(--dim);cursor:pointer}
+.cl-corner span:hover{border-color:var(--cyan);color:var(--cyan)}
+.cl-body{padding:12px}
+.cl-row{display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px dashed var(--line)}
+.cl-row .e{width:18px;text-align:center}
+.cl-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cl-row .bar{width:64px;height:6px;border-radius:4px;background:var(--panel-2);overflow:hidden}
+.cl-row .bar i{display:block;height:100%;background:var(--cyan);border-radius:4px}
+.cl-row .n{font-family:var(--mono);font-size:.68rem;color:var(--dim)}
+.cl-bar{display:flex;align-items:center;gap:7px;padding:9px 12px;border-top:1px solid var(--line);background:var(--panel-2)}
+.cl-dots{display:flex;gap:5px}
+.cl-dots i{width:8px;height:8px;border-radius:50%;background:var(--line-2);cursor:pointer;transition:.15s}
+.cl-dots i.on{background:var(--cyan);transform:scale(1.25)}
+.cl-dots.man i.on{background:var(--green)}
+.cl-lab{font-size:.72rem;color:var(--dim)}
+.cl-lab b{color:var(--ink);font-weight:600}
+/* annotation pins */
+.anno{position:absolute;z-index:5;display:flex;align-items:center;gap:6px;pointer-events:none}
+.anno .pin{width:19px;height:19px;border-radius:10px;background:var(--cyan);color:#04222e;font-weight:800;
+  font-size:.66rem;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.ring{position:absolute;border:2px solid var(--cyan);border-radius:9px;pointer-events:none;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan) 20%,transparent)}
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.legend li{display:flex;gap:11px;align-items:flex-start;font-size:.9rem}
+.legend .num{flex:0 0 auto;width:22px;height:22px;border-radius:11px;background:var(--cyan);color:#04222e;
+  font-family:var(--mono);font-weight:600;font-size:.72rem;display:grid;place-items:center;margin-top:1px}
+.legend b{font-weight:600}
+.legend span{color:var(--dim)}
+
+/* visibility demo */
+.demo{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-top:22px;box-shadow:var(--shadow)}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:10px;overflow:hidden}
+.seg button{font:inherit;font-size:.82rem;padding:7px 13px;border:0;background:var(--panel);color:var(--dim);cursor:pointer}
+.seg button.on{background:var(--cyan);color:#04222e;font-weight:600}
+.hint{font-size:.82rem;color:var(--dim)}
+.hint b{color:var(--ink)}
+.miniwall{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px}
+.mc{border:1px solid var(--line);border-radius:11px;padding:11px;background:var(--panel-2);font-size:.8rem;
+  display:flex;flex-direction:column;gap:6px;transition:opacity .25s,transform .25s;position:relative}
+.mc .ico{font-size:1.2rem}
+.mc .nm{font-weight:600}
+.mc .lvl{font-family:var(--mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase}
+.mc[data-hidden="1"]{opacity:.12;filter:grayscale(1);transform:scale(.97)}
+.mc .stripe{position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:3px}
+.lvl-pub{color:var(--sky)} .stripe.pub{background:var(--sky)}
+.lvl-lan{color:var(--green)} .stripe.lan{background:var(--green)}
+.lvl-auth{color:var(--amber)} .stripe.auth{background:var(--amber)}
+
+/* protocol table */
+.tbl{width:100%;border-collapse:collapse;margin-top:14px;font-size:.84rem}
+.tbl th,.tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl th{font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.tbl td code{font-size:.8rem;color:var(--cyan-ink);background:var(--cyan-soft);padding:1px 6px;border-radius:5px}
+.tbl .dir{font-family:var(--mono);font-size:.68rem;color:var(--dim);white-space:nowrap}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.scroll .tbl{margin:0}
+.scroll .tbl th,.scroll .tbl td{padding:9px 12px}
+
+/* privilege matrix */
+.matrix{width:100%;border-collapse:collapse;font-size:.85rem;min-width:520px}
+.matrix th,.matrix td{padding:9px 10px;border-bottom:1px solid var(--line)}
+.matrix thead th{font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);text-align:center}
+.matrix tbody th{text-align:left;font-weight:600;font-family:var(--body)}
+.matrix td{text-align:center}
+.cell{--c:var(--line-2);cursor:pointer;user-select:none;display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:24px;border-radius:7px;border:1.5px solid var(--c);color:var(--c);font-size:.8rem;background:transparent;transition:.12s}
+.cell.on{background:var(--c);border-color:var(--c);color:#fff}
+:root[data-theme="dark"] .cell.on,:root:not([data-theme="light"]) .cell.on{color:#0e1016}
+.cell.pub{--c:var(--sky)} .cell.lan{--c:var(--green)} .cell.auth{--c:var(--amber)} .cell.admin{--c:var(--violet)}
+.matrix tbody tr:hover{background:var(--panel-2)}
+
+/* mega zoom */
+.zoomwrap{position:relative;margin-top:22px;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:var(--radius);padding:22px;overflow:hidden;min-height:220px}
+.deskgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;filter:blur(.4px);opacity:.6}
+.deskgrid .dc{height:52px;border-radius:10px;background:var(--panel);border:1px solid var(--line)}
+.zoomcard{position:absolute;inset:26px;background:var(--panel);border:1px solid var(--cyan);border-radius:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,.28),0 0 0 6px color-mix(in srgb,var(--cyan) 12%,transparent);
+  display:flex;flex-direction:column;overflow:hidden}
+.zoomcard .zt{display:flex;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);font-size:.85rem}
+.zoomcard .zt b{font-family:var(--disp)}
+.zoomcard .zt .x{margin-left:auto;color:var(--dim);font-family:var(--mono)}
+.zoomcard .zb{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:13px}
+.zoomcard .zp{background:var(--panel-2);border:1px solid var(--line);border-radius:9px}
+
+/* footer */
+footer{border-top:1px solid var(--line);margin-top:40px;padding-top:22px;color:var(--dim);font-size:.82rem}
+.callout{background:var(--cyan-soft);border:1px solid color-mix(in srgb,var(--cyan) 30%,transparent);
+  border-radius:var(--radius);padding:14px 16px;margin-top:20px;font-size:.9rem;color:var(--cyan-ink)}
+:root[data-theme="dark"] .callout,:root:not([data-theme="light"]) .callout{color:var(--ink)}
+.note{font-size:.78rem;color:var(--dim);margin-top:8px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:720px){.two{grid-template-columns:1fr}}
+</style>
+
+<div class="topbar">
+  <div class="brand"><span class="glyph">🛰️</span> SBXOS · Interface Guidelines</div>
+  <nav class="topnav">
+    <a href="#modele">Modèle</a>
+    <a href="#chrome">Chrome</a>
+    <a href="#visibilite">Visibilité</a>
+    <a href="#privileges">Privilèges</a>
+    <a href="#protocole">Protocole</a>
+    <a href="#mega">Mega</a>
+  </nav>
+  <button class="tbtn" id="themeBtn" title="Basculer papier / nuit">◐ <span id="themeLbl">Nuit</span></button>
+</div>
+
+<main>
+  <!-- HERO -->
+  <section class="hero" id="top">
+    <div class="eyebrow">SecuBox WebOS · design system</div>
+    <h1>Un bureau souverain, <span class="k">cohérent</span> de la carte à la fenêtre.</h1>
+    <p class="lead">SBXOS encadre des <b>cardlets</b> (vues <span class="mono">/micro</span>) et des <b>vues pleines</b> (<span class="mono">/mega</span>), reliées par un <b>protocole de messages <span class="mono">sbx</span></b> et deux bibliothèques partagées — le slicer (<span class="mono">SBXSliceBar</span>) et l'aide reverse-design (<span class="mono">SBXAide</span>). Cette page montre les règles <b>en réel</b>, et esquisse ce qui vient <b>en possible</b>.</p>
+    <div class="pills">
+      <span class="pill"><b>10</b> cardlets</span>
+      <span class="pill"><b>~35</b> messages sbx</span>
+      <span class="pill"><b>2</b> libs partagées</span>
+      <span class="pill"><b>3</b> couches de visibilité</span>
+      <span class="pill">thème <b>papier / nuit</b></span>
+    </div>
+    <div class="callout">Référence vivante — elle accompagne <span class="mono">packages/secubox-webos/HIG.md</span> (la source de vérité écrite). Ici, on <b>voit</b> et on <b>manipule</b>.</div>
+  </section>
+
+  <!-- MODELE -->
+  <section id="modele">
+    <div class="eyebrow">Le principe</div>
+    <h2>Une carte, trois profondeurs</h2>
+    <p class="lead">Chaque service se lit à trois échelles. On ne recharge jamais un service : on l'approfondit.</p>
+    <div class="grid g3">
+      <div class="card">
+        <h4>🔎 /micro <span class="tag cyan">cardlet</span></h4>
+        <p>La carte dans la grille du Hall. Coup d'œil vivant : slices en rotation, aide, pause au survol. C'est la vue par défaut.</p>
+      </div>
+      <div class="card">
+        <h4>🖥️ /mega <span class="tag cyan">page pleine</span></h4>
+        <p>L'agrandi. Pour un service de contenu (metanews, peertube), c'est sa <b>page publique riche</b>. Une fenêtre, pas un nouvel onglet.</p>
+      </div>
+      <div class="card">
+        <h4>🔬 /mega enrichi <span class="tag violet">sans vhost</span></h4>
+        <p>Sans page publique (DPI, Surf), le /mega agrandit <b>la cardlet elle-même</b> en page pleine <b>enrichie</b> — s'inspirant du rendu admin (cards détaillées, clients), sans <i>être</i> l'admin.</p>
+      </div>
+    </div>
+    <p class="note">Règle : le /mega n'ouvre jamais la console admin à la place de la carte. Un service sans vhost public enrichit sa <b>propre</b> page ; l'admin vit sur <b>⚙️</b>.</p>
+  </section>
+
+  <!-- CHROME -->
+  <section id="chrome">
+    <div class="eyebrow">Anatomie</div>
+    <h2>Le chrome, au même endroit partout</h2>
+    <p class="lead">Boutons en haut-droite, barre à slices en bas, mini-popup d'aide au clic sur le <b>?</b>. Survolez une puce ci-dessous : elle se fige (vert) et la rotation se met en pause.</p>
+    <div class="stage">
+      <div class="cardlet" id="mock">
+        <div class="cl-head"><span class="ic">🔬</span><b>DPI · Trafic</b>
+          <span class="live"><span class="led"></span>LIVE</span></div>
+        <div class="cl-corner"><span title="Favori">★</span><span title="Aide" id="qmark">?</span></div>
+        <div class="cl-body" id="mockBody"></div>
+        <div class="cl-bar">
+          <span class="cl-dots" id="dots"></span>
+          <span class="cl-lab" id="clab"></span>
+        </div>
+      </div>
+      <ul class="legend">
+        <li><span class="num">1</span><div><b>Boutons haut-droite</b> — <span>★ favori (réordonne), <b>?</b> aide reverse-design. Au niveau du Hall : thème ◐ et profil 🧙.</span></div></li>
+        <li><span class="num">2</span><div><b>Contenu vivant</b> — <span>la slice active ; barres = part du trafic. Listes longues en top-5 + « voir plus ».</span></div></li>
+        <li><span class="num">3</span><div><b>Barre du bas (slicer)</b> — <span>puces bleues = rotation auto ; clic = fige (vert) + pause, mémorisée ; re-clic = reprend.</span></div></li>
+        <li><span class="num">4</span><div><b>Mini-popup d'aide</b> — <span>le <b>?</b> demande <code>{sbx:'aide'}</code> ; la carte répond <code>{sbx:'aide-zones'}</code> et le Hall liste des légendes numérotées, propres au service.</span></div></li>
+      </ul>
+    </div>
+    <p class="note" id="mockNote">Astuce : cliquez le <b>?</b> de la carte pour voir l'aide reverse-design s'afficher dessus.</p>
+  </section>
+
+  <!-- VISIBILITE -->
+  <section id="visibilite">
+    <div class="eyebrow">Couches de visibilité</div>
+    <h2>Ce que chacun voit</h2>
+    <p class="lead">Le Hall révèle les cartes selon deux couches indépendantes : <b>LAN</b> (le client est sur le réseau local) et <b>authentifié</b> (session ouverte). La vraie barrière est côté serveur ; l'affichage n'est que le reflet.</p>
+    <div class="demo">
+      <div class="controls">
+        <span class="hint">Client :</span>
+        <div class="seg" id="segLan">
+          <button data-v="wan" class="on">🌐 WAN</button>
+          <button data-v="lan">🏠 LAN</button>
+        </div>
+        <div class="seg" id="segAuth">
+          <button data-v="anon" class="on">👤 Anonyme</button>
+          <button data-v="auth">🔓 Authentifié</button>
+        </div>
+        <span class="hint" id="visHint"></span>
+      </div>
+      <div class="miniwall" id="wall"></div>
+    </div>
+    <p class="note">Mécanique réelle : <code class="mono">&lt;html class="non-connecte non-lan"&gt;</code> + <code class="mono">.non-lan .fcard[data-lan]{display:none}</code> / <code class="mono">.non-connecte .fcard[data-auth]{display:none}</code>. nginx retire <code class="mono">non-lan</code> pour un client LAN ; la session retire <code class="mono">non-connecte</code>.</p>
+  </section>
+
+  <!-- PRIVILEGES -->
+  <section id="privileges">
+    <div class="eyebrow">En possible · mockup</div>
+    <h2>Administration des privilèges</h2>
+    <p class="lead">Aujourd'hui les couches sont déclarées carte par carte dans le code. Demain, une matrice les rend visibles et pilotables — par service et par rôle. Cliquez les cellules pour esquisser une politique.</p>
+    <div class="scroll" style="margin-top:20px">
+      <table class="matrix">
+        <thead><tr><th style="text-align:left">Service</th><th>🌐 Public</th><th>🏠 LAN</th><th>🔓 Authentifié</th><th>👑 Admin</th></tr></thead>
+        <tbody id="matBody"></tbody>
+      </table>
+    </div>
+    <p class="note">Esquisse — non implémenté. Objectif : remplacer les flags <code class="mono">auth:true</code>/<code class="mono">lan:true</code> épars par une politique déclarative unique, auditable, attribuée par identité (rôles ZKP GK-HAM).</p>
+  </section>
+
+  <!-- PROTOCOLE -->
+  <section id="protocole">
+    <div class="eyebrow">Le langage commun</div>
+    <h2>Le protocole <span class="mono" style="font-size:.8em">sbx</span></h2>
+    <p class="lead">Chaque message est <code class="mono">postMessage({sbx:'…'})</code>. Les signaux d'UI partent en <code class="mono">'*'</code> ; les commandes vers un cadre de confiance visent l'origine précise, et les entrées sont filtrées sur <code class="mono">ev.source</code>.</p>
+    <div class="two">
+      <div>
+        <h3>Hall → cardlet</h3>
+        <div class="scroll"><table class="tbl"><tbody id="p2c"></tbody></table></div>
+      </div>
+      <div>
+        <h3>cardlet → Hall</h3>
+        <div class="scroll"><table class="tbl"><tbody id="c2p"></tbody></table></div>
+      </div>
+    </div>
+    <p class="note">Extrait — la référence complète (~35 messages) est dans HIG.md §4.</p>
+  </section>
+
+  <!-- MEGA -->
+  <section id="mega">
+    <div class="eyebrow">En possible · geste</div>
+    <h2>Le /mega, une fenêtre zoomée</h2>
+    <p class="lead">Plutôt qu'une page à part, l'agrandi devient un <b>zoom spatial</b> dans le bureau : la carte grandit à sa place, le reste s'estompe, et un geste ramène à la grille. Cliquez la maquette.</p>
+    <div class="zoomwrap" id="zoomwrap">
+      <div class="deskgrid" id="deskgrid"></div>
+      <div class="zoomcard" id="zoomcard" hidden>
+        <div class="zt"><span>🔬</span><b>DPI · Trafic</b><span class="tag violet" style="margin-left:8px">cardlet enrichie · clients &amp; agrégats</span><span class="x" id="zx">▢ réduire</span></div>
+        <div class="zb"><div class="zp"></div><div class="zp"></div><div class="zp"></div><div class="zp"></div></div>
+      </div>
+    </div>
+    <p class="note">Continuité : mêmes objets <span class="mono">sbx</span>, même thème, même aide — seul le cadrage change. On ne « part » jamais du bureau.</p>
+  </section>
+
+  <footer>
+    <p><b>SBXOS Interface Guidelines</b> — référence visuelle du design system du WebOS SecuBox.
+    Source écrite : <span class="mono">packages/secubox-webos/HIG.md</span>. Bibliothèque partagée : <span class="mono">secubox-sbxui</span> (<span class="mono">/shared/sbxui/</span>).</p>
+    <p class="note">Réel : cardlets, protocole, libs, couches de visibilité. Possible : administration des privilèges, /mega fenêtre zoomée, slices favorites, multi-cardlet.</p>
+  </footer>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var root=document.documentElement;
+  // theme toggle (3-state aware: default follows system)
+  function sysDark(){return matchMedia('(prefers-color-scheme: dark)').matches;}
+  function cur(){var t=root.getAttribute('data-theme');return t||(sysDark()?'dark':'light');}
+  function setTheme(t){root.setAttribute('data-theme',t);document.getElementById('themeLbl').textContent=(t==='dark'?'Papier':'Nuit');}
+  setTheme(cur());
+  document.getElementById('themeBtn').addEventListener('click',function(){setTheme(cur()==='dark'?'light':'dark');});
+
+  // ── mock cardlet : slices + slicer + aide reverse-design ──
+  var SLICES=[
+    {lab:'🌐 Protocoles', rows:[['🔒','TLS',87],['📡','DNS',9],['📶','STUN',2],['🧲','BitTorrent',1]], help:'Protocoles — la barre = part du trafic'},
+    {lab:'📱 Applications', rows:[['🤖','Anthropic',41],['☁️','Cloudflare',18],['✖️','X',11],['🐙','GitHub',7]], help:'Applications — top usage par service'},
+    {lab:'🌍 Pays', rows:[['🇫🇷','France',75],['🇺🇸','États-Unis',21],['🇨🇦','Canada',2],['🇧🇷','Brésil',1]], help:'Pays — géo des destinations (GeoLite2)'}
+  ];
+  var i=0, mode='auto', timer=null, aideOn=false;
+  var body=document.getElementById('mockBody'), dots=document.getElementById('dots'), clab=document.getElementById('clab');
+  SLICES.forEach(function(s,k){var d=document.createElement('i');d.title=s.lab;d.addEventListener('click',function(){manual(k);});dots.appendChild(d);});
+  function paintBody(){
+    var s=SLICES[i];
+    body.innerHTML=s.rows.map(function(r){return '<div class="cl-row"><span class="e">'+r[0]+'</span><span class="nm">'+r[1]+'</span><span class="bar"><i style="width:'+r[2]+'%"></i></span><span class="n">'+r[2]+'%</span></div>';}).join('');
+    Array.prototype.forEach.call(dots.children,function(d,k){d.classList.toggle('on',k===i);});
+    clab.innerHTML='<b>'+s.lab+'</b>';
+    if(aideOn) drawAide();
+  }
+  function show(k){i=(k+SLICES.length)%SLICES.length;paintBody();}
+  function tick(){if(mode==='auto')show(i+1);}
+  function start(){stop();timer=setInterval(tick,2600);}
+  function stop(){if(timer){clearInterval(timer);timer=null;}}
+  function manual(k){if(mode==='manuel'&&k===i){mode='auto';dots.classList.remove('man');start();}else{mode='manuel';dots.classList.add('man');stop();show(k);}}
+  var mock=document.getElementById('mock');
+  mock.addEventListener('mouseenter',stop);
+  mock.addEventListener('mouseleave',function(){if(mode==='auto')start();});
+  show(0);start();
+
+  // aide reverse-design overlay on the mock
+  var ZONES=[
+    {sel:'.cl-corner', label:'Boutons — favori ★ et aide ?'},
+    {sel:'.cl-body',   label:function(){return SLICES[i].help;}},
+    {sel:'.cl-bar',    label:'Slicer — clic fige + pause, re-clic reprend'}
+  ];
+  function clearAide(){Array.prototype.slice.call(mock.querySelectorAll('.ring,.anno')).forEach(function(n){n.remove();});}
+  function drawAide(){
+    clearAide();var mr=mock.getBoundingClientRect();
+    ZONES.forEach(function(z,k){var el=mock.querySelector(z.sel);if(!el)return;var r=el.getBoundingClientRect();
+      var ring=document.createElement('div');ring.className='ring';
+      ring.style.left=(r.left-mr.left-2)+'px';ring.style.top=(r.top-mr.top-2)+'px';
+      ring.style.width=(r.width+4)+'px';ring.style.height=(r.height+4)+'px';mock.appendChild(ring);
+      var a=document.createElement('div');a.className='anno';a.style.left=(r.left-mr.left+6)+'px';a.style.top=(r.top-mr.top-3)+'px';
+      a.innerHTML='<span class="pin">'+(k+1)+'</span>';mock.appendChild(a);
+    });
+  }
+  document.getElementById('qmark').addEventListener('click',function(){
+    aideOn=!aideOn;
+    document.getElementById('mockNote').innerHTML=aideOn?'Aide affichée — chaque anneau numéroté correspond à une légende. Re-cliquez le <b>?</b> pour masquer.':'Astuce : cliquez le <b>?</b> de la carte pour voir l\'aide reverse-design s\'afficher dessus.';
+    if(aideOn)drawAide();else clearAide();
+  });
+  addEventListener('resize',function(){if(aideOn)drawAide();});
+
+  // ── visibility demo ──
+  var SVCS=[
+    {ic:'🗞️',nm:'MetaNews',lvl:'pub'},{ic:'📹',nm:'PeerTube',lvl:'pub'},{ic:'🎵',nm:'Radio',lvl:'pub'},
+    {ic:'🎚️',nm:'Lyrion',lvl:'lan'},{ic:'📦',nm:'Dépôt',lvl:'lan'},
+    {ic:'🛡️',nm:'Sécurité',lvl:'auth'},{ic:'🔬',nm:'DPI · Trafic',lvl:'auth'},{ic:'☁️',nm:'Cloud +',lvl:'auth'}
+  ];
+  var LN={pub:'Public',lan:'LAN',auth:'Authentifié'};
+  var wall=document.getElementById('wall');
+  wall.innerHTML=SVCS.map(function(s){return '<div class="mc" data-lvl="'+s.lvl+'"><span class="stripe '+s.lvl+'"></span><span class="ico">'+s.ic+'</span><span class="nm">'+s.nm+'</span><span class="lvl lvl-'+s.lvl+'">'+LN[s.lvl]+'</span></div>';}).join('');
+  var state={lan:false,auth:false};
+  function applyVis(){
+    Array.prototype.forEach.call(wall.children,function(c){
+      var lvl=c.getAttribute('data-lvl');
+      var vis=(lvl==='pub')||(lvl==='lan'&&state.lan)||(lvl==='auth'&&state.auth);
+      c.setAttribute('data-hidden',vis?'0':'1');
+    });
+    var n=SVCS.filter(function(s){return (s.lvl==='pub')||(s.lvl==='lan'&&state.lan)||(s.lvl==='auth'&&state.auth);}).length;
+    document.getElementById('visHint').innerHTML='→ <b>'+n+'</b> / '+SVCS.length+' cartes visibles';
+  }
+  function seg(id,on,off,cb){document.getElementById(id).addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+    Array.prototype.forEach.call(this.children,function(x){x.classList.toggle('on',x===b);});cb(b.getAttribute('data-v'));});}
+  seg('segLan',null,null,function(v){state.lan=(v==='lan');applyVis();});
+  seg('segAuth',null,null,function(v){state.auth=(v==='auth');applyVis();});
+  applyVis();
+
+  // ── privilege matrix ──
+  var MSVC=[['🗞️','MetaNews',['pub']],['🎚️','Lyrion',['lan']],['🔬','DPI · Trafic',['auth','admin']],
+            ['🛡️','Sécurité',['auth','admin']],['📦','Dépôt',['lan','auth']],['☁️','Cloud +',['auth']]];
+  var COLS=[['pub','●'],['lan','●'],['auth','●'],['admin','●']];
+  document.getElementById('matBody').innerHTML=MSVC.map(function(s){
+    return '<tr><th>'+s[0]+' '+s[1]+'</th>'+COLS.map(function(c){
+      var on=s[2].indexOf(c[0])>=0;
+      return '<td><span class="cell '+c[0]+(on?' on':'')+'" data-c="'+c[0]+'">'+(on?'✓':'')+'</span></td>';
+    }).join('')+'</tr>';
+  }).join('');
+  document.getElementById('matBody').addEventListener('click',function(e){
+    var cell=e.target.closest('.cell');if(!cell)return;
+    var on=cell.classList.toggle('on');cell.textContent=on?'✓':'';
+  });
+
+  // ── mega zoom demo ──
+  var dg=document.getElementById('deskgrid');
+  for(var z=0;z<8;z++){var d=document.createElement('div');d.className='dc';dg.appendChild(d);}
+  var zc=document.getElementById('zoomcard'), zw=document.getElementById('zoomwrap');
+  zw.addEventListener('click',function(e){
+    if(e.target.id==='zx'){zc.hidden=true;return;}
+    if(zc.hidden){zc.hidden=false;}
+  });
+})();
+</script>
