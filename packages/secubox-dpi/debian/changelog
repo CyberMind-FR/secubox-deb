@@ -1,3 +1,18 @@
+secubox-dpi (1.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * Routeur PUBLIC agrégé /pub (SANS JWT, GET, lecture seule, non nominatif) :
+    /pub/stats /pub/usage /pub/suggestions /pub/sessions /pub/countries. Même
+    posture que le socket sbxdpi historique (aggregate, no-PII, local) mais
+    alimenté par les dérivations RÉELLES du collector — pour que la cardlet DPI
+    du Hall (connect-src 'self', pas de JWT) affiche enfin du réel, sbxdpi
+    restant dark. Les écritures (rules/accept…) restent hors /pub, sous JWT.
+  * /pub/stats : nouvelle dérivation collector (protocoles master, apps=service,
+    catégories=by_category, talkers=dst, risques=alerts) dans la forme attendue
+    par la cardlet. Dérivations usage/suggestions/sessions/countries extraites
+    en fonctions sync partagées (JWT admin + /pub Hall, un seul calcul).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 19:15:00 +0200
+
 secubox-dpi (1.4.6-1~bookworm1) bookworm; urgency=medium
 
   * Admin DPI : affichage progressif — top-5 par défaut + « Voir plus » sur

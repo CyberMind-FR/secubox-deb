@@ -1,3 +1,15 @@
+secubox-webos (1.0.248-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI : le relais Hall /api/v1/dpi/ pointe désormais sur le routeur
+    PUBLIC agrégé de l'API DPI (dpi.sock → /pub) au lieu du socket sbxdpi dark
+    — la carte affiche enfin des DONNÉES RÉELLES (protocoles, apps, usages,
+    talkers, pays, risques), sbxdpi restant non alimenté. Aggregate/no-PII,
+    GET only, sans JWT (posture inchangée) ; les écritures restent sous JWT.
+  * Cardlet DPI : nouvelle slice « 🌍 Pays » (géo des destinations, GeoLite2)
+    et affichage progressif top-5 + « voir plus » sur toutes les listes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 19:15:00 +0200
+
 secubox-webos (1.0.247-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet DPI /mega : section 🎓 Learning (suggestions du learner via

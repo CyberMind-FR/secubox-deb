@@ -149,6 +149,7 @@
     <div class="dsec" id="d-apps"><div class="sec-t">📱 Applications</div><div class="slice" id="s-apps"></div></div>
     <div class="dsec" id="d-usage"><div class="sec-t">🧭 Usages</div><div class="slice" id="s-usage"></div></div>
     <div class="dsec" id="d-talk"><div class="sec-t">🗣️ Talkers</div><div class="slice" id="s-talk"></div></div>
+    <div class="dsec" id="d-pays"><div class="sec-t">🌍 Pays</div><div class="slice" id="s-pays"></div></div>
     <div class="dsec" id="d-infra"><div class="sec-t">🏢 Infrastructure</div><div class="slice" id="s-infra"></div></div>
     <div class="dsec" id="d-unknown"><div class="sec-t">❔ Non classifié</div><div class="slice" id="s-unknown"></div></div>
     <div class="dsec" id="d-learning"><div class="sec-t">🎓 Learning — suggestions</div><div class="slice" id="s-learning"></div></div>
@@ -184,6 +185,7 @@
     unknown:[["rr5---sn.googlevideo.com","2.1 Go · co-occurrent YouTube ×47"],["edge-telemetry.example","40 Mo · beaconing 30 s"],["occ-0-2774.1.nflxso.net","1.8 Go · gros downstream"],["*.gvt2.com","petit · périodique"]],
     learning:[["googlevideo.com","2 sous-domaines non classifiés, 4.0 Go",98],["gvt2.com","6 terminaux, périodique",91],["edge-telemetry.example","beaconing régulier — à examiner",54]],
     talk:[["💻","desktop-lan · .24",34],["📱","pixel · .51",22],["📺","tv-salon · .77",17],["🖥️","nas · .10",14],["🎮","console · .63",8]],
+    pays:[["🇫🇷","France",52],["🇺🇸","États-Unis",28],["🇨🇦","Canada",9],["🇧🇷","Brésil",5],["🇩🇪","Allemagne",3]],
     risk:[["hi","Identifiants en clair (HTTP)","3×"],["hi","Certificat auto-signé","2×"],["md","Proto connu sur port non-std","5×"],["md","TLS obsolète (1.0)","1×"],["lo","Paquet malformé","4×"]]
   };
 
@@ -251,6 +253,7 @@
     barres(el('s-apps'),  d.apps,  'a2');
     barres(el('s-usage'), d.usage||[], '');
     barres(el('s-talk'),  d.talk,  'a3');
+    barres(el('s-pays'),  d.pays||[], '');
     risques(el('s-risk'), d.risk);
     if(d.infra) barres(el('s-infra'), d.infra, 'a2');
     if(d.unknown) inconnus(el('s-unknown'), d.unknown);
@@ -364,11 +367,25 @@
       .catch(function(){ /* démo déjà affichée */ });
   }
 
-  rend(DEMO); tente(); tenteUsage(); tenteSug();
-  setInterval(tente, 15000); setInterval(tenteUsage, 20000); setInterval(tenteSug, 30000);
+  // Pays des destinations (#DPI-sémantique) — géo des IP réelles via /countries.
+  function paysEm(f){ return f||'🏳️'; }
+  function tentePays(){
+    fetch('/api/v1/dpi/countries',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){
+        if(!Array.isArray(j)||!j.length) throw 0;
+        var rows=j.map(function(c){
+          return [paysEm(c.flag), c.name||c.cc, Math.max(1,Math.round(c.pct||0))]; });
+        barres(el('s-pays'), rows, '');
+      })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  rend(DEMO); tente(); tenteUsage(); tenteSug(); tentePays();
+  setInterval(tente, 15000); setInterval(tenteUsage, 20000); setInterval(tenteSug, 30000); setInterval(tentePays, 25000);
 
   // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).
-  var slices=[el('d-proto'),el('d-apps'),el('d-usage'),el('d-talk'),el('d-risk')];
+  var slices=[el('d-proto'),el('d-apps'),el('d-usage'),el('d-talk'),el('d-pays'),el('d-risk')];
   var curSlice=0;
 
   // ── REVERSE-DESIGN : la carte s'annote elle-même, PAR SLICE ─────────────────
@@ -376,12 +393,14 @@
   // report des zones {sbx:'aide-zones'} pour la grande bulle côté Hall. Défini
   // AVANT l'init de la barre (montre() y appelle posteZones dès onShow(0)).
   var aideOn=false, mw=document.querySelector('.mw'), lay=el('aidelay');
-  var SNOM=['Protocoles','Applications','Usages','Talkers','Risques'];
+  var SNOM=['Protocoles','Applications','Usages','Talkers','Pays','Risques'];
   function post(m){ if(parent!==window){ try{ parent.postMessage(m,'*'); }catch(e){} } }
   function zones(){
     var det=['Protocoles — la barre = part du trafic','Applications — top usage',
              'Usages — famille d’usage (catégorie nDPI)',
-             'Talkers — appareils les plus bavards','Risques nDPI — pastille = sévérité'][curSlice];
+             'Talkers — appareils les plus bavards',
+             'Pays — géo des destinations (IP réelles, GeoLite2)',
+             'Risques nDPI — pastille = sévérité'][curSlice];
     return [
       {el:el('k-flows').closest('.kpis'), t:'KPIs — flux actifs · débit · risques'},
       {el:slices[curSlice], t:det},
@@ -419,7 +438,7 @@
     for(var k=0;k<slices.length;k++) slices[k].classList.add('actif');
   } else if(window.SBXSliceBar){
     SBXSliceBar(el('slbar'), {autoMs:9000, onShow:montre,
-      slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🧭 Usages'},{label:'🗣️ Talkers'},{label:'⚠️ Risques'}]});
+      slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🧭 Usages'},{label:'🗣️ Talkers'},{label:'🌍 Pays'},{label:'⚠️ Risques'}]});
   } else { montre(0); }
 
   (function(){ var t=new URLSearchParams(location.search).get('theme');

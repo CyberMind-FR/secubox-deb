@@ -336,12 +336,10 @@ def _bump(m: dict, key: str, b: int, f: int, conf: int):
     a["confidence"] = max(a["confidence"], conf)
 
 
-@app.get("/usage")
-async def dpi_usage(user=Depends(require_jwt)):
-    """Vue usage enrichie. sbxdpi si vivant, sinon dérivée du collector (réel)."""
-    live = await _sbxdpi_get("/api/v1/dpi/usage", {})
-    if live and (live.get("usages") or live.get("unknown")):
-        return live
+# ── Dérivations collector (sync, partagées JWT + public aggregate) ───────────
+# Le même calcul sert (a) l'admin sous JWT et (b) le relais Hall en lecture
+# aggregate/no-PII (routeur /pub, sans JWT — cf. hall.vhost.conf #1360).
+def _derive_usage() -> dict:
     usages, providers, apps = {}, {}, {}
     unknown, total = [], 0
     for dev in _collector_devices():
@@ -366,12 +364,7 @@ async def dpi_usage(user=Depends(require_jwt)):
             "applications": _rank(apps, total), "unknown": unknown[:60]}
 
 
-@app.get("/suggestions")
-async def dpi_suggestions(user=Depends(require_jwt)):
-    """Suggestions du learner : sbxdpi si vivant, sinon dérivées du collector."""
-    live = await _sbxdpi_get("/api/v1/dpi/suggestions", [])
-    if live:
-        return live
+def _derive_suggestions() -> list:
     groups: dict = {}
     for dev in _collector_devices():
         for s in dev.get("services", []):
@@ -400,13 +393,7 @@ async def dpi_suggestions(user=Depends(require_jwt)):
     return out[:40]
 
 
-@app.get("/sessions")
-async def dpi_sessions(user=Depends(require_jwt)):
-    """Sessions d'usage : sbxdpi si vivant, sinon dérivées du collector (par
-    device + usage), avec durée = first_seen→last_seen du device."""
-    live = await _sbxdpi_get("/api/v1/dpi/sessions", [])
-    if live:
-        return live
+def _derive_sessions() -> list:
     by: dict = {}
     for dev in _collector_devices():
         did = dev.get("device", "")
@@ -434,6 +421,78 @@ async def dpi_sessions(user=Depends(require_jwt)):
     out = list(by.values())
     out.sort(key=lambda x: -x["bytes"])
     return out[:200]
+
+
+_RISK_SEV = {"exfil_volume": "high", "beaconing": "medium",
+             "new_cloud": "medium", "unclassified_external": "low"}
+
+
+def _derive_stats() -> dict:
+    """Compteurs agrégés (protocoles/apps/catégories/talkers/risques) dérivés du
+    collector, dans la forme que la cardlet du Hall attend de sbxdpi. Aggregate,
+    sans PII (destinations publiques + hash device)."""
+    protos, apps, cats, talkers, risks = {}, {}, {}, {}, {}
+    total_bytes = total_flows = 0
+    for dev in _collector_devices():
+        for c, b in (dev.get("by_category") or {}).items():
+            cats[c] = cats.get(c, 0) + int(b or 0)
+        for a in (dev.get("alerts") or []):
+            k = a.get("kind") or "alert"
+            risks[k] = risks.get(k, 0) + 1
+        for s in dev.get("services", []):
+            b = int(s.get("up_bytes", 0) or 0) + int(s.get("down_bytes", 0) or 0)
+            fl = int(s.get("flows", 0) or 0)
+            total_bytes += b
+            total_flows += fl
+            proto = (s.get("proto") or "Unknown").split(".")[0]
+            protos[proto] = protos.get(proto, 0) + b
+            app = s.get("service") or _classify(s.get("dst", "")).get("application") or ""
+            if app:
+                apps[app] = apps.get(app, 0) + b
+            dst = s.get("dst", "")
+            if dst:
+                talkers[dst] = talkers.get(dst, 0) + b
+
+    def pctlist(m: dict, tot: int, n: int) -> list:
+        out = [{"name": k, "bytes": v, "pct": (v / tot * 100) if tot else 0.0}
+               for k, v in m.items() if k]
+        out.sort(key=lambda x: -x["bytes"])
+        return out[:n]
+    return {
+        "connected": True,
+        "total_flows": total_flows, "total_bytes": total_bytes,
+        "updated_at": int(time.time()),
+        "protocols": pctlist(protos, total_bytes, 40),
+        "apps": pctlist(apps, total_bytes, 40),
+        "categories": pctlist(cats, sum(cats.values()), 40),
+        "talkers": pctlist(talkers, total_bytes, 40),
+        "risks": [{"name": k, "severity": _RISK_SEV.get(k, "low"), "count": v}
+                  for k, v in sorted(risks.items(), key=lambda x: -x[1])],
+    }
+
+
+@app.get("/usage")
+async def dpi_usage(user=Depends(require_jwt)):
+    """Vue usage enrichie. sbxdpi si vivant, sinon dérivée du collector (réel)."""
+    live = await _sbxdpi_get("/api/v1/dpi/usage", {})
+    if live and (live.get("usages") or live.get("unknown")):
+        return live
+    return _derive_usage()
+
+
+@app.get("/suggestions")
+async def dpi_suggestions(user=Depends(require_jwt)):
+    """Suggestions du learner : sbxdpi si vivant, sinon dérivées du collector."""
+    live = await _sbxdpi_get("/api/v1/dpi/suggestions", [])
+    return live or _derive_suggestions()
+
+
+@app.get("/sessions")
+async def dpi_sessions(user=Depends(require_jwt)):
+    """Sessions d'usage : sbxdpi si vivant, sinon dérivées du collector (par
+    device + usage), avec durée = first_seen→last_seen du device."""
+    live = await _sbxdpi_get("/api/v1/dpi/sessions", [])
+    return live or _derive_sessions()
 
 
 # ── Pays (géo des destinations) ─────────────────────────────────────────────
@@ -493,12 +552,7 @@ def _flag(iso: str) -> str:
     return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in iso)
 
 
-@app.get("/countries")
-async def dpi_countries(user=Depends(require_jwt)):
-    """Top pays des destinations (géo des IP réelles du collector). Additif."""
-    live = await _sbxdpi_get("/api/v1/dpi/countries", [])
-    if live:
-        return live
+def _derive_countries() -> list:
     by: dict = {}
     total = 0
     for dev in _collector_devices():
@@ -535,6 +589,50 @@ async def dpi_countries(user=Depends(require_jwt)):
             "pct": (a["bytes"] / total * 100) if total else 0.0} for a in by.values()]
     out.sort(key=lambda x: (-x["bytes"], -x["flows"]))
     return out
+
+
+@app.get("/countries")
+async def dpi_countries(user=Depends(require_jwt)):
+    """Top pays des destinations (géo des IP réelles du collector). Additif."""
+    live = await _sbxdpi_get("/api/v1/dpi/countries", [])
+    return live or _derive_countries()
+
+
+# ── Relais public agrégé pour le Hall (/pub, SANS JWT) ───────────────────────
+# Même posture que le socket sbxdpi (hall.vhost.conf #1360) : lecture seule,
+# GET, compteurs AGRÉGÉS et non nominatifs — pas de PII. Le Hall relaie
+# /api/v1/dpi/<x> vers /pub/<x>. Les écritures (/rules/accept…) ne sont PAS ici
+# et restent derrière le JWT du portail. Distinct des routes JWT : un client du
+# Hall ne peut atteindre que ces cinq lectures agrégées.
+pub = APIRouter(prefix="/pub")
+
+
+@pub.get("/stats")
+def pub_stats():
+    return _derive_stats()
+
+
+@pub.get("/usage")
+def pub_usage():
+    return _derive_usage()
+
+
+@pub.get("/suggestions")
+def pub_suggestions():
+    return _derive_suggestions()
+
+
+@pub.get("/sessions")
+def pub_sessions():
+    return _derive_sessions()
+
+
+@pub.get("/countries")
+def pub_countries():
+    return _derive_countries()
+
+
+app.include_router(pub)
 
 
 def formatBytesPy(o: int) -> str:
