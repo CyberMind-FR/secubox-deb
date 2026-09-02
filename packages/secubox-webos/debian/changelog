@@ -1,3 +1,11 @@
+secubox-webos (1.0.242-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet surf (BiB) : `surfOrigine`/`cibleDe` gèrent les .onion v3 (même
+    encodage que relais.py `secubox-surf` — `surf-0<56>`, label 62 ≤ 63) →
+    on peut taper un .onion dans la barre du BiB et le naviguer via Tor.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 10:00:00 +0200
+
 secubox-webos (1.0.241-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Lyrion : masque les lecteurs web-client fantômes (ref #1247). LMS
