@@ -41,6 +41,7 @@ type aggregator struct {
 	apps       map[string]*counter // full proto: "TLS.Google"
 	categories map[string]*counter // "Web", "Cloud"
 	talkers    map[string]*counter // "src->dst"
+	hosts      map[string]*counter // SNI/DNS hostname (pivot des règles usage/CDN)
 	risks      map[string]*riskCounter
 	firstParty map[string]bool // apps seen as first-party (our own vhosts)
 
@@ -62,6 +63,7 @@ func newAggregator() *aggregator {
 		apps:       map[string]*counter{},
 		categories: map[string]*counter{},
 		talkers:    map[string]*counter{},
+		hosts:      map[string]*counter{},
 		risks:      map[string]*riskCounter{},
 		firstParty: map[string]bool{},
 	}
@@ -91,6 +93,9 @@ func (a *aggregator) recordFlow(ev *dpiEvent, firstParty bool) {
 	bump(a.apps, ev.app(), 1, 0)
 	bump(a.categories, ev.category(), 1, 0)
 	bump(a.talkers, ev.SrcIP+" → "+ev.DstIP, 1, 0)
+	if h := ev.host(); h != "" {
+		bump(a.hosts, h, 1, 0)
+	}
 	if firstParty {
 		if len(a.firstParty) < mapCap {
 			a.firstParty[ev.app()] = true
@@ -110,6 +115,9 @@ func (a *aggregator) recordBytes(ev *dpiEvent) {
 	bump(a.apps, ev.app(), 0, b)
 	bump(a.categories, ev.category(), 0, b)
 	bump(a.talkers, ev.SrcIP+" → "+ev.DstIP, 0, b)
+	if h := ev.host(); h != "" {
+		bump(a.hosts, h, 0, b)
+	}
 	a.mu.Unlock()
 }
 
@@ -172,6 +180,7 @@ type snapshot struct {
 	Apps        []kv     `json:"apps"`
 	Categories  []kv     `json:"categories"`
 	Talkers     []kv     `json:"talkers"`
+	Hosts       []kv     `json:"hosts"` // SNI/DNS destinations (#DPI-sémantique, additif)
 	Risks       []riskKV `json:"risks"`
 }
 
@@ -218,6 +227,7 @@ func (a *aggregator) snapshot() snapshot {
 		Apps:        rank(a.apps, tb, tf),
 		Categories:  rank(a.categories, tb, tf),
 		Talkers:     rank(a.talkers, tb, tf),
+		Hosts:       rank(a.hosts, tb, tf),
 		Risks:       risks,
 	}
 }

@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.3.8-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi : émet désormais les destinations SNI/DNS (snapshot.hosts[] +
+    endpoint /hosts) — le hostname était lu mais jamais propagé (DPI sémantique,
+    phase 1, L1). Pivot des futures règles usage/CDN/provider. Additif, non
+    cassant. Premiers tests Go de sbxdpi (agrégation SNI + non-régression
+    surensemble).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 11:30:00 +0200
+
 secubox-toolbox-ng (0.3.7-1~bookworm1) bookworm; urgency=medium
 
   * sbxdpi : SNAPSHOT SUR LE SSD /data, PLUS SUR L'eMMC. Le cache DPI vit

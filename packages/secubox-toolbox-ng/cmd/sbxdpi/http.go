@@ -76,6 +76,13 @@ func newDPIMux(agg *aggregator, filt *filter) *http.ServeMux {
 		}
 		writeJSON(w, topN(agg.snapshot().Talkers, limitOf(r)))
 	})
+	// Top destinations SNI/DNS (#DPI-sémantique) — pivot des règles usage/CDN.
+	mux.HandleFunc("/api/v1/dpi/hosts", func(w http.ResponseWriter, r *http.Request) {
+		if !getOnly(w, r) {
+			return
+		}
+		writeJSON(w, topN(agg.snapshot().Hosts, limitOf(r)))
+	})
 	mux.HandleFunc("/api/v1/dpi/risks", func(w http.ResponseWriter, r *http.Request) {
 		if !getOnly(w, r) {
 			return

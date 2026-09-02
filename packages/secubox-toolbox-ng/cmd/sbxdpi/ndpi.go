@@ -95,6 +95,15 @@ func (e *dpiEvent) category() string {
 
 func (e *dpiEvent) bytes() uint64 { return e.SrcBytes + e.DstBytes }
 
+// host returns the SNI/DNS hostname (trimmed, lowercased), or "" if none. C'est
+// le pivot des règles usage/provider/CDN (#DPI-sémantique) : nDPI le fournit et
+// sbxdpi le lisait déjà pour filtrer, mais ne l'émettait jamais. On l'agrège en
+// additif (les flux sans hostname ne comptent pas). Destination, pas de PII —
+// même registre que les talkers (IP).
+func (e *dpiEvent) host() string {
+	return strings.ToLower(strings.TrimSpace(e.NDPI.Hostname))
+}
+
 // consumeDistributor dials the nDPIsrvd distributor socket and feeds every
 // framed flow event through the filter into the aggregator, reconnecting with
 // backoff on any dial/read error until ctx is cancelled.
