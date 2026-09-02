@@ -76,6 +76,7 @@ type Config struct {
 	DenyFile    string // apps/hosts/protocols to drop from the stats entirely
 	RiskMute    string // nDPI risk ids/names to not surface (noise reduction)
 	BoxDomains  string // haproxy-routes.json — first-party (our own vhosts)
+	RulesFile   string // règles d'enrichissement usage/app/infra (DPI sémantique)
 	ReloadEvery time.Duration
 
 	// onReady, if set, is called once the API listener is up (test hook).
@@ -116,6 +117,7 @@ func defaultConfig() Config {
 		DenyFile:        getenvDefault("DPI_DENY_FILE", "/etc/secubox/dpi/app-deny.txt"),
 		RiskMute:        getenvDefault("DPI_RISK_MUTE", "/etc/secubox/dpi/risk-mute.txt"),
 		BoxDomains:      getenvDefault("DPI_BOX_DOMAINS", "/etc/secubox/waf/haproxy-routes.json"),
+		RulesFile:       getenvDefault("DPI_RULES_FILE", "/etc/secubox/dpi/rules.json"),
 		ReloadEvery:     envDurationDefault("DPI_RELOAD_EVERY", defaultReloadEvery),
 	}
 }
@@ -148,6 +150,7 @@ func run(ctx context.Context, cfg Config) error {
 	agg.loadSnapshot(cfg.CachePath)
 
 	filt := newFilter(cfg)
+	enr := newEnricher(cfg.RulesFile, cfg.ReloadEvery)
 
 	var wg sync.WaitGroup
 
@@ -175,7 +178,7 @@ func run(ctx context.Context, cfg Config) error {
 		log.Printf("sbxdpi: chmod %q: %v (continuing)", cfg.APISock, err)
 	}
 	srv := &http.Server{
-		Handler:           newDPIMux(agg, filt),
+		Handler:           newDPIMux(agg, filt, enr),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	wg.Add(1)

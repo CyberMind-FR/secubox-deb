@@ -63,6 +63,7 @@ override_dh_auto_install:
 	install -m 0644 debian/dpi/app-deny.txt debian/secubox-toolbox-ng/etc/secubox/dpi/app-deny.txt
 	install -m 0644 debian/dpi/app-allow.txt debian/secubox-toolbox-ng/etc/secubox/dpi/app-allow.txt
 	install -m 0644 debian/dpi/risk-mute.txt debian/secubox-toolbox-ng/etc/secubox/dpi/risk-mute.txt
+	install -m 0644 debian/dpi/rules.json debian/secubox-toolbox-ng/etc/secubox/dpi/rules.json
 	# L'unite est posee par dh_installsystemd, qui la trouve dans debian/.
 	# L'installer AUSSI a la main creait deux copies du meme chemin — /lib etant
 	# un lien vers /usr/lib, dpkg refusait l'archive.

@@ -23,7 +23,7 @@ import (
 
 const defaultTopLimit = 12
 
-func newDPIMux(agg *aggregator, filt *filter) *http.ServeMux {
+func newDPIMux(agg *aggregator, filt *filter, enr *enricher) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Liveness + connection state to nDPIsrvd + filter sizes.
@@ -82,6 +82,16 @@ func newDPIMux(agg *aggregator, filt *filter) *http.ServeMux {
 			return
 		}
 		writeJSON(w, topN(agg.snapshot().Hosts, limitOf(r)))
+	})
+	// Vue USAGE (#DPI-sémantique) : les destinations SNI classées par famille
+	// d'usage / infrastructure / application via les règles versionnées, plus la
+	// liste unknown-first des hôtes non classifiés. Enrichissement additif, dérivé
+	// de hosts[] — n'altère pas le pipeline de stats.
+	mux.HandleFunc("/api/v1/dpi/usage", func(w http.ResponseWriter, r *http.Request) {
+		if !getOnly(w, r) {
+			return
+		}
+		writeJSON(w, enr.report(agg.snapshot().Hosts))
 	})
 	mux.HandleFunc("/api/v1/dpi/risks", func(w http.ResponseWriter, r *http.Request) {
 		if !getOnly(w, r) {

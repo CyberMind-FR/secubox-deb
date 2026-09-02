@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.3.9-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi : moteur d'ENRICHISSEMENT usage (DPI sémantique, L2). Règles JSON
+    versionnées /etc/secubox/dpi/rules.json (format _meta mirroir waf-rules.json,
+    rechargé à chaud via internal/reload) : flow/host → application/usage/contenu/
+    infra + rôle, avec confiance et evidence. Nouvel endpoint /api/v1/dpi/usage
+    (usages/providers/applications + unknown-first) dérivé des hosts[]. Additif.
+    Tests : classify (OU multi-signaux), report unknown-first, seed valide.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 12:00:00 +0200
+
 secubox-toolbox-ng (0.3.8-1~bookworm1) bookworm; urgency=medium
 
   * sbxdpi : émet désormais les destinations SNI/DNS (snapshot.hosts[] +
