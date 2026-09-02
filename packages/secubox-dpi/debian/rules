@@ -33,6 +33,10 @@ override_dh_auto_install:
 	# Python API + dashboard (arch-independent payload, shipped in the arm64 deb)
 	install -d debian/secubox-dpi/usr/lib/secubox/dpi/
 	cp -r api debian/secubox-dpi/usr/lib/secubox/dpi/
+	# Exemple d'alias de terminaux (vue Clients). L'opérateur le copie en
+	# /etc/secubox/dpi/device-names.json ; rechargé à chaud par l'API.
+	install -d debian/secubox-dpi/etc/secubox/dpi
+	install -m 0644 debian/dpi/device-names.json.example debian/secubox-dpi/etc/secubox/dpi/device-names.json.example
 	install -d debian/secubox-dpi/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-dpi/usr/share/secubox/www/ || true
 	install -d debian/secubox-dpi/usr/share/secubox/menu.d

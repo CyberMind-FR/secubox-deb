@@ -1,3 +1,16 @@
+secubox-dpi (1.4.10-1~bookworm1) bookworm; urgency=medium
+
+  * Vue Clients : NOM LISIBLE par terminal (champ `name` ajouté à /clients et
+    /pub/clients). Priorité : (1) table d'alias manuelle éditable
+    /etc/secubox/dpi/device-names.json ({hash:"Nom"}, rechargée à chaud), puis
+    (2) `name`/`label` éventuellement émis par le collector dans cumulative.json.
+    À défaut, l'UI garde le hash court. La FastAPI tourne en `secubox` et NE lit
+    PAS le dir toolbox 0750 (wg-peers.json) : la séparation CSPN est préservée ;
+    l'auto-résolution depuis les peers WG reste au collector (accès légitime).
+  * top_dst passé à 8, countries à 6 (pour le détail dépliable de la card).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 10:00:00 +0200
+
 secubox-dpi (1.4.9-1~bookworm1) bookworm; urgency=medium
 
   * Vue Clients : détails poussés — chaque terminal porte aussi ses PAYS

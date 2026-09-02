@@ -139,7 +139,20 @@
     background:color-mix(in srgb,var(--cyan) 12%,transparent);color:var(--cyan)}
   .client .dst{font-size:.63rem;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .client .ci .fl{font-size:.82rem;letter-spacing:1px}
+  .client .ci .chev{color:var(--faint);font-size:.7rem;transition:transform .15s;margin-left:2px}
+  .client.open .ci .chev{transform:rotate(90deg)}
+  .client{cursor:pointer}
   .client .meta{font-size:.63rem;color:var(--faint);display:flex;gap:8px;flex-wrap:wrap}
+  /* Détail dépliable au clic sur la card. */
+  .client .cdet{display:none;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);flex-direction:column;gap:7px}
+  .client.open .cdet{display:flex}
+  .cdet .dl{display:flex;flex-direction:column;gap:2px}
+  .cdet .dt{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .cdet .drow{display:flex;align-items:center;gap:6px;font-size:.68rem}
+  .cdet .drow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cdet .drow .bar{width:52px;height:5px;border-radius:3px;background:rgba(128,128,128,.18);overflow:hidden;flex:0 0 auto}
+  .cdet .drow .bar i{display:block;height:100%;background:var(--cyan)}
+  .cdet .drow .n{font-family:ui-monospace,monospace;font-size:.62rem;color:var(--faint);flex:0 0 auto}
   html.mega #s-clients{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
   .sug:last-child{border-bottom:none}
   .sug .dom{font-family:"JetBrains Mono",monospace;font-size:.78rem;color:var(--cyan);flex:0 0 auto;max-width:42%;
@@ -291,8 +304,14 @@
   function spanStr(a,b){ var s=Math.max(0,(b||0)-(a||0));
     if(s<5400) return Math.round(s/60)+' min'; if(s<172800) return (s/3600).toFixed(1)+' h';
     return (s/86400).toFixed(1)+' j'; }
+  function barreDrow(nm, w, n){
+    return '<div class="drow"><span class="nm">'+nm+'</span>'
+      +(w!=null?'<span class="bar"><i style="width:'+w+'%"></i></span>':'')
+      +'<span class="n">'+n+'</span></div>';
+  }
   function clients(cont, rows){
     progressif(cont, rows, function(c){
+      var nom=c.name?esc(c.name):esc(shortDev(c.device));
       var fl=(c.countries||[]).slice(0,4).map(function(x){ return x.flag||'🏳️'; }).join('');
       var us=(c.usages||[]).slice(0,3).map(function(u){
         return '<span class="uchip">'+emUsage(u.name)+' '+esc(u.name)+' '+humain(u.bytes)+'</span>'; }).join('');
@@ -301,16 +320,37 @@
       var meta=(c.last_seen||c.first_seen)
         ? '<div class="meta"><span>🕒 vu il y a '+agoStr(c.last_seen)+'</span><span>⏱ actif '+spanStr(c.first_seen,c.last_seen)+'</span><span>🔀 '+(c.flows||0)+' flux</span></div>'
         : '';
+      // Détail (déplié au clic) : tous les usages (barres), toutes les destinations, tous les pays.
+      var maxu=(c.usages||[]).reduce(function(m,u){return Math.max(m,u.bytes||0);},1);
+      var detU=(c.usages||[]).map(function(u){
+        return barreDrow(emUsage(u.name)+' '+esc(u.name), Math.round((u.bytes||0)/maxu*100), humain(u.bytes)); }).join('');
+      var detD=(c.top_dst||[]).map(function(d){
+        return barreDrow(esc(d.host||d), null, d.bytes?humain(d.bytes):''); }).join('');
+      var detC=(c.countries||[]).map(function(x){
+        return '<span class="uchip">'+(x.flag||'🏳️')+' '+esc(x.name||x.cc||'')+'</span>'; }).join(' ');
+      var cdet='<div class="cdet">'
+        +(detU?'<div class="dl"><div class="dt">Usages</div>'+detU+'</div>':'')
+        +(detD?'<div class="dl"><div class="dt">Destinations</div>'+detD+'</div>':'')
+        +(detC?'<div class="dl"><div class="dt">Pays</div><div class="us">'+detC+'</div></div>':'')
+        +(c.device?'<div class="meta"><span title="identité R3 (hash de clé WireGuard)">🔑 '+esc(c.device)+'</span></div>':'')
+        +'</div>';
       return '<div class="client"><div class="ci"><span class="e">'+devEmoji(c.device)+'</span>'
-        +'<b title="'+esc(c.device)+'">'+esc(shortDev(c.device))+'</b>'
+        +'<b title="'+esc(c.device)+'">'+nom+'</b>'
         +(fl?'<span class="fl" title="pays des destinations">'+fl+'</span>':'')
-        +'<span class="vol">'+humain(c.bytes)+'</span></div>'
+        +'<span class="vol">'+humain(c.bytes)+'</span><span class="chev">▸</span></div>'
         +'<div class="ud">↑'+humain(c.up_bytes)+' ↓'+humain(c.down_bytes)+' · '+(c.sessions||0)+' usages'+al+'</div>'
         +meta
         +(us?'<div class="us">'+us+'</div>':'')
         +(dst?'<div class="dst">→ '+dst+'</div>':'')
-        +'</div>';
+        +cdet+'</div>';
     }, 'Aucun terminal observé.');
+    // Clic sur une card → déplie/replie son détail (délégation, survit aux refresh).
+    if(!cont._clickwired){ cont._clickwired=true;
+      cont.addEventListener('click', function(e){
+        if(e.target.closest('.voirplus')) return;
+        var card=e.target.closest('.client'); if(card) card.classList.toggle('open');
+      });
+    }
   }
   function rend(d){
     el('demo').hidden=!d.demo; el('live').style.display=d.demo?'none':'';

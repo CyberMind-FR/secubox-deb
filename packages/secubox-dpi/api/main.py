@@ -423,6 +423,43 @@ def _derive_sessions() -> list:
     return out[:200]
 
 
+# Table d'alias éditable : {hash_device: "Nom lisible"}. Optionnelle, versionnable,
+# CSPN-clean (explicite, pas de reverse du hash). L'opérateur nomme ses terminaux ;
+# à défaut, l'UI retombe sur le hash court. Rechargée à chaud (mtime).
+DEVICE_NAMES = Path("/etc/secubox/dpi/device-names.json")
+_names_cache: dict = {}
+_names_mtime: float = -1.0
+
+
+def _device_names() -> dict:
+    global _names_cache, _names_mtime
+    try:
+        mt = DEVICE_NAMES.stat().st_mtime
+    except OSError:
+        return _names_cache
+    if mt != _names_mtime:
+        _names_mtime = mt
+        try:
+            d = json.loads(DEVICE_NAMES.read_text())
+            _names_cache = ({str(k): str(v) for k, v in d.items() if not str(k).startswith("__")}
+                            if isinstance(d, dict) else {})
+        except Exception:
+            _names_cache = {}
+    return _names_cache
+
+
+# Nom lisible d'un terminal, dans l'ordre de priorité :
+#   1. table d'alias manuelle /etc/secubox/dpi/device-names.json (surcharge op.)
+#   2. `name`/`label` émis par le collector dans cumulative.json (s'il l'ajoute :
+#      il a l'accès légitime à wg-peers.json — la FastAPI, elle, tourne en
+#      `secubox` sans accès au dir toolbox 0750, et on NE casse PAS cette
+#      séparation CSPN pour lire un nom).
+# À défaut, l'UI retombe sur le hash court.
+def _client_name(did: str, dev: dict) -> str:
+    return (_device_names().get(did)
+            or dev.get("name") or dev.get("label") or "")
+
+
 def _derive_clients() -> list:
     """Détail par TERMINAL (device) : volume ↑/↓, familles d'usage, top
     destinations, nombre de sessions d'usage, alertes. Dérivé du collector —
@@ -460,9 +497,10 @@ def _derive_clients() -> list:
                         a["bytes"] += b
         ulist = sorted(({"name": k, "bytes": v, "pct": (v / tot * 100) if tot else 0.0}
                         for k, v in usages.items() if k), key=lambda x: -x["bytes"])
-        dlist = sorted(dsts.values(), key=lambda x: -x["bytes"])[:5]
-        clist = sorted(countries.values(), key=lambda x: -x["bytes"])[:4]
-        out.append({"device": did, "up_bytes": up, "down_bytes": down, "bytes": tot,
+        dlist = sorted(dsts.values(), key=lambda x: -x["bytes"])[:8]
+        clist = sorted(countries.values(), key=lambda x: -x["bytes"])[:6]
+        out.append({"device": did, "name": _client_name(did, dev),
+                    "up_bytes": up, "down_bytes": down, "bytes": tot,
                     "flows": int(dev.get("flows", 0) or 0),
                     "first_seen": dev.get("first_seen", 0), "last_seen": dev.get("last_seen", 0),
                     "usages": ulist, "top_dst": dlist, "countries": clist,
