@@ -244,8 +244,14 @@ func prettyLabel(label, ip string) string {
 			l = "Navigateur"
 		}
 	default:
-		if i := strings.IndexByte(l, '/'); i > 0 && len(l) < 24 {
-			l = l[:i] // curl/7.88.1, wget/… → curl
+		// Agent/bot non-navigateur : garder le token avant le premier '/' ou
+		// espace, puis borner. « curl/7.88.1 » → curl ; « facebookexternalhit/1.1
+		// (+http…) » → facebookexternalhit ; « test-iphone » → test-iphone.
+		if i := strings.IndexAny(l, "/ "); i > 0 {
+			l = l[:i]
+		}
+		if len(l) > 22 {
+			l = l[:22]
 		}
 	}
 	if l == "" {

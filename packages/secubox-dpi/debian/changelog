@@ -1,3 +1,13 @@
+secubox-dpi (1.4.12-1~bookworm1) bookworm; urgency=medium
+
+  * Collector prettyLabel : noms de terminaux plus robustes pour les labels
+    non-navigateur (agents/bots) — on garde le token avant le premier '/' ou
+    espace puis on borne à 22 car. « curl/7.88.1 » → curl,
+    « facebookexternalhit/1.1 (+http…) » → facebookexternalhit,
+    « test-iphone » → test-iphone. Corrige la fuite d'un label long rendu entier.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 11:40:00 +0200
+
 secubox-dpi (1.4.11-1~bookworm1) bookworm; urgency=medium
 
   * Collector (Go) : émet désormais le NOM lisible du terminal dans
