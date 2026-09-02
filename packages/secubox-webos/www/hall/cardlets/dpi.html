@@ -187,35 +187,60 @@
     risk:[["hi","Identifiants en clair (HTTP)","3×"],["hi","Certificat auto-signé","2×"],["md","Proto connu sur port non-std","5×"],["md","TLS obsolète (1.0)","1×"],["lo","Paquet malformé","4×"]]
   };
 
+  // Affichage progressif : top-5 par défaut + « voir plus » (déplie le reste).
+  // Sur données réelles les listes débordent ; on garde la carte lisible. L'état
+  // déplié survit aux rafraîchissements (persisté sur le conteneur).
+  var LIM=5;
+  (function(){ var s=document.createElement('style');
+    s.textContent='.voirplus{display:block;width:100%;margin-top:2px;padding:2px 4px;'
+      +'background:transparent;border:1px dashed var(--faint,#889);border-radius:5px;'
+      +'color:var(--accent,#0cf);font:inherit;font-size:.68rem;cursor:pointer;opacity:.75}'
+      +'.voirplus:hover{opacity:1;border-style:solid}';
+    document.head.appendChild(s); })();
+  function progressif(cont, rows, drawOne, vide, lim){
+    rows=rows||[]; lim=lim||LIM;
+    if(cont._all===undefined) cont._all=false;
+    function paint(){
+      if(!rows.length){ cont.innerHTML='<div class="vide" style="color:var(--faint);font-size:.72rem">'+(vide||'—')+'</div>'; return; }
+      var shown=cont._all?rows:rows.slice(0,lim);
+      var html=shown.map(drawOne).join('');
+      if(rows.length>lim){ html+='<button class="voirplus" type="button">'
+        +(cont._all?'▲ voir moins':'▾ voir plus (+'+(rows.length-lim)+')')+'</button>'; }
+      cont.innerHTML=html;
+      var b=cont.querySelector('.voirplus');
+      if(b) b.onclick=function(){ cont._all=!cont._all; paint(); };
+    }
+    paint();
+  }
   function barres(cont, rows, cls){
-    var max=rows.reduce(function(m,r){return Math.max(m,r[2]);},1);
-    cont.innerHTML=rows.map(function(r){
+    var max=(rows||[]).reduce(function(m,r){return Math.max(m,r[2]);},1);
+    progressif(cont, rows, function(r){
       return '<div class="row '+(cls||'')+'"><span class="e">'+r[0]+'</span>'
         +'<span class="nm" title="'+esc(r[1])+'">'+esc(r[1])+'</span>'
         +'<span class="bar"><i style="width:'+Math.round(r[2]/max*100)+'%"></i></span>'
         +'<span class="n">'+r[2]+'%</span></div>';
-    }).join('');
+    }, '—');
   }
   function risques(cont, rows){
-    cont.innerHTML=rows.map(function(r){
+    progressif(cont, rows, function(r){
       return '<div class="risk '+r[0]+'"><span class="sev"></span>'
         +'<span class="nm" title="'+esc(r[1])+'">'+esc(r[1])+'</span><span class="n">'+esc(r[2])+'</span></div>';
-    }).join('');
+    }, 'Aucun risque relevé.');
   }
   // Liste « non classifié » (unknown-first) : nom + un détail (volume, comportement).
   function inconnus(cont, rows){
-    cont.innerHTML=(rows||[]).map(function(r){
+    progressif(cont, rows, function(r){
       return '<div class="row"><span class="nm" style="flex:0 0 auto;max-width:52%" title="'+esc(r[0])+'">'+esc(r[0])+'</span>'
         +'<span class="n" style="flex:1;text-align:right;color:var(--faint)">'+esc(r[1])+'</span></div>';
-    }).join('') || '<div class="vide" style="color:var(--faint);font-size:.72rem">Rien d’inconnu — tout est classé.</div>';
+    }, 'Rien d’inconnu — tout est classé.');
   }
   // Suggestions du learner (lecture seule ici — l'ACCEPT se fait dans l'admin,
   // sous JWT). Chaque ligne : domaine proposé + pourquoi + confiance.
   function apprend(cont, rows){
-    cont.innerHTML=(rows||[]).map(function(r){
+    progressif(cont, rows, function(r){
       return '<div class="sug"><span class="dom" title="'+esc(r[0])+'">'+esc(r[0])+'</span>'
         +'<span class="why">'+esc(r[1])+'</span><span class="cf">'+(r[2]||0)+' %</span></div>';
-    }).join('') || '<div class="vide" style="color:var(--faint);font-size:.72rem">Aucune suggestion — rien de neuf à apprendre.</div>';
+    }, 'Aucune suggestion — rien de neuf à apprendre.');
   }
   function rend(d){
     el('demo').hidden=!d.demo; el('live').style.display=d.demo?'none':'';

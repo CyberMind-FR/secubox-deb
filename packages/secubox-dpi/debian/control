@@ -9,7 +9,8 @@ Rules-Requires-Root: no
 
 Package: secubox-dpi
 Architecture: any
-Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2, libndpi-bin
+Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2, libndpi-bin,
+ python3-geoip2, geoip-database
 Recommends: netifyd, secubox-netifyd
 Description: SecuBox DPI Analytics — netifyd-backed app/protocol classification
  Analytics layer on top of netifyd: top applications, top protocols,

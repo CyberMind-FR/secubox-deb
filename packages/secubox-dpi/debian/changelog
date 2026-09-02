@@ -1,3 +1,18 @@
+secubox-dpi (1.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * Admin DPI : affichage progressif — top-5 par défaut + « Voir plus » sur
+    TOUTES les listes (sessions, top apps/protocoles, bande passante par
+    terminal, flux actifs, learning). Les listes réelles (40+ entrées) ne
+    débordent plus ; l'état déplié survit aux rafraîchissements.
+  * Nouveau panneau « 🌍 Pays des destinations » : top-5 pays dérivés des IP
+    RÉELLES du collector (services[].dst) via GeoLite2-Country — drapeau,
+    volume, nb d'hôtes et de terminaux. Endpoint GET /countries (JWT, additif,
+    lecture seule, agrégé par pays — pas de PII). Fallback [] si base absente.
+  * Cardlet /mega : même top-5 + « voir plus » via helper progressif partagé.
+  * control : Depends python3-geoip2, geoip-database (base MaxMind).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 18:30:00 +0200
+
 secubox-dpi (1.4.5-1~bookworm1) bookworm; urgency=medium
 
   * Learner : les suggestions excluent aussi ce que le COLLECTOR classe déjà

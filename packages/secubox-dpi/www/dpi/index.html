@@ -184,10 +184,48 @@
             <div class="card-header"><h2>🎓 Learning <span class="sub">— suggestions de règles DPI (learner) · valider = créer la règle (hot-reload)</span></h2></div>
             <div id="dpi-learning"><p class="empty">Loading…</p></div>
         </div>
+
+        <div class="card">
+            <div class="card-header"><h2>🌍 Pays des destinations <span class="sub">— géo des IP réelles (GeoLite2) · top 5</span></h2></div>
+            <div id="dpi-countries"><p class="empty">Loading…</p></div>
+        </div>
     </main>
 
     <script>
         const API = '/api/v1/dpi';
+
+        // ── Affichage progressif : top-N par défaut + « Voir plus » ──────────
+        // Les listes DPI (sessions, apps, protocoles, pays, learning…) débordent
+        // vite sur données réelles. On n'en montre que les N premières, le reste
+        // se déplie à la demande. `after(el)` re-câble les handlers après chaque
+        // (re)peinture — indispensable pour les boutons Accept/Ignore du learner.
+        (function () {
+            const s = document.createElement('style');
+            s.textContent = '.voir-plus{display:block;width:100%;margin-top:.35rem;padding:.3rem;'
+                + 'background:transparent;border:1px dashed var(--text-dim,#556);border-radius:6px;'
+                + 'color:var(--cyber-cyan,#00d4ff);font:inherit;font-size:.74rem;cursor:pointer;opacity:.8}'
+                + '.voir-plus:hover{opacity:1;border-style:solid}';
+            document.head.appendChild(s);
+        })();
+        function topProg(el, rows, render, empty, lim, after) {
+            if (!el) return;
+            rows = rows || []; lim = lim || 5;
+            if (el._all === undefined) el._all = false; // garde l'état déplié entre rafraîchissements
+            function paint() {
+                if (!rows.length) { el.innerHTML = '<p class="empty">' + empty + '</p>'; return; }
+                const shown = el._all ? rows : rows.slice(0, lim);
+                let html = shown.map(render).join('');
+                if (rows.length > lim) {
+                    html += '<button class="voir-plus" type="button">'
+                        + (el._all ? '▲ Voir moins' : '▾ Voir plus (+' + (rows.length - lim) + ')') + '</button>';
+                }
+                el.innerHTML = html;
+                const b = el.querySelector('.voir-plus');
+                if (b) b.addEventListener('click', function () { el._all = !el._all; paint(); });
+                if (after) after(el);
+            }
+            paint();
+        }
 
         function toast(msg, err) {
             const t = document.createElement('div');
@@ -334,8 +372,7 @@
             }
 
             const fillList = (id, rows, render, empty) => {
-                const el = document.getElementById(id); if (!el) return;
-                el.innerHTML = (rows && rows.length) ? rows.map(render).join('') : `<p class="empty">${empty}</p>`;
+                topProg(document.getElementById(id), rows, render, empty, 5);
             };
             fillList('top-apps', data.top_apps, a => `<div class="app-item"><span>${a.name}</span><span class="bytes">${formatBytes(a.bytes)} · ${a.flows}f</span></div>`, 'No data');
             fillList('top-protocols', data.top_protocols, p => `<div class="app-item"><span>${p.name}</span><span class="bytes">${formatBytes(p.bytes)} · ${p.flows}f</span></div>`, 'No data');
@@ -505,26 +542,27 @@
         async function loadLearning() {
             const box = document.getElementById('dpi-learning'); if (!box) return;
             const sug = await apiAuthed(API + '/suggestions');
-            if (!Array.isArray(sug) || !sug.length) { box.innerHTML = '<p class="empty">Aucune suggestion — rien de neuf à apprendre.</p>'; return; }
-            box.innerHTML = sug.map(function (s, i) {
-                return `<div class="app-item" data-i="${i}" style="align-items:center;gap:10px;">
+            sug && sug.forEach && sug.forEach((s, i) => { s._i = i; });
+            topProg(box, sug, function (s) {
+                return `<div class="app-item" data-i="${s._i}" style="align-items:center;gap:10px;">
                     <span style="font-family:monospace;color:var(--cyber-cyan);flex:0 0 auto;">${esc(s.domain)}</span>
                     <span style="flex:1;color:var(--text-dim);font-size:.8rem;">${esc(s.reason || '')}</span>
                     <span style="font-family:monospace;color:var(--matrix-green);">${Math.round(s.confidence || 0)}%</span>
-                    <button class="btn-accept" data-i="${i}" style="cursor:pointer;">✓ Créer la règle</button>
+                    <button class="btn-accept" data-i="${s._i}" style="cursor:pointer;">✓ Créer la règle</button>
                     <button class="btn-ignore" data-dom="${esc(s.domain)}" style="cursor:pointer;">Ignorer</button></div>`;
-            }).join('');
-            box.querySelectorAll('.btn-accept').forEach(function (b) {
-                b.addEventListener('click', async function () {
-                    const s = sug[+b.dataset.i]; if (!s || !s.proposed_rule) return;
-                    try { const r = await postJwt(API + '/rules/accept', s.proposed_rule); toast('Règle créée (' + r.count + ' au total)'); loadLearning(); }
-                    catch (e) { toast('Refus : ' + e.message, true); }
+            }, 'Aucune suggestion — rien de neuf à apprendre.', 5, function (el) {
+                el.querySelectorAll('.btn-accept').forEach(function (b) {
+                    b.addEventListener('click', async function () {
+                        const s = sug[+b.dataset.i]; if (!s || !s.proposed_rule) return;
+                        try { const r = await postJwt(API + '/rules/accept', s.proposed_rule); toast('Règle créée (' + r.count + ' au total)'); loadLearning(); }
+                        catch (e) { toast('Refus : ' + e.message, true); }
+                    });
                 });
-            });
-            box.querySelectorAll('.btn-ignore').forEach(function (b) {
-                b.addEventListener('click', async function () {
-                    try { await postJwt(API + '/rules/ignore?domain=' + encodeURIComponent(b.dataset.dom), null); toast('Domaine ignoré'); loadLearning(); }
-                    catch (e) { toast('Erreur : ' + e.message, true); }
+                el.querySelectorAll('.btn-ignore').forEach(function (b) {
+                    b.addEventListener('click', async function () {
+                        try { await postJwt(API + '/rules/ignore?domain=' + encodeURIComponent(b.dataset.dom), null); toast('Domaine ignoré'); loadLearning(); }
+                        catch (e) { toast('Erreur : ' + e.message, true); }
+                    });
                 });
             });
         }
@@ -535,8 +573,7 @@
         async function loadSessions() {
             const box = document.getElementById('dpi-sessions'); if (!box) return;
             const ss = await apiAuthed(API + '/sessions');
-            if (!Array.isArray(ss) || !ss.length) { box.innerHTML = '<p class="empty">Aucune session — sbxdpi inactif ou pas de trafic classifié.</p>'; return; }
-            box.innerHTML = ss.map(function (s) {
+            topProg(box, ss, function (s) {
                 const ic = USAGE_ICON[s.usage] || '🧭';
                 const hosts = (s.hosts || []).slice(0, 3).map(esc).join(' · ');
                 return `<div class="app-item" style="align-items:center;gap:10px;">
@@ -547,7 +584,24 @@
                         <div style="color:var(--text-dim);font-size:.7rem;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hosts}</div></span>
                     <span style="font-family:monospace;text-align:right;flex:0 0 auto;"><b style="color:var(--cyber-cyan);">${formatBytes(s.bytes)}</b>
                         <div style="color:var(--text-dim);font-size:.7rem;">${durStr(s.start, s.last)} · ${s.flows||0} flux</div></span></div>`;
-            }).join('');
+            }, 'Aucune session — sbxdpi inactif ou pas de trafic classifié.', 5);
+        }
+
+        // ── PAYS DES DESTINATIONS : géo des IP réelles (GeoLite2) · top 5 ─────
+        async function loadCountries() {
+            const box = document.getElementById('dpi-countries'); if (!box) return;
+            const cs = await apiAuthed(API + '/countries');
+            const max = (Array.isArray(cs) && cs.length) ? Math.max(1, cs[0].bytes || 1) : 1;
+            topProg(box, cs, function (c) {
+                const w = Math.round((c.bytes || 0) / max * 100);
+                return `<div class="app-item" style="align-items:center;gap:10px;">
+                    <span style="flex:0 0 auto;font-size:1.05rem;">${c.flag || '🏳️'}</span>
+                    <span style="flex:0 0 auto;min-width:2.2rem;font-family:monospace;color:var(--cyber-cyan);">${esc(c.cc)}</span>
+                    <span style="flex:1;min-width:0;"><b>${esc(c.name)}</b>
+                        <div style="height:5px;margin-top:3px;background:var(--cyber-cyan,#00d4ff);opacity:.55;border-radius:3px;width:${w}%;"></div></span>
+                    <span style="font-family:monospace;text-align:right;flex:0 0 auto;"><b style="color:var(--cyber-cyan);">${formatBytes(c.bytes)}</b>
+                        <div style="color:var(--text-dim);font-size:.7rem;">${c.hosts||0} hôtes · ${c.devices||0} term.</div></span></div>`;
+            }, 'Aucune destination géolocalisée (base GeoLite2 absente ?).', 5);
         }
 
         function refreshAll() {
@@ -557,9 +611,10 @@
             loadTimeline();
             loadSessions();
             loadLearning();
+            loadCountries();
         }
         refreshAll();
-        setInterval(() => { loadExfil(); loadMediaTypes(); loadTimeline(); loadSessions(); }, 10000);
+        setInterval(() => { loadExfil(); loadMediaTypes(); loadTimeline(); loadSessions(); loadCountries(); }, 10000);
         setInterval(loadMediaBuffer, 15000);
         setInterval(loadLearning, 30000);
     </script>

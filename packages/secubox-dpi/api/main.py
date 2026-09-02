@@ -436,6 +436,107 @@ async def dpi_sessions(user=Depends(require_jwt)):
     return out[:200]
 
 
+# ── Pays (géo des destinations) ─────────────────────────────────────────────
+# Dérivé des IP de destination RÉELLES du collector (services[].dst quand c'est
+# une IP publique) via GeoLite2-Country. Additif, lecture seule, agrégé par pays
+# — pas de PII (destinations publiques). Base MaxMind déjà présente sur la box.
+import ipaddress as _ipaddr  # noqa: E402
+
+_GEO_PATHS = ("/var/lib/GeoIP/GeoLite2-Country.mmdb",
+              "/usr/share/GeoIP/GeoLite2-Country.mmdb")
+_geo_reader = None
+_geo_tried = False
+
+
+def _geo():
+    global _geo_reader, _geo_tried
+    if _geo_tried:
+        return _geo_reader
+    _geo_tried = True
+    try:
+        import geoip2.database
+        for p in _GEO_PATHS:
+            if Path(p).exists():
+                _geo_reader = geoip2.database.Reader(p)
+                break
+    except Exception:
+        _geo_reader = None
+    return _geo_reader
+
+
+def _is_ip(s: str) -> bool:
+    try:
+        _ipaddr.ip_address((s or "").strip())
+        return True
+    except ValueError:
+        return False
+
+
+def _country_of(ip: str):
+    r = _geo()
+    if not r:
+        return None
+    try:
+        c = r.country(ip)
+        iso = (c.country.iso_code or "").upper()
+        if not iso:
+            return None
+        return iso, (c.country.names.get("fr") or c.country.name or iso)
+    except Exception:
+        return None
+
+
+def _flag(iso: str) -> str:
+    iso = (iso or "").upper()
+    if len(iso) != 2 or not iso.isalpha():
+        return "🏳️"
+    return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in iso)
+
+
+@app.get("/countries")
+async def dpi_countries(user=Depends(require_jwt)):
+    """Top pays des destinations (géo des IP réelles du collector). Additif."""
+    live = await _sbxdpi_get("/api/v1/dpi/countries", [])
+    if live:
+        return live
+    by: dict = {}
+    total = 0
+    for dev in _collector_devices():
+        did = dev.get("device", "")
+        for s in dev.get("services", []):
+            dst = (s.get("dst") or "").strip()
+            if not _is_ip(dst):
+                continue
+            try:  # IP privée/loopback = trafic interne, pas un pays.
+                if _ipaddr.ip_address(dst).is_private:
+                    continue
+            except ValueError:
+                continue
+            cc = _country_of(dst)
+            if not cc:
+                continue
+            iso, name = cc
+            b = int(s.get("up_bytes", 0) or 0) + int(s.get("down_bytes", 0) or 0)
+            fl = int(s.get("flows", 0) or 0)
+            total += b
+            a = by.get(iso)
+            if a is None:
+                a = {"cc": iso, "flag": _flag(iso), "name": name,
+                     "bytes": 0, "flows": 0, "hosts": set(), "devices": set()}
+                by[iso] = a
+            a["bytes"] += b
+            a["flows"] += fl
+            a["hosts"].add(dst)
+            if did:
+                a["devices"].add(did)
+    out = [{"cc": a["cc"], "flag": a["flag"], "name": a["name"],
+            "bytes": a["bytes"], "flows": a["flows"],
+            "hosts": len(a["hosts"]), "devices": len(a["devices"]),
+            "pct": (a["bytes"] / total * 100) if total else 0.0} for a in by.values()]
+    out.sort(key=lambda x: (-x["bytes"], -x["flows"]))
+    return out
+
+
 def formatBytesPy(o: int) -> str:
     o = int(o or 0)
     for unit, div in (("Go", 1 << 30), ("Mo", 1 << 20), ("Ko", 1 << 10)):
