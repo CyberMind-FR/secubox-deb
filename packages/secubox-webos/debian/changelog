@@ -1,3 +1,15 @@
+secubox-webos (1.0.250-1~bookworm1) bookworm; urgency=medium
+
+  * Carte DPI : /mega ouvre désormais la VUE ADMIN (admin…/dpi/) — bien plus
+    riche (Sessions/Learning/Pays/Exfil) — au lieu d'agrandir la cardlet. La
+    /micro reste la cardlet vivante. Nouveau flag carte `megaAdmin:true` +
+    plomberie modeURL/plainURL/svcDesc (principe HIG : /mega = console admin
+    quand le service n'a pas de vhost public riche — cas DPI, Surf).
+  * Carte DPI : `auth:true` — widget réservé aux clients authentifiés du Hall,
+    au même titre que Sécurité (couche de visibilité data-auth / .non-connecte).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 20:45:00 +0200
+
 secubox-webos (1.0.249-1~bookworm1) bookworm; urgency=medium
 
   * Slicer partagé (slicebar.js) : un clic sur une puce fige la slice (mode
