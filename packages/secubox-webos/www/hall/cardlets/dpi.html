@@ -8,7 +8,9 @@
   SecuBox #1360 — carte DPI « Trafic vivant » (nDPId / netifyd).
 
   SLICÉE en /micro (barre à bullets « double bullet ») : 🌐 Protocoles ·
-  📱 Applications · 🗣️ Talkers · ⚠️ Risques. Lit best-effort /api/v1/dpi/* ; à
+  📱 Applications · 🧭 Usages · 🗣️ Talkers · ⚠️ Risques. La slice Usages lit
+  `categories[]` (nDPI category) que sbxdpi agrège déjà — début de la vision
+  « usage ». Lit best-effort /api/v1/dpi/* ; à
   défaut, jeu de DÉMO clairement étiqueté (comme le reste du Hall quand le
   registre dort). La même lecture nourrit la couche DPI du groupe Sécurité
   (agrégation WAF).
@@ -129,6 +131,8 @@
     <div class="slice actif" id="s-proto"></div>
     <div class="sec-t">📱 Applications</div>
     <div class="slice" id="s-apps"></div>
+    <div class="sec-t">🧭 Usages</div>
+    <div class="slice" id="s-usage"></div>
     <div class="sec-t">🗣️ Talkers</div>
     <div class="slice" id="s-talk"></div>
     <div class="sec-t">⚠️ Risques</div>
@@ -159,6 +163,7 @@
     demo:true, flows:1284, bw:47.3, risks:6,
     proto:[["🔒","TLS 1.3",38],["⚡","QUIC",24],["🌐","HTTP/2",12],["📡","DNS",9],["🧲","BitTorrent",7],["🛡️","WireGuard",5],["✉️","SMTPS",3]],
     apps:[["▶️","YouTube",29],["🎬","Netflix",18],["☁️","Cloudflare",14],["🐙","GitHub",9],["🎵","Spotify",7],["🪟","Windows Update",6]],
+    usage:[["🎬","Streaming",44],["🌐","Navigation",21],["🎮","Jeu",13],["☁️","Cloud",9],["⬇️","Mises à jour",7],["💬","Social",6]],
     talk:[["💻","desktop-lan · .24",34],["📱","pixel · .51",22],["📺","tv-salon · .77",17],["🖥️","nas · .10",14],["🎮","console · .63",8]],
     risk:[["hi","Identifiants en clair (HTTP)","3×"],["hi","Certificat auto-signé","2×"],["md","Proto connu sur port non-std","5×"],["md","TLS obsolète (1.0)","1×"],["lo","Paquet malformé","4×"]]
   };
@@ -185,6 +190,7 @@
     el('k-risk').textContent=d.risks!=null?d.risks:'—';
     barres(el('s-proto'), d.proto, '');
     barres(el('s-apps'),  d.apps,  'a2');
+    barres(el('s-usage'), d.usage||[], '');
     barres(el('s-talk'),  d.talk,  'a3');
     risques(el('s-risk'), d.risk);
   }
@@ -206,6 +212,16 @@
     if(s.indexOf('amazon')>=0||s.indexOf('aws')>=0)return '📦'; if(s.indexOf('apple')>=0)return '🍎';
     if(s.indexOf('facebook')>=0||s.indexOf('meta')>=0)return '📘'; if(s.indexOf('spotify')>=0)return '🎵';
     if(s.indexOf('tls')>=0)return '🔒'; return '🧩'; }
+  // USAGE (#DPI-sémantique) : nDPI `category` → famille d'usage lisible. Les
+  // catégories nDPI arrivent déjà agrégées de sbxdpi (snapshot.categories[]) —
+  // on ne les jetait plus qu'à l'affichage. Passer de « protocole » à « usage ».
+  function emUsage(n){ var s=String(n||'').toLowerCase();
+    if(/stream|media|video/.test(s))return '🎬'; if(/game|gaming/.test(s))return '🎮';
+    if(/cloud|datatransfer|filetransfer/.test(s))return '☁️'; if(/social|chat/.test(s))return '💬';
+    if(/download|update/.test(s))return '⬇️'; if(/mail|email/.test(s))return '✉️';
+    if(/vpn|remoteaccess|remote/.test(s))return '🛡️'; if(/ad|advertis|track/.test(s))return '📢';
+    if(/web/.test(s))return '🌐'; if(/network|system|conn/.test(s))return '🔧';
+    if(/music|audio/.test(s))return '🎵'; return '🧭'; }
   function sev3(s){ s=String(s||'').toLowerCase();
     if(/crit|severe|high|emerg|error/.test(s)) return 'hi';
     if(/med|warn|moderat|notice/.test(s)) return 'md'; return 'lo'; }
@@ -227,10 +243,11 @@
         }
         lastBytes=j.total_bytes; lastTs=now;
         // En mega on ne coupe presque pas : la page classique montre TOUT.
-        var NP=MEGA?40:7, NA=MEGA?40:6, NT=MEGA?40:5, NR=MEGA?40:5;
+        var NP=MEGA?40:7, NA=MEGA?40:6, NU=MEGA?40:6, NT=MEGA?40:5, NR=MEGA?40:5;
         function rows(arr,n,em){ return (arr||[]).slice(0,n).map(function(x){
           return [em(x.name), x.name, Math.max(1,Math.round(x.pct||0))]; }); }
         var proto=rows(j.protocols,NP,emProto), apps=rows(j.apps,NA,emApp);
+        var usage=rows(j.categories,NU,emUsage);
         var talk=(j.talkers||[]).slice(0,NT).map(function(x){
           return ['💻', shortTalk(x.name), Math.max(1,Math.round(x.pct||0))]; });
         var risk=(j.risks||[]).slice(0,NR).map(function(x){
@@ -238,6 +255,7 @@
         rend({demo:false,
           flows:j.total_flows, bw:(bw!=null?bw:'…'), risks:(j.risks?j.risks.length:0),
           proto:proto.length?proto:DEMO.proto, apps:apps.length?apps:DEMO.apps,
+          usage:usage.length?usage:DEMO.usage,
           talk:talk.length?talk:DEMO.talk, risk:risk.length?risk:DEMO.risk});
       })
       .catch(function(){ /* démo déjà affichée */ });
@@ -246,7 +264,7 @@
   rend(DEMO); tente(); setInterval(tente, 15000);
 
   // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).
-  var slices=[el('s-proto'),el('s-apps'),el('s-talk'),el('s-risk')];
+  var slices=[el('s-proto'),el('s-apps'),el('s-usage'),el('s-talk'),el('s-risk')];
   var curSlice=0;
 
   // ── REVERSE-DESIGN : la carte s'annote elle-même, PAR SLICE ─────────────────
@@ -254,10 +272,11 @@
   // report des zones {sbx:'aide-zones'} pour la grande bulle côté Hall. Défini
   // AVANT l'init de la barre (montre() y appelle posteZones dès onShow(0)).
   var aideOn=false, mw=document.querySelector('.mw'), lay=el('aidelay');
-  var SNOM=['Protocoles','Applications','Talkers','Risques'];
+  var SNOM=['Protocoles','Applications','Usages','Talkers','Risques'];
   function post(m){ if(parent!==window){ try{ parent.postMessage(m,'*'); }catch(e){} } }
   function zones(){
     var det=['Protocoles — la barre = part du trafic','Applications — top usage',
+             'Usages — famille d’usage (catégorie nDPI)',
              'Talkers — appareils les plus bavards','Risques nDPI — pastille = sévérité'][curSlice];
     return [
       {el:el('k-flows').closest('.kpis'), t:'KPIs — flux actifs · débit · risques'},
@@ -296,7 +315,7 @@
     for(var k=0;k<slices.length;k++) slices[k].classList.add('actif');
   } else if(window.SBXSliceBar){
     SBXSliceBar(el('slbar'), {autoMs:5000, onShow:montre,
-      slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🗣️ Talkers'},{label:'⚠️ Risques'}]});
+      slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🧭 Usages'},{label:'🗣️ Talkers'},{label:'⚠️ Risques'}]});
   } else { montre(0); }
 
   (function(){ var t=new URLSearchParams(location.search).get('theme');

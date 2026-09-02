@@ -1,3 +1,12 @@
+secubox-webos (1.0.243-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI : nouvelle slice « 🧭 Usages » (DPI sémantique, phase 1). Elle
+    lit categories[] que sbxdpi agrège DÉJÀ (aggregate.go:173) mais que la carte
+    jetait à l'affichage — premier pas « protocole → usage ». Non cassant : repli
+    démo comme les autres slices ; les 4 slices existantes inchangées.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 11:00:00 +0200
+
 secubox-webos (1.0.242-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet surf (BiB) : `surfOrigine`/`cibleDe` gèrent les .onion v3 (même
