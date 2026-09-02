@@ -1,3 +1,17 @@
+secubox-webos (1.0.244-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI /mega : rendu MULTICOLONNES — chaque section (Protocoles,
+    Applications, Usages, Talkers) devient une carte dans une grille auto-fit,
+    Risques en pleine largeur ; découpage net entre sections (en-tête + filet).
+    Refactor en panneaux .dsec : le slicer /micro est préservé (un panneau
+    visible à la fois), la grille ne s'applique qu'en /mega.
+  * slicebar.js (slicer partagé) : rotation RALENTIE (défaut 6s→9s), pause au
+    survol de TOUTE la cardlet (pas juste la barre) + hook postMessage
+    survol/quitte (le Hall peut pauser quand la souris est au-dessus de la
+    carte), et plus de rotation sous prefers-reduced-motion. DPI passe à 9s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 12:30:00 +0200
+
 secubox-webos (1.0.243-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet DPI : nouvelle slice « 🧭 Usages » (DPI sémantique, phase 1). Elle

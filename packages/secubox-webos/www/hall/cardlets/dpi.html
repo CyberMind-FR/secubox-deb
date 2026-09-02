@@ -75,9 +75,13 @@
   .kpi .l{font-size:.54rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:3px}
   .kpi.hot .v{color:var(--hot)} .kpi.cy .v{color:var(--cyan)} .kpi.up .v{color:var(--up)}
   .vue{flex:1;min-height:0;overflow:hidden;position:relative}
-  .slice{position:absolute;inset:0;display:none;flex-direction:column;gap:2px;overflow-y:auto;scrollbar-width:none}
+  /* Un panneau de section = en-tête (sec-t) + contenu (slice). En /micro les
+     panneaux se superposent (slicer, un seul visible) ; en /mega ils forment
+     une grille multicolonnes (cf. html.mega). */
+  .dsec{position:absolute;inset:0;display:none;flex-direction:column;gap:.25rem}
+  .dsec.actif{display:flex}
+  .slice{flex:1;min-height:0;display:flex;flex-direction:column;gap:2px;overflow-y:auto;scrollbar-width:none}
   .slice::-webkit-scrollbar{display:none}
-  .slice.actif{display:flex}
   /* Une ligne = un item + une barre proportionnelle (animée). */
   .row{display:flex;align-items:center;gap:8px;padding:4px 2px;border-bottom:1px dashed var(--line)}
   .row:last-child{border-bottom:none}
@@ -108,13 +112,21 @@
     text-transform:uppercase;color:var(--cyan)}
   html.mega,html.mega body{height:auto;min-height:100%;overflow:auto;scrollbar-width:auto}
   html.mega body::-webkit-scrollbar,html.mega::-webkit-scrollbar{display:initial;width:auto}
-  html.mega .mw{height:auto;min-height:100%;max-width:940px;margin:0 auto;padding:1rem 1.2rem;gap:.6rem}
-  html.mega .vue{flex:none;overflow:visible;position:static}
-  html.mega .slice{position:static;display:flex!important;overflow:visible}
-  html.mega .sec-t{display:flex}
-  html.mega .sec-t:first-of-type{margin-top:.2rem}
+  html.mega .mw{height:auto;min-height:100%;max-width:1100px;margin:0 auto;padding:1rem 1.2rem 2rem;gap:.7rem}
+  /* MEGA : grille multicolonnes de cartes de section, découpage net entre elles. */
+  html.mega .vue{flex:none;overflow:visible;position:static;display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;align-items:start}
+  html.mega .dsec{position:static;display:flex!important;background:var(--soft);
+    border:1px solid var(--line);border-radius:12px;padding:.7rem .9rem .85rem;gap:.45rem;
+    box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  html.mega .slice{overflow:visible;flex:none}
+  html.mega .sec-t{display:flex;align-items:center;gap:6px;margin:0 0 .35rem;padding-bottom:.4rem;
+    border-bottom:1px solid var(--line);font-size:.66rem}
+  /* La section Risques, souvent la plus longue, prend toute la largeur en bas. */
+  html.mega #d-risk{grid-column:1/-1}
   html.mega #slbar,html.mega .aide-lay{display:none!important}
   html.mega .h b{font-size:1.05rem}
+  html.mega .kpis{max-width:1100px}
 </style>
 
 <div class="mw">
@@ -127,16 +139,11 @@
     <div class="kpi hot"><div class="v" id="k-risk">—</div><div class="l">risques</div></div>
   </div>
   <div class="vue">
-    <div class="sec-t">🌐 Protocoles</div>
-    <div class="slice actif" id="s-proto"></div>
-    <div class="sec-t">📱 Applications</div>
-    <div class="slice" id="s-apps"></div>
-    <div class="sec-t">🧭 Usages</div>
-    <div class="slice" id="s-usage"></div>
-    <div class="sec-t">🗣️ Talkers</div>
-    <div class="slice" id="s-talk"></div>
-    <div class="sec-t">⚠️ Risques</div>
-    <div class="slice" id="s-risk"></div>
+    <div class="dsec actif" id="d-proto"><div class="sec-t">🌐 Protocoles</div><div class="slice" id="s-proto"></div></div>
+    <div class="dsec" id="d-apps"><div class="sec-t">📱 Applications</div><div class="slice" id="s-apps"></div></div>
+    <div class="dsec" id="d-usage"><div class="sec-t">🧭 Usages</div><div class="slice" id="s-usage"></div></div>
+    <div class="dsec" id="d-talk"><div class="sec-t">🗣️ Talkers</div><div class="slice" id="s-talk"></div></div>
+    <div class="dsec" id="d-risk"><div class="sec-t">⚠️ Risques</div><div class="slice" id="s-risk"></div></div>
   </div>
   <div id="slbar"></div>
 
@@ -264,7 +271,7 @@
   rend(DEMO); tente(); setInterval(tente, 15000);
 
   // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).
-  var slices=[el('s-proto'),el('s-apps'),el('s-usage'),el('s-talk'),el('s-risk')];
+  var slices=[el('d-proto'),el('d-apps'),el('d-usage'),el('d-talk'),el('d-risk')];
   var curSlice=0;
 
   // ── REVERSE-DESIGN : la carte s'annote elle-même, PAR SLICE ─────────────────
@@ -314,7 +321,7 @@
     // Page classique : toutes les slices visibles, empilées ; ni barre ni rotation.
     for(var k=0;k<slices.length;k++) slices[k].classList.add('actif');
   } else if(window.SBXSliceBar){
-    SBXSliceBar(el('slbar'), {autoMs:5000, onShow:montre,
+    SBXSliceBar(el('slbar'), {autoMs:9000, onShow:montre,
       slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🧭 Usages'},{label:'🗣️ Talkers'},{label:'⚠️ Risques'}]});
   } else { montre(0); }
 

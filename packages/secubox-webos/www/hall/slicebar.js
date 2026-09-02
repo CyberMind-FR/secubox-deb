@@ -15,11 +15,14 @@
         open  — fonction appelée au clic sur la pastille ; à défaut, href est
                 envoyé au Hall par postMessage {sbx:'voir', url:href}
     opts.onShow(i, slice) — appelé à chaque changement de slice
-    opts.autoMs — période de rotation auto (défaut 6000 ; 0 = pas de rotation)
+    opts.autoMs — période de rotation auto (défaut 9000, RALENTI ; 0 = pas de
+                  rotation ; jamais de rotation sous prefers-reduced-motion)
 
   Rotation AUTO par défaut (puces bleues) ; un clic sur une puce passe en MANUEL
-  (puces vertes) et fige le choix. Le survol met la rotation en pause — on lit
-  sans que ça tourne sous les yeux.
+  (puces vertes) et fige le choix. Le survol de TOUTE la cardlet (pas seulement
+  la barre) met la rotation en pause — on lit sans que ça tourne sous les yeux.
+  Le Hall peut aussi pauser à distance (souris au-dessus de la carte) via
+  postMessage {sbx:'survol'} / {sbx:'quitte'}.
 */
 (function () {
   "use strict";
@@ -63,12 +66,33 @@
     }
     function show(k) { if (!slices.length) return; i = ((k % slices.length) + slices.length) % slices.length; paint(); }
     function manual(k) { mode = "manuel"; dots.className = "sbx-dots manuel"; stop(); show(k); }
-    function tick() { if (mode === "auto") show(i + 1); }
-    function start() { if (opts.autoMs !== 0 && slices.length > 1) { stop(); timer = setInterval(tick, opts.autoMs || 6000); } }
+    function tick() { if (mode === "auto" && !hovered) show(i + 1); }
+    // Rotation RALENTIE (défaut 9 s) et jamais sous prefers-reduced-motion.
+    var reduce = false;
+    try { reduce = matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    function start() {
+      if (reduce || opts.autoMs === 0 || slices.length <= 1) return;
+      stop(); timer = setInterval(tick, opts.autoMs || 9000);
+    }
     function stop() { if (timer) { clearInterval(timer); timer = null; } }
 
-    bar.addEventListener("mouseenter", stop);
-    bar.addEventListener("mouseleave", function () { if (mode === "auto") start(); });
+    // PAUSE AU SURVOL DE TOUTE LA CARDLET (pas seulement la barre) : on lit sans
+    // que ça tourne. `hovered` gèle aussi un tick déjà programmé. Le Hall peut
+    // pauser à distance quand la souris est AU-DESSUS de la carte (postMessage).
+    var hovered = false;
+    function enter() { hovered = true; stop(); }
+    function leave() { hovered = false; if (mode === "auto") start(); }
+    var root = document.documentElement;
+    root.addEventListener("mouseenter", enter);
+    root.addEventListener("mouseleave", leave);
+    root.addEventListener("focusin", enter);
+    bar.addEventListener("mouseenter", enter);
+    bar.addEventListener("mouseleave", function () { /* le survol carte gère la reprise */ });
+    addEventListener("message", function (ev) {
+      var d = ev && ev.data; if (!d || !d.sbx) return;
+      if (d.sbx === "survol" || d.sbx === "pause") enter();
+      else if (d.sbx === "quitte" || d.sbx === "reprend") leave();
+    });
 
     container.appendChild(bar);
     show(0); start();
