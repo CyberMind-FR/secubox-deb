@@ -473,6 +473,18 @@ configure_roundcube() {
 </VirtualHost>
 EOF
 
+    # PIÈCES JOINTES ≥100 Mo (demande 2026-09-02). PHP par défaut : upload 2M /
+    # post 8M → attachements bridés. Drop-in conf.d (survit aux MAJ du paquet php,
+    # contrairement à php.ini). À apparier avec max_message_size dans le .local
+    # ci-dessous (plafond compose = max_message_size / 1.33 à cause du base64).
+    mkdir -p "$rootfs/etc/php/8.2/apache2/conf.d"
+    cat > "$rootfs/etc/php/8.2/apache2/conf.d/99-secubox-attach.ini" <<'EOF'
+; SecuBox — pièces jointes webmail ≥100 Mo
+upload_max_filesize = 128M
+post_max_size = 160M
+memory_limit = 256M
+EOF
+
     chroot "$rootfs" /bin/bash <<'CHROOT_EOF'
 a2dissite 000-default 2>/dev/null || true
 a2ensite roundcube
@@ -510,6 +522,11 @@ cat > /etc/roundcube/config.inc.php.local <<LOCAL
 # porte a 8 h — une journee de travail — sans toucher a defaults.inc.php, que
 # la mise a jour du paquet roundcube reecrirait.
 \$config['session_lifetime'] = 480;
+# PIÈCES JOINTES ≥100 Mo (demande 2026-09-02). Le plafond compose de Roundcube
+# = max_message_size / 1.33 (surcoût base64). 160M → ~120M utile. À apparier avec
+# PHP upload/post (drop-in conf.d 99-secubox-attach.ini) ; Postfix message_size
+# est déjà à 0 (illimité).
+\$config['max_message_size'] = '160M';
 LOCAL
 if [ -f /etc/roundcube/config.inc.php ] && ! grep -q "config.inc.php.local" /etc/roundcube/config.inc.php; then
     echo "include_once('/etc/roundcube/config.inc.php.local');" >> /etc/roundcube/config.inc.php
