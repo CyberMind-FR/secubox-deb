@@ -1,3 +1,13 @@
+secubox-webos (1.0.259-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Tirage (fix iPhone) : les traits de l'hexagramme (.lines svg) sont
+    en opacity:0 côté site, révélés par une animation au scroll/observer qui ne
+    se déclenche pas dans l'iframe mise à l'échelle + scroll verrouillé (iOS) →
+    on les force visibles via le CSS injecté. L'hexagramme s'affiche de nouveau
+    à côté du pavage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 16:35:00 +0200
+
 secubox-webos (1.0.258-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Tirage /micro : vue verrouillée sur le SEUL résultat (N° +

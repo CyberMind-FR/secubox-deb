@@ -107,7 +107,11 @@
     +".grid-panel{position:absolute!important;left:-99999px!important;top:0!important;width:640px!important;height:auto!important;overflow:hidden!important}"
     +"html,body{background:transparent!important;margin:0!important;overflow:hidden!important;height:auto!important}"
     +".wrap{display:block!important;max-width:none!important;margin:0!important;padding:6px 12px 10px!important}"
-    +".detail-outer,#detail{margin:0!important}";
+    +".detail-outer,#detail{margin:0!important}"
+    // iPhone : les traits de l'hexagramme (.lines svg) sont en opacity:0 en
+    // attente d'une révélation (scroll/IntersectionObserver) qui ne se déclenche
+    // pas dans l'iframe mise à l'échelle + scroll verrouillé → on les force visibles.
+    +".lines svg,.mutation-col .lines svg{opacity:1!important;transform:none!important}";
   function nettoie(){
     if(MEGA) return true; // en /mega : outil complet, on n'injecte pas
     try{ var doc=fr.contentDocument; if(!doc||!doc.head) return false;
