@@ -1,3 +1,17 @@
+secubox-webos (1.0.272-1~bookworm1) bookworm; urgency=medium
+
+  * Nouveau cardlet « Messagerie & Chatbox » (SLICÉ) qui jumelle trois surfaces
+    de dialogue : 🤖 ZIA (chatbot, POST /api/v1/zia/v1/chat), 📻 le chat
+    d'ambiance de la radio (lecture incrémentale de /current + envoi anonyme via
+    /chat), 💬 les messages privés du BBS (la vraie page en iframe, chargée à la
+    demande). Slicer partagé SBXSliceBar ; le sondage radio ne tourne QUE quand
+    sa slice est active ET l'onglet visible/en ligne.
+  * hall.vhost.conf : deux relais de même origine pour la carte — /api/v1/zia/
+    (→ zia.sock, strip de préfixe comme zia.conf) et /api/v1/radio/(current|chat|
+    stats|playlist|propositions) (→ radio.sock). CSP du Hall = connect-src 'self'.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 03:10:00 +0200
+
 secubox-webos (1.0.271-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet PeerTube : la reprise au refresh d'une vidéo EN COURS marche de
