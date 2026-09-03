@@ -1,3 +1,13 @@
+secubox-sbxui (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * SBXSliceBar : couches de comportement génériques désormais documentées et
+    OVERRIDABLES par cardlet (auto/pause/click/persist/preview). Nouvelle couche
+    PREVIEW : survoler une puce montre transitoirement sa slice et revient à
+    l'engagée au relâchement (opts.preview:false pour couper ; opts.onPreview
+    pour un aperçu léger). opts.pauseOnHover / opts.persist désactivables.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 18:30:00 +0200
+
 secubox-sbxui (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Paquet initial : bibliothèque UI partagée du WebOS (objets sbx).

@@ -67,11 +67,13 @@
   .load.gone{opacity:0;pointer-events:none}
   /* Bulle de DÉTAIL au survol : le « dessous » (image + interprétation + binôme/
      opposé) remonté depuis l'iframe, sans surcharger la carte. */
-  .dbulle{position:absolute;left:8px;right:8px;bottom:44px;z-index:6;max-height:74%;overflow:auto;
-     scrollbar-width:thin;background:color-mix(in srgb,var(--panel) 92%,#000);
-     border:1px solid var(--line);border-radius:12px;padding:12px 14px;
-     box-shadow:0 12px 34px rgba(0,0,0,.55);opacity:0;transform:translateY(8px);
-     transition:opacity .18s,transform .18s;pointer-events:none}
+  /* Ancrée en BAS, hauteur limitée : elle occupe l'espace vide sous le résultat
+     compact (qui reste visible en haut) au lieu de le recouvrir. */
+  .dbulle{position:absolute;left:8px;right:8px;bottom:44px;z-index:6;max-height:50%;overflow:auto;
+     scrollbar-width:thin;background:color-mix(in srgb,var(--panel) 95%,#000);
+     border:1px solid var(--line-2,var(--line));border-radius:12px;padding:11px 13px;
+     box-shadow:0 -6px 26px rgba(0,0,0,.5);opacity:0;transform:translateY(8px);
+     transition:opacity .16s,transform .16s;pointer-events:none}
   .dbulle.on{opacity:1;transform:none;pointer-events:auto}
   .dbulle .db-img{color:var(--or);font-weight:700;font-size:.86rem;letter-spacing:.01em;margin-bottom:7px}
   .dbulle .db-img .kw{font-family:ui-monospace,monospace;font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;

@@ -15,14 +15,20 @@
         open  — fonction appelée au clic sur la pastille ; à défaut, href est
                 envoyé au Hall par postMessage {sbx:'voir', url:href}
     opts.onShow(i, slice) — appelé à chaque changement de slice
-    opts.autoMs — période de rotation auto (défaut 9000, RALENTI ; 0 = pas de
-                  rotation ; jamais de rotation sous prefers-reduced-motion)
 
-  Rotation AUTO par défaut (puces bleues) ; un clic sur une puce passe en MANUEL
-  (puces vertes) et fige le choix. Le survol de TOUTE la cardlet (pas seulement
-  la barre) met la rotation en pause — on lit sans que ça tourne sous les yeux.
-  Le Hall peut aussi pauser à distance (souris au-dessus de la carte) via
-  postMessage {sbx:'survol'} / {sbx:'quitte'}.
+  COUCHES DE COMPORTEMENT (génériques, chaînées, désactivables/overridables par
+  cardlet — cf. HIG) :
+    • auto     — rotation. opts.autoMs (défaut 9000 ; 0 = off ; jamais sous
+                 prefers-reduced-motion).
+    • pause    — au survol (local + {sbx:'survol'|'quitte'} du Hall). Désactiver :
+                 opts.pauseOnHover:false (le Hall reste maître via postMessage).
+    • click    — clic sur une puce → sélection MANUELLE + fige (puces vertes) ;
+                 recliquer la MÊME puce engagée REPREND l'auto.
+    • persist  — la slice figée survit refresh + visites (localStorage, clé
+                 opts.key || pathname). Désactiver : opts.persist:false.
+    • preview  — survoler une puce montre transitoirement SA slice et revient à
+                 l'engagée au relâchement. Désactiver : opts.preview:false.
+                 Aperçu LÉGER (sans le onShow coûteux) : opts.onPreview(i, slice).
 */
 (function () {
   "use strict";
@@ -37,6 +43,7 @@
     // cardlet). Une PAUSE manuelle (puce figée) doit survivre ; le survol, non.
     var KEY = "sbx-slice:" + (opts.key || (location && location.pathname) || "");
     function persist() {
+      if (opts.persist === false) return; // couche persist désactivable
       try { localStorage.setItem(KEY, JSON.stringify({ mode: mode, i: i })); } catch (e) {}
     }
 
@@ -53,8 +60,14 @@
       b.title = s.label || ("Slice " + (k + 1));
       if (s.tone) b.style.background = "var(--" + s.tone + ")";
       b.addEventListener("click", function () { manual(k); });
+      // COUCHE preview : survoler une puce montre transitoirement SA slice ; on
+      // revient à la slice engagée au relâchement. Générique ; le cardlet peut
+      // désactiver (opts.preview:false) ou alléger (opts.onPreview) si onShow est
+      // coûteux (fetch). Un clic pendant le preview engage la slice.
+      b.addEventListener("mouseenter", function () { preview(k); });
       dots.appendChild(b);
     });
+    dots.addEventListener("mouseleave", function () { previewEnd(); });
 
     host.addEventListener("click", function () {
       var s = slices[i]; if (!s) return;
@@ -71,12 +84,31 @@
       host.title = s.host ? ("Ouvrir " + s.host) : "";
       if (typeof opts.onShow === "function") opts.onShow(i, s);
     }
-    function show(k) { if (!slices.length) return; i = ((k % slices.length) + slices.length) % slices.length; paint(); }
+    function show(k) { committed = null; if (!slices.length) return; i = ((k % slices.length) + slices.length) % slices.length; paint(); }
+
+    // COUCHE preview (survol) : on affiche la slice k SANS l'engager. `committed`
+    // retient la slice réellement choisie ; on y revient au previewEnd(). onShow
+    // par défaut (le cardlet peut fournir onPreview pour un aperçu léger).
+    var committed = null;
+    function preview(k) {
+      if (opts.preview === false || !slices.length) return;
+      k = ((k % slices.length) + slices.length) % slices.length;
+      if (k === i && committed === null) return;
+      if (committed === null) committed = i;
+      i = k;
+      if (typeof opts.onPreview === "function") {
+        Array.prototype.forEach.call(dots.children, function (b, n) { b.classList.toggle("on", n === i); });
+        lab.textContent = (slices[i] || {}).label || "";
+        opts.onPreview(i, slices[i] || {});
+      } else { paint(); }
+    }
+    function previewEnd() { if (committed === null) return; var c = committed; committed = null; i = c; paint(); }
     // Un clic sur une puce FIGE le choix (MANUEL, puces vertes) et met la
     // rotation en PAUSE. Recliquer sur la MÊME puce déjà sélectionnée REPREND la
     // rotation auto. Le mode (et la slice figée) est mémorisé (persist()).
     function manual(k) {
-      if (mode === "manuel" && k === i) { reprendreAuto(); return; }
+      var cur = committed !== null ? committed : i; // pendant un preview, i est déplacé
+      if (mode === "manuel" && k === cur) { reprendreAuto(); return; }
       mode = "manuel"; dots.className = "sbx-dots manuel"; stop(); show(k); persist();
     }
     function reprendreAuto() {
@@ -100,11 +132,13 @@
     function enter() { hovered = true; stop(); }
     function leave() { hovered = false; if (mode === "auto") start(); }
     var root = document.documentElement;
-    root.addEventListener("mouseenter", enter);
-    root.addEventListener("mouseleave", leave);
-    root.addEventListener("focusin", enter);
-    bar.addEventListener("mouseenter", enter);
-    bar.addEventListener("mouseleave", function () { /* le survol carte gère la reprise */ });
+    if (opts.pauseOnHover !== false) { // couche pause (survol local) désactivable
+      root.addEventListener("mouseenter", enter);
+      root.addEventListener("mouseleave", leave);
+      root.addEventListener("focusin", enter);
+      bar.addEventListener("mouseenter", enter);
+      bar.addEventListener("mouseleave", function () { /* le survol carte gère la reprise */ });
+    }
     addEventListener("message", function (ev) {
       var d = ev && ev.data; if (!d || !d.sbx) return;
       if (d.sbx === "survol" || d.sbx === "pause") enter();

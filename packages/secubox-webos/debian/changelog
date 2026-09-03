@@ -1,3 +1,10 @@
+secubox-webos (1.0.262-1~bookworm1) bookworm; urgency=medium
+
+  * slicebar.js (copie du Hall) réaligné sur secubox-sbxui : couche PREVIEW au
+    survol des puces + couches configurables (dpi, surfviewer en profitent).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 18:30:00 +0200
+
 secubox-webos (1.0.261-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Tirage : la carte ne montre plus que le RÉSULTAT COMPACT (traits ·
