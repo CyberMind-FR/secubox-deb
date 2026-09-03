@@ -126,6 +126,27 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .logo-notif.hidden{display:none}
 @keyframes logohalo{0%{transform:scale(1);opacity:.55}100%{transform:scale(2);opacity:0}}
 @media(prefers-reduced-motion:reduce){.logo-notif,.logo-notif::after{animation:none}}
+/* ── #1360d · Menu des DIFFUSIONS au survol du logo ──────────────────────────
+   Survoler le logo (à gauche) déroule un menu qui ne montre QUE les diffusions
+   du parc — un clic rouvre le flux. Reste ouvert tant qu'on est sur le logo ou
+   sur le menu. */
+.logo-diff{position:absolute;top:calc(100% + 6px);left:0;z-index:60;width:min(320px,86vw);
+  background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--coral);
+  border-radius:12px;box-shadow:var(--lift);padding:8px;
+  opacity:0;visibility:hidden;transform:translateY(-5px);transition:.16s;pointer-events:none}
+.logo-wrap:hover .logo-diff,.logo-diff:hover{opacity:1;visibility:visible;transform:none;pointer-events:auto}
+.logo-diff .ld-tete{font-size:.62rem;font-weight:800;color:var(--coral);text-transform:uppercase;
+  letter-spacing:.07em;padding:2px 4px 7px}
+.logo-diff #logo-diff-n{font-family:"JetBrains Mono";font-variant-numeric:tabular-nums;color:var(--coral)}
+.logo-diff .ld-liste{display:flex;flex-direction:column;gap:2px;max-height:300px;overflow-y:auto}
+.logo-diff .ld-liste .who-note{margin:2px 4px;color:var(--dim);font-size:.74rem}
+.logo-diff .ld-liste button{display:flex;align-items:baseline;gap:6px;width:100%;text-align:left;
+  padding:6px 8px;border:0;border-radius:7px;background:none;color:var(--ink);font-size:.78rem;cursor:pointer}
+.logo-diff .ld-liste button:hover{background:var(--soft)}
+.logo-diff .ld-liste .ic{flex:0 0 auto;font-size:.72rem}
+.logo-diff .ld-liste .h{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.logo-diff .ld-liste .n{flex:0 0 auto;font-size:.6rem;color:var(--dim);font-family:"JetBrains Mono";font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:reduce){.logo-diff{transition:opacity .12s}}
 @keyframes medcycle{0%{opacity:0} 2%{opacity:1} 16%{opacity:1} 20%{opacity:0} 100%{opacity:0}}
 .medaillon .mface:nth-of-type(2){--i:0}
 .medaillon .mface:nth-of-type(3){--i:1}
@@ -1071,7 +1092,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 <body>
 <header class="mast">
   <div class="mast-main">
-    <div class="logo-wrap"><a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a><button type="button" class="logo-notif hidden" id="logo-notif" title="Diffusions du parc" aria-label="Nouvelles diffusions du parc"></button></div>
+    <div class="logo-wrap"><a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a><button type="button" class="logo-notif hidden" id="logo-notif" title="Diffusions du parc" aria-label="Nouvelles diffusions du parc"></button><div class="logo-diff" id="logo-diff" role="menu" aria-label="Diffusions du parc"><div class="ld-tete">📡 Diffusions du parc <span id="logo-diff-n"></span></div><div class="ld-liste" id="logo-diff-liste"><p class="who-note">Aucune diffusion reçue pour l’instant.</p></div></div></div>
     <nav class="mnav" aria-label="Menus">
       <!-- Bouton « Accueil » retiré (#1266) : le logo mène déjà à l'accueil,
            c'était un doublon. -->
@@ -4318,22 +4339,33 @@ const CARDLET_ICONES = {
     }
     function delaiDiff(ts){ var s=Math.max(0,(Date.now()/1000)-(ts||0));
       if(s<3600) return Math.round(s/60)+' min'; if(s<86400) return Math.round(s/3600)+' h'; return Math.round(s/86400)+' j'; }
-    function rendDiff(){
-      var z=document.getElementById('who-diff'), n=document.getElementById('diff-n'); if(!z) return;
-      var l=litDiff();
-      if(n) n.textContent=l.length?('('+l.length+')'):'';
-      if(!l.length){ z.innerHTML='<p class="who-note">Aucune diffusion reçue pour l’instant.</p>'; return; }
-      z.innerHTML=l.map(function(x){
-        var media=(typeof estMediaUrl==='function' && estMediaUrl(x.url));
-        return '<button type="button" data-url="'+esc(x.url)+'" title="'+esc(x.titre)+(x.par?(' — '+esc(x.par)):'')+'">'
-          +'<span class="ic">'+(media?'🎬':'🔗')+'</span>'
-          +'<span class="h">'+esc(x.titre)+'</span>'
-          +'<span class="n">'+esc(delaiDiff(x.ts))+'</span></button>';
-      }).join('');
+    // Un item de diffusion (émoji média/lien + titre + ancienneté).
+    function itemDiff(x){
+      var media=(typeof estMediaUrl==='function' && estMediaUrl(x.url));
+      return '<button type="button" data-url="'+esc(x.url)+'" title="'+esc(x.titre)+(x.par?(' — '+esc(x.par)):'')+'">'
+        +'<span class="ic">'+(media?'🎬':'🔗')+'</span>'
+        +'<span class="h">'+esc(x.titre)+'</span>'
+        +'<span class="n">'+esc(delaiDiff(x.ts))+'</span></button>';
+    }
+    function wireDiff(z){
       Array.prototype.forEach.call(z.querySelectorAll('button[data-url]'), function(b){
         b.addEventListener('click', function(){ var u=b.getAttribute('data-url');
           if(typeof estMediaUrl==='function' && estMediaUrl(u) && typeof ouvreViewer==='function') ouvreViewer(u);
           else if(typeof ouvreSurf==='function') ouvreSurf(u); });
+      });
+    }
+    // Peuple la MÊME liste à deux endroits : le menu profil (#who-diff) et le
+    // menu déroulé au survol du LOGO (#logo-diff-liste), qui ne montre QUE les
+    // diffusions (#1360d).
+    function rendDiff(){
+      var l=litDiff();
+      var n=document.getElementById('diff-n'); if(n) n.textContent=l.length?('('+l.length+')'):'';
+      var ln=document.getElementById('logo-diff-n'); if(ln) ln.textContent=l.length?String(l.length):'';
+      var html=l.length ? l.map(itemDiff).join('')
+                        : '<p class="who-note">Aucune diffusion reçue pour l’instant.</p>';
+      ['who-diff','logo-diff-liste'].forEach(function(id){
+        var z=document.getElementById(id); if(!z) return;
+        z.innerHTML=html; if(l.length) wireDiff(z);
       });
     }
     // ── BADGE « diffusions non vues » SUR L'AVATAR (#notif-profil) ────────────

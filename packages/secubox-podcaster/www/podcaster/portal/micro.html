@@ -254,16 +254,20 @@
   // ── SLICES (#1352) : plusieurs vues de la MÊME carte, filtrées côté client
   // depuis la bibliothèque. Récents (tout) · Favoris (♥ locaux) · un flux par
   // podcast. Le parcours change ; la LECTURE en cours continue (playEp).
+  // filtre : objet {kind:'all'|'fav'|'feed', val?} ; null = tout. d.feeds est un
+  // DICT {nom_de_flux: nombre}, et les épisodes portent `feed` (le nom) — on
+  // filtre donc par NOM, pas par feed_id.
   function episodesDe(f) {
-    if (f === 'fav') { const s = favs(); return allEps.filter(e => s.includes(e.id)); }
-    if (f == null)   return allEps.slice(0, 40);
-    return allEps.filter(e => String(e.feed_id) === String(f)).slice(0, 40);
+    f = f || {};
+    if (f.kind === 'fav')  { const s = favs(); return allEps.filter(e => s.includes(e.id)); }
+    if (f.kind === 'feed') return allEps.filter(e => e.feed === f.val).slice(0, 40);
+    return allEps.slice(0, 40);   // 'all' / défaut
   }
   function rendVue() {
     if (!eps.length) {
-      el('titre').textContent = (filtre === 'fav') ? 'Aucun favori'
-                              : (filtre != null)   ? 'Aucun épisode dans ce flux'
-                                                   : 'Bibliothèque vide';
+      el('titre').textContent = (filtre && filtre.kind === 'fav')  ? 'Aucun favori'
+                              : (filtre && filtre.kind === 'feed') ? 'Aucun épisode dans ce flux'
+                                                                   : 'Bibliothèque vide';
       el('src').textContent = ''; el('det').hidden = true;
       ['pp', 'prev', 'next'].forEach(i => el(i).disabled = true);
       el('suite').innerHTML = '<div class="tt">⏭ à suivre</div><span class="vide">—</span>';
@@ -276,15 +280,22 @@
   function appliqueFiltre() { eps = episodesDe(filtre); idx = 0; rendVue(); }
   function batisSlicer() {
     if (slBar || !window.SBXSliceBar) return;
-    const defs = [{ label: '🆕 Récents', f: null }, { label: '⭐ Favoris', f: 'fav' }]
-      .concat((feedsList || []).slice(0, 6).map(fd => ({ label: '📻 ' + (fd.title || 'Flux'), f: fd.id })));
+    // feedsList = dict {nom: compte} → tranches par flux, les mieux fournis d'abord.
+    const feeds = Object.keys(feedsList || {})
+      .map(nom => ({ nom: nom, n: feedsList[nom] || 0 }))
+      .sort((a, b) => b.n - a.n).slice(0, 6);
+    const defs = [{ label: '🆕 Récents', kind: 'all' }, { label: '⭐ Favoris', kind: 'fav' }]
+      .concat(feeds.map(fd => ({
+        label: '📻 ' + (fd.nom.length > 26 ? fd.nom.slice(0, 25) + '…' : fd.nom),
+        kind: 'feed', val: fd.nom
+      })));
     const box = document.createElement('div'); box.className = 'pc-slbox';
     const mp = document.querySelector('.mp'), bas = document.querySelector('.bas');
     if (mp && bas) mp.insertBefore(box, bas); else (mp || document.body).appendChild(box);
     slBar = window.SBXSliceBar(box, {
       autoMs: 0, pauseOnHover: false,   // preview au survol conservé (filtre client, pas de fetch)
       slices: defs.map(s => ({ label: s.label })),
-      onShow: function (k) { filtre = defs[k] ? defs[k].f : null; appliqueFiltre(); }
+      onShow: function (k) { filtre = defs[k] || null; appliqueFiltre(); }
     });
   }
 

@@ -1,3 +1,12 @@
+secubox-webos (1.0.268-1~bookworm1) bookworm; urgency=medium
+
+  * Survol du logo SbX (à gauche) : déroule un menu qui ne montre QUE les
+    DIFFUSIONS du parc (#1360d) — même liste que le menu profil, un clic rouvre
+    le flux (viewer si média, sinon surf). rendDiff() peuple désormais les deux
+    endroits. Reste ouvert tant qu'on survole le logo ou le menu.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 00:40:00 +0200
+
 secubox-webos (1.0.267-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet PeerTube : slicer bespoke (pt-slbar : « bullets sans effet ») MIGRÉ

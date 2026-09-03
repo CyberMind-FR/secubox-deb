@@ -1,3 +1,12 @@
+secubox-podcaster (1.0.34-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif slicer : d.feeds est un DICT {nom: compte}, pas un tableau — le
+    .slice() plantait (« feedsList.slice is not a function ») et vidait TOUT le
+    micro. On construit désormais les tranches par flux depuis les clés du dict,
+    et on filtre les épisodes par NOM de flux (e.feed), pas par feed_id.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 00:20:00 +0200
+
 secubox-podcaster (1.0.33-1~bookworm1) bookworm; urgency=medium
 
   * Correctif du slicer (1.0.32) : le vhost podcaster.gk2 (racine = www/podcaster/
