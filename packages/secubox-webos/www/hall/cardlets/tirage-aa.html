@@ -1,0 +1,94 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+
+  Cardlet TIRAGE — Anibal Amiot (site partenaire, tirage Yi King).
+  ON N'EMBARQUE PAS UNE RÉINVENTION : on EMBARQUE la vraie page de tirage du
+  site (index.html : bouton « Tirer aux pièces » + résultat des 64 hexagrammes,
+  encodé dans ?tire=), servie EN MÊME ORIGINE via le relais /aa/ (→ vhost
+  metablogizer :8900). Le site N'EST JAMAIS MODIFIÉ : on l'affiche et on
+  l'adapte à la cardlet depuis NOTRE côté (cadre, échelle). Plus évolutif : si
+  le tirage du site change, la cardlet suit sans retouche.
+-->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tirage — Anibal Amiot</title>
+<style>
+  :root{
+    --bg:#0c0b0e; --panel:#141216; --ink:#ece5d5; --dim:#9b937f; --line:#282430;
+    --or:#d99a2b; --carmine:#c9536a;
+  }
+  @media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+    --bg:#e7e1d2; --panel:#efe8d7; --ink:#2b2620; --dim:#6a6152; --line:#d3cab3; --or:#b9791a; --carmine:#93283a;
+  }}
+  :root[data-theme="light"]{
+    --bg:#e7e1d2; --panel:#efe8d7; --ink:#2b2620; --dim:#6a6152; --line:#d3cab3; --or:#b9791a; --carmine:#93283a;
+  }
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:"Instrument Sans",system-ui,-apple-system,sans-serif;overflow:hidden}
+  .mw{display:flex;flex-direction:column;height:100vh;position:relative}
+  .h{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);
+     background:linear-gradient(180deg,color-mix(in srgb,var(--or) 10%,var(--panel)),var(--panel))}
+  .h .ic{font-size:1.05rem}
+  .h b{font-weight:600;font-size:.92rem;letter-spacing:.01em}
+  .h .src{margin-left:auto;font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+     font-family:ui-monospace,monospace}
+  .h .dot{width:6px;height:6px;border-radius:50%;background:var(--or);margin-right:4px;display:inline-block;
+     box-shadow:0 0 0 3px color-mix(in srgb,var(--or) 22%,transparent)}
+  /* Le cadre embarque la VRAIE page du site (relais /aa/). En /micro on met à
+     l'échelle depuis NOTRE côté pour donner à voir l'outil sans le modifier ;
+     en /mega la page reprend sa taille pleine. */
+  .frame{flex:1;position:relative;overflow:auto;background:var(--panel);-webkit-overflow-scrolling:touch}
+  iframe{width:100%;height:100%;border:0;display:block;background:transparent}
+  html:not(.mega) .frame{overflow:hidden}
+  html:not(.mega) iframe{width:154%;height:154%;transform:scale(.649);transform-origin:0 0}
+  .pied{display:flex;align-items:center;gap:8px;padding:7px 11px;border-top:1px solid var(--line);
+     background:var(--panel);font-size:.7rem;color:var(--dim)}
+  .pied a{color:var(--or);text-decoration:none;margin-left:auto}
+  .pied a:hover{text-decoration:underline}
+  .load{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:.8rem;
+     background:var(--panel);z-index:2;transition:opacity .4s}
+  .load.gone{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="mw">
+  <div class="h"><span class="ic">🎴</span><b>Tirage — Anibal Amiot</b>
+    <span class="src"><span class="dot"></span>yi king · partenaire</span></div>
+  <div class="frame">
+    <div class="load" id="load">Consultation du Yi King…</div>
+    <iframe id="fr" src="/aa/" title="Tirage Yi King — Anibal Amiot"
+            referrerpolicy="no-referrer" loading="lazy"></iframe>
+  </div>
+  <div class="pied">Tirez aux pièces dans le cadre — 6 traits, un hexagramme.
+    <a id="grand" href="/aa/" target="_blank" rel="noopener">Ouvrir en grand ↗</a></div>
+</div>
+
+<script src="../aide.js"></script>
+<script>
+(function(){
+  "use strict";
+  var qs=new URLSearchParams(location.search);
+  if(qs.get('mega')==='1') document.documentElement.classList.add('mega');
+  var t=qs.get('theme'); if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t);
+  addEventListener('message',function(ev){var d=ev.data;if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light'))
+    document.documentElement.setAttribute('data-theme',d.theme);});
+  // voile de chargement retiré quand l'iframe a chargé
+  var fr=document.getElementById('fr');
+  fr.addEventListener('load',function(){ var l=document.getElementById('load'); if(l) l.classList.add('gone'); });
+  setTimeout(function(){ var l=document.getElementById('load'); if(l) l.classList.add('gone'); },4000);
+  // Aide reverse-design (bibliothèque partagée). On NE touche PAS au contenu
+  // embarqué (cross-doc) : on annote nos zones (en-tête, cadre, pied).
+  window.SBXAide && SBXAide({ zones:function(){ return [
+    {el:document.querySelector('.h'),     label:'En-tête — cardlet Tirage (site partenaire Anibal Amiot)'},
+    {el:document.querySelector('.frame'), label:'Le tirage embarqué — « Tirer aux pièces » (6 traits) → un des 64 hexagrammes'},
+    {el:document.querySelector('.pied'),  label:'Pied — ouvrir le tirage en grand (nouvel onglet)'}
+  ].filter(function(z){return z.el;}); }});
+})();
+</script>
+</body>
+</html>

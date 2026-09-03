@@ -1,3 +1,16 @@
+secubox-webos (1.0.255-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet « 🎴 Tirage — Anibal Amiot » (site partenaire, Yi King). On EMBARQUE
+    la vraie page de tirage du site (index.html : « Tirer aux pièces » → un des
+    64 hexagrammes, encodé ?tire=), servie en même origine via un nouveau relais
+    /aa/ (→ vhost metablogizer 127.0.0.1:8900). Le site n'est JAMAIS modifié :
+    on l'affiche et on l'adapte à la cardlet depuis notre côté (cadre + échelle
+    en /micro, pleine taille en /mega). Évolutif : si le tirage du site change,
+    la cardlet suit sans retouche. Relais GET/HEAD, CSP réécrite pour ce contenu
+    (scripts/styles inline du site) + frame-ancestors 'self'.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 14:30:00 +0200
+
 secubox-webos (1.0.254-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet DPI · vue Clients : cards CLIQUABLES — un clic déplie le détail du
