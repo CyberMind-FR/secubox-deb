@@ -1,3 +1,13 @@
+secubox-webos (1.0.263-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Tirage : correctif — le fit() forçant la largeur desktop (fix
+    iPhone) ne s'applique plus qu'aux écrans ÉTROITS ; sur PC on garde l'ancien
+    rendu (172% / .581), meilleur, déjà 3 colonnes. Bulle de détail déclenchée
+    au survol de l'EN-TÊTE seulement (le centre reste la vue normale, jamais
+    recouverte).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 19:15:00 +0200
+
 secubox-webos (1.0.262-1~bookworm1) bookworm; urgency=medium
 
   * slicebar.js (copie du Hall) réaligné sur secubox-sbxui : couche PREVIEW au

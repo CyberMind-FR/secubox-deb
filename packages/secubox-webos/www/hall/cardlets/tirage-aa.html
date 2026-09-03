@@ -166,8 +166,18 @@
   var LW=800;
   function fit(){ if(MEGA) return; var frame=document.querySelector('.frame'); if(!frame) return;
     var fw=frame.clientWidth, fh=frame.clientHeight; if(!fw||!fh) return;
-    var s=fw/LW; fr.style.width=LW+'px'; fr.style.height=Math.ceil(fh/s)+'px';
-    fr.style.transformOrigin='0 0'; fr.style.transform='scale('+s+')'; }
+    fr.style.transformOrigin='0 0';
+    // ÉCRAN LARGE (PC) : l'ancien rendu (172% / .581) était meilleur et donnait
+    // déjà les 3 colonnes (largeur logique ~1.72×fw > 768). On le garde. ÉCRAN
+    // ÉTROIT (iPhone) SEULEMENT : on force une largeur logique desktop (800px)
+    // pour ne pas perdre la 3ᵉ colonne, quitte à réduire.
+    if (fw * 1.72 >= 800) {
+      fr.style.width = '172%'; fr.style.height = '172%'; fr.style.transform = 'scale(.581)';
+    } else {
+      var s = fw / LW; fr.style.width = LW + 'px'; fr.style.height = Math.ceil(fh / s) + 'px';
+      fr.style.transform = 'scale(' + s + ')';
+    }
+  }
   function tenter(){ var ok=nettoie(); watch(); fit(); return ok; }
   fit();
   fr.addEventListener('load',function(){ tenter(); hideLoad(); fit(); setTimeout(function(){fit();aligne();},120); });
@@ -200,11 +210,11 @@
   function showBulle(){ if(MEGA) return; var h=detailHTML(); if(!h){ hideBulle(); return; }
     bulle.innerHTML=h; bulle.classList.add('on'); bulle.setAttribute('aria-hidden','false'); }
   function hideBulle(){ bulle.classList.remove('on'); bulle.setAttribute('aria-hidden','true'); }
-  // Survol : signalé par le Hall ({sbx:'survol'}) ET en local (mouseenter).
-  document.documentElement.addEventListener('mouseenter',showBulle);
-  document.documentElement.addEventListener('mouseleave',hideBulle);
-  addEventListener('message',function(ev){ var d=ev.data; if(!d) return;
-    if(d.sbx==='survol'||d.sbx==='pause') showBulle(); else if(d.sbx==='quitte'||d.sbx==='reprend') hideBulle(); });
+  // Déclenchement sur l'EN-TÊTE seulement (le centre reste la vue normale du
+  // tirage, jamais recouverte). Survoler le haut de la carte → détail ; quitter
+  // l'en-tête → on referme.
+  var head=document.querySelector('.h');
+  if(head){ head.addEventListener('mouseenter',showBulle); head.addEventListener('mouseleave',hideBulle); }
 
   // Aide reverse-design (bibliothèque partagée). On NE touche PAS au contenu
   // embarqué (cross-doc) : on annote nos zones (en-tête, cadre, pied).
