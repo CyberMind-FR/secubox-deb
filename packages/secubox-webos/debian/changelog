@@ -1,3 +1,13 @@
+secubox-webos (1.0.261-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Tirage : la carte ne montre plus que le RÉSULTAT COMPACT (traits ·
+    pavage · trigrammes). Le « dessous » (image + interprétation + binôme/
+    opposé) est masqué dans la carte et remonté dans une BULLE AU SURVOL,
+    populée depuis l'iframe (même origine), seulement quand un tirage a été
+    fait. Survol détecté via {sbx:'survol'} (Hall) et en local.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 17:30:00 +0200
+
 secubox-webos (1.0.260-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Tirage (fix iPhone, suite) : les deux TRIGRAMMES (à droite du

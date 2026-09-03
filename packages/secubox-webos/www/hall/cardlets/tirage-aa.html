@@ -65,6 +65,21 @@
   .load{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:.8rem;
      background:var(--panel);z-index:2;transition:opacity .4s}
   .load.gone{opacity:0;pointer-events:none}
+  /* Bulle de DÉTAIL au survol : le « dessous » (image + interprétation + binôme/
+     opposé) remonté depuis l'iframe, sans surcharger la carte. */
+  .dbulle{position:absolute;left:8px;right:8px;bottom:44px;z-index:6;max-height:74%;overflow:auto;
+     scrollbar-width:thin;background:color-mix(in srgb,var(--panel) 92%,#000);
+     border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+     box-shadow:0 12px 34px rgba(0,0,0,.55);opacity:0;transform:translateY(8px);
+     transition:opacity .18s,transform .18s;pointer-events:none}
+  .dbulle.on{opacity:1;transform:none;pointer-events:auto}
+  .dbulle .db-img{color:var(--or);font-weight:700;font-size:.86rem;letter-spacing:.01em;margin-bottom:7px}
+  .dbulle .db-img .kw{font-family:ui-monospace,monospace;font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;
+     color:var(--dim);font-weight:400;margin-right:6px}
+  .dbulle .db-jg{color:var(--ink);font-size:.78rem;line-height:1.55}
+  .dbulle .db-xref{margin-top:9px;padding-top:7px;border-top:1px solid var(--line);
+     font-size:.66rem;color:var(--dim);display:flex;gap:10px;flex-wrap:wrap}
+  html.mega .dbulle{display:none}
 </style>
 </head>
 <body>
@@ -76,6 +91,7 @@
     <iframe id="fr" src="/aa/" title="Tirage Yi King — Anibal Amiot"
             referrerpolicy="no-referrer" loading="lazy"></iframe>
   </div>
+  <div class="dbulle" id="dbulle" aria-hidden="true"></div>
   <div class="pied">
     <button class="retirer" id="retirer" type="button">🎴 Retirer</button>
     <span class="hint">6 traits · un hexagramme</span>
@@ -112,6 +128,9 @@
     +"html,body{background:transparent!important;margin:0!important;overflow:hidden!important;height:auto!important}"
     +".wrap{display:block!important;max-width:none!important;margin:0!important;padding:6px 12px 10px!important}"
     +".detail-outer,#detail{margin:0!important}"
+    // Le DESSOUS (binôme/opposé, image, interprétation) sort de la carte : il est
+    // remonté dans une bulle au survol (populée depuis l'iframe, même origine).
+    +".xref-row,.keyword,.keyword-sub,.judgement{display:none!important}"
     // iPhone : les traits de l'hexagramme (.lines svg) sont en opacity:0 en
     // attente d'une révélation (scroll/IntersectionObserver) qui ne se déclenche
     // pas dans l'iframe mise à l'échelle + scroll verrouillé → on les force visibles.
@@ -157,6 +176,34 @@
     var b=fr.contentDocument.getElementById('drawBtn'); if(b){ b.click(); setTimeout(aligne,140); setTimeout(aligne,420); }
   }catch(e){} });
   addEventListener('resize',function(){ fit(); setTimeout(function(){fit();aligne();},60); });
+  // ── Bulle de DÉTAIL au survol : on remonte le « dessous » de l'iframe (image,
+  //    interprétation, binôme/opposé) — masqué dans la carte — sans la surcharger.
+  //    Même origine (relais /aa/) → on lit le vrai contenu du tirage.
+  var bulle=document.getElementById('dbulle');
+  function esc2(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+  function detailHTML(){ try{
+    var doc=fr.contentDocument; if(!doc) return '';
+    var d=doc.getElementById('detail'); if(!d) return '';
+    var kw=d.querySelector('.keyword'), kws=d.querySelector('.keyword-sub'), jg=d.querySelector('.judgement');
+    var jt=jg?jg.textContent.trim():''; var kt=kws?kws.textContent.trim():'';
+    if(!jt && !kt) return ''; // pas encore de tirage
+    var h='';
+    if(kt) h+='<div class="db-img">'+(kw?'<span class="kw">'+esc2(kw.textContent.trim())+'</span>':'')+esc2(kt)+'</div>';
+    if(jt) h+='<div class="db-jg">'+esc2(jt)+'</div>';
+    var xb=d.querySelectorAll('.xref-btn'); if(xb.length){ var p=[];
+      Array.prototype.forEach.call(xb,function(b){ p.push('<span>'+esc2(b.textContent.replace(/\s+/g,' ').trim())+'</span>'); });
+      if(p.length) h+='<div class="db-xref">'+p.join('')+'</div>'; }
+    return h;
+  }catch(e){ return ''; } }
+  function showBulle(){ if(MEGA) return; var h=detailHTML(); if(!h){ hideBulle(); return; }
+    bulle.innerHTML=h; bulle.classList.add('on'); bulle.setAttribute('aria-hidden','false'); }
+  function hideBulle(){ bulle.classList.remove('on'); bulle.setAttribute('aria-hidden','true'); }
+  // Survol : signalé par le Hall ({sbx:'survol'}) ET en local (mouseenter).
+  document.documentElement.addEventListener('mouseenter',showBulle);
+  document.documentElement.addEventListener('mouseleave',hideBulle);
+  addEventListener('message',function(ev){ var d=ev.data; if(!d) return;
+    if(d.sbx==='survol'||d.sbx==='pause') showBulle(); else if(d.sbx==='quitte'||d.sbx==='reprend') hideBulle(); });
+
   // Aide reverse-design (bibliothèque partagée). On NE touche PAS au contenu
   // embarqué (cross-doc) : on annote nos zones (en-tête, cadre, pied).
   window.SBXAide && SBXAide({ zones:function(){ return [
