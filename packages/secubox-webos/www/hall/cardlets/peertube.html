@@ -20,6 +20,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PeerTube — vue micro</title>
 <link rel="stylesheet" href="../spicy.css">
+<link rel="stylesheet" href="../slicebar.css">
+<script src="../slicebar.js"></script>
 <style>
   :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#c0392b; }
   @media (prefers-color-scheme: dark) {
@@ -85,27 +87,21 @@
   @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
   @media (prefers-reduced-motion: reduce){ .pouls{animation:none;opacity:.7} }
 
-  /* ── SLICER « expanded & spicy » : Récentes / Populaires / Catégories /
-     Playlists — barre à bullets doubles, fixée en bas, pilule active en
-     dégradé qui vit. Même langage que la radio. */
+  /* ── SLICER partagé (SBXSliceBar, #1352) ───────────────────────────────────
+     Récentes / Populaires / Catégories / Chaînes / Playlists via la
+     bibliothèque commune (/shared → ../slicebar). Ce conteneur la fixe en bas
+     et lui rend le filet dégradé + le fond ; --cyan/--line l'accrochent au
+     thème. Preview au survol DÉSACTIVÉE ici (elle relancerait un fetch et
+     couperait une lecture en cours) — override contextuel de la couche. */
   .mw { padding-bottom:34px; }
-  .pt-slbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
-              display:flex; align-items:center; gap:8px; padding:7px 12px;
-              font-size:.6rem; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+  .pt-slbox { position:fixed; left:0; right:0; bottom:0; z-index:20;
               background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--fond)),var(--fond));
               border-top:2px solid transparent;
               border-image:linear-gradient(90deg,var(--accent),#f0b429,#28d6ff) 1;
-              box-shadow:0 -8px 20px -14px rgba(0,0,0,.55); }
-  .pt-slbar .dots { display:flex; align-items:center; gap:5px; }
-  .pt-slbar .dots button { width:8px; height:8px; padding:0; border:0; border-radius:50%;
-              background:var(--border); cursor:pointer;
-              transition:width .22s ease, background .22s ease, box-shadow .22s ease; }
-  .pt-slbar .dots button.on { width:20px; border-radius:6px;
-              background:linear-gradient(90deg,var(--accent),#f0b429);
-              box-shadow:0 0 10px -1px var(--accent); }
-  .pt-slbar .dots.manuel button.on { background:linear-gradient(90deg,#28d6ff,var(--accent));
-              box-shadow:0 0 10px -1px #28d6ff; }
-  .pt-slbar .lab { margin-left:2px; font-weight:700; letter-spacing:.08em; color:var(--accent); }
+              box-shadow:0 -8px 20px -14px rgba(0,0,0,.55);
+              --cyan:var(--accent); --line:var(--border); }
+  .pt-slbox .sbx-bar { border-top:none; padding:7px 12px; }
+  .pt-slbox .sbx-dots button.on { box-shadow:0 0 10px -1px var(--accent); }
 
   /* ── Pop-in helper : survol d'une vignette → titre + chaîne + conseil. */
   .ptpop { position:fixed; z-index:40; max-width:230px; padding:8px 10px; border-radius:10px;
@@ -554,7 +550,11 @@
       if (!ids.length) { vids = []; el('une-t').textContent = 'Pas de catégorie'; return; }
       catIdx = ((catIdx % ids.length) + ids.length) % ids.length;
       var id = ids[catIdx], nom = cats[id];
-      if (slLab) slLab.textContent = '📂 ' + nom;
+      // Le genre courant s'affiche dans le libellé de la barre partagée (elle ne
+      // le réécrit qu'au prochain changement de slice, donc il tient le temps du
+      // parcours des catégories).
+      var _lab = (typeof ptbox !== 'undefined' && ptbox) ? ptbox.querySelector('.sbx-lab') : null;
+      if (_lab) _lab.textContent = '📂 ' + nom;
       fetch('/pt/api/v1/videos?count=24&categoryOneOf=' + encodeURIComponent(id) + '&sort=-publishedAt&nsfw=false',
         { headers: { 'Accept': 'application/json' } })
         .then(function (r) { return r.ok ? r.json() : null; })
@@ -599,34 +599,14 @@
       .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });
   }
 
-  // ── BARRE À BULLETS (slicer) ──────────────────────────────────────────────
-  // Click-only (pas d'auto-rotation entre vues : chaque vue refait un fetch —
-  // on ne martèle pas l'API). Le carrousel de vignettes, lui, tourne DANS la
-  // vue courante.
-  var slDots = null, slLab = null;
-  (function buildSlicer() {
-    var bar = document.createElement('div'); bar.className = 'pt-slbar';
-    slDots = document.createElement('div'); slDots.className = 'dots';
-    slLab = document.createElement('span'); slLab.className = 'lab';
-    VUES.forEach(function (v, k) {
-      var b = document.createElement('button'); b.type = 'button';
-      b.title = v.lab; b.setAttribute('aria-label', v.lab);
-      b.addEventListener('click', function () { changeVue(k); });
-      slDots.appendChild(b);
-    });
-    bar.appendChild(slDots); bar.appendChild(slLab);
-    (document.querySelector('.mw') || document.body).appendChild(bar);
-    poseSlice();
-  })();
-  function poseSlice() {
-    if (!slDots) return;
-    Array.prototype.forEach.call(slDots.children, function (d, k) { d.classList.toggle('on', k === vue); });
-    slLab.textContent = VUES[vue].lab;
-  }
-  function changeVue(k) {
-    if (k === vue && VUES[k].kind !== 'category') return;  // déjà là (sauf catégories : on avance)
-    if (VUES[k].kind === 'category') catIdx++;              // un genre différent à chaque entrée
-    vue = k; poseSlice();
+  // ── BARRE À BULLETS (slicer partagé SBXSliceBar, #1352) ────────────────────
+  // Click-only (autoMs:0 : pas d'auto-rotation entre vues — chaque vue refait un
+  // fetch, on ne martèle pas l'API). Le carrousel de vignettes tourne DANS la
+  // vue courante. La lib gère clic (fige) + persistance ; PREVIEW désactivée
+  // (elle relancerait un fetch et couperait une lecture en cours).
+  function appliqueVue(k) {
+    if (VUES[k] && VUES[k].kind === 'category') catIdx++;   // un genre différent à chaque entrée
+    vue = k;
     // Changer de vue arrête une lecture en cours et revient à la vitrine.
     if (joue) {
       joue = false; if (battement) { clearInterval(battement); battement = null; }
@@ -638,6 +618,15 @@
     }
     charge();
   }
+  if (window.SBXSliceBar) {
+    var ptbox = document.createElement('div'); ptbox.className = 'pt-slbox';
+    (document.querySelector('.mw') || document.body).appendChild(ptbox);
+    window.SBXSliceBar(ptbox, {
+      autoMs: 0, pauseOnHover: false, preview: false,
+      slices: VUES.map(function (v) { return { label: v.lab }; }),
+      onShow: function (k) { appliqueVue(k); }   // pilote la vue (charge inclus)
+    });
+  } else { charge(); }   // repli sans lib : charge la vue par défaut
 
   // ── POP-IN HELPER : survol d'une vignette → titre + chaîne + conseil. ───────
   (function () {
@@ -672,7 +661,8 @@
     });
   })();
 
-  charge();
+  // Le premier chargement est piloté par le slicer (onShow au démarrage, ou le
+  // repli charge() sans lib) — pas de charge() ici, sinon double fetch.
   setInterval(function () { if (!enPause && !joue && vids.length) { i++; montre(); } }, 7000);
   setInterval(function () { if (!joue) charge(); }, 600000);
 

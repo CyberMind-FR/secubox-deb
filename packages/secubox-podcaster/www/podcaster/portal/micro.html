@@ -19,6 +19,12 @@
 <title>Podcaster — vue micro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<!-- BARRE DE SLICES partagée (#1352). Le vhost podcaster.gk2 a pour racine ce
+     dossier `portal/` et ne sert PAS /shared/ (il n'est pas packagé) : on
+     VERSIONNE donc une copie de la lib ici, à côté du micro, référencée en
+     relatif. Copie identique à secubox-sbxui/www/slicebar.* (source de vérité).-->
+<link rel="stylesheet" href="slicebar.css">
+<script src="slicebar.js"></script>
 <style>
   /* PALETTE LOCALE. La feuille partagée /shared/hybrid-skin.css n'est PAS
      servie par ce vhost : nginx rendait index.html à sa place, le navigateur
@@ -140,6 +146,15 @@
   .sbxaide-pin { position:absolute; transform:translate(-50%,-50%); min-width:18px; height:18px; border-radius:10px; z-index:42;
     background:var(--cyan); color:#fff; font-weight:800; font-size:.66rem; display:grid; place-items:center; padding:0 5px;
     box-shadow:0 2px 6px rgba(0,0,0,.45); pointer-events:none; }
+  /* ── SLICER partagé (SBXSliceBar, #1352) ─────────────────────────────────
+     La carte podcaster est en AUTO-HAUTEUR : la barre est donc INLINE (pas
+     fixée), posée avant .bas pour que annonceHaut la compte. --cyan est déjà
+     l'accent podcaster ; --line rend un filet discret dans les deux thèmes. */
+  .pc-slbox { margin-top:.4rem; border-top:2px solid transparent;
+    border-image:linear-gradient(90deg,var(--cyan),#28d6ff,#f0b429) 1;
+    --line:rgba(128,132,148,.28); }
+  .pc-slbox .sbx-bar { border-top:none; padding:6px 0 0; }
+  .pc-slbox .sbx-dots button.on { box-shadow:0 0 10px -1px var(--cyan); }
 </style>
 
 <div class="mp">
@@ -198,7 +213,12 @@
   });
 
   const API = '/api/v1/podcaster';
-  let eps = [], idx = 0;
+  // eps = liste PARCOURUE (filtrée par le slicer) ; allEps = bibliothèque
+  // complète ; playEp = épisode réellement chargé dans <audio> (découplé du
+  // parcours, pour que la barre média du Hall dise ce qui JOUE, pas ce qu'on
+  // survole). filtre : null (Récents) · 'fav' · feed_id.
+  let allEps = [], feedsList = [], eps = [], idx = 0, playEp = null,
+      filtre = null, repris = false, slBar = null;
   const son = document.getElementById('son');
   const el = id => document.getElementById(id);
   const fmt = t => { t = Math.floor(t || 0); return Math.floor(t / 60) + ':' + ('0' + (t % 60)).slice(-2); };
@@ -220,19 +240,52 @@
       const r = await fetch(API + '/public/library', { headers: { 'Accept': 'application/json' } });
       if (!r.ok) throw 0;
       const d = await r.json();
-      eps = (d.episodes || []).slice(0, 40);
-    } catch (e) { eps = []; }
-    if (eps.length && reprendEtat()) return;
+      allEps = d.episodes || [];
+      feedsList = d.feeds || [];
+    } catch (e) { allEps = []; feedsList = []; }
+    batisSlicer();                 // une fois : Récents · Favoris · un flux par podcast
+    eps = episodesDe(filtre);
+    // Reprise de lecture : une seule fois (au premier chargement), sur la vue
+    // courante. Un rafraîchissement ne doit pas relancer le son au début.
+    if (eps.length && !repris) { repris = true; if (reprendEtat()) return; }
+    rendVue();
+  }
+
+  // ── SLICES (#1352) : plusieurs vues de la MÊME carte, filtrées côté client
+  // depuis la bibliothèque. Récents (tout) · Favoris (♥ locaux) · un flux par
+  // podcast. Le parcours change ; la LECTURE en cours continue (playEp).
+  function episodesDe(f) {
+    if (f === 'fav') { const s = favs(); return allEps.filter(e => s.includes(e.id)); }
+    if (f == null)   return allEps.slice(0, 40);
+    return allEps.filter(e => String(e.feed_id) === String(f)).slice(0, 40);
+  }
+  function rendVue() {
     if (!eps.length) {
-      el('titre').textContent = 'Bibliothèque vide';
-      el('src').textContent = 'aucun épisode';
-      el('det').hidden = true;
+      el('titre').textContent = (filtre === 'fav') ? 'Aucun favori'
+                              : (filtre != null)   ? 'Aucun épisode dans ce flux'
+                                                   : 'Bibliothèque vide';
+      el('src').textContent = ''; el('det').hidden = true;
       ['pp', 'prev', 'next'].forEach(i => el(i).disabled = true);
       el('suite').innerHTML = '<div class="tt">⏭ à suivre</div><span class="vide">—</span>';
       annonceHaut();
       return;
     }
-    montre();
+    ['pp', 'prev', 'next'].forEach(i => el(i).disabled = false);
+    montre();   // recale prev/next selon idx
+  }
+  function appliqueFiltre() { eps = episodesDe(filtre); idx = 0; rendVue(); }
+  function batisSlicer() {
+    if (slBar || !window.SBXSliceBar) return;
+    const defs = [{ label: '🆕 Récents', f: null }, { label: '⭐ Favoris', f: 'fav' }]
+      .concat((feedsList || []).slice(0, 6).map(fd => ({ label: '📻 ' + (fd.title || 'Flux'), f: fd.id })));
+    const box = document.createElement('div'); box.className = 'pc-slbox';
+    const mp = document.querySelector('.mp'), bas = document.querySelector('.bas');
+    if (mp && bas) mp.insertBefore(box, bas); else (mp || document.body).appendChild(box);
+    slBar = window.SBXSliceBar(box, {
+      autoMs: 0, pauseOnHover: false,   // preview au survol conservé (filtre client, pas de fetch)
+      slices: defs.map(s => ({ label: s.label })),
+      onShow: function (k) { filtre = defs[k] ? defs[k].f : null; appliqueFiltre(); }
+    });
   }
 
   function montre() {
@@ -309,7 +362,7 @@
 
   function joue(i) {
     if (i < 0 || i >= eps.length) return;
-    idx = i; montre();
+    idx = i; playEp = eps[idx]; montre();
     // UNE seule source à la fois : on remplace, on n'empile pas.
     son.src = API + '/media/' + eps[idx].id;
     son.play().catch(() => { el('pp').textContent = '▶'; });
@@ -329,7 +382,7 @@
   function sauveEtat() {
     try {
       localStorage.setItem('sbx.podcaster.etat', JSON.stringify({
-        ep: (eps[idx] || {}).id || '', t: Math.floor(son.currentTime || 0),
+        ep: (playEp || eps[idx] || {}).id || '', t: Math.floor(son.currentTime || 0),
         joue: !son.paused, quand: Date.now()
       }));
     } catch (e) {}
@@ -381,7 +434,7 @@
   // nous encadre, personne d'autre.
   function annonce(fin) {
     if (parent === window) return;   // hors cadre, personne n'écoute
-    const e = eps[idx] || {};
+    const e = playEp || eps[idx] || {};   // ce qui JOUE, pas ce qu'on parcourt
     try {
       parent.postMessage({
         sbx: 'media', id: 'podcaster',
@@ -444,7 +497,7 @@
   const ETAT = 'sbx.podcaster.etat';
   let dernierEnr = 0;
   function retiensEtat(){
-    const e = eps[idx]; if (!e) return;
+    const e = playEp || eps[idx]; if (!e) return;
     try{
       localStorage.setItem(ETAT, JSON.stringify({
         ep: e.id, t: Math.floor(son.currentTime || 0), joue: !son.paused
@@ -457,7 +510,7 @@
     if (!d || !d.ep) return false;
     const i = eps.findIndex(x => String(x.id) === String(d.ep));
     if (i < 0) return false;
-    idx = i; montre();
+    idx = i; playEp = eps[idx]; montre();
     son.src = API + '/media/' + eps[idx].id;
     // La position se pose une fois les métadonnées lues : plus tôt, elle est
     // ignorée en silence et l'épisode repart du début.

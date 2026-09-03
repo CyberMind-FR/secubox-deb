@@ -164,9 +164,10 @@
   // sinon iPhone franchit le point de rupture et les perd), puis on met à
   // l'échelle pour remplir exactement la carte.
   // La rangée résultat (lignes · pavage · trigrammes) fait ~480px de contenu :
-  // une largeur LOGIQUE de 680px garde les 3 colonnes tout en zoomant nettement
-  // plus qu'avant (scale = fw/680 ≈ 0,66 sur PC vs 0,58). Unifié PC + iPhone.
-  var LW=680;
+  // une largeur LOGIQUE de 620px garde les 3 colonnes (breakpoint sous ce seuil)
+  // tout en zoomant encore un peu plus (scale = fw/620 ≈ 0,72 sur PC). Unifié
+  // PC + iPhone. ~480px de contenu → ~140px de marge, on reste à 3 colonnes.
+  var LW=620;
   function fit(){ if(MEGA) return; var frame=document.querySelector('.frame'); if(!frame) return;
     var fw=frame.clientWidth, fh=frame.clientHeight; if(!fw||!fh) return;
     var s=fw/LW; fr.style.transformOrigin='0 0';

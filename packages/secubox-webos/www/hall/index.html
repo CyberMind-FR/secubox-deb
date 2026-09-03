@@ -111,6 +111,21 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   animation-fill-mode:both!important;
   animation-delay:calc(var(--i) * var(--dur) / var(--n))!important}
 .logo:hover .medaillon.anime .mface{animation-play-state:paused}
+/* ── #1360c · Signal de diffusion SUR LE LOGO ───────────────────────────────
+   Le badge du profil (coin haut-droit) passe inaperçu : le signal du parc se
+   pose là où l'œil arrive, sur le médaillon rotatif à gauche. Corail, il bat
+   et rayonne, et un clic ouvre la diffusion. C'est le point d'attention n°1. */
+.logo-wrap{position:relative;flex:none;display:flex;align-items:center}
+.logo-notif{position:absolute;top:-5px;left:33px;z-index:4;min-width:19px;height:19px;
+  padding:0 5px;border:2px solid var(--paper);border-radius:20px;background:var(--coral);
+  color:#fff;font-size:.66rem;font-weight:800;line-height:15px;text-align:center;cursor:pointer;
+  box-shadow:0 2px 9px rgba(230,90,74,.55);animation:notifbat 1.8s ease-in-out infinite}
+.logo-notif::after{content:"";position:absolute;inset:-3px;border-radius:20px;
+  border:2px solid var(--coral);opacity:.55;animation:logohalo 1.8s ease-out infinite;pointer-events:none}
+.logo-notif:hover{filter:brightness(1.08)}
+.logo-notif.hidden{display:none}
+@keyframes logohalo{0%{transform:scale(1);opacity:.55}100%{transform:scale(2);opacity:0}}
+@media(prefers-reduced-motion:reduce){.logo-notif,.logo-notif::after{animation:none}}
 @keyframes medcycle{0%{opacity:0} 2%{opacity:1} 16%{opacity:1} 20%{opacity:0} 100%{opacity:0}}
 .medaillon .mface:nth-of-type(2){--i:0}
 .medaillon .mface:nth-of-type(3){--i:1}
@@ -1013,18 +1028,23 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 .bienv-note{font-family:"JetBrains Mono";font-size:.64rem;color:var(--dim);margin-left:auto}
 .bienv-note b{color:var(--mint)}
 
-/* ── #1360 · NOTIFICATION broadcast — bulle en haut à droite ───────────────── */
-.notif-bulle{position:fixed;top:calc(var(--mast-h,56px) + 10px);right:16px;z-index:75;max-width:320px;
-  display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
-  border-left:3px solid var(--coral);border-radius:12px;box-shadow:var(--lift);padding:10px 12px;cursor:pointer;
-  transform:translateX(24px);opacity:0;transition:.28s;pointer-events:none}
-.notif-bulle.on{transform:none;opacity:1;pointer-events:auto}
-.notif-bulle .ic{font-size:1.1rem;flex:none}
-.notif-bulle b{font-size:.85rem;display:block;line-height:1.2}
+/* ── #1360 · NOTIFICATION broadcast — bulle SOUS LE LOGO (à gauche) ─────────
+   Elle surgit du même côté que le signal du logo, pour qu'ils se lisent d'un
+   seul regard. Accent corail marqué, halo, et une amorce animée qui la fait
+   remarquer sans crier. */
+.notif-bulle{position:fixed;top:calc(var(--mast-h,56px) + 10px);left:16px;z-index:75;max-width:340px;
+  display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--coral);
+  border-left:5px solid var(--coral);border-radius:12px;
+  box-shadow:0 10px 34px rgba(230,90,74,.28),var(--lift);padding:11px 13px;cursor:pointer;
+  transform:translateX(-24px);opacity:0;transition:.28s;pointer-events:none}
+.notif-bulle.on{transform:none;opacity:1;pointer-events:auto;animation:bcpop .5s ease-out}
+@keyframes bcpop{0%{box-shadow:0 0 0 0 rgba(230,90,74,.5),var(--lift)}70%{box-shadow:0 0 0 12px rgba(230,90,74,0),var(--lift)}100%{box-shadow:0 10px 34px rgba(230,90,74,.28),var(--lift)}}
+.notif-bulle .ic{font-size:1.2rem;flex:none}
+.notif-bulle b{font-size:.85rem;display:block;line-height:1.2;color:var(--coral)}
 .notif-bulle small{font-size:.72rem;color:var(--dim);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px}
 .notif-bulle .x{margin-left:auto;border:none;background:none;color:var(--dim);font-size:.9rem;cursor:pointer;flex:none}
 .notif-bulle .x:hover{color:var(--coral)}
-@media(prefers-reduced-motion:reduce){.notif-bulle{transition:opacity .15s}}
+@media(prefers-reduced-motion:reduce){.notif-bulle{transition:opacity .15s}.notif-bulle.on{animation:none}}
 
 /* ── #1352 · VISITE GUIDÉE — projecteur réutilisable ───────────────────────
    Un pas = un élément mis en lumière (trou dans un voile) + une bulle. Le même
@@ -1051,7 +1071,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 <body>
 <header class="mast">
   <div class="mast-main">
-    <a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a>
+    <div class="logo-wrap"><a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a><button type="button" class="logo-notif hidden" id="logo-notif" title="Diffusions du parc" aria-label="Nouvelles diffusions du parc"></button></div>
     <nav class="mnav" aria-label="Menus">
       <!-- Bouton « Accueil » retiré (#1266) : le logo mène déjà à l'accueil,
            c'était un doublon. -->
@@ -2066,7 +2086,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   .then(r=>r.ok?r.json():Promise.reject(r.status))
   .then(d=>{ const n=(d&&d.services||[]).length;
     if(!n){ render(MOCK,'Registre <b>activé mais vide</b> — aperçu maquette.'); return; }
-    render(d,'<b>hall.gk2.net</b> — mon bureau numérique souverain : mes services et mes données, hébergés chez moi sur ma SecuBox, sous mon contrôle. · Registre <b>réel</b> · '+n+' modules · santé socket-aware · principal = curation all.gk2.net, tout le parc sous Système.');
+    render(d,'<b>hall.gk2.net</b> — mon bureau numérique souverain : mes services et mes données, hébergés chez moi sur ma SecuBox, sous mon contrôle.');
   }).catch(()=>{});
 
 // RADIO (#1232) — rien à PILOTER depuis le Hall : le lecteur /micro porte ses
@@ -4324,10 +4344,15 @@ const CARDLET_ICONES = {
     function litVu(){ try{ return parseFloat(localStorage.getItem(CLEF_VU)||'0')||0; }catch(e){ return 0; } }
     function ecritVu(ts){ try{ localStorage.setItem(CLEF_VU, String(ts)); }catch(e){} }
     function majBadge(){
-      var b=document.getElementById('who-notif'); if(!b) return;
       var vu=litVu(), n=litDiff().filter(function(x){ return (x.ts||0) > vu + 0.5; }).length;
-      if(n>0){ b.textContent=(n>9?'9+':String(n)); b.classList.remove('hidden'); }
-      else b.classList.add('hidden');
+      var txt=(n>9?'9+':String(n));
+      // Le même compte alimente le badge discret du profil ET le signal
+      // proéminent du logo (#1360c) : deux vues d'une seule vérité.
+      ['who-notif','logo-notif'].forEach(function(id){
+        var b=document.getElementById(id); if(!b) return;
+        if(n>0){ b.textContent=txt; b.classList.remove('hidden'); }
+        else b.classList.add('hidden');
+      });
     }
     function marqueVu(){ var l=litDiff(); if(l.length) ecritVu(l[0].ts||(Date.now()/1000)); majBadge(); }
     majBadge();
@@ -4336,6 +4361,11 @@ const CARDLET_ICONES = {
     // on marque les diffusions comme vues — le badge s'éteint.
     var whoBloc=document.getElementById('who');
     if(whoBloc) whoBloc.addEventListener('click', function(){ setTimeout(function(){ rendDiff(); marqueVu(); }, 0); });
+    // Le signal du logo ouvre le menu profil (où les diffusions se déroulent) ;
+    // s'il y a un direct en cours, la pastille 📡 y attend d'être jouée.
+    var logoN=document.getElementById('logo-notif');
+    if(logoN) logoN.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation();
+      if(whoBloc){ try{ whoBloc.click(); }catch(_){} } });
 
     function verifie(){
       fetch('/api/v1/webos/public/broadcast',{headers:{'Accept':'application/json'}})

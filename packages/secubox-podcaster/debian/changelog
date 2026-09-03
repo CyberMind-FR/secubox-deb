@@ -1,3 +1,27 @@
+secubox-podcaster (1.0.33-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif du slicer (1.0.32) : le vhost podcaster.gk2 (racine = www/podcaster/
+    portal, NON packagé) ne sert pas /shared/. La lib SBXSliceBar est donc
+    VERSIONNÉE à côté du micro (portal/slicebar.{css,js}, copie identique à
+    secubox-sbxui) et référencée en relatif. Le bloc location /shared/ ajouté par
+    erreur au snippet routes.d (inclus dans le server hall → duplicate location)
+    est retiré. Plus de Depends secubox-sbxui (lib embarquée).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 23:58:00 +0200
+
+secubox-podcaster (1.0.32-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : SLICER partagé (SBXSliceBar) ajouté — 🆕 Récents · ⭐ Favoris ·
+    un 📻 flux par podcast (filtrage côté client depuis la bibliothèque). Clic
+    fige la vue, preview au survol, section persistée. Le PARCOURS est découplé
+    de la LECTURE (playEp) : changer de tranche ne coupe pas le son et la barre
+    média du Hall continue d'annoncer l'épisode qui joue. Barre INLINE (carte en
+    auto-hauteur), comptée par annonceHaut.
+  * nginx : le vhost sert /shared/ (bibliothèque secubox-sbxui) — il tombait
+    dans le SPA et renvoyait index.html en text/html. Depends: secubox-sbxui.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 23:45:00 +0200
+
 secubox-podcaster (1.0.31-1~bookworm1) bookworm; urgency=medium
 
   * Vue micro : habillage spicy (accent dégradé, halo, barre vive) + aide

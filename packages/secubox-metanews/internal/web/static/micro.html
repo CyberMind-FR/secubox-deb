@@ -16,6 +16,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MetaNews — vue micro</title>
+<!-- BARRE DE SLICES partagée (#1352) : bibliothèque commune servie en même
+     origine par le nginx metanews (location /shared/ → secubox-sbxui). Chargée
+     AVANT le script inline qui l'utilise. -->
+<link rel="stylesheet" href="/shared/sbxui/slicebar.css">
+<script src="/shared/sbxui/slicebar.js"></script>
 <style>
   :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#5b46b8; }
   @media (prefers-color-scheme: dark) {
@@ -98,26 +103,20 @@
     z-index:42; background:var(--accent); color:#fff; font-weight:800; font-size:.66rem; display:grid; place-items:center;
     padding:0 5px; box-shadow:0 2px 6px rgba(0,0,0,.45); pointer-events:none; }
 
-  /* ── SLICER « double bullet » : À la une + sections (catégories) ───────────
-     Barre à bullets fixée en bas, pilule active en dégradé qui vit. Même
-     langage que la radio / peertube. */
+  /* ── SLICER partagé (SBXSliceBar, #1352) ───────────────────────────────────
+     La barre est désormais la bibliothèque commune (/shared/sbxui) — même
+     comportement partout (clic fige, preview au survol, persistance). Ce
+     conteneur la fixe en bas et lui redonne le filet dégradé + le fond du
+     cardlet ; le mapping --cyan/--line accroche la puce active au thème. */
   .mw { padding-bottom:34px; }
-  .mn-slbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
-              display:flex; align-items:center; gap:8px; padding:7px 12px;
-              font-size:.6rem; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+  .mn-slbox { position:fixed; left:0; right:0; bottom:0; z-index:20;
               background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--fond)),var(--fond));
               border-top:2px solid transparent;
               border-image:linear-gradient(90deg,var(--accent),#28d6ff,#f0b429) 1;
-              box-shadow:0 -8px 20px -14px rgba(0,0,0,.55); }
-  .mn-slbar .dots { display:flex; align-items:center; gap:5px; flex-wrap:nowrap; }
-  .mn-slbar .dots button { width:8px; height:8px; padding:0; border:0; border-radius:50%;
-              background:var(--border); cursor:pointer;
-              transition:width .22s ease, background .22s ease, box-shadow .22s ease; }
-  .mn-slbar .dots button.on { width:20px; border-radius:6px;
-              background:linear-gradient(90deg,var(--accent),#28d6ff);
-              box-shadow:0 0 10px -1px var(--accent); }
-  .mn-slbar .lab { margin-left:2px; font-weight:700; letter-spacing:.08em; color:var(--accent);
-              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+              box-shadow:0 -8px 20px -14px rgba(0,0,0,.55);
+              --cyan:var(--accent); --line:var(--border); }
+  .mn-slbox .sbx-bar { border-top:none; padding:7px 12px; }
+  .mn-slbox .sbx-dots button.on { box-shadow:0 0 10px -1px var(--accent); }
 </style>
 
 <div class="mw">
@@ -300,43 +299,36 @@
       .catch(function () { el('une-t').textContent = 'MetaNews injoignable'; });
   }
 
-  // ── SLICER « double bullet » (#metanews-slices) ────────────────────────────
-  // À la une + les sections les mieux fournies (catégories de sources). Clic
-  // pour choisir ; la rotation des sujets continue DANS la section. Pas
-  // d'auto-rotation entre sections : chaque section refait un fetch.
-  var VUES = [{ k: '', lab: '🌍 Une' }], slDots = null, slLab = null, vue = 0;
-  function poseSlice() {
-    if (!slDots) return;
-    Array.prototype.forEach.call(slDots.children, function (d, k) { d.classList.toggle('on', k === vue); });
-    slLab.textContent = VUES[vue].lab;
-  }
-  function changeVue(k) {
-    if (k === vue) return;
-    vue = k; curCat = VUES[k].k; poseSlice();
-    i = 0; stopAp(); charge();
-  }
-  function buildSlicer(cats) {
-    var top = Object.keys(cats || {}).map(function (c) { return { c: c, n: cats[c] }; })
-      .sort(function (a, b) { return b.n - a.n; }).slice(0, 5);
-    top.forEach(function (x) { VUES.push({ k: x.c, lab: '🏷️ ' + x.c }); });
-    if (VUES.length < 2) return;   // pas de catégorie → pas de barre
-    var bar = document.createElement('div'); bar.className = 'mn-slbar';
-    slDots = document.createElement('div'); slDots.className = 'dots';
-    slLab = document.createElement('span'); slLab.className = 'lab';
-    VUES.forEach(function (v, k) {
-      var b = document.createElement('button'); b.type = 'button';
-      b.title = v.lab; b.setAttribute('aria-label', v.lab);
-      b.addEventListener('click', function () { changeVue(k); });
-      slDots.appendChild(b);
-    });
-    bar.appendChild(slDots); bar.appendChild(slLab);
-    (document.querySelector('.mw') || document.body).appendChild(bar);
-    poseSlice();
-  }
+  // ── SLICER partagé (SBXSliceBar, #1352) ────────────────────────────────────
+  // À la une + les sections les mieux fournies (catégories de sources). La lib
+  // commune gère le clic (fige la section), la PREVIEW au survol d'une puce et
+  // la PERSISTANCE de la section choisie. Pas d'auto-rotation ENTRE sections
+  // (autoMs:0) ; chaque section refait un fetch via onShow. La rotation des
+  // SUJETS (tourne, 12 s) reste indépendante, dans la section courante.
+  var VUES = [{ k: '', lab: '🌍 Une' }];
   function initSlicer() {
     fetch('/api/v1/metanews/categories', { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { buildSlicer((d && d.categories) || {}); })
+      .then(function (d) {
+        var cats = (d && d.categories) || {};
+        Object.keys(cats).map(function (c) { return { c: c, n: cats[c] }; })
+          .sort(function (a, b) { return b.n - a.n; }).slice(0, 5)
+          .forEach(function (x) { VUES.push({ k: x.c, lab: '🏷️ ' + x.c }); });
+        if (VUES.length < 2 || !window.SBXSliceBar) return;   // pas de catégorie → pas de barre
+        var box = document.createElement('div'); box.className = 'mn-slbox';
+        (document.querySelector('.mw') || document.body).appendChild(box);
+        window.SBXSliceBar(box, {
+          autoMs: 0, pauseOnHover: false,
+          slices: VUES.map(function (v) { return { label: v.lab }; }),
+          // Une seule vérité : la section = VUES[k].k. Le garde évite le fetch
+          // redondant quand la section ne change pas (init, re-clic, revert).
+          onShow: function (k) {
+            var nc = VUES[k] ? VUES[k].k : '';
+            if (nc === curCat) return;
+            curCat = nc; i = 0; stopAp(); charge();
+          }
+        });
+      })
       .catch(function () {});
   }
 

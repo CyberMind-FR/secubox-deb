@@ -1,3 +1,39 @@
+secubox-webos (1.0.267-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet PeerTube : slicer bespoke (pt-slbar : « bullets sans effet ») MIGRÉ
+    sur SBXSliceBar (../slicebar). Clic fige la vue + persistance ; preview au
+    survol DÉSACTIVÉE (override contextuel : elle relancerait un fetch et
+    couperait une lecture en cours). Conteneur .pt-slbox garde le look (filet
+    dégradé, fond), le genre courant s'écrit dans le libellé de la barre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 23:10:00 +0200
+
+secubox-webos (1.0.266-1~bookworm1) bookworm; urgency=medium
+
+  * Surf & Viewer : les favoris/historique retrouvent leur VRAI titre — pour
+    PeerTube, demande à l'API de même origine (/pt/, sans effet de bord), mise
+    en cache locale (sbx.titres) ; la puce n'affiche plus l'UUID mais le nom de
+    la vidéo. YouTube & co gardent le libellé composé (pas de résolveur sans
+    effet de bord).
+  * Cardlet Tirage : zoom encore augmenté — largeur logique 620px (au lieu de
+    680), on reste à 3 colonnes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 22:15:00 +0200
+
+secubox-webos (1.0.265-1~bookworm1) bookworm; urgency=medium
+
+  * Diffusions du parc VISIBLES (#1360c) : le signal se pose désormais SUR le
+    logo rotatif SbX (à gauche, là où l'œil arrive), corail, pulsant + halo,
+    cliquable → ouvre le menu profil et ses diffusions. Le badge du profil est
+    conservé, alimenté par la même vérité.
+  * Bulle de notification broadcast déplacée en haut à GAUCHE, sous le logo :
+    accent corail renforcé, amorce animée, pour se lire d'un seul regard avec
+    le signal du logo.
+  * Description du nœud : réduite à la seule phrase souveraine hall.gk2.net
+    (suffixe registre/modules/curation retiré).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 21:30:00 +0200
+
 secubox-webos (1.0.264-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Tirage : zoom augmenté — largeur logique 680px (au lieu de 774)

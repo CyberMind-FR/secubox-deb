@@ -132,10 +132,43 @@
       return seg.slice(0,22);
     }catch(e){ return ''; }
   }
+  // ── RETROUVER LES VRAIS TITRES ────────────────────────────────────────────
+  // Les favoris et l'historique ne gardent que l'URL : la puce n'a alors qu'un
+  // libellé composé (émoji + service + id vidéo). On demande le vrai titre à
+  // l'API PeerTube de MÊME origine (/pt/, connect-src 'self' l'autorise), SANS
+  // effet de bord, et on le met en cache local. joli() le lit dès qu'il existe,
+  // et resoudreTitre() le remplit en tâche de fond puis re-rend.
+  var TCACHE='sbx.titres', enCours={};
+  function litTitres(){ try{ return JSON.parse(localStorage.getItem(TCACHE)||'{}')||{}; }catch(e){ return {}; } }
+  function ecritTitre(u,t){ try{ var m=litTitres(); m[u]=t; localStorage.setItem(TCACHE, JSON.stringify(m)); }catch(e){} }
+  function estPeertube(u){ return /peertube|\.tube(\/|$)/.test(hote(u)); }
+  function idPeertube(u){
+    try{ var p=new URL(/^https?:\/\//i.test(u)?u:'https://'+u).pathname;
+      var m=p.match(/\/(?:w|videos\/(?:watch|embed))\/([^/?#]+)/); return m?m[1]:'';
+    }catch(e){ return ''; }
+  }
+  function resoudreTitre(u){
+    var m=litTitres(); if(m[u]) return;                 // déjà retrouvé
+    if(enCours[u] || !estPeertube(u)) return;           // YouTube & co : libellé composé
+    var id=idPeertube(u); if(!id) return;
+    enCours[u]=1;
+    fetch('/pt/api/v1/videos/'+encodeURIComponent(id),{headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(v){ if(v && v.name){ ecritTitre(u, v.name); rend(); } })
+      .catch(function(){});
+  }
+  function majTitres(){
+    var urls=[].concat(lire('sbx_favoris'),
+      lire('sbx.broadcast.hist').map(function(x){ return x&&x.u; }),
+      lire('sbx.viewer.hist').map(function(x){ return x&&x.u; }));
+    urls.forEach(function(u){ if(u) resoudreTitre(u); });
+  }
+
   // Libellé riche (émoji + nom), échappé — à insérer en innerHTML.
   function joli(u, titre){
     if(titre && titre.trim() && !/^https?:\/\//i.test(titre.trim()))
       return esc(titre.trim().slice(0,42));
+    var m=litTitres(); if(m[u]) return esc(String(m[u]).slice(0,42));   // titre retrouvé
     var s=source(u), id=ident(u);
     return '<span class="src">'+s.e+'</span>'+esc(s.s)+(id?' <span class="det">'+esc(id)+'</span>':'');
   }
@@ -173,6 +206,7 @@
     var total=fav.length+diff.length+hist.length;
     el('tot').textContent = total? (total+' items') : '';
     el('vide').hidden = total>0;
+    majTitres();   // retrouve les titres manquants (PeerTube) en tâche de fond
   }
 
   function flash(b, txt){
