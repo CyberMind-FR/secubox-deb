@@ -213,6 +213,7 @@
   // ne recopie pas un lecteur — celui de PeerTube sait deja lire ses formats,
   // ses sous-titres et son P2P.
   var depart = 0;   // position à laquelle la prochaine lecture doit reprendre
+  var reprendFait = false;   // la reprise au refresh ne se tente qu'une fois
 
   function lance(n) {
     var v = vids[n % vids.length];
@@ -511,13 +512,21 @@
     // un film qui redémarre tout seul.
     if (!e || !e.uuid || !e.pos) return false;
     if ((Date.now() - (e.quand || 0)) > 3e5) { oublie(); return false; }
-    var n = -1, k;
-    for (k = 0; k < vids.length; k++) if (vids[k].uuid === e.uuid) { n = k; break; }
-    if (n < 0) return false;
     depart = Number(e.pos) || 0;
     position = depart;
-    lance(n);
-    return true;
+    // Déjà dans la vue courante : on lance directement.
+    for (var k = 0; k < vids.length; k++) if (vids[k].uuid === e.uuid) { lance(k); return true; }
+    // Sinon (tranche restaurée différente, ou vue pas encore chargée) : on va
+    // chercher la vidéo par son uuid (API PeerTube même origine) — la reprise
+    // ne dépend plus de la tranche affichée.
+    fetch('/pt/api/v1/videos/' + encodeURIComponent(e.uuid), { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v || !v.uuid) { depart = 0; return; }
+        vids = [v]; i = 0; lance(0);
+      })
+      .catch(function () { depart = 0; });
+    return true;   // reprise lancée (asynchrone)
   }
 
   // Playlists & chaînes prennent la forme d'un item pour réutiliser montre()/le
@@ -575,6 +584,11 @@
   }
 
   function charge() {
+    // REPRISE AU REFRESH, UNE SEULE FOIS, AVANT TOUT : si une vidéo était en
+    // cours (état récent + position), on la relance à sa position — quelle que
+    // soit la tranche restaurée par le slicer (reprend() va chercher la vidéo
+    // par son uuid au besoin).
+    if (!reprendFait) { reprendFait = true; if (reprend()) return; }
     var V = VUES[vue];
     if (V.kind === 'category') { chargeCategorie(); return; }
     fetch(V.url, { headers: { 'Accept': 'application/json' } })
@@ -592,8 +606,6 @@
           return;
         }
         el('pouls').style.animation = '';
-        // La reprise (position gardée) ne vaut que pour le flux vidéo « récentes ».
-        if (V.kind === 'video' && vue === 0 && reprend()) return;
         i = 0; montre();
       })
       .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });

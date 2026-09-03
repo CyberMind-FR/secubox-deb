@@ -1,3 +1,15 @@
+secubox-webos (1.0.271-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet PeerTube : la reprise au refresh d'une vidéo EN COURS marche de
+    nouveau et depuis N'IMPORTE QUELLE tranche. reprend() ne dépend plus de la
+    tranche « Récentes » ni de la présence de la vidéo dans la vue courante :
+    elle est tentée UNE fois au chargement et va chercher la vidéo par son uuid
+    (API même origine) si besoin, puis la relance à sa position (&start=Ns).
+    Réparait la régression introduite par le passage au slicer partagé (la
+    tranche restaurée n'était plus forcément « Récentes »).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 02:15:00 +0200
+
 secubox-webos (1.0.270-1~bookworm1) bookworm; urgency=medium
 
   * Popup diffusions du logo : RESTE ouvert ~0,9 s après qu'on a quitté le logo
