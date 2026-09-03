@@ -1,3 +1,14 @@
+secubox-webos (1.0.264-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Tirage : zoom augmenté — largeur logique 680px (au lieu de 774)
+    → rendu plus grand tout en gardant les 3 colonnes. Bandeau de partage
+    (.share-row) masqué dans la carte.
+  * Cardlet PeerTube : 8 mini-vignettes (2×4) au lieu de 4.
+  * Hall : la description du nœud intègre la phrase souveraine hall.gk2.net
+    (« mon bureau numérique souverain : mes services et mes données… »).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 20:00:00 +0200
+
 secubox-webos (1.0.263-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Tirage : correctif — le fit() forçant la largeur desktop (fix

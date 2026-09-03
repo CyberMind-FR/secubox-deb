@@ -132,7 +132,7 @@
     +".detail-outer,#detail{margin:0!important}"
     // Le DESSOUS (binôme/opposé, image, interprétation) sort de la carte : il est
     // remonté dans une bulle au survol (populée depuis l'iframe, même origine).
-    +".xref-row,.keyword,.keyword-sub,.judgement{display:none!important}"
+    +".xref-row,.keyword,.keyword-sub,.judgement,.share-row{display:none!important}"
     // iPhone : les traits de l'hexagramme (.lines svg) sont en opacity:0 en
     // attente d'une révélation (scroll/IntersectionObserver) qui ne se déclenche
     // pas dans l'iframe mise à l'échelle + scroll verrouillé → on les force visibles.
@@ -163,20 +163,14 @@
   // la mise en page 3 colonnes du résultat (dont les trigrammes à droite —
   // sinon iPhone franchit le point de rupture et les perd), puis on met à
   // l'échelle pour remplir exactement la carte.
-  var LW=800;
+  // La rangée résultat (lignes · pavage · trigrammes) fait ~480px de contenu :
+  // une largeur LOGIQUE de 680px garde les 3 colonnes tout en zoomant nettement
+  // plus qu'avant (scale = fw/680 ≈ 0,66 sur PC vs 0,58). Unifié PC + iPhone.
+  var LW=680;
   function fit(){ if(MEGA) return; var frame=document.querySelector('.frame'); if(!frame) return;
     var fw=frame.clientWidth, fh=frame.clientHeight; if(!fw||!fh) return;
-    fr.style.transformOrigin='0 0';
-    // ÉCRAN LARGE (PC) : l'ancien rendu (172% / .581) était meilleur et donnait
-    // déjà les 3 colonnes (largeur logique ~1.72×fw > 768). On le garde. ÉCRAN
-    // ÉTROIT (iPhone) SEULEMENT : on force une largeur logique desktop (800px)
-    // pour ne pas perdre la 3ᵉ colonne, quitte à réduire.
-    if (fw * 1.72 >= 800) {
-      fr.style.width = '172%'; fr.style.height = '172%'; fr.style.transform = 'scale(.581)';
-    } else {
-      var s = fw / LW; fr.style.width = LW + 'px'; fr.style.height = Math.ceil(fh / s) + 'px';
-      fr.style.transform = 'scale(' + s + ')';
-    }
+    var s=fw/LW; fr.style.transformOrigin='0 0';
+    fr.style.width=LW+'px'; fr.style.height=Math.ceil(fh/s)+'px'; fr.style.transform='scale('+s+')';
   }
   function tenter(){ var ok=nettoie(); watch(); fit(); return ok; }
   fit();

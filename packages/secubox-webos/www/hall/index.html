@@ -2066,7 +2066,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   .then(r=>r.ok?r.json():Promise.reject(r.status))
   .then(d=>{ const n=(d&&d.services||[]).length;
     if(!n){ render(MOCK,'Registre <b>activé mais vide</b> — aperçu maquette.'); return; }
-    render(d,'Registre <b>réel</b> · '+n+' modules · santé socket-aware. Principal = curation all.gk2.net ; tout le parc sous Système.');
+    render(d,'<b>hall.gk2.net</b> — mon bureau numérique souverain : mes services et mes données, hébergés chez moi sur ma SecuBox, sous mon contrôle. · Registre <b>réel</b> · '+n+' modules · santé socket-aware · principal = curation all.gk2.net, tout le parc sous Système.');
   }).catch(()=>{});
 
 // RADIO (#1232) — rien à PILOTER depuis le Hall : le lecteur /micro porte ses
