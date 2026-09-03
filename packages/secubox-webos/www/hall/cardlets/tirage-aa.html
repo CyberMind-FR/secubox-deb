@@ -83,7 +83,8 @@
 (function(){
   "use strict";
   var qs=new URLSearchParams(location.search);
-  if(qs.get('mega')==='1') document.documentElement.classList.add('mega');
+  var MEGA=qs.get('mega')==='1';
+  if(MEGA) document.documentElement.classList.add('mega');
   var t=qs.get('theme'); if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t);
   addEventListener('message',function(ev){var d=ev.data;if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light'))
     document.documentElement.setAttribute('data-theme',d.theme);});
@@ -94,13 +95,21 @@
   // du site : on adapte notre affichage. Sélecteurs du site — si le site change,
   // on ajuste ces sélecteurs (l'embed, lui, reste évolutif).
   var fr=document.getElementById('fr');
+  // On ne garde QUE le résultat (#detail : N° + hexagramme + pavage). Tout le
+  // reste (chrome + échiquier + pied) est masqué. `.grid-panel` (qui contient le
+  // vrai bouton « Tirer aux pièces ») est sorti du flux HORS-ÉCRAN plutôt que
+  // display:none, pour rester CLIQUABLE par notre « Retirer ». Overflow coupé →
+  // aucun scroll, ni au-dessus ni en-dessous.
   var CLEAN="header,.book-bar,.site-nav-row,.footer-caduceus,.footer-title-logo,footer,"
     +".palette-picker,#palettePicker,#btnResetPalette,.detail-below,#detailBelow,"
-    +"#txt-tirageGuide,.tirage-guide,.positions-guide-panel"
+    +"#txt-tirageGuide,.tirage-guide,.positions-guide-panel,.legend"
     +"{display:none!important}"
-    +"html,body{background:transparent!important;margin:0!important}"
-    +".wrap{max-width:none!important;margin:0!important;padding:8px 12px 14px!important}";
+    +".grid-panel{position:absolute!important;left:-99999px!important;top:0!important;width:640px!important;height:auto!important;overflow:hidden!important}"
+    +"html,body{background:transparent!important;margin:0!important;overflow:hidden!important;height:auto!important}"
+    +".wrap{display:block!important;max-width:none!important;margin:0!important;padding:6px 12px 10px!important}"
+    +".detail-outer,#detail{margin:0!important}";
   function nettoie(){
+    if(MEGA) return true; // en /mega : outil complet, on n'injecte pas
     try{ var doc=fr.contentDocument; if(!doc||!doc.head) return false;
       var s=doc.getElementById('sbx-embed-clean');
       if(!s){ s=doc.createElement('style'); s.id='sbx-embed-clean'; doc.head.appendChild(s); }
@@ -111,7 +120,7 @@
   // AUTO-ALIGNEMENT : on cale la vue sur le RÉSULTAT (#detail — le N° tiré,
   // l'hexagramme, le pavage) pour qu'il soit cadré en haut, entier.
   function resultEl(){ try{ var d=fr.contentDocument; return d&&(d.getElementById('detail')||d.querySelector('.detail-outer')); }catch(e){ return null; } }
-  function aligne(){ try{ var win=fr.contentWindow, el=resultEl(); if(!win||!el) return;
+  function aligne(){ if(MEGA) return; try{ var win=fr.contentWindow, el=resultEl(); if(!win||!el) return;
     var r=el.getBoundingClientRect();
     win.scrollTo(Math.max(0,r.left+(win.scrollX||0)-6), Math.max(0,r.top+(win.scrollY||0)-6));
   }catch(e){} }

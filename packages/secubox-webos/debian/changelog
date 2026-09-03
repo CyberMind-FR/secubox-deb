@@ -1,3 +1,13 @@
+secubox-webos (1.0.258-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Tirage /micro : vue verrouillée sur le SEUL résultat (N° +
+    hexagramme + pavage). L'échiquier/bouton du site est sorti du flux
+    hors-écran (mais reste cliquable par « Retirer »), le reste masqué, et
+    l'overflow coupé → plus aucun scroll (ni au-dessus ni en-dessous). En
+    /mega, l'outil complet reste affiché (pas d'injection).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 16:10:00 +0200
+
 secubox-webos (1.0.257-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Tirage : zoom affiné (le résultat entier tient dans la carte, plus
