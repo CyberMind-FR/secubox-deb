@@ -1,3 +1,13 @@
+secubox-webos (1.0.256-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Tirage : nettoyage de la VUE embarquée — une feuille injectée
+    (relais same-origine /aa/, aucun fichier du site touché) masque le chrome
+    du site (en-tête, menu bas, pied, palette, guide) pour ne garder que la
+    zone TIRAGE (échiquier + « Tirer aux pièces » + résultat), cadrée et mise
+    à l’échelle en /micro ; pleine page en /mega.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 15:10:00 +0200
+
 secubox-webos (1.0.255-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet « 🎴 Tirage — Anibal Amiot » (site partenaire, Yi King). On EMBARQUE
