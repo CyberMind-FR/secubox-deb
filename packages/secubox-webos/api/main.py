@@ -635,16 +635,13 @@ async def nc_supprimer(corps: dict, user=Depends(require_jwt)):
     return await nc_super.supprimer(_qui(user), str(corps.get("chemin") or ""))
 
 
-# Borne de téléversement : au-delà, on refuse tôt (mémoire du service partagé).
-_MAX_TELEVERSE = 64 * 1024 * 1024      # 64 Mo
-
 @router.post("/acces/nextcloud/televerser")
 async def nc_televerser(chemin: str = Form("/"), fichier: UploadFile = File(...),
                         user=Depends(require_jwt)):
-    data = await fichier.read(_MAX_TELEVERSE + 1)
-    if len(data) > _MAX_TELEVERSE:
-        return {"ok": False, "detail": "fichier trop volumineux (> 64 Mo)"}
-    return await nc_super.televerser(_qui(user), chemin, fichier.filename or "sans-nom", data)
+    # Plus de borne de taille : on ne charge PAS le fichier en mémoire, on le
+    # STREAME vers Nextcloud (WebDAV PUT chunké). Le service partagé ne garde
+    # ainsi qu'un tampon d'1 Mo à la fois — un envoi de plusieurs Go passe.
+    return await nc_super.televerser(_qui(user), chemin, fichier.filename or "sans-nom", fichier)
 
 
 app.include_router(public_router)

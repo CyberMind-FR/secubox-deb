@@ -399,8 +399,12 @@ async def supprimer(qui: str, chemin: str) -> dict:
     return _vide("suppression refusee (%d)" % r.status_code)
 
 
-async def televerser(qui: str, chemin: str, nom: str, data: bytes) -> dict:
-    """Téléverse un fichier dans un dossier (WebDAV PUT). `chemin` = dossier."""
+async def televerser(qui: str, chemin: str, nom: str, fichier) -> dict:
+    """Téléverse un fichier dans un dossier (WebDAV PUT). `chemin` = dossier.
+
+    `fichier` est un UploadFile : on le STREAME vers Nextcloud sans le charger en
+    mémoire — aucune borne de taille, un tampon d'1 Mo à la fois. `fichier` tolère
+    aussi des `bytes` bruts (compat) pour les rares appels qui en fournissent."""
     c = _ctx(qui)
     if not c:
         return _vide("aucun acces")
@@ -410,9 +414,23 @@ async def televerser(qui: str, chemin: str, nom: str, data: bytes) -> dict:
     if segs is None or nseg is None or len(nseg) != 1:
         return _vide("chemin ou nom refuse")
     url = _url_dav(hote, compte, segs + nseg)
+
+    if isinstance(fichier, (bytes, bytearray)):
+        contenu = bytes(fichier)
+    else:
+        async def contenu():                       # flux chunké depuis l'UploadFile
+            while True:
+                bloc = await fichier.read(1024 * 1024)
+                if not bloc:
+                    break
+                yield bloc
+        contenu = contenu()
     try:
-        async with httpx.AsyncClient(verify=False, timeout=60, auth=auth) as cli:
-            r = await cli.put(url, content=data)
+        # Timeout d'ÉCRITURE illimité : un gros fichier peut mettre longtemps à
+        # monter ; connexion/lecture restent bornées pour ne pas rester pendu.
+        to = httpx.Timeout(connect=15.0, read=300.0, write=None, pool=15.0)
+        async with httpx.AsyncClient(verify=False, timeout=to, auth=auth) as cli:
+            r = await cli.put(url, content=contenu)
     except Exception as e:
         return _vide("envoi impossible : %s" % type(e).__name__)
     if r.status_code in (200, 201, 204):

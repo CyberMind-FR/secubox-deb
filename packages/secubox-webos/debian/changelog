@@ -1,3 +1,15 @@
+secubox-webos (1.0.274-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Cloud+ (Nextcloud) : SUPPRESSION de la limite d'envoi de 64 Mo. Le
+    téléversement n'est plus chargé en mémoire — il est STREAMÉ vers Nextcloud
+    (WebDAV PUT chunké, tampon d'1 Mo), donc un fichier de plusieurs Go passe
+    sans risque pour le service partagé. Timeout d'écriture illimité.
+  * hall.vhost.conf : la route /api/v1/webos/ passe les gros corps sans plafond
+    (client_max_body_size 0) et en streaming (proxy_request_buffering off,
+    proxy_read_timeout 3600s).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 05:00:00 +0200
+
 secubox-webos (1.0.273-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet cumul (Sécurité / Contenu / Cloud / Social / Forums) : le slicer
