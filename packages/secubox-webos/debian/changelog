@@ -1,3 +1,12 @@
+secubox-webos (1.0.257-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Tirage : zoom affiné (le résultat entier tient dans la carte, plus
+    de rognage bas) ; AUTO-ALIGNEMENT sur le N° tiré — on observe #detail et on
+    recadre la vue sur le résultat à chaque tirage. Bouton « Retirer » dans le
+    pied qui déclenche le vrai bouton « Tirer aux pièces » du site (même origine).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 15:40:00 +0200
+
 secubox-webos (1.0.256-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Tirage : nettoyage de la VUE embarquée — une feuille injectée

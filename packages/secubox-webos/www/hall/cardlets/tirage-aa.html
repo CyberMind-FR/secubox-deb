@@ -47,12 +47,16 @@
      puis on met à l'échelle pour focaliser. En /mega, taille pleine + scroll. */
   .frame{flex:1;position:relative;overflow:hidden;background:var(--panel)}
   iframe{position:absolute;top:0;left:0;border:0;display:block;background:transparent;
-         width:143%;height:143%;transform:scale(.699);transform-origin:0 0}
+         width:172%;height:172%;transform:scale(.581);transform-origin:0 0}
   html.mega .frame{overflow:auto;-webkit-overflow-scrolling:touch}
   html.mega iframe{position:static;width:100%;height:100%;transform:none}
-  .pied{display:flex;align-items:center;gap:8px;padding:7px 11px;border-top:1px solid var(--line);
+  .pied{display:flex;align-items:center;gap:9px;padding:7px 11px;border-top:1px solid var(--line);
      background:var(--panel);font-size:.7rem;color:var(--dim)}
-  .pied a{color:var(--or);text-decoration:none;margin-left:auto}
+  .pied .retirer{font:inherit;font-size:.76rem;font-weight:600;cursor:pointer;border:0;border-radius:8px;
+     padding:6px 12px;background:var(--carmine);color:#f7efe0;display:inline-flex;align-items:center;gap:6px;transition:filter .15s,transform .1s}
+  .pied .retirer:hover{filter:brightness(1.08)} .pied .retirer:active{transform:translateY(1px)}
+  .pied .hint{color:var(--dim)}
+  .pied a{color:var(--or);text-decoration:none;margin-left:auto;white-space:nowrap}
   .pied a:hover{text-decoration:underline}
   .load{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:.8rem;
      background:var(--panel);z-index:2;transition:opacity .4s}
@@ -68,7 +72,9 @@
     <iframe id="fr" src="/aa/" title="Tirage Yi King — Anibal Amiot"
             referrerpolicy="no-referrer" loading="lazy"></iframe>
   </div>
-  <div class="pied">Tirez aux pièces dans le cadre — 6 traits, un hexagramme.
+  <div class="pied">
+    <button class="retirer" id="retirer" type="button">🎴 Retirer</button>
+    <span class="hint">6 traits · un hexagramme</span>
     <a id="grand" href="/aa/" target="_blank" rel="noopener">Ouvrir en grand ↗</a></div>
 </div>
 
@@ -102,10 +108,28 @@
     }catch(e){ return false; } // cross-origin (relais indisponible) → page brute
   }
   function hideLoad(){ var l=document.getElementById('load'); if(l) l.classList.add('gone'); }
-  fr.addEventListener('load',function(){ nettoie(); hideLoad(); });
-  // Le tirage réécrit l'URL (?tire=) sans recharger → le nettoyage tient. On
-  // (ré)applique tôt tant que le DOM se construit, puis on s'arrête.
-  var tries=0, iv=setInterval(function(){ if(nettoie()||++tries>20){ clearInterval(iv); hideLoad(); } },350);
+  // AUTO-ALIGNEMENT : on cale la vue sur le RÉSULTAT (#detail — le N° tiré,
+  // l'hexagramme, le pavage) pour qu'il soit cadré en haut, entier.
+  function resultEl(){ try{ var d=fr.contentDocument; return d&&(d.getElementById('detail')||d.querySelector('.detail-outer')); }catch(e){ return null; } }
+  function aligne(){ try{ var win=fr.contentWindow, el=resultEl(); if(!win||!el) return;
+    var r=el.getBoundingClientRect();
+    win.scrollTo(Math.max(0,r.left+(win.scrollX||0)-6), Math.max(0,r.top+(win.scrollY||0)-6));
+  }catch(e){} }
+  // On observe le résultat : à chaque tirage, il change → on re-cale.
+  function watch(){ try{ var el=resultEl(); if(!el||el._sbxObs) return !!el;
+    var obs=new MutationObserver(function(){ setTimeout(aligne,60); });
+    obs.observe(el,{childList:true,subtree:true,characterData:true}); el._sbxObs=obs;
+    setTimeout(aligne,60); return true;
+  }catch(e){ return false; } }
+  function tenter(){ var ok=nettoie(); watch(); return ok; }
+  fr.addEventListener('load',function(){ tenter(); hideLoad(); setTimeout(aligne,120); });
+  var tries=0, iv=setInterval(function(){ if(tenter()||++tries>24){ clearInterval(iv); hideLoad(); aligne(); } },300);
+  // « Retirer » : on déclenche le VRAI bouton du site (« Tirer aux pièces »).
+  var rb=document.getElementById('retirer');
+  if(rb) rb.addEventListener('click',function(){ try{
+    var b=fr.contentDocument.getElementById('drawBtn'); if(b){ b.click(); setTimeout(aligne,140); setTimeout(aligne,420); }
+  }catch(e){} });
+  addEventListener('resize',function(){ setTimeout(aligne,60); });
   // Aide reverse-design (bibliothèque partagée). On NE touche PAS au contenu
   // embarqué (cross-doc) : on annote nos zones (en-tête, cadre, pied).
   window.SBXAide && SBXAide({ zones:function(){ return [
