@@ -1,3 +1,12 @@
+secubox-webos (1.0.270-1~bookworm1) bookworm; urgency=medium
+
+  * Popup diffusions du logo : RESTE ouvert ~0,9 s après qu'on a quitté le logo
+    (délai de grâce en JS + pont invisible sur l'espace logo↔popup) — le temps
+    de descendre dans le menu et de cliquer une diffusion. Avant, il se fermait
+    dès qu'on lâchait le survol du logo, avant même de l'atteindre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 01:45:00 +0200
+
 secubox-webos (1.0.269-1~bookworm1) bookworm; urgency=medium
 
   * Hall moins gourmand + réactif hors-ligne : les sondes de diffusion (sonde

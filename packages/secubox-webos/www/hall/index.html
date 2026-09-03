@@ -134,7 +134,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--coral);
   border-radius:12px;box-shadow:var(--lift);padding:8px;
   opacity:0;visibility:hidden;transform:translateY(-5px);transition:.16s;pointer-events:none}
-.logo-wrap:hover .logo-diff,.logo-diff:hover{opacity:1;visibility:visible;transform:none;pointer-events:auto}
+.logo-wrap:hover .logo-diff,.logo-diff:hover,.logo-diff.on{opacity:1;visibility:visible;transform:none;pointer-events:auto}
+/* Pont invisible qui couvre l'espace entre le logo et le popup : le curseur ne
+   « tombe » pas dans le vide en descendant vers le menu. */
+.logo-diff::before{content:"";position:absolute;left:0;right:0;top:-8px;height:8px}
 .logo-diff .ld-tete{font-size:.62rem;font-weight:800;color:var(--coral);text-transform:uppercase;
   letter-spacing:.07em;padding:2px 4px 7px}
 .logo-diff #logo-diff-n{font-family:"JetBrains Mono";font-variant-numeric:tabular-nums;color:var(--coral)}
@@ -4401,6 +4404,19 @@ const CARDLET_ICONES = {
     var logoN=document.getElementById('logo-notif');
     if(logoN) logoN.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation();
       if(whoBloc){ try{ whoBloc.click(); }catch(_){} } });
+    // Le popup des diffusions RESTE ouvert un court instant après qu'on a quitté
+    // le logo, le temps de descendre dedans et de cliquer une diffusion (#1360d).
+    // Sans ce délai, il se refermait dès qu'on lâchait le survol du logo.
+    var logoWrap=document.querySelector('.logo-wrap'), logoDiff=document.getElementById('logo-diff');
+    if(logoWrap && logoDiff){
+      var hideT=null;
+      function montreLD(){ if(hideT){ clearTimeout(hideT); hideT=null; } logoDiff.classList.add('on'); }
+      function cacheLD(){ if(hideT) clearTimeout(hideT); hideT=setTimeout(function(){ logoDiff.classList.remove('on'); hideT=null; }, 900); }
+      logoWrap.addEventListener('mouseenter', montreLD);
+      logoWrap.addEventListener('mouseleave', cacheLD);
+      logoDiff.addEventListener('mouseenter', montreLD);
+      logoDiff.addEventListener('mouseleave', cacheLD);
+    }
 
     function verifie(){
       // Onglet caché / hors-ligne : on ne sonde pas (gourmand pour rien, et ça
