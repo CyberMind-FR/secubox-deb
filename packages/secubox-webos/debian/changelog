@@ -1,3 +1,14 @@
+secubox-webos (1.0.260-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Tirage (fix iPhone, suite) : les deux TRIGRAMMES (à droite du
+    pavage) disparaissaient en étroit car l'iframe franchissait le point de
+    rupture responsive du site (≤768px → 3ᵉ colonne masquée). fit() force
+    désormais une largeur LOGIQUE desktop (800px) puis met à l'échelle pour
+    remplir la carte : mise en page 3 colonnes (traits · pavage · trigrammes)
+    identique PC et iPhone. Recalé au chargement et au resize.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 17:00:00 +0200
+
 secubox-webos (1.0.259-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Tirage (fix iPhone) : les traits de l'hexagramme (.lines svg) sont
