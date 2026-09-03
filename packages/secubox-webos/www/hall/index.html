@@ -2601,6 +2601,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   }
   addEventListener('message', function(ev){ if(ev.data && ev.data.sbx==='broadcast-on') setTimeout(sonde,300); });
   function sonde(){
+    if(document.hidden || navigator.onLine===false) return;   // pas de sonde caché/hors-ligne
     var ov=E('tv-ov'), t=E('tv-ov-t');
     fetch('/api/v1/webos/public/broadcast', {headers:{'Accept':'application/json'}})
       .then(function(r){ return r.json(); })
@@ -2616,7 +2617,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
         }
       }).catch(function(){});
   }
-  sonde(); setInterval(sonde, 5000);
+  sonde(); setInterval(sonde, 8000);   // 5→8 s : moins gourmand, le direct n'est pas à la seconde
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) sonde(); });
+  addEventListener('online', function(){ sonde(); });
 })();
 
 // LE VIEWER (#1237). Coller une URL media dans la barre -> on la regarde ici.
@@ -4400,6 +4403,9 @@ const CARDLET_ICONES = {
       if(whoBloc){ try{ whoBloc.click(); }catch(_){} } });
 
     function verifie(){
+      // Onglet caché / hors-ligne : on ne sonde pas (gourmand pour rien, et ça
+      // affame les flux). On reprend au retour via les écouteurs plus bas.
+      if(document.hidden || navigator.onLine===false) return;
       fetch('/api/v1/webos/public/broadcast',{headers:{'Accept':'application/json'}})
         .then(function(r){ return r.ok?r.json():null; }).then(function(b){
           if(!b || !b.actif || !b.ts) return;
@@ -4414,6 +4420,8 @@ const CARDLET_ICONES = {
         }).catch(function(){ premier=false; });
     }
     verifie(); setInterval(verifie, 15000);
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) verifie(); });
+    addEventListener('online', function(){ verifie(); });
   });
 })();
 </script>

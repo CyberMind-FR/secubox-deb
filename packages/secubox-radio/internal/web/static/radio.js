@@ -625,26 +625,43 @@
     }
   }
 
+  var sondeN = 0;
+  function horsService() { return document.hidden || navigator.onLine === false; }
   function sonde() {
+    // Rien à sonder si l'onglet est caché ou hors-ligne : des requêtes qui
+    // échouent en boucle sont gourmandes pour rien, et leurs rafales affament
+    // le flux audio (micro-coupures). On reprend instantanément au retour
+    // (visibilitychange / online), donc pas de perte de réactivité.
+    if (horsService()) return;
     dernierAppel = Date.now();
+    // L'ESSENTIEL, à chaque sonde : la piste courante + le chat (incrémental).
     json('/api/v1/radio/current?depuis=' + curseurChat).then(function (r) {
       pose(r.corps);
       poseChat(r.corps.chat);
     }).catch(function () { /* une sonde ratee n'est pas une panne */ });
-    json('/api/v1/radio/playlist').then(function (r) {
-      poseFile(r.corps);
-    }).catch(function () {});
-    json('/api/v1/radio/propositions').then(function (r) {
-      poseAttente(r.corps.propositions);
-    }).catch(function () {});
-    // #1131ah : statut d'AUDIENCE en emojis dans l'espace libre du micro.
-    if (estMicro && microStatus) {
-      json('/api/v1/radio/stats').then(function (r) {
-        var c = r.corps || {};
-        microStatus.textContent = '🎶 ' + (c.pistes || 0) + ' · 🗳️ ' + (c.propositions || 0) +
-          ' · 👥 ' + (c.auditeurs || 0) + ' · 👁️ ' + (c.visites || 0);
-      }).catch(function () {});
+    // Les vues SECONDAIRES (file, propositions, stats) changent lentement : une
+    // sonde sur trois (~15 s) suffit, et on les DÉCALE pour ne JAMAIS tirer
+    // plusieurs requêtes d'un coup — c'est la rafale simultanée (4 fetch/5 s)
+    // qui affamait le flux et faisait les micro-coupures.
+    if (sondeN % 3 === 0) {
+      setTimeout(function () { if (horsService()) return;
+        json('/api/v1/radio/playlist').then(function (r) { poseFile(r.corps); }).catch(function () {});
+      }, 600);
+      setTimeout(function () { if (horsService()) return;
+        json('/api/v1/radio/propositions').then(function (r) { poseAttente(r.corps.propositions); }).catch(function () {});
+      }, 1200);
+      // #1131ah : statut d'AUDIENCE en emojis dans l'espace libre du micro.
+      if (estMicro && microStatus) {
+        setTimeout(function () { if (horsService()) return;
+          json('/api/v1/radio/stats').then(function (r) {
+            var c = r.corps || {};
+            microStatus.textContent = '🎶 ' + (c.pistes || 0) + ' · 🗳️ ' + (c.propositions || 0) +
+              ' · 👥 ' + (c.auditeurs || 0) + ' · 👁️ ' + (c.visites || 0);
+          }).catch(function () {});
+        }, 1800);
+      }
     }
+    sondeN++;
   }
 
   bAime.addEventListener('click', function () {
@@ -776,6 +793,10 @@
 
   sonde();
   setInterval(sonde, PERIODE);
+  // RÉACTIVITÉ : au retour d'onglet (ou du réseau), on resonde tout de suite au
+  // lieu d'attendre le prochain tick — l'affichage se remet à jour aussitôt.
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) sonde(); });
+  addEventListener('online', function () { sonde(); });
   // La fenêtre des titres en attente défile toute seule (#1131j) — un cran
   // toutes les 4 s dès qu'il y a plus de 3 propositions.
   setInterval(function () {

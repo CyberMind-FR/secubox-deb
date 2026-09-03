@@ -1,3 +1,12 @@
+secubox-webos (1.0.269-1~bookworm1) bookworm; urgency=medium
+
+  * Hall moins gourmand + réactif hors-ligne : les sondes de diffusion (sonde
+    du direct, verifie des notifications — même endpoint) sont suspendues quand
+    l'onglet est caché ou hors-ligne, et reprennent instantanément au retour
+    (visibilitychange / online). Sonde du direct ralentie 5→8 s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 01:20:00 +0200
+
 secubox-webos (1.0.268-1~bookworm1) bookworm; urgency=medium
 
   * Survol du logo SbX (à gauche) : déroule un menu qui ne montre QUE les

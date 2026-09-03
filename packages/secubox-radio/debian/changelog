@@ -1,3 +1,15 @@
+secubox-radio (0.1.64-1~bookworm1) bookworm; urgency=medium
+
+  * Lecteur : moins de MICRO-COUPURES et de gourmandise. La sonde tirait 4
+    requêtes SIMULTANÉES toutes les 5 s (current + playlist + propositions +
+    stats) : la rafale entrait en concurrence avec le flux audio. Désormais
+    seule `current` (piste + chat) est tirée à chaque sonde ; file, propositions
+    et stats passent à une sonde sur trois (~15 s) et sont DÉCALÉES pour ne
+    jamais partir ensemble. La sonde est suspendue si l'onglet est caché ou
+    hors-ligne, et reprend instantanément au retour (visibilitychange / online).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 01:15:00 +0200
+
 secubox-radio (0.1.63-1~bookworm1) bookworm; urgency=medium
 
   * Aide reverse-design émancipée (HIG lane B) : la page radio n'embarque plus
