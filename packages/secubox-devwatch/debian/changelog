@@ -1,3 +1,12 @@
+secubox-devwatch (1.0.12-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : le carrousel de tranches bespoke (.dots) est MIGRÉ sur la
+    bibliothèque partagée SBXSliceBar (/shared/sbxui) — mêmes puces double-bullet,
+    preview au survol, clic qui fige, persistance, comme les autres cardlets.
+    Depends: secubox-sbxui.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 04:20:00 +0200
+
 secubox-devwatch (1.0.11-1~bookworm1) bookworm; urgency=medium
 
   * Vue micro : HOVER-DÉTAILS — survol d\047un module (révisions) ou du dernier

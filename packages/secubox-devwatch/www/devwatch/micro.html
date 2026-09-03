@@ -12,6 +12,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DevWatch — vue micro</title>
+<!-- Barre de slices partagée (#1352) : servie en même origine par admin.gk2
+     (/shared/sbxui → secubox-sbxui). Chargée avant le script inline. -->
+<link rel="stylesheet" href="/shared/sbxui/slicebar.css">
+<script src="/shared/sbxui/slicebar.js"></script>
 <style>
   :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --border:#e2e6f0;
          --border-soft:#eef1f7; --cyan:#0784a8; --up:#0f9d54; --gold:#b7810a; --violet:#6b46c9;
@@ -92,11 +96,11 @@
 
   /* BARRE DU BAS : pastilles de navigation + « suivi complet » sur UNE ligne */
   .footbar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding-top:.3rem;border-top:1px solid var(--border)}
-  .dots{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-  .dot-b{width:7px;height:7px;border-radius:50%;border:0;padding:0;cursor:pointer;
-    background:var(--c,var(--muted));opacity:.34;transition:opacity .2s ease,width .2s ease,border-radius .2s ease}
-  .dot-b:hover{opacity:.7}
-  .dot-b.on{opacity:1;width:17px;border-radius:4px}
+  /* Barre de slices partagée (SBXSliceBar) logée dans la footbar : puces
+     double-bullet + libellé de tranche. On lui retire son propre filet/padding
+     (la footbar en a déjà un) et on accroche ses couleurs au thème. */
+  .footbar #slb{flex:1;min-width:0;display:flex}
+  .footbar .sbx-bar{border-top:none;padding:0;--line:var(--border)}
 
   .pied{flex:1;min-width:0;display:flex;align-items:center;gap:6px;
     font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-decoration:none;cursor:pointer;
@@ -147,7 +151,7 @@
   </div>
 
   <div class="footbar">
-    <div class="dots" id="dots" role="tablist" aria-label="Tranches"></div>
+    <div id="slb" role="tablist" aria-label="Tranches"></div>
     <button class="pied" id="pied" type="button"><span class="grow">le suivi complet</span><span id="quota"></span> ↗</button>
   </div>
 </div>
@@ -189,26 +193,18 @@
     }).join('');
   }
 
-  // ── CARROUSEL DE TRANCHES + PASTILLES ────────────────────────────────────
+  // ── CARROUSEL DE TRANCHES (slicer partagé SBXSliceBar, #1352) ─────────────
+  // La lib commune gère les puces (double-bullet), la rotation (5,2 s, en pause
+  // au survol), le clic qui fige, la preview au survol et la persistance. On lui
+  // donne les libellés des tranches et on n'affiche que la tranche courante.
   var slices=[].slice.call(document.querySelectorAll('.slice'));
-  var COL=['var(--up)','var(--cyan)','var(--violet)','var(--cyan)','var(--gold)'];  // vert · bleu · …
-  var cur=0, auto=null, pause=false;
-  function dots(){
-    el('dots').innerHTML=slices.map(function(_,i){
-      return '<button class="dot-b'+(i===cur?' on':'')+'" data-s="'+i+'" role="tab" aria-selected="'+(i===cur)+'" style="--c:'+COL[i%COL.length]+'" aria-label="Tranche '+(i+1)+'"></button>';
-    }).join('');
-  }
-  function montre(i){
-    cur=(i%slices.length+slices.length)%slices.length;
-    slices.forEach(function(sl,k){ sl.hidden = k!==cur; });
-    dots();
-  }
-  function relance(){ if(auto) clearInterval(auto); auto=setInterval(function(){ if(!pause) montre(cur+1); }, 5200); }
-  el('dots').addEventListener('click', function(ev){ var b=ev.target.closest('[data-s]'); if(b){ montre(+b.dataset.s); relance(); } });
-  var mw=document.querySelector('.mw');
-  mw.addEventListener('mouseenter', function(){ pause=true; });
-  mw.addEventListener('mouseleave', function(){ pause=false; });
-  montre(0); relance();
+  function montre(i){ i=(i%slices.length+slices.length)%slices.length;
+    slices.forEach(function(sl,k){ sl.hidden = k!==i; }); }
+  var labels=slices.map(function(sl,i){ var t=sl.querySelector('.slice-t');
+    return { label: t ? t.textContent.trim() : ('Tranche '+(i+1)) }; });
+  if(window.SBXSliceBar){
+    SBXSliceBar(el('slb'), { autoMs:5200, slices:labels, onShow:function(i){ montre(i); } });
+  } else { montre(0); }
 
   function charge(){
     fetch(API+'/summary',{headers:{'Accept':'application/json'}})

@@ -21,6 +21,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Carte cumulative — vue micro</title>
 <link rel="stylesheet" href="../spicy.css">
+<link rel="stylesheet" href="../slicebar.css">
+<script src="../slicebar.js"></script>
 <style>
   :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
           --accent:#2e7d5b; --chaud:#c8791f; --alerte:#c0392b; }
@@ -42,41 +44,17 @@
               font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
   .tete b { font-size:.88rem; }
   .tete .couche { margin-left:auto; font-size:.6rem; color:var(--muted); letter-spacing:.04em; }
-  /* Points de rotation : indiquent la couche courante et permettent de choisir.
-     Placés en bas à droite (dans le pied), près du coin — discrets mais à
-     portée du pouce. */
-  .dots { position:absolute; right:8px; bottom:7px; z-index:6; display:flex; gap:5px;
-          background:var(--fond); padding:3px 6px; border-radius:20px;
-          box-shadow:0 1px 5px rgba(0,0,0,.22); }
   /* Mode EMBED : la carte EST le cardlet du service (avec SON en-tête). Pas de
-     chrome cumul (en-tête/pied doublaient et décalaient) — seule la pastille de
-     rotation flotte. */
+     chrome cumul (en-tête cumul doublait) — seule la barre de slices reste. */
   .mw.embed { padding:0; }
   .mw.embed .tete { display:none; }
-  /* LIGNE DU BAS PARTAGÉE (#1266). En embed, l'en-tête du cumul disparaît, mais
-     le PIED (le lien vers l'hôte du service de la couche) descend en pastille
-     flottante EN BAS À GAUCHE — sur la même ligne que les points de rotation à
-     droite. La carte embarquée masque, elle, son propre hôte / bouton « ouvrir »
-     (embed=1) : une seule barre du bas, l'URL de la tranche à gauche, le choix
-     de tranche à droite. */
-  .mw.embed .pied { position:absolute; left:8px; bottom:6px; right:auto; margin:0;
-    z-index:6; padding:2px 9px; max-width:62%;
-    background:color-mix(in srgb, var(--card,#fff) 80%, transparent);
-    border:1px solid var(--border); border-radius:999px; backdrop-filter:blur(3px);
-    -webkit-backdrop-filter:blur(3px); }
-  .mw.embed .pied .pouls, .mw.embed .pied .grow { display:none; }
-  .mw.embed .pied .pied-lien { font-size:.6rem; font-family:"JetBrains Mono"; }
-  .mw.embed .pied #pied-t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-    max-width:100%; }
-  /* « DOUBLE BULLET » (#1352) — puces rondes au repos, PILULE allongée pour la
-     slice active. Style partagé par tous les cardlets à slices (cf. slicebar.css). */
-  .dots button { width:7px; height:7px; padding:0; border-radius:50%; border:0; cursor:pointer;
-                 background:var(--border); transition:width .22s ease, background .22s ease; }
-  .dots button.on { background:var(--accent); width:17px; border-radius:5px; }
-  /* Point actif : BLEU = rotation AUTO en cours, VERT = mode MANUEL (figé). */
-  .dots.auto button.on { background:#3b82f6; }
-  .dots.manuel button.on { background:#22c55e; }
-  @media (prefers-reduced-motion:reduce){ .dots button { transition:none; } }
+  /* BARRE DE SLICES PARTAGÉE (#1352 / SBXSliceBar). Elle remplace l'ancienne
+     pastille de points flottante ET le pied : puces (double-bullet, bleu=auto /
+     vert=manuel), libellé de la couche, et pastille d'HÔTE cliquable (ouvre le
+     service). Preview au survol pour Sécurité (natif), coupée en embed (recharge
+     d'iframe). En embed on lui rend fond + filet pour la détacher du cardlet. */
+  .sbx-bar { --cyan:#3b82f6; --up:#22c55e; --line:var(--border); flex:0 0 auto; }
+  .mw.embed .sbx-bar { padding:5px 9px; background:var(--fond); border-top:1px solid var(--border); }
 
   .corps { flex:1; min-height:0; display:flex; flex-direction:column; gap:.42rem; }
 
@@ -138,32 +116,15 @@
   .embwrap { position:relative; height:100%; overflow:hidden; border-radius:6px; }
   .embwrap .emb { position:absolute; left:0; top:0; width:100%; height:100%; border:0; display:block; }
 
-  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
-          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
-          text-transform:uppercase; color:var(--muted); }
-  .pied .grow { flex:1; }
-  .pied-lien { display:flex; align-items:center; gap:6px; color:var(--muted); text-decoration:none; }
-  .pied-lien:hover { color:var(--accent); }
-  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
-           animation:bat 2.4s ease-in-out infinite; }
-  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
-  @media (prefers-reduced-motion: reduce){ .pouls{animation:none;opacity:.7} }
 </style>
 
 <div class="mw" id="mw">
   <div class="tete">
     <span class="ic" id="ic">🛡️</span><b id="grp">Sécurité</b>
-    <span class="couche" id="couche-nom"></span>
   </div>
   <div class="corps" id="corps"></div>
-  <div class="pied">
-    <a class="pied-lien" id="pied" href="https://waf.gk2.secubox.in/"><span class="pouls"></span>
-      <span id="pied-t">tableau WAF</span></a>
-    <span class="grow"></span>
-  </div>
-  <!-- Pastille de rotation FLOTTANTE (coin bas-droite) : seule chrome cumul en
-       mode embed, où l'en-tête et le pied sont masqués. -->
-  <span class="dots" id="dots"></span>
+  <!-- La barre de slices partagée (SBXSliceBar) est ajoutée ici en pied par le
+       script : puces + libellé de couche + pastille d'hôte cliquable. -->
 </div>
 
 <script>
@@ -375,61 +336,31 @@
   // porte le sien. Seule la pastille de rotation flotte.
   if (G.embed) { var _mw = document.getElementById('mw'); if (_mw) _mw.classList.add('embed'); }
 
-  var couches = G.couches, N = couches.length, timer = null;
-  var reduit = false;
-  try { reduit = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+  var couches = G.couches, cur = 0;
 
-  // ── MODE DE ROTATION (#1242) : AUTO (point bleu, tourne) ou MANUEL (point
-  // vert, figé). PAS de pause au survol (un cardlet embarqué remplit la carte,
-  // et l'on est toujours dessus quand on l'utilise — la rotation paraissait
-  // alors morte). L'état est PERSISTÉ par groupe (localStorage) : il survit au
-  // rafraîchissement et à la navigation.
-  //   - clic sur un AUTRE point  -> on y va, en mode MANUEL (figé) ;
-  //   - reclic sur le point ACTIF -> bascule MANUEL <-> AUTO.
-  var CLEF = 'sbx.cumul.' + gid;
-  var etat = { auto: true, idx: 0 };
-  try { var _sv = JSON.parse(localStorage.getItem(CLEF) || 'null');
-        if (_sv) { etat.auto = _sv.auto !== false; etat.idx = ((_sv.idx | 0) % N + N) % N; } } catch (e) {}
-  function sauve() { try { localStorage.setItem(CLEF, JSON.stringify(etat)); } catch (e) {} }
+  // Ouvre le service de la couche EMBARQUÉ dans le Hall (par hôte, sans id).
+  function ouvreHote(host){ return function(){
+    if (parent === window) { location.href = 'https://' + host + '/'; return; }
+    try { parent.postMessage({ sbx: 'ouvre-hote', hote: host, url: 'https://' + host + '/' }, '*'); } catch (e) {}
+  }; }
+  function afficheCouche(i){ cur = i; if (couches[i]) couches[i].charge(el('corps')); }
 
-  // Points de rotation.
-  el('dots').innerHTML = couches.map(function (c, i) {
-    return '<button type="button" data-i="' + i + '" title="' + esc(c.nom) + '"></button>';
-  }).join('');
-  el('dots').addEventListener('click', function (ev) {
-    var b = ev.target.closest('button[data-i]'); if (!b) return;
-    var j = Number(b.dataset.i);
-    if (j === etat.idx) { etat.auto = !etat.auto; }    // reclic sur l'actif : bascule le mode
-    else { etat.auto = false; etat.idx = j; }           // autre point : va là, MANUEL
-    applique();                                          // réactif : effet immédiat
-  });
+  // ── SLICER PARTAGÉ (#1352, SBXSliceBar) ────────────────────────────────────
+  // Puces double-bullet (bleu=auto / vert=manuel), libellé de couche, pastille
+  // d'HÔTE cliquable (ouvre le service). Rotation auto 8 s, figée au clic,
+  // persistée PAR GROUPE (key). PREVIEW au survol pour Sécurité (natif, léger) ;
+  // coupée en embed (elle rechargerait l'iframe). Pas de pause au survol.
+  if (window.SBXSliceBar) {
+    SBXSliceBar(el('mw'), {
+      key: 'cumul:' + gid, autoMs: 8000, pauseOnHover: false, preview: !G.embed,
+      slices: couches.map(function (c) { return { label: c.nom, host: c.host, open: ouvreHote(c.host) }; }),
+      onShow: function (i) { afficheCouche(i); }
+    });
+  } else { afficheCouche(0); }
 
-  function montre(i) {
-    etat.idx = (i % N + N) % N;
-    el('couche-nom').textContent = couches[etat.idx].nom;
-    Array.prototype.forEach.call(el('dots').children, function (b, k) { b.classList.toggle('on', k === etat.idx); });
-    var h = couches[etat.idx].host, pd = el('pied');
-    // En embed, la pastille du bas montre l'URL (l'hôte) — c'est ce que l'invité
-    // veut voir et cliquer ; hors embed (Sécurité), le libellé de la couche.
-    if (pd && h) { pd.href = 'https://' + h + '/';
-      el('pied-t').textContent = G.embed ? h : couches[etat.idx].nom.toLowerCase(); }
-    couches[etat.idx].charge(el('corps'));
-    sauve();
-  }
-  function suivant() { montre(etat.idx + 1); }
-  // applique() rend l'état visible : couleur des points (bleu=auto, vert=manuel),
-  // couche affichée, et (re)démarre ou coupe le minuteur selon le mode.
-  function applique() {
-    if (timer) { clearInterval(timer); timer = null; }
-    var d = el('dots');
-    if (d) { d.classList.toggle('auto', etat.auto); d.classList.toggle('manuel', !etat.auto); }
-    montre(etat.idx);
-    if (etat.auto && !reduit && N > 1) timer = setInterval(suivant, 8000);
-  }
-
-  applique();
-  // Rafraîchit la couche visible régulièrement (posture/attaquants bougent lentement).
-  setInterval(function () { couches[etat.idx].charge(el('corps')); }, 60000);
+  // Rafraîchit la couche NATIVE (Sécurité) régulièrement — les couches embed se
+  // rafraîchissent elles-mêmes, inutile de recharger leur iframe.
+  if (!G.embed) setInterval(function () { if (!document.hidden) afficheCouche(cur); }, 60000);
 
   // Rester dans le Hall : le pied ouvre le service de la couche, EMBARQUÉ, par
   // son hôte (ouvre-hote, indépendant d'un id de service enregistré) — pas de
@@ -468,7 +399,7 @@
       // sans contrôle). Hôte = celui de l'URL si absolue, sinon la couche
       // affichée.
       if (d.sbx === 'ouvre' && d.url) {
-        var hote2 = (couches[etat.idx] && couches[etat.idx].host) || '';
+        var hote2 = (couches[cur] && couches[cur].host) || '';
         try { var u2 = new URL(d.url); if (u2.host) hote2 = u2.host; } catch (e) {}
         try { parent.postMessage({ sbx: 'ouvre-hote', hote: hote2, url: d.url }, '*'); } catch (e) {}
         return;
@@ -486,5 +417,5 @@
 <script>window.SBXAide&&SBXAide({zones:function(){return [
   {el:document.querySelector('.tete'),label:'En-tête — le groupe agrégé (Sécurité, Cloud…)'},
   {el:document.getElementById('corps'),label:'Services du groupe — état et chiffres, en rotation'},
-  {el:document.querySelector('.pied'),label:'Pied — ouvre le tableau de bord du groupe'}
+  {el:document.querySelector('.sbx-bar'),label:'Slices — couche courante · hôte cliquable · choix de couche'}
 ].filter(function(z){return z.el;});}});</script>

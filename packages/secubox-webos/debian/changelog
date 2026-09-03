@@ -1,3 +1,15 @@
+secubox-webos (1.0.273-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet cumul (Sécurité / Contenu / Cloud / Social / Forums) : le slicer
+    bespoke (.dots flottantes + pied) est MIGRÉ sur SBXSliceBar — mêmes puces
+    double-bullet (bleu=auto / vert=manuel), libellé de couche + pastille d'HÔTE
+    cliquable, PREVIEW au survol (Sécurité ; coupée en embed pour ne pas recharger
+    l'iframe), persistance PAR GROUPE. Corrige « pas les bonnes bullets, pas de
+    survol ». Rafraîchissement 60 s limité à la couche native (les embed se
+    rafraîchissent seules).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 04:25:00 +0200
+
 secubox-webos (1.0.272-1~bookworm1) bookworm; urgency=medium
 
   * Nouveau cardlet « Messagerie & Chatbox » (SLICÉ) qui jumelle trois surfaces
