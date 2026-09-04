@@ -11,6 +11,8 @@ Package: secubox-soc-web
 Architecture: all
 Depends: ${misc:Depends},
          nginx
+Replaces: secubox-hub, secubox-soc
+Breaks: secubox-hub (<< 1.9.10-1~bookworm1)
 Suggests: secubox-soc-gateway
 Description: SecuBox SOC Web Dashboard — Browser-based Fleet Monitoring
  React-based web dashboard for the SecuBox Security Operations Center.

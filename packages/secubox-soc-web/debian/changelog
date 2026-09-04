@@ -1,3 +1,11 @@
+secubox-soc-web (1.1.2-1) bookworm; urgency=medium
+
+  * Replaces/Breaks secubox-hub (+ soc↔soc-web) : www/soc/index.html était livré
+    par 3 paquets (soc, soc-web, hub) sans Replaces → dpkg refusait l'upgrade
+    (« trying to overwrite … also in secubox-hub »). Débloqué proprement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 13:30:00 +0200
+
 secubox-soc-web (1.1.1-1) bookworm; urgency=medium
 
   * nginx snippet: remove duplicate `location /soc/` block (already defined
