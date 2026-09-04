@@ -1,8 +1,3 @@
-# SPDX-License-Identifier: LicenseRef-CMSD-1.0
-# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-# Source-Disclosed License — All rights reserved except as expressly granted.
-# See LICENCE-CMSD-1.0.md for terms.
-
 from api import execwatch as ew
 
 AU = '''type=SYSCALL msg=audit(1785200000.123:42): arch=c00000b7 syscall=221 success=yes exit=0 ppid=1 pid=999 uid=0 exe="/usr/local/bin/notwork-monitoring" key="sbx_exec"

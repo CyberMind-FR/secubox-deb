@@ -1,3 +1,11 @@
+secubox-mqtt (2.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Ne plus forcer une reconnexion quand la session tient au cookie : la webui
+    laisse le cookie de session authentifier et ne redirige que sur une vraie
+    401, au lieu de renvoyer a login des l'absence de jeton localStorage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 09:59:41 +0200
+
 secubox-mqtt (2.4.1-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

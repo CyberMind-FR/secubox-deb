@@ -1,10 +1,47 @@
-secubox-security-posture (1.0.1-1) unstable; urgency=medium
+secubox-security-posture (2.0.2-2) bookworm; urgency=medium
 
-  * Add Hub sidebar menu entry (menu.d/security-posture.json, category wall)
-  * Serve dashboard at /security-posture/ (rename dashboard.html -> index.html)
-  * Install menu.d into /usr/share/secubox/menu.d in debian/rules
+  * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.
+    /run/secubox porte le bit collant : on n'y delie que ce qu'on possede,
+    et une socket laissee par un autre utilisateur rend le demarrage
+    impossible — le service echoue, redemarre, echoue encore, en silence.
+  * `RuntimeDirectory=secubox` retire : systemd efface le contenu d'un
+    RuntimeDirectory au redemarrage, et ce repertoire est partage par ~95
+    unites. Une seule qui le declare emporte les sockets des autres.
 
- -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 15:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:35:59 +0200
+
+secubox-security-posture (2.0.1-2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
+secubox-security-posture (2.0.1-1) unstable; urgency=medium
+
+  * fix(postinst): stop clobbering /var/lib/secubox parent mode. The 2.0.0
+    postinst ran `install -d -m 0750 /var/lib/secubox/security-posture`, which
+    re-moded the SHARED parent to 0750 secubox:secubox and broke directory
+    traversal for every other secubox-* daemon (took kbin/toolbox to HTTP 500).
+    Now: keep the parent 0755, create only the leaf restricted; service creates
+    its own dir at runtime. (#511 traversal class — regression fix.)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 18:00:00 +0200
+
+secubox-security-posture (2.0.0-1) unstable; urgency=medium
+
+  * Full rewrite — honest, board-truthful posture scorecard (closes #617).
+  * Replaces the broken v1: /overview NameError, ~95% stubbed TPN, hardcoded
+    performance/DEFCON values and the zip()/gather() CSPN misalignment bug.
+  * New posture/ engine: pure scoring (DEFCON dial), real provenance-tracked
+    collectors over public sibling sockets + CrowdSec Prometheus + /proc.
+  * Indicators grouped by the six SecuBox module-domains; unmeasurable signals
+    render UNKNOWN/MANUAL and are excluded from the score, never faked.
+  * Repaired CSPN backbone; real TPN media overlay (anti-piracy DNS, TLS).
+  * New shared hybrid-skin dark UI; sidebar menu.d entry (folds #616).
+  * Unit tests for scoring, CSPN parsers and collector normalization.
+  * Drop python3-psutil; add python3-uvicorn. Standards-Version 4.6.2.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 16:00:00 +0200
 
 secubox-security-posture (1.0.0-1) unstable; urgency=medium
 

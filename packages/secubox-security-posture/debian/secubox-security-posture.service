@@ -4,20 +4,6 @@ Documentation=https://github.com/CyberMind-FR/secubox-deb
 After=network.target nss-lookup.target
 Wants=network-online.target
 
-# /run/secubox N'EST PAS UN RuntimeDirectory (#1022).
-#
-# Il est PARTAGE par une centaine de modules. `RuntimeDirectory=` est concu pour
-# un repertoire PROPRE a un service : systemd le recree a chaque demarrage avec
-# le mode de l'unite, donc le dernier service demarre imposait le sien. Huit
-# unites le posaient en 0755, ce qui privait tous les autres du droit d'y creer
-# leur socket — « bind: permission denied », et un 502 dont la cause etait le
-# redemarrage d'un module sans rapport, survenu entre-temps.
-#
-# Le meme mecanisme effacait le repertoire a l'arret d'un service, emportant les
-# sockets des quatre-vingt-dix autres.
-#
-# Il est desormais declare une seule fois, en 1777, par le tmpfiles.d de
-# secubox-core — un seul proprietaire, une seule verite.
 [Service]
 Type=simple
 User=secubox
@@ -25,6 +11,9 @@ Group=secubox
 
 # Service runtime directory
 RuntimeDirectory=secubox-security-posture
+RuntimeDirectoryPreserve=yes
+RuntimeDirectoryMode=0750
+
 # Remove any stale socket left by a previous run so uvicorn can re-bind
 # cleanly on restart (avoids "Address already in use" on dpkg upgrades).
 ExecStartPre=-/bin/rm -f /run/secubox/security-posture.sock

@@ -1,11 +1,4 @@
 <!DOCTYPE html>
-<!--
-  SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
--->
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -81,8 +74,7 @@
 <script>
 (function() {
   function getToken() { return localStorage.getItem('sbx_token'); }
-  // Pas de pre-emption sur l'absence de jeton : le cookie de session
-  // (SSO parent-domaine) authentifie aussi. Seule une vraie 401 redirige.
+  /* session par cookie autorisee ; 401 seule redirige */
 
   function get(path) {
     return fetch('/api/v1/yacy' + path, {

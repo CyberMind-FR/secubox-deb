@@ -1,493 +1,609 @@
 <!DOCTYPE html>
 <!--
-  SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
+  v1.4.0 — actually useful. v1.3.0 was pretty but showed zeros because
+  threat-analyst's internal DB is only populated by an explicit
+  /collect call. This version:
+    1. Auto-collects on page load (no operator click required)
+    2. Surfaces the RICH data CrowdSec returns: src IP, country,
+       ASN, attack type, targeted user
+    3. Stats panels show unique active IPs + top countries + top
+       attack types + top targeted users — not just abstract counts
+  Layout + palette still respect .claude/DESIGN-CHARTER.md (WALL
+  module, Space Grotesk / JetBrains Mono, charter radii + spacing).
 -->
-
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Threat Analyst</title>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <title>SecuBox · Threat Analyst</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
         :root {
-            --p31-peak: #00dd44; --p31-mid: #009933; --p31-dim: #006622;
-            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7;
-            --bg-card: var(--tube-pale); --border: var(--tube-soft);
-            --text: #1b3d1c; --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak); --danger: #ff4466; --warning: #ffb347; --info: #4488ff;
-            /* Reserve space for the global menu bar that sidebar.js
-             * (v2.38.0+) injects at the top — without this, .main
-             * content slides under the navbar. Matches sentinelle.css
-             * and all other recent dashboards. */
             --gmb-h: 48px;
+            --sp-xs: 4px; --sp-s: 8px; --sp-m: 16px; --sp-l: 24px; --sp-xl: 40px;
+            --r-card: 14px; --r-swatch: 6px; --r-chip: 3px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: calc(var(--gmb-h) + 1.5rem) 1.5rem 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; background: var(--tube-light); border: 1px solid var(--border); }
+        body {
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+            font-size: 14px; line-height: 1.6;
+            background: var(--bg); color: var(--text);
+            min-height: 100vh;
+        }
+        .main {
+            margin-left: 220px;
+            padding: calc(var(--gmb-h) + var(--sp-l)) var(--sp-l) var(--sp-xl);
+            max-width: 1280px;
+        }
+        @media (max-width: 768px) { .main { margin-left: 0; padding: calc(var(--gmb-h) + var(--sp-m)) var(--sp-m) var(--sp-l); } }
 
-        /* Stats grid — one card per top-level metric, each carrying
-         * its own breakdown chips so the operator sees the
-         * distribution without leaving the page. v1.1.0 replaces
-         * the 4 ghost cards that referenced fields the backend
-         * never returns. */
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; }
-        .stat-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-        .stat-icon { font-size: 1.4rem; }
-        .stat-value { font-size: 1.9rem; font-weight: bold; color: var(--primary); line-height: 1; }
-        .stat-value.danger { color: var(--danger); }
-        .stat-value.warn { color: var(--warning); }
-        .stat-label { color: var(--text-dim); font-size: 0.8rem; }
-        .stat-breakdown { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.5rem; }
-        .chip { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.7rem; background: var(--tube-light); border: 1px solid var(--border); white-space: nowrap; }
-        .chip.crit { background: rgba(255,68,102,0.12); color: var(--danger); border-color: rgba(255,68,102,0.4); }
-        .chip.warn { background: rgba(255,179,71,0.12); color: var(--warning); border-color: rgba(255,179,71,0.4); }
-        .chip.ok   { background: rgba(0,221,68,0.12); color: var(--primary); border-color: rgba(0,221,68,0.4); }
+        header.page {
+            display: flex; justify-content: space-between; align-items: baseline;
+            gap: var(--sp-m); margin-bottom: var(--sp-m);
+            padding-bottom: var(--sp-m); border-bottom: 1px solid var(--border);
+        }
+        header.page h1 {
+            font-size: 24px; font-weight: 600; letter-spacing: -0.4px;
+            color: var(--wall-main);
+        }
+        header.page h1 .ver {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; font-weight: 400; color: var(--muted);
+            margin-left: var(--sp-s);
+        }
+        header.page .actions { display: flex; gap: var(--sp-s); align-items: center; }
+        header.page .auto-status {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            color: var(--muted);
+        }
+        header.page .auto-status .dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; background: var(--root-main);
+            margin-right: 4px; vertical-align: middle;
+        }
+        header.page .auto-status .dot.stale { background: var(--muted); }
+        header.page .auto-status .dot.err   { background: var(--boot-main); }
 
-        /* Two-column body: alerts/rules (left, wide) + emancipate/IOC (right, compact) */
-        .body-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
-        @media (max-width: 1024px) { .body-grid { grid-template-columns: 1fr; } }
+        button {
+            padding: 8px 16px; font-family: inherit; font-size: 13px;
+            font-weight: 500; background: var(--surface); color: var(--text);
+            border: 1px solid var(--border); border-radius: var(--r-swatch);
+            cursor: pointer; transition: filter 120ms;
+        }
+        button:hover { filter: brightness(0.96); }
+        button.primary { background: var(--wall-main); color: #fff; border-color: var(--wall-main); }
+        button.primary:hover { filter: brightness(1.08); }
+        button.danger  { background: var(--boot-main); color: #fff; border-color: var(--boot-main); }
+        button.sm { padding: 4px 10px; font-size: 12px; border-radius: var(--r-chip); }
 
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
-        .card-header h2 { font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; }
-        .card-header .actions { display: flex; gap: 0.4rem; }
+        /* Headline stats — what an operator glances at first */
+        .stats {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--sp-m); margin-bottom: var(--sp-l);
+        }
+        .stat {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--r-card); padding: var(--sp-m) var(--sp-l);
+        }
+        .stat-label {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.8px; color: var(--muted);
+        }
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 36px; font-weight: 700; margin-top: var(--sp-xs);
+            color: var(--text); line-height: 1.05;
+        }
+        .stat.warn .stat-value { color: var(--wall-main); }
+        .stat.crit .stat-value { color: var(--boot-main); }
+        .stat-hint {
+            font-size: 11px; color: var(--muted); margin-top: var(--sp-xs);
+        }
 
-        .btn { padding: 0.4rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.8rem; }
-        .btn:hover { background: var(--tube-light); }
-        .btn-primary { background: var(--primary); border-color: var(--primary); color: #000; }
-        .btn-danger  { background: var(--danger);  border-color: var(--danger);  color: #fff; }
-        .btn-warn    { background: var(--warning); border-color: var(--warning); color: #000; }
-        .btn-sm { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
+        /* Top-N panels */
+        .top-row {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--sp-m); margin-bottom: var(--sp-l);
+        }
+        .top-box {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--r-card); padding: var(--sp-m) var(--sp-l);
+        }
+        .top-box h3 {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.8px; color: var(--muted);
+            margin-bottom: var(--sp-s);
+        }
+        .top-list { list-style: none; }
+        .top-list li {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: var(--sp-xs) 0;
+            font-family: 'JetBrains Mono', monospace; font-size: 13px;
+            border-bottom: 1px dotted var(--border);
+        }
+        .top-list li:last-child { border-bottom: none; }
+        .top-list .k { color: var(--text); }
+        .top-list .v {
+            font-weight: 700; color: var(--wall-main);
+            background: var(--surface2); padding: 2px 8px;
+            border-radius: var(--r-chip);
+        }
+        .top-list .empty { color: var(--muted); font-style: italic; }
 
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; vertical-align: middle; }
-        th { color: var(--text-dim); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; background: var(--tube-light); }
-        td code { font-family: monospace; font-size: 0.8rem; }
+        section.panel {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--r-card);
+            padding: var(--sp-l); margin-bottom: var(--sp-l);
+        }
+        section.panel > h2 {
+            font-size: 16px; font-weight: 600; letter-spacing: -0.1px;
+            margin-bottom: var(--sp-m); padding-bottom: var(--sp-s);
+            border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; gap: var(--sp-m);
+            color: var(--wall-main);
+        }
+        section.panel > h2 .head-actions { display: flex; gap: var(--sp-s); align-items: center; }
+        section.panel > h2 select {
+            padding: 4px 8px; font-family: inherit; font-size: 12px;
+            background: var(--bg); color: var(--text);
+            border: 1px solid var(--border); border-radius: var(--r-chip);
+        }
 
-        .severity-pill { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.7rem; font-weight: bold; }
-        .severity-pill.critical { background: var(--danger); color: #fff; }
-        .severity-pill.high     { background: var(--warning); color: #000; }
-        .severity-pill.medium   { background: var(--info); color: #fff; }
-        .severity-pill.low      { background: var(--primary); color: #000; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td {
+            text-align: left; padding: var(--sp-s) var(--sp-m);
+            border-bottom: 1px solid var(--border); vertical-align: top;
+        }
+        th {
+            color: var(--muted); font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.6px;
+            background: var(--surface2);
+        }
+        tr:last-child td { border-bottom: none; }
+        td code, .mono {
+            font-family: 'JetBrains Mono', monospace; font-size: 12px;
+        }
+        td.ip code { color: var(--wall-main); font-weight: 700; }
 
-        /* Emancipate panel: one tight row per exposed service.
-         * Channel tags color-coded by Punk Exposure verb (Tor / SSL+DNS / Mesh). */
-        .ema-list { display: flex; flex-direction: column; gap: 0.5rem; }
-        .ema-row { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.6rem 0.75rem; background: var(--tube-light); border: 1px solid var(--border); border-radius: 6px; }
-        .ema-row-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-        .ema-name { font-weight: 600; font-size: 0.85rem; }
-        .ema-port { font-family: monospace; font-size: 0.75rem; color: var(--text-dim); }
-        .ema-channels { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-        .ema-channel { padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.65rem; font-weight: bold; }
-        .ema-channel.tor  { background: rgba(110,64,201,0.18); color: #6e40c9; border: 1px solid rgba(110,64,201,0.4); }
-        .ema-channel.ssl  { background: rgba(68,136,255,0.15); color: var(--info); border: 1px solid rgba(68,136,255,0.4); }
-        .ema-channel.dns  { background: rgba(68,136,255,0.15); color: var(--info); border: 1px solid rgba(68,136,255,0.4); }
-        .ema-channel.mesh { background: rgba(0,221,68,0.15); color: var(--primary); border: 1px solid rgba(0,221,68,0.4); }
-        .ema-meta { font-size: 0.7rem; color: var(--text-dim); display: flex; gap: 0.75rem; }
+        .pill {
+            display: inline-block; padding: 2px 8px;
+            border-radius: var(--r-chip); font-size: 11px;
+            font-weight: 700; text-transform: lowercase;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .pill.critical { background: var(--boot-main); color: #fff; }
+        .pill.high     { background: var(--wall-main); color: #fff; }
+        .pill.medium   { background: var(--mesh-main); color: #fff; }
+        .pill.low      { background: var(--root-main); color: #fff; }
+        .pill.unknown  { background: var(--muted); color: #fff; }
 
-        /* Pending Rules panel */
-        .rule-row { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.6rem 0.75rem; background: var(--tube-light); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.5rem; }
-        .rule-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-        .rule-meta { font-size: 0.75rem; color: var(--text-dim); }
-        .rule-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-        .rule-body { font-family: monospace; font-size: 0.75rem; background: var(--bg-card); padding: 0.4rem 0.6rem; border-radius: 4px; max-height: 100px; overflow: auto; }
+        .flag { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+        .flag b { color: var(--text); }
 
-        .input-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .input-row input { flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--tube-light); color: var(--text); font-family: inherit; }
-        .empty-state { text-align: center; padding: 1.5rem; color: var(--text-dim); font-size: 0.85rem; }
-        .err { color: var(--danger); font-size: 0.8rem; padding: 0.4rem 0.6rem; }
+        .msg { padding: var(--sp-s) 0; font-size: 13px; }
+        .msg-loading { color: var(--muted); font-style: italic; }
+        .msg-empty   { color: var(--muted); }
+        .msg-error   { color: var(--boot-main); font-weight: 600; }
 
-        @media (max-width: 768px) { .main { margin-left: 0; padding: 1rem; } }
+        .analyze-form { display: flex; gap: var(--sp-s); margin-bottom: var(--sp-m); }
+        .analyze-form input {
+            flex: 1; padding: 8px 12px; font-family: inherit; font-size: 13px;
+            background: var(--bg); color: var(--text);
+            border: 1px solid var(--border); border-radius: var(--r-swatch);
+        }
+        .analyze-result {
+            font-family: 'JetBrains Mono', monospace; font-size: 12px;
+            background: var(--surface2);
+            padding: var(--sp-m); border-radius: var(--r-swatch);
+            white-space: pre-wrap; word-break: break-word;
+            max-height: 240px; overflow: auto;
+        }
+
+        .diag {
+            margin-top: var(--sp-xl); padding: var(--sp-m) var(--sp-l);
+            background: var(--surface2); border: 1px dashed var(--border);
+            border-radius: var(--r-swatch);
+        }
+        .diag h3 {
+            font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.6px;
+            color: var(--muted); margin-bottom: var(--sp-s);
+        }
+        .diag table { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        .diag th { background: transparent; }
+        .diag td { padding: 4px var(--sp-s); border-bottom: 1px dotted var(--border); }
+        .diag .ok  { color: var(--root-main); font-weight: 700; }
+        .diag .bad { color: var(--boot-main); font-weight: 700; }
     </style>
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
 </head>
-<body>
+<body class="module-wall hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
-    <div class="main">
-        <div class="header">
-            <h1>🕵️ Threat Analyst</h1>
-            <div class="header-actions">
-                <button class="btn btn-sm" onclick="collectNow()" title="Pull fresh alerts from CrowdSec + WAF">🔄 Collect</button>
-                <span class="badge">v1.1.0</span>
+    <main class="main">
+
+        <header class="page">
+            <h1>Threat Analyst <span class="ver">v1.4.0</span></h1>
+            <div class="actions">
+                <span class="auto-status" id="auto-status">
+                    <span class="dot" id="auto-dot"></span>
+                    <span id="auto-text">…</span>
+                </span>
+                <button onclick="collectThen()" title="Pull fresh alerts from CrowdSec + WAF and refresh">Collect now</button>
+                <button class="primary" onclick="loadAll()">Refresh</button>
+            </div>
+        </header>
+
+        <!-- Headline stats — operators see these first -->
+        <div class="stats">
+            <div class="stat crit">
+                <div class="stat-label">Unique attackers</div>
+                <div class="stat-value" id="s-unique-ips">—</div>
+                <div class="stat-hint">distinct source IPs (24h)</div>
+            </div>
+            <div class="stat warn">
+                <div class="stat-label">Active threats</div>
+                <div class="stat-value" id="s-alerts">—</div>
+                <div class="stat-hint">alerts collected (24h)</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Countries</div>
+                <div class="stat-value" id="s-countries">—</div>
+                <div class="stat-hint">distinct source regions</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Pending rules</div>
+                <div class="stat-value" id="s-pending">—</div>
+                <div class="stat-hint" id="s-pending-hint">awaiting approval</div>
             </div>
         </div>
 
-        <!-- ── Metrics row ──────────────────────────────────────── -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-row">
-                    <div>
-                        <div class="stat-label">Alerts (24h)</div>
-                        <div class="stat-value" id="m-alerts-24h">–</div>
-                    </div>
-                    <div class="stat-icon">🚨</div>
-                </div>
-                <div class="stat-breakdown" id="m-alerts-by-source"></div>
+        <!-- #597 Global security overview — live from WAF + CrowdSec + firewall -->
+        <h3 style="margin:1rem 0 .4rem">🛡 Vue globale sécurité <span id="ov-sources" style="font-size:.7rem;color:var(--text-muted)"></span></h3>
+        <div class="stats">
+            <div class="stat warn">
+                <div class="stat-label">WAF — menaces (24h)</div>
+                <div class="stat-value" id="o-waf-threats">—</div>
+                <div class="stat-hint" id="o-waf-blocked">bloquées: —</div>
             </div>
-
-            <div class="stat-card">
-                <div class="stat-row">
-                    <div>
-                        <div class="stat-label">Severity Mix</div>
-                        <div class="stat-value" id="m-severity-total">–</div>
-                    </div>
-                    <div class="stat-icon">📊</div>
-                </div>
-                <div class="stat-breakdown" id="m-alerts-by-severity"></div>
+            <div class="stat crit">
+                <div class="stat-label">CrowdSec — détections</div>
+                <div class="stat-value" id="o-cs-bans">—</div>
+                <div class="stat-hint" id="o-cs-alerts">alertes: —</div>
             </div>
-
-            <div class="stat-card">
-                <div class="stat-row">
-                    <div>
-                        <div class="stat-label">Pending Rules</div>
-                        <div class="stat-value warn" id="m-pending-rules">–</div>
-                    </div>
-                    <div class="stat-icon">⚖️</div>
-                </div>
-                <div class="stat-breakdown"><span class="chip" id="m-total-rules">total: –</span></div>
+            <div class="stat">
+                <div class="stat-label">Firewall — IP bloquées (nft)</div>
+                <div class="stat-value" id="o-fw-blacklist">—</div>
+                <div class="stat-hint" id="o-fw-split">via crowdsec-bouncer</div>
             </div>
-
-            <div class="stat-card">
-                <div class="stat-row">
-                    <div>
-                        <div class="stat-label">Emancipated</div>
-                        <div class="stat-value" id="m-emancipated">–</div>
-                    </div>
-                    <div class="stat-icon">🔓</div>
-                </div>
-                <div class="stat-breakdown" id="m-emancipated-channels"></div>
+            <div class="stat">
+                <div class="stat-label">WAF — règles chargées</div>
+                <div class="stat-value" id="o-waf-rules">—</div>
+                <div class="stat-hint">moteur d'inspection</div>
             </div>
         </div>
 
-        <!-- ── Two-column body: Alerts/Rules + Emancipate/IOC ───── -->
-        <div class="body-grid">
-            <div>
-                <div class="card">
-                    <div class="card-header">
-                        <h2>🚨 Active Alerts</h2>
-                        <div class="actions">
-                            <select id="alerts-hours" onchange="loadAlerts()" style="padding:0.25rem 0.4rem;border:1px solid var(--border);border-radius:4px;background:var(--tube-light);font-family:inherit;font-size:0.75rem;">
-                                <option value="1">1h</option>
-                                <option value="6">6h</option>
-                                <option value="24" selected>24h</option>
-                                <option value="168">7d</option>
-                            </select>
-                            <button class="btn btn-sm" onclick="loadAlerts()">Refresh</button>
-                        </div>
-                    </div>
-                    <div id="alerts-container">
-                        <div class="empty-state">Loading…</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>⚖️ Pending Rules</h2>
-                        <button class="btn btn-sm" onclick="loadRules()">Refresh</button>
-                    </div>
-                    <div id="rules-container">
-                        <div class="empty-state">Loading…</div>
-                    </div>
-                </div>
+        <!-- Top-N leaderboards — the real insight surface -->
+        <div class="top-row">
+            <div class="top-box">
+                <h3>Top attackers (by hit count)</h3>
+                <ol class="top-list" id="top-ips"><li class="empty">loading…</li></ol>
             </div>
-
-            <div>
-                <div class="card">
-                    <div class="card-header">
-                        <h2>🔓 Emancipated</h2>
-                        <button class="btn btn-sm" onclick="loadEmancipated()">Refresh</button>
-                    </div>
-                    <div id="emancipated-container">
-                        <div class="empty-state">Loading…</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>🔎 Analyze IOC</h2>
-                    </div>
-                    <div class="input-row" style="flex-direction:column;align-items:stretch;">
-                        <input type="text" id="ioc-input" placeholder="IP, domain, hash, URL…">
-                        <button class="btn btn-primary btn-sm" onclick="analyzeIOC()">Analyze</button>
-                    </div>
-                    <div id="analysis-result"></div>
-                </div>
+            <div class="top-box">
+                <h3>Top source countries</h3>
+                <ol class="top-list" id="top-countries"><li class="empty">loading…</li></ol>
+            </div>
+            <div class="top-box">
+                <h3>Top attack patterns</h3>
+                <ol class="top-list" id="top-types"><li class="empty">loading…</li></ol>
+            </div>
+            <div class="top-box">
+                <h3>Top targeted accounts</h3>
+                <ol class="top-list" id="top-targets"><li class="empty">loading…</li></ol>
             </div>
         </div>
-    </div>
+
+        <!-- Recent attacks — rich table -->
+        <section class="panel">
+            <h2>
+                Recent attacks
+                <div class="head-actions">
+                    <select id="alerts-window" onchange="loadAlerts()">
+                        <option value="1">1h</option>
+                        <option value="6">6h</option>
+                        <option value="24" selected>24h</option>
+                        <option value="168">7d</option>
+                    </select>
+                </div>
+            </h2>
+            <div id="alerts-body"><div class="msg msg-loading">Loading…</div></div>
+        </section>
+
+        <!-- Pending rules -->
+        <section class="panel">
+            <h2>Pending rules</h2>
+            <div id="rules-body"><div class="msg msg-loading">Loading…</div></div>
+        </section>
+
+        <!-- Emancipated services -->
+        <section class="panel">
+            <h2>Emancipated services</h2>
+            <div id="ema-body"><div class="msg msg-loading">Loading…</div></div>
+        </section>
+
+        <!-- IOC analyze -->
+        <section class="panel">
+            <h2>Analyze IOC</h2>
+            <div class="analyze-form">
+                <input type="text" id="ioc-input" placeholder="IP, domain, hash, URL…">
+                <button class="primary" onclick="analyzeIOC()">Analyze</button>
+            </div>
+            <div id="analyze-out" class="msg msg-empty">Enter an indicator above.</div>
+        </section>
+
+    </main>
 
     <script src="/shared/sidebar.js"></script>
     <script>
-        const TA  = '/api/v1/threat-analyst';
-        const EXP = '/api/v1/exposure';
-
-        // Shared HTTP wrapper. v1.1.1: returns {ok, status, data, err}
-        // instead of null-on-error so panels can render meaningful
-        // error states ("auth", "404", "network") rather than stuck
-        // on "Loading…". Sends localStorage Bearer if present, but
-        // also includes browser credentials so Authelia SSO cookies
-        // travel with same-origin fetches (the canonical auth path
-        // for the secubox stack — nginx auth_request validates the
-        // SSO cookie before proxying to the per-module unix socket).
-        async function api(base, path, method = 'GET', data = null) {
-            const token = localStorage.getItem('sbx_token');
-            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+        // Fetch helpers
+        async function get(url) {
             try {
-                const res = await fetch(base + path, {
-                    method, headers, credentials: 'include',
-                    body: data ? JSON.stringify(data) : null,
-                });
-                if (res.status === 401) {
-                    return { ok: false, status: 401, err: 'auth' };
-                }
-                if (res.status === 404) {
-                    return { ok: false, status: 404, err: 'not_found' };
-                }
-                if (!res.ok) {
-                    return { ok: false, status: res.status, err: 'http_' + res.status };
-                }
-                const data = await res.json();
-                return { ok: true, status: res.status, data };
+                const r = await fetch(url, { headers: { Accept: 'application/json' } });
+                const ct = r.headers.get('content-type') || '';
+                if (!r.ok) return { ok: false, status: r.status, err: 'HTTP ' + r.status };
+                if (!ct.includes('json')) return { ok: false, status: r.status, err: 'Not JSON (auth?)' };
+                return { ok: true, status: r.status, data: await r.json() };
             } catch (e) {
-                return { ok: false, status: 0, err: 'network', detail: String(e) };
+                return { ok: false, status: 0, err: 'Network (' + e.message + ')' };
             }
         }
-        const ta  = (p, m, d) => api(TA,  p, m, d);
-        const exp = (p, m, d) => api(EXP, p, m, d);
-
-        // Render an error placeholder when an api() call fails.
-        // Caller passes the container element + the api() result.
-        function renderApiError(el, r, what) {
-            const map = {
-                auth:      'Auth required — log in via /auth/',
-                not_found: 'Endpoint missing on backend',
-                network:   'Network unreachable',
-            };
-            const msg = map[r.err] || ('HTTP ' + r.status);
-            el.innerHTML = `<div class="err">${what}: ${msg}</div>`;
-        }
-
-        function renderBreakdownChips(target, dict, severityColor = false) {
-            const el = document.getElementById(target);
-            if (!dict || !Object.keys(dict).length) {
-                el.innerHTML = '<span class="chip">none</span>';
-                return;
+        async function post(url, body) {
+            try {
+                const r = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: body ? JSON.stringify(body) : null,
+                });
+                const ct = r.headers.get('content-type') || '';
+                if (!r.ok) return { ok: false, status: r.status, err: 'HTTP ' + r.status };
+                if (!ct.includes('json')) return { ok: false, status: r.status, err: 'Not JSON (auth?)' };
+                return { ok: true, status: r.status, data: await r.json() };
+            } catch (e) {
+                return { ok: false, status: 0, err: 'Network (' + e.message + ')' };
             }
-            el.innerHTML = Object.entries(dict)
-                .sort((a, b) => b[1] - a[1])
-                .map(([k, v]) => {
-                    let cls = '';
-                    if (severityColor) {
-                        if (k === 'critical') cls = 'crit';
-                        else if (k === 'high') cls = 'warn';
-                        else if (k === 'low') cls = 'ok';
-                    }
-                    return `<span class="chip ${cls}">${k}: ${v}</span>`;
-                }).join('');
         }
-
-        async function loadMetrics() {
-            const r = await ta('/stats');
-            if (!r.ok) {
-                // /status is auth-free — fall back so the count cards
-                // populate even when /stats 401's (browser hasn't
-                // refreshed Authelia cookie yet). Status only carries
-                // alerts_24h + pending_rules; the breakdowns stay
-                // marked with the error so the operator knows why.
-                const pub = await ta('/status');
-                document.getElementById('m-alerts-24h').textContent = pub.ok ? (pub.data.alerts_24h ?? 0) : '?';
-                document.getElementById('m-pending-rules').textContent = pub.ok ? (pub.data.pending_rules ?? 0) : '?';
-                document.getElementById('m-severity-total').textContent = '?';
-                document.getElementById('m-total-rules').textContent = 'total: ?';
-                const errLabel = r.err === 'auth' ? 'auth' : 'err';
-                document.getElementById('m-alerts-by-source').innerHTML =
-                    `<span class="chip" style="color:var(--danger);">${errLabel}</span>`;
-                document.getElementById('m-alerts-by-severity').innerHTML =
-                    `<span class="chip" style="color:var(--danger);">${errLabel}</span>`;
-                return;
-            }
-            const s = r.data;
-            document.getElementById('m-alerts-24h').textContent = s.alerts_24h ?? 0;
-            renderBreakdownChips('m-alerts-by-source', s.by_source);
-
-            const sev = s.by_severity || {};
-            const sevTotal = Object.values(sev).reduce((a, b) => a + b, 0);
-            document.getElementById('m-severity-total').textContent = sevTotal;
-            renderBreakdownChips('m-alerts-by-severity', sev, true);
-
-            document.getElementById('m-pending-rules').textContent = s.pending_rules ?? 0;
-            document.getElementById('m-total-rules').textContent   = `total: ${s.total_rules ?? 0}`;
-        }
-
-        async function loadAlerts() {
-            const hours = document.getElementById('alerts-hours').value;
-            const r = await ta(`/alerts?hours=${hours}`);
-            const c = document.getElementById('alerts-container');
-            if (!r.ok) { renderApiError(c, r, 'Alerts'); return; }
-            const d = r.data;
-            if (!d.alerts?.length) { c.innerHTML = '<div class="empty-state">No alerts in window</div>'; return; }
-            // Cap at 25 rows so the column doesn't dominate the page —
-            // the "+N more" line tells the operator there's more.
-            c.innerHTML = `
-                <table>
-                    <thead><tr><th>Time</th><th>Severity</th><th>Source</th><th>Detail</th></tr></thead>
-                    <tbody>
-                        ${d.alerts.slice(0, 25).map(a => `
-                            <tr>
-                                <td>${a.timestamp ? new Date(a.timestamp).toLocaleString() : '–'}</td>
-                                <td><span class="severity-pill ${(a.severity || 'low').toLowerCase()}">${a.severity || '?'}</span></td>
-                                <td>${a.source || '–'}</td>
-                                <td>${escapeHtml(a.description || a.scenario || a.message || '–')}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                ${d.alerts.length > 25 ? `<div class="empty-state">…${d.alerts.length - 25} more (truncated)</div>` : ''}
-            `;
-        }
-
-        async function loadEmancipated() {
-            const r = await exp('/emancipated');
-            const c = document.getElementById('emancipated-container');
-            if (!r.ok) {
-                renderApiError(c, r, 'Emancipated');
-                document.getElementById('m-emancipated').textContent = '?';
-                document.getElementById('m-emancipated-channels').innerHTML =
-                    `<span class="chip" style="color:var(--danger);">${r.err}</span>`;
-                return;
-            }
-            const services = r.data.services || [];
-            document.getElementById('m-emancipated').textContent = services.length;
-
-            // Channel breakdown for the top-card chips. ssl+dns are
-            // the same Punk-Exposure channel so we collapse them.
-            const ch = { tor: 0, ssl: 0, mesh: 0 };
-            services.forEach(s => {
-                const cs = s.channels || [];
-                if (cs.includes('tor')) ch.tor++;
-                if (cs.includes('ssl') || cs.includes('dns')) ch.ssl++;
-                if (cs.includes('mesh')) ch.mesh++;
-            });
-            document.getElementById('m-emancipated-channels').innerHTML =
-                Object.entries(ch).filter(([_, n]) => n > 0)
-                    .map(([k, n]) => `<span class="chip">${k}: ${n}</span>`)
-                    .join('') || '<span class="chip">idle</span>';
-
-            if (!services.length) {
-                c.innerHTML = '<div class="empty-state">No services emancipated</div>';
-                return;
-            }
-            c.innerHTML = `<div class="ema-list">${services.map(s => `
-                <div class="ema-row">
-                    <div class="ema-row-head">
-                        <span class="ema-name">${escapeHtml(s.name || s.service || '?')}</span>
-                        <button class="btn btn-sm btn-danger" onclick="revokeService('${escapeHtml(s.name || s.service)}')">Revoke</button>
-                    </div>
-                    <div class="ema-meta">
-                        <span class="ema-port">:${escapeHtml(String(s.port ?? '?'))}</span>
-                        ${s.domain ? `<span>${escapeHtml(s.domain)}</span>` : ''}
-                    </div>
-                    <div class="ema-channels">
-                        ${(s.channels || []).map(ch => `<span class="ema-channel ${ch}">${ch.toUpperCase()}</span>`).join('')}
-                    </div>
-                </div>
-            `).join('')}</div>`;
-        }
-
-        async function revokeService(name) {
-            if (!confirm(`Revoke exposure for "${name}"? All channels (Tor/SSL/Mesh) will be torn down.`)) return;
-            const r = await exp('/revoke', 'POST', { name });
-            if (!r.ok || r.data?.success === false) {
-                alert('Revoke failed: ' + (r.err || r.data?.error || 'unknown'));
-                return;
-            }
-            loadEmancipated();
-        }
-
-        async function loadRules() {
-            const r = await ta('/rules?status=pending');
-            const c = document.getElementById('rules-container');
-            if (!r.ok) { renderApiError(c, r, 'Rules'); return; }
-            const rules = r.data.rules || [];
-            if (!rules.length) { c.innerHTML = '<div class="empty-state">No pending rules</div>'; return; }
-            c.innerHTML = rules.map(r => `
-                <div class="rule-row" id="rule-${r.id}">
-                    <div class="rule-head">
-                        <span><strong>${escapeHtml(r.type || '?')}</strong> · ${escapeHtml(r.name || r.id || '')}</span>
-                        <div class="rule-actions">
-                            <button class="btn btn-sm btn-primary" onclick="ruleAction('${r.id}', 'approve')">Approve</button>
-                            <button class="btn btn-sm btn-warn"    onclick="ruleAction('${r.id}', 'apply')">Apply</button>
-                            <button class="btn btn-sm btn-danger"  onclick="ruleAction('${r.id}', 'reject')">Reject</button>
-                        </div>
-                    </div>
-                    <div class="rule-meta">${escapeHtml(r.description || r.reason || '')}</div>
-                    ${r.body || r.content ? `<div class="rule-body">${escapeHtml(r.body || r.content)}</div>` : ''}
-                </div>
-            `).join('');
-        }
-
-        async function ruleAction(id, verb) {
-            const r = await ta(`/rules/${id}/${verb}`, 'POST');
-            if (!r.ok) { alert(verb + ' failed: ' + r.err); return; }
-            loadRules();
-            loadMetrics();
-        }
-
-        async function analyzeIOC() {
-            const ioc = document.getElementById('ioc-input').value.trim();
-            if (!ioc) return;
-            const r = document.getElementById('analysis-result');
-            r.innerHTML = '<div style="padding:0.5rem;text-align:center;font-size:0.8rem;">Analyzing…</div>';
-            // The backend's /analyze takes AnalysisRequest (hours + optional alert_ids).
-            // Single-IOC quick lookup: send the ioc alongside the 24h window;
-            // the backend ignores unknown keys.
-            const res = await ta('/analyze', 'POST', { ioc, hours: 24 });
-            if (!res.ok) { r.innerHTML = `<div class="err">Analysis failed: ${res.err}</div>`; return; }
-            const d = res.data;
-            r.innerHTML = `
-                <div style="padding:0.5rem;background:var(--tube-light);border-radius:6px;font-size:0.8rem;">
-                    <div><strong>${escapeHtml(ioc)}</strong></div>
-                    <div style="margin-top:0.3rem;color:var(--text-dim);">
-                        ${escapeHtml(typeof d.analysis === 'string' ? d.analysis.slice(0, 300) : JSON.stringify(d).slice(0, 300))}
-                    </div>
-                </div>
-            `;
-        }
-
-        async function collectNow() {
-            const r = await ta('/collect', 'POST');
-            if (!r.ok) { alert('Collect failed: ' + r.err); return; }
-            const c = r.data.collected || {};
-            alert(`Collected:\n  CrowdSec: ${c.crowdsec ?? 0}\n  WAF: ${c.waf ?? 0}`);
-            loadMetrics();
-            loadAlerts();
-        }
-
-        function escapeHtml(s) {
+        function esc(s) {
             if (s == null) return '';
             return String(s).replace(/[&<>"']/g, c => ({
-                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
             }[c]));
         }
 
-        loadMetrics();
-        loadAlerts();
-        loadEmancipated();
-        loadRules();
-        setInterval(loadMetrics, 60000);
-        setInterval(loadEmancipated, 60000);
+        // CrowdSec alert flattener. Walk the nested
+        // .details.events[].meta[{key,value}] structure and pull out
+        // the values an analyst wants — country, ASN, target user —
+        // without forcing the operator to expand each row.
+        function flatMeta(alert) {
+            const events = (alert.details && alert.details.events) || [];
+            const meta = {};
+            for (const ev of events) {
+                for (const m of (ev.meta || [])) {
+                    if (m.key && !(m.key in meta)) meta[m.key] = m.value;
+                }
+            }
+            return {
+                country:     meta.IsoCode || '',
+                asnNumber:   meta.ASNNumber || '',
+                asnOrg:      meta.ASNOrg || '',
+                sourceRange: meta.SourceRange || '',
+                logType:     meta.log_type || '',
+                service:     meta.service || '',
+                targetUser:  meta.target_user || '',
+                hitCount:    events.length,
+                lastSeen:    events.length ? events[events.length - 1].timestamp : '',
+            };
+        }
+
+        function topN(items, n = 5) {
+            const counts = {};
+            for (const v of items) { if (!v) continue; counts[v] = (counts[v] || 0) + 1; }
+            return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, n);
+        }
+        // ISO 3166-1 alpha-2 → flag emoji (regional indicator symbols). #613
+        function flagEmoji(cc) {
+            if (!cc || !/^[A-Za-z]{2}$/.test(cc)) return '';
+            const A = 0x1F1E6;
+            return String.fromCodePoint(A + cc.toUpperCase().charCodeAt(0) - 65,
+                                        A + cc.toUpperCase().charCodeAt(1) - 65);
+        }
+        function renderTop(elId, pairs, withFlag = false) {
+            const el = document.getElementById(elId);
+            if (!pairs.length) { el.innerHTML = '<li class="empty">no data</li>'; return; }
+            el.innerHTML = pairs.map(([k, v]) => {
+                const fl = withFlag ? flagEmoji(k) : '';
+                const label = fl ? `<span class="flag-emoji">${fl}</span> ${esc(k)}` : esc(k);
+                return `<li><span class="k">${label}</span><span class="v">${v}</span></li>`;
+            }).join('');
+        }
+
+        // Loaders
+        async function loadStats() {
+            const r = await get('/api/v1/threat-analyst/stats');
+            if (!r.ok) {
+                document.getElementById('s-alerts').textContent = '?';
+                document.getElementById('s-pending').textContent = '?';
+                return;
+            }
+            const s = r.data;
+            document.getElementById('s-alerts').textContent  = s.alerts_24h ?? 0;
+            document.getElementById('s-pending').textContent = s.pending_rules ?? 0;
+            document.getElementById('s-pending-hint').textContent =
+                `${s.total_rules ?? 0} total · ${s.pending_rules ?? 0} pending`;
+        }
+
+        async function loadAlerts() {
+            const hours = document.getElementById('alerts-window').value;
+            const r = await get(`/api/v1/threat-analyst/alerts?hours=${hours}`);
+            const c = document.getElementById('alerts-body');
+            if (!r.ok) { c.innerHTML = `<div class="msg msg-error">${esc(r.err)}</div>`; return; }
+            const alerts = r.data.alerts || [];
+            renderTopFromAlerts(alerts);
+
+            if (!alerts.length) {
+                c.innerHTML = '<div class="msg msg-empty">No alerts in window. Click "Collect now" to pull from CrowdSec / WAF.</div>';
+                document.getElementById('s-unique-ips').textContent = 0;
+                document.getElementById('s-countries').textContent = 0;
+                return;
+            }
+            const rows = alerts.slice(0, 5).map(a => {
+                const m = flatMeta(a);
+                return `<tr>
+                    <td>${m.lastSeen ? esc(new Date(m.lastSeen).toLocaleString()) : '—'}</td>
+                    <td><span class="pill ${esc((a.severity || 'unknown').toLowerCase())}">${esc(a.severity || '?')}</span></td>
+                    <td class="ip"><code>${esc(a.ip || '—')}</code>${m.country ? ` <span class="flag"><b>${esc(m.country)}</b></span>` : ''}</td>
+                    <td><span class="mono">${esc(a.type || '—')}</span></td>
+                    <td>${esc(m.service || '—')}${m.targetUser ? ` <span class="flag">user=<b>${esc(m.targetUser)}</b></span>` : ''}</td>
+                    <td>${m.asnOrg ? `<span class="flag">AS${esc(m.asnNumber)} <b>${esc(m.asnOrg)}</b></span>` : '—'}</td>
+                    <td><span class="mono">${m.hitCount}</span></td>
+                </tr>`;
+            }).join('');
+            const extra = alerts.length > 5 ? `<div class="msg msg-empty">${alerts.length - 5} more not shown</div>` : '';
+            c.innerHTML = `<table>
+                <thead><tr>
+                    <th>Last seen</th><th>Sev</th><th>Source IP</th>
+                    <th>Attack pattern</th><th>Service / target</th>
+                    <th>ASN</th><th>Hits</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>${extra}`;
+        }
+
+        function renderTopFromAlerts(alerts) {
+            const ips = [], countries = [], types = [], targets = [];
+            const ipSet = new Set(), countrySet = new Set();
+            for (const a of alerts) {
+                const m = flatMeta(a);
+                if (a.ip)         { ips.push(a.ip);             ipSet.add(a.ip); }
+                if (m.country)    { countries.push(m.country);  countrySet.add(m.country); }
+                if (a.type)         types.push(a.type);
+                if (m.targetUser)   targets.push(m.targetUser);
+            }
+            document.getElementById('s-unique-ips').textContent = ipSet.size;
+            document.getElementById('s-countries').textContent  = countrySet.size;
+            renderTop('top-ips',       topN(ips, 5));
+            renderTop('top-countries', topN(countries, 5), true);
+            renderTop('top-types',     topN(types, 5));
+            renderTop('top-targets',   topN(targets, 5));
+        }
+
+        async function loadRules() {
+            const r = await get('/api/v1/threat-analyst/rules?status=pending');
+            const c = document.getElementById('rules-body');
+            if (!r.ok) { c.innerHTML = `<div class="msg msg-error">${esc(r.err)}</div>`; return; }
+            const rules = r.data.rules || [];
+            if (!rules.length) { c.innerHTML = '<div class="msg msg-empty">No pending rules.</div>'; return; }
+            const rows = rules.map(rule => `
+                <tr>
+                    <td><strong>${esc(rule.type || '?')}</strong><br><span class="flag">${esc(rule.name || rule.id || '')}</span></td>
+                    <td>${esc(rule.description || rule.reason || '—')}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="sm primary" onclick="ruleAction('${esc(rule.id)}', 'approve')">Approve</button>
+                        <button class="sm" onclick="ruleAction('${esc(rule.id)}', 'apply')">Apply</button>
+                        <button class="sm danger" onclick="ruleAction('${esc(rule.id)}', 'reject')">Reject</button>
+                    </td>
+                </tr>
+            `).join('');
+            c.innerHTML = `<table><thead><tr><th>Rule</th><th>Description</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table>`;
+        }
+
+        async function loadEmancipated() {
+            const r = await get('/api/v1/exposure/emancipated');
+            const c = document.getElementById('ema-body');
+            if (!r.ok) { c.innerHTML = `<div class="msg msg-error">${esc(r.err)}</div>`; return; }
+            const svcs = r.data.services || [];
+            if (!svcs.length) { c.innerHTML = '<div class="msg msg-empty">No services exposed.</div>'; return; }
+            const rows = svcs.map(s => `
+                <tr>
+                    <td><strong>${esc(s.name || s.service || '?')}</strong></td>
+                    <td><code>:${esc(String(s.port ?? '?'))}</code></td>
+                    <td>${esc(s.domain || '—')}</td>
+                    <td>${(s.channels || []).map(ch => `<span class="pill medium">${esc(ch)}</span>`).join(' ')}</td>
+                    <td><button class="sm danger" onclick="revokeService('${esc(s.name || s.service)}')">Revoke</button></td>
+                </tr>
+            `).join('');
+            c.innerHTML = `<table><thead><tr><th>Name</th><th>Port</th><th>Domain</th><th>Channels</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+        }
+
+        // Actions
+        async function ruleAction(id, verb) {
+            const r = await post(`/api/v1/threat-analyst/rules/${id}/${verb}`);
+            if (!r.ok) { alert(`${verb} failed: ${r.err}`); return; }
+            loadRules(); loadStats();
+        }
+        async function revokeService(name) {
+            if (!confirm(`Revoke exposure for "${name}"?`)) return;
+            const r = await post('/api/v1/exposure/revoke', { name });
+            if (!r.ok) { alert('Revoke failed: ' + r.err); return; }
+            loadEmancipated();
+        }
+        async function analyzeIOC() {
+            const ioc = document.getElementById('ioc-input').value.trim();
+            if (!ioc) return;
+            const out = document.getElementById('analyze-out');
+            out.className = 'analyze-result'; out.textContent = 'Analyzing…';
+            const r = await post('/api/v1/threat-analyst/analyze', { ioc, hours: 24 });
+            if (!r.ok) { out.className = 'msg msg-error'; out.textContent = 'Failed: ' + r.err; return; }
+            out.textContent = JSON.stringify(r.data, null, 2);
+        }
+
+        // Auto-collect lifecycle. Operators don't want to click
+        // "Collect" — they want to land on a page that already shows
+        // real activity. We collect on load AND every 60s.
+        function setAutoStatus(state, text) {
+            const dot = document.getElementById('auto-dot');
+            dot.className = 'dot' + (state === 'stale' ? ' stale' : state === 'err' ? ' err' : '');
+            document.getElementById('auto-text').textContent = text;
+        }
+        async function collectThen() {
+            setAutoStatus('stale', 'collecting…');
+            const r = await post('/api/v1/threat-analyst/collect');
+            if (!r.ok) { setAutoStatus('err', 'collect failed: ' + r.err); await loadAll(); return; }
+            const c = r.data.collected || {};
+            setAutoStatus('', `collected ${c.crowdsec ?? 0} cs · ${c.waf ?? 0} waf — ${new Date().toLocaleTimeString()}`);
+            await loadAll();
+        }
+        // #597 — global overview from WAF + CrowdSec + firewall
+        async function loadOverview() {
+            const r = await get('/api/v1/threat-analyst/overview');
+            if (!r.ok) return;
+            const o = r.data || {}, w = o.waf || {}, c = o.crowdsec || {}, f = o.firewall || {};
+            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+            set('o-waf-threats', w.threats_today ?? '—');
+            set('o-waf-blocked', 'bloquées: ' + (w.blocked_24h ?? 0) + ' (24h)');
+            set('o-cs-bans', c.alerts ?? '—');
+            set('o-cs-alerts', 'décisions actives: ' + (c.active_decisions ?? 0));
+            set('o-fw-blacklist', f.blocked ?? '—');
+            set('o-fw-split', f.source || 'via crowdsec-bouncer');
+            set('o-waf-rules', w.rules_loaded ?? '—');
+            const up = [];
+            up.push((w.running ? '🟢' : '🔴') + ' WAF');
+            up.push((c.running ? '🟢' : '🔴') + ' CrowdSec');
+            up.push('🟢 Firewall');
+            const ago = o.updated ? Math.max(0, Math.round(Date.now()/1000 - o.updated)) + 's' : '';
+            set('ov-sources', up.join(' · ') + (ago ? ' · maj ' + ago : ''));
+        }
+        async function loadAll() {
+            await Promise.all([loadOverview(), loadStats(), loadAlerts(), loadRules(), loadEmancipated()]);
+        }
+
+        // Boot
+        collectThen();
+        setInterval(collectThen, 60000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

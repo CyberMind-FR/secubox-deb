@@ -1,8 +1,3 @@
-# SPDX-License-Identifier: LicenseRef-CMSD-1.0
-# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-# Source-Disclosed License — All rights reserved except as expressly granted.
-# See LICENCE-CMSD-1.0.md for terms.
-
 # packages/secubox-proxypac/tests/test_webui_panel.py
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]

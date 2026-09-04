@@ -1,15 +1,22 @@
-secubox-yacy (1.0.14-1~bookworm1) bookworm; urgency=high
+secubox-yacy (1.0.15-1~bookworm1) bookworm; urgency=medium
 
-  * Retire `RuntimeDirectory=secubox` (ref #1022). Ce repertoire est PARTAGE par
-    une centaine de modules ; `RuntimeDirectory=` est concu pour un repertoire
-    PROPRE a un service. systemd le recreait a chaque demarrage avec le mode de
-    l'unite : le dernier demarre imposait le sien, et huit unites le posaient en
-    0755 — privant tous les autres du droit d'y creer leur socket. Le meme
-    mecanisme l'effacait a l'arret d'un service, emportant les sockets des
-    quatre-vingt-dix autres. Il est desormais declare une seule fois, en 1777,
-    par le tmpfiles.d de secubox-core.
+  * Ne plus forcer une reconnexion quand la session tient au cookie : la webui
+    laisse le cookie de session authentifier et ne redirige que sur une vraie
+    401, au lieu de renvoyer a login des l'absence de jeton localStorage.
 
- -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 11:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 09:59:46 +0200
+
+secubox-yacy (1.0.14-1~bookworm1) bookworm; urgency=medium
+
+  * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.
+    /run/secubox porte le bit collant : on n'y delie que ce qu'on possede,
+    et une socket laissee par un autre utilisateur rend le demarrage
+    impossible — le service echoue, redemarre, echoue encore, en silence.
+  * `RuntimeDirectory=secubox` retire : systemd efface le contenu d'un
+    RuntimeDirectory au redemarrage, et ce repertoire est partage par ~95
+    unites. Une seule qui le declare emporte les sockets des autres.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:35:59 +0200
 
 secubox-yacy (1.0.13-1~bookworm1) bookworm; urgency=medium
 

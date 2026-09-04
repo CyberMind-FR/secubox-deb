@@ -1,3 +1,209 @@
+secubox-threat-analyst (1.5.1-1~bookworm2) bookworm; urgency=medium
+
+  * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.
+    /run/secubox porte le bit collant : on n'y delie que ce qu'on possede,
+    et une socket laissee par un autre utilisateur rend le demarrage
+    impossible — le service echoue, redemarre, echoue encore, en silence.
+  * `RuntimeDirectory=secubox` retire : systemd efface le contenu d'un
+    RuntimeDirectory au redemarrage, et ce repertoire est partage par ~95
+    unites. Une seule qui le declare emporte les sockets des autres.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:35:59 +0200
+
+secubox-threat-analyst (1.5.0-1~bookworm2) bookworm; urgency=medium
+
+  * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
+    (remove the hard cascade-stop when secubox-core restarts/fails).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 12:00:00 +0200
+
+secubox-threat-analyst (1.4.7-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
+secubox-threat-analyst (1.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * webui: remove the "Endpoint status" diagnostic panel (diag footer + diagSet
+    plumbing) from the dashboard.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 09:00:00 +0200
+
+secubox-threat-analyst (1.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * ui: add country flag emoji to the Top source countries list (#613) —
+    ISO 3166-1 alpha-2 → regional-indicator emoji before each code.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 16 Jun 2026 09:30:00 +0200
+
+secubox-threat-analyst (1.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * ui: limit the Recent attacks table to 5 rows (#611), matching the Top-N
+    lists. Stats + leaderboards are unaffected (computed from the full alert
+    set before the table slice).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 16 Jun 2026 09:00:00 +0200
+
+secubox-threat-analyst (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * feat(ingest): populate the headline stats + Top-N leaderboards with real
+    CrowdSec data (#599). The collector shelled out to bare `cscli`, which
+    fails for the unprivileged `secubox` user the daemon runs as → the alerts
+    DB stayed empty (Unique attackers / Active threats / Countries / Top-N all
+    0). Now goes through a read-only sudo grant (`/etc/sudoers.d/
+    secubox-threat-analyst`: `cscli alerts list *` + `decisions list *`,
+    visudo-validated in postinst) and fetches `-l 200`. sudo is BACKEND-only;
+    the frontend stays value-only.
+  * feat(collect): backend auto-collect loop (~5 min) so the DB fills without
+    the page open; severity mapped correctly (`remediation` is a bool).
+  * fix(dedup): `get_recent_alerts` now dedups by alert id (last wins) and a
+    bounded 48 h compaction rewrites `alerts.jsonl` — the append-on-every-poll
+    log was massively inflating counts and leaderboards.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 12:00:00 +0200
+
+secubox-threat-analyst (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat(overview): global security overview — all metrics now dynamic,
+    fed live from WAF + CrowdSec + firewall (#597). New cached `/overview`
+    endpoint aggregates: WAF (threats_today/blocked_24h/rules_loaded via
+    /run/secubox/waf.sock), CrowdSec (active bans + alerts via cscli -o
+    json), firewall (blacklisted IP count v4/v6 via nft -j list set).
+    Double-buffer background refresh (60s, overview.json) + source
+    health line. WebUI gains a "Vue globale sécurité" card row wired to
+    the new endpoint via loadOverview() in loadAll().
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 10:00:00 +0200
+
+secubox-threat-analyst (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix(postinst): build-safe service enable (#595). A plain `systemctl
+    enable` no-ops during offline/image-build installs, so the unit ended
+    up DISABLED on the live board → /threat-analyst/ page loaded but its
+    backend (stats/alerts/rules) was down. Now uses deb-systemd-helper
+    (persists the enable to first boot) + guarded daemon-reload/start.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 15 Jun 2026 11:00:00 +0200
+
+secubox-threat-analyst (1.4.1-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as the AI agent that
+    writes CrowdSec scenarios; disambiguate from the other six
+    threats-cluster packages (closes #383, part of dns/threats
+    naming-clarity pass)
+  * Maintainer corrected to Gerald KERMA
+  * Recommend crowdsec explicitly
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 12:00:00 +0000
+
+secubox-threat-analyst (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: make the dashboard actually
+    USEFUL. v1.3.0 was charter-aligned but always showed zeros
+    because threat-analyst's internal DB is empty until /collect
+    is explicitly called.
+      - Auto-collect on page load AND every 60s (operator sees real
+        activity immediately; small green dot in header confirms
+        latest collection time + counts).
+      - NEW "Unique attackers" + "Countries" stat cards driven from
+        the collected alerts (not just raw alert count).
+      - NEW 4-panel Top-N row: top attackers (by hit count), top
+        source countries, top attack patterns, top targeted accounts
+        — the actual triage data an analyst needs at a glance.
+      - Recent attacks table is now RICH: src IP highlighted, ISO
+        country code, attack pattern (e.g. crowdsecurity/
+        ssh-time-based-bf_user-enum), service+target user (e.g.
+        ssh/admin), ASN org (e.g. AS48090 Techoff Srv Limited),
+        per-IP hit count. All flattened from the nested
+        details.events[].meta[{key,value}] structure that CrowdSec
+        returns.
+      - Layout + palette unchanged (still respects WALL module +
+        DESIGN-CHARTER §Typography §Spacing §Grid).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 15:00:00 +0000
+
+secubox-threat-analyst (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: complete rewrite from scratch.
+    Operators reported the v1.2.x dashboard still felt broken — too
+    many panels, gradient-chip clutter, confusing error states.
+    v1.3.0 throws everything out and rebuilds against
+    .claude/DESIGN-CHARTER.md:
+      - WALL layer palette (threat-analyst is a WALL/firewall
+        module per the charter); --wall-main #9A6010 accent.
+      - Space Grotesk for display/body, JetBrains Mono for
+        monospace per the charter §Typography.
+      - Base white theme tokens: --bg / --surface / --surface2 /
+        --border / --text / --muted (all sourced from shared
+        /shared/design-tokens.css).
+      - Standard radius (14px cards, 6px swatches, 3px chips) and
+        spacing scale (XS 4 / S 8 / M 16 / L 24 / XL 40) per
+        charter §Grid System and §Spacing System.
+      - Single-column layout, plain tables for alerts/rules/
+        emancipated. No gradient text, no chip clutter under each
+        stat card.
+      - Each panel fetches independently and shows its own error
+        in plain text. No clever wrapper hiding 401s.
+      - NEW diagnostic footer table — tracks the latest fetch
+        outcome per endpoint (OK 200 / FAIL 401 / Network etc.)
+        so the operator can distinguish auth-vs-network-vs-404
+        without opening DevTools.
+      - body.module-wall set so any future shared CSS that scopes
+        by .module-wall picks up the right colour vars.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 14:30:00 +0000
+
+secubox-threat-analyst (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * api/main.py: replace `from secubox_core.auth import require_jwt`
+    with a local no-op stub, matching the pattern every other SecuBox
+    module already uses (secubox-sentinelle-gsm, etc.). The real
+    secubox_core.require_jwt demanded an HTTP `Authorization: Bearer`
+    header on every gated endpoint, but the threat-analyst dashboard
+    runs inside the Authelia-SSO'd admin vhost where the operator only
+    carries SSO cookies, never a JWT in localStorage. Every /stats,
+    /alerts, /rules call therefore returned 401 and the dashboard
+    rendered "?" across every metric.
+    The actual security perimeter is nginx + the unix socket — the
+    FastAPI never listens on TCP, the socket is bound 0660 root:secubox
+    by systemd. The `Depends(require_jwt)` decorators are kept for
+    forward compatibility; if a future deploy exposes the API on TCP,
+    swapping the stub for the real check is one line.
+  * User-authorized 2026-05-23.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 13:45:00 +0000
+
+secubox-threat-analyst (1.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: add no-cache <meta> directives.
+    v1.1.2 fixed the CORS-credentials trap on disk but operators
+    still saw the stale "Network unreachable" output because the
+    browser cached the v1.1.1 HTML. Adding `Cache-Control:
+    no-store, no-cache, must-revalidate` + `Pragma: no-cache` +
+    `Expires: 0` <meta> tags so future re-deploys force a reload.
+    Doesn't help the currently-cached page (operator still has to
+    hard-refresh once) but prevents the same trap on the next
+    redeploy.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 13:00:00 +0000
+
+secubox-threat-analyst (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: drop fetch credentials: 'include'.
+    v1.1.1 added it "defensively" — but the secubox nginx vhost sends
+    `Access-Control-Allow-Origin: *` on every /api/v1/* response, and
+    browsers REJECT a wildcard ACAO when the fetch is credentialed
+    (per the CORS spec — credentials require a specific origin). Every
+    call threw TypeError before reaching the response, which the
+    catch labelled "network" — every panel showed "Network
+    unreachable" even though curl showed the endpoints returning JSON.
+    Removing the explicit option falls back to the fetch default
+    `'same-origin'`, which still ships Authelia cookies on same-origin
+    requests without triggering the strict CORS check.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 12:00:00 +0000
+
 secubox-threat-analyst (1.1.1-1~bookworm1) bookworm; urgency=medium
 
   * www/threat-analyst/index.html: two follow-up fixes to v1.1.0:

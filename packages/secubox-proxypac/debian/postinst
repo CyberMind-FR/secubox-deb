@@ -8,25 +8,6 @@ if [ "$1" = "configure" ]; then
     systemctl daemon-reload || true
     systemctl enable --now secubox-proxypac-gen.path || true
     systemctl enable --now secubox-proxypac-gen.timer || true
-    # LE VHOST N ETAIT JAMAIS ACTIVE PAR LE PAQUET (#1034). Il etait livre dans
-    # `sites-available` et quelqu un en avait fait, un jour, une COPIE dans
-    # `sites-enabled`. Cette copie a vecu sa vie : chaque mise a jour du paquet
-    # rafraichissait `sites-available` sans jamais toucher le fichier reellement
-    # charge. La mise a jour reussissait et ne changeait rien — le pire des cas,
-    # puisque rien ne le signale.
-    SRC=/etc/nginx/sites-available/wpad-vhost.conf
-    LIEN=/etc/nginx/sites-enabled/wpad-vhost.conf
-    if [ -e "$SRC" ]; then
-        if [ ! -L "$LIEN" ] && [ -e "$LIEN" ]; then
-            # LA SAUVEGARDE SORT DE `sites-enabled`, IMPERATIVEMENT : nginx y
-            # charge *tous* les fichiers. L y laisser declarerait le meme
-            # `server_name` deux fois — c est-a-dire creer, pour se premunir
-            # d un defaut, exactement le defaut d a cote.
-            install -d /var/backups/secubox-proxypac
-            mv "$LIEN" "/var/backups/secubox-proxypac/wpad-vhost.conf.$(date +%Y%m%d%H%M%S)" || true
-        fi
-        ln -sfn "$SRC" "$LIEN"
-    fi
     nginx -t && systemctl reload nginx || true
     /usr/sbin/proxypac-wpad apply || true
 fi
