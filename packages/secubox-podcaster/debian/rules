@@ -21,6 +21,11 @@ override_dh_auto_install:
 	install -d debian/secubox-podcaster/etc/nginx/secubox.d
 	[ -f nginx/podcaster.conf ] && cp nginx/podcaster.conf debian/secubox-podcaster/etc/nginx/secubox-routes.d/ || true
 	[ -f nginx/podcaster.conf ] && cp nginx/podcaster.conf debian/secubox-podcaster/etc/nginx/secubox.d/ || true
+	# Vhost dédié podcaster.gk2 (server-block) — jusqu'ici hand-managé sur la box,
+	# désormais VERSIONNÉ ici (conffile). Le symlink d'activation est posé en
+	# postinst ; retiré en postrm.
+	install -d debian/secubox-podcaster/etc/nginx/sites-available
+	[ -f nginx/podcaster.gk2.conf ] && cp nginx/podcaster.gk2.conf debian/secubox-podcaster/etc/nginx/sites-available/ || true
 	# Systemd unit
 	install -d debian/secubox-podcaster/usr/lib/systemd/system
 	cp systemd/secubox-podcaster.service debian/secubox-podcaster/usr/lib/systemd/system/

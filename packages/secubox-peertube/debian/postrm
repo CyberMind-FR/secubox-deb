@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+    remove|purge)
+        # Vhost public peertube.gk2 : on retire le symlink d'activation (le
+        # server-block sous sites-available/ est un conffile géré par dpkg).
+        rm -f /etc/nginx/sites-enabled/peertube.conf || true
+        if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
+            systemctl reload nginx 2>/dev/null || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

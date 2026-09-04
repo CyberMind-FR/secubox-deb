@@ -1,3 +1,12 @@
+secubox-peertube (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Reproductibilité : le vhost public peertube.gk2 (server-block), jusqu'ici
+    hand-managé sur la box (backport #390 en attente), est désormais VERSIONNÉ
+    dans le paquet (nginx/peertube.gk2.conf → /etc/nginx/sites-available/peertube.conf,
+    conffile). Le postinst posait déjà le symlink d'activation ; postrm le retire.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 09:00:00 +0200
+
 secubox-peertube (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Nouvelle sous-commande `peertubectl transcodage {etat|off|on}`.

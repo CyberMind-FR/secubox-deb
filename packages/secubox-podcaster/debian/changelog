@@ -1,3 +1,12 @@
+secubox-podcaster (1.0.35-1~bookworm1) bookworm; urgency=medium
+
+  * Reproductibilité : le vhost dédié podcaster.gk2 (server-block), jusqu'ici
+    hand-managé sur la box (aucun paquet), est désormais VERSIONNÉ dans le paquet
+    (nginx/podcaster.gk2.conf → /etc/nginx/sites-available, conffile) et activé
+    par symlink en postinst, retiré en postrm. Contenu identique au live.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 08:30:00 +0200
+
 secubox-podcaster (1.0.34-1~bookworm1) bookworm; urgency=medium
 
   * Correctif slicer : d.feeds est un DICT {nom: compte}, pas un tableau — le

@@ -27,6 +27,11 @@ case "$1" in
       systemctl restart secubox-podcaster.service 2>/dev/null || true
     fi
 
+    # Vhost podcaster.gk2 : on active le server-block (symlink) s'il est fourni.
+    if [ -f /etc/nginx/sites-available/podcaster.gk2.conf ]; then
+      ln -sf ../sites-available/podcaster.gk2.conf /etc/nginx/sites-enabled/podcaster.gk2.conf
+    fi
+
     # Reload nginx only if the resulting config is valid.
     if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
       systemctl reload nginx 2>/dev/null || true

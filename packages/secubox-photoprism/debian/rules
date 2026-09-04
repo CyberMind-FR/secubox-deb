@@ -26,6 +26,11 @@ override_dh_auto_install:
 	install -d debian/secubox-photoprism/etc/nginx/secubox-routes.d
 	[ -f nginx/photoprism.conf ] && cp nginx/photoprism.conf debian/secubox-photoprism/etc/nginx/secubox.d/ || true
 	[ -f nginx/photoprism.conf ] && cp nginx/photoprism.conf debian/secubox-photoprism/etc/nginx/secubox-routes.d/ || true
+	# Vhost public photoprism.gk2 (server-block) — BACKPORT : le postinst posait
+	# déjà le symlink sites-available→sites-enabled, mais le fichier n'était
+	# jamais livré (hand-managé). On le versionne ici (conffile).
+	install -d debian/secubox-photoprism/etc/nginx/sites-available
+	[ -f nginx/photoprism.gk2.conf ] && cp nginx/photoprism.gk2.conf debian/secubox-photoprism/etc/nginx/sites-available/photoprism.conf || true
 	# Public vhost template → sites-available (postinst symlinks it)
 	install -d debian/secubox-photoprism/etc/nginx/sites-available
 	[ -f conf/photoprism.nginx.conf ] && cp conf/photoprism.nginx.conf debian/secubox-photoprism/etc/nginx/sites-available/photoprism.conf || true

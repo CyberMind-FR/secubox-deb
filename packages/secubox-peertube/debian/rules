@@ -30,6 +30,11 @@ override_dh_auto_install:
 	install -d debian/secubox-peertube/etc/nginx/secubox-routes.d
 	[ -f nginx/peertube.conf ] && cp nginx/peertube.conf debian/secubox-peertube/etc/nginx/secubox.d/ || true
 	[ -f nginx/peertube.conf ] && cp nginx/peertube.conf debian/secubox-peertube/etc/nginx/secubox-routes.d/ || true
+	# Vhost public peertube.gk2 (server-block) — BACKPORT (#390) : le postinst
+	# posait déjà le symlink sites-available→sites-enabled, mais le fichier
+	# n'était jamais livré (hand-managé). On le versionne ici (conffile).
+	install -d debian/secubox-peertube/etc/nginx/sites-available
+	[ -f nginx/peertube.gk2.conf ] && cp nginx/peertube.gk2.conf debian/secubox-peertube/etc/nginx/sites-available/peertube.conf || true
 	# Public vhost template → sites-available (postinst symlinks into sites-enabled)
 	install -d debian/secubox-peertube/etc/nginx/sites-available
 	[ -f conf/peertube.nginx.conf ] && cp conf/peertube.nginx.conf debian/secubox-peertube/etc/nginx/sites-available/peertube.conf || true
