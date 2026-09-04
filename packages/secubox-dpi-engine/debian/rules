@@ -1,20 +1,34 @@
 #!/usr/bin/make -f
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 #
-# Le binaire nDPId embarque libnDPI 5.x (BUILD_NDPI=ON). La build clone
-# utoni/nDPId (récursif) et compile en NATIF — le cross-build de libnDPI n'est
-# pas supporté ici. Construire sur arm64 (la box ou un runner arm64) :
-#     dpkg-buildpackage -b -us -uc
-#
-# ÉPINGLAGE : le binaire déployé = nDPId 1.7.0-pre. Pour une build reproductible,
-# renseigner le commit exact dans debian/ndpid.ref (une ligne). À défaut, on
-# tombe sur la branche par défaut ci-dessous (NON reproductible — à figer).
+# nDPId embarque libnDPI 5.x (BUILD_NDPI=ON). Le CROSS-BUILD est supporté :
+# nDPId propage CC/AR/RANLIB au build de libnDPI et pose --host lui-même
+# (scripts/get-and-build-libndpi.sh, HOST_TRIPLET). On construit donc aussi bien
+# en natif qu'en cross arm64 depuis un hôte amd64 :
+#     dpkg-buildpackage -a arm64 -b -us -uc   # cross
+#     dpkg-buildpackage -b -us -uc            # natif
+# Build-Depends: crossbuild-essential-<arch> + libpcap-dev:<arch> pour le cross.
+include /usr/share/dpkg/architecture.mk
+
 NDPID_URL ?= https://github.com/utoni/nDPId.git
-NDPID_REF := $(shell test -f debian/ndpid.ref && sed -n '1p' debian/ndpid.ref || echo main)
+# Commit amont ÉPINGLÉ (reproductibilité). Cf. debian/ndpid.ref.
+NDPID_REF := $(shell sed -n '1p' debian/ndpid.ref 2>/dev/null || echo main)
 
 SRC   := $(CURDIR)/.ndpid-src
 BUILD := $(CURDIR)/.ndpid-build
 DEST  := $(CURDIR)/debian/secubox-dpi-engine
+
+# Réglages CROSS (quand hôte de build != cible). En natif, vide.
+CROSS_CMAKE :=
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS_CMAKE := -DCMAKE_SYSTEM_NAME=Linux \
+	-DCMAKE_SYSTEM_PROCESSOR=$(DEB_HOST_GNU_CPU) \
+	-DCMAKE_C_COMPILER=$(DEB_HOST_GNU_TYPE)-gcc \
+	-DCMAKE_AR=/usr/bin/$(DEB_HOST_GNU_TYPE)-ar \
+	-DCMAKE_RANLIB=/usr/bin/$(DEB_HOST_GNU_TYPE)-ranlib \
+	-DNDPI_ADDITIONAL_ARGS=--host=$(DEB_HOST_GNU_TYPE)
+export PKG_CONFIG_LIBDIR := /usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig:/usr/share/pkgconfig
+endif
 
 %:
 	dh $@
@@ -23,7 +37,7 @@ override_dh_auto_configure:
 	rm -rf $(SRC) $(BUILD)
 	git clone $(NDPID_URL) $(SRC)
 	cd $(SRC) && git checkout $(NDPID_REF) && git submodule update --init --recursive
-	cmake -S $(SRC) -B $(BUILD) -DBUILD_NDPI=ON -DCMAKE_BUILD_TYPE=Release
+	cmake -S $(SRC) -B $(BUILD) -DBUILD_NDPI=ON -DCMAKE_BUILD_TYPE=Release $(CROSS_CMAKE)
 
 override_dh_auto_build:
 	cmake --build $(BUILD) --target nDPId nDPIsrvd -j$$(nproc)
@@ -32,15 +46,12 @@ override_dh_auto_test:
 	true
 
 override_dh_auto_install:
-	# Binaires (nDPI 5.x statiquement liée dans nDPId).
 	install -d $(DEST)/usr/sbin
 	install -m 0755 $$(find $(BUILD) -type f -name nDPId    | head -1) $(DEST)/usr/sbin/nDPId
 	install -m 0755 $$(find $(BUILD) -type f -name nDPIsrvd | head -1) $(DEST)/usr/sbin/nDPIsrvd
-	# Units systemd.
 	install -d $(DEST)/usr/lib/systemd/system
 	install -m 0644 systemd/nDPId.service    $(DEST)/usr/lib/systemd/system/nDPId.service
 	install -m 0644 systemd/nDPIsrvd.service $(DEST)/usr/lib/systemd/system/nDPIsrvd.service
-	# Config (conffile) + répertoire de sockets (tmpfiles).
 	install -d $(DEST)/etc/secubox
 	install -m 0644 conf/ndpi.env $(DEST)/etc/secubox/ndpi.env
 	install -d $(DEST)/usr/lib/tmpfiles.d

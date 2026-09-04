@@ -23,6 +23,7 @@ Description: SecuBox-Deb — moteur DPI nDPId + nDPIsrvd (nDPI 5.x, libre)
  Remplace netifyd (retiré comme CrowdSec). Chaîne : nDPId → nDPIsrvd →
  sbxdpi → /run/secubox/dpi-live.sock → carte DPI du Hall.
  .
- Le binaire nDPId embarque libnDPI 5.x (BUILD_NDPI=ON) : la construction
- clone utoni/nDPId (récursif, épinglé) et compile en natif. Prévoir un build
- arm64 natif (le cross-build de libnDPI n'est pas supporté ici).
+ Le binaire nDPId embarque libnDPI 5.x (BUILD_NDPI=ON) : la construction clone
+ utoni/nDPId (récursif, commit épinglé) et compile. Le CROSS-BUILD arm64 depuis
+ amd64 est supporté (nDPId propage CC/AR/--host à libnDPI) : il faut
+ crossbuild-essential-arm64 + libpcap-dev:arm64 sur l'hôte de build.

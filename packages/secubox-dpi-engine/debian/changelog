@@ -1,3 +1,13 @@
+secubox-dpi-engine (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * CROSS-BUILD arm64 supporté (vérifié depuis amd64) : debian/rules détecte le
+    cross (architecture.mk) et passe le toolchain à cmake ET à libnDPI (nDPId
+    pose --host lui-même). Commit amont ÉPINGLÉ dans debian/ndpid.ref
+    (nDPId 0cc9aeb → 1.7.0-release ; libnDPI 326b64c). Corrige le changelog
+    précédent qui prétendait à tort « natif seulement ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 12:15:00 +0200
+
 secubox-dpi-engine (1.7.0~gitpre-1~bookworm1) bookworm; urgency=medium
 
   * Paquet SOURCE reconstitué (l'orphelin déployé n'avait aucune source dépôt).
