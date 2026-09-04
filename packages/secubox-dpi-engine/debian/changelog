@@ -1,0 +1,10 @@
+secubox-dpi-engine (1.7.0~gitpre-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet SOURCE reconstitué (l'orphelin déployé n'avait aucune source dépôt).
+    Empaquette nDPId + nDPIsrvd (nDPI 5.x, BUILD_NDPI=ON) depuis utoni/nDPId, +
+    les units systemd, la conf ndpi.env (conffile) et les tmpfiles — capturés à
+    l'identique du live (nDPId 1.7.0-pre, arm64). La build clone l'amont récursif
+    et compile en natif ; épingler le commit exact dans debian/ndpid.ref pour la
+    reproductibilité. Remplace netifyd (Provides: ndpid, Conflicts: netifyd).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 11:30:00 +0200

@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+set -e
+
+case "$1" in
+  remove|purge)
+    for u in nDPId.service nDPIsrvd.service; do
+      systemctl disable --now "$u" 2>/dev/null || true
+    done
+    systemctl daemon-reload 2>/dev/null || true
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

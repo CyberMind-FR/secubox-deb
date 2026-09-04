@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=nDPIsrvd — nDPId JSON distributor (SecuBox DPI engine)
+Documentation=https://github.com/utoni/nDPId
+After=network.target
+
+[Service]
+Type=simple
+User=secubox-toolbox
+Group=secubox-toolbox
+EnvironmentFile=-/etc/secubox/ndpi.env
+# Listens on the collector (nDPId → srvd) and distributor (srvd → sbxdpi) sockets.
+ExecStart=/usr/sbin/nDPIsrvd -c ${DPI_COLLECTOR_SOCK} -s ${DPI_DISTRIBUTOR_SOCK} -u secubox-toolbox -g secubox-toolbox -l
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/secubox
+ReadWritePaths=/run/secubox
+MemoryMax=96M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

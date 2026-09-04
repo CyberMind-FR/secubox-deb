@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+set -e
+
+case "$1" in
+  configure)
+    # Utilisateur moteur (partagé avec secubox-toolbox/sbxdpi) — défensif.
+    if ! getent passwd secubox-toolbox >/dev/null 2>&1; then
+      adduser --system --group --no-create-home --home /nonexistent \
+              --shell /usr/sbin/nologin secubox-toolbox >/dev/null 2>&1 || true
+    fi
+
+    # Répertoire de sockets /run/secubox/ndpi (tmpfiles), maintenant.
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/zz-secubox-ndpi.conf 2>/dev/null || true
+
+    systemctl daemon-reload 2>/dev/null || true
+    # nDPIsrvd d'abord (il porte les sockets), puis nDPId. On respecte un
+    # éventuel masquage opérateur (set -e n'avorte pas sur enable masqué).
+    for u in nDPIsrvd.service nDPId.service; do
+      if [ "$(systemctl is-enabled "$u" 2>/dev/null)" != "masked" ]; then
+        systemctl enable "$u" 2>/dev/null || true
+        systemctl restart "$u" 2>/dev/null || true
+      fi
+    done
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

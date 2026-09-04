@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=nDPId — nDPI deep packet inspection capture (SecuBox DPI engine)
+Documentation=https://github.com/utoni/nDPId
+After=network.target nDPIsrvd.service
+Requires=nDPIsrvd.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/secubox/ndpi.env
+# Opens the pcap on ${DPI_IFACE} as root, then drops to secubox-toolbox (-u/-g)
+# and connects to the collector socket owned by that user. Restart covers the
+# race where nDPIsrvd's collector socket is not up on the very first try.
+ExecStart=/usr/sbin/nDPId -i ${DPI_IFACE} -B "${DPI_BPF}" -c ${DPI_COLLECTOR_SOCK} -o max-packets-per-flow-to-send=0 -u secubox-toolbox -g secubox-toolbox -l
+Restart=on-failure
+RestartSec=5
+# Capture requires raw sockets; everything else is locked down.
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_SETUID CAP_SETGID
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/secubox
+ReadWritePaths=/run/secubox
+MemoryMax=192M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target
