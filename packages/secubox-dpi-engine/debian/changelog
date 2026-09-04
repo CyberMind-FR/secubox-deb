@@ -1,3 +1,16 @@
+secubox-dpi-engine (1.7.0-3~bookworm1) bookworm; urgency=medium
+
+  * IMPORTANT — cibler l'ABI bookworm. Le cross-build depuis Ubuntu noble
+    produit un binaire lié à GLIBC_2.38+ / libpcap0.8t64, qui NE TOURNE PAS sur
+    bookworm (glibc 2.36) : le .deb 1.7.0-1 s'installait mais laissait dpkg iU
+    et le moteur cassé. Il faut builder sur base bookworm arm64 (natif, ou chroot
+    bookworm-arm64 debootstrap+qemu / sbuild), libs arm64 issues de bookworm.
+    Doc/README corrigés. (La box a été remise d'aplomb avec un .deb de
+    récupération 1.7.0-2 embarquant les binaires bookworm 1.7.0-pre déjà en
+    place ; ce paquet SOURCE reste la référence, à builder proprement.)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 12:45:00 +0200
+
 secubox-dpi-engine (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * CROSS-BUILD arm64 supporté (vérifié depuis amd64) : debian/rules détecte le

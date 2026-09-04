@@ -19,20 +19,26 @@ Remplace **netifyd** (retiré comme CrowdSec). `Provides: ndpid`,
 
 ## Construire
 
-nDPId embarque libnDPI 5.x (`BUILD_NDPI=ON`). Le **cross-build arm64 est
-supporté** (vérifié) : nDPId propage `CC`/`AR`/`RANLIB` au build de libnDPI et
-pose `--host` lui-même (`scripts/get-and-build-libndpi.sh`, `HOST_TRIPLET`).
+nDPId embarque libnDPI 5.x (`BUILD_NDPI=ON`). Le cross-build fonctionne
+techniquement (nDPId propage `CC`/`AR`/`--host` à libnDPI, cf.
+`scripts/get-and-build-libndpi.sh`, `HOST_TRIPLET`), **MAIS il faut cibler l'ABI
+de la cible = Debian bookworm** (glibc 2.36, `libpcap0.8`).
 
-**Cross depuis amd64** (recommandé — pas le piège disque de la box) :
+⚠️ **NE PAS cross-builder depuis Ubuntu noble/trixie** : le binaire se lie alors
+à `GLIBC_2.38+` et `libpcap0.8t64`, et **refuse de tourner sur bookworm**
+(`GLIBC_2.38 not found`, deps `libc6 (>= 2.38)` / `libpcap0.8t64`
+insatisfaisables). Leçon apprise à la dure — un `.deb` ainsi produit s'installe
+mais laisse dpkg `iU` et le moteur cassé.
 
-    sudo dpkg --add-architecture arm64
-    # sources ports arm64 si besoin (ports.ubuntu.com), puis :
-    sudo apt-get install -y crossbuild-essential-arm64 libpcap-dev:arm64 \
-        cmake git autoconf automake libtool pkg-config flex bison
-    cd packages/secubox-dpi-engine
-    dpkg-buildpackage -a arm64 -b -us -uc
-
-**Natif arm64** : `dpkg-buildpackage -b -us -uc`.
+**Méthode correcte — build sur base bookworm arm64** :
+- **Natif** sur un arm64 bookworm (runner CI arm64, ou la box si ≥ 2 Go libres —
+  attention au piège disque) : `dpkg-buildpackage -b -us -uc`.
+- **Cross depuis amd64** via un **chroot/sysroot bookworm arm64** (debootstrap
+  `bookworm` + qemu-user, ou `sbuild`/`mmdebstrap` avec base bookworm-arm64) :
+  installer dedans `crossbuild-essential-arm64 libpcap-dev:arm64 cmake git
+  autoconf automake libtool pkg-config flex bison`, puis
+  `dpkg-buildpackage -a arm64 -b -us -uc`. Les libs arm64 DOIVENT venir de
+  bookworm (`deb.debian.org bookworm`), pas d'un Ubuntu récent.
 
 `debian/rules` détecte le cross (`architecture.mk`) et passe le toolchain à
 cmake + à libnDPI, clone `utoni/nDPId` au commit épinglé, `cmake -DBUILD_NDPI=ON`
