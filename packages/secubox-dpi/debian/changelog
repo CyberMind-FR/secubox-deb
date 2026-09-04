@@ -1,3 +1,14 @@
+secubox-dpi (1.4.14-1~bookworm1) bookworm; urgency=medium
+
+  * netifyd RETIRÉ (comme CrowdSec) : le paquet ne dépend/ne « veut » plus
+    netifyd. `Recommends: netifyd, secubox-netifyd` → `secubox-ndpid` ; l'unité
+    secubox-dpi.service ne référence plus netifyd.service (After/Wants). Le
+    moteur live est full nDPId (nDPI 5.x → nDPIsrvd → sbxdpi, dpi-live.sock).
+    Les endpoints legacy sur la socket netifyd restent inertes jusqu'au cutover
+    nDPI (évolution à suivre).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 10:00:00 +0200
+
 secubox-dpi (1.4.13-1~bookworm1) bookworm; urgency=medium
 
   * Collector : un NOM D'APPAREIL HUMAIN (champ `name` du peer wg-peers.json,

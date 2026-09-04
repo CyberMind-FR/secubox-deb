@@ -11,18 +11,17 @@ Package: secubox-dpi
 Architecture: any
 Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2, libndpi-bin,
  python3-geoip2, geoip-database
-Recommends: netifyd, secubox-netifyd
-Description: SecuBox DPI Analytics — netifyd-backed app/protocol classification
- Analytics layer on top of netifyd: top applications, top protocols,
- bandwidth-by-app, bandwidth-by-device, talkers, and risk visualization.
- Configures tc mirred to ifb0 for inline inspection.
+Recommends: secubox-ndpid
+Description: SecuBox DPI Analytics — nDPId/sbxdpi app/protocol classification
+ Analytics layer over the SecuBox DPI pipeline: top applications, top
+ protocols, bandwidth-by-app, bandwidth-by-device, talkers, and risk
+ visualization.
  .
- Complements secubox-netifyd, which manages the netifyd daemon
- lifecycle (start/stop/config/alerts). Install both for the full
- daemon-control + analytics experience. For TLS fingerprinting and
- nDPId-engine analysis, install secubox-ndpid instead — it covers a
- different DPI engine and is not provided by this package despite
- historical "dual-stream" framing.
+ netifyd is RETIRED (like CrowdSec) : the live engine is full nDPId
+ (nDPI 5.x → nDPIsrvd → sbxdpi, dpi-live.sock). This package no longer
+ depends on or wants netifyd ; the legacy netifyd-socket endpoints remain
+ only until the nDPI cutover replaces them. See secubox-ndpid for the
+ JA3/JA4 TLS-fingerprinting nDPId dashboard.
  .
  Port Debian bookworm de luci-app-netifyd-dashboard (SecuBox OpenWrt
  / CyberMind.fr).
