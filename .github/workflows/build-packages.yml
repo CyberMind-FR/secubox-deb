@@ -176,7 +176,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             build-essential dpkg-dev debhelper devscripts fakeroot \
-            dh-python python3-all python3-setuptools golang-go
+            dh-python python3-all python3-setuptools golang-go \
+            cmake libpcap-dev pkg-config
+          # cmake + libpcap-dev + pkg-config satisfy secubox-dpi-engine's
+          # Build-Depends (it cmake-builds nDPId/nDPIsrvd against libpcap on
+          # the native amd64 runner). Without them dpkg-checkbuilddeps aborted
+          # the dpi-engine build ("Unmet build dependencies: cmake libpcap-dev").
           # golang-go satisfies Build-Depends of the pure-Go packages
           # (secubox-dpi, secubox-toolbox-ng: CGO_ENABLED=0, GOARCH=arm64,
           # -mod=vendor offline cross-compile). ubuntu-24.04 ships >= 1.22.
@@ -253,6 +258,16 @@ jobs:
           case "${{ matrix.package }}" in
             secubox-dpi|secubox-toolbox-ng|secubox-waf-ng) DEPFLAG="-d" ;;
           esac
+          # Any Go package declares `Build-Depends: golang-go (>= 1.22)`, but the
+          # runner registers the versioned provider (golang-1.22-go) and, on a
+          # cross `-a arm64` build, dpkg-checkbuilddeps demands golang-go:arm64 —
+          # either way it aborts ("Unmet build dependencies: golang-go (>= …)")
+          # even though the compiler is present and the build is vendored and
+          # self-contained. Skip the dep check for every Go package, detected by
+          # golang-go in its control (covers radio, socialrelay, bbs, metanews…).
+          if grep -qE 'golang-go' debian/control; then
+            DEPFLAG="-d"
+          fi
           dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}
 
           echo "✅ Build OK: ${{ matrix.package }} (${{ matrix.arch }})"

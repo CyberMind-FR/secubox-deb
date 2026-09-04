@@ -245,6 +245,29 @@ jobs:
           echo "=== Downloaded artifacts ==="
           ls -lh live-usb/
 
+      - name: Compress raw images to fit GitHub's 2 GiB asset limit
+        run: |
+          # GitHub refuses release assets >= 2 GiB (2147483648 bytes) — the
+          # mochabin image ships as a raw .img and overflowed it, aborting the
+          # whole softprops upload. The x64/rpi images are already .img.gz; gzip
+          # any remaining raw .img so every asset stays a compressed .img.gz and
+          # matches the *.img* globs downstream unchanged.
+          cd live-usb/
+          for f in *.img; do
+            [ -f "$f" ] || continue
+            echo "compressing $f ($(du -h "$f" | cut -f1)) …"
+            gzip -f "$f"
+          done
+          echo "=== after compression ==="
+          ls -lh
+          # Guard: fail loudly if anything is still >= 2 GiB rather than dying
+          # opaquely in the upload step.
+          big=$(find . -type f -size +2047M -printf '%p (%s bytes)\n')
+          if [ -n "$big" ]; then
+            echo "::error::asset still exceeds GitHub's 2 GiB limit:"; echo "$big"
+            exit 1
+          fi
+
       - name: Generate combined checksums
         run: |
           cd live-usb/
@@ -295,7 +318,7 @@ jobs:
             | Image | Platform | Architecture | Boot Method | Flasher Tool |
             |-------|----------|--------------|-------------|--------------|
             | `secubox-live-amd64-bookworm.img.gz` | x64 PC | amd64 | GRUB UEFI/BIOS | `secubox-flash-disk` (press `d`) |
-            | `secubox-mochabin-live-usb.img` | MOCHAbin | arm64 | U-Boot extlinux | `secubox-flash-emmc` (press `f`) |
+            | `secubox-mochabin-live-usb.img.gz` | MOCHAbin | arm64 | U-Boot extlinux | `secubox-flash-emmc` (press `f`) |
             | `secubox-rpi-arm64-bookworm.img.gz` | Raspberry Pi 400 | arm64 | Pi firmware | Manual install |
 
             ### Flash to USB Drive
