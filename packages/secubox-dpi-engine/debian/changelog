@@ -5,11 +5,13 @@ secubox-dpi-engine (1.7.0-3~bookworm1) bookworm; urgency=medium
     bookworm (glibc 2.36) : le .deb 1.7.0-1 s'installait mais laissait dpkg iU
     et le moteur cassé. Il faut builder sur base bookworm arm64 (natif, ou chroot
     bookworm-arm64 debootstrap+qemu / sbuild), libs arm64 issues de bookworm.
-    Doc/README corrigés. (La box a été remise d'aplomb avec un .deb de
-    récupération 1.7.0-2 embarquant les binaires bookworm 1.7.0-pre déjà en
-    place ; ce paquet SOURCE reste la référence, à builder proprement.)
-
- -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 12:45:00 +0200
+    Doc/README corrigés.
+  * BUILDÉ ET DÉPLOYÉ proprement : dans un chroot Debian bookworm-arm64
+    (debootstrap + qemu-user), `dpkg-buildpackage` produit un .deb ARM aarch64
+    aux deps bookworm (libc6 >= 2.34, libpcap0.8) — glibc requis 2.34, tourne
+    sur la box (glibc 2.36). Installé sur gk2 : dpkg ii, nDPId 1.7-112-g0cc9aeb4
+    actif (NRestarts=0), chaîne DPI live. Build-Depends complétés (wget, unzip,
+    ca-certificates : le script libnDPI les exige).
 
 secubox-dpi-engine (1.7.0-1~bookworm1) bookworm; urgency=medium
 

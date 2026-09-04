@@ -3,7 +3,8 @@ Section: net
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13), cmake, git, build-essential,
- libpcap-dev, autoconf, automake, libtool, pkg-config, flex, bison
+ libpcap-dev, autoconf, automake, libtool, pkg-config, flex, bison,
+ wget, unzip, ca-certificates
 Standards-Version: 4.6.2
 Homepage: https://github.com/utoni/nDPId
 Rules-Requires-Root: no
