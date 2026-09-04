@@ -1,3 +1,14 @@
+secubox-dpi (1.4.15-1~bookworm1) bookworm; urgency=medium
+
+  * CUTOVER nDPI : les endpoints legacy (/status /flows /applications /devices
+    /risks /talkers) ne lisent plus la socket netifyd (morte) mais le moteur
+    LIVE sbxdpi via /run/secubox/dpi-live.sock (_sbxdpi_get). /status expose
+    connected/total_flows/total_bytes depuis sbxdpi/health (engine=ndpi) ;
+    /applications→top_apps, /devices+/talkers→talkers, /risks→risks, /flows→stats.
+    Le dashboard admin (/exfil, collector) était déjà sur la chaîne nDPI.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 10:45:00 +0200
+
 secubox-dpi (1.4.14-1~bookworm1) bookworm; urgency=medium
 
   * netifyd RETIRÉ (comme CrowdSec) : le paquet ne dépend/ne « veut » plus

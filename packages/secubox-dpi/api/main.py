@@ -746,7 +746,10 @@ router = APIRouter()
 log = get_logger("dpi")
 
 # Configuration paths
-NETIFYD_SOCK = Path("/run/netifyd/netifyd.sock")
+# CUTOVER nDPI (2026-09-04) : netifyd est retiré. Les endpoints legacy lisent
+# désormais le moteur LIVE sbxdpi (nDPI 5.x → nDPIsrvd → sbxdpi) via sa socket
+# HTTP unix, au lieu de l'ancienne socket netifyd.
+DPI_LIVE_SOCK = "/run/secubox/dpi-live.sock"
 DATA_DIR = Path("/var/lib/secubox/dpi")
 HISTORY_FILE = DATA_DIR / "traffic_history.json"
 QUOTAS_FILE = DATA_DIR / "quotas.json"
@@ -993,25 +996,31 @@ async def send_webhook(event: str, data: Dict[str, Any]):
         except Exception:
             pass
 
-def _netifyd_query(cmd: dict) -> dict:
-    """Envoi JSON command sur socket netifyd."""
-    if not NETIFYD_SOCK.exists():
-        return {"error": "netifyd socket unavailable"}
+async def _sbxdpi_get(path: str):
+    """Lit un endpoint de sbxdpi (moteur nDPI LIVE) via dpi-live.sock.
+
+    Remplace l'ancien _netifyd_query : même rôle (classification live), source
+    différente. Fail-empty si la socket dort (sbxdpi dark avant cutover complet)."""
+    if not Path(DPI_LIVE_SOCK).exists():
+        return {"error": "sbxdpi socket unavailable"}
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(5)
-            s.connect(str(NETIFYD_SOCK))
-            s.sendall((json.dumps(cmd) + "\n").encode())
-            data = b""
-            while True:
-                chunk = s.recv(4096)
-                if not chunk: break
-                data += chunk
-                if data.endswith(b"\n"): break
-        return json.loads(data.decode())
+        transport = httpx.AsyncHTTPTransport(uds=DPI_LIVE_SOCK)
+        async with httpx.AsyncClient(transport=transport, timeout=5.0) as cli:
+            r = await cli.get("http://sbxdpi/api/v1/dpi/" + path)
+            return r.json()
     except Exception as e:
-        log.warning("netifyd query error: %s", e)
+        log.warning("sbxdpi query error: %s", e)
         return {"error": str(e)}
+
+def _netifyd_query(cmd: dict) -> dict:
+    """SHIM de dépréciation (#cutover) : netifyd est retiré. Les endpoints legacy
+    profonds (dns_queries, ssl_fingerprints, flow-by-id…) qui n'ont pas encore
+    d'équivalent sbxdpi renvoient une erreur claire — exactement ce qu'ils
+    renvoyaient déjà quand la socket netifyd avait disparu. Les surfaces clés
+    (status/flows/applications/devices/risks/talkers) sont, elles, re-branchées
+    sur sbxdpi (_sbxdpi_get). À migrer au fil de l'eau."""
+    return {"error": "netifyd retiré — moteur nDPI (sbxdpi). endpoint à migrer.",
+            "retired": True}
 
 def _setup_mirred(iface: str, mirror_if: str = "ifb0") -> dict:
     """Configure tc mirred + ifb0 pour DPI dual-stream."""
@@ -1035,37 +1044,39 @@ def _setup_mirred(iface: str, mirror_if: str = "ifb0") -> dict:
     return {"steps": results, "interface": iface, "mirror": mirror_if}
 
 @router.get("/status")
-def status(user=Depends(require_jwt)):
+async def status(user=Depends(require_jwt)):
     cfg = get_config("dpi")
-    netifyd_up = subprocess.run(["pgrep", "netifyd"], capture_output=True).returncode == 0
-    iface = cfg.get("interface", "eth0")
-    mirred_active = subprocess.run(
-        ["tc", "filter", "show", "dev", iface, "parent", "ffff:"],
-        capture_output=True, text=True
-    ).stdout.strip() != ""
-    return {"running": netifyd_up, "mode": cfg.get("mode","inline"),
-            "engine": cfg.get("engine","netifyd"),
-            "interface": iface, "mirred_active": mirred_active}
+    h = await _sbxdpi_get("health")
+    connected = bool(isinstance(h, dict) and h.get("connected"))
+    return {"running": connected, "mode": cfg.get("mode", "inline"),
+            "engine": "ndpi", "interface": cfg.get("interface", "eth2"),
+            "connected": connected,
+            "total_flows": h.get("total_flows") if isinstance(h, dict) else None,
+            "total_bytes": h.get("total_bytes") if isinstance(h, dict) else None,
+            "filtered": h.get("filtered") if isinstance(h, dict) else None}
 
+# Endpoints legacy re-branchés sur sbxdpi (nDPI live). Formes sbxdpi :
+#   top_apps/top_protocols/top_categories → [{name,flows,bytes,pct}]
+#   talkers → [{name:"src → dst",flows,bytes,pct}] ; risks → [{name,count,severity}]
 @router.get("/flows")
 async def flows(user=Depends(require_jwt)):
-    return _netifyd_query({"type":"get_flows"})
+    return await _sbxdpi_get("stats")
 
 @router.get("/applications")
 async def applications(user=Depends(require_jwt)):
-    return _netifyd_query({"type":"get_applications"})
+    return await _sbxdpi_get("top_apps")
 
 @router.get("/devices")
 async def devices(user=Depends(require_jwt)):
-    return _netifyd_query({"type":"get_devices"})
+    return await _sbxdpi_get("talkers")
 
 @router.get("/risks")
 async def risks(user=Depends(require_jwt)):
-    return _netifyd_query({"type":"get_risks"})
+    return await _sbxdpi_get("risks")
 
 @router.get("/talkers")
 async def talkers(user=Depends(require_jwt)):
-    return _netifyd_query({"type":"get_top_talkers"})
+    return await _sbxdpi_get("talkers")
 
 @router.post("/setup_mirred")
 async def setup_mirred(user=Depends(require_jwt)):
