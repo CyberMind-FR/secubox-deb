@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.3.12-1~bookworm1) bookworm; urgency=medium
+
+  * Upgrade ne coupe plus les services ENABLED. Toutes les unités sont
+    --no-start : dh les arrête en prerm et ne les relance jamais. Le rattrapage
+    n'existait que pour authwatch (#1317) ; sbxdpi tombait à chaque montée de
+    version (DPI live coupé, dpi-live.sock disparu). Le postinst relance
+    désormais TOUTE unité enabled du paquet (sbxdpi, authwatch, sbx-sentinel,
+    sentinel-feeds, egress-proxy, + instances worker@ du cutover).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Sep 2026 14:00:00 +0200
+
 secubox-toolbox-ng (0.3.11-1~bookworm1) bookworm; urgency=medium
 
   * sbxdpi L3 (DPI sémantique) : corrélation multi-flux → SESSIONS d'usage.

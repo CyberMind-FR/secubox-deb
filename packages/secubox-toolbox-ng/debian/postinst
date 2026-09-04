@@ -33,25 +33,40 @@ esac
 
 #DEBHELPER#
 
-# ── UNE MISE A JOUR NE DOIT PAS DESARMER LA SURVEILLANCE (#1317) ────────────
+# ── UNE MISE A JOUR NE DOIT DESARMER AUCUN SERVICE ENABLED (#1317) ──────────
 #
-# secubox-authwatch est volontairement pose `--no-enable --no-start` : un
-# service qui BANNIT ne s'active pas tout seul a l'installation, l'operateur
-# l'observe puis decide (#1220). C'est juste, et on n'y touche pas.
+# TOUTES les unites de ce paquet sont posees `--no-enable --no-start` : un
+# service qui BANNIT / capture / inspecte ne s'active pas tout seul a
+# l'installation, l'operateur l'observe puis decide (#1220). C'est juste, et on
+# n'y touche pas a la PREMIERE installation.
 #
-# Mais `--no-start` vaut aussi a la MISE A JOUR : dh arrete l'unite en prerm et
-# ne la relance jamais. La surveillance SSH/SMTP/IMAP et les leurres tombaient
-# donc en silence a chaque montee de version du paquet, sans qu'aucun message
-# ne le dise — constate en production, le service arrete depuis des heures.
+# Mais `--no-start` vaut aussi a la MISE A JOUR : dh ARRETE l'unite en prerm et
+# ne la relance jamais. Tout service qu'un operateur a ENABLED tombait donc en
+# silence a chaque montee de version — constate en prod : authwatch (#1317),
+# puis sbxdpi (le DPI live coupe, dpi-live.sock disparu, la carte Hall morte).
 #
-# On distingue les deux moments. `$2` non vide signifie MISE A JOUR : si
-# l'unite est ENABLED, c'est que quelqu'un a decide de la faire tourner, et
-# cette decision doit survivre au paquet. A la premiere installation, `$2` est
-# vide et l'on ne demarre rien.
+# On distingue les deux moments. `$2` non vide = MISE A JOUR : si l'unite est
+# ENABLED, cette decision doit survivre au paquet, on la relance. A la premiere
+# installation (`$2` vide) on ne demarre rien.
 if [ "$1" = "configure" ] && [ -n "$2" ]; then
-    if systemctl is-enabled secubox-authwatch.service >/dev/null 2>&1; then
-        systemctl restart secubox-authwatch.service >/dev/null 2>&1 || true
-    fi
+    for u in sbxdpi.service secubox-authwatch.service sbx-sentinel.service \
+             secubox-sentinel-feeds.service secubox-toolbox-egress-proxy.service; do
+        if systemctl is-enabled "$u" >/dev/null 2>&1; then
+            systemctl restart "$u" >/dev/null 2>&1 || true
+        fi
+    done
+    # Instances du worker template activees au cutover (Phase 6) : meme regle.
+    for inst in $(systemctl list-unit-files 'secubox-toolbox-ng-worker@*.service' \
+                    --no-legend 2>/dev/null | awk '$2=="enabled"{print $1}'); do
+        systemctl restart "$inst" >/dev/null 2>&1 || true
+    done
+    # Les instances actives non listees par list-unit-files (template enabled via
+    # DefaultInstance ou enabled a la main) : on couvre 1..4 si enabled.
+    for i in 1 2 3 4; do
+        if systemctl is-enabled "secubox-toolbox-ng-worker@$i.service" >/dev/null 2>&1; then
+            systemctl restart "secubox-toolbox-ng-worker@$i.service" >/dev/null 2>&1 || true
+        fi
+    done
 fi
 
 exit 0
