@@ -28,12 +28,15 @@ sur ce point serait dupliquer une règle qui vivra deux vies.
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 import httpx
 
 # L'API d'administration est servie par le nginx local, sur le vhost admin.
 AMONT = os.environ.get("SECUBOX_ADMIN_AMONT", "http://127.0.0.1:9080")
+# Socket de l'API profiles — source de vérité lifecycle/sleep_state (modules.d).
+PROFILS_SOCK = os.environ.get("SECUBOX_PROFILS_SOCK", "/run/secubox/profiles.sock")
 HOTE_ADMIN = os.environ.get("SECUBOX_ADMIN_HOTE", "admin.gk2.secubox.in")
 
 # ── LA LISTE CLOSE ─────────────────────────────────────────────────────────
@@ -101,6 +104,41 @@ def _id_sur(v: str, module: str = "") -> str:
     return "".join(c for c in v if c in permis)[:64]
 
 
+# ── MODE ÉCONOME SERVEUR (scale-to-zero) ───────────────────────────────────
+# Une action de LECTURE (GET, ex. `liste`) déclenchée par un cardlet ne doit pas
+# RÉVEILLER un module `on-demand` endormi (sinon un cardlet Hall ouvert le tient
+# éveillé en permanence — cause constatée du non-endormissement, cf.
+# secubox-sleeper). On lit le lifecycle+sleep_state depuis l'API profiles
+# (/run/secubox/profiles.sock, source de vérité modules.d), on met en cache le
+# dernier résultat de chaque lecture, et pour un module on-demand+asleep on rend
+# CE cache (marqué `endormi`) au lieu de proxifier. Les écritures (POST, action
+# opérateur) passent toujours ; un module up/always-on est interrogé normalement.
+_profil: dict[str, tuple[str, str]] = {}
+_profil_ts: float = 0.0
+_cache_lecture: dict[tuple[str, str], dict] = {}
+
+
+async def _etat_module(module: str) -> tuple[str, str]:
+    """(lifecycle, sleep_state) d'un module, rafraîchi au plus toutes les 20 s.
+    Best-effort : profiles indisponible => on garde le dernier connu, et à défaut
+    on suppose always-on (comportement d'avant ce gate : on interroge)."""
+    global _profil_ts, _profil
+    now = time.time()
+    if now - _profil_ts > 20:
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(uds=PROFILS_SOCK), timeout=3.0
+            ) as cli:
+                r = await cli.get("http://localhost/api/v1/profiles/lifecycles")
+            rows = (r.json() or {}).get("lifecycles", [])
+            _profil = {row["id"]: (row.get("lifecycle"), row.get("sleep_state"))
+                       for row in rows if "id" in row}
+            _profil_ts = now
+        except Exception:
+            pass
+    return _profil.get(module, ("always-on", "n/a"))
+
+
 async def agir(module: str, action: str, corps: dict | None = None,
                jeton: str = "") -> dict:
     """Exécuter une action nommée, et rien d'autre."""
@@ -130,6 +168,18 @@ async def agir(module: str, action: str, corps: dict | None = None,
         # servirait qu'a remplir le journal de quelqu'un d'autre.
         charge[c] = str(v)[:2048]
 
+    # GATE ÉCONOME : lecture (GET) vers un module on-demand ENDORMI → on ne
+    # réveille pas, on rend le dernier cache (marqué `endormi`). Écritures et
+    # modules up/always-on : on continue normalement.
+    if methode == "GET":
+        lc, ss = await _etat_module(module)
+        if lc == "on-demand" and ss == "asleep":
+            cache = _cache_lecture.get((module, action))
+            if cache is not None:
+                out = dict(cache); out["endormi"] = True; return out
+            return {"ok": True, "endormi": True, "donnees": {},
+                    "detail": "module en veille"}
+
     entetes = {"Host": HOTES.get(module, HOTE_ADMIN), "Accept": "application/json"}
     # ON TRANSMET LE JETON DE L'APPELANT quand il y en a un. Certains modules
     # protègent leurs routes de lecture ; y aller anonymement rendrait un 401
@@ -149,6 +199,14 @@ async def agir(module: str, action: str, corps: dict | None = None,
                 json=charge if methode == "POST" else None,
             )
     except httpx.HTTPError as e:
+        # Robustesse au décalage de propagation de `sleep_state` : si une LECTURE
+        # échoue (module en fait endormi mais que profiles voyait encore up), on
+        # rend le dernier cache plutôt qu'une erreur — sans réessayer (pas de
+        # réveil). Le gate profiles au-dessus reste la barrière principale.
+        if methode == "GET":
+            cache = _cache_lecture.get((module, action))
+            if cache is not None:
+                out = dict(cache); out["endormi"] = True; return out
         return {"ok": False, "detail": "module injoignable : %s" % type(e).__name__}
 
     try:
@@ -162,7 +220,12 @@ async def agir(module: str, action: str, corps: dict | None = None,
         detail = d.get("error") or d.get("detail") or ("refus %d" % r.status_code)
         return {"ok": False, "detail": str(detail)[:200]}
 
-    return {"ok": True, "donnees": d}
+    out = {"ok": True, "donnees": d}
+    # Mémorise la dernière lecture réussie pour la resservir quand le module
+    # sera endormi (gate économe ci-dessus) — sans jamais le réveiller.
+    if methode == "GET":
+        _cache_lecture[(module, action)] = out
+    return out
 
 
 # ── LE DEPOT PUBLIC ────────────────────────────────────────────────────────
