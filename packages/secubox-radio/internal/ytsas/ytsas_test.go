@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func passerelle(t *testing.T, h http.HandlerFunc) *Client {
@@ -179,34 +180,33 @@ func TestLaDemandeEstTransmiseALaPasserelle(t *testing.T) {
 // pour empecher. C'est la difference entre refuser et ne pas subir.
 func TestLaBorneArreteLaLectureEtNeSubitPasLeFichier(t *testing.T) {
 	const borne = 4096
-	envoye := make(chan int64, 1)
+	// On ne mesure PAS les octets « emis » par le serveur : ceux-ci partent
+	// dans le tampon socket du noyau (jusqu'a plusieurs Mio, auto-ajuste), donc
+	// un serveur peut avoir tout ecrit avant meme que la coupure du client ne
+	// remonte — ce qui rendait ce test instable en CI (409600 octets « subis »
+	// pour une borne de 4096, alors que le client n'en avait lu que 4097).
+	//
+	// On teste le comportement OBSERVABLE : le serveur envoie un court prelude
+	// (deux fois la borne, qui tient dans n'importe quel tampon) puis BLOQUE en
+	// gardant la connexion ouverte, sans jamais la clore ni envoyer d'EOF. Un
+	// client BORNE lit borne+1 octets deja en tampon et rend ErrTropGros
+	// aussitot. Un client NON borne ferait un io.Copy integral qui resterait
+	// bloque a attendre la suite ; le contexte l'interromprait au bout de 5 s
+	// et l'erreur ne serait alors PAS ErrTropGros. Borner, c'est ne pas subir.
+	ctx, annule := context.WithTimeout(context.Background(), 5*time.Second)
+	defer annule()
 	c := passerelle(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mp4")
-		bloc := make([]byte, 4096)
-		var total int64
-		// Cent fois la borne : si le client lit tout, on le verra.
-		for i := 0; i < 100; i++ {
-			n, err := w.Write(bloc)
-			total += int64(n)
-			if err != nil {
-				break // le client a coupe : c'est ce qu'on veut
-			}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(make([]byte, borne*2))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
 		}
-		envoye <- total
+		<-r.Context().Done() // le client borne coupe : on debloque et on sort
 	})
 	c.OctetsMax = borne
-	if _, _, _, err := c.Rapatrie(context.Background(), "GROS", t.TempDir()); !errors.Is(err, ErrTropGros) {
-		t.Fatalf("erreur = %v", err)
-	}
-	select {
-	case total := <-envoye:
-		// On tolere la mise en tampon du reseau, pas la lecture integrale.
-		if total > borne*8 {
-			t.Errorf("%d octets consommes pour une borne de %d : le fichier est subi, pas borne",
-				total, borne)
-		}
-	default:
-		// Le serveur n'a pas fini d'ecrire : c'est bien que le client a coupe.
+	if _, _, _, err := c.Rapatrie(ctx, "GROS", t.TempDir()); !errors.Is(err, ErrTropGros) {
+		t.Fatalf("erreur = %v (attendu ErrTropGros)", err)
 	}
 }
 
