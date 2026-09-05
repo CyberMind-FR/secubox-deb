@@ -450,6 +450,22 @@ def create_app() -> FastAPI:
     async def get_status(_claims=Depends(require_jwt)):
         return await _get_status_cached(_root())
 
+    @app.get("/api/v1/profiles/lifecycles")
+    async def get_lifecycles():
+        # Agregat NON-SENSIBLE (id + lifecycle + sleep_state), SANS JWT — meme
+        # posture que l'API DPI /pub (agrege, lecture seule). Sert de SOURCE DE
+        # VERITE UNIQUE au Hall pour piloter le mode de sonde des cardlets : un
+        # cardlet dont le module est `on-demand` passe en mode econome (sonde
+        # only-when-visible, lit un cache quand `asleep`, ne reveille jamais en
+        # fond) ; `always-on` sonde live. N'expose ni rss, ni exposure, ni
+        # topologie — rien qui justifie un JWT. Reutilise le cache de /status.
+        payload = await _get_status_cached(_root())
+        return {"lifecycles": [
+            {"id": m["id"], "lifecycle": m["lifecycle"],
+             "sleep_state": m["sleep_state"]}
+            for m in payload.get("modules", [])
+        ]}
+
     @app.get("/api/v1/profiles/profiles")
     async def list_profiles(_claims=Depends(require_jwt)):
         root = _root()
