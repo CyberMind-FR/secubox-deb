@@ -218,6 +218,32 @@ def _hint_probe(mid: str, m: Manifest) -> bool | None:
     return None
 
 
+def _signals_fresh() -> bool:
+    """Le système de signaux sbxwaf est-il SAIN (fichier récent) ? Vrai si au
+    moins un fichier de signaux (per-worker `vhost-signals.@N.json` ou legacy)
+    date de moins de SIGNALS_MAX_AGE_S. Faux (prudent) sinon — même posture que
+    `_read_snapshot_file` : sans preuve que sbxwaf écrit, on n'endort PERSONNE
+    sur absence de signal. C'est la garde de l'idle-sur-absence (sleeper.serve).
+    """
+    base = VHOST_SIGNALS_PATH
+    paths: list[Path] = []
+    try:
+        if base.parent.is_dir():
+            paths = sorted(base.parent.glob(f"{base.stem}.@*{base.suffix}"))
+    except OSError:
+        paths = []
+    if not paths:
+        paths = [base]
+    now = time.time()
+    for p in paths:
+        try:
+            if now - p.stat().st_mtime <= SIGNALS_MAX_AGE_S:
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -240,6 +266,7 @@ async def main_async(*, root: Path | None = None, interval: float = DEFAULT_INTE
         # sans rapport avec un timestamp unix — voir la docstring de module
         # ci-dessus pour le détail.
         now=time.time,
+        signals_healthy=_signals_fresh,
         stamp=_now_iso,
         tick_limit=tick_limit,
     )

@@ -101,7 +101,9 @@ async def serve(*, root: Path, interval: float,
                 signal_reader: Callable[[], dict[str, dict[str, Any]]],
                 hint_probe: Callable[[str, Manifest], bool | None],
                 run: Callable[..., Any], observe: Callable[[Manifest], Any],
-                now: Callable[[], float], stamp: Callable[[], str] | None = None,
+                now: Callable[[], float],
+                signals_healthy: Callable[[], bool] = lambda: False,
+                stamp: Callable[[], str] | None = None,
                 tick_limit: int | None = None) -> None:
     """Boucle daemon du sleeper. Chaque tick : charge les manifestes, observe
     l'état réel, lit les signaux front par vhost et les reprojette par
@@ -126,6 +128,10 @@ async def serve(*, root: Path, interval: float,
     le périmètre de cette tâche ; à traiter séparément (ref #896 follow-up).
     """
     stamp_fn = stamp if stamp is not None else _default_stamp
+    # Chrono d'inactivité SANS trafic pour l'idle-sur-absence (voir plus bas) :
+    # mid -> instant (horloge `now`) où le module a été vu running+sleepable et
+    # ABSENT d'un fichier de signaux SAIN pour la 1re fois. Persiste entre ticks.
+    absent_since: dict[str, float] = {}
     ticks = 0
     while tick_limit is None or ticks < tick_limit:
         try:
@@ -136,6 +142,30 @@ async def serve(*, root: Path, interval: float,
                 mid: vsig[m.portal_domain] for mid, m in manifests.items()
                 if m.portal_domain in vsig
             }
+            # IDLE-SUR-ABSENCE : un module on-demand qui TOURNE mais est ABSENT
+            # d'un fichier de signaux FRAIS n'a AUCUN trafic. Le contrat « pas de
+            # signal => on ne dort pas » protège d'un fichier PÉRIMÉ (tout
+            # paraîtrait idle → sommeil de masse, incident 2026-08-07) ; il ne
+            # doit PAS empêcher d'endormir un conteneur GÉNUINEMENT idle quand le
+            # système de signaux est SAIN. On synthétise donc un signal idle
+            # (age croissant, 0 conn) après une grâce d'idle_threshold sans
+            # trafic — UNIQUEMENT si le fichier est frais (signals_healthy).
+            # Fichier incertain => aucune injection, on repart de zéro.
+            if signals_healthy():
+                t = now()
+                for mid, m in manifests.items():
+                    if mid in signals:
+                        absent_since.pop(mid, None)
+                        continue
+                    a = actuals.get(mid)
+                    if not (is_sleepable(m) and a is not None and is_on(a)):
+                        absent_since.pop(mid, None)
+                        continue
+                    age = t - absent_since.setdefault(mid, t)
+                    if age >= idle_threshold(m):
+                        signals[mid] = Signal(last_request_age=age, active_conns=0)
+            else:
+                absent_since.clear()
             hints: dict[str, bool] = {}
             for mid, m in manifests.items():
                 h = hint_probe(mid, m)
