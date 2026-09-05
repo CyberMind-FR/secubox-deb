@@ -260,13 +260,21 @@ jobs:
           done
           echo "=== after compression ==="
           ls -lh
-          # Guard: fail loudly if anything is still >= 2 GiB rather than dying
-          # opaquely in the upload step.
-          big=$(find . -type f -size +2047M -printf '%p (%s bytes)\n')
-          if [ -n "$big" ]; then
-            echo "::error::asset still exceeds GitHub's 2 GiB limit:"; echo "$big"
-            exit 1
-          fi
+          # Certaines images restent >= 2 GiB même compressées (rpi-arm64 ~2,1 Go).
+          # GitHub refuse tout asset >= 2 GiB : on SPLIT ces fichiers en parts de
+          # 1900 Mo qui matchent le glob *.img* de l'upload. Réassemblage côté
+          # utilisateur : `cat <fichier>.part* > <fichier>` puis `gunzip`.
+          for f in *.img.gz *.img; do
+            [ -f "$f" ] || continue
+            sz=$(stat -c%s "$f")
+            if [ "$sz" -ge 2000000000 ]; then
+              echo "splitting $f ($sz bytes) → parts de 1900M (asset > 2 GiB)"
+              split -b 1900M -a 2 -d "$f" "${f}.part"
+              rm -f "$f"
+            fi
+          done
+          echo "=== final assets ==="
+          ls -lh
 
       - name: Generate combined checksums
         run: |

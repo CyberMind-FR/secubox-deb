@@ -89,6 +89,17 @@ jobs:
           [ "$requested_arch" = "both" ] && requested_arch=""
           requested_pkg="${REQUESTED_PKG:-}"
 
+          # Combos {paquet, arm64} qui NE BUILDENT PAS dans le CI stock (runner
+          # amd64) et sont produits HORS-CI :
+          #  - secubox-dpi-engine : le cmake-cross de nDPId exige libpcap-dev:arm64
+          #    + crossbuild depuis les dépôts ports (indispo sur archive.ubuntu) ;
+          #    le .deb arm64 se fait en chroot bookworm-arm64 (debootstrap+qemu).
+          #  - secubox-zia-llm : embarque des binaires llama prebuilt non
+          #    versionnés (absents du checkout CI) → install échoue.
+          # Sans exclusion, ces 2 jobs rougissent tout le run .deb (donc Release).
+          SKIP_ARM64="secubox-dpi-engine secubox-zia-llm"
+          arm64_ok() { case " $SKIP_ARM64 " in *" $1 "*) return 1;; *) return 0;; esac; }
+
           combos=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
             | sort | while read -r ctrl; do
               pkg=$(basename "$(dirname "$(dirname "$ctrl")")")
@@ -114,13 +125,14 @@ jobs:
                   if [ -z "$requested_arch" ] || [ "$requested_arch" = "amd64" ]; then
                     echo "{\"package\":\"$pkg\",\"arch\":\"amd64\"}"
                   fi
-                  if [ -z "$requested_arch" ] || [ "$requested_arch" = "arm64" ]; then
+                  if { [ -z "$requested_arch" ] || [ "$requested_arch" = "arm64" ]; } && arm64_ok "$pkg"; then
                     echo "{\"package\":\"$pkg\",\"arch\":\"arm64\"}"
                   fi
                   ;;
                 amd64|arm64)
                   # Single-arch package — schedule only that arch.
-                  if [ -z "$requested_arch" ] || [ "$requested_arch" = "$arch_field" ]; then
+                  if { [ -z "$requested_arch" ] || [ "$requested_arch" = "$arch_field" ]; } \
+                     && { [ "$arch_field" != "arm64" ] || arm64_ok "$pkg"; }; then
                     echo "{\"package\":\"$pkg\",\"arch\":\"$arch_field\"}"
                   fi
                   ;;
