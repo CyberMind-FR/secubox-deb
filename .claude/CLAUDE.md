@@ -26,10 +26,10 @@ Développeur : Gérald Kerma (Gandalf) — CyberMind, Notre-Dame-du-Cruet, Savoi
 
 ### Sécurité active
 - **Firewall** : nftables (pas iptables)
-- **IDS/IPS** : Suricata + CrowdSec
+- **IDS/IPS** : Suricata
 - **WAF** : HAProxy + mitmproxy
 - **DNS** : Unbound (Vortex DNS) + blocklists
-- **DPI** : nDPId + netifyd (dual-stream via tc mirred)
+- **DPI** : nDPId (dual-stream via tc mirred)
 - **Auth ZKP** : SecuBox-ZKP (Hamiltonian NP / GK-HAM-2025)
 - **P2P mesh** : MirrorNet (did:plc + WireGuard + Chain of Hamiltonians)
 
@@ -100,10 +100,10 @@ secubox-deb/
 │   └── mirrornet/             ← P2P mesh
 ├── modules/
 │   ├── firewall/              ← nftables rules
-│   ├── dpi/                   ← nDPId + netifyd
+│   ├── dpi/                   ← nDPId
 │   ├── dns/                   ← Unbound Vortex
 │   ├── waf/                   ← HAProxy + mitmproxy
-│   ├── ids/                   ← Suricata + CrowdSec
+│   ├── ids/                   ← Suricata
 │   └── dashboard/             ← C3BOX UI
 ├── api/                       ← FastAPI REST
 ├── scripts/                   ← install, deploy, diag
@@ -163,7 +163,7 @@ secubox-params swap --module <nom> --validate-zkp
 secubox-params rollback --module <nom> --target R1
 
 # DPI status
-systemctl status ndpid netifyd
+systemctl status ndpid
 
 # Logs live (format CSPN)
 journalctl -u secubox-* -f --output json | jq '.MESSAGE'
@@ -191,7 +191,7 @@ Architecture ZKP 3 niveaux (twins asymétriques) :
 - Utiliser des politiques firewall ACCEPT par défaut
 - Suggérer des bibliothèques Python avec vulns connues
 - Ignorer le schéma double-buffer pour les configs
-- Mentionner "CrowdSec Ambassador" ou "CyberMind Produits SASU"
+- Mentionner "CyberMind Produits SASU"
 
 ---
 
@@ -199,6 +199,5 @@ Architecture ZKP 3 niveaux (twins asymétriques) :
 
 - ANSSI CSPN : https://www.ssi.gouv.fr/entreprise/certification_cspn/
 - nDPId : https://github.com/utoni/nDPId
-- CrowdSec : https://docs.crowdsec.net
 - Suricata : https://docs.suricata.io
 - nftables : https://wiki.nftables.org

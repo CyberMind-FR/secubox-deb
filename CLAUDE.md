@@ -174,7 +174,7 @@ Chaque `package/secubox/luci-app-<module>/` devient un paquet Debian `secubox-<m
 - FastAPI + Uvicorn sur Unix socket par module
 - Nginx reverse proxy : statics htdocs + `/api/v1/<module>/*`
 - nftables, netplan, WireGuard kernel natif
-- CrowdSec dpkg officiel, HAProxy TLS 1.3
+- HAProxy TLS 1.3
 - APT repo signé GPG : `apt.secubox.in`
 
 ---
@@ -219,10 +219,9 @@ secubox-deb/
 ├── packages/                   ← 14 paquets Debian
 │   ├── secubox-core/           ← Bibliothèque partagée Python
 │   ├── secubox-hub/            ← luci-app-secubox → dashboard central
-│   ├── secubox-crowdsec/       ← luci-app-crowdsec-dashboard
 │   ├── secubox-netdata/        ← luci-app-netdata-dashboard
 │   ├── secubox-wireguard/      ← luci-app-wireguard-dashboard
-│   ├── secubox-dpi/            ← luci-app-netifyd-dashboard + dpi-dual
+│   ├── secubox-dpi/            ← dashboard DPI (nDPId) + dpi-dual
 │   ├── secubox-netmodes/       ← luci-app-network-modes
 │   ├── secubox-nac/            ← luci-app-client-guardian
 │   ├── secubox-auth/           ← luci-app-auth-guardian
@@ -414,7 +413,7 @@ value=$(jq -r '.field' /path/to/file.json)
 ss -tlnp | grep -q ":8080 " && echo "Port 8080 open"
 
 # Logs avec journalctl
-journalctl -u secubox-crowdsec --since "1 hour ago" --no-pager
+journalctl -u secubox-dpi --since "1 hour ago" --no-pager
 
 # Timeout disponible
 timeout 5 curl -s http://localhost:8080/health || echo "Timeout"
@@ -427,10 +426,10 @@ netplan generate && netplan apply
 
 ```bash
 # Sur Debian, pgrep -x fonctionne
-pgrep -x crowdsec >/dev/null && echo "CrowdSec running"
+pgrep -x ndpid >/dev/null && echo "nDPId running"
 
 # Ou utiliser systemctl
-systemctl is-active --quiet secubox-crowdsec && echo "Active"
+systemctl is-active --quiet secubox-dpi && echo "Active"
 ```
 
 ---
@@ -476,7 +475,7 @@ async def get_stats():
 
 ### Règle d'application (identique OpenWrt)
 
-* **Toujours** pour les dashboards stats (WAF, CrowdSec, bandwidth, DPI…)
+* **Toujours** pour les dashboards stats (WAF, bandwidth, DPI…)
 * **Toujours** quand l'endpoint lit des logs ou calcule des agrégats
 * **Toujours** quand la donnée peut être périmée de 60s sans impact utilisateur
 * **Jamais** pour les actions temps-réel (start/stop/restart/ban)
@@ -583,23 +582,23 @@ Déclencheurs obligatoires de mise à jour README :
 
 ```bash
 # Build un paquet .deb localement (cross arm64)
-cd packages/secubox-crowdsec
+cd packages/secubox-dpi
 dpkg-buildpackage -a arm64 --host-arch arm64 -us -uc -b
 
 # Déployer sur le MOCHAbin
-bash scripts/deploy.sh secubox-crowdsec root@192.168.1.1
+bash scripts/deploy.sh secubox-dpi root@192.168.1.1
 
 # Construire l'image complète
 bash image/build-image.sh --board mochabin --out /tmp/secubox-deb.img
 
 # Porter le frontend d'un module depuis le repo source
-bash scripts/port-frontend.sh crowdsec-dashboard
+bash scripts/port-frontend.sh dpi-dashboard
 
 # Réécrire les appels XHR d'un module
-python3 scripts/rewrite-xhr.py packages/secubox-crowdsec/www/
+python3 scripts/rewrite-xhr.py packages/secubox-dpi/www/
 
 # Lancer l'API d'un module en dev local
-cd packages/secubox-crowdsec && uvicorn api.main:app --reload --uds /tmp/crowdsec.sock
+cd packages/secubox-dpi && uvicorn api.main:app --reload --uds /tmp/dpi.sock
 ```
 
 ---
@@ -610,11 +609,10 @@ cd packages/secubox-crowdsec && uvicorn api.main:app --reload --uds /tmp/crowdse
 |-------|--------|------------|--------|
 | 1 | secubox-core | — | Dépendance de tous |
 | 2 | secubox-hub | Facile | Référence de pattern |
-| 3 | secubox-crowdsec | Facile | API REST déjà dispo |
 | 4 | secubox-netdata | Facile | Proxy simple |
 | 5 | secubox-wireguard | Facile | wg CLI natif |
 | 6 | secubox-vhost | Facile | Templates nginx |
-| 7 | secubox-dpi | Moyen | Socket netifyd |
+| 7 | secubox-dpi | Moyen | Socket nDPId |
 | 8 | secubox-mediaflow | Facile | Consomme secubox-dpi |
 | 9 | secubox-qos | Moyen | pyroute2 tc HTB |
 | 10 | secubox-system | Moyen | pystemd DBus |
