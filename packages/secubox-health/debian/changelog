@@ -1,0 +1,12 @@
+secubox-health (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet SOURCE reconstitué (sondes orphelines déployées main sur gk2, aucune
+    source dépôt — même situation que dpi-engine). Empaquette prober.py +
+    module_prober.py + leurs units + health.toml (conffile).
+  * prober.py : IGNORE les vhosts lifecycle=on-demand (helper _ondemand_domains
+    lisant /etc/secubox/modules.d/*.toml). Avant, le sondage HTTP horaire de
+    TOUS les vhosts maintenait les modules on-demand éveillés → secubox-sleeper
+    ne les endormait jamais, 8 Go de RAM saturés en permanence. Les always-on
+    restent monitorés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 05 Sep 2026 09:00:00 +0200

@@ -1,0 +1,20 @@
+[Unit]
+Description=SecuBox Health Prober - VHost monitoring
+After=network.target haproxy.service
+Wants=haproxy.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/lib/secubox/health/prober.py
+Restart=always
+RestartSec=10
+User=secubox
+Group=secubox
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=secubox-health
+
+[Install]
+WantedBy=multi-user.target

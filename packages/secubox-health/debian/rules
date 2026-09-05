@@ -1,0 +1,7 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-health-prober --no-stop-on-upgrade secubox-health-prober.service
+	dh_installsystemd --name=secubox-module-prober --no-stop-on-upgrade secubox-module-prober.service

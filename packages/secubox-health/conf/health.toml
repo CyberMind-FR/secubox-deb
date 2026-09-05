@@ -1,0 +1,12 @@
+# /etc/secubox/health.toml — sondes de santé SecuBox
+[settings]
+probe_interval_seconds = 60
+timeout_ms = 15000
+alert_threshold_ms = 500
+cache_file = "/var/cache/secubox/health/status.json"
+
+[display]
+ok = "🟢"
+slow = "🟡"
+down = "🔴"
+skip = "⚪"

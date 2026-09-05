@@ -1,0 +1,22 @@
+Source: secubox-health
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-health
+Architecture: all
+Depends: ${misc:Depends},
+         python3 (>= 3.11),
+         python3-aiohttp
+Description: SecuBox health probers (vhost + module health monitoring)
+ Reconstitue en paquet source les sondes de santé de la board, jusque-là
+ déployées à la main sur gk2 (aucune source dépôt) :
+  - secubox-health-prober (prober.py) : sonde chaque vhost via nginx et écrit
+    /var/cache/secubox/health/status.json. Ignore désormais les vhosts
+    lifecycle=on-demand (modules.d) — les sonder les maintenait éveillés et
+    neutralisait secubox-sleeper (scale-to-zero).
+  - secubox-module-prober (module_prober.py) : santé par socket unix /health.

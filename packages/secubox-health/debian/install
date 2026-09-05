@@ -1,0 +1,5 @@
+src/prober.py                             usr/lib/secubox/health
+src/module_prober.py                      usr/lib/secubox/health
+conf/health.toml                          etc/secubox
+systemd/secubox-health-prober.service     lib/systemd/system
+systemd/secubox-module-prober.service     lib/systemd/system

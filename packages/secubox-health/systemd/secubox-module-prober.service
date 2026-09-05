@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox Module Health Prober
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/lib/secubox/health/module_prober.py
+Restart=always
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target
