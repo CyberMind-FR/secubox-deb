@@ -293,6 +293,16 @@ def observe_all(manifests: dict[str, Manifest], *, run=_run_batch,
 
 
 def is_on(a: Actual) -> bool:
-    """Un module est ON s'il est enabled ET actif. `enabled` seul survit au
-    reboot mais ne sert à rien maintenant ; `active` seul ne survit pas."""
+    """Un module est ON s'il est enabled ET actif.
+
+    EXCEPTION runtime LXC : un service purement conteneurisé (jellyfin,
+    peertube…) n'a PAS de unit systemd hôte (enabled/active restent None) — mais
+    le CONTENEUR qui tourne consomme de la mémoire, et c'est LUI que le sleeper
+    doit pouvoir éteindre. Pour un module à runtime LXC (lxc_running renseigné,
+    ce que observe() ne fait QUE pour runtime=lxc), l'état du conteneur fait
+    autorité, indépendamment d'un éventuel service hôte annexe. Sans ça, is_on
+    valait toujours False pour ces LXC → le sleeper les croyait déjà endormis et
+    ne les arrêtait jamais (scale-to-zero mort pour les médias, #sleeper)."""
+    if a.lxc_running is not None:
+        return bool(a.lxc_running)
     return bool(a.enabled) and bool(a.active)
