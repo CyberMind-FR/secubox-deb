@@ -25,7 +25,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
 import tomllib
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +47,7 @@ log = get_logger("devwatch")
 CONFIG_FILE = Path("/etc/secubox/devwatch.toml")
 STATE_DIR = Path("/var/lib/secubox/devwatch")
 CACHE_FILE = STATE_DIR / "cache.json"      # dernier résumé calculé
+MIRROR = STATE_DIR / "mirror.git"          # miroir bare du dépôt (cadence locale, #B)
 FLOWS_FILE = STATE_DIR / "flows.json"      # flux statiques saisis (admin)
 CONFIG_OVR = STATE_DIR / "config.json"     # surcharges d'estimation (admin)
 # Le PAT GitHub est un SECRET : jamais dans config.json (qui exclut « token »),
@@ -156,6 +159,60 @@ SUMMARY: dict[str, Any] = {}
 MODULES: dict[str, Any] = {"total": 0, "modules": []}  # révisions locales des paquets
 
 
+def _git_url() -> str:
+    """URL git du dépôt suivi (protocole git — hors quota REST GitHub)."""
+    return f"https://github.com/{CFG['owner']}/{CFG['repo']}.git"
+
+
+def _git_weeks_sync(weeks_back: int = 26) -> list[dict] | None:
+    """Cadence hebdo (même format que /stats/commit_activity) dérivée d'un MIROIR
+    git LOCAL — sans token ni endpoint 202 (#B). Maintient un clone --mirror dans
+    STATE_DIR (fetch incrémental), lit les dates de commit et les ventile par
+    semaine (dimanche→samedi) et par jour. La semaine COURANTE est tronquée à
+    aujourd'hui pour que today = days[-1] soit le VRAI compte du jour. Retourne
+    None si git indisponible (on retombe alors sur l'agrégat GitHub). BLOQUANT :
+    à appeler via asyncio.to_thread."""
+    try:
+        if (MIRROR / "HEAD").exists():
+            subprocess.run(["git", "-C", str(MIRROR), "remote", "update", "--prune"],
+                           capture_output=True, timeout=120, check=True)
+        else:
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["git", "clone", "--mirror", "--quiet", _git_url(), str(MIRROR)],
+                           capture_output=True, timeout=300, check=True)
+        since = f"{(weeks_back + 1) * 7} days ago"
+        # Branche PAR DÉFAUT (HEAD du miroir) — même périmètre que le
+        # /stats/commit_activity de GitHub (total cohérent avec commits_total).
+        out = subprocess.run(
+            ["git", "-C", str(MIRROR), "log", f"--since={since}", "--pretty=%ct"],
+            capture_output=True, text=True, timeout=60, check=True).stdout
+    except Exception as e:  # noqa: BLE001
+        log.error(f"cadence git indisponible: {e}")
+        return None
+
+    now = datetime.now(timezone.utc)
+    dow_now = (now.weekday() + 1) % 7          # dimanche = 0 (convention GitHub)
+    week0 = (now - timedelta(days=dow_now)).replace(hour=0, minute=0, second=0, microsecond=0)
+    buckets: dict[datetime, list[int]] = {}
+    for line in out.split():
+        try:
+            d = datetime.fromtimestamp(int(line), timezone.utc)
+        except (ValueError, OSError):
+            continue
+        dow = (d.weekday() + 1) % 7
+        wk = (d - timedelta(days=dow)).replace(hour=0, minute=0, second=0, microsecond=0)
+        buckets.setdefault(wk, [0] * 7)[dow] += 1
+
+    weeks: list[dict] = []
+    for i in range(weeks_back - 1, -1, -1):
+        wk = week0 - timedelta(weeks=i)
+        days = buckets.get(wk, [0] * 7)
+        if i == 0:                              # semaine courante : jusqu'à aujourd'hui
+            days = days[:dow_now + 1]
+        weeks.append({"week": int(wk.timestamp()), "total": sum(days), "days": days})
+    return weeks
+
+
 def _scan_modules() -> None:
     global MODULES
     try:
@@ -194,6 +251,13 @@ async def _poll_once() -> None:
             SUMMARY.setdefault("meta", {})["error"] = raw.get("error")
             SUMMARY["meta"]["rate_left"] = raw.get("rate_left")
         return
+    # Cadence (today/last7/daily) depuis le MIROIR git LOCAL (#B) : fiable, sans
+    # token ni endpoint 202. On garde les métadonnées (commits_total, tags,
+    # stars…) de l'API ; seule la ventilation par jour vient de git.
+    gw = await asyncio.to_thread(_git_weeks_sync)
+    if gw is not None:
+        raw["weeks"] = gw
+        raw["weeks_pending"] = False
     s = metrics.compute(raw, CFG, FLOWS)
     s["_raw"] = raw          # on garde les faits pour recalculer sans réseau
     SUMMARY = s
