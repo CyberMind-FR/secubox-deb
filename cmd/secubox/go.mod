@@ -1,6 +1,6 @@
 module github.com/CyberMind-FR/secubox-deb/cmd/secubox
 
-go 1.26.2
+go 1.22
 
 require (
 	github.com/manifoldco/promptui v0.9.0
