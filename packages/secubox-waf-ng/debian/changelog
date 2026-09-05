@@ -1,3 +1,12 @@
+secubox-waf-ng (1.7.7-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : retire le backend de ban CrowdSec (code mort — jamais appelé ; le
+    ban passe par nftban, WAF autonome). Retire aussi les flags --crowdsec-* de
+    l'ExecStart worker, le grant sudo cscli (sudoers vidé) et le libellé
+    « CrowdSec JWT » de l'apparmor. Rebuild depuis la source toolbox-ng nettoyée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 05 Sep 2026 07:30:00 +0200
+
 secubox-waf-ng (1.7.6-1~bookworm1) bookworm; urgency=medium
 
   * host-anomaly : NOTRE propre domaine n'est jamais banni (#1266). Un hote de
