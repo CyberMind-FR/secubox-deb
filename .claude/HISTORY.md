@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 ## 2026-09-01 — Lyrion : cardlet RESTAURÉE mais LAN-only (correction, ref #1247)
 
 Correction de tir : le retrait complet de la cardlet était trop large — le

@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Objet média multi-sources adaptatif — conception (#1227, #1224, étend #1056)
 
 Date : 2026-08-29 · Statut : conception · Portée : `secubox-bbs` + `secubox-billets` + `secubox-webos`
