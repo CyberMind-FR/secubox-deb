@@ -1298,7 +1298,7 @@ async def _joignable(hote: str) -> bool:
 
     POURQUOI UNE SONDE ET PAS UN FICHIER. Un domaine abandonné garde longtemps
     son certificat, son entrée de routage et son bloc `enabled = true` : sur
-    cette box, `mail.maegia.tv` et `git.maegia.tv` ont les trois, et pointent
+    cette box, `mail.gk2.secubox.in` et `git.gk2.secubox.in` ont les trois, et pointent
     même vers des conteneurs bien vivants — c'est le NOM PUBLIC qui est mort.
     Aucun fichier ne le dit ; seule une connexion le montre.
 

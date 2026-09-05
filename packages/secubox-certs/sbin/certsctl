@@ -24,7 +24,7 @@ set -euo pipefail
 readonly VERSION="1.1.0"
 readonly CERTS_DIR="${SECUBOX_CERTS_DIR:-/data/haproxy/certs}"
 readonly ACME_HOME="${SECUBOX_ACME_HOME:-/root/.acme.sh}"
-# Certbot gere une partie du parc (ganimed.fr, mail.maegia.tv, …). La garantie
+# Certbot gere une partie du parc (ganimed.fr, mail.gk2.secubox.in, …). La garantie
 # doit etre UNIFORME : un certificat renouvele doit atteindre HAProxy quel que
 # soit l outil qui l a emis. Sinon la moitie du parc reste sur le mecanisme qui
 # avait laisse 36 certificats expirer.

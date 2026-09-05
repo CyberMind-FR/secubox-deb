@@ -22,7 +22,6 @@ Presque tous servent un **site metablogizer** (`root /srv/metablogizer/sites/<no
 | `meta-dork-aggregator.gk2.conf` | dork.gk2.secubox.in | sites/meta-dork-a |
 | `git.gk2.conf` | git.gk2.secubox.in | sites/git |
 | `lldh.gk2-redirect.conf` | lldh.gk2… | 301 → lldh.ganimed.fr |
-| `wall.maegia-redirect.conf` | wall.maegia.tv | 301 → wall.ganimed.fr |
 | `companion.conf` | companion.gk2.secubox.in | portail `/data/companion/www` (hors metablogizer) |
 
 Le **contenu** de chaque site est déjà versionné à part (chaque

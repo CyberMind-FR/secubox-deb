@@ -24,5 +24,5 @@ path     = "/data/music"
 readonly = true
 
 [exposure]
-public_hostname = ""        # e.g. "lyrion.maegia.tv" — empty = LAN only
+public_hostname = ""        # e.g. "lyrion.gk2.secubox.in" — empty = LAN only
 waf_inspect     = true

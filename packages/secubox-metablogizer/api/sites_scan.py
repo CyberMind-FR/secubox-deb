@@ -166,7 +166,7 @@ def domaine_du_site(site_dir: Path, domain_suffix: str = DEFAULT_DOMAIN_SUFFIX) 
 
     1. un domaine explicite dans ``site.json`` fait foi — c'est un choix
        d'opérateur, y compris quand il pointe hors du board : une soixantaine
-       de sites servent sous ``maegia.tv`` ou ``ganimed.fr`` ;
+       de sites servent sous ``ganimed.fr`` ;
     2. un ``.local`` hérité est réécrit vers le suffixe réel — ces valeurs ont
        été gravées par l'ancien chemin de création, et les ignorer ferait
        perdre le sous-domaine choisi (``want`` sert sous ``wanted.``) ;

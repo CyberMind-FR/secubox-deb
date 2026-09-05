@@ -49,7 +49,7 @@ def test_jamais_de_local_quel_que_soit_le_chemin(tmp_path):
 
 
 def test_un_domaine_explicite_fait_foi_meme_hors_du_board(tmp_path):
-    # Une soixantaine de sites servent sous maegia.tv ou ganimed.fr. Leur
+    # Une soixantaine de sites servent sous ganimed.fr. Leur
     # imposer le suffixe du board les casserait tous.
     d = site(tmp_path, "chess", {"domain": "chess.ganimed.fr"})
     assert domaine_du_site(d) == "chess.ganimed.fr"

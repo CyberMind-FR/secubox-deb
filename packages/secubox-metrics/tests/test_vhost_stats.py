@@ -15,7 +15,7 @@ def test_hote_reel_ecarte_ce_qui_n_est_pas_un_site():
                  "", "   "):
         assert not _hote_reel(faux), f"{faux!r} compte comme un site"
     for vrai in ("radio.gk2.secubox.in", "ganimed.fr", "www.anibal-amiot.net",
-                 "wall.maegia.tv", "exemple.fr."):
+                 "wall.gk2.secubox.in", "exemple.fr."):
         assert _hote_reel(vrai), f"{vrai!r} devrait compter"
 
 

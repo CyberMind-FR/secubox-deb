@@ -18,8 +18,8 @@ def _profils(tmp_path, contenu):
 
 
 def test_liste_lue_et_normalisee(tmp_path):
-    p = _profils(tmp_path, {"anti_robots": ["Gitea.GK2.Secubox.in", " git.maegia.tv "]})
-    assert lire_anti_robots(p) == {"gitea.gk2.secubox.in", "git.maegia.tv"}
+    p = _profils(tmp_path, {"anti_robots": ["Gitea.GK2.Secubox.in", " git.gk2.secubox.in "]})
+    assert lire_anti_robots(p) == {"gitea.gk2.secubox.in", "git.gk2.secubox.in"}
 
 
 def test_cle_absente_ne_coche_personne(tmp_path):

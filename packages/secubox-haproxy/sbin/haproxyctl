@@ -780,7 +780,7 @@ cmd_cert_sync() {
         #
         # Le premier jet ecrasait des que le contenu differait. L'essai a blanc
         # sur gk2 a montre le piege : deux certificats servis expiraient PLUS
-        # TARD que la copie de /etc/letsencrypt (live.maegia.tv, 4 novembre
+        # TARD que la copie de /etc/letsencrypt (live.gk2.secubox.in, 4 novembre
         # contre 14 octobre). Les synchroniser aurait raccourci leur duree de
         # vie — l'inverse exact du but.
         #
