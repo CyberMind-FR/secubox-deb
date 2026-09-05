@@ -152,6 +152,45 @@
   var cats = null, catIdx = 0;  // {id:nom} des catégories + rotation interne
   var vids = [], i = 0, enPause = false, joue = false;
 
+  // ── MODE ÉCONOME piloté par le PROFIL du module (pièce 1, modules.d) ────────
+  // Un cardlet dont le backend est `on-demand` ne doit ni le MAINTENIR éveillé
+  // ni le RÉVEILLER par ses sondes de fond : il lit /api/v1/profiles/lifecycles
+  // (même origine, sans JWT) et n'interroge PeerTube en fond que s'il est déjà
+  // `up` ET l'onglet visible. Endormi → dernier cache + badge « en veille »,
+  // sans réveil. Un clic opérateur sur une tranche autorise le réveil (actif).
+  // Défaut PESSIMISTE (on-demand/asleep) tant que le profil n'a pas répondu :
+  // jamais de réveil accidentel au tout premier rendu.
+  var lifecycle = 'on-demand', sleepState = 'asleep';
+  function onDemande() { return lifecycle === 'on-demand'; }
+  function refletVeille() {
+    var dort = onDemande() && sleepState === 'asleep', b = el('veille');
+    if (dort && !b) {
+      b = document.createElement('span'); b.id = 'veille';
+      b.style.cssText = 'position:absolute;top:6px;right:8px;z-index:9;'
+        + 'font:600 11px/1.4 system-ui;padding:2px 7px;border-radius:8px;'
+        + 'background:rgba(0,0,0,.55);color:#cbd5e1;backdrop-filter:blur(3px);'
+        + 'pointer-events:none;';
+      b.textContent = '💤 en veille';
+      (document.querySelector('.mw') || document.body).appendChild(b);
+    } else if (!dort && b) { b.remove(); }
+  }
+  function rafraichitProfil() {
+    fetch('/api/v1/profiles/lifecycles', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var L = (d && d.lifecycles) || [], m = null, x;
+        for (x = 0; x < L.length; x++) { if (L[x].id === 'peertube') { m = L[x]; break; } }
+        if (!m) return;
+        var etaitEndormi = (sleepState === 'asleep');
+        lifecycle = m.lifecycle; sleepState = m.sleep_state;
+        refletVeille();
+        // Réveil détecté (asleep→up : un autre accès l'a ouvert) OU premier
+        // profil disant `up` : on charge une fois, passivement, sans réveiller.
+        if (etaitEndormi && sleepState !== 'asleep') charge(false);
+      })
+      .catch(function () {});   // best-effort : indispo => on reste prudent
+  }
+
   var el = function (id) { return document.getElementById(id); };
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
       return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
@@ -583,7 +622,19 @@
       .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });
   }
 
-  function charge() {
+  function charge(actif) {
+    // PORTE ÉCONOME : une sonde PASSIVE (actif !== true) sur un module on-demand
+    // ne réveille pas et n'interroge pas s'il DORT ou si l'onglet est masqué —
+    // on conserve le dernier cache. Un clic opérateur (actif === true) passe.
+    if (actif !== true && onDemande() && (sleepState === 'asleep' || document.hidden)) {
+      refletVeille();
+      if (!vids.length) el('une-t').textContent = 'PeerTube en veille — cliquez pour réveiller';
+      return;
+    }
+    chargeReel();
+  }
+
+  function chargeReel() {
     // REPRISE AU REFRESH, UNE SEULE FOIS, AVANT TOUT : si une vidéo était en
     // cours (état récent + position), on la relance à sa position — quelle que
     // soit la tranche restaurée par le slicer (reprend() va chercher la vidéo
@@ -616,7 +667,7 @@
   // fetch, on ne martèle pas l'API). Le carrousel de vignettes tourne DANS la
   // vue courante. La lib gère clic (fige) + persistance ; PREVIEW désactivée
   // (elle relancerait un fetch et couperait une lecture en cours).
-  function appliqueVue(k) {
+  function appliqueVue(k, actif) {
     if (VUES[k] && VUES[k].kind === 'category') catIdx++;   // un genre différent à chaque entrée
     vue = k;
     // Changer de vue arrête une lecture en cours et revient à la vitrine.
@@ -628,17 +679,19 @@
         + '<span>▶</span></button><span class="voile"><span class="t" id="une-t"></span></span>';
       try { parent.postMessage({ sbx: 'media', id: 'peertube', joue: false, fin: true }, '*'); } catch (e) {}
     }
-    charge();
+    charge(actif);
   }
   if (window.SBXSliceBar) {
     var ptbox = document.createElement('div'); ptbox.className = 'pt-slbox';
     (document.querySelector('.mw') || document.body).appendChild(ptbox);
+    var premierShow = true;   // le 1er onShow est l'init (passif), pas un clic
     window.SBXSliceBar(ptbox, {
       autoMs: 0, pauseOnHover: false, preview: false,
       slices: VUES.map(function (v) { return { label: v.lab }; }),
-      onShow: function (k) { appliqueVue(k); }   // pilote la vue (charge inclus)
+      // Clic opérateur = actif (réveil autorisé) ; init = passif (respecte veille).
+      onShow: function (k) { appliqueVue(k, !premierShow); premierShow = false; }
     });
-  } else { charge(); }   // repli sans lib : charge la vue par défaut
+  } else { charge(false); }   // repli sans lib : charge passif de la vue par défaut
 
   // ── POP-IN HELPER : survol d'une vignette → titre + chaîne + conseil. ───────
   (function () {
@@ -676,7 +729,17 @@
   // Le premier chargement est piloté par le slicer (onShow au démarrage, ou le
   // repli charge() sans lib) — pas de charge() ici, sinon double fetch.
   setInterval(function () { if (!enPause && !joue && vids.length) { i++; montre(); } }, 7000);
-  setInterval(function () { if (!joue) charge(); }, 600000);
+  setInterval(function () { if (!joue) charge(false); }, 600000);   // fond = passif
+
+  // Suivi du profil du module (lifecycle + sleep_state) : source de vérité pour
+  // le mode économe. Au démarrage + toutes les 60 s (l'agrégat est léger et
+  // renseigne aussi les réveils/endormissements). À la reprise de visibilité de
+  // l'onglet, on resynchronise et on tente une sonde passive.
+  rafraichitProfil();
+  setInterval(rafraichitProfil, 60000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { rafraichitProfil(); charge(false); }
+  });
 
   (function () {
     var t = new URLSearchParams(location.search).get('theme');
