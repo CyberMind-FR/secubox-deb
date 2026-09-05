@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox Lyrion LMS watchdog — periodic check
+
+[Timer]
+OnBootSec=120
+OnUnitActiveSec=120
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

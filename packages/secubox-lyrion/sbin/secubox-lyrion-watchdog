@@ -1,0 +1,27 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: lyrion — watchdog LMS.
+#
+# LMS (Lyrion Music Server) se plante sous charge de flux : le conteneur reste
+# RUNNING mais :9000 ne répond plus → 502. Le réveil @sbx_wake ne couvre PAS ce
+# cas (il ne démarre qu'un conteneur ARRÊTÉ). Ce watchdog relance LMS quand le
+# conteneur tourne mais que son backend est muet. Conteneur arrêté = état
+# on-demand NORMAL (réveil sur accès) → on ne fait rien.
+set -eu
+IP="${LYRION_IP:-10.100.0.100}"; PORT="${LYRION_PORT:-9000}"
+LMS="${LYRION_LMS_UNIT:-lyrionmusicserver}"
+state=$(lxc-info -n lyrion -s 2>/dev/null | awk '{print $2}')
+[ "$state" = "RUNNING" ] || exit 0
+# Deux essais espacés : évite un faux positif pendant un GC/scan bref.
+i=1
+while [ "$i" -le 2 ]; do
+  if curl -fsS -o /dev/null --max-time 4 "http://$IP:$PORT/" 2>/dev/null; then exit 0; fi
+  sleep 5; i=$((i+1))
+done
+echo "LMS muet sur $IP:$PORT alors que la LXC tourne — restart $LMS"
+if ! lxc-attach -n lyrion -- systemctl restart "$LMS" 2>/dev/null; then
+  echo "restart unit échoué — restart conteneur lyrion"
+  lxc-stop -n lyrion -t 20 2>/dev/null || true
+  lxc-start -n lyrion 2>/dev/null || true
+fi
+exit 0

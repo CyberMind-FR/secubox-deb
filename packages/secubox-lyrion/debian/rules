@@ -11,6 +11,11 @@ override_dh_auto_install:
 	# CTL
 	install -d debian/secubox-lyrion/usr/sbin
 	install -m 755 sbin/lyrionctl debian/secubox-lyrion/usr/sbin/lyrionctl
+	# Watchdog LMS (relance si :9000 muet alors que la LXC tourne).
+	install -m 755 sbin/secubox-lyrion-watchdog debian/secubox-lyrion/usr/sbin/secubox-lyrion-watchdog
+	install -d debian/secubox-lyrion/lib/systemd/system
+	install -m 644 systemd/secubox-lyrion-watchdog.service systemd/secubox-lyrion-watchdog.timer \
+	        debian/secubox-lyrion/lib/systemd/system/
 	# Web UI
 	install -d debian/secubox-lyrion/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-lyrion/usr/share/secubox/www/ || true
@@ -36,3 +41,9 @@ override_dh_auto_install:
 	install -d debian/secubox-lyrion/usr/lib/systemd/system
 	install -m 0644 debian/secubox-lyrion-version-check.service debian/secubox-lyrion/usr/lib/systemd/system/
 	install -m 0644 debian/secubox-lyrion-version-check.timer debian/secubox-lyrion/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	# Conserver l'activation du relevé de version (#993) — sans ça, remplacer le
+	# dh_installsystemd par défaut le désactiverait.
+	dh_installsystemd --name=secubox-lyrion-version-check secubox-lyrion-version-check.timer
+	dh_installsystemd --name=secubox-lyrion-watchdog secubox-lyrion-watchdog.timer

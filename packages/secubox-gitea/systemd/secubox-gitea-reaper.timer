@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox Gitea reaper — periodic sweep (stuck git serve-clone)
+
+[Timer]
+OnBootSec=300
+OnUnitActiveSec=300
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

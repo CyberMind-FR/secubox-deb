@@ -12,6 +12,11 @@ override_dh_auto_install:
 	install -d debian/secubox-gitea/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-gitea/usr/sbin/ || true
 
+	# Watchdog reaper des git pack-objects zombies (systemd timer).
+	install -d debian/secubox-gitea/lib/systemd/system
+	install -m 644 systemd/secubox-gitea-reaper.service systemd/secubox-gitea-reaper.timer \
+	        debian/secubox-gitea/lib/systemd/system/
+
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox.d
 	install -m 644 nginx/gitea.conf $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox.d/gitea.conf
@@ -24,3 +29,6 @@ override_dh_auto_install:
 	# Install conf/ templates (used by postinst for idempotent routing setup)
 	install -d $(CURDIR)/debian/secubox-gitea/usr/share/secubox-gitea/conf
 	install -m 644 conf/* $(CURDIR)/debian/secubox-gitea/usr/share/secubox-gitea/conf/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-gitea-reaper secubox-gitea-reaper.timer

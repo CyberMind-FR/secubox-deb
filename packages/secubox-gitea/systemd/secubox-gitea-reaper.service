@@ -1,0 +1,7 @@
+[Unit]
+Description=SecuBox Gitea — reap stuck git pack-objects (>15min) in the gitea LXC
+Documentation=man:secubox-gitea-reaper
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-gitea-reaper

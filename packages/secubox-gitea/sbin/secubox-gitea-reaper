@@ -1,0 +1,22 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: gitea — reaper des git pack-objects/upload-pack zombies.
+#
+# Un serve-clone de dépôt, même volumineux, se termine en quelques minutes ;
+# au-delà c'est un client parti qui laisse `git pack-objects` tourner. Constaté
+# 2× en une session (~10 h, ×3), saturant la LXC gitea → 504. Ce reaper tue les
+# process git de service-clone du CONTENEUR gitea plus vieux que GITEA_REAP_MAXSEC.
+set -eu
+MAXSEC="${GITEA_REAP_MAXSEC:-900}"      # 15 min
+ps -eo pid,etimes,args --no-headers 2>/dev/null | while read -r pid etimes rest; do
+  case "$rest" in
+    *pack-objects*|*upload-pack*|*"git bundle"*) : ;;
+    *) continue ;;
+  esac
+  [ "$etimes" -gt "$MAXSEC" ] 2>/dev/null || continue
+  grep -q "lxc.payload.gitea" "/proc/$pid/cgroup" 2>/dev/null || continue
+  if kill -TERM "$pid" 2>/dev/null; then
+    echo "reaped git pid $pid (${etimes}s > ${MAXSEC}s): $rest"
+  fi
+done
+exit 0

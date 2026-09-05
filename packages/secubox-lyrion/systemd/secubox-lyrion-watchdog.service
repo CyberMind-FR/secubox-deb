@@ -1,0 +1,7 @@
+[Unit]
+Description=SecuBox Lyrion — restart LMS when the container is up but :9000 is mute
+Documentation=man:secubox-lyrion-watchdog
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-lyrion-watchdog
