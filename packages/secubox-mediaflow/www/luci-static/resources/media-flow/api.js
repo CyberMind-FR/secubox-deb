@@ -60,14 +60,6 @@ async function callStopNdpid(params) {
     return sbxFetch('/api/v1/mediaflow/stop_ndpid', params, 'POST');
 }
 
-async function callStartNetifyd(params) {
-    return sbxFetch('/api/v1/mediaflow/start_netifyd', params, 'POST');
-}
-
-async function callStopNetifyd(params) {
-    return sbxFetch('/api/v1/mediaflow/stop_netifyd', params, 'POST');
-}
-
 // nDPId Integration
 async function callNdpidStatus(params) {
     return sbxFetch('/api/v1/hub/get_service_status', params, 'GET');
@@ -185,8 +177,6 @@ return baseclass.extend({
 	setSettings: callSetSettings,
 	startNdpid: callStartNdpid,
 	stopNdpid: callStopNdpid,
-	startNetifyd: callStartNetifyd,
-	stopNetifyd: callStopNetifyd,
 
 	// nDPId methods
 	getNdpidStatus: callNdpidStatus,

@@ -12,7 +12,6 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy
 	cp -r addons $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/
 	cp -r data $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/
-	cp -r crowdsec $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/sbin
 	install -m 755 bin/mitmproxyctl $(CURDIR)/debian/secubox-mitmproxy/usr/sbin/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/secubox
@@ -32,9 +31,7 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/logrotate.d
 	install -m 644 debian/cookie-audit.logrotate \
 	  $(CURDIR)/debian/secubox-mitmproxy/etc/logrotate.d/secubox-cookie-audit
-	# Phase 7.A/B (#498) : WAF → CrowdSec bridge + rate-limit + honeypot
-	install -m 755 bin/secubox-waf-cs-bridge-setup \
-	  $(CURDIR)/debian/secubox-mitmproxy/usr/sbin/
+	# Phase 7.A/B (#498) : WAF rate-limit + honeypot
 	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/nftables
 	install -m 644 nftables/secubox-waf-ratelimit.nft \
 	  $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/nftables/

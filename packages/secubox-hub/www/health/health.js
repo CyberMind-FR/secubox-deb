@@ -10,7 +10,7 @@
     const REFRESH_MS = 15000;
 
     // Vital services — the security/serving spine; everything else is "common".
-    const VITAL = ['waf', 'crowdsec', 'mitmproxy', 'haproxy', 'aggregator', 'hub',
+    const VITAL = ['waf', 'mitmproxy', 'haproxy', 'aggregator', 'hub',
         'system', 'vortex-dns', 'dns-guard', 'certs', 'wireguard', 'soc',
         'metrics', 'core'];
     const VITAL_SET = new Set(VITAL);

@@ -365,7 +365,6 @@
                     <div class="info-row"><span class="label">Firewall</span><span id="firewall" style="color: var(--green);">-</span></div>
                     <div class="info-row"><span class="label">SSH</span><span id="ssh">-</span></div>
                     <div class="info-row"><span class="label">AppArmor</span><span id="apparmor">-</span></div>
-                    <div class="info-row"><span class="label">CrowdSec</span><span id="crowdsec">-</span></div>
                 </div>
             </div>
 
@@ -728,7 +727,6 @@
             document.getElementById('firewall').textContent = data.firewall || 'Unknown';
             document.getElementById('ssh').textContent = data.ssh_status || 'Unknown';
             document.getElementById('apparmor').textContent = data.apparmor || 'Unknown';
-            document.getElementById('crowdsec').textContent = data.crowdsec || 'Unknown';
         }
 
         async function loadPackages() {

@@ -210,7 +210,7 @@ def get_system_metrics() -> SystemMetrics:
         load_5m=round(load_5m, 2),
         load_15m=round(load_15m, 2),
         active_connections=active_connections,
-        blocked_threats=0,  # Would come from CrowdSec integration
+        blocked_threats=0,  # Would come from threat-blocking integration
         services_running=0,  # Would come from systemd integration
         services_total=0,
     )

@@ -4,7 +4,7 @@
   threat-analyst's internal DB is only populated by an explicit
   /collect call. This version:
     1. Auto-collects on page load (no operator click required)
-    2. Surfaces the RICH data CrowdSec returns: src IP, country,
+    2. Surfaces the RICH data the collector returns: src IP, country,
        ASN, attack type, targeted user
     3. Stats panels show unique active IPs + top countries + top
        attack types + top targeted users — not just abstract counts
@@ -234,7 +234,7 @@
                     <span class="dot" id="auto-dot"></span>
                     <span id="auto-text">…</span>
                 </span>
-                <button onclick="collectThen()" title="Pull fresh alerts from CrowdSec + WAF and refresh">Collect now</button>
+                <button onclick="collectThen()" title="Pull fresh alerts from WAF and refresh">Collect now</button>
                 <button class="primary" onclick="loadAll()">Refresh</button>
             </div>
         </header>
@@ -263,23 +263,13 @@
             </div>
         </div>
 
-        <!-- #597 Global security overview — live from WAF + CrowdSec + firewall -->
+        <!-- #597 Global security overview — live from WAF -->
         <h3 style="margin:1rem 0 .4rem">🛡 Vue globale sécurité <span id="ov-sources" style="font-size:.7rem;color:var(--text-muted)"></span></h3>
         <div class="stats">
             <div class="stat warn">
                 <div class="stat-label">WAF — menaces (24h)</div>
                 <div class="stat-value" id="o-waf-threats">—</div>
                 <div class="stat-hint" id="o-waf-blocked">bloquées: —</div>
-            </div>
-            <div class="stat crit">
-                <div class="stat-label">CrowdSec — détections</div>
-                <div class="stat-value" id="o-cs-bans">—</div>
-                <div class="stat-hint" id="o-cs-alerts">alertes: —</div>
-            </div>
-            <div class="stat">
-                <div class="stat-label">Firewall — IP bloquées (nft)</div>
-                <div class="stat-value" id="o-fw-blacklist">—</div>
-                <div class="stat-hint" id="o-fw-split">via crowdsec-bouncer</div>
             </div>
             <div class="stat">
                 <div class="stat-label">WAF — règles chargées</div>
@@ -384,7 +374,7 @@
             }[c]));
         }
 
-        // CrowdSec alert flattener. Walk the nested
+        // Alert flattener. Walk the nested
         // .details.events[].meta[{key,value}] structure and pull out
         // the values an analyst wants — country, ASN, target user —
         // without forcing the operator to expand each row.
@@ -455,7 +445,7 @@
             renderTopFromAlerts(alerts);
 
             if (!alerts.length) {
-                c.innerHTML = '<div class="msg msg-empty">No alerts in window. Click "Collect now" to pull from CrowdSec / WAF.</div>';
+                c.innerHTML = '<div class="msg msg-empty">No alerts in window. Click "Collect now" to pull from WAF.</div>';
                 document.getElementById('s-unique-ips').textContent = 0;
                 document.getElementById('s-countries').textContent = 0;
                 return;
@@ -574,26 +564,20 @@
             const r = await post('/api/v1/threat-analyst/collect');
             if (!r.ok) { setAutoStatus('err', 'collect failed: ' + r.err); await loadAll(); return; }
             const c = r.data.collected || {};
-            setAutoStatus('', `collected ${c.crowdsec ?? 0} cs · ${c.waf ?? 0} waf — ${new Date().toLocaleTimeString()}`);
+            setAutoStatus('', `collected ${c.waf ?? 0} waf — ${new Date().toLocaleTimeString()}`);
             await loadAll();
         }
-        // #597 — global overview from WAF + CrowdSec + firewall
+        // #597 — global overview from WAF
         async function loadOverview() {
             const r = await get('/api/v1/threat-analyst/overview');
             if (!r.ok) return;
-            const o = r.data || {}, w = o.waf || {}, c = o.crowdsec || {}, f = o.firewall || {};
+            const o = r.data || {}, w = o.waf || {};
             const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
             set('o-waf-threats', w.threats_today ?? '—');
             set('o-waf-blocked', 'bloquées: ' + (w.blocked_24h ?? 0) + ' (24h)');
-            set('o-cs-bans', c.alerts ?? '—');
-            set('o-cs-alerts', 'décisions actives: ' + (c.active_decisions ?? 0));
-            set('o-fw-blacklist', f.blocked ?? '—');
-            set('o-fw-split', f.source || 'via crowdsec-bouncer');
             set('o-waf-rules', w.rules_loaded ?? '—');
             const up = [];
             up.push((w.running ? '🟢' : '🔴') + ' WAF');
-            up.push((c.running ? '🟢' : '🔴') + ' CrowdSec');
-            up.push('🟢 Firewall');
             const ago = o.updated ? Math.max(0, Math.round(Date.now()/1000 - o.updated)) + 's' : '';
             set('ov-sources', up.join(' · ') + (ago ? ' · maj ' + ago : ''));
         }

@@ -353,8 +353,8 @@ async def health():
     return {"status": "ok", "module": "mediaflow", "version": "2.0.3"}
 
 
-# The DPI engine now exposes a public, category-tagged exfil view (the netifyd
-# /flows path is dead). Media = the exfil classifier's "media" category.
+# The DPI engine now exposes a public, category-tagged exfil view.
+# Media = the exfil classifier's "media" category.
 MEDIA_CATEGORIES = {"media"}
 
 
@@ -1037,18 +1037,6 @@ async def update_settings(req: SettingsRequest, user=Depends(require_jwt)):
 
 
 # DPI service control
-@router.post("/start_netifyd")
-def start_netifyd(user=Depends(require_jwt)):
-    r = subprocess.run(["systemctl", "start", "netifyd"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
-
-
-@router.post("/stop_netifyd")
-def stop_netifyd(user=Depends(require_jwt)):
-    r = subprocess.run(["systemctl", "stop", "netifyd"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
-
-
 @router.post("/start_ndpid")
 def start_ndpid(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "start", "ndpid"], capture_output=True, text=True)

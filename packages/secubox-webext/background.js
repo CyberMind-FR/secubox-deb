@@ -11,7 +11,7 @@ const api = globalThis.browser ?? globalThis.chrome;
 
 const DEFAULTS = {
   hubBase: "",
-  modules: ["hub", "crowdsec", "waf", "wireguard", "peertube", "photoprism", "nextcloud"],
+  modules: ["hub", "waf", "wireguard", "peertube", "photoprism", "nextcloud"],
 };
 
 async function refreshBadge() {

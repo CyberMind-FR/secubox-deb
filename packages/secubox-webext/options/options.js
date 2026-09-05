@@ -8,7 +8,7 @@ const api = globalThis.browser ?? globalThis.chrome;
 
 const DEFAULTS = {
   hubBase: "",
-  modules: ["hub", "crowdsec", "waf", "wireguard", "peertube", "photoprism", "nextcloud"],
+  modules: ["hub", "waf", "wireguard", "peertube", "photoprism", "nextcloud"],
   cookieEndpoint: "/api/v1/avatar/cred/poke/youtube",
 };
 

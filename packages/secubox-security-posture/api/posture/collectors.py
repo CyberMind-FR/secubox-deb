@@ -8,8 +8,8 @@ SecuBox-Deb :: Security Posture — real signal collectors
 CyberMind — https://cybermind.fr
 
 One async coroutine per module-domain. Each returns a list of Indicators built
-only from data actually fetched over public sibling sockets / CrowdSec
-Prometheus / unprivileged /proc. When a source is unreachable the indicator is
+only from data actually fetched over public sibling sockets / unprivileged
+/proc. When a source is unreachable the indicator is
 emitted as UNKNOWN (with provenance.ok = False); when a property can only be
 judged by a human it is MANUAL. Nothing is ever invented.
 """
@@ -58,16 +58,14 @@ def _manual(id, domain, label, source, *, note="human-judged", link=None) -> Ind
 
 
 class Probe:
-    """Shared, pre-fetched cross-domain signal (health-doctor + CrowdSec prom)."""
+    """Shared, pre-fetched cross-domain signal (health-doctor backbone)."""
 
     def __init__(self):
         self.hd: dict = {}
-        self.cs: dict = {}
 
     async def prefetch(self):
         ok, data = await sources.socket_get("health-doctor", "/checks")
         self.hd = (data or {}).get("checks", {}) if ok and isinstance(data, dict) else {}
-        self.cs = await sources.crowdsec_prom()
 
     def svc_ok(self, *names) -> Optional[bool]:
         """True/False if any named health-doctor check is found; None if absent."""
@@ -164,34 +162,6 @@ async def collect_root(probe: Probe) -> List[Indicator]:
 
 async def collect_wall(probe: Probe) -> List[Indicator]:
     out: List[Indicator] = []
-
-    ok, h = await sources.socket_get("crowdsec", "/health")
-    src = "socket:crowdsec.sock /health"
-    checks = h.get("checks", {}) if (ok and isinstance(h, dict)) else {}
-    if checks:
-        nft = checks.get("nftables_ok")
-        if nft is not None:
-            out.append(_scored("nft_default_drop", "wall", "nftables firewall", 1.0 if nft else 0.0,
-                               src, weight=2.0, detail="nftables ruleset loaded" if nft else "nftables not OK",
-                               remediation="nft list ruleset ; reload secubox firewall",
-                               link="/waf/"))
-        engine = checks.get("engine_running")
-        lapi = checks.get("lapi_ok")
-        if engine is not None or lapi is not None:
-            val = (1.0 if engine else 0.0) * 0.5 + (1.0 if lapi else 0.0) * 0.5
-            out.append(_scored("ids_engine", "wall", "CrowdSec IDS engine", val, src,
-                               weight=1.5, detail=f"engine={'up' if engine else 'down'}, lapi={'ok' if lapi else 'down'}",
-                               remediation="systemctl status crowdsec", link="/crowdsec/"))
-        bcount = checks.get("bouncers_count")
-        bok = checks.get("bouncers_ok")
-        if bcount is not None:
-            val = 1.0 if (bok and bcount) else (0.5 if bcount else 0.0)
-            out.append(_scored("bouncer_health", "wall", "CrowdSec bouncers", val, src,
-                               detail=f"{bcount} bouncer(s), ok={bok}",
-                               remediation="cscli bouncers list ; re-register the bouncer",
-                               link="/crowdsec/"))
-    else:
-        out.append(_unknown("ids_engine", "wall", "CrowdSec IDS engine", src, link="/crowdsec/"))
 
     # WAF running + rule coverage (public).
     ok, st = await sources.socket_get("waf", "/stats")
@@ -300,12 +270,12 @@ async def collect_mesh(probe: Probe) -> List[Indicator]:
 async def collect_mind(probe: Probe) -> List[Indicator]:
     out: List[Indicator] = []
     # DPI engine liveness via health-doctor backbone.
-    sok = probe.svc_ok("ndpid", "netifyd", "secubox-dpi", "dpi")
+    sok = probe.svc_ok("ndpid", "secubox-dpi", "dpi")
     if sok is not None:
         out.append(_scored("dpi_active", "mind", "DPI engine", 1.0 if sok else 0.0,
                            "socket:health-doctor.sock /checks", weight=1.5,
                            detail="DPI/nDPId reporting" if sok else "DPI engine down",
-                           remediation="systemctl status ndpid netifyd", link="/dpi/"))
+                           remediation="systemctl status ndpid", link="/dpi/"))
     else:
         out.append(_unknown("dpi_active", "mind", "DPI engine",
                             "socket:health-doctor.sock /checks", link="/dpi/"))

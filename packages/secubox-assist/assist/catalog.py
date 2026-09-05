@@ -22,7 +22,7 @@ _SCOPE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,40}$")
 # Allow-listed modules a center may restart/toggle/reload. Conservative on
 # purpose; extend deliberately. (No secubox-auth, no secubox-core.)
 MODULE_ALLOW = frozenset({
-    "secubox-dns", "secubox-dpi", "secubox-crowdsec", "secubox-netdata",
+    "secubox-dns", "secubox-dpi", "secubox-netdata",
     "secubox-wireguard", "secubox-qos", "secubox-vhost", "secubox-nextcloud",
     "secubox-mediaflow", "secubox-cdn", "secubox-nac", "secubox-netmodes",
 })

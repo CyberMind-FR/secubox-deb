@@ -35,11 +35,6 @@ ALLOWED_COMMANDS = {
     "service.start": ["systemctl", "start"],
     "service.status": ["systemctl", "status"],
 
-    # CrowdSec management
-    "crowdsec.ban": ["cscli", "decisions", "add", "-i"],
-    "crowdsec.unban": ["cscli", "decisions", "delete", "-i"],
-    "crowdsec.sync": ["cscli", "hub", "update"],
-
     # System info
     "system.reboot": ["systemctl", "reboot"],
     "system.update": ["apt-get", "update"],
@@ -50,7 +45,7 @@ ALLOWED_COMMANDS = {
 
 # Services that can be managed remotely
 ALLOWED_SERVICES = {
-    "nginx", "haproxy", "crowdsec", "suricata", "netdata",
+    "nginx", "haproxy", "suricata", "netdata",
     "secubox-hub", "secubox-watchdog", "secubox-soc-agent"
 }
 
@@ -142,16 +137,6 @@ def validate_action(action: str, args: List[str]) -> tuple:
         if service not in ALLOWED_SERVICES:
             return False, f"Service not allowed: {service}"
 
-    # Validate IP addresses for ban/unban
-    if action in ("crowdsec.ban", "crowdsec.unban"):
-        if not args:
-            return False, "IP address required"
-        ip = args[0]
-        # Basic IP validation
-        parts = ip.split(".")
-        if len(parts) != 4:
-            return False, f"Invalid IP: {ip}"
-
     return True, None
 
 
@@ -161,9 +146,6 @@ def build_command(action: str, args: List[str]) -> List[str]:
 
     if action.startswith("service."):
         # Insert service name
-        base_cmd.append(args[0])
-    elif action in ("crowdsec.ban", "crowdsec.unban"):
-        # Insert IP
         base_cmd.append(args[0])
 
     return base_cmd

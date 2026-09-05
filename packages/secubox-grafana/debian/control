@@ -23,7 +23,7 @@ Depends: ${misc:Depends},
 Recommends: secubox-mitmproxy, secubox-metrics
 Description: SecuBox Grafana — security metrics dashboards
  Hosts Grafana OSS in a Debian LXC at 10.100.0.70 on br-lxc, with pre-provisioned
- dashboards for the SecuBox security stack: nftables, crowdsec, suricata,
+ dashboards for the SecuBox security stack: nftables, suricata,
  cookie-audit, mitmproxy WAF and per-service systemd health.
  .
  The host-side FastAPI control plane runs on /run/secubox/grafana.sock and

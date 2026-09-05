@@ -173,15 +173,8 @@ async def get_enforcement(user=Depends(require_jwt)):
         except Exception:
             pass
 
-    cfg_file = Path("/etc/secubox/waf/crowdsec.toml")
+    # No external ban bridge is configured.
     bridge_enabled = False
-    if cfg_file.exists():
-        try:
-            import tomllib
-            with cfg_file.open("rb") as f:
-                bridge_enabled = bool(tomllib.load(f).get("enabled", False))
-        except Exception:
-            pass
 
     # Recent threats (last 20)
     threats_log = Path("/data/mitmproxy/data/threats.log")
@@ -192,21 +185,8 @@ async def get_enforcement(user=Depends(require_jwt)):
         except Exception:
             pass
 
-    # Recent bans : cscli decisions list filtered by origin=secubox-waf
+    # No external ban backend is configured.
     recent_bans = []
-    try:
-        out = subprocess.run(
-            ["cscli", "decisions", "list", "-o", "json", "--origin", "secubox-waf"],
-            capture_output=True, text=True, timeout=3,
-        ).stdout
-        for d in json.loads(out or "[]")[:20]:
-            recent_bans.append({
-                "ip": d.get("decisions", [{}])[0].get("value", "?"),
-                "scenario": d.get("scenario", "?"),
-                "expiration": d.get("expiration", "?"),
-            })
-    except Exception:
-        pass
 
     # Live rate-limit offender count
     rate_limit_offenders = 0

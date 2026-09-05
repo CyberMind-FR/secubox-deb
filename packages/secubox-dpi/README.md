@@ -7,7 +7,7 @@
 
 # 🔬 Deep Packet Inspection
 
-DPI with netifyd/nDPId
+DPI with nDPId
 
 **Category:** Monitoring
 

@@ -14,8 +14,7 @@ se reconstruit via `debian/rules`.
       --> nDPIsrvd --distributor.sock--> sbxdpi (secubox-toolbox-ng)
       --> /run/secubox/dpi-live.sock --> carte DPI du Hall
 
-Remplace **netifyd** (retiré comme CrowdSec). `Provides: ndpid`,
-`Conflicts: netifyd`.
+`Provides: ndpid`.
 
 ## Construire
 

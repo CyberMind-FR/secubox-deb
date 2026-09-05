@@ -395,15 +395,6 @@
                     <div class="form-group">
                         <div class="toggle">
                             <label class="toggle-switch">
-                                <input type="checkbox" id="cfg-crowdsec" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span>CrowdSec Integration</span>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="toggle">
-                            <label class="toggle-switch">
                                 <input type="checkbox" id="cfg-suricata" checked>
                                 <span class="toggle-slider"></span>
                             </label>
@@ -670,7 +661,6 @@
             document.getElementById('cfg-interval').value = data.train_interval_hours || 24;
             document.getElementById('cfg-retention').value = data.retention_days || 30;
             document.getElementById('cfg-autotrain').checked = data.auto_train !== false;
-            document.getElementById('cfg-crowdsec').checked = data.crowdsec_integration !== false;
             document.getElementById('cfg-suricata').checked = data.suricata_integration !== false;
 
             loadIntegrations();
@@ -707,7 +697,6 @@
                 train_interval_hours: parseInt(document.getElementById('cfg-interval').value),
                 retention_days: parseInt(document.getElementById('cfg-retention').value),
                 auto_train: document.getElementById('cfg-autotrain').checked,
-                crowdsec_integration: document.getElementById('cfg-crowdsec').checked,
                 suricata_integration: document.getElementById('cfg-suricata').checked,
             };
             await api('/config', 'POST', config);

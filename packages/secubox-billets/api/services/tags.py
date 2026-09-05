@@ -23,7 +23,7 @@ TAG_EMOJI: dict[str, str] = {
     # security
     "secu": "🛡️", "security": "🛡️", "waf": "🧱", "firewall": "🧱",
     "alerte": "🚨", "alert": "🚨", "incident": "🚨", "cve": "☢️",
-    "ids": "👁️", "crowdsec": "🦅", "ban": "⛔", "attaque": "⚔️",
+    "ids": "👁️", "ban": "⛔", "attaque": "⚔️",
     # network
     "reseau": "🌐", "network": "🌐", "dns": "📡", "vpn": "🔐",
     "wireguard": "🔐", "tor": "🧅", "mesh": "🕸️", "p2p": "🕸️",

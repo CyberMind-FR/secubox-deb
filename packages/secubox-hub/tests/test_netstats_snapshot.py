@@ -34,7 +34,6 @@ def test_collect_once_writes_row_and_snapshot(tmp_path, monkeypatch):
     monkeypatch.setattr(netstats, "DATA_DIR", tmp_path)
     monkeypatch.setattr(netstats, "_read_nft_counters",
                         lambda: {"sbx_drop_wafrl": {"packets": 3, "bytes": 30}})
-    monkeypatch.setattr(netstats, "_read_crowdsec", lambda: {})
     monkeypatch.setattr(netstats, "_read_ifaces",
                         lambda: {"eth0": {"rx_bytes": 1, "rx_packets": 1, "tx_bytes": 1, "tx_packets": 1}})
     out = netstats.collect_once(now=1234)

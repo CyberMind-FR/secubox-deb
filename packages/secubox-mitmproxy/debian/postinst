@@ -34,34 +34,6 @@ case "$1" in
       cp /usr/share/secubox/mitmproxy/data/waf-rules.json /data/mitmproxy-waf/data/
     fi
 
-    # Install CrowdSec acquisition if CrowdSec is installed
-    if [ -d /etc/crowdsec/acquis.d ]; then
-      install -m 644 /usr/share/secubox/mitmproxy/crowdsec/secubox-waf.yaml \
-        /etc/crowdsec/acquis.d/ 2>/dev/null || true
-    fi
-
-    # Phase 7.A (#498) : WAF → CrowdSec HTTP bridge auto-setup.
-    # Runs the setup script if cscli is present. Idempotent (re-creates
-    # bouncer machine + config) — safe to re-run on package upgrade.
-    if command -v cscli >/dev/null 2>&1 && \
-       [ -x /usr/sbin/secubox-waf-cs-bridge-setup ]; then
-        echo "secubox-mitmproxy: configuring WAF → CrowdSec bridge (Phase 7.A)"
-        if /usr/sbin/secubox-waf-cs-bridge-setup >/tmp/cs-bridge-setup.log 2>&1; then
-            install -d -m 0750 /etc/secubox/waf
-            install -m 0640 /tmp/crowdsec.toml /etc/secubox/waf/crowdsec.toml
-            # If running with the mitmproxy LXC, also bind into it
-            if [ -d /var/lib/lxc/mitmproxy/rootfs ]; then
-                mkdir -p /var/lib/lxc/mitmproxy/rootfs/etc/secubox/waf
-                install -m 0644 /tmp/crowdsec.toml \
-                    /var/lib/lxc/mitmproxy/rootfs/etc/secubox/waf/crowdsec.toml
-            fi
-            rm -f /tmp/crowdsec.toml
-            echo "secubox-mitmproxy: WAF → CrowdSec bridge ready"
-        else
-            echo "secubox-mitmproxy: WARN — cs-bridge setup failed, see /tmp/cs-bridge-setup.log"
-        fi
-    fi
-
     # Phase 7.B (#498) : nft rate-limit pre-mitm.
     # Loads a standalone nft table that drops slowloris/scanner sources
     # exceeding 30 conn/s on TCP 80/443. Self-healing : 5-min timeout.

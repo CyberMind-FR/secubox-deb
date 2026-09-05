@@ -15,9 +15,9 @@ Description: SecuBox Network Anomaly — DNS-log anomaly detection
  TLDs).
  .
  Distinct from sibling packages in the threats cluster:
-  - secubox-threats — umbrella dashboard (CrowdSec + Suricata + WAF
+  - secubox-threats — umbrella dashboard (Suricata + WAF
     alerts).
-  - secubox-threat-analyst — AI agent that writes CrowdSec scenarios.
+  - secubox-threat-analyst — AI agent that writes detection scenarios.
   - secubox-cve-triage — CVE vulnerability triage.
   - secubox-cyberfeed — threat-intel feed aggregator.
   - secubox-ipblock — nftables-driven IP blocklist enforcement.

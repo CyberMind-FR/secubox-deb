@@ -41,7 +41,6 @@ return view.extend({
 
 		var dpiSource = status.dpi_source || 'none';
 		var isNdpid = dpiSource === 'ndpid' || ndpidStatus.running;
-		var isNetifyd = dpiSource === 'netifyd';
 		var streams = streamsData.streams || [];
 		var flowCount = streamsData.flow_count || status.active_flows || 0;
 
@@ -137,17 +136,15 @@ return view.extend({
 	renderQuickActions: function(status, ndpid) {
 		var self = this;
 		var isNdpid = status.ndpid_running || ndpid.running;
-		var isNetifyd = status.netifyd_running;
 
 		return E('div', { 'class': 'quick-actions-bar' }, [
 			E('div', { 'class': 'actions-left' }, [
-				E('div', { 'class': 'status-indicator ' + (isNdpid || isNetifyd ? 'good' : 'warn') }, [
+				E('div', { 'class': 'status-indicator ' + (isNdpid ? 'good' : 'warn') }, [
 					E('span', { 'class': 'status-dot' }),
-					E('span', {}, isNdpid ? 'nDPId Active' : (isNetifyd ? 'Netifyd Active' : 'No DPI Engine'))
+					E('span', {}, isNdpid ? 'nDPId Active' : 'No DPI Engine')
 				]),
 				E('div', { 'class': 'service-badges' }, [
-					E('span', { 'class': 'service-badge ' + (isNdpid ? 'active' : 'inactive') }, '🔬 nDPId'),
-					E('span', { 'class': 'service-badge ' + (isNetifyd ? 'active' : 'inactive') }, '📡 Netifyd')
+					E('span', { 'class': 'service-badge ' + (isNdpid ? 'active' : 'inactive') }, '🔬 nDPId')
 				])
 			]),
 			E('div', { 'class': 'actions-right' }, [
@@ -389,7 +386,7 @@ return view.extend({
 
 	startDPI: function(engine) {
 		ui.showModal(_('Starting...'), E('p', { 'class': 'spinning' }, _('Starting ' + engine + '...')));
-		var fn = engine === 'ndpid' ? API.startNdpid : API.startNetifyd;
+		var fn = API.startNdpid;
 		fn().then(function(res) {
 			ui.hideModal();
 			if (res && res.success) {

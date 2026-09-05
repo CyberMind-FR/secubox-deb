@@ -93,7 +93,7 @@ case "$1" in
     # multi-user.target (#998). Un [Install] pose en drop-in n'est pas honore
     # par `systemctl enable` : le lien doit etre cree explicitement.
     #
-    # Sans cela, un seul service lent (crowdsec le 2026-08-07, une boucle
+    # Sans cela, un seul service lent (le 2026-08-07, ou une boucle
     # netboot la veille) empeche multi-user.target d'etre atteint, et le job
     # d'HAProxy n'est jamais tente — journal vide, 443 muet.
     if [ -f /lib/systemd/system/haproxy.service ]; then

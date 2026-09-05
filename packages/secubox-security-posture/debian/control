@@ -17,7 +17,7 @@ Depends:
 Description: SecuBox Security Posture - honest board-truthful scorecard
  SecuBox Security Posture computes a single security score (mapped to a
  DEFCON 5-1 dial) from real, provenance-tracked signals collected over public
- sibling module sockets, CrowdSec Prometheus and unprivileged /proc reads.
+ sibling module sockets and unprivileged /proc reads.
  .
  Every indicator records where its value came from; signals that cannot be
  measured render as UNKNOWN or MANUAL and are excluded from the score rather

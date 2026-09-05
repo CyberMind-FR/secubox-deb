@@ -333,7 +333,6 @@
         }
 
         .activity-icon.waf { background: rgba(232, 132, 90, 0.15); color: var(--auth-light); }
-        .activity-icon.crowdsec { background: rgba(112, 104, 208, 0.15); color: var(--mind-light); }
         .activity-icon.ssl { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
         .activity-icon.auth { background: rgba(44, 112, 192, 0.15); color: var(--mesh-light); }
 
@@ -680,25 +679,6 @@
                     <div id="waf-card-histogram" style="display:flex;align-items:flex-end;height:20px;gap:1px;margin-top:8px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
                 </div>
 
-                <!-- CrowdSec Card -->
-                <div class="glass-card" style="--card-accent: #8b5cf6; border-left: 3px solid #8b5cf6;">
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
-                        <div id="cs-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
-                        <div style="flex:1;min-width:0;">
-                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-                                <span style="font-size:1.1em;">👁️</span>
-                                <span class="card-status" id="cs-card-status" style="font-size:0.65rem;">LOADING</span>
-                            </div>
-                            <div class="card-metric" id="active-decisions" style="font-size:1.5rem;line-height:1;">-</div>
-                            <div style="font-size:0.65rem;color:var(--muted-dark);" id="decisions-info">- bouncers</div>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;">
-                        <span style="background:rgba(139,92,246,0.2);color:#a78bfa;padding:2px 6px;border-radius:3px;" id="cs-bans-tag">🚫 - bans</span>
-                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;" id="cs-captcha-tag">🔒 - captcha</span>
-                    </div>
-                </div>
-
                 <!-- Network Card -->
                 <div class="glass-card" style="--card-accent: #3b82f6; border-left: 3px solid #3b82f6;">
                     <div style="display:flex;align-items:center;gap:0.75rem;">
@@ -739,34 +719,6 @@
 
             <!-- THREE-COLUMN STATUS PANELS -->
             <div class="status-columns">
-                <!-- CROWDSEC STATUS -->
-                <div class="matrix-panel status-col">
-                    <div class="matrix-header">
-                        <span class="matrix-title">👁️ CROWDSEC</span>
-                        <span style="color: var(--muted-dark);" id="cs-version">v-</span>
-                    </div>
-                    <div class="matrix-body">
-                        <div class="matrix-row">
-                            <span class="matrix-label">Agent</span>
-                            <span class="matrix-value" id="cs-agent-status"><span class="highlight">● LOADING</span></span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Decisions</span>
-                            <span class="matrix-value" id="cs-decisions-count">-</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Bouncers</span>
-                            <span class="matrix-value" id="cs-bouncers">-</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Categories</span>
-                            <span class="matrix-value categories-list" id="cs-categories">--</span>
-                        </div>
-                        <!-- Multi-layer donut for categories -->
-                        <div id="cs-cat-donut" style="margin-top: 0.5rem; display: flex; justify-content: center;"></div>
-                    </div>
-                </div>
-
                 <!-- WAF STATUS -->
                 <div class="matrix-panel status-col">
                     <div class="matrix-header">
@@ -815,20 +767,6 @@
                         <div class="matrix-row">
                             <span class="matrix-label">Rules</span>
                             <span class="matrix-value" id="fw-rules">-</span>
-                        </div>
-                        <!-- Packet Stats - Eyeremote Donut -->
-                        <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--divider);">
-                            <div style="display: flex; align-items: center; gap: 1rem;">
-                                <div id="fw-donut" style="width: 90px; height: 90px; flex-shrink: 0;">
-                                    <!-- SVG donut injected by JS -->
-                                </div>
-                                <div style="flex: 1; font-size: 0.7rem; line-height: 1.8;">
-                                    <div style="display:flex;align-items:center;gap:4px;"><span>✅</span><span style="color:var(--muted-dark);">Accept</span><span id="fw-accept-val" style="margin-left:auto;color:#22c55e;font-weight:600;">-</span></div>
-                                    <div style="display:flex;align-items:center;gap:4px;"><span>🛡️</span><span style="color:var(--muted-dark);">CAPI</span><span id="fw-capi-val" style="margin-left:auto;color:#ef4444;font-weight:600;">-</span></div>
-                                    <div style="display:flex;align-items:center;gap:4px;"><span>👁️</span><span style="color:var(--muted-dark);">CrowdSec</span><span id="fw-cs-val" style="margin-left:auto;color:#f97316;font-weight:600;">-</span></div>
-                                    <div style="display:flex;align-items:center;gap:4px;"><span>✋</span><span style="color:var(--muted-dark);">Manual</span><span id="fw-manual-val" style="margin-left:auto;color:#eab308;font-weight:600;">-</span></div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -909,34 +847,6 @@
                 </div>
             </div>
 
-            <!-- AUTOBAN PANEL -->
-            <div class="autoban-panel">
-                <div class="autoban-header">
-                    <span class="autoban-title">⛔ Quick Autoban</span>
-                    <div class="autoban-controls">
-                        <input type="text" id="ban-ip" placeholder="IP address" class="ban-input">
-                        <select id="ban-duration" class="ban-select">
-                            <option value="1h">1 hour</option>
-                            <option value="24h" selected>24 hours</option>
-                            <option value="7d">7 days</option>
-                            <option value="30d">30 days</option>
-                            <option value="permanent">Permanent</option>
-                        </select>
-                        <select id="ban-reason" class="ban-select">
-                            <option value="manual">Manual ban</option>
-                            <option value="scanner">Scanner</option>
-                            <option value="bruteforce">Brute force</option>
-                            <option value="honeypot">Honeypot</option>
-                            <option value="waf">WAF trigger</option>
-                        </select>
-                        <button onclick="banIP()" class="ban-btn">🚫 Ban</button>
-                    </div>
-                </div>
-                <div class="recent-bans" id="recent-bans">
-                    <!-- Recent bans list -->
-                </div>
-            </div>
-
             <!-- SYSTEM HEALTH - Mini Histograms -->
             <div class="health-grid" style="margin-bottom: var(--space-xl); display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
                 <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
@@ -1010,7 +920,6 @@
     <script>
         const API_HUB = '/api/v1/hub';
         const API_WAF = '/api/v1/waf';
-        const API_CROWDSEC = '/api/v1/crowdsec';
         const API_METRICS = '/api/v1/metrics';
 
         function getToken() {
@@ -1526,110 +1435,19 @@
             }).join('');
         }
 
-        async function loadCrowdSecStats() {
-            // Load health first for status panel
-            const health = await api(API_CROWDSEC + '/health', 'GET', null, false);
-            if (!health) {
-                document.getElementById('cs-agent-status').innerHTML = '<span class="danger">● OFFLINE</span>';
-                document.getElementById('cs-version').textContent = 'v-';
-                document.getElementById('cs-card-status').textContent = 'OFFLINE';
-                document.getElementById('cs-card-status').className = 'card-status danger';
-                document.getElementById('active-decisions').textContent = '0';
-                document.getElementById('decisions-info').textContent = '- bouncers';
-                document.getElementById('cs-decisions-count').textContent = '0';
-                document.getElementById('cs-bouncers').textContent = '0';
-                document.getElementById('cs-categories').innerHTML = '<span class="cat-tag">-</span>';
-                document.getElementById('cs-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
-                return;
-            }
-
-            document.getElementById('cs-agent-status').innerHTML = health.checks && health.checks.engine_running
-                ? '<span class="highlight">● ACTIVE</span>'
-                : '<span class="danger">● INACTIVE</span>';
-            document.getElementById('cs-version').textContent = health.version ? `v${health.version}` : 'v-';
-
-            const data = await api(API_CROWDSEC + '/decisions_stats', 'GET', null, false);
-            if (!data) {
-                document.getElementById('cs-card-status').textContent = health.status === 'ok' ? 'ACTIVE' : 'DEGRADED';
-                document.getElementById('active-decisions').textContent = '0';
-                document.getElementById('decisions-info').textContent = '- bouncers';
-                return;
-            }
-
-            document.getElementById('active-decisions').textContent = data.active_decisions || 0;
-            document.getElementById('cs-card-status').textContent = 'ACTIVE';
-            document.getElementById('cs-card-status').className = 'card-status';
-            document.getElementById('decisions-info').textContent = `${data.bouncers || 0} bouncers`;
-            document.getElementById('cs-decisions-count').textContent = data.active_decisions || 0;
-            document.getElementById('cs-bouncers').textContent = data.bouncers || 0;
-
-            // Card donut: active decisions
-            const decisions = data.active_decisions || 0;
-            document.getElementById('cs-card-donut').innerHTML = createCardDonut(decisions, Math.max(decisions, 100), '#f97316', '👁', 'bans');
-
-            // Categories
-            if (data.categories && data.categories.length > 0) {
-                const csDonut = document.getElementById('cs-cat-donut');
-                if (csDonut) {
-                    csDonut.innerHTML = createMultiLayerDonut(data.categories, CAT_COLORS, CATEGORY_EMOJI, 100);
-                }
-            } else {
-                document.getElementById('cs-categories').innerHTML = '<span class="cat-tag">-</span>';
-            }
-
-            if (data.recent_alert) {
-                addActivity('crowdsec', '👁️', `CrowdSec: <code>${data.recent_alert}</code>`, 'recently');
-            }
-        }
-
         async function loadFirewallStats() {
-            const data = await api(API_CROWDSEC + '/health', 'GET', null, false);
-            if (!data) {
-                document.getElementById('fw-status').innerHTML = '<span class="warning">● UNKNOWN</span>';
-            } else {
-                const nftOk = data.checks && data.checks.nftables_ok;
-                document.getElementById('fw-status').innerHTML = nftOk
-                    ? '<span class="highlight">● ACTIVE</span>'
-                    : '<span class="danger">● INACTIVE</span>';
-            }
-
-            // Try to get more details from firewall endpoint (public, no auth required)
+            // Firewall summary endpoint (public, no auth required)
             const fwData = await api(API_HUB + '/public/firewall_summary', 'GET', null, false);
             if (fwData && !fwData.error && fwData.tables > 0) {
+                document.getElementById('fw-status').innerHTML = '<span class="highlight">● ACTIVE</span>';
                 document.getElementById('fw-tables').textContent = fwData.tables;
                 document.getElementById('fw-chains').textContent = fwData.chains || '-';
                 document.getElementById('fw-rules').textContent = fwData.rules || '-';
-
-                // Extract individual counters
-                const counters = fwData.counters || {};
-                const processed = fwData.processed || 0;
-                const capi = counters['crowdsec-blacklists-CAPI'] || 0;
-                const crowdsec = counters['crowdsec-blacklists-crowdsec'] || 0;
-                const manual = counters['crowdsec-blacklists-cscli'] || 0;
-                const totalDrop = capi + crowdsec + manual;
-                const accepted = processed - totalDrop;
-
-                // Update legend values
-                document.getElementById('fw-accept-val').textContent = formatNum(accepted);
-                document.getElementById('fw-capi-val').textContent = formatNum(capi);
-                document.getElementById('fw-cs-val').textContent = formatNum(crowdsec);
-                document.getElementById('fw-manual-val').textContent = formatNum(manual);
-
-                // Create eyeremote donut
-                const donutEl = document.getElementById('fw-donut');
-                if (donutEl && processed > 0) {
-                    donutEl.innerHTML = createNftDonut(accepted, capi, crowdsec, manual, processed, 90);
-                }
             } else {
+                document.getElementById('fw-status').innerHTML = '<span class="warning">● UNKNOWN</span>';
                 document.getElementById('fw-tables').textContent = '-';
                 document.getElementById('fw-chains').textContent = '-';
                 document.getElementById('fw-rules').textContent = '-';
-                document.getElementById('fw-accept-val').textContent = '-';
-                document.getElementById('fw-capi-val').textContent = '-';
-                document.getElementById('fw-cs-val').textContent = '-';
-                document.getElementById('fw-manual-val').textContent = '-';
-                const donutEl = document.getElementById('fw-donut');
-                if (donutEl) donutEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:90px;height:90px;color:var(--muted);font-size:10px;">No data</div>';
             }
         }
 
@@ -1637,40 +1455,6 @@
             if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
             if (n >= 1000) return (n/1000).toFixed(1) + 'K';
             return n.toString();
-        }
-
-        function createNftDonut(accepted, capi, crowdsec, manual, total, size) {
-            const cx = size / 2, cy = size / 2;
-            const colors = ['#22c55e', '#ef4444', '#f97316', '#eab308'];
-            const values = [accepted, capi, crowdsec, manual];
-            const labels = ['✓', '🛡', '👁', '✋'];
-
-            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" style="width:100%;height:100%;">';
-
-            // Background ring
-            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="12"/>';
-
-            // Calculate percentages and draw arcs
-            let startAngle = -90;
-            const radius = 38;
-            const circumference = 2 * Math.PI * radius;
-
-            values.forEach((val, i) => {
-                if (val <= 0) return;
-                const pct = val / total;
-                const dashLen = pct * circumference;
-                const dashOffset = -startAngle / 360 * circumference;
-
-                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + radius + '" fill="none" stroke="' + colors[i] + '" stroke-width="12" stroke-linecap="round" stroke-dasharray="' + dashLen + ' ' + circumference + '" transform="rotate(' + startAngle + ' ' + cx + ' ' + cy + ')" style="opacity:0.9;"/>';
-                startAngle += pct * 360;
-            });
-
-            // Center text
-            svg += '<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" fill="var(--text-dark)" style="font-size:11px;font-weight:700;">' + formatNum(total) + '</text>';
-            svg += '<text x="' + cx + '" y="' + (cy + 8) + '" text-anchor="middle" fill="var(--muted-dark)" style="font-size:8px;">packets</text>';
-
-            svg += '</svg>';
-            return svg;
         }
 
         // Mini donut for card headers (60x60)
@@ -1708,67 +1492,6 @@
             svg += '</svg>';
             return svg;
         }
-
-        // Recent bans list
-        let recentBans = [];
-
-        async function banIP() {
-            const ip = document.getElementById('ban-ip').value.trim();
-            const duration = document.getElementById('ban-duration').value;
-            const reason = document.getElementById('ban-reason').value;
-
-            if (!ip || !/^[\d.]+$/.test(ip)) {
-                alert('Please enter a valid IP address');
-                return;
-            }
-
-            const btn = document.querySelector('.ban-btn');
-            btn.disabled = true;
-            btn.textContent = 'Banning...';
-
-            try {
-                const res = await api(API_CROWDSEC + '/ban', 'POST', { ip, duration, reason });
-                if (res && res.success) {
-                    recentBans.unshift({ ip, duration, reason, time: new Date() });
-                    if (recentBans.length > 5) recentBans.pop();
-                    renderRecentBans();
-                    document.getElementById('ban-ip').value = '';
-                    addActivity('crowdsec', '⛔', `Banned <code>${ip}</code> for ${duration}`, 'just now');
-                } else {
-                    alert(res?.error || 'Ban failed');
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-
-            btn.disabled = false;
-            btn.textContent = '🚫 Ban';
-        }
-
-        function renderRecentBans() {
-            const el = document.getElementById('recent-bans');
-            if (recentBans.length === 0) {
-                el.innerHTML = '<div style="color: var(--muted-dark);">No recent bans</div>';
-                return;
-            }
-            el.innerHTML = recentBans.map(b => `
-                <div class="ban-item">
-                    <span class="ban-ip">${b.ip}</span>
-                    <span class="ban-meta">${b.duration} · ${b.reason}</span>
-                    <button class="unban-btn" onclick="unbanIP('${b.ip}')">Unban</button>
-                </div>
-            `).join('');
-        }
-
-        async function unbanIP(ip) {
-            const res = await api(API_CROWDSEC + '/unban', 'POST', { ip });
-            if (res && res.success) {
-                recentBans = recentBans.filter(b => b.ip !== ip);
-                renderRecentBans();
-                addActivity('crowdsec', '✅', `Unbanned <code>${ip}</code>`, 'just now');
-            }
-        }
-
 
         async function loadMetrics() {
             const data = await api(API_METRICS + '/overview', 'GET', null, false);
@@ -1924,11 +1647,9 @@
 
         async function refresh() {
             updateTimestamp();
-            renderRecentBans();
             await Promise.all([
                 loadHealthBatch(),
                 loadWAFStats(),
-                loadCrowdSecStats(),
                 loadFirewallStats(),
                 loadMetrics(),
                 loadDashboard(),

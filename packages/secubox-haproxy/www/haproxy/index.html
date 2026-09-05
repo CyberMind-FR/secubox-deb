@@ -524,10 +524,6 @@
                 <div class="value" id="requests">-</div>
                 <div class="label">Total Requests</div>
             </div>
-            <div class="stat-card">
-                <div class="value" id="bans">-</div>
-                <div class="label">Active Bans</div>
-            </div>
         </div>
 
         <!-- WAF Control Panel -->
@@ -1342,10 +1338,6 @@
 
             document.getElementById('vhosts-count').textContent = d.vhost_count || 0;
             document.getElementById('backends-count').textContent = d.backend_count || 0;
-
-            // Get CrowdSec bans
-            const cs = await api('/crowdsec/status');
-            document.getElementById('bans').textContent = cs.active_bans || 0;
         }
 
         async function loadVhosts() {

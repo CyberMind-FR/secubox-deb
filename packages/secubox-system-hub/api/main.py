@@ -150,7 +150,6 @@ class SystemHub:
         self.core_services = [
             "haproxy",
             "mitmproxy",
-            "crowdsec",
             "suricata",
             "unbound",
             "nftables",

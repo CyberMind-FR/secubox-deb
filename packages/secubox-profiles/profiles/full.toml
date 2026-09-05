@@ -8,7 +8,7 @@ label = "Full — loadout courant (baseline)"
 on = [
   "ad-guard", "admin", "aggregator", "annuaire", "appstore", "auth",
   "avatar", "backup", "billets", "c3box", "cdn", "certs",
-  "cloner", "config-advisor", "cookies", "core", "crowdsec", "cs-bridge",
+  "cloner", "config-advisor", "cookies", "core", "cs-bridge",
   "cve-triage", "cyberfeed", "dns", "dns-guard", "dns-provider", "dpi",
   "dpi-flowcap", "droplet", "exposure", "eye-remote", "eye-remote-dhcp", "fmrelay",
   "frigate", "gitea", "glances", "grafana", "haproxy", "hardening",
@@ -16,7 +16,7 @@ on = [
   "ksm", "led-heartbeat", "led-trigger", "leds", "localrecall", "lyrion",
   "mail", "mcp-server", "mesh", "meshname", "metablogizer", "metabolizer",
   "module-prober", "mqtt", "nac", "ndpid", "netboot", "netdata",
-  "netdiag", "netifyd", "netmodes", "nettweak", "network-anomaly", "network-ready",
+  "netdiag", "netmodes", "nettweak", "network-anomaly", "network-ready",
   "nextcloud", "p2p", "peertube", "photoprism", "podcaster", "portal",
   "proxypac", "publish", "qos", "reality", "repo", "reporter",
   "rezapp", "roadmap", "routes", "rtty", "runtime", "rustdesk",

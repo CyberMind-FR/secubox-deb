@@ -7,7 +7,7 @@
 
 Progressive threat response:
 1. First detection → Warning page (not block)
-2. Multiple attempts (3+) → Auto-ban via CrowdSec
+2. Multiple attempts (3+) → Auto-ban (inline 403 block)
 
 Features:
 - Pattern-based threat detection (SQLi, XSS, LFI, RCE, etc.)
@@ -18,7 +18,6 @@ Features:
 """
 import json
 import re
-import subprocess
 import urllib.parse
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -86,96 +85,6 @@ def save_cdn_config():
 # Graduated response thresholds
 BAN_THRESHOLD = 3  # Number of threats before ban
 BAN_WINDOW = 300   # Window in seconds (5 min)
-
-# ── Phase 7.A (#498) : CrowdSec bridge — turn WAF detections into actual nft drops ──
-# When BAN_THRESHOLD is crossed, POST an alert+decision to the CrowdSec local
-# API (LAPI). crowdsec-firewall-bouncer then propagates it to nft (table ip
-# crowdsec), dropping subsequent connections from that IP at kernel level.
-#
-# Config file format (TOML) :
-#   enabled         = true                          # master switch
-#   url             = "http://10.100.0.1:8080"      # LAPI URL (via socat from LXC)
-#   machine_id      = "secubox-waf"                 # registered via cscli machines add
-#   machine_password = "<from cscli machines add>"
-#   duration        = "4h"                           # ban duration
-#
-# Note : CrowdSec API uses WATCHER (machine) auth via JWT for POST /v1/alerts.
-# The X-Api-Key flow is for BOUNCERS (read-only, GET /v1/decisions/stream).
-# So we register secubox-waf as a machine, login to get JWT, then POST alerts
-# embedding the decision. JWT is cached for 30 minutes (CrowdSec default TTL).
-#
-# If config is missing or unreadable, bridge is silently disabled (logged once
-# at startup). Existing WAF behaviour (warn pages, stats, threats.log) unchanged.
-
-CROWDSEC_CFG_FILE = Path("/etc/secubox/waf/crowdsec.toml")
-_CS_CFG: dict | None = None       # lazily loaded
-_CS_JWT: str = ""                  # cached JWT (refresh on 401 or expiry)
-_CS_JWT_AT: float = 0.0            # epoch seconds when JWT obtained
-_CS_JWT_TTL = 25 * 60              # refresh 5 min before LAPI 30-min default
-
-
-def _load_crowdsec_cfg() -> dict:
-    """Returns dict with {enabled, url, machine_id, machine_password, duration}.
-    Cached after first call; reload by setting _CS_CFG to None."""
-    global _CS_CFG
-    if _CS_CFG is not None:
-        return _CS_CFG
-    cfg = {
-        "enabled": False, "url": "",
-        "machine_id": "", "machine_password": "",
-        "duration": "4h",
-    }
-    try:
-        if CROWDSEC_CFG_FILE.exists():
-            import tomllib
-            with CROWDSEC_CFG_FILE.open("rb") as f:
-                data = tomllib.load(f)
-            cfg.update({k: data.get(k, cfg[k]) for k in cfg})
-            ready = (cfg["enabled"] and cfg["url"]
-                     and cfg["machine_id"] and cfg["machine_password"])
-            if ready:
-                ctx.log.info(f"[cs-bridge] enabled — ban {cfg['duration']} via {cfg['url']}")
-            else:
-                ctx.log.info("[cs-bridge] config present but disabled or incomplete")
-        else:
-            ctx.log.info(f"[cs-bridge] no config at {CROWDSEC_CFG_FILE} — bridge disabled")
-    except Exception as e:
-        ctx.log.warn(f"[cs-bridge] config load failed: {e}")
-    _CS_CFG = cfg
-    return cfg
-
-
-def _cs_jwt(cfg: dict) -> str:
-    """Get a valid JWT for LAPI watcher auth. Cached, refreshed on TTL expiry."""
-    global _CS_JWT, _CS_JWT_AT
-    import time as _t
-    if _CS_JWT and (_t.time() - _CS_JWT_AT) < _CS_JWT_TTL:
-        return _CS_JWT
-    import urllib.request as _ureq, urllib.error as _uerr
-    try:
-        payload = json.dumps({
-            "machine_id": cfg["machine_id"],
-            "password": cfg["machine_password"],
-            "scenarios": ["secubox-waf/pattern-match"],
-        }).encode("utf-8")
-        req = _ureq.Request(
-            f"{cfg['url'].rstrip('/')}/v1/watchers/login",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with _ureq.urlopen(req, timeout=2.0) as r:
-            body = json.loads(r.read())
-            _CS_JWT = body.get("token", "")
-            _CS_JWT_AT = _t.time()
-            if _CS_JWT:
-                ctx.log.info("[cs-bridge] JWT acquired (TTL ~30m)")
-            return _CS_JWT
-    except _uerr.HTTPError as e:
-        ctx.log.warn(f"[cs-bridge] login HTTP {e.code}: {e.read()[:200]!r}")
-    except Exception as e:
-        ctx.log.warn(f"[cs-bridge] login failed: {e}")
-    return ""
 
 # Trusted proxy IPs (HAProxy, Docker bridge)
 TRUSTED_PROXIES = {"10.100.0.1", "127.0.0.1", "172.17.0.1", "192.168.255.1"}
@@ -804,87 +713,6 @@ class SecuBoxWAF:
         """Record threat for IP."""
         self.threat_counts[ip].append(datetime.now())
 
-    def _ban_via_crowdsec(self, ip: str, reason: str) -> bool:
-        """Phase 7.A : push a ban decision to CrowdSec LAPI.
-
-        Fire-and-forget : we don't care about the response, just don't crash
-        on network errors. crowdsec-firewall-bouncer will pick it up within
-        a few seconds and add an nft drop element.
-
-        Returns True if the POST succeeded, False otherwise (for stats only).
-        """
-        cfg = _load_crowdsec_cfg()
-        if not (cfg.get("enabled") and cfg.get("url")
-                and cfg.get("machine_id") and cfg.get("machine_password")):
-            return False
-        jwt = _cs_jwt(cfg)
-        if not jwt:
-            self.stats["bans_failed"] = self.stats.get("bans_failed", 0) + 1
-            return False
-        # CrowdSec LAPI POST /v1/alerts payload : wraps the decision in an
-        # Alert envelope with scenario / source / events / start_at fields.
-        # See https://crowdsecurity.github.io/crowdsec-docs/local_api/intro/
-        import urllib.request as _ureq, urllib.error as _uerr
-        from datetime import datetime as _dt, timezone as _tz
-        try:
-            now_iso = _dt.now(_tz.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
-            duration = cfg.get("duration", "4h")
-            payload = json.dumps([{
-                "scenario": f"secubox-waf/{reason}",
-                "scenario_hash": "",
-                "scenario_version": "1",
-                "message": f"WAF threshold crossed for {ip} ({reason})",
-                "events_count": 1,
-                "start_at": now_iso,
-                "stop_at": now_iso,
-                "capacity": 0,
-                "leakspeed": "0s",
-                "simulated": False,
-                "source": {
-                    "scope": "Ip", "value": ip, "ip": ip,
-                    "as_number": "0", "as_name": "?",
-                    "cn": "?", "latitude": 0.0, "longitude": 0.0,
-                },
-                "decisions": [{
-                    "duration": duration,
-                    "scenario": f"secubox-waf/{reason}",
-                    "type": "ban",
-                    "value": ip,
-                    "scope": "Ip",
-                    "origin": "secubox-waf",
-                    "simulated": False,
-                }],
-                "events": [{"timestamp": now_iso, "meta": [
-                    {"key": "source_ip", "value": ip},
-                    {"key": "scenario", "value": reason},
-                ]}],
-            }]).encode("utf-8")
-            req = _ureq.Request(
-                f"{cfg['url'].rstrip('/')}/v1/alerts",
-                data=payload,
-                headers={
-                    "Authorization": f"Bearer {jwt}",
-                    "Content-Type": "application/json",
-                },
-                method="POST",
-            )
-            with _ureq.urlopen(req, timeout=2.0) as r:
-                if r.status in (200, 201):
-                    self.stats["bans_pushed"] = self.stats.get("bans_pushed", 0) + 1
-                    ctx.log.info(f"[cs-bridge] BAN {ip} ← {reason} ({duration})")
-                    return True
-                ctx.log.warn(f"[cs-bridge] LAPI {r.status} for {ip}")
-        except _uerr.HTTPError as e:
-            ctx.log.warn(f"[cs-bridge] HTTP {e.code} for {ip}: {e.read()[:200]!r}")
-            # If 401, force JWT refresh next call
-            if e.code == 401:
-                global _CS_JWT
-                _CS_JWT = ""
-        except Exception as e:
-            ctx.log.warn(f"[cs-bridge] POST failed for {ip}: {e}")
-        self.stats["bans_failed"] = self.stats.get("bans_failed", 0) + 1
-        return False
-
     def log_threat(self, flow: http.HTTPFlow, threat: dict, action: str):
         """Log threat to file."""
         # Debug: log raw header values
@@ -911,26 +739,14 @@ class SecuBoxWAF:
             ctx.log.error(f"Failed to log threat: {e}")
     
     def ban_ip(self, ip: str, reason: str):
-        """Ban IP via CrowdSec.
+        """Record a WAF ban decision.
 
-        Phase 7.A (#498) : was 'cscli decisions add' via subprocess. That
-        only works when cscli is installed in the same context as the WAF
-        — broken in the LXC mitmproxy container where cscli is absent.
-        Replaced by HTTP LAPI call (works across LXC boundary). Falls back
-        to cscli subprocess if HTTP bridge unavailable (cfg disabled)."""
-        if self._ban_via_crowdsec(ip, reason):
-            ctx.log.warn(f"BANNED {ip} for {reason} via LAPI")
-            return
-        # Fallback : try cscli subprocess (legacy path, host-only)
-        try:
-            subprocess.run([
-                "cscli", "decisions", "add",
-                "--ip", ip, "--type", "ban", "--duration", "4h",
-                "--reason", f"secubox-waf/{reason}",
-            ], capture_output=True, timeout=5)
-            ctx.log.warn(f"BANNED {ip} for {reason} via cscli (HTTP bridge unavailable)")
-        except Exception:
-            ctx.log.warn(f"BAN FAILED for {ip} ({reason}) : LAPI off + cscli unavailable")
+        The offending request is already blocked in-line with a 403 response
+        (handled in the request hook). No external ban backend is configured,
+        so this only records the event in the WAF log and stats counters.
+        """
+        self.stats["bans"] = self.stats.get("bans", 0) + 1
+        ctx.log.warn(f"BANNED {ip} for {reason} (WAF 403 inline block)")
     
     def _maybe_reload_routes(self):
         # #609 — live-reload haproxy-routes.json when it changes (throttled

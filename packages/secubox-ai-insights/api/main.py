@@ -12,7 +12,7 @@ Features:
   - Anomaly detection in network traffic
   - Log analysis with ML models
   - Threat scoring and classification
-  - Integration with CrowdSec/Suricata alerts
+  - Integration with Suricata alerts
   - Model management (train, deploy)
 
 Three-fold architecture:
@@ -137,7 +137,6 @@ class ConfigModel(BaseModel):
     anomaly_sensitivity: float = 0.8
     auto_train: bool = True
     train_interval_hours: int = 24
-    crowdsec_integration: bool = True
     suricata_integration: bool = True
     max_correlations: int = 100
     retention_days: int = 30
@@ -224,7 +223,6 @@ detection_threshold = {config.detection_threshold}
 anomaly_sensitivity = {config.anomaly_sensitivity}
 auto_train = {str(config.auto_train).lower()}
 train_interval_hours = {config.train_interval_hours}
-crowdsec_integration = {str(config.crowdsec_integration).lower()}
 suricata_integration = {str(config.suricata_integration).lower()}
 max_correlations = {config.max_correlations}
 retention_days = {config.retention_days}
@@ -305,10 +303,6 @@ async def _periodic_analysis():
 
             config = _load_config()
 
-            # Check CrowdSec integration
-            if config.crowdsec_integration:
-                await _analyze_crowdsec_alerts()
-
             # Check Suricata integration
             if config.suricata_integration:
                 await _analyze_suricata_alerts()
@@ -320,24 +314,6 @@ async def _periodic_analysis():
             break
         except Exception as e:
             log.error("Periodic analysis error: %s", e)
-
-
-async def _analyze_crowdsec_alerts():
-    """Analyze CrowdSec alerts for ML insights."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "cscli", "alerts", "list", "-o", "json", "--since", "1h",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode == 0 and stdout:
-            alerts = json.loads(stdout.decode())
-            if isinstance(alerts, list) and len(alerts) > 0:
-                # Process alerts for ML analysis
-                _process_external_alerts(alerts, "crowdsec")
-    except Exception as e:
-        log.debug("CrowdSec analysis skipped: %s", e)
 
 
 async def _analyze_suricata_alerts():
@@ -380,31 +356,18 @@ def _process_external_alerts(alerts: List[Dict], source: str):
             continue
 
         # Create threat detection
-        if source == "crowdsec":
-            threat = ThreatDetection(
-                id=alert_id,
-                timestamp=alert.get("created_at", datetime.now().isoformat()),
-                type=ThreatType.INTRUSION,
-                severity=ThreatSeverity.MEDIUM,
-                source_ip=alert.get("source", {}).get("ip"),
-                score=65.0,
-                description=alert.get("scenario", "CrowdSec alert"),
-                indicators=[alert.get("scenario", "unknown")],
-                model_id="crowdsec-integration"
-            )
-        else:  # suricata
-            threat = ThreatDetection(
-                id=alert_id,
-                timestamp=alert.get("timestamp", datetime.now().isoformat()),
-                type=ThreatType.INTRUSION,
-                severity=ThreatSeverity.MEDIUM,
-                source_ip=alert.get("src_ip"),
-                target_ip=alert.get("dest_ip"),
-                score=60.0,
-                description=alert.get("alert", {}).get("signature", "Suricata alert"),
-                indicators=[alert.get("alert", {}).get("category", "unknown")],
-                model_id="suricata-integration"
-            )
+        threat = ThreatDetection(
+            id=alert_id,
+            timestamp=alert.get("timestamp", datetime.now().isoformat()),
+            type=ThreatType.INTRUSION,
+            severity=ThreatSeverity.MEDIUM,
+            source_ip=alert.get("src_ip"),
+            target_ip=alert.get("dest_ip"),
+            score=60.0,
+            description=alert.get("alert", {}).get("signature", "Suricata alert"),
+            indicators=[alert.get("alert", {}).get("category", "unknown")],
+            model_id="suricata-integration"
+        )
 
         history["threats"].append(threat.model_dump())
 
@@ -520,7 +483,7 @@ async def components():
                 "name": "Alert Correlator",
                 "type": "analyzer",
                 "description": "Correlates alerts from multiple sources",
-                "sources": ["CrowdSec", "Suricata", "nDPId"],
+                "sources": ["Suricata", "nDPId"],
             },
             {
                 "name": "Model Manager",
@@ -551,7 +514,6 @@ def access():
             },
         ],
         "integrations": [
-            {"name": "CrowdSec", "endpoint": "/api/v1/crowdsec/", "status": "active"},
             {"name": "Suricata", "endpoint": "/api/v1/suricata/", "status": "active"},
             {"name": "nDPId", "endpoint": "/api/v1/ndpid/", "status": "active"},
         ],
@@ -610,7 +572,6 @@ async def status():
         "models_deployed": sum(1 for m in models if m.status in [ModelStatus.DEPLOYED, ModelStatus.READY]),
         "detection_threshold": config.detection_threshold,
         "integrations": {
-            "crowdsec": config.crowdsec_integration,
             "suricata": config.suricata_integration,
         },
         "last_analysis": datetime.now().isoformat(),
@@ -1018,17 +979,8 @@ async def analyze(req: AnalyzeRequest, user=Depends(require_jwt)):
 
 @app.get("/integrations")
 def get_integrations(user=Depends(require_jwt)):
-    """Get CrowdSec/Suricata integration status."""
+    """Get Suricata integration status."""
     config = _load_config()
-
-    # Check CrowdSec
-    crowdsec_status = "disabled"
-    if config.crowdsec_integration:
-        try:
-            proc = subprocess.run(["pgrep", "crowdsec"], capture_output=True, timeout=2)
-            crowdsec_status = "running" if proc.returncode == 0 else "stopped"
-        except Exception:
-            crowdsec_status = "error"
 
     # Check Suricata
     suricata_status = "disabled"
@@ -1041,12 +993,6 @@ def get_integrations(user=Depends(require_jwt)):
 
     return {
         "integrations": [
-            {
-                "name": "CrowdSec",
-                "enabled": config.crowdsec_integration,
-                "status": crowdsec_status,
-                "description": "Collaborative security engine alerts"
-            },
             {
                 "name": "Suricata",
                 "enabled": config.suricata_integration,

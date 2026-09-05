@@ -115,7 +115,7 @@ class ServicesScreen(Screen):
                         name = parts[0].replace(".service", "")
                         # Only show secubox services and key system services
                         if name.startswith("secubox-") or name in (
-                            "nginx", "haproxy", "crowdsec", "nftables", "sshd", "dnsmasq"
+                            "nginx", "haproxy", "nftables", "sshd", "dnsmasq"
                         ):
                             load = parts[1]
                             active = parts[2]

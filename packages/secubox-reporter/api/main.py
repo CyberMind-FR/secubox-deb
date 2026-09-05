@@ -137,7 +137,7 @@ def _get_default_sections(report_type: ReportType) -> list[str]:
         ReportType.daily: ["system_health", "services_status", "alerts_summary", "network_stats"],
         ReportType.weekly: ["system_health", "services_status", "alerts_summary", "network_stats",
                            "security_events", "bandwidth_usage", "top_clients"],
-        ReportType.security: ["security_events", "crowdsec_decisions", "blocked_ips",
+        ReportType.security: ["security_events", "blocked_ips",
                              "auth_failures", "waf_alerts", "vulnerability_scan"],
         ReportType.network: ["interface_stats", "bandwidth_usage", "top_protocols",
                             "top_clients", "dns_queries", "connection_summary"],
@@ -199,7 +199,7 @@ def _get_services_status() -> list[dict]:
     """Get status of SecuBox services."""
     services = []
     service_names = [
-        "secubox-hub", "secubox-crowdsec", "secubox-wireguard",
+        "secubox-hub", "secubox-wireguard",
         "secubox-dpi", "secubox-nac", "secubox-qos", "secubox-system",
     ]
 

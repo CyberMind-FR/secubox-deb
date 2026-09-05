@@ -47,7 +47,6 @@ Depends: ${misc:Depends},
          secubox-profil-socle,
          secubox-ad-guard,
          secubox-antirootkit,
-         secubox-crowdsec,
          secubox-cve-triage,
          secubox-cyberfeed,
          secubox-dns-guard,
@@ -69,7 +68,7 @@ Depends: ${misc:Depends},
          secubox-waf,
          secubox-watchdog,
          secubox-wazuh
-Description: SecuBox — profil « defense » : La couche de defense : WAF, CrowdSec, listes de blocage, garde DNS
+Description: SecuBox — profil « defense » : La couche de defense : WAF, listes de blocage, garde DNS
  Ce qui protege la boite et le reseau qu'elle sert. C'est le profil qu'on
  garde quand on ne garde rien d'autre.
  .

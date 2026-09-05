@@ -1,7 +1,7 @@
 # Phase 7.B (#498) — pre-mitm TCP rate-limit on public-facing ports.
 #
 # Catches : TCP-only scanners (slowloris, RST-flood, syn-scan), bot armies
-# that throttle below CrowdSec http-probing detection threshold, and the
+# that throttle below the http-probing detection threshold, and the
 # "1500 sockets but 0 HTTP req" pattern we observed on 134.195.158.62 +
 # .157.224 on 2026-06-05 (live incident, logged in HISTORY.md).
 #

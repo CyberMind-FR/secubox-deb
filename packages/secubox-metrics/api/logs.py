@@ -32,7 +32,7 @@ log = get_logger("metrics.logs")
 CACHE_FILE = Path("/var/cache/secubox/metrics/stats.json")
 LOG_DIRS = ["/var/log", "/var/log/secubox"]
 SECUBOX_SERVICES = [
-    "secubox-hub", "secubox-crowdsec", "secubox-wireguard", "secubox-dpi",
+    "secubox-hub", "secubox-wireguard", "secubox-dpi",
     "secubox-nac", "secubox-qos", "secubox-system", "secubox-reporter",
     "secubox-netdata", "secubox-vhost", "secubox-auth",
     "secubox-cdn", "secubox-netmodes", "secubox-mediaflow",

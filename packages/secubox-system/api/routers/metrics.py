@@ -218,7 +218,7 @@ async def get_temperature_only() -> dict:
     description="""
 Retourne l'état des 6 modules SecuBox :
 - **AUTH** : secubox-auth (authentification)
-- **WALL** : secubox-crowdsec (WAF/IDS)
+- **WALL** : secubox-waf (WAF/IDS)
 - **BOOT** : secubox-hub (dashboard principal)
 - **MIND** : secubox-ai-insights (IA)
 - **ROOT** : secubox-system (système)
@@ -237,7 +237,7 @@ async def get_modules_status() -> ModulesStatusResponse:
 
     module_services = {
         "AUTH": "secubox-auth",
-        "WALL": "secubox-crowdsec",
+        "WALL": "secubox-waf",
         "BOOT": "secubox-hub",
         "MIND": "secubox-ai-insights",
         "ROOT": "secubox-system",

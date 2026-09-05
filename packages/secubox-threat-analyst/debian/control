@@ -8,14 +8,13 @@ Standards-Version: 4.6.2
 Package: secubox-threat-analyst
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Recommends: crowdsec
-Description: SecuBox Threat Analyst — AI agent that writes CrowdSec scenarios
+Description: SecuBox Threat Analyst — AI agent that writes detection scenarios
  AI-assisted threat analysis: ingests recent alerts, proposes new
- CrowdSec scenarios, and writes them under /etc/crowdsec/scenarios/
+ detection scenarios, and writes them under /etc/secubox/scenarios/
  for operator review and reload.
  .
  Distinct from sibling packages in the threats cluster:
-  - secubox-threats — umbrella dashboard aggregating CrowdSec +
+  - secubox-threats — umbrella dashboard aggregating
     Suricata + WAF alerts (read-only).
   - secubox-cve-triage — CVE vulnerability triage workflow.
   - secubox-network-anomaly — DNS-log anomaly detection.

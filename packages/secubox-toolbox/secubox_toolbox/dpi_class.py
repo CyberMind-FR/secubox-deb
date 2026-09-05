@@ -4,7 +4,7 @@
 """DPI / app classification : host → app category + emoji.
 
 Strategy : pure-Python heuristic + (optional, Phase 2b) query to secubox-dpi
-unix socket for nDPI/netifyd results.
+unix socket for nDPI results.
 
 Phase 2a+ : heuristic database below — extensible.
 """

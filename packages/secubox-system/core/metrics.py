@@ -330,7 +330,7 @@ class SystemMetrics:
         """
         module_services = {
             "AUTH": "secubox-auth",
-            "WALL": "secubox-crowdsec",  # ou secubox-waf
+            "WALL": "secubox-waf",
             "BOOT": "secubox-hub",
             "MIND": "secubox-ai-insights",
             "ROOT": "secubox-system",

@@ -15,7 +15,3 @@ override_dh_auto_install:
 	# Systemd service
 	install -d debian/secubox-threats/usr/lib/systemd/system
 	[ -f systemd/secubox-threats.service ] && cp systemd/secubox-threats.service debian/secubox-threats/usr/lib/systemd/system/ || true
-
-	# sudoers: let the secubox-run FastAPI read CrowdSec alerts (cscli via sudo)
-	install -d debian/secubox-threats/etc/sudoers.d
-	[ -f sudoers.d/secubox-threats ] && install -m 440 sudoers.d/secubox-threats debian/secubox-threats/etc/sudoers.d/ || true

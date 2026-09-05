@@ -27,8 +27,8 @@ Description: SecuBox-Deb — MOTEUR du pare-feu applicatif (sbxwaf, Go, natif ho
  hardened systemd worker template units (secubox-waf-ng-worker@{1,2}).
  .
  Features: TLS-forging reverse proxy, hot-reloadable WAF rules engine,
- graduated WARNING/BAN responses, threat log (NDJSON), CrowdSec LAPI
- bridge, RGPD Set-Cookie ledger, media response cache, themed error pages.
+ graduated WARNING/BAN responses, threat log (NDJSON),
+ RGPD Set-Cookie ledger, media response cache, themed error pages.
  .
  CSPN-compliant: dedicated secubox-waf unprivileged user, AppArmor enforce
  profile, NoNewPrivileges, ProtectSystem=strict, RuntimeDirectoryPreserve=yes

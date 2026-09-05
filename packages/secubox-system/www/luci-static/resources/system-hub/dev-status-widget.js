@@ -84,7 +84,7 @@ var DevStatusWidget = {
             progress: 95,
             icon: '🛡️',
             description: 'Détection et blocage des menaces en temps réel',
-            components: ['crowdsec', 'firewall-bouncer', 'wazuh'],
+            components: ['firewall-bouncer', 'wazuh'],
             dependsOn: ['network-stack'],
             usedBy: ['threat-intelligence', 'ai-security']
         },
@@ -370,7 +370,7 @@ var DevStatusWidget = {
             progress: 85,
             icon: '🔬',
             description: 'DPI, flow analysis, application detection',
-            components: ['netifyd', 'ndpid', 'flow-analyzer'],
+            components: ['ndpid', 'flow-analyzer'],
             dependsOn: ['network-stack'],
             usedBy: ['ai-security', 'bandwidth-qos']
         },
@@ -435,7 +435,6 @@ var DevStatusWidget = {
     // ============================================================
     components: {
         // Security components
-        'crowdsec': { name: 'CrowdSec', type: 'backend', status: 'production', packages: ['secubox-app-crowdsec', 'luci-app-crowdsec-dashboard'] },
         'firewall-bouncer': { name: 'Firewall Bouncer', type: 'backend', status: 'production', packages: ['secubox-app-cs-firewall-bouncer'] },
         'wazuh': { name: 'Wazuh SIEM', type: 'backend', status: 'production', packages: ['secubox-app-wazuh', 'luci-app-wazuh'] },
         'mitmproxy': { name: 'Mitmproxy WAF', type: 'backend', status: 'production', packages: ['secubox-app-mitmproxy', 'luci-app-mitmproxy'] },
@@ -513,7 +512,6 @@ var DevStatusWidget = {
         'glances': { name: 'Glances', type: 'backend', status: 'production', packages: ['secubox-app-glances', 'luci-app-glances'] },
         'netdata': { name: 'Netdata', type: 'backend', status: 'production', packages: ['luci-app-netdata-dashboard'] },
         'health-checks': { name: 'Health Checks', type: 'backend', status: 'production', packages: [] },
-        'netifyd': { name: 'Netifyd', type: 'backend', status: 'production', packages: ['secubox-app-netifyd', 'luci-app-secubox-netifyd'] },
         'ndpid': { name: 'nDPId', type: 'backend', status: 'production', packages: ['secubox-app-ndpid', 'luci-app-ndpid'] },
         'flow-analyzer': { name: 'Flow Analyzer', type: 'backend', status: 'production', packages: [] },
         'avatar-tap': { name: 'Avatar-Tap', type: 'backend', status: 'production', packages: ['secubox-avatar-tap', 'luci-app-avatar-tap'] },

@@ -112,8 +112,8 @@ def test_trustless_pull_round_trip(journal_a, journal_b):
     # A: founder publishes an offer
     priv_a, pub_a = generate_keypair()
     id_a = genesis(journal_a, priv_a)
-    offer_service(journal_a, priv_a, id_a.did, name="CrowdSec decisions", kind="api",
-                  endpoint="http://10.10.0.1/api/v1/crowdsec", approval_mode="auto")
+    offer_service(journal_a, priv_a, id_a.did, name="Threatmesh decisions", kind="api",
+                  endpoint="http://10.10.0.1/api/v1/threatmesh", approval_mode="auto")
     wire = _get_offers(journal_a)[0]   # what GET /services would emit
 
     # B: a different founder — A is unknown to B beforehand

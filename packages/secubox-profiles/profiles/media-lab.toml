@@ -8,7 +8,7 @@ label = "Media Lab — box maison-média"
 on = [
   "ad-guard", "admin", "aggregator", "annuaire", "appstore", "auth",
   "avatar", "backup", "billets", "c3box", "cdn", "certs",
-  "cloner", "config-advisor", "cookies", "core", "crowdsec", "cs-bridge",
+  "cloner", "config-advisor", "cookies", "core", "cs-bridge",
   "cyberfeed", "dns", "dns-guard", "dns-provider", "dpi", "dpi-flowcap",
   "droplet", "exposure", "eye-remote", "eye-remote-dhcp", "fmrelay", "frigate",
   "gitea", "glances", "grafana", "haproxy", "hardening", "health-doctor",
@@ -16,7 +16,7 @@ on = [
   "led-trigger", "leds", "localrecall", "lyrion", "mail", "mcp-server",
   "mesh", "meshname", "metablogizer", "metacatalog", "metrics", "mirror",
   "mitmproxy", "modem", "module-prober", "mqtt", "nac", "ndpid",
-  "netboot", "netdata", "netdiag", "netifyd", "netmodes", "nettweak",
+  "netboot", "netdata", "netdiag", "netmodes", "nettweak",
   "network-ready", "nextcloud", "p2p", "peertube", "photoprism", "podcaster",
   "portal", "proxypac", "publish", "qos", "reality", "repo",
   "reporter", "rezapp", "roadmap", "routes", "rtty", "runtime",

@@ -211,38 +211,6 @@ def _generate_id() -> str:
 # ALERT AGGREGATION
 # ══════════════════════════════════════════════════════════════
 
-def _fetch_crowdsec_alerts() -> List[Dict]:
-    """Fetch alerts from CrowdSec.
-
-    The module runs as the `secubox` user, which cannot read CrowdSec's LAPI
-    socket directly, so cscli is invoked through sudo (exact-command sudoers grant
-    in secubox-threats' drop-in). This elevates only under the aggregator
-    (NoNewPrivileges=no); on a hardened standalone unit sudo is neutralized and the
-    fetch simply returns [] (fail-open — the endpoint still serves stored alerts).
-    """
-    alerts = []
-    try:
-        result = subprocess.run(
-            ["sudo", "-n", "/usr/bin/cscli", "alerts", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0 and result.stdout:
-            cs_alerts = json.loads(result.stdout)
-            for a in cs_alerts[:50]:
-                alerts.append({
-                    "id": f"cs-{a.get('id', '')}",
-                    "source": "crowdsec",
-                    "severity": "high" if a.get("scenario", "").startswith("crowdsecurity/") else "medium",
-                    "message": a.get("scenario", "Unknown"),
-                    "value": a.get("source", {}).get("ip", ""),
-                    "timestamp": a.get("created_at", ""),
-                    "raw": a
-                })
-    except Exception:
-        pass
-    return alerts
-
-
 def _fetch_suricata_alerts() -> List[Dict]:
     """Fetch alerts from Suricata eve.json log."""
     alerts = []
@@ -496,7 +464,6 @@ async def list_alerts(
 
     # Fetch fresh alerts from sources
     fresh_alerts = []
-    fresh_alerts.extend(_fetch_crowdsec_alerts())
     fresh_alerts.extend(_fetch_suricata_alerts())
     fresh_alerts.extend(_fetch_waf_alerts())
 
@@ -534,19 +501,6 @@ async def list_alerts(
 def get_alert_sources():
     """Get available alert sources and their status."""
     sources = []
-
-    # CrowdSec
-    try:
-        result = subprocess.run(["systemctl", "is-active", "crowdsec"], capture_output=True, text=True, timeout=5)
-        cs_active = result.stdout.strip() == "active"
-    except Exception:
-        cs_active = False
-    sources.append({
-        "id": "crowdsec",
-        "name": "CrowdSec",
-        "active": cs_active,
-        "description": "Collaborative security engine"
-    })
 
     # Suricata
     try:

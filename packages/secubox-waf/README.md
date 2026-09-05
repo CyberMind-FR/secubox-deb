@@ -19,7 +19,6 @@ WAF with 300+ OWASP security rules
 
 - OWASP rules
 - Custom rules
-- CrowdSec integration
 - Request logging
 
 ## Installation

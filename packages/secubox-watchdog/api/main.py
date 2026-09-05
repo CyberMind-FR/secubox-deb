@@ -109,7 +109,6 @@ DEFAULT_CONFIG = {
     "services": [
         {"name": "nginx", "process": "nginx", "enabled": True, "critical": True},
         {"name": "haproxy", "process": "haproxy", "enabled": True, "critical": True},
-        {"name": "crowdsec", "process": "crowdsec", "enabled": True, "critical": False},
         {"name": "nftables", "process": "nft", "enabled": False, "critical": True}
     ],
     "endpoints": [

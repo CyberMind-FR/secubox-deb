@@ -5,7 +5,6 @@
 """Tests for StatsCache + endpoint cache wiring in secubox-waf.
 
 Pattern reference: CLAUDE.md § Performance Patterns — Double Caching.
-Mirrors `packages/secubox-crowdsec/api/main.py:106-138`.
 
 Verifies:
 - StatsCache.get/set roundtrip

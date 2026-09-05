@@ -9,7 +9,7 @@ override_dh_auto_install:
 	cp -r www/threat-analyst/. debian/secubox-threat-analyst/usr/share/secubox/www/threat-analyst/
 	install -d debian/secubox-threat-analyst/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-threat-analyst/usr/share/secubox/menu.d/ || true
-	# Read-only cscli sudo grant (#599) — backend ingestion of CrowdSec alerts.
+	# Read-only sudo grant (#599) — backend ingestion of alerts.
 	install -d debian/secubox-threat-analyst/etc/sudoers.d
 	install -m 0440 debian/sudoers.d/secubox-threat-analyst \
 		debian/secubox-threat-analyst/etc/sudoers.d/secubox-threat-analyst

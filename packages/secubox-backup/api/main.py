@@ -56,7 +56,6 @@ CONFIG_PATHS = [
     "/etc/wireguard",
     "/etc/haproxy",
     "/etc/nftables.conf",
-    "/etc/crowdsec",
 ]
 
 # Default retention policies (days to keep)

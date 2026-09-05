@@ -47,7 +47,7 @@ return view.extend({
 		var hero = helpers.createHero({
 			icon: '🔍',
 			title: _('Sniffer / TAP Mode'),
-			subtitle: _('Transparent monitoring bridge feeding Netifyd + pcaps. Ideal for SOC taps, troubleshooting, or security labs.'),
+			subtitle: _('Transparent monitoring bridge feeding pcaps. Ideal for SOC taps, troubleshooting, or security labs.'),
 			gradient: 'linear-gradient(135deg,#8b5cf6,#a855f7)',
 			actions: [
 				E('button', { 'class': 'nm-btn nm-btn-primary', 'type': 'button', 'data-action': 'sniffer-save' }, ['💾 ', _('Save Settings')]),
@@ -57,7 +57,6 @@ return view.extend({
 
 		var stats = E('div', { 'style': 'display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px;' }, [
 			helpers.createStatBadge({ label: _('Bridge'), value: (config.bridge_interface || 'br-snoop').toUpperCase() }),
-			helpers.createStatBadge({ label: _('Netifyd'), value: config.netifyd_running ? _('Running') : _('Stopped') }),
 			helpers.createStatBadge({ label: _('Promiscuous'), value: config.promiscuous ? _('Enabled') : _('Disabled') })
 		]);
 
@@ -78,19 +77,14 @@ return view.extend({
 			]
 		});
 
-		var netifySection = helpers.createSection({
-			title: _('Netifyd & PCAP'),
+		var pcapSection = helpers.createSection({
+			title: _('PCAP Capture'),
 			icon: '📊',
-			badge: config.netifyd_running ? _('Running') : _('Stopped'),
 			body: [
-				buildToggle('toggle-netifyd', '🔬', _('Netifyd DPI'), _('Enable Deep Packet Inspection export'), config.netifyd_enabled),
 				helpers.createList([
 					{ title: _('pcap capture'), description: _('Optional tcpdump writes to /var/captures'), suffix: E('span', { 'class': 'nm-badge' }, _('pcap')) },
 					{ title: _('Rotation & retention'), description: _('Configure rotation with network-modes settings tab'), suffix: E('span', { 'class': 'nm-badge' }, _('Storage')) }
-				]),
-				config.netifyd_running ?
-					E('p', { 'style': 'margin-top:12px;color:#a5b4fc;' }, _('Netifyd analytics available in the Netifyd Dashboard.')) :
-					E('p', { 'style': 'margin-top:12px;color:#94a3b8;' }, _('Start Netifyd to feed DPI data.'))
+				])
 			]
 		});
 
@@ -110,7 +104,7 @@ return view.extend({
 			hero,
 			stats,
 			bridgeSection,
-			netifySection,
+			pcapSection,
 			previewSection
 		]);
 
@@ -141,7 +135,6 @@ return view.extend({
 	saveSnifferSettings: function(container) {
 		var payload = {
 			bridge_interface: container.querySelector('#bridge-interface') ? container.querySelector('#bridge-interface').value : '',
-			netifyd_enabled: helpers.isToggleActive(container.querySelector('#toggle-netifyd')) ? 1 : 0,
 			promiscuous: helpers.isToggleActive(container.querySelector('#toggle-promisc')) ? 1 : 0
 		};
 

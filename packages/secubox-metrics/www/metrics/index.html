@@ -326,10 +326,6 @@
                     <span class="mx-svc-dot off" id="sv-waf"></span>
                     WAF
                 </div>
-                <div class="mx-svc-item">
-                    <span class="mx-svc-dot off" id="sv-cs"></span>
-                    CrowdSec
-                </div>
             </div>
 
             <!-- Panels -->
@@ -487,7 +483,6 @@
                 // Service dots
                 document.getElementById('sv-ha').className = 'mx-svc-dot ' + (overview.haproxy ? 'on' : 'off');
                 document.getElementById('sv-waf').className = 'mx-svc-dot ' + (overview.mitmproxy ? 'on' : 'off');
-                document.getElementById('sv-cs').className = 'mx-svc-dot ' + (overview.crowdsec ? 'on' : 'off');
 
                 // Freshness
                 if (overview._freshness) {

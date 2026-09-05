@@ -604,7 +604,7 @@ return view.extend({
 					[
 						{ name: 'Firewall', key: 'firewall', icon: '🛡️' },
 						{ name: 'DHCP/DNS', key: 'dnsmasq', icon: '📡' },
-						{ name: 'nDPId', key: 'netifyd', icon: '🔍' },
+						{ name: 'nDPId', key: 'ndpid', icon: '🔍' },
 						{ name: 'HAProxy', key: 'haproxy', icon: '⚖️' },
 						{ name: 'Nginx', key: 'nginx', icon: '🌐' },
 						{ name: 'WireGuard', key: 'wireguard', icon: '🔐' }

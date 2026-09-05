@@ -27,7 +27,7 @@ override_dh_installsystemd:
 	# secubox-sleeper ships DISABLED (--no-enable --no-start): it stops idle
 	# sleepable modules, so it must be enabled deliberately by the operator only
 	# after the deployment's lifecycle assignments are audited (a security
-	# service like crowdsec must never be on-demand). See debian/postinst.
+	# security service must never be on-demand). See debian/postinst.
 	dh_installsystemd --no-enable --no-start --name=secubox-sleeper
 	# secubox-pins-apply EST ACTIVE PAR DEFAUT, contrairement au sleeper — et la
 	# difference n'est pas d'humeur : le sleeper DECIDE lui-meme ce qui est

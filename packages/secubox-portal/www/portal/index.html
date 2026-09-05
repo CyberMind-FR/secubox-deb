@@ -192,7 +192,7 @@
         <div id="cookie-rows"><div class="empty">Loading…</div></div>
     </div>
 
-    <!-- Bans (crowdsec decisions count + WAF %) -->
+    <!-- Bans (WAF-native ban count + WAF %) -->
     <div class="card">
         <h3>Attacks &amp; Bans</h3>
         <div class="tiles" id="bans-tiles">
@@ -240,7 +240,6 @@
         vhosts:       '/api/v1/metrics/live-hosts',
         asns:         '/api/v1/metrics/visitor-origin',
         cookies:      '/api/v1/cookie-audit/summary',
-        decisions:    '/api/v1/crowdsec/decisions',
     };
 
     function $(id) { return document.getElementById(id); }
@@ -287,14 +286,14 @@
         }
         txt('hero-vhosts', h.counts && h.counts.vhosts);
         txt('hero-certs',  (c && c.summary && c.summary.total) || (h.counts && h.counts.certificates) || '—');
-        txt('hero-bans',   h.crowdsec && h.crowdsec.active_decisions);
+        txt('hero-bans',   h.waf && h.waf.active_bans);
         txt('hero-refresh', fmtTime(h.timestamp || new Date().toISOString()));
     }
 
     function renderModules(h) {
         if (!h || !h.modules) return;
-        const order = ['waf', 'crowdsec', 'haproxy', 'nginx', 'system'];
-        const icons = { waf: '🛡️', crowdsec: '👮', haproxy: '🌐', nginx: '📡', system: '💻' };
+        const order = ['waf', 'haproxy', 'nginx', 'system'];
+        const icons = { waf: '🛡️', haproxy: '🌐', nginx: '📡', system: '💻' };
         const el = $('modules-grid');
         el.innerHTML = order.map(m => {
             const mod = h.modules[m] || {};
@@ -362,14 +361,10 @@
         `;
     }
 
-    function renderBans(h, decisions) {
-        // Prefer the live /crowdsec/decisions list (includes CAPI community
-        // blocklist), falling back to health/summary's local-only count.
-        const decList = decisions && Array.isArray(decisions.decisions) ? decisions.decisions
-                      : (Array.isArray(decisions) ? decisions : null);
-        const ban = decList ? decList.filter(d => (d.type || 'ban') === 'ban').length
-                  : (h && h.crowdsec ? h.crowdsec.active_decisions : null);
-        const alerts = h && h.crowdsec && h.crowdsec.alerts_today;
+    function renderBans(h) {
+        // WAF-native ban / alert counts from health/summary.
+        const ban = h && h.waf ? h.waf.active_bans : null;
+        const alerts = h && h.waf && h.waf.alerts_today;
         const wafPct = h && h.waf && h.waf.blocked_pct;
         const wafCls = wafPct == null ? '' : (wafPct >= 25 ? 'crit' : wafPct >= 10 ? 'warn' : 'ok');
         const banCls = ban == null ? '' : (ban >= 50 ? 'warn' : 'ok');
@@ -411,20 +406,19 @@
     }
 
     async function refresh() {
-        const [h, c, v, a, k, dec] = await Promise.all([
+        const [h, c, v, a, k] = await Promise.all([
             fetchSafe(ENDPOINTS.health),
             fetchSafe(ENDPOINTS.certs),
             fetchSafe(ENDPOINTS.vhosts),
             fetchSafe(ENDPOINTS.asns),
             fetchSafe(ENDPOINTS.cookies),
-            fetchSafe(ENDPOINTS.decisions),
         ]);
         renderHero(h, c);
         renderModules(h);
         renderSystem(h);
         renderCerts(c);
         renderCookies(k);
-        renderBans(h, dec);
+        renderBans(h);
         renderVhosts(v);
         renderAsns(a);
     }

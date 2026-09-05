@@ -9,7 +9,7 @@ Homepage: https://github.com/CyberMind-FR/secubox-deb
 Package: secubox-waf
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, jq, curl
-Recommends: crowdsec, secubox-crowdsec, secubox-haproxy
+Recommends: secubox-haproxy
 Description: SecuBox — API et interface du pare-feu applicatif (wafctl, tableau de bord)
  LA MOITIE VISIBLE DU PARE-FEU. Ce paquet ne filtre rien : il MONTRE et il
  COMMANDE. L'inspection et le bannissement sont l'affaire de secubox-waf-ng,

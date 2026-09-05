@@ -116,12 +116,6 @@ KNOWN_SERVICES = {
         "icon": "hub",
         "dependencies": ["secubox-core"],
     },
-    "secubox-crowdsec": {
-        "description": "CrowdSec threat intelligence integration",
-        "category": "security",
-        "icon": "shield",
-        "dependencies": ["secubox-core"],
-    },
     "secubox-wireguard": {
         "description": "WireGuard VPN management",
         "category": "network",
@@ -135,7 +129,7 @@ KNOWN_SERVICES = {
         "dependencies": ["secubox-core"],
     },
     "secubox-dpi": {
-        "description": "Deep packet inspection with netifyd/nDPId",
+        "description": "Deep packet inspection with nDPId",
         "category": "security",
         "icon": "inspect",
         "dependencies": ["secubox-core"],

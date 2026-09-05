@@ -166,7 +166,7 @@ def _jour_de(horodatage: str) -> Optional[str]:
 
 
 # ── GeoIP : pays du visiteur, avec drapeau ───────────────────────────────────
-# La base GeoLite2-Country est deja sur la board (crowdsec + secubox-geoip). On
+# La base GeoLite2-Country est deja sur la board (secubox-geoip). On
 # resout le pays par IP avec un CACHE : une meme IP revient des centaines de fois
 # dans un journal. Le geoip est un BONUS — une base absente ou une IP inconnue
 # n'interrompt jamais le calcul des stats.

@@ -11,8 +11,8 @@ Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
 Replaces: secubox-hub, secubox-soc-web
 Breaks: secubox-hub (<< 1.9.10-1~bookworm1)
 Description: SecuBox SOC — Security Operations Center aggregator
- Aggregates alerts, threat-map data, and P2P intel from Hub, WAF,
- and CrowdSec into a single Security Operations Center dashboard.
+ Aggregates alerts, threat-map data, and P2P intel from Hub and WAF
+ into a single Security Operations Center dashboard.
  Read-only consumer of the existing alert sources.
  .
  Distinct from sibling packages in the SOC cluster:

@@ -32,7 +32,6 @@ HISTORY_FILE = DATA_DIR / "history.json"
 
 # Service catalog with metadata
 SERVICES = [
-    {"name": "crowdsec", "category": "security", "icon": "🛡️", "desc": "IDS/IPS Protection", "port": None, "critical": True},
     {"name": "wireguard", "category": "security", "icon": "🔒", "desc": "VPN Server", "port": 51820, "critical": False},
     {"name": "waf", "category": "security", "icon": "🔥", "desc": "Web Application Firewall", "port": None, "critical": True},
     {"name": "nac", "category": "security", "icon": "👁️", "desc": "Network Access Control", "port": None, "critical": False},

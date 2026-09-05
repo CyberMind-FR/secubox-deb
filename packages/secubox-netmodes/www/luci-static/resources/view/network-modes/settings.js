@@ -67,10 +67,6 @@ return view.extend({
 			_('Physical interface to capture from'));
 		o.default = 'eth0';
 
-		o = s.option(form.Flag, 'netifyd_enabled', _('Enable Netifyd DPI'),
-			_('Enable deep packet inspection with Netifyd'));
-		o.default = '1';
-
 		o = s.option(form.Flag, 'promiscuous', _('Promiscuous Mode'),
 			_('Enable promiscuous mode on capture interface'));
 		o.default = '1';

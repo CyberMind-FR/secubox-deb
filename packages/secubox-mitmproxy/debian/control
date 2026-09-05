@@ -17,16 +17,15 @@ Depends: ${misc:Depends},
          xz-utils,
          python3-uvicorn,
          python3-toml
-Recommends: secubox-crowdsec
 Description: SecuBox Mitmproxy WAF — Web Application Firewall
  HTTP traffic inspection for HAProxy-hosted services with threat
- detection and CrowdSec integration for automatic IP banning.
+ detection and automatic IP banning.
  .
  Features:
   - LXC-isolated mitmproxy instance
   - 90+ threat detection patterns (SQLi, XSS, RCE, etc.)
   - HAProxy integration for vhost inspection
-  - CrowdSec JSONL output for auto-banning
+  - JSONL ban output for auto-banning
   - WebUI dashboard with real-time stats
  .
  Port Debian bookworm de luci-app-mitmproxy (SecuBox OpenWrt / CyberMind.fr).

@@ -100,7 +100,6 @@
     // Module emoji map for spunky display
     const MODULE_EMOJIS = {
         waf: ['🛡️', '⚔️', '🔰'],
-        crowdsec: ['👮', '🚔', '🚨'],
         haproxy: ['🌐', '🔀', '🔄'],
         nginx: ['🌍', '📡', '🚀'],
         system: ['💻', '🖥️', '⚙️']
@@ -129,22 +128,6 @@
             icon: '⚔️',
             message: h => `WAF slaying ${h.waf.blocked_pct}% baddies`,
             action: '/waf/'
-        },
-        {
-            id: 'crowdsec-many-bans',
-            check: h => h.crowdsec?.active_decisions > 50,
-            severity: 'info',
-            icon: '🚨',
-            message: h => `${h.crowdsec.active_decisions} threats neutralized`,
-            action: '/crowdsec/'
-        },
-        {
-            id: 'crowdsec-patrol',
-            check: h => h.crowdsec?.active_decisions > 0 && h.crowdsec?.active_decisions <= 50,
-            severity: 'patrol',
-            icon: '👮',
-            message: h => `${h.crowdsec.active_decisions} bans active`,
-            action: '/crowdsec/'
         },
         {
             id: 'cpu-critical',
@@ -805,7 +788,7 @@
         // Render module cards
         const modsEl = banner.querySelector('.hb-modules');
         if (modsEl && health?.modules) {
-            const modules = ['waf', 'crowdsec', 'haproxy', 'nginx', 'system'];
+            const modules = ['waf', 'haproxy', 'nginx', 'system'];
             modsEl.innerHTML = modules.map(m => {
                 const mod = health.modules[m] || {};
                 const status = mod.status || 'off';
@@ -865,11 +848,6 @@
                     <span class="hb-stat-value">${health.services?.lxc_running || 0}</span>
                 </div>
                 <div class="hb-stat">
-                    <span class="hb-stat-icon">🚨</span>
-                    <span class="hb-stat-label">Bans</span>
-                    <span class="hb-stat-value">${health.crowdsec?.active_decisions || 0}</span>
-                </div>
-                <div class="hb-stat">
                     <span class="hb-stat-icon">🌐</span>
                     <span class="hb-stat-label">VHosts</span>
                     <span class="hb-stat-value">${health.counts?.vhosts || 0}</span>
@@ -901,7 +879,6 @@
                 score: 85,
                 modules: {
                     waf: { status: 'ok' },
-                    crowdsec: { status: 'ok' },
                     haproxy: { status: 'ok' },
                     nginx: { status: 'ok' },
                     system: { status: 'ok' }

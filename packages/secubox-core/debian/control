@@ -22,7 +22,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
  nginx,
  nftables,
  openssl
-Recommends: crowdsec, wireguard-tools
+Recommends: wireguard-tools
 Description: SecuBox-DEB — bibliothèque centrale et infrastructure
  Bibliothèque Python partagée (JWT auth, config TOML, logging structuré),
  configuration nginx reverse proxy, et scripts d'initialisation firstboot.

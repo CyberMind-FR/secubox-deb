@@ -344,7 +344,7 @@ return view.extend({
 
 				// Security
 				E('div', { 'class': 'metrics-section security', 'id': 'section-security' }, [
-					E('h3', {}, 'SECURITY (CrowdSec)'),
+					E('h3', {}, 'SECURITY'),
 					E('div', { 'class': 'metrics-row' }, [
 						E('span', { 'class': 'metrics-label' }, 'Active Bans'),
 						E('span', { 'class': 'metrics-value', 'data-key': 'sec.bans' }, '0')

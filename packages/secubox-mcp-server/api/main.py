@@ -259,24 +259,6 @@ class MCPServer:
                     }
                 }
             ),
-            "secubox.crowdsec.alerts": MCPTool(
-                name="secubox.crowdsec.alerts",
-                description="Get CrowdSec security alerts",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "default": 20}
-                    }
-                }
-            ),
-            "secubox.crowdsec.decisions": MCPTool(
-                name="secubox.crowdsec.decisions",
-                description="List CrowdSec active decisions (bans)",
-                inputSchema={
-                    "type": "object",
-                    "properties": {}
-                }
-            ),
             "secubox.dns.analyze": MCPTool(
                 name="secubox.dns.analyze",
                 description="Analyze a domain for DGA, tunneling, or malicious patterns",
@@ -382,7 +364,7 @@ class MCPServer:
                     "properties": {
                         "threat_type": {"type": "string", "enum": ["ip", "domain", "pattern"]},
                         "indicator": {"type": "string", "description": "IOC value"},
-                        "rule_type": {"type": "string", "enum": ["nftables", "crowdsec", "waf"]}
+                        "rule_type": {"type": "string", "enum": ["nftables", "waf"]}
                     },
                     "required": ["threat_type", "indicator"]
                 }
@@ -397,12 +379,6 @@ class MCPServer:
                 name="WAF Logs",
                 description="Recent mitmproxy WAF logs",
                 mimeType="application/jsonl"
-            ),
-            "secubox://logs/crowdsec": MCPResource(
-                uri="secubox://logs/crowdsec",
-                name="CrowdSec Logs",
-                description="CrowdSec security logs",
-                mimeType="text/plain"
             ),
             "secubox://logs/dns": MCPResource(
                 uri="secubox://logs/dns",
@@ -576,8 +552,6 @@ class MCPServer:
         tool_mapping = {
             "secubox.waf.status": ("threat-analyst", "/status", "GET", True),
             "secubox.waf.threats": ("threat-analyst", "/alerts", "GET", True),
-            "secubox.crowdsec.alerts": (None, "cscli alerts list -o json", "CMD", False),
-            "secubox.crowdsec.decisions": (None, "cscli decisions list -o json", "CMD", False),
             "secubox.dns.analyze": ("dns-guard", "/analyze", "POST", False),
             "secubox.dns.blocklist": ("dns-guard", "/blocklist", "GET", True),
             "secubox.network.anomalies": ("network-anomaly", "/alerts", "GET", True),
@@ -663,7 +637,6 @@ class MCPServer:
         """Read resource content."""
         resource_readers = {
             "secubox://logs/waf": self._read_waf_logs,
-            "secubox://logs/crowdsec": self._read_crowdsec_logs,
             "secubox://logs/dns": self._read_dns_logs,
             "secubox://config/haproxy": self._read_haproxy_config,
             "secubox://config/nftables": self._read_nftables,
@@ -700,33 +673,6 @@ class MCPServer:
                 except Exception as e:
                     continue
         return "No WAF logs found"
-
-    async def _read_crowdsec_logs(self) -> str:
-        """Read CrowdSec logs."""
-        log_paths = [
-            Path("/var/log/crowdsec.log"),
-            Path("/var/log/crowdsec/crowdsec.log"),
-        ]
-        for log_file in log_paths:
-            if log_file.exists():
-                try:
-                    lines = log_file.read_text().strip().split("\n")
-                    return "\n".join(lines[-100:])
-                except Exception:
-                    continue
-
-        # Try journalctl as fallback
-        try:
-            result = subprocess.run(
-                ["journalctl", "-u", "crowdsec", "-n", "100", "--no-pager"],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.stdout:
-                return result.stdout
-        except Exception:
-            pass
-
-        return "No CrowdSec logs found"
 
     async def _read_dns_logs(self) -> str:
         """Read DNS Guard logs."""
@@ -783,7 +729,6 @@ class MCPServer:
         """Aggregate alerts from all security modules."""
         alerts = {
             "waf": [],
-            "crowdsec": [],
             "dns": [],
             "anomaly": [],
             "iot": [],
@@ -813,17 +758,6 @@ class MCPServer:
             fetch_alerts("cve-triage", "/cves", "cve"),
             return_exceptions=True
         )
-
-        # Also try CrowdSec CLI
-        try:
-            result = subprocess.run(
-                ["cscli", "alerts", "list", "-o", "json", "-l", "20"],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.stdout:
-                alerts["crowdsec"] = json.loads(result.stdout)
-        except Exception:
-            pass
 
         return json.dumps(alerts, indent=2)
 
@@ -895,7 +829,6 @@ class MCPServer:
             return f"""Generate a security status summary for the last {timeframe}.
 Include:
 - Total threats blocked by WAF
-- CrowdSec alerts and bans
 - Network anomalies detected
 - IoT device status
 - Configuration compliance score

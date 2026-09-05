@@ -91,7 +91,7 @@ def test_haproxy_is_pulled_by_network_online_not_only_multi_user():
     """Un frontal TLS ne doit dependre d'AUCUNE cible tardive.
 
     multi-user.target n'est atteinte qu'apres TOUS les services qu'elle
-    rassemble. Le 2026-08-07 un service lent (crowdsec) a tenu son job pendant
+    rassemble. Le 2026-08-07 un service lent a tenu son job pendant
     tout son demarrage : la cible n'a jamais ete atteinte et le job d'HAProxy
     n'a JAMAIS ete tente — journal vide, 443 muet. La veille, c'etait une
     boucle netboot. Le point commun n'est pas le service fautif, c'est la

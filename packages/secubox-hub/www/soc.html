@@ -336,7 +336,6 @@
         }
 
         .activity-icon.waf { background: rgba(232, 132, 90, 0.15); color: var(--auth-light); }
-        .activity-icon.crowdsec { background: rgba(112, 104, 208, 0.15); color: var(--mind-light); }
         .activity-icon.ssl { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
         .activity-icon.auth { background: rgba(44, 112, 192, 0.15); color: var(--mesh-light); }
 
@@ -626,17 +625,6 @@
                     <div class="mini-histogram" id="hist-threats"></div>
                 </div>
 
-                <div class="glass-card" style="--card-accent: #7068D0; border-left: 3px solid #7068D0;">
-                    <div class="card-header">
-                        <span class="card-icon">👁️</span>
-                        <span class="card-status" id="cs-card-status">LOADING</span>
-                    </div>
-                    <div class="card-metric" id="active-decisions">-</div>
-                    <div class="card-label">Active Decisions</div>
-                    <span class="card-trend up" id="decisions-info">- bouncers</span>
-                    <div class="mini-histogram" id="hist-decisions"></div>
-                </div>
-
                 <div class="glass-card" style="--card-accent: #2C70C0; border-left: 3px solid #2C70C0;">
                     <div class="card-header">
                         <span class="card-icon">🌐</span>
@@ -662,34 +650,6 @@
 
             <!-- THREE-COLUMN STATUS PANELS -->
             <div class="status-columns">
-                <!-- CROWDSEC STATUS -->
-                <div class="matrix-panel status-col">
-                    <div class="matrix-header">
-                        <span class="matrix-title">👁️ CROWDSEC</span>
-                        <span style="color: var(--muted-dark);" id="cs-version">v-</span>
-                    </div>
-                    <div class="matrix-body">
-                        <div class="matrix-row">
-                            <span class="matrix-label">Agent</span>
-                            <span class="matrix-value" id="cs-agent-status"><span class="highlight">● LOADING</span></span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Decisions</span>
-                            <span class="matrix-value" id="cs-decisions-count">-</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Bouncers</span>
-                            <span class="matrix-value" id="cs-bouncers">-</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Categories</span>
-                            <span class="matrix-value categories-list" id="cs-categories">--</span>
-                        </div>
-                        <!-- Multi-layer donut for categories -->
-                        <div id="cs-cat-donut" style="margin-top: 0.5rem; display: flex; justify-content: center;"></div>
-                    </div>
-                </div>
-
                 <!-- WAF STATUS -->
                 <div class="matrix-panel status-col">
                     <div class="matrix-header">
@@ -751,34 +711,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- AUTOBAN PANEL -->
-            <div class="autoban-panel">
-                <div class="autoban-header">
-                    <span class="autoban-title">⛔ Quick Autoban</span>
-                    <div class="autoban-controls">
-                        <input type="text" id="ban-ip" placeholder="IP address" class="ban-input">
-                        <select id="ban-duration" class="ban-select">
-                            <option value="1h">1 hour</option>
-                            <option value="24h" selected>24 hours</option>
-                            <option value="7d">7 days</option>
-                            <option value="30d">30 days</option>
-                            <option value="permanent">Permanent</option>
-                        </select>
-                        <select id="ban-reason" class="ban-select">
-                            <option value="manual">Manual ban</option>
-                            <option value="scanner">Scanner</option>
-                            <option value="bruteforce">Brute force</option>
-                            <option value="honeypot">Honeypot</option>
-                            <option value="waf">WAF trigger</option>
-                        </select>
-                        <button onclick="banIP()" class="ban-btn">🚫 Ban</button>
-                    </div>
-                </div>
-                <div class="recent-bans" id="recent-bans">
-                    <!-- Recent bans list -->
                 </div>
             </div>
 
@@ -854,7 +786,6 @@
     <script>
         const API_HUB = '/api/v1/hub';
         const API_WAF = '/api/v1/waf';
-        const API_CROWDSEC = '/api/v1/crowdsec';
         const API_METRICS = '/api/v1/metrics';
 
         // ════════════════��══════════════════════════════════════════════
@@ -973,7 +904,6 @@
 
             // Update sidebar status LEDs
             if (modules.waf) updateStatusLed('waf-status', modules.waf.status);
-            if (modules.crowdsec) updateStatusLed('crowdsec-status', modules.crowdsec.status);
             if (modules.metrics) updateStatusLed('metrics-status', modules.metrics.status);
             if (modules.dns) updateStatusLed('dns-status', modules.dns.status);
             if (modules.wireguard) updateStatusLed('wireguard-status', modules.wireguard.status);
@@ -1254,64 +1184,14 @@
             }).join('');
         }
 
-        async function loadCrowdSecStats() {
-            // Load health first for status panel
-            const health = await api(API_CROWDSEC + '/health');
-            if (health) {
-                document.getElementById('cs-agent-status').innerHTML = health.checks && health.checks.engine_running
-                    ? '<span class="highlight">● ACTIVE</span>'
-                    : '<span class="danger">● INACTIVE</span>';
-                document.getElementById('cs-version').textContent = health.version ? `v${health.version}` : 'v-';
-            }
-
-            const data = await api(API_CROWDSEC + '/decisions_stats');
-            if (!data) {
-                if (health) {
-                    document.getElementById('cs-card-status').textContent = health.status === 'ok' ? 'ACTIVE' : 'DEGRADED';
-                }
-                return;
-            }
-
-            document.getElementById('active-decisions').textContent = data.active_decisions || 0;
-            document.getElementById('cs-card-status').textContent = 'ACTIVE';
-            document.getElementById('decisions-info').textContent = `${data.bouncers || 0} bouncers`;
-            document.getElementById('cs-decisions-count').textContent = data.active_decisions || 0;
-            document.getElementById('cs-bouncers').textContent = data.bouncers || 0;
-
-            // Update mini histogram
-            updateHistogram('decisions', data.active_decisions || 0);
-
-            // Categories
-            if (data.categories) {
-                // Categories shown in donut only
-                // Render multi-layer donut for categories
-                const csDonut = document.getElementById('cs-cat-donut');
-                if (csDonut && data.categories && data.categories.length > 0) {
-                    csDonut.innerHTML = createMultiLayerDonut(data.categories, CAT_COLORS, CATEGORY_EMOJI, 100);
-                }
-            } else {
-                document.getElementById('cs-categories').innerHTML = '<span class="cat-tag">-</span>';
-            }
-
-            if (data.recent_alert) {
-                addActivity('crowdsec', '👁️', `CrowdSec: <code>${data.recent_alert}</code>`, 'recently');
-            }
-        }
-
         async function loadFirewallStats() {
-            const data = await api(API_CROWDSEC + '/health');
-            if (!data) {
-                document.getElementById('fw-status').innerHTML = '<span class="danger">● UNKNOWN</span>';
-                return;
-            }
-
-            const nftOk = data.checks && data.checks.nftables_ok;
+            // Firewall summary endpoint
+            const fwData = await api(API_HUB + '/public/firewall_summary');
+            const nftOk = !!(fwData && !fwData.error && (fwData.tables || 0) > 0);
             document.getElementById('fw-status').innerHTML = nftOk
                 ? '<span class="highlight">● ACTIVE</span>'
-                : '<span class="danger">● INACTIVE</span>';
+                : '<span class="danger">● UNKNOWN</span>';
 
-            // Try to get more details from firewall endpoint
-            const fwData = await api(API_HUB + '/public/firewall_summary');
             if (fwData) {
                 document.getElementById('fw-tables').textContent = fwData.tables || '-';
                 
@@ -1363,73 +1243,12 @@
                 document.getElementById('fw-chains').textContent = fwData.chains || '-';
                 document.getElementById('fw-rules').textContent = fwData.rules || '-';
             } else {
-                document.getElementById('fw-tables').textContent = nftOk ? '2' : '-';
-                document.getElementById('fw-chains').textContent = nftOk ? 'crowdsec' : '-';
-                document.getElementById('fw-rules').textContent = nftOk ? 'active' : '-';
+                document.getElementById('fw-tables').textContent = '-';
+                document.getElementById('fw-chains').textContent = '-';
+                document.getElementById('fw-rules').textContent = '-';
             }
             updateStatusLed('firewall-status', nftOk ? 'ok' : 'error');
         }
-
-        // Recent bans list
-        let recentBans = [];
-
-        async function banIP() {
-            const ip = document.getElementById('ban-ip').value.trim();
-            const duration = document.getElementById('ban-duration').value;
-            const reason = document.getElementById('ban-reason').value;
-
-            if (!ip || !/^[\d.]+$/.test(ip)) {
-                alert('Please enter a valid IP address');
-                return;
-            }
-
-            const btn = document.querySelector('.ban-btn');
-            btn.disabled = true;
-            btn.textContent = 'Banning...';
-
-            try {
-                const res = await api(API_CROWDSEC + '/ban', 'POST', { ip, duration, reason });
-                if (res && res.success) {
-                    recentBans.unshift({ ip, duration, reason, time: new Date() });
-                    if (recentBans.length > 5) recentBans.pop();
-                    renderRecentBans();
-                    document.getElementById('ban-ip').value = '';
-                    addActivity('crowdsec', '⛔', `Banned <code>${ip}</code> for ${duration}`, 'just now');
-                } else {
-                    alert(res?.error || 'Ban failed');
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-
-            btn.disabled = false;
-            btn.textContent = '🚫 Ban';
-        }
-
-        function renderRecentBans() {
-            const el = document.getElementById('recent-bans');
-            if (recentBans.length === 0) {
-                el.innerHTML = '<div style="color: var(--muted-dark);">No recent bans</div>';
-                return;
-            }
-            el.innerHTML = recentBans.map(b => `
-                <div class="ban-item">
-                    <span class="ban-ip">${b.ip}</span>
-                    <span class="ban-meta">${b.duration} · ${b.reason}</span>
-                    <button class="unban-btn" onclick="unbanIP('${b.ip}')">Unban</button>
-                </div>
-            `).join('');
-        }
-
-        async function unbanIP(ip) {
-            const res = await api(API_CROWDSEC + '/unban', 'POST', { ip });
-            if (res && res.success) {
-                recentBans = recentBans.filter(b => b.ip !== ip);
-                renderRecentBans();
-                addActivity('crowdsec', '✅', `Unbanned <code>${ip}</code>`, 'just now');
-            }
-        }
-
 
         async function loadMetrics() {
             const data = await api(API_METRICS + '/overview');
@@ -1510,11 +1329,9 @@
 
         async function refresh() {
             updateTimestamp();
-            renderRecentBans();
             await Promise.all([
                 loadHealthBatch(),
                 loadWAFStats(),
-                loadCrowdSecStats(),
                 loadFirewallStats(),
                 loadMetrics(),
                 loadDashboard(),

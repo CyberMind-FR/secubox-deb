@@ -9,7 +9,7 @@ const api = globalThis.browser ?? globalThis.chrome;
 const DEFAULTS = {
   hubBase: "",                          // e.g. "https://admin.gk2.secubox.in"
   // Modules to probe (name shown + URL slug). Operator can edit in options.
-  modules: ["hub", "crowdsec", "waf", "wireguard", "peertube", "photoprism", "nextcloud"],
+  modules: ["hub", "waf", "wireguard", "peertube", "photoprism", "nextcloud"],
   // Avatar credential-broker poke endpoint (#402): one place to share browser
   // auth with any backend service. youtube → PeerTube.
   cookieEndpoint: "/api/v1/avatar/cred/poke/youtube",

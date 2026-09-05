@@ -137,15 +137,6 @@ def check_cookie_audit_ledger() -> tuple[bool, dict]:
     return fresh, {"ledger": path, "age_seconds": int(age), "fresh": fresh}
 
 
-def check_crowdsec() -> tuple[bool, dict]:
-    unit_ok = _systemd_active("crowdsec")
-    lapi_ok = _tcp_open("127.0.0.1", 8080, timeout=2.0)
-    return (unit_ok and lapi_ok, {
-        "systemd_active": unit_ok,
-        "lapi_8080_open": lapi_ok,
-    })
-
-
 def check_filesystems() -> tuple[bool, dict]:
     """Critical paths must be mounted read-write."""
     paths = ["/var/log", "/var/cache", "/var/lib/secubox", "/data"]
@@ -187,7 +178,6 @@ REGISTRY: Dict[str, CheckFn] = {
     "gitea-lxc":           check_gitea_lxc,
     "mail-lxc":            check_mail_lxc,
     "cookie-audit-ledger": check_cookie_audit_ledger,
-    "crowdsec":            check_crowdsec,
     "filesystems":         check_filesystems,
 }
 # check_act_runner_arm64 kept as a module-level function (cheap) so a

@@ -76,7 +76,7 @@ DEFAULT_LOCAL_PATTERNS = [
     r'\bapi[_-]?key\s*[:=]',                    # API keys
     r'/etc/(shadow|passwd|config)',             # Sensitive paths
     r'\b(root|admin)@',                         # Privileged accounts
-    r'CROWDSEC|MITMPROXY|HAPROXY',              # Security system names
+    r'MITMPROXY|HAPROXY',                        # Security system names
 ]
 
 DEFAULT_SANITIZABLE_PATTERNS = [

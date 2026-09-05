@@ -3292,7 +3292,7 @@ async def admin_blacklist() -> dict:
         "doh_hits": 0,
         "resolved_domains": 0,
         "doh_block": False,
-        "sources": ["crowdsec", "threat-intel", "dns-guard"],
+        "sources": ["threat-intel", "dns-guard"],
     }
     try:
         r = _sp.run(

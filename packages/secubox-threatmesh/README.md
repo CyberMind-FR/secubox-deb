@@ -7,7 +7,7 @@
 
 # 🕸️ ThreatMesh
 
-Sovereign threat-intel mesh (CrowdSec CAPI replacement)
+Sovereign threat-intel mesh (central-API replacement)
 
 **Category:** Security
 

@@ -29,7 +29,7 @@ SOCKET_DIR = Path("/run/secubox")
 # whole board as degraded for SLA/alerting purposes. Everything else is
 # treated as non-critical (cosmetic for the dashboard health %).
 CRITICAL_MODULES = {
-    "hub", "crowdsec", "dpi", "haproxy", "vhost", "system", "core",
+    "hub", "dpi", "haproxy", "vhost", "system", "core",
     "auth", "authelia", "portal", "users", "mail",
 }
 

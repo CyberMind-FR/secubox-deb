@@ -31,7 +31,6 @@ class LogFilter(Static):
                     ("Hub", "secubox-hub"),
                     ("Portal", "secubox-portal"),
                     ("System", "secubox-system"),
-                    ("CrowdSec", "crowdsec"),
                     ("HAProxy", "haproxy"),
                     ("Nginx", "nginx"),
                     ("nftables", "nftables"),

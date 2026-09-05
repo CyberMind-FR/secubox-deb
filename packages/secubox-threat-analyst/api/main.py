@@ -1,11 +1,11 @@
 """SecuBox Threat Analyst - AI-Powered Security Analysis
-Monitors CrowdSec alerts, WAF logs, and DPI events to generate
+Monitors WAF logs and DPI events to generate
 security filters and recommendations using LocalAI.
 
 Features:
 - Real-time threat monitoring
 - AI-powered pattern analysis
-- Automatic filter generation (mitmproxy, CrowdSec, WAF)
+- Automatic filter generation (mitmproxy, WAF)
 - Approval workflow for rule deployment
 """
 import os
@@ -93,7 +93,6 @@ mount_ingest_routes(
 
 class RuleType(str, Enum):
     MITMPROXY = "mitmproxy"
-    CROWDSEC = "crowdsec"
     WAF = "waf"
     NFTABLES = "nftables"
 
@@ -107,7 +106,7 @@ class RuleStatus(str, Enum):
 
 class ThreatAlert(BaseModel):
     id: str
-    source: str  # crowdsec, waf, dpi, mitmproxy
+    source: str  # waf, dpi, mitmproxy
     severity: str  # critical, high, medium, low, info
     type: str
     ip: Optional[str] = None
@@ -175,7 +174,7 @@ class ThreatAnalyzer:
     def get_recent_alerts(self, hours: int = 24, source: Optional[str] = None) -> List[ThreatAlert]:
         """Get recent alerts, deduplicated by id (last occurrence wins).
 
-        The collector appends on every poll, so the same CrowdSec alert id can
+        The collector appends on every poll, so the same alert id can
         recur many times — without dedup the headline counts and Top-N
         leaderboards are massively inflated.
         """
@@ -233,48 +232,6 @@ class ThreatAnalyzer:
             tmp.replace(self.alerts_file)
         except Exception as e:
             logger.warning("compact_alerts failed: %s", e)
-
-    async def collect_crowdsec_alerts(self) -> List[ThreatAlert]:
-        """Collect alerts from CrowdSec."""
-        alerts = []
-        try:
-            # The daemon runs as the unprivileged `secubox` user; `cscli` needs
-            # root (reads /etc/crowdsec/local_api_credentials.yaml). We go through
-            # the read-only sudo grant shipped in /etc/sudoers.d/secubox-threat-
-            # analyst (sudo lives here on the BACKEND only — the frontend just
-            # consumes the resulting values).
-            result = subprocess.run(
-                ["sudo", "-n", "/usr/bin/cscli",
-                 "alerts", "list", "-o", "json", "-l", "200"],
-                capture_output=True,
-                text=True,
-                timeout=15
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                data = json.loads(result.stdout) or []
-                for item in data[:200]:
-                    src = item.get("source") or {}
-                    # `remediation` is a bool, not a severity — map it.
-                    severity = "high" if item.get("remediation") else "medium"
-                    alert = ThreatAlert(
-                        id=f"cs-{item.get('id', '')}",
-                        source="crowdsec",
-                        severity=severity,
-                        type=item.get("scenario", "unknown"),
-                        ip=src.get("ip") or src.get("value"),
-                        details=item,
-                        timestamp=item.get("created_at", datetime.utcnow().isoformat() + "Z")
-                    )
-                    alerts.append(alert)
-            else:
-                logger.warning(
-                    "cscli alerts list failed (rc=%s): %s",
-                    result.returncode, (result.stderr or "").strip()[:200]
-                )
-        except Exception as e:
-            logger.warning(f"CrowdSec collection failed: {e}")
-
-        return alerts
 
     async def collect_waf_alerts(self) -> List[ThreatAlert]:
         """Collect alerts from WAF/mitmproxy."""
@@ -368,19 +325,7 @@ class ThreatAnalyzer:
         rule_id = f"{rule_type.value}-{int(time.time())}"
         now = datetime.utcnow().isoformat() + "Z"
 
-        if rule_type == RuleType.CROWDSEC:
-            # Generate CrowdSec scenario
-            rule_content = f"""type: leaky
-name: secubox/auto-{rule_id}
-description: Auto-generated from {len(alerts)} alerts
-filter: evt.Parsed.source_ip in ["{','.join(list(ips)[:10])}"]
-capacity: 3
-leakspeed: 10s
-labels:
-  type: auto-generated
-  source: threat-analyst
-"""
-        elif rule_type == RuleType.MITMPROXY:
+        if rule_type == RuleType.MITMPROXY:
             # Generate mitmproxy filter - fix: use proper list syntax
             ip_list = list(ips)[:20]
             ip_set_str = ', '.join(f'"{ip}"' for ip in ip_list)
@@ -474,8 +419,6 @@ add rule inet filter input ip saddr $THREAT_IPS drop
         try:
             if rule.type == RuleType.NFTABLES:
                 result = self._apply_nftables_rule(rule)
-            elif rule.type == RuleType.CROWDSEC:
-                result = self._apply_crowdsec_rule(rule)
             elif rule.type == RuleType.MITMPROXY:
                 result = self._apply_mitmproxy_rule(rule)
             else:
@@ -516,34 +459,6 @@ add rule inet filter input ip saddr $THREAT_IPS drop
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _apply_crowdsec_rule(self, rule: GeneratedRule) -> Dict[str, Any]:
-        """Apply CrowdSec scenario."""
-        try:
-            # Write scenario to CrowdSec scenarios directory
-            scenario_dir = Path("/etc/crowdsec/scenarios")
-            scenario_dir.mkdir(parents=True, exist_ok=True)
-            scenario_file = scenario_dir / f"{rule.id}.yaml"
-            scenario_file.write_text(rule.rule_content)
-
-            # Reload CrowdSec to pick up new scenario
-            result = subprocess.run(
-                ["systemctl", "reload", "crowdsec"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Applied CrowdSec scenario {rule.id}")
-                return {"success": True, "file": str(scenario_file)}
-            else:
-                # Rollback - remove the file
-                scenario_file.unlink(missing_ok=True)
-                return {"success": False, "error": result.stderr or "CrowdSec reload failed"}
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
     def _apply_mitmproxy_rule(self, rule: GeneratedRule) -> Dict[str, Any]:
         """Apply mitmproxy addon."""
         try:
@@ -581,12 +496,7 @@ add rule inet filter input ip saddr $THREAT_IPS drop
             return {"success": False, "error": "Rule not applied"}
 
         try:
-            if rule.type == RuleType.CROWDSEC:
-                scenario_file = Path(f"/etc/crowdsec/scenarios/{rule.id}.yaml")
-                scenario_file.unlink(missing_ok=True)
-                subprocess.run(["systemctl", "reload", "crowdsec"], timeout=10)
-
-            elif rule.type == RuleType.MITMPROXY:
+            if rule.type == RuleType.MITMPROXY:
                 addon_file = Path(f"/srv/mitmproxy/addons/{rule.id}.py")
                 addon_file.unlink(missing_ok=True)
                 subprocess.run(["systemctl", "restart", "mitmproxy"], timeout=30)
@@ -670,15 +580,13 @@ async def list_alerts(hours: int = 24, source: Optional[str] = None):
 @app.post("/collect", dependencies=[Depends(require_jwt)])
 async def collect_alerts(background_tasks: BackgroundTasks):
     """Collect alerts from all sources."""
-    crowdsec_alerts = await analyzer.collect_crowdsec_alerts()
     waf_alerts = await analyzer.collect_waf_alerts()
 
-    for alert in crowdsec_alerts + waf_alerts:
+    for alert in waf_alerts:
         analyzer.record_alert(alert)
 
     return {
         "collected": {
-            "crowdsec": len(crowdsec_alerts),
             "waf": len(waf_alerts)
         }
     }
@@ -700,7 +608,7 @@ async def analyze_threats(request: AnalysisRequest):
     }
 
     if request.auto_generate and alerts:
-        rule = await analyzer.generate_rule(RuleType.CROWDSEC, alerts)
+        rule = await analyzer.generate_rule(RuleType.MITMPROXY, alerts)
         if rule:
             result["generated_rule"] = rule
 
@@ -782,11 +690,11 @@ async def rollback_rule(rule_id: str):
 # ============================================================================
 
 # ============================================================================
-# #597 — Global security overview : aggregate live metrics from WAF +
-# CrowdSec + the nft firewall. Double-cache pattern (CLAUDE perf rule) :
-# a background task refreshes every 60 s into _OVERVIEW so /overview is
-# instant and never blocks on cscli/nft subprocesses. Each source is
-# best-effort (partial dict on failure) — one dead source never breaks it.
+# #597 — Global security overview : aggregate live metrics from WAF.
+# Double-cache pattern (CLAUDE perf rule) : a background task refreshes
+# every 60 s into _OVERVIEW so /overview is instant and never blocks on
+# subprocesses. Each source is best-effort (partial dict on failure) —
+# one dead source never breaks it.
 # ============================================================================
 
 _OVERVIEW: Dict[str, Any] = {}
@@ -818,56 +726,9 @@ async def _waf_overview() -> Dict[str, Any]:
     return {"running": False}
 
 
-# CrowdSec exposes a privilege-free Prometheus endpoint on :6060. We parse it
-# instead of shelling out to `cscli`/`nft` (both need root — this daemon runs as
-# the unprivileged `secubox` user, CSPN least-privilege). This gives us both the
-# detection layer (cs_alerts) and the enforcement layer (cs_active_decisions,
-# which the crowdsec-firewall-bouncer materializes into nft) from one HTTP GET.
-_PROM_URL = "http://127.0.0.1:6060/metrics"
-
-
-def _prom_sum(text: str, prefix: str) -> int:
-    """Sum the values of every Prometheus sample line starting with prefix."""
-    total = 0.0
-    for line in text.splitlines():
-        if not line.startswith(prefix) or line.startswith("#"):
-            continue
-        try:
-            total += float(line.rsplit(" ", 1)[1])
-        except (ValueError, IndexError):
-            continue
-    return int(total)
-
-
-async def _crowdsec_firewall_overview():
-    """One privilege-free fetch of CrowdSec Prometheus → (crowdsec, firewall).
-
-    crowdsec : detection layer  — alerts + active decisions
-    firewall : enforcement layer — IPs blocked in nft via crowdsec-firewall-bouncer
-    """
-    cs: Dict[str, Any] = {"running": False, "active_decisions": 0, "alerts": 0}
-    fw: Dict[str, Any] = {"running": False, "blocked": 0,
-                          "source": "crowdsec-firewall-bouncer (nft)"}
-    try:
-        async with httpx.AsyncClient(timeout=4) as c:
-            r = await c.get(_PROM_URL)
-        if r.status_code == 200:
-            active = _prom_sum(r.text, "cs_active_decisions")
-            alerts = _prom_sum(r.text, "cs_alerts")
-            cs = {"running": True, "active_decisions": active, "alerts": alerts}
-            fw = {"running": True, "blocked": active,
-                  "source": "crowdsec-firewall-bouncer (nft)"}
-    except Exception as e:
-        logger.debug("crowdsec prometheus overview failed: %s", e)
-    return cs, fw
-
-
 async def _build_overview() -> Dict[str, Any]:
-    waf, (cs, fw) = await asyncio.gather(
-        _waf_overview(),
-        _crowdsec_firewall_overview(),
-    )
-    return {"waf": waf, "crowdsec": cs, "firewall": fw, "updated": int(time.time())}
+    waf = await _waf_overview()
+    return {"waf": waf, "updated": int(time.time())}
 
 
 async def _overview_refresh_loop():
@@ -886,7 +747,7 @@ async def _overview_refresh_loop():
 
 @app.get("/overview")
 async def get_overview():
-    """Global security overview (WAF + CrowdSec + firewall), 60 s cached."""
+    """Global security overview (WAF), 60 s cached."""
     if _OVERVIEW:
         return _OVERVIEW
     if _OVERVIEW_FILE.exists():
@@ -901,18 +762,17 @@ _COLLECT_TTL = 300  # 5 min
 
 
 async def _collect_refresh_loop():
-    """Backend auto-collect: keep the alerts DB fed from CrowdSec + WAF even
+    """Backend auto-collect: keep the alerts DB fed from WAF even
     when no operator has the page open. Compacts the log after each run so it
     stays bounded (and deduped). subprocess work is brief and best-effort."""
     while True:
         try:
-            cs = await analyzer.collect_crowdsec_alerts()
             waf = await analyzer.collect_waf_alerts()
-            for a in cs + waf:
+            for a in waf:
                 analyzer.record_alert(a)
             analyzer.compact_alerts()
-            if cs or waf:
-                logger.info("auto-collect: %d crowdsec + %d waf alerts", len(cs), len(waf))
+            if waf:
+                logger.info("auto-collect: %d waf alerts", len(waf))
         except Exception as e:
             logger.warning("auto-collect failed: %s", e)
         await asyncio.sleep(_COLLECT_TTL)

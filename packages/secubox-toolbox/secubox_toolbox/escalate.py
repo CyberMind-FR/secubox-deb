@@ -10,13 +10,12 @@ operator-tunable thresholds, and escalates high-confidence repeat
 offenders to the enforcement plane :
 
   - escalate a tracker/operator-grade HOST → resolve its IPs and add
-    them to the 13.A blacklist set (+ optionally a CrowdSec decision for
-    audit + TTL),
+    them to the 13.A blacklist set (audited, with a TTL),
   - escalate a DEVICE over the DoH/bypass threshold → 13.C quarantine.
 
 **Everything is DEFAULT OFF.** Each source is enabled independently via
 env flags (mirrors the SECUBOX_DOH_BLOCK pattern). Every action is
-logged to the append-only CSPN audit log and is reversible (nft/cscli
+logged to the append-only CSPN audit log and is reversible (nft
 timeouts + operator unban). This module decides + records ; the thin
 `secubox-escalate` wrapper invokes it on a timer.
 """
@@ -57,7 +56,6 @@ def load_policy() -> Dict:
         "antibot_min_challenges": int(os.environ.get("SECUBOX_ESCALATE_ANTIBOT_MIN", "50")),
         "device_doh_enabled": _flag("SECUBOX_ESCALATE_DEVICE_DOH"),
         "device_doh_threshold": int(os.environ.get("SECUBOX_ESCALATE_DEVICE_DOH_THRESHOLD", "200")),
-        "use_crowdsec": _flag("SECUBOX_ESCALATE_CROWDSEC"),
         "window_hours": int(os.environ.get("SECUBOX_ESCALATE_WINDOW_H", "24")),
     }
 
@@ -107,18 +105,6 @@ def _nft_quarantine(ip: str) -> bool:
             [NFT, "add", "element", "inet", "secubox_blacklist", setname,
              "{ " + ip + " timeout " + ESCALATE_TTL + " }"],
             capture_output=True, text=True, timeout=5,
-        )
-        return r.returncode == 0
-    except Exception:
-        return False
-
-
-def _cscli_decision(ip: str, reason: str) -> bool:
-    try:
-        r = subprocess.run(
-            ["cscli", "decisions", "add", "--ip", ip,
-             "--duration", ESCALATE_TTL, "--reason", reason, "--type", "ban"],
-            capture_output=True, text=True, timeout=10,
         )
         return r.returncode == 0
     except Exception:
@@ -207,8 +193,6 @@ def evaluate_and_apply() -> Dict:
             for ip in ips:
                 if _nft_add_blacklist(ip):
                     added += 1
-                if policy["use_crowdsec"]:
-                    _cscli_decision(ip, f"secubox-escalate:opgrade:{vendor}")
             if added:
                 summary["opgrade_escalated"] += 1
                 summary["ips_added"] += added

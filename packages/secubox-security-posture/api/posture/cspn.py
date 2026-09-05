@@ -153,20 +153,13 @@ async def _check_acl02() -> dict:
 
 
 async def _check_net01() -> dict:
-    ok, h = await sources.socket_get("crowdsec", "/health")
-    checks = h.get("checks", {}) if (ok and isinstance(h, dict)) else {}
-    nft = checks.get("nftables_ok")
-    if nft is None:
-        out = await _run("nft list ruleset")  # unprivileged may fail → UNKNOWN
-        if out is None:
-            return {"status": UNKNOWN, "detail": "nft ruleset not readable"}
-        ok_drop = nft_has_drop_policy(out)
-        return {"status": PASS if ok_drop else FAIL,
-                "detail": "default-drop policy present" if ok_drop else "no default-drop policy",
-                "remediation": "Set 'policy drop' on input/forward chains"}
-    return {"status": PASS if nft else FAIL,
-            "detail": "nftables ruleset healthy" if nft else "nftables not OK",
-            "remediation": "Reload SecuBox firewall ruleset"}
+    out = await _run("nft list ruleset")  # unprivileged may fail → UNKNOWN
+    if out is None:
+        return {"status": UNKNOWN, "detail": "nft ruleset not readable"}
+    ok_drop = nft_has_drop_policy(out)
+    return {"status": PASS if ok_drop else FAIL,
+            "detail": "default-drop policy present" if ok_drop else "no default-drop policy",
+            "remediation": "Set 'policy drop' on input/forward chains"}
 
 
 async def _check_net02() -> dict:

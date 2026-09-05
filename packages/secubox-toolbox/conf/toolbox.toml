@@ -40,4 +40,3 @@ soc_relay = "http+unix:///run/secubox/soc.sock/event"
 [quarantine]
 score_throttle   = 30
 score_quarantine = 70
-ban_on_crowdsec  = true

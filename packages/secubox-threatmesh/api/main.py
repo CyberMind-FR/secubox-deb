@@ -6,12 +6,12 @@
 SecuBox-Deb :: secubox-threatmesh (#728)
 CyberMind — https://cybermind.fr
 
-Sovereign threat-intel control plane that replaces CrowdSec CAPI:
+Sovereign threat-intel control plane (self-sourced, no third-party central API):
 
   Phase 1  free public feeds (secubox-threatfeed timer) -> threat_intel
   Phase 2  MESH distribution of LOCAL decisions over the SecuBox P2P mesh
            (gossip to peers from secubox-p2p; ingest peer decisions) -> threat_intel
-  Phase 3  status / aggregate / CrowdSec-bouncer-compatible decisions API + UI
+  Phase 3  status / aggregate / bouncer-compatible decisions API + UI
 
 All IOCs land in the shared `threat_intel` table (toolbox.db); secubox-blacklist-sync
 drains it to the nft blacklist. No central account, no CAPI, no paywall.
@@ -38,7 +38,7 @@ TI_DB = Path("/var/lib/secubox/toolbox/toolbox.db")
 P2P_PEERS = Path("/var/lib/secubox/p2p/peers.json")
 P2P_NODE = Path("/var/lib/secubox/p2p/node_id")
 MESH_INTERVAL = 600          # gossip every 10 min
-LOCAL_ORIGINS = {"crowdsec", "cscli", "manual", "secubox-waf", "secubox"}
+LOCAL_ORIGINS = {"manual", "secubox-waf", "secubox"}
 IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?$")
 
 app = FastAPI(title="secubox-threatmesh", version="1.0.0", root_path="/api/v1/threatmesh")
@@ -131,22 +131,22 @@ def mesh_peers():
 
 
 def local_decisions():
-    """Our OWN locally-detected bad IPs (CrowdSec LAPI bans of local origin)."""
-    try:
-        out = subprocess.run(["cscli", "decisions", "list", "-o", "json", "-a"],
-                             capture_output=True, text=True, timeout=20)
-        data = json.loads(out.stdout or "[]") or []
-    except Exception as e:
-        log.debug(f"cscli decisions: {e}")
-        return []
+    """Our OWN locally-detected bad IPs: local-origin bans read from the shared
+    threat_intel table (sources tagged local, e.g. secubox-waf / manual), never
+    the imported feed/mesh/lists entries."""
     ips = []
-    for alert in data:
-        for dec in (alert.get("decisions") or []):
-            if dec.get("type") == "ban" and dec.get("scope", "").lower() == "ip":
-                origin = (dec.get("origin") or "").lower()
-                val = dec.get("value", "")
-                if IPV4.match(val) and not origin.startswith(("feed:", "mesh:", "lists:")):
-                    ips.append(val)
+    try:
+        with _conn() as c:
+            _ensure(c)
+            placeholders = ",".join("?" for _ in LOCAL_ORIGINS)
+            rows = c.execute(
+                "SELECT DISTINCT ioc FROM threat_intel "
+                f"WHERE ioc_type='ip' AND source IN ({placeholders})",
+                tuple(LOCAL_ORIGINS))
+            ips = [r["ioc"] for r in rows if IPV4.match(r["ioc"] or "")]
+    except Exception as e:
+        log.debug(f"local decisions: {e}")
+        return []
     return sorted(set(ips))
 
 
@@ -222,8 +222,8 @@ async def peers():
 
 @router.get("/decisions")
 async def decisions(min_consensus: int = 1, limit: int = 50000):
-    """Aggregated sovereign blocklist (feeds + mesh + local). CrowdSec-bouncer
-    friendly shape so external consumers can poll OUR server, not crowdsec.net."""
+    """Aggregated sovereign blocklist (feeds + mesh + local). Bouncer-friendly
+    shape so external consumers can poll OUR server, not a third-party service."""
     rows = [r for r in aggregate_ips(limit) if r["consensus"] >= min_consensus]
     return [{
         "id": i, "origin": "secubox-threatmesh", "type": "ban", "scope": "Ip",

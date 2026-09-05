@@ -19,8 +19,6 @@ def test_rules_installs_collector_and_units_and_tap():
     assert "secubox-netstats.service" in rules
     assert "secubox-netstats.timer" in rules
     assert "zz-secubox-netstats-tap.nft" in rules
-    # crowdsec read grant added to the sudoers fragment
-    assert "inet crowdsec" in rules
 
 
 def test_postinst_deploys_tap_and_enables_timer():

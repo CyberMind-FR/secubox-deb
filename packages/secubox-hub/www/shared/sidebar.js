@@ -219,7 +219,6 @@
 
     // Page-specific metrics configuration
     const PAGE_METRICS_CONFIG = {
-        '/crowdsec/': { metrics: ['bans', 'alerts', 'decisions'], api: '/api/v1/crowdsec/stats' },
         '/waf/': { metrics: ['blocked', 'threats', 'inspected'], api: '/api/v1/waf/stats' },
         '/wireguard/': { metrics: ['peers', 'tx', 'rx'], api: '/api/v1/wireguard/status' },
         '/netdata/': { metrics: ['cpu', 'mem', 'disk'], api: '/api/v1/hub/dashboard' },
@@ -328,17 +327,11 @@
 
         try {
             if (pagePath.startsWith('/soc/') || pagePath === '/' || pagePath === '/hub/') {
-                // SOC/Hub page: combine CrowdSec + WAF stats
-                var [csRes, wafRes, dashRes] = await Promise.all([
-                    safeFetch('/api/v1/crowdsec/stats', { headers: headers }, 3000),
+                // SOC/Hub page: combine WAF stats with the hub dashboard
+                var [wafRes, dashRes] = await Promise.all([
                     safeFetch('/api/v1/waf/stats', { headers: headers }, 3000),
                     safeFetch('/api/v1/hub/dashboard', { headers: headers }, 3000)
                 ]);
-                if (csRes.ok) {
-                    metricsData.bans = csRes.data.active_bans || csRes.data.decisions || 0;
-                    metricsData.alerts = csRes.data.alerts_today || 0;
-                    metricsData.decisions = csRes.data.total_decisions || metricsData.bans;
-                }
                 if (wafRes.ok) {
                     metricsData.blocked = wafRes.data.blocked_24h || wafRes.data.blocked || 0;
                     metricsData.threats = (metricsData.bans || 0) + (metricsData.blocked || 0);
@@ -506,7 +499,7 @@
 
     // Page icons for menu bar
     const PAGE_ICONS = {
-        '/': '🏠', '/hub/': '🏠', '/soc/': '🛡️', '/waf/': '🔥', '/crowdsec/': '👁️',
+        '/': '🏠', '/hub/': '🏠', '/soc/': '🛡️', '/waf/': '🔥',
         '/wireguard/': '🔐', '/netdata/': '📊', '/system/': '⚙️', '/vhost/': '🌐',
         '/dpi/': '🔍', '/netmodes/': '🔀', '/qos/': '📶', '/nac/': '🚫',
         '/auth/': '🔑', '/cdn/': '💾', '/mediaflow/': '🎬', '/portal/': '🚪',
@@ -1007,7 +1000,7 @@
                 '<div class="hw-tooltip-footer">' + counts.ok + ' / ' + total + ' services healthy</div>';
 
         } else if (layer === 3) {
-            // Security layer - bans, alerts, crowdsec status
+            // Security layer - bans, alerts status
             var bans = currentStripMetrics.bans || 0;
             var alerts = currentStripMetrics.alerts || 0;
             var secLevel = bans > 50 ? 'info' : bans > 20 ? 'warn' : alerts > 0 ? 'warn' : 'ok';
@@ -1020,7 +1013,7 @@
                 '<div class="sec-stat"><span class="sec-icon">🚫</span><span class="sec-count">' + bans + '</span><span class="sec-label">Active Bans</span></div>' +
                 '<div class="sec-stat"><span class="sec-icon">⚠️</span><span class="sec-count">' + alerts + '</span><span class="sec-label">Recent Alerts</span></div>' +
                 '</div>' +
-                '<div class="hw-tooltip-footer">CrowdSec ' + (bans > 0 ? 'actively blocking threats' : 'monitoring') + '</div>';
+                '<div class="hw-tooltip-footer">Security ' + (bans > 0 ? 'actively blocking threats' : 'monitoring') + '</div>';
         }
 
         tooltip.innerHTML = content;
@@ -1350,7 +1343,7 @@
                         cacheData.svcTooltip = lmSvc.title;
                     }
 
-                    // LED3 (Security): fetch bans from CrowdSec
+                    // LED3 (Security): updated by separate security fetch
                     if (lmSec) {
                         // Will be updated by separate security fetch
                         lmSec.textContent = '...';
@@ -1358,20 +1351,13 @@
                 }
             }
 
-            // Fetch security metrics (CrowdSec + WAF combined) - parallel fetch
+            // Fetch security metrics from WAF
             var lmSec = document.getElementById('lm-sec');
-            var [csResult, wafResult] = await Promise.all([
-                safeFetch('/api/v1/crowdsec/stats', { headers: headers }, 3000),
+            var [wafResult] = await Promise.all([
                 safeFetch('/api/v1/waf/stats', { headers: headers }, 3000)
             ]);
 
             var bans = 0, alerts = 0, wafThreats = 0, wafBlocked = 0;
-
-            if (csResult.ok) {
-                var csData = csResult.data;
-                bans = csData.active_bans || csData.decisions || 0;
-                alerts = csData.alerts_today || 0;
-            }
 
             if (wafResult.ok) {
                 var wafData = wafResult.data;
@@ -1388,7 +1374,7 @@
             if (lmSec) {
                 var totalThreats = bans + wafBlocked;
                 lmSec.textContent = totalThreats + '🛡️';
-                lmSec.title = '🛡️ Security: ' + bans + ' IPs banned (CrowdSec), ' + wafBlocked + ' blocked (WAF), ' + alerts + ' alerts, ' + wafThreats + ' threats';
+                lmSec.title = '🛡️ Security: ' + wafBlocked + ' blocked (WAF), ' + alerts + ' alerts, ' + wafThreats + ' threats';
 
                 // Color based on combined threat level
                 var threatLevel = alerts + wafThreats;
@@ -1556,7 +1542,6 @@
             '<div class="nav-items">' +
             '<a href="/" class="nav-item"><span class="icon">🏠</span><span>Dashboard</span></a>' +
             '<a href="/system/" class="nav-item"><span class="icon">⚙️</span><span>System</span></a>' +
-            '<a href="/crowdsec/" class="nav-item"><span class="icon">👁️</span><span>CrowdSec</span></a>' +
             '<a href="/soc/" class="nav-item"><span class="icon">🛡️</span><span>SOC</span></a>' +
             '</div></div></div>' +
             '<div class="sidebar-footer">' +

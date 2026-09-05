@@ -15,15 +15,14 @@ Depends: ${misc:Depends},
          python3-httpx | python3-pip,
          python3-fastapi | python3-pip,
          uvicorn
-Suggests: secubox-watchdog,
-          crowdsec
+Suggests: secubox-watchdog
 Description: SecuBox SOC Agent — Edge Node Agent for SOC Integration
  Edge node agent that collects system metrics and security alerts,
  then pushes them to an upstream SOC gateway for centralized monitoring.
  .
  Features:
   - System metrics collection (CPU, memory, disk, network)
-  - Security alert aggregation (CrowdSec, Suricata, WAF)
+  - Security alert aggregation (Suricata, WAF)
   - HMAC-SHA256 signed metric push to upstream SOC
   - Remote command execution with signature validation
   - Automatic enrollment with SOC gateway

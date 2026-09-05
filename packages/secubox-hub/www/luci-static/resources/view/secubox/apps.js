@@ -2479,9 +2479,6 @@ return view.extend({
 		var services = [];
 
 		apps.forEach(function(app) {
-			if (app.id === 'crowdsec' || app.name.toLowerCase().includes('crowdsec')) {
-				services.push({ id: 'crowdsec-lapi', name: 'CrowdSec LAPI', type: 'ids', port: 8080, status: 'online', shared: true });
-			}
 			if (app.id === 'adguardhome' || app.name.toLowerCase().includes('adguard')) {
 				services.push({ id: 'adguard-dns', name: 'AdGuard DNS', type: 'dns', port: 53, status: 'online', shared: false });
 				services.push({ id: 'adguard-web', name: 'AdGuard Web UI', type: 'adblock', port: 3000, status: 'online', shared: false });

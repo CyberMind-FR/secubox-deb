@@ -59,29 +59,18 @@ def test_root_unknown_when_system_down(monkeypatch):
     assert sh.provenance.ok is False
 
 
-def test_wall_nft_drop_from_crowdsec(monkeypatch):
+def test_wall_waf_running(monkeypatch):
     monkeypatch.setattr(sources, "socket_get", _fake_sockets({
-        ("crowdsec", "/health"): {"checks": {"nftables_ok": True, "engine_running": True,
-                                             "lapi_ok": True, "bouncers_count": 2,
-                                             "bouncers_ok": True}},
         ("waf", "/stats"): {"running": True, "rules_loaded": 1200},
     }))
     inds = asyncio.run(collectors.collect_wall(collectors.Probe()))
-    assert _ind(inds, "nft_default_drop").value == 1.0
-    assert _ind(inds, "nft_default_drop").status is Status.OK
     assert _ind(inds, "waf_running").value == 1.0
+    assert _ind(inds, "waf_running").status is Status.OK
 
 
 def test_collect_all_returns_indicators(monkeypatch):
     monkeypatch.setattr(sources, "socket_get", _fake_sockets({}))
-    monkeypatch.setattr(sources, "crowdsec_prom", lambda: _async({}))
     inds = asyncio.run(collectors.collect_all())
     # Even with all sources down, collectors emit UNKNOWN indicators (never crash).
     assert len(inds) > 0
     assert all(i.value is None or 0.0 <= i.value <= 1.0 for i in inds)
-
-
-def _async(value):
-    async def c():
-        return value
-    return c()

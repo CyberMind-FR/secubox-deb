@@ -255,7 +255,7 @@ return view.extend({
 		if (source === 'haproxy' || svc.haproxy) return 'proxy';
 		if (source === 'tor' || svc.tor) return 'privacy';
 		if (source === 'lxc' || svc.container) return 'container';
-		if (name.match(/crowdsec|firewall|guard|security|fail2ban|auth/)) return 'security';
+		if (name.match(/firewall|guard|security|fail2ban|auth/)) return 'security';
 		if (name.match(/network|wan|lan|wifi|wireguard|vpn|dns/)) return 'network';
 		return 'system';
 	},

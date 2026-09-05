@@ -8,8 +8,8 @@ SecuBox-Deb :: Security Posture — low-level data sources
 CyberMind — https://cybermind.fr
 
 Thin, side-effecting helpers that fetch raw signal from the board with the
-minimal-privilege rule (sibling public sockets > CrowdSec Prometheus >
-unprivileged /proc reads). Every helper degrades gracefully: it returns
+minimal-privilege rule (sibling public sockets > unprivileged /proc reads).
+Every helper degrades gracefully: it returns
 ``None`` / ``(False, None)`` instead of raising, so collectors can mark the
 indicator UNKNOWN rather than crashing the whole refresh.
 """
@@ -24,7 +24,6 @@ from typing import Optional, Tuple
 import httpx
 
 RUN_DIR = "/run/secubox"
-CROWDSEC_PROM = "http://127.0.0.1:6060/metrics"
 DEFAULT_TIMEOUT = 3.0
 
 
@@ -93,20 +92,6 @@ def prom_value(text: str, metric: str) -> Optional[float]:
             except ValueError:
                 continue
     return total
-
-
-async def crowdsec_prom() -> dict:
-    """Fetch active decisions / alerts from CrowdSec's Prometheus endpoint."""
-    text = await http_get_text(CROWDSEC_PROM)
-    if text is None:
-        return {}
-    out = {}
-    for key, metric in (("active_decisions", "cs_active_decisions"),
-                        ("active_alerts", "cs_active_alerts")):
-        val = prom_value(text, metric)
-        if val is not None:
-            out[key] = val
-    return out
 
 
 # ---- unprivileged /proc fallbacks -----------------------------------------

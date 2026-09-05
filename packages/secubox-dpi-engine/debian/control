@@ -14,15 +14,14 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, libpcap0.8, libcap2, adduser
 Recommends: secubox-toolbox-ng
 Provides: ndpid
-Conflicts: netifyd
 Description: SecuBox-Deb — moteur DPI nDPId + nDPIsrvd (nDPI 5.x, libre)
  Empaquette nDPId (capture + classification nDPI 5.x compilée depuis les
  sources amont, statiquement liée) et son distributeur nDPIsrvd. nDPId capture
  sur l'interface configurée, classe les flux et pousse du JSON encadré au
  collecteur ; nDPIsrvd le rediffuse à sbxdpi (secubox-toolbox-ng).
  .
- Remplace netifyd (retiré comme CrowdSec). Chaîne : nDPId → nDPIsrvd →
- sbxdpi → /run/secubox/dpi-live.sock → carte DPI du Hall.
+ Chaîne : nDPId → nDPIsrvd → sbxdpi → /run/secubox/dpi-live.sock →
+ carte DPI du Hall.
  .
  Le binaire nDPId embarque libnDPI 5.x (BUILD_NDPI=ON) : la construction clone
  utoni/nDPId (récursif, commit épinglé) et compile. Le CROSS-BUILD arm64 depuis

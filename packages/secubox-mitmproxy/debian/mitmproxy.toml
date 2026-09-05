@@ -21,10 +21,6 @@ enabled = false
 config_path = "/etc/haproxy/haproxy.cfg"
 backend_name = "mitmproxy_waf"
 
-[crowdsec]
-enabled = true
-threats_log = "/data/mitmproxy-waf/data/threats.log"
-
 [autoban]
 enabled = true
 sensitivity = "moderate"

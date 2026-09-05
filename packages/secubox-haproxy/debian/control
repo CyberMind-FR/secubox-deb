@@ -16,5 +16,4 @@ Description: SecuBox HAProxy Dashboard
  Features:
   - WAF integration for MITM traffic inspection
   - Per-vhost WAF bypass controls
-  - CrowdSec ban synchronization
   - Dynamic route syncing with WAF module

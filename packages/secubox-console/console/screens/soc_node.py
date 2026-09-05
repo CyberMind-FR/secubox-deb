@@ -276,7 +276,6 @@ class SOCNodeScreen(Screen):
                 services = [
                     {"name": "nginx", "running": True, "status": "active"},
                     {"name": "haproxy", "running": True, "status": "active"},
-                    {"name": "crowdsec", "running": True, "status": "active"},
                 ]
             self.query_one("#services-table", NodeServicesTable).load_services(services)
 

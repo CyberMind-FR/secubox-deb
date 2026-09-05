@@ -1,5 +1,0 @@
-# SecuBox Threats — allow the secubox user (the module runs as User=secubox) to
-# read CrowdSec alerts for the SOC dashboard ingestion. cscli talks to the LAPI
-# socket which is not group-readable by secubox, so it is invoked via sudo.
-# Read-only listing only; exact command prefix, no write/decision subcommands.
-secubox ALL=(root) NOPASSWD: /usr/bin/cscli alerts list -o json

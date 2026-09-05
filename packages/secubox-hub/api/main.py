@@ -350,7 +350,6 @@ _health_batch_lock = asyncio.Lock()
 # MODULES dict is dynamically populated from installed services
 # These are the "expected" core modules - actual list comes from systemd
 CORE_MODULES = {
-    "crowdsec": "secubox-crowdsec",
     "netdata":  "secubox-netdata",
     "wireguard":"secubox-wireguard",
     "dpi":      "secubox-dpi",
@@ -818,7 +817,6 @@ async def save_widgets(req: WidgetRequest, user=Depends(require_jwt)):
 async def security_summary(user=Depends(require_jwt)):
     """Résumé de sécurité."""
     return {
-        "crowdsec_alerts": 0,
         "blocked_ips": 0,
         "quarantined_clients": 0,
         "threats_blocked_24h": 0,
@@ -1519,7 +1517,6 @@ def _run_repair_action(module: str, action: str) -> tuple[bool, str]:
             deps = {
                 "haproxy": ["nginx"],
                 "waf": ["haproxy"],
-                "crowdsec": [],
                 "wireguard": [],
             }
             mod_name = module.replace("secubox-", "")
@@ -1953,7 +1950,6 @@ MENU_DIR = Path("/usr/share/secubox/menu.d")
 DEFAULT_MENU = [
     {"id": "hub", "name": "Dashboard", "category": "root", "icon": "🏠", "path": "/", "order": 0},
     {"id": "system", "name": "System Hub", "category": "root", "icon": "🔧", "path": "/system/", "order": 10},
-    {"id": "crowdsec", "name": "CrowdSec", "category": "wall", "icon": "🛡️", "path": "/crowdsec/", "order": 100},
     {"id": "waf", "name": "WAF", "category": "wall", "icon": "🔥", "path": "/waf/", "order": 105},
     {"id": "wireguard", "name": "WireGuard VPN", "category": "mesh", "icon": "🔐", "path": "/wireguard/", "order": 110},
     {"id": "auth", "name": "Auth Guardian", "category": "auth", "icon": "🔑", "path": "/auth/", "order": 120},

@@ -59,7 +59,6 @@ class QuarantineCfg(BaseModel):
     model_config = ConfigDict(extra="forbid")
     score_throttle: int = 30
     score_quarantine: int = 70
-    ban_on_crowdsec: bool = True
 
 
 class Config(BaseModel):

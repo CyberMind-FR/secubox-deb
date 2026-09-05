@@ -92,7 +92,7 @@
             },
 
             features: {
-                'intrusion-prevention': { id: 'intrusion-prevention', name: 'Intrusion Prevention', layer: 'core', category: 'security', status: 'production', progress: 95, icon: '🛡️', description: 'Détection et blocage des menaces en temps réel', components: ['crowdsec', 'firewall-bouncer', 'wazuh'], dependsOn: ['network-stack'], usedBy: ['threat-intelligence', 'ai-security'] },
+                'intrusion-prevention': { id: 'intrusion-prevention', name: 'Intrusion Prevention', layer: 'core', category: 'security', status: 'production', progress: 95, icon: '🛡️', description: 'Détection et blocage des menaces en temps réel', components: ['firewall-bouncer', 'wazuh'], dependsOn: ['network-stack'], usedBy: ['threat-intelligence', 'ai-security'] },
                 'waf': { id: 'waf', name: 'Web Application Firewall', layer: 'core', category: 'security', status: 'production', progress: 90, icon: '🔥', description: 'Inspection HTTP/HTTPS, détection bots, analytics', components: ['mitmproxy', 'haproxy-router', 'analytics'], dependsOn: ['reverse-proxy'], usedBy: ['session-analytics', 'threat-intelligence'] },
                 'dns-firewall': { id: 'dns-firewall', name: 'DNS Firewall', layer: 'core', category: 'security', status: 'production', progress: 85, icon: '🚫', description: 'Blocage DNS (RPZ), threat feeds, mesh DNS', components: ['vortex-dns', 'vortex-firewall', 'rpz-zones'], dependsOn: ['dns-master'], usedBy: ['ai-security', 'mesh-network'] },
                 'access-control': { id: 'access-control', name: 'Access Control', layer: 'core', category: 'security', status: 'production', progress: 90, icon: '🔐', description: 'NAC, portail captif, OAuth2, vouchers', components: ['auth-guardian', 'client-guardian', 'nodogsplash', 'mac-guardian'], dependsOn: ['network-stack'], usedBy: ['user-management'] },
@@ -113,7 +113,7 @@
                 'p2p-intel': { id: 'p2p-intel', name: 'P2P Intelligence', layer: 'mirrornet', category: 'p2p', status: 'alpha', progress: 25, icon: '🔍', description: 'IOC sharing, signed alerts, collective defense', components: ['p2p-intel-core', 'ioc-signatures', 'alert-propagation'], dependsOn: ['identity-trust', 'intrusion-prevention'], usedBy: [] },
                 'service-exposure': { id: 'service-exposure', name: 'Service Exposure', layer: 'core', category: 'exposure', status: 'production', progress: 80, icon: '🚀', description: 'Peek/Poke/Emancipate, multi-channel exposure', components: ['exposure-engine', 'tor-hidden', 'dns-ssl', 'mesh-publish'], dependsOn: ['reverse-proxy', 'dns-master'], usedBy: ['mesh-network'] },
                 'system-monitoring': { id: 'system-monitoring', name: 'System Monitoring', layer: 'core', category: 'monitoring', status: 'production', progress: 90, icon: '📈', description: 'Glances, Netdata, system health', components: ['glances', 'netdata', 'health-checks'], dependsOn: [], usedBy: ['ai-security'] },
-                'network-analytics': { id: 'network-analytics', name: 'Network Analytics', layer: 'core', category: 'monitoring', status: 'production', progress: 85, icon: '🔬', description: 'DPI, flow analysis, application detection', components: ['netifyd', 'ndpid', 'flow-analyzer'], dependsOn: ['network-stack'], usedBy: ['ai-security', 'bandwidth-qos'] },
+                'network-analytics': { id: 'network-analytics', name: 'Network Analytics', layer: 'core', category: 'monitoring', status: 'production', progress: 85, icon: '🔬', description: 'DPI, flow analysis, application detection', components: ['ndpid', 'flow-analyzer'], dependsOn: ['network-stack'], usedBy: ['ai-security', 'bandwidth-qos'] },
                 'session-analytics': { id: 'session-analytics', name: 'Session Analytics', layer: 'core', category: 'monitoring', status: 'production', progress: 85, icon: '👁️', description: 'Avatar-Tap recording, cookie tracking, replay', components: ['avatar-tap', 'cookie-tracker', 'session-replay'], dependsOn: ['waf'], usedBy: ['threat-intelligence'] },
                 'threat-intelligence': { id: 'threat-intelligence', name: 'Threat Intelligence', layer: 'core', category: 'monitoring', status: 'production', progress: 80, icon: '🎯', description: 'CVE triage, cyberfeed, device intel', components: ['cve-triage', 'cyberfeed', 'device-intel'], dependsOn: ['intrusion-prevention'], usedBy: ['ai-security'] },
                 'config-management': { id: 'config-management', name: 'Configuration Management', layer: 'certification', category: 'admin', status: 'beta', progress: 60, icon: '⚙️', description: 'Backup, restore, config advisor, cloning', components: ['backup', 'config-advisor', 'cloner'], dependsOn: [], usedBy: [] },
@@ -121,7 +121,6 @@
             },
 
             components: {
-                'crowdsec': { name: 'CrowdSec', type: 'backend', status: 'production' },
                 'firewall-bouncer': { name: 'Firewall Bouncer', type: 'backend', status: 'production' },
                 'wazuh': { name: 'Wazuh SIEM', type: 'backend', status: 'production' },
                 'mitmproxy': { name: 'Mitmproxy WAF', type: 'backend', status: 'production' },
@@ -189,7 +188,6 @@
                 'glances': { name: 'Glances', type: 'backend', status: 'production' },
                 'netdata': { name: 'Netdata', type: 'backend', status: 'production' },
                 'health-checks': { name: 'Health Checks', type: 'backend', status: 'production' },
-                'netifyd': { name: 'Netifyd', type: 'backend', status: 'production' },
                 'ndpid': { name: 'nDPId', type: 'backend', status: 'production' },
                 'flow-analyzer': { name: 'Flow Analyzer', type: 'backend', status: 'production' },
                 'avatar-tap': { name: 'Avatar-Tap', type: 'backend', status: 'production' },

@@ -382,15 +382,6 @@
                         </td>
                     </tr>
                     <tr>
-                        <td>CrowdSec Feed</td>
-                        <td style="text-align: right;">
-                            <label class="toggle">
-                                <input type="checkbox" id="crowdsec-feed" onchange="updateSetting('crowdsec_feed', this.checked)">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </td>
-                    </tr>
-                    <tr>
                         <td>Block Bots</td>
                         <td style="text-align: right;">
                             <label class="toggle">
@@ -506,7 +497,6 @@
 
             // Update settings
             document.getElementById('wan-protection').checked = statusData.wan_protection_enabled || false;
-            document.getElementById('crowdsec-feed').checked = statusData.crowdsec_feed || false;
             document.getElementById('block-bots').checked = statusData.block_bots || false;
             document.getElementById('autoban').checked = statusData.autoban_enabled || false;
 

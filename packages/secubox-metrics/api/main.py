@@ -232,7 +232,6 @@ def build_overview() -> dict:
 
     haproxy_up = check_lxc_running('haproxy') or check_systemd_service('haproxy')
     mitmproxy_up = check_lxc_running('mitmproxy-in') or check_process('mitmdump')
-    crowdsec_up = check_process('crowdsec') or check_systemd_service('crowdsec')
 
     # Counts - adapted for Debian (using config files instead of UCI)
     vhost_count = 0
@@ -295,7 +294,6 @@ def build_overview() -> dict:
         "mem_pct": mem_pct,
         "haproxy": haproxy_up,
         "mitmproxy": mitmproxy_up,
-        "crowdsec": crowdsec_up,
         "vhosts": vhost_count,
         "metablogs": metablog_count,
         "streamlits": streamlit_count,
@@ -304,37 +302,15 @@ def build_overview() -> dict:
     }
 
 def build_waf_stats() -> dict:
-    """Build WAF/CrowdSec statistics."""
-    cs_running = bool(run_cmd(['pgrep', '-x', 'crowdsec'])) or \
-                 run_cmd(['systemctl', 'is-active', 'crowdsec']) == 'active'
+    """Build WAF statistics."""
     mitmproxy_running = bool(run_cmd(['pgrep', '-f', 'mitmdump']))
 
     bans = alerts_today = waf_blocked = 0
 
-    if cs_running:
-        try:
-            # Get decisions count
-            result = run_cmd(['cscli', 'decisions', 'list', '-o', 'json'])
-            if result:
-                decisions = json.loads(result) or []
-                bans = len(decisions)
-                waf_blocked = sum(1 for d in decisions if 'mitmproxy' in str(d))
-        except Exception:
-            pass
-
-        try:
-            # Get alerts count
-            result = run_cmd(['cscli', 'alerts', 'list', '--since', '24h', '-o', 'json'])
-            if result:
-                alerts = json.loads(result) or []
-                alerts_today = len(alerts)
-        except Exception:
-            pass
-
-    # #1070 : compléter avec l'état PROPRE du WAF, désormais lisible (metrics est
-    # dans le groupe secubox-waf). cscli n'est pas accessible ici, et les BANS NFT
-    # NATIFS du WAF ne sont visibles que dans bans.jsonl ; les menaces du jour et
-    # cumulées, que dans waf-history.json. Sans ça le panneau restait à 0.
+    # #1070 : l'état PROPRE du WAF, désormais lisible (metrics est dans le groupe
+    # secubox-waf). Les BANS NFT NATIFS du WAF ne sont visibles que dans
+    # bans.jsonl ; les menaces du jour et cumulées, que dans waf-history.json.
+    # Sans ça le panneau restait à 0.
     try:
         etat = {}
         for line in Path("/var/lib/secubox/waf/bans.jsonl").read_text().splitlines():
@@ -360,7 +336,6 @@ def build_waf_stats() -> dict:
         pass
 
     return {
-        "crowdsec_running": cs_running,
         "mitmproxy_running": mitmproxy_running,
         "active_bans": bans,
         "alerts_today": alerts_today,
@@ -467,7 +442,7 @@ def get_overview(auth: None = Depends(require_jwt)):
     if cached and cache_is_fresh():
         # `cached.get(cle, batir())` evaluait TOUJOURS `batir()`, cache frais
         # ou non : Python calcule le defaut avant d'appeler `.get`. Ces
-        # fonctions lancent lxc-info, pgrep, systemctl, nft et cscli — elles
+        # fonctions lancent lxc-info, pgrep, systemctl et nft — elles
         # repartaient donc a chaque requete, et le cache ne servait a rien.
         data = cached.get("overview")
         if data is None:
@@ -505,7 +480,7 @@ def get_waf_campaigns(auth: None = Depends(require_jwt)):
 
 @app.get("/api/v1/metrics/waf_stats")
 def get_waf_stats(auth: None = Depends(require_jwt)):
-    """Get WAF/CrowdSec statistics."""
+    """Get WAF statistics."""
     cached = read_cache()
     if cached and cache_is_fresh():
         data = cached.get("waf")
@@ -628,13 +603,6 @@ def build_health_summary() -> dict:
         "running": mitmproxy_up
     }
 
-    # CrowdSec status
-    crowdsec_up = overview.get("crowdsec", False) or waf_stats.get("crowdsec_running", False)
-    modules["crowdsec"] = {
-        "status": "ok" if crowdsec_up else "error",
-        "running": crowdsec_up
-    }
-
     # HAProxy status
     haproxy_up = overview.get("haproxy", False)
     modules["haproxy"] = {
@@ -712,7 +680,7 @@ def build_health_summary() -> dict:
 
     # Count services down
     services_down = 0
-    critical_services = ['haproxy', 'nginx', 'crowdsec']
+    critical_services = ['haproxy', 'nginx']
     for svc in critical_services:
         if run_cmd(['systemctl', 'is-active', svc]) != 'active':
             services_down += 1
@@ -754,10 +722,8 @@ def build_health_summary() -> dict:
         "modules": modules,
         "waf": {
             "blocked_pct": blocked_pct,
-            "active": waf_stats.get("mitmproxy_running", False)
-        },
-        "crowdsec": {
-            "active_decisions": waf_stats.get("active_bans", 0),
+            "active": waf_stats.get("mitmproxy_running", False),
+            "active_bans": waf_stats.get("active_bans", 0),
             "alerts_today": waf_stats.get("alerts_today", 0)
         },
         "system": {

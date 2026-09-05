@@ -15,8 +15,6 @@ Description: SecuBox nDPId — DPI dashboard with JA3/JA4 TLS fingerprinting
  risk scoring, and SQLite flow database.
  .
  Distinct from sibling packages in the DPI cluster:
-  - secubox-netifyd — netifyd daemon lifecycle dashboard (different
-    DPI engine).
-  - secubox-dpi — netifyd-backed analytics layer (top apps,
+  - secubox-dpi — DPI-backed analytics layer (top apps,
     bandwidth, mirred setup) — see #382 for the layered model.
   - secubox-mediaflow — streaming/VoIP classifier consuming DPI.

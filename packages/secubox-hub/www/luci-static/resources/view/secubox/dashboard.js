@@ -11,7 +11,7 @@
 
 /**
  * SecuBox Dashboard - KissTheme Edition
- * Dark themed dashboard using CrowdSec colorsets
+ * Dark themed dashboard
  */
 
 var callSystemBoard = rpc.declare({ object: 'system', method: 'board', expect: {} });

@@ -7,7 +7,7 @@ name  = "lite"
 label = "Lite — daily-driver optimisé"
 on = [
   "ad-guard", "admin", "aggregator", "annuaire", "auth", "backup",
-  "cdn", "certs", "core", "crowdsec", "cs-bridge", "dns",
+  "cdn", "certs", "core", "cs-bridge", "dns",
   "dns-guard", "dns-provider", "exposure", "haproxy", "hardening", "health-doctor",
   "hub", "ipblock", "led-trigger", "leds", "mesh", "netdata",
   "network-ready", "p2p", "portal", "routes", "runtime", "system",

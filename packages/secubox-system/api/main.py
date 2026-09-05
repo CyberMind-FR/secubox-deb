@@ -200,10 +200,10 @@ class RoleAssignment(BaseModel):
     role: str
 
 SECUBOX_SERVICES = [
-    "secubox-hub","secubox-crowdsec","secubox-netdata","secubox-wireguard",
+    "secubox-hub","secubox-netdata","secubox-wireguard",
     "secubox-dpi","secubox-netmodes","secubox-nac","secubox-auth",
     "secubox-qos","secubox-mediaflow","secubox-cdn","secubox-vhost",
-    "secubox-system","crowdsec","netdata","nginx","nftables","dnsmasq",
+    "secubox-system","netdata","nginx","nftables","dnsmasq",
 ]
 
 # ══════════════════════════════════════════════════════════════════
@@ -575,18 +575,10 @@ def security():
     except Exception:
         apparmor = "N/A"
 
-    # Check CrowdSec
-    try:
-        cs = subprocess.run(["systemctl", "is-active", "crowdsec"], capture_output=True, text=True, timeout=5)
-        crowdsec = "Running" if cs.stdout.strip() == "active" else "Stopped"
-    except Exception:
-        crowdsec = "Unknown"
-
     return {
         "firewall": firewall,
         "ssh_status": ssh_status,
         "apparmor": apparmor,
-        "crowdsec": crowdsec,
     }
 
 
@@ -707,9 +699,9 @@ def secubox_logs():
 
     # Get recent logs from all secubox services (journalctl doesn't support globs well)
     units = [
-        "secubox-hub", "secubox-crowdsec", "secubox-system", "secubox-waf",
+        "secubox-hub", "secubox-system", "secubox-waf",
         "secubox-wireguard", "secubox-dpi", "secubox-netmodes", "secubox-nac",
-        "crowdsec", "crowdsec-firewall-bouncer", "nginx", "nftables"
+        "nginx", "nftables"
     ]
     unit_args = []
     for u in units:
@@ -737,8 +729,6 @@ def secubox_logs():
 
     # Category mapping
     CATEGORY_MAP = {
-        "crowdsec": "🛡️ Security",
-        "secubox-crowdsec": "🛡️ Security",
         "secubox-nac": "🔐 NAC",
         "secubox-auth": "🔑 Auth",
         "secubox-wireguard": "🔒 VPN",
@@ -977,7 +967,7 @@ async def get_components(user=Depends(require_jwt)):
 async def get_components_by_category(user=Depends(require_jwt)):
     """Composants par catégorie."""
     return {
-        "security": ["secubox-crowdsec", "secubox-nac", "secubox-auth"],
+        "security": ["secubox-nac", "secubox-auth"],
         "network": ["secubox-netmodes", "secubox-wireguard", "secubox-vhost"],
         "monitoring": ["secubox-netdata", "secubox-dpi", "secubox-mediaflow"],
         "performance": ["secubox-qos", "secubox-cdn"],

@@ -7,7 +7,7 @@
 
 Progressive threat response:
 1. First detection -> Warning page (not block)
-2. Multiple attempts (3+) -> Auto-ban via CrowdSec
+2. Multiple attempts (3+) -> Block (403)
 
 Features:
 - Pattern-based threat detection (SQLi, XSS, LFI, RCE, etc.)
@@ -250,18 +250,14 @@ class SecuBoxWAF:
             ctx.log.error(f"Failed to log threat: {e}")
 
     def ban_ip(self, ip: str, reason: str):
-        """Ban IP via CrowdSec."""
-        try:
-            subprocess.run([
-                "cscli", "decisions", "add",
-                "--ip", ip,
-                "--type", "ban",
-                "--duration", "4h",
-                "--reason", f"secubox/waf-{reason}"
-            ], capture_output=True, timeout=5)
-            ctx.log.warn(f"BANNED {ip} for {reason}")
-        except Exception:
-            pass
+        """Record that IP crossed the ban threshold.
+
+        This request is already blocked in-engine with a 403 by the caller;
+        persistent firewall-level enforcement is handled by the Go engine
+        (sbxwaf) writing the WAF nft ban set.
+        """
+        self.stats["bans"] = self.stats.get("bans", 0) + 1
+        ctx.log.warn(f"BAN THRESHOLD crossed for {ip} ({reason})")
 
     def request(self, flow: http.HTTPFlow):
         self.stats["requests"] += 1

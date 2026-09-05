@@ -17,7 +17,6 @@ ALLOWED_UNITS = frozenset({
     "secubox-hub",
     "secubox-auth",
     "secubox-system",
-    "secubox-crowdsec",
     "secubox-wireguard",
     "secubox-dpi",
     "secubox-dns",

@@ -1200,7 +1200,7 @@
                 ).join(', ');
                 const sev = (r.severity_max || 'low').toLowerCase();
                 const state = r.currently_banned
-                    ? '<span class="severity-badge critical" title="active CrowdSec drop">🚫 silenced</span>'
+                    ? '<span class="severity-badge critical" title="active drop">🚫 silenced</span>'
                     : '<span class="severity-badge medium" title="ban expired but still tracked">👁️ tracked</span>';
                 return '<tr>'
                     + '<td><code>' + r.ip + '</code></td>'

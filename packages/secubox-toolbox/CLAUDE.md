@@ -22,7 +22,7 @@ ToolBoX = **cabine téléphonique numérique** : borne SecuBox publique avec :
 - Sandbox réseau isolé (10.99.0.0/24)
 - Captive portal avec **consentement R2 explicite**
 - MITM transparent (mitmproxy) pour analyse cookies/DPI/avatar/JA4
-- SOC relay : feed les modules existants (cookies, dpi, avatar, threat-analyst, soc, crowdsec)
+- SOC relay : feed les modules existants (cookies, dpi, avatar, threat-analyst, soc)
 - Rapport éphémère 24h remis à l'utilisateur (lien HMAC anonyme)
 
 ## 1. Definition of Done (Phase 1)

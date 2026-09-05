@@ -5,7 +5,7 @@
 
 """SecuBox WAF - Web Application Firewall
 
-Mitmproxy-based threat detection with CrowdSec integration.
+Threat detection with in-engine nft ban enforcement (sbxwaf).
 300+ rules across 14+ categories (SQLi, XSS, RCE, VoIP, router botnets, etc.)
 """
 import asyncio
@@ -96,7 +96,7 @@ def _history_cached(max_age: int = 3600) -> dict:
 # incrementally by the warm refresh loop.
 STATS_DISK_CACHE = "/var/lib/secubox/waf/stats-disk-cache.json"
 # Table nft ou sbxwaf tient ses bannissements (#1218) — source de verite
-# depuis que CrowdSec est retire du chemin de blocage.
+# du chemin de blocage.
 WAF_NFT_TABLE = "secubox"
 
 # Runtime state
@@ -134,7 +134,7 @@ _warm_lock = threading.Lock()
 _warm: Dict[str, Any] = {
     "stats": None,           # full dashboard stats dict
     "alerts_raw": None,      # list of latest threat entries (up to 500)
-    "bans": None,            # CrowdSec decisions, flattened
+    "bans": None,            # active nft ban-set entries, flattened
     "last_refresh": 0.0,
     "refresh_count": 0,
     "refresh_duration_ms": 0,
@@ -300,12 +300,9 @@ def _should_autoban(threat: dict) -> bool:
 def _ban_ip(ip: str, duration: str = "4h", reason: str = "WAF auto-ban") -> tuple:
     """Bannit une adresse dans l'ensemble nft du WAF (#1225).
 
-    Cette fonction passait par `cscli decisions add` et AVALAIT l'echec
-    (`except: pass`). Depuis le retrait de CrowdSec (#1210) la commande ne
-    faisait plus rien : le bouton « Ban » du tableau de bord annoncait un succes
-    sans que rien ne soit banni. Elle ecrit desormais dans l'ensemble que la
-    chaine waf_drop consulte — le seul endroit qui bloque vraiment — par le
-    verbe `wafctl ban`, qui valide l'adresse et refuse le prive.
+    Elle ecrit dans l'ensemble que la chaine waf_drop consulte — le seul endroit
+    qui bloque vraiment — par le verbe `wafctl ban`, qui valide l'adresse et
+    refuse le prive.
 
     Rend (succes, message). L'appelant DOIT propager l'echec : un bouton qui
     ment est pire qu'un bouton absent.
@@ -365,12 +362,9 @@ def _raisons_recentes(limite: int = 4000) -> dict:
 def _get_bans() -> List[dict]:
     """Bannissements ACTIFS, lus dans l'ensemble nft du WAF (#1221).
 
-    Cette fonction interrogeait CrowdSec. Depuis que le WAF applique lui-meme
-    (#1218) et que CrowdSec est retire (#1210), `cscli` ne rend plus rien : le
-    tableau de bord affichait « 0 ban actif » pendant que le pare-feu en tenait
-    quatre-vingts. La source de verite est desormais l'ensemble nft, celui-la
-    meme que la chaine waf_drop consulte — on lit donc ce qui BLOQUE vraiment,
-    et non ce qu'un tiers a enregistre.
+    Le WAF applique lui-meme ses bannissements (#1218) : la source de verite est
+    l'ensemble nft, celui-la meme que la chaine waf_drop consulte — on lit donc
+    ce qui BLOQUE vraiment.
 
     L'echeance vient de nft (`expires`), le motif du journal de menaces, le pays
     de la base GeoIP. Rien n'est invente : un champ inconnu reste vide.
@@ -855,71 +849,6 @@ def _read_alerts_raw() -> List[dict]:
     return list(reversed(parsed))[:500]
 
 
-_SEV_CRIT = ("probing", "exploit", "cve", "rce", "sqli", "xss", "lfi", "rfi",
-             "backdoor", "log4j", "shellshock", "webshell")
-_SEV_HIGH = ("bruteforce", "-bf", "bf-", "scan", "crawl", "enum", "scanner", "flood")
-
-
-def _alert_severity(scenario: str) -> str:
-    """CrowdSec alerts carry no severity field — derive one from the scenario so
-    the dashboard donut has a meaningful distribution."""
-    s = (scenario or "").lower()
-    if any(k in s for k in _SEV_CRIT):
-        return "critical"
-    if any(k in s for k in _SEV_HIGH):
-        return "high"
-    return "medium"
-
-
-def _get_crowdsec_alerts() -> List[dict]:
-    """REPLI d'urgence, plus la source normale (#1226).
-
-    Ce commentaire disait l'inverse : « le journal en ligne est normalement vide,
-    CrowdSec fait la detection ». C'etait vrai avant que sbxwaf ecrive un journal
-    riche (#744) et applique lui-meme ses bannissements (#1218). CrowdSec est
-    desormais arrete et masque (#1210) : cette fonction ne rend plus rien, et
-    n'est appelee que si le moteur n'a RIEN produit — moteur arrete, journal
-    illisible. Elle reste pour ce cas-la, et pour un retour eventuel de
-    CrowdSec. Best-effort : vide en cas d'echec."""
-    # CROWDSEC N'EST PLUS INVOQUE (#1218/#1210). Il est desactive et destine a la
-    # desinstallation ; appeler `cscli` dessus etait un appel MORT (lent, sudo)
-    # sur un service arrete. sbxwaf ecrit deja un journal riche et bannit en nft.
-    return []
-    try:  # noqa: unreachable — conserve pour un retour eventuel de CrowdSec
-        result = subprocess.run(
-            ["sudo", "cscli", "alerts", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=15)
-        if result.returncode != 0 or not result.stdout:
-            return []
-        raw = json.loads(result.stdout) or []
-    except Exception:
-        return []
-    out: List[dict] = []
-    for a in raw:
-        decs = a.get("decisions") or []
-        scenario = a.get("scenario") or (decs[0].get("scenario") if decs else "") or ""
-        src = a.get("source") or {}
-        ip = src.get("ip") or src.get("value") or (decs[0].get("value") if decs else "") or ""
-        country = src.get("cn") or ""
-        if not country:
-            for ev in (a.get("events") or [])[:1]:
-                for m in ev.get("meta") or []:
-                    if m.get("key") == "IsoCode":
-                        country = m.get("value", "")
-        out.append({
-            "id": a.get("id"),
-            "timestamp": a.get("created_at") or a.get("start_at") or "",
-            "ip": ip, "client_ip": ip,
-            "scenario": scenario,
-            "category": scenario.split("/")[-1] if scenario else "attack",
-            "severity": _alert_severity(scenario),
-            "country": country,
-            "vhost": "",
-            "count": a.get("events_count", 1),
-        })
-    return out
-
-
 def _protected_vhost_count() -> int:
     """Number of vhosts protected by the WAF = the HAProxy→mitmproxy route map."""
     for p in ("/srv/mitmproxy/haproxy-routes.json", "/srv/mitmproxy-in/haproxy-routes.json"):
@@ -932,53 +861,6 @@ def _protected_vhost_count() -> int:
     return 0
 
 
-def _overlay_crowdsec_stats(stats: dict, alerts: List[dict]) -> None:
-    """Fold CrowdSec alert counts into the (usually-empty) inline-log stats so the
-    Threats/Blocked cards + severity/category donuts reflect real activity."""
-    now = datetime.now(timezone.utc)
-    today = 0
-    by_sev = defaultdict(int, stats.get("by_severity") or {})
-    by_cat = defaultdict(int, stats.get("by_category") or {})
-    # top_countries may already have been decorated into a list of
-    # {"country","count"} dicts (the overlay can run after _decorate_dashboard_stats);
-    # accept either shape so we never crash the warm refresh and lose the WAF stats.
-    _tc = stats.get("top_countries") or {}
-    if isinstance(_tc, list):
-        _tc = {d.get("country", "??"): int(d.get("count", 0) or 0) for d in _tc}
-    by_country = defaultdict(int, _tc)
-    for a in alerts:
-        by_sev[a["severity"]] += 1
-        by_cat[a["category"]] += 1
-        if a.get("country"):
-            by_country[a["country"]] += 1
-        ts = a.get("timestamp", "")
-        try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            if (now - dt) <= timedelta(hours=24):
-                today += 1
-        except Exception:
-            today += 1  # unparseable ts → treat as recent
-    stats["total_threats"] = stats.get("total_threats", 0) + len(alerts)
-    stats["threats_today"] = stats.get("threats_today", 0) + today
-    stats["blocked_24h"] = stats["total_threats"]
-    stats["blocked_today"] = stats["threats_today"]
-    stats["by_severity"] = dict(by_sev)
-    stats["by_category"] = dict(by_cat)
-    stats["top_countries"] = [{"country": c, "count": n}
-                              for c, n in sorted(by_country.items(), key=lambda x: -int(x[1] or 0))[:5]]
-    if alerts:
-        a0 = alerts[0]
-        ago = "recently"
-        try:
-            dt = datetime.fromisoformat(a0["timestamp"].replace("Z", "+00:00"))
-            mins = int((now - dt).total_seconds() / 60)
-            ago = "just now" if mins < 1 else (f"{mins}m ago" if mins < 60 else f"{mins // 60}h ago")
-        except Exception:
-            pass
-        stats["last_threat"] = {"ip": a0["ip"], "type": a0["category"],
-                                "vhost": a0.get("vhost"), "time_ago": ago}
-
-
 def _refresh_warm_caches() -> dict:
     """Compute every expensive piece of state ONCE. Called from the
     background loop via asyncio.to_thread so the event loop stays free."""
@@ -989,34 +871,8 @@ def _refresh_warm_caches() -> dict:
         new_bans = _get_bans()
     except Exception:
         new_bans = []
-    # LE MOTEUR EST LA COUCHE DE DETECTION, CrowdSec n'est qu'un repli (#1226).
-    # La prémisse d'origine était l'inverse — « le journal en ligne est
-    # normalement vide, CrowdSec fait la détection » — et elle est caduque
-    # depuis que sbxwaf écrit un journal riche (#744) puis applique lui-même
-    # (#1218). CrowdSec est d'ailleurs arrêté et masqué (#1210).
-    #
-    # L'appel se faisait a CHAQUE cycle avant d'etre jete : un `sudo cscli` de
-    # plus toutes les trente secondes, pour un resultat inutilise. On ne
-    # l'invoque plus que si le moteur n'a RIEN produit — moteur arrete, journal
-    # illisible — c'est-a-dire presque jamais.
-    engine_has_data = (new_stats.get("total_threats", 0) or 0) > 0 or bool(new_alerts)
-    cs_alerts: List[dict] = []
-    if not engine_has_data:
-        try:
-            cs_alerts = _get_crowdsec_alerts()
-        except Exception:
-            cs_alerts = []
-    if cs_alerts and not engine_has_data:
-        # Defensive: a CrowdSec-overlay failure must NEVER abort the refresh and
-        # leave the warm cache frozen — the WAF top_ips/top_vhosts/tracked-attacker
-        # data (the dashboard's per-IP/vhost panels) lives in new_stats and must
-        # survive even if the optional CrowdSec donut overlay throws.
-        try:
-            _overlay_crowdsec_stats(new_stats, cs_alerts)
-        except Exception:
-            pass
-        if not new_alerts:
-            new_alerts = cs_alerts  # feed the live feed / threat list too
+    # Le moteur (sbxwaf) est la seule couche de détection : il écrit un journal
+    # riche (#744) et applique lui-même ses bannissements en nft (#1218).
     new_stats["vhosts_count"] = _protected_vhost_count()
     duration_ms = int((time.time() - t0) * 1000)
 
@@ -1036,7 +892,7 @@ def _refresh_warm_caches() -> dict:
 
 async def _warm_loop():
     """Background refresher. Survives individual failures so a single
-    bad log line / cscli outage can't kill the loop."""
+    bad log line can't kill the loop."""
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
@@ -1643,8 +1499,8 @@ async def get_alerts(limit: int = 50, aggregate: bool = False):
 
 @app.get("/bans")
 async def get_bans():
-    """Active IP bans from CrowdSec. Read from warm cache; the
-    underlying `cscli` call is too slow (5-15 s) to run on the request
+    """Active IP bans from the WAF nft set. Read from warm cache; the
+    underlying `nft list set` call is too slow to run on the request
     path. Cold start falls through to a synchronous fetch."""
     with _warm_lock:
         bans = _warm["bans"]
@@ -1658,7 +1514,7 @@ def _aggregate_threats(hours: int, limit: int) -> List[dict]:
 
     Returns the top `limit` source IPs ordered by hit count. Each entry
     carries first-seen / last-seen / top categories / max severity so the
-    UI can show 'silence but track' status even after the CrowdSec ban
+    UI can show 'silence but track' status even after the nft ban
     expired (active ban set in `currently_banned`)."""
     log_path = Path(THREATS_LOG)
     if not log_path.exists():
@@ -1711,7 +1567,7 @@ def _aggregate_threats(hours: int, limit: int) -> List[dict]:
         if sev_rank.get(sev, 0) > sev_rank.get(rec["severity_max"], 0):
             rec["severity_max"] = sev
 
-    # Cross-reference active CrowdSec bans so the UI can mark "currently
+    # Cross-reference active nft bans so the UI can mark "currently
     # silenced (drop) vs only tracked".
     active = set()
     with _warm_lock:
@@ -1734,7 +1590,7 @@ def _aggregate_threats(hours: int, limit: int) -> List[dict]:
 async def get_bans_history(hours: int = 24, limit: int = 100):
     """Tracked attackers — IPs we have threat-logged in the window.
 
-    Surfaces every source IP that hit a WAF rule even AFTER its CrowdSec
+    Surfaces every source IP that hit a WAF rule even AFTER its nft ban
     decision expires. Lets the operator audit "who was silenced and is
     still being silenced" vs "who was silenced and may slip back in".
     `currently_banned=True` means there is an active nft drop right now.

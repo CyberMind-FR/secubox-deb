@@ -8,9 +8,9 @@ Standards-Version: 4.6.2
 Package: secubox-threatmesh
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-uvicorn | python3-pip, secubox-vortex-firewall | secubox-toolbox
-Recommends: secubox-p2p, crowdsec
-Description: Sovereign threat-intel mesh for SecuBox (CrowdSec CAPI replacement)
- Replaces the CrowdSec Central API with self-sourced free public blocklists
+Recommends: secubox-p2p
+Description: Sovereign threat-intel mesh for SecuBox (central-API replacement)
+ Replaces third-party central threat APIs with self-sourced free public blocklists
  (Phase 1) and peer-to-peer MESH distribution of locally-detected decisions over
  the SecuBox WireGuard mesh (Phase 2), plus a status/aggregate/bouncer-compatible
  API and dashboard (Phase 3). All IOCs flow into the shared threat_intel table

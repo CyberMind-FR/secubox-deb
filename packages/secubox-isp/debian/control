@@ -48,7 +48,7 @@ Depends: ${misc:Depends},
  secubox-p2p (>= 1.0),
  secubox-meshname (>= 1.0),
  secubox-security-posture (>= 1.0)
-Recommends: secubox-crowdsec, secubox-cdn, crowdsec, wireguard-tools
+Recommends: secubox-cdn, wireguard-tools
 Description: SecuBox ISP — socle routeur/FAI propre
  Métapaquet du socle SecuBox pour un routeur/passerelle FAI : réseau, pare-feu
  (nftables, WAF, vortex-firewall, HAProxy), DNS, WireGuard, contrôle d'accès

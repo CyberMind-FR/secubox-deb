@@ -63,11 +63,6 @@ return view.extend({
 				statusText = 'nDPId Active';
 				statusIcon = '\u2713';
 				break;
-			case 'netifyd':
-				statusColor = 'var(--kiss-blue)';
-				statusText = 'Netifyd Active';
-				statusIcon = '\u2713';
-				break;
 			default:
 				statusColor = 'var(--kiss-red)';
 				statusText = 'No DPI Engine';
@@ -85,7 +80,7 @@ return view.extend({
 				E('div', { 'style': 'font-size: 13px; color: var(--kiss-muted);' },
 					this.dpiSource !== 'none'
 						? 'Deep Packet Inspection is analyzing your network traffic'
-						: 'Install nDPId or netifyd to enable application detection')
+						: 'Install nDPId to enable application detection')
 			]),
 			E('div', { 'style': 'font-size: 13px;' }, [
 				E('span', { 'style': 'color: var(--kiss-muted);' }, 'Detected: '),

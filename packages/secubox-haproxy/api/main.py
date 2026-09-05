@@ -218,7 +218,6 @@ def _compute_status_sync() -> Dict[str, Any]:
         "stats_port": main_cfg.get("stats_port", 8404),
         "waf_enabled": main_cfg.get("waf_enabled", False),
         "waf_available": waf_available,
-        "crowdsec_enabled": main_cfg.get("crowdsec_enabled", False),
         "vhost_count": len(vhost_cfg),
         "backend_count": len(backend_cfg),
         "cached_at": time.time(),
@@ -466,7 +465,6 @@ def _cfg():
         "stats_port": main_cfg.get("stats_port", 8404),
         "waf_enabled": main_cfg.get("waf_enabled", True),
         "waf_backend_port": main_cfg.get("waf_backend_port", 8890),
-        "crowdsec_enabled": main_cfg.get("crowdsec_enabled", True),
     }
 
 
@@ -645,12 +643,6 @@ async def components():
                 "description": "TLS certificates directory",
                 "path": CERTS_DIR,
                 "exists": Path(CERTS_DIR).exists()
-            },
-            {
-                "name": "CrowdSec Bouncer",
-                "type": "integration",
-                "description": "IP reputation and blocking",
-                "enabled": cfg["crowdsec_enabled"]
             }
         ]
     }
@@ -1436,34 +1428,6 @@ async def add_acl(req: ACLCreate):
     """Add an ACL rule."""
     log.info("Add ACL: %s (%s %s)", req.name, req.type, req.pattern)
     return {"success": True, "name": req.name}
-
-
-# ── CrowdSec Integration ──────────────────────────────────────────
-
-@router.get("/crowdsec/status", dependencies=[Depends(require_jwt)])
-async def crowdsec_status():
-    """Get CrowdSec bouncer status for HAProxy."""
-    cfg = _cfg()
-
-    # Check if CrowdSec bouncer is configured
-    bouncer_running = False
-    try:
-        result = subprocess.run(
-            ["pgrep", "-f", "crowdsec-haproxy-bouncer"],
-            capture_output=True, timeout=5
-        )
-        bouncer_running = result.returncode == 0
-    except Exception:
-        pass
-
-    # Get active decisions count from WAF
-    waf_bans = await _call_waf("/bans")
-
-    return {
-        "enabled": cfg["crowdsec_enabled"],
-        "bouncer_running": bouncer_running,
-        "active_bans": waf_bans.get("total", 0) if "total" in waf_bans else 0,
-    }
 
 
 # ── Actions ───────────────────────────────────────────────────────

@@ -42,7 +42,6 @@ class StatusResponse(BaseModel):
     # Config (for WebUI display)
     mode: str = "transparent"
     wan_protection_enabled: bool = False
-    crowdsec_feed: bool = True
     block_bots: bool = True
     autoban_enabled: bool = True
     proxy_port: int = 8890
@@ -109,7 +108,6 @@ async def get_status(user=Depends(require_jwt)):
         by_severity=stats.get("by_severity", {}),
         mode=config.get("proxy", {}).get("mode", "transparent"),
         wan_protection_enabled=config.get("haproxy", {}).get("wan_protection", False),
-        crowdsec_feed=config.get("crowdsec", {}).get("enabled", True),
         block_bots=config.get("waf_rules", {}).get("block_bots", True),
         autoban_enabled=config.get("autoban", {}).get("enabled", True),
         proxy_port=config.get("proxy", {}).get("listen_port", 8890),
@@ -168,7 +166,6 @@ class ModeRequest(BaseModel):
 
 class SettingsRequest(BaseModel):
     wan_protection: Optional[bool] = None
-    crowdsec_feed: Optional[bool] = None
     block_bots: Optional[bool] = None
     autoban_enabled: Optional[bool] = None
     apply_now: bool = False
@@ -204,11 +201,6 @@ async def save_settings(req: SettingsRequest, user=Depends(require_jwt)):
         if "haproxy" not in config:
             config["haproxy"] = {}
         config["haproxy"]["wan_protection"] = req.wan_protection
-
-    if req.crowdsec_feed is not None:
-        if "crowdsec" not in config:
-            config["crowdsec"] = {}
-        config["crowdsec"]["enabled"] = req.crowdsec_feed
 
     if req.block_bots is not None:
         if "waf_rules" not in config:

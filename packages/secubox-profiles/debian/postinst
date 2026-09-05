@@ -65,7 +65,7 @@ case "$1" in
 
         # secubox-sleeper ships DISABLED (pilot): it STOPS idle sleepable
         # modules, and until each deployment's lifecycle assignments are audited
-        # (a security service like crowdsec must be always-on, NEVER on-demand),
+        # (a security service like the WAF must be always-on, NEVER on-demand),
         # auto-enabling it fleet-wide could sleep something that must stay up.
         # The operator enables it deliberately, once the sleepable set is
         # verified: `systemctl enable --now secubox-sleeper.service`. We only

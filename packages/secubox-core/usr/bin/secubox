@@ -29,10 +29,9 @@ ${YELLOW}System:${NC}
     version         Show version information
 
 ${YELLOW}Security:${NC}
-    threats         View blocked threats (CrowdSec + WAF)
+    threats         View blocked threats (WAF)
     waf             WAF inspection status
     firewall        Firewall rules (nftables)
-    bans            CrowdSec active bans
 
 ${YELLOW}Network:${NC}
     network         Show network configuration
@@ -49,7 +48,7 @@ ${YELLOW}Control:${NC}
 
 ${YELLOW}Examples:${NC}
     secubox status
-    secubox logs crowdsec
+    secubox logs waf
     secubox restart wireguard
 
 EOF
@@ -197,9 +196,6 @@ cmd_network() {
 cmd_threats() {
     echo -e "${CYAN}=== SecuBox Threats ===${NC}"
     echo
-    echo -e "${YELLOW}CrowdSec Active Bans:${NC}"
-    cscli decisions list --limit 10 2>/dev/null | tail -12 || echo "  CrowdSec not running"
-    echo
     echo -e "${YELLOW}WAF Recent Threats:${NC}"
     if [[ -f /srv/mitmproxy/logs/waf-threats.log ]]; then
         tail -5 /srv/mitmproxy/logs/waf-threats.log | jq -r '"\(.timestamp) | \(.client_ip) | \(.category) | \(.action)"' 2>/dev/null || tail -5 /srv/mitmproxy/logs/waf-threats.log
@@ -233,11 +229,6 @@ cmd_firewall() {
     echo
     echo -e "${YELLOW}Active Connections:${NC}"
     ss -tuln | head -15
-}
-
-cmd_bans() {
-    echo -e "${CYAN}=== CrowdSec Active Bans ===${NC}"
-    cscli decisions list --limit 20 2>/dev/null || echo "CrowdSec not running"
 }
 
 cmd_vhosts() {
@@ -354,9 +345,6 @@ case "${1:-help}" in
         ;;
     firewall|fw)
         cmd_firewall
-        ;;
-    bans)
-        cmd_bans
         ;;
     vhosts)
         cmd_vhosts

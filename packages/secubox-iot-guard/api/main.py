@@ -1151,7 +1151,6 @@ class CastDiagnostic(BaseModel):
     is_google_device: bool
     diagnostic_vector: Optional[str] = None  # V1=WiFi, V2=LAN, V3=Cloud
     issues_found: List[str] = []
-    crowdsec_status: Dict[str, Any] = {}
     suricata_alerts: List[str] = []
     dns_blocks: List[str] = []
     nftables_drops: List[str] = []
@@ -1211,40 +1210,6 @@ def find_google_cast_devices() -> List[Dict[str, str]]:
         pass  # avahi-browse may not be available
 
     return devices
-
-
-def check_crowdsec_for_ip(ip_address: str) -> Dict[str, Any]:
-    """Check if IP is banned or has alerts in CrowdSec."""
-    result = {"banned": False, "alerts": [], "decisions": []}
-    try:
-        # Check decisions
-        proc = subprocess.run(
-            ["cscli", "decisions", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=30
-        )
-        if proc.returncode == 0 and proc.stdout.strip():
-            decisions = json.loads(proc.stdout)
-            for d in (decisions or []):
-                if d.get("value") == ip_address:
-                    result["banned"] = True
-                    result["decisions"].append({
-                        "type": d.get("type"),
-                        "scenario": d.get("scenario"),
-                        "duration": d.get("duration")
-                    })
-
-        # Check alerts
-        proc = subprocess.run(
-            ["cscli", "alerts", "list", "--ip", ip_address, "-o", "json"],
-            capture_output=True, text=True, timeout=30
-        )
-        if proc.returncode == 0 and proc.stdout.strip():
-            alerts = json.loads(proc.stdout)
-            result["alerts"] = [a.get("scenario") for a in (alerts or [])][:10]
-    except Exception as e:
-        result["error"] = str(e)
-
-    return result
 
 
 def check_suricata_alerts(ip_address: str, limit: int = 20) -> List[str]:
@@ -1359,17 +1324,6 @@ server:
 '''
 
 
-def generate_crowdsec_whitelist(ip_address: str) -> str:
-    """Generate CrowdSec whitelist command."""
-    return f'''# CrowdSec Whitelist for Google Cast Device
-cscli decisions add --ip {ip_address} --type whitelist --duration 0 \\
-    --reason "Google Radio - Cast device - IoT Guard whitelist"
-
-# Verify whitelist
-cscli decisions list | grep {ip_address}
-'''
-
-
 @app.get("/cast/devices")
 async def find_cast_devices():
     """Find Google Cast/Chromecast devices on the network."""
@@ -1386,7 +1340,6 @@ def diagnose_cast_device(ip_address: str):
     """Run full diagnostic on a Cast device.
 
     Checks:
-    - CrowdSec bans/alerts
     - Suricata alerts
     - DNS blocks (Unbound)
     - nftables DROP rules
@@ -1408,16 +1361,6 @@ def diagnose_cast_device(ip_address: str):
     issues = []
     recommendations = []
     diagnostic_vector = None
-
-    # Check CrowdSec
-    cs_status = check_crowdsec_for_ip(ip_address)
-    if cs_status.get("banned"):
-        issues.append(f"Device is BANNED in CrowdSec: {cs_status['decisions']}")
-        recommendations.append("Run: cscli decisions add --ip {ip} --type whitelist --duration 0")
-        diagnostic_vector = "V3"
-
-    if cs_status.get("alerts"):
-        issues.append(f"CrowdSec alerts: {cs_status['alerts'][:5]}")
 
     # Check Suricata
     suricata_alerts = check_suricata_alerts(ip_address)
@@ -1454,7 +1397,6 @@ def diagnose_cast_device(ip_address: str):
         is_google_device=is_google_device(mac_address) if mac_address else False,
         diagnostic_vector=diagnostic_vector,
         issues_found=issues,
-        crowdsec_status=cs_status,
         suricata_alerts=suricata_alerts,
         dns_blocks=dns_blocks,
         nftables_drops=nft_drops,
@@ -1464,35 +1406,17 @@ def diagnose_cast_device(ip_address: str):
 
 
 @app.post("/cast/whitelist/{ip_address}", dependencies=[Depends(require_jwt)])
-def whitelist_cast_device(ip_address: str, apply_crowdsec: bool = True):
-    """Whitelist a Cast device in CrowdSec.
+def whitelist_cast_device(ip_address: str):
+    """Whitelist a Cast device.
 
     Args:
         ip_address: Device IP address
-        apply_crowdsec: Whether to apply CrowdSec whitelist immediately
     """
     result = {"ip_address": ip_address, "actions": []}
-
-    # Apply CrowdSec whitelist
-    if apply_crowdsec:
-        try:
-            proc = subprocess.run(
-                ["cscli", "decisions", "add", "--ip", ip_address,
-                 "--type", "whitelist", "--duration", "0",
-                 "--reason", "Google Cast device - IoT Guard whitelist"],
-                capture_output=True, text=True, timeout=30
-            )
-            if proc.returncode == 0:
-                result["actions"].append("CrowdSec whitelist applied")
-            else:
-                result["actions"].append(f"CrowdSec error: {proc.stderr}")
-        except Exception as e:
-            result["actions"].append(f"CrowdSec failed: {e}")
 
     # Generate config files
     result["nftables_config"] = generate_whitelist_nft(ip_address)
     result["unbound_config"] = generate_unbound_passthrough()
-    result["crowdsec_commands"] = generate_crowdsec_whitelist(ip_address)
 
     return result
 

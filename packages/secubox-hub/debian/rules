@@ -66,8 +66,6 @@ override_dh_auto_install:
 	# Two patterns because `-j` is a global option for nft and must precede
 	# the command (`nft -j list ruleset`, not `nft list ruleset -j`).
 	install -d debian/secubox-hub/etc/sudoers.d
-	# #758 — netstats collector reads `nft -j list table inet crowdsec`
-	# (best-effort, covered by the existing `nft -j list *` grant above).
 	printf '%s\n%s\n%s\n%s\n' \
 	    'secubox ALL=(root) NOPASSWD: /usr/sbin/nft list *' \
 	    'secubox ALL=(root) NOPASSWD: /usr/sbin/nft -j list *' \

@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
-"""secubox-dpi — netifyd socket + tc mirred DPI dual-stream
+"""secubox-dpi — sbxdpi (nDPI) socket + tc mirred DPI dual-stream
 
 Enhanced features:
 - Traffic history tracking with time-series stats
@@ -36,7 +36,7 @@ from secubox_core.classifiers import host_app as _host_app  # noqa: E402
 def _dpi_enrich(event: dict) -> dict:
     """Phase 2c enrichment : classify host/SNI -> {app, category, emoji}.
 
-    Future Phase 3 : query nDPI/netifyd daemon socket for live classification.
+    Future Phase 3 : query the nDPI daemon socket for live classification.
     """
     host = event.get("host") or event.get("sni") or ""
     if not host:
@@ -746,9 +746,8 @@ router = APIRouter()
 log = get_logger("dpi")
 
 # Configuration paths
-# CUTOVER nDPI (2026-09-04) : netifyd est retiré. Les endpoints legacy lisent
-# désormais le moteur LIVE sbxdpi (nDPI 5.x → nDPIsrvd → sbxdpi) via sa socket
-# HTTP unix, au lieu de l'ancienne socket netifyd.
+# Les endpoints legacy lisent le moteur LIVE sbxdpi (nDPI 5.x → nDPIsrvd →
+# sbxdpi) via sa socket HTTP unix.
 DPI_LIVE_SOCK = "/run/secubox/dpi-live.sock"
 DATA_DIR = Path("/var/lib/secubox/dpi")
 HISTORY_FILE = DATA_DIR / "traffic_history.json"
@@ -999,8 +998,8 @@ async def send_webhook(event: str, data: Dict[str, Any]):
 async def _sbxdpi_get(path: str):
     """Lit un endpoint de sbxdpi (moteur nDPI LIVE) via dpi-live.sock.
 
-    Remplace l'ancien _netifyd_query : même rôle (classification live), source
-    différente. Fail-empty si la socket dort (sbxdpi dark avant cutover complet)."""
+    Classification live. Fail-empty si la socket dort (sbxdpi dark avant
+    cutover complet)."""
     if not Path(DPI_LIVE_SOCK).exists():
         return {"error": "sbxdpi socket unavailable"}
     try:
@@ -1012,14 +1011,13 @@ async def _sbxdpi_get(path: str):
         log.warning("sbxdpi query error: %s", e)
         return {"error": str(e)}
 
-def _netifyd_query(cmd: dict) -> dict:
-    """SHIM de dépréciation (#cutover) : netifyd est retiré. Les endpoints legacy
-    profonds (dns_queries, ssl_fingerprints, flow-by-id…) qui n'ont pas encore
-    d'équivalent sbxdpi renvoient une erreur claire — exactement ce qu'ils
-    renvoyaient déjà quand la socket netifyd avait disparu. Les surfaces clés
-    (status/flows/applications/devices/risks/talkers) sont, elles, re-branchées
-    sur sbxdpi (_sbxdpi_get). À migrer au fil de l'eau."""
-    return {"error": "netifyd retiré — moteur nDPI (sbxdpi). endpoint à migrer.",
+def _legacy_dpi_query(cmd: dict) -> dict:
+    """SHIM de dépréciation : les endpoints legacy profonds (dns_queries,
+    ssl_fingerprints, flow-by-id…) qui n'ont pas encore d'équivalent sbxdpi
+    renvoient une erreur claire. Les surfaces clés (status/flows/applications/
+    devices/risks/talkers) sont, elles, re-branchées sur sbxdpi (_sbxdpi_get).
+    À migrer au fil de l'eau."""
+    return {"error": "endpoint legacy sans moteur — nDPI (sbxdpi). à migrer.",
             "retired": True}
 
 def _setup_mirred(iface: str, mirror_if: str = "ifb0") -> dict:
@@ -1087,13 +1085,13 @@ async def setup_mirred(user=Depends(require_jwt)):
 @router.get("/apps")
 async def apps(user=Depends(require_jwt)):
     """Liste des applications détectées."""
-    return _netifyd_query({"type": "get_applications"})
+    return _legacy_dpi_query({"type": "get_applications"})
 
 
 @router.get("/protocols")
 async def protocols(user=Depends(require_jwt)):
     """Protocoles détectés."""
-    return _netifyd_query({"type": "get_protocols"})
+    return _legacy_dpi_query({"type": "get_protocols"})
 
 
 @router.get("/categories")
@@ -1111,7 +1109,7 @@ async def categories(user=Depends(require_jwt)):
 @router.get("/top_apps")
 async def top_apps(limit: int = 10, user=Depends(require_jwt)):
     """Top applications par trafic."""
-    flows = _netifyd_query({"type": "get_flows"})
+    flows = _legacy_dpi_query({"type": "get_flows"})
     if "error" in flows:
         return []
     # Aggregate by app
@@ -1126,7 +1124,7 @@ async def top_apps(limit: int = 10, user=Depends(require_jwt)):
 @router.get("/top_protocols")
 async def top_protocols(limit: int = 10, user=Depends(require_jwt)):
     """Top protocoles par trafic."""
-    flows = _netifyd_query({"type": "get_flows"})
+    flows = _legacy_dpi_query({"type": "get_flows"})
     if "error" in flows:
         return []
     proto_traffic = {}
@@ -1146,7 +1144,7 @@ async def bandwidth_by_app(user=Depends(require_jwt)):
 @router.get("/bandwidth_by_device")
 async def bandwidth_by_device(user=Depends(require_jwt)):
     """Bande passante par appareil."""
-    flows = _netifyd_query({"type": "get_flows"})
+    flows = _legacy_dpi_query({"type": "get_flows"})
     if "error" in flows:
         return []
     device_traffic = {}
@@ -1160,19 +1158,19 @@ async def bandwidth_by_device(user=Depends(require_jwt)):
 @router.get("/active_flows")
 async def active_flows(user=Depends(require_jwt)):
     """Flux actifs."""
-    return _netifyd_query({"type": "get_flows"})
+    return _legacy_dpi_query({"type": "get_flows"})
 
 
 @router.get("/flow_details")
 async def flow_details(flow_id: str, user=Depends(require_jwt)):
     """Détails d'un flux."""
-    return _netifyd_query({"type": "get_flow", "flow_id": flow_id})
+    return _legacy_dpi_query({"type": "get_flow", "flow_id": flow_id})
 
 
 @router.get("/device_flows")
 async def device_flows(mac: str, user=Depends(require_jwt)):
     """Flux d'un appareil."""
-    flows = _netifyd_query({"type": "get_flows"})
+    flows = _legacy_dpi_query({"type": "get_flows"})
     if "error" in flows:
         return []
     return [f for f in flows.get("flows", []) if f.get("local_mac") == mac]
@@ -1197,7 +1195,7 @@ async def realtime(user=Depends(require_jwt)):
 @router.get("/stats")
 async def stats(user=Depends(require_jwt)):
     """Statistiques DPI."""
-    return _netifyd_query({"type": "get_stats"})
+    return _legacy_dpi_query({"type": "get_stats"})
 
 
 from pydantic import BaseModel
@@ -1242,19 +1240,19 @@ async def delete_block_rule(app_or_category: str, user=Depends(require_jwt)):
 @router.get("/alerts")
 async def alerts(user=Depends(require_jwt)):
     """Alertes DPI."""
-    return _netifyd_query({"type": "get_alerts"})
+    return _legacy_dpi_query({"type": "get_alerts"})
 
 
 @router.get("/dns_queries")
 async def dns_queries(limit: int = 100, user=Depends(require_jwt)):
     """Requêtes DNS interceptées."""
-    return _netifyd_query({"type": "get_dns_queries", "limit": limit})
+    return _legacy_dpi_query({"type": "get_dns_queries", "limit": limit})
 
 
 @router.get("/ssl_flows")
 async def ssl_flows(user=Depends(require_jwt)):
     """Flux SSL/TLS."""
-    flows = _netifyd_query({"type": "get_flows"})
+    flows = _legacy_dpi_query({"type": "get_flows"})
     if "error" in flows:
         return []
     return [f for f in flows.get("flows", []) if f.get("ssl", {}).get("enabled")]
@@ -1263,7 +1261,7 @@ async def ssl_flows(user=Depends(require_jwt)):
 @router.get("/ssl_fingerprints")
 async def ssl_fingerprints(user=Depends(require_jwt)):
     """Empreintes JA3/JA3S."""
-    return _netifyd_query({"type": "get_ssl_fingerprints"})
+    return _legacy_dpi_query({"type": "get_ssl_fingerprints"})
 
 
 class DpiSettingsRequest(BaseModel):
@@ -1295,30 +1293,23 @@ async def save_settings(req: DpiSettingsRequest, user=Depends(require_jwt)):
 
 @router.post("/restart")
 def restart(user=Depends(require_jwt)):
-    """Redémarrer netifyd."""
-    r = subprocess.run(["systemctl", "restart", "netifyd"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
+    """Contrôle de service DPI legacy retiré (moteur nDPI/sbxdpi géré ailleurs)."""
+    return {"success": False, "retired": True}
 
 
 @router.post("/start")
 def start(user=Depends(require_jwt)):
-    r = subprocess.run(["systemctl", "start", "netifyd"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
+    return {"success": False, "retired": True}
 
 
 @router.post("/stop")
 def stop(user=Depends(require_jwt)):
-    r = subprocess.run(["systemctl", "stop", "netifyd"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
+    return {"success": False, "retired": True}
 
 
 @router.get("/logs")
 def logs(lines: int = 100, user=Depends(require_jwt)):
-    r = subprocess.run(
-        ["journalctl", "-u", "netifyd", "-n", str(lines), "--no-pager"],
-        capture_output=True, text=True, timeout=10
-    )
-    return {"lines": r.stdout.splitlines()}
+    return {"lines": []}
 
 
 @router.get("/interface_list")
@@ -1363,7 +1354,7 @@ def remove_mirred(user=Depends(require_jwt)):
 @router.get("/export_flows")
 async def export_flows(format: str = "json", user=Depends(require_jwt)):
     """Exporter les flux."""
-    flows = _netifyd_query({"type": "get_flows"})
+    flows = _legacy_dpi_query({"type": "get_flows"})
     if format == "csv":
         lines = ["timestamp,src_ip,dst_ip,app,protocol,bytes"]
         for f in flows.get("flows", []):
@@ -1675,7 +1666,7 @@ async def collect_stats_periodically():
             tx_bytes = int((stats_path / "tx_bytes").read_text().strip())
 
             # Get flows and calculate top apps/devices
-            flows = _netifyd_query({"type": "get_flows"})
+            flows = _legacy_dpi_query({"type": "get_flows"})
 
             app_traffic = defaultdict(int)
             device_traffic = defaultdict(int)

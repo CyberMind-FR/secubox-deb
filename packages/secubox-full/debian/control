@@ -27,7 +27,7 @@ Depends: ${misc:Depends},
  secubox-metablogizer (>= 1.0),
  secubox-publish (>= 1.0),
  secubox-radio (>= 1.0)
-Recommends: crowdsec, wireguard-tools
+Recommends: wireguard-tools
 Description: SecuBox Full — socle ISP + applications working (catalogue all.gk2)
  Métapaquet showcase : le socle secubox-isp PLUS les applications
  effectivement en service et listées sur all.gk2.secubox.in — BBS, billets,

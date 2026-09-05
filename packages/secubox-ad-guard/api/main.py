@@ -7,7 +7,7 @@
 Detects advertising networks, tracking domains, and provides per-device statistics.
 
 Features:
-- Ad network detection via DPI (nDPId/netifyd integration)
+- Ad network detection via DPI (nDPId integration)
 - Tracking domain classification
 - Device-type statistics (IoT, phones, computers, smart TVs)
 - Delayed/scheduled blacklisting

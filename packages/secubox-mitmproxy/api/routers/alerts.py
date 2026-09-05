@@ -5,7 +5,6 @@
 
 """Alerts router — Threat log, stats, and ban management."""
 import json
-import subprocess
 from pathlib import Path
 from typing import List, Optional
 
@@ -163,45 +162,18 @@ async def clear_alerts_alias(user=Depends(require_jwt)):
 
 @router.get("/bans", response_model=BansResponse)
 async def get_bans(user=Depends(require_jwt)):
-    """Get active bans from CrowdSec."""
-    bans = []
+    """Get active bans.
 
-    try:
-        result = subprocess.run(
-            ["cscli", "decisions", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=10
-        )
-
-        if result.returncode == 0 and result.stdout:
-            decisions = json.loads(result.stdout) or []
-            for d in decisions:
-                if d.get("type") == "ban":
-                    bans.append(BanEntry(
-                        ip=d.get("value", "unknown"),
-                        reason=d.get("scenario", "unknown"),
-                        duration=d.get("duration", "unknown"),
-                        source=d.get("origin", "unknown")
-                    ))
-    except Exception as e:
-        log.error(f"Failed to get bans: {e}")
-
-    return BansResponse(total=len(bans), bans=bans)
+    No external ban backend is configured, so this returns an empty list.
+    """
+    return BansResponse(total=0, bans=[])
 
 
 @router.post("/unban", response_model=ActionResponse)
 async def unban_ip(req: UnbanRequest, user=Depends(require_jwt)):
-    """Remove IP from ban list."""
-    try:
-        result = subprocess.run(
-            ["cscli", "decisions", "delete", "--ip", req.ip],
-            capture_output=True, text=True, timeout=10
-        )
+    """Remove IP from ban list.
 
-        if result.returncode == 0:
-            log.info(f"Unbanned IP: {req.ip}")
-            return ActionResponse(success=True, message=f"IP {req.ip} unbanned")
-        else:
-            raise HTTPException(500, f"Failed to unban: {result.stderr}")
-
-    except subprocess.TimeoutExpired:
-        raise HTTPException(500, "CrowdSec command timed out")
+    No external ban backend is configured, so there is nothing to remove.
+    """
+    log.info(f"Unban requested for IP: {req.ip} (no active ban backend)")
+    return ActionResponse(success=True, message=f"IP {req.ip} unbanned")

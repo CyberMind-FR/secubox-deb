@@ -25,10 +25,9 @@ CATEGORY_MAP = {
     "sbx_doh_detect_v4": "doh", "sbx_doh_detect_v6": "doh",
     "sbx_drop_wafrl": "waf_ratelimit",
     "sbx_drop_input_policy": "input_policy",
-    "sbx_drop_crowdsec": "crowdsec",
 }
 # Categories that count toward "network_drops" (doh is detect-only, excluded).
-DROP_CATEGORIES = {"blacklist", "quarantine", "waf_ratelimit", "input_policy", "crowdsec"}
+DROP_CATEGORIES = {"blacklist", "quarantine", "waf_ratelimit", "input_policy"}
 
 
 def category_for(name: str) -> str | None:
@@ -264,28 +263,6 @@ def _read_nft_counters() -> dict:
     return parse_nft_counters_json(_run_nft_json(["counters"]))
 
 
-def _read_crowdsec() -> dict:
-    """Best-effort: sum the externally-managed inet crowdsec table counters
-    into a single synthetic counter mapped to the 'crowdsec' category.
-    """
-    data = _run_nft_json(["table", "inet", "crowdsec"])
-    total = 0
-    for item in data.get("nftables", []):
-        c = item.get("counter")
-        if isinstance(c, dict):
-            total += int(c.get("packets", 0) or 0)
-        rule = item.get("rule")
-        if isinstance(rule, dict):
-            for ex in rule.get("expr", []):
-                cc = ex.get("counter")
-                if isinstance(cc, dict):
-                    total += int(cc.get("packets", 0) or 0)
-    if total:
-        # synthetic name so category_for resolves to 'crowdsec'
-        return {"sbx_drop_crowdsec": {"packets": total, "bytes": 0}}
-    return {}
-
-
 def _read_ifaces() -> dict:
     try:
         return parse_proc_net_dev(Path("/proc/net/dev").read_text())
@@ -312,7 +289,6 @@ def collect_once(now: int | None = None, conn: sqlite3.Connection | None = None)
     c, owns = _open_db(conn)
     try:
         counters = dict(_read_nft_counters())
-        counters.update(_read_crowdsec())
         ifaces = _read_ifaces()
         insert_sample(c, now, counters, ifaces)
         prune(c, keep_s=7 * 86400)

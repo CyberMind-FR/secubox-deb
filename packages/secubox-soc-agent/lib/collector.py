@@ -23,7 +23,6 @@ import logging
 logger = logging.getLogger("secubox.soc-agent.collector")
 
 # Paths
-CROWDSEC_ALERTS_CMD = ["cscli", "alerts", "list", "-l", "50", "-o", "json"]
 SURICATA_EVE_LOG = Path("/var/log/suricata/eve.json")
 WAF_ALERTS_DIR = Path("/var/log/secubox/waf")
 NETDATA_SOCK = Path("/run/netdata/netdata.sock")
@@ -161,7 +160,7 @@ def get_load_average() -> Dict[str, float]:
 def get_services_status() -> List[Dict[str, Any]]:
     """Get status of key SecuBox services."""
     services = [
-        "nginx", "haproxy", "crowdsec", "suricata",
+        "nginx", "haproxy", "suricata",
         "secubox-hub", "secubox-watchdog", "netdata"
     ]
 
@@ -179,28 +178,6 @@ def get_services_status() -> List[Dict[str, Any]]:
         })
 
     return results
-
-
-def get_crowdsec_alerts(limit: int = 20) -> List[Dict[str, Any]]:
-    """Get recent CrowdSec alerts."""
-    try:
-        success, out, _ = run_cmd(
-            ["cscli", "alerts", "list", "-l", str(limit), "-o", "json"],
-            timeout=15
-        )
-        if success and out.strip():
-            alerts = json.loads(out)
-            return [{
-                "id": a.get("id"),
-                "source": "crowdsec",
-                "ip": a.get("source", {}).get("ip"),
-                "scenario": a.get("scenario"),
-                "created_at": a.get("created_at"),
-                "severity": "high" if "brute" in a.get("scenario", "") else "medium"
-            } for a in alerts[:limit]]
-    except Exception as e:
-        logger.warning(f"Failed to get CrowdSec alerts: {e}")
-    return []
 
 
 def get_suricata_alerts(limit: int = 20) -> List[Dict[str, Any]]:
@@ -327,7 +304,7 @@ def calculate_health_score(
         score -= 10
 
     # Service penalty
-    critical_services = {"nginx", "haproxy", "crowdsec"}
+    critical_services = {"nginx", "haproxy"}
     for svc in services:
         if not svc.get("running"):
             if svc["name"] in critical_services:
@@ -379,7 +356,6 @@ async def collect_alerts() -> List[Dict[str, Any]]:
     alerts = []
 
     # Collect from all sources
-    alerts.extend(get_crowdsec_alerts(20))
     alerts.extend(get_suricata_alerts(20))
     alerts.extend(get_waf_alerts(20))
 

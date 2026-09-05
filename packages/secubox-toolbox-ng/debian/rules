@@ -34,7 +34,7 @@ override_dh_auto_build:
 	# #1220 authwatch : analyse de journaux (SSH/SMTP/IMAP) + leurres de service.
 	# Comble ce que sbxwaf ne voit pas — il est derriere HAProxy et ne connait
 	# que le HTTP — en alimentant LE MEME ensemble nft et LE MEME journal de
-	# menaces, pour que la correlation perdue avec CrowdSec revienne sans qu'un
+	# menaces, pour que la correlation perdue revienne sans qu'un
 	# seul consommateur ait a changer.
 	go build -trimpath -ldflags=-s -o sbx-authwatch ./cmd/sbx-authwatch
 	# sbxdpi : la couche Go au-dessus de nDPId. Consomme le flux JSON du
