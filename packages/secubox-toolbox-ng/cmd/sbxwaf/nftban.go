@@ -17,14 +17,14 @@ import (
 
 // Ban nft natif (#1070, phase B).
 //
-// Jusqu'ici le WAF déléguait TOUT le ban à CrowdSec (cscli → bouncer → nft). Un
-// WAF sans CrowdSec ne bloquait donc rien. NftBanner rend le WAF AUTONOME : il
+// Jusqu'ici le WAF déléguait TOUT le ban à un relais externe (→ bouncer → nft). Un
+// WAF sans ce relais ne bloquait donc rien. NftBanner rend le WAF AUTONOME : il
 // gère son PROPRE set nft `inet secubox waf_ban{,6}` avec un `timeout` par
 // élément — le noyau retire l'IP à l'échéance (le retrait différé). Le journal
 // (BanStore) assure la persistance au restart et l'audit.
 //
-// LE WAF BLOQUE LUI-MÊME, sans relais. CrowdSec n'est plus appelé (#1218) : sa
-// voie échouait de toute façon en silence — cscli lit /etc/crowdsec/config.yaml,
+// LE WAF BLOQUE LUI-MÊME, sans relais externe (#1218) : l'ancienne voie
+// échouait de toute façon en silence (droits/config du relais externe),
 // que le compte de service ne peut pas ouvrir.
 //
 // PIÈGE CORRIGÉ (#1218) : Ensure() ne créait que la table et les deux SETS. Rien
@@ -35,7 +35,7 @@ import (
 // ce qui rend le blocage réel.
 //
 // Le processus a besoin de CAP_NET_ADMIN (ou `sudo nft`) — sinon `nft` échoue et
-// on se rabat sur CrowdSec seul, en journalisant.
+// aucun ban natif n'est posé, en journalisant.
 
 // nftRunner exécute `nft <args...>`. Injectable pour les tests.
 type nftRunner func(ctx context.Context, args ...string) ([]byte, error)
@@ -88,7 +88,7 @@ func (b *NftBanner) execNft(ctx context.Context, args ...string) ([]byte, error)
 
 // Ensure crée table + sets de façon idempotente. À appeler une fois au
 // démarrage. Renvoie une erreur si nft n'est pas utilisable (droits) — l'appelant
-// désactive alors le backend nft et garde CrowdSec.
+// désactive alors le backend nft (plus de ban natif).
 func (b *NftBanner) Ensure() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

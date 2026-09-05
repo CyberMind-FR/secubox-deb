@@ -15,7 +15,7 @@
 // POURQUOI CE N'EST PAS DU HTTP. sbxwaf est place derriere HAProxy : il ne voit
 // que ce qui parle HTTP. La force brute SSH, les echecs SASL de postfix, les
 // tentatives IMAP de dovecot lui sont invisibles. C'est precisement la surface
-// que CrowdSec couvrait et qu'on a perdue en le retirant (#1218). Ici on la
+// que l'ancien relais de ban externe couvrait et qu'on a perdue en le retirant (#1218). Ici on la
 // reprend, en alimentant LE MEME ensemble nft et LE MEME journal de menaces —
 // pour que la correlation, les pays et le rapport PDF retrouvent ces sources
 // sans qu'aucun de ces trois consommateurs ait a changer.
@@ -125,7 +125,7 @@ func Reconnaitre(ligne string) (Signal, bool) {
 // 339 des 388 adresses d'une campagne SASL n'apparaissent qu'UNE FOIS en sept
 // jours — un compteur par adresse ne verrait jamais rien. Le compte, lui, est
 // stable : « gerald@gk2.net » a ete tente 39 fois depuis autant de sources.
-// C'est la correlation que CrowdSec apportait et qu'on reconstitue ici.
+// C'est la correlation que l'ancien relais externe apportait et qu'on reconstitue ici.
 var motifsCible = []*regexp.Regexp{
 	reI(`sasl_username=([^\s,]+)`), // postfix
 	reI(`user=<([^>]*)>`),          // dovecot

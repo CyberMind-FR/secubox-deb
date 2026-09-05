@@ -16,8 +16,6 @@
 //   - On a WAF hit: ban.Record(clientIP, now) → if banned → writeBan + log
 //     "banned"; else → writeWarning + log "warning".
 //   - threatLog is set by main() via NewThreatLog(--threat-log path).
-//   - crowdsec seam: Server.crowdsec (nil-able interface, see below) is the
-//     hook point for Task 4.1 — call crowdsec.Report(ip, cat, sev) when
 //     banned, guarded by nil-check so the field is entirely optional.
 //
 // Design decision — Server struct:
@@ -29,7 +27,6 @@
 //   - upstreamTimeout time.Duration
 //   - ban       *Ban               sliding-window ban state; NewBan(300s,3) in main()
 //   - threatLog *ThreatLog         append-only JSON threat log; NewThreatLog in main()
-//   - crowdsec  CrowdSecReporter   Task 4.1 seam — nil until wired; see interface below
 package main
 
 import (
@@ -81,20 +78,6 @@ func upstreamErrorCode(err error) int {
 	return http.StatusServiceUnavailable // 503
 }
 
-// CrowdSecReporter is the seam for Task 4.1 — CrowdSec LAPI bridge.
-// When a client IP is banned, the handler calls crowdsec.Report if the field
-// is non-nil.  Task 4.1 implements a concrete type (e.g. *CrowdSecClient) and
-// wires it into Server.crowdsec in main().
-//
-// TODO(task-4.1): implement CrowdSecClient satisfying this interface and wire
-// it via --crowdsec-url / --crowdsec-machine-id / --crowdsec-password flags.
-type CrowdSecReporter interface {
-	// Report submits a ban alert for ip to the CrowdSec LAPI.
-	// cat and sev are the WAF category and severity strings.
-	// Must be non-blocking (should run in a goroutine if the LAPI call can block).
-	Report(ip, cat, sev string)
-}
-
 // Server is the sbxwaf reverse-proxy core.
 type Server struct {
 	// ca holds the loaded forging CA. May be nil when --ca-cert/--ca-key are not
@@ -134,7 +117,7 @@ type Server struct {
 
 	// escalateBan counts hits on `escalate`-mode categories in a SEPARATE
 	// sliding window (long, e.g. 24h) from `ban`. escalate observes (passes,
-	// logs "detect") until this counter says banned, then bans via crowdsec.
+	// logs "detect") until this counter says banned, then bans via nftBan.
 	// Nil means escalate behaves like detect (observe, never ban).
 	escalateBan *Ban
 
@@ -148,14 +131,9 @@ type Server struct {
 	// sanctionné au lieu d'un simple 421 muet. Kill-switch --host-anomaly.
 	hostAnomaly bool
 
-	// crowdsec is the Task 4.1 CrowdSec LAPI bridge seam.
-	// Nil until Task 4.1 is implemented and wired in main().
-	// When non-nil: called with (ip, cat, sev) whenever an IP reaches BAN.
-	crowdsec CrowdSecReporter
-
 	// nftBan est le ban nft NATIF (#1070, phase B) — set nft à timeout géré par
-	// le WAF lui-même, en parallèle de CrowdSec. Nil = backend désactivé (nft
-	// indisponible / droits manquants) : on retombe sur CrowdSec seul.
+	// le WAF lui-même. Nil = backend désactivé (nft
+	// indisponible / droits manquants) : aucun ban natif posé.
 	nftBan *NftBanner
 
 	// ja4Header est l'en-tête de confiance où HAProxy dépose l'empreinte TLS JA4
@@ -556,7 +534,7 @@ func (s *Server) handler() http.Handler {
 				if hit && mode == modeDetect {
 					// Observe only: log it, let it through. A detect category
 					// must be as harmless as enabled:false, minus the log line
-					// — so NO ban, NO CrowdSec report, NO nft decision, NO
+					// — so NO ban, NO nft decision, NO
 					// ban-counter increment.
 					if s.threatLog != nil {
 						s.threatLog.Record(ThreatRecord{
@@ -648,7 +626,7 @@ func (s *Server) handler() http.Handler {
 						sev, ip, count, 3, cat)
 
 					if banned {
-						// Task 4.1 seam — notify CrowdSec LAPI when non-nil.
+						// Ban natif nft (appliquerBan → nftBan).
 						s.appliquerBan(ip, cat, sev)
 						writeBan(w)
 					} else {
@@ -809,16 +787,10 @@ func (s *Server) lireJA4(r *http.Request) string {
 	return r.Header.Get(s.ja4Header)
 }
 
-// appliquerBan sanctionne une IP sur TOUS les backends configurés, en parallèle
-// (#1070, phase B) : le drop nft natif ET le rapport CrowdSec. Le nft rend le ban
-// effectif même si CrowdSec est absent — le WAF est autonome.
-// appliquerBan applique le ban. Le WAF bloque LUI-MÊME, sans relais (#1218).
-//
-// CrowdSec n'est plus appelé. Deux raisons, la seconde étant décisive :
-//   - la voie échouait de toute façon en silence — cscli lit
-//     /etc/crowdsec/config.yaml, que le compte de service ne peut pas ouvrir ;
-//   - un WAF qui ne sait pas bloquer sans un tiers n'est pas un WAF. Le drop
-//     est désormais posé par sbxwaf dans sa propre chaîne nft (voir nftban.go).
+// appliquerBan sanctionne une IP via le drop nft natif (#1070, phase B). Le WAF
+// bloque LUI-MÊME, sans relais externe (#1218) : un WAF qui ne sait pas bloquer
+// sans un tiers n'est pas un WAF. Le drop est posé par sbxwaf dans sa propre
+// chaîne nft (voir nftban.go), effectif de façon autonome.
 //
 // Si nftBan est nil, RIEN ne bloque : c'est journalisé au démarrage plutôt que
 // laissé à deviner (voir main()).
@@ -831,7 +803,7 @@ func (s *Server) appliquerBan(ip, cat, sev string) {
 // recordHostAnomaly journalise et sanctionne un Host non routé (#1070, phase A).
 // N'ÉCRIT PAS de réponse : l'appelant renvoie toujours 421 (ne rien divulguer).
 //
-// Classes FORTES (vide/IP/DGA) → ban premier coup (rapport CrowdSec immédiat) :
+// Classes FORTES (vide/IP/DGA) → ban premier coup (nft immédiat) :
 // aucun usage légitime. Classe FAIBLE (unrouted) → compteur gradué, car un lien
 // périmé légitime existe. Un client LAN est exempté de ban (mauvaise config, pas
 // attaque) mais reste journalisé.
@@ -966,19 +938,9 @@ func main() {
 			"— journaliser + bannir au lieu d'un 421 muet (#1070)")
 	threatLog := flag.String("threat-log", "/var/log/secubox/waf/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
-	// Task 4.1: CrowdSec LAPI bridge flags.
-	crowdsecURL := flag.String("crowdsec-url", "",
-		"CrowdSec LAPI base URL (e.g. http://10.100.0.1:8080); empty disables the bridge")
-	crowdsecJWTFile := flag.String("crowdsec-jwt-file", "",
-		"path to file containing the CrowdSec LAPI JWT/API key (read once at startup)")
-	crowdsecBanDuration := flag.String("crowdsec-ban-duration", "4h",
-		"ban duration forwarded to CrowdSec decisions (e.g. 4h, 24h)")
-	crowdsecCscli := flag.String("crowdsec-cscli", "cscli",
-		"cscli binary used to inject ban decisions when no --crowdsec-jwt-file is set "+
-			"(the proven path the WAF dashboard's manual ban uses); empty disables the cscli fallback")
-	// Ban nft natif (#1070 phase B) — en parallèle de CrowdSec, WAF autonome.
+	// Ban nft natif (#1070 phase B) — WAF autonome.
 	nftBanEnabled := flag.Bool("nft-ban", false,
-		"ban natif nft en parallèle de CrowdSec (#1070) : le WAF pose ses propres drops "+
+		"ban natif nft (#1070) : le WAF pose ses propres drops "+
 			"dans inet <table> waf_ban{,6}, persistants et à retrait différé (nécessite CAP_NET_ADMIN)")
 	nftPath := flag.String("nft-path", "nft", "chemin de l'exécutable nft")
 	nftTable := flag.String("nft-table", "secubox", "table nft inet pour les sets de ban")
@@ -1123,7 +1085,6 @@ func main() {
 		ja4Header:   *ja4Header,
 		// #1080 phase G: profils de service par vhost (nil = désactivé).
 		vhostProfiles: profils,
-		// crowdsec: wired below when --crowdsec-url and --crowdsec-jwt-file are set.
 		// Task 5.1: RGPD cookie-audit ledger.
 		cookieAudit: cookieAudit,
 		// Task 6.1: response media cache.
@@ -1144,40 +1105,15 @@ func main() {
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
 	log.Printf("sbxwaf: body-inspect cap=%d bytes; trusted-skip hosts=%d", *maxBodyInspectFlag, len(srv.trustedHosts))
 
-	// Task 4.1: wire CrowdSec LAPI bridge when both --crowdsec-url and
-	// --crowdsec-jwt-file are provided.  The JWT is read from a file so the
-	// secret never appears in the process command line or environment.
-	if *crowdsecURL != "" && *crowdsecJWTFile != "" {
-		jwtBytes, err := os.ReadFile(*crowdsecJWTFile)
-		if err != nil {
-			log.Fatalf("sbxwaf: crowdsec: read jwt-file %q: %v", *crowdsecJWTFile, err)
-		}
-		jwt := strings.TrimSpace(string(jwtBytes))
-		srv.crowdsec = NewCrowdSecClient(*crowdsecURL, jwt, *crowdsecBanDuration)
-		log.Printf("sbxwaf: CrowdSec LAPI bridge enabled → %s (ban-duration=%s)",
-			*crowdsecURL, *crowdsecBanDuration)
-	} else if *crowdsecURL != "" && *crowdsecCscli != "" {
-		// No JWT file: use the cscli fallback (the LAPI /v1/alerts path 500s on
-		// this build and JWTs expire hourly). This is the path that actually
-		// creates a bouncer-enforced nft drop, so auto-bans finally take effect.
-		srv.crowdsec = NewCscliReporter(*crowdsecCscli, *crowdsecBanDuration)
-		log.Printf("sbxwaf: NOTE — CrowdSec n'est plus le relais de ban (#1218) ; " +
-			"le blocage est posé par sbxwaf dans sa propre chaîne nft")
-		log.Printf("sbxwaf: CrowdSec bridge enabled via cscli %q (ban-duration=%s)",
-			*crowdsecCscli, *crowdsecBanDuration)
-	} else if *crowdsecURL != "" || *crowdsecJWTFile != "" {
-		log.Printf("sbxwaf: crowdsec bridge disabled — set --crowdsec-url (+ --crowdsec-cscli or --crowdsec-jwt-file)")
-	}
-
-	// Ban nft natif (#1070 phase B) — en parallèle de CrowdSec. Autonome : le
-	// drop nft est effectif même sans CrowdSec, persiste au restart (journal) et
+	// Ban nft natif (#1070 phase B). Autonome : le
+	// drop nft est effectif de façon autonome, persiste au restart (journal) et
 	// se retire à l'échéance (timeout nft). Ensure échoue sans CAP_NET_ADMIN → on
-	// désactive proprement le backend nft et on garde CrowdSec.
+	// désactive proprement le backend nft (plus de ban natif).
 	if *nftBanEnabled {
 		store := NewBanStore(*banStore)
 		nb := NewNftBanner(*nftPath, *nftTable, *nftBanDuration, store)
 		if err := nb.Ensure(); err != nil {
-			log.Printf("sbxwaf: ban nft natif désactivé (nft indisponible : %v) — CrowdSec seul", err)
+			log.Printf("sbxwaf: ban nft natif désactivé (nft indisponible : %v) — plus de ban natif", err)
 		} else {
 			srv.nftBan = nb
 			n := nb.Reload()

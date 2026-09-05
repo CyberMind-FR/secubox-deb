@@ -13,23 +13,6 @@ import (
 	"time"
 )
 
-// reporterFake enregistre les rapports CrowdSec via un canal (Report est appelé
-// dans une goroutine).
-type reporterFake struct{ ch chan [3]string }
-
-func (f *reporterFake) Report(ip, cat, sev string) { f.ch <- [3]string{ip, cat, sev} }
-
-func serveurAnomalie(t *testing.T, rep CrowdSecReporter) (*Server, string) {
-	t.Helper()
-	logPath := filepath.Join(t.TempDir(), "threats.log")
-	return &Server{
-		ban:         NewBan(300*time.Second, 3),
-		threatLog:   NewThreatLog(logPath),
-		crowdsec:    rep,
-		hostAnomaly: true,
-	}, logPath
-}
-
 // serveurAnomalieNft monte un serveur dont le ban passe par le banneur nft du
 // WAF — le seul chemin de blocage depuis #1218.
 func serveurAnomalieNft(t *testing.T) (*Server, string, *fauxNft) {
@@ -79,8 +62,7 @@ func TestRecordHostAnomaly_FortDepuisWANBannitParLeWAF(t *testing.T) {
 }
 
 func TestRecordHostAnomaly_ClientLANObserveSansBannir(t *testing.T) {
-	rep := &reporterFake{ch: make(chan [3]string, 1)}
-	srv, logPath := serveurAnomalie(t, rep)
+	srv, logPath, fx := serveurAnomalieNft(t)
 
 	req := httptest.NewRequest(http.MethodGet, "http://x/", nil)
 	req.Host = "10.10.10.10"
@@ -90,11 +72,11 @@ func TestRecordHostAnomaly_ClientLANObserveSansBannir(t *testing.T) {
 	if data, _ := os.ReadFile(logPath); !contains(string(data), `"action":"detect"`) {
 		t.Fatalf("client LAN attendu action detect, obtenu: %s", data)
 	}
-	select {
-	case c := <-rep.ch:
-		t.Fatalf("client LAN ne doit PAS être rapporté à CrowdSec: %v", c)
-	case <-time.After(120 * time.Millisecond):
-		// rien reçu : correct
+	// Un client LAN ne doit JAMAIS entrer dans le set nft (aucun ban posé) :
+	// on laisse une éventuelle goroutine de ban s'exécuter, puis on vérifie.
+	time.Sleep(150 * time.Millisecond)
+	if contains(joint(fx.dernier()), "192.168.1.50") {
+		t.Fatalf("client LAN ne doit PAS être banni (nft): %q", joint(fx.dernier()))
 	}
 }
 

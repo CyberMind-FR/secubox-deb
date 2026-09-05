@@ -18,7 +18,7 @@ import (
 // repartait à zéro. BanStore journalise chaque ban/unban en JSONL append-only ;
 // au démarrage on relit les bans encore actifs et on les ré-injecte dans nft.
 // C'est ce qui rend le WAF AUTONOME : les bans survivent au restart, sans
-// dépendre de CrowdSec.
+// dépendre d'un relais externe.
 
 // BanRecord est une ligne du journal.
 type BanRecord struct {

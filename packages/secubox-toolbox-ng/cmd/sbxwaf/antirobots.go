@@ -14,7 +14,7 @@
 // et des 504 pour les humains.
 //
 // CE QUE CE N'EST PAS. Ce n'est PAS de la détection de menace. On ne bannit
-// pas, on ne signale pas à CrowdSec, on n'incrémente aucun compteur de
+// pas, on ne signale rien en externe, on n'incrémente aucun compteur de
 // sévérité : bannir l'adresse de Googlebot serait une faute. C'est une
 // décision de CHARGE, prise tôt et à bas coût, et journalisée à part
 // (`action: "robot"`) pour rester auditable.

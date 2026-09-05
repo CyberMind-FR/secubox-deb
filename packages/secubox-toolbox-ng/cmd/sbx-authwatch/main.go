@@ -8,7 +8,7 @@
 // CE QU'IL COMBLE. sbxwaf est place derriere HAProxy : il ne voit que le HTTP.
 // La force brute SSH, les echecs SASL de postfix, les tentatives IMAP de
 // dovecot et les balayages de ports lui sont invisibles. C'etait la surface
-// couverte par CrowdSec, perdue en le retirant (#1218). sbx-authwatch la
+// couverte par l'ancien relais externe, perdue en le retirant (#1218). sbx-authwatch la
 // reprend, avec deux sources qui se completent :
 //
 //  1. ANALYSE DE JOURNAUX — ce que les services deja presents ont constate.

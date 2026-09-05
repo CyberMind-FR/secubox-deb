@@ -20,7 +20,7 @@
 // dans la fenetre, on considere la campagne etablie, et chaque source qui y
 // participe devient bannissable des son premier echec. On ne punit pas la
 // repetition d'un individu, on reconnait une action collective — c'est la
-// correlation que CrowdSec apportait et que son retrait avait emportee.
+// correlation que l'ancien relais externe apportait et que son retrait avait emportee.
 //
 // LA RESERVE, qui compte autant. Un compte vise peut etre un compte REEL —
 // « gerald@gk2.net » l'est. Son proprietaire qui se trompe de mot de passe
