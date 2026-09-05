@@ -68,10 +68,6 @@ override_dh_auto_install:
 	# Threatmesh ban-apply timer + oneshot (#768)
 	install -m 644 $(CURDIR)/systemd/secubox-annuaire-bans-apply.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/secubox-annuaire-bans-apply.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
-	# Threatmesh ban->mesh bridge (the WAF hook) + timer (#768)
-	install -m 755 $(CURDIR)/sbin/sbx-threatmesh-bridge $(CURDIR)/debian/secubox-annuaire/usr/sbin/sbx-threatmesh-bridge
-	install -m 644 $(CURDIR)/systemd/secubox-threatmesh-bridge.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
-	install -m 644 $(CURDIR)/systemd/secubox-threatmesh-bridge.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	# Fleet metrics publish timer + oneshot (fleet-metrics, Task 5)
 	install -m 644 $(CURDIR)/systemd/secubox-metrics-publish.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/secubox-metrics-publish.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/

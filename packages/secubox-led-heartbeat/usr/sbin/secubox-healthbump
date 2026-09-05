@@ -8,7 +8,7 @@
 # LED Layout (MOCHAbin front panel, bottom to top):
 #   LED1 (HW)  - Hardware: network, CPU, memory
 #   LED2 (SVC) - Services: vhosts, certs, HAProxy
-#   LED3 (SEC) - Security: CrowdSec bans, attacks
+#   LED3 (SEC) - Security: bans, attacks
 
 # Same values as secubox-led-safe
 LED_BASE="/sys/class/leds"
@@ -171,7 +171,6 @@ spunk_alert() {
 # Check critical services
 check_critical() {
     pgrep -x haproxy >/dev/null || { spunk_alert "HAProxy down"; return 1; }
-    pgrep -x crowdsec >/dev/null || { spunk_alert "CrowdSec down"; return 1; }
     return 0
 }
 
@@ -251,7 +250,9 @@ check_services() {
 # LED3 - Security check
 check_security() {
     color="green"; detail="clear"
-    bans=$(cscli decisions list -o json 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+    # Ancienne source de bans externe retiree (#1218) — comptage neutre en
+    # attendant une source de bans locale (ex. sets nft du WAF).
+    bans=0
 
     rate=0
     if [ -f "$RATE_FILE" ]; then
@@ -282,7 +283,8 @@ gather_metrics() {
     load=$(cut -d' ' -f1 /proc/loadavg | cut -d'.' -f1)
     METRIC_CPU=$((load * 25))
     METRIC_MEM=$(free | awk '/^Mem:/ {printf "%.0f", $3/$2*100}')
-    METRIC_BANS=$(cscli decisions list -o json 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+    # Ancienne source de bans externe retiree (#1218) — comptage neutre.
+    METRIC_BANS=0
 
     wan_ok=1
     ip route get 8.8.8.8 >/dev/null 2>&1 || wan_ok=0

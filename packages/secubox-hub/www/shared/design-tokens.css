@@ -50,7 +50,7 @@
 
   /* ═══════════════════════════════════════════════════════════════
      MODULE 02: WALL — Yellow/Amber (Amber Shield)
-     Firewall, nftables, CrowdSec, IDS/IPS
+     Firewall, nftables, IDS/IPS
      ═══════════════════════════════════════════════════════════════ */
   --wall-main:  #9A6010;
   --wall-light: #CC8820;

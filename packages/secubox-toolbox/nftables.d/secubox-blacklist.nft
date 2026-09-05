@@ -4,7 +4,7 @@
 # Phase 13.A (#521) — unified blacklist enforcement spine.
 #
 # One authoritative pair of sets (v4/v6) fed by secubox-blacklist-sync
-# from ALL ban sources (CrowdSec decisions + threat-intel C2 IPs ;
+# from ALL ban sources (threat-intel C2 IPs ;
 # WAF-ban + Vortex-resolved feeds land in 13.B/13.D).  A single
 # forward-hook chain drops any ROUTED packet whose source OR destination
 # is blacklisted — so it covers every device egress path at once

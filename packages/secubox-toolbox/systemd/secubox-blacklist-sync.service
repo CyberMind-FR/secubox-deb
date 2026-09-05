@@ -1,27 +1,21 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Phase 13.A (#521) — union ban sources into the nft blacklist sets.
 [Unit]
-Description=SecuBox blacklist enforcement sync (CrowdSec + threat-intel -> nft sets)
+Description=SecuBox blacklist enforcement sync (threat-intel -> nft sets)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/521
-After=nftables.service secubox-toolbox.service crowdsec.service
-# Dependance CrowdSec (#1218). Ce service lit les decisions de CrowdSec via
-# cscli : sans le moteur, il tourne pour rien. Requisite echoue IMMEDIATEMENT si
-# crowdsec n'est pas deja actif, sans tenter de le demarrer — c'est la semantique
-# voulue : ne rien faire tant que CrowdSec n'est pas la, plutot que shell un
-# binaire qui rendra une liste vide ou une erreur a chaque declenchement.
-Requisite=crowdsec.service
+After=nftables.service secubox-toolbox.service
 Wants=nftables.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/secubox-blacklist-sync
 # Needs CAP_NET_ADMIN for nft set writes ; root is simplest + the script
-# is read-only against the toolbox DB + cscli.
+# is read-only against the toolbox DB.
 User=root
 Nice=10
 IOSchedulingClass=idle
 # 600 s etait dimensionne pour le balayage DNS de la Source 3, retiree le
-# 2026-08-16 (#1045). Ce qui reste — une requete SQLite, cscli, et des ajouts
+# 2026-08-16 (#1045). Ce qui reste — une requete SQLite et des ajouts
 # nft par lots — se compte en secondes. Un plafond genereux ne protegeait plus
 # de rien : il laissait simplement un blocage tourner dix minutes avant que
 # systemd ne s'en apercoive.

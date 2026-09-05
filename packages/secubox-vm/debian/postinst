@@ -5,7 +5,7 @@ case "$1" in
     install -d -o root -g root -m 755 /var/lib/secubox/vm
     install -d -o root -g root -m 755 /var/lib/secubox/vm/iso
     install -d -o root -g root -m 755 /var/lib/secubox/vm/disks
-    # #601 — validate the read+lifecycle cscli/lxc sudo grant; drop it if
+    # #601 — validate the read+lifecycle lxc sudo grant; drop it if
     # malformed so a bad drop-in can never break sudo for the whole system.
     SUDOERS=/etc/sudoers.d/secubox-vm
     if [ -f "$SUDOERS" ]; then

@@ -15,7 +15,6 @@ depends:
   - secubox-core
   - secubox-hub
   - secubox-portal
-  - secubox-crowdsec
   - secubox-wireguard
   - secubox-netmodes
   - secubox-nac

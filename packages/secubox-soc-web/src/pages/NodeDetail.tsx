@@ -28,7 +28,6 @@ interface NodeData {
 const SERVICES = [
   { name: 'nginx', label: 'Nginx' },
   { name: 'haproxy', label: 'HAProxy' },
-  { name: 'crowdsec', label: 'CrowdSec' },
   { name: 'suricata', label: 'Suricata' },
   { name: 'netdata', label: 'Netdata' },
 ]

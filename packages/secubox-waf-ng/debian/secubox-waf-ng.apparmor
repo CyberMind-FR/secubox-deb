@@ -11,7 +11,7 @@
 #   - rw   : /var/cache/secubox/waf/**    (media response cache)
 #   - rw   : /run/secubox/**              (Unix sockets, PID files)
 #   - r    : /etc/secubox/waf/**          (routes, rules, CA cert)
-#   - r    : /etc/secubox/secrets/**      (CrowdSec JWT file — read-only)
+#   - r    : /etc/secubox/secrets/**      (JWT / secret files — read-only)
 #   - r    : /usr/sbin/sbxwaf             (binary)
 #   - r    : /proc/self/maps, /proc/self/status, /sys/kernel/mm/transparent*
 #             (Go runtime internals; read-only, kernel-granted)

@@ -16,7 +16,6 @@ depends:
   - secubox-hub
   - secubox-portal
   - secubox-system
-  - secubox-crowdsec
   - secubox-waf
   - secubox-vortex-firewall
   - secubox-auth

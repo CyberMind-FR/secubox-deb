@@ -3,16 +3,7 @@
 # Deux capacités, chacune limitée à un jeu de verbes précis. Ni accès root, ni
 # contrôle des services.
 #
-# ── 1. CrowdSec : bans du tableau de bord WAF ────────────────────────────────
-#
-# L'API du module WAF (api/main.py) sert le tableau de bord : lister les
-# décisions, bannir, et lever un ban à la demande de l'opérateur. Elle tourne
-# sous `secubox` et passe par `cscli decisions`. `delete` est VOULU ici — c'est
-# le bouton « lever le ban » de l'interface, une action opérateur assumée (à ne
-# pas confondre avec le service sbxwaf lui-même, qui tourne sous `secubox-waf`
-# et ne reçoit, dans /etc/sudoers.d/secubox-waf-ng, QUE `decisions add`).
-#
-# ── 2. Purge du cache média du WAF ───────────────────────────────────────────
+# ── 1. Purge du cache média du WAF ───────────────────────────────────────────
 #
 # Le cache de sbxwaf (TTL 1 h) sert CSS/JS/images/polices. Un asset redéployé
 # dont l'amont ne change pas l'ETag reste servi PÉRIMÉ jusqu'à la fin de son TTL
@@ -23,10 +14,7 @@
 # — ni démarrage, ni arrêt, ni config, ni route. Au pire, une relecture de cache
 # forcée : une nuisance de performance, pas une atteinte à la sécurité.
 
-Cmnd_Alias SBX_WAF_CSCLI = /usr/bin/cscli decisions add *, \
-                           /usr/bin/cscli decisions delete *, \
-                           /usr/bin/cscli decisions list *
-# ── 3. Case anti-robots du panneau Vhost (#1216) ────────────────────────────
+# ── 2. Case anti-robots du panneau Vhost (#1216) ────────────────────────────
 #
 # Le fichier /etc/secubox/waf/vhost_profiles.json appartient à root et son
 # dossier est root:secubox-waf ; l'API du panneau Vhost tourne sous `secubox`
@@ -36,10 +24,10 @@ Cmnd_Alias SBX_WAF_CSCLI = /usr/bin/cscli decisions add *, \
 # qu'un vhost refuse ou accepte les robots : une décision de charge,
 # réversible d'un clic, jamais une ouverture de la surface d'attaque.
 Cmnd_Alias SBX_WAF_PURGE = /usr/sbin/wafctl purge-cache
-# ── 4. Lecture des bannissements nft (#1221) ────────────────────────────────
+# ── 3. Lecture des bannissements nft (#1221) ────────────────────────────────
 #
 # Le tableau de bord affichait « 0 ban actif » alors que le pare-feu en tenait
-# quatre-vingts : il interrogeait CrowdSec, retire du chemin de blocage. La
+# quatre-vingts : il interrogeait une source retiree du chemin de blocage. La
 # source de verite est l'ensemble nft du WAF. LECTURE SEULE, sur deux ensembles
 # nommes : ni ajout, ni suppression, ni acces au reste du jeu de regles.
 Cmnd_Alias SBX_WAF_NFTLIST = /usr/sbin/nft -j list set inet secubox waf_ban, \
@@ -47,10 +35,10 @@ Cmnd_Alias SBX_WAF_NFTLIST = /usr/sbin/nft -j list set inet secubox waf_ban, \
                              /sbin/nft -j list set inet secubox waf_ban, \
                              /sbin/nft -j list set inet secubox waf_ban6
 
-# ── 5. Bannissement manuel depuis le tableau de bord (#1225) ────────────────
+# ── 4. Bannissement manuel depuis le tableau de bord (#1225) ────────────────
 #
-# Le bouton « Ban » passait par cscli, retire du chemin de blocage : il
-# annoncait un succes sans rien bannir. Il ecrit desormais dans l'ensemble nft
+# Le bouton « Ban » passait autrefois par une source retiree du chemin de
+# blocage : il annoncait un succes sans rien bannir. Il ecrit desormais dans l'ensemble nft
 # du WAF, par un verbe unique qui valide l'adresse, refuse le prive et borne la
 # duree. `secubox` n'obtient pas nft : il obtient CE verbe.
 Cmnd_Alias SBX_WAF_BANMANUEL = /usr/sbin/wafctl ban *, \
@@ -60,7 +48,6 @@ Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
                             /usr/sbin/wafctl anti-robots on *, \
                             /usr/sbin/wafctl anti-robots off *
 
-secubox ALL=(root) NOPASSWD: SBX_WAF_CSCLI
 secubox ALL=(root) NOPASSWD: SBX_WAF_PURGE
 secubox ALL=(root) NOPASSWD: SBX_WAF_ROBOTS
 secubox ALL=(root) NOPASSWD: SBX_WAF_NFTLIST

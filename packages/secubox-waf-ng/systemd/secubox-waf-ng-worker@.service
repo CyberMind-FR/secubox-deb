@@ -48,15 +48,7 @@ ExecStart=/usr/sbin/sbxwaf \
   --vhost-signals /var/cache/secubox/waf/vhost-signals.@%i.json \
   --threat-log /var/log/secubox/waf/waf-threats.log \
   --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
-  --media-cache-dir /var/cache/secubox/waf/media \
-  --crowdsec-url http://10.100.0.1:8080 \
-  --crowdsec-jwt-file /etc/secubox/secrets/waf-crowdsec.jwt
-
-# IMPORTANT: --crowdsec-url must be the real CrowdSec LAPI endpoint (LXC-bridge
-# gateway 10.100.0.1:8080), NOT 127.0.0.1:8080 which is the nftables DNAT VIP
-# that fans connections back into these very workers (self-loop → ban alerts
-# never reach CrowdSec LAPI). Python addon used http://10.100.0.1:8080 for this
-# reason. Verify via pre-cutover checklist §1.2 in docs/CUTOVER.md.
+  --media-cache-dir /var/cache/secubox/waf/media
 
 Restart=on-failure
 RestartSec=5

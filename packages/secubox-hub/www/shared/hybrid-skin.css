@@ -529,7 +529,6 @@ html body.hybrid-skin {
 }
 
 .activity-icon.waf { background: rgba(232, 132, 90, 0.15); color: var(--auth-light); }
-.activity-icon.crowdsec { background: rgba(112, 104, 208, 0.15); color: var(--mind-light); }
 .activity-icon.ssl, .activity-icon.system { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
 .activity-icon.auth { background: rgba(44, 112, 192, 0.15); color: var(--mesh-light); }
 .activity-icon.threats { background: rgba(192, 96, 64, 0.15); color: var(--boot-light); }

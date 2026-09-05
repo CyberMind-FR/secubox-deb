@@ -24,9 +24,9 @@ EOF
     # masquerade`) and `include "/etc/nftables.d/*.nft"`. On the board it was
     # found masked (symlink to /dev/null), so after every reboot the kernel had
     # no NAT and all 10.100.0.0/24 LXCs lost outbound (#150). Unmask + enable so
-    # it loads at boot, ordered before the CrowdSec bouncer adds its own tables.
+    # it loads at boot.
     # Not force-started here: a live `nft -f` flushes the ruleset and would
-    # momentarily drop CrowdSec's live tables — boot-time loading is the fix.
+    # momentarily drop live tables — boot-time loading is the fix.
     systemctl unmask nftables.service 2>/dev/null || true
     systemctl enable nftables.service 2>/dev/null || true
 

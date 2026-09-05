@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
-    # #599 — validate the read-only cscli sudo grant; drop it if malformed so a
+    # #599 — validate the sudoers drop-in; drop it if malformed so a
     # bad drop-in can never break sudo for the whole system.
     SUDOERS=/etc/sudoers.d/secubox-threat-analyst
     if [ -f "$SUDOERS" ]; then

@@ -1,7 +1,5 @@
-# SecuBox threat-analyst — read-only CrowdSec ingestion.
-# The FastAPI daemon runs as the unprivileged `secubox` user and needs to read
-# CrowdSec alerts/decisions to populate the analyst dashboard. `cscli` needs
-# root (it reads /etc/crowdsec/local_api_credentials.yaml). Only READ-ONLY
-# subcommands are granted here — no add/delete/restart. CSPN least-privilege.
-secubox ALL=(root) NOPASSWD: /usr/bin/cscli alerts list *
-secubox ALL=(root) NOPASSWD: /usr/bin/cscli decisions list *
+# SecuBox threat-analyst — sudoers.
+# The threat feed this file used to grant read access to has been removed from
+# the platform, so no privileged command is delegated here any more. The file
+# is kept (empty of grants) to reserve the drop-in path for future least-
+# privilege delegations; add scoped, exact-command NOPASSWD entries here.

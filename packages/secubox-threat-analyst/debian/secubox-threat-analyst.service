@@ -18,10 +18,6 @@ Restart=on-failure
 RestartSec=5
 UMask=0000
 
-# #599 — allow the read-only `sudo cscli` ingestion grant (sibling pattern:
-# secubox-crowdsec / secubox-waf also set this). The sudo scope is tightly
-# limited to read-only `cscli alerts/decisions list` in /etc/sudoers.d.
-NoNewPrivileges=no
 # RuntimeDirectory=secubox RETIRE (#1022) : /run/secubox est partage par ~95
 # unites, et systemd EFFACE le contenu d'un RuntimeDirectory au redemarrage —
 # une seule unite qui le declare emporte les sockets de toutes les autres, et

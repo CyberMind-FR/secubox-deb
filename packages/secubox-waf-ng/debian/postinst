@@ -41,15 +41,10 @@ case "$1" in
     chown root:secubox-waf /etc/secubox/waf/ca
     chmod 0750 /etc/secubox/waf/ca
 
-    # Secrets dir: the secubox-waf JWT file lives here. Parent 0750 is correct
-    # (root:secubox-toolbox owns the parent on the board, so we only ensure
-    # our JWT file will be readable by secubox-waf when created by the operator).
-    # Do NOT re-mode /etc/secubox/secrets to 0750 — the parent /etc/secubox
-    # must stay 0755 (traversal constraint above). Just ensure the dir exists.
+    # Secrets dir: ensure the shared secrets directory exists and stays
+    # traversable. Do NOT re-mode /etc/secubox/secrets to 0750 — the parent
+    # /etc/secubox must stay 0755 (traversal constraint above).
     mkdir -p /etc/secubox/secrets
-    # The JWT file itself (/etc/secubox/secrets/waf-crowdsec.jwt) is operator-
-    # created; its perms are set when the operator generates it. We do NOT
-    # touch it here.
 
     # ── 3. Log directories ────────────────────────────────────────────────────
     # /var/log/secubox is a SHARED parent traversed by many service users

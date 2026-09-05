@@ -316,9 +316,9 @@ NFT_TABLE="secubox"
 
 # cmd_ban / cmd_unban — bannissement MANUEL depuis le tableau de bord (#1225).
 #
-# Le bouton « Ban » du panneau passait par `cscli decisions add`. Depuis que
-# CrowdSec est retire (#1210), cette commande ne fait plus rien — et l'API
-# avalait l'echec (`except: pass`), si bien que le bouton annoncait un succes
+# Le bouton « Ban » du panneau passait autrefois par une source de blocage
+# externe, desormais retiree (#1210) : cette commande ne faisait plus rien — et
+# l'API avalait l'echec (`except: pass`), si bien que le bouton annoncait un succes
 # sans que rien ne soit banni. On ecrit desormais dans l'ensemble nft du WAF,
 # celui que la chaine waf_drop consulte : le seul endroit qui bloque vraiment.
 #

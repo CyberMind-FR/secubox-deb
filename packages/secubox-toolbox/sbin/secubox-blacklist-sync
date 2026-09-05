@@ -42,7 +42,6 @@ trap 'rm -f "$TMP4" "$TMP6"' EXIT
 # single-source entries (e.g. blocklist.de) — arming all of them risks blocking
 # legitimate traffic. Enforce an IP only when corroborated by >= MIN_CONSENSUS
 # distinct sources OR carried by a curated high-trust feed (weight >= MIN_WEIGHT).
-# CrowdSec local decisions (Source 2) are always enforced.
 TI_MIN_CONSENSUS="${SECUBOX_BL_MIN_CONSENSUS:-2}"
 TI_MIN_WEIGHT="${SECUBOX_BL_MIN_WEIGHT:-80}"
 if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
@@ -52,14 +51,8 @@ if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
         2>/dev/null >> "$TMP4.raw" || true
 fi
 
-# Source 2 : CrowdSec decisions (ban scope=Ip). JSON via cscli.
-if command -v cscli >/dev/null 2>&1; then
-    cscli decisions list -o json 2>/dev/null \
-      | { command -v jq >/dev/null 2>&1 \
-            && jq -r '.[] | select(.decisions != null) | .decisions[] | select(.type=="ban") | .value' 2>/dev/null \
-            || sed -n 's/.*"value":"\([0-9a-fA-F:.]*\)".*/\1/p'; } \
-      >> "$TMP4.raw" || true
-fi
+# Source 2 (ancienne source de decisions externe) — RETIRE (#1218) : ce moteur
+# est desactive et destine a etre desinstalle ; la source est absente de l'agregat.
 
 # Source 3 (Phase 13.B #522) : DNS-guard — RETIRE le 2026-08-16.
 #

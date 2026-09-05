@@ -9,7 +9,7 @@
 name: secubox-dpi
 category: misc
 tier: pro
-description: "SecuBox DPI — netifyd Dashboard"
+description: "SecuBox DPI — Deep Packet Inspection Dashboard"
 
 depends:
   - secubox-core

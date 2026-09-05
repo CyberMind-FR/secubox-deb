@@ -62,7 +62,7 @@ Usage:
 Layers:
   hw, 1, bottom    LED1 - Hardware layer (network, CPU, memory)
   svc, 2, middle   LED2 - Services layer (vhosts, certs, HAProxy)
-  sec, 3, top      LED3 - Security layer (CrowdSec, attacks)
+  sec, 3, top      LED3 - Security layer (bans, attacks)
   all              All LEDs
 
 Status:

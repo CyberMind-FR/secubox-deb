@@ -9,8 +9,8 @@ CyberMind — https://cybermind.fr
 
 Pulls FREE, no-enrollment public IP/CIDR/domain blocklists and writes them into
 the shared `threat_intel` table (toolbox.db) that secubox-blacklist-sync already
-drains into the nft blacklist. This REPLACES the CrowdSec CAPI community feed
-with self-sourced lists — no central account, no paywall, no IP blocklisting.
+drains into the nft blacklist. Self-sourced lists — no central account, no
+paywall, no IP blocklisting.
 
 Pure stdlib (urllib) — no extra Debian deps. Idempotent, safe on a timer.
 """

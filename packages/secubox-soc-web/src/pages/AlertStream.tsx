@@ -11,7 +11,7 @@ interface AlertStreamProps {
   } | null
 }
 
-type FilterType = 'all' | 'critical' | 'high' | 'medium' | 'crowdsec' | 'suricata' | 'waf'
+type FilterType = 'all' | 'critical' | 'high' | 'medium' | 'suricata' | 'waf'
 
 export default function AlertStream({ lastMessage }: AlertStreamProps) {
   const { alerts, threats, loading, refreshAlerts, refreshThreats } = useAlerts()
@@ -40,7 +40,6 @@ export default function AlertStream({ lastMessage }: AlertStreamProps) {
     if (filter === 'critical') return alert.severity === 'critical' || alert.severity === 1
     if (filter === 'high') return alert.severity === 'high' || alert.severity === 2
     if (filter === 'medium') return alert.severity === 'medium' || alert.severity === 3
-    if (filter === 'crowdsec') return alert.source === 'crowdsec'
     if (filter === 'suricata') return alert.source === 'suricata'
     if (filter === 'waf') return alert.source === 'waf'
     return true
@@ -89,7 +88,7 @@ export default function AlertStream({ lastMessage }: AlertStreamProps) {
             </button>
           ))}
           <span style={{ margin: '0 0.5rem', color: 'var(--text-muted)' }}>|</span>
-          {(['crowdsec', 'suricata', 'waf'] as FilterType[]).map(f => (
+          {(['suricata', 'waf'] as FilterType[]).map(f => (
             <button
               key={f}
               className={`filter-btn ${filter === f ? 'active' : ''}`}

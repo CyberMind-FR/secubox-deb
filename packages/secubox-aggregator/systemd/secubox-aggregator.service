@@ -44,18 +44,16 @@ MemoryHigh=768M
 
 # Hardening basics — read-only system + private tmp.
 # Phase 7 follow-up (#498) : NoNewPrivileges was true but blocked the
-# crowdsec module's tightly-scoped sudoers (cscli bouncers list +
-# nft list tables — both read-only, exact-command match in
-# /etc/sudoers.d/secubox-crowdsec). Relaxed to false ; the sudoers
-# entries are the real defense in depth.
+# in-process modules' tightly-scoped sudoers grants (exact-command,
+# read-only matches in /etc/sudoers.d/secubox-*). Relaxed to false ;
+# the sudoers entries are the real defense in depth.
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-# Phase 7 (#498) : /var/lib/crowdsec added because cscli rewrites
-# perms on crowdsec.db at every invocation ; /etc/secubox added for
-# module config reads/writes (toolbox, dpi, etc.).
-ReadWritePaths=/run/secubox /var/lib/secubox /var/log/secubox /var/lib/crowdsec /etc/secubox
+# Phase 7 (#498) : /etc/secubox added for module config reads/writes
+# (toolbox, dpi, etc.).
+ReadWritePaths=/run/secubox /var/lib/secubox /var/log/secubox /etc/secubox
 
 [Install]
 WantedBy=multi-user.target

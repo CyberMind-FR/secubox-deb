@@ -112,9 +112,6 @@ case "$1" in
         # table, so enabling by default is safe). Bans a node under attack
         # shares reach every peer within ~1 min.
         systemctl enable --now secubox-annuaire-bans-apply.timer 2>/dev/null || true
-        # The WAF hook: bridge local crowdsec bans into the mesh. Safe no-op
-        # where crowdsec is absent, so enabling by default is fine.
-        systemctl enable --now secubox-threatmesh-bridge.timer 2>/dev/null || true
         # Fleet metrics publish (fleet-metrics, Task 5): signs + persists this
         # box's own MetricSnapshot every 60s. [metrics] fleet_publish=false in
         # secubox.conf makes sbx-fleetctl publish a documented no-op, so

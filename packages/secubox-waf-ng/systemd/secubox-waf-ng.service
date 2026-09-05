@@ -106,11 +106,9 @@ ExecStart=/usr/sbin/sbxwaf \
   --vhost-profiles /etc/secubox/waf/vhost_profiles.json \
   --nft-ban
 
-# CROWDSEC RETIRE (#1218) : --crowdsec-url a ete supprime. CrowdSec est desactive
-# et destine a etre desinstalle ; l'invoquer (POST /v1/alerts, ou cscli via le
-# bouncer) etait un appel mort qui ralentissait le chemin de ban. Le WAF est
-# AUTONOME via --nft-ban (set nft `inet secubox waf_ban{,6}`, persistant, retrait
-# differe par le timeout nft) — plus aucune dependance CrowdSec.
+# BAN AUTONOME (#1218) : le WAF pose ses propres drops via --nft-ban (set nft
+# `inet secubox waf_ban{,6}`, persistant, retrait differe par le timeout nft).
+# Aucune source de blocage externe n'est plus interrogee sur le chemin de ban.
 
 Restart=on-failure
 RestartSec=5
@@ -119,19 +117,11 @@ RestartSec=5
 # Same posture as the worker@ template (secubox-mesh convention, §6 CSPN), minus
 # RuntimeDirectory (see header). /run/secubox is READ-WRITE so the client connect
 # to waker.sock works under ProtectSystem=strict.
-# NoNewPrivileges=false EST REQUIS (#1017), et c'est un choix, pas un oubli.
-#
-# Le pont CrowdSec passe par "cscli decisions add" — le code le documente :
-# la LAPI /v1/alerts rend 500 sur cette version et les jetons expirent toutes
-# les heures ; seul ce chemin cree reellement le blocage nft applique par le
-# bouncer.
-#
-# Or cscli doit lire /etc/crowdsec/config.yaml, interdit a secubox-waf. Avec
-# NoNewPrivileges=yes, meme un droit sudo reste inutilisable : le WAF detectait
-# donc en continu sans jamais pouvoir bannir, et rien ne le signalait.
-#
-# L'elevation est BORNEE au seul "cscli decisions add" par le droit sudo livre
-# avec ce paquet (/etc/sudoers.d/secubox-waf-ng) — pas un blanc-seing.
+# NoNewPrivileges=false — conserve. Le pont de ban qui l'exigeait (une elevation
+# sudo bornee, desormais retiree) n'existe plus ; le ban passe aujourd'hui par
+# --nft-ban et la capacite CAP_NET_ADMIN declaree plus bas. La valeur est laissee
+# a false par prudence — ne pas durcir dans le meme changement que la depose du
+# pont (cf. /etc/sudoers.d/secubox-waf-ng, desormais sans autorisation).
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=yes
@@ -142,12 +132,11 @@ ReadWritePaths=/var/log/secubox/waf /var/log/secubox/cookie-audit /var/cache/sec
 
 # #1070 phase B — BAN NFT NATIF. --nft-ban laisse le WAF poser ses propres drops
 # dans le set nft `inet secubox waf_ban{,6}` (persistants, retrait différé par le
-# timeout nft), en parallèle de CrowdSec. nft parle à netfilter par netlink :
-# d'où CAP_NET_ADMIN + AF_NETLINK. Compromis ASSUME sur ce service exposé — le WAF
-# est deja le point d'application du blocage (le bouncer CrowdSec detient le meme
-# pouvoir nft) et devient autonome (bans effectifs meme sans CrowdSec). Pour
-# revenir au strict minimum : retirer --nft-ban de l'ExecStart ET ces trois lignes
-# (rebasculer CapabilityBoundingSet/AmbientCapabilities a vide, retirer AF_NETLINK).
+# timeout nft). nft parle à netfilter par netlink : d'où CAP_NET_ADMIN + AF_NETLINK.
+# Compromis ASSUME sur ce service exposé — le WAF est deja le point d'application
+# du blocage et devient autonome (bans effectifs sans source de blocage externe).
+# Pour revenir au strict minimum : retirer --nft-ban de l'ExecStart ET ces trois
+# lignes (rebasculer CapabilityBoundingSet/AmbientCapabilities a vide, retirer AF_NETLINK).
 CapabilityBoundingSet=CAP_NET_ADMIN
 AmbientCapabilities=CAP_NET_ADMIN
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK

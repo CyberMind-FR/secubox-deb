@@ -230,7 +230,7 @@ fi
 
     # Phase 13.A (#521) : unified blacklist enforcement spine.
     # nft drop-in (loaded by nftables.service at boot) + sync timer that
-    # unions CrowdSec decisions + threat-intel C2 IPs into the sets.
+    # unions threat-intel C2 IPs into the sets.
     if [ -f /usr/share/secubox/toolbox/nftables.d/secubox-blacklist.nft ]; then
       install -d -m 0755 /etc/nftables.d
       install -m 0644 /usr/share/secubox/toolbox/nftables.d/secubox-blacklist.nft \
