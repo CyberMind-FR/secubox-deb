@@ -1,3 +1,11 @@
+secubox-webos (1.0.283-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : suppression complète de la cardlet Messagerie (carte retirée de la
+    liste + fichier cardlets/messagerie.html supprimé). Le chatbot ZIA reste
+    accessible via la carte 🦊 ZIA (cardlets servie par le vhost zia).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 03:00:00 +0200
+
 secubox-webos (1.0.282-1~bookworm1) bookworm; urgency=medium
 
   * ZIA Action Layer (RFC) — Phase C bridge Hall : le chat ZIA peut PILOTER les
