@@ -1315,6 +1315,10 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 // n'est pas (encore) dans le registre.
 const FEATURED = [
   {id:"securite",   label:"Sécurité",   icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=securite", h:238, auth:true},
+  // #1240 : Actor Intelligence (TPI inverse) — acteurs corrélés au-delà de l'IP,
+  // campagnes, ThreatVector. Lit l'API read-only de sbx-actord (shadow). auth:true
+  // (donnée de sécurité réservée à la session, comme la carte Sécurité).
+  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"waf.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214},
   {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true},
   {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264},

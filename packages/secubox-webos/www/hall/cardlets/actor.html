@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+<!-- Cardlet Actor Intelligence (RFC-0013 §10). DONNÉES RÉELLES UNIQUEMENT : lit
+     l'API read-only de sbx-actord via le relais same-origin /api/v1/actor/* ;
+     si le moteur n'a corrélé aucun acteur, état honnête « en observation »,
+     jamais de valeurs inventées (même principe que la carte DPI). Style maison
+     hybrid-dark ; police système mono (CSP du Hall = pas de font externe). -->
+<title>Actor Intelligence</title>
+<style>
+  :root{
+    --bg:#0d1117; --card:rgba(30,40,55,.55); --soft:rgba(30,40,55,.35);
+    --line:rgba(100,150,200,.2); --line2:rgba(100,150,200,.38);
+    --text:#e8e6d9; --dim:#6b7b8b; --cyan:#00d4ff; --red:#ff4466;
+    --orange:#ff9944; --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
+    --mono:ui-monospace,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--mono);background:var(--bg);color:var(--text);
+    background-image:radial-gradient(600px 300px at 90% -10%,rgba(0,212,255,.07),transparent);
+    padding:10px;font-size:13px;line-height:1.35;overflow-y:auto}
+  .hd{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .hd b{color:var(--cyan);font-size:.95rem;text-shadow:0 0 10px rgba(0,212,255,.4)}
+  .badge{margin-left:auto;font-size:.56rem;letter-spacing:.12em;text-transform:uppercase;
+    border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--cyan)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}
+  .k{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.5rem .4rem;text-align:center;position:relative;overflow:hidden}
+  .k::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cyan);opacity:.6}
+  .k.alerte::before{background:var(--orange)}
+  .k .v{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:0 0 8px currentColor}
+  .k .l{font-size:.52rem;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+  .sec{font-size:.6rem;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin:6px 0 5px}
+  .actor{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:8px;
+    padding:6px 8px;margin-bottom:6px;cursor:pointer;background:var(--soft);transition:.15s}
+  .actor:hover{border-color:var(--line2)}
+  .actor.on{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(0,212,255,.3)}
+  .ring{--v:70;--c:var(--cyan);flex:0 0 auto;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;
+    font-size:.66rem;font-weight:700;position:relative}
+  .ring::before{content:"";position:absolute;inset:0;border-radius:50%;
+    background:conic-gradient(var(--c) calc(var(--v)*1%),rgba(255,255,255,.07) 0);
+    -webkit-mask:radial-gradient(farthest-side,transparent 62%,#000 64%);mask:radial-gradient(farthest-side,transparent 62%,#000 64%)}
+  .actor .nm{flex:1;min-width:0}
+  .actor .nm b{font-size:.8rem;display:block}
+  .tg{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+  .tag{font-size:.52rem;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .tag.auto{color:var(--blue);border-color:rgba(68,136,255,.4)}
+  .tag.target{color:var(--red);border-color:rgba(255,68,102,.4)}
+  .tag.recon{color:var(--purple);border-color:rgba(163,113,247,.4)}
+  .lvl{font-size:.56rem;color:var(--dim);text-align:right}
+  .lvl b{display:block;font-size:.82rem;color:var(--orange)}
+  /* profil */
+  .prof{border:1px solid var(--line);border-radius:8px;padding:8px 9px;margin-top:2px;background:var(--soft)}
+  .prof .t{font-size:.78rem;color:var(--cyan);margin-bottom:6px}
+  .bar{display:grid;grid-template-columns:76px 1fr 26px;align-items:center;gap:7px;margin-bottom:4px}
+  .bar .bk{font-size:.56rem;color:var(--dim);text-transform:uppercase}
+  .bar .tk{height:7px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden}
+  .bar .fl{height:100%;background:linear-gradient(90deg,var(--cyan),var(--blue))}
+  .bar.hot .fl{background:linear-gradient(90deg,var(--orange),var(--red))}
+  .bar .bn{font-size:.62rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+  .meta{font-size:.62rem;color:var(--dim);margin-top:6px}
+  .hyp{font-size:.64rem;margin-top:5px;color:var(--text)}
+  .hyp .p{color:var(--cyan);font-weight:700}
+  .vide{color:var(--dim);font-size:.72rem;padding:10px 4px;text-align:center;border:1px dashed var(--line);border-radius:8px}
+  .foot{margin-top:8px;font-size:.54rem;color:var(--dim);text-align:center;letter-spacing:.05em}
+</style>
+</head>
+<body>
+  <div class="hd"><span>🧠</span><b>Actor Intelligence</b>
+    <span class="badge" id="badge">shadow · observe</span></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="sec">🎭 Acteurs corrélés — TPI inverse</div>
+  <div id="list"></div>
+  <div id="profile"></div>
+  <div class="foot">Continuité de campagne <b>probable</b>, jamais « même personne ». ASN/pays = routage, pas identité.</div>
+
+<script>
+"use strict";
+var $=function(s){return document.getElementById(s);};
+function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+function jget(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+var VECLBL={knowledge:"connaiss.",continuity:"continuité",intent:"intention",automation:"automat.",severity:"gravité",persistence:"persist.",confidence:"confiance"};
+var CUR=null, ACTS=[];
+
+function kpi(v,l,al){return '<div class="k'+(al?' alerte':'')+'"><div class="v">'+(v==null?'–':v)+'</div><div class="l">'+l+'</div></div>';}
+
+function rendKPIs(s){
+  $('kpis').innerHTML=kpi(s.actors,'acteurs',s.actors>0)+kpi(s.campaigns,'campagnes',s.campaigns>0)
+    +kpi(s.events_24h,'évén. / j')+kpi(s.blocked_24h,'bloqués',s.blocked_24h>0);
+  $('badge').textContent=(s.mode||'observe')+' · shadow';
+}
+function rendList(){
+  var box=$('list');
+  if(!ACTS.length){ box.innerHTML='<div class="vide">😴 Aucun acteur corrélé pour l\'instant — le moteur observe le trafic (shadow).</div>'; $('profile').innerHTML=''; return; }
+  box.innerHTML='';
+  ACTS.slice(0,6).forEach(function(a){
+    var col=a.priority>=80?'var(--red)':a.priority>=50?'var(--orange)':'var(--cyan)';
+    var d=document.createElement('div'); d.className='actor'+(a.id===CUR?' on':'');
+    d.innerHTML='<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>'
+      +'<div class="nm"><b>'+esc(a.id)+'</b><div class="tg">'
+      +(a.tags||[]).map(function(t){return '<span class="tag '+(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')+'</div></div>'
+      +'<div class="lvl"><b>'+a.priority+'</b>'+esc(a.level||'')+'</div>';
+    d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();});
+    box.appendChild(d);
+  });
+}
+function rendProfile(){
+  var a=ACTS.filter(function(x){return x.id===CUR;})[0]; if(!a){$('profile').innerHTML='';return;}
+  var v=a.vec||{};
+  var bars=["knowledge","continuity","intent","automation","severity","persistence","confidence"].map(function(k){
+    var val=v[k]||0, hot=(k==="automation"||k==="intent"||k==="severity")&&val>=70;
+    return '<div class="bar'+(hot?' hot':'')+'"><span class="bk">'+VECLBL[k]+'</span>'
+      +'<span class="tk"><span class="fl" style="width:'+val+'%"></span></span><span class="bn">'+val+'</span></div>';
+  }).join('');
+  var h=(a.hyp&&a.hyp[0])?'<div class="hyp"><span class="p">'+(a.hyp[0][1]*100).toFixed(0)+'%</span> '+esc(a.hyp[0][0])+'</div>':'';
+  $('profile').innerHTML='<div class="prof"><div class="t">🕵️ '+esc(a.id)+' · vu '+esc(a.first)+' → '+esc(a.last)+'</div>'
+    +bars+h
+    +'<div class="meta">'+a.src.ips+' IP → '+a.src.asns+' ASN → '+a.src.countries+' pays'
+    +(a.targets&&a.targets.length?' · cibles : '+a.targets.slice(0,4).map(esc).join(', '):'')+'</div></div>';
+}
+
+function tick(){
+  if(document.hidden) return;   // économe : ne sonde pas onglet caché
+  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors')]).then(function(r){
+    if(!r[0]){ $('kpis').innerHTML=''; $('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>'; return; }
+    rendKPIs(r[0]);
+    ACTS=r[1]||[];
+    if(CUR&&!ACTS.some(function(x){return x.id===CUR;})) CUR=null;
+    if(!CUR&&ACTS.length) CUR=ACTS[0].id;
+    rendList(); rendProfile();
+  });
+}
+tick();
+setInterval(tick,15000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)tick();});
+</script>
+</body>
+</html>

@@ -1,3 +1,13 @@
+secubox-webos (1.0.279-1~bookworm1) bookworm; urgency=medium
+
+  * Nouvelle cardlet « Renseignement » (Actor Intelligence / TPI inverse) dans
+    le Hall : KPIs (acteurs/campagnes/évén.j/bloqués), acteurs corrélés
+    cliquables (anneau de priorité + tags), ThreatVector 7 axes + hypothèse
+    dominante + sources par acteur. DONNÉES RÉELLES uniquement (API read-only
+    sbx-actord, shadow) ; sinon état honnête « en observation ». auth:true.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 17:00:00 +0200
+
 secubox-webos (1.0.278-1~bookworm1) bookworm; urgency=medium
 
   * Rapport de sécurité du Hall : nouvelle couche « Renseignement » dans le
