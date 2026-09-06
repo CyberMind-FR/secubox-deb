@@ -15,17 +15,24 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/evidence"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/graph"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/store"
 )
 
 func serveur(t *testing.T) *Server {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "actord.db"))
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "actord.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = st.Close() })
-	return &Server{store: st, shadow: true}
+	led, err := evidence.Open(filepath.Join(dir, "evidence.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close(); _ = led.Close() })
+	return &Server{store: st, shadow: true, graph: graph.New(0), ledger: led, accum: map[string]*actorSignals{}}
 }
 
 // bout-en-bout : capteur -> socket d'ingestion -> validation -> store -> /stats.
@@ -96,8 +103,30 @@ func TestIngestionBoutEnBout(t *testing.T) {
 	if out["mode"] != "observe" || out["shadow"] != true {
 		t.Errorf("mode/shadow inattendus : %v / %v", out["mode"], out["shadow"])
 	}
-	// Aucun acteur inventé tant que le graphe n'est pas branché.
-	if out["actors"].(float64) != 0 {
-		t.Errorf("actors = %v, attendu 0 (pas de corrélation en Phase 0)", out["actors"])
+	// La corrélation a créé un acteur pour l'événement ingéré.
+	if out["actors"].(float64) != 1 {
+		t.Errorf("actors = %v, attendu 1 (corrélation)", out["actors"])
+	}
+
+	// L'endpoint /actors expose cet acteur, projeté au format console.
+	reqA := httptest.NewRequest(http.MethodGet, "/api/v1/actor/actors", nil)
+	wA := httptest.NewRecorder()
+	s.handleActors(wA, reqA)
+	var acts []map[string]any
+	if err := json.Unmarshal(wA.Body.Bytes(), &acts); err != nil {
+		t.Fatal(err)
+	}
+	if len(acts) != 1 {
+		t.Fatalf("/actors a rendu %d acteurs, attendu 1", len(acts))
+	}
+	if acts[0]["id"] == "" || acts[0]["vec"] == nil {
+		t.Errorf("acteur projeté incomplet : %+v", acts[0])
+	}
+	// La preuve de l'événement est dans le ledger inviolable, et la chaîne est intègre.
+	if _, ok, _ := s.ledger.Get(valide.EventID); !ok {
+		t.Error("preuve de l'événement absente du ledger")
+	}
+	if ok, idx, _ := s.ledger.Verify(); !ok {
+		t.Errorf("chaîne de preuves corrompue à l'index %d", idx)
 	}
 }

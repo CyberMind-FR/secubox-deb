@@ -13,26 +13,35 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/evidence"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/graph"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/store"
 )
 
-// Server porte l'état partagé du démon. Phase 0/1 : SHADOW — on ingère et on
-// expose, on ne décide ni n'applique rien (RFC-0013 §11).
+// Server porte l'état partagé du démon. Phase 0/1 : SHADOW — on ingère, on
+// corrèle et on expose, on ne décide ni n'applique rien (RFC-0013 §11).
 type Server struct {
 	store  *store.Store
 	shadow bool
+
+	// Corrélation en mémoire (reconstruite au démarrage depuis le store).
+	mu     sync.Mutex
+	graph  *graph.Graph
+	ledger *evidence.Ledger
+	accum  map[string]*actorSignals
 
 	ingested atomic.Uint64 // enveloppes persistées
 	dropped  atomic.Uint64 // rejetées faute de place (backpressure, jamais bloquant)
 	invalid  atomic.Uint64 // rejetées par Validate (événements forgés/malformés)
 }
 
-// worker draine la file d'ingestion vers le store. Plusieurs workers possibles ;
-// c'est la seule voie qui écrit sur bbolt.
+// worker draine la file d'ingestion vers le store puis corrèle. C'est la seule
+// voie qui écrit sur bbolt.
 func (s *Server) worker(ch <-chan *envelope.Envelope) {
 	for e := range ch {
 		if err := s.store.Ingest(e); err != nil {
@@ -40,6 +49,7 @@ func (s *Server) worker(ch <-chan *envelope.Envelope) {
 			continue
 		}
 		s.ingested.Add(1)
+		s.correlate(e)
 	}
 }
 
@@ -111,11 +121,11 @@ func (s *Server) serveAPI(path string) error {
 		writeJSON(w, map[string]any{"ok": true, "schema": envelope.SchemaVersion})
 	})
 	mux.HandleFunc("GET /api/v1/actor/stats", s.handleStats)
-	mux.HandleFunc("GET /api/v1/actor/actors", func(w http.ResponseWriter, _ *http.Request) {
-		// La corrélation (internal/actor/graph) n'est pas encore branchée :
-		// aucun acteur inventé. La console affiche son état "en attente".
-		writeJSON(w, []any{})
-	})
+	mux.HandleFunc("GET /api/v1/actor/actors", s.handleActors)
+	mux.HandleFunc("GET /api/v1/actor/actors/{id}", s.handleActor)
+	mux.HandleFunc("GET /api/v1/actor/campaigns", s.handleCampaigns)
+	mux.HandleFunc("GET /api/v1/actor/evidence/{id}", s.handleEvidence)
+	mux.HandleFunc("POST /api/v1/actor/feedback/{id}", s.handleFeedback)
 	log.Printf("actord: API sur %s", path)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	return srv.Serve(ln)
@@ -127,20 +137,37 @@ func (s *Server) handleStats(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "stats indisponibles", http.StatusInternalServerError)
 		return
 	}
-	mode := "observe"
+	// Agrégats de corrélation (acteurs, campagnes, posture) depuis le graphe.
+	s.mu.Lock()
+	actors := s.graph.Len()
+	campaigns, top := 0, 0
+	for _, a := range s.graph.Actors() {
+		if len(a.IPs) >= 2 || len(a.Countries) >= 2 {
+			campaigns++
+		}
+		if a.Priority > top {
+			top = a.Priority
+		}
+	}
+	s.mu.Unlock()
+
+	// Posture globale : 100 quand rien ne pèse, dégradée par l'acteur le plus
+	// prioritaire (dérivée du réel, pas une valeur fixe).
+	global := 100 - top/3
+
 	// Contrat consommé par docs/design/actor-intelligence-webui.html.
 	writeJSON(w, map[string]any{
-		"mode":         mode,
+		"mode":         "observe",
 		"shadow":       s.shadow,
 		"posture":      "Protégée",
 		"blocked_24h":  st.Blocked24h,
 		"attempts_24h": st.Attempts24h,
 		"events_24h":   st.Events24h,
-		"actors":       0, // en attente de internal/actor/graph
-		"campaigns":    0,
-		"honey_active": 0, // en attente de internal/actor/knowledge (honey-identities)
+		"actors":       actors,
+		"campaigns":    campaigns,
+		"honey_active": 0, // framework honey-identities : déclaratif, pas encore de leurres actifs
 		"honey_hit":    0,
-		"global":       100, // posture par défaut tant que le scoring n'est pas branché
+		"global":       global,
 		"by_sensor":    st.BySensor,
 		"total_events": st.Total,
 		"ingested":     s.ingested.Load(),

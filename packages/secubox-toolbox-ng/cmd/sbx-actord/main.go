@@ -27,12 +27,15 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/evidence"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/graph"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/store"
 )
 
 func main() {
 	var (
 		dbPath     = flag.String("db", "/var/lib/secubox/actor/actord.db", "chemin du magasin bbolt")
+		ledgerPath = flag.String("ledger", "/var/lib/secubox/actor/evidence.db", "chemin du ledger de preuves (append-only inviolable)")
 		ingestSock = flag.String("ingest-socket", "/run/secubox/actord.sock", "socket unix d'ingestion des enveloppes")
 		apiSock    = flag.String("api-socket", "/run/secubox/actor.sock", "socket unix de l'API read-only")
 		shadow     = flag.Bool("shadow", true, "mode observation (Phase 0/1) : ne décide ni n'applique rien")
@@ -59,7 +62,20 @@ func main() {
 	}
 	defer st.Close()
 
-	srv := &Server{store: st, shadow: *shadow}
+	led, err := evidence.Open(*ledgerPath)
+	if err != nil {
+		log.Fatalf("actord: ledger : %v", err)
+	}
+	defer led.Close()
+
+	srv := &Server{
+		store:  st,
+		shadow: *shadow,
+		graph:  graph.New(0),
+		ledger: led,
+		accum:  map[string]*actorSignals{},
+	}
+	srv.rebuild() // reconstruit le graphe en mémoire depuis les événements persistés
 
 	if !*readOnly {
 		ch := make(chan *envelope.Envelope, *queue)
