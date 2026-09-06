@@ -1,3 +1,12 @@
+secubox-webos (1.0.280-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Renseignement (Actor Intelligence) : SLICÉE sur SBXSliceBar (3
+    couches Acteurs / Profil / Défense) pour ne plus tronquer le contenu ;
+    barres ThreatVector CORRIGÉES (.fl passe en display:block — le remplissage
+    s'affichait plus) ; mode dark/light (suit ?theme= du Hall).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 21:00:00 +0200
+
 secubox-webos (1.0.279-1~bookworm1) bookworm; urgency=medium
 
   * Nouvelle cardlet « Renseignement » (Actor Intelligence / TPI inverse) dans

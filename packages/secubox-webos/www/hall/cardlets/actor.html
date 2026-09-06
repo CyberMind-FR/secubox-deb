@@ -9,138 +9,185 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 -->
-<!-- Cardlet Actor Intelligence (RFC-0013 §10). DONNÉES RÉELLES UNIQUEMENT : lit
-     l'API read-only de sbx-actord via le relais same-origin /api/v1/actor/* ;
-     si le moteur n'a corrélé aucun acteur, état honnête « en observation »,
-     jamais de valeurs inventées (même principe que la carte DPI). Style maison
-     hybrid-dark ; police système mono (CSP du Hall = pas de font externe). -->
+<!-- Cardlet Actor Intelligence (RFC-0013 §10), SLICÉE (SBXSliceBar) : 3 couches
+     rotatives (Acteurs / Profil / Défense) pour ne rien tronquer dans la carte.
+     DONNÉES RÉELLES UNIQUEMENT via /api/v1/actor/* (sbx-actord, shadow) ; sinon
+     état honnête « en observation ». Police système mono (CSP du Hall). -->
 <title>Actor Intelligence</title>
+<script>
+  // Thème dark/light : suit ?theme= (passé par le Hall) puis la préférence
+  // système, posé sur <html> avant le rendu.
+  (function(){try{
+    var t=new URLSearchParams(location.search).get('theme');
+    if(t!=='light'&&t!=='dark') t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+    document.documentElement.setAttribute('data-theme',t);
+  }catch(e){}})();
+</script>
 <style>
   :root{
     --bg:#0d1117; --card:rgba(30,40,55,.55); --soft:rgba(30,40,55,.35);
-    --line:rgba(100,150,200,.2); --line2:rgba(100,150,200,.38);
+    --border:rgba(100,150,200,.2); --border2:rgba(100,150,200,.38);
     --text:#e8e6d9; --dim:#6b7b8b; --cyan:#00d4ff; --red:#ff4466;
     --orange:#ff9944; --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
     --mono:ui-monospace,"Courier New",monospace;
   }
+  /* Mode clair : on ne redéfinit que fond/carte/texte/bords/accent. */
+  :root[data-theme="light"]{
+    --bg:#eef2f6; --card:rgba(255,255,255,.9); --soft:rgba(20,40,70,.04);
+    --border:rgba(20,40,70,.15); --border2:rgba(20,40,70,.3);
+    --text:#1a2430; --dim:#566575; --cyan:#0077a8;
+  }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%}
   body{font-family:var(--mono);background:var(--bg);color:var(--text);
     background-image:radial-gradient(600px 300px at 90% -10%,rgba(0,212,255,.07),transparent);
-    padding:10px;font-size:13px;line-height:1.35;overflow-y:auto}
-  .hd{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+    padding:10px 10px 4px;font-size:13px;line-height:1.35;min-height:100vh;display:flex;flex-direction:column}
+  .hd{display:flex;align-items:center;gap:8px;margin-bottom:9px;flex:0 0 auto}
   .hd b{color:var(--cyan);font-size:.95rem;text-shadow:0 0 10px rgba(0,212,255,.4)}
   .badge{margin-left:auto;font-size:.56rem;letter-spacing:.12em;text-transform:uppercase;
-    border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--cyan)}
+    border:1px solid var(--border);border-radius:999px;padding:2px 8px;color:var(--cyan)}
+  .body{flex:1 1 auto;min-height:0}
+  /* couches slicées */
+  .dsec{display:none}
+  .dsec.actif{display:block}
+  .sec{font-size:.6rem;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin:0 0 7px}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}
-  .k{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.5rem .4rem;text-align:center;position:relative;overflow:hidden}
+  .k{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.5rem .4rem;text-align:center;position:relative;overflow:hidden}
   .k::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cyan);opacity:.6}
   .k.alerte::before{background:var(--orange)}
   .k .v{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:0 0 8px currentColor}
   .k .l{font-size:.52rem;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
-  .sec{font-size:.6rem;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin:6px 0 5px}
-  .actor{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:8px;
+  .actor{display:flex;align-items:center;gap:9px;border:1px solid var(--border);border-radius:8px;
     padding:6px 8px;margin-bottom:6px;cursor:pointer;background:var(--soft);transition:.15s}
-  .actor:hover{border-color:var(--line2)}
+  .actor:hover{border-color:var(--border2)}
   .actor.on{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(0,212,255,.3)}
-  .ring{--v:70;--c:var(--cyan);flex:0 0 auto;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;
-    font-size:.66rem;font-weight:700;position:relative}
+  .ring{--v:70;--c:var(--cyan);flex:0 0 auto;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:.66rem;font-weight:700;position:relative}
   .ring::before{content:"";position:absolute;inset:0;border-radius:50%;
     background:conic-gradient(var(--c) calc(var(--v)*1%),rgba(255,255,255,.07) 0);
     -webkit-mask:radial-gradient(farthest-side,transparent 62%,#000 64%);mask:radial-gradient(farthest-side,transparent 62%,#000 64%)}
-  .actor .nm{flex:1;min-width:0}
-  .actor .nm b{font-size:.8rem;display:block}
+  .actor .nm{flex:1;min-width:0} .actor .nm b{font-size:.8rem;display:block}
   .tg{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
-  .tag{font-size:.52rem;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
-  .tag.auto{color:var(--blue);border-color:rgba(68,136,255,.4)}
-  .tag.target{color:var(--red);border-color:rgba(255,68,102,.4)}
-  .tag.recon{color:var(--purple);border-color:rgba(163,113,247,.4)}
-  .lvl{font-size:.56rem;color:var(--dim);text-align:right}
-  .lvl b{display:block;font-size:.82rem;color:var(--orange)}
-  /* profil */
-  .prof{border:1px solid var(--line);border-radius:8px;padding:8px 9px;margin-top:2px;background:var(--soft)}
-  .prof .t{font-size:.78rem;color:var(--cyan);margin-bottom:6px}
-  .bar{display:grid;grid-template-columns:76px 1fr 26px;align-items:center;gap:7px;margin-bottom:4px}
-  .bar .bk{font-size:.56rem;color:var(--dim);text-transform:uppercase}
-  .bar .tk{height:7px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden}
-  .bar .fl{height:100%;background:linear-gradient(90deg,var(--cyan),var(--blue))}
+  .tag{font-size:.52rem;border:1px solid var(--border);border-radius:4px;padding:0 5px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .tag.auto{color:var(--blue);border-color:rgba(68,136,255,.4)} .tag.target{color:var(--red);border-color:rgba(255,68,102,.4)} .tag.recon{color:var(--purple);border-color:rgba(163,113,247,.4)}
+  .lvl{font-size:.56rem;color:var(--dim);text-align:right} .lvl b{display:block;font-size:.82rem;color:var(--orange)}
+  .pt{font-size:.78rem;color:var(--cyan);margin-bottom:7px}
+  /* ThreatVector — .fl EST un bloc (sinon width % ignorée = barres vides) */
+  .bar{display:grid;grid-template-columns:78px 1fr 30px;align-items:center;gap:7px;margin-bottom:5px}
+  .bar .bk{font-size:.58rem;color:var(--dim);text-transform:uppercase}
+  .bar .tk{height:8px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+  .bar .fl{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--cyan),var(--blue))}
   .bar.hot .fl{background:linear-gradient(90deg,var(--orange),var(--red))}
-  .bar .bn{font-size:.62rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
-  .meta{font-size:.62rem;color:var(--dim);margin-top:6px}
-  .hyp{font-size:.64rem;margin-top:5px;color:var(--text)}
-  .hyp .p{color:var(--cyan);font-weight:700}
-  .vide{color:var(--dim);font-size:.72rem;padding:10px 4px;text-align:center;border:1px dashed var(--line);border-radius:8px}
-  .foot{margin-top:8px;font-size:.54rem;color:var(--dim);text-align:center;letter-spacing:.05em}
+  .bar .bn{font-size:.64rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+  .meta{font-size:.62rem;color:var(--dim);margin-top:7px}
+  .hyp{font-size:.66rem;margin-top:6px}.hyp .p{color:var(--cyan);font-weight:700}
+  .flow{display:flex;gap:5px;flex-wrap:wrap}
+  .step{flex:1;min-width:88px;border:1px solid var(--border);border-radius:8px;padding:7px 5px;text-align:center;font-size:.6rem;color:var(--dim);letter-spacing:.06em;position:relative}
+  .step b{display:block;font-size:.48rem;opacity:.6}
+  .step.on{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.1)}
+  .step.on::after{content:"● actif";position:absolute;top:-8px;right:5px;font-size:.48rem;color:var(--cyan);background:var(--bg);padding:0 4px}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+  .box{border:1px solid var(--border);border-radius:8px;padding:8px 9px;background:var(--soft)}
+  .box .l{font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+  .box .big{font-size:1.3rem;font-weight:700}
+  .note{font-size:.58rem;color:var(--dim);margin-top:8px;line-height:1.4}
+  .vide{color:var(--dim);font-size:.74rem;padding:12px;text-align:center;border:1px dashed var(--border);border-radius:8px}
+  #slbar{flex:0 0 auto;margin-top:6px}
 </style>
 </head>
 <body>
-  <div class="hd"><span>🧠</span><b>Actor Intelligence</b>
-    <span class="badge" id="badge">shadow · observe</span></div>
-  <div class="kpis" id="kpis"></div>
-  <div class="sec">🎭 Acteurs corrélés — TPI inverse</div>
-  <div id="list"></div>
-  <div id="profile"></div>
-  <div class="foot">Continuité de campagne <b>probable</b>, jamais « même personne ». ASN/pays = routage, pas identité.</div>
+  <div class="hd"><span>🧠</span><b>Actor Intelligence</b><span class="badge" id="badge">shadow · observe</span></div>
 
+  <div class="body">
+    <div class="dsec actif" id="d-acteurs">
+      <div class="kpis" id="kpis"></div>
+      <div class="sec">🎭 Acteurs corrélés — TPI inverse</div>
+      <div id="list"></div>
+    </div>
+    <div class="dsec" id="d-profil">
+      <div id="profile"><div class="vide">Sélectionne un acteur.</div></div>
+    </div>
+    <div class="dsec" id="d-defense">
+      <div class="sec">🛡️ Flux de défense — graduée, réversible</div>
+      <div class="flow" id="flow"></div>
+      <div class="twocol">
+        <div class="box"><div class="l">Honey-identities</div><div class="big" id="honey" style="color:#ffcc00">—</div></div>
+        <div class="box"><div class="l">Score global</div><div class="big" id="glob" style="color:var(--green)">—</div></div>
+      </div>
+      <div class="note">Phase 0/1 : le moteur <b>propose</b>, n'applique rien (shadow). Toute action porte TTL, raison, preuve, rollback. Aucun « hack back ». « Continuité de campagne probable », jamais « même personne ».</div>
+    </div>
+  </div>
+
+  <div id="slbar"></div>
+
+<script src="../slicebar.js"></script>
 <script>
 "use strict";
-var $=function(s){return document.getElementById(s);};
+var $=function(i){return document.getElementById(i);};
 function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
 function jget(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
 var VECLBL={knowledge:"connaiss.",continuity:"continuité",intent:"intention",automation:"automat.",severity:"gravité",persistence:"persist.",confidence:"confiance"};
-var CUR=null, ACTS=[];
+var FLOW=["OBSERVE","DELAY","CHALLENGE","TARPIT","DENY","QUARANTINE"];
+var ACTS=[],CUR=null;
 
 function kpi(v,l,al){return '<div class="k'+(al?' alerte':'')+'"><div class="v">'+(v==null?'–':v)+'</div><div class="l">'+l+'</div></div>';}
-
 function rendKPIs(s){
   $('kpis').innerHTML=kpi(s.actors,'acteurs',s.actors>0)+kpi(s.campaigns,'campagnes',s.campaigns>0)
     +kpi(s.events_24h,'évén. / j')+kpi(s.blocked_24h,'bloqués',s.blocked_24h>0);
   $('badge').textContent=(s.mode||'observe')+' · shadow';
+  $('honey').textContent=(s.honey_active!=null?s.honey_active:'—');
+  $('glob').textContent=(s.global!=null?s.global+' /100':'—');
 }
 function rendList(){
   var box=$('list');
-  if(!ACTS.length){ box.innerHTML='<div class="vide">😴 Aucun acteur corrélé pour l\'instant — le moteur observe le trafic (shadow).</div>'; $('profile').innerHTML=''; return; }
+  if(!ACTS.length){box.innerHTML='<div class="vide">😴 Aucun acteur corrélé — le moteur observe le trafic (shadow).</div>';return;}
   box.innerHTML='';
-  ACTS.slice(0,6).forEach(function(a){
+  ACTS.slice(0,8).forEach(function(a){
     var col=a.priority>=80?'var(--red)':a.priority>=50?'var(--orange)':'var(--cyan)';
-    var d=document.createElement('div'); d.className='actor'+(a.id===CUR?' on':'');
+    var d=document.createElement('div');d.className='actor'+(a.id===CUR?' on':'');
     d.innerHTML='<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>'
-      +'<div class="nm"><b>'+esc(a.id)+'</b><div class="tg">'
-      +(a.tags||[]).map(function(t){return '<span class="tag '+(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')+'</div></div>'
+      +'<div class="nm"><b>'+esc(a.id)+'</b><div class="tg">'+(a.tags||[]).map(function(t){return '<span class="tag '+(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')+'</div></div>'
       +'<div class="lvl"><b>'+a.priority+'</b>'+esc(a.level||'')+'</div>';
     d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();});
     box.appendChild(d);
   });
 }
 function rendProfile(){
-  var a=ACTS.filter(function(x){return x.id===CUR;})[0]; if(!a){$('profile').innerHTML='';return;}
+  var a=ACTS.filter(function(x){return x.id===CUR;})[0];
+  if(!a){$('profile').innerHTML='<div class="vide">Sélectionne un acteur (couche Acteurs).</div>';return;}
   var v=a.vec||{};
   var bars=["knowledge","continuity","intent","automation","severity","persistence","confidence"].map(function(k){
-    var val=v[k]||0, hot=(k==="automation"||k==="intent"||k==="severity")&&val>=70;
+    var val=v[k]||0,hot=(k==="automation"||k==="intent"||k==="severity")&&val>=70;
     return '<div class="bar'+(hot?' hot':'')+'"><span class="bk">'+VECLBL[k]+'</span>'
       +'<span class="tk"><span class="fl" style="width:'+val+'%"></span></span><span class="bn">'+val+'</span></div>';
   }).join('');
   var h=(a.hyp&&a.hyp[0])?'<div class="hyp"><span class="p">'+(a.hyp[0][1]*100).toFixed(0)+'%</span> '+esc(a.hyp[0][0])+'</div>':'';
-  $('profile').innerHTML='<div class="prof"><div class="t">🕵️ '+esc(a.id)+' · vu '+esc(a.first)+' → '+esc(a.last)+'</div>'
+  $('profile').innerHTML='<div class="pt">🕵️ '+esc(a.id)+' · prio '+a.priority+' ('+esc(a.level)+') · vu '+esc(a.first)+' → '+esc(a.last)+'</div>'
     +bars+h
     +'<div class="meta">'+a.src.ips+' IP → '+a.src.asns+' ASN → '+a.src.countries+' pays'
-    +(a.targets&&a.targets.length?' · cibles : '+a.targets.slice(0,4).map(esc).join(', '):'')+'</div></div>';
+    +(a.targets&&a.targets.length?' · cibles : '+a.targets.slice(0,4).map(esc).join(', '):'')+'</div>';
 }
+function rendFlow(){$('flow').innerHTML=FLOW.map(function(f,i){return '<div class="step'+(i===0?' on':'')+'"><b>'+(i+1)+'</b>'+f+'</div>';}).join('');}
+
+// ── SLICER partagé (SBXSliceBar) : 3 couches, rien n'est tronqué. ────────────
+var SLICES=[$('d-acteurs'),$('d-profil'),$('d-defense')];
+function montre(i){for(var k=0;k<SLICES.length;k++)SLICES[k].classList.toggle('actif',k===i);}
 
 function tick(){
-  if(document.hidden) return;   // économe : ne sonde pas onglet caché
+  if(document.hidden) return;
   Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors')]).then(function(r){
-    if(!r[0]){ $('kpis').innerHTML=''; $('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>'; return; }
-    rendKPIs(r[0]);
-    ACTS=r[1]||[];
-    if(CUR&&!ACTS.some(function(x){return x.id===CUR;})) CUR=null;
-    if(!CUR&&ACTS.length) CUR=ACTS[0].id;
-    rendList(); rendProfile();
+    if(!r[0]){$('kpis').innerHTML='';$('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>';return;}
+    rendKPIs(r[0]);ACTS=r[1]||[];
+    if(CUR&&!ACTS.some(function(x){return x.id===CUR;}))CUR=null;
+    if(!CUR&&ACTS.length)CUR=ACTS[0].id;
+    rendList();rendProfile();
   });
 }
-tick();
-setInterval(tick,15000);
+rendFlow();tick();setInterval(function(){if(!document.hidden)tick();},15000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden)tick();});
+
+if(window.SBXSliceBar){
+  SBXSliceBar($('slbar'),{autoMs:9000,onShow:montre,
+    slices:[{label:'🎭 Acteurs'},{label:'🕵️ Profil'},{label:'🛡️ Défense'}]});
+}else{ montre(0); }
 </script>
 </body>
 </html>

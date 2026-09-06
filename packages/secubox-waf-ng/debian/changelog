@@ -1,3 +1,10 @@
+secubox-waf-ng (1.7.12-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau admin.gk2/actor/ : barres ThreatVector corrigées (.fl display:block,
+    le remplissage % ne s'affichait pas).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 21:00:00 +0200
+
 secubox-waf-ng (1.7.11-1~bookworm1) bookworm; urgency=medium
 
   * Menu Système du Hall : entrée « Renseignement » (Actor Intelligence) via
