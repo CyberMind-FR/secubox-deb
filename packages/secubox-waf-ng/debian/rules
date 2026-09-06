@@ -38,6 +38,11 @@ override_dh_auto_build:
 	  go build -trimpath -ldflags=-s \
 	    -o $(CURDIR)/sbxwaf \
 	    ./cmd/sbxwaf
+	# sbx-actord : moteur Actor Intelligence (RFC-0013), même module Go.
+	cd $(CURDIR)/../secubox-toolbox-ng && \
+	  go build -trimpath -ldflags=-s \
+	    -o $(CURDIR)/sbx-actord \
+	    ./cmd/sbx-actord
 
 # No Go unit tests at package-build time: the arm64 cross-binary cannot
 # execute its tests on an x86_64 build host. Tests run in CI on the host arch.
@@ -51,7 +56,7 @@ override_dh_auto_install:
 	# execute_after_dh_auto_install below (see note at top of file).
 
 override_dh_auto_clean:
-	rm -f $(CURDIR)/sbxwaf
+	rm -f $(CURDIR)/sbxwaf $(CURDIR)/sbx-actord
 	rm -rf _gocache _gopath
 
 override_dh_auto_install:
@@ -74,10 +79,20 @@ override_dh_installsystemd:
 	install -m 0644 systemd/secubox-waf-campaigns.service systemd/secubox-waf-campaigns.timer \
 	  debian/secubox-waf-ng/lib/systemd/system/
 	dh_installsystemd --name=secubox-waf-campaigns.timer
+	# Actor Intelligence (RFC-0013) : moteur shadow, désactivable sans réduire la
+	# protection WAF. Activé mais démarré séparément (le postinst crée son user).
+	install -m 0644 systemd/secubox-actord.service \
+	  debian/secubox-waf-ng/lib/systemd/system/
+	dh_installsystemd --name=secubox-actord
 
 execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/sbin
 	install -m 0755 sbxwaf debian/secubox-waf-ng/usr/sbin/sbxwaf
+	install -m 0755 sbx-actord debian/secubox-waf-ng/usr/sbin/sbx-actord
+	# Doc de conception embarquée (référencée par l'unité systemd).
+	install -d debian/secubox-waf-ng/usr/share/doc/secubox
+	install -m 0644 $(CURDIR)/../../docs/design/actor-intelligence-rfc-pack.md \
+	  debian/secubox-waf-ng/usr/share/doc/secubox/actor-intelligence-rfc-pack.md 2>/dev/null || true
 	# AppArmor profile → /etc/apparmor.d/usr.sbin.sbxwaf
 	install -d debian/secubox-waf-ng/etc/apparmor.d
 	install -m 0644 debian/secubox-waf-ng.apparmor \

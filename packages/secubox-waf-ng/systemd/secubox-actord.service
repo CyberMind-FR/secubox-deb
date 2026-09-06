@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# sbx-actord — moteur Actor Intelligence (RFC-0013), 100 % SHADOW en Phase 0/1 :
+# il ingère les Event Envelopes des capteurs, corrèle en acteurs/campagnes et
+# expose une API read-only. Il ne décide ni n'applique RIEN. Consommateur
+# best-effort : s'il tombe, sbxwaf/DPI continuent de protéger (émission fire-and-
+# forget côté capteurs). Unité durcie (RFC-0013 §15).
+
+[Unit]
+Description=SecuBox Actor Intelligence — sbx-actord (shadow)
+Documentation=file:///usr/share/doc/secubox/actor-intelligence-rfc-pack.md
+After=network.target
+# N'est PAS une dépendance de sbxwaf : l'intelligence est désactivable sans
+# réduire la protection WAF (critère d'acceptation RFC-0013 §10).
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/sbx-actord --shadow \
+  --db /var/lib/secubox/actor/actord.db \
+  --ledger /var/lib/secubox/actor/evidence.db \
+  --ingest-socket /run/secubox/actord.sock \
+  --api-socket /run/secubox/actor.sock
+Restart=on-failure
+RestartSec=3
+
+# Identité non privilégiée dédiée ; groupe partagé secubox pour les sockets.
+User=secubox-actord
+Group=secubox
+UMask=0007
+
+# Répertoire d'état (créé/possédé automatiquement) : /var/lib/secubox/actor.
+StateDirectory=secubox/actor
+StateDirectoryMode=0750
+
+# Durcissement (RFC-0013 §15).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Le socket partagé /run/secubox est écrit hors StateDirectory.
+ReadWritePaths=/run/secubox
+# Plafond mémoire : borne la carte des acteurs en mémoire.
+MemoryMax=256M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

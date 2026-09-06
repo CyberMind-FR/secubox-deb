@@ -25,6 +25,20 @@ case "$1" in
       systemctl try-restart secubox-metrics.service 2>/dev/null || true
     fi
 
+    # ── 1b. Actor Intelligence (RFC-0013) : user dédié non privilégié ──────────
+    # sbx-actord ne bannit rien (shadow) : pas de sudoers. Il tourne sous son
+    # propre user, avec Group=secubox (unité) pour partager les sockets
+    # /run/secubox avec les capteurs et le Hall.
+    if ! getent passwd secubox-actord >/dev/null 2>&1; then
+      adduser --system --group --no-create-home \
+              --home /nonexistent --shell /usr/sbin/nologin \
+              --gecos "SecuBox Actor Intelligence" secubox-actord
+    fi
+    if getent group secubox >/dev/null 2>&1 \
+       && ! id -nG secubox-actord 2>/dev/null | tr ' ' '\n' | grep -qx secubox; then
+      usermod -aG secubox secubox-actord || true
+    fi
+
     # ── 2. Config directories ─────────────────────────────────────────────────
     # IMPORTANT: NEVER chmod the SHARED PARENTS /etc/secubox to 0750 — that
     # breaks traversal for every other secubox-* daemon (#474/#620 lessons).

@@ -1,3 +1,15 @@
+secubox-waf-ng (1.7.8-1~bookworm1) bookworm; urgency=medium
+
+  * Actor Intelligence (RFC-0013) : le paquet livre désormais le moteur
+    sbx-actord (même module Go toolbox-ng que sbxwaf) + son unité systemd
+    durcie secubox-actord.service (SHADOW : ingère/corrèle/expose, ne décide ni
+    n'applique rien ; User=secubox-actord Group=secubox ; ProtectSystem=strict,
+    RestrictAddressFamilies=AF_UNIX, NoNewPrivileges, MemoryMax=256M). Le
+    postinst crée l'utilisateur dédié. Actor Intelligence est désactivable sans
+    réduire la protection WAF (aucune dépendance de sbxwaf).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 15:30:00 +0200
+
 secubox-waf-ng (1.7.7-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : retire le backend de ban CrowdSec (code mort — jamais appelé ; le
