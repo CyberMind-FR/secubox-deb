@@ -121,12 +121,18 @@ func (s *Server) serveAPI(path string) error {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "schema": envelope.SchemaVersion})
 	})
-	mux.HandleFunc("GET /api/v1/actor/stats", s.handleStats)
-	mux.HandleFunc("GET /api/v1/actor/actors", s.handleActors)
-	mux.HandleFunc("GET /api/v1/actor/actors/{id}", s.handleActor)
-	mux.HandleFunc("GET /api/v1/actor/campaigns", s.handleCampaigns)
-	mux.HandleFunc("GET /api/v1/actor/evidence/{id}", s.handleEvidence)
-	mux.HandleFunc("POST /api/v1/actor/feedback/{id}", s.handleFeedback)
+	// Routes exposées à DEUX préfixes : le préfixe complet (relais nginx du Hall,
+	// chemin préservé) ET la racine (agrégateur admin.gk2, qui STRIPPE le préfixe
+	// /api/v1/<module>). Le même socket sert ainsi le Hall ET le panneau admin,
+	// sans divergence de chemin.
+	for _, p := range []string{"/api/v1/actor", ""} {
+		mux.HandleFunc("GET "+p+"/stats", s.handleStats)
+		mux.HandleFunc("GET "+p+"/actors", s.handleActors)
+		mux.HandleFunc("GET "+p+"/actors/{id}", s.handleActor)
+		mux.HandleFunc("GET "+p+"/campaigns", s.handleCampaigns)
+		mux.HandleFunc("GET "+p+"/evidence/{id}", s.handleEvidence)
+		mux.HandleFunc("POST "+p+"/feedback/{id}", s.handleFeedback)
+	}
 	log.Printf("actord: API sur %s", path)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	return srv.Serve(ln)

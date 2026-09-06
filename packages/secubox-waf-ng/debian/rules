@@ -89,6 +89,10 @@ execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/sbin
 	install -m 0755 sbxwaf debian/secubox-waf-ng/usr/sbin/sbxwaf
 	install -m 0755 sbx-actord debian/secubox-waf-ng/usr/sbin/sbx-actord
+	# Panneau admin Actor Intelligence (admin.gk2/actor/) — statique, standard maison.
+	install -d debian/secubox-waf-ng/usr/share/secubox/www/actor
+	install -m 0644 www/actor/index.html \
+	  debian/secubox-waf-ng/usr/share/secubox/www/actor/index.html
 	# Doc de conception embarquée (référencée par l'unité systemd).
 	install -d debian/secubox-waf-ng/usr/share/doc/secubox
 	install -m 0644 $(CURDIR)/../../docs/design/actor-intelligence-rfc-pack.md \

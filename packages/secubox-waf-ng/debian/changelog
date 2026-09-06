@@ -1,3 +1,15 @@
+secubox-waf-ng (1.7.9-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau admin Actor Intelligence complet à admin.gk2/actor/ (standard maison
+    hybrid-dark + /shared/sidebar, comme DPI/Sécurité) : posture, KPIs, acteurs
+    corrélés cliquables, ThreatVector 7 axes, contre-hypothèses, sources, flux de
+    défense OBSERVE→QUARANTINE. DONNÉES RÉELLES uniquement (API sbx-actord).
+  * sbx-actord expose son API aux DEUX préfixes (/api/v1/actor/* pour le relais
+    Hall, chemin préservé ; et racine /stats /actors… pour l'agrégateur admin qui
+    strippe le préfixe) — un seul socket sert Hall et admin.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 18:30:00 +0200
+
 secubox-waf-ng (1.7.8-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf émet désormais un Event Envelope (fire-and-forget, NON bloquant)
