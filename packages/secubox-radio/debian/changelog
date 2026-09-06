@@ -1,3 +1,11 @@
+secubox-radio (0.1.65-1~bookworm1) bookworm; urgency=medium
+
+  * Couche d'actions ZIA (Phase D) : capabilities.d/radio.json (la radio déclare
+    ses capacités pilotables) + annonceHall() publie muet/volume et republie
+    après vol/muet (RFC §8, rétrocompatible).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 01:40:00 +0200
+
 secubox-radio (0.1.64-1~bookworm1) bookworm; urgency=medium
 
   * Lecteur : moins de MICRO-COUPURES et de gourmandise. La sonde tirait 4
