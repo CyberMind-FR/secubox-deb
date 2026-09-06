@@ -176,6 +176,25 @@ vers cardlet ; C→P = cardlet vers Hall ; C→child = cardlet-relais vers son i
 | `surf-hote` | `{hote}` | Met à jour l'hôte affiché dans l'overlay surf. |
 | `surf-close` / `surf-vide` | — | Ferme l'overlay surf. |
 | `surf-stats-up` | `{stats:{trackers,pubs,cookies,notifs,popups,total}}` | Compteurs bloqués dans l'overlay. |
+| `action` | `{req:{kind:'sbx-action', service, action, params}}` | **Couche d'actions ZIA.** Le chat ZIA relaie une action DÉJÀ validée (whitelist+rôle+valeur, côté serveur). Le Hall gate `ev.source` (cadre connu), RÉ-RÉSOUT via `SBXCapabilities` (registre `/api/v1/zia/capabilities`) et poste le `{sbx:'cmd',…}` natif à la cardlet cible **à l'origine précise** (`window.sbxPost`). Capacité inconnue → rien. |
+
+### 4.3 La couche d'actions (ZIA)
+
+ZIA est un **interpréteur d'intentions**, pas un automate : le LLM PROPOSE une
+action sémantique (`media.mute`, `ui.zoom`), du code déterministe la VALIDE
+(liste blanche + rôle + type/bornes) et la TRADUIT en message `sbx` natif. Aucune
+commande shell, URL libre ou JS libre ne transite jamais par le modèle.
+
+- **Registre de capacités** : chaque module DÉCLARE ce qu'il sait faire dans
+  `/usr/share/secubox/capabilities.d/<service>.json` (transport `sbx-postmessage`,
+  `actions` → `{message:{sbx:'cmd',action}, value?}`). ZIA les agrège (bootstrap +
+  manifestes) et les sert au Hall via `GET /api/v1/zia/capabilities`. **Un module
+  n'est pilotable QUE s'il a déclaré ET expose le handler `sbx:'cmd'`** (jamais
+  d'après son nom). Pilote : `radio` (toggle/pause/stop/mute/volume/zoom ;
+  prev/next absents — un direct ne se parcourt pas).
+- **Chaîne** : `langage → ZIA (intention) → Tools/policy (validation, ACL hors
+  LLM) → réponse {actions:[{kind:'sbx-action',…}]} → cardlet ZIA relaie {sbx:'action'}
+  → Hall (sbxExecuteAction, origine précise) → cardlet cible (handler sbx:'cmd')`.
 
 > `cumul.html` est un **relais** : il applique `theme` et le reforwarde à son
 > iframe imbriqué, convertit `ouvre`→`ouvre-hote`, et ne remonte au Hall qu'une

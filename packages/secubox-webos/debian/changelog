@@ -1,3 +1,18 @@
+secubox-webos (1.0.282-1~bookworm1) bookworm; urgency=medium
+
+  * ZIA Action Layer (RFC) — Phase C bridge Hall : le chat ZIA peut PILOTER les
+    cardlets via le protocole sbx existant (pas de seconde API).
+    - window.sbxPost(id,message) : poste un message sbx résolu au cadre cible à
+      l'ORIGINE PRÉCISE (réutilise le routage du dock).
+    - SBXCapabilities (registre /api/v1/zia/capabilities) + sbxExecuteAction :
+      ré-résout l'action contre le même registre (défense en profondeur) et poste
+      le {sbx:'cmd'} natif ; capacité inconnue → rien.
+    - handler {sbx:'action'} gaté sur ev.source (cadre connu).
+    - cardlet messagerie : relaie les actions[] validées de /v1/chat au Hall.
+    - HIG §4.2/§4.3 : message `action` + couche de capacités documentés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 01:15:00 +0200
+
 secubox-webos (1.0.281-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Renseignement (Actor Intelligence) : REFAITE sur la fondation

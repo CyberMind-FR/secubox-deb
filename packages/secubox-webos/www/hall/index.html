@@ -2326,6 +2326,21 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   // Le viewer se sert de `commande` pour rendre la main à la carte source à la
   // fermeture d'un zoom (#1266). Exposé car viewer et dock sont deux IIFE.
   window.dockCmd=commande;
+  // COUCHE D'ACTIONS ZIA (RFC) : poste un message sbx DÉJÀ RÉSOLU au cadre du
+  // service, à l'ORIGINE PRÉCISE (jamais '*' pour une commande). Réutilise le
+  // routage du dock — instance embarquée prioritaire, viewer local. Rend true si
+  // le message est bien parti. Socle de sbxExecuteAction.
+  window.sbxPost=function(id, message){
+    if(!id || !message || typeof message!=='object') return false;
+    const f=flux.get(id);
+    if(f&&f.local){
+      if(message.sbx==='cmd' && typeof window.viewerCmd==='function'){ window.viewerCmd(message.action, message.v); return true; }
+      return false;
+    }
+    const c=(f&&f.cadre)||cadreDe(id);
+    if(!c||!c.contentWindow||!c.src) return false;
+    try{ c.contentWindow.postMessage(message, new URL(c.src).origin); return true; }catch(e){ return false; }
+  };
   // RENDRE LA MAIN À LA CARTE (#1266). À la fermeture d'un zoom « lecteur »
   // (radio dans le viewer mini), le cadre embarqué du viewer vient d'être retiré
   // du DOM : `flux[id].cadre` pointe donc sur un cadre MORT. On l'oublie, puis on
@@ -3117,9 +3132,59 @@ function ouvreHote(hote, url){
   // demandee (le fragment porte l'id du sujet MetaNews).
   if(url){ setTimeout(()=>{ const fr=document.querySelector('#eb-frames iframe'); if(fr) fr.src=url; }, 0); }
 }
+// ═══ COUCHE D'ACTIONS ZIA (RFC) ═══════════════════════════════════════════════
+// ZIA n'exécute rien : elle PROPOSE une action déjà validée côté serveur
+// (whitelist + rôle + valeur). Ici le Hall la RÉ-RÉSOUT contre le MÊME registre
+// de capacités (défense en profondeur) et la poste au cadre cible à l'origine
+// précise. Capacité inconnue → rien (jamais d'approximation). Le registre est
+// servi par ZIA (/api/v1/zia/capabilities), agrégat des manifestes des modules.
+const SBXCapabilities=(function(){
+  let reg=null;
+  function charge(){
+    fetch('/api/v1/zia/capabilities',{headers:{'Accept':'application/json'}})
+      .then(r=>r.ok?r.json():null).then(j=>{ reg=(j&&j.capabilities)||{}; }).catch(()=>{ reg={}; });
+  }
+  charge();
+  function resolve(service, action, params){
+    if(!reg) return null;
+    const c=reg[service]; if(!c||!c.actions) return null;
+    const a=c.actions[action]; if(!a||!a.message||a.message.sbx!=='cmd') return null;
+    const msg=Object.assign({}, a.message);
+    if(a.value && a.value.field){
+      const raw=(params||{}).value;
+      if(a.value.type==='boolean') msg[a.value.field]=!!raw;
+      else if(a.value.type==='number'){ let n=Number(raw); if(!isFinite(n)) return null;
+        if(a.value.min!=null) n=Math.max(a.value.min,n);
+        if(a.value.max!=null) n=Math.min(a.value.max,n);
+        msg[a.value.field]=n; }
+    }
+    return {message:msg};
+  }
+  return {resolve:resolve, recharge:charge};
+})();
+// Une commande n'est honorée que si elle vient d'un cadre CONNU du Hall (le chat
+// ZIA), pas d'un window quelconque — l'action agit sur un AUTRE service.
+function estCadreConnu(src){
+  if(!src) return false;
+  return [].slice.call(document.querySelectorAll('iframe')).some(f=>f.contentWindow===src);
+}
+function sbxExecuteAction(req){
+  if(!req || req.kind!=='sbx-action' || !req.service || !req.action) return false;
+  const cap=SBXCapabilities.resolve(req.service, req.action, req.params||{});
+  if(!cap || !cap.message) return false;   // capacité inconnue → on n'invente rien
+  return (typeof window.sbxPost==='function') ? !!window.sbxPost(req.service, cap.message) : false;
+}
+window.sbxExecuteAction=sbxExecuteAction;
+
 addEventListener('message', ev=>{
   const d=ev.data;
   if(!d) return;
+  // ACTION (couche ZIA) : le chat ZIA relaie une action DÉJÀ VALIDÉE. On gate la
+  // SOURCE (cadre connu) — elle agit sur un autre service — puis on exécute.
+  if(d.sbx==='action' && d.req){
+    if(estCadreConnu(ev.source)) sbxExecuteAction(d.req);
+    return;
+  }
   if(d.sbx==='surf' && d.url){ ouvreSurf(d.url); return; }
   // VOIR : une cardlet demande d'ouvrir un media dans le VIEWER (peertube,
   // youtube, video directe). #1237 — le lien du bas de la carte peertube.

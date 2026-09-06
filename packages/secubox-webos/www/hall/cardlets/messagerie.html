@@ -166,6 +166,16 @@
   function ziaRender(r){
     var d=ziaBot(md(r.text||'…'));
     (r.objects||[]).forEach(function(o){ d.querySelector('.bub').insertAdjacentHTML('beforeend', ziaObj(o)); });
+    // ACTIONS SBX (couche ZIA) : déjà validées côté serveur (whitelist+rôle+valeur).
+    // On les RELAIE au Hall — seul à pouvoir commander la cardlet cible, à
+    // l'origine précise. ZIA ne touche jamais le DOM d'un autre service.
+    (r.actions||[]).forEach(function(a){
+      if(!a || a.kind!=='sbx-action') return;
+      if(parent!==window){ try{ parent.postMessage({sbx:'action', req:a}, '*'); }catch(e){} }
+      d.querySelector('.bub').insertAdjacentHTML('beforeend',
+        '<div style="margin-top:6px;font-size:.62rem;opacity:.65">⚡ '+esc(a.service)+' · '+esc(a.action)
+        +(a.params&&a.params.value!=null?(' = '+esc(String(a.params.value))):'')+'</div>');
+    });
     if(r.engine && actif==='zia'){ el('h-state').textContent=r.engine==='llm'?'modèle':'local'; }
     ziaScroll();
   }
