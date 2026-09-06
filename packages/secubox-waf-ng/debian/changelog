@@ -1,3 +1,12 @@
+secubox-waf-ng (1.7.10-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau admin actor : theme-aware (dark/light) — suit ?theme= puis la
+    préférence système (palettes light+dark), ne reste plus figé en dark.
+  * secubox-actord.service : Alias secubox-actor.service pour que le catalogue
+    détecte le module Actor Intelligence (menu Système du Hall, id « actor »).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 19:30:00 +0200
+
 secubox-waf-ng (1.7.9-1~bookworm1) bookworm; urgency=medium
 
   * Panneau admin Actor Intelligence complet à admin.gk2/actor/ (standard maison

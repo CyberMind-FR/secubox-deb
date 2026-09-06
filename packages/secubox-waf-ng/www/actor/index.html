@@ -17,6 +17,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shared/hybrid-skin.css">
+<script>
+  // Thème dark/light : suit ?theme= (passé par le Hall) puis la préférence
+  // système. Posé sur <html> AVANT le rendu (pas de flash), et le <body> porte
+  // hybrid-dark seulement en dark (le skin partagé reste cohérent).
+  (function(){try{
+    var t=new URLSearchParams(location.search).get('theme');
+    if(t!=='light'&&t!=='dark') t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+    document.documentElement.setAttribute('data-theme',t);
+    document.addEventListener('DOMContentLoaded',function(){
+      document.body.classList.toggle('hybrid-dark',t!=='light');
+      document.body.classList.toggle('hybrid-light',t==='light');
+    });
+  }catch(e){}})();
+</script>
 <style>
   :root{
     --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8); --bg-soft:rgba(30,40,55,.45);
@@ -24,6 +38,13 @@
     --text:#e8e6d9; --dim:#6b7b8b; --cyan:#00d4ff; --red:#ff4466;
     --orange:#ff9944; --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
     --mono:'Courier Prime',ui-monospace,'Courier New',monospace;
+  }
+  /* Mode clair : on ne redéfinit QUE les tokens (fond/texte/bords/accent) ;
+     les couleurs sémantiques (rouge/orange/vert…) restent lisibles sur clair. */
+  :root[data-theme="light"]{
+    --bg-dark:#eef2f6; --bg-card:rgba(255,255,255,.9); --bg-soft:rgba(20,40,70,.04);
+    --border:rgba(20,40,70,.15); --border2:rgba(20,40,70,.3);
+    --text:#1a2430; --dim:#566575; --cyan:#0077a8;
   }
   *{box-sizing:border-box}
   body{font-family:var(--mono);background:var(--bg-dark);color:var(--text);margin:0;min-height:100vh}

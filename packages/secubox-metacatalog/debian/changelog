@@ -1,3 +1,10 @@
+secubox-metacatalog (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Catalogue : ajout du module Actor Intelligence (secubox-actor, catégorie
+    security) — apparaît dans le menu Système du Hall, ouvre admin.gk2/actor/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 19:30:00 +0200
+
 secubox-metacatalog (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est

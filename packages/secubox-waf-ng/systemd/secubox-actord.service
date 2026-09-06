@@ -62,3 +62,7 @@ TasksMax=64
 
 [Install]
 WantedBy=multi-user.target
+# Alias « actor » : le catalogue (metacatalog) détecte un module par la présence
+# de son unité secubox-<id>.service. On expose secubox-actor.service pour que le
+# module apparaisse sous l'id « actor » (menu Système du Hall → admin.gk2/actor/).
+Alias=secubox-actor.service

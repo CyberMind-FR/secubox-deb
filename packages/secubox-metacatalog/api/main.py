@@ -134,6 +134,15 @@ KNOWN_SERVICES = {
         "icon": "inspect",
         "dependencies": ["secubox-core"],
     },
+    # Actor Intelligence (RFC-0013) : livré par secubox-waf-ng (binaire sbx-actord
+    # + panneau admin.gk2/actor/). Détecté « installé » via l'alias systemd
+    # secubox-actor.service -> secubox-actord.service.
+    "secubox-actor": {
+        "description": "Actor Intelligence — TPI inverse, profils d'acteurs, defense adaptative (shadow)",
+        "category": "security",
+        "icon": "inspect",
+        "dependencies": ["secubox-core", "secubox-waf-ng"],
+    },
     "secubox-mediaflow": {
         "description": "Media flow monitoring and control",
         "category": "network",
