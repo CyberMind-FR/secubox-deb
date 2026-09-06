@@ -39,6 +39,28 @@ def filtre(objets: list, role: str) -> list:
     return [o for o in objets if visible(o, role)]
 
 
+# Rôle PLANCHER par famille d'action (RFC §10) — décidé ICI, jamais dans le LLM.
+# UI ordinaire non privilégiée (media/ui/view) = guest ; personnel = registered ;
+# communautaire = member ; administration = admin. Famille inconnue → prudence
+# maximale (admin), pour qu'une action non classée ne passe jamais en douce.
+_ACTION_FLOOR = {
+    "media": "guest", "ui": "guest", "view": "guest",
+    "app": "registered",
+    "comm": "member",
+    "admin": "admin", "sys": "admin",
+}
+
+
+def action_famille(action: str) -> str:
+    return (str(action).split(".", 1)[0] or "").lower()
+
+
+def action_role_ok(role: str, action: str) -> bool:
+    """Le rôle atteint-il le plancher de la famille de cette action ?"""
+    floor = _ACTION_FLOOR.get(action_famille(action), "admin")
+    return rang(role) >= rang(floor)
+
+
 def remote_autorise(cfg: dict, role: str) -> bool:
     """Le remote (niveau 3) est désactivé par défaut ; activable par politique."""
     if not cfg.get("remote_enabled", False):

@@ -106,6 +106,27 @@ TOOLS = Tools(BUS)
 REMOTE = Remote()
 _M = {"chats": 0, "ms_total": 0.0, "started": time.time()}
 
+# Journal d'audit minimal des actions (RFC §9.9) : qui/rôle, cible, action,
+# valeur, résultat, horodatage — append-only JSONL, best-effort (jamais bloquant).
+AUDIT_FILE = Path("/var/log/secubox/zia/actions.jsonl")
+
+
+def _audit(role: str, actions: list) -> None:
+    if not actions:
+        return
+    try:
+        AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with AUDIT_FILE.open("a", encoding="utf-8") as fh:
+            for a in actions:
+                fh.write(json.dumps({
+                    "ts": round(time.time(), 3), "role": role,
+                    "target": a.get("target"), "service": a.get("service"),
+                    "action": a.get("action"), "params": a.get("params"),
+                    "result": "proposée",   # shadow : le Hall exécute, ZIA propose
+                }, ensure_ascii=False) + "\n")
+    except Exception as e:
+        log.error(f"audit action: {e}")
+
 app = FastAPI(title="secubox-zia", version="0.1.0", root_path="/api/v1/zia")
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
@@ -181,11 +202,24 @@ async def chat(body: ChatIn) -> JSONResponse:
         log.error(f"chat: {e}")
         out = {"text": "Désolé, j'ai buté sur cette demande. Réessaie autrement ?",
                "objects": [], "trace": [], "delegate": None, "engine": "heuristique"}
+    # `actions[]` fait TOUJOURS partie du contrat de réponse (RFC §7) — vide par
+    # défaut. Ce sont des actions SBX déjà VALIDÉES (cible/action/rôle/valeur) que
+    # la cardlet ZIA transmet au Hall ; ZIA ne touche jamais le DOM.
+    out.setdefault("actions", [])
+    _audit(role, out.get("actions") or [])
     dt = (time.time() - t0) * 1000
     _M["chats"] += 1
     _M["ms_total"] += dt
     out["meta"] = {"role": role, "ms": round(dt, 1)}
     return JSONResponse(out)
+
+
+@router.get("/capabilities")
+async def capabilities() -> dict:
+    """Registre PUBLIC des capacités (bootstrap + manifestes) — lu par le Hall pour
+    résoudre une action sémantique en message `sbx` natif (client SBXCapabilities).
+    Lecture seule, pas de secret : la même liste blanche que le serveur applique."""
+    return {"capabilities": BUS.caps.registry()}
 
 
 @router.get("/config", dependencies=[Depends(require_jwt)])

@@ -1,3 +1,22 @@
+secubox-zia (0.1.11-1~bookworm1) bookworm; urgency=medium
+
+  * ZIA Action Layer (RFC) — Phase B socle : couche d'actions générique qui
+    EXPOSE le protocole sbx existant au chatbot, sans seconde API de contrôle.
+    - api/capabilities.py : registre de capacités (bootstrap radio ancré sur
+      radio.js + manifestes /usr/share/secubox/capabilities.d/*.json) ; résout
+      une action sémantique (media.mute, media.volume, ui.zoom) en message sbx
+      natif, valide type/bornes (clamp 0..1), rejette capacité/module inconnus.
+    - Tools.act : outil GÉNÉRIQUE (pas un par phrase) ; rend une action SBX
+      VALIDÉE {kind:'sbx-action',...} sans jamais toucher le DOM.
+    - bus.action_allowed + policy.action_role_ok : ACL hors LLM (media/ui=guest,
+      admin=admin) ; objets service enrichis d'un champ `capabilities` structuré.
+    - runtime : langage naturel -> action (coupe/remets le son, volume N%, pause,
+      stop, agrandis) ; « piste suivante » sur la radio = refus explicite.
+    - /v1/chat rend `actions[]` (contrat RFC §7) ; GET /capabilities pour le Hall ;
+      journal d'audit minimal (JSONL). 21 tests unitaires.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 00:30:00 +0200
+
 secubox-zia (0.1.10-1~bookworm1) bookworm; urgency=medium
 
   * Vue micro : habillage spicy + aide reverse-design contextuelle (inline).

@@ -53,6 +53,77 @@ def _service_de(msg: str) -> str:
     return ""
 
 
+# ── COUCHE D'ACTIONS (RFC) — intention de COMMANDE → action sémantique ───────────
+# On ne mappe QUE des intentions claires vers un NOM d'action sémantique
+# (media.*/ui.*). La disponibilité réelle (capacité déclarée + rôle + valeur) est
+# tranchée plus loin par Tools.act/policy — ici, aucune exécution, aucune invention.
+_VOL_PCT = re.compile(r"(\d{1,3})\s*%")
+_NUM = re.compile(r"\b(0?[.,]\d+|[01](?:[.,]\d+)?)\b")
+
+
+def _commande(low: str):
+    """(action, params) si le message est une COMMANDE reconnue, sinon None."""
+    # Rétablir le son (AVANT « coupe » pour ne pas confondre).
+    if re.search(r"\b(remets?|remettre|r[ée]tablis|r[ée]active|d[ée]mute|rallume|remonte)\b", low) \
+            and re.search(r"\b(son|audio|radio|muet)\b", low):
+        return ("media.mute", {"value": False})
+    # Couper le son.
+    if re.search(r"\b(coupe|couper|coupe[- ]?son|muet|silence|mute|chut)\b", low):
+        return ("media.mute", {"value": True})
+    # Volume : un pourcentage explicite, ou « volume/niveau » + nombre décimal.
+    m = _VOL_PCT.search(low)
+    if m:
+        return ("media.volume", {"value": int(m.group(1)) / 100.0})
+    if re.search(r"\b(volume|niveau)\b", low):
+        mn = _NUM.search(low)
+        if mn:
+            try:
+                return ("media.volume", {"value": float(mn.group(1).replace(",", "."))})
+            except ValueError:
+                pass
+    # Pause / stop / zoom / relance.
+    if re.search(r"\bpause\b|mets?.{0,12}\ben pause\b|suspends?", low):
+        return ("media.pause", {})
+    if re.search(r"\b(stop|arr[êe]te|arr[êe]ter|[ée]teins|[ée]teindre)\b", low):
+        return ("media.stop", {})
+    if re.search(r"\b(agrandis|agrandir|zoom|plein[- ]?[ée]cran)\b", low):
+        return ("ui.zoom", {})
+    if re.search(r"\b(relance|relancer|reprends?|reprendre|remets? la lecture|joue|jouer|lance|lancer|d[ée]marre|play)\b", low):
+        return ("media.toggle", {})
+    # Piste suivante/précédente : capacité MÉDIA (podcaster oui, radio non). On la
+    # PROPOSE ; Tools.act la refusera proprement là où elle n'existe pas.
+    if re.search(r"\b(suivant|suivante|prochaine?|next)\b", low):
+        return ("media.next", {})
+    if re.search(r"\b(pr[ée]c[ée]dent|pr[ée]c[ée]dente|previous|prev)\b", low):
+        return ("media.prev", {})
+    return None
+
+
+def _phrase_action(service: str, action: str, params: dict) -> str:
+    v = params.get("value")
+    if action == "media.mute":
+        return f"Je coupe le son de {service}." if v else f"Je remets le son de {service}."
+    if action == "media.volume":
+        return f"Je règle le volume de {service} à {round((v or 0) * 100)} %."
+    return {
+        "media.pause": f"Je mets {service} en pause.",
+        "media.stop": f"J'arrête {service}.",
+        "media.toggle": f"Je relance {service}.",
+        "media.next": f"Piste suivante sur {service}.",
+        "media.prev": f"Piste précédente sur {service}.",
+        "ui.zoom": f"J'agrandis {service}.",
+    }.get(action, f"Action {action} sur {service}.")
+
+
+def _phrase_refus(service: str, action: str, err: str) -> str:
+    if "disponible" in err or "inconnue" in err or "inconnu" in err:
+        return (f"« {action} » n'est pas disponible pour {service} — cette commande "
+                f"n'existe pas pour ce service, et je n'invente rien.")
+    if "rôle" in err or "autoris" in err:
+        return "Cette action demande davantage de droits que ceux de ta session."
+    return f"Je n'ai pas pu exécuter cette commande sur {service} ({err})."
+
+
 def _mots_cles(msg: str) -> str:
     # Mots vides + mots GÉNÉRIQUES (« sujets », « objets »…) qui ne sont pas des
     # critères de recherche mais une intention « liste-moi des choses ».
@@ -128,6 +199,26 @@ async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dic
                         "« montre les podcasts », « les sujets récents ». Pour un sujet "
                         "pointu, je passe la main à la ZIA du service concerné.",
                 "objects": [], "trace": trace, "delegate": None, "engine": engine}
+
+    # ── COMMANDE (couche d'actions) — AVANT recherche/délégation ────────────────
+    # On ne pilote QUE des capacités DÉCLARÉES ; une commande sans capacité →
+    # « non disponible », JAMAIS une approximation. La cible par défaut est la
+    # radio (média canonique du Hall) quand aucun service n'est nommé. Les ACL
+    # sont tranchées hors LLM (Tools.act → bus.action_allowed → policy).
+    cmd = _commande(low)
+    if cmd:
+        action, params = cmd
+        cible = _service_de(low) or "radio"
+        target = f"service:{cible}"
+        trace.append({"tool": "act", "args": {"target": target, "action": action}})
+        res = await tools.call("act", {"target": target, "action": action, "params": params}, role)
+        if res.get("ok"):
+            act = res["result"]
+            return {"text": _phrase_action(cible, action, act.get("params", {})),
+                    "objects": [], "actions": [act], "trace": trace,
+                    "delegate": None, "engine": engine}
+        return {"text": _phrase_refus(cible, action, res.get("error", "action indisponible")),
+                "objects": [], "actions": [], "trace": trace, "delegate": None, "engine": engine}
 
     # Question « explique/détaille » sur un service → délégation (niveau 2).
     service = _service_de(low)

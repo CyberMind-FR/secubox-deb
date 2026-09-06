@@ -21,6 +21,26 @@ from typing import Any, Optional
 import httpx
 
 from . import policy
+from .capabilities import Capabilities
+
+
+class Verdict:
+    """Verdict d'une demande d'action : autorisée ? sinon pourquoi. `params` porte
+    la valeur VALIDÉE/bornée à renvoyer au Hall (ex. {'value': 0.3})."""
+    __slots__ = ("ok", "error", "params")
+
+    def __init__(self, ok: bool, error: str = "", params: Optional[dict] = None):
+        self.ok = ok
+        self.error = error
+        self.params = params or {}
+
+
+def _service_de(target: str) -> str:
+    """« service:radio » → « radio » ; « radio » → « radio »."""
+    t = (target or "").strip()
+    if ":" in t:
+        t = t.split(":", 1)[1]
+    return t.strip().lower()
 
 # PLUS DE « seed » factice (#1245) : ZIA ne montre QUE des objets RÉELS, tirés des
 # adapters ci-dessous. Hors ligne, elle le dit — elle n'invente jamais de contenu.
@@ -44,6 +64,28 @@ class Bus:
         self._cache: list[dict] = []
         self._ts = 0.0
         self.ttl = float(cfg.get("bus_cache_s", 45))
+        # Registre des capacités (couche d'actions) : bootstrap + manifestes des
+        # modules. Le LLM ne l'écrit jamais ; il propose, on valide ici.
+        self.caps = Capabilities(cfg.get("capabilities_dir",
+                                         "/usr/share/secubox/capabilities.d"))
+
+    def action_allowed(self, service: str, action: str, params: Optional[dict],
+                       role: str) -> Verdict:
+        """Une action est-elle permise pour ce rôle sur ce service ? (hors LLM)
+
+        Trois barrières, dans l'ordre : (1) la capacité EXISTE (liste blanche du
+        registre) ; (2) le RÔLE atteint le plancher de la famille d'action ; (3) la
+        VALEUR valide (type + bornes). Rend un Verdict avec la valeur bornée.
+        """
+        if not self.caps.has(service, action):
+            return Verdict(False, error="capacité non disponible")
+        if not policy.action_role_ok(role, action):
+            return Verdict(False, error="action non autorisée pour ce rôle")
+        r = self.caps.resolve(service, action, params)
+        if not r.ok:
+            return Verdict(False, error=r.error)
+        out = {} if r.value is None else {"value": r.value}
+        return Verdict(True, params=out)
 
     async def _metanews(self) -> list[dict]:
         """Adapter MetaNews : topics récents -> objets news.topic (via socket UDS)."""
@@ -120,13 +162,23 @@ class Bus:
                     if not sid:
                         continue
                     path = s.get("path") or f"/{sid}/"
-                    out.append({
+                    # Contrat d'objet enrichi (RFC §3) : on GARDE `actions` plat
+                    # (["open"…], compat UI existante) et on AJOUTE `capabilities`
+                    # structurées, tirées du registre — uniquement si le module a
+                    # DÉCLARÉ des capacités (jamais inventées d'après le nom).
+                    caps = self.caps.actions_for(sid)
+                    obj = {
                         "id": f"service:{sid}", "type": "service", "service": sid,
                         "title": s.get("name", sid), "summary": s.get("description", ""),
                         "uri": f"sbx://{sid}{path}", "visibility": "guest",
                         "actions": ["open"],
                         "tags": [s.get("category", ""), sid, "service"],
-                    })
+                    }
+                    if caps:
+                        obj["type"] = "service.media" if any(
+                            c["name"].startswith("media.") for c in caps) else "service"
+                        obj["capabilities"] = caps
+                    out.append(obj)
         except Exception:
             return out
         return out

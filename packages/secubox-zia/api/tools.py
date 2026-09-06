@@ -21,6 +21,9 @@ SCHEMc: dict = {
     "list_recent": {"limit": int},
     "open": {"id": str},
     "delegate": {"service": str, "reason": str},
+    # Outil GÉNÉRIQUE de commande (RFC §4) — un seul, pas un par phrase. Il ne
+    # touche PAS au DOM : il rend une ACTION SBX VALIDÉE que la couche Hall exécute.
+    "act": {"target": str, "action": str, "params": dict},
 }
 
 
@@ -57,6 +60,28 @@ class Tools:
             if name == "delegate":
                 return {"ok": True, "result": {"to": str(args.get("service", "")),
                                                "reason": str(args.get("reason", ""))}}
+            if name == "act":
+                # Le modèle a proposé une INTENTION structurée. Ici, code
+                # déterministe : on valide cible + rôle + action + valeur, puis on
+                # rend une action SBX prête à poster — SANS jamais exécuter le DOM.
+                target = str(args.get("target", ""))
+                action = str(args.get("action", ""))
+                params = args.get("params") or {}
+                from .bus import _service_de
+                obj = await self.bus.get(target, role)
+                service = (obj or {}).get("service") or _service_de(target)
+                if not service:
+                    return {"ok": False, "error": "cible introuvable"}
+                allowed = self.bus.action_allowed(service, action, params, role)
+                if not allowed.ok:
+                    return {"ok": False, "error": allowed.error}
+                return {"ok": True, "result": {
+                    "kind": "sbx-action",
+                    "target": target or f"service:{service}",
+                    "service": service,
+                    "action": action,
+                    "params": allowed.params,
+                }}
         except Exception as e:  # défensif : un outil qui trébuche ne casse pas le chat
             return {"ok": False, "error": str(e)}
         return {"ok": False, "error": "non exécuté"}
