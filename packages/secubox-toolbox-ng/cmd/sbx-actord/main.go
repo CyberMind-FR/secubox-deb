@@ -18,7 +18,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -43,6 +45,8 @@ func main() {
 		retention  = flag.Duration("retention", 30*24*time.Hour, "durée de rétention des événements")
 		queue      = flag.Int("queue", 4096, "profondeur de la file d'ingestion (backpressure)")
 		workers    = flag.Int("workers", 2, "nombre de workers d'écriture")
+		replayPath = flag.String("replay", "", "rejoue un journal NDJSON d'enveloppes (calibration RFC-0013 §13) puis quitte")
+		sinceDur   = flag.Duration("since", 0, "avec --replay : ne rejoue que les événements plus récents que cette durée")
 	)
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.LUTC)
@@ -76,6 +80,18 @@ func main() {
 		accum:  map[string]*actorSignals{},
 	}
 	srv.rebuild() // reconstruit le graphe en mémoire depuis les événements persistés
+
+	// Mode calibration (RFC-0013 §13) : rejoue un journal puis quitte, sans
+	// ouvrir de socket ni décider quoi que ce soit.
+	if *replayPath != "" {
+		rep, err := srv.replay(*replayPath, *sinceDur)
+		if err != nil {
+			log.Fatalf("actord: replay: %v", err)
+		}
+		out, _ := json.MarshalIndent(rep, "", "  ")
+		fmt.Println(string(out))
+		return
+	}
 
 	if !*readOnly {
 		ch := make(chan *envelope.Envelope, *queue)
