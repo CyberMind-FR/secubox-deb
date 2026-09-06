@@ -247,6 +247,10 @@
         lecteur: location.origin + '/micro',
         titre: (titre && titre.textContent) || 'Radio', sous: (meta && meta.textContent) || '',
         joue: !ecran.paused, t: ecran.currentTime || 0, d: ecran.duration || 0,
+        // ÉTAT SON pour la couche d'actions ZIA (rétrocompatible) : permet au Hall
+        // de connaître muet/volume et d'éviter une bascule quand l'intention est
+        // explicite (RFC §8). Les anciens lecteurs qui ne les lisent pas les ignorent.
+        muet: !!ecran.muted, volume: (typeof ecran.volume === 'number') ? ecran.volume : 1,
         fin: !!fin
       }, '*');
     } catch (e) {}
@@ -288,10 +292,12 @@
       try { localStorage.setItem('sbx_radio_vol', String(ecran.volume)); } catch (e) {}
       if (typeof iconeVol === 'function') iconeVol();
       if (curseurVol) curseurVol.value = String(ecran.volume);
+      annonceHall();   // republie l'état son (RFC §8) : le Hall/ZIA le voit changer
     } else if (d.action === 'muet') {
       ecran.muted = !!d.v;
       try { localStorage.setItem('sbx_radio_muet', ecran.muted ? '1' : '0'); } catch (e) {}
       if (typeof iconeVol === 'function') iconeVol();
+      annonceHall();   // idem : muet/démuet remonté immédiatement
     }
     // prev / next : un direct ne se parcourt pas. On ne fait pas semblant.
   });

@@ -51,6 +51,10 @@ override_dh_auto_install:
 	  debian/secubox-radio/etc/secubox/nginx-available/radio.conf
 	install -D -m 0644 menu.d/60-radio.json \
 	  debian/secubox-radio/usr/share/secubox/menu.d/60-radio.json
+	# Manifeste de capacités (couche d'actions ZIA) : la radio DÉCLARE ce que le
+	# Hall/ZIA peuvent lui commander via sbx:'cmd'. Lu par secubox-zia.
+	install -D -m 0644 capabilities.d/radio.json \
+	  debian/secubox-radio/usr/share/secubox/capabilities.d/radio.json
 	install -D -m 0644 www/radio/index.html \
 	  debian/secubox-radio/usr/share/secubox/www/radio/index.html
 	install -D -m 0644 www/radio/radio-admin.js \

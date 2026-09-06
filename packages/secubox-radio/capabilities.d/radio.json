@@ -1,0 +1,13 @@
+{
+  "service": "radio",
+  "transport": "sbx-postmessage",
+  "_note": "Capacités de la radio, ancrées sur internal/web/static/radio.js (handler sbx:'cmd'). prev/next ABSENTS : un direct ne se parcourt pas.",
+  "actions": {
+    "media.toggle": {"message": {"sbx": "cmd", "action": "toggle"}},
+    "media.pause":  {"message": {"sbx": "cmd", "action": "pause"}},
+    "media.stop":   {"message": {"sbx": "cmd", "action": "stop"}},
+    "media.mute":   {"message": {"sbx": "cmd", "action": "muet"}, "value": {"field": "v", "type": "boolean"}},
+    "media.volume": {"message": {"sbx": "cmd", "action": "vol"}, "value": {"field": "v", "type": "number", "min": 0, "max": 1}},
+    "ui.zoom":      {"message": {"sbx": "cmd", "action": "zoom"}}
+  }
+}
