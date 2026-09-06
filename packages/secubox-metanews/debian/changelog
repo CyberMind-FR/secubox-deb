@@ -1,3 +1,14 @@
+secubox-metanews (0.1.35-1~bookworm1) bookworm; urgency=medium
+
+  * Radar : le classement des sujets remonte enfin le RÉCENT. SujetsListe
+    triait par importance pure → un gros sujet figé (ex. du 26/08) trustait la
+    une pendant des jours (« je ne vois que d'anciennes nouvelles »). Nouveau
+    score = importance / (1 + âge/3h) sur updated_at : un sujet frais garde son
+    poids, un vieux s'effondre. Les sujets mis à jour aujourd'hui repassent en
+    tête, un sujet encore chaud reste visible.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 13:00:00 +0200
+
 secubox-metanews (0.1.34-1~bookworm1) bookworm; urgency=medium
 
   * Vue micro : le slicer bespoke (mn-slbar : « bullets sans effet ») est MIGRÉ

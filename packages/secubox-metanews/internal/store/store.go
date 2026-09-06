@@ -311,11 +311,17 @@ func (s *Store) SujetsRecents(since int64) ([]Topic, error) {
 }
 
 // SujetsListe retourne les sujets pour l'affichage (catégorie vide = tous).
+// SujetsListe classe les sujets par IMPORTANCE DÉCRUE PAR L'ÂGE : un radar
+// d'actualité doit remonter le RÉCENT, pas les gros sujets figés. Le score
+// importance/(1 + âge/3h) divise l'importance par le nombre de tranches de 3 h
+// écoulées depuis la dernière activité (updated_at) : un sujet frais garde tout
+// son poids, un sujet de 11 jours voit le sien s'effondrer. Corrige « je ne
+// vois que d'anciennes nouvelles » (un sujet du 26/08 trustait la une).
 func (s *Store) SujetsListe(category string, limit int) ([]Topic, error) {
 	if category == "" || category == "une" {
-		return s.scanTopics(`ORDER BY importance DESC, updated_at DESC LIMIT ?`, limit)
+		return s.scanTopics(`ORDER BY importance * 1.0 / (1.0 + (strftime('%s','now') - updated_at) / 10800.0) DESC, updated_at DESC LIMIT ?`, limit)
 	}
-	return s.scanTopics(`WHERE id IN (SELECT DISTINCT topic_id FROM article a JOIN source s ON s.id=a.source_id WHERE s.category=? AND a.topic_id<>'') ORDER BY importance DESC, updated_at DESC LIMIT ?`, category, limit)
+	return s.scanTopics(`WHERE id IN (SELECT DISTINCT topic_id FROM article a JOIN source s ON s.id=a.source_id WHERE s.category=? AND a.topic_id<>'') ORDER BY importance * 1.0 / (1.0 + (strftime('%s','now') - updated_at) / 10800.0) DESC, updated_at DESC LIMIT ?`, category, limit)
 }
 
 // SujetParID retourne un sujet, ou une erreur sql.ErrNoRows.
