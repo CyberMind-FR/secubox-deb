@@ -93,6 +93,11 @@ execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/share/secubox/www/actor
 	install -m 0644 www/actor/index.html \
 	  debian/secubox-waf-ng/usr/share/secubox/www/actor/index.html
+	# Entrée du menu Système du Hall (le hub lit /usr/share/secubox/menu.d/*.json
+	# et n'affiche que les modules ayant un www/<id>/ — actor en a un ci-dessus).
+	install -d debian/secubox-waf-ng/usr/share/secubox/menu.d
+	install -m 0644 menu.d/32-actor.json \
+	  debian/secubox-waf-ng/usr/share/secubox/menu.d/32-actor.json
 	# Doc de conception embarquée (référencée par l'unité systemd).
 	install -d debian/secubox-waf-ng/usr/share/doc/secubox
 	install -m 0644 $(CURDIR)/../../docs/design/actor-intelligence-rfc-pack.md \

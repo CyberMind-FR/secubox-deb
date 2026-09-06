@@ -1,0 +1,9 @@
+{
+  "id": "actor",
+  "name": "Renseignement",
+  "category": "mind",
+  "icon": "🧠",
+  "path": "/actor/",
+  "order": 215,
+  "description": "Actor Intelligence — TPI inverse, profils d'acteurs, défense adaptative"
+}
