@@ -283,6 +283,33 @@
     };
   }
 
+  // ── COUCHE 4 : RENSEIGNEMENT — Actor Intelligence / TPI inverse (#1240) ─────
+  // Lit l'API read-only de sbx-actord (SHADOW) via le relais /api/v1/actor/ :
+  // acteurs corrélés AU-DELÀ de l'IP, campagnes, posture. Rien n'est appliqué
+  // (observe). On dit « continuité de campagne probable », jamais « même personne »
+  // (RFC-0007) — l'ASN/pays sont du routage, pas une identité.
+  function coucheActeurs(corps) {
+    return Promise.all([jget('/api/v1/actor/stats'), jget('/api/v1/actor/actors')]).then(function (r) {
+      var s = r[0], acts = r[1] || [];
+      if (!s) { corps.innerHTML = '<div class="vide">Renseignement acteurs injoignable.</div>'; return; }
+      var top = acts.slice(0, 3).map(function (a) {
+        var pin = a.priority >= 80 ? '🔴' : a.priority >= 50 ? '🟠' : '🔵';
+        return '<div class="ipr"><span>' + pin + '</span>'
+          + '<span class="ipa">' + esc(a.id) + '</span>'
+          + '<span class="ipc">prio ' + a.priority + ' · ' + a.src.ips + ' IP · cont ' + a.vec.continuity + '</span></div>';
+      }).join('');
+      corps.innerHTML =
+        '<div class="kpis">'
+        + kpi(s.actors, 'acteurs', s.actors > 0)
+        + kpi(s.campaigns, 'campagnes', s.campaigns > 0)
+        + kpi(s.events_24h, 'événements / j')
+        + kpi(s.blocked_24h, 'bloqués', s.blocked_24h > 0)
+        + '</div>'
+        + '<div class="sous">TPI inverse · shadow (observe) · continuité probable, pas d\'attribution</div>'
+        + (top ? '<div class="iplist">' + top + '</div>' : '<div class="vide">Aucun acteur corrélé pour l\'instant.</div>');
+    });
+  }
+
   // ── COMPOSITION DES GROUPES ───────────────────────────────────────────────
   var GROUPES = {
     securite: {
@@ -290,7 +317,8 @@
       couches: [
         { nom: 'Pare-feu', host: 'waf.gk2.secubox.in', charge: couchePosture },
         { nom: 'Qui frappe ?', host: 'waf.gk2.secubox.in', charge: coucheQuiFrappe },
-        { nom: 'Analyse', host: 'waf.gk2.secubox.in', charge: coucheAnalyse }
+        { nom: 'Analyse', host: 'waf.gk2.secubox.in', charge: coucheAnalyse },
+        { nom: 'Renseignement', host: 'waf.gk2.secubox.in', charge: coucheActeurs }
       ]
     },
     // GROUPES « embed » : la couche EST la carte réelle du service, avec SON

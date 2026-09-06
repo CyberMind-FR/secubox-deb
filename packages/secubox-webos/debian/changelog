@@ -1,3 +1,14 @@
+secubox-webos (1.0.278-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport de sécurité du Hall : nouvelle couche « Renseignement » dans le
+    groupe Sécurité (cumul) — Actor Intelligence / TPI inverse. Lit l'API
+    read-only de sbx-actord (SHADOW) : acteurs corrélés au-delà de l'IP,
+    campagnes, événements/j, bloqués, top acteurs (priorité/continuité). Dit
+    « continuité de campagne probable », jamais une attribution.
+  * hall.vhost.conf : relais GET /api/v1/actor/ -> actor.sock (posture dpi /pub).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 16:30:00 +0200
+
 secubox-webos (1.0.277-1~bookworm1) bookworm; urgency=medium
 
   * Hall : RÉVEIL DES COMPOSANTS ON-DEMAND, piloté par le profil. Le Hall lit
