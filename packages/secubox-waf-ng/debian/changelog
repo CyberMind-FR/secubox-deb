@@ -1,5 +1,9 @@
 secubox-waf-ng (1.7.8-1~bookworm1) bookworm; urgency=medium
 
+  * sbxwaf émet désormais un Event Envelope (fire-and-forget, NON bloquant)
+    vers actord.sock à chaque menace journalisée (--actor-socket, désactivable ;
+    le trafic interne "local" n'est pas émis). Si actord est absent, les
+    enveloppes sont déposées — le chemin requête du WAF n'attend jamais.
   * Actor Intelligence (RFC-0013) : le paquet livre désormais le moteur
     sbx-actord (même module Go toolbox-ng que sbxwaf) + son unité systemd
     durcie secubox-actord.service (SHADOW : ingère/corrèle/expose, ne décide ni

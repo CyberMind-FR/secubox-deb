@@ -27,9 +27,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/emit"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/features"
 )
 
 // ThreatRecord holds the fields for one WAF threat event.
@@ -52,8 +57,9 @@ type ThreatRecord struct {
 // ThreatLog appends JSON threat records to a file, one per line.
 // It is goroutine-safe; a sync.Mutex serialises concurrent appends.
 type ThreatLog struct {
-	path string
-	mu   sync.Mutex
+	path    string
+	mu      sync.Mutex
+	emitter *emit.Emitter // #1240 : émission Actor Intelligence (facultative)
 }
 
 // NewThreatLog creates a ThreatLog that writes to path.
@@ -62,6 +68,66 @@ type ThreatLog struct {
 // directory doesn't exist yet.
 func NewThreatLog(path string) *ThreatLog {
 	return &ThreatLog{path: path}
+}
+
+// SetEmitter branche (facultativement) l'émission des Event Envelopes vers
+// sbx-actord (RFC-0013). Nil = pas d'émission. L'émission est fire-and-forget :
+// elle ne peut jamais ralentir ni interrompre le chemin requête du WAF.
+func (l *ThreatLog) SetEmitter(e *emit.Emitter) { l.emitter = e }
+
+// sevToInt projette la sévérité WAF (low/medium/high/critical) sur 0..100.
+func sevToInt(s string) int {
+	switch s {
+	case "critical":
+		return 90
+	case "high":
+		return 75
+	case "medium":
+		return 50
+	case "low":
+		return 25
+	default:
+		return 40
+	}
+}
+
+// entryToEnvelope projette un événement WAF sur l'Event Envelope v1 (RFC-0013
+// §2). Les champs non disponibles au WAF (ASN, pays, credential) restent vides —
+// aucune valeur inventée. path_shape et ua_family réutilisent internal/actor/
+// features (parité de forme avec le clustering).
+func entryToEnvelope(e *logEntry) *envelope.Envelope {
+	action := envelope.ActionObserve
+	if e.Action == "banned" {
+		action = envelope.ActionBlock
+	}
+	uaFam := e.Tool // outil déjà identifié (nuclei, sqlmap…) prime
+	if uaFam == "" {
+		uaFam = features.UAFamily(e.UserAgent)
+	}
+	var tags []string
+	if e.Category != "" {
+		tags = append(tags, e.Category)
+	}
+	if e.NegativeSpace != "" {
+		tags = append(tags, e.NegativeSpace)
+	}
+	return &envelope.Envelope{
+		EventID:         envelope.NewEventID(),
+		Timestamp:       time.Now().Unix(),
+		Sensor:          envelope.SensorWAF,
+		SrcIP:           e.ClientIP,
+		DstService:      e.Host,
+		Vhost:           e.Host,
+		Transport:       "tls",
+		Protocol:        "https",
+		Action:          action,
+		RuleID:          e.RuleID,
+		Severity:        sevToInt(e.Severity),
+		PathShape:       features.PathShape(e.Path),
+		UserAgentFamily: uaFam,
+		TLSFingerprint:  e.JA4,
+		BehaviorTags:    tags,
+	}
 }
 
 // logEntry is the JSON shape written to the threat log.
@@ -123,6 +189,14 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 	// journalise ici que des événements déjà retenus comme menace.
 	if v := classifyPath(rec.Path, false, rec.Category); v.Signal {
 		entry.NegativeSpace = v.Class
+	}
+
+	// Émission Actor Intelligence (RFC-0013), best-effort et NON BLOQUANTE : si
+	// actord est absent/lent/tombé, l'enveloppe est déposée et la requête n'attend
+	// jamais. Le trafic interne (agrégé sous "local" plus haut) n'est pas un
+	// acteur → non émis ; on n'émet que pour une IP source réelle.
+	if l.emitter != nil && entry.ClientIP != "local" && net.ParseIP(entry.ClientIP) != nil {
+		l.emitter.Emit(entryToEnvelope(&entry))
 	}
 
 	data, err := json.Marshal(entry)

@@ -48,6 +48,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/emit"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
 	"golang.org/x/net/http/httpguts"
 )
@@ -936,6 +937,8 @@ func main() {
 	hostAnomaly := flag.Bool("host-anomaly", true,
 		"traiter un Host non routé (vide/IP/DGA/inconnu) comme signal scanner "+
 			"— journaliser + bannir au lieu d'un 421 muet (#1070)")
+	actorSocket := flag.String("actor-socket", "/run/secubox/actord.sock",
+		"socket d'ingestion sbx-actord — émission Actor Intelligence fire-and-forget (\"\" = désactivé)")
 	threatLog := flag.String("threat-log", "/var/log/secubox/waf/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
 	// Ban nft natif (#1070 phase B) — WAF autonome.
@@ -1071,6 +1074,17 @@ func main() {
 		}
 	}
 
+	// #1240 : le journal de menaces émet aussi (fire-and-forget) vers sbx-actord.
+	// Émission désactivable (--actor-socket ""); si actord est absent, les
+	// enveloppes sont déposées sans jamais ralentir le WAF.
+	tl := NewThreatLog(*threatLog)
+	if *actorSocket != "" {
+		emitter := emit.New(*actorSocket, 8192)
+		tl.SetEmitter(emitter)
+		defer emitter.Close()
+		log.Printf("sbxwaf: Actor Intelligence — émission vers %s (fire-and-forget)", *actorSocket)
+	}
+
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
@@ -1079,8 +1093,8 @@ func main() {
 		ban: NewBan(300*time.Second, 3),
 		// escalate mode: separate long-window counter (default 24h/3).
 		escalateBan: NewBan(*escalateWindow, *escalateThreshold),
-		// Task 3.2: append-only threat log.
-		threatLog:   NewThreatLog(*threatLog),
+		// Task 3.2: append-only threat log (+ émission Actor Intelligence).
+		threatLog:   tl,
 		hostAnomaly: *hostAnomaly,
 		ja4Header:   *ja4Header,
 		// #1080 phase G: profils de service par vhost (nil = désactivé).
