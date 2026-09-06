@@ -167,7 +167,7 @@
 <div class="mw">
   <div class="h"><span class="ic">🔬</span><b>DPI · Trafic vivant</b>
     <span class="live" id="live"><i></i> live</span>
-    <span class="demo" id="demo" hidden>démo</span></div>
+    <span class="demo" id="demo" hidden>😴 en veille</span></div>
   <div class="kpis">
     <div class="kpi cy"><div class="v" id="k-flows">—</div><div class="l">flux actifs</div></div>
     <div class="kpi up"><div class="v" id="k-bw">—<small>Mb/s</small></div><div class="l">débit</div></div>
@@ -206,35 +206,13 @@
   var MEGA=(qs.get('mega')==='1');
   if(MEGA) document.documentElement.classList.add('mega');
 
-  // Jeu de DÉMO (nDPI plausible) — remplacé dès que /api/v1/dpi/* répond en JSON.
-  var DEMO={
-    demo:true, flows:1284, bw:47.3, risks:6,
-    proto:[["🔒","TLS 1.3",38],["⚡","QUIC",24],["🌐","HTTP/2",12],["📡","DNS",9],["🧲","BitTorrent",7],["🛡️","WireGuard",5],["✉️","SMTPS",3]],
-    apps:[["▶️","YouTube",29],["🎬","Netflix",18],["☁️","Cloudflare",14],["🐙","GitHub",9],["🎵","Spotify",7],["🪟","Windows Update",6]],
-    usage:[["🎬","Streaming",44],["🌐","Navigation",21],["🎮","Jeu",13],["☁️","Cloud",9],["⬇️","Mises à jour",7],["💬","Social",6]],
-    infra:[["🔎","Google",34],["🎬","Netflix OpenConnect",26],["☁️","Cloudflare",12],["🪟","Microsoft",10],["📦","Akamai / Steam",9]],
-    unknown:[["rr5---sn.googlevideo.com","2.1 Go · co-occurrent YouTube ×47"],["edge-telemetry.example","40 Mo · beaconing 30 s"],["occ-0-2774.1.nflxso.net","1.8 Go · gros downstream"],["*.gvt2.com","petit · périodique"]],
-    learning:[["googlevideo.com","2 sous-domaines non classifiés, 4.0 Go",98],["gvt2.com","6 terminaux, périodique",91],["edge-telemetry.example","beaconing régulier — à examiner",54]],
-    talk:[["💻","desktop-lan · .24",34],["📱","pixel · .51",22],["📺","tv-salon · .77",17],["🖥️","nas · .10",14],["🎮","console · .63",8]],
-    pays:[["🇫🇷","France",52],["🇺🇸","États-Unis",28],["🇨🇦","Canada",9],["🇧🇷","Brésil",5],["🇩🇪","Allemagne",3]],
-    clients:[
-      {device:"a1b2c3d4e5f6",up_bytes:8.6e9,down_bytes:2.1e9,bytes:10.7e9,sessions:3,alerts:2,flows:728052,
-       last_seen:Math.floor(Date.now()/1000)-240, first_seen:Math.floor(Date.now()/1000)-5443200,
-       countries:[{flag:"🇫🇷"},{flag:"🇺🇸"},{flag:"🇨🇦"},{flag:"🇧🇷"}],
-       usages:[{name:"ai",bytes:6.6e8},{name:"cloud",bytes:3.1e8},{name:"social",bytes:1.2e8}],
-       top_dst:[{host:"api.anthropic.com"},{host:"82.67.100.75"},{host:"x.com"}]},
-      {device:"f6a7b8c9d012",up_bytes:5.0e8,down_bytes:1.1e8,bytes:6.1e8,sessions:3,alerts:1,flows:41200,
-       last_seen:Math.floor(Date.now()/1000)-3600, first_seen:Math.floor(Date.now()/1000)-527000,
-       countries:[{flag:"🇺🇸"},{flag:"🇫🇷"},{flag:"🇩🇪"}],
-       usages:[{name:"ai",bytes:2.1e7},{name:"cloud",bytes:8.0e6}],top_dst:[{host:"160.79.104.10"}]},
-      {device:"4fec81d9aa10",up_bytes:3.3e7,down_bytes:5.8e6,bytes:3.9e7,sessions:4,alerts:0,flows:9800,
-       last_seen:Math.floor(Date.now()/1000)-1800, first_seen:Math.floor(Date.now()/1000)-1296000,
-       countries:[{flag:"🇮🇱"},{flag:"🇭🇺"},{flag:"🇺🇸"},{flag:"🇫🇷"}],
-       usages:[{name:"cloud",bytes:2.5e7},{name:"streaming",bytes:7.3e6},{name:"social",bytes:2.0e6}],
-       top_dst:[{host:"www.youtube.com"},{host:"photos.googleapis.com"}]}
-    ],
-    risk:[["hi","Identifiants en clair (HTTP)","3×"],["hi","Certificat auto-signé","2×"],["md","Proto connu sur port non-std","5×"],["md","TLS obsolète (1.0)","1×"],["lo","Paquet malformé","4×"]]
-  };
+  // DONNÉES RÉELLES UNIQUEMENT (#donnees-reelles) : AUCUNE démo. La carte ne
+  // montre QUE ce que sbxdpi/secubox-dpi renvoie. Quand le moteur DPI
+  // (on-demand) dort ou ne répond pas, on affiche un état HONNÊTE « en veille »
+  // (KPIs et listes à « — »), jamais de valeurs inventées.
+  var VIDE={ veille:true, flows:null, bw:null, risks:null,
+    proto:[], apps:[], usage:[], talk:[], clients:[], pays:[],
+    infra:[], unknown:[], learning:[], risk:[] };
 
   // Affichage progressif : top-5 par défaut + « voir plus » (déplie le reste).
   // Sur données réelles les listes débordent ; on garde la carte lisible. L'état
@@ -353,7 +331,7 @@
     }
   }
   function rend(d){
-    el('demo').hidden=!d.demo; el('live').style.display=d.demo?'none':'';
+    el('demo').hidden=!d.veille; el('live').style.display=d.veille?'none':'';
     el('k-flows').textContent=d.flows!=null?d.flows:'—';
     el('k-bw').innerHTML=(d.bw!=null?d.bw:'—')+'<small>Mb/s</small>';
     el('k-risk').textContent=d.risks!=null?d.risks:'—';
@@ -435,19 +413,17 @@
           return ['💻', shortTalk(x.name), Math.max(1,Math.round(x.pct||0))]; });
         var risk=(j.risks||[]).slice(0,NR).map(function(x){
           return [sev3(x.severity), x.name, (x.count||0)+'×']; });
-        rend({demo:false,
+        rend({
           flows:j.total_flows, bw:(bw!=null?bw:'…'), risks:(j.risks?j.risks.length:0),
-          proto:proto.length?proto:DEMO.proto, apps:apps.length?apps:DEMO.apps,
-          usage:usage.length?usage:DEMO.usage,
-          talk:talk.length?talk:DEMO.talk, risk:risk.length?risk:DEMO.risk});
+          proto:proto, apps:apps, usage:usage, talk:talk, risk:risk});
       })
-      .catch(function(){ /* démo déjà affichée */ });
+      .catch(function(){ rend(VIDE); });
   }
 
   // ── VUE USAGE ENRICHIE (#DPI-sémantique L2) via /api/v1/dpi/usage ───────────
   // Sert les sections mega Infrastructure (providers) et Non classifié (unknown-
   // first). Servi par sbxdpi (moteur d'enrichissement, règles versionnées). Si
-  // le socket dort, la démo étiquetée reste (rend(DEMO) l'a déjà posée).
+  // le socket dort, on n'invente rien (l'état « en veille » reste posé).
   function tenteUsage(){
     fetch('/api/v1/dpi/usage',{headers:{'Accept':'application/json'}})
       .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
@@ -460,7 +436,7 @@
         if(prov.length) barres(el('s-infra'), prov, 'a2');
         if(unk.length) inconnus(el('s-unknown'), unk);
       })
-      .catch(function(){ /* démo déjà affichée */ });
+      .catch(function(){ /* pas de données réelles : on n'affiche rien */ });
   }
 
   // Suggestions du learner (#DPI-sémantique L5) — lecture seule.
@@ -473,7 +449,7 @@
           return [s.domain, (s.reason||''), Math.max(0,Math.round(s.confidence||0))]; });
         if(rows.length) apprend(el('s-learning'), rows);
       })
-      .catch(function(){ /* démo déjà affichée */ });
+      .catch(function(){ /* pas de données réelles : on n'affiche rien */ });
   }
 
   // Pays des destinations (#DPI-sémantique) — géo des IP réelles via /countries.
@@ -487,7 +463,7 @@
           return [paysEm(c.flag), c.name||c.cc, Math.max(1,Math.round(c.pct||0))]; });
         barres(el('s-pays'), rows, '');
       })
-      .catch(function(){ /* démo déjà affichée */ });
+      .catch(function(){ /* pas de données réelles : on n'affiche rien */ });
   }
 
   // Clients (terminaux) via /api/v1/dpi/clients (relayé vers /pub/clients).
@@ -495,10 +471,10 @@
     fetch('/api/v1/dpi/clients',{headers:{'Accept':'application/json'}})
       .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
       .then(function(j){ if(!Array.isArray(j)||!j.length) throw 0; clients(el('s-clients'), j); })
-      .catch(function(){ /* démo déjà affichée */ });
+      .catch(function(){ /* pas de données réelles : on n'affiche rien */ });
   }
 
-  rend(DEMO); tente(); tenteUsage(); tenteSug(); tentePays(); tenteClients();
+  rend(VIDE); tente(); tenteUsage(); tenteSug(); tentePays(); tenteClients();
   setInterval(tente, 15000); setInterval(tenteUsage, 20000); setInterval(tenteSug, 30000); setInterval(tentePays, 25000); setInterval(tenteClients, 20000);
 
   // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).

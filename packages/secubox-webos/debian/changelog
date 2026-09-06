@@ -1,3 +1,13 @@
+secubox-webos (1.0.276-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI : DONNÉES RÉELLES UNIQUEMENT. Suppression totale du jeu de démo
+    (talkers « desktop-lan/pixel/tv-salon… », protocoles, apps, pays, clients…
+    tous inventés) qui s'affichait quand le moteur DPI on-demand dort. La carte
+    ne montre plus QUE ce que sbxdpi/secubox-dpi renvoie ; sinon état honnête
+    « 😴 en veille » (KPIs et listes à « — »), jamais de valeurs fabriquées.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 11:00:00 +0200
+
 secubox-webos (1.0.275-1~bookworm1) bookworm; urgency=medium
 
   * Viewer du Hall : désactive le Picture-in-Picture AUTOMATIQUE. Firefox ouvre
