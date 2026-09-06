@@ -148,6 +148,47 @@ case "$1" in
       systemctl start secubox-waf-campaigns.service 2>/dev/null || true
     fi
 
+    # ── 7. #1240 : vhost dédié actor.gk2.secubox.in (Renseignement) ────────────
+    #
+    # Trois gestes, dans cet ordre, et l'ordre compte : semer le filtre
+    # d'exposition AVANT d'activer le site. Activer d'abord exposerait la page —
+    # et les points d'entrée sans jeton qu'elle consomme — pendant l'intervalle.
+    A_VHOST="actor.gk2.secubox.in"
+    A_SNIP="/etc/nginx/snippets/exposure/${A_VHOST}.conf"
+    A_SITE="/etc/nginx/sites-available/${A_VHOST}.conf"
+
+    if [ -f "$A_SITE" ]; then
+      # 1. Le filtre, à « lan » — jamais écrasé s'il existe déjà : l'opérateur a
+      #    pu l'ouvrir volontairement, et le réinstaller le refermerait dans son dos.
+      if [ ! -f "$A_SNIP" ]; then
+        mkdir -p "$(dirname "$A_SNIP")"
+        cat > "$A_SNIP" <<'EXPO'
+# Filtre d'exposition — semé à « lan » par secubox-waf-ng (#1240).
+# Édité par le module secubox-exposure, qui fait autorité une fois le fichier
+# créé. Ce panneau livre la carte des acteurs corrélés, leurs scores et la
+# posture de défense : ouvert au monde, c'est un renseignement offert à qui
+# l'attaque.
+allow 127.0.0.1;
+allow 10.0.0.0/8;
+allow 172.16.0.0/12;
+allow 192.168.0.0/16;
+deny all;
+EXPO
+      fi
+
+      # 2. L'activation.
+      ln -sf "$A_SITE" "/etc/nginx/sites-enabled/${A_VHOST}.conf"
+
+      # 3. Le rechargement, SEULEMENT si la configuration passe le test : une
+      #    conf fautive couperait tous les autres vhosts de la box.
+      if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+      else
+        echo "secubox-waf-ng: nginx -t a echoue — vhost ${A_VHOST} depose mais non active" >&2
+        rm -f "/etc/nginx/sites-enabled/${A_VHOST}.conf"
+      fi
+    fi
+
     ;;
 
   abort-upgrade|abort-remove|abort-deconfigure)

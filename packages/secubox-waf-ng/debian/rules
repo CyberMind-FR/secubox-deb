@@ -93,6 +93,11 @@ execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/share/secubox/www/actor
 	install -m 0644 www/actor/index.html \
 	  debian/secubox-waf-ng/usr/share/secubox/www/actor/index.html
+	# #1240 : vhost dédié actor.gk2.secubox.in (servi en direct par nginx, comme
+	# waf.gk2). Déposé dans sites-available ; activé + semé « lan » par le postinst.
+	install -d debian/secubox-waf-ng/etc/nginx/sites-available
+	install -m 0644 nginx/actor.gk2.secubox.in.conf \
+	  debian/secubox-waf-ng/etc/nginx/sites-available/actor.gk2.secubox.in.conf
 	# Entrée du menu Système du Hall (le hub lit /usr/share/secubox/menu.d/*.json
 	# et n'affiche que les modules ayant un www/<id>/ — actor en a un ci-dessus).
 	install -d debian/secubox-waf-ng/usr/share/secubox/menu.d

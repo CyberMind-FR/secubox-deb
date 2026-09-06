@@ -1,3 +1,14 @@
+secubox-waf-ng (1.7.13-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 : vhost dédié actor.gk2.secubox.in (module Renseignement). Servi en
+    direct par nginx comme waf.gk2 (HAProxy route déjà *.gk2 → nginx:9080, cert
+    wildcard) : aucune entrée haproxy.toml ni route mitmproxy. Panneau à la
+    racine + relais lecture /api/v1/actor/ vers actor.sock. Fermé « lan » par
+    défaut (endpoints sans jeton), snippet d'exposition semé par le postinst.
+    Corrige le 421 sur actor.gk2 et donne au service son /mega dans le Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 06 Sep 2026 23:40:00 +0200
+
 secubox-waf-ng (1.7.12-1~bookworm1) bookworm; urgency=medium
 
   * Panneau admin.gk2/actor/ : barres ThreatVector corrigées (.fl display:block,
