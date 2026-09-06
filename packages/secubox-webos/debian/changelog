@@ -1,3 +1,14 @@
+secubox-webos (1.0.281-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Renseignement (Actor Intelligence) : REFAITE sur la fondation
+    standard des cardlets du Hall (réf. dpi.html) — tokens partagés
+    (--fond/--texte/--muted/--line/--cyan/--up), en-tête spicy, KPIs, vue slicée
+    et surtout la barre SBXSliceBar « double bullet » enfin STYLÉE (slicebar.css
+    était absente → bullets hors-charte). Barres ThreatVector via .row/.bar
+    standard ; thème clair-d'abord + dark (media + data-theme).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 06 Sep 2026 22:30:00 +0200
+
 secubox-webos (1.0.280-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Renseignement (Actor Intelligence) : SLICÉE sur SBXSliceBar (3
