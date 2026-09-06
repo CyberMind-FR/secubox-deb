@@ -1,3 +1,16 @@
+secubox-webos (1.0.277-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : RÉVEIL DES COMPOSANTS ON-DEMAND, piloté par le profil. Le Hall lit
+    /api/v1/profiles/lifecycles (source de vérité) et pose un voile + bouton
+    « réveiller » sur toute carte dont le module est on-demand ET endormi —
+    uniquement en session ouverte. Le réveil part en POST /api/v1/profiles/wake
+    AUTHENTIFIÉ (Bearer sbx_token). Nouveau relais nginx POST /profiles/wake
+    (wake-seul). Automatique : un always-on n'affiche jamais de bouton ; un
+    changement de lifecycle dans le profil est reflété à la sonde suivante.
+  * Cartes : ajout de data-host (le domaine réel) pour le mapping carte→module.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 12:00:00 +0200
+
 secubox-webos (1.0.276-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet DPI : DONNÉES RÉELLES UNIQUEMENT. Suppression totale du jeu de démo

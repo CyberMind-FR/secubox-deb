@@ -165,6 +165,7 @@ def _build_status_payload(manifests: dict, actuals: dict) -> dict:
             "protected": m.protected, "on": st, "rss_kb": a.rss_kb,
             "lifecycle": eff, "wake_class": m.wake_class,
             "sleep_state": sleep_state, "wake_budget_s": budget,
+            "portal_domain": m.portal_domain,
         })
         totals["count"] += 1
         totals[st] += 1
@@ -460,9 +461,14 @@ def create_app() -> FastAPI:
         # fond) ; `always-on` sonde live. N'expose ni rss, ni exposure, ni
         # topologie — rien qui justifie un JWT. Reutilise le cache de /status.
         payload = await _get_status_cached(_root())
+        # portal_domain (le vhost, déjà public — c'est l'URL des cartes) est
+        # ajouté pour que le Hall mappe une carte à son module et propose un
+        # réveil (POST /wake, JWT) piloté par le lifecycle. On n'expose toujours
+        # ni rss, ni exposure, ni interne.
         return {"lifecycles": [
             {"id": m["id"], "lifecycle": m["lifecycle"],
-             "sleep_state": m["sleep_state"]}
+             "sleep_state": m["sleep_state"],
+             "portal_domain": m.get("portal_domain")}
             for m in payload.get("modules", [])
         ]}
 

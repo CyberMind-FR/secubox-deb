@@ -1487,7 +1487,7 @@ function featCardHTML(f,s){
     const auth = (f.auth || (f.carte && f.carte.indexOf('delegue')>=0)) ? ' data-auth="1"' : '';
     // LAN-only (#1247) : data-lan -> .non-lan la cache pour les clients WAN.
     const lanOnly = f.lan ? ' data-lan="1"' : '';
-    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'" data-label="'+esc(f.label)+'"'+auth+lanOnly+'>'
+    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'" data-host="'+esc(h)+'" data-label="'+esc(f.label)+'"'+auth+lanOnly+'>'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
       + ETOILE + AIDE
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'+haut
@@ -1502,7 +1502,7 @@ function featCardHTML(f,s){
   if(EMBEDDABLE.has(f.id)){
     const th=root.getAttribute('data-theme')
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-    return '<article class="fcard fcard-apercu" data-embed="'+esc(f.id)+'" data-label="'+esc(f.label)+'">'
+    return '<article class="fcard fcard-apercu" data-embed="'+esc(f.id)+'" data-host="'+esc(h)+'" data-label="'+esc(f.label)+'">'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
       + ETOILE + AIDE
       + '<div class="ap-tete">'
@@ -1522,7 +1522,7 @@ function featCardHTML(f,s){
       + '</article>';
   }
 
-  return '<article class="fcard clic" data-embed="'+esc(f.id)+'" data-label="'+esc(f.label)+'">'
+  return '<article class="fcard clic" data-embed="'+esc(f.id)+'" data-host="'+esc(h)+'" data-label="'+esc(f.label)+'">'
     +'<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'+ETOILE+AIDE+'<div class="hd">'
     +'<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
     +'<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
@@ -3545,6 +3545,71 @@ addEventListener('message', ev=>{
     }
   }
   sondeSession();   // AU CHARGEMENT (#1237) : masque les cartes a auth + fixe le header
+
+  // ── RÉVEIL DEPUIS LE HALL (#reveil-hall) ────────────────────────────────────
+  // Piloté par le PROFIL, jamais codé en dur : on lit la source de vérité
+  // /api/v1/profiles/lifecycles (id + portal_domain + sleep_state). Toute carte
+  // dont le module est on-demand et ENDORMI (sleep_state==='asleep') reçoit un
+  // voile + bouton « réveiller », UNIQUEMENT en session ouverte (_moi). Le réveil
+  // est une ACTION → POST /api/v1/profiles/wake AUTHENTIFIÉ (Bearer sbx_token,
+  // même jeton que sondeSession). Un module always-on n'est jamais 'asleep' →
+  // pas de bouton ; si le lifecycle change dans le profil, la sonde suivante le
+  // reflète. Intégration automatique, aucune carte à câbler à la main.
+  (function reveilsHall(){
+    var stl=document.createElement('style');
+    stl.textContent='.fcard{position:relative}'
+      +'.reveil-scrim{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:7px;'
+      +'align-items:center;justify-content:center;border-radius:inherit;background:rgba(120,122,134,.30);'
+      +'-webkit-backdrop-filter:blur(1.2px);backdrop-filter:blur(1.2px)}'
+      +'.reveil-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:999px;'
+      +'border:1px solid var(--sky,#0aa);background:var(--panel,#fff);color:var(--ink,#222);'
+      +'font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;box-shadow:0 2px 9px rgba(0,0,0,.22)}'
+      +'.reveil-btn:hover{background:var(--sky,#0aa);color:#fff}'
+      +'.reveil-btn[disabled]{cursor:default;opacity:.7}'
+      +'.reveil-lbl{font-size:.6rem;letter-spacing:.13em;text-transform:uppercase;color:#fff;'
+      +'text-shadow:0 1px 3px rgba(0,0,0,.5)}';
+    document.head.appendChild(stl);
+    function jeton(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } }
+    function pose(card, mid){
+      if(card.querySelector('.reveil-scrim')) return;
+      var sc=document.createElement('div'); sc.className='reveil-scrim';
+      sc.innerHTML='<button type="button" class="reveil-btn" data-mid="'+esc(mid)+'">😴 réveiller</button>'
+        +'<span class="reveil-lbl">module en veille</span>';
+      card.appendChild(sc);
+    }
+    function retire(card){ var s=card.querySelector('.reveil-scrim'); if(s) s.remove(); }
+    async function majReveils(){
+      if(!_moi){ document.querySelectorAll('.reveil-scrim').forEach(function(s){ s.remove(); }); return; }
+      var parDom={};
+      try{
+        var r=await fetch('/api/v1/profiles/lifecycles',{headers:{'Accept':'application/json'}});
+        if(!r.ok) return; var d=await r.json();
+        (d.lifecycles||[]).forEach(function(m){
+          if(m.portal_domain) parDom[m.portal_domain]={id:m.id, dort:(m.sleep_state==='asleep')};
+        });
+      }catch(e){ return; }
+      document.querySelectorAll('.fcard[data-host]').forEach(function(card){
+        var mod=parDom[card.getAttribute('data-host')];
+        if(mod && mod.dort && mod.id){ pose(card, mod.id); } else { retire(card); }
+      });
+    }
+    document.addEventListener('click', function(ev){
+      var b=ev.target.closest ? ev.target.closest('.reveil-btn') : null; if(!b) return;
+      ev.preventDefault(); ev.stopPropagation();
+      var mid=b.getAttribute('data-mid'), j=jeton();
+      if(!mid || !j) return;
+      b.disabled=true; b.textContent='⏳ réveil…';
+      fetch('/api/v1/profiles/wake',{method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json','Authorization':'Bearer '+j},
+        body:JSON.stringify({module:mid})})
+        .then(function(r){ if(!r.ok) throw r.status; return r.json(); })
+        .then(function(){ setTimeout(majReveils,4000); setTimeout(majReveils,9000); setTimeout(majReveils,15000); })
+        .catch(function(){ b.disabled=false; b.textContent='⚠️ réessayer'; });
+    }, true);
+    setTimeout(majReveils, 1600);
+    setInterval(majReveils, 20000);
+    window.majReveils=majReveils;   // rappelable après un (re)rendu de la grille
+  })();
 
   // UNE VALIDATION QUI ATTEND DOIT SE VOIR (#1297). Sans marque, la demande
   // deposee par une carte dort dans une file que personne n'ouvre. La pastille
