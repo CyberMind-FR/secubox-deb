@@ -83,6 +83,7 @@ func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 // correlate : observe + fige une preuve inviolable. Aucune décision appliquée
 // (shadow). Utilisé sur le flux d'ingestion live.
 func (s *Server) correlate(e *envelope.Envelope) {
+	defer s.correlated.Add(1)
 	actorID, cont, prio := s.observe(e)
 
 	// Preuve inviolable : chaque événement lie sa source à un acteur + sa priorité,

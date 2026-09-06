@@ -35,9 +35,10 @@ type Server struct {
 	ledger *evidence.Ledger
 	accum  map[string]*actorSignals
 
-	ingested atomic.Uint64 // enveloppes persistées
-	dropped  atomic.Uint64 // rejetées faute de place (backpressure, jamais bloquant)
-	invalid  atomic.Uint64 // rejetées par Validate (événements forgés/malformés)
+	ingested   atomic.Uint64 // enveloppes persistées
+	correlated atomic.Uint64 // enveloppes passées par le pipeline de corrélation
+	dropped    atomic.Uint64 // rejetées faute de place (backpressure, jamais bloquant)
+	invalid    atomic.Uint64 // rejetées par Validate (événements forgés/malformés)
 }
 
 // worker draine la file d'ingestion vers le store puis corrèle. C'est la seule

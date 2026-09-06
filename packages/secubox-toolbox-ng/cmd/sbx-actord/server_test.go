@@ -71,9 +71,10 @@ func TestIngestionBoutEnBout(t *testing.T) {
 	}
 	_ = conn.Close()
 
-	// Ingestion asynchrone : on attend le drainage.
+	// Ingestion + corrélation asynchrones : on attend que le valide soit corrélé
+	// (donc persisté ET passé par le pipeline, preuve figée) et le forgé compté.
 	deadline := time.Now().Add(3 * time.Second)
-	for s.ingested.Load() < 1 && time.Now().Before(deadline) {
+	for (s.correlated.Load() < 1 || s.invalid.Load() < 1) && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if got := s.ingested.Load(); got != 1 {
