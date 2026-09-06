@@ -12,6 +12,11 @@ override_dh_auto_install:
 	# Menu definitions
 	install -d debian/secubox-podcaster/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-podcaster/usr/share/secubox/menu.d/ || true
+
+	# Manifeste de capacités (couche d'actions ZIA) : le podcaster DÉCLARE ce que
+	# le Hall/ZIA peuvent lui commander via sbx:'cmd'. Lu par secubox-zia.
+	install -d debian/secubox-podcaster/usr/share/secubox/capabilities.d
+	[ -d capabilities.d ] && cp -r capabilities.d/. debian/secubox-podcaster/usr/share/secubox/capabilities.d/ || true
 	# Config template (installed by postinst on first install only)
 	install -d debian/secubox-podcaster/usr/share/secubox/podcaster
 	[ -f conf/podcaster.toml ] && cp conf/podcaster.toml debian/secubox-podcaster/usr/share/secubox/podcaster/ || true

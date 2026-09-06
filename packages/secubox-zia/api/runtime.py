@@ -46,10 +46,23 @@ def _type_de(msg: str) -> str:
     return ""
 
 
+# Alias de lexique → service canonique (le mot courant n'est pas l'id du service).
+_ALIAS = {
+    "cloud": "nextcloud",
+    "podcast": "podcaster", "podcasts": "podcaster", "épisode": "podcaster",
+    "episode": "podcaster", "émission": "podcaster", "emission": "podcaster",
+}
+
+
 def _service_de(msg: str) -> str:
+    # Ids de service exacts d'abord (radio, podcaster, peertube…).
     for s in _SERVICES:
         if re.search(r"\b" + re.escape(s) + r"\b", msg):
             return "nextcloud" if s == "cloud" else s
+    # Puis les alias courants (« podcast », « épisode »… → podcaster).
+    for mot, svc in _ALIAS.items():
+        if re.search(r"\b" + re.escape(mot) + r"\b", msg):
+            return svc
     return ""
 
 

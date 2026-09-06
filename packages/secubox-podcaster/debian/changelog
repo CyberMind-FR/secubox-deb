@@ -1,3 +1,12 @@
+secubox-podcaster (1.0.36-1~bookworm1) bookworm; urgency=medium
+
+  * Couche d'actions ZIA (Phase E) : capabilities.d/podcaster.json — le podcaster
+    déclare ses capacités pilotables (toggle/pause/stop/next/prev/mute/volume),
+    ancrées sur portal/micro.html. next/prev présents (parcours d'épisodes), pas
+    de zoom. Installé sous /usr/share/secubox/capabilities.d/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 03:40:00 +0200
+
 secubox-podcaster (1.0.35-1~bookworm1) bookworm; urgency=medium
 
   * Reproductibilité : le vhost dédié podcaster.gk2 (server-block), jusqu'ici

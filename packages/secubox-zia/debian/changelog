@@ -1,3 +1,11 @@
+secubox-zia (0.1.13-1~bookworm1) bookworm; urgency=medium
+
+  * Lexique étendu (Phase E) : alias « podcast/podcasts/épisode/émission » →
+    service podcaster dans le runtime (_service_de). « podcast suivant », « épisode
+    précédent », « coupe le podcast » ciblent désormais le podcaster.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 03:40:00 +0200
+
 secubox-zia (0.1.12-1~bookworm1) bookworm; urgency=medium
 
   * Correctif couche d'actions : la cardlet ZIA 🦊 (www/zia/micro.html — la carte

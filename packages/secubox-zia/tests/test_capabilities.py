@@ -98,3 +98,20 @@ def test_registry_public_shape():
     reg = c.registry()
     assert reg["radio"]["transport"] == "sbx-postmessage"
     assert reg["radio"]["actions"]["media.mute"]["message"]["action"] == "muet"
+
+
+def test_shipped_podcaster_manifest():
+    # Le manifeste RÉELLEMENT livré par secubox-podcaster se charge et déclare
+    # next/prev (un podcaster PARCOURT ses épisodes) mais PAS de zoom.
+    import pathlib
+    import pytest
+    p = pathlib.Path(__file__).resolve().parents[2] / "secubox-podcaster" / "capabilities.d"
+    if not (p / "podcaster.json").exists():
+        pytest.skip("manifeste podcaster absent")
+    c = Capabilities(str(p))
+    for a in ["media.toggle", "media.next", "media.prev", "media.pause",
+              "media.stop", "media.mute", "media.volume"]:
+        assert c.has("podcaster", a), a
+    assert not c.has("podcaster", "ui.zoom")
+    assert c.resolve("podcaster", "media.next", {}).message == {"sbx": "cmd", "action": "next"}
+    assert c.resolve("podcaster", "media.volume", {"value": 0.5}).message["v"] == 0.5

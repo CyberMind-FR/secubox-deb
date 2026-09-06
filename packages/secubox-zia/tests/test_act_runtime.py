@@ -117,3 +117,35 @@ def test_nl_piste_suivante_refusee():
 def test_nl_non_commande_reste_recherche():
     o = resp("trouve une vidéo sur le WAF")
     assert o.get("actions", []) == []               # pas d'action : c'est une recherche
+
+
+# ── podcaster : lexique étendu (Phase E) ─────────────────────────────────────
+def _bus_podcaster():
+    import pathlib
+    capdir = str(pathlib.Path(__file__).resolve().parents[2] / "secubox-podcaster" / "capabilities.d")
+    b = Bus({"capabilities_dir": capdir})
+
+    async def _vide(role="guest", force=False):
+        return []
+    b.objets = _vide
+    return b
+
+
+def test_nl_podcast_suivant():
+    o = call(runtime.respond("podcast suivant", "guest", Tools(_bus_podcaster()), {}, None))
+    assert o["actions"] and o["actions"][0]["service"] == "podcaster"
+    assert o["actions"][0]["action"] == "media.next"
+
+
+def test_nl_episode_precedent_et_coupe_podcast():
+    t = Tools(_bus_podcaster())
+    o = call(runtime.respond("épisode précédent", "guest", t, {}, None))
+    assert o["actions"][0]["service"] == "podcaster" and o["actions"][0]["action"] == "media.prev"
+    o2 = call(runtime.respond("coupe le podcast", "guest", t, {}, None))
+    assert o2["actions"][0]["service"] == "podcaster" and o2["actions"][0]["action"] == "media.mute"
+
+
+def test_nl_suivant_sur_radio_refuse():
+    # « suivant » sans podcast → cible radio (défaut) → refus (pas de next en direct).
+    o = resp("piste suivante")
+    assert o["actions"] == [] and "disponible" in o["text"]
