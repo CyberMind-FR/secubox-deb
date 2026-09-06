@@ -2566,6 +2566,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       f.style.display='none'; try{ f.src='about:blank'; }catch(_){}
       if(!v){ v=document.createElement('video'); v.className='tv-direct'; v.controls=true;
         v.autoplay=true; v.setAttribute('playsinline','');
+      v.disablePictureInPicture=true; v.setAttribute('disablepictureinpicture',''); // pas d'auto-PiP Firefox au changement d'onglet — lecture manuelle uniquement
         v.style.cssText='flex:1;width:100%;min-height:0;background:#000;object-fit:contain';
         // AUTO-RESYNC (#1237) : en ouvrant le direct on se cale sur le moment live.
         v.addEventListener('loadedmetadata', resync, {once:true});
@@ -2686,6 +2687,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function flux(src, mime, depart){
     var v=document.createElement('video');
     v.src=src; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
+      v.disablePictureInPicture=true; v.setAttribute('disablepictureinpicture',''); // pas d'auto-PiP Firefox au changement d'onglet — lecture manuelle uniquement
     media.innerHTML=''; media.appendChild(v);
     // REPRISE AU REFRESH (#1266b) : on se recale à la seconde sauvegardée. La
     // position peut venir de l'appelant (flux souverain direct) OU de la reprise
@@ -2806,6 +2808,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     } else if(estVideoDirecte(url)){
       var v=document.createElement('video');
       v.src=url; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
+      v.disablePictureInPicture=true; v.setAttribute('disablepictureinpicture',''); // pas d'auto-PiP Firefox au changement d'onglet — lecture manuelle uniquement
       media.appendChild(v);
       if(depart && depart>2){ v.addEventListener('loadedmetadata', function(){ try{ v.currentTime=depart; }catch(e){} }, {once:true}); }
       function maj(){
