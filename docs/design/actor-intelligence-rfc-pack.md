@@ -174,6 +174,15 @@ score global. **Chaque score cliquable → « Pourquoi ce score ? »** avec `evi
 contre-hypothèses. Vue « Constellation » : Actor Cards au centre, sources réseau autour, services
 ciblés à droite ; traits épais selon la confiance ; pas de drapeau de pays géant.
 
+**Réalisation (aperçu).** La console est maquettée dans
+[`actor-intelligence-webui.html`](actor-intelligence-webui.html) — style maison
+hybrid-dark (Courier Prime, cyan `#00d4ff`), Actor Cards + ThreatVector cliquable
+« Pourquoi ce score ? » (preuves +/- et contre-hypothèses), timeline, flux de
+défense `OBSERVE→QUARANTINE`, honey-identities, score global. Elle interroge
+`/api/v1/actor/*` et remplace l'illustration par du réel dès que `sbx-actord`
+répond (sinon bannière « aperçu design » explicite — jamais de faux passé pour
+du réel).
+
 ## RFC-0010 — Plan d'implémentation
 
 - **Phase 0** — Instrumentation, aucune décision automatique : Event Envelope ; adaptateurs
