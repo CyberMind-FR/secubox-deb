@@ -1,3 +1,13 @@
+secubox-webos (1.0.275-1~bookworm1) bookworm; urgency=medium
+
+  * Viewer du Hall : désactive le Picture-in-Picture AUTOMATIQUE. Firefox ouvre
+    le PiP en changeant d'onglet et saisissait la vidéo autoplay du viewer
+    (« autopopup quand je sors le focus »). On pose disablePictureInPicture sur
+    les 3 <video> du viewer (TV-direct + deux flux souverains) : plus aucun
+    pop-out, lecture manuelle uniquement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 06 Sep 2026 09:30:00 +0200
+
 secubox-webos (1.0.274-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Cloud+ (Nextcloud) : SUPPRESSION de la limite d'envoi de 64 Mo. Le
