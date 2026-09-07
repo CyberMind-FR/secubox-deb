@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox #1238 — cardlet Freebox TV. Grille des chaînes (playlist de base,
+  variante standard) + lecteur HLS. Les chaînes sont exposées en RTSP par la
+  Freebox ; le daemon secubox-freeboxtv interpose un sas ffmpeg RTSP→HLS
+  on-demand (/api/v1/freeboxtv/*). Un navigateur ne lit pas le HLS nativement
+  (hors Safari) → hls.js (same-origin, /hls.min.js). MSE → flux blob: (la CSP de
+  cette carte l'autorise, cf. hall.vhost.conf). Données réelles, usage perso LAN.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freebox TV</title>
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
+         --line-2:#c5cfd7; --panel:#ffffff; --soft:#f5f7fc; --cyan:#0784a8; --hot:#d64545; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --line-2:#2d3a4e; --panel:#141a26; --soft:#10151f; --cyan:#28d6ff; --hot:#ff6a6a; } }
+  :root[data-theme="dark"]{ --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779;
+    --line:#232b3b; --line-2:#2d3a4e; --panel:#141a26; --soft:#10151f; --cyan:#28d6ff; --hot:#ff6a6a; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.5rem .6rem;gap:.45rem}
+  .h{display:flex;align-items:center;gap:8px;position:relative;padding-bottom:6px;flex:0 0 auto}
+  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+    background:linear-gradient(90deg,var(--hot),#e0b46a,var(--cyan))}
+  .h .ic{font-size:1.05rem} .h b{font-size:.9rem;letter-spacing:.02em}
+  .h .now{margin-left:auto;font-size:.6rem;color:var(--faint);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;max-width:45%}
+  /* Lecteur 16:9, masqué tant qu'aucune chaîne n'est choisie. */
+  .screen{flex:0 0 auto;position:relative;background:#000;border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;aspect-ratio:16/9;display:none}
+  .screen.on{display:block}
+  .screen video{width:100%;height:100%;display:block;background:#000}
+  .screen .spin{position:absolute;inset:0;display:grid;place-items:center;color:#9fb0c4;font-size:.7rem;
+    letter-spacing:.1em;text-transform:uppercase}
+  .screen .spin.off{display:none}
+  .filtre{flex:0 0 auto}
+  .filtre input{width:100%;font:inherit;font-size:.8rem;padding:5px 9px;border-radius:8px;
+    border:1px solid var(--line);background:var(--soft);color:var(--texte)}
+  .grille{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));
+    gap:6px;align-content:start;scrollbar-width:thin}
+  .ch{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;
+    background:var(--soft);cursor:pointer;text-align:left;font:inherit;color:var(--texte);transition:.12s;min-width:0}
+  .ch:hover{border-color:var(--line-2)}
+  .ch.on{border-color:var(--cyan);box-shadow:0 0 0 1px color-mix(in srgb,var(--cyan) 30%,transparent)}
+  .ch .lcn{flex:0 0 auto;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.66rem;font-weight:700;
+    color:var(--cyan);min-width:20px;text-align:right}
+  .ch .nm{flex:1;min-width:0;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vide{color:var(--faint);font-size:.74rem;padding:14px;text-align:center;grid-column:1/-1}
+</style>
+
+<div class="mw">
+  <div class="h"><span class="ic">📺</span><b>Freebox TV</b><span class="now" id="now"></span></div>
+  <div class="screen" id="screen">
+    <video id="v" playsinline controls></video>
+    <div class="spin" id="spin">● connexion…</div>
+  </div>
+  <div class="filtre"><input id="q" type="search" placeholder="filtrer une chaîne… (177)" autocomplete="off"></div>
+  <div class="grille" id="grille"><div class="vide">Chargement des chaînes…</div></div>
+</div>
+
+<script src="/hls.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+  var API='/api/v1/freeboxtv', v=el('v'), hls=null, CHANS=[], cur=null;
+
+  // Thème (comme les autres cardlets) : ?theme= puis postMessage.
+  (function(){ var t=new URLSearchParams(location.search).get('theme');
+    if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
+  addEventListener('message',function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
+
+  function stop(){ if(hls){ try{hls.destroy();}catch(e){} hls=null; } try{ v.pause(); v.removeAttribute('src'); v.load(); }catch(e){} }
+
+  function joue(ch){
+    cur=ch.id; rendActive(); el('now').textContent=ch.name;
+    el('screen').classList.add('on'); el('spin').classList.remove('off');
+    stop();
+    var url=ch.hls;
+    v.onplaying=function(){ el('spin').classList.add('off'); };
+    if(window.Hls && Hls.isSupported()){
+      hls=new Hls({maxBufferLength:12, liveSyncDurationCount:3, manifestLoadingTimeOut:20000});
+      hls.loadSource(url); hls.attachMedia(v);
+      hls.on(Hls.Events.MANIFEST_PARSED,function(){ v.play().catch(function(){}); });
+      hls.on(Hls.Events.ERROR,function(_,data){
+        if(!data||!data.fatal) return;
+        if(data.type===Hls.ErrorTypes.NETWORK_ERROR){ hls.startLoad(); }
+        else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){ hls.recoverMediaError(); }
+        else { el('spin').classList.remove('off'); el('spin').textContent='flux indisponible'; stop(); }
+      });
+    } else if(v.canPlayType('application/vnd.apple.mpegurl')){   // Safari : HLS natif
+      v.src=url; v.play().catch(function(){});
+    } else {
+      el('spin').textContent='lecteur HLS indisponible';
+    }
+  }
+
+  function rendActive(){ var b=el('grille').querySelectorAll('.ch'); for(var i=0;i<b.length;i++) b[i].classList.toggle('on', b[i].dataset.id===cur); }
+
+  function rendGrille(list){
+    var g=el('grille');
+    if(!list.length){ g.innerHTML='<div class="vide">Aucune chaîne.</div>'; return; }
+    g.innerHTML='';
+    list.forEach(function(c){
+      var b=document.createElement('button'); b.className='ch'+(c.id===cur?' on':''); b.dataset.id=c.id;
+      b.innerHTML='<span class="lcn">'+c.lcn+'</span><span class="nm">'+esc(c.name)+'</span>';
+      b.addEventListener('click',function(){ joue(c); });
+      g.appendChild(b);
+    });
+  }
+
+  el('q').addEventListener('input',function(){
+    var q=el('q').value.trim().toLowerCase();
+    rendGrille(!q?CHANS:CHANS.filter(function(c){return (c.name||'').toLowerCase().indexOf(q)>=0 || String(c.lcn)===q;}));
+  });
+
+  fetch(API+'/channels',{headers:{'Accept':'application/json'}})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(j){
+      CHANS=(j&&j.channels)||[];
+      el('q').placeholder='filtrer une chaîne… ('+CHANS.length+')';
+      rendGrille(CHANS);
+    })
+    .catch(function(){ el('grille').innerHTML='<div class="vide">Service Freebox TV injoignable.</div>'; });
+
+  // Libère le sas en quittant (le reaper le tuerait de toute façon après inactivité).
+  addEventListener('pagehide', stop);
+})();
+</script>

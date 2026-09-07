@@ -1,3 +1,11 @@
+secubox-webos (1.0.285-1~bookworm1) bookworm; urgency=medium
+
+  * Freebox TV (#1238) : cardlet freeboxtv.html (grille des chaînes + lecteur
+    HLS via hls.js vendoré /hls.min.js) ; carte FEATURED (LAN+auth) ; location
+    nginx dédiée /cardlets/freeboxtv.html avec CSP media-src/connect blob: (MSE).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 15:30:00 +0200
+
 secubox-webos (1.0.284-1~bookworm1) bookworm; urgency=medium
 
   * Couche d'actions : sbxExecuteAction met à jour l'état retenu du dock
