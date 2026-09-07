@@ -143,7 +143,10 @@ class Streamer:
             "-rtsp_transport", str(self.cfg["rtsp_transport"]),
             "-i", url,
             "-map", "0:v:0", "-map", "0:a:0",     # vidéo + 1 audio (pas le télétexte)
-            "-c", "copy", "-bsf:a", "aac_adtstoasc",
+            "-c", "copy",
+            # PAS de `-bsf:a aac_adtstoasc` : ce filtre est pour le MP4 (retire les
+            # entêtes ADTS). En MPEG-TS/HLS, l'AAC DOIT rester en ADTS, sinon le
+            # transmuxeur de hls.js jette une exception (internalException). #1238.
             "-f", "hls",
             "-hls_time", str(self.cfg["hls_time"]),
             "-hls_list_size", str(self.cfg["hls_list_size"]),
