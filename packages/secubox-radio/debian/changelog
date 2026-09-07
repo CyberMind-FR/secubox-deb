@@ -1,3 +1,12 @@
+secubox-radio (0.1.66-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif régression volume : la radio ne re-annonce plus après vol/muet.
+    Une annonce joue:true recomposait le dock, dont appliqueMedia réappliquait le
+    vol/muet RETENU et écrasait le réglage qu'on venait de poser. Le battement 2 s
+    publie déjà l'état pour la couche ZIA.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 10:00:00 +0200
+
 secubox-radio (0.1.65-1~bookworm1) bookworm; urgency=medium
 
   * Couche d'actions ZIA (Phase D) : capabilities.d/radio.json (la radio déclare

@@ -292,12 +292,14 @@
       try { localStorage.setItem('sbx_radio_vol', String(ecran.volume)); } catch (e) {}
       if (typeof iconeVol === 'function') iconeVol();
       if (curseurVol) curseurVol.value = String(ecran.volume);
-      annonceHall();   // republie l'état son (RFC §8) : le Hall/ZIA le voit changer
+      // NE PAS re-annoncer ici (#régression volume) : une annonce `joue:true`
+      // peut faire recomposer le dock, dont `appliqueMedia` réapplique alors le
+      // vol/muet RETENU (em.vol) et ÉCRASE le réglage qu'on vient de poser. Le
+      // battement 2 s publie déjà l'état (muet/volume) pour la couche ZIA (§8).
     } else if (d.action === 'muet') {
       ecran.muted = !!d.v;
       try { localStorage.setItem('sbx_radio_muet', ecran.muted ? '1' : '0'); } catch (e) {}
       if (typeof iconeVol === 'function') iconeVol();
-      annonceHall();   // idem : muet/démuet remonté immédiatement
     }
     // prev / next : un direct ne se parcourt pas. On ne fait pas semblant.
   });

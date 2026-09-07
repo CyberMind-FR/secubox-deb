@@ -1,3 +1,11 @@
+secubox-webos (1.0.284-1~bookworm1) bookworm; urgency=medium
+
+  * Couche d'actions : sbxExecuteAction met à jour l'état retenu du dock
+    (window.dockRetiens) après media.volume/media.mute, pour que le réglage posé
+    par ZIA TIENNE (appliqueMedia ne le réécrase plus).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 10:00:00 +0200
+
 secubox-webos (1.0.283-1~bookworm1) bookworm; urgency=medium
 
   * Hall : suppression complète de la cardlet Messagerie (carte retirée de la

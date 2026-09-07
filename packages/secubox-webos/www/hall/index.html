@@ -2335,6 +2335,14 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     if(!c||!c.contentWindow||!c.src) return false;
     try{ c.contentWindow.postMessage(message, new URL(c.src).origin); return true; }catch(e){ return false; }
   };
+  // La couche d'actions ZIA doit pouvoir RETENIR le vol/muet qu'elle vient de
+  // poser : sinon `appliqueMedia`, à la prochaine recomposition du dock, le
+  // réécraserait par la valeur mémorisée (em.vol). On expose donc l'écriture de
+  // l'état retenu, pour que le réglage tienne (#régression volume).
+  window.dockRetiens=function(id, patch){
+    if(!id || !patch) return;
+    try{ Object.assign(etatMedia(id), patch); sauveMedia(); }catch(e){}
+  };
   // RENDRE LA MAIN À LA CARTE (#1266). À la fermeture d'un zoom « lecteur »
   // (radio dans le viewer mini), le cadre embarqué du viewer vient d'être retiré
   // du DOM : `flux[id].cadre` pointe donc sur un cadre MORT. On l'oublie, puis on
@@ -3166,7 +3174,15 @@ function sbxExecuteAction(req){
   if(!req || req.kind!=='sbx-action' || !req.service || !req.action) return false;
   const cap=SBXCapabilities.resolve(req.service, req.action, req.params||{});
   if(!cap || !cap.message) return false;   // capacité inconnue → on n'invente rien
-  return (typeof window.sbxPost==='function') ? !!window.sbxPost(req.service, cap.message) : false;
+  const ok=(typeof window.sbxPost==='function') ? !!window.sbxPost(req.service, cap.message) : false;
+  // Un réglage de son doit TENIR : on met à jour l'état retenu du dock pour que
+  // appliqueMedia ne le réécrase pas à la prochaine recomposition.
+  if(ok && typeof window.dockRetiens==='function'){
+    const v=(req.params||{}).value;
+    if(req.action==='media.volume' && v!=null) window.dockRetiens(req.service,{vol:Number(v)});
+    else if(req.action==='media.mute') window.dockRetiens(req.service,{muet:!!v});
+  }
+  return ok;
 }
 window.sbxExecuteAction=sbxExecuteAction;
 
