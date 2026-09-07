@@ -81,26 +81,37 @@
 
   function stop(){ if(hls){ try{hls.destroy();}catch(e){} hls=null; } try{ v.pause(); v.removeAttribute('src'); v.load(); }catch(e){} }
 
+  function spin(txt){ var s=el('spin'); s.classList.remove('off'); if(txt!=null) s.textContent=txt; }
+  // AUTOPLAY : un navigateur REFUSE de lancer une vidéo AVEC SON sans geste direct
+  // (et le play() part en asynchrone après le clic → le geste ne « porte » pas).
+  // On démarre donc MUET (autoplay muet = toujours autorisé), comme la radio, et
+  // on invite à rétablir le son. `controls` laisse l'utilisateur régler ensuite.
+  function lance(){ v.muted=true; el('now').setAttribute('data-muet','1');
+    v.play().then(function(){ el('now').textContent=(el('now').textContent||'')+' 🔇 (clic 🔊)'; })
+             .catch(function(e){ spin('clique ▶ pour lire ('+(e&&e.name||'')+')'); }); }
+
   function joue(ch){
     cur=ch.id; rendActive(); el('now').textContent=ch.name;
-    el('screen').classList.add('on'); el('spin').classList.remove('off');
+    el('screen').classList.add('on'); spin('● connexion…');
     stop();
     var url=ch.hls;
     v.onplaying=function(){ el('spin').classList.add('off'); };
     if(window.Hls && Hls.isSupported()){
-      hls=new Hls({maxBufferLength:12, liveSyncDurationCount:3, manifestLoadingTimeOut:20000});
+      hls=new Hls({maxBufferLength:12, liveSyncDurationCount:3, manifestLoadingTimeOut:25000, manifestLoadingMaxRetry:4});
       hls.loadSource(url); hls.attachMedia(v);
-      hls.on(Hls.Events.MANIFEST_PARSED,function(){ v.play().catch(function(){}); });
+      hls.on(Hls.Events.MANIFEST_PARSED, lance);
       hls.on(Hls.Events.ERROR,function(_,data){
         if(!data||!data.fatal) return;
-        if(data.type===Hls.ErrorTypes.NETWORK_ERROR){ hls.startLoad(); }
-        else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){ hls.recoverMediaError(); }
-        else { el('spin').classList.remove('off'); el('spin').textContent='flux indisponible'; stop(); }
+        if(data.type===Hls.ErrorTypes.NETWORK_ERROR){
+          // Au démarrage, le 1er segment met ~2 s à s'écrire : on relance le chargement.
+          spin('● démarrage… ('+(data.details||'')+')'); try{ hls.startLoad(); }catch(e){}
+        } else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){ try{ hls.recoverMediaError(); }catch(e){}
+        } else { spin('flux indisponible ('+(data.details||data.type||'')+')'); stop(); }
       });
     } else if(v.canPlayType('application/vnd.apple.mpegurl')){   // Safari : HLS natif
-      v.src=url; v.play().catch(function(){});
+      v.src=url; lance();
     } else {
-      el('spin').textContent='lecteur HLS indisponible';
+      spin('lecteur HLS indisponible (hls.js absent)');
     }
   }
 
