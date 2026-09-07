@@ -30,9 +30,10 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --log-level warning
 Restart=always
 RestartSec=5
-# Fuite mémoire lente (~23 Mo/j) : redémarrage propre toutes les 24 h pour capper
-# la RSS (band-aid en attendant le fix de fond). Le timeout relance via Restart.
-RuntimeMaxSec=86400
+# Fuite mémoire RAPIDE constatée (~40 Mo/h : 156→243 Mo en 2 h) : redémarrage
+# propre toutes les 6 h pour capper la RSS (~260 Mo max). Band-aid — fix de fond
+# à traquer (collecteur monté aussi dans l'aggregator → double collecte à trancher).
+RuntimeMaxSec=21600
 # Sandboxing disabled - causes namespace errors with Python symlinks on some kernels
 # PrivateTmp=true
 # ProtectSystem=full

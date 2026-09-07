@@ -1,3 +1,9 @@
+secubox-metrics (1.12.5-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-fuite : RuntimeMaxSec resserré 24h → 6h (fuite rapide ~40 Mo/h constatée).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Sep 2026 00:15:00 +0200
+
 secubox-metrics (1.12.4-1~bookworm1) bookworm; urgency=medium
 
   * Anti-fuite mémoire : RuntimeMaxSec + Restart=always (redémarrage propre

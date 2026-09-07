@@ -112,6 +112,19 @@ surcoût interpréteur SANS réécrire → réserver Go aux 3 plus chauds.
   fronts LXC + collecteurs (nextcloud 284, metrics 156, waf 100, gitea, lyrion,
   streamlit…) : le standalone y a un RÔLE DE FOND (pilote le conteneur / collecteur)
   → NE PAS couper à l'aveugle, traitement au cas par cas (P3/P4).
+- **Verrou durable** : les 10 pure-API `systemctl mask`és (survit à `apt upgrade`).
+- **Analyse des 13** (2026-09-07) : leurs app-vhosts (nc.gk2, gitea.gk2, lyrion…)
+  proxifient le **LXC directement** (`10.100.0.100:9000`), PAS le socket module ni
+  l'aggregator. Le standalone restant = **API de gestion (contrôle scale-to-zero du
+  conteneur) + collecteurs** (metrics/waf/dpi/streamlit). → **NON désactivables à
+  l'aveugle** (casserait réveil scale-to-zero / collecte). Chacun exige une lecture
+  du code (boucle de fond ? fuite ? double-collecte). Reste ~772 Mo, mais chaque
+  coupe est un mini-chantier, pas un gain gratuit.
+- **metrics fuit VITE** (~40 Mo/h) : cap resserré 24 h → **6 h** (metrics 1.12.5).
+  Note : metrics tourne EN DOUBLE (standalone collecteur + monté dans l'aggregator)
+  → double collecte probable + la fuite contamine aussi l'aggregator (94→116 Mo).
+  Fix de fond à trancher : metrics UNIQUEMENT standalone (démonter de l'aggregator)
+  OU uniquement dans l'aggregator (mais alors la fuite n'est plus isolable/cappable).
   **Fuite cappée durablement** : `RuntimeMaxSec` (metrics 24 h, devwatch 6 h) +
   `Restart=always` → redémarrage propre périodique (paquets metrics 1.12.4, devwatch 1.0.13).
 - **P3** : journald capé (`SystemMaxUse=120M`). **KSM activé mais SANS gain** :
