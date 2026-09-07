@@ -11,6 +11,7 @@ Ported from luci-app-metrics-dashboard RPCD backend.
 """
 
 import asyncio
+import ctypes
 import json
 import os
 import subprocess
@@ -106,6 +107,28 @@ def amorcer_collecte() -> None:
     _prechauffer_rapport()
 
 
+# ── FUITE RSS NATIVE (glibc) — cause racine confirmee par tracemalloc ─────────
+# Le diff tracemalloc a montre que les objets Python NE grossissent PAS (churn
+# de parsing/serialisation transitoire) alors que la RSS grimpe : la croissance
+# est dans le TAS NATIF glibc, pas dans le tas Python. Les 4 boucles ci-dessus
+# parsent de gros logs nginx via des THREADS (asyncio.to_thread) ; glibc alloue
+# une arene par thread (jusqu'a 8×cœurs) et ne rend jamais spontanement les
+# pages liberees a l'OS -> la RSS creep sans « fuite » Python. On force la
+# restitution avec malloc_trim(0) toutes les 2 min. (MALLOC_ARENA_MAX=2 dans
+# l'unite borne en plus le nombre d'arenes creees.)
+async def _rendre_memoire_glibc() -> None:
+    try:
+        _libc = ctypes.CDLL("libc.so.6", use_errno=False)
+    except OSError:
+        return  # pas de glibc (musl…) : rien a faire
+    while True:
+        await asyncio.sleep(120)
+        try:
+            _libc.malloc_trim(0)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 @asynccontextmanager
 async def lifespan(_app):
     amorcer_collecte()
@@ -113,6 +136,7 @@ async def lifespan(_app):
         asyncio.create_task(visitor_origin_agg.run_forever()),
         asyncio.create_task(live_hosts_agg.run_forever()),
         asyncio.create_task(cert_status_agg.run_forever()),
+        asyncio.create_task(_rendre_memoire_glibc()),
     ]
     try:
         yield

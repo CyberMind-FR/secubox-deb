@@ -137,9 +137,32 @@ surcoût interpréteur SANS réécrire → réserver Go aux 3 plus chauds.
   restart coupe brièvement TOUTES les APIs mountées).
 - **PATTERN identifié** : ne PAS monter dans l'aggregator un module qui (a) a une
   boucle de fond/collecteur ET (b) est déjà routé en direct par nginx → montage
-  redondant qui fuit dans l'aggregator. Candidats similaires à vérifier : waf, dpi.
-  **Fuite cappée durablement** : `RuntimeMaxSec` (metrics 24 h, devwatch 6 h) +
-  `Restart=always` → redémarrage propre périodique (paquets metrics 1.12.4, devwatch 1.0.13).
+  redondant qui fuit dans l'aggregator.
+- **FAIT — waf/dpi vérifiés (même pattern que metrics)** : contrairement à metrics,
+  ni waf ni dpi n'étaient montés dans l'aggregator (confirmé via
+  `/api/v1/aggregator/health` : absents de `mounted[]`) — tous deux routés en direct
+  (`waf.sock`/`dpi.sock`). **Pas de double-collecte.** Retirés quand même de
+  `aggregator.toml` par ceinture-et-bretelles (114→112) ; APIs 200 après restart.
+- **CAUSE RACINE DE LA FUITE metrics — trouvée par tracemalloc (le vrai fix)** :
+  endpoint diag temporaire `/_leak` (start → baseline → diff 15 min) déployé puis
+  retiré. Verdict : sur 15 min la RSS monte de **~98 Mo** MAIS les objets **Python
+  ne grossissent quasi pas** (~140 Ko : `json/encoder` = churn de sérialisation,
+  `vhost_stats:292/325` = parsing de logs — tout transitoire/réassigné). ⇒ La
+  croissance est dans le **TAS NATIF glibc**, pas le tas Python. Les 4 boucles
+  parsent de gros logs via `asyncio.to_thread` (THREADS) ; glibc alloue **une arène
+  par thread** (défaut 8×cœurs) qu'il ne rend jamais spontanément à l'OS →
+  fragmentation, RSS qui creep. « ~40 Mo/h » était donc de la frag native, pas une
+  fuite d'objet. **Fix racine (metrics 1.12.6)** : `Environment=MALLOC_ARENA_MAX=2`
+  (unité) + `malloc_trim(0)` toutes les 2 min (tâche de lifespan). Bonus correctness :
+  `_geo_cache` (IP→pays) était non plafonné (1 entrée/IP publique à vie) → borné en
+  LRU (OrderedDict, 16384) ; il n'apparaissait PAS dans le top tracemalloc (peu d'IP
+  neuves sur 15 min) donc pas le foyer dominant, mais fuite lente réelle sur des jours.
+  `RuntimeMaxSec` 6 h **dégradé en simple filet** (plus la mesure principale).
+  Mesure avant/après RSS en cours pour valider l'aplatissement de la pente.
+  **Leçon** : « objets Python plats + RSS qui monte » = fuite NATIVE (glibc/arènes),
+  pas un objet retenu → chercher `MALLOC_ARENA_MAX`/`malloc_trim`, pas un dict.
+  Idem devwatch (~140 Mo/j) resté sur `RuntimeMaxSec` : même profil probable (threads
+  + churn HTTP GitHub) — appliquer MALLOC_ARENA_MAX si la fuite persiste après mesure.
 - **P3** : journald capé (`SystemMaxUse=120M`). **KSM activé mais SANS gain** :
   `run=0`, 0 page partagée — KSM ne fusionne que les pages `MADV_MERGEABLE`
   (opt-in process) que les daemons Python ne posent pas ; abandonné (paquet laissé

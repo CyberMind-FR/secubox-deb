@@ -13,6 +13,12 @@ WorkingDirectory=/usr/lib/secubox/metrics
 # une seule unite qui le declare emporte les sockets de toutes les autres, et
 # la board rend des 502 sur des modules qui n'avaient rien demande. Le parent
 # reste root:root 1777, cree hors des unites.
+# FUITE RSS NATIVE (glibc) — cause racine trouvee par tracemalloc : les objets
+# Python ne grossissent pas, mais les boucles parsent de gros logs dans des
+# THREADS (asyncio.to_thread) et glibc ouvre une arene par thread (defaut
+# 8×cœurs) qu'il ne rend jamais a l'OS. On borne a 2 arenes : coupe la
+# fragmentation a la source (le daemon force en plus malloc_trim toutes les 2 min).
+Environment=MALLOC_ARENA_MAX=2
 RuntimeDirectoryMode=0755
 # CacheDirectory auto-creates /var/cache/secubox with service user/group
 # and survives reboots (unlike /tmp). Fix for #149: was ReadWritePaths=
@@ -30,9 +36,10 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --log-level warning
 Restart=always
 RestartSec=5
-# Fuite mémoire RAPIDE constatée (~40 Mo/h : 156→243 Mo en 2 h) : redémarrage
-# propre toutes les 6 h pour capper la RSS (~260 Mo max). Band-aid — fix de fond
-# à traquer (collecteur monté aussi dans l'aggregator → double collecte à trancher).
+# Filet de sécurité : la fuite RSS a maintenant sa cause racine traitée
+# (MALLOC_ARENA_MAX + malloc_trim, cf. ci-dessus ; démontage de la double
+# collecte aggregator déjà fait). On garde un redémarrage propre toutes les 6 h
+# par prudence — s'il s'avère inutile après mesure, on pourra le détendre/retirer.
 RuntimeMaxSec=21600
 # Sandboxing disabled - causes namespace errors with Python symlinks on some kernels
 # PrivateTmp=true

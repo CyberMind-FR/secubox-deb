@@ -1,3 +1,17 @@
+secubox-metrics (1.12.6-1~bookworm1) bookworm; urgency=medium
+
+  * Fuite RSS — cause racine trouvée par tracemalloc : les objets Python NE
+    grossissent PAS (churn de parsing/sérialisation transitoire) alors que la
+    RSS grimpe → la croissance est dans le TAS NATIF glibc. Les 4 boucles
+    parsent de gros logs via asyncio.to_thread (threads) et glibc ouvre une
+    arène par thread (8×cœurs) sans jamais rendre les pages à l'OS.
+    Fix racine : Environment=MALLOC_ARENA_MAX=2 (unité) + malloc_trim(0) toutes
+    les 2 min (tâche de lifespan). RuntimeMaxSec 6h dégradé en simple filet.
+  * vhost_stats : _geo_cache (IP→pays) borné en LRU (OrderedDict, plafond
+    16384) — était non plafonné, 1 entrée/IP publique inédite gardée à vie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 12:00:00 +0200
+
 secubox-metrics (1.12.5-1~bookworm1) bookworm; urgency=medium
 
   * Anti-fuite : RuntimeMaxSec resserré 24h → 6h (fuite rapide ~40 Mo/h constatée).

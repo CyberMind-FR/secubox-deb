@@ -33,7 +33,7 @@ import json
 import ipaddress
 import os
 import re
-from collections import Counter, defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Optional
@@ -177,7 +177,13 @@ _GEOIP_MMDB = (
 )
 _geo_reader = None
 _geo_essaye = False
-_geo_cache: dict = {}
+# FUITE #allègement : ce cache mappait IP->pays SANS PLAFOND — une entree par IP
+# publique inedite, gardee A VIE. Sur une box scannee en permanence par Internet,
+# c'est un flux continu d'IP jamais revues => croissance lineaire de la RSS
+# (~40 Mo/h constate). Borne en LRU : on garde les IP recurrentes (evite de
+# reinterroger GeoIP) et on evince la plus ancienne au-dela du plafond.
+_geo_cache: "OrderedDict[str, Optional[str]]" = OrderedDict()
+_GEO_CACHE_MAX = 16384
 
 
 # Noms qui ne designent AUCUN site : la box qui se parle a elle-meme.
@@ -232,6 +238,7 @@ def _pays(ip: str) -> Optional[str]:
     """Code pays ISO-2 d'une IP PUBLIQUE, ou None (privee/inconnue/base absente)."""
     global _geo_reader, _geo_essaye
     if ip in _geo_cache:
+        _geo_cache.move_to_end(ip)   # LRU : marque comme recemment utilisee
         return _geo_cache[ip]
     cc = None
     try:
@@ -251,6 +258,8 @@ def _pays(ip: str) -> Optional[str]:
     except Exception:  # noqa: BLE001
         cc = None
     _geo_cache[ip] = cc
+    if len(_geo_cache) > _GEO_CACHE_MAX:
+        _geo_cache.popitem(last=False)   # evince l'IP la moins recemment vue
     return cc
 
 
