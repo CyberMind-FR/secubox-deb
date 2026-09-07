@@ -99,10 +99,19 @@ surcoût interpréteur SANS réécrire → réserver Go aux 3 plus chauds.
 
 - **P1** : purgé `dpi-engine` (box+dépôt), désactivé `surf`, supprimé du dépôt
   `surf`+`webradio`. Reclaim ~360 Mo (restart des fuites metrics/devwatch).
-- **P2** : désactivé 4 standalones redondants (montés dans l'aggregator) : **vhost,
-  hub, admin, auth** (~64 Mo), tout vérifié 200 (rollback auto sinon). Les 6 autres
-  (metacatalog, repo, vm, soc, portal, users) NON servis par l'aggregator (`pre=000`)
-  → **gardés** (à investiguer : pas montés, ou consommateurs directs du socket).
+- **P2 TERMINÉ** : les **10 standalones pure-API redondants** (montés dans
+  l'aggregator, vérifiés 200 via le Hall) désactivés → **vhost, hub, admin, auth,
+  portal, users, metacatalog, repo, vm, soc ≈ 128 Mo**. (Le `pre=000` initial sur 6
+  d'entre eux était un TIMEOUT transitoire du probe socket direct — l'uvicorn unique
+  de l'aggregator se bloque sous rafale ; la vérif via le Hall, chemin client réel,
+  confirme 200.) L'aggregator monte **111 modules** ; 4 échecs bénins (glances,
+  metalogizer, roadmap, torrent = pas de `api/main.py`).
+  **⚠️ Durabilité** : `systemctl disable` survit au reboot mais PAS à un `apt upgrade`
+  du module (le postinst réactive). Fix durable = `mask` OU postinst du module qui
+  n'enable pas si aggregator-mounté (à packager). Reste **13 doubles (~772 Mo)** =
+  fronts LXC + collecteurs (nextcloud 284, metrics 156, waf 100, gitea, lyrion,
+  streamlit…) : le standalone y a un RÔLE DE FOND (pilote le conteneur / collecteur)
+  → NE PAS couper à l'aveugle, traitement au cas par cas (P3/P4).
   **Fuite cappée durablement** : `RuntimeMaxSec` (metrics 24 h, devwatch 6 h) +
   `Restart=always` → redémarrage propre périodique (paquets metrics 1.12.4, devwatch 1.0.13).
 - **P3** : journald capé (`SystemMaxUse=120M`). **KSM activé mais SANS gain** :
