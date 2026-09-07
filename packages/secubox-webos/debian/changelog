@@ -1,3 +1,12 @@
+secubox-webos (1.0.290-1~bookworm1) bookworm; urgency=medium
+
+  * Freebox TV : (1) l'overlay « démarrage » passe en pointer-events:none — il
+    volait les clics aux contrôles natifs (play/volume ne réagissaient pas) ;
+    (2) lance() tolère l'AbortError (play() court-circuité par hls, transitoire),
+    autoplay muet ; n'affiche l'invite que sur un vrai blocage (NotAllowedError).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 20:40:00 +0200
+
 secubox-webos (1.0.289-1~bookworm1) bookworm; urgency=medium
 
   * Freebox TV : hls.js enableWorker:false — le Web Worker blob: de hls.js

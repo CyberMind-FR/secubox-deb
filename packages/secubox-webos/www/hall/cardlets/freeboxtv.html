@@ -38,8 +38,10 @@
     overflow:hidden;aspect-ratio:16/9;display:none}
   .screen.on{display:block}
   .screen video{width:100%;height:100%;display:block;background:#000}
+  /* pointer-events:none — l'overlay NE DOIT PAS voler les clics aux contrôles
+     natifs de la vidéo (play/volume/plein écran) juste en dessous. */
   .screen .spin{position:absolute;inset:0;display:grid;place-items:center;color:#9fb0c4;font-size:.7rem;
-    letter-spacing:.1em;text-transform:uppercase}
+    letter-spacing:.1em;text-transform:uppercase;pointer-events:none;text-align:center;padding:0 12px}
   .screen .spin.off{display:none}
   .filtre{flex:0 0 auto}
   .filtre input{width:100%;font:inherit;font-size:.8rem;padding:5px 9px;border-radius:8px;
@@ -86,9 +88,17 @@
   // (et le play() part en asynchrone après le clic → le geste ne « porte » pas).
   // On démarre donc MUET (autoplay muet = toujours autorisé), comme la radio, et
   // on invite à rétablir le son. `controls` laisse l'utilisateur régler ensuite.
-  function lance(){ v.muted=true; el('now').setAttribute('data-muet','1');
-    v.play().then(function(){ el('now').textContent=(el('now').textContent||'')+' 🔇 (clic 🔊)'; })
-             .catch(function(e){ spin('clique ▶ pour lire ('+(e&&e.name||'')+')'); }); }
+  function lance(){
+    v.muted=true; v.autoplay=true;         // autoplay MUET (toujours autorisé)
+    var p=v.play();
+    if(p&&p.catch) p.catch(function(e){
+      // AbortError = play() court-circuité par le chargement hls (transitoire) :
+      // l'autoplay muet reprend tout seul. NotAllowedError = vrai blocage → on
+      // invite à cliquer ▶ (les contrôles natifs sont accessibles, overlay
+      // pointer-events:none). On n'affiche PAS l'AbortError comme une erreur.
+      if(e && e.name==='NotAllowedError') spin('clique ▶ pour lire (puis 🔊)');
+    });
+  }
 
   function joue(ch){
     cur=ch.id; rendActive(); el('now').textContent=ch.name;
