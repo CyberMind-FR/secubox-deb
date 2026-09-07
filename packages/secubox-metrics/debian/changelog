@@ -1,3 +1,10 @@
+secubox-metrics (1.12.4-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-fuite mémoire : RuntimeMaxSec + Restart=always (redémarrage propre
+    périodique pour capper la RSS ; fuite lente constatée gk2 2026-09). Band-aid.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 23:30:00 +0200
+
 secubox-metrics (1.12.3-1~bookworm1) bookworm; urgency=medium
 
   * LE SERVICE PRINCIPAL RESTE ARME APRES MISE A JOUR (#1368). secubox-metrics

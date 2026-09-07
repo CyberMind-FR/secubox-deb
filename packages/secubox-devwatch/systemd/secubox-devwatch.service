@@ -22,8 +22,11 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/devwatch.s
 # lisible/ecrivable au groupe des qu'uvicorn l'a posee. On sonde jusqu'a ~15 s
 # plutot qu'un sleep fixe (le bind UDS peut trainer).
 ExecStartPost=/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/devwatch.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/devwatch.sock'
-Restart=on-failure
+Restart=always
 RestartSec=5
+# Fuite mémoire rapide (~140 Mo/j) : redémarrage propre toutes les 6 h pour capper
+# la RSS (band-aid en attendant le fix de fond). Le timeout relance via Restart.
+RuntimeMaxSec=21600
 
 # Hardening : lecture seule du systeme, tmp prive. Le service n'ecrit que son
 # cache et sa config d'exploitation ; il sort en HTTPS vers api.github.com.

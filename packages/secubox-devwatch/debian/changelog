@@ -1,3 +1,10 @@
+secubox-devwatch (1.0.13-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-fuite mémoire : RuntimeMaxSec + Restart=always (redémarrage propre
+    périodique pour capper la RSS ; fuite lente constatée gk2 2026-09). Band-aid.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 23:30:00 +0200
+
 secubox-devwatch (1.0.12-1~bookworm1) bookworm; urgency=medium
 
   * Vue micro : le carrousel de tranches bespoke (.dots) est MIGRÉ sur la

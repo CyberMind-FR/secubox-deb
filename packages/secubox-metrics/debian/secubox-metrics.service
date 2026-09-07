@@ -28,8 +28,11 @@ ExecStartPre=+/bin/rm -f /run/secubox/metrics.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/metrics.sock \
     --log-level warning
-Restart=on-failure
+Restart=always
 RestartSec=5
+# Fuite mémoire lente (~23 Mo/j) : redémarrage propre toutes les 24 h pour capper
+# la RSS (band-aid en attendant le fix de fond). Le timeout relance via Restart.
+RuntimeMaxSec=86400
 # Sandboxing disabled - causes namespace errors with Python symlinks on some kernels
 # PrivateTmp=true
 # ProtectSystem=full
