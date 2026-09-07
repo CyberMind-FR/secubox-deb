@@ -1,0 +1,9 @@
+secubox-freeboxtv (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1238 — premier jet du streamer Freebox TV (backend). Daemon FastAPI sur
+    socket : /channels (playlist de base, variante standard), /hls/<cid>/live.m3u8
+    (sas ffmpeg RTSP->HLS on-demand, remux -c copy, reaper d'inactivite,
+    garde-fou max_streams). Servi via l'agregateur sous /api/v1/freeboxtv/.
+    Faisabilite validee au prealable (issue #1238).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 12:00:00 +0200

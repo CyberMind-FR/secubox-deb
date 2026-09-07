@@ -1,0 +1,10 @@
+# SecuBox Freebox TV — streamer on-demand (#1238). Usage personnel LAN.
+playlist_url = "http://mafreebox.freebox.fr/freeboxtv/playlist.m3u"
+hls_dir = "/run/secubox/freeboxtv/hls"
+rtsp_transport = "udp"     # passerelle Freebox = RTP/UDP (TCP interleaved refusé 461)
+hls_time = 2
+hls_list_size = 6
+idle_timeout_s = 45        # sas ffmpeg tué N s après le dernier accès
+max_streams = 3            # garde-fou : nb max de sas simultanés
+refresh_s = 3600
+ffmpeg = "/usr/bin/ffmpeg"

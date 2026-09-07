@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox Freebox TV — streamer on-demand (RTSP->HLS)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1238
+After=network.target secubox-runtime.service
+Wants=secubox-runtime.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/share/secubox/freeboxtv
+ExecStartPre=+/bin/rm -f /run/secubox/freeboxtv.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/freeboxtv.sock --workers 1 --log-level warning
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/freeboxtv.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/freeboxtv.sock'
+Restart=on-failure
+RestartSec=3
+# Durcissement raisonnable : le sas n'écrit que sous /run (HLS) et lit le réseau LAN.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/secubox
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

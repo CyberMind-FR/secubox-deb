@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-freeboxtv/usr/share/secubox/freeboxtv/
+	cp -r api debian/secubox-freeboxtv/usr/share/secubox/freeboxtv/
+	install -D -m0644 conf/freeboxtv.toml \
+	  debian/secubox-freeboxtv/etc/secubox/freeboxtv.toml
+	install -d debian/secubox-freeboxtv/usr/lib/systemd/system
+	cp systemd/secubox-freeboxtv.service \
+	  debian/secubox-freeboxtv/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-freeboxtv --no-stop-on-upgrade

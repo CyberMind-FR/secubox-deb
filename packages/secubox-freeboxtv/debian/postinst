@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+set -e
+case "$1" in
+  configure)
+    # /etc/secubox doit rester traversable par tous les services (ne pas re-moder).
+    [ -d /etc/secubox ] && chmod 0755 /etc/secubox 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
+exit 0
