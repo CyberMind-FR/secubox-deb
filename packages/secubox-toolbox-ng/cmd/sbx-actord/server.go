@@ -89,8 +89,9 @@ func (s *Server) handleConn(conn net.Conn, ch chan<- *envelope.Envelope) {
 			continue
 		}
 		e := new(envelope.Envelope)
-		if json.Unmarshal(line, e) != nil {
+		if uerr := json.Unmarshal(line, e); uerr != nil {
 			s.invalid.Add(1)
+			s.logReject("json", uerr, line)
 			continue
 		}
 		if e.EventID == "" {
@@ -98,6 +99,7 @@ func (s *Server) handleConn(conn net.Conn, ch chan<- *envelope.Envelope) {
 		}
 		if err := e.Validate(); err != nil {
 			s.invalid.Add(1)
+			s.logReject("validate", err, line)
 			continue
 		}
 		select {
@@ -106,6 +108,22 @@ func (s *Server) handleConn(conn net.Conn, ch chan<- *envelope.Envelope) {
 			s.dropped.Add(1) // file pleine : on dépose plutôt que bloquer le producteur
 		}
 	}
+}
+
+// logReject journalise, de façon ÉCHANTILLONNÉE, la raison du rejet d'une
+// enveloppe (JSON malformé ou Validate). Précieux pour distinguer un capteur mal
+// configuré (tout rejeté) d'un vrai flux forgé. On journalise les 30 premiers
+// puis un sur 200, avec un extrait borné de la ligne (jamais toute une charge).
+func (s *Server) logReject(kind string, err error, line []byte) {
+	n := s.invalid.Load()
+	if n > 30 && n%200 != 0 {
+		return
+	}
+	snip := line
+	if len(snip) > 300 {
+		snip = snip[:300]
+	}
+	log.Printf("actord: enveloppe rejetée (%s) #%d: %v | %s", kind, n, err, snip)
 }
 
 // serveAPI expose l'API read-only locale (RFC-0013 §9) sur un socket unix, que
