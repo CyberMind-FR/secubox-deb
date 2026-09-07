@@ -1,3 +1,11 @@
+secubox-podcaster (1.0.37-1~bookworm1) bookworm; urgency=medium
+
+  * Détacher = mini-viewer du Hall (comme la radio), plus de fenêtre détachée :
+    l'annonce média porte `zoomable`+`lecteur` (le Hall embarque /micro.html dans
+    son lecteur mini) et le bouton Détacher envoie {sbx:'zoom'} quand encadré.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 18:30:00 +0200
+
 secubox-podcaster (1.0.36-1~bookworm1) bookworm; urgency=medium
 
   * Couche d'actions ZIA (Phase E) : capabilities.d/podcaster.json — le podcaster

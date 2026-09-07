@@ -449,6 +449,11 @@
     try {
       parent.postMessage({
         sbx: 'media', id: 'podcaster',
+        // AGRANDISSABLE DANS LE MINI-VIEWER (#1238-suite), comme la radio : le Hall
+        // sait ainsi embarquer NOTRE /micro.html dans son lecteur mini (source
+        // unique, anti-doublon) plutôt que d'ouvrir une fenêtre détachée.
+        zoomable: true,
+        lecteur: location.origin + '/micro.html',
         // VIGNETTE DE SOURCE (#1266b) : la pochette du flux courant, pour que la
         // barre média montre CE podcast — distincte selon l'épisode. URL absolue
         // (origine podcaster) car c'est le Hall qui l'affichera.
@@ -599,6 +604,13 @@
   // au début serait une perte. La radio n'en a pas besoin, elle rejoint le
   // direct.
   el('detach').addEventListener('click', () => {
+    // DANS LE HALL : on s'agrandit dans le MINI-VIEWER comme la radio — on demande
+    // au Hall de zoomer, il embarque notre /micro.html (champ `lecteur`) au lieu
+    // d'une fenêtre détachée. HORS Hall (accès direct) : fenêtre classique.
+    if (window.parent !== window) {
+      try { parent.postMessage({ sbx: 'zoom', id: 'podcaster' }, '*'); } catch (e) {}
+      return;
+    }
     const e = eps[idx];
     const u = new URL(location.href);
     u.searchParams.set('ep', e ? e.id : '');
