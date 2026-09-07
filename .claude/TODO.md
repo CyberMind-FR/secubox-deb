@@ -13,6 +13,8 @@
 ## 2026-09-07 — suites Freebox TV / réveils / capacité gk2
 
 ### 🔴 Capacité gk2 / réveils on-demand
+- 📄 **Plan complet : `.claude/AUDIT-ALLEGEMENT-2026-09.md`** (audit RAM data-driven,
+  23 modules en double, fuites metrics/devwatch, phases P1-P5).
 - [ ] **Charge chronique** : load ~5, RAM ~250 Mo libres → les « réveils »
       (POST /api/v1/profiles/wake) démarrent mal les services on-demand (pas un
       bug du wake — profiles répond, /wake authed). Réduire l'empreinte (Streamlit
