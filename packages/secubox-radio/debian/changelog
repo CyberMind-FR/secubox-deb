@@ -1,3 +1,12 @@
+secubox-radio (0.1.67-1~bookworm1) bookworm; urgency=medium
+
+  * radio/micro : scripts inline (aide SBXAide + bulle survol) EXTERNALISÉS en
+    /static/radio-aide.js + /static/radio-tooltip.js. La CSP de la radio
+    (script-src 'self' + hash bannière, PAS d'unsafe-inline) bloquait ces inline
+    → l'aide ne s'exécutait pas. Externalisés, ils passent en 'self'. Préexistant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 19:15:00 +0200
+
 secubox-radio (0.1.66-1~bookworm1) bookworm; urgency=medium
 
   * Correctif régression volume : la radio ne re-annonce plus après vol/muet.
