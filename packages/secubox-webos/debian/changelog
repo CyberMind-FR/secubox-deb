@@ -1,3 +1,13 @@
+secubox-webos (1.0.287-1~bookworm1) bookworm; urgency=medium
+
+  * Freebox TV : carte visible comme les autres médias (retrait auth/lan qui la
+    masquait quand non connecté/non-LAN — protection LAN à faire côté serveur).
+  * FIX packaging : hls.min.js n'était PAS installé (rules installe les fichiers
+    racine hall un par un) → /hls.min.js renvoyait l'index (text/html) et le
+    lecteur HLS échouait. Ajout de l'install.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 17:00:00 +0200
+
 secubox-webos (1.0.286-1~bookworm1) bookworm; urgency=medium
 
   * Freebox TV (#1238) : relais Hall /api/v1/freeboxtv/ vers le daemon
