@@ -97,6 +97,28 @@ surcoût interpréteur SANS réécrire → réserver Go aux 3 plus chauds.
 
 ## 9. Fait cette session (2026-09-07)
 
-- Purgé `dpi-engine` (box+dépôt), désactivé `surf`, supprimé du dépôt `surf`+`webradio`.
-- Reclaim ~360 Mo (restart des fuites metrics/devwatch). RAM dispo 130→~2000 Mo.
-- Audit + plan (ce doc).
+- **P1** : purgé `dpi-engine` (box+dépôt), désactivé `surf`, supprimé du dépôt
+  `surf`+`webradio`. Reclaim ~360 Mo (restart des fuites metrics/devwatch).
+- **P2** : désactivé 4 standalones redondants (montés dans l'aggregator) : **vhost,
+  hub, admin, auth** (~64 Mo), tout vérifié 200 (rollback auto sinon). Les 6 autres
+  (metacatalog, repo, vm, soc, portal, users) NON servis par l'aggregator (`pre=000`)
+  → **gardés** (à investiguer : pas montés, ou consommateurs directs du socket).
+  **Fuite cappée durablement** : `RuntimeMaxSec` (metrics 24 h, devwatch 6 h) +
+  `Restart=always` → redémarrage propre périodique (paquets metrics 1.12.4, devwatch 1.0.13).
+- **P3** : journald capé (`SystemMaxUse=120M`). **KSM activé mais SANS gain** :
+  `run=0`, 0 page partagée — KSM ne fusionne que les pages `MADV_MERGEABLE`
+  (opt-in process) que les daemons Python ne posent pas ; abandonné (paquet laissé
+  actif, inoffensif). LXC : déjà cappés (photoprism/gitea/peertube), gains marginaux.
+- **Bilan RAM : 130 → ~2260 Mo dispo ; swap 3501 → ~3086 Mo** (en drainage).
+
+### ⏳ P4 / P5 — NON exécutés (chantiers délibérés, pas de bâclage prod)
+- **P4 (on-demand)** : mécanisme = `modules.d/<mod>.toml` `lifecycle="on-demand"`
+  **shipé par le paquet du module** (la CLI `secubox-profilectl set-lifecycle` refuse
+  un module « unknown » sans manifeste). ⚠️ **Prérequis** : le chemin de RÉVEIL doit
+  être câblé par module (wake-proxy) — sinon requêtes en échec pendant le sommeil
+  (le bug « réveils »). Ex. : freeboxtv a son propre relais (pas le wake standard) →
+  NE PAS le passer on-demand sans câbler son réveil (casserait la TV). À faire
+  module par module, avec validation du réveil (facilité maintenant que la RAM respire).
+- **P5** : réécritures Go (`toolbox`→toolbox-ng, `auth`, `hub`) = multi-jours ;
+  purge `mitmproxy`/`ndpid` = nettoyer d'abord les 7 `control` qui les déclarent en
+  Depends (cookies, grafana, interceptor, lyrion, profils, yacy ; dpi).
