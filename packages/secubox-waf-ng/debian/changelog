@@ -1,3 +1,12 @@
+secubox-waf-ng (1.7.16-1~bookworm1) bookworm; urgency=medium
+
+  * actord : le socket d'INGESTION tolère les sondes de santé HTTP égarées
+    (répond 200, sans les compter comme enveloppes « invalides »). Un prober
+    interrogeait /run/secubox/actord.sock en HTTP (au lieu de l'API actor.sock),
+    gonflant faussement le compteur invalid — la corrélation, elle, fonctionne.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 14:30:00 +0200
+
 secubox-waf-ng (1.7.15-1~bookworm1) bookworm; urgency=medium
 
   * actord : journalisation échantillonnée de la RAISON de rejet d'enveloppe

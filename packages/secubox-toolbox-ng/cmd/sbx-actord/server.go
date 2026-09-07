@@ -7,6 +7,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"log"
@@ -83,10 +84,24 @@ func (s *Server) handleConn(conn net.Conn, ch chan<- *envelope.Envelope) {
 	defer conn.Close()
 	sc := bufio.NewScanner(conn)
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20) // ligne max 1 Mio (anti-forge)
+	first := true
 	for sc.Scan() {
 		line := sc.Bytes()
 		if len(line) == 0 {
 			continue
+		}
+		// SONDE DE SANTÉ ÉGARÉE : un prober HTTP interroge parfois ce socket
+		// d'INGESTION (protocole RAW newline-JSON), le confondant avec l'API. Sans
+		// ce garde-fou, chaque requête (« GET /health HTTP/1.1 », « Host: … »…)
+		// comptait comme autant d'enveloppes « invalides » et polluait la métrique
+		// anti-forge. On répond un 200 minimal et on ferme, SANS rien compter — le
+		// vrai socket API (actor.sock) reste la bonne cible pour /health.
+		if first {
+			first = false
+			if isHTTPRequestLine(line) {
+				_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\nConnection: close\r\n\r\nok\n"))
+				return
+			}
 		}
 		e := new(envelope.Envelope)
 		if uerr := json.Unmarshal(line, e); uerr != nil {
@@ -108,6 +123,24 @@ func (s *Server) handleConn(conn net.Conn, ch chan<- *envelope.Envelope) {
 			s.dropped.Add(1) // file pleine : on dépose plutôt que bloquer le producteur
 		}
 	}
+}
+
+// isHTTPRequestLine reconnaît une ligne de requête HTTP (« GET /x HTTP/1.1 »).
+// Strict : commence par une méthode connue ET contient " HTTP/". Une enveloppe
+// JSON commence par '{' → jamais confondue, même si un champ contient " HTTP/".
+func isHTTPRequestLine(line []byte) bool {
+	if !bytes.Contains(line, []byte(" HTTP/")) {
+		return false
+	}
+	for _, m := range [][]byte{
+		[]byte("GET "), []byte("POST "), []byte("HEAD "), []byte("PUT "),
+		[]byte("OPTIONS "), []byte("DELETE "), []byte("PATCH "),
+	} {
+		if bytes.HasPrefix(line, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // logReject journalise, de façon ÉCHANTILLONNÉE, la raison du rejet d'une
