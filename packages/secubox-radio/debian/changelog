@@ -1,3 +1,11 @@
+secubox-radio (0.1.68-1~bookworm1) bookworm; urgency=medium
+
+  * CSP : style-src 'self' 'unsafe-inline' (au lieu de hash bannière) pour que
+    l'aide partagée SBXAide (style injecté + positions inline) fonctionne.
+    script-src reste strict. #1238-suite.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 22:00:00 +0200
+
 secubox-radio (0.1.67-1~bookworm1) bookworm; urgency=medium
 
   * radio/micro : scripts inline (aide SBXAide + bulle survol) EXTERNALISÉS en

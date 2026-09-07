@@ -550,14 +550,16 @@ func (s *Server) OrigineMediaMastodon(w http.ResponseWriter, hote string) {
 func (s *Server) entetes(h http.Handler) http.Handler {
 	script := "'self'"
 	connect := "'self'"
-	style := "'self'"
+	// style-src 'unsafe-inline' (#1238-suite) : la carte /micro embarque le style
+	// « spicy » + la lib d'aide partagée SBXAide, qui injectent un <style> et des
+	// styles inline. Un style n'exécute AUCUN code — script-src reste strict
+	// ('self', jamais 'unsafe-inline'). On ne garde pas l'empreinte de style de la
+	// bannière : une empreinte rendrait 'unsafe-inline' inopérant (spec CSP).
+	style := "'self' 'unsafe-inline'"
 	// `frame-src 'none'` par defaut : aucune page tierce ne s'integre. Seule
 	// une instance PeerTube explicitement configuree ouvre cette porte, et
 	// UNIQUEMENT pour un cadre — pas pour des scripts.
 	frame := s.frameSrc()
-	if e := strings.TrimSpace(s.opt.BanniereStyle); empreinteValide.MatchString(e) {
-		style += " '" + e + "'"
-	}
 	if o := strings.TrimSpace(s.opt.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
 		script += " " + o
 		connect += " " + o

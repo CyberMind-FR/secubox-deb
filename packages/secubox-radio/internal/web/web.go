@@ -318,10 +318,12 @@ func (s *Serveur) politique() string {
 	if e := strings.TrimSpace(s.BanniereHash); empreinteValide.MatchString(e) {
 		script += " '" + e + "'"
 	}
-	style := "'self'"
-	if e := strings.TrimSpace(s.BanniereStyle); empreinteValide.MatchString(e) {
-		style += " '" + e + "'"
-	}
+	// style-src 'unsafe-inline' (#1238-suite) : la lib d'aide partagée SBXAide
+	// injecte un <style> et pose des positions inline (anneaux/pastilles) ; un
+	// style n'exécute AUCUN code (script-src reste strict). On ne garde donc pas
+	// l'empreinte de style de la bannière — une empreinte rendrait 'unsafe-inline'
+	// inopérant (spec CSP), et les styles d'aide resteraient bloqués.
+	style := "'self' 'unsafe-inline'"
 	// Le Hall souverain (hall.gk2.secubox.in) encadre le vhost réel de la Radio
 	// (#1175) ; tout autre parent reste bloqué. Le lecteur /mini garde en plus
 	// son CadreParent dédié (cf. politiqueMini).
@@ -340,10 +342,12 @@ func (s *Serveur) politiqueMini() string {
 	if e := strings.TrimSpace(s.BanniereHash); empreinteValide.MatchString(e) {
 		script += " '" + e + "'"
 	}
-	style := "'self'"
-	if e := strings.TrimSpace(s.BanniereStyle); empreinteValide.MatchString(e) {
-		style += " '" + e + "'"
-	}
+	// style-src 'unsafe-inline' (#1238-suite) : la lib d'aide partagée SBXAide
+	// injecte un <style> et pose des positions inline (anneaux/pastilles) ; un
+	// style n'exécute AUCUN code (script-src reste strict). On ne garde donc pas
+	// l'empreinte de style de la bannière — une empreinte rendrait 'unsafe-inline'
+	// inopérant (spec CSP), et les styles d'aide resteraient bloqués.
+	style := "'self' 'unsafe-inline'"
 	anc := "'self'"
 	if o := strings.TrimSpace(s.CadreParent); o != "" && !strings.ContainsAny(o, " ;'\"") {
 		anc += " " + o
