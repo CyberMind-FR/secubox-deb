@@ -10,6 +10,25 @@
 
 ---
 
+## 2026-09-07 — Freebox TV, ZIA Action Layer, fixes média/CSP (déployé gk2)
+
+### ✅ Fait — déployé live
+- **Freebox TV streamer** (`secubox-freeboxtv` 0.1.1 + webos ≥1.0.290) — **#1238 FERMÉ**,
+  lecture validée. Sans authent + WAN (choix).
+- **ZIA Action Layer** (RFC) : pilotage radio + podcaster via le protocole sbx, 25 tests.
+- **Actor Intelligence** : invalid=prober HTTP (toléré, non compté), store purgé,
+  vhost `actor.gk2.secubox.in` + item mégabarre.
+- **Radio** : régression volume corrigée ; scripts inline `/micro` externalisés ;
+  `style-src 'unsafe-inline'` (SBXAide). **Podcaster** : détach → mini-viewer.
+- **BBS** : `/micro` `style-src 'unsafe-inline'` + inline aide externalisé.
+- **Messagerie** retirée du Hall.
+
+### ⬜ Observations / à suivre (→ TODO)
+- **Réveils on-demand** peinent = SATURATION chronique gk2 (load ~5, ~250 Mo libres),
+  pas un bug du wake (profiles OK, `/wake` authed). Réduire l'empreinte (cf. #946).
+- `secubox-droplet` inactif → `/adm/api/v1/droplet/status` 504 (bruit, feature séparée).
+- ZIA Phase E : manifestes `capabilities.d` pour lyrion + peertube.
+
 ## 2026-08-31 — DPI vivant, sweep spicy, Lyrion, Agenda NC (déployé gk2)
 
 ### ✅ Fait — déployé live

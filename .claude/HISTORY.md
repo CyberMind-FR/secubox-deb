@@ -5,6 +5,38 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-07 — Freebox TV streamer, ZIA Action Layer, fixes média/CSP (déployé gk2)
+
+- **Freebox TV (#1238) — FERMÉ.** Nouveau paquet `secubox-freeboxtv` 0.1.1 : daemon
+  FastAPI (177 chaînes std, sas ffmpeg RTSP→HLS on-demand, reaper 45 s, max_streams=3)
+  + cardlet Hall `freeboxtv.html` (hls.js vendoré `/hls.min.js`, CSP dédiée
+  media/connect/worker `blob:`) + relais `/api/v1/freeboxtv/` (strip préfixe, GET-only).
+  Pièges résolus : hls.min.js non packagé (rules), `enableWorker:false` (fragLoadError
+  worker CSP), overlay `pointer-events:none` + autoplay muet (AbortError), **retrait de
+  `-bsf:a aac_adtstoasc`** (cassait l'AAC en MPEG-TS → hls.js internalException — cause
+  de fond). Lecture validée. **Sans authent + WAN** (choix utilisateur). `closes #1238`
+- **ZIA Action Layer (RFC).** `secubox-zia` : couche d'actions générique exposant le
+  protocole sbx existant (capabilities.py, Tools.act, policy.action_role_ok, runtime
+  NL→action, `/v1/chat` actions[], `/capabilities`) + bridge Hall (SBXCapabilities,
+  sbxExecuteAction, window.sbxPost origine précise, dockRetiens) + relais dans
+  `zia/micro.html`. Pilotes radio + podcaster (`capabilities.d/*.json`). 25 tests.
+- **Actor Intelligence (#1240 umbrella).** Le « invalid: 2877 » n'était PAS des
+  détections ratées : un health-prober HTTP tapait le socket d'INGESTION RAW → actord
+  tolère désormais les sondes HTTP (200, non comptées) ; store bbolt purgé (état propre).
+  Vhost `actor.gk2.secubox.in` (chaîne 3 maillons : nginx + haproxy.toml + route sbxwaf)
+  + item mégabarre Services. Cardlet slicée + light + barres ThreatVector.
+- **Radio.** Régression volume corrigée (les `annonceHall()` après vol/muet
+  recomposaient le dock → `appliqueMedia` réécrasait `em.vol`) ; scripts inline de
+  `/micro` externalisés (`/static/radio-aide.js`+`radio-tooltip.js`) ; `style-src
+  'unsafe-inline'` pour SBXAide. **Podcaster.** Détach → mini-viewer (`zoomable`+`lecteur`),
+  +next/prev via ZIA.
+- **BBS.** `/micro` : `style-src 'unsafe-inline'` (SBXAide/spicy) + inline aide
+  externalisé (`/static/micro-aide.js`). **SBXAide** débloquée sur radio + bbs.
+- **Cardlet Messagerie SUPPRIMÉE** du Hall (webos). hls.js vendoré dans secubox-webos.
+- **Réveils on-demand** : ne « ratent » pas par bug (profiles OK, `/wake` authed) mais
+  par SATURATION chronique de gk2 (load ~5, ~250 Mo RAM libre) → un service réveillé
+  démarre mal. `secubox-droplet` inactif → `/adm/api/v1/droplet/status` 504 (bruit). Voir TODO.
+
 ## 2026-09-01 — Lyrion : cardlet RESTAURÉE mais LAN-only (correction, ref #1247)
 
 Correction de tir : le retrait complet de la cardlet était trop large — le

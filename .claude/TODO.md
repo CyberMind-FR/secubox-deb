@@ -10,6 +10,27 @@
 
 ---
 
+## 2026-09-07 — suites Freebox TV / réveils / capacité gk2
+
+### 🔴 Capacité gk2 / réveils on-demand
+- [ ] **Charge chronique** : load ~5, RAM ~250 Mo libres → les « réveils »
+      (POST /api/v1/profiles/wake) démarrent mal les services on-demand (pas un
+      bug du wake — profiles répond, /wake authed). Réduire l'empreinte (Streamlit
+      & services lourds), cf. #946. `secubox-droplet` inactif → droplet/status 504.
+
+### Freebox TV (#1238 fermé — suites optionnelles)
+- [ ] Annonce `{sbx:'media'}` + `lecteur`/`zoomable` → dock + mini-viewer (comme radio/podcaster).
+- [ ] Playlist « de base » curatée (actuellement 177 chaînes standard).
+- Note : LAN-gating **NON** — laissé sans authent + WAN (choix utilisateur).
+
+### ZIA Action Layer — Phase E (généralisation)
+- [ ] Manifestes `capabilities.d/*.json` : **lyrion** (media.toggle, media.stop=pause,
+      `cast`), **peertube** (ui.zoom, media.stop). Capacités déjà prouvées à l'audit.
+
+### CSP / aide partagée
+- [ ] SBXAide impose `style-src 'unsafe-inline'` aux services stricts (radio/bbs faits) —
+      à terme, externaliser sa CSS + positionner sans style inline pour garder strict.
+
 ## 2026-08-30 — ZIA Hall — POC IA locale, interface du bus d'objets (#1245)
 
 Design validé (`docs/design/ZIA-HALL-POC.md`, wiki [[ZIA-Hall]], README paquet). Découpage
