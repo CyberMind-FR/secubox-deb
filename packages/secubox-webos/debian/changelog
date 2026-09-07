@@ -1,3 +1,11 @@
+secubox-webos (1.0.286-1~bookworm1) bookworm; urgency=medium
+
+  * Freebox TV (#1238) : relais Hall /api/v1/freeboxtv/ vers le daemon
+    secubox-freeboxtv (strip préfixe, GET-only, read-timeout 30s). Sans lui, le
+    chemin HLS tombait dans location / (index.html).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Sep 2026 16:00:00 +0200
+
 secubox-webos (1.0.285-1~bookworm1) bookworm; urgency=medium
 
   * Freebox TV (#1238) : cardlet freeboxtv.html (grille des chaînes + lecteur
