@@ -97,7 +97,14 @@
     var url=ch.hls;
     v.onplaying=function(){ el('spin').classList.add('off'); };
     if(window.Hls && Hls.isSupported()){
-      hls=new Hls({maxBufferLength:12, liveSyncDurationCount:3, manifestLoadingTimeOut:25000, manifestLoadingMaxRetry:4});
+      // enableWorker:false — hls.js charge les segments dans un Web Worker blob:
+      // par défaut ; son fetch se heurte alors à la CSP (fragLoadError) même en
+      // same-origin. Sur le thread principal, il hérite du contexte CSP du
+      // document ('self' = le Hall) → les .ts passent. + retries généreux au
+      // démarrage (le 1er segment met ~2 s à s'écrire côté ffmpeg).
+      hls=new Hls({enableWorker:false, maxBufferLength:12, liveSyncDurationCount:3,
+        manifestLoadingTimeOut:25000, manifestLoadingMaxRetry:4,
+        fragLoadingTimeOut:30000, fragLoadingMaxRetry:6, fragLoadingRetryDelay:1000});
       hls.loadSource(url); hls.attachMedia(v);
       hls.on(Hls.Events.MANIFEST_PARSED, lance);
       hls.on(Hls.Events.ERROR,function(_,data){
