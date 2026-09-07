@@ -125,6 +125,19 @@ surcoût interpréteur SANS réécrire → réserver Go aux 3 plus chauds.
   → double collecte probable + la fuite contamine aussi l'aggregator (94→116 Mo).
   Fix de fond à trancher : metrics UNIQUEMENT standalone (démonter de l'aggregator)
   OU uniquement dans l'aggregator (mais alors la fuite n'est plus isolable/cappable).
+- **FAIT — metrics démonté de l'aggregator** : nginx route DÉJÀ `/api/v1/metrics/`
+  → `metrics.sock` (le montage était donc inutile et ne servait qu'à DUPLIQUER ses
+  boucles de fond dans l'aggregator). Retiré de `/etc/secubox/aggregator.toml`
+  (114 modules restants) + restart. API metrics toujours 200 (via son socket),
+  les 10 masqués toujours 200. Gain steady-state **~34 Mo** (aggregator 184→150 Mo)
+  + arrêt de la double-collecte. ⚠️ Le « 23 Mo » post-restart était un TRANSITOIRE
+  (modules pas encore initialisés) — l'aggregator se stabilise ~150 Mo avec 114
+  modules montés (coût inhérent au mount-everything ; à surveiller si ça croît =
+  leak d'un autre module monté → alors RuntimeMaxSec sur l'aggregator, mais un
+  restart coupe brièvement TOUTES les APIs mountées).
+- **PATTERN identifié** : ne PAS monter dans l'aggregator un module qui (a) a une
+  boucle de fond/collecteur ET (b) est déjà routé en direct par nginx → montage
+  redondant qui fuit dans l'aggregator. Candidats similaires à vérifier : waf, dpi.
   **Fuite cappée durablement** : `RuntimeMaxSec` (metrics 24 h, devwatch 6 h) +
   `Restart=always` → redémarrage propre périodique (paquets metrics 1.12.4, devwatch 1.0.13).
 - **P3** : journald capé (`SystemMaxUse=120M`). **KSM activé mais SANS gain** :
