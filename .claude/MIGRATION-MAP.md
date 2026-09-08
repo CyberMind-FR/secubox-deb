@@ -83,7 +83,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-watchdog** | ✅ | ✅ | ✅ | containers, services, endpoints | ✅ |
 | **secubox-tor** | ✅ | ✅ | ✅ | circuits, hidden services | ✅ |
 | **secubox-exposure** | ✅ | ✅ | ✅ | Tor, SSL, DNS, Mesh | ✅ |
-| **secubox-mitmproxy** | ✅ | ✅ | ✅ | WAF, alerts, bans | ✅ |
+| **secubox-waf-ng** | ✅ | ✅ | ✅ | WAF engine (sbxwaf), alerts, bans | ✅ |
 | **secubox-traffic** | ✅ | ✅ | ✅ | TC/CAKE QoS | ✅ |
 | **secubox-device-intel** | ✅ | ✅ | ✅ | asset discovery, fingerprinting | ✅ |
 | **secubox-vortex-dns** | ✅ | ✅ | ✅ | DNS firewall, RPZ, threat feeds | ✅ |

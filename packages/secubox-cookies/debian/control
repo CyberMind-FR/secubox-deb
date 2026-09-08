@@ -13,7 +13,6 @@ Depends: ${misc:Depends},
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip,
  secubox-core
-Recommends: secubox-mitmproxy
 Description: SecuBox Cookie Tracker
  Cookie tracking, analysis, and privacy compliance monitoring.
  Provides third-party cookie detection, tracker identification,

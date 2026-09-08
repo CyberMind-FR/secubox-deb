@@ -33,7 +33,7 @@ Cible : CSPN ANSSI, déploiements collectivités, candidature France.gouv (ANCT,
 | OS | Debian 12 bookworm arm64 | MochaBin Armada 7040 |
 | Captive AP | hostapd open SSID `VILLAGE3B`, dnsmasq | wlxa854b2428fbb iface |
 | Transparent proxy | mitmproxy 8.1.1 transparent (HOST) | sur 10.99.0.1:8080 |
-| WAF mitm | mitmproxy 11.0.2 (LXC container `mitmproxy`) | sur 10.100.0.60:8080 — séparé |
+| WAF | sbxwaf (moteur Go host-native) | sur 127.0.0.1:8085 — séparé |
 | FastAPI portal | uvicorn 10.99.0.1:8088 unix socket | secubox-toolbox.service |
 | nftables | table `inet toolbox` | sets validated_macs / consented_r2_macs / r2_banner_macs |
 | Storage | SQLite `/var/lib/secubox/toolbox/toolbox.db` | clients + events + reports |
@@ -54,12 +54,12 @@ HOST gk2 (192.168.1.200)
 │
 ├─ HAProxy frontal :443 + :80
 │   - termine TLS pour vhosts externes
-│   - route vers backend mitmproxy_inspector (LXC)
+│   - route vers backend sbxwaf_inspector
 │
-└─ LXC container "mitmproxy" (10.100.0.60)
-    - WAF mitm (mitmproxy 11.0.2)
-    - listen :8080
-    - addons : secubox_waf.py + cookie_audit.py
+└─ sbxwaf (moteur Go host-native, 127.0.0.1:8085)
+    - WAF (sbxwaf, paquet secubox-waf-ng)
+    - listen 127.0.0.1:8085
+    - règles + ban intégrés (Go)
     - inspecte vhosts externes (chess.maegia.tv, etc.)
 ```
 

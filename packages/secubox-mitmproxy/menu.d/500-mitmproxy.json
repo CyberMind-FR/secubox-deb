@@ -1,9 +1,0 @@
-{
-  "id": "mitmproxy",
-  "name": "WAF",
-  "icon": "🛡️",
-  "path": "/mitmproxy/",
-  "category": "wall",
-  "order": 500,
-  "description": "Web Application Firewall"
-}

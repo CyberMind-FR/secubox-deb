@@ -5,13 +5,13 @@
 
 """secubox-haproxy — HAProxy Dashboard API with WAF Integration
 
-Provides HAProxy management with integrated WAF inspection via mitmproxy.
-Traffic flow: Client → HAProxy → WAF (mitmproxy) → Backend
+Provides HAProxy management with integrated WAF inspection via sbxwaf.
+Traffic flow: Client → HAProxy → WAF (sbxwaf) → Backend
 
 Features:
 - HAProxy status and stats monitoring
 - VHost and backend management
-- WAF integration with mitmproxy
+- WAF integration with sbxwaf
 - Certificate management with expiry monitoring
 - Traffic history and request statistics
 - Configuration backup/versioning
@@ -625,7 +625,7 @@ async def components():
             {
                 "name": "WAF Inspector",
                 "type": "service",
-                "description": "Web Application Firewall (mitmproxy)",
+                "description": "Web Application Firewall (sbxwaf)",
                 "enabled": cfg["waf_enabled"],
                 "available": _waf_available(),
                 "port": cfg["waf_backend_port"]
@@ -800,15 +800,15 @@ async def get_waf_routes():
 
 @router.get("/waf/targets")
 async def get_waf_targets():
-    """Get actual WAF target backends from mitmproxy routes."""
+    """Get actual WAF target backends from sbxwaf routes."""
     try:
-        routes_file = Path("/srv/mitmproxy-waf/data/routes.json")
+        routes_file = Path("/etc/secubox/waf/haproxy-routes.json")
         if routes_file.exists():
             data = json.loads(routes_file.read_text())
             # Convert [ip, port] to "ip:port" string
             return {"targets": {k: f"{v[0]}:{v[1]}" for k, v in data.items()}}
     except Exception as e:
-        log.warning(f"Failed to load mitmproxy routes: {e}")
+        log.warning(f"Failed to load sbxwaf routes: {e}")
     return {"targets": {}}
 
 
@@ -894,7 +894,7 @@ async def list_backends():
             "type": "waf",
             "mode": "http",
             "port": cfg["waf_backend_port"],
-            "description": "WAF inspection backend (mitmproxy)",
+            "description": "WAF inspection backend (sbxwaf)",
         })
 
     return {"backends": backends}
@@ -1533,7 +1533,7 @@ async def generate_config():
             except ValueError:
                 pass
             if cfg["waf_enabled"] and not vh.get("waf_bypass"):
-                config_lines.append(f"    use_backend mitmproxy_inspector if host_{vh['name']}")
+                config_lines.append(f"    use_backend sbxwaf_inspector if host_{vh['name']}")
             else:
                 config_lines.append(f"    use_backend {vh['backend']} if host_{vh['name']}")
 
@@ -1579,7 +1579,7 @@ async def generate_config():
             except ValueError:
                 pass
             if cfg["waf_enabled"] and not vh.get("waf_bypass"):
-                config_lines.append(f"    use_backend mitmproxy_inspector if host_{vh['name']}")
+                config_lines.append(f"    use_backend sbxwaf_inspector if host_{vh['name']}")
             else:
                 config_lines.append(f"    use_backend {vh['backend']} if host_{vh['name']}")
 
@@ -1588,10 +1588,10 @@ async def generate_config():
         "",
     ])
 
-    # WAF inspector backend (mitmproxy)
+    # WAF inspector backend (sbxwaf)
     if cfg["waf_enabled"]:
         config_lines.extend([
-            "# WAF Inspector Backend (routes to mitmproxy for inspection)",
+            "# WAF Inspector Backend (routes to sbxwaf for inspection)",
             "backend waf_inspector",
             "    mode http",
             "    option forwardfor",

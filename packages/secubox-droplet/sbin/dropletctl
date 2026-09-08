@@ -158,7 +158,7 @@ cmd_publish() {
         log_error "metablogizerctl not found — install secubox-metablogizer"
         exit 4
     fi
-    # Pass the public vhost so metablogizerctl wires HAProxy + mitmproxy.
+    # Pass the public vhost so metablogizerctl wires HAProxy + sbxwaf.
     # Falls back gracefully on older metablogizer (which ignores the flag
     # and only configures nginx — same behavior as droplet 1.1.0).
     if ! metablogizerctl site publish "$name" --public-domain "$vhost"; then

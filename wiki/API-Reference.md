@@ -204,7 +204,7 @@ Web Application Firewall with 300+ rules.
 | `/whitelist` | GET | Yes | Get whitelisted IPs |
 | `/whitelist` | POST | Yes | Add/remove from whitelist |
 
-### MITMProxy WAF API (`/api/v1/mitmproxy/`)
+### sbxwaf WAF API (`/api/v1/waf/`)
 
 Inline traffic inspection and protection.
 

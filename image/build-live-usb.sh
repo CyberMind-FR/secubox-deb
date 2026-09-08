@@ -2787,7 +2787,6 @@ INCOMPLETE_MODULES=(
   secubox-gitea
   secubox-matrix
   secubox-horde
-  secubox-mitmproxy
   secubox-nextcloud
   secubox-rbs-sensor
 )

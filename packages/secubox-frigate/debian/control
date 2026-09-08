@@ -17,7 +17,7 @@ Description: Frigate NVR for SecuBox (native LXC, podman)
  .
  Foundation scope: OpenVINO CPU detector, go2rtc demo source (no camera yet),
  storage + retention on /data/frigate, /api/v1/frigate/* shim, and cross-node
- exposure through gk2's WAF (mitmproxy — no bypass). The C3BOX dashboard, MQTT,
+ exposure through gk2's WAF (sbxwaf — no bypass). The C3BOX dashboard, MQTT,
  and 4R config double-buffer are deferred (sub-project 2 / follow-ups).
  .
  Provides FastAPI backend on /api/v1/frigate/ via a Unix socket.

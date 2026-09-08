@@ -115,7 +115,7 @@ class AlertSink:
         in CONNECTING and the UI shows "connecting…" forever.
 
         Also emits a `: ping` heartbeat every 30 s so intermediate proxies
-        (HAProxy, mitmproxy, nginx) keep the long-poll connection alive.
+        (HAProxy, sbxwaf, nginx) keep the long-poll connection alive.
         """
         q = self.subscribe()
         # SSE comments — browsers + EventSource ignore lines starting with ":"

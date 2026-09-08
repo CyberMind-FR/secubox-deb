@@ -9,7 +9,7 @@
 #   systemctl enable --now secubox-waf-ng-worker@1.service
 #   systemctl enable --now secubox-waf-ng-worker@2.service
 #
-# Rollback (disable workers, fall back to mitmproxy fleet):
+# Rollback (disable workers, fall back to legacy mitmproxy fleet):
 #   systemctl disable --now secubox-waf-ng-worker@{1,2}.service
 #
 # CRITICAL — RuntimeDirectory=secubox + RuntimeDirectoryPreserve=yes:

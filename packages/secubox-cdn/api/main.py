@@ -509,7 +509,7 @@ async def mesh_stats(user=Depends(require_jwt)):
 # BANNER INJECTION CONFIG (CDN/WAF Transparent Injection)
 # ══════════════════════════════════════════════════════════════════
 
-CDN_BANNER_CONFIG = Path("/srv/mitmproxy/cdn-config.json")
+CDN_BANNER_CONFIG = Path("/etc/secubox/waf/cdn-config.json")
 
 class BannerConfig(BaseModel):
     banner_injection: bool = True

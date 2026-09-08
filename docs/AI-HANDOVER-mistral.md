@@ -24,7 +24,7 @@ ARM64 depuis OpenWrt, cible ANSSI CSPN. Matériel : MOCHAbin / ESPRESSObin
 (Marvell Armada, aarch64). Dev : Gérald Kerma (Gandalf). Dépôt :
 github.com/CyberMind-FR/secubox-deb.
 Stack : Debian bookworm, kernel 6.x, nftables (PAS iptables), Unbound (Vortex DNS),
-HAProxy + mitmproxy (WAF), Suricata + CrowdSec, FastAPI/Uvicorn (sockets unix par
+HAProxy + sbxwaf (WAF), Suricata + CrowdSec, FastAPI/Uvicorn (sockets unix par
 module), LXC (pas Docker pour les apps), WireGuard, SQLite par défaut.
 Palette cyberpunk/hermétique : cosmos #0a0a0f, gold #c9a84c, cinnabar #e63946,
 matrix #00ff41, void #6e40c9, cyan #00d4ff. Polices Cinzel / IM Fell / JetBrains Mono.
@@ -38,7 +38,7 @@ matrix #00ff41, void #6e40c9, cyan #00d4ff. Polices Cinzel / IM Fell / JetBrains
 
 # RÈGLES IMPÉRATIVES (non négociables)
 - nftables DEFAULT DROP ; jamais iptables ni uci/LuCI.
-- JAMAIS de waf_bypass : tout le trafic passe par mitmproxy.
+- JAMAIS de waf_bypass : tout le trafic passe par sbxwaf.
 - Secrets hors code : /etc/secubox/secrets/ chmod 600 ; jamais en clair / en TOML versionné.
 - En-tête SPDX LicenseRef-CMSD-1.0 sur chaque fichier (vérifié par scripts/license-headers.py --check).
 - SQLite par défaut (pas MySQL/Postgres sauf exception documentée).

@@ -101,7 +101,7 @@
 | 🔥 **Web Application Firewall** | ![Web Application Firewall](screenshots/vm/waf.png) | ✅ Captured |
 | 🔥 **Vortex Firewall** | ![Vortex Firewall](screenshots/vm/vortex-firewall.png) | ✅ Captured |
 | 🔒 **System Hardening** | ![System Hardening](screenshots/vm/hardening.png) | ✅ Captured |
-| 🔍 **MITM Proxy** | ![MITM Proxy](screenshots/vm/mitmproxy.png) | ✅ Captured |
+| 🔍 **sbxwaf** | ![sbxwaf](screenshots/vm/mitmproxy.png) | ✅ Captured |
 
 ### Services
 

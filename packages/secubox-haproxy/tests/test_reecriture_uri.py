@@ -5,7 +5,7 @@
 
 """La réécriture d'URI vers l'inspecteur doit conserver la chaîne de requête.
 
-Le backend `mitmproxy_inspector` réécrivait l'URI avec `%[path]%[query]`.
+Le backend `sbxwaf_inspector` réécrivait l'URI avec `%[path]%[query]`.
 `%[query]` rend la chaîne de requête **sans** le « ? » qui l'introduit :
 « /a.css?v=3 » devenait « /a.cssv=3 », et le backend répondait 404.
 

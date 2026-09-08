@@ -1382,7 +1382,7 @@ a.back{{color:var(--purple);text-decoration:underline;font-size:0.85rem}}
 </table>
 
 <div class=note>
-ℹ Les modifications nécessitent un redémarrage de <code>secubox-toolbox-mitm-wg.service</code> + <code>secubox-mitmproxy</code> pour prendre effet.
+ℹ Les modifications nécessitent un redémarrage de <code>secubox-toolbox-mitm-wg.service</code> pour prendre effet.
 <br><b>Source de vérité :</b> <code>{MITM_BYPASS_FILE}</code> ({len(entries)} pattern{'s' if len(entries)>1 else ''})
 </div>
 

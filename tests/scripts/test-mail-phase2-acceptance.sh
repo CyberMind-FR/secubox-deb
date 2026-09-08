@@ -102,8 +102,8 @@ step "11) Rspamd UI at https://rspamd.gk2.secubox.in/ via WAF"
 out=$(curl --silent --insecure --include --resolve "rspamd.gk2.secubox.in:443:$HOST_IP" \
     https://rspamd.gk2.secubox.in/ping 2>&1 || true)
 echo "$out" | grep -qiE 'x-secubox-waf: inspected' \
-    || fail "WAF marker missing — mitmproxy route map not updated"
-pass "rspamd.gk2.secubox.in routes via HAProxy → mitmproxy → 10.100.0.10:11334"
+    || fail "WAF marker missing — sbxwaf route map not updated"
+pass "rspamd.gk2.secubox.in routes via HAProxy → sbxwaf → 10.100.0.10:11334"
 
 # ─── 12) OpenDKIM + SpamAssassin purged ──────────────────────────────────
 step "12) OpenDKIM + SpamAssassin absent from mail LXC"

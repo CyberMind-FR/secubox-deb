@@ -28,7 +28,7 @@
 | 🔥 **Web Application Firewall** | Security | 具有300+条OWASP安全规则的WAF |
 | 🔥 **Vortex Firewall** | Security | 基于nftables的威胁执行防火墙 |
 | 🔒 **System Hardening** | Security | 符合ANSSI CSPN的内核和系统加固 |
-| 🔍 **MITM Proxy** | Security | 具有自动封禁功能的流量检查和WAF代理 |
+| 🔍 **sbxwaf** | Security | 具有自动封禁功能的流量检查和WAF代理 |
 | 🔐 **Auth Guardian** | Security | 统一认证管理 |
 | 🛡️ **Network Access Control** | Security | 具有隔离功能的客户端守护和NAC |
 | 🚫 **IP Block Manager** | Security | IP和网络封锁管理 |
@@ -914,13 +914,13 @@ RSS/Atom订阅聚合器
 
 ![System Hardening](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/hardening.png)
 
-#### 🔍 MITM Proxy
+#### 🔍 sbxwaf
 
 具有自动封禁功能的流量检查和WAF代理
 
 **功能:** 流量检查, 请求日志, 自动封禁, SSL拦截
 
-![MITM Proxy](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/mitmproxy.png)
+![sbxwaf](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/mitmproxy.png)
 
 #### 🔐 Auth Guardian
 

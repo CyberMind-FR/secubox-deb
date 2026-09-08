@@ -13,20 +13,19 @@ secubox-mail (2.2.0-1~bookworm1) bookworm; urgency=medium
   WAF compliance (mandatory per CLAUDE.md):
 
   * HTTPS surface (webmail.<domain>, mail-admin.<domain>) MUST route
-    via HAProxy → mitmproxy_inspector → backend. This release does not
+    via HAProxy → sbxwaf_inspector → backend. This release does not
     change the HAProxy frontend ACLs (already in place for
-    webmail.gk2.secubox.in). The mitmproxy route map must be updated
-    once at deploy time:
+    webmail.gk2.secubox.in). The single sbxwaf route table must be
+    updated once at deploy time:
 
-      /srv/mitmproxy/haproxy-routes.json
-      /srv/mitmproxy-in/haproxy-routes.json
+      /etc/secubox/waf/haproxy-routes.json
         "webmail.gk2.secubox.in": ["10.100.0.10", 80]
 
-    Then: systemctl restart mitmproxy
+    sbxwaf hot-reloads the table; if needed: systemctl reload secubox-waf-ng
 
   * Mail protocols (SMTP 25/587/465, IMAPS 993, ManageSieve 4190) are
     TCP pass-through to the LXC via HAProxy. They do not transit
-    mitmproxy because mitmproxy inspects HTTP, not SMTP/IMAP. This is
+    sbxwaf because the WAF inspects HTTP, not SMTP/IMAP. This is
     not a WAF bypass — mail protocols are not in the WAF's protocol
     scope.
 

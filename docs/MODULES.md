@@ -36,7 +36,7 @@ This document catalogs all SecuBox Debian modules, their features, and UI screen
 | secubox-crowdsec | `🛡️` | `/crowdsec/` | Collaborative security engine |
 | secubox-waf | `🔥` | `/waf/` | Web Application Firewall |
 | secubox-vortex-firewall | `🔥` | `/vortex-firewall/` | nftables threat enforcement |
-| secubox-mitmproxy | `🔍` | `/mitmproxy/` | Traffic inspection proxy |
+| secubox-waf-ng | `🔍` | `127.0.0.1:8085` | sbxwaf inline WAF inspection engine (Go) |
 | secubox-hardening | `🔒` | `/hardening/` | System hardening tools |
 
 ### Network & Traffic

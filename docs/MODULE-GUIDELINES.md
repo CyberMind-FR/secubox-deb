@@ -87,7 +87,7 @@ Mirror an existing module of similar shape rather than starting from scratch:
 |---|---|
 | LXC-hosted daemon | `packages/secubox-gitea/`, `packages/secubox-mail/` |
 | Host-only daemon | `packages/secubox-metrics/`, `packages/secubox-crowdsec/` |
-| WAF / proxy add-on | `packages/secubox-mitmproxy/` |
+| WAF / proxy add-on | `packages/secubox-waf-ng/` |
 | Pure web UI on existing service | `packages/secubox-soc-web/` |
 | Pure CLI / no daemon | `packages/secubox-droplet/` |
 
@@ -98,7 +98,7 @@ Mirror an existing module of similar shape rather than starting from scratch:
 ### When LXC is the right choice
 
 - Daemon needs a different runtime (JVM, Alpine, custom apt repo) than the host.
-- Daemon is high-risk and should run in an isolated rootfs (RustDesk, mitmproxy).
+- Daemon is high-risk and should run in an isolated rootfs (RustDesk).
 - Daemon needs root-level setup that would conflict with another module's daemon if run on the host.
 
 ### IP allocation
@@ -193,7 +193,7 @@ SecuBox system image. The package ships only the install script; the
 operator runs `<module>ctl install` post-firstboot.
 
 This keeps the v2.10.x image at ~8 GB. Modules requiring large daemons
-(grafana, yacy, rustdesk) follow this rule. Compact LXCs (mitmproxy ~50 MB)
+(grafana, yacy, rustdesk) follow this rule. Compact LXCs (≤ ~50 MB)
 can pre-build during image construction.
 
 ---

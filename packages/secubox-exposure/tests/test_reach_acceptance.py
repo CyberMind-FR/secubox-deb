@@ -11,7 +11,7 @@ terminal `deny all;` denies the rest, empty snippet == no restriction).
 
 Live effectiveness additionally requires secubox-hub's lan-geo
 `set_real_ip_from`/`real_ip_header` so `$remote_addr` reflects the true client
-behind HAProxy/mitmproxy — see the exposure README for that wiring; this test
+behind HAProxy/sbxwaf — see the exposure README for that wiring; this test
 only proves the snippet's own logic is correct.
 """
 import sys

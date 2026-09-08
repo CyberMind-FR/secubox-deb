@@ -715,7 +715,7 @@
     },
     {
       "module_id": "mitmproxy",
-      "module_name": "Mitmproxy",
+      "module_name": "sbxwaf",
       "category": "Security",
       "path": "/mitmproxy/",
       "screenshot_path": "docs/screenshots/vm/mitmproxy.png",

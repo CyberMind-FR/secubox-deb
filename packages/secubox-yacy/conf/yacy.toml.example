@@ -31,7 +31,7 @@ peer_name = "secubox-yacy"
 # ── Public exposure (HAProxy vhost; see haproxyctl) ───────────────────
 [exposure]
 public_hostname = ""           # e.g. "yacy.gk2.secubox.in" — empty = LAN only
-waf_inspect     = true         # route through mitmproxy when exposed
+waf_inspect     = true         # route via sbxwaf when exposed
 
 # ── Crawler defaults ──────────────────────────────────────────────────
 [crawler]

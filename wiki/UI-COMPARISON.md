@@ -125,7 +125,7 @@
 | secubox-c3box | Services portal |
 | secubox-tor | Tor network |
 | secubox-exposure | Exposure settings |
-| secubox-mitmproxy | MITM inspection |
+| secubox-waf-ng | sbxwaf inspection |
 | secubox-backup | System backup |
 | secubox-watchdog | Service monitor |
 | secubox-traffic | Traffic shaping |

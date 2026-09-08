@@ -34,7 +34,7 @@ be commanded — instrumentation without préhension.
 | Layer                | Verb                                              |
 |----------------------|---------------------------------------------------|
 | ROUTING              | `haproxyctl     vhost  add/remove`                |
-| INTERCEPTION         | `mitmproxyctl   route  add/remove/list`           |
+| INTERCEPTION         | `wafctl         route  add/remove/list`           |
 | REPLICATION          | `giteactl       repo   mirror add/remove/sync`    |
 | IDENTITY             | `giteactl       user   add/remove/passwd`         |
 | CI EXECUTION         | `giteactl       runner add/remove/list`           |
@@ -50,8 +50,8 @@ be commanded — instrumentation without préhension.
 
 ```bash
 # WAF un-bypass for a vhost (three layers, three verbs, one operation):
-haproxyctl   vhost  add   gitea.gk2.secubox.in mitmproxy_inspector ssl
-mitmproxyctl route  add   gitea.gk2.secubox.in 192.168.1.200 9080
+haproxyctl   vhost  add   gitea.gk2.secubox.in sbxwaf_inspector ssl
+wafctl       route  add   gitea.gk2.secubox.in 192.168.1.200 9080
 giteactl     repo   mirror add secubox/secubox-deb \
                                  https://github.com/CyberMind-FR/secubox-deb.git \
                                  --interval 10m --force

@@ -97,7 +97,7 @@ var DevStatusWidget = {
             progress: 90,
             icon: '🔥',
             description: 'Inspection HTTP/HTTPS, détection bots, analytics',
-            components: ['mitmproxy', 'haproxy-router', 'analytics'],
+            components: ['sbxwaf', 'haproxy-router', 'analytics'],
             dependsOn: ['reverse-proxy'],
             usedBy: ['session-analytics', 'threat-intelligence']
         },
@@ -437,7 +437,7 @@ var DevStatusWidget = {
         // Security components
         'firewall-bouncer': { name: 'Firewall Bouncer', type: 'backend', status: 'production', packages: ['secubox-app-cs-firewall-bouncer'] },
         'wazuh': { name: 'Wazuh SIEM', type: 'backend', status: 'production', packages: ['secubox-app-wazuh', 'luci-app-wazuh'] },
-        'mitmproxy': { name: 'Mitmproxy WAF', type: 'backend', status: 'production', packages: ['secubox-app-mitmproxy', 'luci-app-mitmproxy'] },
+        'sbxwaf': { name: 'sbxwaf', type: 'backend', status: 'production', packages: ['secubox-waf-ng', 'secubox-waf'] },
         'haproxy-router': { name: 'HAProxy Router', type: 'addon', status: 'production', packages: [] },
         'analytics': { name: 'SecuBox Analytics', type: 'addon', status: 'production', packages: [] },
         'vortex-dns': { name: 'Vortex DNS', type: 'backend', status: 'production', packages: ['secubox-vortex-dns', 'luci-app-vortex-dns'] },

@@ -620,7 +620,7 @@ def build_health_summary() -> dict:
     # Calculate module statuses
     modules = {}
 
-    # WAF status (mitmproxy)
+    # WAF status (sbxwaf)
     mitmproxy_up = overview.get("mitmproxy", False)
     modules["waf"] = {
         "status": "ok" if mitmproxy_up else "error",
@@ -692,7 +692,7 @@ def build_health_summary() -> dict:
     # Get WAF blocked percentage (estimate from recent logs)
     blocked_pct = 0
     try:
-        waf_log = Path('/var/log/mitmproxy/threats.jsonl')
+        waf_log = Path('/var/log/secubox/waf/waf-threats.log')
         if waf_log.exists():
             # Count threats in last hour
             result = run_cmd(['wc', '-l', str(waf_log)])

@@ -5,7 +5,7 @@
 # publishctl — SecuBox ISP Home Publish CLI (issue #180)
 #
 # Renamed from `metactl` for naming consistency with the rest of the
-# SecuBox grammar (haproxyctl/giteactl/mitmproxyctl/metablogizerctl/
+# SecuBox grammar (haproxyctl/giteactl/wafctl/metablogizerctl/
 # dropletctl/streamlitctl/streamforgectl). The old `metactl` name remains
 # as a symlink for backward compatibility — to drop in a future major.
 #
@@ -420,7 +420,7 @@ cmd_health() {
 }
 
 # post noun dispatch (issue #180 — grammar consistency, parallel to
-# `giteactl repo`, `mitmproxyctl route`, `dropletctl file`, etc).
+# `giteactl repo`, `wafctl route`, `dropletctl file`, etc).
 # Delegates to the existing flat cmd_* functions; both grammars supported.
 cmd_post() {
     local act="${1:-}"; shift || true

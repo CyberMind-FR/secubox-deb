@@ -71,7 +71,7 @@
       },
       {
         "module": "mitmproxy",
-        "name": "MITM Proxy",
+        "name": "sbxwaf",
         "category": "Security",
         "success": true,
         "screenshot": "docs/screenshots/vm/mitmproxy.png",

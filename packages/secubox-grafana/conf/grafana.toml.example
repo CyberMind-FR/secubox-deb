@@ -25,4 +25,4 @@ root_url            = "https://%(domain)s/grafana/"
 # ── Public exposure (HAProxy vhost; see haproxyctl) ───────────────────
 [exposure]
 public_hostname = ""           # e.g. "grafana.gk2.secubox.in" — empty = LAN only
-waf_inspect     = true         # route through mitmproxy when exposed
+waf_inspect     = true         # route via sbxwaf when exposed

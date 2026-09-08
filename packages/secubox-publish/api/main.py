@@ -801,7 +801,7 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
     - MetaBlogizer site
     - Nginx VHost
     - HAProxy VHost + ACL
-    - MITMProxy WAF route
+    - sbxwaf WAF route
     - SSL Certificate
     - Vortex DNS record (if available)
 

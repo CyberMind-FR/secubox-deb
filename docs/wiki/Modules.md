@@ -26,7 +26,7 @@
 | 🔥 **Web Application Firewall** | Security | WAF with 300+ security rules |
 | 🔥 **Vortex Firewall** | Security | nftables threat enforcement |
 | 🔒 **System Hardening** | Security | Kernel and system hardening |
-| 🔍 **MITM Proxy** | Security | Traffic inspection and WAF proxy |
+| 🔍 **sbxwaf** | Security | Traffic inspection and WAF proxy |
 | 🔐 **Auth Guardian** | Security | Authentication management |
 | 🛡️ **Network Access Control** | Security | Client guardian and NAC |
 | 🌐 **Network Modes** | Network | Network topology configuration |
@@ -179,7 +179,7 @@ Kernel and system hardening
 
 ---
 
-### 🔍 MITM Proxy
+### 🔍 sbxwaf
 
 **Category:** Security
 
@@ -190,7 +190,7 @@ Traffic inspection and WAF proxy
 - Request logging
 - Auto-ban
 
-![MITM Proxy](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/mitmproxy.png)
+![sbxwaf](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/mitmproxy.png)
 
 ---
 

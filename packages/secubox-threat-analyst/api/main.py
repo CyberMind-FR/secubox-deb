@@ -239,9 +239,9 @@ class ThreatAnalyzer:
             logger.warning("compact_alerts failed: %s", e)
 
     async def collect_waf_alerts(self) -> List[ThreatAlert]:
-        """Collect alerts from WAF/mitmproxy."""
+        """Collect alerts from the WAF (sbxwaf)."""
         alerts = []
-        waf_log = Path("/var/log/mitmproxy/waf.jsonl")
+        waf_log = Path("/var/log/secubox/waf/waf-threats.log")
 
         if not waf_log.exists():
             return alerts

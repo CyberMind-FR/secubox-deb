@@ -15,7 +15,7 @@ on = [
   "health-prober", "hub", "identity", "ipblock", "ksm", "led-heartbeat",
   "led-trigger", "leds", "localrecall", "lyrion", "mail", "mcp-server",
   "mesh", "meshname", "metablogizer", "metacatalog", "metrics", "mirror",
-  "mitmproxy", "modem", "module-prober", "mqtt", "nac", "ndpid",
+  "modem", "module-prober", "mqtt", "nac", "ndpid",
   "netboot", "netdata", "netdiag", "netmodes", "nettweak",
   "network-ready", "nextcloud", "p2p", "peertube", "photoprism", "podcaster",
   "portal", "proxypac", "publish", "qos", "reality", "repo",

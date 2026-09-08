@@ -33,7 +33,7 @@ override_dh_auto_install:
 	[ -f conf/frigate.config.yml.example ] && cp conf/frigate.config.yml.example debian/secubox-frigate/usr/share/secubox/frigate/frigate.config.yml.example || true
 	# Disk-pressure guard unit + timer. dh_installsystemd only auto-detects the
 	# package-named unit (secubox-frigate.service); extra units need to be
-	# placed in the install tree explicitly (mirror secubox-mitmproxy's
+	# placed in the install tree explicitly (mirror secubox-waf-ng's
 	# waf-watchdog pattern) so dh_installsystemd picks them up for enable/start.
 	install -d debian/secubox-frigate/usr/lib/systemd/system
 	install -m 644 debian/secubox-frigate-diskguard.service debian/secubox-frigate/usr/lib/systemd/system/

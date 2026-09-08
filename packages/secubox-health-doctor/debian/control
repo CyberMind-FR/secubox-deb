@@ -17,7 +17,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
          systemd
 Description: SecuBox vital-services health monitor
  Daemon + CLI (healthctl) + FastAPI that runs periodic checks against the
- vital services on a SecuBox board (haproxy, mitmproxy LXC, gitea LXC,
+ vital services on a SecuBox board (haproxy, sbxwaf, gitea LXC,
  nginx, mail LXC, metrics socket, cookie-audit ledger freshness,
  filesystems, act-runner). State transitions emit CSPN-compatible journal
  events. Read-only API consumed by the portal banner.

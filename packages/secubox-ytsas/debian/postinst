@@ -71,7 +71,7 @@ case "$1" in
     fi
 
     # Register the HAProxy exposure DURABLY. ytsas is a WAF-bypass vhost by
-    # design — like torrent/nc/photoprism/matrix, the mitmproxy inspection chain
+    # design — like torrent/nc/photoprism/matrix, the sbxwaf inspection chain
     # breaks its Range streaming / large media transfers — so it declares
     # `waf_bypass = true` (the sanctioned, auditable opt-in honoured by
     # haproxyctl) and routes straight to host nginx (nginx_vhosts). The regen is

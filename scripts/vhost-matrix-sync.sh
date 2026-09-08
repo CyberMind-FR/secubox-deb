@@ -4,7 +4,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
-# vhost-matrix-sync.sh — Synchronize HAProxy vhosts to mitmproxy routes and health prober
+# vhost-matrix-sync.sh — Synchronize HAProxy vhosts to the sbxwaf routes table and health prober
 # SecuBox-DEB :: Infrastructure Workflow Automation
 # CyberMind — Gérald Kerma
 set -euo pipefail
@@ -14,12 +14,14 @@ SCRIPT_NAME=$(basename "$0")
 
 # Paths
 HAPROXY_CFG="${HAPROXY_CFG:-/etc/haproxy/haproxy.cfg}"
-MITMPROXY_ROUTES="/srv/mitmproxy-waf/data/routes.json"
+# sbxwaf routes table (hot-reloaded by secubox-waf-ng); var kept for compatibility
+MITMPROXY_ROUTES="/etc/secubox/waf/haproxy-routes.json"
 HEALTH_VHOSTS="/var/cache/secubox/health/vhost-matrix.json"
 VHOST_MATRIX="/var/lib/secubox/haproxy/vhost-matrix.json"
 LOG_FILE="/var/log/secubox/vhost-matrix-sync.log"
 
-# LXC mitmproxy bridge IP (not localhost - routes are used inside LXC)
+# Backend host IP used when a matrix entry resolves to 127.0.0.1.
+# Legacy default (10.100.0.1) was the LXC bridge; kept as an overridable default.
 MITMPROXY_HOST_IP="${MITMPROXY_HOST_IP:-10.100.0.1}"
 
 # Colors
@@ -109,17 +111,17 @@ PYEOF
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GENERATE MITMPROXY ROUTES
+# GENERATE SBXWAF ROUTES
 # ═══════════════════════════════════════════════════════════════════════════════
 
 generate_mitmproxy_routes() {
     local matrix="$1"
 
     # Log to stderr so stdout only contains the JSON result
-    echo -e "${BLUE}[INFO]${NC} Generating mitmproxy routes..." >&2
+    echo -e "${BLUE}[INFO]${NC} Generating sbxwaf routes..." >&2
 
-    # Convert matrix to mitmproxy format: {"hostname": ["ip", port]}
-    # Use MITMPROXY_HOST_IP instead of 127.0.0.1 for LXC container access
+    # Convert matrix to sbxwaf routes format: {"hostname": ["ip", port]}
+    # Rewrite 127.0.0.1 to MITMPROXY_HOST_IP for the routed backend
     local routes
     routes=$(echo "$matrix" | jq --arg host "$MITMPROXY_HOST_IP" '
         to_entries | map({
@@ -133,32 +135,35 @@ generate_mitmproxy_routes() {
 
     local count
     count=$(echo "$routes" | jq 'keys | length')
-    echo -e "${BLUE}[INFO]${NC} Generated $count mitmproxy routes" >&2
+    echo -e "${BLUE}[INFO]${NC} Generated $count sbxwaf routes" >&2
 
     echo "$routes"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SYNC TO MITMPROXY
+# SYNC TO SBXWAF
 # ═══════════════════════════════════════════════════════════════════════════════
 
 sync_mitmproxy() {
     local routes="$1"
 
-    log "Syncing routes to mitmproxy..."
+    log "Syncing routes to sbxwaf..."
 
     # Ensure directory exists
     mkdir -p "$(dirname "$MITMPROXY_ROUTES")"
 
-    # Write routes
+    # Write the routes table (sbxwaf hot-reloads it)
     echo "$routes" | jq . > "$MITMPROXY_ROUTES"
     success "Routes written to $MITMPROXY_ROUTES"
 
-    # Reload mitmproxy if running in LXC
+    # Nudge sbxwaf to reload the routes table
+    systemctl reload secubox-waf-ng 2>/dev/null || true
+
+    # Legacy guarded step: signal the old mitmproxy WAF LXC if it still exists
+    # (no-op on current boxes).
     if lxc-info -n mitmproxy-waf -s 2>/dev/null | grep -q "RUNNING"; then
-        log "Signaling mitmproxy to reload..."
+        log "Signaling legacy mitmproxy WAF LXC to reload..."
         lxc-attach -n mitmproxy-waf -- pkill -HUP mitmdump 2>/dev/null || true
-        success "mitmproxy reloaded"
     fi
 }
 
@@ -230,12 +235,12 @@ show_status() {
 
     log "Summary:"
     echo "  HAProxy vhosts:     $haproxy_vhosts"
-    echo "  Mitmproxy routes:   $mitmproxy_routes"
+    echo "  sbxwaf routes:      $mitmproxy_routes"
     echo "  Health prober:      $health_vhosts"
 
     # Check sync status
     if [ "$mitmproxy_routes" -lt "$((haproxy_vhosts / 2))" ]; then
-        warn "Mitmproxy routes appear out of sync. Run 'sync' to update."
+        warn "sbxwaf routes appear out of sync. Run 'sync' to update."
     fi
 }
 
@@ -287,11 +292,17 @@ cmd_reload() {
         success "HAProxy reloaded"
     fi
 
-    # Reload mitmproxy
+    # Reload sbxwaf (host daemon)
+    if systemctl is-active --quiet secubox-waf-ng 2>/dev/null; then
+        log "Reloading sbxwaf..."
+        systemctl reload secubox-waf-ng 2>/dev/null || true
+        success "sbxwaf reloaded"
+    fi
+
+    # Legacy guarded step: signal the old mitmproxy WAF LXC if it still exists
     if lxc-info -n mitmproxy-waf -s 2>/dev/null | grep -q "RUNNING"; then
-        log "Signaling mitmproxy..."
+        log "Signaling legacy mitmproxy WAF LXC..."
         lxc-attach -n mitmproxy-waf -- pkill -HUP mitmdump 2>/dev/null || true
-        success "mitmproxy signaled"
     fi
 
     # Restart health prober
@@ -315,14 +326,14 @@ $SCRIPT_NAME v$VERSION — VHost Matrix Synchronization
 Usage: $SCRIPT_NAME <command>
 
 Commands:
-  sync      Extract HAProxy vhosts and sync to mitmproxy + health prober
+  sync      Extract HAProxy vhosts and sync to sbxwaf + health prober
   status    Show current vhost matrix status
-  reload    Reload all related services (HAProxy, mitmproxy, health prober)
+  reload    Reload all related services (HAProxy, sbxwaf, health prober)
   help      Show this help
 
 Environment:
   HAPROXY_CFG         HAProxy config path (default: /etc/haproxy/haproxy.cfg)
-  MITMPROXY_HOST_IP   Host IP for mitmproxy routes (default: 10.100.0.1)
+  MITMPROXY_HOST_IP   Backend host IP for sbxwaf routes (default: 10.100.0.1)
 
 Examples:
   $SCRIPT_NAME sync       # Full sync from HAProxy to all consumers

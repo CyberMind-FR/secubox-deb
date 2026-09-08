@@ -9,7 +9,7 @@ FastAPI on /run/secubox/lyrion.sock, proxied by nginx at /api/v1/lyrion/.
 Mandatory endpoints per docs/MODULE-GUIDELINES.md §8.
 
 Plus the `verify` endpoint used as the placeholder for future module-specific endpoints.
-SSO-less backends (yacy / rustdesk-web / mitmproxy-web): see #244 SSO bridge
+SSO-less backends (yacy / rustdesk-web / secubox-waf UI): see #244 SSO bridge
 spec.
 """
 from __future__ import annotations

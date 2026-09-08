@@ -2,7 +2,8 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """WAF/HAProxy routing for published sites — all privileged work is delegated
 to `secubox-publishctl`. Replaces the retired `sync_mitmproxy_routes` (which
-wrote the dead mitmproxy-LXC route file)."""
+wrote the now-dead mitmproxy-LXC route file); routes now live in the single
+sbxwaf table /etc/secubox/waf/haproxy-routes.json (hot-reloaded)."""
 from __future__ import annotations
 
 import json
@@ -45,7 +46,7 @@ def apply_route(domain: str, port: int = 8900, runner=_sudo_publishctl) -> dict:
     vhost = runner("vhost-add", domain)
     waf = runner("waf-route", domain, str(port))
     # The WAF route file is the OPERATIVE mechanism: sbxwaf serves a host iff it
-    # is in that file, and HAProxy's `default_backend mitmproxy_inspector` already
+    # is in that file, and HAProxy's `default_backend sbxwaf_inspector` already
     # sends TLS traffic to the WAF backend. `haproxyctl vhost add` is advisory
     # (belt-and-braces for setups without that default) and is blocked by
     # haproxyctl's drift-guard on a hand-migrated board — so it must NOT gate

@@ -35,7 +35,7 @@ maxconn = 2048
 
 [vhosts.a_exemple_fr]
 domain = "a.exemple.fr"
-backend = "mitmproxy_inspector"
+backend = "sbxwaf_inspector"
 ssl = false
 ssl_redirect = true
 enabled = true
@@ -110,7 +110,7 @@ def test_la_table_en_double_est_repliee_sur_la_premiere(conf):
                            'backend = "AUTRE"\nssl = true\nenabled = true\n')
     ctl(conf, "config-repair", "--write")
     d = tomllib.loads(conf.read_text())
-    assert d["vhosts"]["a_exemple_fr"]["backend"] == "mitmproxy_inspector"
+    assert d["vhosts"]["a_exemple_fr"]["backend"] == "sbxwaf_inspector"
 
 
 def test_la_reparation_laisse_une_sauvegarde(conf, tmp_path):
@@ -158,7 +158,7 @@ def test_supprimer_un_vhost_ne_decapite_pas_le_suivant(conf):
 def test_mettre_a_jour_un_vhost_preserve_ses_cles_non_gerees(conf):
     # `waf_bypass` est la seule exception WAF sanctionnee : la perdre a la
     # mise a jour d'un vhost la desactiverait sans que personne ne le voie.
-    ctl(conf, "vhost", "add", "b.exemple.fr", "mitmproxy_inspector", "true")
+    ctl(conf, "vhost", "add", "b.exemple.fr", "sbxwaf_inspector", "true")
     d = tomllib.loads(conf.read_text())
-    assert d["vhosts"]["b_exemple_fr"]["backend"] == "mitmproxy_inspector"
+    assert d["vhosts"]["b_exemple_fr"]["backend"] == "sbxwaf_inspector"
     assert d["vhosts"]["b_exemple_fr"]["waf_bypass"] is True

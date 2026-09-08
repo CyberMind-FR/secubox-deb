@@ -352,7 +352,7 @@ user_list() {
 
 # ============================================================================
 # Repo / Mirror — the third routing verb (issue #176)
-# Forges `repo mirror add/remove/list/sync` parallel to mitmproxyctl route
+# Forges `repo mirror add/remove/list/sync` parallel to wafctl route
 # (issue #173) and haproxyctl vhost. Wraps the 4 quirks of the Gitea
 # pull-mirror API into one atomic operation:
 #   1. No "convert existing repo to mirror" -> delete + migrate
@@ -1355,7 +1355,7 @@ Users:
   user passwd <n> <p>  Change password
   user list            List users
 
-Repos & Mirrors (issue #176, parallel to mitmproxyctl route):
+Repos & Mirrors (issue #176, parallel to wafctl route):
   repo create OWNER/NAME [--private] [--default-branch BR]
   repo delete OWNER/NAME --force
   repo list   [OWNER]

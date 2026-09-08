@@ -84,10 +84,10 @@ cmd_install() {
 
     # Ensure the host-maintained routes file exists so the bind-mount below has
     # a source (#603). haproxyctl writes this file on the host; the WAF addon
-    # inside the LXC reads /data/mitmproxy/haproxy-routes.json — the bind-mount
+    # inside the LXC reads /etc/secubox/waf/haproxy-routes.json — the bind-mount
     # keeps them the same file instead of two copies that drift apart.
     mkdir -p /srv/mitmproxy
-    [ -f /srv/mitmproxy/haproxy-routes.json ] || echo '{}' > /srv/mitmproxy/haproxy-routes.json
+    [ -f /etc/secubox/waf/haproxy-routes.json ] || echo '{}' > /etc/secubox/waf/haproxy-routes.json
 
     # Configure container
     cat >> "$LXC_PATH/$LXC_NAME/config" << CONF
@@ -100,7 +100,7 @@ lxc.net.0.ipv4.address = $LXC_IP/24
 lxc.net.0.ipv4.gateway = 10.100.0.1
 
 # Routes: bind-mount the host-maintained haproxy routes DIRECTORY into the
-# container; the addon reads /data/mitmproxy/haproxy-routes.json via a symlink
+# container; the addon reads /etc/secubox/waf/haproxy-routes.json via a symlink
 # into it (created below). A *directory* mount (not a file mount) is required
 # so route tools that edit via `jq > tmp && mv` (new inode) stay visible — a
 # file mount binds one inode and goes stale on mv (#609, was #603). Combined
@@ -122,11 +122,11 @@ CONF
     lxc-attach -n "$LXC_NAME" -- apt-get install -y python3-pip python3-venv curl jq
 
     lxc-attach -n "$LXC_NAME" -- mkdir -p /opt/mitmproxy /data/mitmproxy /var/log/mitmproxy \
-        /data/mitmproxy/cache/media /data/mitmproxy/logs   # #607 media cache + stats
-    # #609 — addon reads /data/mitmproxy/haproxy-routes.json; point it at the
+        /data/mitmproxy/cache/media /var/log/secubox/waf   # #607 media cache + stats
+    # #609 — addon reads /etc/secubox/waf/haproxy-routes.json; point it at the
     # routes dir bind-mount so mv-replaced files stay visible + live-reload.
     lxc-attach -n "$LXC_NAME" -- ln -sfn /var/lib/secubox-waf-routes/haproxy-routes.json \
-        /data/mitmproxy/haproxy-routes.json
+        /etc/secubox/waf/haproxy-routes.json
     lxc-attach -n "$LXC_NAME" -- python3 -m venv /opt/mitmproxy
     lxc-attach -n "$LXC_NAME" -- /opt/mitmproxy/bin/pip install mitmproxy
 
@@ -179,7 +179,7 @@ cmd_logs() {
 
 cmd_routes() {
     if lxc_running; then
-        lxc-attach -n "$LXC_NAME" -- cat /data/mitmproxy/haproxy-routes.json 2>/dev/null || echo "{}"
+        lxc-attach -n "$LXC_NAME" -- cat /etc/secubox/waf/haproxy-routes.json 2>/dev/null || echo "{}"
     else
         error "Container not running"
     fi
@@ -201,8 +201,8 @@ cmd_add_route() {
     fi
 
     lxc-attach -n "$LXC_NAME" -- bash -c "
-        jq '. + {\"$domain\": [\"$backend_ip\", $backend_port]}' /data/mitmproxy/haproxy-routes.json > /tmp/routes.json && \
-        mv /tmp/routes.json /data/mitmproxy/haproxy-routes.json
+        jq '. + {\"$domain\": [\"$backend_ip\", $backend_port]}' /etc/secubox/waf/haproxy-routes.json > /tmp/routes.json && \
+        mv /tmp/routes.json /etc/secubox/waf/haproxy-routes.json
     "
     log "Added route: $domain -> $backend_ip:$backend_port"
 }

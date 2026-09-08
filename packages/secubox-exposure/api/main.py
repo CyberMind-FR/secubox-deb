@@ -1026,7 +1026,7 @@ async def emancipate(req: EmancipateRequest, user: dict = Depends(require_jwt)):
 
     # Public channel (gondwana #768 P4): federate a public offer + emit the WAF
     # vhost recipe. Real reach is completed by the operator (DNS + cert); we do
-    # not auto-mutate the live HAProxy/mitmproxy chain.
+    # not auto-mutate the live HAProxy/sbxwaf chain.
     if req.dns and req.domain:
         try:
             from api.mesh_egress import apply_public  # noqa: PLC0415

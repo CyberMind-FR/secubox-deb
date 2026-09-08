@@ -7,7 +7,7 @@
 # config (TCP) + nftables DNAT (UDP) for public exposure.
 #
 # Follows docs/MODULE-GUIDELINES.md §3. UDP DNAT is the rustdesk-specific
-# delta from the grafana/yacy pattern (mitmproxy cannot inspect raw UDP).
+# delta from the grafana/yacy pattern (sbxwaf cannot inspect raw UDP).
 
 set -euo pipefail
 
@@ -218,7 +218,7 @@ INNER
 }
 
 # ── Host: nftables DNAT for the UDP signal port ──────────────────────────────
-# mitmproxy cannot inspect raw UDP — forward 21116/udp directly to the LXC.
+# sbxwaf cannot inspect raw UDP — forward 21116/udp directly to the LXC.
 # TCP ports go through HAProxy stream-mode (see haproxy/rustdesk-stream.cfg
 # shipped in the .deb under /etc/haproxy/secubox-streams/).
 setup_nftables_udp_dnat() {

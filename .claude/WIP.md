@@ -173,7 +173,7 @@ secubox-radio 0.1.57 · secubox-metanews 0.1.28 · secubox-surf 1.0.17.
 - Générateur de routes WAF : vérifier que `haproxyctl generate` / wafgen ré-émet
   les 22 routes ajoutées à la main (sinon dérive au prochain regen).
 - Podcaster pas encore câblé au zoom-viewer (pas de champ `lecteur`).
-- 4 vhosts test backend `mitmproxy_inspector` (wiztest2/3, shiptest, mail.maegia.tv)
+- 4 vhosts test backend `sbxwaf_inspector` (wiztest2/3, shiptest, mail.maegia.tv)
   laissés hors routes WAF volontairement.
 - Reprise vidéo horodatée à la fermeture (peertube n'expose pas sa position) —
   « déplacement » seulement ; radio a la reprise complète.
@@ -4306,10 +4306,10 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] Source file synced: secubox_waf.py
 
 ### HAProxy WAF Routing Investigation
-- [x] Tested routing admin.gk2.secubox.in through mitmproxy_inspector
+- [x] Tested routing admin.gk2.secubox.in through sbxwaf_inspector
 - [x] Found issue: 400 Bad Request with query parameters
 - [x] Reverted admin.gk2.secubox.in to nginx_vhosts
-- [x] Confirmed default_backend mitmproxy_inspector works fine
+- [x] Confirmed default_backend sbxwaf_inspector works fine
 - [ ] TODO: Investigate why use_backend causes 400 errors
 
 ### CrowdSec Integration
@@ -4330,8 +4330,8 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] Synced to debian package locations
 
 ### Known Issues
-- **HAProxy use_backend vs default_backend**: Explicit `use_backend mitmproxy_inspector`
-  causes 400 errors with query params, but `default_backend mitmproxy_inspector` works.
+- **HAProxy use_backend vs default_backend**: Explicit `use_backend sbxwaf_inspector`
+  causes 400 errors with query params, but `default_backend sbxwaf_inspector` works.
   Needs further investigation.
 
 ### ⬜ Next Up
@@ -4792,14 +4792,14 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 
 ### Phase 2: HAProxy WAF Integration ✅ COMPLETE
 - [x] Configure HAProxy backends to route through mitmproxy
-- [x] `backend mitmproxy_inspector` → LXC 10.100.0.60:8080
+- [x] `backend sbxwaf_inspector` → LXC 10.100.0.60:8080
 - [x] Update all vhost backends to use WAF inspection (330 rules)
 - [x] Using `http-request set-uri` for proxy-style requests
 - [ ] Test bypass rules for WebSocket/streaming services
 
 ### Phase 3: WAF Rules & Monitoring
 - [x] Deploy mitmproxy inspection scripts (SecuBox WAF addon)
-- [x] Configure logging to `/srv/mitmproxy/logs/waf-threats.log`
+- [x] Configure logging to `/var/log/secubox/waf/waf-threats.log`
 - [x] Create `wafctl` control script (xxxctl pattern)
 - [x] Graduated Response System (GH Issue #37):
   - Warning page on first detection (not immediate block)
@@ -4828,7 +4828,7 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] Update `secubox-haproxy` for WAF backend support
   - Added `waf` subcommand (status/enable/disable)
   - Added waf_backend_ip config for LXC IP (10.100.0.60)
-  - Updated mitmproxy_inspector backend with http-request set-uri
+  - Updated sbxwaf_inspector backend with http-request set-uri
   - Updated debian/changelog to v1.2.0
 - [x] Add WAF status to WebUI dashboard
   - Added mitmproxy container status card
@@ -4898,7 +4898,7 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] GitHub issues: #35 (migration), #36 (license)
 
 ### WAF Phase 2 Complete
-- [x] All 330 backends routed through mitmproxy_inspector
+- [x] All 330 backends routed through sbxwaf_inspector
 - [x] HAProxy `http-request set-uri` for proxy-style requests
 - [x] All traffic inspected: X-SecuBox-WAF header added
 - [x] Tested: gandalf, pix, gitea, nextcloud - all via WAF

@@ -28,7 +28,7 @@ Write the issue body following this template (adapt verbs/nouns):
 The X module already exposes <capability> via the web UI and FastAPI, but
 operators have no CLI grammar for it. Closing the gap parallel to:
 
-- `mitmproxyctl route add` (#173) — INTERCEPTION
+- `wafctl route add` (#173) — INTERCEPTION
 - `giteactl repo mirror add` (#176) — REPLICATION
 
 ## Gap
@@ -73,7 +73,7 @@ issue is labeled `bug`). Every commit message ends with `(ref #<N>)` or
 Both styles exist in-tree. Reference implementations:
 
 - **Bash** — `packages/secubox-gitea/sbin/giteactl`, `packages/secubox-metablogizer/sbin/metablogizerctl`
-- **Python** — `packages/secubox-mitmproxy/bin/mitmproxyctl`, `packages/secubox-health-doctor/sbin/healthctl`
+- **Python** — `packages/secubox-annuaire/sbin/annuairectl`, `packages/secubox-health-doctor/sbin/healthctl`
 
 ---
 
@@ -292,7 +292,7 @@ project's global reference is enough. Example:
 feat(xctl): forge widget noun verbs (closes #<N>)
 
 Ninth verb of the SecuBox grammar, layer = <layer>. Parallel to
-mitmproxyctl route (#173), giteactl repo mirror (#176).
+wafctl route (#173), giteactl repo mirror (#176).
 
 Subcommands:
   xctl widget add NAME [--option ...]

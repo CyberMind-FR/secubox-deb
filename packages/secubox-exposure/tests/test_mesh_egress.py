@@ -11,11 +11,11 @@ from mesh_egress import (  # noqa: E402
 
 def test_public_vhost_recipe_routes_through_waf_no_bypass():
     r = public_vhost_recipe("app.gk2.secubox.in", 8080)
-    # routes through mitmproxy_inspector (no waf_bypass), targets the port
+    # routes through sbxwaf_inspector (no waf_bypass), targets the port
     assert r["mitmproxy_route"] == {"app.gk2.secubox.in": ["127.0.0.1", 8080]}
-    assert "mitmproxy_inspector" in r["haproxy"]
+    assert "sbxwaf_inspector" in r["haproxy"]
     assert "waf_bypass" not in r["haproxy"]
-    assert len(r["mitmproxy_files"]) == 2  # both inspector dirs
+    assert len(r["mitmproxy_files"]) == 1  # single sbxwaf routes table
 
 
 def test_mesh_nft_line():

@@ -7,8 +7,10 @@
 # live containers (mail/horde/roundcube) instead of "dead" ones that
 # get auto-rerouted to webui.
 #
-# Also adds the rspamd.gk2.secubox.in entry to /data/mitmproxy/haproxy-routes.json
-# (host copy AND mitmproxy LXC copy) so the Rspamd web UI is reachable via WAF.
+# Also adds the rspamd.gk2.secubox.in entry to the sbxwaf route table
+# /etc/secubox/waf/haproxy-routes.json so the Rspamd web UI is reachable via WAF.
+# (A legacy mitmproxy-LXC copy is still written by the guarded block below for
+# boxes that predate the sbxwaf host daemon; it no-ops where no such LXC exists.)
 
 set -euo pipefail
 
@@ -25,7 +27,8 @@ else
     echo "[phase2] $SCRIPT not found — skipping sync-script patch"
 fi
 
-# Apply the route in two places (host + mitmproxy LXC) and detect/repair drift.
+# Apply the route to the host sbxwaf table (and, on legacy boxes, the old
+# mitmproxy LXC copy) and detect/repair drift.
 #
 # Phase 2 lesson (deploy 2026-05-16): the host copy update succeeded but the
 # LXC copy did not on first run — gate 11 of the smoke caught it. We now
@@ -60,19 +63,20 @@ PY
 }
 
 # 1) Host copy.
-HOST_JSON=/data/mitmproxy/haproxy-routes.json
+HOST_JSON=/etc/secubox/waf/haproxy-routes.json
 if [ -d "$(dirname "$HOST_JSON")" ]; then
     apply_route_python "$HOST_JSON" "$RSPAMD_FQDN" "$RSPAMD_HOST" "$RSPAMD_CTRL_PORT"
 else
     echo "[phase2] $(dirname "$HOST_JSON") not present, skipping host copy"
 fi
 
-# 2) mitmproxy LXC copy — write via `lxc-attach` so we don't have to guess
-# where the LXC rootfs is mounted. Also restart mitmproxy to pick up the new
-# route map (it reads at startup, not live).
+# 2) Legacy mitmproxy LXC copy — write via `lxc-attach` so we don't have to
+# guess where the LXC rootfs is mounted. Guarded on the container existing, so
+# it no-ops on boxes where sbxwaf is the host daemon (which hot-reloads and
+# needs no restart). Retained only for historical in-LXC WAF deployments.
 if command -v lxc-attach >/dev/null 2>&1 && lxc-info -n mitmproxy 2>/dev/null | grep -q RUNNING; then
     lxc-attach -n mitmproxy -- bash -c "
-        python3 - /data/mitmproxy/haproxy-routes.json '$RSPAMD_FQDN' '$RSPAMD_HOST' '$RSPAMD_CTRL_PORT' <<'PY'
+        python3 - /etc/secubox/waf/haproxy-routes.json '$RSPAMD_FQDN' '$RSPAMD_HOST' '$RSPAMD_CTRL_PORT' <<'PY'
 import json, sys
 path, fqdn, host, port = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 try:

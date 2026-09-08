@@ -15,8 +15,8 @@ SCRIPT_NAME=$(basename "$0")
 # Paths
 HAPROXY_CFG="/etc/haproxy/haproxy.cfg"
 HAPROXY_TOML="/etc/secubox/haproxy.toml"
-MITMPROXY_TOML="/etc/secubox/mitmproxy.toml"
-ROUTES_JSON="/srv/mitmproxy-waf/data/routes.json"
+SBXWAF_TOML="/etc/secubox/waf/sbxwaf.toml"
+ROUTES_JSON="/etc/secubox/waf/haproxy-routes.json"
 HEALTH_CACHE="/var/cache/secubox/health/status.json"
 CERTS_DIR="/etc/haproxy/certs"
 ACME_DIR="/etc/acme"
@@ -25,7 +25,7 @@ LOG_FILE="/var/log/secubox/haproxy-workflow.log"
 
 # API endpoints (via Unix sockets)
 HAPROXY_SOCK="/run/secubox/haproxy.sock"
-MITMPROXY_SOCK="/run/secubox/mitmproxy.sock"
+SBXWAF_SOCK="/run/secubox/sbxwaf.sock"
 
 # Colors
 RED='\033[0;31m'
@@ -148,21 +148,19 @@ cmd_rehealth() {
 cmd_waf_sync() {
     log "=== Workflow Backend Through WAF ==="
 
-    # Step 1: Check mitmproxy-waf container/service
+    # Step 1: Check sbxwaf engine (Go daemon on 127.0.0.1:8085, unit secubox-waf-ng)
+    # Legacy guarded fallback to the old mitmproxy WAF LXC is a no-op on the box.
     local waf_running=false
-    if lxc-info -n mitmproxy-waf -s 2>/dev/null | grep -q "RUNNING"; then
-        success "mitmproxy-waf LXC container is running"
+    if service_running secubox-waf-ng; then
+        success "sbxwaf engine (secubox-waf-ng) is running"
         waf_running=true
-    elif service_running mitmproxy; then
-        success "mitmproxy service is running"
+    elif lxc-info -n mitmproxy-waf -s 2>/dev/null | grep -q "RUNNING"; then
+        success "legacy WAF LXC is running"
         waf_running=true
     else
         warn "WAF service not running, attempting start..."
-        if [ -f /var/lib/lxc/mitmproxy-waf/config ]; then
-            sudo lxc-start -n mitmproxy-waf || warn "LXC start failed"
-        else
-            sudo systemctl start mitmproxy 2>/dev/null || warn "mitmproxy service start failed"
-        fi
+        sudo systemctl start secubox-waf-ng 2>/dev/null || warn "sbxwaf start failed"
+        service_running secubox-waf-ng && waf_running=true
     fi
 
     # Step 2: Parse HAProxy config to extract vhosts and backends (using awk for speed)
@@ -197,7 +195,7 @@ cmd_waf_sync() {
         /^[[:space:]]+use_backend .* if / {
             be=$2
             aclname=$4
-            if (be !~ /waf_inspector|mitmproxy_inspector/ && acls[aclname] && servers[be]) {
+            if (be !~ /waf_inspector|sbxwaf_inspector/ && acls[aclname] && servers[be]) {
                 split(servers[be], a, ":")
                 if (!first) printf ", "
                 printf "\"%s\": [\"%s\", %s]", acls[aclname], a[1], a[2]
@@ -212,7 +210,7 @@ cmd_waf_sync() {
 
     log "Found $count vhost→backend mappings"
 
-    # Step 3: Write routes to mitmproxy
+    # Step 3: Write routes to the sbxwaf routes table (hot-reloaded)
     if [ $count -gt 0 ]; then
         log "Writing routes to WAF..."
         sudo mkdir -p "$(dirname $ROUTES_JSON)"
@@ -225,7 +223,7 @@ cmd_waf_sync() {
 
     # Step 4: Verify WAF backend exists in HAProxy config
     log "Checking WAF backend in HAProxy config..."
-    if grep -q "backend mitmproxy_inspector\|backend waf_inspector" "$HAPROXY_CFG"; then
+    if grep -q "backend sbxwaf_inspector\|backend waf_inspector" "$HAPROXY_CFG"; then
         success "WAF backend exists in HAProxy config"
     else
         warn "WAF backend not found, may need to regenerate config"
@@ -233,16 +231,17 @@ cmd_waf_sync() {
     fi
 
     # Step 5: Check WAF routing is active
-    local waf_routes=$(grep -c "use_backend.*waf_inspector\|use_backend.*mitmproxy_inspector" "$HAPROXY_CFG" 2>/dev/null || echo "0")
+    local waf_routes=$(grep -c "use_backend.*waf_inspector\|use_backend.*sbxwaf_inspector" "$HAPROXY_CFG" 2>/dev/null || echo "0")
     log "HAProxy routes through WAF: $waf_routes vhosts"
 
-    # Step 6: Reload mitmproxy to pick up routes
+    # Step 6: Reload sbxwaf to pick up routes (sbxwaf hot-reloads the table;
+    # this reload is a belt-and-suspenders nudge). Legacy LXC branch is a no-op.
     if [ "$waf_running" = true ]; then
-        log "Signaling mitmproxy to reload routes..."
+        log "Signaling sbxwaf to reload routes..."
         if lxc-info -n mitmproxy-waf -s 2>/dev/null | grep -q "RUNNING"; then
-            sudo lxc-attach -n mitmproxy-waf -- pkill -HUP mitmproxy 2>/dev/null || true
+            sudo lxc-attach -n mitmproxy-waf -- pkill -HUP mitmdump 2>/dev/null || true
         else
-            sudo systemctl reload mitmproxy 2>/dev/null || true
+            sudo systemctl reload secubox-waf-ng 2>/dev/null || true
         fi
         success "WAF routes synced"
     fi
@@ -413,7 +412,7 @@ Usage: $SCRIPT_NAME <command>
 
 Commands:
   rehealth    Auto rehealth HAProxy (reload, invalidate caches, restart probers)
-  waf-sync    Sync backend routes through WAF (mitmproxy)
+  waf-sync    Sync backend routes through WAF (sbxwaf)
   certs       Check/list vhost certificates status
   all         Run complete workflow (rehealth + waf-sync + certs)
   help        Show this help

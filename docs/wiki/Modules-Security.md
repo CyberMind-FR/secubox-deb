@@ -47,7 +47,7 @@ Community-driven IDS/IPS with automatic bouncing.
 
 ## secubox-waf
 
-HAProxy + mitmproxy Web Application Firewall.
+HAProxy + sbxwaf Web Application Firewall.
 
 ### Features
 - OWASP ModSecurity CRS

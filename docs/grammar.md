@@ -48,7 +48,7 @@ Without the CTL the organ exists but cannot be commanded —
 | Layer                | Verb                                              | Forged in |
 |----------------------|---------------------------------------------------|-----------|
 | ROUTING              | `haproxyctl   vhost  add/remove`                  | pre-2026  |
-| INTERCEPTION         | `mitmproxyctl route  add/remove/list`             | #173      |
+| INTERCEPTION         | `wafctl       route  add/remove/list`             | #173      |
 | REPLICATION          | `giteactl     repo   mirror add/remove/sync/list` | #176      |
 | IDENTITY             | `giteactl     user   add/remove/passwd/list`      | pre-2026  |
 | CI EXECUTION         | `giteactl     runner add/remove/list/token`       | #190      |
@@ -65,8 +65,8 @@ expresses end-to-end workflows in three lines of shell:
 
 ```bash
 # WAF un-bypass for a vhost (the cookie-audit cascade fix, today's grammar):
-haproxyctl   vhost  add   gitea.gk2.secubox.in mitmproxy_inspector ssl
-mitmproxyctl route  add   gitea.gk2.secubox.in 192.168.1.200 9080
+haproxyctl   vhost  add   gitea.gk2.secubox.in sbxwaf_inspector ssl
+wafctl       route  add   gitea.gk2.secubox.in 192.168.1.200 9080
 giteactl     repo   mirror add secubox/secubox-deb \
                                  https://github.com/CyberMind-FR/secubox-deb.git \
                                  --interval 10m --force
@@ -113,7 +113,7 @@ its own worktree, each commit references `(ref #N)` or `(closes #N)`.
 ### 3. CTL skeleton
 
 Bash for shell-shaped tools (giteactl, metablogizerctl), Python with
-`argparse` for tools with rich subcommands and JSON I/O (mitmproxyctl,
+`argparse` for tools with rich subcommands and JSON I/O (wafctl,
 healthctl). Both styles co-exist; pick the one closest to the existing
 ctls in the same package.
 
@@ -189,7 +189,7 @@ the exact command, the observable side-effect, the API endpoint check.
 │  REPLICATION  giteactl repo mirror (#176)                           │
 │  CI EXECUTION giteactl runner (#190)                                │
 ├─────────────────────────────────────────────────────────────────────┤
-│  INTERCEPTION mitmproxyctl route (#173)                             │
+│  INTERCEPTION wafctl route (#173)                                   │
 │  ROUTING      haproxyctl vhost                                      │
 ├─────────────────────────────────────────────────────────────────────┤
 │  OPS MONITORING healthctl (#212)                                    │

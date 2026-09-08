@@ -31,7 +31,7 @@ SecuBox OS security architecture for ANSSI CSPN certification.
 │     nftables, CrowdSec, Geo-blocking            │
 ├─────────────────────────────────────────────────┤
 │ L2: Application Security                        │
-│     HAProxy TLS 1.3, WAF, mitmproxy             │
+│     HAProxy TLS 1.3, WAF (sbxwaf)               │
 ├─────────────────────────────────────────────────┤
 │ L3: Authentication                              │
 │     JWT, ZKP (optional), OAuth2                 │
@@ -103,10 +103,10 @@ POST /api/v1/firewall/rules
 
 ## WAF Configuration
 
-### HAProxy + mitmproxy
+### HAProxy + sbxwaf
 
 ```
-Internet → HAProxy (TLS 1.3) → mitmproxy → Backend
+Internet → HAProxy (TLS 1.3) → sbxwaf → Backend
               │                    │
               └──────────────────────→ Logs
 ```
@@ -142,7 +142,7 @@ Each module runs under dedicated user:
 
 ```
 secubox-crowdsec  → crowdsec:crowdsec
-secubox-waf       → mitmproxy:mitmproxy
+secubox-waf       → secubox-waf:secubox-waf
 secubox-dns       → unbound:unbound
 secubox-hub       → secubox:secubox
 ```

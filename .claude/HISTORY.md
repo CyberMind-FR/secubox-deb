@@ -349,7 +349,7 @@ ja4 / signatures 2-arg manquants. Vrai merge 3-voies combinant les DEUX familles
 #803/#806/#809) + capture #1058. 0.1.43 déployé, sur-ensemble canonique.
 
 **Python mitmproxy totalement dégagé (#1054).** La chaîne publique était déjà
-sur Go sbxwaf (le backend `mitmproxy_inspector` pointe sur :8085) ; le reliquat
+sur Go sbxwaf (le backend `sbxwaf_inspector` pointe sur :8085) ; le reliquat
 Python était mort (0 connexion). 2 LXC détruits, paquet `secubox-mitmproxy`
 purgé, dépendance `mitmproxy` retirée de `secubox-toolbox` (2.9.0), `apt purge
 mitmproxy` réussi. Plus rien, ni sur la board ni dans les sources.
@@ -806,7 +806,7 @@ pattern. Merged #846–#850, deployed **and installed** on gk2.
   container LAN IP only. Its UI emits absolute `/static` paths so it can't live under a portal
   subpath (`admin.gk2/spiderfoot-ui/` → the SPA's "module not found"); served **at root** on its own
   vhost **https://spiderfoot.gk2.secubox.in/** (zigbee/lyrion pattern: nginx :9080 vhost + sbxwaf
-  route + HAProxy ACL → mitmproxy_inspector + LAN-gated exposure snippet, wildcard `*.gk2` cert) +
+  route + HAProxy ACL → sbxwaf_inspector + LAN-gated exposure snippet, wildcard `*.gk2` cert) +
   a `:9043` LAN-direct fallback. Review HIGH fixed: SpiderFoot has no native auth → every nginx
   location auth-gated (`auth_request /__sbx_auth_verify`, peer pattern).
 - **Stylized PDF report** (maigret) — raw `--json simple` → a FORMAL SecuBox dossier (`api/report.py`,
@@ -842,7 +842,7 @@ owned `secubox:secubox 0640`.
 route landed `["192.168.1.200",8900]` in `/etc/secubox/waf/haproxy-routes.json`, backup export→import
 round-trip recreated the site. Live-driven fixes: real `haproxyctl vhost add <domain> <backend>` signature;
 `route_ok` gates on the WAF route (vhost advisory — blocked by haproxyctl drift-guard + redundant with
-`default_backend mitmproxy_inspector`); portable safe tar-extract (board is Python 3.11.2, no `filter=`).
+`default_backend sbxwaf_inspector`); portable safe tar-extract (board is Python 3.11.2, no `filter=`).
 Whole-branch review: READY TO MERGE, all 5 security invariants held. metablogizer 1.3.0.
 
 ---
@@ -1686,7 +1686,7 @@ All PRs merged to master and deployed live on gk2.
 Follow-up to the WAF restoration. Three findings investigated; two fixed.
 
 - **Open forward-proxy / loops (#605/PR #606, mitmproxy 1.0.6 + waf 1.2.4).**
-  `--mode regular` + HAProxy `default_backend mitmproxy_inspector` made the WAF
+  `--mode regular` + HAProxy `default_backend sbxwaf_inspector` made the WAF
   an open proxy: internet scanners (114.66.25.146, 211.154.17.165,
   hashtagbrock.nl) drove a **72% backend-error rate** + 11 self-loop 508s/hr.
   The `requestheaders` hook now serves ONLY our vhosts (routes / our domains
@@ -1731,7 +1731,7 @@ Made the apt repo at `https://admin.gk2.secubox.in/repo/` (served from
   buildinfo artifact race — deb still produced).
 
 **Public HTTPS now works — WAF mitmproxy restored (3 stacked bugs).** The WAF
-LXC (`mitmproxy`, served via HAProxy `mitmproxy_inspector` → 10.100.0.60:8080)
+LXC (`mitmproxy`, served via HAProxy `sbxwaf_inspector` → 10.100.0.60:8080)
 was down board-wide (every inspected vhost 503/400), blocking public
 `apt.secubox.in`. Three compounding faults, all fixed live on gk2:
 
@@ -1746,8 +1746,8 @@ was down board-wide (every inspected vhost 503/400), blocking public
    (82.67.100.75). Added a `requestheaders` hook that sets
    `flow.server_conn.address` (+ request host/port) before the connect.
 3. **Route-file drift** (the real killer, `routes_count: 0`): the addon reads
-   `/data/mitmproxy/haproxy-routes.json`, but the system maintains
-   `/srv/mitmproxy/haproxy-routes.json` (255 routes). The addon's file was
+   `/etc/secubox/waf/haproxy-routes.json`, but the system maintains
+   `/etc/secubox/waf/haproxy-routes.json` (255 routes). The addon's file was
    missing. Fixed by **bind-mounting** the host file into the container at the
    addon's path (`/var/lib/lxc/mitmproxy/config`) so they stay in sync.
 
@@ -3178,7 +3178,7 @@ work on gk2.
 * **URL `nextcloud.gk2.secubox.in` worked end-to-end** by:
   - mitmproxy haproxy-routes.json entry added
     (`nextcloud.gk2.secubox.in → 192.168.1.200:9080`) — **TWICE**,
-    once on host's `/srv/mitmproxy/haproxy-routes.json` and once on
+    once on host's `/etc/secubox/waf/haproxy-routes.json` and once on
     the LXC's separate copy (live config drift — see TODO).
   - nginx vhost `server_name` aliased: `nc.gk2.secubox.in
     nextcloud.gk2.secubox.in;`
@@ -3238,7 +3238,7 @@ work on gk2.
 
 ### Live config drift discovered (mitmproxy)
 
-* `/srv/mitmproxy/haproxy-routes.json` on the host is NOT
+* `/etc/secubox/waf/haproxy-routes.json` on the host is NOT
   bind-mounted into the mitmproxy LXC. Each has its own copy,
   edits to one don't reach the other. Tripped me up when adding
   the nextcloud.gk2.secubox.in route. Recipe: also bind-mount
@@ -3695,7 +3695,7 @@ entirely: defaults to dry-run candidate listing, requires explicit
 - Generated DKIM keypair for `secubox.in/default` (2048-bit) via `lxc-attach -n mail -- rspamadm dkim_keygen`. DNS TXT recorded in `/data/volumes/mail/rspamd/dkim/secubox.in/default.txt` — awaiting publication.
 - Re-ran `configure_rspamd_milter` to deploy the 8 `local.d/*.{conf,inc}` templates into the LXC's `/etc/rspamd/local.d/`. Re-ran `configure_rspamd_controller` for `worker-controller.inc` + `secrets.inc`.
 - Fixed `secrets.inc` ownership via `lxc-attach -- chown _rspamd:_rspamd` (kernel idmap maps inside-LXC uid 107 to the right outside-LXC subuid regardless of image). Rspamd then started cleanly.
-- Added HAProxy vhost `rspamd.gk2.secubox.in → mitmproxy_inspector` via `haproxyctl vhost add`. Added matching entry to mitmproxy LXC's `/srv/mitmproxy/haproxy-routes.json` and restarted mitmproxy. End-to-end curl returned `HTTP 200`, `x-secubox-waf: inspected`, body `pong` from `rspamd/3.4`.
+- Added HAProxy vhost `rspamd.gk2.secubox.in → sbxwaf_inspector` via `haproxyctl vhost add`. Added matching entry to mitmproxy LXC's `/etc/secubox/waf/haproxy-routes.json` and restarted mitmproxy. End-to-end curl returned `HTTP 200`, `x-secubox-waf: inspected`, body `pong` from `rspamd/3.4`.
 - Ran `mailctl rspamd purge-legacy` on the board — D9 health gate verified rspamc-controller reachable, then purged `opendkim opendkim-tools spamassassin spamc spamd` cleanly. Postfix/Dovecot stayed active throughout.
 - All 13 acceptance gates green: ports, milter, DKIM, modules, WAF path, SA/OpenDKIM absent, Phase 1 regression (5 production mailboxes + webmail WAF path).
 
@@ -3711,8 +3711,8 @@ entirely: defaults to dry-run candidate listing, requires explicit
 Root cause: the running HAProxy was started 2026-05-15 17:37 from a config that pointed `bind *:443 ssl crt` at `/data/haproxy/certs/` (95 .pem files). Later in the day, a `haproxyctl` config regen (triggered when adding the rspamd.gk2 vhost) emitted a new `/etc/haproxy/haproxy.cfg` that:
 
 1. Changed the cert directory to `/srv/haproxy/certs/` (which didn't exist).
-2. Stripped **every** `backend {…}` block (9 backends dropped, including `mitmproxy_inspector`, `webui_direct`, `nginx_vhosts`, `fallback`, the metablog_* group, and `gitea_ssh`).
-3. Replaced the issue-#44 `is_webui_admin` regex routing of `admin.gk2.secubox.in` to `webui_direct` with a plain `hdr -i` ACL routing to `mitmproxy_inspector`.
+2. Stripped **every** `backend {…}` block (9 backends dropped, including `sbxwaf_inspector`, `webui_direct`, `nginx_vhosts`, `fallback`, the metablog_* group, and `gitea_ssh`).
+3. Replaced the issue-#44 `is_webui_admin` regex routing of `admin.gk2.secubox.in` to `webui_direct` with a plain `hdr -i` ACL routing to `sbxwaf_inspector`.
 
 Result: any `systemctl reload haproxy` would crash. The live process held the old (correct) config in memory and kept serving 26k+ SSL connections, hiding the breakage.
 
@@ -3720,7 +3720,7 @@ Result: any `systemctl reload haproxy` would crash. The live process held the ol
 - Symlinked `/srv/haproxy/certs -> /data/haproxy/certs` (so the haproxyctl-style path resolves to the real cert store, future regens stay valid).
 - Rebuilt `/etc/haproxy/haproxy.cfg` from `bak.20260515-1531-pre-503-fix` (latest known-good with 9 backends), grafted in the two intentional changes the regen had introduced:
   - `acl is_webui_admin hdr(host) -m reg ^admin\.gk2\.secubox\.in$` + `use_backend webui_direct if is_webui_admin` (in both http-in + https-in).
-  - `acl host_rspamd_gk2_secubox_in hdr(host) -i rspamd.gk2.secubox.in` + `use_backend mitmproxy_inspector if host_rspamd_gk2_secubox_in` (in both frontends).
+  - `acl host_rspamd_gk2_secubox_in hdr(host) -i rspamd.gk2.secubox.in` + `use_backend sbxwaf_inspector if host_rspamd_gk2_secubox_in` (in both frontends).
 - `haproxy -c` validated cleanly. `systemctl reload haproxy` forked a new worker; master process stayed up (`20h06m` etime preserved). New worker took over without dropping the SSL listener.
 - Verified: `rspamd.gk2.secubox.in` (WAF inspected), `admin.gk2.secubox.in` (direct webui_direct), `webmail.gk2.secubox.in` (WAF inspected) — all return 200/expected status. Full Phase 2 smoke re-ran 13/13 green post-reload.
 
@@ -4012,7 +4012,7 @@ apt-cache search secubox # 15 packages
 - `packages/secubox-hub/www/shared/health-banner.js` (v1.2.1):
   - Pass `window.location.hostname` as query param to API
   - Added version footer display for debugging
-- HAProxy config: Fixed broken `mitmproxy_inspector_DISABLED` references
+- HAProxy config: Fixed broken `sbxwaf_inspector_DISABLED` references
 - Permissions: Granted `secubox` group read access to `/etc/letsencrypt/live/`
 
 **Commits:** `443e375f` (merge), `90e8b8fc` (fixes)
@@ -4058,10 +4058,10 @@ apt-cache search secubox # 15 packages
 
 **Cause chain (multi-layered):**
 
-1. **Stale generator on board.** `/usr/sbin/haproxyctl` (the bash script that actually writes `haproxy.cfg` from `/etc/secubox/haproxy.toml`) was an older version that emitted `use_backend waf_inspector if host_X` while `waf_enabled=1`. The repo's current `packages/secubox-haproxy/sbin/haproxyctl` already emits `use_backend mitmproxy_inspector` — but the board had a 33115 b old copy still using `waf_inspector`.
+1. **Stale generator on board.** `/usr/sbin/haproxyctl` (the bash script that actually writes `haproxy.cfg` from `/etc/secubox/haproxy.toml`) was an older version that emitted `use_backend waf_inspector if host_X` while `waf_enabled=1`. The repo's current `packages/secubox-haproxy/sbin/haproxyctl` already emits `use_backend sbxwaf_inspector` — but the board had a 33115 b old copy still using `waf_inspector`.
 2. **`waf_inspector` backend was a dead reference.** The script also generated `backend waf_inspector { server srv0 127.0.0.1:8890 check }` but **port 8890 was not listening** — so even if the regen worked, those vhosts would have been DOWN.
 3. **`waf_enabled=0` fallback was equally broken.** When `waf_enabled` evaluated to 0, the script fell back to each vhost's TOML `backend = "nginx_vhosts"` (`server 127.0.0.1:9080 check`) — but nginx:9080 has no `server_name` for individual gk2 sites (only for `admin.gk2.secubox.in`), so every other host hit the default_server "Wrong Domain" page.
-4. **TOML coverage is incomplete.** `/etc/secubox/haproxy.toml` declares only 93 vhosts, while `/srv/mitmproxy/haproxy-routes.json` has 245 active routes. The 150 missing domains had no HAProxy ACL → `default_backend fallback` (deny 503).
+4. **TOML coverage is incomplete.** `/etc/secubox/haproxy.toml` declares only 93 vhosts, while `/etc/secubox/waf/haproxy-routes.json` has 245 active routes. The 150 missing domains had no HAProxy ACL → `default_backend fallback` (deny 503).
 5. **Race with the Python service.** `secubox-haproxy.service` (FastAPI on `/usr/lib/secubox/haproxy/api/main.py`) was polling/validating the config and logging "Failed to load HAProxy config: Invalid value (at line 854, column 7)" every ~10 s for >10 min before haproxyctl finally succeeded a regen that produced the broken-but-syntactically-valid output.
 6. **Container routes had drifted too.** `lxc-attach -n mitmproxy -- jq .[cpf.gk2.secubox.in] routes.json` showed `[10.100.0.1, 9080]` while the host file had `[10.100.0.50, 8523]`. A previous unsuccessful regen had pushed a corrupted JSON into the container.
 
@@ -4069,8 +4069,8 @@ apt-cache search secubox # 15 packages
 
 1. `systemctl stop secubox-haproxy.service` — freeze any further regen attempts.
 2. Backup current `haproxy.cfg`.
-3. Read `/srv/mitmproxy/haproxy-routes.json` → for each of 245 domains, replace `use_backend nginx_vhosts if host_X` with `use_backend mitmproxy_inspector if host_X` in `haproxy.cfg` (180 lines patched: 90 unique × 2 frontends).
-4. Replace `default_backend fallback` with `default_backend mitmproxy_inspector` in both `http-in` and `https-in` frontends — so the 150 routes that exist in mitmproxy JSON but not in `haproxy.toml` are still dispatched correctly (mitmproxy reads the Host header against its routes table).
+3. Read `/etc/secubox/waf/haproxy-routes.json` → for each of 245 domains, replace `use_backend nginx_vhosts if host_X` with `use_backend sbxwaf_inspector if host_X` in `haproxy.cfg` (180 lines patched: 90 unique × 2 frontends).
+4. Replace `default_backend fallback` with `default_backend sbxwaf_inspector` in both `http-in` and `https-in` frontends — so the 150 routes that exist in mitmproxy JSON but not in `haproxy.toml` are still dispatched correctly (mitmproxy reads the Host header against its routes table).
 5. `haproxy -c -f haproxy.cfg` → validate; `systemctl reload haproxy`.
 6. Push host routes JSON → mitmproxy LXC; `systemctl restart mitmproxy` inside container.
 7. Verify with live HTTPS probes.
@@ -4091,8 +4091,8 @@ apt-cache search secubox # 15 packages
 
 **Persistent fixes committed to repo:**
 
-- `packages/secubox-haproxy/api/main.py` — Python generator: `use_backend waf_inspector` → `use_backend mitmproxy_inspector` (2 occurrences, lines 1147 + 1170). Survives next package rebuild.
-- `packages/secubox-haproxy/sbin/haproxyctl` — Bash generator: `default_backend fallback` → `default_backend mitmproxy_inspector` (2 occurrences). Repo version already used `mitmproxy_inspector` for the `use_backend` lines; the board copy was stale. Future `dpkg -i secubox-haproxy_*.deb` will replace the board's stale `/usr/sbin/haproxyctl`.
+- `packages/secubox-haproxy/api/main.py` — Python generator: `use_backend waf_inspector` → `use_backend sbxwaf_inspector` (2 occurrences, lines 1147 + 1170). Survives next package rebuild.
+- `packages/secubox-haproxy/sbin/haproxyctl` — Bash generator: `default_backend fallback` → `default_backend sbxwaf_inspector` (2 occurrences). Repo version already used `sbxwaf_inspector` for the `use_backend` lines; the board copy was stale. Future `dpkg -i secubox-haproxy_*.deb` will replace the board's stale `/usr/sbin/haproxyctl`.
 - `scripts/secubox-haproxy-regen-safe` — new wrapper: snapshot → regen → validate → atomic swap → reload, with rollback on validation failure. Prevents future broken-config-deployed-anyway incidents.
 
 **Still on board (not in repo, infra-side only):**
@@ -4103,7 +4103,7 @@ apt-cache search secubox # 15 packages
 
 **Open questions:**
 
-- `/etc/secubox/haproxy.toml` only declares 93 vhosts — should the 150 metablog/streamlit domains be added so HAProxy has explicit ACLs and stats? Currently they work via `default_backend mitmproxy_inspector` (catch-all), which is functional but loses per-vhost stats granularity.
+- `/etc/secubox/haproxy.toml` only declares 93 vhosts — should the 150 metablog/streamlit domains be added so HAProxy has explicit ACLs and stats? Currently they work via `default_backend sbxwaf_inspector` (catch-all), which is functional but loses per-vhost stats granularity.
 - Re-enabling `secubox-haproxy.service` is safe now (generators patched), but verify no other code path writes `haproxy.cfg` with the broken pattern (e.g., on-demand `/generate` API endpoint).
 
 ---
@@ -4139,11 +4139,11 @@ apt-cache search secubox # 15 packages
 
 1. Extracted zip via `python3 -m zipfile` (84 files: `index.html` + `planches/*.jpg`).
 2. Added `lldh.ganimed.fr` to existing `server_name lldh.gk2.secubox.in` block in `/etc/nginx/sites-enabled/metablogizer`, `nginx -t && systemctl reload nginx`.
-3. Patched `/srv/mitmproxy/haproxy-routes.json`: `lldh.ganimed.fr` → `[192.168.1.200, 8900]`, pushed to LXC container, `systemctl restart mitmproxy` (SIGHUP alone wasn't enough — mitmproxy serving cached/wrong content until full restart).
+3. Patched `/etc/secubox/waf/haproxy-routes.json`: `lldh.ganimed.fr` → `[192.168.1.200, 8900]`, pushed to LXC container, `systemctl restart mitmproxy` (SIGHUP alone wasn't enough — mitmproxy serving cached/wrong content until full restart).
 
 **Systematic audit of all metablog vhosts (Python script in `/tmp` on board):**
 
-Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root pair, cross-checked each domain against `/srv/mitmproxy/haproxy-routes.json` and the on-disk `index.html`.
+Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root pair, cross-checked each domain against `/etc/secubox/waf/haproxy-routes.json` and the on-disk `index.html`.
 
 | Metric | Count |
 | --- | --- |
@@ -4166,7 +4166,7 @@ Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root
 
 **Backups on board:**
 
-- `/srv/mitmproxy/haproxy-routes.json.bak.<epoch>` (pre-patch)
+- `/etc/secubox/waf/haproxy-routes.json.bak.<epoch>` (pre-patch)
 - `/etc/nginx/sites-enabled/metablogizer.bak.<epoch>` (pre-server_name-add)
 - Symlink for `werdl` is non-destructive (`famille_index.html` untouched).
 
@@ -4195,7 +4195,7 @@ Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root
 
 **Root cause (deepest):**
 
-`log()` function in `/usr/local/bin/sync-mitmproxy-routes.sh` wrote to **stdout**. `fix_dead_container_routes()` calls `log "Fixing dead route: …"` and is itself captured via `routes_json=$(fix_dead_container_routes "$routes_json")` — every log line was concatenated into the JSON variable, producing `[date] Fixing dead route: …{"255.gk2..."`. jq then complained `Invalid numeric literal at line 1, column 12`, `set -e` killed the script, and the corrupted JSON got pushed to the mitmproxy container (`lxc-attach … tee /srv/mitmproxy/haproxy-routes.json`). mitmproxy restart-looped on `Failed to load routes: Expecting ',' delimiter`, HAProxy backend `mitmproxy_inspector` went DOWN, every public domain returned **HTTP 503**.
+`log()` function in `/usr/local/bin/sync-mitmproxy-routes.sh` wrote to **stdout**. `fix_dead_container_routes()` calls `log "Fixing dead route: …"` and is itself captured via `routes_json=$(fix_dead_container_routes "$routes_json")` — every log line was concatenated into the JSON variable, producing `[date] Fixing dead route: …{"255.gk2..."`. jq then complained `Invalid numeric literal at line 1, column 12`, `set -e` killed the script, and the corrupted JSON got pushed to the mitmproxy container (`lxc-attach … tee /etc/secubox/waf/haproxy-routes.json`). mitmproxy restart-looped on `Failed to load routes: Expecting ',' delimiter`, HAProxy backend `sbxwaf_inspector` went DOWN, every public domain returned **HTTP 503**.
 
 **Additional contributing bugs:**
 
@@ -4208,7 +4208,7 @@ Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root
 
 | # | Fix | Cible | Mechanism |
 | --- | --- | --- | --- |
-| 1 | Routes patchées 9080→8900 (165 sites metablog) | `/srv/mitmproxy/haproxy-routes.json` (host + container) | Python script (extract `server_name` from nginx, rewrite port) |
+| 1 | Routes patchées 9080→8900 (165 sites metablog) | `/etc/secubox/waf/haproxy-routes.json` (host + container) | Python script (extract `server_name` from nginx, rewrite port) |
 | 2 | `return $fixed` → `return 0` | `sync-mitmproxy-routes.sh:fix_dead_container_routes` | sed |
 | 3 | Port metablog 9080 → 8900 in step 2 | `sync-all-routes.sh:62` | sed |
 | 4 | **`log()` writes to stderr** (root-cause fix) | `sync-mitmproxy-routes.sh:log` | adds `>&2` so `$()` capture is clean |
@@ -4222,7 +4222,7 @@ Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root
 - `sync-mitmproxy-routes.service` via systemd → exit 0/SUCCESS, "Sync complete".
 - Container routes JSON valid: 244 keys, all metablogizer domains → `[10.100.0.1, 8900]`.
 - mitmproxy: `active`, listening on `0.0.0.0:8080`.
-- HAProxy backend `mitmproxy_inspector srv0 10.100.0.60:8080` op_state=UP.
+- HAProxy backend `sbxwaf_inspector srv0 10.100.0.60:8080` op_state=UP.
 - Live tests: `admin.gk2`, `arm.gk2`, `zkp.gk2`, `3d.gk2` all HTTP 200 with correct titles.
 
 **Files modified (versioned in repo):**
@@ -4232,7 +4232,7 @@ Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root
 
 **Backups created on board (timestamped, kept for rollback):**
 
-- `/srv/mitmproxy/haproxy-routes.json.bak.<epoch>` (pre-patch JSON)
+- `/etc/secubox/waf/haproxy-routes.json.bak.<epoch>` (pre-patch JSON)
 - `/usr/local/bin/sync-mitmproxy-routes.sh.bak.<epoch>` and `.bak.<epoch>-preflock`
 - `/usr/local/bin/sync-all-routes.sh.bak.<epoch>`
 
@@ -4240,7 +4240,7 @@ Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root
 
 - Canonical Hub vhosts (nginx `sites-available/secubox-local`): `admin.gk2.secubox.in`, `gk2.secubox.in`, `secubox.maegia.tv`, `c3box.maegia.tv` + LAN aliases.
 - `~165` metablogizer sites listed in `/etc/nginx/sites-enabled/metablogizer`, each `listen 0.0.0.0:8900` with per-site `server_name`, `root /srv/metablogizer/sites/<name>/`.
-- Public flow: HAProxy `https-in` (443) → ACL host match → backend `mitmproxy_inspector` (LXC `10.100.0.60:8080`) → mitmproxy looks up host in `haproxy-routes.json` → upstream `[10.100.0.1, 8900]` → nginx vhost matches `server_name` → serves static site.
+- Public flow: HAProxy `https-in` (443) → ACL host match → backend `sbxwaf_inspector` (LXC `10.100.0.60:8080`) → mitmproxy looks up host in `haproxy-routes.json` → upstream `[10.100.0.1, 8900]` → nginx vhost matches `server_name` → serves static site.
 
 **Open follow-up:** the `sync-streamlit-routes.timer` last fired 2026-05-10 (1d 15h ago) and didn't fire since — needs separate investigation. Not blocking metablog/Hub stability.
 
@@ -4958,7 +4958,7 @@ COPYRIGHT (C) 2024-2025 CyberMind / Gérald Kerma
 - Compact category listing with emoji + toggle
 
 **WAF Threat Log Fix:**
-- Symlinked `/var/log/secubox/waf-threats.log` → `/srv/mitmproxy/logs/waf-threats.log`
+- Symlinked `/var/log/secubox/waf-threats.log` → `/var/log/secubox/waf/waf-threats.log`
 - Mitmproxy logs now accessible to WAF API
 
 **LXC Network Fix:**
@@ -4994,7 +4994,7 @@ COPYRIGHT (C) 2024-2025 CyberMind / Gérald Kerma
 - mitmproxy now running with 145 routes and 150 WAF rules
 
 **HAProxy Routing Refactor:**
-- Changed all vhosts from `nginx_vhosts` → `mitmproxy_inspector`
+- Changed all vhosts from `nginx_vhosts` → `sbxwaf_inspector`
 - All HTTP traffic now flows through WAF inspection
 - Fallback backend changed from 503 deny to mitmproxy pass-through
 - Traffic flow: `HAProxy → mitmproxy (WAF) → nginx/backends`
@@ -5012,7 +5012,7 @@ COPYRIGHT (C) 2024-2025 CyberMind / Gérald Kerma
 
 **CrowdSec Status:**
 - 100+ active bans (SSH brute-force from DE/NL/RO/SE)
-- WAF threats log ready at `/srv/mitmproxy/logs/waf-threats.log`
+- WAF threats log ready at `/var/log/secubox/waf/waf-threats.log`
 
 **Dependencies Added:**
 - `netcat-openbsd` for diagnostics
@@ -5400,7 +5400,7 @@ secubox-healthbump off          # Turn off LEDs
 
 2. **WAF Phase 1-4: Mitmproxy LXC Container**
    - LXC container at `/data/lxc/mitmproxy` (10.100.0.60:8080)
-   - 330 HAProxy backends routing through mitmproxy_inspector
+   - 330 HAProxy backends routing through sbxwaf_inspector
    - HAProxy `http-request set-uri` for proxy-style requests
    - All traffic tagged with X-SecuBox-WAF: inspected header
    - All 6 LXC containers verified running

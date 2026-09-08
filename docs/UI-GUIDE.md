@@ -89,7 +89,7 @@ Every module page must include:
 | WireGuard VPN | `/wireguard/` | VPN tunnel management |
 | CrowdSec | `/crowdsec/` | Collaborative security engine |
 | WAF | `/waf/` | Web Application Firewall |
-| MITM Proxy | `/mitmproxy/` | Traffic inspection |
+| sbxwaf | `127.0.0.1:8085` | Inline WAF traffic inspection (Go engine) |
 | Hardening | `/hardening/` | Kernel and system hardening |
 | Auth Guardian | `/auth/` | Authentication management |
 | Vortex Firewall | `/vortex-firewall/` | nftables threat enforcement |

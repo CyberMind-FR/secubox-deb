@@ -146,7 +146,7 @@ ssh-keyscan -H apt.secubox.in
 | `secubox-crowdsec` | CrowdSec integration |
 | `secubox-waf` | Web Application Firewall (300+ rules) |
 | `secubox-vortex-firewall` | nftables threat enforcement |
-| `secubox-mitmproxy` | MITM proxy with WAF inspection |
+| `secubox-waf-ng` | sbxwaf inline inspection engine (Go) |
 | `secubox-auth` | Authentication |
 | `secubox-nac` | Network Access Control |
 | `secubox-hardening` | Kernel and system hardening |

@@ -519,7 +519,7 @@ def get_alert_sources():
     waf_log = Path("/var/log/secubox/waf.json")
     sources.append({
         "id": "waf",
-        "name": "WAF (HAProxy/mitmproxy)",
+        "name": "WAF (HAProxy/sbxwaf)",
         "active": waf_log.exists(),
         "description": "Web application firewall"
     })

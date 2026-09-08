@@ -3581,7 +3581,7 @@ modules:
     nom: "secubox-mitmproxy"
     categorie: "misc"
     tier: "lite"
-    description: "SecuBox Mitmproxy WAF — Web Application Firewall"
+    description: "SecuBox sbxwaf — Web Application Firewall (moteur Go)"
     manifeste: true
     lxc: false
     tests: 2
@@ -6852,7 +6852,7 @@ modules:
     nom: "secubox-waf"
     categorie: "security"
     tier: "standard"
-    description: "SecuBox Web Application Firewall (mitmproxy LXC)"
+    description: "SecuBox Web Application Firewall (sbxwaf, moteur Go 127.0.0.1:8085)"
     manifeste: true
     lxc: false
     tests: 2

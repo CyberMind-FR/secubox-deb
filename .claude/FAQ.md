@@ -92,5 +92,4 @@ un Host sous nos suffixes (`--widget-hosts`) n'est jamais banni (`detect`).
 Chercher le vrai coupable dans `waf-threats.log` par UA navigateur/appli, pas par
 IP. Voir aussi : notre domaine non route = **route WAF manquante**, pas une
 attaque — comparer `grep 'hdr(host) -i' /etc/haproxy/haproxy.cfg` aux cles de
-`/etc/secubox/waf/haproxy-routes.json` (l'autorite, hot-reload ; PAS le
-`/srv/mitmproxy` legacy vide).
+`/etc/secubox/waf/haproxy-routes.json` (l'autorite, hot-reload).

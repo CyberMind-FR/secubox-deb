@@ -138,7 +138,7 @@ Pre-configured SecuBox environment for:
 │           └── dpi/
 ├── srv/
 │   └── secubox/             # Service data
-│       ├── mitmproxy/
+│       ├── waf/
 │       ├── nginx/
 │       └── certs/
 └── log/

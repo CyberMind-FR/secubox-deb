@@ -53,7 +53,7 @@ case "$1" in
 
     # Register the HAProxy exposure DURABLY (was previously a hand-edit that a
     # `haproxyctl generate` would wipe). Torrent is a WAF-bypass vhost by design
-    # — like nc/photoprism/matrix, the mitmproxy inspection chain breaks its
+    # — like nc/photoprism/matrix, the sbxwaf inspection chain breaks its
     # Range streaming / large transfers — so it declares `waf_bypass = true`
     # (the sanctioned, auditable opt-in honoured by haproxyctl) and routes
     # straight to the host nginx (nginx_vhosts), never through sbxwaf. This

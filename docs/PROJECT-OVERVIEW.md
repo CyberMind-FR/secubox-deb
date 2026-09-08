@@ -275,7 +275,7 @@ infrastructure.
 | Layer                | Verb                                              |
 |----------------------|---------------------------------------------------|
 | ROUTING              | `haproxyctl     vhost  add/remove`                |
-| INTERCEPTION         | `mitmproxyctl   route  add/remove/list`           |
+| INTERCEPTION         | `wafctl         route  add/remove/list`           |
 | REPLICATION          | `giteactl       repo   mirror add/remove`         |
 | IDENTITY             | `giteactl       user   add/remove`                |
 | CI EXECUTION         | `giteactl       runner add/remove/list`           |

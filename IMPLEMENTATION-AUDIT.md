@@ -19,7 +19,7 @@
 **Le brief est déjà réalisé à ~80 %.** L'essentiel des « organes » décrits existe en production, mais **dispersé** entre trois foyers :
 
 1. **`secubox-toolbox-ng`** (Go) — le vrai moteur : `cmd/sbxwaf`, `cmd/sbx-authwatch`, `cmd/sbxmitm`, `cmd/sbx-sentinel`, `internal/sentinel`.
-2. **Python legacy / WebUI** — `secubox-waf` (addon mitmproxy + dashboard FastAPI + **données de règles**), `secubox-soc` (dashboard SOC complet), `secubox-mitmproxy` (WAF Python + honeypot nginx).
+2. **WebUI Python / données de règles** — `secubox-waf` (dashboard FastAPI + **données de règles** + pièges honeypot), `secubox-soc` (dashboard SOC complet).
 3. **Périphérie** — `secubox-auth` (événements de session), `secubox-crowdsec` (LAPI/bouncer), `secubox-cyberfeed` (feeds), GeoIP.
 
 Le travail réel n'est **pas** un second stack de sécurité. C'est :
@@ -29,7 +29,7 @@ Le travail réel n'est **pas** un second stack de sécurité. C'est :
 
 ### Topologie live (à retenir)
 
-- **Moteur WAF live = Go**, source `packages/secubox-toolbox-ng/cmd/sbxwaf/*.go`, **livré compilé** par `secubox-waf-ng` (`systemd/secubox-waf-ng.service`, `ExecStart=/usr/sbin/sbxwaf --listen 127.0.0.1:8085`, backend HAProxy `mitmproxy_inspector`).
+- **Moteur WAF live = Go**, source `packages/secubox-toolbox-ng/cmd/sbxwaf/*.go`, **livré compilé** par `secubox-waf-ng` (`systemd/secubox-waf-ng.service`, `ExecStart=/usr/sbin/sbxwaf --listen 127.0.0.1:8085`, backend HAProxy `sbxwaf_inspector`).
 - **`secubox-waf` (Python) = legacy** : ne reste que **config/données** (`config/waf-rules.json`, `config/vhost_profiles.json`) + **WebUI** (`api/main.py`, `www/waf/tableau.html`).
 - **Substrat de convergence = 2 canaux partagés**, pas un bus applicatif :
   1. **nft sets partagés** `inet secubox waf_ban{,6}` — écrits par `sbxwaf` **et** `sbx-authwatch` ;
@@ -50,7 +50,7 @@ Le travail réel n'est **pas** un second stack de sécurité. C'est :
 | §6 P0-C | **Coherence engine** | **ABSENT** | Aucun score de cohérence inter-couches. Plus proche : corroboration ≥2 traits de `toolprint.go`. **Vrai trou.** |
 | §7 P1-A | **Toolprint / tools.json** | **IMPLÉMENTÉ** | `cmd/sbxwaf/toolprint.go` (`outilsConnus` L30-51 : nuclei/sqlmap/nikto/wpscan/gobuster/ffuf/masscan/nmap/zap…), nommage prudent (`certain=false`→famille). **Écart :** table **compilée en Go**, pas de `tools.json` hot-reload externe. |
 | §8 P1-B | **Behavior engine** (stats glissantes/acteur) | **PARTIEL** | Sentinel `behavioral.go` (beaconing/one-time-link/zero-click) **fait**. Côté WAF : seulement 2 compteurs fenêtre glissante (`ban`, `escalateBan`) + `profiler.go` **offline**. Les stats riches (req/min, unique_paths, 404_ratio, variance inter-arrivées…) **manquent au niveau HTTP**. |
-| §9 P1-C | **MicroCanary** | **PARTIEL** | Ports-leurres réels `cmd/sbx-authwatch/leurre.go` (`Leurre`, `EcouteLeurre`, RDP/VNC/telnet/SMB/mysql, ban 1er contact) + honeypot HTTP nginx (`secubox-mitmproxy/nginx/honeypot.conf`). **Manque** la couche greeting→observe→classify du brief (leurre **n'émet aucun banner**). |
+| §9 P1-C | **MicroCanary** | **PARTIEL** | Ports-leurres réels `cmd/sbx-authwatch/leurre.go` (`Leurre`, `EcouteLeurre`, RDP/VNC/telnet/SMB/mysql, ban 1er contact) + pièges honeypot HTTP (catégorie `honeypot` dans `secubox-waf/config/waf-rules.json`). **Manque** la couche greeting→observe→classify du brief (leurre **n'émet aucun banner**). |
 | §10 P1-D | **Auth Observer** | **PARTIEL** | `sbx-authwatch` couvre l'auth **non-HTTP par logs** (SSH/SMTP/IMAP). Les **événements de session propres à la box** existent (`secubox-auth/api/main.py` `_emit_session_event` login_failed/success/MFA) mais **aucun consommateur comportemental** ne les lit. |
 | §11 P2 | **Actor Memory** (`actor_hash=HMAC`) | **PARTIEL** | Clé acteur = **JA4 sinon IP** (`profiler.go:89`, offline). Store bbolt sentinel par `MacHash` (`store.go`). HMAC-identité existe mais pour le **jar anti-track** (`privacy-jar.key`, non rotatif, clé=client). `actor_hash=HMAC(rotating_secret, fingerprint)` **absent**. TTL en morceaux. |
 | §12 P2 | **Campaign correlation** (`workflow_hash`) | **IMPLÉMENTÉ** | `profiler.go` `signatureWorkflow` (SHA1 chemins normalisés+outils) → `clusteriser`→`Campaign`→`CorrelationSummary`, via `--correlate`. **Batch/offline** (pas live). |
@@ -124,7 +124,7 @@ Le travail réel n'est **pas** un second stack de sécurité. C'est :
 1. **`sbxwaf` fait confiance à JA4/XFF entrants sans strip** (`cmd/sbxwaf`, aucun `Header.Del`). Si un chemin atteint `sbxwaf` **sans** réécriture HAProxy, un client peut **forger** `X-Sbx-JA4`/`X-Forwarded-For` → empoisonne clé de corrélation et bans. **À corriger** (strip au bord + producteur HAProxy) — c'est aussi le plus gros trou fonctionnel du corridor JA4.
 2. **Sentinel livré « dark »** : `sbx-sentinel.service` désactivé par design, `SENTINEL_ENABLED` non positionné, aucun analyseur câblé par défaut. Moteur présent mais **inerte** (cutover humain).
 3. **`escalate` non activé** dans le corpus de règles livré (implémenté mais dormant).
-4. **Hardening systemd inégal** : fort sur `sbx-sentinel`/`secubox-authwatch`/`sentinelle-gsm` ; **faible** sur `secubox-mitmproxy` (pas de caps/mem/syscall) et **quasi nul** sur `secubox-device-intel` (`NoNewPrivileges` seul). Aligner sur le template existant.
+4. **Hardening systemd inégal** : fort sur `sbx-sentinel`/`secubox-authwatch`/`sentinelle-gsm` ; **faible** sur `secubox-waf-ng` (pas de caps/mem/syscall) et **quasi nul** sur `secubox-device-intel` (`NoNewPrivileges` seul). Aligner sur le template existant.
 
 ---
 
@@ -139,7 +139,7 @@ Le brief prévoit Phase 1 = negative-space + host-anomaly + tool-signatures + JA
 - **Phase 4 (Auth) :** consommateur comportemental des événements `secubox-auth` (metrics → signal → réponse adaptative, par paliers).
 - **Phase 5 (MicroCanary) :** étendre `leurre.go` avec greeting/observe borné (SSH+Redis d'abord).
 - **Phase 6 (OSINT) :** enrichisseurs locaux async (ASN/rDNS/réputation) ; plugins externes facultatifs.
-- **Transverse :** namespace config `intelligence` (tout désactivable) ; cardlets Hall au-dessus des endpoints existants ; aligner le hardening systemd de `secubox-mitmproxy`/`device-intel`.
+- **Transverse :** namespace config `intelligence` (tout désactivable) ; cardlets Hall au-dessus des endpoints existants ; aligner le hardening systemd de `secubox-waf-ng`/`device-intel`.
 
 **Definition of Done (brief §21) :** transformer `185.x GET /.env` en une fiche acteur expliquée (classe, confiance, evidence, campagne, première vue, action suggérée) **sans conserver le contenu** — la matière (`profiler.go`, campagnes, JA4, threatlog) existe déjà ; il reste à **relier et exposer**.
 

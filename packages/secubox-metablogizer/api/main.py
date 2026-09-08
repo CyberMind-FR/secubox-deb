@@ -1505,10 +1505,10 @@ server {{
 acl host_{name.replace('.', '_').replace('-', '_')} hdr(host) -i {domain}
 
 # Backend routing (add after ACLs)
-use_backend mitmproxy_inspector if host_{name.replace('.', '_').replace('-', '_')}
+use_backend sbxwaf_inspector if host_{name.replace('.', '_').replace('-', '_')}
 
-# Note: Requires mitmproxy route configuration
-# Add to /srv/mitmproxy/haproxy-routes.json:
+# Note: Requires an sbxwaf route entry in /etc/secubox/waf/haproxy-routes.json (hot-reloaded)
+# Add to /etc/secubox/waf/haproxy-routes.json:
 # "{domain}": ["10.100.0.1", 8900]
 """
             zf.writestr("config/haproxy.cfg", haproxy_conf)
@@ -1601,10 +1601,10 @@ use_backend mitmproxy_inspector if host_{name.replace('.', '_').replace('-', '_'
 1. Add ACL to haproxy.cfg:
    ```
    acl host_{name.replace('.', '_').replace('-', '_')} hdr(host) -i {domain}
-   use_backend mitmproxy_inspector if host_{name.replace('.', '_').replace('-', '_')}
+   use_backend sbxwaf_inspector if host_{name.replace('.', '_').replace('-', '_')}
    ```
 
-2. Add mitmproxy route:
+2. Add the sbxwaf route to the single table /etc/secubox/waf/haproxy-routes.json:
    ```json
    "{domain}": ["10.100.0.1", 8900]
    ```
@@ -1612,7 +1612,7 @@ use_backend mitmproxy_inspector if host_{name.replace('.', '_').replace('-', '_'
 3. Reload:
    ```bash
    haproxy -c -f /etc/haproxy/haproxy.cfg && systemctl reload haproxy
-   systemctl restart mitmproxy
+   # sbxwaf hot-reloads the table; if needed: systemctl reload secubox-waf-ng
    ```
 
 ## DNS Configuration

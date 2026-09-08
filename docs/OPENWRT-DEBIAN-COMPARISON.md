@@ -43,7 +43,7 @@
 | luci-app-tor-shield | secubox-tor | ✅ | Anonymity network |
 | luci-app-vortex-dns | secubox-vortex-dns | ✅ | DNS firewall + RPZ |
 | luci-app-vortex-firewall | secubox-vortex-firewall | ✅ | nftables enforcement |
-| luci-app-mitmproxy | secubox-mitmproxy | ✅ | Traffic inspection |
+| luci-app-mitmproxy | secubox-waf-ng | ✅ | Traffic inspection (sbxwaf) |
 | — | secubox-waf | ✅ | Web App Firewall (NEW) |
 | — | secubox-hardening | ✅ | Kernel hardening (NEW) |
 | luci-app-secubox-users | secubox-users | ✅ | Unified identity |

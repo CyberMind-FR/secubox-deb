@@ -110,7 +110,7 @@ response — pass the `.http`.
 - **503** is the big win: HAProxy synthesises 503 itself when a backend server is
   down / in maintenance / has no server up — this is the common "service asleep
   or crashed" case, and the branded 503 is what the visitor sees.
-- **502 / 500** produced *by the backend itself* (nginx, an app, mitmproxy)
+- **502 / 500** produced *by the backend itself* (nginx, an app, sbxwaf)
   are **passed through unchanged** — HAProxy only substitutes its own generated
   errors, unless you force interception. To brand backend-origin 5xx at the
   HAProxy layer too, add per-backend:

@@ -195,8 +195,8 @@ back with `free -h` before/after.
 ## Side note — lyrion HS
 
 LXC `lyrion` runs OK (squeezeboxserver active, listens 9000/9090/3483).
-HAProxy routes `lyrion.gk2.secubox.in` → `mitmproxy_inspector` backend.
-503 means mitm WAF either doesn't have the route mapped, or the LXC IP
-in `/srv/mitmproxy/haproxy-routes.json` is stale. Worth investigating
+HAProxy routes `lyrion.gk2.secubox.in` → `sbxwaf_inspector` backend.
+503 means sbxwaf either doesn't have the route mapped, or the LXC IP
+in `/etc/secubox/waf/haproxy-routes.json` is stale. Worth investigating
 once memory optimization lands (some LXC bridge weirdness may be
 memory-pressure-induced).

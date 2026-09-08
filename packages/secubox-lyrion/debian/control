@@ -22,7 +22,6 @@ Depends: ${misc:Depends},
          openssl,
          curl,
          jq
-Recommends: secubox-mitmproxy
 Description: SecuBox Lyrion — Music server (HOSTING layer)
  Hosts Lyrion in a Debian bookworm LXC at 10.100.0.100 on br-lxc.
  File-backend identity provider reading /etc/secubox/users.json (the same
@@ -30,7 +29,7 @@ Description: SecuBox Lyrion — Music server (HOSTING layer)
  SecuBox identity is the single source of truth for SSO.
  .
  OIDC clients pre-provisioned for the three native admin UIs that already
- support OIDC: Grafana, Gitea, Nextcloud. YaCy/RustDesk-web/mitmproxy-web
+ support OIDC: Grafana, Gitea, Nextcloud. YaCy/RustDesk-web/secubox-waf UI
  (no native OIDC) get nginx `auth_request` integration to the same Lyrion.
  .
  Health-banner injected on the Lyrion login page via nginx sub_filter so

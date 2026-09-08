@@ -5,20 +5,22 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 # SecuBox Routes Auto-Sync - All Services
-# Syncs routes from streamlit, metablogizer, and other services to mitmproxy
+# Syncs routes from streamlit, metablogizer, and other services into the
+# sbxwaf routes table (/etc/secubox/waf/haproxy-routes.json, hot-reloaded).
 
 set -euo pipefail
 
-ROUTES_FILE="/srv/mitmproxy/haproxy-routes.json"
+ROUTES_FILE="/etc/secubox/waf/haproxy-routes.json"
 LOG_TAG="routes-sync"
 
 log() { logger -t "$LOG_TAG" "$1"; echo "[$(date +%H:%M:%S)] $1"; }
 
 log "Starting full routes sync..."
 
-# Ensure mitmproxy container is running
-if ! lxc-info -n mitmproxy 2>/dev/null | grep -q "RUNNING"; then
-    log "Starting mitmproxy container..."
+# Legacy: the old mitmproxy WAF ran in an LXC. sbxwaf is now a host daemon,
+# so this container start is a guarded no-op on current boxes.
+if lxc-info -n mitmproxy 2>/dev/null | grep -q "STOPPED"; then
+    log "Starting legacy mitmproxy container..."
     lxc-start -n mitmproxy 2>/dev/null || true
     sleep 3
 fi
@@ -86,11 +88,13 @@ Path(routes_file).write_text(json.dumps(routes, indent=2, sort_keys=True))
 print(f"Total: {len(routes)} routes saved")
 PYEOF
 
-# Copy routes to mitmproxy container
-log "Syncing to mitmproxy container..."
-cat "$ROUTES_FILE" | lxc-attach -n mitmproxy -- tee /srv/mitmproxy/haproxy-routes.json > /dev/null
-
-# Reload mitmproxy
-lxc-attach -n mitmproxy -- pkill -HUP mitmdump 2>/dev/null || true
+# sbxwaf reads /etc/secubox/waf/haproxy-routes.json directly and hot-reloads it,
+# so writing the table above is the functional sync. The legacy copy into the
+# old mitmproxy WAF LXC below is kept guarded and is a no-op on current boxes.
+if lxc-info -n mitmproxy 2>/dev/null | grep -q "RUNNING"; then
+    log "Syncing to legacy mitmproxy container..."
+    lxc-attach -n mitmproxy -- tee /etc/secubox/waf/haproxy-routes.json < "$ROUTES_FILE" > /dev/null || true
+    lxc-attach -n mitmproxy -- pkill -HUP mitmdump 2>/dev/null || true
+fi
 
 log "Routes sync complete"

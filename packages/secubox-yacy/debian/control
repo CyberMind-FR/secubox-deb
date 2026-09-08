@@ -20,7 +20,6 @@ Depends: ${misc:Depends},
          openssl,
          curl,
          jq
-Recommends: secubox-mitmproxy
 Description: SecuBox YaCy — peer-to-peer search engine
  Hosts YaCy in a Debian LXC at 10.100.0.80 on br-lxc with a sovereign,
  decentralised search index that does not depend on any third-party

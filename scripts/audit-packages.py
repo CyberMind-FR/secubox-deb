@@ -192,7 +192,7 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
     ],
     "waf-stack": [
         "secubox-waf",
-        "secubox-mitmproxy",
+        "secubox-waf-ng",
         "secubox-haproxy",
         "secubox-interceptor",
     ],

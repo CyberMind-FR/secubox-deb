@@ -294,15 +294,14 @@ class VHostUpdate(BaseModel):
 
 
 # Table de routage hôte -> [ip, port] du front. Elle a DÉMÉNAGÉ : le WAF Go
-# (sbxwaf, --routes) la lit dans /etc/secubox/waf, tandis que /srv/mitmproxy
-# était l'emplacement du temps de l'addon mitmproxy. Pointer sur l'ancien
-# chemin ne levait aucune erreur — _load_haproxy_routes rendait simplement {} —
-# et le panneau perdait EN SILENCE tous les vhosts servis par HAProxy sans
-# fichier nginx (anibal-amiot, entre autres), ainsi que les backends. On essaie
-# donc les emplacements connus, le courant d'abord.
+# (sbxwaf, --routes) la lit dans /etc/secubox/waf. Historiquement, /srv/mitmproxy
+# était l'emplacement du temps de l'ancien addon mitmproxy (retiré). Pointer sur
+# cet ancien chemin ne levait aucune erreur — _load_haproxy_routes rendait
+# simplement {} — et le panneau perdait EN SILENCE tous les vhosts servis par
+# HAProxy sans fichier nginx (anibal-amiot, entre autres), ainsi que les
+# backends. On pointe donc sur la table unique courante.
 HAPROXY_ROUTES_CANDIDATS = (
     Path("/etc/secubox/waf/haproxy-routes.json"),
-    Path("/srv/mitmproxy/haproxy-routes.json"),
 )
 
 
@@ -338,7 +337,7 @@ def _server_name_fqdn(content: str):
 
 
 def _load_haproxy_routes() -> dict:
-    """Public FQDN -> backend target from the HAProxy/mitmproxy route map."""
+    """Public FQDN -> backend target from the HAProxy/sbxwaf route map."""
     try:
         d = json.loads(_fichier_routes().read_text())
         return {k: v for k, v in d.items() if _is_public_fqdn(k)}

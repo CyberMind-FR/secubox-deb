@@ -27,7 +27,7 @@ Développeur : Gérald Kerma (Gandalf) — CyberMind, Notre-Dame-du-Cruet, Savoi
 ### Sécurité active
 - **Firewall** : nftables (pas iptables)
 - **IDS/IPS** : Suricata
-- **WAF** : HAProxy + mitmproxy
+- **WAF** : HAProxy + sbxwaf (moteur Go, 127.0.0.1:8085)
 - **DNS** : Unbound (Vortex DNS) + blocklists
 - **DPI** : nDPId (dual-stream via tc mirred)
 - **Auth ZKP** : SecuBox-ZKP (Hamiltonian NP / GK-HAM-2025)
@@ -102,7 +102,7 @@ secubox-deb/
 │   ├── firewall/              ← nftables rules
 │   ├── dpi/                   ← nDPId
 │   ├── dns/                   ← Unbound Vortex
-│   ├── waf/                   ← HAProxy + mitmproxy
+│   ├── waf/                   ← HAProxy + sbxwaf
 │   ├── ids/                   ← Suricata
 │   └── dashboard/             ← C3BOX UI
 ├── api/                       ← FastAPI REST

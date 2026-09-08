@@ -26,7 +26,7 @@ SecuBox OS est un système d'exploitation durci orienté sécurité réseau :
 |----------|-------------|
 | **Firewall** | nftables DEFAULT DROP, règles automatiques |
 | **IDS/IPS** | CrowdSec + Suricata, threat intelligence temps réel |
-| **WAF** | HAProxy + mitmproxy, 300+ règles ModSecurity |
+| **WAF** | HAProxy + sbxwaf, 300+ règles ModSecurity |
 | **VPN** | WireGuard natif, mesh P2P |
 | **DPI** | nDPId + netifyd, analyse trafic L7 |
 | **DNS** | Unbound Vortex, blocklists automatiques |
@@ -143,7 +143,7 @@ Voir [[Modules]] pour les 125 modules.
 
 ### WAF & Inspection
 - **HAProxy** — TLS 1.3, load balancing
-- **mitmproxy** — Inspection HTTPS transparente
+- **sbxwaf** — Inspection HTTPS transparente
 - **300+ règles** — OWASP ModSecurity CRS
 
 ### AI & Threat Intel

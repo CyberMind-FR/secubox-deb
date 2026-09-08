@@ -67,7 +67,7 @@ Status: ⬜ todo · 🔄 partial · ✅ covered.
 ## 5. WAF / traffic inspection integrity (no bypass)
 | ID | Requirement | Type | Method / assertion | Pass | St |
 |----|-------------|------|-------------------|------|----|
-| WAF-01 | No `waf_bypass` anywhere; all vhosts → mitm inspector | A | grep HAProxy cfg; each backend = mitmproxy_inspector (or documented exception) | no bypass | 🔄 |
+| WAF-01 | No `waf_bypass` anywhere; all vhosts → mitm inspector | A | grep HAProxy cfg; each backend = sbxwaf_inspector (or documented exception) | no bypass | 🔄 |
 | WAF-02 | mitm CA only trusted on consenting (R2/R3) clients | A | non-consenting client not MITM'd | scoped | ✅ |
 | WAF-03 | Banner/transparency shown to inspected clients (CSPN R2 req) | A | inspected HTML carries the banner guard | present | ✅ |
 | WAF-04 | Active interference (spoof/ghost) is opt-in + logged + reversible | A | filters default-safe; every action → audit.log; toggle off restores | conforms | ✅ |

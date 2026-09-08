@@ -10,7 +10,7 @@ DATA_PATH="/srv/metablogizer"
 NGINX_VHOST_DIR="/etc/nginx/sites-available"
 NGINX_ENABLED_DIR="/etc/nginx/sites-enabled"
 
-# Public-vhost wiring. Set to "1" to inject HAProxy + mitmproxy route on publish.
+# Public-vhost wiring. Set to "1" to inject HAProxy + sbxwaf route on publish.
 # Triggered automatically when site_publish is called with --public-domain.
 # The sync script + service may live at non-standard paths on different hosts;
 # we try systemctl first, fall back to `command -v`.
@@ -189,7 +189,7 @@ site_publish() {
 
     # The nginx vhost responds to BOTH the internal .secubox.local name and the
     # public FQDN (so the same nginx instance answers Host: smoke.gk2.secubox.in
-    # coming back through HAProxy → mitmproxy).
+    # coming back through HAProxy → sbxwaf).
     local server_names="$domain"
     if [ -n "$public_domain" ] && [ "$public_domain" != "$domain" ]; then
         server_names="$domain $public_domain"
@@ -230,7 +230,7 @@ EOF
 
     log "Site published: http://$domain"
 
-    # Public-vhost wiring (HAProxy + mitmproxy route sync).
+    # Public-vhost wiring (HAProxy + sbxwaf route sync).
     # Only runs when --public-domain was passed AND the helper CLIs are present.
     # Failures are tolerated so the nginx publish still counts as success.
     if [ -n "$public_domain" ]; then
@@ -297,7 +297,7 @@ except Exception:
     fi
 }
 
-# Wire the HAProxy vhost + trigger mitmproxy route sync for <public_domain>.
+# Wire the HAProxy vhost + trigger sbxwaf route sync for <public_domain>.
 # Tolerant of missing tools (logs a warning and continues).
 site_wire_public_vhost() {
     local public_domain="$1"
@@ -305,15 +305,15 @@ site_wire_public_vhost() {
         warn "$HAPROXYCTL not found — skipping HAProxy vhost add for $public_domain"
         return 0
     fi
-    if "$HAPROXYCTL" vhost add "$public_domain" mitmproxy_inspector true 2>&1; then
-        log "HAProxy vhost added: $public_domain → mitmproxy_inspector (ssl)"
+    if "$HAPROXYCTL" vhost add "$public_domain" sbxwaf_inspector true 2>&1; then
+        log "HAProxy vhost added: $public_domain → sbxwaf_inspector (ssl)"
     else
         warn "haproxyctl vhost add failed for $public_domain (continuing)"
     fi
     site_trigger_sync
 }
 
-# Trigger mitmproxy route sync. Prefer systemctl unit, fall back to direct script.
+# Trigger sbxwaf route sync. Prefer systemctl unit, fall back to direct script.
 site_trigger_sync() {
     if command -v systemctl >/dev/null 2>&1 && \
        systemctl list-unit-files "$SYNC_SERVICE" >/dev/null 2>&1; then
@@ -321,7 +321,7 @@ site_trigger_sync() {
     elif command -v "$SYNC_SCRIPT" >/dev/null 2>&1; then
         "$SYNC_SCRIPT" 2>&1 || warn "$SYNC_SCRIPT exited non-zero"
     else
-        warn "no sync mechanism found (neither $SYNC_SERVICE nor $SYNC_SCRIPT in PATH) — mitmproxy routes NOT updated"
+        warn "no sync mechanism found (neither $SYNC_SERVICE nor $SYNC_SCRIPT in PATH) — sbxwaf routes NOT updated"
     fi
 }
 
@@ -357,7 +357,7 @@ site_unpublish() {
 
     log "Site unpublished: $name"
 
-    # Reverse the HAProxy + mitmproxy wiring if site was publicly published.
+    # Reverse the HAProxy + sbxwaf wiring if site was publicly published.
     if [ -n "$public_domain" ]; then
         site_unwire_public_vhost "$public_domain"
     fi
@@ -703,7 +703,7 @@ Sites:
   site delete <name>                       Delete site
   site publish <name> [--public-domain <fqdn>]
                                            Publish site (nginx vhost + optional
-                                           HAProxy + mitmproxy route sync)
+                                           HAProxy + sbxwaf route sync)
   site unpublish <name>                    Unpublish site (auto-reverses HAProxy
                                            if site was published with --public-domain)
   site list                                List all sites

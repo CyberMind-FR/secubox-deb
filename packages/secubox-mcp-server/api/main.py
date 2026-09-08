@@ -241,7 +241,7 @@ class MCPServer:
         self.tools: Dict[str, MCPTool] = {
             "secubox.waf.status": MCPTool(
                 name="secubox.waf.status",
-                description="Get WAF (mitmproxy) status and recent threat statistics",
+                description="Get WAF (sbxwaf) status and recent threat statistics",
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -377,7 +377,7 @@ class MCPServer:
             "secubox://logs/waf": MCPResource(
                 uri="secubox://logs/waf",
                 name="WAF Logs",
-                description="Recent mitmproxy WAF logs",
+                description="Recent sbxwaf WAF logs",
                 mimeType="application/jsonl"
             ),
             "secubox://logs/dns": MCPResource(
@@ -659,11 +659,10 @@ class MCPServer:
         return ""
 
     async def _read_waf_logs(self) -> str:
-        """Read WAF (mitmproxy) logs."""
+        """Read WAF (sbxwaf) logs."""
         log_paths = [
-            Path("/var/log/mitmproxy/waf.jsonl"),
+            Path("/var/log/secubox/waf/waf-threats.log"),
             Path("/var/log/secubox/waf.jsonl"),
-            Path("/var/log/mitmproxy/access.log"),
         ]
         for log_file in log_paths:
             if log_file.exists():

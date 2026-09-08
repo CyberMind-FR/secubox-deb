@@ -1545,7 +1545,7 @@ SecuBox Mirror/CDN Cache
 
 ### `secubox-mitmproxy`
 
-SecuBox Mitmproxy WAF — Web Application Firewall
+SecuBox sbxwaf — Web Application Firewall (moteur Go)
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`, `secubox-haproxy`
@@ -2719,7 +2719,7 @@ SecuBox Vortex-firewall Module
 
 ### `secubox-waf`
 
-SecuBox Web Application Firewall (mitmproxy LXC)
+SecuBox Web Application Firewall (sbxwaf, moteur Go 127.0.0.1:8085)
 
 - **Catégorie** : security · **Tier** : standard
 - **Dépend de** : `secubox-core`

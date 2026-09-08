@@ -149,7 +149,7 @@ class SystemHub:
         # Core services
         self.core_services = [
             "haproxy",
-            "mitmproxy",
+            "secubox-waf-ng",
             "suricata",
             "unbound",
             "nftables",

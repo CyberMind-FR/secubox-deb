@@ -596,7 +596,7 @@ async def _journal_stream() -> "AsyncIterator[str]":  # noqa: F821
     # Emit a `: subscribed` SSE comment IMMEDIATELY so browsers transition
     # EventSource from CONNECTING to OPEN even if the journal happens to
     # be idle. Then loop with a 30 s heartbeat that pings the connection
-    # alive across HAProxy/mitmproxy/nginx idle timeouts.
+    # alive across HAProxy/sbxwaf/nginx idle timeouts.
     yield ": subscribed\n\n"
     HEARTBEAT_SEC = 30.0
     try:

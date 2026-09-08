@@ -304,10 +304,10 @@ export_haproxy() {
     ssh_run "tar -czf - /etc/haproxy/lua 2>/dev/null" | tar -xzf - -C "$dst/lua" --strip-components=3 || true
   fi
 
-  # mitmproxy routes mapping (SecuBox specific)
-  if ssh_run "[ -f '/srv/mitmproxy/haproxy-routes.json' ]" 2>/dev/null; then
-    log "  Exporting mitmproxy routes..."
-    ssh_run "cat /srv/mitmproxy/haproxy-routes.json 2>/dev/null" > "$dst/mitmproxy-routes.json" || true
+  # sbxwaf routes table (SecuBox specific)
+  if ssh_run "[ -f '/etc/secubox/waf/haproxy-routes.json' ]" 2>/dev/null; then
+    log "  Exporting sbxwaf routes..."
+    ssh_run "cat /etc/secubox/waf/haproxy-routes.json 2>/dev/null" > "$dst/haproxy-routes.json" || true
   fi
 
   local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")

@@ -22,7 +22,7 @@ Getting started with SecuBox-DEB development.
 ### Security Stack
 - **Firewall**: nftables (not iptables)
 - **IDS/IPS**: Suricata + CrowdSec
-- **WAF**: HAProxy + mitmproxy
+- **WAF**: HAProxy + sbxwaf
 - **DNS**: Unbound (Vortex DNS) + blocklists
 - **DPI**: nDPId + netifyd (dual-stream via tc mirred)
 - **Auth**: SecuBox-ZKP (Hamiltonian NP / GK-HAM-2025)

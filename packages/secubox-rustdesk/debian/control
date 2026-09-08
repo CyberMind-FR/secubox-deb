@@ -27,7 +27,7 @@ Description: SecuBox RustDesk — self-hosted remote desktop relay
  10.100.0.90 on br-lxc. Two separate systemd units inside the LXC for the
  two daemons; rustdeskctl components surfaces both as independent.
  .
- Public exposure does not use mitmproxy (it cannot inspect the raw UDP
+ Public exposure does not use sbxwaf (it cannot inspect the raw UDP
  NAT-traversal traffic on 21116/udp). HAProxy stream-mode handles
  21115/tcp, 21116/tcp, 21117/tcp; nftables DNAT handles 21116/udp.
  .

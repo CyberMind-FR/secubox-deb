@@ -197,8 +197,8 @@ cmd_threats() {
     echo -e "${CYAN}=== SecuBox Threats ===${NC}"
     echo
     echo -e "${YELLOW}WAF Recent Threats:${NC}"
-    if [[ -f /srv/mitmproxy/logs/waf-threats.log ]]; then
-        tail -5 /srv/mitmproxy/logs/waf-threats.log | jq -r '"\(.timestamp) | \(.client_ip) | \(.category) | \(.action)"' 2>/dev/null || tail -5 /srv/mitmproxy/logs/waf-threats.log
+    if [[ -f /var/log/secubox/waf/waf-threats.log ]]; then
+        tail -5 /var/log/secubox/waf/waf-threats.log | jq -r '"\(.timestamp) | \(.client_ip) | \(.category) | \(.action)"' 2>/dev/null || tail -5 /var/log/secubox/waf/waf-threats.log
     else
         echo "  No WAF threats logged"
     fi
@@ -209,15 +209,15 @@ cmd_waf() {
     echo
     LXC_STATUS=$(lxc-info -n mitmproxy -s 2>/dev/null | grep -oP "State:\s+\K\w+" || echo "UNKNOWN")
     if [[ "$LXC_STATUS" == "RUNNING" ]]; then
-        echo -e "  ${GREEN}●${NC} mitmproxy LXC: ${GREEN}RUNNING${NC}"
+        echo -e "  ${GREEN}●${NC} sbxwaf: ${GREEN}RUNNING${NC}"
     else
-        echo -e "  ${RED}●${NC} mitmproxy LXC: ${RED}$LXC_STATUS${NC}"
+        echo -e "  ${RED}●${NC} sbxwaf: ${RED}$LXC_STATUS${NC}"
     fi
-    if [[ -f /srv/mitmproxy/logs/waf-threats.log ]]; then
-        TOTAL=$(wc -l < /srv/mitmproxy/logs/waf-threats.log 2>/dev/null || echo 0)
+    if [[ -f /var/log/secubox/waf/waf-threats.log ]]; then
+        TOTAL=$(wc -l < /var/log/secubox/waf/waf-threats.log 2>/dev/null || echo 0)
         echo -e "  Total Threats Logged: ${CYAN}$TOTAL${NC}"
     fi
-    VHOSTS=$(grep -c "use_backend mitmproxy_inspector" /etc/haproxy/haproxy.cfg 2>/dev/null || echo 0)
+    VHOSTS=$(grep -c "use_backend sbxwaf_inspector" /etc/haproxy/haproxy.cfg 2>/dev/null || echo 0)
     echo -e "  Vhosts via WAF: ${CYAN}$VHOSTS${NC}"
 }
 

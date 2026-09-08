@@ -40,7 +40,7 @@ load helpers
     [ -f "$SITES_DIR/mysite/index.html" ]
     grep -q "fixture" "$SITES_DIR/mysite/index.html"
     # Delegate was called with the right args, INCLUDING the --public-domain
-    # flag so metablogizerctl can wire HAProxy + mitmproxy (issue #200).
+    # flag so metablogizerctl can wire HAProxy + sbxwaf (issue #200).
     grep -q "metablogizerctl site publish mysite --public-domain mysite.mydomain.test" "$STUB_LOG"
 }
 

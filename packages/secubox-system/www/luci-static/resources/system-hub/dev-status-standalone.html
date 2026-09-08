@@ -93,7 +93,7 @@
 
             features: {
                 'intrusion-prevention': { id: 'intrusion-prevention', name: 'Intrusion Prevention', layer: 'core', category: 'security', status: 'production', progress: 95, icon: '🛡️', description: 'Détection et blocage des menaces en temps réel', components: ['firewall-bouncer', 'wazuh'], dependsOn: ['network-stack'], usedBy: ['threat-intelligence', 'ai-security'] },
-                'waf': { id: 'waf', name: 'Web Application Firewall', layer: 'core', category: 'security', status: 'production', progress: 90, icon: '🔥', description: 'Inspection HTTP/HTTPS, détection bots, analytics', components: ['mitmproxy', 'haproxy-router', 'analytics'], dependsOn: ['reverse-proxy'], usedBy: ['session-analytics', 'threat-intelligence'] },
+                'waf': { id: 'waf', name: 'Web Application Firewall', layer: 'core', category: 'security', status: 'production', progress: 90, icon: '🔥', description: 'Inspection HTTP/HTTPS, détection bots, analytics', components: ['sbxwaf', 'haproxy-router', 'analytics'], dependsOn: ['reverse-proxy'], usedBy: ['session-analytics', 'threat-intelligence'] },
                 'dns-firewall': { id: 'dns-firewall', name: 'DNS Firewall', layer: 'core', category: 'security', status: 'production', progress: 85, icon: '🚫', description: 'Blocage DNS (RPZ), threat feeds, mesh DNS', components: ['vortex-dns', 'vortex-firewall', 'rpz-zones'], dependsOn: ['dns-master'], usedBy: ['ai-security', 'mesh-network'] },
                 'access-control': { id: 'access-control', name: 'Access Control', layer: 'core', category: 'security', status: 'production', progress: 90, icon: '🔐', description: 'NAC, portail captif, OAuth2, vouchers', components: ['auth-guardian', 'client-guardian', 'nodogsplash', 'mac-guardian'], dependsOn: ['network-stack'], usedBy: ['user-management'] },
                 'reverse-proxy': { id: 'reverse-proxy', name: 'Reverse Proxy & SSL', layer: 'core', category: 'network', status: 'production', progress: 95, icon: '🔀', description: 'HAProxy SNI routing, ACME SSL, 226 vhosts', components: ['haproxy', 'acme', 'vhost-manager'], dependsOn: ['dns-master'], usedBy: ['waf', 'service-exposure'] },
@@ -123,7 +123,7 @@
             components: {
                 'firewall-bouncer': { name: 'Firewall Bouncer', type: 'backend', status: 'production' },
                 'wazuh': { name: 'Wazuh SIEM', type: 'backend', status: 'production' },
-                'mitmproxy': { name: 'Mitmproxy WAF', type: 'backend', status: 'production' },
+                'sbxwaf': { name: 'sbxwaf', type: 'backend', status: 'production' },
                 'haproxy-router': { name: 'HAProxy Router', type: 'addon', status: 'production' },
                 'analytics': { name: 'SecuBox Analytics', type: 'addon', status: 'production' },
                 'vortex-dns': { name: 'Vortex DNS', type: 'backend', status: 'production' },

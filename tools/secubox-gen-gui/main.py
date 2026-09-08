@@ -143,7 +143,7 @@ COMPONENTS = {
         ("secubox-grafana", "Grafana", False),
     ],
     "services": [
-        ("secubox-mitmproxy", "mitmproxy WAF", True),
+        ("secubox-waf-ng", "sbxwaf WAF", True),
         ("secubox-nginx", "Nginx", True),
         ("secubox-squid", "Squid Cache", False),
     ],

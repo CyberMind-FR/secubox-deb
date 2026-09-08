@@ -5,7 +5,7 @@
 
 Eighth verb of the SecuBox grammar, layer = ops monitoring. Parallel to:
   haproxyctl   vhost  add/remove
-  mitmproxyctl route  add/remove
+  wafctl route        add/remove
   giteactl     repo   mirror add
   giteactl     runner add/remove
   giteactl     user   add/remove

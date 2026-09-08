@@ -102,7 +102,7 @@ de la grosse session d'implémentation `secubox-zia` :
 - [ ] **`torrent/etat` public** : exposer le résumé chiffré (comme `liste`) sinon la
       carte torrent reste sans chiffres en invité (`action non autorisée`).
 - [ ] 4 vhosts test (`wiztest2/3`, `shiptest`, `mail.maegia.tv`, backend
-      `mitmproxy_inspector`) laissés hors routes WAF — à trancher.
+      `sbxwaf_inspector`) laissés hors routes WAF — à trancher.
 
 ---
 
@@ -991,7 +991,7 @@ Ces 4 jobs sont distincts du chain kiosk #436. À investiguer un par un.
      container start. Document.
 
 - [ ] **mitmproxy + WAF live-config drift**: host's
-  `/srv/mitmproxy/haproxy-routes.json` and `secubox_waf.py` are NOT
+  `/etc/secubox/waf/haproxy-routes.json` and `secubox_waf.py` are NOT
   bind-mounted into the mitmproxy LXC. Each has its own copy →
   source-side edits don't propagate. Fix: add
   `lxc.mount.entry = /srv/mitmproxy srv/mitmproxy none bind,create=dir`

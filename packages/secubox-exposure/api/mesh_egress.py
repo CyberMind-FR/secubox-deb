@@ -162,19 +162,18 @@ def apply_mesh(service: str, port: int) -> dict:
 def public_vhost_recipe(domain: str, port: int) -> dict:
     """The operator steps to route <domain> to a local :<port> through the WAF.
 
-    Deliberately NOT auto-applied: the live HAProxy/mitmproxy chain has a
+    Deliberately NOT auto-applied: the live HAProxy/sbxwaf chain has a
     board-wide blast radius, and real reachability needs an operator DNS record
     + TLS cert. We emit the exact recipe (no waf_bypass — always via
-    mitmproxy_inspector) so it can be reviewed/applied deliberately.
+    sbxwaf_inspector) so it can be reviewed/applied deliberately.
     """
     return {
         "dns": f"A record {domain} -> the public ingress IP",
         "cert": f"acme.sh --issue -d {domain} -w /usr/share/secubox/www --keylength ec-256",
-        "haproxy": f"haproxyctl vhost add {domain} nginx_vhosts ssl   # backend stays mitmproxy_inspector",
+        "haproxy": f"haproxyctl vhost add {domain} nginx_vhosts ssl   # backend stays sbxwaf_inspector",
         "mitmproxy_route": {domain: ["127.0.0.1", int(port)]},
-        "mitmproxy_files": ["/srv/mitmproxy/haproxy-routes.json",
-                            "/srv/mitmproxy-in/haproxy-routes.json"],
-        "reload": "systemctl restart mitmproxy",
+        "mitmproxy_files": ["/etc/secubox/waf/haproxy-routes.json"],
+        "reload": "systemctl reload secubox-waf-ng",
     }
 
 

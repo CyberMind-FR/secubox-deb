@@ -2,7 +2,7 @@
 # Installed by secubox-gitea postinst; injected into /etc/haproxy/haproxy.cfg.
 #
 # Two ACL pairs (http-in + https-in) route gitea.gk2.secubox.in to the
-# nginx_vhosts backend (direct, no mitmproxy). The TCP frontend exposes
+# nginx_vhosts backend (direct, no sbxwaf). The TCP frontend exposes
 # Gitea SSH on port 2222 so the host port 22 stays reserved for operator
 # access.
 

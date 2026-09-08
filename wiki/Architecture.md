@@ -65,7 +65,7 @@ Les modules s'associent en paires complémentaires pour certaines fonctions :
 | Composant | Choix | Notes |
 |-----------|-------|-------|
 | IDS/IPS | Suricata + `sbxwaf` | Bannissement nftables direct, sans tiers |
-| WAF | mitmproxy + ModSecurity rules | Inspection HTTPS |
+| WAF | sbxwaf + ModSecurity rules | Inspection HTTPS |
 | DPI | nDPId + netifyd | Dual-stream via tc mirred |
 | DNS | Unbound | Vortex DNS + blocklists |
 

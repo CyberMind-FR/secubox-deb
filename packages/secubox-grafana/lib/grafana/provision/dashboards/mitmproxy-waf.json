@@ -1,8 +1,8 @@
 {
   "schemaVersion": 38,
-  "uid": "secubox-mitmproxy-waf",
-  "title": "SecuBox — mitmproxy WAF",
-  "tags": ["secubox", "waf", "mitmproxy"],
+  "uid": "secubox-sbxwaf",
+  "title": "SecuBox — sbxwaf",
+  "tags": ["secubox", "waf", "sbxwaf"],
   "timezone": "browser",
   "editable": true,
   "panels": [

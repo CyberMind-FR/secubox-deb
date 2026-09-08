@@ -24,7 +24,7 @@ of the same plan. The full C3BOX dashboard is a separate sub-project.
 - go2rtc demo source (no real camera yet)
 - Storage + retention on `/data/frigate`
 - `/api/v1/frigate/*` shim
-- Cross-node exposure through gk2's WAF (mitmproxy — no bypass)
+- Cross-node exposure through gk2's WAF (sbxwaf — no bypass)
 
 ## Installation
 
@@ -61,10 +61,10 @@ Add to `packages/secubox-hub/www/shared/sidebar.js` PAGE_METRICS map:
 
 ```bash
 # gk2: front the amd64 Frigate UI through the WAF (NO bypass)
-haproxyctl vhost add frigate.gk2.secubox.in          # backend defaults to mitmproxy_inspector
-# add to BOTH /srv/mitmproxy/haproxy-routes.json AND /srv/mitmproxy-in/haproxy-routes.json:
+haproxyctl vhost add frigate.gk2.secubox.in          # backend defaults to sbxwaf_inspector
+# add to BOTH /etc/secubox/waf/haproxy-routes.json AND /etc/secubox/waf/haproxy-routes.json:
 #   "frigate.gk2.secubox.in": ["10.100.0.140", 5000]   # amd64 frigate LXC over the mesh
-systemctl restart mitmproxy
+systemctl restart sbxwaf
 ```
 
 ## License

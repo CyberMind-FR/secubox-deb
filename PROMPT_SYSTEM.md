@@ -101,7 +101,7 @@ Séparation de privilèges formelle entre chaque couche. Ne jamais croiser les r
 | firewall | nftables | actif |
 | dpi | nDPId + netifyd (tc mirred dual-stream) | actif |
 | dns | Unbound (Vortex DNS) | actif |
-| waf | HAProxy + mitmproxy | actif |
+| waf | HAProxy + sbxwaf | actif |
 | ids | Suricata + CrowdSec | actif |
 | zkp | SecuBox-ZKP (GK-HAM-2025) | en développement |
 | mirrornet | MirrorNet P2P mesh | en développement |

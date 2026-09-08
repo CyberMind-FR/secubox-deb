@@ -10,19 +10,22 @@ LOCK=/run/sync-mitmproxy-routes.lock
 exec 9>"$LOCK"
 flock -n 9 || { echo "[$(date "+%F %T")] another instance running, skipping"; exit 0; }
 
-# SecuBox Route Sync - Ensures HAProxy vhosts are synced to mitmproxy routes
+# SecuBox Route Sync - Ensures HAProxy vhosts are synced to the sbxwaf routes table
 # Run periodically via cron or systemd timer
 #
 # Features:
-# - Syncs HAProxy domains to mitmproxy routes
+# - Syncs HAProxy domains into the sbxwaf routes table
 # - Syncs metablogizer domains from nginx config
 # - Fixes dead container routes (10.100.0.10-50) to point to webui
 # - Runs via systemd timer every 5 minutes
+#
+# Legacy note: sbxwaf is now a host daemon (unit secubox-waf-ng) that hot-reloads
+# the routes table; the LXC container plumbing below is kept as a guarded no-op.
 
 set -euo pipefail
 
 LXC_CONTAINER="mitmproxy"
-ROUTES_FILE="/srv/mitmproxy/haproxy-routes.json"
+ROUTES_FILE="/etc/secubox/waf/haproxy-routes.json"
 HAPROXY_CFG="/etc/haproxy/haproxy.cfg"
 NGINX_METABLOG="/etc/nginx/sites-enabled/metablogizer"
 
@@ -40,20 +43,20 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2
 }
 
-# Get current routes from container
+# Get current routes from the host routes table (sbxwaf source of truth)
 get_current_routes() {
-    lxc-attach -n "$LXC_CONTAINER" -- cat "$ROUTES_FILE" 2>/dev/null || echo "{}"
+    cat "$ROUTES_FILE" 2>/dev/null || echo "{}"
 }
 
-# Get all domains from HAProxy that use mitmproxy_inspector
+# Get all domains from HAProxy that use sbxwaf_inspector
 get_haproxy_domains() {
-    # `use_backend mitmproxy_inspector if host_<dotted_domain>` lines end at
+    # `use_backend sbxwaf_inspector if host_<dotted_domain>` lines end at
     # the hostname (no trailing space, regex anchors on $). The previous
     # `(?= )` lookahead required a space and silently matched zero domains —
     # which is why sync never auto-populated routes for newly-added vhosts
     # (caught 2026-05-17 when ckwa.gk2.secubox.in returned 502 because its
     # route had never been written by sync).
-    grep "use_backend mitmproxy_inspector" "$HAPROXY_CFG" | \
+    grep "use_backend sbxwaf_inspector" "$HAPROXY_CFG" | \
         grep -oP 'host_\K[a-z0-9_]+(?=\s|$)' | \
         sed 's/_/./g' | sort -u
 }
@@ -147,10 +150,16 @@ main() {
     done < <(get_metablog_domains)
 
     if [[ $updated -gt 0 ]]; then
-        log "Updating $updated routes in mitmproxy container..."
-        echo "$routes_json" | lxc-attach -n "$LXC_CONTAINER" -- tee "$ROUTES_FILE" > /dev/null
-        lxc-attach -n "$LXC_CONTAINER" -- systemctl restart mitmproxy
-        log "Routes synced and mitmproxy restarted"
+        log "Writing $updated routes to the sbxwaf routes table..."
+        echo "$routes_json" | tee "$ROUTES_FILE" > /dev/null
+        # Legacy guarded step: mirror into the old mitmproxy WAF LXC if it exists
+        # (no-op on current boxes; sbxwaf hot-reloads $ROUTES_FILE on the host).
+        if lxc-info -n "$LXC_CONTAINER" 2>/dev/null | grep -q "RUNNING"; then
+            echo "$routes_json" | lxc-attach -n "$LXC_CONTAINER" -- tee "$ROUTES_FILE" > /dev/null || true
+            lxc-attach -n "$LXC_CONTAINER" -- systemctl restart mitmproxy 2>/dev/null || true
+        fi
+        systemctl reload secubox-waf-ng 2>/dev/null || true
+        log "Routes synced"
     else
         log "All routes up to date"
     fi

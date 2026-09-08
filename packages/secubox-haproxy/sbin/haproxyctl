@@ -984,7 +984,7 @@ EOF
                     echo "    redirect scheme https code 301 if host_$name !is_acme_challenge"
                 fi
                 if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
-                    echo "    use_backend mitmproxy_inspector if host_$name"
+                    echo "    use_backend sbxwaf_inspector if host_$name"
                 else
                     echo "    use_backend ${backend:-nginx_vhosts} if host_$name"
                 fi
@@ -993,7 +993,7 @@ EOF
     fi
 
     cat >> "$out" << EOF
-    default_backend mitmproxy_inspector
+    default_backend sbxwaf_inspector
 
 frontend https-in
     bind *:${https_port} ssl crt $CERTS_DIR/
@@ -1128,7 +1128,7 @@ EOF
                     echo "    http-request set-var(txn.cookies_tiers) int(1) if host_$name"
                 fi
                 if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
-                    echo "    use_backend mitmproxy_inspector if host_$name"
+                    echo "    use_backend sbxwaf_inspector if host_$name"
                 else
                     echo "    use_backend ${backend:-nginx_vhosts} if host_$name"
                 fi
@@ -1166,15 +1166,15 @@ EOF
 
 
     cat >> "$out" << EOF
-    default_backend mitmproxy_inspector
+    default_backend sbxwaf_inspector
 
 EOF
 
-    # WAF inspector backend (mitmproxy LXC container)
+    # WAF inspector backend (sbxwaf host daemon)
     # if/then/fi (not `&& cat`) — under set -e a false test here aborts generation.
     if [ "$waf_enabled" = "1" ]; then cat >> "$out" << EOF
-# WAF Inspector Backend (mitmproxy LXC at $waf_ip:$waf_port)
-backend mitmproxy_inspector
+# WAF Inspector Backend (sbxwaf at $waf_ip:$waf_port)
+backend sbxwaf_inspector
     mode http
     # TELEVERSEMENTS LONGS : DELAI SERVEUR RELEVE PAR REQUETE (#1030).
     #
@@ -1222,7 +1222,7 @@ EOF
     if [ -f "$CONF_PATH" ]; then
         grep '^\[backends\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[backends\.//;s/\]//')
-            # Skip backends already emitted (mitmproxy_inspector/webui_direct are
+            # Skip backends already emitted (sbxwaf_inspector/webui_direct are
             # auto-generated above) to avoid duplicate-backend fatal errors.
             if grep -q "^backend $name\$" "$out"; then continue; fi
             local section=$(sed -n "/^\[backends\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
@@ -1281,11 +1281,11 @@ backend webui_direct
     mode http
     server srv0 127.0.0.1:9080 check
 EOF
-    grep -q '^backend mitmproxy_inspector$' "$out" || cat >> "$out" << EOF
+    grep -q '^backend sbxwaf_inspector$' "$out" || cat >> "$out" << EOF
 
-# Emitted unconditionally so use_backend mitmproxy_inspector references stay
+# Emitted unconditionally so use_backend sbxwaf_inspector references stay
 # resolvable even with waf_enabled=0 (defense in depth — #286).
-backend mitmproxy_inspector
+backend sbxwaf_inspector
     mode http
     balance roundrobin
     server srv0 ${waf_ip:-10.100.0.60}:${waf_port:-8080} check
@@ -1433,10 +1433,11 @@ cmd_waf_status() {
     local waf_running="false"
     local waf_container="false"
 
-    # Check if mitmproxy container is running
+    # Legacy check retained for the historical mitmproxy WAF LXC (no-op on
+    # boxes where sbxwaf is the host daemon and no such container exists).
     if lxc-info -n mitmproxy -s 2>/dev/null | grep -q "RUNNING"; then
         waf_container="true"
-        # Check if mitmproxy service is active
+        # Check if the legacy in-LXC WAF service is active
         if lxc-attach -n mitmproxy -- systemctl is-active mitmproxy >/dev/null 2>&1; then
             waf_running="true"
         fi
@@ -1456,7 +1457,7 @@ cmd_waf_status() {
   "reachable": $waf_reachable,
   "ip": "$waf_ip",
   "port": $waf_port,
-  "backend": "mitmproxy_inspector"
+  "backend": "sbxwaf_inspector"
 }
 EOF
 }
@@ -1590,7 +1591,7 @@ Certificates:
 Migration:
   migrate [source]        Migrate from OpenWrt (default: 192.168.255.1)
 
-WAF (mitmproxy):
+WAF (sbxwaf):
   waf status              Show WAF status (JSON)
   waf enable              Enable WAF inspection
   waf disable             Disable WAF inspection
