@@ -1,3 +1,11 @@
+secubox-system-tuning (1.2.1-1~bookworm1) bookworm; urgency=high
+
+  * Purge des references authelia (SSO decommissionne) : commentaires,
+    docstrings, libelles d'acces et budgets LXC nettoyes. Aucun changement de
+    comportement des stubs auth (auth_request /__sbx_auth_verify inchange).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 08 Sep 2026 13:30:00 +0200
+
 secubox-system-tuning (1.2.0-1~bookworm1) bookworm; urgency=high
 
   * REUNION DE DEUX 1.1.0 DIVERGENTS (split-brain). La feature CPU (#1011,

@@ -1,3 +1,11 @@
+secubox-torrent (2.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Purge des references authelia (SSO decommissionne) : commentaires,
+    docstrings, libelles d'acces et budgets LXC nettoyes. Aucun changement de
+    comportement des stubs auth (auth_request /__sbx_auth_verify inchange).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 08 Sep 2026 13:30:00 +0200
+
 secubox-torrent (2.4.2-1~bookworm1) bookworm; urgency=medium
 
   * L ADRESSE PUBLIQUE SERVAIT LE PANNEAU D ADMINISTRATION (ref #1042).
