@@ -9509,3 +9509,9 @@ Le support a été ajouté dans le DTS upstream Linux (torvalds/linux) mais:
 - Endpoints: 3122
 - Migration: 75%
 - Commits: 4930
+
+## CI Sync 2026-09-08
+- Packages: 181
+- Endpoints: 3102
+- Migration: 76%
+- Commits: 4955
