@@ -1,3 +1,13 @@
+secubox-waf (1.10.26-1~bookworm1) bookworm; urgency=medium
+
+  * Migration mitmproxy → sbxwaf : le module lit désormais la table de routes
+    du moteur Go (/etc/secubox/waf/haproxy-routes.json) au lieu des chemins
+    legacy /data/mitmproxy-waf/data/routes.json et /srv/mitmproxy*/. Supprime
+    la dernière dépendance runtime au chemin mitmproxy (sbxwaf remplace
+    entièrement mitmproxy).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 08 Sep 2026 14:30:00 +0200
+
 secubox-waf (1.10.25-1~bookworm1) bookworm; urgency=medium
 
   * URGENT fix: waf-rules 1.4.2 — router-goform. Le pattern '/goform/.*\$\(|`|;'

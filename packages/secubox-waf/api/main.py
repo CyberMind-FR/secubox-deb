@@ -31,7 +31,7 @@ import geoip2.errors
 RULES_PATH = "/usr/share/secubox/waf/waf-rules.json"
 # Threat log — the WAF dashboard's sole data source. The Go engine (sbxwaf,
 # #744) writes to the sandboxed leaf dir /var/log/secubox/waf/waf-threats.log;
-# the legacy Python mitmproxy WAF used the shared-parent path. Prefer the Go
+# the legacy Python WAF used the shared-parent path. Prefer the Go
 # engine's path, fall back to the legacy one, and honour SECUBOX_WAF_THREATS_LOG.
 THREATS_LOG = os.environ.get("SECUBOX_WAF_THREATS_LOG") or next(
     (p for p in ("/var/log/secubox/waf/waf-threats.log",
@@ -850,8 +850,8 @@ def _read_alerts_raw() -> List[dict]:
 
 
 def _protected_vhost_count() -> int:
-    """Number of vhosts protected by the WAF = the HAProxy→mitmproxy route map."""
-    for p in ("/srv/mitmproxy/haproxy-routes.json", "/srv/mitmproxy-in/haproxy-routes.json"):
+    """Number of vhosts protected by the WAF = the HAProxy→sbxwaf route map."""
+    for p in ("/etc/secubox/waf/haproxy-routes.json",):
         try:
             d = json.loads(Path(p).read_text())
             if isinstance(d, dict) and d:
@@ -1751,10 +1751,8 @@ async def doctor_check():
     elif not os.access(log_dir, os.W_OK):
         issues.append({"type": "log_not_writable", "repairable": True})
 
-    # Check mitmproxy routes (for WAF integration)
-    routes_file = Path("/data/mitmproxy-waf/data/routes.json")
-    if not routes_file.exists():
-        routes_file = Path("/data/mitmproxy/routes.json")
+    # Check sbxwaf route map (WAF route table)
+    routes_file = Path("/etc/secubox/waf/haproxy-routes.json")
     if not routes_file.exists():
         issues.append({"type": "routes_missing", "repairable": False})
         can_repair = False
@@ -1797,13 +1795,10 @@ async def repair_waf():
     except Exception as e:
         repairs.append({"action": "reload_rules", "status": "error", "message": str(e)})
 
-    # 3. Clear expired bans (via mitmproxy if available)
-    # This would be done via the mitmproxy addon
+    # 3. Clear expired bans (handled by sbxwaf's nft-ban directly)
 
-    # 4. Verify mitmproxy connection
-    routes_file = Path("/data/mitmproxy-waf/data/routes.json")
-    if not routes_file.exists():
-        routes_file = Path("/data/mitmproxy/routes.json")
+    # 4. Verify sbxwaf route map
+    routes_file = Path("/etc/secubox/waf/haproxy-routes.json")
     if routes_file.exists():
         try:
             routes = json.loads(routes_file.read_text())
