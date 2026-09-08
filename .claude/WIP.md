@@ -6,7 +6,42 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-31*
+*Mis à jour : 2026-09-08*
+
+---
+
+## 2026-09-08 — Fuite metrics, incident login, purge authelia, migration mitmproxy→sbxwaf
+
+### ✅ Fait — déployé live
+- **Fuite RSS metrics** — cause racine trouvée par **tracemalloc** : objets Python
+  plats mais RSS qui monte ⇒ **tas natif glibc** (arènes par thread des boucles
+  `asyncio.to_thread`). Fix `secubox-metrics` 1.12.6 : `MALLOC_ARENA_MAX=2` +
+  `malloc_trim(0)` /2 min ; `_geo_cache` borné LRU. Mesuré : plateau ~185 Mo (vs
+  ~98 Mo/15 min avant). waf/dpi vérifiés = pas montés dans l'aggregator (pas de
+  double-collecte, contrairement à metrics démonté).
+- **Incident login admin (JSON.parse)** — RÉGRESSION du masquage P2 : hub/auth
+  routés EN DIRECT par nginx (hub→127.0.0.1:8001, auth→auth.sock), pas via
+  l'aggregator. Masqués = 502 HTML. **Corrigé** (unmask+start des 14). Règle P2
+  revue : vérifier le routage nginx avant tout `mask`.
+- **authelia — purgé (box + dépôt, 0 réf hors changelog)**. IdP SSO décommissionné ;
+  stubs LAN `/__sbx_auth_verify` conservés. Fix fonctionnel : zigbee.conf ne
+  proxifie plus `authelia.sock` mort ; prober health nettoyé (1.0.1). 20 paquets
+  redéployés.
+- **mitmproxy → sbxwaf (remplacement complet du WAF)** : backend HAProxy
+  `mitmproxy_inspector` → `sbxwaf_inspector` (cfg live validé + toml 8890→8085) ;
+  `secubox-waf` lit les routes sbxwaf (`/etc/secubox/waf/haproxy-routes.json`,
+  1.10.26) ; paquet `secubox-mitmproxy` **purgé** ; `/data/mitmproxy*` retiré ;
+  dépôt scrubé (`packages/secubox-mitmproxy/` supprimé, CLAUDE.md/docs→sbxwaf).
+  **CONSERVÉ** : analyseurs `toolbox-mitm`/`-wg` (mitmdump R2/R3), distincts du WAF.
+
+### ⬜ À suivre (→ TODO)
+- **haproxyctl generate CASSÉ** (erreurs bash) + `haproxy.toml` avait divergé du
+  cfg live — à réparer (le rename backend a été fait sur le cfg live + toml synchro).
+- Redéploiement des ~30 paquets au scrub mitmproxy **non fait** : 0 gain fonctionnel
+  (box déjà migrée), cosmétique seul → suivra au release naturel.
+- `secubox-jellyfin-playback-policy.service` en échec (pré-existant, sans rapport).
+- Allègement P2 (masquage standalones) **suspendu** : ne masquer qu'après vérif du
+  routage nginx par vhost (cf. incident login).
 
 ---
 

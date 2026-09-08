@@ -5,6 +5,42 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-08 — Fuite metrics (glibc), incident login, purge authelia, migration mitmproxy→sbxwaf
+
+- **Fuite RSS `secubox-metrics` — cause racine par tracemalloc.** Le diff a montré
+  des objets Python plats (~140 Ko/15 min : churn parsing/sérialisation) alors que
+  la RSS montait (~98 Mo/15 min) ⇒ croissance dans le **tas natif glibc** : les 4
+  boucles parsent de gros logs via `asyncio.to_thread` (threads) → une arène glibc
+  par thread jamais rendue à l'OS. Fix 1.12.6 : `Environment=MALLOC_ARENA_MAX=2`
+  + `malloc_trim(0)` toutes les 2 min (lifespan) + `_geo_cache` borné LRU 16384.
+  Mesuré : plateau ~185 Mo avec Δ RSS négatif (glibc restitue), vs pente linéaire
+  avant. `RuntimeMaxSec` 6 h dégradé en filet. waf/dpi audités = non montés dans
+  l'aggregator (pas de double-collecte).
+- **Incident login admin (`JSON.parse: unexpected character`).** Régression du
+  masquage P2 (allègement) : le panneau admin route hub→`127.0.0.1:8001` et
+  auth→`auth.sock` **en direct** (pas via l'aggregator) ; masqués → nginx renvoyait
+  du HTML 502 que le front parsait en JSON. Corrigé par `unmask + enable --now`
+  des 14 services masqués. Nouvelle règle : vérifier le routage nginx de chaque
+  vhost AVANT tout `systemctl mask`.
+- **authelia — décommissionné et purgé (box + dépôt, 0 réf hors changelog),** comme
+  crowdsec/netifyd. IdP SSO (#239) déjà remplacé par des stubs LAN nginx
+  (`/__sbx_auth_verify`, `$lan_client`). Résidu fonctionnel éliminé : `zigbee.conf`
+  ne proxifie plus le `authelia.sock` mort ; `secubox-health` retire authelia de
+  CRITICAL_MODULES (1.0.1). 20 paquets rebuild+déployés ; conffiles synchronisés
+  sans clobber.
+- **mitmproxy → sbxwaf : remplacement complet du WAF.** Le backend HAProxy
+  `mitmproxy_inspector` (qui pointait déjà vers sbxwaf `127.0.0.1:8085`) renommé
+  `sbxwaf_inspector` sur le cfg LIVE (sed + `haproxy -c` + reload — car
+  `haproxyctl generate` est cassé et `haproxy.toml` avait divergé, disait `:8890`
+  mort) et le toml synchronisé (rename + 8890→8085). Module `secubox-waf` migré des
+  chemins legacy `/data/mitmproxy-waf` & `/srv/mitmproxy*` vers la table sbxwaf
+  `/etc/secubox/waf/haproxy-routes.json` (1.10.26). Paquet `secubox-mitmproxy`
+  **purgé** (rdepends non durs préservés), `/data/mitmproxy*` supprimé (backup tar).
+  Dépôt scrubé (`packages/secubox-mitmproxy/` retiré, `Depends` nettoyés,
+  CLAUDE.md/docs/wiki→sbxwaf ; historiques datés préservés). **CONSERVÉ** : les
+  analyseurs MITM à la demande `toolbox-mitm`/`toolbox-mitm-wg` (mitmdump R2/R3,
+  addons cookies/dpi/ja4/soc_relay), fonction distincte que sbxwaf ne remplace pas.
+
 ## 2026-09-07 — Freebox TV streamer, ZIA Action Layer, fixes média/CSP (déployé gk2)
 
 - **Freebox TV (#1238) — FERMÉ.** Nouveau paquet `secubox-freeboxtv` 0.1.1 : daemon
