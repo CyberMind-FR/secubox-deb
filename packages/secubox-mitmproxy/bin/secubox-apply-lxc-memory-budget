@@ -25,7 +25,6 @@ err() { printf '[%s] ERROR: %s\n' "$MODULE" "$*" >&2; exit 1; }
 # Per-LXC budgets in MiB. Total budget : 5.5 GB of an 8 GB host, leaving
 # 2.5 GB for kernel + host services. Adjust the user's set as needed.
 declare -A BUDGET=(
-    [authelia]=128
     [gitea]=256
     [grafana]=256
     [horde]=256

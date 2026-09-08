@@ -9,7 +9,7 @@ SecuBox-Deb :: secubox-mqtt :: host FastAPI control plane.
 Mosquitto runs in LXC at 10.100.0.110 (br-lxc). This API is on the host,
 on Unix socket /run/secubox/mqtt.sock, reverse-proxied at /api/v1/mqtt/
 by the canonical hub vhost. Authentication is provided by the canonical
-SecuBox JWT middleware (handled at the nginx/Authelia layer).
+SecuBox JWT middleware (handled at the nginx layer).
 """
 
 import os

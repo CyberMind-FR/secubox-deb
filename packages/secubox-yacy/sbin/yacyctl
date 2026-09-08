@@ -136,7 +136,7 @@ emit_access_json() {
   "module": "yacy",
   "access": [
     {"url": "$lan_url", "auth": "lan-only", "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
-    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "Authelia SSO", "scope": "public"}\n' "$public_url" )
+    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "LAN-gated", "scope": "public"}\n' "$public_url" )
   ]
 }
 EOF

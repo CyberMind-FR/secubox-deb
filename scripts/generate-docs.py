@@ -1678,8 +1678,8 @@ MODULES = {
     # =========================================================================
     # ADDED 2026-06-26 (#742) — modules discovered but previously undocumented
     # =========================================================================
-    # authelia removed 2026-07 — secubox-authelia SSO IdP decommissioned (#64768978,
-    # package removed; nginx gate is now a permissive no-op). Do not re-add.
+    # ex-SSO IdP module removed 2026-07 — external SSO IdP decommissioned (#64768978,
+    # package removed; nginx gate is now a LAN default-deny no-op). Do not re-add.
     "avatar": {
         "name": "Avatar Manager", "icon": "🧑", "category": "Apps",
         "description": {

@@ -243,7 +243,6 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
         "secubox-avatar",
         "secubox-auth",
         "secubox-portal",
-        "secubox-authelia",
     ],
     "monitoring": [
         "secubox-netdata",

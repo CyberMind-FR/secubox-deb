@@ -14,7 +14,7 @@ tests cover the full L3-decode → baseline → scoring → trusted-match
 or binding a real UDP socket.
 
 JWT is bypassed via FastAPI's dependency_overrides — the real JWT
-layer lives at nginx + Authelia, not inside the app.
+layer lives at nginx, not inside the app.
 """
 
 from __future__ import annotations

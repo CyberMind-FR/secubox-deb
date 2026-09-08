@@ -10,7 +10,7 @@ Type=simple
 User=secubox-mesh
 Group=secubox-mesh
 # Le module Python est installé sous /usr/lib/secubox/mesh/ (pas de venv).
-# Pattern hérité de secubox-meshname, authelia, etc. — voir CLAUDE.md root.
+# Pattern hérité de secubox-meshname, lyrion, etc. — voir CLAUDE.md root.
 Environment="PYTHONPATH=/usr/lib/secubox/mesh"
 ExecStart=/usr/bin/python3 -m uvicorn secubox_mesh.app:app --host 127.0.0.1 --port 8743 --log-level warning
 Restart=on-failure

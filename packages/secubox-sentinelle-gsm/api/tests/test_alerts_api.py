@@ -7,7 +7,7 @@
 The `client` fixture wires fresh AlertSink + TrustedRegistry instances
 into the live `api.main` module so test isolation is per-test (tmp_path).
 JWT enforcement is bypassed via FastAPI's dependency_overrides — the real
-JWT layer lives at nginx + Authelia, not inside the app.
+JWT layer lives at nginx, not inside the app.
 """
 
 import pytest

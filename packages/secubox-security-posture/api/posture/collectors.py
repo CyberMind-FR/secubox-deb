@@ -198,7 +198,7 @@ async def collect_auth(probe: Probe) -> List[Indicator]:
                        remediation="systemctl status secubox-auth", link="/auth/"))
 
     # Cross-check via health-doctor backbone if present.
-    sok = probe.svc_ok("secubox-auth", "auth", "authelia")
+    sok = probe.svc_ok("secubox-auth", "auth")
     if sok is not None:
         out.append(_scored("auth_health_doctor", "auth", "Auth health check", 1.0 if sok else 0.0,
                            "socket:health-doctor.sock /checks",

@@ -10,7 +10,7 @@ ObservationsDB uses a real on-disk SQLite under tmp_path so the
 GET /observations route hits the real implementation end-to-end.
 
 JWT is bypassed via FastAPI's dependency_overrides — the real JWT
-layer lives at nginx + Authelia, not inside the app.
+layer lives at nginx, not inside the app.
 """
 
 from unittest.mock import AsyncMock, MagicMock

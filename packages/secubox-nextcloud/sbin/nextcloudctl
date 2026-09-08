@@ -9,7 +9,7 @@ CONFIG_FILE="/etc/secubox/nextcloud.toml"
 # Phone → Nextcloud "PhotoLibrary" external storage → here → PhotoPrism (#397).
 SHARED_PHOTOS="${SECUBOX_SHARED_PHOTOS:-/data/shared/photos}"
 # v2.11.1 modernization: /data/lxc is the canonical LXC path on SecuBox
-# boards (matches authelia/grafana/etc). Override via SECUBOX_LXC_PATH for tests.
+# boards (matches grafana/lyrion/etc). Override via SECUBOX_LXC_PATH for tests.
 LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
 DATA_PATH="${SECUBOX_NEXTCLOUD_DATA:-/data/volumes/nextcloud}"
 CONTAINER="${SECUBOX_LXC_NAME:-nextcloud}"
@@ -116,7 +116,7 @@ lxc.include = /usr/share/lxc/config/common.conf
 lxc.apparmor.profile = generated
 
 # Bridged networking on br-lxc (10.100.0.0/24). Pinned to 10.100.0.21 to
-# avoid the legacy collision with secubox-authelia at 10.100.0.20 (see #280).
+# avoid the legacy collision with the ex-SSO LXC at 10.100.0.20 (see #280).
 lxc.net.0.type = veth
 lxc.net.0.link = ${LXC_BRIDGE:-br-lxc}
 lxc.net.0.flags = up

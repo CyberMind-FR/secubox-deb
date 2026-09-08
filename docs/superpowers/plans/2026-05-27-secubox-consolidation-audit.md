@@ -313,7 +313,7 @@ Realistic consolidation opportunities surface in three narrow places:
 | `secubox-waf` (waf + mitmproxy + haproxy + interceptor) | 4 → 2 | distinct layers in the WAF pipeline |
 | `secubox-traffic` (traffic + qos + nettweak) | 3 → 1 | tc shaping vs QoS policy vs tunables — distinct |
 | `secubox-monitoring` (netdata + glances + metrics + health-doctor + watchdog + device-intel) | 6 → 2-3 | each backs a different upstream (netdata, glances, prom, etc.) |
-| `secubox-identity` (identity + users + avatar + auth + portal + authelia) | 6 → 3 | distinct layers in the identity stack |
+| `secubox-identity` (identity + users + avatar + auth + portal) | 5 → 3 | distinct layers in the identity stack |
 | `secubox-publishing` (droplet + cloner + publish + backup + reporter) | 5 → 3 | distinct artefact types |
 | `secubox-ai` (ai-gateway + ai-insights + localai + ollama + mcp-server) | 5 → 3 | distinct: gateway router, ML detection, local LLM runtime, ollama wrapper, MCP server |
 | `secubox-meta-services` (metablogizer + metabolizer + metacatalog + metoblizer) | 4 → 4 (already KEEP) | confirmed distinct |
@@ -368,8 +368,8 @@ specifically confirms:
 - **LXC service backers** (`gitea`, `nextcloud`, `matrix`, `jitsi`,
   `jellyfin`, `peertube`, `gotosocial`, `simplex`, `jabber`,
   `photoprism`, `nextcloud`, `newsbin`, `voip`, `turn`, `domoticz`,
-  `homeassistant`, `rustdesk`, `yacy`, `lyrion`, `authelia`,
-  `redroid`, `webradio`, `torrent`, `hexo`) — 24 distinct LXC apps,
+  `homeassistant`, `rustdesk`, `yacy`, `lyrion`,
+  `redroid`, `webradio`, `torrent`, `hexo`) — 23 distinct LXC apps,
   each backs a different container. Operators install per-container.
 
 - **Hardware-gated** (`sentinelle-gsm`, `rbs-sensor`, `modem`,

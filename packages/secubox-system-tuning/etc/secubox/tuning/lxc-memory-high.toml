@@ -26,7 +26,6 @@ nextcloud  = "600M"   # NC + bundled mariadb
 lyrion     = "500M"   # Logitech Media Server
 grafana    = "400M"   # grafana-server
 horde      = "300M"   # horde webmail
-authelia   = "200M"   # SSO IdP
 mqtt       = "150M"   # mosquitto
 rustdesk   = "200M"   # rustdesk relay
 roundcube  = "200M"   # roundcube webmail (separate from horde)

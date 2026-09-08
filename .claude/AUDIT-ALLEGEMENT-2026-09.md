@@ -113,6 +113,30 @@ surcoût interpréteur SANS réécrire → réserver Go aux 3 plus chauds.
   streamlit…) : le standalone y a un RÔLE DE FOND (pilote le conteneur / collecteur)
   → NE PAS couper à l'aveugle, traitement au cas par cas (P3/P4).
 - **Verrou durable** : les 10 pure-API `systemctl mask`és (survit à `apt upgrade`).
+- **🔴 INCIDENT (2026-09-08) — le masquage a CASSÉ le login admin. Prémisse P2
+  fausse pour hub+auth.** Symptôme : `admin.gk2.secubox.in` → `JSON.parse:
+  unexpected character at line 1 column 1` au Sign In. Cause : le formulaire POST
+  `/api/v1/hub/auth/login` ; or **nginx du panneau admin ne route PAS hub/auth vers
+  l'aggregator** mais **en DIRECT** vers leur standalone : `hub` → `127.0.0.1:8001`
+  (`secubox-routes.d/hub.conf`), `auth` → `auth.sock` (`webui.conf` location
+  `/api/v1/auth/`). Masqués → 8001/auth.sock morts → nginx renvoie une page d'erreur
+  HTML 502 → le front fait `JSON.parse` dessus → crash. Le mount aggregator de hub
+  ne remplace PAS : sur admin, nginx ne l'utilise même pas (et le mount hub répond
+  quand même, mais admin tape 8001). **Correctif** : `unmask + enable --now` hub+auth
+  (login redevient 401 JSON = OK), puis **par sûreté unmask+restart des 14 masqués**
+  (retour à l'état d'avant P2). Aggregator restart propre au passage (les « hang »
+  des mounts hub/admin/soc/vhost/system étaient du **warm-up** ~30 s au montage de
+  100+ modules, pas un bug ; après chauffe tous 200).
+- **LEÇON (corrige la règle P2)** : « module monté dans l'aggregator ⇒ standalone
+  masquable » est **FAUX** tant qu'on n'a pas vérifié le ROUTAGE NGINX RÉEL de CHAQUE
+  vhost qui l'utilise. Un `location /api/v1/<m>/` peut pointer soit vers
+  `aggregator.sock` (→ masquage OK) soit **en direct vers le socket/port du
+  standalone** (→ masquage = panne). Avant tout `mask`, faire :
+  `grep -rn "api/v1/<m>/\|<m>.sock\|127.0.0.1:<port>" /etc/nginx/{sites-enabled,secubox-routes.d,secubox.d}`
+  et ne masquer que si TOUTES les routes vont à l'aggregator. hub (8001) et auth
+  (auth.sock) sont routés en direct → **jamais masquables** tant que nginx pointe là.
+  → P2 est donc **suspendu** : reprendre module par module avec cette vérif de routage,
+  ou d'abord basculer les routes nginx vers `aggregator.sock` AVANT de masquer.
 - **Analyse des 13** (2026-09-07) : leurs app-vhosts (nc.gk2, gitea.gk2, lyrion…)
   proxifient le **LXC directement** (`10.100.0.100:9000`), PAS le socket module ni
   l'aggregator. Le standalone restant = **API de gestion (contrôle scale-to-zero du

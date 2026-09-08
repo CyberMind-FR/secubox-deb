@@ -992,7 +992,7 @@ Deployed versions on gk2: toolbox-ng **0.1.31**, toolbox **2.8.2**.
   empties after draining. Live-verified on gk2 (two consecutive pings drain, `NRestarts=0`).
 
 - **Wiki** — new `ToolBox` page (numeric-cabin use cases + report features), poster image,
-  Authelia stale entries removed from MODULES, sidebar/navbar link fixes (Gollum `[[Text|Page]]`).
+  Ex-SSO IdP stale entries removed from MODULES, sidebar/navbar link fixes (Gollum `[[Text|Page]]`).
 
 ---
 
@@ -1278,7 +1278,7 @@ backporter wget/TCP dans le fork Tow-Boot 2022.07, OU porter le board mochabin v
   `openssl dgst -verify` contre `netboot-image.pub` (résultat : Verified OK) →
   `gunzip | dd of=/dev/mmcblk0 bs=4M conv=fsync` (8 Gio, progression 32→62→94→100%) → sync.
 - **c3box démarre SecuBox Debian v1.9.0** — hostname `secubox-mochabin`, kernel Debian
-  6.1.0-47-arm64, stack complète : secuboxd, hub, grafana, zigbee, mqtt, authelia,
+  6.1.0-47-arm64, stack complète : secuboxd, hub, grafana, zigbee, mqtt,
   sentinel/rogue-BTS (layers WALL+MIND). Creds root/secubox, Web UI `:9443`.
 - **Fix auto-boot persistant** : l'image utilise `extlinux.conf` à `0x02080000` (adresse réservée
   factory U-Boot → reset immédiat) et ne livre pas de `boot.scr` compilé. Construit
@@ -2972,12 +2972,12 @@ the resulting artefacts in the operator's hands.
   Root cause: appliance-only services (`secubox-otg-gadget` needs configfs/USB
   gadget kernel) aren't gated on a VM profile, plus `networkd-wait-online` is
   strict. Proposed: mask the hardware-only units on the vm-x64 build profile.
-* **#421** filed — `/run/secubox/{authelia,cookies,certs}.sock` are bound by
+* **#421** filed — `/run/secubox/{cookies,certs}.sock` (and the ex-SSO IdP socket) are bound by
   services running in a private mount namespace (`RuntimeDirectory=secubox` +
   the host dedicated `/run/secubox` tmpfs mount = collision), invisible to nginx
-  (host) → 502 on `/api/v1/cookies` + `/api/v1/certs` and 500 on every Authelia
+  (host) → 502 on `/api/v1/cookies` + `/api/v1/certs` and 500 on every ex-SSO IdP
   `auth_request` consumer (lyrion was the loudest). Live workaround: commented
-  out the 4 Authelia `auth_request` lines in the lyrion vhost (lyrion now 200).
+  out the 4 ex-SSO IdP `auth_request` lines in the lyrion vhost (lyrion now 200).
   Real fix needs reconciling tmpfs-mount vs `RuntimeDirectory`, reboot-tested.
 * **v2.13.2** tagged after #425 + #423 merged → re-runs the release pipeline
   with: fmrelay + zkp + sentinelle-gsm packaging fixes (publish unblocked
@@ -2997,7 +2997,7 @@ Closed a batch of fixed-live-but-unmerged issues by finalizing each branch
 
 * **#392** vhost-health: fold `error` (404/502) into the 🔴 bucket in the
   pre-computed summary path (PR #413).
-* **#394** Nextcloud: drop the Authelia `auth_request` gate on the public vhost
+* **#394** Nextcloud: drop the ex-SSO IdP `auth_request` gate on the public vhost
   so the mobile client authenticates (PR #414; changelog conflict resolved →
   1.4.1 above master's 1.4.0).
 * **#152** Roundcube SQLite by default — config.inc.php.local DSN + des_key +
@@ -3420,7 +3420,7 @@ belongs in every other secubox-* postinst — audit tracked in TODO P0.
 ---
 ## 2026-05-24
 
-### Module dual-vhost split — MUST pattern + lyrion/zigbee/authelia alignment
+### Module dual-vhost split — MUST pattern + lyrion/zigbee/ex-SSO alignment
 
 Codified in `docs/MODULE-GUIDELINES.md` §4 (REQUIRED) + §5 (nginx
 template) + `.claude/PATTERNS.md` Pattern 12. Any module with a real
@@ -3438,7 +3438,7 @@ Three modules aligned (master commits b1718788, d4adc1a3, 54da8a7c):
 
 - **secubox-lyrion 1.1.0** — `/lyrion/` rewritten as static admin; `lyrionctl` access URLs corrected (LAN `http://IP:9000/`, public `https://lyrion.gk2.secubox.in/`); `config_get` strips TOML inline comments; admin "Open Music UI" button now reads from `/access`.
 - **secubox-zigbee** — admin "Open Zigbee Manager" button reads from `/access`.
-- **secubox-authelia** — `autheliactl` same `config_get` + `emit_access_json` fixes; public hostname default `auth.maegia.tv` → `sso.gk2.secubox.in`; "Open SSO Portal" button reads from `/access`.
+- **ex-SSO IdP module** — its ctl got the same `config_get` + `emit_access_json` fixes; public hostname default `auth.maegia.tv` → `sso.gk2.secubox.in`; "Open SSO Portal" button reads from `/access`.
 
 Live on gk2 — all three return the same shape, all three admin pages
 behave identically. **Next**: nextcloud + audit grafana/yacy/rustdesk
@@ -3499,22 +3499,22 @@ entirely: defaults to dry-run candidate listing, requires explicit
 
 ### secubox-nextcloud v1.3.0 — reverse-proxy + SSO gating + move to 10.100.0.21 (Issue #280)
 
-**Context:** Package predated the SSO chain. On gk2 the `/nextcloud/` URL served a static stub (alias to `/usr/share/secubox/www/nextcloud/`), the LXC was hand-patched from source's `lxc.net.0.type=none` to `veth+10.100.0.20/24` — colliding with `secubox-authelia` at the same IP. No Authelia gating.
+**Context:** Package predated the SSO chain. On gk2 the `/nextcloud/` URL served a static stub (alias to `/usr/share/secubox/www/nextcloud/`), the LXC was hand-patched from source's `lxc.net.0.type=none` to `veth+10.100.0.20/24` — colliding with the ex-SSO IdP LXC at the same IP. No SSO gating.
 
 **Done:**
-- **#280 / PR [#281](https://github.com/CyberMind-FR/secubox-deb/pull/281)** (`b86dee78`): `secubox-nextcloud v1.3.0` — `nginx/nextcloud.conf` now reverse-proxies `/nextcloud/` to `10.100.0.21:80` with Apache-friendly headers and SSO-gates via `auth_request /__sbx_auth_verify` + `error_page 401 = @sbx_auth_login` (handler from secubox-authelia v1.0.8). `sbin/nextcloudctl` LXC template moved from `type=none` (host-mode) to `veth+br-lxc+10.100.0.21/24`, `LXC_PATH=/data/lxc`, env-override knobs per MODULE-GUIDELINES §3. Frees `10.100.0.20` for authelia. Operator rebind recipe in the PR.
+- **#280 / PR [#281](https://github.com/CyberMind-FR/secubox-deb/pull/281)** (`b86dee78`): `secubox-nextcloud v1.3.0` — `nginx/nextcloud.conf` now reverse-proxies `/nextcloud/` to `10.100.0.21:80` with Apache-friendly headers and SSO-gates via `auth_request /__sbx_auth_verify` + `error_page 401 = @sbx_auth_login` (handler from the ex-SSO IdP v1.0.8). `sbin/nextcloudctl` LXC template moved from `type=none` (host-mode) to `veth+br-lxc+10.100.0.21/24`, `LXC_PATH=/data/lxc`, env-override knobs per MODULE-GUIDELINES §3. Frees `10.100.0.20` for the ex-SSO IdP. Operator rebind recipe in the PR.
 
 **Validation:** Hot-rebind on gk2 (`sed -i s/10.100.0.20/10.100.0.21/ /data/lxc/nextcloud/config` + restart), deployed nginx conf, both LXCs now reachable at distinct IPs. `/nextcloud/` no-cookie → 302 to `/auth/?rd=…/nextcloud/`. Apache returns 400 for plain `/` because of Nextcloud `trusted_domains` — operator must add `admin.gk2.secubox.in` to `config.php` for the post-SSO page to render.
 
-### Authelia SSO loop fix — multi-cookie + access_control + X-Original-URL forwarding (Issues #272 #273 #274)
+### Ex-SSO IdP loop fix — multi-cookie + access_control + X-Original-URL forwarding (Issues #272 #273 #274)
 
 **Context:** After v1.0.5 the browser flow on `https://admin.gk2.secubox.in/zigbee/` exhibited an infinite redirect loop: login succeeded, returned to `/zigbee/`, then nginx `auth_request` returned 401/403 → 302 back to `/auth/?rd=…` → loop. Three independent bugs stacked.
 
 **Done:**
 
-- **#272 / PR [#275](https://github.com/CyberMind-FR/secubox-deb/pull/275)** (`f6439aeb`): `secubox-authelia v1.0.6` — `install-lxc.sh` now renders TWO `session.cookies[]` entries (`maegia.tv` + `${SECUBOX_HUB_DOMAIN}`, default `gk2.secubox.in`) plus matching `access_control` rules. Authelia returned 403 on `/auth/api/state` because no `cookies[].domain` matched `admin.gk2.secubox.in`. New env knob `SECUBOX_HUB_DOMAIN`.
+- **#272 / PR [#275](https://github.com/CyberMind-FR/secubox-deb/pull/275)** (`f6439aeb`): the ex-SSO IdP v1.0.6 — `install-lxc.sh` now renders TWO `session.cookies[]` entries (`maegia.tv` + `${SECUBOX_HUB_DOMAIN}`, default `gk2.secubox.in`) plus matching `access_control` rules. The IdP returned 403 on `/auth/api/state` because no `cookies[].domain` matched `admin.gk2.secubox.in`. New env knob `SECUBOX_HUB_DOMAIN`.
 - **#273 / PR [#276](https://github.com/CyberMind-FR/secubox-deb/pull/276)** (`a907b5ba`): `secubox-zigbee v2.4.4` + `secubox-lyrion v1.0.7` — `@sbx_auth_login` redirect changed from `$http_host` to `$host` to strip the internal `:9080` nginx port that was leaking into public redirects. Lyrion vhost also switches `$scheme://` → hardcoded `https://`.
-- **#274 / PR [#277](https://github.com/CyberMind-FR/secubox-deb/pull/277)** (`fe37e2c7`): `secubox-authelia v1.0.7` — nginx `/__sbx_auth_verify` and FastAPI `/verify` now forward `X-Original-URL` + `X-Forwarded-{Method,Proto,Host,Uri,For}` to Authelia's `/api/verify`. Without these, Authelia defaulted to the first `cookies[]` entry (`maegia.tv`), never found the `gk2.secubox.in` session, returned 401 → infinite loop after successful login.
+- **#274 / PR [#277](https://github.com/CyberMind-FR/secubox-deb/pull/277)** (`fe37e2c7`): the ex-SSO IdP v1.0.7 — nginx `/__sbx_auth_verify` and FastAPI `/verify` now forward `X-Original-URL` + `X-Forwarded-{Method,Proto,Host,Uri,For}` to the IdP's `/api/verify`. Without these, the IdP defaulted to the first `cookies[]` entry (`maegia.tv`), never found the `gk2.secubox.in` session, returned 401 → infinite loop after successful login.
 
 **Validation:** Hot-deployed nginx confs + `api/main.py` onto gk2 + sed-patched the live LXC config to add `gk2.secubox.in` + `*.gk2.secubox.in` to `access_control` (source-side install-lxc.sh changes don't touch the running config — caveat memorialised in memory). Also restarted z2m which had silently hung 14h with no listener on :8080 — root cause was z2m needing ~20s post-restart to bind. Board load dropped 359 → 7 once the auth loop stopped. Final state: `/zigbee/` returns clean 302 to `/auth/?rd=https://admin.gk2.secubox.in/zigbee/` (no `:9080`), `/auth/api/state` → 200, z2m UI loads after login. User confirmed.
 

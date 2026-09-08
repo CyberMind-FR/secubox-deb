@@ -20,7 +20,7 @@ Group=secubox
 RuntimeDirectoryMode=0755
 # MUST preserve /run/secubox across unit restarts — otherwise stopping
 # this service wipes the directory and removes every other secubox
-# module's socket (lyrion, authelia, etc.). Same pattern as every other
+# module's socket (lyrion, mqtt, etc.). Same pattern as every other
 # secubox unit that owns RuntimeDirectory=secubox.
 WorkingDirectory=/usr/lib/secubox/fmrelay
 # /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on

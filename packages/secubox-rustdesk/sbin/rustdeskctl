@@ -120,7 +120,7 @@ emit_access_json() {
   "module": "rustdesk",
   "access": [
     {"url": "$lan_url", "auth": "lan-only",     "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
-    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "Authelia SSO", "scope": "public"}\n' "$public_url" ),
+    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "LAN-gated", "scope": "public"}\n' "$public_url" ),
     {"url": "rustdesk://$LXC_IP:$SIGNAL_PORT", "auth": "preshared-key", "scope": "lan-signal"},
     {"url": "rustdesk://$LXC_IP:$RELAY_PORT",  "auth": "preshared-key", "scope": "lan-relay"}
   ]

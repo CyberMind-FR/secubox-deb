@@ -490,13 +490,13 @@ Depends: ..., lxc, lxc-templates
 ### MUST — dual-vhost split (modules with a real web UI)
 
 A module that wraps an upstream app with its own web UI (LMS, z2m,
-Authelia, Nextcloud, Grafana, …) MUST split the two surfaces on
+Nextcloud, Grafana, …) MUST split the two surfaces on
 separate hostnames:
 
 | URL | Role |
 | --- | --- |
 | `https://admin.gk2.secubox.in/<module>/` | **SecuBox admin** — static page calling `/api/v1/<module>/*`. NEVER a `proxy_pass` to the app. |
-| `https://<module>.gk2.secubox.in/` | **Real app web UI** at the vhost root, Authelia-gated. |
+| `https://<module>.gk2.secubox.in/` | **Real app web UI** at the vhost root, LAN-gated. |
 
 **Why** — upstream apps hardcode absolute asset paths (`/material/`,
 `/cometd/`, `/css/`, `/apps/`, `/public/`). Reverse-proxying under a
@@ -506,7 +506,7 @@ the app at root so the absolute URLs resolve.
 **Single source of truth** — the `Open <App> UI →` button on the admin
 page reads its href from `/api/v1/<module>/access` at runtime. Never
 hardcode the public hostname in HTML. The `/access` endpoint is the
-only place the URL appears (see `lyrionctl`, `autheliactl` for the
+only place the URL appears (see `lyrionctl`, `grafanactl` for the
 `emit_access_json` pattern).
 
 ```js

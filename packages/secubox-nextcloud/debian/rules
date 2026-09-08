@@ -19,8 +19,8 @@ override_dh_auto_install:
 
 	# nginx canonical-hub snippet (SecuBox config module + API). Installed to
 	# both secubox.d/ and secubox-routes.d/ (the canonical hub vhost includes
-	# both via /etc/nginx/snippets/secubox-routes.conf — same convention as
-	# secubox-authelia v1.0.5+).
+	# both via /etc/nginx/snippets/secubox-routes.conf — same canonical
+	# convention).
 	install -d $(CURDIR)/debian/secubox-nextcloud/etc/nginx/secubox.d
 	install -m 644 nginx/nextcloud.conf $(CURDIR)/debian/secubox-nextcloud/etc/nginx/secubox.d/nextcloud.conf
 	install -d $(CURDIR)/debian/secubox-nextcloud/etc/nginx/secubox-routes.d

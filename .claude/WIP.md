@@ -2355,7 +2355,7 @@ Le Pi 400 doit servir de démo terrain. Tout ce qui distingue un appareil
 * **PR #429** à ouvrir (branche déjà pushée, fix déployé live mais source
   pas encore mergé en master).
 * **#421** sockets `/run/secubox/*.sock` (RuntimeDirectory vs tmpfs collision)
-  — reboot-tested fix attendu, puis revert le contournement Authelia sur
+  — reboot-tested fix attendu, puis revert le contournement ex-SSO IdP sur
   lyrion.
 * **#422** vm-x64 cascade `[FAILED]` en VBox (préexistant, pas re-testé v2.13.4).
 * **#433** kiosk silent fail dans `build-rpi-usb.sh` — apt qemu-arm64 broken
@@ -2390,8 +2390,8 @@ Le Pi 400 doit servir de démo terrain. Tout ce qui distingue un appareil
   "--kiosk"` sur l'entrée matrice rpi400. PR #424 mergée.
 * **#422** filée (vm-x64 cascade `[FAILED]` en VBox : otg-gadget +
   networkd-wait-online + openclaw restart-loop, sshd plombe par cascade).
-* **#421** filée + contournement live (lyrion) : sockets `/run/secubox/{authelia,
-  cookies,certs}.sock` cachés par collision tmpfs-mount vs
+* **#421** filée + contournement live (lyrion) : sockets `/run/secubox/{cookies,certs}.sock`
+  (et le socket ex-SSO IdP) cachés par collision tmpfs-mount vs
   `RuntimeDirectory=secubox` dans namespace privé. Lyrion débloqué en
   commentant les 4 lignes `auth_request` du vhost (sauvegarde `.bak.sso-removed`).
 * **v2.13.2** taggé : intègre fmrelay + zkp + sentinelle-gsm packaging fixes +
@@ -2409,7 +2409,7 @@ Le Pi 400 doit servir de démo terrain. Tout ce qui distingue un appareil
   enfin proprement avec les 3 packaging fixes mergés (fmrelay + zkp +
   sentinelle-gsm).
 * **#421** systemic socket fix (réconcilier `/run/secubox` tmpfs mount vs
-  `RuntimeDirectory=secubox`) — reboot-tested. Re-activer ensuite l'Authelia
+  `RuntimeDirectory=secubox`) — reboot-tested. Re-activer ensuite l'ex-SSO IdP
   `auth_request` sur lyrion (revert du contournement live).
 * **#422** vm-x64 image : gater les services appliance-only (`otg-gadget`,
   etc.) sur le profil VM ; assouplir `networkd-wait-online`. Re-tester en
@@ -2461,7 +2461,7 @@ Le Pi 400 doit servir de démo terrain. Tout ce qui distingue un appareil
   mitmproxy route entry added (host + LXC copies, see drift in TODO);
   nginx `server_name` aliased.
 * **#394 NC SSO removal** so official mobile clients can authenticate
-  (HTTP Basic + app-password don't carry Authelia cookie). NC bf
+  (HTTP Basic + app-password don't carry the ex-SSO IdP cookie). NC bf
   protection disabled at runtime + table truncated.
 * **#395 WAF cred-004 false-positive** on NC mobile login-poll
   (`/index.php/login/v2/poll?token=...`) fixed live + source-side.
@@ -2671,7 +2671,7 @@ All session deliverables landed and pushed. Follow-ups tracked in
 
 ---
 
-## ✅ 2026-05-24: Module dual-vhost MUST pattern + Lyrion/Zigbee/Authelia alignment (master 54da8a7c, b1718788, d4adc1a3)
+## ✅ 2026-05-24: Module dual-vhost MUST pattern + Lyrion/Zigbee/ex-SSO alignment (master 54da8a7c, b1718788, d4adc1a3)
 
 Codified the dual-vhost split as a **REQUIRED** rule in
 `docs/MODULE-GUIDELINES.md` §4 + `.claude/PATTERNS.md` Pattern 12:
@@ -2679,10 +2679,10 @@ Codified the dual-vhost split as a **REQUIRED** rule in
 | URL | Role |
 | --- | --- |
 | `https://admin.gk2.secubox.in/<module>/` | SecuBox admin (static, calls `/api/v1/<module>/*`) |
-| `https://<module>.gk2.secubox.in/` | Real app web UI at vhost root, Authelia-gated |
+| `https://<module>.gk2.secubox.in/` | Real app web UI at vhost root, LAN-gated |
 
 **Why** — LMS Material loads `/material/customcss/`, z2m `/api/`,
-Authelia `/api/firstfactor/`, Nextcloud `/apps/`. Reverse-proxying any
+the ex-SSO IdP `/api/firstfactor/`, Nextcloud `/apps/`. Reverse-proxying any
 of them under `/<module>/` silently breaks every absolute asset URL.
 Hit live on `admin.gk2.secubox.in/lyrion/`: 405 on `/cometd/handshake`,
 CSS served as text/html.
@@ -2695,14 +2695,14 @@ Aligned three modules:
 
 - **lyrion 1.1.0** (b1718788, d4adc1a3) — `/lyrion/` is now static admin; `lyrion.gk2.secubox.in` keeps the real LMS Material UI. `lyrionctl` access URLs corrected (LAN `http://IP:9000/`, public `https://lyrion.gk2.secubox.in/`), `config_get` strips TOML inline comments (the bug that produced `http://IP:9000#webadminUI/`).
 - **zigbee** (54da8a7c) — `Open Zigbee Manager` button now dynamic from `/access`.
-- **authelia** (54da8a7c) — `autheliactl` same config_get + access_json fixes; public hostname default `auth.maegia.tv` → `sso.gk2.secubox.in`; `Open SSO Portal` button dynamic.
+- **ex-SSO IdP** (54da8a7c) — its ctl got the same config_get + access_json fixes; public hostname default `auth.maegia.tv` → `sso.gk2.secubox.in`; `Open SSO Portal` button dynamic.
 
 Live verified — all three return same shape:
 
 ```text
 lyrion   lan http://192.168.1.200:9000/  public https://lyrion.gk2.secubox.in/
 zigbee   lan http://10.100.0.111:8080/   public https://zigbee.gk2.secubox.in/
-authelia lan http://10.100.0.20:9091/    public https://sso.gk2.secubox.in/
+ex-sso   lan http://10.100.0.20:9091/    public https://sso.gk2.secubox.in/
 ```
 
 **Next**: apply same pattern to `secubox-nextcloud` and audit
@@ -2710,16 +2710,16 @@ authelia lan http://10.100.0.20:9091/    public https://sso.gk2.secubox.in/
 
 ---
 
-## ✅ 2026-05-21: Authelia SSO loop fix end-to-end — multi-cookie + access_control + X-Original-URL + named-location refactor (Issues #272 #273 #274 #278)
+## ✅ 2026-05-21: Ex-SSO IdP loop fix end-to-end — multi-cookie + access_control + X-Original-URL + named-location refactor (Issues #272 #273 #274 #278)
 
 Closed the infinite redirect loop the user hit on `https://admin.gk2.secubox.in/zigbee/` after v1.0.5. Four PRs merged, hot-deployed, browser-validated.
 
-- **#272 / PR [#275](https://github.com/CyberMind-FR/secubox-deb/pull/275)** — `secubox-authelia v1.0.6`: `install-lxc.sh` renders TWO `session.cookies[]` entries (`maegia.tv` + `${SECUBOX_HUB_DOMAIN}`, default `gk2.secubox.in`) + matching `access_control` rules. New env knob.
+- **#272 / PR [#275](https://github.com/CyberMind-FR/secubox-deb/pull/275)** — ex-SSO IdP v1.0.6: `install-lxc.sh` renders TWO `session.cookies[]` entries (`maegia.tv` + `${SECUBOX_HUB_DOMAIN}`, default `gk2.secubox.in`) + matching `access_control` rules. New env knob.
 - **#273 / PR [#276](https://github.com/CyberMind-FR/secubox-deb/pull/276)** — `secubox-zigbee v2.4.4` + `secubox-lyrion v1.0.7`: `@sbx_auth_login` uses `$host` not `$http_host` to strip `:9080` leak; lyrion-vhost hardcodes `https://`.
-- **#274 / PR [#277](https://github.com/CyberMind-FR/secubox-deb/pull/277)** — `secubox-authelia v1.0.7`: nginx `/__sbx_auth_verify` + FastAPI `/verify` forward `X-Original-URL` + `X-Forwarded-{Method,Proto,Host,Uri,For}` so Authelia picks the right `session.cookies[]` entry. Without it Authelia defaulted to `maegia.tv`, 401 → loop.
-- **#278 / PR [#279](https://github.com/CyberMind-FR/secubox-deb/pull/279)** — `secubox-authelia v1.0.8` owns `location @sbx_auth_login` (moved from secubox-zigbee v2.4.5). Decouples lyrion from a transitive zigbee install.
+- **#274 / PR [#277](https://github.com/CyberMind-FR/secubox-deb/pull/277)** — ex-SSO IdP v1.0.7: nginx `/__sbx_auth_verify` + FastAPI `/verify` forward `X-Original-URL` + `X-Forwarded-{Method,Proto,Host,Uri,For}` so the IdP picks the right `session.cookies[]` entry. Without it the IdP defaulted to `maegia.tv`, 401 → loop.
+- **#278 / PR [#279](https://github.com/CyberMind-FR/secubox-deb/pull/279)** — ex-SSO IdP v1.0.8 owns `location @sbx_auth_login` (moved from secubox-zigbee v2.4.5). Decouples lyrion from a transitive zigbee install.
 
-**Hot-deployment caveat:** source-side `install-lxc.sh` doesn't touch the live LXC config — had to sed-patch `/etc/authelia/configuration.yml` inside the LXC to add `gk2.secubox.in` + `*.gk2.secubox.in` access_control rules; matching change is in v1.0.6 source for next install. Memorialized in memory `feedback_live_config_drift.md`.
+**Hot-deployment caveat:** source-side `install-lxc.sh` doesn't touch the live LXC config — had to sed-patch the ex-SSO IdP's `configuration.yml` inside the LXC to add `gk2.secubox.in` + `*.gk2.secubox.in` access_control rules; matching change is in v1.0.6 source for next install. Memorialized in memory `feedback_live_config_drift.md`.
 
 **Collateral:** z2m frontend at 10.100.0.111:8080 was silently hung 14h with no listener (process alive but never bound). Restart took 20s before binding — root cause unknown, watch list. Board load 359 → 7 once the loop stopped.
 

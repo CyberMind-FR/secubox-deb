@@ -181,6 +181,6 @@ returns a clean 409, not a 500.
 
 ## Out of scope
 
-- Changing the NC container itself, HAProxy/nginx vhost, or Authelia gating.
+- Changing the NC container itself, HAProxy/nginx vhost, or the LAN auth gating.
 - Per-user dav-URL substitution beyond showing the template + selected-uid fill.
 - Backend user *sync to* other modules (this reads NC as source of truth).

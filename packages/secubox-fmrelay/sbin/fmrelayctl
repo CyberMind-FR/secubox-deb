@@ -148,7 +148,7 @@ emit_access_json() {
   "module": "fmrelay",
   "access": [
     {"url": "$lan_url",       "auth": "lan-only",     "scope": "lan"},
-    {"url": "$WEBRADIO_URL",  "auth": "Authelia SSO", "scope": "public"}
+    {"url": "$WEBRADIO_URL",  "auth": "LAN-gated", "scope": "public"}
   ]
 }
 EOF

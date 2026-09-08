@@ -57,7 +57,7 @@ ls packages/secubox-* -d | wc -l            # current package count
 
 * `secubox-kiosk`, `secubox-console`, `secubox-eye-remote` — UI
   modes are intentionally separate.
-* `secubox-authelia`, `secubox-grafana`, `secubox-yacy`,
+* `secubox-grafana`, `secubox-yacy`,
   `secubox-rustdesk`, `secubox-lyrion`, `secubox-mail`,
   `secubox-gitea`, etc. — each backs a distinct LXC container that
   operators decide to run or not.

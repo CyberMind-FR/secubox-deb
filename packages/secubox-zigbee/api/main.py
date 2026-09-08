@@ -35,7 +35,7 @@ FRONTEND_PORT = int(os.environ.get("SECUBOX_Z2M_FRONTEND_PORT", "8080"))
 MQTT_LXC_IP = os.environ.get("SECUBOX_MQTT_LXC_IP", "10.100.0.110")
 MQTT_PORT = int(os.environ.get("SECUBOX_MQTT_PORT", "1883"))
 SECRETS_DIR = Path(os.environ.get("SECUBOX_SECRETS_DIR", "/etc/secubox/secrets"))
-# v2.5.8: the public SSO-gated vhost that nginx + Authelia front for
+# v2.5.8: the public LAN-gated vhost that nginx fronts (ex-SSO retired) for
 # the zigbee2mqtt UI. Operators reach it from outside the LAN; the
 # /access list now includes it explicitly.
 PUBLIC_URL = os.environ.get("SECUBOX_ZIGBEE_PUBLIC_URL", "https://zigbee.gk2.secubox.in/")
@@ -154,7 +154,7 @@ def access() -> dict:
         "module": "zigbee",
         "access": [
             {"url": PUBLIC_URL,
-             "scope": "public", "auth": "Authelia SSO"},
+             "scope": "public", "auth": "LAN-gated"},
             {"url": f"http://{LXC_IP}:{FRONTEND_PORT}/",
              "scope": "lan", "auth": "none (LAN-only)"},
             {"url": f"mqtt://{MQTT_LXC_IP}:{MQTT_PORT} (zigbee2mqtt/#)",

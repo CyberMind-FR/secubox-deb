@@ -77,15 +77,15 @@ app = FastAPI(
 
 # ── v0.2: alert sink + trusted registry singletons ──────────────────────────
 #
-# Auth note: this package is reverse-proxied through nginx + Authelia (see
+# Auth note: this package is reverse-proxied through nginx (see
 # nginx/sentinelle-gsm.conf), which terminates JWT before forwarding to the
 # Unix socket. `require_jwt` is therefore a no-op dependency here; it exists
 # as a hook so tests (and future host-direct callers) can override it via
 # `app.dependency_overrides[require_jwt]`.
 
 def require_jwt() -> dict:
-    """No-op auth hook. Real JWT enforcement happens at nginx/Authelia."""
-    return {"sub": "nginx-authelia"}
+    """No-op auth hook. Real JWT enforcement happens at nginx."""
+    return {"sub": "nginx-lan"}
 
 
 _alert_sink: Optional[AlertSink] = None
@@ -478,7 +478,7 @@ def access() -> dict:
             {"endpoint": "/run/secubox/sentinelle-gsm.sock",
              "scope": "host-only", "auth": "Unix socket (root + secubox)"},
             {"endpoint": "/api/v1/sensor/gsm/ (via canonical hub vhost)",
-             "scope": "lan", "auth": "JWT (Authelia / secubox-zkp-auth)"},
+             "scope": "lan", "auth": "JWT (secubox-zkp-auth)"},
         ],
     }
 
@@ -1097,7 +1097,7 @@ async def list_observations(limit: int = 200) -> dict:
 # /baseline/learn     — enable learn-mode for a sweep window
 # /scoring/thresholds — read / write the 8-heuristic threshold table
 #
-# JWT enforcement is delegated to nginx + Authelia upstream (require_jwt
+# JWT enforcement is delegated to nginx upstream (require_jwt
 # is a no-op hook here, overridable in tests).
 
 class BaselineLearnBody(BaseModel):

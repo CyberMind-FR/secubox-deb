@@ -35,7 +35,7 @@ SOCKET_DIR = Path("/run/secubox")
 # treated as non-critical (cosmetic for the dashboard health %).
 CRITICAL_MODULES = {
     "hub", "dpi", "haproxy", "vhost", "system", "core",
-    "auth", "authelia", "portal", "users", "mail",
+    "auth", "portal", "users", "mail",
 }
 
 

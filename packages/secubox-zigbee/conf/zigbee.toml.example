@@ -33,5 +33,5 @@ symlink = "/dev/secubox-zgb"
 [exposure]
 # zigbee2mqtt frontend is LAN-only by design. For an authenticated remote
 # exposure, the canonical pattern is a sites-available vhost behind
-# HAProxy + Authelia (matches the yacy/lyrion exposure pattern).
+# HAProxy + the LAN default-deny gate (matches the yacy/lyrion exposure pattern).
 lan_only = true

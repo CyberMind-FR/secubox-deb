@@ -110,7 +110,6 @@ Currently 0 of 16 LXCs have memory limits. A misbehaving app can balloon to cons
 | matrix | 384 MB | synapse |
 | gitea | 256 MB | go binary, minimal |
 | grafana | 256 MB | go binary |
-| authelia | 128 MB | go binary, light |
 | roundcube | 256 MB | PHP webmail |
 | horde | 256 MB | PHP groupware |
 | yacy | 256 MB | java search engine |

@@ -3,7 +3,7 @@
 # SecuBox-Deb :: secubox-mqtt :: install-lxc.sh
 #
 # Idempotent LXC bootstrap for Mosquitto 2.x. Safe to re-run.
-# Inherits all 11 install-lxc fixes from v2.11.1 + Authelia v1.0.1 + Lyrion v1.0.3.
+# Inherits all 11 install-lxc fixes from v2.11.1 + Lyrion v1.0.3.
 #
 # Hard limits enforced (per docs/superpowers/specs/2026-05-20-secubox-zigbee-mqtt-iot-stack.md):
 #   - allow_anonymous false (never true)

@@ -62,7 +62,6 @@ jellyfin   = "100000 100000"  # 1,0
 # Ce n'est pas un reglage fin, et il ne pretend pas l'etre. C'est la difference
 # entre « borne » et « pas borne ».
 act-runner-ci-arm64 = "200000 100000"  # compilations CI, par nature gourmandes
-authelia            = "200000 100000"
 frigate             = "200000 100000"  # detection continue — a resserrer si actif
 gitea               = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
 grafana             = "200000 100000"

@@ -146,7 +146,7 @@
       SecuBox runs <code>zigbee2mqtt</code> in an LXC at <code>10.100.0.111</code>
       with a SONOFF Dongle-E coordinator. Pairing, network maps, OTA updates,
       and group bindings are handled by the dedicated <em>Zigbee Manager</em>
-      vhost (Authelia SSO-gated) — click <strong>Open Zigbee Manager →</strong>.
+      vhost (LAN-gated) — click <strong>Open Zigbee Manager →</strong>.
     </p>
     <p>
       This page surfaces the SecuBox-side health (component state, MQTT bridge,
@@ -190,7 +190,7 @@
     var list = access.map(function (a) { return '<div>' + a.scope + ': <a href="' + a.url + '">' + a.url + '</a></div>'; }).join('');
     document.getElementById('access-v').innerHTML = list || '<span style="color:var(--muted)">no access points</span>';
     // Single source of truth for the "Open Zigbee Manager" button:
-    // prefer the public (Authelia-gated) URL, fall back to LAN.
+    // prefer the public (LAN-gated) URL, fall back to LAN.
     var pub = access.find(function (a) { return a.scope === 'public'; });
     var lan = access.find(function (a) { return a.scope === 'lan'; });
     var target = (pub && pub.url) || (lan && lan.url) || '#';

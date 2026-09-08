@@ -118,7 +118,7 @@ avatar.Watch()                   → flux d'événements d'état
   - via theming applicatif quand le service le permet (PeerTube plugin, Nextcloud theming),
   - sinon via le reverse-proxy de la box (sub_filter / injection `<script>` sur les vhosts internes).
   - Contenu : navigation commune, état avatar, lien mosaïque.
-- **SSO réel** : ne PAS implémenter d'IdP maison. Intégrer **Kanidm** (ou Authelia) comme IdP OIDC de la box ; l'avatar provisionne les clients OIDC des services internes et stocke leurs secrets dans le vault. Le « SSO personnel développé maison » = la barre + l'orchestration avatar, pas le protocole.
+- **SSO réel** : ne PAS implémenter d'IdP maison. Intégrer **Kanidm** comme IdP OIDC de la box ; l'avatar provisionne les clients OIDC des services internes et stocke leurs secrets dans le vault. Le « SSO personnel développé maison » = la barre + l'orchestration avatar, pas le protocole.
 
 ## 9. Connecteurs gateway consommateurs (rappel de liaison)
 

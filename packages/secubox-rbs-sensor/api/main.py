@@ -115,7 +115,7 @@ def access() -> dict:
             {"endpoint": "/run/secubox/rbs-sensor.sock", "scope": "host-only",
              "auth": "Unix socket (root + secubox group)"},
             {"endpoint": "/api/v1/rbs-sensor/ (via canonical hub vhost)",
-             "scope": "lan", "auth": "JWT (Authelia / secubox-zkp-auth)"},
+             "scope": "lan", "auth": "JWT (secubox-zkp-auth)"},
         ],
     }
 

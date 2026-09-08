@@ -264,13 +264,13 @@ Pulls live data from `/api/v1/<module>/components`, `/status`, `/access`.
 ### REQUIRED: dual-vhost pattern for modules with a real web UI
 
 When the module exposes a real web UI (LMS Material, z2m frontend,
-Authelia portal, Nextcloud, …), the two surfaces MUST be kept on
+Nextcloud, Grafana, …), the two surfaces MUST be kept on
 separate hostnames:
 
 | URL | Role |
 | --- | --- |
 | `https://admin.gk2.secubox.in/<module>/` | **SecuBox admin** — static page calling `/api/v1/<module>/*`. NEVER a proxy to the app. |
-| `https://<module>.gk2.secubox.in/` | **Real app web UI** at the vhost root. Authelia-gated. |
+| `https://<module>.gk2.secubox.in/` | **Real app web UI** at the vhost root. LAN-gated. |
 
 **Why this is mandatory:**
 

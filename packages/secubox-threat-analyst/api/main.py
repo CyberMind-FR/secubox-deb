@@ -34,8 +34,8 @@ from secubox_core.config import get_config
 # v1.2.0: local no-op `require_jwt`. The previous import from
 # secubox_core.auth demanded an HTTP `Authorization: Bearer` header on
 # every gated endpoint — but the threat-analyst frontend runs inside
-# the Authelia-SSO'd admin vhost where the operator only carries SSO
-# cookies, never a JWT in localStorage. Result: every /stats, /alerts,
+# the LAN-gated admin vhost (ex-SSO retired) where the operator only carries
+# session cookies, never a JWT in localStorage. Result: every /stats, /alerts,
 # /rules call returned 401 and the dashboard showed "?".
 #
 # Every other module in this stack (sentinelle-gsm, etc.) already uses

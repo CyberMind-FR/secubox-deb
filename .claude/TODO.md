@@ -878,7 +878,7 @@ Ces 4 jobs sont distincts du chain kiosk #436. À investiguer un par un.
 
 - [ ] **#421** sockets `/run/secubox/*.sock` cachés (cause des 502 sur
   `/api/v1/cookies` + `/api/v1/certs` + des 500 sur tous les vhosts gated
-  Authelia, dont lyrion). Cause racine identifiée : collision entre tmpfs
+  LAN (ex-SSO), dont lyrion). Cause racine identifiée : collision entre tmpfs
   mount dédié à `/run/secubox` (créé par secubox-runtime/tmpfiles) et
   `RuntimeDirectory=secubox` dans plusieurs units (qui crée un namespace
   privé). Fix : choisir UNE seule mécanique de création et l'appliquer

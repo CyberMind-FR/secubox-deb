@@ -66,18 +66,6 @@
       "timestamp": "2026-06-26T09:38:16.828902"
     },
     {
-      "module_id": "authelia",
-      "module_name": "Authelia",
-      "category": "Other",
-      "path": "/authelia/",
-      "screenshot_path": "docs/screenshots/vm/authelia.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/authelia-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-06-26T09:38:36.021296"
-    },
-    {
       "module_id": "avatar",
       "module_name": "Avatar",
       "category": "System",

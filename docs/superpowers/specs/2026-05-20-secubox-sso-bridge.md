@@ -40,7 +40,7 @@ sees the system-wide health bar even on the auth screens.
 ## Prerequisites — open questions for the operator
 
 1. **IdP choice**: SecuBox doesn't yet ship an IdP. Three viable paths:
-   - **Authelia** (small, OIDC + 2FA, suitable for self-hosted) — recommended starter
+   - **an off-the-shelf OIDC IdP** (small, OIDC + 2FA, suitable for self-hosted) — recommended starter
    - **Authentik** (fuller-featured, heavier)
    - **Keycloak** (mature but JVM-heavy on arm64 MOCHAbin)
 
@@ -70,7 +70,7 @@ sees the system-wide health bar even on the auth screens.
 4. **Health banner on the IdP login page**: `sub_filter` injection of
    `/shared/health-banner.js` in nginx, identical to how the canonical hub
    vhost does it on `admin.gk2.secubox.in`. The IdP login page must be
-   served by nginx (not by Authelia's built-in static asset) for the
+   served by nginx (not by the IdP's built-in static asset) for the
    sub_filter to land — typically via a reverse-proxy wrapper.
 
 ---
@@ -117,9 +117,9 @@ location = /__sbx_verify {
 
 ### Phase C — OIDC IdP for SSO-capable backends
 
-Pick **Authelia** in an LXC at `10.100.0.20` on `br-lxc`:
+Pick **an off-the-shelf OIDC IdP** in an LXC at `10.100.0.20` on `br-lxc`:
 
-- New module `secubox-authelia` (same LXC pattern as grafana/yacy/rustdesk)
+- New IdP module (same LXC pattern as grafana/yacy/rustdesk)
 - Mounts under `/auth/` on the canonical hub vhost
 - Configured to use SecuBox's `users.json` as the authentication backend
   (file backend with argon2 — matches the existing `secubox-users` schema)
@@ -133,7 +133,7 @@ Each backend then enables OIDC:
 
 ### Phase D — Health-banner percolation everywhere
 
-For every SSO-touched vhost (Authelia login page, every backend's `/login`
+For every SSO-touched vhost (the IdP login page, every backend's `/login`
 or equivalent), add the `sub_filter` injection of `/shared/health-banner.js`.
 For backends that minify/CSP-restrict, may need a small upstream patch or
 inject via the post-login dashboard instead.
@@ -144,7 +144,7 @@ inject via the post-login dashboard instead.
 
 - Full ZKP-auth implementation per the GK-HAM-2025 doctrine in CLAUDE.md
   (that's a v3.x track)
-- 2FA / TOTP enrollment UX (Authelia covers this out-of-the-box)
+- 2FA / TOTP enrollment UX (a mature IdP covers this out-of-the-box)
 - Audit trail of cross-app SSO logins (deferred to a `secubox-audit` module)
 
 ---
@@ -153,7 +153,7 @@ inject via the post-login dashboard instead.
 
 Before scaffolding any code, the operator needs to arbitrate:
 
-1. **IdP**: Authelia LXC vs in-house ZKP-auth vs Authentik vs Keycloak?
+1. **IdP**: off-the-shelf IdP LXC vs in-house ZKP-auth vs Authentik vs Keycloak?
 2. **Cookie name + scope**: `sbx_token` global, or per-app `sbx_<app>_token`?
 3. **Health banner on IdP login**: do we proxy the IdP through nginx
    (where sub_filter works) or accept that the IdP login page lacks the banner?

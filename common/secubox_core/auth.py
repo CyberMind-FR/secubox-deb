@@ -106,7 +106,7 @@ def _secret() -> str:
 
 # SSO-lite (#400) ────────────────────────────────────────────────────────
 # A session cookie + /verify endpoint let nginx `auth_request` gate vhosts
-# against SecuBox users directly — replacing Authelia while reusing the same
+# against SecuBox users directly — replacing the ex-SSO IdP (retired) while reusing the same
 # argon2 user_store. The cookie is set parent-domain-scoped so one login
 # covers every *.<domain> vhost (SSO-lite). Configure the parent domain via
 # api.sso_cookie_domain in secubox.conf (e.g. ".gk2.secubox.in"); empty =

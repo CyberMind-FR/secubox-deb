@@ -8,7 +8,7 @@
 
 # ── LXC ──────────────────────────────────────────────────────────────
 container_name = "nextcloud"
-# v2.11.1 canonical layout — match secubox-authelia and siblings.
+# v2.11.1 canonical layout — match the canonical LXC siblings.
 lxc_path  = "/data/lxc"
 data_path = "/data/volumes/nextcloud"
 # LXC container's LAN IP, used for the reachability probe (container_reachable()).

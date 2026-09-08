@@ -163,13 +163,13 @@ Réf. d'implémentation : `secubox-cvectl` (génération de règles WAF),
 ### Dual-vhost split — REQUIRED pour les modules avec UI applicative
 
 Un module qui embarque une application avec sa propre interface web
-(LMS Material, zigbee2mqtt, Authelia, Nextcloud, Grafana, …) **DOIT**
+(LMS Material, zigbee2mqtt, Nextcloud, Grafana, …) **DOIT**
 séparer ses deux surfaces sur des hôtes distincts :
 
 | URL | Rôle |
 | --- | --- |
 | `https://admin.gk2.secubox.in/<module>/` | Admin SecuBox (statique, appelle `/api/v1/<module>/*`) |
-| `https://<module>.gk2.secubox.in/` | App réelle servie à la racine du vhost, Authelia-gated |
+| `https://<module>.gk2.secubox.in/` | App réelle servie à la racine du vhost, LAN-gated |
 
 Reverse-proxy de l'app sous `/<module>/` casse silencieusement les
 URLs d'assets absolues (`/material/`, `/cometd/`, `/apps/`, `/public/`).
