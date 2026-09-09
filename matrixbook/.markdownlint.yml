@@ -1,0 +1,39 @@
+# Configuration markdownlint pour MatrixBook
+# Référence : https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+default: true
+
+# Longueur de ligne : prose française et tableaux larges tolérés
+MD013:
+  line_length: 120
+  code_blocks: false
+  tables: false
+  headings: false
+
+# Titres identiques autorisés dans des sections différentes (ex. « Dimensions »)
+MD024:
+  siblings_only: true
+
+# Ponctuation finale dans les titres : autorise « ? » pour les FAQ
+MD026:
+  punctuation: ".,;:!"
+
+# Listes ordonnées : numérotation incrémentale explicite
+MD029:
+  style: ordered
+
+# Aucun HTML brut dans la documentation
+MD033: true
+
+# Le premier titre d'un fichier doit être un H1
+MD041: true
+
+# Style des blocs de code : toujours délimités par des ```
+MD046:
+  style: fenced
+
+# Style d'emphase : astérisques
+MD049:
+  style: asterisk
+MD050:
+  style: asterisk

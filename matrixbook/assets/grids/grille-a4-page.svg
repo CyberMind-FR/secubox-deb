@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="216mm" height="303mm" viewBox="0 0 216 303">
+<title>MatrixBook — grille a4-page</title>
+<desc>1 unité SVG = 1 mm. Rouge : fond perdu. Noir : format fini. Vert : zone sûre. Bleu : marges et colonnes. Gris : grille de ligne de base.</desc>
+<rect x="0" y="0" width="216" height="303" fill="#fbf8f1"/>
+<rect x="0.15" y="0.15" width="215.7" height="302.7" fill="none" stroke="#c8102e" stroke-width="0.3" stroke-dasharray="2 1"/>
+<rect x="3" y="3" width="210" height="297" fill="none" stroke="#1a1a1a" stroke-width="0.3"/>
+<rect x="9" y="9" width="198" height="285" fill="none" stroke="#2e8b57" stroke-width="0.25" stroke-dasharray="1 1"/>
+<rect x="23" y="25" width="165" height="245" fill="none" stroke="#1f5fa6" stroke-width="0.3"/>
+<rect x="23.000" y="25" width="80.000" height="245" fill="#1f5fa6" fill-opacity="0.06" stroke="#1f5fa6" stroke-width="0.15"/>
+<rect x="108.000" y="25" width="80.000" height="245" fill="#1f5fa6" fill-opacity="0.06" stroke="#1f5fa6" stroke-width="0.15"/>
+<line x1="23" y1="25.000" x2="188" y2="25.000" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="29.586" x2="188" y2="29.586" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="34.172" x2="188" y2="34.172" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="38.758" x2="188" y2="38.758" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="43.344" x2="188" y2="43.344" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="47.931" x2="188" y2="47.931" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="52.517" x2="188" y2="52.517" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="57.103" x2="188" y2="57.103" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="61.689" x2="188" y2="61.689" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="66.275" x2="188" y2="66.275" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="70.861" x2="188" y2="70.861" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="75.447" x2="188" y2="75.447" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="80.033" x2="188" y2="80.033" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="84.619" x2="188" y2="84.619" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="89.206" x2="188" y2="89.206" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="93.792" x2="188" y2="93.792" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="98.378" x2="188" y2="98.378" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="102.964" x2="188" y2="102.964" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="107.550" x2="188" y2="107.550" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="112.136" x2="188" y2="112.136" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="116.722" x2="188" y2="116.722" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="121.308" x2="188" y2="121.308" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="125.894" x2="188" y2="125.894" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="130.481" x2="188" y2="130.481" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="135.067" x2="188" y2="135.067" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="139.653" x2="188" y2="139.653" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="144.239" x2="188" y2="144.239" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="148.825" x2="188" y2="148.825" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="153.411" x2="188" y2="153.411" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="157.997" x2="188" y2="157.997" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="162.583" x2="188" y2="162.583" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="167.169" x2="188" y2="167.169" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="171.756" x2="188" y2="171.756" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="176.342" x2="188" y2="176.342" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="180.928" x2="188" y2="180.928" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="185.514" x2="188" y2="185.514" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="190.100" x2="188" y2="190.100" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="194.686" x2="188" y2="194.686" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="199.272" x2="188" y2="199.272" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="203.858" x2="188" y2="203.858" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="208.444" x2="188" y2="208.444" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="213.031" x2="188" y2="213.031" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="217.617" x2="188" y2="217.617" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="222.203" x2="188" y2="222.203" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="226.789" x2="188" y2="226.789" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="231.375" x2="188" y2="231.375" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="235.961" x2="188" y2="235.961" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="240.547" x2="188" y2="240.547" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="245.133" x2="188" y2="245.133" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="249.719" x2="188" y2="249.719" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="254.306" x2="188" y2="254.306" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="258.892" x2="188" y2="258.892" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="263.478" x2="188" y2="263.478" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="23" y1="268.064" x2="188" y2="268.064" stroke="#9a9a9a" stroke-width="0.1"/>
+<line x1="-1" y1="3" x2="0" y2="3" stroke="#1a1a1a" stroke-width="0.2"/>
+<line x1="3" y1="-1" x2="3" y2="0" stroke="#1a1a1a" stroke-width="0.2"/>
+<line x1="217" y1="3" x2="216" y2="3" stroke="#1a1a1a" stroke-width="0.2"/>
+<line x1="213" y1="-1" x2="213" y2="0" stroke="#1a1a1a" stroke-width="0.2"/>
+<line x1="-1" y1="300" x2="0" y2="300" stroke="#1a1a1a" stroke-width="0.2"/>
+<line x1="3" y1="304" x2="3" y2="303" stroke="#1a1a1a" stroke-width="0.2"/>
+<line x1="217" y1="300" x2="216" y2="300" stroke="#1a1a1a" stroke-width="0.2"/>
+<line x1="213" y1="304" x2="213" y2="303" stroke="#1a1a1a" stroke-width="0.2"/>
+<text x="5" y="302" font-family="monospace" font-size="2.2" fill="#555">MatrixBook · a4-page · fond perdu 3 mm · zone sûre 6 mm · marges H/B/I/E 22/30/20/25 mm · 2 col. · gouttière 5 mm · base 13.0 pt</text>
+</svg>
