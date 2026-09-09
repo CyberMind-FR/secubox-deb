@@ -60,7 +60,6 @@ func TestUn200SignifieChange(t *testing.T) {
 	}
 }
 
-
 func TestSansValidateurOnNeSupposeRien(t *testing.T) {
 	// L ignorance doit conduire a redemander, jamais a servir du perime.
 	appele := false

@@ -53,10 +53,10 @@ func TestEstDGA_NePasSurClasserLesNomsLegitimes(t *testing.T) {
 
 func TestEstDGA_AttrapeLesNomsGeneres(t *testing.T) {
 	dga := []string{
-		"xqzkwbrtplmn",       // pas de voyelle, long
-		"kdjfhgqwzxcvbnm",    // imprononçable
-		"a1b2c3d4e5f6g7h8",   // saupoudré de chiffres
-		"zx9k2m7q4w1n8p",     // dense, chiffré
+		"xqzkwbrtplmn",     // pas de voyelle, long
+		"kdjfhgqwzxcvbnm",  // imprononçable
+		"a1b2c3d4e5f6g7h8", // saupoudré de chiffres
+		"zx9k2m7q4w1n8p",   // dense, chiffré
 	}
 	for _, h := range dga {
 		if !estDGA(h) {
@@ -81,7 +81,7 @@ func TestEstPremierePartie(t *testing.T) {
 		{"GK2.NET", true},
 		{"nextcloud.gk2.secubox.in:443", true},
 		{"evil.com", false},
-		{"notgk2.net", false},          // pas une frontière de label
+		{"notgk2.net", false}, // pas une frontière de label
 		{"gk2.secubox.in.evil.com", false},
 		{"", false},
 	}

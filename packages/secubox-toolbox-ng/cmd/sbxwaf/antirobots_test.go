@@ -94,7 +94,7 @@ func TestAntiRobotsNommeLesRobotsConnus(t *testing.T) {
 		"Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)":       "ahrefsbot",
 		"Mozilla/5.0 (compatible; SemrushBot/7~bl; +http://www.semrush.com/bot)":   "semrushbot",
 		"Mozilla/5.0 (compatible; PerplexityBot/1.0)":                              "perplexitybot",
-		"Bytespider":                                                               "bytespider",
+		"Bytespider": "bytespider",
 	}
 	for ua, attendu := range cas {
 		nom, ok := identifierRobot(ua)

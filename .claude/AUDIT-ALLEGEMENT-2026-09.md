@@ -66,7 +66,7 @@ nginx tape déjà l'aggregator) — vérifier au cas par cas l'absence de tâche
 | mitmproxy | déjà non installé | **CONSERVÉ** | 6 paquets le déclarent en Depends (cookies, grafana, interceptor, lyrion, profils, yacy) — nettoyer ces `control` d'abord (#1054). |
 | ndpid | non installé | **CONSERVÉ** | `secubox-dpi` le déclare en Depends — nettoyer d'abord. |
 | dpi-engine | **purgé** ✅ | **supprimé** ✅ | nDPId écarté. |
-| surf | **désactivé** ✅ | **supprimé** ✅ | POC absorbé par le BiB/webos. |
+| surf | **RÉACTIVÉ** ⚠️ | à restaurer au dépôt | ❌ PAS un POC mort : **metanews en dépend** pour les clics de liens sources (réécrits en `surf-<hôte>.gk2.secubox.in` → nginx `surf.conf` → uvicorn `127.0.0.1:9082`). Désactivé par erreur → clics = 502. Réactivé le 2026-09-09 (`enable --now secubox-surf`). Le retrait du dépôt était une erreur — à restaurer si future réinstall. |
 | webradio | non installé | **supprimé** ✅ | doublon de `secubox-radio` (Go). |
 
 ## 6. Candidats ON-DEMAND (sleeper `secubox-profiles`)

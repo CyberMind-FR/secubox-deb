@@ -17,12 +17,12 @@ func TestTraficInterneAgregeEnLocal(t *testing.T) {
 	tl := NewThreatLog(path)
 
 	cas := map[string]string{
-		"127.0.0.1":     "local", // loopback
-		"192.168.1.254": "local", // passerelle LAN
-		"10.100.0.1":    "local", // réseau interne
-		"::1":           "local", // loopback v6
+		"127.0.0.1":       "local",           // loopback
+		"192.168.1.254":   "local",           // passerelle LAN
+		"10.100.0.1":      "local",           // réseau interne
+		"::1":             "local",           // loopback v6
 		"195.178.110.199": "195.178.110.199", // vrai attaquant externe : intact
-		"local":           "local",             // idempotent
+		"local":           "local",           // idempotent
 	}
 	for ip := range cas {
 		tl.Record(ThreatRecord{ClientIP: ip, Host: "x", Method: "GET", Path: "/",

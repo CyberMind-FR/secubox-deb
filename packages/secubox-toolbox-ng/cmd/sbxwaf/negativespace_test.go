@@ -7,10 +7,10 @@ package main
 import "testing"
 
 // TestClassifyPath — le contrat du brief P0-A (#1240) :
-//   1. un chemin réel n'est jamais un signal ;
-//   2. une 404 quelconque n'est PAS une attaque (le point central du brief) ;
-//   3. un appât connu est un signal ;
-//   4. une sonde de secret/exécution/admin est un signal FORT.
+//  1. un chemin réel n'est jamais un signal ;
+//  2. une 404 quelconque n'est PAS une attaque (le point central du brief) ;
+//  3. un appât connu est un signal ;
+//  4. une sonde de secret/exécution/admin est un signal FORT.
 func TestClassifyPath(t *testing.T) {
 	cas := []struct {
 		nom     string
