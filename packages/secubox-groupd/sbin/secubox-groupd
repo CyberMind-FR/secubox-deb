@@ -29,6 +29,7 @@ import importlib.util
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -109,9 +110,143 @@ def charge(mid: str, racine: Path = RACINE):
         os.chdir(avant)
 
 
-async def sert(mid: str, app, dossier_sockets: Path = SOCKETS):
-    """Sert un module sur SA socket, dans la boucle partagee."""
+class _Lifespan:
+    """Pilote le lifespan d'une app ASGI a la demande (demarrer / arreter).
+
+    Une app FastAPI/Starlette sert ses routes HTTP MEME sans lifespan : le
+    lifespan ne fait que lancer les taches de fond (`run_forever`) et les hooks
+    de startup. On les demarre donc a la 1re vraie requete et on les arrete
+    apres inactivite, en pilotant nous-memes le protocole lifespan via des files.
+    """
+
+    def __init__(self, app):
+        self.app = app
+        self._tache: asyncio.Task | None = None
+        self._vers_app: asyncio.Queue = asyncio.Queue()
+        self._depuis_app: asyncio.Queue = asyncio.Queue()
+        self._verrou = asyncio.Lock()
+        self.actif = False
+
+    async def _boucle(self):
+        async def receive():
+            return await self._vers_app.get()
+
+        async def send(msg):
+            await self._depuis_app.put(msg)
+
+        try:
+            await self.app({"type": "lifespan", "asgi": {"version": "3.0"}},
+                           receive, send)
+        except Exception as e:  # noqa: BLE001
+            await self._depuis_app.put({"type": "_erreur", "exc": repr(e)})
+
+    async def demarrer(self):
+        async with self._verrou:
+            if self.actif:
+                return
+            self._tache = asyncio.create_task(self._boucle())
+            await self._vers_app.put({"type": "lifespan.startup"})
+            msg = await self._depuis_app.get()
+            if msg["type"] in ("lifespan.startup.failed", "_erreur"):
+                log.error("veille: startup echoue: %s", msg)
+                self._tache.cancel()
+                self._tache = None
+                return  # on sert quand meme, sans les taches de fond
+            self.actif = True
+
+    async def arreter(self):
+        async with self._verrou:
+            if not self.actif:
+                return
+            await self._vers_app.put({"type": "lifespan.shutdown"})
+            try:
+                await asyncio.wait_for(self._depuis_app.get(), timeout=15)
+            except asyncio.TimeoutError:
+                log.warning("veille: shutdown lent, on annule la tache")
+            if self._tache:
+                self._tache.cancel()
+                try:
+                    await self._tache
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                    pass
+                self._tache = None
+            self.actif = False
+
+
+class VeilleAuto:
+    """Enveloppe ASGI : lazy-lifespan + mise en veille apres inactivite.
+
+    La socket reste a l'ecoute en permanence (aucun 502/504, pas de wake-proxy).
+    Les taches de fond du module ne tournent QUE lorsqu'il est reveille — un
+    module opt-in jamais consulte ne coute alors plus de CPU. Les SONDES de sante
+    ne reveillent pas (sinon rien ne dort jamais : cf. conflit sleeper/prober).
+    """
+
+    def __init__(self, app, mid: str, idle: float):
+        self.app = app
+        self.mid = mid
+        self.idle = max(30.0, float(idle))
+        self.ls = _Lifespan(app)
+        self._dernier = 0.0
+        self._reaper: asyncio.Task | None = None
+
+    @staticmethod
+    def _est_sonde(scope) -> bool:
+        chemin = scope.get("path", "") or ""
+        if chemin.endswith("/health") or chemin.endswith("/healthz") \
+           or chemin.endswith("/ping") or chemin == "/":
+            return True
+        for cle, val in (scope.get("headers") or []):
+            if cle == b"user-agent" and (b"prober" in val.lower()
+                                         or b"health" in val.lower()):
+                return True
+        return False
+
+    async def _veilleur(self):
+        pas = min(60.0, self.idle)
+        while True:
+            await asyncio.sleep(pas)
+            if self.ls.actif and self._dernier \
+               and (time.monotonic() - self._dernier) > self.idle:
+                log.info("veille: %s s'endort (inactif %.0fs)", self.mid, self.idle)
+                await self.ls.arreter()
+
+    async def __call__(self, scope, receive, send):
+        t = scope["type"]
+        if t == "lifespan":
+            # On repond nous-memes a uvicorn : le module ne demarre PAS ici.
+            while True:
+                msg = await receive()
+                if msg["type"] == "lifespan.startup":
+                    if self._reaper is None:
+                        self._reaper = asyncio.create_task(self._veilleur())
+                    await send({"type": "lifespan.startup.complete"})
+                elif msg["type"] == "lifespan.shutdown":
+                    if self._reaper:
+                        self._reaper.cancel()
+                    await self.ls.arreter()
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+        else:
+            # http / websocket : on reveille sauf pour les sondes.
+            if not (t == "http" and self._est_sonde(scope)):
+                await self.ls.demarrer()
+                self._dernier = time.monotonic()
+            await self.app(scope, receive, send)
+
+
+async def sert(mid: str, app, dossier_sockets: Path = SOCKETS, veille: float = 0):
+    """Sert un module sur SA socket, dans la boucle partagee.
+
+    Si `veille > 0`, le module est enveloppe de `VeilleAuto` : ses taches de
+    fond ne tournent que lorsqu'il est reveille. Sinon, comportement historique
+    (lifespan demarre au boot, taches de fond permanentes).
+    """
     import uvicorn
+
+    if veille > 0:
+        app = VeilleAuto(app, mid, veille)
+        log.info("veille auto activee pour %s (idle=%.0fs)", mid, veille)
 
     chemin = dossier_sockets / f"{mid}.sock"
     # La socket perimee est retiree AVANT le bind : /run/secubox est partage et
@@ -128,7 +263,8 @@ async def sert(mid: str, app, dossier_sockets: Path = SOCKETS):
     await srv.serve()
 
 
-async def principal(modules: list[str], racine: Path, dossier_sockets: Path) -> int:
+async def principal(modules: list[str], racine: Path, dossier_sockets: Path,
+                    veille: float = 0, veille_modules: set[str] | None = None) -> int:
     charges, echecs = [], []
     for mid in modules:
         try:
@@ -141,7 +277,12 @@ async def principal(modules: list[str], racine: Path, dossier_sockets: Path) -> 
     log.warning("groupe : %d module(s) charges, %d en echec", len(charges), len(echecs))
     if not charges:
         return 1
-    await asyncio.gather(*(sert(m, a, dossier_sockets) for m, a in charges))
+    # Double garde : la veille ne s'applique qu'avec `--veille > 0` ET au module
+    # explicitement opt-in (`--veille-modules`). Sinon, comportement historique.
+    vm = veille_modules or set()
+    await asyncio.gather(*(
+        sert(m, a, dossier_sockets, veille=veille if (veille > 0 and m in vm) else 0)
+        for m, a in charges))
     return 0
 
 
@@ -177,6 +318,11 @@ def main() -> int:
                    help="prendre les modules qui se sont declares groupables")
     p.add_argument("--repertoire-declarations", type=Path, default=DECLARATIONS,
                    dest="repertoire_declarations")
+    p.add_argument("--veille", type=float, default=0,
+                   help="mise en veille auto apres N secondes d'inactivite "
+                        "(0 = desactive ; n'agit que sur --veille-modules)")
+    p.add_argument("--veille-modules", default="",
+                   help="liste (virgules) des modules opt-in a la veille auto")
     a = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -197,7 +343,9 @@ def main() -> int:
     mods = uniques
     if not mods:
         p.error("aucun module : ni declaration, ni --fichier, ni --modules")
-    return asyncio.run(principal(mods, a.racine, a.sockets))
+    veille_modules = {m.strip() for m in a.veille_modules.split(",") if m.strip()}
+    return asyncio.run(principal(mods, a.racine, a.sockets,
+                                 veille=a.veille, veille_modules=veille_modules))
 
 
 if __name__ == "__main__":

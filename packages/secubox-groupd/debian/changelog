@@ -1,3 +1,15 @@
+secubox-groupd (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Veille auto par sous-module (opt-in) : nouveau wrapper ASGI VeilleAuto +
+    pilote _Lifespan. Les taches de fond d'un module opt-in ne tournent que
+    lorsqu'il est reveille par une vraie requete ; mise en veille apres
+    inactivite (--veille N). La socket reste a l'ecoute (aucun 502/504, pas de
+    wake-proxy). Les sondes de sante (/health, UA prober) ne reveillent pas.
+    Double garde : n'agit qu'avec --veille>0 ET --veille-modules <liste>.
+    Sans arguments, comportement strictement identique (aucune regression).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 09 Sep 2026 18:30:00 +0200
+
 secubox-groupd (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Le groupe tombait en EMFILE (« Too many open files ») et refusait les
