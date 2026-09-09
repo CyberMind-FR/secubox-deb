@@ -113,6 +113,17 @@ surcoût interpréteur SANS réécrire → réserver Go aux 3 plus chauds.
   streamlit…) : le standalone y a un RÔLE DE FOND (pilote le conteneur / collecteur)
   → NE PAS couper à l'aveugle, traitement au cas par cas (P3/P4).
 - **Verrou durable** : les 10 pure-API `systemctl mask`és (survit à `apt upgrade`).
+- **🔥 secubox-ui-manager = SPINNER 100% CPU (2026-09-09).** L'unité lance une TUI
+  **Textual** (`python3 -m textual run secubox_console.app`) en démon `Type=notify` :
+  une TUI n'envoie jamais le READY sd_notify → l'unité reste `activating` à vie et
+  sa **boucle de rendu spin à ~180% CPU** (2 threads), sans TTY, sans socket, sans
+  route nginx, sans consommateur. C'est un **bug d'unité** (TUI packagée en daemon).
+  Il avait été masqué par l'allègement (à raison) puis **réactivé par erreur** dans
+  la reprise post-incident login (« unmask des 14 par sûreté »). **Re-masqué** →
+  load 11 → 3,4. À corriger côté paquet (unité : soit retirer le service, soit
+  l'attacher à un vrai TTY/console locale). Leçon : la reprise « par sûreté » a
+  réactivé un service qui n'aurait pas dû — vérifier CONSOMMATEUR **et** santé
+  (spin/activating) avant de (re)démarrer.
 - **🔴 INCIDENT (2026-09-08) — le masquage a CASSÉ le login admin. Prémisse P2
   fausse pour hub+auth.** Symptôme : `admin.gk2.secubox.in` → `JSON.parse:
   unexpected character at line 1 column 1` au Sign In. Cause : le formulaire POST
