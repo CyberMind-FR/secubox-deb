@@ -1,3 +1,12 @@
+secubox-security-posture (2.0.4-1) bookworm; urgency=medium
+
+  * Allègement CPU : REFRESH_INTERVAL du snapshot posture porté de 60 s à 300 s
+    (chaque collecte est coûteuse, ~20% CPU en continu sur board 4 cœurs ; un
+    snapshot de tableau de bord n'a pas besoin de 60 s de fraîcheur).
+    Configurable par SECUBOX_POSTURE_REFRESH_SEC. Ajoute l'import os manquant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 09 Sep 2026 19:00:00 +0200
+
 secubox-security-posture (2.0.3-2) bookworm; urgency=medium
 
   * Purge des references authelia (SSO decommissionne) : commentaires,

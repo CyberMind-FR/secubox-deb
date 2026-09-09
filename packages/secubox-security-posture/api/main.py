@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +37,10 @@ log = logging.getLogger("secubox.security-posture")
 # Under /var/lib/secubox (the systemd unit's ReadWritePaths) — /var/cache is not
 # writable with ProtectSystem=strict.
 CACHE_FILE = Path("/var/lib/secubox/security-posture/posture.json")
-REFRESH_INTERVAL = 60
+# Snapshot pour un tableau de bord : 5 min de fraicheur suffisent. Chaque
+# rafraichissement est couteux (collecte posture) — a 60s il pesait ~20% CPU en
+# continu sur cette board 4 coeurs. Configurable par env si besoin.
+REFRESH_INTERVAL = int(os.environ.get("SECUBOX_POSTURE_REFRESH_SEC", "300"))
 
 _state: dict = {}
 

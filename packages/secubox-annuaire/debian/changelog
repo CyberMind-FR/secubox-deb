@@ -1,3 +1,12 @@
+secubox-annuaire (0.10.3-1~bookworm1) bookworm; urgency=medium
+
+  * Allègement CPU : intervalle par défaut de _dir_sync_loop (sync mesh) porté
+    de 120 s à 300 s (chaque sync_once est coûteux, ~20% CPU en continu sur
+    cette board 4 cœurs). Toujours surchargée par ANNUAIRE_DIR_SYNC_INTERVAL.
+    Fraîcheur de l'annuaire mesh un peu moindre, aucune fonction perdue.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 09 Sep 2026 19:00:00 +0200
+
 secubox-annuaire (0.10.2-1~bookworm1) bookworm; urgency=high
 
   * Retire `RuntimeDirectory=secubox` (ref #1022). Ce repertoire est PARTAGE par

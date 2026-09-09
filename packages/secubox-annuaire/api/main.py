@@ -1190,7 +1190,7 @@ async def _dir_sync_loop():
     import asyncio  # noqa: PLC0415
     from annuaire.mesh_sync import read_mesh_peers, sync_once  # noqa: PLC0415
 
-    interval = int(os.environ.get("ANNUAIRE_DIR_SYNC_INTERVAL", "120"))
+    interval = int(os.environ.get("ANNUAIRE_DIR_SYNC_INTERVAL", "300"))
     peers_path = os.environ.get("ANNUAIRE_PEERS_PATH", "/var/lib/secubox/p2p/wg_mesh.json")
     while True:
         try:
