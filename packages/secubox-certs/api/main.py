@@ -8,6 +8,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from pathlib import Path
 from datetime import datetime, timedelta
+import os
 import subprocess
 import json
 import asyncio
@@ -672,8 +673,14 @@ app.include_router(router)
 
 
 # Background cache refresh
+# Allègement : le scan spawn un openssl PAR certificat (pic CPU récurrent). Les
+# certs expirent en semaines — 15 min de fraîcheur suffisent largement. Défaut
+# 900s, surchargeable par SECUBOX_CERTS_REFRESH_SEC.
+_CERTS_REFRESH = int(os.environ.get("SECUBOX_CERTS_REFRESH_SEC", "900"))
+
+
 async def _refresh_cache():
-    """Background task to refresh cache every 5 minutes."""
+    """Background task to refresh cache (SECUBOX_CERTS_REFRESH_SEC, defaut 900s)."""
     global _certs_cache, _metrics_cache
     # If cache is already loaded from file, wait before first scan
     if _certs_cache:
@@ -692,7 +699,7 @@ async def _refresh_cache():
             }))
         except Exception:
             pass
-        await asyncio.sleep(300)
+        await asyncio.sleep(_CERTS_REFRESH)
 
 
 @app.on_event("startup")

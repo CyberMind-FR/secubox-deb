@@ -1,3 +1,12 @@
+secubox-certs (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Allègement CPU : scan d'expiration des certificats porté de 300 s à 900 s
+    (chaque scan spawn un openssl par cert → pic CPU récurrent ; l'expiration
+    évolue en semaines). Configurable par SECUBOX_CERTS_REFRESH_SEC. Ajoute
+    l'import os manquant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 09 Sep 2026 19:30:00 +0200
+
 secubox-certs (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * certsctl couvre aussi le magasin certbot (/etc/letsencrypt/live). La
