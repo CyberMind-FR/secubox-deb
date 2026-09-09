@@ -1,0 +1,5 @@
+# Les modèles GitHub (issues, pull request) commencent par un H2 par convention
+# et n'ont pas de titre H1 : la règle MD041 est désactivée dans ce dossier.
+# Toutes les autres règles sont héritées de la configuration racine.
+extends: ../.markdownlint.yml
+MD041: false
