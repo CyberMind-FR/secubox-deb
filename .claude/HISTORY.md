@@ -5,6 +5,41 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-10 — Garde JWT : P0 fermé + cliquet de conformité (ref #1256)
+
+Suite de l'audit du jour. Les trois modules critiques sont fermés, et la dette
+restante est désormais **mesurée et bornée**.
+
+- **`secubox-vault` 1.1.1, `secubox-certs` 1.2.2, `secubox-cloner` 1.1.1.**
+  33 routes passent sous `dependencies=[Depends(require_jwt)]` ; seule `/health`
+  reste publique. Vérifié à l'exécution (TestClient) : `/health` → 200,
+  `GET /secrets/{key}` → 401, `POST /export` → 401. Avant, la même requête
+  rendait la valeur du secret. `dependencies=[...]` plutôt qu'un paramètre
+  `user=Depends()` : aucun corps de fonction n'est touché.
+- **`/metrics` de certs est gardé**, contrairement à `/health` : il rend
+  domaines, statistiques d'attaques et de visites, n'est pas au format
+  Prometheus, et rien dans le dépôt ne le consomme.
+- **`tests/test_conformite_jwt.py` — cliquet, pas verdict.** Analyse **statique**
+  (`ast`, sans importer fastapi : la forme de `app.routes` dépend de la version —
+  à partir de 0.14x un routeur inclus est un `_IncludedRouter` opaque là où
+  bookworm aplatit ; un test qui inspecte l'objet passerait ici et raterait sur
+  la board). Il échoue si une route nue apparaît **hors** de
+  `tests/dette-jwt.txt`, ET si une entrée de l'inventaire est réparée sans être
+  retirée — c'est ce second sens qui empêche l'inventaire de pourrir. Les deux
+  directions ont été vérifiées en cassant volontairement chaque cas.
+- **CORRECTION DU CHIFFRE DE L'AUDIT.** L'audit annonçait 581 routes nues ;
+  le compte exact est **~700** (667 après les 33 réparées). L'écart vient de
+  l'heuristique employée le matin — un `Depends(` cherché dans les 12 lignes
+  suivant un décorateur : la fenêtre débordait sur le décorateur **suivant** et
+  créditait à tort 92 routes. L'AST ne se trompe pas. La dette est donc pire que
+  ce que l'audit disait, pas meilleure.
+- Inventaire : 667 routes sur 114 modules. Toutes ne sont pas fautives —
+  `portal POST /login` et `annuaire GET /services` sont publics à dessein ; le
+  tri module par module les reclassera dans `PUBLIQUES`.
+- Non déployé. Suite P1 : les 22 modules restants sans aucun `require_jwt`.
+
+---
+
 ## 2026-09-10 — `haproxyctl generate` réparé (ref #1254)
 
 Le « generate CASSÉ (erreurs bash) » noté au 08/09 était **deux** pannes, reproduites

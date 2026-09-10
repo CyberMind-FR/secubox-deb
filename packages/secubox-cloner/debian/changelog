@@ -1,3 +1,24 @@
+secubox-cloner (1.1.1-1~bookworm1) bookworm; urgency=high
+
+  * 11 routes ouvertes, dont POST /backups/{id}/restore (ecrase le systeme
+    depuis une sauvegarde arbitraire), DELETE /backups/{id} et PUT /config.
+  * GARDE JWT SUR TOUTE L'API (#1256). Aucune route de ce module n'exigeait
+    d'authentification, alors que MODULE-COMPLIANCE.md l'impose depuis toujours
+    (« All endpoints (except /health) MUST use JWT authentication »).
+  * Et rien ne rattrapait l'oubli en amont : l'aggregator se contente de
+    app.mount() sans middleware, le snippet nginx secubox-proxy.conf TRANSMET
+    l'en-tete Authorization sans jamais le verifier, et auth_request
+    /__sbx_auth_verify n'est cable que sur une poignee de vhosts -- ou il teste
+    l'appartenance au LAN, pas un jeton. La seule barriere etait l'obfuscation
+    du nom d'hote admin.
+  * dependencies=[Depends(require_jwt)] plutot qu'un parametre user=Depends() :
+    la garde porte sur la route, aucun corps de fonction n'est touche.
+  * /health reste public (sonde systemd/nginx, appelee sans jeton).
+  * Verifie a l'execution : /health rend 200, toute autre route rend 401
+    sans jeton. Couvert par tests/test_conformite_jwt.py.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 18:05:00 +0200
+
 secubox-cloner (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/. C'est le

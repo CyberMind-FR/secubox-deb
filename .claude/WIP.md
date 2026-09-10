@@ -10,6 +10,37 @@
 
 ---
 
+## 2026-09-10 — Audit sécurité + garde JWT P0 (#1256, #1257, #1258)
+
+### ✅ Fait — dans le dépôt (non déployé)
+- **Audit de conformité** du dépôt contre ses propres règles (CLAUDE.md,
+  MODULE-COMPLIANCE, contraintes CSPN). Trois constats déposés : **#1256**
+  (581→~700 routes API sans garde JWT), **#1257** (l'API vhost de HAProxy répond
+  `success` sans rien écrire), **#1258** (3 profils AppArmor pour 254 units).
+  Contre-épreuve : aucun secret en clair, aucun `shell=True`, aucun `subprocess`
+  par f-string, TLS 1.3/1.2 seulement, DEFAULT DROP effectif, aucun paquet ne
+  fait `flush ruleset` (et deux tests le défendent).
+- **#1256 P0 fermé** : `secubox-vault` 1.1.1, `secubox-certs` 1.2.2,
+  `secubox-cloner` 1.1.1 — 33 routes gardées, `/health` seule publique, vérifié
+  à l'exécution (401 sans jeton).
+- **Cliquet de conformité** `tests/test_conformite_jwt.py` + inventaire
+  `tests/dette-jwt.txt` (667 routes, 114 modules) : la dette ne peut plus
+  augmenter en silence, ni l'inventaire pourrir.
+
+### ⬜ Next Up
+- **#1256 P1** : les 22 modules restants sans aucun `require_jwt`, en commençant
+  par ceux qui écrivent (`simplex` 27, `vm` 17, `wazuh` 17, `jabber` 15,
+  `redroid` 14). Retirer les lignes correspondantes de `tests/dette-jwt.txt`
+  dans le même commit.
+- **#1256 P2** : trier les entrées publiques à dessein vers `PUBLIQUES`.
+- **#1257** : brancher l'API vhost de HAProxy sur `haproxyctl` — **après** le
+  déploiement de #1254.
+- **#1258** : patron AppArmor générique dans `common/`, puis les 5 services
+  exposés (haproxy, portal, aggregator, vault, certs).
+- **Déployer** `secubox-haproxy` 1.8.12 sur gk2 (cf. section #1254 ci-dessous).
+
+---
+
 ## 2026-09-10 — `haproxyctl generate` réparé (#1254)
 
 ### ✅ Fait — dans le dépôt (non déployé)
