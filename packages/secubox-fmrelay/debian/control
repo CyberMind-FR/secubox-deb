@@ -9,7 +9,7 @@ Homepage: https://cybermind.fr/secubox
 Package: secubox-fmrelay
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core (>= 1.0),
+         secubox-core (>= 1.4.0),
          python3-uvicorn,
          python3-fastapi,
          rtl-sdr,

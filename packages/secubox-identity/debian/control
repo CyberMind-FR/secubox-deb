@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-identity
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
 Description: SecuBox Identity — decentralized identity management
  Decentralized identity (DID) management for SecuBox: identity
  issuance, verification, and lifecycle. Distinct from user-account

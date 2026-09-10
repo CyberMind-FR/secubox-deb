@@ -9,7 +9,7 @@ Homepage: https://github.com/gkerma/secubox-deb
 Package: secubox-hardening
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends},
- secubox-core,
+ secubox-core (>= 1.4.0),
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip
 Recommends: auditd

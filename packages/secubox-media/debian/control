@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-media
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-uvicorn
 Recommends: rsync, exfat-fuse, exfatprogs, ntfs-3g
 Description: SecuBox External Media Manager
  Port Debian bookworm du module luci-app-media de SecuBox OpenWrt.

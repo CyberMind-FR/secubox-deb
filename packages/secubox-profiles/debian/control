@@ -13,7 +13,7 @@ Depends: ${misc:Depends},
  python3-fastapi,
  python3-uvicorn,
  python3-pydantic,
- secubox-core
+ secubox-core (>= 1.4.0)
 Description: SecuBox — inventaire et profils de modules (phase 1, lecture seule)
  Manifestes de modules, profiler de configuration, état et diff — CLI
  secubox-profilectl et API web (webui /profiles/, socket dédié, jamais

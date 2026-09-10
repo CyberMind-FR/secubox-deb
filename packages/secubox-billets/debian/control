@@ -9,6 +9,7 @@ Homepage: https://secubox.in
 Package: secubox-billets
 Architecture: all
 Depends: ${misc:Depends},
+         secubox-core (>= 1.4.0),
          python3 (>= 3.11),
          python3-venv,
          adduser,

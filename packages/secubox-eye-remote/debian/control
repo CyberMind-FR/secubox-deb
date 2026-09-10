@@ -10,7 +10,7 @@ Package: secubox-eye-remote
 Architecture: all
 Depends: ${misc:Depends},
  dnsmasq-base,
- secubox-core,
+ secubox-core (>= 1.4.0),
  python3-fastapi,
  python3-uvicorn,
  udev

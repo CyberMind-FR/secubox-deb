@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-ai-insights
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3 (>= 3.11)
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3 (>= 3.11)
 Recommends: suricata
 Description: SecuBox AI Insights - ML-based Threat Detection
  Machine learning powered threat detection and security insights module.

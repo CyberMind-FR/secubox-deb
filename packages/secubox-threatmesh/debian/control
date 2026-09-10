@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-threatmesh
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-uvicorn | python3-pip, secubox-vortex-firewall | secubox-toolbox
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3, python3-uvicorn | python3-pip, secubox-vortex-firewall | secubox-toolbox
 Recommends: secubox-p2p
 Description: Sovereign threat-intel mesh for SecuBox (central-API replacement)
  Replaces third-party central threat APIs with self-sourced free public blocklists

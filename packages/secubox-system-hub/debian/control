@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-system-hub
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-psutil
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-psutil
 Description: SecuBox System Hub Dashboard
  System control center: health, systemd services, journald logs, diagnostics.
  .

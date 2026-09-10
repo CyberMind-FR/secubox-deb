@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-soc
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
 Replaces: secubox-hub, secubox-soc-web
 Breaks: secubox-hub (<< 1.9.10-1~bookworm1)
 Description: SecuBox SOC — Security Operations Center aggregator

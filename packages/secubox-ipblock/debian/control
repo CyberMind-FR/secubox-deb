@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-ipblock
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), nftables, curl
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), nftables, curl
 Description: SecuBox IP Blocklist Manager
  IP blocklist management module for SecuBox.
  Features include:
