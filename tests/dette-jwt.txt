@@ -7,7 +7,7 @@
 # Une ligne se RETIRE quand la route est reparee, dans le meme commit que la
 # reparation — `test_inventaire_sans_entree_perimee` echoue sinon.
 #
-# Genere le 2026-09-10 : 667 routes, 114 modules.
+# Genere le 2026-09-10 : 526 routes, 106 modules.
 # Format : <module> <METHODE> <chemin>
 #
 # TOUTES ces lignes ne sont pas des trous : quelques routes sont PUBLIQUES A
@@ -329,23 +329,6 @@ secubox-iot-guard GET /status
 # secubox-ipblock — 1
 secubox-ipblock GET /status
 
-# secubox-jabber — 15
-secubox-jabber DELETE /hosts/{domain}
-secubox-jabber DELETE /users/{jid}
-secubox-jabber GET /hosts
-secubox-jabber GET /logs
-secubox-jabber GET /online
-secubox-jabber GET /status
-secubox-jabber GET /users
-secubox-jabber POST /hosts
-secubox-jabber POST /install
-secubox-jabber POST /reload
-secubox-jabber POST /restart
-secubox-jabber POST /start
-secubox-jabber POST /stop
-secubox-jabber POST /users
-secubox-jabber POST /users/{jid}/password
-
 # secubox-jellyfin — 1
 secubox-jellyfin GET /status
 
@@ -374,28 +357,6 @@ secubox-lyrion POST /player/{pid}/power
 secubox-lyrion POST /player/{pid}/sync
 secubox-lyrion POST /player/{pid}/volume
 secubox-lyrion POST /rescan
-
-# secubox-magicmirror — 20
-secubox-magicmirror DELETE /modules/{module_name}
-secubox-magicmirror GET /config
-secubox-magicmirror GET /display
-secubox-magicmirror GET /logs
-secubox-magicmirror GET /modules
-secubox-magicmirror GET /modules/available
-secubox-magicmirror GET /modules/categories
-secubox-magicmirror GET /modules/installed
-secubox-magicmirror GET /modules/{module_name}
-secubox-magicmirror GET /search
-secubox-magicmirror GET /status
-secubox-magicmirror POST /display/brightness/{level}
-secubox-magicmirror POST /display/power/{state}
-secubox-magicmirror POST /modules/install
-secubox-magicmirror POST /modules/install/{module_name}
-secubox-magicmirror POST /modules/refresh
-secubox-magicmirror POST /modules/{module_name}/update
-secubox-magicmirror POST /restart
-secubox-magicmirror POST /start
-secubox-magicmirror POST /stop
 
 # secubox-maigret — 1
 secubox-maigret GET /status
@@ -481,23 +442,6 @@ secubox-ollama GET /status
 # secubox-openclaw — 1
 secubox-openclaw GET /status
 
-# secubox-ossec — 15
-secubox-ossec GET /active-response
-secubox-ossec GET /agents
-secubox-ossec GET /alerts
-secubox-ossec GET /alerts/stats
-secubox-ossec GET /decoders
-secubox-ossec GET /logs
-secubox-ossec GET /rootcheck
-secubox-ossec GET /rules
-secubox-ossec GET /status
-secubox-ossec GET /syscheck
-secubox-ossec POST /restart
-secubox-ossec POST /rootcheck/scan
-secubox-ossec POST /start
-secubox-ossec POST /stop
-secubox-ossec POST /syscheck/scan
-
 # secubox-p2p — 23
 secubox-p2p GET /announcers
 secubox-p2p GET /dht/find/{did}
@@ -576,22 +520,6 @@ secubox-rbs-sensor POST /mitigate/lte-only
 secubox-rbs-sensor POST /mitigate/rf-off
 secubox-rbs-sensor POST /restore
 
-# secubox-redroid — 14
-secubox-redroid DELETE /container
-secubox-redroid GET /adb/devices
-secubox-redroid GET /adb/packages
-secubox-redroid GET /images
-secubox-redroid GET /logs
-secubox-redroid GET /status
-secubox-redroid POST /adb/connect
-secubox-redroid POST /adb/disconnect
-secubox-redroid POST /adb/install
-secubox-redroid POST /adb/shell
-secubox-redroid POST /images/pull/{tag:path}
-secubox-redroid POST /restart
-secubox-redroid POST /start
-secubox-redroid POST /stop
-
 # secubox-release — 1
 secubox-release GET /status
 
@@ -605,24 +533,6 @@ secubox-repo GET /recent
 secubox-repo GET /stats
 secubox-repo GET /status
 secubox-repo GET /summary
-
-# secubox-rezapp — 16
-secubox-rezapp DELETE /templates/{name}
-secubox-rezapp GET /app/{name}
-secubox-rezapp GET /app/{name}/logs
-secubox-rezapp GET /apps
-secubox-rezapp GET /images
-secubox-rezapp GET /stats
-secubox-rezapp GET /status
-secubox-rezapp GET /templates
-secubox-rezapp GET /templates/{name}
-secubox-rezapp POST /app/deploy
-secubox-rezapp POST /app/undeploy
-secubox-rezapp POST /app/{name}/restart
-secubox-rezapp POST /app/{name}/start
-secubox-rezapp POST /app/{name}/stop
-secubox-rezapp POST /images/pull
-secubox-rezapp POST /templates
 
 # secubox-rustdesk — 4
 secubox-rustdesk GET /access
@@ -650,35 +560,6 @@ secubox-sentinelle-gsm GET /cells
 secubox-sentinelle-gsm GET /components
 secubox-sentinelle-gsm GET /status
 secubox-sentinelle-gsm POST /mode
-
-# secubox-simplex — 27
-secubox-simplex DELETE /backup/{backup_name}
-secubox-simplex DELETE /container
-secubox-simplex GET /backup
-secubox-simplex GET /connection-string
-secubox-simplex GET /container/status
-secubox-simplex GET /fingerprint
-secubox-simplex GET /logs
-secubox-simplex GET /server/config
-secubox-simplex GET /server/info
-secubox-simplex GET /stats
-secubox-simplex GET /stats/connections
-secubox-simplex GET /stats/queues
-secubox-simplex GET /status
-secubox-simplex GET /tls/status
-secubox-simplex POST /backup/create
-secubox-simplex POST /backup/restore
-secubox-simplex POST /container/install
-secubox-simplex POST /container/restart
-secubox-simplex POST /container/start
-secubox-simplex POST /container/stop
-secubox-simplex POST /install
-secubox-simplex POST /maintenance/cleanup
-secubox-simplex POST /restart
-secubox-simplex POST /server/config
-secubox-simplex POST /start
-secubox-simplex POST /stop
-secubox-simplex POST /tls/renew
 
 # secubox-soc — 5
 secubox-soc GET /mesh/peers
@@ -790,25 +671,6 @@ secubox-vhost GET /certificates
 secubox-vhost GET /components
 secubox-vhost GET /status
 
-# secubox-vm — 17
-secubox-vm DELETE /vms/{name}
-secubox-vm GET /iso
-secubox-vm GET /status
-secubox-vm GET /templates
-secubox-vm GET /vms
-secubox-vm GET /vms/kvm
-secubox-vm GET /vms/lxc
-secubox-vm GET /vms/{name}
-secubox-vm GET /vms/{name}/console
-secubox-vm POST /vms/kvm
-secubox-vm POST /vms/lxc
-secubox-vm POST /vms/{name}/autostart
-secubox-vm POST /vms/{name}/freeze
-secubox-vm POST /vms/{name}/restart
-secubox-vm POST /vms/{name}/start
-secubox-vm POST /vms/{name}/stop
-secubox-vm POST /vms/{name}/unfreeze
-
 # secubox-voip — 1
 secubox-voip GET /status
 
@@ -842,25 +704,6 @@ secubox-watchdog GET /logs
 secubox-watchdog GET /services
 secubox-watchdog GET /status
 secubox-watchdog GET /summary
-
-# secubox-wazuh — 17
-secubox-wazuh GET /agents
-secubox-wazuh GET /alerts
-secubox-wazuh GET /alerts/stats
-secubox-wazuh GET /alerts/{alert_id}
-secubox-wazuh GET /decoders
-secubox-wazuh GET /logs
-secubox-wazuh GET /rootcheck
-secubox-wazuh GET /rules
-secubox-wazuh GET /status
-secubox-wazuh GET /syscheck
-secubox-wazuh POST /agent/register
-secubox-wazuh POST /agent/restart
-secubox-wazuh POST /agent/start
-secubox-wazuh POST /agent/stop
-secubox-wazuh POST /manager/restart
-secubox-wazuh POST /manager/start
-secubox-wazuh POST /manager/stop
 
 # secubox-webos — 14
 secubox-webos GET /actions/{module}/{action}

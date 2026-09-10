@@ -4,11 +4,26 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """SecuBox Redroid API - Android in container management."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 import subprocess
 import json
 import os
+
+# GARDE JWT SUR TOUTE L'API (#1256, lot P1).
+#
+# MODULE-COMPLIANCE.md §Authentication : « All endpoints (except /health) MUST
+# use JWT authentication ». Ce module ne l'appliquait nulle part.
+#
+# ET RIEN NE RATTRAPAIT L'OUBLI EN AMONT : l'aggregator se contente de
+# `app.mount()` sans middleware, le snippet nginx `secubox-proxy.conf`
+# TRANSMET l'en-tete `Authorization` sans jamais le verifier, et
+# `auth_request /__sbx_auth_verify` teste l'appartenance au LAN, pas un jeton.
+#
+# `dependencies=[...]` plutot qu'un parametre `user=Depends(...)` : la garde
+# porte sur la route, aucun corps de fonction n'est touche, et une route
+# ajoutee plus tard sans garde se voit d'un coup d'oeil.
 
 app = FastAPI(title="SecuBox Redroid API", version="1.0.0")
 
@@ -97,7 +112,7 @@ def health():
     return {"status": "ok", "service": "redroid"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get Redroid status."""
     docker_ok = is_docker_installed()
@@ -120,7 +135,7 @@ def get_status():
     }
 
 
-@app.post("/start")
+@app.post("/start", dependencies=[Depends(require_jwt)])
 def start_container(config: RedroidConfig = None):
     """Start or create Redroid container."""
     if not is_docker_installed():
@@ -166,7 +181,7 @@ def start_container(config: RedroidConfig = None):
     return {"status": "started"}
 
 
-@app.post("/stop")
+@app.post("/stop", dependencies=[Depends(require_jwt)])
 def stop_container():
     """Stop Redroid container."""
     if not container_exists():
@@ -182,7 +197,7 @@ def stop_container():
     return {"status": "stopped"}
 
 
-@app.post("/restart")
+@app.post("/restart", dependencies=[Depends(require_jwt)])
 def restart_container():
     """Restart Redroid container."""
     if not container_exists():
@@ -201,7 +216,7 @@ def restart_container():
     return {"status": "restarted"}
 
 
-@app.delete("/container")
+@app.delete("/container", dependencies=[Depends(require_jwt)])
 def remove_container():
     """Remove Redroid container."""
     if not container_exists():
@@ -221,7 +236,7 @@ def remove_container():
     return {"status": "removed"}
 
 
-@app.get("/adb/devices")
+@app.get("/adb/devices", dependencies=[Depends(require_jwt)])
 def adb_devices():
     """List ADB devices."""
     stdout, stderr, code = run_cmd(["adb", "devices", "-l"])
@@ -241,7 +256,7 @@ def adb_devices():
     return {"devices": devices}
 
 
-@app.post("/adb/connect")
+@app.post("/adb/connect", dependencies=[Depends(require_jwt)])
 def adb_connect():
     """Connect ADB to Redroid container."""
     stdout, stderr, code = run_cmd([
@@ -254,7 +269,7 @@ def adb_connect():
     }
 
 
-@app.post("/adb/disconnect")
+@app.post("/adb/disconnect", dependencies=[Depends(require_jwt)])
 def adb_disconnect():
     """Disconnect ADB from Redroid container."""
     stdout, stderr, code = run_cmd([
@@ -264,7 +279,7 @@ def adb_disconnect():
     return {"status": "disconnected", "output": stdout.strip()}
 
 
-@app.post("/adb/shell")
+@app.post("/adb/shell", dependencies=[Depends(require_jwt)])
 def adb_shell(command: str):
     """Execute ADB shell command."""
     stdout, stderr, code = run_cmd([
@@ -278,7 +293,7 @@ def adb_shell(command: str):
     }
 
 
-@app.get("/adb/packages")
+@app.get("/adb/packages", dependencies=[Depends(require_jwt)])
 def list_packages():
     """List installed Android packages."""
     stdout, stderr, code = run_cmd([
@@ -294,7 +309,7 @@ def list_packages():
     return {"packages": sorted(packages)}
 
 
-@app.post("/adb/install")
+@app.post("/adb/install", dependencies=[Depends(require_jwt)])
 def install_apk(apk_path: str):
     """Install APK via ADB."""
     if not os.path.exists(apk_path):
@@ -310,7 +325,7 @@ def install_apk(apk_path: str):
     return {"status": "installed", "output": stdout}
 
 
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_jwt)])
 def get_logs(lines: int = 50):
     """Get container logs."""
     stdout, stderr, code = run_cmd([
@@ -320,7 +335,7 @@ def get_logs(lines: int = 50):
     return {"logs": (stdout + stderr).split('\n')}
 
 
-@app.get("/images")
+@app.get("/images", dependencies=[Depends(require_jwt)])
 def list_images():
     """List available Redroid Docker images."""
     available = [
@@ -342,7 +357,7 @@ def list_images():
     return {"images": available}
 
 
-@app.post("/images/pull/{tag:path}")
+@app.post("/images/pull/{tag:path}", dependencies=[Depends(require_jwt)])
 def pull_image(tag: str):
     """Pull a Redroid Docker image."""
     stdout, stderr, code = run_cmd([

@@ -6,12 +6,27 @@
 
 """SecuBox Jabber API - XMPP Server with Prosody"""
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 from typing import Optional, List
 import subprocess
 import os
 from pathlib import Path
+
+# GARDE JWT SUR TOUTE L'API (#1256, lot P1).
+#
+# MODULE-COMPLIANCE.md §Authentication : « All endpoints (except /health) MUST
+# use JWT authentication ». Ce module ne l'appliquait nulle part.
+#
+# ET RIEN NE RATTRAPAIT L'OUBLI EN AMONT : l'aggregator se contente de
+# `app.mount()` sans middleware, le snippet nginx `secubox-proxy.conf`
+# TRANSMET l'en-tete `Authorization` sans jamais le verifier, et
+# `auth_request /__sbx_auth_verify` teste l'appartenance au LAN, pas un jeton.
+#
+# `dependencies=[...]` plutot qu'un parametre `user=Depends(...)` : la garde
+# porte sur la route, aucun corps de fonction n'est touche, et une route
+# ajoutee plus tard sans garde se voit d'un coup d'oeil.
 
 app = FastAPI(title="SecuBox Jabber API", version="1.0.0")
 
@@ -58,7 +73,7 @@ async def health():
     return {"status": "ok", "service": "jabber"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 async def status():
     """Get Prosody status"""
     result = run_cmd(["systemctl", "is-active", "prosody"])
@@ -92,7 +107,7 @@ async def status():
     }
 
 
-@app.post("/install")
+@app.post("/install", dependencies=[Depends(require_jwt)])
 async def install(domain: str = "localhost"):
     """Install Prosody XMPP server"""
     result = run_cmd(["apt-get", "install", "-y", "prosody", "lua-sec"], timeout=180)
@@ -126,7 +141,7 @@ async def install(domain: str = "localhost"):
     return {"success": True, "message": f"Prosody installed with domain {domain}"}
 
 
-@app.post("/start")
+@app.post("/start", dependencies=[Depends(require_jwt)])
 async def start():
     """Start Prosody"""
     result = run_cmd(["systemctl", "start", "prosody"])
@@ -135,7 +150,7 @@ async def start():
     return {"success": True}
 
 
-@app.post("/stop")
+@app.post("/stop", dependencies=[Depends(require_jwt)])
 async def stop():
     """Stop Prosody"""
     result = run_cmd(["systemctl", "stop", "prosody"])
@@ -144,7 +159,7 @@ async def stop():
     return {"success": True}
 
 
-@app.post("/restart")
+@app.post("/restart", dependencies=[Depends(require_jwt)])
 async def restart():
     """Restart Prosody"""
     result = run_cmd(["systemctl", "restart", "prosody"])
@@ -153,7 +168,7 @@ async def restart():
     return {"success": True}
 
 
-@app.post("/reload")
+@app.post("/reload", dependencies=[Depends(require_jwt)])
 async def reload():
     """Reload Prosody configuration"""
     result = prosodyctl("reload")
@@ -162,7 +177,7 @@ async def reload():
     return {"success": True}
 
 
-@app.get("/users")
+@app.get("/users", dependencies=[Depends(require_jwt)])
 async def list_users(domain: Optional[str] = None):
     """List XMPP users"""
     users = []
@@ -186,7 +201,7 @@ async def list_users(domain: Optional[str] = None):
     return {"users": users}
 
 
-@app.post("/users")
+@app.post("/users", dependencies=[Depends(require_jwt)])
 async def create_user(user: User):
     """Create a new XMPP user"""
     result = run_cmd(["prosodyctl", "adduser", f"{user.username}@{user.domain}"],
@@ -201,7 +216,7 @@ async def create_user(user: User):
     return {"success": True, "jid": f"{user.username}@{user.domain}"}
 
 
-@app.delete("/users/{jid}")
+@app.delete("/users/{jid}", dependencies=[Depends(require_jwt)])
 async def delete_user(jid: str):
     """Delete an XMPP user"""
     result = prosodyctl(f"deluser {jid}")
@@ -210,7 +225,7 @@ async def delete_user(jid: str):
     return {"success": True}
 
 
-@app.post("/users/{jid}/password")
+@app.post("/users/{jid}/password", dependencies=[Depends(require_jwt)])
 async def change_password(jid: str, password: str):
     """Change user password"""
     username, domain = jid.split("@")
@@ -220,7 +235,7 @@ async def change_password(jid: str, password: str):
     return {"success": True}
 
 
-@app.get("/hosts")
+@app.get("/hosts", dependencies=[Depends(require_jwt)])
 async def list_hosts():
     """List virtual hosts"""
     hosts = []
@@ -240,7 +255,7 @@ async def list_hosts():
     return {"hosts": hosts}
 
 
-@app.post("/hosts")
+@app.post("/hosts", dependencies=[Depends(require_jwt)])
 async def create_host(host: VirtualHost):
     """Create a new virtual host"""
     PROSODY_HOSTS.mkdir(parents=True, exist_ok=True)
@@ -266,7 +281,7 @@ async def create_host(host: VirtualHost):
     return {"success": True, "domain": host.domain}
 
 
-@app.delete("/hosts/{domain}")
+@app.delete("/hosts/{domain}", dependencies=[Depends(require_jwt)])
 async def delete_host(domain: str):
     """Delete a virtual host"""
     host_file = PROSODY_HOSTS / f"{domain}.cfg.lua"
@@ -277,7 +292,7 @@ async def delete_host(domain: str):
     raise HTTPException(status_code=404, detail="Host not found")
 
 
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_jwt)])
 async def get_logs(lines: int = 100):
     """Get Prosody logs"""
     log_file = Path("/var/log/prosody/prosody.log")
@@ -290,7 +305,7 @@ async def get_logs(lines: int = 100):
     return {"logs": []}
 
 
-@app.get("/online")
+@app.get("/online", dependencies=[Depends(require_jwt)])
 async def online_users():
     """Get currently online users"""
     result = prosodyctl("c2s:show()")

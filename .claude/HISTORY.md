@@ -5,6 +5,37 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-10 — Garde JWT P1 : 8 modules fermés, dette 667 → 526 (ref #1256)
+
+Les huit modules qui n'importaient **jamais** `require_jwt` sont fermés :
+`simplex` (27 routes), `magicmirror` (23), `vm` (17), `wazuh` (17), `rezapp` (16),
+`jabber` (15), `ossec` (15), `redroid` (14) — **144 routes**.
+
+- **Ce qui était ouvert** : `POST /container/install` et `DELETE /container`
+  (simplex), création/suppression de VM et de conteneurs LXC (vm), l'API de
+  gestion complète d'un SIEM (wazuh) et d'un HIDS (ossec), `POST /app/deploy`
+  et `POST /images/pull` (rezapp), `POST /modules/install` (magicmirror).
+- **`magicmirror` : le routeur `mmpm` aussi.** Il est monté sous `/mmpm` par
+  `api/main.py` et porte 10 routes ; une garde posée seulement sur le module
+  principal aurait laissé la moitié de la surface ouverte. C'est le seul module
+  du lot avec des routes hors `api/main.py` — raison pour laquelle le scanner
+  balaie `packages/*/api/**/*.py` et pas seulement `main.py`.
+- **`rezapp`** importait déjà `require_jwt` sans l'appliquer à une seule route.
+  Ses `/login`, `/verify`, `/logout` restent publics : ils viennent du routeur
+  `secubox_core.auth` et sont les points d'entrée qui **délivrent** le jeton.
+- **Vérifié à l'exécution**, module par module : `/health` → 200, tout le reste
+  → 401 sans jeton (dont `/mmpm/modules/installed`, à son vrai préfixe).
+- **Le cliquet a servi le jour même** : un `git checkout` de nettoyage de ma part
+  a écrasé les modifs de `simplex`, et c'est `test_modules_p0_totalement_gardes`
+  qui l'a signalé — pas une relecture. Réappliqué et revérifié.
+- `REPARES` passe de 3 à 11 modules ; l'inventaire tombe de **667 à 526 routes**
+  (114 → 106 modules). Cumul du jour : **177 routes fermées**.
+- Non déployé. Suite : les modules à trous partiels (`lyrion` 15/19,
+  `p2p` 17/57, `soc-gateway` 5/30, `mail` 11/55), puis le tri des routes
+  publiques à dessein.
+
+---
+
 ## 2026-09-10 — Garde JWT : P0 fermé + cliquet de conformité (ref #1256)
 
 Suite de l'audit du jour. Les trois modules critiques sont fermés, et la dette

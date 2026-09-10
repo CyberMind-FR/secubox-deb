@@ -50,8 +50,15 @@ VERBES = {"get", "post", "put", "delete", "patch"}
 # ne le consomme en anonyme.
 PUBLIQUES = {"/health", "/healthz", "/readyz", "/ping"}
 
-# Modules réparés — ils ne doivent JAMAIS reparaître dans l'inventaire (#1256 P0).
-REPARES = {"secubox-vault", "secubox-certs", "secubox-cloner"}
+# Modules réparés — ils ne doivent JAMAIS reparaître dans l'inventaire.
+# Cette liste ne fait que grandir : chaque module ferme rejoint le cliquet.
+REPARES = {
+    # P0 (#1256) — les trois critiques
+    "secubox-vault", "secubox-certs", "secubox-cloner",
+    # P1 (#1256) — les modules qui n'importaient jamais require_jwt
+    "secubox-simplex", "secubox-vm", "secubox-wazuh", "secubox-rezapp",
+    "secubox-jabber", "secubox-ossec", "secubox-redroid", "secubox-magicmirror",
+}
 
 
 def _routes_du_fichier(chemin: Path):
@@ -130,7 +137,7 @@ def test_inventaire_sans_entree_perimee():
 
 
 def test_modules_p0_totalement_gardes():
-    """vault, certs et cloner sont réparés (#1256 P0) — aucune régression."""
+    """Les modules déjà fermés le restent : aucune régression tolérée (#1256)."""
     restant = sorted(r for r in _scanner() if r.split(" ", 1)[0] in REPARES)
     assert not restant, (
         "régression sur un module déjà réparé :\n  " + "\n  ".join(restant)

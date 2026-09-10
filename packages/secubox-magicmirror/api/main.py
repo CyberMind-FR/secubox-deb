@@ -4,7 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """SecuBox MagicMirror API - Smart display platform management."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 import subprocess
 import json
@@ -12,6 +13,20 @@ import os
 import re
 
 from .routers import mmpm as mmpm_router
+
+# GARDE JWT SUR TOUTE L'API (#1256, lot P1).
+#
+# MODULE-COMPLIANCE.md §Authentication : « All endpoints (except /health) MUST
+# use JWT authentication ». Ce module ne l'appliquait nulle part.
+#
+# ET RIEN NE RATTRAPAIT L'OUBLI EN AMONT : l'aggregator se contente de
+# `app.mount()` sans middleware, le snippet nginx `secubox-proxy.conf`
+# TRANSMET l'en-tete `Authorization` sans jamais le verifier, et
+# `auth_request /__sbx_auth_verify` teste l'appartenance au LAN, pas un jeton.
+#
+# `dependencies=[...]` plutot qu'un parametre `user=Depends(...)` : la garde
+# porte sur la route, aucun corps de fonction n'est touche, et une route
+# ajoutee plus tard sans garde se voit d'un coup d'oeil.
 
 app = FastAPI(title="SecuBox MagicMirror API", version="1.1.0")
 app.include_router(mmpm_router.router, prefix="/mmpm", tags=["mmpm"])
@@ -123,7 +138,7 @@ def health():
     return {"status": "ok", "service": "magicmirror"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get MagicMirror service status and configuration."""
     running = is_service_running()
@@ -139,7 +154,7 @@ def get_status():
     }
 
 
-@app.post("/start")
+@app.post("/start", dependencies=[Depends(require_jwt)])
 def start_service():
     """Start MagicMirror service."""
     stdout, stderr, code = run_cmd(["systemctl", "start", SERVICE_NAME])
@@ -148,7 +163,7 @@ def start_service():
     return {"status": "started"}
 
 
-@app.post("/stop")
+@app.post("/stop", dependencies=[Depends(require_jwt)])
 def stop_service():
     """Stop MagicMirror service."""
     stdout, stderr, code = run_cmd(["systemctl", "stop", SERVICE_NAME])
@@ -157,7 +172,7 @@ def stop_service():
     return {"status": "stopped"}
 
 
-@app.post("/restart")
+@app.post("/restart", dependencies=[Depends(require_jwt)])
 def restart_service():
     """Restart MagicMirror service."""
     stdout, stderr, code = run_cmd(["systemctl", "restart", SERVICE_NAME])
@@ -166,19 +181,19 @@ def restart_service():
     return {"status": "restarted"}
 
 
-@app.get("/modules")
+@app.get("/modules", dependencies=[Depends(require_jwt)])
 def get_modules():
     """List all installed modules."""
     return {"modules": list_installed_modules()}
 
 
-@app.get("/modules/available")
+@app.get("/modules/available", dependencies=[Depends(require_jwt)])
 def get_available_modules():
     """List popular modules available for installation."""
     return {"modules": list_available_modules()}
 
 
-@app.post("/modules/install/{module_name}")
+@app.post("/modules/install/{module_name}", dependencies=[Depends(require_jwt)])
 def install_module(module_name: str):
     """Install a third-party MagicMirror module from GitHub."""
     if not module_name.startswith("MMM-"):
@@ -216,7 +231,7 @@ def install_module(module_name: str):
     return {"status": "installed", "module": module_name, "path": module_path}
 
 
-@app.delete("/modules/{module_name}")
+@app.delete("/modules/{module_name}", dependencies=[Depends(require_jwt)])
 def uninstall_module(module_name: str):
     """Uninstall a third-party module."""
     module_path = f"{MODULES_DIR}/{module_name}"
@@ -233,7 +248,7 @@ def uninstall_module(module_name: str):
     return {"status": "uninstalled", "module": module_name}
 
 
-@app.get("/config")
+@app.get("/config", dependencies=[Depends(require_jwt)])
 def get_config():
     """Get current MagicMirror configuration."""
     if not os.path.exists(CONFIG_FILE):
@@ -245,7 +260,7 @@ def get_config():
     return {"config_file": CONFIG_FILE, "content": content}
 
 
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_jwt)])
 def get_logs(lines: int = 50):
     """Get recent MagicMirror logs."""
     stdout, stderr, code = run_cmd(
@@ -254,7 +269,7 @@ def get_logs(lines: int = 50):
     return {"logs": stdout.split('\n') if stdout else []}
 
 
-@app.get("/display")
+@app.get("/display", dependencies=[Depends(require_jwt)])
 def get_display_info():
     """Get display/screen information."""
     # Check for display server
@@ -276,7 +291,7 @@ def get_display_info():
     return display_info
 
 
-@app.post("/display/brightness/{level}")
+@app.post("/display/brightness/{level}", dependencies=[Depends(require_jwt)])
 def set_brightness(level: int):
     """Set display brightness (0-100)."""
     if not 0 <= level <= 100:
@@ -302,7 +317,7 @@ def set_brightness(level: int):
     return {"brightness": level}
 
 
-@app.post("/display/power/{state}")
+@app.post("/display/power/{state}", dependencies=[Depends(require_jwt)])
 def set_display_power(state: str):
     """Turn display on or off."""
     if state not in ["on", "off"]:

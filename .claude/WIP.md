@@ -28,10 +28,14 @@
   augmenter en silence, ni l'inventaire pourrir.
 
 ### ⬜ Next Up
-- **#1256 P1** : les 22 modules restants sans aucun `require_jwt`, en commençant
-  par ceux qui écrivent (`simplex` 27, `vm` 17, `wazuh` 17, `jabber` 15,
-  `redroid` 14). Retirer les lignes correspondantes de `tests/dette-jwt.txt`
-  dans le même commit.
+- ~~**#1256 P1**~~ → **fait** : 8 modules fermés (`simplex` 27, `magicmirror` 23,
+  `vm` 17, `wazuh` 17, `rezapp` 16, `jabber` 15, `ossec` 15, `redroid` 14) =
+  **144 routes**. Inventaire 667 → 526, `REPARES` à 11 modules. **177 routes
+  fermées au total sur la journée.**
+- **#1256 suite** : les modules à trous partiels — `lyrion` (15/19),
+  `p2p` (17/57), `soc-gateway` (5/30), `mail` (11/55), `annuaire` (15/39) — la
+  garde y est déjà importée. Retirer les lignes de `tests/dette-jwt.txt` dans le
+  même commit que chaque réparation.
 - **#1256 P2** : trier les entrées publiques à dessein vers `PUBLIQUES`.
 - **#1257** : brancher l'API vhost de HAProxy sur `haproxyctl` — **après** le
   déploiement de #1254.

@@ -1,3 +1,24 @@
+secubox-magicmirror (1.1.3-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT SUR TOUTE L'API (#1256, lot P1). MODULE-COMPLIANCE.md impose
+    « All endpoints (except /health) MUST use JWT authentication » ; ce
+    module ne l'appliquait nulle part.
+  * 23 routes ouvertes (13 dans api/main.py, 10 dans le routeur mmpm monte sous
+    /mmpm), dont POST /modules/install et POST /mmpm/modules/install : de
+    l'installation de paquets tiers, anonyme.
+  * Le routeur mmpm est corrige lui aussi -- une garde posee seulement sur le
+    module principal aurait laisse la moitie de la surface ouverte.
+  * Et rien ne rattrapait l'oubli en amont : l'aggregator se contente de
+    app.mount() sans middleware, le snippet nginx secubox-proxy.conf TRANSMET
+    l'en-tete Authorization sans jamais le verifier, et auth_request
+    /__sbx_auth_verify teste l'appartenance au LAN, pas un jeton.
+  * dependencies=[Depends(require_jwt)] plutot qu'un parametre user=Depends() :
+    la garde porte sur la route, aucun corps de fonction n'est touche.
+  * /health reste public (sonde systemd/nginx). Verifie a l'execution : toute
+    autre route rend 401 sans jeton. Couvert par tests/test_conformite_jwt.py.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 19:20:00 +0200
+
 secubox-magicmirror (1.1.2-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

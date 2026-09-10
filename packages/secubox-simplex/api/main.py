@@ -14,7 +14,8 @@ SimpleX Chat SMP/XFTP server management with Docker/Podman support.
 Zero-knowledge messaging infrastructure with no user identifiers.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -25,6 +26,20 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 import asyncio
+
+# GARDE JWT SUR TOUTE L'API (#1256, lot P1).
+#
+# MODULE-COMPLIANCE.md §Authentication : « All endpoints (except /health) MUST
+# use JWT authentication ». Ce module ne l'appliquait nulle part.
+#
+# ET RIEN NE RATTRAPAIT L'OUBLI EN AMONT : l'aggregator se contente de
+# `app.mount()` sans middleware, le snippet nginx `secubox-proxy.conf`
+# TRANSMET l'en-tete `Authorization` sans jamais le verifier, et
+# `auth_request /__sbx_auth_verify` teste l'appartenance au LAN, pas un jeton.
+#
+# `dependencies=[...]` plutot qu'un parametre `user=Depends(...)` : la garde
+# porte sur la route, aucun corps de fonction n'est touche, et une route
+# ajoutee plus tard sans garde se voit d'un coup d'oeil.
 
 app = FastAPI(
     title="SecuBox SimpleX API",
@@ -175,7 +190,7 @@ async def health():
     return {"status": "ok", "service": "simplex"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 async def status():
     """Get SimpleX server status"""
     runtime = get_container_runtime()
@@ -217,7 +232,7 @@ async def status():
 # Server Information
 # =============================================================================
 
-@app.get("/server/info")
+@app.get("/server/info", dependencies=[Depends(require_jwt)])
 async def server_info():
     """Get detailed server information"""
     if not container_running():
@@ -247,14 +262,14 @@ async def server_info():
     }
 
 
-@app.get("/server/config")
+@app.get("/server/config", dependencies=[Depends(require_jwt)])
 async def get_config():
     """Get server configuration"""
     config = load_config()
     return {"config": config}
 
 
-@app.post("/server/config")
+@app.post("/server/config", dependencies=[Depends(require_jwt)])
 async def update_config(new_config: ServerConfig):
     """Update server configuration"""
     config = load_config()
@@ -274,7 +289,7 @@ async def update_config(new_config: ServerConfig):
 # Statistics Endpoints
 # =============================================================================
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_jwt)])
 async def get_stats():
     """Get server statistics"""
     if not container_running():
@@ -301,7 +316,7 @@ async def get_stats():
     return {"stats": stats}
 
 
-@app.get("/stats/queues")
+@app.get("/stats/queues", dependencies=[Depends(require_jwt)])
 async def get_queue_stats():
     """Get detailed queue statistics"""
     if not container_running():
@@ -323,7 +338,7 @@ async def get_queue_stats():
     return {"queues": queues, "total": len(queues)}
 
 
-@app.get("/stats/connections")
+@app.get("/stats/connections", dependencies=[Depends(require_jwt)])
 async def get_connections():
     """Get active connection statistics"""
     if not container_running():
@@ -349,7 +364,7 @@ async def get_connections():
 # Container Management
 # =============================================================================
 
-@app.get("/container/status")
+@app.get("/container/status", dependencies=[Depends(require_jwt)])
 async def container_status():
     """Get container status"""
     runtime = get_container_runtime()
@@ -388,7 +403,7 @@ async def container_status():
     }
 
 
-@app.post("/container/install")
+@app.post("/container/install", dependencies=[Depends(require_jwt)])
 async def install_container(server_address: str = ""):
     """Install SimpleX SMP server container"""
     runtime = get_container_runtime()
@@ -456,7 +471,7 @@ async def install_container(server_address: str = ""):
     }
 
 
-@app.post("/container/start")
+@app.post("/container/start", dependencies=[Depends(require_jwt)])
 async def start_container():
     """Start SimpleX container"""
     if not container_exists():
@@ -473,7 +488,7 @@ async def start_container():
     return {"success": True, "container_ip": get_container_ip()}
 
 
-@app.post("/container/stop")
+@app.post("/container/stop", dependencies=[Depends(require_jwt)])
 async def stop_container():
     """Stop SimpleX container"""
     if not container_exists():
@@ -486,7 +501,7 @@ async def stop_container():
     return {"success": True}
 
 
-@app.post("/container/restart")
+@app.post("/container/restart", dependencies=[Depends(require_jwt)])
 async def restart_container():
     """Restart SimpleX container"""
     if not container_exists():
@@ -500,7 +515,7 @@ async def restart_container():
     return {"success": True, "container_ip": get_container_ip()}
 
 
-@app.delete("/container")
+@app.delete("/container", dependencies=[Depends(require_jwt)])
 async def delete_container():
     """Delete SimpleX container"""
     if container_running():
@@ -517,7 +532,7 @@ async def delete_container():
 # TLS Certificate Management
 # =============================================================================
 
-@app.get("/tls/status")
+@app.get("/tls/status", dependencies=[Depends(require_jwt)])
 async def tls_status():
     """Get TLS certificate status"""
     cert_file = TLS_DIR / "server.crt"
@@ -554,7 +569,7 @@ async def tls_status():
     }
 
 
-@app.post("/tls/renew")
+@app.post("/tls/renew", dependencies=[Depends(require_jwt)])
 async def tls_renew(domain: Optional[str] = None):
     """Renew TLS certificate (self-signed or request Let's Encrypt)"""
     TLS_DIR.mkdir(parents=True, exist_ok=True)
@@ -593,7 +608,7 @@ async def tls_renew(domain: Optional[str] = None):
 # Backup and Restore
 # =============================================================================
 
-@app.get("/backup")
+@app.get("/backup", dependencies=[Depends(require_jwt)])
 async def list_backups():
     """List available backups"""
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -611,7 +626,7 @@ async def list_backups():
     return {"backups": backups, "total": len(backups)}
 
 
-@app.post("/backup/create")
+@app.post("/backup/create", dependencies=[Depends(require_jwt)])
 async def create_backup(request: BackupRequest):
     """Create a backup of SimpleX data"""
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -656,7 +671,7 @@ async def create_backup(request: BackupRequest):
     }
 
 
-@app.post("/backup/restore")
+@app.post("/backup/restore", dependencies=[Depends(require_jwt)])
 async def restore_backup(request: RestoreRequest):
     """Restore from a backup"""
     backup_path = BACKUP_DIR / request.backup_name
@@ -691,7 +706,7 @@ async def restore_backup(request: RestoreRequest):
     return {"success": True, "message": f"Restored from {request.backup_name}"}
 
 
-@app.delete("/backup/{backup_name}")
+@app.delete("/backup/{backup_name}", dependencies=[Depends(require_jwt)])
 async def delete_backup(backup_name: str):
     """Delete a backup"""
     backup_path = BACKUP_DIR / backup_name
@@ -707,7 +722,7 @@ async def delete_backup(backup_name: str):
 # Maintenance
 # =============================================================================
 
-@app.post("/maintenance/cleanup")
+@app.post("/maintenance/cleanup", dependencies=[Depends(require_jwt)])
 async def cleanup_old_queues(days_old: int = 30):
     """Clean up old/inactive queues"""
     if not container_running():
@@ -727,7 +742,7 @@ async def cleanup_old_queues(days_old: int = 30):
 # Connection String
 # =============================================================================
 
-@app.get("/connection-string")
+@app.get("/connection-string", dependencies=[Depends(require_jwt)])
 async def get_connection_string():
     """Get SMP server connection string for clients"""
     if not container_running():
@@ -749,7 +764,7 @@ async def get_connection_string():
     raise HTTPException(status_code=404, detail="Could not generate connection string")
 
 
-@app.get("/fingerprint")
+@app.get("/fingerprint", dependencies=[Depends(require_jwt)])
 async def get_fingerprint():
     """Get server fingerprint"""
     fingerprint = get_server_fingerprint()
@@ -762,7 +777,7 @@ async def get_fingerprint():
 # Logs
 # =============================================================================
 
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_jwt)])
 async def get_logs(lines: int = 100, filter: Optional[str] = None):
     """Get server logs"""
     result = container_cmd(["logs", "--tail", str(lines), CONTAINER_NAME])
@@ -777,25 +792,25 @@ async def get_logs(lines: int = 100, filter: Optional[str] = None):
 
 
 # Legacy endpoints for backward compatibility
-@app.post("/install")
+@app.post("/install", dependencies=[Depends(require_jwt)])
 async def install(server_address: str = ""):
     """Legacy install endpoint - redirects to container/install"""
     return await install_container(server_address)
 
 
-@app.post("/start")
+@app.post("/start", dependencies=[Depends(require_jwt)])
 async def start():
     """Legacy start endpoint"""
     return await start_container()
 
 
-@app.post("/stop")
+@app.post("/stop", dependencies=[Depends(require_jwt)])
 async def stop():
     """Legacy stop endpoint"""
     return await stop_container()
 
 
-@app.post("/restart")
+@app.post("/restart", dependencies=[Depends(require_jwt)])
 async def restart():
     """Legacy restart endpoint"""
     return await restart_container()
