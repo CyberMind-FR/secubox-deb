@@ -11,8 +11,10 @@ import (
 func TestEmpreinteDeStyleDansStyleSrc(t *testing.T) {
 	s := &Serveur{BanniereStyle: "sha256-cDIMF0VHleQj8Or2kSnnBba00DygyPImvtNVZIuif5I="}
 	p := s.politique()
-	if !strings.Contains(p, "style-src 'self' 'sha256-cDIMF0VHleQj8Or2kSnnBba00DygyPImvtNVZIuif5I") {
-		t.Fatalf("empreinte de style absente de style-src : %s", p)
+	// Depuis 7a58996 (#1238-suite), style-src est 'self' 'unsafe-inline' et
+	// l'empreinte n'y figure plus (elle rendrait 'unsafe-inline' inopérant).
+	if !strings.Contains(p, "style-src 'self' 'unsafe-inline';") {
+		t.Fatalf("style-src inattendu : %s", p)
 	}
 	// ET SURTOUT PAS AILLEURS : une empreinte de feuille qui autoriserait un
 	// script porterait bien plus loin que ce qu'on a voulu ouvrir.
@@ -27,7 +29,7 @@ func TestEmpreinteDeStyleDansStyleSrc(t *testing.T) {
 func TestEmpreinteDeStyleInvalideIgnoree(t *testing.T) {
 	for _, mauvais := range []string{"n importe quoi", "'; script-src *", "sha256-", ""} {
 		p := (&Serveur{BanniereStyle: mauvais}).politique()
-		if !strings.Contains(p, "style-src 'self';") {
+		if !strings.Contains(p, "style-src 'self' 'unsafe-inline';") {
 			t.Fatalf("%q a altere style-src : %s", mauvais, p)
 		}
 	}
