@@ -18,7 +18,8 @@ import socket
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel, Field
 
 from ...core.device_registry import get_device_registry
@@ -176,7 +177,7 @@ async def discover() -> DiscoverResponse:
     )
 
 
-@router.post("", response_model=PairResponse)
+@router.post("", response_model=PairResponse, dependencies=[Depends(require_jwt)])
 async def pair_device(request: PairRequest) -> PairResponse:
     """
     Pair a new Eye Remote device.

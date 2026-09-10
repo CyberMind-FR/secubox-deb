@@ -651,7 +651,7 @@ async def stream_journal() -> StreamingResponse:
     )
 
 
-@app.post("/mode")
+@app.post("/mode", dependencies=[Depends(require_jwt)])
 def set_mode(payload: dict = Body(...)) -> dict:
     """Flip between PROD ↔ LAB.
 

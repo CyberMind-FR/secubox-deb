@@ -1,3 +1,12 @@
+secubox-cookies (1.3.1-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT SUR /capture (#1256). Le puits qui RECOIT les temoins captures
+    etait ouvert, alors que son voisin /capture/statut etait deja garde :
+    n'importe qui pouvait y injecter des temoins arbitraires pour un hote
+    arbitraire, donc empoisonner le bocal.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 20:40:00 +0200
+
 secubox-cookies (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * #1058 phase 3 : le magasin de capture est cable a l'API et au marqueur.

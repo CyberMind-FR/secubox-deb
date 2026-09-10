@@ -118,7 +118,7 @@ async def capture_desarmer():
 # Route d'ingest depuis sbxmitm. Pas de JWT : le proxy poste sur la socket
 # locale de confiance, et recevoir() re-verifie que la fenetre est armee — un
 # post hors fenetre ne garde rien. C'est la defense en profondeur.
-@app.post("/capture")
+@app.post("/capture", dependencies=[Depends(require_jwt)])
 async def capture_recevoir(request: Request):
     ev = await request.json()
     hote = (ev.get("hote") or "").lower()

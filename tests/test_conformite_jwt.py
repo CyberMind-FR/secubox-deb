@@ -40,6 +40,7 @@ from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
 INVENTAIRE = Path(__file__).resolve().parent / "dette-jwt.txt"
+ASSUMEES = Path(__file__).resolve().parent / "publiques-assumees.txt"
 
 VERBES = {"get", "post", "put", "delete", "patch"}
 
@@ -61,13 +62,25 @@ REPARES = {
 }
 
 
+def _est_garde(noeud: ast.AST) -> bool:
+    """Un nom qui dénote une garde : `Depends`, ou toute variante de require_jwt."""
+    return isinstance(noeud, ast.Name) and (
+        noeud.id == "Depends" or "require_jwt" in noeud.id
+    )
+
+
 def _routes_du_fichier(chemin: Path):
     """Rend (méthode, chemin_route, gardée) pour chaque route déclarée.
 
-    Une route est « gardée » si `Depends` apparaît dans son décorateur
-    (`dependencies=[Depends(require_jwt)]`) ou dans la signature de la
-    fonction (`user=Depends(require_jwt)`) — les deux formes sont en usage
-    dans le parc et protègent aussi bien l'une que l'autre.
+    Trois écritures sont en usage dans le parc et protègent aussi bien :
+
+    * `@app.get("/x", dependencies=[Depends(require_jwt)])` — dans le décorateur ;
+    * `async def x(user=Depends(require_jwt))` — dans la signature ;
+    * `dependencies=[require_jwt()]` où `require_jwt()` est une fabrique locale
+      rendant `Depends(_require_jwt)` — c'est la forme de `secubox-antirootkit`,
+      et ne chercher que le nom `Depends` la déclarait à tort non gardée.
+
+    On reconnaît donc `Depends` **ou** un nom contenant `require_jwt`.
     """
     try:
         arbre = ast.parse(chemin.read_text(encoding="utf-8", errors="ignore"))
@@ -77,10 +90,7 @@ def _routes_du_fichier(chemin: Path):
     for noeud in ast.walk(arbre):
         if not isinstance(noeud, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        signature_gardee = any(
-            isinstance(n, ast.Name) and n.id == "Depends"
-            for n in ast.walk(noeud.args)
-        )
+        signature_gardee = any(_est_garde(n) for n in ast.walk(noeud.args))
         for deco in noeud.decorator_list:
             if not isinstance(deco, ast.Call):
                 continue
@@ -89,16 +99,21 @@ def _routes_du_fichier(chemin: Path):
             if not deco.args or not isinstance(deco.args[0], ast.Constant):
                 continue
             route = deco.args[0].value
-            if not isinstance(route, str) or not route.startswith("/"):
+            # `@router.post("")` est une VRAIE route : le chemin vide vaut le
+            # prefixe du routeur (`include_router(..., prefix="/devices")`).
+            # L'exiger commencant par « / » la rendait invisible — angle mort
+            # trouve en auditant secubox-eye-remote/api/routers/pairing.py.
+            if not isinstance(route, str) or (route and not route.startswith("/")):
                 continue
-            deco_garde = any(
-                isinstance(n, ast.Name) and n.id == "Depends" for n in ast.walk(deco)
-            )
+            route = route or "(prefixe du routeur)"
+
+            deco_garde = any(_est_garde(n) for n in ast.walk(deco))
             yield deco.func.attr.upper(), route, (deco_garde or signature_gardee)
 
 
 def _scanner() -> set[str]:
     """Inventaire des routes non gardées, en clés stables `module METHODE chemin`."""
+    assumees = _publiques_assumees()
     nues = set()
     for fichier in sorted(RACINE.glob("packages/*/api/**/*.py")):
         module = fichier.relative_to(RACINE).parts[1]
@@ -107,8 +122,30 @@ def _scanner() -> set[str]:
                 continue
             if methode == "GET" and route in PUBLIQUES:
                 continue
-            nues.add(f"{module} {methode} {route}")
+            cle = f"{module} {methode} {route}"
+            if cle in assumees:
+                continue
+            nues.add(cle)
     return nues
+
+
+def _publiques_assumees() -> set[str]:
+    """Routes publiques à dessein, chacune avec sa raison en commentaire.
+
+    Ce n'est pas une dérogation de confort : une route n'entre ici que si elle
+    porte SA PROPRE protection (session + CSRF de `billets`, HMAC du webhook
+    `metablogizer`, requête signée de `soc-gateway`, restriction à localhost de
+    `p2p`) ou si exiger un jeton la casserait par construction (les points
+    d'entrée de `secubox-auth` DÉLIVRENT le jeton ; l'autodiscover Outlook est
+    parlé par un client qui n'en porte pas).
+    """
+    lignes = ASSUMEES.read_text(encoding="utf-8").splitlines()
+    entrees = set()
+    for l in lignes:
+        l = l.split("#", 1)[0].strip()
+        if l:
+            entrees.add(" ".join(l.split()))
+    return entrees
 
 
 def _inventaire() -> set[str]:
@@ -162,3 +199,22 @@ def test_le_scanner_voit_les_deux_formes_de_garde(tmp_path):
     assert vu[("GET", "/a")] is True, "dependencies=[...] non reconnu"
     assert vu[("POST", "/b")] is True, "user=Depends(...) non reconnu"
     assert vu[("GET", "/c")] is False, "route nue non détectée"
+
+
+def test_publiques_assumees_sans_ligne_morte():
+    """Une route publique assumée doit exister : sinon la ligne ment.
+
+    Une entrée qui ne correspond plus à aucune route (route renommée, module
+    retiré) donne l'illusion d'une décision prise alors qu'elle ne couvre plus
+    rien — et masquerait la réapparition de la vraie route sous un autre nom.
+    """
+    toutes = set()
+    for fichier in sorted(RACINE.glob("packages/*/api/**/*.py")):
+        module = fichier.relative_to(RACINE).parts[1]
+        for methode, route, _ in _routes_du_fichier(fichier):
+            toutes.add(f"{module} {methode} {route}")
+    mortes = sorted(_publiques_assumees() - toutes)
+    assert not mortes, (
+        f"{len(mortes)} ligne(s) de tests/publiques-assumees.txt ne "
+        "correspondent à aucune route :\n  " + "\n  ".join(mortes)
+    )

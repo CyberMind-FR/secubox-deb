@@ -1,3 +1,12 @@
+secubox-sentinelle-gsm (0.4.3-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT SUR /mode (#1256). Le basculement PROD <-> LAB etait ouvert :
+    l'exigence de consent_ack et la trace d'audit ne remplacent pas une
+    authentification -- elles enregistrent qui a bascule, elles n'empechent
+    pas n'importe qui de le faire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 20:40:00 +0200
+
 secubox-sentinelle-gsm (0.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Purge des references authelia (SSO decommissionne) : commentaires,

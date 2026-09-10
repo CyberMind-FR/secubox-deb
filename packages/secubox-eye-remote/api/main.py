@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -192,7 +193,7 @@ async def get_eye_metrics():
     raise HTTPException(status_code=503, detail="Cannot reach Eye Remote")
 
 
-@app.post("/api/v1/eye-remote/mode")
+@app.post("/api/v1/eye-remote/mode", dependencies=[Depends(require_jwt)])
 async def set_gadget_mode(request: GadgetModeRequest):
     """Change Eye Remote gadget mode."""
     valid_modes = ["normal", "flash", "debug", "tty", "auth"]
@@ -255,7 +256,7 @@ async def get_pizero_metrics():
     raise HTTPException(status_code=503, detail="Cannot reach Pi Zero")
 
 
-@app.post("/api/v1/eye-remote/auto-pair")
+@app.post("/api/v1/eye-remote/auto-pair", dependencies=[Depends(require_jwt)])
 async def auto_pair():
     """Auto-pair with connected Eye Remote device.
 

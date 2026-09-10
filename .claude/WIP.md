@@ -32,10 +32,18 @@
   `vm` 17, `wazuh` 17, `rezapp` 16, `jabber` 15, `ossec` 15, `redroid` 14) =
   **144 routes**. Inventaire 667 → 526, `REPARES` à 11 modules. **177 routes
   fermées au total sur la journée.**
-- **#1256 suite** : les modules à trous partiels — `lyrion` (15/19),
-  `p2p` (17/57), `soc-gateway` (5/30), `mail` (11/55), `annuaire` (15/39) — la
-  garde y est déjà importée. Retirer les lignes de `tests/dette-jwt.txt` dans le
-  même commit que chaque réparation.
+- ~~**#1256 écritures des modules partiels**~~ → **fait** : les 58 écritures
+  triées une par une — 12 fermées, 46 reclassées publiques à dessein dans
+  `tests/publiques-assumees.txt` avec leur raison. Dette 526 → 468.
+- **#1256 lectures** : 397 GET nues restent, sur ~90 modules. C'est le gros du
+  reste, et le seul où « donnée publique ou pas » se décide module par module —
+  pas d'automatisation possible sans décider à la place de l'opérateur.
+- **À trancher (marqué A CONFIRMER dans `publiques-assumees.txt`)** : les routes
+  du Hall (`webos` broadcast, `zia` /v1/chat, `ai-gateway`) et le transport
+  `lyrion` restent publiques parce que les cardlets les appellent depuis le
+  navigateur. À vérifier sur gk2 : relaient-elles un jeton ?
+- **#1259 / #1260** (nouveaux) : routeurs `eye-remote` non montés, et repli
+  fail-open de `leases.py`.
 - **#1256 P2** : trier les entrées publiques à dessein vers `PUBLIQUES`.
 - **#1257** : brancher l'API vhost de HAProxy sur `haproxyctl` — **après** le
   déploiement de #1254.

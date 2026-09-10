@@ -1,3 +1,15 @@
+secubox-lyrion (1.6.9-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT SUR /medialib/mount ET /medialib/unmount (#1256). Lier un chemin
+    hote arbitraire en lecture seule dans le LXC merite mieux qu'une barriere
+    reseau : ces deux routes exigent desormais un jeton.
+  * Les routes de transport (rescan, player/*) restent sans jeton : le relais
+    /api/v1/lyrion/ est gate LAN par nginx (auth_request, ref #1247) et la
+    cardlet du Hall les appelle depuis le navigateur. Consigne dans
+    tests/publiques-assumees.txt, marque A CONFIRMER sur la board.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 20:40:00 +0200
+
 secubox-lyrion (1.6.8-1~bookworm1) bookworm; urgency=medium
 
   * Purge des references authelia (SSO decommissionne) : commentaires,

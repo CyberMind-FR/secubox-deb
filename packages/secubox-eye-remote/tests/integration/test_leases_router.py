@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
-def client(monkeypatch, tmp_path: Path) -> TestClient:
+def client(monkeypatch, tmp_path: Path):
     leases = tmp_path / "leases"
     leases.write_text(
         "4000000000 02:fb:00:00:11:03 10.55.0.11 eye-rpiz id1\n"
@@ -23,8 +23,23 @@ def client(monkeypatch, tmp_path: Path) -> TestClient:
     monkeypatch.setenv("SECUBOX_EYE_RESERVATIONS_FILE", str(res))
 
     from api.main import app
+    from api.routers.leases import require_jwt
 
-    return TestClient(app)
+    # LA GARDE RESTE EN PLACE, ON PRESENTE UN PORTEUR VALIDE (#1256).
+    #
+    # Ces tests passaient auparavant SANS authentification : `leases.py` retombe
+    # sur un `require_jwt` no-op quand `secubox_core` n'est pas importable
+    # (repli « standalone Pi Zero »), et le harnais de test n'ajoutait pas
+    # `common/` au chemin — les tests exercaient donc une app sans garde.
+    # Maintenant que `common/` est sur le chemin, la vraie garde s'applique.
+    #
+    # `dependency_overrides` plutot qu'un faux jeton : on teste le ROUTEUR, pas
+    # la cryptographie du jeton, et un test qui fabrique un JWT valide casserait
+    # au prochain changement de secret.
+    app.dependency_overrides[require_jwt] = lambda: None
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
 
 
 def test_get_leases_returns_active(client: TestClient):
@@ -69,9 +84,15 @@ def test_get_leases_resilient_to_malformed_reservations(monkeypatch, tmp_path):
 
     from fastapi.testclient import TestClient
     from api.main import app
+    from api.routers.leases import require_jwt
 
-    client = TestClient(app)
-    r = client.get("/api/v1/eye-remote/leases")
+    # Ce test construit son propre client, hors de la fixture : meme surcharge.
+    app.dependency_overrides[require_jwt] = lambda: None
+    try:
+        client = TestClient(app)
+        r = client.get("/api/v1/eye-remote/leases")
+    finally:
+        app.dependency_overrides.clear()
     assert r.status_code == 200, r.text
     # Lease still shown, just with no joined hostname from reservations
     body = r.json()

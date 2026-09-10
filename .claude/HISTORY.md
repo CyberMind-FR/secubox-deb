@@ -5,6 +5,59 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-10 — Garde JWT : les 58 écritures des modules partiels triées (ref #1256)
+
+Les 93 modules « à trous partiels » portent 455 routes nues. Balayage aveugle
+exclu : ces modules ont gardé *certaines* routes, donc le choix pouvait être
+délibéré. J'ai isolé le sous-ensemble où l'oubli ne fait aucun doute — les
+**58 écritures** — et je les ai triées **une par une**, docstring et corps de
+fonction à l'appui.
+
+**12 fermées** (aucun contrôle interne, action d'administration) :
+`eye-remote` `/mode`, `/auto-pair`, l'appairage et les 5 routes du routeur
+websocket (commande, capture d'écran, redémarrage, lockdown, restart de
+service) ; `cookies` `/capture` — le puits qui **reçoit** les témoins était
+ouvert alors que son voisin `/capture/statut` était gardé, donc empoisonnable ;
+`lyrion` `/medialib/mount` et `/unmount` — lier un chemin hôte dans le LXC
+mérite mieux qu'une barrière réseau ; `sentinelle-gsm` `/mode`.
+
+**46 reclassées publiques à dessein**, dans `tests/publiques-assumees.txt`,
+chacune avec sa raison vérifiable : les points d'entrée de `secubox-auth` qui
+**délivrent** le jeton ; l'admin de `billets`, qui a sa propre session
+(`billets_session`) + CSRF double-envoi — y poser `require_jwt` casserait la
+connexion sans rien ajouter ; le webhook HMAC de `metablogizer` ; l'enrôlement
+signé de `soc-gateway` ; `/depot` de `droplet`, documenté public ; l'autodiscover
+Outlook, parlé par un client qui ne porte pas de JWT ; `/connected` et
+`/disconnected` d'`eye-remote`, appelés par udev en local.
+
+**Deux corrections du détecteur, trouvées en auditant :**
+- `dependencies=[require_jwt()]` — fabrique locale rendant `Depends(_require_jwt)`,
+  la forme de `secubox-antirootkit` — était compté comme **non gardé**. Faux
+  positif. Le scanner reconnaît désormais `Depends` **ou** tout nom contenant
+  `require_jwt`.
+- `@router.post("")` (chemin vide = préfixe du routeur) était **invisible** :
+  j'exigeais un chemin commençant par « / ». Trouvé sur
+  `eye-remote/api/routers/pairing.py`, qui portait ainsi une route d'appairage
+  hors inventaire.
+
+**Deux trouvailles à part, signalées et non corrigées ici :**
+- **`secubox-eye-remote` ne monte que `leases_router`.** Les routeurs
+  `websocket`, `pairing`, `devices` et `boot_media` ne sont inclus par aucune
+  application — l'API Boot Media documentée dans `CLAUDE.md` §v2.1.0+ ne répond
+  donc pas. Mes gardes y sont correctes mais actuellement inatteignables.
+- **`leases.py` échoue OUVERT** : `try: from secubox_core.auth import require_jwt
+  / except ImportError: def require_jwt(): return None`. Si l'import casse, la
+  garde devient un no-op **en silence**. C'est ce repli qui faisait passer les
+  tests d'intégration sans authentification, `common/` n'étant pas sur le chemin
+  du harnais. Corrigé côté test (chemin + `dependency_overrides`), pas côté
+  code : le repli est documenté « standalone Pi Zero » et le changer est une
+  décision de déploiement.
+
+Dette : **526 → 468** routes. Reste 397 lectures, où « donnée publique ou pas »
+se décide module par module. Non déployé.
+
+---
+
 ## 2026-09-10 — Garde JWT P1 : 8 modules fermés, dette 667 → 526 (ref #1256)
 
 Les huit modules qui n'importaient **jamais** `require_jwt` sont fermés :

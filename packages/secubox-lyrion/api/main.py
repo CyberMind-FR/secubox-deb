@@ -346,7 +346,7 @@ async def medialib() -> Dict[str, Any]:
     }
 
 
-@app.post("/medialib/mount")
+@app.post("/medialib/mount", dependencies=[Depends(require_jwt)])
 async def medialib_mount(payload: Dict[str, Any] = Body(default=None)) -> Dict[str, Any]:
     """Read-only-bind a confirmed host path into the Lyrion LXC.
 
@@ -398,7 +398,7 @@ async def upgrade(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
     return await asyncio.to_thread(_run)
 
 
-@app.post("/medialib/unmount")
+@app.post("/medialib/unmount", dependencies=[Depends(require_jwt)])
 async def medialib_unmount() -> Dict[str, Any]:
     """Remove the external-media RO bind + persisted key, then rescan."""
     return await _ctl_medialib("unmount")

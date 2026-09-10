@@ -21,7 +21,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel, Field
 
 from ...core.device_registry import get_device_registry
@@ -613,7 +614,7 @@ async def get_connected_devices() -> dict[str, Any]:
     }
 
 
-@router.post("/devices/{device_id}/command")
+@router.post("/devices/{device_id}/command", dependencies=[Depends(require_jwt)])
 async def send_device_command(
     device_id: str,
     cmd: Command,
@@ -659,7 +660,7 @@ async def send_device_command(
         }
 
 
-@router.post("/devices/{device_id}/screenshot")
+@router.post("/devices/{device_id}/screenshot", dependencies=[Depends(require_jwt)])
 async def request_screenshot(device_id: str) -> dict[str, Any]:
     """
     Demander une capture d'ecran a un appareil Eye Remote.
@@ -673,7 +674,7 @@ async def request_screenshot(device_id: str) -> dict[str, Any]:
     return await send_device_command(device_id, Command.SCREENSHOT)
 
 
-@router.post("/devices/{device_id}/reboot")
+@router.post("/devices/{device_id}/reboot", dependencies=[Depends(require_jwt)])
 async def request_reboot(device_id: str) -> dict[str, Any]:
     """
     Redemarrer un appareil Eye Remote.
@@ -687,7 +688,7 @@ async def request_reboot(device_id: str) -> dict[str, Any]:
     return await send_device_command(device_id, Command.REBOOT)
 
 
-@router.post("/devices/{device_id}/lockdown")
+@router.post("/devices/{device_id}/lockdown", dependencies=[Depends(require_jwt)])
 async def request_lockdown(device_id: str, enable: bool = True) -> dict[str, Any]:
     """
     Activer/desactiver le mode lockdown sur le SecuBox associe.
@@ -703,7 +704,7 @@ async def request_lockdown(device_id: str, enable: bool = True) -> dict[str, Any
     return await send_device_command(device_id, cmd)
 
 
-@router.post("/devices/{device_id}/service/{service_name}/restart")
+@router.post("/devices/{device_id}/service/{service_name}/restart", dependencies=[Depends(require_jwt)])
 async def request_service_restart(
     device_id: str,
     service_name: str
