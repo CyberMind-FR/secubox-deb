@@ -6,7 +6,31 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-09-08*
+*Mis à jour : 2026-09-10*
+
+---
+
+## 2026-09-10 — `haproxyctl generate` réparé (#1254)
+
+### ✅ Fait — dans le dépôt (non déployé)
+- **`haproxyctl` 1.1.1 / `secubox-haproxy` 1.8.12.** Le « generate cassé » du 08/09
+  était **deux** pannes : (a) accents graves des commentaires exécutés comme
+  substitutions de commandes dans les heredocs non quotés → volée de
+  `command not found` + commentaires éventrés dans le cfg ; (b) l'extraction d'une
+  table TOML (`head -n -1`) décapitait la **dernière** table du fichier — le dernier
+  `[backends.X]` sortait **sans un seul serveur** (503 silencieux, cfg valide pour
+  `haproxy -c`). Remplacée par `_toml_section()` en awk, 6 sites d'appel.
+- **Tests** : `test_generation_cfg.py` exécute réellement `generate` et vérifie cfg +
+  stderr (3 régressions couvertes) ; `test_ssl_redirect_requires_ssl` remis en phase
+  avec #1370 (HTTPS partout par défaut, `ssl_redirect` = no-op).
+
+### ⬜ Next Up
+- **Déployer `secubox-haproxy` 1.8.12 sur gk2** puis lancer un `generate` réel :
+  comparer le cfg produit au cfg live AVANT tout `--allow-shrink` (le garde-fou
+  anti-dérive refusera de régénérer tant que `haproxy.toml` compte moins d'entrées
+  que le live). Ne fermer #1254 qu'après cette validation.
+- **secubox-dpi-engine** : le formaliser en paquet source cross-build.
+- **ZIA Phase E** : manifestes `capabilities.d` pour lyrion + peertube.
 
 ---
 
@@ -35,8 +59,10 @@
   **CONSERVÉ** : analyseurs `toolbox-mitm`/`-wg` (mitmdump R2/R3), distincts du WAF.
 
 ### ⬜ À suivre (→ TODO)
-- **haproxyctl generate CASSÉ** (erreurs bash) + `haproxy.toml` avait divergé du
-  cfg live — à réparer (le rename backend a été fait sur le cfg live + toml synchro).
+- ~~**haproxyctl generate CASSÉ** (erreurs bash)~~ → **corrigé le 10/09 (#1254)**,
+  cf. section du jour. Reste la partie board : `haproxy.toml` avait divergé du cfg
+  live (rename backend fait sur le cfg live + toml synchro) — vérifier le diff au
+  redéploiement, avant tout `--allow-shrink`.
 - Redéploiement des ~30 paquets au scrub mitmproxy **non fait** : 0 gain fonctionnel
   (box déjà migrée), cosmétique seul → suivra au release naturel.
 - `secubox-jellyfin-playback-policy.service` en échec (pré-existant, sans rapport).

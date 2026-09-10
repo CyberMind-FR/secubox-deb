@@ -1,3 +1,34 @@
+secubox-haproxy (1.8.12-1~bookworm1) bookworm; urgency=medium
+
+  * haproxyctl generate : REPARE (haproxyctl 1.1.1). Deux pannes distinctes,
+    toutes deux invisibles a la relecture du script.
+  * Accents graves executes. Les commentaires francais du generateur citent
+    les directives entre accents graves ; emis dans un heredoc NON QUOTE, ces
+    accents etaient des substitutions de commandes. bash executait donc
+    `defaults`, `set-timeout`, `timeout server 30s`, `server`, `tunnel` a
+    chaque generation : d'ou la volee de « command not found » et de « syntax
+    error: unexpected end of file » qui faisait passer generate pour casse.
+    Les commentaires sortaient de surcroit eventres dans le cfg (« La section
+    porte , et c'est bien »), et `$scheme` etait remplace par du vide. Les
+    accents et le `$` sont desormais echappes ; le cfg produit est inchange
+    pour le trafic, seuls les commentaires reviennent lisibles.
+  * Derniere table TOML decapitee. L'extraction d'une table valait
+    `sed '/^[x]/,/^[/p' | head -n -1` : le `head` servait a retrancher
+    l'en-tete de la table SUIVANTE, incluse par la plage sed. Pour la DERNIERE
+    table du fichier il n'y a pas d'en-tete suivant — c'est une vraie directive
+    qui etait mangee. Le dernier `[backends.X]` de haproxy.toml perdait ainsi
+    son `servers = [...]` et sortait SANS UN SEUL SERVEUR (503 sur tout son
+    trafic, avec un cfg parfaitement valide pour `haproxy -c`) ; un dernier
+    `[vhosts.X]` perdait son dernier drapeau. Remplace par un extracteur awk
+    qui s'arrete AVANT l'en-tete suivant (6 sites d'appel).
+  * Tests : `tests/test_generation_cfg.py` execute reellement generate sur un
+    haproxy.toml temoin et verifie le cfg produit ET le flux d'erreur.
+    `test_ssl_redirect_requires_ssl` etait reste sur le contrat d'avant #1370
+    (redirection conditionnee a `ssl_redirect`, drapeau devenu no-op) : remis
+    en phase avec HTTPS-partout-par-defaut.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 15:45:00 +0200
+
 secubox-haproxy (1.8.11-1~bookworm1) bookworm; urgency=medium
 
   * RETRAIT DU LEGACY « MIGRATION » (#1222). La migration OpenWrt->Debian est

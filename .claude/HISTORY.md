@@ -5,6 +5,40 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-10 — `haproxyctl generate` réparé (ref #1254)
+
+Le « generate CASSÉ (erreurs bash) » noté au 08/09 était **deux** pannes, reproduites
+hors board sur un `haproxy.toml` témoin.
+
+- **Accents graves exécutés.** Les commentaires français du générateur citent les
+  directives entre accents graves ; émis dans un heredoc `<< EOF` **non quoté**, ces
+  accents sont des substitutions de commandes. bash exécutait `defaults`,
+  `set-timeout`, `timeout server 30s`, `server`, `tunnel` à chaque génération — d'où
+  la volée de `command not found` et le `syntax error: unexpected end of file`. Les
+  commentaires sortaient éventrés dans le cfg (« La section  porte , et c'est bien »)
+  et `$scheme` était remplacé par du vide. Accents et `$` échappés (`haproxyctl` 1.1.1) ;
+  **le cfg produit est inchangé pour le trafic**, seuls les commentaires redeviennent
+  lisibles.
+- **Dernière table TOML décapitée.** `sed '/^\[x\]/,/^\[/p' | head -n -1` : le `head`
+  retranchait l'en-tête de la table *suivante*, incluse par la plage sed. Pour la
+  **dernière** table du fichier il n'y a pas d'en-tête suivant — c'est une vraie
+  directive qui était mangée. Le dernier `[backends.X]` perdait son `servers = [...]`
+  et sortait **sans un seul serveur** (503 sur tout son trafic, avec un cfg
+  parfaitement valide pour `haproxy -c`) ; un dernier `[vhosts.X]` perdait son dernier
+  drapeau. Remplacé par `_toml_section()` (awk) qui s'arrête **avant** l'en-tête
+  suivant — 6 sites d'appel.
+- **Tests** : `tests/test_generation_cfg.py` exécute réellement `generate` (faux
+  binaire `haproxy` pour la validation) et vérifie le cfg **et** stderr ; les 3
+  tests de régression échouent sur le script d'avant, passent après.
+  `test_ssl_redirect_requires_ssl` était resté sur le contrat d'avant #1370
+  (redirection conditionnée à `ssl_redirect`, drapeau devenu no-op) — remis en phase
+  avec HTTPS-partout-par-défaut.
+- `secubox-haproxy` 1.8.12. **Non déployé** : au redéploiement sur gk2, vérifier le
+  diff avant tout `--allow-shrink` (le garde-fou anti-dérive refusera de régénérer
+  tant que `haproxy.toml` compte moins d'entrées que le cfg live).
+
+---
+
 ## 2026-09-08 — Fuite metrics (glibc), incident login, purge authelia, migration mitmproxy→sbxwaf
 
 - **Fuite RSS `secubox-metrics` — cause racine par tracemalloc.** Le diff a montré
