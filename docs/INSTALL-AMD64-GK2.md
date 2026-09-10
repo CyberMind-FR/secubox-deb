@@ -25,6 +25,8 @@ Ce guide installe une SecuBox-DEB AMD64 sur un PC, dans VirtualBox ou sur un hô
 
 GK2 Clone est l’instance AMD64 reproductible de la box de développement GK2. Elle fournit une base Debian/SecuBox pour valider les services, les flux réseau et les parcours opérateur sans modifier une box physique.
 
+![Affiche GK2 Clone sur PC AMD64](assets/images/gk2-clone-amd64-poster.png)
+
 Le clone démarre avec une chaîne réseau de sécurité : HAProxy reçoit les flux exposés, SBXWAF les inspecte, puis SBXOS Hall distribue les services tels que Nextcloud, Mail, Radio, BBS, PeerTube et l’API. Consultez [l’architecture détaillée](ARCHITECTURE-GK2.md) avant d’exposer une instance hors d’un réseau de développement.
 
 ## 2. Architecture matérielle
