@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -194,7 +195,7 @@ async def health():
     return {"status": "ok", "module": "annuaire"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Global status: merkle root + chain integrity."""
     j = get_journal()
@@ -210,7 +211,7 @@ async def status():
     }
 
 
-@app.get("/log")
+@app.get("/log", dependencies=[Depends(require_lecture)])
 async def log_recent(limit: int = 20):
     """Return recent log entries (oldest-first, up to *limit*)."""
     j = get_journal()
@@ -219,7 +220,7 @@ async def log_recent(limit: int = 20):
     return [e.model_dump() for e in recent]
 
 
-@app.get("/verify-chain")
+@app.get("/verify-chain", dependencies=[Depends(require_lecture)])
 async def verify_chain():
     """Walk the BLAKE2b chain; detect tampering. Public — anyone may audit."""
     j = get_journal()
@@ -227,7 +228,7 @@ async def verify_chain():
     return {"ok": ok, "broken_at": broken_at}
 
 
-@app.get("/merkle-root")
+@app.get("/merkle-root", dependencies=[Depends(require_lecture)])
 async def merkle_root():
     """Current BLAKE2b Merkle root over all entry_hash leaves."""
     j = get_journal()
@@ -236,7 +237,7 @@ async def merkle_root():
     return {"root": root, "height": tip.height if tip else -1}
 
 
-@app.get("/can")
+@app.get("/can", dependencies=[Depends(require_lecture)])
 async def can_query(subject: str, action: str, target: str, domain: str):
     """Ask the can() resolver whether *subject* may *action* on *target* in *domain*."""
     from annuaire.resolver import can  # noqa: PLC0415
@@ -245,7 +246,7 @@ async def can_query(subject: str, action: str, target: str, domain: str):
     return {"allowed": decision.allowed, "reasons": decision.reasons}
 
 
-@app.get("/proposal/{proposal_id}")
+@app.get("/proposal/{proposal_id}", dependencies=[Depends(require_lecture)])
 async def get_proposal_tally(proposal_id: str):
     """Tally the votes on a proposal and return the computed outcome."""
     from annuaire.verbs import tally  # noqa: PLC0415
@@ -447,7 +448,7 @@ class PullServicesRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@app.get("/services")
+@app.get("/services", dependencies=[Depends(require_lecture)])
 async def list_services():
     """List all non-revoked service offers (public)."""
     from annuaire.verbs import _get_offers  # noqa: PLC0415
@@ -513,7 +514,7 @@ async def subscribe_to_service(service_id: str, req: SubscribeRequest):
     return result
 
 
-@app.get("/subscriptions")
+@app.get("/subscriptions", dependencies=[Depends(require_lecture)])
 async def list_subscriptions(mine: Optional[str] = None, pending_for: Optional[str] = None):
     """List subscriptions with derived state (public read).
 
@@ -690,14 +691,14 @@ class PullLogRequest(BaseModel):
     base_url: str
 
 
-@app.get("/nodes")
+@app.get("/nodes", dependencies=[Depends(require_lecture)])
 async def list_nodes():
     """List the latest self-authored NodeRecord per node (public — the peer registry)."""
     from annuaire.verbs import _get_nodes  # noqa: PLC0415
     return {"nodes": _get_nodes(get_journal())}
 
 
-@app.get("/config")
+@app.get("/config", dependencies=[Depends(require_lecture)])
 async def list_config(scope: Optional[str] = None):
     """List current (non-revoked) config blobs, optionally filtered by scope (public)."""
     from annuaire.verbs import _get_configs  # noqa: PLC0415
@@ -707,7 +708,7 @@ async def list_config(scope: Optional[str] = None):
     return {"configs": configs}
 
 
-@app.get("/bans")
+@app.get("/bans", dependencies=[Depends(require_lecture)])
 async def list_bans():
     """The federated ban union (public read) — every node's active bans (#768)."""
     from annuaire.verbs import _get_bans, banned_ips  # noqa: PLC0415
@@ -715,7 +716,7 @@ async def list_bans():
     return {"banned_ips": banned_ips(j), "bans": _get_bans(j)}
 
 
-@app.get("/log/export")
+@app.get("/log/export", dependencies=[Depends(require_lecture)])
 async def export_log():
     """Export the full signed log for a peer to pull (public).
 
@@ -816,7 +817,7 @@ async def pull_log(req: PullLogRequest):
 _FLEET_TTL_S = 5 * 60  # 5x the publish interval (sbx-fleetctl publish timer)
 
 
-@app.get("/fleet/self")
+@app.get("/fleet/self", dependencies=[Depends(require_lecture)])
 async def get_fleet_self():
     """This node's own signed MetricSnapshot, or {} if not yet published (public)."""
     return fleet_store.read() or {}
@@ -984,7 +985,7 @@ def _self_did_best_effort() -> Optional[str]:
         return None
 
 
-@app.get("/centers")
+@app.get("/centers", dependencies=[Depends(require_lecture)])
 async def list_centers():
     """Enrolled centers + their delegated (scope, layer) capabilities (public read).
 
@@ -1012,7 +1013,7 @@ async def list_centers():
     return {"centers": centers}
 
 
-@app.get("/centers/ownership")
+@app.get("/centers/ownership", dependencies=[Depends(require_lecture)])
 async def centers_ownership():
     """(scope, layer) -> owning center matrix (public read), via grants.active_grants.
 
@@ -1033,7 +1034,7 @@ async def centers_ownership():
     return {"ownership": matrix}
 
 
-@app.get("/centers/proposals")
+@app.get("/centers/proposals", dependencies=[Depends(require_lecture)])
 async def centers_proposals():
     """CONFIG_PUBLISH entries that failed to route (no grant / bad sig / hash
     mismatch / malformed) — pending operator review (public read).
@@ -1050,7 +1051,7 @@ async def centers_proposals():
     return {"proposals": result["proposals"]}
 
 
-@app.get("/centers/effective/{scope}")
+@app.get("/centers/effective/{scope}", dependencies=[Depends(require_lecture)])
 async def centers_effective(scope: str):
     """Composed effective config for *scope* vs its local override layer (public read).
 

@@ -29,6 +29,7 @@ from enum import Enum
 from collections import Counter
 
 from fastapi import FastAPI, Depends, HTTPException
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 import httpx
 
@@ -573,7 +574,7 @@ guard = DnsGuard(DATA_DIR)
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = guard.get_stats()
@@ -676,7 +677,7 @@ async def sync_dnsmasq():
     return {"status": "synced"}
 
 
-@app.get("/check/{domain}")
+@app.get("/check/{domain}", dependencies=[Depends(require_lecture)])
 async def check_domain(domain: str):
     """Check if a domain is blocked (public endpoint)."""
     return {

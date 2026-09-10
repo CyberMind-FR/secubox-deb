@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 import httpx
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox OpenClaw", version="1.0.0")
 config = get_config("openclaw")
@@ -726,7 +727,7 @@ async def health():
     return {"status": "healthy", "service": "secubox-openclaw", "version": "1.0.0"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Status endpoint with statistics."""
     scans = _list_scans(1000)

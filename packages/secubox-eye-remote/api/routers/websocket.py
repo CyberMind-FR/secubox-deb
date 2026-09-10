@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from ...core.device_registry import get_device_registry
 from ...core.token_manager import hash_token
+from secubox_core.auth import require_lecture
 
 log = logging.getLogger(__name__)
 
@@ -589,7 +590,7 @@ async def websocket_webui_endpoint(
 # =============================================================================
 
 
-@router.get("/devices/connected")
+@router.get("/devices/connected", dependencies=[Depends(require_lecture)])
 async def get_connected_devices() -> dict[str, Any]:
     """
     Lister les appareils Eye Remote actuellement connectes.

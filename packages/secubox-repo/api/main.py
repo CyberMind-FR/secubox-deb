@@ -24,6 +24,7 @@ from pathlib import Path
 
 # Import shared auth
 import sys
+from secubox_core.auth import require_lecture
 sys.path.insert(0, '/usr/lib/python3/dist-packages')
 try:
     from secubox_core.auth import require_jwt, get_current_user
@@ -354,7 +355,7 @@ async def shutdown():
 
 
 # Public Endpoints
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get repository status."""
     cached = stats_cache.get("status")
@@ -379,19 +380,19 @@ async def health_check():
     }
 
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def get_components():
     """Get required components status."""
     return run_repoctl("components", parse_json=True)
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def get_access():
     """Get access information."""
     return run_repoctl("access", parse_json=True)
 
 
-@app.get("/distributions")
+@app.get("/distributions", dependencies=[Depends(require_lecture)])
 async def get_distributions():
     """List available distributions."""
     return {
@@ -400,7 +401,7 @@ async def get_distributions():
     }
 
 
-@app.get("/packages/{distribution}")
+@app.get("/packages/{distribution}", dependencies=[Depends(require_lecture)])
 async def list_packages_dist(distribution: str = "bookworm"):
     """List packages in a distribution."""
     cached = stats_cache.get(f"packages_{distribution}")
@@ -420,7 +421,7 @@ async def list_packages_dist(distribution: str = "bookworm"):
     return result
 
 
-@app.get("/packages")
+@app.get("/packages", dependencies=[Depends(require_lecture)])
 async def list_all_packages():
     """List all packages across all distributions."""
     all_packages = []
@@ -438,7 +439,7 @@ async def list_all_packages():
     }
 
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_lecture)])
 async def get_stats():
     """Get repository statistics."""
     cached = stats_cache.get("repo_stats")
@@ -466,7 +467,7 @@ async def get_stats():
     return stats
 
 
-@app.get("/recent")
+@app.get("/recent", dependencies=[Depends(require_lecture)])
 async def get_recent():
     """Get recently added packages."""
     return {
@@ -770,7 +771,7 @@ async def delete_webhook(webhook_id: str, user: dict = Depends(require_jwt)):
     return {"success": True}
 
 
-@app.get("/summary")
+@app.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get repository summary."""
     stats = await get_stats()

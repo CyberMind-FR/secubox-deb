@@ -28,6 +28,7 @@ import concurrent.futures
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import platform
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-system", version="1.2.0", root_path="/api/v1/system")
 
@@ -379,7 +380,7 @@ async def status(user=Depends(require_jwt)):
     return _compute_status_sync()
 
 
-@router.get("/info")
+@router.get("/info", dependencies=[Depends(require_lecture)])
 def info():
     """System info for dashboard (public)."""
     import platform
@@ -406,7 +407,7 @@ def info():
     }
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_lecture)])
 def metrics():
     """System metrics for Eye Remote dashboard (public).
 
@@ -434,7 +435,7 @@ def metrics():
     }
 
 
-@router.get("/resources")
+@router.get("/resources", dependencies=[Depends(require_lecture)])
 async def resources():
     """Resource usage for dashboard (public)."""
     cpu = psutil.cpu_percent(interval=0.5)
@@ -452,7 +453,7 @@ async def resources():
     }
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_lecture)])
 def metrics_public():
     """
     Public metrics endpoint for Eye Remote Dashboard (no JWT required).
@@ -527,13 +528,13 @@ def metrics_public():
     }
 
 
-@router.get("/services")
+@router.get("/services", dependencies=[Depends(require_lecture)])
 async def services():
     """Services list for dashboard (public)."""
     return {"services": [_svc_status(s) for s in SECUBOX_SERVICES]}
 
 
-@router.get("/network")
+@router.get("/network", dependencies=[Depends(require_lecture)])
 async def network():
     """Network interfaces for dashboard (public)."""
     import socket
@@ -1078,7 +1079,7 @@ def _get_interface_details() -> List[Dict[str, Any]]:
     return interfaces
 
 
-@router.get("/board")
+@router.get("/board", dependencies=[Depends(require_lecture)])
 async def board_info_endpoint():
     """
     Get detailed board detection info.
@@ -1173,7 +1174,7 @@ def run_board_detection(user=Depends(require_jwt)):
         return {"success": False, "error": str(e)}
 
 
-@router.get("/board/capabilities")
+@router.get("/board/capabilities", dependencies=[Depends(require_lecture)])
 async def board_capabilities():
     """
     Get board capabilities based on detected type.
@@ -1189,7 +1190,7 @@ async def board_capabilities():
     }
 
 
-@router.get("/kiosk/status")
+@router.get("/kiosk/status", dependencies=[Depends(require_lecture)])
 async def kiosk_status_endpoint():
     """
     Get kiosk mode status (public for UI adaptation).

@@ -28,6 +28,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Depends
 from secubox_core.auth import require_jwt
+from secubox_core.auth import require_lecture
 
 LXC_NAME = os.environ.get("SECUBOX_LXC_NAME", "zigbee")
 LXC_IP = os.environ.get("SECUBOX_LXC_IP", "10.100.0.111")
@@ -114,7 +115,7 @@ def _bridge_state() -> str:
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> dict:
     lxc_st = _lxc_state()
     daemon_st = "running" if _z2m_running() else "stopped"
@@ -132,7 +133,7 @@ def components() -> dict:
     }
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> dict:
     c = components()
     s = {x["name"]: x["state"] for x in c["components"]}
@@ -149,7 +150,7 @@ def status() -> dict:
     return {"module": "zigbee", "version": "2.4.0", "overall": overall, "states": s}
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access() -> dict:
     # v2.5.8: field renamed `endpoint` → `url` so the frontend's
     # `a.url` access actually finds a value (previously "lan:
@@ -185,7 +186,7 @@ BACKUP_SCRIPT  = ["sudo", "-n", "/usr/sbin/zigbee-backup"]
 RESTORE_SCRIPT = ["sudo", "-n", "/usr/sbin/zigbee-restore"]
 
 
-@app.get("/backups")
+@app.get("/backups", dependencies=[Depends(require_lecture)])
 def list_backups() -> dict:
     """List available z2m state snapshots, newest first.
     Each entry includes the device count parsed from the .devices

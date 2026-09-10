@@ -49,23 +49,42 @@ VERBES = {"get", "post", "put", "delete", "patch"}
 # modules il rend des agrégats de trafic, des domaines ou des statistiques
 # d'attaques, c'est-à-dire de la reconnaissance, et aucun scrutateur du dépôt
 # ne le consomme en anonyme.
-PUBLIQUES = {"/health", "/healthz", "/readyz", "/ping"}
+# Sondes de sante : elles restent publiques, ou qu'elles soient montees.
+#
+# On compare le DERNIER SEGMENT, pas le chemin entier : un module qui declare
+# `/api/v1/health` (eye-remote), `/api/v1/mastodon/healthz` ou
+# `/api/v1/metrics/health` sert la meme sonde qu'un `/health` a la racine, et
+# systemd comme nginx l'appellent sans jeton. La premiere version de ce jeu
+# exigeait l'egalite stricte : trois sondes se sont retrouvees gardees, et
+# c'est un test d'integration qui l'a dit — pas la relecture.
+SONDES = {"health", "healthz", "readyz", "livez", "ping", "alive"}
 
-# Modules réparés — ils ne doivent JAMAIS reparaître dans l'inventaire.
-# Cette liste ne fait que grandir : chaque module ferme rejoint le cliquet.
-REPARES = {
-    # P0 (#1256) — les trois critiques
-    "secubox-vault", "secubox-certs", "secubox-cloner",
-    # P1 (#1256) — les modules qui n'importaient jamais require_jwt
-    "secubox-simplex", "secubox-vm", "secubox-wazuh", "secubox-rezapp",
-    "secubox-jabber", "secubox-ossec", "secubox-redroid", "secubox-magicmirror",
-}
+
+def _est_sonde(route: str) -> bool:
+    return route.rsplit("/", 1)[-1].lower() in SONDES
+
 
 
 def _est_garde(noeud: ast.AST) -> bool:
-    """Un nom qui dénote une garde : `Depends`, ou toute variante de require_jwt."""
+    """Un nom qui dénote une garde.
+
+    Deux gardes coexistent depuis le passage du parc en lecture gardée :
+
+    * `require_jwt` — jeton obligatoire, sans exception. C'est la garde des
+      écritures et de tout ce qui touche à un secret, une clé ou un journal.
+    * `require_lecture` — jeton, **ou** mode tableau de bord depuis le LAN si
+      l'opérateur l'a explicitement armé dans `secubox.conf`. C'est la garde
+      des lectures d'affichage, celles qui alimentaient les cardlets sans
+      authentification avant #1256.
+
+    `Depends` seul compte aussi : quelques modules définissent leur propre
+    fabrique (`secubox-antirootkit`) ou leur propre dépendance locale
+    (`secubox-annuaire`).
+    """
     return isinstance(noeud, ast.Name) and (
-        noeud.id == "Depends" or "require_jwt" in noeud.id
+        noeud.id == "Depends"
+        or "require_jwt" in noeud.id
+        or "require_lecture" in noeud.id
     )
 
 
@@ -120,7 +139,7 @@ def _scanner() -> set[str]:
         for methode, route, gardee in _routes_du_fichier(fichier):
             if gardee:
                 continue
-            if methode == "GET" and route in PUBLIQUES:
+            if methode == "GET" and _est_sonde(route):
                 continue
             cle = f"{module} {methode} {route}"
             if cle in assumees:
@@ -163,6 +182,23 @@ def test_aucune_route_non_gardee_nouvelle():
     )
 
 
+def test_dette_close():
+    """L'inventaire doit rester VIDE : la dette est soldée, pas gérée.
+
+    Tant qu'il restait des centaines de routes nues, `dette-jwt.txt` mesurait
+    une dette et le test empêchait qu'elle grossisse. Depuis le passage du
+    parc en lecture gardée, il n'y a plus rien à mesurer — et rouvrir le
+    fichier serait le moyen le plus simple de faire taire ce test au lieu de
+    poser une garde. Une route nue est un défaut, plus une ligne d'inventaire.
+    """
+    assert not _inventaire(), (
+        "tests/dette-jwt.txt doit rester vide : pose `require_jwt` ou "
+        "`require_lecture` sur la route, ou justifie-la dans "
+        "tests/publiques-assumees.txt.\n  "
+        + "\n  ".join(sorted(_inventaire()))
+    )
+
+
 def test_inventaire_sans_entree_perimee():
     """La dette réparée doit sortir de l'inventaire, sinon le cliquet se desserre."""
     perimees = sorted(_inventaire() - _scanner())
@@ -170,14 +206,6 @@ def test_inventaire_sans_entree_perimee():
         f"{len(perimees)} entrée(s) de tests/dette-jwt.txt sont réparées ou "
         "disparues — retire ces lignes dans le même commit :\n  "
         + "\n  ".join(perimees)
-    )
-
-
-def test_modules_p0_totalement_gardes():
-    """Les modules déjà fermés le restent : aucune régression tolérée (#1256)."""
-    restant = sorted(r for r in _scanner() if r.split(" ", 1)[0] in REPARES)
-    assert not restant, (
-        "régression sur un module déjà réparé :\n  " + "\n  ".join(restant)
     )
 
 

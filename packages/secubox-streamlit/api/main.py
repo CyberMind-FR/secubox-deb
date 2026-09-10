@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
@@ -287,7 +288,7 @@ async def shutdown_cache():
 # ── COMPONENTS ─────────────────────────────────────────────────────────
 # What makes up the system
 
-@router.get("/components")
+@router.get("/components", dependencies=[Depends(require_lecture)])
 async def components():
     """List system components (public)."""
     cfg = _cfg()
@@ -324,7 +325,7 @@ async def components():
 # ── STATUS ─────────────────────────────────────────────────────────────
 # Health and runtime state
 
-@router.get("/instant")
+@router.get("/instant", dependencies=[Depends(require_lecture)])
 async def instant():
     """Get instant stats from pre-cache (public, fast)."""
     data = _cache.get_instant()
@@ -332,7 +333,7 @@ async def instant():
     return data
 
 
-@router.get("/details")
+@router.get("/details", dependencies=[Depends(require_lecture)])
 async def details():
     """Get detailed stats from pre-cache (public)."""
     data = _cache.get_details()
@@ -340,7 +341,7 @@ async def details():
     return data
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get platform status from cache (public)."""
     # Use cached details for fast response
@@ -412,7 +413,7 @@ async def health():
 # ── ACCESS ─────────────────────────────────────────────────────────────
 # How to connect to services
 
-@router.get("/access")
+@router.get("/access", dependencies=[Depends(require_lecture)])
 async def access():
     """Get access information for running apps (public)."""
     apps = _get_apps()
@@ -455,7 +456,7 @@ async def access():
 # APPS
 # ═══════════════════════════════════════════════════════════════════════
 
-@router.get("/apps")
+@router.get("/apps", dependencies=[Depends(require_lecture)])
 async def list_apps():
     """List all apps (public)."""
     return {"apps": _get_apps()}
@@ -767,7 +768,7 @@ def _start_autostart_instances():
                     log.info("Autostarted instance: %s on port %s", name, port)
     return started
 
-@router.get("/power/status")
+@router.get("/power/status", dependencies=[Depends(require_lecture)])
 async def power_status():
     """Get power state and idle time (public endpoint for dashboard)."""
     state = _load_power_state()
@@ -876,7 +877,7 @@ async def power_toggle(user=Depends(require_jwt)):
         return await power_wake(user)
 
 
-@router.get("/autostart")
+@router.get("/autostart", dependencies=[Depends(require_lecture)])
 async def list_autostart():
     """List instances configured for autostart (public)."""
     cfg = _load_streamlit_config()

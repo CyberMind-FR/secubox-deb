@@ -1,3 +1,18 @@
+secubox-voip (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,
+    components, access, stats — repondaient sans authentification : c'etait le
+    motif « three-fold » du parc, un choix assume, mais une lecture publique
+    reste de la reconnaissance offerte. Elles passent sous
+    `require_lecture` : jeton, OU mode tableau de bord depuis le LAN si
+    l'operateur l'a arme dans /etc/secubox/secubox.conf.
+  * Le defaut est FERME : sans `[tableau_de_bord] actif = true`, ces routes
+    exigent un jeton, y compris depuis le LAN.
+  * Les sondes de sante restent publiques. Les routes deja sous require_jwt ne
+    changent pas — le mode ne les ouvre jamais.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 23:55:00 +0200
+
 secubox-voip (1.1.1-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

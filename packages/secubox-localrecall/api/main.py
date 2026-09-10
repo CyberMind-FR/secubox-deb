@@ -30,6 +30,7 @@ import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/localrecall.toml")
@@ -474,7 +475,7 @@ async def semantic_search(
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = store.get_stats()

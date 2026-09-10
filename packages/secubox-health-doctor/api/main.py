@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import checks, runner
+from secubox_core.auth import require_lecture
 
 # GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
 # Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
@@ -37,7 +38,7 @@ def health():
     return {"status": "ok", "service": "secubox-health-doctor"}
 
 
-@app.get("/checks")
+@app.get("/checks", dependencies=[Depends(require_lecture)])
 def list_checks():
     """Read the persisted health state. CORS-open for the portal banner."""
     return JSONResponse(
@@ -46,7 +47,7 @@ def list_checks():
     )
 
 
-@app.get("/status/{name}")
+@app.get("/status/{name}", dependencies=[Depends(require_lecture)])
 def status_of(name: str):
     if name not in checks.REGISTRY:
         raise HTTPException(status_code=404, detail=f"unknown check: {name}")
@@ -65,7 +66,7 @@ def run():
     return runner.run_once()
 
 
-@app.get("/registered")
+@app.get("/registered", dependencies=[Depends(require_lecture)])
 def registered():
     """List all registered check names (for discovery)."""
     return {"checks": sorted(checks.REGISTRY.keys())}

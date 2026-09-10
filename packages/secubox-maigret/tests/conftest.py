@@ -15,3 +15,9 @@ try:
     }
 except Exception:  # pragma: no cover - handled by per-test skip
     pass
+
+# Le harnais represente un client de tableau de bord LAN (#1256) : mode arme +
+# en-tete LAN. `require_jwt` n'est PAS satisfait pour autant — les tests qui
+# verifient un refus continuent de le voir.
+from secubox_core.testing import active_mode_tableau_de_bord as _sbx_tdb  # noqa: E402
+_sbx_tdb()

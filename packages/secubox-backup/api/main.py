@@ -18,6 +18,7 @@ Enhanced features:
 """
 
 from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from pathlib import Path
@@ -482,7 +483,7 @@ def ensure_backup_dirs():
 
 
 # Public endpoints
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get backup system status"""
     ensure_backup_dirs()
@@ -519,13 +520,13 @@ async def get_status():
     }
 
 
-@app.get("/list")
+@app.get("/list", dependencies=[Depends(require_lecture)])
 async def list_all_backups(type: str = Query("all", description="Backup type: all, config, containers, services")):
     """List backup files"""
     return {"backups": list_backups(type)}
 
 
-@app.get("/containers")
+@app.get("/containers", dependencies=[Depends(require_lecture)])
 async def list_containers():
     """List LXC containers with backup info"""
     containers = []
@@ -773,7 +774,7 @@ async def restore_container(req: ContainerRestore, user: dict = Depends(require_
     }
 
 
-@app.get("/info")
+@app.get("/info", dependencies=[Depends(require_lecture)])
 async def get_info():
     """Get module info"""
     return {
@@ -805,7 +806,7 @@ async def health():
 # History Endpoints
 # ============================================================================
 
-@app.get("/history")
+@app.get("/history", dependencies=[Depends(require_lecture)])
 async def get_history(
     limit: int = Query(50, ge=1, le=500),
     type: Optional[str] = None,
@@ -846,7 +847,7 @@ async def delete_history_entry(backup_id: str, user: dict = Depends(require_jwt)
 # Progress Tracking Endpoints
 # ============================================================================
 
-@app.get("/progress/{backup_id}")
+@app.get("/progress/{backup_id}", dependencies=[Depends(require_lecture)])
 async def get_backup_progress(backup_id: str):
     """Get progress of a running backup."""
     progress = get_progress(backup_id)
@@ -855,7 +856,7 @@ async def get_backup_progress(backup_id: str):
     return progress
 
 
-@app.get("/running")
+@app.get("/running", dependencies=[Depends(require_lecture)])
 async def get_running_backups():
     """Get all currently running backups."""
     with _progress_lock:
@@ -914,7 +915,7 @@ async def verify_backup(filename: str, user: dict = Depends(require_jwt)):
 # Retention Policy Endpoints
 # ============================================================================
 
-@app.get("/retention")
+@app.get("/retention", dependencies=[Depends(require_lecture)])
 async def get_retention_policies():
     """Get retention policies per backup type."""
     # Load custom policies or return defaults
@@ -1003,7 +1004,7 @@ async def apply_retention_policies(user: dict = Depends(require_jwt)):
 # Schedule Endpoints
 # ============================================================================
 
-@app.get("/schedules")
+@app.get("/schedules", dependencies=[Depends(require_lecture)])
 async def get_schedules():
     """Get all backup schedules."""
     schedules = load_schedule()

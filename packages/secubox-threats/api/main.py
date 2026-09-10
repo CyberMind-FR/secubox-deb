@@ -31,6 +31,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Threats", version="1.0.0")
 
@@ -299,7 +300,7 @@ async def health():
     return {"status": "ok", "module": "threats"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     threats = _load_json(THREATS_FILE)
     alerts = _load_json(ALERTS_FILE)

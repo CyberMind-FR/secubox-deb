@@ -193,6 +193,7 @@ import asyncio
 import time
 import threading
 from pathlib import Path
+from secubox_core.auth import require_lecture
 
 CACHE_DIR = Path("/var/cache/secubox/users")
 STATUS_CACHE_FILE = CACHE_DIR / "status.json"
@@ -393,7 +394,7 @@ def require_permission(permission: str, allow_self_for_param: str = ""):
 # Public Endpoints
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get users system status. Returns cached data instantly."""
     # Return from cache (instant)
@@ -410,7 +411,7 @@ async def get_status():
     # Last resort: compute (first request only)
     return _compute_status_sync()
 
-@app.get("/services")
+@app.get("/services", dependencies=[Depends(require_lecture)])
 async def list_services():
     """List available services and their status."""
     service_status = {}
@@ -431,12 +432,12 @@ async def list_services():
         }
     return {"services": service_status}
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def get_components():
     """Get components status."""
     return run_usersctl("components", parse_json=True)
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def get_access():
     """Get access information."""
     return run_usersctl("access", parse_json=True)
@@ -774,7 +775,7 @@ async def delete_group(name: str):
 # Role & Permission Endpoints (RBAC)
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/permissions")
+@app.get("/permissions", dependencies=[Depends(require_lecture)])
 async def list_permissions():
     """List all available permissions in the system."""
     return {
@@ -792,13 +793,13 @@ async def list_permissions():
         }
     }
 
-@app.get("/roles")
+@app.get("/roles", dependencies=[Depends(require_lecture)])
 async def list_roles():
     """List all roles."""
     roles = load_roles()
     return {"roles": roles, "total": len(roles)}
 
-@app.get("/role/{role_id}")
+@app.get("/role/{role_id}", dependencies=[Depends(require_lecture)])
 async def get_role(role_id: str):
     """Get role details."""
     roles = load_roles()
@@ -952,7 +953,7 @@ async def check_user_permission(username: str, permission: str):
 # ACL Endpoints
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/acl")
+@app.get("/acl", dependencies=[Depends(require_lecture)])
 async def get_acl():
     """Get the full Access Control List matrix."""
     data = load_users()

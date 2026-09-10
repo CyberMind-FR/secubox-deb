@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_lecture
 from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 
@@ -129,7 +130,7 @@ async def health():
             "catalog_count": len(load_catalog()), "board_tier": board_tier()}
 
 
-@app.get("/categories")
+@app.get("/categories", dependencies=[Depends(require_lecture)])
 async def categories():
     st = compute_state()
     cats: dict = {}
@@ -143,7 +144,7 @@ async def categories():
     }
 
 
-@app.get("/catalog")
+@app.get("/catalog", dependencies=[Depends(require_lecture)])
 async def catalog(category: Optional[str] = None, tier: Optional[str] = None,
                   state: Optional[str] = None, q: Optional[str] = None):
     st = compute_state()
@@ -191,7 +192,7 @@ def _read_directory():
         return [], {}
 
 
-@app.get("/mesh-catalog")
+@app.get("/mesh-catalog", dependencies=[Depends(require_lecture)])
 async def mesh_catalog():
     offers, nodes = _read_directory()
     items = []
@@ -219,7 +220,7 @@ async def mesh_catalog():
     }
 
 
-@app.get("/module/{name}")
+@app.get("/module/{name}", dependencies=[Depends(require_lecture)])
 async def module(name: str):
     st = compute_state()
     if name not in st:
@@ -279,7 +280,7 @@ async def module_action(name: str, verb: str):
             "state": new.get("state"), "running": new.get("running"), "message": out}
 
 
-@app.get("/module/{name}/config")
+@app.get("/module/{name}/config", dependencies=[Depends(require_lecture)])
 async def get_config(name: str):
     name = _resolve(name, compute_state())
     p = _config_path(name)

@@ -25,11 +25,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException, status, Depends
 from pydantic import BaseModel, Field
 
 from ...core.device_registry import get_device_registry
 from ...core.token_manager import hash_token
+from secubox_core.auth import require_lecture
 
 log = logging.getLogger(__name__)
 
@@ -521,7 +522,7 @@ def authenticate_for_serial(device_id: str, token: str) -> bool:
 # =============================================================================
 
 
-@router.get("/status", response_model=SerialStatus)
+@router.get("/status", response_model=SerialStatus, dependencies=[Depends(require_lecture)])
 async def get_serial_status() -> SerialStatus:
     """
     Obtenir le statut de la connexion serie.
@@ -532,7 +533,7 @@ async def get_serial_status() -> SerialStatus:
     return serial_manager.get_status()
 
 
-@router.get("/devices")
+@router.get("/devices", dependencies=[Depends(require_lecture)])
 async def list_serial_devices() -> list[SerialDeviceInfo]:
     """
     Lister les devices serie disponibles.

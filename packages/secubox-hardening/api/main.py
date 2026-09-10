@@ -32,6 +32,7 @@ import hmac
 import httpx
 
 import sys
+from secubox_core.auth import require_lecture
 sys.path.insert(0, '/usr/lib/python3/dist-packages')
 try:
     from secubox_core.auth import require_jwt
@@ -288,17 +289,17 @@ def run_ctl(*args, parse_json=False):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get hardening status."""
     return run_ctl("status", "--json", parse_json=True)
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def get_components():
     """Get hardening components."""
     return run_ctl("components", parse_json=True)
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def get_access():
     """Get access information."""
     return run_ctl("access", parse_json=True)

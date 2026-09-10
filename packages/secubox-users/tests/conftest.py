@@ -44,3 +44,9 @@ def _isolate_totp_replay_store(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("SECUBOX_TOTP_REPLAY_PATH",
                        str(tmp_path / "totp-replay.json"))
+
+# Le harnais represente un client de tableau de bord LAN (#1256) : mode arme +
+# en-tete LAN. `require_jwt` n'est PAS satisfait pour autant — les tests qui
+# verifient un refus continuent de le voir.
+from secubox_core.testing import active_mode_tableau_de_bord as _sbx_tdb  # noqa: E402
+_sbx_tdb()

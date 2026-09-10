@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-nettweak", version="1.0.0", root_path="/api/v1/nettweak")
 
@@ -562,7 +563,7 @@ async def health():
     return {"status": "ok", "module": "nettweak", "version": "1.0.0"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get current network tuning status."""
     saved_settings = _load_saved_settings()
@@ -589,7 +590,7 @@ async def status():
     }
 
 
-@router.get("/profiles")
+@router.get("/profiles", dependencies=[Depends(require_lecture)])
 async def get_profiles():
     """Get available tuning profiles."""
     current = _detect_current_profile()
@@ -760,7 +761,7 @@ async def reset_to_defaults(user=Depends(require_jwt)):
         return {"success": False, "error": str(e)}
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get nettweak summary for dashboard widget."""
     status_info = await status()

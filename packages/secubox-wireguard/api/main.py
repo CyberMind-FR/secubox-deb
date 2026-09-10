@@ -40,6 +40,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 log = get_logger("wireguard")
 
@@ -412,19 +413,19 @@ def _invalidate_ctl_cache() -> None:
 
 # === Three-Fold Architecture Endpoints ===
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def components():
     """List system components (public, three-fold: what)."""
     return await _run_ctl_cached("components", ttl=60.0)
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Show health status (public, three-fold: health)."""
     return await _run_ctl_cached("status", ttl=8.0)
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def access():
     """Show connection endpoints (public, three-fold: how)."""
     # wgctl access queries an external IP service (curl, 5s), so cache longer.

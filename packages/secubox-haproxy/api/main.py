@@ -42,6 +42,7 @@ from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 from api import webui_identity as _webui_identity
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-haproxy", version="2.0.0", root_path="/api/v1/haproxy")
 
@@ -608,7 +609,7 @@ def _load_vhost_routes() -> Dict[str, str]:
 
 # ── COMPONENTS ─────────────────────────────────────────────────────────
 
-@router.get("/components")
+@router.get("/components", dependencies=[Depends(require_lecture)])
 async def components():
     """List system components (public)."""
     cfg = _cfg()
@@ -650,7 +651,7 @@ async def components():
 
 # ── ACCESS ─────────────────────────────────────────────────────────────
 
-@router.get("/access")
+@router.get("/access", dependencies=[Depends(require_lecture)])
 async def access():
     """Get access information for HAProxy services (public)."""
     cfg = _cfg()
@@ -698,7 +699,7 @@ async def access():
 
 # ── STATUS ─────────────────────────────────────────────────────────────
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """HAProxy status with WAF integration (public). Returns cached data instantly."""
     # Return from cache (instant)
@@ -717,7 +718,7 @@ async def status():
     return _compute_status_sync()
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_lecture)])
 async def get_stats():
     """Get HAProxy stats (public)."""
     data = _send_stats_command("show stat")
@@ -728,7 +729,7 @@ async def get_stats():
     return {"stats": stats}
 
 
-@router.get("/info")
+@router.get("/info", dependencies=[Depends(require_lecture)])
 async def get_info():
     """Get HAProxy info (public)."""
     data = _send_stats_command("show info")
@@ -798,7 +799,7 @@ async def get_waf_routes():
     """Get current WAF routing table."""
     return {"routes": _load_vhost_routes()}
 
-@router.get("/waf/targets")
+@router.get("/waf/targets", dependencies=[Depends(require_lecture)])
 async def get_waf_targets():
     """Get actual WAF target backends from sbxwaf routes."""
     try:

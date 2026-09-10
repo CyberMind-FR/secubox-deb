@@ -31,6 +31,7 @@ config = get_config("mail")
 # Phase 2: mount rspamd router + legacy deprecation shims
 from .routers import rspamd as _rspamd_router
 from .routers import legacy as _legacy_router
+from secubox_core.auth import require_lecture
 app.include_router(_rspamd_router.router)
 app.include_router(_legacy_router.router)
 
@@ -175,7 +176,7 @@ def webmail_up() -> bool:
 # STATUS - Module state and health
 # =============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get unified mail status (public endpoint)"""
     # Running state comes from live TCP probes, not lxc-info (which silently
@@ -246,7 +247,7 @@ async def health():
 # COMPONENTS - Three-fold architecture (What)
 # =============================================================================
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def get_components():
     """List system components (public, three-fold: what)"""
     return {
@@ -292,7 +293,7 @@ async def get_components():
 # ACCESS - Connection URLs and client configuration
 # =============================================================================
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def get_access():
     """Get connection URLs and client configuration (public)"""
     fqdn = f"{HOSTNAME}.{DOMAIN}"
@@ -333,8 +334,8 @@ async def get_access():
 # AUTODISCOVER - Email client auto-configuration
 # =============================================================================
 
-@app.get("/mail/config-v1.1.xml")
-@app.get("/autoconfig/mail/config-v1.1.xml")
+@app.get("/mail/config-v1.1.xml", dependencies=[Depends(require_lecture)])
+@app.get("/autoconfig/mail/config-v1.1.xml", dependencies=[Depends(require_lecture)])
 async def thunderbird_autoconfig():
     """Mozilla Thunderbird/Evolution autoconfig (RFC 6186 style)"""
     fqdn = f"{HOSTNAME}.{DOMAIN}"
@@ -400,7 +401,7 @@ async def thunderbird_autoconfig():
     return Response(content=xml, media_type="application/xml")
 
 
-@app.get("/autodiscover/autodiscover.xml")
+@app.get("/autodiscover/autodiscover.xml", dependencies=[Depends(require_lecture)])
 @app.post("/autodiscover/autodiscover.xml")
 @app.post("/Autodiscover/Autodiscover.xml")
 async def outlook_autodiscover(request: Request):
@@ -453,7 +454,7 @@ async def outlook_autodiscover(request: Request):
     return Response(content=xml, media_type="application/xml")
 
 
-@app.get("/{domain}.mobileconfig")
+@app.get("/{domain}.mobileconfig", dependencies=[Depends(require_lecture)])
 async def apple_mobileconfig(domain: str):
     """Apple iOS/macOS mail configuration profile"""
     if domain != DOMAIN:
@@ -546,7 +547,7 @@ async def apple_mobileconfig(domain: str):
     )
 
 
-@app.get("/.well-known/autoconfig/mail/config-v1.1.xml")
+@app.get("/.well-known/autoconfig/mail/config-v1.1.xml", dependencies=[Depends(require_lecture)])
 async def wellknown_autoconfig():
     """Well-known autoconfig location"""
     return await thunderbird_autoconfig()
@@ -729,7 +730,7 @@ async def install_service(background_tasks: BackgroundTasks):
 # WEBMAIL CONTROL (via roundcubectl)
 # =============================================================================
 
-@app.get("/webmail/status")
+@app.get("/webmail/status", dependencies=[Depends(require_lecture)])
 async def webmail_status():
     """Get webmail container status"""
     running = lxc_running(WEBMAIL_CONTAINER)

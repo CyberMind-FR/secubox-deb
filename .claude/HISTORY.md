@@ -5,6 +5,89 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-10 — LE PARC PASSE EN LECTURE GARDÉE (ref #1256)
+
+Décision de l'opérateur, appliquée : **plus une seule route du parc ne répond
+sans garde.** ~450 lectures d'affichage passent sous `require_lecture`, avec un
+**mode tableau de bord** explicite pour les rouvrir au LAN.
+
+### La garde
+
+`secubox_core.auth.require_lecture` : jeton ou cookie de session → autorisé ;
+sinon, **si** le mode est armé **et** que nginx a marqué la requête LAN →
+lecteur anonyme ; sinon 401. `secubox-core` 1.4.0.
+
+**Le défaut est fermé.** `[tableau_de_bord] actif = true` dans `secubox.conf`
+arme le mode ; absent, mal typé ou config illisible valent false. La lecture est
+**strictement booléenne** — `bool("false")` vaut `True` en Python, accepter la
+chaîne ouvrirait le parc sur une coquille. C'est un test qui me l'a appris, pas
+une relecture.
+
+**Nginx décide du « LAN », pas nous.** Derrière HAProxy → sbxwaf → nginx,
+`$remote_addr` vaut 127.0.0.1 pour tout le monde : un test d'origine côté Python
+verrait le WAN entier comme local. On consomme le verdict de
+`conf.d/secubox-lan-geo.conf` — que le dépôt calcule déjà correctement — transmis
+par `secubox-proxy.conf` dans `X-SecuBox-LAN`. `proxy_set_header` **remplace** la
+valeur du client : l'en-tête n'est pas forgeable. Et une requête qui ne passe pas
+par nginx ne le porte pas, donc exige un jeton. Les deux chemins d'échec ferment.
+
+**Deux niveaux, prouvés :**
+
+```
+                        mode OFF·LAN   mode ON·hors LAN   mode ON·LAN
+/health                     200              200             200
+/status  (require_lecture)  401              401             200
+/peers   (require_jwt)      401              401             401
+```
+
+### Ce que la campagne a coûté, honnêtement
+
+- **3 sondes de santé gardées par erreur** (`eye-remote /api/v1/health`,
+  `mastodon /healthz`, `metrics /health`) : mon jeu `PUBLIQUES` exigeait
+  l'égalité stricte avec `/health`. Corrigé — la comparaison porte sur le
+  **dernier segment**.
+- **15 routes de `public_router`** rendues à leur état public : `hub /menu` et
+  `/info` alimentent **la page de connexion**, donc sont lus avant tout jeton —
+  les garder cassait le login. Les projections de `webos` sont volontairement
+  minimales (« never leaks urls/latency/reach ») et ont leur pendant détaillé
+  sous jeton.
+- **10 gardes redondantes** posées sur des routes déjà gardées dans leur
+  signature. Inoffensif en production, mais ça cassait les tests qui surchargent
+  une seule dépendance.
+- **Mon insertion d'import** plaçait `from secubox_core.auth import
+  require_lecture` après le dernier import de premier niveau — donc **après son
+  usage** dans deux fichiers, et pas du tout dans 113 autres (je testais la
+  présence du nom *après* avoir écrit les décorateurs). Rattrapé par
+  l'exécution, pas par la relecture.
+
+### Le harnais de test rattrapé au passage
+
+`conftest.py` à la racine pose `common/` sur le chemin : les 181 paquets
+dépendent de `secubox-core` dans `debian/control`, seul le harnais l'ignorait.
+Effet de bord : **5 suites qui ne collectaient plus tournent à nouveau**
+(`nac` passe de 54 à 2 échecs, `network-anomaly`, `maigret`, `spiderfoot`
+réparés) et **5 autres exposent des échecs préexistants jamais observés** —
+`mac-guard` attendait 308 sur des routes qui exigent un jeton depuis toujours
+(`git diff` sur ce paquet : vide).
+
+`secubox_core.testing` place le harnais dans la position du client légitime
+(mode armé + en-tête LAN) sans désactiver aucune garde : `require_jwt` continue
+de rendre 401, ce qui laisse les tests de refus faire leur travail.
+
+### Vérification
+
+**57 suites comparées avant/après. Zéro régression causée par ce lot.**
+Les échecs restants sont préexistants, chacun vérifié à la ligne près.
+
+`tests/dette-jwt.txt` est **vide** et doit le rester : le cliquet devient un
+verrou (`test_dette_close`). Non déployé.
+
+**À l'installation** : `secubox-core` 1.4.0 livre la garde ET le snippet nginx
+ensemble. Sans `[tableau_de_bord] actif = true`, les cardlets du Hall
+demanderont un jeton — c'est le sens de panne voulu, mais il faut le savoir.
+
+---
+
 ## 2026-09-10 — Lectures : plus AUCUNE écriture nue, et la fuite du domaine admin (ref #1256, #1261)
 
 **Le parc ne porte plus une seule route d'écriture sans garde.** Les 17 dernières

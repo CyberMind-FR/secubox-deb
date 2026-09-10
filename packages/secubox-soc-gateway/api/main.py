@@ -35,6 +35,7 @@ from lib.alert_correlator import correlator
 from lib.remote_command import RemoteCommandManager
 from lib.hierarchy import hierarchy, GatewayMode
 from lib.cross_region_correlator import cross_region_correlator
+from secubox_core.auth import require_lecture
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -108,7 +109,7 @@ class CentralEnrollRequest(BaseModel):
 # Public Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get gateway status."""
     summary = registry.get_fleet_summary()

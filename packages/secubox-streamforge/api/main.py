@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-streamforge", version="2.0.0", root_path="/api/v1/streamforge")
 
@@ -330,7 +331,7 @@ async def health():
     return {"status": "ok", "module": "streamforge", "version": "2.0.0"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """StreamForge status (public)."""
     cached = stats_cache.get("status")
@@ -355,7 +356,7 @@ async def status():
     return result
 
 
-@router.get("/apps")
+@router.get("/apps", dependencies=[Depends(require_lecture)])
 async def list_apps():
     """List all apps (public)."""
     cached = stats_cache.get("apps")
@@ -373,7 +374,7 @@ async def list_apps():
     return result
 
 
-@router.get("/templates")
+@router.get("/templates", dependencies=[Depends(require_lecture)])
 async def list_templates():
     """List available templates (public)."""
     templates = []
@@ -639,7 +640,7 @@ async def delete_webhook(webhook_id: str, user=Depends(require_jwt)):
     return {"success": True}
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get StreamForge summary."""
     status_info = await status()

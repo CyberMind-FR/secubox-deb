@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-glances", version="1.0.0", root_path="/api/v1/glances")
 
@@ -458,7 +459,7 @@ async def health():
     return {"status": "ok", "module": "glances", "version": "1.0.0"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Service status (public for dashboard)."""
     cached = stats_cache.get("status")
@@ -474,7 +475,7 @@ async def status():
     return result
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_lecture)])
 async def stats():
     """Current system stats (public for dashboard)."""
     cached = stats_cache.get("stats")
@@ -674,7 +675,7 @@ def get_logs(lines: int = Query(100, ge=1, le=1000), user=Depends(require_jwt)):
         return {"lines": [], "error": str(e)}
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get glances summary for dashboard widget."""
     status_info = await status()

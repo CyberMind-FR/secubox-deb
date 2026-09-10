@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-gotosocial", version="1.0.0", root_path="/api/v1/gotosocial")
 
@@ -219,7 +220,7 @@ async def health():
     return {"status": "ok", "module": "gotosocial"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 def status():
     """Get GoToSocial service status."""
     cfg = get_config()

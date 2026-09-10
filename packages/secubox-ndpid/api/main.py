@@ -38,6 +38,7 @@ import zmq.asyncio
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/ndpid.toml")
@@ -709,7 +710,7 @@ def calculate_risk_score(flow: dict) -> tuple[int, List[str]]:
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     daemon_status = ndpid_client.get_status()

@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Any
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Request
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -923,7 +924,7 @@ app = FastAPI(title="SecuBox WAF", lifespan=_lifespan)
 
 # === Public Endpoints ===
 
-@app.get("/history")
+@app.get("/history", dependencies=[Depends(require_lecture)])
 async def waf_history():
     """Tendances des menaces par jour + top attaquants persistants, sur toute la
     fenêtre de rétention des logs (courant + tournés). Cache disque 1 h."""
@@ -933,7 +934,7 @@ async def waf_history():
 CAMPAIGNS_FILE = "/var/cache/secubox/waf/campaigns.json"
 
 
-@app.get("/campaigns")
+@app.get("/campaigns", dependencies=[Depends(require_lecture)])
 async def waf_campaigns():
     """Campagnes d'attaque corrélées (#1070 phase D) : attaquants regroupés par
     MÊME workflow (même jeu de sondes, même outil), à travers le temps et les IP.
@@ -950,7 +951,7 @@ async def waf_campaigns():
     return {"available": True, "attaquants": data.get("attaquants", 0), "campagnes": camps}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """WAF status (public)."""
     cfg = _cfg()
@@ -980,7 +981,7 @@ async def info():
     }
 
 
-@app.get("/detections")
+@app.get("/detections", dependencies=[Depends(require_lecture)])
 async def get_detections():
     """Detections COMPORTEMENTALES, celles qui ne tiennent pas dans un fichier
     de motifs (#1222).
@@ -1143,7 +1144,7 @@ def _ports_leurres() -> List[str]:
     return [p for p in candidats if p in ouverts and p not in echoues]
 
 
-@app.get("/categories")
+@app.get("/categories", dependencies=[Depends(require_lecture)])
 async def get_categories():
     """List all WAF categories with stats (public)."""
     return {
@@ -1223,7 +1224,7 @@ VISITS_STATS = os.environ.get(
     "SECUBOX_WAF_VISITS_STATS", "/var/log/secubox/waf/visits-stats.json")
 
 
-@app.get("/visits")
+@app.get("/visits", dependencies=[Depends(require_lecture)])
 async def get_visits():
     """Non-attacker visit statistics (#747) — the WAF sees ALL inbound traffic,
     so this is real 'who actually visited' data: total requests, client-type /
@@ -1330,7 +1331,7 @@ async def _joignable(hote: str) -> bool:
     return ok
 
 
-@app.get("/cookies")
+@app.get("/cookies", dependencies=[Depends(require_lecture)])
 async def get_cookies():
     """Inventaire agrégé des témoins posés, par service.
 
@@ -1399,7 +1400,7 @@ async def get_cookies():
     return {"services": services, "registre": COOKIE_LEDGER}
 
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_lecture)])
 async def get_stats():
     """Threat statistics for the dashboard (public).
 
@@ -1486,7 +1487,7 @@ def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
     return {"alerts": aggregated, "aggregated": True}
 
 
-@app.get("/alerts")
+@app.get("/alerts", dependencies=[Depends(require_lecture)])
 async def get_alerts(limit: int = 50, aggregate: bool = False):
     """Recent threat alerts, sliced/aggregated from the warm cache."""
     with _warm_lock:
@@ -1497,7 +1498,7 @@ async def get_alerts(limit: int = 50, aggregate: bool = False):
     return _slice_alerts(raw or [], limit, aggregate)
 
 
-@app.get("/bans")
+@app.get("/bans", dependencies=[Depends(require_lecture)])
 async def get_bans():
     """Active IP bans from the WAF nft set. Read from warm cache; the
     underlying `nft list set` call is too slow to run on the request
@@ -1586,7 +1587,7 @@ def _aggregate_threats(hours: int, limit: int) -> List[dict]:
     return out[:limit]
 
 
-@app.get("/bans/history")
+@app.get("/bans/history", dependencies=[Depends(require_lecture)])
 async def get_bans_history(hours: int = 24, limit: int = 100):
     """Tracked attackers — IPs we have threat-logged in the window.
 
@@ -1731,7 +1732,7 @@ async def health_check():
     }
 
 
-@app.get("/doctor")
+@app.get("/doctor", dependencies=[Depends(require_lecture)])
 async def doctor_check():
     """Layer 2: Doctor health - can we self-repair?"""
     issues = []
@@ -1882,7 +1883,7 @@ def _lookup_country(ip: str, reader=None) -> str:
     return "??"
 
 
-@app.get("/geoip/{ip}")
+@app.get("/geoip/{ip}", dependencies=[Depends(require_lecture)])
 async def get_geoip(ip: str):
     """Lookup country code for IP address using local MaxMind database."""
     if ip in _geoip_cache:

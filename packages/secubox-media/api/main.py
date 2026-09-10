@@ -31,6 +31,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from secubox_core.auth import require_jwt
+from secubox_core.auth import require_lecture
 
 VERSION = "1.5.0"
 CTL = "/usr/sbin/mediactl"
@@ -96,7 +97,7 @@ async def health() -> Dict[str, str]:
     return {"status": "ok", "module": "media"}
 
 
-@app.get("/detect")
+@app.get("/detect", dependencies=[Depends(require_lecture)])
 async def detect() -> Dict[str, Any]:
     """Supports détectés + alertes de stabilité du bus.
 
@@ -105,12 +106,12 @@ async def detect() -> Dict[str, Any]:
     return await _ctl("detect", timeout=30)
 
 
-@app.get("/browse")
+@app.get("/browse", dependencies=[Depends(require_lecture)])
 async def browse(path: str = "") -> Dict[str, Any]:
     return await _ctl("browse", path, timeout=45)
 
 
-@app.get("/roots")
+@app.get("/roots", dependencies=[Depends(require_lecture)])
 async def roots() -> Dict[str, Any]:
     """Racines déclarées : médiathèques des services et destinations.
 
@@ -149,6 +150,6 @@ async def compare(body: TransferBody, _: Any = Depends(require_jwt)) -> Dict[str
     return await _ctl("compare", body.src, body.dst, timeout=120)
 
 
-@app.get("/jobs")
+@app.get("/jobs", dependencies=[Depends(require_lecture)])
 async def jobs() -> Dict[str, Any]:
     return await _ctl("jobs", timeout=30)

@@ -25,6 +25,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Maigret", version="1.0.0")
 config = get_config("maigret")
@@ -119,7 +120,7 @@ def _require_installed():
 def health():
     return {"status": "ok", "module": "maigret"}
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status():
     return _cached("status", 15.0, _compute_status)
 

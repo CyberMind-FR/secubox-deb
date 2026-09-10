@@ -25,6 +25,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 import httpx
 
@@ -237,7 +238,7 @@ async def health():
     return {"status": "ok", "module": "domoticz"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get Domoticz service status."""
     cfg = get_config()

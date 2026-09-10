@@ -46,6 +46,7 @@ from api import exclusion as _excl
 # emancipate_webui's federation call resolves the module-global at call time
 # and tests can monkeypatch it directly as `main._publish`.
 from api.mesh_egress import _publish
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Exposure Manager API", version="2.0.0")
 
@@ -629,7 +630,7 @@ def get_ssl_backends() -> list:
 
 
 # Public endpoints
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get exposure status overview"""
     services = scan_services()
@@ -654,25 +655,25 @@ async def get_status():
     }
 
 
-@app.get("/scan")
+@app.get("/scan", dependencies=[Depends(require_lecture)])
 async def scan():
     """Scan listening services"""
     return {"services": scan_services()}
 
 
-@app.get("/tor_list")
+@app.get("/tor_list", dependencies=[Depends(require_lecture)])
 async def tor_list():
     """List Tor hidden services"""
     return {"services": get_tor_services()}
 
 
-@app.get("/ssl_list")
+@app.get("/ssl_list", dependencies=[Depends(require_lecture)])
 async def ssl_list():
     """List SSL backends"""
     return {"backends": get_ssl_backends()}
 
 
-@app.get("/emancipated")
+@app.get("/emancipated", dependencies=[Depends(require_lecture)])
 async def get_emancipated():
     """Get list of emancipated services"""
     config = load_config()
@@ -1077,7 +1078,7 @@ async def revoke(req: RevokeRequest, user: dict = Depends(require_jwt)):
     return {"success": True, "message": "Service revoked"}
 
 
-@app.get("/info")
+@app.get("/info", dependencies=[Depends(require_lecture)])
 async def get_info():
     """Get module info"""
     return {
@@ -1101,7 +1102,7 @@ async def health_endpoint():
 # History Endpoints
 # ============================================================================
 
-@app.get("/history")
+@app.get("/history", dependencies=[Depends(require_lecture)])
 async def get_history(
     limit: int = 50,
     service: str = None,
@@ -1135,14 +1136,14 @@ async def clear_history(user: dict = Depends(require_jwt)):
 # Health Check Endpoints
 # ============================================================================
 
-@app.get("/health/services")
+@app.get("/health/services", dependencies=[Depends(require_lecture)])
 async def get_services_health():
     """Get health status of all exposed services."""
     health_status = load_health_status()
     return {"services": {k: v.dict() for k, v in health_status.items()}}
 
 
-@app.get("/health/services/{service}")
+@app.get("/health/services/{service}", dependencies=[Depends(require_lecture)])
 async def get_service_health(service: str):
     """Get health status of a specific service."""
     health_status = load_health_status()
@@ -1266,7 +1267,7 @@ async def delete_webhook(url: str, user: dict = Depends(require_jwt)):
 # Statistics Endpoints
 # ============================================================================
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_lecture)])
 async def get_exposure_stats():
     """Get exposure statistics."""
     config = load_config()

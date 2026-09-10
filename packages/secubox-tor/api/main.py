@@ -35,6 +35,7 @@ import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Tor Shield API", version="2.0.0")
 
@@ -443,7 +444,7 @@ def _onion_dns_canary(timeout: float = 1.5) -> bool:
 # Public Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get Tor Shield status."""
     cached = stats_cache.get("status")
@@ -496,7 +497,7 @@ async def health():
     return {"status": "healthy", "module": "tor"}
 
 
-@app.get("/summary")
+@app.get("/summary", dependencies=[Depends(require_lecture)])
 async def get_summary():
     """Get comprehensive Tor summary."""
     config = load_config()
@@ -551,7 +552,7 @@ async def get_summary():
     }
 
 
-@app.get("/circuits")
+@app.get("/circuits", dependencies=[Depends(require_lecture)])
 async def get_circuits():
     """Get active Tor circuits."""
     if not tor_running():
@@ -587,7 +588,7 @@ async def get_circuits():
     return {"circuits": circuits, "total": len(circuits)}
 
 
-@app.get("/hidden_services")
+@app.get("/hidden_services", dependencies=[Depends(require_lecture)])
 async def get_hidden_services():
     """Get every on-disk hidden service (auto-discovered from TOR_DATA),
     annotated with config-known local_port/enabled where available. This
@@ -597,7 +598,7 @@ async def get_hidden_services():
     return {"services": services, "total": len(services)}
 
 
-@app.get("/onion_dns")
+@app.get("/onion_dns", dependencies=[Depends(require_lecture)])
 async def get_onion_dns():
     """.onion-DNS status: is the (moved) Tor DNSPort up on 127.0.0.1:9053,
     is the unbound forward-zone drop-in installed, and — only if both of
@@ -627,7 +628,7 @@ async def get_onion_dns():
     }
 
 
-@app.get("/history")
+@app.get("/history", dependencies=[Depends(require_lecture)])
 async def get_history(limit: int = 50):
     """Get event history."""
     history = load_history()
@@ -846,7 +847,7 @@ async def delete_webhook(webhook_id: str):
     return {"success": True}
 
 
-@app.get("/info")
+@app.get("/info", dependencies=[Depends(require_lecture)])
 async def get_info():
     return {
         "module": "secubox-tor",

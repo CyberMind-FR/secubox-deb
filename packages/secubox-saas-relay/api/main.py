@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 try:
     import httpx
@@ -416,7 +417,7 @@ async def health():
     }
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get module status (public)."""
     services = _load_services()
@@ -976,7 +977,7 @@ def _log_request(
 # ============================================================================
 # Three-Fold Architecture Endpoints
 # ============================================================================
-@router.get("/components")
+@router.get("/components", dependencies=[Depends(require_lecture)])
 async def components():
     """List system components (public)."""
     services = _load_services()
@@ -1020,7 +1021,7 @@ async def components():
     }
 
 
-@router.get("/access")
+@router.get("/access", dependencies=[Depends(require_lecture)])
 async def access():
     """Get access information (public)."""
     services = _load_services()

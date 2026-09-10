@@ -38,6 +38,7 @@ sys.path.insert(0, "/usr/lib/secubox/rbs-sensor/lib")
 
 from rbs_sensor import CAPTURES_SUBSCRIBER_IDENTIFIERS  # noqa: E402
 from rbs_sensor.ep06 import Ep06Actuator, Ep06Modem, Ep06Observer  # noqa: E402
+from secubox_core.auth import require_lecture
 
 # GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
 # Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
@@ -67,7 +68,7 @@ def _host_api_running() -> bool:
     return True
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> dict:
     """Overall status + OPAD invariant flag.
 
@@ -107,13 +108,13 @@ def _components_list() -> list[dict]:
     ]
 
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> dict:
     return {"module": "rbs-sensor", "version": "0.1.0",
             "components": _components_list()}
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access() -> dict:
     return {
         "module": "rbs-sensor",
@@ -126,7 +127,7 @@ def access() -> dict:
     }
 
 
-@app.get("/servingcell")
+@app.get("/servingcell", dependencies=[Depends(require_lecture)])
 def serving_cell() -> dict:
     obs = _observer.serving_cell()
     if obs is None:
@@ -137,7 +138,7 @@ def serving_cell() -> dict:
     return {"observation": asdict(obs)}
 
 
-@app.get("/neighbours")
+@app.get("/neighbours", dependencies=[Depends(require_lecture)])
 def neighbours() -> dict:
     if not _modem_present():
         raise HTTPException(503, "modem-absent")

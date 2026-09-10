@@ -41,12 +41,18 @@
   `/webui/nginx-config` rendaient à un anonyme la seule barrière devant l'API
   d'admin. Plus 9 lectures de reconnaissance (topologie HAProxy, pairs
   WireGuard, inventaire/journaux système).
-- **#1256 lectures — arbitrage à rendre** : 440 GET restent, dont ~130
-  **documentées publiques dans le code** (motif three-fold : status/components/
-  access pour les tableaux de bord). Ce n'est pas de l'oubli, c'est un choix
-  d'architecture. La question à trancher : la lecture publique reste de la
-  reconnaissance offerte — garde-t-on le motif, ou passe-t-on le parc en
-  lecture gardée avec un mode « tableau de bord » explicite ?
+- ~~**#1256 lectures**~~ → **arbitrage rendu et appliqué : lecture gardée +
+  mode tableau de bord.** ~450 routes sous `require_lecture`, `secubox-core`
+  1.4.0, 106 paquets rebâtis. Dette = **0**, cliquet devenu verrou.
+- **⚠ AVANT DÉPLOIEMENT** : armer `[tableau_de_bord] actif = true` dans
+  `/etc/secubox/secubox.conf` sur gk2, sinon les cardlets du Hall demanderont un
+  jeton. C'est le sens de panne voulu (fermé par défaut), mais il se prépare.
+- **À trancher encore** : les entrées `A CONFIRMER` de
+  `tests/publiques-assumees.txt` — `webos /actions/{module}/{action}` (un GET
+  nommé « actions » sur un routeur public), et les cardlets Hall/`zia`/
+  `ai-gateway` : relaient-elles un jeton ?
+- **Échecs de tests préexistants révélés** par le conftest racine (5 suites :
+  `dpi`, `iot-guard`, `mac-guard`, `nextcloud`, `openclaw`) — à trier.
 - **À trancher (marqué A CONFIRMER dans `publiques-assumees.txt`)** : les routes
   du Hall (`webos` broadcast, `zia` /v1/chat, `ai-gateway`) et le transport
   `lyrion` restent publiques parce que les cardlets les appellent depuis le

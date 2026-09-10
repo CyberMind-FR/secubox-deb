@@ -36,6 +36,7 @@ from secubox_core.auth import create_token as core_create_token
 from secubox_core.kiosk import (
     detect_board_type, get_board_profile, get_board_capabilities, get_board_model
 )
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-portal", version="2.1.0", root_path="/api/v1/portal")
 
@@ -471,7 +472,7 @@ BOARD_THEMES = {
 }
 
 
-@router.get("/theme")
+@router.get("/theme", dependencies=[Depends(require_lecture)])
 async def get_theme():
     """
     Get device-specific theme based on detected board type.
@@ -503,7 +504,7 @@ def _generate_css_vars(colors: dict) -> str:
     return "\n".join(css_lines)
 
 
-@router.get("/branding")
+@router.get("/branding", dependencies=[Depends(require_lecture)])
 async def get_branding():
     """
     Get full branding info including theme, capabilities, and display settings.
@@ -539,7 +540,7 @@ async def health():
     return {"status": "ok", "module": "portal", "version": "2.1.0"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Portal status (public)."""
     users = _load_users()
@@ -629,7 +630,7 @@ async def logout(response: Response, secubox_token: Optional[str] = Cookie(None)
     return {"success": True, "message": "Deconnecte"}
 
 
-@router.get("/verify")
+@router.get("/verify", dependencies=[Depends(require_lecture)])
 async def verify(secubox_token: Optional[str] = Cookie(None)):
     """Verify current session."""
     if not secubox_token:
@@ -884,7 +885,7 @@ async def delete_webhook(webhook_id: str, user=Depends(require_auth)):
     return {"success": True}
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get portal summary."""
     users = _load_users()

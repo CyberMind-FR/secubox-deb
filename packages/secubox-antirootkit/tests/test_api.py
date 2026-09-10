@@ -27,6 +27,20 @@ def env(tmp_path):
     log = ExecLog(str(tmp_path / "execlog.db"), check_same_thread=False)
     astore = AlertStore(str(tmp_path / "alerts.db"))
     app = create_app(execlog=log, alertstore=astore)
+
+    # LA GARDE EST DESORMAIS REELLE, ON PRESENTE UN PORTEUR VALIDE (#1256).
+    #
+    # Ces tests passaient SANS authentification, et pas par choix : api/main.py
+    # retombe sur un `_require_jwt` factice quand `secubox_core` n'est pas
+    # importable (try/except ImportError, l. 49-55), et le harnais n'avait pas
+    # `common/` sur son chemin. La garde de /quarantine-prep etait donc inerte
+    # ici — le meme repli fail-open que #1260 signale pour eye-remote/leases.
+    #
+    # `dependency_overrides` sur `_require_jwt` (la dependance reelle, pas la
+    # fabrique `require_jwt()` qui l'enveloppe) : on teste le PLAN de mise en
+    # quarantaine, pas la cryptographie du jeton.
+    from api import main as _m
+    app.dependency_overrides[_m._require_jwt] = lambda: {"sub": "test"}
     return TestClient(app), log, astore
 
 

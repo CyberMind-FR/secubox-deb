@@ -68,6 +68,7 @@ live_hosts_agg     = LiveHostsAggregator(get_live_hosts_config())
 cert_status_agg    = CertStatusAggregator(get_cert_status_config())
 
 from vhost_stats import VhostStatsAggregator, famille  # noqa: E402
+from secubox_core.auth import require_lecture
 
 vhost_stats_agg = VhostStatsAggregator()
 
@@ -427,7 +428,7 @@ def get_cached_or_build() -> dict:
 
 # API Endpoints
 
-@app.get("/api/v1/metrics/status")
+@app.get("/api/v1/metrics/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Module status endpoint."""
     return {"status": "ok", "module": "metrics", "version": "1.0.0"}
@@ -861,7 +862,7 @@ def _memoise(cle: str, duree: int, calcul):
     return valeur
 
 
-@app.get("/api/v1/metrics/health/summary")
+@app.get("/api/v1/metrics/health/summary", dependencies=[Depends(require_lecture)])
 def get_health_summary(request: Request, domain: Optional[str] = None):
     """
     Health summary for the global health banner.
@@ -886,7 +887,7 @@ def get_health_summary(request: Request, domain: Optional[str] = None):
 
     return summary
 
-@app.get("/api/v1/metrics/visitor-origin")
+@app.get("/api/v1/metrics/visitor-origin", dependencies=[Depends(require_lecture)])
 async def visitor_origin_endpoint():
     return JSONResponse(
         content=visitor_origin_agg.current(),
@@ -894,7 +895,7 @@ async def visitor_origin_endpoint():
     )
 
 
-@app.get("/api/v1/metrics/live-hosts")
+@app.get("/api/v1/metrics/live-hosts", dependencies=[Depends(require_lecture)])
 async def live_hosts_endpoint():
     return JSONResponse(
         content=live_hosts_agg.current(),
@@ -902,7 +903,7 @@ async def live_hosts_endpoint():
     )
 
 
-@app.get("/api/v1/metrics/cert-status")
+@app.get("/api/v1/metrics/cert-status", dependencies=[Depends(require_lecture)])
 async def cert_status_endpoint():
     return JSONResponse(
         content=cert_status_agg.current(),

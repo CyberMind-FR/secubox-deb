@@ -38,6 +38,7 @@ import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/system-hub.toml")
@@ -696,7 +697,7 @@ hub = SystemHub(DATA_DIR)
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = hub.get_stats()
@@ -837,7 +838,7 @@ async def delete_diagnostics(bundle_id: str):
     return {"status": "deleted"}
 
 
-@app.get("/cached-status")
+@app.get("/cached-status", dependencies=[Depends(require_lecture)])
 async def get_cached_status():
     """Get cached system status (fast endpoint)."""
     return hub.get_cached_status()

@@ -11,6 +11,7 @@ import json
 import subprocess
 from fastapi import APIRouter, FastAPI, Depends
 from secubox_core.auth import require_jwt
+from secubox_core.auth import require_lecture
 
 CTL = "/usr/sbin/picobrewctl"
 
@@ -37,7 +38,7 @@ def _ctl(args: list[str], timeout: int = 20) -> tuple[int, str]:
         return 1, ""
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> dict:
     rc, out = _ctl(["status", "--json"])
     if rc != 0 or not out:
@@ -69,7 +70,7 @@ def restart() -> dict:
     return {"ok": rc == 0}
 
 
-@router.get("/logs")
+@router.get("/logs", dependencies=[Depends(require_lecture)])
 def logs() -> dict:
     # Journal du service picobrew DANS le conteneur (best-effort ; conteneur à
     # l'arrêt → le ctl renvoie rc!=0, on rend une liste vide plutôt qu'une 500).

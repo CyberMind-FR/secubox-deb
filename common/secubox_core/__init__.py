@@ -10,7 +10,7 @@ JWT auth · Config TOML · Logging structuré · Helpers système · Kiosk/Board
 """
 __version__ = "1.1.0"
 
-from .auth   import require_jwt, create_token, router as auth_router
+from .auth   import require_jwt, require_lecture, create_token, router as auth_router
 from .config import get_config, get_board_info, reload_config
 from .logger import get_logger
 from .system import (
@@ -32,7 +32,7 @@ from .health import (
 
 __all__ = [
     # Auth
-    "require_jwt", "create_token", "auth_router",
+    "require_jwt", "require_lecture", "create_token", "auth_router",
     # Config
     "get_config", "get_board_info", "reload_config",
     # Logger

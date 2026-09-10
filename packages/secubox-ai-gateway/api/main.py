@@ -32,6 +32,7 @@ from enum import IntEnum
 from collections import defaultdict
 
 from fastapi import FastAPI, Depends, HTTPException, Request
+from secubox_core.auth import require_lecture
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
@@ -662,7 +663,7 @@ class ProviderUpdateRequest(BaseModel):
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     return {
@@ -762,7 +763,7 @@ async def chat_completions(request: ChatCompletionRequest, req: Request):
     return response
 
 
-@app.get("/v1/models")
+@app.get("/v1/models", dependencies=[Depends(require_lecture)])
 async def list_models():
     """List available models across all providers."""
     models = []

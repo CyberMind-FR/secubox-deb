@@ -37,6 +37,7 @@ from cryptography.fernet import Fernet
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/identity.toml")
@@ -664,7 +665,7 @@ identity_manager = IdentityManager(KEYS_DIR, PEERS_DIR, TRUST_FILE)
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     try:

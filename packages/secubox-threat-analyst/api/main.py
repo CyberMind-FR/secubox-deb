@@ -63,6 +63,7 @@ logger = logging.getLogger("secubox.threat-analyst")
 # Phase 2b/2c (#488/#490) : ingest mitm JA4 events + compute fingerprint hash
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
 from secubox_core.classifiers import ja4 as _ja4_cls  # noqa: E402
+from secubox_core.auth import require_lecture
 
 
 def _ja4_enrich(event: dict) -> dict:
@@ -550,7 +551,7 @@ analyzer = ThreatAnalyzer(DATA_DIR)
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = analyzer.get_stats()
@@ -750,7 +751,7 @@ async def _overview_refresh_loop():
         await asyncio.sleep(_OVERVIEW_TTL)
 
 
-@app.get("/overview")
+@app.get("/overview", dependencies=[Depends(require_lecture)])
 async def get_overview():
     """Global security overview (WAF), 60 s cached."""
     if _OVERVIEW:

@@ -32,6 +32,7 @@ from enum import Enum
 from abc import ABC, abstractmethod
 
 from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -896,7 +897,7 @@ async def health():
     }
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get service status."""
     providers = _load_json(PROVIDERS_FILE, {"providers": []})

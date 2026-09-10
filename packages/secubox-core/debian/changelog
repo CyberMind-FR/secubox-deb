@@ -1,3 +1,31 @@
+secubox-core (1.4.0-1~bookworm1) bookworm; urgency=high
+
+  * LECTURE GARDEE + MODE TABLEAU DE BORD (#1256). secubox_core.auth gagne
+    `require_lecture` : jeton ou cookie de session, SINON mode tableau de bord
+    depuis le LAN, SINON 401. C'est la garde que portent desormais les ~450
+    routes d'affichage du parc, jusqu'ici publiques.
+  * Le defaut est FERME. `[tableau_de_bord] actif = true` dans
+    /etc/secubox/secubox.conf arme le mode ; absent, mal type ou config
+    illisible valent false. La lecture est STRICTEMENT booleenne : `bool("false")`
+    vaut True en Python, accepter la chaine ouvrirait le parc sur une coquille.
+  * NGINX DECIDE DU « LAN », PAS NOUS. Derriere HAProxy -> sbxwaf -> nginx,
+    $remote_addr vaut 127.0.0.1 pour tout le monde : un test d'origine cote
+    Python verrait le WAN entier comme local. On consomme le verdict de
+    conf.d/secubox-lan-geo.conf (set_real_ip_from + real_ip_header
+    X-Forwarded-For + geo $lan_client), transmis par secubox-proxy.conf dans
+    l'en-tete X-SecuBox-LAN.
+  * L'EN-TETE N'EST PAS FORGEABLE : proxy_set_header REMPLACE la valeur du
+    client. Et une requete qui ne passe pas par nginx ne le porte pas du tout,
+    donc retombe sur l'exigence du jeton. Les deux chemins d'echec ferment.
+  * secubox_core.testing : place un harnais de test dans la position du client
+    de tableau de bord LAN (mode arme + en-tete). Ne desactive aucune garde —
+    require_jwt continue de rendre 401.
+  * conftest.py a la racine du depot : `common/` sur le chemin d'import pour
+    toute suite. Les 181 paquets dependent de secubox-core dans debian/control ;
+    seul le harnais l'ignorait. A debloque 5 suites qui ne collectaient plus.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 23:55:00 +0200
+
 secubox-core (1.3.5-1~bookworm1) bookworm; urgency=medium
 
   * Purge des references authelia (SSO decommissionne) : commentaires,

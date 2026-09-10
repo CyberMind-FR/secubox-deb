@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core import user_store
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-peertube", version="1.1.0", root_path="/api/v1/peertube")
 
@@ -383,7 +384,7 @@ async def health():
     return {"status": "ok", "module": "peertube"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 def status():
     """Real native-LXC status: LXC state + PeerTube HTTP reachability + disk."""
     cfg = get_config()
@@ -1322,7 +1323,7 @@ async def upgrade_peertube(user=Depends(require_jwt)):
     return {"success": True, "output": (r.get("stdout") or "").strip().splitlines()[-5:]}
 
 
-@router.get("/container/status")
+@router.get("/container/status", dependencies=[Depends(require_lecture)])
 async def container_status():
     """LXC + reachability status (kept under /container/* for webui back-compat)."""
     cfg = get_config()

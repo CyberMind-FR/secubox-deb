@@ -20,6 +20,7 @@ import asyncio
 import os
 import time
 from pathlib import Path
+from secubox_core.auth import require_lecture
 try:
     from . import netstats          # uvicorn `api.main:app` / aggregator import
 except ImportError:                 # standalone with api/ on sys.path (collector)
@@ -1575,7 +1576,7 @@ def _diagnose_module(module: str) -> list[str]:
     return issues
 
 
-@router.get("/repair/status")
+@router.get("/repair/status", dependencies=[Depends(require_lecture)])
 async def repair_status():
     """Get repair system status (public)."""
     history = []

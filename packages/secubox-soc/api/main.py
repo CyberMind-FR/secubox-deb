@@ -41,6 +41,7 @@ app = FastAPI(title="SecuBox SOC", version="2.0.0")
 
 # Phase 2b/2c (#488/#490) : ingest mitm SOC events + score aggregation
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+from secubox_core.auth import require_lecture
 
 
 def _soc_enrich(event: dict) -> dict:
@@ -228,7 +229,7 @@ async def broadcast_update(event_type: str, data: dict):
     await trigger_webhooks(event_type, data)
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     tickets = _load_json(TICKETS_FILE)
     alerts = _load_json(ALERTS_FILE)
@@ -254,7 +255,7 @@ async def health():
 # SUMMARY
 # ══════════════════════════════════════════════════════════════
 
-@app.get("/summary")
+@app.get("/summary", dependencies=[Depends(require_lecture)])
 async def get_summary():
     """Get comprehensive SOC summary."""
     cached = stats_cache.get("summary")
@@ -657,7 +658,7 @@ def _fetch_p2p_api(endpoint: str) -> Dict[str, Any]:
     return {}
 
 
-@app.get("/mesh/peers")
+@app.get("/mesh/peers", dependencies=[Depends(require_lecture)])
 async def get_mesh_peers():
     """Get P2P mesh peers from the mesh network.
 
@@ -697,7 +698,7 @@ async def get_mesh_peers():
     }
 
 
-@app.get("/mesh/status")
+@app.get("/mesh/status", dependencies=[Depends(require_lecture)])
 async def get_mesh_status():
     """Get P2P mesh network status."""
     status_data = _fetch_p2p_api("/status")
@@ -719,7 +720,7 @@ async def get_mesh_status():
     }
 
 
-@app.get("/mesh/tree")
+@app.get("/mesh/tree", dependencies=[Depends(require_lecture)])
 async def get_mesh_tree():
     """Get master-link mesh tree structure."""
     tree_data = _fetch_p2p_api("/master-link/tree")

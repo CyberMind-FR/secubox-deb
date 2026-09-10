@@ -32,6 +32,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import Body, FastAPI, HTTPException, Depends
 from secubox_core.auth import require_jwt
+from secubox_core.auth import require_lecture
 
 VERSION = "0.1.0"
 CTL = shutil.which("fmrelayctl") or "/usr/sbin/fmrelayctl"
@@ -83,24 +84,24 @@ def healthz() -> Dict[str, bool]:
     return {"ok": True}
 
 
-@app.get("/version")
+@app.get("/version", dependencies=[Depends(require_lecture)])
 def version() -> Dict[str, str]:
     build_file = Path("/usr/share/doc/secubox-fmrelay/.build-sha")
     build = build_file.read_text().strip() if build_file.is_file() else "unknown"
     return {"version": VERSION, "build": build}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> Dict[str, Any]:
     return _ctl_json("status")
 
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> Dict[str, Any]:
     return _ctl_json("components")
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access() -> Dict[str, Any]:
     """Real mount URLs (consumed by Lyrion / webradio / VLC). The admin
     webui's `Open Webradio →` button reads from here per the dual-vhost
@@ -108,13 +109,13 @@ def access() -> Dict[str, Any]:
     return _ctl_json("access")
 
 
-@app.get("/mounts")
+@app.get("/mounts", dependencies=[Depends(require_lecture)])
 def mounts() -> Dict[str, Any]:
     """List active icecast mounts + listener counts."""
     return _ctl_json("mounts")
 
 
-@app.get("/now-playing")
+@app.get("/now-playing", dependencies=[Depends(require_lecture)])
 def now_playing() -> Dict[str, Any]:
     """Current RDS RadioText for the active relay (or {} if idle)."""
     return _ctl_json("now-playing")

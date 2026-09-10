@@ -32,6 +32,7 @@ from enum import Enum
 
 from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel, Field
+from secubox_core.auth import require_lecture
 
 try:
     from secubox_core.auth import require_jwt
@@ -535,7 +536,7 @@ async def probe_secubox_peer(ipv6: str, timeout: float = 3.0) -> dict:
     return result
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def get_status():
     """Get mesh network status (public)."""
     ygg_info = get_yggdrasil_info()
@@ -586,7 +587,7 @@ async def get_sessions(user=Depends(require_jwt)):
     return {"sessions": sessions, "count": len(sessions)}
 
 
-@app.get("/services")
+@app.get("/services", dependencies=[Depends(require_lecture)])
 async def get_services():
     """Get local announced services (public read)."""
     data = load_json(SERVICES_FILE, {"services": []})
@@ -638,7 +639,7 @@ async def revoke_service(service: ServiceRevoke, user=Depends(require_jwt)):
     return {"status": "success"}
 
 
-@app.get("/domains")
+@app.get("/domains", dependencies=[Depends(require_lecture)])
 async def get_domains():
     """Get discovered remote domains (public read)."""
     data = load_json(DOMAINS_FILE, {"domains": [], "last_sync": None})

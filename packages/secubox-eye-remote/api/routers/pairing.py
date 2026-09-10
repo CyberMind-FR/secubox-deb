@@ -34,6 +34,7 @@ from ...models.device import (
     PairRequest,
     PairResponse,
 )
+from secubox_core.auth import require_lecture
 
 log = logging.getLogger(__name__)
 
@@ -106,7 +107,7 @@ def _get_local_ip() -> str:
         return "127.0.0.1"
 
 
-@router.get("/qr", response_model=PairingQRResponse)
+@router.get("/qr", response_model=PairingQRResponse, dependencies=[Depends(require_lecture)])
 async def generate_pairing_qr() -> PairingQRResponse:
     """
     Generate a QR code pairing session.
@@ -155,7 +156,7 @@ async def generate_pairing_qr() -> PairingQRResponse:
     )
 
 
-@router.get("/discover", response_model=DiscoverResponse)
+@router.get("/discover", response_model=DiscoverResponse, dependencies=[Depends(require_lecture)])
 async def discover() -> DiscoverResponse:
     """
     Discover SecuBox instance.

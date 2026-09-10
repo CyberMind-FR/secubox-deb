@@ -21,6 +21,7 @@ import os
 
 # Import shared auth
 import sys
+from secubox_core.auth import require_lecture
 sys.path.insert(0, '/usr/lib/secubox/core')
 try:
     from secubox_core.auth import require_jwt
@@ -229,7 +230,7 @@ async def health_check():
     return {"status": "ok", "module": "interceptor", "timestamp": datetime.now().isoformat()}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get interceptor status"""
     config = load_config()
@@ -252,7 +253,7 @@ async def get_status():
     }
 
 
-@app.get("/config")
+@app.get("/config", dependencies=[Depends(require_lecture)])
 async def get_config():
     """Get interceptor configuration"""
     return load_config()
@@ -300,7 +301,7 @@ async def update_config(req: ConfigRequest, user: dict = Depends(require_jwt)):
     return {"success": True, "message": "Configuration saved"}
 
 
-@app.get("/sessions")
+@app.get("/sessions", dependencies=[Depends(require_lecture)])
 async def get_sessions():
     """Get active sessions"""
     sessions = load_sessions()
@@ -312,7 +313,7 @@ async def get_sessions():
     }
 
 
-@app.get("/session/{session_id}")
+@app.get("/session/{session_id}", dependencies=[Depends(require_lecture)])
 async def get_session_detail(session_id: str):
     """Get session details"""
     sessions = load_sessions()
@@ -335,7 +336,7 @@ async def close_session(session_id: str, user: dict = Depends(require_jwt)):
     return {"success": True, "message": f"Session {session_id} closed"}
 
 
-@app.get("/flows")
+@app.get("/flows", dependencies=[Depends(require_lecture)])
 async def get_flows(limit: int = 100, offset: int = 0, filter_host: Optional[str] = None):
     """Get intercepted flows"""
     flows = load_flows(limit + offset)
@@ -351,7 +352,7 @@ async def get_flows(limit: int = 100, offset: int = 0, filter_host: Optional[str
     }
 
 
-@app.get("/flow/{flow_id}")
+@app.get("/flow/{flow_id}", dependencies=[Depends(require_lecture)])
 async def get_flow_detail(flow_id: str):
     """Get flow details"""
     flow = get_flow(flow_id)
@@ -392,7 +393,7 @@ async def replay_flow(flow_id: str, req: Optional[ReplayRequest] = None, user: d
     }
 
 
-@app.get("/rules")
+@app.get("/rules", dependencies=[Depends(require_lecture)])
 async def get_rules():
     """Get interception rules"""
     rules = load_rules()
@@ -465,7 +466,7 @@ async def update_rule(rule_id: str, req: RuleRequest, user: dict = Depends(requi
     raise HTTPException(status_code=404, detail="Rule not found")
 
 
-@app.get("/recordings")
+@app.get("/recordings", dependencies=[Depends(require_lecture)])
 async def get_recordings():
     """Get recorded sessions"""
     recordings = []
@@ -511,7 +512,7 @@ async def stop_recording(user: dict = Depends(require_jwt)):
     return {"success": True, "message": "Recording stopped"}
 
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_lecture)])
 async def get_traffic_stats():
     """Get traffic statistics"""
     stats = get_stats()
@@ -552,7 +553,7 @@ async def get_traffic_stats():
     }
 
 
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_lecture)])
 async def get_logs(limit: int = 100, level: Optional[str] = None):
     """Get interceptor logs"""
     log_file = LOGS_DIR / "interceptor.log"
@@ -602,7 +603,7 @@ async def restart_service(user: dict = Depends(require_jwt)):
     return {"success": True, "message": "Interceptor restarted"}
 
 
-@app.get("/info")
+@app.get("/info", dependencies=[Depends(require_lecture)])
 async def get_info():
     """Get module info"""
     return {

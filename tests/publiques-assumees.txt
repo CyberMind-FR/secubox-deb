@@ -80,3 +80,26 @@ secubox-ai-gateway POST /v1/chat/completions # A CONFIRMER — API compatible Op
 secubox-portal POST /login              # delivre la session — ne peut pas en exiger une
 secubox-portal POST /logout             # ferme la session
 secubox-portal POST /recover            # recuperation de compte, par definition sans session
+
+# ── Routeurs nommes `public_router` : le code les declare publics ─────────
+# secubox-hub /menu et /info alimentent LA PAGE DE CONNEXION : les garder
+# casserait le login lui-meme, puisqu'ils sont lus AVANT d'avoir un jeton.
+# Les projections de secubox-webos sont volontairement MINIMALES — la
+# docstring de /services dit « never leaks urls/latency/reach » — et chacune a
+# son pendant detaille sous require_jwt. Garder la projection publique
+# reviendrait a supprimer le couple, pas a le durcir.
+secubox-hub GET /menu                   # lu par la page de connexion, avant tout jeton
+secubox-hub GET /info                   # idem
+secubox-hub GET /led_status             # etat materiel des LED, sans donnee de session
+secubox-hub GET /health-batch           # agregat de sondes de sante
+secubox-hub GET /firewall_summary       # resume, pas de regle detaillee
+secubox-webos GET /services             # projection minimale, pendant detaille sous jeton
+secubox-webos GET /broadcast            # barre media du Hall
+secubox-webos GET /broadcasts           # historique des diffusions
+secubox-webos GET /cardlets             # cartes du Hall
+secubox-webos GET /cardlets/radio       # idem
+secubox-webos GET /cardlets/waf         # idem
+secubox-webos GET /cardlets/podcaster   # idem
+secubox-webos GET /menu/bbs             # idem
+secubox-webos GET /waf/qui-frappe       # caracterisation d'attaquants, deja agregee
+secubox-webos GET /actions/{module}/{action} # A CONFIRMER — un GET nomme « actions » sur un routeur public : a relire

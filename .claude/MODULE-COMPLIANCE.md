@@ -164,7 +164,26 @@ Every module API MUST implement:
 
 ### Authentication
 
-All endpoints (except /health) MUST use JWT authentication:
+All endpoints (except health probes) MUST carry a guard. **Two** exist since
+the parc moved to guarded reads (#1256) — pick by what the route reveals:
+
+| Garde | Pour quoi | Le mode tableau de bord l'ouvre ? |
+|---|---|---|
+| `require_jwt` | écritures, secrets, clés, journaux, sessions, topologie | **jamais** |
+| `require_lecture` | lectures d'affichage (status, components, access, stats) | oui, depuis le LAN, si armé |
+
+En cas de doute, `require_jwt` : on peut toujours desserrer plus tard, on ne
+rattrape pas une donnée déjà servie.
+
+Les sondes de santé restent publiques — la comparaison porte sur le DERNIER
+SEGMENT du chemin (`health`, `healthz`, `readyz`, `livez`, `ping`, `alive`),
+pour qu'un `/api/v1/health` monté sous préfixe compte comme les autres.
+
+Une route publique par conception se justifie dans
+`tests/publiques-assumees.txt`, avec sa raison — sans quoi
+`tests/test_conformite_jwt.py` la refuse.
+
+Exemple :
 
 ```python
 from secubox_core.auth import require_jwt

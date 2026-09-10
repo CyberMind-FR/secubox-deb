@@ -18,7 +18,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_lecture
 
 LXC_NAME = os.environ.get("SECUBOX_LXC_NAME", "mqtt")
 LXC_IP = os.environ.get("SECUBOX_LXC_IP", "10.100.0.110")
@@ -89,7 +90,7 @@ def _broker_healthy() -> bool:
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> dict:
     lxc_st = _lxc_state()
     broker_st = "running" if _broker_running() else "stopped"
@@ -105,7 +106,7 @@ def components() -> dict:
     }
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> dict:
     c = components()
     states = {x["name"]: x["state"] for x in c["components"]}
@@ -118,7 +119,7 @@ def status() -> dict:
     return {"module": "mqtt", "version": "2.4.0", "overall": overall, "states": states}
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access() -> dict:
     """List ACL users + their topic globs.
 

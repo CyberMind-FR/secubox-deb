@@ -34,6 +34,7 @@ import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Watchdog API", version="2.0.0")
 
@@ -556,7 +557,7 @@ async def shutdown():
 # Public Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get watchdog status."""
     cached = stats_cache.get("last_check")
@@ -573,7 +574,7 @@ async def health():
     return {"status": "healthy", "module": "watchdog"}
 
 
-@app.get("/containers")
+@app.get("/containers", dependencies=[Depends(require_lecture)])
 async def get_containers():
     """Get detailed container list."""
     config = load_config()
@@ -610,7 +611,7 @@ async def get_containers():
     return {"containers": containers, "total": len(containers)}
 
 
-@app.get("/services")
+@app.get("/services", dependencies=[Depends(require_lecture)])
 async def get_services():
     """Get detailed service list."""
     config = load_config()
@@ -630,7 +631,7 @@ async def get_services():
     return {"services": services, "total": len(services)}
 
 
-@app.get("/endpoints")
+@app.get("/endpoints", dependencies=[Depends(require_lecture)])
 async def get_endpoints():
     """Get detailed endpoint list."""
     config = load_config()
@@ -650,7 +651,7 @@ async def get_endpoints():
     return {"endpoints": endpoints, "total": len(endpoints)}
 
 
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_lecture)])
 async def get_logs(lines: int = Query(50, ge=1, le=500)):
     """Get watchdog logs."""
     log_lines = []
@@ -664,7 +665,7 @@ async def get_logs(lines: int = Query(50, ge=1, le=500)):
     return {"lines": log_lines, "total": total}
 
 
-@app.get("/history")
+@app.get("/history", dependencies=[Depends(require_lecture)])
 async def get_history(limit: int = Query(50, ge=1, le=500), event_type: Optional[str] = None):
     """Get event history."""
     history = load_history()
@@ -676,13 +677,13 @@ async def get_history(limit: int = Query(50, ge=1, le=500), event_type: Optional
     return {"events": history[:limit], "total": len(history)}
 
 
-@app.get("/config")
+@app.get("/config", dependencies=[Depends(require_lecture)])
 async def get_config_endpoint():
     """Get watchdog configuration."""
     return load_config()
 
 
-@app.get("/summary")
+@app.get("/summary", dependencies=[Depends(require_lecture)])
 async def get_summary():
     """Get comprehensive watchdog summary."""
     config = load_config()

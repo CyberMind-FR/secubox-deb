@@ -33,6 +33,7 @@ import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 # P2P API socket for mesh peer integration
 P2P_SOCKET = "/run/secubox/p2p.sock"
@@ -864,7 +865,7 @@ def sync_p2p_peers_to_devices() -> Dict[str, Any]:
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = guard.get_stats()
@@ -953,7 +954,7 @@ async def list_quarantine():
     return {"quarantined": active, "count": len(active)}
 
 
-@app.get("/manufacturers/{mac_address}")
+@app.get("/manufacturers/{mac_address}", dependencies=[Depends(require_lecture)])
 async def lookup_manufacturer(mac_address: str):
     """Lookup manufacturer by MAC address."""
     manufacturer = guard.lookup_manufacturer(mac_address)
@@ -964,7 +965,7 @@ async def lookup_manufacturer(mac_address: str):
 # P2P Mesh Integration Endpoints
 # ============================================================================
 
-@app.get("/mesh/peers")
+@app.get("/mesh/peers", dependencies=[Depends(require_lecture)])
 async def get_mesh_peers():
     """Get P2P mesh peers (raw data from P2P API)."""
     peers = fetch_p2p_peers()
@@ -1324,7 +1325,7 @@ server:
 '''
 
 
-@app.get("/cast/devices")
+@app.get("/cast/devices", dependencies=[Depends(require_lecture)])
 async def find_cast_devices():
     """Find Google Cast/Chromecast devices on the network."""
     devices = find_google_cast_devices()
@@ -1452,7 +1453,7 @@ def start_cast_capture(ip_address: str, duration: int = 60):
         raise HTTPException(status_code=500, detail=f"Failed to start capture: {e}")
 
 
-@app.get("/cast/config/nftables/{ip_address}")
+@app.get("/cast/config/nftables/{ip_address}", dependencies=[Depends(require_lecture)])
 async def get_nftables_config(ip_address: str):
     """Generate nftables whitelist config for Cast device."""
     return {
@@ -1462,7 +1463,7 @@ async def get_nftables_config(ip_address: str):
     }
 
 
-@app.get("/cast/config/unbound")
+@app.get("/cast/config/unbound", dependencies=[Depends(require_lecture)])
 async def get_unbound_config():
     """Generate Unbound passthrough config for Cast domains."""
     return {

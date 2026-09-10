@@ -30,10 +30,11 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse
 
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 log = get_logger("freeboxtv")
 
@@ -231,7 +232,7 @@ async def health() -> dict:
     return {"ok": True, "channels": len(ST.channels), "streams": actifs}
 
 
-@router.get("/channels")
+@router.get("/channels", dependencies=[Depends(require_lecture)])
 async def channels() -> dict:
     chs = sorted(ST.channels.values(), key=lambda c: c["lcn"])
     # On n'expose PAS l'URL RTSP interne : le client ne voit que l'id + le HLS.
@@ -239,7 +240,7 @@ async def channels() -> dict:
                           "hls": f"/api/v1/freeboxtv/hls/{c['id']}/live.m3u8"} for c in chs]}
 
 
-@router.get("/hls/{cid}/live.m3u8")
+@router.get("/hls/{cid}/live.m3u8", dependencies=[Depends(require_lecture)])
 async def manifest(cid: str):
     if not cid.isdigit() or cid not in ST.channels:
         raise HTTPException(404, "chaîne inconnue")
@@ -253,7 +254,7 @@ async def manifest(cid: str):
                         headers={"Cache-Control": "no-store"})
 
 
-@router.get("/hls/{cid}/{seg}")
+@router.get("/hls/{cid}/{seg}", dependencies=[Depends(require_lecture)])
 async def segment(cid: str, seg: str):
     if not cid.isdigit() or not _SEG_RE.match(seg) or ".." in seg:
         raise HTTPException(400, "requête invalide")
