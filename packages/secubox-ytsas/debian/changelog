@@ -1,3 +1,12 @@
+secubox-ytsas (0.2.9-1~bookworm1) bookworm; urgency=medium
+
+  * Exposition WAN : retrait du garde LAN-only (auth_request /__sbx_auth_verify)
+    du vhost nginx à la demande. ytsas est désormais joignable depuis l'extérieur
+    (WAN + LAN) via la chaîne HAProxy(waf_bypass)+sbxwaf déjà en place. Service
+    ouvert (pas d'authentification — ex-SSO décommissionné).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Sep 2026 10:00:00 +0200
+
 secubox-ytsas (0.2.8-1~bookworm1) bookworm; urgency=medium
 
   * Purge des references authelia (SSO decommissionne) : commentaires,
