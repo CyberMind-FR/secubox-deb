@@ -29,7 +29,8 @@ from dataclasses import asdict
 import os
 import sys
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 
 # Make sibling lib importable when launched via uvicorn api.main:app from
 # /usr/lib/secubox/rbs-sensor — debian/rules installs lib/ as a sibling.
@@ -37,6 +38,11 @@ sys.path.insert(0, "/usr/lib/secubox/rbs-sensor/lib")
 
 from rbs_sensor import CAPTURES_SUBSCRIBER_IDENTIFIERS  # noqa: E402
 from rbs_sensor.ep06 import Ep06Actuator, Ep06Modem, Ep06Observer  # noqa: E402
+
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
 
 app = FastAPI(
     title="SecuBox RBS Sensor",
@@ -138,17 +144,17 @@ def neighbours() -> dict:
     return {"observations": [asdict(n) for n in _observer.neighbours()]}
 
 
-@app.post("/mitigate/lte-only")
+@app.post("/mitigate/lte-only", dependencies=[Depends(require_jwt)])
 async def mitigate_lte_only() -> dict:
     return await _actuator.mitigate_lte_only()
 
 
-@app.post("/mitigate/rf-off")
+@app.post("/mitigate/rf-off", dependencies=[Depends(require_jwt)])
 async def mitigate_rf_off() -> dict:
     return await _actuator.mitigate_rf_off()
 
 
-@app.post("/restore")
+@app.post("/restore", dependencies=[Depends(require_jwt)])
 async def restore() -> dict:
     return await _actuator.restore()
 

@@ -1,3 +1,9 @@
+secubox-fmrelay (0.2.3-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT (#1256) sur /start et /stop.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 22:10:00 +0200
+
 secubox-fmrelay (0.2.2-1~bookworm2) bookworm; urgency=medium
 
   * Purge des references authelia (SSO decommissionne) : commentaires,

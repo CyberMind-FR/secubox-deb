@@ -7,14 +7,24 @@
 # Une ligne se RETIRE quand la route est reparee, dans le meme commit que la
 # reparation — `test_inventaire_sans_entree_perimee` echoue sinon.
 #
-# Genere le 2026-09-10 : 468 routes, 106 modules.
+# Genere le 2026-09-10 : 440 routes, 106 modules.
 # Format : <module> <METHODE> <chemin>
 #
-# CE QUI RESTE A REGARDER, pas ce qui est fautif. Une route sort d'ici de deux
-# facons : gardee, ou reclassee dans tests/publiques-assumees.txt avec la
-# raison qui la rend legitimement publique. Les ECRITURES ont ete triees le
-# 10/09 ; ce qui reste est en tres grande majorite de la LECTURE, ou le choix
-# « donnee publique ou pas » se decide module par module.
+# IL N'Y A PLUS AUCUNE ECRITURE ICI : les 4 verbes mutants sont tous gardes ou
+# assumes publics avec leur raison (10/09). Ce qui reste est ENTIEREMENT de la
+# LECTURE.
+#
+# ET CE N'EST PAS QUE DE L'OUBLI. Environ 140 de ces lectures sont documentees
+# « public » DANS LE CODE — c'est le motif « three-fold » du parc (status /
+# components / access, lus par les tableaux de bord). C'est un CHOIX
+# d'architecture, pas une negligence : lecture publique, ecriture gardee.
+#
+# La question qui reste n'est donc pas « qui a oublie ? » mais « ce choix
+# tient-il ? ». Une lecture publique reste de la reconnaissance offerte : les
+# plus parlantes ont ete fermees le 10/09 (topologie HAProxy, pairs WireGuard,
+# inventaire de paquets, journaux, sessions). Le reste demande un arbitrage
+# module par module, que le scanner ne peut pas rendre a la place de
+# l'operateur.
 
 
 # secubox-ad-guard — 3
@@ -59,14 +69,12 @@ secubox-antirootkit GET /alerts
 secubox-antirootkit GET /execlog
 secubox-antirootkit GET /status
 
-# secubox-appstore — 7
+# secubox-appstore — 5
 secubox-appstore GET /catalog
 secubox-appstore GET /categories
 secubox-appstore GET /mesh-catalog
 secubox-appstore GET /module/{name}
 secubox-appstore GET /module/{name}/config
-secubox-appstore POST /module/{name}/action/{verb}
-secubox-appstore PUT /module/{name}/config
 
 # secubox-assist — 1
 secubox-assist GET /status
@@ -199,15 +207,13 @@ secubox-eye-remote GET /metrics
 secubox-eye-remote GET /qr
 secubox-eye-remote GET /status
 
-# secubox-fmrelay — 8
+# secubox-fmrelay — 6
 secubox-fmrelay GET /access
 secubox-fmrelay GET /components
 secubox-fmrelay GET /mounts
 secubox-fmrelay GET /now-playing
 secubox-fmrelay GET /status
 secubox-fmrelay GET /version
-secubox-fmrelay POST /start
-secubox-fmrelay POST /stop
 
 # secubox-freeboxtv — 3
 secubox-freeboxtv GET /channels
@@ -232,29 +238,23 @@ secubox-grafana GET /components
 secubox-grafana GET /status
 secubox-grafana GET /version
 
-# secubox-haproxy — 11
+# secubox-haproxy — 6
 secubox-haproxy GET /access
-secubox-haproxy GET /backends
-secubox-haproxy GET /certificates
 secubox-haproxy GET /components
 secubox-haproxy GET /info
 secubox-haproxy GET /stats
 secubox-haproxy GET /status
-secubox-haproxy GET /vhosts
 secubox-haproxy GET /waf/targets
-secubox-haproxy GET /webui/admin-domain
-secubox-haproxy GET /webui/nginx-config
 
 # secubox-hardening — 3
 secubox-hardening GET /access
 secubox-hardening GET /components
 secubox-hardening GET /status
 
-# secubox-health-doctor — 4
+# secubox-health-doctor — 3
 secubox-health-doctor GET /checks
 secubox-health-doctor GET /registered
 secubox-health-doctor GET /status/{name}
-secubox-health-doctor POST /run
 
 # secubox-hexo — 1
 secubox-hexo GET /status
@@ -426,12 +426,9 @@ secubox-peertube GET /status
 # secubox-photoprism — 1
 secubox-photoprism GET /status
 
-# secubox-picobrew — 5
+# secubox-picobrew — 2
 secubox-picobrew GET /logs
 secubox-picobrew GET /status
-secubox-picobrew POST /restart
-secubox-picobrew POST /start
-secubox-picobrew POST /stop
 
 # secubox-podcaster — 6
 secubox-podcaster GET /feeds/{fid}/cover
@@ -441,15 +438,12 @@ secubox-podcaster GET /public/library
 secubox-podcaster GET /share/feed.xml
 secubox-podcaster GET /status
 
-# secubox-portal — 8
+# secubox-portal — 5
 secubox-portal GET /branding
 secubox-portal GET /status
 secubox-portal GET /summary
 secubox-portal GET /theme
 secubox-portal GET /verify
-secubox-portal POST /login
-secubox-portal POST /logout
-secubox-portal POST /recover
 
 # secubox-profiles — 2
 secubox-profiles GET /_wake/{vhost}
@@ -462,15 +456,12 @@ secubox-publish GET /bundle/{name}/qrcode
 secubox-publish GET /status
 secubox-publish GET /summary
 
-# secubox-rbs-sensor — 8
+# secubox-rbs-sensor — 5
 secubox-rbs-sensor GET /access
 secubox-rbs-sensor GET /components
 secubox-rbs-sensor GET /neighbours
 secubox-rbs-sensor GET /servingcell
 secubox-rbs-sensor GET /status
-secubox-rbs-sensor POST /mitigate/lte-only
-secubox-rbs-sensor POST /mitigate/rf-off
-secubox-rbs-sensor POST /restore
 
 # secubox-release — 1
 secubox-release GET /status
@@ -497,14 +488,13 @@ secubox-saas-relay GET /access
 secubox-saas-relay GET /components
 secubox-saas-relay GET /status
 
-# secubox-security-posture — 7
+# secubox-security-posture — 6
 secubox-security-posture GET /cspn
 secubox-security-posture GET /defcon
 secubox-security-posture GET /domains/{domain}
 secubox-security-posture GET /findings
 secubox-security-posture GET /overview
 secubox-security-posture GET /tpn
-secubox-security-posture POST /refresh
 
 # secubox-sentinelle-gsm — 4
 secubox-sentinelle-gsm GET /access
@@ -548,19 +538,15 @@ secubox-streamlit GET /instant
 secubox-streamlit GET /power/status
 secubox-streamlit GET /status
 
-# secubox-system — 12
+# secubox-system — 8
 secubox-system GET /board
 secubox-system GET /board/capabilities
 secubox-system GET /info
 secubox-system GET /kiosk/status
 secubox-system GET /metrics
 secubox-system GET /network
-secubox-system GET /packages
 secubox-system GET /resources
-secubox-system GET /secubox_logs
-secubox-system GET /security
 secubox-system GET /services
-secubox-system GET /sessions/summary
 
 # secubox-system-hub — 2
 secubox-system-hub GET /cached-status
@@ -663,11 +649,9 @@ secubox-webos GET /menu/bbs
 secubox-webos GET /services
 secubox-webos GET /waf/qui-frappe
 
-# secubox-wireguard — 5
+# secubox-wireguard — 3
 secubox-wireguard GET /access
 secubox-wireguard GET /components
-secubox-wireguard GET /interfaces
-secubox-wireguard GET /peers
 secubox-wireguard GET /status
 
 # secubox-yacy — 4
@@ -685,13 +669,11 @@ secubox-yggdrasil GET /status
 secubox-zia GET /capabilities
 secubox-zia GET /metrics
 
-# secubox-zigbee — 6
+# secubox-zigbee — 4
 secubox-zigbee GET /access
 secubox-zigbee GET /backups
 secubox-zigbee GET /components
 secubox-zigbee GET /status
-secubox-zigbee POST /backup
-secubox-zigbee POST /restore
 
 # secubox-zkp — 2
 secubox-zkp GET /keys

@@ -1,3 +1,9 @@
+secubox-security-posture (2.0.5-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT (#1256) sur /refresh.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 22:10:00 +0200
+
 secubox-security-posture (2.0.4-1) bookworm; urgency=medium
 
   * Allègement CPU : REFRESH_INTERVAL du snapshot posture porté de 60 s à 300 s

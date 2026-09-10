@@ -1,3 +1,9 @@
+secubox-picobrew (2.0.3-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT (#1256) sur /start, /stop et /restart.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 22:10:00 +0200
+
 secubox-picobrew (2.0.2-1~bookworm1) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

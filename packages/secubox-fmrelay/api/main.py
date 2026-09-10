@@ -30,10 +30,16 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 
 VERSION = "0.1.0"
 CTL = shutil.which("fmrelayctl") or "/usr/sbin/fmrelayctl"
+
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
 
 app = FastAPI(
     title="SecuBox FM Relay",
@@ -114,7 +120,7 @@ def now_playing() -> Dict[str, Any]:
     return _ctl_json("now-playing")
 
 
-@app.post("/start")
+@app.post("/start", dependencies=[Depends(require_jwt)])
 def start(body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     """Body: {freq: "103.9M", mount: "savoie", bitrate?: 128, gain?: 49, ppm?: 60}.
 
@@ -135,6 +141,6 @@ def start(body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     return _ctl_json(*args)
 
 
-@app.post("/stop")
+@app.post("/stop", dependencies=[Depends(require_jwt)])
 def stop() -> Dict[str, Any]:
     return _ctl_json("stop")

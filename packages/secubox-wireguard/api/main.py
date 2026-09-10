@@ -433,7 +433,13 @@ async def access():
 
 # === Interface Management ===
 
-@app.get("/interfaces")
+# LA LISTE DES PAIRS D'UN VPN N'EST PAS UNE DONNEE DE TABLEAU DE BORD (#1261).
+# /peers rend les cles publiques, les adresses autorisees et les derniers
+# handshakes ; /interfaces rend les ports d'ecoute. Ensemble, c'est la carte du
+# mesh et de qui s'y connecte. L'appelant est
+# www/luci-static/.../wireguard-dashboard/api.js, servi par la webui admin :
+# l'operateur y est connecte, et require_jwt accepte le cookie de session.
+@app.get("/interfaces", dependencies=[Depends(require_jwt)])
 async def list_interfaces():
     """List all WireGuard interfaces (public)."""
     return await _run_ctl_cached("interfaces", ttl=8.0)
@@ -459,7 +465,7 @@ async def interface_down(name: str, user=Depends(require_jwt)):
 
 # === Peer Management ===
 
-@app.get("/peers")
+@app.get("/peers", dependencies=[Depends(require_jwt)])
 async def list_peers(interface: Optional[str] = None):
     """List all peers (public)."""
     if interface:

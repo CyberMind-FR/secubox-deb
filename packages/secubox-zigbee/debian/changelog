@@ -1,3 +1,9 @@
+secubox-zigbee (2.6.5-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT (#1256) sur /backup et /restore.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 22:10:00 +0200
+
 secubox-zigbee (2.6.4-1~bookworm1) bookworm; urgency=medium
 
   * Purge des references authelia (SSO decommissionne) : commentaires,

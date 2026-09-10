@@ -9,9 +9,15 @@ sudo. C'est la règle du dépôt — une seule surface root, auditée.
 """
 import json
 import subprocess
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Depends
+from secubox_core.auth import require_jwt
 
 CTL = "/usr/sbin/picobrewctl"
+
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
 
 app = FastAPI(title="SecuBox PicoBrew")
 router = APIRouter()
@@ -44,19 +50,19 @@ def status() -> dict:
                 "session_active": False, "error": "réponse ctl illisible"}
 
 
-@router.post("/start")
+@router.post("/start", dependencies=[Depends(require_jwt)])
 def start() -> dict:
     rc, _ = _ctl(["start"])
     return {"ok": rc == 0}
 
 
-@router.post("/stop")
+@router.post("/stop", dependencies=[Depends(require_jwt)])
 def stop() -> dict:
     rc, _ = _ctl(["stop"])
     return {"ok": rc == 0}
 
 
-@router.post("/restart")
+@router.post("/restart", dependencies=[Depends(require_jwt)])
 def restart() -> dict:
     # restart peut prendre quelques secondes (stop + start du conteneur).
     rc, _ = _ctl(["restart"], timeout=60)

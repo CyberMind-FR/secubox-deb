@@ -1,3 +1,10 @@
+secubox-appstore (0.4.2-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT (#1256) sur /module/{name}/action/{verb} et /module/{name}/config :
+    declencher une action ou reecrire la config d'un module, sans jeton.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 22:10:00 +0200
+
 secubox-appstore (0.4.1-1~bookworm2) bookworm; urgency=high
 
   * Retire `RuntimeDirectory=secubox` (ref #1022). Ce repertoire est PARTAGE par

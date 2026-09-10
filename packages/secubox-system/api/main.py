@@ -555,7 +555,13 @@ async def network():
     return {"interfaces": interfaces}
 
 
-@router.get("/security")
+# INVENTAIRE ET JOURNAUX (#1261). /packages rend la liste versionnee des
+# paquets installes — de quoi choisir un CVE applicable ; /security rend la
+# posture ; /sessions/summary, qui est connecte ; /secubox_logs, le contenu des
+# journaux. Aucune de ces quatre n'est consommee par une page de www/ dans le
+# depot. Les autres routes du module (info, resources, metrics, services,
+# network) restent publiques : elles alimentent le tableau de bord Eye Remote.
+@router.get("/security", dependencies=[Depends(require_jwt)])
 def security():
     """Security status for dashboard (public)."""
     # nftables always active on SecuBox (rules loaded at boot)
@@ -582,7 +588,7 @@ def security():
     }
 
 
-@router.get("/packages")
+@router.get("/packages", dependencies=[Depends(require_jwt)])
 def packages():
     """Installed SecuBox packages (public)."""
     r = subprocess.run(
@@ -685,7 +691,7 @@ async def logs(unit: str = "", lines: int = 100, user=Depends(require_jwt)):
     return {"lines": r.stdout.splitlines(), "unit": unit}
 
 
-@router.get("/secubox_logs")
+@router.get("/secubox_logs", dependencies=[Depends(require_jwt)])
 def secubox_logs():
     """Get latest secubox log messages with criticality and emojis (public for dashboard).
 
@@ -1446,7 +1452,7 @@ async def get_sessions(user=Depends(require_jwt)):
     }
 
 
-@router.get("/sessions/summary")
+@router.get("/sessions/summary", dependencies=[Depends(require_jwt)])
 async def get_sessions_summary():
     """Get session summary for dashboard (public)."""
     sessions = _load_sessions()

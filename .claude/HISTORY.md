@@ -5,6 +5,63 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-10 — Lectures : plus AUCUNE écriture nue, et la fuite du domaine admin (ref #1256, #1261)
+
+**Le parc ne porte plus une seule route d'écriture sans garde.** Les 17 dernières
+(`appstore`, `fmrelay`, `health-doctor`, `picobrew`, `rbs-sensor` — des
+contre-mesures radio déclenchables sans jeton —, `security-posture`, `zigbee`)
+sont fermées ; les 3 de `portal` (`/login`, `/logout`, `/recover`) rejoignent
+les publiques assumées. Dette : 468 → 440, **écritures = 0**.
+
+### Ce que l'audit des lectures a révélé, et qui corrige mon propre diagnostic
+
+**140 des 451 lectures sont documentées « public » DANS LE CODE.** Ce n'est pas
+de l'oubli : c'est le motif « three-fold » du parc — `status` / `components` /
+`access` lus par les tableaux de bord — un **choix d'architecture** assumé,
+lecture publique et écriture gardée. Ma présentation d'hier (« 700 routes sans
+garde ») mélangeait donc deux choses très différentes. La vraie question n'est
+pas « qui a oublié ? » mais « ce choix tient-il ? ».
+
+### #1261 — la chaîne complète, trouvée en tirant ce fil
+
+`GET /api/v1/haproxy/webui/admin-domain` rendait `admin.<hôte>.<suffixe>` à
+n'importe qui, avec pour justification *« No auth required (info is not
+secret) »*. Le test qui l'accompagnait ajoutait *« the unix socket is root-only
+at the filesystem level »*. **Les deux sont faux :**
+
+1. nginx proxifie `location /api/v1/haproxy/` vers cette socket **sans**
+   `auth_request`, et `common/nginx/secubox.conf` inclut `secubox.d/*.conf`
+   depuis un bloc `server_name secubox.local _;` — **attrape-tout**. On atteint
+   donc la route par l'IP, sans connaître le domaine admin.
+2. L'unité tourne en `UMask=0000` : la socket n'est pas root-only.
+
+Et ce nom d'hôte est la **seule** barrière devant les routes d'admin encore sans
+garde (#1256), sur un vhost routé par `webui_direct`, hors inspection sbxwaf
+(#861). La chaîne : anonyme → apprend le domaine admin → atteint l'API d'admin.
+`/webui/nginx-config` rendait en prime le vhost complet (regex, port 9080,
+racine, includes).
+
+**Fermées toutes les deux.** `haproxyctl` n'est pas cassé : `_fetch_webui_regex`
+retombe déjà sur `/etc/default/secubox` quand l'appel échoue (`curl -sf` échoue
+sur 401) — et cette source locale vaut mieux que l'API. Le test
+`test_nginx_config_is_public` devient `test_les_deux_routes_webui_exigent_un_jeton` :
+le contrat est renversé, pas contourné.
+
+### 9 lectures de reconnaissance fermées
+
+`haproxy` `/certificates`, `/vhosts`, `/backends` — la carte du frontal, pas un
+état de service. `wireguard` `/peers`, `/interfaces` — clés publiques, adresses
+autorisées, handshakes : la carte du mesh. `system` `/packages` (inventaire
+versionné = de quoi choisir un CVE applicable), `/security`, `/sessions/summary`,
+`/secubox_logs`. Aucune n'a d'appelant anonyme : leurs tableaux de bord vivent
+sur la webui admin, où `require_jwt` accepte le cookie de session.
+
+Restent **440 lectures**, dont ~130 documentées publiques par conception. C'est
+un arbitrage d'architecture, pas une correction mécanique — il revient à
+l'opérateur. Non déployé.
+
+---
+
 ## 2026-09-10 — Garde JWT : les 58 écritures des modules partiels triées (ref #1256)
 
 Les 93 modules « à trous partiels » portent 455 routes nues. Balayage aveugle

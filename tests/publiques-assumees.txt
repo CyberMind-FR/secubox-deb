@@ -75,3 +75,8 @@ secubox-webos POST /broadcast/like      # A CONFIRMER — barre media du Hall
 secubox-webos POST /depot               # A CONFIRMER — relais vers droplet, public en aval
 secubox-zia POST /v1/chat               # A CONFIRMER — cardlet Chat du Hall (www/zia/micro.html)
 secubox-ai-gateway POST /v1/chat/completions # A CONFIRMER — API compatible OpenAI
+
+# ── secubox-portal : les points d'entree de la connexion ──────────────────
+secubox-portal POST /login              # delivre la session — ne peut pas en exiger une
+secubox-portal POST /logout             # ferme la session
+secubox-portal POST /recover            # recuperation de compte, par definition sans session

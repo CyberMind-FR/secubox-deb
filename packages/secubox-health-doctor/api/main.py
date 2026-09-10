@@ -4,11 +4,17 @@
 """SecuBox-Deb :: health-doctor FastAPI (issue #212)."""
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import checks, runner
+
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
 
 app = FastAPI(
     title="SecuBox Health Doctor",
@@ -53,7 +59,7 @@ def status_of(name: str):
     return {"name": name, **entry, "cached": True}
 
 
-@app.post("/run")
+@app.post("/run", dependencies=[Depends(require_jwt)])
 def run():
     """Trigger a fresh check pass. CORS POST allowed for admin UIs."""
     return runner.run_once()

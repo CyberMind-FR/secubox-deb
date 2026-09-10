@@ -815,7 +815,15 @@ async def get_waf_targets():
 
 # ── VHosts ────────────────────────────────────────────────────────
 
-@router.get("/vhosts")
+# RECONNAISSANCE, PAS « STATUT » (#1261). Ces trois routes rendent
+# l'inventaire complet du frontal : tous les vhosts servis, tous les backends
+# et leurs adresses, tous les certificats avec leurs dates d'expiration. C'est
+# la carte de la boite. Elles etaient documentees « public » comme le reste du
+# motif three-fold, mais elles ne rendent pas un etat de service : elles
+# rendent la topologie. Le tableau de bord qui les consomme vit sur la webui
+# admin, ou l'operateur est connecte — require_jwt accepte le cookie de
+# session, la carte continue de s'afficher.
+@router.get("/vhosts", dependencies=[Depends(require_jwt)])
 async def list_vhosts():
     """List vhosts (public)."""
     return {"vhosts": _load_vhosts()}
@@ -881,7 +889,7 @@ async def set_vhost_waf_bypass(name: str, req: WAFBypassRequest):
 
 # ── Backends ──────────────────────────────────────────────────────
 
-@router.get("/backends")
+@router.get("/backends", dependencies=[Depends(require_jwt)])
 async def list_backends():
     """List backends including WAF inspector (public)."""
     backends = _load_backends()
@@ -969,7 +977,7 @@ def _parse_certificate(cert_path: Path) -> CertificateInfo:
     return info
 
 
-@router.get("/certificates")
+@router.get("/certificates", dependencies=[Depends(require_jwt)])
 async def list_certificates():
     """List certificates with expiry info (public)."""
     certs = []
@@ -2201,11 +2209,27 @@ async def migrate(req: MigrateRequest):
 # WebUI Identity Endpoints (issue #44 — admin.<HOSTNAME>.<SUFFIX> only)
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/webui/admin-domain")
+# CE NOM D'HOTE EST UNE CLE, PAS UNE INFORMATION ANODINE (#1261).
+#
+# La docstring disait « No auth required (info is not secret) ». C'etait vrai
+# tant que l'obfuscation du domaine admin (#44) n'etait pas porteuse. Elle
+# l'est : c'est la SEULE barriere devant les centaines de routes d'admin encore
+# sans garde (#1256), et le vhost admin est route par le backend `webui_direct`,
+# qui court-circuite l'inspection sbxwaf (#861).
+#
+# ET LA SOCKET N'EST PAS LA PROTECTION QU'ON CROYAIT. Le test justifiait le
+# libre acces par « the unix socket is root-only at the filesystem level » :
+# nginx proxifie `/api/v1/haproxy/` vers cette socket SANS auth_request, depuis
+# un bloc `server` attrape-tout, et l'unite tourne en `UMask=0000`. Rendre le
+# domaine admin a un anonyme, c'est lui donner l'adresse de la porte qu'on
+# esperait qu'il ne trouve pas.
+@app.get("/webui/admin-domain", dependencies=[Depends(require_jwt)])
 async def webui_admin_domain():
     """Return the canonical admin URL identity for this board.
 
-    Reads /etc/default/secubox. No auth required (info is not secret).
+    Reads /etc/default/secubox. GARDE (#1261) : ce nom d'hote est la seule
+    barriere devant les routes d'admin encore sans garde — voir la note
+    au-dessus du decorateur.
     """
     try:
         return _webui_identity.get_identity()
@@ -2237,11 +2261,14 @@ def _render_nginx_vhost(ident: dict) -> str:
     )
 
 
-@app.get("/webui/nginx-config", response_class=PlainTextResponse)
+# Garde avec /webui/admin-domain, et pas separement : ce rendu CONTIENT la
+# regex du domaine admin, plus la topologie interne (port 9080, racine servie,
+# includes). Fermer l'un en laissant l'autre ne fermerait rien.
+@app.get("/webui/nginx-config", response_class=PlainTextResponse, dependencies=[Depends(require_jwt)])
 async def webui_nginx_config():
     """Return the rendered nginx vhost for the WebUI (text/plain).
 
-    Public — content is fully derivable from the public /webui/admin-domain.
+    Garde comme /webui/admin-domain, dont le contenu est derivable (#1261).
     Unix socket access is root-only (postinst trigger context).
     """
     try:

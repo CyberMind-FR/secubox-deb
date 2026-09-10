@@ -1,3 +1,13 @@
+secubox-wireguard (1.1.2-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT SUR /peers ET /interfaces (#1261). La liste des pairs d'un VPN
+    n'est pas une donnee de tableau de bord : cles publiques, adresses
+    autorisees, derniers handshakes, ports d'ecoute — la carte du mesh et de
+    qui s'y connecte. L'appelant est le tableau de bord servi par la webui
+    admin, ou l'operateur est connecte (require_jwt accepte le cookie).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 22:10:00 +0200
+
 secubox-wireguard (1.1.1-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

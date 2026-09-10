@@ -24,7 +24,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from fastapi.middleware.cors import CORSMiddleware
 
 from .posture import cspn, tpn
@@ -110,6 +111,11 @@ async def lifespan(app: FastAPI):
         task.cancel()
 
 
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
+
 app = FastAPI(
     title="SecuBox Security Posture",
     description="Honest, board-truthful security posture scorecard.",
@@ -169,7 +175,7 @@ async def get_tpn():
     return _snapshot()["tpn"]
 
 
-@app.post("/refresh")
+@app.post("/refresh", dependencies=[Depends(require_jwt)])
 async def refresh():
     await _refresh_once()
     return {"status": "refreshed", "timestamp": _state["snapshot"]["timestamp"]}

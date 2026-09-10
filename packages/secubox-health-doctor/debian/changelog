@@ -1,3 +1,9 @@
+secubox-health-doctor (1.0.3-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT (#1256) sur /run.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 22:10:00 +0200
+
 secubox-health-doctor (1.0.2-1~bookworm1) bookworm; urgency=high
 
   * Retire `RuntimeDirectory=secubox` (ref #1022). Ce repertoire est PARTAGE par

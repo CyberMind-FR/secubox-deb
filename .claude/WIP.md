@@ -35,9 +35,18 @@
 - ~~**#1256 écritures des modules partiels**~~ → **fait** : les 58 écritures
   triées une par une — 12 fermées, 46 reclassées publiques à dessein dans
   `tests/publiques-assumees.txt` avec leur raison. Dette 526 → 468.
-- **#1256 lectures** : 397 GET nues restent, sur ~90 modules. C'est le gros du
-  reste, et le seul où « donnée publique ou pas » se décide module par module —
-  pas d'automatisation possible sans décider à la place de l'opérateur.
+- ~~**#1256 écritures**~~ → **terminé : le parc ne porte plus une seule route
+  d'écriture sans garde.** Les 17 dernières fermées, les 3 de `portal` assumées.
+- **#1261 — fuite du domaine admin fermée** : `/webui/admin-domain` et
+  `/webui/nginx-config` rendaient à un anonyme la seule barrière devant l'API
+  d'admin. Plus 9 lectures de reconnaissance (topologie HAProxy, pairs
+  WireGuard, inventaire/journaux système).
+- **#1256 lectures — arbitrage à rendre** : 440 GET restent, dont ~130
+  **documentées publiques dans le code** (motif three-fold : status/components/
+  access pour les tableaux de bord). Ce n'est pas de l'oubli, c'est un choix
+  d'architecture. La question à trancher : la lecture publique reste de la
+  reconnaissance offerte — garde-t-on le motif, ou passe-t-on le parc en
+  lecture gardée avec un mode « tableau de bord » explicite ?
 - **À trancher (marqué A CONFIRMER dans `publiques-assumees.txt`)** : les routes
   du Hall (`webos` broadcast, `zia` /v1/chat, `ai-gateway`) et le transport
   `lyrion` restent publiques parce que les cardlets les appellent depuis le

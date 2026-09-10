@@ -1,3 +1,27 @@
+secubox-haproxy (1.8.13-1~bookworm1) bookworm; urgency=high
+
+  * FUITE DU DOMAINE ADMIN — GARDE (#1261). /webui/admin-domain et
+    /webui/nginx-config etaient publics, justifies par « info is not secret »
+    et « the unix socket is root-only at the filesystem level ». Les deux
+    justifications tombent : nginx proxifie location /api/v1/haproxy/ vers
+    cette socket SANS auth_request depuis un bloc server attrape-tout, et
+    l'unite tourne en UMask=0000. Or ce nom d'hote EST la seule barriere
+    devant les routes d'admin encore sans garde (#1256), sur un vhost route
+    par webui_direct, hors inspection sbxwaf (#861). Un anonyme obtenait
+    l'adresse de la porte.
+  * haproxyctl n'est pas casse : _fetch_webui_regex retombe deja sur la
+    lecture directe de /etc/default/secubox quand l'appel echoue (curl -sf
+    echoue sur 401) — et cette source locale vaut mieux que l'API.
+  * /certificates, /vhosts et /backends gardees : elles ne rendent pas un etat
+    de service mais la TOPOLOGIE (tous les vhosts, tous les backends et leurs
+    adresses, tous les certificats avec expiration). Le tableau de bord qui les
+    consomme vit sur la webui admin, ou require_jwt accepte le cookie de
+    session — l'affichage continue.
+  * test_nginx_config_is_public devient test_les_deux_routes_webui_exigent_un_
+    jeton : le contrat est renverse, pas contourne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 22:10:00 +0200
+
 secubox-haproxy (1.8.12-1~bookworm1) bookworm; urgency=medium
 
   * haproxyctl generate : REPARE (haproxyctl 1.1.1). Deux pannes distinctes,
