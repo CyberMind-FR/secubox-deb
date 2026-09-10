@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # SecuBox Freebox TV — streamer on-demand (#1238). Usage personnel LAN.
 playlist_url = "http://mafreebox.freebox.fr/freeboxtv/playlist.m3u"
 hls_dir = "/run/secubox/freeboxtv/hls"

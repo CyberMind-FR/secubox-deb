@@ -403,10 +403,15 @@ func TestLaPolitiqueDeLaPageNOuvreRienVersLExterieur(t *testing.T) {
 			t.Errorf("directive manquante : %s\n%s", d, csp)
 		}
 	}
-	for _, interdit := range []string{"unsafe-inline", "unsafe-eval", "youtube", "*"} {
+	for _, interdit := range []string{"unsafe-eval", "youtube", "*"} {
 		if strings.Contains(csp, interdit) {
 			t.Errorf("la politique contient %q :\n%s", interdit, csp)
 		}
+	}
+	// 'unsafe-inline' n'est toléré que dans style-src (7a58996, #1238-suite) :
+	// un style n'exécute aucun code ; script-src doit rester strict.
+	if strings.Contains(csp[:strings.Index(csp, "style-src")], "unsafe-inline") {
+		t.Errorf("'unsafe-inline' hors de style-src :\n%s", csp)
 	}
 }
 
