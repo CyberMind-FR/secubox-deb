@@ -175,10 +175,15 @@
           lire('sbx.viewer.hist').map(function(x){ return x&&x.u; }));
         var chg=false, m=litTitres();
         urls.forEach(function(u){
-          if(!u || m[u] || !/youtube|youtu\.be/.test(hote(u))) return;
+          if(!u || m[u]) return;
+          // URL SOUVERAINE (/api/v1/ytsas/stream/<id>, ex. les propositions) :
+          // l'id EST celui de la biblio → titre direct, sans sonde.
+          var sm=String(u).match(/\/ytsas\/stream\/([^/?#]+)/);
+          if(sm){ if(parId[sm[1]]){ ecritTitre(u, parId[sm[1]]); chg=true; } return; }
+          if(!/youtube|youtu\.be/.test(hote(u))) return;   // autres hôtes : libellé composé
           var id=ident(u);
-          if(id && parId[id]){ ecritTitre(u, parId[id]); chg=true; }  // en biblio
-          else sonderTitre(u);   // jamais rapatrié : sonde métadonnées-seules
+          if(id && parId[id]){ ecritTitre(u, parId[id]); chg=true; }  // youtube en biblio
+          else sonderTitre(u);   // youtube jamais rapatrié : sonde métadonnées-seules
         });
         if(chg) rend();
       }).catch(function(){});

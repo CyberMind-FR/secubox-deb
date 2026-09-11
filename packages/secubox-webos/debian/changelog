@@ -1,3 +1,12 @@
+secubox-webos (1.0.293-1~bookworm1) bookworm; urgency=medium
+
+  * Surf & Viewer : titres smart AUSSI pour la slice Propositions — les URLs
+    souveraines /api/v1/ytsas/stream/<id> (affichées « api <id> ») sont
+    rapprochées de la bibliothèque ytsas par leur id (titre direct, sans sonde).
+    Étend la résolution des favoris aux propositions/liens diffusés au parc.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Sep 2026 15:00:00 +0200
+
 secubox-webos (1.0.292-1~bookworm1) bookworm; urgency=medium
 
   * Surf & Viewer : titres smart AUSSI pour les favoris YouTube jamais rapatriés
