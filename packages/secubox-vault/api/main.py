@@ -15,7 +15,26 @@ from datetime import datetime
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from secubox_core.auth import require_jwt
 
+
+# GARDE JWT SUR TOUTE L'API (#1256).
+#
+# `.claude/MODULE-COMPLIANCE.md` §Authentication : « All endpoints (except
+# /health) MUST use JWT authentication ». Ce module ne l'appliquait NULLE PART
+# — il importait meme `Depends` sans jamais s'en servir.
+#
+# ET IL N'Y AVAIT AUCUN RATTRAPAGE EN AMONT, c'est ce qui rend l'oubli grave :
+# l'aggregator se contente de `app.mount()` sans middleware, le snippet nginx
+# `secubox-proxy.conf` TRANSMET l'en-tete `Authorization` (`proxy_set_header`)
+# sans jamais le verifier, et `auth_request /__sbx_auth_verify` n'est cable que
+# sur une poignee de vhosts — ou il teste l'appartenance au LAN, pas un jeton.
+# La seule barriere restante etait l'obfuscation du nom d'hote admin.
+#
+# `dependencies=[...]` PLUTOT QU'UN PARAMETRE `user=Depends(...)` : la garde
+# porte sur la route, pas sur la signature. Aucun corps de fonction n'est
+# touche, donc aucun risque d'en changer le comportement en la posant — et une
+# route ajoutee plus tard sans garde se voit d'un coup d'oeil.
 app = FastAPI(title="SecuBox Vault API", version="1.0.0")
 
 VAULT_DIR = "/var/lib/secubox/vault"
@@ -132,7 +151,7 @@ def health():
     return {"status": "ok", "service": "vault"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get vault status."""
     secrets = load_secrets()
@@ -152,7 +171,7 @@ def get_status():
     }
 
 
-@app.get("/secrets")
+@app.get("/secrets", dependencies=[Depends(require_jwt)])
 def list_secrets():
     """List all secret keys (without values)."""
     secrets = load_secrets()
@@ -170,7 +189,7 @@ def list_secrets():
     return {"secrets": items}
 
 
-@app.get("/secrets/{key}")
+@app.get("/secrets/{key}", dependencies=[Depends(require_jwt)])
 def get_secret(key: str):
     """Get a specific secret."""
     secrets = load_secrets()
@@ -191,7 +210,7 @@ def get_secret(key: str):
     }
 
 
-@app.post("/secrets")
+@app.post("/secrets", dependencies=[Depends(require_jwt)])
 def create_secret(secret: Secret):
     """Create a new secret."""
     secrets = load_secrets()
@@ -214,7 +233,7 @@ def create_secret(secret: Secret):
     return {"status": "created", "key": secret.key}
 
 
-@app.put("/secrets/{key}")
+@app.put("/secrets/{key}", dependencies=[Depends(require_jwt)])
 def update_secret(key: str, update: SecretUpdate):
     """Update an existing secret."""
     secrets = load_secrets()
@@ -234,7 +253,7 @@ def update_secret(key: str, update: SecretUpdate):
     return {"status": "updated", "key": key}
 
 
-@app.delete("/secrets/{key}")
+@app.delete("/secrets/{key}", dependencies=[Depends(require_jwt)])
 def delete_secret(key: str):
     """Delete a secret."""
     secrets = load_secrets()
@@ -249,7 +268,7 @@ def delete_secret(key: str):
     return {"status": "deleted", "key": key}
 
 
-@app.post("/secrets/{key}/rotate")
+@app.post("/secrets/{key}/rotate", dependencies=[Depends(require_jwt)])
 def rotate_secret(key: str):
     """Rotate (regenerate) a secret value."""
     secrets = load_secrets()
@@ -271,7 +290,7 @@ def rotate_secret(key: str):
     return {"status": "rotated", "key": key, "new_value": new_value}
 
 
-@app.get("/secrets/search/{query}")
+@app.get("/secrets/search/{query}", dependencies=[Depends(require_jwt)])
 def search_secrets(query: str):
     """Search secrets by key or description."""
     secrets = load_secrets()
@@ -289,7 +308,7 @@ def search_secrets(query: str):
     return {"query": query, "results": results}
 
 
-@app.get("/secrets/tag/{tag}")
+@app.get("/secrets/tag/{tag}", dependencies=[Depends(require_jwt)])
 def get_secrets_by_tag(tag: str):
     """Get secrets by tag."""
     secrets = load_secrets()
@@ -306,7 +325,7 @@ def get_secrets_by_tag(tag: str):
     return {"tag": tag, "secrets": results}
 
 
-@app.get("/audit")
+@app.get("/audit", dependencies=[Depends(require_jwt)])
 def get_audit_log(lines: int = 50):
     """Get recent audit log entries."""
     if not os.path.exists(AUDIT_LOG):
@@ -329,7 +348,7 @@ def get_audit_log(lines: int = 50):
     return {"entries": entries}
 
 
-@app.post("/generate")
+@app.post("/generate", dependencies=[Depends(require_jwt)])
 def generate_secret(length: int = 32, type: str = "urlsafe"):
     """Generate a random secret value."""
     import secrets as py_secrets
@@ -346,7 +365,7 @@ def generate_secret(length: int = 32, type: str = "urlsafe"):
     return {"value": value, "type": type, "length": len(value)}
 
 
-@app.post("/export")
+@app.post("/export", dependencies=[Depends(require_jwt)])
 def export_secrets(include_values: bool = False):
     """Export secrets (optionally with values)."""
     secrets = load_secrets()
@@ -369,7 +388,7 @@ def export_secrets(include_values: bool = False):
     return {"secrets": export_data, "count": len(export_data)}
 
 
-@app.post("/import")
+@app.post("/import", dependencies=[Depends(require_jwt)])
 def import_secrets(secrets_data: list, overwrite: bool = False):
     """Import secrets from export data."""
     secrets = load_secrets()

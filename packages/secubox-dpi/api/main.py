@@ -14,6 +14,7 @@ Enhanced features:
 - Traffic anomaly detection
 """
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, BackgroundTasks
+from secubox_core.auth import require_lecture
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
@@ -70,7 +71,7 @@ async def health_check():
     return {"status": "ok", "module": "deb"}
 
 
-@app.get("/exfil")
+@app.get("/exfil", dependencies=[Depends(require_lecture)])
 async def exfil_state():
     """#687 Phase 2 — per-device cloud-exfiltration state produced by the Go
     collector (secubox-dpi-flowcap → secubox-dpi-collector). Fail-empty so the
@@ -87,7 +88,7 @@ async def exfil_state():
             "note": "no capture window completed yet (or wg-toolbox idle)"}
 
 
-@app.get("/history")
+@app.get("/history", dependencies=[Depends(require_lecture)])
 async def exfil_history(device: str = "", days: int = 14):
     """#720 — per-device DAILY timeline from the collector history.json. Without
     ?device, returns board-wide daily totals. Fail-empty."""
@@ -700,32 +701,32 @@ async def dpi_countries(user=Depends(require_jwt)):
 pub = APIRouter(prefix="/pub")
 
 
-@pub.get("/stats")
+@pub.get("/stats", dependencies=[Depends(require_lecture)])
 def pub_stats():
     return _derive_stats()
 
 
-@pub.get("/usage")
+@pub.get("/usage", dependencies=[Depends(require_lecture)])
 def pub_usage():
     return _derive_usage()
 
 
-@pub.get("/suggestions")
+@pub.get("/suggestions", dependencies=[Depends(require_lecture)])
 def pub_suggestions():
     return _derive_suggestions()
 
 
-@pub.get("/sessions")
+@pub.get("/sessions", dependencies=[Depends(require_lecture)])
 def pub_sessions():
     return _derive_sessions()
 
 
-@pub.get("/clients")
+@pub.get("/clients", dependencies=[Depends(require_lecture)])
 def pub_clients():
     return _derive_clients()
 
 
-@pub.get("/countries")
+@pub.get("/countries", dependencies=[Depends(require_lecture)])
 def pub_countries():
     return _derive_countries()
 

@@ -37,6 +37,7 @@ from fastapi import (APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcept
 from fastapi.responses import JSONResponse
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 # Relatif d'abord : sous l'agregateur, seul le repertoire PARENT de api/ est
 # sur sys.path, donc `import depot` en absolu n'y resout rien. En execution
@@ -118,7 +119,7 @@ def origine(r: Request) -> str:
     return (r.client.host if r.client else "inconnu")[:64]
 
 
-@router.get("/depot/reglages")
+@router.get("/depot/reglages", dependencies=[Depends(require_lecture)])
 async def reglages_publics():
     """Ce que le déposant a besoin de savoir AVANT d'envoyer.
 
@@ -301,7 +302,7 @@ async def liste_depots(borne: int = 50):
     return {"depots": out, "total": len(out)}
 
 
-@router.get("/depot/sante")
+@router.get("/depot/sante", dependencies=[Depends(require_lecture)])
 async def sante_depot():
     """La santé REPOSE SUR UNE ECRITURE, pas sur l'existence du dossier.
 

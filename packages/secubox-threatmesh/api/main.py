@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 
 from secubox_core.auth import require_jwt
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 log = get_logger("threatmesh")
 
@@ -199,7 +200,7 @@ async def health():
     return {"status": "ok", "module": "deb"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     src = counts_by_source()
     feeds = {k: v for k, v in src.items() if k.startswith("feed:")}
@@ -215,12 +216,12 @@ async def status():
     }
 
 
-@router.get("/peers")
+@router.get("/peers", dependencies=[Depends(require_lecture)])
 async def peers():
     return {"node": node_id(), "peers": mesh_peers()}
 
 
-@router.get("/decisions")
+@router.get("/decisions", dependencies=[Depends(require_lecture)])
 async def decisions(min_consensus: int = 1, limit: int = 50000):
     """Aggregated sovereign blocklist (feeds + mesh + local). Bouncer-friendly
     shape so external consumers can poll OUR server, not a third-party service."""

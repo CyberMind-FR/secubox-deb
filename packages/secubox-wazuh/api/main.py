@@ -4,7 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """SecuBox Wazuh API - SIEM integration."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 import subprocess
 import json
@@ -12,6 +13,20 @@ import os
 import requests
 from datetime import datetime, timedelta
 from typing import Optional
+
+# GARDE JWT SUR TOUTE L'API (#1256, lot P1).
+#
+# MODULE-COMPLIANCE.md §Authentication : « All endpoints (except /health) MUST
+# use JWT authentication ». Ce module ne l'appliquait nulle part.
+#
+# ET RIEN NE RATTRAPAIT L'OUBLI EN AMONT : l'aggregator se contente de
+# `app.mount()` sans middleware, le snippet nginx `secubox-proxy.conf`
+# TRANSMET l'en-tete `Authorization` sans jamais le verifier, et
+# `auth_request /__sbx_auth_verify` teste l'appartenance au LAN, pas un jeton.
+#
+# `dependencies=[...]` plutot qu'un parametre `user=Depends(...)` : la garde
+# porte sur la route, aucun corps de fonction n'est touche, et une route
+# ajoutee plus tard sans garde se voit d'un coup d'oeil.
 
 app = FastAPI(title="SecuBox Wazuh API", version="1.0.0")
 
@@ -175,7 +190,7 @@ def health():
     return {"status": "ok", "service": "wazuh"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get Wazuh status."""
     manager_running = is_wazuh_manager_running()
@@ -201,7 +216,7 @@ def get_status():
     }
 
 
-@app.get("/alerts")
+@app.get("/alerts", dependencies=[Depends(require_jwt)])
 def list_alerts(count: int = 50, level: int = None):
     """Get recent alerts."""
     alerts = get_recent_alerts(count)
@@ -212,13 +227,13 @@ def list_alerts(count: int = 50, level: int = None):
     return {"alerts": alerts, "count": len(alerts)}
 
 
-@app.get("/alerts/stats")
+@app.get("/alerts/stats", dependencies=[Depends(require_jwt)])
 def get_alerts_stats():
     """Get alert statistics."""
     return get_alert_stats()
 
 
-@app.get("/alerts/{alert_id}")
+@app.get("/alerts/{alert_id}", dependencies=[Depends(require_jwt)])
 def get_alert(alert_id: str):
     """Get specific alert by ID."""
     alerts = get_recent_alerts(1000)
@@ -230,7 +245,7 @@ def get_alert(alert_id: str):
     raise HTTPException(status_code=404, detail="Alert not found")
 
 
-@app.post("/agent/start")
+@app.post("/agent/start", dependencies=[Depends(require_jwt)])
 def start_agent():
     """Start Wazuh agent."""
     stdout, stderr, code = run_cmd(["systemctl", "start", "wazuh-agent"])
@@ -239,7 +254,7 @@ def start_agent():
     return {"status": "started"}
 
 
-@app.post("/agent/stop")
+@app.post("/agent/stop", dependencies=[Depends(require_jwt)])
 def stop_agent():
     """Stop Wazuh agent."""
     stdout, stderr, code = run_cmd(["systemctl", "stop", "wazuh-agent"])
@@ -248,7 +263,7 @@ def stop_agent():
     return {"status": "stopped"}
 
 
-@app.post("/agent/restart")
+@app.post("/agent/restart", dependencies=[Depends(require_jwt)])
 def restart_agent():
     """Restart Wazuh agent."""
     stdout, stderr, code = run_cmd(["systemctl", "restart", "wazuh-agent"])
@@ -257,7 +272,7 @@ def restart_agent():
     return {"status": "restarted"}
 
 
-@app.post("/agent/register")
+@app.post("/agent/register", dependencies=[Depends(require_jwt)])
 def register_agent(config: ManagerConfig):
     """Register agent with Wazuh manager."""
     # Import agent key using agent-auth
@@ -299,7 +314,7 @@ def register_agent(config: ManagerConfig):
     return {"status": "registered", "manager": config.manager_ip}
 
 
-@app.post("/manager/start")
+@app.post("/manager/start", dependencies=[Depends(require_jwt)])
 def start_manager():
     """Start Wazuh manager."""
     stdout, stderr, code = run_cmd(["systemctl", "start", "wazuh-manager"])
@@ -308,7 +323,7 @@ def start_manager():
     return {"status": "started"}
 
 
-@app.post("/manager/stop")
+@app.post("/manager/stop", dependencies=[Depends(require_jwt)])
 def stop_manager():
     """Stop Wazuh manager."""
     stdout, stderr, code = run_cmd(["systemctl", "stop", "wazuh-manager"])
@@ -317,7 +332,7 @@ def stop_manager():
     return {"status": "stopped"}
 
 
-@app.post("/manager/restart")
+@app.post("/manager/restart", dependencies=[Depends(require_jwt)])
 def restart_manager():
     """Restart Wazuh manager."""
     stdout, stderr, code = run_cmd(["systemctl", "restart", "wazuh-manager"])
@@ -326,7 +341,7 @@ def restart_manager():
     return {"status": "restarted"}
 
 
-@app.get("/agents")
+@app.get("/agents", dependencies=[Depends(require_jwt)])
 def list_agents():
     """List connected agents (manager mode only)."""
     if not is_wazuh_manager_running():
@@ -350,7 +365,7 @@ def list_agents():
     return {"agents": agents}
 
 
-@app.get("/syscheck")
+@app.get("/syscheck", dependencies=[Depends(require_jwt)])
 def get_syscheck_status():
     """Get file integrity monitoring status."""
     stdout, stderr, code = run_cmd(["/var/ossec/bin/syscheck_control", "-l"])
@@ -364,7 +379,7 @@ def get_syscheck_status():
     return {"monitored_files": len(files), "files": files[:100]}
 
 
-@app.get("/rootcheck")
+@app.get("/rootcheck", dependencies=[Depends(require_jwt)])
 def get_rootcheck_status():
     """Get rootkit detection status."""
     stdout, stderr, code = run_cmd(["/var/ossec/bin/rootcheck_control", "-l"])
@@ -372,7 +387,7 @@ def get_rootcheck_status():
     return {"output": stdout if code == 0 else stderr}
 
 
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_jwt)])
 def get_logs(lines: int = 50):
     """Get Wazuh logs."""
     log_file = "/var/ossec/logs/ossec.log"
@@ -388,7 +403,7 @@ def get_logs(lines: int = 50):
         return {"logs": [], "error": str(e)}
 
 
-@app.get("/rules")
+@app.get("/rules", dependencies=[Depends(require_jwt)])
 def list_rules():
     """List active detection rules."""
     rules_dir = "/var/ossec/ruleset/rules"
@@ -405,7 +420,7 @@ def list_rules():
     return {"rules": sorted(rules, key=lambda x: x["name"])}
 
 
-@app.get("/decoders")
+@app.get("/decoders", dependencies=[Depends(require_jwt)])
 def list_decoders():
     """List active decoders."""
     decoders_dir = "/var/ossec/ruleset/decoders"

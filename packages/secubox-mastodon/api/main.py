@@ -20,6 +20,7 @@ import shutil
 import subprocess
 
 from fastapi import Depends, FastAPI, HTTPException
+from secubox_core.auth import require_lecture
 
 try:
     from secubox_core import auth

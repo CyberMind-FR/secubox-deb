@@ -4,7 +4,7 @@
 # Three-fold architecture: Components, Status, Access
 set -e
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 
 LXC_NAME="haproxy"
 LXC_PATH="/var/lib/lxc/$LXC_NAME"
@@ -46,6 +46,30 @@ load_config() {
         MODE=$(grep -E '^mode\s*=' "$CONF_PATH" | cut -d'"' -f2 || echo "native")
         DATA_PATH=$(grep -E '^data_path\s*=' "$CONF_PATH" | cut -d'"' -f2 || echo "$DATA_PATH")
     fi
+}
+
+# CORPS D'UNE TABLE TOML, SANS L'EN-TETE DE LA TABLE SUIVANTE.
+#
+# L'extraction historique etait `sed '/^\[x\]/,/^\[/p' | head -n -1` : la plage
+# sed inclut la ligne d'arret, donc l'en-tete de la table SUIVANTE, et le
+# `head -n -1` servait a la retrancher. Quand la table visee est la DERNIERE du
+# fichier, il n'y a pas d'en-tete suivant a retrancher — c'est une vraie ligne
+# de configuration qui etait mangee, en silence.
+#
+# CE QUE CELA CASSAIT. Le dernier `[backends.X]` du haproxy.toml perdait son
+# `servers = [...]` et sortait dans le cfg genere SANS UN SEUL SERVEUR : un
+# backend sans serveur repond 503 sur tout son trafic. Un dernier `[vhosts.X]`
+# perdait de meme son dernier drapeau — `ssl` absent = plus de redirection
+# HTTPS ni de regle dans frontend https-in pour ce vhost.
+#
+# On s'arrete donc AVANT l'en-tete suivant plutot que de couper apres coup.
+_toml_section() {
+    awk -v want="[$1]" '
+        { ligne = $0; sub(/[[:space:]]+$/, "", ligne) }
+        dedans && ligne ~ /^\[/ { exit }
+        dedans { print }
+        ligne == want { dedans = 1 }
+    ' "$2"
 }
 
 # Fetch the strict-regex pattern from the secubox-haproxy API.
@@ -372,7 +396,7 @@ cmd_access() {
     if [ -f "$CONF_PATH" ]; then
         grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
-            local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local section=$(_toml_section "vhosts.$name" "$CONF_PATH")
             local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
             local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "true" || echo "false")
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "false" || echo "true")
@@ -434,7 +458,7 @@ cmd_vhost_list() {
     if [ -f "$CONF_PATH" ]; then
         grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
-            local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local section=$(_toml_section "vhosts.$name" "$CONF_PATH")
             local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
             local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
             local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "true" || echo "false")
@@ -642,7 +666,7 @@ cmd_backend_list() {
     if [ -f "$CONF_PATH" ]; then
         grep '^\[backends\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[backends\.//;s/\]//')
-            local section=$(sed -n "/^\[backends\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local section=$(_toml_section "backends.$name" "$CONF_PATH")
             local mode=$(echo "$section" | grep -E '^mode\s*=' | cut -d'"' -f2 || echo "http")
             local balance=$(echo "$section" | grep -E '^balance\s*=' | cut -d'"' -f2 || echo "roundrobin")
 
@@ -931,7 +955,7 @@ EOF
         fi
         grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
-            local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local section=$(_toml_section "vhosts.$name" "$CONF_PATH")
             local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
             local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
@@ -1001,14 +1025,14 @@ frontend https-in
     # X-FORWARDED-PROTO, ET IL N'ETAIT POSE NULLE PART (#1269).
     #
     # HAProxy termine le TLS ; nginx ecoute en clair sur 9080 et transmettait
-    # `$scheme`, c'est-a-dire « http ». TOUS les modules croyaient donc servir
+    # \`\$scheme\`, c'est-a-dire « http ». TOUS les modules croyaient donc servir
     # en clair. Consequences constatees : les permaliens de Billets sortaient
     # en http:// — le Hall refusait alors de suivre le lien, origine differente
-    # — et `_secure()` rendait faux, ce qui faisait retomber les cookies sur
+    # — et \`_secure()\` rendait faux, ce qui faisait retomber les cookies sur
     # SameSite=Lax au lieu de None. Le correctif du cadrage etait donc annule
     # en silence par ce seul en-tete manquant.
     #
-    # `set-header` et non `add-header` : la valeur du client est ECRASEE. Un
+    # \`set-header\` et non \`add-header\` : la valeur du client est ECRASEE. Un
     # visiteur qui annoncerait « https » sur le port 80 ferait poser des
     # cookies Secure sur une connexion en clair.
     http-request set-header X-Forwarded-Proto https
@@ -1035,7 +1059,7 @@ EOF
         fi
         grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
-            local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local section=$(_toml_section "vhosts.$name" "$CONF_PATH")
             local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
             local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
             local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
@@ -1178,19 +1202,19 @@ backend sbxwaf_inspector
     mode http
     # TELEVERSEMENTS LONGS : DELAI SERVEUR RELEVE PAR REQUETE (#1030).
     #
-    # La section `defaults` porte `timeout server 30s`, et c'est bien : elle
+    # La section \`defaults\` porte \`timeout server 30s\`, et c'est bien : elle
     # protege TOUS les vhosts d'un amont qui trainerait. Mais un depot de 22 Mio
     # a mis 116 s a s'ecrire sur cette board — HAProxy abandonnait a 30, le
     # deposant voyait un 504, ET LE SERVEUR TERMINAIT LE TRAVAIL. Chaque essai
     # deposait a nouveau : trois depots pour une seule intention.
     #
-    # DEUX LECONS PAYEES A L'ESSAI. `set-timeout` ne vit QUE dans un backend —
+    # DEUX LECONS PAYEES A L'ESSAI. \`set-timeout\` ne vit QUE dans un backend —
     # HAProxy refuse « proxy has no backend capability » cote frontend — et il
-    # ne connait que `server` et `tunnel` : `set-timeout client` n'existe pas.
-    # `timeout client` reste donc a 30 s, ce qui convient : c'est un delai
+    # ne connait que \`server\` et \`tunnel\` : \`set-timeout client\` n'existe pas.
+    # \`timeout client\` reste donc a 30 s, ce qui convient : c'est un delai
     # d'INACTIVITE, et un televersement regulier ne l'atteint jamais.
     #
-    # Relever `defaults` aurait couvert le cas en retirant la protection a la
+    # Relever \`defaults\` aurait couvert le cas en retirant la protection a la
     # centaine de vhosts qui n'en ont pas besoin — payer pour tous ce dont un
     # seul a besoin.
     acl est_depot_long path_beg /api/v1/droplet/depot
@@ -1225,7 +1249,7 @@ EOF
             # Skip backends already emitted (sbxwaf_inspector/webui_direct are
             # auto-generated above) to avoid duplicate-backend fatal errors.
             if grep -q "^backend $name\$" "$out"; then continue; fi
-            local section=$(sed -n "/^\[backends\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local section=$(_toml_section "backends.$name" "$CONF_PATH")
             local mode=$(echo "$section" | grep -E '^mode\s*=' | cut -d'"' -f2 || echo "http")
             local balance=$(echo "$section" | grep -E '^balance\s*=' | cut -d'"' -f2 || echo "roundrobin")
             local servers=$(echo "$section" | grep -E '^servers\s*=' | cut -d'[' -f2 | cut -d']' -f1 | tr -d '"' | tr ',' '\n')

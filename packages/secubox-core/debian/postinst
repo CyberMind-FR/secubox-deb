@@ -60,6 +60,29 @@ case "$1" in
       install -m 644 /usr/share/secubox-core/nginx/secubox-proxy.conf \
         /etc/nginx/snippets/secubox-proxy.conf
 
+      # VERDICT LAN POUR LA LECTURE GARDEE (#1256) — ajoute SI nginx l'accepte.
+      #
+      # `$lan_client` vient de conf.d/secubox-lan-geo.conf, livre par
+      # secubox-hub. hub depend de core, donc core ne peut pas dependre de hub :
+      # sur une board sans ce fichier, la ligne ferait echouer `nginx -t` et
+      # casserait TOUTE la configuration, pas seulement la lecture gardee.
+      #
+      # On l'ajoute, on teste, on la retire si le test echoue. Sans elle,
+      # require_lecture ne voit aucune marque LAN et exige un jeton : on perd
+      # un affichage, pas une barriere.
+      _snip=/etc/nginx/snippets/secubox-proxy.conf
+      if ! grep -q 'X-SecuBox-LAN' "$_snip"; then
+        cp -a "$_snip" "$_snip.sbxbak"
+        printf 'proxy_set_header   X-SecuBox-LAN     $lan_client;\n' >> "$_snip"
+        if nginx -t 2>/dev/null; then
+          rm -f "$_snip.sbxbak"
+        else
+          mv -f "$_snip.sbxbak" "$_snip"
+          echo "secubox-core: \$lan_client indisponible (secubox-hub absent ?) —" \
+               "mode tableau de bord inactif, les lectures exigeront un jeton" >&2
+        fi
+      fi
+
       # Symlink only on first install — never overwrite an existing one
       # (which may point at an HAProxy-aware variant like secubox-local).
       if [ ! -e /etc/nginx/sites-enabled/secubox ]; then

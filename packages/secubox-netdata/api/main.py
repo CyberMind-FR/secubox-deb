@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-netdata", version="2.0.0", root_path="/api/v1/netdata")
 
@@ -367,7 +368,7 @@ async def health():
     return {"status": "ok", "module": "netdata", "version": "2.0.0"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Netdata status for dashboard (public)."""
     cached = stats_cache.get("status")
@@ -390,7 +391,7 @@ async def status():
     return result
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_lecture)])
 async def stats():
     """System stats for dashboard (public)."""
     cached = stats_cache.get("stats")
@@ -424,7 +425,7 @@ async def stats_history(hours: int = 1, user=Depends(require_jwt)):
     }
 
 
-@router.get("/processes")
+@router.get("/processes", dependencies=[Depends(require_lecture)])
 async def processes():
     """Top processes for dashboard (public)."""
     cached = stats_cache.get("processes")
@@ -456,7 +457,7 @@ async def processes():
         return {"processes": [], "error": str(e)}
 
 
-@router.get("/alerts")
+@router.get("/alerts", dependencies=[Depends(require_lecture)])
 async def alerts():
     """Alerts for dashboard (public)."""
     cached = stats_cache.get("alerts")
@@ -675,7 +676,7 @@ async def delete_webhook(webhook_id: str, user=Depends(require_jwt)):
     return {"success": True}
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get netdata summary."""
     status_info = await status()
@@ -705,7 +706,7 @@ async def summary():
 
 
 # Aliases for compatibility
-@router.get("/netdata_status")
+@router.get("/netdata_status", dependencies=[Depends(require_lecture)])
 async def netdata_status():
     return await status()
 

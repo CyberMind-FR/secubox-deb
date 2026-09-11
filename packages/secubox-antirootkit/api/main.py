@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel
 
 from api.execlog import ExecLog
@@ -114,7 +115,7 @@ def create_app(
     log = execlog if execlog is not None else _default_execlog()
     astore = alertstore if alertstore is not None else _default_alertstore()
 
-    @app.get("/status")
+    @app.get("/status", dependencies=[Depends(require_lecture)])
     def get_status():
         """Small status blob for the panel header/sidebar badge.
 
@@ -124,12 +125,12 @@ def create_app(
         """
         return {"execlog_rows": log.count()}
 
-    @app.get("/execlog")
+    @app.get("/execlog", dependencies=[Depends(require_lecture)])
     def get_execlog(limit: int = 100):
         """Recent exec forensic log rows (most recent first)."""
         return log.recent(limit=limit)
 
-    @app.get("/alerts")
+    @app.get("/alerts", dependencies=[Depends(require_lecture)])
     def get_alerts(limit: int = 100):
         """Current alert queue (most recent first).
 

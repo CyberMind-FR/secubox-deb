@@ -32,6 +32,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
@@ -456,7 +457,7 @@ app.include_router(auth_router, prefix="/auth")
 # Three-Fold Architecture Endpoints
 # ============================================================================
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def components():
     """List system components (public, three-fold: what)."""
     return {
@@ -494,7 +495,7 @@ async def components():
     }
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access():
     """Show connection endpoints (public, three-fold: how)."""
     import socket
@@ -540,7 +541,7 @@ async def health():
     }
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get current status and metrics."""
     cached = stats_cache.get("status")

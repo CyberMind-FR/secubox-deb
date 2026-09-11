@@ -39,6 +39,7 @@ from lib.upstreamer import (
 from lib.command_handler import (
     Command, execute_command, get_allowed_actions, get_audit_log
 )
+from secubox_core.auth import require_lecture
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -75,7 +76,7 @@ class ConfigUpdate(BaseModel):
 # Public Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get agent status."""
     upstream = get_upstream_status()
@@ -96,21 +97,21 @@ async def health():
     return {"status": "healthy", "module": "soc-agent"}
 
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[Depends(require_lecture)])
 async def get_metrics():
     """Get current node metrics."""
     metrics = await collect_metrics()
     return metrics
 
 
-@app.get("/alerts")
+@app.get("/alerts", dependencies=[Depends(require_lecture)])
 async def get_alerts():
     """Get current security alerts."""
     alerts = await collect_alerts()
     return {"alerts": alerts, "count": len(alerts)}
 
 
-@app.get("/report")
+@app.get("/report", dependencies=[Depends(require_lecture)])
 async def get_report():
     """Get full node report (metrics + alerts)."""
     report = await collect_full_report()
@@ -142,7 +143,7 @@ async def receive_command(cmd: CommandRequest, request: Request):
     return result
 
 
-@app.get("/command/allowed")
+@app.get("/command/allowed", dependencies=[Depends(require_lecture)])
 async def get_allowed_commands():
     """Get list of allowed remote commands."""
     return get_allowed_actions()

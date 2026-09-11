@@ -1,0 +1,20 @@
+# tests/dette-jwt.txt — inventaire des routes API sans garde (#1256)
+#
+# CE FICHIER EST VIDE, ET DOIT LE RESTER.
+#
+# Le 2026-09-10, le parc est passe en LECTURE GARDEE : plus une seule
+# route ne repond sans garde. Deux gardes coexistent :
+#
+#   require_jwt      jeton obligatoire, sans exception — ecritures, secrets,
+#                    cles, journaux, topologie.
+#   require_lecture  jeton, OU mode tableau de bord depuis le LAN si
+#                    l'operateur l'a arme dans secubox.conf. Lectures
+#                    d'affichage.
+#
+# Les sondes de sante (dernier segment health/healthz/readyz/livez/ping/alive)
+# restent publiques ; les exceptions raisonnees vivent dans
+# tests/publiques-assumees.txt, chacune avec sa justification.
+#
+# NE REMETTEZ PAS DE LIGNE ICI POUR FAIRE PASSER UN TEST. Une route nue est
+# desormais un defaut a corriger, plus une dette a inventorier —
+# `test_dette_close` echoue si ce fichier reprend des entrees.

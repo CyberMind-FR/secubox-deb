@@ -35,6 +35,7 @@ from collections import defaultdict
 from functools import wraps
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 import httpx
 
@@ -1097,7 +1098,7 @@ guard = AdGuard(DATA_DIR)
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = guard.get_stats()
@@ -1207,7 +1208,7 @@ async def record_detection(
     return detection
 
 
-@app.get("/check/{domain}")
+@app.get("/check/{domain}", dependencies=[Depends(require_lecture)])
 async def check_domain(domain: str):
     """Check if a domain is blocked (public endpoint)."""
     is_ad, category, rule = guard.is_ad_domain(domain)
@@ -1328,7 +1329,7 @@ async def cleanup_expired_whitelist():
     return {"removed": count}
 
 
-@app.get("/check/whitelist/{domain}")
+@app.get("/check/whitelist/{domain}", dependencies=[Depends(require_lecture)])
 async def check_whitelist(domain: str):
     """Check if domain is whitelisted (public endpoint)."""
     return {

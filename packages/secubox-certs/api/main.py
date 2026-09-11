@@ -16,7 +16,26 @@ import time
 import re
 import ssl
 import socket
+from secubox_core.auth import require_jwt
 
+
+# GARDE JWT SUR TOUTE L'API (#1256).
+#
+# `.claude/MODULE-COMPLIANCE.md` §Authentication : « All endpoints (except
+# /health) MUST use JWT authentication ». Ce module ne l'appliquait NULLE PART
+# — il importait meme `Depends` sans jamais s'en servir.
+#
+# ET IL N'Y AVAIT AUCUN RATTRAPAGE EN AMONT, c'est ce qui rend l'oubli grave :
+# l'aggregator se contente de `app.mount()` sans middleware, le snippet nginx
+# `secubox-proxy.conf` TRANSMET l'en-tete `Authorization` (`proxy_set_header`)
+# sans jamais le verifier, et `auth_request /__sbx_auth_verify` n'est cable que
+# sur une poignee de vhosts — ou il teste l'appartenance au LAN, pas un jeton.
+# La seule barriere restante etait l'obfuscation du nom d'hote admin.
+#
+# `dependencies=[...]` PLUTOT QU'UN PARAMETRE `user=Depends(...)` : la garde
+# porte sur la route, pas sur la signature. Aucun corps de fonction n'est
+# touche, donc aucun risque d'en changer le comportement en la posant — et une
+# route ajoutee plus tard sans garde se voit d'un coup d'oeil.
 app = FastAPI(title="secubox-certs", version="1.0.0", root_path="/api/v1/certs")
 router = APIRouter()
 
@@ -290,7 +309,7 @@ def get_visit_metrics() -> dict:
 # API Endpoints
 # ══════════════════════════════════════════════════════════════════
 
-@router.get("/list")
+@router.get("/list", dependencies=[Depends(require_jwt)])
 async def list_certificates():
     """List all certificates with status and expiry info."""
     certs = _certs_cache if _certs_cache else scan_certificates()
@@ -314,7 +333,7 @@ async def list_certificates():
     }
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_jwt)])
 async def cert_status():
     """Get overall certificate health status."""
     certs = _certs_cache if _certs_cache else scan_certificates()
@@ -354,7 +373,7 @@ async def cert_status():
     }
 
 
-@router.get("/details/{domain}")
+@router.get("/details/{domain}", dependencies=[Depends(require_jwt)])
 def cert_details(domain: str):
     """Get detailed info for a specific certificate."""
     # Find the cert file
@@ -406,7 +425,7 @@ class CertRequest(BaseModel):
     backend_port: int = 8080
 
 
-@router.post("/check")
+@router.post("/check", dependencies=[Depends(require_jwt)])
 def check_domain(req: CertRequest):
     """Pre-flight checks before issuing certificate."""
     checks = []
@@ -467,7 +486,7 @@ def check_domain(req: CertRequest):
     }
 
 
-@router.post("/issue")
+@router.post("/issue", dependencies=[Depends(require_jwt)])
 def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks):
     """Issue a new certificate via ACME."""
     domain = req.domain
@@ -537,7 +556,7 @@ def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks):
     return {"success": False, "error": "Certificate files not found after issuance"}
 
 
-@router.post("/renew/{domain}")
+@router.post("/renew/{domain}", dependencies=[Depends(require_jwt)])
 async def renew_certificate(domain: str):
     """Renew a specific certificate."""
     # Find existing cert
@@ -574,7 +593,7 @@ async def renew_certificate(domain: str):
     }
 
 
-@router.post("/renew-all")
+@router.post("/renew-all", dependencies=[Depends(require_jwt)])
 async def renew_all_expiring():
     """Renew all certificates expiring within 30 days."""
     certs = _certs_cache if _certs_cache else scan_certificates()
@@ -598,7 +617,7 @@ async def renew_all_expiring():
     }
 
 
-@router.delete("/revoke/{domain}")
+@router.delete("/revoke/{domain}", dependencies=[Depends(require_jwt)])
 def revoke_certificate(domain: str):
     """Revoke and delete a certificate."""
     pem_path = CERTS_DIR / f"{domain}.pem"
@@ -622,7 +641,7 @@ def revoke_certificate(domain: str):
     }
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_jwt)])
 async def get_metrics():
     """Get visit and attack metrics for all domains."""
     certs = _certs_cache if _certs_cache else scan_certificates()

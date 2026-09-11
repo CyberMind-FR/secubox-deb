@@ -1,3 +1,24 @@
+secubox-rezapp (1.1.1-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT SUR TOUTE L'API (#1256, lot P1). MODULE-COMPLIANCE.md impose
+    « All endpoints (except /health) MUST use JWT authentication » ; ce
+    module ne l'appliquait nulle part.
+  * 16 routes sur 17 etaient ouvertes, dont POST /app/deploy, POST /app/undeploy
+    et POST /images/pull : deploiement d'images arbitraires sans authentification.
+  * Le module importait deja require_jwt sans l'appliquer a une seule route.
+  * /login, /verify et /logout restent publics : ils viennent du routeur
+    secubox_core.auth et sont les points d'entree qui DELIVRENT le jeton.
+  * Et rien ne rattrapait l'oubli en amont : l'aggregator se contente de
+    app.mount() sans middleware, le snippet nginx secubox-proxy.conf TRANSMET
+    l'en-tete Authorization sans jamais le verifier, et auth_request
+    /__sbx_auth_verify teste l'appartenance au LAN, pas un jeton.
+  * dependencies=[Depends(require_jwt)] plutot qu'un parametre user=Depends() :
+    la garde porte sur la route, aucun corps de fonction n'est touche.
+  * /health reste public (sonde systemd/nginx). Verifie a l'execution : toute
+    autre route rend 401 sans jeton. Couvert par tests/test_conformite_jwt.py.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 19:20:00 +0200
+
 secubox-rezapp (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est

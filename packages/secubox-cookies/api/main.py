@@ -12,6 +12,7 @@ License: Proprietary / ANSSI CSPN candidate
 """
 
 from fastapi import FastAPI, Depends, HTTPException, Query, Request
+from secubox_core.auth import require_lecture
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -118,7 +119,7 @@ async def capture_desarmer():
 # Route d'ingest depuis sbxmitm. Pas de JWT : le proxy poste sur la socket
 # locale de confiance, et recevoir() re-verifie que la fenetre est armee — un
 # post hors fenetre ne garde rien. C'est la defense en profondeur.
-@app.post("/capture")
+@app.post("/capture", dependencies=[Depends(require_jwt)])
 async def capture_recevoir(request: Request):
     ev = await request.json()
     hote = (ev.get("hote") or "").lower()
@@ -573,7 +574,7 @@ async def health():
     }
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get service status"""
     config = load_config()
@@ -594,7 +595,7 @@ async def get_status():
 
 
 # Configuration endpoints
-@app.get("/config")
+@app.get("/config", dependencies=[Depends(require_lecture)])
 async def get_config():
     """Get configuration"""
     return load_config()
@@ -616,7 +617,7 @@ async def update_config(req: ConfigUpdate, user: dict = Depends(require_jwt)):
 
 
 # Cookie tracking endpoints
-@app.get("/cookies")
+@app.get("/cookies", dependencies=[Depends(require_lecture)])
 async def get_cookies(
     domain: Optional[str] = None,
     third_party_only: bool = False,
@@ -655,7 +656,7 @@ async def get_cookies(
     }
 
 
-@app.get("/cookie/{domain}")
+@app.get("/cookie/{domain}", dependencies=[Depends(require_lecture)])
 async def get_cookies_by_domain(domain: str):
     """Get cookies for a specific domain"""
     cookies_db = _cache.get("cookies") or load_cookies_db()
@@ -675,7 +676,7 @@ async def get_cookies_by_domain(domain: str):
 
 
 # Tracker management endpoints
-@app.get("/trackers")
+@app.get("/trackers", dependencies=[Depends(require_lecture)])
 async def get_trackers():
     """Get known tracker patterns"""
     config = load_config()
@@ -759,7 +760,7 @@ async def remove_tracker(tracker_id: str, user: dict = Depends(require_jwt)):
 
 
 # Third-party cookies endpoint
-@app.get("/thirdparty")
+@app.get("/thirdparty", dependencies=[Depends(require_lecture)])
 async def get_third_party_cookies(limit: int = Query(100, ge=1, le=1000)):
     """Get all third-party cookies"""
     cookies_db = _cache.get("cookies") or load_cookies_db()
@@ -782,7 +783,7 @@ async def get_third_party_cookies(limit: int = Query(100, ge=1, le=1000)):
 
 
 # Policy management endpoints
-@app.get("/policies")
+@app.get("/policies", dependencies=[Depends(require_lecture)])
 async def get_policies():
     """Get all cookie policies"""
     config = load_config()
@@ -845,7 +846,7 @@ async def delete_policy(policy_id: str, user: dict = Depends(require_jwt)):
 
 
 # Violations endpoint
-@app.get("/violations")
+@app.get("/violations", dependencies=[Depends(require_lecture)])
 async def get_violations(
     limit: int = Query(100, ge=1, le=1000),
     policy: Optional[str] = None,
@@ -873,7 +874,7 @@ async def get_violations(
 
 
 # Statistics endpoint
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_lecture)])
 async def get_stats():
     """Get cookie statistics"""
     stats = _cache.get("stats")
@@ -941,7 +942,7 @@ async def scan_url(req: ScanRequest, user: dict = Depends(require_jwt)):
 
 
 # Logs endpoint
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_lecture)])
 async def get_logs(
     limit: int = Query(100, ge=1, le=1000),
     event_type: Optional[str] = None
@@ -973,7 +974,7 @@ async def get_logs(
     }
 
 
-@app.get("/info")
+@app.get("/info", dependencies=[Depends(require_lecture)])
 async def get_info():
     """Get module info"""
     return {

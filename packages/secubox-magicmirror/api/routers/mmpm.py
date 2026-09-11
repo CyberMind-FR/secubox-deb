@@ -9,7 +9,8 @@ Folded into secubox-magicmirror in #381 (was its own secubox-mmpm package).
 Mounted under /mmpm by api.main; legacy /api/v1/mmpm/* routes are now
 served by /api/v1/magicmirror/mmpm/*.
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 import subprocess
 import json
@@ -111,7 +112,7 @@ def fetch_module_registry() -> list:
     ]
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get MMPM status and overview (mounted under /mmpm/status)."""
     installed = get_installed_modules()
@@ -125,13 +126,13 @@ def get_status():
     }
 
 
-@router.get("/modules/installed")
+@router.get("/modules/installed", dependencies=[Depends(require_jwt)])
 def list_installed():
     """List installed third-party modules."""
     return {"modules": get_installed_modules()}
 
 
-@router.get("/modules/available")
+@router.get("/modules/available", dependencies=[Depends(require_jwt)])
 def list_available(category: str = None, search: str = None):
     """List available modules from registry."""
     modules = load_module_db()
@@ -151,7 +152,7 @@ def list_available(category: str = None, search: str = None):
     return {"modules": modules}
 
 
-@router.get("/modules/categories")
+@router.get("/modules/categories", dependencies=[Depends(require_jwt)])
 def list_categories():
     """List available module categories."""
     modules = load_module_db()
@@ -162,7 +163,7 @@ def list_categories():
     return {"categories": sorted(categories)}
 
 
-@router.post("/modules/refresh")
+@router.post("/modules/refresh", dependencies=[Depends(require_jwt)])
 def refresh_database():
     """Refresh the module database from registry."""
     modules = fetch_module_registry()
@@ -170,7 +171,7 @@ def refresh_database():
     return {"status": "refreshed", "count": len(modules)}
 
 
-@router.post("/modules/install")
+@router.post("/modules/install", dependencies=[Depends(require_jwt)])
 def install_module(mod: ModuleInstall):
     """Install a module from GitHub."""
     if not mod.name.startswith("MMM-"):
@@ -207,7 +208,7 @@ def install_module(mod: ModuleInstall):
     return {"status": "installed", "module": mod.name, "path": module_path}
 
 
-@router.delete("/modules/{module_name}")
+@router.delete("/modules/{module_name}", dependencies=[Depends(require_jwt)])
 def uninstall_module(module_name: str):
     """Uninstall a module."""
     module_path = f"{MM_MODULES_DIR}/{module_name}"
@@ -224,7 +225,7 @@ def uninstall_module(module_name: str):
     return {"status": "uninstalled", "module": module_name}
 
 
-@router.post("/modules/{module_name}/update")
+@router.post("/modules/{module_name}/update", dependencies=[Depends(require_jwt)])
 def update_module(module_name: str):
     """Update an installed module via git pull."""
     module_path = f"{MM_MODULES_DIR}/{module_name}"
@@ -249,7 +250,7 @@ def update_module(module_name: str):
     return {"status": "updated", "module": module_name, "output": stdout}
 
 
-@router.get("/modules/{module_name}")
+@router.get("/modules/{module_name}", dependencies=[Depends(require_jwt)])
 def get_module_info(module_name: str):
     """Get detailed info about an installed module."""
     module_path = f"{MM_MODULES_DIR}/{module_name}"
@@ -289,7 +290,7 @@ def get_module_info(module_name: str):
     return info
 
 
-@router.get("/search")
+@router.get("/search", dependencies=[Depends(require_jwt)])
 def search_modules(q: str = Query(..., min_length=2)):
     """Search for modules by name or description."""
     modules = load_module_db()

@@ -9,7 +9,7 @@ Homepage: https://cybermind.fr/secubox
 Package: secubox-zigbee
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core (>= 1.0),
+         secubox-core (>= 1.4.0),
          secubox-mqtt (>= 2.4),
          lxc,
          lxc-templates,

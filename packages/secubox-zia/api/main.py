@@ -36,6 +36,7 @@ from .bus import Bus
 from .tools import Tools
 from .remote import Remote
 from . import runtime
+from secubox_core.auth import require_lecture
 
 log = get_logger("zia")
 
@@ -177,7 +178,7 @@ async def health() -> dict:
             "model": CFG.get("model_name"), "uptime_s": round(time.time() - _M["started"])}
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_lecture)])
 async def metrics() -> dict:
     n = _M["chats"] or 1
     objs = await BUS.objets(role="admin")   # compte total (vue admin), pour info
@@ -214,7 +215,7 @@ async def chat(body: ChatIn) -> JSONResponse:
     return JSONResponse(out)
 
 
-@router.get("/capabilities")
+@router.get("/capabilities", dependencies=[Depends(require_lecture)])
 async def capabilities() -> dict:
     """Registre PUBLIC des capacités (bootstrap + manifestes) — lu par le Hall pour
     résoudre une action sémantique en message `sbx` natif (client SBXCapabilities).

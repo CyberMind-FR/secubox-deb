@@ -24,13 +24,15 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from fastapi.middleware.cors import CORSMiddleware
 
 from .posture import cspn, tpn
 from .posture.collectors import collect_all
 from .posture.model import DOMAINS
 from .posture.scoring import build_domain_scores, defcon, findings_from, overall_score
+from secubox_core.auth import require_lecture
 
 log = logging.getLogger("secubox.security-posture")
 
@@ -110,6 +112,11 @@ async def lifespan(app: FastAPI):
         task.cancel()
 
 
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
+
 app = FastAPI(
     title="SecuBox Security Posture",
     description="Honest, board-truthful security posture scorecard.",
@@ -130,19 +137,19 @@ def _snapshot() -> dict:
     return snap
 
 
-@app.get("/overview")
+@app.get("/overview", dependencies=[Depends(require_lecture)])
 async def overview():
     return _snapshot()
 
 
-@app.get("/defcon")
+@app.get("/defcon", dependencies=[Depends(require_lecture)])
 async def get_defcon():
     snap = _snapshot()
     return {"timestamp": snap["timestamp"], "overall": snap["overall"],
             "coverage": snap["coverage"]}
 
 
-@app.get("/domains/{domain}")
+@app.get("/domains/{domain}", dependencies=[Depends(require_lecture)])
 async def get_domain(domain: str):
     if domain not in DOMAINS:
         raise HTTPException(status_code=404, detail=f"unknown domain '{domain}'")
@@ -153,23 +160,23 @@ async def get_domain(domain: str):
     raise HTTPException(status_code=404, detail="domain not in snapshot")
 
 
-@app.get("/findings")
+@app.get("/findings", dependencies=[Depends(require_lecture)])
 async def get_findings():
     snap = _snapshot()
     return {"timestamp": snap["timestamp"], "findings": snap["findings"]}
 
 
-@app.get("/cspn")
+@app.get("/cspn", dependencies=[Depends(require_lecture)])
 async def get_cspn():
     return _snapshot()["cspn"]
 
 
-@app.get("/tpn")
+@app.get("/tpn", dependencies=[Depends(require_lecture)])
 async def get_tpn():
     return _snapshot()["tpn"]
 
 
-@app.post("/refresh")
+@app.post("/refresh", dependencies=[Depends(require_jwt)])
 async def refresh():
     await _refresh_once()
     return {"status": "refreshed", "timestamp": _state["snapshot"]["timestamp"]}

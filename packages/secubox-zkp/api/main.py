@@ -18,6 +18,7 @@ import base64
 from pathlib import Path
 
 import sys
+from secubox_core.auth import require_lecture
 sys.path.insert(0, '/usr/lib/python3/dist-packages')
 try:
     from secubox_core.auth import require_jwt
@@ -68,7 +69,7 @@ class KeygenRequest(BaseModel):
 class KeyRequest(BaseModel):
     name: str
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get ZKP status."""
     init_dirs()
@@ -85,7 +86,7 @@ async def get_status():
         "proofs_dir": str(PROOFS_DIR)
     }
 
-@app.get("/keys")
+@app.get("/keys", dependencies=[Depends(require_lecture)])
 async def list_keys():
     """List all generated keys."""
     init_dirs()

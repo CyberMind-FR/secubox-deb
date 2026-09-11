@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-streamlit
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip, python3-psutil, lxc, debootstrap
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-uvicorn | python3-pip, python3-psutil, lxc, debootstrap
 # chromium powers the Mosaic tab thumbnail capture (streamlit-shotter,
 # #958 — see api/shots.py / common/secubox_core/shotter.py), triggered on
 # wake and on manual "recapturer" clicks, never by a timer. Recommends,

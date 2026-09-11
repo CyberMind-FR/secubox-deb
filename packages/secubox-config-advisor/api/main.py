@@ -25,6 +25,7 @@ from typing import Optional, Dict, List, Any
 from enum import Enum
 
 from fastapi import FastAPI, Depends, HTTPException
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 
 from secubox_core.auth import require_jwt
@@ -788,7 +789,7 @@ advisor = ConfigAdvisor(DATA_DIR)
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = advisor.get_stats()

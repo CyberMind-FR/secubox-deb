@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field, validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -281,7 +282,7 @@ class ZoneCreate(BaseModel):
 
 
 # Public endpoints
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get BIND status"""
     code, out, err = run_cmd(["status-json"])
@@ -293,7 +294,7 @@ async def status():
     return {"running": False, "zones": 0, "records": 0}
 
 
-@app.get("/zones")
+@app.get("/zones", dependencies=[Depends(require_lecture)])
 async def list_zones():
     """List all DNS zones"""
     code, out, err = run_cmd(["zone-list-json"])
@@ -305,7 +306,7 @@ async def list_zones():
     return {"zones": []}
 
 
-@app.get("/zone/{zone_name}/records")
+@app.get("/zone/{zone_name}/records", dependencies=[Depends(require_lecture)])
 async def get_records(zone_name: str):
     """Get records for a zone"""
     code, out, err = run_cmd(["records-json", zone_name])

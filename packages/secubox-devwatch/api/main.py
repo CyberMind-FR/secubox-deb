@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from secubox_core.auth import require_lecture
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -338,7 +339,7 @@ async def health() -> dict:
             "repo": f"{CFG['owner']}/{CFG['repo']}"}
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary() -> JSONResponse:
     if not SUMMARY:
         return JSONResponse({"ok": False, "warming": True,
@@ -351,12 +352,12 @@ async def summary() -> JSONResponse:
     return JSONResponse(out)
 
 
-@router.get("/modules")
+@router.get("/modules", dependencies=[Depends(require_lecture)])
 async def get_modules() -> JSONResponse:
     return JSONResponse(MODULES)
 
 
-@router.get("/flows")
+@router.get("/flows", dependencies=[Depends(require_lecture)])
 async def get_flows() -> dict:
     # Lecture publique : ces chiffres sont ceux qu'affiche le tableau de bord.
     return dict(FLOWS)

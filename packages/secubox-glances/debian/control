@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-glances
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), glances, python3-psutil
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), glances, python3-psutil
 Description: SecuBox Glances Dashboard
  System monitoring module wrapping the Glances monitoring tool.
  Provides real-time CPU, memory, disk, network stats with P31 Phosphor theme.

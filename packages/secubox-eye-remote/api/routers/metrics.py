@@ -18,11 +18,12 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, status, Depends
 from pydantic import BaseModel, Field
 
 from ...core.device_registry import get_device_registry
 from ...core.token_manager import hash_token
+from secubox_core.auth import require_lecture
 
 log = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ def get_system_metrics() -> SystemMetrics:
     )
 
 
-@router.get("/metrics", response_model=SystemMetrics)
+@router.get("/metrics", response_model=SystemMetrics, dependencies=[Depends(require_lecture)])
 async def get_metrics(
     authorization: Optional[str] = Header(None),
 ) -> SystemMetrics:

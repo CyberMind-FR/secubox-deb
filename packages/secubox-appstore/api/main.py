@@ -16,7 +16,9 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_lecture
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 
 CATALOG_FILE = Path(os.environ.get(
@@ -24,6 +26,11 @@ CATALOG_FILE = Path(os.environ.get(
 TIER_RANK = {"all": 0, "lite": 1, "standard": 2, "pro": 3}
 _STATE_TTL = 30.0
 _state_cache = {"ts": 0.0, "data": {}}
+
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
 
 app = FastAPI(title="secubox-appstore", version="0.1.0",
               root_path="/api/v1/appstore")
@@ -123,7 +130,7 @@ async def health():
             "catalog_count": len(load_catalog()), "board_tier": board_tier()}
 
 
-@app.get("/categories")
+@app.get("/categories", dependencies=[Depends(require_lecture)])
 async def categories():
     st = compute_state()
     cats: dict = {}
@@ -137,7 +144,7 @@ async def categories():
     }
 
 
-@app.get("/catalog")
+@app.get("/catalog", dependencies=[Depends(require_lecture)])
 async def catalog(category: Optional[str] = None, tier: Optional[str] = None,
                   state: Optional[str] = None, q: Optional[str] = None):
     st = compute_state()
@@ -185,7 +192,7 @@ def _read_directory():
         return [], {}
 
 
-@app.get("/mesh-catalog")
+@app.get("/mesh-catalog", dependencies=[Depends(require_lecture)])
 async def mesh_catalog():
     offers, nodes = _read_directory()
     items = []
@@ -213,7 +220,7 @@ async def mesh_catalog():
     }
 
 
-@app.get("/module/{name}")
+@app.get("/module/{name}", dependencies=[Depends(require_lecture)])
 async def module(name: str):
     st = compute_state()
     if name not in st:
@@ -260,7 +267,7 @@ def _config_path(name: str) -> Path:
     return Path(f"/etc/secubox/{short}.toml")
 
 
-@app.post("/module/{name}/action/{verb}")
+@app.post("/module/{name}/action/{verb}", dependencies=[Depends(require_jwt)])
 async def module_action(name: str, verb: str):
     name = _resolve(name, compute_state())
     if verb not in ACTIONS:
@@ -273,7 +280,7 @@ async def module_action(name: str, verb: str):
             "state": new.get("state"), "running": new.get("running"), "message": out}
 
 
-@app.get("/module/{name}/config")
+@app.get("/module/{name}/config", dependencies=[Depends(require_lecture)])
 async def get_config(name: str):
     name = _resolve(name, compute_state())
     p = _config_path(name)
@@ -286,7 +293,7 @@ async def get_config(name: str):
         return {"module": name, "path": str(p), "exists": True, "readable": False, "content": ""}
 
 
-@app.put("/module/{name}/config")
+@app.put("/module/{name}/config", dependencies=[Depends(require_jwt)])
 async def put_config(name: str, body: ConfigIn):
     name = _resolve(name, compute_state())
     rc, out, err = _appstorectl(["write-config", name], input_text=body.content)

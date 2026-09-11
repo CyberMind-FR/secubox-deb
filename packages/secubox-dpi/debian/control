@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-dpi
 Architecture: any
-Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2, libndpi-bin,
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), iproute2, libndpi-bin,
  python3-geoip2, geoip-database
 Recommends: secubox-ndpid
 Description: SecuBox DPI Analytics — nDPId/sbxdpi app/protocol classification

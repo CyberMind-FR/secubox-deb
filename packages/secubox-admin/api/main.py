@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, APIRouter, Depends, Query, HTTPException
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
@@ -418,7 +419,7 @@ async def health():
 
 
 # Status endpoint (public for dashboard widgets)
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """System status overview."""
     return _get_system_status()
@@ -580,7 +581,7 @@ async def run_update(request: UpdateRequest, user=Depends(require_jwt)):
     return result
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get admin summary for dashboard widget."""
     status_info = _get_system_status()

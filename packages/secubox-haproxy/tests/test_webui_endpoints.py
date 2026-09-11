@@ -23,7 +23,15 @@ def client(tmp_path, monkeypatch):
     """))
     monkeypatch.setattr(wi, "DEFAULTS_FILE", p)
     wi.invalidate_cache()
-    return TestClient(api_main.app)
+
+    # LES DEUX ROUTES /webui SONT DESORMAIS GARDEES (#1261). On surcharge la
+    # dependance plutot que de fabriquer un jeton : ces tests portent sur le
+    # RENDU de l'identite et du vhost, pas sur la cryptographie du jeton, et un
+    # faux JWT casserait au prochain changement de secret.
+    from secubox_core.auth import require_jwt
+    api_main.app.dependency_overrides[require_jwt] = lambda: None
+    yield TestClient(api_main.app)
+    api_main.app.dependency_overrides.clear()
 
 
 def test_admin_domain_returns_canonical_identity(client):
@@ -48,12 +56,31 @@ def test_admin_domain_503_when_unset(client, tmp_path, monkeypatch):
     assert "SECUBOX_HOSTNAME" in r.json()["detail"]
 
 
-def test_nginx_config_is_public(client):
-    """Endpoint is intentionally public — content is derivable from /webui/admin-domain
-    and the unix socket is root-only at the filesystem level."""
-    r = client.get("/webui/nginx-config")
-    assert r.status_code == 200
-    assert r.headers["content-type"].startswith("text/plain")
+def test_les_deux_routes_webui_exigent_un_jeton():
+    """Renversement du contrat (#1261) — ces routes etaient publiques A TORT.
+
+    L'ancien test s'appelait `test_nginx_config_is_public` et justifiait le
+    libre acces ainsi : « content is derivable from /webui/admin-domain and the
+    unix socket is root-only at the filesystem level ». Les deux moities sont
+    fausses.
+
+    * La socket n'est pas root-only : l'unite tourne en `UMask=0000`, et
+      surtout nginx proxifie `location /api/v1/haproxy/` vers elle SANS
+      `auth_request`, depuis un bloc `server` attrape-tout. Les permissions du
+      fichier ne protegent rien de ce qui passe par HTTP.
+    * « Derivable de l'autre » n'etait pas un argument pour ouvrir les deux,
+      mais pour les fermer ensemble.
+
+    Ce que ces routes rendent — `admin.<hote>.<suffixe>` et le vhost nginx
+    rendu — est la SEULE barriere devant les routes d'admin encore sans garde
+    (#1256), sur un vhost route par `webui_direct`, hors inspection sbxwaf
+    (#861). Sans jeton : 401.
+    """
+    from fastapi.testclient import TestClient
+    client = TestClient(api_main.app)
+    for chemin in ("/webui/admin-domain", "/webui/nginx-config"):
+        r = client.get(chemin)
+        assert r.status_code == 401, f"{chemin} rend {r.status_code}, pas 401"
 
 
 def test_nginx_config_returns_rendered_vhost(client):

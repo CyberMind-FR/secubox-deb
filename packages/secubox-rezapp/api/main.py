@@ -29,6 +29,20 @@ except ImportError:
     def require_jwt():
         pass
 
+# GARDE JWT SUR TOUTE L'API (#1256, lot P1).
+#
+# MODULE-COMPLIANCE.md §Authentication : « All endpoints (except /health) MUST
+# use JWT authentication ». Ce module ne l'appliquait nulle part.
+#
+# ET RIEN NE RATTRAPAIT L'OUBLI EN AMONT : l'aggregator se contente de
+# `app.mount()` sans middleware, le snippet nginx `secubox-proxy.conf`
+# TRANSMET l'en-tete `Authorization` sans jamais le verifier, et
+# `auth_request /__sbx_auth_verify` teste l'appartenance au LAN, pas un jeton.
+#
+# `dependencies=[...]` plutot qu'un parametre `user=Depends(...)` : la garde
+# porte sur la route, aucun corps de fonction n'est touche, et une route
+# ajoutee plus tard sans garde se voit d'un coup d'oeil.
+
 app = FastAPI(title="SecuBox RezApp API", version="1.0.0")
 app.include_router(auth_router)
 
@@ -307,7 +321,7 @@ def health():
     return {"status": "ok", "service": "rezapp"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get RezApp module status."""
     docker_ok = is_docker_available()
@@ -333,14 +347,14 @@ def get_status():
     }
 
 
-@app.get("/apps")
+@app.get("/apps", dependencies=[Depends(require_jwt)])
 def list_apps():
     """List all deployed applications."""
     apps = get_docker_containers()
     return {"apps": apps}
 
 
-@app.get("/app/{name}")
+@app.get("/app/{name}", dependencies=[Depends(require_jwt)])
 def get_app(name: str):
     """Get application details."""
     apps = get_docker_containers()
@@ -368,7 +382,7 @@ def get_app(name: str):
     raise HTTPException(status_code=404, detail="Application not found")
 
 
-@app.post("/app/deploy")
+@app.post("/app/deploy", dependencies=[Depends(require_jwt)])
 def deploy_app(config: AppDeploy):
     """Deploy a new application."""
     if not is_docker_available():
@@ -432,7 +446,7 @@ def deploy_app(config: AppDeploy):
     }
 
 
-@app.post("/app/undeploy")
+@app.post("/app/undeploy", dependencies=[Depends(require_jwt)])
 def undeploy_app(name: str):
     """Undeploy (remove) an application."""
     if not is_docker_available():
@@ -450,14 +464,14 @@ def undeploy_app(name: str):
     return {"status": "undeployed", "name": name}
 
 
-@app.get("/app/{name}/logs")
+@app.get("/app/{name}/logs", dependencies=[Depends(require_jwt)])
 def get_app_logs(name: str, lines: int = 100):
     """Get application logs."""
     logs = get_container_logs(name, lines)
     return {"name": name, "logs": logs, "lines": lines}
 
 
-@app.post("/app/{name}/restart")
+@app.post("/app/{name}/restart", dependencies=[Depends(require_jwt)])
 def restart_app(name: str):
     """Restart an application."""
     stdout, stderr, code = run_cmd(["docker", "restart", name])
@@ -468,7 +482,7 @@ def restart_app(name: str):
     return {"status": "restarted", "name": name}
 
 
-@app.post("/app/{name}/start")
+@app.post("/app/{name}/start", dependencies=[Depends(require_jwt)])
 def start_app(name: str):
     """Start a stopped application."""
     stdout, stderr, code = run_cmd(["docker", "start", name])
@@ -479,7 +493,7 @@ def start_app(name: str):
     return {"status": "started", "name": name}
 
 
-@app.post("/app/{name}/stop")
+@app.post("/app/{name}/stop", dependencies=[Depends(require_jwt)])
 def stop_app(name: str):
     """Stop a running application."""
     stdout, stderr, code = run_cmd(["docker", "stop", name])
@@ -490,14 +504,14 @@ def stop_app(name: str):
     return {"status": "stopped", "name": name}
 
 
-@app.get("/templates")
+@app.get("/templates", dependencies=[Depends(require_jwt)])
 def list_templates():
     """List available application templates."""
     templates = load_templates()
     return {"templates": templates}
 
 
-@app.get("/templates/{name}")
+@app.get("/templates/{name}", dependencies=[Depends(require_jwt)])
 def get_template(name: str):
     """Get a specific template."""
     templates = load_templates()
@@ -507,7 +521,7 @@ def get_template(name: str):
     raise HTTPException(status_code=404, detail="Template not found")
 
 
-@app.post("/templates")
+@app.post("/templates", dependencies=[Depends(require_jwt)])
 def create_template(template: TemplateCreate):
     """Create a custom application template."""
     TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
@@ -525,7 +539,7 @@ def create_template(template: TemplateCreate):
     return {"status": "created", "name": template.name}
 
 
-@app.delete("/templates/{name}")
+@app.delete("/templates/{name}", dependencies=[Depends(require_jwt)])
 def delete_template(name: str):
     """Delete a custom template."""
     template_file = TEMPLATES_DIR / f"{name}.json"
@@ -537,7 +551,7 @@ def delete_template(name: str):
     return {"status": "deleted", "name": name}
 
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_jwt)])
 def get_stats():
     """Get cached application statistics."""
     if _cache:
@@ -566,7 +580,7 @@ def get_stats():
     }
 
 
-@app.get("/images")
+@app.get("/images", dependencies=[Depends(require_jwt)])
 def list_images():
     """List available Docker images."""
     stdout, _, code = run_cmd([
@@ -595,7 +609,7 @@ def list_images():
     return {"images": images}
 
 
-@app.post("/images/pull")
+@app.post("/images/pull", dependencies=[Depends(require_jwt)])
 def pull_image(image: str):
     """Pull a Docker image."""
     stdout, stderr, code = run_cmd(["docker", "pull", image], timeout=300)

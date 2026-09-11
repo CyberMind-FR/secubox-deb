@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """SecuBox Cloner API - System backup and restore."""
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 import subprocess
 import json
@@ -13,7 +13,26 @@ import shutil
 import tarfile
 from datetime import datetime
 from pathlib import Path
+from secubox_core.auth import require_jwt
 
+
+# GARDE JWT SUR TOUTE L'API (#1256).
+#
+# `.claude/MODULE-COMPLIANCE.md` §Authentication : « All endpoints (except
+# /health) MUST use JWT authentication ». Ce module ne l'appliquait NULLE PART
+# — il importait meme `Depends` sans jamais s'en servir.
+#
+# ET IL N'Y AVAIT AUCUN RATTRAPAGE EN AMONT, c'est ce qui rend l'oubli grave :
+# l'aggregator se contente de `app.mount()` sans middleware, le snippet nginx
+# `secubox-proxy.conf` TRANSMET l'en-tete `Authorization` (`proxy_set_header`)
+# sans jamais le verifier, et `auth_request /__sbx_auth_verify` n'est cable que
+# sur une poignee de vhosts — ou il teste l'appartenance au LAN, pas un jeton.
+# La seule barriere restante etait l'obfuscation du nom d'hote admin.
+#
+# `dependencies=[...]` PLUTOT QU'UN PARAMETRE `user=Depends(...)` : la garde
+# porte sur la route, pas sur la signature. Aucun corps de fonction n'est
+# touche, donc aucun risque d'en changer le comportement en la posant — et une
+# route ajoutee plus tard sans garde se voit d'un coup d'oeil.
 app = FastAPI(title="SecuBox Cloner API", version="1.0.0")
 
 BACKUP_DIR = "/var/lib/secubox/backups"
@@ -237,7 +256,7 @@ def health():
     return {"status": "ok", "service": "cloner"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get cloner status."""
     state = load_state()
@@ -259,13 +278,13 @@ def get_status():
     }
 
 
-@app.get("/backups")
+@app.get("/backups", dependencies=[Depends(require_jwt)])
 def list_backups():
     """List all backups."""
     return {"backups": get_backup_list()}
 
 
-@app.get("/backups/{backup_id}")
+@app.get("/backups/{backup_id}", dependencies=[Depends(require_jwt)])
 def get_backup(backup_id: str):
     """Get backup details."""
     backup_path = os.path.join(BACKUP_DIR, backup_id)
@@ -308,7 +327,7 @@ def get_backup(backup_id: str):
     }
 
 
-@app.post("/backups")
+@app.post("/backups", dependencies=[Depends(require_jwt)])
 def create_backup(config: BackupConfig, background_tasks: BackgroundTasks):
     """Create a new backup."""
     state = load_state()
@@ -321,7 +340,7 @@ def create_backup(config: BackupConfig, background_tasks: BackgroundTasks):
     return result
 
 
-@app.delete("/backups/{backup_id}")
+@app.delete("/backups/{backup_id}", dependencies=[Depends(require_jwt)])
 def delete_backup(backup_id: str):
     """Delete a backup."""
     backup_path = os.path.join(BACKUP_DIR, backup_id)
@@ -339,7 +358,7 @@ def delete_backup(backup_id: str):
     return {"status": "deleted", "backup_id": backup_id}
 
 
-@app.post("/backups/{backup_id}/restore")
+@app.post("/backups/{backup_id}/restore", dependencies=[Depends(require_jwt)])
 def restore_backup(backup_id: str, config: RestoreConfig = None):
     """Restore from a backup."""
     backup_path = os.path.join(BACKUP_DIR, backup_id)
@@ -368,13 +387,13 @@ def restore_backup(backup_id: str, config: RestoreConfig = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/config")
+@app.get("/config", dependencies=[Depends(require_jwt)])
 def get_config():
     """Get cloner configuration."""
     return load_config()
 
 
-@app.put("/config")
+@app.put("/config", dependencies=[Depends(require_jwt)])
 def update_config(config: dict):
     """Update cloner configuration."""
     current = load_config()
@@ -383,7 +402,7 @@ def update_config(config: dict):
     return {"status": "updated", "config": current}
 
 
-@app.put("/schedule")
+@app.put("/schedule", dependencies=[Depends(require_jwt)])
 def update_schedule(schedule: ScheduleConfig):
     """Update backup schedule."""
     config = load_config()
@@ -417,7 +436,7 @@ WantedBy=timers.target
     return {"status": "updated", "schedule": schedule.dict()}
 
 
-@app.post("/cleanup")
+@app.post("/cleanup", dependencies=[Depends(require_jwt)])
 def cleanup_old_backups(keep: int = 7):
     """Remove old backups, keeping the N most recent."""
     backups = get_backup_list()
@@ -441,7 +460,7 @@ def cleanup_old_backups(keep: int = 7):
     return {"status": "ok", "deleted": deleted, "kept": keep}
 
 
-@app.get("/paths")
+@app.get("/paths", dependencies=[Depends(require_jwt)])
 def get_default_paths():
     """Get default backup paths."""
     paths = []

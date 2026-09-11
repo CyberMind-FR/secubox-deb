@@ -19,6 +19,31 @@ jwt_secret  = ""                # Généré au firstboot — ne pas modifier
 # *.<domaine>. Vide = cookie host-only. Ex: ".gk2.secubox.in"
 sso_cookie_domain = ""
 
+# ── Mode tableau de bord ──────────────────────────────────────────
+# Le parc est en LECTURE GARDÉE (#1256) : toute route API exige un jeton, y
+# compris les lectures d'affichage (status, components, access, stats) qui
+# étaient publiques avant.
+#
+# Ce mode rouvre CES LECTURES-LÀ, et seulement elles, aux clients que nginx
+# reconnaît comme LAN — c'est ce qui permet aux cardlets du Hall et aux
+# tableaux de bord de s'afficher sans session sur le réseau interne.
+#
+# CE QU'IL NE ROUVRE JAMAIS : les écritures, et les lectures sensibles
+# (secrets, certificats, pairs WireGuard, inventaire de paquets, journaux,
+# sessions, topologie HAProxy). Elles sont sous `require_jwt`, que ce mode ne
+# satisfait pas — même depuis le LAN, même armé.
+#
+# DÉFAUT : false. Opt-in explicite, déclaratif, versionné — la même doctrine
+# que `waf_bypass` dans haproxy.toml, et pour la même raison : un défaut
+# silencieux ne protège plus personne.
+#
+# La frontière LAN est celle de /etc/nginx/conf.d/secubox-lan-geo.conf
+# (`geo $lan_client`), transmise par le snippet secubox-proxy.conf dans
+# l'en-tête X-SecuBox-LAN. Une requête qui ne passe pas par nginx ne porte
+# pas l'en-tête et retombe sur l'exigence du jeton.
+[tableau_de_bord]
+actif = false
+
 # Utilisateurs locaux (fallback si pas d'OAuth)
 [auth]
 # Force TOTP (2FA) enrollment for admin accounts on login. Default: true

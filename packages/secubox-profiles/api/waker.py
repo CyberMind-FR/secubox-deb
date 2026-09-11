@@ -25,7 +25,7 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import HTMLResponse, Response
 
 from .etat_panne import qualifie
@@ -70,6 +70,7 @@ log = logging.getLogger("secubox-waker")
 
 
 from . import streamlit_apps as _streamlit
+from secubox_core.auth import require_lecture
 
 
 def _root() -> Path:
@@ -231,7 +232,7 @@ def _splash(module: str, budget: float, retry: int) -> HTMLResponse:
 def create_app() -> FastAPI:
     app = FastAPI(title="SecuBox Waker", docs_url=None, redoc_url=None)
 
-    @app.get("/_wake/{vhost}")
+    @app.get("/_wake/{vhost}", dependencies=[Depends(require_lecture)])
     async def wake_vhost(vhost: str, request: Request) -> Response:
         manifests = load_all(_root() / "modules.d")
         mid = _resolve(vhost, manifests)

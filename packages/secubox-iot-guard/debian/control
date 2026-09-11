@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-iot-guard
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
 Description: SecuBox IoT Guard — IoT device discovery + segmentation
  Inventories IoT devices on the LAN (vendor MAC OUI, mDNS/SSDP/MQTT
  fingerprints), classifies them by type, and applies nftables

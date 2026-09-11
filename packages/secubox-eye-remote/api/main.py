@@ -23,10 +23,12 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .routers.leases import router as leases_router
+from secubox_core.auth import require_lecture
 
 # Initialize
 app = FastAPI(
@@ -140,7 +142,7 @@ def _check_peer_reachable() -> bool:
     return False
 
 
-@app.get("/api/v1/eye-remote/status", response_model=EyeRemoteStatus)
+@app.get("/api/v1/eye-remote/status", response_model=EyeRemoteStatus, dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get Eye Remote connection status."""
     interface_up = _check_interface()
@@ -173,7 +175,7 @@ async def notify_disconnected():
     return {"status": "ok"}
 
 
-@app.get("/api/v1/eye-remote/metrics")
+@app.get("/api/v1/eye-remote/metrics", dependencies=[Depends(require_lecture)])
 async def get_eye_metrics():
     """Get latest metrics from Eye Remote."""
     if not _eye_state.get("connected"):
@@ -192,7 +194,7 @@ async def get_eye_metrics():
     raise HTTPException(status_code=503, detail="Cannot reach Eye Remote")
 
 
-@app.post("/api/v1/eye-remote/mode")
+@app.post("/api/v1/eye-remote/mode", dependencies=[Depends(require_jwt)])
 async def set_gadget_mode(request: GadgetModeRequest):
     """Change Eye Remote gadget mode."""
     valid_modes = ["normal", "flash", "debug", "tty", "auth"]
@@ -218,7 +220,7 @@ async def set_gadget_mode(request: GadgetModeRequest):
     raise HTTPException(status_code=503, detail="Failed to change mode")
 
 
-@app.get("/api/v1/eye-remote/serial/status")
+@app.get("/api/v1/eye-remote/serial/status", dependencies=[Depends(require_lecture)])
 async def get_serial_status():
     """Get serial console status."""
     tty_exists = Path("/dev/ttyACM0").exists()
@@ -229,7 +231,7 @@ async def get_serial_status():
     }
 
 
-@app.get("/api/v1/eye-remote/pizero/metrics")
+@app.get("/api/v1/eye-remote/pizero/metrics", dependencies=[Depends(require_lecture)])
 async def get_pizero_metrics():
     """Get Pi Zero metrics - public endpoint for dashboard.
 
@@ -255,7 +257,7 @@ async def get_pizero_metrics():
     raise HTTPException(status_code=503, detail="Cannot reach Pi Zero")
 
 
-@app.post("/api/v1/eye-remote/auto-pair")
+@app.post("/api/v1/eye-remote/auto-pair", dependencies=[Depends(require_jwt)])
 async def auto_pair():
     """Auto-pair with connected Eye Remote device.
 
@@ -333,7 +335,7 @@ async def auto_pair():
     }
 
 
-@app.get("/api/v1/eye-remote/paired-devices")
+@app.get("/api/v1/eye-remote/paired-devices", dependencies=[Depends(require_lecture)])
 async def get_paired_devices():
     """List all paired Eye Remote devices."""
     storage_path = Path("/var/lib/secubox/eye-remote/auto-paired.json")
@@ -521,7 +523,7 @@ def _get_host_metrics() -> dict:
     return metrics
 
 
-@app.get("/api/v1/system/metrics")
+@app.get("/api/v1/system/metrics", dependencies=[Depends(require_lecture)])
 async def get_system_metrics():
     """Get MOCHAbin host system metrics for round UI dashboard.
 

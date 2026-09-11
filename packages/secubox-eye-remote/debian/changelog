@@ -1,3 +1,42 @@
+secubox-eye-remote (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,
+    components, access, stats — repondaient sans authentification : c'etait le
+    motif « three-fold » du parc, un choix assume, mais une lecture publique
+    reste de la reconnaissance offerte. Elles passent sous
+    `require_lecture` : jeton, OU mode tableau de bord depuis le LAN si
+    l'operateur l'a arme dans /etc/secubox/secubox.conf.
+  * Le defaut est FERME : sans `[tableau_de_bord] actif = true`, ces routes
+    exigent un jeton, y compris depuis le LAN.
+  * Les sondes de sante restent publiques. Les routes deja sous require_jwt ne
+    changent pas — le mode ne les ouvre jamais.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 23:55:00 +0200
+
+secubox-eye-remote (1.0.3-1~bookworm1) bookworm; urgency=high
+
+  * GARDE JWT SUR 8 ROUTES D'ECRITURE (#1256) : /mode et /auto-pair dans
+    api/main.py (les deux sont LIVE, verifie a l'execution : 401 sans jeton),
+    et dans les routeurs pairing/ et websocket/ -- appairage d'un appareil,
+    envoi de commande, capture d'ecran, redemarrage, lockdown et redemarrage
+    de service a distance. Aucune ne portait de controle interne.
+  * /connected et /disconnected restent publics : udev les appelle en local.
+    Consigne dans tests/publiques-assumees.txt avec cette raison.
+  * ATTENTION -- les routeurs websocket/, pairing/, devices/ et boot_media/ ne
+    sont inclus par AUCUNE application : api/main.py ne monte que leases_router.
+    Ces gardes sont donc correctes mais actuellement inatteignables, et l'API
+    Boot Media documentee dans CLAUDE.md ne repond pas. Signale separement.
+  * tests : conftest ajoute common/ au chemin (le paquet depend deja de
+    secubox-core dans debian/control ; seul le harnais l'ignorait, et la
+    collecte cassait des que api/main.py importait secubox_core.auth).
+  * tests/integration/test_leases_router.py : la garde est desormais REELLE.
+    Ces tests passaient sans authentification -- leases.py retombe sur un
+    require_jwt no-op quand secubox_core n'est pas importable, et le chemin
+    n'etait pas pose. Ils surchargent maintenant la dependance
+    (dependency_overrides) au lieu de contourner la garde.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 20:40:00 +0200
+
 secubox-eye-remote (1.0.2-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

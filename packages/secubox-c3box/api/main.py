@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, Depends, BackgroundTasks
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -281,7 +282,7 @@ async def shutdown():
 
 
 # Public endpoints
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     return {
@@ -292,7 +293,7 @@ async def status():
     }
 
 
-@app.get("/services")
+@app.get("/services", dependencies=[Depends(require_lecture)])
 async def list_services():
     """List all available services with status."""
     cached = stats_cache.get("services")
@@ -320,7 +321,7 @@ async def list_services():
     return result
 
 
-@app.get("/services/by-category")
+@app.get("/services/by-category", dependencies=[Depends(require_lecture)])
 async def services_by_category():
     """Get services grouped by category."""
     services = (await list_services())["services"]
@@ -344,7 +345,7 @@ async def services_by_category():
     }
 
 
-@app.get("/services/{name}")
+@app.get("/services/{name}", dependencies=[Depends(require_lecture)])
 async def get_service(name: str):
     """Get detailed status for a specific service."""
     svc = next((s for s in SERVICES if s["name"] == name), None)
@@ -464,7 +465,7 @@ async def delete_webhook(webhook_id: str):
     return {"success": True}
 
 
-@app.get("/summary")
+@app.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get portal summary."""
     services = (await list_services())["services"]

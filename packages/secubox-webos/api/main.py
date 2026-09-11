@@ -15,6 +15,7 @@ from secubox_core.auth import require_jwt, create_token
 from secubox_core.health import systemd_batch
 from api.models import Service
 from api import registry, flags, cardlets, acces, actions, nc_super
+from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
 _flags: dict = flags.load_flags()
@@ -443,7 +444,7 @@ def _porteur(request: Request) -> str:
 #
 # DECLAREES AVANT LA ROUTE GENERIQUE : `/actions/{module}/{action}` les
 # capturerait, FastAPI retenant la premiere qui correspond.
-@router.get("/depot/reglages")
+@router.get("/depot/reglages", dependencies=[Depends(require_lecture)])
 async def depot_reglages():
     """Les plafonds du depot, avant l'envoi."""
     return await actions.reglages_depot()

@@ -23,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Form
+from secubox_core.auth import require_lecture
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, EmailStr
 from secubox_core.auth import router as auth_router, require_jwt
@@ -376,7 +377,7 @@ async def upload_avatar(
     return {"success": True, "avatar_url": avatar_url}
 
 
-@router.get("/avatar/{identity_id}")
+@router.get("/avatar/{identity_id}", dependencies=[Depends(require_lecture)])
 async def get_avatar(identity_id: str):
     """Get avatar image. Public endpoint for displaying avatars."""
     avatar_path = _find_avatar(identity_id)
@@ -469,7 +470,7 @@ async def sync_identity(request: SyncRequest, user=Depends(require_jwt)):
     }
 
 
-@router.get("/summary")
+@router.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get avatar module summary for dashboard widget."""
     identities = _load_identities()

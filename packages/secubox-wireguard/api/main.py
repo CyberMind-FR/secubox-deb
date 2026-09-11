@@ -40,6 +40,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 log = get_logger("wireguard")
 
@@ -412,19 +413,19 @@ def _invalidate_ctl_cache() -> None:
 
 # === Three-Fold Architecture Endpoints ===
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def components():
     """List system components (public, three-fold: what)."""
     return await _run_ctl_cached("components", ttl=60.0)
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Show health status (public, three-fold: health)."""
     return await _run_ctl_cached("status", ttl=8.0)
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def access():
     """Show connection endpoints (public, three-fold: how)."""
     # wgctl access queries an external IP service (curl, 5s), so cache longer.
@@ -433,7 +434,13 @@ async def access():
 
 # === Interface Management ===
 
-@app.get("/interfaces")
+# LA LISTE DES PAIRS D'UN VPN N'EST PAS UNE DONNEE DE TABLEAU DE BORD (#1261).
+# /peers rend les cles publiques, les adresses autorisees et les derniers
+# handshakes ; /interfaces rend les ports d'ecoute. Ensemble, c'est la carte du
+# mesh et de qui s'y connecte. L'appelant est
+# www/luci-static/.../wireguard-dashboard/api.js, servi par la webui admin :
+# l'operateur y est connecte, et require_jwt accepte le cookie de session.
+@app.get("/interfaces", dependencies=[Depends(require_jwt)])
 async def list_interfaces():
     """List all WireGuard interfaces (public)."""
     return await _run_ctl_cached("interfaces", ttl=8.0)
@@ -459,7 +466,7 @@ async def interface_down(name: str, user=Depends(require_jwt)):
 
 # === Peer Management ===
 
-@app.get("/peers")
+@app.get("/peers", dependencies=[Depends(require_jwt)])
 async def list_peers(interface: Optional[str] = None):
     """List all peers (public)."""
     if interface:

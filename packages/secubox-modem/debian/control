@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-modem
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core (>= 1.0),
+         secubox-core (>= 1.4.0),
          modemmanager,
          libqmi-utils,
          libmbim-utils,

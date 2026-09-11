@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-netdata
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), netdata
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), netdata
 Description: SecuBox Netdata Dashboard
  Monitoring temps réel via Netdata REST v2 : CPU, RAM, réseau, température, processus.
  .

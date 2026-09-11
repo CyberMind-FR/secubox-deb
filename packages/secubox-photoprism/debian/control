@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-photoprism
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip,
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-uvicorn | python3-pip,
  lxc, lxc-templates, nftables, openssl
 Description: PhotoPrism photo management for SecuBox (native LXC)
  SecuBox module for a PhotoPrism photo server running as a podman container

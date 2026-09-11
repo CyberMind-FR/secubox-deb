@@ -18,7 +18,8 @@ import socket
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel, Field
 
 from ...core.device_registry import get_device_registry
@@ -33,6 +34,7 @@ from ...models.device import (
     PairRequest,
     PairResponse,
 )
+from secubox_core.auth import require_lecture
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +107,7 @@ def _get_local_ip() -> str:
         return "127.0.0.1"
 
 
-@router.get("/qr", response_model=PairingQRResponse)
+@router.get("/qr", response_model=PairingQRResponse, dependencies=[Depends(require_lecture)])
 async def generate_pairing_qr() -> PairingQRResponse:
     """
     Generate a QR code pairing session.
@@ -154,7 +156,7 @@ async def generate_pairing_qr() -> PairingQRResponse:
     )
 
 
-@router.get("/discover", response_model=DiscoverResponse)
+@router.get("/discover", response_model=DiscoverResponse, dependencies=[Depends(require_lecture)])
 async def discover() -> DiscoverResponse:
     """
     Discover SecuBox instance.
@@ -176,7 +178,7 @@ async def discover() -> DiscoverResponse:
     )
 
 
-@router.post("", response_model=PairResponse)
+@router.post("", response_model=PairResponse, dependencies=[Depends(require_jwt)])
 async def pair_device(request: PairRequest) -> PairResponse:
     """
     Pair a new Eye Remote device.

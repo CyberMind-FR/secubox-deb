@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-threat-analyst
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
 Description: SecuBox Threat Analyst — AI agent that writes detection scenarios
  AI-assisted threat analysis: ingests recent alerts, proposes new
  detection scenarios, and writes them under /etc/secubox/scenarios/

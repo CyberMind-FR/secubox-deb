@@ -5,6 +5,299 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-10 — LE PARC PASSE EN LECTURE GARDÉE (ref #1256)
+
+Décision de l'opérateur, appliquée : **plus une seule route du parc ne répond
+sans garde.** ~450 lectures d'affichage passent sous `require_lecture`, avec un
+**mode tableau de bord** explicite pour les rouvrir au LAN.
+
+### La garde
+
+`secubox_core.auth.require_lecture` : jeton ou cookie de session → autorisé ;
+sinon, **si** le mode est armé **et** que nginx a marqué la requête LAN →
+lecteur anonyme ; sinon 401. `secubox-core` 1.4.0.
+
+**Le défaut est fermé.** `[tableau_de_bord] actif = true` dans `secubox.conf`
+arme le mode ; absent, mal typé ou config illisible valent false. La lecture est
+**strictement booléenne** — `bool("false")` vaut `True` en Python, accepter la
+chaîne ouvrirait le parc sur une coquille. C'est un test qui me l'a appris, pas
+une relecture.
+
+**Nginx décide du « LAN », pas nous.** Derrière HAProxy → sbxwaf → nginx,
+`$remote_addr` vaut 127.0.0.1 pour tout le monde : un test d'origine côté Python
+verrait le WAN entier comme local. On consomme le verdict de
+`conf.d/secubox-lan-geo.conf` — que le dépôt calcule déjà correctement — transmis
+par `secubox-proxy.conf` dans `X-SecuBox-LAN`. `proxy_set_header` **remplace** la
+valeur du client : l'en-tête n'est pas forgeable. Et une requête qui ne passe pas
+par nginx ne le porte pas, donc exige un jeton. Les deux chemins d'échec ferment.
+
+**Deux niveaux, prouvés :**
+
+```
+                        mode OFF·LAN   mode ON·hors LAN   mode ON·LAN
+/health                     200              200             200
+/status  (require_lecture)  401              401             200
+/peers   (require_jwt)      401              401             401
+```
+
+### Ce que la campagne a coûté, honnêtement
+
+- **3 sondes de santé gardées par erreur** (`eye-remote /api/v1/health`,
+  `mastodon /healthz`, `metrics /health`) : mon jeu `PUBLIQUES` exigeait
+  l'égalité stricte avec `/health`. Corrigé — la comparaison porte sur le
+  **dernier segment**.
+- **15 routes de `public_router`** rendues à leur état public : `hub /menu` et
+  `/info` alimentent **la page de connexion**, donc sont lus avant tout jeton —
+  les garder cassait le login. Les projections de `webos` sont volontairement
+  minimales (« never leaks urls/latency/reach ») et ont leur pendant détaillé
+  sous jeton.
+- **10 gardes redondantes** posées sur des routes déjà gardées dans leur
+  signature. Inoffensif en production, mais ça cassait les tests qui surchargent
+  une seule dépendance.
+- **Mon insertion d'import** plaçait `from secubox_core.auth import
+  require_lecture` après le dernier import de premier niveau — donc **après son
+  usage** dans deux fichiers, et pas du tout dans 113 autres (je testais la
+  présence du nom *après* avoir écrit les décorateurs). Rattrapé par
+  l'exécution, pas par la relecture.
+
+### Le harnais de test rattrapé au passage
+
+`conftest.py` à la racine pose `common/` sur le chemin : les 181 paquets
+dépendent de `secubox-core` dans `debian/control`, seul le harnais l'ignorait.
+Effet de bord : **5 suites qui ne collectaient plus tournent à nouveau**
+(`nac` passe de 54 à 2 échecs, `network-anomaly`, `maigret`, `spiderfoot`
+réparés) et **5 autres exposent des échecs préexistants jamais observés** —
+`mac-guard` attendait 308 sur des routes qui exigent un jeton depuis toujours
+(`git diff` sur ce paquet : vide).
+
+`secubox_core.testing` place le harnais dans la position du client légitime
+(mode armé + en-tête LAN) sans désactiver aucune garde : `require_jwt` continue
+de rendre 401, ce qui laisse les tests de refus faire leur travail.
+
+### Vérification
+
+**57 suites comparées avant/après. Zéro régression causée par ce lot.**
+Les échecs restants sont préexistants, chacun vérifié à la ligne près.
+
+`tests/dette-jwt.txt` est **vide** et doit le rester : le cliquet devient un
+verrou (`test_dette_close`). Non déployé.
+
+**À l'installation** : `secubox-core` 1.4.0 livre la garde ET le snippet nginx
+ensemble. Sans `[tableau_de_bord] actif = true`, les cardlets du Hall
+demanderont un jeton — c'est le sens de panne voulu, mais il faut le savoir.
+
+---
+
+## 2026-09-10 — Lectures : plus AUCUNE écriture nue, et la fuite du domaine admin (ref #1256, #1261)
+
+**Le parc ne porte plus une seule route d'écriture sans garde.** Les 17 dernières
+(`appstore`, `fmrelay`, `health-doctor`, `picobrew`, `rbs-sensor` — des
+contre-mesures radio déclenchables sans jeton —, `security-posture`, `zigbee`)
+sont fermées ; les 3 de `portal` (`/login`, `/logout`, `/recover`) rejoignent
+les publiques assumées. Dette : 468 → 440, **écritures = 0**.
+
+### Ce que l'audit des lectures a révélé, et qui corrige mon propre diagnostic
+
+**140 des 451 lectures sont documentées « public » DANS LE CODE.** Ce n'est pas
+de l'oubli : c'est le motif « three-fold » du parc — `status` / `components` /
+`access` lus par les tableaux de bord — un **choix d'architecture** assumé,
+lecture publique et écriture gardée. Ma présentation d'hier (« 700 routes sans
+garde ») mélangeait donc deux choses très différentes. La vraie question n'est
+pas « qui a oublié ? » mais « ce choix tient-il ? ».
+
+### #1261 — la chaîne complète, trouvée en tirant ce fil
+
+`GET /api/v1/haproxy/webui/admin-domain` rendait `admin.<hôte>.<suffixe>` à
+n'importe qui, avec pour justification *« No auth required (info is not
+secret) »*. Le test qui l'accompagnait ajoutait *« the unix socket is root-only
+at the filesystem level »*. **Les deux sont faux :**
+
+1. nginx proxifie `location /api/v1/haproxy/` vers cette socket **sans**
+   `auth_request`, et `common/nginx/secubox.conf` inclut `secubox.d/*.conf`
+   depuis un bloc `server_name secubox.local _;` — **attrape-tout**. On atteint
+   donc la route par l'IP, sans connaître le domaine admin.
+2. L'unité tourne en `UMask=0000` : la socket n'est pas root-only.
+
+Et ce nom d'hôte est la **seule** barrière devant les routes d'admin encore sans
+garde (#1256), sur un vhost routé par `webui_direct`, hors inspection sbxwaf
+(#861). La chaîne : anonyme → apprend le domaine admin → atteint l'API d'admin.
+`/webui/nginx-config` rendait en prime le vhost complet (regex, port 9080,
+racine, includes).
+
+**Fermées toutes les deux.** `haproxyctl` n'est pas cassé : `_fetch_webui_regex`
+retombe déjà sur `/etc/default/secubox` quand l'appel échoue (`curl -sf` échoue
+sur 401) — et cette source locale vaut mieux que l'API. Le test
+`test_nginx_config_is_public` devient `test_les_deux_routes_webui_exigent_un_jeton` :
+le contrat est renversé, pas contourné.
+
+### 9 lectures de reconnaissance fermées
+
+`haproxy` `/certificates`, `/vhosts`, `/backends` — la carte du frontal, pas un
+état de service. `wireguard` `/peers`, `/interfaces` — clés publiques, adresses
+autorisées, handshakes : la carte du mesh. `system` `/packages` (inventaire
+versionné = de quoi choisir un CVE applicable), `/security`, `/sessions/summary`,
+`/secubox_logs`. Aucune n'a d'appelant anonyme : leurs tableaux de bord vivent
+sur la webui admin, où `require_jwt` accepte le cookie de session.
+
+Restent **440 lectures**, dont ~130 documentées publiques par conception. C'est
+un arbitrage d'architecture, pas une correction mécanique — il revient à
+l'opérateur. Non déployé.
+
+---
+
+## 2026-09-10 — Garde JWT : les 58 écritures des modules partiels triées (ref #1256)
+
+Les 93 modules « à trous partiels » portent 455 routes nues. Balayage aveugle
+exclu : ces modules ont gardé *certaines* routes, donc le choix pouvait être
+délibéré. J'ai isolé le sous-ensemble où l'oubli ne fait aucun doute — les
+**58 écritures** — et je les ai triées **une par une**, docstring et corps de
+fonction à l'appui.
+
+**12 fermées** (aucun contrôle interne, action d'administration) :
+`eye-remote` `/mode`, `/auto-pair`, l'appairage et les 5 routes du routeur
+websocket (commande, capture d'écran, redémarrage, lockdown, restart de
+service) ; `cookies` `/capture` — le puits qui **reçoit** les témoins était
+ouvert alors que son voisin `/capture/statut` était gardé, donc empoisonnable ;
+`lyrion` `/medialib/mount` et `/unmount` — lier un chemin hôte dans le LXC
+mérite mieux qu'une barrière réseau ; `sentinelle-gsm` `/mode`.
+
+**46 reclassées publiques à dessein**, dans `tests/publiques-assumees.txt`,
+chacune avec sa raison vérifiable : les points d'entrée de `secubox-auth` qui
+**délivrent** le jeton ; l'admin de `billets`, qui a sa propre session
+(`billets_session`) + CSRF double-envoi — y poser `require_jwt` casserait la
+connexion sans rien ajouter ; le webhook HMAC de `metablogizer` ; l'enrôlement
+signé de `soc-gateway` ; `/depot` de `droplet`, documenté public ; l'autodiscover
+Outlook, parlé par un client qui ne porte pas de JWT ; `/connected` et
+`/disconnected` d'`eye-remote`, appelés par udev en local.
+
+**Deux corrections du détecteur, trouvées en auditant :**
+- `dependencies=[require_jwt()]` — fabrique locale rendant `Depends(_require_jwt)`,
+  la forme de `secubox-antirootkit` — était compté comme **non gardé**. Faux
+  positif. Le scanner reconnaît désormais `Depends` **ou** tout nom contenant
+  `require_jwt`.
+- `@router.post("")` (chemin vide = préfixe du routeur) était **invisible** :
+  j'exigeais un chemin commençant par « / ». Trouvé sur
+  `eye-remote/api/routers/pairing.py`, qui portait ainsi une route d'appairage
+  hors inventaire.
+
+**Deux trouvailles à part, signalées et non corrigées ici :**
+- **`secubox-eye-remote` ne monte que `leases_router`.** Les routeurs
+  `websocket`, `pairing`, `devices` et `boot_media` ne sont inclus par aucune
+  application — l'API Boot Media documentée dans `CLAUDE.md` §v2.1.0+ ne répond
+  donc pas. Mes gardes y sont correctes mais actuellement inatteignables.
+- **`leases.py` échoue OUVERT** : `try: from secubox_core.auth import require_jwt
+  / except ImportError: def require_jwt(): return None`. Si l'import casse, la
+  garde devient un no-op **en silence**. C'est ce repli qui faisait passer les
+  tests d'intégration sans authentification, `common/` n'étant pas sur le chemin
+  du harnais. Corrigé côté test (chemin + `dependency_overrides`), pas côté
+  code : le repli est documenté « standalone Pi Zero » et le changer est une
+  décision de déploiement.
+
+Dette : **526 → 468** routes. Reste 397 lectures, où « donnée publique ou pas »
+se décide module par module. Non déployé.
+
+---
+
+## 2026-09-10 — Garde JWT P1 : 8 modules fermés, dette 667 → 526 (ref #1256)
+
+Les huit modules qui n'importaient **jamais** `require_jwt` sont fermés :
+`simplex` (27 routes), `magicmirror` (23), `vm` (17), `wazuh` (17), `rezapp` (16),
+`jabber` (15), `ossec` (15), `redroid` (14) — **144 routes**.
+
+- **Ce qui était ouvert** : `POST /container/install` et `DELETE /container`
+  (simplex), création/suppression de VM et de conteneurs LXC (vm), l'API de
+  gestion complète d'un SIEM (wazuh) et d'un HIDS (ossec), `POST /app/deploy`
+  et `POST /images/pull` (rezapp), `POST /modules/install` (magicmirror).
+- **`magicmirror` : le routeur `mmpm` aussi.** Il est monté sous `/mmpm` par
+  `api/main.py` et porte 10 routes ; une garde posée seulement sur le module
+  principal aurait laissé la moitié de la surface ouverte. C'est le seul module
+  du lot avec des routes hors `api/main.py` — raison pour laquelle le scanner
+  balaie `packages/*/api/**/*.py` et pas seulement `main.py`.
+- **`rezapp`** importait déjà `require_jwt` sans l'appliquer à une seule route.
+  Ses `/login`, `/verify`, `/logout` restent publics : ils viennent du routeur
+  `secubox_core.auth` et sont les points d'entrée qui **délivrent** le jeton.
+- **Vérifié à l'exécution**, module par module : `/health` → 200, tout le reste
+  → 401 sans jeton (dont `/mmpm/modules/installed`, à son vrai préfixe).
+- **Le cliquet a servi le jour même** : un `git checkout` de nettoyage de ma part
+  a écrasé les modifs de `simplex`, et c'est `test_modules_p0_totalement_gardes`
+  qui l'a signalé — pas une relecture. Réappliqué et revérifié.
+- `REPARES` passe de 3 à 11 modules ; l'inventaire tombe de **667 à 526 routes**
+  (114 → 106 modules). Cumul du jour : **177 routes fermées**.
+- Non déployé. Suite : les modules à trous partiels (`lyrion` 15/19,
+  `p2p` 17/57, `soc-gateway` 5/30, `mail` 11/55), puis le tri des routes
+  publiques à dessein.
+
+---
+
+## 2026-09-10 — Garde JWT : P0 fermé + cliquet de conformité (ref #1256)
+
+Suite de l'audit du jour. Les trois modules critiques sont fermés, et la dette
+restante est désormais **mesurée et bornée**.
+
+- **`secubox-vault` 1.1.1, `secubox-certs` 1.2.2, `secubox-cloner` 1.1.1.**
+  33 routes passent sous `dependencies=[Depends(require_jwt)]` ; seule `/health`
+  reste publique. Vérifié à l'exécution (TestClient) : `/health` → 200,
+  `GET /secrets/{key}` → 401, `POST /export` → 401. Avant, la même requête
+  rendait la valeur du secret. `dependencies=[...]` plutôt qu'un paramètre
+  `user=Depends()` : aucun corps de fonction n'est touché.
+- **`/metrics` de certs est gardé**, contrairement à `/health` : il rend
+  domaines, statistiques d'attaques et de visites, n'est pas au format
+  Prometheus, et rien dans le dépôt ne le consomme.
+- **`tests/test_conformite_jwt.py` — cliquet, pas verdict.** Analyse **statique**
+  (`ast`, sans importer fastapi : la forme de `app.routes` dépend de la version —
+  à partir de 0.14x un routeur inclus est un `_IncludedRouter` opaque là où
+  bookworm aplatit ; un test qui inspecte l'objet passerait ici et raterait sur
+  la board). Il échoue si une route nue apparaît **hors** de
+  `tests/dette-jwt.txt`, ET si une entrée de l'inventaire est réparée sans être
+  retirée — c'est ce second sens qui empêche l'inventaire de pourrir. Les deux
+  directions ont été vérifiées en cassant volontairement chaque cas.
+- **CORRECTION DU CHIFFRE DE L'AUDIT.** L'audit annonçait 581 routes nues ;
+  le compte exact est **~700** (667 après les 33 réparées). L'écart vient de
+  l'heuristique employée le matin — un `Depends(` cherché dans les 12 lignes
+  suivant un décorateur : la fenêtre débordait sur le décorateur **suivant** et
+  créditait à tort 92 routes. L'AST ne se trompe pas. La dette est donc pire que
+  ce que l'audit disait, pas meilleure.
+- Inventaire : 667 routes sur 114 modules. Toutes ne sont pas fautives —
+  `portal POST /login` et `annuaire GET /services` sont publics à dessein ; le
+  tri module par module les reclassera dans `PUBLIQUES`.
+- Non déployé. Suite P1 : les 22 modules restants sans aucun `require_jwt`.
+
+---
+
+## 2026-09-10 — `haproxyctl generate` réparé (ref #1254)
+
+Le « generate CASSÉ (erreurs bash) » noté au 08/09 était **deux** pannes, reproduites
+hors board sur un `haproxy.toml` témoin.
+
+- **Accents graves exécutés.** Les commentaires français du générateur citent les
+  directives entre accents graves ; émis dans un heredoc `<< EOF` **non quoté**, ces
+  accents sont des substitutions de commandes. bash exécutait `defaults`,
+  `set-timeout`, `timeout server 30s`, `server`, `tunnel` à chaque génération — d'où
+  la volée de `command not found` et le `syntax error: unexpected end of file`. Les
+  commentaires sortaient éventrés dans le cfg (« La section  porte , et c'est bien »)
+  et `$scheme` était remplacé par du vide. Accents et `$` échappés (`haproxyctl` 1.1.1) ;
+  **le cfg produit est inchangé pour le trafic**, seuls les commentaires redeviennent
+  lisibles.
+- **Dernière table TOML décapitée.** `sed '/^\[x\]/,/^\[/p' | head -n -1` : le `head`
+  retranchait l'en-tête de la table *suivante*, incluse par la plage sed. Pour la
+  **dernière** table du fichier il n'y a pas d'en-tête suivant — c'est une vraie
+  directive qui était mangée. Le dernier `[backends.X]` perdait son `servers = [...]`
+  et sortait **sans un seul serveur** (503 sur tout son trafic, avec un cfg
+  parfaitement valide pour `haproxy -c`) ; un dernier `[vhosts.X]` perdait son dernier
+  drapeau. Remplacé par `_toml_section()` (awk) qui s'arrête **avant** l'en-tête
+  suivant — 6 sites d'appel.
+- **Tests** : `tests/test_generation_cfg.py` exécute réellement `generate` (faux
+  binaire `haproxy` pour la validation) et vérifie le cfg **et** stderr ; les 3
+  tests de régression échouent sur le script d'avant, passent après.
+  `test_ssl_redirect_requires_ssl` était resté sur le contrat d'avant #1370
+  (redirection conditionnée à `ssl_redirect`, drapeau devenu no-op) — remis en phase
+  avec HTTPS-partout-par-défaut.
+- `secubox-haproxy` 1.8.12. **Non déployé** : au redéploiement sur gk2, vérifier le
+  diff avant tout `--allow-shrink` (le garde-fou anti-dérive refusera de régénérer
+  tant que `haproxy.toml` compte moins d'entrées que le cfg live).
+
+---
+
 ## 2026-09-08 — Fuite metrics (glibc), incident login, purge authelia, migration mitmproxy→sbxwaf
 
 - **Fuite RSS `secubox-metrics` — cause racine par tracemalloc.** Le diff a montré

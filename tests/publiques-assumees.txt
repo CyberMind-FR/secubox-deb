@@ -1,0 +1,105 @@
+# tests/publiques-assumees.txt — routes publiques A DESSEIN (#1256)
+#
+# CE FICHIER N'EST PAS UNE DEROGATION DE CONFORT. Une route n'y entre que si
+# elle porte SA PROPRE protection, ou si exiger un jeton la casserait par
+# construction. Chaque ligne dit laquelle des deux, en clair — sans raison
+# verifiable, la route retourne dans tests/dette-jwt.txt.
+#
+# Format : <module> <METHODE> <chemin>   # raison
+#
+# Les entrees marquees « A CONFIRMER » reposent sur une lecture du code, pas
+# sur un essai sur la board : elles sont a valider par l'operateur.
+
+# ── Points d'entree d'authentification : ils DELIVRENT le jeton ────────────
+secubox-auth POST /login                # delivre le jeton — ne peut pas en exiger un
+secubox-auth POST /login/mfa            # 2e facteur, porte par le mfa_token du 1er
+secubox-auth POST /totp/enroll          # porte par l'enrollment_token
+secubox-auth POST /totp/confirm         # porte par l'enrollment_token
+secubox-auth POST /set-password         # porte par le setup_token
+secubox-auth POST /redeem_voucher       # documente « public endpoint » dans le code
+
+# ── Session propre : cookie + CSRF double-envoi, pas de JWT ────────────────
+# secubox-billets a son admin rendu cote serveur : _current_author() lit le
+# cookie billets_session et sec.csrf_ok() verifie le double-envoi. Poser
+# require_jwt casserait la connexion admin sans rien ajouter.
+secubox-billets POST /admin/login                       # delivre la session
+secubox-billets POST /admin/logout                      # ferme la session
+secubox-billets POST /admin/override                    # session + CSRF
+secubox-billets POST /admin/password                    # session + CSRF
+secubox-billets POST /admin/billets                     # session + CSRF
+secubox-billets POST /admin/billets/{billet_id}         # session + CSRF
+secubox-billets POST /admin/billets/{billet_id}/refetch # session + CSRF
+secubox-billets POST /admin/billets/{billet_id}/delete  # session + CSRF
+secubox-billets POST /admin/media/{media_id}/delete     # session + CSRF
+secubox-billets POST /admin/comments/{comment_id}/moderate # session + CSRF
+secubox-billets POST /b/{slug}/react                    # blog public, par conception
+secubox-billets POST /b/{slug}/comment                  # blog public, par conception
+
+# ── Protocoles machine a machine, avec leur propre preuve ─────────────────
+secubox-metablogizer POST /webhook      # webhook Gitea verifie en HMAC
+secubox-soc-gateway POST /enroll        # enrolement d'un noeud edge, requete signee
+secubox-soc-gateway POST /ingest        # requete signee (documente dans le code)
+secubox-soc-gateway POST /regional/enroll # enrolement d'un SOC regional
+secubox-soc-gateway POST /regional/ingest # requete signee
+secubox-soc-agent POST /command         # exige node_token + signature verifiee par execute_command()
+secubox-threatmesh POST /mesh/ingest    # decisions d'un pair du mesh, transport authentifie
+secubox-p2p POST /master-link/token/validate  # documente « public » : valide un jeton, n'en exige pas
+secubox-p2p POST /master-link/join      # jeton valide dans le corps de la requete
+secubox-p2p POST /master-link/invite-local    # restreint a localhost (documente)
+secubox-p2p POST /master-link/cleanup-local   # restreint a localhost (documente)
+secubox-p2p POST /api/v1/p2p-macro/grant/{service_id} # Subscription auto-signee, verifiee
+secubox-mail POST /autodiscover/autodiscover.xml  # protocole Outlook : le client ne peut pas porter de JWT
+secubox-mail POST /Autodiscover/Autodiscover.xml  # idem, variante de casse imposee par le protocole
+secubox-droplet POST /depot             # documente « PUBLIC — c'est la raison d'etre de cet espace »
+secubox-eye-remote POST /api/v1/eye-remote/connected     # appele par udev, en local
+secubox-eye-remote POST /api/v1/eye-remote/disconnected  # appele par udev, en local
+
+# ── Gate LAN au niveau nginx, pas JWT ──────────────────────────────────────
+# A CONFIRMER. secubox-lyrion est relaye derriere auth_request
+# /__sbx_auth_verify (LAN-only default-deny, ref #1247) : la cardlet du Hall
+# appelle ces routes depuis le navigateur sans porter de jeton. Le montage de
+# volume (medialib/mount) en a ete RETIRE et exige desormais un jeton — lier
+# un chemin hote arbitraire dans le LXC merite mieux qu'une barriere reseau.
+secubox-lyrion POST /rescan                      # A CONFIRMER — gate LAN nginx
+secubox-lyrion POST /player/{pid}/action/{verbe} # A CONFIRMER — gate LAN nginx
+secubox-lyrion POST /player/{pid}/play-url       # A CONFIRMER — gate LAN nginx
+secubox-lyrion POST /player/{pid}/power          # A CONFIRMER — gate LAN nginx
+secubox-lyrion POST /player/{pid}/volume         # A CONFIRMER — gate LAN nginx
+secubox-lyrion POST /player/{pid}/sync           # A CONFIRMER — gate LAN nginx
+
+# ── Cardlets du Hall : appelees depuis le navigateur, meme origine ────────
+# A CONFIRMER : poser require_jwt ici casserait le Hall si ses cardlets ne
+# relaient pas le jeton. A verifier sur gk2 avant de trancher.
+secubox-webos POST /broadcast           # A CONFIRMER — barre media du Hall
+secubox-webos POST /broadcast/like      # A CONFIRMER — barre media du Hall
+secubox-webos POST /depot               # A CONFIRMER — relais vers droplet, public en aval
+secubox-zia POST /v1/chat               # A CONFIRMER — cardlet Chat du Hall (www/zia/micro.html)
+secubox-ai-gateway POST /v1/chat/completions # A CONFIRMER — API compatible OpenAI
+
+# ── secubox-portal : les points d'entree de la connexion ──────────────────
+secubox-portal POST /login              # delivre la session — ne peut pas en exiger une
+secubox-portal POST /logout             # ferme la session
+secubox-portal POST /recover            # recuperation de compte, par definition sans session
+
+# ── Routeurs nommes `public_router` : le code les declare publics ─────────
+# secubox-hub /menu et /info alimentent LA PAGE DE CONNEXION : les garder
+# casserait le login lui-meme, puisqu'ils sont lus AVANT d'avoir un jeton.
+# Les projections de secubox-webos sont volontairement MINIMALES — la
+# docstring de /services dit « never leaks urls/latency/reach » — et chacune a
+# son pendant detaille sous require_jwt. Garder la projection publique
+# reviendrait a supprimer le couple, pas a le durcir.
+secubox-hub GET /menu                   # lu par la page de connexion, avant tout jeton
+secubox-hub GET /info                   # idem
+secubox-hub GET /led_status             # etat materiel des LED, sans donnee de session
+secubox-hub GET /health-batch           # agregat de sondes de sante
+secubox-hub GET /firewall_summary       # resume, pas de regle detaillee
+secubox-webos GET /services             # projection minimale, pendant detaille sous jeton
+secubox-webos GET /broadcast            # barre media du Hall
+secubox-webos GET /broadcasts           # historique des diffusions
+secubox-webos GET /cardlets             # cartes du Hall
+secubox-webos GET /cardlets/radio       # idem
+secubox-webos GET /cardlets/waf         # idem
+secubox-webos GET /cardlets/podcaster   # idem
+secubox-webos GET /menu/bbs             # idem
+secubox-webos GET /waf/qui-frappe       # caracterisation d'attaquants, deja agregee
+secubox-webos GET /actions/{module}/{action} # A CONFIRMER — un GET nomme « actions » sur un routeur public : a relire

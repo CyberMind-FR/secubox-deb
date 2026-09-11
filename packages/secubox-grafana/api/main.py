@@ -21,7 +21,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_lecture
 
 VERSION = "1.0.0"
 CTL = shutil.which("grafanactl") or "/usr/sbin/grafanactl"
@@ -56,23 +57,23 @@ def healthz() -> Dict[str, bool]:
     return {"ok": True}
 
 
-@app.get("/version")
+@app.get("/version", dependencies=[Depends(require_lecture)])
 def version() -> Dict[str, str]:
     build_file = Path("/usr/share/doc/secubox-grafana/.build-sha")
     build = build_file.read_text().strip() if build_file.is_file() else "unknown"
     return {"version": VERSION, "build": build}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> Dict[str, Any]:
     return _ctl_json("status")
 
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> Dict[str, Any]:
     return _ctl_json("components")
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access() -> Dict[str, Any]:
     return _ctl_json("access")

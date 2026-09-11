@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-localrecall
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
 Description: SecuBox LocalRecall — on-box AI memory store
  Long-term, on-box memory store for AI assistants: conversation
  history, learned operator preferences, project context. Local

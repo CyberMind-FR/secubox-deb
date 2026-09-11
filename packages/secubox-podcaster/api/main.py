@@ -38,6 +38,7 @@ from secubox_core.logger import get_logger
 
 from . import store
 from . import importer
+from secubox_core.auth import require_lecture
 
 log = get_logger("podcaster")
 
@@ -394,7 +395,7 @@ async def health():
     return {"status": "ok", "module": "deb"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     _ensure_worker()
     return {
@@ -410,7 +411,7 @@ def _xml_esc(s: Optional[str]) -> str:
     return html.escape(s or "", quote=True)
 
 
-@router.get("/share/feed.xml")
+@router.get("/share/feed.xml", dependencies=[Depends(require_lecture)])
 async def share_feed(request: Request):
     """A generated RSS of the locally downloaded episodes (the relay/share feed)."""
     _ensure_worker()
@@ -442,7 +443,7 @@ async def share_feed(request: Request):
     return Response(content=rss, media_type="application/rss+xml")
 
 
-@router.get("/public/library")
+@router.get("/public/library", dependencies=[Depends(require_lecture)])
 async def public_library():
     """Public listener library — downloaded/shared episodes only (no auth).
     Feeds the external portal frontend; exposes nothing un-shared."""
@@ -466,7 +467,7 @@ async def public_library():
     }
 
 
-@router.get("/public/feed/{fid}/zip")
+@router.get("/public/feed/{fid}/zip", dependencies=[Depends(require_lecture)])
 async def public_feed_zip(fid: int, background: BackgroundTasks):
     """Public: download all downloaded episodes of a feed as one ZIP.
     mp3/audio are already compressed → STORED (no recompress). Built to a temp
@@ -489,7 +490,7 @@ async def public_feed_zip(fid: int, background: BackgroundTasks):
                         background=background)
 
 
-@router.get("/media/{ep_id}")
+@router.get("/media/{ep_id}", dependencies=[Depends(require_lecture)])
 async def media(ep_id: int):
     ep = store.get_episode(ep_id)
     if not ep or ep.get("state") != "done" or not ep.get("local_path"):
@@ -503,7 +504,7 @@ async def media(ep_id: int):
                         filename=p.name, content_disposition_type="inline")
 
 
-@router.get("/feeds/{fid}/cover")
+@router.get("/feeds/{fid}/cover", dependencies=[Depends(require_lecture)])
 async def feed_cover(fid: int):
     """Public: the feed's artwork extracted from its media (audiobooks). Podcasts
     keep their RSS image URL; this only serves locally-extracted covers."""

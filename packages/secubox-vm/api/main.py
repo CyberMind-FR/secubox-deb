@@ -4,13 +4,28 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """SecuBox VM API - Virtualization management."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 import subprocess
 import json
 import os
 import xml.etree.ElementTree as ET
 from typing import Optional
+
+# GARDE JWT SUR TOUTE L'API (#1256, lot P1).
+#
+# MODULE-COMPLIANCE.md §Authentication : « All endpoints (except /health) MUST
+# use JWT authentication ». Ce module ne l'appliquait nulle part.
+#
+# ET RIEN NE RATTRAPAIT L'OUBLI EN AMONT : l'aggregator se contente de
+# `app.mount()` sans middleware, le snippet nginx `secubox-proxy.conf`
+# TRANSMET l'en-tete `Authorization` sans jamais le verifier, et
+# `auth_request /__sbx_auth_verify` teste l'appartenance au LAN, pas un jeton.
+#
+# `dependencies=[...]` plutot qu'un parametre `user=Depends(...)` : la garde
+# porte sur la route, aucun corps de fonction n'est touche, et une route
+# ajoutee plus tard sans garde se voit d'un coup d'oeil.
 
 app = FastAPI(title="SecuBox VM API", version="1.0.0")
 
@@ -167,7 +182,7 @@ def health():
     return {"status": "ok", "service": "vm"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get virtualization status."""
     libvirt_ok = is_libvirt_running()
@@ -201,7 +216,7 @@ def get_status():
     }
 
 
-@app.get("/vms")
+@app.get("/vms", dependencies=[Depends(require_jwt)])
 def list_vms():
     """List all VMs (KVM + LXC)."""
     vms = []
@@ -215,7 +230,7 @@ def list_vms():
     return {"vms": vms}
 
 
-@app.get("/vms/kvm")
+@app.get("/vms/kvm", dependencies=[Depends(require_jwt)])
 def list_kvm_vms():
     """List KVM virtual machines."""
     if not is_libvirt_running():
@@ -223,7 +238,7 @@ def list_kvm_vms():
     return {"vms": get_virsh_vms()}
 
 
-@app.get("/vms/lxc")
+@app.get("/vms/lxc", dependencies=[Depends(require_jwt)])
 def list_lxc_containers():
     """List LXC containers."""
     if not is_lxc_available():
@@ -231,7 +246,7 @@ def list_lxc_containers():
     return {"containers": get_lxc_containers()}
 
 
-@app.get("/vms/{name}")
+@app.get("/vms/{name}", dependencies=[Depends(require_jwt)])
 def get_vm(name: str):
     """Get VM or container details."""
     # Try KVM first
@@ -249,7 +264,7 @@ def get_vm(name: str):
     raise HTTPException(status_code=404, detail="VM not found")
 
 
-@app.post("/vms/kvm")
+@app.post("/vms/kvm", dependencies=[Depends(require_jwt)])
 def create_kvm_vm(config: VMCreate):
     """Create a new KVM virtual machine."""
     if not is_libvirt_running():
@@ -304,7 +319,7 @@ def create_kvm_vm(config: VMCreate):
     return {"status": "created", "name": config.name}
 
 
-@app.post("/vms/lxc")
+@app.post("/vms/lxc", dependencies=[Depends(require_jwt)])
 def create_lxc_container(config: LXCCreate):
     """Create a new LXC container."""
     if not is_lxc_available():
@@ -333,7 +348,7 @@ def create_lxc_container(config: LXCCreate):
     return {"status": "created", "name": config.name}
 
 
-@app.post("/vms/{name}/start")
+@app.post("/vms/{name}/start", dependencies=[Depends(require_jwt)])
 def start_vm(name: str):
     """Start a VM or container."""
     # Try KVM
@@ -362,7 +377,7 @@ def _set_lxc_autostart(name: str, on: bool) -> tuple:
     return run_priv(["/usr/sbin/secubox-vm-autostart", name, "1" if on else "0"])
 
 
-@app.post("/vms/{name}/stop")
+@app.post("/vms/{name}/stop", dependencies=[Depends(require_jwt)])
 def stop_vm(name: str, force: bool = False, hold: bool = False):
     """Stop a VM or container.
 
@@ -400,7 +415,7 @@ def stop_vm(name: str, force: bool = False, hold: bool = False):
     raise HTTPException(status_code=404, detail="VM not found")
 
 
-@app.post("/vms/{name}/freeze")
+@app.post("/vms/{name}/freeze", dependencies=[Depends(require_jwt)])
 def freeze_vm(name: str):
     """Mettre en VEILLE un conteneur LXC (#1225) : lxc-freeze gele tous ses
     processus — zero CPU, RAM conservee, reveil instantane par unfreeze. C'est
@@ -415,7 +430,7 @@ def freeze_vm(name: str):
     raise HTTPException(status_code=404, detail="Container not found")
 
 
-@app.post("/vms/{name}/unfreeze")
+@app.post("/vms/{name}/unfreeze", dependencies=[Depends(require_jwt)])
 def unfreeze_vm(name: str):
     """REVEILLER un conteneur en veille (#1225) : lxc-unfreeze relache les
     processus geles. Instantane — la RAM n'a pas bouge."""
@@ -429,7 +444,7 @@ def unfreeze_vm(name: str):
     raise HTTPException(status_code=404, detail="Container not found")
 
 
-@app.post("/vms/{name}/autostart")
+@app.post("/vms/{name}/autostart", dependencies=[Depends(require_jwt)])
 def set_autostart(name: str, on: bool = True):
     """(Dé)clarer un conteneur en DEMARRAGE AUTO (#1225). Ecrit
     `lxc.start.auto` dans sa config via un helper privilegie — le service
@@ -446,7 +461,7 @@ def set_autostart(name: str, on: bool = True):
     raise HTTPException(status_code=404, detail="Container not found")
 
 
-@app.post("/vms/{name}/restart")
+@app.post("/vms/{name}/restart", dependencies=[Depends(require_jwt)])
 def restart_vm(name: str):
     """Restart a VM or container."""
     # Try KVM
@@ -471,7 +486,7 @@ def restart_vm(name: str):
     raise HTTPException(status_code=404, detail="VM not found")
 
 
-@app.delete("/vms/{name}")
+@app.delete("/vms/{name}", dependencies=[Depends(require_jwt)])
 def delete_vm(name: str):
     """Delete a VM or container."""
     # Try KVM
@@ -508,7 +523,7 @@ def delete_vm(name: str):
     raise HTTPException(status_code=404, detail="VM not found")
 
 
-@app.get("/vms/{name}/console")
+@app.get("/vms/{name}/console", dependencies=[Depends(require_jwt)])
 def get_console_info(name: str):
     """Get console connection info for a VM."""
     if is_libvirt_running():
@@ -536,7 +551,7 @@ def get_console_info(name: str):
     raise HTTPException(status_code=404, detail="VM not found")
 
 
-@app.get("/iso")
+@app.get("/iso", dependencies=[Depends(require_jwt)])
 def list_iso_images():
     """List available ISO images."""
     os.makedirs(ISO_DIR, exist_ok=True)
@@ -556,7 +571,7 @@ def list_iso_images():
     return {"images": images}
 
 
-@app.get("/templates")
+@app.get("/templates", dependencies=[Depends(require_jwt)])
 def list_lxc_templates():
     """List available LXC templates."""
     templates = [

@@ -26,6 +26,7 @@ from typing import Optional, Dict, List, Any
 from enum import Enum
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 import httpx
 
@@ -576,7 +577,7 @@ async def health():
     return {"status": "healthy", "module": "cyberfeed"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = feed_manager.get_stats()

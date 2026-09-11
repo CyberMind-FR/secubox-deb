@@ -22,6 +22,10 @@ if "secubox_core" not in sys.modules:
     secubox_core = ModuleType("secubox_core")
     auth_mod = ModuleType("secubox_core.auth")
     auth_mod.require_jwt = lambda: None
+    # Le parc est passe en lecture gardee (#1256) : le stub doit porter
+    # les DEUX gardes, sinon l'import de waf.api echoue en designant le
+    # bon nom pour la mauvaise raison (« unknown location »).
+    auth_mod.require_lecture = lambda: None
     config_mod = ModuleType("secubox_core.config")
     config_mod.get_config = lambda *_a, **_k: {}
     secubox_core.auth = auth_mod

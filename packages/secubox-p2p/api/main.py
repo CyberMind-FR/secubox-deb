@@ -36,6 +36,7 @@ except ImportError:
         return {"sub": "admin"}
 
 from . import mesh, registry, annuaire_client, dht, federation, masterlink
+from secubox_core.auth import require_lecture
 
 app = FastAPI(
     title="SecuBox P2P API",
@@ -631,7 +632,7 @@ class TokenGenerateRequest(BaseModel):
 
 # ============== Status ==============
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get P2P network status (public)."""
     init_dirs()
@@ -676,7 +677,7 @@ async def get_status():
 
 # ============== Peer Discovery ==============
 
-@app.get("/discover")
+@app.get("/discover", dependencies=[Depends(require_lecture)])
 async def discover_get(method: str = "all", timeout: int = 5):
     """Discover peers (public read)."""
     return await discover_peers(method, timeout)
@@ -706,7 +707,7 @@ async def discover_post(req: DiscoverRequest, user: dict = Depends(require_jwt))
     return result
 
 
-@app.get("/discover/self")
+@app.get("/discover/self", dependencies=[Depends(require_lecture)])
 async def get_self():
     """Get local node info for announcement."""
     return get_self_peer()
@@ -714,7 +715,7 @@ async def get_self():
 
 # ============== Peers ==============
 
-@app.get("/peers")
+@app.get("/peers", dependencies=[Depends(require_lecture)])
 async def list_peers():
     """List all known peers (public read).
 
@@ -837,7 +838,7 @@ async def probe_peer(peer_id: str, user: dict = Depends(require_jwt)):
 
 # ============== Services ==============
 
-@app.get("/services")
+@app.get("/services", dependencies=[Depends(require_lecture)])
 async def list_services():
     """Live view: annuaire catalog ⨝ my subscriptions ⨝ activation overlay ⨝ legacy."""
     init_dirs()
@@ -1218,7 +1219,7 @@ async def revoke_access(service_id: str, user: dict = Depends(require_jwt)):
 
 # ============== Mesh Network ==============
 
-@app.get("/mesh")
+@app.get("/mesh", dependencies=[Depends(require_lecture)])
 async def get_mesh_status():
     """Get mesh network topology (public read).
 
@@ -1269,7 +1270,7 @@ async def get_mesh_status():
 
 # ============== Profiles ==============
 
-@app.get("/profiles")
+@app.get("/profiles", dependencies=[Depends(require_lecture)])
 async def list_profiles():
     """List P2P profiles."""
     init_dirs()
@@ -1307,7 +1308,7 @@ async def delete_profile(name: str, user: dict = Depends(require_jwt)):
 
 # ============== Threat Intelligence ==============
 
-@app.get("/threats")
+@app.get("/threats", dependencies=[Depends(require_lecture)])
 async def list_threats():
     """List threat intelligence entries (public read)."""
     init_dirs()
@@ -1381,7 +1382,7 @@ def generate_wg_keypair() -> tuple:
         return None, None
 
 
-@app.get("/wireguard")
+@app.get("/wireguard", dependencies=[Depends(require_lecture)])
 def get_wireguard_status():
     """Get WireGuard mesh status (public read)."""
     config = get_wg_mesh_config()
@@ -1512,7 +1513,7 @@ def get_announcers() -> List[Dict]:
     return load_json(ANNOUNCERS_FILE, [])
 
 
-@app.get("/announcers")
+@app.get("/announcers", dependencies=[Depends(require_lecture)])
 async def list_announcers():
     """List remote announcer servers (public read)."""
     announcers = get_announcers()
@@ -1712,7 +1713,7 @@ async def discover_via_bridge(
 
 # ============== Master-Link ==============
 
-@app.get("/master-link/status")
+@app.get("/master-link/status", dependencies=[Depends(require_lecture)])
 async def ml_status():
     """Get master-link status (public read)."""
     config = get_ml_config()
@@ -1910,7 +1911,7 @@ async def ml_generate_invite_local(
     }
 
 
-@app.get("/master-link/join-script")
+@app.get("/master-link/join-script", dependencies=[Depends(require_lecture)])
 async def ml_join_script(token: str, request: Request):
     """Return a shell script for joining (OpenWRT compatible)."""
     from fastapi.responses import PlainTextResponse
@@ -2278,14 +2279,14 @@ async def _notify_peer_promotion(peer_addr: str, depth: int):
         pass  # Best effort
 
 
-@app.get("/master-link/peers")
+@app.get("/master-link/peers", dependencies=[Depends(require_lecture)])
 async def ml_list_peers():
     """List all join requests and their status (public read)."""
     requests = get_ml_requests()
     return {"peers": requests, "count": len(requests)}
 
 
-@app.get("/master-link/tree")
+@app.get("/master-link/tree", dependencies=[Depends(require_lecture)])
 async def ml_tree():
     """Get mesh hierarchy tree (public read)."""
     config = get_ml_config()
@@ -2500,7 +2501,7 @@ async def _dht_shutdown():
         log.warning("dht stop failed: %s", exc)
 
 
-@app.get("/dht/peers")
+@app.get("/dht/peers", dependencies=[Depends(require_lecture)])
 async def dht_peers():
     """Routing table snapshot (public read). Disabled -> empty/zeroed shape."""
     net = getattr(app.state, "dht", None)
@@ -2528,7 +2529,7 @@ async def dht_announce(user: dict = Depends(require_jwt)):
     return {"ok": True, "key": net.self_id.hex()}
 
 
-@app.get("/dht/find/{did}")
+@app.get("/dht/find/{did}", dependencies=[Depends(require_lecture)])
 async def dht_find(did: str):
     """Resolve a DID to its verified reachability record via the DHT (public read)."""
     net = getattr(app.state, "dht", None)
@@ -2602,7 +2603,7 @@ async def _federation_shutdown():
         log.warning("federation checker stop failed: %s", exc)
 
 
-@app.get("/federation/services")
+@app.get("/federation/services", dependencies=[Depends(require_lecture)])
 async def federation_services():
     """Federated services + their current health status (public read).
     Disabled -> enabled: false, but the service list is still returned
@@ -2714,7 +2715,7 @@ async def _masterlink_shutdown():
         log.warning("masterlink stop failed: %s", exc)
 
 
-@app.get("/masterlink/topology")
+@app.get("/masterlink/topology", dependencies=[Depends(require_lecture)])
 async def masterlink_topology():
     """Snapshot of this node's master-link topology (public read).
     Disabled -> {"enabled": false}."""

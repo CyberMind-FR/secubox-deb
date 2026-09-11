@@ -61,6 +61,7 @@ from sentinelle_gsm.observations import (                # noqa: E402
 from sentinelle_gsm.observer import Anonymizer           # noqa: E402
 from sentinelle_gsm.scoring_engine import ScoringEngine  # noqa: E402
 from sentinelle_gsm.trusted import TrustedRegistry       # noqa: E402
+from secubox_core.auth import require_lecture
 
 _log = logging.getLogger("secubox.sentinelle-gsm.api")
 
@@ -419,7 +420,7 @@ def _sdr_present() -> bool:
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> dict:
     components = _components_list()
     states = {c["name"]: c["state"] for c in components}
@@ -464,13 +465,13 @@ def _components_list() -> list[dict]:
     ]
 
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> dict:
     return {"module": "sentinelle-gsm", "version": "0.1.0",
             "components": _components_list()}
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access() -> dict:
     return {
         "module": "sentinelle-gsm",
@@ -483,7 +484,7 @@ def access() -> dict:
     }
 
 
-@app.get("/cells")
+@app.get("/cells", dependencies=[Depends(require_lecture)])
 def cells() -> dict:
     """Observed cells + scores. Empty in v0.1.0 (scoring engine stubbed)."""
     if not _sdr_present():
@@ -651,7 +652,7 @@ async def stream_journal() -> StreamingResponse:
     )
 
 
-@app.post("/mode")
+@app.post("/mode", dependencies=[Depends(require_jwt)])
 def set_mode(payload: dict = Body(...)) -> dict:
     """Flip between PROD ↔ LAB.
 

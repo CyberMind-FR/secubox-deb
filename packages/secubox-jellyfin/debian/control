@@ -9,7 +9,7 @@ Homepage: https://cybermind.fr/secubox
 Package: secubox-jellyfin
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core (>= 1.0),
+         secubox-core (>= 1.4.0),
          lxc,
          lxc-templates,
          debootstrap,

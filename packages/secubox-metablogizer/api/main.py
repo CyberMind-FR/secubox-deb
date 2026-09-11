@@ -74,6 +74,7 @@ from webhook import (
 )
 import routers.publish
 from routers.publish import router as publish_router
+from secubox_core.auth import require_lecture
 app.include_router(publish_router)
 
 logger = logging.getLogger("metablogizer")
@@ -566,7 +567,7 @@ async def startup_event():
 # STATUS - Module state and health
 # =============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get unified MetaBlogizer status (public endpoint).
 
@@ -609,7 +610,7 @@ async def health():
     }
 
 
-@app.get("/health/{domain}")
+@app.get("/health/{domain}", dependencies=[Depends(require_lecture)])
 async def check_site_health(domain: str):
     """Check health of a specific site by probing HTTP/HTTPS"""
     import httpx
@@ -650,7 +651,7 @@ async def check_site_health(domain: str):
 # ACCESS - Sites list and URLs
 # =============================================================================
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def get_access():
     """Get all sites with their access URLs (public)"""
     sites = load_sites()
@@ -668,7 +669,7 @@ async def get_access():
     }
 
 
-@app.get("/access/detailed")
+@app.get("/access/detailed", dependencies=[Depends(require_lecture)])
 def get_access_detailed():
     """Get all published sites with certificate info and sizes"""
     import subprocess
@@ -737,7 +738,7 @@ def get_access_detailed():
 # SCREENSHOTS — Mosaic tab thumbnails (#956)
 # =============================================================================
 
-@app.get("/site/{name}/screenshot")
+@app.get("/site/{name}/screenshot", dependencies=[Depends(require_lecture)])
 async def get_site_screenshot(name: str):
     """Serve the conserved thumbnail for the Mosaic tab.
 

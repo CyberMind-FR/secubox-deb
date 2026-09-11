@@ -19,6 +19,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Nextcloud")
 config = get_config("nextcloud")
@@ -259,7 +260,7 @@ threading.Thread(target=_cache_worker, daemon=True, name="nc-cache").start()
 
 
 # Public endpoints
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get Nextcloud service status (fast: live port probe + cached occ fields)."""
     running = lxc_running()

@@ -252,6 +252,104 @@ async def require_jwt(
     )
 
 
+# Lecture gardée + mode tableau de bord ─────────────────────────────────
+#
+# LE MOTIF « THREE-FOLD » ETAIT UNE LECTURE PUBLIQUE (#1256). Environ 140
+# routes du parc — `status`, `components`, `access`, `stats` — etaient
+# documentees « public » pour que les tableaux de bord s'affichent sans
+# session. Ce n'etait pas une negligence, c'etait un choix. Mais une lecture
+# publique reste de la reconnaissance offerte : inventaire de paquets, pairs
+# WireGuard, topologie du frontal, journaux.
+#
+# LE PARC PASSE DONC EN LECTURE GARDEE. `require_lecture` remplace l'absence
+# de garde sur ces routes :
+#
+#   1. porteur ou cookie de session valide  -> autorise, identite connue ;
+#   2. sinon, SI le mode tableau de bord est actif ET que nginx a marque la
+#      requete comme LAN  -> autorise en lecteur anonyme ;
+#   3. sinon  -> 401.
+#
+# LE DEFAUT EST FERME. Le mode est opt-in, declaratif, auditable et versionne
+# — la meme doctrine que `waf_bypass` dans haproxy.toml, et pour la meme
+# raison : un defaut silencieux ne protege plus personne.
+#
+# POURQUOI NGINX DECIDE DU « LAN », ET PAS NOUS. Juger l'origine depuis
+# Python est un piege : derriere HAProxy -> sbxwaf -> nginx, `$remote_addr`
+# vaut 127.0.0.1 pour TOUT LE MONDE, et un test naif verrait le WAN entier
+# comme local. Le depot resout deja ce probleme dans
+# conf.d/secubox-lan-geo.conf (`set_real_ip_from` + `real_ip_header
+# X-Forwarded-For` + `real_ip_recursive on`, puis un bloc `geo $lan_client`).
+# On consomme ce verdict, on ne le refait pas.
+#
+# L'EN-TETE N'EST PAS FORGEABLE PAR LE CLIENT : le snippet
+# secubox-proxy.conf le pose avec `proxy_set_header`, qui REMPLACE toute
+# valeur presentee par l'appelant. Et si la requete n'est pas passee par
+# nginx, l'en-tete est absent : on retombe sur l'exigence du jeton. Les deux
+# chemins d'echec ferment.
+ENTETE_LAN = "X-SecuBox-LAN"
+
+
+def mode_tableau_de_bord_actif() -> bool:
+    """Le mode est-il arme sur cette board ?
+
+    `[tableau_de_bord] actif = true` dans /etc/secubox/secubox.conf. Absent ou
+    invalide vaut FALSE : on ne s'ouvre jamais par defaut d'ecriture.
+    `SECUBOX_TABLEAU_DE_BORD` (1/0) surcharge, pour les tests et la mise au
+    point — jamais pour la production.
+    """
+    forcage = os.environ.get("SECUBOX_TABLEAU_DE_BORD", "").strip()
+    if forcage in ("1", "0"):
+        return forcage == "1"
+    try:
+        valeur = get_config("tableau_de_bord").get("actif", False)
+    except Exception:  # config illisible -> ferme
+        return False
+    # STRICTEMENT LE BOOLEEN TOML, et rien d'autre. `bool("false")` vaut True
+    # en Python : accepter la chaine ouvrirait la lecture du parc sur un
+    # `actif = "true"` mal type — ou pire, sur un `actif = "false"`.
+    return valeur is True
+
+
+def _requete_lan(request: Request) -> bool:
+    """Verdict LAN de nginx, tel quel. Absent = non-LAN."""
+    return request.headers.get(ENTETE_LAN, "").strip() == "1"
+
+
+async def require_lecture(
+    request: Request,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> Dict[str, Any]:
+    """Garde de LECTURE : jeton, ou mode tableau de bord depuis le LAN.
+
+    Rend le payload du jeton quand il y en a un, sinon un pseudo-payload
+    `{"sub": None, "tableau_de_bord": True}` — pour qu'une route puisse savoir
+    qu'elle sert un lecteur anonyme et taire ce qui ne le regarde pas.
+    """
+    candidats = []
+    if creds is not None and creds.credentials:
+        candidats.append(creds.credentials)
+    cookie_tok = request.cookies.get(SESSION_COOKIE)
+    if cookie_tok:
+        candidats.append(cookie_tok)
+    for token in candidats:
+        payload = _validate_token(token)
+        if payload is not None:
+            return payload
+
+    if mode_tableau_de_bord_actif() and _requete_lan(request):
+        return {"sub": None, "tableau_de_bord": True}
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=(
+            "Lecture gardee : jeton requis. Le mode tableau de bord "
+            "(/etc/secubox/secubox.conf, [tableau_de_bord] actif) autorise le "
+            "LAN sans jeton ; il est inactif ou la requete n'est pas LAN."
+        ),
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 # Password verification ─────────────────────────────────────────────────
 def _check_password(username: str, password: str) -> bool:
     """Delegate to user_store. Replaces the old plaintext auth.toml lookup."""

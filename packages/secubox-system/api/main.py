@@ -28,6 +28,7 @@ import concurrent.futures
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import platform
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-system", version="1.2.0", root_path="/api/v1/system")
 
@@ -379,7 +380,7 @@ async def status(user=Depends(require_jwt)):
     return _compute_status_sync()
 
 
-@router.get("/info")
+@router.get("/info", dependencies=[Depends(require_lecture)])
 def info():
     """System info for dashboard (public)."""
     import platform
@@ -406,7 +407,7 @@ def info():
     }
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_lecture)])
 def metrics():
     """System metrics for Eye Remote dashboard (public).
 
@@ -434,7 +435,7 @@ def metrics():
     }
 
 
-@router.get("/resources")
+@router.get("/resources", dependencies=[Depends(require_lecture)])
 async def resources():
     """Resource usage for dashboard (public)."""
     cpu = psutil.cpu_percent(interval=0.5)
@@ -452,7 +453,7 @@ async def resources():
     }
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_lecture)])
 def metrics_public():
     """
     Public metrics endpoint for Eye Remote Dashboard (no JWT required).
@@ -527,13 +528,13 @@ def metrics_public():
     }
 
 
-@router.get("/services")
+@router.get("/services", dependencies=[Depends(require_lecture)])
 async def services():
     """Services list for dashboard (public)."""
     return {"services": [_svc_status(s) for s in SECUBOX_SERVICES]}
 
 
-@router.get("/network")
+@router.get("/network", dependencies=[Depends(require_lecture)])
 async def network():
     """Network interfaces for dashboard (public)."""
     import socket
@@ -555,7 +556,13 @@ async def network():
     return {"interfaces": interfaces}
 
 
-@router.get("/security")
+# INVENTAIRE ET JOURNAUX (#1261). /packages rend la liste versionnee des
+# paquets installes — de quoi choisir un CVE applicable ; /security rend la
+# posture ; /sessions/summary, qui est connecte ; /secubox_logs, le contenu des
+# journaux. Aucune de ces quatre n'est consommee par une page de www/ dans le
+# depot. Les autres routes du module (info, resources, metrics, services,
+# network) restent publiques : elles alimentent le tableau de bord Eye Remote.
+@router.get("/security", dependencies=[Depends(require_jwt)])
 def security():
     """Security status for dashboard (public)."""
     # nftables always active on SecuBox (rules loaded at boot)
@@ -582,7 +589,7 @@ def security():
     }
 
 
-@router.get("/packages")
+@router.get("/packages", dependencies=[Depends(require_jwt)])
 def packages():
     """Installed SecuBox packages (public)."""
     r = subprocess.run(
@@ -685,7 +692,7 @@ async def logs(unit: str = "", lines: int = 100, user=Depends(require_jwt)):
     return {"lines": r.stdout.splitlines(), "unit": unit}
 
 
-@router.get("/secubox_logs")
+@router.get("/secubox_logs", dependencies=[Depends(require_jwt)])
 def secubox_logs():
     """Get latest secubox log messages with criticality and emojis (public for dashboard).
 
@@ -1072,7 +1079,7 @@ def _get_interface_details() -> List[Dict[str, Any]]:
     return interfaces
 
 
-@router.get("/board")
+@router.get("/board", dependencies=[Depends(require_lecture)])
 async def board_info_endpoint():
     """
     Get detailed board detection info.
@@ -1167,7 +1174,7 @@ def run_board_detection(user=Depends(require_jwt)):
         return {"success": False, "error": str(e)}
 
 
-@router.get("/board/capabilities")
+@router.get("/board/capabilities", dependencies=[Depends(require_lecture)])
 async def board_capabilities():
     """
     Get board capabilities based on detected type.
@@ -1183,7 +1190,7 @@ async def board_capabilities():
     }
 
 
-@router.get("/kiosk/status")
+@router.get("/kiosk/status", dependencies=[Depends(require_lecture)])
 async def kiosk_status_endpoint():
     """
     Get kiosk mode status (public for UI adaptation).
@@ -1446,7 +1453,7 @@ async def get_sessions(user=Depends(require_jwt)):
     }
 
 
-@router.get("/sessions/summary")
+@router.get("/sessions/summary", dependencies=[Depends(require_jwt)])
 async def get_sessions_summary():
     """Get session summary for dashboard (public)."""
     sessions = _load_sessions()

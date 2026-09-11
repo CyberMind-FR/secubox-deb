@@ -58,6 +58,7 @@ from .manifest import LIFECYCLES, WAKE_CLASSES, ManifestError, load_all
 from .observe import Actual, is_on, load_routes
 from .scan import _toml_list, _toml_str
 from .state import OFF, ON, Profile, StateError, load_pins, load_profile
+from secubox_core.auth import require_lecture
 
 DEFAULT_ROOT = Path("/etc/secubox")
 
@@ -451,7 +452,7 @@ def create_app() -> FastAPI:
     async def get_status(_claims=Depends(require_jwt)):
         return await _get_status_cached(_root())
 
-    @app.get("/api/v1/profiles/lifecycles")
+    @app.get("/api/v1/profiles/lifecycles", dependencies=[Depends(require_lecture)])
     async def get_lifecycles():
         # Agregat NON-SENSIBLE (id + lifecycle + sleep_state), SANS JWT — meme
         # posture que l'API DPI /pub (agrege, lecture seule). Sert de SOURCE DE

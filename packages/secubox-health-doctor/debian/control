@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-health-doctor
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends},
-         secubox-core (>= 1.1),
+         secubox-core (>= 1.4.0),
          python3-uvicorn,
          python3-fastapi,
          lxc,

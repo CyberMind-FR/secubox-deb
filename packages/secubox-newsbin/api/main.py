@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="secubox-newsbin", version="1.0.0", root_path="/api/v1/newsbin")
 
@@ -258,7 +259,7 @@ async def health():
     return {"status": "ok", "module": "newsbin"}
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 def status():
     """Get Newsbin service status."""
     cfg = get_config()

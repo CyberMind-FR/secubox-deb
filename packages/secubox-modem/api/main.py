@@ -32,6 +32,7 @@ from .routers import status, connection, sms, terminal
 from core.modem_detect import ModemDetector
 from core.mm_client import ModemManagerClient
 from core.signal_history import get_signal_history
+from secubox_core.auth import require_lecture
 
 log = get_logger("modem")
 
@@ -184,7 +185,7 @@ async def health():
     }
 
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def components():
     """List system components (three-fold: what)."""
     return {
@@ -213,7 +214,7 @@ async def components():
     }
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def access():
     """Show access endpoints (three-fold: how)."""
     return {

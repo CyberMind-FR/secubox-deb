@@ -38,6 +38,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, Field
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Gitea", version="2.0.0")
 config = get_config("gitea")
@@ -300,7 +301,7 @@ def lxc_attach(command: str, timeout: int = 30) -> tuple:
 # STATUS - Module state and health
 # =============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status():
     """Get unified Gitea status (public endpoint)"""
     running = lxc_running()
@@ -374,7 +375,7 @@ async def health():
 # ACCESS - Connection URLs and configuration
 # =============================================================================
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def get_access():
     """Get connection URLs and client configuration (public)"""
     running = lxc_running()

@@ -5,6 +5,7 @@
 
 """SecuBox Auth API - OAuth2 + Vouchers + Sessions with Enhanced Monitoring"""
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, BackgroundTasks
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt, create_token, set_session_callback
 from secubox_core.config import get_config
@@ -348,7 +349,7 @@ def _set_password(req: _SetPasswordIn, request: _Request):
     raise HTTPException(status_code=403, detail="Token hors scope")
 
 
-@_login_router.get("/preflight")
+@_login_router.get("/preflight", dependencies=[Depends(require_lecture)])
 async def _auth_preflight():
     """Public-readable preflight surface for the UI banner.
 

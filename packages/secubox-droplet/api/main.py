@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Query
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
@@ -232,7 +233,7 @@ def _cfg():
 
 # ── Status ────────────────────────────────────────────────────────
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Droplet status for dashboard (public)."""
     cfg = _cfg()
@@ -267,7 +268,7 @@ async def status():
 
 # ── List Droplets ─────────────────────────────────────────────────
 
-@router.get("/list")
+@router.get("/list", dependencies=[Depends(require_lecture)])
 async def list_droplets():
     """List all droplets (sites + apps) for dashboard (public)."""
     droplets = []

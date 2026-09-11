@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox SpiderFoot", version="1.0.0")
 config = get_config("spiderfoot")
@@ -113,7 +114,7 @@ def health():
     return {"status": "ok", "module": "spiderfoot"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status():
     return _cached("status", 15.0, _compute_status)
 

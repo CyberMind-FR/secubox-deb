@@ -113,12 +113,17 @@ def test_ssl_redirect_never_captures_acme_challenges():
         )
 
 
-def test_ssl_redirect_requires_ssl():
+def test_redirection_https_exige_un_certificat():
     """Rediriger vers HTTPS un vhost sans certificat enverrait le visiteur sur
-    une page injoignable. La condition porte sur les deux drapeaux."""
+    une page injoignable : la condition porte sur `ssl`.
+
+    HTTPS PARTOUT PAR DEFAUT (#1370). Le test exigeait auparavant AUSSI
+    `ssl_redirect = true`. Ce drapeau restait false sur les 18 vhosts qui le
+    declaraient, donc aucune redirection n'etait produite ; il est devenu un
+    no-op garde pour compat. Avoir un certificat est desormais la seule
+    condition — forcer le clair sur un service a cert n'a pas de sens
+    defendable (posture ANSSI/CSPN)."""
     src = _src()
     i = src.index("redirect scheme https code 301")
     window = src[max(0, i - 400):i]
-    assert '"$ssl_redirect" = "1"' in window and '"$ssl" = "1"' in window, (
-        "la redirection doit exiger ssl ET ssl_redirect"
-    )
+    assert '"$ssl" = "1"' in window, "la redirection doit exiger un certificat"

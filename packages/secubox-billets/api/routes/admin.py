@@ -14,7 +14,8 @@ import json
 import secrets as _secrets
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile, Depends
+from secubox_core.auth import require_lecture
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
@@ -191,7 +192,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
     def _redirect(url: str) -> RedirectResponse:
         return RedirectResponse(url, status_code=303)
 
-    @app.get("/admin/login", response_class=HTMLResponse)
+    @app.get("/admin/login", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
     async def login_form(request: Request, error: str | None = None):
         token = _csrf_token(request)
         resp = templates.TemplateResponse(request, "admin_login.html",
@@ -236,7 +237,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
     # SecuBox /billets/ operator panel.
     override_limiter = sec.RateLimiter(max_events=5, window_s=3600)
 
-    @app.get("/admin/override", response_class=HTMLResponse)
+    @app.get("/admin/override", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
     async def override_form(request: Request, error: str | None = None):
         token = _csrf_token(request)
         resp = templates.TemplateResponse(request, "admin_override.html",
@@ -276,7 +277,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         _set_csrf(resp, request, token)
         return resp
 
-    @app.get("/admin", response_class=HTMLResponse)
+    @app.get("/admin", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
     async def dashboard(request: Request, status: str | None = None):
         author = await _current_author(request)
         if author is None:
@@ -289,7 +290,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         _set_csrf(resp, request, token)
         return resp
 
-    @app.get("/admin/billets/new", response_class=HTMLResponse)
+    @app.get("/admin/billets/new", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
     async def new_form(request: Request):
         author = await _current_author(request)
         if author is None:
@@ -371,7 +372,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         await _log_and_revision(request, event, row, actor=author["username"])
         return _redirect(f"/admin?media_skipped={skipped}" if skipped else "/admin")
 
-    @app.get("/admin/billets/{billet_id}/edit", response_class=HTMLResponse)
+    @app.get("/admin/billets/{billet_id}/edit", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
     async def edit_form(request: Request, billet_id: str):
         author = await _current_author(request)
         if author is None:
@@ -474,7 +475,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         await repo.delete_media(conn, media_id)
         return _redirect(f"/admin/billets/{billet_id}/edit")
 
-    @app.get("/admin/export.sbxsite")
+    @app.get("/admin/export.sbxsite", dependencies=[Depends(require_lecture)])
     async def export_site(request: Request):
         """Portable single-file backup: every billet + its media inlined as
         base64. Re-importable elsewhere; the media travels with the file."""
@@ -504,7 +505,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         return Response(content=body, media_type="application/json",
                         headers={"Content-Disposition": 'attachment; filename="billets.sbxsite"'})
 
-    @app.get("/admin/billets/{billet_id}/archive.html")
+    @app.get("/admin/billets/{billet_id}/archive.html", dependencies=[Depends(require_lecture)])
     async def archive_html(request: Request, billet_id: str):
         """Portable single-file .html of one billet in the communiqué layout:
         CSS inlined, media + embed vignette inlined as data: URIs, embed rendered
@@ -524,7 +525,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         return Response(content=html, media_type="text/html",
                         headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
-    @app.get("/admin/comments", response_class=HTMLResponse)
+    @app.get("/admin/comments", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
     async def comments_queue(request: Request):
         author = await _current_author(request)
         if author is None:

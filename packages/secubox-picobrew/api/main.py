@@ -9,9 +9,16 @@ sudo. C'est la règle du dépôt — une seule surface root, auditée.
 """
 import json
 import subprocess
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Depends
+from secubox_core.auth import require_jwt
+from secubox_core.auth import require_lecture
 
 CTL = "/usr/sbin/picobrewctl"
+
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
 
 app = FastAPI(title="SecuBox PicoBrew")
 router = APIRouter()
@@ -31,7 +38,7 @@ def _ctl(args: list[str], timeout: int = 20) -> tuple[int, str]:
         return 1, ""
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> dict:
     rc, out = _ctl(["status", "--json"])
     if rc != 0 or not out:
@@ -44,26 +51,26 @@ def status() -> dict:
                 "session_active": False, "error": "réponse ctl illisible"}
 
 
-@router.post("/start")
+@router.post("/start", dependencies=[Depends(require_jwt)])
 def start() -> dict:
     rc, _ = _ctl(["start"])
     return {"ok": rc == 0}
 
 
-@router.post("/stop")
+@router.post("/stop", dependencies=[Depends(require_jwt)])
 def stop() -> dict:
     rc, _ = _ctl(["stop"])
     return {"ok": rc == 0}
 
 
-@router.post("/restart")
+@router.post("/restart", dependencies=[Depends(require_jwt)])
 def restart() -> dict:
     # restart peut prendre quelques secondes (stop + start du conteneur).
     rc, _ = _ctl(["restart"], timeout=60)
     return {"ok": rc == 0}
 
 
-@router.get("/logs")
+@router.get("/logs", dependencies=[Depends(require_lecture)])
 def logs() -> dict:
     # Journal du service picobrew DANS le conteneur (best-effort ; conteneur à
     # l'arrêt → le ctl renvoie rc!=0, on rend une liste vide plutôt qu'une 500).

@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-wireguard
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core,
+         secubox-core (>= 1.4.0),
          wireguard-tools,
          qrencode
 Description: SecuBox WireGuard VPN Dashboard

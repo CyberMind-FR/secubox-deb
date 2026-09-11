@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-assist
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}, python3-fastapi, python3-uvicorn,
- secubox-core, secubox-annuaire, secubox-p2p, sudo, adduser
+ secubox-core (>= 1.4.0), secubox-annuaire, secubox-p2p, sudo, adduser
 Recommends: python3-websockets
 Description: SecuBox assistance request — real-time help sessions
  .

@@ -28,6 +28,7 @@ from api.antirobots import basculer_anti_robots, lire_anti_robots
 from api.exposure_read import read_exposure
 from api.modules_read import module_de
 from api.exposure_seed import ensure_snippet
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox VHost", version="1.1.0")
 config = get_config("vhost")
@@ -87,7 +88,7 @@ def acme_available() -> bool:
 # STATUS - Module state and health
 # =============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Get unified VHost status (public endpoint)"""
     running = nginx_running()
@@ -142,7 +143,7 @@ async def health():
 # COMPONENTS - Three-fold architecture (What)
 # =============================================================================
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 async def get_components():
     """List system components (public, three-fold: what)"""
     running = nginx_running()
@@ -193,7 +194,7 @@ async def get_components():
 # ACCESS - VHosts list and connection info
 # =============================================================================
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 async def get_access():
     """Get all vhosts with their access URLs (public)"""
     vhosts = []
@@ -730,7 +731,7 @@ async def delete_vhost(domain: str):
 # CERTIFICATES
 # =============================================================================
 
-@app.get("/certificates")
+@app.get("/certificates", dependencies=[Depends(require_lecture)])
 async def list_certificates():
     """List all certificates from the combined HAProxy PEM store (the real cert
     source, same as the certs module). Parsing shells out to openssl once per

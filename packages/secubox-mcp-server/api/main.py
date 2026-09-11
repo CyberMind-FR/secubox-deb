@@ -33,6 +33,7 @@ import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/mcp-server.toml")
@@ -884,7 +885,7 @@ mcp_server = MCPServer(DATA_DIR)
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Public status endpoint."""
     stats = mcp_server.get_stats()

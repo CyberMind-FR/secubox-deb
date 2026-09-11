@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-ai-gateway
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
 Description: SecuBox AI Gateway — data-sovereignty router for AI requests
  Routes AI inference requests across the available backends with
  per-request policy enforcement (sovereignty constraints, cost caps,

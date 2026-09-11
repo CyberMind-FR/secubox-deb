@@ -16,7 +16,7 @@ Depends: ${misc:Depends},
  python3-qrcode,
  python3-jsonschema,
  python3-tomli | python3 (>= 3.11),
- secubox-core (>= 1.0),
+ secubox-core (>= 1.4.0),
  jq
 Description: SecuBox Users — local account manager (Argon2id + TOTP + RBAC)
  Unified user-account management for SecuBox: account create/disable/

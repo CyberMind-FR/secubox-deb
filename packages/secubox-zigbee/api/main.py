@@ -26,7 +26,9 @@ import socket
 import subprocess
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from secubox_core.auth import require_jwt
+from secubox_core.auth import require_lecture
 
 LXC_NAME = os.environ.get("SECUBOX_LXC_NAME", "zigbee")
 LXC_IP = os.environ.get("SECUBOX_LXC_IP", "10.100.0.111")
@@ -39,6 +41,11 @@ SECRETS_DIR = Path(os.environ.get("SECUBOX_SECRETS_DIR", "/etc/secubox/secrets")
 # the zigbee2mqtt UI. Operators reach it from outside the LAN; the
 # /access list now includes it explicitly.
 PUBLIC_URL = os.environ.get("SECUBOX_ZIGBEE_PUBLIC_URL", "https://zigbee.gk2.secubox.in/")
+
+# GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
+# Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le
+# snippet nginx transmet `Authorization` sans le verifier, et auth_request
+# teste le LAN, pas un jeton.
 
 app = FastAPI(
     title="SecuBox Zigbee",
@@ -108,7 +115,7 @@ def _bridge_state() -> str:
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> dict:
     lxc_st = _lxc_state()
     daemon_st = "running" if _z2m_running() else "stopped"
@@ -126,7 +133,7 @@ def components() -> dict:
     }
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> dict:
     c = components()
     s = {x["name"]: x["state"] for x in c["components"]}
@@ -143,7 +150,7 @@ def status() -> dict:
     return {"module": "zigbee", "version": "2.4.0", "overall": overall, "states": s}
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access() -> dict:
     # v2.5.8: field renamed `endpoint` → `url` so the frontend's
     # `a.url` access actually finds a value (previously "lan:
@@ -179,7 +186,7 @@ BACKUP_SCRIPT  = ["sudo", "-n", "/usr/sbin/zigbee-backup"]
 RESTORE_SCRIPT = ["sudo", "-n", "/usr/sbin/zigbee-restore"]
 
 
-@app.get("/backups")
+@app.get("/backups", dependencies=[Depends(require_lecture)])
 def list_backups() -> dict:
     """List available z2m state snapshots, newest first.
     Each entry includes the device count parsed from the .devices
@@ -213,7 +220,7 @@ def list_backups() -> dict:
     return {"module": "zigbee", "backups": items, "root": str(BACKUP_ROOT)}
 
 
-@app.post("/backup")
+@app.post("/backup", dependencies=[Depends(require_jwt)])
 def trigger_backup() -> dict:
     """Run zigbee-backup synchronously. Short (~1s) so we don't bother
     with a background-task pattern."""
@@ -233,7 +240,7 @@ def trigger_backup() -> dict:
     }
 
 
-@app.post("/restore")
+@app.post("/restore", dependencies=[Depends(require_jwt)])
 def trigger_restore(body: dict) -> dict:
     """Restore a specific snapshot. Body: {id: <timestamp>}.
     The restore script stops z2m, archives the current state under a

@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-picobrew
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip,
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-uvicorn | python3-pip,
          python3-fastapi | python3-pip,
          lxc, debootstrap, sudo
 Recommends: unbound

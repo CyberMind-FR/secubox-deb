@@ -12,6 +12,7 @@ import sys
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Depends, HTTPException
+from secubox_core.auth import require_lecture
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 
@@ -58,7 +59,7 @@ def _ctl(*args):
         return {"raw": r.stdout}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     sid = _self_did()
     active = None

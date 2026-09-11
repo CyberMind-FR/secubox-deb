@@ -4,7 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """SecuBox OSSEC API - Host-based Intrusion Detection System."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from secubox_core.auth import require_jwt
 from pydantic import BaseModel
 import subprocess
 import json
@@ -12,6 +13,20 @@ import os
 import re
 from datetime import datetime, timedelta
 from typing import Optional
+
+# GARDE JWT SUR TOUTE L'API (#1256, lot P1).
+#
+# MODULE-COMPLIANCE.md §Authentication : « All endpoints (except /health) MUST
+# use JWT authentication ». Ce module ne l'appliquait nulle part.
+#
+# ET RIEN NE RATTRAPAIT L'OUBLI EN AMONT : l'aggregator se contente de
+# `app.mount()` sans middleware, le snippet nginx `secubox-proxy.conf`
+# TRANSMET l'en-tete `Authorization` sans jamais le verifier, et
+# `auth_request /__sbx_auth_verify` teste l'appartenance au LAN, pas un jeton.
+#
+# `dependencies=[...]` plutot qu'un parametre `user=Depends(...)` : la garde
+# porte sur la route, aucun corps de fonction n'est touche, et une route
+# ajoutee plus tard sans garde se voit d'un coup d'oeil.
 
 app = FastAPI(title="SecuBox OSSEC API", version="1.0.0")
 
@@ -245,7 +260,7 @@ def health():
     return {"status": "ok", "service": "ossec"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 def get_status():
     """Get OSSEC status."""
     running = is_ossec_running()
@@ -260,7 +275,7 @@ def get_status():
     }
 
 
-@app.post("/start")
+@app.post("/start", dependencies=[Depends(require_jwt)])
 def start_ossec():
     """Start OSSEC services."""
     control_script = f"{OSSEC_DIR}/bin/ossec-control"
@@ -275,7 +290,7 @@ def start_ossec():
     return {"status": "started"}
 
 
-@app.post("/stop")
+@app.post("/stop", dependencies=[Depends(require_jwt)])
 def stop_ossec():
     """Stop OSSEC services."""
     control_script = f"{OSSEC_DIR}/bin/ossec-control"
@@ -290,7 +305,7 @@ def stop_ossec():
     return {"status": "stopped"}
 
 
-@app.post("/restart")
+@app.post("/restart", dependencies=[Depends(require_jwt)])
 def restart_ossec():
     """Restart OSSEC services."""
     control_script = f"{OSSEC_DIR}/bin/ossec-control"
@@ -305,7 +320,7 @@ def restart_ossec():
     return {"status": "restarted"}
 
 
-@app.get("/alerts")
+@app.get("/alerts", dependencies=[Depends(require_jwt)])
 def list_alerts(count: int = 50, level: int = None):
     """Get recent alerts."""
     alerts = parse_alerts_log(count * 2)  # Get more to filter
@@ -316,13 +331,13 @@ def list_alerts(count: int = 50, level: int = None):
     return {"alerts": alerts[-count:], "count": len(alerts[-count:])}
 
 
-@app.get("/alerts/stats")
+@app.get("/alerts/stats", dependencies=[Depends(require_jwt)])
 def get_alerts_stats():
     """Get alert statistics."""
     return get_alert_stats()
 
 
-@app.get("/syscheck")
+@app.get("/syscheck", dependencies=[Depends(require_jwt)])
 def get_syscheck():
     """Get file integrity monitoring configuration."""
     files = get_syscheck_files()
@@ -333,7 +348,7 @@ def get_syscheck():
     }
 
 
-@app.post("/syscheck/scan")
+@app.post("/syscheck/scan", dependencies=[Depends(require_jwt)])
 def run_syscheck_scan():
     """Trigger a syscheck scan."""
     agent_control = f"{OSSEC_DIR}/bin/agent_control"
@@ -351,13 +366,13 @@ def run_syscheck_scan():
     raise HTTPException(status_code=404, detail="Syscheck control not found")
 
 
-@app.get("/rootcheck")
+@app.get("/rootcheck", dependencies=[Depends(require_jwt)])
 def get_rootcheck():
     """Get rootkit detection status."""
     return get_rootcheck_status()
 
 
-@app.post("/rootcheck/scan")
+@app.post("/rootcheck/scan", dependencies=[Depends(require_jwt)])
 def run_rootcheck_scan():
     """Trigger a rootcheck scan."""
     rootcheck_control = f"{OSSEC_DIR}/bin/rootcheck_control"
@@ -369,7 +384,7 @@ def run_rootcheck_scan():
     raise HTTPException(status_code=404, detail="Rootcheck control not found")
 
 
-@app.get("/logs")
+@app.get("/logs", dependencies=[Depends(require_jwt)])
 def get_logs(lines: int = 50):
     """Get OSSEC logs."""
     if not os.path.exists(OSSEC_LOG):
@@ -383,7 +398,7 @@ def get_logs(lines: int = 50):
         return {"logs": [], "error": str(e)}
 
 
-@app.get("/rules")
+@app.get("/rules", dependencies=[Depends(require_jwt)])
 def list_rules():
     """List detection rules."""
     rules_dir = f"{OSSEC_DIR}/rules"
@@ -404,7 +419,7 @@ def list_rules():
     return {"rules": sorted(rules, key=lambda x: x["name"])}
 
 
-@app.get("/decoders")
+@app.get("/decoders", dependencies=[Depends(require_jwt)])
 def list_decoders():
     """List log decoders."""
     decoders_dir = f"{OSSEC_DIR}/etc/decoders"
@@ -424,7 +439,7 @@ def list_decoders():
     return {"decoders": sorted(decoders, key=lambda x: x["name"])}
 
 
-@app.get("/active-response")
+@app.get("/active-response", dependencies=[Depends(require_jwt)])
 def list_active_responses():
     """List active response scripts."""
     ar_dir = f"{OSSEC_DIR}/active-response/bin"
@@ -443,7 +458,7 @@ def list_active_responses():
     return {"responses": sorted(responses, key=lambda x: x["name"])}
 
 
-@app.get("/agents")
+@app.get("/agents", dependencies=[Depends(require_jwt)])
 def list_agents():
     """List connected agents (server mode)."""
     agent_control = f"{OSSEC_DIR}/bin/agent_control"

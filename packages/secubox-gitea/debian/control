@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-gitea
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
 Description: SecuBox Gitea — self-hosted Git server (LXC)
  Manages a Gitea Git server (private repositories, issues, PRs)
  running in its own LXC container. SecuBox wires up nginx vhost,

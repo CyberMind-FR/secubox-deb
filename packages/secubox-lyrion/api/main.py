@@ -33,6 +33,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Header, Response
 # par le simple fait d'etre sur le reseau local. `check-upgrade` sort vers
 # l'exterieur, il est gate pour la meme raison.
 from secubox_core.auth import require_jwt
+from secubox_core.auth import require_lecture
 
 VERSION = "1.2.0"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
@@ -95,29 +96,29 @@ def healthz() -> Dict[str, bool]:
     return {"ok": True}
 
 
-@app.get("/version")
+@app.get("/version", dependencies=[Depends(require_lecture)])
 def version() -> Dict[str, str]:
     build_file = Path("/usr/share/doc/secubox-lyrion/.build-sha")
     build = build_file.read_text().strip() if build_file.is_file() else "unknown"
     return {"version": VERSION, "build": build}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 def status() -> Dict[str, Any]:
     return _ctl_json("status")
 
 
-@app.get("/components")
+@app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> Dict[str, Any]:
     return _ctl_json("components")
 
 
-@app.get("/access")
+@app.get("/access", dependencies=[Depends(require_lecture)])
 def access() -> Dict[str, Any]:
     return _ctl_json("access")
 
 
-@app.get("/players")
+@app.get("/players", dependencies=[Depends(require_lecture)])
 def players() -> Dict[str, Any]:
     """List players connected to LMS — name, model, id (MAC), ip, power.
 
@@ -141,7 +142,7 @@ def players() -> Dict[str, Any]:
     return {"players": out, "count": len(out)}
 
 
-@app.get("/now-playing")
+@app.get("/now-playing", dependencies=[Depends(require_lecture)])
 def now_playing() -> Dict[str, Any]:
     """Track currently playing on any player. Empty dict if nothing is
     playing on any connected player (or if no player is connected)."""
@@ -325,7 +326,7 @@ async def _ctl_verb(*args: str, timeout: int = 120) -> Dict[str, Any]:
     return await asyncio.to_thread(_run)
 
 
-@app.get("/medialib")
+@app.get("/medialib", dependencies=[Depends(require_lecture)])
 async def medialib() -> Dict[str, Any]:
     """Current external-media mount + detected candidates.
 
@@ -346,7 +347,7 @@ async def medialib() -> Dict[str, Any]:
     }
 
 
-@app.post("/medialib/mount")
+@app.post("/medialib/mount", dependencies=[Depends(require_jwt)])
 async def medialib_mount(payload: Dict[str, Any] = Body(default=None)) -> Dict[str, Any]:
     """Read-only-bind a confirmed host path into the Lyrion LXC.
 
@@ -358,7 +359,7 @@ async def medialib_mount(payload: Dict[str, Any] = Body(default=None)) -> Dict[s
     return await _ctl_medialib("mount", path)
 
 
-@app.get("/version-status")
+@app.get("/version-status", dependencies=[Depends(require_lecture)])
 async def version_status() -> Dict[str, Any]:
     """Version installee + derniere version connue, depuis le CACHE.
 
@@ -398,7 +399,7 @@ async def upgrade(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
     return await asyncio.to_thread(_run)
 
 
-@app.post("/medialib/unmount")
+@app.post("/medialib/unmount", dependencies=[Depends(require_jwt)])
 async def medialib_unmount() -> Dict[str, Any]:
     """Remove the external-media RO bind + persisted key, then rescan."""
     return await _ctl_medialib("unmount")

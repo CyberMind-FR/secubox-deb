@@ -33,6 +33,7 @@ import asyncio
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Traffic Shaper API", version="2.0.0")
 
@@ -369,7 +370,7 @@ def get_tc_stats() -> list:
 # Public Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def get_status():
     """Get traffic shaper status."""
     cached = stats_cache.get("status")
@@ -396,7 +397,7 @@ async def health():
     return {"status": "healthy", "module": "traffic"}
 
 
-@app.get("/summary")
+@app.get("/summary", dependencies=[Depends(require_lecture)])
 async def get_summary():
     """Get comprehensive traffic shaper summary."""
     config = load_config()
@@ -441,25 +442,25 @@ async def get_summary():
     }
 
 
-@app.get("/classes")
+@app.get("/classes", dependencies=[Depends(require_lecture)])
 async def list_classes():
     config = load_config()
     return {"classes": config.get("classes", []), "total": len(config.get("classes", []))}
 
 
-@app.get("/rules")
+@app.get("/rules", dependencies=[Depends(require_lecture)])
 async def list_rules():
     config = load_config()
     return {"rules": config.get("rules", []), "total": len(config.get("rules", []))}
 
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_lecture)])
 async def get_stats():
     stats = get_tc_stats()
     return {"stats": stats, "total": len(stats)}
 
 
-@app.get("/presets")
+@app.get("/presets", dependencies=[Depends(require_lecture)])
 async def list_presets():
     return {
         "presets": [
@@ -469,7 +470,7 @@ async def list_presets():
     }
 
 
-@app.get("/history")
+@app.get("/history", dependencies=[Depends(require_lecture)])
 async def get_history(limit: int = Query(50, ge=1, le=500)):
     history = load_history()
     history = sorted(history, key=lambda x: x.get("timestamp", ""), reverse=True)
@@ -668,7 +669,7 @@ async def delete_webhook(webhook_id: str):
     return {"success": True}
 
 
-@app.get("/info")
+@app.get("/info", dependencies=[Depends(require_lecture)])
 async def get_info():
     return {
         "module": "secubox-traffic",

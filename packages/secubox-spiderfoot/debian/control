@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-spiderfoot
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), debootstrap, lxc, jq
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), debootstrap, lxc, jq
 Description: SpiderFoot OSINT automation engine (LXC-sandboxed)
  Runs the SpiderFoot OSINT automation engine inside a dedicated
  debootstrap/LXC sandbox — 200+ passive modules and a correlation graph,

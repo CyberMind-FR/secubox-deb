@@ -6,7 +6,89 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-09-08*
+*Mis à jour : 2026-09-10*
+
+---
+
+## 2026-09-10 — Audit sécurité + garde JWT P0 (#1256, #1257, #1258)
+
+### ✅ Fait — dans le dépôt (non déployé)
+- **Audit de conformité** du dépôt contre ses propres règles (CLAUDE.md,
+  MODULE-COMPLIANCE, contraintes CSPN). Trois constats déposés : **#1256**
+  (581→~700 routes API sans garde JWT), **#1257** (l'API vhost de HAProxy répond
+  `success` sans rien écrire), **#1258** (3 profils AppArmor pour 254 units).
+  Contre-épreuve : aucun secret en clair, aucun `shell=True`, aucun `subprocess`
+  par f-string, TLS 1.3/1.2 seulement, DEFAULT DROP effectif, aucun paquet ne
+  fait `flush ruleset` (et deux tests le défendent).
+- **#1256 P0 fermé** : `secubox-vault` 1.1.1, `secubox-certs` 1.2.2,
+  `secubox-cloner` 1.1.1 — 33 routes gardées, `/health` seule publique, vérifié
+  à l'exécution (401 sans jeton).
+- **Cliquet de conformité** `tests/test_conformite_jwt.py` + inventaire
+  `tests/dette-jwt.txt` (667 routes, 114 modules) : la dette ne peut plus
+  augmenter en silence, ni l'inventaire pourrir.
+
+### ⬜ Next Up
+- ~~**#1256 P1**~~ → **fait** : 8 modules fermés (`simplex` 27, `magicmirror` 23,
+  `vm` 17, `wazuh` 17, `rezapp` 16, `jabber` 15, `ossec` 15, `redroid` 14) =
+  **144 routes**. Inventaire 667 → 526, `REPARES` à 11 modules. **177 routes
+  fermées au total sur la journée.**
+- ~~**#1256 écritures des modules partiels**~~ → **fait** : les 58 écritures
+  triées une par une — 12 fermées, 46 reclassées publiques à dessein dans
+  `tests/publiques-assumees.txt` avec leur raison. Dette 526 → 468.
+- ~~**#1256 écritures**~~ → **terminé : le parc ne porte plus une seule route
+  d'écriture sans garde.** Les 17 dernières fermées, les 3 de `portal` assumées.
+- **#1261 — fuite du domaine admin fermée** : `/webui/admin-domain` et
+  `/webui/nginx-config` rendaient à un anonyme la seule barrière devant l'API
+  d'admin. Plus 9 lectures de reconnaissance (topologie HAProxy, pairs
+  WireGuard, inventaire/journaux système).
+- ~~**#1256 lectures**~~ → **arbitrage rendu et appliqué : lecture gardée +
+  mode tableau de bord.** ~450 routes sous `require_lecture`, `secubox-core`
+  1.4.0, 106 paquets rebâtis. Dette = **0**, cliquet devenu verrou.
+- **⚠ AVANT DÉPLOIEMENT** : armer `[tableau_de_bord] actif = true` dans
+  `/etc/secubox/secubox.conf` sur gk2, sinon les cardlets du Hall demanderont un
+  jeton. C'est le sens de panne voulu (fermé par défaut), mais il se prépare.
+- **À trancher encore** : les entrées `A CONFIRMER` de
+  `tests/publiques-assumees.txt` — `webos /actions/{module}/{action}` (un GET
+  nommé « actions » sur un routeur public), et les cardlets Hall/`zia`/
+  `ai-gateway` : relaient-elles un jeton ?
+- **Échecs de tests préexistants révélés** par le conftest racine (5 suites :
+  `dpi`, `iot-guard`, `mac-guard`, `nextcloud`, `openclaw`) — à trier.
+- **À trancher (marqué A CONFIRMER dans `publiques-assumees.txt`)** : les routes
+  du Hall (`webos` broadcast, `zia` /v1/chat, `ai-gateway`) et le transport
+  `lyrion` restent publiques parce que les cardlets les appellent depuis le
+  navigateur. À vérifier sur gk2 : relaient-elles un jeton ?
+- **#1259 / #1260** (nouveaux) : routeurs `eye-remote` non montés, et repli
+  fail-open de `leases.py`.
+- **#1256 P2** : trier les entrées publiques à dessein vers `PUBLIQUES`.
+- **#1257** : brancher l'API vhost de HAProxy sur `haproxyctl` — **après** le
+  déploiement de #1254.
+- **#1258** : patron AppArmor générique dans `common/`, puis les 5 services
+  exposés (haproxy, portal, aggregator, vault, certs).
+- **Déployer** `secubox-haproxy` 1.8.12 sur gk2 (cf. section #1254 ci-dessous).
+
+---
+
+## 2026-09-10 — `haproxyctl generate` réparé (#1254)
+
+### ✅ Fait — dans le dépôt (non déployé)
+- **`haproxyctl` 1.1.1 / `secubox-haproxy` 1.8.12.** Le « generate cassé » du 08/09
+  était **deux** pannes : (a) accents graves des commentaires exécutés comme
+  substitutions de commandes dans les heredocs non quotés → volée de
+  `command not found` + commentaires éventrés dans le cfg ; (b) l'extraction d'une
+  table TOML (`head -n -1`) décapitait la **dernière** table du fichier — le dernier
+  `[backends.X]` sortait **sans un seul serveur** (503 silencieux, cfg valide pour
+  `haproxy -c`). Remplacée par `_toml_section()` en awk, 6 sites d'appel.
+- **Tests** : `test_generation_cfg.py` exécute réellement `generate` et vérifie cfg +
+  stderr (3 régressions couvertes) ; `test_ssl_redirect_requires_ssl` remis en phase
+  avec #1370 (HTTPS partout par défaut, `ssl_redirect` = no-op).
+
+### ⬜ Next Up
+- **Déployer `secubox-haproxy` 1.8.12 sur gk2** puis lancer un `generate` réel :
+  comparer le cfg produit au cfg live AVANT tout `--allow-shrink` (le garde-fou
+  anti-dérive refusera de régénérer tant que `haproxy.toml` compte moins d'entrées
+  que le live). Ne fermer #1254 qu'après cette validation.
+- **secubox-dpi-engine** : le formaliser en paquet source cross-build.
+- **ZIA Phase E** : manifestes `capabilities.d` pour lyrion + peertube.
 
 ---
 
@@ -35,8 +117,10 @@
   **CONSERVÉ** : analyseurs `toolbox-mitm`/`-wg` (mitmdump R2/R3), distincts du WAF.
 
 ### ⬜ À suivre (→ TODO)
-- **haproxyctl generate CASSÉ** (erreurs bash) + `haproxy.toml` avait divergé du
-  cfg live — à réparer (le rename backend a été fait sur le cfg live + toml synchro).
+- ~~**haproxyctl generate CASSÉ** (erreurs bash)~~ → **corrigé le 10/09 (#1254)**,
+  cf. section du jour. Reste la partie board : `haproxy.toml` avait divergé du cfg
+  live (rename backend fait sur le cfg live + toml synchro) — vérifier le diff au
+  redéploiement, avant tout `--allow-shrink`.
 - Redéploiement des ~30 paquets au scrub mitmproxy **non fait** : 0 gain fonctionnel
   (box déjà migrée), cosmétique seul → suivra au release naturel.
 - `secubox-jellyfin-playback-policy.service` en échec (pré-existant, sans rapport).

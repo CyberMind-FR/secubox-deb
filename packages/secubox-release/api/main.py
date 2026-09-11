@@ -18,6 +18,7 @@ sys.path.insert(0, os.environ.get("ANNUAIRE_LIB", "/usr/lib/secubox/annuaire"))
 sys.path.insert(0, os.environ.get("RELEASE_LIB", "/usr/lib/secubox/release"))
 from annuaire.log import Journal          # noqa: E402
 from annuaire import releases             # noqa: E402
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Release")
 CTL = ["/usr/sbin/secubox-releasectl"]
@@ -58,7 +59,7 @@ def _ctl(*args):
         return {"raw": r.stdout}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     return {"module": "release", "ok": True}
 

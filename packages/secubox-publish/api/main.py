@@ -32,6 +32,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core.auth import require_lecture
 
 app = FastAPI(title="SecuBox Publishing Platform", version="3.0.0")
 
@@ -434,7 +435,7 @@ async def health():
     return {"status": "ok", "module": "publish", "version": "2.0.0"}
 
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_lecture)])
 async def status():
     """Unified status for all publishing modules."""
     cached = stats_cache.get("status")
@@ -723,7 +724,7 @@ async def delete_webhook(webhook_id: str):
     return {"success": True}
 
 
-@app.get("/summary")
+@app.get("/summary", dependencies=[Depends(require_lecture)])
 async def summary():
     """Get publishing platform summary."""
     status_info = await status()
@@ -1025,7 +1026,7 @@ async def isp_upload(
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-@app.get("/bundle/{name}.zip")
+@app.get("/bundle/{name}.zip", dependencies=[Depends(require_lecture)])
 async def download_bundle(name: str):
     """
     Download published content as ZIP bundle.
@@ -1058,7 +1059,7 @@ async def download_bundle(name: str):
     )
 
 
-@app.get("/bundle/{name}/qrcode")
+@app.get("/bundle/{name}/qrcode", dependencies=[Depends(require_lecture)])
 async def bundle_qrcode(name: str):
     """Generate QR code for bundle download URL."""
     try:
@@ -1153,7 +1154,7 @@ async def reload_plugins():
 # Banner Integration — Eyemote Download Links
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.get("/banner/links")
+@app.get("/banner/links", dependencies=[Depends(require_lecture)])
 async def banner_links():
     """
     Get links for eyemote banner integration.
