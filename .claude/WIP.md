@@ -35,9 +35,18 @@
   (pubkey match, 0600), clé primaire existante intacte. Compat PEM croisée + ECDH
   souverain↔stdlib vérifiés localement.
 
+- **Premier consommateur `Session` branché** : canal scellé device↔device dans
+  `secubox-identity` (`establish_session`/`seal_for`/`open_from`, helpers serveur,
+  aucune route n'expose de clé). ECDH X25519 → HKDF → ChaCha20-Poly1305.
+  `secubox-identity` **1.1.6** — PR **#1273**. Déployé gk2, vérifié sur l'arm64 :
+  round-trip OK (enveloppe 53 o), rejet tiers/AAD = InvalidTag, `/health` 200.
+  Constat de cadrage : mesh=WireGuard, invitation #1262=Ed25519 → pas d'ECDH à
+  reconvertir ; ce canal est le **chemin souverain unique** pour les futures
+  features (offres MirrorNet chiffrées, secret d'onboarding #1262).
+
 ### ⬜ Next Up
-- **Consommateurs `Session`** (mesh/MirrorNet, invitation #1262) sur
-  `secubox_core.crypto.Session` — cf. TODO 2026-09-11.
+- Quand une feature réclame un canal chiffré (offre MirrorNet, onboarding #1262),
+  l'adosser à `IdentityManager.seal_for/open_from` plutôt qu'un ECDH maison.
 - **PR #6 côté upstream** : étendre l'optimisation `random_grid` au Carter
   classique demandera de revoir la méthodologie des 2 tests d'avalanche à bruit
   figé (dépendance à la granularité `os.urandom`). Laissé à l'upstream.
