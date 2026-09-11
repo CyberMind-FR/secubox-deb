@@ -60,6 +60,17 @@ Some subdirectories may contain components under different licenses (Apache 2.0,
 | `packages/` | CMSD-1.0 | SecuBox modules |
 | `docs/` | CMSD-1.0 | Documentation |
 
+## Contributions
+
+Contributions are welcome for transparency and security review. Because CMSD-1.0
+reserves all economic rights to the Licensor, every contributor must accept the
+**Contributor License Agreement** before a contribution can be merged:
+
+- 📄 [CLA.md](CLA.md) — CyberMind Contributor License Agreement v1.0 (French, authoritative)
+
+Acceptance is done either by adding a `CLA-Accepted-by:` trailer to each commit,
+or by signing and emailing the CLA once (see CLA.md, Article 8).
+
 ## Contact
 
 - **Security issues:** security@cybermind.fr
