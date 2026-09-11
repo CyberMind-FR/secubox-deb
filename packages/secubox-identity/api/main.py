@@ -295,6 +295,52 @@ class IdentityManager:
             format=serialization.PublicFormat.Raw)
         return pub.hex()
 
+    # ── Canal scellé device↔device (Session souveraine, #1263) ──────────────────
+    # Premier CONSOMMATEUR de secubox_core.crypto.Session : la clé device X25519
+    # (publiée par ensure_x25519_pubkey) sert enfin à DÉRIVER un secret partagé.
+    # ECDH X25519 → HKDF-SHA256 → ChaCha20-Poly1305. Helpers SERVEUR uniquement —
+    # aucune route n'expose de clé ni de secret. Les features futures (offres
+    # MirrorNet chiffrées, secret d'onboarding #1262) passent par ce chemin unique
+    # plutôt que de refaire leur propre ECDH.
+    def _load_x25519_identity(self, key_id: str = "primary"):
+        """Charge la clé device X25519 comme `Identity` souveraine (pour Session)."""
+        if _hermes is None:
+            raise RuntimeError(
+                "canal scellé indisponible : cœur souverain secubox_core.crypto "
+                "absent (requiert secubox-core >= 1.4.1)")
+        self.ensure_x25519_pubkey(key_id)   # garantit la présence du fichier PEM
+        return _hermes.Identity.load(self._x25519_path(key_id))
+
+    def establish_session(self, peer_public_hex: str, *, key_id: str = "primary",
+                          salt: Optional[bytes] = None):
+        """Session ECDH X25519 + HKDF-SHA256 avec un pair (sa pubkey Raw en hex).
+
+        Les deux pairs qui appellent `establish` avec le même `salt` obtiennent
+        la MÊME clé symétrique. Lève RuntimeError si le cœur souverain est absent,
+        ValueError si `peer_public_hex` n'est pas 32 octets hex valides.
+        """
+        peer = bytes.fromhex(peer_public_hex)
+        if len(peer) != 32:
+            raise ValueError("clé publique du pair invalide : 32 octets X25519 attendus")
+        local = self._load_x25519_identity(key_id)
+        return _hermes.Session.establish(local, peer, salt=salt)
+
+    def seal_for(self, peer_public_hex: str, plaintext: bytes, *, aad: bytes = b"",
+                 key_id: str = "primary", salt: Optional[bytes] = None) -> bytes:
+        """Scelle `plaintext` pour un pair : ECDH → ChaCha20-Poly1305.
+
+        Renvoie `nonce(12) || ciphertext || tag(16)`. `aad` est authentifiée
+        mais pas chiffrée. Nonce aléatoire par appel."""
+        return self.establish_session(
+            peer_public_hex, key_id=key_id, salt=salt).encrypt(plaintext, aad)
+
+    def open_from(self, peer_public_hex: str, sealed: bytes, *, aad: bytes = b"",
+                  key_id: str = "primary", salt: Optional[bytes] = None) -> bytes:
+        """Ouvre un message scellé par un pair. Lève ValueError si le tag Poly1305
+        est invalide (clé, nonce, AAD ou ciphertext altéré)."""
+        return self.establish_session(
+            peer_public_hex, key_id=key_id, salt=salt).decrypt(sealed, aad)
+
     def get_or_create_identity(self) -> IdentityDocument:
         """Get existing identity or create new one."""
         if self._local_identity:
