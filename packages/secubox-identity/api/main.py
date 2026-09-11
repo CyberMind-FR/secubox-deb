@@ -38,8 +38,8 @@ from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 # retombe sinon sur `cryptography` (stdlib). L'audit confirme que hermes repose
 # sur les MÊMES primitives standard (X25519, ChaCha20-Poly1305, HKDF) : le repli
 # n'est donc pas une dégradation d'algorithme, juste l'absence de la couche
-# souveraine. Le module souverain arrive avec la branche feat/hermes-crypto-core
-# (non mergée) ; ce seam l'adoptera automatiquement à son merge.
+# souveraine. Le module souverain est fusionné (secubox_core.crypto, PR #1272,
+# secubox-core >= 1.4.1) : ce seam l'adopte quand il est importable.
 try:  # noqa: SIM105
     from secubox_core.crypto import hermes as _hermes  # type: ignore
     CRYPTO_BACKEND = "hermes-souverain"
@@ -267,11 +267,23 @@ class IdentityManager:
                                                       backend=default_backend())
 
     def ensure_x25519_pubkey(self, key_id: str = "primary") -> str:
-        """Rend la clé publique X25519 (hex Raw 32o), en la créant+persistant si absente."""
+        """Rend la clé publique X25519 (hex Raw 32o), en la créant+persistant si absente.
+
+        Génération par le cœur **souverain** `hermes.Identity` quand il est
+        importable (#1263) — même primitive X25519, persistance PEM PKCS#8 en
+        **0600 atomique** (`O_CREAT|O_EXCL` + `os.replace`). Le format sur disque
+        est identique à celui du chemin `cryptography`, donc `load_x25519()`
+        (chargeur PEM stdlib) relit indifféremment une clé produite par l'un ou
+        l'autre. Repli stdlib si le backend souverain est absent — même algo.
+        """
         priv = self.load_x25519(key_id)
         if priv is None:
-            priv = x25519.X25519PrivateKey.generate()
             p = self._x25519_path(key_id)
+            if _hermes is not None:
+                ident = _hermes.Identity.generate()
+                ident.save(p)                     # PKCS#8 PEM, 0600, atomique
+                return ident.public_hex()
+            priv = x25519.X25519PrivateKey.generate()
             with open(p, "wb") as f:
                 f.write(priv.private_bytes(
                     encoding=serialization.Encoding.PEM,
