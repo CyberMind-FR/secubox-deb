@@ -868,8 +868,11 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   background:var(--panel);border-top:1px solid var(--line)}
 .viewer-bar .titre{font-size:.82rem;color:var(--ink);white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;max-width:34vw}
-.viewer-bar .etat{display:flex;align-items:center;gap:.7rem;font-family:"JetBrains Mono";
-  font-size:.68rem;color:var(--dim);flex-wrap:wrap}
+/* nowrap : les 3 indicateurs (souverain/temps/cache) tiennent sur UNE ligne au
+   lieu de s'empiler quand la barre est etroite (mini-player). Le titre cede en
+   premier (ellipsis) plutot que de faire wrapper l'etat. */
+.viewer-bar .etat{display:flex;align-items:center;gap:.6rem;font-family:"JetBrains Mono";
+  font-size:.68rem;color:var(--dim);flex-wrap:nowrap;white-space:nowrap;flex:0 0 auto}
 .viewer-bar .etat b{color:var(--ink)} .viewer-bar .etat .cache b{color:var(--cyan)}
 .viewer-bar .prog{flex:1;min-width:60px;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
 .viewer-bar .prog i{display:block;height:100%;width:0;background:var(--cyan);transition:width .3s}

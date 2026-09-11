@@ -1,17 +1,14 @@
 secubox-webos (1.0.291-1~bookworm1) bookworm; urgency=medium
 
-  * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,
-    components, access, stats — repondaient sans authentification : c'etait le
-    motif « three-fold » du parc, un choix assume, mais une lecture publique
-    reste de la reconnaissance offerte. Elles passent sous
-    `require_lecture` : jeton, OU mode tableau de bord depuis le LAN si
-    l'operateur l'a arme dans /etc/secubox/secubox.conf.
-  * Le defaut est FERME : sans `[tableau_de_bord] actif = true`, ces routes
-    exigent un jeton, y compris depuis le LAN.
-  * Les sondes de sante restent publiques. Les routes deja sous require_jwt ne
-    changent pas — le mode ne les ouvre jamais.
+  * Viewer : les indicateurs (souverain / temps / cache) tiennent sur UNE ligne
+    (`.etat` flex-wrap:nowrap) au lieu de s'empiler quand la barre est étroite
+    (mini-player). Le titre cède en premier (ellipsis).
+  * Surf & Viewer : titres « smart » pour les favoris/historique YouTube &
+    co — rapprochés de la bibliothèque ytsas (/list, read-only, une requête,
+    AUCUN rapatriement déclenché). Complète la résolution PeerTube existante ;
+    à défaut d'entrée en bibliothèque, on garde le libellé composé.
 
- -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 23:55:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Sep 2026 12:00:00 +0200
 
 secubox-webos (1.0.290-1~bookworm1) bookworm; urgency=medium
 

@@ -157,11 +157,37 @@
       .then(function(v){ if(v && v.name){ ecritTitre(u, v.name); rend(); } })
       .catch(function(){});
   }
+  // YOUTUBE & co : on NE demande PAS /resolve (il ENFILE un rapatriement — effet
+  // de bord). On lit la bibliothèque ytsas (/list, read-only, UNE requête) et on
+  // rapproche par id vidéo. Ne titre donc que ce qui a déjà été vu/rapatrié ;
+  // le reste garde son libellé composé. Zéro téléchargement déclenché.
+  var _biblioFait=false;
+  function resoudreViaBiblio(){
+    if(_biblioFait) return; _biblioFait=true;
+    fetch('/api/v1/ytsas/list',{headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(d){
+        var items=(d&&(d.items||d.list))||d||[]; if(!items.forEach) return;
+        var parId={};
+        items.forEach(function(it){ if(it&&it.id&&it.title) parId[it.id]=it.title; });
+        var urls=[].concat(lire('sbx_favoris'),
+          lire('sbx.broadcast.hist').map(function(x){ return x&&x.u; }),
+          lire('sbx.viewer.hist').map(function(x){ return x&&x.u; }));
+        var chg=false, m=litTitres();
+        urls.forEach(function(u){
+          if(!u || m[u] || !/youtube|youtu\.be/.test(hote(u))) return;
+          var id=ident(u);
+          if(id && parId[id]){ ecritTitre(u, parId[id]); chg=true; }
+        });
+        if(chg) rend();
+      }).catch(function(){});
+  }
   function majTitres(){
     var urls=[].concat(lire('sbx_favoris'),
       lire('sbx.broadcast.hist').map(function(x){ return x&&x.u; }),
       lire('sbx.viewer.hist').map(function(x){ return x&&x.u; }));
-    urls.forEach(function(u){ if(u) resoudreTitre(u); });
+    urls.forEach(function(u){ if(u) resoudreTitre(u); });   // PeerTube (par vidéo)
+    resoudreViaBiblio();                                    // YouTube & co (biblio ytsas)
   }
 
   // Libellé riche (émoji + nom), échappé — à insérer en innerHTML.
