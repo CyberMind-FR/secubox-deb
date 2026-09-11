@@ -397,3 +397,109 @@ Recommandations par priorité :
 7. Tests de non-régression : uniformité du champ longueur (N1), unicité du sel de dérivation vault (N2).
 
 *Aucun fichier du dépôt cloné modifié ; vérifications empiriques via scripts hors arbre.*
+
+## Passage 4 — 2026-09-11 (commit `aede483`, delta 5 commits sur `3b7af6a`)
+
+### Note de méthode
+`git fetch` de `anibaledel/livreedhermes` : **5 nouveaux commits** depuis l'état
+audité au passage 3 (`3b7af6a`) → HEAD `aede483`. Delta rejouable cette fois
+(`git show`/`git diff`). Environnement identique (Python 3.12.3, `cryptography`,
+`argon2-cffi`, `pytest` 7.4.4 ; **`scipy` absent** → tests statistiques skippés).
+Les 5 commits :
+- `4fe96da` DOC-1 + CR-3 : correction des comptes Ref360 et du commentaire de masque.
+- `52bc2ee` porte **Carter-18** et **Carter-Hybrid** (reconstruits sur le code du dépôt).
+- `bf8b717` expose les fonctions de **session** Carter-18/Hybrid (`secu_box.py`).
+- `f759431` couverture statistique Carter-18/Hybrid (`test_statistical.py`).
+- `aede483` **Fix N2** : sel aléatoire par-vault pour la dérivation Argon2id.
+
+### 1. Résumé exécutif
+À `aede483` la crypto reste **saine**. La grande nouveauté (Carter-18, Carter-Hybrid
+et leurs variantes de session X25519) est **hors chemin critique de confidentialité** :
+`encode_carter_18`/`encode_carter_hybrid` chiffrent d'abord par
+`_encrypt(message, xchacha_key)` (XChaCha20-Poly1305, AEAD vérifié), puis ne font
+que *placer* les symboles selon une grammaire dérivée par HKDF d'une clé et un
+référent géométrique **de graine publique**. La confidentialité/intégrité ne
+dépend jamais de la géométrie. **N2 est corrigé upstream** (`aede483`, vérifié).
+**DOC-1/CR-3** re-documentés correctement (masque additif = couche défensive, non
+source d'indiscernabilité, déterministe par `grammar_key`). Restent ouverts, non
+touchés par ce delta : **N1** (en-tête de longueur), **W1/W2** (worker Stripe),
+entropie Ref256 (§4.6), débit (§4.8). **Gravité résiduelle globale : Faible**,
+inchangée.
+
+### 2. État des constats @ `aede483`
+
+**N2 — corrigé upstream.** `secu_box_cli.py` : `_vault_key()` ne pré-dérive plus
+par PBKDF2 à sel fixe (`b'SecuBox-Vault-KDF-v1'`) ; la passphrase est passée telle
+quelle (`pp.encode('utf-8')`) à l'Argon2id à **sel aléatoire par-vault** de
+`vault_lib`. Correctif juste. ⚠️ **Sans repli de compatibilité** : les vaults créés
+avant le correctif (clé maître = PBKDF2 à sel fixe) ne s'ouvrent plus. Acceptable
+si aucun vault n'existe en production ; à signaler sinon. (La PR de contribution
+`CyberMind-FR/livreedhermes#5` proposait un repli legacy — devenu redondant, à
+retirer au rebase.)
+
+**N1 — ouvert.** `crypto_core.py` inchangé : le symbole de poids faible de l'en-tête
+de longueur reste à 11/44 valeurs pour une longueur fixe. Les nouveaux modes
+Carter-18/Hybrid routent par le même `payload_to_symbols()` → ils héritent du même
+défaut (non exploitable). Couvert par la contribution `#5`.
+
+**W1/W2 — ouverts.** `worker/src/index.js` non touché par ce delta. Couverts par `#5`.
+
+**§4.6 (Ref256 8,17 bits), §4.8 (débit)** — ouverts/documentés, inchangés.
+
+**DOC-1 / CR-3 — re-documentés (`4fe96da`).** Le commentaire de masque additif
+précise désormais qu'il dérive de `grammar_key` **seul**, sans aléa propre à la
+grille (même `grammar_key` → mêmes masques à chaque appel), qu'il est conservé comme
+couche défensive et **ne doit pas être réemployé** ailleurs comme masque
+cryptographique générique. Exact et honnête ; les comptes Ref360 sont corrigés.
+
+### 3. Constats NOUVEAUX (revue Carter-18 / Carter-Hybrid / session)
+
+**C18-1 — Masque additif déterministe par clé (Négligeable / informatif).**
+`carter_random.py` : dans Carter-18 et Carter-Hybrid, `grid[gr][gc] =
+(nibbles[ni] + masks[ni]) % ALPHA_LEN` avec `masks = _derive_masks(grammar_key,…)`.
+Le masque ne dépend que de `grammar_key` → **identique d'un message à l'autre** pour
+une même clé. **Sans danger ici** : `nibbles` sont les symboles d'un *payload déjà
+chiffré* (XChaCha20-Poly1305, nonce aléatoire), donc pseudo-aléatoires et
+indépendants à chaque message ; l'ajout d'un offset constant ne crée pas de
+réutilisation de flux (ce n'est pas un one-time-pad sur du clair). Vérifié : deux
+chiffrements du même message/clé diffèrent sur ~7900/8100 cellules. Constat
+purement informatif ; upstream le documente déjà (C18/CR-3). *Recommandation* : ne
+jamais promouvoir ce masque en masque cryptographique autonome.
+
+**C18-2 — Alignement encode/decode conditionné à `grid_size % 18 == 0` (Robustesse,
+très faible).** `encode_carter_18`/`decode_carter_18` incrémentent `ni` pour chaque
+position d'une forme, y compris hors bornes (`if 0 <= gr < grid_size …`). Pour la
+grille par défaut 90×90 (multiple de 18) toutes les positions sont dans les bornes :
+aucun impact. Pour une `grid_size` non multiple de 18, encode et decode
+sauteraient les mêmes positions mais l'invariant n'est pas garanti. *Recommandation* :
+`assert grid_size % BLOCK_18 == 0` en entrée (idem sous-blocs 6×6 pour Hybrid).
+
+**Session Carter (revue) — saine.** `encode_carter_session_18/hybrid`
+(`secu_box.py`) utilisent `session_keys['steg_key']` (issu de `Session.derive()`,
+ECDH X25519 + HKDF) comme `master_key`, re-splitté par `_carter_split` en clé AEAD +
+clé grammaire. Hiérarchie de clés correcte, aucune clé longue-durée réutilisée en
+clair. Le mode Hybrid par bloc est dérivé de la **clé** et non de la longueur du
+message (choix explicite et correct : pas de distingueur géométrique court/long).
+
+### 4. Résultats des tests
+- Suite complète `pytest` @ `aede483` : **50 passés / 6 skipped** (scipy absent —
+  dont les 2 nouveaux tests χ² Carter-18/Hybrid).
+- `py_compile` : `carter_random.py`, `secu_box.py`, `secu_box_cli.py` — OK.
+- Fonctionnel (hors arbre) : Carter-18 round-trip OK (capacité 1234 car. sur 90×90),
+  Carter-Hybrid round-trip OK (capacité 620 car.) ; **rejet d'une clé fausse par
+  l'AEAD** (`ValueError`) pour les deux ; non-déterminisme confirmé (nonce aléatoire).
+
+### 5. Verdict et recommandations
+**Verdict** : à `aede483`, architecture toujours saine ; N2 corrigé upstream ;
+extension Carter-18/Hybrid/session bien conçue, géométrie hors chemin critique,
+aucun **nouveau** constat exploitable. **Gravité résiduelle : Faible**, inchangée.
+
+Recommandations restantes (par priorité) :
+1. **N1** — entrée à entropie pleine pour le champ longueur (contribution `#5`).
+2. **W1/W2** — liste blanche de devises + révocation sur remboursement/litige (`#5`).
+3. **N2** — si des vaults antérieurs existent en prod, prévoir un repli/migration
+   (le correctif upstream `aede483` n'en offre pas).
+4. **C18-2** — assertion `grid_size % 18 == 0` dans Carter-18/Hybrid.
+5. **§4.6 / §4.8** — entropie Ref256 assumée à 8 bits ; débit `_geo_derive`.
+
+*Aucun fichier du dépôt cloné modifié ; vérifications empiriques via scripts hors arbre.*
