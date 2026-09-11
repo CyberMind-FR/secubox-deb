@@ -27,11 +27,26 @@
   (N1/W1/W2), PR **#6** (perf `random_grid`, ~×25). Review/merge = ressort de
   l'upstream.
 
+### ✅ Fait (suite) — dans le dépôt ET déployé
+- **Boucle #1263 fermée** : `ensure_x25519_pubkey` **génère** désormais la clé
+  device X25519 via `hermes.Identity.generate()` (souverain) au lieu de stdlib.
+  `secubox-identity` **1.1.5** — PR **#1273**. Déployé gk2 : `/health` 200,
+  `/identity/x25519` 401 (route vivante), keygen hermes vérifié sur l'arm64
+  (pubkey match, 0600), clé primaire existante intacte. Compat PEM croisée + ECDH
+  souverain↔stdlib vérifiés localement.
+
+- **Premier consommateur `Session` branché** : canal scellé device↔device dans
+  `secubox-identity` (`establish_session`/`seal_for`/`open_from`, helpers serveur,
+  aucune route n'expose de clé). ECDH X25519 → HKDF → ChaCha20-Poly1305.
+  `secubox-identity` **1.1.6** — PR **#1273**. Déployé gk2, vérifié sur l'arm64 :
+  round-trip OK (enveloppe 53 o), rejet tiers/AAD = InvalidTag, `/health` 200.
+  Constat de cadrage : mesh=WireGuard, invitation #1262=Ed25519 → pas d'ECDH à
+  reconvertir ; ce canal est le **chemin souverain unique** pour les futures
+  features (offres MirrorNet chiffrées, secret d'onboarding #1262).
+
 ### ⬜ Next Up
-- **Boucle #1263** : `ensure_x25519_pubkey` détecte le backend souverain mais
-  **génère encore la clé via `cryptography` stdlib** (même primitive X25519,
-  aucun impact sécu) → câbler sur `hermes.Identity.generate()`. Petit, à faire
-  en worktree + vérif déploiement.
+- Quand une feature réclame un canal chiffré (offre MirrorNet, onboarding #1262),
+  l'adosser à `IdentityManager.seal_for/open_from` plutôt qu'un ECDH maison.
 - **PR #6 côté upstream** : étendre l'optimisation `random_grid` au Carter
   classique demandera de revoir la méthodologie des 2 tests d'avalanche à bruit
   figé (dépendance à la granularité `os.urandom`). Laissé à l'upstream.

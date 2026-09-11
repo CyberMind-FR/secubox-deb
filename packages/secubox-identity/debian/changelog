@@ -1,3 +1,28 @@
+secubox-identity (1.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * #1263 : premier CONSOMMATEUR de secubox_core.crypto.Session — canal scellé
+    device↔device. IdentityManager gagne establish_session()/seal_for()/open_from()
+    (+ _load_x25519_identity) : la clé device X25519 sert enfin à dériver un secret
+    partagé (ECDH X25519 → HKDF-SHA256 → ChaCha20-Poly1305, nonce aléatoire par
+    message, AAD authentifiée). Helpers SERVEUR uniquement — aucune route n'expose
+    de clé ni de secret. Chemin souverain unique pour les features futures (offres
+    MirrorNet chiffrées, secret d'onboarding #1262). Tests tests/test_sealed_channel.py
+    (round-trip, mauvais destinataire, AAD, séparation par salt).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Sep 2026 19:15:00 +0200
+
+secubox-identity (1.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * #1263 : génération de la clé device X25519 déléguée au cœur SOUVERAIN
+    `hermes.Identity.generate()` quand il est importable (secubox-core >= 1.4.1).
+    Ferme la boucle : le seam ne se contentait plus de DÉTECTER hermes, il génère
+    désormais la clé par ce chemin. Même primitive X25519, persistance PEM PKCS#8
+    0600 atomique (O_CREAT|O_EXCL + os.replace) — format identique au chemin stdlib,
+    donc `load_x25519()` relit indifféremment. Repli `cryptography` inchangé.
+    Vérifié : compat PEM croisée dans les deux sens + ECDH souverain↔stdlib identique.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Sep 2026 18:30:00 +0200
+
 secubox-identity (1.1.4-1~bookworm1) bookworm; urgency=medium
 
   * #1263 : clé device X25519 (ECDH) en plus de l'Ed25519 de signature — socle
