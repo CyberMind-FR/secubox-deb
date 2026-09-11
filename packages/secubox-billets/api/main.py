@@ -256,6 +256,29 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         resp.headers["Content-Security-Policy"] = _csp(_frame_src(_extra_frame_hosts(rows)))
         return resp
 
+    @app.get("/feed/suite", dependencies=[Depends(require_lecture)])
+    async def feed_suite(request: Request, cursor: str | None = None,
+                         tag: str | None = None):
+        """Fragment du fil pour le DÉFILEMENT INFINI (#1268).
+
+        Rend EXACTEMENT les mêmes cartes que la page (partiel `_feed_items.html`)
+        et renvoie le curseur keyset suivant. Le client (billets.js) appende le
+        HTML sous `#fil-billets` et poursuit tant que `next_cursor` n'est pas nul.
+        Sans JS, le lecteur garde le pager `?cursor=` classique de la page."""
+        from fastapi.responses import JSONResponse
+        rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE,
+                                                      cursor=cursor, tag=tag)
+        base = _base(request)
+        media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
+        tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
+        vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]))
+                for r in rows]
+        html = templates.env.get_template("_feed_items.html").render(billets=vues)
+        # Pas d'en-tête CSP ici : le fragment est injecté dans le document de la
+        # page, dont la CSP fait foi (un embed exotique d'une page ultérieure
+        # peut donc être bloqué — cas rare, borné au v1 du mur infini).
+        return JSONResponse({"html": html, "next_cursor": next_cursor})
+
     @app.get("/micro", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
     async def micro(request: Request):
         """La carte que Billets sert au Hall (#1261).
