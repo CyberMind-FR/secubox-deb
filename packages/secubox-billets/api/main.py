@@ -12,8 +12,7 @@ import time
 from pathlib import Path
 
 import aiosqlite
-from fastapi import FastAPI, HTTPException, Request, Depends
-from secubox_core.auth import require_lecture
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -235,7 +234,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
     async def healthz():
         return {"status": "ok", "module": "billets"}
 
-    @app.get("/", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
+    @app.get("/", response_class=HTMLResponse)
     async def feed(request: Request, cursor: str | None = None, tag: str | None = None):
         rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE,
                                                       cursor=cursor, tag=tag)
@@ -253,10 +252,17 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         })
         # Embeds render inline in the feed too; allow any self-hosted embed hosts
         # of the shown billets in frame-src (static providers already covered).
-        resp.headers["Content-Security-Policy"] = _csp(_frame_src(_extra_frame_hosts(rows)))
+        # frame-src doit couvrir les embeds de TOUS les billets publiés, pas
+        # seulement ceux de la page 1 : le défilement infini (#1268) appende des
+        # billets des pages suivantes (ex. 122 PeerTube auto-hébergés), dont
+        # l'hôte n'apparaîtrait pas dans la CSP du document et serait bloqué.
+        allh = await repo.embed_hosts_published(app.state.conn)
+        extra = tuple(h for h in allh
+                      if not any(h == d or h.endswith("." + d) for d in _FRAME_HOSTS))
+        resp.headers["Content-Security-Policy"] = _csp(_frame_src(extra))
         return resp
 
-    @app.get("/feed/suite", dependencies=[Depends(require_lecture)])
+    @app.get("/feed/suite")
     async def feed_suite(request: Request, cursor: str | None = None,
                          tag: str | None = None):
         """Fragment du fil pour le DÉFILEMENT INFINI (#1268).
@@ -279,7 +285,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         # peut donc être bloqué — cas rare, borné au v1 du mur infini).
         return JSONResponse({"html": html, "next_cursor": next_cursor})
 
-    @app.get("/micro", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
+    @app.get("/micro", response_class=HTMLResponse)
     async def micro(request: Request):
         """La carte que Billets sert au Hall (#1261).
 
@@ -331,7 +337,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         resp.headers["Cache-Control"] = "no-cache"
         return resp
 
-    @app.get("/b/{slug}", response_class=HTMLResponse, dependencies=[Depends(require_lecture)])
+    @app.get("/b/{slug}", response_class=HTMLResponse)
     async def permalink(request: Request, slug: str):
         row = await repo.get_by_slug(app.state.conn, slug)
         if row is None or row["status"] != "published":
@@ -384,7 +390,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         rows, _ = await repo.list_published(app.state.conn, limit=30)
         return rows
 
-    @app.get("/feed.xml", dependencies=[Depends(require_lecture)])
+    @app.get("/feed.xml")
     async def feed_atom(request: Request):
         from fastapi.responses import Response
         base = _base(request)
@@ -400,12 +406,12 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
                                self_url=f"{base}/feed.xml", entries=entries, updated=updated)
         return Response(xml, media_type="application/atom+xml")
 
-    @app.get("/tags.json", dependencies=[Depends(require_lecture)])
+    @app.get("/tags.json")
     async def tags_json():
         """The quick-view chip bar: every emoji hashtag in use, most-used first."""
         return {"tags": await repo.list_tags(app.state.conn)}
 
-    @app.get("/feed.json", dependencies=[Depends(require_lecture)])
+    @app.get("/feed.json")
     async def feed_json(request: Request, tag: str | None = None):
         base = _base(request)
         rows, _ = await repo.list_published(app.state.conn, limit=30, tag=tag)
@@ -428,7 +434,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             feed["title"] = f"{SITE_TITLE} · #{tag}"
         return feed
 
-    @app.get("/stats.json", dependencies=[Depends(require_lecture)])
+    @app.get("/stats.json")
     async def stats_json(request: Request):
         # Public aggregate counts for the SecuBox admin panel (cross-origin).
         from fastapi.responses import JSONResponse
@@ -442,7 +448,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         return JSONResponse(s, headers={"Access-Control-Allow-Origin": "*",
                                         "Cache-Control": "public, max-age=30"})
 
-    @app.get("/oembed", dependencies=[Depends(require_lecture)])
+    @app.get("/oembed")
     async def oembed_out(request: Request, url: str, format: str = "json",
                          maxwidth: int | None = None, maxheight: int | None = None):
         # Outbound oEmbed so billets embed elsewhere. Only OUR own permalinks.

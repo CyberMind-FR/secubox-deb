@@ -1,3 +1,18 @@
+secubox-billets (0.8.29-1~bookworm1) bookworm; urgency=medium
+
+  * Lecture PUBLIQUE rétablie : billets est une gazette (feeds Atom/JSON,
+    permaliens, oEmbed, fédération) faite pour être lue. La rafle #1256 avait
+    sur-appliqué require_lecture à ses routes de lecture, qui renvoyaient 401 en
+    WAN anonyme (billets.gk2). require_lecture retiré de /, /feed/suite, /micro,
+    /b/{slug}, /feed.xml, /tags.json, /feed.json, /stats.json, /oembed. L'admin
+    (édition, modération, commentaires) garde son auth propre.
+  * #1268 : correctif embeds du mur infini. La CSP frame-src de la page couvre
+    désormais les hôtes d'embed de TOUS les billets publiés (via
+    repo.embed_hosts_published), pas seulement ceux de la page 1 — sinon les
+    PeerTube auto-hébergés (122) appendés au défilement étaient bloqués.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 11 Sep 2026 21:00:00 +0200
+
 secubox-billets (0.8.28-1~bookworm1) bookworm; urgency=medium
 
   * #1268 : mur infini — 1re tranche (défilement infini du fil billets). Le fil

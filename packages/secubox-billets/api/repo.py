@@ -102,6 +102,26 @@ async def list_published(conn: aiosqlite.Connection, *, limit: int = 20,
     return rows, next_cursor
 
 
+async def embed_hosts_published(conn: aiosqlite.Connection) -> list[str]:
+    """Hôtes distincts des embeds parmi les billets publiés (#1268).
+
+    La CSP `frame-src` du fil doit les autoriser TOUS : le défilement infini
+    appende des billets des pages suivantes, dont l'embed serait bloqué si son
+    hôte ne figurait que dans la page où il apparaît. Requête bornée (DISTINCT),
+    quelques hôtes en pratique."""
+    from urllib.parse import urlparse
+    q = ("SELECT DISTINCT embed_url FROM billet WHERE status = 'published' "
+         "AND embed_html IS NOT NULL AND embed_html <> '' "
+         "AND embed_url IS NOT NULL AND embed_url <> ''")
+    out: list[str] = []
+    async with conn.execute(q) as cur:
+        async for (url,) in cur:
+            h = urlparse(url).hostname
+            if h and h not in out:
+                out.append(h)
+    return out
+
+
 async def increment_view(conn: aiosqlite.Connection, billet_id: str) -> None:
     await conn.execute("UPDATE billet SET view_count = view_count + 1 WHERE id = ?", (billet_id,))
     await conn.commit()
