@@ -30,7 +30,22 @@ from enum import Enum
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
+
+# ── BACKEND CRYPTO ENFICHABLE (#1263) ────────────────────────────────────────
+# On PRÉFÈRE la crypto souveraine « hermes » (dérivée de livreedhermes, cf.
+# docs/audits/AUDIT-CRYPTO-livreedhermes.md) quand elle est présente, et l'on
+# retombe sinon sur `cryptography` (stdlib). L'audit confirme que hermes repose
+# sur les MÊMES primitives standard (X25519, ChaCha20-Poly1305, HKDF) : le repli
+# n'est donc pas une dégradation d'algorithme, juste l'absence de la couche
+# souveraine. Le module souverain arrive avec la branche feat/hermes-crypto-core
+# (non mergée) ; ce seam l'adoptera automatiquement à son merge.
+try:  # noqa: SIM105
+    from secubox_core.crypto import hermes as _hermes  # type: ignore
+    CRYPTO_BACKEND = "hermes-souverain"
+except Exception:  # noqa: BLE001
+    _hermes = None
+    CRYPTO_BACKEND = "cryptography-stdlib"
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
@@ -70,6 +85,11 @@ class IdentityDocument(BaseModel):
     capabilities: List[str] = []
     signature: Optional[str] = None
     key_type: str = "ed25519"
+    # Clé publique X25519 (ECDH) du device, en hex Raw (32 octets). Socle de
+    # l'accord de clés mesh/MirrorNet (#1263) — distincte de la clé Ed25519 de
+    # signature (public_key). Optionnelle : les identités antérieures la
+    # rétro-remplissent au chargement.
+    x25519_public_key: Optional[str] = None
     version: int = 1
 
 
@@ -231,6 +251,38 @@ class IdentityManager:
             )
         return private_key
 
+    # ------------------------------------------------------------- X25519 (ECDH)
+    # La signature (Ed25519) prouve QUI parle ; l'accord de clés (X25519) permet
+    # de DÉRIVER un secret partagé avec un pair (base du mesh/MirrorNet, #1263).
+    # Deux clés distinctes, jamais la même : on ne signe pas avec une clé d'ECDH.
+    def _x25519_path(self, key_id: str = "primary") -> Path:
+        return self.keys_dir / f"{key_id}_x25519.key"
+
+    def load_x25519(self, key_id: str = "primary") -> Optional[x25519.X25519PrivateKey]:
+        p = self._x25519_path(key_id)
+        if not p.exists():
+            return None
+        with open(p, "rb") as f:
+            return serialization.load_pem_private_key(f.read(), password=None,
+                                                      backend=default_backend())
+
+    def ensure_x25519_pubkey(self, key_id: str = "primary") -> str:
+        """Rend la clé publique X25519 (hex Raw 32o), en la créant+persistant si absente."""
+        priv = self.load_x25519(key_id)
+        if priv is None:
+            priv = x25519.X25519PrivateKey.generate()
+            p = self._x25519_path(key_id)
+            with open(p, "wb") as f:
+                f.write(priv.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()))
+            os.chmod(p, 0o600)
+        pub = priv.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw)
+        return pub.hex()
+
     def get_or_create_identity(self) -> IdentityDocument:
         """Get existing identity or create new one."""
         if self._local_identity:
@@ -244,6 +296,15 @@ class IdentityManager:
                     data = json.load(f)
                 self._local_identity = IdentityDocument(**data)
                 self._private_key = self.load_keypair()
+                # Rétro-remplissage X25519 (#1263) : une identité créée avant
+                # cette clé la reçoit maintenant, et le document est ré-écrit.
+                if not self._local_identity.x25519_public_key:
+                    self._local_identity.x25519_public_key = self.ensure_x25519_pubkey()
+                    try:
+                        with open(identity_file, "w") as f:
+                            json.dump(self._local_identity.model_dump(), f, indent=2)
+                    except OSError as e:
+                        logger.warning(f"x25519 backfill non persisté: {e}")
                 return self._local_identity
             except Exception as e:
                 logger.warning(f"Failed to load identity: {e}")
@@ -261,7 +322,8 @@ class IdentityManager:
             public_key=public_key_hex,
             hostname=self._get_hostname(),
             created_at=datetime.utcnow().isoformat() + "Z",
-            capabilities=["mesh", "p2p", "waf"]
+            capabilities=["mesh", "p2p", "waf"],
+            x25519_public_key=self.ensure_x25519_pubkey()
         )
 
         # Sign identity document
@@ -695,6 +757,15 @@ async def health():
 async def get_identity():
     """Get local identity document."""
     return identity_manager.get_or_create_identity()
+
+
+@app.get("/identity/x25519", dependencies=[Depends(require_jwt)])
+async def get_identity_x25519():
+    """Clé publique X25519 (ECDH) du device — pour l'accord de clés mesh/MirrorNet
+    et l'onboarding par invitation (#1263). Ne divulgue JAMAIS la clé privée."""
+    ident = identity_manager.get_or_create_identity()
+    return {"did": ident.did, "x25519_public_key": ident.x25519_public_key,
+            "curve": "X25519", "encoding": "raw-hex", "backend": CRYPTO_BACKEND}
 
 
 @app.post("/identity/rotate", dependencies=[Depends(require_jwt)])
