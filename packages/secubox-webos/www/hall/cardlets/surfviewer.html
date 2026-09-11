@@ -177,10 +177,31 @@
         urls.forEach(function(u){
           if(!u || m[u] || !/youtube|youtu\.be/.test(hote(u))) return;
           var id=ident(u);
-          if(id && parId[id]){ ecritTitre(u, parId[id]); chg=true; }
+          if(id && parId[id]){ ecritTitre(u, parId[id]); chg=true; }  // en biblio
+          else sonderTitre(u);   // jamais rapatrié : sonde métadonnées-seules
         });
         if(chg) rend();
       }).catch(function(){});
+  }
+
+  // MÉTADONNÉES-SEULES (favori JAMAIS rapatrié). /title sonde yt-dlp SANS
+  // télécharger et cache le titre côté box. Coûteux (~1-3 s + un process yt-dlp) :
+  // on sonde donc UNE URL à la fois (file d'attente), jamais en rafale.
+  var _fileTitre=[], _sondeActive=false;
+  function sonderTitre(u){
+    var m=litTitres();
+    if(!u || m[u] || enCours[u] || _fileTitre.indexOf(u)>=0) return;
+    _fileTitre.push(u); traiterFileTitres();
+  }
+  function traiterFileTitres(){
+    if(_sondeActive || !_fileTitre.length) return;
+    _sondeActive=true;
+    var u=_fileTitre.shift(); enCours[u]=1;
+    fetch('/api/v1/ytsas/title?url='+encodeURIComponent(u),{headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(j){ if(j && j.title){ ecritTitre(u, j.title); rend(); } })
+      .catch(function(){})
+      .then(function(){ _sondeActive=false; setTimeout(traiterFileTitres, 400); });
   }
   function majTitres(){
     var urls=[].concat(lire('sbx_favoris'),

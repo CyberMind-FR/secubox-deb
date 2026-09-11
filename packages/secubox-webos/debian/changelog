@@ -1,3 +1,12 @@
+secubox-webos (1.0.292-1~bookworm1) bookworm; urgency=medium
+
+  * Surf & Viewer : titres smart AUSSI pour les favoris YouTube jamais rapatriés
+    — sonde /api/v1/ytsas/title (métadonnées-seules, aucun download) en file
+    d'attente SÉQUENTIELLE (une URL à la fois, +400 ms) pour ne pas lancer 15
+    yt-dlp d'un coup. Complète la résolution via la bibliothèque ytsas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Sep 2026 14:00:00 +0200
+
 secubox-webos (1.0.291-1~bookworm1) bookworm; urgency=medium
 
   * Viewer : les indicateurs (souverain / temps / cache) tiennent sur UNE ligne

@@ -241,6 +241,38 @@ async def resolve(url: str):
     return {"video_id": vid, "state": "pending"}
 
 
+# Cache mémoire des titres sondés (borné — cf. leçon des caches non plafonnés).
+_TITLES: dict = {}
+_TITLES_MAX = 2000
+
+
+@app.get(API + "/title")
+async def title(url: str):
+    """Titre SEUL, sans RIEN télécharger (yt-dlp -j --no-download).
+
+    Sert à afficher un vrai nom pour un favori JAMAIS rapatrié. Contrairement à
+    /resolve, n'enfile AUCUN download. Ordre : biblio (gratuit) -> cache -> sonde
+    yt-dlp (réseau, ~1-3 s). En cas d'échec (auth/format), title:null et le client
+    garde son libellé composé."""
+    vid = _video_id(url)
+    if vid:
+        for row in library.list():        # déjà en biblio : titre connu, zéro yt-dlp
+            if row.get("id") == vid and row.get("title"):
+                return {"video_id": vid, "title": row["title"], "cached": True}
+        if vid in _TITLES:
+            return {"video_id": vid, "title": _TITLES[vid], "cached": True}
+    try:
+        v, t = await engine._probe(url)
+    except (AuthRequired, EngineError) as e:
+        return {"video_id": vid, "title": None, "error": str(e)[:160]}
+    except Exception as e:                 # noqa: BLE001
+        return {"video_id": vid, "title": None, "error": ("probe: " + str(e))[:160]}
+    if len(_TITLES) >= _TITLES_MAX:
+        _TITLES.clear()                    # cap simple : on repart à vide
+    _TITLES[v] = t
+    return {"video_id": v, "title": t}
+
+
 @app.get(API + "/files/{id}")
 def files(id: str):
     row = library.get(id)

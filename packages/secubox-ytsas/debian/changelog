@@ -1,3 +1,13 @@
+secubox-ytsas (0.2.10-1~bookworm1) bookworm; urgency=medium
+
+  * Nouvel endpoint GET /api/v1/ytsas/title?url= : renvoie le TITRE SEUL d'une
+    URL (yt-dlp -j --no-download, via engine._probe, cookies+deno) SANS rien
+    télécharger — contrairement à /resolve qui enfile un rapatriement. Ordre
+    biblio → cache mémoire (borné 2000) → sonde. Sert au Hall à nommer un favori
+    jamais rapatrié. Échec (auth/format) → title:null (pas d'erreur dure).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Sep 2026 14:00:00 +0200
+
 secubox-ytsas (0.2.9-1~bookworm1) bookworm; urgency=medium
 
   * Exposition WAN : retrait du garde LAN-only (auth_request /__sbx_auth_verify)
