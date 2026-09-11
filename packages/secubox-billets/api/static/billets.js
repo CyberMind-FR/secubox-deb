@@ -340,3 +340,61 @@
   sync();
   play();
 })();
+
+// ── MUR INFINI (#1268) ──────────────────────────────────────────────────────
+//
+// Le fil s'étend en défilant : quand le pager approche du viewport, on va
+// chercher /feed/suite (mêmes cartes que la page) et on l'appende sous
+// #fil-billets, puis on avance le curseur. Sans JS, #fil-pager reste un lien
+// « Billets plus anciens → » classique — c'est l'enrichissement progressif, pas
+// une dépendance. Les interactions (lightbox, partage, embeds) sont déléguées au
+// document : le contenu appendé est vivant sans ré-initialisation.
+(function () {
+  var pager = document.getElementById("fil-pager");
+  var fil = document.getElementById("fil-billets");
+  if (!pager || !fil || !("IntersectionObserver" in window)) return;
+  var loading = false, echecs = 0;
+
+  function stop() { if (pager && pager.parentNode) pager.parentNode.removeChild(pager); if (obs) obs.disconnect(); }
+
+  async function charger() {
+    if (loading || !pager) return;
+    var cursor = pager.getAttribute("data-cursor");
+    if (!cursor) { stop(); return; }
+    loading = true;
+    pager.classList.add("chargement");
+    try {
+      var tag = pager.getAttribute("data-tag");
+      var url = "/feed/suite?cursor=" + encodeURIComponent(cursor);
+      if (tag) url += "&tag=" + encodeURIComponent(tag);
+      var r = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      var data = await r.json();
+      if (data.html) {
+        var tmp = document.createElement("div");
+        tmp.innerHTML = data.html;
+        while (tmp.firstChild) fil.appendChild(tmp.firstChild);
+      }
+      echecs = 0;
+      if (data.next_cursor) {
+        pager.setAttribute("data-cursor", data.next_cursor);
+        var a = pager.querySelector("a[rel=next]");
+        if (a) { var q = "/?cursor=" + encodeURIComponent(data.next_cursor); if (tag) q += "&tag=" + encodeURIComponent(tag); a.setAttribute("href", q); }
+      } else {
+        stop();  // plus rien à dérouler
+      }
+    } catch (e) {
+      // On garde le pager (lien manuel) et on réessaiera au prochain passage,
+      // mais on abandonne l'auto-chargement après quelques échecs d'affilée.
+      if (++echecs >= 3 && obs) obs.disconnect();
+    } finally {
+      loading = false;
+      if (pager) pager.classList.remove("chargement");
+    }
+  }
+
+  var obs = new IntersectionObserver(function (entries) {
+    if (entries.some(function (en) { return en.isIntersecting; })) charger();
+  }, { rootMargin: "600px 0px" });  // pré-charge avant d'atteindre le bas
+  obs.observe(pager);
+})();

@@ -10,6 +10,25 @@
 
 ---
 
+## 2026-09-11 — Mur infini #1268 : 1re tranche (défilement infini billets)
+
+### ✅ Fait — dans le dépôt ET déployé
+- **Défilement infini du fil billets** : fragment `GET /feed/suite` (JSON
+  `{html, next_cursor}`) + client IntersectionObserver (`billets.js`) qui appende
+  sous `#fil-billets` en avançant le curseur keyset. Cartes via un partiel
+  **partagé** `_feed_items.html` (page = pages suivantes). Enrichissement
+  progressif (pager `?cursor=` conservé sans JS). `secubox-billets` **0.8.28**,
+  PR **#1274**, déployé gk2 (handler vérifié contre la vraie base : 20/page +
+  pagination). Cadrage : la 1re tranche est billets (pagination déjà là) ; mesh/
+  invitation hors sujet ici.
+
+### ⬜ Next Up (suites #1268)
+- Billet **polymorphe** (article/app/média/discussion, #1266) — l'unité du mur.
+- **Mur mosaïque BBS** paginé (`assemblerMosaique` → curseur cross-source).
+- **Curation mur par-forum** côté admin BBS (#1208 : surface-on-wall).
+
+---
+
 ## 2026-09-11 — Crypto souveraine : cœur Hermes intégré + audité + benchmarké (#1263, #1272)
 
 ### ✅ Fait — dans le dépôt ET déployé
