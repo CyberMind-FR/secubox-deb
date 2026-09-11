@@ -1,3 +1,17 @@
+secubox-core (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_core.crypto (Hermes souverain, #1263) : cœur crypto IMPORTABLE au
+    runtime — Identity (X25519 long-terme + Ed25519 signature optionnelle),
+    Session (ECDH X25519 → HKDF-SHA256, AEAD ChaCha20-Poly1305), et
+    derive_key_material (HKDF-SHA256). Primitives standard `cryptography`
+    uniquement (aucune construction maison ; couche géométrique exclue).
+    Clé privée verrouillée à l'export par défaut, persistance PEM 0600 atomique.
+    Répare le placeholder racine core/crypto (shim de ré-export). Le seam
+    enfichable de secubox-identity l'adopte automatiquement. Ajoute la dépendance
+    python3-cryptography. 20 tests. Réf #1263.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Sep 2026 18:30:00 +0200
+
 secubox-core (1.4.0-1~bookworm1) bookworm; urgency=high
 
   * LECTURE GARDEE + MODE TABLEAU DE BORD (#1256). secubox_core.auth gagne
