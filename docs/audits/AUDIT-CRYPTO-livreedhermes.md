@@ -503,3 +503,58 @@ Recommandations restantes (par priorité) :
 5. **§4.6 / §4.8** — entropie Ref256 assumée à 8 bits ; débit `_geo_derive`.
 
 *Aucun fichier du dépôt cloné modifié ; vérifications empiriques via scripts hors arbre.*
+
+## Annexe A — Benchmark matériel réel (2026-09-11)
+
+Mesures sur la box de production **gk2** (MOCHAbin, Marvell **Armada 7040 /
+Cortex-A72**, aarch64, 4 cœurs), Python 3.11.2, `cryptography` 47.0.0.
+Micro-benchmarks mono-thread (`time.perf_counter`, warmup + boucle timée).
+But : chiffrer le point ouvert **§4.8 (débit)** sur l'architecture cible réelle.
+
+### A.1 — Cœur Hermes souverain (`secubox_core.crypto`, primitives OpenSSL C)
+
+| Opération | Débit | Latence |
+|-----------|-------|---------|
+| `Identity.generate` (X25519) | 6 209 /s | 161 µs |
+| `Identity.generate` (X25519 + Ed25519) | 3 420 /s | 292 µs |
+| `Session.establish` (ECDH X25519 + HKDF) | 1 959 /s | 510 µs |
+| Ed25519 `sign` | 8 148 /s | 123 µs |
+| Ed25519 `verify` | 2 479 /s | 403 µs |
+| ChaCha20-Poly1305 chiffrement | 60 MB/s @1 KiB · **~200 MB/s** @≥16 KiB | 8–17 µs (petits messages) |
+
+→ Adéquat pour l'usage identité/mesh : établissement de session sous la
+milliseconde, AEAD à ~200 MB/s. **Aucun goulot côté crypto réelle.**
+
+### A.2 — Couche Carter stégano (pure-Python) — message 65 car., grille 90×90
+
+| Mode | Encode | Decode | Capacité |
+|------|--------|--------|----------|
+| baseline (AEAD + `payload_to_symbols`) | 1 944 /s · 0,51 ms | — | — |
+| Carter-Random-256 | 18 /s · 55,9 ms | 140 /s · 7,2 ms | 235 car. |
+| Carter-18 | 21 /s · 47,7 ms | 267 /s · 3,8 ms | 1 185 car. |
+| Carter-Hybrid | 20 /s · 49,4 ms | 255 /s · 3,9 ms | 878 car. |
+
+### A.3 — Décomposition du coût d'encodage (~50 ms)
+
+| Étape | Coût arm64 |
+|-------|-----------|
+| Init grille `secrets.randbelow(44)` × 8100 cellules | **42,5 ms (≈ 85 %)** |
+| `_derive_masks` | 1,0 ms |
+| Build référent 18×18 (à froid, puis **caché**) | 262 ms (1×/graine) |
+| Décodage (référent déjà en cache) | ~4 ms |
+
+### A.4 — Lecture §4.8 et suite donnée
+Le coût d'encodage Carter est **quasi entièrement du remplissage CSPRNG
+cellule-par-cellule**, pas de la crypto. Il se réduit à ~0,5 ms (≈ ×25) en
+tirant l'entropie de couverture en **un seul `os.urandom` en bloc +
+échantillonnage base-44 par rejet** — même source, même uniformité (χ² 38,7 <
+59,3, 44/44 valeurs). Correctif proposé à l'upstream :
+**PR `CyberMind-FR/livreedhermes#6`** (appliqué à Carter-Random/18/Hybrid ;
+Carter classique laissé inchangé car ses tests d'avalanche à bruit figé
+dépendent de la granularité de consommation d'`os.urandom`). Le build de
+référent à froid (262 ms) reste amorti par le cache ; envisager un
+pré-chauffage au démarrage si la latence du premier message importe.
+
+**Conclusion débit** : les primitives réelles sont rapides ; Carter reste adapté
+à de la **messagerie** (~8 ms/encode après optimisation, ~4 ms/decode), pas à du
+volume soutenu.
