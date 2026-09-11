@@ -6,7 +6,30 @@
 -->
 
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-08-30*
+*Mis à jour : 2026-09-11*
+
+---
+
+## 2026-09-11 — suites crypto souveraine (#1263, #1272 fusionnés)
+
+### 🟡 Boucle backend souverain
+- [ ] **`secubox-identity` — générer la clé via hermes** : `ensure_x25519_pubkey`
+      détecte `hermes-souverain` mais appelle encore `cryptography` stdlib pour la
+      keygen. Câbler sur `hermes.Identity.generate()` (même primitive X25519, aucun
+      impact sécu — ferme juste la boucle). Worktree + vérif déploiement.
+- [ ] **Consommateurs `Session`** : brancher mesh/MirrorNet et l'invitation (#1262)
+      sur `secubox_core.crypto.Session` (ECDH X25519 + HKDF) plutôt que du stdlib ad hoc.
+
+### 🟢 Perf / stégano (optionnel, côté upstream)
+- [ ] **Carter classique** : étendre l'optimisation `random_grid` (PR livreedhermes#6)
+      à `carter.py` → nécessite de revoir les 2 tests d'avalanche à bruit figé
+      (dépendance à la granularité de consommation `os.urandom` cellule-par-cellule).
+- [ ] **Pré-chauffage référent 18×18** : build à froid ~262 ms (puis caché) — envisager
+      un warm-up au démarrage si la latence du premier message compte.
+
+### 📌 Suivi contributions upstream
+- [ ] Suivre review/merge des PR `CyberMind-FR/livreedhermes` **#5** (N1/W1/W2) et
+      **#6** (perf) — ressort de l'upstream, pas d'auto-merge.
 
 ---
 

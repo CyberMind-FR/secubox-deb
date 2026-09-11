@@ -6,7 +6,35 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-09-10*
+*Mis à jour : 2026-09-11*
+
+---
+
+## 2026-09-11 — Crypto souveraine : cœur Hermes intégré + audité + benchmarké (#1263, #1272)
+
+### ✅ Fait — dans le dépôt ET déployé
+- **Cœur Hermes** dans `common/secubox_core/crypto/` (Identity X25519, Session
+  ECDH+HKDF, AEAD ChaCha20-Poly1305) packagé en **`secubox-core` 1.4.1**,
+  importable au runtime, **déployé gk2** — **PR #1272 fusionnée sur master**.
+- **`secubox-identity`** : clé device X25519 + `/identity/x25519`, seam rapporte
+  `hermes-souverain` (#1263). Vérifié `/health` 200 sur gk2.
+- **Audit passages 3 & 4** (`docs/audits/AUDIT-CRYPTO-livreedhermes.{md,pdf}`) :
+  crypto saine, Carter-18/Hybrid hors chemin critique, N2 corrigé upstream,
+  aucun nouveau constat exploitable. **Annexe A** = benchmark gk2/Cortex-A72
+  (§4.8 chiffré : hermes AEAD ~200 MB/s, Carter encode ~50 ms dont 42 ms de
+  remplissage CSPRNG).
+- **Contributions upstream** (fork `CyberMind-FR/livreedhermes`) : PR **#5**
+  (N1/W1/W2), PR **#6** (perf `random_grid`, ~×25). Review/merge = ressort de
+  l'upstream.
+
+### ⬜ Next Up
+- **Boucle #1263** : `ensure_x25519_pubkey` détecte le backend souverain mais
+  **génère encore la clé via `cryptography` stdlib** (même primitive X25519,
+  aucun impact sécu) → câbler sur `hermes.Identity.generate()`. Petit, à faire
+  en worktree + vérif déploiement.
+- **PR #6 côté upstream** : étendre l'optimisation `random_grid` au Carter
+  classique demandera de revoir la méthodologie des 2 tests d'avalanche à bruit
+  figé (dépendance à la granularité `os.urandom`). Laissé à l'upstream.
 
 ---
 

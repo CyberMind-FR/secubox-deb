@@ -5,6 +5,52 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-11 — CRYPTO SOUVERAINE : CŒUR HERMES INTÉGRÉ, AUDITÉ, BENCHMARKÉ (ref #1263, #1272)
+
+Le backend crypto souverain n'est plus un placeholder : il est **dans l'arbre,
+déployé, audité et mesuré sur la board réelle.**
+
+### Le cœur
+Portage d'Hermes (`anibaledel/livreedhermes`) dans **`common/secubox_core/crypto/`**
+(`hermes.py` : `Identity` X25519, `Session` ECDH X25519 + HKDF-SHA256, chiffrement
+authentifié ChaCha20-Poly1305/XChaCha ; clés privées 0600, jamais exportées par
+défaut). Packagé dans **`secubox-core` 1.4.1** → **importable au runtime**
+(`from secubox_core.crypto import hermes`), `core/crypto/hermes.py` = shim de
+ré-export. **PR #1272 fusionnée sur master.** `secubox-identity` (#1263) a gagné
+sa clé device **X25519** + route `/identity/x25519` ; le seam préfère hermes dès
+qu'il est importable et rapporte `hermes-souverain` — **vérifié déployé sur gk2**
+(`/health` 200). Repli `cryptography` stdlib conservé (même primitive X25519).
+
+### L'audit (passages 3 & 4)
+`docs/audits/AUDIT-CRYPTO-livreedhermes.md` (+ PDF). Passage 3 (`d590010`) : crypto
+**saine**, les deux constats sérieux du passage 2 corrigés + vérifiés par exécution.
+Passage 4 (`aede483`, 5 commits neufs) : **Carter-18/Carter-Hybrid** ajoutés —
+**hors chemin critique** (le message est chiffré par l'AEAD *avant* placement
+géométrique ; la grammaire n'est que disposition à graine publique) ; **N2 corrigé
+upstream** (sel aléatoire par-vault) ; DOC-1/CR-3 re-documentés. Round-trip OK,
+rejet de clé fausse par l'AEAD, non-déterminisme (nonce aléatoire) — tout vérifié.
+Aucun **nouveau** constat exploitable. Gravité résiduelle **Faible**.
+
+### Le benchmark matériel (Annexe A)
+Sur **gk2** (Cortex-A72, aarch64) : hermes = session ~0,5 ms, **AEAD ~200 MB/s**,
+Ed25519 sign 8 148/s — aucun goulot côté crypto réelle. La couche Carter (pure-Python)
+coûte ~50 ms/encode, dont **42 ms rien que le remplissage CSPRNG cellule-par-cellule**
+de la grille 90×90 — pas de la crypto. C'est le **§4.8 (débit)** enfin chiffré.
+
+### Contributions durcissement upstream (fork `CyberMind-FR/livreedhermes`)
+- **PR #5** : N1 (en-tête de longueur à entropie pleine), W1 (liste blanche de
+  devises), W2 (révocation jeton sur remboursement/litige). N2 retiré (doublon
+  du fix upstream).
+- **PR #6** (perf) : helper `crypto_core.random_grid` — un `os.urandom` en bloc +
+  rejet base-44, **~25×** plus rapide, uniformité préservée (χ² 38,7 < 59,3).
+  Scopé à Carter-Random/18/Hybrid ; Carter classique inchangé (ses tests
+  d'avalanche à bruit figé dépendent de la granularité de consommation `os.urandom`).
+
+*Déploiement par paquet respecté (secubox-core via dpkg) ; commits master via
+worktrees ; checkout partagé `docs/governance-framework` non perturbé.*
+
+---
+
 ## 2026-09-10 — LE PARC PASSE EN LECTURE GARDÉE (ref #1256)
 
 Décision de l'opérateur, appliquée : **plus une seule route du parc ne répond

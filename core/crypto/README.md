@@ -12,12 +12,14 @@ Backend crypto **souverain** de SecuBox, adapté de l'implémentation **Hermes**
 l'identité, les sessions et le chiffrement authentifié pour l'identité device
 (#1263), le mesh/MirrorNet et l'invitation (#1262).
 
-> ⚠️ **État actuel : PLACEHOLDER.** Ce paquet ne contient que `__init__.py`, qui
-> ré-exporte `Identity, Session, derive_key_material` depuis un module `.hermes`
-> **pas encore présent**. Donc `import core.crypto` **échoue** aujourd'hui, et le
-> module n'est **ni packagé ni installé** (non importable au runtime). Les
-> consommateurs (voir plus bas) utilisent un **backend enfichable** qui retombe
-> sur `cryptography` (stdlib) tant que ce portage n'est pas fait. Voir *À faire*.
+> ✅ **État actuel : effectif (2026-09-11).** Le portage est fait et fusionné
+> (**PR #1272**, ref #1263) : le vrai module vit dans **`common/secubox_core/crypto/`**
+> (`hermes.py` + tests), packagé dans **`secubox-core` 1.4.1** et donc **importable
+> au runtime** (`from secubox_core.crypto import hermes`) ; `core/crypto/hermes.py`
+> est un shim de ré-export. **Déployé sur gk2** : le seam de `secubox-identity`
+> rapporte `hermes-souverain`. Les primitives ont été **auditées** (passages 3 & 4,
+> crypto saine) et **benchmarkées sur matériel réel** (Annexe A de l'audit :
+> session ~0,5 ms, AEAD ~200 MB/s sur Cortex-A72).
 
 ---
 
@@ -42,8 +44,12 @@ centrale de l'audit (voir ci-dessous).
 - Origine : `anibaledel/livreedhermes` (Hermes), fork durci
   `CyberMind-FR/livreedhermes`.
 - Audit interne : **[`docs/audits/AUDIT-CRYPTO-livreedhermes.md`](../../docs/audits/AUDIT-CRYPTO-livreedhermes.md)**
-  — passages 1 & 2 (13 constats critiques/élevés corrigés ; gravité résiduelle
-  **Faible**), passage 3 en cours sur la refonte `crypto_core.py`.
+  (+ PDF) — passages 1 & 2 (13 constats critiques/élevés corrigés), passage 3
+  (`d590010`, crypto saine), passage 4 (`aede483` : Carter-18/Hybrid sains, N2
+  corrigé upstream, aucun nouveau constat exploitable). Gravité résiduelle
+  **Faible**. **Annexe A** : benchmark matériel réel (gk2/Cortex-A72).
+  Contributions durcissement upstream : `CyberMind-FR/livreedhermes#5` (N1/W1/W2),
+  `#6` (perf remplissage CSPRNG).
 - Règle : **on ne réinvente rien.** La sécurité repose sur les primitives
   ci-dessus, pas sur une construction maison.
 
@@ -56,17 +62,18 @@ centrale de l'audit (voir ci-dessous).
 - **mesh / MirrorNet** : `Session` (ECDH X25519 + HKDF) pour l'accord de clés.
 - **invitation (#1262)** : jetons signés + onboarding.
 
-## À faire (pour rendre le souverain effectif)
+## À faire
 
-1. **Porter `hermes.py`** depuis `livreedhermes/stegano/crypto_core.py` (primitives
-   isolées) vers ce paquet, en implémentant réellement `Identity`, `Session`,
-   `derive_key_material`.
-2. **Packager `core/crypto`** en module **importable au runtime** (p. ex. sous
-   `secubox_core.crypto`) via un `debian/*.install`, pour que les daemons le
-   voient (aujourd'hui `No module named 'core'` sur la board).
-3. **Tests** : keygen/persistance (0600), ECDH (secret partagé identique), AEAD
-   round-trip, vecteurs.
-4. Basculer le seam de `secubox-identity` sur le vrai backend une fois 1-2 faits.
+1. ~~Porter `hermes.py`~~ **fait** (PR #1272) : `Identity`/`Session`/`derive_key_material`
+   implémentés dans `common/secubox_core/crypto/hermes.py`.
+2. ~~Packager en module importable~~ **fait** : `secubox-core` 1.4.1, `from
+   secubox_core.crypto import hermes` OK au runtime, déployé sur gk2.
+3. ~~Tests~~ **fait** : keygen/persistance 0600, ECDH secret partagé, AEAD
+   round-trip (`common/secubox_core/crypto/tests/test_hermes.py`).
+4. **Reste** : le seam de `secubox-identity` **détecte** le backend souverain
+   (rapporte `hermes-souverain`) mais `ensure_x25519_pubkey` **génère encore la
+   clé via `cryptography` stdlib** — même primitive X25519, aucune dégradation.
+   Câbler la génération sur `hermes.Identity.generate()` pour fermer la boucle.
 
 ## Règles de sécurité (rappel CSPN)
 
