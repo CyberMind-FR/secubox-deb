@@ -1,3 +1,16 @@
+secubox-billets (0.8.30-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — refonte carrousel/fil « magazine, dense ». Cartes « À la une » :
+    vraie VIGNETTE vidéo (poster) au lieu de l'icône lien — miniature YouTube
+    déterministe (i.ytimg, déduite de la source/embed, sans appel API ;
+    referrerpolicy=no-referrer), capture locale prioritaire si présente.
+    Placeholder RICHE (dégradé sur la tonalité + glyphe ▶/🎵/📄/🔗) quand aucune
+    vignette. Cover 92→126 px (image-forward), cartes 206×252, carrousel et fil
+    resserrés (colonne kind 72→60, paddings réduits). newsroom.css ?v=nr11.
+    Nouveau champ _billet_view.poster + helper _poster_for.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 11 Sep 2026 22:30:00 +0200
+
 secubox-billets (0.8.29-1~bookworm1) bookworm; urgency=medium
 
   * Lecture PUBLIQUE rétablie : billets est une gazette (feeds Atom/JSON,

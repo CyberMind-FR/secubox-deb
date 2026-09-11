@@ -8,6 +8,7 @@ The public feed is server-rendered Jinja2 with keyset pagination."""
 from __future__ import annotations
 
 import os
+import re
 import time
 from pathlib import Path
 
@@ -160,6 +161,26 @@ def _depuis(iso: str | None) -> str:
     return t.strftime("%d/%m/%y")
 
 
+# Poster (vignette) d'une carte média (#1268). Un identifiant YouTube (11 car.)
+# se lit dans une URL de source OU d'embed ; la miniature i.ytimg est
+# déterministe, donc pas d'appel API au rendu. Les PeerTube dont la source n'est
+# pas YouTube (rares) retombent sur le placeholder typé.
+_YT_ID = re.compile(r"(?:youtu\.be/|[?&]v=|/embed/|/vi/)([A-Za-z0-9_-]{11})")
+
+
+def _poster_for(d: dict) -> str | None:
+    """URL de vignette pour la couverture de carte, ou None (→ placeholder)."""
+    if d.get("embed_snapshot_url"):
+        return d["embed_snapshot_url"]        # capture locale (souveraine) si présente
+    for u in (d.get("ref_url"), d.get("embed_url")):
+        if not u:
+            continue
+        m = _YT_ID.search(u)
+        if m:
+            return f"https://i.ytimg.com/vi/{m.group(1)}/hqdefault.jpg"
+    return None
+
+
 def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None) -> dict:
     from urllib.parse import urlparse
     d = dict(row)
@@ -189,6 +210,7 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None)
     d["embed_is_video"] = bool(_eh) and (
         any(_eh == h or _eh.endswith("." + h) for h in _VID)
         or "peertube" in _eh or _eh.startswith("tube.") or _eh.endswith(".tv"))
+    d["poster"] = _poster_for(d)
     return d
 
 
