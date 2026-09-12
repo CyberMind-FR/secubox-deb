@@ -1,3 +1,21 @@
+secubox-billets (0.8.49-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — ON ECRIT AUSSI DEPUIS LE THEATRE. Le popup du fil reçoit la même ligne
+    de console que la vue billet (nom retenu, message, émojis, envoyer), posée sous
+    l'image. Contrairement à ce que je croyais, la règle du dépopup n'est pas en
+    cause : il se déclenche au SCROLL, à la MOLETTE et au TOUCHMOVE — taper au
+    clavier n'en produit aucun, la saisie n'interrompt donc rien.
+  * #1268 — l'envoi se fait en arrière-plan : la lecture continue, la ligne part
+    aussitôt en sous-titre incrusté (liseré doré, « en attente » si la modération la
+    retient) et rejoint les couloirs sans rechargement.
+  * #1268 — nouvelle route `GET /jeton` : le fil ne rend aucun formulaire, il lui
+    faut donc la paire CSRF + jeton anti-spam servie séparément. Elle est demandée
+    AU CHARGEMENT du fil, pas au moment d'écrire — sinon le premier envoi tomberait
+    sous le délai minimal de trois secondes. Deux jetons opaques, rien du visiteur.
+    assets ?v=im11.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 23:55:00 +0200
+
 secubox-billets (0.8.48-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — LE PAVE DE FORMULAIRE DISPARAIT de la vue billet : la barre incrustée

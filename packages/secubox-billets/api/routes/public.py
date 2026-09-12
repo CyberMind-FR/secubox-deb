@@ -75,6 +75,30 @@ def register_public(app: FastAPI, templates: Jinja2Templates) -> None:
                             secure=_secure(request), max_age=31536000, path="/")
         return resp
 
+    @app.get("/jeton")
+    async def jeton(request: Request):
+        """Jetons de publication pour LE FIL (#1268).
+
+        Le fil ne rend aucun formulaire : la saisie vit dans le popup théâtre,
+        fabriqué en JavaScript. Il lui faut donc la même paire que la vue billet
+        — le jeton CSRF (dont la moitié est posée en cookie) et le jeton
+        anti-spam signé, qui impose trois secondes de réflexion. On le sert au
+        chargement du fil, pas au moment d'écrire : sinon le premier envoi
+        tomberait systématiquement sous le délai minimal.
+
+        Rien du visiteur n'est exposé : deux jetons opaques, et un cookie que la
+        page recevait déjà en visitant n'importe quel billet.
+        """
+        pcsrf = request.cookies.get(PCSRF_COOKIE) or sec.new_csrf_token()
+        resp = JSONResponse({
+            "csrf": pcsrf,
+            "ts_token": antispam.issue_form_token(request.app.state.secret,
+                                                  now_epoch=int(time.time())),
+        })
+        resp.set_cookie(PCSRF_COOKIE, pcsrf, httponly=True, samesite=_samesite(request),
+                        secure=_secure(request), path="/")
+        return resp
+
     @app.post("/b/{slug}/comment")
     async def comment(request: Request, slug: str, author_name: str = Form(...),
                       body: str = Form(...), author_email: str = Form(""),

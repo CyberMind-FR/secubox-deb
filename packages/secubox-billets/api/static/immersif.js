@@ -65,9 +65,17 @@
       + '<div class="tinc"><div class="tsub"></div><div class="tlk"></div></div></div>'
       + '<div class="tbar"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
       + '<span class="ttl">' + esc(title) + '</span>'
-      + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div></div>';
+      + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div>'
+      + '<form class="tmsg" autocomplete="off"><span class="k">▸</span>'
+      + '<input class="qui" maxlength="40" placeholder="nom">'
+      + '<input class="quoi" maxlength="2000" placeholder="votre ligne passera en sous-titre…">'
+      + '<span class="emos">' + EMOS.map(function (e) {
+        return '<button type="button" class="emo" tabindex="-1">' + e + '</button>'; }).join("")
+      + '</span><button class="send" type="submit">envoyer ↗</button>'
+      + '<span class="etat"></span></form></div>';
     theater.hidden = false; playing = el; base = pos; t0 = performance.now();
     incruste(slug);
+    saisie(slug);
   }
 
   // INCRUSTATION (#1268) : les likes et UNE ligne de conversation, en bas de
@@ -99,6 +107,66 @@
     }
     ligne();
     if (cs.length > 1) subTimer = setInterval(ligne, 4600);
+  }
+
+  // ECRIRE DEPUIS LE THEATRE (#1268). Possible sans rien changer à la règle du
+  // dépopup : celui-ci est déclenché par le SCROLL, la molette et le touchmove —
+  // taper au clavier n'en produit aucun. L'envoi se fait en arrière-plan, donc
+  // la lecture n'est pas interrompue, et la ligne part aussitôt en sous-titre.
+  var EMOS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+  var ETATS = {
+    ok: "publié", pending: "en attente de modération", slow: "trop vite — réessayez",
+    rate: "trop de messages — patientez", bad: "refusé (2 à 2000 caractères)",
+    csrf: "session expirée — rechargez", absent: "billet introuvable"
+  };
+  var JET = null;
+  fetch("/jeton", { headers: { "Accept": "application/json" }, credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { JET = d; }).catch(function () {});
+
+  function saisie(slug) {
+    var f = theater.querySelector(".tmsg"); if (!f) return;
+    var qui = f.querySelector(".qui"), quoi = f.querySelector(".quoi"),
+        etat = f.querySelector(".etat"), envoi = f.querySelector(".send");
+    qui.value = LS.get("nom", "") || "";
+    function dire(txt, err) {
+      etat.textContent = txt || "";
+      etat.className = "etat" + (txt ? (err ? " err" : " ok") : "");
+    }
+    [].forEach.call(f.querySelectorAll(".emo"), function (b) {
+      b.addEventListener("click", function () { quoi.value += b.textContent; quoi.focus(); });
+    });
+    f.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!JET) { dire("pas encore prêt", true); return; }
+      var n = (qui.value || "").trim(), m = (quoi.value || "").trim();
+      if (n.length < 2) { dire("votre nom, d'abord", true); qui.focus(); return; }
+      if (m.length < 2) { quoi.focus(); return; }
+      LS.set("nom", n);
+      envoi.disabled = true; dire("envoi…");
+      var fd = new FormData();
+      fd.append("csrf", JET.csrf); fd.append("ts_token", JET.ts_token);
+      fd.append("website", ""); fd.append("author_name", n); fd.append("body", m);
+      fetch("/b/" + encodeURIComponent(slug) + "/comment", {
+        method: "POST", body: fd, credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        envoi.disabled = false;
+        dire(ETATS[d.c] || d.c, !d.ok);
+        if (!d.ok) return;
+        quoi.value = ""; quoi.focus();
+        var ligne = { who: n, msg: m, when: "à l'instant", slug: slug };
+        (ACT.comments[slug] = ACT.comments[slug] || []).unshift(ligne);
+        var sub = theater.querySelector(".tsub");
+        if (sub) {
+          sub.innerHTML = '<span class="k">▸</span><span class="nm">' + esc(n) + '</span>'
+            + '<span class="msg">' + esc(m) + '</span>'
+            + (d.c === "pending" ? '<span class="att">en attente</span>' : "");
+          sub.classList.add("mienne", "in");
+        }
+        placeActivity();
+      }).catch(function () { envoi.disabled = false; dire("envoi impossible", true); });
+    });
   }
 
   function depopTheater() {
