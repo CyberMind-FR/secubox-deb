@@ -1,3 +1,126 @@
+secubox-billets (0.8.55-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — OUVRIR UN PERMALIEN REPREND EXACTEMENT OU ON EN ETAIT. La position
+    n'était écrite qu'au dépopup : suivre « ouvrir ↗ » quittait la page SANS
+    dépopup, et le permalien repartait donc de la dernière position dépopée —
+    souvent zéro. Elle est désormais retenue aussi au départ de la page
+    (pagehide/beforeunload), quand l'onglet passe en arrière-plan, toutes les
+    quatre secondes pendant la lecture, et à tout clic vers un /b/<slug>.
+  * #1268 — la saisie du théâtre acceptait encore 2 000 signes alors que la limite
+    est passée à 8 000 : corrigé. assets ?v=im16.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 03:15:00 +0200
+
+secubox-billets (0.8.54-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LIMITES DE MESSAGES RETIREES. Plus de plafond de cadence (c'était 5
+    messages par heure et par IP), plus de délai de réflexion imposé (c'était 3
+    secondes), et la longueur passe de 2 000 à 8 000 signes — celle d'un billet.
+  * ATTENTION, ET C'EST VOLONTAIREMENT REVERSIBLE : billets est exposé
+    publiquement, et ces deux gardes étaient sa seule protection contre
+    l'inondation de commentaires. Le mécanisme n'est donc PAS supprimé du code,
+    seulement éteint par défaut et rallumable en une variable :
+      BILLETS_COMMENT_CADENCE=5   → 5 messages/heure et par IP
+      BILLETS_COMMENT_DELAI=3     → 3 secondes de réflexion minimale
+    Le jeton signé reste VERIFIE dans tous les cas — c'est lui qui prouve que le
+    formulaire vient bien de nous ; seul le délai minimal est réglable. Le piège à
+    robots et la modération restent en place, eux aussi.
+  * #1268 — les plafonds d'AFFICHAGE suivent : l'activité d'un billet renvoie
+    désormais TOUS ses messages (c'était les huit derniers), sans quoi un
+    sous-titre ancré tard dans la vidéo ne pouvait jamais sortir ; le flux global
+    passe de 16 à 60. assets ?v=im15 / vue ?v=v10.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 02:55:00 +0200
+
+secubox-billets (0.8.53-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LA VUE PRINCIPALE N'EST PLUS UNE LISTE D'ADRESSES. Les billets relayés
+    (199 en base) portent dans leur corps une fiche — titre répété, ligne
+    chaîne/durée, puis trois libellés suivis d'URLS NUES de deux cents caractères.
+    Rendue telle quelle, elle occupait toute la page. `services/fiche.extraire`
+    reconnaît cette forme et en tire des données ; la page les rend en PASTILLES
+    typées (Source YouTube / PeerTube · souverain / Flux de la box) portant leur
+    hôte en petit, et garde le RESTE comme prose.
+  * #1268 — c'est l'HOTE qui donne la nature du lien, pas le libellé : PeerTube en
+    vert souverain, flux de la box en doré, source tierce en sourdine. Le titre
+    répété et le trait de séparation disparaissent — le titre est déjà en tête.
+  * #1268 — MINI-STATS sur la fiche : lectures, réactions, messages.
+  * Rien n'est réécrit en base : la transformation est une LECTURE. Un corps qui
+    n'est pas une fiche ressort intact — mieux vaut une page ordinaire qu'une page
+    mutilée par un extracteur trop sûr de lui. vue ?v=v9.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 02:20:00 +0200
+
+secubox-billets (0.8.52-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — TELEPHONE : écrire ne fait plus sauter à l'article suivant. Deux causes
+    distinctes, corrigées toutes les deux.
+    1. Le navigateur ZOOMAIT tout seul à l'entrée dans le champ, parce que son
+       texte faisait moins de 16 px — c'est ce zoom qui décentrait la page, pas
+       notre mise en page. Les champs passent à 16 px en petite largeur.
+    2. L'ouverture du clavier produit un SCROLL, et la logique « billet le plus
+       proche » dépopupait le théâtre pour passer au suivant AU MILIEU D'UNE
+       PHRASE. Tant qu'un champ de la barre a le focus, le défilé ne pilote plus
+       rien : ni dépopup, ni changement de billet actif.
+  * #1268 — la barre se réorganise en petite largeur (message sur sa propre ligne,
+    émojis et envoi en dessous) et le théâtre se cale EN HAUT de l'écran : centré,
+    le clavier le poussait hors du cadre. assets ?v=im14 / vue ?v=v8.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 01:45:00 +0200
+
+secubox-billets (0.8.51-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LES MESSAGES SONT ANCRES DANS LE TEMPS DE LA VIDEO. Migration 0005 :
+    colonne `comment.video_t`. Un message écrit pendant la lecture retient la
+    seconde visée ; il RESSORT quand la vidéo y revient — c'est ce qui en fait un
+    sous-titre et non un bandeau qui défile. Vaut pour la vue billet comme pour le
+    popup théâtre.
+  * #1268 — NULL et non 0 par défaut : un message écrit hors lecture (billet texte,
+    envoi sans JavaScript) n'est ancré nulle part, et zéro voudrait dire « au tout
+    début ». Les messages déjà en base restent donc non ancrés et continuent de
+    tourner en boucle, sans prétendre à un instant qu'on ne connaît pas.
+  * #1268 — la console affiche une PUCE D'INSTANT (m:ss) cliquable : elle reprend la
+    lecture à ce moment. Les lignes ancrées y sont classées dans l'ordre de la
+    vidéo, les autres par date — la console se lit comme la bande-son du billet.
+  * La position est celle que nous ESTIMONS (départ + temps écoulé) : un lecteur en
+    iframe d'un autre domaine ne nous dit pas où il en est. C'est déjà la base de la
+    reprise de lecture ; la précision est de l'ordre de la seconde, pas de l'image.
+    assets ?v=im13 / vue ?v=v7.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 01:10:00 +0200
+
+secubox-billets (0.8.50-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LES INCRUSTATIONS NE RECOUVRENT PLUS LA BARRE DU LECTEUR. On ne dispute
+    pas ses clics au lecteur : la saisie et l'OSD, qui sont CLIQUABLES, sortent du
+    cadre et se rangent SOUS l'écran (bloc .ctrls) ; seuls les sous-titres et les
+    réactions restent sur l'image — ils ne captent pas le pointeur — et remontent
+    au-dessus des commandes (58 px, 64 px). Dans le théâtre, l'incrustation remonte
+    de même (46 px).
+  * #1268 — effet de bord bienvenu : l'image redevient entière, et la barre de
+    saisie gagne le fond opaque d'un vrai champ au lieu d'un voile sur la vidéo.
+    assets ?v=im12 / vue ?v=v6.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 00:20:00 +0200
+
+secubox-billets (0.8.49-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — ON ECRIT AUSSI DEPUIS LE THEATRE. Le popup du fil reçoit la même ligne
+    de console que la vue billet (nom retenu, message, émojis, envoyer), posée sous
+    l'image. Contrairement à ce que je croyais, la règle du dépopup n'est pas en
+    cause : il se déclenche au SCROLL, à la MOLETTE et au TOUCHMOVE — taper au
+    clavier n'en produit aucun, la saisie n'interrompt donc rien.
+  * #1268 — l'envoi se fait en arrière-plan : la lecture continue, la ligne part
+    aussitôt en sous-titre incrusté (liseré doré, « en attente » si la modération la
+    retient) et rejoint les couloirs sans rechargement.
+  * #1268 — nouvelle route `GET /jeton` : le fil ne rend aucun formulaire, il lui
+    faut donc la paire CSRF + jeton anti-spam servie séparément. Elle est demandée
+    AU CHARGEMENT du fil, pas au moment d'écrire — sinon le premier envoi tomberait
+    sous le délai minimal de trois secondes. Deux jetons opaques, rien du visiteur.
+    assets ?v=im11.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 23:55:00 +0200
+
 secubox-billets (0.8.48-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — LE PAVE DE FORMULAIRE DISPARAIT de la vue billet : la barre incrustée

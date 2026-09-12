@@ -54,7 +54,14 @@
     <div class="pops" id="pops" aria-hidden="true"></div>
     <div class="track" id="track" aria-label="Messages en sous-titres"></div>
 
-    <!-- SAISIE INCRUSTEE : écrire sans quitter l'écran ni couper la vidéo.
+
+  </div>
+  <!-- LES COMMANDES, SOUS l'ECRAN. Elles étaient incrustées en bas de l'image
+       et recouvraient la barre de contrôle du lecteur : on ne dispute pas ses
+       clics au lecteur. Seuls les sous-titres restent sur l'image — ils ne
+       captent pas le pointeur et se tiennent au-dessus des commandes. -->
+  <div class="ctrls">
+    <!-- SAISIE : écrire sans quitter l'écran ni couper la vidéo.
          Elle emprunte les jetons du vrai formulaire (csrf, ts_token) : mêmes
          contrôles anti-spam, pas de seconde porte d'entrée. -->
     <form class="msgbox" id="msgbox" method="post" action="/b/{{ billet.slug }}/comment" autocomplete="off">
@@ -63,10 +70,13 @@
          serveur redirige comme avant — rien n'est perdu. #}
       <input type="hidden" name="csrf" value="{{ pcsrf }}">
       <input type="hidden" name="ts_token" value="{{ ts_token }}">
+      {# Rempli par vue.js à l'envoi : la seconde de lecture visée. Vide sans JS
+         ou hors lecture — le serveur enregistre alors « pas d'instant ». #}
+      <input type="hidden" name="video_t" id="mb-t" value="">
       <label class="hp">Laissez ce champ vide<input name="website" tabindex="-1" autocomplete="off"></label>
       <span class="k">▸</span>
       <input class="qui" id="mb-qui" name="author_name" maxlength="40" placeholder="nom" required>
-      <input class="quoi" id="mb-quoi" name="body" maxlength="2000" placeholder="votre ligne passera en sous-titre…" required>
+      <input class="quoi" id="mb-quoi" name="body" maxlength="8000" placeholder="votre ligne passera en sous-titre…" required>
       <span class="emos" id="mb-emos" aria-label="Émojis">
         {% for e in ['👍','❤️','😂','😮','😢','🔥'] %}<button type="button" class="emo" data-emo="{{ e }}" tabindex="-1">{{ e }}</button>{% endfor %}
       </span>
@@ -92,10 +102,40 @@
     {% if billet.ref_host %}<a class="ref-chip u-url" href="{{ billet.ref_url }}" target="_blank" rel="noopener nofollow ugc">↗ {{ billet.ref_host }}</a>{% endif %}
   </header>
 
+  {# LA FICHE : ce qui était une liste d'URLs nues devient des pastilles typées
+     (l'hôte dit la nature, pas le libellé) plus une ligne de mini-stats. #}
+  {% if billet.fiche %}
+  <div class="fiche">
+    <div class="fmeta">
+      {% if billet.fiche.chaine %}<span class="fch">👤 {{ billet.fiche.chaine }}</span>{% endif %}
+      {% if billet.fiche.duree %}<span class="fdur">⏱ {{ billet.fiche.duree }}</span>{% endif %}
+      <span class="fstats">
+        <span class="st" title="lectures">👁 <b>{{ billet.view_count or 0 }}</b></span>
+        <span class="st" title="réactions">♥ <b>{{ reactions.counts.values()|sum if reactions else 0 }}</b></span>
+        <span class="st" title="messages">💬 <b>{{ comments|length }}</b></span>
+      </span>
+    </div>
+    <div class="fliens">
+      {% for l in billet.fiche.liens %}
+      <a class="fl {{ l.genre }}" href="{{ l.url }}" target="_blank" rel="noopener nofollow ugc"
+         title="{{ l.url }}">
+        <span class="fi">{{ l.ico }}</span>
+        <span class="ft">{{ 'Source YouTube' if l.genre == 'yt' else ('PeerTube · souverain' if l.genre == 'pt' else ('Flux de la box' if l.genre == 'box' else l.label)) }}</span>
+        <span class="fh">{{ l.hote }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if billet.body_html and billet.body_html.strip() %}
   <div class="prose e-content">
     {% with b=billet %}{% include "_zani_stamp.html" %}{% endwith %}
     {{ billet.body_html|safe }}
   </div>
+  {% else %}
+  <div class="prose e-content zani-seul">{% with b=billet %}{% include "_zani_stamp.html" %}{% endwith %}</div>
+  {% endif %}
 
   {# Galerie = IMAGES seules. L'audio/vidéo/pdf s'affiche EN LIGNE dans le corps
      (les refs /media/ y sont embarquées au rendu, #1094) : les remettre ici en
@@ -156,8 +196,11 @@
   {% if flash == 'slow' %}<p class="note err">Trop vite — réessayez dans un instant.</p>{% endif %}
   <ol class="clines">
   {% for c in comments %}
-    <li class="comment cline" data-who="{{ c.author_name }}" data-when="{{ c.created_at[:16]|replace('T',' ') }}">
-      <span class="ix">{{ '%02d' % loop.index }}</span>
+    <li class="comment cline" data-who="{{ c.author_name }}" data-when="{{ c.created_at[:16]|replace('T',' ') }}"
+        {% if c.video_t is not none %}data-t="{{ c.video_t }}"{% endif %}>
+      {% if c.video_t is not none %}<button type="button" class="at" data-seek="{{ c.video_t }}"
+        title="Reprendre la vidéo à cet instant">{{ '%d:%02d' % (c.video_t // 60, c.video_t % 60) }}</button>
+      {% else %}<span class="ix">{{ '%02d' % loop.index }}</span>{% endif %}
       <span class="nm c-meta"><strong>{{ c.author_name }}</strong></span>
       <span class="msg c-body">{{ c.body_html|safe }}</span>
       <time class="tm" datetime="{{ c.created_at }}">{{ c.created_at[:10] }}</time>

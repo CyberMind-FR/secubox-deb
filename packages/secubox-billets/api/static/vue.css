@@ -39,7 +39,7 @@
 .vue-stage.nocrt .crt{display:none}
 
 /* ── POPS : réactions qui montent par-dessus l'image ───────────────────────── */
-.pops{position:absolute;right:12px;top:44px;bottom:52px;z-index:8;width:190px;pointer-events:none;
+.pops{position:absolute;right:12px;top:44px;bottom:64px;z-index:8;width:190px;pointer-events:none;
   display:flex;flex-direction:column-reverse;align-items:flex-end;gap:5px;overflow:hidden}
 .pop{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;
   color:#e6eef4;background:rgba(6,10,15,.6);border-right:2px solid var(--tone);border-radius:5px 0 0 5px;
@@ -54,7 +54,7 @@
 }
 
 /* ── SOUS-TITRES : lignes monospace tronquées, par-dessus l'image ──────────── */
-.track{position:absolute;left:0;right:0;bottom:86px;z-index:8;display:flex;flex-direction:column;
+.track{position:absolute;left:0;right:0;bottom:58px;z-index:8;display:flex;flex-direction:column;
   gap:3px;padding:0 14px;pointer-events:none;align-items:flex-start}
 .track .line{pointer-events:auto;max-width:min(760px,86%);display:flex;align-items:baseline;gap:9px;
   background:rgba(6,10,15,.66);backdrop-filter:blur(2px);
@@ -64,6 +64,12 @@
 .track .line.out{animation:subout .3s ease forwards}
 .track .line:hover{background:rgba(10,16,24,.92);border-left-color:var(--gold)}
 .line .k{color:var(--tone);opacity:.8;flex:none}
+/* la puce d'INSTANT : ce message parle de CE moment de la vidéo */
+.line .at,.cline .at{flex:none;font-family:var(--mono);font-size:9.5px;font-variant-numeric:tabular-nums;
+  color:var(--gold);background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);
+  border-radius:4px;padding:1px 5px;letter-spacing:.02em}
+.cline .at{cursor:pointer;transition:.15s}
+.cline .at:hover{background:var(--gold);color:var(--ink);border-color:var(--gold)}
 .line .nm{color:#eaf1f6;font-weight:600;font-size:11px;flex:none;letter-spacing:.02em}
 .line .msg{color:#c9d5df;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .line .tm{color:var(--faint);font-size:9px;flex:none;font-variant-numeric:tabular-nums}
@@ -72,11 +78,12 @@
 .vue-stage.nosubs .track{display:none}
 
 /* ── SAISIE INCRUSTEE : une ligne de console, dans l'écran ─────────────────── */
-.msgbox{position:absolute;left:14px;right:14px;bottom:40px;z-index:9;display:flex;align-items:center;gap:8px;
-  background:rgba(6,10,15,.72);backdrop-filter:blur(3px);border:1px solid var(--edge-2);
-  border-left:2px solid var(--tone);border-radius:0 8px 8px 0;padding:5px 10px;
+.ctrls{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.msgbox{display:flex;align-items:center;gap:8px;
+  background:var(--panel-2);border:1px solid var(--edge);
+  border-left:2px solid var(--tone);border-radius:0 10px 10px 0;padding:7px 12px;
   font-family:var(--mono);font-size:12px;transition:border-color .15s,background .15s}
-.msgbox:focus-within{background:rgba(8,13,20,.92);border-color:var(--gold);border-left-color:var(--gold)}
+.msgbox:focus-within{background:var(--panel);border-color:var(--gold);border-left-color:var(--gold)}
 .msgbox .k{color:var(--tone);opacity:.85;flex:none}
 .msgbox input{font:inherit;color:var(--tx);background:transparent;border:0;padding:4px 2px;min-width:0}
 .msgbox input:focus{outline:none}
@@ -94,16 +101,15 @@
 .msgbox .etat{flex:none;font-size:9.5px;letter-spacing:.08em;color:var(--faint);max-width:190px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .msgbox .etat.ok{color:var(--green)} .msgbox .etat.err{color:var(--coral)}
-.vue-stage.nosubs .msgbox{display:none}
+
 /* la ligne qu'on vient d'écrire se distingue dans le défilé */
 .track .line.mienne{border-left-color:var(--gold);background:rgba(14,21,30,.88)}
 .track .line .att{color:var(--gold);font-size:9px;flex:none}
 
 /* ── OSD : la barre console en bas de l'écran ──────────────────────────────── */
-.osd{position:absolute;left:0;right:0;bottom:0;z-index:9;display:flex;align-items:center;gap:8px;
-  padding:20px 12px 9px;background:linear-gradient(transparent,rgba(4,7,11,.88) 62%);
+.osd{display:flex;align-items:center;gap:8px;padding:0 2px;
   font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--dim)}
-.ob{font:inherit;letter-spacing:inherit;color:var(--dim);background:rgba(6,10,15,.5);
+.ob{font:inherit;letter-spacing:inherit;color:var(--dim);background:transparent;
   border:1px solid var(--edge-2);border-radius:999px;padding:4px 10px;cursor:pointer;transition:.15s;text-transform:uppercase}
 .ob:hover{color:var(--tx);border-color:var(--dim)}
 .ob.on{color:var(--tone);border-color:color-mix(in srgb,var(--tone) 45%,var(--edge-2))}
@@ -120,6 +126,31 @@
 .vue-pin .ref-chip{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--dim);
   border:1px solid var(--edge);border-radius:999px;padding:5px 11px}
 .vue-pin .ref-chip:hover{color:var(--tx);border-color:var(--edge-2)}
+
+/* ── LA FICHE : les liens deviennent des PASTILLES, plus des URLs nues ─────── */
+.fiche{max-width:68ch;margin:24px auto 0;display:flex;flex-direction:column;gap:12px}
+.fmeta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-family:var(--mono);
+  font-size:11px;color:var(--dim);letter-spacing:.04em}
+.fmeta .fdur{color:var(--gold)}
+.fstats{margin-left:auto;display:flex;gap:13px;color:var(--faint)}
+.fstats .st{display:inline-flex;align-items:center;gap:5px}
+.fstats b{color:var(--tx);font-variant-numeric:tabular-nums;font-weight:600}
+.fliens{display:flex;gap:9px;flex-wrap:wrap}
+.fl{display:inline-flex;align-items:center;gap:9px;padding:9px 14px;border-radius:11px;
+  background:var(--panel-2);border:1px solid var(--edge);transition:.16s;min-width:0}
+.fl:hover{transform:translateY(-1px);border-color:var(--edge-2);background:var(--panel)}
+.fl .fi{font-size:15px;flex:none}
+.fl .ft{font-family:var(--body);font-size:13px;font-weight:500;color:var(--tx);white-space:nowrap}
+.fl .fh{font-family:var(--mono);font-size:9px;color:var(--faint);letter-spacing:.04em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px}
+/* l'hôte dit la nature : souverain en vert, tiers en sourdine */
+.fl.pt{border-color:color-mix(in srgb,var(--green) 34%,var(--edge))}
+.fl.pt:hover{border-color:var(--green)} .fl.pt .ft{color:#cfeadd}
+.fl.box{border-color:color-mix(in srgb,var(--gold) 34%,var(--edge))}
+.fl.box:hover{border-color:var(--gold)} .fl.box .ft{color:#f0e2bb}
+.fl.yt .ft{color:var(--dim)}
+.prose.zani-seul{margin-top:8px;min-height:0}
+.prose.zani-seul::after{content:"";display:block;clear:both}
 
 /* ── LE CORPS ──────────────────────────────────────────────────────────────── */
 .prose{max-width:68ch;margin:26px auto 0;font-size:16.5px;line-height:1.74;color:#ccd6e0}
@@ -220,8 +251,14 @@
   .vue-wrap{padding-bottom:56px}
   .vue-stage{border-radius:13px;margin-top:14px}
   .pops{display:none}
-  .track{bottom:84px;padding:0 9px}
-  .msgbox{left:9px;right:9px;font-size:11px}
+  .track{bottom:50px;padding:0 9px}
+  /* 16px : en dessous, le navigateur zoome à l'entrée dans le champ */
+  .msgbox{flex-wrap:wrap;gap:6px}
+  .msgbox .qui{width:92px;font-size:16px}
+  .msgbox .quoi{font-size:16px;flex:1 1 100%;order:3}
+  .msgbox .emos{margin-left:auto}
+  .msgbox .emo{font-size:17px;padding:4px}
+  .msgbox .send{order:4;margin-left:auto}
   .msgbox .emos,.msgbox .etat{display:none}
   .msgbox .qui{width:74px}
   .track .line{max-width:94%;font-size:11px}

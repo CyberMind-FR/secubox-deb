@@ -65,9 +65,17 @@
       + '<div class="tinc"><div class="tsub"></div><div class="tlk"></div></div></div>'
       + '<div class="tbar"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
       + '<span class="ttl">' + esc(title) + '</span>'
-      + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div></div>';
+      + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div>'
+      + '<form class="tmsg" autocomplete="off"><span class="k">▸</span>'
+      + '<input class="qui" maxlength="40" placeholder="nom">'
+      + '<input class="quoi" maxlength="8000" placeholder="votre ligne passera en sous-titre…">'
+      + '<span class="emos">' + EMOS.map(function (e) {
+        return '<button type="button" class="emo" tabindex="-1">' + e + '</button>'; }).join("")
+      + '</span><button class="send" type="submit">envoyer ↗</button>'
+      + '<span class="etat"></span></form></div>';
     theater.hidden = false; playing = el; base = pos; t0 = performance.now();
     incruste(slug);
+    saisie(slug);
   }
 
   // INCRUSTATION (#1268) : les likes et UNE ligne de conversation, en bas de
@@ -75,7 +83,17 @@
   // le théâtre, bouger la souris dépopupe : une incrustation qui capterait le
   // pointeur casserait le comportement validé. D'où pointer-events:none côté CSS
   // et zéro écouteur ici. Les données sont celles déjà chargées pour les couloirs.
-  var subTimer = null;
+  var subTimer = null, ancreTimer = null;
+  function mmss(t) { t = Math.max(0, Math.floor(t)); return Math.floor(t / 60) + ":" + ("0" + (t % 60)).slice(-2); }
+  function posTh() { return base + (performance.now() - t0) / 1000; }
+  function poseSub(c, attente) {
+    var sub = theater.querySelector(".tsub"); if (!sub) return;
+    sub.innerHTML = (c.t != null ? '<span class="at">' + mmss(c.t) + '</span>' : '<span class="k">▸</span>')
+      + '<span class="nm">' + esc(c.who) + '</span>'
+      + '<span class="msg">' + esc(c.msg) + '</span>'
+      + (attente ? '<span class="att">en attente</span>' : "");
+    sub.classList.remove("in"); void sub.offsetWidth; sub.classList.add("in");
+  }
   function incruste(slug) {
     var sub = theater.querySelector(".tsub"), lk = theater.querySelector(".tlk");
     if (!sub || !lk) return;
@@ -90,19 +108,113 @@
     }).join("");
     var cs = (ACT.comments[slug] || []).filter(function (c) { return c.msg; });
     if (!cs.length) { sub.innerHTML = ""; return; }
-    var i = 0;
-    function ligne() {
-      var c = cs[i % cs.length]; i++;
-      sub.innerHTML = '<span class="k">▸</span><span class="nm">' + esc(c.who) + '</span>'
-        + '<span class="msg">' + esc(c.msg) + '</span>';
-      sub.classList.remove("in"); void sub.offsetWidth; sub.classList.add("in");
+
+    // ANCRES : ils sortent QUAND LA VIDEO Y ARRIVE. Les autres tournent en
+    // boucle, faute d'instant — mieux vaut les montrer que les taire.
+    var ancres = cs.filter(function (c) { return c.t != null; })
+                   .sort(function (a, b) { return a.t - b.t; });
+    var libres = cs.filter(function (c) { return c.t == null; });
+    var vus = {}, dernier = 0;
+    if (ancres.length) ancreTimer = setInterval(function () {
+      var p = posTh();
+      if (p < dernier - 2) vus = {};
+      dernier = p;
+      ancres.forEach(function (c, i) {
+        if (!vus[i] && p >= c.t && p < c.t + 5) { vus[i] = 1; poseSub(c); }
+      });
+    }, 700);
+    if (libres.length) {
+      var i = 0;
+      poseSub(libres[0]); i = 1;
+      if (libres.length > 1) subTimer = setInterval(function () {
+        poseSub(libres[i % libres.length]); i++;
+      }, 6000);
+    } else if (ancres.length) {
+      sub.innerHTML = "";
     }
-    ligne();
-    if (cs.length > 1) subTimer = setInterval(ligne, 4600);
   }
+
+  // ECRIRE DEPUIS LE THEATRE (#1268). Possible sans rien changer à la règle du
+  // dépopup : celui-ci est déclenché par le SCROLL, la molette et le touchmove —
+  // taper au clavier n'en produit aucun. L'envoi se fait en arrière-plan, donc
+  // la lecture n'est pas interrompue, et la ligne part aussitôt en sous-titre.
+  var EMOS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+  var ETATS = {
+    ok: "publié", pending: "en attente de modération", slow: "trop vite — réessayez",
+    rate: "trop de messages — patientez", bad: "refusé (2 à 2000 caractères)",
+    csrf: "session expirée — rechargez", absent: "billet introuvable"
+  };
+  var JET = null;
+  fetch("/jeton", { headers: { "Accept": "application/json" }, credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { JET = d; }).catch(function () {});
+
+  function saisie(slug) {
+    var f = theater.querySelector(".tmsg"); if (!f) return;
+    var qui = f.querySelector(".qui"), quoi = f.querySelector(".quoi"),
+        etat = f.querySelector(".etat"), envoi = f.querySelector(".send");
+    qui.value = LS.get("nom", "") || "";
+    function dire(txt, err) {
+      etat.textContent = txt || "";
+      etat.className = "etat" + (txt ? (err ? " err" : " ok") : "");
+    }
+    [].forEach.call(f.querySelectorAll(".emo"), function (b) {
+      b.addEventListener("click", function () { quoi.value += b.textContent; quoi.focus(); });
+    });
+    f.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!JET) { dire("pas encore prêt", true); return; }
+      var n = (qui.value || "").trim(), m = (quoi.value || "").trim();
+      if (n.length < 2) { dire("votre nom, d'abord", true); qui.focus(); return; }
+      if (m.length < 2) { quoi.focus(); return; }
+      LS.set("nom", n);
+      envoi.disabled = true; dire("envoi… @" + mmss(posTh()));
+      var fd = new FormData();
+      fd.append("csrf", JET.csrf); fd.append("ts_token", JET.ts_token);
+      fd.append("website", ""); fd.append("author_name", n); fd.append("body", m);
+      var vt = Math.floor(posTh());
+      if (vt >= 0 && vt <= 86400) fd.append("video_t", String(vt));
+      fetch("/b/" + encodeURIComponent(slug) + "/comment", {
+        method: "POST", body: fd, credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        envoi.disabled = false;
+        dire(ETATS[d.c] || d.c, !d.ok);
+        if (!d.ok) return;
+        quoi.value = ""; quoi.focus();
+        var ligne = { who: n, msg: m, when: "à l'instant", slug: slug,
+                      t: (d.t == null ? null : d.t) };
+        (ACT.comments[slug] = ACT.comments[slug] || []).unshift(ligne);
+        poseSub(ligne, d.c === "pending");
+        var sub = theater.querySelector(".tsub"); if (sub) sub.classList.add("mienne");
+        placeActivity();
+      }).catch(function () { envoi.disabled = false; dire("envoi impossible", true); });
+    });
+  }
+
+  // LA POSITION SURVIT A LA NAVIGATION (#1268). Elle n'était écrite qu'au
+  // dépopup : suivre « ouvrir ↗ » quittait la page SANS dépopup, et le permalien
+  // reprenait donc à la dernière position dépopée — souvent zéro. On la retient
+  // aussi en partant, en masquant l'onglet, et régulièrement pendant la lecture.
+  function retiens() {
+    if (!playing || theater.hidden) return;
+    var t = base + (performance.now() - t0) / 1000;
+    LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
+  }
+  setInterval(retiens, 4000);
+  window.addEventListener("pagehide", retiens);
+  window.addEventListener("beforeunload", retiens);
+  document.addEventListener("visibilitychange", function () { if (document.hidden) retiens(); });
+  // Tout départ vers un billet emporte la position en cours : le permalien
+  // reprend EXACTEMENT là, sans coupure perceptible.
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest ? e.target.closest('a[href^="/b/"]') : null;
+    if (a) retiens();
+  }, true);
 
   function depopTheater() {
     clearInterval(subTimer); subTimer = null;
+    clearInterval(ancreTimer); ancreTimer = null;
     if (playing) {
       var t = base + (performance.now() - t0) / 1000;
       LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
@@ -197,7 +309,23 @@
     return best;
   }
   var _spend = false, dwellT = null;
+  // TANT QU'ON ECRIT, LE FIL NE BOUGE PLUS (#1268). Sur téléphone, l'ouverture du
+  // clavier produit un scroll : la logique « billet le plus proche » dépopupait le
+  // théâtre et passait à l'article suivant AU MILIEU D'UNE PHRASE. Le champ a la
+  // priorité sur le défilé tant qu'il a le focus.
+  var ecrit = false;
+  document.addEventListener("focusin", function (e) {
+    if (e.target.closest && e.target.closest(".tmsg")) ecrit = true;
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target.closest && e.target.closest(".tmsg")) setTimeout(function () {
+      var a = document.activeElement;
+      ecrit = !!(a && a.closest && a.closest(".tmsg"));
+    }, 0);
+  });
+
   function onScroll() {
+    if (ecrit) return;                 // on écrit : ni dépopup, ni changement de billet
     depopTheater();                    // bouge → dépopup (overlay non-modal, le scroll passe)
     if (!_spend) { _spend = true; requestAnimationFrame(function () { _spend = false; var c = nearestCard(); if (c) activate(c); else if (active) drawLinks(active); }); }
     clearTimeout(dwellT);

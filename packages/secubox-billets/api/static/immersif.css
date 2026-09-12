@@ -231,9 +231,11 @@ html.reveal .card.in{opacity:1;transform:none;
 /* INCRUSTATION : likes + une ligne de conversation, en bas de l'image, façon
    sous-titres TV. `pointer-events:none` est OBLIGATOIRE — dans le théâtre,
    bouger la souris dépopupe ; rien ici ne doit intercepter le pointeur. */
-.tinc{position:absolute;left:0;right:0;bottom:0;z-index:3;pointer-events:none;
-  display:flex;align-items:flex-end;gap:14px;padding:42px 16px 14px;
-  background:linear-gradient(transparent,rgba(4,7,11,.85) 72%)}
+/* remontée AU-DESSUS de la barre de contrôle du lecteur : l'incrustation ne
+   doit ni la masquer ni sembler lui appartenir. */
+.tinc{position:absolute;left:0;right:0;bottom:46px;z-index:3;pointer-events:none;
+  display:flex;align-items:flex-end;gap:14px;padding:34px 16px 8px;
+  background:linear-gradient(transparent,rgba(4,7,11,.8) 78%)}
 .tinc::before{content:"";position:absolute;inset:auto 0 0 0;height:64%;opacity:.5;
   background:repeating-linear-gradient(180deg,rgba(255,255,255,.045) 0 1px,transparent 1px 3px)}
 .tsub{position:relative;display:flex;align-items:baseline;gap:9px;max-width:min(700px,76%);
@@ -257,4 +259,45 @@ html.reveal .card.in{opacity:1;transform:none;
 .tbar .ttl{font-family:var(--serif);font-size:15px;color:#eef3f7;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .topen{font-family:var(--mono);font-size:14px;color:var(--dim);border:1px solid var(--edge);border-radius:999px;padding:4px 11px}
 .topen:hover{color:var(--tx);border-color:var(--edge-2)}
+/* SAISIE dans le théâtre : une ligne de console sous l'image. Le clavier ne
+   produit ni scroll ni molette — écrire ici ne dépopupe donc jamais. */
+.tmsg{display:flex;align-items:center;gap:8px;margin:0 12px 12px;padding:5px 10px;
+  background:rgba(6,10,15,.6);border:1px solid var(--edge);border-left:2px solid var(--tone,#4db6d6);
+  border-radius:0 8px 8px 0;font-family:var(--mono);font-size:12px;transition:border-color .15s,background .15s}
+.tmsg:focus-within{background:rgba(8,13,20,.95);border-color:var(--gold);border-left-color:var(--gold)}
+.tmsg .k{color:var(--tone,#4db6d6);opacity:.85;flex:none}
+.tmsg input{font:inherit;color:var(--tx);background:transparent;border:0;padding:4px 2px;min-width:0}
+.tmsg input:focus{outline:none}
+.tmsg input::placeholder{color:var(--faint)}
+.tmsg .qui{flex:none;width:92px;color:#eaf1f6;font-weight:600;border-right:1px solid var(--edge)}
+.tmsg .quoi{flex:1}
+.tmsg .emos{display:flex;gap:1px;flex:none}
+.tmsg .emo{background:none;border:0;cursor:pointer;font-size:14px;line-height:1;padding:3px;opacity:.6;border-radius:5px;transition:.12s}
+.tmsg .emo:hover{opacity:1;transform:translateY(-1px);background:rgba(255,255,255,.07)}
+.tmsg .send{flex:none;font:inherit;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+  background:transparent;border:1px solid var(--edge-2);border-radius:999px;padding:4px 11px;cursor:pointer;transition:.15s}
+.tmsg .send:hover{color:var(--ink);background:var(--gold);border-color:var(--gold)}
+.tmsg .send[disabled]{opacity:.45;cursor:default}
+.tmsg .etat{flex:none;font-size:9.5px;letter-spacing:.08em;color:var(--faint);max-width:170px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tmsg .etat.ok{color:var(--green)} .tmsg .etat.err{color:var(--coral)}
+.tsub.mienne{border-left-color:var(--gold)}
+.tsub .att{color:var(--gold);font-size:9px;flex:none}
+.tsub .at,.at{flex:none;font-family:var(--mono);font-size:9.5px;font-variant-numeric:tabular-nums;
+  color:var(--gold);background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);
+  border-radius:4px;padding:1px 5px;letter-spacing:.02em}
+@media(max-width:640px){
+  /* 16px OBLIGATOIRE : en dessous, le navigateur zoome tout seul en entrant dans
+     le champ — c'est lui qui décentrait la page, pas notre mise en page. */
+  .tmsg{flex-wrap:wrap;gap:6px;margin:0 8px 10px;padding:7px 10px}
+  .tmsg .etat{display:none}
+  .tmsg .qui{width:88px;font-size:16px}
+  .tmsg .quoi{font-size:16px;flex:1 1 100%;order:3}
+  .tmsg .emos{margin-left:auto}
+  .tmsg .emo{font-size:17px;padding:4px}
+  .tmsg .send{order:4;margin-left:auto}
+  /* le théâtre se cale en haut : centré, le clavier le poussait hors écran */
+  .theater-pop{align-items:start;padding:8px}
+  .tp{width:100%}
+}
 @media(prefers-reduced-motion:reduce){.theater-pop::before,.tp{animation:none}}

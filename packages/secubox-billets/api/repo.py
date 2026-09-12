@@ -296,13 +296,15 @@ async def all_media(conn: aiosqlite.Connection) -> list[aiosqlite.Row]:
 # ── comments ────────────────────────────────────────────────────────────────
 async def add_comment(conn: aiosqlite.Connection, billet_id: str, *, author_name: str,
                       email_hash: Optional[str], body: str, ip_hash: str, honeypot: bool,
-                      status: str, now: str, ulid: Optional[str] = None) -> str:
+                      status: str, now: str, ulid: Optional[str] = None,
+                      video_t: Optional[int] = None) -> str:
+    """`video_t` = la seconde de lecture visée, ou None hors lecture (#1268)."""
     cid = ulid or new_ulid()
     await conn.execute(
         "INSERT INTO comment(id,billet_id,created_at,author_name,author_email,body,"
-        "status,ip_hash,honeypot_tripped) VALUES (?,?,?,?,?,?,?,?,?)",
+        "status,ip_hash,honeypot_tripped,video_t) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (cid, billet_id, now, author_name, email_hash, body, status, ip_hash,
-         1 if honeypot else 0),
+         1 if honeypot else 0, video_t),
     )
     await conn.commit()
     return cid
@@ -310,8 +312,11 @@ async def add_comment(conn: aiosqlite.Connection, billet_id: str, *, author_name
 
 async def list_approved_comments(conn: aiosqlite.Connection, billet_id: str) -> list[aiosqlite.Row]:
     async with conn.execute(
-        "SELECT id, author_name, body, created_at FROM comment "
-        "WHERE billet_id=? AND status='approved' ORDER BY created_at ASC", (billet_id,)
+        "SELECT id, author_name, body, created_at, video_t FROM comment "
+        "WHERE billet_id=? AND status='approved' "
+        # Ancrés d'abord, dans l'ordre de la vidéo : la console se lit comme la
+        # bande-son du billet. Les non-ancrés suivent, par date.
+        "ORDER BY (video_t IS NULL), video_t ASC, created_at ASC", (billet_id,)
     ) as cur:
         return await cur.fetchall()
 

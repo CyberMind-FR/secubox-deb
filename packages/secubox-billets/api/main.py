@@ -24,7 +24,7 @@ from .routes.public import _samesite
 from .routes.jwt_admin import register_jwt_admin
 from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
                             register_public, _visitor)
-from .services import antispam, feeds, media
+from .services import antispam, feeds, fiche, media
 from .services import security as sec
 from .services.render import linkify_plain, render_markdown
 
@@ -199,10 +199,21 @@ def _categorie(billet_id: str) -> str:
 def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None) -> dict:
     from urllib.parse import urlparse
     d = dict(row)
-    d["body_html"] = render_markdown(d["body"])
+    # FICHE MEDIA (#1268) : un billet relayé porte dans son corps une fiche —
+    # titre répété, chaîne/durée, et trois libellés suivis d'URLS NUES. Rendue
+    # telle quelle, la page principale n'était qu'une liste d'adresses. On en
+    # tire des données (rendues en pastilles) et on garde le RESTE comme prose.
+    # Un corps qui n'est pas une fiche ressort intact : `extraire` ne devine pas.
+    d["fiche"], _reste = fiche.extraire(d["body"])
+    d["body_html"] = render_markdown(_reste if d["fiche"] else d["body"])
     d["tags"] = tags or []
     # A few words for list/preview contexts; body_html keeps the full billet.
-    d["summary"] = feeds.excerpt(d["body"], max_len=140)
+    # Sur une fiche sans prose, le résumé vient de la fiche : une carte vide
+    # n'apprendrait rien, et l'URL nue encore moins.
+    if d["fiche"] and not _reste:
+        d["summary"] = " · ".join(x for x in (d["fiche"]["chaine"], d["fiche"]["duree"]) if x)
+    else:
+        d["summary"] = feeds.excerpt(_reste if d["fiche"] else d["body"], max_len=140)
     # Only long billets get resumed in the feed — `excerpt` collapses markdown, so
     # compare against IT, not len(body): a short billet padded with link syntax
     # would otherwise be "resumed" to a copy of itself followed by "Lire la suite".
@@ -339,11 +350,14 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         cmts = await repo.list_approved_comments(app.state.conn, row["id"])
         counts = await repo.reaction_counts(app.state.conn, row["id"])
         items = []
-        for c in cmts[-8:]:
+        # Tous les messages du billet : les sous-titres ancrés doivent pouvoir
+        # sortir à leur instant, pas seulement les huit derniers écrits.
+        for c in cmts:
             c = dict(c)
             items.append({"who": (c.get("author_name") or "anon")[:32],
                           "msg": (c.get("body") or "")[:180],
-                          "when": _depuis(c.get("created_at"))})
+                          "when": _depuis(c.get("created_at")),
+                          "t": c.get("video_t")})
         resp = JSONResponse({"comments": items, "reactions": counts})
         resp.headers["Cache-Control"] = "no-cache"
         return resp
@@ -356,18 +370,18 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         conn = app.state.conn
         comments = []
         async with conn.execute(
-            "SELECT c.author_name, c.body, c.created_at, b.slug FROM comment c "
+            "SELECT c.author_name, c.body, c.created_at, b.slug, c.video_t FROM comment c "
             "JOIN billet b ON b.id = c.billet_id "
             "WHERE c.status='approved' AND b.status='published' "
-            "ORDER BY c.created_at DESC LIMIT 16") as cur:
+            "ORDER BY c.created_at DESC LIMIT 60") as cur:
             async for r in cur:
                 comments.append({"who": (r[0] or "anon")[:32], "msg": (r[1] or "")[:160],
-                                 "when": _depuis(r[2]), "slug": r[3]})
+                                 "when": _depuis(r[2]), "slug": r[3], "t": r[4]})
         reactions = []
         try:
             async with conn.execute(
                 "SELECT r.emoji, b.slug FROM reaction r JOIN billet b ON b.id = r.billet_id "
-                "WHERE b.status='published' ORDER BY r.rowid DESC LIMIT 18") as cur:
+                "WHERE b.status='published' ORDER BY r.rowid DESC LIMIT 60") as cur:
                 async for r in cur:
                     reactions.append({"emoji": r[0], "slug": r[1]})
         except Exception:  # noqa: BLE001 — le flux d'activité ne doit jamais casser la page
