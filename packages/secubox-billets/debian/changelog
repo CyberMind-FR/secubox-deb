@@ -1,3 +1,21 @@
+secubox-billets (0.8.48-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LE PAVE DE FORMULAIRE DISPARAIT de la vue billet : la barre incrustée
+    dans l'écran le rendait redondant. Les jetons (csrf, anti-spam, piège à robots)
+    DEMENAGENT dans la barre, qui devient le seul et unique formulaire de la page —
+    avec `method=post action=/b/<slug>/comment`, donc TOUJOURS fonctionnelle sans
+    JavaScript (le serveur redirige comme avant). Une seule porte d'entrée, mêmes
+    contrôles.
+  * #1268 — le champ e-mail (facultatif, jamais affiché, servant seulement à un
+    hachage anti-spam) est retiré de l'interface : il n'avait pas sa place dans une
+    ligne de console.
+  * #1268 — CONSOLE réécrite : en-tête à témoin « en direct » battant, compteur de
+    lignes, lignes NUMEROTEES (01, 02…) en relief alterné, nom à la tonalité du
+    billet, liseré doré au survol et sur la ligne qu'on vient d'écrire, état vide
+    invitant, et un pied qui indique où écrire. assets vue ?v=v5.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 23:20:00 +0200
+
 secubox-billets (0.8.47-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — LA VIDEO NE S'ARRETE PLUS QUAND ON ECRIT. Le formulaire postait en 303 :

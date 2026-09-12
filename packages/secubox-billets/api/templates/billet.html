@@ -57,7 +57,13 @@
     <!-- SAISIE INCRUSTEE : écrire sans quitter l'écran ni couper la vidéo.
          Elle emprunte les jetons du vrai formulaire (csrf, ts_token) : mêmes
          contrôles anti-spam, pas de seconde porte d'entrée. -->
-    <form class="msgbox" id="msgbox" autocomplete="off">
+    <form class="msgbox" id="msgbox" method="post" action="/b/{{ billet.slug }}/comment" autocomplete="off">
+      {# Les jetons vivent ICI : c'est le seul formulaire de la page. Avec JS il
+         est intercepté (la vidéo continue) ; sans JS il poste normalement et le
+         serveur redirige comme avant — rien n'est perdu. #}
+      <input type="hidden" name="csrf" value="{{ pcsrf }}">
+      <input type="hidden" name="ts_token" value="{{ ts_token }}">
+      <label class="hp">Laissez ce champ vide<input name="website" tabindex="-1" autocomplete="off"></label>
       <span class="k">▸</span>
       <input class="qui" id="mb-qui" name="author_name" maxlength="40" placeholder="nom" required>
       <input class="quoi" id="mb-quoi" name="body" maxlength="2000" placeholder="votre ligne passera en sous-titre…" required>
@@ -134,36 +140,33 @@
   </footer>
 </article>
 
-<!-- LA CONSOLE : mêmes lignes que les sous-titres, en entier. -->
+<!-- LA CONSOLE : le relevé complet des lignes qui passent en sous-titre.
+     Plus de formulaire ici — on écrit depuis la barre incrustée dans l'écran,
+     qui est le seul formulaire de la page. -->
 <section id="comments" class="comments console">
-  <h2><span class="k">▸</span>console des messages</h2>
-  {% if flash == 'pending' %}<p class="note">Merci — votre message est en attente de modération.</p>{% endif %}
+  <header class="chead">
+    <span class="k">▸</span>
+    <h2>console des messages</h2>
+    <span class="cnum"><b class="nbc" id="nbc">{{ comments|length }}</b> ligne{{ 's' if comments|length > 1 else '' }}</span>
+    <span class="clive"><i></i>en direct</span>
+  </header>
+  {% if flash == 'pending' %}<p class="note">Reçu — votre message attend la modération.</p>{% endif %}
   {% if flash == 'ok' %}<p class="note">Message publié.</p>{% endif %}
   {% if flash == 'rate' %}<p class="note err">Trop de messages — réessayez plus tard.</p>{% endif %}
-  <div class="clines">
+  {% if flash == 'slow' %}<p class="note err">Trop vite — réessayez dans un instant.</p>{% endif %}
+  <ol class="clines">
   {% for c in comments %}
-    <article class="comment cline" data-who="{{ c.author_name }}" data-when="{{ c.created_at[:16]|replace('T',' ') }}">
-      <span class="k">▸</span>
+    <li class="comment cline" data-who="{{ c.author_name }}" data-when="{{ c.created_at[:16]|replace('T',' ') }}">
+      <span class="ix">{{ '%02d' % loop.index }}</span>
       <span class="nm c-meta"><strong>{{ c.author_name }}</strong></span>
       <span class="msg c-body">{{ c.body_html|safe }}</span>
       <time class="tm" datetime="{{ c.created_at }}">{{ c.created_at[:10] }}</time>
-    </article>
-  {% else %}<p class="vide">— aucun message sur ce billet —</p>{% endfor %}
-  </div>
-
-  <form method="post" action="/b/{{ billet.slug }}/comment" class="comment-form">
-    <input type="hidden" name="csrf" value="{{ pcsrf }}">
-    <input type="hidden" name="ts_token" value="{{ ts_token }}">
-    <p class="hp"><label>Laissez ce champ vide
-      <input name="website" tabindex="-1" autocomplete="off"></label></p>
-    <div class="frow">
-      <label>Nom<input name="author_name" required minlength="2" maxlength="40"></label>
-      <label>Email (optionnel, jamais affiché)<input name="author_email" type="email" maxlength="254"></label>
-    </div>
-    <label>Message<textarea name="body" rows="3" required minlength="2" maxlength="2000"
-      placeholder="votre ligne passera en sous-titre sur l'écran…"></textarea></label>
-    <button type="submit">Envoyer ↗</button>
-  </form>
+    </li>
+  {% else %}
+    <li class="vide"><span class="k">▸</span>aucune ligne sur ce billet — la vôtre serait la première</li>
+  {% endfor %}
+  </ol>
+  <p class="cfoot"><span class="fk">↑</span> écrivez depuis la barre au bas de l'écran — votre ligne y passe aussitôt en sous-titre</p>
 </section>
 </main>
 {% endblock %}
