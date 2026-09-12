@@ -1,3 +1,25 @@
+secubox-billets (0.8.32-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — poster souverain à l'ingestion aussi pour YouTube-direct. La capture
+    de vignette tente la miniature YouTube (i.ytimg maxres→sd→hq, hôte public,
+    récupérée côté serveur puis stockée en /media) après PeerTube et avant le
+    navigateur ; le déclenchement couvre désormais les embeds PeerTube ET
+    YouTube. Un nouveau billet vidéo obtient donc un poster maison sans que le
+    navigateur ne contacte i.ytimg. Tests test_snapshot.py.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 10:00:00 +0200
+
+secubox-billets (0.8.31-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — poster SOUVERAIN à l'ingestion. La capture de vignette (snapshot)
+    tente d'abord la miniature officielle d'une vidéo PeerTube self-hosted via
+    son API (previewPath, SSRF-gardé, sans navigateur ni og:image tiers) ; elle
+    s'applique désormais à TOUT billet à embed PeerTube (plus seulement les
+    communiqués). Nouveaux billets PeerTube -> poster maison sans i.ytimg ni
+    backfill. Tests test_snapshot.py.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 09:00:00 +0200
+
 secubox-billets (0.8.30-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — refonte carrousel/fil « magazine, dense ». Cartes « À la une » :

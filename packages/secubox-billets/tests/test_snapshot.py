@@ -103,3 +103,68 @@ def test_browser_path_ssrf_rejects_internal_embed_url(monkeypatch):
     out = snapshot._screenshot_via_browser("https://internal.example/",
                                            resolver=lambda h, p: [(0, 0, 0, "", ("10.0.0.5", p))])
     assert out is None
+
+
+# ── Poster PeerTube souverain (#1268) ────────────────────────────────────────
+def test_peertube_preview_souverain():
+    """Embed PeerTube du parc → vignette via l'API PeerTube (2 GET : métadonnées
+    puis image), sans navigateur ni og:image tiers."""
+    seen = []
+
+    def handler(request):
+        seen.append(str(request.url))
+        if request.url.path.endswith("/api/v1/videos/AbC123-xyz"):
+            return httpx.Response(200, json={"previewPath": "/lazy-static/thumbnails/p.jpg",
+                                             "thumbnailPath": "/x.jpg"})
+        return httpx.Response(200, content=b"PREVIEW-JPEG-BYTES")
+
+    c = httpx.Client(transport=httpx.MockTransport(handler))
+    out = snapshot._peertube_preview_bytes(
+        "https://peertube.gk2.secubox.in/videos/embed/AbC123-xyz", client=c)
+    assert out == b"PREVIEW-JPEG-BYTES"
+    assert seen[0].endswith("/api/v1/videos/AbC123-xyz")
+    assert seen[1].endswith("/lazy-static/thumbnails/p.jpg")  # previewPath préféré
+
+
+def test_peertube_preview_host_exact():
+    """Seul l'hôte PeerTube configuré est accepté : un hôte tiers (même contenant
+    'peertube') ou YouTube → None, sans aucun fetch."""
+    def handler(request):
+        raise AssertionError("ne doit pas fetch un hôte non autorisé")
+    c = httpx.Client(transport=httpx.MockTransport(handler))
+    assert snapshot._peertube_preview_bytes("https://peertube.evil.com/w/AbC123", client=c) is None
+    assert snapshot._peertube_preview_bytes(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ", client=c) is None
+
+
+def test_peertube_preview_swallows_errors():
+    def handler(request):
+        return httpx.Response(500)
+    c = httpx.Client(transport=httpx.MockTransport(handler))
+    assert snapshot._peertube_preview_bytes(
+        "https://peertube.gk2.secubox.in/w/AbC123-xyz", client=c) is None
+
+
+def test_youtube_thumb_fallback(monkeypatch):
+    """maxres absent (petit placeholder) → bascule sur sddefault."""
+    calls = []
+
+    def fake(url, *, client, resolver):
+        calls.append(url)
+        if "maxresdefault" in url:
+            return b"x" * 100          # < 1500 → ignoré (pixel gris de YouTube)
+        return b"y" * 3000
+
+    monkeypatch.setattr(snapshot, "_fetch_public_bytes", fake)
+    out = snapshot._youtube_thumb_bytes(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ", client=object(), resolver=None)
+    assert out == b"y" * 3000
+    assert any("maxresdefault" in u for u in calls)
+    assert any("sddefault" in u for u in calls)
+
+
+def test_youtube_thumb_none_for_non_youtube(monkeypatch):
+    monkeypatch.setattr(snapshot, "_fetch_public_bytes",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no fetch")))
+    assert snapshot._youtube_thumb_bytes(
+        "https://peertube.gk2.secubox.in/w/abc", client=None, resolver=None) is None

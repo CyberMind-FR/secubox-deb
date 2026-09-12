@@ -164,7 +164,13 @@ async def _maybe_capture_snapshot(request: Request, billet_id: str, embed_url: s
     also happens in that thread inside `snapshot.capture`. Cache: skip when the
     embed_url is unchanged and a snapshot already exists. Never raises — a
     snapshot must not break a save."""
-    if style != "communique" or not embed_url:
+    # Communiqué : poster (screenshot/og). Vidéo PeerTube ou YouTube : poster
+    # capté à l'ingestion (#1268) — PeerTube via son API, YouTube via i.ytimg
+    # côté serveur — puis stocké en /media : la carte du fil montre une vraie
+    # vignette au lieu de l'icône lien, sans que le navigateur touche Google.
+    _ev = (embed_url or "").lower()
+    _vid = "peertube" in _ev or "youtube" in _ev or "youtu.be" in _ev
+    if not embed_url or (style != "communique" and not _vid):
         return
     if prev_snapshot and prev_embed_url == embed_url:
         return

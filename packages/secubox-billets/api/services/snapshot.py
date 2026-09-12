@@ -27,7 +27,9 @@ Never call it directly inside an async handler.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urljoin
 
@@ -35,6 +37,77 @@ import httpx
 
 from . import media
 from . import ssrf
+
+# Vidéo PeerTube self-hosted : hôte + court-UUID depuis une URL /w/, /videos/watch
+# ou /videos/embed. Sert à récupérer sa vignette souveraine (poster) via l'API.
+_PT_VIDEO = re.compile(r"//([^/]+)/(?:w|videos/(?:watch|embed))/([0-9A-Za-z-]+)")
+# Hôte PeerTube du parc — SEUL hôte pour lequel on récupère un poster, et sans le
+# garde « IP publique » (notre PeerTube résout sur une IP LAN, que le garde SSRF
+# rejetterait). On borne au host EXACT configuré, en https, sans suivre de
+# redirection hors-hôte : un `embed_url` d'auteur ne peut pas détourner le fetch.
+_PT_HOST = os.environ.get("BILLETS_PEERTUBE_HOST", "peertube.gk2.secubox.in").lower()
+
+
+# Miniature YouTube déterministe (i.ytimg est un hôte PUBLIC : le garde SSRF
+# « IP publique » l'accepte). Récupérée UNE fois côté serveur puis stockée en
+# /media → le navigateur ne contacte jamais Google (#1268).
+_YT_ID = re.compile(r"(?:youtu\.be/|[?&]v=|/embed/|/vi/)([A-Za-z0-9_-]{11})")
+
+
+def _youtube_thumb_bytes(url: str | None, *, client, resolver) -> bytes | None:
+    """Miniature d'une vidéo YouTube (maxres → sd → hq) via i.ytimg, SSRF-gardée.
+    None si l'URL ne porte pas d'identifiant YouTube ou si rien n'est récupérable."""
+    m = _YT_ID.search(url or "")
+    if not m:
+        return None
+    vid = m.group(1)
+    own = client is None
+    c = client or httpx.Client(headers={"user-agent": "billets/0.1 (+secubox)"})
+    try:
+        for q in ("maxresdefault", "sddefault", "hqdefault"):
+            try:
+                data = _fetch_public_bytes(
+                    f"https://i.ytimg.com/vi/{vid}/{q}.jpg", client=c, resolver=resolver)
+                if len(data) > 1500:   # une 404 « pas de maxres » renvoie un pixel gris
+                    return data
+            except (ssrf.SSRFError, httpx.HTTPError, OSError):
+                continue
+        return None
+    finally:
+        if own:
+            c.close()
+
+
+def _peertube_preview_bytes(embed_url: str | None, *, client, resolver=None) -> bytes | None:
+    """Vignette (preview) d'une vidéo PeerTube du parc, via son API — poster
+    SOUVERAIN, sans navigateur (#1268). None si l'embed ne vise pas l'hôte
+    PeerTube configuré ou si la récupération échoue."""
+    m = _PT_VIDEO.search(embed_url or "")
+    if not m or m.group(1).lower() != _PT_HOST:
+        return None
+    host, vid = m.group(1), m.group(2)
+    own = client is None
+    c = client or httpx.Client(headers={"user-agent": "billets/0.1 (+secubox)"})
+
+    def _get(url: str) -> bytes:
+        r = c.get(url, timeout=IMAGE_TIMEOUT, follow_redirects=False)
+        r.raise_for_status()
+        data = r.content
+        if len(data) > IMAGE_MAX_BYTES:
+            raise ValueError("preview trop grande")
+        return data
+
+    try:
+        meta = json.loads(_get(f"https://{host}/api/v1/videos/{vid}"))
+        path = meta.get("previewPath") or meta.get("thumbnailPath")
+        if not path or not str(path).startswith("/"):   # reste sur l'hôte
+            return None
+        return _get(urljoin(f"https://{host}", path))
+    except (httpx.HTTPError, OSError, ValueError):
+        return None
+    finally:
+        if own:
+            c.close()
 
 # Bounds for the whole capture. The browser goto/wait budget (~22s) keeps the
 # to_thread worker from lingering; the og:image fetch is size- and time-capped.
@@ -146,7 +219,14 @@ def capture(embed_url: str, og_image_url: str | None, media_id: str, *,
     Returns (filename, thumb_filename) on success, or None if neither the
     headless screenshot nor the og:image fallback yielded a usable image."""
     raw: bytes | None = None
-    if _browser_enabled(enable_browser):
+    # PeerTube self-hosted d'abord : sa vignette officielle (API) est souveraine
+    # et gratuite — ni navigateur, ni og:image d'un tiers (#1268).
+    raw = _peertube_preview_bytes(embed_url, client=client, resolver=resolver)
+    # YouTube-direct : sa miniature (i.ytimg), récupérée côté serveur et stockée
+    # localement → plus de requête i.ytimg depuis le navigateur (#1268).
+    if raw is None:
+        raw = _youtube_thumb_bytes(embed_url, client=client, resolver=resolver)
+    if raw is None and _browser_enabled(enable_browser):
         raw = _screenshot_via_browser(embed_url, resolver=resolver)
     if raw is None and og_image_url:
         raw = _og_image_bytes(og_image_url, client=client, resolver=resolver)
