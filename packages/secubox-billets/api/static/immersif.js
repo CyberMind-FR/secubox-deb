@@ -59,7 +59,8 @@
       + '<h2>' + esc(title) + '</h2>'
       + '<a class="act open" href="/b/' + encodeURIComponent(slug) + '">page & commentaires ↗</a></div></div>';
     var started = performance.now();
-    if (typeof sheet.showModal === "function") sheet.showModal(); else { location.href = playableSrc(embed); return; }
+    if (sheet && typeof sheet.showModal === "function") { sheet.showModal(); }
+    else { location.href = "/b/" + encodeURIComponent(slug); return; }  // jamais vers la source
     function close() {
       LS.set("bpos:" + slug, Math.max(0, Math.floor(pos + (performance.now() - started) / 1000)));
       var seen = el.querySelector(".seen"); if (seen) seen.style.width = Math.max(seen.offsetWidth ? parseFloat(seen.style.width) || 0 : 0, 30) + "%";

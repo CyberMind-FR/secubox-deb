@@ -1,3 +1,13 @@
+secubox-billets (0.8.36-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — fil immersif : Cache-Control no-cache sur / (le navigateur ne sert
+    plus une vieille version qui référencerait d'anciens assets) ; le fallback du
+    lecteur (si <dialog> indisponible) ouvre le PERMALIEN du billet, jamais la
+    source PeerTube. assets ?v=im4. (Note : le script inline du bandeau santé
+    sbxwaf reste bloqué par script-src 'self' — cosmétique, n'affecte pas le fil.)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 14:00:00 +0200
+
 secubox-billets (0.8.35-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — fil immersif, refonte interaction. (1) le billet ACTIF n'est plus le

@@ -296,6 +296,9 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         # Fil immersif (#1268) : 'self' dans frame-src (le dialog encadre le
         # permalien même-origine) + fonts (Cinzel/Inter/JetBrains via Google).
         resp.headers["Content-Security-Policy"] = _csp("'self' " + _frame_src(extra), fonts=True)
+        # Fil immersif : page vivante, on ne veut pas d'une vieille version en
+        # cache navigateur qui référencerait d'anciens assets (#1268).
+        resp.headers["Cache-Control"] = "no-cache"
         return resp
 
     @app.get("/feed/suite")
