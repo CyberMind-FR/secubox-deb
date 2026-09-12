@@ -111,9 +111,13 @@ def _csp(frame_src: str, *, fonts: bool = False) -> str:
     # nh3-sanitized. `fonts` also adds Google Fonts for the communiqué permalink.
     style_src = "style-src 'self' 'unsafe-inline'" + (" https://fonts.googleapis.com" if fonts else "")
     font_src = " font-src https://fonts.gstatic.com;" if fonts else ""
+    # Bandeau santé injecté par le WAF (sbxwaf sub_filter) : un <script> inline
+    # que `script-src 'self'` bloquait (erreur console). On l'autorise par son
+    # EMPREINTE exacte — pas d'ouverture générale de l'inline.
+    waf_banner = " 'sha256-eDTYsncfrGT/tlGmdDgSPq9JNg8lg8MeoFWIUtAxVHs='"
     return (
         "default-src 'self'; img-src 'self' https: data:; "
-        f"{style_src}; script-src 'self'; base-uri 'none'; "
+        f"{style_src}; script-src 'self'{waf_banner}; base-uri 'none'; "
         f"form-action 'self'; frame-ancestors {_ancetres()};{font_src} frame-src {frame_src}"
     )
 

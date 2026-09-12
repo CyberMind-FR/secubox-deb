@@ -1,3 +1,11 @@
+secubox-billets (0.8.38-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — CSP : autorise le <script> inline du bandeau santé sbxwaf par son
+    empreinte sha256 (plus d'erreur console script-src), sans ouvrir l'inline en
+    général. Ajouté à _csp() donc actif sur le fil, le permalien et la carte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 15:00:00 +0200
+
 secubox-billets (0.8.37-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — fil immersif, VIE : révélation animée des cartes au scroll (fade+rise,
