@@ -68,7 +68,7 @@
       + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div>'
       + '<form class="tmsg" autocomplete="off"><span class="k">▸</span>'
       + '<input class="qui" maxlength="40" placeholder="nom">'
-      + '<input class="quoi" maxlength="2000" placeholder="votre ligne passera en sous-titre…">'
+      + '<input class="quoi" maxlength="8000" placeholder="votre ligne passera en sous-titre…">'
       + '<span class="emos">' + EMOS.map(function (e) {
         return '<button type="button" class="emo" tabindex="-1">' + e + '</button>'; }).join("")
       + '</span><button class="send" type="submit">envoyer ↗</button>'
@@ -191,6 +191,26 @@
       }).catch(function () { envoi.disabled = false; dire("envoi impossible", true); });
     });
   }
+
+  // LA POSITION SURVIT A LA NAVIGATION (#1268). Elle n'était écrite qu'au
+  // dépopup : suivre « ouvrir ↗ » quittait la page SANS dépopup, et le permalien
+  // reprenait donc à la dernière position dépopée — souvent zéro. On la retient
+  // aussi en partant, en masquant l'onglet, et régulièrement pendant la lecture.
+  function retiens() {
+    if (!playing || theater.hidden) return;
+    var t = base + (performance.now() - t0) / 1000;
+    LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
+  }
+  setInterval(retiens, 4000);
+  window.addEventListener("pagehide", retiens);
+  window.addEventListener("beforeunload", retiens);
+  document.addEventListener("visibilitychange", function () { if (document.hidden) retiens(); });
+  // Tout départ vers un billet emporte la position en cours : le permalien
+  // reprend EXACTEMENT là, sans coupure perceptible.
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest ? e.target.closest('a[href^="/b/"]') : null;
+    if (a) retiens();
+  }, true);
 
   function depopTheater() {
     clearInterval(subTimer); subTimer = null;

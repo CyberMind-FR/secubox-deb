@@ -1,3 +1,16 @@
+secubox-billets (0.8.55-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — OUVRIR UN PERMALIEN REPREND EXACTEMENT OU ON EN ETAIT. La position
+    n'était écrite qu'au dépopup : suivre « ouvrir ↗ » quittait la page SANS
+    dépopup, et le permalien repartait donc de la dernière position dépopée —
+    souvent zéro. Elle est désormais retenue aussi au départ de la page
+    (pagehide/beforeunload), quand l'onglet passe en arrière-plan, toutes les
+    quatre secondes pendant la lecture, et à tout clic vers un /b/<slug>.
+  * #1268 — la saisie du théâtre acceptait encore 2 000 signes alors que la limite
+    est passée à 8 000 : corrigé. assets ?v=im16.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 03:15:00 +0200
+
 secubox-billets (0.8.54-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — LIMITES DE MESSAGES RETIREES. Plus de plafond de cadence (c'était 5
