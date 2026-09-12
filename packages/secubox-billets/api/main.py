@@ -341,6 +341,34 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         resp.headers["Cache-Control"] = "no-cache"
         return resp
 
+    @app.get("/feed/activity")
+    async def feed_activity(request: Request):
+        """Flux d'activité GLOBAL (#1268) : derniers commentaires + réactions,
+        tous billets — pour les couloirs latéraux, toujours visibles."""
+        from fastapi.responses import JSONResponse
+        conn = app.state.conn
+        comments = []
+        async with conn.execute(
+            "SELECT c.author_name, c.body, c.created_at, b.slug FROM comment c "
+            "JOIN billet b ON b.id = c.billet_id "
+            "WHERE c.status='approved' AND b.status='published' "
+            "ORDER BY c.created_at DESC LIMIT 16") as cur:
+            async for r in cur:
+                comments.append({"who": (r[0] or "anon")[:32], "msg": (r[1] or "")[:160],
+                                 "when": _depuis(r[2]), "slug": r[3]})
+        reactions = []
+        try:
+            async with conn.execute(
+                "SELECT r.emoji, b.slug FROM reaction r JOIN billet b ON b.id = r.billet_id "
+                "WHERE b.status='published' ORDER BY r.rowid DESC LIMIT 18") as cur:
+                async for r in cur:
+                    reactions.append({"emoji": r[0], "slug": r[1]})
+        except Exception:  # noqa: BLE001 — le flux d'activité ne doit jamais casser la page
+            pass
+        resp = JSONResponse({"comments": comments, "reactions": reactions})
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     @app.get("/micro", response_class=HTMLResponse)
     async def micro(request: Request):
         """La carte que Billets sert au Hall (#1261).

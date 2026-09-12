@@ -1,3 +1,15 @@
+secubox-billets (0.8.34-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — fil immersif, itération interaction. Le SURVOL ne charge plus la
+    vidéo : il met le billet en avant (spotlight + connecteur) ; c'est le CLIC sur
+    l'écran qui FORCE la lecture (embed autoplay, avec le son car c'est un geste).
+    Les couloirs latéraux (commentaires + réactions/likes) sont désormais un flux
+    d'activité GLOBAL, TOUJOURS visible (endpoint /feed/activity, rafraîchi 45 s) ;
+    survol d'un billet = surlignage de ses bulles + connecteur ; clic sur une bulle
+    ouvre le billet. YouTube jouable au clic aussi (embed nocookie). assets ?v=im2.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 12:15:00 +0200
+
 secubox-billets (0.8.33-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — le fil devient IMMERSIF (concept validé). Colonne centrale infinie,

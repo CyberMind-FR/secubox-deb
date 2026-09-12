@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
-// Fil immersif billets (#1268) — survol=lecture (PeerTube réel + mémoire de
-// position), couloirs-chat via /activity, dialog=permalien réel, scroll infini.
+// Fil immersif billets (#1268). Couloirs chat/likes GLOBAUX toujours visibles ;
+// survol = spotlight + connecteur ; CLIC sur l'écran = lecture forcée (autoplay).
 (function () {
   "use strict";
   var LS = {
@@ -9,175 +9,167 @@
   };
   var CATS = ["auth", "wall", "boot", "mind", "root", "mesh"];
   var COL = { auth: "#f0a020", wall: "#e8c637", boot: "#e8556e", mind: "#9b6ff0", root: "#2fcf6a", mesh: "#22c8e8" };
-  var PEOPLE_COL = ["#c9a84c", "#4db6d6", "#e8836b", "#5fb98f", "#8b7fd6", "#d98fb0", "#6fb0e0"];
-  var EMO_LABEL = { "❤️": "❤️", "🔥": "🔥", "👏": "👏", "🎧": "🎧", "🌀": "🌀", "⭐": "⭐" };
+  var PCOL = ["#c9a84c", "#4db6d6", "#e8836b", "#5fb98f", "#8b7fd6", "#d98fb0", "#6fb0e0"];
 
   var feed = document.getElementById("fil-billets");
   var col = document.getElementById("col");
   var laneL = document.getElementById("laneL"), laneR = document.getElementById("laneR");
   var emptyL = document.getElementById("emptyL"), emptyR = document.getElementById("emptyR");
-  var linksSvg = document.getElementById("links");
-  var legendEl = document.getElementById("legend");
-  var sheet = document.getElementById("sheet");
+  var linksSvg = document.getElementById("links"), legendEl = document.getElementById("legend"), sheet = document.getElementById("sheet");
   if (!feed) return;
 
-  var active = null, raf = null, hoverStart = 0, basePos = 0, activeSlug = null, actToken = 0;
+  var active = null;     // survolé (spotlight + connecteur)
+  var playing = null;    // en lecture (iframe), un seul à la fois
+  var raf = null, base = 0, t0 = 0;
   function fmt(s) { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
-  function colorOf(el) { return COL[el.dataset.cat] || "#4db6d6"; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[<>&]/g, function (c) { return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]; }); }
+  function tone(el) { return COL[el.dataset.cat] || "#4db6d6"; }
 
-  // ── activation au survol ───────────────────────────────────
+  // ── survol = SPOTLIGHT (pas de lecture) ────────────────────
   function activate(el) {
     if (active === el) return;
     if (active) deactivate(active);
     active = el; el.classList.add("on");
-    var slug = el.dataset.id; activeSlug = slug;
-    var prov = el.dataset.prov, embed = el.dataset.embed;
-    var pos = LS.get("bpos:" + slug, 0);
-    var seen = el.querySelector(".seen"); if (seen && pos > 0) seen.style.width = Math.min(100, pos / 3) + "%";
-
-    if (prov === "pt" && embed) {
-      // lecteur PeerTube RÉEL : autoplay muet, reprise à la position mémorisée
-      var frame = el.querySelector(".frame");
-      if (frame && !frame.firstChild) {
-        var sep = embed.indexOf("?") >= 0 ? "&" : "?";
-        var src = embed + sep + "autoplay=1&muted=1&controls=1&title=0&warningTitle=0&peertubeLink=0&p2p=0&start=" + Math.floor(pos);
-        var ifr = document.createElement("iframe");
-        ifr.setAttribute("allow", "autoplay; fullscreen; encrypted-media");
-        ifr.setAttribute("loading", "eager"); ifr.src = src;
-        frame.appendChild(ifr);
-      }
-      el.classList.add("playing");
-      var resume = el.querySelector(".resume"), rt = el.querySelector(".rt"), tc = el.querySelector(".tc"), played = el.querySelector(".played");
-      if (pos > 1 && resume) { resume.classList.add("show"); if (rt) rt.textContent = fmt(pos); }
-      basePos = pos; hoverStart = performance.now();
-      (function tick(now) {
-        if (active !== el) return;
-        var t = basePos + (now - hoverStart) / 1000;
-        if (tc) tc.textContent = fmt(t);
-        if (played) played.style.width = Math.min(100, t / 3) + "%";  // échelle indicative
-        raf = requestAnimationFrame(tick);
-      })(performance.now());
-    }
-    loadLanes(slug);
-    drawLinks(el);
+    drawLinks(el); highlight(el.dataset.id, true);
   }
   function deactivate(el) {
-    el.classList.remove("on", "playing");
-    if (active === el) {
-      var slug = el.dataset.id;
-      if (el.dataset.prov === "pt") {
-        cancelAnimationFrame(raf); raf = null;
-        var t = basePos + (performance.now() - hoverStart) / 1000;
-        LS.set("bpos:" + slug, Math.max(0, Math.floor(t)));      // souvenir de position
-        var frame = el.querySelector(".frame"); if (frame) frame.innerHTML = "";  // arrêter le lecteur
-        var seen = el.querySelector(".seen"); if (seen) seen.style.width = Math.min(100, t / 3) + "%";
-      }
-      active = null; activeSlug = null; clearLanes(); clearLinks();
-    }
+    el.classList.remove("on");
+    if (active === el) { active = null; clearLinks(); highlight(null, false); }
   }
 
-  // ── couloirs latéraux : vraies données via /activity/<slug> ─
-  function avatar(name, i) { var c = PEOPLE_COL[(i || 0) % PEOPLE_COL.length]; return '<span class="av" style="background:' + c + '">' + (name || "?").slice(0, 1).toUpperCase() + '</span>'; }
-  function clearLanes() { laneL.innerHTML = ""; laneR.innerHTML = ""; emptyL.style.display = ""; emptyR.style.display = ""; }
-  function bubble(lane, html, cls, delay) {
-    var d = document.createElement("div"); d.className = "bub" + (cls ? " " + cls : "");
-    d.innerHTML = html; d.style.animationDelay = (delay || 0) + "ms"; lane.appendChild(d);
+  // ── clic sur l'écran = FORCE la lecture (autoplay, geste → son) ─
+  function playableSrc(embed) {
+    var m = embed.match(/(?:youtu\.be\/|[?&]v=|\/embed\/)([A-Za-z0-9_-]{11})/);
+    if (m && /youtu/.test(embed)) return "https://www.youtube-nocookie.com/embed/" + m[1] + "?rel=0";
+    return embed;
   }
-  function loadLanes(slug) {
-    clearLanes();
-    var token = ++actToken;
-    fetch("/activity/" + encodeURIComponent(slug), { headers: { "Accept": "application/json" } })
-      .then(function (r) { return r.ok ? r.json() : { comments: [], reactions: {} }; })
+  function stopPlaying() {
+    if (!playing) return;
+    var el = playing;
+    cancelAnimationFrame(raf); raf = null;
+    var t = base + (performance.now() - t0) / 1000;
+    LS.set("bpos:" + el.dataset.id, Math.max(0, Math.floor(t)));
+    var frame = el.querySelector(".frame"); if (frame) frame.innerHTML = "";
+    var seen = el.querySelector(".seen"); if (seen) seen.style.width = Math.min(100, t / 3) + "%";
+    el.classList.remove("playing");
+    playing = null;
+  }
+  function togglePlay(el) {
+    var embed = el.dataset.embed; if (!embed) return;
+    if (playing === el) { stopPlaying(); return; }
+    if (playing) stopPlaying();
+    var slug = el.dataset.id, pos = LS.get("bpos:" + slug, 0);
+    var src = playableSrc(embed);
+    src += (src.indexOf("?") >= 0 ? "&" : "?") + "autoplay=1&muted=0&start=" + Math.floor(pos);
+    var frame = el.querySelector(".frame");
+    var ifr = document.createElement("iframe");
+    ifr.setAttribute("allow", "autoplay; fullscreen; encrypted-media; picture-in-picture");
+    ifr.src = src; frame.innerHTML = ""; frame.appendChild(ifr);
+    el.classList.add("playing", "on"); playing = el;
+    base = pos; t0 = performance.now();
+    var tc = el.querySelector(".tc"), played = el.querySelector(".played");
+    (function tick(now) {
+      if (playing !== el) return;
+      var t = base + (now - t0) / 1000;
+      if (tc) tc.textContent = fmt(t);
+      if (played) played.style.width = Math.min(100, t / 3) + "%";
+      raf = requestAnimationFrame(tick);
+    })(performance.now());
+  }
+
+  // ── couloirs GLOBAUX (toujours visibles) ───────────────────
+  function avatar(name, i) { return '<span class="av" style="background:' + PCOL[(i || 0) % PCOL.length] + '">' + esc((name || "?").slice(0, 1).toUpperCase()) + '</span>'; }
+  function bubble(lane, html, cls, slug, delay) {
+    var d = document.createElement("div"); d.className = "bub" + (cls ? " " + cls : "");
+    if (slug) d.dataset.slug = slug; d.innerHTML = html; d.style.animationDelay = (delay || 0) + "ms"; lane.appendChild(d);
+  }
+  function highlight(slug, on) {
+    [].forEach.call(document.querySelectorAll(".bub[data-slug]"), function (b) {
+      b.classList.toggle("hot", !!(on && slug && b.dataset.slug === slug));
+    });
+  }
+  function loadActivity() {
+    fetch("/feed/activity", { headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : { comments: [], reactions: [] }; })
       .then(function (d) {
-        if (token !== actToken) return;               // survol changé entre-temps
+        laneL.innerHTML = ""; laneR.innerHTML = "";
         var cm = d.comments || [];
         if (cm.length) { emptyL.style.display = "none";
           cm.forEach(function (c, i) {
-            bubble(laneL, '<div class="who">' + avatar(c.who, i) + '<span class="nm">' + esc(c.who) + '</span><span class="tm">' + esc(c.when || "") + '</span></div><div class="msg">' + esc(c.msg) + '</div>', "", i * 70);
+            bubble(laneL, '<div class="who">' + avatar(c.who, i) + '<span class="nm">' + esc(c.who) + '</span><span class="tm">' + esc(c.when || "") + '</span></div><div class="msg">' + esc(c.msg) + '</div>', "", c.slug, i * 45);
           });
         }
-        var rx = d.reactions || {}, keys = Object.keys(rx), any = false, i = 0;
-        keys.forEach(function (emo) {
-          if (!rx[emo]) return; any = true;
-          bubble(laneR, '<span class="emo">' + esc(emo) + '</span><span class="nm">×' + rx[emo] + '</span>', "react", (i++) * 80);
-        });
-        if (any) emptyR.style.display = "none";
-        // total → compteur du bouton like de la carte
-        var el = active; if (el && el.dataset.id === slug) {
-          var total = keys.reduce(function (s, k) { return s + (rx[k] || 0); }, 0);
-          var n = el.querySelector("[data-like] .n"); if (n) n.textContent = total || "·";
+        var rx = d.reactions || [];
+        if (rx.length) { emptyR.style.display = "none";
+          rx.forEach(function (r, i) { bubble(laneR, '<span class="emo">' + esc(r.emoji) + '</span>', "react", r.slug, i * 45); });
         }
-        if (active) drawLinks(active);
       }).catch(function () {});
   }
-  function esc(s) { return String(s == null ? "" : s).replace(/[<>&]/g, function (c) { return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]; }); }
 
-  // ── connecteurs vers le billet actif ───────────────────────
+  // ── connecteurs ────────────────────────────────────────────
   function clearLinks() { linksSvg.innerHTML = ""; }
   function drawLinks(el) {
     if (window.innerWidth < 1081) { clearLinks(); return; }
     var r = el.getBoundingClientRect(), lb = laneL.getBoundingClientRect(), rb = laneR.getBoundingClientRect();
-    var yTop = r.top + 22, tone = colorOf(el);
-    function mk(x1, y1, x2, y2) { var cx = (x1 + x2) / 2; return '<path d="M' + x1 + ' ' + y1 + ' C ' + cx + ' ' + y1 + ' ' + cx + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" stroke="' + tone + '"/>'; }
-    linksSvg.innerHTML = mk(r.left, yTop, lb.right - 10, Math.max(84, r.top + 40)) + mk(r.right, yTop, rb.left + 10, Math.max(84, r.top + 40));
+    var y = r.top + 22, c = tone(el);
+    function mk(x1, y1, x2, y2) { var cx = (x1 + x2) / 2; return '<path d="M' + x1 + ' ' + y1 + ' C ' + cx + ' ' + y1 + ' ' + cx + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" stroke="' + c + '"/>'; }
+    linksSvg.innerHTML = mk(r.left, y, lb.right - 10, Math.max(84, r.top + 40)) + mk(r.right, y, rb.left + 10, Math.max(84, r.top + 40));
   }
   window.addEventListener("scroll", function () { if (active) drawLinks(active); }, { passive: true });
   window.addEventListener("resize", function () { if (active) drawLinks(active); });
 
-  // ── délégation hover / focus / clics ───────────────────────
+  // ── délégation survol / clic ───────────────────────────────
   col.addEventListener("mouseover", function (e) { var c = e.target.closest(".card"); if (c && !c.contains(e.relatedTarget)) activate(c); });
   col.addEventListener("mouseout", function (e) { var c = e.target.closest(".card"); if (c && !c.contains(e.relatedTarget)) deactivate(c); });
   col.addEventListener("focusin", function (e) { var c = e.target.closest(".card"); if (c) activate(c); });
   col.addEventListener("click", function (e) {
     var like = e.target.closest("[data-like]");
-    if (like) { e.preventDefault(); var c = like.closest(".card"); toggleLike(c, like); return; }
-    var open = e.target.closest("[data-open],[data-comment],[data-play]");
-    if (open) { var c2 = open.closest(".card"); if (c2) { e.preventDefault(); openSheet(c2, !!e.target.closest("[data-comment]")); } }
+    if (like) { e.preventDefault(); toggleLike(like.closest(".card"), like); return; }
+    var btn = e.target.closest("[data-open],[data-comment]");
+    if (btn) { e.preventDefault(); openSheet(btn.closest(".card"), !!e.target.closest("[data-comment]")); return; }
+    var scr = e.target.closest("[data-play]");
+    if (scr) { var c = scr.closest(".card"); if (c && c.dataset.embed) { e.preventDefault(); togglePlay(c); } }
+  });
+  // clic dans un lane → ouvrir le billet concerné
+  [laneL, laneR].forEach(function (ln) {
+    ln.addEventListener("click", function (e) {
+      var b = e.target.closest(".bub[data-slug]"); if (!b) return;
+      var card = feed.querySelector('.card[data-id="' + b.dataset.slug + '"]');
+      if (card) openSheetSlug(b.dataset.slug, card);
+    });
   });
 
   function toggleLike(card, btn) {
     var slug = card.dataset.id, liked = !LS.get("like:" + slug, false);
     LS.set("like:" + slug, liked); btn.classList.toggle("liked", liked);
-    // le "like" visuel est local ; la réaction persistée se fait dans le permalien
-    // (ouvert par « ouvrir »/« commenter »), qui porte le jeton anti-CSRF.
   }
 
-  // ── overlay immersif = le permalien réel (vidéo + commentaires + réactions) ─
-  function openSheet(card, focusComment) {
-    var slug = card.dataset.id;
-    var url = "/b/" + encodeURIComponent(slug) + (focusComment ? "#reactions" : "");
-    sheet.innerHTML = '<div class="sheet"><button class="x" data-close aria-label="Fermer">✕</button><iframe src="' + url + '" title="' + esc(card.querySelector(".title") ? card.querySelector(".title").textContent : "billet") + '"></iframe></div>';
+  function openSheetSlug(slug, card) {
+    var url = "/b/" + encodeURIComponent(slug);
+    var title = card && card.querySelector(".title") ? card.querySelector(".title").textContent : "billet";
+    sheet.innerHTML = '<div class="sheet"><button class="x" data-close aria-label="Fermer">✕</button><iframe src="' + url + '" title="' + esc(title) + '"></iframe></div>';
     if (typeof sheet.showModal === "function") sheet.showModal(); else location.href = url;
     sheet.querySelector("[data-close]").onclick = function () { sheet.close(); };
     sheet.addEventListener("click", function (e) { if (e.target === sheet) sheet.close(); }, { once: true });
   }
+  function openSheet(card, focusComment) { openSheetSlug(card.dataset.id, card); }
 
-  // ── légende / filtre de catégories ─────────────────────────
+  // ── légende / filtre ───────────────────────────────────────
   var activeFilter = null;
-  (function buildLegend() {
+  (function () {
     if (!legendEl) return;
     var all = document.createElement("button"); all.className = "lg on"; all.dataset.cat = "";
     all.innerHTML = '<span class="d" style="background:conic-gradient(#f0a020,#e8c637,#e8556e,#9b6ff0,#2fcf6a,#22c8e8,#f0a020)"></span>tous';
     legendEl.appendChild(all);
-    CATS.forEach(function (k) {
-      var b = document.createElement("button"); b.className = "lg"; b.dataset.cat = k;
-      b.innerHTML = '<span class="d" style="background:' + COL[k] + '"></span>' + k;
-      legendEl.appendChild(b);
-    });
-    legendEl.addEventListener("click", function (e) {
-      var b = e.target.closest(".lg"); if (!b) return;
+    CATS.forEach(function (k) { var b = document.createElement("button"); b.className = "lg"; b.dataset.cat = k;
+      b.innerHTML = '<span class="d" style="background:' + COL[k] + '"></span>' + k; legendEl.appendChild(b); });
+    legendEl.addEventListener("click", function (e) { var b = e.target.closest(".lg"); if (!b) return;
       activeFilter = b.dataset.cat || null;
-      [].forEach.call(legendEl.children, function (x) { x.classList.toggle("on", x === b); });
-      applyFilter();
-    });
+      [].forEach.call(legendEl.children, function (x) { x.classList.toggle("on", x === b); }); applyFilter(); });
   })();
-  function applyFilter() {
-    [].forEach.call(feed.querySelectorAll(".card"), function (el) {
-      el.classList.toggle("dim", !!(activeFilter && el.dataset.cat !== activeFilter));
-    });
-  }
+  function applyFilter() { [].forEach.call(feed.querySelectorAll(".card"), function (el) { el.classList.toggle("dim", !!(activeFilter && el.dataset.cat !== activeFilter)); }); }
 
-  // ── mur infini (fragment /feed/suite) ──────────────────────
+  // ── mur infini ─────────────────────────────────────────────
   var pager = document.getElementById("fil-pager"), loader = document.getElementById("loader"), loading = false, echecs = 0, obs = null;
   function stopScroll() { if (pager && pager.parentNode) pager.parentNode.removeChild(pager); if (obs) obs.disconnect(); if (loader) loader.hidden = true; }
   function loadMore() {
@@ -191,8 +183,7 @@
       .then(function (d) {
         if (d.html) { var tmp = document.createElement("div"); tmp.innerHTML = d.html; while (tmp.firstChild) feed.appendChild(tmp.firstChild); }
         echecs = 0; applyFilter();
-        if (d.next_cursor) { pager.setAttribute("data-cursor", d.next_cursor); }
-        else stopScroll();
+        if (d.next_cursor) pager.setAttribute("data-cursor", d.next_cursor); else stopScroll();
       }).catch(function () { if (++echecs >= 3 && obs) obs.disconnect(); })
       .then(function () { loading = false; if (loader) loader.hidden = true; });
   }
@@ -200,4 +191,7 @@
     obs = new IntersectionObserver(function (es) { if (es.some(function (e) { return e.isIntersecting; })) loadMore(); }, { rootMargin: "800px 0px" });
     obs.observe(pager);
   }
+
+  loadActivity();
+  setInterval(loadActivity, 45000);   // le flux reste vivant
 })();

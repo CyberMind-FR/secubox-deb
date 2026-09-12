@@ -9,7 +9,7 @@
 {%- set cover = (b.media | selectattr('thumb') | list | first) if b.media else None -%}
 {%- set poster = ('/media/' ~ cover.thumb) if cover else (b.poster or b.embed_snapshot_url) -%}
 <article class="card" data-k="{{ 'communique' if b.style=='communique' else ('billet' if b.embed_is_video else 'article') }}"
-         data-cat="{{ b.cat }}" data-id="{{ b.slug }}" data-prov="{{ prov }}"{% if is_pt %} data-embed="{{ eu }}"{% endif %} tabindex="0">
+         data-cat="{{ b.cat }}" data-id="{{ b.slug }}" data-prov="{{ prov }}"{% if b.embed_is_video and eu %} data-embed="{{ eu }}"{% endif %} tabindex="0">
   <div class="screen" data-play>
     {% if prov %}<span class="provider {{ prov }}">{{ 'PeerTube · souverain' if is_pt else 'YouTube' }}</span>{% endif %}
     {% if poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}

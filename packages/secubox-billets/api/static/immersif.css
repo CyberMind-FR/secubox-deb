@@ -77,6 +77,8 @@ img{max-width:100%}
 .bub .msg{font-size:12.5px;line-height:1.4;color:var(--dim)}
 .bub.react{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;max-width:none;width:auto}
 .bub.react .emo{font-size:14px}
+.bub{cursor:pointer;transition:border-color .18s, box-shadow .18s}
+.bub.hot{border-color:color-mix(in srgb,var(--gold) 55%,var(--edge));box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 30%,transparent),var(--lift)}
 .lane-empty{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.04em;text-align:center;margin-top:30px;line-height:1.7;opacity:.8}
 
 .col{padding:20px 0 60px;display:flex;flex-direction:column;gap:16px;position:relative}
@@ -101,7 +103,8 @@ img{max-width:100%}
 .glyph{position:absolute;inset:0;display:grid;place-items:center;z-index:3;transition:opacity .25s,transform .25s}
 .play-badge{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:rgba(8,12,18,.5);
   border:1.5px solid rgba(255,255,255,.55);backdrop-filter:blur(3px);color:#fff;font-size:19px;padding-left:4px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
-.card.on .glyph{opacity:0;transform:scale(1.1)}
+.card.on:not(.playing) .glyph{transform:scale(1.08)}     /* survol : le ▶ invite au clic (lecture) */
+.card.on:not(.playing) .play-badge{border-color:rgba(255,255,255,.85);background:rgba(8,12,18,.62)}
 .provider{position:absolute;top:9px;left:10px;z-index:3;font-family:var(--mono);font-size:9px;letter-spacing:.14em;
   text-transform:uppercase;color:#cfe6ef;background:rgba(6,10,15,.55);border:1px solid rgba(255,255,255,.14);padding:3px 8px;border-radius:999px;backdrop-filter:blur(3px)}
 .provider.pt{color:#bfe6d6} .provider.yt{color:#f0c9c1}
@@ -113,16 +116,14 @@ img{max-width:100%}
 .scan{position:absolute;left:0;right:0;height:2px;background:rgba(255,255,255,.16);box-shadow:0 0 14px rgba(255,255,255,.25);animation:scan 4.5s linear infinite}
 @keyframes scan{0%{top:6%}100%{top:94%}}
 .tc{position:absolute;right:9px;top:9px;z-index:3;font-family:var(--mono);font-size:10px;color:#dfe9ef;background:rgba(6,10,15,.5);padding:2px 7px;border-radius:6px;opacity:0;transition:.25s}
-.card.on:not(.playing) .tc{opacity:1}
+.card.playing .tc{opacity:1}
 .resume{position:absolute;left:10px;bottom:12px;z-index:3;font-family:var(--mono);font-size:9.5px;color:var(--gold);
   background:rgba(6,10,15,.6);border:1px solid rgba(201,168,76,.35);padding:3px 9px;border-radius:999px;display:none;align-items:center;gap:6px}
 .card.on .resume.show{display:inline-flex;animation:rise .4s both}
 .bar{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.1);z-index:3}
 .bar .played{height:100%;width:0;background:var(--tone);box-shadow:0 0 10px color-mix(in srgb,var(--tone) 70%,transparent)}
 .bar .seen{position:absolute;top:0;height:100%;width:0;background:rgba(201,168,76,.5)}
-.mute{position:absolute;right:9px;bottom:12px;z-index:3;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:#cfe0e8;
-  background:rgba(6,10,15,.5);border:1px solid rgba(255,255,255,.14);padding:3px 8px;border-radius:999px;opacity:0;transition:.25s}
-.card.on:not(.playing) .mute{opacity:1}
+.mute{display:none}  /* le clic joue AVEC le son (geste utilisateur) : plus de libellé « muet » */
 
 .body{padding:13px 16px 15px}
 .kicker{display:flex;align-items:center;gap:8px;margin-bottom:7px}
