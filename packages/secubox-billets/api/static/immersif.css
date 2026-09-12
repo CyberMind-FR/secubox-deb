@@ -231,11 +231,6 @@ html.reveal .card.in{opacity:1;transform:none;
 .tbar{display:flex;align-items:center;gap:12px;padding:10px 14px}
 .tbar .chip{color:var(--tone,#4db6d6)}
 .tbar .ttl{font-family:var(--serif);font-size:15px;color:#eef3f7;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* le son est un CHOIX RETENU : le bouton reste, et montre l'état (il ne disparaît plus) */
-.tsnd{font-family:var(--mono);font-size:11px;color:var(--dim);background:transparent;border:1px solid var(--edge-2);
-  border-radius:999px;padding:6px 13px;cursor:pointer;font-weight:500;transition:.15s}
-.tsnd:hover{color:var(--tx);border-color:var(--dim)}
-.tsnd.on{color:#0b1016;background:var(--gold);border-color:var(--gold);font-weight:600}
 .topen{font-family:var(--mono);font-size:14px;color:var(--dim);border:1px solid var(--edge);border-radius:999px;padding:4px 11px}
 .topen:hover{color:var(--tx);border-color:var(--edge-2)}
 @media(prefers-reduced-motion:reduce){.theater-pop::before,.tp{animation:none}}

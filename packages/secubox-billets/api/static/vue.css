@@ -77,7 +77,6 @@
   border:1px solid var(--edge-2);border-radius:999px;padding:4px 10px;cursor:pointer;transition:.15s;text-transform:uppercase}
 .ob:hover{color:var(--tx);border-color:var(--dim)}
 .ob.on{color:var(--tone);border-color:color-mix(in srgb,var(--tone) 45%,var(--edge-2))}
-.ob.snd.on{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 50%,var(--edge-2))}
 .osd .sep{flex:1}
 .osd .cnt b{color:var(--tx);font-variant-numeric:tabular-nums}
 .osd .go{margin-left:4px}

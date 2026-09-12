@@ -46,15 +46,9 @@
     if (p) return p[1] + "/videos/embed/" + p[2] + "?autoplay=1&muted=" + mm + "&title=0&warningTitle=0&peertubeLink=0&p2p=0&controls=1&start=" + start;
     return embed;
   }
-  // SON : ce n'est PAS un bouton par lecture, c'est un CHOIX RETENU (clé « son »),
-  // appliqué à toutes les lectures, ici comme sur la vue billet. L'autoplay non-muté
-  // n'étant permis qu'avec une activation de la page, on reste muet tant que la page
-  // n'a rien reçu — le premier clic suffit, et le choix vaut pour la suite.
-  var gest = false;
-  ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
-    addEventListener(ev, function () { gest = true; }, { once: true, passive: true });
-  });
-  function son() { return LS.get("son", false) === true; }
+  // SON : ça joue AVEC LE SON, point. Pas d'auto-muet, pas de bouton — le contrôle
+  // du volume est celui du lecteur. Si le navigateur refuse l'autoplay sonore, il
+  // laisse simplement l'image en attente d'un clic : c'est préférable au muet subi.
 
   // POPUP THÉÂTRE (overlay NON-modal → le scroll passe, donc « bouge = dépopup »).
   // Reste sur un billet → ça pop et joue. Bouge → depop + position sauvée.
@@ -67,18 +61,11 @@
     var title = el.querySelector(".title") ? el.querySelector(".title").textContent : "billet";
     theater.style.setProperty("--tone", COL[el.dataset.cat] || "#4db6d6");
     theater.innerHTML =
-      '<div class="tp"><div class="tstage"><iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, !(son() && gest), pos) + '"></iframe></div>'
+      '<div class="tp"><div class="tstage"><iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, false, pos) + '"></iframe></div>'
       + '<div class="tbar"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
       + '<span class="ttl">' + esc(title) + '</span>'
-      + '<button class="tsnd' + (son() ? " on" : "") + '" data-snd>' + (son() ? "🔊 son" : "🔇 muet") + '</button>'
       + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div></div>';
     theater.hidden = false; playing = el; base = pos; t0 = performance.now();
-    theater.querySelector("[data-snd]").onclick = function () {
-      var v = !son(); LS.set("son", v);
-      var t = base + (performance.now() - t0) / 1000, ifr = theater.querySelector("iframe");
-      if (ifr) { ifr.src = embedSrc(el.dataset.embed, !v, t); base = t; t0 = performance.now(); }
-      this.textContent = v ? "🔊 son" : "🔇 muet"; this.classList.toggle("on", v);
-    };
   }
   function depopTheater() {
     if (playing) {

@@ -21,14 +21,9 @@
   };
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
-  // ── SON : un choix, retenu, appliqué partout ──────────────────────────────
-  // L'autoplay non-muté n'est autorisé qu'avec une activation de la page ; on
-  // garde donc le muet tant que la page n'a rien reçu, puis on applique le choix.
-  var gest = false;
-  ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
-    addEventListener(ev, function () { gest = true; }, { once: true, passive: true });
-  });
-  function son() { return LS.get("son", false) === true; }
+  // SON : ça joue AVEC LE SON, point. Pas d'auto-muet, pas de bouton — le volume,
+  // c'est celui du lecteur. Navigateur qui refuse l'autoplay sonore = image en
+  // attente d'un clic, ce qui vaut mieux qu'un muet subi.
 
   // ── L'EMBED : même fabrique d'URL que le fil (autoplay + reprise) ─────────
   function embedSrc(embed, muted, start) {
@@ -56,10 +51,9 @@
   function pos() { return joue ? base + (performance.now() - t0) / 1000 : base; }
   function retiens() { if (slug && joue) LS.set("bpos:" + slug, Math.max(0, Math.floor(pos()))); }
 
-  if (ifr && src0 && embedSrc(src0, true, 0)) {
-    // On REPREND là où le fil s'était arrêté, muet par défaut (autoplay garanti),
-    // avec le son si c'est le choix retenu et que la page est déjà activée.
-    lance(!(son() && gest), LS.get("bpos:" + slug, 0));
+  if (ifr && src0 && embedSrc(src0, false, 0)) {
+    // On REPREND là où le fil s'était arrêté, avec le son.
+    lance(false, LS.get("bpos:" + slug, 0));
     setInterval(retiens, 4000);
     addEventListener("pagehide", retiens);
     addEventListener("beforeunload", retiens);
@@ -67,21 +61,6 @@
   }
 
   // ── OSD ───────────────────────────────────────────────────────────────────
-  var bSnd = scene && scene.querySelector('[data-act="snd"]');
-  function majSnd() {
-    if (!bSnd) return;
-    var on = son();
-    bSnd.textContent = on ? "🔊 son" : "🔇 muet";
-    bSnd.classList.toggle("on", on);
-    bSnd.setAttribute("aria-pressed", on ? "true" : "false");
-    bSnd.title = on ? "Le son est retenu pour toutes les lectures" : "Muet — le choix sera retenu partout";
-  }
-  majSnd();
-  if (bSnd) bSnd.addEventListener("click", function () {
-    var v = !son(); LS.set("son", v); majSnd();
-    if (ifr && src0) lance(!v, pos());      /* le clic EST le geste : ça repart au bon endroit */
-  });
-
   var bSubs = scene && scene.querySelector('[data-act="subs"]');
   if (bSubs) bSubs.addEventListener("click", function () {
     var off = scene.classList.toggle("nosubs");

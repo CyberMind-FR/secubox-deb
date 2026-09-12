@@ -1,3 +1,15 @@
+secubox-billets (0.8.43-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — L'AUTO-MUET DEGAGE. Plus de lecture muette par défaut, plus de bouton
+    son : le fil comme la vue billet lancent l'embed AVEC le son (mute=0), et le
+    volume est celui du lecteur. Si un navigateur refuse l'autoplay sonore, il
+    laisse l'image en attente d'un clic — préférable à un muet subi. Le réglage
+    global « son » introduit en 0.8.42 est retiré (il faisait plus de mal que de
+    bien : un bouton d'état de plus dans la barre, et une lecture muette au premier
+    chargement). assets ?v=im9 / vue ?v=v2.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 19:25:00 +0200
+
 secubox-billets (0.8.42-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — RETOUR au fil de 0.8.39 : les changements de 0.8.40 (popup = permalien)
