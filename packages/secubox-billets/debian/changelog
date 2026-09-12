@@ -1,3 +1,19 @@
+secubox-billets (0.8.57-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LES IMAGES S'AGRANDISSENT DANS LA VUE BILLET. Deux trous distincts :
+    l'habillage de l'agrandissement vivait dans billets.css, que cette vue ne
+    charge pas — le recouvrement s'ouvrait donc NU ; et les images posées DANS le
+    texte n'étaient agrandissables d'aucune façon, faute d'appartenir à un groupe
+    [data-lightbox] (seule la galerie en avait un).
+  * #1268 — le recouvrement est rhabillé au grain de la vue (fond sombre, flou,
+    fermeture et flèches en pastilles dorées au survol, page bloquée derrière) et
+    les images du corps reçoivent la structure que billets.js attend déjà : un
+    seul agrandisseur, un seul jeu de touches (Échap, ← →), une seule façon de
+    refermer. Le zanimalos de coin et les images déjà cliquables sont exclus.
+    vue ?v=v12.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 11:05:00 +0200
+
 secubox-billets (0.8.56-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — la bascule « ▤ sous-titres » est RETENUE, comme « ▩ crt » l'était déjà.

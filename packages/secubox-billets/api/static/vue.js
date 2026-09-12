@@ -85,6 +85,32 @@
     });
   }
 
+  // ── LES IMAGES DU CORPS S'AGRANDISSENT AUSSI ─────────────────────────────
+  // La galerie l'a toujours fait ; les images posées DANS le texte, non : elles
+  // n'étaient pas dans un groupe [data-lightbox]. On leur en fabrique un, avec
+  // la structure que billets.js attend déjà — pas de second agrandisseur, pas de
+  // second jeu de touches, une seule façon de refermer.
+  (function () {
+    var prose = document.querySelector(".prose.e-content");
+    if (!prose) return;
+    var imgs = [].slice.call(prose.querySelectorAll("img")).filter(function (im) {
+      return !im.closest("a") && !im.closest(".gallery") && !im.classList.contains("zani-stamp");
+    });
+    if (!imgs.length) return;
+    imgs.forEach(function (im) {
+      var a = document.createElement("a");
+      a.className = "gallery-item";
+      a.href = im.currentSrc || im.src;
+      a.setAttribute("data-full", im.getAttribute("data-full") || im.src);
+      a.setAttribute("data-alt", im.alt || "");
+      a.setAttribute("aria-label", "Agrandir l'image");
+      im.setAttribute("data-zoom", "1");
+      im.parentNode.insertBefore(a, im);
+      a.appendChild(im);
+    });
+    prose.setAttribute("data-lightbox", "");
+  })();
+
   // ── popup au curseur : le message ENTIER (même objet que dans le fil) ─────
   var cur = document.createElement("div"); cur.className = "curpop"; document.body.appendChild(cur);
   function montre(e, who, msg, when) {
