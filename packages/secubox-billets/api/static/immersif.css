@@ -286,5 +286,18 @@ html.reveal .card.in{opacity:1;transform:none;
 .tsub .at,.at{flex:none;font-family:var(--mono);font-size:9.5px;font-variant-numeric:tabular-nums;
   color:var(--gold);background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);
   border-radius:4px;padding:1px 5px;letter-spacing:.02em}
-@media(max-width:640px){.tmsg .emos,.tmsg .etat{display:none}.tmsg .qui{width:70px}}
+@media(max-width:640px){
+  /* 16px OBLIGATOIRE : en dessous, le navigateur zoome tout seul en entrant dans
+     le champ — c'est lui qui décentrait la page, pas notre mise en page. */
+  .tmsg{flex-wrap:wrap;gap:6px;margin:0 8px 10px;padding:7px 10px}
+  .tmsg .etat{display:none}
+  .tmsg .qui{width:88px;font-size:16px}
+  .tmsg .quoi{font-size:16px;flex:1 1 100%;order:3}
+  .tmsg .emos{margin-left:auto}
+  .tmsg .emo{font-size:17px;padding:4px}
+  .tmsg .send{order:4;margin-left:auto}
+  /* le théâtre se cale en haut : centré, le clavier le poussait hors écran */
+  .theater-pop{align-items:start;padding:8px}
+  .tp{width:100%}
+}
 @media(prefers-reduced-motion:reduce){.theater-pop::before,.tp{animation:none}}

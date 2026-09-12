@@ -1,3 +1,20 @@
+secubox-billets (0.8.52-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — TELEPHONE : écrire ne fait plus sauter à l'article suivant. Deux causes
+    distinctes, corrigées toutes les deux.
+    1. Le navigateur ZOOMAIT tout seul à l'entrée dans le champ, parce que son
+       texte faisait moins de 16 px — c'est ce zoom qui décentrait la page, pas
+       notre mise en page. Les champs passent à 16 px en petite largeur.
+    2. L'ouverture du clavier produit un SCROLL, et la logique « billet le plus
+       proche » dépopupait le théâtre pour passer au suivant AU MILIEU D'UNE
+       PHRASE. Tant qu'un champ de la barre a le focus, le défilé ne pilote plus
+       rien : ni dépopup, ni changement de billet actif.
+  * #1268 — la barre se réorganise en petite largeur (message sur sa propre ligne,
+    émojis et envoi en dessous) et le théâtre se cale EN HAUT de l'écran : centré,
+    le clavier le poussait hors du cadre. assets ?v=im14 / vue ?v=v8.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 01:45:00 +0200
+
 secubox-billets (0.8.51-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — LES MESSAGES SONT ANCRES DANS LE TEMPS DE LA VIDEO. Migration 0005 :

@@ -227,7 +227,13 @@
   .vue-stage{border-radius:13px;margin-top:14px}
   .pops{display:none}
   .track{bottom:50px;padding:0 9px}
-  .msgbox{font-size:11px}
+  /* 16px : en dessous, le navigateur zoome à l'entrée dans le champ */
+  .msgbox{flex-wrap:wrap;gap:6px}
+  .msgbox .qui{width:92px;font-size:16px}
+  .msgbox .quoi{font-size:16px;flex:1 1 100%;order:3}
+  .msgbox .emos{margin-left:auto}
+  .msgbox .emo{font-size:17px;padding:4px}
+  .msgbox .send{order:4;margin-left:auto}
   .msgbox .emos,.msgbox .etat{display:none}
   .msgbox .qui{width:74px}
   .track .line{max-width:94%;font-size:11px}

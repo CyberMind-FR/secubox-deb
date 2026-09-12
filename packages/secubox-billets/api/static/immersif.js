@@ -289,7 +289,23 @@
     return best;
   }
   var _spend = false, dwellT = null;
+  // TANT QU'ON ECRIT, LE FIL NE BOUGE PLUS (#1268). Sur téléphone, l'ouverture du
+  // clavier produit un scroll : la logique « billet le plus proche » dépopupait le
+  // théâtre et passait à l'article suivant AU MILIEU D'UNE PHRASE. Le champ a la
+  // priorité sur le défilé tant qu'il a le focus.
+  var ecrit = false;
+  document.addEventListener("focusin", function (e) {
+    if (e.target.closest && e.target.closest(".tmsg")) ecrit = true;
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target.closest && e.target.closest(".tmsg")) setTimeout(function () {
+      var a = document.activeElement;
+      ecrit = !!(a && a.closest && a.closest(".tmsg"));
+    }, 0);
+  });
+
   function onScroll() {
+    if (ecrit) return;                 // on écrit : ni dépopup, ni changement de billet
     depopTheater();                    // bouge → dépopup (overlay non-modal, le scroll passe)
     if (!_spend) { _spend = true; requestAnimationFrame(function () { _spend = false; var c = nearestCard(); if (c) activate(c); else if (active) drawLinks(active); }); }
     clearTimeout(dwellT);
