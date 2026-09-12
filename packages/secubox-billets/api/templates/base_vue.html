@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Vue billet (#1268) — MEME look & feel que le fil immersif, et MEME forme que
+  le popup théâtre : un écran en haut, les messages et les réactions en
+  sous-titres CRT PAR-DESSUS l'image, interactifs. On charge immersif.css pour
+  hériter mot pour mot du masthead, des pastilles et de l'écran ; vue.css ne
+  fait qu'ajouter la couche « ouverture ».
+-->
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="sbx-no-health-banner" content="1">
+<title>{% block title %}{{ site_title }}{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/immersif.css?v=im9">
+<link rel="stylesheet" href="/static/vue.css?v=v2">
+<link rel="alternate" type="application/atom+xml" title="{{ site_title }}" href="/feed.xml">
+<link rel="alternate" type="application/feed+json" title="{{ site_title }}" href="/feed.json">
+{% block head %}{% endblock %}
+</head>
+<body class="vue">
+<header class="mast">
+  <a class="brand" href="/">
+    <span class="seal">B</span>
+    <span><span class="site-title">{{ site_title|upper }}</span><span class="sub">Fil immersif · {{ tagline }}</span></span>
+  </a>
+  <a class="retour" href="/">← le fil</a>
+</header>
+
+{% block content %}{% endblock %}
+
+<footer class="vue-foot"><a href="/">le fil</a> · <a href="/feed.xml">Atom</a> · <a href="/feed.json">JSON</a> · billets · gk2</footer>
+<script src="/static/billets.js?v=8" defer></script>
+<script src="/static/vue.js?v=v2" defer></script>
+</body>
+</html>

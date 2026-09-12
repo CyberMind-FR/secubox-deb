@@ -7,6 +7,7 @@
   seed                       insert sample published billets
   backfill-tags              extract #hashtags from pre-tags billets
   backfill-media             embed BBS /f/NN media into billets published before #1094
+  backfill-embeds            promeut en embed les liens vidéo restés dans le corps
 """
 from __future__ import annotations
 
@@ -117,6 +118,64 @@ async def _backfill_media(bbs_db: str, files_root: str) -> int:
         await conn.close()
 
 
+async def _backfill_embeds(dry: bool) -> int:
+    """Rattrape les billets dont le lien vidéo est resté DANS LE CORPS (#1268).
+
+    Le relais BBS ne remplit que `body` + `ref_url` : un fil qui contenait une
+    vidéo arrivait en texte nu, sans lecteur ni vignette. La promotion se fait
+    désormais à l'entrée — reste à réparer ceux déjà publiés. Idempotent : on
+    ne touche que les lignes SANS embed_url, et un échec de vignette n'empêche
+    pas la promotion (le lecteur, lui, marchera).
+    """
+    import httpx
+
+    from .models import video_url_in
+    from .services import linkcard, snapshot, ssrf
+    from .ids import new_ulid
+
+    conn = await db.connect(now=_now())
+    promus = vignettes = 0
+    try:
+        cur = await conn.execute(
+            "SELECT id, slug, body, ref_url, style FROM billet "
+            "WHERE embed_url IS NULL AND status = 'published'")
+        rows = await cur.fetchall()
+        cibles = [(r, video_url_in(r["body"])) for r in rows]
+        cibles = [(r, u) for r, u in cibles if u]
+        print(f"{len(rows)} billet(s) sans embed, {len(cibles)} avec une vidéo dans le corps")
+        if dry:
+            for r, u in cibles:
+                print(f"  [essai] {r['slug']} → {u}")
+            return 0
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            for r, url in cibles:
+                await repo.update_billet(conn, r["id"], body=r["body"],
+                                         ref_url=r["ref_url"], embed_url=url, now=_now())
+                promus += 1
+                try:
+                    res = await linkcard.resolve_embed(url, client=client,
+                                                       resolver=ssrf._default_resolver)
+                    await repo.set_embed(conn, r["id"], html=res["html"],
+                                         provider=res["provider"], fetched_at=_now())
+                except Exception as exc:  # noqa: BLE001 — l'iframe est un bonus
+                    print(f"  ! embed {r['slug']}: {exc}", file=sys.stderr)
+                try:
+                    og = await linkcard.fetch_og_image(url, client=client,
+                                                       resolver=ssrf._default_resolver)
+                    got = await asyncio.to_thread(snapshot.capture, url, og, new_ulid(),
+                                                  resolver=ssrf._default_resolver)
+                    if got:
+                        await repo.set_embed_snapshot(conn, r["id"], got[0])
+                        vignettes += 1
+                except Exception as exc:  # noqa: BLE001 — la vignette est un bonus
+                    print(f"  ! vignette {r['slug']}: {exc}", file=sys.stderr)
+                print(f"  {r['slug']} → {url}")
+        print(f"promus {promus}, vignettes {vignettes}")
+        return 0
+    finally:
+        await conn.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="billets-manage")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -130,12 +189,17 @@ def main(argv: list[str] | None = None) -> int:
                      help="chemin de l'index SQLite du BBS (lecture seule)")
     spm.add_argument("--files-root", default="/var/lib/secubox/bbs/files",
                      help="racine de l'arbre des fichiers du BBS")
+    spe = sub.add_parser("backfill-embeds")
+    spe.add_argument("--dry-run", action="store_true",
+                     help="montrer ce qui serait promu, sans rien écrire")
     args = p.parse_args(argv)
 
     if args.cmd == "backfill-tags":
         return asyncio.run(_backfill_tags())
     if args.cmd == "backfill-media":
         return asyncio.run(_backfill_media(args.bbs_db, args.files_root))
+    if args.cmd == "backfill-embeds":
+        return asyncio.run(_backfill_embeds(args.dry_run))
 
     if args.cmd in ("create-author", "set-password"):
         pw = getpass.getpass("Password: ")

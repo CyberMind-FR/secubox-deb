@@ -111,9 +111,13 @@ def _csp(frame_src: str, *, fonts: bool = False) -> str:
     # nh3-sanitized. `fonts` also adds Google Fonts for the communiqué permalink.
     style_src = "style-src 'self' 'unsafe-inline'" + (" https://fonts.googleapis.com" if fonts else "")
     font_src = " font-src https://fonts.gstatic.com;" if fonts else ""
+    # Bandeau santé injecté par le WAF (sbxwaf sub_filter) : un <script> inline
+    # que `script-src 'self'` bloquait (erreur console). On l'autorise par son
+    # EMPREINTE exacte — pas d'ouverture générale de l'inline.
+    waf_banner = " 'sha256-eDTYsncfrGT/tlGmdDgSPq9JNg8lg8MeoFWIUtAxVHs='"
     return (
         "default-src 'self'; img-src 'self' https: data:; "
-        f"{style_src}; script-src 'self'; base-uri 'none'; "
+        f"{style_src}; script-src 'self'{waf_banner}; base-uri 'none'; "
         f"form-action 'self'; frame-ancestors {_ancetres()};{font_src} frame-src {frame_src}"
     )
 
@@ -181,6 +185,17 @@ def _poster_for(d: dict) -> str | None:
     return None
 
 
+# Auto-catégorisation (fil immersif #1268) : 6 catégories souveraines, assignées
+# de façon stable par hachage de l'id — en attendant une vraie taxonomie, ça
+# colore le fil et alimente la légende/filtre. Ordre = look & feel de la barre.
+_CATS = ("auth", "wall", "boot", "mind", "root", "mesh")
+
+
+def _categorie(billet_id: str) -> str:
+    import hashlib
+    return _CATS[int(hashlib.sha1((billet_id or "").encode()).hexdigest(), 16) % len(_CATS)]
+
+
 def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None) -> dict:
     from urllib.parse import urlparse
     d = dict(row)
@@ -211,6 +226,7 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None)
         any(_eh == h or _eh.endswith("." + h) for h in _VID)
         or "peertube" in _eh or _eh.startswith("tube.") or _eh.endswith(".tv"))
     d["poster"] = _poster_for(d)
+    d["cat"] = _categorie(d.get("id", ""))
     return d
 
 
@@ -281,7 +297,12 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         allh = await repo.embed_hosts_published(app.state.conn)
         extra = tuple(h for h in allh
                       if not any(h == d or h.endswith("." + d) for d in _FRAME_HOSTS))
-        resp.headers["Content-Security-Policy"] = _csp(_frame_src(extra))
+        # Fil immersif (#1268) : 'self' dans frame-src (le dialog encadre le
+        # permalien même-origine) + fonts (Cinzel/Inter/JetBrains via Google).
+        resp.headers["Content-Security-Policy"] = _csp("'self' " + _frame_src(extra), fonts=True)
+        # Fil immersif : page vivante, on ne veut pas d'une vieille version en
+        # cache navigateur qui référencerait d'anciens assets (#1268).
+        resp.headers["Cache-Control"] = "no-cache"
         return resp
 
     @app.get("/feed/suite")
@@ -301,11 +322,59 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
         vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]))
                 for r in rows]
-        html = templates.env.get_template("_feed_items.html").render(billets=vues)
+        html = templates.env.get_template("_immersif_items.html").render(billets=vues)
         # Pas d'en-tête CSP ici : le fragment est injecté dans le document de la
         # page, dont la CSP fait foi (un embed exotique d'une page ultérieure
         # peut donc être bloqué — cas rare, borné au v1 du mur infini).
         return JSONResponse({"html": html, "next_cursor": next_cursor})
+
+    @app.get("/activity/{slug}")
+    async def activity(request: Request, slug: str):
+        """Activité réelle d'un billet pour les couloirs latéraux du fil immersif
+        (#1268) : derniers commentaires + réactions. Lecture seule, publique."""
+        from fastapi.responses import JSONResponse
+        row = await repo.get_by_slug(app.state.conn, slug)
+        if row is None or row["status"] != "published":
+            return JSONResponse({"comments": [], "reactions": {}})
+        cmts = await repo.list_approved_comments(app.state.conn, row["id"])
+        counts = await repo.reaction_counts(app.state.conn, row["id"])
+        items = []
+        for c in cmts[-8:]:
+            c = dict(c)
+            items.append({"who": (c.get("author_name") or "anon")[:32],
+                          "msg": (c.get("body") or "")[:180],
+                          "when": _depuis(c.get("created_at"))})
+        resp = JSONResponse({"comments": items, "reactions": counts})
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+    @app.get("/feed/activity")
+    async def feed_activity(request: Request):
+        """Flux d'activité GLOBAL (#1268) : derniers commentaires + réactions,
+        tous billets — pour les couloirs latéraux, toujours visibles."""
+        from fastapi.responses import JSONResponse
+        conn = app.state.conn
+        comments = []
+        async with conn.execute(
+            "SELECT c.author_name, c.body, c.created_at, b.slug FROM comment c "
+            "JOIN billet b ON b.id = c.billet_id "
+            "WHERE c.status='approved' AND b.status='published' "
+            "ORDER BY c.created_at DESC LIMIT 16") as cur:
+            async for r in cur:
+                comments.append({"who": (r[0] or "anon")[:32], "msg": (r[1] or "")[:160],
+                                 "when": _depuis(r[2]), "slug": r[3]})
+        reactions = []
+        try:
+            async with conn.execute(
+                "SELECT r.emoji, b.slug FROM reaction r JOIN billet b ON b.id = r.billet_id "
+                "WHERE b.status='published' ORDER BY r.rowid DESC LIMIT 18") as cur:
+                async for r in cur:
+                    reactions.append({"emoji": r[0], "slug": r[1]})
+        except Exception:  # noqa: BLE001 — le flux d'activité ne doit jamais casser la page
+            pass
+        resp = JSONResponse({"comments": comments, "reactions": reactions})
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
 
     @app.get("/micro", response_class=HTMLResponse)
     async def micro(request: Request):
@@ -395,17 +464,16 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
                             secure=(request.headers.get("x-forwarded-proto", request.url.scheme) == "https"),
                             max_age=31536000, path="/")
         # A self-hosted embed (Mastodon/PeerTube) needs its instance host in
-        # frame-src; add it for this page only. The communiqué look also needs
-        # Google Fonts in style-src/font-src (page-scoped relaxation).
-        is_comm = row["style"] == "communique"
+        # frame-src; add it for this page only. La vue billet a le look du fil
+        # immersif (#1268) : elle tire Cinzel/Inter/JetBrains de Google Fonts,
+        # comme le communiqué — d'où fonts=True pour les deux gabarits.
         extra_hosts: tuple[str, ...] = ()
         if row["embed_html"] and row["embed_url"]:
             from urllib.parse import urlparse
             host = urlparse(row["embed_url"]).hostname
             if host and not any(host == d or host.endswith("." + d) for d in _FRAME_HOSTS):
                 extra_hosts = (host,)
-        if extra_hosts or is_comm:
-            resp.headers["Content-Security-Policy"] = _csp(_frame_src(extra_hosts), fonts=is_comm)
+        resp.headers["Content-Security-Policy"] = _csp(_frame_src(extra_hosts), fonts=True)
         return resp
 
     async def _feed_rows() -> list[aiosqlite.Row]:

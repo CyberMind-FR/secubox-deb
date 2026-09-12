@@ -12,7 +12,10 @@ import re
 import unicodedata
 from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from urllib.parse import urlparse
+
+from pydantic import (BaseModel, ConfigDict, Field, StringConstraints, field_validator,
+                      model_validator)
 
 
 class BilletStatus(str, enum.Enum):
@@ -68,6 +71,34 @@ def slugify(text: str, *, suffix: str, max_words: int = 6) -> str:
 
 
 # ── input models ────────────────────────────────────────────────────────
+# Un lien VIDEO posé dans le corps vaut un embed (#1268). Un producteur qui ne
+# remplit pas `embed_url` — le relais BBS n'envoie que `body` + `ref_url`, la
+# conversation, jamais la vidéo qu'elle contient — laissait sinon le billet en
+# texte nu : pas de lecteur, pas de vignette souveraine, juste une URL brute au
+# milieu de la page. On PROMEUT donc le premier lien vidéo du corps quand le
+# champ est vide ; un `embed_url` explicite gagne toujours.
+_VIDEO_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com",
+                "vimeo.com", "dailymotion.com")
+_URL_IN_TEXT = re.compile(r"https://[^\s<>\"'\)\]]+")
+
+
+def video_url_in(body: str | None) -> Optional[str]:
+    """Le premier lien vidéo du corps, ou None. Volontairement STRICT : seuls
+    les hébergeurs vidéo connus (et les instances PeerTube) sont promus — une
+    page ordinaire reste une référence, pas un lecteur."""
+    for raw in _URL_IN_TEXT.findall(body or ""):
+        url = raw.rstrip(".,;:!?")
+        if len(url) > URL_MAX:
+            continue
+        host = (urlparse(url).hostname or "").lower()
+        if not host:
+            continue
+        if (any(host == h or host.endswith("." + h) for h in _VIDEO_HOSTS)
+                or "peertube" in host or host.startswith("tube.")):
+            return url
+    return None
+
+
 class BilletIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     body: Annotated[str, StringConstraints(min_length=1, max_length=BODY_MAX)]
@@ -80,6 +111,14 @@ class BilletIn(BaseModel):
     @classmethod
     def _https_only(cls, v: Optional[str]) -> Optional[str]:
         return _require_https(v)
+
+    @model_validator(mode="after")
+    def _embed_depuis_le_corps(self) -> "BilletIn":
+        if not self.embed_url:
+            found = video_url_in(self.body)
+            if found:
+                self.embed_url = found
+        return self
 
 
 class CommentIn(BaseModel):

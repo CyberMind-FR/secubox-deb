@@ -1,68 +1,59 @@
+<!DOCTYPE html>
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Fil public en cartes « dossier » — identique à la rédaction du BBS.
+  Fil immersif (#1268) — colonne centrale infinie, lecture au survol + mémoire de
+  position, interactions en bulles-chat des deux côtés, catégories auto. Page
+  autonome (le fil est sa propre scène). Cartes = _immersif_items.html.
 -->
-{% extends "base.html" %}
-{% block content %}
-{% if all_tags %}
-<details class="motscles"{% if active_tag %} open{% endif %}>
-  <summary>🏷️ Mots-clés <span class="mc-n">{{ all_tags|length }}</span></summary>
-  <nav class="tagbar" aria-label="Filtrer par tag">
-    <a class="tag-chip{% if not active_tag %} on{% endif %}" href="/">🌀 tous</a>
-    {% for t in all_tags %}
-    <a class="tag-chip{% if active_tag == t.slug %} on{% endif %}" href="/?tag={{ t.slug }}"
-       rel="{% if active_tag == t.slug %}nofollow{% endif %}">{{ t.emoji }} #{{ t.slug }} <span class="tag-n">{{ t.count }}</span></a>
-    {% endfor %}
-  </nav>
-</details>
-{% endif %}
-{% if active_tag %}<p class="tag-active">Vue rapide : <b>#{{ active_tag }}</b> — <a href="/">tout afficher</a></p>{% endif %}
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ site_title }} · Fil immersif</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/immersif.css?v=im9">
+<link rel="alternate" type="application/atom+xml" title="{{ site_title }}" href="/feed.xml">
+</head>
+<body>
+<header class="mast">
+  <a class="brand" href="/">
+    <span class="seal">B</span>
+    <span><span class="site-title">{{ site_title|upper }}</span><span class="sub">Fil immersif · {{ tagline }}</span></span>
+  </a>
+  <div class="status"><span class="dot"></span>en direct</div>
+</header>
 
-{% if billets %}
-<section class="caroussel" aria-label="À la une — carrousel des billets">
-  <div class="carhead"><h2 class="serif">À la une</h2><span class="sub">glissez, flèches ◀ ▶ ou ← →</span>
-    <span class="carnav"><button class="carbtn" type="button" data-act="carprev" aria-label="Billet précédent">◀</button><button class="carbtn" type="button" data-act="carnext" aria-label="Billet suivant">▶</button></span>
-  </div>
-  <div class="cartrack" id="cartrack" tabindex="0" role="list">
-    {% for b in billets %}
-    {% set cover = (b.media | selectattr('thumb') | list | first) if b.media else None %}
-    {% set ns = namespace(v=false, a=false, p=false) %}
-    {% if b.media %}{% for m in b.media if not m.thumb %}{% set ext = m.filename.rsplit('.', 1)[-1] | lower %}
-      {%- if ext in ['mp4','webm','ogv','mov'] %}{% set ns.v = true %}
-      {%- elif ext in ['mp3','ogg','oga','wav','m4a','weba','aac','flac'] %}{% set ns.a = true %}
-      {%- elif ext == 'pdf' %}{% set ns.p = true %}{% endif %}{% endfor %}{% endif %}
-    <a class="ccard" role="listitem" data-k="{{ 'communique' if b.style == 'communique' else 'billet' }}" href="/b/{{ b.slug }}">
-      {% if cover %}<span class="cccover"><img src="/media/{{ cover.thumb }}" alt="{{ cover.alt }}" loading="lazy"></span>
-      {%- elif b.poster %}<span class="cccover"><img src="{{ b.poster }}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>
-      {%- elif ns.v %}<span class="cccover ph vid" data-glyph="▶"></span>
-      {%- elif ns.a %}<span class="cccover ph aud" data-glyph="🎵"></span>
-      {%- elif ns.p %}<span class="cccover ph doc" data-glyph="📄"></span>
-      {%- else %}<span class="cccover ph link" data-glyph="🔗"></span>{% endif %}
-      <div class="ccbody">
-        <div class="cctop"><span class="ccic">{{ '📡' if b.style == 'communique' else '📝' }}</span><span class="cctype">{{ 'communiqué' if b.style == 'communique' else 'billet' }}</span>
-          {% if ns.v or ns.a or ns.p %}<span class="ccmed">{% if ns.v %}🎬{% endif %}{% if ns.a %}🎵{% endif %}{% if ns.p %}📄{% endif %}</span>{% endif %}
-        </div>
-        <h3 class="serif">{{ b.title or ((b.summary[:64] ~ '…') if b.summary else 'Billet') }}</h3>
-        {% if b.summary %}<p class="ccdek">{{ b.summary }}</p>{% endif %}
-        <div class="ccwho">{% if b.published_at %}{{ b.published_at[:10] }}{% endif %}{% if b.ref_host %} · <span class="cchost">🔗 {{ b.ref_host }}</span>{% elif b.tags %} · {{ b.tags[0].emoji }} #{{ b.tags[0].slug }}{% endif %}</div>
-      </div>
-    </a>
-    {% endfor %}
-  </div>
-  <div class="cardots" id="cardots" aria-hidden="true"></div>
-</section>
-{% endif %}
+<nav class="legend" id="legend" aria-label="Catégories"></nav>
+<svg class="link-svg" id="links" aria-hidden="true"></svg>
 
-{# Le fil : cartes rendues par le partiel partagé (#1268). Le défilement infini
-   (billets.js) fetch /feed/suite et APPEND ici ; sans JS, le pager ci-dessous
-   reste un lien de page classique. #}
-<div id="fil-billets" class="fil">{% include "_feed_items.html" %}</div>
-{% if not billets %}<p class="empty">Aucun billet pour le moment.</p>{% endif %}
+<main class="stage">
+  <aside class="lane lane-l" aria-label="Interactions des autres">
+    <div class="lane-head"><span class="k"></span>les autres</div>
+    <div class="bubbles" id="laneL"></div>
+    <div class="lane-empty" id="emptyL">survolez un billet<br>pour voir qui réagit</div>
+  </aside>
 
-{% if next_cursor %}
-<nav class="pager" id="fil-pager" data-cursor="{{ next_cursor }}"{% if active_tag %} data-tag="{{ active_tag }}"{% endif %}>
-  <a rel="next" href="/?cursor={{ next_cursor }}{% if active_tag %}&amp;tag={{ active_tag }}{% endif %}">Billets plus anciens →</a>
-</nav>
-{% endif %}
-{% endblock %}
+  <section class="col" id="col" aria-label="Fil des billets">
+    <div id="fil-billets">{% include "_immersif_items.html" %}</div>
+    {% if not billets %}<p class="empty">Aucun billet pour le moment.</p>{% endif %}
+    {% if next_cursor %}
+    <nav class="pager" id="fil-pager" data-cursor="{{ next_cursor }}"{% if active_tag %} data-tag="{{ active_tag }}"{% endif %}>
+      <a rel="next" href="/?cursor={{ next_cursor }}{% if active_tag %}&amp;tag={{ active_tag }}{% endif %}">Billets plus anciens →</a>
+    </nav>
+    {% endif %}
+    <div class="loading" id="loader" hidden><span class="sp"></span>plus de billets…</div>
+  </section>
+
+  <aside class="lane lane-r" aria-label="Activité récente">
+    <div class="lane-head"><span class="k"></span>le plus récent</div>
+    <div class="bubbles" id="laneR"></div>
+    <div class="lane-empty" id="emptyR">votre écho<br>et les derniers gestes</div>
+  </aside>
+</main>
+
+<dialog id="sheet"></dialog>
+<script src="/static/immersif.js?v=im9" defer></script>
+</body>
+</html>

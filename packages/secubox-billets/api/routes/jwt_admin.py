@@ -100,6 +100,22 @@ def register_jwt_admin(app: FastAPI) -> None:
     if require_jwt is None:
         return
 
+    async def _enrichir(request: Request, billet_id: str, data: BilletIn) -> None:
+        """MEME enrichissement que le formulaire d'administration (#1268).
+
+        CETTE SURFACE N'EN FAISAIT AUCUN. Elle écrivait la ligne et s'arrêtait
+        là : pas d'iframe résolue, pas de vignette captée. Or c'est PAR ICI que
+        le BBS publie — un fil conservé arrivait donc en texte nu, sans lecteur
+        ni poster, alors que le même contenu saisi au formulaire ressortait en
+        carte vidéo. Les trois aides ne lèvent jamais : un enrichissement raté
+        ne doit pas faire échouer une publication.
+        """
+        from .admin import (_maybe_capture_snapshot, _maybe_ref_card,
+                            _resolve_and_store_embed)
+        await _resolve_and_store_embed(request, billet_id, data.embed_url)
+        await _maybe_ref_card(request, billet_id, data.ref_url, data.embed_url)
+        await _maybe_capture_snapshot(request, billet_id, data.embed_url, data.style)
+
     def _billet_in(p: BilletPayload) -> BilletIn:
         try:
             return BilletIn(body=p.body, ref_url=p.ref_url, embed_url=p.embed_url,
@@ -155,6 +171,7 @@ def register_jwt_admin(app: FastAPI) -> None:
         data = _billet_in(payload)
         conn = request.app.state.conn
         billet_id = await repo.create_billet(conn, data, now=_now())
+        await _enrichir(request, billet_id, data)
         row = await repo.get_by_id(conn, billet_id)
         return {"success": True, **_view(row)}
 
@@ -167,6 +184,7 @@ def register_jwt_admin(app: FastAPI) -> None:
         data = _billet_in(payload)
         await repo.update_billet(conn, billet_id, body=data.body, ref_url=data.ref_url,
                                  embed_url=data.embed_url, now=_now())
+        await _enrichir(request, billet_id, data)
         await repo.set_status(conn, billet_id,
                               "published" if data.publish else "draft", now=_now())
         return {"success": True, **_view(await repo.get_by_id(conn, billet_id))}

@@ -1,0 +1,37 @@
+{#- Carte du fil immersif (#1268) — vraies données billet. Partagé par feed.html
+    et le fragment /feed/suite. Le survol charge l'embed PeerTube (data-embed) ;
+    YouTube reste poster + clic. Les couloirs se peuplent via /activity/<slug>. -#}
+{% for b in billets %}
+{%- set eu = b.embed_url or '' -%}
+{%- set is_pt = b.embed_is_video and 'peertube' in eu -%}
+{%- set is_yt = b.embed_is_video and ('youtube' in eu or 'youtu.be' in eu) -%}
+{%- set prov = 'pt' if is_pt else ('yt' if is_yt else '') -%}
+{%- set cover = (b.media | selectattr('thumb') | list | first) if b.media else None -%}
+{%- set poster = ('/media/' ~ cover.thumb) if cover else (b.poster or b.embed_snapshot_url) -%}
+<article class="card" data-k="{{ 'communique' if b.style=='communique' else ('billet' if b.embed_is_video else 'article') }}"
+         data-cat="{{ b.cat }}" data-id="{{ b.slug }}" data-prov="{{ prov }}"{% if b.embed_is_video and eu %} data-embed="{{ eu }}"{% endif %} tabindex="0">
+  <div class="screen" data-play>
+    {% if prov %}<span class="provider {{ prov }}">{{ 'PeerTube · souverain' if is_pt else 'YouTube' }}</span>{% endif %}
+    {% if poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}
+    {% if is_pt %}<div class="frame"></div><div class="film"><div class="bars"></div><div class="scan"></div></div>{% endif %}
+    <div class="glyph"><div class="play-badge">{{ '▶' if b.embed_is_video else '✎' }}</div></div>
+    {% if is_pt %}<div class="tc"></div><div class="resume">↺ reprise à <span class="rt"></span></div>
+    <div class="mute">🔇 muet — clic pour le son</div>
+    <div class="bar"><div class="seen"></div><div class="played"></div></div>{% endif %}
+  </div>
+  <div class="body">
+    <div class="kicker">
+      <span class="chip"><span class="d"></span>{{ b.cat }}</span>
+      <span class="ic" title="{{ 'communiqué' if b.style=='communique' else ('vidéo' if b.embed_is_video else 'billet') }}">{{ '📡' if b.style=='communique' else ('🎬' if b.embed_is_video else '📝') }}</span>
+      {% if b.published_at %}<span class="date">{{ b.published_at[:10] }}</span>{% endif %}
+    </div>
+    <h3 class="title"><a href="/b/{{ b.slug }}">{{ b.title or (b.summary[:64] ~ '…' if b.summary else 'Billet') }}</a></h3>
+    {% if b.summary %}<p class="dek">{{ b.summary }}</p>{% endif %}
+    <div class="foot">
+      <button class="act like" type="button" data-like aria-label="Réagir">♥ <span class="n">·</span></button>
+      <button class="act cmt" type="button" data-comment aria-label="Commenter">💬</button>
+      <a class="act spread open" href="/b/{{ b.slug }}" data-open>ouvrir ↗</a>
+    </div>
+  </div>
+</article>
+{% endfor %}

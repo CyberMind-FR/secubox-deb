@@ -1,0 +1,197 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+   Vue billet (#1268) — la COUCHE « ouverture », par-dessus immersif.css dont on
+   hérite tokens, masthead, pastilles et écran. Forme = celle du popup théâtre :
+   un écran, et les messages / réactions EN SOUS-TITRES CRT PAR-DESSUS l'image,
+   interactifs (survol = le message entier au curseur, clic = la console). */
+
+.vue .retour{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--dim);border:1px solid var(--edge);border-radius:999px;padding:7px 14px;transition:.18s}
+.vue .retour:hover{color:var(--tx);border-color:var(--edge-2)}
+
+.vue-wrap{max-width:1020px;margin:0 auto;padding:0 clamp(12px,3vw,28px) 80px}
+
+/* la tonalité de catégorie, comme sur les cartes du fil */
+.vue-billet{--tone:var(--sky);position:relative}
+.vue-billet[data-cat="auth"]{--tone:#f0a020} .vue-billet[data-cat="wall"]{--tone:#e8c637}
+.vue-billet[data-cat="boot"]{--tone:#e8556e} .vue-billet[data-cat="mind"]{--tone:#9b6ff0}
+.vue-billet[data-cat="root"]{--tone:#2fcf6a} .vue-billet[data-cat="mesh"]{--tone:#22c8e8}
+
+/* ── L'ECRAN ───────────────────────────────────────────────────────────────── */
+.vue-stage{margin:22px 0 0;border:1px solid var(--edge);border-radius:18px;overflow:hidden;
+  box-shadow:var(--lift);cursor:default;background:#05080c}
+.vue-stage.flat{aspect-ratio:21/8}
+.vue-stage::after{content:"";position:absolute;left:0;top:0;height:3px;width:100%;background:var(--tone);opacity:.9;z-index:9}
+.vue .frame{opacity:1}                        /* hors carte : l'embed est visible d'emblée */
+.vue .frame.live{z-index:2}
+.vue .glyph{opacity:.85}
+.vue-stage .poster{filter:saturate(.95)}
+.vue-stage.playing .poster,.vue-stage.playing .glyph{opacity:0;transition:opacity .35s}
+
+/* couche CRT : balayage + vignette + battement très léger */
+.crt{position:absolute;inset:0;z-index:6;pointer-events:none;mix-blend-mode:screen;opacity:.9}
+.crt .sl{position:absolute;inset:0;background:repeating-linear-gradient(180deg,
+  rgba(255,255,255,.045) 0 1px, rgba(0,0,0,0) 1px 3px);animation:crtroll 9s linear infinite}
+.crt .vig{position:absolute;inset:0;mix-blend-mode:multiply;
+  background:radial-gradient(120% 100% at 50% 50%, rgba(255,255,255,1) 55%, rgba(120,150,170,.55) 100%)}
+@keyframes crtroll{from{background-position-y:0}to{background-position-y:60px}}
+.vue-stage.nocrt .crt{display:none}
+
+/* ── POPS : réactions qui montent par-dessus l'image ───────────────────────── */
+.pops{position:absolute;right:12px;top:44px;bottom:52px;z-index:8;width:190px;pointer-events:none;
+  display:flex;flex-direction:column-reverse;align-items:flex-end;gap:5px;overflow:hidden}
+.pop{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;
+  color:#e6eef4;background:rgba(6,10,15,.6);border-right:2px solid var(--tone);border-radius:5px 0 0 5px;
+  padding:4px 9px;text-shadow:0 1px 2px rgba(0,0,0,.9);animation:monte 4.6s ease-out forwards;white-space:nowrap}
+.pop .emo{font-size:14px;text-shadow:none}
+.pop .n{color:var(--gold);font-variant-numeric:tabular-nums}
+@keyframes monte{
+  0%{opacity:0;transform:translateY(14px) scale(.94)}
+  12%{opacity:1;transform:none}
+  72%{opacity:1;transform:translateY(-10px)}
+  100%{opacity:0;transform:translateY(-26px)}
+}
+
+/* ── SOUS-TITRES : lignes monospace tronquées, par-dessus l'image ──────────── */
+.track{position:absolute;left:0;right:0;bottom:44px;z-index:8;display:flex;flex-direction:column;
+  gap:3px;padding:0 14px;pointer-events:none;align-items:flex-start}
+.track .line{pointer-events:auto;max-width:min(760px,86%);display:flex;align-items:baseline;gap:9px;
+  background:rgba(6,10,15,.66);backdrop-filter:blur(2px);
+  border-left:2px solid var(--tone);border-radius:0 5px 5px 0;padding:4px 11px;cursor:pointer;
+  font-family:var(--mono);font-size:12px;line-height:1.4;text-shadow:0 1px 2px rgba(0,0,0,.9);
+  animation:subin .28s cubic-bezier(.2,.7,.2,1) both;transition:background .15s,border-color .15s}
+.track .line.out{animation:subout .3s ease forwards}
+.track .line:hover{background:rgba(10,16,24,.92);border-left-color:var(--gold)}
+.line .k{color:var(--tone);opacity:.8;flex:none}
+.line .nm{color:#eaf1f6;font-weight:600;font-size:11px;flex:none;letter-spacing:.02em}
+.line .msg{color:#c9d5df;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.line .tm{color:var(--faint);font-size:9px;flex:none;font-variant-numeric:tabular-nums}
+@keyframes subin{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+@keyframes subout{to{opacity:0;transform:translateY(-6px)}}
+.vue-stage.nosubs .track{display:none}
+
+/* ── OSD : la barre console en bas de l'écran ──────────────────────────────── */
+.osd{position:absolute;left:0;right:0;bottom:0;z-index:9;display:flex;align-items:center;gap:8px;
+  padding:20px 12px 9px;background:linear-gradient(transparent,rgba(4,7,11,.88) 62%);
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--dim)}
+.ob{font:inherit;letter-spacing:inherit;color:var(--dim);background:rgba(6,10,15,.5);
+  border:1px solid var(--edge-2);border-radius:999px;padding:4px 10px;cursor:pointer;transition:.15s;text-transform:uppercase}
+.ob:hover{color:var(--tx);border-color:var(--dim)}
+.ob.on{color:var(--tone);border-color:color-mix(in srgb,var(--tone) 45%,var(--edge-2))}
+.osd .sep{flex:1}
+.osd .cnt b{color:var(--tx);font-variant-numeric:tabular-nums}
+.osd .go{margin-left:4px}
+
+/* ── LE BANDEAU (barre du théâtre) ─────────────────────────────────────────── */
+.vue-pin{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 2px 13px;border-bottom:1px solid var(--edge)}
+.vue-pin .ic{font-size:15px}
+.vue-pin .date{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.06em}
+.vue-pin .title{flex-basis:100%;font-family:var(--serif);font-weight:600;color:#eff4f8;
+  font-size:clamp(23px,3.3vw,33px);line-height:1.18;margin:2px 0 0;text-wrap:balance}
+.vue-pin .ref-chip{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--dim);
+  border:1px solid var(--edge);border-radius:999px;padding:5px 11px}
+.vue-pin .ref-chip:hover{color:var(--tx);border-color:var(--edge-2)}
+
+/* ── LE CORPS ──────────────────────────────────────────────────────────────── */
+.prose{max-width:68ch;margin:26px auto 0;font-size:16.5px;line-height:1.74;color:#ccd6e0}
+.prose>*+*{margin-top:1.05em}
+.prose h2,.prose h3{font-family:var(--serif);color:#eef3f7;line-height:1.25;margin-top:1.9em;font-weight:600}
+.prose h2{font-size:23px} .prose h3{font-size:19px}
+.prose a{color:var(--tone);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.prose a:hover{color:var(--gold)}
+.prose blockquote{margin-left:0;padding:2px 0 2px 18px;border-left:2px solid var(--gold);color:var(--dim);font-style:italic}
+.prose code{font-family:var(--mono);font-size:.88em;background:rgba(255,255,255,.06);border:1px solid var(--edge);border-radius:5px;padding:1px 5px}
+.prose pre{background:var(--panel-2);border:1px solid var(--edge);border-radius:12px;padding:14px 16px;overflow-x:auto}
+.prose pre code{background:none;border:0;padding:0}
+.prose img,.prose video,.prose audio{border-radius:12px;display:block;max-width:100%}
+.prose hr{border:0;border-top:1px solid var(--edge)}
+.zani-stamp{float:right;margin:0 0 10px 16px;opacity:.9}
+
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:26px auto 0;max-width:68ch}
+.gallery-item{display:block;border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:var(--panel-2)}
+.gallery-item img{display:block;width:100%;height:130px;object-fit:cover;transition:transform .3s}
+.gallery-item:hover img{transform:scale(1.05)}
+
+.vue-embed{margin:26px auto 0;max-width:68ch;border:1px solid var(--edge);border-radius:14px;overflow:hidden;background:var(--panel-2)}
+.vue-embed iframe{width:100%;border:0;display:block}
+
+.sbx-mediaobj-bar,.reactions,.share-quick,.billet-meta{max-width:68ch;margin-left:auto;margin-right:auto}
+.sbx-mediaobj-bar{display:flex;align-items:center;gap:8px;margin-top:22px;font-family:var(--mono);font-size:10.5px}
+.mo-id{color:var(--faint);letter-spacing:.1em}
+.mo-act{color:var(--dim);border:1px solid var(--edge);border-radius:999px;padding:5px 11px;transition:.15s}
+.mo-act:hover{color:var(--tx);border-color:var(--edge-2)}
+.mo-diff:hover{color:var(--coral);border-color:color-mix(in srgb,var(--coral) 45%,var(--edge))}
+
+/* réactions : afficheur CRT (mono + lueur), et non des boutons d'appli */
+.reactions{display:flex;flex-wrap:wrap;gap:7px;margin-top:20px}
+.reactions .react{margin:0}
+.react-btn{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;color:var(--dim);
+  background:rgba(255,255,255,.03);border:1px solid var(--edge);border-radius:999px;padding:5px 12px;cursor:pointer;transition:.15s}
+.react-btn:hover{border-color:var(--edge-2);color:var(--tx);transform:translateY(-1px)}
+.react-btn .emoji{font-size:15px}
+.react-btn .count{font-variant-numeric:tabular-nums;color:var(--faint)}
+.react-btn.on{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 45%,var(--edge));
+  background:color-mix(in srgb,var(--gold) 9%,transparent);text-shadow:0 0 12px color-mix(in srgb,var(--gold) 55%,transparent)}
+.react-btn.on .count{color:var(--gold)}
+
+.share-quick{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:20px;padding-top:16px;border-top:1px solid var(--edge);font-size:17px}
+.share-quick .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin-right:4px}
+.share-quick a,.share-quick button{background:none;border:0;cursor:pointer;font-size:17px;opacity:.72;transition:.15s;padding:2px}
+.share-quick a:hover,.share-quick button:hover{opacity:1;transform:translateY(-2px)}
+.billet-meta{margin-top:18px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.billet-meta a:hover{color:var(--dim)}
+
+/* ── LA CONSOLE : les mêmes lignes, en entier ──────────────────────────────── */
+.console{max-width:840px;margin:44px auto 0;background:linear-gradient(180deg,var(--panel),var(--panel-2));
+  border:1px solid var(--edge);border-radius:16px;padding:18px 20px 22px;box-shadow:var(--lift);position:relative;overflow:hidden}
+.console::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.016) 0 1px,transparent 1px 3px)}
+.console h2{font-family:var(--mono);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--dim);margin:0 0 14px;display:flex;align-items:center;gap:8px;font-weight:500}
+.console h2 .k{color:var(--tone)}
+.clines{display:flex;flex-direction:column;gap:4px}
+.cline{display:flex;align-items:baseline;gap:9px;font-family:var(--mono);font-size:12.5px;line-height:1.55;
+  background:rgba(6,10,15,.4);border-left:2px solid var(--tone);border-radius:0 6px 6px 0;padding:7px 12px;transition:.15s}
+.cline:hover,.cline.vu{background:rgba(12,19,28,.82);border-left-color:var(--gold)}
+.cline .k{color:var(--tone);opacity:.8;flex:none}
+.cline .nm strong{color:#eaf1f6;font-weight:600;font-size:11.5px}
+.cline .msg{color:#c9d5df;flex:1;min-width:0}
+.cline .msg p{margin:0} .cline .msg a{color:var(--tone)}
+.cline .tm{color:var(--faint);font-size:9.5px;flex:none;font-variant-numeric:tabular-nums}
+.console .vide{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center;padding:22px 0;letter-spacing:.06em}
+.console .note{font-family:var(--mono);font-size:11px;color:var(--green);border:1px solid color-mix(in srgb,var(--green) 35%,var(--edge));
+  border-radius:8px;padding:8px 12px;margin:0 0 12px}
+.console .note.err{color:var(--coral);border-color:color-mix(in srgb,var(--coral) 40%,var(--edge))}
+
+.comment-form{margin-top:20px;padding-top:18px;border-top:1px solid var(--edge);display:flex;flex-direction:column;gap:11px}
+.comment-form .frow{display:flex;gap:11px;flex-wrap:wrap}
+.comment-form .frow label{flex:1;min-width:200px}
+.comment-form label{display:flex;flex-direction:column;gap:5px;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.comment-form input,.comment-form textarea{font-family:var(--body);font-size:14px;color:var(--tx);
+  background:rgba(5,8,12,.6);border:1px solid var(--edge);border-radius:9px;padding:9px 12px;transition:.15s;resize:vertical}
+.comment-form input:focus,.comment-form textarea:focus{outline:none;border-color:var(--gold);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 16%,transparent)}
+.comment-form textarea::placeholder{color:var(--faint);font-family:var(--mono);font-size:12px}
+.comment-form button{align-self:flex-start;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink);background:var(--gold);border:0;border-radius:999px;padding:9px 20px;cursor:pointer;transition:.15s}
+.comment-form button:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.hp{position:absolute;left:-9999px}
+
+.vue-foot{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);padding:0 0 40px}
+.vue-foot a:hover{color:var(--dim)}
+
+@media(max-width:720px){
+  .vue-wrap{padding-bottom:56px}
+  .vue-stage{border-radius:13px;margin-top:14px}
+  .pops{display:none}
+  .track{bottom:40px;padding:0 9px}
+  .track .line{max-width:94%;font-size:11px}
+  .console{padding:15px 14px 18px;border-radius:13px}
+  .cline{flex-wrap:wrap;gap:6px}
+  .prose{font-size:16px}
+}
+@media(prefers-reduced-motion:reduce){
+  .crt .sl{animation:none}
+  .pop,.track .line{animation:none}
+}

@@ -1,3 +1,133 @@
+secubox-billets (0.8.44-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — UN LIEN VIDEO DANS LE CORPS VAUT UN EMBED. Le relais BBS n'envoie que
+    `body` + `ref_url` (la conversation), jamais la vidéo qu'elle contient : un fil
+    conservé arrivait en texte nu — URL brute au milieu de la page, ni lecteur ni
+    vignette souveraine. `models.video_url_in` promeut désormais le premier lien
+    vidéo du corps quand `embed_url` est vide (hébergeurs connus + instances
+    PeerTube seulement ; un `embed_url` explicite gagne toujours).
+  * #1268 — la surface JWT (/admin/api/billets), PAR OU LE BBS PUBLIE, n'enrichissait
+    RIEN : ni iframe résolue ni vignette captée, là où le même contenu saisi au
+    formulaire ressortait en carte vidéo. Elle exécute maintenant le même
+    enrichissement (embed + link-card + poster), à la création comme à la mise à jour.
+  * #1268 — `python3 -m api.manage backfill-embeds [--dry-run]` rattrape les billets
+    déjà publiés dont le lien vidéo est resté dans le corps : promotion, iframe,
+    vignette. Idempotent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 20:30:00 +0200
+
+secubox-billets (0.8.43-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — L'AUTO-MUET DEGAGE. Plus de lecture muette par défaut, plus de bouton
+    son : le fil comme la vue billet lancent l'embed AVEC le son (mute=0), et le
+    volume est celui du lecteur. Si un navigateur refuse l'autoplay sonore, il
+    laisse l'image en attente d'un clic — préférable à un muet subi. Le réglage
+    global « son » introduit en 0.8.42 est retiré (il faisait plus de mal que de
+    bien : un bouton d'état de plus dans la barre, et une lecture muette au premier
+    chargement). assets ?v=im9 / vue ?v=v2.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 19:25:00 +0200
+
+secubox-billets (0.8.42-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — RETOUR au fil de 0.8.39 : les changements de 0.8.40 (popup = permalien)
+    et 0.8.41 (chat en sous-titres dans les couloirs) sont annulés. Le fil retrouve
+    exactement le comportement validé : dwell = popup théâtre embed nu, mouvement =
+    dépopup, reprise de position, bulles dans les couloirs.
+  * #1268 — la VUE BILLET prend le look & feel du fil et la FORME du popup théâtre :
+    nouveau gabarit base_vue.html + vue.css/vue.js (immersif.css hérité mot pour mot
+    pour le masthead, les pastilles et l'écran). Un écran 16/9 en haut, l'embed qui
+    REPREND la position mémorisée par le fil (même clé bpos:<slug>), couche CRT
+    (balayage + vignette), bandeau façon barre du théâtre, corps en colonne de
+    lecture, galerie, réactions et partage au même grain.
+  * #1268 — messages et réactions en OVERLAY INTERACTIF par-dessus l'image : les
+    messages défilent en sous-titres monospace (survol = le message entier au
+    curseur, clic = la ligne dans la console en bas), les réactions poppent et
+    montent. Sans JS la liste complète reste rendue sous le billet.
+  * #1268 — le MUET n'est plus un bouton par lecture : c'est un CHOIX GLOBAL RETENU
+    (clé « son »), appliqué au fil comme à la vue billet, réversible dans les deux
+    sens ; le muet ne subsiste que tant que la page n'a pas été activée, l'autoplay
+    non-muté étant refusé sans geste.
+  * CSP : /b/ autorise Google Fonts pour les deux gabarits (la vue billet tire
+    Cinzel/Inter/JetBrains comme le fil).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 18:40:00 +0200
+
+secubox-billets (0.8.39-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — lecture façon reels. Billet centré = spotlight ; si on RESTE (dwell
+    ~480ms) → popup THÉÂTRE overlay non-modal avec l'embed NU (/videos/embed, sans
+    la page peertube), autoplay MUET, reprise à la position mémorisée ; si on BOUGE
+    (scroll/wheel/touch) → dépopup + position sauvée ; on revient → ça reprend. Clic
+    écran = pop immédiat. Bouton 🔊 = active le son (recharge non-muté à la position).
+    YouTube en embed nocookie. assets ?v=im6.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 15:40:00 +0200
+
+secubox-billets (0.8.38-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — CSP : autorise le <script> inline du bandeau santé sbxwaf par son
+    empreinte sha256 (plus d'erreur console script-src), sans ouvrir l'inline en
+    général. Ajouté à _csp() donc actif sur le fil, le permalien et la carte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 15:00:00 +0200
+
+secubox-billets (0.8.37-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — fil immersif, VIE : révélation animée des cartes au scroll (fade+rise,
+    repli visible sans IntersectionObserver), Ken-Burns lent sur le poster du
+    billet actif, pulsation du ▶, respiration des pastilles catégorie, flux des
+    connecteurs, transitions des bulles. Respecte prefers-reduced-motion. ?v=im5.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 14:40:00 +0200
+
+secubox-billets (0.8.36-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — fil immersif : Cache-Control no-cache sur / (le navigateur ne sert
+    plus une vieille version qui référencerait d'anciens assets) ; le fallback du
+    lecteur (si <dialog> indisponible) ouvre le PERMALIEN du billet, jamais la
+    source PeerTube. assets ?v=im4. (Note : le script inline du bandeau santé
+    sbxwaf reste bloqué par script-src 'self' — cosmétique, n'affecte pas le fil.)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 14:00:00 +0200
+
+secubox-billets (0.8.35-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — fil immersif, refonte interaction. (1) le billet ACTIF n'est plus le
+    survolé mais celui au CENTRE du viewport → défilement « smart » qui marche au
+    doigt sur téléphone. (2) clic sur l'écran = LECTEUR DIRECT en grand (mode
+    théâtre : l'embed joue tout de suite, avec le son), plus le petit inline. (3)
+    les bulles commentaires/likes sont placées À CÔTÉ DE LEUR billet (alignées,
+    plus en vrac), groupées par billet. (4) survol d'une bulle = popup message au
+    curseur (accès à la conversation). assets ?v=im3.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 13:15:00 +0200
+
+secubox-billets (0.8.34-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — fil immersif, itération interaction. Le SURVOL ne charge plus la
+    vidéo : il met le billet en avant (spotlight + connecteur) ; c'est le CLIC sur
+    l'écran qui FORCE la lecture (embed autoplay, avec le son car c'est un geste).
+    Les couloirs latéraux (commentaires + réactions/likes) sont désormais un flux
+    d'activité GLOBAL, TOUJOURS visible (endpoint /feed/activity, rafraîchi 45 s) ;
+    survol d'un billet = surlignage de ses bulles + connecteur ; clic sur une bulle
+    ouvre le billet. YouTube jouable au clic aussi (embed nocookie). assets ?v=im2.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 12:15:00 +0200
+
+secubox-billets (0.8.33-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — le fil devient IMMERSIF (concept validé). Colonne centrale infinie,
+    survol d'un billet = lecture PeerTube RÉELLE (iframe autoplay muet, reprise à
+    la position mémorisée en localStorage) ; interactions en bulles-chat des DEUX
+    côtés (couloirs gauche « les autres » = commentaires, droite = réactions),
+    peuplés par le nouvel endpoint /activity/<slug> (données réelles) ; catégories
+    AUTO (chip pastille + légende/filtre) ; « ouvrir »/« commenter » = surcouche
+    encadrant le permalien réel. feed.html autonome (dark), immersif.css/js,
+    _immersif_items.html partagé avec /feed/suite. CSP: 'self' dans frame-src + fonts.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 11:30:00 +0200
+
 secubox-billets (0.8.32-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — poster souverain à l'ingestion aussi pour YouTube-direct. La capture
