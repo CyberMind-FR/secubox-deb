@@ -1,3 +1,15 @@
+secubox-billets (0.8.46-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LA VIDEO N'EST PLUS LAVEE EN BLANC. La couche CRT de la vue billet
+    portait `mix-blend-mode: screen` et contenait une vignette CLAIRE : screen sur
+    du blanc donne du blanc, l'image passait donc sous un voile laiteux. Le blend
+    est supprimé et la vignette devient SOMBRE (coins assombris, pas de voile) —
+    ce qu'est réellement le grain d'un tube. Balayage adouci (.11 au lieu de .045
+    en clair, opacité .55) pour ne pas salir une vraie vidéo. assets vue ?v=v3.
+    La bascule ▩ CRT de l'OSD reste disponible et retenue.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 21:55:00 +0200
+
 secubox-billets (0.8.45-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — INCRUSTATION dans le popup théâtre : les likes (emoji + compte, agrégés)

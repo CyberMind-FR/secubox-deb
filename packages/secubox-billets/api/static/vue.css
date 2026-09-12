@@ -27,12 +27,14 @@
 .vue-stage .poster{filter:saturate(.95)}
 .vue-stage.playing .poster,.vue-stage.playing .glyph{opacity:0;transition:opacity .35s}
 
-/* couche CRT : balayage + vignette + battement très léger */
-.crt{position:absolute;inset:0;z-index:6;pointer-events:none;mix-blend-mode:screen;opacity:.9}
+/* Couche CRT : balayage + vignette SOMBRE. Surtout PAS de mix-blend-mode ici —
+   un `screen` sur une vignette claire lavait toute l'image en blanc. Le grain
+   d'un tube, c'est des lignes noires et des COINS assombris, jamais un voile. */
+.crt{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:.55}
 .crt .sl{position:absolute;inset:0;background:repeating-linear-gradient(180deg,
-  rgba(255,255,255,.045) 0 1px, rgba(0,0,0,0) 1px 3px);animation:crtroll 9s linear infinite}
-.crt .vig{position:absolute;inset:0;mix-blend-mode:multiply;
-  background:radial-gradient(120% 100% at 50% 50%, rgba(255,255,255,1) 55%, rgba(120,150,170,.55) 100%)}
+  rgba(0,0,0,.11) 0 1px, rgba(0,0,0,0) 1px 3px);animation:crtroll 9s linear infinite}
+.crt .vig{position:absolute;inset:0;
+  background:radial-gradient(125% 105% at 50% 50%, rgba(0,0,0,0) 58%, rgba(0,0,0,.42) 100%)}
 @keyframes crtroll{from{background-position-y:0}to{background-position-y:60px}}
 .vue-stage.nocrt .crt{display:none}
 
