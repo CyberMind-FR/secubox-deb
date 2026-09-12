@@ -1,3 +1,46 @@
+secubox-billets (0.8.47-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LA VIDEO NE S'ARRETE PLUS QUAND ON ECRIT. Le formulaire postait en 303 :
+    la page se rechargeait, l'embed repartait en autoplay SONORE — que le navigateur
+    refuse sans geste — et l'image restait figée jusqu'à un clic. `/b/{slug}/comment`
+    sait désormais répondre en JSON (Accept: application/json) et le client poste en
+    arrière-plan. Le chemin HTML sans JS est INCHANGE : mêmes contrôles, mêmes
+    redirections, dans le même ordre.
+  * #1268 — SAISIE INCRUSTEE dans l'écran : une ligne de console (nom retenu, message,
+    rangée d'émojis, envoyer) posée au-dessus de l'OSD. Le message part sans quitter
+    la page et s'affiche AUSSITOT en dernier sous-titre, liseré doré, marqué « en
+    attente » quand la modération le retient — et il est ajouté à la console en bas.
+    La barre emprunte les jetons du vrai formulaire (csrf, anti-spam) : mêmes
+    contrôles serveur, pas de seconde porte d'entrée. assets vue ?v=v4.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 22:40:00 +0200
+
+secubox-billets (0.8.46-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LA VIDEO N'EST PLUS LAVEE EN BLANC. La couche CRT de la vue billet
+    portait `mix-blend-mode: screen` et contenait une vignette CLAIRE : screen sur
+    du blanc donne du blanc, l'image passait donc sous un voile laiteux. Le blend
+    est supprimé et la vignette devient SOMBRE (coins assombris, pas de voile) —
+    ce qu'est réellement le grain d'un tube. Balayage adouci (.11 au lieu de .045
+    en clair, opacité .55) pour ne pas salir une vraie vidéo. assets vue ?v=v3.
+    La bascule ▩ CRT de l'OSD reste disponible et retenue.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 21:55:00 +0200
+
+secubox-billets (0.8.45-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — INCRUSTATION dans le popup théâtre : les likes (emoji + compte, agrégés)
+    et UNE ligne de conversation défilent maintenant EN BAS DE L'IMAGE, façon
+    sous-titres de télévision — bande dégradée, lignes de balayage CRT confinées à
+    la bande, monospace, liseré de la tonalité du billet. Les données sont celles
+    déjà chargées pour les couloirs (/feed/activity) : aucune requête de plus.
+  * #1268 — l'incrustation est STRICTEMENT NON INTERACTIVE (pointer-events:none,
+    zéro écouteur) : dans le théâtre, bouger la souris dépopupe, et une couche qui
+    capterait le pointeur casserait le comportement validé. Le compteur de lignes
+    est arrêté au dépopup (pas de minuterie qui survit). assets ?v=im10.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 21:15:00 +0200
+
 secubox-billets (0.8.44-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — UN LIEN VIDEO DANS LE CORPS VAUT UN EMBED. Le relais BBS n'envoie que
