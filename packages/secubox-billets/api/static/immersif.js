@@ -46,8 +46,18 @@
     if (p) return p[1] + "/videos/embed/" + p[2] + "?autoplay=1&muted=" + mm + "&title=0&warningTitle=0&peertubeLink=0&p2p=0&controls=1&start=" + start;
     return embed;
   }
+  // SON : ce n'est PAS un bouton par lecture, c'est un CHOIX RETENU (clé « son »),
+  // appliqué à toutes les lectures, ici comme sur la vue billet. L'autoplay non-muté
+  // n'étant permis qu'avec une activation de la page, on reste muet tant que la page
+  // n'a rien reçu — le premier clic suffit, et le choix vaut pour la suite.
+  var gest = false;
+  ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
+    addEventListener(ev, function () { gest = true; }, { once: true, passive: true });
+  });
+  function son() { return LS.get("son", false) === true; }
+
   // POPUP THÉÂTRE (overlay NON-modal → le scroll passe, donc « bouge = dépopup »).
-  // Reste sur un billet → ça pop et joue (muté). Bouge → depop + position sauvée.
+  // Reste sur un billet → ça pop et joue. Bouge → depop + position sauvée.
   var theater = document.createElement("div"); theater.className = "theater-pop"; theater.hidden = true; document.body.appendChild(theater);
   function popTheater(el) {
     if (!el || !el.dataset.embed) return;
@@ -56,12 +66,19 @@
     var slug = el.dataset.id, pos = LS.get("bpos:" + slug, 0);
     var title = el.querySelector(".title") ? el.querySelector(".title").textContent : "billet";
     theater.style.setProperty("--tone", COL[el.dataset.cat] || "#4db6d6");
-    // Le pop montre le PERMALIEN du billet (notre page : vidéo + commentaires +
-    // réactions) — le comportement « ouvrir ». Overlay non-modal → « bouge = dépop ».
     theater.innerHTML =
-      '<div class="tp tp-page"><a class="tx" href="/b/' + encodeURIComponent(slug) + '?t=' + Math.floor(pos) + '" title="ouvrir en pleine page">↗</a>'
-      + '<iframe class="tframe" src="/b/' + encodeURIComponent(slug) + '?embed=1&t=' + Math.floor(pos) + '" title="' + esc(title) + '"></iframe></div>';
+      '<div class="tp"><div class="tstage"><iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, !(son() && gest), pos) + '"></iframe></div>'
+      + '<div class="tbar"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
+      + '<span class="ttl">' + esc(title) + '</span>'
+      + '<button class="tsnd' + (son() ? " on" : "") + '" data-snd>' + (son() ? "🔊 son" : "🔇 muet") + '</button>'
+      + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div></div>';
     theater.hidden = false; playing = el; base = pos; t0 = performance.now();
+    theater.querySelector("[data-snd]").onclick = function () {
+      var v = !son(); LS.set("son", v);
+      var t = base + (performance.now() - t0) / 1000, ifr = theater.querySelector("iframe");
+      if (ifr) { ifr.src = embedSrc(el.dataset.embed, !v, t); base = t; t0 = performance.now(); }
+      this.textContent = v ? "🔊 son" : "🔇 muet"; this.classList.toggle("on", v);
+    };
   }
   function depopTheater() {
     if (playing) {
@@ -78,16 +95,12 @@
   function avatar(name, i) { return '<span class="av" style="background:' + PCOL[(i || 0) % PCOL.length] + '">' + esc((name || "?").slice(0, 1).toUpperCase()) + '</span>'; }
   function sel(slug) { try { return '.card[data-id="' + (window.CSS && CSS.escape ? CSS.escape(slug) : slug) + '"]'; } catch (e) { return null; } }
 
-  // Ligne de SOUS-TITRE (console) : linéaire, monospace, tronquée — le survol
-  // ouvre le popup avec le message entier.
   function mkComment(c, i) {
     var d = document.createElement("div"); d.className = "bub"; d.dataset.msg = c.msg || ""; d.dataset.who = c.who || ""; d.dataset.when = c.when || "";
-    d.innerHTML = '<span class="k">▸</span><span class="nm">' + esc(c.who) + '</span>'
-                + '<span class="msg">' + esc(c.msg) + '</span>'
-                + '<span class="tm">' + esc(c.when || "") + '</span>';
+    d.innerHTML = '<div class="who">' + avatar(c.who, i) + '<span class="nm">' + esc(c.who) + '</span><span class="tm">' + esc(c.when || "") + '</span></div><div class="msg">' + esc(c.msg) + '</div>';
     return d;
   }
-  function mkReact(emo) { var d = document.createElement("div"); d.className = "bub react"; d.innerHTML = '<span class="k">·</span><span class="emo">' + esc(emo) + '</span>'; return d; }
+  function mkReact(emo) { var d = document.createElement("div"); d.className = "bub react"; d.innerHTML = '<span class="emo">' + esc(emo) + '</span>'; return d; }
 
   function placeActivity() {
     if (!laneL) return;
@@ -194,8 +207,7 @@
   }
 
   function openSheetSlug(slug, card) {
-    // reprend la vidéo là où on l'avait laissée (#1268)
-    var url = "/b/" + encodeURIComponent(slug) + "?t=" + Math.floor(LS.get("bpos:" + slug, 0));
+    var url = "/b/" + encodeURIComponent(slug);
     var title = card && card.querySelector(".title") ? card.querySelector(".title").textContent : "billet";
     sheet.innerHTML = '<div class="sheet"><button class="x" data-close aria-label="Fermer">✕</button><iframe src="' + url + '" title="' + esc(title) + '"></iframe></div>';
     if (typeof sheet.showModal === "function") sheet.showModal(); else location.href = url;

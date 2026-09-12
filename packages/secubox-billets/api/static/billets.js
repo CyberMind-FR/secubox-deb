@@ -398,22 +398,3 @@
   }, { rootMargin: "600px 0px" });  // pré-charge avant d'atteindre le bas
   obs.observe(pager);
 })();
-
-// ── REPRISE DE LA VIDÉO À L'OUVERTURE D'UN BILLET (#1268) ───────────────────
-//
-// Le fil immersif mémorise où on en était (localStorage) et passe la seconde au
-// permalien via `?t=<sec>`. On réinjecte cette position dans l'embed pour que la
-// vidéo CONTINUE au lieu de repartir de zéro. PeerTube comme YouTube acceptent
-// tous deux le paramètre `start` (en secondes).
-(function () {
-  try {
-    var t = parseInt(new URLSearchParams(location.search).get("t") || "", 10);
-    if (!t || t < 2) return;
-    var ifr = document.querySelector(".embed iframe") || document.querySelector(".prev iframe");
-    if (!ifr || !ifr.src) return;
-    var s = ifr.src;
-    s = /[?&]start=/.test(s) ? s.replace(/([?&]start=)\d+/, "$1" + t)
-                             : s + (s.indexOf("?") >= 0 ? "&" : "?") + "start=" + t;
-    ifr.src = s;
-  } catch (e) {}
-})();

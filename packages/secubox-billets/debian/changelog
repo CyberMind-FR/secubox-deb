@@ -1,24 +1,27 @@
-secubox-billets (0.8.41-1~bookworm1) bookworm; urgency=medium
+secubox-billets (0.8.42-1~bookworm1) bookworm; urgency=medium
 
-  * #1268 — CHAT en SOUS-TITRES TV / overlay console : les messages ne sont plus
-    des bulles arrondies mais des LIGNES monospace tronquées (bande sombre
-    translucide, liseré de la tonalité, ombre de texte lisible partout) ; le
-    survol garde le popup du message entier. Réactions en ligne compacte.
-  * #1268 — la vidéo CONTINUE à l'ouverture d'un billet : le fil passe la position
-    mémorisée au permalien (?t=<sec>) et billets.js la réinjecte dans l'embed
-    (paramètre `start`, PeerTube comme YouTube). Vaut pour le popup dwell, le
-    bouton ouvrir et le clic sur une ligne de chat. assets ?v=im8 / billets.js v9.
+  * #1268 — RETOUR au fil de 0.8.39 : les changements de 0.8.40 (popup = permalien)
+    et 0.8.41 (chat en sous-titres dans les couloirs) sont annulés. Le fil retrouve
+    exactement le comportement validé : dwell = popup théâtre embed nu, mouvement =
+    dépopup, reprise de position, bulles dans les couloirs.
+  * #1268 — la VUE BILLET prend le look & feel du fil et la FORME du popup théâtre :
+    nouveau gabarit base_vue.html + vue.css/vue.js (immersif.css hérité mot pour mot
+    pour le masthead, les pastilles et l'écran). Un écran 16/9 en haut, l'embed qui
+    REPREND la position mémorisée par le fil (même clé bpos:<slug>), couche CRT
+    (balayage + vignette), bandeau façon barre du théâtre, corps en colonne de
+    lecture, galerie, réactions et partage au même grain.
+  * #1268 — messages et réactions en OVERLAY INTERACTIF par-dessus l'image : les
+    messages défilent en sous-titres monospace (survol = le message entier au
+    curseur, clic = la ligne dans la console en bas), les réactions poppent et
+    montent. Sans JS la liste complète reste rendue sous le billet.
+  * #1268 — le MUET n'est plus un bouton par lecture : c'est un CHOIX GLOBAL RETENU
+    (clé « son »), appliqué au fil comme à la vue billet, réversible dans les deux
+    sens ; le muet ne subsiste que tant que la page n'a pas été activée, l'autoplay
+    non-muté étant refusé sans geste.
+  * CSP : /b/ autorise Google Fonts pour les deux gabarits (la vue billet tire
+    Cinzel/Inter/JetBrains comme le fil).
 
- -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 16:50:00 +0200
-
-secubox-billets (0.8.40-1~bookworm1) bookworm; urgency=medium
-
-  * #1268 — le popup dwell montre désormais le PERMALIEN du billet (notre page :
-    vidéo + commentaires + réactions), en mode ?embed=1 (sans double chrome) — le
-    comportement « ouvrir » que l'utilisateur visait, en overlay non-modal (reste =
-    pop, bouge = dépop). Plus l'embed nu qui affichait la page peertube. ?v=im7.
-
- -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 16:10:00 +0200
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 18:40:00 +0200
 
 secubox-billets (0.8.39-1~bookworm1) bookworm; urgency=medium
 

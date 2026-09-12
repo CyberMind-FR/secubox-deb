@@ -464,17 +464,16 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
                             secure=(request.headers.get("x-forwarded-proto", request.url.scheme) == "https"),
                             max_age=31536000, path="/")
         # A self-hosted embed (Mastodon/PeerTube) needs its instance host in
-        # frame-src; add it for this page only. The communiqué look also needs
-        # Google Fonts in style-src/font-src (page-scoped relaxation).
-        is_comm = row["style"] == "communique"
+        # frame-src; add it for this page only. La vue billet a le look du fil
+        # immersif (#1268) : elle tire Cinzel/Inter/JetBrains de Google Fonts,
+        # comme le communiqué — d'où fonts=True pour les deux gabarits.
         extra_hosts: tuple[str, ...] = ()
         if row["embed_html"] and row["embed_url"]:
             from urllib.parse import urlparse
             host = urlparse(row["embed_url"]).hostname
             if host and not any(host == d or host.endswith("." + d) for d in _FRAME_HOSTS):
                 extra_hosts = (host,)
-        if extra_hosts or is_comm:
-            resp.headers["Content-Security-Policy"] = _csp(_frame_src(extra_hosts), fonts=is_comm)
+        resp.headers["Content-Security-Policy"] = _csp(_frame_src(extra_hosts), fonts=True)
         return resp
 
     async def _feed_rows() -> list[aiosqlite.Row]:

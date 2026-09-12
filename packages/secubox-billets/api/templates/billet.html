@@ -3,10 +3,15 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  #1268 — la vue billet est la MEME scène que le popup théâtre du fil : un écran
+  en haut, les messages et les réactions en sous-titres CRT PAR-DESSUS l'image,
+  interactifs (survol = message entier, clic = la console en bas). La liste
+  complète reste rendue sous le billet : sans JS, rien ne se perd.
 -->
 
-{% extends "base.html" %}
-{% block title %}{{ site_title }} — billet{% endblock %}
+{% extends "base_vue.html" %}
+{% block title %}{{ site_title }} — {{ billet.title or 'billet' }}{% endblock %}
 {% block head %}
 <link rel="canonical" href="/b/{{ billet.slug }}">
 {% if og %}
@@ -24,9 +29,55 @@
 {% if oembed_url %}<link rel="alternate" type="application/json+oembed" href="{{ oembed_url }}">{% endif %}
 {% endblock %}
 {% block content %}
-<article class="h-entry billet billet-full">
-  {% with b=billet %}{% include "_zani_stamp.html" %}{% endwith %}
-  <div class="e-content">{{ billet.body_html|safe }}</div>
+{%- set eu = billet.embed_url or '' -%}
+{%- set is_pt = billet.embed_is_video and 'peertube' in eu -%}
+{%- set is_yt = billet.embed_is_video and ('youtube' in eu or 'youtu.be' in eu) -%}
+{%- set prov = 'pt' if is_pt else ('yt' if is_yt else '') -%}
+{%- set cover = (billet.media | selectattr('thumb') | list | first) if billet.media else None -%}
+{%- set poster = ('/media/' ~ cover.thumb) if cover else (billet.poster or billet.embed_snapshot_url) -%}
+{%- set joue = billet.embed_html and billet.embed_is_video -%}
+
+<main class="vue-wrap">
+<article class="h-entry billet billet-full vue-billet" data-cat="{{ billet.cat }}" data-slug="{{ billet.slug }}">
+
+  <!-- L'ECRAN : identique à celui des cartes du fil, en grand. -->
+  <div class="vue-stage screen{{ '' if joue or poster else ' flat' }}" id="scene">
+    {% if prov %}<span class="provider {{ prov }}">{{ 'PeerTube · souverain' if is_pt else 'YouTube' }}</span>{% endif %}
+    {% if poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}
+    {% if joue %}<div class="frame live">{{ billet.embed_html|safe }}</div>
+    {% else %}<div class="glyph"><div class="play-badge">{{ '▶' if billet.embed_is_video else '✎' }}</div></div>{% endif %}
+
+    <!-- couche CRT : lignes de balayage + vignette, purement décorative -->
+    <div class="crt" aria-hidden="true"><span class="sl"></span><span class="vig"></span></div>
+
+    <!-- pops interactifs PAR-DESSUS l'image : réactions qui montent, sous-titres -->
+    <div class="pops" id="pops" aria-hidden="true"></div>
+    <div class="track" id="track" aria-label="Messages en sous-titres"></div>
+
+    <div class="osd">
+      {% if joue %}<button type="button" class="ob snd" data-act="snd" aria-pressed="false" title="Son">🔇 muet</button>{% endif %}
+      <button type="button" class="ob on" data-act="subs" aria-pressed="true" title="Afficher / masquer les sous-titres">▤ sous-titres</button>
+      <button type="button" class="ob" data-act="crt" aria-pressed="true" title="Effet CRT">▩ crt</button>
+      <span class="sep"></span>
+      <span class="cnt"><b id="nbc">{{ comments|length }}</b> messages</span>
+      <a class="ob go" href="#comments" title="Aller à la console">↓ console</a>
+    </div>
+  </div>
+
+  <!-- LE BANDEAU, comme la barre du popup théâtre -->
+  <header class="pin vue-pin">
+    <span class="chip"><span class="d"></span>{{ billet.cat }}</span>
+    <span class="ic" title="{{ 'communiqué' if billet.style=='communique' else ('vidéo' if billet.embed_is_video else 'billet') }}">{{ '📡' if billet.style=='communique' else ('🎬' if billet.embed_is_video else '📝') }}</span>
+    {% if billet.published_at %}<time class="date dt-published" datetime="{{ billet.published_at }}">{{ billet.published_at[:19]|replace('T',' ') }} UTC</time>{% endif %}
+    <h1 class="title">{{ billet.title or 'Billet' }}</h1>
+    {% if billet.ref_host %}<a class="ref-chip u-url" href="{{ billet.ref_url }}" target="_blank" rel="noopener nofollow ugc">↗ {{ billet.ref_host }}</a>{% endif %}
+  </header>
+
+  <div class="prose e-content">
+    {% with b=billet %}{% include "_zani_stamp.html" %}{% endwith %}
+    {{ billet.body_html|safe }}
+  </div>
+
   {# Galerie = IMAGES seules. L'audio/vidéo/pdf s'affiche EN LIGNE dans le corps
      (les refs /media/ y sont embarquées au rendu, #1094) : les remettre ici en
      ferait un doublon, et un <img> sur un mp4 casserait. #}
@@ -42,8 +93,11 @@
     {% endfor %}
   </div>
   {% endif %}
-  {% if billet.ref_host %}<a class="ref-chip u-url" href="{{ billet.ref_url }}" target="_blank" rel="noopener nofollow ugc">{{ billet.ref_host }}</a>{% endif %}
-  {% if billet.embed_html %}<div class="embed">{{ billet.embed_html|safe }}</div>{% endif %}
+
+  {# Un embed NON-video (mastodon, bsky, soundcloud…) ne va pas dans l'écran
+     16/9 : il garde sa hauteur propre, dans un panneau au même grain. #}
+  {% if billet.embed_html and not billet.embed_is_video %}<div class="embed vue-embed">{{ billet.embed_html|safe }}</div>{% endif %}
+
   {# OBJET MEDIA (#1227) : un embed VIDEO gagne les actions du Hall (voir dans le
      lecteur souverain, diffuser au parc), comme le BBS. billets.js relaie. #}
   {% if billet.embed_is_video and billet.embed_url %}
@@ -55,39 +109,48 @@
        title="Diffuser au parc (📡 direct)">📡 diffuser</a>
   </figcaption>
   {% endif %}
+
+  {% if reactions %}{% include "_reactions.html" %}{% endif %}
+
+  {% if billet.share %}
+    {% with share=billet.share, permalink=billet.permalink, title=billet.title %}{% include "_share_quick.html" %}{% endwith %}
+  {% endif %}
+
   <footer class="billet-meta">
-    {% if billet.published_at %}<time class="dt-published" datetime="{{ billet.published_at }}">{{ billet.published_at[:19]|replace('T',' ') }} UTC</time>{% endif %}
     <a class="u-url" href="/b/{{ billet.slug }}">permalien</a>
   </footer>
 </article>
-{% if reactions %}{% include "_reactions.html" %}{% endif %}
 
-{% if billet.share %}
-  {% with share=billet.share, permalink=billet.permalink, title=billet.title %}{% include "_share_quick.html" %}{% endwith %}
-{% endif %}
-
-<section id="comments" class="comments">
-  <h2>Commentaires</h2>
-  {% if flash == 'pending' %}<p class="note">Merci — votre commentaire est en attente de modération.</p>{% endif %}
-  {% if flash == 'ok' %}<p class="note">Commentaire publié.</p>{% endif %}
-  {% if flash == 'rate' %}<p class="note err">Trop de commentaires — réessayez plus tard.</p>{% endif %}
+<!-- LA CONSOLE : mêmes lignes que les sous-titres, en entier. -->
+<section id="comments" class="comments console">
+  <h2><span class="k">▸</span>console des messages</h2>
+  {% if flash == 'pending' %}<p class="note">Merci — votre message est en attente de modération.</p>{% endif %}
+  {% if flash == 'ok' %}<p class="note">Message publié.</p>{% endif %}
+  {% if flash == 'rate' %}<p class="note err">Trop de messages — réessayez plus tard.</p>{% endif %}
+  <div class="clines">
   {% for c in comments %}
-  <article class="comment">
-    <p class="c-meta"><strong>{{ c.author_name }}</strong>
-      <time datetime="{{ c.created_at }}">{{ c.created_at[:10] }}</time></p>
-    <p class="c-body">{{ c.body_html|safe }}</p>
-  </article>
-  {% else %}<p class="empty">Aucun commentaire pour l'instant.</p>{% endfor %}
+    <article class="comment cline" data-who="{{ c.author_name }}" data-when="{{ c.created_at[:16]|replace('T',' ') }}">
+      <span class="k">▸</span>
+      <span class="nm c-meta"><strong>{{ c.author_name }}</strong></span>
+      <span class="msg c-body">{{ c.body_html|safe }}</span>
+      <time class="tm" datetime="{{ c.created_at }}">{{ c.created_at[:10] }}</time>
+    </article>
+  {% else %}<p class="vide">— aucun message sur ce billet —</p>{% endfor %}
+  </div>
 
   <form method="post" action="/b/{{ billet.slug }}/comment" class="comment-form">
     <input type="hidden" name="csrf" value="{{ pcsrf }}">
     <input type="hidden" name="ts_token" value="{{ ts_token }}">
     <p class="hp"><label>Laissez ce champ vide
       <input name="website" tabindex="-1" autocomplete="off"></label></p>
-    <label>Nom<input name="author_name" required minlength="2" maxlength="40"></label>
-    <label>Email (optionnel, jamais affiché)<input name="author_email" type="email" maxlength="254"></label>
-    <label>Commentaire<textarea name="body" rows="4" required minlength="2" maxlength="2000"></textarea></label>
-    <button type="submit">Envoyer</button>
+    <div class="frow">
+      <label>Nom<input name="author_name" required minlength="2" maxlength="40"></label>
+      <label>Email (optionnel, jamais affiché)<input name="author_email" type="email" maxlength="254"></label>
+    </div>
+    <label>Message<textarea name="body" rows="3" required minlength="2" maxlength="2000"
+      placeholder="votre ligne passera en sous-titre sur l'écran…"></textarea></label>
+    <button type="submit">Envoyer ↗</button>
   </form>
 </section>
+</main>
 {% endblock %}
