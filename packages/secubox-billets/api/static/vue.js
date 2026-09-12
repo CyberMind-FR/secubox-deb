@@ -61,11 +61,20 @@
   }
 
   // ── OSD ───────────────────────────────────────────────────────────────────
+  // Les DEUX bascules sont retenues (#1268) : « crt » l'était, « sous-titres »
+  // repassait à « affiché » au rechargement — le guide d'utilisation promet les
+  // deux, et c'est le comportement attendu d'un réglage.
   var bSubs = scene && scene.querySelector('[data-act="subs"]');
-  if (bSubs) bSubs.addEventListener("click", function () {
-    var off = scene.classList.toggle("nosubs");
-    this.classList.toggle("on", !off); this.setAttribute("aria-pressed", off ? "false" : "true");
-  });
+  if (bSubs) {
+    var subsOff = LS.get("nosubs", false);
+    if (subsOff) scene.classList.add("nosubs");
+    bSubs.classList.toggle("on", !subsOff);
+    bSubs.setAttribute("aria-pressed", subsOff ? "false" : "true");
+    bSubs.addEventListener("click", function () {
+      var off = scene.classList.toggle("nosubs"); LS.set("nosubs", off);
+      this.classList.toggle("on", !off); this.setAttribute("aria-pressed", off ? "false" : "true");
+    });
+  }
   var bCrt = scene && scene.querySelector('[data-act="crt"]');
   if (bCrt) {
     bCrt.classList.toggle("on", !LS.get("nocrt", false));

@@ -1,3 +1,12 @@
+secubox-billets (0.8.56-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — la bascule « ▤ sous-titres » est RETENUE, comme « ▩ crt » l'était déjà.
+    Elle repassait à « affiché » à chaque rechargement : un réglage qu'on doit
+    reposer à chaque visite n'est pas un réglage. Le guide d'utilisation promet les
+    deux — c'est le code qui avait tort. vue ?v=v11.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 10:30:00 +0200
+
 secubox-billets (0.8.55-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — OUVRIR UN PERMALIEN REPREND EXACTEMENT OU ON EN ETAIT. La position
