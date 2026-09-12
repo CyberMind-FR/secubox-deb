@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LicenseRef-CMSD-1.0
    Vue billet (#1268) — la scène du popup théâtre, en grand :
      · l'embed reprend LA POSITION MEMORISEE par le fil (même clé bpos:<slug>) ;
-     · le SON est un choix GLOBAL retenu (clé « son »), pas un bouton par lecture ;
+     · ça joue AVEC le son — pas d'auto-muet, pas de bouton ;
      · les messages passent en SOUS-TITRES par-dessus l'image, interactifs
        (survol = le message entier au curseur, clic = la ligne dans la console) ;
      · les réactions POPPENT par-dessus l'image.
@@ -166,11 +166,10 @@
   // se rechargeait, l'embed repartait en autoplay SONORE — refusé sans geste —
   // et l'image restait figée jusqu'à un clic. On poste donc en arrière-plan :
   // la lecture n'est jamais interrompue, et la ligne envoyée passe aussitôt en
-  // sous-titre. Les jetons (csrf, anti-spam) sont EMPRUNTES au vrai formulaire :
-  // mêmes contrôles côté serveur, pas de seconde porte d'entrée.
-  var vrai = document.querySelector(".comment-form");
+  // sous-titre. La barre incrustée EST le formulaire de la page — elle porte les
+  // jetons (csrf, anti-spam, piège) et reste postable sans JS : rien n'est perdu
+  // pour un visiteur sans script, et il n'existe qu'une seule porte d'entrée.
   var clines = document.querySelector(".clines");
-  var nbc = document.getElementById("nbc");
   var ETATS = {
     ok: "publié", pending: "en attente de modération", slow: "trop vite — réessayez",
     rate: "trop de messages — patientez", bad: "refusé (2 à 2000 caractères)",
@@ -180,18 +179,23 @@
   function ajouteConsole(qui, texte, attente) {
     if (!clines) return;
     var vide = clines.querySelector(".vide"); if (vide) vide.remove();
-    var a = document.createElement("article");
-    a.className = "comment cline vu"; a.dataset.who = qui; a.dataset.when = "à l'instant";
-    a.innerHTML = '<span class="k">▸</span><span class="nm c-meta"><strong>' + esc(qui) + '</strong></span>'
+    var n = clines.querySelectorAll(".cline").length + 1;
+    var li = document.createElement("li");
+    li.className = "comment cline vu"; li.dataset.who = qui; li.dataset.when = "à l'instant";
+    li.innerHTML = '<span class="ix">' + (n < 10 ? "0" + n : n) + '</span>'
+      + '<span class="nm c-meta"><strong>' + esc(qui) + '</strong></span>'
       + '<span class="msg c-body">' + esc(texte) + '</span>'
       + '<time class="tm">' + (attente ? "en attente" : "à l'instant") + '</time>';
-    clines.appendChild(a);
-    if (nbc && !attente) nbc.textContent = (parseInt(nbc.textContent, 10) || 0) + 1;
+    clines.appendChild(li);
+    if (!attente) [].forEach.call(document.querySelectorAll(".nbc"), function (b) {
+      b.textContent = (parseInt(b.textContent, 10) || 0) + 1;
+    });
   }
 
   function envoyer(nom, texte, dire) {
-    if (!vrai) { dire("indisponible", true); return Promise.resolve(false); }
-    var c = vrai.querySelector('[name="csrf"]'), t = vrai.querySelector('[name="ts_token"]');
+    var f = document.getElementById("msgbox");
+    if (!f) { dire("indisponible", true); return Promise.resolve(false); }
+    var c = f.querySelector('[name="csrf"]'), t = f.querySelector('[name="ts_token"]');
     var fd = new FormData();
     fd.append("csrf", c ? c.value : ""); fd.append("ts_token", t ? t.value : "");
     fd.append("website", ""); fd.append("author_name", nom); fd.append("body", texte);
@@ -221,6 +225,8 @@
     }
     mb.addEventListener("submit", function (e) {
       e.preventDefault();
+      var piege = mb.querySelector('[name="website"]');
+      if (piege && piege.value) return;            /* piège rempli : on laisse filer */
       var n = (qui.value || "").trim(), m = (quoi.value || "").trim();
       if (n.length < 2) { dire("votre nom, d'abord", true); qui.focus(); return; }
       if (m.length < 2) { quoi.focus(); return; }
@@ -238,25 +244,4 @@
     });
   }
 
-  // le formulaire de la console : même chemin, pour la même raison
-  if (vrai) vrai.addEventListener("submit", function (e) {
-    var n = vrai.querySelector('[name="author_name"]'), b = vrai.querySelector('[name="body"]');
-    var hp = vrai.querySelector('[name="website"]');
-    if (!n || !b || (hp && hp.value)) return;               /* piège rempli : chemin normal */
-    e.preventDefault();
-    var bouton = vrai.querySelector('button[type="submit"]');
-    if (bouton) bouton.disabled = true;
-    LS.set("nom", (n.value || "").trim());
-    envoyer((n.value || "").trim(), (b.value || "").trim(), function (txt, err) {
-      var note = vrai.parentNode.querySelector(".note.envoi");
-      if (!note) {
-        note = document.createElement("p"); note.className = "note envoi";
-        vrai.parentNode.insertBefore(note, vrai);
-      }
-      note.textContent = txt; note.classList.toggle("err", !!err);
-    }).then(function (ok) {
-      if (bouton) bouton.disabled = false;
-      if (ok) b.value = "";
-    });
-  });
 })();

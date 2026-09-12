@@ -170,41 +170,46 @@
 .billet-meta{margin-top:18px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .billet-meta a:hover{color:var(--dim)}
 
-/* ── LA CONSOLE : les mêmes lignes, en entier ──────────────────────────────── */
+/* ── LA CONSOLE : le relevé des lignes, en entier ──────────────────────────── */
 .console{max-width:840px;margin:44px auto 0;background:linear-gradient(180deg,var(--panel),var(--panel-2));
-  border:1px solid var(--edge);border-radius:16px;padding:18px 20px 22px;box-shadow:var(--lift);position:relative;overflow:hidden}
-.console::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  border:1px solid var(--edge);border-radius:16px;padding:0 0 4px;box-shadow:var(--lift);position:relative;overflow:hidden}
+.console::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.45;
   background:repeating-linear-gradient(180deg,rgba(255,255,255,.016) 0 1px,transparent 1px 3px)}
-.console h2{font-family:var(--mono);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;
-  color:var(--dim);margin:0 0 14px;display:flex;align-items:center;gap:8px;font-weight:500}
-.console h2 .k{color:var(--tone)}
-.clines{display:flex;flex-direction:column;gap:4px}
-.cline{display:flex;align-items:baseline;gap:9px;font-family:var(--mono);font-size:12.5px;line-height:1.55;
-  background:rgba(6,10,15,.4);border-left:2px solid var(--tone);border-radius:0 6px 6px 0;padding:7px 12px;transition:.15s}
-.cline:hover,.cline.vu{background:rgba(12,19,28,.82);border-left-color:var(--gold)}
-.cline .k{color:var(--tone);opacity:.8;flex:none}
-.cline .nm strong{color:#eaf1f6;font-weight:600;font-size:11.5px}
-.cline .msg{color:#c9d5df;flex:1;min-width:0}
-.cline .msg p{margin:0} .cline .msg a{color:var(--tone)}
-.cline .tm{color:var(--faint);font-size:9.5px;flex:none;font-variant-numeric:tabular-nums}
-.console .vide{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center;padding:22px 0;letter-spacing:.06em}
-.console .note{font-family:var(--mono);font-size:11px;color:var(--green);border:1px solid color-mix(in srgb,var(--green) 35%,var(--edge));
-  border-radius:8px;padding:8px 12px;margin:0 0 12px}
-.console .note.err{color:var(--coral);border-color:color-mix(in srgb,var(--coral) 40%,var(--edge))}
+.console::after{content:"";position:absolute;left:0;top:0;height:2px;width:100%;background:var(--tone);opacity:.75}
 
-.comment-form{margin-top:20px;padding-top:18px;border-top:1px solid var(--edge);display:flex;flex-direction:column;gap:11px}
-.comment-form .frow{display:flex;gap:11px;flex-wrap:wrap}
-.comment-form .frow label{flex:1;min-width:200px}
-.comment-form label{display:flex;flex-direction:column;gap:5px;font-family:var(--mono);font-size:9.5px;
-  letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
-.comment-form input,.comment-form textarea{font-family:var(--body);font-size:14px;color:var(--tx);
-  background:rgba(5,8,12,.6);border:1px solid var(--edge);border-radius:9px;padding:9px 12px;transition:.15s;resize:vertical}
-.comment-form input:focus,.comment-form textarea:focus{outline:none;border-color:var(--gold);
-  box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 16%,transparent)}
-.comment-form textarea::placeholder{color:var(--faint);font-family:var(--mono);font-size:12px}
-.comment-form button{align-self:flex-start;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--ink);background:var(--gold);border:0;border-radius:999px;padding:9px 20px;cursor:pointer;transition:.15s}
-.comment-form button:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.chead{position:relative;display:flex;align-items:center;gap:10px;padding:14px 20px 12px;
+  border-bottom:1px solid var(--edge);font-family:var(--mono)}
+.chead .k{color:var(--tone)}
+.chead h2{font:inherit;font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--dim);margin:0;font-weight:500}
+.chead .cnum{font-size:10px;letter-spacing:.14em;color:var(--faint);margin-left:2px}
+.chead .cnum b{color:var(--tx);font-variant-numeric:tabular-nums}
+.chead .clive{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:9px;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--faint)}
+.chead .clive i{width:6px;height:6px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 0 3px rgba(95,185,143,.14);animation:battement 2.4s ease-in-out infinite}
+@keyframes battement{0%,100%{opacity:1}50%{opacity:.35}}
+
+.clines{position:relative;list-style:none;margin:0;padding:8px 0;display:flex;flex-direction:column}
+.cline{display:flex;align-items:baseline;gap:11px;font-family:var(--mono);font-size:12.5px;line-height:1.6;
+  padding:8px 20px;border-left:2px solid transparent;transition:background .15s,border-color .15s}
+.cline:nth-child(odd){background:rgba(255,255,255,.014)}
+.cline:hover,.cline.vu{background:rgba(12,19,28,.9);border-left-color:var(--gold)}
+.cline .ix{flex:none;color:var(--faint);font-size:9.5px;font-variant-numeric:tabular-nums;letter-spacing:.06em}
+.cline:hover .ix,.cline.vu .ix{color:var(--gold)}
+.cline .nm{flex:none}
+.cline .nm strong{color:var(--tone);font-weight:600;font-size:11.5px;letter-spacing:.02em}
+.cline .msg{color:#ccd7e1;flex:1;min-width:0}
+.cline .msg p{margin:0} .cline .msg a{color:var(--gold);text-decoration:underline;text-underline-offset:2px}
+.cline .tm{color:var(--faint);font-size:9.5px;flex:none;font-variant-numeric:tabular-nums}
+.console .vide{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11.5px;
+  color:var(--faint);padding:24px 20px;letter-spacing:.04em}
+.console .vide .k{color:var(--tone);opacity:.6}
+.console .note{position:relative;font-family:var(--mono);font-size:11px;color:var(--green);
+  border-left:2px solid var(--green);background:rgba(95,185,143,.07);padding:9px 20px;margin:0}
+.console .note.err{color:var(--coral);border-left-color:var(--coral);background:rgba(232,131,107,.07)}
+.cfoot{position:relative;display:flex;align-items:center;gap:9px;margin:0;padding:12px 20px 14px;
+  border-top:1px solid var(--edge);font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--faint)}
+.cfoot .fk{color:var(--gold);font-size:12px}
 .hp{position:absolute;left:-9999px}
 
 .vue-foot{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
