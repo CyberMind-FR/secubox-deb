@@ -22,7 +22,7 @@ CONF_PATH="${SECUBOX_HAPROXY_CONF:-/etc/secubox/haproxy.toml}"
 # Qui a le droit d'encadrer un vhost marque `cadrable = true` (#1257).
 # EXPLICITE et surchargeable : `*` accepterait n'importe quel site, ce qui est
 # l'attaque meme que frame-ancestors existe pour empecher.
-CADRE_ANCETRES="${SECUBOX_FRAME_ANCESTORS:-'self' https://hall.gk2.secubox.in https://hall.gk2.net}"
+CADRE_ANCETRES="${SECUBOX_FRAME_ANCESTORS:-'self' https://hall.gk2.secubox.in https://hall.gk2.net https://billets.gk2.secubox.in}"
 CONFIG_DIR="${SECUBOX_HAPROXY_CONFIG_DIR:-/etc/haproxy}"
 CERTS_DIR="$DATA_PATH/certs"
 # Operator-managed extra frontends/backends (webui-lan, gitea-ssh, custom
