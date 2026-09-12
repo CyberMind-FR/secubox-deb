@@ -1,3 +1,17 @@
+secubox-billets (0.8.58-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — AUTOPOP AUSSI POUR LES IMAGES. Rester sur une carte faisait poper le
+    théâtre uniquement si elle portait une vidéo ; une carte image ne faisait rien,
+    alors que rien ne le justifiait — le théâtre sait montrer une image aussi bien
+    qu'un lecteur, et l'incrustation (sous-titres, réactions, saisie) n'a jamais
+    rien eu de spécifique à la vidéo. Le dwell et le clic sur l'écran valent
+    désormais pour les deux.
+  * #1268 — l'image y est montrée ENTIERE (contain), jamais rognée : on la regarde,
+    on ne la cadre pas. Et rien n'est retenu comme position de lecture pour une
+    image — `bpos` reste une notion de vidéo. assets ?v=im17.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 11:40:00 +0200
+
 secubox-billets (0.8.57-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — LES IMAGES S'AGRANDISSENT DANS LA VUE BILLET. Deux trous distincts :

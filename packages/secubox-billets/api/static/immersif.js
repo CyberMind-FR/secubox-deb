@@ -54,14 +54,21 @@
   // Reste sur un billet → ça pop et joue. Bouge → depop + position sauvée.
   var theater = document.createElement("div"); theater.className = "theater-pop"; theater.hidden = true; document.body.appendChild(theater);
   function popTheater(el) {
-    if (!el || !el.dataset.embed) return;
+    // AUTOPOP AUSSI POUR LES IMAGES (#1268) : une carte sans vidéo ne popait
+    // pas, alors que rien ne le justifiait — le théâtre sait montrer une image
+    // aussi bien qu'un lecteur, et l'incrustation (messages, réactions, saisie)
+    // n'a jamais rien eu de spécifique à la vidéo.
+    if (!el || !(el.dataset.embed || el.dataset.img)) return;
     if (playing === el && !theater.hidden) return;
     if (playing) depopTheater();
     var slug = el.dataset.id, pos = LS.get("bpos:" + slug, 0);
     var title = el.querySelector(".title") ? el.querySelector(".title").textContent : "billet";
     theater.style.setProperty("--tone", COL[el.dataset.cat] || "#4db6d6");
     theater.innerHTML =
-      '<div class="tp"><div class="tstage"><iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, false, pos) + '"></iframe>'
+      '<div class="tp"><div class="tstage">'
+      + (el.dataset.embed
+         ? '<iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, false, pos) + '"></iframe>'
+         : '<img class="timg" src="' + el.dataset.img + '" alt="">')
       + '<div class="tinc"><div class="tsub"></div><div class="tlk"></div></div></div>'
       + '<div class="tbar"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
       + '<span class="ttl">' + esc(title) + '</span>'
@@ -197,7 +204,7 @@
   // reprenait donc à la dernière position dépopée — souvent zéro. On la retient
   // aussi en partant, en masquant l'onglet, et régulièrement pendant la lecture.
   function retiens() {
-    if (!playing || theater.hidden) return;
+    if (!playing || theater.hidden || !playing.dataset.embed) return;
     var t = base + (performance.now() - t0) / 1000;
     LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
   }
@@ -215,7 +222,7 @@
   function depopTheater() {
     clearInterval(subTimer); subTimer = null;
     clearInterval(ancreTimer); ancreTimer = null;
-    if (playing) {
+    if (playing && playing.dataset.embed) {
       var t = base + (performance.now() - t0) / 1000;
       LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
       var seen = playing.querySelector(".seen"); if (seen) seen.style.width = Math.min(100, t / 3) + "%";
@@ -329,7 +336,7 @@
     depopTheater();                    // bouge → dépopup (overlay non-modal, le scroll passe)
     if (!_spend) { _spend = true; requestAnimationFrame(function () { _spend = false; var c = nearestCard(); if (c) activate(c); else if (active) drawLinks(active); }); }
     clearTimeout(dwellT);
-    dwellT = setTimeout(function () { if (active && active.dataset.embed) popTheater(active); }, 480);  // reste → popup théâtre
+    dwellT = setTimeout(function () { if (active && (active.dataset.embed || active.dataset.img)) popTheater(active); }, 480);  // reste → popup théâtre
   }
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("wheel", onScroll, { passive: true });
@@ -340,7 +347,7 @@
     var btn = e.target.closest("[data-open],[data-comment]");
     if (btn) { e.preventDefault(); openSheet(btn.closest(".card"), !!e.target.closest("[data-comment]")); return; }
     var scr = e.target.closest("[data-play]");
-    if (scr) { var c = scr.closest(".card"); if (c && c.dataset.embed) { e.preventDefault(); activate(c); popTheater(c); } }
+    if (scr) { var c = scr.closest(".card"); if (c && (c.dataset.embed || c.dataset.img)) { e.preventDefault(); activate(c); popTheater(c); } }
   });
   // clic dans un lane → ouvrir le billet concerné
   [laneL, laneR].forEach(function (ln) {

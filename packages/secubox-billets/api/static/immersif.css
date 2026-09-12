@@ -228,6 +228,8 @@ html.reveal .card.in{opacity:1;transform:none;
 @keyframes tpop{to{transform:none}}
 .tstage{aspect-ratio:16/9;background:#05080c;position:relative}
 .tstage iframe{width:100%;height:100%;border:0;display:block}
+/* une IMAGE au théâtre : entière, jamais rognée — on la regarde, on ne la cadre pas */
+.tstage .timg{width:100%;height:100%;object-fit:contain;display:block;background:#05080c}
 /* INCRUSTATION : likes + une ligne de conversation, en bas de l'image, façon
    sous-titres TV. `pointer-events:none` est OBLIGATOIRE — dans le théâtre,
    bouger la souris dépopupe ; rien ici ne doit intercepter le pointeur. */
