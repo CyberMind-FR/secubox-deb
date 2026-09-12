@@ -34,11 +34,11 @@
       {%- elif ext == 'pdf' %}{% set ns.p = true %}{% endif %}{% endfor %}{% endif %}
     <a class="ccard" role="listitem" data-k="{{ 'communique' if b.style == 'communique' else 'billet' }}" href="/b/{{ b.slug }}">
       {% if cover %}<span class="cccover"><img src="/media/{{ cover.thumb }}" alt="{{ cover.alt }}" loading="lazy"></span>
-      {%- elif b.embed_snapshot_url %}<span class="cccover"><img src="{{ b.embed_snapshot_url }}" alt="" loading="lazy"></span>
-      {%- elif ns.v %}<span class="cccover vid"></span>
-      {%- elif ns.a %}<span class="cccover aud"></span>
-      {%- elif ns.p %}<span class="cccover doc"></span>
-      {%- elif b.ref_host %}<span class="cccover link"></span>{% endif %}
+      {%- elif b.poster %}<span class="cccover"><img src="{{ b.poster }}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>
+      {%- elif ns.v %}<span class="cccover ph vid" data-glyph="▶"></span>
+      {%- elif ns.a %}<span class="cccover ph aud" data-glyph="🎵"></span>
+      {%- elif ns.p %}<span class="cccover ph doc" data-glyph="📄"></span>
+      {%- else %}<span class="cccover ph link" data-glyph="🔗"></span>{% endif %}
       <div class="ccbody">
         <div class="cctop"><span class="ccic">{{ '📡' if b.style == 'communique' else '📝' }}</span><span class="cctype">{{ 'communiqué' if b.style == 'communique' else 'billet' }}</span>
           {% if ns.v or ns.a or ns.p %}<span class="ccmed">{% if ns.v %}🎬{% endif %}{% if ns.a %}🎵{% endif %}{% if ns.p %}📄{% endif %}</span>{% endif %}
