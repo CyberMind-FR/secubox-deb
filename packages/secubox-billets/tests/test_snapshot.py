@@ -143,3 +143,28 @@ def test_peertube_preview_swallows_errors():
     c = httpx.Client(transport=httpx.MockTransport(handler))
     assert snapshot._peertube_preview_bytes(
         "https://peertube.gk2.secubox.in/w/AbC123-xyz", client=c) is None
+
+
+def test_youtube_thumb_fallback(monkeypatch):
+    """maxres absent (petit placeholder) → bascule sur sddefault."""
+    calls = []
+
+    def fake(url, *, client, resolver):
+        calls.append(url)
+        if "maxresdefault" in url:
+            return b"x" * 100          # < 1500 → ignoré (pixel gris de YouTube)
+        return b"y" * 3000
+
+    monkeypatch.setattr(snapshot, "_fetch_public_bytes", fake)
+    out = snapshot._youtube_thumb_bytes(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ", client=object(), resolver=None)
+    assert out == b"y" * 3000
+    assert any("maxresdefault" in u for u in calls)
+    assert any("sddefault" in u for u in calls)
+
+
+def test_youtube_thumb_none_for_non_youtube(monkeypatch):
+    monkeypatch.setattr(snapshot, "_fetch_public_bytes",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no fetch")))
+    assert snapshot._youtube_thumb_bytes(
+        "https://peertube.gk2.secubox.in/w/abc", client=None, resolver=None) is None

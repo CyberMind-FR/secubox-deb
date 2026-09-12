@@ -48,6 +48,36 @@ _PT_VIDEO = re.compile(r"//([^/]+)/(?:w|videos/(?:watch|embed))/([0-9A-Za-z-]+)"
 _PT_HOST = os.environ.get("BILLETS_PEERTUBE_HOST", "peertube.gk2.secubox.in").lower()
 
 
+# Miniature YouTube déterministe (i.ytimg est un hôte PUBLIC : le garde SSRF
+# « IP publique » l'accepte). Récupérée UNE fois côté serveur puis stockée en
+# /media → le navigateur ne contacte jamais Google (#1268).
+_YT_ID = re.compile(r"(?:youtu\.be/|[?&]v=|/embed/|/vi/)([A-Za-z0-9_-]{11})")
+
+
+def _youtube_thumb_bytes(url: str | None, *, client, resolver) -> bytes | None:
+    """Miniature d'une vidéo YouTube (maxres → sd → hq) via i.ytimg, SSRF-gardée.
+    None si l'URL ne porte pas d'identifiant YouTube ou si rien n'est récupérable."""
+    m = _YT_ID.search(url or "")
+    if not m:
+        return None
+    vid = m.group(1)
+    own = client is None
+    c = client or httpx.Client(headers={"user-agent": "billets/0.1 (+secubox)"})
+    try:
+        for q in ("maxresdefault", "sddefault", "hqdefault"):
+            try:
+                data = _fetch_public_bytes(
+                    f"https://i.ytimg.com/vi/{vid}/{q}.jpg", client=c, resolver=resolver)
+                if len(data) > 1500:   # une 404 « pas de maxres » renvoie un pixel gris
+                    return data
+            except (ssrf.SSRFError, httpx.HTTPError, OSError):
+                continue
+        return None
+    finally:
+        if own:
+            c.close()
+
+
 def _peertube_preview_bytes(embed_url: str | None, *, client, resolver=None) -> bytes | None:
     """Vignette (preview) d'une vidéo PeerTube du parc, via son API — poster
     SOUVERAIN, sans navigateur (#1268). None si l'embed ne vise pas l'hôte
@@ -192,6 +222,10 @@ def capture(embed_url: str, og_image_url: str | None, media_id: str, *,
     # PeerTube self-hosted d'abord : sa vignette officielle (API) est souveraine
     # et gratuite — ni navigateur, ni og:image d'un tiers (#1268).
     raw = _peertube_preview_bytes(embed_url, client=client, resolver=resolver)
+    # YouTube-direct : sa miniature (i.ytimg), récupérée côté serveur et stockée
+    # localement → plus de requête i.ytimg depuis le navigateur (#1268).
+    if raw is None:
+        raw = _youtube_thumb_bytes(embed_url, client=client, resolver=resolver)
     if raw is None and _browser_enabled(enable_browser):
         raw = _screenshot_via_browser(embed_url, resolver=resolver)
     if raw is None and og_image_url:
