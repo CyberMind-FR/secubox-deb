@@ -1,3 +1,12 @@
+secubox-billets (0.8.37-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — fil immersif, VIE : révélation animée des cartes au scroll (fade+rise,
+    repli visible sans IntersectionObserver), Ken-Burns lent sur le poster du
+    billet actif, pulsation du ▶, respiration des pastilles catégorie, flux des
+    connecteurs, transitions des bulles. Respecte prefers-reduced-motion. ?v=im5.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 14:40:00 +0200
+
 secubox-billets (0.8.36-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — fil immersif : Cache-Control no-cache sur / (le navigateur ne sert

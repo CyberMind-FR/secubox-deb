@@ -221,7 +221,7 @@
       .then(function (r) { if (!r.ok) throw 0; return r.json(); })
       .then(function (d) {
         if (d.html) { var tmp = document.createElement("div"); tmp.innerHTML = d.html; while (tmp.firstChild) feed.appendChild(tmp.firstChild); }
-        echecs = 0; applyFilter(); placeActivity(); onScroll();
+        echecs = 0; applyFilter(); observeCards(); placeActivity(); onScroll();
         if (d.next_cursor) pager.setAttribute("data-cursor", d.next_cursor); else stopScroll();
       }).catch(function () { if (++echecs >= 3 && obs) obs.disconnect(); })
       .then(function () { loading = false; if (loader) loader.hidden = true; });
@@ -230,6 +230,17 @@
     obs = new IntersectionObserver(function (es) { if (es.some(function (e) { return e.isIntersecting; })) loadMore(); }, { rootMargin: "800px 0px" });
     obs.observe(pager);
   }
+
+  // révélation animée des cartes (repli : si pas d'IO, tout est visible)
+  document.documentElement.classList.add("reveal");
+  var revObs = ("IntersectionObserver" in window)
+    ? new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); revObs.unobserve(e.target); } }); }, { rootMargin: "0px 0px -6% 0px" })
+    : null;
+  function observeCards() {
+    if (!revObs) { [].forEach.call(feed.querySelectorAll(".card"), function (c) { c.classList.add("in"); }); return; }
+    [].forEach.call(feed.querySelectorAll(".card:not(.in)"), function (c) { revObs.observe(c); });
+  }
+  observeCards();
 
   loadActivity();
   setInterval(loadActivity, 45000);   // le flux reste vivant

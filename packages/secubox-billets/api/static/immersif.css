@@ -192,3 +192,25 @@ dialog::backdrop{background:rgba(4,7,11,.72);backdrop-filter:blur(6px)}
   .film .bars,.scan,.loading .sp{animation:none}
   .card,.frame,.glyph{transition:none}
 }
+
+/* ── VIE & micro-animations (#1268) — sûres : sans la classe .reveal (posée par
+   le JS), tout reste visible ─────────────────────────────────────────────── */
+html.reveal .card{opacity:0;transform:translateY(16px)}
+html.reveal .card.in{opacity:1;transform:none;
+  transition:opacity .5s ease, transform .55s cubic-bezier(.2,.7,.2,1), border-color .25s, box-shadow .25s}
+.card.on .poster{animation:kenburns 16s ease-out both}
+@keyframes kenburns{from{transform:scale(1.001)}to{transform:scale(1.08)}}
+.card.on .play-badge{animation:badgepulse 2.4s ease-in-out infinite}
+@keyframes badgepulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07);box-shadow:0 10px 40px color-mix(in srgb,var(--tone) 45%,transparent)}}
+.chip .d{animation:dotbreathe 3s ease-in-out infinite}
+@keyframes dotbreathe{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35)}}
+.card.on::after{animation:topbar 2.6s ease-in-out infinite}
+@keyframes topbar{0%,100%{opacity:.75}50%{opacity:1}}
+.link-svg path{animation:dashflow 20s linear infinite}
+@keyframes dashflow{to{stroke-dashoffset:-240}}
+.grp.hot .bub{transform:translateX(2px)}
+.bub{transition:border-color .18s, box-shadow .18s, transform .18s}
+@media (prefers-reduced-motion: reduce){
+  html.reveal .card{opacity:1;transform:none}
+  .card.on .poster,.card.on .play-badge,.chip .d,.card.on::after,.link-svg path{animation:none}
+}
