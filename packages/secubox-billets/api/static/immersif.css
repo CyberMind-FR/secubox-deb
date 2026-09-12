@@ -214,3 +214,24 @@ html.reveal .card.in{opacity:1;transform:none;
   html.reveal .card{opacity:1;transform:none}
   .card.on .poster,.card.on .play-badge,.chip .d,.card.on::after,.link-svg path{animation:none}
 }
+
+/* ── POPUP THÉÂTRE (overlay non-modal : dwell → pop, mouvement → depop) ────── */
+.theater-pop{position:fixed;inset:0;z-index:70;display:grid;place-items:center;pointer-events:none;padding:20px}
+.theater-pop[hidden]{display:none}
+.theater-pop::before{content:"";position:absolute;inset:0;background:rgba(4,7,11,.5);backdrop-filter:blur(3px);
+  opacity:0;animation:tfade .18s ease forwards}
+@keyframes tfade{to{opacity:1}}
+.tp{position:relative;width:min(1000px,94vw);pointer-events:auto;border:1px solid var(--edge-2);border-radius:18px;overflow:hidden;
+  background:linear-gradient(180deg,var(--panel),var(--panel-2));
+  box-shadow:0 40px 90px -20px rgba(0,0,0,.9),0 0 0 1px color-mix(in srgb,var(--tone,#4db6d6) 32%,transparent);
+  transform:translateY(10px) scale(.985);animation:tpop .26s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes tpop{to{transform:none}}
+.tstage{aspect-ratio:16/9;background:#05080c}
+.tstage iframe{width:100%;height:100%;border:0;display:block}
+.tbar{display:flex;align-items:center;gap:12px;padding:10px 14px}
+.tbar .chip{color:var(--tone,#4db6d6)}
+.tbar .ttl{font-family:var(--serif);font-size:15px;color:#eef3f7;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tsnd{font-family:var(--mono);font-size:11px;color:#0b1016;background:var(--gold);border:none;border-radius:999px;padding:6px 13px;cursor:pointer;font-weight:600}
+.topen{font-family:var(--mono);font-size:14px;color:var(--dim);border:1px solid var(--edge);border-radius:999px;padding:4px 11px}
+.topen:hover{color:var(--tx);border-color:var(--edge-2)}
+@media(prefers-reduced-motion:reduce){.theater-pop::before,.tp{animation:none}}

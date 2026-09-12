@@ -37,38 +37,45 @@
     if (active === el) { active = null; clearLinks(); highlight(null, false); }
   }
 
-  // ── clic sur l'écran = FORCE la lecture (autoplay, geste → son) ─
-  function playableSrc(embed) {
-    var m = embed.match(/(?:youtu\.be\/|[?&]v=|\/embed\/)([A-Za-z0-9_-]{11})/);
-    if (m && /youtu/.test(embed)) return "https://www.youtube-nocookie.com/embed/" + m[1] + "?rel=0";
+  // Embed NU (sans chrome peertube), muté/non, à une position — /w/ & /watch → /embed.
+  function embedSrc(embed, muted, start) {
+    start = Math.floor(start || 0); var mm = muted ? 1 : 0;
+    var y = (embed.match(/(?:youtu\.be\/|[?&]v=|\/embed\/)([A-Za-z0-9_-]{11})/) || [])[1];
+    if (/youtu/.test(embed) && y) return "https://www.youtube-nocookie.com/embed/" + y + "?rel=0&playsinline=1&autoplay=1&mute=" + mm + "&start=" + start;
+    var p = embed.match(/(https?:\/\/[^/]+)\/(?:w|videos\/(?:watch|embed))\/([0-9A-Za-z-]+)/);
+    if (p) return p[1] + "/videos/embed/" + p[2] + "?autoplay=1&muted=" + mm + "&title=0&warningTitle=0&peertubeLink=0&p2p=0&controls=1&start=" + start;
     return embed;
   }
-  // CLIC = LECTEUR DIRECT (mode théâtre) : grand, l'embed joue tout de suite,
-  // avec le son (le clic est un geste). Pas le petit player inline.
-  function openPlayer(el) {
-    var embed = el.dataset.embed; if (!embed) return;
+  // POPUP THÉÂTRE (overlay NON-modal → le scroll passe, donc « bouge = dépopup »).
+  // Reste sur un billet → ça pop et joue (muté). Bouge → depop + position sauvée.
+  var theater = document.createElement("div"); theater.className = "theater-pop"; theater.hidden = true; document.body.appendChild(theater);
+  function popTheater(el) {
+    if (!el || !el.dataset.embed) return;
+    if (playing === el && !theater.hidden) return;
+    if (playing) depopTheater();
     var slug = el.dataset.id, pos = LS.get("bpos:" + slug, 0);
-    var src = playableSrc(embed);
-    src += (src.indexOf("?") >= 0 ? "&" : "?") + "autoplay=1&muted=0&start=" + Math.floor(pos);
     var title = el.querySelector(".title") ? el.querySelector(".title").textContent : "billet";
-    var col = COL[el.dataset.cat] || "#4db6d6";
-    sheet.innerHTML =
-      '<div class="sheet player" style="--tone:' + col + '"><button class="x" data-close aria-label="Fermer">✕</button>'
-      + '<div class="theater"><iframe allow="autoplay; fullscreen; encrypted-media; picture-in-picture" src="' + src + '"></iframe></div>'
-      + '<div class="pin"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
-      + '<h2>' + esc(title) + '</h2>'
-      + '<a class="act open" href="/b/' + encodeURIComponent(slug) + '">page & commentaires ↗</a></div></div>';
-    var started = performance.now();
-    if (sheet && typeof sheet.showModal === "function") { sheet.showModal(); }
-    else { location.href = "/b/" + encodeURIComponent(slug); return; }  // jamais vers la source
-    function close() {
-      LS.set("bpos:" + slug, Math.max(0, Math.floor(pos + (performance.now() - started) / 1000)));
-      var seen = el.querySelector(".seen"); if (seen) seen.style.width = Math.max(seen.offsetWidth ? parseFloat(seen.style.width) || 0 : 0, 30) + "%";
-      sheet.close();
+    theater.style.setProperty("--tone", COL[el.dataset.cat] || "#4db6d6");
+    theater.innerHTML =
+      '<div class="tp"><div class="tstage"><iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, true, pos) + '"></iframe></div>'
+      + '<div class="tbar"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
+      + '<span class="ttl">' + esc(title) + '</span>'
+      + '<button class="tsnd" data-snd>🔊 son</button>'
+      + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div></div>';
+    theater.hidden = false; playing = el; base = pos; t0 = performance.now();
+    theater.querySelector("[data-snd]").onclick = function () {
+      var t = base + (performance.now() - t0) / 1000, ifr = theater.querySelector("iframe");
+      if (ifr) ifr.src = embedSrc(el.dataset.embed, false, t); this.remove();
+    };
+  }
+  function depopTheater() {
+    if (playing) {
+      var t = base + (performance.now() - t0) / 1000;
+      LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
+      var seen = playing.querySelector(".seen"); if (seen) seen.style.width = Math.min(100, t / 3) + "%";
+      playing = null;
     }
-    sheet.querySelector("[data-close]").onclick = close;
-    sheet.addEventListener("click", function (e) { if (e.target === sheet) close(); }, { once: true });
-    sheet.addEventListener("close", function () { sheet.innerHTML = ""; }, { once: true });
+    theater.hidden = true; theater.innerHTML = "";
   }
 
   // ── couloirs : chaque groupe À CÔTÉ DE SON BILLET (pas en vrac) ─
@@ -155,19 +162,23 @@
     });
     return best;
   }
-  var _spend = false;
+  var _spend = false, dwellT = null;
   function onScroll() {
-    if (_spend) return; _spend = true;
-    requestAnimationFrame(function () { _spend = false; var c = nearestCard(); if (c) activate(c); else if (active) drawLinks(active); });
+    depopTheater();                    // bouge → dépopup (overlay non-modal, le scroll passe)
+    if (!_spend) { _spend = true; requestAnimationFrame(function () { _spend = false; var c = nearestCard(); if (c) activate(c); else if (active) drawLinks(active); }); }
+    clearTimeout(dwellT);
+    dwellT = setTimeout(function () { if (active && active.dataset.embed) popTheater(active); }, 480);  // reste → popup théâtre
   }
   window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("wheel", onScroll, { passive: true });
+  window.addEventListener("touchmove", onScroll, { passive: true });
   col.addEventListener("click", function (e) {
     var like = e.target.closest("[data-like]");
     if (like) { e.preventDefault(); toggleLike(like.closest(".card"), like); return; }
     var btn = e.target.closest("[data-open],[data-comment]");
     if (btn) { e.preventDefault(); openSheet(btn.closest(".card"), !!e.target.closest("[data-comment]")); return; }
     var scr = e.target.closest("[data-play]");
-    if (scr) { var c = scr.closest(".card"); if (c && c.dataset.embed) { e.preventDefault(); openPlayer(c); } }
+    if (scr) { var c = scr.closest(".card"); if (c && c.dataset.embed) { e.preventDefault(); activate(c); popTheater(c); } }
   });
   // clic dans un lane → ouvrir le billet concerné
   [laneL, laneR].forEach(function (ln) {

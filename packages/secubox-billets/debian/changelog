@@ -1,3 +1,14 @@
+secubox-billets (0.8.39-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — lecture façon reels. Billet centré = spotlight ; si on RESTE (dwell
+    ~480ms) → popup THÉÂTRE overlay non-modal avec l'embed NU (/videos/embed, sans
+    la page peertube), autoplay MUET, reprise à la position mémorisée ; si on BOUGE
+    (scroll/wheel/touch) → dépopup + position sauvée ; on revient → ça reprend. Clic
+    écran = pop immédiat. Bouton 🔊 = active le son (recharge non-muté à la position).
+    YouTube en embed nocookie. assets ?v=im6.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 15:40:00 +0200
+
 secubox-billets (0.8.38-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — CSP : autorise le <script> inline du bandeau santé sbxwaf par son
