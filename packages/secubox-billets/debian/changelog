@@ -1,3 +1,21 @@
+secubox-billets (0.8.44-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — UN LIEN VIDEO DANS LE CORPS VAUT UN EMBED. Le relais BBS n'envoie que
+    `body` + `ref_url` (la conversation), jamais la vidéo qu'elle contient : un fil
+    conservé arrivait en texte nu — URL brute au milieu de la page, ni lecteur ni
+    vignette souveraine. `models.video_url_in` promeut désormais le premier lien
+    vidéo du corps quand `embed_url` est vide (hébergeurs connus + instances
+    PeerTube seulement ; un `embed_url` explicite gagne toujours).
+  * #1268 — la surface JWT (/admin/api/billets), PAR OU LE BBS PUBLIE, n'enrichissait
+    RIEN : ni iframe résolue ni vignette captée, là où le même contenu saisi au
+    formulaire ressortait en carte vidéo. Elle exécute maintenant le même
+    enrichissement (embed + link-card + poster), à la création comme à la mise à jour.
+  * #1268 — `python3 -m api.manage backfill-embeds [--dry-run]` rattrape les billets
+    déjà publiés dont le lien vidéo est resté dans le corps : promotion, iframe,
+    vignette. Idempotent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 20:30:00 +0200
+
 secubox-billets (0.8.43-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — L'AUTO-MUET DEGAGE. Plus de lecture muette par défaut, plus de bouton
