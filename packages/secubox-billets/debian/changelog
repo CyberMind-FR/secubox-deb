@@ -1,3 +1,17 @@
+secubox-billets (0.8.45-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — INCRUSTATION dans le popup théâtre : les likes (emoji + compte, agrégés)
+    et UNE ligne de conversation défilent maintenant EN BAS DE L'IMAGE, façon
+    sous-titres de télévision — bande dégradée, lignes de balayage CRT confinées à
+    la bande, monospace, liseré de la tonalité du billet. Les données sont celles
+    déjà chargées pour les couloirs (/feed/activity) : aucune requête de plus.
+  * #1268 — l'incrustation est STRICTEMENT NON INTERACTIVE (pointer-events:none,
+    zéro écouteur) : dans le théâtre, bouger la souris dépopupe, et une couche qui
+    capterait le pointeur casserait le comportement validé. Le compteur de lignes
+    est arrêté au dépopup (pas de minuterie qui survit). assets ?v=im10.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 21:15:00 +0200
+
 secubox-billets (0.8.44-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — UN LIEN VIDEO DANS LE CORPS VAUT UN EMBED. Le relais BBS n'envoie que

@@ -226,8 +226,32 @@ html.reveal .card.in{opacity:1;transform:none;
   box-shadow:0 40px 90px -20px rgba(0,0,0,.9),0 0 0 1px color-mix(in srgb,var(--tone,#4db6d6) 32%,transparent);
   transform:translateY(10px) scale(.985);animation:tpop .26s cubic-bezier(.2,.7,.2,1) forwards}
 @keyframes tpop{to{transform:none}}
-.tstage{aspect-ratio:16/9;background:#05080c}
+.tstage{aspect-ratio:16/9;background:#05080c;position:relative}
 .tstage iframe{width:100%;height:100%;border:0;display:block}
+/* INCRUSTATION : likes + une ligne de conversation, en bas de l'image, façon
+   sous-titres TV. `pointer-events:none` est OBLIGATOIRE — dans le théâtre,
+   bouger la souris dépopupe ; rien ici ne doit intercepter le pointeur. */
+.tinc{position:absolute;left:0;right:0;bottom:0;z-index:3;pointer-events:none;
+  display:flex;align-items:flex-end;gap:14px;padding:42px 16px 14px;
+  background:linear-gradient(transparent,rgba(4,7,11,.85) 72%)}
+.tinc::before{content:"";position:absolute;inset:auto 0 0 0;height:64%;opacity:.5;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.045) 0 1px,transparent 1px 3px)}
+.tsub{position:relative;display:flex;align-items:baseline;gap:9px;max-width:min(700px,76%);
+  background:rgba(6,10,15,.62);border-left:2px solid var(--tone,#4db6d6);border-radius:0 5px 5px 0;
+  padding:5px 12px;font-family:var(--mono);font-size:12.5px;line-height:1.4;
+  text-shadow:0 1px 3px rgba(0,0,0,.95)}
+.tsub:empty{display:none}
+.tsub.in{animation:tsubin .3s cubic-bezier(.2,.7,.2,1) both}
+@keyframes tsubin{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+.tsub .k{color:var(--tone,#4db6d6);opacity:.8;flex:none}
+.tsub .nm{color:#eaf1f6;font-weight:600;font-size:11px;flex:none;letter-spacing:.02em}
+.tsub .msg{color:#c9d5df;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tlk{position:relative;display:flex;gap:6px;flex:none;margin-left:auto}
+.tlk .lk{display:inline-flex;align-items:center;gap:5px;background:rgba(6,10,15,.62);
+  border:1px solid rgba(255,255,255,.13);border-radius:999px;padding:3px 9px;
+  font-family:var(--mono);font-size:11px;color:#e6eef4;text-shadow:0 1px 3px rgba(0,0,0,.9)}
+.tlk .e{font-size:14px;text-shadow:none}
+.tlk .n{color:var(--gold);font-variant-numeric:tabular-nums}
 .tbar{display:flex;align-items:center;gap:12px;padding:10px 14px}
 .tbar .chip{color:var(--tone,#4db6d6)}
 .tbar .ttl{font-family:var(--serif);font-size:15px;color:#eef3f7;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

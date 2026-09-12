@@ -61,13 +61,48 @@
     var title = el.querySelector(".title") ? el.querySelector(".title").textContent : "billet";
     theater.style.setProperty("--tone", COL[el.dataset.cat] || "#4db6d6");
     theater.innerHTML =
-      '<div class="tp"><div class="tstage"><iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, false, pos) + '"></iframe></div>'
+      '<div class="tp"><div class="tstage"><iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, false, pos) + '"></iframe>'
+      + '<div class="tinc"><div class="tsub"></div><div class="tlk"></div></div></div>'
       + '<div class="tbar"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
       + '<span class="ttl">' + esc(title) + '</span>'
       + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div></div>';
     theater.hidden = false; playing = el; base = pos; t0 = performance.now();
+    incruste(slug);
   }
+
+  // INCRUSTATION (#1268) : les likes et UNE ligne de conversation, en bas de
+  // l'image, façon sous-titres de télévision. STRICTEMENT NON INTERACTIVE — dans
+  // le théâtre, bouger la souris dépopupe : une incrustation qui capterait le
+  // pointeur casserait le comportement validé. D'où pointer-events:none côté CSS
+  // et zéro écouteur ici. Les données sont celles déjà chargées pour les couloirs.
+  var subTimer = null;
+  function incruste(slug) {
+    var sub = theater.querySelector(".tsub"), lk = theater.querySelector(".tlk");
+    if (!sub || !lk) return;
+    var compte = {}, ordre = [];
+    (ACT.reactions[slug] || []).forEach(function (r) {
+      if (!compte[r.emoji]) { compte[r.emoji] = 0; ordre.push(r.emoji); }
+      compte[r.emoji]++;
+    });
+    lk.innerHTML = ordre.slice(0, 6).map(function (e) {
+      return '<span class="lk"><span class="e">' + esc(e) + '</span>'
+        + (compte[e] > 1 ? '<span class="n">' + compte[e] + '</span>' : '') + '</span>';
+    }).join("");
+    var cs = (ACT.comments[slug] || []).filter(function (c) { return c.msg; });
+    if (!cs.length) { sub.innerHTML = ""; return; }
+    var i = 0;
+    function ligne() {
+      var c = cs[i % cs.length]; i++;
+      sub.innerHTML = '<span class="k">▸</span><span class="nm">' + esc(c.who) + '</span>'
+        + '<span class="msg">' + esc(c.msg) + '</span>';
+      sub.classList.remove("in"); void sub.offsetWidth; sub.classList.add("in");
+    }
+    ligne();
+    if (cs.length > 1) subTimer = setInterval(ligne, 4600);
+  }
+
   function depopTheater() {
+    clearInterval(subTimer); subTimer = null;
     if (playing) {
       var t = base + (performance.now() - t0) / 1000;
       LS.set("bpos:" + playing.dataset.id, Math.max(0, Math.floor(t)));
