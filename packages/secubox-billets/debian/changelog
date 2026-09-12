@@ -1,3 +1,17 @@
+secubox-billets (0.8.50-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LES INCRUSTATIONS NE RECOUVRENT PLUS LA BARRE DU LECTEUR. On ne dispute
+    pas ses clics au lecteur : la saisie et l'OSD, qui sont CLIQUABLES, sortent du
+    cadre et se rangent SOUS l'écran (bloc .ctrls) ; seuls les sous-titres et les
+    réactions restent sur l'image — ils ne captent pas le pointeur — et remontent
+    au-dessus des commandes (58 px, 64 px). Dans le théâtre, l'incrustation remonte
+    de même (46 px).
+  * #1268 — effet de bord bienvenu : l'image redevient entière, et la barre de
+    saisie gagne le fond opaque d'un vrai champ au lieu d'un voile sur la vidéo.
+    assets ?v=im12 / vue ?v=v6.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 00:20:00 +0200
+
 secubox-billets (0.8.49-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — ON ECRIT AUSSI DEPUIS LE THEATRE. Le popup du fil reçoit la même ligne

@@ -54,7 +54,14 @@
     <div class="pops" id="pops" aria-hidden="true"></div>
     <div class="track" id="track" aria-label="Messages en sous-titres"></div>
 
-    <!-- SAISIE INCRUSTEE : écrire sans quitter l'écran ni couper la vidéo.
+
+  </div>
+  <!-- LES COMMANDES, SOUS l'ECRAN. Elles étaient incrustées en bas de l'image
+       et recouvraient la barre de contrôle du lecteur : on ne dispute pas ses
+       clics au lecteur. Seuls les sous-titres restent sur l'image — ils ne
+       captent pas le pointeur et se tiennent au-dessus des commandes. -->
+  <div class="ctrls">
+    <!-- SAISIE : écrire sans quitter l'écran ni couper la vidéo.
          Elle emprunte les jetons du vrai formulaire (csrf, ts_token) : mêmes
          contrôles anti-spam, pas de seconde porte d'entrée. -->
     <form class="msgbox" id="msgbox" method="post" action="/b/{{ billet.slug }}/comment" autocomplete="off">

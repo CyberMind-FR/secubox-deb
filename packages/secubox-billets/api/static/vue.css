@@ -39,7 +39,7 @@
 .vue-stage.nocrt .crt{display:none}
 
 /* ── POPS : réactions qui montent par-dessus l'image ───────────────────────── */
-.pops{position:absolute;right:12px;top:44px;bottom:52px;z-index:8;width:190px;pointer-events:none;
+.pops{position:absolute;right:12px;top:44px;bottom:64px;z-index:8;width:190px;pointer-events:none;
   display:flex;flex-direction:column-reverse;align-items:flex-end;gap:5px;overflow:hidden}
 .pop{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;
   color:#e6eef4;background:rgba(6,10,15,.6);border-right:2px solid var(--tone);border-radius:5px 0 0 5px;
@@ -54,7 +54,7 @@
 }
 
 /* ── SOUS-TITRES : lignes monospace tronquées, par-dessus l'image ──────────── */
-.track{position:absolute;left:0;right:0;bottom:86px;z-index:8;display:flex;flex-direction:column;
+.track{position:absolute;left:0;right:0;bottom:58px;z-index:8;display:flex;flex-direction:column;
   gap:3px;padding:0 14px;pointer-events:none;align-items:flex-start}
 .track .line{pointer-events:auto;max-width:min(760px,86%);display:flex;align-items:baseline;gap:9px;
   background:rgba(6,10,15,.66);backdrop-filter:blur(2px);
@@ -72,11 +72,12 @@
 .vue-stage.nosubs .track{display:none}
 
 /* ── SAISIE INCRUSTEE : une ligne de console, dans l'écran ─────────────────── */
-.msgbox{position:absolute;left:14px;right:14px;bottom:40px;z-index:9;display:flex;align-items:center;gap:8px;
-  background:rgba(6,10,15,.72);backdrop-filter:blur(3px);border:1px solid var(--edge-2);
-  border-left:2px solid var(--tone);border-radius:0 8px 8px 0;padding:5px 10px;
+.ctrls{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.msgbox{display:flex;align-items:center;gap:8px;
+  background:var(--panel-2);border:1px solid var(--edge);
+  border-left:2px solid var(--tone);border-radius:0 10px 10px 0;padding:7px 12px;
   font-family:var(--mono);font-size:12px;transition:border-color .15s,background .15s}
-.msgbox:focus-within{background:rgba(8,13,20,.92);border-color:var(--gold);border-left-color:var(--gold)}
+.msgbox:focus-within{background:var(--panel);border-color:var(--gold);border-left-color:var(--gold)}
 .msgbox .k{color:var(--tone);opacity:.85;flex:none}
 .msgbox input{font:inherit;color:var(--tx);background:transparent;border:0;padding:4px 2px;min-width:0}
 .msgbox input:focus{outline:none}
@@ -94,16 +95,15 @@
 .msgbox .etat{flex:none;font-size:9.5px;letter-spacing:.08em;color:var(--faint);max-width:190px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .msgbox .etat.ok{color:var(--green)} .msgbox .etat.err{color:var(--coral)}
-.vue-stage.nosubs .msgbox{display:none}
+
 /* la ligne qu'on vient d'écrire se distingue dans le défilé */
 .track .line.mienne{border-left-color:var(--gold);background:rgba(14,21,30,.88)}
 .track .line .att{color:var(--gold);font-size:9px;flex:none}
 
 /* ── OSD : la barre console en bas de l'écran ──────────────────────────────── */
-.osd{position:absolute;left:0;right:0;bottom:0;z-index:9;display:flex;align-items:center;gap:8px;
-  padding:20px 12px 9px;background:linear-gradient(transparent,rgba(4,7,11,.88) 62%);
+.osd{display:flex;align-items:center;gap:8px;padding:0 2px;
   font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--dim)}
-.ob{font:inherit;letter-spacing:inherit;color:var(--dim);background:rgba(6,10,15,.5);
+.ob{font:inherit;letter-spacing:inherit;color:var(--dim);background:transparent;
   border:1px solid var(--edge-2);border-radius:999px;padding:4px 10px;cursor:pointer;transition:.15s;text-transform:uppercase}
 .ob:hover{color:var(--tx);border-color:var(--dim)}
 .ob.on{color:var(--tone);border-color:color-mix(in srgb,var(--tone) 45%,var(--edge-2))}
@@ -220,8 +220,8 @@
   .vue-wrap{padding-bottom:56px}
   .vue-stage{border-radius:13px;margin-top:14px}
   .pops{display:none}
-  .track{bottom:84px;padding:0 9px}
-  .msgbox{left:9px;right:9px;font-size:11px}
+  .track{bottom:50px;padding:0 9px}
+  .msgbox{font-size:11px}
   .msgbox .emos,.msgbox .etat{display:none}
   .msgbox .qui{width:74px}
   .track .line{max-width:94%;font-size:11px}

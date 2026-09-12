@@ -231,9 +231,11 @@ html.reveal .card.in{opacity:1;transform:none;
 /* INCRUSTATION : likes + une ligne de conversation, en bas de l'image, façon
    sous-titres TV. `pointer-events:none` est OBLIGATOIRE — dans le théâtre,
    bouger la souris dépopupe ; rien ici ne doit intercepter le pointeur. */
-.tinc{position:absolute;left:0;right:0;bottom:0;z-index:3;pointer-events:none;
-  display:flex;align-items:flex-end;gap:14px;padding:42px 16px 14px;
-  background:linear-gradient(transparent,rgba(4,7,11,.85) 72%)}
+/* remontée AU-DESSUS de la barre de contrôle du lecteur : l'incrustation ne
+   doit ni la masquer ni sembler lui appartenir. */
+.tinc{position:absolute;left:0;right:0;bottom:46px;z-index:3;pointer-events:none;
+  display:flex;align-items:flex-end;gap:14px;padding:34px 16px 8px;
+  background:linear-gradient(transparent,rgba(4,7,11,.8) 78%)}
 .tinc::before{content:"";position:absolute;inset:auto 0 0 0;height:64%;opacity:.5;
   background:repeating-linear-gradient(180deg,rgba(255,255,255,.045) 0 1px,transparent 1px 3px)}
 .tsub{position:relative;display:flex;align-items:baseline;gap:9px;max-width:min(700px,76%);
