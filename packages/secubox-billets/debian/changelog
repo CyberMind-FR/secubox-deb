@@ -1,3 +1,15 @@
+secubox-billets (0.8.35-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — fil immersif, refonte interaction. (1) le billet ACTIF n'est plus le
+    survolé mais celui au CENTRE du viewport → défilement « smart » qui marche au
+    doigt sur téléphone. (2) clic sur l'écran = LECTEUR DIRECT en grand (mode
+    théâtre : l'embed joue tout de suite, avec le son), plus le petit inline. (3)
+    les bulles commentaires/likes sont placées À CÔTÉ DE LEUR billet (alignées,
+    plus en vrac), groupées par billet. (4) survol d'une bulle = popup message au
+    curseur (accès à la conversation). assets ?v=im3.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 13:15:00 +0200
+
 secubox-billets (0.8.34-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — fil immersif, itération interaction. Le SURVOL ne charge plus la
