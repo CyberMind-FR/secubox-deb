@@ -61,11 +61,20 @@
   }
 
   // ── OSD ───────────────────────────────────────────────────────────────────
+  // Les DEUX bascules sont retenues (#1268) : « crt » l'était, « sous-titres »
+  // repassait à « affiché » au rechargement — le guide d'utilisation promet les
+  // deux, et c'est le comportement attendu d'un réglage.
   var bSubs = scene && scene.querySelector('[data-act="subs"]');
-  if (bSubs) bSubs.addEventListener("click", function () {
-    var off = scene.classList.toggle("nosubs");
-    this.classList.toggle("on", !off); this.setAttribute("aria-pressed", off ? "false" : "true");
-  });
+  if (bSubs) {
+    var subsOff = LS.get("nosubs", false);
+    if (subsOff) scene.classList.add("nosubs");
+    bSubs.classList.toggle("on", !subsOff);
+    bSubs.setAttribute("aria-pressed", subsOff ? "false" : "true");
+    bSubs.addEventListener("click", function () {
+      var off = scene.classList.toggle("nosubs"); LS.set("nosubs", off);
+      this.classList.toggle("on", !off); this.setAttribute("aria-pressed", off ? "false" : "true");
+    });
+  }
   var bCrt = scene && scene.querySelector('[data-act="crt"]');
   if (bCrt) {
     bCrt.classList.toggle("on", !LS.get("nocrt", false));
@@ -75,6 +84,32 @@
       this.classList.toggle("on", !off); this.setAttribute("aria-pressed", off ? "false" : "true");
     });
   }
+
+  // ── LES IMAGES DU CORPS S'AGRANDISSENT AUSSI ─────────────────────────────
+  // La galerie l'a toujours fait ; les images posées DANS le texte, non : elles
+  // n'étaient pas dans un groupe [data-lightbox]. On leur en fabrique un, avec
+  // la structure que billets.js attend déjà — pas de second agrandisseur, pas de
+  // second jeu de touches, une seule façon de refermer.
+  (function () {
+    var prose = document.querySelector(".prose.e-content");
+    if (!prose) return;
+    var imgs = [].slice.call(prose.querySelectorAll("img")).filter(function (im) {
+      return !im.closest("a") && !im.closest(".gallery") && !im.classList.contains("zani-stamp");
+    });
+    if (!imgs.length) return;
+    imgs.forEach(function (im) {
+      var a = document.createElement("a");
+      a.className = "gallery-item";
+      a.href = im.currentSrc || im.src;
+      a.setAttribute("data-full", im.getAttribute("data-full") || im.src);
+      a.setAttribute("data-alt", im.alt || "");
+      a.setAttribute("aria-label", "Agrandir l'image");
+      im.setAttribute("data-zoom", "1");
+      im.parentNode.insertBefore(a, im);
+      a.appendChild(im);
+    });
+    prose.setAttribute("data-lightbox", "");
+  })();
 
   // ── popup au curseur : le message ENTIER (même objet que dans le fil) ─────
   var cur = document.createElement("div"); cur.className = "curpop"; document.body.appendChild(cur);
