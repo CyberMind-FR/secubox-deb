@@ -1,3 +1,16 @@
+secubox-billets (0.8.41-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — CHAT en SOUS-TITRES TV / overlay console : les messages ne sont plus
+    des bulles arrondies mais des LIGNES monospace tronquées (bande sombre
+    translucide, liseré de la tonalité, ombre de texte lisible partout) ; le
+    survol garde le popup du message entier. Réactions en ligne compacte.
+  * #1268 — la vidéo CONTINUE à l'ouverture d'un billet : le fil passe la position
+    mémorisée au permalien (?t=<sec>) et billets.js la réinjecte dans l'embed
+    (paramètre `start`, PeerTube comme YouTube). Vaut pour le popup dwell, le
+    bouton ouvrir et le clic sur une ligne de chat. assets ?v=im8 / billets.js v9.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 16:50:00 +0200
+
 secubox-billets (0.8.40-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — le popup dwell montre désormais le PERMALIEN du billet (notre page :

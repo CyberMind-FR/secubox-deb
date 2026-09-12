@@ -59,8 +59,8 @@
     // Le pop montre le PERMALIEN du billet (notre page : vidéo + commentaires +
     // réactions) — le comportement « ouvrir ». Overlay non-modal → « bouge = dépop ».
     theater.innerHTML =
-      '<div class="tp tp-page"><a class="tx" href="/b/' + encodeURIComponent(slug) + '" title="ouvrir en pleine page">↗</a>'
-      + '<iframe class="tframe" src="/b/' + encodeURIComponent(slug) + '?embed=1" title="' + esc(title) + '"></iframe></div>';
+      '<div class="tp tp-page"><a class="tx" href="/b/' + encodeURIComponent(slug) + '?t=' + Math.floor(pos) + '" title="ouvrir en pleine page">↗</a>'
+      + '<iframe class="tframe" src="/b/' + encodeURIComponent(slug) + '?embed=1&t=' + Math.floor(pos) + '" title="' + esc(title) + '"></iframe></div>';
     theater.hidden = false; playing = el; base = pos; t0 = performance.now();
   }
   function depopTheater() {
@@ -78,12 +78,16 @@
   function avatar(name, i) { return '<span class="av" style="background:' + PCOL[(i || 0) % PCOL.length] + '">' + esc((name || "?").slice(0, 1).toUpperCase()) + '</span>'; }
   function sel(slug) { try { return '.card[data-id="' + (window.CSS && CSS.escape ? CSS.escape(slug) : slug) + '"]'; } catch (e) { return null; } }
 
+  // Ligne de SOUS-TITRE (console) : linéaire, monospace, tronquée — le survol
+  // ouvre le popup avec le message entier.
   function mkComment(c, i) {
     var d = document.createElement("div"); d.className = "bub"; d.dataset.msg = c.msg || ""; d.dataset.who = c.who || ""; d.dataset.when = c.when || "";
-    d.innerHTML = '<div class="who">' + avatar(c.who, i) + '<span class="nm">' + esc(c.who) + '</span><span class="tm">' + esc(c.when || "") + '</span></div><div class="msg">' + esc(c.msg) + '</div>';
+    d.innerHTML = '<span class="k">▸</span><span class="nm">' + esc(c.who) + '</span>'
+                + '<span class="msg">' + esc(c.msg) + '</span>'
+                + '<span class="tm">' + esc(c.when || "") + '</span>';
     return d;
   }
-  function mkReact(emo) { var d = document.createElement("div"); d.className = "bub react"; d.innerHTML = '<span class="emo">' + esc(emo) + '</span>'; return d; }
+  function mkReact(emo) { var d = document.createElement("div"); d.className = "bub react"; d.innerHTML = '<span class="k">·</span><span class="emo">' + esc(emo) + '</span>'; return d; }
 
   function placeActivity() {
     if (!laneL) return;
@@ -190,7 +194,8 @@
   }
 
   function openSheetSlug(slug, card) {
-    var url = "/b/" + encodeURIComponent(slug);
+    // reprend la vidéo là où on l'avait laissée (#1268)
+    var url = "/b/" + encodeURIComponent(slug) + "?t=" + Math.floor(LS.get("bpos:" + slug, 0));
     var title = card && card.querySelector(".title") ? card.querySelector(".title").textContent : "billet";
     sheet.innerHTML = '<div class="sheet"><button class="x" data-close aria-label="Fermer">✕</button><iframe src="' + url + '" title="' + esc(title) + '"></iframe></div>';
     if (typeof sheet.showModal === "function") sheet.showModal(); else location.href = url;
