@@ -11,7 +11,7 @@ import os
 import time
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .. import repo
@@ -79,35 +79,49 @@ def register_public(app: FastAPI, templates: Jinja2Templates) -> None:
     async def comment(request: Request, slug: str, author_name: str = Form(...),
                       body: str = Form(...), author_email: str = Form(""),
                       website: str = Form(""), ts_token: str = Form(""), csrf: str = Form("")):
+        # ENVOI SANS RECHARGEMENT (#1268). La vue billet joue une vidéo : la
+        # redirection 303 rechargeait la page, l'embed repartait en autoplay
+        # SONORE — que le navigateur refuse sans geste — et l'image restait
+        # figée le temps d'un clic. Le client poste donc en `Accept: json` et
+        # reste sur place. Le chemin HTML (sans JS) est inchangé : mêmes
+        # contrôles, mêmes redirections, dans le même ordre.
+        veut_json = "application/json" in (request.headers.get("accept") or "")
+
+        def rep(code: str, *, cible: str | None = None, **extra):
+            if veut_json:
+                return JSONResponse({"ok": code in ("ok", "pending"), "c": code, **extra})
+            return RedirectResponse(cible or f"/b/{slug}?c={code}", status_code=303)
+
         conn = request.app.state.conn
         row = await repo.get_by_slug(conn, slug)
         if row is None or row["status"] != "published":
-            return RedirectResponse("/", status_code=303)
+            return rep("absent", cible="/")
         secret = request.app.state.secret
         if not sec.csrf_ok(request.cookies.get(PCSRF_COOKIE), csrf):
-            return RedirectResponse(f"/b/{slug}", status_code=303)
+            return rep("csrf", cible=f"/b/{slug}")
         # Honeypot: pretend success, store nothing.
         if antispam.honeypot_tripped(website):
-            return RedirectResponse(f"/b/{slug}?c=ok", status_code=303)
+            return rep("ok")
         # Minimum think-time (signed token).
         if not antispam.form_token_ok(secret, ts_token, now_epoch=int(time.time())):
-            return RedirectResponse(f"/b/{slug}?c=slow", status_code=303)
+            return rep("slow")
         ip_hash = sec.hash_ip(_client_ip(request), secret)
         if not _comment_limiter.check_and_add(ip_hash):
-            return RedirectResponse(f"/b/{slug}?c=rate", status_code=303)
+            return rep("rate")
         try:
             data = CommentIn(author_name=author_name, body=body,
                              author_email=(author_email or None))
         except Exception:  # noqa: BLE001
-            return RedirectResponse(f"/b/{slug}?c=bad", status_code=303)
+            return rep("bad")
         auto = await repo.has_prior_approved(conn, ip_hash, data.author_name)
         status = "approved" if auto else "pending"
         await repo.add_comment(conn, row["id"], author_name=data.author_name,
                                email_hash=antispam.email_hash(data.author_email, secret),
                                body=data.body, ip_hash=ip_hash, honeypot=False,
                                status=status, now=_now())
-        return RedirectResponse(f"/b/{slug}?c={'ok' if auto else 'pending'}#comments",
-                                status_code=303)
+        code = "ok" if auto else "pending"
+        return rep(code, cible=f"/b/{slug}?c={code}#comments",
+                   who=data.author_name, msg=data.body, when="à l'instant")
 
 
 def _now() -> str:

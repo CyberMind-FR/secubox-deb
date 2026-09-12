@@ -54,6 +54,20 @@
     <div class="pops" id="pops" aria-hidden="true"></div>
     <div class="track" id="track" aria-label="Messages en sous-titres"></div>
 
+    <!-- SAISIE INCRUSTEE : écrire sans quitter l'écran ni couper la vidéo.
+         Elle emprunte les jetons du vrai formulaire (csrf, ts_token) : mêmes
+         contrôles anti-spam, pas de seconde porte d'entrée. -->
+    <form class="msgbox" id="msgbox" autocomplete="off">
+      <span class="k">▸</span>
+      <input class="qui" id="mb-qui" name="author_name" maxlength="40" placeholder="nom" required>
+      <input class="quoi" id="mb-quoi" name="body" maxlength="2000" placeholder="votre ligne passera en sous-titre…" required>
+      <span class="emos" id="mb-emos" aria-label="Émojis">
+        {% for e in ['👍','❤️','😂','😮','😢','🔥'] %}<button type="button" class="emo" data-emo="{{ e }}" tabindex="-1">{{ e }}</button>{% endfor %}
+      </span>
+      <button class="send" type="submit">envoyer ↗</button>
+      <span class="etat" id="mb-etat" role="status"></span>
+    </form>
+
     <div class="osd">
       <button type="button" class="ob on" data-act="subs" aria-pressed="true" title="Afficher / masquer les sous-titres">▤ sous-titres</button>
       <button type="button" class="ob" data-act="crt" aria-pressed="true" title="Effet CRT">▩ crt</button>

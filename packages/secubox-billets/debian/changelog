@@ -1,3 +1,20 @@
+secubox-billets (0.8.47-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LA VIDEO NE S'ARRETE PLUS QUAND ON ECRIT. Le formulaire postait en 303 :
+    la page se rechargeait, l'embed repartait en autoplay SONORE — que le navigateur
+    refuse sans geste — et l'image restait figée jusqu'à un clic. `/b/{slug}/comment`
+    sait désormais répondre en JSON (Accept: application/json) et le client poste en
+    arrière-plan. Le chemin HTML sans JS est INCHANGE : mêmes contrôles, mêmes
+    redirections, dans le même ordre.
+  * #1268 — SAISIE INCRUSTEE dans l'écran : une ligne de console (nom retenu, message,
+    rangée d'émojis, envoyer) posée au-dessus de l'OSD. Le message part sans quitter
+    la page et s'affiche AUSSITOT en dernier sous-titre, liseré doré, marqué « en
+    attente » quand la modération le retient — et il est ajouté à la console en bas.
+    La barre emprunte les jetons du vrai formulaire (csrf, anti-spam) : mêmes
+    contrôles serveur, pas de seconde porte d'entrée. assets vue ?v=v4.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 12 Sep 2026 22:40:00 +0200
+
 secubox-billets (0.8.46-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — LA VIDEO N'EST PLUS LAVEE EN BLANC. La couche CRT de la vue billet

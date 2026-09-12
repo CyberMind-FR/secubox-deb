@@ -96,19 +96,19 @@
     };
   }).filter(function (c) { return c.msg; });
 
-  if (track && src.length) {
+  var pousseLigne = null;                       /* défini plus bas si la piste existe */
+  if (track) {
     var k = 0, MAX = 3;
-    function pousse() {
-      if (document.hidden || !scene || scene.classList.contains("nosubs")) return;
-      var c = src[k % src.length]; k++;
-      var d = document.createElement("div"); d.className = "line";
+    function ligne(c, mienne, attente) {
+      var d = document.createElement("div"); d.className = "line" + (mienne ? " mienne" : "");
       d.innerHTML = '<span class="k">▸</span><span class="nm">' + esc(c.who) + '</span>'
         + '<span class="msg">' + esc(c.msg) + '</span>'
-        + '<span class="tm">' + esc(c.when) + '</span>';
+        + (attente ? '<span class="att">en attente</span>' : "")
+        + '<span class="tm">' + esc(c.when || "") + '</span>';
       d.addEventListener("mouseenter", function (e) { montre(e, c.who, c.msg, c.when); });
       d.addEventListener("mousemove", function (e) { montre(e, c.who, c.msg, c.when); });
       d.addEventListener("mouseleave", cache);
-      d.addEventListener("click", function () {
+      if (c.node) d.addEventListener("click", function () {
         cache();
         c.node.scrollIntoView({ behavior: "smooth", block: "center" });
         [].forEach.call(document.querySelectorAll(".cline.vu"), function (n) { n.classList.remove("vu"); });
@@ -120,11 +120,18 @@
         if (!d.parentNode) return;
         d.classList.add("out");
         setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 320);
-      }, 9000);
+      }, mienne ? 14000 : 9000);   /* la sienne reste un peu plus longtemps à l'écran */
     }
-    pousse();
-    setTimeout(pousse, 1400);
-    setInterval(pousse, 4200);
+    pousseLigne = ligne;
+    function pousse() {
+      if (document.hidden || !src.length || !scene || scene.classList.contains("nosubs")) return;
+      ligne(src[k % src.length]); k++;
+    }
+    if (src.length) {
+      pousse();
+      setTimeout(pousse, 1400);
+      setInterval(pousse, 4200);
+    }
   }
 
   // ── RÉACTIONS : elles poppent par-dessus l'image ─────────────────────────
@@ -153,4 +160,103 @@
     var em = b.querySelector(".emoji");
     popRe(em ? em.textContent.trim() : "♥", null);
   }, true);
+
+  // ── ECRIRE SANS RECHARGER ────────────────────────────────────────────────
+  // LA VIDEO S'ARRETAIT A CHAQUE MESSAGE. Le formulaire postait en 303, la page
+  // se rechargeait, l'embed repartait en autoplay SONORE — refusé sans geste —
+  // et l'image restait figée jusqu'à un clic. On poste donc en arrière-plan :
+  // la lecture n'est jamais interrompue, et la ligne envoyée passe aussitôt en
+  // sous-titre. Les jetons (csrf, anti-spam) sont EMPRUNTES au vrai formulaire :
+  // mêmes contrôles côté serveur, pas de seconde porte d'entrée.
+  var vrai = document.querySelector(".comment-form");
+  var clines = document.querySelector(".clines");
+  var nbc = document.getElementById("nbc");
+  var ETATS = {
+    ok: "publié", pending: "en attente de modération", slow: "trop vite — réessayez",
+    rate: "trop de messages — patientez", bad: "refusé (2 à 2000 caractères)",
+    csrf: "session expirée — rechargez", absent: "billet introuvable"
+  };
+
+  function ajouteConsole(qui, texte, attente) {
+    if (!clines) return;
+    var vide = clines.querySelector(".vide"); if (vide) vide.remove();
+    var a = document.createElement("article");
+    a.className = "comment cline vu"; a.dataset.who = qui; a.dataset.when = "à l'instant";
+    a.innerHTML = '<span class="k">▸</span><span class="nm c-meta"><strong>' + esc(qui) + '</strong></span>'
+      + '<span class="msg c-body">' + esc(texte) + '</span>'
+      + '<time class="tm">' + (attente ? "en attente" : "à l'instant") + '</time>';
+    clines.appendChild(a);
+    if (nbc && !attente) nbc.textContent = (parseInt(nbc.textContent, 10) || 0) + 1;
+  }
+
+  function envoyer(nom, texte, dire) {
+    if (!vrai) { dire("indisponible", true); return Promise.resolve(false); }
+    var c = vrai.querySelector('[name="csrf"]'), t = vrai.querySelector('[name="ts_token"]');
+    var fd = new FormData();
+    fd.append("csrf", c ? c.value : ""); fd.append("ts_token", t ? t.value : "");
+    fd.append("website", ""); fd.append("author_name", nom); fd.append("body", texte);
+    return fetch("/b/" + encodeURIComponent(slug) + "/comment", {
+      method: "POST", body: fd, credentials: "same-origin",
+      headers: { "Accept": "application/json" }
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      dire(ETATS[d.c] || d.c, !d.ok);
+      if (!d.ok) return false;
+      var qui = d.who || nom, quoi = d.msg || texte, attente = (d.c === "pending");
+      if (pousseLigne) pousseLigne({ who: qui, msg: quoi, when: d.when || "à l'instant" }, true, attente);
+      ajouteConsole(qui, quoi, attente);
+      return true;
+    }).catch(function () { dire("envoi impossible", true); return false; });
+  }
+
+  // la barre incrustée dans l'écran
+  var mb = document.getElementById("msgbox");
+  if (mb) {
+    var qui = document.getElementById("mb-qui"), quoi = document.getElementById("mb-quoi"),
+        etat = document.getElementById("mb-etat"), envoi = mb.querySelector(".send");
+    qui.value = LS.get("nom", "") || "";
+    function dire(txt, err) {
+      etat.textContent = txt || "";
+      etat.className = "etat" + (txt ? (err ? " err" : " ok") : "");
+      if (txt && !err) setTimeout(function () { etat.textContent = ""; etat.className = "etat"; }, 4000);
+    }
+    mb.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var n = (qui.value || "").trim(), m = (quoi.value || "").trim();
+      if (n.length < 2) { dire("votre nom, d'abord", true); qui.focus(); return; }
+      if (m.length < 2) { quoi.focus(); return; }
+      LS.set("nom", n);
+      envoi.disabled = true; dire("envoi…");
+      envoyer(n, m, dire).then(function (ok) {
+        envoi.disabled = false;
+        if (ok) { quoi.value = ""; quoi.focus(); }
+      });
+    });
+    [].forEach.call(mb.querySelectorAll(".emo"), function (b) {
+      b.addEventListener("click", function () {
+        quoi.value += b.dataset.emo; quoi.focus();
+      });
+    });
+  }
+
+  // le formulaire de la console : même chemin, pour la même raison
+  if (vrai) vrai.addEventListener("submit", function (e) {
+    var n = vrai.querySelector('[name="author_name"]'), b = vrai.querySelector('[name="body"]');
+    var hp = vrai.querySelector('[name="website"]');
+    if (!n || !b || (hp && hp.value)) return;               /* piège rempli : chemin normal */
+    e.preventDefault();
+    var bouton = vrai.querySelector('button[type="submit"]');
+    if (bouton) bouton.disabled = true;
+    LS.set("nom", (n.value || "").trim());
+    envoyer((n.value || "").trim(), (b.value || "").trim(), function (txt, err) {
+      var note = vrai.parentNode.querySelector(".note.envoi");
+      if (!note) {
+        note = document.createElement("p"); note.className = "note envoi";
+        vrai.parentNode.insertBefore(note, vrai);
+      }
+      note.textContent = txt; note.classList.toggle("err", !!err);
+    }).then(function (ok) {
+      if (bouton) bouton.disabled = false;
+      if (ok) b.value = "";
+    });
+  });
 })();
