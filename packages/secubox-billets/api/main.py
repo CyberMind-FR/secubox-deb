@@ -343,7 +343,8 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             c = dict(c)
             items.append({"who": (c.get("author_name") or "anon")[:32],
                           "msg": (c.get("body") or "")[:180],
-                          "when": _depuis(c.get("created_at"))})
+                          "when": _depuis(c.get("created_at")),
+                          "t": c.get("video_t")})
         resp = JSONResponse({"comments": items, "reactions": counts})
         resp.headers["Cache-Control"] = "no-cache"
         return resp
@@ -356,13 +357,13 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         conn = app.state.conn
         comments = []
         async with conn.execute(
-            "SELECT c.author_name, c.body, c.created_at, b.slug FROM comment c "
+            "SELECT c.author_name, c.body, c.created_at, b.slug, c.video_t FROM comment c "
             "JOIN billet b ON b.id = c.billet_id "
             "WHERE c.status='approved' AND b.status='published' "
             "ORDER BY c.created_at DESC LIMIT 16") as cur:
             async for r in cur:
                 comments.append({"who": (r[0] or "anon")[:32], "msg": (r[1] or "")[:160],
-                                 "when": _depuis(r[2]), "slug": r[3]})
+                                 "when": _depuis(r[2]), "slug": r[3], "t": r[4]})
         reactions = []
         try:
             async with conn.execute(

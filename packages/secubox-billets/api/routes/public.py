@@ -102,7 +102,8 @@ def register_public(app: FastAPI, templates: Jinja2Templates) -> None:
     @app.post("/b/{slug}/comment")
     async def comment(request: Request, slug: str, author_name: str = Form(...),
                       body: str = Form(...), author_email: str = Form(""),
-                      website: str = Form(""), ts_token: str = Form(""), csrf: str = Form("")):
+                      website: str = Form(""), ts_token: str = Form(""), csrf: str = Form(""),
+                      video_t: str = Form("")):
         # ENVOI SANS RECHARGEMENT (#1268). La vue billet joue une vidéo : la
         # redirection 303 rechargeait la page, l'embed repartait en autoplay
         # SONORE — que le navigateur refuse sans geste — et l'image restait
@@ -137,15 +138,23 @@ def register_public(app: FastAPI, templates: Jinja2Templates) -> None:
                              author_email=(author_email or None))
         except Exception:  # noqa: BLE001
             return rep("bad")
+        # ANCRAGE DANS LA VIDEO (#1268) : la seconde visée, si le message a été
+        # écrit pendant la lecture. Borné à 24 h et jamais négatif ; hors lecture
+        # ou valeur illisible → None, c'est-à-dire « pas d'instant », et non zéro.
+        try:
+            vt = int(float(video_t))
+            vt = vt if 0 <= vt <= 86400 else None
+        except (TypeError, ValueError):
+            vt = None
         auto = await repo.has_prior_approved(conn, ip_hash, data.author_name)
         status = "approved" if auto else "pending"
         await repo.add_comment(conn, row["id"], author_name=data.author_name,
                                email_hash=antispam.email_hash(data.author_email, secret),
                                body=data.body, ip_hash=ip_hash, honeypot=False,
-                               status=status, now=_now())
+                               status=status, now=_now(), video_t=vt)
         code = "ok" if auto else "pending"
         return rep(code, cible=f"/b/{slug}?c={code}#comments",
-                   who=data.author_name, msg=data.body, when="à l'instant")
+                   who=data.author_name, msg=data.body, when="à l'instant", t=vt)
 
 
 def _now() -> str:

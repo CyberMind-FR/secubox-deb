@@ -1,0 +1,14 @@
+-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+-- #1268 — UN COMMENTAIRE PEUT ETRE ANCRE DANS LE TEMPS DE LA VIDEO.
+--
+-- Les messages passent en sous-titres par-dessus l'image : ils doivent pouvoir
+-- apparaître AU MOMENT dont ils parlent, comme un vrai sous-titre, et non
+-- défiler au hasard. `video_t` retient la seconde de lecture à laquelle le
+-- message a été écrit.
+--
+-- NULL et non 0 par défaut : un message écrit hors lecture (billet texte,
+-- vidéo à l'arrêt, envoi sans JavaScript) n'est ancré nulle part, et zéro
+-- voudrait dire « au tout début » — deux choses différentes qu'il ne faut pas
+-- confondre. Les commentaires déjà en base restent donc NULL : ils continuent
+-- de défiler en boucle, sans prétendre à un instant qu'on ne connaît pas.
+ALTER TABLE comment ADD COLUMN video_t INTEGER;

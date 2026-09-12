@@ -283,5 +283,8 @@ html.reveal .card.in{opacity:1;transform:none;
 .tmsg .etat.ok{color:var(--green)} .tmsg .etat.err{color:var(--coral)}
 .tsub.mienne{border-left-color:var(--gold)}
 .tsub .att{color:var(--gold);font-size:9px;flex:none}
+.tsub .at,.at{flex:none;font-family:var(--mono);font-size:9.5px;font-variant-numeric:tabular-nums;
+  color:var(--gold);background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);
+  border-radius:4px;padding:1px 5px;letter-spacing:.02em}
 @media(max-width:640px){.tmsg .emos,.tmsg .etat{display:none}.tmsg .qui{width:70px}}
 @media(prefers-reduced-motion:reduce){.theater-pop::before,.tp{animation:none}}

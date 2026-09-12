@@ -70,6 +70,9 @@
          serveur redirige comme avant — rien n'est perdu. #}
       <input type="hidden" name="csrf" value="{{ pcsrf }}">
       <input type="hidden" name="ts_token" value="{{ ts_token }}">
+      {# Rempli par vue.js à l'envoi : la seconde de lecture visée. Vide sans JS
+         ou hors lecture — le serveur enregistre alors « pas d'instant ». #}
+      <input type="hidden" name="video_t" id="mb-t" value="">
       <label class="hp">Laissez ce champ vide<input name="website" tabindex="-1" autocomplete="off"></label>
       <span class="k">▸</span>
       <input class="qui" id="mb-qui" name="author_name" maxlength="40" placeholder="nom" required>
@@ -163,8 +166,11 @@
   {% if flash == 'slow' %}<p class="note err">Trop vite — réessayez dans un instant.</p>{% endif %}
   <ol class="clines">
   {% for c in comments %}
-    <li class="comment cline" data-who="{{ c.author_name }}" data-when="{{ c.created_at[:16]|replace('T',' ') }}">
-      <span class="ix">{{ '%02d' % loop.index }}</span>
+    <li class="comment cline" data-who="{{ c.author_name }}" data-when="{{ c.created_at[:16]|replace('T',' ') }}"
+        {% if c.video_t is not none %}data-t="{{ c.video_t }}"{% endif %}>
+      {% if c.video_t is not none %}<button type="button" class="at" data-seek="{{ c.video_t }}"
+        title="Reprendre la vidéo à cet instant">{{ '%d:%02d' % (c.video_t // 60, c.video_t % 60) }}</button>
+      {% else %}<span class="ix">{{ '%02d' % loop.index }}</span>{% endif %}
       <span class="nm c-meta"><strong>{{ c.author_name }}</strong></span>
       <span class="msg c-body">{{ c.body_html|safe }}</span>
       <time class="tm" datetime="{{ c.created_at }}">{{ c.created_at[:10] }}</time>

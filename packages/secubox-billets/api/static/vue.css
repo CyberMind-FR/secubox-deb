@@ -64,6 +64,12 @@
 .track .line.out{animation:subout .3s ease forwards}
 .track .line:hover{background:rgba(10,16,24,.92);border-left-color:var(--gold)}
 .line .k{color:var(--tone);opacity:.8;flex:none}
+/* la puce d'INSTANT : ce message parle de CE moment de la vidéo */
+.line .at,.cline .at{flex:none;font-family:var(--mono);font-size:9.5px;font-variant-numeric:tabular-nums;
+  color:var(--gold);background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);
+  border-radius:4px;padding:1px 5px;letter-spacing:.02em}
+.cline .at{cursor:pointer;transition:.15s}
+.cline .at:hover{background:var(--gold);color:var(--ink);border-color:var(--gold)}
 .line .nm{color:#eaf1f6;font-weight:600;font-size:11px;flex:none;letter-spacing:.02em}
 .line .msg{color:#c9d5df;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .line .tm{color:var(--faint);font-size:9px;flex:none;font-variant-numeric:tabular-nums}

@@ -88,10 +88,12 @@
   function cache() { cur.classList.remove("on"); }
 
   // ── SOUS-TITRES : les messages déjà rendus, en défilé par-dessus l'image ──
+  function mmss(t) { t = Math.max(0, Math.floor(t)); return Math.floor(t / 60) + ":" + ("0" + (t % 60)).slice(-2); }
   var src = [].slice.call(document.querySelectorAll("#comments .cline")).map(function (n, i) {
     var m = n.querySelector(".msg");
     return {
       i: i, who: n.dataset.who || "", when: n.dataset.when || "",
+      t: n.dataset.t != null && n.dataset.t !== "" ? parseInt(n.dataset.t, 10) : null,
       msg: (m ? m.textContent : "").replace(/\s+/g, " ").trim(), node: n
     };
   }).filter(function (c) { return c.msg; });
@@ -101,7 +103,8 @@
     var k = 0, MAX = 3;
     function ligne(c, mienne, attente) {
       var d = document.createElement("div"); d.className = "line" + (mienne ? " mienne" : "");
-      d.innerHTML = '<span class="k">▸</span><span class="nm">' + esc(c.who) + '</span>'
+      d.innerHTML = (c.t != null ? '<span class="at">' + mmss(c.t) + '</span>' : '<span class="k">▸</span>')
+        + '<span class="nm">' + esc(c.who) + '</span>'
         + '<span class="msg">' + esc(c.msg) + '</span>'
         + (attente ? '<span class="att">en attente</span>' : "")
         + '<span class="tm">' + esc(c.when || "") + '</span>';
@@ -123,14 +126,35 @@
       }, mienne ? 14000 : 9000);   /* la sienne reste un peu plus longtemps à l'écran */
     }
     pousseLigne = ligne;
+
+    // ANCRES : ils apparaissent QUAND LA VIDEO Y ARRIVE — c'est ce qui fait d'eux
+    // des sous-titres et non un bandeau qui défile. La position est celle que
+    // nous estimons (base + temps écoulé) : un lecteur en iframe d'un autre
+    // domaine ne nous dit pas où il en est, et c'est déjà la base de la reprise.
+    var ancres = src.filter(function (c) { return c.t != null; })
+                    .sort(function (a, b) { return a.t - b.t; });
+    var libres = src.filter(function (c) { return c.t == null; });
+    var vus = {}, dernier = 0;
+    if (ancres.length) setInterval(function () {
+      if (document.hidden || !joue || !scene || scene.classList.contains("nosubs")) return;
+      var p = pos();
+      if (p < dernier - 2) vus = {};        /* on est revenu en arrière : ils repassent */
+      dernier = p;
+      ancres.forEach(function (c, i) {
+        if (!vus[i] && p >= c.t && p < c.t + 5) { vus[i] = 1; ligne(c); }
+      });
+    }, 700);
+
+    // LIBRES (messages d'avant l'ancrage, ou écrits hors lecture) : ils tournent,
+    // faute d'instant à respecter. Mieux vaut les montrer que les taire.
     function pousse() {
-      if (document.hidden || !src.length || !scene || scene.classList.contains("nosubs")) return;
-      ligne(src[k % src.length]); k++;
+      if (document.hidden || !libres.length || !scene || scene.classList.contains("nosubs")) return;
+      ligne(libres[k % libres.length]); k++;
     }
-    if (src.length) {
+    if (libres.length) {
       pousse();
       setTimeout(pousse, 1400);
-      setInterval(pousse, 4200);
+      setInterval(pousse, 6000);
     }
   }
 
@@ -161,6 +185,17 @@
     popRe(em ? em.textContent.trim() : "♥", null);
   }, true);
 
+  // cliquer une puce d'instant reprend la lecture À CE MOMENT
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("[data-seek]") : null;
+    if (!b) return;
+    e.preventDefault();
+    var t = parseInt(b.dataset.seek, 10);
+    if (isNaN(t) || !ifr || !src0) return;
+    lance(false, t);
+    if (scene) scene.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
   // ── ECRIRE SANS RECHARGER ────────────────────────────────────────────────
   // LA VIDEO S'ARRETAIT A CHAQUE MESSAGE. Le formulaire postait en 303, la page
   // se rechargeait, l'embed repartait en autoplay SONORE — refusé sans geste —
@@ -176,7 +211,7 @@
     csrf: "session expirée — rechargez", absent: "billet introuvable"
   };
 
-  function ajouteConsole(qui, texte, attente) {
+  function ajouteConsole(qui, texte, attente, t) {
     if (!clines) return;
     var vide = clines.querySelector(".vide"); if (vide) vide.remove();
     var n = clines.querySelectorAll(".cline").length + 1;
@@ -199,6 +234,8 @@
     var fd = new FormData();
     fd.append("csrf", c ? c.value : ""); fd.append("ts_token", t ? t.value : "");
     fd.append("website", ""); fd.append("author_name", nom); fd.append("body", texte);
+    var ct = document.getElementById("mb-t");
+    if (ct && ct.value) fd.append("video_t", ct.value);
     return fetch("/b/" + encodeURIComponent(slug) + "/comment", {
       method: "POST", body: fd, credentials: "same-origin",
       headers: { "Accept": "application/json" }
@@ -206,8 +243,9 @@
       dire(ETATS[d.c] || d.c, !d.ok);
       if (!d.ok) return false;
       var qui = d.who || nom, quoi = d.msg || texte, attente = (d.c === "pending");
-      if (pousseLigne) pousseLigne({ who: qui, msg: quoi, when: d.when || "à l'instant" }, true, attente);
-      ajouteConsole(qui, quoi, attente);
+      if (pousseLigne) pousseLigne({ who: qui, msg: quoi, when: d.when || "à l'instant",
+                                     t: (d.t == null ? null : d.t) }, true, attente);
+      ajouteConsole(qui, quoi, attente, d.t);
       return true;
     }).catch(function () { dire("envoi impossible", true); return false; });
   }
@@ -231,7 +269,9 @@
       if (n.length < 2) { dire("votre nom, d'abord", true); qui.focus(); return; }
       if (m.length < 2) { quoi.focus(); return; }
       LS.set("nom", n);
-      envoi.disabled = true; dire("envoi…");
+      var champT = document.getElementById("mb-t");
+      if (champT) champT.value = joue ? String(Math.floor(pos())) : "";
+      envoi.disabled = true; dire("envoi…" + (joue ? " @" + mmss(pos()) : ""));
       envoyer(n, m, dire).then(function (ok) {
         envoi.disabled = false;
         if (ok) { quoi.value = ""; quoi.focus(); }
