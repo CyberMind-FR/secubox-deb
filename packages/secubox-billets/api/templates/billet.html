@@ -102,10 +102,40 @@
     {% if billet.ref_host %}<a class="ref-chip u-url" href="{{ billet.ref_url }}" target="_blank" rel="noopener nofollow ugc">↗ {{ billet.ref_host }}</a>{% endif %}
   </header>
 
+  {# LA FICHE : ce qui était une liste d'URLs nues devient des pastilles typées
+     (l'hôte dit la nature, pas le libellé) plus une ligne de mini-stats. #}
+  {% if billet.fiche %}
+  <div class="fiche">
+    <div class="fmeta">
+      {% if billet.fiche.chaine %}<span class="fch">👤 {{ billet.fiche.chaine }}</span>{% endif %}
+      {% if billet.fiche.duree %}<span class="fdur">⏱ {{ billet.fiche.duree }}</span>{% endif %}
+      <span class="fstats">
+        <span class="st" title="lectures">👁 <b>{{ billet.view_count or 0 }}</b></span>
+        <span class="st" title="réactions">♥ <b>{{ reactions.counts.values()|sum if reactions else 0 }}</b></span>
+        <span class="st" title="messages">💬 <b>{{ comments|length }}</b></span>
+      </span>
+    </div>
+    <div class="fliens">
+      {% for l in billet.fiche.liens %}
+      <a class="fl {{ l.genre }}" href="{{ l.url }}" target="_blank" rel="noopener nofollow ugc"
+         title="{{ l.url }}">
+        <span class="fi">{{ l.ico }}</span>
+        <span class="ft">{{ 'Source YouTube' if l.genre == 'yt' else ('PeerTube · souverain' if l.genre == 'pt' else ('Flux de la box' if l.genre == 'box' else l.label)) }}</span>
+        <span class="fh">{{ l.hote }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if billet.body_html and billet.body_html.strip() %}
   <div class="prose e-content">
     {% with b=billet %}{% include "_zani_stamp.html" %}{% endwith %}
     {{ billet.body_html|safe }}
   </div>
+  {% else %}
+  <div class="prose e-content zani-seul">{% with b=billet %}{% include "_zani_stamp.html" %}{% endwith %}</div>
+  {% endif %}
 
   {# Galerie = IMAGES seules. L'audio/vidéo/pdf s'affiche EN LIGNE dans le corps
      (les refs /media/ y sont embarquées au rendu, #1094) : les remettre ici en

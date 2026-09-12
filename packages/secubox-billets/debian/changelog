@@ -1,3 +1,22 @@
+secubox-billets (0.8.53-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LA VUE PRINCIPALE N'EST PLUS UNE LISTE D'ADRESSES. Les billets relayés
+    (199 en base) portent dans leur corps une fiche — titre répété, ligne
+    chaîne/durée, puis trois libellés suivis d'URLS NUES de deux cents caractères.
+    Rendue telle quelle, elle occupait toute la page. `services/fiche.extraire`
+    reconnaît cette forme et en tire des données ; la page les rend en PASTILLES
+    typées (Source YouTube / PeerTube · souverain / Flux de la box) portant leur
+    hôte en petit, et garde le RESTE comme prose.
+  * #1268 — c'est l'HOTE qui donne la nature du lien, pas le libellé : PeerTube en
+    vert souverain, flux de la box en doré, source tierce en sourdine. Le titre
+    répété et le trait de séparation disparaissent — le titre est déjà en tête.
+  * #1268 — MINI-STATS sur la fiche : lectures, réactions, messages.
+  * Rien n'est réécrit en base : la transformation est une LECTURE. Un corps qui
+    n'est pas une fiche ressort intact — mieux vaut une page ordinaire qu'une page
+    mutilée par un extracteur trop sûr de lui. vue ?v=v9.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 02:20:00 +0200
+
 secubox-billets (0.8.52-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — TELEPHONE : écrire ne fait plus sauter à l'article suivant. Deux causes

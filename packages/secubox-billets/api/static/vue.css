@@ -127,6 +127,31 @@
   border:1px solid var(--edge);border-radius:999px;padding:5px 11px}
 .vue-pin .ref-chip:hover{color:var(--tx);border-color:var(--edge-2)}
 
+/* ── LA FICHE : les liens deviennent des PASTILLES, plus des URLs nues ─────── */
+.fiche{max-width:68ch;margin:24px auto 0;display:flex;flex-direction:column;gap:12px}
+.fmeta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-family:var(--mono);
+  font-size:11px;color:var(--dim);letter-spacing:.04em}
+.fmeta .fdur{color:var(--gold)}
+.fstats{margin-left:auto;display:flex;gap:13px;color:var(--faint)}
+.fstats .st{display:inline-flex;align-items:center;gap:5px}
+.fstats b{color:var(--tx);font-variant-numeric:tabular-nums;font-weight:600}
+.fliens{display:flex;gap:9px;flex-wrap:wrap}
+.fl{display:inline-flex;align-items:center;gap:9px;padding:9px 14px;border-radius:11px;
+  background:var(--panel-2);border:1px solid var(--edge);transition:.16s;min-width:0}
+.fl:hover{transform:translateY(-1px);border-color:var(--edge-2);background:var(--panel)}
+.fl .fi{font-size:15px;flex:none}
+.fl .ft{font-family:var(--body);font-size:13px;font-weight:500;color:var(--tx);white-space:nowrap}
+.fl .fh{font-family:var(--mono);font-size:9px;color:var(--faint);letter-spacing:.04em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px}
+/* l'hôte dit la nature : souverain en vert, tiers en sourdine */
+.fl.pt{border-color:color-mix(in srgb,var(--green) 34%,var(--edge))}
+.fl.pt:hover{border-color:var(--green)} .fl.pt .ft{color:#cfeadd}
+.fl.box{border-color:color-mix(in srgb,var(--gold) 34%,var(--edge))}
+.fl.box:hover{border-color:var(--gold)} .fl.box .ft{color:#f0e2bb}
+.fl.yt .ft{color:var(--dim)}
+.prose.zani-seul{margin-top:8px;min-height:0}
+.prose.zani-seul::after{content:"";display:block;clear:both}
+
 /* ── LE CORPS ──────────────────────────────────────────────────────────────── */
 .prose{max-width:68ch;margin:26px auto 0;font-size:16.5px;line-height:1.74;color:#ccd6e0}
 .prose>*+*{margin-top:1.05em}

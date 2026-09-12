@@ -24,7 +24,7 @@ from .routes.public import _samesite
 from .routes.jwt_admin import register_jwt_admin
 from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
                             register_public, _visitor)
-from .services import antispam, feeds, media
+from .services import antispam, feeds, fiche, media
 from .services import security as sec
 from .services.render import linkify_plain, render_markdown
 
@@ -199,10 +199,21 @@ def _categorie(billet_id: str) -> str:
 def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None) -> dict:
     from urllib.parse import urlparse
     d = dict(row)
-    d["body_html"] = render_markdown(d["body"])
+    # FICHE MEDIA (#1268) : un billet relayé porte dans son corps une fiche —
+    # titre répété, chaîne/durée, et trois libellés suivis d'URLS NUES. Rendue
+    # telle quelle, la page principale n'était qu'une liste d'adresses. On en
+    # tire des données (rendues en pastilles) et on garde le RESTE comme prose.
+    # Un corps qui n'est pas une fiche ressort intact : `extraire` ne devine pas.
+    d["fiche"], _reste = fiche.extraire(d["body"])
+    d["body_html"] = render_markdown(_reste if d["fiche"] else d["body"])
     d["tags"] = tags or []
     # A few words for list/preview contexts; body_html keeps the full billet.
-    d["summary"] = feeds.excerpt(d["body"], max_len=140)
+    # Sur une fiche sans prose, le résumé vient de la fiche : une carte vide
+    # n'apprendrait rien, et l'URL nue encore moins.
+    if d["fiche"] and not _reste:
+        d["summary"] = " · ".join(x for x in (d["fiche"]["chaine"], d["fiche"]["duree"]) if x)
+    else:
+        d["summary"] = feeds.excerpt(_reste if d["fiche"] else d["body"], max_len=140)
     # Only long billets get resumed in the feed — `excerpt` collapses markdown, so
     # compare against IT, not len(body): a short billet padded with link syntax
     # would otherwise be "resumed" to a copy of itself followed by "Lire la suite".
