@@ -41,7 +41,7 @@ class ReactionEmoji(str, enum.Enum):
 
 # ── size limits (bytes/chars) ─────────────────────────────────────────────
 BODY_MAX = 8000
-COMMENT_MAX = 2000
+COMMENT_MAX = 8000        # #1268 : aligné sur le corps d'un billet (était 2000)
 AUTHOR_NAME_MIN, AUTHOR_NAME_MAX = 2, 40
 URL_MAX = 2048
 

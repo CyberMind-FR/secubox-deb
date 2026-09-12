@@ -350,7 +350,9 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         cmts = await repo.list_approved_comments(app.state.conn, row["id"])
         counts = await repo.reaction_counts(app.state.conn, row["id"])
         items = []
-        for c in cmts[-8:]:
+        # Tous les messages du billet : les sous-titres ancrés doivent pouvoir
+        # sortir à leur instant, pas seulement les huit derniers écrits.
+        for c in cmts:
             c = dict(c)
             items.append({"who": (c.get("author_name") or "anon")[:32],
                           "msg": (c.get("body") or "")[:180],
@@ -371,7 +373,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             "SELECT c.author_name, c.body, c.created_at, b.slug, c.video_t FROM comment c "
             "JOIN billet b ON b.id = c.billet_id "
             "WHERE c.status='approved' AND b.status='published' "
-            "ORDER BY c.created_at DESC LIMIT 16") as cur:
+            "ORDER BY c.created_at DESC LIMIT 60") as cur:
             async for r in cur:
                 comments.append({"who": (r[0] or "anon")[:32], "msg": (r[1] or "")[:160],
                                  "when": _depuis(r[2]), "slug": r[3], "t": r[4]})
@@ -379,7 +381,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         try:
             async with conn.execute(
                 "SELECT r.emoji, b.slug FROM reaction r JOIN billet b ON b.id = r.billet_id "
-                "WHERE b.status='published' ORDER BY r.rowid DESC LIMIT 18") as cur:
+                "WHERE b.status='published' ORDER BY r.rowid DESC LIMIT 60") as cur:
                 async for r in cur:
                     reactions.append({"emoji": r[0], "slug": r[1]})
         except Exception:  # noqa: BLE001 — le flux d'activité ne doit jamais casser la page

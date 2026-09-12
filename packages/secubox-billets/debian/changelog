@@ -1,3 +1,24 @@
+secubox-billets (0.8.54-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — LIMITES DE MESSAGES RETIREES. Plus de plafond de cadence (c'était 5
+    messages par heure et par IP), plus de délai de réflexion imposé (c'était 3
+    secondes), et la longueur passe de 2 000 à 8 000 signes — celle d'un billet.
+  * ATTENTION, ET C'EST VOLONTAIREMENT REVERSIBLE : billets est exposé
+    publiquement, et ces deux gardes étaient sa seule protection contre
+    l'inondation de commentaires. Le mécanisme n'est donc PAS supprimé du code,
+    seulement éteint par défaut et rallumable en une variable :
+      BILLETS_COMMENT_CADENCE=5   → 5 messages/heure et par IP
+      BILLETS_COMMENT_DELAI=3     → 3 secondes de réflexion minimale
+    Le jeton signé reste VERIFIE dans tous les cas — c'est lui qui prouve que le
+    formulaire vient bien de nous ; seul le délai minimal est réglable. Le piège à
+    robots et la modération restent en place, eux aussi.
+  * #1268 — les plafonds d'AFFICHAGE suivent : l'activité d'un billet renvoie
+    désormais TOUS ses messages (c'était les huit derniers), sans quoi un
+    sous-titre ancré tard dans la vidéo ne pouvait jamais sortir ; le flux global
+    passe de 16 à 60. assets ?v=im15 / vue ?v=v10.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 02:55:00 +0200
+
 secubox-billets (0.8.53-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — LA VUE PRINCIPALE N'EST PLUS UNE LISTE D'ADRESSES. Les billets relayés

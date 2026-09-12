@@ -22,7 +22,24 @@ from ..services import security as sec
 VISITOR_COOKIE = "billets_visitor"
 PCSRF_COOKIE = "billets_pcsrf"
 EMOJIS = [e.value for e in ReactionEmoji]
-_comment_limiter = sec.RateLimiter(max_events=5, window_s=3600)
+# LIMITES DE MESSAGES — RETIREES PAR DEFAUT (#1268), pas supprimées du code.
+# Billets est exposé publiquement : ces deux gardes (cadence par IP, délai de
+# réflexion) sont sa seule protection contre l'inondation de commentaires. On
+# les éteint parce que c'est ce qui est demandé, mais elles restent rallumables
+# en une variable — supprimer le mécanisme aurait rendu le retour en arrière
+# coûteux le jour où un robot passe.
+#   BILLETS_COMMENT_CADENCE=n   n messages/heure et par IP (0 = sans limite)
+#   BILLETS_COMMENT_DELAI=n     n secondes de réflexion minimale (0 = aucune)
+def _entier(nom: str, defaut: int) -> int:
+    try:
+        return max(0, int(os.environ.get(nom, defaut)))
+    except (TypeError, ValueError):
+        return defaut
+
+
+CADENCE = _entier("BILLETS_COMMENT_CADENCE", 0)
+DELAI = _entier("BILLETS_COMMENT_DELAI", 0)
+_comment_limiter = sec.RateLimiter(max_events=CADENCE, window_s=3600) if CADENCE else None
 
 
 def _client_ip(request: Request) -> str:
@@ -127,11 +144,14 @@ def register_public(app: FastAPI, templates: Jinja2Templates) -> None:
         # Honeypot: pretend success, store nothing.
         if antispam.honeypot_tripped(website):
             return rep("ok")
-        # Minimum think-time (signed token).
-        if not antispam.form_token_ok(secret, ts_token, now_epoch=int(time.time())):
+        # Délai de réflexion (jeton signé). Le jeton reste VERIFIE — c'est lui qui
+        # prouve que le formulaire vient bien de nous ; seul le délai minimal est
+        # réglable, et vaut zéro par défaut.
+        if not antispam.form_token_ok(secret, ts_token, now_epoch=int(time.time()),
+                                      min_delay=DELAI):
             return rep("slow")
         ip_hash = sec.hash_ip(_client_ip(request), secret)
-        if not _comment_limiter.check_and_add(ip_hash):
+        if _comment_limiter is not None and not _comment_limiter.check_and_add(ip_hash):
             return rep("rate")
         try:
             data = CommentIn(author_name=author_name, body=body,
