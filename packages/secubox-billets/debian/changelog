@@ -1,3 +1,12 @@
+secubox-billets (0.8.40-1~bookworm1) bookworm; urgency=medium
+
+  * #1268 — le popup dwell montre désormais le PERMALIEN du billet (notre page :
+    vidéo + commentaires + réactions), en mode ?embed=1 (sans double chrome) — le
+    comportement « ouvrir » que l'utilisateur visait, en overlay non-modal (reste =
+    pop, bouge = dépop). Plus l'embed nu qui affichait la page peertube. ?v=im7.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 12 Sep 2026 16:10:00 +0200
+
 secubox-billets (0.8.39-1~bookworm1) bookworm; urgency=medium
 
   * #1268 — lecture façon reels. Billet centré = spotlight ; si on RESTE (dwell

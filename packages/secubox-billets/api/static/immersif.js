@@ -56,17 +56,12 @@
     var slug = el.dataset.id, pos = LS.get("bpos:" + slug, 0);
     var title = el.querySelector(".title") ? el.querySelector(".title").textContent : "billet";
     theater.style.setProperty("--tone", COL[el.dataset.cat] || "#4db6d6");
+    // Le pop montre le PERMALIEN du billet (notre page : vidéo + commentaires +
+    // réactions) — le comportement « ouvrir ». Overlay non-modal → « bouge = dépop ».
     theater.innerHTML =
-      '<div class="tp"><div class="tstage"><iframe allow="autoplay; fullscreen; picture-in-picture" src="' + embedSrc(el.dataset.embed, true, pos) + '"></iframe></div>'
-      + '<div class="tbar"><span class="chip"><span class="d"></span>' + esc(el.dataset.cat) + '</span>'
-      + '<span class="ttl">' + esc(title) + '</span>'
-      + '<button class="tsnd" data-snd>🔊 son</button>'
-      + '<a class="topen" href="/b/' + encodeURIComponent(slug) + '">↗</a></div></div>';
+      '<div class="tp tp-page"><a class="tx" href="/b/' + encodeURIComponent(slug) + '" title="ouvrir en pleine page">↗</a>'
+      + '<iframe class="tframe" src="/b/' + encodeURIComponent(slug) + '?embed=1" title="' + esc(title) + '"></iframe></div>';
     theater.hidden = false; playing = el; base = pos; t0 = performance.now();
-    theater.querySelector("[data-snd]").onclick = function () {
-      var t = base + (performance.now() - t0) / 1000, ifr = theater.querySelector("iframe");
-      if (ifr) ifr.src = embedSrc(el.dataset.embed, false, t); this.remove();
-    };
   }
   function depopTheater() {
     if (playing) {
