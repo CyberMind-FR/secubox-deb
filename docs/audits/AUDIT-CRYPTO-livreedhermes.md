@@ -558,3 +558,167 @@ pré-chauffage au démarrage si la latence du premier message importe.
 **Conclusion débit** : les primitives réelles sont rapides ; Carter reste adapté
 à de la **messagerie** (~8 ms/encode après optimisation, ~4 ms/decode), pas à du
 volume soutenu.
+
+---
+
+## Passage 5 — 2026-09-13 (amont `3bd5f7fd`, delta **126 commits** sur `aede483`)
+
+Revue du portage `secubox_core.crypto.hermes` contre l'amont réel, et non
+contre le souvenir qu'on en avait. Trois constats, dont un sur **notre**
+documentation.
+
+### 5.1 La provenance citée par notre en-tête était fausse (corrigé)
+
+`hermes.py` se disait porté de `stegano/crypto_core.py` **au commit
+`d4abc757`**. Vérification faite, ce fichier **n'existait pas** à ce commit :
+`stegano/` n'y contenait que `stegano_lib.py`. `crypto_core.py` en a été
+extrait plus tard, par la scission `f00548d1`. La base réelle est donc
+`stegano_lib.py` @ `d4abc757`, dont l'équivalent amont s'appelle aujourd'hui
+`crypto_core.py`. L'en-tête est corrigé et daté.
+
+Ce n'est pas anodin : une provenance fausse rend une revue de sécurité
+irreproductible — l'auditeur suivant aurait cherché un fichier absent et
+conclu ce qu'il aurait voulu.
+
+### 5.2 Fenêtre de permissions : l'amont nous a rejoints, il ne nous devançait pas
+
+`2eca5145` (« corrections d'un audit externe ») corrige en amont une **fenêtre
+de course** sur les fichiers sensibles : créés avec l'umask par défaut, donc
+lisibles par le groupe et les autres, puis restreints à `0600` par un `chmod`
+**après coup**.
+
+Notre portage n'a jamais eu ce défaut : `Identity.save()` ouvre déjà par
+`os.open(..., O_CREAT|O_EXCL, 0o600)` puis remplace atomiquement. Le point est
+désormais **verrouillé par un test** (`test_la_cle_privee_nait_deja_en_0600`)
+plutôt que par une affirmation de docstring.
+
+### 5.3 Deux limites réelles de notre couche Session — désormais énoncées et outillées
+
+L'amont documente dans le même commit que sa couche session **n'offre aucune
+confirmation de clé**. Notre `Session` a exactement la même propriété, et ne le
+disait nulle part.
+
+| Limite | Avant | Maintenant |
+|---|---|---|
+| Pas de confirmation de clé — un pair mal apparié obtient une session d'apparence valide, l'erreur ne surgit qu'au premier déchiffrement raté | non documentée | documentée **et** détectable tout de suite via `Session.confirmation()` / `Session.accorde()` (HKDF en domaine séparé, comparaison en temps constant) |
+| Nonce ChaCha20-Poly1305 de 96 bits **tiré au hasard** : unicité non garantie au-delà de ~2³² messages sous la même clé | non documentée, dépassement silencieux | budget appliqué — `encrypt()` **refuse** de franchir la borne et exige une renégociation |
+
+`XChaCha20-Poly1305` (nonce de 192 bits), qui supprimerait la question, est
+**absent de `cryptography` 47.0.0** telle qu'installée sur la cible : le
+changement d'algorithme n'est pas disponible, et l'aurait de toute façon été au
+prix d'une rupture de compatibilité avec les données déjà scellées.
+
+### 5.4 Ce qui ne nous concerne pas
+
+* **`_km_to_keys`** — dérivation SHA-256 maison de `key_2`/`key_b`, signalée
+  par l'amont comme **restant vivante en production** dans sa `Session.derive()`.
+  Notre portage n'en a rien repris : `Session.establish()` est ECDH X25519 puis
+  **HKDF-SHA256 seul**, sans construction maison sur le chemin critique.
+* **Tâche 1 (`0bd78882`), HChaCha20 natif / format v3, masques, référents
+  6×6, Carter-256/360/Mix, mode déni** — toute la couche géométrique et
+  stéganographique, délibérément hors du portage (cf. §3). Ces 126 commits la
+  remanient en profondeur ; cela ne change rien à notre surface.
+* `f57fc55d` et `cec6ecf6` sont **nos propres PR #6 et #5**, mergées en amont :
+  le correctif d'entropie de l'en-tête de longueur et l'optimisation CSPRNG en
+  bloc sont désormais dans la branche principale d'`anibaledel/livreedhermes`.
+
+### 5.5 Verdict
+
+Le portage reste **sain** et n'a hérité d'aucune des faiblesses corrigées en
+amont depuis. Les deux limites structurelles de la couche session sont
+maintenant **dites** et, pour l'une, **instrumentée**. Aucune action restante
+côté SecuBox à ce passage.
+
+---
+
+## Annexe B — Banc d'essai `hermes` sur deux matériels (2026-09-13)
+
+Mesures du portage `secubox_core.crypto.hermes` 1.4.2, **même script, mêmes
+tailles**, sur la cible de production et sur le poste de développement.
+
+### B.1 Les deux machines
+
+| | **gk2** (cible) | **hôte** (développement) |
+|---|---|---|
+| Processeur | ARM Cortex-A72 (`0xd08`), 4 cœurs | 13th Gen Intel(R) Core(TM) i9-13900H, 20 fils |
+| Fréquence max | 1400 MHz | 5200 MHz |
+| Noyau | 6.12.85 | 7.1.5-76070105-generic |
+| Python | 3.11.2 | 3.12.3 |
+| `cryptography` | **47.0.0** | **41.0.7** |
+| OpenSSL | OpenSSL 4.0.0 14 Apr 2026 | OpenSSL 3.0.13 30 Jan 2024 |
+
+**Le banc n'est pas un comparatif de processeurs.** Les deux machines ne portent
+ni la même `cryptography` ni le même OpenSSL, et §B.4 montre que cet écart
+logiciel dépasse par endroits l'écart matériel. Chaque chiffre est valable pour
+*sa* machine telle qu'elle est ; les rapports sont indicatifs.
+
+### B.2 Méthode
+
+Chaque opération est chauffée, puis mesurée sur cinq séries dont on retient la
+**médiane** — pas le meilleur temps, qui flatte une machine au repos et ne dit
+rien d'un service en charge. Les itérations sont calibrées par opération. Le
+débit est calculé sur la taille du **clair**, nonce et tag exclus. Sur gk2, le
+banc tourne en `nice -n 5` pour ne pas évincer les services.
+
+### B.3 Opérations unitaires
+
+| Opération | gk2 | hôte | rapport |
+|---|---|---|---|
+| Génération d'identité (X25519) | **178 µs** — 5 603 op/s | 57 µs — 17 510 op/s | ×3.1 |
+| Établissement de session (ECDH + HKDF) | **554 µs** — 1 806 op/s | 77 µs — 12 934 op/s | ×7.2 |
+| Écriture de clé privée (PEM 0600) | **431 µs** — 2 322 op/s | 116 µs — 8 630 op/s | ×3.7 |
+| Lecture de clé privée (PEM) | **288 µs** — 3 477 op/s | 565 µs — 1 769 op/s | ×0.5 |
+| Confirmation de clé (HKDF) | **37 µs** — 26 874 op/s | 21 µs — 47 708 op/s | ×1.8 |
+| HKDF-SHA256 seul | **30 µs** — 33 472 op/s | 21 µs — 48 260 op/s | ×1.4 |
+
+### B.4 Ce que le banc révèle sur l'hôte, pas sur la cible
+
+`Identity.load` est **deux fois plus rapide sur la box que sur l'hôte** — une
+inversion qui n'a pas de sens matériel. Mesure isolée sur la primitive nue
+`load_pem_private_key` :
+
+| | `cryptography` | `load_pem_private_key` |
+|---|---|---|
+| gk2, A72 à 1,4 GHz | 47.0.0 | **147 µs** |
+| hôte, i9 à 5,2 GHz | 41.0.7 | **542 µs** |
+
+L'écart vient donc **entièrement de la bibliothèque** : le décodage PEM/PKCS#8 a
+été porté en Rust dans les versions récentes. L'hôte de développement traîne une
+`cryptography` 41.0.7 ancienne, et c'est lui qu'il faut mettre à jour — la cible
+est à jour. À retenir : sans cette vérification, on aurait conclu que l'ARM bat
+l'x86 sur le chargement de clé, ce qui est faux.
+
+### B.5 Chiffrement authentifié (ChaCha20-Poly1305)
+
+| Taille du clair | gk2 chiffre | gk2 déchiffre | hôte chiffre | hôte déchiffre |
+|---|---|---|---|---|
+| 64 o | **6 Mio/s** | **9 Mio/s** | 6 Mio/s | 7 Mio/s |
+| 1 Kio | **57 Mio/s** | **76 Mio/s** | 92 Mio/s | 100 Mio/s |
+| 16 Kio | **176 Mio/s** | **193 Mio/s** | 786 Mio/s | 809 Mio/s |
+| 256 Kio | **203 Mio/s** | **186 Mio/s** | 779 Mio/s | 596 Mio/s |
+| 1 Mio | **134 Mio/s** | **177 Mio/s** | 708 Mio/s | 574 Mio/s |
+
+### B.6 Lecture
+
+**Sur les petits messages  la box vaut l'hôte.** À 64 octets — la taille réelle
+du canal scellé de `secubox-identity` — on mesure 11 µs sur gk2 contre
+10 µs sur l'hôte  soit ×1.1. À cette taille  le coût n'est pas
+cryptographique : c'est l'appel Python et l'allocation. Aucun gain à espérer
+d'un processeur plus rapide  et aucune inquiétude à avoir sur la cible.
+
+**L'asymétrique est le vrai écart.** L'établissement de session (ECDH X25519 +
+HKDF) est le poste le plus pénalisé  ×7.2.
+Même ainsi  gk2 soutient **1 806 établissements par seconde et par cœur** —
+hors de proportion avec l'usage réel  où une session est négociée par pair et
+réutilisée.
+
+**Le symétrique dépasse largement le réseau.** gk2 plafonne autour de
+203 Mio/s sur les blocs de 256 Kio  soit environ
+1.6 Gbit/s : le chiffrement ne sera jamais le goulot
+d'étranglement d'un lien de la box. Le débit s'écroule en dessous de 1 Kio  où
+l'on paie l'appel plutôt que l'algorithme — grouper les petits messages  quand
+c'est possible  vaut mieux qu'optimiser la primitive.
+
+**Aucune action de performance n'est requise côté cible.** La seule
+recommandation de cette annexe concerne le poste de développement : mettre
+`cryptography` à niveau.

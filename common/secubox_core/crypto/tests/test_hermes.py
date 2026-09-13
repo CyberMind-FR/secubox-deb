@@ -178,3 +178,57 @@ def test_no_signing_key_by_default():
     assert not ident.has_signing_key
     with pytest.raises(ValueError):
         ident.sign(b"x")
+
+
+# ── Passage 5 (2026-09-13) : revue contre l'amont à 126 commits ───────────
+# Deux limites que l'amont a documentées sur sa propre couche session
+# (`2eca5145`) sont ici COUVERTES PAR DES TESTS, pas seulement par un
+# commentaire : l'absence de confirmation de clé, et la borne du nonce.
+
+def test_confirmation_egale_entre_pairs_qui_partagent_la_cle():
+    a, b = Identity.generate(), Identity.generate()
+    sa = Session.establish(a, bytes.fromhex(b.public_hex()))
+    sb = Session.establish(b, bytes.fromhex(a.public_hex()))
+    assert Session.accorde(sa.confirmation(), sb.confirmation())
+
+
+def test_confirmation_revele_tout_de_suite_un_pair_qui_ne_correspond_pas():
+    """SANS ce mécanisme, l'erreur ne surgit qu'au premier déchiffrement raté."""
+    a, b, autre = Identity.generate(), Identity.generate(), Identity.generate()
+    sa = Session.establish(a, bytes.fromhex(b.public_hex()))
+    faux = Session.establish(autre, bytes.fromhex(a.public_hex()))
+    assert not Session.accorde(sa.confirmation(), faux.confirmation())
+
+
+def test_confirmation_ne_divulgue_pas_la_cle_de_session():
+    a, b = Identity.generate(), Identity.generate()
+    s = Session.establish(a, bytes.fromhex(b.public_hex()))
+    etiquette = s.confirmation()
+    assert etiquette != s._key                      # domaine HKDF séparé
+    assert len(etiquette) == 32
+    assert etiquette != s.confirmation(label=b"autre-usage")
+
+
+def test_le_budget_de_nonces_refuse_plutot_que_de_deborder():
+    """96 bits tirés au hasard : au-delà de ~2³² messages, l'unicité n'est plus
+    garantie. On s'arrête AVANT, bruyamment."""
+    import pytest
+    a, b = Identity.generate(), Identity.generate()
+    s = Session.establish(a, bytes.fromhex(b.public_hex()))
+    s._envois = 2 ** 32 - 1
+    s.encrypt(b"dernier message autorise")          # la borne exacte passe
+    with pytest.raises(RuntimeError, match="budget de nonces"):
+        s.encrypt(b"celui-ci doit etre refuse")
+
+
+def test_la_cle_privee_nait_deja_en_0600(tmp_path):
+    """L'amont a corrigé en `2eca5145` une fenêtre où le fichier existait avec
+    l'umask par défaut avant le chmod. Notre portage pose 0600 à la création :
+    ce test le verrouille."""
+    import os
+    import stat
+    p = tmp_path / "identite.pem"
+    Identity.generate().save(p)
+    mode = stat.S_IMODE(os.stat(p).st_mode)
+    assert mode == 0o600, f"clé privée en {oct(mode)} — doit être 0o600"
+    assert not list(tmp_path.glob("*.tmp")), "temporaire laissé derrière"

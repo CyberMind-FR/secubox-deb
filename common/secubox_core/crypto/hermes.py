@@ -5,9 +5,18 @@
 
 """hermes — cœur cryptographique souverain de SecuBox.
 
-Portage des primitives de ``anibaledel/livreedhermes``
-(``stegano/crypto_core.py``, audité « sain », commit d'origine
-``d4abc757``) vers un backend souverain **enfichable au runtime**.
+Portage des primitives de ``anibaledel/livreedhermes`` vers un backend
+souverain **enfichable au runtime**.
+
+PROVENANCE EXACTE (corrigée au passage 5, 2026-09-13). L'en-tête citait
+``stegano/crypto_core.py`` au commit ``d4abc757`` — or ce fichier
+**n'existait pas** à ce commit : ``stegano/`` n'y contenait que
+``stegano_lib.py``, dont ``crypto_core.py`` a été extrait plus tard
+(scission ``f00548d1``). La base réelle du portage est donc
+``stegano_lib.py`` @ ``d4abc757`` ; l'équivalent amont s'appelle
+aujourd'hui ``stegano/crypto_core.py``. Revu contre l'amont à
+``origin/main`` du 2026-09-13 (126 commits plus loin) : voir
+``docs/audits/AUDIT-CRYPTO-livreedhermes.md``, passage 5.
 
 Seules des primitives **standard et éprouvées** de la bibliothèque
 ``cryptography`` sont utilisées — aucune construction « maison » sur le
@@ -27,13 +36,30 @@ L'API sépare trois responsabilités :
 Règles de sécurité (rappel CSPN) :
 
 * les clés privées ne sont **jamais exportées en clair par défaut** ;
-* elles sont persistées en PEM avec permission **0600** ;
+* elles sont persistées en PEM avec permission **0600**, posée **à la
+  création du descripteur** — jamais par un ``chmod`` après coup, qui
+  laisserait le fichier lisible entre les deux (l'amont a corrigé cette
+  même fenêtre de course en ``2eca5145`` ; notre portage ne l'a jamais
+  eue) ;
 * signature (Ed25519) et accord de clés (X25519) reposent sur **deux
   clés distinctes**.
+
+Limites connues, énoncées plutôt que tues :
+
+* :class:`Session` n'offre **aucune confirmation de clé implicite** — un
+  pair qui dérive avec une mauvaise clé publique obtient une session
+  d'apparence valide, et l'erreur ne se manifeste qu'au premier
+  déchiffrement raté. :meth:`Session.confirmation` existe pour la
+  détecter **tout de suite** ;
+* le nonce ChaCha20-Poly1305 fait 96 bits et est **tiré au hasard** à
+  chaque message : au-delà de ~2³² messages sous la même clé, le risque
+  de collision cesse d'être négligeable. :meth:`Session.encrypt` refuse
+  de franchir cette borne plutôt que de la dépasser en silence.
 """
 
 from __future__ import annotations
 
+import hmac
 import os
 from pathlib import Path
 from typing import Optional, Union
@@ -58,6 +84,11 @@ _CHACHA_NONCE_LEN = 12  # ChaCha20-Poly1305 (RFC 8439) : nonce de 96 bits.
 _CHACHA_TAG_LEN = 16
 _DEFAULT_KDF_LEN = 32
 _DEFAULT_KDF_INFO = b"secubox-hermes/v1"
+# Budget de nonces d'une session (#1263). Nonce ALEATOIRE de 96 bits : la
+# probabilité de collision suit la borne des anniversaires, donc ~2^-32 après
+# 2^32 messages. On s'arrête AVANT plutôt que de continuer en silence — une
+# session qui atteint ce volume doit être renégociée, pas prolongée.
+_NONCE_BUDGET = 2 ** 32
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -308,6 +339,7 @@ class Session:
             )
         self._key = key
         self._aead = ChaCha20Poly1305(key)
+        self._envois = 0
 
     @classmethod
     def establish(
@@ -352,10 +384,50 @@ class Session:
         :param aad: données associées authentifiées mais non chiffrées ; elles
             devront être fournies à l'identique lors du :meth:`decrypt`.
         :returns: ``nonce(12) || ciphertext || tag(16)``.
+        :raises RuntimeError: si le budget de nonces de la session est épuisé
+            (~2³² messages) — il faut alors **renégocier** une session, pas
+            continuer sous la même clé.
         """
+        if self._envois >= _NONCE_BUDGET:
+            raise RuntimeError(
+                "budget de nonces épuisé pour cette session "
+                f"({_NONCE_BUDGET} messages) : renégociez une session. "
+                "Un nonce aléatoire de 96 bits ne garantit plus l'unicité "
+                "au-delà de cette borne."
+            )
+        self._envois += 1
         nonce = os.urandom(_CHACHA_NONCE_LEN)
         ct = self._aead.encrypt(nonce, plaintext, aad or None)
         return nonce + ct
+
+    def confirmation(self, *, label: bytes = b"confirmation") -> bytes:
+        """Étiquette de **confirmation de clé** (32 octets) à échanger.
+
+        POURQUOI ELLE EXISTE. :meth:`establish` ne valide rien : deux pairs qui
+        dérivent avec des clés publiques différentes obtiennent chacun une
+        session d'apparence parfaitement valide, et la divergence ne se révèle
+        qu'au **premier déchiffrement raté** — parfois longtemps après, et sous
+        la forme trompeuse d'une « donnée corrompue ». L'amont a documenté la
+        même limite sur sa propre couche session (``2eca5145``).
+
+        Les deux pairs comparent cette étiquette avec :meth:`accorde` : égales,
+        ils partagent la clé ; différentes, la session est à jeter tout de
+        suite. L'étiquette est dérivée par HKDF dans un **domaine séparé** de
+        la clé de chiffrement : la publier n'apprend rien sur celle-ci.
+        """
+        return derive_key_material(
+            self._key, info=_DEFAULT_KDF_INFO + b"/" + label, length=32
+        )
+
+    @staticmethod
+    def accorde(mienne: bytes, sienne: bytes) -> bool:
+        """Compare deux étiquettes de confirmation en **temps constant**.
+
+        Une comparaison naïve (``==``) fuirait par son temps d'exécution le
+        nombre d'octets de préfixe communs — de quoi reconstruire l'étiquette
+        attendue octet par octet.
+        """
+        return hmac.compare_digest(mienne, sienne)
 
     def decrypt(self, ciphertext: bytes, aad: bytes = b"") -> bytes:
         """Déchiffre et **authentifie** un message produit par :meth:`encrypt`.
