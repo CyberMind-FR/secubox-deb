@@ -3689,14 +3689,31 @@ addEventListener('message', ev=>{
       var b=ev.target.closest ? ev.target.closest('.reveil-btn') : null; if(!b) return;
       ev.preventDefault(); ev.stopPropagation();
       var mid=b.getAttribute('data-mid'), j=jeton();
-      if(!mid || !j) return;
+      if(!mid) return;
+      // LE CLIC NE DOIT JAMAIS RESTER MUET. Il exigeait un `sbx_token` en
+      // localStorage et repartait EN SILENCE quand il manquait — or le voile
+      // s'affiche dès que `_moi` est vrai, et `_moi` peut venir du seul COOKIE
+      // de session (sondeSession n'ajoute le Bearer que s'il existe). On
+      // cliquait donc sur un bouton qui ne faisait rien, sans un mot.
+      // Côté serveur, `require_jwt` accepte DÉJÀ le cookie autant que le Bearer :
+      // il suffisait d'essayer. On envoie le cookie, on n'ajoute le Bearer que
+      // s'il existe, et tout échec se dit.
       b.disabled=true; b.textContent='⏳ réveil…';
-      fetch('/api/v1/profiles/wake',{method:'POST',
-        headers:{'Content-Type':'application/json','Accept':'application/json','Authorization':'Bearer '+j},
-        body:JSON.stringify({module:mid})})
+      var hdr={'Content-Type':'application/json','Accept':'application/json'};
+      if(j) hdr['Authorization']='Bearer '+j;
+      fetch('/api/v1/profiles/wake',{method:'POST', headers:hdr,
+        credentials:'same-origin', body:JSON.stringify({module:mid})})
         .then(function(r){ if(!r.ok) throw r.status; return r.json(); })
         .then(function(){ setTimeout(majReveils,4000); setTimeout(majReveils,9000); setTimeout(majReveils,15000); })
-        .catch(function(){ b.disabled=false; b.textContent='⚠️ réessayer'; });
+        .catch(function(err){
+          b.disabled=false;
+          // Une session expirée n'est pas une panne : on le dit autrement, et on
+          // ne propose pas de réessayer ce qui échouera pareil.
+          var auth=(err===401||err===403);
+          b.textContent = auth ? '🔒 reconnectez-vous' : '⚠️ réessayer';
+          b.title = auth ? 'Le réveil demande une session ouverte sur la box.'
+                         : 'Le réveil a échoué ('+err+'). Réessayez.';
+        });
     }, true);
     setTimeout(majReveils, 1600);
     setInterval(majReveils, 20000);

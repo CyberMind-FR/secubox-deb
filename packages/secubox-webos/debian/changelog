@@ -1,3 +1,20 @@
+secubox-webos (1.0.295-1~bookworm1) bookworm; urgency=medium
+
+  * Hall — « RÉVEILLER » NE RESTE PLUS MUET. Le bouton exigeait un `sbx_token` en
+    localStorage et repartait EN SILENCE quand il manquait : ni message, ni
+    sablier, rien. Or le voile s'affiche des que `_moi` est vrai, et `_moi` peut
+    venir du SEUL COOKIE de session — `sondeSession` n'ajoute le Bearer que s'il
+    existe. On cliquait donc sur un bouton qui ne faisait rien, sans un mot.
+  * Côté serveur, `require_jwt` accepte DEJA le cookie autant que le Bearer
+    (SSO-lite #400) : il suffisait d'essayer. La requete part maintenant avec le
+    cookie (`credentials: same-origin`) et n'ajoute le Bearer que s'il existe,
+    exactement comme `sondeSession`.
+  * Tout echec se dit desormais : 401/403 -> « 🔒 reconnectez-vous » (une session
+    expiree n'est pas une panne, et rien ne sert de proposer de reessayer), toute
+    autre erreur -> « ⚠️ réessayer » avec le code en infobulle.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 14:55:00 +0200
+
 secubox-webos (1.0.294-1~bookworm1) bookworm; urgency=medium
 
   * Hall — LE RENSEIGNEMENT REAPPARAIT DANS LE MENU SERVICES DE LA MEGABARRE.
