@@ -1,3 +1,30 @@
+secubox-core (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * crypto/hermes — revue contre l'amont `anibaledel/livreedhermes` à 126 commits
+    de distance (`3bd5f7fd`, 2026-09-13). Voir docs/audits, passage 5.
+  * PROVENANCE CORRIGEE : l'en-tête citait `stegano/crypto_core.py` au commit
+    `d4abc757`, où ce fichier N'EXISTAIT PAS (seul `stegano_lib.py` s'y trouvait ;
+    `crypto_core.py` en a été extrait plus tard). Une provenance fausse rend une
+    revue de sécurité irreproductible — l'auditeur suivant aurait cherché un
+    fichier absent.
+  * CONFIRMATION DE CLE : `Session.establish()` ne valide rien — deux pairs mal
+    appariés obtiennent chacun une session d'apparence valide, et la divergence ne
+    se révèle qu'au premier déchiffrement raté, sous la forme trompeuse d'une
+    « donnée corrompue ». `Session.confirmation()` dérive une étiquette dans un
+    domaine HKDF séparé, `Session.accorde()` la compare en TEMPS CONSTANT.
+    L'amont a documenté la même limite sur sa propre couche session (`2eca5145`).
+  * BUDGET DE NONCES : le nonce ChaCha20-Poly1305 fait 96 bits et est tiré au
+    hasard ; au-delà de ~2^32 messages sous la même clé, l'unicité n'est plus
+    garantie. `encrypt()` REFUSE désormais de franchir la borne au lieu de la
+    dépasser en silence. XChaCha20-Poly1305 (192 bits), qui supprimerait la
+    question, est absent de `cryptography` 47.0.0 sur la cible.
+  * La fenêtre de permissions corrigée en amont (`2eca5145` : fichier créé sous
+    umask puis chmod 0600 après coup) n'a jamais existé ici — `Identity.save()`
+    ouvre en 0600 dès `os.open`. Le point passe d'une affirmation de docstring à
+    un TEST.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 12:30:00 +0200
+
 secubox-core (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox_core.crypto (Hermes souverain, #1263) : cœur crypto IMPORTABLE au

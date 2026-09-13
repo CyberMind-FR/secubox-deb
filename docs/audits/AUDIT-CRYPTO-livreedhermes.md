@@ -558,3 +558,73 @@ pré-chauffage au démarrage si la latence du premier message importe.
 **Conclusion débit** : les primitives réelles sont rapides ; Carter reste adapté
 à de la **messagerie** (~8 ms/encode après optimisation, ~4 ms/decode), pas à du
 volume soutenu.
+
+---
+
+## Passage 5 — 2026-09-13 (amont `3bd5f7fd`, delta **126 commits** sur `aede483`)
+
+Revue du portage `secubox_core.crypto.hermes` contre l'amont réel, et non
+contre le souvenir qu'on en avait. Trois constats, dont un sur **notre**
+documentation.
+
+### 5.1 La provenance citée par notre en-tête était fausse (corrigé)
+
+`hermes.py` se disait porté de `stegano/crypto_core.py` **au commit
+`d4abc757`**. Vérification faite, ce fichier **n'existait pas** à ce commit :
+`stegano/` n'y contenait que `stegano_lib.py`. `crypto_core.py` en a été
+extrait plus tard, par la scission `f00548d1`. La base réelle est donc
+`stegano_lib.py` @ `d4abc757`, dont l'équivalent amont s'appelle aujourd'hui
+`crypto_core.py`. L'en-tête est corrigé et daté.
+
+Ce n'est pas anodin : une provenance fausse rend une revue de sécurité
+irreproductible — l'auditeur suivant aurait cherché un fichier absent et
+conclu ce qu'il aurait voulu.
+
+### 5.2 Fenêtre de permissions : l'amont nous a rejoints, il ne nous devançait pas
+
+`2eca5145` (« corrections d'un audit externe ») corrige en amont une **fenêtre
+de course** sur les fichiers sensibles : créés avec l'umask par défaut, donc
+lisibles par le groupe et les autres, puis restreints à `0600` par un `chmod`
+**après coup**.
+
+Notre portage n'a jamais eu ce défaut : `Identity.save()` ouvre déjà par
+`os.open(..., O_CREAT|O_EXCL, 0o600)` puis remplace atomiquement. Le point est
+désormais **verrouillé par un test** (`test_la_cle_privee_nait_deja_en_0600`)
+plutôt que par une affirmation de docstring.
+
+### 5.3 Deux limites réelles de notre couche Session — désormais énoncées et outillées
+
+L'amont documente dans le même commit que sa couche session **n'offre aucune
+confirmation de clé**. Notre `Session` a exactement la même propriété, et ne le
+disait nulle part.
+
+| Limite | Avant | Maintenant |
+|---|---|---|
+| Pas de confirmation de clé — un pair mal apparié obtient une session d'apparence valide, l'erreur ne surgit qu'au premier déchiffrement raté | non documentée | documentée **et** détectable tout de suite via `Session.confirmation()` / `Session.accorde()` (HKDF en domaine séparé, comparaison en temps constant) |
+| Nonce ChaCha20-Poly1305 de 96 bits **tiré au hasard** : unicité non garantie au-delà de ~2³² messages sous la même clé | non documentée, dépassement silencieux | budget appliqué — `encrypt()` **refuse** de franchir la borne et exige une renégociation |
+
+`XChaCha20-Poly1305` (nonce de 192 bits), qui supprimerait la question, est
+**absent de `cryptography` 47.0.0** telle qu'installée sur la cible : le
+changement d'algorithme n'est pas disponible, et l'aurait de toute façon été au
+prix d'une rupture de compatibilité avec les données déjà scellées.
+
+### 5.4 Ce qui ne nous concerne pas
+
+* **`_km_to_keys`** — dérivation SHA-256 maison de `key_2`/`key_b`, signalée
+  par l'amont comme **restant vivante en production** dans sa `Session.derive()`.
+  Notre portage n'en a rien repris : `Session.establish()` est ECDH X25519 puis
+  **HKDF-SHA256 seul**, sans construction maison sur le chemin critique.
+* **Tâche 1 (`0bd78882`), HChaCha20 natif / format v3, masques, référents
+  6×6, Carter-256/360/Mix, mode déni** — toute la couche géométrique et
+  stéganographique, délibérément hors du portage (cf. §3). Ces 126 commits la
+  remanient en profondeur ; cela ne change rien à notre surface.
+* `f57fc55d` et `cec6ecf6` sont **nos propres PR #6 et #5**, mergées en amont :
+  le correctif d'entropie de l'en-tête de longueur et l'optimisation CSPRNG en
+  bloc sont désormais dans la branche principale d'`anibaledel/livreedhermes`.
+
+### 5.5 Verdict
+
+Le portage reste **sain** et n'a hérité d'aucune des faiblesses corrigées en
+amont depuis. Les deux limites structurelles de la couche session sont
+maintenant **dites** et, pour l'une, **instrumentée**. Aucune action restante
+côté SecuBox à ce passage.
