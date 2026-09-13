@@ -1321,7 +1321,7 @@ const FEATURED = [
   // #1240 : Actor Intelligence (TPI inverse) — acteurs corrélés au-delà de l'IP,
   // campagnes, ThreatVector. Lit l'API read-only de sbx-actord (shadow). auth:true
   // (donnée de sécurité réservée à la session, comme la carte Sécurité).
-  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"waf.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true},
+  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"actor.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214},
   {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true},
   {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264},
@@ -1582,8 +1582,13 @@ function render(data,src){
   // #1187 — sélection d'apps PLATE : une ligne = un service, aucun sous-menu.
   // La nav propre au service descend dans le panneau contextuel (.ctx).
   FEATURED_ALPHA.forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
+    // UNE CARTE VIVANTE N'A PAS D'ONGLET (#1268). Les entrees sans `url`
+    // (DPI, Freebox TV, Tirage, Surf & Viewer) fabriquaient un bouton ⧉ vers
+    // « https://undefined/ » : rowHTML ne pose le bouton que si `tab` est vrai,
+    // et la chaine l'etait toujours. On ne le propose plus quand il n'y a pas
+    // de vhost — la carte vivante s'ouvre dans le Hall, pas ailleurs.
     rh+=rowHTML({attrs:'data-open="'+esc(f.id)+'"', icon:f.icon, label:f.label, state:st,
-                 admin:f.id, tab:'https://'+f.url+'/'});
+                 admin:f.id, tab:(f.url?'https://'+f.url+'/':null)});
   });
   rail.innerHTML=rh;
   // featured grid (principal)
@@ -2815,7 +2820,17 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     ov.classList.remove('lecteur');   // fenêtre vidéo 16/9, pas le portrait « lecteur »
     depart=Number(depart)||0;
     departVoulu=depart;   // reprise : le sas (YouTube) lira ceci quand il jouera le flux
-    media.innerHTML=''; titreEl.textContent=titre||url.slice(0,90);
+    // LE TITRE, PAS L'ADRESSE (#1268). Sans titre fourni, la barre affichait
+    // l'URL — « /api/v1/ytsas/stream/DI8L-8Ogp6E ». On pose le nom déjà connu,
+    // et on résout en tâche de fond sinon : la barre se nomme d'elle-même une
+    // fraction de seconde plus tard, sans rechargement.
+    media.innerHTML='';
+    titreEl.textContent = titre || sbxTitres.connu(url) || sbxTitres.brut(url).slice(0,90);
+    if(!titre && !sbxTitres.connu(url)){
+      (function(pose){ sbxTitres.resous(url).then(function(t){
+        if(t && titreEl && titreEl.textContent===pose) titreEl.textContent=t;
+      }); })(titreEl.textContent);
+    }
     document.getElementById('viewer-fav').classList.remove('on');
     var cb=document.getElementById('viewer-cast'); cb.classList.remove('on');
     cb.title='Diffuser au parc (📡 direct)'; diffuse=false;
@@ -3061,6 +3076,74 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       body:JSON.stringify({url:u})}).catch(function(){}); }
   }
   window.viewerVoir=voirOuSurfer;   // le catch depuis le surf s'en sert
+  // ── NOMMER CE QU'ON MONTRE (#1268) ──────────────────────────────────────────
+  // Les listes (historique, favoris, diffusions) et la barre du viewer
+  // affichaient l'URL BRUTE. « /api/v1/ytsas/stream/DI8L-8Ogp6E » ne dit rien de
+  // « Kid Francescoli — Don't Get On The Plane » : on montrait une adresse là où
+  // l'utilisateur cherche un titre.
+  //
+  // Trois sources SOUVERAINES, toutes sur la box, savent répondre :
+  //   · le catalogue ytsas (id → titre), qui couvre /stream/<id> comme une URL
+  //     YouTube déjà rapatriée — une seule requête pour tout le catalogue ;
+  //   · /api/v1/ytsas/title?url=… pour une URL YouTube absente du catalogue ;
+  //   · l'API PeerTube de la box pour /w/<uuid>.
+  // Aucune ne sort de la box : nommer un lien n'appelle pas Google.
+  //
+  // Le résultat est mis en cache dans localStorage — jamais deux fois la même
+  // question — et le rendu reste SYNCHRONE : on affiche ce qu'on sait, on résout
+  // le reste en tâche de fond, et on redessine une seule fois.
+  window.sbxTitres = (function(){
+    var CACHE={}; try{ CACHE=JSON.parse(localStorage.getItem('sbx.titres')||'{}'); }catch(e){}
+    function sauve(){ try{ localStorage.setItem('sbx.titres', JSON.stringify(CACHE)); }catch(e){} }
+    var cat=null, catP=null;
+    function catalogue(){
+      if(cat) return Promise.resolve(cat);
+      if(!catP) catP=fetch('/api/v1/ytsas/list',{headers:{'Accept':'application/json'}})
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){
+          cat={}; var l=(d&&(d.items||d.videos))||d||[];
+          if(Array.isArray(l)) l.forEach(function(it){ if(it&&it.id&&it.title) cat[it.id]=it.title; });
+          return cat;
+        }).catch(function(){ cat={}; return cat; });
+      return catP;
+    }
+    function idStream(u){ var m=/\/api\/v1\/ytsas\/stream\/([A-Za-z0-9_-]+)/.exec(u); return m?m[1]:null; }
+    function idYt(u){ var m=/(?:youtu\.be\/|[?&]v=|\/embed\/)([A-Za-z0-9_-]{11})/.exec(u); return m?m[1]:null; }
+    function pt(u){ var m=/^https?:\/\/([^\/]+)\/w\/([A-Za-z0-9-]+)/.exec(u);
+                    return (m && /peertube/.test(m[1])) ? m : null; }
+    function brut(u){ return String(u||'').replace(/^https?:\/\//,''); }
+    function connu(u){ return CACHE[String(u||'')]||''; }
+    // Une URL en guise de titre n'est pas un titre : certains émetteurs de
+    // diffusion passent l'adresse faute de mieux. On la traite comme absente.
+    function vrai(t,u){ t=String(t||'').trim();
+      return (!t || t===String(u||'') || /^https?:\/\//.test(t) || t.indexOf('/api/v1/')===0) ? '' : t; }
+    function resous(u){
+      u=String(u||''); if(!u) return Promise.resolve('');
+      if(CACHE[u]) return Promise.resolve(CACHE[u]);
+      var fin=function(t){ if(t){ CACHE[u]=t; sauve(); } return t||''; };
+      var st=idStream(u), y=idYt(u), q=pt(u);
+      if(st||y) return catalogue().then(function(c){
+        var t=c[st||y]; if(t) return fin(t);
+        if(!y) return '';                        // /stream/<id> hors catalogue
+        return fetch('/api/v1/ytsas/title?url='+encodeURIComponent(u),{headers:{'Accept':'application/json'}})
+          .then(function(r){ return r.ok?r.json():null; })
+          .then(function(d){ return fin(d&&d.title); }).catch(function(){ return ''; });
+      });
+      if(q) return fetch('https://'+q[1]+'/api/v1/videos/'+encodeURIComponent(q[2]),{headers:{'Accept':'application/json'}})
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){ return fin(d&&d.name); }).catch(function(){ return ''; });
+      return Promise.resolve('');
+    }
+    // Nomme un lot puis rappelle `apres` UNE fois, et seulement si on a trouvé
+    // quelque chose : redessiner pour rien ferait clignoter la liste.
+    function nomme(urls, apres){
+      var man=(urls||[]).filter(function(u){ return u && !CACHE[u]; });
+      if(!man.length) return;
+      Promise.all(man.map(resous)).then(function(r){ if(r.some(Boolean) && apres) apres(); });
+    }
+    return {connu:connu, resous:resous, nomme:nomme, brut:brut, vrai:vrai};
+  })();
+
   function histLire(){ try{ return JSON.parse(localStorage.getItem('sbx.viewer.hist')||'[]'); }catch(e){ return []; } }
   function histAjoute(u){
     var h=histLire().filter(function(x){ return x.u!==u; });
@@ -3071,9 +3154,10 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function histRend(){
     var z=E('viewer-hist'); if(!z) return;
     z.innerHTML=histLire().map(function(x){
-      var lbl=String(x.u).replace(/^https?:\/\//,'').slice(0,42);
+      var lbl=(sbxTitres.connu(x.u)||sbxTitres.brut(x.u)).slice(0,42);
       return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" data-act="view" title="'+esc(x.u)+'">▶ '+esc(lbl)+'</button>';
     }).join('');
+      sbxTitres.nomme(histLire().map(function(x){ return x.u; }), histRend);
   }
   // ── FAVORIS (#1266b) : la meme reserve que le bouton ⭐ (sbx_favoris). On la
   //    montre en slice pour la rappeler d'un clic dans le viewer.
@@ -3081,9 +3165,10 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function favRend(){
     var z=E('vb-fav'); if(!z) return;
     z.innerHTML=favLire().slice().reverse().slice(0,20).map(function(u){
-      var lbl=String(u).replace(/^https?:\/\//,'').slice(0,42);
+      var lbl=(sbxTitres.connu(u)||sbxTitres.brut(u)).slice(0,42);
       return '<button class="vb-h" type="button" data-u="'+esc(u)+'" data-act="view" title="'+esc(u)+'">⭐ '+esc(lbl)+'</button>';
     }).join('');
+      sbxTitres.nomme(favLire(), favRend);
   }
   window.rendViewerFavoris=favRend;   // le bouton ⭐ le rappelle apres ajout
   // ── DIFFUSIONS (#1266b) : journal local de ce qu'on a envoye au parc. Aucun
@@ -3107,10 +3192,11 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function diffRend(){
     var z=E('vb-diff'); if(!z) return;
     z.innerHTML=diffLire().map(function(x){
-      var lbl=(x.titre||String(x.u).replace(/^https?:\/\//,'')).slice(0,40);
+      var lbl=(sbxTitres.vrai(x.titre,x.u)||sbxTitres.connu(x.u)||sbxTitres.brut(x.u)).slice(0,40);
       var n=x.n||1;
       return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×) : '+esc(x.titre||x.u)+'">📡 '+esc(lbl)+(n>1?' <span class="vb-n">×'+n+'</span>':'')+'</button>';
     }).join('');
+      sbxTitres.nomme(diffLire().map(function(x){ return x.u; }), diffRend);
   }
   function reDiffuse(u, titre){
     if(!u) return;
@@ -3684,14 +3770,31 @@ addEventListener('message', ev=>{
       var b=ev.target.closest ? ev.target.closest('.reveil-btn') : null; if(!b) return;
       ev.preventDefault(); ev.stopPropagation();
       var mid=b.getAttribute('data-mid'), j=jeton();
-      if(!mid || !j) return;
+      if(!mid) return;
+      // LE CLIC NE DOIT JAMAIS RESTER MUET. Il exigeait un `sbx_token` en
+      // localStorage et repartait EN SILENCE quand il manquait — or le voile
+      // s'affiche dès que `_moi` est vrai, et `_moi` peut venir du seul COOKIE
+      // de session (sondeSession n'ajoute le Bearer que s'il existe). On
+      // cliquait donc sur un bouton qui ne faisait rien, sans un mot.
+      // Côté serveur, `require_jwt` accepte DÉJÀ le cookie autant que le Bearer :
+      // il suffisait d'essayer. On envoie le cookie, on n'ajoute le Bearer que
+      // s'il existe, et tout échec se dit.
       b.disabled=true; b.textContent='⏳ réveil…';
-      fetch('/api/v1/profiles/wake',{method:'POST',
-        headers:{'Content-Type':'application/json','Accept':'application/json','Authorization':'Bearer '+j},
-        body:JSON.stringify({module:mid})})
+      var hdr={'Content-Type':'application/json','Accept':'application/json'};
+      if(j) hdr['Authorization']='Bearer '+j;
+      fetch('/api/v1/profiles/wake',{method:'POST', headers:hdr,
+        credentials:'same-origin', body:JSON.stringify({module:mid})})
         .then(function(r){ if(!r.ok) throw r.status; return r.json(); })
         .then(function(){ setTimeout(majReveils,4000); setTimeout(majReveils,9000); setTimeout(majReveils,15000); })
-        .catch(function(){ b.disabled=false; b.textContent='⚠️ réessayer'; });
+        .catch(function(err){
+          b.disabled=false;
+          // Une session expirée n'est pas une panne : on le dit autrement, et on
+          // ne propose pas de réessayer ce qui échouera pareil.
+          var auth=(err===401||err===403);
+          b.textContent = auth ? '🔒 reconnectez-vous' : '⚠️ réessayer';
+          b.title = auth ? 'Le réveil demande une session ouverte sur la box.'
+                         : 'Le réveil a échoué ('+err+'). Réessayez.';
+        });
     }, true);
     setTimeout(majReveils, 1600);
     setInterval(majReveils, 20000);
@@ -4509,9 +4612,14 @@ const CARDLET_ICONES = {
     // Un item de diffusion (émoji média/lien + titre + ancienneté).
     function itemDiff(x){
       var media=(typeof estMediaUrl==='function' && estMediaUrl(x.url));
-      return '<button type="button" data-url="'+esc(x.url)+'" title="'+esc(x.titre)+(x.par?(' — '+esc(x.par)):'')+'">'
+      // Le titre reçu peut n'être qu'une URL : l'émetteur n'en savait pas plus.
+      // On lui préfère alors le nom résolu localement, sur la box (#1268).
+      var t=(window.sbxTitres
+        ? (sbxTitres.vrai(x.titre,x.url)||sbxTitres.connu(x.url)||sbxTitres.brut(x.url))
+        : x.titre);
+      return '<button type="button" data-url="'+esc(x.url)+'" title="'+esc(t)+(x.par?(' — '+esc(x.par)):'')+'">'
         +'<span class="ic">'+(media?'🎬':'🔗')+'</span>'
-        +'<span class="h">'+esc(x.titre)+'</span>'
+        +'<span class="h">'+esc(t)+'</span>'
         +'<span class="n">'+esc(delaiDiff(x.ts))+'</span></button>';
     }
     function wireDiff(z){
@@ -4534,6 +4642,7 @@ const CARDLET_ICONES = {
         var z=document.getElementById(id); if(!z) return;
         z.innerHTML=html; if(l.length) wireDiff(z);
       });
+      if(window.sbxTitres && l.length) sbxTitres.nomme(l.map(function(x){ return x.url; }), rendDiff);
     }
     // ── BADGE « diffusions non vues » SUR L'AVATAR (#notif-profil) ────────────
     // Le compte des diffusions plus récentes que la dernière ouverture du menu

@@ -636,6 +636,15 @@ côté SecuBox à ce passage.
 Mesures du portage `secubox_core.crypto.hermes` 1.4.2, **même script, mêmes
 tailles**, sur la cible de production et sur le poste de développement.
 
+> **Révision du même jour.** Une première passe a été faite avec la
+> `cryptography` 41.0.7 que portait alors l'hôte. Elle concluait que « sur les
+> petits messages, la box vaut l'hôte » — **c'était faux**, artefact d'une
+> bibliothèque périmée côté hôte (§B.4). L'hôte a été mis à jour et **tout le
+> banc rejoué** ; les chiffres ci-dessous sont ceux de la seconde passe, et la
+> conclusion erronée est retirée. Les mesures de la première passe restent
+> versionnées (`bench-hermes-hote-avant-maj.json`) — on ne cache pas une erreur,
+> on la date.
+
 ### B.1 Les deux machines
 
 | | **gk2** (cible) | **hôte** (développement) |
@@ -644,13 +653,12 @@ tailles**, sur la cible de production et sur le poste de développement.
 | Fréquence max | 1400 MHz | 5200 MHz |
 | Noyau | 6.12.85 | 7.1.5-76070105-generic |
 | Python | 3.11.2 | 3.12.3 |
-| `cryptography` | **47.0.0** | **41.0.7** |
-| OpenSSL | OpenSSL 4.0.0 14 Apr 2026 | OpenSSL 3.0.13 30 Jan 2024 |
+| `cryptography` | 47.0.0 | 50.0.1 |
+| OpenSSL | OpenSSL 4.0.0 14 Apr 2026 | OpenSSL 4.0.2 25 Aug 2026 |
 
-**Le banc n'est pas un comparatif de processeurs.** Les deux machines ne portent
-ni la même `cryptography` ni le même OpenSSL, et §B.4 montre que cet écart
-logiciel dépasse par endroits l'écart matériel. Chaque chiffre est valable pour
-*sa* machine telle qu'elle est ; les rapports sont indicatifs.
+Les piles logicielles sont désormais **proches** (OpenSSL 4.0.0 contre 4.0.2),
+ce qui rend la comparaison lisible. Elle ne sera jamais parfaite : versions de
+Python et de `cryptography` différentes.
 
 ### B.2 Méthode
 
@@ -658,67 +666,75 @@ Chaque opération est chauffée, puis mesurée sur cinq séries dont on retient 
 **médiane** — pas le meilleur temps, qui flatte une machine au repos et ne dit
 rien d'un service en charge. Les itérations sont calibrées par opération. Le
 débit est calculé sur la taille du **clair**, nonce et tag exclus. Sur gk2, le
-banc tourne en `nice -n 5` pour ne pas évincer les services.
+banc tourne en `nice -n 5` pour ne pas évincer les services. Script et mesures
+brutes : `bench_hermes.py`, `bench-hermes-gk2.json`, `bench-hermes-hote.json`.
 
 ### B.3 Opérations unitaires
 
 | Opération | gk2 | hôte | rapport |
 |---|---|---|---|
-| Génération d'identité (X25519) | **178 µs** — 5 603 op/s | 57 µs — 17 510 op/s | ×3.1 |
-| Établissement de session (ECDH + HKDF) | **554 µs** — 1 806 op/s | 77 µs — 12 934 op/s | ×7.2 |
-| Écriture de clé privée (PEM 0600) | **431 µs** — 2 322 op/s | 116 µs — 8 630 op/s | ×3.7 |
-| Lecture de clé privée (PEM) | **288 µs** — 3 477 op/s | 565 µs — 1 769 op/s | ×0.5 |
-| Confirmation de clé (HKDF) | **37 µs** — 26 874 op/s | 21 µs — 47 708 op/s | ×1.8 |
-| HKDF-SHA256 seul | **30 µs** — 33 472 op/s | 21 µs — 48 260 op/s | ×1.4 |
+| Génération d'identité (X25519) | **178 µs** — 5 603 op/s | 35 µs — 28 259 op/s | ×5.0 |
+| Établissement de session (ECDH + HKDF) | **554 µs** — 1 806 op/s | 40 µs — 24 900 op/s | ×13.8 |
+| Écriture de clé privée (PEM 0600) | **431 µs** — 2 322 op/s | 43 µs — 23 255 op/s | ×10.0 |
+| Lecture de clé privée (PEM) | **288 µs** — 3 477 op/s | 43 µs — 23 182 op/s | ×6.7 |
+| Confirmation de clé (HKDF) | **37 µs** — 26 874 op/s | 3 µs — 313 309 op/s | ×11.7 |
+| HKDF-SHA256 seul | **30 µs** — 33 472 op/s | 3 µs — 297 526 op/s | ×8.9 |
 
-### B.4 Ce que le banc révèle sur l'hôte, pas sur la cible
+### B.4 Le piège évité : mesurer sa bibliothèque en croyant mesurer son matériel
 
-`Identity.load` est **deux fois plus rapide sur la box que sur l'hôte** — une
-inversion qui n'a pas de sens matériel. Mesure isolée sur la primitive nue
-`load_pem_private_key` :
+À la première passe, `Identity.load` ressortait **deux fois plus rapide sur la
+box que sur l'hôte** — une inversion sans aucun sens matériel. Mesure isolée sur
+la primitive nue `load_pem_private_key` :
 
 | | `cryptography` | `load_pem_private_key` |
 |---|---|---|
-| gk2, A72 à 1,4 GHz | 47.0.0 | **147 µs** |
-| hôte, i9 à 5,2 GHz | 41.0.7 | **542 µs** |
+| gk2, A72 à 1,4 GHz | 47.0.0 | 147 µs |
+| hôte **avant**, i9 à 5,2 GHz | 41.0.7 | **542 µs** |
+| hôte **après**, même machine | 50.0.1 | **49 µs** |
 
-L'écart vient donc **entièrement de la bibliothèque** : le décodage PEM/PKCS#8 a
-été porté en Rust dans les versions récentes. L'hôte de développement traîne une
-`cryptography` 41.0.7 ancienne, et c'est lui qu'il faut mettre à jour — la cible
-est à jour. À retenir : sans cette vérification, on aurait conclu que l'ARM bat
-l'x86 sur le chargement de clé, ce qui est faux.
+Onze fois plus rapide **sur le même processeur**, par la seule mise à jour : le
+décodage PEM/PKCS#8 est passé en Rust dans les versions récentes. Et l'écart ne
+touchait pas que le PEM — la mise à jour a aussi apporté, sur l'hôte, ×6,2 sur
+HKDF, ×6,6 sur la confirmation de clé et ×6,7 sur l'AEAD à 64 octets.
+
+D'où le retrait de la conclusion de la première passe : elle attribuait au
+matériel ce qui venait du logiciel. Un banc qui compare deux machines doit
+d'abord vérifier qu'il compare deux piles comparables.
 
 ### B.5 Chiffrement authentifié (ChaCha20-Poly1305)
 
-| Taille du clair | gk2 chiffre | gk2 déchiffre | hôte chiffre | hôte déchiffre |
-|---|---|---|---|---|
-| 64 o | **6 Mio/s** | **9 Mio/s** | 6 Mio/s | 7 Mio/s |
-| 1 Kio | **57 Mio/s** | **76 Mio/s** | 92 Mio/s | 100 Mio/s |
-| 16 Kio | **176 Mio/s** | **193 Mio/s** | 786 Mio/s | 809 Mio/s |
-| 256 Kio | **203 Mio/s** | **186 Mio/s** | 779 Mio/s | 596 Mio/s |
-| 1 Mio | **134 Mio/s** | **177 Mio/s** | 708 Mio/s | 574 Mio/s |
+| Taille du clair | gk2 chiffre | gk2 déchiffre | hôte chiffre | hôte déchiffre | rapport |
+|---|---|---|---|---|---|
+| 64 o | **6 Mio/s** | **9 Mio/s** | 42 Mio/s | 62 Mio/s | ×7.5 |
+| 1 Kio | **57 Mio/s** | **76 Mio/s** | 482 Mio/s | 446 Mio/s | ×8.5 |
+| 16 Kio | **176 Mio/s** | **193 Mio/s** | 1211 Mio/s | 1300 Mio/s | ×6.9 |
+| 256 Kio | **203 Mio/s** | **186 Mio/s** | 825 Mio/s | 1554 Mio/s | ×4.1 |
+| 1 Mio | **134 Mio/s** | **177 Mio/s** | 767 Mio/s | 1493 Mio/s | ×5.7 |
 
 ### B.6 Lecture
 
-**Sur les petits messages  la box vaut l'hôte.** À 64 octets — la taille réelle
-du canal scellé de `secubox-identity` — on mesure 11 µs sur gk2 contre
-10 µs sur l'hôte  soit ×1.1. À cette taille  le coût n'est pas
-cryptographique : c'est l'appel Python et l'allocation. Aucun gain à espérer
-d'un processeur plus rapide  et aucune inquiétude à avoir sur la cible.
+**La cible est cinq à quatorze fois plus lente que le poste selon l'opération** —
+ordre de grandeur cohérent avec 1,4 GHz contre 5,2 GHz, et une microarchitecture
+de 2015 face à une de 2023. Rien d'anormal, rien d'inquiétant.
 
-**L'asymétrique est le vrai écart.** L'établissement de session (ECDH X25519 +
-HKDF) est le poste le plus pénalisé  ×7.2.
-Même ainsi  gk2 soutient **1 806 établissements par seconde et par cœur** —
-hors de proportion avec l'usage réel  où une session est négociée par pair et
-réutilisée.
+**L'asymétrique est le poste le plus pénalisé** : l'établissement de session
+(ECDH X25519 + HKDF) coûte 554 µs sur gk2, ×13.8. Cela reste **1 806
+établissements par seconde et par cœur**, hors de proportion avec l'usage réel :
+une session est négociée par pair, puis réutilisée.
 
-**Le symétrique dépasse largement le réseau.** gk2 plafonne autour de
-203 Mio/s sur les blocs de 256 Kio  soit environ
-1.6 Gbit/s : le chiffrement ne sera jamais le goulot
-d'étranglement d'un lien de la box. Le débit s'écroule en dessous de 1 Kio  où
-l'on paie l'appel plutôt que l'algorithme — grouper les petits messages  quand
-c'est possible  vaut mieux qu'optimiser la primitive.
+**Le symétrique dépasse largement le réseau.** gk2 tient ~203 Mio/s sur les
+blocs de 256 Kio, soit ~1.6 Gbit/s : le chiffrement ne sera jamais le goulot
+d'étranglement d'un lien de la box.
 
-**Aucune action de performance n'est requise côté cible.** La seule
-recommandation de cette annexe concerne le poste de développement : mettre
-`cryptography` à niveau.
+**Les petits messages coûtent cher partout, et davantage sur la cible.** À 64
+octets — la taille du canal scellé de `secubox-identity` — gk2 est ×7.5 plus
+lent que l'hôte, et le débit s'effondre des deux côtés : on y paie l'appel
+Python et l'allocation, pas l'algorithme. Sur ce profil, **grouper les
+messages** vaut mieux qu'optimiser la primitive. En valeur absolue, 11 µs par
+message scellé restent négligeables devant un aller-retour réseau.
+
+**Aucune action de performance n'est requise.** La recommandation issue de la
+première passe — mettre `cryptography` à jour sur le poste — a été **appliquée
+le jour même** : 50.0.1 installée dans le site utilisateur, paquet système
+Ubuntu (41.0.7, dont dépendent `paramiko`, `nova`, `octavia`…) laissé
+**intact**. Les 25 tests de `hermes` passent sur les deux versions.
