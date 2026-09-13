@@ -1321,7 +1321,7 @@ const FEATURED = [
   // #1240 : Actor Intelligence (TPI inverse) — acteurs corrélés au-delà de l'IP,
   // campagnes, ThreatVector. Lit l'API read-only de sbx-actord (shadow). auth:true
   // (donnée de sécurité réservée à la session, comme la carte Sécurité).
-  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"waf.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true},
+  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"actor.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214},
   {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true},
   {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264},
@@ -1582,8 +1582,13 @@ function render(data,src){
   // #1187 — sélection d'apps PLATE : une ligne = un service, aucun sous-menu.
   // La nav propre au service descend dans le panneau contextuel (.ctx).
   FEATURED_ALPHA.forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
+    // UNE CARTE VIVANTE N'A PAS D'ONGLET (#1268). Les entrees sans `url`
+    // (DPI, Freebox TV, Tirage, Surf & Viewer) fabriquaient un bouton ⧉ vers
+    // « https://undefined/ » : rowHTML ne pose le bouton que si `tab` est vrai,
+    // et la chaine l'etait toujours. On ne le propose plus quand il n'y a pas
+    // de vhost — la carte vivante s'ouvre dans le Hall, pas ailleurs.
     rh+=rowHTML({attrs:'data-open="'+esc(f.id)+'"', icon:f.icon, label:f.label, state:st,
-                 admin:f.id, tab:'https://'+f.url+'/'});
+                 admin:f.id, tab:(f.url?'https://'+f.url+'/':null)});
   });
   rail.innerHTML=rh;
   // featured grid (principal)

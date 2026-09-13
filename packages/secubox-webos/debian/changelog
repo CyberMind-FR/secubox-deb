@@ -1,3 +1,20 @@
+secubox-webos (1.0.294-1~bookworm1) bookworm; urgency=medium
+
+  * Hall — LE RENSEIGNEMENT REAPPARAIT DANS LE MENU SERVICES DE LA MEGABARRE.
+    L'entree « Renseignement » pointait sur `waf.gk2.secubox.in`, le vhost de la
+    Securite, alors qu'elle a le sien : `actor.gk2.secubox.in`, qui sert
+    « SecuBox — Actor Intelligence ». Le menu dedoublonnant PAR URL (#1266), les
+    deux entrees entraient en collision et une seule survivait — le Renseignement
+    disparaissait. Il a desormais son propre vhost : plus de collision, et son
+    bouton « nouvel onglet » mene enfin a Actor Intelligence et non au WAF.
+  * Hall — plus de bouton ⧉ vers `https://undefined/`. Les entrees SANS vhost
+    (DPI · Trafic, Freebox TV, Tirage, Surf & Viewer) sont des cartes vivantes du
+    Hall ; la ligne du menu leur fabriquait tout de meme un onglet vers
+    « https://undefined/ », `rowHTML` ne testant que la presence de la chaine —
+    toujours vraie. Le bouton n'est plus propose quand il n'y a pas de vhost.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 14:10:00 +0200
+
 secubox-webos (1.0.293-1~bookworm1) bookworm; urgency=medium
 
   * Surf & Viewer : titres smart AUSSI pour la slice Propositions — les URLs
