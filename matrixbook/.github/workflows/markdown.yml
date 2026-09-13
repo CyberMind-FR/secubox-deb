@@ -1,0 +1,84 @@
+# Validation automatique de la documentation MatrixBook
+#
+# 1. markdownlint : style et syntaxe de tous les fichiers .md (règles dans .markdownlint.yml)
+# 2. liens internes : chaque lien relatif et chaque ancre (#section) doivent exister
+#
+# Les liens externes (https://…) ne sont pas vérifiés en CI pour éviter les
+# échecs dus au réseau ; ils sont contrôlés à la relecture des pull requests.
+
+name: Markdown
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.md"
+      - ".markdownlint.yml"
+      - ".github/workflows/markdown.yml"
+      - ".github/scripts/check-links.py"
+  pull_request:
+    paths:
+      - "**.md"
+      - ".markdownlint.yml"
+      - ".github/workflows/markdown.yml"
+      - ".github/scripts/check-links.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: markdown-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdownlint:
+    name: markdownlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lint Markdown files
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: |
+            **/*.md
+            !node_modules
+
+  links:
+    name: Liens internes et ancres
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check internal links and anchors
+        run: python3 .github/scripts/check-links.py
+
+  encoding:
+    name: Encodage UTF-8
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify every Markdown file is valid UTF-8 without BOM
+        run: |
+          status=0
+          while IFS= read -r -d '' f; do
+            if ! iconv -f UTF-8 -t UTF-8 "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::le fichier n'est pas en UTF-8 valide"
+              status=1
+            fi
+            if [ "$(head -c 3 "$f" | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then
+              echo "::error file=$f::le fichier commence par un BOM UTF-8"
+              status=1
+            fi
+          done < <(find . -name '*.md' -not -path './node_modules/*' -print0)
+          exit "$status"

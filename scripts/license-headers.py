@@ -83,6 +83,7 @@ SKIP_DIRS = frozenset({
     "output", "cache", "backups", "apt", "repo",
     "node_modules", ".venv", ".git", "__pycache__", "dist", "build",
     "vendor",  # code tiers vendore — jamais estampiller ni verifier
+    "matrixbook",  # framework editorial MatrixBook, licence MIT (depot gkerma/matrixbook)
 })
 
 SKIP_GLOBS = (
