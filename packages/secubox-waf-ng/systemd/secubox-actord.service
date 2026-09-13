@@ -23,6 +23,21 @@ ExecStart=/usr/sbin/sbx-actord --shadow \
   --ledger /var/lib/secubox/actor/evidence.db \
   --ingest-socket /run/secubox/actord.sock \
   --api-socket /run/secubox/actor.sock
+# INGESTION : groupe DEDIE, et lui seul (#1240). La socket naissait en groupe
+# `secubox` — le groupe primaire de l'unite — et sbxwaf, qui tourne en
+# `secubox-waf` sans y appartenir, ne pouvait pas y ecrire. L'emission etant
+# fire-and-forget, l'echec etait MUET des deux cotes : le WAF croyait emettre,
+# actord n'entendait rien, et la carte Renseignement affichait 0 acteur alors
+# que le WAF comptait 15 000 menaces par jour.
+#
+# On ne touche PAS au groupe primaire : la socket d'API /run/secubox/actor.sock
+# doit rester lisible par `secubox`, dont nginx fait partie — la changer
+# couperait actor.gk2. D'ou un groupe dedie applique a la SEULE ingestion.
+#
+# `+` : execute en root, hors des restrictions d'identite de l'unite. La petite
+# attente couvre la course avec la creation de la socket par le demon (Type=simple,
+# ExecStartPost part des le fork).
+ExecStartPost=+/bin/sh -c 'i=0; while [ $i -lt 25 ] && [ ! -S /run/secubox/actord.sock ]; do sleep 0.2; i=$((i+1)); done; if [ -S /run/secubox/actord.sock ]; then chgrp actord-ingest /run/secubox/actord.sock && chmod 0660 /run/secubox/actord.sock; fi'
 Restart=on-failure
 RestartSec=3
 

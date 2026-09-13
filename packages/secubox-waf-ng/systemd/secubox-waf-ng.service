@@ -35,6 +35,11 @@ ConditionPathExists=/usr/sbin/sbxwaf
 Type=simple
 User=secubox-waf
 Group=secubox-waf
+# ACTOR INTELLIGENCE (#1240) : seul droit ajoute, celui d'ECRIRE dans la socket
+# d'ingestion de sbx-actord. Un groupe dedie plutot que `secubox` : ce dernier
+# donnerait au WAF acces a tout ce que le groupe partage, pour un besoin qui se
+# limite a deposer des enveloppes d'evenements.
+SupplementaryGroups=actord-ingest
 
 # AUTO-REPARATION AVANT CHAQUE DEMARRAGE.
 #

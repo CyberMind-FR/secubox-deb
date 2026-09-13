@@ -39,6 +39,26 @@ case "$1" in
       usermod -aG secubox secubox-actord || true
     fi
 
+      # ── 1c. Groupe d'INGESTION dedie (#1240) ──────────────────────────────────
+      # sbxwaf emet ses Event Envelopes vers /run/secubox/actord.sock. Cette
+      # socket naissait en groupe `secubox`, or sbxwaf tourne en `secubox-waf` :
+      # l'ecriture etait refusee SANS BRUIT, l'emission etant fire-and-forget. Le
+      # WAF croyait emettre, actord n'entendait rien, et la carte Renseignement
+      # affichait zero acteur pendant que le WAF comptait ses menaces.
+      #
+      # Un groupe dedie plutot qu'un elargissement de `secubox` : le WAF gagne le
+      # droit d'ecrire dans CETTE socket, et rien d'autre. La socket d'API reste
+      # en `secubox` pour nginx (Hall) — l'unite ne change que l'ingestion.
+      if ! getent group actord-ingest >/dev/null 2>&1; then
+        addgroup --system actord-ingest || true
+      fi
+      for u in secubox-waf secubox-actord; do
+        if getent passwd "$u" >/dev/null 2>&1 \
+           && ! id -nG "$u" 2>/dev/null | tr ' ' '\n' | grep -qx actord-ingest; then
+          usermod -aG actord-ingest "$u" || true
+        fi
+      done
+
     # ── 2. Config directories ─────────────────────────────────────────────────
     # IMPORTANT: NEVER chmod the SHARED PARENTS /etc/secubox to 0750 — that
     # breaks traversal for every other secubox-* daemon (#474/#620 lessons).
