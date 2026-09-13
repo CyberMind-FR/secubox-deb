@@ -2820,7 +2820,17 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     ov.classList.remove('lecteur');   // fenêtre vidéo 16/9, pas le portrait « lecteur »
     depart=Number(depart)||0;
     departVoulu=depart;   // reprise : le sas (YouTube) lira ceci quand il jouera le flux
-    media.innerHTML=''; titreEl.textContent=titre||url.slice(0,90);
+    // LE TITRE, PAS L'ADRESSE (#1268). Sans titre fourni, la barre affichait
+    // l'URL — « /api/v1/ytsas/stream/DI8L-8Ogp6E ». On pose le nom déjà connu,
+    // et on résout en tâche de fond sinon : la barre se nomme d'elle-même une
+    // fraction de seconde plus tard, sans rechargement.
+    media.innerHTML='';
+    titreEl.textContent = titre || sbxTitres.connu(url) || sbxTitres.brut(url).slice(0,90);
+    if(!titre && !sbxTitres.connu(url)){
+      (function(pose){ sbxTitres.resous(url).then(function(t){
+        if(t && titreEl && titreEl.textContent===pose) titreEl.textContent=t;
+      }); })(titreEl.textContent);
+    }
     document.getElementById('viewer-fav').classList.remove('on');
     var cb=document.getElementById('viewer-cast'); cb.classList.remove('on');
     cb.title='Diffuser au parc (📡 direct)'; diffuse=false;
@@ -3066,6 +3076,74 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       body:JSON.stringify({url:u})}).catch(function(){}); }
   }
   window.viewerVoir=voirOuSurfer;   // le catch depuis le surf s'en sert
+  // ── NOMMER CE QU'ON MONTRE (#1268) ──────────────────────────────────────────
+  // Les listes (historique, favoris, diffusions) et la barre du viewer
+  // affichaient l'URL BRUTE. « /api/v1/ytsas/stream/DI8L-8Ogp6E » ne dit rien de
+  // « Kid Francescoli — Don't Get On The Plane » : on montrait une adresse là où
+  // l'utilisateur cherche un titre.
+  //
+  // Trois sources SOUVERAINES, toutes sur la box, savent répondre :
+  //   · le catalogue ytsas (id → titre), qui couvre /stream/<id> comme une URL
+  //     YouTube déjà rapatriée — une seule requête pour tout le catalogue ;
+  //   · /api/v1/ytsas/title?url=… pour une URL YouTube absente du catalogue ;
+  //   · l'API PeerTube de la box pour /w/<uuid>.
+  // Aucune ne sort de la box : nommer un lien n'appelle pas Google.
+  //
+  // Le résultat est mis en cache dans localStorage — jamais deux fois la même
+  // question — et le rendu reste SYNCHRONE : on affiche ce qu'on sait, on résout
+  // le reste en tâche de fond, et on redessine une seule fois.
+  window.sbxTitres = (function(){
+    var CACHE={}; try{ CACHE=JSON.parse(localStorage.getItem('sbx.titres')||'{}'); }catch(e){}
+    function sauve(){ try{ localStorage.setItem('sbx.titres', JSON.stringify(CACHE)); }catch(e){} }
+    var cat=null, catP=null;
+    function catalogue(){
+      if(cat) return Promise.resolve(cat);
+      if(!catP) catP=fetch('/api/v1/ytsas/list',{headers:{'Accept':'application/json'}})
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){
+          cat={}; var l=(d&&(d.items||d.videos))||d||[];
+          if(Array.isArray(l)) l.forEach(function(it){ if(it&&it.id&&it.title) cat[it.id]=it.title; });
+          return cat;
+        }).catch(function(){ cat={}; return cat; });
+      return catP;
+    }
+    function idStream(u){ var m=/\/api\/v1\/ytsas\/stream\/([A-Za-z0-9_-]+)/.exec(u); return m?m[1]:null; }
+    function idYt(u){ var m=/(?:youtu\.be\/|[?&]v=|\/embed\/)([A-Za-z0-9_-]{11})/.exec(u); return m?m[1]:null; }
+    function pt(u){ var m=/^https?:\/\/([^\/]+)\/w\/([A-Za-z0-9-]+)/.exec(u);
+                    return (m && /peertube/.test(m[1])) ? m : null; }
+    function brut(u){ return String(u||'').replace(/^https?:\/\//,''); }
+    function connu(u){ return CACHE[String(u||'')]||''; }
+    // Une URL en guise de titre n'est pas un titre : certains émetteurs de
+    // diffusion passent l'adresse faute de mieux. On la traite comme absente.
+    function vrai(t,u){ t=String(t||'').trim();
+      return (!t || t===String(u||'') || /^https?:\/\//.test(t) || t.indexOf('/api/v1/')===0) ? '' : t; }
+    function resous(u){
+      u=String(u||''); if(!u) return Promise.resolve('');
+      if(CACHE[u]) return Promise.resolve(CACHE[u]);
+      var fin=function(t){ if(t){ CACHE[u]=t; sauve(); } return t||''; };
+      var st=idStream(u), y=idYt(u), q=pt(u);
+      if(st||y) return catalogue().then(function(c){
+        var t=c[st||y]; if(t) return fin(t);
+        if(!y) return '';                        // /stream/<id> hors catalogue
+        return fetch('/api/v1/ytsas/title?url='+encodeURIComponent(u),{headers:{'Accept':'application/json'}})
+          .then(function(r){ return r.ok?r.json():null; })
+          .then(function(d){ return fin(d&&d.title); }).catch(function(){ return ''; });
+      });
+      if(q) return fetch('https://'+q[1]+'/api/v1/videos/'+encodeURIComponent(q[2]),{headers:{'Accept':'application/json'}})
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){ return fin(d&&d.name); }).catch(function(){ return ''; });
+      return Promise.resolve('');
+    }
+    // Nomme un lot puis rappelle `apres` UNE fois, et seulement si on a trouvé
+    // quelque chose : redessiner pour rien ferait clignoter la liste.
+    function nomme(urls, apres){
+      var man=(urls||[]).filter(function(u){ return u && !CACHE[u]; });
+      if(!man.length) return;
+      Promise.all(man.map(resous)).then(function(r){ if(r.some(Boolean) && apres) apres(); });
+    }
+    return {connu:connu, resous:resous, nomme:nomme, brut:brut, vrai:vrai};
+  })();
+
   function histLire(){ try{ return JSON.parse(localStorage.getItem('sbx.viewer.hist')||'[]'); }catch(e){ return []; } }
   function histAjoute(u){
     var h=histLire().filter(function(x){ return x.u!==u; });
@@ -3076,9 +3154,10 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function histRend(){
     var z=E('viewer-hist'); if(!z) return;
     z.innerHTML=histLire().map(function(x){
-      var lbl=String(x.u).replace(/^https?:\/\//,'').slice(0,42);
+      var lbl=(sbxTitres.connu(x.u)||sbxTitres.brut(x.u)).slice(0,42);
       return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" data-act="view" title="'+esc(x.u)+'">▶ '+esc(lbl)+'</button>';
     }).join('');
+      sbxTitres.nomme(histLire().map(function(x){ return x.u; }), histRend);
   }
   // ── FAVORIS (#1266b) : la meme reserve que le bouton ⭐ (sbx_favoris). On la
   //    montre en slice pour la rappeler d'un clic dans le viewer.
@@ -3086,9 +3165,10 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function favRend(){
     var z=E('vb-fav'); if(!z) return;
     z.innerHTML=favLire().slice().reverse().slice(0,20).map(function(u){
-      var lbl=String(u).replace(/^https?:\/\//,'').slice(0,42);
+      var lbl=(sbxTitres.connu(u)||sbxTitres.brut(u)).slice(0,42);
       return '<button class="vb-h" type="button" data-u="'+esc(u)+'" data-act="view" title="'+esc(u)+'">⭐ '+esc(lbl)+'</button>';
     }).join('');
+      sbxTitres.nomme(favLire(), favRend);
   }
   window.rendViewerFavoris=favRend;   // le bouton ⭐ le rappelle apres ajout
   // ── DIFFUSIONS (#1266b) : journal local de ce qu'on a envoye au parc. Aucun
@@ -3112,10 +3192,11 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function diffRend(){
     var z=E('vb-diff'); if(!z) return;
     z.innerHTML=diffLire().map(function(x){
-      var lbl=(x.titre||String(x.u).replace(/^https?:\/\//,'')).slice(0,40);
+      var lbl=(sbxTitres.vrai(x.titre,x.u)||sbxTitres.connu(x.u)||sbxTitres.brut(x.u)).slice(0,40);
       var n=x.n||1;
       return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×) : '+esc(x.titre||x.u)+'">📡 '+esc(lbl)+(n>1?' <span class="vb-n">×'+n+'</span>':'')+'</button>';
     }).join('');
+      sbxTitres.nomme(diffLire().map(function(x){ return x.u; }), diffRend);
   }
   function reDiffuse(u, titre){
     if(!u) return;
@@ -4531,9 +4612,14 @@ const CARDLET_ICONES = {
     // Un item de diffusion (émoji média/lien + titre + ancienneté).
     function itemDiff(x){
       var media=(typeof estMediaUrl==='function' && estMediaUrl(x.url));
-      return '<button type="button" data-url="'+esc(x.url)+'" title="'+esc(x.titre)+(x.par?(' — '+esc(x.par)):'')+'">'
+      // Le titre reçu peut n'être qu'une URL : l'émetteur n'en savait pas plus.
+      // On lui préfère alors le nom résolu localement, sur la box (#1268).
+      var t=(window.sbxTitres
+        ? (sbxTitres.vrai(x.titre,x.url)||sbxTitres.connu(x.url)||sbxTitres.brut(x.url))
+        : x.titre);
+      return '<button type="button" data-url="'+esc(x.url)+'" title="'+esc(t)+(x.par?(' — '+esc(x.par)):'')+'">'
         +'<span class="ic">'+(media?'🎬':'🔗')+'</span>'
-        +'<span class="h">'+esc(x.titre)+'</span>'
+        +'<span class="h">'+esc(t)+'</span>'
         +'<span class="n">'+esc(delaiDiff(x.ts))+'</span></button>';
     }
     function wireDiff(z){
@@ -4556,6 +4642,7 @@ const CARDLET_ICONES = {
         var z=document.getElementById(id); if(!z) return;
         z.innerHTML=html; if(l.length) wireDiff(z);
       });
+      if(window.sbxTitres && l.length) sbxTitres.nomme(l.map(function(x){ return x.url; }), rendDiff);
     }
     // ── BADGE « diffusions non vues » SUR L'AVATAR (#notif-profil) ────────────
     // Le compte des diffusions plus récentes que la dernière ouverture du menu

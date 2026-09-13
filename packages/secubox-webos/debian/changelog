@@ -1,3 +1,26 @@
+secubox-webos (1.0.296-1~bookworm1) bookworm; urgency=medium
+
+  * Hall — ON MONTRE DES TITRES, PLUS DES ADRESSES. L'historique du viewer, les
+    favoris, le journal des diffusions, le menu des diffusions du logo et la
+    BARRE DU VIEWER affichaient l'URL brute :
+    « /api/v1/ytsas/stream/DI8L-8Ogp6E » ne dit rien de « Kid Francescoli — Don't
+    Get On The Plane ». Seules les diffusions dont l'emetteur fournissait un
+    titre etaient nommees, d'ou les listes a moitie lisibles.
+  * Resolveur unique `sbxTitres`, adosse a TROIS SOURCES SOUVERAINES, toutes sur
+    la box : le catalogue ytsas (id -> titre, une requete pour tout le
+    catalogue, couvre /stream/<id> comme une URL YouTube deja rapatriee),
+    /api/v1/ytsas/title pour une URL YouTube hors catalogue, et l'API PeerTube
+    locale pour /w/<uuid>. Nommer un lien N'APPELLE PAS Google.
+  * Rendu SYNCHRONE conserve : on affiche ce qu'on sait, on resout le reste en
+    tache de fond, on redessine UNE fois — et seulement si quelque chose a ete
+    trouve, pour ne pas faire clignoter les listes. Cache persistant en
+    localStorage : jamais deux fois la meme question.
+  * Un titre qui n'est qu'une URL est traite comme ABSENT (`vrai()`) : certains
+    emetteurs de diffusion passent l'adresse faute de mieux, on leur prefere
+    alors le nom resolu localement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 15:40:00 +0200
+
 secubox-webos (1.0.295-1~bookworm1) bookworm; urgency=medium
 
   * Hall — « RÉVEILLER » NE RESTE PLUS MUET. Le bouton exigeait un `sbx_token` en
