@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Droits de la socket d'INGESTION d'Actor Intelligence (#1240).
+#
+# POURQUOI UNE UNITE SEPAREE. sbx-actord cree /run/secubox/actord.sock avec son
+# groupe primaire `secubox` ; sbxwaf tourne en `secubox-waf` et n'y appartient
+# pas : l'ecriture etait refusee, et comme l'emission est fire-and-forget, en
+# SILENCE. Il faut donc reassigner le groupe de cette socket apres coup.
+#
+# On ne peut pas le faire dans l'unite d'actord : son durcissement (RFC-0013
+# §15) pose `CapabilityBoundingSet=` VIDE, ce qui prive de CAP_CHOWN meme un
+# ExecStartPost prefixe `+`, donc execute en root. Le chgrp y echoue avec
+# « Operation not permitted ». Plutot que d'affaiblir le durcissement du demon
+# pour une correction de droits, on sort la correction dans cette unite-ci.
+#
+# On ne touche QUE l'ingestion : la socket d'API /run/secubox/actor.sock reste
+# en groupe `secubox`, dont nginx est membre — la basculer couperait actor.gk2.
+
+[Unit]
+Description=SecuBox — groupe de la socket d'ingestion Actor Intelligence
+After=secubox-actord.service
+BindsTo=secubox-actord.service
+PartOf=secubox-actord.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# La socket nait avec le demon (Type=simple) : on l'attend brievement plutot que
+# de supposer qu'elle est deja la.
+ExecStart=/bin/sh -c 'i=0; while [ $i -lt 25 ] && [ ! -S /run/secubox/actord.sock ]; do sleep 0.2; i=$((i+1)); done; [ -S /run/secubox/actord.sock ] || exit 0; chgrp actord-ingest /run/secubox/actord.sock && chmod 0660 /run/secubox/actord.sock'
+
+[Install]
+WantedBy=secubox-actord.service

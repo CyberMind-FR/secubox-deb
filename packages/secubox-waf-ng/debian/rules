@@ -81,9 +81,10 @@ override_dh_installsystemd:
 	dh_installsystemd --name=secubox-waf-campaigns.timer
 	# Actor Intelligence (RFC-0013) : moteur shadow, désactivable sans réduire la
 	# protection WAF. Activé mais démarré séparément (le postinst crée son user).
-	install -m 0644 systemd/secubox-actord.service \
+	install -m 0644 systemd/secubox-actord.service systemd/secubox-actord-ingest.service \
 	  debian/secubox-waf-ng/lib/systemd/system/
 	dh_installsystemd --name=secubox-actord
+	dh_installsystemd --name=secubox-actord-ingest --no-start
 
 execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/sbin

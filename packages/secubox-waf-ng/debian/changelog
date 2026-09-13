@@ -12,8 +12,14 @@ secubox-waf-ng (1.7.17-1~bookworm1) bookworm; urgency=medium
     pas « recu puis jete ».
   * Correctif au plus etroit : groupe systeme DEDIE `actord-ingest`, dont
     `secubox-waf` et `secubox-actord` sont membres (postinst), applique a la
-    SEULE socket d'ingestion via ExecStartPost. sbxwaf le porte en
-    SupplementaryGroups. Il gagne le droit d'ecrire la, et rien d'autre.
+    SEULE socket d'ingestion. sbxwaf le porte en SupplementaryGroups : il gagne
+    le droit d'ecrire la, et rien d'autre.
+  * La reassignation du groupe vit dans une UNITE SEPAREE
+    (secubox-actord-ingest.service, tiree par Wants=) et non dans un
+    ExecStartPost d'actord : le durcissement RFC-0013 §15 de ce dernier pose
+    `CapabilityBoundingSet=` VIDE, ce qui prive de CAP_CHOWN meme une commande
+    prefixee `+`, donc executee en root — le chgrp y echouait en « Operation not
+    permitted ». On sort la correction plutot que d'affaiblir le demon.
   * CE QUI N'EST PAS TOUCHE, ET POURQUOI : le groupe primaire d'actord reste
     `secubox`. La socket d'API /run/secubox/actor.sock doit rester lisible par ce
     groupe, dont nginx est membre — la basculer aurait coupe actor.gk2.
