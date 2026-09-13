@@ -80,6 +80,11 @@ Prefer QEMU on an ARM host? Use
 [`create-qemu-arm64-vm.sh`](https://github.com/CyberMind-FR/secubox-deb/releases/latest)
 from the release assets.
 
+## 📘 Official AMD64 Installation
+
+Install and reproduce the GK2 development box on an AMD64 PC, VirtualBox,
+KVM or QEMU: [Official AMD64 GK2 Clone installation guide](docs/INSTALL-AMD64-GK2.md).
+
 ## 🎬 Quick Demo
 
 **Boot it from a USB stick on any x86_64 PC — nothing is written to the disk.**
