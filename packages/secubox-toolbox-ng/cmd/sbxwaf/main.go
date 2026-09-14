@@ -327,9 +327,11 @@ func (s *Server) handler() http.Handler {
 			// #1070 phase A : un hôte non routé est un signal scanner — on le
 			// journalise et on le sanctionne AVANT de répondre. recordHostAnomaly
 			// n'écrit rien : la réponse reste un 421 (ne rien divulguer).
-			if s.hostAnomaly {
-				s.recordHostAnomaly(r, host)
-			}
+			// LE LEURRE SERT D'ABORD, LE JOURNAL ENSUITE — pour que l'entrée
+			// porte ce qui a été semé. L'inverse journaliserait l'anomalie
+			// sans jamais dire quelle marque est partie avec le visiteur.
+			var famServie, aleaSeme string
+			var marquesRejouees []string
 			// LEURRE (#1290). On est ici dans l'espace NON ROUTÉ : aucun
 			// service réel n'est en jeu, et le scanner est détourné du vrai.
 			// S'il est armé, on répond par un contenu plausible et inerte au
@@ -351,10 +353,17 @@ func (s *Server) handler() http.Handler {
 			//
 			// Même règle que pour le ban : une adresse privée n'est pas un
 			// scanner externe, c'est nous.
+			leurreServi := false
 			if !privateCIDR(clientIP(r)) && !estPremierePartie(host, s.widgetHosts) {
-				if servi, _, _ := s.leurre.Sert(w, r, host); servi {
-					return
+				if servi, f, a, m := s.leurre.Sert(w, r, host); servi {
+					leurreServi, famServie, aleaSeme, marquesRejouees = true, string(f), a, m
 				}
+			}
+			if s.hostAnomaly {
+				s.recordHostAnomalyAvecLeurre(r, host, famServie, aleaSeme, marquesRejouees)
+			}
+			if leurreServi {
+				return
 			}
 			// #789: styled page instead of http.Error's bare text. The two
 			// sides are complementary — the on-demand check decides WHETHER
@@ -385,6 +394,13 @@ func (s *Server) handler() http.Handler {
 				// host is bound per-request (outer HandlerFunc scope).
 				if ca := s.cookieAudit; ca != nil {
 					ca.Record(host, resp.Request, resp)
+				}
+				// #1290 — RÉPERTOIRE INEXISTANT : un 404 du vhost réel sur un
+				// chemin-appât devient un leurre. On n'agit qu'APRÈS la réponse
+				// du service : aucun chemin légitime ne peut être masqué, et
+				// aucune requête n'est détournée de son backend.
+				if s.leurre.LeurrerLe404(resp) {
+					return nil // le widget n'a rien à faire sur un leurre
 				}
 				// #747: inject the SecuBox health/visit widget on first-party HTML.
 				applyWidget(resp, host, s.bannerOrigin, s.widgetHosts, s.widgetExclude)
@@ -840,6 +856,14 @@ func (s *Server) appliquerBan(ip, cat, sev string) {
 // périmé légitime existe. Un client LAN est exempté de ban (mauvaise config, pas
 // attaque) mais reste journalisé.
 func (s *Server) recordHostAnomaly(r *http.Request, host string) {
+	s.recordHostAnomalyAvecLeurre(r, host, "", "")
+}
+
+// recordHostAnomalyAvecLeurre journalise l'anomalie ET ce que le leurre a semé.
+// Les deux vont ensemble : sans le semis, la marque retrouvée plus tard
+// n'aurait aucun contexte — on saurait qu'elle est nôtre, pas d'où elle vient.
+func (s *Server) recordHostAnomalyAvecLeurre(r *http.Request, host, leurre, filigrane string,
+	rejouees ...[]string) {
 	cls := classifyHost(host)
 	ip := clientIP(r)
 	lan := privateCIDR(ip)
@@ -867,12 +891,30 @@ func (s *Server) recordHostAnomaly(r *http.Request, host string) {
 
 	cat := "host_anomaly:" + cls.Name
 	if s.threatLog != nil {
+		traits := traitsComportementaux(r)
+		// DÉDUCTION SANS CROIRE L'USER-AGENT. Si l'outil ne s'annonce pas, on
+		// propose quand même une famille — tirée de la forme de la requête et
+		// de ce que la sonde cherchait. Le résultat porte un « ? » : c'est une
+		// déduction, pas un nom.
+		outil := étiquetteOutil(r.Header.Get("User-Agent"), r.URL.Path)
+		if outil == "" {
+			outil = familleDeduite(traits, classeSonde(r.URL.Path))
+		}
 		s.threatLog.Record(ThreatRecord{
 			ClientIP: ip, Host: r.Host, Method: r.Method, Path: r.URL.Path,
 			Category: cat, Severity: cls.Sev, Action: action,
 			UA:   r.Header.Get("User-Agent"),
-			Tool: étiquetteOutil(r.Header.Get("User-Agent"), r.URL.Path),
+			Tool: outil,
 			JA4:  s.lireJA4(r),
+
+			EmpreinteHTTP: signatureEnTetes(r),
+			Traits:        traits,
+			Leurre:        leurre,
+			Filigrane:     filigrane,
+			// Les marques vues dans l'URL/les en-têtes ET celles trouvées dans
+			// un corps POST par le leurre : le rejeu passe par le second
+			// chemin, et c'est justement celui qui compte.
+			MarqueRevenue: fusionneMarques(s.marquesRevenues(r), rejouees...),
 		})
 	}
 	if action == "banned" {

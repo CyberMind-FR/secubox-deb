@@ -45,10 +45,18 @@ package main
 
 import (
 	"html"
+	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
+
+// corpsMaxLeurre borne ce qu'on accepte de lire d'un corps de requête. Assez
+// pour un formulaire de connexion, trop peu pour servir de dépôt à qui que ce
+// soit — et le plafond est appliqué à la LECTURE, pas après.
+const corpsMaxLeurre = 8 << 10
 
 // familleSonde classe ce que la sonde CHERCHE. On répond dans le registre de
 // sa demande : un outil qui reçoit une réponse hors-sujet s'arrête, et l'on
@@ -63,6 +71,7 @@ const (
 	sondeInfo       familleSonde = "info"   // phpinfo, status, debug
 	sondeSauvegarde familleSonde = "backup" // .sql, .zip, dumps
 	sondeRacine     familleSonde = "racine" // « / » et le reste
+	sondeEntree     familleSonde = "entree" // il a REJOUÉ une de nos marques
 )
 
 // classeSonde déduit la famille du chemin demandé. Ordre volontaire : du plus
@@ -97,6 +106,10 @@ func classeSonde(chemin string) familleSonde {
 type LeurreHTTP struct {
 	fil   *Filigrane
 	actif bool
+	// theatre retient les scènes en cours : c'est lui qui permet de
+	// RECONNAÎTRE un visiteur déjà servi, et donc de SIMULER la suite au lieu
+	// de lui rejouer une première visite.
+	theatre *Theatre
 	// journal reçoit ce qui a été semé : (hôte, chemin, famille, aléa du
 	// filigrane). C'est la trace qui permettra, plus tard, de dire d'où vient
 	// une marque qui revient.
@@ -108,22 +121,45 @@ type LeurreHTTP struct {
 // en silence sur la box de quelqu'un.
 func NewLeurreHTTP(actif bool, fil *Filigrane,
 	journal func(string, string, familleSonde, string)) *LeurreHTTP {
-	return &LeurreHTTP{actif: actif, fil: fil, journal: journal}
+	return &LeurreHTTP{actif: actif, fil: fil, journal: journal,
+		theatre: NewTheatre(2048, 30*time.Minute)}
 }
 
 // Sert répond à la place du 421 si le leurre est armé.
 //
-// Rend (servi, famille, alea) : `servi=false` laisse l'appelant écrire son 421
-// habituel — ce qui reste le comportement par défaut de la box.
-func (l *LeurreHTTP) Sert(w http.ResponseWriter, r *http.Request, hote string) (bool, familleSonde, string) {
+// Rend (servi, famille, alea, marquesRejouees). `servi=false` laisse l'appelant
+// écrire son 421 habituel — le comportement par défaut de la box.
+//
+// LES MARQUES REJOUÉES REMONTENT, et ce n'est pas décoratif : le rejeu arrive
+// dans un CORPS POST, que seul ce niveau lit. Les garder ici ferait piloter la
+// simulation par un événement dont le journal et l'enveloppe d'acteur
+// n'entendraient jamais parler — c'est-à-dire perdre le signal le plus fort du
+// dispositif au moment précis où il se produit.
+func (l *LeurreHTTP) Sert(w http.ResponseWriter, r *http.Request, hote string) (bool, familleSonde, string, []string) {
 	if l == nil || !l.actif {
-		return false, "", ""
+		return false, "", "", nil
 	}
-	// GARDE-FOU DE MÉTHODE. On ne répond qu'aux lectures. Accepter un POST
-	// reviendrait à encaisser un corps — donc à accepter de la donnée d'un
-	// inconnu sans aucune raison de le faire.
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		return false, "", ""
+	// LE POST EST ACCEPTÉ ICI, ET C'EST UN CHANGEMENT ASSUMÉ.
+	//
+	// On le refusait — « encaisser le corps d'un inconnu sans raison ». La
+	// raison existe maintenant : REJOUER UNE FAUSSE CLÉ, C'EST UN POST. Sans
+	// lui, le moment le plus instructif de toute la boucle — l'outil qui
+	// essaie ce qu'il a moissonné — nous resterait invisible.
+	//
+	// Le risque est borné par la façon de lire : au plus `corpsMaxLeurre`
+	// octets, JAMAIS analysés — on y cherche une marque par simple recherche de
+	// sous-chaîne, puis on jette. Pas de parsing de formulaire, pas de JSON,
+	// pas de multipart : rien qui puisse trébucher sur une entrée malveillante.
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodPost:
+	default:
+		return false, "", "", nil
+	}
+	var marquesRejouees []string
+	if r.Method == http.MethodPost && l.fil != nil && r.Body != nil {
+		corps, _ := io.ReadAll(io.LimitReader(r.Body, corpsMaxLeurre))
+		_ = r.Body.Close()
+		marquesRejouees = l.fil.Cherche(string(corps))
 	}
 
 	famille := classeSonde(r.URL.Path)
@@ -132,7 +168,20 @@ func (l *LeurreHTTP) Sert(w http.ResponseWriter, r *http.Request, hote string) (
 		jeton, alea = l.fil.Marque()
 	}
 
+	// RECONNAÎTRE, PUIS SIMULER. La clé associe l'adresse à la FORME des
+	// requêtes : derrière un même NAT, deux outils ne partagent pas de scène.
+	cle := l.theatre.Cle(clientIP(r), signatureEnTetes(r))
+	etape, _ := l.theatre.Avance(cle, famille, alea)
+
 	corps, typeMIME := corpsLeurre(famille, hote, jeton)
+	// Si le visiteur REJOUE une valeur qu'on lui a donnée, on lui accorde ce
+	// que cette valeur promet. Il croit être entré ; il va donc faire ce qu'il
+	// fait UNE FOIS ENTRÉ — et c'est précisément ce qu'on veut voir. Rien
+	// n'est ouvert pour autant : la « session » est une page de plus.
+	if len(marquesRejouees) > 0 {
+		corps, typeMIME = corpsApresEntree(hote, jeton)
+		famille = sondeEntree
+	}
 
 	// En-têtes délibérément BANALS. Un serveur qui se signale « SecuBox » dirait
 	// à l'outil qu'il a trouvé un produit de sécurité, et le plus soigné des
@@ -150,7 +199,8 @@ func (l *LeurreHTTP) Sert(w http.ResponseWriter, r *http.Request, hote string) (
 	if l.journal != nil {
 		l.journal(hote, r.URL.Path, famille, alea)
 	}
-	return true, famille, alea
+	_ = etape
+	return true, famille, alea, marquesRejouees
 }
 
 // corpsLeurre rend un contenu PLAUSIBLE et STATIQUE pour la famille demandée.
@@ -260,4 +310,161 @@ func construitLeurre(actif bool, cheminSecret string) *LeurreHTTP {
 		log.Printf("sbxwaf: leurre semé host=%s path=%s famille=%s filigrane=%s",
 			hote, chemin, f, alea)
 	})
+}
+
+// marquesRevenues cherche, dans une requête ENTRANTE, une marque que nous avons
+// nous-mêmes semée (#1290).
+//
+// C'EST LE MOMENT OÙ LE FILIGRANE PAIE. Le reste du dispositif observe ; ceci
+// RELIE. Une de nos fausses clés qui revient prouve trois choses d'un coup :
+// que le visiteur a moissonné notre leurre, qu'il exploite ce qu'il moissonne,
+// et — puisque la marque est unique — de QUEL semis elle vient. Deux visites
+// séparées par des semaines et par des adresses différentes se trouvent alors
+// reliées par une preuve, pas par une ressemblance.
+//
+// OÙ L'ON REGARDE, ET POURQUOI PAS AILLEURS. L'URL complète et trois en-têtes.
+// On NE LIT PAS le corps : sbxwaf est sur le chemin critique de toutes les
+// requêtes de la box, et bufferiser chaque corps pour y chercher une aiguille
+// coûterait à tout le trafic légitime le prix d'une minorité d'attaquants. Le
+// corps sera inspecté là où c'est déjà le cas — l'authentification — quand on
+// y branchera la même recherche.
+func (s *Server) marquesRevenues(r *http.Request) []string {
+	if s == nil || s.leurre == nil || s.leurre.fil == nil {
+		return nil
+	}
+	f := s.leurre.fil
+	var trouves []string
+	ajoute := func(texte string) {
+		if texte == "" {
+			return
+		}
+		trouves = append(trouves, f.Cherche(texte)...)
+	}
+	ajoute(r.URL.RequestURI())
+	ajoute(r.Header.Get("Authorization"))
+	ajoute(r.Header.Get("Cookie"))
+	ajoute(r.Header.Get("Referer"))
+	if len(trouves) == 0 {
+		return nil
+	}
+	// Un événement pareil ne doit pas se perdre dans le bruit du journal de
+	// menaces : on le dit aussi en clair, tout de suite.
+	log.Printf("sbxwaf: MARQUE REVENUE — une valeur semée par le leurre est "+
+		"rejouée par %s sur %s%s (marques=%v)",
+		clientIP(r), r.Host, r.URL.Path, trouves)
+	return trouves
+}
+
+// corpsApresEntree — ce qu'on sert à qui REJOUE une marque qu'on lui a semée.
+//
+// L'outil croit avoir ouvert une porte. On lui montre donc ce qu'une porte
+// ouverte montre : une liste de choses à prendre. Chaque nom est une INVITATION
+// À SE DÉCRIRE — celui qui ira vers « /backup/db.sql » ne cherche pas la même
+// chose que celui qui ira vers « /admin/users ». La séquence qui suit vaut plus
+// que tout ce qu'on aurait appris d'un refus.
+//
+// Rien de tout cela n'existe. Ce sont des noms dans une page.
+func corpsApresEntree(hote, jeton string) (string, string) {
+	h := html.EscapeString(hote)
+	return "<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\">" +
+		"<title>" + h + " — tableau de bord</title></head><body>" +
+		"<h1>Bienvenue</h1><p>Session <code>" + jeton + "</code></p>" +
+		"<ul>" +
+		"<li><a href=\"/admin/users\">Utilisateurs</a></li>" +
+		"<li><a href=\"/admin/settings\">Paramètres</a></li>" +
+		"<li><a href=\"/backup/db.sql\">Sauvegarde base</a></li>" +
+		"<li><a href=\"/files/\">Fichiers</a></li>" +
+		"<li><a href=\"/api/v1/keys\">Clés d'API</a></li>" +
+		"</ul></body></html>", "text/html; charset=utf-8"
+}
+
+// LeurrerLe404 remplace un 404 d'un vhost RÉEL par un contenu de leurre, quand
+// — et seulement quand — le chemin demandé est un appât intrinsèque (#1290).
+//
+// POURQUOI C'EST LÉGITIME ICI AUSSI. « Répertoire inexistant » est le même
+// espace négatif qu'un vhost non routé, vu d'un cran plus bas : la ressource
+// n'existe pas, et personne ne la demande par accident. Un navigateur qui suit
+// un lien périmé tombe sur une vraie 404 ; celui qui demande `/.env` ne suit
+// aucun lien — il devine.
+//
+// TROIS GARDES, ET LA PREMIÈRE EST LA PLUS IMPORTANTE :
+//
+//  1. ON N'AGIT QU'APRÈS COUP. Le vhost réel a déjà répondu, et il a répondu
+//
+//  404. On ne pré-empte rien, on ne masque aucun chemin légitime : si le
+//     service servait cette URL, on ne serait jamais entré ici. C'est ce qui
+//     distingue ce remplacement d'une interception, qui elle pourrait faire
+//     disparaître une page réelle le jour où quelqu'un en crée une.
+//
+//  2. SEULEMENT LES APPÂTS INTRINSÈQUES — `estHauteValeur`. Pas « toute 404 » :
+//     transformer les liens morts d'un vrai site en fausses pages tromperait
+//     ses visiteurs et pourrirait son référencement.
+//
+//  3. JAMAIS LE LAN. Nos propres outils sondent nos propres services ; leur
+//     mentir ferait conclure n'importe quoi à un prober.
+func (l *LeurreHTTP) LeurrerLe404(resp *http.Response) bool {
+	if l == nil || !l.actif || resp == nil || resp.Request == nil {
+		return false
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		return false
+	}
+	r := resp.Request
+	if privateCIDR(clientIP(r)) {
+		return false
+	}
+	if !estHauteValeur(strings.ToLower(r.URL.Path)) {
+		return false
+	}
+
+	famille := classeSonde(r.URL.Path)
+	jeton, alea := "", ""
+	if l.fil != nil {
+		jeton, alea = l.fil.Marque()
+	}
+	corps, typeMIME := corpsLeurre(famille, r.Host, jeton)
+
+	if l.theatre != nil {
+		l.theatre.Avance(l.theatre.Cle(clientIP(r), signatureEnTetes(r)), famille, alea)
+	}
+
+	resp.StatusCode = http.StatusOK
+	resp.Status = "200 OK"
+	resp.Body = io.NopCloser(strings.NewReader(corps))
+	resp.ContentLength = int64(len(corps))
+	resp.Header.Set("Content-Type", typeMIME)
+	resp.Header.Set("Cache-Control", "no-store")
+	resp.Header.Set("X-Robots-Tag", "noindex, nofollow")
+	// L'en-tête de longueur DOIT suivre le corps : le laisser à la valeur du
+	// 404 d'origine ferait tronquer ou attendre, et le client verrait une
+	// réponse cassée là où on voulait une réponse plausible.
+	resp.Header.Set("Content-Length", strconv.Itoa(len(corps)))
+	resp.Header.Del("Content-Encoding") // le corps de remplacement est en clair
+
+	if l.journal != nil {
+		l.journal(r.Host, r.URL.Path, famille, alea)
+	}
+	return true
+}
+
+// fusionneMarques réunit les marques repérées par les deux chemins (en-têtes/URL
+// d'un côté, corps POST de l'autre) sans doublon, et crie au journal si le
+// second en a trouvé — le premier le fait déjà de son côté.
+func fusionneMarques(base []string, autres ...[]string) []string {
+	vus := make(map[string]bool, len(base))
+	out := append([]string(nil), base...)
+	for _, m := range base {
+		vus[m] = true
+	}
+	for _, lot := range autres {
+		for _, m := range lot {
+			if m != "" && !vus[m] {
+				vus[m] = true
+				out = append(out, m)
+				log.Printf("sbxwaf: MARQUE REVENUE — une valeur semée par le "+
+					"leurre est rejouée dans un corps de requête (marque=%s)", m)
+			}
+		}
+	}
+	return out
 }

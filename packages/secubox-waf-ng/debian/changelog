@@ -1,3 +1,35 @@
+secubox-waf-ng (1.16.1-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif : une marque rejouée DANS UN CORPS POST pilotait bien la
+    simulation, mais n'atteignait ni le journal ni l'enveloppe d'acteur — le
+    signal le plus fort du dispositif se perdait au moment précis où il se
+    produisait. Seul le niveau du leurre lit ce corps ; il remonte désormais ce
+    qu'il y a trouvé (ref #1290).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 13:07:38 +0200
+
+secubox-waf-ng (1.16.0-1~bookworm1) bookworm; urgency=medium
+
+  * RECONNAÎTRE ET SIMULER (ref #1290). Le leurre avait une mémoire d'un
+    instant : il répondait à la deuxième visite comme à la première, et ratait
+    donc le moment le plus instructif — celui où l'outil ESSAIE ce qu'il vient
+    de moissonner. Un « théâtre » borné retient les scènes en cours ; qui rejoue
+    une marque qu'on lui a semée obtient ce qu'elle promet, et continue.
+  * LE POST EST ADMIS, ET C'EST UN CHANGEMENT ASSUMÉ. On le refusait faute de
+    raison ; la raison existe : rejouer une fausse clé, c'est un POST. Le corps
+    est lu au plus 8 Kio et JAMAIS analysé — recherche de sous-chaîne, puis
+    jeté. Pas de formulaire, pas de JSON, pas de multipart.
+  * RÉPERTOIRE INEXISTANT : un 404 d'un vhost RÉEL sur un chemin-appât
+    intrinsèque (.env, .git, credentials…) devient un leurre. On n'agit
+    qu'APRÈS la réponse du service — aucun chemin légitime ne peut être masqué.
+    Une 404 ORDINAIRE n'est jamais touchée : transformer les liens morts d'un
+    vrai site en fausses pages tromperait ses visiteurs.
+  * La mémoire du théâtre est bornée en nombre de scènes, en durée de vie et en
+    longueur de scène. Une carte indexée par IP est, sinon, un moyen offert à
+    n'importe qui de remplir la RAM de la box : il suffit de varier l'adresse.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 13:05:09 +0200
+
 secubox-waf-ng (1.15.2-1~bookworm1) bookworm; urgency=medium
 
   * LE LAN N'EST PLUS LEURRÉ (ref #1290) — et ce n'était pas théorique : dès

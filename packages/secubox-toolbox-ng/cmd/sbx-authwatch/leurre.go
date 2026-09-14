@@ -93,9 +93,24 @@ func AnalyseLeurres(spec string) ([]Leurre, error) {
 
 // EcouteLeurre ouvre le port et pousse un signal par connexion entrante.
 //
-// La connexion est fermee IMMEDIATEMENT, sans un octet echange. Le delai
-// d'ecriture n'existe donc pas : il n'y a rien a ecrire.
+// DEUX RÉGIMES. Par défaut, la connexion est fermée IMMÉDIATEMENT, sans un
+// octet échangé — c'est le comportement d'origine, et il reste le défaut.
+//
+// Avec `bannieres=true`, le leurre envoie une annonce STATIQUE (voir
+// banniere.go) et capture, sans jamais l'interpréter, la première trame du
+// client. Le signal cesse alors de dire seulement « on a été touché » pour dire
+// « touché PAR CECI » — la trame décrit l'outil bien mieux qu'un numéro de port.
+//
+// Le second régime traite chaque connexion dans sa propre goroutine, bornée par
+// un sémaphore : échanger prend du temps, et le faire dans la boucle d'accept
+// suffirait à bloquer le leurre avec une seule connexion muette.
 func EcouteLeurre(ctx context.Context, l Leurre, signaux chan<- Signal) error {
+	return EcouteLeurreAvecBanniere(ctx, l, signaux, false)
+}
+
+// EcouteLeurreAvecBanniere — cf. EcouteLeurre. `bannieres` arme le second régime.
+func EcouteLeurreAvecBanniere(ctx context.Context, l Leurre, signaux chan<- Signal,
+	bannieres bool) error {
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", fmt.Sprintf(":%d", l.Port))
 	if err != nil {
@@ -107,6 +122,8 @@ func EcouteLeurre(ctx context.Context, l Leurre, signaux chan<- Signal) error {
 		<-ctx.Done()
 		_ = ln.Close()
 	}()
+
+	jetons := make(chan struct{}, banniereParallelisme)
 
 	for {
 		conn, err := ln.Accept()
@@ -120,20 +137,55 @@ func EcouteLeurre(ctx context.Context, l Leurre, signaux chan<- Signal) error {
 			continue
 		}
 		hote, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-		_ = conn.Close()
 		if hote == "" {
+			_ = conn.Close()
 			continue
 		}
-		select {
-		case signaux <- Signal{
-			IP:        hote,
-			Service:   l.Service,
-			Categorie: "leurre:" + l.Service,
-			Severite:  "high",
-			Detail:    fmt.Sprintf("connexion sur un service inexistant (port %d)", l.Port),
-		}:
-		case <-ctx.Done():
-			return nil
+
+		if !bannieres {
+			// Régime d'origine : on accepte, on note, on ferme.
+			_ = conn.Close()
+			emet(ctx, signaux, l, hote, "", 0)
+			continue
 		}
+
+		// Régime bannière. Le sémaphore n'est pas une précaution de style :
+		// sans lui, mille connexions muettes tiendraient chacune une goroutine
+		// et un tampon pendant l'échéance, sur une box qui n'a pas cette marge.
+		select {
+		case jetons <- struct{}{}:
+		default:
+			// Plafond atteint : on retombe sur le régime d'origine plutôt que
+			// de refuser le signal. Mieux vaut savoir moins que ne rien savoir.
+			_ = conn.Close()
+			emet(ctx, signaux, l, hote, "", 0)
+			continue
+		}
+		go func(c net.Conn, ip string) {
+			defer func() { <-jetons; _ = c.Close() }()
+			extrait, n := Echange(c, l.Service)
+			emet(ctx, signaux, l, ip, extrait, n)
+		}(conn, hote)
+	}
+}
+
+// emet pousse le signal, en y joignant ce que le client a dit s'il a dit
+// quelque chose. Le détail reste une PHRASE : l'extrait est déjà assaini par
+// resumeTrame, jamais des octets bruts.
+func emet(ctx context.Context, signaux chan<- Signal, l Leurre, ip, extrait string, n int) {
+	detail := fmt.Sprintf("connexion sur un service inexistant (port %d)", l.Port)
+	if n > 0 {
+		detail = fmt.Sprintf("connexion sur un service inexistant (port %d) — "+
+			"première trame %d o : %s", l.Port, n, extrait)
+	}
+	select {
+	case signaux <- Signal{
+		IP:        ip,
+		Service:   l.Service,
+		Categorie: "leurre:" + l.Service,
+		Severite:  "high",
+		Detail:    detail,
+	}:
+	case <-ctx.Done():
 	}
 }

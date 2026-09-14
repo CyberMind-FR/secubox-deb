@@ -52,6 +52,16 @@ type ThreatRecord struct {
 	UA       string
 	Tool     string // #1070 phase C : outil identifié (nuclei, sqlmap…) si certain
 	JA4      string // #1070 phase E : empreinte TLS JA4 (via HAProxy), clé anti-spoof
+
+	// #1290 — CE QUE L'OUTIL NE PEUT PAS FALSIFIER D'UN ARGUMENT.
+	// L'User-Agent ci-dessus se change en une ligne ; la FORME des requêtes
+	// vient de la bibliothèque HTTP de l'outil. Ces trois champs portent donc
+	// plus d'information que l'UA, et ne coûtent rien à collecter.
+	EmpreinteHTTP string   // forme des en-têtes (le champ JA4H de l'enveloppe)
+	Traits        []string // faits observés : entetes:pauvres, nav:chemin-devine…
+	Leurre        string   // famille servie par le leurre, si semis il y a eu
+	Filigrane     string   // aléa de la marque semée — retrouvable dans le journal
+	MarqueRevenue []string // UNE DE NOS MARQUES EST REVENUE : signal le plus fort
 }
 
 // ThreatLog appends JSON threat records to a file, one per line.
@@ -116,6 +126,22 @@ func entryToEnvelope(e *logEntry) *envelope.Envelope {
 	if e.NegativeSpace != "" {
 		tags = append(tags, e.NegativeSpace)
 	}
+	// #1290 — les traits comportementaux rejoignent les étiquettes : c'est par
+	// eux que deux adresses au même outil se rapprochent, même quand l'une
+	// ment sur son User-Agent et l'autre non.
+	tags = append(tags, e.Traits...)
+	if e.Leurre != "" {
+		tags = append(tags, "leurre:"+e.Leurre)
+	}
+	// UNE MARQUE QUI REVIENT EST LE SIGNAL LE PLUS FORT DONT ON DISPOSE. Elle
+	// ne prouve pas seulement qu'on a affaire à un scanner : elle prouve que
+	// CELUI-CI a moissonné notre leurre, et relie les deux visites — celle qui
+	// a pris, et celle qui rejoue — même à des semaines d'écart et depuis une
+	// autre adresse.
+	for range e.MarqueRevenue {
+		tags = append(tags, "leurre:marque-revenue")
+		break
+	}
 	return &envelope.Envelope{
 		EventID:         envelope.NewEventID(),
 		Timestamp:       time.Now().Unix(),
@@ -131,6 +157,7 @@ func entryToEnvelope(e *logEntry) *envelope.Envelope {
 		PathShape:       features.PathShape(e.Path),
 		UserAgentFamily: uaFam,
 		TLSFingerprint:  e.JA4,
+		HTTPFingerprint: e.EmpreinteHTTP,
 		BehaviorTags:    tags,
 	}
 }
@@ -154,6 +181,12 @@ type logEntry struct {
 	// Présente UNIQUEMENT pour les sondes de reconnaissance ; absente pour les
 	// attaques à charge utile (sqli, xss…) et les 404 anodines.
 	NegativeSpace string `json:"negative_space,omitempty"`
+	// #1290 — empreinte et traits comportementaux, leurre, filigrane.
+	EmpreinteHTTP string   `json:"http_fingerprint,omitempty"`
+	Traits        []string `json:"behavior_traits,omitempty"`
+	Leurre        string   `json:"leurre,omitempty"`
+	Filigrane     string   `json:"filigrane,omitempty"`
+	MarqueRevenue []string `json:"marque_revenue,omitempty"`
 }
 
 // Record appends one JSON line to the threat log for the given ThreatRecord.
@@ -184,6 +217,12 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		UserAgent: rec.UA,
 		Tool:      rec.Tool,
 		JA4:       rec.JA4,
+
+		EmpreinteHTTP: rec.EmpreinteHTTP,
+		Traits:        rec.Traits,
+		Leurre:        rec.Leurre,
+		Filigrane:     rec.Filigrane,
+		MarqueRevenue: rec.MarqueRevenue,
 	}
 
 	// LECTURE « NEGATIVE SPACE » (#1240, P0-A). On ÉTIQUETTE l'événement selon
