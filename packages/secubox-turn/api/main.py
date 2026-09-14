@@ -203,7 +203,22 @@ def _generate_temp_credentials(username: str, ttl: int = 86400) -> dict:
     timestamp = int(time.time()) + ttl
     temp_username = f"{timestamp}:{username}"
 
-    # HMAC-SHA1 password
+    # SHA-1 ICI EST IMPOSÉ PAR LE PROTOCOLE — CE N'EST PAS UN CHOIX.
+    #
+    # Le mécanisme d'identifiants temporaires TURN (« TURN REST API », le
+    # `static-auth-secret` de coturn) définit le mot de passe comme
+    # base64(HMAC-SHA1(secret, username)). Un serveur TURN qui calculerait un
+    # HMAC-SHA256 refuserait tous les clients WebRTC existants : ils vérifient
+    # SHA-1, et ne négocient rien.
+    #
+    # CE QUE CELA COÛTE, ET POURQUOI C'EST ACCEPTABLE. Les attaques connues sur
+    # SHA-1 sont des COLLISIONS (SHAttered, 2017). HMAC-SHA1 n'en dépend pas :
+    # sa sécurité repose sur la résistance à la préimage de la fonction sous
+    # clé, qui n'est pas entamée — c'est pourquoi la RFC 6151 déconseille SHA-1
+    # pour les signatures tout en laissant HMAC-SHA1 en service.
+    #
+    # La vraie protection est ailleurs : `secret` doit être long et aléatoire,
+    # et l'identifiant expire (ttl). Voir docs/POLITIQUE-CRYPTO.md § exceptions.
     password = hmac.new(
         secret.encode(),
         temp_username.encode(),

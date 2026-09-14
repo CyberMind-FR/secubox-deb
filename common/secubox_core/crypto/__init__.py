@@ -3,22 +3,25 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
-"""secubox_core.crypto — cœur cryptographique souverain (Hermes).
-
-Backend crypto **souverain** de SecuBox, importable au runtime en :
+"""secubox_core.crypto — cœur cryptographique de SecuBox.
 
     from secubox_core.crypto import Identity, Session, derive_key_material
 
-Le seam enfichable de ``secubox-identity`` (#1263) fait ``from
-secubox_core.crypto import hermes`` et adopte automatiquement ce backend dès
-qu'il est installé, sinon retombe sur ``cryptography`` (mêmes primitives).
+UNE SEULE RÈGLE : QUE DES ALGORITHMES NORMALISÉS. X25519 (RFC 7748), Ed25519
+(RFC 8032, FIPS 186-5), HKDF-SHA256 (RFC 5869), AES-256-GCM (NIST SP 800-38D),
+SHA-256 (FIPS 180-4) — tous implémentés par OpenSSL via ``pyca/cryptography``.
+Rien n'est écrit à la main, et rien n'est assemblé de façon originale.
 
-L'API sépare :
-- les identités long-terme (X25519) ;
-- les sessions éphémères (X25519 ECDH + HKDF-SHA256) ;
-- le chiffrement symétrique authentifié (ChaCha20-Poly1305).
+Voir ``docs/POLITIQUE-CRYPTO.md`` pour le catalogue complet, les justifications
+et la liste — courte et motivée — des exceptions imposées par des protocoles.
+
+L'API sépare trois choses qui ne doivent pas se mélanger :
+  * les identités long-terme (X25519, + Ed25519 pour signer) ;
+  * les sessions éphémères (ECDH X25519 → HKDF-SHA256) ;
+  * le chiffrement authentifié (AES-256-GCM, clés directionnelles et nonces
+    compteur — voir le module pour le pourquoi).
 """
 
-from .hermes import Identity, Session, derive_key_material
+from .standard import Identity, Session, derive_key_material
 
 __all__ = ["Identity", "Session", "derive_key_material"]

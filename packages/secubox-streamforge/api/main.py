@@ -23,6 +23,7 @@ from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 from secubox_core.auth import require_lecture
+from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(title="secubox-streamforge", version="2.0.0", root_path="/api/v1/streamforge")
 
@@ -625,7 +626,7 @@ async def list_webhooks(user=Depends(require_jwt)):
 async def add_webhook(webhook: WebhookConfig, user=Depends(require_jwt)):
     webhooks = _load_webhooks()
     webhook_data = webhook.model_dump()
-    webhook_data["id"] = hashlib.md5(webhook.url.encode()).hexdigest()[:8]
+    webhook_data["id"] = ident(webhook.url, n=8)
     webhook_data["created_at"] = datetime.now().isoformat()
     webhooks.append(webhook_data)
     _save_webhooks(webhooks)

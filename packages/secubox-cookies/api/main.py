@@ -38,6 +38,7 @@ app = FastAPI(title="SecuBox Cookies API", version="1.0.0")
 # Phase 2b/2c (#488/#490) : ingest mitm cookies events + provider classification
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
 from secubox_core.classifiers import cookie as _cookie_cls  # noqa: E402
+from secubox_core.crypto.empreinte import ident
 
 
 def _cookies_enrich(event: dict) -> dict:
@@ -479,7 +480,7 @@ def check_policy_violations(cookies_db: dict, config: dict) -> list:
                 # Third-party violation
                 if policy.get("block_third_party") and cookie.get("is_third_party"):
                     violations.append({
-                        "id": hashlib.md5(f"{domain}-{cookie['name']}-third_party".encode()).hexdigest()[:12],
+                        "id": ident(f"{domain}-{cookie['name']}-third_party", n=12),
                         "timestamp": datetime.now().isoformat(),
                         "policy": policy["name"],
                         "domain": domain,
@@ -491,7 +492,7 @@ def check_policy_violations(cookies_db: dict, config: dict) -> list:
                 # Tracker violation
                 if policy.get("block_trackers") and cookie.get("is_tracker"):
                     violations.append({
-                        "id": hashlib.md5(f"{domain}-{cookie['name']}-tracker".encode()).hexdigest()[:12],
+                        "id": ident(f"{domain}-{cookie['name']}-tracker", n=12),
                         "timestamp": datetime.now().isoformat(),
                         "policy": policy["name"],
                         "domain": domain,
@@ -509,7 +510,7 @@ def check_policy_violations(cookies_db: dict, config: dict) -> list:
                         age_days = (expires_dt - datetime.now()).days
                         if age_days > max_age:
                             violations.append({
-                                "id": hashlib.md5(f"{domain}-{cookie['name']}-age".encode()).hexdigest()[:12],
+                                "id": ident(f"{domain}-{cookie['name']}-age", n=12),
                                 "timestamp": datetime.now().isoformat(),
                                 "policy": policy["name"],
                                 "domain": domain,
@@ -798,7 +799,7 @@ async def create_policy(policy: CookiePolicy, user: dict = Depends(require_jwt))
     """Create a new cookie policy"""
     config = load_config()
 
-    policy_id = hashlib.md5(policy.name.encode()).hexdigest()[:12]
+    policy_id = ident(policy.name, n=12)
     new_policy = {
         "id": policy_id,
         "name": policy.name,

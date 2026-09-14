@@ -31,7 +31,21 @@ log = logging.getLogger("secubox.p2p.dht")
 
 
 def node_id_for(did: str) -> bytes:
-    """160-bit Kademlia node id = SHA1(did)."""
+    """Identifiant de nœud Kademlia, 160 bits = SHA1(did).
+
+    SHA-1 EST ICI UNE CONSTANTE DE PROTOCOLE, PAS UNE MESURE DE SÉCURITÉ.
+    Kademlia définit un espace d'identifiants de 160 bits et une distance XOR
+    sur cet espace ; toute la table de routage, les k-buckets et la convergence
+    des recherches en dépendent. Passer à SHA-256 ne « renforcerait » rien —
+    cela produirait un espace de 256 bits incompatible avec tout pair existant,
+    et il faudrait tronquer, c'est-à-dire revenir à 160 bits.
+
+    Aucune propriété de sécurité ne repose sur ce hachage : il répartit des
+    identifiants, il n'authentifie personne. L'authentification d'un pair se
+    fait par sa clé (Ed25519), pas par son emplacement dans l'anneau.
+
+    Voir docs/POLITIQUE-CRYPTO.md § exceptions imposées par un protocole.
+    """
     return hashlib.sha1(did.encode()).digest()
 
 

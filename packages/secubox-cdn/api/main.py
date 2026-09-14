@@ -21,6 +21,7 @@ import subprocess, json, hashlib, time, asyncio
 from pathlib import Path
 from typing import List, Optional, Dict
 from datetime import datetime
+from secubox_core.crypto.empreinte import empreinte
 
 app = FastAPI(title="secubox-cdn", version="1.1.0", root_path="/api/v1/cdn")
 
@@ -432,7 +433,7 @@ async def mesh_sync(user=Depends(require_jwt)):
     if CACHE_DIR.exists():
         for f in CACHE_DIR.rglob("*"):
             if f.is_file():
-                file_hash = hashlib.md5(f.read_bytes()).hexdigest()
+                file_hash = empreinte(f.read_bytes())
                 manifest[file_hash] = {
                     "path": str(f.relative_to(CACHE_DIR)),
                     "size": f.stat().st_size,

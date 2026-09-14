@@ -27,6 +27,7 @@ from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
 from .services import antispam, feeds, fiche, media
 from .services import security as sec
 from .services.render import linkify_plain, render_markdown
+from secubox_core.crypto.empreinte import empreinte
 
 SITE_URL = os.environ.get("BILLETS_SITE_URL", "")
 
@@ -193,7 +194,7 @@ _CATS = ("auth", "wall", "boot", "mind", "root", "mesh")
 
 def _categorie(billet_id: str) -> str:
     import hashlib
-    return _CATS[int(hashlib.sha1((billet_id or "").encode()).hexdigest(), 16) % len(_CATS)]
+    return _CATS[int(empreinte(billet_id or ""), 16) % len(_CATS)]
 
 
 def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None) -> dict:

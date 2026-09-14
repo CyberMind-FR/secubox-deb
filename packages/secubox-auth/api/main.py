@@ -189,6 +189,7 @@ def _verify_totp_ntp_aware(username: str, code: str) -> bool:
 # ─── Branching login router ────────────────────────────────────────────
 from fastapi import APIRouter as _APIRouter, Request as _Request, Response as _Response
 from secubox_core.auth import set_session_cookie as _set_session_cookie
+from secubox_core.crypto.empreinte import ident
 
 _login_router = _APIRouter(tags=["auth-v2"])
 
@@ -917,7 +918,7 @@ async def add_webhook(webhook: WebhookConfig, user=Depends(require_jwt)):
     """Add a new webhook."""
     webhooks = _load_webhooks()
     webhook_data = webhook.model_dump()
-    webhook_data["id"] = hashlib.md5(webhook.url.encode()).hexdigest()[:8]
+    webhook_data["id"] = ident(webhook.url, n=8)
     webhook_data["created_at"] = datetime.now().isoformat()
     webhooks.append(webhook_data)
     _save_webhooks(webhooks)

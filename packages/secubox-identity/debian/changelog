@@ -1,3 +1,19 @@
+secubox-identity (1.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * Le « backend crypto enfichable » disparaît (ref #1288) : un seul chemin,
+    bâti sur secubox_core.crypto. Deux chemins pour le même travail, c'était
+    deux fois la surface à évaluer et une incertitude sur ce qui tourne.
+  * Clés privées au repos : Scrypt(n=2^14) + Fernet (AES-128-CBC) remplacés par
+    Argon2id (64 Mio, 3 passes — RFC 9106) + AES-256-GCM, le sel authentifié en
+    AAD. Le produit hachait déjà ses mots de passe en Argon2id : protéger une
+    clé privée plus faiblement était une incohérence.
+  * La génération de clé X25519 n'a plus qu'un chemin, et la permission 0600 est
+    posée À LA CRÉATION du fichier — l'ancien second chemin la posait après
+    écriture, laissant une fenêtre où la clé était lisible par tous.
+  * Format sur disque inchangé (PKCS#8 PEM) : aucune migration.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 11:23:36 +0200
+
 secubox-identity (1.1.6-1~bookworm1) bookworm; urgency=medium
 
   * #1263 : premier CONSOMMATEUR de secubox_core.crypto.Session — canal scellé

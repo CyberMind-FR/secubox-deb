@@ -44,6 +44,7 @@ from .presence.reports import build_report
 from .presence.store import PresenceStore
 from .presence.wan import collect_wan
 from .store import DeviceStore, canon_mac, migrate_legacy
+from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(title="secubox-nac", version="2.0.0", root_path="/api/v1/nac")
 
@@ -1288,7 +1289,7 @@ async def list_webhooks(user=Depends(require_jwt)):
 async def add_webhook(webhook: WebhookConfig, user=Depends(require_jwt)):
     webhooks = _load_webhooks()
     webhook_data = webhook.model_dump()
-    webhook_data["id"] = hashlib.md5(webhook.url.encode()).hexdigest()[:8]
+    webhook_data["id"] = ident(webhook.url, n=8)
     webhook_data["created_at"] = datetime.now().isoformat()
     webhooks.append(webhook_data)
     _save_webhooks(webhooks)
@@ -2000,7 +2001,7 @@ def _peer_synthetic_mac(peer_id: str) -> str:
     """`sb:xx:xx:xx:xx:xx` synthetic MAC hashed from the peer id — the
     exact scheme from iot-guard's `sync_p2p_peers_to_devices` (md5 hex
     digest, first 10 hex chars, colon-paired)."""
-    peer_hash = hashlib.md5(peer_id.encode()).hexdigest()[:10]
+    peer_hash = ident(peer_id, n=10)
     return f"sb:{peer_hash[0:2]}:{peer_hash[2:4]}:{peer_hash[4:6]}:{peer_hash[6:8]}:{peer_hash[8:10]}"
 
 
