@@ -1,3 +1,14 @@
+secubox-dpi (1.4.17-1~bookworm1) bookworm; urgency=medium
+
+  * « Débit par terminal » adopte le langage de lecture de la page
+    Renseignement (#1240), appliqué au parc : glyphe de la catégorie dominante
+    (celle qui porte le plus de flux, pas la première venue), bloc de volume
+    gradué sur le maximum observé, tampon EXFIL ×N / RAS.
+    Une machine du parc se lit désormais comme un acteur — même grammaire que
+    sur le tableau WAF, pour que l'opérateur n'ait pas deux langues à tenir.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 08:54:19 +0200
+
 secubox-dpi (1.4.16-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

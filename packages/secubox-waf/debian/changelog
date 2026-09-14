@@ -1,3 +1,29 @@
+secubox-waf (1.10.29-1~bookworm1) bookworm; urgency=medium
+
+  * Tableau de bord (tableau.html) : la carte « Attaquants persistants » adopte
+    le langage de lecture de la page Renseignement (#1240) — glyphe de nature,
+    bloc de sondes gradué sur le maximum observé, tampon BANNI/LIBRE croisé
+    avec l'ensemble nft réellement actif.
+  * ET LE CHAÎNON QUI MANQUAIT : chaque empreinte de campagne porte la liste de
+    ses IP, on affiche donc la campagne de chaque adresse et on pointe vers la
+    carte des empreintes. Les deux cartes de cette page parlaient des mêmes
+    attaquants sans jamais se répondre.
+  * Fonds dérivés des jetons par color-mix : la page a trois états de thème,
+    un rgba figé redevenait un néon sur le fond clair.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 08:51:22 +0200
+
+secubox-waf (1.10.28-1~bookworm1) bookworm; urgency=medium
+
+  * IHM « Attaquants suivis » alignée sur le langage de lecture de la page
+    Renseignement (#1240) : glyphe de nature lu dans les catégories réellement
+    déclenchées, bloc de sondes gradué (5/15/50), tampon BANNI/SUIVI apposé.
+    Les deux pages montrent les mêmes adresses — elles se lisent désormais
+    pareil, au lieu d'obliger l'opérateur à retraduire à chaque aller-retour.
+    Carte passée en français, comme le reste du neuf de ce tableau de bord.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 08:47:02 +0200
+
 secubox-waf (1.10.27-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

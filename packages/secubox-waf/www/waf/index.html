@@ -183,6 +183,25 @@
 
         @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 768px) { .main { margin-left: 0; } .grid-2, .grid-3 { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+        /* ── Langage de lecture commun avec Renseignement (#1240) ───────────
+           Les deux pages montrent les mêmes attaquants : elles doivent se lire
+           de la même façon, sinon l'opérateur retraduit à chaque passage. */
+        .nat{font-size:.95rem;margin-right:3px;vertical-align:-1px}
+        .multi{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+          min-width:46px;padding:3px 7px;border-radius:8px;line-height:1.05;
+          background:rgba(0,212,255,.10);border:1px solid rgba(0,212,255,.32);color:var(--cyan)}
+        .multi b{font-size:.95rem;font-weight:800;font-variant-numeric:tabular-nums}
+        .multi i{font-style:normal;font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;opacity:.75}
+        .multi.n2{background:rgba(0,212,255,.14)}
+        .multi.n3{background:rgba(255,153,68,.13);border-color:rgba(255,153,68,.45);color:var(--orange)}
+        .multi.n4{background:rgba(255,68,102,.15);border-color:rgba(255,68,102,.55);color:var(--red);
+          box-shadow:0 0 12px rgba(255,68,102,.18)}
+        /* Tampon : apposé, pas dessiné. */
+        .tampon{display:inline-block;transform:rotate(-8deg);padding:2px 8px;border:2px solid currentColor;
+          border-radius:4px;font-weight:800;font-size:.58rem;letter-spacing:.1em}
+        .tampon.banni{color:var(--red);background:rgba(255,68,102,.10)}
+        .tampon.suivi{color:var(--blue)}
     </style>
 </head>
 <body class="hybrid-dark">
@@ -377,18 +396,18 @@
 
             <!-- Phase 7 (#498) — silenced-but-tracked attackers (24 h) -->
             <div class="card" id="trackedAttackersCard" style="grid-column: span 2;">
-                <h2>🎯 Tracked Attackers <span class="muted" style="font-size:0.8rem;">— silenced, still tracked (24 h)</span></h2>
+                <h2>🎯 Attaquants suivis <span class="muted" style="font-size:0.8rem;">— écartés du réseau, toujours profilés (24 h)</span></h2>
                 <div class="table-wrap">
                     <table class="data-table" id="trackedAttackersTable">
                         <thead>
                             <tr>
-                                <th>IP</th>
-                                <th>Hits</th>
-                                <th>Severity</th>
-                                <th>Top categories</th>
-                                <th>First seen</th>
-                                <th>Last seen</th>
-                                <th>State</th>
+                                <th>Acteur</th>
+                                <th>Sondes</th>
+                                <th>Gravité</th>
+                                <th>Catégories dominantes</th>
+                                <th>Première vue</th>
+                                <th>Dernière vue</th>
+                                <th>État</th>
                             </tr>
                         </thead>
                         <tbody id="trackedAttackersBody">
@@ -1185,13 +1204,27 @@
             if (!iso) return '-';
             return iso.replace('T', ' ').replace('Z', '').slice(5, 16);
         }
+        // NATURE D'UNE ADRESSE, lue dans ce qu'elle a RÉELLEMENT déclenché,
+        // jamais devinée. Les catégories viennent des règles qui ont matché :
+        // elles portent l'intention bien mieux qu'un compteur de sondes.
+        function _natureIP(r) {
+            const cats = (r.top_categories || []).map(c => String(c.category || '').toLowerCase()).join(' ');
+            const sev = String(r.severity_max || '').toLowerCase();
+            if (/auth|login|brute|credential/.test(cats))  return ['\u{1F511}', 'tente des identifiants'];
+            if (/lfi|rce|sqli|xss|traversal|exec|inject/.test(cats)) return ['\u{1F3AF}', 'exploitation cibl\u00e9e'];
+            if (/scan|recon|probe|crawl/.test(cats))       return ['\u{1F916}', 'balayage automatis\u00e9'];
+            if (/host|anomaly|unrouted|vhost/.test(cats))  return ['\u{1F4D6}', '\u00e9num\u00e8re des noms d\u2019h\u00f4tes'];
+            if (sev === 'critical' || sev === 'high')      return ['\u{1F525}', 'activit\u00e9 \u00e0 forte gravit\u00e9'];
+            return ['\u{1F464}', 'bruit de fond'];
+        }
+
         async function loadTrackedAttackers() {
             const data = await api('/bans/history?hours=24&limit=30');
             const body = document.getElementById('trackedAttackersBody');
             if (!body) return;
             const rows = data?.tracked || [];
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="7" class="muted">No tracked attackers in the last 24 h.</td></tr>';
+                body.innerHTML = '<tr><td colspan="7" class="muted">Aucun attaquant suivi sur les 24 derni\u00e8res heures.</td></tr>';
                 return;
             }
             body.innerHTML = rows.map(r => {
@@ -1200,11 +1233,19 @@
                 ).join(', ');
                 const sev = (r.severity_max || 'low').toLowerCase();
                 const state = r.currently_banned
-                    ? '<span class="severity-badge critical" title="active drop">🚫 silenced</span>'
-                    : '<span class="severity-badge medium" title="ban expired but still tracked">👁️ tracked</span>';
+                    ? '<span class="tampon banni" title="drop nft actif">BANNI</span>'
+                    : '<span class="tampon suivi" title="ban expiré, profil toujours suivi">SUIVI</span>';
+                // MEME LANGAGE DE LECTURE QUE LA PAGE RENSEIGNEMENT (#1240) :
+                // le glyphe dit CE QUE FAIT l'adresse, le bloc plein dit COMBIEN
+                // elle insiste. Deux pages qui montrent les mêmes attaquants
+                // doivent se lire pareil, sinon l'opérateur retraduit à chaque
+                // aller-retour entre les deux.
+                const nat = _natureIP(r);
+                const n = r.count || 0;
+                const cls = n >= 50 ? 'n4' : n >= 15 ? 'n3' : n >= 5 ? 'n2' : '';
                 return '<tr>'
-                    + '<td><code>' + r.ip + '</code></td>'
-                    + '<td>' + r.count + '</td>'
+                    + '<td><span class="nat" title="' + nat[1] + '">' + nat[0] + '</span> <code>' + r.ip + '</code></td>'
+                    + '<td><span class="multi ' + cls + '"><b>' + n + '</b><i>sondes</i></span></td>'
                     + '<td><span class="severity-badge ' + sev + '">' + (SEV_EMOJI[sev] || '') + ' ' + sev + '</span></td>'
                     + '<td>' + (cats || '-') + '</td>'
                     + '<td>' + _shortISO(r.first_seen) + '</td>'
