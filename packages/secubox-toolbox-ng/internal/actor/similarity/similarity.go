@@ -120,3 +120,61 @@ func Similarity(a, b Signature) score.Score {
 	}
 	return score.New(c...)
 }
+
+// PoidsTotal est la somme de TOUS les axes : la masse de preuve qu'une
+// comparaison pourrait produire si chaque capteur etait alimente.
+const PoidsTotal = WCredential + WPathSeq + WTool + WTLS + WCadence + WIP + WASN + WCountry
+
+// MasseMin est la masse ABSOLUE de concordance exigee pour qu'un rattachement
+// soit envisageable, quel que soit le nombre de capteurs deployes. Sans elle,
+// un deploiement ne portant qu'un seul axe faible rattacherait sur ce seul axe.
+const MasseMin = 20
+
+// Comparable rend la masse de preuve que ces deux signatures pouvaient produire :
+// la somme des poids des axes RENSEIGNES DES DEUX COTES, concordants ou non.
+//
+// POURQUOI CETTE MESURE EXISTE (2026-09-14). Le bareme a ete calibre pour huit
+// capteurs et compare a un seuil fixe de 50. Sur une box ou seuls trois sont
+// alimentes — ni identifiant reutilise (30), ni empreinte TLS (12), ni ASN, ni
+// pays — le plafond atteignable est 40 : le seuil ne POUVAIT PAS etre franchi,
+// et le moteur creait un acteur par evenement. Le score reste une mesure
+// ABSOLUE, donc comparable dans le temps et non falsifiable ; c'est la DECISION
+// de rattachement qui doit tenir compte de ce qu'on pouvait observer.
+func Comparable(a, b Signature) int {
+	m := 0
+	deux := func(gauche, droite bool, poids int) {
+		if gauche && droite {
+			m += poids
+		}
+	}
+	deux(a.CredentialHash != "", b.CredentialHash != "", WCredential)
+	deux(a.PathSig != "", b.PathSig != "", WPathSeq)
+	deux(a.UAFamily != "", b.UAFamily != "", WTool)
+	deux(a.TLSFingerprint != "", b.TLSFingerprint != "", WTLS)
+	deux(a.CadenceBucket != "", b.CadenceBucket != "", WCadence)
+	if a.IP != "" && b.IP != "" {
+		// L'IP decroit avec le temps : ce qu'elle pouvait prouver decroit aussi.
+		m += int(math.Round(float64(WIP) * ipDecay(a.SeenAt, b.SeenAt)))
+	}
+	deux(a.ASN != 0, b.ASN != 0, WASN)
+	deux(a.Country != "", b.Country != "", WCountry)
+	return m
+}
+
+// SeuilEffectif ramene un seuil calibre sur PoidsTotal a la masse reellement
+// comparable. « Tout ce qu'on pouvait comparer concorde » doit pouvoir suffire,
+// sans jamais descendre sous MasseMin : une concordance legere ne devient pas
+// une preuve parce qu'on n'avait rien d'autre a comparer.
+func SeuilEffectif(seuilNominal, comparable int) int {
+	if comparable <= 0 {
+		return seuilNominal
+	}
+	s := int(math.Round(float64(seuilNominal) * float64(comparable) / float64(PoidsTotal)))
+	if s < MasseMin {
+		s = MasseMin
+	}
+	if s > seuilNominal {
+		s = seuilNominal
+	}
+	return s
+}

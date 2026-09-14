@@ -1,3 +1,33 @@
+secubox-waf-ng (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — ACTOR INTELLIGENCE AGREGE ENFIN. Le moteur creait UN ACTEUR PAR
+    EVENEMENT — 1192 acteurs pour 1192 evenements, zero campagne. Cause exacte :
+    la similarite additionne huit axes ponderes et le rattachement exige 50
+    points, mais seuls trois axes sont alimentes sur cette box (chemin 18, outil
+    12, IP 10). Plafond atteignable : 40. Le seuil ne POUVAIT PAS etre franchi,
+    meme avec une concordance parfaite. Le bareme avait ete calibre pour huit
+    capteurs et s'appliquait a trois.
+  * Le score reste une mesure ABSOLUE — donc comparable dans le temps, et un
+    verdict deja rendu n'est pas falsifie. C'est la DECISION de rattachement qui
+    s'adapte : `similarity.SeuilEffectif` ramene le seuil nominal a la masse
+    reellement COMPARABLE entre deux signatures (les axes renseignes des deux
+    cotes), sans jamais descendre sous un plancher de masse absolue (20). Une
+    concordance legere ne devient pas une preuve parce qu'on n'avait rien
+    d'autre a comparer : un pays partage seul ne rattache toujours pas.
+  * INDEX DES CANDIDATS. `Observe` comparait chaque observation a TOUS les
+    acteurs : cout quadratique. Avec un acteur par evenement, le demon a brule
+    6 h 46 de processeur sans jamais ouvrir son API — page Renseignement vide,
+    systemd contraint de le tuer au SIGKILL. La similarite n'accordant de points
+    qu'a des axes EGAUX, restreindre aux acteurs partageant au moins une valeur
+    n'approxime rien : meme resultat, sans le balayage.
+  * Rattachement rendu REPRODUCTIBLE : a score egal, l'ID tranche. L'ordre d'un
+    parcours de map rendait le resultat dependant de l'execution.
+  * Tests : agregation a travers des IP differentes (la personnalite recurrente),
+    non-fusion de deux profils etrangers, filtrage effectif de l'index sur mille
+    acteurs, et les trois regles du seuil effectif.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 09:30:00 +0200
+
 secubox-waf-ng (1.7.17-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — ACTOR INTELLIGENCE NE RECEVAIT RIEN, ET PERSONNE NE LE SAVAIT. sbxwaf

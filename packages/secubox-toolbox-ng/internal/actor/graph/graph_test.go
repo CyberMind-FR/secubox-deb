@@ -6,6 +6,7 @@
 package graph
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/similarity"
@@ -90,5 +91,46 @@ func TestActorsTriParPriorite(t *testing.T) {
 	list := g.Actors()
 	if len(list) != 2 || list[0].ID != hi.ID {
 		t.Errorf("le plus prioritaire devrait être en tête : %v", list)
+	}
+}
+
+// ── Agregation reelle et cout (2026-09-14) ──────────────────────────────────
+
+func TestObserve_AgregeAvecLesSeulsCapteursDuWAF(t *testing.T) {
+	// Ce que la box emet vraiment : chemin, outil, IP. Rien d'autre.
+	g := New(DefaultThreshold)
+	sig := func(ip string) similarity.Signature {
+		return similarity.Signature{PathSig: "wp-login", UAFamily: "nuclei", IP: ip, SeenAt: 1000}
+	}
+	a1 := g.Observe(Obs{Sig: sig("1.2.3.4"), Timestamp: 1000})
+	a2 := g.Observe(Obs{Sig: sig("5.6.7.8"), Timestamp: 1001}) // MEME profil, AUTRE IP
+	if a1.ID != a2.ID {
+		t.Fatalf("deux observations du meme profil ont cree %s et %s : aucune agregation", a1.ID, a2.ID)
+	}
+	if g.Len() != 1 {
+		t.Fatalf("%d acteurs pour un seul profil", g.Len())
+	}
+}
+
+func TestObserve_NeFusionnePasDeuxProfilsEtrangers(t *testing.T) {
+	g := New(DefaultThreshold)
+	a := g.Observe(Obs{Sig: similarity.Signature{PathSig: "wp-login", UAFamily: "nuclei", IP: "1.1.1.1", SeenAt: 1000}, Timestamp: 1000})
+	b := g.Observe(Obs{Sig: similarity.Signature{PathSig: "api-graphql", UAFamily: "curl", IP: "2.2.2.2", SeenAt: 1000}, Timestamp: 1001})
+	if a.ID == b.ID {
+		t.Fatal("deux profils sans rien en commun ont ete fusionnes")
+	}
+}
+
+func TestObserve_NeBalaiePlusTousLesActeurs(t *testing.T) {
+	// L'index doit rendre le cout independant du nombre d'acteurs etrangers :
+	// mille acteurs sans aucune valeur commune ne doivent pas etre compares.
+	g := New(DefaultThreshold)
+	for i := 0; i < 1000; i++ {
+		g.Observe(Obs{Sig: similarity.Signature{
+			PathSig: fmt.Sprintf("p%d", i), UAFamily: fmt.Sprintf("ua%d", i),
+			IP: fmt.Sprintf("10.0.%d.%d", i/256, i%256), SeenAt: 1000}, Timestamp: 1000})
+	}
+	if n := len(g.candidats(similarity.Signature{PathSig: "inconnu", UAFamily: "inconnu", IP: "9.9.9.9"})); n != 0 {
+		t.Fatalf("%d candidats pour une signature sans rien en commun : l'index ne filtre pas", n)
 	}
 }

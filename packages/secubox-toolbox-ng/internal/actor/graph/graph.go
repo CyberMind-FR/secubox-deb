@@ -74,6 +74,16 @@ type Graph struct {
 	threshold int
 	seq       int
 	actors    map[string]*Actor
+	// INDEX DES CANDIDATS (2026-09-14). `Observe` comparait chaque observation a
+	// TOUS les acteurs : cout quadratique. Avec un acteur cree par evenement —
+	// ce qui arrivait faute d'agregation — le demon a brule 6 h 46 de processeur
+	// sans jamais ouvrir son API.
+	//
+	// Or la similarite n'accorde de points qu'a des axes EGAUX : un acteur qui ne
+	// partage aucune valeur avec l'observation score zero, quoi qu'il arrive. Le
+	// restreindre aux candidats indexes n'approxime donc rien — c'est le meme
+	// resultat, sans le balayage.
+	idx map[string]map[string]bool // "axe:valeur" -> ensemble d'ID d'acteurs
 }
 
 // New crée un graphe. threshold<=0 => DefaultThreshold.
@@ -81,7 +91,8 @@ func New(threshold int) *Graph {
 	if threshold <= 0 {
 		threshold = DefaultThreshold
 	}
-	return &Graph{threshold: threshold, actors: map[string]*Actor{}}
+	return &Graph{threshold: threshold, actors: map[string]*Actor{},
+		idx: map[string]map[string]bool{}}
 }
 
 // Observe rattache une observation à l'acteur le plus similaire (si la continuité
@@ -90,13 +101,27 @@ func New(threshold int) *Graph {
 func (g *Graph) Observe(o Obs) *Actor {
 	var best *Actor
 	var bestScore score.Score
-	for _, a := range g.actors {
+	for _, id := range g.candidats(o.Sig) {
+		a := g.actors[id]
+		if a == nil {
+			continue
+		}
 		s := similarity.Similarity(a.sig, o.Sig)
-		if s.Value > bestScore.Value {
+		// Egalite tranchee par l'ID : sans cela, l'ordre d'un parcours de map
+		// rendrait le rattachement non reproductible d'une execution a l'autre.
+		if s.Value > bestScore.Value || (s.Value == bestScore.Value && best != nil && a.ID < best.ID) {
 			bestScore, best = s, a
 		}
 	}
-	if best == nil || bestScore.Value < g.threshold {
+	// SEUIL ADAPTE AUX CAPTEURS PRESENTS. Le seuil nominal (50) suppose les huit
+	// axes alimentes ; ici trois le sont. On le ramene a la masse reellement
+	// comparable entre ces deux signatures, sans jamais descendre sous
+	// MasseMin — voir similarity.SeuilEffectif.
+	seuil := g.threshold
+	if best != nil {
+		seuil = similarity.SeuilEffectif(g.threshold, similarity.Comparable(best.sig, o.Sig))
+	}
+	if best == nil || bestScore.Value < seuil {
 		best = g.newActor(o)
 	} else {
 		// rattachement : la continuité de l'acteur est la meilleure jointure vue,
@@ -109,7 +134,69 @@ func (g *Graph) Observe(o Obs) *Actor {
 		}
 	}
 	g.absorb(best, o)
+	g.indexer(best, o.Sig)
 	return best
+}
+
+// cles derive d'une signature les valeurs sur lesquelles un rattachement est
+// seulement POSSIBLE. Un axe vide n'en produit aucune : il ne peut pas egaler.
+func cles(sig similarity.Signature) []string {
+	var k []string
+	if sig.CredentialHash != "" {
+		k = append(k, "cred:"+sig.CredentialHash)
+	}
+	if sig.PathSig != "" {
+		k = append(k, "path:"+sig.PathSig)
+	}
+	if sig.UAFamily != "" {
+		k = append(k, "ua:"+sig.UAFamily)
+	}
+	if sig.TLSFingerprint != "" {
+		k = append(k, "tls:"+sig.TLSFingerprint)
+	}
+	if sig.CadenceBucket != "" {
+		k = append(k, "cad:"+sig.CadenceBucket)
+	}
+	if sig.IP != "" {
+		k = append(k, "ip:"+sig.IP)
+	}
+	if sig.ASN != 0 {
+		k = append(k, fmt.Sprintf("asn:%d", sig.ASN))
+	}
+	if sig.Country != "" {
+		k = append(k, "cty:"+sig.Country)
+	}
+	return k
+}
+
+// indexer enregistre l'acteur sous chaque cle de la signature observee. Les
+// cles s'ACCUMULENT : un acteur reste joignable par une IP qu'il n'utilise
+// plus, ce qui est precisement ce qui permet de le reconnaitre quand il y
+// revient.
+func (g *Graph) indexer(a *Actor, sig similarity.Signature) {
+	for _, k := range cles(sig) {
+		if g.idx[k] == nil {
+			g.idx[k] = map[string]bool{}
+		}
+		g.idx[k][a.ID] = true
+	}
+}
+
+// candidats rend, triee, la liste des acteurs partageant au moins une valeur
+// avec la signature. Le tri rend le parcours reproductible.
+func (g *Graph) candidats(sig similarity.Signature) []string {
+	vus := map[string]bool{}
+	for _, k := range cles(sig) {
+		for id := range g.idx[k] {
+			vus[id] = true
+		}
+	}
+	out := make([]string, 0, len(vus))
+	for id := range vus {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (g *Graph) newActor(o Obs) *Actor {
