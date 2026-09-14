@@ -1,3 +1,55 @@
+secubox-waf-ng (1.15.2-1~bookworm1) bookworm; urgency=medium
+
+  * LE LAN N'EST PLUS LEURRÉ (ref #1290) — et ce n'était pas théorique : dès
+    l'armement, le leurre a répondu 200 à nos PROPRES sondes de santé
+    (/api/v1/waf/health depuis 10.10.0.1, avec un Host non routé). Un prober
+    interne en aurait conclu qu'un service inexistant est vivant : le leurre
+    s'était mis à mentir à sa propre box. Même règle que pour le ban — une
+    adresse privée n'est pas un scanner externe, c'est nous.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 12:52:22 +0200
+
+secubox-waf-ng (1.15.1-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif d'empaquetage ANTÉRIEUR, découvert en livrant le leurre : il y
+    avait DEUX cibles `override_dh_auto_install` dans debian/rules. Make ne
+    garde que la dernière et ignore la première EN SILENCE — tout le premier
+    bloc était mort, y compris l'installation de tmpfiles.d, jamais livrée
+    depuis qu'elle a été écrite. Vérifié sur la box : le fichier n'y était pas.
+    Les deux cibles sont fusionnées.
+  * Le drop-in d'exemple du leurre visait `secubox-waf-ng-worker@.service`, qui
+    n'est PLUS installé depuis #896 (unité unique sur :8085). Réaligné, et sa
+    liste de drapeaux est désormais le miroir exact de celle de l'unité.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 12:48:53 +0200
+
+secubox-waf-ng (1.15.0-1~bookworm1) bookworm; urgency=medium
+
+  * LEURRE HTTP (ref #1290) — connaître l'outil sans en subir les effets.
+    Un hôte NON ROUTÉ recevait un 421 muet : le scanner en déduisait « rien ici »
+    et s'en allait, on ne voyait que sa PREMIÈRE sonde. C'est la suite qui trahit
+    l'outil. Le leurre sert désormais un contenu plausible et INERTE — mais
+    seulement dans l'espace que la box ne sert à personne, et sans proxifier
+    quoi que ce soit : le scanner est détourné du vrai.
+  * INVARIANTS : rien n'est exécuté, rien n'est lu sur le disque, aucun
+    protocole n'est imité. sbxwaf terminait déjà le HTTP — servir un corps
+    statique n'ajoute pas une ligne de surface d'analyse.
+  * APPRENTISSAGE SEUL : aucun ban, aucun blocage n'en découle. Première partie
+    exemptée (#1266 transposé) — un nom à nous non câblé appartient à un de nos
+    utilisateurs, et un faux « site en configuration » lui mentirait là où le
+    421 se contentait d'être sec.
+  * FILIGRANE auto-vérifiable sur chaque contenu semé : aléa ‖ HMAC-SHA256.
+    On reconnaît une de nos marques n'importe où sans tenir de table, et nul ne
+    peut en fabriquer une. Si une fausse clé revient dans une tentative
+    d'authentification, on saura de quel semis elle vient.
+  * EMPREINTE COMPORTEMENTALE, indépendante de l'User-Agent — qui se falsifie
+    d'un argument. On lit la FORME des requêtes (quels en-têtes, lesquels
+    manquent), qui vient de la bibliothèque HTTP de l'outil, pas de sa config.
+  * Défaut INACTIF. Drop-in d'exemple livré dans
+    /usr/share/secubox/waf/honeypot.conf — on n'arme pas un piège en silence.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 12:46:42 +0200
+
 secubox-waf-ng (1.14.1-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — AVATARS TYPES : nature x niveau, au lieu d'un masque identique pour

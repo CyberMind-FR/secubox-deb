@@ -48,19 +48,24 @@ override_dh_auto_build:
 # execute its tests on an x86_64 build host. Tests run in CI on the host arch.
 override_dh_auto_test:
 
-override_dh_auto_install:
-	install -d debian/secubox-waf-ng/usr/lib/tmpfiles.d
-	install -m 644 tmpfiles.d/secubox-waf-ng.conf \
-	               debian/secubox-waf-ng/usr/lib/tmpfiles.d/secubox-waf-ng.conf
-	# Intentionally empty: actual installation handled by
-	# execute_after_dh_auto_install below (see note at top of file).
-
 override_dh_auto_clean:
 	rm -f $(CURDIR)/sbxwaf $(CURDIR)/sbx-actord
 	rm -rf _gocache _gopath
 
+# UNE SEULE CIBLE `override_dh_auto_install`, ET C'EST UN CORRECTIF.
+# Il y en avait DEUX : make ne garde que la derniere et ignore la premiere en
+# silence. Tout le premier bloc etait donc mort — y compris l'installation de
+# tmpfiles.d, jamais livree depuis qu'elle a ete ecrite, sans que rien ne le
+# signale. Un doublon de cible ne produit pas d'erreur, juste du travail perdu.
 override_dh_auto_install:
 	dh_auto_install
+	# Drop-in D'EXEMPLE du leurre (#1290) : livre, jamais actif tel quel.
+	# On n'arme pas un piege en silence sur la box de quelqu'un.
+	install -D -m 0644 conf/honeypot.conf \
+	  debian/secubox-waf-ng/usr/share/secubox/waf/honeypot.conf
+	install -d debian/secubox-waf-ng/usr/lib/tmpfiles.d
+	install -m 644 tmpfiles.d/secubox-waf-ng.conf \
+	               debian/secubox-waf-ng/usr/lib/tmpfiles.d/secubox-waf-ng.conf
 	# Le droit sudo borne qui permet au WAF de bannir (#1017). Sans lui,
 	# sbxwaf detecte sans jamais pouvoir appliquer le ban, et rien ne le signale.
 	install -d debian/secubox-waf-ng/etc/sudoers.d

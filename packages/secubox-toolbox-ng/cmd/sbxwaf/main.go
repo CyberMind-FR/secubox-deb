@@ -132,6 +132,11 @@ type Server struct {
 	// sanctionné au lieu d'un simple 421 muet. Kill-switch --host-anomaly.
 	hostAnomaly bool
 
+	// leurre sert des réponses plausibles et INERTES aux hôtes non routés
+	// (#1290) — apprentissage seul, jamais de sanction. Nil ou inactif → le
+	// 421 d'origine est conservé, ce qui reste le comportement par défaut.
+	leurre *LeurreHTTP
+
 	// nftBan est le ban nft NATIF (#1070, phase B) — set nft à timeout géré par
 	// le WAF lui-même. Nil = backend désactivé (nft
 	// indisponible / droits manquants) : aucun ban natif posé.
@@ -324,6 +329,32 @@ func (s *Server) handler() http.Handler {
 			// n'écrit rien : la réponse reste un 421 (ne rien divulguer).
 			if s.hostAnomaly {
 				s.recordHostAnomaly(r, host)
+			}
+			// LEURRE (#1290). On est ici dans l'espace NON ROUTÉ : aucun
+			// service réel n'est en jeu, et le scanner est détourné du vrai.
+			// S'il est armé, on répond par un contenu plausible et inerte au
+			// lieu du 421 — un 421 coupe la conversation juste avant qu'elle
+			// devienne informative, et c'est la SUITE des sondes qui trahit
+			// l'outil. On n'agit toujours pas : on observe et on marque.
+			// PREMIÈRE PARTIE EXEMPTÉE, ET LA LEÇON EST DÉJÀ PAYÉE. Un nom à
+			// nous qu'on n'a pas câblé (l'appli Nextcloud sur un alias oublié)
+			// n'est pas un scanner : c'est un de nos utilisateurs. Lui servir
+			// un faux « site en cours de configuration » le laisserait croire
+			// que son service existe et qu'il est cassé — pire qu'un 421, qui
+			// au moins ne ment pas. Même exemption que pour le ban (#1266).
+			// LE LAN N'EST JAMAIS LEURRÉ, et ce n'est pas une précaution
+			// théorique : dès l'armement, le leurre a répondu 200 à nos
+			// PROPRES sondes de santé (`/api/v1/waf/health` depuis 10.10.0.1,
+			// avec un Host non routé). Un prober interne aurait conclu qu'un
+			// service est vivant alors qu'il n'existe pas — le leurre se
+			// serait mis à mentir à sa propre box.
+			//
+			// Même règle que pour le ban : une adresse privée n'est pas un
+			// scanner externe, c'est nous.
+			if !privateCIDR(clientIP(r)) && !estPremierePartie(host, s.widgetHosts) {
+				if servi, _, _ := s.leurre.Sert(w, r, host); servi {
+					return
+				}
 			}
 			// #789: styled page instead of http.Error's bare text. The two
 			// sides are complementary — the on-demand check decides WHETHER
@@ -934,6 +965,13 @@ func main() {
 	vhostSignalsFile := flag.String("vhost-signals", "/var/cache/secubox/waf/vhost-signals.json",
 		"path for the per-vhost last-request/active-conns JSON snapshot (scale-to-zero signal source); empty disables")
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
+	honeypot := flag.Bool("honeypot", false,
+		"servir des réponses plausibles et inertes aux hôtes NON ROUTÉS pour "+
+			"observer la suite des sondes (#1290). Apprentissage seul : aucun "+
+			"ban, aucun blocage. Défaut INACTIF — on n'arme pas un piège en silence.")
+	honeypotSecret := flag.String("honeypot-secret", "/etc/secubox/secrets/filigrane",
+		"secret local du filigrane. Absent → le leurre sert des contenus SANS "+
+			"marque plutôt que des marques invérifiables.")
 	hostAnomaly := flag.Bool("host-anomaly", true,
 		"traiter un Host non routé (vide/IP/DGA/inconnu) comme signal scanner "+
 			"— journaliser + bannir au lieu d'un 421 muet (#1070)")
@@ -1104,6 +1142,7 @@ func main() {
 		// Task 3.2: append-only threat log (+ émission Actor Intelligence).
 		threatLog:   tl,
 		hostAnomaly: *hostAnomaly,
+		leurre:      construitLeurre(*honeypot, *honeypotSecret),
 		ja4Header:   *ja4Header,
 		// #1080 phase G: profils de service par vhost (nil = désactivé).
 		vhostProfiles: profils,
