@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Dépannage AMD64 — GK2 Clone
 
 Ce guide couvre les incidents de démarrage et d’accès les plus courants sur une SecuBox-DEB AMD64. Exécutez les diagnostics dans l’ordre et conservez les journaux avant toute réinitialisation.
