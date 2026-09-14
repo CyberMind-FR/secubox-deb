@@ -120,6 +120,7 @@ func main() {
 	}()
 
 	go srv.pruneLoop(*retention)
+	go srv.consolidationLoop()
 
 	// Arrêt propre.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

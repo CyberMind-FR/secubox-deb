@@ -393,3 +393,115 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ── CONSOLIDATION : deux acteurs deja crees peuvent se reveler un seul ────────
+//
+// LE MANQUE QUE CECI COMBLE. `Observe` rattache une NOUVELLE observation au
+// meilleur acteur existant. Mais si deux acteurs se sont formes separement —
+// parce que leurs premieres observations ne se recoupaient pas encore, ou parce
+// qu'un axe de correlation est arrive apres eux — RIEN ne les reunissait
+// ensuite. L'operateur voyait trois profils cote a cote, avec six ou sept
+// adresses chacun, en reconnaissant a l'oeil la meme attaque.
+//
+// CE QUI AUTORISE UNE FUSION. Jamais une ressemblance : une PREUVE PARTAGEE que
+// la coincidence n'explique pas.
+//
+//	· deux mots de dictionnaire inexistants en commun — reciter deux fois le
+//	  meme nom invente, c'est puiser dans la meme liste ;
+//	· une adresse IP en commun — deux profils qui ont emis depuis la meme
+//	  source sont, au minimum, la meme campagne.
+//
+// Un hote qui EXISTE ne compte jamais : tout le monde visite le Hall.
+//
+// LA FUSION EST IRREVERSIBLE EN MEMOIRE, et c'est pourquoi le seuil est haut.
+// Les preuves, elles, restent dans le ledger : une fusion abusive se constate,
+// et le graphe se reconstruit du journal.
+const MotsCommunsPourFusion = 2
+
+// fusionnables dit si deux acteurs portent une preuve partagee suffisante.
+func (g *Graph) fusionnables(a, b *Actor, inexistants map[string]bool) (bool, string) {
+	for ip := range a.ips {
+		if b.ips[ip] {
+			return true, "même adresse source (" + ip + ")"
+		}
+	}
+	communs := 0
+	for t := range a.tgts {
+		if b.tgts[t] && inexistants[t] {
+			communs++
+			if communs >= MotsCommunsPourFusion {
+				return true, "même dictionnaire de sondage"
+			}
+		}
+	}
+	return false, ""
+}
+
+// Consolider fusionne les acteurs qui partagent une preuve non fortuite. Rend le
+// nombre de fusions. `inexistants` est l'ensemble des hotes qu'aucune route ne
+// sert — l'appelant le connait, le graphe non.
+func (g *Graph) Consolider(inexistants map[string]bool) int {
+	ids := make([]string, 0, len(g.actors))
+	for id := range g.actors {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids) // deterministe : le plus ancien absorbe, jamais l'inverse
+	fusions := 0
+	for i := 0; i < len(ids); i++ {
+		a := g.actors[ids[i]]
+		if a == nil {
+			continue
+		}
+		for j := i + 1; j < len(ids); j++ {
+			b := g.actors[ids[j]]
+			if b == nil {
+				continue
+			}
+			if ok, raison := g.fusionnables(a, b, inexistants); ok {
+				g.absorberActeur(a, b, raison)
+				fusions++
+			}
+		}
+	}
+	return fusions
+}
+
+// absorberActeur verse b dans a, puis retire b. L'anciennete prime : a garde son
+// identifiant, ce qui evite qu'un acteur suivi depuis des jours change de nom
+// sous les yeux de l'operateur.
+func (g *Graph) absorberActeur(a, b *Actor, raison string) {
+	a.Events += b.Events
+	if b.FirstSeen != 0 && (a.FirstSeen == 0 || b.FirstSeen < a.FirstSeen) {
+		a.FirstSeen = b.FirstSeen
+	}
+	if b.LastSeen > a.LastSeen {
+		a.LastSeen = b.LastSeen
+		a.sig = b.sig // l'exemplaire le plus recent reste l'exemplaire
+	}
+	if b.Vector.Severity > a.Vector.Severity {
+		a.Vector.Severity = b.Vector.Severity
+	}
+	if b.Vector.Continuity > a.Vector.Continuity {
+		a.Vector.Continuity = b.Vector.Continuity
+	}
+	for _, m := range []struct{ dst, src map[string]bool }{
+		{a.ips, b.ips}, {a.asns, b.asns}, {a.ctys, b.ctys}, {a.tgts, b.tgts},
+	} {
+		for k := range m.src {
+			m.dst[k] = true
+		}
+	}
+	for k := range b.concord {
+		a.concord[k] = true
+	}
+	a.concord[raison] = true
+	// L'index doit suivre : toute cle qui menait a b mene desormais a a.
+	for _, ens := range g.idx {
+		if ens[b.ID] {
+			delete(ens, b.ID)
+			ens[a.ID] = true
+		}
+	}
+	delete(g.actors, b.ID)
+	g.materialize(a)
+}

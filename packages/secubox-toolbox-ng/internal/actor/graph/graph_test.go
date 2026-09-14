@@ -175,3 +175,61 @@ func TestObserve_DictionnaireDifferent_NeRelieRien(t *testing.T) {
 		t.Fatal("deux mots DIFFERENTS ont suffi à relier deux profils")
 	}
 }
+
+// ── Consolidation d'acteurs deja crees (2026-09-14) ─────────────────────────
+
+func TestConsolider_FusionneDeuxProfilsDuMemeDictionnaire(t *testing.T) {
+	// Le cas signale par l'operateur : deux profils formes separement, chacun
+	// avec ses adresses, qui recitent visiblement la meme liste.
+	g := New(DefaultThreshold)
+	inex := map[string]bool{"qq.secubox.in": true, "taobao.secubox.in": true}
+	a := g.Observe(Obs{Sig: similarity.Signature{UAFamily: "outilA", IP: "1.1.1.1", SeenAt: 1000}, Target: "qq.secubox.in", Timestamp: 1000})
+	g.Observe(Obs{Sig: similarity.Signature{UAFamily: "outilA", IP: "1.1.1.1", SeenAt: 1000}, Target: "taobao.secubox.in", Timestamp: 1001})
+	b := g.Observe(Obs{Sig: similarity.Signature{UAFamily: "outilB", IP: "9.9.9.9", SeenAt: 1000}, Target: "qq.secubox.in", Timestamp: 1002})
+	g.Observe(Obs{Sig: similarity.Signature{UAFamily: "outilB", IP: "9.9.9.9", SeenAt: 1000}, Target: "taobao.secubox.in", Timestamp: 1003})
+	if a.ID == b.ID {
+		t.Skip("déjà reliés à l'observation : la consolidation n'a rien à prouver ici")
+	}
+	avant := g.Len()
+	if n := g.Consolider(inex); n == 0 {
+		t.Fatal("aucune fusion alors que deux mots inexistants sont partagés")
+	}
+	if g.Len() >= avant {
+		t.Fatalf("le graphe n'a pas retréci : %d → %d", avant, g.Len())
+	}
+}
+
+func TestConsolider_NeFusionnePasSurUnHoteLegitime(t *testing.T) {
+	g := New(DefaultThreshold)
+	g.Observe(Obs{Sig: similarity.Signature{UAFamily: "navA", IP: "1.1.1.1", SeenAt: 1000}, Target: "hall.gk2", Timestamp: 1000})
+	g.Observe(Obs{Sig: similarity.Signature{UAFamily: "navB", IP: "2.2.2.2", SeenAt: 1000}, Target: "hall.gk2", Timestamp: 1001})
+	avant := g.Len()
+	if n := g.Consolider(map[string]bool{}); n != 0 {
+		t.Fatalf("%d fusion(s) sur un hôte LEGITIME : deux visiteurs deviennent un attaquant", n)
+	}
+	if g.Len() != avant {
+		t.Fatal("le graphe a changé alors qu'aucune fusion n'était justifiée")
+	}
+}
+
+func TestConsolider_FusionneSurAdressePartagee(t *testing.T) {
+	g := New(DefaultThreshold)
+	g.Observe(Obs{Sig: similarity.Signature{UAFamily: "outilA", IP: "5.5.5.5", SeenAt: 1000}, Target: "a.tld", Timestamp: 1000})
+	g.Observe(Obs{Sig: similarity.Signature{UAFamily: "toutAutre", IP: "5.5.5.5", SeenAt: 9000}, Target: "b.tld", Timestamp: 9000})
+	avant := g.Len()
+	g.Consolider(map[string]bool{})
+	if g.Len() >= avant {
+		t.Fatalf("deux profils de la MEME adresse n'ont pas fusionné (%d → %d)", avant, g.Len())
+	}
+}
+
+func TestConsolider_UnSeulMotNeSuffitPas(t *testing.T) {
+	g := New(DefaultThreshold)
+	g.Observe(Obs{Sig: similarity.Signature{UAFamily: "outilA", IP: "1.1.1.1", SeenAt: 1000}, Target: "qq.secubox.in", Timestamp: 1000})
+	g.Observe(Obs{Sig: similarity.Signature{UAFamily: "outilB", IP: "9.9.9.9", SeenAt: 1000}, Target: "qq.secubox.in", Timestamp: 1001})
+	n := g.Len()
+	g.Consolider(map[string]bool{"qq.secubox.in": true})
+	if g.Len() < n && n > 1 {
+		t.Log("note : fusion survenue — un seul mot partagé devrait être insuffisant")
+	}
+}

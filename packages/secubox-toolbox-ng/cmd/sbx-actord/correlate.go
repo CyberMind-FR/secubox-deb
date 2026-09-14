@@ -8,6 +8,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/evidence"
@@ -89,6 +90,15 @@ func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 		Tags: e.BehaviorTags, Timestamp: e.Timestamp}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// On APPREND les noms qui n'existent pas, au fil des etiquettes.
+	for _, t := range e.BehaviorTags {
+		if t == graph.EtiquetteInexistant && e.DstService != "" {
+			if s.inexistants == nil {
+				s.inexistants = map[string]bool{}
+			}
+			s.inexistants[e.DstService] = true
+		}
+	}
 	a := s.graph.Observe(obs)
 	acc := s.accum[a.ID]
 	if acc == nil {
@@ -186,6 +196,30 @@ func mergeTags(acc *actorSignals, e *envelope.Envelope) {
 			acc.sig.LowVolumeHighRelevance = true
 		case "returns-after-source":
 			acc.sig.ReturnsAfterSourceChange = true
+		}
+	}
+}
+
+// consolidationLoop reunit periodiquement les acteurs qui se revelent etre le
+// meme. POURQUOI PERIODIQUE ET PAS A CHAQUE EVENEMENT : la preuve qui autorise
+// une fusion — deux mots de dictionnaire, une adresse commune — n'apparait
+// qu'une fois les deux profils suffisamment nourris. La verifier a chaque
+// observation couterait un balayage complet pour un resultat qui ne change
+// qu'au bout de plusieurs minutes.
+func (s *Server) consolidationLoop() {
+	t := time.NewTicker(2 * time.Minute)
+	defer t.Stop()
+	for range t.C {
+		s.mu.Lock()
+		inex := make(map[string]bool, len(s.inexistants))
+		for k := range s.inexistants {
+			inex[k] = true
+		}
+		n := s.graph.Consolider(inex)
+		restants := s.graph.Len()
+		s.mu.Unlock()
+		if n > 0 {
+			log.Printf("actord: consolidation — %d acteur(s) fusionne(s), %d restants", n, restants)
 		}
 	}
 }

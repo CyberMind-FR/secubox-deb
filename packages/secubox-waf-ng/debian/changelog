@@ -1,3 +1,28 @@
+secubox-waf-ng (1.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — CONSOLIDATION : deux acteurs deja crees peuvent se reveler un seul.
+    `Observe` rattachait une NOUVELLE observation au meilleur acteur existant,
+    mais si deux acteurs s'etaient formes separement — premieres observations qui
+    ne se recoupaient pas encore, ou axe de correlation arrive apres eux — RIEN
+    ne les reunissait ensuite. L'operateur voyait trois profils cote a cote, six
+    ou sept adresses chacun, en reconnaissant a l'oeil la meme attaque.
+  * CE QUI AUTORISE UNE FUSION : jamais une ressemblance, une PREUVE PARTAGEE que
+    la coincidence n'explique pas — deux mots de dictionnaire INEXISTANTS en
+    commun, ou une adresse source commune. Un hote qui EXISTE ne compte jamais :
+    deux visiteurs du Hall ne doivent pas devenir un attaquant (verrouille par un
+    test).
+  * L'anciennete prime : l'acteur le plus ancien absorbe, garde son identifiant
+    et son historique — un profil suivi depuis des jours ne change pas de nom
+    sous les yeux de l'operateur. L'index suit la fusion.
+  * actord APPREND les hotes inexistants des etiquettes du capteur : il ne
+    connait pas la table des routes du WAF, mais le WAF etiquette deja
+    `host_anomaly:unrouted`. Consolidation toutes les deux minutes — la preuve
+    qui autorise une fusion n'apparait qu'une fois les profils nourris.
+  * La fusion est irreversible EN MEMOIRE, d'ou le seuil haut ; les preuves
+    restent dans le ledger et le graphe se reconstruit du journal.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 14:10:00 +0200
+
 secubox-waf-ng (1.11.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — LIEN PAR DICTIONNAIRE : deux adresses qui recitent le meme mot
