@@ -1,3 +1,36 @@
+secubox-waf-ng (1.17.2-1~bookworm1) bookworm; urgency=medium
+
+  * TRI PAR SCORE DE MENACE, et il devient le défaut (ref #1290). Deux champs
+    prétendaient déjà classer et aucun ne séparait : `level` vaut LOW pour les
+    391 acteurs SANS EXCEPTION, et `priorite` est quasi constante. Trier par eux
+    revenait à trier au hasard — l'ancien défaut mettait en tête un acteur à
+    2 adresses et 1 ban, devant un autre à 19 adresses, 7 pays et 4 bans.
+  * Le score combine ce qu'un acteur FAIT que les autres ne font pas : revenir
+    après sanction (poids le plus lourd — aucune lecture innocente), changer
+    d'adresse (échelle logarithmique : 1→8 dit plus que 60→68), se répartir sur
+    plusieurs pays, insister dans le temps. Vérifié sur les 391 acteurs réels :
+    5 critiques, 9 élevés, 24 notables, 353 faibles — il sépare.
+  * Le score est AFFICHÉ, pas seulement utilisé pour trier : un ordre qu'on ne
+    peut pas vérifier ne se lit pas. On voit pourquoi une ligne est en haut, et
+    on peut contester le classement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 13:21:49 +0200
+
+secubox-waf-ng (1.17.1-1~bookworm1) bookworm; urgency=medium
+
+  * Page Renseignement : on ne fait plus l'ascenseur (ref #1290). La liste des
+    acteurs est longue et le profil vivait dessous : choisir un acteur imposait
+    de descendre, cliquer, puis REMONTER pour lire — à chaque acteur.
+    - Grand écran : le profil est COLLANT et la liste défile dans son propre
+      cadre. On clique d'un acteur à l'autre et le panneau change sans que rien
+      ne bouge : c'est ce qui permet enfin de comparer.
+    - Petit écran : maître-détail. Une vue à la fois, avec un bouton « ←
+      Acteurs ». Empiler les deux était précisément la cause du va-et-vient.
+  * C'est la CSS qui décide de la forme, pas le JS : une seule source de vérité,
+    au lieu de deux règles de largeur qui finiraient par diverger.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 13:18:35 +0200
+
 secubox-waf-ng (1.17.0-1~bookworm1) bookworm; urgency=medium
 
   * LA PAGE DE BLOCAGE NE TRAHIT PLUS LE PRODUIT (ref #1290). Elle annonçait

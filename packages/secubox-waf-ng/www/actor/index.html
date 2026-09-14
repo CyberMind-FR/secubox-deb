@@ -71,6 +71,41 @@
   .stat .l{font-size:.56rem;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-top:3px}
   .cols{display:grid;grid-template-columns:360px 1fr;gap:1rem;align-items:start}
   @media(max-width:980px){.cols{grid-template-columns:1fr}}
+  /* Le score, lisible d'un coup d'œil : le chiffre ET sa couleur disent la
+     même chose, pour qu'on n'ait pas à lire pour comprendre. */
+  .score{display:inline-flex;align-items:center;justify-content:center;min-width:30px;
+    padding:2px 5px;border-radius:6px;font-size:.72rem;font-weight:800;
+    font-variant-numeric:tabular-nums;color:var(--sc);border:1px solid var(--sc);
+    background:color-mix(in srgb, var(--sc) 12%, transparent);flex:0 0 auto}
+
+  /* ── LIRE SANS FAIRE L'ASCENSEUR (#1290) ────────────────────────────────
+     La liste des acteurs est longue ; le profil vivait dessous. Choisir un
+     acteur imposait donc de descendre, cliquer, puis REMONTER pour lire — à
+     chaque acteur. Deux corrections, une par forme d'écran. */
+
+  /* GRAND ÉCRAN : le profil reste à l'écran pendant qu'on parcourt la liste.
+     C'est ce qui permet de COMPARER — cliquer d'un acteur à l'autre et voir
+     le panneau changer sans rien déplacer. */
+  @media(min-width:981px){
+    #colProfil{position:sticky;top:12px;max-height:calc(100vh - 24px);
+      overflow-y:auto;overscroll-behavior:contain}
+    #retour{display:none}
+    /* La liste garde sa propre hauteur : c'est elle qui défile, pas la page. */
+    #list{max-height:calc(100vh - 190px);overflow-y:auto;overscroll-behavior:contain}
+  }
+
+  /* PETIT ÉCRAN : maître-détail. Une vue à la fois, et un retour explicite —
+     empiler les deux, c'est exactement ce qui obligeait à faire l'ascenseur. */
+  @media(max-width:980px){
+    #cols.voit-profil #colListe{display:none}
+    #cols:not(.voit-profil) #colProfil{display:none}
+    #retour{display:inline-flex;align-items:center;gap:6px;margin:0 0 10px;
+      padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+      background:var(--bg-soft);color:var(--cyan);font:inherit;font-size:.78rem;
+      cursor:pointer}
+    #retour:hover{border-color:var(--cyan)}
+  }
+
   .card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
   .card h2{font-size:.7rem;color:var(--cyan);letter-spacing:.14em;text-transform:uppercase;margin:0 0 .7rem;display:flex;align-items:center;gap:7px}
   .card h2 .rt{margin-left:auto;color:var(--dim);font-size:.62rem}
@@ -204,15 +239,16 @@
 
   <div class="grid" id="kpis"></div>
 
-  <div class="cols">
-    <div>
+  <div class="cols" id="cols">
+    <div id="colListe">
       <div class="card">
         <h2>🎭 Acteurs identifiés <span class="rt">TPI inverse</span></h2>
         <div class="barre" id="barre"></div>
         <div id="list"></div>
       </div>
     </div>
-    <div>
+    <div id="colProfil">
+      <button class="retour" id="retour" type="button" onclick="montreListe()">← Acteurs</button>
       <div class="card"><h2>🕵️ Profil acteur <span class="rt" id="pver"></span></h2><div id="profile"><div class="vide">Sélectionne un acteur.</div></div></div>
       <div class="card"><h2>🛡️ Flux de défense <span class="rt">graduée · réversible</span></h2>
         <div class="flow" id="flow"></div>
@@ -254,13 +290,56 @@ function rendFlow(){$('flow').innerHTML=FLOW.map(function(f,i){return '<div clas
 // se ramenent a 13 campagnes : c'est le mode operatoire qui se retient, pas
 // l'identifiant d'un profil qui changera au prochain rebuild. On ouvre donc sur
 // les campagnes, et les acteurs restent a un clic.
-var FILTRE='campagnes', TRI='ips';
+// TRI PAR DÉFAUT = SCORE. À l'ouverture, la question est « qui dois-je
+// regarder en premier ? » — pas « qui a le plus d'adresses ».
+var FILTRE='campagnes', TRI='score';
+
+// ── SCORE DE MENACE ─────────────────────────────────────────────────────────
+//
+// POURQUOI IL FALLAIT LE CALCULER. Deux champs prétendaient déjà classer, et
+// aucun ne sépare : `level` vaut LOW pour les 391 acteurs sans exception, et
+// `priorite` — le commentaire de ce fichier le disait déjà — est « identique
+// pour presque tous ». Trier par eux, c'est trier au hasard.
+//
+// CE QUI SÉPARE VRAIMENT, c'est ce qu'un acteur FAIT que les autres ne font
+// pas. Chaque terme ci-dessous est un comportement observé, pas une étiquette :
+//
+//   * REVENIR APRÈS SANCTION est le signal le plus fort dont on dispose. Se
+//     faire bannir puis recommencer n'a aucune lecture innocente — c'est de
+//     l'intention, pas du bruit. D'où le poids le plus lourd.
+//   * CHANGER D'ADRESSE est de l'évasion. L'échelle est logarithmique : passer
+//     de 1 à 8 adresses dit bien plus que passer de 60 à 68.
+//   * PLUSIEURS PAYS indique une infrastructure, pas une machine infectée.
+//   * LA CONTINUITÉ distingue qui insiste de qui passe.
+//
+// Le score n'est pas une vérité : c'est un ORDRE DE LECTURE. Il met en haut ce
+// qui mérite d'être regardé en premier, et n'autorise aucune sanction par
+// lui-même — la politique d'action reste ailleurs.
+function score(a){
+  var v=a.vec||{}, s=a.src||{};
+  var ips=Math.max(1, s.ips||1), pays=Math.max(1, s.countries||1), bans=a.bans||0;
+  var n=0;
+  n += Math.min(30, Math.log2(ips)*10);          // évasion par rotation d'adresse
+  n += Math.min(15, (pays-1)*5);                 // infrastructure répartie
+  n += Math.min(25, bans*8);                     // revient après sanction
+  n += Math.min(15, (v.continuity||0)*0.15);     // insiste dans le temps
+  n += Math.min(10, (v.persistence||0)*0.2);     // s'accroche
+  n += Math.min(5,  (v.automation||0)*0.05);     // outillage
+  return Math.round(Math.min(100, n));
+}
+// Quatre paliers, pour que la couleur dise la même chose que le chiffre.
+function palierScore(n){
+  return n>=70?['var(--red)','critique']
+       : n>=45?['var(--orange)','élevé']
+       : n>=25?['var(--cyan)','notable']
+       :       ['var(--muted)','faible'];
+}
 function rendBarre(){
   var rec=ACTS.filter(multi).length;
   var f=[['campagnes','Campagnes','·'+CAMPS.length],
          ['recurrents','Récurrents','·'+rec],
          ['tous','Tous','·'+ACTS.length]];
-  var t=[['ips','adresses'],['continuite','continuité'],['priorite','priorité'],['recent','vu récemment']];
+  var t=[['score','score'],['ips','adresses'],['continuite','continuité'],['priorite','priorité'],['recent','vu récemment']];
   $('barre').innerHTML=
     '<span class="grp">'+f.map(function(x){return '<button class="fb'+(FILTRE===x[0]?' on':'')+'" data-f="'+x[0]+'">'+x[1]+'<i>'+x[2]+'</i></button>';}).join('')+'</span>'
    +'<span class="grp tri">trier : '+t.map(function(x){return '<button class="tb'+(TRI===x[0]?' on':'')+'" data-t="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</span>';
@@ -311,7 +390,8 @@ function defcon(bans){
 }
 function cont(a){return (a.vec&&a.vec.continuity)||0;}
 function trie(l){
-  var f={ips:function(a,b){return (b.src.ips-a.src.ips)||(b.priority-a.priority);},
+  var f={score:function(a,b){return score(b)-score(a)||(b.src.ips-a.src.ips);},
+          ips:function(a,b){return (b.src.ips-a.src.ips)||(b.priority-a.priority);},
           continuite:function(a,b){return cont(b)-cont(a)||b.priority-a.priority;},
           priorite:function(a,b){return b.priority-a.priority;},
           recent:function(a,b){return String(b.last||'').localeCompare(String(a.last||''));}}[TRI];
@@ -346,7 +426,7 @@ function rendCampagnes(){
         +(c.pays>1?'<span class="tag cont">'+c.pays+' pays</span>':'')
       +'</div></div>'
       +'<div class="lvl"><b>'+c.nb_acteurs+'</b>acteurs</div>';
-    d.addEventListener('click',function(){CAMP=c.signature;CUR=c.acteurs[0];rendList();rendProfile();});
+    d.addEventListener('click',function(){CAMP=c.signature;CUR=c.acteurs[0];rendList();rendProfile();montreProfil();});
     box.appendChild(d);
   });
 }
@@ -376,6 +456,12 @@ function rendList(){
             +'<b>×'+n+'</b><i>adresses</i></div>'
         : '<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>')
       +defcon(a.bans)
+      // LE SCORE EST AFFICHÉ, PAS SEULEMENT UTILISÉ POUR TRIER. Un ordre qu'on
+      // ne peut pas vérifier ne se lit pas : montrer le chiffre permet de voir
+      // POURQUOI une ligne est en haut, et de contester le classement.
+      +'<span class="score" style="--sc:'+palierScore(score(a))[0]+'" title="Score de menace '
+        +score(a)+'/100 ('+palierScore(score(a))[1]+') — adresses, pays, retours après sanction, continuité">'
+        +score(a)+'</span>'
       +'<div class="nm"><b><span class="nat" title="'+esc(nature(a)[1])+'">'+nature(a)[0]+'</span> '+esc(a.id)+'</b><div class="tg">'
         +(n>1?'<span class="tag ips" title="Le même profil, vu depuis '+n+' adresses">'+n+' IP</span>':'')
         +(cont(a)?'<span class="tag cont" title="Continuité : '+cont(a)+'/100">↗ '+cont(a)+'</span>':'')
@@ -383,9 +469,28 @@ function rendList(){
         +(a.tags||[]).map(function(t){return '<span class="tag '+(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')
       +'</div></div>'
       +'<div class="lvl"><b>'+a.priority+'</b>'+esc(a.level||'')+'</div>';
-    d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();});
+    d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();montreProfil();});
     box.appendChild(d);
   });
+}
+
+// ── Maître-détail sur petit écran ───────────────────────────────────────────
+// Sur grand écran ces deux fonctions ne font rien de visible : les deux colonnes
+// restent affichées et le profil est collant. On ne teste donc PAS la largeur
+// ici — c'est la CSS qui décide, et une seule source de vérité vaut mieux que
+// deux règles qui finiront par diverger.
+function montreProfil(){
+  var c=document.getElementById('cols');
+  if(c) c.classList.add('voit-profil');
+  // Revenir en haut du panneau : on vient de changer d'acteur, on veut lire
+  // son en-tête, pas se retrouver au milieu du profil précédent.
+  var p=document.getElementById('colProfil');
+  if(p) p.scrollTop=0;
+  window.scrollTo({top:0,behavior:'instant'});
+}
+function montreListe(){
+  var c=document.getElementById('cols');
+  if(c) c.classList.remove('voit-profil');
 }
 function rendProfile(){
   var a=ACTS.filter(function(x){return x.id===CUR;})[0];if(!a){$('profile').innerHTML='<div class="vide">Sélectionne un acteur.</div>';return;}
