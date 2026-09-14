@@ -1,3 +1,20 @@
+secubox-toolbox-ng (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — REJEU DE DEMARRAGE BORNE, distinct de la retention. `--rebuild-max`
+    (defaut 50 000) plafonne les evenements rejoues pour reconstruire le graphe.
+    Ce qu'on GARDE et ce qu'on RECHARGE en memoire n'ont pas les memes
+    contraintes : le rejeu est LINEAIRE (~220 us l'evenement, mesure sur la
+    cible : 708 ms pour 3187) et l'API reste FERMEE pendant. Sans ce plafond,
+    une retention genereuse tenait le demon des minutes hors ligne — c'est ce
+    qui faisait passer la carte Renseignement pour vide, jusqu'au SIGKILL de
+    systemd sur expiration du delai d'arret.
+  * Le plafond etait deja la, code en dur a 200 000 : il devient explicite,
+    reglable, et par defaut dimensionne sur une mesure (~11 s de demarrage).
+  * Les acteurs plus anciens que le rejeu ne sont pas perdus : ils reapparaissent
+    des qu'ils se manifestent, et leurs preuves restent dans le ledger.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 11:00:00 +0200
+
 secubox-toolbox-ng (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — CORRELATION MULTI-COUCHE : sbx-authwatch alimente le graphe d'acteurs.

@@ -1,3 +1,16 @@
+secubox-waf-ng (1.9.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — RETENTION GENEREUSE dans l'unite actord : 360 h (quinze jours), pour
+    que la correlation puisse reconnaitre une personnalite qui revient de semaine
+    en semaine — l'usage vise. Elle etait a 720 h par defaut, puis ramenee a 48 h
+    en urgence par une surcharge systemd posee a la main pendant l'incident.
+  * Le rejeu de demarrage est borne separement (`--rebuild-max 50000`) : c'est lui
+    qui tenait le demon hors ligne, pas la retention. Deux chiffres, deux
+    contraintes. La surcharge d'urgence /etc/systemd/system/secubox-actord.service.d
+    devient inutile et doit etre retiree.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 11:05:00 +0200
+
 secubox-waf-ng (1.9.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — CORRELATION MULTI-COUCHE : authwatch alimente le meme graphe que le
