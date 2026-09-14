@@ -1,0 +1,35 @@
+# Fichiers système
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Éditeurs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Outils Node (markdownlint, lychee via npx)
+node_modules/
+npm-debug.log*
+.npm/
+
+# Exports et fichiers de travail PAO (à ne jamais versionner ici)
+*.pdf
+*.indd
+*.indb
+*.idlk
+*.sla.autosave
+*.sla~
+*.afpub
+*.psd
+*.tif
+*.tiff
+*.ai
+*.eps
+
+# Sorties temporaires
+out/
+build/
+tmp/
