@@ -1,3 +1,19 @@
+secubox-webos (1.0.297-1~bookworm1) bookworm; urgency=medium
+
+  * Hall — LA CARTE RENSEIGNEMENT S'AFFICHE ENFIN. En 1.0.294, l'entree a ete
+    repointee de `waf.gk2.secubox.in` vers son vrai vhost
+    `actor.gk2.secubox.in` — ce qui l'a sortie de la liste `frame-src` de la CSP
+    du Hall, ou l'ancien hote figurait. Le cadre etait donc BLOQUE par le
+    navigateur (« Les parametres de la page ont empeche le chargement d'une
+    ressource (frame-src) ») et la carte restait vide. `actor.gk2.secubox.in`
+    rejoint la liste, juste apres `waf.gk2` : securite et renseignement sont les
+    deux surfaces de la meme famille.
+  * Lecon : repointer une carte vers un nouveau vhost demande DEUX gestes — l'url
+    de l'entree FEATURED, et l'autorisation de cadrage. Le premier sans le second
+    donne une carte muette, sans erreur cote serveur.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 08:15:00 +0200
+
 secubox-webos (1.0.296-1~bookworm1) bookworm; urgency=medium
 
   * Hall — ON MONTRE DES TITRES, PLUS DES ADRESSES. L'historique du viewer, les
