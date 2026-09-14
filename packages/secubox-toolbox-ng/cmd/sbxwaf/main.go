@@ -674,11 +674,25 @@ func (s *Server) handler() http.Handler {
 						sev, ip, count, 3, cat)
 
 					if banned {
-						// Ban natif nft (appliquerBan → nftBan).
+						// Ban natif nft (appliquerBan → nftBan). LA SANCTION
+						// EST APPLIQUÉE ICI, avant toute considération de
+						// présentation — le leurre ne l'allège en rien.
 						s.appliquerBan(ip, cat, sev)
-						writeBan(w)
-					} else {
-						writeWarning(w, cat)
+					}
+					// #1290 — CE QUE L'ATTAQUANT VOIT, PAS CE QU'IL OBTIENT.
+					// Sur un chemin-appât, la page de blocage est remplacée par
+					// un leurre : elle annonçait « SecuBox / WAF / sbxwaf » à
+					// chaque scanner, ce qui est l'information la plus utile de
+					// sa reconnaissance et fait changer de comportement les
+					// outils soignés. La requête reste bloquée — elle n'atteint
+					// pas le backend — et tout ce qui précède (comptage,
+					// verdict, ban, journal) a déjà eu lieu.
+					if !s.leurre.SertAuLieuDeBloquer(w, r) {
+						if banned {
+							writeBan(w)
+						} else {
+							writeWarning(w, cat)
+						}
 					}
 					return
 				}

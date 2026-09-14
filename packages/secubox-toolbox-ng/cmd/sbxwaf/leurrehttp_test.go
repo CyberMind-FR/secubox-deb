@@ -622,3 +622,81 @@ func TestLeurre404_InactifNeToucheRien(t *testing.T) {
 		t.Fatal("le leurre désarmé a modifié une réponse")
 	}
 }
+
+// ── Remplacement de la page de blocage ──────────────────────────────────────
+
+func requeteExterne(chemin string) *http.Request {
+	r := httptest.NewRequest("GET", "http://vrai-site.test"+chemin, nil)
+	r.RemoteAddr = "203.0.113.55:44444"
+	return r
+}
+
+func TestBlocage_LeLeurreRemplaceLaPageSurUnAppat(t *testing.T) {
+	fil := filigraneDEssai(t)
+	l := NewLeurreHTTP(true, fil, nil)
+	w := httptest.NewRecorder()
+	w.Header().Set("X-SecuBox-WAF", "warning") // posé par la page d'origine
+
+	if !l.SertAuLieuDeBloquer(w, requeteExterne("/.env")) {
+		t.Fatal("un chemin-appât aurait dû être leurré")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("code = %d, attendu 200", w.Code)
+	}
+	if len(fil.Cherche(w.Body.String())) == 0 {
+		t.Error("la page de remplacement ne porte pas de marque")
+	}
+}
+
+func TestBlocage_PlusAUCUNEMentionDuProduit(t *testing.T) {
+	// C'EST LA RAISON D'ÊTRE DU CHANGEMENT. La page d'origine disait
+	// « SecuBox » ×4, « WAF » ×2, « sbxwaf » ×1 — l'information la plus utile
+	// de toute la reconnaissance d'un scanner, offerte gratuitement.
+	l := NewLeurreHTTP(true, filigraneDEssai(t), nil)
+	w := httptest.NewRecorder()
+	w.Header().Set("X-SecuBox-WAF", "warning")
+	l.SertAuLieuDeBloquer(w, requeteExterne("/.git/config"))
+
+	tout := w.Body.String() + "\n" + fmt.Sprint(w.Header())
+	for _, mot := range []string{"SecuBox", "secubox", "sbxwaf", "WAF", "Firewall", "firewall"} {
+		if strings.Contains(tout, mot) {
+			t.Errorf("le produit est encore annoncé par %q", mot)
+		}
+	}
+	if w.Header().Get("X-SecuBox-WAF") != "" {
+		t.Error("l'en-tête X-SecuBox-WAF subsiste et trahit le produit")
+	}
+}
+
+func TestBlocage_UneVRAIEATTAQUEGardeSon403(t *testing.T) {
+	// GARDE-FOU LE PLUS IMPORTANT DU FICHIER. Une injection vise une ressource
+	// RÉELLE : répondre 200 ferait croire à l'attaquant que sa charge est
+	// passée sur une page qui existe — un mensonge sans contrepartie, et une
+	// invitation à recommencer plus fort. Seuls les appâts sont concernés.
+	l := NewLeurreHTTP(true, filigraneDEssai(t), nil)
+	for _, chemin := range []string{
+		"/index.php", "/recherche", "/api/v1/users", "/", "/produits/42",
+	} {
+		w := httptest.NewRecorder()
+		if l.SertAuLieuDeBloquer(w, requeteExterne(chemin)) {
+			t.Errorf("%s : la page de blocage a été remplacée hors chemin-appât", chemin)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("%s : du contenu a été écrit", chemin)
+		}
+	}
+}
+
+func TestBlocage_JamaisLeLanNiQuandDesarme(t *testing.T) {
+	l := NewLeurreHTTP(true, filigraneDEssai(t), nil)
+	lan := httptest.NewRequest("GET", "http://vrai-site.test/.env", nil)
+	lan.RemoteAddr = "192.168.1.9:1234"
+	if l.SertAuLieuDeBloquer(httptest.NewRecorder(), lan) {
+		t.Error("le LAN a reçu un leurre à la place du blocage")
+	}
+
+	off := NewLeurreHTTP(false, filigraneDEssai(t), nil)
+	if off.SertAuLieuDeBloquer(httptest.NewRecorder(), requeteExterne("/.env")) {
+		t.Error("le leurre désarmé a remplacé une page de blocage")
+	}
+}

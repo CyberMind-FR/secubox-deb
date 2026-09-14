@@ -468,3 +468,69 @@ func fusionneMarques(base []string, autres ...[]string) []string {
 	}
 	return out
 }
+
+// SertAuLieuDeBloquer remplace la PAGE d'un blocage par un contenu de leurre,
+// sur les chemins-appâts uniquement (#1290).
+//
+// LE PROBLÈME QU'ON CORRIGE. La page de blocage du WAF annonce le produit :
+// « SecuBox » quatre fois, « WAF » deux fois, « sbxwaf » une fois, dans un 403.
+// Tout le reste du dispositif s'applique à ne rien révéler — bannières banales,
+// corps sans marque de fabrique — et le chemin le plus fréquenté par les
+// scanners criait le nom du pare-feu à chacun d'eux. Un outil soigné qui
+// apprend qu'il est face à un WAF change de comportement : on perdait
+// exactement ce qu'on était venu observer, et on lui offrait en prime
+// l'information la plus utile de sa reconnaissance.
+//
+// CE QUI NE CHANGE ABSOLUMENT PAS — ET C'EST L'ESSENTIEL :
+//
+//   - LA REQUÊTE RESTE BLOQUÉE. Elle n'atteint pas le backend, ni avant ni
+//     après ce changement. On ne « laisse pas passer » : on répond autre chose.
+//   - LA DÉCISION EST DÉJÀ PRISE quand on arrive ici. Le comptage, le verdict
+//     de ban, l'application nft et l'écriture au journal de menaces ont eu lieu
+//     en amont et ne sont pas touchés. Ce code ne décide de rien ; il écrit.
+//   - LE PÉRIMÈTRE EST ÉTROIT. Uniquement les chemins-appâts intrinsèques
+//     (`estHauteValeur` : .env, .git, credentials…). Une injection SQL ou un
+//     XSS gardent leur 403 : ce sont des attaques contre une ressource RÉELLE,
+//     et répondre 200 y serait un mensonge sans contrepartie — l'attaquant
+//     croirait sa charge passée sur une page qui existe.
+//   - JAMAIS LE LAN, comme partout ailleurs dans ce fichier.
+//
+// Rend false si rien n'a été écrit : l'appelant garde alors sa page d'origine.
+func (l *LeurreHTTP) SertAuLieuDeBloquer(w http.ResponseWriter, r *http.Request) bool {
+	if l == nil || !l.actif || r == nil {
+		return false
+	}
+	if privateCIDR(clientIP(r)) {
+		return false
+	}
+	if !estHauteValeur(strings.ToLower(r.URL.Path)) {
+		return false
+	}
+
+	famille := classeSonde(r.URL.Path)
+	jeton, alea := "", ""
+	if l.fil != nil {
+		jeton, alea = l.fil.Marque()
+	}
+	corps, typeMIME := corpsLeurre(famille, r.Host, jeton)
+
+	if l.theatre != nil {
+		l.theatre.Avance(l.theatre.Cle(clientIP(r), signatureEnTetes(r)), famille, alea)
+	}
+
+	// AUCUN EN-TÊTE NE DOIT TRAHIR LE PRODUIT. `X-SecuBox-WAF` est posé par les
+	// pages de blocage ; ici il annulerait tout le bénéfice du remplacement.
+	w.Header().Del("X-SecuBox-WAF")
+	w.Header().Set("Content-Type", typeMIME)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write([]byte(corps))
+	}
+
+	if l.journal != nil {
+		l.journal(r.Host, r.URL.Path, famille, alea)
+	}
+	return true
+}

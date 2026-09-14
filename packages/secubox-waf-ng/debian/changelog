@@ -1,3 +1,22 @@
+secubox-waf-ng (1.17.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA PAGE DE BLOCAGE NE TRAHIT PLUS LE PRODUIT (ref #1290). Elle annonçait
+    « SecuBox » x4, « WAF » x2, « sbxwaf » x1 dans un 403 — sur le chemin le
+    plus fréquenté par les scanners. C'est l'information la plus utile de leur
+    reconnaissance, et un outil soigné qui se sait face à un WAF change de
+    comportement : on perdait ce qu'on venait observer. Sur un chemin-appât, la
+    page est remplacée par un leurre marqué, et l'en-tête X-SecuBox-WAF retiré.
+  * LA PROTECTION EST INCHANGÉE, et c'est vérifié par test : la requête reste
+    bloquée (elle n'atteint pas le backend), le comptage, le verdict de ban,
+    l'application nft et le journal de menaces ont lieu en amont et ne sont pas
+    touchés. Seule la page écrite change.
+  * PÉRIMÈTRE ÉTROIT : uniquement les appâts intrinsèques (.env, .git,
+    credentials…). Une injection SQL ou un XSS gardent leur 403 — ils visent une
+    ressource RÉELLE, et répondre 200 ferait croire la charge passée sur une
+    page qui existe : un mensonge sans contrepartie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 13:13:07 +0200
+
 secubox-waf-ng (1.16.1-1~bookworm1) bookworm; urgency=medium
 
   * Correctif : une marque rejouée DANS UN CORPS POST pilotait bien la
