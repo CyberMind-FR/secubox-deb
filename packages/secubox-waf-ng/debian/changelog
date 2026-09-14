@@ -1,3 +1,19 @@
+secubox-waf-ng (1.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — L'INGESTION NE REDEVIENT PLUS MUETTE AU REDEMARRAGE. L'unite qui
+    replace la socket d'ingestion dans le groupe `actord-ingest` portait
+    `RemainAfterExit=yes` : apres son premier passage elle restait « active », le
+    `Wants=` d'actord ne la relancait plus, et chaque redemarrage d'actord
+    recreait une socket en groupe `secubox` que plus personne ne corrigeait.
+    L'emission du WAF repartait alors dans le vide — fire-and-forget, donc SANS
+    LA MOINDRE TRACE. Le meme symptome que la permission d'origine, revenu deux
+    fois apres avoir ete « corrige ».
+  * Sans RemainAfterExit, l'unite retombe inactive apres son passage et se rejoue
+    a chaque demarrage d'actord : une correction de droits n'a pas d'etat a
+    conserver.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 12:35:00 +0200
+
 secubox-waf-ng (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — PAYS SOURCE : sbxwaf geolocalise ses evenements (voir toolbox-ng

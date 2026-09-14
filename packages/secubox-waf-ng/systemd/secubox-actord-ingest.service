@@ -25,7 +25,15 @@ PartOf=secubox-actord.service
 
 [Service]
 Type=oneshot
-RemainAfterExit=yes
+# SURTOUT PAS RemainAfterExit. Avec lui, l'unite restait « active » apres son
+# premier passage : le `Wants=` d'actord ne la relancait plus, et chaque
+# redemarrage d'actord recreait une socket en groupe `secubox` que plus personne
+# ne corrigeait. L'ingestion redevenait muette en silence — le meme symptome que
+# la permission d'origine, trois fois de suite.
+#
+# Sans lui, l'unite retombe inactive apres son passage et se rejoue donc a chaque
+# demarrage d'actord. C'est exactement ce qu'on veut : une correction de droits
+# n'a pas d'etat a conserver.
 # COURSE AVEC LA RECREATION DE LA SOCKET. Une simple attente « le fichier
 # existe-t-il ? » ne suffit pas : au redemarrage, l'ANCIENNE socket est encore
 # la quand cette unite demarre. On lui changeait donc le groupe juste avant
