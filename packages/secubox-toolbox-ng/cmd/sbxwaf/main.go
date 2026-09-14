@@ -939,6 +939,10 @@ func main() {
 			"— journaliser + bannir au lieu d'un 421 muet (#1070)")
 	actorSocket := flag.String("actor-socket", "/run/secubox/actord.sock",
 		"socket d'ingestion sbx-actord — émission Actor Intelligence fire-and-forget (\"\" = désactivé)")
+	geoipPath := flag.String("geoip-country", "/usr/share/GeoIP/GeoLite2-Country.mmdb",
+		"base MaxMind du pays source, lue LOCALEMENT (\"\" = désactivée). Le pays "+
+			"alimente la carte du renseignement et la moitié de la définition d'une "+
+			"campagne (plusieurs IP OU plusieurs pays)")
 	threatLog := flag.String("threat-log", "/var/log/secubox/waf/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
 	// Ban nft natif (#1070 phase B) — WAF autonome.
@@ -1081,6 +1085,10 @@ func main() {
 	if *actorSocket != "" {
 		emitter := emit.New(*actorSocket, 8192)
 		tl.SetEmitter(emitter)
+		if g := NewGeo(*geoipPath); g != nil {
+			tl.SetGeo(g)
+			defer g.Close()
+		}
 		defer emitter.Close()
 		log.Printf("sbxwaf: Actor Intelligence — émission vers %s (fire-and-forget)", *actorSocket)
 	}

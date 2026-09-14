@@ -1,3 +1,26 @@
+secubox-toolbox-ng (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — PAYS SOURCE : le WAF geolocalise enfin ses evenements. Tous les
+    acteurs portaient `countries: 0`, avec deux consequences dont une invisible :
+    une CAMPAGNE se definit chez actord par « plusieurs IP OU plusieurs pays » —
+    sans pays, la moitie de la definition ne pouvait jamais se declencher ; et
+    une CARTE du renseignement n'a rien a afficher sans geolocalisation.
+  * LECTURE LOCALE, JAMAIS UN APPEL RESEAU : base GeoLite2 deja presente sur la
+    box (/usr/share/GeoIP/GeoLite2-Country.mmdb). Interroger un service tiers
+    ferait fuiter la liste de nos visiteurs — l'inverse de ce que cette box
+    defend — et ajouterait une latence sur le chemin critique du WAF.
+  * PAYS SEULEMENT, pas de ville : le bareme n'accorde qu'un point au pays, il
+    sert a ecarter, jamais a conclure. Une geolocalisation plus fine couterait
+    une base bien plus lourde pour une donnee personnelle inutilisee.
+  * Les adresses privees et non routables ne recoivent PAS de pays : leur en
+    inventer un placerait nos propres machines sur la carte des attaquants.
+  * Base absente ou illisible = geolocalisation desactivee, le WAF demarre quand
+    meme. Perdre un axe de correlation ne justifie pas de perdre le pare-feu.
+  * Nouvelle dependance : github.com/oschwald/maxminddb-golang v1.13.1, lecteur
+    PUR GO (sans cgo), compatible avec la compilation statique arm64.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 12:00:00 +0200
+
 secubox-toolbox-ng (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — REJEU DE DEMARRAGE BORNE, distinct de la retention. `--rebuild-max`

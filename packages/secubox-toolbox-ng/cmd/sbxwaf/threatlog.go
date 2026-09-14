@@ -60,6 +60,7 @@ type ThreatLog struct {
 	path    string
 	mu      sync.Mutex
 	emitter *emit.Emitter // #1240 : émission Actor Intelligence (facultative)
+	geo     *Geo          // #1240 : pays source, lecture locale (facultative)
 }
 
 // NewThreatLog creates a ThreatLog that writes to path.
@@ -74,6 +75,10 @@ func NewThreatLog(path string) *ThreatLog {
 // sbx-actord (RFC-0013). Nil = pas d'émission. L'émission est fire-and-forget :
 // elle ne peut jamais ralentir ni interrompre le chemin requête du WAF.
 func (l *ThreatLog) SetEmitter(e *emit.Emitter) { l.emitter = e }
+
+// SetGeo branche (facultativement) la résolution du pays source. Sans elle, les
+// enveloppes partent sans pays — le graphe perd un axe, pas une couche.
+func (l *ThreatLog) SetGeo(g *Geo) { l.geo = g }
 
 // sevToInt projette la sévérité WAF (low/medium/high/critical) sur 0..100.
 func sevToInt(s string) int {
@@ -196,7 +201,9 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 	// jamais. Le trafic interne (agrégé sous "local" plus haut) n'est pas un
 	// acteur → non émis ; on n'émet que pour une IP source réelle.
 	if l.emitter != nil && entry.ClientIP != "local" && net.ParseIP(entry.ClientIP) != nil {
-		l.emitter.Emit(entryToEnvelope(&entry))
+		env := entryToEnvelope(&entry)
+		env.GeoCountry = l.geo.Pays(entry.ClientIP) // nil-safe
+		l.emitter.Emit(env)
 	}
 
 	data, err := json.Marshal(entry)
