@@ -56,6 +56,8 @@ detection, WAF, and a suite of sovereign services, all behind one web dashboard.
 | 📊 **Web dashboard** | One interface for the whole box, from any browser |
 | ☁️ **Sovereign services** | Nextcloud, mail, Gitea, Jellyfin, PeerTube, radio, forum… |
 | 🔄 **Automatic updates** | Security patches applied on their own |
+| 🎭 **Decoy & watermark** | Unrouted hosts and bait paths get a plausible, inert page — watermarked, so a fake credential replayed later is recognised as ours. Learning only: no bans follow |
+| 🧬 **Actor intelligence** | Scanners correlated across addresses and countries; a walking subdomain dictionary is regrouped into one campaign instead of dozens of fragments |
 
 > A visual tour of the dashboard lives in the
 > [wiki gallery](https://github.com/CyberMind-FR/secubox-deb/wiki/UI-COMPARISON).
@@ -153,6 +155,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 | [Architecture](https://github.com/CyberMind-FR/secubox-deb/wiki/Modules-Architecture) | The 6-layer model |
 | [Troubleshooting](https://github.com/CyberMind-FR/secubox-deb/wiki/Troubleshooting) | When it does not boot |
 | [Project overview](docs/PROJECT-OVERVIEW.md) | Long form: flagship programmes, release history, CTL grammar |
+| [Cryptographic policy](docs/POLITIQUE-CRYPTO.md) | Which algorithms, why, and the two protocol-imposed exceptions — the reference document for CSPN evaluation |
 
 ## 🤝 Contributing
 

@@ -6,7 +6,41 @@
 -->
 
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-09-11*
+*Mis à jour : 2026-09-14*
+
+---
+
+## 2026-09-14 — suites leurre & renseignement (#1290 livré)
+
+- [ ] **Vue « marques revenues »** dans la page Renseignement. Le moteur
+      enregistre `marque_revenue` dans l'enveloppe et crie au journal ; l'interface
+      ne l'expose pas. C'est le moment où le filigrane paie, il doit se voir.
+- [ ] **Filigrane à l'authentification** — chercher la marque là où le corps est
+      DÉJÀ lu (login), au lieu de bufferiser le trafic de toute la box.
+- [ ] **Honeypot : ratio d'échantillonnage** si l'on veut un jour n'en armer
+      qu'une fraction. Aujourd'hui : tout ou rien, apprentissage seul.
+- [ ] **Ports leurres** — armer `--leurre-bannieres` sur gk2 après observation
+      du coût réel (plafond de 64 connexions simultanées).
+- [ ] **Page de blocage** : étendre le remplacement au-delà des appâts
+      intrinsèques ? À ne PAS faire pour les injections — répondre 200 ferait
+      croire la charge passée sur une page qui existe.
+
+## 2026-09-14 — suites crypto (#1288 livré)
+
+- [ ] **JWT HS256 → EdDSA** (RFC 8037) : distribuer une clé publique de
+      vérification sans partager le pouvoir de signer.
+- [ ] **Courbes** — si l'évaluation CSPN exige la liste historique ANSSI
+      (FRP256v1, Brainpool) plutôt que Curve25519, rouvrir. Les primitives sont
+      isolées dans un seul module : le changement serait local.
+- [ ] **`secubox-nac`** (#1289) — conflit de fichier avec `secubox-hub`, paquet
+      gelé. Décider qui possède la vue NAC.
+
+## 2026-09-14 — suites Lexie (#1287 livré)
+
+- [ ] **Moteur** : Piper + whisper.cpp arm64 sur la box, ou `moteur = "distant"`
+      vers VoiceStudio sur poste x86. Arbitrage sur la taille du modèle.
+- [ ] **Traits comportementaux dans le profil acteur** — ils partent dans
+      l'enveloppe, l'interface ne les affiche pas encore.
 
 ---
 
