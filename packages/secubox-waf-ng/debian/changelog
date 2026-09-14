@@ -1,3 +1,18 @@
+secubox-waf-ng (1.13.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — IHM : la page Renseignement s'ouvre sur les CAMPAGNES, pas sur les
+    acteurs. Sur cette box, 115 acteurs se ramenent a 13 campagnes : c'est le
+    mode operatoire qui se retient, pas l'identifiant d'un profil — lequel
+    changera d'ailleurs au prochain rebuild du graphe.
+  * Chaque campagne porte ce qui la caracterise : nombre d'acteurs, sources
+    distinctes, cibles, et combien de ces cibles N'EXISTENT PAS — marqueur
+    orange, parce qu'un nom d'hote inexistant est un mot de dictionnaire et non
+    une cible. C'est ce qui distingue l'enumeration de sous-domaines de la chasse
+    ciblee, d'un coup d'oeil.
+  * « Recurrents » et « Tous » restent a un clic.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 15:00:00 +0200
+
 secubox-waf-ng (1.13.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — LES CAMPAGNES SONT ENFIN DES CAMPAGNES. /campaigns rendait « les

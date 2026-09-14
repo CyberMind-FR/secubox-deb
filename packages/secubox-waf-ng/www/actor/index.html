@@ -137,6 +137,10 @@
 .tag.ips{color:var(--bg);background:var(--cyan);font-weight:700}
 .tag.cont{color:var(--cyan);border:1px solid var(--cyan);background:transparent}
 .tag.tgt{color:var(--dim);border:1px solid var(--line);background:transparent}
+/* Un nom d'hôte qui n'existe pas est un mot de dictionnaire, pas une cible :
+   c'est le marqueur de l'énumération de sous-domaines. */
+.tag.dico{color:var(--bg);background:var(--orange);font-weight:700}
+.actor.camp .ring{font-size:.78rem}
 </style>
 </head>
 <body class="hybrid-dark">
@@ -197,7 +201,7 @@ function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return
 function jget(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
 var VECLBL={knowledge:"connaissance",continuity:"continuité",intent:"intention",automation:"automation",severity:"gravité",persistence:"persistance",confidence:"confiance"};
 var FLOW=["OBSERVE","DELAY","CHALLENGE","TARPIT","DENY","QUARANTINE"];
-var ACTS=[],CUR=null;
+var ACTS=[],CAMPS=[],CUR=null,CAMP=null;
 
 function stat(v,l,w){return '<div class="stat'+(w?' warn':'')+'"><div class="v">'+(v==null?'–':v)+'</div><div class="l">'+l+'</div></div>';}
 function rendKPIs(s){
@@ -213,10 +217,16 @@ function rendFlow(){$('flow').innerHTML=FLOW.map(function(f,i){return '<div clas
 // un meme profil a-t-il utilisees. Un acteur revu depuis onze IP est une
 // personnalite qui revient ; un acteur vu une fois est du bruit de fond. On
 // regroupe donc sur ce critere, et on trie par defaut sur lui.
-var FILTRE='recurrents', TRI='ips';
+// LA CAMPAGNE EST L'UNITE DE LECTURE, PAS L'ACTEUR. Sur cette box, 115 acteurs
+// se ramenent a 13 campagnes : c'est le mode operatoire qui se retient, pas
+// l'identifiant d'un profil qui changera au prochain rebuild. On ouvre donc sur
+// les campagnes, et les acteurs restent a un clic.
+var FILTRE='campagnes', TRI='ips';
 function rendBarre(){
   var rec=ACTS.filter(multi).length;
-  var f=[['recurrents','Récurrents','·'+rec],['tous','Tous','·'+ACTS.length]];
+  var f=[['campagnes','Campagnes','·'+CAMPS.length],
+         ['recurrents','Récurrents','·'+rec],
+         ['tous','Tous','·'+ACTS.length]];
   var t=[['ips','adresses'],['continuite','continuité'],['priorite','priorité'],['recent','vu récemment']];
   $('barre').innerHTML=
     '<span class="grp">'+f.map(function(x){return '<button class="fb'+(FILTRE===x[0]?' on':'')+'" data-f="'+x[0]+'">'+x[1]+'<i>'+x[2]+'</i></button>';}).join('')+'</span>'
@@ -233,7 +243,42 @@ function trie(l){
           recent:function(a,b){return String(b.last||'').localeCompare(String(a.last||''));}}[TRI];
   return l.slice().sort(f);
 }
+// UNE CAMPAGNE, UNE LIGNE. Quarante-deux profils visant `git.gk2` et
+// `gitea.gk2` faisaient quarante-deux lignes rigoureusement identiques — memes
+// cibles, meme priorite, meme continuite. Regroupes, ils disent enfin quelque
+// chose : « un mode operatoire, 42 acteurs, 45 sources ».
+//
+// On REGROUPE sans FUSIONNER : ces hotes existent, et 42 sources qui chassent du
+// Gitea ne sont pas une meme personne. Le groupe affirme un mode operatoire
+// partage, jamais une identite.
+function rendCampagnes(){
+  var box=$('list');
+  if(!CAMPS.length){
+    box.innerHTML='<div class="vide">Aucune campagne : il faut plusieurs acteurs partageant le même mode opératoire, '
+      +'ou un acteur qui s\'est déplacé. <button class="fb" onclick="FILTRE=\'tous\';rendBarre();rendList()">voir les acteurs</button></div>';
+    return;
+  }
+  box.innerHTML='';
+  CAMPS.forEach(function(c){
+    var dico=c.cibles_inexistantes>0;
+    var col=dico?'var(--orange)':'var(--cyan)';
+    var d=document.createElement('div');d.className='actor camp'+(c.signature===CAMP?' on':'');
+    d.innerHTML='<div class="ring" style="--v:'+Math.min(100,c.nb_acteurs*2)+';--c:'+col+'">'+c.nb_acteurs+'</div>'
+      +'<div class="nm"><b>'+esc(c.signature)+'</b><div class="tg">'
+        +'<span class="tag ips">'+c.sources+' sources</span>'
+        +'<span class="tag tgt">'+c.cibles.length+' cible'+(c.cibles.length>1?'s':'')+'</span>'
+        +(dico?'<span class="tag dico" title="Noms d\'hôtes qui n\'existent pas : énumération de sous-domaines">'
+              +c.cibles_inexistantes+' inexistantes</span>':'')
+        +(c.pays>1?'<span class="tag cont">'+c.pays+' pays</span>':'')
+      +'</div></div>'
+      +'<div class="lvl"><b>'+c.nb_acteurs+'</b>acteurs</div>';
+    d.addEventListener('click',function(){CAMP=c.signature;CUR=c.acteurs[0];rendList();rendProfile();});
+    box.appendChild(d);
+  });
+}
+
 function rendList(){
+  if(FILTRE==='campagnes'){ rendCampagnes(); return; }
   var box=$('list');
   if(!ACTS.length){box.innerHTML='<div class="vide">😴 Aucun acteur corrélé — le moteur observe le trafic (shadow).</div>';$('profile').innerHTML='<div class="vide">—</div>';return;}
   var vus=trie(FILTRE==='recurrents'?ACTS.filter(multi):ACTS);
@@ -280,7 +325,8 @@ function rendProfile(){
   $('pver').textContent='algo v1 · poids v1';
 }
 function tick(){
-  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors')]).then(function(r){
+  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors'),jget('/api/v1/actor/campaigns')]).then(function(r){
+    CAMPS=r[2]||[];
     if(!r[0]){$('kpis').innerHTML='';$('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>';return;}
     rendKPIs(r[0]);ACTS=r[1]||[];
     if(CUR&&!ACTS.some(function(x){return x.id===CUR;}))CUR=null;
