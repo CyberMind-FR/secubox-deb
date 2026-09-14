@@ -1,0 +1,47 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Replace la socket d'ingestion d'Actor Intelligence dans le groupe dédié
+# `actord-ingest`, afin que sbxwaf (qui tourne en `secubox-waf`) puisse y écrire.
+#
+# POURQUOI UN FICHIER PLUTÔT QU'UN ExecStart EN LIGNE. Cette correction a échoué
+# DEUX FOIS en restant invisible, à cause de l'analyseur de systemd :
+#   · avec un seul `$`, systemd développait `$S` et `$i` en chaîne VIDE ;
+#   · avec `$$`, il les passait littéralement et le shell lisait `$$` = son PID.
+# Dans les deux cas l'unité sortait en 0 : un échec silencieux et vert, le pire
+# qui soit. Un script dans un fichier n'a aucun de ces pièges.
+#
+# POURQUOI UNE BOUCLE ET PAS UN SEUL chgrp. Au redémarrage d'actord, l'ANCIENNE
+# socket existe encore quand cette unité démarre : on changerait le groupe d'un
+# inode que le démon s'apprête à remplacer. On insiste donc jusqu'à ce que le
+# groupe TIENNE deux vérifications consécutives.
+set -u
+SOCKET="${1:-/run/secubox/actord.sock}"
+GROUPE="${2:-actord-ingest}"
+
+i=0
+stable=0
+while [ "$i" -lt 40 ]; do
+    if [ -S "$SOCKET" ]; then
+        chgrp "$GROUPE" "$SOCKET" 2>/dev/null
+        chmod 0660 "$SOCKET" 2>/dev/null
+        if [ "$(stat -c %G "$SOCKET" 2>/dev/null)" = "$GROUPE" ]; then
+            stable=$((stable + 1))
+            if [ "$stable" -ge 2 ]; then
+                echo "socket $SOCKET : groupe $GROUPE posé"
+                exit 0
+            fi
+        else
+            stable=0
+        fi
+    fi
+    i=$((i + 1))
+    sleep 0.5
+done
+
+# On n'échoue PAS : une ingestion muette vaut mieux qu'un service bloqué. Mais on
+# le DIT, pour que ça ne redevienne jamais un échec silencieux.
+echo "socket $SOCKET : groupe $GROUPE NON posé après 20 s — l'ingestion Actor" \
+     "Intelligence restera muette (sbxwaf ne pourra pas écrire)" >&2
+exit 0

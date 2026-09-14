@@ -43,7 +43,7 @@ Type=oneshot
 # On insiste donc : on repose le groupe tant qu'il n'a pas TENU deux controles
 # consecutifs espaces d'une seconde. Au-dela de ~15 s on abandonne sans faire
 # echouer le demarrage : mieux vaut une ingestion muette qu'un service bloque.
-ExecStart=/bin/sh -c 'S=/run/secubox/actord.sock; i=0; ok=0; while [ $$i -lt 30 ]; do if [ -S "$$S" ]; then chgrp actord-ingest "$$S" 2>/dev/null; chmod 0660 "$$S" 2>/dev/null; if [ "$$(stat -c %%G "$$S" 2>/dev/null)" = actord-ingest ]; then ok=$$((ok+1)); [ $$ok -ge 2 ] && exit 0; else ok=0; fi; fi; i=$$((i+1)); sleep 0.5; done; exit 0'
+ExecStart=/usr/sbin/secubox-actord-ingest-perms /run/secubox/actord.sock actord-ingest
 
 [Install]
 WantedBy=secubox-actord.service

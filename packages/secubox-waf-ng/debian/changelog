@@ -1,3 +1,20 @@
+secubox-waf-ng (1.10.3-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — La correction des droits de la socket d'ingestion passe dans un
+    SCRIPT LIVRE (/usr/sbin/secubox-actord-ingest-perms) au lieu d'un ExecStart
+    en ligne. L'analyseur de systemd l'avait fait echouer DEUX FOIS en silence :
+    avec un seul `$`, il developpait `$S` et `$i` en chaine VIDE ; avec `$$`, il
+    les passait litteralement et le shell lisait `$$` comme son propre PID. Dans
+    les deux cas l'unite sortait en 0 — un echec silencieux et vert, le pire qui
+    soit, et l'ingestion Actor Intelligence restait muette.
+  * Le script DIT desormais ce qu'il fait et ce qu'il n'a pas pu faire : succes
+    journalise, echec apres 20 s journalise en erreur explicite (« l'ingestion
+    restera muette »). Il ne fait toujours pas echouer le demarrage : une
+    ingestion muette vaut mieux qu'un service bloque — mais elle ne sera plus
+    invisible.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 13:05:00 +0200
+
 secubox-waf-ng (1.10.2-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — L'unite de droits de la socket d'ingestion ne faisait RIEN, et le
