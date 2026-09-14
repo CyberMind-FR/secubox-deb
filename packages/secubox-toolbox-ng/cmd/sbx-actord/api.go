@@ -6,10 +6,13 @@
 package main
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/evidence"
@@ -143,18 +146,110 @@ func (s *Server) handleActor(w http.ResponseWriter, r *http.Request) {
 
 // handleCampaigns : une campagne = un acteur multi-sources (plusieurs IP ou pays)
 // — un même comportement reproduit par des sources successives (RFC-0004).
+// handleCampaigns rend les CAMPAGNES : des groupes d'acteurs partageant le meme
+// mode operatoire.
+//
+// CE QUE CETTE VUE CORRIGE. Elle rendait « les acteurs ayant au moins deux IP »,
+// ce qui n'est pas une campagne — c'est un acteur mobile. L'operateur, lui,
+// voyait trente-quatre profils rigoureusement identiques (memes cibles, meme
+// priorite, meme continuite) et se demandait a juste titre pourquoi ils n'etaient
+// pas regroupes.
+//
+// POURQUOI ON REGROUPE SANS FUSIONNER. Ces trente-quatre profils visent
+// `git.gk2` et `gitea.gk2` — des hotes qui EXISTENT. Trente-quatre sources qui
+// chassent du Gitea ne sont pas une meme personne : ce peut etre le meme outil
+// public lance par trente-quatre inconnus. Les fusionner affirmerait une identite
+// que la preuve ne soutient pas — l'erreur que ce moteur refuse de commettre.
+// Les REGROUPER dit ce qu'on sait : meme mode operatoire, continuite de campagne
+// probable.
+//
+// LA SIGNATURE EST L'ENSEMBLE DES CIBLES. C'est ce qui distingue un mode
+// operatoire : l'enumerateur de sous-domaines recite sa liste, le chasseur de
+// Gitea vise deux noms precis. Deux acteurs qui visent exactement le meme jeu
+// font la meme chose, quel que soit leur nombre d'adresses.
+func signatureCampagne(cibles []string) string {
+	tri := append([]string(nil), cibles...)
+	sort.Strings(tri)
+	h := sha1.Sum([]byte(strings.Join(tri, "\n")))
+	return hex.EncodeToString(h[:4])
+}
+
 func (s *Server) handleCampaigns(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
-	var out []map[string]any
+	type grp struct {
+		Signature   string   `json:"signature"`
+		Acteurs     []string `json:"acteurs"`
+		NbActeurs   int      `json:"nb_acteurs"`
+		Sources     int      `json:"sources"`
+		Pays        int      `json:"pays"`
+		Cibles      []string `json:"cibles"`
+		Inexistants int      `json:"cibles_inexistantes"`
+		Priorite    int      `json:"priorite"`
+		Continuite  int      `json:"continuite"`
+		Premier     int64    `json:"premier"`
+		Dernier     int64    `json:"dernier"`
+	}
+	par := map[string]*grp{}
+	ips := map[string]map[string]bool{}
+	pays := map[string]map[string]bool{}
 	for _, a := range s.graph.Actors() {
-		if len(a.IPs) >= 2 || len(a.Countries) >= 2 {
-			out = append(out, map[string]any{
-				"actor_id": a.ID, "priority": a.Priority,
-				"continuity": a.Vector.Continuity, "sources": len(a.IPs),
-				"asns": len(a.ASNs), "countries": len(a.Countries), "targets": a.Targets,
-			})
+		if len(a.Targets) == 0 {
+			continue // sans cible, pas de mode operatoire a comparer
+		}
+		sig := signatureCampagne(a.Targets)
+		g := par[sig]
+		if g == nil {
+			inex := 0
+			for _, t := range a.Targets {
+				if s.inexistants[t] {
+					inex++
+				}
+			}
+			g = &grp{Signature: sig, Cibles: a.Targets, Inexistants: inex,
+				Premier: a.FirstSeen, Dernier: a.LastSeen}
+			par[sig] = g
+			ips[sig] = map[string]bool{}
+			pays[sig] = map[string]bool{}
+		}
+		g.Acteurs = append(g.Acteurs, a.ID)
+		g.NbActeurs++
+		for _, ip := range a.IPs {
+			ips[sig][ip] = true
+		}
+		for _, c := range a.Countries {
+			pays[sig][c] = true
+		}
+		if a.Priority > g.Priorite {
+			g.Priorite = a.Priority
+		}
+		if a.Vector.Continuity > g.Continuite {
+			g.Continuite = a.Vector.Continuity
+		}
+		if a.FirstSeen != 0 && (g.Premier == 0 || a.FirstSeen < g.Premier) {
+			g.Premier = a.FirstSeen
+		}
+		if a.LastSeen > g.Dernier {
+			g.Dernier = a.LastSeen
 		}
 	}
+	out := make([]*grp, 0, len(par))
+	for sig, g := range par {
+		// UNE CAMPAGNE SUPPOSE UNE PLURALITE : soit plusieurs acteurs, soit un
+		// acteur qui s'est deplace. Un profil isole n'en est pas une.
+		if g.NbActeurs < 2 && len(ips[sig]) < 2 {
+			continue
+		}
+		g.Sources = len(ips[sig])
+		g.Pays = len(pays[sig])
+		sort.Strings(g.Acteurs)
+		out = append(out, g)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].NbActeurs != out[j].NbActeurs {
+			return out[i].NbActeurs > out[j].NbActeurs
+		}
+		return out[i].Signature < out[j].Signature
+	})
 	s.mu.Unlock()
 	writeJSON(w, out)
 }

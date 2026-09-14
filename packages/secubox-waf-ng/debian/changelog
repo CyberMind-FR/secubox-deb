@@ -1,3 +1,27 @@
+secubox-waf-ng (1.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — LES CAMPAGNES SONT ENFIN DES CAMPAGNES. /campaigns rendait « les
+    acteurs ayant au moins deux IP », ce qui n'en est pas une : c'est un acteur
+    mobile. Une campagne regroupe desormais les ACTEURS PARTAGEANT LE MEME MODE
+    OPERATOIRE, signature = l'ensemble de leurs cibles.
+  * CE QUE LA MESURE MONTRAIT : 34 acteurs visant exactement `git.gk2` et
+    `gitea.gk2`, memes cibles, meme priorite, meme continuite — trente-quatre
+    lignes identiques dans l'interface, et l'operateur qui demande a juste titre
+    pourquoi elles ne sont pas regroupees.
+  * POURQUOI ON REGROUPE SANS FUSIONNER : ces hotes EXISTENT. Trente-quatre
+    sources qui chassent du Gitea ne sont pas une meme personne — ce peut etre le
+    meme outil public lance par trente-quatre inconnus. Les fusionner affirmerait
+    une identite que la preuve ne soutient pas. Les regrouper dit ce qu'on sait :
+    meme mode operatoire, continuite de campagne probable. C'est exactement la
+    distinction que porte le pied de page du panneau.
+  * Une campagne suppose une PLURALITE : plusieurs acteurs, ou un acteur qui s'est
+    deplace. Un profil isole n'en est pas une. Chaque groupe porte ses acteurs,
+    ses sources distinctes, ses pays, ses cibles et combien sont INEXISTANTES —
+    ce dernier chiffre distingue l'enumeration de sous-domaines de la chasse
+    ciblee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 14:35:00 +0200
+
 secubox-waf-ng (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — CONSOLIDATION : deux acteurs deja crees peuvent se reveler un seul.
