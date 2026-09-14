@@ -63,11 +63,35 @@ type Actor struct {
 
 // Obs est une observation à corréler (dérivée d'une enveloppe par l'appelant).
 type Obs struct {
-	Sig       similarity.Signature
-	Severity  int
-	Target    string // dst_service
+	Sig      similarity.Signature
+	Severity int
+	Target   string // dst_service
+	// Tags porte les etiquettes de comportement du capteur. Une seule nous
+	// interesse ici : celle qui dit que l'hote VISE N'EXISTE PAS. Voir
+	// `lienDictionnaire`.
+	Tags      []string
 	Timestamp int64
 }
+
+// WCibleDico pese le partage d'un mot de DICTIONNAIRE entre deux profils.
+//
+// POURQUOI CET AXE MANQUAIT, ET POURQUOI IL EST LOURD. Le bareme comparait des
+// chemins, des outils, des empreintes — jamais CE QUI EST VISE. Or l'enumeration
+// de sous-domaines ne varie ni le chemin (toujours « / ») ni l'outillage : elle
+// ne varie que l'HOTE. Deux adresses rejouant `softbank`, `tinkoff`, `qq`,
+// `taobao` sur notre joker DNS etaient donc vues comme deux inconnus sans
+// rapport, alors qu'elles recitent la meme liste.
+//
+// Le poids n'a de sens que pour un hote INEXISTANT. Partager `hall.gk2` ne prouve
+// rien — tout le monde le visite. Partager `qianbao.secubox.in`, un nom qui n'a
+// jamais existe, c'est tirer le meme mot du meme dictionnaire : la coincidence
+// n'est pas credible. D'ou un poids eleve, mais conditionne a l'etiquette
+// `host_anomaly:unrouted` que le WAF pose deja.
+const WCibleDico = 22
+
+// EtiquetteInexistant est l'etiquette posee par sbxwaf sur une requete visant un
+// hote qu'aucune route ne sert.
+const EtiquetteInexistant = "host_anomaly:unrouted"
 
 // Graph maintient l'ensemble des acteurs.
 type Graph struct {
@@ -98,15 +122,37 @@ func New(threshold int) *Graph {
 // Observe rattache une observation à l'acteur le plus similaire (si la continuité
 // atteint le seuil) ou en crée un nouveau, met à jour les agrégats, la continuité,
 // la confiance et la priorité, puis retourne l'acteur concerné.
+// lienDictionnaire rend le poids d'un partage de mot de dictionnaire entre
+// l'observation et un acteur : l'acteur a-t-il DEJA vise cet hote inexistant ?
+func lienDictionnaire(a *Actor, o Obs) int {
+	if o.Target == "" || !a.tgts[o.Target] {
+		return 0
+	}
+	for _, t := range o.Tags {
+		if t == EtiquetteInexistant {
+			return WCibleDico
+		}
+	}
+	return 0
+}
+
 func (g *Graph) Observe(o Obs) *Actor {
 	var best *Actor
 	var bestScore score.Score
-	for _, id := range g.candidats(o.Sig) {
+	for _, id := range g.candidatsAvecCible(o.Sig, o.Target) {
 		a := g.actors[id]
 		if a == nil {
 			continue
 		}
 		s := similarity.Similarity(a.sig, o.Sig)
+		// LE DICTIONNAIRE EST UNE PREUVE DE CONTINUITE. On l'ajoute aux
+		// contributions plutot que de le traiter a part : le score reste
+		// EXPLICABLE — l'operateur lit « meme mot de dictionnaire » comme il lit
+		// « meme outil », avec son poids.
+		if w := lienDictionnaire(a, o); w > 0 {
+			s = score.New(append(s.Contributions,
+				score.Contribution{Label: "même dictionnaire de sondage (hôte inexistant partagé)", Weight: w})...)
+		}
 		// Egalite tranchee par l'ID : sans cela, l'ordre d'un parcours de map
 		// rendrait le rattachement non reproductible d'une execution a l'autre.
 		if s.Value > bestScore.Value || (s.Value == bestScore.Value && best != nil && a.ID < best.ID) {
@@ -135,6 +181,14 @@ func (g *Graph) Observe(o Obs) *Actor {
 	}
 	g.absorb(best, o)
 	g.indexer(best, o.Sig)
+	// La cible entre dans l'index : sans elle, deux reciteurs du meme
+	// dictionnaire ne seraient jamais candidats l'un pour l'autre.
+	if o.Target != "" {
+		if g.idx["tgt:"+o.Target] == nil {
+			g.idx["tgt:"+o.Target] = map[string]bool{}
+		}
+		g.idx["tgt:"+o.Target][best.ID] = true
+	}
 	return best
 }
 
@@ -184,6 +238,26 @@ func (g *Graph) indexer(a *Actor, sig similarity.Signature) {
 
 // candidats rend, triee, la liste des acteurs partageant au moins une valeur
 // avec la signature. Le tri rend le parcours reproductible.
+func (g *Graph) candidatsAvecCible(sig similarity.Signature, cible string) []string {
+	vus := map[string]bool{}
+	for _, k := range cles(sig) {
+		for id := range g.idx[k] {
+			vus[id] = true
+		}
+	}
+	if cible != "" {
+		for id := range g.idx["tgt:"+cible] {
+			vus[id] = true
+		}
+	}
+	out := make([]string, 0, len(vus))
+	for id := range vus {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (g *Graph) candidats(sig similarity.Signature) []string {
 	vus := map[string]bool{}
 	for _, k := range cles(sig) {

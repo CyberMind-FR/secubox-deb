@@ -85,7 +85,8 @@ func (s *Server) rebuild() {
 // persistance). Pur (graphe + scores), sans effet de bord ledger — réutilisé au
 // rebuild du graphe au démarrage. Retourne l'acteur, sa continuité et sa priorité.
 func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
-	obs := graph.Obs{Sig: signatureDe(e), Severity: e.Severity, Target: e.DstService, Timestamp: e.Timestamp}
+	obs := graph.Obs{Sig: signatureDe(e), Severity: e.Severity, Target: e.DstService,
+		Tags: e.BehaviorTags, Timestamp: e.Timestamp}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a := s.graph.Observe(obs)

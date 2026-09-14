@@ -1,3 +1,27 @@
+secubox-waf-ng (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — LIEN PAR DICTIONNAIRE : deux adresses qui recitent le meme mot
+    inexistant sont reliees. Le bareme comparait des chemins, des outils, des
+    empreintes — jamais CE QUI EST VISE. Or l'enumeration de sous-domaines ne
+    varie ni le chemin (toujours « / ») ni l'outillage : elle ne varie que
+    l'HOTE. Deux adresses rejouant `softbank`, `tinkoff`, `qq`, `taobao` sur le
+    joker DNS etaient donc vues comme deux inconnus sans rapport.
+  * L'axe ne compte QUE pour un hote inexistant (etiquette `host_anomaly:unrouted`
+    posee par le WAF). Partager `hall.gk2` ne prouve rien : tout le monde le
+    visite. Partager `qianbao.secubox.in`, un nom qui n'a jamais existe, c'est
+    tirer le meme mot du meme dictionnaire — la coincidence n'est pas credible.
+    Poids 22, et la cible entre dans l'index des candidats.
+  * FAUX POSITIF CORRIGE, trouve par les tests de cette meme correction : le
+    moteur fusionnait deux scanners ETRANGERS des lors qu'ils visaient « / » avec
+    une famille d'outillage banale — 30 points pour deux coincidences qui n'en
+    sont pas. Une valeur UBIQUITAIRE n'a pas de valeur de preuve : « / » ne
+    rapproche personne de personne. Le filtre vaut aussi au denominateur.
+  * Mesure sur la cible avant correctif : 38 cibles distinctes vues par les
+    acteurs, dont 21 INEXISTANTES. Un acteur a 12 cibles, toutes les 12
+    inexistantes, depuis 5 adresses.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 13:40:00 +0200
+
 secubox-waf-ng (1.10.4-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — La correction des droits visait la MAUVAISE socket. Lancee juste

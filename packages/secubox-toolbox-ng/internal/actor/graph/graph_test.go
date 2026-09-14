@@ -134,3 +134,44 @@ func TestObserve_NeBalaiePlusTousLesActeurs(t *testing.T) {
 		t.Fatalf("%d candidats pour une signature sans rien en commun : l'index ne filtre pas", n)
 	}
 }
+
+// ── Lien par dictionnaire (2026-09-14) ──────────────────────────────────────
+
+func sigVierge(ip string) similarity.Signature {
+	// Enumeration de sous-domaines : le chemin est toujours « / », l'outil
+	// banal. RIEN ne distingue ces requetes, sauf l'hote vise.
+	return similarity.Signature{PathSig: "/", UAFamily: "go-http", IP: ip, SeenAt: 1000}
+}
+
+func TestObserve_MemeMotDeDictionnaireRelieDeuxAdresses(t *testing.T) {
+	g := New(DefaultThreshold)
+	a := g.Observe(Obs{Sig: sigVierge("1.1.1.1"), Target: "qianbao.secubox.in",
+		Tags: []string{EtiquetteInexistant}, Timestamp: 1000})
+	b := g.Observe(Obs{Sig: sigVierge("2.2.2.2"), Target: "qianbao.secubox.in",
+		Tags: []string{EtiquetteInexistant}, Timestamp: 1001})
+	if a.ID != b.ID {
+		t.Fatalf("deux adresses récitant le même mot inexistant restent séparées : %s vs %s", a.ID, b.ID)
+	}
+}
+
+func TestObserve_UnHoteQuiEXISTE_NeRelieRien(t *testing.T) {
+	// Partager « hall.gk2 » ne prouve rien : tout le monde le visite. Sans
+	// l'étiquette « inexistant », aucun lien ne doit se créer.
+	g := New(DefaultThreshold)
+	a := g.Observe(Obs{Sig: sigVierge("1.1.1.1"), Target: "hall.gk2.secubox.in", Timestamp: 1000})
+	b := g.Observe(Obs{Sig: sigVierge("2.2.2.2"), Target: "hall.gk2.secubox.in", Timestamp: 1001})
+	if a.ID == b.ID {
+		t.Fatal("deux visiteurs d'un hôte LEGITIME ont été fusionnés en un acteur")
+	}
+}
+
+func TestObserve_DictionnaireDifferent_NeRelieRien(t *testing.T) {
+	g := New(DefaultThreshold)
+	a := g.Observe(Obs{Sig: sigVierge("1.1.1.1"), Target: "qianbao.secubox.in",
+		Tags: []string{EtiquetteInexistant}, Timestamp: 1000})
+	b := g.Observe(Obs{Sig: sigVierge("2.2.2.2"), Target: "tinkoff.secubox.in",
+		Tags: []string{EtiquetteInexistant}, Timestamp: 1001})
+	if a.ID == b.ID {
+		t.Fatal("deux mots DIFFERENTS ont suffi à relier deux profils")
+	}
+}

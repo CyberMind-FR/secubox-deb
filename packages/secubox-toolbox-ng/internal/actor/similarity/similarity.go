@@ -84,6 +84,22 @@ func ipDecay(t1, t2 int64) float64 {
 // Similarity calcule la continuité entre deux signatures : somme pondérée et
 // explicable des signaux concordants, bornée 0..100. Chaque signal concordant
 // devient une contribution traçable.
+// discriminant refuse les valeurs UBIQUITAIRES. Une signature n'a de valeur de
+// preuve que si la partager est improbable : « / » est le chemin le plus frequent
+// du web, et le partager ne rapproche personne de personne.
+//
+// SANS CE FILTRE, le moteur fusionnait deux scanners etrangers des lors qu'ils
+// visaient « / » avec une famille d'outillage banale — 18 + 12 points pour deux
+// coincidences qui n'en sont pas. C'est exactement le faux positif qu'un
+// operateur ne pardonne pas : deux inconnus presentes comme un seul acteur.
+func discriminant(v string) bool {
+	switch v {
+	case "", "/", "/*", "*":
+		return false
+	}
+	return true
+}
+
 func Similarity(a, b Signature) score.Score {
 	var c []score.Contribution
 	add := func(label string, w int) {
@@ -94,7 +110,7 @@ func Similarity(a, b Signature) score.Score {
 	if a.CredentialHash != "" && a.CredentialHash == b.CredentialHash {
 		add("credential/token rare réutilisé", WCredential)
 	}
-	if a.PathSig != "" && a.PathSig == b.PathSig {
+	if discriminant(a.PathSig) && a.PathSig == b.PathSig {
 		add("même séquence de chemins", WPathSeq)
 	}
 	if a.UAFamily != "" && a.UAFamily == b.UAFamily {
@@ -148,7 +164,7 @@ func Comparable(a, b Signature) int {
 		}
 	}
 	deux(a.CredentialHash != "", b.CredentialHash != "", WCredential)
-	deux(a.PathSig != "", b.PathSig != "", WPathSeq)
+	deux(discriminant(a.PathSig), discriminant(b.PathSig), WPathSeq)
 	deux(a.UAFamily != "", b.UAFamily != "", WTool)
 	deux(a.TLSFingerprint != "", b.TLSFingerprint != "", WTLS)
 	deux(a.CadenceBucket != "", b.CadenceBucket != "", WCadence)
