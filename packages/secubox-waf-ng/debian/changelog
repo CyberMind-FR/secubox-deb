@@ -1,3 +1,16 @@
+secubox-waf-ng (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — PAYS SOURCE : sbxwaf geolocalise ses evenements (voir toolbox-ng
+    0.5.0 pour le detail). Tous les acteurs portaient `countries: 0` : la moitie
+    de la definition d'une campagne — « plusieurs IP OU plusieurs pays » — ne
+    pouvait jamais se declencher, et une carte du renseignement n'avait rien a
+    afficher. Lecture LOCALE de GeoLite2, jamais un appel reseau.
+  * Note de packaging : sbxwaf et sbx-actord sont livres par CE paquet, mais
+    compiles depuis le module Go de secubox-toolbox-ng. Modifier leur source
+    demande donc de reconstruire secubox-waf-ng, pas seulement toolbox-ng.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 12:15:00 +0200
+
 secubox-waf-ng (1.9.2-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — IHM Actor Intelligence : la liste montre ce qui COMPTE. Cent trois
