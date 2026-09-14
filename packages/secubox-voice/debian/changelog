@@ -1,0 +1,26 @@
+secubox-voice (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif : `proxy_read_timeout` retiré de voice.conf. Le snippet partagé
+    secubox-proxy.conf le pose déjà (300 s) et nginx refuse le doublon dans le
+    même bloc — `nginx -t` échouait alors sur TOUTE la configuration, pas
+    seulement sur ce fichier. Le doublon était en plus PLUS COURT que la valeur
+    partagée : il n'apportait rien.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 09:23:10 +0200
+
+secubox-voice (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier paquet — Lexie : les oreilles et la bouche de SBXOS (ref #1287).
+  * La voix n'est PAS une seconde API : deux familles de capacités de plus sur
+    le bus existant (voice.speak / voice.listen), déclarées dans un manifeste
+    capabilities.d comme n'importe quel module. ZIA garde seule le droit de
+    décider — ce module transcrit et prononce, il ne comprend rien.
+  * Contrat de moteur compatible OpenAI-audio, deux implémentations
+    interchangeables par configuration : « local » (Piper + whisper.cpp, arm64,
+    chargés à la demande) et « distant » (tout hôte servant le contrat).
+  * Défaut LOCAL : un défaut distant enverrait l'audio du micro vers un autre
+    hôte dès l'installation, sans que personne l'ait demandé.
+  * Moteur injoignable = 503 explicite. Jamais de voix de secours ni de
+    transcription approximative : une panne doit se voir.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 09:15:31 +0200

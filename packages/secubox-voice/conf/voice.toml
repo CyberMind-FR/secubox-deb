@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# SecuBox — Hall Voice / Lexie (#1287).
+
+# MOTEUR : « local » (défaut, souverain) ou « distant ».
+#
+# Le défaut est LOCAL, et ce n'est pas un détail de confort : un défaut
+# « distant » enverrait l'audio du micro vers un autre hôte dès l'installation,
+# sans que personne l'ait demandé. Sur une box dont tout l'argument est la
+# souveraineté, ce serait le pire défaut possible.
+moteur = "local"
+
+voix_defaut = "lexie-fr"
+
+# Garde-fous. Une synthèse n'est pas un moyen de faire lire un livre entier à la
+# box, ni un envoi audio un moyen d'y téléverser un film.
+texte_max = 2000
+audio_max_mo = 10
+
+[local]
+# Piper (synthèse) et whisper.cpp (reconnaissance), tous deux arm64, invoqués en
+# SOUS-PROCESSUS : ils chargent, produisent, et rendent la mémoire. gk2 tient
+# ~1,8 Gio disponibles avec llama-server déjà résident — un modèle qui resterait
+# chargé la mettrait à genoux. On paie en latence ce qu'on refuse de payer en
+# résidence, exactement comme les vhosts `lifecycle=on-demand`.
+piper      = "piper"
+voix_dir   = "/usr/share/secubox/voice/voix"
+whisper    = "whisper-cli"
+modele_asr = "/usr/share/secubox/voice/modeles/ggml-base-q5_1.bin"
+delai_s    = 120
+
+[distant]
+# Tout hôte servant le contrat audio compatible OpenAI :
+#   POST /v1/audio/speech · POST /v1/audio/transcriptions · GET /v1/audio/voices
+#
+# VoiceStudio (https://github.com/debpalash/VoiceStudio) sert exactement ce
+# contrat sur le port 3900. Il NE PEUT PAS tourner sur la box — binaires Linux
+# x86_64/glibc≥2.39, 8 Gio de RAM minimum, AGPL-3.0 avec des poids par défaut
+# CC-BY-NC. Sur un poste x86 du réseau, en revanche, il fait un excellent moteur
+# distant : processus séparé, appel réseau, aucun lien de code.
+#
+#   url = "http://192.168.1.50:3900"
+url        = ""
+modele_tts = "tts-1"
+modele_asr = "whisper-1"
+# Vide sur un déploiement souverain. Le champ n'existe que parce que certains
+# serveurs compatibles en exigent une ; sa valeur n'est jamais journalisée.
+cle        = ""
+delai_s    = 60
+
+# Profils vocaux supplémentaires ou surcharges. Ce que l'on met ici GAGNE sur les
+# manifestes des modules : l'opérateur a le dernier mot sur la voix de sa box.
+#
+# [profils.reveil]
+# voix    = "chaleureuse"
+# libelle = "Réveil du matin"

@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/voice
+    if [ ! -f /etc/secubox/voice.toml ]; then
+      if [ -f /usr/share/secubox/voice/voice.toml ]; then
+        install -o secubox -g secubox -m 0640 \
+          /usr/share/secubox/voice/voice.toml /etc/secubox/voice.toml
+      fi
+    fi
+    systemctl daemon-reload 2>/dev/null || true
+    if [ "$(systemctl is-enabled secubox-voice.service 2>/dev/null)" != "masked" ]; then
+      systemctl enable secubox-voice.service 2>/dev/null || true
+      systemctl restart secubox-voice.service 2>/dev/null || true
+    fi
+    if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+    # ON NE TELECHARGE RIEN ICI. Un postinst qui irait chercher un modele de
+    # plusieurs centaines de mega-octets ferait de `dpkg -i` une operation
+    # reseau silencieuse et longue, sur une box qui peut etre hors ligne.
+    # L'etat « moteur local incomplet » est lisible dans /api/v1/voice/moteur,
+    # et c'est la que l'operateur doit l'apprendre.
+    ;;
+esac
+#DEBHELPER#
+exit 0

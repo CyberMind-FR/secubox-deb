@@ -3268,6 +3268,14 @@ function sbxExecuteAction(req){
   if(!req || req.kind!=='sbx-action' || !req.service || !req.action) return false;
   const cap=SBXCapabilities.resolve(req.service, req.action, req.params||{});
   if(!cap || !cap.message) return false;   // capacité inconnue → on n'invente rien
+  // LEXIE N'EST PAS UNE CARDLET (#1287). `sbxPost` poste à un CADRE ; la fenêtre
+  // vocale est native au Hall et n'en a pas. Sans ce routage, ZIA validerait
+  // `voice.speak` et le message partirait vers un iframe inexistant — un échec
+  // silencieux qui ressemblerait à un succès. La validation, elle, reste la même
+  // (le registre a déjà tranché juste au-dessus).
+  if(req.service==='voice'){
+    return (typeof window.sbxVoiceCmd==='function') ? !!window.sbxVoiceCmd(cap.message) : false;
+  }
   const ok=(typeof window.sbxPost==='function') ? !!window.sbxPost(req.service, cap.message) : false;
   // Un réglage de son doit TENIR : on met à jour l'état retenu du dock pour que
   // appliqueMedia ne le réécrase pas à la prochaine recomposition.
@@ -4893,5 +4901,8 @@ const CARDLET_ICONES = {
 })();
 </script>
 
+<!-- Lexie — la fenêtre vocale du Hall (#1287). Chargée en dernier : elle se
+     greffe sur la barre déjà construite, et n'est requise par rien d'autre. -->
+<script src="lexie.js"></script>
 </body>
 </html>

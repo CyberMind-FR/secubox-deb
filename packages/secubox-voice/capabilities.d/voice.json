@@ -1,0 +1,19 @@
+{
+  "service": "voice",
+  "transport": "sbx-postmessage",
+  "_note": "Lexie — les oreilles et la bouche de SBXOS (#1287). La voix n'est PAS une seconde API : ce sont deux familles de capacités de plus sur le bus existant. ZIA propose l'action, le Hall la poste à la fenêtre Lexie, qui appelle /api/v1/voice/*.",
+  "actions": {
+    "voice.speak":  {"message": {"sbx": "cmd", "action": "dire"},
+                     "value": {"field": "texte", "type": "string"}},
+    "voice.listen": {"message": {"sbx": "cmd", "action": "ecoute"},
+                     "value": {"field": "v", "type": "boolean"}},
+    "voice.stop":   {"message": {"sbx": "cmd", "action": "tais-toi"}}
+  },
+  "_profils": "Une voix par SOURCE, déclarée ici et non codée en dur : c'est ce qui permet de changer la voix des Billets sans toucher aux Billets.",
+  "profils": {
+    "lexie":    {"voix": "lexie-fr",    "libelle": "Lexie — voix du système"},
+    "billets":  {"voix": "chaleureuse", "libelle": "Billets — lecture d'articles"},
+    "sentinel": {"voix": "neutre",      "libelle": "Sentinel — alertes de sécurité"},
+    "radio":    {"voix": "animateur",   "libelle": "Radio GK2 — annonces"}
+  }
+}

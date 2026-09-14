@@ -20,6 +20,10 @@ override_dh_auto_install:
 	install -m 0644 www/hall/hall-logo.svg $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/hall-logo.svg
 	install -m 0644 www/hall/render-ref.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/render-ref.html
 	install -m 0644 www/hall/slicebar.css $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/slicebar.css
+	# Lexie (#1287) — la fenetre vocale. Les fichiers de ce repertoire sont
+	# listes UN PAR UN : un oubli ici ne casse pas la construction, il produit
+	# un 404 a l'execution, ce qui se voit bien plus tard.
+	install -m 0644 www/hall/lexie.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/lexie.js
 	install -m 0644 www/hall/slicebar.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/slicebar.js
 	install -m 0644 www/hall/aide.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/aide.js
 	install -m 0644 www/hall/spicy.css $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/spicy.css
