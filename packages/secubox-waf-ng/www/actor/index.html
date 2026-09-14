@@ -163,6 +163,14 @@
 .defcon.d2{color:var(--red)}
 .defcon.d1{color:var(--red);box-shadow:0 0 12px rgba(255,68,102,.5);background:rgba(255,68,102,.12)}
 .actor{position:relative}
+/* L'avatar porte DEUX informations : le glyphe dit la nature, la couleur le
+   poids. Un masque identique pour tous n'en portait aucune. */
+.avatar.n1{background:linear-gradient(135deg,rgba(107,123,139,.22),rgba(107,123,139,.06));border:1px solid rgba(107,123,139,.35)}
+.avatar.n2{background:linear-gradient(135deg,rgba(0,212,255,.20),rgba(0,212,255,.05));border:1px solid rgba(0,212,255,.40)}
+.avatar.n3{background:linear-gradient(135deg,rgba(255,153,68,.22),rgba(255,153,68,.06));border:1px solid rgba(255,153,68,.50)}
+.avatar.n4{background:linear-gradient(135deg,rgba(255,68,102,.26),rgba(255,68,102,.08));border:1px solid rgba(255,68,102,.60);
+  box-shadow:0 0 16px rgba(255,68,102,.28)}
+.nat{font-size:.95rem;margin-right:2px;vertical-align:-1px}
 </style>
 </head>
 <body class="hybrid-dark">
@@ -260,6 +268,36 @@ function rendBarre(){
   [].forEach.call($('barre').querySelectorAll('[data-t]'),function(b){b.onclick=function(){TRI=b.getAttribute('data-t');rendBarre();rendList();};});
 }
 function multi(a){return (a.src&&a.src.ips||0)>1;}
+
+// AVATAR = NATURE x NIVEAU. Un masque identique pour tout le monde n'apprend
+// rien. Le glyphe dit CE QUE FAIT le profil, la couleur dit CE QU'IL PESE.
+//
+// La nature se lit dans ce qu'on a REELLEMENT observe, par certitude
+// decroissante : reciter des noms d'hotes inexistants, c'est enumerer ; revenir
+// apres plusieurs sanctions, c'est insister ; une hypothese de campagne ciblee
+// le dit ; une automation elevee trahit l'outil. A defaut c'est du bruit, et on
+// le montre comme tel plutot que de lui inventer une intention.
+function nature(a){
+  var v=a.vec||{}, hyp=((a.hyp||[])[0]||[''])[0];
+  if((a.bans||0)>=3)                return ['\u{1F501}','revient apres sanction'];
+  if(/cibl/.test(hyp))              return ['\u{1F3AF}','campagne ciblee'];
+  if((v.automation||0)>=70)         return ['\u{1F916}','outillage automatise'];
+  if((a.src&&a.src.countries||0)>1) return ['\u{1F30D}','plusieurs pays'];
+  if((a.src&&a.src.ips||0)>1)       return ['\u{1F500}','change d adresse'];
+  return ['\u{1F464}','bruit de fond'];
+}
+// Le niveau vient de ce qui pese vraiment : les sanctions d'abord, la priorite
+// ensuite — elle est identique pour presque tous les acteurs.
+function niveau(a){
+  if((a.bans||0)>=5) return 'n4';
+  if((a.bans||0)>=1 || a.priority>=70) return 'n3';
+  if(a.priority>=40) return 'n2';
+  return 'n1';
+}
+function avatarDe(a){
+  var n=nature(a);
+  return '<div class="avatar '+niveau(a)+'" title="'+esc(n[1])+'">'+n[0]+'</div>';
+}
 // TAMPON DEFCON. Le nombre de SANCTIONS deja prises contre un profil dit ce que
 // la priorite ne dit pas : celui-ci est revenu apres avoir ete banni. L'echelle
 // va de 5 (observe) a 1 (revenu encore et encore) — plus le chiffre est bas,
@@ -338,7 +376,7 @@ function rendList(){
             +'<b>×'+n+'</b><i>adresses</i></div>'
         : '<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>')
       +defcon(a.bans)
-      +'<div class="nm"><b>'+esc(a.id)+'</b><div class="tg">'
+      +'<div class="nm"><b><span class="nat" title="'+esc(nature(a)[1])+'">'+nature(a)[0]+'</span> '+esc(a.id)+'</b><div class="tg">'
         +(n>1?'<span class="tag ips" title="Le même profil, vu depuis '+n+' adresses">'+n+' IP</span>':'')
         +(cont(a)?'<span class="tag cont" title="Continuité : '+cont(a)+'/100">↗ '+cont(a)+'</span>':'')
         +((a.targets&&a.targets.length>1)?'<span class="tag tgt">'+a.targets.length+' cibles</span>':'')
@@ -358,7 +396,7 @@ function rendProfile(){
   }).join('');
   var hyp=(a.hyp||[]).map(function(h){return '<div class="hyp"><span class="p">'+(h[1]*100).toFixed(0)+'%</span><span class="hb"><i style="width:'+Math.round(h[1]*100)+'%"></i></span><span>'+esc(h[0])+'</span></div>';}).join('');
   $('profile').innerHTML=
-    '<div class="phead"><div class="avatar">🎭</div>'
+    '<div class="phead">'+avatarDe(a)
     +'<div><div class="pid"><b>'+esc(a.id)+'</b></div>'
     +'<div style="margin-top:4px"><span class="badge hi">priorité '+a.priority+' · '+esc(a.level)+'</span> <span class="badge sh" title="Le moteur de renseignement observe et propose ; il n’applique rien. Le WAF, lui, bannit avec ses propres règles.">renseignement : propose, n’applique pas</span></div></div>'
     +'<div class="gscore"><div class="n">'+a.priority+'</div><div class="l">/100 priorité</div></div></div>'

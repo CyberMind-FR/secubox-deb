@@ -1,3 +1,18 @@
+secubox-waf-ng (1.14.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — AVATARS TYPES : nature x niveau, au lieu d'un masque identique pour
+    tout le monde. Le glyphe dit CE QUE FAIT le profil, la couleur CE QU'IL PESE.
+  * La nature se lit dans ce qu'on a REELLEMENT observe, par certitude
+    decroissante : revenir apres plusieurs sanctions, c'est insister ; une
+    hypothese de campagne ciblee le dit ; une automation elevee trahit l'outil ;
+    plusieurs pays, plusieurs adresses. A defaut c'est du bruit de fond, et on le
+    montre comme tel plutot que de lui inventer une intention.
+  * Le niveau vient des SANCTIONS d'abord, de la priorite ensuite — cette
+    derniere est identique pour presque tous les acteurs et ne discrimine rien.
+    Le glyphe apparait aussi sur chaque ligne de la liste.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 16:00:00 +0200
+
 secubox-waf-ng (1.14.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — LE NOMBRE D'ADRESSES PREND LA PLACE FORTE. Un profil revu depuis sept
