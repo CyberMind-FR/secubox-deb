@@ -34,8 +34,12 @@ type webActor struct {
 	First    string       `json:"first"`
 	Last     string       `json:"last"`
 	Targets  []string     `json:"targets"`
-	Hyp      [][2]any     `json:"hyp"`
-	TL       []any        `json:"tl"`
+	// Bans : combien de fois cet acteur a ete SANCTIONNE. L'interface en fait un
+	// niveau DEFCON — un profil sanctionne dix fois et qui revient n'a pas le
+	// meme poids qu'un profil observe une fois.
+	Bans int      `json:"bans"`
+	Hyp  [][2]any `json:"hyp"`
+	TL   []any    `json:"tl"`
 }
 
 type srcCounts struct {
@@ -109,7 +113,8 @@ func hypotheses(v graph.Vector) [][2]any {
 
 func toWeb(a *graph.Actor) webActor {
 	return webActor{
-		ID: a.ID, Name: "", Priority: a.Priority, Level: niveau(a.Priority),
+		Bans: a.Bans,
+		ID:   a.ID, Name: "", Priority: a.Priority, Level: niveau(a.Priority),
 		Tags: tags(a.Vector), Vec: a.Vector,
 		Src:   srcCounts{IPs: len(a.IPs), ASNs: len(a.ASNs), Countries: len(a.Countries)},
 		First: hhmm(a.FirstSeen), Last: hhmm(a.LastSeen),

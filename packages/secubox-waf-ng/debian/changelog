@@ -1,3 +1,25 @@
+secubox-waf-ng (1.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — LE NOMBRE D'ADRESSES PREND LA PLACE FORTE. Un profil revu depuis sept
+    adresses est une personnalite qui revient malgre le changement d'IP : c'est
+    precisement ce que le moteur cherche a etablir, et c'etait relegue dans une
+    petite etiquette. Le compte devient le premier signe lu de la ligne, avec une
+    intensite qui suit le nombre (cyan, orange, rouge). La priorite, identique
+    pour presque tous les acteurs, descend en second rang.
+  * TAMPON DEFCON sur les profils deja sanctionnes. Le graphe compte desormais
+    les SANCTIONS par acteur (`bans`) — le capteur dit s'il a observe ou bloque,
+    l'information ne s'arretait nulle part. Un profil banni dix fois et qui
+    revient n'a pas le poids d'un profil observe une fois : l'echelle va de
+    DEFCON 5 a DEFCON 1, du plus bas au plus insistant. Les sanctions
+    s'additionnent lors d'une consolidation d'acteurs.
+  * FORMULATION CORRIGEE : « shadow · aucune action » se lisait comme « rien ne
+    te protege ». C'est faux — le WAF bannit avec ses propres regles pendant que
+    le renseignement se contente d'observer. Le bandeau dit desormais
+    « renseignement · observe — le WAF protege », et le badge du profil
+    « renseignement : propose, n'applique pas ».
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 15:40:00 +0200
+
 secubox-waf-ng (1.13.1-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — IHM : la page Renseignement s'ouvre sur les CAMPAGNES, pas sur les

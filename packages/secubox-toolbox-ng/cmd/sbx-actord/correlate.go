@@ -87,7 +87,7 @@ func (s *Server) rebuild() {
 // rebuild du graphe au démarrage. Retourne l'acteur, sa continuité et sa priorité.
 func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 	obs := graph.Obs{Sig: signatureDe(e), Severity: e.Severity, Target: e.DstService,
-		Tags: e.BehaviorTags, Timestamp: e.Timestamp}
+		Tags: e.BehaviorTags, Bloque: e.Action == envelope.ActionBlock, Timestamp: e.Timestamp}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// On APPREND les noms qui n'existent pas, au fil des etiquettes.

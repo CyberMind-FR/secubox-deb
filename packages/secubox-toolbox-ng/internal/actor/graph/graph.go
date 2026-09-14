@@ -41,10 +41,14 @@ type Vector struct {
 // Actor est une Actor Card agrégée (RFC-0013 §1). Les ensembles sont exposés
 // triés et dédupliqués.
 type Actor struct {
-	ID        string   `json:"actor_id"`
-	FirstSeen int64    `json:"first_seen"`
-	LastSeen  int64    `json:"last_seen"`
-	Events    int      `json:"events"`
+	ID        string `json:"actor_id"`
+	FirstSeen int64  `json:"first_seen"`
+	LastSeen  int64  `json:"last_seen"`
+	Events    int    `json:"events"`
+	// Bans : combien de fois un capteur a SANCTIONNE cet acteur. Un profil
+	// sanctionne dix fois et qui revient n'est pas du meme ordre qu'un profil
+	// observe une fois — l'interface doit pouvoir le crier.
+	Bans      int      `json:"bans"`
 	IPs       []string `json:"ips"`
 	ASNs      []string `json:"asns"`
 	Countries []string `json:"countries"`
@@ -66,6 +70,10 @@ type Obs struct {
 	Sig      similarity.Signature
 	Severity int
 	Target   string // dst_service
+	// Bloque dit que le capteur a SANCTIONNE cette requete, pas seulement
+	// observee. C'est la difference entre « on a vu » et « on a agi », et elle
+	// doit remonter jusqu'a l'operateur.
+	Bloque bool
 	// Tags porte les etiquettes de comportement du capteur. Une seule nous
 	// interesse ici : celle qui dit que l'hote VISE N'EXISTE PAS. Voir
 	// `lienDictionnaire`.
@@ -290,6 +298,9 @@ func (g *Graph) newActor(o Obs) *Actor {
 // absorb met à jour les agrégats d'un acteur avec une observation.
 func (g *Graph) absorb(a *Actor, o Obs) {
 	a.Events++
+	if o.Bloque {
+		a.Bans++
+	}
 	if o.Timestamp < a.FirstSeen || a.FirstSeen == 0 {
 		a.FirstSeen = o.Timestamp
 	}
@@ -471,6 +482,7 @@ func (g *Graph) Consolider(inexistants map[string]bool) int {
 // sous les yeux de l'operateur.
 func (g *Graph) absorberActeur(a, b *Actor, raison string) {
 	a.Events += b.Events
+	a.Bans += b.Bans
 	if b.FirstSeen != 0 && (a.FirstSeen == 0 || b.FirstSeen < a.FirstSeen) {
 		a.FirstSeen = b.FirstSeen
 	}

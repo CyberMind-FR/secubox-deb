@@ -141,6 +141,28 @@
    c'est le marqueur de l'énumération de sous-domaines. */
 .tag.dico{color:var(--bg);background:var(--orange);font-weight:700}
 .actor.camp .ring{font-size:.78rem}
+/* LE CRITERE : combien d'adresses pour un seul profil. Bloc plein, lisible de
+   loin, intensite croissante — il doit se voir avant tout le reste. */
+.multi{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-width:54px;padding:6px 8px;border-radius:10px;line-height:1.05;
+  background:rgba(0,212,255,.10);border:1px solid rgba(0,212,255,.35);color:var(--cyan)}
+.multi b{font-size:1.15rem;font-weight:800;font-variant-numeric:tabular-nums}
+.multi i{font-style:normal;font-size:.52rem;letter-spacing:.12em;text-transform:uppercase;opacity:.8}
+.multi.n3{background:rgba(255,153,68,.12);border-color:rgba(255,153,68,.45);color:var(--orange)}
+.multi.n4{background:rgba(255,68,102,.14);border-color:rgba(255,68,102,.55);color:var(--red);
+  box-shadow:0 0 14px rgba(255,68,102,.18)}
+/* Tampon : il doit avoir l'air APPOSE, pas dessine — d'ou l'inclinaison et le
+   double filet. */
+.defcon{position:absolute;top:6px;right:8px;transform:rotate(-11deg);
+  display:flex;flex-direction:column;align-items:center;line-height:1;
+  padding:3px 8px;border:2px solid currentColor;border-radius:4px;
+  font-weight:800;letter-spacing:.06em;opacity:.9;pointer-events:none}
+.defcon b{font-size:.56rem}
+.defcon i{font-style:normal;font-size:.46rem;opacity:.75;letter-spacing:.1em}
+.defcon.d4{color:var(--blue)} .defcon.d3{color:var(--orange)}
+.defcon.d2{color:var(--red)}
+.defcon.d1{color:var(--red);box-shadow:0 0 12px rgba(255,68,102,.5);background:rgba(255,68,102,.12)}
+.actor{position:relative}
 </style>
 </head>
 <body class="hybrid-dark">
@@ -168,7 +190,7 @@
     <h1>🧠 Actor Intelligence</h1>
     <span class="sub">TPI inverse · profils d'acteurs · défense adaptative</span>
     <span class="spacer"></span>
-    <span class="live" id="live"><i></i> shadow · observe</span>
+    <span class="live" id="live" title="Phase 0/1 : le moteur corrèle et propose une réponse graduée, sans jamais l'appliquer. La protection active, c'est le WAF."><i></i> renseignement · observe</span>
     <button class="btn" onclick="tick()">↻ Rafraîchir</button>
   </div>
 
@@ -208,7 +230,10 @@ function rendKPIs(s){
   $('kpis').innerHTML=stat(s.posture||'Protégée','posture')+stat(s.blocked_24h,'bloquées · 24h')
     +stat(s.attempts_24h,'tentatives · 24h',s.attempts_24h>0)+stat(s.actors,'acteurs',s.actors>0)
     +stat(s.campaigns,'campagnes',s.campaigns>0)+stat(s.events_24h,'événements · 24h');
-  $('live').innerHTML='<i></i> '+(s.mode||'observe')+' · shadow';
+  // « shadow » se lisait comme « rien ne te protege ». C'est faux : le WAF
+  // bannit avec ses propres regles pendant que le renseignement se contente
+  // d'observer. On nomme donc ce qui observe, plutot que l'etat du mode.
+  $('live').innerHTML='<i></i> renseignement · '+(s.mode||'observe')+' — le WAF protège';
 }
 function rendFlow(){$('flow').innerHTML=FLOW.map(function(f,i){return '<div class="step'+(i===0?' on':'')+'"><b>'+(i+1)+'</b>'+f+'</div>';}).join('');}
 // CE QUI MERITE D'ETRE VU EN PREMIER. Une liste plate de cent acteurs tous
@@ -235,6 +260,17 @@ function rendBarre(){
   [].forEach.call($('barre').querySelectorAll('[data-t]'),function(b){b.onclick=function(){TRI=b.getAttribute('data-t');rendBarre();rendList();};});
 }
 function multi(a){return (a.src&&a.src.ips||0)>1;}
+// TAMPON DEFCON. Le nombre de SANCTIONS deja prises contre un profil dit ce que
+// la priorite ne dit pas : celui-ci est revenu apres avoir ete banni. L'echelle
+// va de 5 (observe) a 1 (revenu encore et encore) — plus le chiffre est bas,
+// plus l'insistance est etablie.
+function defcon(bans){
+  bans=bans||0;
+  if(!bans) return '';
+  var lvl = bans>=10?1 : bans>=5?2 : bans>=3?3 : 4;
+  return '<span class="defcon d'+lvl+'" title="'+bans+' sanction'+(bans>1?'s':'')+' déjà prise'+(bans>1?'s':'')+' contre ce profil">'
+       +'<b>DEFCON '+lvl+'</b><i>'+bans+' ban'+(bans>1?'s':'')+'</i></span>';
+}
 function cont(a){return (a.vec&&a.vec.continuity)||0;}
 function trie(l){
   var f={ips:function(a,b){return (b.src.ips-a.src.ips)||(b.priority-a.priority);},
@@ -280,7 +316,7 @@ function rendCampagnes(){
 function rendList(){
   if(FILTRE==='campagnes'){ rendCampagnes(); return; }
   var box=$('list');
-  if(!ACTS.length){box.innerHTML='<div class="vide">😴 Aucun acteur corrélé — le moteur observe le trafic (shadow).</div>';$('profile').innerHTML='<div class="vide">—</div>';return;}
+  if(!ACTS.length){box.innerHTML='<div class="vide">😴 Aucun acteur corrélé — le moteur de renseignement observe. La protection WAF, elle, est active.</div>';$('profile').innerHTML='<div class="vide">—</div>';return;}
   var vus=trie(FILTRE==='recurrents'?ACTS.filter(multi):ACTS);
   box.innerHTML='';
   if(!vus.length){
@@ -292,7 +328,16 @@ function rendList(){
     var col=a.priority>=80?'var(--red)':a.priority>=50?'var(--orange)':'var(--cyan)';
     var d=document.createElement('div');d.className='actor'+(a.id===CUR?' on':'');
     var n=a.src&&a.src.ips||0;
-    d.innerHTML='<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>'
+    // LE NOMBRE D'ADRESSES EST LE CRITERE, pas la priorite. Un profil revu depuis
+    // sept adresses est une personnalite qui revient malgre le changement d'IP —
+    // c'est precisement ce que le moteur cherche a etablir. Il prend donc la
+    // place forte de la ligne, avec une intensite qui suit le nombre ; la
+    // priorite, identique pour presque tous, descend en second rang.
+    d.innerHTML=(n>1
+        ? '<div class="multi n'+(n>=7?'4':n>=4?'3':'2')+'" title="Le même profil, vu depuis '+n+' adresses différentes">'
+            +'<b>×'+n+'</b><i>adresses</i></div>'
+        : '<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>')
+      +defcon(a.bans)
       +'<div class="nm"><b>'+esc(a.id)+'</b><div class="tg">'
         +(n>1?'<span class="tag ips" title="Le même profil, vu depuis '+n+' adresses">'+n+' IP</span>':'')
         +(cont(a)?'<span class="tag cont" title="Continuité : '+cont(a)+'/100">↗ '+cont(a)+'</span>':'')
@@ -315,7 +360,7 @@ function rendProfile(){
   $('profile').innerHTML=
     '<div class="phead"><div class="avatar">🎭</div>'
     +'<div><div class="pid"><b>'+esc(a.id)+'</b></div>'
-    +'<div style="margin-top:4px"><span class="badge hi">priorité '+a.priority+' · '+esc(a.level)+'</span> <span class="badge sh">shadow · aucune action</span></div></div>'
+    +'<div style="margin-top:4px"><span class="badge hi">priorité '+a.priority+' · '+esc(a.level)+'</span> <span class="badge sh" title="Le moteur de renseignement observe et propose ; il n’applique rien. Le WAF, lui, bannit avec ses propres règles.">renseignement : propose, n’applique pas</span></div></div>'
     +'<div class="gscore"><div class="n">'+a.priority+'</div><div class="l">/100 priorité</div></div></div>'
     +'<div class="vec">'+bars+'</div>'
     +'<div class="facts"><div class="fact"><div class="l">Sources</div><div class="v">'+a.src.ips+' IP · '+a.src.asns+' ASN · '+a.src.countries+' pays</div></div>'
