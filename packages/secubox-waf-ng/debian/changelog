@@ -1,3 +1,16 @@
+secubox-waf-ng (1.10.4-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — La correction des droits visait la MAUVAISE socket. Lancee juste
+    apres actord (Type=simple : systemd rend la main des le fork), l'unite voit
+    encore l'ANCIENNE socket — actord reconstruit son graphe avant d'ouvrir la
+    nouvelle, ce qui prend quelques secondes. Le script corrigeait donc un inode
+    condamne, verifiait deux fois en une seconde, et repartait satisfait.
+  * Il applique desormais EN CONTINU pendant douze secondes, sans sortie
+    anticipee, ce qui couvre largement le demarrage d'actord. Cout nul : c'est un
+    oneshot qui ne retient personne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 13:15:00 +0200
+
 secubox-waf-ng (1.10.3-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — La correction des droits de la socket d'ingestion passe dans un

@@ -20,25 +20,32 @@ set -u
 SOCKET="${1:-/run/secubox/actord.sock}"
 GROUPE="${2:-actord-ingest}"
 
+# LA SOCKET QU'ON CORRIGE N'EST PAS FORCEMENT LA BONNE. Lancee juste apres
+# actord (Type=simple : systemd rend la main des le fork), cette unite voit
+# encore l'ANCIENNE socket — actord reconstruit son graphe avant d'ouvrir la
+# nouvelle, ce qui prend quelques secondes. Un script qui corrige puis verifie
+# deux fois en une seconde corrige donc un inode condamne, et repart satisfait.
+#
+# On applique donc EN CONTINU pendant une fenetre qui couvre largement le
+# demarrage d'actord, sans sortie anticipee. Le cout est nul : l'unite est un
+# oneshot qui ne retient personne — actord tourne deja, sbxwaf aussi.
+FENETRE=24          # 24 x 0,5 s = 12 s
+pose=0
 i=0
-stable=0
-while [ "$i" -lt 40 ]; do
+while [ "$i" -lt "$FENETRE" ]; do
     if [ -S "$SOCKET" ]; then
         chgrp "$GROUPE" "$SOCKET" 2>/dev/null
         chmod 0660 "$SOCKET" 2>/dev/null
-        if [ "$(stat -c %G "$SOCKET" 2>/dev/null)" = "$GROUPE" ]; then
-            stable=$((stable + 1))
-            if [ "$stable" -ge 2 ]; then
-                echo "socket $SOCKET : groupe $GROUPE posé"
-                exit 0
-            fi
-        else
-            stable=0
-        fi
+        [ "$(stat -c %G "$SOCKET" 2>/dev/null)" = "$GROUPE" ] && pose=1
     fi
     i=$((i + 1))
     sleep 0.5
 done
+
+if [ "$pose" = 1 ] && [ "$(stat -c %G "$SOCKET" 2>/dev/null)" = "$GROUPE" ]; then
+    echo "socket $SOCKET : groupe $GROUPE posé"
+    exit 0
+fi
 
 # On n'échoue PAS : une ingestion muette vaut mieux qu'un service bloqué. Mais on
 # le DIT, pour que ça ne redevienne jamais un échec silencieux.
