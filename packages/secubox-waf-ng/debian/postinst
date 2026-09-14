@@ -80,6 +80,24 @@ case "$1" in
     # /etc/secubox must stay 0755 (traversal constraint above).
     mkdir -p /etc/secubox/secrets
 
+      # ── Secret HMAC des identifiants (#1240, corrélation multi-couche) ────────
+      # authwatch apporte au graphe d'acteurs le COMPTE VISÉ — l'axe le plus
+      # lourd du barème de similarité, et le seul qui était totalement mort. Ce
+      # compte ne doit jamais quitter la box en clair : il part en HMAC-SHA256
+      # avec ce secret local. Un secret ROTATABLE : le remplacer rend les anciens
+      # condensés inexploitables, ce qui est le but.
+      #
+      # Lisible par le seul utilisateur des capteurs (secubox-waf fait tourner le
+      # WAF comme authwatch), jamais par le groupe ni les autres.
+      if [ ! -s /etc/secubox/secrets/actor-credential ]; then
+        ( umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d " \n" \
+            > /etc/secubox/secrets/actor-credential ) 2>/dev/null || true
+        chmod 0600 /etc/secubox/secrets/actor-credential 2>/dev/null || true
+        if getent passwd secubox-waf >/dev/null 2>&1; then
+          chown secubox-waf:secubox-waf /etc/secubox/secrets/actor-credential 2>/dev/null || true
+        fi
+      fi
+
     # ── 3. Log directories ────────────────────────────────────────────────────
     # /var/log/secubox is a SHARED parent traversed by many service users
     # (aggregator, WAF, SOC dashboards). It MUST be 0755 — a 0750 owned by

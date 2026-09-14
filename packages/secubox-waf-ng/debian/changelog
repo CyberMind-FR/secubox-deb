@@ -1,3 +1,27 @@
+secubox-waf-ng (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — CORRELATION MULTI-COUCHE : authwatch alimente le meme graphe que le
+    WAF. Le contrat d'enveloppe declare CINQ capteurs (waf, dpi, authwatch,
+    sentinel, replay) et UN SEUL emettait : le graphe d'acteurs ne voyait que du
+    HTTP, et `by_sensor` ne contenait que « waf ».
+  * authwatch apporte deux choses qu'aucun autre capteur ne donne : le COMPTE
+    VISE, qui alimente `CredentialTokenHash` — l'axe le plus lourd du bareme
+    (30 points sur 96) et le seul totalement mort —, et une COUCHE differente.
+    Un acteur qui sonde le HTTP ET force du SSH devient une personnalite
+    reconnaissable, la ou c'etaient deux profils separes.
+  * Le compte n'est JAMAIS emis en clair : HMAC-SHA256 avec un secret local
+    rotatable, genere par le postinst en 0600 (le remplacer rend les anciens
+    condenses inexploitables, ce qui est le but). Secret illisible = on perd
+    l'axe « compte », pas la couche : IP, service vise et gravite partent quand
+    meme.
+  * Emission FIRE-AND-FORGET comme celle du WAF : actord absent, lent ou arrete,
+    authwatch continue de detecter et de bannir sans ralentir. Un moteur
+    d'intelligence en panne ne doit jamais affaiblir la protection.
+  * authwatch tourne deja sous `secubox-waf`, deja membre d'`actord-ingest` : la
+    permission qui avait rendu l'ingestion muette (1.7.17) ne se repose pas.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 10:20:00 +0200
+
 secubox-waf-ng (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — ACTOR INTELLIGENCE AGREGE ENFIN. Le moteur creait UN ACTEUR PAR

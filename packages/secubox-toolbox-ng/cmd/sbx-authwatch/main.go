@@ -69,6 +69,11 @@ func main() {
 			"fenêtre d'observation des campagnes par compte visé")
 		leurres = flag.String("leurres", "",
 			"ports leurres : `defaut` pour la liste connue, ou « 3389:rdp,5900:vnc »")
+		acteurSock = flag.String("actor-socket", "/run/secubox/actord.sock",
+			"socket d'ingestion sbx-actord — corrélation multi-couche, émission "+
+				"fire-and-forget (\"\" = désactivée)")
+		acteurSecret = flag.String("credential-secret", "/etc/secubox/secrets/actor-credential",
+			"secret HMAC des identifiants : le compte visé est haché, jamais émis en clair")
 		simule    = flag.Bool("simulation", false, "détecter et journaliser sans jamais bannir")
 		sansGarde = flag.Bool("sans-verification-nft", false,
 			"démarrer même si aucune règle ne consulte l'ensemble (DANGEREUX : les bannissements seraient sans effet)")
@@ -208,7 +213,16 @@ func main() {
 		}
 	}()
 
-	traite(ctx, signaux, compteur, campagnes, comptes, banneur, journalMenaces, lb, *simule)
+	// CORRELATION MULTI-COUCHE (#1240). Le graphe d'acteurs ne voyait que du
+	// HTTP ; authwatch lui apporte le compte visé — l'axe le plus lourd du
+	// barème — et une couche differente. Voir acteur.go.
+	acteur := NewActeur(*acteurSock, *acteurSecret)
+	if acteur != nil {
+		defer acteur.Close()
+		log.Printf("authwatch: Actor Intelligence — émission vers %s (fire-and-forget)", *acteurSock)
+	}
+
+	traite(ctx, signaux, compteur, campagnes, comptes, banneur, journalMenaces, lb, *simule, acteur)
 	log.Printf("sbx-authwatch: arrêt")
 }
 
@@ -216,7 +230,7 @@ func main() {
 // journalctl : les tests y injectent des signaux et observent les bannissements.
 func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 	campagnes *Campagnes, comptes *Comptes, banneur *Banneur,
-	journal *JournalMenaces, lb *ListeBlanche, simule bool) {
+	journal *JournalMenaces, lb *ListeBlanche, simule bool, acteur *Acteur) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -232,8 +246,12 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 			// patience — personne ne se connecte a un service inexistant.
 			if strings.HasPrefix(sig.Categorie, "leurre:") {
 				appliquer(ctx, sig, 1, banneur, journal, simule)
+				acteur.Emet(sig, !simule) // signal certain : sanction, sauf simulation
 				continue
 			}
+			// Tout signal retenu nourrit le graphe, sanctionné ou non : observer
+			// est justement ce que fait la phase 0/1.
+			acteur.Emet(sig, false)
 			maintenant := time.Now()
 
 			// COMPTE INEXISTANT : LE SIGNAL LE PLUS SUR. La box heberge une
