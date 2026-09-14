@@ -5,6 +5,144 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-14 — LEURRE HTTP, FILIGRANE, ET LE DICTIONNAIRE QUI SE REGROUPE (ref #1290)
+
+### Le leurre
+Un hôte NON ROUTÉ recevait un **421 muet** : le scanner en déduisait « rien ici »
+et partait — on ne voyait que sa **première** sonde, alors que c'est la suite qui
+trahit l'outil. Il reçoit maintenant un contenu **plausible et inerte**
+(`cmd/sbxwaf/leurrehttp.go`), et continue son script dans le vide.
+
+Trois invariants : **aucun service réel en jeu** (le leurre ne vit que dans
+l'espace non routé et ne proxifie rien), **rien n'est exécuté ni lu sur le
+disque** (corps = constantes compilées), **aucun protocole imité**. La règle de
+`sbx-authwatch/leurre.go` tient : ce qui rend le cas HTTP sûr, c'est que sbxwaf
+**termine déjà le HTTP** — servir un corps statique n'ajoute pas une ligne de
+surface d'analyse.
+
+**Apprentissage seul** : aucun ban, aucun blocage n'en découle.
+
+### Le filigrane
+Chaque contenu semé porte une marque auto-vérifiable
+(`aléa ‖ HMAC-SHA256(secret, aléa)`, `cmd/sbxwaf/filigrane.go`). On reconnaît une
+de nos marques n'importe où **sans tenir de table**, et nul ne peut en fabriquer
+une. Elle voyage **noyée** dans la fausse valeur (clé AWS de 64 signes, SHA de
+commit de 40) : la recherche glisse une fenêtre. Conforme à
+`docs/POLITIQUE-CRYPTO.md`.
+
+### Reconnaître et simuler
+Un « théâtre » borné (`cmd/sbxwaf/theatre.go`) retient les scènes : qui **rejoue**
+une marque semée obtient ce qu'elle promet, et continue de se décrire. Le POST est
+admis — rejouer une fausse clé *est* un POST — mais le corps est lu au plus 8 Kio
+et **jamais analysé**.
+
+Étendu aux **ports leurres** (bannière statique + capture de la première trame,
+jamais interprétée) et au **répertoire inexistant** (404 d'un vhost réel sur un
+appât intrinsèque, remplacé *après* la réponse du service, jamais une 404
+ordinaire).
+
+### La page de blocage ne trahit plus le produit
+Elle annonçait « SecuBox » ×4, « WAF » ×2, « sbxwaf » ×1 dans un 403 — sur le
+chemin le plus fréquenté par les scanners. **La protection est inchangée** (la
+requête reste bloquée, le ban et le journal sont décidés en amont) ; seule la page
+change, et seulement sur un appât. Une injection SQL garde son 403.
+
+### Trois exemptions payées par l'expérience
+Première partie (#1266), **LAN** — dès l'armement le leurre a répondu 200 à nos
+propres sondes de santé, il se mettait à mentir à sa propre box — et méthodes
+autres que GET/HEAD/POST.
+
+### Le dictionnaire qui avance
+La signature de campagne était le **jeu exact** des cibles : deux tranches
+consécutives d'un même dictionnaire ne partagent aucune signature. Une opération
+unique se présentait en **35 campagnes** de 2 à 4 cibles. Quand toutes les cibles
+sont inexistantes et partagent un domaine, la signature devient **le domaine**.
+
+|                          | avant | après |
+|--------------------------|------:|------:|
+| campagnes totales        |    62 |    38 |
+| à cibles inexistantes    |    35 |    11 |
+| max cibles inexistantes  |     4 |    92 |
+
+Ce que la campagne consolidée récite devient lisible : **92 noms, 89 acteurs,
+18 adresses, 3 pays** — `oauth`, `okta`, `openid`, `saml`, `passport2`,
+`old-login`, `onlinebank`, `my-account`… C'est une **chasse au portail
+d'identité**, pas un balayage générique.
+
+### Score de menace
+`level` valait `LOW` pour les **391 acteurs sans exception** et `priorite` est
+quasi constante : trier par eux, c'était trier au hasard. Le score pèse ce qu'un
+acteur **fait** (retour après sanction, rotation d'adresse en échelle log,
+pays, continuité). Sur les données réelles : 5 critiques, 9 élevés, 24 notables,
+353 faibles — il sépare. Affiché, pas seulement utilisé.
+
+### Ergonomie
+Profil **collant** sur grand écran, **maître-détail** sur petit : on ne fait plus
+l'ascenseur entre la liste et le détail.
+
+Déployé : `secubox-waf-ng` **1.18.0**. 44 tests.
+
+---
+
+## 2026-09-14 — CRYPTO : ALGORITHMES NORMALISÉS UNIQUEMENT, HERMES SUPPRIMÉ (ref #1288)
+
+**Hermes est supprimé** — module, audit, banc d'essai, et le « backend
+enfichable » de `secubox-identity` qui le préférait. Deux chemins pour le même
+travail, c'est deux fois la surface à évaluer et une incertitude sur ce qui tourne
+en production.
+
+Cœur refait dans `common/secubox_core/crypto/standard.py` : **X25519** (RFC 7748),
+**Ed25519** (RFC 8032, FIPS 186-5), **HKDF-SHA256** (RFC 5869), **AES-256-GCM**
+(NIST SP 800-38D). AES plutôt que ChaCha20 pour deux raisons — référence ANSSI, et
+le matériel cible porte les extensions ARMv8 (`aes`, `pmull` vérifiés dans
+`/proc/cpuinfo`) : le choix conforme est ici le choix rapide.
+
+**Nonces compteur + clés directionnelles** (SP 800-38D §8.2.1, comme TLS 1.3) : la
+collision de nonce devient *structurellement impossible* au lieu d'improbable.
+
+**Clés privées au repos** : `Scrypt(n=2¹⁴)` + Fernet (AES-128-CBC) →
+**Argon2id** (RFC 9106) + AES-256-GCM. Le produit hachait déjà ses mots de passe
+en Argon2id : protéger une clé privée plus faiblement était une incohérence.
+
+**22 hachages hérités** (MD5/SHA-1 servant d'identifiants) → une fonction unique
+`secubox_core.crypto.empreinte.ident()`. Deux exceptions **imposées par un
+protocole**, documentées dans le code : HMAC-SHA1 de TURN, node id Kademlia 160
+bits.
+
+Politique de référence : **`docs/POLITIQUE-CRYPTO.md`**.
+
+Format des clés sur disque **inchangé** (PKCS#8 PEM) : aucune migration.
+Déployé : `secubox-core` **1.4.3**, `secubox-identity` **1.1.7**, + 13 paquets.
+
+---
+
+## 2026-09-14 — LEXIE : LA BOUCLE VOCALE LOCALE DU HALL (ref #1287)
+
+La voix n'est **pas** une seconde API : deux familles de capacités de plus sur le
+bus existant (`voice.speak` / `voice.listen`), déclarées dans un manifeste
+`capabilities.d` comme n'importe quel module. ZIA garde seule le droit de décider.
+
+Boucle : micro → `/api/v1/voice/asr` → ZIA `/v1/chat` → action `sbx` →
+`/api/v1/voice/tts`.
+
+**Contrat de moteur compatible OpenAI-audio**, deux backends interchangeables par
+configuration : `local` (Piper + whisper.cpp, arm64, à la demande) et `distant`
+(tout hôte servant le contrat). Défaut **local** : un défaut distant enverrait
+l'audio du micro chez un tiers dès l'installation.
+
+**VoiceStudio ne peut pas tourner sur la box** — vérifié dans son propre README :
+binaires Linux x86_64/glibc ≥ 2.39 quand gk2 est arm64/glibc 2.36, 8 Gio de RAM
+minimum quand gk2 en a 1,8 de libres, AGPL-3.0 avec poids CC-BY-NC. Il reste un
+excellent **moteur distant**, à distance de bras.
+
+Aucun élargissement de CSP (Web Audio, WAV 16 kHz encodé dans le navigateur) ;
+`Permissions-Policy: microphone=(self), camera=()` explicite. Pas d'écoute
+permanente : aucun détecteur de mot-clé local n'existe.
+
+Déployé : `secubox-voice` **0.1.1**, `secubox-webos` **1.0.299**.
+
+---
+
 ## 2026-09-11 — CRYPTO SOUVERAINE : CŒUR HERMES INTÉGRÉ, AUDITÉ, BENCHMARKÉ (ref #1263, #1272)
 
 Le backend crypto souverain n'est plus un placeholder : il est **dans l'arbre,

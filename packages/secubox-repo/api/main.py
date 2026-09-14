@@ -25,6 +25,7 @@ from pathlib import Path
 # Import shared auth
 import sys
 from secubox_core.auth import require_lecture
+from secubox_core.crypto.empreinte import ident
 sys.path.insert(0, '/usr/lib/python3/dist-packages')
 try:
     from secubox_core.auth import require_jwt, get_current_user
@@ -755,7 +756,7 @@ async def add_webhook(webhook: WebhookConfig, user: dict = Depends(require_jwt))
     """Add a new webhook."""
     webhooks = _load_webhooks()
     webhook_data = webhook.model_dump()
-    webhook_data["id"] = hashlib.md5(webhook.url.encode()).hexdigest()[:8]
+    webhook_data["id"] = ident(webhook.url, n=8)
     webhook_data["created_at"] = datetime.now().isoformat()
     webhooks.append(webhook_data)
     _save_webhooks(webhooks)

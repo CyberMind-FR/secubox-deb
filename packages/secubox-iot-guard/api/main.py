@@ -34,6 +34,7 @@ import httpx
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 from secubox_core.auth import require_lecture
+from secubox_core.crypto.empreinte import ident
 
 # P2P API socket for mesh peer integration
 P2P_SOCKET = "/run/secubox/p2p.sock"
@@ -805,7 +806,7 @@ def sync_p2p_peers_to_devices() -> Dict[str, Any]:
         # Generate synthetic MAC from peer ID (for database key)
         # Format: sb:xx:xx:xx:xx:xx (SecuBox prefix + hash of peer_id)
         import hashlib
-        peer_hash = hashlib.md5(peer_id.encode()).hexdigest()[:10]
+        peer_hash = ident(peer_id, n=10)
         synthetic_mac = f"sb:{peer_hash[0:2]}:{peer_hash[2:4]}:{peer_hash[4:6]}:{peer_hash[6:8]}:{peer_hash[8:10]}"
 
         # Register or update device

@@ -6,7 +6,43 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-09-11*
+*Mis à jour : 2026-09-14*
+
+---
+
+## 2026-09-14 — Leurre intuitif, filigrane, crypto normalisée, Lexie
+
+### ✅ Fait — dans le dépôt ET déployé
+
+- **Leurre HTTP + filigrane (#1290)** — `secubox-waf-ng` **1.18.0**. Espace non
+  routé, 404 d'appâts sur vhosts réels, et la page de blocage qui ne trahit plus
+  le produit. Reconnaître et simuler (théâtre borné), ports leurres à bannière.
+  Apprentissage seul : aucun ban n'en découle. 44 tests.
+- **Regroupement des dictionnaires (#1290)** — 35 campagnes fragmentées → 11 ;
+  la plus grosse passe de 4 à **92 cibles inexistantes** (89 acteurs, 18 IP).
+  Révèle une chasse au portail d'identité (`oauth`, `okta`, `saml`, `old-login`…).
+- **Score de menace + ergonomie (#1290)** — `level` valait LOW pour les 391
+  acteurs : le tri ne séparait rien. Score affiché et trié par défaut. Profil
+  collant / maître-détail : plus d'ascenseur.
+- **Crypto normalisée, hermes supprimé (#1288)** — `secubox-core` **1.4.3**,
+  `secubox-identity` **1.1.7** + 13 paquets. X25519 / Ed25519 / HKDF-SHA256 /
+  AES-256-GCM, nonces compteur + clés directionnelles, Argon2id pour les clés au
+  repos, 22 hachages hérités unifiés. `docs/POLITIQUE-CRYPTO.md`.
+- **Lexie, boucle vocale (#1287)** — `secubox-voice` **0.1.1**,
+  `secubox-webos` **1.0.299**. Contrat OpenAI-audio, deux backends, défaut local.
+
+### ⬜ Next Up
+
+1. **Moteur vocal sur la box (#1287)** — Piper + whisper.cpp arm64, ou bascule
+   `moteur = "distant"` vers VoiceStudio sur un poste x86. Arbitrage attendu sur
+   la taille du modèle (gk2 : 1,8 Gio libres).
+2. **Vue « marques revenues » dans la page Renseignement (#1290)** — le moteur
+   les enregistre (`marque_revenue`), l'interface ne les montre pas encore.
+3. **Corps de requête à l'authentification (#1290)** — chercher le filigrane là
+   où le corps est DÉJÀ lu, plutôt que de bufferiser tout le trafic.
+4. **`secubox-nac` non-upgradable (#1289)** — conflit de fichier avec
+   `secubox-hub` sur `www/nac/index.html`. Paquet gelé en 3.1.1.
+5. **JWT HS256 → EdDSA (#1288)** — à arbitrer. Non bloquant.
 
 ---
 

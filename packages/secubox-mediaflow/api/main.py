@@ -24,6 +24,7 @@ import hmac
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(title="secubox-mediaflow", version="2.2.0", root_path="/api/v1/mediaflow")
 
@@ -977,7 +978,7 @@ async def create_alert(req: AlertRequest, user=Depends(require_jwt)):
     """Create a new alert."""
     alerts = _load_alerts()
     alert_data = req.model_dump()
-    alert_data["id"] = hashlib.md5(f"{req.name}{req.service}".encode()).hexdigest()[:8]
+    alert_data["id"] = ident(f"{req.name}{req.service}", n=8)
     alert_data["created_at"] = datetime.now().isoformat()
     alerts.append(alert_data)
     _save_alerts(alerts)
@@ -1005,7 +1006,7 @@ async def add_webhook(webhook: WebhookConfig, user=Depends(require_jwt)):
     """Add a new webhook."""
     webhooks = _load_webhooks()
     webhook_data = webhook.model_dump()
-    webhook_data["id"] = hashlib.md5(webhook.url.encode()).hexdigest()[:8]
+    webhook_data["id"] = ident(webhook.url, n=8)
     webhook_data["created_at"] = datetime.now().isoformat()
     webhooks.append(webhook_data)
     _save_webhooks(webhooks)

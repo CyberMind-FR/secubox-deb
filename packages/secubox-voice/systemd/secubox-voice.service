@@ -1,0 +1,39 @@
+[Unit]
+Description=SecuBox Voice — Lexie : synthèse et reconnaissance locales [#1287]
+After=network.target secubox-runtime.service
+Requires=secubox-runtime.service
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1287
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/share/secubox/voice
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="PYTHONUNBUFFERED=1"
+
+# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on possede.
+# Le prefixe `+` execute en root malgre User=.
+ExecStartPre=+/bin/rm -f /run/secubox/voice.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/voice.sock --workers 1 --log-level warning
+# nginx (www-data, groupe secubox) doit joindre la socket.
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/voice.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/voice.sock'
+Restart=on-failure
+RestartSec=5
+
+# Durcissement. Ce service INVOQUE DES SOUS-PROCESSUS (piper, whisper.cpp) et
+# ecrit des fichiers temporaires : PrivateTmp lui en donne un a lui seul, ce qui
+# evite qu'un audio en cours de transcription traine dans le /tmp commun.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/secubox /var/lib/secubox /var/log/secubox
+
+# LA BOX N'A PAS DE MICRO, ET CE SERVICE N'EN OUVRE AUCUN. L'audio arrive par
+# HTTP depuis le navigateur ; aucun peripherique son n'est necessaire, on coupe
+# donc l'acces aux peripheriques plutot que de le laisser ouvert « au cas ou ».
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target

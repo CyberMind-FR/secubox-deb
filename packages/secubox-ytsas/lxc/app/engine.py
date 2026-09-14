@@ -66,8 +66,10 @@ class PlaylistTimeout(EngineError):
     """Playlist enumeration exceeded its time budget (mapped to 504 upstream)."""
 
 
-def _sha1(s: str) -> str:
-    return hashlib.sha1(s.encode("utf-8", "replace")).hexdigest()
+# Cet applicatif vit dans un LXC autonome : il n'a pas secubox_core.
+# SHA-256 en direct, donc — même intention que secubox_core.crypto.empreinte.
+def _empreinte(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8", "replace")).hexdigest()
 
 
 class Engine:
@@ -148,7 +150,7 @@ class Engine:
             meta = json.loads(out.decode("utf-8", "replace").splitlines()[0])
         except (ValueError, IndexError):
             raise EngineError("métadonnées illisibles")
-        vid = str(meta.get("id") or "").strip() or _sha1(url)
+        vid = str(meta.get("id") or "").strip() or _empreinte(url)
         title = (meta.get("title") or "").strip() or vid
         return vid, title
 

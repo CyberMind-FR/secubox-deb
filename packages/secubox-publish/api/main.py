@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 from secubox_core.auth import require_lecture
+from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(title="SecuBox Publishing Platform", version="3.0.0")
 
@@ -709,7 +710,7 @@ async def list_webhooks():
 async def add_webhook(webhook: WebhookConfig):
     webhooks = _load_webhooks()
     webhook_data = webhook.model_dump()
-    webhook_data["id"] = hashlib.md5(webhook.url.encode()).hexdigest()[:8]
+    webhook_data["id"] = ident(webhook.url, n=8)
     webhook_data["created_at"] = datetime.now().isoformat()
     webhooks.append(webhook_data)
     _save_webhooks(webhooks)

@@ -37,6 +37,7 @@ except ImportError:
 
 from . import mesh, registry, annuaire_client, dht, federation, masterlink
 from secubox_core.auth import require_lecture
+from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(
     title="SecuBox P2P API",
@@ -431,7 +432,7 @@ async def discover_mdns(timeout: int = 5) -> List[Dict]:
                 address = parts[7]
                 port = int(parts[8]) if parts[8].isdigit() else API_PORT
 
-                peer_id = f"sb-{hashlib.md5(address.encode()).hexdigest()[:12]}"
+                peer_id = f"sb-{ident(address, n=12)}"
                 peers.append({
                     "id": peer_id,
                     "name": name or hostname,
@@ -505,7 +506,7 @@ async def discover_network_scan(subnet: str = None, timeout: int = 5) -> List[Di
                 if title_match:
                     name = title_match.group(1).split(' - ')[0].strip()
 
-                peer_id = f"sb-{hashlib.md5(ip.encode()).hexdigest()[:12]}"
+                peer_id = f"sb-{ident(ip, n=12)}"
                 return {
                     "id": peer_id,
                     "name": name,
@@ -743,7 +744,7 @@ async def add_peer(req: PeerRequest, user: dict = Depends(require_jwt)):
     peers_data = load_json(PEERS_FILE, {"peers": []})
     peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else []
 
-    peer_id = f"sb-{hashlib.md5(req.address.encode()).hexdigest()[:12]}"
+    peer_id = f"sb-{ident(req.address, n=12)}"
 
     # Check if already exists
     if any(p.get("id") == peer_id or p.get("address") == req.address for p in peers):
@@ -1533,7 +1534,7 @@ async def add_announcer(
         raise HTTPException(status_code=400, detail="Announcer already exists")
 
     announcer = {
-        "id": hashlib.md5(url.encode()).hexdigest()[:12],
+        "id": ident(url, n=12),
         "url": url,
         "name": name or url,
         "added": datetime.utcnow().isoformat(),
@@ -2146,7 +2147,7 @@ def _add_approved_peer(join_request: Dict):
     peers_data = load_json(PEERS_FILE, {"peers": []})
     peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else []
 
-    peer_id = f"sb-{hashlib.md5(join_request['fingerprint'].encode()).hexdigest()[:12]}"
+    peer_id = f"sb-{ident(join_request['fingerprint'], n=12)}"
 
     # Check if already exists
     if any(p.get("id") == peer_id for p in peers):

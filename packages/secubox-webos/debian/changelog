@@ -1,3 +1,36 @@
+secubox-webos (1.0.299-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif Lexie : `location /api/v1/voice/` ajoutée au vhost du Hall. Le
+    Hall n'inclut pas secubox-routes.d — il expose ses API une par une, et c'est
+    voulu. Sans ce bloc, /api/v1/voice/ retombait sur le repli SPA et rendait
+    l'index du Hall AVEC UN 200 : le client croyait avoir une réponse.
+  * Limite de corps portée à 12 Mo sur cette route (alignée sur audio_max_mo) et
+    lecture à 180 s, le temps qu'un modèle se charge à la demande.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 09:26:17 +0200
+
+secubox-webos (1.0.298-1~bookworm1) bookworm; urgency=medium
+
+  * Lexie — la fenêtre vocale du Hall (ref #1287). Bouton dans la barre,
+    fenêtre flottante, vumètre live, et la boucle complète : micro → /voice/asr
+    → ZIA /v1/chat → action sbx → /voice/tts.
+  * ROUTAGE `service === 'voice'` AJOUTÉ DANS sbxExecuteAction : `sbxPost` poste
+    à un CADRE de cardlet, or Lexie est native au Hall et n'en a pas. Sans ce
+    routage, ZIA validait l'action et le message partait vers un iframe
+    inexistant — un échec silencieux qui ressemblait à un succès.
+  * Aucun élargissement de CSP : l'audio est joué par Web Audio (pas d'URL
+    blob:) et le WAV 16 kHz mono est encodé dans le navigateur — ce que
+    whisper.cpp veut, sans imposer ffmpeg à la box.
+  * Permissions-Policy « microphone=(self), camera=() » posée explicitement.
+    Le navigateur l'accordait déjà par défaut à une page de même origine, mais
+    une permission accordée par défaut silencieux est une permission que
+    personne n'a relue.
+  * Pas d'écoute permanente : aucun détecteur de mot-clé local n'existe, et une
+    écoute continue enverrait le son de la pièce en permanence. Lexie écoute
+    quand on le lui demande, et le montre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 09:22:15 +0200
+
 secubox-webos (1.0.297-1~bookworm1) bookworm; urgency=medium
 
   * Hall — LA CARTE RENSEIGNEMENT S'AFFICHE ENFIN. En 1.0.294, l'entree a ete

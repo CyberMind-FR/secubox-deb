@@ -179,6 +179,74 @@ func signatureCampagne(cibles []string) string {
 	return hex.EncodeToString(h[:4])
 }
 
+// UN DICTIONNAIRE QUI AVANCE NE SE RÉPÈTE JAMAIS — et c'est ce qui le rendait
+// invisible en tant que campagne.
+//
+// LE DÉFAUT OBSERVÉ. Un énumérateur de sous-domaines tire sa liste dans l'ordre
+// alphabétique et la répartit entre ses adresses : l'une voit `tencent, tw,
+// user, vip`, la suivante `wanted, wazuh, web-login`. Comme la signature est le
+// JEU EXACT des cibles, deux tranches consécutives du MÊME dictionnaire ne
+// partagent aucune signature. Une opération unique se présentait donc en 35
+// campagnes de 2 à 4 cibles — 237 adresses et 94 noms d'hôtes, éparpillés au
+// point qu'aucune ligne ne paraissait grave.
+//
+// LA CORRECTION. Quand toutes les cibles d'un acteur sont INEXISTANTES et
+// partagent un même domaine, ce n'est plus « ce jeu de noms » qui décrit son
+// mode opératoire, c'est « réciter un dictionnaire sur ce domaine ». La
+// signature devient donc le domaine, et les tranches se rejoignent.
+//
+// ON REGROUPE TOUJOURS SANS FUSIONNER. Le groupe dit « même mode opératoire »,
+// jamais « même personne » — deux inconnus lançant le même outil public sur le
+// même domaine feraient exactement cela, et rien ne permet de les distinguer.
+// C'est la règle de ce moteur, et elle ne bouge pas.
+//
+// LA CONDITION EST STRICTE : TOUTES les cibles inexistantes. Une seule cible
+// réelle, et l'acteur cherche quelque chose de précis — pas la même chose que
+// celui qui récite. Le doute profite à la séparation.
+func suffixeDictionnaire(cibles []string, inexistants map[string]bool) (string, bool) {
+	if len(cibles) == 0 {
+		return "", false
+	}
+	suffixe := ""
+	for _, c := range cibles {
+		if !inexistants[c] {
+			return "", false // une cible réelle : ce n'est pas une récitation
+		}
+		// On retire le port éventuel, puis le PREMIER label — celui que le
+		// dictionnaire fait varier.
+		h := c
+		if i := strings.IndexByte(h, ':'); i >= 0 {
+			h = h[:i]
+		}
+		i := strings.IndexByte(h, '.')
+		if i < 0 {
+			return "", false // pas de domaine parent : rien à regrouper
+		}
+		parent := h[i+1:]
+		// Un suffixe doit rester un domaine : « in » seul regrouperait la
+		// moitié de l'internet.
+		if strings.Count(parent, ".") < 1 {
+			return "", false
+		}
+		if suffixe == "" {
+			suffixe = parent
+		} else if suffixe != parent {
+			return "", false // deux domaines : pas le même dictionnaire
+		}
+	}
+	return suffixe, suffixe != ""
+}
+
+// signatureActeur choisit la bonne signature pour un acteur : celle du
+// dictionnaire quand il en récite un, celle du jeu de cibles sinon.
+func (s *Server) signatureActeur(cibles []string) string {
+	if suf, ok := suffixeDictionnaire(cibles, s.inexistants); ok {
+		h := sha1.Sum([]byte("dictionnaire\n" + suf))
+		return hex.EncodeToString(h[:4])
+	}
+	return signatureCampagne(cibles)
+}
+
 func (s *Server) handleCampaigns(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	type grp struct {
@@ -197,24 +265,36 @@ func (s *Server) handleCampaigns(w http.ResponseWriter, _ *http.Request) {
 	par := map[string]*grp{}
 	ips := map[string]map[string]bool{}
 	pays := map[string]map[string]bool{}
+	vues := map[string]map[string]bool{} // cibles déjà comptées, par groupe
 	for _, a := range s.graph.Actors() {
 		if len(a.Targets) == 0 {
 			continue // sans cible, pas de mode operatoire a comparer
 		}
-		sig := signatureCampagne(a.Targets)
+		sig := s.signatureActeur(a.Targets)
 		g := par[sig]
 		if g == nil {
-			inex := 0
-			for _, t := range a.Targets {
-				if s.inexistants[t] {
-					inex++
-				}
-			}
-			g = &grp{Signature: sig, Cibles: a.Targets, Inexistants: inex,
-				Premier: a.FirstSeen, Dernier: a.LastSeen}
+			g = &grp{Signature: sig, Premier: a.FirstSeen, Dernier: a.LastSeen}
 			par[sig] = g
 			ips[sig] = map[string]bool{}
 			pays[sig] = map[string]bool{}
+			vues[sig] = map[string]bool{}
+		}
+		// LES CIBLES DU GROUPE SONT L'UNION, PAS CELLES DU PREMIER ARRIVÉ.
+		// On ne gardait que le jeu du premier acteur : une campagne regroupée
+		// n'aurait montré que sa part du dictionnaire — trois noms pour une
+		// opération qui en récite quatre-vingt-quatorze.
+		for _, t := range a.Targets {
+			if !vues[sig][t] {
+				vues[sig][t] = true
+				// Borne d'affichage : au-delà, la liste ne s'inspecte plus à
+				// l'œil et le compteur dit déjà l'ampleur.
+				if len(g.Cibles) < 300 {
+					g.Cibles = append(g.Cibles, t)
+				}
+				if s.inexistants[t] {
+					g.Inexistants++
+				}
+			}
 		}
 		g.Acteurs = append(g.Acteurs, a.ID)
 		g.NbActeurs++

@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-voice/usr/share/secubox/voice/
+	cp -r api debian/secubox-voice/usr/share/secubox/voice/
+	[ -f conf/voice.toml ] && cp conf/voice.toml debian/secubox-voice/usr/share/secubox/voice/ || true
+	# Le manifeste de capacités : c'est LUI qui apprend à ZIA que la voix existe.
+	# Sans lui, `voice.speak` serait une action inconnue et ZIA la refuserait —
+	# ce qui est le comportement voulu tant que le module n'est pas installé.
+	install -D -m 0644 capabilities.d/voice.json \
+	  debian/secubox-voice/usr/share/secubox/capabilities.d/voice.json
+	# Les répertoires de modèles, VIDES : le paquet ne transporte ni voix ni
+	# modèle de reconnaissance. Ils pèsent des centaines de mégaoctets et
+	# portent leurs propres licences — les empaqueter ici les ferait voyager
+	# sous la licence du produit, ce qu'on ne peut pas faire.
+	install -d debian/secubox-voice/usr/share/secubox/voice/voix
+	install -d debian/secubox-voice/usr/share/secubox/voice/modeles
+	install -d debian/secubox-voice/etc/nginx/secubox-routes.d
+	install -d debian/secubox-voice/etc/nginx/secubox.d
+	cp nginx/voice.conf debian/secubox-voice/etc/nginx/secubox-routes.d/
+	cp nginx/voice.conf debian/secubox-voice/etc/nginx/secubox.d/
+	install -d debian/secubox-voice/usr/lib/systemd/system
+	cp systemd/secubox-voice.service debian/secubox-voice/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	true

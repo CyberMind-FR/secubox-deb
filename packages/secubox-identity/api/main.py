@@ -32,23 +32,19 @@ from pydantic import BaseModel, Field
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 
-# ── BACKEND CRYPTO ENFICHABLE (#1263) ────────────────────────────────────────
-# On PRÉFÈRE la crypto souveraine « hermes » (dérivée de livreedhermes, cf.
-# docs/audits/AUDIT-CRYPTO-livreedhermes.md) quand elle est présente, et l'on
-# retombe sinon sur `cryptography` (stdlib). L'audit confirme que hermes repose
-# sur les MÊMES primitives standard (X25519, ChaCha20-Poly1305, HKDF) : le repli
-# n'est donc pas une dégradation d'algorithme, juste l'absence de la couche
-# souveraine. Le module souverain est fusionné (secubox_core.crypto, PR #1272,
-# secubox-core >= 1.4.1) : ce seam l'adopte quand il est importable.
-try:  # noqa: SIM105
-    from secubox_core.crypto import hermes as _hermes  # type: ignore
-    CRYPTO_BACKEND = "hermes-souverain"
-except Exception:  # noqa: BLE001
-    _hermes = None
-    CRYPTO_BACKEND = "cryptography-stdlib"
+# ── CŒUR CRYPTOGRAPHIQUE — UN SEUL CHEMIN ────────────────────────────────────
+# Il y avait ici un « backend enfichable » qui préférait un module maison et
+# retombait sinon sur `cryptography`. Deux chemins pour le même travail, c'est
+# deux fois la surface à évaluer et une incertitude sur ce qui tourne vraiment
+# en production — précisément ce qu'une évaluation CSPN reproche. Il n'en reste
+# qu'un, bâti sur des algorithmes normalisés (X25519, Ed25519, HKDF-SHA256,
+# AES-256-GCM). Voir docs/POLITIQUE-CRYPTO.md.
+from secubox_core.crypto import Identity as _Identity, Session as _Session
+
+CRYPTO_BACKEND = "aes256gcm-x25519-hkdf-sha256"
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.exceptions import InvalidTag
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -157,33 +153,76 @@ class IdentityManager:
         self.peers_dir.mkdir(parents=True, exist_ok=True)
         self.trust_file.parent.mkdir(parents=True, exist_ok=True)
 
+    # ── PROTECTION DES CLÉS PRIVÉES AU REPOS ────────────────────────────────
+    #
+    # Ce qu'il y avait avant : Scrypt(n=2¹⁴, r=8, p=1) — soit 16 Mio, le
+    # paramètre « interactif » de l'article de 2009 — puis Fernet, c'est-à-dire
+    # AES-128-CBC + HMAC-SHA256.
+    #
+    # Deux reproches, et le second est le plus gênant :
+    #   * 16 Mio de coût mémoire ne freinent plus grand-chose en 2026 ;
+    #   * le produit hache DÉJÀ ses mots de passe en Argon2id (secubox_core.
+    #     user_store, secubox-billets). Protéger une CLÉ PRIVÉE plus faiblement
+    #     qu'un mot de passe est une incohérence qu'un évaluateur relèvera avant
+    #     nous.
+    #
+    # On aligne donc sur ce que le produit fait déjà de mieux : Argon2id
+    # (RFC 9106, lauréat de la Password Hashing Competition) pour transformer la
+    # phrase en clé, puis AES-256-GCM (SP 800-38D) — un AEAD, là où CBC+HMAC est
+    # un assemblage hérité.
+    #
+    # PARAMÈTRES ARGON2id : 64 Mio, 3 passes, 4 voies — le profil « second
+    # recommandé » de la RFC 9106 §4. La box a 4 cœurs et déchiffre une clé
+    # rarement : on peut payer ce prix-là, ce qui n'est pas le cas d'un hachage
+    # de mot de passe sur le chemin d'une connexion.
+    _ARGON2_MEMOIRE_KIO = 65536
+    _ARGON2_PASSES = 3
+    _ARGON2_VOIES = 4
+
     def _derive_key(self, passphrase: str, salt: bytes) -> bytes:
-        """Derive encryption key from passphrase using scrypt."""
-        kdf = Scrypt(
+        """Dérive une clé AES-256 depuis une phrase secrète, via Argon2id."""
+        from argon2.low_level import Type, hash_secret_raw
+        return hash_secret_raw(
+            secret=passphrase.encode("utf-8"),
             salt=salt,
-            length=32,
-            n=2**14,
-            r=8,
-            p=1,
-            backend=default_backend()
+            time_cost=self._ARGON2_PASSES,
+            memory_cost=self._ARGON2_MEMOIRE_KIO,
+            parallelism=self._ARGON2_VOIES,
+            hash_len=32,
+            type=Type.ID,
         )
-        return base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
 
     def _encrypt_key(self, private_bytes: bytes, passphrase: str) -> Tuple[str, str]:
-        """Encrypt private key with passphrase."""
+        """Chiffre une clé privée sous une phrase secrète : Argon2id → AES-256-GCM.
+
+        Le sel fait 16 octets et le nonce 12 ; le nonce est TIRÉ AU HASARD ici,
+        et c'est le bon choix : contrairement à une session, il n'y a pas de
+        compteur à tenir entre deux chiffrements indépendants, et chaque appel
+        tire un sel neuf — donc une clé neuve, sous laquelle un seul message
+        sera jamais chiffré.
+        """
         salt = secrets.token_bytes(16)
-        key = self._derive_key(passphrase, salt)
-        f = Fernet(key)
-        encrypted = f.encrypt(private_bytes)
-        return base64.b64encode(encrypted).decode(), base64.b64encode(salt).decode()
+        nonce = secrets.token_bytes(12)
+        aead = AESGCM(self._derive_key(passphrase, salt))
+        # Le sel est authentifié en AAD : le substituer pour faire dériver une
+        # autre clé fait échouer le tag au lieu de produire un clair douteux.
+        scelle = nonce + aead.encrypt(nonce, private_bytes, salt)
+        return base64.b64encode(scelle).decode(), base64.b64encode(salt).decode()
 
     def _decrypt_key(self, encrypted_data: str, passphrase: str, salt: str) -> bytes:
-        """Decrypt private key with passphrase."""
+        """Déchiffre une clé privée. Lève ValueError si la phrase est fausse ou
+        si le conteneur a été altéré — sans dire lequel des deux."""
         salt_bytes = base64.b64decode(salt)
-        key = self._derive_key(passphrase, salt_bytes)
-        f = Fernet(key)
-        encrypted_bytes = base64.b64decode(encrypted_data)
-        return f.decrypt(encrypted_bytes)
+        scelle = base64.b64decode(encrypted_data)
+        if len(scelle) < 12 + 16:
+            raise ValueError("conteneur de clé trop court")
+        nonce, corps = scelle[:12], scelle[12:]
+        aead = AESGCM(self._derive_key(passphrase, salt_bytes))
+        try:
+            return aead.decrypt(nonce, corps, salt_bytes)
+        except InvalidTag as e:
+            raise ValueError(
+                "phrase secrète invalide ou conteneur altéré") from e
 
     def _get_hostname(self) -> str:
         """Get system hostname."""
@@ -269,27 +308,20 @@ class IdentityManager:
     def ensure_x25519_pubkey(self, key_id: str = "primary") -> str:
         """Rend la clé publique X25519 (hex Raw 32o), en la créant+persistant si absente.
 
-        Génération par le cœur **souverain** `hermes.Identity` quand il est
-        importable (#1263) — même primitive X25519, persistance PEM PKCS#8 en
-        **0600 atomique** (`O_CREAT|O_EXCL` + `os.replace`). Le format sur disque
-        est identique à celui du chemin `cryptography`, donc `load_x25519()`
-        (chargeur PEM stdlib) relit indifféremment une clé produite par l'un ou
-        l'autre. Repli stdlib si le backend souverain est absent — même algo.
+        Clé X25519 (RFC 7748), persistée en PKCS#8 PEM ouvert directement en
+        **0600** — pas de fenêtre où la clé serait lisible par tous. Le format
+        est standard et n'a jamais changé : `load_x25519()` relit sans
+        conversion les clés déjà présentes sur les box.
         """
         priv = self.load_x25519(key_id)
         if priv is None:
-            p = self._x25519_path(key_id)
-            if _hermes is not None:
-                ident = _hermes.Identity.generate()
-                ident.save(p)                     # PKCS#8 PEM, 0600, atomique
-                return ident.public_hex()
-            priv = x25519.X25519PrivateKey.generate()
-            with open(p, "wb") as f:
-                f.write(priv.private_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption()))
-            os.chmod(p, 0o600)
+            # UN SEUL CHEMIN DE GÉNÉRATION. L'ancienne version en avait deux —
+            # dont un qui posait la permission APRÈS avoir écrit la clé, laissant
+            # une fenêtre où elle était lisible par tous. `Identity.save` ouvre
+            # le fichier en 0600 dès la création.
+            ident = _Identity.generate()
+            ident.save(self._x25519_path(key_id))   # PKCS#8 PEM, 0600
+            return ident.public_hex()
         pub = priv.public_key().public_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw)
@@ -298,18 +330,14 @@ class IdentityManager:
     # ── Canal scellé device↔device (Session souveraine, #1263) ──────────────────
     # Premier CONSOMMATEUR de secubox_core.crypto.Session : la clé device X25519
     # (publiée par ensure_x25519_pubkey) sert enfin à DÉRIVER un secret partagé.
-    # ECDH X25519 → HKDF-SHA256 → ChaCha20-Poly1305. Helpers SERVEUR uniquement —
+    # ECDH X25519 → HKDF-SHA256 → AES-256-GCM. Helpers SERVEUR uniquement —
     # aucune route n'expose de clé ni de secret. Les features futures (offres
     # MirrorNet chiffrées, secret d'onboarding #1262) passent par ce chemin unique
     # plutôt que de refaire leur propre ECDH.
     def _load_x25519_identity(self, key_id: str = "primary"):
-        """Charge la clé device X25519 comme `Identity` souveraine (pour Session)."""
-        if _hermes is None:
-            raise RuntimeError(
-                "canal scellé indisponible : cœur souverain secubox_core.crypto "
-                "absent (requiert secubox-core >= 1.4.1)")
+        """Charge la clé device X25519 comme `Identity` (socle de Session)."""
         self.ensure_x25519_pubkey(key_id)   # garantit la présence du fichier PEM
-        return _hermes.Identity.load(self._x25519_path(key_id))
+        return _Identity.load(self._x25519_path(key_id))
 
     def establish_session(self, peer_public_hex: str, *, key_id: str = "primary",
                           salt: Optional[bytes] = None):
@@ -323,20 +351,22 @@ class IdentityManager:
         if len(peer) != 32:
             raise ValueError("clé publique du pair invalide : 32 octets X25519 attendus")
         local = self._load_x25519_identity(key_id)
-        return _hermes.Session.establish(local, peer, salt=salt)
+        return _Session.establish(local, peer, salt=salt)
 
     def seal_for(self, peer_public_hex: str, plaintext: bytes, *, aad: bytes = b"",
                  key_id: str = "primary", salt: Optional[bytes] = None) -> bytes:
-        """Scelle `plaintext` pour un pair : ECDH → ChaCha20-Poly1305.
+        """Scelle `plaintext` pour un pair : ECDH X25519 → AES-256-GCM.
 
         Renvoie `nonce(12) || ciphertext || tag(16)`. `aad` est authentifiée
-        mais pas chiffrée. Nonce aléatoire par appel."""
+        mais pas chiffrée. Le nonce est un COMPTEUR de session (SP 800-38D
+        §8.2.1), pas un tirage : la collision devient impossible et non plus
+        seulement improbable."""
         return self.establish_session(
             peer_public_hex, key_id=key_id, salt=salt).encrypt(plaintext, aad)
 
     def open_from(self, peer_public_hex: str, sealed: bytes, *, aad: bytes = b"",
                   key_id: str = "primary", salt: Optional[bytes] = None) -> bytes:
-        """Ouvre un message scellé par un pair. Lève ValueError si le tag Poly1305
+        """Ouvre un message scellé par un pair. Lève ValueError si le tag GCM
         est invalide (clé, nonce, AAD ou ciphertext altéré)."""
         return self.establish_session(
             peer_public_hex, key_id=key_id, salt=salt).decrypt(sealed, aad)

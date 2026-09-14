@@ -69,6 +69,14 @@ func main() {
 			"fenêtre d'observation des campagnes par compte visé")
 		leurres = flag.String("leurres", "",
 			"ports leurres : `defaut` pour la liste connue, ou « 3389:rdp,5900:vnc »")
+		// #1290 — RÉGIME BANNIÈRE. Sans lui, le leurre accepte et ferme : on
+		// sait qu'on a été touché, jamais par quoi. Avec, on envoie une annonce
+		// STATIQUE et l'on capture la première trame du client sans jamais
+		// l'interpréter — c'est elle qui décrit l'outil. Défaut INACTIF : un
+		// port qui répond est une promesse de plus à tenir.
+		leurreBannieres = flag.Bool("leurre-bannieres", false,
+			"envoyer une bannière statique sur les ports leurres et capturer la "+
+				"première trame du client (jamais interprétée). Défaut inactif.")
 		acteurSock = flag.String("actor-socket", "/run/secubox/actord.sock",
 			"socket d'ingestion sbx-actord — corrélation multi-couche, émission "+
 				"fire-and-forget (\"\" = désactivée)")
@@ -187,7 +195,7 @@ func main() {
 	}
 	for _, l := range listeLeurres {
 		go func(l Leurre) {
-			if err := EcouteLeurre(ctx, l, signaux); err != nil {
+			if err := EcouteLeurreAvecBanniere(ctx, l, signaux, *leurreBannieres); err != nil {
 				log.Printf("sbx-authwatch: %v", err)
 			}
 		}(l)

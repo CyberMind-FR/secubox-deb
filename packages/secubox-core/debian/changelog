@@ -1,3 +1,21 @@
+secubox-core (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Cœur cryptographique refait sur des ALGORITHMES NORMALISÉS uniquement
+    (ref #1288) : X25519 (RFC 7748), Ed25519 (RFC 8032/FIPS 186-5),
+    HKDF-SHA256 (RFC 5869), AES-256-GCM (NIST SP 800-38D).
+  * Le module « hermes » est SUPPRIMÉ, ainsi que son audit et son banc d'essai.
+  * AES-256-GCM remplace ChaCha20-Poly1305 : référence de l'ANSSI, et accéléré
+    par les extensions ARMv8 du matériel cible là où ChaCha20 tourne en logiciel.
+  * Nonces COMPTEUR + clés directionnelles (SP 800-38D §8.2.1, comme TLS 1.3) :
+    la collision de nonce devient structurellement impossible au lieu
+    d'improbable. Le plafond de 2^32 invocations lève désormais une erreur.
+  * Nouveau module secubox_core.crypto.empreinte : une fonction relue une
+    fois pour
+    les identifiants dérivés, en remplacement de 22 hachages hérités
+    disséminés dans le produit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 11:23:31 +0200
+
 secubox-core (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * crypto/hermes — revue contre l'amont `anibaledel/livreedhermes` à 126 commits
