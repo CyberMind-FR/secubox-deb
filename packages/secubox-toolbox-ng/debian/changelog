@@ -1,3 +1,20 @@
+secubox-toolbox-ng (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — CORRELATION MULTI-COUCHE : sbx-authwatch alimente le graphe d'acteurs.
+    Nouveaux drapeaux `--actor-socket` (defaut : la socket d'ingestion, "" pour
+    desactiver) et `--credential-secret`. Le contrat declare cinq capteurs et un
+    seul emettait : le graphe ne voyait que du HTTP.
+  * authwatch apporte le COMPTE VISE, qui alimente `CredentialTokenHash` — l'axe
+    le plus lourd du bareme (30 points sur 96) et le seul totalement mort — et
+    une COUCHE differente : un acteur qui sonde le HTTP ET force du SSH devient
+    une personnalite reconnaissable, la ou c'etaient deux profils separes.
+  * Le compte part en HMAC-SHA256 avec un secret local rotatable, jamais en
+    clair. Secret illisible = on perd l'axe « compte », pas la couche.
+  * Emission fire-and-forget : actord absent ou lent ne ralentit ni la detection
+    ni le bannissement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 10:40:00 +0200
+
 secubox-toolbox-ng (0.3.12-1~bookworm1) bookworm; urgency=medium
 
   * Upgrade ne coupe plus les services ENABLED. Toutes les unités sont
