@@ -1,3 +1,26 @@
+secubox-waf-ng (1.18.0-1~bookworm1) bookworm; urgency=medium
+
+  * UN DICTIONNAIRE QUI AVANCE NE SE RÉPÈTE JAMAIS — et c'est ce qui le rendait
+    invisible (ref #1290). La signature de campagne était le JEU EXACT des
+    cibles ; un énumérateur qui tire sa liste dans l'ordre et la répartit entre
+    ses adresses ne partage donc AUCUNE signature d'une tranche à l'autre. Une
+    opération unique se présentait en 35 campagnes de 2 à 4 cibles : 237
+    adresses et 94 noms d'hôtes, éparpillés au point qu'aucune ligne ne
+    paraissait grave.
+  * Quand TOUTES les cibles d'un acteur sont inexistantes et partagent un même
+    domaine, la signature devient le domaine : les tranches se rejoignent. La
+    condition est stricte — une seule cible réelle et l'acteur cherche quelque
+    chose de précis, pas la même chose que celui qui récite. Le doute profite à
+    la séparation.
+  * ON REGROUPE TOUJOURS SANS FUSIONNER : le groupe dit « même mode opératoire »,
+    jamais « même personne ». Deux inconnus lançant le même outil public sur le
+    même domaine feraient exactement cela.
+  * CORRECTIF CONNEXE : les cibles d'un groupe sont désormais l'UNION, pas
+    celles du premier acteur arrivé. Une campagne regroupée n'aurait montré que
+    sa part du dictionnaire — trois noms pour une opération qui en récite 94.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 14 Sep 2026 13:25:48 +0200
+
 secubox-waf-ng (1.17.2-1~bookworm1) bookworm; urgency=medium
 
   * TRI PAR SCORE DE MENACE, et il devient le défaut (ref #1290). Deux champs
