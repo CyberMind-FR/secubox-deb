@@ -1,3 +1,19 @@
+secubox-waf-ng (1.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — L'unite de droits de la socket d'ingestion ne faisait RIEN, et le
+    signalait comme un succes. systemd developpe les `$VAR` dans ExecStart AVANT
+    de passer la ligne au shell : ecrits avec un seul `$`, les `$S` et `$i` de la
+    boucle arrivaient VIDES. L'unite s'executait, sortait en 0, et la socket
+    restait en groupe `secubox` — le pire des echecs : silencieux et vert. Les
+    `$` sont doubles.
+  * C'est la troisieme fois que cette permission fait taire l'ingestion sans
+    trace : d'abord le groupe manquant, puis RemainAfterExit qui figeait l'unite,
+    maintenant l'expansion systemd. La verification post-deploiement est
+    desormais explicite : on casse le groupe, on redemarre, on verifie qu'il se
+    repare.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 12:50:00 +0200
+
 secubox-waf-ng (1.10.1-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — L'INGESTION NE REDEVIENT PLUS MUETTE AU REDEMARRAGE. L'unite qui
