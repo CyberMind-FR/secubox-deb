@@ -1,3 +1,23 @@
+secubox-waf-ng (1.9.2-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — IHM Actor Intelligence : la liste montre ce qui COMPTE. Cent trois
+    acteurs tous « LOW », avec des priorites entre 14 et 33, formaient un mur de
+    lignes identiques : ni le niveau ni la priorite ne discriminent quoi que ce
+    soit a cette echelle.
+  * Le signal utile est ailleurs — COMBIEN D'ADRESSES un meme profil a utilisees.
+    Un acteur revu depuis onze IP est une personnalite qui revient ; un acteur vu
+    une fois est du bruit de fond. La vue s'ouvre donc sur les RECURRENTS (29 sur
+    103 aujourd'hui), triables par adresses, continuite, priorite ou recence, et
+    « Tous » reste a un clic.
+  * Chaque ligne porte desormais ses marqueurs de continuite — nombre d'adresses,
+    score de continuite, nombre de cibles — la ou elle ne montrait qu'une
+    priorite identique pour tout le monde.
+  * L'etat vide est utile plutot que muet : « aucun profil revu depuis plusieurs
+    adresses — c'est ce que le moteur cherche », avec le renvoi vers la vue
+    complete.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 11:30:00 +0200
+
 secubox-waf-ng (1.9.1-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — RETENTION GENEREUSE dans l'unite actord : 360 h (quinze jours), pour

@@ -117,6 +117,26 @@
   .honey{display:flex;align-items:center;gap:12px}.honey .big{font-size:1.5rem;font-weight:700;color:#ffcc00}
   .vide{color:var(--dim);font-size:.78rem;padding:14px;text-align:center;border:1px dashed var(--border);border-radius:8px}
   .foot{margin-top:1rem;color:var(--dim);font-size:.62rem;text-align:center}.foot b{color:var(--cyan)}
+
+/* ── Barre de tri/filtre (#1240) ────────────────────────────────────────────
+   Cent acteurs tous « LOW » forment un mur illisible. On donne a l'operateur
+   de quoi trancher : ce qui REVIENT d'abord, le reste sur demande. */
+.barre{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 10px;
+  font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.barre .grp{display:flex;align-items:center;gap:6px}
+.barre .tri{margin-left:auto}
+.fb,.tb{font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;
+  color:var(--dim);background:transparent;border:1px solid var(--line);
+  border-radius:999px;padding:4px 10px;transition:.15s}
+.fb:hover,.tb:hover{color:var(--fg);border-color:var(--dim)}
+.fb.on{color:var(--bg);background:var(--cyan);border-color:var(--cyan)}
+.tb.on{color:var(--cyan);border-color:var(--cyan)}
+.fb i{font-style:normal;opacity:.65;margin-left:5px}
+/* Le nombre d'adresses est LE signal : un profil revu depuis onze IP est une
+   personnalite qui revient, pas du bruit. Il se lit avant tout le reste. */
+.tag.ips{color:var(--bg);background:var(--cyan);font-weight:700}
+.tag.cont{color:var(--cyan);border:1px solid var(--cyan);background:transparent}
+.tag.tgt{color:var(--dim);border:1px solid var(--line);background:transparent}
 </style>
 </head>
 <body class="hybrid-dark">
@@ -154,6 +174,7 @@
     <div>
       <div class="card">
         <h2>🎭 Acteurs identifiés <span class="rt">TPI inverse</span></h2>
+        <div class="barre" id="barre"></div>
         <div id="list"></div>
       </div>
     </div>
@@ -186,15 +207,53 @@ function rendKPIs(s){
   $('live').innerHTML='<i></i> '+(s.mode||'observe')+' · shadow';
 }
 function rendFlow(){$('flow').innerHTML=FLOW.map(function(f,i){return '<div class="step'+(i===0?' on':'')+'"><b>'+(i+1)+'</b>'+f+'</div>';}).join('');}
+// CE QUI MERITE D'ETRE VU EN PREMIER. Une liste plate de cent acteurs tous
+// « LOW » ne dit rien : le niveau ne discrimine pas, la priorite non plus quand
+// tout tient entre 14 et 33. Le signal utile est ailleurs — COMBIEN D'ADRESSES
+// un meme profil a-t-il utilisees. Un acteur revu depuis onze IP est une
+// personnalite qui revient ; un acteur vu une fois est du bruit de fond. On
+// regroupe donc sur ce critere, et on trie par defaut sur lui.
+var FILTRE='recurrents', TRI='ips';
+function rendBarre(){
+  var rec=ACTS.filter(multi).length;
+  var f=[['recurrents','Récurrents','·'+rec],['tous','Tous','·'+ACTS.length]];
+  var t=[['ips','adresses'],['continuite','continuité'],['priorite','priorité'],['recent','vu récemment']];
+  $('barre').innerHTML=
+    '<span class="grp">'+f.map(function(x){return '<button class="fb'+(FILTRE===x[0]?' on':'')+'" data-f="'+x[0]+'">'+x[1]+'<i>'+x[2]+'</i></button>';}).join('')+'</span>'
+   +'<span class="grp tri">trier : '+t.map(function(x){return '<button class="tb'+(TRI===x[0]?' on':'')+'" data-t="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</span>';
+  [].forEach.call($('barre').querySelectorAll('[data-f]'),function(b){b.onclick=function(){FILTRE=b.getAttribute('data-f');rendBarre();rendList();};});
+  [].forEach.call($('barre').querySelectorAll('[data-t]'),function(b){b.onclick=function(){TRI=b.getAttribute('data-t');rendBarre();rendList();};});
+}
+function multi(a){return (a.src&&a.src.ips||0)>1;}
+function cont(a){return (a.vec&&a.vec.continuity)||0;}
+function trie(l){
+  var f={ips:function(a,b){return (b.src.ips-a.src.ips)||(b.priority-a.priority);},
+          continuite:function(a,b){return cont(b)-cont(a)||b.priority-a.priority;},
+          priorite:function(a,b){return b.priority-a.priority;},
+          recent:function(a,b){return String(b.last||'').localeCompare(String(a.last||''));}}[TRI];
+  return l.slice().sort(f);
+}
 function rendList(){
   var box=$('list');
   if(!ACTS.length){box.innerHTML='<div class="vide">😴 Aucun acteur corrélé — le moteur observe le trafic (shadow).</div>';$('profile').innerHTML='<div class="vide">—</div>';return;}
+  var vus=trie(FILTRE==='recurrents'?ACTS.filter(multi):ACTS);
   box.innerHTML='';
-  ACTS.forEach(function(a){
+  if(!vus.length){
+    box.innerHTML='<div class="vide">Aucun profil revu depuis plusieurs adresses pour l\'instant — '
+      +'c\'est ce que le moteur cherche. <button class="fb" onclick="FILTRE=\'tous\';rendBarre();rendList()">voir tout</button></div>';
+    return;
+  }
+  vus.forEach(function(a){
     var col=a.priority>=80?'var(--red)':a.priority>=50?'var(--orange)':'var(--cyan)';
     var d=document.createElement('div');d.className='actor'+(a.id===CUR?' on':'');
+    var n=a.src&&a.src.ips||0;
     d.innerHTML='<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>'
-      +'<div class="nm"><b>'+esc(a.id)+'</b><div class="tg">'+(a.tags||[]).map(function(t){return '<span class="tag '+(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')+'</div></div>'
+      +'<div class="nm"><b>'+esc(a.id)+'</b><div class="tg">'
+        +(n>1?'<span class="tag ips" title="Le même profil, vu depuis '+n+' adresses">'+n+' IP</span>':'')
+        +(cont(a)?'<span class="tag cont" title="Continuité : '+cont(a)+'/100">↗ '+cont(a)+'</span>':'')
+        +((a.targets&&a.targets.length>1)?'<span class="tag tgt">'+a.targets.length+' cibles</span>':'')
+        +(a.tags||[]).map(function(t){return '<span class="tag '+(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')
+      +'</div></div>'
       +'<div class="lvl"><b>'+a.priority+'</b>'+esc(a.level||'')+'</div>';
     d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();});
     box.appendChild(d);
