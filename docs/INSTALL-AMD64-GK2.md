@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Installation officielle AMD64 — GK2 Clone
 
 Ce guide installe une SecuBox-DEB AMD64 sur un PC, dans VirtualBox ou sur un hôte KVM/QEMU, afin de reproduire la box de développement **GK2**. Il est la procédure de référence pour un environnement de développement isolé.

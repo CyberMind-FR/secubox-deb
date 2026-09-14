@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # VM GK2 Clone — VirtualBox, KVM et QEMU
 
 Ce guide décrit les topologies de virtualisation compatibles avec une SecuBox-DEB AMD64. VirtualBox est la voie automatisée officielle ; KVM et QEMU conviennent aux postes Linux et aux chaînes CI de laboratoire.

@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Premier démarrage SecuBox AMD64
 
 Cette procédure sécurise une SecuBox-DEB AMD64 immédiatement après son premier démarrage. Elle s’applique à une GK2 Clone virtuelle comme à une installation sur matériel physique.

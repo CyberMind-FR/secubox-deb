@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Architecture GK2 Clone
 
 GK2 Clone représente la chaîne de publication et de services de la SecuBox de développement sous forme AMD64 reproductible. Le diagramme suivant présente le chemin logique des requêtes publiques vers SBXOS Hall et les services proposés.
