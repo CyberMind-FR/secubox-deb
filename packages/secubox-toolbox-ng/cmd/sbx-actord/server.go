@@ -31,10 +31,16 @@ type Server struct {
 	shadow bool
 
 	// Corrélation en mémoire (reconstruite au démarrage depuis le store).
-	mu     sync.Mutex
-	graph  *graph.Graph
-	ledger *evidence.Ledger
-	accum  map[string]*actorSignals
+	mu    sync.Mutex
+	graph *graph.Graph
+	// Plafond d'evenements rejoues au demarrage — voir rebuild().
+	rebuildMax int
+	// Hotes qu'aucune route ne sert, APPRIS des etiquettes du capteur : actord
+	// ne connait pas la table des routes du WAF, mais le WAF etiquette deja
+	// `host_anomaly:unrouted`. Sert a la consolidation par dictionnaire.
+	inexistants map[string]bool
+	ledger      *evidence.Ledger
+	accum       map[string]*actorSignals
 
 	ingested   atomic.Uint64 // enveloppes persistées
 	correlated atomic.Uint64 // enveloppes passées par le pipeline de corrélation

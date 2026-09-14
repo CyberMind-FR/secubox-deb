@@ -41,10 +41,14 @@ type Vector struct {
 // Actor est une Actor Card agrégée (RFC-0013 §1). Les ensembles sont exposés
 // triés et dédupliqués.
 type Actor struct {
-	ID        string   `json:"actor_id"`
-	FirstSeen int64    `json:"first_seen"`
-	LastSeen  int64    `json:"last_seen"`
-	Events    int      `json:"events"`
+	ID        string `json:"actor_id"`
+	FirstSeen int64  `json:"first_seen"`
+	LastSeen  int64  `json:"last_seen"`
+	Events    int    `json:"events"`
+	// Bans : combien de fois un capteur a SANCTIONNE cet acteur. Un profil
+	// sanctionne dix fois et qui revient n'est pas du meme ordre qu'un profil
+	// observe une fois — l'interface doit pouvoir le crier.
+	Bans      int      `json:"bans"`
 	IPs       []string `json:"ips"`
 	ASNs      []string `json:"asns"`
 	Countries []string `json:"countries"`
@@ -63,17 +67,55 @@ type Actor struct {
 
 // Obs est une observation à corréler (dérivée d'une enveloppe par l'appelant).
 type Obs struct {
-	Sig       similarity.Signature
-	Severity  int
-	Target    string // dst_service
+	Sig      similarity.Signature
+	Severity int
+	Target   string // dst_service
+	// Bloque dit que le capteur a SANCTIONNE cette requete, pas seulement
+	// observee. C'est la difference entre « on a vu » et « on a agi », et elle
+	// doit remonter jusqu'a l'operateur.
+	Bloque bool
+	// Tags porte les etiquettes de comportement du capteur. Une seule nous
+	// interesse ici : celle qui dit que l'hote VISE N'EXISTE PAS. Voir
+	// `lienDictionnaire`.
+	Tags      []string
 	Timestamp int64
 }
+
+// WCibleDico pese le partage d'un mot de DICTIONNAIRE entre deux profils.
+//
+// POURQUOI CET AXE MANQUAIT, ET POURQUOI IL EST LOURD. Le bareme comparait des
+// chemins, des outils, des empreintes — jamais CE QUI EST VISE. Or l'enumeration
+// de sous-domaines ne varie ni le chemin (toujours « / ») ni l'outillage : elle
+// ne varie que l'HOTE. Deux adresses rejouant `softbank`, `tinkoff`, `qq`,
+// `taobao` sur notre joker DNS etaient donc vues comme deux inconnus sans
+// rapport, alors qu'elles recitent la meme liste.
+//
+// Le poids n'a de sens que pour un hote INEXISTANT. Partager `hall.gk2` ne prouve
+// rien — tout le monde le visite. Partager `qianbao.secubox.in`, un nom qui n'a
+// jamais existe, c'est tirer le meme mot du meme dictionnaire : la coincidence
+// n'est pas credible. D'ou un poids eleve, mais conditionne a l'etiquette
+// `host_anomaly:unrouted` que le WAF pose deja.
+const WCibleDico = 22
+
+// EtiquetteInexistant est l'etiquette posee par sbxwaf sur une requete visant un
+// hote qu'aucune route ne sert.
+const EtiquetteInexistant = "host_anomaly:unrouted"
 
 // Graph maintient l'ensemble des acteurs.
 type Graph struct {
 	threshold int
 	seq       int
 	actors    map[string]*Actor
+	// INDEX DES CANDIDATS (2026-09-14). `Observe` comparait chaque observation a
+	// TOUS les acteurs : cout quadratique. Avec un acteur cree par evenement —
+	// ce qui arrivait faute d'agregation — le demon a brule 6 h 46 de processeur
+	// sans jamais ouvrir son API.
+	//
+	// Or la similarite n'accorde de points qu'a des axes EGAUX : un acteur qui ne
+	// partage aucune valeur avec l'observation score zero, quoi qu'il arrive. Le
+	// restreindre aux candidats indexes n'approxime donc rien — c'est le meme
+	// resultat, sans le balayage.
+	idx map[string]map[string]bool // "axe:valeur" -> ensemble d'ID d'acteurs
 }
 
 // New crée un graphe. threshold<=0 => DefaultThreshold.
@@ -81,22 +123,59 @@ func New(threshold int) *Graph {
 	if threshold <= 0 {
 		threshold = DefaultThreshold
 	}
-	return &Graph{threshold: threshold, actors: map[string]*Actor{}}
+	return &Graph{threshold: threshold, actors: map[string]*Actor{},
+		idx: map[string]map[string]bool{}}
 }
 
 // Observe rattache une observation à l'acteur le plus similaire (si la continuité
 // atteint le seuil) ou en crée un nouveau, met à jour les agrégats, la continuité,
 // la confiance et la priorité, puis retourne l'acteur concerné.
+// lienDictionnaire rend le poids d'un partage de mot de dictionnaire entre
+// l'observation et un acteur : l'acteur a-t-il DEJA vise cet hote inexistant ?
+func lienDictionnaire(a *Actor, o Obs) int {
+	if o.Target == "" || !a.tgts[o.Target] {
+		return 0
+	}
+	for _, t := range o.Tags {
+		if t == EtiquetteInexistant {
+			return WCibleDico
+		}
+	}
+	return 0
+}
+
 func (g *Graph) Observe(o Obs) *Actor {
 	var best *Actor
 	var bestScore score.Score
-	for _, a := range g.actors {
+	for _, id := range g.candidatsAvecCible(o.Sig, o.Target) {
+		a := g.actors[id]
+		if a == nil {
+			continue
+		}
 		s := similarity.Similarity(a.sig, o.Sig)
-		if s.Value > bestScore.Value {
+		// LE DICTIONNAIRE EST UNE PREUVE DE CONTINUITE. On l'ajoute aux
+		// contributions plutot que de le traiter a part : le score reste
+		// EXPLICABLE — l'operateur lit « meme mot de dictionnaire » comme il lit
+		// « meme outil », avec son poids.
+		if w := lienDictionnaire(a, o); w > 0 {
+			s = score.New(append(s.Contributions,
+				score.Contribution{Label: "même dictionnaire de sondage (hôte inexistant partagé)", Weight: w})...)
+		}
+		// Egalite tranchee par l'ID : sans cela, l'ordre d'un parcours de map
+		// rendrait le rattachement non reproductible d'une execution a l'autre.
+		if s.Value > bestScore.Value || (s.Value == bestScore.Value && best != nil && a.ID < best.ID) {
 			bestScore, best = s, a
 		}
 	}
-	if best == nil || bestScore.Value < g.threshold {
+	// SEUIL ADAPTE AUX CAPTEURS PRESENTS. Le seuil nominal (50) suppose les huit
+	// axes alimentes ; ici trois le sont. On le ramene a la masse reellement
+	// comparable entre ces deux signatures, sans jamais descendre sous
+	// MasseMin — voir similarity.SeuilEffectif.
+	seuil := g.threshold
+	if best != nil {
+		seuil = similarity.SeuilEffectif(g.threshold, similarity.Comparable(best.sig, o.Sig))
+	}
+	if best == nil || bestScore.Value < seuil {
 		best = g.newActor(o)
 	} else {
 		// rattachement : la continuité de l'acteur est la meilleure jointure vue,
@@ -109,7 +188,97 @@ func (g *Graph) Observe(o Obs) *Actor {
 		}
 	}
 	g.absorb(best, o)
+	g.indexer(best, o.Sig)
+	// La cible entre dans l'index : sans elle, deux reciteurs du meme
+	// dictionnaire ne seraient jamais candidats l'un pour l'autre.
+	if o.Target != "" {
+		if g.idx["tgt:"+o.Target] == nil {
+			g.idx["tgt:"+o.Target] = map[string]bool{}
+		}
+		g.idx["tgt:"+o.Target][best.ID] = true
+	}
 	return best
+}
+
+// cles derive d'une signature les valeurs sur lesquelles un rattachement est
+// seulement POSSIBLE. Un axe vide n'en produit aucune : il ne peut pas egaler.
+func cles(sig similarity.Signature) []string {
+	var k []string
+	if sig.CredentialHash != "" {
+		k = append(k, "cred:"+sig.CredentialHash)
+	}
+	if sig.PathSig != "" {
+		k = append(k, "path:"+sig.PathSig)
+	}
+	if sig.UAFamily != "" {
+		k = append(k, "ua:"+sig.UAFamily)
+	}
+	if sig.TLSFingerprint != "" {
+		k = append(k, "tls:"+sig.TLSFingerprint)
+	}
+	if sig.CadenceBucket != "" {
+		k = append(k, "cad:"+sig.CadenceBucket)
+	}
+	if sig.IP != "" {
+		k = append(k, "ip:"+sig.IP)
+	}
+	if sig.ASN != 0 {
+		k = append(k, fmt.Sprintf("asn:%d", sig.ASN))
+	}
+	if sig.Country != "" {
+		k = append(k, "cty:"+sig.Country)
+	}
+	return k
+}
+
+// indexer enregistre l'acteur sous chaque cle de la signature observee. Les
+// cles s'ACCUMULENT : un acteur reste joignable par une IP qu'il n'utilise
+// plus, ce qui est precisement ce qui permet de le reconnaitre quand il y
+// revient.
+func (g *Graph) indexer(a *Actor, sig similarity.Signature) {
+	for _, k := range cles(sig) {
+		if g.idx[k] == nil {
+			g.idx[k] = map[string]bool{}
+		}
+		g.idx[k][a.ID] = true
+	}
+}
+
+// candidats rend, triee, la liste des acteurs partageant au moins une valeur
+// avec la signature. Le tri rend le parcours reproductible.
+func (g *Graph) candidatsAvecCible(sig similarity.Signature, cible string) []string {
+	vus := map[string]bool{}
+	for _, k := range cles(sig) {
+		for id := range g.idx[k] {
+			vus[id] = true
+		}
+	}
+	if cible != "" {
+		for id := range g.idx["tgt:"+cible] {
+			vus[id] = true
+		}
+	}
+	out := make([]string, 0, len(vus))
+	for id := range vus {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (g *Graph) candidats(sig similarity.Signature) []string {
+	vus := map[string]bool{}
+	for _, k := range cles(sig) {
+		for id := range g.idx[k] {
+			vus[id] = true
+		}
+	}
+	out := make([]string, 0, len(vus))
+	for id := range vus {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (g *Graph) newActor(o Obs) *Actor {
@@ -129,6 +298,9 @@ func (g *Graph) newActor(o Obs) *Actor {
 // absorb met à jour les agrégats d'un acteur avec une observation.
 func (g *Graph) absorb(a *Actor, o Obs) {
 	a.Events++
+	if o.Bloque {
+		a.Bans++
+	}
 	if o.Timestamp < a.FirstSeen || a.FirstSeen == 0 {
 		a.FirstSeen = o.Timestamp
 	}
@@ -231,4 +403,117 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// ── CONSOLIDATION : deux acteurs deja crees peuvent se reveler un seul ────────
+//
+// LE MANQUE QUE CECI COMBLE. `Observe` rattache une NOUVELLE observation au
+// meilleur acteur existant. Mais si deux acteurs se sont formes separement —
+// parce que leurs premieres observations ne se recoupaient pas encore, ou parce
+// qu'un axe de correlation est arrive apres eux — RIEN ne les reunissait
+// ensuite. L'operateur voyait trois profils cote a cote, avec six ou sept
+// adresses chacun, en reconnaissant a l'oeil la meme attaque.
+//
+// CE QUI AUTORISE UNE FUSION. Jamais une ressemblance : une PREUVE PARTAGEE que
+// la coincidence n'explique pas.
+//
+//	· deux mots de dictionnaire inexistants en commun — reciter deux fois le
+//	  meme nom invente, c'est puiser dans la meme liste ;
+//	· une adresse IP en commun — deux profils qui ont emis depuis la meme
+//	  source sont, au minimum, la meme campagne.
+//
+// Un hote qui EXISTE ne compte jamais : tout le monde visite le Hall.
+//
+// LA FUSION EST IRREVERSIBLE EN MEMOIRE, et c'est pourquoi le seuil est haut.
+// Les preuves, elles, restent dans le ledger : une fusion abusive se constate,
+// et le graphe se reconstruit du journal.
+const MotsCommunsPourFusion = 2
+
+// fusionnables dit si deux acteurs portent une preuve partagee suffisante.
+func (g *Graph) fusionnables(a, b *Actor, inexistants map[string]bool) (bool, string) {
+	for ip := range a.ips {
+		if b.ips[ip] {
+			return true, "même adresse source (" + ip + ")"
+		}
+	}
+	communs := 0
+	for t := range a.tgts {
+		if b.tgts[t] && inexistants[t] {
+			communs++
+			if communs >= MotsCommunsPourFusion {
+				return true, "même dictionnaire de sondage"
+			}
+		}
+	}
+	return false, ""
+}
+
+// Consolider fusionne les acteurs qui partagent une preuve non fortuite. Rend le
+// nombre de fusions. `inexistants` est l'ensemble des hotes qu'aucune route ne
+// sert — l'appelant le connait, le graphe non.
+func (g *Graph) Consolider(inexistants map[string]bool) int {
+	ids := make([]string, 0, len(g.actors))
+	for id := range g.actors {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids) // deterministe : le plus ancien absorbe, jamais l'inverse
+	fusions := 0
+	for i := 0; i < len(ids); i++ {
+		a := g.actors[ids[i]]
+		if a == nil {
+			continue
+		}
+		for j := i + 1; j < len(ids); j++ {
+			b := g.actors[ids[j]]
+			if b == nil {
+				continue
+			}
+			if ok, raison := g.fusionnables(a, b, inexistants); ok {
+				g.absorberActeur(a, b, raison)
+				fusions++
+			}
+		}
+	}
+	return fusions
+}
+
+// absorberActeur verse b dans a, puis retire b. L'anciennete prime : a garde son
+// identifiant, ce qui evite qu'un acteur suivi depuis des jours change de nom
+// sous les yeux de l'operateur.
+func (g *Graph) absorberActeur(a, b *Actor, raison string) {
+	a.Events += b.Events
+	a.Bans += b.Bans
+	if b.FirstSeen != 0 && (a.FirstSeen == 0 || b.FirstSeen < a.FirstSeen) {
+		a.FirstSeen = b.FirstSeen
+	}
+	if b.LastSeen > a.LastSeen {
+		a.LastSeen = b.LastSeen
+		a.sig = b.sig // l'exemplaire le plus recent reste l'exemplaire
+	}
+	if b.Vector.Severity > a.Vector.Severity {
+		a.Vector.Severity = b.Vector.Severity
+	}
+	if b.Vector.Continuity > a.Vector.Continuity {
+		a.Vector.Continuity = b.Vector.Continuity
+	}
+	for _, m := range []struct{ dst, src map[string]bool }{
+		{a.ips, b.ips}, {a.asns, b.asns}, {a.ctys, b.ctys}, {a.tgts, b.tgts},
+	} {
+		for k := range m.src {
+			m.dst[k] = true
+		}
+	}
+	for k := range b.concord {
+		a.concord[k] = true
+	}
+	a.concord[raison] = true
+	// L'index doit suivre : toute cle qui menait a b mene desormais a a.
+	for _, ens := range g.idx {
+		if ens[b.ID] {
+			delete(ens, b.ID)
+			ens[a.ID] = true
+		}
+	}
+	delete(g.actors, b.ID)
+	g.materialize(a)
 }

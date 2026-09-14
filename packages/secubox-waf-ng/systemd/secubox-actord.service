@@ -19,7 +19,19 @@ After=network.target
 
 [Service]
 Type=simple
+# RETENTION GENEREUSE, REJEU BORNE (#1240). Deux chiffres, deux contraintes :
+#   --retention : ce qu'on GARDE. Quinze jours, pour que la correlation puisse
+#     reconnaitre une personnalite qui revient de semaine en semaine — c'est
+#     precisement l'usage vise.
+#   --rebuild-max : ce qu'on RECHARGE en memoire au demarrage. Le rejeu est
+#     LINEAIRE (~220 us l'evenement, mesure sur la cible) et l'API reste FERMEE
+#     pendant : sans plafond, quinze jours de trafic tenaient le demon des
+#     minutes hors ligne, jusqu'au SIGKILL de systemd sur delai d'arret.
+#     50 000 evenements = ~11 s de demarrage.
+# Les acteurs plus anciens que le rejeu ne sont pas perdus : ils reapparaissent
+# des qu'ils se manifestent, et leurs preuves restent dans le ledger.
 ExecStart=/usr/sbin/sbx-actord --shadow \
+  --retention 360h --rebuild-max 50000 \
   --db /var/lib/secubox/actor/actord.db \
   --ledger /var/lib/secubox/actor/evidence.db \
   --ingest-socket /run/secubox/actord.sock \

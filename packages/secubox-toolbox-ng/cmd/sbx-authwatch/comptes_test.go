@@ -90,7 +90,7 @@ func TestCompteInexistantBannitDesLaPremiereTentative(t *testing.T) {
 		Severite: "high", Detail: "SASL refusee", Cible: "gerald@gk2.net"}
 	// Seuils volontairement inatteignables : seule la liste peut declencher.
 	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour),
-		NewCampagnes(time.Hour, 999), comptes, b, j, lb, false)
+		NewCampagnes(time.Hour, 999), comptes, b, j, lb, false, nil)
 	time.Sleep(100 * time.Millisecond)
 	annule()
 
@@ -115,7 +115,7 @@ func TestCompteReelResteTraiteAvecPatience(t *testing.T) {
 	signaux <- Signal{IP: "203.0.113.78", Service: "smtp", Categorie: "auth_smtp:sasl_failed",
 		Severite: "high", Detail: "SASL refusee", Cible: "gk2@secubox.in"}
 	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour),
-		NewCampagnes(time.Hour, 999), comptes, b, j, lb, false)
+		NewCampagnes(time.Hour, 999), comptes, b, j, lb, false, nil)
 	time.Sleep(100 * time.Millisecond)
 	annule()
 

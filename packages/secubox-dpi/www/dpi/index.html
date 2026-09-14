@@ -102,6 +102,39 @@
         ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
         @media (max-width: 768px) { .main { margin-left: 0; } }
+
+        /* ── Langage de lecture partage avec Renseignement (#1240) ────────────
+           Le terminal est lu comme un acteur : glyphe = ce qu'il fait,
+           bloc plein = combien il pese, tampon = ce qu'il a declenche. */
+        .app-item.acteur { display: grid; grid-template-columns: auto 1fr auto auto;
+            align-items: center; gap: 0.55rem; }
+        .acteur .nat { font-size: 1rem; line-height: 1; }
+        .acteur .ident { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+        .acteur .ident code { font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+        .acteur .ident small { font-size: 0.63rem; color: var(--text-dim);
+            font-family: 'Courier Prime', monospace; }
+        .multi { display: inline-flex; flex-direction: column; align-items: center;
+            justify-content: center; min-width: 62px; padding: 0.18rem 0.45rem;
+            border-radius: 7px; line-height: 1.05; color: var(--cyan);
+            background: rgba(0,212,255,0.10); border: 1px solid rgba(0,212,255,0.32); }
+        .multi b { font-size: 0.82rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .multi i { font-style: normal; font-size: 0.5rem; letter-spacing: 0.09em;
+            text-transform: uppercase; opacity: 0.72; }
+        .multi.n2 { background: rgba(0,212,255,0.16); }
+        .multi.n3 { color: var(--orange); background: rgba(255,153,68,0.14);
+            border-color: rgba(255,153,68,0.45); }
+        .multi.n4 { color: var(--red); background: rgba(255,68,102,0.16);
+            border-color: rgba(255,68,102,0.55); box-shadow: 0 0 12px rgba(255,68,102,0.16); }
+        /* Le tampon est appose : la detection a deja eu lieu. */
+        .tampon { display: inline-block; transform: rotate(-7deg); padding: 0.1rem 0.4rem;
+            border: 2px solid currentColor; border-radius: 4px; white-space: nowrap;
+            font-weight: 800; font-size: 0.55rem; letter-spacing: 0.09em; }
+        .tampon.exfil { color: var(--red); background: rgba(255,68,102,0.10); }
+        .tampon.ras { color: var(--text-dim); opacity: 0.5; }
+        @media (max-width: 560px) {
+            .app-item.acteur { grid-template-columns: auto 1fr auto; row-gap: 0.25rem; }
+            .acteur .tampon { grid-column: 2 / -1; justify-self: start; }
+        }
     </style>
 </head>
 <body class="hybrid-dark">
@@ -171,7 +204,7 @@
         <div class="grid-2">
             <div class="card"><div class="card-header"><h2>📊 Top Applications</h2></div><div class="app-list" id="top-apps"><p class="empty">Loading…</p></div></div>
             <div class="card"><div class="card-header"><h2>📡 Top Protocols</h2></div><div class="app-list" id="top-protocols"><p class="empty">Loading…</p></div></div>
-            <div class="card"><div class="card-header"><h2>💻 Bandwidth by Device</h2></div><div class="app-list" id="bandwidth-devices"><p class="empty">Loading…</p></div></div>
+            <div class="card"><div class="card-header"><h2>💻 Débit par terminal <span class="sub">— qui parle, combien, et vers quoi</span></h2></div><div class="app-list" id="bandwidth-devices"><p class="empty">Loading…</p></div></div>
             <div class="card"><div class="card-header"><h2>🌐 Active Flows <span class="sub">— live window</span></h2></div><div class="app-list" id="active-flows"><p class="empty">Loading…</p></div></div>
         </div>
 
@@ -376,7 +409,33 @@
             };
             fillList('top-apps', data.top_apps, a => `<div class="app-item"><span>${a.name}</span><span class="bytes">${formatBytes(a.bytes)} · ${a.flows}f</span></div>`, 'No data');
             fillList('top-protocols', data.top_protocols, p => `<div class="app-item"><span>${p.name}</span><span class="bytes">${formatBytes(p.bytes)} · ${p.flows}f</span></div>`, 'No data');
-            fillList('bandwidth-devices', devices, d => `<div class="app-item"><span style="font-family:monospace;">📟 ${shortDev(d.device)}</span><span class="bytes">↑${formatBytes(d.up_bytes)} ↓${formatBytes(d.down_bytes || 0)}</span></div>`, 'No data');
+            // MEME LANGAGE DE LECTURE QUE LA PAGE RENSEIGNEMENT (#1240), applique
+            // au terminal : ici l'acteur n'est pas une adresse qui attaque, c'est
+            // une machine du parc qui parle vers l'exterieur. Trois signes, les
+            // memes : le GLYPHE dit ce qu'elle fait (sa categorie dominante, lue
+            // dans ce qui a REELLEMENT ete classe), le BLOC PLEIN dit combien elle
+            // pese, le TAMPON dit si elle a declenche quelque chose.
+            const volMax = devices.reduce((m, d) =>
+                Math.max(m, (d.up_bytes || 0) + (d.down_bytes || 0)), 1);
+            fillList('bandwidth-devices', devices, d => {
+                const vol = (d.up_bytes || 0) + (d.down_bytes || 0);
+                const part = Math.min(1, vol / volMax);
+                const cls = part >= .6 ? 'n4' : part >= .3 ? 'n3' : part >= .1 ? 'n2' : '';
+                // Categorie dominante = celle qui porte le plus de flux, pas la
+                // premiere venue : c'est elle qui caracterise le terminal.
+                const bc = d.by_category || {};
+                const dom = Object.keys(bc).sort((a, b) => bc[b] - bc[a])[0];
+                const m = dom ? catMeta(dom) : { icon: '📟' };
+                const na = (d.alerts && d.alerts.length) || 0;
+                return `<div class="app-item acteur">
+                    <span class="nat" title="${esc(dom || 'aucune categorie classee')}">${m.icon}</span>
+                    <span class="ident"><code>${esc(shortDev(d.device))}</code>
+                        <small>${d.flows || 0} flux · ↑${formatBytes(d.up_bytes)} ↓${formatBytes(d.down_bytes || 0)}</small></span>
+                    <span class="multi ${cls}"><b>${formatBytes(vol)}</b><i>total</i></span>
+                    ${na ? `<span class="tampon exfil" title="${na} alerte(s) d'exfiltration sur ce terminal">EXFIL ×${na}</span>`
+                         : '<span class="tampon ras" title="aucune alerte d\'exfiltration">RAS</span>'}
+                </div>`;
+            }, 'Aucun terminal observ\u00e9');
             fillList('active-flows', data.active_flows, f => {
                 const m = catMeta(f.category); const name = f.service || f.dst;
                 return `<div class="app-item"><span><span title="${f.category || 'other'}">${m.icon}</span> ${name} <span style="color:var(--text-dim);">${f.proto || ''}</span></span><span class="bytes">↑${formatBytes(f.up_bytes)} ↓${formatBytes(f.down_bytes)}</span></div>`;

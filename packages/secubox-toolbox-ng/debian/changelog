@@ -1,3 +1,60 @@
+secubox-toolbox-ng (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — PAYS SOURCE : le WAF geolocalise enfin ses evenements. Tous les
+    acteurs portaient `countries: 0`, avec deux consequences dont une invisible :
+    une CAMPAGNE se definit chez actord par « plusieurs IP OU plusieurs pays » —
+    sans pays, la moitie de la definition ne pouvait jamais se declencher ; et
+    une CARTE du renseignement n'a rien a afficher sans geolocalisation.
+  * LECTURE LOCALE, JAMAIS UN APPEL RESEAU : base GeoLite2 deja presente sur la
+    box (/usr/share/GeoIP/GeoLite2-Country.mmdb). Interroger un service tiers
+    ferait fuiter la liste de nos visiteurs — l'inverse de ce que cette box
+    defend — et ajouterait une latence sur le chemin critique du WAF.
+  * PAYS SEULEMENT, pas de ville : le bareme n'accorde qu'un point au pays, il
+    sert a ecarter, jamais a conclure. Une geolocalisation plus fine couterait
+    une base bien plus lourde pour une donnee personnelle inutilisee.
+  * Les adresses privees et non routables ne recoivent PAS de pays : leur en
+    inventer un placerait nos propres machines sur la carte des attaquants.
+  * Base absente ou illisible = geolocalisation desactivee, le WAF demarre quand
+    meme. Perdre un axe de correlation ne justifie pas de perdre le pare-feu.
+  * Nouvelle dependance : github.com/oschwald/maxminddb-golang v1.13.1, lecteur
+    PUR GO (sans cgo), compatible avec la compilation statique arm64.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 12:00:00 +0200
+
+secubox-toolbox-ng (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — REJEU DE DEMARRAGE BORNE, distinct de la retention. `--rebuild-max`
+    (defaut 50 000) plafonne les evenements rejoues pour reconstruire le graphe.
+    Ce qu'on GARDE et ce qu'on RECHARGE en memoire n'ont pas les memes
+    contraintes : le rejeu est LINEAIRE (~220 us l'evenement, mesure sur la
+    cible : 708 ms pour 3187) et l'API reste FERMEE pendant. Sans ce plafond,
+    une retention genereuse tenait le demon des minutes hors ligne — c'est ce
+    qui faisait passer la carte Renseignement pour vide, jusqu'au SIGKILL de
+    systemd sur expiration du delai d'arret.
+  * Le plafond etait deja la, code en dur a 200 000 : il devient explicite,
+    reglable, et par defaut dimensionne sur une mesure (~11 s de demarrage).
+  * Les acteurs plus anciens que le rejeu ne sont pas perdus : ils reapparaissent
+    des qu'ils se manifestent, et leurs preuves restent dans le ledger.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 11:00:00 +0200
+
+secubox-toolbox-ng (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — CORRELATION MULTI-COUCHE : sbx-authwatch alimente le graphe d'acteurs.
+    Nouveaux drapeaux `--actor-socket` (defaut : la socket d'ingestion, "" pour
+    desactiver) et `--credential-secret`. Le contrat declare cinq capteurs et un
+    seul emettait : le graphe ne voyait que du HTTP.
+  * authwatch apporte le COMPTE VISE, qui alimente `CredentialTokenHash` — l'axe
+    le plus lourd du bareme (30 points sur 96) et le seul totalement mort — et
+    une COUCHE differente : un acteur qui sonde le HTTP ET force du SSH devient
+    une personnalite reconnaissable, la ou c'etaient deux profils separes.
+  * Le compte part en HMAC-SHA256 avec un secret local rotatable, jamais en
+    clair. Secret illisible = on perd l'axe « compte », pas la couche.
+  * Emission fire-and-forget : actord absent ou lent ne ralentit ni la detection
+    ni le bannissement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 10:40:00 +0200
+
 secubox-toolbox-ng (0.3.12-1~bookworm1) bookworm; urgency=medium
 
   * Upgrade ne coupe plus les services ENABLED. Toutes les unités sont

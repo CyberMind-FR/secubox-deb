@@ -1,3 +1,290 @@
+secubox-waf-ng (1.14.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — AVATARS TYPES : nature x niveau, au lieu d'un masque identique pour
+    tout le monde. Le glyphe dit CE QUE FAIT le profil, la couleur CE QU'IL PESE.
+  * La nature se lit dans ce qu'on a REELLEMENT observe, par certitude
+    decroissante : revenir apres plusieurs sanctions, c'est insister ; une
+    hypothese de campagne ciblee le dit ; une automation elevee trahit l'outil ;
+    plusieurs pays, plusieurs adresses. A defaut c'est du bruit de fond, et on le
+    montre comme tel plutot que de lui inventer une intention.
+  * Le niveau vient des SANCTIONS d'abord, de la priorite ensuite — cette
+    derniere est identique pour presque tous les acteurs et ne discrimine rien.
+    Le glyphe apparait aussi sur chaque ligne de la liste.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 16:00:00 +0200
+
+secubox-waf-ng (1.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — LE NOMBRE D'ADRESSES PREND LA PLACE FORTE. Un profil revu depuis sept
+    adresses est une personnalite qui revient malgre le changement d'IP : c'est
+    precisement ce que le moteur cherche a etablir, et c'etait relegue dans une
+    petite etiquette. Le compte devient le premier signe lu de la ligne, avec une
+    intensite qui suit le nombre (cyan, orange, rouge). La priorite, identique
+    pour presque tous les acteurs, descend en second rang.
+  * TAMPON DEFCON sur les profils deja sanctionnes. Le graphe compte desormais
+    les SANCTIONS par acteur (`bans`) — le capteur dit s'il a observe ou bloque,
+    l'information ne s'arretait nulle part. Un profil banni dix fois et qui
+    revient n'a pas le poids d'un profil observe une fois : l'echelle va de
+    DEFCON 5 a DEFCON 1, du plus bas au plus insistant. Les sanctions
+    s'additionnent lors d'une consolidation d'acteurs.
+  * FORMULATION CORRIGEE : « shadow · aucune action » se lisait comme « rien ne
+    te protege ». C'est faux — le WAF bannit avec ses propres regles pendant que
+    le renseignement se contente d'observer. Le bandeau dit desormais
+    « renseignement · observe — le WAF protege », et le badge du profil
+    « renseignement : propose, n'applique pas ».
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 15:40:00 +0200
+
+secubox-waf-ng (1.13.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — IHM : la page Renseignement s'ouvre sur les CAMPAGNES, pas sur les
+    acteurs. Sur cette box, 115 acteurs se ramenent a 13 campagnes : c'est le
+    mode operatoire qui se retient, pas l'identifiant d'un profil — lequel
+    changera d'ailleurs au prochain rebuild du graphe.
+  * Chaque campagne porte ce qui la caracterise : nombre d'acteurs, sources
+    distinctes, cibles, et combien de ces cibles N'EXISTENT PAS — marqueur
+    orange, parce qu'un nom d'hote inexistant est un mot de dictionnaire et non
+    une cible. C'est ce qui distingue l'enumeration de sous-domaines de la chasse
+    ciblee, d'un coup d'oeil.
+  * « Recurrents » et « Tous » restent a un clic.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 15:00:00 +0200
+
+secubox-waf-ng (1.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — LES CAMPAGNES SONT ENFIN DES CAMPAGNES. /campaigns rendait « les
+    acteurs ayant au moins deux IP », ce qui n'en est pas une : c'est un acteur
+    mobile. Une campagne regroupe desormais les ACTEURS PARTAGEANT LE MEME MODE
+    OPERATOIRE, signature = l'ensemble de leurs cibles.
+  * CE QUE LA MESURE MONTRAIT : 34 acteurs visant exactement `git.gk2` et
+    `gitea.gk2`, memes cibles, meme priorite, meme continuite — trente-quatre
+    lignes identiques dans l'interface, et l'operateur qui demande a juste titre
+    pourquoi elles ne sont pas regroupees.
+  * POURQUOI ON REGROUPE SANS FUSIONNER : ces hotes EXISTENT. Trente-quatre
+    sources qui chassent du Gitea ne sont pas une meme personne — ce peut etre le
+    meme outil public lance par trente-quatre inconnus. Les fusionner affirmerait
+    une identite que la preuve ne soutient pas. Les regrouper dit ce qu'on sait :
+    meme mode operatoire, continuite de campagne probable. C'est exactement la
+    distinction que porte le pied de page du panneau.
+  * Une campagne suppose une PLURALITE : plusieurs acteurs, ou un acteur qui s'est
+    deplace. Un profil isole n'en est pas une. Chaque groupe porte ses acteurs,
+    ses sources distinctes, ses pays, ses cibles et combien sont INEXISTANTES —
+    ce dernier chiffre distingue l'enumeration de sous-domaines de la chasse
+    ciblee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 14:35:00 +0200
+
+secubox-waf-ng (1.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — CONSOLIDATION : deux acteurs deja crees peuvent se reveler un seul.
+    `Observe` rattachait une NOUVELLE observation au meilleur acteur existant,
+    mais si deux acteurs s'etaient formes separement — premieres observations qui
+    ne se recoupaient pas encore, ou axe de correlation arrive apres eux — RIEN
+    ne les reunissait ensuite. L'operateur voyait trois profils cote a cote, six
+    ou sept adresses chacun, en reconnaissant a l'oeil la meme attaque.
+  * CE QUI AUTORISE UNE FUSION : jamais une ressemblance, une PREUVE PARTAGEE que
+    la coincidence n'explique pas — deux mots de dictionnaire INEXISTANTS en
+    commun, ou une adresse source commune. Un hote qui EXISTE ne compte jamais :
+    deux visiteurs du Hall ne doivent pas devenir un attaquant (verrouille par un
+    test).
+  * L'anciennete prime : l'acteur le plus ancien absorbe, garde son identifiant
+    et son historique — un profil suivi depuis des jours ne change pas de nom
+    sous les yeux de l'operateur. L'index suit la fusion.
+  * actord APPREND les hotes inexistants des etiquettes du capteur : il ne
+    connait pas la table des routes du WAF, mais le WAF etiquette deja
+    `host_anomaly:unrouted`. Consolidation toutes les deux minutes — la preuve
+    qui autorise une fusion n'apparait qu'une fois les profils nourris.
+  * La fusion est irreversible EN MEMOIRE, d'ou le seuil haut ; les preuves
+    restent dans le ledger et le graphe se reconstruit du journal.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 14:10:00 +0200
+
+secubox-waf-ng (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — LIEN PAR DICTIONNAIRE : deux adresses qui recitent le meme mot
+    inexistant sont reliees. Le bareme comparait des chemins, des outils, des
+    empreintes — jamais CE QUI EST VISE. Or l'enumeration de sous-domaines ne
+    varie ni le chemin (toujours « / ») ni l'outillage : elle ne varie que
+    l'HOTE. Deux adresses rejouant `softbank`, `tinkoff`, `qq`, `taobao` sur le
+    joker DNS etaient donc vues comme deux inconnus sans rapport.
+  * L'axe ne compte QUE pour un hote inexistant (etiquette `host_anomaly:unrouted`
+    posee par le WAF). Partager `hall.gk2` ne prouve rien : tout le monde le
+    visite. Partager `qianbao.secubox.in`, un nom qui n'a jamais existe, c'est
+    tirer le meme mot du meme dictionnaire — la coincidence n'est pas credible.
+    Poids 22, et la cible entre dans l'index des candidats.
+  * FAUX POSITIF CORRIGE, trouve par les tests de cette meme correction : le
+    moteur fusionnait deux scanners ETRANGERS des lors qu'ils visaient « / » avec
+    une famille d'outillage banale — 30 points pour deux coincidences qui n'en
+    sont pas. Une valeur UBIQUITAIRE n'a pas de valeur de preuve : « / » ne
+    rapproche personne de personne. Le filtre vaut aussi au denominateur.
+  * Mesure sur la cible avant correctif : 38 cibles distinctes vues par les
+    acteurs, dont 21 INEXISTANTES. Un acteur a 12 cibles, toutes les 12
+    inexistantes, depuis 5 adresses.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 13:40:00 +0200
+
+secubox-waf-ng (1.10.4-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — La correction des droits visait la MAUVAISE socket. Lancee juste
+    apres actord (Type=simple : systemd rend la main des le fork), l'unite voit
+    encore l'ANCIENNE socket — actord reconstruit son graphe avant d'ouvrir la
+    nouvelle, ce qui prend quelques secondes. Le script corrigeait donc un inode
+    condamne, verifiait deux fois en une seconde, et repartait satisfait.
+  * Il applique desormais EN CONTINU pendant douze secondes, sans sortie
+    anticipee, ce qui couvre largement le demarrage d'actord. Cout nul : c'est un
+    oneshot qui ne retient personne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 13:15:00 +0200
+
+secubox-waf-ng (1.10.3-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — La correction des droits de la socket d'ingestion passe dans un
+    SCRIPT LIVRE (/usr/sbin/secubox-actord-ingest-perms) au lieu d'un ExecStart
+    en ligne. L'analyseur de systemd l'avait fait echouer DEUX FOIS en silence :
+    avec un seul `$`, il developpait `$S` et `$i` en chaine VIDE ; avec `$$`, il
+    les passait litteralement et le shell lisait `$$` comme son propre PID. Dans
+    les deux cas l'unite sortait en 0 — un echec silencieux et vert, le pire qui
+    soit, et l'ingestion Actor Intelligence restait muette.
+  * Le script DIT desormais ce qu'il fait et ce qu'il n'a pas pu faire : succes
+    journalise, echec apres 20 s journalise en erreur explicite (« l'ingestion
+    restera muette »). Il ne fait toujours pas echouer le demarrage : une
+    ingestion muette vaut mieux qu'un service bloque — mais elle ne sera plus
+    invisible.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 13:05:00 +0200
+
+secubox-waf-ng (1.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — L'unite de droits de la socket d'ingestion ne faisait RIEN, et le
+    signalait comme un succes. systemd developpe les `$VAR` dans ExecStart AVANT
+    de passer la ligne au shell : ecrits avec un seul `$`, les `$S` et `$i` de la
+    boucle arrivaient VIDES. L'unite s'executait, sortait en 0, et la socket
+    restait en groupe `secubox` — le pire des echecs : silencieux et vert. Les
+    `$` sont doubles.
+  * C'est la troisieme fois que cette permission fait taire l'ingestion sans
+    trace : d'abord le groupe manquant, puis RemainAfterExit qui figeait l'unite,
+    maintenant l'expansion systemd. La verification post-deploiement est
+    desormais explicite : on casse le groupe, on redemarre, on verifie qu'il se
+    repare.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 12:50:00 +0200
+
+secubox-waf-ng (1.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — L'INGESTION NE REDEVIENT PLUS MUETTE AU REDEMARRAGE. L'unite qui
+    replace la socket d'ingestion dans le groupe `actord-ingest` portait
+    `RemainAfterExit=yes` : apres son premier passage elle restait « active », le
+    `Wants=` d'actord ne la relancait plus, et chaque redemarrage d'actord
+    recreait une socket en groupe `secubox` que plus personne ne corrigeait.
+    L'emission du WAF repartait alors dans le vide — fire-and-forget, donc SANS
+    LA MOINDRE TRACE. Le meme symptome que la permission d'origine, revenu deux
+    fois apres avoir ete « corrige ».
+  * Sans RemainAfterExit, l'unite retombe inactive apres son passage et se rejoue
+    a chaque demarrage d'actord : une correction de droits n'a pas d'etat a
+    conserver.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 12:35:00 +0200
+
+secubox-waf-ng (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — PAYS SOURCE : sbxwaf geolocalise ses evenements (voir toolbox-ng
+    0.5.0 pour le detail). Tous les acteurs portaient `countries: 0` : la moitie
+    de la definition d'une campagne — « plusieurs IP OU plusieurs pays » — ne
+    pouvait jamais se declencher, et une carte du renseignement n'avait rien a
+    afficher. Lecture LOCALE de GeoLite2, jamais un appel reseau.
+  * Note de packaging : sbxwaf et sbx-actord sont livres par CE paquet, mais
+    compiles depuis le module Go de secubox-toolbox-ng. Modifier leur source
+    demande donc de reconstruire secubox-waf-ng, pas seulement toolbox-ng.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 12:15:00 +0200
+
+secubox-waf-ng (1.9.2-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — IHM Actor Intelligence : la liste montre ce qui COMPTE. Cent trois
+    acteurs tous « LOW », avec des priorites entre 14 et 33, formaient un mur de
+    lignes identiques : ni le niveau ni la priorite ne discriminent quoi que ce
+    soit a cette echelle.
+  * Le signal utile est ailleurs — COMBIEN D'ADRESSES un meme profil a utilisees.
+    Un acteur revu depuis onze IP est une personnalite qui revient ; un acteur vu
+    une fois est du bruit de fond. La vue s'ouvre donc sur les RECURRENTS (29 sur
+    103 aujourd'hui), triables par adresses, continuite, priorite ou recence, et
+    « Tous » reste a un clic.
+  * Chaque ligne porte desormais ses marqueurs de continuite — nombre d'adresses,
+    score de continuite, nombre de cibles — la ou elle ne montrait qu'une
+    priorite identique pour tout le monde.
+  * L'etat vide est utile plutot que muet : « aucun profil revu depuis plusieurs
+    adresses — c'est ce que le moteur cherche », avec le renvoi vers la vue
+    complete.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 11:30:00 +0200
+
+secubox-waf-ng (1.9.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — RETENTION GENEREUSE dans l'unite actord : 360 h (quinze jours), pour
+    que la correlation puisse reconnaitre une personnalite qui revient de semaine
+    en semaine — l'usage vise. Elle etait a 720 h par defaut, puis ramenee a 48 h
+    en urgence par une surcharge systemd posee a la main pendant l'incident.
+  * Le rejeu de demarrage est borne separement (`--rebuild-max 50000`) : c'est lui
+    qui tenait le demon hors ligne, pas la retention. Deux chiffres, deux
+    contraintes. La surcharge d'urgence /etc/systemd/system/secubox-actord.service.d
+    devient inutile et doit etre retiree.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 11:05:00 +0200
+
+secubox-waf-ng (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — CORRELATION MULTI-COUCHE : authwatch alimente le meme graphe que le
+    WAF. Le contrat d'enveloppe declare CINQ capteurs (waf, dpi, authwatch,
+    sentinel, replay) et UN SEUL emettait : le graphe d'acteurs ne voyait que du
+    HTTP, et `by_sensor` ne contenait que « waf ».
+  * authwatch apporte deux choses qu'aucun autre capteur ne donne : le COMPTE
+    VISE, qui alimente `CredentialTokenHash` — l'axe le plus lourd du bareme
+    (30 points sur 96) et le seul totalement mort —, et une COUCHE differente.
+    Un acteur qui sonde le HTTP ET force du SSH devient une personnalite
+    reconnaissable, la ou c'etaient deux profils separes.
+  * Le compte n'est JAMAIS emis en clair : HMAC-SHA256 avec un secret local
+    rotatable, genere par le postinst en 0600 (le remplacer rend les anciens
+    condenses inexploitables, ce qui est le but). Secret illisible = on perd
+    l'axe « compte », pas la couche : IP, service vise et gravite partent quand
+    meme.
+  * Emission FIRE-AND-FORGET comme celle du WAF : actord absent, lent ou arrete,
+    authwatch continue de detecter et de bannir sans ralentir. Un moteur
+    d'intelligence en panne ne doit jamais affaiblir la protection.
+  * authwatch tourne deja sous `secubox-waf`, deja membre d'`actord-ingest` : la
+    permission qui avait rendu l'ingestion muette (1.7.17) ne se repose pas.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 10:20:00 +0200
+
+secubox-waf-ng (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — ACTOR INTELLIGENCE AGREGE ENFIN. Le moteur creait UN ACTEUR PAR
+    EVENEMENT — 1192 acteurs pour 1192 evenements, zero campagne. Cause exacte :
+    la similarite additionne huit axes ponderes et le rattachement exige 50
+    points, mais seuls trois axes sont alimentes sur cette box (chemin 18, outil
+    12, IP 10). Plafond atteignable : 40. Le seuil ne POUVAIT PAS etre franchi,
+    meme avec une concordance parfaite. Le bareme avait ete calibre pour huit
+    capteurs et s'appliquait a trois.
+  * Le score reste une mesure ABSOLUE — donc comparable dans le temps, et un
+    verdict deja rendu n'est pas falsifie. C'est la DECISION de rattachement qui
+    s'adapte : `similarity.SeuilEffectif` ramene le seuil nominal a la masse
+    reellement COMPARABLE entre deux signatures (les axes renseignes des deux
+    cotes), sans jamais descendre sous un plancher de masse absolue (20). Une
+    concordance legere ne devient pas une preuve parce qu'on n'avait rien
+    d'autre a comparer : un pays partage seul ne rattache toujours pas.
+  * INDEX DES CANDIDATS. `Observe` comparait chaque observation a TOUS les
+    acteurs : cout quadratique. Avec un acteur par evenement, le demon a brule
+    6 h 46 de processeur sans jamais ouvrir son API — page Renseignement vide,
+    systemd contraint de le tuer au SIGKILL. La similarite n'accordant de points
+    qu'a des axes EGAUX, restreindre aux acteurs partageant au moins une valeur
+    n'approxime rien : meme resultat, sans le balayage.
+  * Rattachement rendu REPRODUCTIBLE : a score egal, l'ID tranche. L'ordre d'un
+    parcours de map rendait le resultat dependant de l'execution.
+  * Tests : agregation a travers des IP differentes (la personnalite recurrente),
+    non-fusion de deux profils etrangers, filtrage effectif de l'index sur mille
+    acteurs, et les trois regles du seuil effectif.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 09:30:00 +0200
+
 secubox-waf-ng (1.7.17-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — ACTOR INTELLIGENCE NE RECEVAIT RIEN, ET PERSONNE NE LE SAVAIT. sbxwaf

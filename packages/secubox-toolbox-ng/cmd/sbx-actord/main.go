@@ -43,6 +43,11 @@ func main() {
 		shadow     = flag.Bool("shadow", true, "mode observation (Phase 0/1) : ne décide ni n'applique rien")
 		readOnly   = flag.Bool("read-only", false, "n'ingère pas ; sert uniquement l'API sur un store existant")
 		retention  = flag.Duration("retention", 30*24*time.Hour, "durée de rétention des événements")
+		rebuildMax = flag.Int("rebuild-max", DefaultRebuildMax,
+			"plafond d'événements rejoués au démarrage pour reconstruire le graphe. "+
+				"DISTINCT de --retention : ce qu'on garde et ce qu'on recharge en "+
+				"mémoire n'ont pas les mêmes contraintes. Le rejeu est linéaire "+
+				"(~220 µs/événement sur la cible) et l'API reste fermée pendant")
 		queue      = flag.Int("queue", 4096, "profondeur de la file d'ingestion (backpressure)")
 		workers    = flag.Int("workers", 2, "nombre de workers d'écriture")
 		replayPath = flag.String("replay", "", "rejoue un journal NDJSON d'enveloppes (calibration RFC-0013 §13) puis quitte")
@@ -73,11 +78,12 @@ func main() {
 	defer led.Close()
 
 	srv := &Server{
-		store:  st,
-		shadow: *shadow,
-		graph:  graph.New(0),
-		ledger: led,
-		accum:  map[string]*actorSignals{},
+		store:      st,
+		shadow:     *shadow,
+		graph:      graph.New(0),
+		ledger:     led,
+		accum:      map[string]*actorSignals{},
+		rebuildMax: *rebuildMax,
 	}
 	srv.rebuild() // reconstruit le graphe en mémoire depuis les événements persistés
 
@@ -114,11 +120,12 @@ func main() {
 	}()
 
 	go srv.pruneLoop(*retention)
+	go srv.consolidationLoop()
 
 	// Arrêt propre.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	log.Printf("actord: démarré (db=%s, retention=%s)", *dbPath, *retention)
+	log.Printf("actord: démarré (db=%s, retention=%s, rejeu max=%d)", *dbPath, *retention, *rebuildMax)
 	<-ctx.Done()
 	log.Printf("actord: arrêt")
 }

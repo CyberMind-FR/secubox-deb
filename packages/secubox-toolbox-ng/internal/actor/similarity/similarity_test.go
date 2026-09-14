@@ -67,3 +67,41 @@ func TestSimilarite_Vides(t *testing.T) {
 		t.Errorf("champs vides identiques = %d, attendu 0", v)
 	}
 }
+
+// ── Seuil adapte aux capteurs presents (2026-09-14) ──────────────────────────
+
+func TestSeuilEffectif_SeDetendQuandPeuDeCapteurs(t *testing.T) {
+	// Cas reel de la box : seuls chemin (18), outil (12) et IP (10) sont
+	// alimentes. Avec le seuil nominal de 50, le plafond atteignable etait 40 —
+	// aucun rattachement n'etait possible, d'ou un acteur par evenement.
+	const comparableReel = WPathSeq + WTool + WIP
+	s := SeuilEffectif(50, comparableReel)
+	if s >= comparableReel {
+		t.Fatalf("seuil %d >= plafond atteignable %d : le rattachement reste impossible", s, comparableReel)
+	}
+	if s < MasseMin {
+		t.Fatalf("seuil %d sous le plancher de masse %d", s, MasseMin)
+	}
+}
+
+func TestSeuilEffectif_NeDescendJamaisSousLePlancher(t *testing.T) {
+	// Un deploiement qui ne partagerait qu'un pays (poids 1) ne doit pas
+	// rattacher pour autant : le plancher tient.
+	if s := SeuilEffectif(50, WCountry); s != MasseMin {
+		t.Fatalf("pays seul : seuil %d, attendu le plancher %d", s, MasseMin)
+	}
+}
+
+func TestSeuilEffectif_TousCapteursRendLeSeuilNominal(t *testing.T) {
+	if s := SeuilEffectif(50, PoidsTotal); s != 50 {
+		t.Fatalf("tous capteurs : seuil %d, attendu le nominal 50", s)
+	}
+}
+
+func TestComparable_IgnoreLesAxesQueLUnDesDeuxNePortePas(t *testing.T) {
+	a := Signature{UAFamily: "nuclei", PathSig: "p1"}
+	b := Signature{UAFamily: "nuclei"} // pas de PathSig : axe non comparable
+	if got := Comparable(a, b); got != WTool {
+		t.Fatalf("comparable = %d, attendu %d (l'outil seul)", got, WTool)
+	}
+}

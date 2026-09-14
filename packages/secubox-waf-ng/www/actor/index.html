@@ -117,6 +117,60 @@
   .honey{display:flex;align-items:center;gap:12px}.honey .big{font-size:1.5rem;font-weight:700;color:#ffcc00}
   .vide{color:var(--dim);font-size:.78rem;padding:14px;text-align:center;border:1px dashed var(--border);border-radius:8px}
   .foot{margin-top:1rem;color:var(--dim);font-size:.62rem;text-align:center}.foot b{color:var(--cyan)}
+
+/* ── Barre de tri/filtre (#1240) ────────────────────────────────────────────
+   Cent acteurs tous « LOW » forment un mur illisible. On donne a l'operateur
+   de quoi trancher : ce qui REVIENT d'abord, le reste sur demande. */
+.barre{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 10px;
+  font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.barre .grp{display:flex;align-items:center;gap:6px}
+.barre .tri{margin-left:auto}
+.fb,.tb{font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;
+  color:var(--dim);background:transparent;border:1px solid var(--line);
+  border-radius:999px;padding:4px 10px;transition:.15s}
+.fb:hover,.tb:hover{color:var(--fg);border-color:var(--dim)}
+.fb.on{color:var(--bg);background:var(--cyan);border-color:var(--cyan)}
+.tb.on{color:var(--cyan);border-color:var(--cyan)}
+.fb i{font-style:normal;opacity:.65;margin-left:5px}
+/* Le nombre d'adresses est LE signal : un profil revu depuis onze IP est une
+   personnalite qui revient, pas du bruit. Il se lit avant tout le reste. */
+.tag.ips{color:var(--bg);background:var(--cyan);font-weight:700}
+.tag.cont{color:var(--cyan);border:1px solid var(--cyan);background:transparent}
+.tag.tgt{color:var(--dim);border:1px solid var(--line);background:transparent}
+/* Un nom d'hôte qui n'existe pas est un mot de dictionnaire, pas une cible :
+   c'est le marqueur de l'énumération de sous-domaines. */
+.tag.dico{color:var(--bg);background:var(--orange);font-weight:700}
+.actor.camp .ring{font-size:.78rem}
+/* LE CRITERE : combien d'adresses pour un seul profil. Bloc plein, lisible de
+   loin, intensite croissante — il doit se voir avant tout le reste. */
+.multi{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-width:54px;padding:6px 8px;border-radius:10px;line-height:1.05;
+  background:rgba(0,212,255,.10);border:1px solid rgba(0,212,255,.35);color:var(--cyan)}
+.multi b{font-size:1.15rem;font-weight:800;font-variant-numeric:tabular-nums}
+.multi i{font-style:normal;font-size:.52rem;letter-spacing:.12em;text-transform:uppercase;opacity:.8}
+.multi.n3{background:rgba(255,153,68,.12);border-color:rgba(255,153,68,.45);color:var(--orange)}
+.multi.n4{background:rgba(255,68,102,.14);border-color:rgba(255,68,102,.55);color:var(--red);
+  box-shadow:0 0 14px rgba(255,68,102,.18)}
+/* Tampon : il doit avoir l'air APPOSE, pas dessine — d'ou l'inclinaison et le
+   double filet. */
+.defcon{position:absolute;top:6px;right:8px;transform:rotate(-11deg);
+  display:flex;flex-direction:column;align-items:center;line-height:1;
+  padding:3px 8px;border:2px solid currentColor;border-radius:4px;
+  font-weight:800;letter-spacing:.06em;opacity:.9;pointer-events:none}
+.defcon b{font-size:.56rem}
+.defcon i{font-style:normal;font-size:.46rem;opacity:.75;letter-spacing:.1em}
+.defcon.d4{color:var(--blue)} .defcon.d3{color:var(--orange)}
+.defcon.d2{color:var(--red)}
+.defcon.d1{color:var(--red);box-shadow:0 0 12px rgba(255,68,102,.5);background:rgba(255,68,102,.12)}
+.actor{position:relative}
+/* L'avatar porte DEUX informations : le glyphe dit la nature, la couleur le
+   poids. Un masque identique pour tous n'en portait aucune. */
+.avatar.n1{background:linear-gradient(135deg,rgba(107,123,139,.22),rgba(107,123,139,.06));border:1px solid rgba(107,123,139,.35)}
+.avatar.n2{background:linear-gradient(135deg,rgba(0,212,255,.20),rgba(0,212,255,.05));border:1px solid rgba(0,212,255,.40)}
+.avatar.n3{background:linear-gradient(135deg,rgba(255,153,68,.22),rgba(255,153,68,.06));border:1px solid rgba(255,153,68,.50)}
+.avatar.n4{background:linear-gradient(135deg,rgba(255,68,102,.26),rgba(255,68,102,.08));border:1px solid rgba(255,68,102,.60);
+  box-shadow:0 0 16px rgba(255,68,102,.28)}
+.nat{font-size:.95rem;margin-right:2px;vertical-align:-1px}
 </style>
 </head>
 <body class="hybrid-dark">
@@ -144,7 +198,7 @@
     <h1>🧠 Actor Intelligence</h1>
     <span class="sub">TPI inverse · profils d'acteurs · défense adaptative</span>
     <span class="spacer"></span>
-    <span class="live" id="live"><i></i> shadow · observe</span>
+    <span class="live" id="live" title="Phase 0/1 : le moteur corrèle et propose une réponse graduée, sans jamais l'appliquer. La protection active, c'est le WAF."><i></i> renseignement · observe</span>
     <button class="btn" onclick="tick()">↻ Rafraîchir</button>
   </div>
 
@@ -154,6 +208,7 @@
     <div>
       <div class="card">
         <h2>🎭 Acteurs identifiés <span class="rt">TPI inverse</span></h2>
+        <div class="barre" id="barre"></div>
         <div id="list"></div>
       </div>
     </div>
@@ -176,25 +231,157 @@ function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return
 function jget(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
 var VECLBL={knowledge:"connaissance",continuity:"continuité",intent:"intention",automation:"automation",severity:"gravité",persistence:"persistance",confidence:"confiance"};
 var FLOW=["OBSERVE","DELAY","CHALLENGE","TARPIT","DENY","QUARANTINE"];
-var ACTS=[],CUR=null;
+var ACTS=[],CAMPS=[],CUR=null,CAMP=null;
 
 function stat(v,l,w){return '<div class="stat'+(w?' warn':'')+'"><div class="v">'+(v==null?'–':v)+'</div><div class="l">'+l+'</div></div>';}
 function rendKPIs(s){
   $('kpis').innerHTML=stat(s.posture||'Protégée','posture')+stat(s.blocked_24h,'bloquées · 24h')
     +stat(s.attempts_24h,'tentatives · 24h',s.attempts_24h>0)+stat(s.actors,'acteurs',s.actors>0)
     +stat(s.campaigns,'campagnes',s.campaigns>0)+stat(s.events_24h,'événements · 24h');
-  $('live').innerHTML='<i></i> '+(s.mode||'observe')+' · shadow';
+  // « shadow » se lisait comme « rien ne te protege ». C'est faux : le WAF
+  // bannit avec ses propres regles pendant que le renseignement se contente
+  // d'observer. On nomme donc ce qui observe, plutot que l'etat du mode.
+  $('live').innerHTML='<i></i> renseignement · '+(s.mode||'observe')+' — le WAF protège';
 }
 function rendFlow(){$('flow').innerHTML=FLOW.map(function(f,i){return '<div class="step'+(i===0?' on':'')+'"><b>'+(i+1)+'</b>'+f+'</div>';}).join('');}
-function rendList(){
+// CE QUI MERITE D'ETRE VU EN PREMIER. Une liste plate de cent acteurs tous
+// « LOW » ne dit rien : le niveau ne discrimine pas, la priorite non plus quand
+// tout tient entre 14 et 33. Le signal utile est ailleurs — COMBIEN D'ADRESSES
+// un meme profil a-t-il utilisees. Un acteur revu depuis onze IP est une
+// personnalite qui revient ; un acteur vu une fois est du bruit de fond. On
+// regroupe donc sur ce critere, et on trie par defaut sur lui.
+// LA CAMPAGNE EST L'UNITE DE LECTURE, PAS L'ACTEUR. Sur cette box, 115 acteurs
+// se ramenent a 13 campagnes : c'est le mode operatoire qui se retient, pas
+// l'identifiant d'un profil qui changera au prochain rebuild. On ouvre donc sur
+// les campagnes, et les acteurs restent a un clic.
+var FILTRE='campagnes', TRI='ips';
+function rendBarre(){
+  var rec=ACTS.filter(multi).length;
+  var f=[['campagnes','Campagnes','·'+CAMPS.length],
+         ['recurrents','Récurrents','·'+rec],
+         ['tous','Tous','·'+ACTS.length]];
+  var t=[['ips','adresses'],['continuite','continuité'],['priorite','priorité'],['recent','vu récemment']];
+  $('barre').innerHTML=
+    '<span class="grp">'+f.map(function(x){return '<button class="fb'+(FILTRE===x[0]?' on':'')+'" data-f="'+x[0]+'">'+x[1]+'<i>'+x[2]+'</i></button>';}).join('')+'</span>'
+   +'<span class="grp tri">trier : '+t.map(function(x){return '<button class="tb'+(TRI===x[0]?' on':'')+'" data-t="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</span>';
+  [].forEach.call($('barre').querySelectorAll('[data-f]'),function(b){b.onclick=function(){FILTRE=b.getAttribute('data-f');rendBarre();rendList();};});
+  [].forEach.call($('barre').querySelectorAll('[data-t]'),function(b){b.onclick=function(){TRI=b.getAttribute('data-t');rendBarre();rendList();};});
+}
+function multi(a){return (a.src&&a.src.ips||0)>1;}
+
+// AVATAR = NATURE x NIVEAU. Un masque identique pour tout le monde n'apprend
+// rien. Le glyphe dit CE QUE FAIT le profil, la couleur dit CE QU'IL PESE.
+//
+// La nature se lit dans ce qu'on a REELLEMENT observe, par certitude
+// decroissante : reciter des noms d'hotes inexistants, c'est enumerer ; revenir
+// apres plusieurs sanctions, c'est insister ; une hypothese de campagne ciblee
+// le dit ; une automation elevee trahit l'outil. A defaut c'est du bruit, et on
+// le montre comme tel plutot que de lui inventer une intention.
+function nature(a){
+  var v=a.vec||{}, hyp=((a.hyp||[])[0]||[''])[0];
+  if((a.bans||0)>=3)                return ['\u{1F501}','revient apres sanction'];
+  if(/cibl/.test(hyp))              return ['\u{1F3AF}','campagne ciblee'];
+  if((v.automation||0)>=70)         return ['\u{1F916}','outillage automatise'];
+  if((a.src&&a.src.countries||0)>1) return ['\u{1F30D}','plusieurs pays'];
+  if((a.src&&a.src.ips||0)>1)       return ['\u{1F500}','change d adresse'];
+  return ['\u{1F464}','bruit de fond'];
+}
+// Le niveau vient de ce qui pese vraiment : les sanctions d'abord, la priorite
+// ensuite — elle est identique pour presque tous les acteurs.
+function niveau(a){
+  if((a.bans||0)>=5) return 'n4';
+  if((a.bans||0)>=1 || a.priority>=70) return 'n3';
+  if(a.priority>=40) return 'n2';
+  return 'n1';
+}
+function avatarDe(a){
+  var n=nature(a);
+  return '<div class="avatar '+niveau(a)+'" title="'+esc(n[1])+'">'+n[0]+'</div>';
+}
+// TAMPON DEFCON. Le nombre de SANCTIONS deja prises contre un profil dit ce que
+// la priorite ne dit pas : celui-ci est revenu apres avoir ete banni. L'echelle
+// va de 5 (observe) a 1 (revenu encore et encore) — plus le chiffre est bas,
+// plus l'insistance est etablie.
+function defcon(bans){
+  bans=bans||0;
+  if(!bans) return '';
+  var lvl = bans>=10?1 : bans>=5?2 : bans>=3?3 : 4;
+  return '<span class="defcon d'+lvl+'" title="'+bans+' sanction'+(bans>1?'s':'')+' déjà prise'+(bans>1?'s':'')+' contre ce profil">'
+       +'<b>DEFCON '+lvl+'</b><i>'+bans+' ban'+(bans>1?'s':'')+'</i></span>';
+}
+function cont(a){return (a.vec&&a.vec.continuity)||0;}
+function trie(l){
+  var f={ips:function(a,b){return (b.src.ips-a.src.ips)||(b.priority-a.priority);},
+          continuite:function(a,b){return cont(b)-cont(a)||b.priority-a.priority;},
+          priorite:function(a,b){return b.priority-a.priority;},
+          recent:function(a,b){return String(b.last||'').localeCompare(String(a.last||''));}}[TRI];
+  return l.slice().sort(f);
+}
+// UNE CAMPAGNE, UNE LIGNE. Quarante-deux profils visant `git.gk2` et
+// `gitea.gk2` faisaient quarante-deux lignes rigoureusement identiques — memes
+// cibles, meme priorite, meme continuite. Regroupes, ils disent enfin quelque
+// chose : « un mode operatoire, 42 acteurs, 45 sources ».
+//
+// On REGROUPE sans FUSIONNER : ces hotes existent, et 42 sources qui chassent du
+// Gitea ne sont pas une meme personne. Le groupe affirme un mode operatoire
+// partage, jamais une identite.
+function rendCampagnes(){
   var box=$('list');
-  if(!ACTS.length){box.innerHTML='<div class="vide">😴 Aucun acteur corrélé — le moteur observe le trafic (shadow).</div>';$('profile').innerHTML='<div class="vide">—</div>';return;}
+  if(!CAMPS.length){
+    box.innerHTML='<div class="vide">Aucune campagne : il faut plusieurs acteurs partageant le même mode opératoire, '
+      +'ou un acteur qui s\'est déplacé. <button class="fb" onclick="FILTRE=\'tous\';rendBarre();rendList()">voir les acteurs</button></div>';
+    return;
+  }
   box.innerHTML='';
-  ACTS.forEach(function(a){
+  CAMPS.forEach(function(c){
+    var dico=c.cibles_inexistantes>0;
+    var col=dico?'var(--orange)':'var(--cyan)';
+    var d=document.createElement('div');d.className='actor camp'+(c.signature===CAMP?' on':'');
+    d.innerHTML='<div class="ring" style="--v:'+Math.min(100,c.nb_acteurs*2)+';--c:'+col+'">'+c.nb_acteurs+'</div>'
+      +'<div class="nm"><b>'+esc(c.signature)+'</b><div class="tg">'
+        +'<span class="tag ips">'+c.sources+' sources</span>'
+        +'<span class="tag tgt">'+c.cibles.length+' cible'+(c.cibles.length>1?'s':'')+'</span>'
+        +(dico?'<span class="tag dico" title="Noms d\'hôtes qui n\'existent pas : énumération de sous-domaines">'
+              +c.cibles_inexistantes+' inexistantes</span>':'')
+        +(c.pays>1?'<span class="tag cont">'+c.pays+' pays</span>':'')
+      +'</div></div>'
+      +'<div class="lvl"><b>'+c.nb_acteurs+'</b>acteurs</div>';
+    d.addEventListener('click',function(){CAMP=c.signature;CUR=c.acteurs[0];rendList();rendProfile();});
+    box.appendChild(d);
+  });
+}
+
+function rendList(){
+  if(FILTRE==='campagnes'){ rendCampagnes(); return; }
+  var box=$('list');
+  if(!ACTS.length){box.innerHTML='<div class="vide">😴 Aucun acteur corrélé — le moteur de renseignement observe. La protection WAF, elle, est active.</div>';$('profile').innerHTML='<div class="vide">—</div>';return;}
+  var vus=trie(FILTRE==='recurrents'?ACTS.filter(multi):ACTS);
+  box.innerHTML='';
+  if(!vus.length){
+    box.innerHTML='<div class="vide">Aucun profil revu depuis plusieurs adresses pour l\'instant — '
+      +'c\'est ce que le moteur cherche. <button class="fb" onclick="FILTRE=\'tous\';rendBarre();rendList()">voir tout</button></div>';
+    return;
+  }
+  vus.forEach(function(a){
     var col=a.priority>=80?'var(--red)':a.priority>=50?'var(--orange)':'var(--cyan)';
     var d=document.createElement('div');d.className='actor'+(a.id===CUR?' on':'');
-    d.innerHTML='<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>'
-      +'<div class="nm"><b>'+esc(a.id)+'</b><div class="tg">'+(a.tags||[]).map(function(t){return '<span class="tag '+(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')+'</div></div>'
+    var n=a.src&&a.src.ips||0;
+    // LE NOMBRE D'ADRESSES EST LE CRITERE, pas la priorite. Un profil revu depuis
+    // sept adresses est une personnalite qui revient malgre le changement d'IP —
+    // c'est precisement ce que le moteur cherche a etablir. Il prend donc la
+    // place forte de la ligne, avec une intensite qui suit le nombre ; la
+    // priorite, identique pour presque tous, descend en second rang.
+    d.innerHTML=(n>1
+        ? '<div class="multi n'+(n>=7?'4':n>=4?'3':'2')+'" title="Le même profil, vu depuis '+n+' adresses différentes">'
+            +'<b>×'+n+'</b><i>adresses</i></div>'
+        : '<div class="ring" style="--v:'+a.priority+';--c:'+col+'">'+a.priority+'</div>')
+      +defcon(a.bans)
+      +'<div class="nm"><b><span class="nat" title="'+esc(nature(a)[1])+'">'+nature(a)[0]+'</span> '+esc(a.id)+'</b><div class="tg">'
+        +(n>1?'<span class="tag ips" title="Le même profil, vu depuis '+n+' adresses">'+n+' IP</span>':'')
+        +(cont(a)?'<span class="tag cont" title="Continuité : '+cont(a)+'/100">↗ '+cont(a)+'</span>':'')
+        +((a.targets&&a.targets.length>1)?'<span class="tag tgt">'+a.targets.length+' cibles</span>':'')
+        +(a.tags||[]).map(function(t){return '<span class="tag '+(t[1]||'')+'">'+esc(t[0])+'</span>';}).join('')
+      +'</div></div>'
       +'<div class="lvl"><b>'+a.priority+'</b>'+esc(a.level||'')+'</div>';
     d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();});
     box.appendChild(d);
@@ -209,9 +396,9 @@ function rendProfile(){
   }).join('');
   var hyp=(a.hyp||[]).map(function(h){return '<div class="hyp"><span class="p">'+(h[1]*100).toFixed(0)+'%</span><span class="hb"><i style="width:'+Math.round(h[1]*100)+'%"></i></span><span>'+esc(h[0])+'</span></div>';}).join('');
   $('profile').innerHTML=
-    '<div class="phead"><div class="avatar">🎭</div>'
+    '<div class="phead">'+avatarDe(a)
     +'<div><div class="pid"><b>'+esc(a.id)+'</b></div>'
-    +'<div style="margin-top:4px"><span class="badge hi">priorité '+a.priority+' · '+esc(a.level)+'</span> <span class="badge sh">shadow · aucune action</span></div></div>'
+    +'<div style="margin-top:4px"><span class="badge hi">priorité '+a.priority+' · '+esc(a.level)+'</span> <span class="badge sh" title="Le moteur de renseignement observe et propose ; il n’applique rien. Le WAF, lui, bannit avec ses propres règles.">renseignement : propose, n’applique pas</span></div></div>'
     +'<div class="gscore"><div class="n">'+a.priority+'</div><div class="l">/100 priorité</div></div></div>'
     +'<div class="vec">'+bars+'</div>'
     +'<div class="facts"><div class="fact"><div class="l">Sources</div><div class="v">'+a.src.ips+' IP · '+a.src.asns+' ASN · '+a.src.countries+' pays</div></div>'
@@ -221,7 +408,8 @@ function rendProfile(){
   $('pver').textContent='algo v1 · poids v1';
 }
 function tick(){
-  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors')]).then(function(r){
+  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors'),jget('/api/v1/actor/campaigns')]).then(function(r){
+    CAMPS=r[2]||[];
     if(!r[0]){$('kpis').innerHTML='';$('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>';return;}
     rendKPIs(r[0]);ACTS=r[1]||[];
     if(CUR&&!ACTS.some(function(x){return x.id===CUR;}))CUR=null;
