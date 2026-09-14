@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Droits de la socket d'INGESTION d'Actor Intelligence (#1240).
+#
+# POURQUOI UNE UNITE SEPAREE. sbx-actord cree /run/secubox/actord.sock avec son
+# groupe primaire `secubox` ; sbxwaf tourne en `secubox-waf` et n'y appartient
+# pas : l'ecriture etait refusee, et comme l'emission est fire-and-forget, en
+# SILENCE. Il faut donc reassigner le groupe de cette socket apres coup.
+#
+# On ne peut pas le faire dans l'unite d'actord : son durcissement (RFC-0013
+# §15) pose `CapabilityBoundingSet=` VIDE, ce qui prive de CAP_CHOWN meme un
+# ExecStartPost prefixe `+`, donc execute en root. Le chgrp y echoue avec
+# « Operation not permitted ». Plutot que d'affaiblir le durcissement du demon
+# pour une correction de droits, on sort la correction dans cette unite-ci.
+#
+# On ne touche QUE l'ingestion : la socket d'API /run/secubox/actor.sock reste
+# en groupe `secubox`, dont nginx est membre — la basculer couperait actor.gk2.
+
+[Unit]
+Description=SecuBox — groupe de la socket d'ingestion Actor Intelligence
+After=secubox-actord.service
+BindsTo=secubox-actord.service
+PartOf=secubox-actord.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# COURSE AVEC LA RECREATION DE LA SOCKET. Une simple attente « le fichier
+# existe-t-il ? » ne suffit pas : au redemarrage, l'ANCIENNE socket est encore
+# la quand cette unite demarre. On lui changeait donc le groupe juste avant
+# qu'actord ne la remplace par une neuve, en groupe `secubox` — et le correctif
+# semblait pose alors qu'il ne l'etait plus.
+#
+# On insiste donc : on repose le groupe tant qu'il n'a pas TENU deux controles
+# consecutifs espaces d'une seconde. Au-dela de ~15 s on abandonne sans faire
+# echouer le demarrage : mieux vaut une ingestion muette qu'un service bloque.
+ExecStart=/bin/sh -c 'S=/run/secubox/actord.sock; i=0; ok=0; while [ $i -lt 30 ]; do if [ -S "$S" ]; then chgrp actord-ingest "$S" 2>/dev/null; chmod 0660 "$S" 2>/dev/null; if [ "$(stat -c %%G "$S" 2>/dev/null)" = actord-ingest ]; then ok=$((ok+1)); [ $ok -ge 2 ] && exit 0; else ok=0; fi; fi; i=$((i+1)); sleep 0.5; done; exit 0'
+
+[Install]
+WantedBy=secubox-actord.service

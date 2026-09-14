@@ -1,3 +1,34 @@
+secubox-waf-ng (1.7.17-1~bookworm1) bookworm; urgency=medium
+
+  * #1240 — ACTOR INTELLIGENCE NE RECEVAIT RIEN, ET PERSONNE NE LE SAVAIT. sbxwaf
+    emet une Event Envelope vers /run/secubox/actord.sock a chaque menace dont
+    l'IP est reelle, et l'annonce au demarrage. Mais la socket naissait en groupe
+    `secubox` (groupe primaire de l'unite actord) alors que sbxwaf tourne en
+    `secubox-waf`, qui n'y appartient pas : l'ecriture etait refusee. L'emission
+    etant FIRE-AND-FORGET, l'echec ne produisait ni erreur ni trace — le WAF
+    croyait emettre, actord n'entendait rien. Symptome visible : la carte
+    Renseignement affichait 0 acteur / 0 campagne quand le WAF comptait 15 000
+    menaces par jour, et /stats rendait events_24h=0, dropped=0 — jamais recu,
+    pas « recu puis jete ».
+  * Correctif au plus etroit : groupe systeme DEDIE `actord-ingest`, dont
+    `secubox-waf` et `secubox-actord` sont membres (postinst), applique a la
+    SEULE socket d'ingestion. sbxwaf le porte en SupplementaryGroups : il gagne
+    le droit d'ecrire la, et rien d'autre.
+  * La reassignation du groupe vit dans une UNITE SEPAREE
+    (secubox-actord-ingest.service, tiree par Wants=) et non dans un
+    ExecStartPost d'actord : le durcissement RFC-0013 §15 de ce dernier pose
+    `CapabilityBoundingSet=` VIDE, ce qui prive de CAP_CHOWN meme une commande
+    prefixee `+`, donc executee en root — le chgrp y echouait en « Operation not
+    permitted ». On sort la correction plutot que d'affaiblir le demon.
+  * CE QUI N'EST PAS TOUCHE, ET POURQUOI : le groupe primaire d'actord reste
+    `secubox`. La socket d'API /run/secubox/actor.sock doit rester lisible par ce
+    groupe, dont nginx est membre — la basculer aurait coupe actor.gk2.
+  * Effet attendu : les campagnes du WAF (167 campagnes, 1011 attaquants, dont
+    1007 adresses IP) et les acteurs partagent enfin la meme cle. La correlation
+    empreinte de campagne <-> acteur devient possible.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 13 Sep 2026 16:30:00 +0200
+
 secubox-waf-ng (1.7.16-1~bookworm1) bookworm; urgency=medium
 
   * actord : le socket d'INGESTION tolère les sondes de santé HTTP égarées

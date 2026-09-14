@@ -1,3 +1,25 @@
+secubox-certs (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * LA PAGE DES CERTIFICATS N'INVENTE PLUS DE DONNEES. Quand l'API tombait,
+    `getFallbackCerts()` remplacait silencieusement le parc par QUINZE
+    CERTIFICATS FICTIFS — dates d'expiration et compteurs d'attaques fabriques —
+    indistincts des vrais, avec pour seul signe un `console.warn` que personne ne
+    lit. Un operateur ouvrant la page pendant une panne pouvait y lire
+    « gk2.secubox.in : expire depuis 7 jours, 1245 attaques » et agir dessus.
+    Dans un outil de securite, une donnee inventee qui a l'air vraie est pire que
+    pas de donnee du tout.
+  * Desormais : tableau VIDE, bandeau « API des certificats injoignable » avec le
+    motif de l'echec, et un bouton Reessayer. La fonction de repli est supprimee,
+    pas neutralisee.
+  * Meme traitement pour les metriques : des zeros ont l'air d'une mesure — « 0
+    attaque » se lit comme « aucune attaque », pas comme « on ne sait pas ». La
+    panne est annoncee au lieu d'etre absorbee.
+  * Deux des quinze entrees fictives citaient `lldh.ganimed.fr` et
+    `oracle.ganimed.fr`, domaines decommissionnes le 2026-09-14 : elles
+    disparaissent avec le repli.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 14 Sep 2026 07:10:00 +0200
+
 secubox-certs (1.2.2-1~bookworm1) bookworm; urgency=high
 
   * 9 routes ouvertes, dont POST /issue, POST /renew-all et DELETE

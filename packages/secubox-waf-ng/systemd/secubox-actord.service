@@ -10,6 +10,7 @@
 # forget côté capteurs). Unité durcie (RFC-0013 §15).
 
 [Unit]
+Wants=secubox-actord-ingest.service
 Description=SecuBox Actor Intelligence — sbx-actord (shadow)
 Documentation=file:///usr/share/doc/secubox/actor-intelligence-rfc-pack.md
 After=network.target
@@ -23,6 +24,10 @@ ExecStart=/usr/sbin/sbx-actord --shadow \
   --ledger /var/lib/secubox/actor/evidence.db \
   --ingest-socket /run/secubox/actord.sock \
   --api-socket /run/secubox/actor.sock
+# INGESTION : la socket /run/secubox/actord.sock doit appartenir au groupe
+# `actord-ingest` pour que sbxwaf puisse y ecrire. Le durcissement de cette
+# unite (CapabilityBoundingSet= vide) interdit tout chgrp ici, meme en root :
+# la correction vit dans secubox-actord-ingest.service, tiree par Wants=.
 Restart=on-failure
 RestartSec=3
 
