@@ -54,7 +54,8 @@ def extrait(html: str) -> list[dict]:
 
 
 def main() -> int:
-    racine = Path(__file__).resolve().parents[3]
+    # parents[2] = packages/ — le script vit dans packages/secubox-sbxos/outils/.
+    racine = Path(__file__).resolve().parents[2]
     source = racine / "secubox-webos" / "www" / "hall" / "index.html"
     cible = Path(__file__).resolve().parents[1] / "www" / "mine" / "curation.json"
 
@@ -71,7 +72,7 @@ def main() -> int:
         "lieux": lieux,
     }
     cible.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"{len(lieux)} lieux → {cible.relative_to(racine.parent)}")
+    print(f"{len(lieux)} lieux → {cible.name}")
     return 0
 
 

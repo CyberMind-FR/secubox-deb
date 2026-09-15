@@ -1,4 +1,30 @@
-secubox-sbxos (0.3.0-1~bookworm1) bookworm; urgency=medium
+secubox-sbxos (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * SBX OS EST UN CLONE DU HALL (ref #1349). Il montre ce que le Hall montre —
+    sans cette règle ce sont deux bureaux qui divergent lentement, et celui
+    qu'on regarde le moins finit par mentir.
+  * DEUX SOURCES, DEUX QUESTIONS. `curation.json` dit CE QU'ON MONTRE : il est
+    EXTRAIT du `FEATURED` du Hall à la construction du paquet, pas recopié —
+    25 lieux, un jugement humain versionné avec le code. Le registre vivant dit
+    CE QUI RÉPOND : installé, actif. Le registre complet compte 121 services, et
+    un bureau à 121 tuiles est un mur.
+  * LE REGISTRE NE PEUT QU'ÉCARTER, JAMAIS AJOUTER, et seulement sur une
+    information POSITIVE d'absence : un service qu'il ne connaît pas n'est pas
+    éteint pour autant — l'ignorance n'est pas une preuve. S'il tombe, on garde
+    la curation entière : mieux vaut une tuile vers un service endormi qu'un
+    écran vide.
+  * `profil_min` n'existe pas dans la curation — le Hall masque par CSS selon la
+    session. On l'ajoute ici, et le défaut est `user` : un invité ne voit que ce
+    qui est explicitement public. Se tromper dans ce sens ne montre pas trop ;
+    l'inverse, si.
+  * `Mine.adopte()` : le MÊME chemin que `charge()` après son fetch —
+    validation, mémorisation, griefs, événements. Deux chemins d'adoption
+    divergeraient, et c'est toujours celui qu'on regarde le moins qui garderait
+    le bug. On valide même ce qu'on a fabriqué soi-même : le clone part de
+    données distantes, et passer par notre code ne les rend pas sûres.
+  * Cache du service worker en v3, et la curation suit la règle du manifeste —
+    réseau d'abord : servie depuis le cache, un service retiré resterait sur le
+    bureau.
 
   * ENTRER SANS MOT DE PASSE (ref #1353). SBX OS n'en demande jamais, et ce
     n'est pas une facilité : ce parcours n'en crée pas. Un appareil admis entre

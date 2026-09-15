@@ -36,7 +36,7 @@
 // sbx-carlette.js, index.html). Sans ce changement de nom, la stratégie
 // « cache d'abord » servirait l'ancienne coquille jusqu'au lancement SUIVANT —
 // et le réglage paraîtrait n'avoir rien fait.
-const VERSION = 'sbxos-v2';
+const VERSION = 'sbxos-v3';
 const CACHE_COQUILLE = `${VERSION}-coquille`;
 const CACHE_MANIFESTE = `${VERSION}-manifeste`;
 const CACHE_MEDIAS = `${VERSION}-medias`;
@@ -51,6 +51,7 @@ const COQUILLE = [
   './ui/sbx-damier.js',
   './hall/hall.js',
   './mine/mine.js',
+  './mine/clone.js',
 ];
 
 /** Combien de médias on garde. Au-delà, le plus ancien sort. */
@@ -89,7 +90,11 @@ function estMedia(url) {
 }
 
 function estManifeste(url) {
-  return new URL(url).pathname.endsWith('/manifeste.json');
+  // LA CURATION SUIT LA MÊME RÈGLE QUE LE MANIFESTE : réseau d'abord. C'est
+  // elle qui dit ce que le Hall montre ; servie depuis le cache, un service
+  // retiré resterait sur le bureau — ou l'inverse.
+  const p = new URL(url).pathname;
+  return p.endsWith('/manifeste.json') || p.endsWith('/curation.json');
 }
 
 /** Borne le cache des médias, du plus ancien au plus récent. */

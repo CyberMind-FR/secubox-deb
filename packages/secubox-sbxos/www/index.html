@@ -133,6 +133,7 @@
 
 <script type="module">
 import { Mine, profilSuffit } from './mine/mine.js';
+import { cloneDuHall } from './mine/clone.js';
 import { Hall, appliqueTheme, ECRANS } from './hall/hall.js';
 import './ui/sbx-damier.js';
 
@@ -337,10 +338,31 @@ compose();                        // d'abord le connu, instantanément
 // par PROFIL, et le profil dépend de la session. Charger d'abord donnerait le
 // bureau d'un invité à quelqu'un qui vient d'entrer, jusqu'au rafraîchissement
 // suivant.
+/**
+ * LE BUREAU EST UN CLONE DU HALL, pas une liste écrite ici.
+ *
+ * On tente le clone d'abord — la curation du Hall mariée à l'état vivant du
+ * registre —, et l'on retombe sur le manifeste statique s'il échoue. L'ordre
+ * compte : le manifeste statique est un EXEMPLE, le clone est la vérité.
+ *
+ * Le PROFIL vient de la session : c'est lui qui décide ce qui est autorisé,
+ * pendant que les favoris et les masques — propres à cet appareil — décident
+ * de ce qui est MONTRÉ. La Mine et le Hall, chacun son rôle.
+ */
+async function composeLeBureau(profil) {
+  try {
+    mine.adopte(await cloneDuHall({ profil }));
+  } catch (e) {
+    // Le clone a besoin du Hall ; son absence ne doit pas laisser un écran nu.
+    await mine.charge();
+  }
+  compose();
+}
+
 entreSansMotDePasse().then((r) => {
-  if (r === 'ouverte') {
-    $('note').textContent = 'Session ouverte sur cet appareil.';
-    return mine.charge().then(() => compose());
+  if (r === 'ouverte' || r === 'deja') {
+    if (r === 'ouverte') $('note').textContent = 'Session ouverte sur cet appareil.';
+    return composeLeBureau('user');
   }
   if (r === 'aucun') {
     // ON MONTRE LA PORTE PLUTÔT QU'UN BUREAU VIDE. « Rien n'apparaît » sans
@@ -355,8 +377,7 @@ entreSansMotDePasse().then((r) => {
   }
 }).catch(() => { /* l'ouverture est un confort : son échec n'arrête rien */ });
 
-mine.charge().then((change) => {
-  if (change) compose();
+composeLeBureau(mine.profil || 'guest').then(() => {
   if (mine.manifeste?.invitation === 'en_attente') mine.sondeInvitation();
 }).catch(() => {
   $('note').textContent = mine.manifeste
