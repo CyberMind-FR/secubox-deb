@@ -1,3 +1,53 @@
+secubox-acces (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE NIVEAU SE VOIT SANS SE LIRE (ref #1355). Une progression, pas trois
+    étiquettes indépendantes — c'est ce qui rend les signes mémorisables :
+    👋 guest, accueilli à la porte · 🔑 user, il a une clé · 👑 admin, il est
+    chez lui et décide qui entre.
+  * 👑 était DÉJÀ le signe des administrateurs dans la tuile du profileur. On
+    construit autour plutôt que d'inventer une seconde convention : un
+    vocabulaire visuel ne vaut que s'il est constant d'un écran à l'autre.
+  * LE MOT RESTE À CÔTÉ. Ici l'emoji s'AJOUTE au libellé, il ne le remplace pas
+    — contrairement au tag de Lexie, où la place manquait. Rien à compenser dans
+    l'arbre d'accessibilité : le mot est déjà là. L'infobulle dit ce que le rang
+    permet, ce que ni le mot ni le signe ne portent.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:23:34 +0200
+
+secubox-acces (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * UNE ADRESSE, FACULTATIVE, DANS LE FORMULAIRE (ref #1354). Elle ne sert pas
+    à entrer — l'entrée se fait par signature — mais à JOINDRE : poser un mot de
+    passe plus tard, ou renvoyer un lien si la personne change d'appareil.
+    Validée sans être vérifiée : l'expression n'atteste pas qu'une adresse
+    existe, rien ne le peut sans y écrire ; elle écarte ce qui ne peut PAS en
+    être une, pour que le champ ne devienne pas un second texte libre.
+  * LE LIEN D'ENTRÉE À USAGE UNIQUE, rendu à l'administrateur au moment où il
+    accorde, et UNE SEULE FOIS — un porteur qu'on peut redemander n'est plus à
+    usage unique en pratique.
+  * IL EST PLUS FAIBLE QUE LA SIGNATURE, ET C'EST ASSUMÉ. Un lien se lit ;
+    quiconque voit l'écran, le courriel ou l'historique entre à la place du
+    destinataire. Il n'existe que pour le cas que la signature ne couvre pas :
+    la clé vit par origine ET par navigateur, et qui a demandé depuis son
+    téléphone n'a rien à présenter depuis son ordinateur.
+  * L'USAGE UNIQUE EST UN DÉTECTEUR, pas seulement une limite : il n'empêche pas
+    l'interception, il la REND VISIBLE. Le destinataire qui trouve un lien mort
+    sait que quelqu'un est passé avant lui — et le client le lui DIT. Un lien
+    réutilisable laisserait les deux entrer sans que personne ne s'en aperçoive.
+  * Ce que la faiblesse impose, et qu'on applique : consommé avant d'être jugé
+    (une tentative ratée ne le laisse pas disponible), six heures de vie, 32
+    octets d'entropie, session plafonnée à `guest` et à 24 h, empreinte stockée
+    au lieu du jeton, et un seul message d'erreur pour « inconnu », « périmé »
+    et « déjà servi » — les distinguer apprendrait qu'un lien a existé.
+  * LE PARAMÈTRE EST RETIRÉ DE L'ADRESSE, réussite ou échec : un jeton qui reste
+    dans la barre finit dans l'historique, dans un signet, dans une capture — et
+    serait renvoyé en `Referer` au premier lien suivi.
+  * La box N'ENVOIE RIEN elle-même : poser une chaîne SMTP fiable est un projet
+    en soi, et un lien qui échoue silencieusement en route est pire qu'un lien
+    qu'on recopie. 5 tests de plus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:21:38 +0200
+
 secubox-acces (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * La destination du parcours suit SBX OS chez le Hall (ref #1353).

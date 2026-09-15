@@ -1,3 +1,12 @@
+secubox-core (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le registre des appareils porte une ADRESSE (ref #1354). Elle ne sert pas à
+    identifier — le compte dérive de la clé — mais à JOINDRE : poser un mot de
+    passe plus tard, ou renvoyer un lien d'entrée. Deux appareils peuvent porter
+    la même adresse ; un seul porte une clé donnée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:21:38 +0200
+
 secubox-core (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * LE CŒUR RECONNAÎT DEUX SORTES DE PORTEURS (ref #1351). Un utilisateur a un

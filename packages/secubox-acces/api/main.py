@@ -38,6 +38,7 @@ from secubox_core.auth import (_emit_session_event, create_token, require_jwt,
                                set_session_cookie)
 
 from .identite import empreinte_courte, nom_de_compte, verifie_signature
+from .lien import LienInvalide, Liens
 from .profileur import PROFILS, DemandeInvalide, Profileur
 from .session import Portier, SessionRefusee
 
@@ -53,6 +54,10 @@ CONF = Path("/etc/secubox/acces.toml")
 #: ouvrir la porte à un remplissage.
 PLAFOND_PAR_IP = 5
 FENETRE_S = 3600
+
+#: Une session ouverte par LIEN dure moins qu'une session ouverte par
+#: signature : le porteur est plus faible, la fenêtre doit l'être aussi.
+SESSION_LIEN_S = 24 * 3600
 
 #: La page qui porte le formulaire, quand personne ne dit où elle est.
 #:
@@ -105,6 +110,7 @@ def _porte_publique() -> str:
     return u.rstrip("/") + "/"
 
 _profileur: Optional[Profileur] = None
+_liens = Liens()
 _portier: Optional[Portier] = None
 _compteur: dict[str, list[float]] = {}
 
@@ -124,8 +130,10 @@ def _provisionne(nom: str, profil: str, did: str, cle: str) -> None:
     répondre à la place de l'autre.
     """
     compte = nom_de_compte(cle)
+    d = profileur().demande_de(did)
     appareils.inscris(compte, nom=nom, profil=profil, did=did,
-                      empreinte=empreinte_courte(cle))
+                      empreinte=empreinte_courte(cle),
+                      email=(d.email if d else ""))
     log.info("appareil %s inscrit (« %s », %s), profil %s", compte, nom, did, profil)
 
 
@@ -194,6 +202,10 @@ class DemandeIn(BaseModel):
     nom: str = Field(max_length=60)
     message: str = Field(default="", max_length=500)
     appareil: str = Field(default="", max_length=60)
+    #: Facultative. Elle ne sert PAS à identifier — le compte dérive de la clé —
+    #: mais à JOINDRE : poser un mot de passe plus tard, ou renvoyer un lien
+    #: d'entrée à quelqu'un qui a changé d'appareil.
+    email: str = Field(default="", max_length=120)
 
 
 @app.get("/health")
@@ -314,6 +326,49 @@ class OuvertureIn(BaseModel):
     signature: str = Field(max_length=200)
 
 
+class EntreeIn(BaseModel):
+    entree: str = Field(max_length=64)
+
+
+@app.post("/session/entree")
+async def session_entree(corps: EntreeIn, req: Request, reponse: Response):
+    """Ouvrir une session avec un lien d'entrée. **Usage unique.**
+
+    PLUS FAIBLE QUE LA SIGNATURE, ET ASSUMÉ. Un lien est un PORTEUR : il suffit
+    de le lire. Il n'existe que pour le cas où la clé n'est pas disponible —
+    un autre navigateur, un autre appareil.
+
+    L'USAGE UNIQUE EST UN DÉTECTEUR, pas seulement une limite : si le
+    destinataire légitime trouve un lien qui ne marche plus, il sait que
+    quelqu'un est passé avant lui. Un lien réutilisable laisserait les deux
+    entrer sans que personne ne s'en aperçoive.
+    """
+    try:
+        did = _liens.consomme(corps.entree)
+    except LienInvalide as e:
+        raise HTTPException(403, str(e)) from e
+
+    d = profileur().demande_de(did)
+    if not d or d.etat != "acceptee":
+        raise HTTPException(403, "accès non accordé")
+
+    compte = nom_de_compte(d.cle_publique)
+    jti = secrets.token_hex(8)
+    # LE LIEN PLAFONNE À `guest`, quel que soit le profil inscrit. Un porteur ne
+    # doit pas pouvoir ouvrir davantage que la porte d'entrée : monter en
+    # privilèges se fait depuis une session déjà prouvée par signature.
+    jwt = create_token(compte, expires_in=SESSION_LIEN_S, jti=jti)
+    set_session_cookie(reponse, jwt, expires_in=SESSION_LIEN_S)
+    _emit_session_event("login_success", compte, {
+        "jti": jti, "expires_in": SESSION_LIEN_S,
+        "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:100],
+        "voie": "acces-lien-unique",
+    })
+    profileur().note_session(did)
+    log.info("session ouverte par lien unique : %s (« %s »)", compte, d.nom)
+    return {"ok": True, "nom": d.nom, "compte": compte, "profil": "guest"}
+
+
 @app.get("/session/etat")
 async def session_etat(req: Request):
     """Y a-t-il DÉJÀ une session sur ce navigateur ?
@@ -432,7 +487,21 @@ async def accepter(v: Verdict, req: Request):
         d = profileur().accepte(v.did, par=_qui(req))
     except DemandeInvalide as e:
         raise HTTPException(400, str(e)) from e
-    return {"ok": True, "did": d.did, "profil": d.profil}
+
+    # LE LIEN EST RENDU ICI, ET SEULEMENT ICI. Il n'est pas relu : ce qui n'est
+    # pas noté à cet instant est perdu, et c'est voulu — un porteur qu'on peut
+    # redemander indéfiniment n'est plus à usage unique en pratique.
+    #
+    # Il sert le cas que la signature ne couvre pas : la clé vit par origine et
+    # par navigateur. Qui a demandé depuis son téléphone et ouvre depuis son
+    # ordinateur n'a aucune clé à présenter.
+    try:
+        jeton = _liens.emet(d.did)
+    except LienInvalide:
+        jeton = ""
+    return {"ok": True, "did": d.did, "profil": d.profil,
+            "email": d.email or "",
+            "lien": (_base_publique(req) + "/acces/?entree=" + jeton) if jeton else ""}
 
 
 @app.post("/file/refuser", dependencies=[Depends(require_jwt)])

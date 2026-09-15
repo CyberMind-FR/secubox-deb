@@ -161,7 +161,8 @@ export async function demande(champs) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       did: id.did, cle_publique: id.publique,
-      nom: champs.nom, appareil: champs.appareil, message: champs.message,
+      nom: champs.nom, email: champs.email || '',
+      appareil: champs.appareil, message: champs.message,
     }),
   });
   if (j.jeton) retiens(j.jeton);
@@ -177,6 +178,38 @@ export async function suivi() {
       + '&jeton=' + encodeURIComponent(jeton));
   } catch (e) {
     return null;    // demande inconnue ou jeton périmé : on repart du formulaire
+  }
+}
+
+/**
+ * SUIT UN LIEN D'ENTRÉE présent dans l'adresse (#1354).
+ *
+ * C'est le chemin de celui qui N'A PAS la clé : il a demandé depuis son
+ * téléphone et ouvre depuis son ordinateur. Le lien est un PORTEUR, donc plus
+ * faible que la signature — il n'ouvre qu'une session `guest`, plus courte.
+ *
+ * LE PARAMÈTRE EST RETIRÉ DE L'ADRESSE, réussite ou échec. Un jeton d'entrée
+ * qui reste dans la barre finit dans l'historique, dans un signet, dans une
+ * capture d'écran ; et il serait renvoyé en `Referer` au premier lien suivi.
+ */
+export async function suitLeLien() {
+  const u = new URL(location.href);
+  const entree = u.searchParams.get('entree');
+  if (!entree) return null;
+  u.searchParams.delete('entree');
+  try { history.replaceState(null, '', u.toString()); } catch (e) { /* rien */ }
+  try {
+    return await json('/session/entree', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entree }),
+    });
+  } catch (e) {
+    // USAGE UNIQUE : un lien qui ne marche plus peut signifier qu'il a DÉJÀ
+    // servi — donc que quelqu'un d'autre est entré avec. On le dit.
+    throw new Error('Ce lien d’entrée n’est plus valable. S’il a déjà servi, '
+      + 'quelqu’un d’autre s’en est servi avant vous : prévenez '
+      + 'l’administrateur.');
   }
 }
 

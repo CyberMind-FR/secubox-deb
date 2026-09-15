@@ -264,7 +264,7 @@
 </div>
 
 <script type="module">
-import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis,
+import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis, suitLeLien,
          oublie, jetonGarde } from './appareil.js';
 
 // LA DESTINATION DU PARCOURS. Ce module n'ouvre pas « un accès à la box » : il
@@ -372,7 +372,8 @@ function rendFile(liste) {
     // ACCEPTER OUVRE UN ACCÈS `guest`, et rien de plus. Le serveur ignore tout
     // profil qu'on lui enverrait : l'admission n'a qu'une issue.
     g.append(
-      bouton('Accorder un accès', 'oui', () => poste('/file/accepter', { did: d.did })),
+      bouton('Accorder un accès', 'oui',
+        () => poste('/file/accepter', { did: d.did }).then(montreLien)),
       bouton('Refuser', 'non', () => poste('/file/refuser', { did: d.did, motif: '' })));
     b.appendChild(g);
     c.appendChild(b);
@@ -393,8 +394,9 @@ function rendProfils(admis, profils) {
     const r = el('div', 'rang');
     r.appendChild(el('span', 'lab', 'Profil'));
     for (const p of profils) {
-      const cr = el('button', 'cran', p);
+      const cr = el('button', 'cran', rang(p));
       cr.dataset.p = p;
+      cr.title = RANG_DIT[p] || p;
       cr.setAttribute('aria-pressed', String(a.profil === p));
       cr.onclick = () => {
         cr.disabled = true;
@@ -416,6 +418,44 @@ function rendProfils(admis, profils) {
     b.appendChild(g);
     c.appendChild(b);
   }
+}
+
+/**
+ * MONTRE LE LIEN D'ENTRÉE, UNE FOIS.
+ *
+ * Il n'est pas relu : ce qui n'est pas noté maintenant est perdu. Un porteur
+ * qu'on peut redemander indéfiniment n'est plus à usage unique en pratique.
+ *
+ * IL NE SERT QU'AU CAS OÙ LA CLÉ MANQUE — quelqu'un qui a demandé depuis son
+ * téléphone et ouvrira depuis son ordinateur. Sur l'appareil qui a demandé,
+ * l'entrée se fait toute seule et par SIGNATURE : ne transmettez le lien que
+ * s'il en a besoin.
+ */
+function montreLien(r) {
+  if (!r || !r.lien) return r;
+  const b = el('div', 'bloc');
+  b.appendChild(el('span', 'etat acceptee', '✅ Accès accordé'));
+  b.appendChild(el('p', 'sous',
+    'Lien d’entrée à usage unique, valable six heures. Il n’est montré QU’ICI '
+    + 'et ne sera pas relu. Ne le transmettez que si la personne ouvrira SecuBox '
+    + 'depuis un AUTRE appareil que celui qui a demandé — sinon elle entrera '
+    + 'toute seule, et par signature, ce qui est plus sûr.'));
+  const champ = document.createElement('input');
+  champ.type = 'text';
+  champ.readOnly = true;
+  champ.value = r.lien;
+  champ.style.cssText = 'width:100%;font-family:"IBM Plex Mono";font-size:.72rem;'
+    + 'padding:.5rem .65rem;border-radius:9px;border:1px solid var(--line);'
+    + 'background:var(--surface-2);color:var(--ink)';
+  champ.onclick = () => champ.select();
+  b.appendChild(champ);
+  if (r.email) {
+    b.appendChild(el('p', 'sous', 'Adresse déclarée : ' + r.email
+      + ' — la box n’envoie rien elle-même, à vous de choisir le canal.'));
+  }
+  const v = $('vue') || $('file');
+  v.insertBefore(b, v.firstChild);
+  return r;
 }
 
 function rendInviter(j) {
@@ -440,6 +480,32 @@ function rendInviter(j) {
 }
 
 // ── VISAGE DEMANDEUR / INCONNU ──────────────────────────────────────────────
+
+/**
+ * LE NIVEAU SE VOIT SANS SE LIRE (#1355).
+ *
+ * Une progression, pas trois étiquettes indépendantes — c'est ce qui rend les
+ * signes mémorisables :
+ *
+ *     👋 guest   accueilli à la porte : il entre, il voit ce qui est public
+ *     🔑 user    il a une clé : les services lui sont ouverts
+ *     👑 admin   il est chez lui : il décide qui entre
+ *
+ * 👑 était DÉJÀ le signe des administrateurs dans la tuile du profileur. On
+ * construit autour plutôt que d'inventer une seconde convention : un
+ * vocabulaire visuel ne vaut que s'il est constant d'un écran à l'autre.
+ *
+ * LE MOT RESTE À CÔTÉ. Ici l'emoji s'AJOUTE au libellé, il ne le remplace pas —
+ * contrairement au tag de Lexie, où la place manquait. Rien à compenser dans
+ * l'arbre d'accessibilité : le mot est déjà là, lu tel quel.
+ */
+const RANG = { guest: '👋', user: '🔑', admin: '👑' };
+const RANG_DIT = {
+  guest: 'Invité — entre et voit ce qui est public',
+  user: 'Utilisateur — les services lui sont ouverts',
+  admin: 'Administrateur — décide qui entre',
+};
+const rang = (p) => (RANG[p] || '•') + ' ' + p;
 
 const MOTS = {
   en_attente: ['⏳', 'En attente de validation'],
@@ -482,7 +548,7 @@ async function rendMienne(v) {
     c.appendChild(g);
   } else if (v.etat === 'acceptee') {
     c.appendChild(el('p', 'sous', 'Session ouverte sur cet appareil. Profil : '
-      + (v.profil || 'guest') + '.'));
+      + rang(v.profil || 'guest') + '.'));
     const g = el('div', 'gestes');
     g.appendChild(bouton('Entrer dans SBX OS', 'fort', () => { location.href = DESTINATION; }));
     c.appendChild(g);
@@ -505,6 +571,10 @@ async function rendFormulaire() {
   const saisies = {};
   for (const [clef, etiq, balise] of [
     ['nom', 'Votre nom', 'input'],
+    // L'ADRESSE EST FACULTATIVE ET NE SERT PAS À ENTRER. Elle sert à VOUS
+    // JOINDRE : poser un mot de passe plus tard, ou renvoyer un lien d'entrée
+    // si vous changez d'appareil. L'entrée, elle, se fait par signature.
+    ['email', 'Votre adresse (facultative)', 'input'],
     ['appareil', 'Cet appareil', 'input'],
     ['message', 'Un mot (facultatif)', 'textarea'],
   ]) {
@@ -524,6 +594,7 @@ async function rendFormulaire() {
     if (!saisies.nom.value.trim()) throw new Error('Votre nom est nécessaire.');
     return demande({
       nom: saisies.nom.value.trim(),
+      email: saisies.email.value.trim(),
       appareil: saisies.appareil.value.trim(),
       message: saisies.message.value.trim(),
     });
@@ -535,6 +606,12 @@ async function rendFormulaire() {
 
 async function rafraichis() {
   // Même règle qu'en carlette : l'ouverture ne dépend pas du visage affiché.
+  // LE LIEN PASSE EN PREMIER : il vient d'être cliqué, et il est à usage
+  // unique — le consommer plus tard, ou pas du tout, le gaspillerait.
+  try {
+    if (await suitLeLien()) { location.href = DESTINATION; return; }
+  } catch (e) { return panne(e); }
+
   try {
     const ouvert = await ouvreSiAdmis();
     if (ouvert) { await _destinationPrete; location.href = DESTINATION; return; }

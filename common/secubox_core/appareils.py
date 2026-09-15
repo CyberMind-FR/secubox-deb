@@ -92,7 +92,7 @@ def profil_de(compte: str) -> str:
 
 
 def inscris(compte: str, *, nom: str, profil: str, did: str,
-            empreinte: str = "") -> Dict[str, Any]:
+            empreinte: str = "", email: str = "") -> Dict[str, Any]:
     """Inscrit ou met à jour un appareil. Écriture ATOMIQUE.
 
     LE NOM DÉCLARÉ EST CONSERVÉ TEL QUEL, comme étiquette — il vient d'un
@@ -103,6 +103,11 @@ def inscris(compte: str, *, nom: str, profil: str, did: str,
     liste.append({
         "compte": compte, "nom": nom, "profil": profil,
         "did": did, "empreinte": empreinte, "actif": True,
+        # L'ADRESSE NE SERT PAS À IDENTIFIER — le compte dérive de la clé — mais
+        # à JOINDRE : poser un mot de passe plus tard, ou renvoyer un lien
+        # d'entrée. Deux appareils peuvent porter la même adresse ; un seul
+        # porte une clé donnée.
+        "email": email or "",
     })
     d["appareils"] = liste
     _ecrit(d)

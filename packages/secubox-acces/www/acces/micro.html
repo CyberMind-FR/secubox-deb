@@ -87,7 +87,7 @@
 <div class="corps" id="corps"><p class="aide">Chargement…</p></div>
 
 <script type="module">
-import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis,
+import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis, suitLeLien,
          oublie, jetonGarde } from './appareil.js';
 
 const $ = (id) => document.getElementById(id);
@@ -130,6 +130,32 @@ let SBXOS = '/sbxos/';
 const _sbxosPret = api('/invitation/url')
   .then(j => { if (j && j.sbxos) SBXOS = j.sbxos; })
   .catch(() => { /* on gardera le repli */ });
+
+/**
+ * LE NIVEAU SE VOIT SANS SE LIRE (#1355).
+ *
+ * Une progression, pas trois étiquettes indépendantes — c'est ce qui rend les
+ * signes mémorisables :
+ *
+ *     👋 guest   accueilli à la porte : il entre, il voit ce qui est public
+ *     🔑 user    il a une clé : les services lui sont ouverts
+ *     👑 admin   il est chez lui : il décide qui entre
+ *
+ * 👑 était DÉJÀ le signe des administrateurs dans la tuile du profileur. On
+ * construit autour plutôt que d'inventer une seconde convention : un
+ * vocabulaire visuel ne vaut que s'il est constant d'un écran à l'autre.
+ *
+ * LE MOT RESTE À CÔTÉ. Ici l'emoji s'AJOUTE au libellé, il ne le remplace pas —
+ * contrairement au tag de Lexie, où la place manquait. Rien à compenser dans
+ * l'arbre d'accessibilité : le mot est déjà là, lu tel quel.
+ */
+const RANG = { guest: '👋', user: '🔑', admin: '👑' };
+const RANG_DIT = {
+  guest: 'Invité — entre et voit ce qui est public',
+  user: 'Utilisateur — les services lui sont ouverts',
+  admin: 'Administrateur — décide qui entre',
+};
+const rang = (p) => (RANG[p] || '•') + ' ' + p;
 
 const MOTS = { en_attente:['⏳','En attente'], acceptee:['✅','Accès accordé'],
                refusee:['⛔','Refusée'], expiree:['⌛','Expirée'] };
@@ -194,7 +220,7 @@ async function rendMienne(v) {
         .then(j => _sbxosPret.then(() => { top.location.href = SBXOS; return j; }))));
     b.appendChild(g);
   } else if (v.etat === 'acceptee') {
-    b.appendChild(el('p', 'aide', 'Session ouverte. Profil : ' + (v.profil || 'guest') + '.'));
+    b.appendChild(el('p', 'aide', 'Session ouverte. Profil : ' + rang(v.profil || 'guest') + '.'));
   } else {
     const g = el('div', 'gestes');
     g.appendChild(bouton('Refaire une demande', 'fort', () => { oublie(); return Promise.resolve(); }));
@@ -212,6 +238,9 @@ function rendFormulaire() {
     + 'une empreinte, puis votre session s’ouvrira ici même.'));
   const s = {};
   for (const [k, lab, bal] of [['nom','Votre nom','input'],
+                               // Facultative, et sans effet sur l'entrée : elle
+                               // sert à joindre, pas à identifier.
+                               ['email','Votre adresse (facultative)','input'],
                                ['appareil','Cet appareil','input'],
                                ['message','Un mot (facultatif)','textarea']]) {
     const w = el('div', 'champ');
@@ -225,7 +254,8 @@ function rendFormulaire() {
   const g = el('div', 'gestes');
   g.appendChild(bouton('Demander un accès', 'fort', () => {
     if (!s.nom.value.trim()) throw new Error('Votre nom est nécessaire.');
-    return demande({ nom: s.nom.value.trim(), appareil: s.appareil.value.trim(),
+    return demande({ nom: s.nom.value.trim(), email: s.email.value.trim(),
+                     appareil: s.appareil.value.trim(),
                      message: s.message.value.trim() });
   }));
   b.appendChild(g);
@@ -269,6 +299,10 @@ async function rafraichis() {
   // L'OUVERTURE PASSE AVANT L'AFFICHAGE, et elle ne dépend pas du visage :
   // l'appareil qui valide sa propre machine voit la FILE, jamais « votre
   // demande » — le geste d'ouverture lui serait donc resté inatteignable.
+  try {
+    if (await suitLeLien()) { top.location.href = SBXOS; return; }
+  } catch (e) { return panne(e); }
+
   try {
     if (await ouvreSiAdmis()) { top.location.reload(); return; }
   } catch (e) { /* signature refusée : on affiche, on ne boucle pas */ }

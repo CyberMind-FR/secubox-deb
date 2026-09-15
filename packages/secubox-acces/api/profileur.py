@@ -54,6 +54,12 @@ Etat = Literal["en_attente", "acceptee", "refusee", "expiree"]
 
 _RE_DID = re.compile(r"^did:[a-z0-9]+:[A-Za-z0-9._-]{8,128}$")
 
+#: L'ADRESSE EST VALIDÉE SANS ÊTRE VÉRIFIÉE, et la nuance compte. Cette
+#: expression n'atteste pas que l'adresse existe — rien ne le peut sans y
+#: écrire. Elle écarte seulement ce qui ne peut PAS être une adresse, pour que
+#: le champ ne devienne pas un second champ de texte libre.
+_RE_EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s.]+(\.[^@\s.]+)+$")
+
 
 class DemandeInvalide(ValueError):
     """Le formulaire ou l'identité ne tient pas la route. Le message est
@@ -69,6 +75,10 @@ class Demande:
     message: str
     appareil: str
     demandee_le: int
+    #: Facultative. Elle ne sert PAS à identifier — le compte dérive de la clé —
+    #: mais à JOINDRE : poser un mot de passe plus tard, ou renvoyer un lien
+    #: d'entrée à quelqu'un qui a changé d'appareil.
+    email: str = ""
     etat: Etat = "en_attente"
     traitee_le: Optional[int] = None
     traitee_par: Optional[str] = None
@@ -147,8 +157,12 @@ def valide_demande(brut: dict) -> Demande:
     message = str(brut.get("message", "")).strip()[:500]
     appareil = str(brut.get("appareil", "")).strip()[:60] or "appareil inconnu"
 
+    email = str(brut.get("email", "")).strip().lower()[:120]
+    if email and not _RE_EMAIL.match(email):
+        raise DemandeInvalide("adresse électronique hors format")
+
     return Demande(did=did, cle_publique=cle, nom=nom, message=message,
-                   appareil=appareil, demandee_le=int(time.time()))
+                   appareil=appareil, email=email, demandee_le=int(time.time()))
 
 
 class Profileur:

@@ -237,3 +237,71 @@ def test_le_provisionnement_ne_touche_pas_a_un_compte_existant(prof, monkeypatch
     p.demande(form(pub))
     p.accepte(DID, par="gerald")
     assert len(ecrits) == 1
+
+
+# ── LE LIEN D'ENTRÉE À USAGE UNIQUE (#1354) ─────────────────────────────────
+
+from api.lien import LienInvalide, Liens, TTL_S  # noqa: E402
+
+
+def test_le_lien_ne_sert_qu_une_fois():
+    """LA PROPRIÉTÉ QUI COMPTE, et c'est un DÉTECTEUR autant qu'une limite.
+
+    L'usage unique n'empêche pas l'interception — un lien est un porteur, il
+    suffit de le lire. Mais il la REND VISIBLE : le destinataire légitime qui
+    trouve un lien mort sait que quelqu'un est passé avant lui, et peut le dire.
+    Un lien réutilisable laisserait les deux entrer sans que personne ne s'en
+    aperçoive.
+    """
+    L = Liens()
+    j = L.emet("did:sbx:a")
+    assert L.consomme(j) == "did:sbx:a"
+    with pytest.raises(LienInvalide):
+        L.consomme(j)
+
+
+def test_un_lien_inconnu_est_refuse_comme_un_lien_servi():
+    """UN SEUL MESSAGE POUR LES TROIS CAS. Distinguer « inconnu » de « déjà
+    servi » apprendrait à qui essaie qu'un lien a existé — donc qu'une personne
+    a été admise."""
+    L = Liens()
+    with pytest.raises(LienInvalide):
+        L.consomme("jamais-emis")
+    with pytest.raises(LienInvalide):
+        L.consomme("")
+
+
+def test_le_lien_perime_ne_sert_plus(monkeypatch):
+    L = Liens()
+    j = L.emet("did:sbx:a")
+    # On avance le temps plutôt que d'attendre six heures.
+    import api.lien as m
+    vrai = m.time.monotonic
+    monkeypatch.setattr(m.time, "monotonic", lambda: vrai() + TTL_S + 1)
+    with pytest.raises(LienInvalide):
+        L.consomme(j)
+
+
+def test_le_jeton_n_est_pas_conserve_en_clair():
+    """On garde l'EMPREINTE, pas le jeton : un journal, une trace mémoire ou un
+    vidage ne doivent pas rendre le lien réutilisable."""
+    L = Liens()
+    j = L.emet("did:sbx:a")
+    assert all(j not in str(v.__dict__) for v in L._liens.values())
+
+
+def test_l_adresse_est_validee_sans_etre_verifiee(prof):
+    """L'expression n'atteste pas qu'une adresse existe — rien ne le peut sans
+    y écrire. Elle écarte ce qui ne PEUT PAS en être une, pour que le champ ne
+    devienne pas un second champ de texte libre."""
+    _, pub = paire()
+    f = form(pub)
+    f["email"] = "pas-une-adresse"
+    with pytest.raises(DemandeInvalide, match="adresse"):
+        prof.demande(f)
+    # Vide : accepté, le champ est facultatif.
+    f["email"] = ""
+    assert prof.demande(f).email == ""
+    # Correcte : conservée en minuscules.
+    f["email"] = "Gerald@Example.FR"
+    assert prof.demande(f).email == "gerald@example.fr"
