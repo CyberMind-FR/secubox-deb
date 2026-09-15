@@ -1,3 +1,41 @@
+secubox-sbxos (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA PASTILLE ROUGE SUR CHAQUE VIGNETTE : le même défaut que l'écran noir, mais
+    dans l'OMBRE (ref #1357). `.badge` pose `display:inline-flex`, qui bat le
+    `[hidden]` du navigateur — un badge vide restait affiché. La garde existait
+    déjà dans la feuille du document, mais une feuille de document NE TRAVERSE
+    PAS le shadow DOM : il faut la répéter dans chaque racine d'ombre. C'est le
+    prix de l'encapsulation, et l'oublier redonne le bug là où on ne le cherche
+    pas.
+  * UN CONTRÔLE POUR LES ACCENTS GRAVES. Le CSS des composants vit dans un
+    template literal, et notre convention cite les termes techniques entre
+    accents graves — chacun FERME la chaîne. Trois fois dans la même journée :
+    module invalide, jamais chargé, symptôme sans rapport avec la cause. Une
+    convention qui se retourne contre soi ne se corrige pas par l'attention mais
+    par un contrôle, et `outils/verifie-gabarits.py` tourne à la construction.
+    Vérifié EN NÉGATIF : une faute injectée le fait échouer.
+  * LE THÉÂTRE N'AVERTIT PLUS À TORT. « Ce lieu refuse peut-être d'être encadré »
+    s'affichait après 2,5 s SANS RIEN VÉRIFIER — la radio jouait et l'on
+    annonçait un problème. Et c'est indétectable : un cadre refusé par
+    `frame-ancestors` déclenche `load` comme un cadre qui a chargé. Un lien
+    PERMANENT « Ouvrir dans un onglet » sert les deux cas et n'affirme rien
+    qu'on ne sache.
+  * APERÇUS VIVANTS SUR LES VIGNETTES. « Radio » ne dit rien ; « Radio — Sacred
+    Spirit » dit s'il vaut la peine d'ouvrir. DU TEXTE, PAS DES IMAGES : la CSP
+    du Hall pose `img-src 'self'`, une pochette tierce serait bloquée, et
+    vingt-cinq vignettes qui chargent chacune une image coûtent plus qu'elles ne
+    rendent sur un téléphone.
+  * ON NE SONDE QUE CE QUI EST VISIBLE, et l'on s'ARRÊTE quand l'onglet passe en
+    arrière-plan : sans cette règle, une PWA installée interroge la box toutes
+    les vingt secondes, toute la journée, dans la poche de quelqu'un.
+  * LE SILENCE EST UNE INFORMATION : une radio qui ne joue rien le dit, au lieu
+    de garder le dernier titre affiché — une vignette périmée ment tranquillement.
+  * L'aperçu se POSE sur la vignette déjà dessinée : recomposer le damier à
+    chaque morceau perdrait un glisser en cours et ferait clignoter l'écran.
+  * Cache du service worker en v5.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:48:30 +0200
+
 secubox-sbxos (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * ÉCRAN NOIR : `hidden` ne gagnait pas sur nos propres règles (ref #1356).

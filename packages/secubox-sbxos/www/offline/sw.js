@@ -36,7 +36,7 @@
 // sbx-carlette.js, index.html). Sans ce changement de nom, la stratégie
 // « cache d'abord » servirait l'ancienne coquille jusqu'au lancement SUIVANT —
 // et le réglage paraîtrait n'avoir rien fait.
-const VERSION = 'sbxos-v4';
+const VERSION = 'sbxos-v5';
 const CACHE_COQUILLE = `${VERSION}-coquille`;
 const CACHE_MANIFESTE = `${VERSION}-manifeste`;
 const CACHE_MEDIAS = `${VERSION}-medias`;
@@ -52,6 +52,7 @@ const COQUILLE = [
   './hall/hall.js',
   './mine/mine.js',
   './mine/clone.js',
+  './mine/apercu.js',
 ];
 
 /** Combien de médias on garde. Au-delà, le plus ancien sort. */

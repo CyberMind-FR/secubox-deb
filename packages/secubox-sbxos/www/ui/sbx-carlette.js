@@ -43,6 +43,20 @@
 const GABARIT = document.createElement('template');
 GABARIT.innerHTML = `
 <style>
+  /* LA GARDE DOIT ÊTRE RÉPÉTÉE DANS CHAQUE RACINE D'OMBRE.
+   *
+   * « [hidden] { display: none } » vient du navigateur, donc cède devant toute
+   * règle d'auteur posant « display » — et « .badge » pose « display:inline-flex ».
+   * Un badge « hidden » restait donc affiché : une pastille rouge VIDE sur
+   * chaque vignette du damier.
+   *
+   * La même garde existe dans la feuille du document (#1356), mais une feuille
+   * de document NE TRAVERSE PAS le shadow DOM. Il faut la répéter ici — c'est
+   * le prix de l'encapsulation, et l'oublier redonne exactement le même bug
+   * dans un endroit où l'on ne pense pas à le chercher.
+   */
+  [hidden] { display: none !important; }
+
   :host {
     display: block;
     aspect-ratio: 1;            /* le damier impose la largeur, la hauteur suit */
@@ -87,6 +101,24 @@ GABARIT.innerHTML = `
        options, pas le sélecteur de texte du système. */
     pointer-events: none;
   }
+  /* L'APERÇU : ce que le lieu contient MAINTENANT. Une ligne, coupée net.
+     Il passe SOUS le titre et n'agrandit pas la vignette — le damier doit
+     rester un damier, pas une liste. */
+  .apercu {
+    display: var(--carlette-apercu, block);
+    font-size: clamp(.52rem, 2.2vw, .62rem);
+    font-weight: 500;
+    opacity: .72;
+    text-align: center;
+    padding: 0 .35rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .apercu:empty { display: none; }
+
   .titre {
     /* Retirée par le damier via « --carlette-etiquette: none ». On ne masque pas
        par « visibility » : la place doit être RENDUE, sinon les vignettes sans
@@ -138,6 +170,7 @@ GABARIT.innerHTML = `
   <span class="favori" hidden>⭐</span>
   <span class="icone"></span>
   <span class="titre"></span>
+  <span class="apercu"></span>
 </div>`;
 
 /**
@@ -156,7 +189,7 @@ function teinteDe(texte) {
 
 export class SbxCarlette extends HTMLElement {
   static get observedAttributes() {
-    return ['titre', 'icone', 'couleur', 'badge', 'favori', 'masque'];
+    return ['titre', 'icone', 'couleur', 'badge', 'favori', 'masque', 'apercu'];
   }
 
   constructor() {
@@ -248,6 +281,10 @@ export class SbxCarlette extends HTMLElement {
 
     const fav = this.hasAttribute('favori');
     r.querySelector('.favori').hidden = !fav;
+
+    // textContent et jamais innerHTML : l'aperçu vient d'un service, donc du
+    // réseau. Un titre de morceau peut contenir n'importe quoi.
+    r.querySelector('.apercu').textContent = this.getAttribute('apercu') || '';
 
     const n = parseInt(this.getAttribute('badge') || '0', 10);
     const badge = r.querySelector('.badge');

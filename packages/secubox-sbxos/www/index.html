@@ -134,6 +134,7 @@
 <script type="module">
 import { Mine, profilSuffit } from './mine/mine.js';
 import { cloneDuHall } from './mine/clone.js';
+import { suitLesApercus } from './mine/apercu.js';
 import { Hall, appliqueTheme, ECRANS } from './hall/hall.js';
 import './ui/sbx-damier.js';
 
@@ -187,6 +188,23 @@ function compose() {
     : '';
 }
 
+// ── APERÇUS VIVANTS ─────────────────────────────────────────────────────────
+//
+// On POSE l'aperçu sur la vignette déjà dessinée, on ne recompose pas : repeindre
+// le damier à chaque titre de morceau perdrait un glisser en cours, relancerait
+// les animations et ferait clignoter l'écran toutes les vingt secondes.
+//
+// Les trois damiers sont servis : celui du Hall, celui des favoris, et celui des
+// réglages. Une vignette qui dit ce qu'elle contient le dit partout où elle est.
+suitLesApercus(
+  () => mine.carlettesAutorisees(),
+  (id, texte) => {
+    for (const d of ['damier', 'damier-favoris', 'damier-modules']) {
+      const el = $(d);
+      if (el && el.apercu) el.apercu(id, texte);
+    }
+  });
+
 // ── Écrans ──────────────────────────────────────────────────────────────────
 
 function montre(nom) {
@@ -231,20 +249,27 @@ function entre(c) {
   $('theatre').hidden = false;
   for (const e of ['hall', 'favoris', 'reglages']) $('ecran-' + e).hidden = true;
 
-  // Si le cadre reste vide, on propose l'onglet — c'est la seule façon
-  // d'emporter la session existante.
-  clearTimeout(entre._veille);
-  entre._veille = setTimeout(() => {
-    if (!$('theatre').hidden) {
-      $('theatre-note').innerHTML = '';
-      const p = document.createElement('span');
-      p.textContent = "Ce lieu refuse peut-être d'être encadré. ";
-      const a = document.createElement('a');
-      a.href = c.url; a.target = '_blank'; a.rel = 'noopener';
-      a.textContent = "L'ouvrir dans un onglet";
-      $('theatre-note').append(p, a);
-    }
-  }, 2500);
+  // L'ONGLET EST PROPOSÉ EN PERMANENCE, PAS APRÈS UN MINUTEUR.
+  //
+  // On affichait « ce lieu refuse peut-être d'être encadré » au bout de 2,5 s,
+  // sans rien vérifier : le message apparaissait aussi quand le cadre marchait
+  // parfaitement — la radio jouait, et l'on annonçait un problème.
+  //
+  // ET ON NE PEUT PAS LE DÉTECTER. Un cadre refusé par `frame-ancestors` déclenche
+  // `load` comme un cadre qui a chargé : le navigateur ne nous dit pas la
+  // différence. Avertir « peut-être » à chaque fois est donc du bruit, et
+  // n'avertir jamais laisserait un écran vide sans recours.
+  //
+  // Un LIEN PERMANENT résout les deux : il sert quand le cadre a échoué, et il
+  // sert aussi à qui veut simplement une vraie fenêtre. Il n'affirme rien
+  // qu'on ne sache.
+  $('theatre-note').textContent = '';
+  const onglet = document.createElement('a');
+  onglet.href = c.url;
+  onglet.target = '_blank';
+  onglet.rel = 'noopener';
+  onglet.textContent = 'Ouvrir dans un onglet ↗';
+  $('theatre-note').appendChild(onglet);
 }
 
 $('theatre-retour').onclick = () => {

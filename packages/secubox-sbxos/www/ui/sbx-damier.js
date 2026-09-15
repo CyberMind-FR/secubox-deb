@@ -65,6 +65,20 @@ export const NOMS_DENSITE = Object.keys(DENSITES);
 const GABARIT = document.createElement('template');
 GABARIT.innerHTML = `
 <style>
+  /* LA GARDE DOIT ÊTRE RÉPÉTÉE DANS CHAQUE RACINE D'OMBRE.
+   *
+   * « [hidden] { display: none } » vient du navigateur, donc cède devant toute
+   * règle d'auteur posant « display » — et « .badge » pose « display:inline-flex ».
+   * Un badge « hidden » restait donc affiché : une pastille rouge VIDE sur
+   * chaque vignette du damier.
+   *
+   * La même garde existe dans la feuille du document (#1356), mais une feuille
+   * de document NE TRAVERSE PAS le shadow DOM. Il faut la répéter ici — c'est
+   * le prix de l'encapsulation, et l'oublier redonne exactement le même bug
+   * dans un endroit où l'on ne pense pas à le chercher.
+   */
+  [hidden] { display: none !important; }
+
   :host { display: block; }
   .grille {
     display: grid;
@@ -158,6 +172,16 @@ export class SbxDamier extends HTMLElement {
   }
   get carlettes() { return this._carlettes; }
 
+  /** Pose un aperçu sur une vignette DÉJÀ dessinée, sans tout repeindre.
+   *
+   * Repeindre le damier à chaque titre de morceau perdrait le glisser en cours,
+   * relancerait les animations et ferait clignoter l'écran toutes les vingt
+   * secondes. On touche l'attribut, la carlette se met à jour seule. */
+  apercu(id, texte) {
+    const el = this._grille.querySelector(`sbx-carlette[id="${CSS.escape(id)}"]`);
+    if (el) el.setAttribute('apercu', texte || '');
+  }
+
   /** Les ids dans l'ordre AFFICHÉ — ce que le Hall doit mémoriser. */
   get ids() {
     return [...this._grille.querySelectorAll('sbx-carlette')].map(c => c.id);
@@ -177,6 +201,7 @@ export class SbxDamier extends HTMLElement {
       el.setAttribute('icone', c.icone ?? '⬛');
       if (c.couleur) el.setAttribute('couleur', c.couleur);
       if (c.badge) el.setAttribute('badge', String(c.badge));
+      if (c.apercu) el.setAttribute('apercu', String(c.apercu));
       if (c.favori) el.setAttribute('favori', '');
       if (c.masque) el.setAttribute('masque', '');
       if (rangeable) {
