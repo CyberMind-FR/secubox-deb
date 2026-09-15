@@ -15,7 +15,8 @@ from cryptography.hazmat.primitives.asymmetric import ec, utils as asym_utils
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from api.identite import CleInvalide, charge_cle, empreinte_courte, verifie_signature  # noqa: E402
+from api.identite import (CleInvalide, charge_cle, empreinte_courte,  # noqa: E402
+                          nom_de_compte, verifie_signature)
 from api.profileur import DemandeInvalide, Profileur  # noqa: E402
 from api.session import Portier, SessionRefusee  # noqa: E402
 
@@ -187,3 +188,52 @@ def test_la_session_se_note(prof, portier):
     portier.ouvre(DID, jeton, defi, signe(priv, bytes.fromhex(defi)))
     prof.note_session(DID)
     assert prof.suivi(DID, jeton)["session_ouverte"] is True
+
+
+# ── LE NOM DE COMPTE, ET L'ESCALADE QU'IL FERME ─────────────────────────────
+
+def test_le_nom_de_compte_derive_de_la_cle_pas_du_nom_declare():
+    """LA RÈGLE DE SÛRETÉ DU MODULE.
+
+    Le nom déclaré arrive par un formulaire OUVERT. S'en servir comme
+    identifiant de compte laisserait quiconque annoncer « admin » — et la voie
+    de création, qui écrit un mot de passe, réinitialiserait le compte existant
+    portant ce nom. Une porte d'entrée deviendrait une prise de contrôle.
+    """
+    _, a = paire()
+    _, b = paire()
+    # Deux clés différentes → deux comptes différents, quel que soit le nom
+    # que l'un et l'autre déclarent.
+    assert nom_de_compte(a) != nom_de_compte(b)
+    # La même clé → le même compte, de façon stable.
+    assert nom_de_compte(a) == nom_de_compte(a)
+    # Et le nom produit ne contient RIEN de ce qu'un inconnu a pu écrire.
+    assert nom_de_compte(a).startswith("sbx-")
+    assert len(nom_de_compte(a)) == len("sbx-") + 12
+
+
+def test_le_provisionnement_ne_touche_pas_a_un_compte_existant(prof, monkeypatch):
+    """`set_password(provision=True)` RÉINITIALISE un compte déjà là. Comme le
+    nom dérive de la clé, un compte de ce nom EST cet appareil — on le laisse
+    tel quel plutôt que de lui réécrire un secret."""
+    ecrits = []
+    existants = set()
+
+    def creer(nom, profil, did, cle):
+        compte = nom_de_compte(cle)
+        if compte in existants:
+            return                 # déjà provisionné : on ne retouche à rien
+        existants.add(compte)
+        ecrits.append(compte)
+
+    _, pub = paire()
+    p = Profileur(prof.chemin, creer_compte=creer)
+    p.demande(form(pub))
+    p.accepte(DID, par="gerald")
+    assert len(ecrits) == 1
+
+    # Une seconde admission du MÊME appareil n'écrit pas une seconde fois.
+    p.revoque(DID, par="gerald")
+    p.demande(form(pub))
+    p.accepte(DID, par="gerald")
+    assert len(ecrits) == 1

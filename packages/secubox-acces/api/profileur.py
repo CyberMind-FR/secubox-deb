@@ -261,7 +261,7 @@ class Profileur:
         d.traitee_par = par
         d.profil = PROFIL_ADMISSION
         if self._creer_compte:
-            self._creer_compte(d.nom, PROFIL_ADMISSION, d.did)
+            self._creer_compte(d.nom, PROFIL_ADMISSION, d.did, d.cle_publique)
         self._ecrit()
         return d
 

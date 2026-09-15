@@ -1,4 +1,59 @@
-secubox-acces (1.1.2-1~bookworm1) bookworm; urgency=medium
+secubox-acces (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE MODULE SE DÉCLARE DANS aggregator.toml. L'agrégateur ne balaie pas
+    /usr/lib/secubox : il monte ce que sa configuration lui nomme, et relaie le
+    reste vers un socket par module. C'est ce REPLI qui masquait le problème —
+    tant que le service isolé tournait, tout répondait, mais depuis le mauvais
+    processus, celui où `_emit_session_event` ne fait rien. En retirant le
+    service j'ai retiré la jambe sur laquelle le repli s'appuyait, et tout est
+    passé en 404 : le symptôme a enfin désigné la cause.
+
+  * LE SERVICE ISOLÉ DISPARAÎT — l'API passe par l'agrégateur (ref #1350).
+    Deux processus servaient le même module, chacun avec SA copie en mémoire de
+    la file. Et surtout, seul l'agrégateur charge `secubox-auth`, qui pose le
+    rappel enregistrant les sessions : dans le service isolé
+    `_emit_session_event` était un NO-OP. On frappait donc le jeton dans un
+    processus permissif et on le validait dans un processus strict — d'où
+    « session ouverte » d'un côté et « non connecté » de l'autre, sur le même
+    écran.
+  * L'agrégateur monte déjà tous les modules de /usr/lib/secubox : le service
+    isolé était l'anomalie, pas la règle. Le postinst le désactive et retire son
+    unité.
+
+  * Le service peut écrire le magasin d'utilisateurs. `ProtectSystem=strict`
+    rendait /etc en lecture seule, et le provisionnement échouait en 500 —
+    l'écriture atomique crée son fichier temporaire DANS le répertoire, qui
+    doit donc être ouvert en entier. Le pouvoir accordé reste INFÉRIEUR à celui
+    que ce module exerce déjà : il décide qui entre.
+  * LA CADENCE PAR ADRESSE NE S'APPLIQUE PLUS À /session/defi. Le plafond de
+    cinq par heure vise la CRÉATION de demandes — un geste humain, rare.
+    Appliqué au défi, il punissait l'usage normal : plusieurs appareils derrière
+    un même NAT, ou un seul qui rouvre sa session, épuisaient le quota en
+    quelques minutes et se voyaient refuser l'entrée par un « trop de demandes »
+    qui ne décrivait rien. Cette route exige de toute façon un jeton valide sur
+    une demande acceptée : elle ne permet ni d'énumérer ni de créer.
+
+  * LA SESSION EST ENFIN SYNCHRONISÉE AVEC LA BOX (ref #1350). Le module posait
+    un cookie que tout le reste rejetait : `_validate_token` exige DEUX choses
+    qu'on ne fournissait pas — un `jti` présent dans le registre des sessions,
+    et un `sub` qui soit un utilisateur ACTIVÉ. D'où « Session ouverte, profil
+    guest » d'un côté et « Non connecté à la box » de l'autre, sur le même
+    écran.
+  * On suit désormais la voie canonique de `login`, à la lettre : `jti`
+    explicite, puis `_emit_session_event("login_success")` — c'est cet événement
+    qui ENREGISTRE la session.
+  * L'ADMISSION PROVISIONNE LE COMPTE. Mot de passe tiré au sort et jamais
+    divulgué : le magasin en exige un, ce parcours n'en veut pas — l'appareil
+    entre en SIGNANT. Un secret de 32 octets que personne ne connaît laisse le
+    compte inutilisable par mot de passe, ce qui est exactement l'effet voulu.
+  * LE NOM DE COMPTE DÉRIVE DE LA CLÉ, JAMAIS DU NOM DÉCLARÉ, et c'est une
+    règle de sûreté. Le nom déclaré arrive par un formulaire OUVERT : s'en
+    servir comme identifiant laisserait quiconque annoncer « admin », et
+    `set_password(provision=True)` RÉINITIALISERAIT le compte existant portant
+    ce nom. Une porte d'entrée serait devenue une prise de contrôle. Le nom
+    déclaré reste une ÉTIQUETTE que l'administrateur lit pour décider.
+  * Un compte déjà provisionné n'est jamais réécrit : comme le nom dérive de la
+    clé, un compte de ce nom EST cet appareil. Deux tests verrouillent la règle.
 
   * QUAND ÇA RATE, LA CARLETTE LE DIT (ref #1348). Elle restait sur
     « Chargement… » dès qu'une erreur échappait : un écran muet, impossible à

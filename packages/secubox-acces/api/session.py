@@ -143,6 +143,9 @@ class Portier:
 
         return {
             "nom": demande.nom,
+            # La CLÉ remonte : c'est d'elle que dérive le nom de compte, jamais
+            # du nom déclaré — voir identite.nom_de_compte.
+            "cle": demande.cle_publique,
             "profil": demande.profil or "guest",
             "did": did,
             "duree": SESSION_S,

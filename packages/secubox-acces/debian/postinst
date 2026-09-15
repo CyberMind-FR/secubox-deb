@@ -2,6 +2,41 @@
 set -e
 case "$1" in
   configure)
+    # LE MODULE SE DÉCLARE DANS L'AGRÉGATEUR (#1350).
+    #
+    # Celui-ci ne balaie PAS /usr/lib/secubox : il monte ce que
+    # `/etc/secubox/aggregator.toml` lui nomme. Ce qui n'y figure pas est
+    # simplement relayé vers un socket par module — et c'est ce repli qui
+    # masquait le problème : tant que le service isolé tournait, tout
+    # répondait, mais depuis le MAUVAIS processus, celui où
+    # `_emit_session_event` ne fait rien.
+    #
+    # Monté en processus, le module partage l'espace de secubox-auth : la
+    # session qu'il ouvre est enregistrée, donc reconnue partout.
+    python3 - <<'TOML' || echo "secubox-acces: déclaration dans aggregator.toml impossible" >&2
+import re, pathlib
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+if f.exists():
+    t = f.read_text(encoding="utf-8")
+    if '"acces"' not in t:
+        # On insère en TÊTE de liste, juste après `modules = [`. Écrire un TOML
+        # à la main est laid ; le relire et le réécrire entièrement effacerait
+        # les commentaires, qui documentent des choix (« metrics/waf/dpi
+        # retirés : routés en direct par nginx »).
+        t2 = re.sub(r'(modules\s*=\s*\[)', r'\1\n    "acces",', t, count=1)
+        if t2 != t:
+            f.write_text(t2, encoding="utf-8")
+            print("secubox-acces: déclaré dans aggregator.toml")
+TOML
+
+    # LE SERVICE ISOLÉ EST RETIRÉ (#1350) : l'agrégateur monte déjà ce module,
+    # et lui seul charge secubox-auth — donc lui seul sait ENREGISTRER une
+    # session. Deux processus servaient le même module avec deux états.
+    if systemctl list-unit-files secubox-acces.service >/dev/null 2>&1; then
+      systemctl disable --now secubox-acces.service >/dev/null 2>&1 || true
+      rm -f /lib/systemd/system/secubox-acces.service
+      systemctl daemon-reload || true
+    fi
     # La file des demandes est le seul état du module.
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/acces
     # LE VHOST N'EST ACTIVÉ QUE S'IL PASSE LE TEST — mais encore faut-il que
@@ -30,6 +65,10 @@ case "$1" in
     if [ -x /usr/sbin/nginx ] && nginx -t >/dev/null 2>&1; then
       systemctl reload nginx || true
     fi
+    # L'AGRÉGATEUR NE RELIT SA LISTE QU'AU DÉMARRAGE. Le redémarrage coupe
+    # brièvement TOUTES les API — c'est le prix du montage en processus, et il
+    # se paie une fois à l'installation, pas à chaque requête.
+    systemctl restart secubox-aggregator >/dev/null 2>&1 || true
     ;;
 esac
 #DEBHELPER#

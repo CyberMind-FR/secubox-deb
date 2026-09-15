@@ -22,8 +22,4 @@ override_dh_auto_install:
 	# dans sites-enabled, après avoir vérifié que nginx l'accepte.
 	install -d debian/secubox-acces/etc/secubox/nginx-available
 	install -m 644 nginx/acces.vhost.conf debian/secubox-acces/etc/secubox/nginx-available/acces.conf
-	install -d debian/secubox-acces/lib/systemd/system
-	install -m 644 systemd/secubox-acces.service debian/secubox-acces/lib/systemd/system/
 
-override_dh_installsystemd:
-	dh_installsystemd --name=secubox-acces --no-stop-on-upgrade

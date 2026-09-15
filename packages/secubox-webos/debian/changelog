@@ -1,3 +1,11 @@
+secubox-webos (1.0.309-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : les routes d'accès pointent sur l'agrégateur (ref #1350). Le service
+    isolé de secubox-acces ne pouvait pas ENREGISTRER une session — seul
+    l'agrégateur charge secubox-auth, qui pose ce rappel.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:04:56 +0200
+
 secubox-webos (1.0.308-1~bookworm1) bookworm; urgency=medium
 
   * LA CARLETTE ACCÈS REFUSAIT D'ÊTRE ENCADRÉE PAR LE HALL QUI LA SERT

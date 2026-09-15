@@ -31,9 +31,13 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from secubox_core.auth import create_token, require_jwt, set_session_cookie
+import secrets
 
-from .identite import verifie_signature
+from secubox_core import user_store
+from secubox_core.auth import (_emit_session_event, create_token, require_jwt,
+                               set_session_cookie)
+
+from .identite import nom_de_compte, verifie_signature
 from .profileur import PROFILS, DemandeInvalide, Profileur
 from .session import Portier, SessionRefusee
 
@@ -105,10 +109,38 @@ _portier: Optional[Portier] = None
 _compteur: dict[str, list[float]] = {}
 
 
+def _provisionne(nom: str, profil: str, did: str, cle: str) -> None:
+    """Crée le compte SecuBox de l'appareil admis.
+
+    SANS CE CHAÎNON, LA SESSION N'EXISTAIT QUE POUR NOUS. `_validate_token`
+    refuse un jeton dont le `sub` n'est pas un utilisateur activé — le module
+    posait donc un cookie que tout le reste de la box rejetait, et le Hall
+    continuait d'afficher « non connecté » à côté de « session ouverte ».
+
+    LE MOT DE PASSE EST TIRÉ AU SORT ET JAMAIS DIVULGUÉ. Le magasin en exige
+    un ; ce parcours n'en a pas et n'en veut pas — l'appareil entre en SIGNANT.
+    Un secret de 32 octets que personne ne connaît, pas même nous une fois la
+    ligne exécutée, laisse le compte inutilisable par mot de passe. C'est
+    exactement l'effet recherché : passwordless de fait, sans toucher au cœur
+    d'authentification pour un seul module.
+
+    LE COMPTE EXISTANT N'EST JAMAIS ÉCRASÉ. `set_password(provision=True)`
+    RÉINITIALISERAIT le mot de passe d'un compte déjà là. Comme le nom dérive
+    de la clé, un compte de ce nom EST cet appareil — on le laisse tel quel.
+    """
+    compte = nom_de_compte(cle)
+    if user_store.get_user(compte):
+        return                      # déjà provisionné : on ne retouche à rien
+    user_store.set_password(compte, secrets.token_urlsafe(32),
+                            provision=True, role=profil)
+    log.info("compte %s provisionné pour %s (%s), profil %s",
+             compte, nom, did, profil)
+
+
 def profileur() -> Profileur:
     global _profileur
     if _profileur is None:
-        _profileur = Profileur(FICHIER)
+        _profileur = Profileur(FICHIER, creer_compte=_provisionne)
     return _profileur
 
 
@@ -311,8 +343,20 @@ async def session_etat(req: Request):
 
 @app.get("/session/defi")
 async def session_defi(did: str, jeton: str, req: Request):
-    """Un défi à signer. Usage unique, lié au DID, périmé en deux minutes."""
-    _cadence(req)
+    """Un défi à signer. Usage unique, lié au DID, périmé en deux minutes.
+
+    PAS DE CADENCE PAR ADRESSE ICI, et c'est une correction. Le plafond de cinq
+    par heure vise la CRÉATION de demandes — un geste humain, rare. Appliqué au
+    défi, il punissait l'usage normal : plusieurs appareils derrière un même
+    NAT, ou un seul qui rouvre sa session, épuisaient le quota en quelques
+    minutes et se voyaient refuser l'entrée avec un « trop de demandes » qui ne
+    décrivait rien.
+
+    Cette route ne s'ouvre d'ailleurs pas à l'inconnu : elle exige un DID et un
+    jeton de suivi VALIDES, sur une demande ACCEPTÉE. Elle ne permet donc ni
+    d'énumérer, ni de créer quoi que ce soit, et la table de défis est bornée
+    par ailleurs.
+    """
     try:
         return {"defi": portier().defi(did, jeton)}
     except SessionRefusee as e:
@@ -320,7 +364,7 @@ async def session_defi(did: str, jeton: str, req: Request):
 
 
 @app.post("/session/ouvrir")
-async def session_ouvrir(corps: OuvertureIn, reponse: Response):
+async def session_ouvrir(corps: OuvertureIn, req: Request, reponse: Response):
     """Échanger une preuve contre une session.
 
     C'EST LE CHAÎNON QUI MANQUAIT. Avant, l'appareil lisait « Accès accordé » et
@@ -332,13 +376,28 @@ async def session_ouvrir(corps: OuvertureIn, reponse: Response):
     except SessionRefusee as e:
         raise HTTPException(403, str(e)) from e
 
-    # Le jeton porte le NOM déclaré à l'admission, pas le DID : c'est ce que
-    # l'administrateur a vu et validé, et c'est ce qui s'affichera partout.
-    jwt = create_token(d["nom"], expires_in=d["duree"])
+    # LE JETON PORTE LE NOM DE COMPTE, pas le nom déclaré. Le second est une
+    # étiquette lue par l'administrateur ; le premier est ce que le reste de la
+    # box sait valider.
+    compte = nom_de_compte(d["cle"])
+
+    # ON SUIT LA VOIE CANONIQUE DE `login`, À LA LETTRE. Un `jti` explicite, et
+    # l'événement qui ENREGISTRE la session : `_validate_token` refuse tout
+    # jeton dont le `jti` n'est pas dans le registre. Mint sans émettre, et l'on
+    # obtient un cookie que la box entière rejette — ce qui affichait « session
+    # ouverte » d'un côté et « non connecté » de l'autre.
+    jti = secrets.token_hex(8)
+    jwt = create_token(compte, expires_in=d["duree"], jti=jti)
     set_session_cookie(reponse, jwt, expires_in=d["duree"])
+    _emit_session_event("login_success", compte, {
+        "jti": jti, "expires_in": d["duree"],
+        "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:100],
+        "voie": "acces-signature",
+    })
     profileur().note_session(corps.did)
-    log.info("session ouverte pour %s (%s), profil %s", d["nom"], corps.did, d["profil"])
-    return {"ok": True, "nom": d["nom"], "profil": d["profil"]}
+    log.info("session ouverte : compte %s (%s, « %s »), profil %s",
+             compte, corps.did, d["nom"], d["profil"])
+    return {"ok": True, "nom": d["nom"], "compte": compte, "profil": d["profil"]}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

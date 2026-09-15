@@ -89,6 +89,26 @@ def empreinte_courte(point_hex: str) -> str:
     return " ".join(brut[i:i + 4] for i in range(0, 24, 4))
 
 
+def nom_de_compte(point_hex: str) -> str:
+    """Le nom du compte SecuBox d'un appareil. DÉRIVÉ DE LA CLÉ, jamais du nom
+    déclaré — et c'est une règle de sûreté, pas une commodité.
+
+    Le nom déclaré vient d'un INCONNU : il arrive par un formulaire ouvert.
+    S'en servir comme identifiant de compte permettrait à quiconque d'annoncer
+    « Gérald » ou « admin » — et la voie de création de compte, qui écrit un
+    mot de passe, RÉINITIALISERAIT le compte existant portant ce nom. Une porte
+    d'entrée deviendrait une prise de contrôle.
+
+    Le nom déclaré reste ce qu'il est : une ÉTIQUETTE que l'administrateur lit
+    pour décider. Il ne désigne rien dans le système.
+
+    Deux appareils ne peuvent pas produire le même nom sans produire la même
+    clé — ce qui exigerait d'en trouver une collision SHA-256.
+    """
+    return "sbx-" + hashlib.sha256(
+        bytes.fromhex(point_hex.strip().lower())).hexdigest()[:12]
+
+
 def verifie_signature(point_hex: str, message: bytes, signature_hex: str) -> bool:
     """Vérifie une signature ECDSA P-256 / SHA-256 produite par WebCrypto.
 
