@@ -1,3 +1,20 @@
+secubox-webos (1.0.308-1~bookworm1) bookworm; urgency=medium
+
+  * LA CARLETTE ACCÈS REFUSAIT D'ÊTRE ENCADRÉE PAR LE HALL QUI LA SERT
+    (ref #1348). `add_header` n'est pas hérité par un `location` qui pose ses
+    propres en-têtes — mais un `location` qui n'en pose AUCUN hérite de celui
+    du serveur, lequel porte `frame-ancestors 'none'`. Et `'none'` interdit
+    TOUT ancêtre, y compris de MÊME ORIGINE.
+  * Le relais /i/acces/ n'avait pas d'add_header : il héritait donc du refus.
+    Les sept autres carlettes redéclarent déjà `frame-ancestors 'self'` — on
+    reprend leur politique mot pour mot, plutôt que d'en écrire une voisine :
+    deux politiques qui divergent sont la panne suivante.
+  * Firefox le disait très bien — « hall.gk2.secubox.in will not allow Firefox
+    to display the page if another site has embedded it » — mais en nommant le
+    Hall, pas le fichier servi sous son nom. Trois aller-retours pour ça.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:53:34 +0200
+
 secubox-webos (1.0.307-1~bookworm1) bookworm; urgency=medium
 
   * /sbxos/ sur le Hall REDIRIGE au lieu de faire semblant (ref #1347). Il
