@@ -214,6 +214,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/bbs/menu", s.apiMenu) // rubriques JSON → sous-menu Hall (#1175)
 	s.mux.HandleFunc("/t/", s.fil)
 	s.mux.HandleFunc("/p/", s.edition) // #1091 — /p/{id}/edit
+	// ENTRER AVEC SA SESSION SECUBOX (#1360) — voir sbx_entree.go pour ce qui
+	// rend l'en-tête digne de foi : socket unix + nginx qui l'écrase.
+	s.mux.HandleFunc("/sbx/entrer", s.sbxEntree)
 	s.mux.HandleFunc("/login", s.connexion)
 	s.mux.HandleFunc("/logout", s.deconnexion)
 	s.mux.HandleFunc("/invite/", s.invitation)

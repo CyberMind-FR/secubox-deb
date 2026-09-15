@@ -1,3 +1,41 @@
+secubox-bbs (0.31.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le lien « Entrer avec ma session SecuBox » passe DEVANT le formulaire, et
+    c'est l'information : qui vient de SBX OS n'a pas de mot de passe ici — il
+    n'en a jamais eu — et lui présenter d'abord un champ à remplir, c'est lui
+    offrir une impasse. Sans session SecuBox le lien retombe sur ce même
+    formulaire : il ne coûte rien à qui n'en a pas.
+
+  * ENTRER AVEC SA SESSION SECUBOX (ref #1360). Quelqu'un entré dans SBX OS —
+    par SIGNATURE, sans mot de passe — arrivait ici et se voyait demander un
+    pseudonyme et un mot de passe qu'il n'a JAMAIS EUS. Deux authentifications
+    pour une seule personne, dont l'une était infranchissable.
+  * `/sbx/entrer` ouvre une session BBS pour le porteur d'une session SecuBox,
+    et crée le membre à la première venue.
+  * CE QUI REND L'EN-TÊTE DIGNE DE FOI EST UNE CONJONCTION, pas une confiance :
+    le démon n'écoute QUE sur un socket unix — aucun client ne l'atteint, seul
+    nginx lui parle — ET la `location` ÉCRASE l'en-tête avec la valeur obtenue
+    de /auth/verify. Retirer l'une des deux ouvrirait la porte à qui sait écrire
+    `X-Sbx-Membre`. C'est écrit en toutes lettres dans le fichier, parce qu'un
+    futur déplacement vers un port TCP le casserait en silence.
+  * JAMAIS SYSOP, quoi que dise l'en-tête. Un administrateur SecuBox n'est pas
+    d'office administrateur du forum : ce sont deux responsabilités distinctes,
+    et les confondre donnerait la modération à quiconque obtient
+    l'administration de la box. La promotion reste un geste fait DANS le BBS.
+  * Le nom de compte est BORNÉ par expression régulière — il devient un
+    pseudonyme affiché et sert de clé. Traversées, sauts de ligne et balises
+    sont refusés, et testés comme tels.
+  * PAS DE SESSION N'EST PAS UNE ERREUR : c'est le cas de tout visiteur qui
+    n'est pas passé par SBX OS. On lui montre le formulaire, pas une page
+    d'échec.
+  * Le `?vers=` de retour n'accepte qu'un chemin interne : sans cette borne,
+    la route deviendrait un tremplin de redirection.
+  * Défense en profondeur : l'en-tête est EFFACÉ sur toutes les autres routes.
+    Aucune ne le lit aujourd'hui — mais le jour où l'une le lirait, un client
+    pourrait l'avoir posé lui-même.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 15:34:07 +0200
+
 secubox-bbs (0.30.45-1~bookworm1) bookworm; urgency=medium
 
   * CSP carte /micro : style-src 'self' 'unsafe-inline' (SBXAide/spicy) ; script

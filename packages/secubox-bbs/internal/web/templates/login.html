@@ -10,6 +10,18 @@
   <div class="ph"><div><h1 class="serif">Se connecter</h1>
   <p>{{if .Invite}}Invitation valide — choisissez votre pseudonyme.{{else}}L'inscription se fait sur invitation.{{end}}</p></div></div>
   {{if .Err}}<div class="note sa2d3b14"><b>{{.Err}}</b></div>{{end}}
+  <!-- ENTRER AVEC SA SESSION SECUBOX (#1360).
+       Il passe DEVANT le formulaire, et c'est l'information : qui vient de SBX
+       OS n'a pas de mot de passe ici — il n'en a jamais eu — et lui presenter
+       d'abord un champ a remplir, c'est lui offrir une impasse. Sans session
+       SecuBox le lien retombe ici meme : il ne coute rien a qui n'en a pas. -->
+  {{if not .Invite}}
+  <div class="card pad stack">
+    <a class="btn primary" href="/sbx/entrer">Entrer avec ma session SecuBox</a>
+    <p>Vous venez de SBX OS ou du Hall ? Vous etes deja identifie — aucun mot de
+      passe n'est necessaire, et il n'y en a pas a creer.</p>
+  </div>
+  {{end}}
   <form method="post" action="{{if .Invite}}/invite/{{.Invite}}{{else}}/login{{end}}" class="card pad stack">
     <input type="hidden" name="csrf" value="{{.V.CSRF}}">
     <label class="s3fb7839">Pseudonyme
