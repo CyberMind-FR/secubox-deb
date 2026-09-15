@@ -1,3 +1,17 @@
+secubox-webos (1.0.306-1~bookworm1) bookworm; urgency=medium
+
+  * CSP : acces.gk2.secubox.in entre dans `frame-src` (ref #1346). La carlette
+    passe par le relais et vit donc en MÊME ORIGINE — mais la vue plein cadre
+    (`?embed=1`) ouvre le vhost DÉDIÉ, en cross-origine. Il ne figurait pas dans
+    la liste des cadres autorisés : le navigateur refusait le document, et la
+    page s'affichait cassée.
+  * LE SYMPTÔME NE DÉSIGNAIT PAS LA CAUSE. En ligne de commande tout répondait
+    200 — curl n'applique aucune CSP. Une politique de sécurité ne se vérifie
+    que dans un navigateur, ou en relisant la directive ; trois `frame-src`
+    étaient à corriger, pas un.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:29:45 +0200
+
 secubox-webos (1.0.305-1~bookworm1) bookworm; urgency=medium
 
   * LA CARLETTE ACCÈS EST SERVIE EN MÊME ORIGINE (ref #1346). Elle range la clé
