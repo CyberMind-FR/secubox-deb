@@ -19,5 +19,7 @@ Description: SecuBox MagicMirror management
  As of 1.1, the MagicMirror Package Manager (MMPM) frontend and
  endpoints are folded into this package and reachable at
  /magicmirror/mmpm/ and /api/v1/magicmirror/mmpm/* respectively.
- The standalone secubox-mmpm package is now a transitional shell
- and can be removed via apt autoremove after upgrade.
+ The standalone secubox-mmpm package was a transitional shell and was
+ decommissioned on 2026-09-15 (#1362): it shipped only an nginx location
+ for /api/v1/mmpm/, which nothing mounted and nothing called. The MMPM
+ feature itself is unaffected — it lives here.

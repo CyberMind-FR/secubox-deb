@@ -49,7 +49,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-dns` | network | lite | oui | 23 | — | 1 | — | — | oui |
 | `secubox-dns-guard` | network | lite | oui | 19 | — | 1 | — | — | oui |
 | `secubox-dns-provider` | network | lite | oui | 20 | — | 1 | — | — | oui |
-| `secubox-domoticz` | misc | lite | oui | 28 | — | — | — | — | oui |
 | `secubox-dpi` | misc | pro | oui | 58 | 1 | 1 | — | 3 | oui |
 | `secubox-droplet` | misc | lite | oui | 17 | 1 | 1 | — | — | oui |
 | `secubox-egress` | À documenter | À documenter | — | — | — | — | — | — | — |
@@ -67,7 +66,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-hardening` | security | lite | oui | 18 | 1 | 1 | — | — | oui |
 | `secubox-health-doctor` | À documenter | À documenter | — | 5 | 1 | — | — | — | — |
 | `secubox-hexo` | misc | lite | oui | 32 | — | 1 | — | — | oui |
-| `secubox-homeassistant` | iot | lite | oui | 26 | — | — | oui | — | oui |
 | `secubox-hub` | system | all | oui | 54 | 2 | 5 | — | 7 | oui |
 | `secubox-identity` | misc | lite | oui | 20 | — | 1 | — | — | oui |
 | `secubox-interceptor` | misc | lite | oui | 23 | — | — | — | — | oui |
@@ -79,7 +77,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-ksm` | misc | lite | oui | 8 | — | 1 | — | — | oui |
 | `secubox-led-heartbeat` | misc | lite | — | — | — | — | — | — | — |
 | `secubox-lite` | misc | lite | — | — | — | — | — | — | — |
-| `secubox-localai` | misc | lite | oui | 17 | — | 1 | oui | — | oui |
 | `secubox-localrecall` | misc | lite | oui | 16 | — | 1 | — | — | oui |
 | `secubox-lyrion` | media | lite | oui | 14 | 1 | 3 | oui | 3 | oui |
 | `secubox-mac-guard` | misc | lite | — | 1 | — | — | — | 1 | oui |
@@ -88,7 +85,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-maigret` | À documenter | À documenter | oui | 8 | 1 | — | — | 2 | oui |
 | `secubox-mail` | email | lite | oui | 48 | 5 | 1 | oui | 3 | oui |
 | `secubox-mail-lxc` | email | lite | — | — | — | — | — | — | — |
-| `secubox-master-link` | misc | lite | — | — | — | — | — | — | oui |
 | `secubox-mastodon` | À documenter | À documenter | oui | 6 | 1 | 1 | oui | — | oui |
 | `secubox-matrix` | communication | pro | oui | 37 | — | 1 | oui | — | oui |
 | `secubox-mcp-server` | misc | lite | oui | 12 | — | 1 | — | — | oui |
@@ -103,7 +99,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-metrics` | monitoring | lite | oui | 19 | — | 1 | — | 5 | oui |
 | `secubox-mirror` | misc | lite | oui | 15 | — | 1 | — | — | oui |
 | `secubox-mitmproxy` | misc | lite | oui | 1 | — | 4 | — | 2 | oui |
-| `secubox-mmpm` | misc | lite | — | — | — | — | — | — | — |
 | `secubox-modem` | misc | lite | oui | 4 | — | 1 | — | — | oui |
 | `secubox-mqtt` | À documenter | À documenter | oui | 4 | 1 | 1 | oui | — | oui |
 | `secubox-nac` | security | lite | oui | 52 | — | 1 | — | 7 | oui |
@@ -181,7 +176,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-watchdog` | misc | lite | oui | 17 | — | 1 | — | — | oui |
 | `secubox-webext` | À documenter | À documenter | — | — | — | — | — | — | oui |
 | `secubox-webmail` | email | lite | — | — | — | — | — | — | oui |
-| `secubox-webmail-lxc` | email | lite | — | — | — | — | — | — | — |
 | `secubox-webradio` | misc | lite | oui | 25 | — | 1 | — | — | oui |
 | `secubox-wireguard` | network | lite | oui | 28 | 1 | 1 | — | — | oui |
 | `secubox-yacy` | À documenter | À documenter | oui | 5 | 1 | 1 | oui | — | oui |
@@ -689,22 +683,6 @@ SecuBox DNS Provider Module
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-dns-provider/`
 
-### `secubox-domoticz`
-
-Domoticz Home Automation for SecuBox
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 28 route(s), socket `/run/secubox/domoticz.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/domoticz
-- **CLI** : À documenter
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-domoticz/`
-
 ### `secubox-dpi`
 
 SecuBox DPI — netifyd Dashboard
@@ -838,7 +816,7 @@ Frigate NVR for SecuBox
 SecuBox Full — All 49 modules
 
 - **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-system`, `secubox-crowdsec`, `secubox-waf`, `secubox-vortex-firewall`, `secubox-auth`, `secubox-nac`, `secubox-wireguard`, `secubox-mesh`, `secubox-p2p`, `secubox-netmodes`, `secubox-dpi`, `secubox-qos`, `secubox-traffic`, `secubox-vhost`, `secubox-haproxy`, `secubox-cdn`, `secubox-dns`, `secubox-vortex-dns`, `secubox-meshname`, `secubox-netdata`, `secubox-mediaflow`, `secubox-device-intel`, `secubox-watchdog`, `secubox-metrics`, `secubox-soc`, `secubox-roadmap`, `secubox-mail`, `secubox-mail-lxc`, `secubox-webmail`, `secubox-webmail-lxc`, `secubox-users`, `secubox-gitea`, `secubox-nextcloud`, `secubox-droplet`, `secubox-streamlit`, `secubox-streamforge`, `secubox-metablogizer`, `secubox-publish`, `secubox-c3box`, `secubox-backup`, `secubox-tor`, `secubox-exposure`, `secubox-zkp`, `secubox-mitmproxy`, `secubox-repo`, `secubox-hardening`
+- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-system`, `secubox-crowdsec`, `secubox-waf`, `secubox-vortex-firewall`, `secubox-auth`, `secubox-nac`, `secubox-wireguard`, `secubox-mesh`, `secubox-p2p`, `secubox-netmodes`, `secubox-dpi`, `secubox-qos`, `secubox-traffic`, `secubox-vhost`, `secubox-haproxy`, `secubox-cdn`, `secubox-dns`, `secubox-vortex-dns`, `secubox-meshname`, `secubox-netdata`, `secubox-mediaflow`, `secubox-device-intel`, `secubox-watchdog`, `secubox-metrics`, `secubox-soc`, `secubox-roadmap`, `secubox-mail`, `secubox-mail-lxc`, `secubox-webmail`, `secubox-users`, `secubox-gitea`, `secubox-nextcloud`, `secubox-droplet`, `secubox-streamlit`, `secubox-streamforge`, `secubox-metablogizer`, `secubox-publish`, `secubox-c3box`, `secubox-backup`, `secubox-tor`, `secubox-exposure`, `secubox-zkp`, `secubox-mitmproxy`, `secubox-repo`, `secubox-hardening`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : À documenter
@@ -977,22 +955,6 @@ Hexo static blog generator management
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-hexo/`
-
-### `secubox-homeassistant`
-
-Home Assistant IoT Hub for SecuBox
-
-- **Catégorie** : iot · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 26 route(s), socket `/run/secubox/homeassistant.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/homeassistant
-- **CLI** : À documenter
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : oui
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-homeassistant/`
 
 ### `secubox-hub`
 
@@ -1173,22 +1135,6 @@ SecuBox Lite — Essential modules for low-RAM devices
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-lite/`
 
-### `secubox-localai`
-
-SecuBox LocalAI - Self-hosted LLM inference
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 17 route(s), socket `/run/secubox/localai.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/localai
-- **CLI** : À documenter
-- **Units systemd** : `secubox-localai.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : oui
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-localai/`
-
 ### `secubox-localrecall`
 
 SecuBox Localrecall Module
@@ -1317,22 +1263,6 @@ SecuBox Mail LXC Container (Backend)
 - **Tests** : À documenter
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-mail-lxc/`
-
-### `secubox-master-link`
-
-SecuBox Master-link Module
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 0 route(s), socket `/run/secubox/master-link.sock`, authentification À documenter
-- **Interface web** : À documenter
-- **CLI** : À documenter
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-master-link/`
 
 ### `secubox-mastodon`
 
@@ -1557,22 +1487,6 @@ SecuBox sbxwaf — Web Application Firewall (moteur Go)
 - **Tests** : 2
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-mitmproxy/`
-
-### `secubox-mmpm`
-
-SecuBox MMPM - MagicMirror Package Manager
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 0 route(s), socket `/run/secubox/mmpm.sock`, authentification À documenter
-- **Interface web** : À documenter
-- **CLI** : À documenter
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : À documenter
-- **Source technique** : `packages/secubox-mmpm/`
 
 ### `secubox-modem`
 
@@ -2821,22 +2735,6 @@ SecuBox Webmail Module
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-webmail/`
-
-### `secubox-webmail-lxc`
-
-SecuBox Webmail LXC Container (Backend)
-
-- **Catégorie** : email · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 0 route(s), socket `/run/secubox/webmail-lxc.sock`, authentification À documenter
-- **Interface web** : À documenter
-- **CLI** : À documenter
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : À documenter
-- **Source technique** : `packages/secubox-webmail-lxc/`
 
 ### `secubox-webradio`
 

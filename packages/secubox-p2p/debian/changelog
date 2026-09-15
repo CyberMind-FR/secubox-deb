@@ -1,3 +1,17 @@
+secubox-p2p (1.11.4-1~bookworm1) bookworm; urgency=medium
+
+  * `secubox-master-link` DECOMMISSIONNE (#1362). La description annoncait
+    qu'un autoremove s'en chargerait ; il ne s'en est jamais charge, et le
+    paquet est reste installe, reduit a un repertoire de documentation
+    possedant zero fichier de code. Il est purge. Le role master-link est
+    intact — il vit ici, sous /api/v1/p2p/master-link/*.
+  .
+    Les champs Breaks/Replaces sont CONSERVES : ils restent le chemin de
+    mise a niveau pour une installation ancienne qui porterait encore le
+    paquet separe.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 18:33:09 +0200
+
 secubox-p2p (1.11.3-1~bookworm1) bookworm; urgency=medium
 
   * Identifiants dérivés : les hachages hérités (MD5/SHA-1) passent par

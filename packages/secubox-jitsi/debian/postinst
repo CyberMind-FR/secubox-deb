@@ -25,13 +25,19 @@ case "$1" in
     fi
 
     systemctl daemon-reload
-    systemctl enable secubox-jitsi.service
-    # try-restart plutôt que start : sur une mise à jour, dpkg a déjà envoyé
-    # SIGTERM à l'unité. try-restart relance ce qui tournait et respecte un
-    # service délibérément arrêté ; le start n'est qu'un repli de première
-    # installation.
-    systemctl try-restart secubox-jitsi.service 2>/dev/null || \
-      systemctl start secubox-jitsi.service || true
+    # VESTIGE D'AVANT LE REGROUPEMENT (ref #1362).
+    #
+    # Ce module est servi par l'agrégateur (il figure dans aggregator.toml) et
+    # son socket est tenu par secubox-groupd, qui le lit depuis sa déclaration
+    # dans groupable-root.d. L'unité individuelle ci-devant n'a donc JAMAIS
+    # démarré : son `start` échouait, masqué par le `|| true`.
+    #
+    # On retire le lien d'activation que dpkg ne connaît pas : il vit dans
+    # /etc/systemd/system, posé par un `systemctl enable` d'une version
+    # antérieure. Sans ce nettoyage, systemd continuerait d'essayer au
+    # démarrage une unité dont le fichier a disparu.
+    systemctl disable secubox-jitsi.service 2>/dev/null || true
+    rm -f /etc/systemd/system/multi-user.target.wants/secubox-jitsi.service
 
     # Activer le vhost public (idempotent).
     if [ -f /etc/nginx/sites-available/jitsi.conf ] && \

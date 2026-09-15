@@ -5,6 +5,84 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-15 — LES UNITÉS VESTIGES ET LES COQUILLES (ref #1362)
+
+Suite du décommissionnement de Wazuh. L'audit avait trié 19 unités jamais
+démarrées en trois groupes ; les deux visés ici ont été traités
+**différemment, parce qu'ils ne sont pas la même chose**.
+
+### Groupe A — dix unités retirées, zéro module retiré
+
+`gotosocial, jabber, jitsi, magicmirror, matrix, newsbin, ollama, redroid,
+simplex, voip`. Leur unité individuelle était `enabled` et n'avait **jamais
+démarré** : le `systemctl start` du postinst échouait à chaque installation,
+masqué par un `|| true`.
+
+Ces modules ne sont pas morts — ils sont servis **deux fois autrement** :
+montés en processus par l'agrégateur, qui les liste dans `aggregator.toml`,
+et leur socket tenu par `secubox-groupd` depuis leur déclaration dans
+`groupable-root.d`. L'unité était un reste d'avant ce regroupement.
+
+**VÉRIFIÉ AVANT RETRAIT, et c'est ce qui a autorisé le geste** — le précédent
+du masquage de standalones, qui avait cassé le login admin, imposait de
+regarder le routage d'abord :
+
+* aucune `location` nginx ne pointe vers `/run/secubox/<module>.sock` : tout
+  passe par `aggregator.sock` ;
+* `groupd` lit ses déclarations, **jamais** les fichiers `.service`.
+
+Après pose : les dix répondent **avec les mêmes codes qu'avant** (200 ×8,
+401 ×2 — 401 = authentification exigée, donc vivant). L'unité de
+provisionnement `secubox-jitsi-provision`, qui elle avait démarré, est
+intacte.
+
+Le postinst retire en plus le lien d'activation laissé dans
+`/etc/systemd/system` par un `enable` d'une version antérieure : dpkg ne le
+connaît pas et ne l'aurait pas effacé.
+
+### Groupe C — six paquets purgés, `webmail` exclu
+
+`domoticz, homeassistant, localai, master-link, mmpm, webmail-lxc`. Aucun
+dans `aggregator.toml`, aucune API montée.
+
+Trois d'entre eux étaient déjà **déclarés supplantés** — `Breaks/Replaces`
+par `p2p`, `magicmirror` et `mail`. C'étaient des paquets transitionnels que
+l'autoremove annoncé n'a jamais emportés. Ces champs sont **conservés** :
+ils restent le chemin de mise à niveau d'une installation ancienne.
+
+`secubox-profil-reseau` dépendait de `domoticz` et `homeassistant`,
+`secubox-profil-media` de `localai` : les garder en `Depends` aurait rendu
+ces méta-paquets **ininstallables**. Corrigé.
+
+### Ce qui a failli être emporté
+
+**`webmail` est exclu, et la vérification a montré qu'il fallait aller plus
+loin que le nom.** Le conteneur `roundcube` tourne, `webmail.gk2` répond 200
+— mais c'est `hall.gk2.net.conf` qui le sert, pas le paquet. Et
+`secubox-webmail-lxc` ne contenait qu'un changelog et une `location` vers une
+API non montée : le retirer ne touche ni le conteneur ni le vhost. Vérifié
+à 200 avant **et** après la purge.
+
+**MMPM a failli passer pour mort.** Mon test initial lisait un 404 sur
+`/api/v1/mmpm/status` comme « rien ne répond ». Un 404 ne distingue pas
+« module non monté » de « cet endpoint n'existe pas ». La fonction MMPM est
+**vivante**, servie par `magicmirror` sous `/api/v1/magicmirror/mmpm/*` —
+c'est le paquet `secubox-mmpm`, lui, qui ne route qu'un chemin mort que
+personne n'appelle. Vérifié à 200 après la purge.
+
+### Ce qui n'a pas été touché
+
+`WIP.md` et `TODO.md` gardent leurs mentions : ce sont des journaux datés et
+des cases cochées, c'est-à-dire des registres. Seules les références
+**vivantes** — tableaux d'état, backlog de portage, catalogue `tutorial/` —
+ont été retirées. Le total « 125 modules » de `MIGRATION-MAP.md` est laissé
+tel quel : il ne correspond ni aux 321 paquets du dépôt ni aux 159 installés,
+c'est un nombre tenu à la main déjà faux avant ce passage — le corriger de 7
+aurait ajouté une fausse précision.
+
+**Le groupe B (`mail-lxc`) et `webmail` restent en place.** Rien n'a été
+retiré au-delà de ce qui est listé ici.
+
 ## 2026-09-14 — LEURRE HTTP, FILIGRANE, ET LE DICTIONNAIRE QUI SE REGROUPE (ref #1290)
 
 ### Le leurre

@@ -1,3 +1,14 @@
+secubox-profils (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * COQUILLES RETIREES DES PROFILS (#1362). `secubox-profil-reseau`
+    dependait de `secubox-domoticz` et `secubox-homeassistant`,
+    `secubox-profil-media` de `secubox-localai`. Ces trois paquets sont
+    decommissionnes : ils n'etaient dans aucun aggregator.toml, leur unite
+    n'avait jamais demarre, et leur API ne repondait pas. Les garder en
+    Depends rendait ces meta-paquets ININSTALLABLES.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 18:32:19 +0200
+
 secubox-profils (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Premiers profils de meta-installation. Ils suivent les sections que les

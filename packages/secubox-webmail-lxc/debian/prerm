@@ -1,5 +1,0 @@
-#!/bin/sh
-set -e
-# Transitional package — nothing to undo.
-#DEBHELPER#
-exit 0

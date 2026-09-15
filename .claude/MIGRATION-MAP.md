@@ -73,7 +73,6 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-users** | ✅ | ✅ | ✅ | unified identity v1.1.0 | ✅ |
 | **secubox-webmail** | ✅ | ✅ | ✅ | Roundcube/SOGo | ✅ |
 | **secubox-mail-lxc** | — | ✅ | ✅ | LXC backend (no UI) | ✅ |
-| **secubox-webmail-lxc** | — | ✅ | ✅ | LXC backend (no UI) | ✅ |
 | **secubox-publish** | ✅ | ✅ | ✅ | Unified publishing | ✅ |
 | **secubox-waf** | ✅ | ✅ | ✅ | 300+ rules, CrowdSec | ✅ |
 | **secubox-gitea** | ✅ | ✅ | ✅ | Git server LXC | ✅ |
@@ -114,11 +113,9 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-ytsas** | ✅ | ✅ | ✅ | **NOUVEAU** — YouTube/web SAS LXC (yt-dlp+deno+EJS), cookies, conserve→peertube 0.1.2 | ✅ |
 | **secubox-aggregator** | — | ✅ | ✅ | gateway 0.3.0 — **concentrateur sélectif** (forward /api/v1/&lt;mod&gt;/→socket dédié) | ✅ |
 | **secubox-newsbin** | ✅ | ✅ | ✅ | NZB queue, history, servers | ✅ |
-| **secubox-domoticz** | ✅ | ✅ | ✅ | devices, rooms, scenes, automation | ✅ |
 | **secubox-gotosocial** | ✅ | ✅ | ✅ | accounts, federation, moderation | ✅ |
 | **secubox-simplex** | ✅ | ✅ | ✅ | SMP relay, queues, TLS | ✅ |
 | **secubox-photoprism** | ✅ | ✅ | ✅ | library, albums, faces, storage | ✅ |
-| **secubox-homeassistant** | ✅ | ✅ | ✅ | entities, automations, scenes, addons | ✅ |
 | **secubox-matrix** | ✅ | ✅ | ✅ | users, rooms, federation, media | ✅ |
 | **secubox-jitsi** | ✅ | ✅ | ✅ | rooms, recordings, auth, prosody | ✅ |
 | **secubox-peertube** | ✅ | ✅ | ✅ | videos, channels, federation, transcoding | ✅ |
@@ -153,7 +150,11 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 **Total : 125 modules | ~2000+ endpoints API + Go mesh daemon + TUI console + SOC**
 
-*Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
+*Note: mail-lxc is a backend component integrated into secubox-mail. Le paquet
+compagnon `secubox-webmail-lxc` a été décommissionné le 2026-09-15 (#1362) : il
+ne contenait qu'une `location` nginx vers une API non montée. Le webmail lui-même
+— conteneur `roundcube`, vhost `webmail.gk2` — n'est pas concerné et continue de
+répondre.*
 
 ---
 

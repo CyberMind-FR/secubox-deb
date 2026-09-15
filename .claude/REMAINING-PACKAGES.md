@@ -61,12 +61,9 @@ These OpenWrt packages exist in Debian with renamed equivalents:
 | OpenWrt Package | Target Debian | Complexity | Notes |
 |-----------------|---------------|------------|-------|
 | ~~**ollama**~~ | secubox-ollama | ~~Medium~~ | ~~LLM inference, API proxy~~ ✅ |
-| ~~**localai**~~ | secubox-localai | ~~Medium~~ | ~~Alternative LLM backend~~ ✅ |
 | ~~**jellyfin**~~ | secubox-jellyfin | ~~Medium~~ | ~~Media server, LXC~~ ✅ |
 | **photoprism** | secubox-photoprism | Complex | Photo management, Go |
-| **homeassistant** | secubox-homeassistant | Complex | IoT hub, LXC |
 | ~~**zigbee2mqtt**~~ | secubox-zigbee | ~~Medium~~ | ~~Zigbee gateway~~ ✅ |
-| **domoticz** | secubox-domoticz | Medium | Home automation |
 | **matrix** | secubox-matrix | Complex | Chat server, Synapse |
 | **jitsi** | secubox-jitsi | Complex | Video conferencing |
 | **gotosocial** | secubox-gotosocial | Medium | Fediverse server |
@@ -80,7 +77,6 @@ These OpenWrt packages exist in Debian with renamed equivalents:
 | **simplex** | secubox-simplex | Medium | Secure messaging |
 | **torrent** | secubox-torrent | Easy | BitTorrent client |
 | **newsbin** | secubox-newsbin | Easy | Usenet client |
-| **mmpm** | secubox-mmpm | Easy | MagicMirror package manager |
 
 ---
 
@@ -141,7 +137,6 @@ These OpenWrt packages exist in Debian with renamed equivalents:
 3. `secubox-vault` — Essential for backup/restore
 
 ### Short-term (Phase 8)
-4. `secubox-homeassistant` — IoT ecosystem
 5. `secubox-zigbee` — Smart home devices
 6. `secubox-matrix` — Secure communications
 

@@ -17,7 +17,6 @@ override_dh_auto_install:
 	[ -f nginx/jitsi.conf ] && cp nginx/jitsi.conf debian/secubox-jitsi/etc/nginx/secubox.d/ || true
 	# Systemd service
 	install -d debian/secubox-jitsi/usr/lib/systemd/system
-	[ -f systemd/secubox-jitsi.service ] && cp systemd/secubox-jitsi.service debian/secubox-jitsi/usr/lib/systemd/system/ || true
 	# Confined root actuator — the module's single privileged surface.
 	install -d debian/secubox-jitsi/usr/sbin
 	install -m 755 sbin/jitsictl debian/secubox-jitsi/usr/sbin/

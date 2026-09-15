@@ -15,6 +15,3 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-voip/etc/nginx/secubox.d
 	[ -f nginx/voip.conf ] && cp nginx/voip.conf debian/secubox-voip/etc/nginx/secubox.d/ || true
-	# Systemd service
-	install -d debian/secubox-voip/lib/systemd/system
-	[ -f systemd/secubox-voip.service ] && cp systemd/secubox-voip.service debian/secubox-voip/lib/systemd/system/ || true

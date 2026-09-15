@@ -1,3 +1,25 @@
+secubox-jabber (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * UNITE VESTIGE RETIREE (#1362). Ce module etait livre avec une unite
+    systemd individuelle, `secubox-jabber.service`, qui n'a JAMAIS demarre : son
+    `systemctl start` echouait a chaque installation, masque par un
+    `|| true`. Il est en realite servi deux fois autrement — monte en
+    processus par l'agregateur, qui le liste dans aggregator.toml, et son
+    socket tenu par secubox-groupd depuis sa declaration groupable-root.d.
+    L'unite etait un reste d'avant ce regroupement.
+  .
+    VERIFIE AVANT RETRAIT, et c'est ce qui autorise le geste : aucune
+    `location` nginx ne pointe vers /run/secubox/jabber.sock — tout passe
+    par aggregator.sock — et groupd lit ses declarations, jamais les
+    fichiers .service. Le module continue donc de repondre a l'identique.
+  .
+    Le postinst retire en plus le lien d'activation laisse dans
+    /etc/systemd/system par un `enable` d'une version anterieure : dpkg ne
+    le connait pas et ne l'aurait pas efface, et systemd aurait continue
+    d'essayer au demarrage une unite dont le fichier a disparu.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 18:22:19 +0200
+
 secubox-jabber (1.0.2-1~bookworm1) bookworm; urgency=high
 
   * GARDE JWT SUR TOUTE L'API (#1256, lot P1). MODULE-COMPLIANCE.md impose

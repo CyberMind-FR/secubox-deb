@@ -1278,59 +1278,6 @@ modules:
       presente: true
       chemin: "/srv/secubox/www/dns-provider"
       vhosts: []
-  - id: secubox-domoticz
-    nom: "secubox-domoticz"
-    categorie: "misc"
-    tier: "lite"
-    description: "Domoticz Home Automation for SecuBox"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd: []
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/domoticz.sock"
-      health: "/api/v1/domoticz/health"
-      authentifie: true
-      nb_routes: 28
-      routes:
-        - "DELETE /hardware/{idx}"
-        - "DELETE /room/{idx}"
-        - "GET /backups"
-        - "GET /config"
-        - "GET /container/status"
-        - "GET /device/{idx}"
-        - "GET /devices"
-        - "GET /events"
-        - "GET /graphs/{idx}"
-        - "GET /hardware"
-        - "GET /health"
-        - "GET /logs"
-        - "GET /notifications"
-        - "GET /rooms"
-        - "GET /scenes"
-        - "GET /status"
-        - "POST /backup"
-        - "POST /config"
-        - "POST /container/install"
-        - "POST /container/restart"
-        - "POST /container/start"
-        - "POST /container/stop"
-        - "POST /device/{idx}/command"
-        - "POST /hardware"
-        - "POST /notifications"
-        - "POST /restore"
-        - "POST /room"
-        - "POST /scene/{idx}/activate"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/domoticz"
-      vhosts: []
   - id: secubox-dpi
     nom: "secubox-dpi"
     categorie: "misc"
@@ -1707,7 +1654,6 @@ modules:
       - "secubox-mail"
       - "secubox-mail-lxc"
       - "secubox-webmail"
-      - "secubox-webmail-lxc"
       - "secubox-users"
       - "secubox-gitea"
       - "secubox-nextcloud"
@@ -2146,57 +2092,6 @@ modules:
     interface_web:
       presente: true
       chemin: "/srv/secubox/www/hexo"
-      vhosts: []
-  - id: secubox-homeassistant
-    nom: "secubox-homeassistant"
-    categorie: "iot"
-    tier: "lite"
-    description: "Home Assistant IoT Hub for SecuBox"
-    manifeste: true
-    lxc: true
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd: []
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/homeassistant.sock"
-      health: "/api/v1/homeassistant/health"
-      authentifie: true
-      nb_routes: 26
-      routes:
-        - "GET /addons"
-        - "GET /automations"
-        - "GET /backups"
-        - "GET /config"
-        - "GET /container/status"
-        - "GET /devices"
-        - "GET /entities"
-        - "GET /entity/{entity_id:path}"
-        - "GET /health"
-        - "GET /integrations"
-        - "GET /logs"
-        - "GET /scenes"
-        - "GET /status"
-        - "POST /addon/install"
-        - "POST /automation/toggle"
-        - "POST /backup/create"
-        - "POST /backup/restore"
-        - "POST /config"
-        - "POST /container/install"
-        - "POST /container/restart"
-        - "POST /container/start"
-        - "POST /container/stop"
-        - "POST /entity/{entity_id:path}/command"
-        - "POST /hacs/install"
-        - "POST /integration/install"
-        - "POST /scene/{scene_id:path}/activate"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/homeassistant"
       vhosts: []
   - id: secubox-hub
     nom: "secubox-hub"
@@ -2669,49 +2564,6 @@ modules:
       presente: false
       chemin: "À documenter"
       vhosts: []
-  - id: secubox-localai
-    nom: "secubox-localai"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox LocalAI - Self-hosted LLM inference"
-    manifeste: true
-    lxc: true
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd:
-      - "secubox-localai.service"
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/localai.sock"
-      health: "/api/v1/localai/health"
-      authentifie: true
-      nb_routes: 17
-      routes:
-        - "DELETE /models/{model_id}"
-        - "DELETE /uninstall"
-        - "GET /config"
-        - "GET /gallery"
-        - "GET /health"
-        - "GET /logs"
-        - "GET /metrics"
-        - "GET /models"
-        - "GET /status"
-        - "POST /chat"
-        - "POST /complete"
-        - "POST /config"
-        - "POST /install"
-        - "POST /models/install"
-        - "POST /restart"
-        - "POST /start"
-        - "POST /stop"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/localai"
-      vhosts: []
   - id: secubox-localrecall
     nom: "secubox-localrecall"
     categorie: "misc"
@@ -3027,30 +2879,6 @@ modules:
     interface_web:
       presente: false
       chemin: "/srv/secubox/www/mail-lxc"
-      vhosts: []
-  - id: secubox-master-link
-    nom: "secubox-master-link"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox Master-link Module"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd: []
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/master-link.sock"
-      health: "/api/v1/master-link/health"
-      authentifie: false
-      nb_routes: 0
-    interface_web:
-      presente: false
-      chemin: "/srv/secubox/www/master-link"
       vhosts: []
   - id: secubox-mastodon
     nom: "secubox-mastodon"
@@ -3607,29 +3435,6 @@ modules:
     interface_web:
       presente: true
       chemin: "/srv/secubox/www/mitmproxy"
-      vhosts: []
-  - id: secubox-mmpm
-    nom: "secubox-mmpm"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox MMPM - MagicMirror Package Manager"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd: []
-    ports: []
-    documentation: []
-    api:
-      socket: "/run/secubox/mmpm.sock"
-      health: "/api/v1/mmpm/health"
-      authentifie: false
-      nb_routes: 0
-    interface_web:
-      presente: false
-      chemin: "/srv/secubox/www/mmpm"
       vhosts: []
   - id: secubox-modem
     nom: "secubox-modem"
@@ -7068,29 +6873,6 @@ modules:
     interface_web:
       presente: false
       chemin: "/srv/secubox/www/webmail"
-      vhosts: []
-  - id: secubox-webmail-lxc
-    nom: "secubox-webmail-lxc"
-    categorie: "email"
-    tier: "lite"
-    description: "SecuBox Webmail LXC Container (Backend)"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd: []
-    ports: []
-    documentation: []
-    api:
-      socket: "/run/secubox/webmail-lxc.sock"
-      health: "/api/v1/webmail-lxc/health"
-      authentifie: false
-      nb_routes: 0
-    interface_web:
-      presente: false
-      chemin: "/srv/secubox/www/webmail-lxc"
       vhosts: []
   - id: secubox-webradio
     nom: "secubox-webradio"

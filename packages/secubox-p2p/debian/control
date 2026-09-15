@@ -18,5 +18,6 @@ Description: SecuBox P2P - Peer-to-Peer Network Hub
  .
  As of 1.7, this package absorbs the master-link role that was
  previously shipped as a separate (but never nginx-reachable)
- secubox-master-link package. Operators who had secubox-master-link
- installed see it autoremoved on apt full-upgrade.
+ secubox-master-link package. That package was decommissioned on
+ 2026-09-15 (#1362): it had been reduced to a documentation directory
+ owning no code at all. The master-link role is unaffected — it lives here.

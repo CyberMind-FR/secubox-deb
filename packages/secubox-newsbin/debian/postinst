@@ -17,8 +17,19 @@ case "$1" in
     install -d -m 755 /etc/nginx/secubox.d
     # Enable and start service
     systemctl daemon-reload
-    systemctl enable secubox-newsbin.service
-    systemctl start  secubox-newsbin.service || true
+    # VESTIGE D'AVANT LE REGROUPEMENT (ref #1362).
+    #
+    # Ce module est servi par l'agrégateur (il figure dans aggregator.toml) et
+    # son socket est tenu par secubox-groupd, qui le lit depuis sa déclaration
+    # dans groupable-root.d. L'unité individuelle ci-devant n'a donc JAMAIS
+    # démarré : son `start` échouait, masqué par le `|| true`.
+    #
+    # On retire le lien d'activation que dpkg ne connaît pas : il vit dans
+    # /etc/systemd/system, posé par un `systemctl enable` d'une version
+    # antérieure. Sans ce nettoyage, systemd continuerait d'essayer au
+    # démarrage une unité dont le fichier a disparu.
+    systemctl disable secubox-newsbin.service 2>/dev/null || true
+    rm -f /etc/systemd/system/multi-user.target.wants/secubox-newsbin.service
     # Reload nginx to pick up new location
     systemctl reload nginx 2>/dev/null || true
     ;;
