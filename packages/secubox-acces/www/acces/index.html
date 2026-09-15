@@ -270,7 +270,22 @@ import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis,
 // LA DESTINATION DU PARCOURS. Ce module n'ouvre pas « un accès à la box » : il
 // fait entrer quelqu'un dans SON SBX OS. La session posée vaut pour tous les
 // vhosts (cookie de domaine parent), mais l'endroit où l'on ARRIVE est SBX OS.
-let DESTINATION = '/sbxos/';   // remplacée par ce que dit le serveur
+//
+// ELLE SE RÉSOUT AVANT TOUT AFFICHAGE, et hors de tout visage. Elle n'était
+// affectée que dans la branche ADMINISTRATEUR — or c'est le DEMANDEUR qui
+// clique « Entrer dans SBX OS ». Il gardait donc le repli relatif `/sbxos/`,
+// qui sur hall.gk2 tombe sur le repli SPA : l'index du Hall, répondu en 200.
+// Et le Hall porte `frame-ancestors 'none'` — dans un cadre, le navigateur
+// refuse ce document. « hall.gk2.secubox.in n'autorise pas la connexion ».
+//
+// Le repli reste relatif parce qu'il est juste sur admin.gk2, là où SBX OS
+// est réellement servi ; ailleurs, seule la valeur du serveur vaut.
+let DESTINATION = '/sbxos/';
+const _destinationPrete = fetch(API + '/invitation/url', { credentials: 'same-origin' })
+  .then(r => (r.ok && (r.headers.get('content-type') || '').indexOf('json') >= 0)
+    ? r.json() : null)
+  .then(j => { if (j && j.sbxos) DESTINATION = j.sbxos; })
+  .catch(() => { /* on gardera le repli */ });
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s);
@@ -462,8 +477,7 @@ async function rendMienne(v) {
         // ON ENTRE DANS SBX OS, pas sur une racine quelconque. Tout ce parcours
         // existe pour ça : proposer un accès facile à SON SBX OS. Le laisser
         // sur « / » obligeait à deviner où aller ensuite.
-        location.href = DESTINATION;
-        return j;
+        return _destinationPrete.then(() => { location.href = DESTINATION; return j; });
       })));
     c.appendChild(g);
   } else if (v.etat === 'acceptee') {
@@ -523,7 +537,7 @@ async function rafraichis() {
   // Même règle qu'en carlette : l'ouverture ne dépend pas du visage affiché.
   try {
     const ouvert = await ouvreSiAdmis();
-    if (ouvert) { location.href = DESTINATION; return; }
+    if (ouvert) { await _destinationPrete; location.href = DESTINATION; return; }
   } catch (e) { /* signature refusée : on affiche, on ne boucle pas */ }
 
   try {
@@ -535,20 +549,51 @@ async function rafraichis() {
     rendFile(f.en_attente);
     rendProfils(p.admis, p.profils);
     rendInviter(u);
-    if (u.sbxos) DESTINATION = u.sbxos;
+    if (u.sbxos) DESTINATION = u.sbxos;   // confirmation, la résolution a déjà eu lieu
   } catch (e) {
     // Pas administrateur : on montre ce que CET appareil peut faire.
     $('admin').hidden = true;
     $('visiteur').hidden = false;
-    const v = jetonGarde() ? await suivi() : null;
+    // PAS ADMINISTRATEUR — ce n'est pas une panne, c'est le cas NORMAL pour un
+    // visiteur. On montre ce que CET appareil peut faire, et d'abord demander.
+    const v = jetonGarde() ? await suivi().catch(() => null) : null;
     if (v) await rendMienne(v); else await rendFormulaire();
   }
   $('maj').textContent = 'relevé à ' + new Date().toLocaleTimeString('fr-FR',
     { hour: '2-digit', minute: '2-digit' });
 }
 
-rafraichis();
+// UN SEUL ENDROIT RATTRAPE TOUT. Sans ce filet, la moindre erreur laissait la
+// page muette — et une page muette se lit comme un service mort, alors que la
+// demande d'accès ne demande rien de plus qu'un formulaire.
+function panne(e) {
+  $('admin').hidden = true;
+  $('visiteur').hidden = false;
+  $('vk').textContent = 'Indisponible';
+  const c = $('vue');
+  c.textContent = '';
+  c.appendChild(el('span', 'etat refusee', '⚠ Accès indisponible'));
+  c.appendChild(el('p', 'sous', String((e && e.message) || e || 'erreur inconnue')));
+}
+
+// Sans WebCrypto ni IndexedDB, aucune identité d'appareil n'est possible :
+// autant le DIRE que proposer un formulaire qui échouera à l'envoi.
+function capacites() {
+  if (!(window.crypto && crypto.subtle)) {
+    throw new Error('Ce navigateur n’expose pas WebCrypto sur cette page '
+      + '(contexte non sécurisé ?). L’identité d’appareil est impossible.');
+  }
+  if (!window.indexedDB) {
+    throw new Error('Stockage IndexedDB indisponible — navigation privée ou '
+      + 'stockage bloqué. La clé de l’appareil ne peut pas être conservée.');
+  }
+}
+
+function tour() {
+  Promise.resolve().then(capacites).then(rafraichis).catch(panne);
+}
+tour();
 // Trente secondes : assez pour que l'attente paraisse vivante — côté admin une
 // demande qui arrive, côté demandeur une validation — sans marteler la box.
-setInterval(rafraichis, 30000);
+setInterval(tour, 30000);
 </script>

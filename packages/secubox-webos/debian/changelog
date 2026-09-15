@@ -1,3 +1,15 @@
+secubox-webos (1.0.307-1~bookworm1) bookworm; urgency=medium
+
+  * /sbxos/ sur le Hall REDIRIGE au lieu de faire semblant (ref #1347). Il
+    tombait sur le repli SPA et rendait l'index du Hall en 200 : un lien relatif
+    devenait silencieusement « le Hall », et comme le Hall porte
+    `frame-ancestors 'none'`, le charger dans un cadre donnait « n'autorise pas
+    la connexion » — un message qui ne désigne rien de ce qui s'est passé.
+  * 302 et non 301 : le jour où SBX OS sera servi ici aussi, un 301 mémorisé par
+    les navigateurs continuerait de les envoyer ailleurs.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:44:26 +0200
+
 secubox-webos (1.0.306-1~bookworm1) bookworm; urgency=medium
 
   * CSP : acces.gk2.secubox.in entre dans `frame-src` (ref #1346). La carlette

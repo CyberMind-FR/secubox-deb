@@ -123,8 +123,13 @@ const poste = (c, corps) => api(c, { method: 'POST',
   headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
 
 // Où l'on arrive après l'ouverture — dicté par le serveur, jamais deviné.
+// Le repli relatif n'est juste que sur admin.gk2 ; sur le Hall il tombe sur
+// l'index (repli SPA, 200), que `frame-ancestors 'none'` interdit d'encadrer.
+// On ATTEND donc la vraie adresse avant de naviguer.
 let SBXOS = '/sbxos/';
-api('/invitation/url').then(j => { if (j && j.sbxos) SBXOS = j.sbxos; }).catch(() => {});
+const _sbxosPret = api('/invitation/url')
+  .then(j => { if (j && j.sbxos) SBXOS = j.sbxos; })
+  .catch(() => { /* on gardera le repli */ });
 
 const MOTS = { en_attente:['⏳','En attente'], acceptee:['✅','Accès accordé'],
                refusee:['⛔','Refusée'], expiree:['⌛','Expirée'] };
@@ -185,7 +190,8 @@ async function rendMienne(v) {
       + 'défi avec la clé dont l’empreinte a été validée.'));
     const g = el('div', 'gestes');
     g.appendChild(bouton('Ouvrir ma session', 'fort',
-      () => ouvreSession().then(j => { top.location.href = SBXOS; return j; })));
+      () => ouvreSession()
+        .then(j => _sbxosPret.then(() => { top.location.href = SBXOS; return j; }))));
     b.appendChild(g);
   } else if (v.etat === 'acceptee') {
     b.appendChild(el('p', 'aide', 'Session ouverte. Profil : ' + (v.profil || 'guest') + '.'));
@@ -226,6 +232,38 @@ function rendFormulaire() {
   c.appendChild(b);
 }
 
+// ── QUAND ÇA RATE, ON LE DIT ────────────────────────────────────────────────
+//
+// La carlette restait sur « Chargement… » dès qu'une erreur échappait : un
+// écran muet, impossible à diagnostiquer de l'extérieur, et qui ressemble à un
+// service mort alors que le formulaire, lui, n'a besoin de rien.
+function panne(e) {
+  const c = $('corps');
+  c.textContent = '';
+  const b = el('div', 'bloc');
+  b.appendChild(el('span', 'etat refusee', '⚠ Accès indisponible'));
+  b.appendChild(el('p', 'aide', String((e && e.message) || e || 'erreur inconnue')));
+  const a = el('a', 'plus', 'Ouvrir la page d’accès →');
+  a.href = '/i/acces/'; a.target = '_top';
+  b.appendChild(a);
+  c.appendChild(b);
+}
+
+// CE QUE LE NAVIGATEUR DOIT SAVOIR FAIRE. Sans WebCrypto ni IndexedDB, il n'y a
+// pas d'identité d'appareil possible — autant le DIRE que laisser un formulaire
+// qui échouera à l'envoi. En fenêtre privée, ou avec le stockage bloqué, c'est
+// exactement ce qui arrive.
+function capacites() {
+  if (!(window.crypto && crypto.subtle)) {
+    throw new Error('Ce navigateur n’expose pas WebCrypto sur cette page '
+      + '(contexte non sécurisé ?). L’identité d’appareil est impossible.');
+  }
+  if (!window.indexedDB) {
+    throw new Error('Stockage IndexedDB indisponible — navigation privée ou '
+      + 'stockage bloqué. La clé de l’appareil ne peut pas être conservée.');
+  }
+}
+
 // ── Le visage se déduit ─────────────────────────────────────────────────────
 async function rafraichis() {
   // L'OUVERTURE PASSE AVANT L'AFFICHAGE, et elle ne dépend pas du visage :
@@ -239,12 +277,25 @@ async function rafraichis() {
     const f = await api('/file');
     rendFile(f.en_attente || []);
   } catch (e) {
-    const v = jetonGarde() ? await suivi() : null;
+    // PAS ADMINISTRATEUR — ce n'est pas une panne, c'est le cas NORMAL sur le
+    // Hall : la surface d'administration n'y est délibérément pas montée. On
+    // montre donc ce que CET appareil peut faire.
+    const v = jetonGarde() ? await suivi().catch(() => null) : null;
     if (v) await rendMienne(v); else rendFormulaire();
   }
 }
-rafraichis();
-setInterval(rafraichis, 30000);
+
+function tour() {
+  // UN SEUL ENDROIT RATTRAPE TOUT. Sans ce filet, la moindre erreur laissait
+  // « Chargement… » à l'écran — et un service muet se lit comme un service
+  // mort, alors que la demande d'accès, elle, ne demandait rien de plus.
+  Promise.resolve()
+    .then(capacites)
+    .then(rafraichis)
+    .catch(panne);
+}
+tour();
+setInterval(tour, 30000);
 
 // Thème hérité du Hall : le paramètre donne le thème d'ARRIVÉE, le message les
 // bascules suivantes — jamais par rechargement du cadre.

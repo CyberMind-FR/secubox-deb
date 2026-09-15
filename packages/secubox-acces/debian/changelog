@@ -1,4 +1,27 @@
-secubox-acces (1.1.0-1~bookworm1) bookworm; urgency=medium
+secubox-acces (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * QUAND ÇA RATE, LA CARLETTE LE DIT (ref #1348). Elle restait sur
+    « Chargement… » dès qu'une erreur échappait : un écran muet, impossible à
+    diagnostiquer de l'extérieur, et qui se lit comme un service mort — alors
+    que le formulaire de demande, lui, n'a besoin de rien. Un seul filet
+    rattrape désormais tout et affiche la cause.
+  * CONTRÔLE DES CAPACITÉS DU NAVIGATEUR. Sans WebCrypto ni IndexedDB il n'y a
+    pas d'identité d'appareil possible : mieux vaut le dire que proposer un
+    formulaire qui échouera à l'envoi. C'est le cas en fenêtre privée ou avec
+    le stockage bloqué.
+  * NE PAS ÊTRE ADMINISTRATEUR N'EST PAS UNE PANNE — c'est le cas NORMAL sur le
+    Hall, où la surface d'administration n'est délibérément pas montée. Le
+    visage « demander un accès » est ce qu'un visiteur doit voir en premier.
+
+  * LA DESTINATION SE RÉSOUT AVANT TOUT AFFICHAGE (ref #1347). Elle n'était
+    affectée que dans la branche ADMINISTRATEUR — or c'est le DEMANDEUR qui
+    clique « Entrer dans SBX OS ». Il gardait donc le repli relatif `/sbxos/`,
+    qui sur hall.gk2 tombe sur l'index du Hall (repli SPA, 200) — document que
+    `frame-ancestors 'none'` interdit d'encadrer. D'où « hall.gk2.secubox.in
+    n'autorise pas la connexion », message qui ne désignait rien de la cause.
+  * Les deux pages ATTENDENT la vraie adresse avant de naviguer : rediriger
+    vers une valeur qu'on n'a pas encore reçue mène exactement où l'on ne veut
+    pas aller.
 
   * LA SESSION S'OUVRE TOUTE SEULE dès que l'accès est accordé (ref #1347).
   * POURQUOI ÇA NE POUVAIT PAS ÊTRE UN BOUTON. Le visage de la carlette se
