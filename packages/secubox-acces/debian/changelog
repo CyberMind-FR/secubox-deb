@@ -1,0 +1,272 @@
+secubox-acces (1.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * Même garde `[hidden] { display: none !important }` dans les deux pages
+    d'accès (ref #1356). Elles basculent `#admin` et `#visiteur` par `hidden`, et
+    une future règle `display` sur `.carte` les rendrait indémasquables
+    exactement comme le `.theatre` de SBX OS l'a été.
+  * LE POSTINST NE REDÉMARRE PLUS L'AGRÉGATEUR SANS RAISON. Il ne relit sa liste
+    de modules qu'au démarrage, donc la PREMIÈRE installation l'exige — mais le
+    redémarrage coupe toutes les API et prend plusieurs minutes sur une box
+    chargée. Le payer pour une ligne de CSS est une taxe injustifiable. Un
+    marqueur dit ce qui a déjà été fait.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:33:52 +0200
+
+secubox-acces (1.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * LE LIEN D'ENTRÉE DÉSIGNE LA PORTE PUBLIQUE (ref #1354). Construit depuis la
+    requête, il portait `admin.gk2` — l'hôte d'ADMINISTRATION — et on l'aurait
+    transmis à quelqu'un qui n'a rien à y faire. C'est la même faute que pour le
+    QR (#1343), refaite ici : une adresse qu'on DONNE ne se déduit jamais de
+    l'endroit d'où on la donne. Sorti par le banc d'essai de bout en bout.
+  * La porte publique désigne désormais le Hall, qui sert SBX OS depuis #1353.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:26:00 +0200
+
+secubox-acces (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE NIVEAU SE VOIT SANS SE LIRE (ref #1355). Une progression, pas trois
+    étiquettes indépendantes — c'est ce qui rend les signes mémorisables :
+    👋 guest, accueilli à la porte · 🔑 user, il a une clé · 👑 admin, il est
+    chez lui et décide qui entre.
+  * 👑 était DÉJÀ le signe des administrateurs dans la tuile du profileur. On
+    construit autour plutôt que d'inventer une seconde convention : un
+    vocabulaire visuel ne vaut que s'il est constant d'un écran à l'autre.
+  * LE MOT RESTE À CÔTÉ. Ici l'emoji s'AJOUTE au libellé, il ne le remplace pas
+    — contrairement au tag de Lexie, où la place manquait. Rien à compenser dans
+    l'arbre d'accessibilité : le mot est déjà là. L'infobulle dit ce que le rang
+    permet, ce que ni le mot ni le signe ne portent.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:23:34 +0200
+
+secubox-acces (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * UNE ADRESSE, FACULTATIVE, DANS LE FORMULAIRE (ref #1354). Elle ne sert pas
+    à entrer — l'entrée se fait par signature — mais à JOINDRE : poser un mot de
+    passe plus tard, ou renvoyer un lien si la personne change d'appareil.
+    Validée sans être vérifiée : l'expression n'atteste pas qu'une adresse
+    existe, rien ne le peut sans y écrire ; elle écarte ce qui ne peut PAS en
+    être une, pour que le champ ne devienne pas un second texte libre.
+  * LE LIEN D'ENTRÉE À USAGE UNIQUE, rendu à l'administrateur au moment où il
+    accorde, et UNE SEULE FOIS — un porteur qu'on peut redemander n'est plus à
+    usage unique en pratique.
+  * IL EST PLUS FAIBLE QUE LA SIGNATURE, ET C'EST ASSUMÉ. Un lien se lit ;
+    quiconque voit l'écran, le courriel ou l'historique entre à la place du
+    destinataire. Il n'existe que pour le cas que la signature ne couvre pas :
+    la clé vit par origine ET par navigateur, et qui a demandé depuis son
+    téléphone n'a rien à présenter depuis son ordinateur.
+  * L'USAGE UNIQUE EST UN DÉTECTEUR, pas seulement une limite : il n'empêche pas
+    l'interception, il la REND VISIBLE. Le destinataire qui trouve un lien mort
+    sait que quelqu'un est passé avant lui — et le client le lui DIT. Un lien
+    réutilisable laisserait les deux entrer sans que personne ne s'en aperçoive.
+  * Ce que la faiblesse impose, et qu'on applique : consommé avant d'être jugé
+    (une tentative ratée ne le laisse pas disponible), six heures de vie, 32
+    octets d'entropie, session plafonnée à `guest` et à 24 h, empreinte stockée
+    au lieu du jeton, et un seul message d'erreur pour « inconnu », « périmé »
+    et « déjà servi » — les distinguer apprendrait qu'un lien a existé.
+  * LE PARAMÈTRE EST RETIRÉ DE L'ADRESSE, réussite ou échec : un jeton qui reste
+    dans la barre finit dans l'historique, dans un signet, dans une capture — et
+    serait renvoyé en `Referer` au premier lien suivi.
+  * La box N'ENVOIE RIEN elle-même : poser une chaîne SMTP fiable est un projet
+    en soi, et un lien qui échoue silencieusement en route est pire qu'un lien
+    qu'on recopie. 5 tests de plus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:21:38 +0200
+
+secubox-acces (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * La destination du parcours suit SBX OS chez le Hall (ref #1353).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:46:48 +0200
+
+secubox-acces (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE MODULE N'ÉCRIT PLUS DANS users.json (ref #1351). Un appareil admis entre
+    au registre des APPAREILS — il n'a pas de mot de passe, son nom dérive de sa
+    clé, et les gestes du panneau « Users » n'ont aucun sens pour lui. Les mêler
+    faisait apparaître des lignes `sbx-…` là où personne ne pouvait rien en
+    faire, et brouillait la distinction que ce module existe pour poser.
+  * RÉVOQUER FERME LES DEUX PORTES. Sans cela, la file dirait « révoqué »
+    pendant que le registre laisserait passer les jetons déjà émis — un refus
+    qui ne refuse rien.
+  * PROMOUVOIR REPORTE LE PROFIL au registre : le cœur y lit le profil
+    effectif, et l'oublier lui aurait fait lire l'ancien.
+
+  * LE MODULE SE DÉCLARE DANS aggregator.toml. L'agrégateur ne balaie pas
+    /usr/lib/secubox : il monte ce que sa configuration lui nomme, et relaie le
+    reste vers un socket par module. C'est ce REPLI qui masquait le problème —
+    tant que le service isolé tournait, tout répondait, mais depuis le mauvais
+    processus, celui où `_emit_session_event` ne fait rien. En retirant le
+    service j'ai retiré la jambe sur laquelle le repli s'appuyait, et tout est
+    passé en 404 : le symptôme a enfin désigné la cause.
+
+  * LE SERVICE ISOLÉ DISPARAÎT — l'API passe par l'agrégateur (ref #1350).
+    Deux processus servaient le même module, chacun avec SA copie en mémoire de
+    la file. Et surtout, seul l'agrégateur charge `secubox-auth`, qui pose le
+    rappel enregistrant les sessions : dans le service isolé
+    `_emit_session_event` était un NO-OP. On frappait donc le jeton dans un
+    processus permissif et on le validait dans un processus strict — d'où
+    « session ouverte » d'un côté et « non connecté » de l'autre, sur le même
+    écran.
+  * L'agrégateur monte déjà tous les modules de /usr/lib/secubox : le service
+    isolé était l'anomalie, pas la règle. Le postinst le désactive et retire son
+    unité.
+
+  * Le service peut écrire le magasin d'utilisateurs. `ProtectSystem=strict`
+    rendait /etc en lecture seule, et le provisionnement échouait en 500 —
+    l'écriture atomique crée son fichier temporaire DANS le répertoire, qui
+    doit donc être ouvert en entier. Le pouvoir accordé reste INFÉRIEUR à celui
+    que ce module exerce déjà : il décide qui entre.
+  * LA CADENCE PAR ADRESSE NE S'APPLIQUE PLUS À /session/defi. Le plafond de
+    cinq par heure vise la CRÉATION de demandes — un geste humain, rare.
+    Appliqué au défi, il punissait l'usage normal : plusieurs appareils derrière
+    un même NAT, ou un seul qui rouvre sa session, épuisaient le quota en
+    quelques minutes et se voyaient refuser l'entrée par un « trop de demandes »
+    qui ne décrivait rien. Cette route exige de toute façon un jeton valide sur
+    une demande acceptée : elle ne permet ni d'énumérer ni de créer.
+
+  * LA SESSION EST ENFIN SYNCHRONISÉE AVEC LA BOX (ref #1350). Le module posait
+    un cookie que tout le reste rejetait : `_validate_token` exige DEUX choses
+    qu'on ne fournissait pas — un `jti` présent dans le registre des sessions,
+    et un `sub` qui soit un utilisateur ACTIVÉ. D'où « Session ouverte, profil
+    guest » d'un côté et « Non connecté à la box » de l'autre, sur le même
+    écran.
+  * On suit désormais la voie canonique de `login`, à la lettre : `jti`
+    explicite, puis `_emit_session_event("login_success")` — c'est cet événement
+    qui ENREGISTRE la session.
+  * L'ADMISSION PROVISIONNE LE COMPTE. Mot de passe tiré au sort et jamais
+    divulgué : le magasin en exige un, ce parcours n'en veut pas — l'appareil
+    entre en SIGNANT. Un secret de 32 octets que personne ne connaît laisse le
+    compte inutilisable par mot de passe, ce qui est exactement l'effet voulu.
+  * LE NOM DE COMPTE DÉRIVE DE LA CLÉ, JAMAIS DU NOM DÉCLARÉ, et c'est une
+    règle de sûreté. Le nom déclaré arrive par un formulaire OUVERT : s'en
+    servir comme identifiant laisserait quiconque annoncer « admin », et
+    `set_password(provision=True)` RÉINITIALISERAIT le compte existant portant
+    ce nom. Une porte d'entrée serait devenue une prise de contrôle. Le nom
+    déclaré reste une ÉTIQUETTE que l'administrateur lit pour décider.
+  * Un compte déjà provisionné n'est jamais réécrit : comme le nom dérive de la
+    clé, un compte de ce nom EST cet appareil. Deux tests verrouillent la règle.
+
+  * QUAND ÇA RATE, LA CARLETTE LE DIT (ref #1348). Elle restait sur
+    « Chargement… » dès qu'une erreur échappait : un écran muet, impossible à
+    diagnostiquer de l'extérieur, et qui se lit comme un service mort — alors
+    que le formulaire de demande, lui, n'a besoin de rien. Un seul filet
+    rattrape désormais tout et affiche la cause.
+  * CONTRÔLE DES CAPACITÉS DU NAVIGATEUR. Sans WebCrypto ni IndexedDB il n'y a
+    pas d'identité d'appareil possible : mieux vaut le dire que proposer un
+    formulaire qui échouera à l'envoi. C'est le cas en fenêtre privée ou avec
+    le stockage bloqué.
+  * NE PAS ÊTRE ADMINISTRATEUR N'EST PAS UNE PANNE — c'est le cas NORMAL sur le
+    Hall, où la surface d'administration n'est délibérément pas montée. Le
+    visage « demander un accès » est ce qu'un visiteur doit voir en premier.
+
+  * LA DESTINATION SE RÉSOUT AVANT TOUT AFFICHAGE (ref #1347). Elle n'était
+    affectée que dans la branche ADMINISTRATEUR — or c'est le DEMANDEUR qui
+    clique « Entrer dans SBX OS ». Il gardait donc le repli relatif `/sbxos/`,
+    qui sur hall.gk2 tombe sur l'index du Hall (repli SPA, 200) — document que
+    `frame-ancestors 'none'` interdit d'encadrer. D'où « hall.gk2.secubox.in
+    n'autorise pas la connexion », message qui ne désignait rien de la cause.
+  * Les deux pages ATTENDENT la vraie adresse avant de naviguer : rediriger
+    vers une valeur qu'on n'a pas encore reçue mène exactement où l'on ne veut
+    pas aller.
+
+  * LA SESSION S'OUVRE TOUTE SEULE dès que l'accès est accordé (ref #1347).
+  * POURQUOI ÇA NE POUVAIT PAS ÊTRE UN BOUTON. Le visage de la carlette se
+    déduit : la file répond → administrateur ; sinon → « votre demande ». Un
+    appareil qui est À LA FOIS administrateur et demandeur — le téléphone
+    depuis lequel on valide sa propre machine — voyait donc toujours la file,
+    et le bouton « Ouvrir ma session » ne lui était JAMAIS proposé. L'accès
+    restait accordé et inutilisable, et l'on finissait par essayer un mot de
+    passe que ce parcours ne crée pas. L'ouverture ne dépend plus du visage.
+  * UNE SESSION DÉJÀ OUVERTE NE SE REMPLACE PAS. Ouvrir écrase le cookie :
+    l'administrateur qui valide sa propre machine aurait été reconnecté en
+    `user` sous le nom déclaré par l'appareil — donc déconnecté de son compte
+    d'administration, par le geste même qui devait l'aider. Nouvelle route
+    ouverte /session/etat, qui CONSTATE la présence d'un cookie sans le
+    décoder : lui faire valider un jeton en ferait un oracle.
+  * UN SEUL ESSAI PAR CHARGEMENT. Si la signature échoue — clé effacée, accès
+    révoqué entre-temps — réessayer toutes les trente secondes ne réparerait
+    rien et brûlerait un défi à chaque tour.
+
+  * L'ATTENTE DU SOCKET NE TUE PLUS LE SERVICE. Le ExecStartPost attendait 15 s
+    puis lançait `chmod` ; sur une box à charge 38, uvicorn met plus longtemps
+    à ouvrir le socket, le chmod échouait sur un fichier absent, et systemd
+    tuait un service qui démarrait correctement — puis relançait, en boucle. Un
+    garde-fou qui empêche le démarrage qu'il surveille est pire que pas de
+    garde-fou. Attente portée à 120 s, sortie toujours en succès, et RestartSec
+    à 15 s : relancer vite sous charge empile les tentatives.
+  * UNE RÉPONSE QUI N'EST PAS DU JSON N'EST PAS UNE RÉPONSE. Sur le Hall, la
+    surface d'administration n'est délibérément pas montée : /file y rend 200
+    avec l'index du Hall. On s'en remettait à l'échec de `r.json()` — ça
+    marchait, mais par accident, et le message parlait de syntaxe JSON là où le
+    vrai problème est un hôte qui ne monte pas cette API. Les trois appelants
+    contrôlent désormais le type de contenu.
+  * Le postinst n'accuse plus que le vrai coupable. Il copiait le vhost,
+    lançait `nginx -t`, et le RETIRAIT en cas d'échec — sans vérifier que
+    l'échec venait de lui. Pendant une installation groupée, un autre paquet à
+    mi-chemin de sa configuration suffisait : le vhost disparaissait en
+    silence, et acces.gk2 retombait sur le serveur par défaut, qui sert une
+    page « Wrong Domain ». On mesure désormais l'état de départ, et on ne
+    retire que si l'ajout est démontrablement la cause.
+  * OÙ VIT SBX OS EST DIT PAR LE SERVEUR (`url_sbxos`), pas deviné. La carlette
+    est servie par le vhost d'accès mais EMBARQUÉE dans le Hall : un chemin
+    relatif comme « /sbxos/ » désignerait tantôt l'un, tantôt l'autre selon qui
+    l'interprète — et ne mènerait nulle part dans les deux cas.
+  * La carlette pointe vers le webui à la RACINE de son propre vhost. « /acces/ »
+    supposait un montage dans un vhost partagé : vrai sur le panneau d'admin,
+    faux partout ailleurs.
+  * La feuille de style partagée du Hall n'est plus réclamée : elle n'existe pas
+    sur ce vhost, et la carlette porte déjà tout son style.
+  * La configuration est lue depuis acces.toml directement. `get_config()` ne
+    charge qu'un seul document (secubox.conf) et ignore les TOML par module :
+    `get_config("acces")` rendait donc silencieusement une section vide.
+  * LE QR DÉSIGNE TOUJOURS LA PORTE PUBLIQUE (`url_publique` dans acces.toml),
+    jamais le vhost que l'administrateur regarde. Déduire l'URL de la requête
+    avait deux défauts : l'agrégateur monte ce module en processus pour les
+    vhosts partagés et son appel interne ne porte qu'un `Host: localhost` ;
+    et surtout, un administrateur consultant la carlette depuis admin.gk2
+    aurait distribué une adresse d'ADMIN à un inconnu — précisément la faute
+    que ce module existe pour corriger.
+  * Le QR encode la VRAIE adresse de la page. Elle n'est pas au même endroit
+    selon le vhost — racine sur le vhost dédié, /acces/ dans un vhost partagé —
+    et l'URL précédente ne tombait juste que par le repli try_files : fausse,
+    mais fonctionnelle par accident. C'est nginx qui la DIT maintenant, par un
+    en-tête ; deviner d'après le nom d'hôte aurait cassé au premier renommage.
+  * LA SESSION ENTRE DANS SBX OS, pas sur une racine quelconque. Tout ce
+    parcours existe pour ça : proposer un accès facile à SON SBX OS. Renvoyer
+    sur « / » laissait deviner où aller ensuite.
+  * Module initial (ref #1344). Extrait de secubox-users, où le parcours
+    d'admission se lisait comme de la gestion d'utilisateurs alors qu'il ouvre
+    des SESSIONS à des appareils. Les loger ensemble produisait des phrases
+    fausses : « profil accordé » affiché à côté de « non connecté ».
+  * UNE VRAIE CLÉ. La version précédente tirait 32 octets au hasard et les
+    appelait « clé publique ». L'empreinte qu'on faisait comparer n'engageait
+    donc personne — aucun secret ne lui correspondait, et rien ne reliait
+    l'empreinte validée à l'appareil qui se présenterait ensuite. L'appareil
+    engendre maintenant une paire ECDSA P-256 dont la partie privée est NON
+    EXPORTABLE et vit dans IndexedDB : le navigateur peut signer, aucun script
+    ne peut la lire.
+  * LA SESSION S'OUVRE ENFIN. C'était le chaînon manquant : la file savait dire
+    « accepté », personne n'ouvrait la porte. L'appareil admis demande un défi,
+    le signe, et reçoit le cookie de session SecuBox. Il le MÉRITE par une
+    signature et non par un jeton recopié — sinon quiconque lirait le jeton
+    entrerait à sa place, et la comparaison d'empreinte n'aurait servi à rien.
+  * Défi à usage unique, lié au DID, périmé en deux minutes, et CONSOMMÉ avant
+    d'être jugé : une signature fausse ne laisse pas le défi disponible pour un
+    second essai.
+  * Le webui porte le PROFILEUR : deux colonnes, ce qui attend une décision et
+    ce qui vit déjà. On ne promeut pas une demande, on promeut un accès.
+  * Une tuile compte les « jamais entré » — les accès accordés dont personne
+    n'a rien fait. C'est exactement ce qu'on ne voyait pas.
+  * Vhost dédié `acces.gk2.secubox.in`. Le parcours vivait sous le panneau
+    d'administration — c'est-à-dire derrière une porte que le demandeur n'a par
+    définition pas encore franchie. On donnait l'adresse d'un panneau d'admin à
+    un inconnu. La page est servie en STATIQUE, seule l'API passe par le socket :
+    le formulaire s'ouvre même si le service dort.
+  * Le vhost est déposé puis TESTÉ avant activation, et retiré s'il échoue : un
+    vhost fautif empêche nginx de recharger toute sa configuration, donc
+    emporterait tous les autres services avec lui.
+  * L'empreinte est bornée en largeur : étirée sur toute la page elle finissait
+    alignée à droite, illisible au moment précis où il faut la comparer.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:27:12 +0200

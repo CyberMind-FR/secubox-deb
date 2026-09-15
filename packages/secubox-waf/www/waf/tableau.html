@@ -16,135 +16,253 @@
 
   Tous les graphiques sont en SVG écrit ici : la CSP du panneau interdit les
   scripts externes, et une bibliothèque de plus serait une dépendance de plus.
+
+  ── REPRISE GRAPHIQUE (#1341), AU NIVEAU DE DevWatch ───────────────────────
+
+  Le fond était juste ; la forme ne l'était pas. Une seule fonte à chasse fixe,
+  des cartes plates, et des titres préfixés d'emoji : la page se lisait comme un
+  journal brut, alors qu'elle porte les conclusions du moteur.
+
+  TROIS FONTES, TROIS RÔLES — le trio de DevWatch, et c'est volontairement le
+  même : Chivo pour les titres et les chiffres, IBM Plex Sans pour le corps, IBM
+  Plex Mono pour les adresses, les signatures et les chemins. Un style de maison
+  n'existe que s'il se répète.
+
+  L'ACCENT N'EST PAS LA SÉMANTIQUE. Le cyan est structurel — il dit « SecuBox »,
+  jamais « danger ». Le rouge, l'ambre, le violet et le vert disent une DÉCISION
+  (banni, averti, refusé sans bannir, sain). Les confondre ferait clignoter la
+  page en alarme permanente, et une alarme permanente ne se lit plus.
+
+  L'ŒIL-DE-BŒUF DE CHAQUE SECTION PORTE LA PROVENANCE, pas un numéro d'ordre :
+  « JOURNAL · SOURCES », « CORRÉLATION », « REGISTRE DES VHOSTS ». Ces sections
+  ne forment pas une séquence — ce sont des angles de vue —, et numéroter ce qui
+  n'est pas ordonné invente une progression qui n'existe pas. Sur une console de
+  sécurité, ce qu'il est utile d'annoncer, c'est D'OÙ VIENT le chiffre.
+
+  L'HEURE DU RELEVÉ EST AFFICHÉE. La page se rafraîchit seule chaque minute ;
+  sans horodatage, rien ne distingue un tableau vivant d'un tableau figé sur une
+  erreur silencieuse.
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WAF — évolution et efficacité</title>
+<title>SBXWAF — poste de garde</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<!-- LE SKIN PARTAGE EST RETIRE (#1310, revu #1334). /shared/hybrid-skin.css
-     forcait le fond et la couleur du corps en `!important` (195 regles) : c'est
-     lui, et lui seul, qui empechait le mode clair. Ce tableau n'utilise QUE ses
-     propres classes (.card, .grille, .tuile…) — verifie une par une — donc rien
-     ne dependait du skin. On le retire, et le clair devient possible. -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
-  /* PALETTE LOCALE À TROIS ÉTATS (#1308).
-     Le tableau s'en remettait à /shared/hybrid-skin.css, qui ne définit AUCUN
-     des jetons qu'il utilise — ni --bg-card, ni --border, ni --cyan, ni le
-     reste — et qui ne connaît ni data-theme ni prefers-color-scheme. En clair,
-     les défauts du navigateur sauvaient l'apparence ; en sombre, du texte
-     sombre se retrouvait sur un fond sombre.
-     Les trois états sont donc écrits ici : :root nu = clair, la requête média
-     pour l'état « système » où aucun attribut n'est posé, et [data-theme] pour
-     le choix explicite, qui doit gagner dans les DEUX sens. */
-  /* SOMBRE D'ABORD, ET C'EST LE SENS DE CE TABLEAU. Ses teintes de series sont
-     des neons — #00d4ff, #6e40c9 — dessines pour un fond noir. Poser le clair
-     sur `:root` a casse ce qui marchait : le clair devenait le defaut, et les
-     neons s'y ecrasaient. On inverse donc les miroirs, comme on l'a fait pour
-     MetaNews et SocialRelay (#1268) : `:root` nu porte le SOMBRE, et c'est le
-     clair qui se redefinit. */
-  /* PALETTE A TROIS ETATS (#1334). Le tableau reste SOMBRE PAR DEFAUT — c'est
-     son heritage, et le Hall lui impose de toute facon `data-theme`. Mais le
-     clair existe enfin : il s'applique sur choix explicite (`data-theme=light`)
-     ET pour l'etat « systeme » clair ou aucun attribut n'est pose. C'est le
-     retrait du skin force-sombre ci-dessus qui l'a rendu possible. */
-  :root { --fond:#0a0a0f; --bg-card:#14141c; --ink:#e8e6d9; --muted:#8a8a99;
-          --border:#2a2a36; --cyan:#00d4ff; --purple:#b388ff; --orange:#e0b355;
-          --red:#e8636f; --green:#4ade80; }
-  /* Le clair, ecrit une fois, applique a deux etats. Accents assombris : le
-     cyan neon des ecrans ne tient pas sur du papier. */
+  /* ═══════════════════════════════════════════════════════════════════════
+     PALETTE À TROIS ÉTATS, SOMBRE PAR DÉFAUT (#1308, revu #1334, #1341).
+
+     L'ORDRE EST INVERSÉ EXPRÈS, et c'est la leçon de #1308 : les teintes de
+     séries de cette page sont des néons, dessinés pour un fond noir. Poser le
+     clair sur `:root` nu avait fait du clair le défaut, et les néons s'y
+     écrasaient. `:root` porte donc le SOMBRE ; c'est le clair qui se redéfinit,
+     dans les deux sens — choix explicite ET état « système » sans attribut.
+
+     L'ACCENT ET LA SÉMANTIQUE SONT DEUX CHOSES. Le cyan est structurel : il
+     dit « SecuBox », il ne dit rien du danger. Le rouge, l'ambre, le violet et
+     le vert disent une DÉCISION (banni, averti, refusé, sain). Les confondre
+     ferait clignoter la page en alarme permanente, et une alarme permanente ne
+     se lit plus.
+     ═══════════════════════════════════════════════════════════════════════ */
+  :root {
+    --fond:#080a10; --surface:#131824; --surface-2:#0f131d; --sunk:#0b0e16;
+    --ink:#e6eaf3; --ink-soft:#bcc5d6; --muted:#838ea3; --faint:#5a6479;
+    --line:#222a3a; --line-soft:#1a2030;
+    --cyan:#28d6ff; --cyan-ink:#8fe6ff;
+    --red:#ff5d6c; --orange:#f0b429; --purple:#a98bff; --green:#35d07f;
+    --halo:rgba(40,214,255,.10);
+    --ombre:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    --ombre-h:0 2px 8px rgba(0,0,0,.5), 0 26px 60px rgba(0,0,0,.5);
+    /* Rétro-compatibilité : les fragments écrits par le JS et les SVG tracés
+       ici emploient encore ces deux noms. */
+    --bg-card:var(--surface); --border:var(--line);
+  }
+  /* Le clair, écrit UNE fois, appliqué à deux états. Accents assombris : le
+     néon des écrans ne tient pas sur du papier. */
   :root[data-theme="light"] {
-          --fond:#f6f5f0; --bg-card:#ffffff; --ink:#1a1a22; --muted:#5b5b6a;
-          --border:#e2e0d6; --cyan:#0a7ea4; --purple:#6e40c9; --orange:#a1701a;
-          --red:#c0392b; --green:#1f9d55; }
+    --fond:#eef1f7; --surface:#ffffff; --surface-2:#f5f7fc; --sunk:#e9edf5;
+    --ink:#131722; --ink-soft:#3a4256; --muted:#5b6478; --faint:#8a93a6;
+    --line:#dce1ec; --line-soft:#e7ebf3;
+    --cyan:#0784a8; --cyan-ink:#0784a8;
+    --red:#dc2f43; --orange:#b7810a; --purple:#6b46c9; --green:#0f9d54;
+    --halo:rgba(7,132,168,.08);
+    --ombre:0 1px 2px rgba(20,30,60,.06), 0 8px 24px rgba(20,30,60,.07);
+    --ombre-h:0 2px 6px rgba(20,30,60,.08), 0 20px 50px rgba(20,30,60,.12);
+  }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
-          --fond:#f6f5f0; --bg-card:#ffffff; --ink:#1a1a22; --muted:#5b5b6a;
-          --border:#e2e0d6; --cyan:#0a7ea4; --purple:#6e40c9; --orange:#a1701a;
-          --red:#c0392b; --green:#1f9d55; }
+      --fond:#eef1f7; --surface:#ffffff; --surface-2:#f5f7fc; --sunk:#e9edf5;
+      --ink:#131722; --ink-soft:#3a4256; --muted:#5b6478; --faint:#8a93a6;
+      --line:#dce1ec; --line-soft:#e7ebf3;
+      --cyan:#0784a8; --cyan-ink:#0784a8;
+      --red:#dc2f43; --orange:#b7810a; --purple:#6b46c9; --green:#0f9d54;
+      --halo:rgba(7,132,168,.08);
+      --ombre:0 1px 2px rgba(20,30,60,.06), 0 8px 24px rgba(20,30,60,.07);
+      --ombre-h:0 2px 6px rgba(20,30,60,.08), 0 20px 50px rgba(20,30,60,.12);
+    }
   }
 
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
   /* Fond ET couleur EXPLICITES : un corps transparent emprunte celui de
      l'hôte, et la page finit peinte dans un thème que son texte ne suit pas. */
-  body { margin: 0; padding: 0 1rem 4rem; background: var(--fond); color: var(--ink); }
-  .grille { display: grid; gap: 1rem; max-width: 78rem; margin: 0 auto; }
-  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.1rem; }
-  h1 { font-size: 1.35rem; margin: 1.6rem 0 .2rem; }
-  .sous { color: var(--muted); font-size: .82rem; margin: 0 0 1.2rem; }
-  h2 { font-size: 1rem; margin: 0 0 .2rem; }
-  .h2sous { color: var(--muted); font-size: .74rem; margin: 0 0 .9rem; font-style: italic; }
+  body {
+    margin: 0; padding: 0; background: var(--fond); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 15px; line-height: 1.5; letter-spacing: .005em;
+    -webkit-font-smoothing: antialiased;
+    background-image: radial-gradient(1200px 620px at 82% -12%, var(--halo), transparent 70%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3 { font-family: "Chivo", sans-serif; margin: 0; letter-spacing: -.015em; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
 
-  .tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 1px;
-            background: var(--border); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-  .tuile { background: var(--bg-card); padding: .9rem 1rem; }
-  .tuile .lib { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-  .tuile .val { font-family: 'Courier Prime', monospace; font-size: 1.5rem; font-weight: 700;
-                color: var(--cyan); font-variant-numeric: tabular-nums; margin-top: .3rem; }
-  .tuile .note { font-size: .68rem; color: var(--muted); margin-top: .25rem; }
+  .grille { display: grid; gap: 18px; max-width: 78rem; margin: 0 auto; padding: 26px 22px 72px; }
 
-  .legende { display: flex; flex-wrap: wrap; gap: .5rem .9rem; margin-top: .7rem; font-size: .7rem; color: var(--muted); }
+  /* ── MASTHEAD ─────────────────────────────────────────────────────────── */
+  .mast { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .sceau { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
+           flex: 0 0 auto; font-size: 1.25rem; position: relative; overflow: hidden;
+           background: linear-gradient(150deg, color-mix(in srgb, var(--cyan) 26%, var(--surface)), var(--surface));
+           border: 1px solid var(--line); box-shadow: var(--ombre); }
+  /* Le reflet en diagonale : ce qui fait qu'une tuile a une MATIÈRE et pas
+     seulement une couleur. */
+  .sceau::after { content: ""; position: absolute; inset: -40% -40% auto auto; width: 90%; height: 180%;
+                  background: linear-gradient(transparent, color-mix(in srgb, var(--cyan) 30%, transparent));
+                  transform: rotate(25deg); opacity: .5; }
+  .wm { display: flex; flex-direction: column; line-height: 1.05; }
+  .wm b { font-family: "Chivo"; font-weight: 900; font-size: 1.42rem; letter-spacing: -.02em; }
+  .wm b i { font-style: normal; color: var(--cyan-ink); }
+  .wm span { font-size: .66rem; letter-spacing: .24em; text-transform: uppercase;
+             color: var(--faint); font-weight: 600; }
+  .moteur { display: flex; align-items: center; gap: 9px; padding: 8px 13px; border-radius: 11px;
+            background: var(--surface); border: 1px solid var(--line); box-shadow: var(--ombre); }
+  .moteur .path { font-family: "IBM Plex Mono"; font-size: .82rem; font-weight: 500; }
+  .moteur .path .o { color: var(--muted); }
+  .moteur .path .r { color: var(--ink); font-weight: 600; }
+  .live { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px 5px 9px; border-radius: 999px;
+          background: color-mix(in srgb, var(--green) 12%, var(--surface));
+          border: 1px solid color-mix(in srgb, var(--green) 30%, var(--line));
+          font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--green); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+         animation: pouls 2.2s ease-out infinite; }
+  @keyframes pouls { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 55%, transparent); }
+                     70% { box-shadow: 0 0 0 8px transparent; }
+                     100% { box-shadow: 0 0 0 0 transparent; } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+  .spacer { flex: 1 1 40px; }
+  .maj { font-size: .7rem; color: var(--faint); letter-spacing: .04em; }
+
+  h1 { font-size: 1.62rem; font-weight: 900; margin-top: 4px; }
+  .sous { color: var(--muted); font-size: .94rem; max-width: 66ch; margin: 0; text-wrap: pretty; }
+
+  /* ── TUILES HÉROS ─────────────────────────────────────────────────────── */
+  /* Des cartes SÉPARÉES, pas une feuille quadrillée : chaque chiffre est une
+     mesure autonome, et le filet de gauche dit laquelle sans qu'on lise. */
+  .tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 14px; }
+  .tuile { background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+           box-shadow: var(--ombre); padding: 16px 16px 14px; position: relative; overflow: hidden; }
+  .tuile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--cyan); }
+  .tuile.k-red::before { background: var(--red); }
+  .tuile.k-orange::before { background: var(--orange); }
+  .tuile.k-purple::before { background: var(--purple); }
+  .tuile.k-green::before { background: var(--green); }
+  .tuile .lib { font-size: .72rem; color: var(--muted); font-weight: 600; }
+  .tuile .val { font-family: "Chivo", sans-serif; font-size: 2.05rem; font-weight: 800; line-height: 1;
+                letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-top: 10px; color: var(--ink); }
+  .tuile .note { font-size: .68rem; color: var(--faint); margin-top: 8px; }
+
+  /* ── CARTES ET EN-TÊTES DE SECTION ────────────────────────────────────── */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+          box-shadow: var(--ombre); padding: 20px 20px 18px; }
+  /* L'ŒIL-DE-BŒUF PORTE LA PROVENANCE, pas un numéro d'ordre. Ces sections ne
+     forment pas une séquence : ce sont des angles de vue. Ce qu'il est utile
+     d'annoncer sur une console de sécurité, c'est D'OÙ VIENT le chiffre — du
+     journal, d'une corrélation, du registre. */
+  .sec-h { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+  .sec-h .k { font-size: .62rem; letter-spacing: .18em; text-transform: uppercase;
+              color: var(--faint); font-weight: 700; white-space: nowrap; }
+  .sec-h .rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+  .sec-h .ic { font-size: 1rem; opacity: .9; }
+  h2 { font-size: 1.06rem; font-weight: 800; margin: 0 0 .3rem; }
+  h3 { font-size: .86rem; font-weight: 800; margin: 0 0 .45rem; }
+  .h2sous { color: var(--muted); font-size: .82rem; margin: 0 0 1rem; max-width: 74ch; text-wrap: pretty; }
+
+  .legende { display: flex; flex-wrap: wrap; gap: .5rem .9rem; margin-top: .8rem; font-size: .7rem; color: var(--muted); }
   .legende i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
 
-  table { width: 100%; border-collapse: collapse; font-size: .78rem; font-variant-numeric: tabular-nums; }
-  th, td { padding: .45rem .6rem; text-align: left; border-bottom: 1px solid var(--border); }
-  th { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
-  tbody tr:last-child td { border-bottom: none; }
-  code { font-family: 'Courier Prime', monospace; color: var(--cyan); }
-  /* #1243 — empreintes séquentielles de campagnes. */
-  /* Une campagne = UNE ligne (#1243). La sequence deborde a l'horizontale sans
-     jamais empiler de details. */
-  .camp1 { display: flex; align-items: center; gap: .5rem; padding: .42rem 0;
-           border-bottom: 1px solid var(--border); overflow: hidden; }
-  .camp1:last-child { border-bottom: 0; }
-  .campseq1 { flex: 1; min-width: 0; display: flex; align-items: center; gap: .15rem;
-              overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg,#000 88%,transparent);
-              mask-image: linear-gradient(90deg,#000 88%,transparent); }
-  .camp { padding: .55rem 0; border-bottom: 1px solid var(--border); }
-  .camp:last-child { border-bottom: 0; }
-  .camptete { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-  .campsig { font-family: 'Courier Prime', monospace; color: var(--purple); font-size: .8rem; }
-  .camptool { font-size: .72rem; color: var(--orange); }
-  .campbar { flex: 1; min-width: 60px; height: 6px; border-radius: 4px; background: var(--border); overflow: hidden; }
-  .campbar i { display: block; height: 100%; background: var(--cyan); }
-  .campnb { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .camphv { font-size: .72rem; color: var(--orange); font-variant-numeric: tabular-nums; }
-  .camphv.z { color: var(--muted); opacity: .5; }
-  .campseq { display: flex; align-items: center; gap: .15rem; flex-wrap: wrap; margin-top: .35rem; }
-  .seqchip { font-family: 'Courier Prime', monospace; font-size: .68rem; background: var(--border);
-             color: var(--ink); padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
-  .seqar { color: var(--muted); font-size: .66rem; }
+  /* Tout contenu large défile DANS SON CADRE : le corps de la page ne part
+     jamais en travers. */
   .enveloppe { overflow-x: auto; }
   .muted { color: var(--muted); }
 
-  .barre { display: grid; grid-template-columns: 11rem 1fr auto; gap: .6rem; align-items: center;
-           font-size: .76rem; margin-bottom: .4rem; }
-  .barre .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .piste { height: .8rem; border-radius: 2px; overflow: hidden; display: flex; background: rgba(255,255,255,.06); }
-  .piste span { height: 100%; }
-  .chiffre { font-family: 'Courier Prime', monospace; color: var(--muted); font-size: .72rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .8rem; font-variant-numeric: tabular-nums; }
+  th, td { padding: .5rem .6rem; text-align: left; border-bottom: 1px solid var(--line-soft); }
+  th { font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 700; }
+  tbody tr:last-child td { border-bottom: none; }
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--cyan-ink); }
 
-  /* ── ATTAQUANTS : langage de lecture partage avec Renseignement (#1240) ────
-     Les fonds sont derives des JETONS par color-mix, jamais ecrits en rgba fixe :
-     cette page a trois etats de theme, et un rgba(0,212,255,…) pose en dur
-     redeviendrait un neon sur le fond clair. */
+  /* ── CAMPAGNES (#1243) ────────────────────────────────────────────────── */
+  /* Une campagne = UNE ligne. La séquence déborde à l'horizontale sans jamais
+     empiler de détails. */
+  .camp1 { display: flex; align-items: center; gap: .55rem; padding: .5rem .1rem;
+           border-bottom: 1px solid var(--line-soft); overflow: hidden; }
+  .camp1:last-child { border-bottom: 0; }
+  .campseq1 { flex: 1; min-width: 0; display: flex; align-items: center; gap: .18rem;
+              overflow: hidden; white-space: nowrap;
+              -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+              mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .campsig { font-family: "IBM Plex Mono"; color: var(--purple); font-size: .8rem; font-weight: 600; }
+  .camptool { font-size: .7rem; color: var(--orange); font-weight: 600; }
+  .campnb { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .camphv { font-size: .72rem; color: var(--orange); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .camphv.z { color: var(--muted); opacity: .45; font-weight: 400; }
+  .seqchip { font-family: "IBM Plex Mono"; font-size: .68rem; background: var(--surface-2);
+             border: 1px solid var(--line-soft); color: var(--ink-soft);
+             padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+  .seqar { color: var(--faint); font-size: .66rem; }
+  .camp { padding: .55rem 0; border-bottom: 1px solid var(--line-soft); }
+  .camp:last-child { border-bottom: 0; }
+  .camptete { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .campbar { flex: 1; min-width: 60px; height: 6px; border-radius: 4px; background: var(--line); overflow: hidden; }
+  .campbar i { display: block; height: 100%; background: var(--cyan); }
+  .campseq { display: flex; align-items: center; gap: .18rem; flex-wrap: wrap; margin-top: .35rem; }
+
+  /* ── EFFICACITÉ : barres empilées ─────────────────────────────────────── */
+  .barre { display: grid; grid-template-columns: 11rem 1fr auto; gap: .6rem; align-items: center;
+           font-size: .78rem; margin-bottom: .5rem; }
+  .barre .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-soft); }
+  .piste { height: .85rem; border-radius: 4px; overflow: hidden; display: flex;
+           background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  .piste span { height: 100%; }
+  .chiffre { font-family: "IBM Plex Mono"; color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
+
+  /* ── ATTAQUANTS : langage de lecture partagé avec Renseignement (#1240) ──
+     Les fonds sont dérivés des JETONS par color-mix, jamais écrits en rgba
+     fixe : cette page a trois états de thème, et un rgba(0,212,255,…) posé en
+     dur redeviendrait un néon sur le fond clair. */
   .acteurs { display: flex; flex-direction: column; }
   .acteur { display: grid; grid-template-columns: auto 1fr auto auto auto;
-            align-items: center; gap: .6rem; padding: .45rem .1rem;
-            border-bottom: 1px solid var(--border); }
+            align-items: center; gap: .65rem; padding: .5rem .1rem;
+            border-bottom: 1px solid var(--line-soft); }
   .acteur:last-child { border-bottom: 0; }
-  .acteur.interne { opacity: .62; }
+  .acteur.interne { opacity: .55; }
   .acteur .nat { font-size: 1.05rem; line-height: 1; }
   .acteur .ident { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
-  .acteur .ident code { font-family: 'Courier Prime', monospace; font-size: .8rem;
+  .acteur .ident code { font-family: "IBM Plex Mono"; font-size: .8rem; font-weight: 500;
             color: var(--ink); overflow-wrap: anywhere; }
-  .acteur .ident small { font-size: .64rem; color: var(--muted); }
-  /* Le bloc plein : on lit le NOMBRE, l'unite ne fait que le qualifier. */
+  .acteur .ident small { font-size: .66rem; color: var(--muted); }
+  /* Le bloc plein : on lit le NOMBRE, l'unité ne fait que le qualifier. */
   .multi { display: inline-flex; flex-direction: column; align-items: center;
-           justify-content: center; min-width: 54px; padding: .18rem .45rem;
-           border-radius: 7px; line-height: 1.05; color: var(--cyan);
+           justify-content: center; min-width: 54px; padding: .2rem .45rem;
+           border-radius: 8px; line-height: 1.05; color: var(--cyan);
            background: color-mix(in srgb, var(--cyan) 10%, transparent);
            border: 1px solid color-mix(in srgb, var(--cyan) 32%, transparent); }
-  .multi b { font-size: .9rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .multi b { font-family: "Chivo"; font-size: .92rem; font-weight: 800; font-variant-numeric: tabular-nums; }
   .multi i { font-style: normal; font-size: .5rem; letter-spacing: .09em;
              text-transform: uppercase; opacity: .72; }
   .multi.n2 { background: color-mix(in srgb, var(--cyan) 16%, transparent); }
@@ -154,42 +272,78 @@
   .multi.n4 { color: var(--red);
               background: color-mix(in srgb, var(--red) 16%, transparent);
               border-color: color-mix(in srgb, var(--red) 55%, transparent); }
-  /* Le chainon vers la carte des empreintes, juste en dessous. */
-  .liencamp { font-family: 'Courier Prime', monospace; font-size: .7rem;
+  /* Le chaînon vers la carte des empreintes, juste en dessous. */
+  .liencamp { font-family: "IBM Plex Mono"; font-size: .7rem; font-weight: 500;
               color: var(--purple); text-decoration: none; white-space: nowrap;
               border-bottom: 1px dotted color-mix(in srgb, var(--purple) 50%, transparent); }
   .liencamp:hover { border-bottom-style: solid; }
-  .liencamp.z { color: var(--muted); opacity: .45; border-bottom: 0; }
-  /* Le tampon est APPOSE, pas dessine : c'est une decision deja prise. */
-  .tampon { display: inline-block; transform: rotate(-7deg); padding: .1rem .4rem;
+  .liencamp.z { color: var(--muted); opacity: .4; border-bottom: 0; }
+  /* Le tampon est APPOSÉ, pas dessiné : c'est une décision déjà prise. */
+  .tampon { display: inline-block; transform: rotate(-7deg); padding: .12rem .42rem;
             border: 2px solid currentColor; border-radius: 4px;
             font-weight: 800; font-size: .55rem; letter-spacing: .09em; }
   .tampon.banni { color: var(--red);
                   background: color-mix(in srgb, var(--red) 10%, transparent); }
-  .tampon.libre { color: var(--muted); opacity: .55; }
-  @media (max-width: 560px) {
-    .acteur { grid-template-columns: auto 1fr auto; row-gap: .25rem; }
+  .tampon.libre { color: var(--muted); opacity: .5; }
+
+  /* ── SURFACES ET DÉTECTIONS ───────────────────────────────────────────── */
+  .surfaces { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .surf { background: var(--surface-2); border: 1px solid var(--line-soft);
+          border-radius: 11px; padding: .85rem .95rem; }
+  .surf > div:first-child { font-size: .6rem; letter-spacing: .12em; text-transform: uppercase;
+          color: var(--faint); font-weight: 700; margin-bottom: .4rem; }
+  .surf-v { font-family: "Chivo", sans-serif; font-size: 1.32rem; font-weight: 800;
+            letter-spacing: -.02em; color: var(--cyan-ink); font-variant-numeric: tabular-nums; }
+  .det { background: var(--surface-2); border: 1px solid var(--line-soft);
+         border-left: 3px solid var(--cyan); border-radius: 11px; padding: .7rem .85rem; }
+  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(264px, 1fr)); gap: 1.4rem; margin-top: 1.3rem; }
+  .duo .apres { font-size: .7rem; color: var(--faint); margin: .6rem 0 0; text-wrap: pretty; }
+  .detections { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+
+  @media (max-width: 640px) {
+    .grille { padding: 18px 14px 56px; gap: 14px; }
+    .card { padding: 16px 15px 14px; border-radius: 14px; }
+    h1 { font-size: 1.34rem; }
+    .barre { grid-template-columns: 7.5rem 1fr auto; }
+    .acteur { grid-template-columns: auto 1fr auto; row-gap: .3rem; }
     .acteur .liencamp, .acteur .tampon { grid-column: 2 / -1; justify-self: start; }
   }
 </style>
 
 <div class="grille">
+
+  <header class="mast">
+    <div class="brand">
+      <div class="sceau">🛡️</div>
+      <div class="wm"><b>SBX<i>WAF</i></b><span>Poste de garde</span></div>
+    </div>
+    <div class="moteur">
+      <span class="path"><span class="o">moteur Go ·</span> <span class="r">inspection HTTP</span></span>
+    </div>
+    <span class="live"><span class="dot"></span>en écoute</span>
+    <span class="spacer"></span>
+    <span class="maj mono" id="maj">relevé…</span>
+  </header>
+
   <div>
-    <h1>🛡️ WAF — évolution et efficacité</h1>
-    <p class="sous">Ce que le panneau ne dit pas : comment les menaces évoluent, et si les protections bloquent vraiment.</p>
+    <h1>Évolution et efficacité</h1>
+    <p class="sous">Le panneau répond à « que se passe-t-il maintenant ». Cette page répond à
+      <b>comment cela évolue, et si les protections bloquent vraiment</b>.</p>
   </div>
 
   <div class="tuiles" id="tuiles"><div class="tuile"><span class="muted">chargement…</span></div></div>
 
-  <div class="card">
-    <h2>📈 Évolution journalière par catégorie</h2>
+  <section class="card">
+    <div class="sec-h"><span class="k">Journal · 30 jours</span><div class="rule"></div><span class="ic">📈</span></div>
+    <h2>Évolution journalière par catégorie</h2>
     <p class="h2sous">Chaque barre est une journée ; les couleurs sont les catégories. Une journée qui gonfle d'un seul bloc est une campagne, pas une hausse de fond.</p>
     <div class="enveloppe" id="evolution"><span class="muted">chargement…</span></div>
     <div class="legende" id="evolutionLegende"></div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>🎚️ Efficacité par catégorie</h2>
+  <section class="card">
+    <div class="sec-h"><span class="k">Journal · décisions</span><div class="rule"></div><span class="ic">🎚️</span></div>
+    <h2>Efficacité par catégorie</h2>
     <p class="h2sous">Écarté contre simplement observé. Refuser sans bannir compte comme écarter : on ne bannit pas Googlebot, on lui ferme la porte. Une catégorie qui détecte beaucoup et n'agit jamais n'est pas une protection, c'est un compteur.</p>
     <div id="efficacite"><span class="muted">chargement…</span></div>
     <div class="legende">
@@ -198,60 +352,55 @@
       <span><i style="background:var(--orange)"></i>averti</span>
       <span><i style="background:var(--muted)"></i>observé seulement</span>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>🎯 Attaquants persistants</h2>
+  <section class="card">
+    <div class="sec-h"><span class="k">Journal · sources</span><div class="rule"></div><span class="ic">🎯</span></div>
+    <h2>Attaquants persistants</h2>
     <p class="h2sous">Les adresses les plus vues, avec leur origine. « local » agrège tout le trafic interne : ce n'est pas un attaquant.</p>
     <div class="enveloppe" id="attaquants"><span class="muted">chargement…</span></div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>🧬 Empreintes de campagnes</h2>
-    <p class="h2sous">Des attaquants distincts qui rejouent le MÊME enchaînement de sondes forment une campagne. La bande montre leur workflow — l'empreinte séquentielle partagée. 🔑 = sondes de secret/exécution.</p>
+  <section class="card">
+    <div class="sec-h"><span class="k">Corrélation</span><div class="rule"></div><span class="ic">🧬</span></div>
+    <h2>Empreintes de campagnes</h2>
+    <p class="h2sous">Des attaquants distincts qui rejouent le MÊME enchaînement de sondes forment une campagne. La bande montre leur workflow — l'empreinte séquentielle partagée. 🔑 = sondes de secret ou d'exécution.</p>
     <div id="campagnes"><span class="muted">chargement…</span></div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>🛰️ Surfaces surveillées</h2>
+  <section class="card">
+    <div class="sec-h"><span class="k">sbxwaf + authwatch</span><div class="rule"></div><span class="ic">🛰️</span></div>
+    <h2>Surfaces surveillées</h2>
     <p class="h2sous">sbxwaf ne voit que le HTTP ; authwatch couvre SSH, SMTP, IMAP et les leurres.</p>
-    <div id="surfaces" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:6px;overflow:hidden">
-      <div class="muted" style="padding:1rem">chargement…</div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.1rem;margin-top:1.1rem">
+    <div class="surfaces" id="surfaces"><div class="muted">chargement…</div></div>
+    <div class="duo">
       <div>
-        <h3 style="font-size:.82rem;margin:0 0 .4rem">🎯 Comptes visés
-          <span class="muted" style="font-size:.72rem;font-weight:400">— SSH, SMTP, IMAP</span></h3>
+        <h3>🎯 Comptes visés <span class="muted" style="font-size:.72rem;font-weight:400">— SSH, SMTP, IMAP</span></h3>
         <div id="comptesVises"><span class="muted">chargement…</span></div>
-        <p class="muted" style="font-size:.7rem;margin:.5rem 0 0">
-          Un compte tenté depuis des centaines de sources n'est pas un utilisateur qui se
-          trompe. S'il n'existe pas sur la box, c'est du ciblage.</p>
+        <p class="apres">Un compte tenté depuis des centaines de sources n'est pas un utilisateur qui se trompe. S'il n'existe pas sur la box, c'est du ciblage.</p>
       </div>
       <div>
-        <h3 style="font-size:.82rem;margin:0 0 .4rem">🕳️ Leurres touchés
-          <span class="muted" style="font-size:.72rem;font-weight:400">— services inexistants</span></h3>
+        <h3>🕳️ Leurres touchés <span class="muted" style="font-size:.72rem;font-weight:400">— services inexistants</span></h3>
         <div id="leurresTouches"><span class="muted">chargement…</span></div>
-        <p class="muted" style="font-size:.7rem;margin:.5rem 0 0">
-          Ces ports n'offrent rien. Toute connexion y est un balayage, et vaut un
-          bannissement dès le premier contact.</p>
+        <p class="apres">Ces ports n'offrent rien. Toute connexion y est un balayage, et vaut un bannissement dès le premier contact.</p>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>🌐 Noms demandés que la box ne sert pas</h2>
+  <section class="card">
+    <div class="sec-h"><span class="k">Registre des vhosts</span><div class="rule"></div><span class="ic">🌐</span></div>
+    <h2>Noms demandés que la box ne sert pas</h2>
     <p class="h2sous">Un nom qu'on ne route pas, frappé en boucle, n'est pas une erreur : c'est un scan. Les plus vus, en tête.</p>
     <div id="nomsNonRoutes"><span class="muted">chargement…</span></div>
-    <p class="muted" id="nomsResume" style="font-size:.7rem;margin:.5rem 0 0"></p>
-  </div>
+    <p class="muted" id="nomsResume" style="font-size:.7rem;margin:.6rem 0 0"></p>
+  </section>
 
-  <div class="card">
-    <h2>🧠 Ce qui protège</h2>
+  <section class="card">
+    <div class="sec-h"><span class="k">Moteur · état mesuré</span><div class="rule"></div><span class="ic">🧠</span></div>
+    <h2>Ce qui protège</h2>
     <p class="h2sous">État mesuré, jamais supposé.</p>
-    <div id="detections" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.6rem">
-      <span class="muted">chargement…</span>
-    </div>
-  </div>
+    <div class="detections" id="detections"><span class="muted">chargement…</span></div>
+  </section>
 </div>
 
 <script>
@@ -286,16 +435,16 @@
     var total = cles.reduce(function (a, k) { return a + t[k]; }, 0) || 1;
     el.innerHTML = cles.map(function (k) {
       var d = SURFACE_INFO[k], n = t[k], pct = Math.round(n / total * 100);
-      return '<div style="background:var(--bg-card);padding:.85rem 1rem">'
+      return '<div class="surf">'
         + '<div style="font-size:.6rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">'
         + d[0] + ' ' + esc(d[1]) + '</div>'
-        + '<div style="font-family:monospace;font-size:1.3rem;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">'
+        + '<div class="surf-v">'
         + nb(n) + ' <span style="font-size:.7rem;color:var(--muted);font-weight:400">' + pct + ' %</span></div>'
         + '<div class="muted" style="font-size:.66rem;margin-top:.3rem">' + esc(d[2]) + '</div></div>';
     }).join('') + (function () {
       var o = parOrigine || {}, w = o.waf || 0, a = o.authwatch || 0;
       if (!w && !a) return '';
-      return '<div style="background:var(--bg-card);padding:.85rem 1rem">'
+      return '<div class="surf">'
         + '<div style="font-size:.6rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">⚙️ Moteurs</div>'
         + '<div style="font-size:.74rem;line-height:1.7">sbxwaf <b style="color:var(--cyan)">' + nb(w)
         + '</b><br>authwatch <b style="color:var(--cyan)">' + nb(a) + '</b></div></div>';
@@ -363,7 +512,7 @@
   // noir : sur du blanc ils eblouissent sans rien distinguer. On en garde deux
   // jeux et l'on choisit au trace — un graphique doit se lire dans les deux
   // thèmes, pas seulement dans celui d'origine.
-  const TEINTES_SOMBRE = ['#00d4ff', '#b388ff', '#e8636f', '#e0b355', '#4ade80', '#ff8c42',
+  const TEINTES_SOMBRE = ['#28d6ff', '#a98bff', '#ff5d6c', '#f0b429', '#35d07f', '#ff8c42',
                           '#4ecdc4', '#7cb342'];
   // Un seul jeu : la page est sombre quel que soit le theme de l'hote, donc
   // des teintes claires ne s'y poseraient jamais.
@@ -562,7 +711,7 @@
     if (!liste || !liste.length) { cible.innerHTML = '<span class="muted">indisponible</span>'; return; }
     cible.innerHTML = liste.map(function (x) {
       const bord = x.actif ? 'var(--cyan)' : 'var(--muted)';
-      return '<div style="border:1px solid var(--border);border-left:3px solid ' + bord + ';padding:.6rem .75rem">'
+      return '<div class="det" style="border-left-color:' + bord + '">'
         + '<div style="font-weight:700;font-size:.84rem">' + x.emoji + ' ' + esc(x.nom)
         + ' <span class="muted" style="font-size:.64rem;font-weight:400">' + (x.actif ? '✓ ON' : '○ inactif') + '</span></div>'
         + '<div class="muted" style="font-size:.68rem;margin-top:.3rem">' + esc(x.detail) + '</div></div>';
@@ -573,15 +722,15 @@
     const surfaces = Object.keys((stats && stats.par_type) || {}).length;
     const actives = ((detec && detec.detections) || []).filter(d => d.actif).length;
     const items = [
-      ['👁️ Menaces vues', nb(stats && stats.total_threats), 'depuis le début du journal'],
-      ['📅 Aujourd\'hui', nb(stats && stats.threats_today), 'bloquées ce jour'],
-      ['🚫 Bannis actifs', nb(bans && bans.total), 'dans la chaîne nft du WAF'],
-      ['🛰️ Surfaces', String(surfaces), 'HTTP, SSH, SMTP, IMAP, leurres'],
+      ['👁️ Menaces vues', nb(stats && stats.total_threats), 'depuis le début du journal', ''],
+      ['📅 Aujourd\'hui', nb(stats && stats.threats_today), 'bloquées ce jour', 'k-orange'],
+      ['🚫 Bannis actifs', nb(bans && bans.total), 'dans la chaîne nft du WAF', 'k-red'],
+      ['🛰️ Surfaces', String(surfaces), 'HTTP, SSH, SMTP, IMAP, leurres', 'k-purple'],
       ['🧠 Détections', actives + ' / ' + (((detec && detec.detections) || []).length),
-       'comportementales actives']
+       'comportementales actives', 'k-green']
     ];
     document.getElementById('tuiles').innerHTML = items.map(function (t) {
-      return '<div class="tuile"><div class="lib">' + esc(t[0]) + '</div>'
+      return '<div class="tuile ' + t[3] + '"><div class="lib">' + esc(t[0]) + '</div>'
         + '<div class="val">' + esc(t[1]) + '</div>'
         + '<div class="note">' + esc(t[2]) + '</div></div>';
     }).join('');
@@ -645,6 +794,11 @@
       }
     }
     tuiles(stats, bans, detec);
+    const m = document.getElementById('maj');
+    if (m) {
+      m.textContent = 'relevé à ' + new Date().toLocaleTimeString('fr-FR',
+        { hour: '2-digit', minute: '2-digit' });
+    }
   }
 
   charger();

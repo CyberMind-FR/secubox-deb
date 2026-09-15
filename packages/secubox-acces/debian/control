@@ -1,0 +1,28 @@
+Source: secubox-acces
+Section: admin
+Priority: optional
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr
+
+Package: secubox-acces
+Architecture: all
+Depends: ${misc:Depends},
+         python3,
+         python3-fastapi,
+         python3-uvicorn,
+         python3-cryptography,
+         python3-qrcode,
+         secubox-core (>= 1.4.0)
+Description: SecuBox Accès — admission des appareils et ouverture de sessions
+ Le parcours par lequel un appareil inconnu obtient une session sur la box.
+ .
+ Ce n'est pas de la gestion d'utilisateurs : on n'administre pas des comptes,
+ on ouvre des sessions à des appareils. L'appareil engendre une paire ECDSA
+ P-256 dont la partie privée n'est pas exportable, l'administrateur compare une
+ empreinte courte, puis l'appareil PROUVE qu'il détient la clé en signant un
+ défi — et reçoit alors le cookie de session SecuBox.
+ .
+ Une admission n'a qu'une issue, `guest`. Monter en `user` puis `admin` est un
+ geste séparé, pris après coup dans le profileur.

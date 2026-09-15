@@ -1,0 +1,23 @@
+Package: secubox-ndpid-engine
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: arm64
+Installed-Size: @TAILLE@
+Depends: libc6, libpcap0.8, adduser
+Provides: ndpid
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Description: SecuBox — moteur DPI nDPId + nDPIsrvd (nDPI 6.x statique)
+ Les deux démons qui PRODUISENT les événements de flux que sbxdpi agrège :
+ nDPId capture et classe, nDPIsrvd distribue.
+ .
+ Sans eux, sbxdpi servait un instantané gelé — connected:false, total_flows
+ figé, hosts et fingerprints à zéro — parce que son socket distributeur
+ n'existait pas. Le paquet secubox-ndpid déclarait « Depends: ndpid |
+ ndpi-reader » et l'alternative était satisfaite par ndpiReader, l'outil de
+ démonstration de libndpi, qui écrit du CSV dans un fichier et ne parle à
+ personne.
+ .
+ nDPI 6.x est liée STATIQUEMENT : nDPId exige au moins la 5.0.0 et la box a la
+ 4.2 en système. Remplacer la bibliothèque système casserait tout ce qui
+ s'appuie dessus.

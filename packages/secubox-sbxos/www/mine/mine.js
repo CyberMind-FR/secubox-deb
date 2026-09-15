@@ -223,7 +223,23 @@ export class Mine extends EventTarget {
       headers: { Accept: 'application/json' },
     });
     if (!rep.ok) throw new Error(`manifeste : HTTP ${rep.status}`);
-    const m = valideManifeste(await rep.json());
+    return this.adopte(await rep.json());
+  }
+
+  /**
+   * ADOPTE un manifeste DÉJÀ OBTENU — venu d'un fichier, d'un clone du Hall,
+   * de n'importe où.
+   *
+   * C'est le MÊME chemin que `charge()` emprunte après son fetch : validation,
+   * mémorisation, griefs, événements. Deux chemins d'adoption divergeraient, et
+   * c'est toujours celui qu'on regarde le moins qui garderait le bug.
+   *
+   * ON VALIDE MÊME CE QU'ON A FABRIQUÉ SOI-MÊME. Le clone construit son
+   * manifeste à partir de données DISTANTES — la curation et le registre ; le
+   * fait qu'il passe par notre code ne les rend pas sûres.
+   */
+  adopte(brut) {
+    const m = valideManifeste(brut);
 
     const avant = JSON.stringify(this.manifeste?.carlettes ?? null) + '|' + (this.manifeste?.profil ?? '');
     const apres = JSON.stringify(m.carlettes) + '|' + m.profil;

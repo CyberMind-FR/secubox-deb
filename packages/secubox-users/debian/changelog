@@ -1,3 +1,81 @@
+secubox-users (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * La carlette `www/users/micro.html` part avec son API. Elle s'affichait
+    encore en 200 tout en appelant des routes supprimées — une carlette qui a
+    l'air de marcher est pire qu'une carlette absente.
+  * Le parcours d'admission DÉMÉNAGE dans secubox-acces (ref #1344). Il n'a
+    jamais été de la gestion d'utilisateurs : il fait entrer un appareil dans
+    SBX OS. Le garder ici faisait cohabiter deux files — celle qu'on regarde et
+    celle qu'on oublie — et l'ancienne acceptait encore des « clés publiques »
+    qui étaient de simples nombres aléatoires.
+  * `invitations.py`, `routes_invitations.py` et leurs tests sont retirés, pas
+    dupliqués : deux implémentations d'une même file divergent toujours, et
+    c'est celle qu'on a cessé de regarder qui reste ouverte.
+  * Les routes `/api/v1/users/invitation*` disparaissent. Le parcours vit
+    désormais sur son propre vhost, acces.gk2.secubox.in.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:33:51 +0200
+
+secubox-users (1.6.7-1~bookworm1) bookworm; urgency=medium
+
+  * Invitation : une admission ouvre une SESSION `guest`, elle ne crée pas un
+    utilisateur (ref #1297). Correction de conception, pas durcissement : le
+    profil d'admission passe de `user` à `guest`.
+  * `accepte()` NE PREND PLUS DE PROFIL, et c'est plus fort qu'un contrôle qui
+    refuserait `admin` — il n'y a plus rien à contrôler. Ni une requête forgée,
+    ni une erreur d'appel, ni un champ oublié dans un formulaire ne peuvent
+    faire sortir autre chose qu'un `guest`. La route ignore explicitement le
+    champ `profil` du corps.
+  * Monter en `user` puis en `admin` reste /promouvoir : un geste séparé, pris
+    plus tard, sur un compte qui existe et dont on a vu l'usage — et qui se lit
+    comme tel dans le journal.
+  * `guest` est donc à la fois le profil de qui n'a rien demandé et celui de
+    qui vient d'être admis. Ce n'est pas une confusion : ce qui les sépare
+    n'est pas un droit, c'est une SESSION — l'admis a un compte et peut en
+    ouvrir une, l'inconnu non.
+  * Le bouton de la carlette dit ce qui se passe : « Ouvrir une session ».
+  * Tests réécrits sur le nouveau contrat (20 passent).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:14:16 +0200
+
+secubox-users (1.6.6-1~bookworm1) bookworm; urgency=medium
+
+  * Invitation : le schéma de l'URL est DÉCIDÉ, plus lu (ref #1343).
+    `X-Forwarded-Proto` traverse deux mandataires — HAProxy termine le TLS et
+    le pose à `https`, puis nginx, selon le vhost, le RÉÉCRIT avec son propre
+    `$scheme`, qui vaut `http` puisque le TLS est déjà terminé en amont. Suivre
+    l'en-tête encodait donc « http:// » dans le QR d'un service joignable en
+    HTTPS seulement, et imposait une redirection au téléphone.
+  * Un nom d'hôte qualifié n'est atteignable que par HAProxy, donc en TLS. Le
+    clair n'est retenu que pour localhost et les accès par adresse — utiles en
+    développement, et reconnaissables sans deviner.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:02:56 +0200
+
+secubox-users (1.6.5-1~bookworm1) bookworm; urgency=medium
+
+  * Invitation : le QR de l'URL, enfin branché (ref #1297, #1343).
+    `qr_png_b64()` existait dans totp.py, fonctionnait, et n'avait AUCUN
+    appelant — le QR n'était pas cassé, il n'était relié à rien.
+  * UN QR D'URL EST UN CONFORT ; UN QR DE SECRET EST UN CANAL. Celui-ci
+    n'encode que l'adresse publique du formulaire : rien qu'on ne puisse lire
+    par-dessus une épaule, rien qui ne soit déjà dans la barre d'adresse. Il
+    évite de taper une URL au clavier d'un téléphone, et c'est tout ce qu'on
+    lui demande.
+  * L'EMPREINTE N'EST TOUJOURS PAS MISE EN QR, et c'est délibéré : la comparer
+    d'un regard EST le geste qui vérifie qu'on valide le bon appareil. Un QR
+    scanné à sa place supprimerait la vérification en croyant l'automatiser.
+  * L'URL est déduite des en-têtes du mandataire, jamais codée en dur : la box
+    répond sur plusieurs noms, et un QR pointant vers le mauvais ne mènerait
+    nulle part depuis un téléphone en 4G. En-tête `Vary` posé en conséquence —
+    un cache partagé qui l'ignorerait servirait à l'un le QR de l'autre.
+  * L'adresse en clair reste affichée à côté du QR : tout le monde n'a pas un
+    appareil photo qui décode, et une adresse se dicte au téléphone. Si la
+    génération échoue, l'image s'efface au lieu de laisser un cadre vide.
+  * Nouvelles routes ouvertes : GET /invitation/qr (PNG) et /invitation/url.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 08:59:13 +0200
+
 secubox-users (1.6.4-1~bookworm1) bookworm; urgency=medium
 
   * UNE SEULE CARLETTE, TROIS VISAGES (ref #1297). On ne fait pas une vignette

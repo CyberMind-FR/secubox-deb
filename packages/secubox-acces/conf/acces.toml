@@ -1,0 +1,20 @@
+# SecuBox :: Accès (#1344)
+[acces]
+# L'ADRESSE QUE L'ON DONNE À QUELQU'UN. C'est elle, et elle seule, que le QR
+# encode. Sans ce réglage l'URL se déduit de la requête — ce qui ferait
+# distribuer une adresse d'ADMIN à un inconnu quand l'administrateur montre la
+# carlette depuis son panneau.
+url_publique = "https://hall.gk2.secubox.in/acces/"
+
+# OÙ L'ON ARRIVE une fois la session ouverte. Absolue, parce que la carlette est
+# servie par le vhost d'accès mais EMBARQUÉE dans le Hall : un chemin relatif
+# désignerait tantôt l'un, tantôt l'autre.
+url_sbxos = "https://hall.gk2.secubox.in/sbxos/"
+# Plafond de demandes par adresse et par heure. Volontairement bas : une demande
+# d'accès est un geste humain, pas une boucle.
+plafond_par_ip = 5
+# Durée d'une session ouverte par signature, en secondes (7 jours).
+session_s = 604800
+# Une demande non traitée expire au bout de 14 jours : une file qui ne se vide
+# jamais cesse d'être lue.
+expiration_s = 1209600

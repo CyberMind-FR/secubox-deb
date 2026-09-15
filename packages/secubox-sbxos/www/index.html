@@ -76,6 +76,34 @@
         <option value="sombre">Sombre</option>
       </select>
     </div>
+
+    <h3 class="sous-titre">Le damier</h3>
+    <p class="note">Les changements se voient ici même, sur les vignettes du bas.</p>
+    <div class="reglage">
+      <label for="choix-densite">Taille des vignettes</label>
+      <select id="choix-densite">
+        <option value="serree">Serrée — en voir beaucoup</option>
+        <option value="normale">Normale</option>
+        <option value="large">Large — viser facilement</option>
+      </select>
+    </div>
+    <div class="reglage">
+      <label for="choix-etiquettes">Noms sous les icônes</label>
+      <select id="choix-etiquettes">
+        <option value="toujours">Affichés</option>
+        <option value="jamais">Masqués</option>
+      </select>
+    </div>
+    <div class="reglage">
+      <label for="choix-colonnes">Colonnes au maximum</label>
+      <select id="choix-colonnes">
+        <option value="auto">Autant que l'écran permet</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="6">6</option>
+        <option value="8">8</option>
+      </select>
+    </div>
     <h3 class="sous-titre">Modules</h3>
     <p class="note">Ce que la box autorise. Masquer retire du Hall — sans retirer le droit.</p>
     <sbx-damier id="damier-modules"></sbx-damier>
@@ -105,6 +133,8 @@
 
 <script type="module">
 import { Mine, profilSuffit } from './mine/mine.js';
+import { cloneDuHall } from './mine/clone.js';
+import { suitLesApercus } from './mine/apercu.js';
 import { Hall, appliqueTheme, ECRANS } from './hall/hall.js';
 import './ui/sbx-damier.js';
 
@@ -119,9 +149,26 @@ appliqueTheme(hall.theme);
 // Un seul endroit relit l'état et redessine. Multiplier les points de rendu est
 // la façon la plus sûre de faire diverger deux écrans qui montrent la même
 // chose.
+/**
+ * LES RÉGLAGES DU DAMIER S'APPLIQUENT À TOUS LES DAMIERS, y compris celui des
+ * réglages lui-même — c'est ce qui rend le réglage lisible : on voit le
+ * résultat sur les vignettes qu'on a sous les yeux, pas après être revenu au
+ * Hall. Un réglage dont l'effet est ailleurs se règle à l'aveugle.
+ */
+function appliqueDamier() {
+  for (const id of ['damier', 'damier-favoris', 'damier-modules']) {
+    const d = $(id);
+    if (!d) continue;
+    d.setAttribute('densite', hall.densite);
+    d.setAttribute('etiquettes', hall.etiquettes);
+    d.setAttribute('colonnes', hall.colonnes);
+  }
+}
+
 function compose() {
   const autorisees = mine.carlettesAutorisees();
   const visibles = hall.compose(autorisees);
+  appliqueDamier();
 
   $('damier').carlettes = visibles;
   $('damier-favoris').carlettes = visibles.filter(c => c.favori);
@@ -140,6 +187,23 @@ function compose() {
     ? "Aucun module autorisé pour ce profil."
     : '';
 }
+
+// ── APERÇUS VIVANTS ─────────────────────────────────────────────────────────
+//
+// On POSE l'aperçu sur la vignette déjà dessinée, on ne recompose pas : repeindre
+// le damier à chaque titre de morceau perdrait un glisser en cours, relancerait
+// les animations et ferait clignoter l'écran toutes les vingt secondes.
+//
+// Les trois damiers sont servis : celui du Hall, celui des favoris, et celui des
+// réglages. Une vignette qui dit ce qu'elle contient le dit partout où elle est.
+suitLesApercus(
+  () => mine.carlettesAutorisees(),
+  (id, texte) => {
+    for (const d of ['damier', 'damier-favoris', 'damier-modules']) {
+      const el = $(d);
+      if (el && el.apercu) el.apercu(id, texte);
+    }
+  });
 
 // ── Écrans ──────────────────────────────────────────────────────────────────
 
@@ -185,20 +249,27 @@ function entre(c) {
   $('theatre').hidden = false;
   for (const e of ['hall', 'favoris', 'reglages']) $('ecran-' + e).hidden = true;
 
-  // Si le cadre reste vide, on propose l'onglet — c'est la seule façon
-  // d'emporter la session existante.
-  clearTimeout(entre._veille);
-  entre._veille = setTimeout(() => {
-    if (!$('theatre').hidden) {
-      $('theatre-note').innerHTML = '';
-      const p = document.createElement('span');
-      p.textContent = "Ce lieu refuse peut-être d'être encadré. ";
-      const a = document.createElement('a');
-      a.href = c.url; a.target = '_blank'; a.rel = 'noopener';
-      a.textContent = "L'ouvrir dans un onglet";
-      $('theatre-note').append(p, a);
-    }
-  }, 2500);
+  // L'ONGLET EST PROPOSÉ EN PERMANENCE, PAS APRÈS UN MINUTEUR.
+  //
+  // On affichait « ce lieu refuse peut-être d'être encadré » au bout de 2,5 s,
+  // sans rien vérifier : le message apparaissait aussi quand le cadre marchait
+  // parfaitement — la radio jouait, et l'on annonçait un problème.
+  //
+  // ET ON NE PEUT PAS LE DÉTECTER. Un cadre refusé par `frame-ancestors` déclenche
+  // `load` comme un cadre qui a chargé : le navigateur ne nous dit pas la
+  // différence. Avertir « peut-être » à chaque fois est donc du bruit, et
+  // n'avertir jamais laisserait un écran vide sans recours.
+  //
+  // Un LIEN PERMANENT résout les deux : il sert quand le cadre a échoué, et il
+  // sert aussi à qui veut simplement une vraie fenêtre. Il n'affirme rien
+  // qu'on ne sache.
+  $('theatre-note').textContent = '';
+  const onglet = document.createElement('a');
+  onglet.href = c.url;
+  onglet.target = '_blank';
+  onglet.rel = 'noopener';
+  onglet.textContent = 'Ouvrir dans un onglet ↗';
+  $('theatre-note').appendChild(onglet);
 }
 
 $('theatre-retour').onclick = () => {
@@ -256,6 +327,22 @@ $('choix-theme').onchange = (ev) => {
   appliqueTheme(hall.theme);
 };
 
+// Les trois molettes du damier. `hall` refuse les valeurs hors liste, donc on
+// relit l'état APRÈS écriture plutôt que de supposer que la nôtre a été prise :
+// un `<select>` qui affiche autre chose que la vérité est pire qu'un réglage
+// qui n'a pas marché.
+for (const [id, clef] of [['choix-densite', 'densite'],
+                          ['choix-etiquettes', 'etiquettes'],
+                          ['choix-colonnes', 'colonnes']]) {
+  const el = $(id);
+  el.value = hall[clef];
+  el.onchange = (ev) => {
+    hall[clef] = ev.target.value;
+    el.value = hall[clef];
+    appliqueDamier();
+  };
+}
+
 $('oublier').onclick = () => {
   hall.reinitialise();
   appliqueTheme(hall.theme);
@@ -271,8 +358,51 @@ mine.addEventListener('griefs', (ev) => {
 });
 
 compose();                        // d'abord le connu, instantanément
-mine.charge().then((change) => {
-  if (change) compose();
+
+// L'OUVERTURE PASSE AVANT LE CHARGEMENT DU MANIFESTE : la Mine sert un bureau
+// par PROFIL, et le profil dépend de la session. Charger d'abord donnerait le
+// bureau d'un invité à quelqu'un qui vient d'entrer, jusqu'au rafraîchissement
+// suivant.
+/**
+ * LE BUREAU EST UN CLONE DU HALL, pas une liste écrite ici.
+ *
+ * On tente le clone d'abord — la curation du Hall mariée à l'état vivant du
+ * registre —, et l'on retombe sur le manifeste statique s'il échoue. L'ordre
+ * compte : le manifeste statique est un EXEMPLE, le clone est la vérité.
+ *
+ * Le PROFIL vient de la session : c'est lui qui décide ce qui est autorisé,
+ * pendant que les favoris et les masques — propres à cet appareil — décident
+ * de ce qui est MONTRÉ. La Mine et le Hall, chacun son rôle.
+ */
+async function composeLeBureau(profil) {
+  try {
+    mine.adopte(await cloneDuHall({ profil }));
+  } catch (e) {
+    // Le clone a besoin du Hall ; son absence ne doit pas laisser un écran nu.
+    await mine.charge();
+  }
+  compose();
+}
+
+entreSansMotDePasse().then((r) => {
+  if (r === 'ouverte' || r === 'deja') {
+    if (r === 'ouverte') $('note').textContent = 'Session ouverte sur cet appareil.';
+    return composeLeBureau('user');
+  }
+  if (r === 'aucun') {
+    // ON MONTRE LA PORTE PLUTÔT QU'UN BUREAU VIDE. « Rien n'apparaît » sans
+    // rien proposer laisse croire à une panne ; ici, il manque juste un accès.
+    $('note').textContent = '';
+    const p = document.createElement('span');
+    p.textContent = "Cet appareil n'a pas encore d'accès. ";
+    const a = document.createElement('a');
+    a.href = '/acces/';
+    a.textContent = 'En demander un';
+    $('note').append(p, a);
+  }
+}).catch(() => { /* l'ouverture est un confort : son échec n'arrête rien */ });
+
+composeLeBureau(mine.profil || 'guest').then(() => {
   if (mine.manifeste?.invitation === 'en_attente') mine.sondeInvitation();
 }).catch(() => {
   $('note').textContent = mine.manifeste
@@ -284,6 +414,49 @@ mine.charge().then((change) => {
 const demande = new URLSearchParams(location.search).get('ecran');
 montre(ECRANS.includes(demande) ? demande
        : (['hall', 'favoris', 'reglages'].includes(hall.ecran) ? hall.ecran : 'hall'));
+
+// ── ENTRER SANS MOT DE PASSE ────────────────────────────────────────────────
+//
+// SBX OS ne demande jamais de mot de passe, et ce n'est pas une facilité : ce
+// parcours n'en crée pas. Un appareil admis entre en SIGNANT un défi avec la
+// clé dont l'administrateur a comparé l'empreinte.
+//
+// TROIS CAS, ET UN SEUL DEMANDE QUELQUE CHOSE À L'UTILISATEUR :
+//
+//   session déjà ouverte   le cookie est posé sur le domaine PARENT, donc une
+//                          session ouverte depuis le Hall vaut ici aussi
+//   accès admis, pas entré on signe, on entre — sans rien demander
+//   aucun accès            on montre la porte, c'est tout ce qu'on peut faire
+//
+// L'IMPORT EST DYNAMIQUE, ET C'EST DÉLIBÉRÉ. Un `import` statique de
+// /acces/appareil.js lierait le démarrage de SBX OS à la présence du module
+// d'accès : s'il manquait, le module entier ne se chargerait pas et le bureau
+// resterait nu — la panne que ce fichier vient de corriger deux fois. Ici, son
+// absence coûte l'ouverture automatique, rien d'autre.
+//
+// MÊME ORIGINE, DONC MÊME IndexedDB. La clé de l'appareil est rangée par
+// ORIGINE : celle créée sur hall.gk2 n'est pas lisible ici. Mais le cookie de
+// session, lui, porte sur `.gk2.secubox.in` — si le parcours a été fait depuis
+// le Hall, on est déjà entré, et le premier cas s'applique.
+async function entreSansMotDePasse() {
+  let etat;
+  try {
+    const r = await fetch('/api/v1/acces/session/etat', { credentials: 'same-origin' });
+    if (!r.ok || (r.headers.get('content-type') || '').indexOf('json') < 0) return null;
+    etat = await r.json();
+  } catch (e) {
+    return null;                       // porte d'accès absente : on n'insiste pas
+  }
+  if (etat && etat.session) return 'deja';
+
+  try {
+    const acces = await import('/acces/appareil.js');
+    const ouvert = await acces.ouvreSiAdmis();
+    return ouvert ? 'ouverte' : 'aucun';
+  } catch (e) {
+    return 'aucun';
+  }
+}
 
 // ── Service worker ──────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+
+  SecuBox :: ACCÈS — le webui du vhost (#1344).
+
+  POURQUOI CETTE PAGE EXISTE À PART. Le parcours d'admission vivait dans le
+  panneau « Users », et se lisait donc comme de la gestion d'utilisateurs. Ce
+  n'en est pas : on n'administre pas des comptes ici, on ouvre des SESSIONS à
+  des appareils. Les loger ensemble produisait des phrases fausses — « profil
+  accordé » affiché à côté de « non connecté ».
+
+  DEUX COLONNES, ET LA SÉPARATION EST LE PROPOS. À gauche CE QUI ATTEND une
+  décision ; à droite CE QUI VIT déjà. On ne promeut pas une demande, on promeut
+  un accès : mélanger les deux listes obligeait à lire un état avant de savoir
+  quel geste était possible.
+
+  L'EMPREINTE EST LE HÉROS DE CHAQUE LIGNE, parce que la comparer EST la
+  vérification. Elle est donc en chasse fixe, à chiffres tabulaires, en bloc
+  centré et BORNÉ EN LARGEUR — dans la version précédente elle s'étirait sur
+  toute la page et finissait alignée à droite, c'est-à-dire illisible au moment
+  précis où il fallait la lire.
+
+  CE QUE LA PAGE NE FAIT PAS. Elle ne met JAMAIS l'empreinte en QR code. Le QR
+  n'encode que l'adresse publique du formulaire : un QR d'URL est un confort, un
+  QR de secret est un canal. Scanner une empreinte au lieu de la comparer
+  supprimerait la vérification en croyant l'automatiser.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accès</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════
+     PALETTE À TROIS ÉTATS. Clair par défaut — une réception est un lieu
+     éclairé —, et le sombre se redéfinit pour les deux états où il s'applique :
+     le choix explicite, et l'état « système » où aucun attribut n'est posé.
+
+     L'ACCENT EST UN LAITON, pas un cyan. Le cyan est la couleur de SecuBox en
+     général ; ici on est à une PORTE, et le laiton d'une plaque ou d'une clé
+     dit ce lieu-là. La sémantique reste séparée de l'accent : vert admis, ambre
+     en attente, rouge refusé, violet administrateur.
+     ═══════════════════════════════════════════════════════════════════════ */
+  :root {
+    --fond:#f4f2ee; --surface:#ffffff; --surface-2:#faf8f4; --sunk:#efece6;
+    --ink:#1b1814; --ink-soft:#453f37; --muted:#6b6358; --faint:#968c7e;
+    --line:#e2ddd3; --line-soft:#eeeae2;
+    --laiton:#a06a1c; --laiton-ink:#8a5a14;
+    --vert:#1f8f57; --ambre:#b7810a; --rouge:#c0392b; --violet:#6b46c9;
+    --halo:rgba(160,106,28,.07);
+    --ombre:0 1px 2px rgba(60,45,20,.06), 0 8px 24px rgba(60,45,20,.07);
+    --ombre-h:0 2px 6px rgba(60,45,20,.08), 0 20px 50px rgba(60,45,20,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fond:#12100d; --surface:#1c1915; --surface-2:#171410; --sunk:#100e0b;
+      --ink:#f0ebe2; --ink-soft:#cfc7ba; --muted:#9b9184; --faint:#6e6558;
+      --line:#2e2922; --line-soft:#241f1a;
+      --laiton:#e0a33c; --laiton-ink:#f0c47a;
+      --vert:#35d07f; --ambre:#f0b429; --rouge:#ff6b5d; --violet:#b39aff;
+      --halo:rgba(224,163,60,.10);
+      --ombre:0 1px 2px rgba(0,0,0,.45), 0 10px 30px rgba(0,0,0,.4);
+      --ombre-h:0 2px 8px rgba(0,0,0,.5), 0 26px 60px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --fond:#12100d; --surface:#1c1915; --surface-2:#171410; --sunk:#100e0b;
+    --ink:#f0ebe2; --ink-soft:#cfc7ba; --muted:#9b9184; --faint:#6e6558;
+    --line:#2e2922; --line-soft:#241f1a;
+    --laiton:#e0a33c; --laiton-ink:#f0c47a;
+    --vert:#35d07f; --ambre:#f0b429; --rouge:#ff6b5d; --violet:#b39aff;
+    --halo:rgba(224,163,60,.10);
+    --ombre:0 1px 2px rgba(0,0,0,.45), 0 10px 30px rgba(0,0,0,.4);
+    --ombre-h:0 2px 8px rgba(0,0,0,.5), 0 26px 60px rgba(0,0,0,.55);
+  }
+
+  /* `hidden` DOIT GAGNER SUR NOS PROPRES RÈGLES. `[hidden]{display:none}` vient
+     du NAVIGATEUR, donc cède devant toute règle d'auteur posant `display`. SBX
+     OS y a laissé un écran noir (#1356) : un `.theatre` en `position:fixed;
+     inset:0; display:flex` restait affiché malgré `hidden` et couvrait tout.
+     Une ligne ici rend la bascule par `el.hidden` fiable pour de bon. */
+  [hidden] { display: none !important; }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--fond); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+    background-image: radial-gradient(1100px 580px at 84% -12%, var(--halo), transparent 70%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3 { font-family: "Chivo", sans-serif; margin: 0; letter-spacing: -.015em; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--laiton); outline-offset: 2px; border-radius: 4px; }
+  .cadre { max-width: 74rem; margin: 0 auto; padding: 26px 22px 72px;
+           display: grid; gap: 18px; }
+
+  /* ── MASTHEAD ─────────────────────────────────────────────────────────── */
+  .mast { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .sceau { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
+           flex: 0 0 auto; font-size: 1.25rem; position: relative; overflow: hidden;
+           background: linear-gradient(150deg, color-mix(in srgb, var(--laiton) 28%, var(--surface)), var(--surface));
+           border: 1px solid var(--line); box-shadow: var(--ombre); }
+  .sceau::after { content:""; position:absolute; inset:-40% -40% auto auto; width:90%; height:180%;
+                  background: linear-gradient(transparent, color-mix(in srgb, var(--laiton) 30%, transparent));
+                  transform: rotate(25deg); opacity:.5; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .wm { display: flex; flex-direction: column; line-height: 1.05; }
+  .wm b { font-family:"Chivo"; font-weight:900; font-size:1.42rem; letter-spacing:-.02em; }
+  .wm b i { font-style: normal; color: var(--laiton-ink); }
+  .wm span { font-size:.66rem; letter-spacing:.24em; text-transform:uppercase;
+             color: var(--faint); font-weight:600; }
+  .espace { flex: 1 1 40px; }
+  .maj { font-size:.7rem; color: var(--faint); font-family:"IBM Plex Mono"; }
+  .lede { color: var(--muted); font-size:.94rem; max-width: 66ch; margin: 0; text-wrap: pretty; }
+  .lede b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ── TUILES ───────────────────────────────────────────────────────────── */
+  .tuiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(10.5rem,1fr)); gap:14px; }
+  .tuile { background:var(--surface); border:1px solid var(--line); border-radius:16px;
+           box-shadow:var(--ombre); padding:16px; position:relative; overflow:hidden; }
+  .tuile::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--laiton); }
+  .tuile.k-ambre::before { background:var(--ambre); }
+  .tuile.k-vert::before  { background:var(--vert); }
+  .tuile.k-violet::before{ background:var(--violet); }
+  .tuile .lib { font-size:.72rem; color:var(--muted); font-weight:600; }
+  .tuile .val { font-family:"Chivo"; font-size:2.05rem; font-weight:800; line-height:1;
+                letter-spacing:-.03em; font-variant-numeric:tabular-nums; margin-top:10px; }
+  .tuile .note { font-size:.68rem; color:var(--faint); margin-top:8px; }
+
+  /* ── CARTES ───────────────────────────────────────────────────────────── */
+  .duo { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  @media (max-width: 900px) { .duo { grid-template-columns:1fr; } }
+  .carte { background:var(--surface); border:1px solid var(--line); border-radius:16px;
+           box-shadow:var(--ombre); padding:20px; }
+  .sec-h { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
+  .sec-h .k { font-size:.62rem; letter-spacing:.18em; text-transform:uppercase;
+              color:var(--faint); font-weight:700; white-space:nowrap; }
+  .sec-h .rule { flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent); }
+  h2 { font-size:1.06rem; font-weight:800; margin:0 0 .3rem; }
+  .sous { color:var(--muted); font-size:.8rem; margin:0 0 1rem; text-wrap:pretty; }
+
+  /* ── L'INVITATION ─────────────────────────────────────────────────────── */
+  .inviter { display:flex; align-items:center; gap:14px; padding:14px;
+             border:1px dashed color-mix(in srgb, var(--laiton) 40%, var(--line));
+             border-radius:14px; background:var(--surface-2); }
+  .inviter img { width:104px; height:104px; flex:0 0 auto; border-radius:8px;
+                 background:#fff; padding:5px; image-rendering:pixelated; }
+  .inviter .t { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
+  .inviter .h { font-size:.8rem; font-weight:800; font-family:"Chivo"; }
+  .inviter .u { font-size:.72rem; font-family:"IBM Plex Mono"; color:var(--laiton-ink);
+                text-decoration:none; overflow-wrap:anywhere; }
+  .inviter .u:hover { text-decoration:underline; }
+  .inviter .p { font-size:.68rem; color:var(--faint); margin:0; }
+
+  /* ── UNE DEMANDE / UN ACCÈS ───────────────────────────────────────────── */
+  .bloc { border:1px solid var(--line-soft); border-radius:13px; padding:13px 14px;
+          background:var(--surface-2); margin-bottom:10px; }
+  .bloc:last-child { margin-bottom:0; }
+  .qui { display:flex; align-items:baseline; gap:.5rem; flex-wrap:wrap; }
+  .qui .nom { font-family:"Chivo"; font-weight:800; font-size:.95rem; }
+  .qui .app { font-size:.72rem; color:var(--muted); }
+  .mot { font-size:.8rem; color:var(--ink-soft); font-style:italic; margin:.4rem 0 0; }
+
+  /* L'EMPREINTE EST BORNÉE EN LARGEUR, et c'est une correction, pas un détail :
+     étirée sur toute la page elle finissait alignée à droite, illisible au
+     moment précis où il faut la comparer signe à signe. */
+  .empreinte { font-family:"IBM Plex Mono"; font-variant-numeric:tabular-nums;
+               font-size:.86rem; font-weight:500; letter-spacing:.06em;
+               display:block; width:max-content; max-width:100%;
+               margin:.6rem auto; padding:.5rem .8rem; border-radius:9px;
+               background:color-mix(in srgb, var(--laiton) 9%, transparent);
+               border:1px solid color-mix(in srgb, var(--laiton) 24%, transparent);
+               color:var(--ink); text-align:center; overflow-wrap:anywhere; }
+  .empreinte.zoom { font-size:1.06rem; letter-spacing:.1em; padding:.7rem 1rem; }
+
+  .gestes { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.7rem; }
+  button { font:inherit; font-size:.78rem; font-weight:600; cursor:pointer;
+           padding:.42rem .85rem; border-radius:9px; border:1px solid var(--line);
+           background:var(--surface); color:var(--ink); }
+  button:hover { border-color:var(--laiton); }
+  button[disabled] { opacity:.5; cursor:progress; }
+  button.oui { color:var(--vert); border-color:color-mix(in srgb,var(--vert) 40%,var(--line)); }
+  button.non { color:var(--rouge); border-color:color-mix(in srgb,var(--rouge) 40%,var(--line)); }
+  button.fort { background:var(--laiton); color:#fff; border-color:var(--laiton); }
+
+  /* ── LE PROFILEUR ─────────────────────────────────────────────────────── */
+  .rang { display:flex; align-items:center; gap:.4rem; margin-top:.6rem; flex-wrap:wrap; }
+  .rang .lab { font-size:.66rem; letter-spacing:.1em; text-transform:uppercase;
+               color:var(--faint); font-weight:700; margin-right:.2rem; }
+  .cran { font-size:.72rem; font-weight:700; padding:.3rem .7rem; border-radius:999px;
+          border:1px solid var(--line); background:var(--surface); color:var(--muted); cursor:pointer; }
+  .cran[aria-pressed="true"] { color:#fff; border-color:transparent; }
+  .cran[data-p="guest"][aria-pressed="true"]  { background:var(--muted); }
+  .cran[data-p="user"][aria-pressed="true"]   { background:var(--vert); }
+  .cran[data-p="admin"][aria-pressed="true"]  { background:var(--violet); }
+  .etat-session { font-size:.68rem; color:var(--faint); margin-top:.5rem; }
+  .etat-session.jamais { color:var(--ambre); font-weight:600; }
+
+  .vide { color:var(--muted); font-size:.82rem; padding:.6rem 0; }
+  .err { color:var(--rouge); font-size:.78rem; margin-top:.6rem; }
+
+  /* ── LE VISAGE DU DEMANDEUR ───────────────────────────────────────────── */
+  .etat { display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem;
+          font-weight:700; padding:.32rem .75rem; border-radius:999px;
+          border:1px solid var(--line); background:var(--surface); }
+  .etat.acceptee { color:var(--vert); border-color:color-mix(in srgb,var(--vert) 40%,var(--line)); }
+  .etat.en_attente { color:var(--ambre); border-color:color-mix(in srgb,var(--ambre) 40%,var(--line)); }
+  .etat.refusee, .etat.expiree { color:var(--rouge); border-color:color-mix(in srgb,var(--rouge) 40%,var(--line)); }
+  .champ { display:flex; flex-direction:column; gap:.25rem; margin-bottom:.7rem; }
+  .champ label { font-size:.7rem; letter-spacing:.08em; text-transform:uppercase;
+                 color:var(--faint); font-weight:700; }
+  .champ input, .champ textarea {
+    font:inherit; font-size:.86rem; padding:.5rem .65rem; border-radius:9px;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink); }
+  .champ textarea { min-height:4.2rem; resize:vertical; }
+</style>
+
+<div class="cadre">
+
+  <header class="mast">
+    <div class="brand">
+      <div class="sceau">🎟️</div>
+      <div class="wm"><b>ACC<i>ÈS</i></b><span>Qui entre, et comment</span></div>
+    </div>
+    <span class="espace"></span>
+    <span class="maj" id="maj">…</span>
+  </header>
+
+  <p class="lede" id="lede">
+    Une invitation n'ouvre pas un compte : elle ouvre une <b>session</b> à un
+    appareil. L'empreinte comparée ici désigne l'unique appareil qui saura
+    ensuite signer — c'est ce qui donne un sens au geste.
+  </p>
+
+  <!-- ADMIN -->
+  <div id="admin" hidden>
+    <div class="tuiles" id="tuiles"></div>
+
+    <div class="duo" style="margin-top:18px">
+      <section class="carte">
+        <div class="sec-h"><span class="k">Ce qui attend</span><div class="rule"></div><span>⏳</span></div>
+        <h2>Demandes à trancher</h2>
+        <p class="sous">Comparez l'empreinte avec celle affichée sur l'appareil du
+          demandeur. C'est la seule vérification, et elle ne s'automatise pas.</p>
+        <div id="file"><p class="vide">Chargement…</p></div>
+        <div style="margin-top:14px" id="inviter"></div>
+      </section>
+
+      <section class="carte">
+        <div class="sec-h"><span class="k">Ce qui vit</span><div class="rule"></div><span>🎚️</span></div>
+        <h2>Profileur</h2>
+        <p class="sous">On ne promeut pas une demande, on promeut un accès. Un
+          appareil admis qui n'a <b>jamais ouvert de session</b> est un parcours
+          resté en plan — et ça se voit ici.</p>
+        <div id="profils"><p class="vide">Chargement…</p></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- DEMANDEUR / INCONNU -->
+  <section class="carte" id="visiteur" hidden>
+    <div class="sec-h"><span class="k" id="vk">Cet appareil</span><div class="rule"></div><span>📱</span></div>
+    <div id="vue"></div>
+  </section>
+</div>
+
+<script type="module">
+import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis, suitLeLien,
+         oublie, jetonGarde } from './appareil.js';
+
+// LA DESTINATION DU PARCOURS. Ce module n'ouvre pas « un accès à la box » : il
+// fait entrer quelqu'un dans SON SBX OS. La session posée vaut pour tous les
+// vhosts (cookie de domaine parent), mais l'endroit où l'on ARRIVE est SBX OS.
+//
+// ELLE SE RÉSOUT AVANT TOUT AFFICHAGE, et hors de tout visage. Elle n'était
+// affectée que dans la branche ADMINISTRATEUR — or c'est le DEMANDEUR qui
+// clique « Entrer dans SBX OS ». Il gardait donc le repli relatif `/sbxos/`,
+// qui sur hall.gk2 tombe sur le repli SPA : l'index du Hall, répondu en 200.
+// Et le Hall porte `frame-ancestors 'none'` — dans un cadre, le navigateur
+// refuse ce document. « hall.gk2.secubox.in n'autorise pas la connexion ».
+//
+// Le repli reste relatif parce qu'il est juste sur admin.gk2, là où SBX OS
+// est réellement servi ; ailleurs, seule la valeur du serveur vaut.
+let DESTINATION = '/sbxos/';
+const _destinationPrete = fetch(API + '/invitation/url', { credentials: 'same-origin' })
+  .then(r => (r.ok && (r.headers.get('content-type') || '').indexOf('json') >= 0)
+    ? r.json() : null)
+  .then(j => { if (j && j.sbxos) DESTINATION = j.sbxos; })
+  .catch(() => { /* on gardera le repli */ });
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s);
+
+function el(t, c, txt) {
+  const n = document.createElement(t);
+  if (c) n.className = c;
+  if (txt != null) n.textContent = txt;   // textContent : le nom vient d'un inconnu
+  return n;
+}
+function bouton(txt, cls, action) {
+  const b = el('button', cls, txt);
+  b.onclick = () => {
+    b.disabled = true;
+    Promise.resolve(action()).then(rafraichis)
+      .catch(e => { b.disabled = false; alerte(e.message); });
+  };
+  return b;
+}
+function alerte(txt) {
+  const p = $('vue') || document.body;
+  const n = el('p', 'err', txt);
+  p.appendChild(n);
+  setTimeout(() => n.remove(), 6000);
+}
+
+async function api(chemin, options) {
+  const r = await fetch(API + chemin, Object.assign({ credentials: 'same-origin' }, options));
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new Error(j.detail || ('HTTP ' + r.status));
+  }
+  return r.json();
+  // UNE RÉPONSE QUI N'EST PAS DU JSON N'EST PAS UNE RÉPONSE. Sur le Hall, la
+  // surface d'administration n'est délibérément PAS montée : /file y rend 200
+  // avec l'index du Hall. On s'en remettait à l'échec de `r.json()` — ça
+  // marchait, mais par accident, et le message d'erreur parlait de syntaxe
+  // JSON au lieu de dire que la route n'existe pas ici.
+  const ct = r.headers.get('content-type') || '';
+  if (ct.indexOf('json') < 0) throw new Error('route indisponible sur cet hôte');
+  return r.json();
+}
+const poste = (chemin, corps) => api(chemin, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(corps) });
+
+// ── VISAGE ADMIN ────────────────────────────────────────────────────────────
+
+function tuiles(attente, admis) {
+  // « Jamais entré » est la mesure qui manquait : elle compte les accès
+  // accordés dont personne n'a jamais rien fait.
+  const jamais = admis.filter(a => !a.session_le).length;
+  const items = [
+    ['⏳ En attente', attente.length, 'demandes à trancher', 'k-ambre'],
+    ['🎟️ Accès accordés', admis.length, 'appareils admis', 'k-vert'],
+    ['🚪 Jamais entré', jamais, 'admis sans session ouverte', jamais ? 'k-ambre' : ''],
+    ['👑 Administrateurs', admis.filter(a => a.profil === 'admin').length,
+     'profil le plus doté', 'k-violet'],
+  ];
+  $('tuiles').textContent = '';
+  for (const [lib, val, note, k] of items) {
+    const t = el('div', 'tuile ' + (k || ''));
+    t.append(el('div', 'lib', lib), el('div', 'val', String(val)), el('div', 'note', note));
+    $('tuiles').appendChild(t);
+  }
+}
+
+function rendFile(liste) {
+  const c = $('file');
+  c.textContent = '';
+  if (!liste.length) { c.appendChild(el('p', 'vide', 'Aucune demande en attente.')); return; }
+  for (const d of liste) {
+    const b = el('div', 'bloc');
+    const q = el('div', 'qui');
+    q.append(el('span', 'nom', d.nom || '(sans nom)'), el('span', 'app', d.appareil || 'appareil inconnu'));
+    b.appendChild(q);
+    if (d.message) b.appendChild(el('div', 'mot', '« ' + d.message + ' »'));
+
+    const e = el('div', 'empreinte', d.empreinte || '');
+    e.title = "À comparer, signe à signe, avec l'empreinte affichée sur l'appareil du demandeur";
+    b.appendChild(e);
+
+    const g = el('div', 'gestes');
+    // ACCEPTER OUVRE UN ACCÈS `guest`, et rien de plus. Le serveur ignore tout
+    // profil qu'on lui enverrait : l'admission n'a qu'une issue.
+    g.append(
+      bouton('Accorder un accès', 'oui',
+        () => poste('/file/accepter', { did: d.did }).then(montreLien)),
+      bouton('Refuser', 'non', () => poste('/file/refuser', { did: d.did, motif: '' })));
+    b.appendChild(g);
+    c.appendChild(b);
+  }
+}
+
+function rendProfils(admis, profils) {
+  const c = $('profils');
+  c.textContent = '';
+  if (!admis.length) { c.appendChild(el('p', 'vide', 'Aucun accès accordé pour l’instant.')); return; }
+  for (const a of admis) {
+    const b = el('div', 'bloc');
+    const q = el('div', 'qui');
+    q.append(el('span', 'nom', a.nom || '(sans nom)'), el('span', 'app', a.appareil || ''));
+    b.appendChild(q);
+    b.appendChild(el('div', 'empreinte', a.empreinte || ''));
+
+    const r = el('div', 'rang');
+    r.appendChild(el('span', 'lab', 'Profil'));
+    for (const p of profils) {
+      const cr = el('button', 'cran', rang(p));
+      cr.dataset.p = p;
+      cr.title = RANG_DIT[p] || p;
+      cr.setAttribute('aria-pressed', String(a.profil === p));
+      cr.onclick = () => {
+        cr.disabled = true;
+        poste('/profils/promouvoir', { did: a.did, profil: p })
+          .then(rafraichis).catch(e => { cr.disabled = false; alerte(e.message); });
+      };
+      r.appendChild(cr);
+    }
+    b.appendChild(r);
+
+    const s = el('div', 'etat-session' + (a.session_le ? '' : ' jamais'),
+      a.session_le
+        ? 'Dernière session : ' + new Date(a.session_le * 1000).toLocaleString('fr-FR')
+        : "Jamais entré — l'accès est accordé, l'appareil n'a pas encore ouvert de session.");
+    b.appendChild(s);
+
+    const g = el('div', 'gestes');
+    g.appendChild(bouton('Révoquer', 'non', () => poste('/profils/revoquer', { did: a.did })));
+    b.appendChild(g);
+    c.appendChild(b);
+  }
+}
+
+/**
+ * MONTRE LE LIEN D'ENTRÉE, UNE FOIS.
+ *
+ * Il n'est pas relu : ce qui n'est pas noté maintenant est perdu. Un porteur
+ * qu'on peut redemander indéfiniment n'est plus à usage unique en pratique.
+ *
+ * IL NE SERT QU'AU CAS OÙ LA CLÉ MANQUE — quelqu'un qui a demandé depuis son
+ * téléphone et ouvrira depuis son ordinateur. Sur l'appareil qui a demandé,
+ * l'entrée se fait toute seule et par SIGNATURE : ne transmettez le lien que
+ * s'il en a besoin.
+ */
+function montreLien(r) {
+  if (!r || !r.lien) return r;
+  const b = el('div', 'bloc');
+  b.appendChild(el('span', 'etat acceptee', '✅ Accès accordé'));
+  b.appendChild(el('p', 'sous',
+    'Lien d’entrée à usage unique, valable six heures. Il n’est montré QU’ICI '
+    + 'et ne sera pas relu. Ne le transmettez que si la personne ouvrira SecuBox '
+    + 'depuis un AUTRE appareil que celui qui a demandé — sinon elle entrera '
+    + 'toute seule, et par signature, ce qui est plus sûr.'));
+  const champ = document.createElement('input');
+  champ.type = 'text';
+  champ.readOnly = true;
+  champ.value = r.lien;
+  champ.style.cssText = 'width:100%;font-family:"IBM Plex Mono";font-size:.72rem;'
+    + 'padding:.5rem .65rem;border-radius:9px;border:1px solid var(--line);'
+    + 'background:var(--surface-2);color:var(--ink)';
+  champ.onclick = () => champ.select();
+  b.appendChild(champ);
+  if (r.email) {
+    b.appendChild(el('p', 'sous', 'Adresse déclarée : ' + r.email
+      + ' — la box n’envoie rien elle-même, à vous de choisir le canal.'));
+  }
+  const v = $('vue') || $('file');
+  v.insertBefore(b, v.firstChild);
+  return r;
+}
+
+function rendInviter(j) {
+  const c = $('inviter');
+  c.textContent = '';
+  const d = el('div', 'inviter');
+  const img = document.createElement('img');
+  img.alt = "QR de l'adresse du formulaire de demande d'accès";
+  img.src = API + '/invitation/qr';
+  img.loading = 'lazy';
+  img.onerror = () => img.remove();   // pas de cadre vide : l'adresse suffit
+  const t = el('div', 't');
+  t.appendChild(el('div', 'h', 'Faire entrer quelqu’un'));
+  const a = el('a', 'u', (j.url || '').replace(/^https?:\/\//, ''));
+  a.href = j.url || '#';
+  t.appendChild(a);
+  // L'adresse en clair reste lisible : tout le monde n'a pas un appareil photo
+  // qui décode, et une adresse se dicte au téléphone.
+  t.appendChild(el('p', 'p', 'Le QR ne porte que cette adresse — aucun secret.'));
+  d.append(img, t);
+  c.appendChild(d);
+}
+
+// ── VISAGE DEMANDEUR / INCONNU ──────────────────────────────────────────────
+
+/**
+ * LE NIVEAU SE VOIT SANS SE LIRE (#1355).
+ *
+ * Une progression, pas trois étiquettes indépendantes — c'est ce qui rend les
+ * signes mémorisables :
+ *
+ *     👋 guest   accueilli à la porte : il entre, il voit ce qui est public
+ *     🔑 user    il a une clé : les services lui sont ouverts
+ *     👑 admin   il est chez lui : il décide qui entre
+ *
+ * 👑 était DÉJÀ le signe des administrateurs dans la tuile du profileur. On
+ * construit autour plutôt que d'inventer une seconde convention : un
+ * vocabulaire visuel ne vaut que s'il est constant d'un écran à l'autre.
+ *
+ * LE MOT RESTE À CÔTÉ. Ici l'emoji s'AJOUTE au libellé, il ne le remplace pas —
+ * contrairement au tag de Lexie, où la place manquait. Rien à compenser dans
+ * l'arbre d'accessibilité : le mot est déjà là, lu tel quel.
+ */
+const RANG = { guest: '👋', user: '🔑', admin: '👑' };
+const RANG_DIT = {
+  guest: 'Invité — entre et voit ce qui est public',
+  user: 'Utilisateur — les services lui sont ouverts',
+  admin: 'Administrateur — décide qui entre',
+};
+const rang = (p) => (RANG[p] || '•') + ' ' + p;
+
+const MOTS = {
+  en_attente: ['⏳', 'En attente de validation'],
+  acceptee:   ['✅', 'Accès accordé'],
+  refusee:    ['⛔', 'Demande refusée'],
+  expiree:    ['⌛', 'Demande expirée'],
+};
+
+async function rendMienne(v) {
+  const c = $('vue');
+  c.textContent = '';
+  $('vk').textContent = 'Votre demande';
+
+  const m = MOTS[v.etat] || ['•', v.etat];
+  c.appendChild(el('span', 'etat ' + v.etat, m[0] + ' ' + m[1]));
+
+  const id = await identite();
+  // ZOOMÉE côté demandeur : c'est LUI qui la montre à quelqu'un, elle doit se
+  // lire à bout de bras.
+  c.appendChild(el('div', 'empreinte zoom', await empreinte(id.publique)));
+
+  if (v.etat === 'en_attente') {
+    c.appendChild(el('p', 'sous',
+      "Montrez cette empreinte à l'administrateur : il la compare avec ce que "
+      + "montre son écran avant de valider. Rien d'autre n'est à transmettre."));
+  } else if (v.etat === 'acceptee' && !v.session_ouverte) {
+    // LE CHAÎNON QUI MANQUAIT. Avant, le parcours s'arrêtait sur le mot
+    // « accordé » et le Hall continuait d'afficher « non connecté ».
+    c.appendChild(el('p', 'sous',
+      'Votre accès est accordé. Il reste à ouvrir la session : cet appareil va '
+      + 'signer un défi avec la clé dont l’empreinte a été validée.'));
+    const g = el('div', 'gestes');
+    g.appendChild(bouton('Ouvrir ma session', 'fort',
+      () => ouvreSession().then(j => {
+        // ON ENTRE DANS SBX OS, pas sur une racine quelconque. Tout ce parcours
+        // existe pour ça : proposer un accès facile à SON SBX OS. Le laisser
+        // sur « / » obligeait à deviner où aller ensuite.
+        return _destinationPrete.then(() => { location.href = DESTINATION; return j; });
+      })));
+    c.appendChild(g);
+  } else if (v.etat === 'acceptee') {
+    c.appendChild(el('p', 'sous', 'Session ouverte sur cet appareil. Profil : '
+      + rang(v.profil || 'guest') + '.'));
+    const g = el('div', 'gestes');
+    g.appendChild(bouton('Entrer dans SBX OS', 'fort', () => { location.href = DESTINATION; }));
+    c.appendChild(g);
+  } else {
+    const g = el('div', 'gestes');
+    g.appendChild(bouton('Refaire une demande', 'fort',
+      () => { oublie(); return Promise.resolve(); }));
+    c.appendChild(g);
+  }
+}
+
+async function rendFormulaire() {
+  const c = $('vue');
+  c.textContent = '';
+  $('vk').textContent = 'Demander un accès';
+  c.appendChild(el('p', 'sous',
+    "Cet appareil n'a pas encore d'accès. Demandez-en un : un administrateur "
+    + 'comparera une empreinte, puis votre session s’ouvrira ici même.'));
+
+  const saisies = {};
+  for (const [clef, etiq, balise] of [
+    ['nom', 'Votre nom', 'input'],
+    // L'ADRESSE EST FACULTATIVE ET NE SERT PAS À ENTRER. Elle sert à VOUS
+    // JOINDRE : poser un mot de passe plus tard, ou renvoyer un lien d'entrée
+    // si vous changez d'appareil. L'entrée, elle, se fait par signature.
+    ['email', 'Votre adresse (facultative)', 'input'],
+    ['appareil', 'Cet appareil', 'input'],
+    ['message', 'Un mot (facultatif)', 'textarea'],
+  ]) {
+    const w = el('div', 'champ');
+    w.appendChild(el('label', null, etiq));
+    const i = document.createElement(balise);
+    if (balise === 'input') i.type = 'text';
+    i.maxLength = clef === 'message' ? 500 : 60;
+    saisies[clef] = i;
+    w.appendChild(i);
+    c.appendChild(w);
+  }
+  saisies.appareil.value = navigator.platform || 'appareil';
+
+  const g = el('div', 'gestes');
+  g.appendChild(bouton('Demander un accès', 'fort', () => {
+    if (!saisies.nom.value.trim()) throw new Error('Votre nom est nécessaire.');
+    return demande({
+      nom: saisies.nom.value.trim(),
+      email: saisies.email.value.trim(),
+      appareil: saisies.appareil.value.trim(),
+      message: saisies.message.value.trim(),
+    });
+  }));
+  c.appendChild(g);
+}
+
+// ── Le visage se DÉDUIT, il ne se choisit pas ───────────────────────────────
+
+async function rafraichis() {
+  // Même règle qu'en carlette : l'ouverture ne dépend pas du visage affiché.
+  // LE LIEN PASSE EN PREMIER : il vient d'être cliqué, et il est à usage
+  // unique — le consommer plus tard, ou pas du tout, le gaspillerait.
+  try {
+    if (await suitLeLien()) { location.href = DESTINATION; return; }
+  } catch (e) { return panne(e); }
+
+  try {
+    const ouvert = await ouvreSiAdmis();
+    if (ouvert) { await _destinationPrete; location.href = DESTINATION; return; }
+  } catch (e) { /* signature refusée : on affiche, on ne boucle pas */ }
+
+  try {
+    const [f, p, u] = await Promise.all([
+      api('/file'), api('/profils'), api('/invitation/url')]);
+    $('admin').hidden = false;
+    $('visiteur').hidden = true;
+    tuiles(f.en_attente, p.admis);
+    rendFile(f.en_attente);
+    rendProfils(p.admis, p.profils);
+    rendInviter(u);
+    if (u.sbxos) DESTINATION = u.sbxos;   // confirmation, la résolution a déjà eu lieu
+  } catch (e) {
+    // Pas administrateur : on montre ce que CET appareil peut faire.
+    $('admin').hidden = true;
+    $('visiteur').hidden = false;
+    // PAS ADMINISTRATEUR — ce n'est pas une panne, c'est le cas NORMAL pour un
+    // visiteur. On montre ce que CET appareil peut faire, et d'abord demander.
+    const v = jetonGarde() ? await suivi().catch(() => null) : null;
+    if (v) await rendMienne(v); else await rendFormulaire();
+  }
+  $('maj').textContent = 'relevé à ' + new Date().toLocaleTimeString('fr-FR',
+    { hour: '2-digit', minute: '2-digit' });
+}
+
+// UN SEUL ENDROIT RATTRAPE TOUT. Sans ce filet, la moindre erreur laissait la
+// page muette — et une page muette se lit comme un service mort, alors que la
+// demande d'accès ne demande rien de plus qu'un formulaire.
+function panne(e) {
+  $('admin').hidden = true;
+  $('visiteur').hidden = false;
+  $('vk').textContent = 'Indisponible';
+  const c = $('vue');
+  c.textContent = '';
+  c.appendChild(el('span', 'etat refusee', '⚠ Accès indisponible'));
+  c.appendChild(el('p', 'sous', String((e && e.message) || e || 'erreur inconnue')));
+}
+
+// Sans WebCrypto ni IndexedDB, aucune identité d'appareil n'est possible :
+// autant le DIRE que proposer un formulaire qui échouera à l'envoi.
+function capacites() {
+  if (!(window.crypto && crypto.subtle)) {
+    throw new Error('Ce navigateur n’expose pas WebCrypto sur cette page '
+      + '(contexte non sécurisé ?). L’identité d’appareil est impossible.');
+  }
+  if (!window.indexedDB) {
+    throw new Error('Stockage IndexedDB indisponible — navigation privée ou '
+      + 'stockage bloqué. La clé de l’appareil ne peut pas être conservée.');
+  }
+}
+
+function tour() {
+  Promise.resolve().then(capacites).then(rafraichis).catch(panne);
+}
+tour();
+// Trente secondes : assez pour que l'attente paraisse vivante — côté admin une
+// demande qui arrive, côté demandeur une validation — sans marteler la box.
+setInterval(tour, 30000);
+</script>

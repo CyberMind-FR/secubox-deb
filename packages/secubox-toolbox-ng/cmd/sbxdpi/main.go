@@ -44,7 +44,7 @@ import (
 const (
 	defaultFlushInterval = 30 * time.Second
 	defaultDialBackoff   = 3 * time.Second
-	defaultReloadEvery = 15 * time.Second
+	defaultReloadEvery   = 15 * time.Second
 	// 0666: the socket serves read-only, non-PII aggregate counters and is
 	// fronted by nginx (JWT) on the same box; a world-readable local socket
 	// avoids a cross-group chown the unprivileged daemon user cannot perform.
@@ -66,7 +66,11 @@ type Config struct {
 	APISockMode os.FileMode
 	// CachePath is the atomic JSON snapshot the flusher rewrites every
 	// FlushInterval — the warm-start/last-known source the API falls back to.
-	CachePath     string
+	CachePath string
+
+	// NamesFile : table d'alias d'adresses de l'opérateur (JSON {ip: "nom"}),
+	// relue à chaud. Absente → les noms viennent des seules sources déduites.
+	NamesFile     string
 	FlushInterval time.Duration
 	// DialBackoff is the reconnect delay between distributor dial attempts.
 	DialBackoff time.Duration
@@ -111,6 +115,7 @@ func defaultConfig() Config {
 		APISock:         getenvDefault("DPI_API_SOCK", "/run/secubox/dpi-live.sock"),
 		APISockMode:     defaultAPISockMode,
 		CachePath:       getenvDefault("DPI_STATS_CACHE", "/data/secubox/sbxdpi/stats.json"),
+		NamesFile:       getenvDefault("DPI_NAMES_FILE", "/etc/secubox/dpi/ip-names.json"),
 		FlushInterval:   envDurationDefault("DPI_FLUSH_INTERVAL", defaultFlushInterval),
 		DialBackoff:     envDurationDefault("DPI_DIAL_BACKOFF", defaultDialBackoff),
 		AllowFile:       getenvDefault("DPI_ALLOW_FILE", "/etc/secubox/dpi/app-allow.txt"),
@@ -145,6 +150,10 @@ func run(ctx context.Context, cfg Config) error {
 	cfg = withDefaults(cfg)
 
 	agg := newAggregator()
+	// Le nommeur est branché AVANT le chargement du snapshot : celui-ci lui
+	// rend les noms déjà observés, et les talkers repris sont nommés dès la
+	// première réponse de l'API (#1342).
+	agg.nom = newNommeur(cfg.NamesFile)
 	// Warm-start from the last snapshot so the API is non-empty across a
 	// restart before the first flush (fail-safe: unreadable → empty agg).
 	agg.loadSnapshot(cfg.CachePath)
@@ -160,6 +169,14 @@ func run(ctx context.Context, cfg Config) error {
 	go func() {
 		defer wg.Done()
 		consumeDistributor(ctx, cfg, agg, filt, sess)
+	}()
+
+	// 1bis) Nommage : rafraîchit la table ARP et les alias, et résout les DNS
+	// inverses en attente. UN seul travailleur, hors du chemin chaud.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		agg.nom.BoucleInverse(ctx)
 	}()
 
 	// 2) Periodic atomic snapshot flush.

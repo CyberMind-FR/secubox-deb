@@ -413,6 +413,28 @@ def _qui(user) -> str:
     return acces.qui_sur((user or {}).get("sub"))
 
 
+def _etiquette(compte: str) -> str:
+    """Ce qu'on AFFICHE pour ce porteur — distinct de ce qui l'IDENTIFIE.
+
+    `qui_sur()` assainit le `sub` pour en faire une clé de fichier sûre ; ce
+    n'est pas un nom, et l'afficher tel quel donnait « sbx-3704f0234ea3 » dans
+    la barre du Hall. Un appareil a pourtant un nom : celui que son porteur a
+    déclaré à l'admission, et que l'administrateur a lu pour décider.
+
+    Ce nom N'IDENTIFIE RIEN — il vient d'un formulaire ouvert, deux appareils
+    peuvent déclarer le même. C'est précisément pour ça qu'il est cantonné à
+    l'affichage, et que le compte, lui, dérive de la clé.
+    """
+    try:
+        from secubox_core import appareils
+        a = appareils.get(compte)
+        if a and a.get("nom"):
+            return str(a["nom"])[:60]
+    except Exception:
+        pass
+    return compte
+
+
 # ── ACTIONS DES MODULES (#1314) ────────────────────────────────────────────
 #
 # SOUS JETON, ET SOUS LISTE CLOSE. L'API d'administration repond `400` et non
@@ -557,6 +579,8 @@ async def acces_liste(user=Depends(require_jwt)):
                          "flux": v["flux"], "acces": bool(d.get("secret")),
                          "compte": d.get("compte") or "", "voie": d.get("voie") or ""})
     return {"qui": qui,
+            # L'étiquette est ce qui S'AFFICHE ; `qui` reste ce qui identifie.
+            "etiquette": _etiquette(qui),
             "demandes": [x for x in acces.demandes() if x.get("qui") == qui],
             "accordes": accordes}
 

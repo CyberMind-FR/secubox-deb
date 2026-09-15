@@ -1,0 +1,9 @@
+{
+  "id": "acces",
+  "name": "Accès",
+  "category": "auth",
+  "icon": "🎟️",
+  "path": "/acces/",
+  "order": 26,
+  "description": "SecuBox Accès — admission des appareils, empreintes et sessions"
+}

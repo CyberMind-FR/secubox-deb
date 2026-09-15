@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/secubox-acces/usr/lib/secubox/acces/api
+	install -m 644 api/*.py debian/secubox-acces/usr/lib/secubox/acces/api/
+	install -d debian/secubox-acces/usr/share/secubox/www/acces
+	install -m 644 www/acces/index.html debian/secubox-acces/usr/share/secubox/www/acces/
+	install -m 644 www/acces/micro.html debian/secubox-acces/usr/share/secubox/www/acces/
+	install -m 644 www/acces/appareil.js debian/secubox-acces/usr/share/secubox/www/acces/
+	install -d debian/secubox-acces/usr/share/secubox/menu.d
+	install -m 644 menu.d/26-acces.json debian/secubox-acces/usr/share/secubox/menu.d/
+	install -d debian/secubox-acces/etc/secubox
+	install -m 644 conf/acces.toml debian/secubox-acces/etc/secubox/
+	install -d debian/secubox-acces/etc/nginx/secubox.d
+	install -m 644 nginx/acces.conf debian/secubox-acces/etc/nginx/secubox.d/
+	# Le vhost dédié est DÉPOSÉ, pas activé : c'est le postinst qui l'installe
+	# dans sites-enabled, après avoir vérifié que nginx l'accepte.
+	install -d debian/secubox-acces/etc/secubox/nginx-available
+	install -m 644 nginx/acces.vhost.conf debian/secubox-acces/etc/secubox/nginx-available/acces.conf
+

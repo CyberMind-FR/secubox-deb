@@ -1,0 +1,182 @@
+{
+ "_pourquoi": "EXTRAIT du Hall (const FEATURED) par outils/extraire-curation.py. Ne pas éditer à la main : la source est hall/index.html, et toute correction faite ici serait perdue à la construction suivante.",
+ "_source": "packages/secubox-webos/www/hall/index.html",
+ "lieux": [
+  {
+   "id": "securite",
+   "label": "Sécurité",
+   "icon": "🛡️",
+   "color": "#2e7d5b",
+   "url": "waf.gk2.secubox.in"
+  },
+  {
+   "id": "acteurs",
+   "label": "Renseignement",
+   "icon": "🧠",
+   "color": "#2e6a5b",
+   "url": "actor.gk2.secubox.in"
+  },
+  {
+   "id": "contenu",
+   "label": "Contenu",
+   "icon": "📦",
+   "color": "#3d6b4a",
+   "url": "depot.gk2.secubox.in"
+  },
+  {
+   "id": "cloud",
+   "label": "Cloud",
+   "icon": "☁️",
+   "color": "#1655a0",
+   "url": "nc.gk2.secubox.in"
+  },
+  {
+   "id": "social",
+   "label": "Social",
+   "icon": "🐘",
+   "color": "#2e6da4",
+   "url": "social.gk2.secubox.in"
+  },
+  {
+   "id": "forums",
+   "label": "Forums",
+   "icon": "💬",
+   "color": "#5b46b8",
+   "url": "bbs.gk2.secubox.in"
+  },
+  {
+   "id": "bbs",
+   "label": "BBS",
+   "icon": "💬",
+   "color": "#5b46b8",
+   "url": "bbs.gk2.secubox.in"
+  },
+  {
+   "id": "radio",
+   "label": "Radio",
+   "icon": "📻",
+   "color": "#a73d42",
+   "url": "radio.gk2.secubox.in"
+  },
+  {
+   "id": "peertube",
+   "label": "PeerTube",
+   "icon": "📹",
+   "color": "#c0392b",
+   "url": "peertube.gk2.secubox.in"
+  },
+  {
+   "id": "lyrion",
+   "label": "Lyrion",
+   "icon": "🎚️",
+   "color": "#128a6f",
+   "url": "lyrion.gk2.secubox.in",
+   "lan": true
+  },
+  {
+   "id": "nextcloud",
+   "label": "Cloud",
+   "icon": "☁️",
+   "color": "#1655a0",
+   "url": "nc.gk2.secubox.in"
+  },
+  {
+   "id": "nextcloud-super",
+   "label": "Cloud +",
+   "icon": "☁️",
+   "color": "#1655a0",
+   "url": "nc.gk2.secubox.in"
+  },
+  {
+   "id": "photoprism",
+   "label": "Photos",
+   "icon": "📷",
+   "color": "#1f7a58",
+   "url": "photoprism.gk2.secubox.in"
+  },
+  {
+   "id": "metanews",
+   "label": "MetaNews",
+   "icon": "🗞️",
+   "color": "#5b46b8",
+   "url": "metanews.gk2.secubox.in"
+  },
+  {
+   "id": "podcaster",
+   "label": "Podcaster",
+   "icon": "🎙️",
+   "color": "#c87832",
+   "url": "podcaster.gk2.secubox.in"
+  },
+  {
+   "id": "mastodon",
+   "label": "Social",
+   "icon": "🐘",
+   "color": "#2e6da4",
+   "url": "social.gk2.secubox.in"
+  },
+  {
+   "id": "billets",
+   "label": "Billets",
+   "icon": "🎟️",
+   "color": "#8a5a2b",
+   "url": "billets.gk2.secubox.in"
+  },
+  {
+   "id": "depot",
+   "label": "Dépôt",
+   "icon": "📦",
+   "color": "#3d6b4a",
+   "url": "depot.gk2.secubox.in"
+  },
+  {
+   "id": "socialrelay",
+   "label": "SocialRelay",
+   "icon": "🔄",
+   "color": "#1f7a58",
+   "url": "socialrelay.gk2.secubox.in"
+  },
+  {
+   "id": "mail",
+   "label": "Mail",
+   "icon": "📧",
+   "color": "#c87832",
+   "url": "webmail.gk2.secubox.in"
+  },
+  {
+   "id": "ytsas",
+   "label": "YTSaS",
+   "icon": "🎬",
+   "color": "#b03030",
+   "url": "ytsas.gk2.secubox.in"
+  },
+  {
+   "id": "torrent",
+   "label": "Torrent",
+   "icon": "🧲",
+   "color": "#3c6e8f",
+   "url": "torrent.gk2.secubox.in"
+  },
+  {
+   "id": "devwatch",
+   "label": "DevWatch",
+   "icon": "🛰️",
+   "color": "#0784a8",
+   "url": "admin.gk2.secubox.in/devwatch"
+  },
+  {
+   "id": "zia",
+   "label": "ZIA",
+   "icon": "🦊",
+   "color": "#0a93a6",
+   "url": "admin.gk2.secubox.in/zia"
+  },
+  {
+   "id": "acces",
+   "label": "Accès",
+   "icon": "🎟️",
+   "color": "#f59e0b",
+   "url": "acces.gk2.secubox.in"
+  }
+ ]
+}

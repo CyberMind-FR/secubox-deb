@@ -1,4 +1,176 @@
-secubox-sbxos (0.1.1-1~bookworm1) bookworm; urgency=medium
+secubox-sbxos (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA PASTILLE ROUGE SUR CHAQUE VIGNETTE : le même défaut que l'écran noir, mais
+    dans l'OMBRE (ref #1357). `.badge` pose `display:inline-flex`, qui bat le
+    `[hidden]` du navigateur — un badge vide restait affiché. La garde existait
+    déjà dans la feuille du document, mais une feuille de document NE TRAVERSE
+    PAS le shadow DOM : il faut la répéter dans chaque racine d'ombre. C'est le
+    prix de l'encapsulation, et l'oublier redonne le bug là où on ne le cherche
+    pas.
+  * UN CONTRÔLE POUR LES ACCENTS GRAVES. Le CSS des composants vit dans un
+    template literal, et notre convention cite les termes techniques entre
+    accents graves — chacun FERME la chaîne. Trois fois dans la même journée :
+    module invalide, jamais chargé, symptôme sans rapport avec la cause. Une
+    convention qui se retourne contre soi ne se corrige pas par l'attention mais
+    par un contrôle, et `outils/verifie-gabarits.py` tourne à la construction.
+    Vérifié EN NÉGATIF : une faute injectée le fait échouer.
+  * LE THÉÂTRE N'AVERTIT PLUS À TORT. « Ce lieu refuse peut-être d'être encadré »
+    s'affichait après 2,5 s SANS RIEN VÉRIFIER — la radio jouait et l'on
+    annonçait un problème. Et c'est indétectable : un cadre refusé par
+    `frame-ancestors` déclenche `load` comme un cadre qui a chargé. Un lien
+    PERMANENT « Ouvrir dans un onglet » sert les deux cas et n'affirme rien
+    qu'on ne sache.
+  * APERÇUS VIVANTS SUR LES VIGNETTES. « Radio » ne dit rien ; « Radio — Sacred
+    Spirit » dit s'il vaut la peine d'ouvrir. DU TEXTE, PAS DES IMAGES : la CSP
+    du Hall pose `img-src 'self'`, une pochette tierce serait bloquée, et
+    vingt-cinq vignettes qui chargent chacune une image coûtent plus qu'elles ne
+    rendent sur un téléphone.
+  * ON NE SONDE QUE CE QUI EST VISIBLE, et l'on s'ARRÊTE quand l'onglet passe en
+    arrière-plan : sans cette règle, une PWA installée interroge la box toutes
+    les vingt secondes, toute la journée, dans la poche de quelqu'un.
+  * LE SILENCE EST UNE INFORMATION : une radio qui ne joue rien le dit, au lieu
+    de garder le dernier titre affiché — une vignette périmée ment tranquillement.
+  * L'aperçu se POSE sur la vignette déjà dessinée : recomposer le damier à
+    chaque morceau perdrait un glisser en cours et ferait clignoter l'écran.
+  * Cache du service worker en v5.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:48:30 +0200
+
+secubox-sbxos (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * ÉCRAN NOIR : `hidden` ne gagnait pas sur nos propres règles (ref #1356).
+    `[hidden] { display: none }` est une règle du NAVIGATEUR, donc de plus
+    faible priorité que toute règle d'auteur posant `display`. Or `.theatre`
+    pose `display:flex` — un élément `hidden` restait affiché, et comme il est
+    en `position:fixed; inset:0`, il couvrait tout l'écran avec son iframe
+    noire. Écran noir, sans une ligne de JavaScript en cause.
+  * LE DÉFAUT DORMAIT DEPUIS LE DÉBUT. Tant que la feuille était servie en
+    `application/octet-stream`, le navigateur la REFUSAIT (nosniff) : on voyait
+    du HTML nu — laid, mais fonctionnel, et c'est ce que montraient les captures
+    d'écran précédentes. Corriger le type MIME a réveillé le bug. Une panne qui
+    apparaît en réparant autre chose n'est pas une régression du correctif,
+    c'est une dette qu'il rend visible.
+  * `[hidden] { display: none !important; }` posé une fois, en tête. La
+    visibilité se bascule par `el.hidden`, jamais par `style.display` : un seul
+    mécanisme, et cette règle le rend fiable.
+  * Cache du service worker en v4 : il garde la FEUILLE autant que la coquille,
+    et sans changement de version la version fautive continuerait d'être servie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:32:57 +0200
+
+secubox-sbxos (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * SBX OS EST UN CLONE DU HALL (ref #1349). Il montre ce que le Hall montre —
+    sans cette règle ce sont deux bureaux qui divergent lentement, et celui
+    qu'on regarde le moins finit par mentir.
+  * DEUX SOURCES, DEUX QUESTIONS. `curation.json` dit CE QU'ON MONTRE : il est
+    EXTRAIT du `FEATURED` du Hall à la construction du paquet, pas recopié —
+    25 lieux, un jugement humain versionné avec le code. Le registre vivant dit
+    CE QUI RÉPOND : installé, actif. Le registre complet compte 121 services, et
+    un bureau à 121 tuiles est un mur.
+  * LE REGISTRE NE PEUT QU'ÉCARTER, JAMAIS AJOUTER, et seulement sur une
+    information POSITIVE d'absence : un service qu'il ne connaît pas n'est pas
+    éteint pour autant — l'ignorance n'est pas une preuve. S'il tombe, on garde
+    la curation entière : mieux vaut une tuile vers un service endormi qu'un
+    écran vide.
+  * `profil_min` n'existe pas dans la curation — le Hall masque par CSS selon la
+    session. On l'ajoute ici, et le défaut est `user` : un invité ne voit que ce
+    qui est explicitement public. Se tromper dans ce sens ne montre pas trop ;
+    l'inverse, si.
+  * `Mine.adopte()` : le MÊME chemin que `charge()` après son fetch —
+    validation, mémorisation, griefs, événements. Deux chemins d'adoption
+    divergeraient, et c'est toujours celui qu'on regarde le moins qui garderait
+    le bug. On valide même ce qu'on a fabriqué soi-même : le clone part de
+    données distantes, et passer par notre code ne les rend pas sûres.
+  * Cache du service worker en v3, et la curation suit la règle du manifeste —
+    réseau d'abord : servie depuis le cache, un service retiré resterait sur le
+    bureau.
+
+  * ENTRER SANS MOT DE PASSE (ref #1353). SBX OS n'en demande jamais, et ce
+    n'est pas une facilité : ce parcours n'en crée pas. Un appareil admis entre
+    en SIGNANT un défi avec la clé dont l'administrateur a comparé l'empreinte.
+    Trois cas, un seul demande quelque chose : session déjà ouverte (le cookie
+    porte sur le domaine parent), accès admis mais pas encore entré (on signe),
+    aucun accès (on montre la porte — plutôt qu'un bureau vide qui laisse
+    croire à une panne).
+  * L'IMPORT DU MODULE D'ACCÈS EST DYNAMIQUE. Un import statique lierait le
+    démarrage de SBX OS à la présence de ce module : s'il manquait, le bureau
+    resterait nu — la panne que ce paquet vient de corriger deux fois. Son
+    absence ne coûte désormais que l'ouverture automatique.
+  * L'OUVERTURE PASSE AVANT LE CHARGEMENT DU MANIFESTE : la Mine sert un bureau
+    par PROFIL, et le profil dépend de la session. L'inverse donnerait le bureau
+    d'un invité à quelqu'un qui vient d'entrer.
+  * Le panneau d'administration ne sert plus SBX OS : il y redirige.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:46:48 +0200
+
+secubox-sbxos (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * LE TYPE MIME VENAIT DE `try_files "" =404`. Avec un premier argument VIDE,
+    nginx perd l'extension de la requête et retombe sur `default_type` — donc
+    `application/octet-stream` pour tout, y compris les PNG. Aucune quantité de
+    `include mime.types` n'y change rien : il n'y a plus d'extension à chercher
+    dans la table.
+  * `root` remplace `alias $variable` : le chemin sur disque coïncide avec
+    l'URI, donc root suffit, et sans variable nginx garde l'extension. Un
+    fichier absent rend 404 naturellement — c'est le défaut de `root`, pas une
+    règle à écrire.
+  * Vérifié : hall.js et sbx-damier.js en application/javascript, manifeste.json
+    en application/json, l'icône en image/png, et absent.js toujours en 404.
+
+  * DEUX DÉFAUTS QUI EMPÊCHAIENT SBX OS DE DÉMARRER, et les deux venaient de
+    mes ajouts de la veille.
+
+    LES COMMENTAIRES TERMINAIENT LA CHAÎNE. Le gabarit CSS des composants vit
+    dans un template literal ; j'y ai écrit des termes entre accents graves —
+    « `auto-fill` » — et chacun FERME la chaîne. `sbx-damier.js` et
+    `sbx-carlette.js` étaient des modules syntaxiquement invalides, donc jamais
+    chargés. Les accents graves sont remplacés par des guillemets français, qui
+    disent la même chose sans rien fermer.
+
+    LE TYPE MIME EST FATAL POUR UN MODULE ES. Les scripts étaient servis en
+    `application/octet-stream` : un navigateur REFUSE d'exécuter un
+    `<script type="module">` avec ce type — il ne dégrade pas, il n'exécute
+    rien. Une `location` en expression régulière avec `alias` perd la table des
+    types : on la réinclut plutôt que de compter sur un héritage qui n'a pas
+    lieu.
+
+    Le symptôme était le même dans les deux cas — la coquille nue, et le
+    message « aucun manifeste mémorisé » qui accusait la box alors que rien
+    n'avait même essayé de la joindre.
+
+  * Le cache du service worker passe en v2. La coquille est servie « cache
+    d'abord » : sans changer le nom du cache, l'ancienne aurait tenu jusqu'au
+    lancement SUIVANT, et le nouveau réglage aurait paru n'avoir rien fait.
+  * LE DAMIER EST RÉGLABLE — trois molettes, et pas une de plus (ref #1293).
+    Taille des vignettes, noms sous les icônes, plafond de colonnes.
+  * LA DENSITÉ EST UNE SEULE MOLETTE qui bouge largeur, écart et taille
+    d'icône ENSEMBLE. Les séparer aurait laissé fabriquer des grilles
+    contradictoires — vignettes étroites et grands écarts font une grille
+    trouée, vignettes larges et écart serré font un mur — et la faute serait
+    retombée sur qui a « mal réglé ». Les triplets sont accordés une fois dans
+    le composant, et l'interface ne propose que les triplets.
+  * LES DEUX AUTRES SONT INDÉPENDANTES parce qu'elles répondent à des questions
+    différentes — « est-ce que je veux lire les noms ? », « est-ce que je veux
+    douze colonnes sur mon 27 pouces ? » — et qu'aucune ne peut contredire les
+    autres. C'est le critère qui les a fait retenir.
+  * Le plafond de colonnes borne la LARGEUR de la grille, il ne compte pas les
+    colonnes en JavaScript : le calcul reste dans le moteur de rendu, et rien
+    ne se recalcule au redimensionnement. Il se relit à chaque changement de
+    densité, sinon « 6 colonnes » posé en large donnerait six colonnes écrasées
+    une fois repassé en serré.
+  * LES RÉGLAGES S'APPLIQUENT AU DAMIER DES RÉGLAGES LUI-MÊME : on voit le
+    résultat sur les vignettes qu'on a sous les yeux. Un réglage dont l'effet
+    est ailleurs se règle à l'aveugle.
+  * L'étiquette se retire par `display:none`, pas par `visibility` : la place
+    doit être RENDUE, sinon les vignettes sans nom gardent un vide sous l'icône.
+  * Une valeur inconnue en stockage retombe sur le défaut au lieu d'être posée
+    telle quelle — une préférence invalide écrite sur disque ressort à chaque
+    démarrage, et le damier recevrait un attribut qu'il ne sait pas traduire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:15:46 +0200
+
+secubox-sbxos (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Les icônes de la PWA existent enfin, et le repli qui les masquait est borné.
     Le `try_files` valait pour TOUT : une icône absente ressortait en

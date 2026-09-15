@@ -26,7 +26,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from . import sessions as _sessions
-from . import user_store
+from . import appareils, user_store
 from .config import get_config
 from .logger import get_logger
 
@@ -210,7 +210,23 @@ def _validate_token(token: str) -> Optional[Dict[str, Any]]:
     jti = payload.get("jti")
     if not jti or not _session_validator(jti):
         return None
-    if not user_store.is_enabled(payload["sub"]):
+    # DEUX SORTES DE PORTEURS, DEUX REGISTRES (#1351).
+    #
+    # Un UTILISATEUR a un nom choisi, un mot de passe, des droits attribués.
+    # Un APPAREIL est une CLÉ : son nom en dérive, il n'a pas de mot de passe —
+    # il entre en signant — et il vit dans son propre registre.
+    #
+    # Les loger ensemble faisait apparaître des entrées `sbx-…` dans le panneau
+    # « Users », où aucun geste de gestion d'utilisateurs n'a de sens pour elles.
+    # Le registre des appareils ne répond QU'À la question posée ici : ce
+    # porteur existe-t-il, et est-il encore admis ?
+    #
+    # L'ordre compte peu — les espaces de noms sont disjoints, `appareils` ne
+    # répond que pour le préfixe `sbx-` — mais on interroge les utilisateurs
+    # d'abord : c'est le cas courant, et le registre des appareils reste vide
+    # sur une box qui n'a admis personne.
+    if not (user_store.is_enabled(payload["sub"])
+            or appareils.est_admis(payload["sub"])):
         return None
     return payload
 

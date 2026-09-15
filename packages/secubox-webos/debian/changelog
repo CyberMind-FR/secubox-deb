@@ -1,3 +1,180 @@
+secubox-webos (1.0.311-1~bookworm1) bookworm; urgency=medium
+
+  * LE HALL SERT SBX OS (ref #1353). Il l'était par admin.gk2, et c'était un
+    contresens sur les deux : l'administration doit rester INTERNE, et SBX OS
+    est la porte publique — le Hall qui tient dans la poche.
+  * LA CONSÉQUENCE TECHNIQUE EST CE QUI TRANCHE. La clé privée de l'appareil
+    vit dans IndexedDB, rangée PAR ORIGINE. Servi depuis admin.gk2, SBX OS ne
+    voyait pas la clé créée par la carlette d'accès sur hall.gk2 : deux
+    identités pour un seul appareil, et aucune ouverture automatique possible.
+    Servi ici, il partage le stockage de la carlette.
+  * /acces/ est aliassé sur cette origine aussi, sous son chemin canonique :
+    SBX OS importe /acces/appareil.js, et un chemin qui changerait selon l'hôte
+    serait la meilleure façon de se tromper d'hôte.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:46:48 +0200
+
+secubox-webos (1.0.310-1~bookworm1) bookworm; urgency=medium
+
+  * LE HALL AFFICHE UN NOM, PLUS UNE CLÉ (ref #1351). `qui` est un identifiant
+    ASSAINI pour servir de nom de fichier — l'afficher donnait
+    « sbx-3704f0234ea3 » dans la barre, alors que l'appareil a un nom : celui
+    que son porteur a déclaré à l'admission, et que l'administrateur a lu pour
+    décider.
+  * L'API rend désormais `etiquette` À CÔTÉ de `qui`. Ce nom n'identifie RIEN —
+    il vient d'un formulaire ouvert, deux appareils peuvent déclarer le même —
+    et c'est précisément pour cela qu'il est cantonné à l'affichage, pendant que
+    le compte dérive de la clé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:32:29 +0200
+
+secubox-webos (1.0.309-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : les routes d'accès pointent sur l'agrégateur (ref #1350). Le service
+    isolé de secubox-acces ne pouvait pas ENREGISTRER une session — seul
+    l'agrégateur charge secubox-auth, qui pose ce rappel.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:04:56 +0200
+
+secubox-webos (1.0.308-1~bookworm1) bookworm; urgency=medium
+
+  * LA CARLETTE ACCÈS REFUSAIT D'ÊTRE ENCADRÉE PAR LE HALL QUI LA SERT
+    (ref #1348). `add_header` n'est pas hérité par un `location` qui pose ses
+    propres en-têtes — mais un `location` qui n'en pose AUCUN hérite de celui
+    du serveur, lequel porte `frame-ancestors 'none'`. Et `'none'` interdit
+    TOUT ancêtre, y compris de MÊME ORIGINE.
+  * Le relais /i/acces/ n'avait pas d'add_header : il héritait donc du refus.
+    Les sept autres carlettes redéclarent déjà `frame-ancestors 'self'` — on
+    reprend leur politique mot pour mot, plutôt que d'en écrire une voisine :
+    deux politiques qui divergent sont la panne suivante.
+  * Firefox le disait très bien — « hall.gk2.secubox.in will not allow Firefox
+    to display the page if another site has embedded it » — mais en nommant le
+    Hall, pas le fichier servi sous son nom. Trois aller-retours pour ça.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:53:34 +0200
+
+secubox-webos (1.0.307-1~bookworm1) bookworm; urgency=medium
+
+  * /sbxos/ sur le Hall REDIRIGE au lieu de faire semblant (ref #1347). Il
+    tombait sur le repli SPA et rendait l'index du Hall en 200 : un lien relatif
+    devenait silencieusement « le Hall », et comme le Hall porte
+    `frame-ancestors 'none'`, le charger dans un cadre donnait « n'autorise pas
+    la connexion » — un message qui ne désigne rien de ce qui s'est passé.
+  * 302 et non 301 : le jour où SBX OS sera servi ici aussi, un 301 mémorisé par
+    les navigateurs continuerait de les envoyer ailleurs.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:44:26 +0200
+
+secubox-webos (1.0.306-1~bookworm1) bookworm; urgency=medium
+
+  * CSP : acces.gk2.secubox.in entre dans `frame-src` (ref #1346). La carlette
+    passe par le relais et vit donc en MÊME ORIGINE — mais la vue plein cadre
+    (`?embed=1`) ouvre le vhost DÉDIÉ, en cross-origine. Il ne figurait pas dans
+    la liste des cadres autorisés : le navigateur refusait le document, et la
+    page s'affichait cassée.
+  * LE SYMPTÔME NE DÉSIGNAIT PAS LA CAUSE. En ligne de commande tout répondait
+    200 — curl n'applique aucune CSP. Une politique de sécurité ne se vérifie
+    que dans un navigateur, ou en relisant la directive ; trois `frame-src`
+    étaient à corriger, pas un.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:29:45 +0200
+
+secubox-webos (1.0.305-1~bookworm1) bookworm; urgency=medium
+
+  * LA CARLETTE ACCÈS EST SERVIE EN MÊME ORIGINE (ref #1346). Elle range la clé
+    privée de l'appareil dans IndexedDB ; chargée depuis acces.gk2 dans un cadre
+    de hall.gk2, elle est un contexte TIERS, et les navigateurs y cloisonnent ou
+    refusent le stockage. La carlette n'avait alors plus d'identité — donc plus
+    rien à montrer. Le relais `/i/acces/` la sert sous hall.gk2, où son stockage
+    est de première partie. Même mécanisme que #1239.
+  * Les routes ouvertes suivent : /api/v1/acces/invitation/ et /session/. On
+    n'ouvre PAS /file/ ni /profils/ — la proximité des noms est précisément ce
+    qui rend important le préfixe à ne pas écrire.
+  * DEMANDER UN ACCÈS PASSE DEVANT LA CONNEXION. Un visiteur sans compte ne peut
+    pas se connecter : lui présenter d'abord un formulaire de connexion, c'est
+    lui offrir une impasse et le laisser croire qu'il a oublié un mot de passe
+    qu'il n'a jamais eu. L'ordre des deux boutons EST l'information. Le premier
+    disparaît une fois la session ouverte — il n'a plus d'objet.
+  * Le bouton ouvre le parcours par le relais, jamais acces.gk2 dans un onglet :
+    une autre origine donnerait une AUTRE identité d'appareil, donc une seconde
+    demande pour la même machine.
+  * Identifiant `who-inscription` et non `who-acces`, déjà pris par « Gérer les
+    accès » : deux éléments de même id, et l'un des deux boutons meurt.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:21:19 +0200
+
+secubox-webos (1.0.304-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la carte Accès pointait sur l'ancien module, et de travers (ref #1344).
+    Son entrée portait `url:"admin.gk2.secubox.in/users"` — or `url` est le
+    vhost PUBLIC, celui du mode embed. Le Hall embarquait donc l'hôte
+    d'ADMINISTRATION, et chargeait la carlette depuis un fichier que le
+    déménagement venait de supprimer. Inversé, puis absent.
+  * Désormais `url:"acces.gk2.secubox.in"` : embed et carlette sur le vhost
+    dédié, mode admin sur admin.gk2.secubox.in/acces/ via `path`. Les trois
+    liens vérifiés en 200.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:07:28 +0200
+
+secubox-webos (1.0.303-1~bookworm1) bookworm; urgency=medium
+
+  * Lexie : l'état du moteur est un GLYPHE, plus une étiquette (ref #1287).
+    « LOCALE » en majuscules dans une pastille bordée pesait autant que le nom
+    de la fenêtre, pour une information qu'on ne consulte qu'une fois.
+    🏠 la voix tourne sur la box · 🛰️ elle est relayée ailleurs · ⛔ injoignable.
+  * Le 🏠 est le MÊME signe que celui du nommage DPI pour « cette box » : un
+    vocabulaire visuel ne vaut que s'il est constant d'un écran à l'autre.
+  * UN EMOJI QUI REMPLACE UN MOT NE RETIRE PAS LE MOT de l'arbre
+    d'accessibilité : un lecteur d'écran annoncerait « maison » au lieu de
+    « voix locale ». Le sens vit donc dans `aria-label`, et l'infobulle y
+    ajoute le détail du moteur.
+  * La pastille colorée survit en petit, collée au glyphe : l'emoji porte le
+    SENS, le point de couleur porte la GRAVITÉ — c'est lui qu'on repère du coin
+    de l'œil quand le moteur tombe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:44:27 +0200
+
+secubox-webos (1.0.302-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : nginx cesse d'écraser X-Forwarded-Proto (ref #1343). `$scheme` vaut
+    `http` à ce niveau — le TLS est terminé par HAProxy — donc le poser
+    effaçait le `https` déjà transmis, et le service en aval croyait servir en
+    clair. On relaie désormais l'en-tête reçu.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:02:56 +0200
+
+secubox-webos (1.0.301-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la porte d'invitation est routée (ref #1297, #1343). Le Hall
+    n'inclut PAS secubox-routes.d — il expose les API une par une, pour que
+    personne n'ouvre par inadvertance une surface d'administration sur le vhost
+    public. La contrepartie est qu'une API oubliée répond 200 avec l'index du
+    Hall, et le formulaire d'invitation tombait exactement là-dessus : la page
+    s'ouvrait, ses appels recevaient du HTML.
+  * ON N'OUVRE QUE `/invitation/` (singulier). `/invitations/` (pluriel) est la
+    file d'administration — accepter, refuser, promouvoir. La proximité des deux
+    noms est précisément ce qui rend important le préfixe à NE PAS écrire : un
+    `location /api/v1/users/` exposerait la seconde avec la première.
+  * X-Forwarded-Host transmis : le QR encode l'URL par laquelle la requête est
+    ARRIVÉE. Sans cet en-tête il renverrait vers le nom interne, et ne mènerait
+    nulle part depuis un téléphone en 4G.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:01:13 +0200
+
+secubox-webos (1.0.300-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI : la slice Talkers affiche des NOMS, plus des octets (ref #1342).
+    Chaque bout porte une pastille de source — 🏠 la box, 🏷️ un alias posé par
+    l'opérateur, 🌐 un nom observé dans un flux, 📟 déduit de la table ARP,
+    ↩️ un DNS inverse. Un nom sans provenance ne se vérifie pas.
+  * L'emoji de ligne dit d'où PART la conversation : un flux émis par la box
+    elle-même ne se lit pas comme un flux d'un terminal du réseau.
+  * Un bout que personne n'a su nommer garde son adresse — mieux vaut une
+    adresse qu'un nom inventé. Rendu en TEXTE PUR : `barres()` échappe ce qu'on
+    lui donne, et c'est très bien ainsi, un nom venant du réseau et pas de nous.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 08:54:03 +0200
+
 secubox-webos (1.0.299-1~bookworm1) bookworm; urgency=medium
 
   * Correctif Lexie : `location /api/v1/voice/` ajoutée au vhost du Hall. Le

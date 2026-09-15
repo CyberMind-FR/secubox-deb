@@ -1196,6 +1196,9 @@ if __name__ == "__main__":
 # Deux surfaces dans ce routeur, et elles n'ont rien à voir : `/invitation/*`
 # est OUVERTE (c'est la seule porte de SecuBox qui accepte un inconnu, bornée
 # en conséquence), `/invitations/*` exige un jeton.
-from .routes_invitations import router as _routeur_invitations  # noqa: E402
 
-app.include_router(_routeur_invitations)
+# LE PARCOURS D'ADMISSION A DÉMÉNAGÉ dans secubox-acces (#1344). Il n'a jamais
+# été de la gestion d'utilisateurs : il fait entrer un appareil dans SBX OS. Le
+# garder monté ici faisait cohabiter deux files — celle qu'on regarde et celle
+# qu'on oublie — et l'ancienne acceptait encore des clés qui n'en étaient pas.
+# app.include_router(_routeur_invitations)
