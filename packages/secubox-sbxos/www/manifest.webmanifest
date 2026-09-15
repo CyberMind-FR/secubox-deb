@@ -1,0 +1,25 @@
+{
+  "name": "SBX OS — le Hall qui tient dans la poche",
+  "short_name": "SBX OS",
+  "description": "Votre SecuBox. Vos services. Votre univers. Partout.",
+  "id": "/sbxos/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icones/sbxos-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icones/sbxos-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icones/sbxos-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Cinéma",  "url": "./?ecran=cinema",  "icons": [{ "src": "icones/sbxos-192.png", "sizes": "192x192" }] },
+    { "name": "Radio",   "url": "./?ecran=radio",   "icons": [{ "src": "icones/sbxos-192.png", "sizes": "192x192" }] },
+    { "name": "Billets", "url": "./?ecran=billets", "icons": [{ "src": "icones/sbxos-192.png", "sizes": "192x192" }] }
+  ]
+}

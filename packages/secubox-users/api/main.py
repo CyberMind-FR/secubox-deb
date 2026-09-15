@@ -1187,3 +1187,15 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
+
+
+# ── PROFILEUR : invitation, admission, profils (#1297) ───────────────────────
+# Inclus en fin de fichier parce que le routeur n'a besoin que de `app` : rien
+# à déplacer dans un module qui en compte déjà mille lignes.
+#
+# Deux surfaces dans ce routeur, et elles n'ont rien à voir : `/invitation/*`
+# est OUVERTE (c'est la seule porte de SecuBox qui accepte un inconnu, bornée
+# en conséquence), `/invitations/*` exige un jeton.
+from .routes_invitations import router as _routeur_invitations  # noqa: E402
+
+app.include_router(_routeur_invitations)

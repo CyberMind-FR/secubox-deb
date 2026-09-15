@@ -1,3 +1,46 @@
+secubox-users (1.6.4-1~bookworm1) bookworm; urgency=medium
+
+  * UNE SEULE CARLETTE, TROIS VISAGES (ref #1297). On ne fait pas une vignette
+    pour l'administrateur et une autre pour le demandeur : c'est le MÊME sujet
+    vu des deux bouts.
+      - ADMIN     : la file, avec l'empreinte de chacun, accepter / refuser ;
+      - DEMANDEUR : SA demande, son empreinte ZOOMÉE — c'est lui qui la montre
+        à quelqu'un, elle doit se lire à bout de bras — et où elle en est ;
+      - INCONNU   : le formulaire.
+  * LE VISAGE SE DÉDUIT, il ne se choisit pas : la file répond 200 → admin,
+    401/403 → cet appareil a-t-il une demande en cours → sinon le formulaire.
+    Aucun réglage, aucun bouton de bascule.
+  * Le jeton de suivi n'étant rendu QU'UNE FOIS, il est mémorisé côté client :
+    sans lui, l'état de la demande deviendrait inconsultable.
+  * Une demande disparue côté box (purge, réinstallation) ramène au formulaire
+    plutôt que d'afficher un état qui n'existe plus.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 15 Sep 2026 07:36:14 +0200
+
+secubox-users (1.6.3-1~bookworm1) bookworm; urgency=medium
+
+  * LE PROFILEUR — file d'invitation, admission, profils (ref #1297). Le module
+    savait gérer comptes, groupes, rôles et ACL ; il ne savait pas accueillir
+    quelqu'un qui n'a PAS ENCORE de compte. C'est ce chaînon qui manquait.
+  * Deux surfaces qui n'ont rien à voir : /invitation/* est OUVERTE — la seule
+    porte de SecuBox qui accepte un inconnu, parce qu'il faut bien un premier
+    contact — bornée à 5 essais par adresse et par heure, une demande par
+    appareil, corps limité. /invitations/* exige un jeton.
+  * UN DID INCONNU ET UN MAUVAIS JETON RENDENT LA MÊME RÉPONSE : les distinguer
+    ferait de la route ouverte un moyen d'énumérer qui a demandé l'accès.
+  * L'ADMISSION NE FABRIQUE JAMAIS UN ADMIN. Demander `admin` à l'admission est
+    refusé avec « accepter puis promouvoir » : la promotion est un geste à part,
+    sur un compte qui existe.
+  * Sans QR code et sans secret à recopier : une EMPREINTE COURTE de la clé
+    publique, six groupes de quatre, s'affiche des deux côtés et se compare d'un
+    regard.
+  * Carlette /micro pour le Hall : la file se voit là où l'on regarde déjà. Sur
+    401/403 elle affiche « Réservé à l'administration » — elle ne divulgue pas
+    qu'une file existe à qui n'a pas le droit de la voir.
+  * 20 tests.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 15 Sep 2026 07:27:40 +0200
+
 secubox-users (1.6.2-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

@@ -1,0 +1,30 @@
+Source: secubox-sbxos
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-sbxos
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-webos, secubox-users (>= 1.6.4)
+Description: SBX OS — the Hall as an installable PWA
+ The Hall that fits in a pocket. A Progressive Web App that reproduces the
+ SecuBox Hall on any phone, tablet or desktop: a checkerboard of cardlets, each
+ opening a place rather than an application — Cinema, Radio, Billets, Cloud.
+ .
+ Two sources decide what you see, and they are kept apart on purpose. The MINE
+ says what is AVAILABLE: the box decides, per profile, and ships a manifest.
+ The HALL says what is SHOWN: order, favourites, hidden modules, opening
+ screen, theme — the user decides, in the browser, and nothing leaves the
+ device.
+ .
+ Offline first. The shell is cached so the app opens instantly with no network;
+ the manifest is fetched network-first so a freshly granted cardlet appears at
+ once; watched media are kept for replay. Nothing else is cached — not API
+ calls, not other origins.
+ .
+ V1 carries no backend: the manifest is served as a file and profiles are
+ simulated locally, so the whole journey — including the invitation — is
+ playable end to end. The data contract is already the one the box will serve.

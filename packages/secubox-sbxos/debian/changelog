@@ -1,0 +1,36 @@
+secubox-sbxos (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Les icônes de la PWA existent enfin, et le repli qui les masquait est borné.
+    Le `try_files` valait pour TOUT : une icône absente ressortait en
+    `text/html`, 200, avec la coquille dedans. Une PWA dont les icônes sont des
+    pages HTML NE S'INSTALLE PAS — et rien ne le signalait, puisque le code de
+    retour était 200. Une extension de fichier dit « je veux CE fichier », pas
+    « je veux une route » : elle échoue désormais en 404.
+  * Icônes dessinées (192, 512, maskable) : le mont en cyan sur la nuit, motif
+    du carnet. La version `maskable` porte une marge large — le système recadre
+    en cercle ou en goutte selon le lanceur, et sans zone de sécurité les
+    sommets seraient rognés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 15 Sep 2026 08:33:37 +0200
+
+secubox-sbxos (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier paquet — SBX OS, le Hall qui tient dans la poche (ref #1293).
+  * PWA installable : coquille, service worker, manifeste, damier de carlettes.
+  * DEUX SOURCES TENUES SÉPARÉES : la Mine dit ce qui est DISPONIBLE (la box
+    décide, par profil), le Hall dit ce qui est MONTRÉ (l'utilisateur décide,
+    et rien ne quitte l'appareil). Les mélanger produirait l'un des deux bugs
+    classiques : un module retiré qui reste affiché, ou des préférences qui
+    sautent à chaque régénération du manifeste.
+  * Service worker à TROIS stratégies, choisies par nature de ressource : la
+    coquille en cache d'abord (ouverture instantanée hors ligne), le manifeste
+    en réseau d'abord (une carlette qu'on vient d'accorder doit apparaître),
+    les médias en cache seul. Rien d'autre n'est mis en cache — ni les appels
+    d'API, ni les autres origines.
+  * Le théâtre propose l'onglet si le cadre reste vide : Nextcloud et Gitea
+    posent des cookies SameSite=Lax, que le navigateur n'envoie pas dans une
+    iframe cross-site. Constaté dans le journal d'audit des cookies de sbxwaf.
+  * V1 sans backend : manifeste servi en fichier, profils simulés localement.
+    Le contrat de données est déjà celui que la box servira.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 15 Sep 2026 08:31:48 +0200
