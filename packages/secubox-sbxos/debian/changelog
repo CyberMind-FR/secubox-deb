@@ -1,3 +1,25 @@
+secubox-sbxos (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * ÉCRAN NOIR : `hidden` ne gagnait pas sur nos propres règles (ref #1356).
+    `[hidden] { display: none }` est une règle du NAVIGATEUR, donc de plus
+    faible priorité que toute règle d'auteur posant `display`. Or `.theatre`
+    pose `display:flex` — un élément `hidden` restait affiché, et comme il est
+    en `position:fixed; inset:0`, il couvrait tout l'écran avec son iframe
+    noire. Écran noir, sans une ligne de JavaScript en cause.
+  * LE DÉFAUT DORMAIT DEPUIS LE DÉBUT. Tant que la feuille était servie en
+    `application/octet-stream`, le navigateur la REFUSAIT (nosniff) : on voyait
+    du HTML nu — laid, mais fonctionnel, et c'est ce que montraient les captures
+    d'écran précédentes. Corriger le type MIME a réveillé le bug. Une panne qui
+    apparaît en réparant autre chose n'est pas une régression du correctif,
+    c'est une dette qu'il rend visible.
+  * `[hidden] { display: none !important; }` posé une fois, en tête. La
+    visibilité se bascule par `el.hidden`, jamais par `style.display` : un seul
+    mécanisme, et cette règle le rend fiable.
+  * Cache du service worker en v4 : il garde la FEUILLE autant que la coquille,
+    et sans changement de version la version fautive continuerait d'être servie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:32:57 +0200
+
 secubox-sbxos (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * SBX OS EST UN CLONE DU HALL (ref #1349). Il montre ce que le Hall montre —

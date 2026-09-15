@@ -65,10 +65,21 @@ TOML
     if [ -x /usr/sbin/nginx ] && nginx -t >/dev/null 2>&1; then
       systemctl reload nginx || true
     fi
-    # L'AGRÉGATEUR NE RELIT SA LISTE QU'AU DÉMARRAGE. Le redémarrage coupe
-    # brièvement TOUTES les API — c'est le prix du montage en processus, et il
-    # se paie une fois à l'installation, pas à chaque requête.
-    systemctl restart secubox-aggregator >/dev/null 2>&1 || true
+    # ON NE REDÉMARRE L'AGRÉGATEUR QUE SI C'EST NÉCESSAIRE.
+    #
+    # Il ne relit sa liste de modules qu'au démarrage, donc une PREMIÈRE
+    # installation l'exige. Mais le redémarrage coupe brièvement TOUTES les API
+    # et prend plusieurs minutes sur une box chargée : le payer pour une ligne
+    # de CSS ou un texte d'interface est une taxe injustifiable.
+    #
+    # Le marqueur dit ce qui a déjà été fait. Les fichiers statiques et les
+    # sources Python sont relus par le processus en place ou au prochain
+    # redémarrage naturel.
+    MARQUE=/var/lib/secubox/acces/.monte-dans-agregateur
+    if [ ! -f "$MARQUE" ]; then
+      systemctl restart secubox-aggregator >/dev/null 2>&1 || true
+      touch "$MARQUE" 2>/dev/null || true
+    fi
     ;;
 esac
 #DEBHELPER#

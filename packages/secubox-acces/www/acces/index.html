@@ -78,6 +78,13 @@
     --ombre-h:0 2px 8px rgba(0,0,0,.5), 0 26px 60px rgba(0,0,0,.55);
   }
 
+  /* `hidden` DOIT GAGNER SUR NOS PROPRES RÈGLES. `[hidden]{display:none}` vient
+     du NAVIGATEUR, donc cède devant toute règle d'auteur posant `display`. SBX
+     OS y a laissé un écran noir (#1356) : un `.theatre` en `position:fixed;
+     inset:0; display:flex` restait affiché malgré `hidden` et couvrait tout.
+     Une ligne ici rend la bascule par `el.hidden` fiable pour de bon. */
+  [hidden] { display: none !important; }
+
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
   body {

@@ -27,6 +27,13 @@
   }
   :root[data-theme="dark"] { --l:#e0a33c; --li:#f0c47a; --v:#35d07f; --a:#f0b429; --r:#ff6b5d; }
 
+  /* `hidden` DOIT GAGNER SUR NOS PROPRES RÈGLES. `[hidden]{display:none}` vient
+     du NAVIGATEUR, donc cède devant toute règle d'auteur posant `display`. SBX
+     OS y a laissé un écran noir (#1356) : un `.theatre` en `position:fixed;
+     inset:0; display:flex` restait affiché malgré `hidden` et couvrait tout.
+     Une ligne ici rend la bascule par `el.hidden` fiable pour de bon. */
+  [hidden] { display: none !important; }
+
   body { margin:0; font-family:"IBM Plex Sans",system-ui,sans-serif; font-size:14px;
          background:var(--bg,transparent); color:var(--ink,#1b1814); }
   .h { display:flex; align-items:center; gap:.5rem; padding:.7rem .8rem .5rem; }

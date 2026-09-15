@@ -32,6 +32,24 @@
 }
 
 * { box-sizing: border-box; }
+/* `hidden` DOIT GAGNER SUR NOS PROPRES RÈGLES.
+ *
+ * `[hidden] { display: none }` est une règle du NAVIGATEUR, donc de plus faible
+ * priorité que n'importe quelle règle d'auteur qui pose `display`. Or `.theatre`
+ * pose `display:flex` — un élément `hidden` restait donc affiché, et comme il
+ * est en `position:fixed; inset:0`, il couvrait tout l'écran avec son iframe
+ * noire. Écran noir, sans une ligne de JavaScript en cause.
+ *
+ * LE DÉFAUT DORMAIT. Tant que la feuille était servie en
+ * `application/octet-stream`, le navigateur la REFUSAIT (nosniff) : on voyait du
+ * HTML nu, laid mais fonctionnel. Corriger le type MIME a réveillé le bug —
+ * une panne qui apparaît en réparant autre chose n'est pas une régression de ce
+ * correctif, c'est une dette qu'il rend visible.
+ *
+ * On bascule la visibilité par `el.hidden`, jamais par `style.display` : un seul
+ * mécanisme, et cette règle le rend fiable. */
+[hidden] { display: none !important; }
+
 body {
   margin:0; background:var(--fond); color:var(--encre);
   font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;

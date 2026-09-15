@@ -1,3 +1,17 @@
+secubox-acces (1.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * Même garde `[hidden] { display: none !important }` dans les deux pages
+    d'accès (ref #1356). Elles basculent `#admin` et `#visiteur` par `hidden`, et
+    une future règle `display` sur `.carte` les rendrait indémasquables
+    exactement comme le `.theatre` de SBX OS l'a été.
+  * LE POSTINST NE REDÉMARRE PLUS L'AGRÉGATEUR SANS RAISON. Il ne relit sa liste
+    de modules qu'au démarrage, donc la PREMIÈRE installation l'exige — mais le
+    redémarrage coupe toutes les API et prend plusieurs minutes sur une box
+    chargée. Le payer pour une ligne de CSS est une taxe injustifiable. Un
+    marqueur dit ce qui a déjà été fait.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:33:52 +0200
+
 secubox-acces (1.5.2-1~bookworm1) bookworm; urgency=medium
 
   * LE LIEN D'ENTRÉE DÉSIGNE LA PORTE PUBLIQUE (ref #1354). Construit depuis la
