@@ -9,7 +9,7 @@ url_publique = "https://acces.gk2.secubox.in/"
 # OÙ L'ON ARRIVE une fois la session ouverte. Absolue, parce que la carlette est
 # servie par le vhost d'accès mais EMBARQUÉE dans le Hall : un chemin relatif
 # désignerait tantôt l'un, tantôt l'autre.
-url_sbxos = "https://admin.gk2.secubox.in/sbxos/"
+url_sbxos = "https://hall.gk2.secubox.in/sbxos/"
 # Plafond de demandes par adresse et par heure. Volontairement bas : une demande
 # d'accès est un geste humain, pas une boucle.
 plafond_par_ip = 5

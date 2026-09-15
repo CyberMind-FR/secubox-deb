@@ -1,3 +1,23 @@
+secubox-sbxos (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * ENTRER SANS MOT DE PASSE (ref #1353). SBX OS n'en demande jamais, et ce
+    n'est pas une facilité : ce parcours n'en crée pas. Un appareil admis entre
+    en SIGNANT un défi avec la clé dont l'administrateur a comparé l'empreinte.
+    Trois cas, un seul demande quelque chose : session déjà ouverte (le cookie
+    porte sur le domaine parent), accès admis mais pas encore entré (on signe),
+    aucun accès (on montre la porte — plutôt qu'un bureau vide qui laisse
+    croire à une panne).
+  * L'IMPORT DU MODULE D'ACCÈS EST DYNAMIQUE. Un import statique lierait le
+    démarrage de SBX OS à la présence de ce module : s'il manquait, le bureau
+    resterait nu — la panne que ce paquet vient de corriger deux fois. Son
+    absence ne coûte désormais que l'ouverture automatique.
+  * L'OUVERTURE PASSE AVANT LE CHARGEMENT DU MANIFESTE : la Mine sert un bureau
+    par PROFIL, et le profil dépend de la session. L'inverse donnerait le bureau
+    d'un invité à quelqu'un qui vient d'entrer.
+  * Le panneau d'administration ne sert plus SBX OS : il y redirige.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:46:48 +0200
+
 secubox-sbxos (0.2.3-1~bookworm1) bookworm; urgency=medium
 
   * LE TYPE MIME VENAIT DE `try_files "" =404`. Avec un premier argument VIDE,

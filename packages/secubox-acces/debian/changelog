@@ -1,3 +1,9 @@
+secubox-acces (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * La destination du parcours suit SBX OS chez le Hall (ref #1353).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:46:48 +0200
+
 secubox-acces (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * LE MODULE N'ÉCRIT PLUS DANS users.json (ref #1351). Un appareil admis entre

@@ -1,3 +1,19 @@
+secubox-webos (1.0.311-1~bookworm1) bookworm; urgency=medium
+
+  * LE HALL SERT SBX OS (ref #1353). Il l'était par admin.gk2, et c'était un
+    contresens sur les deux : l'administration doit rester INTERNE, et SBX OS
+    est la porte publique — le Hall qui tient dans la poche.
+  * LA CONSÉQUENCE TECHNIQUE EST CE QUI TRANCHE. La clé privée de l'appareil
+    vit dans IndexedDB, rangée PAR ORIGINE. Servi depuis admin.gk2, SBX OS ne
+    voyait pas la clé créée par la carlette d'accès sur hall.gk2 : deux
+    identités pour un seul appareil, et aucune ouverture automatique possible.
+    Servi ici, il partage le stockage de la carlette.
+  * /acces/ est aliassé sur cette origine aussi, sous son chemin canonique :
+    SBX OS importe /acces/appareil.js, et un chemin qui changerait selon l'hôte
+    serait la meilleure façon de se tromper d'hôte.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:46:48 +0200
+
 secubox-webos (1.0.310-1~bookworm1) bookworm; urgency=medium
 
   * LE HALL AFFICHE UN NOM, PLUS UNE CLÉ (ref #1351). `qui` est un identifiant

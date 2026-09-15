@@ -332,6 +332,29 @@ mine.addEventListener('griefs', (ev) => {
 });
 
 compose();                        // d'abord le connu, instantanément
+
+// L'OUVERTURE PASSE AVANT LE CHARGEMENT DU MANIFESTE : la Mine sert un bureau
+// par PROFIL, et le profil dépend de la session. Charger d'abord donnerait le
+// bureau d'un invité à quelqu'un qui vient d'entrer, jusqu'au rafraîchissement
+// suivant.
+entreSansMotDePasse().then((r) => {
+  if (r === 'ouverte') {
+    $('note').textContent = 'Session ouverte sur cet appareil.';
+    return mine.charge().then(() => compose());
+  }
+  if (r === 'aucun') {
+    // ON MONTRE LA PORTE PLUTÔT QU'UN BUREAU VIDE. « Rien n'apparaît » sans
+    // rien proposer laisse croire à une panne ; ici, il manque juste un accès.
+    $('note').textContent = '';
+    const p = document.createElement('span');
+    p.textContent = "Cet appareil n'a pas encore d'accès. ";
+    const a = document.createElement('a');
+    a.href = '/acces/';
+    a.textContent = 'En demander un';
+    $('note').append(p, a);
+  }
+}).catch(() => { /* l'ouverture est un confort : son échec n'arrête rien */ });
+
 mine.charge().then((change) => {
   if (change) compose();
   if (mine.manifeste?.invitation === 'en_attente') mine.sondeInvitation();
@@ -345,6 +368,49 @@ mine.charge().then((change) => {
 const demande = new URLSearchParams(location.search).get('ecran');
 montre(ECRANS.includes(demande) ? demande
        : (['hall', 'favoris', 'reglages'].includes(hall.ecran) ? hall.ecran : 'hall'));
+
+// ── ENTRER SANS MOT DE PASSE ────────────────────────────────────────────────
+//
+// SBX OS ne demande jamais de mot de passe, et ce n'est pas une facilité : ce
+// parcours n'en crée pas. Un appareil admis entre en SIGNANT un défi avec la
+// clé dont l'administrateur a comparé l'empreinte.
+//
+// TROIS CAS, ET UN SEUL DEMANDE QUELQUE CHOSE À L'UTILISATEUR :
+//
+//   session déjà ouverte   le cookie est posé sur le domaine PARENT, donc une
+//                          session ouverte depuis le Hall vaut ici aussi
+//   accès admis, pas entré on signe, on entre — sans rien demander
+//   aucun accès            on montre la porte, c'est tout ce qu'on peut faire
+//
+// L'IMPORT EST DYNAMIQUE, ET C'EST DÉLIBÉRÉ. Un `import` statique de
+// /acces/appareil.js lierait le démarrage de SBX OS à la présence du module
+// d'accès : s'il manquait, le module entier ne se chargerait pas et le bureau
+// resterait nu — la panne que ce fichier vient de corriger deux fois. Ici, son
+// absence coûte l'ouverture automatique, rien d'autre.
+//
+// MÊME ORIGINE, DONC MÊME IndexedDB. La clé de l'appareil est rangée par
+// ORIGINE : celle créée sur hall.gk2 n'est pas lisible ici. Mais le cookie de
+// session, lui, porte sur `.gk2.secubox.in` — si le parcours a été fait depuis
+// le Hall, on est déjà entré, et le premier cas s'applique.
+async function entreSansMotDePasse() {
+  let etat;
+  try {
+    const r = await fetch('/api/v1/acces/session/etat', { credentials: 'same-origin' });
+    if (!r.ok || (r.headers.get('content-type') || '').indexOf('json') < 0) return null;
+    etat = await r.json();
+  } catch (e) {
+    return null;                       // porte d'accès absente : on n'insiste pas
+  }
+  if (etat && etat.session) return 'deja';
+
+  try {
+    const acces = await import('/acces/appareil.js');
+    const ouvert = await acces.ouvreSiAdmis();
+    return ouvert ? 'ouverte' : 'aucun';
+  } catch (e) {
+    return 'aucun';
+  }
+}
 
 // ── Service worker ──────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
