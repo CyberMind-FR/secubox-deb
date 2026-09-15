@@ -499,9 +499,15 @@ async def accepter(v: Verdict, req: Request):
         jeton = _liens.emet(d.did)
     except LienInvalide:
         jeton = ""
+    # LE LIEN DÉSIGNE LA PORTE PUBLIQUE, pas le vhost que l'administrateur
+    # regarde. Construit depuis la requête, il portait `admin.gk2` — l'hôte
+    # d'ADMINISTRATION — et on l'aurait transmis à quelqu'un qui n'a rien à y
+    # faire. Même faute que pour le QR (#1343), refaite ici : une adresse qu'on
+    # DONNE ne se déduit jamais de l'endroit d'où on la donne.
+    porte = _url_invitation(req).rstrip("/")
     return {"ok": True, "did": d.did, "profil": d.profil,
             "email": d.email or "",
-            "lien": (_base_publique(req) + "/acces/?entree=" + jeton) if jeton else ""}
+            "lien": (porte + "/?entree=" + jeton) if jeton else ""}
 
 
 @app.post("/file/refuser", dependencies=[Depends(require_jwt)])

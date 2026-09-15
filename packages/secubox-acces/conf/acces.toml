@@ -4,7 +4,7 @@
 # encode. Sans ce réglage l'URL se déduit de la requête — ce qui ferait
 # distribuer une adresse d'ADMIN à un inconnu quand l'administrateur montre la
 # carlette depuis son panneau.
-url_publique = "https://acces.gk2.secubox.in/"
+url_publique = "https://hall.gk2.secubox.in/acces/"
 
 # OÙ L'ON ARRIVE une fois la session ouverte. Absolue, parce que la carlette est
 # servie par le vhost d'accès mais EMBARQUÉE dans le Hall : un chemin relatif

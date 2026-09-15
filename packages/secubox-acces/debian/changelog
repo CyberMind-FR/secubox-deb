@@ -1,3 +1,14 @@
+secubox-acces (1.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * LE LIEN D'ENTRÉE DÉSIGNE LA PORTE PUBLIQUE (ref #1354). Construit depuis la
+    requête, il portait `admin.gk2` — l'hôte d'ADMINISTRATION — et on l'aurait
+    transmis à quelqu'un qui n'a rien à y faire. C'est la même faute que pour le
+    QR (#1343), refaite ici : une adresse qu'on DONNE ne se déduit jamais de
+    l'endroit d'où on la donne. Sorti par le banc d'essai de bout en bout.
+  * La porte publique désigne désormais le Hall, qui sert SBX OS depuis #1353.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 14:26:00 +0200
+
 secubox-acces (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * LE NIVEAU SE VOIT SANS SE LIRE (ref #1355). Une progression, pas trois
