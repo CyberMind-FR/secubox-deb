@@ -77,8 +77,8 @@ GABARIT.innerHTML = `
   }
 
   .icone {
-    /* LA DENSITÉ DU DAMIER PASSE PAR ICI. `--carlette-icone` est posée par le
-       damier ; le `clamp` reste le défaut, pour une carlette employée seule.
+    /* LA DENSITÉ DU DAMIER PASSE PAR ICI. « --carlette-icone » est posée par le
+       damier ; le « clamp » reste le défaut, pour une carlette employée seule.
        Le repli n'est pas une valeur fixe mais le clamp lui-même : une carlette
        hors damier doit rester responsive. */
     font-size: var(--carlette-icone, clamp(1.6rem, 9vw, 2.6rem));
@@ -88,8 +88,8 @@ GABARIT.innerHTML = `
     pointer-events: none;
   }
   .titre {
-    /* Retirée par le damier via `--carlette-etiquette: none`. On ne masque pas
-       par `visibility` : la place doit être RENDUE, sinon les vignettes sans
+    /* Retirée par le damier via « --carlette-etiquette: none ». On ne masque pas
+       par « visibility » : la place doit être RENDUE, sinon les vignettes sans
        nom gardent un vide sous l'icône. */
     display: var(--carlette-etiquette, block);
     font-size: clamp(.62rem, 2.8vw, .78rem);

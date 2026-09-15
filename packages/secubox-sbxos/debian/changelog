@@ -1,4 +1,37 @@
-secubox-sbxos (0.2.1-1~bookworm1) bookworm; urgency=medium
+secubox-sbxos (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * LE TYPE MIME VENAIT DE `try_files "" =404`. Avec un premier argument VIDE,
+    nginx perd l'extension de la requête et retombe sur `default_type` — donc
+    `application/octet-stream` pour tout, y compris les PNG. Aucune quantité de
+    `include mime.types` n'y change rien : il n'y a plus d'extension à chercher
+    dans la table.
+  * `root` remplace `alias $variable` : le chemin sur disque coïncide avec
+    l'URI, donc root suffit, et sans variable nginx garde l'extension. Un
+    fichier absent rend 404 naturellement — c'est le défaut de `root`, pas une
+    règle à écrire.
+  * Vérifié : hall.js et sbx-damier.js en application/javascript, manifeste.json
+    en application/json, l'icône en image/png, et absent.js toujours en 404.
+
+  * DEUX DÉFAUTS QUI EMPÊCHAIENT SBX OS DE DÉMARRER, et les deux venaient de
+    mes ajouts de la veille.
+
+    LES COMMENTAIRES TERMINAIENT LA CHAÎNE. Le gabarit CSS des composants vit
+    dans un template literal ; j'y ai écrit des termes entre accents graves —
+    « `auto-fill` » — et chacun FERME la chaîne. `sbx-damier.js` et
+    `sbx-carlette.js` étaient des modules syntaxiquement invalides, donc jamais
+    chargés. Les accents graves sont remplacés par des guillemets français, qui
+    disent la même chose sans rien fermer.
+
+    LE TYPE MIME EST FATAL POUR UN MODULE ES. Les scripts étaient servis en
+    `application/octet-stream` : un navigateur REFUSE d'exécuter un
+    `<script type="module">` avec ce type — il ne dégrade pas, il n'exécute
+    rien. Une `location` en expression régulière avec `alias` perd la table des
+    types : on la réinclut plutôt que de compter sur un héritage qui n'a pas
+    lieu.
+
+    Le symptôme était le même dans les deux cas — la coquille nue, et le
+    message « aucun manifeste mémorisé » qui accusait la box alors que rien
+    n'avait même essayé de la joindre.
 
   * Le cache du service worker passe en v2. La coquille est servie « cache
     d'abord » : sans changer le nom du cache, l'ancienne aurait tenu jusqu'au

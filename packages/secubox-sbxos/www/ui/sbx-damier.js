@@ -72,11 +72,11 @@ GABARIT.innerHTML = `
     grid-template-columns: repeat(auto-fill, minmax(var(--min, 5.5rem), 1fr));
     gap: var(--ecart, .7rem);
     padding: var(--marge, .2rem);
-    /* PLAFOND DE COLONNES. `auto-fill` seul donne douze colonnes minuscules sur
+    /* PLAFOND DE COLONNES. « auto-fill » seul donne douze colonnes minuscules sur
        un grand écran — techniquement responsive, illisible en pratique. On
        borne donc la LARGEUR de la grille plutôt que de compter les colonnes en
        JavaScript : le calcul reste dans le moteur de rendu, et rien ne se
-       recalcule au redimensionnement. `--large-max` vaut `none` par défaut. */
+       recalcule au redimensionnement. « --large-max » vaut « none » par défaut. */
     max-width: var(--large-max, none);
     margin-inline: auto;
   }

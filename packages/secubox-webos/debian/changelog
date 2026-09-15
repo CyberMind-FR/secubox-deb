@@ -1,3 +1,17 @@
+secubox-webos (1.0.310-1~bookworm1) bookworm; urgency=medium
+
+  * LE HALL AFFICHE UN NOM, PLUS UNE CLÉ (ref #1351). `qui` est un identifiant
+    ASSAINI pour servir de nom de fichier — l'afficher donnait
+    « sbx-3704f0234ea3 » dans la barre, alors que l'appareil a un nom : celui
+    que son porteur a déclaré à l'admission, et que l'administrateur a lu pour
+    décider.
+  * L'API rend désormais `etiquette` À CÔTÉ de `qui`. Ce nom n'identifie RIEN —
+    il vient d'un formulaire ouvert, deux appareils peuvent déclarer le même —
+    et c'est précisément pour cela qu'il est cantonné à l'affichage, pendant que
+    le compte dérive de la clé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:32:29 +0200
+
 secubox-webos (1.0.309-1~bookworm1) bookworm; urgency=medium
 
   * Hall : les routes d'accès pointent sur l'agrégateur (ref #1350). Le service

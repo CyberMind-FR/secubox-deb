@@ -3717,7 +3717,11 @@ addEventListener('message', ev=>{
       const r = await fetch('/api/v1/webos/acces', {headers: j
         ? {'Accept':'application/json','Authorization':'Bearer '+j}
         : {'Accept':'application/json'}});
-      _moi = r.ok ? ((await r.json()).qui || '') : null;
+      // L'ÉTIQUETTE D'ABORD, la clé en repli. `qui` est un identifiant
+      // assaini pour servir de nom de fichier — l'afficher donnait
+      // « sbx-3704f0234ea3 » dans la barre, alors que l'appareil a un nom.
+      if (r.ok) { const j = await r.json(); _moi = j.etiquette || j.qui || ''; }
+      else { _moi = null; }
     }catch(e){ _moi = null; }
     // NON CONNECTÉ -> on masque les cartes a auth reelle (#1237).
     try{ document.documentElement.classList.toggle('non-connecte', !_moi); }catch(e){}
