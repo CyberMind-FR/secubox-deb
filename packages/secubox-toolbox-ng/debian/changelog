@@ -1,3 +1,37 @@
+secubox-toolbox-ng (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi : les talkers sont NOMMÉS, et chaque nom dit sa source (ref #1342).
+    Ils étaient des paires d'adresses — « 192.168.1.254 → 192.168.1.200 » — que
+    l'interface réduisait aux derniers octets, « ·254 → ·200 », ce qui ne
+    désigne rien.
+  * LE NOM OBSERVÉ BAT LE DNS INVERSE, et c'est la décision centrale. Le moteur
+    voit déjà passer le nom que le client a DEMANDÉ (SNI, requête DNS) :
+    interroger un résolveur pour le redécouvrir serait payer un aller-retour
+    réseau pour une information qu'on tient. Et les deux ne disent pas la même
+    chose — pour 82.67.100.75 le PTR rend « maegia.hd.free.fr », le SNI rend
+    « www.maegia.tv ». C'est le second qu'on reconnaît.
+  * Cinq sources, par priorité : alias de l'opérateur (/etc/secubox/dpi/
+    ip-names.json, relu à chaud), adresses de la box, nom observé dans un flux,
+    table ARP traduite par la base OUI, puis DNS inverse en dernier recours.
+    Le DHCP n'est pas une source ici : c'est la Freebox qui sert les baux, et
+    dnsmasq.leases reste vide.
+  * LE PTR N'EST JAMAIS DEMANDÉ POUR UNE ADRESSE PRIVÉE : demander à un
+    résolveur externe le nom de 192.168.1.61 lui décrirait le plan du réseau
+    interne, et n'obtiendrait rien. Il est résolu hors du chemin chaud, un seul
+    travailleur, file bornée, échecs mémorisés.
+  * CORRIGÉ — la moitié des compteurs était JETÉE au redémarrage. loadSnapshot
+    restaurait protocoles, applications, catégories, talkers et risques, mais
+    pas `hosts`, `ports`, `fingerprints` ni les octets directionnels, que le
+    snapshot ÉCRIT pourtant sur le disque. Ce n'était pas cosmétique : `hosts`
+    est le pivot des règles d'enrichissement — sans lui Usages, Infrastructure
+    et Non-classifié repartaient vides — et `fingerprints` (JA4) est le signal
+    d'identité des appareils. Les détails d'appareils disparaissaient à chaque
+    relance du démon. Verrouillé par test.
+  * Les snapshots écrits avant ce changement restent lisibles : `kv` est
+    embarqué dans `talkerKV`, donc les champs restent à plat dans le JSON.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 08:54:03 +0200
+
 secubox-toolbox-ng (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * #1240 — PAYS SOURCE : le WAF geolocalise enfin ses evenements. Tous les

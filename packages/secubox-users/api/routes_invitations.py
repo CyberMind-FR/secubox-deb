@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from secubox_core.auth import require_jwt
@@ -122,6 +122,93 @@ async def demander(corps: DemandeIn, req: Request):
         # compare — c'est le remplaçant du QR code.
         "empreinte": d.empreinte,
     }
+
+
+#: Page qui porte le formulaire. C'est elle que le QR encode — pas une API.
+PAGE_INVITATION = "/users/micro.html"
+
+
+def _base_publique(req: Request) -> str:
+    """L'URL publique par laquelle CETTE requête est arrivée.
+
+    On la déduit des en-têtes du mandataire plutôt que de la coder en dur : la
+    box répond sur plusieurs noms (hall, admin, et demain un vhost propre), et
+    un QR qui renverrait vers le mauvais nom serait un QR qui ne mène nulle part
+    depuis un téléphone en 4G.
+    """
+    hote = (req.headers.get("x-forwarded-host") or req.headers.get("host") or "").split(",")[0].strip()
+    if not hote:
+        return ""
+
+    # LE SCHÉMA EST DÉCIDÉ ICI, PAS LU. `X-Forwarded-Proto` traverse deux
+    # mandataires — HAProxy qui termine le TLS et le pose à `https`, puis nginx
+    # qui, selon le vhost, le RÉÉCRIT avec son propre `$scheme`, lequel vaut
+    # `http` puisque le TLS est déjà terminé en amont. Suivre l'en-tête revient
+    # donc à encoder « http:// » dans le QR d'un service qui n'est joignable
+    # qu'en HTTPS, et à faire vivre au téléphone une redirection inutile.
+    #
+    # Un nom d'hôte qualifié n'est atteignable que par HAProxy, donc en TLS. Le
+    # seul cas où l'on sert vraiment en clair est un accès direct par
+    # localhost ou par adresse — utile en développement, et reconnaissable.
+    sans_port = hote.split(":")[0]
+    en_clair = (sans_port in ("localhost", "127.0.0.1", "::1")
+                or sans_port.replace(".", "").isdigit())
+    return f"{'http' if en_clair else 'https'}://{hote}"
+
+
+@router.get("/invitation/qr")
+async def invitation_qr(req: Request):
+    """Le QR de l'URL d'invitation. **Non authentifié — et sans secret.**
+
+    UN QR D'URL EST UN CONFORT ; UN QR DE SECRET EST UN CANAL. Celui-ci
+    n'encode que l'adresse publique du formulaire : rien qu'on ne puisse lire
+    par-dessus une épaule, rien qui ne soit déjà dans la barre d'adresse. Il
+    évite seulement de taper une URL au clavier d'un téléphone.
+
+    C'est aussi pourquoi l'EMPREINTE, elle, n'est jamais mise en QR : la
+    comparer d'un regard est le geste qui vérifie qu'on valide le bon appareil,
+    et un QR scanné à la place supprimerait ce geste.
+    """
+    base = _base_publique(req)
+    if not base:
+        raise HTTPException(400, "hôte indéterminable")
+    url = base + PAGE_INVITATION
+
+    try:
+        import io
+        import qrcode
+    except ImportError:  # pragma: no cover — paquet absent
+        # Pas de QR ? On rend l'URL, pas une erreur : le lien reste utilisable
+        # à la main, et l'interface saura afficher l'un ou l'autre.
+        raise HTTPException(503, "génération de QR indisponible") from None
+
+    q = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,
+                      box_size=6, border=2)
+    q.add_data(url)
+    q.make(fit=True)
+    tampon = io.BytesIO()
+    q.make_image(fill_color="black", back_color="white").save(tampon, format="PNG")
+
+    return Response(
+        content=tampon.getvalue(),
+        media_type="image/png",
+        headers={
+            # Le QR dépend de l'hôte demandé : un cache partagé qui l'ignorerait
+            # servirait à l'un le QR de l'autre.
+            "Vary": "X-Forwarded-Host, Host",
+            "Cache-Control": "public, max-age=600",
+            "X-Invitation-URL": url,
+        },
+    )
+
+
+@router.get("/invitation/url")
+async def invitation_url(req: Request):
+    """L'URL d'invitation en clair, pour l'afficher à côté du QR."""
+    base = _base_publique(req)
+    if not base:
+        raise HTTPException(400, "hôte indéterminable")
+    return {"url": base + PAGE_INVITATION, "qr": "/api/v1/users/invitation/qr"}
 
 
 @router.get("/invitation/suivi")

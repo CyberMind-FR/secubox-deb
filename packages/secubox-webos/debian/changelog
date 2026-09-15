@@ -1,3 +1,44 @@
+secubox-webos (1.0.302-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : nginx cesse d'écraser X-Forwarded-Proto (ref #1343). `$scheme` vaut
+    `http` à ce niveau — le TLS est terminé par HAProxy — donc le poser
+    effaçait le `https` déjà transmis, et le service en aval croyait servir en
+    clair. On relaie désormais l'en-tête reçu.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:02:56 +0200
+
+secubox-webos (1.0.301-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la porte d'invitation est routée (ref #1297, #1343). Le Hall
+    n'inclut PAS secubox-routes.d — il expose les API une par une, pour que
+    personne n'ouvre par inadvertance une surface d'administration sur le vhost
+    public. La contrepartie est qu'une API oubliée répond 200 avec l'index du
+    Hall, et le formulaire d'invitation tombait exactement là-dessus : la page
+    s'ouvrait, ses appels recevaient du HTML.
+  * ON N'OUVRE QUE `/invitation/` (singulier). `/invitations/` (pluriel) est la
+    file d'administration — accepter, refuser, promouvoir. La proximité des deux
+    noms est précisément ce qui rend important le préfixe à NE PAS écrire : un
+    `location /api/v1/users/` exposerait la seconde avec la première.
+  * X-Forwarded-Host transmis : le QR encode l'URL par laquelle la requête est
+    ARRIVÉE. Sans cet en-tête il renverrait vers le nom interne, et ne mènerait
+    nulle part depuis un téléphone en 4G.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:01:13 +0200
+
+secubox-webos (1.0.300-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI : la slice Talkers affiche des NOMS, plus des octets (ref #1342).
+    Chaque bout porte une pastille de source — 🏠 la box, 🏷️ un alias posé par
+    l'opérateur, 🌐 un nom observé dans un flux, 📟 déduit de la table ARP,
+    ↩️ un DNS inverse. Un nom sans provenance ne se vérifie pas.
+  * L'emoji de ligne dit d'où PART la conversation : un flux émis par la box
+    elle-même ne se lit pas comme un flux d'un terminal du réseau.
+  * Un bout que personne n'a su nommer garde son adresse — mieux vaut une
+    adresse qu'un nom inventé. Rendu en TEXTE PUR : `barres()` échappe ce qu'on
+    lui donne, et c'est très bien ainsi, un nom venant du réseau et pas de nous.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 08:54:03 +0200
+
 secubox-webos (1.0.299-1~bookworm1) bookworm; urgency=medium
 
   * Correctif Lexie : `location /api/v1/voice/` ajoutée au vhost du Hall. Le

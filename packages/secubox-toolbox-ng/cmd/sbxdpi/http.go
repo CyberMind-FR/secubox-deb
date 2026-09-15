@@ -142,7 +142,9 @@ func limitOf(r *http.Request) int {
 	return defaultTopLimit
 }
 
-func topN(s []kv, n int) []kv {
+// topN est générique depuis que les talkers portent leurs identités (#1342) :
+// ils ne sont plus des `kv` nus, et la troncature ne dépend pas du type.
+func topN[T any](s []T, n int) []T {
 	if n > 0 && n < len(s) {
 		return s[:n]
 	}

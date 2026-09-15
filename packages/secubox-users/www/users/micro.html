@@ -99,6 +99,19 @@
   .repos,.erreur{color:var(--terne);font-size:.82rem;padding:.9rem .2rem}
   .erreur{color:var(--non)}
   .aide{font-size:.74rem;color:var(--terne);margin:.4rem 0 0;line-height:1.4}
+
+  /* Le bloc d'invitation : un QR, et l'adresse en clair juste à côté. */
+  .inviter { display:flex; align-items:center; gap:.8rem; padding:.7rem;
+             margin-bottom:.7rem; border:1px dashed var(--bord, #2a2a36);
+             border-radius:10px; }
+  .inviter img { width:88px; height:88px; flex:0 0 auto; border-radius:6px;
+                 background:#fff; padding:3px; image-rendering:pixelated; }
+  .inviter-t { display:flex; flex-direction:column; gap:.25rem; min-width:0; }
+  .inviter-h { font-size:.74rem; font-weight:700; letter-spacing:.04em; }
+  .inviter-u { font-size:.68rem; font-family:ui-monospace,monospace;
+               color:var(--accent, #00d4ff); text-decoration:none;
+               overflow-wrap:anywhere; }
+  .inviter-u:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -149,12 +162,53 @@ function annonce(texte, classe){
 
 // ── VISAGE 1 — l'administrateur voit la file ────────────────────────────────
 
+// LE QR N'EST PAS LÀ POUR LA FILE, IL EST LÀ POUR LA REMPLIR. Côté admin, on
+// montre l'écran à quelqu'un qui sort son téléphone — c'est le seul instant où
+// un QR sert à quelque chose. Il n'encode QUE l'URL publique du formulaire :
+// rien de confidentiel, rien qu'on ne puisse lire par-dessus une épaule.
+//
+// L'EMPREINTE, elle, n'est jamais mise en QR. La comparer d'un regard EST le
+// geste qui vérifie qu'on valide le bon appareil ; un QR scanné à sa place
+// supprimerait la vérification en croyant l'automatiser.
+function inviterQR(){
+  var d = el('div','inviter');
+  var img = document.createElement('img');
+  img.alt = "QR de l'adresse du formulaire de demande d'accès";
+  img.src = API + '/invitation/qr';
+  img.loading = 'lazy';
+  d.appendChild(img);
+  var t = el('div','inviter-t');
+  t.appendChild(el('span','inviter-h', 'Faire entrer quelqu\u2019un'));
+  var lien = el('a','inviter-u', '\u2026');
+  fetch(API + '/invitation/url', {credentials:'same-origin'})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      if(!j || !j.url) return;
+      // L'URL EN CLAIR RESTE AFFICHÉE à côté du QR : tout le monde n'a pas un
+      // appareil photo qui décode, et une adresse se dicte au téléphone.
+      lien.textContent = j.url.replace(/^https?:\/\//,'');
+      lien.href = j.url;
+    })
+    .catch(function(){ lien.textContent = 'adresse indisponible'; });
+  t.appendChild(lien);
+  // Si le QR ne se génère pas, on n'affiche pas un cadre vide : l'adresse
+  // écrite suffit à faire le travail.
+  img.onerror = function(){ img.remove(); };
+  d.appendChild(t);
+  return d;
+}
+
 function rendFile(liste){
   $('compte').hidden = liste.length === 0;
   $('compte').textContent = String(liste.length);
-  if (!liste.length){ annonce('Aucune demande en attente.', 'repos'); return; }
+  if (!liste.length){
+    annonce('Aucune demande en attente.', 'repos');
+    vue().appendChild(inviterQR());
+    return;
+  }
 
   vue().textContent = '';
+  vue().appendChild(inviterQR());
   liste.forEach(function(d){
     var b = el('div','bloc');
     var q = el('div','qui');

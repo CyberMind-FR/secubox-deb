@@ -1,3 +1,29 @@
+secubox-waf (1.10.30-1~bookworm1) bookworm; urgency=medium
+
+  * Tableau WAF : reprise graphique au niveau de DevWatch (ref #1341).
+    TROIS FONTES, TROIS RÔLES — Chivo pour les titres et les chiffres, IBM Plex
+    Sans pour le corps, IBM Plex Mono pour les adresses, les signatures et les
+    chemins. C'est volontairement le trio de DevWatch : un style de maison
+    n'existe que s'il se répète.
+  * L'ACCENT EST SÉPARÉ DE LA SÉMANTIQUE. Le cyan est structurel — il dit
+    « SecuBox », jamais « danger ». Le rouge, l'ambre, le violet et le vert
+    disent une DÉCISION : banni, averti, refusé sans bannir, sain. Les
+    confondre ferait clignoter la page en alarme permanente, et une alarme
+    permanente ne se lit plus.
+  * L'ŒIL-DE-BŒUF DE CHAQUE SECTION PORTE LA PROVENANCE du chiffre —
+    « JOURNAL · SOURCES », « CORRÉLATION », « REGISTRE DES VHOSTS » — et non un
+    numéro d'ordre : ces sections sont des angles de vue, pas une séquence, et
+    numéroter ce qui n'est pas ordonné invente une progression qui n'existe pas.
+  * Masthead au sceau avec pouls en écoute, tuiles héros à filet de nature,
+    cartes en relief, cellules de surfaces et de détections enfin bordées.
+  * L'HEURE DU RELEVÉ est affichée : la page se rafraîchit seule chaque minute,
+    et sans horodatage rien ne distingue un tableau vivant d'un tableau figé
+    sur une erreur silencieuse.
+  * Les trois états de thème sont conservés, sombre par défaut — l'héritage de
+    #1308 : les teintes de séries sont des néons dessinés pour un fond noir.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 08:45:19 +0200
+
 secubox-waf (1.10.29-1~bookworm1) bookworm; urgency=medium
 
   * Tableau de bord (tableau.html) : la carte « Attaquants persistants » adopte

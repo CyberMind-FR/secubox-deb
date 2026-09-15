@@ -32,8 +32,8 @@ func TestSNIAggregation(t *testing.T) {
 
 	feed(ev("TLS.YouTube", "Media", "rr5.googlevideo.com", "10.0.0.2", "1.2.3.4", 1000))
 	feed(ev("TLS.YouTube", "Media", "RR5.GoogleVideo.com", "10.0.0.2", "1.2.3.5", 500)) // casse → même clé
-	feed(ev("QUIC.Google", "Web", "  www.google.com  ", "10.0.0.2", "1.2.3.6", 300))     // trim
-	feed(ev("DNS", "Network", "", "10.0.0.2", "1.2.3.7", 200))                           // pas de SNI → non compté
+	feed(ev("QUIC.Google", "Web", "  www.google.com  ", "10.0.0.2", "1.2.3.6", 300))    // trim
+	feed(ev("DNS", "Network", "", "10.0.0.2", "1.2.3.7", 200))                          // pas de SNI → non compté
 
 	h := hostsMap(a.snapshot())
 

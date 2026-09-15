@@ -387,8 +387,31 @@
     if(/crit|severe|high|emerg|error/.test(s)) return 'hi';
     if(/med|warn|moderat|notice/.test(s)) return 'md'; return 'lo'; }
   // « 192.168.1.24 → 1.2.3.4 » : on garde les derniers octets, lisibles en étroit.
+  // Repli SEULEMENT — sbxdpi nomme désormais les deux bouts (#1342) ; ceci ne
+  // sert plus qu'aux destinations de la carte Clients, et aux moteurs anciens.
   function shortTalk(n){ return String(n||'').replace(/(\d+)\.(\d+)\.(\d+)\.(\d+)/g,
     function(_,a,b,c,d){ return '·'+d; }); }
+
+  // ── NOMMAGE DES INTERLOCUTEURS (#1342) ─────────────────────────────────────
+  // Le moteur rend maintenant, pour chaque conversation, l'identité de chaque
+  // bout avec sa SOURCE. On l'affiche telle quelle : inventer un nom ici, alors
+  // que sbxdpi sait d'où vient le sien, casserait la seule chose qui rend un
+  // nom utilisable — savoir s'il est CONSTATÉ ou DÉDUIT.
+  // TEXTE PUR, PAS DE BALISE : `barres()` échappe ce qu'on lui donne, et c'est
+  // très bien ainsi — un nom vient du réseau, pas de nous. La source se dit donc
+  // par une PASTILLE, qui est du texte comme le reste.
+  var PASTILLE={ 'soi':'🏠', 'alias':'🏷️', 'observé':'🌐', 'voisin':'📟', 'ptr':'↩️' };
+  function nomBout(id, brut){
+    if(!id || !id.nom) return shortTalk(brut);
+    return (PASTILLE[id.source]||'')+id.nom;
+  }
+  // Une conversation se lit « qui → quoi ». Un bout que personne n'a su nommer
+  // garde son adresse : mieux vaut une adresse qu'un nom inventé.
+  function talkLigne(x){
+    var k=String(x.name||''), i=k.indexOf(' → ');
+    var s=i<0?k:k.slice(0,i), d=i<0?'':k.slice(i+3);
+    return nomBout(x.src,s)+' → '+nomBout(x.dst,d);
+  }
 
   var lastBytes=null, lastTs=null;
   function tente(){
@@ -410,7 +433,11 @@
         var proto=rows(j.protocols,NP,emProto), apps=rows(j.apps,NA,emApp);
         var usage=rows(j.categories,NU,emUsage);
         var talk=(j.talkers||[]).slice(0,NT).map(function(x){
-          return ['💻', shortTalk(x.name), Math.max(1,Math.round(x.pct||0))]; });
+          // Emoji de portée : d'où PART la conversation. Un flux qui sort de la
+          // box elle-même ne se lit pas comme un flux d'un terminal du réseau.
+          var em = x.src && x.src.portee==='soi' ? '🏠'
+                 : (x.src && x.src.portee==='public' ? '🌍' : '💻');
+          return [em, talkLigne(x), Math.max(1,Math.round(x.pct||0))]; });
         var risk=(j.risks||[]).slice(0,NR).map(function(x){
           return [sev3(x.severity), x.name, (x.count||0)+'×']; });
         rend({

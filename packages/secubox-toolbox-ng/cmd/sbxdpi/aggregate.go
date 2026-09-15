@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,6 +48,10 @@ type aggregator struct {
 	fps        map[string]*counter // empreinte JA4 (fingerprint device/learner)
 	risks      map[string]*riskCounter
 	firstParty map[string]bool // apps seen as first-party (our own vhosts)
+
+	// nom donne un NOM aux adresses des talkers. Facultatif : un agrégateur
+	// sans nommeur rend les adresses brutes, comme avant (#1342).
+	nom *nommeur
 
 	totalFlows uint64
 	totalBytes uint64
@@ -76,6 +81,20 @@ func newAggregator() *aggregator {
 	}
 }
 
+// LA CLÉ TALKER PORTE DEUX ADRESSES, et le séparateur est une flèche entourée
+// d'espaces insécables logiques. On la coupe ici, en un seul endroit : la
+// dupliquer serait s'exposer à ce qu'un appelant coupe sur « → » sans espaces
+// et rende des adresses avec une espace collée.
+const sepTalker = " → "
+
+func coupeTalker(k string) (src, dst string, ok bool) {
+	i := strings.Index(k, sepTalker)
+	if i < 0 {
+		return "", "", false
+	}
+	return k[:i], k[i+len(sepTalker):], true
+}
+
 func (a *aggregator) setConnected(v bool) { a.connected.Store(v) }
 
 // bump increments a capped map's counter, creating the key only if the map is
@@ -99,9 +118,15 @@ func (a *aggregator) recordFlow(ev *dpiEvent, firstParty bool) {
 	bump(a.protocols, ev.master(), 1, 0)
 	bump(a.apps, ev.app(), 1, 0)
 	bump(a.categories, ev.category(), 1, 0)
-	bump(a.talkers, ev.SrcIP+" → "+ev.DstIP, 1, 0)
+	bump(a.talkers, ev.SrcIP+sepTalker+ev.DstIP, 1, 0)
 	if h := ev.host(); h != "" {
 		bump(a.hosts, h, 1, 0)
+		// LE NOM EST CAPTÉ ICI, pas redécouvert plus tard : c'est le seul
+		// instant où l'on tient ENSEMBLE l'adresse jointe et le nom demandé.
+		// La clé talker, elle, ne garde que les adresses.
+		if a.nom != nil {
+			a.nom.Observe(ev.DstIP, h)
+		}
 	}
 	if j := ev.ja4(); j != "" {
 		bump(a.fps, j, 1, 0)
@@ -127,7 +152,7 @@ func (a *aggregator) recordBytes(ev *dpiEvent) {
 	bump(a.protocols, ev.master(), 0, b)
 	bump(a.apps, ev.app(), 0, b)
 	bump(a.categories, ev.category(), 0, b)
-	bump(a.talkers, ev.SrcIP+" → "+ev.DstIP, 0, b)
+	bump(a.talkers, ev.SrcIP+sepTalker+ev.DstIP, 0, b)
 	if h := ev.host(); h != "" {
 		bump(a.hosts, h, 0, b)
 	}
@@ -186,6 +211,16 @@ type kv struct {
 	Pct   float64 `json:"pct"` // share of totalBytes (or totalFlows if no bytes)
 }
 
+// talkerKV : une conversation, avec l'identité de chaque bout. `kv` est
+// EMBARQUÉ, donc ses champs restent à plat dans le JSON — un snapshot écrit
+// avant #1342 se relit sans transition, les deux identités valant simplement
+// vide.
+type talkerKV struct {
+	kv
+	Src identite `json:"src"`
+	Dst identite `json:"dst"`
+}
+
 type riskKV struct {
 	Name     string `json:"name"`
 	Count    uint64 `json:"count"`
@@ -194,22 +229,22 @@ type riskKV struct {
 
 // snapshot is the full on-disk / API-root document.
 type snapshot struct {
-	UpdatedAt   int64    `json:"updated_at"`
-	Connected   bool     `json:"connected"`
-	TotalFlows  uint64   `json:"total_flows"`
-	TotalBytes  uint64   `json:"total_bytes"`
-	OutBytes    uint64   `json:"out_bytes"` // direction (#DPI-sémantique, additif)
-	InBytes     uint64   `json:"in_bytes"`
-	Filtered    uint64   `json:"filtered"`
-	FirstPartyN int      `json:"first_party_apps"`
-	Protocols   []kv     `json:"protocols"`
-	Apps        []kv     `json:"apps"`
-	Categories  []kv     `json:"categories"`
-	Talkers      []kv     `json:"talkers"`
-	Hosts        []kv     `json:"hosts"`        // SNI/DNS destinations (#DPI-sémantique, additif)
-	Ports        []kv     `json:"ports"`        // ports destinataires (services)
-	Fingerprints []kv     `json:"fingerprints"` // empreintes JA4
-	Risks        []riskKV `json:"risks"`
+	UpdatedAt    int64      `json:"updated_at"`
+	Connected    bool       `json:"connected"`
+	TotalFlows   uint64     `json:"total_flows"`
+	TotalBytes   uint64     `json:"total_bytes"`
+	OutBytes     uint64     `json:"out_bytes"` // direction (#DPI-sémantique, additif)
+	InBytes      uint64     `json:"in_bytes"`
+	Filtered     uint64     `json:"filtered"`
+	FirstPartyN  int        `json:"first_party_apps"`
+	Protocols    []kv       `json:"protocols"`
+	Apps         []kv       `json:"apps"`
+	Categories   []kv       `json:"categories"`
+	Talkers      []talkerKV `json:"talkers"`
+	Hosts        []kv       `json:"hosts"`        // SNI/DNS destinations (#DPI-sémantique, additif)
+	Ports        []kv       `json:"ports"`        // ports destinataires (services)
+	Fingerprints []kv       `json:"fingerprints"` // empreintes JA4
+	Risks        []riskKV   `json:"risks"`
 }
 
 // rank sorts a counter map into a bytes-desc (flows-desc tiebreak) slice, with
@@ -234,6 +269,24 @@ func rank(m map[string]*counter, totalBytes, totalFlows uint64) []kv {
 	return out
 }
 
+// rankTalkers classe les conversations et nomme leurs deux bouts. Le nommage
+// se fait AU SNAPSHOT, jamais à l'enregistrement du flux : résoudre pendant le
+// comptage mettrait une recherche de nom sur le chemin chaud, et figerait le
+// nom au premier flux — alors qu'une adresse encore anonyme peut être nommée
+// une minute plus tard. Appelant : a.mu tenu.
+func (a *aggregator) rankTalkers(tb, tf uint64) []talkerKV {
+	base := rank(a.talkers, tb, tf)
+	out := make([]talkerKV, 0, len(base))
+	for _, e := range base {
+		t := talkerKV{kv: e}
+		if src, dst, ok := coupeTalker(e.Name); ok && a.nom != nil {
+			t.Src, t.Dst = a.nom.Nomme(src), a.nom.Nomme(dst)
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
 // snapshot builds a consistent document under one lock hold.
 func (a *aggregator) snapshot() snapshot {
 	a.mu.Lock()
@@ -245,8 +298,8 @@ func (a *aggregator) snapshot() snapshot {
 	}
 	sort.Slice(risks, func(i, j int) bool { return risks[i].Count > risks[j].Count })
 	return snapshot{
-		UpdatedAt:   time.Now().Unix(),
-		Connected:   a.connected.Load(),
+		UpdatedAt:    time.Now().Unix(),
+		Connected:    a.connected.Load(),
 		TotalFlows:   tf,
 		TotalBytes:   tb,
 		OutBytes:     a.outBytes,
@@ -256,7 +309,7 @@ func (a *aggregator) snapshot() snapshot {
 		Protocols:    rank(a.protocols, tb, tf),
 		Apps:         rank(a.apps, tb, tf),
 		Categories:   rank(a.categories, tb, tf),
-		Talkers:      rank(a.talkers, tb, tf),
+		Talkers:      a.rankTalkers(tb, tf),
 		Hosts:        rank(a.hosts, tb, tf),
 		Ports:        rank(a.ports, tb, tf),
 		Fingerprints: rank(a.fps, tb, tf),
@@ -316,10 +369,40 @@ func (a *aggregator) loadSnapshot(path string) {
 			dst[e.Name] = &counter{Flows: e.Flows, Bytes: e.Bytes}
 		}
 	}
+	// LA MOITIÉ DES COMPTEURS ÉTAIT JETÉE ICI (#1342). Le snapshot ÉCRIT hosts,
+	// ports, fingerprints et les octets directionnels ; le chargement ne les
+	// relisait pas. À chaque redémarrage du démon, ils repartaient de zéro alors
+	// que la donnée était sur le disque, juste à côté de celle qu'on restaurait.
+	//
+	// Ce n'était pas une perte cosmétique : `hosts` est le PIVOT des règles
+	// d'enrichissement — sans lui, Usages, Infrastructure et Non-classifié
+	// repartaient vides —, et `fingerprints` (JA4) est le signal d'identité des
+	// appareils. Les détails d'appareils disparaissaient à chaque relance.
+	a.outBytes = snap.OutBytes
+	a.inBytes = snap.InBytes
 	restore(a.protocols, snap.Protocols)
 	restore(a.apps, snap.Apps)
 	restore(a.categories, snap.Categories)
-	restore(a.talkers, snap.Talkers)
+	restore(a.hosts, snap.Hosts)
+	restore(a.ports, snap.Ports)
+	restore(a.fps, snap.Fingerprints)
+	for _, t := range snap.Talkers {
+		if len(a.talkers) >= mapCap {
+			break
+		}
+		a.talkers[t.Name] = &counter{Flows: t.Flows, Bytes: t.Bytes}
+	}
+	// Les noms déjà observés sont repris avec les hôtes : sans eux, un talker
+	// resterait anonyme jusqu'à ce que le même flux repasse.
+	if a.nom != nil {
+		for _, h := range snap.Talkers {
+			if h.Dst.Source == "observé" && h.Dst.Nom != "" {
+				if _, dst, ok := coupeTalker(h.Name); ok {
+					a.nom.Observe(dst, h.Dst.Nom)
+				}
+			}
+		}
+	}
 	for _, r := range snap.Risks {
 		if len(a.risks) >= mapCap {
 			break
