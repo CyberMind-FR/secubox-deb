@@ -169,6 +169,10 @@ func (s *Server) apiMReponse(w http.ResponseWriter, r *http.Request, fil, membre
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	// APRES l'enregistrement, jamais avant : on ne notifie que ce qui existe
+	// deja. L'envoi part dans une goroutine et son echec ne remonte pas —
+	// quelqu'un qui ecrit dans un forum n'a pas a voir une erreur SMTP.
+	s.notifieReponse(fil, membre, titreDuFil(s, fil))
 	jsonOK(w, map[string]any{"ok": true, "visibilite": string(vis)})
 }
 

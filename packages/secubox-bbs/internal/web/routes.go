@@ -1303,6 +1303,10 @@ func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {
 		http.Error(w, "enregistrement impossible", http.StatusInternalServerError)
 		return
 	}
+	// APRES l'enregistrement, jamais avant : on ne notifie que ce qui existe
+	// deja. L'envoi part dans une goroutine et son echec ne remonte pas —
+	// quelqu'un qui ecrit dans un forum n'a pas a voir une erreur SMTP.
+	s.notifieReponse(id, v.ID, titreDuFil(s, id))
 	if vis == store.VisPublic {
 		s.propagerPiecesPubliques(body) // #1114 : média public comme le message
 	}
