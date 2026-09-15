@@ -121,7 +121,6 @@ These OpenWrt packages exist in Debian with renamed equivalents:
 
 | OpenWrt Package | Target Debian | Complexity | Notes |
 |-----------------|---------------|------------|-------|
-| **wazuh** | secubox-wazuh | Complex | SIEM, requires agent |
 | **ai-insights** | secubox-ai-insights | Medium | ML threat detection |
 | **ipblocklist** | secubox-ipblock | Easy | IP blocklist manager |
 | **interceptor** | secubox-interceptor | Medium | Traffic interception |
@@ -154,7 +153,6 @@ These OpenWrt packages exist in Debian with renamed equivalents:
 
 ## Notes
 
-- **Complex packages** requiring LXC: homeassistant, matrix, jitsi, wazuh
 - **Go-based packages**: photoprism, gotosocial (may need cross-compile)
 - **Easy ports**: Dashboard-only apps with existing daemons in Debian repos
 - Total estimated effort: 6-12 months for full coverage

@@ -179,7 +179,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-waf-ng` | À documenter | À documenter | — | — | — | — | — | — | oui |
 | `secubox-wan-link-guard` | À documenter | À documenter | — | — | 1 | — | — | — | — |
 | `secubox-watchdog` | misc | lite | oui | 17 | — | 1 | — | — | oui |
-| `secubox-wazuh` | misc | lite | oui | 18 | — | 1 | — | — | oui |
 | `secubox-webext` | À documenter | À documenter | — | — | — | — | — | — | oui |
 | `secubox-webmail` | email | lite | — | — | — | — | — | — | oui |
 | `secubox-webmail-lxc` | email | lite | — | — | — | — | — | — | — |
@@ -2781,21 +2780,15 @@ SecuBox Watchdog Module
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-watchdog/`
 
-### `secubox-wazuh`
 
-SecuBox Wazuh SIEM integration
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 18 route(s), socket `/run/secubox/wazuh.sock`, authentification À documenter
-- **Interface web** : oui, /srv/secubox/www/wazuh
 - **CLI** : À documenter
-- **Units systemd** : `secubox-wazuh.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
 - **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-wazuh/`
 
 ### `secubox-webext`
 

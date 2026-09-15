@@ -127,7 +127,6 @@
 
 ### ⬜ Next Up
 - ~~**#1256 P1**~~ → **fait** : 8 modules fermés (`simplex` 27, `magicmirror` 23,
-  `vm` 17, `wazuh` 17, `rezapp` 16, `jabber` 15, `ossec` 15, `redroid` 14) =
   **144 routes**. Inventaire 667 → 526, `REPARES` à 11 modules. **177 routes
   fermées au total sur la journée.**
 - ~~**#1256 écritures des modules partiels**~~ → **fait** : les 58 écritures
@@ -2853,8 +2852,6 @@ Le Pi 400 doit servir de démo terrain. Tout ce qui distingue un appareil
   `RuntimeDirectory=` (Preserve sans objet), 2 vrais restants à
   finir : `secubox-torrent` + `secubox-voip`.
 
-- **wazuh postinst masked-tolerant** (`63284497`, pushed): one of
-  the 100 packages (`secubox-wazuh`) initially failed install because
   its postinst did `systemctl enable` against a masked unit and `set -e`
   aborted, leaving the package `half-configured`. Recovery on board
   was `unmask → configure → re-mask` to respect operator intent.
@@ -7261,7 +7258,6 @@ if [[ -f "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" ]]; then
 - secubox-cloner, secubox-magicmirror, secubox-mmpm
 - secubox-ndpid, secubox-ossec, secubox-p2p
 - secubox-redroid, secubox-rezapp
-- secubox-vault, secubox-vm, secubox-wazuh
 
 #### Live Image Rebuilt
 - `output/secubox-live-amd64-bookworm.img.gz` (1.2GB)
@@ -7306,7 +7302,6 @@ if [[ -f "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" ]]; then
 - secubox-cloner, secubox-magicmirror, secubox-mmpm
 - secubox-ndpid, secubox-ossec, secubox-p2p
 - secubox-redroid, secubox-rezapp
-- secubox-vault, secubox-vm, secubox-wazuh
 
 **3 modules excluded (intentional - no sidebar):**
 - secubox-portal (login.html) — login pages don't need nav
@@ -7659,7 +7654,6 @@ release.yml        → All packages + images
 - `secubox-openclaw_1.0.0-1~bookworm1_all.deb` (17KB) — OSINT reconnaissance
 
 **Previously Built:**
-- `secubox-wazuh_1.0.0-1_all.deb` — SIEM (Session 24)
 - `secubox-ossec_1.0.0-1_all.deb` — Host IDS (Session 24)
 
 **Total Packages: 93** (was 85)
@@ -8171,7 +8165,6 @@ release.yml        → All packages + images
 - secubox-vault — Built
 - secubox-cloner — Built
 - secubox-vm — Built
-- secubox-wazuh — Built
 - secubox-ossec — Built
 - All commits pushed to master
 
@@ -9007,7 +9000,6 @@ sudo bash image/build-live-usb.sh --local-cache
 - [x] secubox-vm — Virtualization (KVM/LXC)
 
 **Phase 10 (Built, not deployed):**
-- [x] secubox-wazuh — SIEM
 - [x] secubox-ossec — Host IDS
 
 > See [REMAINING-PACKAGES.md](REMAINING-PACKAGES.md) for full Phase 8-10 inventory

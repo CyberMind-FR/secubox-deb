@@ -124,7 +124,6 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-peertube** | ✅ | ✅ | ✅ | videos, channels, federation, transcoding | ✅ |
 | **secubox-voip** | ✅ | ✅ | ✅ | extensions, trunks, routes, IVR, CDR | ✅ |
 
-| **secubox-wazuh** | — | ✅ | ✅ | SIEM, agent enrollment | ✅ |
 | **secubox-ossec** | — | ✅ | ✅ | Host IDS | ✅ |
 | **secubox-ai-insights** | ✅ | ✅ | ✅ | ML threat detection, anomalies | ✅ |
 | **secubox-ipblock** | ✅ | ✅ | ✅ | IP blocklist, nftables sets | ✅ |

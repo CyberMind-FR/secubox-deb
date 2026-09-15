@@ -617,7 +617,6 @@ ces cartes-là, pas des cartes à écrire — la formulation précédente
 - #447 kiosk : mot de passe admin semé par le CI (users.json shippe un hash) **← fuite**
 - #91 haproxyctl régénère haproxy.cfg avec `waf_inspector` inexistant *(intégrité WAF)*
 - #65 nginx : routes API manquantes dans webui.conf
-- #53 Wazuh uvicorn 100% CPU spin
 - #121 metablog ingest : dirs en `secubox:secubox`
 
 ### 🟠 T1 — Plan d'enforcement sécurité (mission CSPN ; détection→action)
@@ -1117,7 +1116,6 @@ Ces 4 jobs sont distincts du chain kiosk #436. À investiguer un par un.
 
 - [ ] **Auditer tous les `postinst` qui font `systemctl enable` sans
   tolérer les units masked.** Pattern à reproduire (depuis le fix
-  wazuh `63284497`) :
 
   ```sh
   if [ "$(systemctl is-enabled secubox-X.service 2>/dev/null)" != "masked" ]; then
@@ -1400,7 +1398,6 @@ Infrastructure utilities:
 
 Advanced security features:
 
-- [x] **P10-01** `secubox-wazuh` — SIEM integration ✅
 - [x] **P10-02** `secubox-ai-insights` — ML threat detection ✅
 - [x] **P10-03** `secubox-ipblock` — IP blocklist manager ✅
 - [x] **P10-04** `secubox-interceptor` — Traffic interception ✅

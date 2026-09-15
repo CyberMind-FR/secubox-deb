@@ -6985,11 +6985,8 @@ modules:
       presente: true
       chemin: "/srv/secubox/www/watchdog"
       vhosts: []
-  - id: secubox-wazuh
-    nom: "secubox-wazuh"
     categorie: "misc"
     tier: "lite"
-    description: "SecuBox Wazuh SIEM integration"
     manifeste: true
     lxc: false
     tests: 0
@@ -6997,13 +6994,10 @@ modules:
       - "secubox-core"
     cli: []
     systemd:
-      - "secubox-wazuh.service"
     ports: []
     documentation:
       - "README.md"
     api:
-      socket: "/run/secubox/wazuh.sock"
-      health: "/api/v1/wazuh/health"
       authentifie: false
       nb_routes: 18
       routes:
@@ -7027,7 +7021,6 @@ modules:
         - "POST /manager/stop"
     interface_web:
       presente: true
-      chemin: "/srv/secubox/www/wazuh"
       vhosts: []
   - id: secubox-webext
     nom: "secubox-webext"
