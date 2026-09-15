@@ -1,3 +1,19 @@
+secubox-core (1.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * UN SEUL PRÉDICAT POUR « CE PORTEUR EST-IL ADMIS ? » (ref #1359).
+    `_validate_token` et `/auth/verify` portaient chacun LEUR COPIE du contrôle.
+    En ajoutant le registre des appareils (#1351) je n'ai corrigé que la
+    première : un appareil passait donc `require_jwt` et se faisait refuser par
+    `/auth/verify` — il entrait dans SecuBox et restait à la porte de tout
+    service protégé par `auth_request`. Le genre d'incohérence qu'on ne trouve
+    qu'en la subissant.
+  * LE RÔLE SUIT LA MÊME RÈGLE. `Remote-Groups` venait du seul magasin
+    d'utilisateurs, donc VIDE pour un appareil : un service qui décide d'après
+    ce champ l'aurait traité comme n'ayant aucun droit, APRÈS l'avoir laissé
+    entrer. Pire qu'un refus — une entrée qui ne mène à rien.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 15:29:40 +0200
+
 secubox-core (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Le registre des appareils porte une ADRESSE (ref #1354). Elle ne sert pas à

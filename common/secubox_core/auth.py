@@ -191,6 +191,22 @@ def _is_scope_token(payload: Dict[str, Any]) -> bool:
     return bool(payload.get("scope"))
 
 
+def porteur_reconnu(sub: str) -> bool:
+    """Ce porteur existe-t-il, et est-il encore admis ?
+
+    UN SEUL PRÉDICAT, PARCE QUE DEUX ONT DÉJÀ DIVERGÉ. `_validate_token` et
+    `verify` portaient chacun leur copie du contrôle ; en ajoutant le registre
+    des appareils (#1351) je n'ai corrigé que la première. Résultat : un
+    appareil passait `require_jwt` et se faisait refuser par `/auth/verify` —
+    donc entrait dans SecuBox et restait à la porte des services protégés par
+    `auth_request`. Le genre d'incohérence qu'on ne trouve qu'en la subissant.
+
+    DEUX REGISTRES, ESPACES DE NOMS DISJOINTS : `appareils` ne répond que pour
+    le préfixe `sbx-`, les utilisateurs pour le reste.
+    """
+    return bool(user_store.is_enabled(sub) or appareils.est_admis(sub))
+
+
 def _validate_token(token: str) -> Optional[Dict[str, Any]]:
     """Decode + scope/session/enabled checks. Returns the payload if the token
     is fully valid, else None — never raises. Used to try multiple credential
@@ -225,8 +241,7 @@ def _validate_token(token: str) -> Optional[Dict[str, Any]]:
     # répond que pour le préfixe `sbx-` — mais on interroge les utilisateurs
     # d'abord : c'est le cas courant, et le registre des appareils reste vide
     # sur une box qui n'a admis personne.
-    if not (user_store.is_enabled(payload["sub"])
-            or appareils.est_admis(payload["sub"])):
+    if not porteur_reconnu(payload["sub"]):
         return None
     return payload
 
@@ -446,14 +461,23 @@ async def verify(request: Request):
     if not jti or not _session_validator(jti):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="session révoquée")
     sub = payload["sub"]
-    if not user_store.is_enabled(sub):
+    # LE MÊME PRÉDICAT QUE `_validate_token`, et c'est le point : en avoir deux
+    # les a fait diverger dès le premier ajout (#1351).
+    if not porteur_reconnu(sub):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="compte désactivé")
+    # LE RÔLE SUIT LE MÊME REGLE QUE LE PORTEUR : deux registres, et celui qui
+    # connaît ce nom répond. Sans cela un appareil recevait un `Remote-Groups`
+    # VIDE, et tout service qui décide d'après ce champ le traitait comme
+    # n'ayant aucun droit — après l'avoir laissé entrer. Pire qu'un refus : une
+    # entrée qui ne mène à rien.
     role = ""
     try:
         getter = getattr(user_store, "get_user", None)
         if callable(getter):
             u = getter(sub) or {}
             role = u.get("role", "") if isinstance(u, dict) else ""
+        if not role:
+            role = appareils.profil_de(sub) if appareils.get(sub) else ""
     except Exception:
         role = ""
     return JSONResponse(
