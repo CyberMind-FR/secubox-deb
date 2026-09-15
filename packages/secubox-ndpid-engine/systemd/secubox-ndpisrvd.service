@@ -1,0 +1,28 @@
+[Unit]
+Description=SecuBox nDPIsrvd — distributeur d'événements DPI [#1345]
+Documentation=https://github.com/utoni/nDPId
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/secubox/ndpid-engine.env
+RuntimeDirectory=secubox/ndpi
+RuntimeDirectoryMode=0755
+# LE GROUPE DU SOCKET DISTRIBUTEUR EST CELUI DE sbxdpi, et c'est tout l'enjeu
+# de cette ligne : le lecteur tourne en `secubox-toolbox`, le producteur en
+# `secubox-ndpi`. Sans `-G`, le socket appartiendrait au seul producteur et
+# sbxdpi resterait déconnecté — exactement le symptôme qu'on vient de corriger,
+# sous une autre cause.
+ExecStart=/usr/sbin/nDPIsrvd -l \
+  -c ${COLLECTEUR} -s ${DISTRIBUTEUR} \
+  -u ${UTILISATEUR} -g ${GROUPE} \
+  -G ${UTILISATEUR}:${GROUPE_LECTEUR}
+Restart=on-failure
+RestartSec=3
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

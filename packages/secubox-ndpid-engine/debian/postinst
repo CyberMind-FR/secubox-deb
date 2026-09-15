@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    if ! getent passwd secubox-ndpi >/dev/null; then
+      adduser --system --group --no-create-home --home /nonexistent \
+              --shell /usr/sbin/nologin secubox-ndpi >/dev/null
+    fi
+    systemctl daemon-reload || true
+    systemctl enable --now secubox-ndpisrvd.service || true
+    systemctl enable --now secubox-ndpid.service || true
+    ;;
+esac
+exit 0

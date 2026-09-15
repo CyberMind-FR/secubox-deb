@@ -1,3 +1,21 @@
+secubox-webos (1.0.303-1~bookworm1) bookworm; urgency=medium
+
+  * Lexie : l'état du moteur est un GLYPHE, plus une étiquette (ref #1287).
+    « LOCALE » en majuscules dans une pastille bordée pesait autant que le nom
+    de la fenêtre, pour une information qu'on ne consulte qu'une fois.
+    🏠 la voix tourne sur la box · 🛰️ elle est relayée ailleurs · ⛔ injoignable.
+  * Le 🏠 est le MÊME signe que celui du nommage DPI pour « cette box » : un
+    vocabulaire visuel ne vaut que s'il est constant d'un écran à l'autre.
+  * UN EMOJI QUI REMPLACE UN MOT NE RETIRE PAS LE MOT de l'arbre
+    d'accessibilité : un lecteur d'écran annoncerait « maison » au lieu de
+    « voix locale ». Le sens vit donc dans `aria-label`, et l'infobulle y
+    ajoute le détail du moteur.
+  * La pastille colorée survit en petit, collée au glyphe : l'emoji porte le
+    SENS, le point de couleur porte la GRAVITÉ — c'est lui qu'on repère du coin
+    de l'œil quand le moteur tombe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:44:27 +0200
+
 secubox-webos (1.0.302-1~bookworm1) bookworm; urgency=medium
 
   * Hall : nginx cesse d'écraser X-Forwarded-Proto (ref #1343). `$scheme` vaut

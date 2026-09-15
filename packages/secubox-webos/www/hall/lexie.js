@@ -302,8 +302,18 @@
     + '.lexie-tete{display:flex;align-items:center;gap:8px;padding:10px 12px;'
     + 'border-bottom:1px solid var(--bord,rgba(140,170,200,.22))}'
     + '.lexie-nom{font-weight:700;letter-spacing:.02em}'
-    + '.lexie-tag{font-size:.58rem;text-transform:uppercase;letter-spacing:.09em;padding:2px 6px;'
-    + 'border-radius:5px;border:1px solid currentColor;opacity:.8}'
+    /* L'ÉTAT DU MOTEUR EST UN GLYPHE, PLUS UNE ÉTIQUETTE. « LOCALE » en
+       majuscules dans une pastille bordée pesait autant que le nom de la
+       fenêtre pour une information qu'on ne consulte qu'une fois. Un emoji se
+       lit sans se lire.
+       LA PASTILLE COLORÉE RESTE, EN PETIT : l'emoji porte le SENS, le point de
+       couleur porte la GRAVITÉ — c'est lui qu'on repère du coin de l'œil quand
+       le moteur tombe. */
+    + '.lexie-tag{font-size:.92rem;line-height:1;cursor:help;position:relative;'
+    + 'display:inline-flex;align-items:center;opacity:.95}'
+    + '.lexie-tag::after{content:"";position:absolute;right:-1px;bottom:-1px;'
+    + 'width:6px;height:6px;border-radius:50%;background:currentColor;'
+    + 'box-shadow:0 0 0 1.5px var(--carte,#12161d)}'
     + '.lexie-tag.local{color:var(--vert,#4ade80)}.lexie-tag.distant{color:var(--orange,#ff9944)}'
     + '.lexie-tag.hs{color:var(--rouge,#ff4466)}'
     + '.lexie-x{margin-left:auto;background:none;border:0;color:inherit;font-size:1.05rem;'
@@ -366,9 +376,22 @@
     if (!el.vol) return;
     var m = moteur || {};
     var genre = m.joignable ? (m.genre === 'distant' ? 'distant' : 'local') : 'hs';
+    // 🏠 la voix tourne SUR la box · 🛰️ elle est relayée ailleurs · ⛔ injoignable.
+    // Le 🏠 est le même signe que celui du nommage DPI pour « cette box » : un
+    // vocabulaire visuel ne vaut que s'il est constant d'un écran à l'autre.
+    var SIGNES = { local: '🏠', distant: '🛰️', hs: '⛔' };
+    var MOTS = { local: 'Voix locale — le moteur tourne sur la box',
+                 distant: 'Voix distante — le moteur est relayé ailleurs',
+                 hs: 'Moteur vocal injoignable' };
     el.tag.className = 'lexie-tag ' + genre;
-    el.tag.textContent = m.joignable ? (m.genre === 'distant' ? 'distant' : 'locale') : 'hors service';
-    el.tag.title = m.detail || '';
+    el.tag.textContent = SIGNES[genre];
+    // UN EMOJI QUI REMPLACE UN MOT NE DOIT PAS RETIRER LE MOT de l'arbre
+    // d'accessibilité : un lecteur d'écran annoncerait « maison » au lieu de
+    // « voix locale ». Le sens vit donc dans aria-label, et l'infobulle y
+    // ajoute le détail du moteur quand il y en a un.
+    el.tag.setAttribute('role', 'img');
+    el.tag.setAttribute('aria-label', MOTS[genre]);
+    el.tag.title = m.detail ? (MOTS[genre] + ' — ' + m.detail) : MOTS[genre];
     el.mic.disabled = !(m.asr !== false && m.joignable !== false);
     el.mic.classList.toggle('on', ecoutant);
     el.mic.textContent = ecoutant ? '⏹️ J’écoute — cliquez pour envoyer' : '🎙️ Parler';

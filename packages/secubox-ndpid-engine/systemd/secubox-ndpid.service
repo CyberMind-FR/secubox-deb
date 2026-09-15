@@ -1,0 +1,35 @@
+[Unit]
+Description=SecuBox nDPId — capture et classification DPI [#1345]
+Documentation=https://github.com/utoni/nDPId
+# LE DISTRIBUTEUR D'ABORD : nDPId se connecte au socket collecteur au
+# démarrage. S'il n'existe pas encore, il échoue et repart en boucle de
+# redémarrage — bruyant, et pour rien.
+After=secubox-ndpisrvd.service
+Requires=secubox-ndpisrvd.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/secubox/ndpid-engine.env
+# LA CAPTURE EXIGE CAP_NET_RAW ; ABANDONNER SES PRIVILÈGES EXIGE CAP_SETUID.
+#
+# Le premier périmètre ne gardait que NET_RAW et NET_ADMIN — et le démon
+# échouait sur « Change user/group to secubox-ndpi failed ». La cause n'est pas
+# évidente à lire : en retirant SETUID du BoundingSet, on retire la capacité de
+# DESCENDRE, pas seulement celle de monter. Un périmètre trop serré empêche
+# donc le durcissement qu'il était censé servir.
+#
+# nDPId démarre root, ouvre l'interface, puis redescend vers `-u` de lui-même.
+# C'est le bon ordre, et il ne garde rien après.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_SETUID CAP_SETGID CAP_CHOWN
+ExecStart=/usr/sbin/nDPId -l \
+  -i ${INTERFACE} -c ${COLLECTEUR} -u ${UTILISATEUR} -g ${GROUPE}
+Restart=on-failure
+RestartSec=5
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
