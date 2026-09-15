@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# La PWA vit sous son PROPRE chemin : le périmètre d'un service worker est
+	# son répertoire. La servir depuis une racine partagée lui donnerait la
+	# main sur des pages qui ne lui appartiennent pas.
+	install -d debian/secubox-sbxos/usr/share/secubox/www/sbxos
+	cp -r www/. debian/secubox-sbxos/usr/share/secubox/www/sbxos/
+	install -d debian/secubox-sbxos/etc/nginx/secubox-routes.d
+	install -d debian/secubox-sbxos/etc/nginx/secubox.d
+	install -m 0644 nginx/sbxos.conf debian/secubox-sbxos/etc/nginx/secubox-routes.d/
+	install -m 0644 nginx/sbxos.conf debian/secubox-sbxos/etc/nginx/secubox.d/

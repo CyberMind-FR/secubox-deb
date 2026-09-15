@@ -1,0 +1,116 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+   See LICENCE-CMSD-1.0.md for terms.
+
+   SBX OS — le thème. WebOS minimaliste, mobile d'abord.
+
+   TROIS ÉTATS DE THÈME, pas deux. Le réglage « automatique » ne pose AUCUN
+   attribut : c'est `prefers-color-scheme` qui tranche. Un choix explicite pose
+   `data-theme`, et doit gagner dans les DEUX sens — d'où la redéfinition sous
+   `[data-theme]` en plus de la requête média. */
+
+:root {
+  --fond:#0f172a; --carte:#172033; --bord:rgba(148,163,184,.20);
+  --encre:#e8eefb; --encre-terne:#94a3b8;
+  --accent:#38bdf8; --alerte:#ef4444;
+  --min:5.5rem; --ecart:.7rem;
+  --barre-h:3.6rem;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --fond:#f6f8fc; --carte:#fff; --bord:#e2e8f0;
+    --encre:#0f172a; --encre-terne:#64748b; --accent:#0284c7;
+  }
+}
+:root[data-theme="light"] {
+  --fond:#f6f8fc; --carte:#fff; --bord:#e2e8f0;
+  --encre:#0f172a; --encre-terne:#64748b; --accent:#0284c7;
+}
+:root[data-theme="dark"] {
+  --fond:#0f172a; --carte:#172033; --bord:rgba(148,163,184,.20);
+  --encre:#e8eefb; --encre-terne:#94a3b8; --accent:#38bdf8;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin:0; background:var(--fond); color:var(--encre);
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* La barre du bas est fixe : on réserve sa hauteur, plus l'encoche. */
+  padding-bottom: calc(var(--barre-h) + env(safe-area-inset-bottom,0px));
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mast {
+  display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+  padding: calc(.7rem + env(safe-area-inset-top,0px)) .9rem .5rem;
+}
+.marque { font-weight:800; letter-spacing:.02em; color:var(--accent); }
+.bonjour { color:var(--encre-terne); font-size:.84rem; }
+.profil {
+  margin-left:auto; font-size:.62rem; font-weight:800; letter-spacing:.09em;
+  text-transform:uppercase; padding:.15rem .5rem; border-radius:999px;
+  border:1px solid currentColor; color:var(--encre-terne);
+}
+.profil[data-p="admin"] { color:#f59e0b; }
+.profil[data-p="user"]  { color:var(--accent); }
+
+main { padding: 0 .8rem 1rem; }
+.titre-ecran { font-size:1.05rem; margin:.3rem 0 .8rem; }
+.sous-titre { font-size:.82rem; margin:1.2rem 0 .3rem; color:var(--encre-terne);
+  text-transform:uppercase; letter-spacing:.08em; }
+.note { color:var(--encre-terne); font-size:.78rem; margin:.7rem 0 0; line-height:1.5; }
+.note a { color:var(--accent); }
+
+.reglage { display:flex; align-items:center; gap:.7rem; margin:.7rem 0; flex-wrap:wrap; }
+.reglage label { font-size:.82rem; color:var(--encre-terne); min-width:9rem; }
+select, .fb {
+  padding:.4rem .65rem; border-radius:8px; border:1px solid var(--bord);
+  background:var(--carte); color:var(--encre); font:inherit; font-size:.82rem;
+  cursor:pointer;
+}
+.fb:hover, select:hover { border-color:var(--accent); }
+
+/* ── Théâtre : le lieu prend tout ─────────────────────────────────────────── */
+.theatre { position:fixed; inset:0; z-index:40; background:var(--fond);
+  display:flex; flex-direction:column;
+  padding-top: env(safe-area-inset-top,0px); }
+.theatre-barre {
+  display:flex; align-items:center; gap:.6rem; padding:.5rem .7rem;
+  border-bottom:1px solid var(--bord); font-size:.86rem; font-weight:600;
+}
+.theatre-barre span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.theatre iframe { flex:1; width:100%; border:0; background:#000; }
+.theatre .note { padding:0 .8rem .8rem; margin:0; }
+
+/* ── La barre du bas ───────────────────────────────────────────────────────── */
+.barre {
+  position:fixed; left:0; right:0; bottom:0; z-index:30;
+  height: calc(var(--barre-h) + env(safe-area-inset-bottom,0px));
+  padding-bottom: env(safe-area-inset-bottom,0px);
+  display:flex; background:color-mix(in srgb,var(--carte) 92%,transparent);
+  border-top:1px solid var(--bord);
+  backdrop-filter: blur(10px);
+}
+.barre button {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:.1rem;
+  background:none; border:0; color:var(--encre-terne);
+  font:inherit; font-size:.62rem; cursor:pointer;
+}
+.barre button span { font-size:1.15rem; line-height:1; }
+.barre button.on { color:var(--accent); }
+
+/* ── Grand écran : le damier respire, la barre passe sur le côté ──────────── */
+@media (min-width: 900px) {
+  :root { --min:7rem; --ecart:1rem; }
+  body { padding-bottom:0; padding-left:6.5rem; }
+  .barre {
+    top:0; right:auto; width:6.5rem; height:100vh;
+    flex-direction:column; justify-content:flex-start; gap:.3rem;
+    padding-top:4.5rem; border-top:0; border-right:1px solid var(--bord);
+  }
+  .barre button { flex:0 0 auto; padding:.8rem 0; font-size:.68rem; }
+  main { max-width:1200px; }
+}
+
+@media (prefers-reduced-motion: reduce) { * { animation:none !important; } }

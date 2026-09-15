@@ -1,0 +1,12 @@
+{
+  "_pourquoi": "Ce que voit une PWA fraîchement installée : UNE seule carlette. C'est la promesse du parcours d'invitation — on n'installe pas deux fois, le bureau se compose quand l'accès est accordé.",
+  "version": 1,
+  "nom": "SBX OS",
+  "profil": "guest",
+  "invitation": "en_attente",
+  "carlettes": [
+    { "id": "acces", "titre": "Demander un accès", "icone": "🎟️", "couleur": "#f59e0b",
+      "url": "https://admin.gk2.secubox.in/users/micro.html", "profil_min": "guest",
+      "description": "Un administrateur validera. Aucune réinstallation ensuite." }
+  ]
+}

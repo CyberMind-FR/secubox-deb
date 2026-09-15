@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SBX OS — LA COQUILLE (#1293). « Le Hall qui tient dans la poche. »
+
+  CE FICHIER N'EST QU'UN ASSEMBLAGE, et c'est voulu. Il branche trois pièces
+  qui ne se connaissent pas :
+
+      mine/mine.js   ce qui est DISPONIBLE  — la box décide, selon le profil
+      hall/hall.js   ce qui est MONTRÉ      — l'utilisateur décide
+      ui/            comment ça se montre   — composants Web autonomes
+
+  Les mélanger produirait l'un des deux bugs classiques : un module retiré par
+  l'administrateur qui resterait affiché, ou des préférences qui sauteraient à
+  chaque régénération du manifeste. Ici, c'est `Hall.compose()` — et lui seul —
+  qui marie les deux.
+
+  MOBILE D'ABORD, sans point de rupture à maintenir : le damier est une grille
+  `auto-fill`, la barre du bas est fixe, et le théâtre occupe tout l'écran.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="Votre SecuBox. Vos services. Votre univers. Partout.">
+<title>SBX OS</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icones/sbxos-192.png">
+<link rel="apple-touch-icon" href="./icones/sbxos-192.png">
+<link rel="stylesheet" href="./ui/styles.css">
+</head>
+<body>
+
+<header class="mast">
+  <span class="marque">▲ SBX&nbsp;OS</span>
+  <span class="bonjour" id="bonjour"></span>
+  <span class="profil" id="profil" hidden></span>
+</header>
+
+<main id="scene">
+  <!-- HALL : le damier -->
+  <section class="ecran" id="ecran-hall">
+    <h2 class="titre-ecran" id="titre-hall">Votre Hall</h2>
+    <sbx-damier id="damier" rangeable>
+      <span slot="vide">Votre bureau se compose… Si rien n'apparaît, c'est que
+      la box n'est pas joignable et qu'aucun manifeste n'a encore été mémorisé.</span>
+    </sbx-damier>
+    <p class="note" id="note"></p>
+  </section>
+
+  <!-- FAVORIS -->
+  <section class="ecran" id="ecran-favoris" hidden>
+    <h2 class="titre-ecran">Favoris</h2>
+    <sbx-damier id="damier-favoris">
+      <span slot="vide">Appui long sur une vignette pour la mettre en favori.</span>
+    </sbx-damier>
+  </section>
+
+  <!-- RÉGLAGES -->
+  <section class="ecran" id="ecran-reglages" hidden>
+    <h2 class="titre-ecran">Réglages</h2>
+    <div class="reglage">
+      <label for="ecran-ouverture">Écran d'ouverture</label>
+      <select id="ecran-ouverture"></select>
+    </div>
+    <div class="reglage">
+      <label for="choix-theme">Thème</label>
+      <select id="choix-theme">
+        <option value="auto">Automatique</option>
+        <option value="clair">Clair</option>
+        <option value="sombre">Sombre</option>
+      </select>
+    </div>
+    <h3 class="sous-titre">Modules</h3>
+    <p class="note">Ce que la box autorise. Masquer retire du Hall — sans retirer le droit.</p>
+    <sbx-damier id="damier-modules"></sbx-damier>
+    <div class="reglage">
+      <button class="fb" id="oublier">Oublier mes réglages</button>
+    </div>
+  </section>
+
+  <!-- THÉÂTRE : le lieu, plein écran -->
+  <section class="theatre" id="theatre" hidden>
+    <div class="theatre-barre">
+      <button class="fb" id="theatre-retour">‹ Hall</button>
+      <span id="theatre-titre"></span>
+      <button class="fb" id="theatre-fav" title="Mettre en favori">☆</button>
+    </div>
+    <iframe id="theatre-cadre" title="" referrerpolicy="no-referrer"
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
+    <p class="note" id="theatre-note"></p>
+  </section>
+</main>
+
+<nav class="barre" id="barre">
+  <button data-ecran="hall"     class="on"><span>🏠</span>Hall</button>
+  <button data-ecran="favoris"><span>⭐</span>Favoris</button>
+  <button data-ecran="reglages"><span>⚙️</span>Réglages</button>
+</nav>
+
+<script type="module">
+import { Mine, profilSuffit } from './mine/mine.js';
+import { Hall, appliqueTheme, ECRANS } from './hall/hall.js';
+import './ui/sbx-damier.js';
+
+const $ = (id) => document.getElementById(id);
+
+const mine = new Mine({ source: './mine/manifeste.json' });
+const hall = new Hall();
+
+appliqueTheme(hall.theme);
+
+// ── Composition ─────────────────────────────────────────────────────────────
+// Un seul endroit relit l'état et redessine. Multiplier les points de rendu est
+// la façon la plus sûre de faire diverger deux écrans qui montrent la même
+// chose.
+function compose() {
+  const autorisees = mine.carlettesAutorisees();
+  const visibles = hall.compose(autorisees);
+
+  $('damier').carlettes = visibles;
+  $('damier-favoris').carlettes = visibles.filter(c => c.favori);
+  // L'écran de réglages montre AUSSI les masqués — c'est le seul endroit d'où
+  // l'on peut les faire revenir.
+  $('damier-modules').carlettes = hall.compose(autorisees, { avecMasques: true });
+
+  const p = mine.profil;
+  $('profil').hidden = false;
+  $('profil').textContent = p;
+  $('profil').dataset.p = p;
+  $('bonjour').textContent = p === 'guest'
+    ? 'Bienvenue' : 'Votre Hall est prêt.';
+
+  $('note').textContent = autorisees.length === 0
+    ? "Aucun module autorisé pour ce profil."
+    : '';
+}
+
+// ── Écrans ──────────────────────────────────────────────────────────────────
+
+function montre(nom) {
+  for (const e of ['hall', 'favoris', 'reglages']) {
+    const s = $('ecran-' + e);
+    if (s) s.hidden = (e !== nom);
+  }
+  $('theatre').hidden = true;
+  for (const b of $('barre').querySelectorAll('button')) {
+    b.classList.toggle('on', b.dataset.ecran === nom);
+  }
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+$('barre').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-ecran]');
+  if (b) montre(b.dataset.ecran);
+});
+
+// ── Théâtre ─────────────────────────────────────────────────────────────────
+// Une carlette n'ouvre pas une application : elle entre dans un LIEU. Le
+// théâtre occupe tout l'écran, avec un seul retour.
+
+let lieuCourant = null;
+
+function entre(c) {
+  if (!c.url) {
+    // Un module sans URL (les Réglages) ne s'encadre pas : il EST un écran.
+    if (c.theatre === 'reglages') montre('reglages');
+    return;
+  }
+  lieuCourant = c;
+  $('theatre-titre').textContent = c.titre;
+  $('theatre-cadre').title = c.titre;
+  $('theatre-cadre').src = c.url;
+  $('theatre-fav').textContent = hall.estFavori(c.id) ? '★' : '☆';
+  // CERTAINS LIEUX NE S'ENCADRENT PAS, et il faut le dire plutôt que d'afficher
+  // un cadre vide : Nextcloud et Gitea posent des cookies `SameSite=Lax`, que
+  // le navigateur n'envoie pas dans une iframe d'un autre site. La session
+  // n'y arriverait donc jamais.
+  $('theatre-note').textContent = '';
+  $('theatre').hidden = false;
+  for (const e of ['hall', 'favoris', 'reglages']) $('ecran-' + e).hidden = true;
+
+  // Si le cadre reste vide, on propose l'onglet — c'est la seule façon
+  // d'emporter la session existante.
+  clearTimeout(entre._veille);
+  entre._veille = setTimeout(() => {
+    if (!$('theatre').hidden) {
+      $('theatre-note').innerHTML = '';
+      const p = document.createElement('span');
+      p.textContent = "Ce lieu refuse peut-être d'être encadré. ";
+      const a = document.createElement('a');
+      a.href = c.url; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = "L'ouvrir dans un onglet";
+      $('theatre-note').append(p, a);
+    }
+  }, 2500);
+}
+
+$('theatre-retour').onclick = () => {
+  $('theatre-cadre').src = 'about:blank';   // coupe le son en sortant
+  lieuCourant = null;
+  montre('hall');
+};
+$('theatre-fav').onclick = () => {
+  if (!lieuCourant) return;
+  hall.basculeFavori(lieuCourant.id);
+  $('theatre-fav').textContent = hall.estFavori(lieuCourant.id) ? '★' : '☆';
+};
+
+// ── Gestes sur les vignettes ────────────────────────────────────────────────
+
+function carletteDe(id) {
+  return mine.carlettesAutorisees().find(c => c.id === id);
+}
+
+document.addEventListener('ouvrir', (ev) => {
+  const c = carletteDe(ev.detail.id);
+  if (c) entre(c);
+});
+
+// Appui long / clic droit : dans les réglages on masque, ailleurs on met en
+// favori. Le même geste, le sens du lieu.
+document.addEventListener('options', (ev) => {
+  const id = ev.detail.id;
+  if (!$('ecran-reglages').hidden) hall.basculeMasque(id);
+  else hall.basculeFavori(id);
+});
+
+document.addEventListener('ordre', (ev) => {
+  hall.reordonne(ev.detail.ids, ev.detail.ids[0], 0);
+  // `reordonne` réécrit l'ordre complet à partir de la liste affichée : on lui
+  // passe donc la liste telle qu'elle est, sans calcul d'index.
+  hall.etat.ordre = ev.detail.ids.slice();
+});
+
+hall.addEventListener('change', compose);
+
+// ── Réglages ────────────────────────────────────────────────────────────────
+
+for (const e of ECRANS) {
+  const o = document.createElement('option');
+  o.value = e; o.textContent = e;
+  $('ecran-ouverture').appendChild(o);
+}
+$('ecran-ouverture').value = hall.ecran;
+$('ecran-ouverture').onchange = (ev) => { hall.ecran = ev.target.value; };
+
+$('choix-theme').value = hall.theme;
+$('choix-theme').onchange = (ev) => {
+  hall.theme = ev.target.value;
+  appliqueTheme(hall.theme);
+};
+
+$('oublier').onclick = () => {
+  hall.reinitialise();
+  appliqueTheme(hall.theme);
+};
+
+// ── La Mine ─────────────────────────────────────────────────────────────────
+
+mine.addEventListener('change', compose);
+mine.addEventListener('griefs', (ev) => {
+  // Un manifeste partiellement invalide ne fait pas disparaître le bureau : on
+  // affiche ce qui tient, et l'on dit ce qui a été écarté.
+  console.warn('[mine] écarté :', ev.detail.map(String));
+});
+
+compose();                        // d'abord le connu, instantanément
+mine.charge().then((change) => {
+  if (change) compose();
+  if (mine.manifeste?.invitation === 'en_attente') mine.sondeInvitation();
+}).catch(() => {
+  $('note').textContent = mine.manifeste
+    ? 'Hors ligne — bureau mémorisé.'
+    : 'Box injoignable, et aucun bureau mémorisé.';
+});
+
+// L'écran d'ouverture, sauf si l'URL en demande un autre (raccourcis PWA).
+const demande = new URLSearchParams(location.search).get('ecran');
+montre(ECRANS.includes(demande) ? demande
+       : (['hall', 'favoris', 'reglages'].includes(hall.ecran) ? hall.ecran : 'hall'));
+
+// ── Service worker ──────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  // Après le chargement : l'enregistrer plus tôt entre en concurrence avec les
+  // requêtes qui ouvrent l'application.
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('./offline/sw.js', { scope: './' })
+      .catch(e => console.warn('[sw] non enregistré :', e.message));
+  });
+}
+</script>
+</body>
+</html>

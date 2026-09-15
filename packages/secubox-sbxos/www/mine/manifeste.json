@@ -1,0 +1,31 @@
+{
+  "_pourquoi": "Manifeste d'EXEMPLE (#1293). En V1 il est servi tel quel ; en V2 la Mine le génère par utilisateur et le signe. Le CONTRAT ci-dessous ne changera pas : seule sa fabrication changera.",
+  "version": 1,
+  "nom": "SBX OS",
+  "profil": "user",
+  "invitation": null,
+  "profils_vocaux_note": "voir capabilities.d/voice.json pour les voix",
+  "carlettes": [
+    { "id": "cinema",  "titre": "Cinéma",  "icone": "🎬", "couleur": "#7c3aed",
+      "theatre": "cinema",  "url": "https://peertube.gk2.secubox.in/",
+      "profil_min": "user", "description": "PeerTube devient une salle de projection." },
+    { "id": "radio",   "titre": "Radio",   "icone": "📻", "couleur": "#f97316",
+      "theatre": "radio",   "url": "https://radio.gk2.secubox.in/",
+      "profil_min": "guest", "description": "Direct, podcasts et reprise des émissions." },
+    { "id": "billets", "titre": "Billets", "icone": "📰", "couleur": "#0ea5e9",
+      "theatre": "billets", "url": "https://billets.gk2.secubox.in/",
+      "profil_min": "guest", "description": "Le fil immersif comme journal vivant." },
+    { "id": "cloud",   "titre": "Cloud",   "icone": "☁️", "couleur": "#38bdf8",
+      "theatre": "cloud",   "url": "https://nc.gk2.secubox.in/",
+      "profil_min": "user", "description": "Nextcloud, photos et documents." },
+    { "id": "photos",  "titre": "Photos",  "icone": "🖼️", "couleur": "#22c55e",
+      "url": "https://photoprism.gk2.secubox.in/", "profil_min": "user" },
+    { "id": "forum",   "titre": "Forum",   "icone": "💬", "couleur": "#a855f7",
+      "url": "https://bbs.gk2.secubox.in/", "profil_min": "user" },
+    { "id": "acces",   "titre": "Accès",   "icone": "🎟️", "couleur": "#f59e0b",
+      "url": "https://admin.gk2.secubox.in/users/micro.html", "profil_min": "admin",
+      "description": "Demandes d'accès en attente." },
+    { "id": "reglages","titre": "Réglages","icone": "⚙️", "couleur": "#64748b",
+      "theatre": "reglages", "profil_min": "guest" }
+  ]
+}

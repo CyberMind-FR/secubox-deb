@@ -1373,6 +1373,15 @@ const FEATURED = [
   // chat, servie sous admin.gk2…/zia/ (autorisé dans frame-src) ; les 3 modes
   // visent /zia/. Chat + recherche d'objets + délégation.
   {id:"zia",        label:"ZIA",       icon:"🦊", color:"#0a93a6", url:"admin.gk2.secubox.in/zia", micro:"/micro.html", h:340},
+  // DEMANDES D'ACCÈS (#1297) : la file d'invitation, dans le Hall. Une file que
+  // personne n'ouvre ne sert à rien — le demandeur patiente, l'administrateur
+  // ignore qu'on l'attend. Posée ici, elle se voit au même endroit que le reste.
+  //
+  // PAS DE GATING PAR PROFIL DANS CE REGISTRE, et la carlette en tient compte :
+  // sur 401/403 elle affiche « Réservé à l'administration » au lieu d'une
+  // erreur, et ne divulgue donc pas qu'une file existe à qui n'a pas le droit
+  // de la voir.
+  {id:"acces",      label:"Accès",     icon:"🎟️", color:"#f59e0b", url:"admin.gk2.secubox.in/users", micro:"/micro.html", h:320},
   // Surf & Viewer (#1266b) : rappel EN SLICES des favoris (partage/répète),
   // propositions au parc (propose/cumule ×N) et liens collés. Carte servie par
   // le Hall — MÊME origine que le viewer, donc même localStorage.
