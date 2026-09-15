@@ -1,4 +1,37 @@
-secubox-sbxos (0.1.1-1~bookworm1) bookworm; urgency=medium
+secubox-sbxos (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le cache du service worker passe en v2. La coquille est servie « cache
+    d'abord » : sans changer le nom du cache, l'ancienne aurait tenu jusqu'au
+    lancement SUIVANT, et le nouveau réglage aurait paru n'avoir rien fait.
+  * LE DAMIER EST RÉGLABLE — trois molettes, et pas une de plus (ref #1293).
+    Taille des vignettes, noms sous les icônes, plafond de colonnes.
+  * LA DENSITÉ EST UNE SEULE MOLETTE qui bouge largeur, écart et taille
+    d'icône ENSEMBLE. Les séparer aurait laissé fabriquer des grilles
+    contradictoires — vignettes étroites et grands écarts font une grille
+    trouée, vignettes larges et écart serré font un mur — et la faute serait
+    retombée sur qui a « mal réglé ». Les triplets sont accordés une fois dans
+    le composant, et l'interface ne propose que les triplets.
+  * LES DEUX AUTRES SONT INDÉPENDANTES parce qu'elles répondent à des questions
+    différentes — « est-ce que je veux lire les noms ? », « est-ce que je veux
+    douze colonnes sur mon 27 pouces ? » — et qu'aucune ne peut contredire les
+    autres. C'est le critère qui les a fait retenir.
+  * Le plafond de colonnes borne la LARGEUR de la grille, il ne compte pas les
+    colonnes en JavaScript : le calcul reste dans le moteur de rendu, et rien
+    ne se recalcule au redimensionnement. Il se relit à chaque changement de
+    densité, sinon « 6 colonnes » posé en large donnerait six colonnes écrasées
+    une fois repassé en serré.
+  * LES RÉGLAGES S'APPLIQUENT AU DAMIER DES RÉGLAGES LUI-MÊME : on voit le
+    résultat sur les vignettes qu'on a sous les yeux. Un réglage dont l'effet
+    est ailleurs se règle à l'aveugle.
+  * L'étiquette se retire par `display:none`, pas par `visibility` : la place
+    doit être RENDUE, sinon les vignettes sans nom gardent un vide sous l'icône.
+  * Une valeur inconnue en stockage retombe sur le défaut au lieu d'être posée
+    telle quelle — une préférence invalide écrite sur disque ressort à chaque
+    démarrage, et le damier recevrait un attribut qu'il ne sait pas traduire.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:15:46 +0200
+
+secubox-sbxos (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Les icônes de la PWA existent enfin, et le repli qui les masquait est borné.
     Le `try_files` valait pour TOUT : une icône absente ressortait en

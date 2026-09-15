@@ -32,12 +32,30 @@ export const ECRANS = ['hall', 'favoris', 'cinema', 'radio', 'billets', 'cloud']
 /** Thèmes admis. `auto` suit le réglage du système. */
 export const THEMES = ['auto', 'clair', 'sombre'];
 
+/**
+ * LE DAMIER EST RÉGLABLE, et ces trois listes disent jusqu'où.
+ *
+ * `densite` est UNE molette qui bouge largeur, écart et taille d'icône
+ * ensemble : les séparer laisserait fabriquer des grilles contradictoires —
+ * vignettes étroites et grands écarts — et la faute retomberait sur qui a
+ * « mal réglé ».
+ *
+ * `etiquettes` et `colonnes` sont indépendantes parce qu'elles répondent à des
+ * questions différentes, et qu'aucune ne peut contredire les autres.
+ */
+export const DENSITES = ['serree', 'normale', 'large'];
+export const ETIQUETTES = ['toujours', 'jamais'];
+export const COLONNES = ['auto', '3', '4', '6', '8'];
+
 const VIDE = Object.freeze({
   ordre: [],        // ids, dans l'ordre voulu ; les absents suivent
   favoris: [],      // ids mis en avant
   masques: [],      // ids que l'utilisateur ne veut PAS voir
   ecran: 'hall',    // ce qui s'ouvre au lancement
   theme: 'auto',
+  densite: 'normale',      // taille des vignettes, écart et icône, accordés
+  etiquettes: 'toujours',  // le nom sous l'icône
+  colonnes: 'auto',        // plafond de colonnes sur grand écran
 });
 
 /**
@@ -62,6 +80,12 @@ export class Hall extends EventTarget {
         masques: tab(brut.masques),
         ecran: ECRANS.includes(brut.ecran) ? brut.ecran : 'hall',
         theme: THEMES.includes(brut.theme) ? brut.theme : 'auto',
+        // Une valeur inconnue — préférence d'une version future, stockage
+        // bricolé — retombe sur le défaut au lieu d'être posée telle quelle :
+        // le damier recevrait sinon un attribut qu'il ne sait pas traduire.
+        densite: DENSITES.includes(brut.densite) ? brut.densite : 'normale',
+        etiquettes: ETIQUETTES.includes(brut.etiquettes) ? brut.etiquettes : 'toujours',
+        colonnes: COLONNES.includes(String(brut.colonnes)) ? String(brut.colonnes) : 'auto',
       };
     } catch {
       // Stockage illisible : on repart d'un Hall par défaut plutôt que de
@@ -84,6 +108,9 @@ export class Hall extends EventTarget {
   estMasque(id) { return this.etat.masques.includes(id); }
   get ecran() { return this.etat.ecran; }
   get theme() { return this.etat.theme; }
+  get densite() { return this.etat.densite; }
+  get etiquettes() { return this.etat.etiquettes; }
+  get colonnes() { return this.etat.colonnes; }
 
   /**
    * COMPOSE LE DAMIER : marie ce que la Mine autorise avec ce que
@@ -180,6 +207,29 @@ export class Hall extends EventTarget {
   set theme(v) {
     if (!THEMES.includes(v)) return;
     this.etat.theme = v;
+    this.#ecrit();
+  }
+
+  // LES TROIS RÉGLAGES DU DAMIER. Chaque setter REFUSE en silence une valeur
+  // hors liste plutôt que de la stocker : une préférence invalide écrite sur
+  // disque ressort à chaque démarrage, et le damier reçoit alors un attribut
+  // qu'il ne sait pas traduire — panne durable née d'une frappe.
+  set densite(v) {
+    if (!DENSITES.includes(v)) return;
+    this.etat.densite = v;
+    this.#ecrit();
+  }
+
+  set etiquettes(v) {
+    if (!ETIQUETTES.includes(v)) return;
+    this.etat.etiquettes = v;
+    this.#ecrit();
+  }
+
+  set colonnes(v) {
+    v = String(v);
+    if (!COLONNES.includes(v)) return;
+    this.etat.colonnes = v;
     this.#ecrit();
   }
 

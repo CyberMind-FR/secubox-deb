@@ -32,7 +32,11 @@
  * d'hier serve un JavaScript d'aujourd'hui.
  */
 
-const VERSION = 'sbxos-v1';
+// v2 : le damier réglable change la coquille (hall.js, sbx-damier.js,
+// sbx-carlette.js, index.html). Sans ce changement de nom, la stratégie
+// « cache d'abord » servirait l'ancienne coquille jusqu'au lancement SUIVANT —
+// et le réglage paraîtrait n'avoir rien fait.
+const VERSION = 'sbxos-v2';
 const CACHE_COQUILLE = `${VERSION}-coquille`;
 const CACHE_MANIFESTE = `${VERSION}-manifeste`;
 const CACHE_MEDIAS = `${VERSION}-medias`;

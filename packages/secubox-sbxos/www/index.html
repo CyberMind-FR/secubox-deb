@@ -76,6 +76,34 @@
         <option value="sombre">Sombre</option>
       </select>
     </div>
+
+    <h3 class="sous-titre">Le damier</h3>
+    <p class="note">Les changements se voient ici même, sur les vignettes du bas.</p>
+    <div class="reglage">
+      <label for="choix-densite">Taille des vignettes</label>
+      <select id="choix-densite">
+        <option value="serree">Serrée — en voir beaucoup</option>
+        <option value="normale">Normale</option>
+        <option value="large">Large — viser facilement</option>
+      </select>
+    </div>
+    <div class="reglage">
+      <label for="choix-etiquettes">Noms sous les icônes</label>
+      <select id="choix-etiquettes">
+        <option value="toujours">Affichés</option>
+        <option value="jamais">Masqués</option>
+      </select>
+    </div>
+    <div class="reglage">
+      <label for="choix-colonnes">Colonnes au maximum</label>
+      <select id="choix-colonnes">
+        <option value="auto">Autant que l'écran permet</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="6">6</option>
+        <option value="8">8</option>
+      </select>
+    </div>
     <h3 class="sous-titre">Modules</h3>
     <p class="note">Ce que la box autorise. Masquer retire du Hall — sans retirer le droit.</p>
     <sbx-damier id="damier-modules"></sbx-damier>
@@ -119,9 +147,26 @@ appliqueTheme(hall.theme);
 // Un seul endroit relit l'état et redessine. Multiplier les points de rendu est
 // la façon la plus sûre de faire diverger deux écrans qui montrent la même
 // chose.
+/**
+ * LES RÉGLAGES DU DAMIER S'APPLIQUENT À TOUS LES DAMIERS, y compris celui des
+ * réglages lui-même — c'est ce qui rend le réglage lisible : on voit le
+ * résultat sur les vignettes qu'on a sous les yeux, pas après être revenu au
+ * Hall. Un réglage dont l'effet est ailleurs se règle à l'aveugle.
+ */
+function appliqueDamier() {
+  for (const id of ['damier', 'damier-favoris', 'damier-modules']) {
+    const d = $(id);
+    if (!d) continue;
+    d.setAttribute('densite', hall.densite);
+    d.setAttribute('etiquettes', hall.etiquettes);
+    d.setAttribute('colonnes', hall.colonnes);
+  }
+}
+
 function compose() {
   const autorisees = mine.carlettesAutorisees();
   const visibles = hall.compose(autorisees);
+  appliqueDamier();
 
   $('damier').carlettes = visibles;
   $('damier-favoris').carlettes = visibles.filter(c => c.favori);
@@ -255,6 +300,22 @@ $('choix-theme').onchange = (ev) => {
   hall.theme = ev.target.value;
   appliqueTheme(hall.theme);
 };
+
+// Les trois molettes du damier. `hall` refuse les valeurs hors liste, donc on
+// relit l'état APRÈS écriture plutôt que de supposer que la nôtre a été prise :
+// un `<select>` qui affiche autre chose que la vérité est pire qu'un réglage
+// qui n'a pas marché.
+for (const [id, clef] of [['choix-densite', 'densite'],
+                          ['choix-etiquettes', 'etiquettes'],
+                          ['choix-colonnes', 'colonnes']]) {
+  const el = $(id);
+  el.value = hall[clef];
+  el.onchange = (ev) => {
+    hall[clef] = ev.target.value;
+    el.value = hall[clef];
+    appliqueDamier();
+  };
+}
 
 $('oublier').onclick = () => {
   hall.reinitialise();
