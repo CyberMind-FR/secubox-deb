@@ -110,6 +110,14 @@ async function api(c, o) {
   const r = await fetch(API + c, Object.assign({ credentials: 'same-origin' }, o));
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.detail || ('HTTP ' + r.status)); }
   return r.json();
+  // UNE RÉPONSE QUI N'EST PAS DU JSON N'EST PAS UNE RÉPONSE. Sur le Hall, la
+  // surface d'administration n'est délibérément PAS montée : /file y rend 200
+  // avec l'index du Hall. On s'en remettait à l'échec de `r.json()` — ça
+  // marchait, mais par accident, et le message d'erreur parlait de syntaxe
+  // JSON au lieu de dire que la route n'existe pas ici.
+  const ct = r.headers.get('content-type') || '';
+  if (ct.indexOf('json') < 0) throw new Error('route indisponible sur cet hôte');
+  return r.json();
 }
 const poste = (c, corps) => api(c, { method: 'POST',
   headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });

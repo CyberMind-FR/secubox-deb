@@ -1,5 +1,18 @@
-secubox-acces (1.0.6-1~bookworm1) bookworm; urgency=medium
+secubox-acces (1.0.8-1~bookworm1) bookworm; urgency=medium
 
+  * L'ATTENTE DU SOCKET NE TUE PLUS LE SERVICE. Le ExecStartPost attendait 15 s
+    puis lançait `chmod` ; sur une box à charge 38, uvicorn met plus longtemps
+    à ouvrir le socket, le chmod échouait sur un fichier absent, et systemd
+    tuait un service qui démarrait correctement — puis relançait, en boucle. Un
+    garde-fou qui empêche le démarrage qu'il surveille est pire que pas de
+    garde-fou. Attente portée à 120 s, sortie toujours en succès, et RestartSec
+    à 15 s : relancer vite sous charge empile les tentatives.
+  * UNE RÉPONSE QUI N'EST PAS DU JSON N'EST PAS UNE RÉPONSE. Sur le Hall, la
+    surface d'administration n'est délibérément pas montée : /file y rend 200
+    avec l'index du Hall. On s'en remettait à l'échec de `r.json()` — ça
+    marchait, mais par accident, et le message parlait de syntaxe JSON là où le
+    vrai problème est un hôte qui ne monte pas cette API. Les trois appelants
+    contrôlent désormais le type de contenu.
   * Le postinst n'accuse plus que le vrai coupable. Il copiait le vhost,
     lançait `nginx -t`, et le RETIRAIT en cas d'échec — sans vérifier que
     l'échec venait de lui. Pendant une installation groupée, un autre paquet à

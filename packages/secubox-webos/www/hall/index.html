@@ -1141,7 +1141,17 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                dans une fenêtre à part dont la barre d'adresse est visible.
                C'est la même règle que pour les cartes — on n'apprend à
                personne à taper son mot de passe ailleurs que chez lui. -->
-          <button type="button" role="menuitem" id="who-session">Connexion SecuBox…</button>
+          <!-- DEMANDER UN ACCÈS PASSE DEVANT LA CONNEXION (#1346). Un visiteur
+               sans compte ne peut PAS se connecter : lui présenter d'abord un
+               formulaire de connexion, c'est lui offrir une impasse et le
+               laisser croire qu'il a oublié un mot de passe qu'il n'a jamais
+               eu. L'ordre des deux boutons est donc l'information : on
+               s'inscrit, et si l'on a déjà un compte on se connecte.
+               Il disparaît une fois la session ouverte — il n'a plus d'objet. -->
+          <button type="button" role="menuitem" id="who-inscription">🎟️ Demander un accès…</button>
+          <p class="who-note" id="who-inscription-note">Pas encore de compte ? Cet appareil
+            en demande un ; un administrateur compare une empreinte et vous entrez.</p>
+          <button type="button" role="menuitem" id="who-session">J'ai déjà un compte — connexion…</button>
           <p class="who-note" id="who-etat">session non vérifiée</p>
           <div class="who-sep"></div>
           <button type="button" role="menuitem" id="who-defaut">⭐ Ordre actuel = défaut</button>
@@ -1479,7 +1489,11 @@ function featCardHTML(f,s){
   if(f.micro || f.carte){
     // Services micro servis en MÊME ORIGINE via le Hall-proxy (#1239). On
     // étend au fur et à mesure que chaque proxy /i/<id>/ est ajouté au vhost.
-    const SVC_PROXY = {};   // #1239 resolu par un 301 hall.gk2.net -> hall.gk2.secubox.in
+    // ACCÈS PASSE PAR LE RELAIS (#1346) : sa carlette range la clé privée de
+    // l'appareil dans IndexedDB, et un cadre cross-origine est un contexte
+    // TIERS où le navigateur cloisonne ou refuse le stockage. Servie sous
+    // hall.gk2, elle retrouve une identité — donc quelque chose à montrer.
+    const SVC_PROXY = { acces: 1 };   // #1239 resolu par un 301 hall.gk2.net -> hall.gk2.secubox.in
     const th=root.getAttribute('data-theme')
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
     // MÊME ORIGINE (#1239) : pour les services proxifiés par le Hall, on charge
@@ -3710,8 +3724,21 @@ addEventListener('message', ev=>{
     // Plus de session -> on oublie les identités lues : elles ne doivent pas
     // survivre en cache à une déconnexion, ni s'afficher au prochain invité.
     if(!_moi) _identVues = null;
-    const b = document.getElementById('who-session');
+    const ba = document.getElementById('who-inscription');
+  if(ba) ba.addEventListener('click', function(){
+    // MÊME ORIGINE, par le relais : la clé privée de l'appareil vit dans
+    // l'IndexedDB de hall.gk2. Ouvrir acces.gk2 dans un onglet donnerait une
+    // AUTRE identité, donc une seconde demande pour le même appareil.
+    location.href = '/i/acces/';
+  });
+  const b = document.getElementById('who-session');
     const e = document.getElementById('who-etat');
+    // L'inscription n'a d'objet que pour qui n'est pas entré : une fois la
+    // session ouverte, la proposer à nouveau ne ferait qu'encombrer.
+    const a = document.getElementById('who-inscription');
+    const an = document.getElementById('who-inscription-note');
+    if(a) a.hidden = !!_moi;
+    if(an) an.hidden = !!_moi;
     if(!b || !e) return;
     if(!SBX_DOM && !_moi){
       b.textContent = 'Connexion SecuBox…';

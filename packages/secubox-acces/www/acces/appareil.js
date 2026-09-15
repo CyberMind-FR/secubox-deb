@@ -146,6 +146,11 @@ async function json(chemin, options) {
     const j = await r.json().catch(() => ({}));
     throw new Error(j.detail || ('HTTP ' + r.status));
   }
+  // Un 200 qui n'est pas du JSON est une route absente servie par un repli —
+  // pas une réponse. Le dire ici évite un message parlant de syntaxe JSON là
+  // où le vrai problème est un hôte qui ne monte pas cette API.
+  const ct = r.headers.get('content-type') || '';
+  if (ct.indexOf('json') < 0) throw new Error('route indisponible sur cet hôte');
   return r.json();
 }
 

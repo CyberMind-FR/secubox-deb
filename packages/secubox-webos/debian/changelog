@@ -1,3 +1,27 @@
+secubox-webos (1.0.305-1~bookworm1) bookworm; urgency=medium
+
+  * LA CARLETTE ACCÈS EST SERVIE EN MÊME ORIGINE (ref #1346). Elle range la clé
+    privée de l'appareil dans IndexedDB ; chargée depuis acces.gk2 dans un cadre
+    de hall.gk2, elle est un contexte TIERS, et les navigateurs y cloisonnent ou
+    refusent le stockage. La carlette n'avait alors plus d'identité — donc plus
+    rien à montrer. Le relais `/i/acces/` la sert sous hall.gk2, où son stockage
+    est de première partie. Même mécanisme que #1239.
+  * Les routes ouvertes suivent : /api/v1/acces/invitation/ et /session/. On
+    n'ouvre PAS /file/ ni /profils/ — la proximité des noms est précisément ce
+    qui rend important le préfixe à ne pas écrire.
+  * DEMANDER UN ACCÈS PASSE DEVANT LA CONNEXION. Un visiteur sans compte ne peut
+    pas se connecter : lui présenter d'abord un formulaire de connexion, c'est
+    lui offrir une impasse et le laisser croire qu'il a oublié un mot de passe
+    qu'il n'a jamais eu. L'ordre des deux boutons EST l'information. Le premier
+    disparaît une fois la session ouverte — il n'a plus d'objet.
+  * Le bouton ouvre le parcours par le relais, jamais acces.gk2 dans un onglet :
+    une autre origine donnerait une AUTRE identité d'appareil, donc une seconde
+    demande pour la même machine.
+  * Identifiant `who-inscription` et non `who-acces`, déjà pris par « Gérer les
+    accès » : deux éléments de même id, et l'un des deux boutons meurt.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:21:19 +0200
+
 secubox-webos (1.0.304-1~bookworm1) bookworm; urgency=medium
 
   * Hall : la carte Accès pointait sur l'ancien module, et de travers (ref #1344).
