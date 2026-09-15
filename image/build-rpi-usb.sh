@@ -146,7 +146,7 @@ INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
 INCLUDE_PKGS+=",python3-pyotp,python3-qrcode"
 
 # Network and security tools
-INCLUDE_PKGS+=",bridge-utils,dnsutils,iputils-arping,avahi-daemon,avahi-utils"
+INCLUDE_PKGS+=",bridge-utils,bind9-dnsutils,iputils-arping,avahi-daemon,avahi-utils"
 INCLUDE_PKGS+=",ieee-data,procps,openssl,haproxy,qrencode"
 INCLUDE_PKGS+=",fonts-noto-color-emoji,locales,console-setup"
 # Note: linux-image-arm64, plymouth, initramfs-tools installed later

@@ -195,7 +195,7 @@ INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
 INCLUDE_PKGS+=",python3-toml,python3-netifaces,python3-serial"
 
 # Network and security tools
-INCLUDE_PKGS+=",bridge-utils,dnsutils,iputils-arping,avahi-daemon,avahi-utils"
+INCLUDE_PKGS+=",bridge-utils,bind9-dnsutils,iputils-arping,avahi-daemon,avahi-utils"
 INCLUDE_PKGS+=",ieee-data,procps,openssl,haproxy,qrencode"
 INCLUDE_PKGS+=",fonts-noto-color-emoji"
 

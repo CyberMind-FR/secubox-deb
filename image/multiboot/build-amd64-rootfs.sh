@@ -144,7 +144,7 @@ install_base_packages() {
         net-tools \
         iproute2 \
         iputils-ping \
-        dnsutils \
+        bind9-dnsutils \
         tcpdump \
         iptables \
         nftables \
