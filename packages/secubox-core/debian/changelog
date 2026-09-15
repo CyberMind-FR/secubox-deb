@@ -1,3 +1,26 @@
+secubox-core (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE CŒUR RECONNAÎT DEUX SORTES DE PORTEURS (ref #1351). Un utilisateur a un
+    nom choisi, un mot de passe, des droits attribués ; un APPAREIL est une
+    CLÉ — son nom en dérive, il n'a pas de mot de passe, il entre en SIGNANT.
+  * Nouveau `secubox_core.appareils` : registre des appareils admis, dans
+    /etc/secubox/appareils.json, DÉLIBÉRÉMENT distinct de users.json. Les mêler
+    faisait apparaître des lignes `sbx-…` dans le panneau « Users », où aucun
+    geste de gestion d'utilisateurs n'a de sens pour elles.
+  * `_validate_token` accepte désormais un porteur reconnu par l'un OU l'autre
+    registre. Les espaces de noms sont DISJOINTS — le registre des appareils ne
+    répond que pour le préfixe `sbx-` —, donc aucun des deux ne peut répondre à
+    la place de l'autre, et deux magasins qui pourraient répondre pour le même
+    nom finiraient toujours par diverger.
+  * UN FICHIER, PAS UN CROCHET EN MÉMOIRE. Le cœur offre déjà
+    `set_session_validator()`, mais un crochet n'est posé que dans le processus
+    qui l'installe, et SecuBox en fait tourner des dizaines : un jeton frappé
+    dans l'un et présenté à l'autre trouverait un validateur d'un côté et rien
+    de l'autre. C'est exactement le défaut de #1350. Un fichier lu par tous n'a
+    pas ce problème.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 13:23:16 +0200
+
 secubox-core (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * Cœur cryptographique refait sur des ALGORITHMES NORMALISÉS uniquement

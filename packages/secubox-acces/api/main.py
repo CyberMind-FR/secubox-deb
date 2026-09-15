@@ -33,11 +33,11 @@ from pydantic import BaseModel, Field
 
 import secrets
 
-from secubox_core import user_store
+from secubox_core import appareils
 from secubox_core.auth import (_emit_session_event, create_token, require_jwt,
                                set_session_cookie)
 
-from .identite import nom_de_compte, verifie_signature
+from .identite import empreinte_courte, nom_de_compte, verifie_signature
 from .profileur import PROFILS, DemandeInvalide, Profileur
 from .session import Portier, SessionRefusee
 
@@ -110,31 +110,23 @@ _compteur: dict[str, list[float]] = {}
 
 
 def _provisionne(nom: str, profil: str, did: str, cle: str) -> None:
-    """Crée le compte SecuBox de l'appareil admis.
+    """Inscrit l'appareil admis au registre des APPAREILS.
 
-    SANS CE CHAÎNON, LA SESSION N'EXISTAIT QUE POUR NOUS. `_validate_token`
-    refuse un jeton dont le `sub` n'est pas un utilisateur activé — le module
-    posait donc un cookie que tout le reste de la box rejetait, et le Hall
-    continuait d'afficher « non connecté » à côté de « session ouverte ».
+    IL N'ENTRE PAS DANS users.json, et c'est le point de ce changement (#1351).
+    Un appareil n'est pas un utilisateur : il n'a pas de mot de passe, son nom
+    dérive de sa clé, et les gestes du panneau « Users » — réinitialiser un
+    mot de passe, envoyer un courriel — n'ont aucun sens pour lui. Les mêler
+    faisait apparaître des lignes `sbx-…` là où personne ne pouvait rien en
+    faire.
 
-    LE MOT DE PASSE EST TIRÉ AU SORT ET JAMAIS DIVULGUÉ. Le magasin en exige
-    un ; ce parcours n'en a pas et n'en veut pas — l'appareil entre en SIGNANT.
-    Un secret de 32 octets que personne ne connaît, pas même nous une fois la
-    ligne exécutée, laisse le compte inutilisable par mot de passe. C'est
-    exactement l'effet recherché : passwordless de fait, sans toucher au cœur
-    d'authentification pour un seul module.
-
-    LE COMPTE EXISTANT N'EST JAMAIS ÉCRASÉ. `set_password(provision=True)`
-    RÉINITIALISERAIT le mot de passe d'un compte déjà là. Comme le nom dérive
-    de la clé, un compte de ce nom EST cet appareil — on le laisse tel quel.
+    Le cœur consulte les deux registres en validant un jeton ; les espaces de
+    noms sont disjoints (`sbx-` d'un côté), donc aucun des deux ne peut
+    répondre à la place de l'autre.
     """
     compte = nom_de_compte(cle)
-    if user_store.get_user(compte):
-        return                      # déjà provisionné : on ne retouche à rien
-    user_store.set_password(compte, secrets.token_urlsafe(32),
-                            provision=True, role=profil)
-    log.info("compte %s provisionné pour %s (%s), profil %s",
-             compte, nom, did, profil)
+    appareils.inscris(compte, nom=nom, profil=profil, did=did,
+                      empreinte=empreinte_courte(cle))
+    log.info("appareil %s inscrit (« %s », %s), profil %s", compte, nom, did, profil)
 
 
 def profileur() -> Profileur:
@@ -462,6 +454,10 @@ async def promouvoir(v: Verdict, req: Request):
         d = profileur().promeut(v.did, vers=v.profil, par=_qui(req))
     except DemandeInvalide as e:
         raise HTTPException(400, str(e)) from e
+    # Le registre porte le profil EFFECTIF : promouvoir sans l'y reporter
+    # laisserait le cœur lire l'ancien.
+    appareils.inscris(nom_de_compte(d.cle_publique), nom=d.nom, profil=d.profil,
+                      did=d.did, empreinte=d.empreinte)
     log.info("profil de %s porté à %s par %s", d.did, d.profil, d.traitee_par)
     return {"ok": True, "did": d.did, "profil": d.profil}
 
@@ -472,4 +468,8 @@ async def revoquer(v: Verdict, req: Request):
         d = profileur().revoque(v.did, par=_qui(req))
     except DemandeInvalide as e:
         raise HTTPException(400, str(e)) from e
+    # RÉVOQUER DOIT FERMER LES DEUX PORTES. Sans cette ligne, la file dirait
+    # « révoqué » pendant que le registre laisserait encore passer les jetons
+    # déjà émis — un refus qui ne refuse rien.
+    appareils.revoque(nom_de_compte(d.cle_publique))
     return {"ok": True, "did": d.did}
