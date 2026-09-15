@@ -1,0 +1,24 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    # La file des demandes est le seul état du module.
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/acces
+    # LE VHOST N'EST ACTIVÉ QUE S'IL PASSE LE TEST. Copier d'abord, tester
+    # ensuite, et retirer si ça casse : un vhost fautif empêche nginx de
+    # recharger TOUTE sa configuration, donc emporterait tous les autres
+    # services avec lui.
+    if [ -f /etc/secubox/nginx-available/acces.conf ]; then
+      cp -f /etc/secubox/nginx-available/acces.conf /etc/nginx/sites-enabled/acces.conf
+      if ! nginx -t >/dev/null 2>&1; then
+        rm -f /etc/nginx/sites-enabled/acces.conf
+        echo "secubox-acces: vhost refusé par nginx -t, non activé" >&2
+      fi
+    fi
+    if [ -x /usr/sbin/nginx ] && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

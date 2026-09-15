@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+
+  SecuBox :: ACCÈS — la carlette /micro (#1344).
+
+  UNE SEULE CARLETTE, TROIS VISAGES, et le visage se DÉDUIT — il ne se choisit
+  pas. On interroge la file : si elle répond, on est administrateur ; sinon, on
+  regarde si CET appareil a une demande en cours ; sinon, c'est un inconnu.
+  Deux carlettes distinctes auraient obligé le Hall à savoir qui regarde, ce
+  qu'il ne sait pas avant d'avoir demandé.
+
+  LA CARLETTE NE DUPLIQUE PAS LE WEBUI. Le profileur — promouvoir, révoquer —
+  vit en /mega, sur le vhost. Ici on ne garde que ce qui doit se voir EN PASSANT
+  dans le Hall : une demande qui arrive, et l'unique geste qui reste à faire de
+  ce côté-ci.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accès</title>
+<link rel="stylesheet" href="../slicebar.css">
+<style>
+  :root { --l:#a06a1c; --li:#8a5a14; --v:#1f8f57; --a:#b7810a; --r:#c0392b; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --l:#e0a33c; --li:#f0c47a; --v:#35d07f; --a:#f0b429; --r:#ff6b5d; }
+  }
+  :root[data-theme="dark"] { --l:#e0a33c; --li:#f0c47a; --v:#35d07f; --a:#f0b429; --r:#ff6b5d; }
+
+  body { margin:0; font-family:"IBM Plex Sans",system-ui,sans-serif; font-size:14px;
+         background:var(--bg,transparent); color:var(--ink,#1b1814); }
+  .h { display:flex; align-items:center; gap:.5rem; padding:.7rem .8rem .5rem; }
+  .h .ic { font-size:1rem; }
+  .h b { font-family:"Chivo",sans-serif; font-weight:800; font-size:.92rem;
+         letter-spacing:.04em; text-transform:uppercase; color:var(--li); }
+  .cpt { margin-left:auto; font-size:.72rem; font-weight:800; min-width:1.4rem;
+         text-align:center; padding:.1rem .45rem; border-radius:999px;
+         background:var(--a); color:#fff; }
+  .cpt[hidden] { display:none; }
+  .corps { padding:0 .8rem .8rem; display:flex; flex-direction:column; gap:.6rem; }
+
+  .bloc { border:1px solid var(--bord,#e2ddd3); border-radius:12px; padding:.7rem .75rem;
+          background:var(--carte,rgba(127,127,127,.04)); }
+  .qui { display:flex; align-items:baseline; gap:.45rem; flex-wrap:wrap; }
+  .qui .nom { font-family:"Chivo",sans-serif; font-weight:800; font-size:.88rem; }
+  .qui .app { font-size:.68rem; color:var(--gris,#6b6358); }
+  .mot { font-size:.75rem; font-style:italic; color:var(--gris,#6b6358); margin:.35rem 0 0; }
+
+  /* BORNÉE EN LARGEUR : étirée, elle finissait alignée à droite et illisible
+     au moment précis où il faut la comparer signe à signe. */
+  .emp { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.8rem;
+         letter-spacing:.05em; font-variant-numeric:tabular-nums;
+         display:block; width:max-content; max-width:100%; margin:.55rem auto;
+         padding:.45rem .7rem; border-radius:9px; text-align:center;
+         background:color-mix(in srgb, var(--l) 10%, transparent);
+         border:1px solid color-mix(in srgb, var(--l) 26%, transparent);
+         overflow-wrap:anywhere; }
+  .emp.zoom { font-size:.96rem; letter-spacing:.09em; }
+
+  .gestes { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+  button { font:inherit; font-size:.74rem; font-weight:600; cursor:pointer;
+           padding:.36rem .7rem; border-radius:8px; border:1px solid var(--bord,#e2ddd3);
+           background:transparent; color:inherit; }
+  button.oui  { color:var(--v); border-color:color-mix(in srgb,var(--v) 40%,var(--bord,#ccc)); }
+  button.non  { color:var(--r); border-color:color-mix(in srgb,var(--r) 40%,var(--bord,#ccc)); }
+  button.fort { background:var(--l); color:#fff; border-color:var(--l); }
+  button[disabled] { opacity:.5; cursor:progress; }
+
+  .etat { display:inline-flex; align-items:center; gap:.35rem; font-size:.76rem;
+          font-weight:700; padding:.28rem .65rem; border-radius:999px;
+          border:1px solid var(--bord,#e2ddd3); }
+  .etat.acceptee { color:var(--v); } .etat.en_attente { color:var(--a); }
+  .etat.refusee, .etat.expiree { color:var(--r); }
+  .aide { font-size:.72rem; color:var(--gris,#6b6358); margin:.5rem 0 0; text-wrap:pretty; }
+  .err { color:var(--r); font-size:.74rem; margin:.4rem 0 0; }
+  .plus { font-size:.7rem; color:var(--li); text-decoration:none; }
+  .plus:hover { text-decoration:underline; }
+  .champ { display:flex; flex-direction:column; gap:.2rem; margin-bottom:.5rem; }
+  .champ label { font-size:.64rem; letter-spacing:.08em; text-transform:uppercase;
+                 color:var(--gris,#6b6358); font-weight:700; }
+  .champ input, .champ textarea { font:inherit; font-size:.8rem; padding:.4rem .55rem;
+    border-radius:8px; border:1px solid var(--bord,#e2ddd3); background:transparent; color:inherit; }
+  .champ textarea { min-height:3rem; resize:vertical; }
+</style>
+
+<div class="h"><span class="ic">🎟️</span><b>Accès</b><span class="cpt" id="cpt" hidden>0</span></div>
+<div class="corps" id="corps"><p class="aide">Chargement…</p></div>
+
+<script type="module">
+import { API, identite, empreinte, demande, suivi, ouvreSession, oublie, jetonGarde }
+  from './appareil.js';
+
+const $ = (id) => document.getElementById(id);
+function el(t, c, txt) {
+  const n = document.createElement(t);
+  if (c) n.className = c;
+  if (txt != null) n.textContent = txt;   // le nom vient d'un inconnu
+  return n;
+}
+function bouton(txt, cls, action) {
+  const b = el('button', cls, txt);
+  b.onclick = () => {
+    b.disabled = true;
+    Promise.resolve(action()).then(rafraichis)
+      .catch(e => { b.disabled = false; $('corps').appendChild(el('p', 'err', e.message)); });
+  };
+  return b;
+}
+async function api(c, o) {
+  const r = await fetch(API + c, Object.assign({ credentials: 'same-origin' }, o));
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.detail || ('HTTP ' + r.status)); }
+  return r.json();
+}
+const poste = (c, corps) => api(c, { method: 'POST',
+  headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
+
+const MOTS = { en_attente:['⏳','En attente'], acceptee:['✅','Accès accordé'],
+               refusee:['⛔','Refusée'], expiree:['⌛','Expirée'] };
+
+// ── VISAGE 1 — l'administrateur voit ce qui attend ──────────────────────────
+function rendFile(liste) {
+  const c = $('corps'); c.textContent = '';
+  $('cpt').hidden = !liste.length;
+  $('cpt').textContent = String(liste.length);
+  if (!liste.length) {
+    c.appendChild(el('p', 'aide', 'Aucune demande en attente.'));
+  }
+  for (const d of liste.slice(0, 3)) {
+    const b = el('div', 'bloc');
+    const q = el('div', 'qui');
+    q.append(el('span', 'nom', d.nom || '(sans nom)'), el('span', 'app', d.appareil || ''));
+    b.appendChild(q);
+    if (d.message) b.appendChild(el('div', 'mot', '« ' + d.message + ' »'));
+    const e = el('div', 'emp', d.empreinte || '');
+    e.title = "À comparer avec l'empreinte affichée sur l'appareil du demandeur";
+    b.appendChild(e);
+    const g = el('div', 'gestes');
+    g.append(
+      bouton('Accorder', 'oui', () => poste('/file/accepter', { did: d.did })),
+      bouton('Refuser', 'non', () => poste('/file/refuser', { did: d.did, motif: '' })));
+    b.appendChild(g);
+    c.appendChild(b);
+  }
+  // LE PROFILEUR VIT EN /mega, pas ici : la carlette montre ce qui passe, la
+  // page porte ce qui se gère.
+  const a = el('a', 'plus', 'Profileur et accès accordés →');
+  a.href = '/acces/'; a.target = '_top';
+  c.appendChild(a);
+}
+
+// ── VISAGE 2 — le demandeur voit SA demande ─────────────────────────────────
+async function rendMienne(v) {
+  const c = $('corps'); c.textContent = ''; $('cpt').hidden = true;
+  const b = el('div', 'bloc');
+  const m = MOTS[v.etat] || ['•', v.etat];
+  b.appendChild(el('span', 'etat ' + v.etat, m[0] + ' ' + m[1]));
+
+  const id = await identite();
+  b.appendChild(el('div', 'emp zoom', await empreinte(id.publique)));
+
+  if (v.etat === 'en_attente') {
+    b.appendChild(el('p', 'aide',
+      "Montrez cette empreinte à l'administrateur : il la compare avec son écran "
+      + "avant de valider. Rien d'autre n'est à transmettre."));
+  } else if (v.etat === 'acceptee' && !v.session_ouverte) {
+    // LE GESTE QUI MANQUAIT. Le parcours s'arrêtait sur le mot « accordé »,
+    // et le Hall continuait d'afficher « non connecté ».
+    b.appendChild(el('p', 'aide',
+      'Accès accordé. Il reste à ouvrir la session : cet appareil va signer un '
+      + 'défi avec la clé dont l’empreinte a été validée.'));
+    const g = el('div', 'gestes');
+    g.appendChild(bouton('Ouvrir ma session', 'fort',
+      () => ouvreSession().then(j => { top.location.href = '/sbxos/'; return j; })));
+    b.appendChild(g);
+  } else if (v.etat === 'acceptee') {
+    b.appendChild(el('p', 'aide', 'Session ouverte. Profil : ' + (v.profil || 'guest') + '.'));
+  } else {
+    const g = el('div', 'gestes');
+    g.appendChild(bouton('Refaire une demande', 'fort', () => { oublie(); return Promise.resolve(); }));
+    b.appendChild(g);
+  }
+  c.appendChild(b);
+}
+
+// ── VISAGE 3 — l'inconnu demande ────────────────────────────────────────────
+function rendFormulaire() {
+  const c = $('corps'); c.textContent = ''; $('cpt').hidden = true;
+  const b = el('div', 'bloc');
+  b.appendChild(el('p', 'aide',
+    "Cet appareil n'a pas d'accès. Demandez-en un : un administrateur comparera "
+    + 'une empreinte, puis votre session s’ouvrira ici même.'));
+  const s = {};
+  for (const [k, lab, bal] of [['nom','Votre nom','input'],
+                               ['appareil','Cet appareil','input'],
+                               ['message','Un mot (facultatif)','textarea']]) {
+    const w = el('div', 'champ');
+    w.appendChild(el('label', null, lab));
+    const i = document.createElement(bal);
+    if (bal === 'input') i.type = 'text';
+    i.maxLength = k === 'message' ? 500 : 60;
+    s[k] = i; w.appendChild(i); b.appendChild(w);
+  }
+  s.appareil.value = navigator.platform || 'appareil';
+  const g = el('div', 'gestes');
+  g.appendChild(bouton('Demander un accès', 'fort', () => {
+    if (!s.nom.value.trim()) throw new Error('Votre nom est nécessaire.');
+    return demande({ nom: s.nom.value.trim(), appareil: s.appareil.value.trim(),
+                     message: s.message.value.trim() });
+  }));
+  b.appendChild(g);
+  c.appendChild(b);
+}
+
+// ── Le visage se déduit ─────────────────────────────────────────────────────
+async function rafraichis() {
+  try {
+    const f = await api('/file');
+    rendFile(f.en_attente || []);
+  } catch (e) {
+    const v = jetonGarde() ? await suivi() : null;
+    if (v) await rendMienne(v); else rendFormulaire();
+  }
+}
+rafraichis();
+setInterval(rafraichis, 30000);
+
+// Thème hérité du Hall : le paramètre donne le thème d'ARRIVÉE, le message les
+// bascules suivantes — jamais par rechargement du cadre.
+(function () {
+  const t = new URLSearchParams(location.search).get('theme');
+  if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+})();
+addEventListener('message', (ev) => {
+  const d = ev.data;
+  if (d && d.sbx === 'theme' && (d.theme === 'dark' || d.theme === 'light')) {
+    document.documentElement.setAttribute('data-theme', d.theme);
+  }
+});
+</script>

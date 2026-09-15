@@ -222,10 +222,11 @@ function rendFile(liste){
     b.appendChild(e);
 
     var g = el('div','gestes');
-    // ON ACCEPTE TOUJOURS EN `user`. Le serveur refuse d'ailleurs `admin` à
-    // l'admission : promouvoir est un geste à part, sur un compte qui existe.
-    g.appendChild(bouton('Accepter','oui', function(){
-      return tranche('accepter', {did:d.did, profil:'user'}); }));
+    // ACCEPTER OUVRE UNE SESSION `guest`, et rien de plus. Le serveur ignore
+    // tout profil qu'on lui enverrait : l'admission n'a qu'une issue. Monter en
+    // `user` est un geste séparé, pris plus tard, sur un compte qui existe.
+    g.appendChild(bouton('Ouvrir une session','oui', function(){
+      return tranche('accepter', {did:d.did}); }));
     g.appendChild(bouton('Refuser','non', function(){
       return tranche('refuser', {did:d.did, motif:''}); }));
     b.appendChild(g);

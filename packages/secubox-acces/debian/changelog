@@ -1,0 +1,55 @@
+secubox-acces (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * La configuration est lue depuis acces.toml directement. `get_config()` ne
+    charge qu'un seul document (secubox.conf) et ignore les TOML par module :
+    `get_config("acces")` rendait donc silencieusement une section vide.
+  * LE QR DÉSIGNE TOUJOURS LA PORTE PUBLIQUE (`url_publique` dans acces.toml),
+    jamais le vhost que l'administrateur regarde. Déduire l'URL de la requête
+    avait deux défauts : l'agrégateur monte ce module en processus pour les
+    vhosts partagés et son appel interne ne porte qu'un `Host: localhost` ;
+    et surtout, un administrateur consultant la carlette depuis admin.gk2
+    aurait distribué une adresse d'ADMIN à un inconnu — précisément la faute
+    que ce module existe pour corriger.
+  * Le QR encode la VRAIE adresse de la page. Elle n'est pas au même endroit
+    selon le vhost — racine sur le vhost dédié, /acces/ dans un vhost partagé —
+    et l'URL précédente ne tombait juste que par le repli try_files : fausse,
+    mais fonctionnelle par accident. C'est nginx qui la DIT maintenant, par un
+    en-tête ; deviner d'après le nom d'hôte aurait cassé au premier renommage.
+  * LA SESSION ENTRE DANS SBX OS, pas sur une racine quelconque. Tout ce
+    parcours existe pour ça : proposer un accès facile à SON SBX OS. Renvoyer
+    sur « / » laissait deviner où aller ensuite.
+  * Module initial (ref #1344). Extrait de secubox-users, où le parcours
+    d'admission se lisait comme de la gestion d'utilisateurs alors qu'il ouvre
+    des SESSIONS à des appareils. Les loger ensemble produisait des phrases
+    fausses : « profil accordé » affiché à côté de « non connecté ».
+  * UNE VRAIE CLÉ. La version précédente tirait 32 octets au hasard et les
+    appelait « clé publique ». L'empreinte qu'on faisait comparer n'engageait
+    donc personne — aucun secret ne lui correspondait, et rien ne reliait
+    l'empreinte validée à l'appareil qui se présenterait ensuite. L'appareil
+    engendre maintenant une paire ECDSA P-256 dont la partie privée est NON
+    EXPORTABLE et vit dans IndexedDB : le navigateur peut signer, aucun script
+    ne peut la lire.
+  * LA SESSION S'OUVRE ENFIN. C'était le chaînon manquant : la file savait dire
+    « accepté », personne n'ouvrait la porte. L'appareil admis demande un défi,
+    le signe, et reçoit le cookie de session SecuBox. Il le MÉRITE par une
+    signature et non par un jeton recopié — sinon quiconque lirait le jeton
+    entrerait à sa place, et la comparaison d'empreinte n'aurait servi à rien.
+  * Défi à usage unique, lié au DID, périmé en deux minutes, et CONSOMMÉ avant
+    d'être jugé : une signature fausse ne laisse pas le défi disponible pour un
+    second essai.
+  * Le webui porte le PROFILEUR : deux colonnes, ce qui attend une décision et
+    ce qui vit déjà. On ne promeut pas une demande, on promeut un accès.
+  * Une tuile compte les « jamais entré » — les accès accordés dont personne
+    n'a rien fait. C'est exactement ce qu'on ne voyait pas.
+  * Vhost dédié `acces.gk2.secubox.in`. Le parcours vivait sous le panneau
+    d'administration — c'est-à-dire derrière une porte que le demandeur n'a par
+    définition pas encore franchie. On donnait l'adresse d'un panneau d'admin à
+    un inconnu. La page est servie en STATIQUE, seule l'API passe par le socket :
+    le formulaire s'ouvre même si le service dort.
+  * Le vhost est déposé puis TESTÉ avant activation, et retiré s'il échoue : un
+    vhost fautif empêche nginx de recharger toute sa configuration, donc
+    emporterait tous les autres services avec lui.
+  * L'empreinte est bornée en largeur : étirée sur toute la page elle finissait
+    alignée à droite, illisible au moment précis où il faut la comparer.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 09:27:12 +0200

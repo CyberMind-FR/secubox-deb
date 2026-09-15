@@ -1,0 +1,27 @@
+[Unit]
+Description=SecuBox Accès — admission des appareils et ouverture de sessions [#1344]
+After=network-online.target secubox-runtime.service
+Wants=secubox-runtime.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/acces
+Environment=PYTHONPATH=/usr/lib/secubox/acces
+# Le prefixe `+` execute en root malgre User= : sans lui la ligne echouerait
+# quand le socket appartient a un tour precedent.
+ExecStartPre=+/bin/rm -f /run/secubox/acces.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/acces.sock --workers 1 --log-level warning
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/acces.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/acces.sock'
+Restart=on-failure
+RestartSec=3
+# La file des demandes est le seul etat : rien d'autre a ecrire.
+ReadWritePaths=/var/lib/secubox/acces /run/secubox
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

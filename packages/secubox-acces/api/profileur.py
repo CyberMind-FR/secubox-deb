@@ -4,33 +4,33 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """
-SecuBox-Deb :: LE PROFILEUR — file d'invitation et profils (#1297).
+SecuBox-Deb :: Accès — LA FILE D'ADMISSION ET LES PROFILS (#1344).
 
-CE QUE ÇA AJOUTE À secubox-users. Le module savait déjà gérer des comptes, des
-groupes, des rôles et des ACL. Il ne savait pas accueillir quelqu'un qui n'a
-pas encore de compte : il n'y avait ni inscription, ni file d'attente, ni
-validation. C'est ce chaînon-là, et lui seul, qu'on écrit ici.
+POURQUOI CE MODULE N'EST PAS `secubox-users`. Ce qui se joue ici n'est pas la
+gestion d'utilisateurs : c'est l'ouverture de SESSIONS à des appareils. Les deux
+se ressemblent de loin et divergent partout :
 
-LE PARCOURS, EN UN COUP D'ŒIL
+    un utilisateur   a un nom, un mot de passe, des droits, une durée de vie
+    une session      appartient à UN APPAREIL, se prouve par une clé, expire
 
-    le client engendre sa clé  →  il remplit le formulaire  →  DEMANDE
-                                                                  ↓
-    l'admin voit la demande, compare l'empreinte, tranche  →  ACCEPTÉE
-                                                                  ↓
-    compte créé au profil `user`  →  le client sonde et s'enregistre seul
+Les loger ensemble menait à des phrases fausses dans l'interface — « profil
+accordé » sur un écran qui affichait « non connecté » juste à côté.
 
-SANS QR CODE, ET SANS SECRET À RECOPIER. Rien de confidentiel ne circule : le
-client publie sa clé PUBLIQUE, l'administrateur décide. Le garde-fou contre la
-validation d'un mauvais appareil n'est pas un code à saisir mais une EMPREINTE
-COURTE, affichée des deux côtés — à comparer d'un coup d'œil.
+    l'appareil engendre sa clé  →  il remplit le formulaire  →  DEMANDE
+                                                                   ↓
+    l'admin compare l'empreinte, tranche                   →  ACCEPTÉE (guest)
+                                                                   ↓
+    l'appareil SIGNE un défi                               →  SESSION ouverte
+                                                                   ↓
+    (plus tard, séparément)                                →  promotion en user
 
-LE PROFIL D'ADMISSION EST TOUJOURS `user`. Jamais `admin`, jamais par
-inadvertance, jamais parce qu'un champ du formulaire le demandait. La promotion
-est un geste à part, explicite, fait après coup.
+UNE ADMISSION N'A QU'UNE ISSUE : `guest`. `accepte()` ne prend pas de profil —
+et c'est plus fort qu'un contrôle qui refuserait `admin`, parce qu'il n'y a rien
+à contrôler. Monter en `user` puis `admin` passe par `promeut()`, qui se lit
+comme un geste distinct dans le journal.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import secrets
@@ -39,9 +39,11 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Literal, Optional
 
+from .identite import CleInvalide, charge_cle, empreinte_courte
+
 #: Profils, du moins au plus doté. L'ORDRE COMPTE : il sert à comparer.
 PROFILS = ("guest", "user", "admin")
-PROFIL_ADMISSION = "user"
+PROFIL_ADMISSION = "guest"
 
 #: Une demande non traitée finit par expirer — une file qui ne se vide jamais
 #: cesse d'être lue, et une file qu'on ne lit plus ne sert à rien.
@@ -51,7 +53,6 @@ ETATS = ("en_attente", "acceptee", "refusee", "expiree")
 Etat = Literal["en_attente", "acceptee", "refusee", "expiree"]
 
 _RE_DID = re.compile(r"^did:[a-z0-9]+:[A-Za-z0-9._-]{8,128}$")
-_RE_HEX32 = re.compile(r"^[0-9a-f]{64}$")
 
 
 class DemandeInvalide(ValueError):
@@ -59,27 +60,14 @@ class DemandeInvalide(ValueError):
     destiné au demandeur : il doit dire QUOI corriger."""
 
 
-def empreinte_courte(cle_publique_hex: str) -> str:
-    """Six groupes de quatre, dérivés de la clé publique.
-
-    C'EST LE REMPLAÇANT DU QR CODE. Affichée sur le client et dans le panneau
-    d'administration, elle se compare d'un regard. On la découpe parce qu'une
-    chaîne de 24 signes d'affilée ne se compare pas — l'œil décroche au
-    huitième.
-    """
-    brut = hashlib.sha256(bytes.fromhex(cle_publique_hex)).hexdigest()[:24]
-    return " ".join(brut[i:i + 4] for i in range(0, 24, 4))
-
-
 @dataclass
 class Demande:
-    """Une demande d'accès. C'est à la fois l'inscription, l'invitation et la
-    demande d'accès — un seul geste, trois noms pour la même chose."""
+    """Une demande d'accès — inscription, invitation et demande à la fois."""
     did: str
-    cle_publique: str          # X25519 publique, hex (64 signes)
-    nom: str                   # ce que le demandeur déclare
-    message: str               # pourquoi il demande — lu par l'admin
-    appareil: str              # « iPhone de Gérald » : ce qui aide à trancher
+    cle_publique: str          # point P-256 SEC1 non compressé, hex (130 signes)
+    nom: str
+    message: str
+    appareil: str
     demandee_le: int
     etat: Etat = "en_attente"
     traitee_le: Optional[int] = None
@@ -87,6 +75,10 @@ class Demande:
     profil: Optional[str] = None
     motif_refus: Optional[str] = None
     jeton: str = field(default_factory=lambda: secrets.token_urlsafe(16))
+    #: Dernière session ouverte. Sert à l'administrateur : un appareil admis qui
+    #: n'a JAMAIS ouvert de session est un parcours resté en plan, et c'est
+    #: précisément ce qu'on ne voyait pas avant.
+    session_le: Optional[int] = None
 
     @property
     def empreinte(self) -> str:
@@ -102,20 +94,28 @@ class Demande:
         # Le jeton de suivi ne regarde QUE le demandeur : c'est avec lui qu'il
         # interroge l'état de sa demande sans être authentifié.
         d.pop("jeton", None)
+        # La clé entière n'apprend rien à l'œil et allonge la file ; l'empreinte
+        # est ce qu'on compare.
+        d.pop("cle_publique", None)
         return d
 
     def vue_demandeur(self) -> dict:
         """Ce que le demandeur a le droit de savoir : où en est SA demande.
 
-        On ne rend ni le motif de refus, ni qui a tranché. Un refus se dit ; il
-        ne se justifie pas à qui l'a essuyé, sinon la file devient un terrain
-        d'essai où l'on ajuste sa demande jusqu'à passer.
+        Ni le motif de refus, ni qui a tranché. Un refus se dit ; il ne se
+        justifie pas à qui l'a essuyé, sinon la file devient un terrain d'essai
+        où l'on ajuste sa demande jusqu'à passer.
         """
         return {
             "etat": self.etat,
             "demandee_le": self.demandee_le,
             "empreinte": self.empreinte,
             "profil": self.profil if self.etat == "acceptee" else None,
+            # Dit au client s'il lui reste quelque chose à faire. Sans ce
+            # drapeau, l'interface ne peut pas distinguer « admis, session à
+            # ouvrir » de « admis, session en cours » — la confusion exacte qui
+            # affichait « accès accordé » à côté de « non connecté ».
+            "session_ouverte": bool(self.session_le),
         }
 
 
@@ -129,16 +129,21 @@ def valide_demande(brut: dict) -> Demande:
         raise DemandeInvalide("identifiant d'appareil hors format")
 
     cle = str(brut.get("cle_publique", "")).strip().lower()
-    if not _RE_HEX32.match(cle):
-        raise DemandeInvalide("clé publique invalide : 32 octets hexadécimaux attendus")
+    try:
+        # ON CHARGE LA CLÉ POUR DE BON, on ne se contente pas d'une expression
+        # régulière : un point bien formé mais hors courbe passerait le filtre
+        # de forme et ne vérifierait jamais aucune signature. Mieux vaut le
+        # refuser à l'entrée, quand on peut encore le dire au demandeur.
+        charge_cle(cle)
+    except CleInvalide as e:
+        raise DemandeInvalide(str(e)) from e
 
     nom = str(brut.get("nom", "")).strip()
     if not 1 <= len(nom) <= 60:
         raise DemandeInvalide("le nom doit faire entre 1 et 60 caractères")
 
-    # Les champs libres sont BORNÉS à la lecture. Un message de quarante mille
-    # signes n'apporte rien à l'administrateur et alourdit la file pour tout le
-    # monde.
+    # Champs libres BORNÉS à la lecture : un message de quarante mille signes
+    # n'apporte rien à l'administrateur et alourdit la file pour tout le monde.
     message = str(brut.get("message", "")).strip()[:500]
     appareil = str(brut.get("appareil", "")).strip()[:60] or "appareil inconnu"
 
@@ -147,7 +152,7 @@ def valide_demande(brut: dict) -> Demande:
 
 
 class Profileur:
-    """La file d'invitation, persistée en JSON.
+    """La file d'admission, persistée en JSON.
 
     UNE DEMANDE PAR DID. Re-demander depuis le même appareil MET À JOUR la
     demande au lieu d'en empiler une seconde : sans cette règle, un client qui
@@ -157,9 +162,6 @@ class Profileur:
 
     def __init__(self, chemin: Path, creer_compte=None):
         self.chemin = Path(chemin)
-        # `creer_compte(nom, profil, did)` est injecté : le profileur ne sait
-        # pas créer un compte, il sait DÉCIDER qu'il faut en créer un. C'est
-        # secubox-users qui sait, et les tests qui s'en passent.
         self._creer_compte = creer_compte
         self._demandes: dict[str, Demande] = {}
         self._relit()
@@ -202,8 +204,8 @@ class Profileur:
         return d
 
     def suivi(self, did: str, jeton: str) -> Optional[dict]:
-        """État de SA demande. Le jeton évite qu'un tiers sonde l'état d'un
-        DID qu'il aurait deviné."""
+        """État de SA demande. Le jeton évite qu'un tiers sonde l'état d'un DID
+        qu'il aurait deviné."""
         d = self._demandes.get(did)
         if not d or not secrets.compare_digest(d.jeton, jeton or ""):
             return None
@@ -211,6 +213,16 @@ class Profileur:
             d.etat = "expiree"
             self._ecrit()
         return d.vue_demandeur()
+
+    def demande_de(self, did: str) -> Optional[Demande]:
+        """La demande complète — réservée au portier, qui a besoin de la clé."""
+        return self._demandes.get(did)
+
+    def note_session(self, did: str) -> None:
+        d = self._demandes.get(did)
+        if d:
+            d.session_le = int(time.time())
+            self._ecrit()
 
     # — côté administrateur ————————————————————————————————————————
 
@@ -226,28 +238,30 @@ class Profileur:
         return [d.vue_admin() for d in self._demandes.values()
                 if d.etat == "en_attente"]
 
-    def accepte(self, did: str, *, par: str,
-                profil: str = PROFIL_ADMISSION) -> Demande:
+    def admis(self) -> list[dict]:
+        """Les appareils qui ONT un accès. C'est la matière du profileur : on ne
+        promeut pas une demande, on promeut un accès existant."""
+        return [d.vue_admin() for d in self._demandes.values()
+                if d.etat == "acceptee"]
+
+    def accepte(self, did: str, *, par: str) -> Demande:
+        """Admettre un appareil. L'issue est TOUJOURS `guest`.
+
+        Pas de paramètre de profil, et c'est le cœur de la règle : accepter une
+        invitation ouvre une SESSION, ça ne crée pas un utilisateur.
+        """
         d = self._demandes.get(did)
         if not d:
             raise DemandeInvalide("demande inconnue")
         if d.etat != "en_attente":
             raise DemandeInvalide(f"demande déjà {d.etat}")
-        if profil not in PROFILS:
-            raise DemandeInvalide(f"profil inconnu : {profil}")
-        if profil == "admin":
-            # L'admission ne fabrique jamais un administrateur. Promouvoir est
-            # un geste séparé, fait en connaissance de cause sur un compte qui
-            # existe déjà.
-            raise DemandeInvalide(
-                "l'admission ne crée pas d'administrateur — accepter puis promouvoir")
 
         d.etat = "acceptee"
         d.traitee_le = int(time.time())
         d.traitee_par = par
-        d.profil = profil
+        d.profil = PROFIL_ADMISSION
         if self._creer_compte:
-            self._creer_compte(d.nom, profil, d.did)
+            self._creer_compte(d.nom, PROFIL_ADMISSION, d.did)
         self._ecrit()
         return d
 
@@ -280,13 +294,14 @@ class Profileur:
 
     def revoque(self, did: str, *, par: str) -> Demande:
         """Retire l'accès. La demande repasse en `refusee` plutôt que d'être
-        effacée : garder la trace évite qu'un appareil écarté revienne sans
-        que personne ne s'en souvienne."""
+        effacée : garder la trace évite qu'un appareil écarté revienne sans que
+        personne ne s'en souvienne."""
         d = self._demandes.get(did)
         if not d:
             raise DemandeInvalide("demande inconnue")
         d.etat = "refusee"
         d.profil = None
+        d.session_le = None
         d.traitee_par = par
         d.traitee_le = int(time.time())
         d.motif_refus = "accès révoqué"
@@ -294,8 +309,12 @@ class Profileur:
         return d
 
     def profil_de(self, did: str) -> str:
-        """Le profil effectif d'un appareil. `guest` tant qu'il n'est pas
-        admis — c'est ce qui fait qu'une PWA fraîchement installée n'a qu'une
-        seule carlette."""
+        """Le profil effectif d'un appareil. `guest` tant qu'il n'est pas admis.
+
+        NOTE — `guest` désigne donc à la fois celui qui n'a rien demandé et
+        celui qui vient d'être admis. Ce n'est pas une confusion : ce qui les
+        sépare n'est pas un droit, c'est une SESSION. L'admis peut en ouvrir
+        une, l'inconnu non.
+        """
         d = self._demandes.get(did)
         return d.profil if (d and d.etat == "acceptee" and d.profil) else "guest"
