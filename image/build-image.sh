@@ -231,7 +231,7 @@ INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
 INCLUDE_PKGS+=",python3-toml,python3-netifaces"
 
 # Network and security tools
-INCLUDE_PKGS+=",bridge-utils,traceroute,dnsutils,whois,mtr-tiny,nmap,iputils-arping"
+INCLUDE_PKGS+=",bridge-utils,traceroute,bind9-dnsutils,whois,mtr-tiny,nmap,iputils-arping"
 INCLUDE_PKGS+=",avahi-daemon,avahi-utils,ieee-data,procps,openssl"
 INCLUDE_PKGS+=",fonts-noto-color-emoji,locales,console-setup"
 
@@ -666,6 +666,23 @@ EOF
     SECUBOX_REPO_OK=1
     log "Repo local SecuBox configuré (trusted=yes)"
   fi
+elif ! curl -sf "${APT_SECUBOX}/dists/${SUITE}/Release" >/dev/null 2>&1; then
+  # LA SUITE N'EST PAS PUBLIÉE — ON N'AJOUTE PAS LE DÉPÔT (#1294).
+  #
+  # La branche locale faisait déjà cette vérification ; la branche distante ne
+  # regardait que le keyring, et écrivait `deb … ${SUITE} main` quoi qu'il
+  # arrive. Le premier `apt-get update` échouait alors en dur :
+  #
+  #   E: The repository 'https://apt.secubox.in trixie Release' does not have
+  #      a Release file.   → exit 100, image perdue
+  #
+  # C'est exactement ce qui bloquait la première image Trixie : notre dépôt ne
+  # publie que bookworm. Or l'image N'A PAS BESOIN de ce dépôt pour se
+  # construire — le slipstream injecte les .deb fraîchement bâtis. On saute
+  # donc le dépôt, en le DISANT, au lieu de faire échouer toute la
+  # construction pour une source d'appoint.
+  warn "apt.secubox.in ne publie pas « ${SUITE} » — dépôt ignoré, les paquets"
+  warn "viendront du slipstream. Publier la suite lèvera cet avertissement."
 elif curl -sf "${APT_SECUBOX}/secubox-keyring.gpg" 2>/dev/null \
        | gpg --dearmor > "${ROOTFS}/usr/share/keyrings/secubox.gpg" 2>/dev/null \
      && [ -s "${ROOTFS}/usr/share/keyrings/secubox.gpg" ]; then

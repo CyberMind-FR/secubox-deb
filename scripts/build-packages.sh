@@ -145,6 +145,35 @@ for PKG in "${PACKAGES[@]}"; do
   # Use timeout to prevent infinite hangs (5 minutes per package)
   TIMEOUT_CMD="timeout --kill-after=30s 300s"
 
+  # ── LA SUITE CIBLE DÉCIDE DU SUFFIXE (#1294) ────────────────────────────────
+  #
+  # Le script acceptait déjà `[bookworm|trixie]` en argument, mais ne s'en
+  # servait pas : le suffixe de version vient de debian/changelog, qui dit
+  # `~bookworm1`. Construire « pour trixie » produisait donc des paquets
+  # estampillés bookworm — un piège silencieux, puisque rien n'échoue.
+  #
+  # ON NE RÉÉCRIT PAS LES 178 CHANGELOGS. Ce serait effacer l'historique de
+  # chaque paquet pour une information qui dépend de la CIBLE, pas de la
+  # source : le même code doit pouvoir sortir en bookworm ET en trixie. On
+  # réécrit donc la PREMIÈRE LIGNE, le temps de la construction, et on la
+  # remet ensuite — l'arbre de travail ressort intact.
+  CHLOG="debian/changelog"
+  CHLOG_SAUVE=""
+  if [[ -f "$CHLOG" ]] && ! head -1 "$CHLOG" | grep -q "~${SUITE}"; then
+    CHLOG_SAUVE="$(mktemp)"
+    cp "$CHLOG" "$CHLOG_SAUVE"
+    # `~<suite>N` dans la version, et le nom de la suite dans le champ
+    # distribution : les deux doivent bouger ensemble, sinon `dpkg-genchanges`
+    # publie un paquet dont la distribution contredit la version.
+    sed -i "1s/~[a-z]\+\([0-9]\+\))/~${SUITE}\1)/; 1s/) [a-z]\+;/) ${SUITE};/" "$CHLOG"
+  fi
+  # Quoi qu'il arrive ensuite — succès, échec, timeout — le changelog revient.
+  restaure_changelog() {
+    [[ -n "$CHLOG_SAUVE" ]] && mv -f "$CHLOG_SAUVE" "$CHLOG" && CHLOG_SAUVE=""
+    return 0
+  }
+  trap restaure_changelog RETURN
+
   # -d skips the build-dependency check: every SecuBox package is
   # Architecture: all (dh just copies files), so the Build-Depends need not be
   # installed on the build host. Without -d, packages declaring deps absent
@@ -160,6 +189,8 @@ for PKG in "${PACKAGES[@]}"; do
       BUILD_OK=1
     fi
   fi
+
+  restaure_changelog
 
   if [[ $BUILD_OK -eq 1 ]]; then
     ok "${PKG} built"
