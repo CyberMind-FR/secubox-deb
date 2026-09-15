@@ -1,5 +1,8 @@
-secubox-users (1.7.0-1~bookworm1) bookworm; urgency=medium
+secubox-users (1.7.1-1~bookworm1) bookworm; urgency=medium
 
+  * La carlette `www/users/micro.html` part avec son API. Elle s'affichait
+    encore en 200 tout en appelant des routes supprimées — une carlette qui a
+    l'air de marcher est pire qu'une carlette absente.
   * Le parcours d'admission DÉMÉNAGE dans secubox-acces (ref #1344). Il n'a
     jamais été de la gestion d'utilisateurs : il fait entrer un appareil dans
     SBX OS. Le garder ici faisait cohabiter deux files — celle qu'on regarde et

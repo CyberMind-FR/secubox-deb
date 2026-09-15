@@ -221,9 +221,28 @@ def _url_invitation(req: Request) -> str:
     return base + _page(req)
 
 
+def _url_sbxos() -> str:
+    """Où vit SBX OS. C'EST LE SERVEUR QUI LE DIT, et pas le client.
+
+    La carlette est servie depuis le vhost d'accès mais EMBARQUÉE dans le Hall :
+    un chemin relatif comme « /sbxos/ » désignerait donc tantôt le vhost
+    d'accès, tantôt celui du Hall, selon qui l'interprète — et ne mènerait nulle
+    part dans les deux cas. Une adresse absolue, décidée par l'opérateur, ne
+    souffre pas de cette ambiguïté.
+    """
+    try:
+        import tomllib
+        with open(CONF, "rb") as f:
+            u = str(tomllib.load(f).get("acces", {}).get("url_sbxos", "") or "").strip()
+    except (OSError, ValueError, KeyError):
+        u = ""
+    return u if u.startswith("http") else "/sbxos/"
+
+
 @app.get("/invitation/url")
 async def invitation_url(req: Request):
-    return {"url": _url_invitation(req), "qr": "/api/v1/acces/invitation/qr"}
+    return {"url": _url_invitation(req), "qr": "/api/v1/acces/invitation/qr",
+            "sbxos": _url_sbxos()}
 
 
 @app.get("/invitation/qr")

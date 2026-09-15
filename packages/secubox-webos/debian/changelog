@@ -1,3 +1,16 @@
+secubox-webos (1.0.304-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la carte Accès pointait sur l'ancien module, et de travers (ref #1344).
+    Son entrée portait `url:"admin.gk2.secubox.in/users"` — or `url` est le
+    vhost PUBLIC, celui du mode embed. Le Hall embarquait donc l'hôte
+    d'ADMINISTRATION, et chargeait la carlette depuis un fichier que le
+    déménagement venait de supprimer. Inversé, puis absent.
+  * Désormais `url:"acces.gk2.secubox.in"` : embed et carlette sur le vhost
+    dédié, mode admin sur admin.gk2.secubox.in/acces/ via `path`. Les trois
+    liens vérifiés en 200.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 12:07:28 +0200
+
 secubox-webos (1.0.303-1~bookworm1) bookworm; urgency=medium
 
   * Lexie : l'état du moteur est un GLYPHE, plus une étiquette (ref #1287).

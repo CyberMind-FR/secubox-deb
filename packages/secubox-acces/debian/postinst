@@ -4,13 +4,25 @@ case "$1" in
   configure)
     # La file des demandes est le seul état du module.
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/acces
-    # LE VHOST N'EST ACTIVÉ QUE S'IL PASSE LE TEST. Copier d'abord, tester
-    # ensuite, et retirer si ça casse : un vhost fautif empêche nginx de
-    # recharger TOUTE sa configuration, donc emporterait tous les autres
-    # services avec lui.
+    # LE VHOST N'EST ACTIVÉ QUE S'IL PASSE LE TEST — mais encore faut-il que
+    # le test accuse LE BON COUPABLE.
+    #
+    # La première version copiait, testait, et retirait en cas d'échec. Pendant
+    # une installation groupée, `nginx -t` peut échouer pour une raison qui
+    # n'est pas la nôtre — un autre paquet à mi-chemin de sa configuration — et
+    # notre fichier payait pour elle. C'est exactement ce qui est arrivé : le
+    # vhost a été supprimé silencieusement, et acces.gk2 est retombé sur le
+    # serveur par défaut, qui sert une page « Wrong Domain ».
+    #
+    # On mesure donc l'ÉTAT DE DÉPART. Si la configuration est déjà cassée sans
+    # nous, on installe et on se tait : ce n'est pas notre faute, et retirer
+    # notre fichier ne réparerait rien. On ne retire que si l'ajout est
+    # DÉMONTRABLEMENT la cause — base saine, ajout cassé.
     if [ -f /etc/secubox/nginx-available/acces.conf ]; then
+      rm -f /etc/nginx/sites-enabled/acces.conf
+      if nginx -t >/dev/null 2>&1; then BASE_SAINE=1; else BASE_SAINE=0; fi
       cp -f /etc/secubox/nginx-available/acces.conf /etc/nginx/sites-enabled/acces.conf
-      if ! nginx -t >/dev/null 2>&1; then
+      if [ "$BASE_SAINE" = 1 ] && ! nginx -t >/dev/null 2>&1; then
         rm -f /etc/nginx/sites-enabled/acces.conf
         echo "secubox-acces: vhost refusé par nginx -t, non activé" >&2
       fi

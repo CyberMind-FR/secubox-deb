@@ -1,5 +1,21 @@
-secubox-acces (1.0.4-1~bookworm1) bookworm; urgency=medium
+secubox-acces (1.0.6-1~bookworm1) bookworm; urgency=medium
 
+  * Le postinst n'accuse plus que le vrai coupable. Il copiait le vhost,
+    lançait `nginx -t`, et le RETIRAIT en cas d'échec — sans vérifier que
+    l'échec venait de lui. Pendant une installation groupée, un autre paquet à
+    mi-chemin de sa configuration suffisait : le vhost disparaissait en
+    silence, et acces.gk2 retombait sur le serveur par défaut, qui sert une
+    page « Wrong Domain ». On mesure désormais l'état de départ, et on ne
+    retire que si l'ajout est démontrablement la cause.
+  * OÙ VIT SBX OS EST DIT PAR LE SERVEUR (`url_sbxos`), pas deviné. La carlette
+    est servie par le vhost d'accès mais EMBARQUÉE dans le Hall : un chemin
+    relatif comme « /sbxos/ » désignerait tantôt l'un, tantôt l'autre selon qui
+    l'interprète — et ne mènerait nulle part dans les deux cas.
+  * La carlette pointe vers le webui à la RACINE de son propre vhost. « /acces/ »
+    supposait un montage dans un vhost partagé : vrai sur le panneau d'admin,
+    faux partout ailleurs.
+  * La feuille de style partagée du Hall n'est plus réclamée : elle n'existe pas
+    sur ce vhost, et la carlette porte déjà tout son style.
   * La configuration est lue depuis acces.toml directement. `get_config()` ne
     charge qu'un seul document (secubox.conf) et ignore les TOML par module :
     `get_config("acces")` rendait donc silencieusement une section vide.

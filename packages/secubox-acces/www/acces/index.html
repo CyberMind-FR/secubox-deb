@@ -270,7 +270,7 @@ import { API, identite, empreinte, demande, suivi, ouvreSession, oublie, jetonGa
 // LA DESTINATION DU PARCOURS. Ce module n'ouvre pas « un accès à la box » : il
 // fait entrer quelqu'un dans SON SBX OS. La session posée vaut pour tous les
 // vhosts (cookie de domaine parent), mais l'endroit où l'on ARRIVE est SBX OS.
-const DESTINATION = '/sbxos/';
+let DESTINATION = '/sbxos/';   // remplacée par ce que dit le serveur
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s);
@@ -521,6 +521,7 @@ async function rafraichis() {
     rendFile(f.en_attente);
     rendProfils(p.admis, p.profils);
     rendInviter(u);
+    if (u.sbxos) DESTINATION = u.sbxos;
   } catch (e) {
     // Pas administrateur : on montre ce que CET appareil peut faire.
     $('admin').hidden = true;

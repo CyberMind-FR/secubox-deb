@@ -20,7 +20,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Accès</title>
-<link rel="stylesheet" href="../slicebar.css">
 <style>
   :root { --l:#a06a1c; --li:#8a5a14; --v:#1f8f57; --a:#b7810a; --r:#c0392b; }
   @media (prefers-color-scheme: dark) {
@@ -115,6 +114,10 @@ async function api(c, o) {
 const poste = (c, corps) => api(c, { method: 'POST',
   headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
 
+// Où l'on arrive après l'ouverture — dicté par le serveur, jamais deviné.
+let SBXOS = '/sbxos/';
+api('/invitation/url').then(j => { if (j && j.sbxos) SBXOS = j.sbxos; }).catch(() => {});
+
 const MOTS = { en_attente:['⏳','En attente'], acceptee:['✅','Accès accordé'],
                refusee:['⛔','Refusée'], expiree:['⌛','Expirée'] };
 
@@ -144,8 +147,11 @@ function rendFile(liste) {
   }
   // LE PROFILEUR VIT EN /mega, pas ici : la carlette montre ce qui passe, la
   // page porte ce qui se gère.
+  // La carlette est SERVIE par le vhost d'accès : le webui y est à la racine.
+  // Pointer « /acces/ » supposait le montage dans un vhost partagé — vrai sur
+  // le panneau d'admin, faux partout ailleurs.
   const a = el('a', 'plus', 'Profileur et accès accordés →');
-  a.href = '/acces/'; a.target = '_top';
+  a.href = '/'; a.target = '_top';
   c.appendChild(a);
 }
 
@@ -171,7 +177,7 @@ async function rendMienne(v) {
       + 'défi avec la clé dont l’empreinte a été validée.'));
     const g = el('div', 'gestes');
     g.appendChild(bouton('Ouvrir ma session', 'fort',
-      () => ouvreSession().then(j => { top.location.href = '/sbxos/'; return j; })));
+      () => ouvreSession().then(j => { top.location.href = SBXOS; return j; })));
     b.appendChild(g);
   } else if (v.etat === 'acceptee') {
     b.appendChild(el('p', 'aide', 'Session ouverte. Profil : ' + (v.profil || 'guest') + '.'));
