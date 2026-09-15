@@ -264,8 +264,8 @@
 </div>
 
 <script type="module">
-import { API, identite, empreinte, demande, suivi, ouvreSession, oublie, jetonGarde }
-  from './appareil.js';
+import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis,
+         oublie, jetonGarde } from './appareil.js';
 
 // LA DESTINATION DU PARCOURS. Ce module n'ouvre pas « un accès à la box » : il
 // fait entrer quelqu'un dans SON SBX OS. La session posée vaut pour tous les
@@ -520,6 +520,12 @@ async function rendFormulaire() {
 // ── Le visage se DÉDUIT, il ne se choisit pas ───────────────────────────────
 
 async function rafraichis() {
+  // Même règle qu'en carlette : l'ouverture ne dépend pas du visage affiché.
+  try {
+    const ouvert = await ouvreSiAdmis();
+    if (ouvert) { location.href = DESTINATION; return; }
+  } catch (e) { /* signature refusée : on affiche, on ne boucle pas */ }
+
   try {
     const [f, p, u] = await Promise.all([
       api('/file'), api('/profils'), api('/invitation/url')]);

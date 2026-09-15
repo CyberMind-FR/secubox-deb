@@ -87,8 +87,8 @@
 <div class="corps" id="corps"><p class="aide">Chargement…</p></div>
 
 <script type="module">
-import { API, identite, empreinte, demande, suivi, ouvreSession, oublie, jetonGarde }
-  from './appareil.js';
+import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis,
+         oublie, jetonGarde } from './appareil.js';
 
 const $ = (id) => document.getElementById(id);
 function el(t, c, txt) {
@@ -228,6 +228,13 @@ function rendFormulaire() {
 
 // ── Le visage se déduit ─────────────────────────────────────────────────────
 async function rafraichis() {
+  // L'OUVERTURE PASSE AVANT L'AFFICHAGE, et elle ne dépend pas du visage :
+  // l'appareil qui valide sa propre machine voit la FILE, jamais « votre
+  // demande » — le geste d'ouverture lui serait donc resté inatteignable.
+  try {
+    if (await ouvreSiAdmis()) { top.location.reload(); return; }
+  } catch (e) { /* signature refusée : on affiche, on ne boucle pas */ }
+
   try {
     const f = await api('/file');
     rendFile(f.en_attente || []);

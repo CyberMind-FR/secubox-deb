@@ -290,6 +290,25 @@ class OuvertureIn(BaseModel):
     signature: str = Field(max_length=200)
 
 
+@app.get("/session/etat")
+async def session_etat(req: Request):
+    """Y a-t-il DÉJÀ une session sur ce navigateur ?
+
+    LA QUESTION N'EST PAS RHÉTORIQUE : ouvrir une session écrase le cookie
+    existant. Un administrateur qui valide sa PROPRE machine déclencherait
+    l'ouverture automatique, et se retrouverait connecté en `user` sous le nom
+    déclaré par l'appareil — donc déconnecté de son compte d'administration,
+    par le geste même qui devait l'aider.
+
+    On ne DÉCODE pas le jeton ici : on constate seulement qu'un cookie de
+    session est présent. Cette route est ouverte, et lui faire valider un jeton
+    en ferait un oracle — « ce jeton est-il encore bon ? » se demande à
+    l'endroit qui l'exige, pas à celui qui l'observe.
+    """
+    from secubox_core.auth import SESSION_COOKIE
+    return {"session": bool(req.cookies.get(SESSION_COOKIE))}
+
+
 @app.get("/session/defi")
 async def session_defi(did: str, jeton: str, req: Request):
     """Un défi à signer. Usage unique, lié au DID, périmé en deux minutes."""

@@ -1,4 +1,22 @@
-secubox-acces (1.0.8-1~bookworm1) bookworm; urgency=medium
+secubox-acces (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA SESSION S'OUVRE TOUTE SEULE dès que l'accès est accordé (ref #1347).
+  * POURQUOI ÇA NE POUVAIT PAS ÊTRE UN BOUTON. Le visage de la carlette se
+    déduit : la file répond → administrateur ; sinon → « votre demande ». Un
+    appareil qui est À LA FOIS administrateur et demandeur — le téléphone
+    depuis lequel on valide sa propre machine — voyait donc toujours la file,
+    et le bouton « Ouvrir ma session » ne lui était JAMAIS proposé. L'accès
+    restait accordé et inutilisable, et l'on finissait par essayer un mot de
+    passe que ce parcours ne crée pas. L'ouverture ne dépend plus du visage.
+  * UNE SESSION DÉJÀ OUVERTE NE SE REMPLACE PAS. Ouvrir écrase le cookie :
+    l'administrateur qui valide sa propre machine aurait été reconnecté en
+    `user` sous le nom déclaré par l'appareil — donc déconnecté de son compte
+    d'administration, par le geste même qui devait l'aider. Nouvelle route
+    ouverte /session/etat, qui CONSTATE la présence d'un cookie sans le
+    décoder : lui faire valider un jeton en ferait un oracle.
+  * UN SEUL ESSAI PAR CHARGEMENT. Si la signature échoue — clé effacée, accès
+    révoqué entre-temps — réessayer toutes les trente secondes ne réparerait
+    rien et brûlerait un défi à chaque tour.
 
   * L'ATTENTE DU SOCKET NE TUE PLUS LE SERVICE. Le ExecStartPost attendait 15 s
     puis lançait `chmod` ; sur une box à charge 38, uvicorn met plus longtemps

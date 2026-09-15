@@ -181,6 +181,48 @@ export async function suivi() {
 }
 
 /**
+ * OUVRE LA SESSION TOUT SEUL, dès que l'accès est accordé (#1347).
+ *
+ * POURQUOI ÇA NE POUVAIT PAS ÊTRE UN BOUTON. Le visage de la carlette se
+ * déduit : la file répond → on est administrateur ; sinon on montre « votre
+ * demande ». Un appareil qui est À LA FOIS administrateur et demandeur — le
+ * téléphone depuis lequel on valide sa propre machine — voyait donc toujours
+ * la file, et le bouton « Ouvrir ma session » ne lui était JAMAIS proposé.
+ * L'accès restait accordé et inutilisable, et l'on finissait par essayer un
+ * mot de passe que ce parcours ne crée pas.
+ *
+ * L'ouverture est donc tentée à chaque rafraîchissement, quel que soit le
+ * visage. Elle ne se déclenche qu'une fois : le serveur note la session, et
+ * `session_ouverte` devient vrai.
+ *
+ * UN SEUL ESSAI PAR CHARGEMENT. Si la signature échoue — clé effacée, demande
+ * révoquée entre-temps — réessayer toutes les trente secondes ne réparerait
+ * rien et brûlerait un défi à chaque tour.
+ */
+let _essaiFait = false;
+
+export async function ouvreSiAdmis() {
+  if (_essaiFait || !jetonGarde()) return null;
+
+  // UNE SESSION DÉJÀ OUVERTE NE SE REMPLACE PAS. Ouvrir écrase le cookie : un
+  // administrateur qui valide sa propre machine serait reconnecté en `user`
+  // sous le nom déclaré par l'appareil — donc déconnecté de son compte
+  // d'administration, par le geste même qui devait l'aider. On attend qu'il
+  // se déconnecte, et l'ouverture se fera alors d'elle-même.
+  try {
+    const e = await json('/session/etat');
+    if (e && e.session) return null;
+  } catch (err) {
+    return null;   // on ne sait pas : on ne touche à rien
+  }
+
+  const v = await suivi();
+  if (!v || v.etat !== 'acceptee' || v.session_ouverte) return null;
+  _essaiFait = true;
+  return ouvreSession();
+}
+
+/**
  * OUVRE LA SESSION — le chaînon qui manquait.
  *
  * L'appareil ne présente pas son jeton comme un mot de passe : il PROUVE qu'il
