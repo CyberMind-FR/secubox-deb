@@ -5,6 +5,59 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-16 — anibal-amiot N'EST PLUS HÉBERGÉ ICI (ref #1364)
+
+Trois demandes successives, du plus étroit au plus large : supprimer l'envoi de
+statistiques, puis la synchronisation GitHub, puis le site.
+
+### Ce qui partait vers l'extérieur
+
+`/etc/secubox/metrics.toml` expédiait les chiffres de fréquentation à un
+destinataire **hors du parc**, avec une note à son intention. Deux minuteries —
+dont une **quotidienne**. Supprimé.
+
+### La synchronisation
+
+Le site était rapatrié depuis `github.com/anibaledel/livreedhermes` **toutes les
+5 minutes** en `git reset --hard`. Amont détaché, `metablog-sync.timer` arrêté.
+Il était le **seul** des ~170 sites metablog adossé à git : la minuterie
+n'existait que pour lui, et tourner sur un dépôt sans amont aurait produit un
+échec toutes les 5 minutes.
+
+### Le site
+
+**Vérifié avant de supprimer, et c'est ce qui a rendu le geste sûr :** le dépôt
+GitHub est **public**, 529 Mo, poussé la veille ; et le **DNS pointe déjà vers
+GitHub Pages** (185.199.108-111.153, `www` en CNAME vers `anibaledel.github.io`).
+Le site avait donc déjà migré — la box ne recevait plus son trafic, et le contenu
+ne risquait rien.
+
+Retirés : le vhost dédié, le **bloc caché dans le nginx monolithique** (36
+lignes, invisible d'un `ls` — le piège déjà rencontré sur ganimed), 6 vhosts
+HAProxy (`--allow-shrink` obligatoire, ACL 202 → 190), 6 routes sbxwaf, 3
+certificats Let's Encrypt, et 1,2 Go de contenu. Les six noms répondent **421** ;
+les sites voisins du même monolithe répondent toujours **200**.
+
+### La cardlet Tirage, retirée avec le reste
+
+Elle embarquait le site via le relais de même origine `/aa/`, qui mandatait
+`127.0.0.1:8900` avec `Host: anibal-amiot.com`. Laissée en place, elle aurait
+affiché un cadre vide. Entrée du registre, fichier de carte et bloc `location`
+sont partis ensemble — ils n'avaient de sens qu'ensemble. Vérifié : `/aa/` rend
+maintenant le repli du Hall, **identique octet pour octet** à n'importe quel
+chemin inexistant.
+
+### Une erreur de raisonnement, corrigée
+
+J'ai d'abord écarté l'archivage du contenu en invoquant le manque de place — en
+lisant `/` (carte SD, 1,9 Go libres) alors que le site vivait sur `/data`
+(**916 Go, 50 %**). L'argument était faux ; la décision tenait sur l'autre motif,
+le seul qui comptait : contenu public sur GitHub et DNS déjà migré.
+
+Conservé dans `/var/backups/anibal-amiot/` : les configurations d'origine et les
+certificats. Les fixtures de test gardant ce nom sont des **exemples**, pas de la
+logique — comme pour ganimed, elles restent.
+
 ## 2026-09-16 — LE TABLEAU WAF NE POUVAIT PAS SE CONNECTER (ref #1363)
 
 `https://waf.gk2.secubox.in/login.html?redirect=%2F` répondait **404**.

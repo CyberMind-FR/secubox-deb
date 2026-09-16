@@ -1,3 +1,18 @@
+secubox-webos (1.0.312-1~bookworm1) bookworm; urgency=medium
+
+  * CARDLET TIRAGE RETIREE — le site partenaire n'est plus heberge (#1364).
+    `anibal-amiot.com` est decommissionne : son DNS pointe desormais vers
+    GitHub Pages (185.199.108-111.153) et la box ne le sert plus. La cardlet
+    Tirage embarquait ce site via le relais de meme origine `/aa/`, qui
+    mandatait 127.0.0.1:8900 avec `Host: anibal-amiot.com` — un vhost qui
+    n'existe plus. Laissee en place, la carte aurait affiche un cadre vide.
+  .
+    Retires ensemble, parce qu'ils n'ont de sens qu'ensemble : l'entree du
+    registre du Hall, le fichier `cardlets/tirage-aa.html`, et le bloc
+    `location /aa/` du vhost avec sa CSP dediee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 06:43:15 +0200
+
 secubox-webos (1.0.311-1~bookworm1) bookworm; urgency=medium
 
   * LE HALL SERT SBX OS (ref #1353). Il l'était par admin.gk2, et c'était un
