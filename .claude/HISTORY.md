@@ -5,6 +5,42 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-16 — LE TABLEAU WAF NE POUVAIT PAS SE CONNECTER (ref #1363)
+
+`https://waf.gk2.secubox.in/login.html?redirect=%2F` répondait **404**.
+
+Sur un 401, `tableau.html` envoie vers `/login.html`. Ce chemin est **absolu**,
+donc résolu dans la racine de CE vhost — `…/www/waf` — où la page n'existe pas.
+La page partagée vit un niveau au-dessus, dans `…/www/`.
+
+L'enchaînement était rompu de bout en bout : tous les endpoints du module
+répondent 401 hors LAN et sans jeton, la page rebondissait, et le rebond tombait
+dans le vide. **L'opérateur ne pouvait pas se connecter du tout.**
+
+### Pourquoi pas une redirection vers admin.gk2, qui a une page qui marche
+
+Parce que `login.html` n'accepte **que des chemins de même origine** pour son
+`?redirect=` — garde-fou délibéré contre la redirection ouverte (« never //host
+or /\host — open-redirect safe »). Renvoyer l'opérateur sur admin.gk2 l'aurait
+connecté puis laissé là-bas, le retour étant refusé par ce garde-fou, à juste
+titre. La connexion doit se faire **sur cette origine**.
+
+Cela fonctionne parce que le cookie de session porte le domaine parent
+(`sso_cookie_domain = ".gk2.secubox.in"`) : une connexion faite ici vaut pour
+tout le parc.
+
+### Deux `location`, et pourquoi la seconde n'est pas optionnelle
+
+* `= /login.html` avec un **`root` statique** sur la racine partagée — jamais un
+  `alias` + `try_files`, qui perdrait l'extension et renverrait la page en
+  `application/octet-stream` ;
+* `/api/v1/auth/` vers `auth.sock` — sans quoi la page s'afficherait mais ne
+  connecterait **personne**, son formulaire postant sur une route absente de
+  cette origine.
+
+Vérifié au-delà du code de retour : identifiants faux → **401
+`{"detail":"Identifiants incorrects"}`**, exactement comme sur `admin.gk2`.
+
 ## 2026-09-15 — LES UNITÉS VESTIGES ET LES COQUILLES (ref #1362)
 
 Suite du décommissionnement de Wazuh. L'audit avait trié 19 unités jamais
