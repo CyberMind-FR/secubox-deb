@@ -74,6 +74,30 @@ route, donc le code est bien à jour.
 **La leçon générale :** poser le paquet ne suffit pas pour un module monté en
 processus. Vérifier avec une route neuve, pas avec un code de retour.
 
+### Deux défauts que la console du navigateur a nommés
+
+**La CSP du Hall ne listait pas `zigbee.gk2` en `frame-src`** : cliquer la carte
+ne faisait *rien de visible*, le navigateur refusant le cadre en silence. Ajouté
+aux trois déclarations qui portaient déjà `lyrion` — et vérifié **des deux
+côtés**, car autoriser `frame-src` ne suffit pas : la console z2m ne renvoie ni
+`X-Frame-Options` ni `frame-ancestors`, elle accepte donc le cadre.
+
+**Un garde-fou écrit après un `return`.** Dans `api()` de la carlette d'accès, le
+contrôle « cette réponse n'est pas du JSON » suivait le `return r.json()` : jamais
+exécuté. On retombait sur l'échec de `r.json()` — ça marchait, mais par accident,
+et l'erreur parlait de syntaxe JSON au lieu de dire que la route est absente.
+
+### Une fausse alerte, et ce qu'elle apprend
+
+Le formulaire « cet appareil n'a pas d'accès » vu sur une session **authentifiée**
+n'était pas une régression : c'était l'état transitoire pendant le redémarrage de
+l'agrégateur. Les appels échouaient en `NetworkError`, la carlette retombait sur
+son dernier visage possible. Le journal nginx l'a tranché —
+`GET /api/v1/acces/file → 200, 17 octets`, soit une file vide, donc reçue.
+
+**Ne pas diagnostiquer une carte sur une capture d'écran quand le journal du
+serveur répond à la question.**
+
 ## 2026-09-16 — anibal-amiot N'EST PLUS HÉBERGÉ ICI (ref #1364)
 
 Trois demandes successives, du plus étroit au plus large : supprimer l'envoi de

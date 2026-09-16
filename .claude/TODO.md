@@ -10,6 +10,27 @@
 
 ---
 
+## 2026-09-16 — suites Zigbee & accès (#1365, #1366 livrés)
+
+- [ ] **Zigbee : luminosité et température de couleur.** `/devices/{nom}/set`
+      n'accepte que `state`. Les ampoules exposent `brightness` et `color_temp`
+      en accès 7 — la carte pourrait porter un réglage long-press. À faire
+      seulement si l'usage le demande : la carte existe pour le geste d'une
+      seconde, pas pour remplacer la console.
+- [ ] **Zigbee : lecture sans jeton sur le LAN ?** La carte porte `auth:true`
+      parce que `require_lecture` est fermé par défaut. Armer
+      `[tableau_de_bord] actif = true` ouvrirait la lecture au LAN — décision
+      d'exploitant, pas de code.
+- [ ] **Sonder le groupe C restant.** `webmail` a été exclu du décommissionnement
+      et garde un vhost qui répond 200 : vérifier ce qu'il sert réellement.
+- [ ] **Unités orphelines de `metablog-sync`.** `.service` et `.timer` ne sont
+      possédés par aucun paquet (comme l'était `secubox-wazuh`). Les empaqueter
+      ou les retirer.
+- [ ] **File de notifications BBS.** Toujours sans persistance : une notification
+      perdue est perdue. Poser la file si les pertes se voient.
+
+---
+
 ## 2026-09-14 — suites leurre & renseignement (#1290 livré)
 
 - [ ] **Vue « marques revenues »** dans la page Renseignement. Le moteur

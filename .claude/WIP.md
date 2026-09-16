@@ -6,7 +6,44 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-09-14*
+*Mis à jour : 2026-09-16*
+
+---
+
+## 2026-09-16 — Zigbee dans le Hall, file d'accès, décommissionnements
+
+### ✅ Fait — dans le dépôt ET déployé
+
+- **Carte Zigbee (#1365)** — `secubox-zigbee` **2.6.7**, `secubox-webos` **1.0.315**.
+  `/devices` et `/devices/{nom}/set`, annoncés « deferred to v2.5 » depuis la v2.4.
+  Liste + petit bouton emoji par ligne, 6 appareils. LAN deux fois (`lan:true` +
+  `$lan_client`), `auth:true` puisque la lecture du module est fermée par défaut.
+  État **demandé** (le topic retenu peut être vide) ; `etat: null` ≠ `"OFF"` ;
+  `TOGGLE` plutôt qu'un ON/OFF calculé ; nom validé par liste blanche du pont.
+- **File d'accès visible depuis le Hall (#1366)** — `secubox-acces` **1.5.6**.
+  `/file` n'était pas relayé : l'administrateur retombait *toujours* sur sa propre
+  fiche. **Trouvé en corrigeant** : les six routes d'administration n'exigeaient
+  qu'un jeton valide, donc tout porteur authentifié pouvait lire les noms et
+  empreintes des demandeurs. Elles exigent maintenant `admin`, cherché dans les
+  **deux** registres. « Ouvrir SBX OS » dans les deux vues ; « Profileur » reste
+  encadré au lieu de remplacer le Hall.
+- **Connexion du tableau WAF (#1363)** — `secubox-waf` **1.10.31**. `/login.html`
+  rendait 404 : chemin absolu résolu dans la racine du vhost. Page + `/api/v1/auth/`
+  servis sur cette origine — `login.html` n'accepte que du même-origine pour son
+  `?redirect=`.
+- **anibal-amiot décommissionné (#1364)** — stats, synchro GitHub, puis le site.
+  DNS déjà sur GitHub Pages, dépôt public : rien perdu. Les 6 noms rendent 421.
+- **Unités vestiges et coquilles (#1362)** — 10 unités retirées (modules intacts,
+  servis par `secubox-groupd`), 6 paquets purgés, Wazuh décommissionné.
+- **Sauvegardes sur le SSD** — `/var/backups` = montage lié vers `/data/backups`.
+  329 fichiers comparés par empreinte avant bascule. Carte SD 87 % → 84 %.
+
+### ⬜ Next Up
+
+- **Basculer une lampe pour de vrai** — la chaîne est prouvée jusqu'au 401 ; le
+  dernier pas demande une session de navigateur.
+- **`[tableau_de_bord] actif`** — décider si la lecture Zigbee doit s'ouvrir au
+  LAN sans jeton ; sinon la carte reste réservée aux sessions ouvertes.
 
 ---
 

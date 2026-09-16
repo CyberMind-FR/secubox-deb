@@ -1,3 +1,14 @@
+secubox-acces (1.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * UN GARDE-FOU ECRIT APRES UN `return` (#1366). Le controle « cette reponse
+    n'est pas du JSON » suivait le `return r.json()` : il n'a JAMAIS ete
+    execute, et le navigateur le signalait (« unreachable code after return
+    statement »). On retombait sur l'echec de `r.json()` — ca marchait, mais
+    par accident, et l'erreur parlait de syntaxe JSON au lieu de dire que la
+    route est absente de ce vhost. Le controle passe AVANT le retour.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 10:00:59 +0200
+
 secubox-acces (1.5.5-1~bookworm1) bookworm; urgency=medium
 
   * « Profileur et acces accordes » RESTE ENCADRE (#1366). Le lien portait

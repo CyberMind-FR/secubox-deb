@@ -266,7 +266,46 @@ Une carte fait 280 px et le pointeur y dérape. `confirm()` dans une iframe est
 laid et parfois bloqué. Le premier clic **arme** (le bouton devient ⚠), le
 second exécute, et l'armement **retombe seul** au bout de quelques secondes.
 
-### 5.5 Jamais de champ mot de passe dans une carte
+### 5.5 « Pas de réponse » n'est pas « éteint »
+
+Carte Zigbee (#1365). Un appareil qui ne répond pas rendait naturellement une
+absence d'état — la tentation est de l'afficher « éteint », puisque c'est le
+rendu par défaut d'un booléen vide. **C'est un mensonge cliquable** : la lampe
+est hors de portée, pas éteinte ; l'utilisateur appuie, rien ne se passe, et il
+conclut que la carte est cassée.
+
+> **Règle.** L'état inconnu est une **troisième valeur**, pas un repli sur le
+> premier choix. Une carte qui pilote quelque chose de physique montre
+> explicitement « injoignable » et **désactive** son bouton.
+
+Corollaire sur la lecture : un état qu'on lit dans un cache (topic retenu MQTT,
+dernier échantillon, fichier) peut être **vide** sans que rien n'aille mal —
+après un redémarrage de l'amont, personne n'a republié. Lire le cache seul rend
+alors une carte vide en prétendant que tout va bien. **Demander** coûte un
+aller-retour ; il vaut le prix.
+
+### 5.6 Envoyer l'intention, pas l'état calculé
+
+Même carte. Pour éteindre une lampe affichée « allumée », l'évidence est
+d'envoyer `OFF`. Mais la carte affiche **le monde tel qu'il était** à son dernier
+rafraîchissement — entre-temps quelqu'un a pu toucher l'interrupteur mural.
+`OFF` sur une lampe déjà éteinte ne fait rien de **visible**, et se lit comme une
+panne de la carte.
+
+> **Règle.** Quand l'amont sait basculer, envoyer `TOGGLE` et **relire** la
+> réponse de l'appareil. La carte affiche ce qui est, jamais ce qu'elle espérait.
+
+### 5.7 Un nom qui devient une adresse se valide par liste blanche
+
+La carte Zigbee poste sur `zigbee2mqtt/<nom>/set`. Une expression régulière
+« nom bien formé » laisse passer n'importe quel nom bien formé — y compris
+`bridge/request/…`, qui pilote le pont lui-même.
+
+> **Règle.** Dès qu'un identifiant fourni par l'appelant est **concaténé** dans
+> un topic, un chemin ou une clé, le valider contre la **liste que l'amont a
+> lui-même annoncée**, pas contre une forme.
+
+### 5.8 Jamais de champ mot de passe dans une carte
 
 Non négociable, développé en [`WEBOS-DESIGN.md`](WEBOS-DESIGN.md) §4bis. Une
 carte qui manque d'accès **demande une validation** ; celle-ci se fait en

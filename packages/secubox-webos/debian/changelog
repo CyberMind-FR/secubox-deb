@@ -1,3 +1,17 @@
+secubox-webos (1.0.315-1~bookworm1) bookworm; urgency=medium
+
+  * LA CARTE ZIGBEE NE POUVAIT PAS S'OUVRIR EN PLEINE PAGE (#1365). La CSP du
+    Hall ne listait pas `zigbee.gk2.secubox.in` en `frame-src` : cliquer la
+    carte ne faisait RIEN de visible, le navigateur refusant le cadre en
+    silence — seule la console le disait. Ajoute aux TROIS declarations qui
+    portaient deja lyrion, la carte LAN comparable ; nulle part ailleurs.
+  .
+    Verifie des deux cotes, parce qu'autoriser `frame-src` ne suffit pas : la
+    console z2m ne renvoie ni `X-Frame-Options` ni `frame-ancestors`, elle
+    accepte donc le cadre — exactement comme lyrion.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 10:00:59 +0200
+
 secubox-webos (1.0.314-1~bookworm1) bookworm; urgency=medium
 
   * LA FILE D'ACCES, VISIBLE DEPUIS LE HALL (#1366). La carlette d'acces
