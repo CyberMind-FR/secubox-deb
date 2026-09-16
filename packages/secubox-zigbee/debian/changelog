@@ -1,3 +1,36 @@
+secubox-zigbee (2.6.7-1~bookworm1) bookworm; urgency=medium
+
+  * LES APPAREILS, ENFIN (#1365). Le module annoncait depuis la v2.4 que
+    `/devices` etait « deferred to v2.5 » : il savait dire si le pont tournait,
+    jamais ce qu'il y avait au bout. La carte du Hall en a besoin — une carte
+    qui ne sait pas dire si une lampe est allumee ne vaut pas la peine d'etre
+    ouverte.
+  .
+    GET /devices (require_lecture) rend les appareils avec leur etat ;
+    POST /devices/{nom}/set (require_jwt) allume, eteint ou bascule.
+  .
+    ON DEMANDE L'ETAT, ON NE L'ATTEND PAS. Le topic retenu `zigbee2mqtt/<nom>`
+    peut etre VIDE — c'est le cas apres un redemarrage du pont, ou quand le
+    conteneur a ete gele. Se contenter de lire le retenu rendrait une carte
+    vide en pretendant que tout va bien. On publie donc un `/get` sur chaque
+    appareil et on ecoute la reponse, en UNE seule ecoute pour tous : six
+    abonnements successifs couteraient six fois le delai d'attente.
+  .
+    UN APPAREIL QUI N'A PAS REPONDU REND `etat: null`, PAS « OFF ». Une lampe
+    hors de portee n'est pas une lampe eteinte, et les confondre ferait cliquer
+    dans le vide en croyant agir.
+  .
+    LE NOM EST VALIDE PAR LISTE BLANCHE, pas par expression reguliere : il
+    devient un segment de topic MQTT (`zigbee2mqtt/<nom>/set`). Un nom
+    simplement « bien forme » permettrait d'ecrire dans un topic arbitraire du
+    courtier, `bridge/request/...` compris, qui pilote le pont lui-meme. On
+    n'accepte que ce que le pont a lui-meme annonce.
+  .
+    Aucune dependance nouvelle : meme motif mosquitto_sub/pub en sous-processus
+    que `_bridge_state`, memes identifiants /etc/secubox/secrets/mqtt-z2m.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 09:34:06 +0200
+
 secubox-zigbee (2.6.6-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

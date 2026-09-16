@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1365 — carte « Zigbee » : la liste des appareils, et un bouton par
+  appareil.
+
+  CE QU'ELLE REMPLACE. Allumer une lampe demandait d'ouvrir zigbee.gk2, d'attendre
+  le chargement de l'interface zigbee2mqtt — une application complète, avec sa
+  carte du réseau maillé et ses écrans d'appairage — puis de trouver l'appareil.
+  Pour un geste d'une seconde. La carte fait ce geste, et rien d'autre : la
+  console reste à un clic pour tout le reste.
+
+  ELLE NE MONTRE QUE CE QUE LE PONT A DIT. Un appareil qui n'a pas répondu
+  s'affiche « injoignable » — PAS « éteint ». Une lampe hors de portée n'est pas
+  une lampe éteinte, et les confondre ferait cliquer dans le vide en croyant agir.
+
+  LAN SEULEMENT, deux fois. La carte est masquée aux clients WAN du Hall
+  (`lan:true` → data-lan), et le relais nginx refuse AUSSI côté serveur
+  ($lan_client). Le premier est du confort d'affichage ; le second est la
+  garantie — sans lui, il suffirait d'appeler l'API à la main depuis l'extérieur
+  pour éteindre les lumières de quelqu'un.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zigbee — vue micro</title>
+<link rel="stylesheet" href="../spicy.css">
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
+          --accent:#c8791f; --ok:#3d6b4a; --froid:#8a8a99; --alerte:#c0392b; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#e0a45c; --ok:#6db38a; --froid:#6b6b7a; --alerte:#ef6b5c; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#e0a45c; --ok:#6db38a; --froid:#6b6b7a; --alerte:#ef6b5c; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
+  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .72rem; gap:.4rem; }
+  .tete { display:flex; align-items:center; gap:.45rem; }
+  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
+              font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
+  .tete b { font-size:.88rem; }
+  .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em;
+             text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  /* La liste : une ligne par appareil, serrée — six lignes doivent tenir sans
+     que la carte ait besoin de défiler. */
+  .liste { display:flex; flex-direction:column; gap:.2rem; overflow-y:auto; scrollbar-width:none; }
+  .liste::-webkit-scrollbar { width:0; display:none; }
+  .app { display:flex; align-items:center; gap:.42rem; padding:.16rem .12rem;
+         border-radius:7px; }
+  .app:hover { background:color-mix(in srgb, var(--border) 45%, transparent); }
+  .app .k { flex:0 0 auto; font-size:.82rem; width:17px; text-align:center; line-height:1; }
+  .app .nom { flex:1; min-width:0; font-size:.71rem; overflow:hidden;
+              text-overflow:ellipsis; white-space:nowrap; }
+  .app .det { flex:0 0 auto; font-size:.55rem; color:var(--muted);
+              font-variant-numeric:tabular-nums; }
+
+  /* LE BOUTON. Petit, rond, emoji — et il PORTE l'état : allumé il est en
+     accent, éteint il est sourd. Le même objet dit et fait, il n'y a donc rien
+     à lire pour savoir sur quoi on appuie. */
+  .b { flex:0 0 auto; width:23px; height:23px; border-radius:50%;
+       border:1px solid var(--border); background:transparent; cursor:pointer;
+       display:grid; place-items:center; font-size:.76rem; line-height:1;
+       padding:0; transition:background .12s, border-color .12s, opacity .12s; }
+  .b:hover:not(:disabled) { border-color:var(--accent); }
+  .b:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .b.on { background:color-mix(in srgb, var(--accent) 22%, transparent);
+          border-color:var(--accent); }
+  .b.off { opacity:.4; filter:grayscale(1); }
+  .b:disabled { cursor:not-allowed; opacity:.3; }
+  .b.attente { animation:pulse .9s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  @media (prefers-reduced-motion: reduce){ .b.attente{animation:none;opacity:.6} }
+
+  .msg { color:var(--muted); font-size:.7rem; text-align:center; margin:auto 0;
+         padding:0 .4rem; line-height:1.5; }
+  .msg b { color:var(--texte); font-weight:600; }
+
+  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
+          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
+          text-transform:uppercase; color:var(--muted); text-decoration:none; }
+  .pied .grow { flex:1; } .pied:hover { color:var(--accent); }
+  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
+           animation:bat 2.4s ease-in-out infinite; }
+  .pouls.mort { background:var(--alerte); animation:none; }
+  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
+  @media (prefers-reduced-motion: reduce){ .pouls{animation:none;opacity:.7} }
+</style>
+
+<div class="mw">
+  <div class="tete"><span class="ic">💡</span><b>Zigbee</b><span class="n" id="n"></span></div>
+  <div class="liste" id="liste"></div>
+  <div class="msg" id="msg" hidden></div>
+  <a class="pied" href="https://zigbee.gk2.secubox.in/" title="Ouvrir la console zigbee2mqtt">
+    <span class="pouls" id="pouls"></span><span>console zigbee2mqtt</span>
+    <span class="grow"></span><span id="pont"></span></a>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var el = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
+
+  function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+
+  function api(chemin, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+    var j = jeton();
+    if (j) opts.headers['Authorization'] = 'Bearer ' + j;
+    if (opts.body) opts.headers['Content-Type'] = 'application/json';
+    return fetch('/api/v1/zigbee' + chemin, opts).then(function (r) {
+      return r.json().catch(function () { return {}; })
+        .then(function (d) { return { code: r.status, corps: d }; });
+    });
+  }
+
+  // L'EMOJI DIT LE GENRE, PAS LE MODÈLE. Une guirlande et une ampoule sont
+  // toutes deux des « light » pour le pont ; les distinguer d'un coup d'œil
+  // vaut mieux qu'une icône unique répétée six fois.
+  function icone(a) {
+    var n = (a.nom || '').toUpperCase();
+    if (/GUIRLANDE|STRIP|RUBAN/.test(n)) return '✨';
+    if (a.genre === 'switch') return '🔌';
+    if (a.genre === 'light') return '💡';
+    return '🔘';
+  }
+
+  // Le nom du pont est CELUI DE L'OPÉRATEUR (INTER-BUR, LIGHT-JARDIN…) : c'est
+  // lui qui sert de clé dans l'API, et le réécrire « joliment » ferait diverger
+  // ce qu'on montre de ce qu'on commande. On se contente de l'adoucir.
+  function joli(n) {
+    return String(n || '').replace(/[-_]/g, ' ').toLowerCase()
+      .replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); });
+  }
+
+  var enVol = {};   // appareils dont une commande est en cours
+
+  function rend(d) {
+    var apps = (d && d.appareils) || [];
+    var pont = (d && d.pont) || 'inconnu';
+    el('pont').textContent = pont === 'online' ? '' : pont;
+    el('pouls').classList.toggle('mort', pont !== 'online');
+
+    if (!apps.length) {
+      el('liste').innerHTML = '';
+      montre(pont === 'online'
+        ? 'Le pont ne déclare aucun appareil.'
+        : 'Le pont Zigbee est <b>' + esc(pont) + '</b>.');
+      return;
+    }
+    cache();
+    var allumes = apps.filter(function (a) { return a.etat === 'ON'; }).length;
+    el('n').textContent = allumes + '/' + apps.length + ' allumés';
+
+    el('liste').innerHTML = apps.map(function (a) {
+      var inj = !a.joignable;
+      var on = a.etat === 'ON';
+      var cls = inj ? '' : (on ? ' on' : ' off');
+      // Le détail dit ce qu'on SAIT : la luminosité d'une lampe allumée, ou
+      // rien. Afficher « 0 % » pour une lampe éteinte inventerait une mesure.
+      var det = inj ? 'injoignable'
+              : (on && a.luminosite != null
+                 ? Math.round(a.luminosite / 254 * 100) + '&#8239;%' : '');
+      var titre = inj ? a.nom + ' — ne répond pas'
+                : a.nom + ' — ' + (on ? 'allumé' : 'éteint')
+                  + (a.qualite != null ? ' · signal ' + a.qualite : '');
+      return '<div class="app" title="' + esc(titre) + '">'
+        + '<span class="k">' + icone(a) + '</span>'
+        + '<span class="nom">' + esc(joli(a.nom)) + '</span>'
+        + '<span class="det">' + det + '</span>'
+        + '<button class="b' + cls + (enVol[a.nom] ? ' attente' : '') + '"'
+        + ' data-nom="' + esc(a.nom) + '"'
+        + (inj ? ' disabled' : '')
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' aria-label="' + esc((on ? 'Éteindre ' : 'Allumer ') + joli(a.nom)) + '">'
+        + (inj ? '⚠️' : '⏻') + '</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  function montre(html) { el('msg').innerHTML = html; el('msg').hidden = false;
+                          el('liste').innerHTML = ''; el('n').textContent = ''; }
+  function cache() { el('msg').hidden = true; }
+
+  function charge() {
+    api('/devices').then(function (r) {
+      if (r.code === 403) {
+        return montre('Le pilotage Zigbee est réservé au <b>réseau local</b>.');
+      }
+      if (r.code === 401) {
+        return montre('Ouvrez votre session pour piloter les appareils.');
+      }
+      if (r.code >= 400) { return montre('Le pont Zigbee est injoignable.'); }
+      rend(r.corps);
+    }).catch(function () { montre('Le pont Zigbee est injoignable.'); });
+  }
+
+  // BASCULER SANS SAVOIR L'ÉTAT COURANT, c'est le pont qui le fait : on envoie
+  // TOGGLE plutôt que de calculer ON ou OFF depuis ce qu'on affiche. Entre notre
+  // dernier rafraîchissement et le clic, quelqu'un a pu toucher l'interrupteur
+  // mural — envoyer « ON » parce qu'on croit la lampe éteinte ne ferait rien de
+  // visible, et passerait pour une panne.
+  el('liste').addEventListener('click', function (ev) {
+    var b = ev.target && ev.target.closest ? ev.target.closest('button.b') : null;
+    if (!b || b.disabled) return;
+    var nom = b.getAttribute('data-nom');
+    if (!nom || enVol[nom]) return;
+    enVol[nom] = true;
+    b.classList.add('attente');
+    api('/devices/' + encodeURIComponent(nom) + '/set',
+        { method: 'POST', body: JSON.stringify({ etat: 'TOGGLE' }) })
+      .then(function (r) {
+        delete enVol[nom];
+        if (r.code === 403) return montre('Le pilotage Zigbee est réservé au <b>réseau local</b>.');
+        if (r.code === 401) return montre('Ouvrez votre session pour piloter les appareils.');
+        // On RECHARGE au lieu de peindre l'état qu'on espérait : la réponse
+        // vient de l'appareil, et lui seul sait s'il a obéi.
+        charge();
+      })
+      .catch(function () { delete enVol[nom]; charge(); });
+  });
+
+  charge();
+  // Les appareils bougent quand on les touche — ici ou au mur. Dix secondes
+  // gardent la carte honnête sans interroger six appareils en permanence.
+  var tic = setInterval(function () { if (!document.hidden) charge(); }, 10000);
+  addEventListener('pagehide', function () { clearInterval(tic); });
+
+  // RESTER DANS LE HALL : le lien du pied ne doit pas emporter tout le Hall.
+  document.addEventListener('click', function (ev) {
+    if (parent === window) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: 'ouvre', id: 'zigbee', url: a.href }, '*'); } catch (e) {}
+  }, true);
+
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  })();
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+})();
+</script>
+
+<script src="../aide.js"></script>
+<script>window.SBXAide&&SBXAide({zones:function(){return [
+  {el:document.querySelector('.tete'),label:'En-tête — Zigbee et le nombre d’appareils allumés'},
+  {el:document.getElementById('liste'),label:'Appareils — un par ligne ; le bouton ⏻ bascule, ⚠️ signale un appareil qui ne répond pas'},
+  {el:document.querySelector('.pied'),label:'Pied — ouvre la console zigbee2mqtt (appairage, réseau maillé)'}
+].filter(function(z){return z.el;});}});</script>

@@ -196,8 +196,31 @@ function rendFile(liste) {
   // La carlette est SERVIE par le vhost d'accès : le webui y est à la racine.
   // Pointer « /acces/ » supposait le montage dans un vhost partagé — vrai sur
   // le panneau d'admin, faux partout ailleurs.
+  // L'ADMINISTRATEUR AUSSI A UN BUREAU (#1366). Il voit la file parce qu'il
+  // administre, mais il reste quelqu'un qui vient travailler : sans ce geste,
+  // la seule sortie de la carte menait au profileur.
+  const g = el('div', 'gestes');
+  g.appendChild(bouton('Ouvrir SBX OS', 'fort',
+    () => _sbxosPret.then(() => { top.location.href = SBXOS; })));
+  c.appendChild(g);
+
+  // LA RACINE SE DÉDUIT DE L'ENDROIT D'OÙ L'ON A ÉTÉ SERVI (#1366). Écrire « / »
+  // supposait la carlette à la racine de son propre vhost — vrai sur acces.gk2,
+  // FAUX sur le Hall, où elle vit sous /i/acces/ et où ce lien menait donc à
+  // l'accueil du Hall. Le défaut ne se voyait pas tant qu'un administrateur ne
+  // pouvait pas atteindre cette vue depuis le Hall ; il le peut maintenant.
   const a = el('a', 'plus', 'Profileur et accès accordés →');
-  a.href = '/'; a.target = '_top';
+  a.href = location.pathname.replace(/[^/]*$/, '') || '/';
+  // ON RESTE DANS LE HALL (#1366). `target="_top"` remplaçait le Hall entier
+  // par le profileur : la radio s'arrêtait, la vidéo aussi, et revenir
+  // demandait de tout recharger. Encadrée, la carte demande au Hall d'ouvrir la
+  // page À CÔTÉ, comme le font les autres cartes. Hors cadre — sur acces.gk2 —
+  // le lien reste un lien ordinaire, et n'a besoin de rien.
+  a.addEventListener('click', (ev) => {
+    if (parent === window) return;
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: 'ouvre', id: 'acces', url: a.href }, '*'); } catch (e) {}
+  });
   c.appendChild(a);
 }
 
@@ -228,6 +251,14 @@ async function rendMienne(v) {
     b.appendChild(g);
   } else if (v.etat === 'acceptee') {
     b.appendChild(el('p', 'aide', 'Session ouverte. Profil : ' + rang(v.profil || 'guest') + '.'));
+    // LA CARTE S'ARRÊTAIT LÀ (#1366). « Session ouverte, profil admin », et
+    // rien à faire : ni geste, ni lien. Une carte qui annonce un droit sans
+    // ouvrir la porte qu'il donne oblige à aller chercher l'adresse ailleurs.
+    // Le bureau est la suite naturelle d'une session ouverte — on y mène.
+    const g = el('div', 'gestes');
+    g.appendChild(bouton('Ouvrir SBX OS', 'fort',
+      () => _sbxosPret.then(() => { top.location.href = SBXOS; })));
+    b.appendChild(g);
   } else {
     const g = el('div', 'gestes');
     g.appendChild(bouton('Refaire une demande', 'fort', () => { oublie(); return Promise.resolve(); }));

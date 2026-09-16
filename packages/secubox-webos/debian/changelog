@@ -1,3 +1,53 @@
+secubox-webos (1.0.314-1~bookworm1) bookworm; urgency=medium
+
+  * LA FILE D'ACCES, VISIBLE DEPUIS LE HALL (#1366). La carlette d'acces
+    essaie `/file` : si la route repond, elle montre la file d'attente ; sinon
+    elle retombe sur « votre demande ». Cette route n'etant pas relayee par le
+    Hall, un administrateur y retombait TOUJOURS sur sa propre fiche —
+    « Session ouverte, profil admin », et rien d'autre. La file existait, il ne
+    pouvait pas la voir, et le demandeur attendait pendant ce temps.
+  .
+    `/profils/` RESTE DEHORS, et la proximite des noms est exactement ce qui
+    rend ce choix important : promouvoir et revoquer sont des gestes de
+    gouvernance, ils restent sur le vhost d'administration. On ne relaie que ce
+    que la carlette montre : lire la file, accorder, refuser.
+  .
+    DEUX VERROUS. Le LAN ($lan_client) — un administrateur en deplacement
+    retombe sur l'ancien comportement, ce qui est correct. Le profil ensuite :
+    depuis secubox-acces #1366 ces routes exigent `admin`, sans quoi relayer
+    `/file` aurait livre les noms et empreintes des demandeurs a tout porteur
+    authentifie.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 09:39:44 +0200
+
+secubox-webos (1.0.313-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE ZIGBEE (#1365). Une liste d'appareils, un petit bouton emoji par
+    ligne. Allumer une lampe demandait d'ouvrir zigbee.gk2, d'attendre le
+    chargement de l'interface zigbee2mqtt — une application complete, avec sa
+    carte du reseau maille et ses ecrans d'appairage — puis de trouver
+    l'appareil. Pour un geste d'une seconde.
+  .
+    LE BOUTON PORTE L'ETAT : allume il est en accent, eteint il est sourd. Le
+    meme objet dit et fait, il n'y a rien a lire pour savoir sur quoi on appuie.
+    Un appareil injoignable affiche ⚠️ et son bouton est desactive — il n'est
+    PAS montre comme eteint.
+  .
+    ON ENVOIE `TOGGLE`, PAS `ON`/`OFF` CALCULE DEPUIS L'AFFICHAGE. Entre le
+    dernier rafraichissement et le clic, quelqu'un a pu toucher l'interrupteur
+    mural : envoyer « ON » parce qu'on croit la lampe eteinte ne ferait rien de
+    visible, et passerait pour une panne. C'est le pont qui bascule.
+  .
+    LAN SEULEMENT, DEUX FOIS — meme posture que Lyrion. La carte est masquee
+    aux clients WAN (`lan:true`), et le relais nginx refuse AUSSI cote serveur
+    (`$lan_client`). Le premier n'est que de l'affichage ; sans le second, il
+    suffirait d'appeler l'API a la main depuis l'exterieur pour eteindre les
+    lumieres de la maison. `auth:true` aussi : depuis #1256 la lecture du
+    module est fermee par defaut, donc sans session la carte ne peut afficher
+    aucun appareil.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 09:34:06 +0200
+
 secubox-webos (1.0.312-1~bookworm1) bookworm; urgency=medium
 
   * CARDLET TIRAGE RETIREE — le site partenaire n'est plus heberge (#1364).

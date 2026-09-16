@@ -1342,6 +1342,18 @@ const FEATURED = [
   // Lyrion : LAN-only (#1247). `lan:true` → carte cachée aux clients WAN du Hall
   // (data-lan + .non-lan). Le service LMS et son admin restent accessibles en LAN.
   {id:"lyrion",     label:"Lyrion",    icon:"🎚️", color:"#128a6f", url:"lyrion.gk2.secubox.in", carte:"/cardlets/lyrion.html", h:230, lan:true},
+  // Zigbee : LAN-only (#1365), même posture que Lyrion. La carte liste les
+  // appareils du pont et porte un bouton par appareil — le geste d'une seconde,
+  // sans ouvrir la console zigbee2mqtt. `lan:true` masque la carte aux clients
+  // WAN, et le relais nginx refuse AUSSI côté serveur : sans ce second verrou,
+  // il suffirait d'appeler l'API à la main pour éteindre les lumières d'ici.
+  //
+  // `auth:true` AUSSI, et ce n'est pas du zèle : depuis #1256 la lecture du
+  // module est FERMÉE par défaut (pas de `[tableau_de_bord] actif` sur cette
+  // box), donc sans session la carte ne peut afficher aucun appareil. La
+  // montrer à un invité reviendrait à lui présenter une carte vide dont il ne
+  // peut rien faire.
+  {id:"zigbee",     label:"Zigbee",    icon:"💡", color:"#c8791f", url:"zigbee.gk2.secubox.in", carte:"/cardlets/zigbee.html", h:250, lan:true, auth:true},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=nextcloud", h:182},
   // SUPER CARDLET (#1245) : la carte PERSONNELLE du Cloud — fichiers (WebDAV),
   // quota, activité, partages ET actions (partager/supprimer/envoyer), au nom de

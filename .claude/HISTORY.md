@@ -5,6 +5,75 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-16 — CARTE ZIGBEE, ET LA FILE D'ACCÈS ENFIN VISIBLE (ref #1365, #1366)
+
+### La carte Zigbee
+
+Une liste d'appareils, un petit bouton emoji par ligne. Le module savait dire si
+le pont tournait, jamais ce qu'il y avait au bout : `/devices` était annoncé
+« deferred to v2.5 » depuis la v2.4. Livré, avec `/devices/{nom}/set`.
+
+**On demande l'état, on ne l'attend pas.** Le topic retenu `zigbee2mqtt/<nom>`
+peut être VIDE — après un redémarrage du pont, ou quand le conteneur a été gelé.
+Lire le retenu seul aurait rendu une carte vide en prétendant que tout va bien.
+On publie un `/get` sur chaque appareil, en **une** écoute pour tous.
+
+**Un appareil qui n'a pas répondu rend `etat: null`, pas « OFF ».** Une lampe
+hors de portée n'est pas une lampe éteinte ; les confondre ferait cliquer dans le
+vide en croyant agir. La carte l'affiche ⚠️, bouton désactivé.
+
+**Le nom est validé par liste blanche, pas par expression régulière** : il
+devient un segment de topic MQTT. Un nom « bien formé » permettrait d'écrire dans
+un topic arbitraire du courtier, `bridge/request/…` compris — qui pilote le pont.
+
+**On envoie `TOGGLE`**, pas un ON/OFF calculé depuis l'affichage : entre le
+dernier rafraîchissement et le clic, quelqu'un a pu toucher l'interrupteur mural.
+
+**LAN deux fois** — `lan:true` masque la carte aux clients WAN, et le relais
+nginx refuse aussi côté serveur. Le premier n'est que de l'affichage ; sans le
+second, il suffirait d'appeler l'API à la main depuis l'extérieur pour éteindre
+les lumières de la maison.
+
+### La file d'accès, invisible depuis le Hall
+
+La carlette essaie `/file` : si ça répond elle montre la file, sinon elle
+retombe sur « votre demande ». **Cette route n'était pas relayée par le Hall** —
+un administrateur y retombait donc TOUJOURS sur sa propre fiche, « Session
+ouverte, profil admin », et rien d'autre. La file existait, il ne pouvait pas la
+voir, et le demandeur attendait pendant ce temps.
+
+**Trouvé en corrigeant :** `/file`, `/profils` et leurs actions n'exigeaient
+qu'un jeton VALIDE — donc tout porteur authentifié, y compris un appareil admis
+en `guest`. Or la file porte les noms, appareils, messages et empreintes de gens
+qui demandent à entrer. Relayer sans corriger aurait élargi l'exposition ; les
+six routes exigent maintenant le profil `admin`, cherché dans **les deux**
+registres (`user_store` puis `appareils`) — l'oublier aurait verrouillé
+l'administrateur hors de sa propre file. Exercé sur cinq identités réelles avant
+livraison.
+
+`/profils/` reste hors du Hall : promouvoir et révoquer sont des gestes de
+gouvernance. La proximité des noms est exactement ce qui rend ce choix important.
+
+### Deux culs-de-sac fermés
+
+« Session ouverte, profil 👑 admin » n'offrait ni geste ni lien — **« Ouvrir SBX
+OS »** est posé dans les deux vues. Et le lien « Profileur » portait
+`target="_top"` : il remplaçait le Hall entier, arrêtant la radio et la vidéo. Il
+demande maintenant au Hall d'ouvrir la page **à côté**.
+
+### Le piège du jour : l'agrégateur servait du code périmé
+
+Il tournait depuis la veille et monte les modules **en processus**. Après
+`dpkg -i`, `require_admin` était sur le disque mais **pas dans le processus qui
+sert** — le relais fraîchement ouvert exposait donc la file sans sa garde.
+Détecté par une route qui n'existe que dans le code neuf : `/zigbee/devices`
+rendait **404** via l'agrégateur et **401** via groupd. Redémarrage (40 s), puis
+vérification : `/devices` → 401, `/nexistepas` → 404 — le 401 est propre à la
+route, donc le code est bien à jour.
+
+**La leçon générale :** poser le paquet ne suffit pas pour un module monté en
+processus. Vérifier avec une route neuve, pas avec un code de retour.
+
 ## 2026-09-16 — anibal-amiot N'EST PLUS HÉBERGÉ ICI (ref #1364)
 
 Trois demandes successives, du plus étroit au plus large : supprimer l'envoi de
