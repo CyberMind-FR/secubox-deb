@@ -19,7 +19,7 @@ on:
         type: string
         default: ''
       suite:
-        description: 'Debian suite (bookworm = oldstable, trixie = stable)'
+        description: 'Debian suite (bookworm = cible actuelle, trixie = portage)'
         required: false
         type: string
         default: 'bookworm'
@@ -45,35 +45,27 @@ on:
         description: 'Image size (empty = use board default)'
         required: false
         default: ''
+      suite:
+        description: 'Debian suite'
+        required: false
+        type: choice
+        options: [bookworm, trixie]
+        default: bookworm
       kiosk:
         description: 'rpi400/rpi4 only: include GUI kiosk (chromium fullscreen dashboard)'
         required: false
         type: boolean
         default: false
-      suite:
-        description: 'Debian suite'
-        required: false
-        type: choice
-        options:
-          - bookworm   # oldstable depuis que Trixie est stable (2026)
-          - trixie     # stable — portage en cours, ref #1294
-        default: bookworm
   push:
     tags:
       - 'v*'
 
 env:
-  # LA SUITE EST UN PARAMÈTRE, AVEC bookworm POUR DÉFAUT (#1294).
-  #
-  # Elle était figée ici en dur, ce qui rendait `build-image.sh --suite` inutile
-  # depuis la CI : le script savait construire une Trixie, le workflow ne savait
-  # pas le lui demander.
-  #
-  # LE REPLI N'EST PAS DÉCORATIF : le déclencheur `push: tags` ne porte AUCUN
-  # `inputs`, et une suite vide ferait appeler `debootstrap` sans nom de suite —
-  # échec au milieu d'une construction de 90 minutes. `|| 'bookworm'` garde donc
-  # le comportement d'aujourd'hui pour tout appelant qui ne demande rien.
-  DEBIAN_SUITE: ${{ inputs.suite || 'bookworm' }}
+  # SUITE PARAMÉTRABLE (#1294). Elle était figée à bookworm ; le portage Trixie
+  # demande de construire les deux sans dupliquer le workflow. Le repli littéral
+  # `bookworm` n'est pas décoratif : sans lui, un appel qui ne passe rien
+  # produirait `--suite ` et debootstrap échouerait sur une suite vide.
+  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'bookworm' }}
 
 jobs:
   # Build system images
