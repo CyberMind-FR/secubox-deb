@@ -90,10 +90,16 @@ override_dh_installsystemd:
 	  debian/secubox-waf-ng/lib/systemd/system/
 	dh_installsystemd --name=secubox-actord
 	dh_installsystemd --name=secubox-actord-ingest --no-start
+	# #498 : rate-limit nft pre-inspection, jusqu'ici orpheline dans /etc.
+	install -m 0644 systemd/secubox-waf-ratelimit.service \
+	  debian/secubox-waf-ng/lib/systemd/system/
+	dh_installsystemd --name=secubox-waf-ratelimit
 
 execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/sbin
 	install -m 0755 sbin/secubox-actord-ingest-perms debian/secubox-waf-ng/usr/sbin/
+	install -d debian/secubox-waf-ng/etc/secubox
+	install -m 0644 config/secubox-waf-ratelimit.nft debian/secubox-waf-ng/etc/secubox/
 	install -m 0755 sbxwaf debian/secubox-waf-ng/usr/sbin/sbxwaf
 	install -m 0755 sbx-actord debian/secubox-waf-ng/usr/sbin/sbx-actord
 	# Panneau admin Actor Intelligence (admin.gk2/actor/) — statique, standard maison.

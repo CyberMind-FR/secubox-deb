@@ -3,6 +3,12 @@
 	dh $@
 
 override_dh_auto_install:
+	# #1362 : filet de secours reseau, jusqu'ici orphelin dans /etc + /usr/sbin.
+	install -d debian/secubox-netmodes/usr/sbin
+	install -m 0755 sbin/secubox-net-fallback debian/secubox-netmodes/usr/sbin/
+	install -d debian/secubox-netmodes/lib/systemd/system
+	install -m 0644 systemd/secubox-net-fallback.service \
+	  debian/secubox-netmodes/lib/systemd/system/
 	install -d debian/secubox-netmodes/usr/lib/secubox/netmodes/
 	cp -r api debian/secubox-netmodes/usr/lib/secubox/netmodes/
 	install -d debian/secubox-netmodes/usr/share/secubox/www
@@ -20,3 +26,12 @@ override_dh_auto_install:
 	# elle n etait jamais lue.
 	install -d debian/secubox-netmodes/etc/nginx/secubox-routes.d
 	[ -f nginx/netmodes.conf ] && cp nginx/netmodes.conf debian/secubox-netmodes/etc/nginx/secubox-routes.d/ || true
+
+override_dh_installsystemd:
+	# NOMMER CHAQUE UNITE. Un `dh_installsystemd` nu traite TOUTES les unites du
+	# paquet, donc il activait et demarrait aussi le filet de secours — qui a
+	# reellement tourne sur gk2, fait un DHCPDISCOVER sur eth1 et pose une
+	# adresse 10.55.255.x sur une interface morte avant de tomber en timeout.
+	# L'appel --no-enable qui suivait arrivait trop tard (#1362).
+	dh_installsystemd --name=secubox-netmodes
+	dh_installsystemd --name=secubox-net-fallback --no-enable --no-start

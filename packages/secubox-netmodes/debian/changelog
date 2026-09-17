@@ -1,3 +1,20 @@
+secubox-netmodes (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * rules : nommer chaque unite dans dh_installsystemd. L'appel nu activait
+    ET demarrait secubox-net-fallback malgre le --no-enable qui suivait
+    (ref #1362).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 12:01:45 +0200
+
+secubox-netmodes (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Empaquette secubox-net-fallback (script + unite), orphelins dans
+    /usr/sbin et /etc/systemd/system. Livre DESACTIVE : s'attribuer une
+    adresse de secours est une manoeuvre de recuperation, pas un defaut
+    (ref #1362).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 11:55:44 +0200
+
 secubox-netmodes (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est

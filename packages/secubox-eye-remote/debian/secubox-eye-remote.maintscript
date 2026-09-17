@@ -1,0 +1,8 @@
+# Les unites etaient livrees dans /etc/systemd/system, donc enregistrees comme
+# CONFFILES : dpkg ne les met jamais a jour, et la copie figee masquait l'unite
+# correcte de /usr/lib. C'est ainsi que la board a garde une version privee du
+# nettoyage de socket (ExecStartPre) et porteuse du RuntimeDirectory=secubox
+# retire en #1022 — neutralise depuis par des drop-ins ecrits a la main.
+# rm_conffile est la seule facon propre de reprendre ces fichiers (#1362).
+rm_conffile /etc/systemd/system/secubox-eye-remote.service 1.0.5-1~bookworm1~
+rm_conffile /etc/systemd/system/secubox-eye-remote-dhcp.service 1.0.5-1~bookworm1~

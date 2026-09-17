@@ -1,3 +1,11 @@
 #!/usr/bin/make -f
 %:
 	dh $@
+
+override_dh_installsystemd:
+	# NOMMER CHAQUE UNITE : un `dh_installsystemd` nu traite toutes les unites du
+	# paquet et passe outre les --no-enable qui suivent (#1362).
+	dh_installsystemd --name=secubox-eye-remote
+	dh_installsystemd --name=secubox-eye-remote-dhcp --no-enable --no-start
+	# Gabarit par interface : instancie par le peripherique, jamais active seul.
+	dh_installsystemd --name=secubox-eye-network@ --no-enable --no-start

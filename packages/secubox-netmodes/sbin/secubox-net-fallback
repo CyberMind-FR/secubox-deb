@@ -1,0 +1,238 @@
+#!/bin/bash
+# SecuBox Network Fallback - DHCP first, then smart auto-IP with ARP collision detection
+# Avoids IP conflicts when multiple SecuBox devices are on same network
+logger -t secubox-net "Network fallback starting..."
+
+# Fallback network (SecuBox default when no DHCP)
+FALLBACK_NETWORK="10.55.255"
+FALLBACK_GW="10.55.255.1"
+# IP range for auto-assignment (avoid .1 gateway and .255 broadcast)
+IP_START=100
+IP_END=250
+
+# Check if IP is in use via ARP probe (RFC 5227)
+# Returns 0 if IP is FREE, 1 if IP is TAKEN
+check_ip_free() {
+    local ip="$1"
+    local iface="$2"
+
+    # Send ARP probe (src=0.0.0.0, dst=target IP)
+    # If we get a reply, the IP is taken
+    if command -v arping &>/dev/null; then
+        # arping returns 0 if reply received (IP taken), 1 if no reply (IP free)
+        if arping -D -q -c 2 -w 2 -I "$iface" "$ip" 2>/dev/null; then
+            return 0  # No reply = IP is free
+        else
+            return 1  # Got reply = IP is taken
+        fi
+    else
+        # Fallback: ping check (less reliable but works)
+        if ping -c 1 -W 1 "$ip" &>/dev/null; then
+            return 1  # Got reply = IP is taken
+        else
+            return 0  # No reply = probably free
+        fi
+    fi
+}
+
+# Find a free IP in the fallback range using ARP probing
+find_free_ip() {
+    local iface="$1"
+    local mac=$(cat /sys/class/net/$iface/address 2>/dev/null | tr -d ':')
+
+    # Generate a pseudo-random starting point based on MAC address
+    # This spreads devices across the range to reduce collision probability
+    local mac_seed=$(printf "%d" "0x${mac:8:4}" 2>/dev/null || echo "12345")
+    local range=$((IP_END - IP_START))
+    local start_offset=$((mac_seed % range))
+
+    logger -t secubox-net "Searching for free IP in ${FALLBACK_NETWORK}.${IP_START}-${IP_END} (seed offset: $start_offset)"
+
+    # Try IPs starting from our MAC-based offset, wrapping around
+    for ((i=0; i<range; i++)); do
+        local offset=$(( (start_offset + i) % range ))
+        local test_suffix=$((IP_START + offset))
+        local test_ip="${FALLBACK_NETWORK}.${test_suffix}"
+
+        if check_ip_free "$test_ip" "$iface"; then
+            logger -t secubox-net "Found free IP: $test_ip"
+            echo "$test_ip"
+            return 0
+        else
+            logger -t secubox-net "IP $test_ip is in use, trying next..."
+        fi
+    done
+
+    logger -t secubox-net "ERROR: No free IP found in range!"
+    return 1
+}
+
+# Announce our IP via gratuitous ARP (alert other devices)
+announce_ip() {
+    local ip="$1"
+    local iface="$2"
+
+    if command -v arping &>/dev/null; then
+        # Send gratuitous ARP to announce our presence
+        arping -A -c 3 -I "$iface" "$ip" 2>/dev/null &
+        logger -t secubox-net "Announced IP $ip via gratuitous ARP"
+    fi
+}
+
+# Common gateway IPs to probe for existing networks
+GATEWAYS="192.168.1.1 192.168.0.1 192.168.2.1 10.55.255.1 10.0.0.1 10.0.1.1 172.16.0.1"
+
+discover_lan() {
+    local iface="$1"
+    for gw in $GATEWAYS; do
+        local subnet_base="${gw%.*}"
+
+        # Find a free IP in this subnet
+        local test_ip
+        for suffix in 250 249 248 251 252; do
+            test_ip="${subnet_base}.${suffix}"
+            if check_ip_free "$test_ip" "$iface"; then
+                break
+            fi
+        done
+
+        # Temporarily add IP to test gateway reachability
+        ip addr add "${test_ip}/24" dev "$iface" 2>/dev/null
+
+        if ping -c 1 -W 1 -I "$iface" "$gw" &>/dev/null; then
+            logger -t secubox-net "Discovered gateway $gw on $iface"
+            ip route add default via "$gw" dev "$iface" 2>/dev/null || true
+            echo "nameserver $gw" > /etc/resolv.conf
+            echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+            echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+            announce_ip "$test_ip" "$iface"
+            logger -t secubox-net "Auto-configured $iface: ${test_ip}/24 via $gw"
+            return 0
+        fi
+
+        ip addr del "${test_ip}/24" dev "$iface" 2>/dev/null
+    done
+    return 1
+}
+
+# Configure fallback network with collision-free IP
+configure_fallback() {
+    local iface="$1"
+
+    logger -t secubox-net "Configuring fallback network on $iface"
+
+    # Find a free IP in the fallback range
+    local free_ip
+    free_ip=$(find_free_ip "$iface")
+
+    if [[ -z "$free_ip" ]]; then
+        # Last resort: use MAC-based IP
+        local mac=$(cat /sys/class/net/$iface/address 2>/dev/null | tr -d ':')
+        local mac_suffix=$(printf "%d" "0x${mac:8:4}" 2>/dev/null || echo "200")
+        mac_suffix=$((100 + (mac_suffix % 150)))
+        free_ip="${FALLBACK_NETWORK}.${mac_suffix}"
+        logger -t secubox-net "Using MAC-based fallback IP: $free_ip"
+    fi
+
+    # Configure the IP
+    ip addr add "${free_ip}/24" dev "$iface" 2>/dev/null
+
+    # Check if gateway exists
+    if ping -c 1 -W 1 "$FALLBACK_GW" &>/dev/null; then
+        ip route add default via "$FALLBACK_GW" dev "$iface" 2>/dev/null || true
+        echo "nameserver $FALLBACK_GW" > /etc/resolv.conf
+    fi
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+
+    # Announce our IP
+    announce_ip "$free_ip" "$iface"
+
+    logger -t secubox-net "Fallback configured: $iface = $free_ip"
+    return 0
+}
+
+# Wait for system to settle
+sleep 10
+GOT_IP=0
+
+# Process each network interface
+for iface in /sys/class/net/*; do
+    [ -e "$iface" ] || continue
+    IFACE=$(basename "$iface")
+
+    # Skip virtual interfaces
+    case "$IFACE" in
+        lo|dummy*|docker*|veth*|br-*|virbr*) continue ;;
+    esac
+
+    # Skip LAN interfaces - SecuBox IS the router on these (provides DHCP, not receives it)
+    # lan0, lan1 on EspressoBin are downstream ports to clients
+    case "$IFACE" in
+        lan*)
+            logger -t secubox-net "Skipping LAN interface $IFACE (downstream port)"
+            continue
+            ;;
+    esac
+
+    # Skip interfaces that are part of a bridge (already managed)
+    if [[ -d "/sys/class/net/$IFACE/brport" ]]; then
+        logger -t secubox-net "Skipping $IFACE (bridged interface)"
+        continue
+    fi
+
+    # Only process WAN/uplink interfaces (need DHCP from upstream router)
+    case "$IFACE" in
+        eth*|wan*|en*) ;;
+        *) continue ;;
+    esac
+
+    ip link set "$IFACE" up 2>/dev/null
+    sleep 2  # Wait for link
+
+    # Check if already has valid IP
+    CURRENT_IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -oP 'inet \K[0-9.]+' | grep -v '^169\.254\.' | head -1)
+    if [[ -n "$CURRENT_IP" ]]; then
+        logger -t secubox-net "Interface $IFACE already has IP $CURRENT_IP"
+        GOT_IP=1
+        continue
+    fi
+
+    # Try DHCP first
+    logger -t secubox-net "Requesting DHCP on $IFACE..."
+    if command -v dhclient &>/dev/null; then
+        timeout 30 dhclient -1 -v "$IFACE" 2>&1 | logger -t secubox-net || true
+    else
+        networkctl reconfigure "$IFACE" 2>/dev/null || true
+        sleep 15
+    fi
+
+    # Check if DHCP succeeded
+    CURRENT_IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -oP 'inet \K[0-9.]+' | grep -v '^169\.254\.' | head -1)
+    if [[ -n "$CURRENT_IP" ]]; then
+        logger -t secubox-net "DHCP succeeded on $IFACE: $CURRENT_IP"
+        GOT_IP=1
+        continue
+    fi
+
+    # DHCP failed on WAN interface - try auto-discovery then fallback
+    if [[ "$IFACE" == e* ]] || [[ "$IFACE" == eth* ]] || [[ "$IFACE" == wan* ]] || [[ "$IFACE" == en* ]]; then
+        logger -t secubox-net "DHCP failed on $IFACE, trying LAN auto-discovery..."
+        if discover_lan "$IFACE"; then
+            logger -t secubox-net "LAN auto-discovery succeeded on $IFACE"
+            GOT_IP=1
+        else
+            logger -t secubox-net "Auto-discovery failed, using fallback network..."
+            if configure_fallback "$IFACE"; then
+                GOT_IP=1
+            fi
+        fi
+    fi
+done
+
+# Final status
+if [[ "$GOT_IP" -eq 1 ]]; then
+    logger -t secubox-net "Network configuration complete"
+else
+    logger -t secubox-net "WARNING: No network configured!"
+fi

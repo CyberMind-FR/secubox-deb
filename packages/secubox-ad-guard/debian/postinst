@@ -6,8 +6,13 @@ if [ "$1" = "configure" ]; then
     chown -R secubox:secubox /var/lib/secubox/ad-guard
 
     systemctl daemon-reload
-    systemctl enable secubox-ad-guard.service || true
-    systemctl start secubox-ad-guard.service || true
+    # PAS d'enable de secubox-ad-guard.service : le module est servi par
+    # secubox-groupd (secubox-group@g1.service) d'apres sa declaration dans
+    # aggregator.toml, et le paquet ne livre donc AUCUNE unite propre.
+    # Ces deux lignes echouaient bruyamment a chaque installation :
+    #   Failed to enable unit: Unit file secubox-ad-guard.service does not exist.
+    # L'unite debian/secubox-ad-guard.service subsiste comme reference du
+    # mode autonome ; elle n'est deliberement pas installee (#1362).
 fi
 #DEBHELPER#
 exit 0

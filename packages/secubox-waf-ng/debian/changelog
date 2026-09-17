@@ -1,3 +1,21 @@
+secubox-waf-ng (1.18.3-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-waf-ratelimit.nft rendu rejouable (idiome create-then-delete).
+    `nft -f` sur une table deja chargee echouait sur « File exists » : l'unite
+    ne fonctionnait qu'au premier chargement et tombait en echec a tout
+    redemarrage. Defaut prealable, revele par la mise en paquet (ref #1362).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 12:01:45 +0200
+
+secubox-waf-ng (1.18.2-1~bookworm1) bookworm; urgency=medium
+
+  * Empaquette secubox-waf-ratelimit.service et son jeu de regles nft
+    (#498), jusqu'ici orphelins dans /etc/systemd/system et /etc/secubox
+    alors que l'unite tournait. Le commentaire du .nft citait CrowdSec,
+    purge depuis : corrige (ref #1362).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 11:55:44 +0200
+
 secubox-waf-ng (1.18.1-1~bookworm1) bookworm; urgency=medium
 
   * LE JOURNAL DES MENACES N'ETAIT DECLARE NULLE PART (#1362).

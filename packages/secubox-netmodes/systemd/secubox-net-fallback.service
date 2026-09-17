@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Filet de secours reseau : attribue une adresse dans 10.55.255.0/24
+# (detection de doublon par arping) quand la configuration nominale ne
+# monte pas. Livree DESACTIVEE — s'attribuer une IP de secours n'est pas
+# un comportement par defaut, c'est une manoeuvre de recuperation.
+# Etait orpheline dans /etc/systemd/system (#1362).
+[Unit]
+Description=SecuBox Network Fallback
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-net-fallback
+RemainAfterExit=yes
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

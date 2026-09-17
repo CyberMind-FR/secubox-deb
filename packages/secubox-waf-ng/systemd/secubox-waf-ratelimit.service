@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Rate-limit nft en amont de l'inspection (#498). Table dediee
+# (secubox_waf_ratelimit, priorite -10) pour pouvoir etre deployee
+# independamment du pare-feu principal. Etait orpheline dans
+# /etc/systemd/system alors qu'elle tournait — empaquetee (#1362).
+[Unit]
+Description=SecuBox WAF nft rate-limit pre-mitm [Phase 7.B #498]
+After=network.target nftables.service
+
+ConditionPathExists=/etc/secubox/secubox-waf-ratelimit.nft
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nft -f /etc/secubox/secubox-waf-ratelimit.nft
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

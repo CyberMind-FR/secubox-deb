@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Gabarit par interface (%i) : monte le reseau de l'Eye Remote quand le
+# peripherique apparait. ExecStart pointait sur /usr/local/sbin, chemin
+# qu'aucun paquet ne livre — recable sur /usr/sbin (#1362).
+# Gabarit : pas d'activation sans instance.
+[Unit]
+Description=SecuBox Eye Remote Network Setup for %i
+After=network.target
+BindsTo=sys-subsystem-net-devices-%i.device
+After=sys-subsystem-net-devices-%i.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=INTERFACE=%i
+ExecStart=/usr/sbin/secubox-eye-network.sh up
+ExecStop=/usr/sbin/secubox-eye-network.sh down
+
+[Install]
+WantedBy=multi-user.target
