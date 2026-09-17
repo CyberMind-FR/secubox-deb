@@ -1,17 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox NetBoot — confirmation d'un amorçage sain.
+#
+# CETTE UNITÉ A DÉJÀ BLOQUÉ UN DÉMARRAGE PENDANT 17 HEURES (#998). Elle
+# déclarait trois choses qui, ensemble, forment une boucle :
+#
+#     After=multi-user.target      -> s'exécute APRÈS la cible
+#     Wants=multi-user.target      -> TIRE la cible
+#     WantedBy=multi-user.target   -> la cible LA RÉCLAME
+#
+# La cible attendait son unité, qui attendait la cible. Le job restait suspendu,
+# `multi-user.target` n'était JAMAIS atteint, et rien de ce qui en dépend ne
+# démarrait — HAProxy compris. Concrètement : une carte sans HTTPS après un
+# redémarrage, et pas la moindre trace dans le journal d'HAProxy pour
+# l'expliquer, puisqu'il n'avait jamais été lancé.
+#
+# UN DROP-IN NE SUFFISAIT PAS : le `Wants=` du fichier principal recréait
+# l'ordre. Il fallait corriger le fichier lui-même — ce qui avait été fait à la
+# main sur gk2, dans /etc/systemd/system, où cela ne protégeait AUCUNE autre
+# installation. La correction est ici, dans le paquet, depuis #1362.
+#
+# `network-online.target` remplace `multi-user.target` : on veut seulement que
+# le réseau soit levé avant de confirmer, pas que tout le système le soit.
 [Unit]
 Description=SecuBox NetBoot — confirme un boot OS sain (bootcount=0) [#737]
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/737
-# Ne se déclenche qu'une fois le système réellement opérationnel : si on arrive
-# ici, le boot (overlay ou usine) a réussi → on remet bootcount à 0 pour ne pas
-# déclencher le rollback anti-brick. Tardif volontairement (après le multi-user).
-After=multi-user.target secubox-netboot.service
-Wants=multi-user.target
+After=network-online.target secubox-netboot.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/secubox-netboot-overlay confirm-healthy
-# best-effort : ne jamais faire échouer le boot pour ça
 SuccessExitStatus=0 1
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
