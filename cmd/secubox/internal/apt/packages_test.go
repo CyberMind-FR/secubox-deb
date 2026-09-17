@@ -67,8 +67,10 @@ func TestTierNames(t *testing.T) {
 }
 
 func TestAvailablePackages(t *testing.T) {
-	if len(AvailablePackages) != 14 {
-		t.Errorf("AvailablePackages len = %d, want 14", len(AvailablePackages))
+	// 13 depuis le retrait de secubox-crowdsec (#1362) : le paquet est purge du
+	// produit, la liste ne doit plus le proposer a l'installation.
+	if len(AvailablePackages) != 13 {
+		t.Errorf("AvailablePackages len = %d, want 13", len(AvailablePackages))
 	}
 
 	// Verify secubox-core is first
