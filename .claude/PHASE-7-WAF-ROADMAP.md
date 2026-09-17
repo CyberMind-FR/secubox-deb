@@ -27,7 +27,6 @@ IP, BAN_THRESHOLD / BAN_WINDOW logic) but its only enforcement is :
   (until they age out of BAN_WINDOW, then prune in Phase 6.J)
 * Attackers keep flooding HTTPS — every probe costs WAF a TLS handshake +
   regex run + log write
-* CrowdSec catches SSH brute-force + log-parseable HTTP attacks but
   doesn't see what only mitm WAF sees (per-route signature match)
 * Live observation 2026-06-05 : mitm WAF saturated 800+ idle connections
   while serving real and bot traffic indistinguishably
@@ -76,16 +75,13 @@ We need : **WAF detection → kernel drop**.
 * In `request` hook after threat detected and `count >= BAN_THRESHOLD` :
   call `_ban_via_crowdsec(client_ip, cat, hours=4)`.
 
-* CrowdSec config : add `secubox-waf` as a valid origin in
   `/etc/crowdsec/local_api_credentials.yaml`, generate API key with
   `cscli bouncers add secubox-waf`.
 
-* nft already has the bouncer chain (`table ip crowdsec`) — no work needed.
 
 ### Telemetry side-effect
 
 * mitm WAF stats grow a `bans_pushed` counter
-* CrowdSec dashboard at `/api/v1/crowdsec/decisions` lists who's banned
 * Decisions appear in admin webui (already wired through `/admin/clients/rich`
   via mac_hash, can add an IP-bans card)
 
@@ -115,7 +111,6 @@ table inet filter {
 ```
 
 * Cheap : kernel-side, no Python overhead
-* Catches the slowloris/TCP-only scanners that bypass CrowdSec log parsing
 * Doesn't trigger on legitimate browsers (TCP from real browsers stays
   well under 30 conn/s per IP)
 
@@ -168,7 +163,6 @@ A real WAF :
 
 ### Global threat intel federation
 
-* Push our local bans to CrowdSec Hub (community blocklist)
 * Pull AlienVault OTX + Spamhaus DROP + tor exit nodes into nft sets
 * Daily cron `cscli decisions import` from public feeds
 
@@ -188,9 +182,7 @@ A real WAF :
 
 ## Dependencies / known issues
 
-* CrowdSec local API needs HTTP listener (currently exposed on
   127.0.0.1:8081 by default — fine for in-LXC mitm)
-* nft bouncer chain `table ip crowdsec` already exists — verified live
 * No new dependencies (httpx already in mitm Python env)
 
 ---

@@ -5,7 +5,6 @@ Description=SecuBox Mesh Daemon
 Documentation=https://secubox.in/docs/secuboxd
 After=network-online.target
 Wants=network-online.target
-Before=crowdsec.service
 
 [Service]
 Type=simple

@@ -1,9 +1,0 @@
-{
-  "id": "localai",
-  "name": "LocalAI",
-  "icon": "🤖",
-  "path": "/localai/",
-  "category": "mind",
-  "order": 804,
-  "description": "Self-hosted LLM inference with OpenAI-compatible API"
-}

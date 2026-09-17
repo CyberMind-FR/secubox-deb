@@ -46,7 +46,7 @@ Examples:
   sudo secubox clone --minimal -y
 
   # Specific packages
-  sudo secubox clone --packages "secubox-core,secubox-hub,secubox-crowdsec" -y`,
+  sudo secubox clone --packages "secubox-core,secubox-hub,secubox-waf-ng" -y`,
 	RunE: runClone,
 }
 

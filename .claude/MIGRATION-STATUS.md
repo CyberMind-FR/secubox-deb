@@ -32,7 +32,6 @@ Generated: 2025-03-22
 | secubox-vhost | luci-app-vhost-manager | 735 | vhostctl | ✅ Complete |
 | secubox-gitea | luci-app-gitea | 1,027 | giteactl | ✅ Complete |
 | secubox-mail | luci-app-mailserver | ~500 | mailctl, mailserverctl | ✅ Complete |
-| secubox-crowdsec | luci-app-crowdsec-dashboard | 2,812 | crowdsecctl | ✅ Complete |
 
 ### 🔄 Partial Migration (API exists, needs real backend)
 
@@ -44,7 +43,6 @@ Generated: 2025-03-22
 | secubox-system | luci-app-system-hub | 2,417 | 501 | MEDIUM |
 | secubox-netmodes | luci-app-network-modes | 2,668 | 404 | MEDIUM |
 | secubox-nac | luci-app-client-guardian | 1,755 | 401 | MEDIUM |
-| secubox-dpi | luci-app-dpi-dual + netifyd | 1,753 | 391 | MEDIUM |
 | secubox-cdn | luci-app-cdn-cache | 943 | 493 | LOW |
 | secubox-waf | luci-app-mitmproxy | 809 | 481 | LOW |
 | secubox-auth | luci-app-auth-guardian | 517 | 179 | LOW |
@@ -101,7 +99,6 @@ Generated: 2025-03-22
 ### Phase 1: Core Security (Priority: HIGH)
 Complete the security stack for appliance functionality.
 
-1. **secubox-crowdsec** - Add crowdsecctl with LAPI integration
 2. **secubox-wireguard** - Add wgctl for tunnel management
 3. **secubox-dnsguard** - Create new package for DNS filtering
 
@@ -204,8 +201,6 @@ packages/secubox-<module>/
 
 ## Next Immediate Actions
 
-1. **secubox-crowdsec**: Add `crowdsecctl` with:
-   - CrowdSec LAPI communication
    - Decision list/ban management
    - Bouncer configuration
    - Migration of scenarios/parsers

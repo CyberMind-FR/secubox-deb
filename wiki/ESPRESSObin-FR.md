@@ -409,7 +409,6 @@ ip addr show
 | RAM | 1-2 Go | 4 Go |
 | Réseau | 3× GbE | 4× GbE + 2× 10GbE |
 | Mode DPI | Passif uniquement | Inline capable |
-| CrowdSec | Mode lite | Mode complet |
 | Profil SecuBox | secubox-lite | secubox-full |
 
 ## Voir aussi

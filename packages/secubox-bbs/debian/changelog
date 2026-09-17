@@ -1,3 +1,76 @@
+secubox-bbs (0.32.0-1~bookworm1) bookworm; urgency=medium
+
+  * NOTIFIER UNE RÉPONSE PAR COURRIEL (ref #1361), à l'adresse déclarée à
+    l'admission.
+  * L'ADRESSE SE CONSULTE, ELLE NE SE COPIE PAS — et c'est la décision centrale.
+    La recopier dans la base du BBS créerait deux versions d'un même fait :
+    elles divergeraient, révoquer un appareil ne couperait plus rien puisque le
+    BBS garderait sa copie, et l'adresse existerait à deux endroits à effacer le
+    jour où il faut l'effacer. En la RELISANT au moment d'envoyer, il n'y a
+    qu'un propriétaire — et un appareil révoqué cesse d'être notifié sans qu'on
+    ait rien à propager. L'absence de copie fait le travail que la propagation
+    aurait mal fait.
+  * TROIS CHOSES SÉPARÉES : le BBS sait SI l'on notifie (préférence en base),
+    le registre des appareils sait OÙ, et le conteneur mail est le PAR OÙ.
+  * DÉFAUT À « ACTIVÉ ». Un membre qui participe à un fil s'attend à savoir
+    qu'on lui a répondu ; s'inscrire à une notification qu'on ne sait pas
+    exister ne se fait jamais. Le désabonnement est à un clic.
+  * L'ENVOI NE BLOQUE JAMAIS L'ÉCRITURE : une réponse publiée doit l'être même
+    si le relais est éteint. La notification part dans une goroutine, son échec
+    ne remonte pas, et une panique y est rattrapée — le forum fonctionne sans
+    les notifications, l'inverse n'est pas vrai.
+  * ON NE NOTIFIE PAS QUELQU'UN DE SA PROPRE RÉPONSE. Évidence qui se paie cher
+    quand on l'oublie : chaque message déclencherait un courriel à son auteur.
+  * UN TITRE DE FIL NE PEUT PAS INJECTER D'EN-TÊTES. Le sujet est construit à
+    partir d'un texte écrit par un membre ; un saut de ligne y ajouterait des
+    en-têtes arbitraires — un « Bcc: » vers n'importe qui, depuis l'adresse de
+    la box. Les sauts sont RETIRÉS, pas échappés : un titre n'a aucune raison
+    d'en contenir. Testé.
+  * CE QU'ON ASSUME : une notification perdue est perdue — il n'y a pas de file
+    qui survit au redémarrage. La poser est la prochaine étape SI les pertes se
+    voient ; l'écrire d'emblée serait bâtir une machinerie avant d'avoir mesuré
+    le besoin.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 15:52:08 +0200
+
+secubox-bbs (0.31.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le lien « Entrer avec ma session SecuBox » passe DEVANT le formulaire, et
+    c'est l'information : qui vient de SBX OS n'a pas de mot de passe ici — il
+    n'en a jamais eu — et lui présenter d'abord un champ à remplir, c'est lui
+    offrir une impasse. Sans session SecuBox le lien retombe sur ce même
+    formulaire : il ne coûte rien à qui n'en a pas.
+
+  * ENTRER AVEC SA SESSION SECUBOX (ref #1360). Quelqu'un entré dans SBX OS —
+    par SIGNATURE, sans mot de passe — arrivait ici et se voyait demander un
+    pseudonyme et un mot de passe qu'il n'a JAMAIS EUS. Deux authentifications
+    pour une seule personne, dont l'une était infranchissable.
+  * `/sbx/entrer` ouvre une session BBS pour le porteur d'une session SecuBox,
+    et crée le membre à la première venue.
+  * CE QUI REND L'EN-TÊTE DIGNE DE FOI EST UNE CONJONCTION, pas une confiance :
+    le démon n'écoute QUE sur un socket unix — aucun client ne l'atteint, seul
+    nginx lui parle — ET la `location` ÉCRASE l'en-tête avec la valeur obtenue
+    de /auth/verify. Retirer l'une des deux ouvrirait la porte à qui sait écrire
+    `X-Sbx-Membre`. C'est écrit en toutes lettres dans le fichier, parce qu'un
+    futur déplacement vers un port TCP le casserait en silence.
+  * JAMAIS SYSOP, quoi que dise l'en-tête. Un administrateur SecuBox n'est pas
+    d'office administrateur du forum : ce sont deux responsabilités distinctes,
+    et les confondre donnerait la modération à quiconque obtient
+    l'administration de la box. La promotion reste un geste fait DANS le BBS.
+  * Le nom de compte est BORNÉ par expression régulière — il devient un
+    pseudonyme affiché et sert de clé. Traversées, sauts de ligne et balises
+    sont refusés, et testés comme tels.
+  * PAS DE SESSION N'EST PAS UNE ERREUR : c'est le cas de tout visiteur qui
+    n'est pas passé par SBX OS. On lui montre le formulaire, pas une page
+    d'échec.
+  * Le `?vers=` de retour n'accepte qu'un chemin interne : sans cette borne,
+    la route deviendrait un tremplin de redirection.
+  * Défense en profondeur : l'en-tête est EFFACÉ sur toutes les autres routes.
+    Aucune ne le lit aujourd'hui — mais le jour où l'une le lirait, un client
+    pourrait l'avoir posé lui-même.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 15 Sep 2026 15:34:07 +0200
+
 secubox-bbs (0.30.45-1~bookworm1) bookworm; urgency=medium
 
   * CSP carte /micro : style-src 'self' 'unsafe-inline' (SBXAide/spicy) ; script

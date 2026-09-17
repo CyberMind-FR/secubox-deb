@@ -33,7 +33,6 @@ CrowdSec est retiré de l'architecture actuelle. Ne l'ajoute pas, ne le réactiv
 - Retrouve l'implémentation réelle de sbxwaf, sbxmitm, sbx-sentinel, sidecars, event/verdict stores et mécanismes de bannissement/ratelimit actuels.
 - Cherche les fonctions déjà présentes qui font scénario, corrélation, scoring, fingerprinting, JA4/TLS, HTTP fingerprint, ASN/Geo, honeypot/leurres ou agrégation.
 - Dresse un tableau : EXISTANT / PARTIEL / MANQUANT / À NE PAS DUPLIQUER.
-- Identifie les références CrowdSec résiduelles sans les utiliser.
 - Avant toute modification, produis docs/design/actor-intelligence-audit.md avec les chemins de fichiers et symboles exacts.
 
 1. ARCHITECTURE CIBLE
@@ -327,7 +326,6 @@ Fournis :
 ## Checklist de revue avant merge (RFC-0013)
 
 - Actor Intelligence peut être désactivé sans réduire la protection SBX WAF.
-- Aucune nouvelle dépendance CrowdSec n'est introduite.
 - Le hot path ne fait aucun enrichissement externe synchrone.
 - Chaque score possède une explication et une version d'algorithme.
 - Les canaris ne donnent aucun accès réel.

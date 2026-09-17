@@ -35,7 +35,6 @@ traverse le pipeline de forge MITM SecuBox — sans configuration, sans app obli
 | **🔒 Full encrypted** | Inspection MITM complète sur HTTPS sortant : forge de cert par hôte, chaîne de certs vérifiée, fingerprint Chrome (uTLS) côté upstream. | Go forging core (#662), uTLS HelloChrome |
 | **☠️ Injection de poison & smog** | Le trafic ad-tech / tracker entre dans la chambre d'inspection et ressort empoisonné/embrumé : pseudo-réponses, scripts neutralisés, IP-drop + DNS-refuse. | Anti-Track v2 (#633), `privacy_guard`, ad-ghoster |
 | **🚫 Bandeau anti-adware** | Bannière de transparence injectée dans la page : « tu as été pisté / X trackers bloqués », immune au CSP, SPA-aware. | banner saga (#636/#639), webext (#655) |
-| **🛡️ Safe browsing** | Blocklists Vortex DNS, blacklist nft (CrowdSec + threat-intel), détection anti-bot/challenge passive. | Phase 13 enforcement plane, Vortex Unbound |
 
 ---
 

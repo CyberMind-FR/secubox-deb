@@ -142,7 +142,6 @@ Voir **[[Hardware-Matrix]]** pour la matrice complète avec statuts de support.
 | 🟠 AUTH | Authentification, ZeroTrust, MFA | auth, portal, users, nac |
 | 🟡 WALL | Firewall, WAF, IDS/IPS, auth watch | waf, authwatch, threats, ipblock |
 | 🔴 BOOT | Déploiement, provisioning | cloner, vault, vm, rezapp |
-| 🟣 MIND | IA, analyse comportementale, DPI | dpi, netifyd, ai-insights, soc |
 | 🟢 ROOT | Système, CLI, hardening | core, hub, system, console |
 | 🔵 MESH | Réseau, WireGuard, QoS | wireguard, haproxy, netmodes, turn |
 

@@ -291,13 +291,9 @@ jwt_secret  = "${JWT_SECRET}"
 [auth.users.admin]
 password = "${ADMIN_PASS}"
 
-[crowdsec]
-lapi_url = "http://127.0.0.1:8080"
-lapi_key = ""
-
 [dpi]
 mode      = "inline"
-engine    = "netifyd"
+engine    = "ndpid"
 interface = "eth0"
 mirror_if = "ifb0"
 
@@ -460,9 +456,6 @@ table inet secubox_filter {
 
         # WireGuard
         udp dport 51820 accept
-
-        # CrowdSec LAPI (local seulement)
-        ip saddr 127.0.0.1 tcp dport 8080 accept
 
         # Drop silencieux
         drop

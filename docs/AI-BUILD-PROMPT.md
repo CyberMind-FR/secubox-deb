@@ -78,7 +78,6 @@ ssh -p 2222 root@localhost  # Password: secubox
 - Network auto-detection
 - 125+ SecuBox modules pre-installed
 - nftables firewall (DEFAULT DROP)
-- HAProxy + CrowdSec security stack
 
 ## Flash to USB
 
@@ -112,7 +111,6 @@ sudo bash image/build-live-usb.sh --local-cache
 - Debian 12 bookworm (arm64/amd64)
 - Python 3.11+ / FastAPI / Uvicorn
 - nftables (not iptables)
-- HAProxy + CrowdSec + Suricata
 - WireGuard VPN
 - Chromium kiosk (X11)
 

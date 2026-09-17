@@ -120,16 +120,12 @@ curl https://localhost/api/v1/hub/status \
 | 端点 | 方法 | 认证 | 描述 |
 |------|------|------|------|
 | `/components` | GET | 否 | 系统组件 |
-| `/metrics` | GET | 是 | CrowdSec 指标 |
 | `/decisions` | GET | 是 | 活动决策（封禁） |
 | `/alerts` | GET | 是 | 安全告警 |
 | `/bouncers` | GET | 是 | Bouncer 状态 |
 | `/ban` | POST | 是 | 封禁 IP 地址 |
 | `/unban` | POST | 是 | 解封 IP 地址 |
 | `/nftables` | GET | 是 | nftables 统计 |
-| `/service/start` | POST | 是 | 启动 CrowdSec |
-| `/service/stop` | POST | 是 | 停止 CrowdSec |
-| `/console/enroll` | POST | 是 | 注册到 CrowdSec 控制台 |
 
 #### 封禁 IP 示例
 ```bash

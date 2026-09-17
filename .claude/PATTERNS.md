@@ -656,7 +656,6 @@ async def get_stats():
 - Dashboard stats endpoints
 - Log aggregation endpoints
 - Metrics collection (CPU, mem, disk, network)
-- CrowdSec decisions/alerts lists
 - Any endpoint reading files or calling subprocesses
 
 ### When NOT to Apply

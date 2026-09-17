@@ -26,7 +26,6 @@
 | 7 | Bannissement / ratelimit / verdicts | **EXISTANT — À NE PAS DUPLIQUER** | `cmd/sbxwaf/nftban.go:NftBanner` · `banstore.go:BanStore` · `ban.go:Ban` · `antirobots.go` · `cmd/sbx-authwatch/nft.go:Banneur` · `internal/sentinel/scorer.go:FinalizeAction` |
 | 8 | Stockage local (bbolt / SQLite / ledger) | **EXISTANT (partiel)** | bbolt: `internal/sentinel/store.go` (go.etcd.io/bbolt v1.3.11) · NDJSON: `banstore.go`, `threatlog.go` · **Evidence Ledger inviolable (hash-chain) = MANQUANT** |
 | 9 | WebUI / API intelligence | **PARTIEL** | `secubox-threat-analyst/api/main.py` · `secubox-threatmesh/api/main.py` · `secubox-soc-gateway/lib/alert_correlator.py` · **endpoints /actors /campaigns /evidence = MANQUANT** |
-| 10 | Références CrowdSec résiduelles | **DETTE DOC uniquement** | Aucune dans le code ; seulement changelog/README. Purge déjà actée. |
 
 ## Détail par thème
 

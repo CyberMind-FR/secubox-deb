@@ -107,7 +107,6 @@ qemu-system-x86_64 \
 - `secubox-portal` - Web authentication
 
 **Security:**
-- `secubox-crowdsec` - IDS/IPS with CrowdSec
 - `secubox-waf` - Web Application Firewall
 - `secubox-auth` - OAuth2, captive portal
 - `secubox-nac` - Network Access Control

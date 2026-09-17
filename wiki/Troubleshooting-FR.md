@@ -101,7 +101,6 @@ secubox-netdiag
 
 **Solutions :**
 
-1. Verifier que CrowdSec fonctionne :
    ```bash
    systemctl status crowdsec
    cscli metrics
@@ -167,7 +166,6 @@ secubox-netdiag
 | Systeme | `journalctl` |
 | Nginx | `/var/log/nginx/` |
 | HAProxy | `/var/log/haproxy.log` |
-| CrowdSec | `cscli metrics` / `journalctl -u crowdsec` |
 | Modules SecuBox | `journalctl -u secubox-*` |
 | Audit | `/var/log/secubox/audit.log` |
 

@@ -1342,6 +1342,18 @@ const FEATURED = [
   // Lyrion : LAN-only (#1247). `lan:true` → carte cachée aux clients WAN du Hall
   // (data-lan + .non-lan). Le service LMS et son admin restent accessibles en LAN.
   {id:"lyrion",     label:"Lyrion",    icon:"🎚️", color:"#128a6f", url:"lyrion.gk2.secubox.in", carte:"/cardlets/lyrion.html", h:230, lan:true},
+  // Zigbee : LAN-only (#1365), même posture que Lyrion. La carte liste les
+  // appareils du pont et porte un bouton par appareil — le geste d'une seconde,
+  // sans ouvrir la console zigbee2mqtt. `lan:true` masque la carte aux clients
+  // WAN, et le relais nginx refuse AUSSI côté serveur : sans ce second verrou,
+  // il suffirait d'appeler l'API à la main pour éteindre les lumières d'ici.
+  //
+  // `auth:true` AUSSI, et ce n'est pas du zèle : depuis #1256 la lecture du
+  // module est FERMÉE par défaut (pas de `[tableau_de_bord] actif` sur cette
+  // box), donc sans session la carte ne peut afficher aucun appareil. La
+  // montrer à un invité reviendrait à lui présenter une carte vide dont il ne
+  // peut rien faire.
+  {id:"zigbee",     label:"Zigbee",    icon:"💡", color:"#c8791f", url:"zigbee.gk2.secubox.in", carte:"/cardlets/zigbee.html", h:250, lan:true, auth:true},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=nextcloud", h:182},
   // SUPER CARDLET (#1245) : la carte PERSONNELLE du Cloud — fichiers (WebDAV),
   // quota, activité, partages ET actions (partager/supprimer/envoyer), au nom de
@@ -1375,10 +1387,6 @@ const FEATURED = [
   // empilée, enrichie — cf. dpi.html html.mega). L'admin reste sur ⚙️, intacte.
   // auth:true → widget réservé aux clients authentifiés du Hall (comme Sécurité).
   {id:"dpi",        label:"DPI · Trafic", icon:"🔬", color:"#d64545", carte:"/cardlets/dpi.html", h:262, auth:true},
-  // Tirage — site PARTENAIRE Anibal Amiot (Yi King). La cardlet embarque la
-  // vraie page de tirage via le relais same-origine /aa/ (le site, hébergé par
-  // la box, n'est JAMAIS modifié). Sans vhost cadrable → /mega = cardlet agrandie.
-  {id:"tirage-aa",  label:"Tirage",       icon:"🎴", color:"#93283a", carte:"/cardlets/tirage-aa.html", h:300},
   // ZIA (#1245) : l'IA locale du Hall, interface du bus d'objets. Carte /micro de
   // chat, servie sous admin.gk2…/zia/ (autorisé dans frame-src) ; les 3 modes
   // visent /zia/. Chat + recherche d'objets + délégation.

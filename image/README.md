@@ -256,7 +256,6 @@ sudo bash image/build-c3box-clone.sh [OPTIONS]
 - System configuration (`/etc/secubox/`)
 - User accounts and SSH keys
 - Network configuration (netplan, WireGuard)
-- Service configurations (nginx, HAProxy, CrowdSec)
 - SSL certificates (Let's Encrypt, custom)
 - LXC container configs (optional)
 - Data partition contents (optional)
@@ -392,7 +391,6 @@ Apply preseed configuration from a clone archive.
 1. SecuBox configuration (`/etc/secubox/`)
 2. Network configuration (netplan, WireGuard)
 3. User accounts and SSH keys
-4. Service configurations (nginx, HAProxy, CrowdSec)
 5. SSL certificates
 6. Package list verification
 7. Service restarts (skipped on live boot)

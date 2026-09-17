@@ -372,6 +372,59 @@ func (a *Auth) flush() error {
 }
 
 // UserByHandle resout un pseudonyme. Ne rend JAMAIS un compte desactive.
+// NotifEmailActif dit si ce membre veut etre notifie par courriel.
+//
+// LA PREFERENCE EST ICI, L'ADRESSE EST AILLEURS (#1361). Le BBS sait SI l'on
+// notifie ; le registre des appareils sait OU. Les separer evite deux versions
+// d'un meme fait, et fait qu'un appareil revoque cesse d'etre notifie sans
+// qu'on ait rien a propager.
+func (s *Store) NotifEmailActif(userID int64) bool {
+	var v int
+	if err := s.db.QueryRow(`SELECT notif_email FROM users WHERE id=?`, userID).Scan(&v); err != nil {
+		// Inconnu ou colonne absente : on ne notifie pas. Se taire est le bon
+		// defaut quand on ne sait pas.
+		return false
+	}
+	return v != 0
+}
+
+// ReglerNotifEmail pose la preference d'un membre.
+func (s *Store) ReglerNotifEmail(userID int64, actif bool) error {
+	v := 0
+	if actif {
+		v = 1
+	}
+	_, err := s.db.Exec(`UPDATE users SET notif_email=? WHERE id=?`, v, userID)
+	return err
+}
+
+// ParticipantsFil rend les membres a prevenir d'une reponse : l'auteur du fil
+// et ceux qui y ont deja ecrit, SAUF celui qui vient d'ecrire.
+//
+// ON NE NOTIFIE PAS QUELQU'UN DE SA PROPRE REPONSE — evidence qui se paie cher
+// quand on l'oublie : chaque message declencherait un courriel a son auteur.
+func (s *Store) ParticipantsFil(threadID, sauf int64) ([]int64, error) {
+	rows, err := s.db.Query(`
+		SELECT DISTINCT author_id FROM (
+			SELECT author_id FROM threads WHERE id=?
+			UNION
+			SELECT author_id FROM posts WHERE thread_id=?
+		) WHERE author_id <> ?`, threadID, threadID, sauf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) UserByHandle(handle string) (int64, error) {
 	var id int64
 	err := s.db.QueryRow(

@@ -143,7 +143,6 @@ ssh-keyscan -H apt.secubox.in
 ### Security
 | Package | Description |
 |---------|-------------|
-| `secubox-crowdsec` | CrowdSec integration |
 | `secubox-waf` | Web Application Firewall (300+ rules) |
 | `secubox-vortex-firewall` | nftables threat enforcement |
 | `secubox-waf-ng` | sbxwaf inline inspection engine (Go) |

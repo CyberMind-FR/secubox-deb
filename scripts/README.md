@@ -319,7 +319,6 @@ bash scripts/migration-import.sh -f /tmp/partial.tar.gz -m wireguard,crowdsec
 | network | /etc/config/network (UCI) | /etc/netplan/00-secubox.yaml |
 | firewall | /etc/config/firewall (UCI) | /etc/nftables.conf |
 | wireguard | /etc/wireguard/*.conf | /etc/wireguard/*.conf |
-| crowdsec | /etc/crowdsec/* | /etc/crowdsec/* |
 | dhcp | /etc/config/dhcp (UCI) | /etc/dnsmasq.d/secubox.conf |
 | haproxy | /etc/haproxy/* | /etc/haproxy/* |
 | nginx | /etc/nginx/* | /etc/nginx/* |

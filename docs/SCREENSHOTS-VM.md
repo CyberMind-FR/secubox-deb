@@ -97,7 +97,6 @@
 
 | Module | Screenshot | Status |
 |--------|------------|--------|
-| 🛡️ **CrowdSec** | ![CrowdSec](screenshots/vm/crowdsec.png) | ✅ Captured |
 | 🔥 **Web Application Firewall** | ![Web Application Firewall](screenshots/vm/waf.png) | ✅ Captured |
 | 🔥 **Vortex Firewall** | ![Vortex Firewall](screenshots/vm/vortex-firewall.png) | ✅ Captured |
 | 🔒 **System Hardening** | ![System Hardening](screenshots/vm/hardening.png) | ✅ Captured |

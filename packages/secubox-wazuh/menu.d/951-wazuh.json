@@ -1,9 +1,0 @@
-{
-  "id": "wazuh",
-  "name": "Wazuh SIEM",
-  "icon": "🛡️",
-  "path": "/wazuh/",
-  "category": "wall",
-  "order": 951,
-  "description": "Security monitoring and alerts"
-}

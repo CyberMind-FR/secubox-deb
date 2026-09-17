@@ -24,7 +24,6 @@
 | 📋 **Migration Roadmap** | Dashboard | OpenWRT到Debian迁移跟踪 |
 | 📈 **System Metrics** | Dashboard | 实时系统指标仪表板 |
 | ⚙️ **Admin Panel** | Dashboard | 系统管理面板 |
-| 🛡️ **CrowdSec** | Security | 具有行为分析的协作式安全引擎 |
 | 🔥 **Web Application Firewall** | Security | 具有300+条OWASP安全规则的WAF |
 | 🔥 **Vortex Firewall** | Security | 基于nftables的威胁执行防火墙 |
 | 🔒 **System Hardening** | Security | 符合ANSSI CSPN的内核和系统加固 |
@@ -69,8 +68,6 @@
 | 💬 **SimpleX Chat** | Privacy | 注重隐私的消息 |
 | 🔐 **Secret Vault** | Privacy | 密钥和凭据管理 |
 | 📊 **Netdata** | Monitoring | 实时系统监控 |
-| 🔬 **Deep Packet Inspection** | Monitoring | 使用netifyd/nDPId的DPI |
-| 🔬 **Netifyd DPI** | Monitoring | Netifyd深度包检测 |
 | 🔬 **nDPId** | Monitoring | 用于流量分析的nDPI守护进程 |
 | 📱 **Device Intelligence** | Monitoring | 资产发现和指纹识别 |
 | 👁️ **Watchdog** | Monitoring | 服务和容器监控 |
@@ -142,7 +139,6 @@
 | 🔌 **SaaS Relay** | Network | SaaS / API 代理中继 |
 | 🎯 **Security Posture** | Security | 诚实的、基于真实状态的安全评分卡 |
 | 📡 **SENTINELLE-GSM** | Security | 被动式伪基站传感器（MIND 层） |
-| 🕸️ **ThreatMesh** | Security | 主权威胁情报网格（替代 CrowdSec CAPI） |
 | 🧰 **ToolBoX (Cabine)** | Security | 强制门户 AP + 知情同意的 MITM 隐私分析器 |
 | 💻 **VM Manager** | System | 虚拟化管理 |
 | 🔎 **YaCy** | Network | 点对点搜索引擎 |

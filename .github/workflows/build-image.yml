@@ -269,9 +269,9 @@ jobs:
 
             | Image | Board | Architecture | Description |
             |-------|-------|--------------|-------------|
-            | `secubox-mochabin-bookworm.img.gz` | MOCHAbin | arm64 | Marvell Armada 7040 (Pro) |
-            | `secubox-rpi400-bookworm.img.gz` | Raspberry Pi 400 | arm64 | Pi 400 / Pi 4 |
-            | `secubox-vm-x64-bookworm.img.gz` | VirtualBox/QEMU | amd64 | VM for testing |
+            | `secubox-mochabin-${{ env.DEBIAN_SUITE }}.img.gz` | MOCHAbin | arm64 | Marvell Armada 7040 (Pro) |
+            | `secubox-rpi400-${{ env.DEBIAN_SUITE }}.img.gz` | Raspberry Pi 400 | arm64 | Pi 400 / Pi 4 |
+            | `secubox-vm-x64-${{ env.DEBIAN_SUITE }}.img.gz` | VirtualBox/QEMU | amd64 | VM for testing |
             | `create-qemu-arm64-vm.sh` | QEMU ARM64 | script | Run ARM64 on x86 hosts |
 
             *ESPRESSObin v7 and Ultra board images are no longer published in
@@ -283,15 +283,15 @@ jobs:
             **ARM64 boards (MOCHAbin, Raspberry Pi 400):**
             ```bash
             # Flash to SD card or eMMC
-            gunzip -c secubox-mochabin-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+            gunzip -c secubox-mochabin-${{ env.DEBIAN_SUITE }}.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
             sync
             ```
 
             **VirtualBox (x64):**
             ```bash
             # Convert to VDI
-            gunzip secubox-vm-x64-bookworm.img.gz
-            VBoxManage convertfromraw secubox-vm-x64-bookworm.img secubox.vdi --format VDI
+            gunzip secubox-vm-x64-${{ env.DEBIAN_SUITE }}.img.gz
+            VBoxManage convertfromraw secubox-vm-x64-${{ env.DEBIAN_SUITE }}.img secubox.vdi --format VDI
 
             # Create VM
             VBoxManage createvm --name SecuBox --ostype Debian_64 --register

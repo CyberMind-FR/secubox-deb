@@ -7,10 +7,10 @@
 secubox_core.logger — Logging structuré JSON vers journald/stderr
 =================================================================
 Usage :
-    log = get_logger("crowdsec")
+    log = get_logger("waf")
     log.info("Ban appliqué: %s", ip)
     log.warning("Échec connexion LAPI")
-    log.error("Timeout netifyd socket")
+    log.error("Timeout nDPId socket")
 """
 from __future__ import annotations
 import json

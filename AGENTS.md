@@ -167,7 +167,6 @@ Chaque `package/secubox/luci-app-<module>/` devient un paquet Debian `secubox-<m
 - FastAPI + Uvicorn sur Unix socket par module
 - Nginx reverse proxy : statics htdocs + `/api/v1/<module>/*`
 - nftables, netplan, WireGuard kernel natif
-- CrowdSec dpkg officiel, HAProxy TLS 1.3
 - APT repo signé GPG : `apt.secubox.in`
 
 ---
@@ -469,7 +468,6 @@ async def get_stats():
 
 ### Règle d'application (identique OpenWrt)
 
-* **Toujours** pour les dashboards stats (WAF, CrowdSec, bandwidth, DPI…)
 * **Toujours** quand l'endpoint lit des logs ou calcule des agrégats
 * **Toujours** quand la donnée peut être périmée de 60s sans impact utilisateur
 * **Jamais** pour les actions temps-réel (start/stop/restart/ban)
@@ -603,11 +601,9 @@ cd packages/secubox-crowdsec && uvicorn api.main:app --reload --uds /tmp/crowdse
 |-------|--------|------------|--------|
 | 1 | secubox-core | — | Dépendance de tous |
 | 2 | secubox-hub | Facile | Référence de pattern |
-| 3 | secubox-crowdsec | Facile | API REST déjà dispo |
 | 4 | secubox-netdata | Facile | Proxy simple |
 | 5 | secubox-wireguard | Facile | wg CLI natif |
 | 6 | secubox-vhost | Facile | Templates nginx |
-| 7 | secubox-dpi | Moyen | Socket netifyd |
 | 8 | secubox-mediaflow | Facile | Consomme secubox-dpi |
 | 9 | secubox-qos | Moyen | pyroute2 tc HTB |
 | 10 | secubox-system | Moyen | pystemd DBus |

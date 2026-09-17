@@ -472,7 +472,6 @@ ip addr show
 | RAM | 1-2 GB | 4 GB |
 | Network | 3× GbE | 4× GbE + 2× 10GbE |
 | DPI Mode | Passive only | Inline capable |
-| CrowdSec | Lite mode | Full mode |
 | SecuBox Profile | secubox-lite | secubox-full |
 
 ## See Also

@@ -1,0 +1,17 @@
+-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+-- Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+-- Source-Disclosed License — All rights reserved except as expressly granted.
+-- See LICENCE-CMSD-1.0.md for terms.
+--
+-- NOTIFICATIONS PAR COURRIEL — la PRÉFÉRENCE, pas l'adresse (#1361).
+--
+-- On stocke ici SI l'on notifie, jamais OÙ. L'adresse d'un membre venu de
+-- SBX OS est celle qu'il a déclarée à l'admission, et elle vit dans le registre
+-- des appareils. La recopier ferait deux versions d'un même fait : elles
+-- divergeraient, et révoquer un appareil ne couperait plus rien puisque le BBS
+-- garderait sa copie.
+--
+-- DÉFAUT À 1, ET C'EST UN CHOIX. Un membre qui rejoint un fil s'attend à savoir
+-- qu'on lui a répondu ; l'inverse — s'inscrire à une notification qu'on ne sait
+-- pas exister — ne se fait jamais. Le désabonnement, lui, est à un clic.
+ALTER TABLE users ADD COLUMN notif_email INTEGER NOT NULL DEFAULT 1;

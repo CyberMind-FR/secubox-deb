@@ -1,3 +1,56 @@
+secubox-acces (1.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * UN GARDE-FOU ECRIT APRES UN `return` (#1366). Le controle « cette reponse
+    n'est pas du JSON » suivait le `return r.json()` : il n'a JAMAIS ete
+    execute, et le navigateur le signalait (« unreachable code after return
+    statement »). On retombait sur l'echec de `r.json()` — ca marchait, mais
+    par accident, et l'erreur parlait de syntaxe JSON au lieu de dire que la
+    route est absente de ce vhost. Le controle passe AVANT le retour.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 10:00:59 +0200
+
+secubox-acces (1.5.5-1~bookworm1) bookworm; urgency=medium
+
+  * « Profileur et acces accordes » RESTE ENCADRE (#1366). Le lien portait
+    `target="_top"` : il remplacait le Hall ENTIER par le profileur. La radio
+    s'arretait, la video aussi, et revenir demandait de tout recharger.
+    Encadree, la carte demande maintenant au Hall d'ouvrir la page A COTE, par
+    le meme message `sbx: 'ouvre'` que les autres cartes. Hors cadre — sur
+    acces.gk2 — le lien reste un lien ordinaire : on ne change rien a ce qui
+    marchait deja.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 09:42:12 +0200
+
+secubox-acces (1.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * LA SURFACE D'ADMINISTRATION EXIGE LE PROFIL admin (#1366). `/file`,
+    `/profils` et leurs actions n'exigeaient qu'un jeton VALIDE — donc
+    n'importe quel porteur authentifie, y compris un appareil admis en `guest`
+    cinq minutes plus tot. Or la file porte le nom, l'appareil, le message et
+    l'empreinte de gens qui demandent a entrer, et `/file/accepter` fait
+    entrer. Un jeton dit QUI l'on est, pas ce que l'on a le droit de faire.
+  .
+    LE ROLE SE CHERCHE A DEUX ENDROITS, et l'oublier aurait verrouille
+    l'administrateur hors de sa propre file : les comptes humains vivent dans
+    `user_store`, mais l'administrateur de CE module est le plus souvent un
+    APPAREIL (`sbx-...`), dont le profil vit dans le registre des appareils.
+    Verifie sur la box avant livraison : deux admins de chaque cote.
+  .
+  * LA CARTE NE S'ARRETE PLUS SUR « session ouverte » (#1366). Elle annoncait
+    le profil et n'offrait rien — ni geste, ni lien. Une carte qui annonce un
+    droit sans ouvrir la porte qu'il donne oblige a aller chercher l'adresse
+    ailleurs. « Ouvrir SBX OS » est pose dans les deux vues : celle du
+    demandeur admis, ET celle de l'administrateur qui regarde la file.
+  .
+  * Le lien « Profileur » de la vue file ecrivait « / », ce qui supposait la
+    carlette a la racine de son propre vhost — vrai sur acces.gk2, FAUX sur le
+    Hall ou elle vit sous /i/acces/, et ou il menait a l'accueil du Hall. La
+    racine se deduit maintenant du chemin servi. Le defaut ne se voyait pas
+    tant qu'un administrateur ne pouvait pas atteindre cette vue depuis le
+    Hall ; il le peut desormais.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 09:39:44 +0200
+
 secubox-acces (1.5.3-1~bookworm1) bookworm; urgency=medium
 
   * Même garde `[hidden] { display: none !important }` dans les deux pages

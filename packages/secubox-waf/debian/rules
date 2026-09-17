@@ -24,9 +24,6 @@ override_dh_auto_install:
 	install -d debian/secubox-waf/etc/secubox/waf
 	[ -f config/vhost_profiles.json ] && install -m 0644 config/vhost_profiles.json \
 		debian/secubox-waf/etc/secubox/waf/vhost_profiles.json || true
-	# Mitmproxy addon for LXC container
-	install -d debian/secubox-waf/usr/share/secubox/waf/mitmproxy
-	[ -d mitmproxy ] && cp -r mitmproxy/. debian/secubox-waf/usr/share/secubox/waf/mitmproxy/ || true
 	# wafctl control script
 	install -d debian/secubox-waf/usr/sbin
 	[ -f scripts/wafctl ] && install -m 755 scripts/wafctl debian/secubox-waf/usr/sbin/ || true
@@ -48,6 +45,3 @@ override_dh_auto_install:
 	# Example haproxy-routes.json
 	install -d debian/secubox-waf/usr/share/doc/secubox-waf/examples
 	[ -f config/haproxy-routes.json.example ] && cp config/haproxy-routes.json.example debian/secubox-waf/usr/share/doc/secubox-waf/examples/ || true
-	# Systemd service for mitmproxy in container
-	install -d debian/secubox-waf/usr/share/secubox/waf/systemd
-	[ -f systemd/mitmproxy.service ] && cp systemd/mitmproxy.service debian/secubox-waf/usr/share/secubox/waf/systemd/ || true

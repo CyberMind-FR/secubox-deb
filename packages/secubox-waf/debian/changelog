@@ -1,3 +1,50 @@
+secubox-waf (1.10.32-1~bookworm1) bookworm; urgency=medium
+
+  * LE MOTEUR MITMPROXY NE FAIT PLUS PARTIE DU PAQUET (#1362). Le WAF a migre
+    vers sbxwaf (Go) il y a longtemps, mais le paquet LIVRAIT toujours l'ancien
+    moteur : `mitmproxy/secubox_waf.py`, `mitmproxy/media_cache.py`, l'addon et
+    son unite systemd, plus une migration /srv -> /data de repertoires deja
+    effaces. Retires.
+  .
+    LA DISTINCTION EST DELIBEREE, et c'est ce qui rend ce retrait sur : seul le
+    MOTEUR WAF mitmproxy meurt. `sbxmitm` / `secubox-toolbox-mitm` — l'analyseur
+    R2/R3 — est un composant DISTINCT et CONSERVE. Purger sur le seul mot
+    « mitmproxy » aurait emporte 57 fichiers Go d'un outil vivant.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 08:42:30 +0200
+
+secubox-waf (1.10.31-1~bookworm1) bookworm; urgency=medium
+
+  * LA PAGE DE CONNEXION RENVOYAIT UN 404 (#1363).
+    `https://waf.gk2.secubox.in/login.html?redirect=%2F` repondait 404. Sur un
+    401, tableau.html envoie vers `/login.html` — chemin ABSOLU, donc resolu
+    dans la racine de ce vhost (`.../www/waf`), ou la page n'existe pas. La
+    page partagee vit un niveau au-dessus, dans `.../www/`.
+  .
+    L'ENCHAINEMENT ETAIT DONC ROMPU DE BOUT EN BOUT : tous les endpoints du
+    module repondent 401 hors LAN et sans jeton (`require_lecture` teste le
+    LAN, `require_jwt` exige le jeton), la page rebondissait, et le rebond
+    tombait dans le vide. L'operateur ne pouvait pas se connecter du tout.
+  .
+    POURQUOI PAS UNE REDIRECTION VERS admin.gk2, qui a une page qui marche :
+    `login.html` n'accepte QUE des chemins de meme origine pour son
+    `?redirect=`, garde-fou delibere contre la redirection ouverte (« never
+    //host or /\host — open-redirect safe »). Renvoyer l'operateur sur
+    admin.gk2 l'aurait connecte puis laisse la-bas, le retour etant refuse par
+    ce garde-fou, a juste titre. La connexion doit se faire SUR CETTE ORIGINE.
+  .
+    Deux `location` ajoutees au vhost : `= /login.html` avec un `root`
+    STATIQUE sur la racine partagee (jamais un `alias` + try_files, qui
+    perdrait l'extension et renverrait la page en application/octet-stream),
+    et `/api/v1/auth/` vers auth.sock — sans quoi la page s'afficherait mais
+    ne connecterait personne, son formulaire postant sur une route absente.
+  .
+    Cela fonctionne parce que le cookie de session porte le domaine parent
+    (`sso_cookie_domain = ".gk2.secubox.in"`) : une connexion faite ici vaut
+    pour tout le parc.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 16 Sep 2026 06:30:53 +0200
+
 secubox-waf (1.10.30-1~bookworm1) bookworm; urgency=medium
 
   * Tableau WAF : reprise graphique au niveau de DevWatch (ref #1341).

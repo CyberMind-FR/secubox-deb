@@ -74,7 +74,6 @@ que ces neuf-là s'en sort.
 | Lire les journaux | `secubox-system` |
 | Surveiller les ressources | `secubox-system-tuning` |
 | Naviguer par Tor | `secubox-tor` |
-| Ce que le pare-feu bloque | `secubox-crowdsec` |
 
 ---
 

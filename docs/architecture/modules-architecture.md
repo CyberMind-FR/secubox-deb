@@ -47,7 +47,6 @@ Domaine de protection frontale : WAF, firewall, filtrage DNS.
 
 | Module | Rôle | Statut |
 |--------|------|--------|
-| `secubox-crowdsec` | IDS/IPS collaboratif | ✅ |
 | `secubox-haproxy` | Load balancer / WAF TLS 1.3 | ✅ |
 | `secubox-vhost` | Gestion des virtual hosts | ✅ |
 | `secubox-dns` | Unbound DNS filtrant | ✅ |
@@ -62,7 +61,6 @@ Domaine d'analyse en profondeur : DPI, métriques, inspection du trafic.
 
 | Module | Rôle | Statut |
 |--------|------|--------|
-| `secubox-dpi` | Deep Packet Inspection (nDPId + netifyd) | ✅ |
 | `secubox-netdata` | Monitoring temps réel | ✅ |
 | `secubox-reporter` | Rapports et alertes | ✅ |
 | `secubox-mediaflow` | Analyse des flux média | ✅ |
@@ -190,7 +188,6 @@ graph TB
 1. **BOOT** : Plymouth → FirstBoot → HW-Detect
 2. **ROOT** : Core → API → Hub → System
 3. **MESH** : WireGuard → Routes → NetModes
-4. **WALL** : DNS → NAC → HAProxy → CrowdSec
 5. **MIND** : Netdata → nDPId → Reporter
 6. **AUTH** : Vault → ZKP → TURN
 

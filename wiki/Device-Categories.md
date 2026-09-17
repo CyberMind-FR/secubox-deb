@@ -14,7 +14,6 @@ SecuBox uses a unified 6-category icon system across all devices and interfaces.
 | Index | Icon | Name | Role | Color | Hex |
 |-------|------|------|------|-------|-----|
 | 0 | 🔐 | **AUTH** | Authentication / VPN / Encryption | Rust | `#C04E24` |
-| 1 | 🛡️ | **WALL** | Firewall / nftables / CrowdSec | Amber | `#9A6010` |
 | 2 | ⚙️ | **BOOT** | System / OS / Services | Crimson | `#803018` |
 | 3 | 🧠 | **MIND** | AI / CPU / Processing | Indigo | `#3D35A0` |
 | 4 | 🌳 | **ROOT** | Privileges / Integrity / Trust | Teal | `#0A5840` |

@@ -331,7 +331,6 @@ secubox-status
 | RAM | 1-2 GB | 4 GB |
 | Netzwerk | 3× GbE | 4× GbE + 2× 10GbE |
 | DPI-Modus | Nur passiv | Inline-fähig |
-| CrowdSec | Lite-Modus | Vollmodus |
 | SecuBox-Profil | secubox-lite | secubox-full |
 
 ## Siehe auch

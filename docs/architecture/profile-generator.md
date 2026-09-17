@@ -161,7 +161,6 @@ cspn_sensitivity: info       # none | info | eal2 | eal4
 | Module | Couleur Light 3 | Couche ZKP | Responsabilité |
 |--------|-----------------|------------|----------------|
 | AUTH | `#C04E24` | L1 | NIZK Hamiltonian, G rotation 24h, PFS |
-| WALL | `#9A6010` | — | nftables, CrowdSec, rate limiting |
 | BOOT | `#803018` | — | secure boot, LUKS, dm-verity |
 | MIND | `#3D35A0` | L2 (partiel) | nDPId, mitmproxy bridge, DPI dual-stream |
 | ROOT | `#0A5840` | — | base Debian, kernel, systemd, perf profiles |
@@ -357,7 +356,6 @@ profile_source:
 resolved_hash: sha256:c3d4...   # = "version fingerprint" P12-08
 fingerprint_short: c3d4e5f6     # 8 hex chars, pour bug reports lisibles
 packages:
-  - name: secubox-crowdsec
     version: 1.7.7-sb3
     upstream: 1.7.7
     sha256: ...

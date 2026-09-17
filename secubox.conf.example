@@ -54,15 +54,10 @@ require_admin_totp = true
 password = "secubox"            # À changer impérativement !
 # password_hash = "$2b$12$..."  # bcrypt recommandé (TODO Phase 5)
 
-# ── CrowdSec ──────────────────────────────────────────────────────
-[crowdsec]
-lapi_url  = "http://127.0.0.1:8080"
-lapi_key  = ""                  # Généré par : cscli bouncers add secubox-bouncer
-
-# ── DPI / netifyd ─────────────────────────────────────────────────
+# ── DPI ───────────────────────────────────────────────────────────
 [dpi]
 mode      = "inline"            # inline | passive
-engine    = "netifyd"           # netifyd | ndpid
+engine    = "ndpid"             # ndpid (nDPId -> nDPIsrvd -> sbxdpi)
 interface = "eth0"              # Interface à surveiller (WAN)
 mirror_if = "ifb0"              # Interface miroir pour DPI inline
 
@@ -171,7 +166,7 @@ crit = -80                           # Signal critique
 # Ordre : centre vers extérieur = AUTH → WALL → BOOT → MIND → ROOT → MESH
 [remote_ui.modules]
 AUTH = "secubox-auth"                # Authentification / SSO
-WALL = "secubox-crowdsec"            # WAF / IDS / CrowdSec
+WALL = "secubox-waf-ng"              # WAF / IDS (moteur Go sbxwaf)
 BOOT = "secubox-hub"                 # Dashboard principal
 MIND = "secubox-ai-insights"         # IA / Insights
 ROOT = "secubox-system"              # Système / Métriques

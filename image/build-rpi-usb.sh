@@ -1124,7 +1124,7 @@ for iface in $(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$'); do
 done
 echo ""
 echo -e "${WHITE}  🔧 Core Services${RESET}"
-for svc in nginx haproxy secubox-api secubox-hub crowdsec; do
+for svc in nginx haproxy secubox-api secubox-hub; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         echo -e "     ${ok} ${GRAY}${svc}${RESET}"
     elif systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then

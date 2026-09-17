@@ -25,10 +25,8 @@ SecuBox OS est un système d'exploitation durci orienté sécurité réseau :
 | Fonction | Description |
 |----------|-------------|
 | **Firewall** | nftables DEFAULT DROP, règles automatiques |
-| **IDS/IPS** | CrowdSec + Suricata, threat intelligence temps réel |
 | **WAF** | HAProxy + sbxwaf, 300+ règles ModSecurity |
 | **VPN** | WireGuard natif, mesh P2P |
-| **DPI** | nDPId + netifyd, analyse trafic L7 |
 | **DNS** | Unbound Vortex, blocklists automatiques |
 
 ---
@@ -98,7 +96,6 @@ SecuBox OS est organisé en 6 stacks fonctionnelles :
 | Stack | Code couleur | Modules clés |
 |-------|--------------|--------------|
 | 🟠 **AUTH** | Orange | auth, portal, nac, users |
-| 🟡 **WALL** | Jaune | crowdsec, waf, ipblock, threats |
 | 🔴 **BOOT** | Rouge | cloner, vault, vm, backup |
 | 🟣 **MIND** | Violet | dpi, ai-insights, netdata |
 | 🟢 **ROOT** | Vert | core, hub, system, admin |
@@ -138,7 +135,6 @@ Voir [[Modules]] pour les 125 modules.
 
 ### Firewall & IDS
 - **nftables** — DEFAULT DROP, règles dynamiques
-- **CrowdSec** — IDS communautaire, bouncer automatique
 - **Suricata** — Signatures ET Open
 
 ### WAF & Inspection

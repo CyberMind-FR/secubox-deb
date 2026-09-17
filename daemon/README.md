@@ -52,7 +52,6 @@ Go-based mesh networking daemon for SecuBox with Zero-Knowledge Proof authentica
 
 ### internal/telemetry
 - System metrics collection (CPU, memory, disk)
-- Security metrics (nftables rules, CrowdSec bans)
 - SQLite persistence with 24h retention
 
 ### pkg/hamiltonian

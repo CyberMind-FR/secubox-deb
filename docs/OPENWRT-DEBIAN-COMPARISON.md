@@ -36,7 +36,6 @@
 
 | OpenWRT | Debian | Status | Notes |
 |---------|--------|--------|-------|
-| luci-app-crowdsec-dashboard | secubox-crowdsec | ✅ | 54 endpoints |
 | luci-app-auth-guardian | secubox-auth | ✅ | OAuth2/JWT |
 | luci-app-client-guardian | secubox-nac | ✅ | Network access control |
 | luci-app-wireguard-dashboard | secubox-wireguard | ✅ | VPN tunnel management |
@@ -71,7 +70,6 @@
 | luci-app-dpi-dual | secubox-dpi | ✅ | Deep packet inspection |
 | luci-app-secubox-mesh | secubox-mesh | ✅ | Yggdrasil mesh |
 | luci-app-secubox-p2p | secubox-p2p | ✅ | P2P networking |
-| luci-app-secubox-netifyd | — | ⬜ | Netifyd agent (merged with DPI) |
 | luci-app-network-tweaks | — | ⬜ | Network optimization |
 | luci-app-network-anomaly | — | ⬜ | Traffic anomaly |
 | luci-app-dns-provider | — | ⬜ | DNS providers |
@@ -181,7 +179,6 @@ These modules exist only in SecuBox-DEB and have no OpenWRT equivalent:
 |--------|-------------|
 | secubox-daemon | Go mesh daemon (secuboxd, secuboxctl) |
 | secubox-soc | Security Operations Center dashboard |
-| secubox-waf | Web Application Firewall (CrowdSec) |
 | secubox-hardening | Kernel sysctl + module blacklist |
 | secubox-publish | Unified publishing platform |
 | secubox-c3box | Services portal with topology |
@@ -212,7 +209,6 @@ These modules exist only in SecuBox-DEB and have no OpenWRT equivalent:
 | Module | Endpoints | Status |
 |--------|-----------|--------|
 | secubox-hub | 40+ | ✅ |
-| secubox-crowdsec | 54 | ✅ |
 | secubox-qos | 80+ | ✅ |
 | secubox-dpi | 40+ | ✅ |
 | secubox-system | 35+ | ✅ |

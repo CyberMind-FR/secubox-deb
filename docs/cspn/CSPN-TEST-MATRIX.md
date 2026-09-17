@@ -42,7 +42,6 @@ Status: ⬜ todo · 🔄 partial · ✅ covered.
 | AUT-03 | JWT signature verified; tampered/expired rejected | A | forge/expire token → 401 | rejected | ⬜ |
 | AUT-04 | Social/report tokens = HMAC, TTL-bound, salt-rotated | A | expired/forged `/social/{token}` → 403; salt rotates daily | rejected + rotation | 🔄 |
 | AUT-05 | No default/hardcoded credentials | A | grep configs + first-boot generates per-device secrets | none | 🔄 |
-| AUT-06 | Brute-force handled at the WAF layer (per project doctrine) | M | rate-limit probe via HAProxy/CrowdSec | throttled/banned | 🔄 |
 | AUT-07 | ZKP auth (GK-HAM-2025) NIZK soundness, G rotation 24h PFS | M+A | protocol test vectors + rotation timer check | proofs verify, rotates | ⬜ |
 
 ## 3. Access control / privilege separation

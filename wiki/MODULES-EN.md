@@ -24,7 +24,6 @@
 | 📋 **Migration Roadmap** | Dashboard | OpenWRT to Debian migration tracking |
 | 📈 **System Metrics** | Dashboard | Real-time system metrics dashboard |
 | ⚙️ **Admin Panel** | Dashboard | System administration panel |
-| 🛡️ **CrowdSec** | Security | Collaborative security engine with behavior analysis |
 | 🔥 **Web Application Firewall** | Security | WAF with 300+ OWASP security rules |
 | 🔥 **Vortex Firewall** | Security | nftables-based threat enforcement firewall |
 | 🔒 **System Hardening** | Security | Kernel and system hardening for ANSSI CSPN compliance |
@@ -69,8 +68,6 @@
 | 💬 **SimpleX Chat** | Privacy | Privacy-focused messaging |
 | 🔐 **Secret Vault** | Privacy | Secrets and credentials management |
 | 📊 **Netdata** | Monitoring | Real-time system monitoring |
-| 🔬 **Deep Packet Inspection** | Monitoring | DPI with netifyd/nDPId |
-| 🔬 **Netifyd DPI** | Monitoring | Netifyd deep packet inspection |
 | 🔬 **nDPId** | Monitoring | nDPI daemon for traffic analysis |
 | 📱 **Device Intelligence** | Monitoring | Asset discovery and fingerprinting |
 | 👁️ **Watchdog** | Monitoring | Service and container monitoring |
@@ -142,7 +139,6 @@
 | 🔌 **SaaS Relay** | Network | SaaS / API proxy relay |
 | 🎯 **Security Posture** | Security | Honest board-truthful security scorecard |
 | 📡 **SENTINELLE-GSM** | Security | Passive rogue-BTS sensor (MIND layer) |
-| 🕸️ **ThreatMesh** | Security | Sovereign threat-intel mesh (CrowdSec CAPI replacement) |
 | 🧰 **ToolBoX (Cabine)** | Security | Captive AP + consented MITM privacy analyzer |
 | 💻 **VM Manager** | System | Virtualization management |
 | 🔎 **YaCy** | Network | Peer-to-peer search engine |

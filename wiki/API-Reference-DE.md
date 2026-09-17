@@ -141,7 +141,6 @@ Intrusion Detection und Prevention.
 
 | Endpunkt | Methode | Auth | Beschreibung |
 |----------|---------|------|--------------|
-| `/status` | GET | Nein | CrowdSec-Dienststatus |
 | `/metrics` | GET | Ja | Verarbeitete Ereignisse, Entscheidungen |
 | `/decisions` | GET | Ja | Aktive Sperrentscheidungen |
 | `/alerts` | GET | Ja | Aktuelle Sicherheitswarnungen |

@@ -26,7 +26,7 @@ import socket
 import subprocess
 from pathlib import Path
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from secubox_core.auth import require_jwt
 from secubox_core.auth import require_lecture
 
@@ -113,7 +113,179 @@ def _bridge_state() -> str:
         return proc.stdout.strip()
 
 
+def _mqtt_base() -> list:
+    """La partie commune de tout appel mosquitto — hôte, port, identifiants.
+
+    Rend [] si le secret manque : l'appelant doit alors renoncer plutôt que de
+    tenter une connexion anonyme, que le courtier refuserait de toute façon.
+    """
+    pw_file = SECRETS_DIR / "mqtt-z2m"
+    if not pw_file.exists():
+        return []
+    return ["-h", MQTT_LXC_IP, "-p", str(MQTT_PORT),
+            "-u", "z2m", "-P", pw_file.read_text().strip()]
+
+
+def _inventaire() -> list:
+    """Les appareils annoncés par le pont, coordinateur exclu.
+
+    C'EST AUSSI LA LISTE BLANCHE DES NOMS. Un nom d'appareil devient un
+    segment de topic MQTT : `zigbee2mqtt/<nom>/set`. Le valider par une
+    expression régulière laisserait passer n'importe quel nom bien formé et
+    permettrait d'écrire dans un topic arbitraire du courtier — y compris
+    `bridge/request/...`, qui pilote le pont lui-même. On n'accepte donc que
+    ce que le pont a lui-même annoncé.
+    """
+    base = _mqtt_base()
+    if not base:
+        return []
+    try:
+        proc = subprocess.run(
+            ["mosquitto_sub", *base, "-t", "zigbee2mqtt/bridge/devices",
+             "-C", "1", "-W", "3"],
+            capture_output=True, text=True, timeout=6,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return []
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return []
+    try:
+        tout = json.loads(proc.stdout.strip())
+    except json.JSONDecodeError:
+        return []
+    return [d for d in tout
+            if d.get("type") != "Coordinator" and d.get("friendly_name")]
+
+
+def _genre(dev: dict) -> str:
+    """« light » ou « switch » selon ce que l'appareil expose vraiment.
+
+    On lit la définition plutôt que le modèle : deux références différentes
+    peuvent exposer la même chose, et un modèle inconnu du catalogue n'aurait
+    alors aucun genre.
+    """
+    for e in ((dev.get("definition") or {}).get("exposes") or []):
+        if e.get("type") in ("light", "switch"):
+            return e["type"]
+    return "inconnu"
+
+
+def _etats(noms: list) -> dict:
+    """L'état courant de chaque appareil nommé.
+
+    ON DEMANDE, ON N'ATTEND PAS. Le topic retenu `zigbee2mqtt/<nom>` peut être
+    VIDE — c'est le cas après un redémarrage du pont, ou quand le conteneur a
+    été gelé : plus personne n'a publié depuis. Se contenter de lire le retenu
+    rendrait alors une carte vide en prétendant que tout va bien. On publie
+    donc un `/get` sur chaque appareil et on écoute la réponse.
+
+    Une seule écoute pour tous les appareils, en parallèle des demandes : six
+    abonnements successifs coûteraient six fois le délai d'attente.
+    """
+    base = _mqtt_base()
+    if not base or not noms:
+        return {}
+    try:
+        ecoute = subprocess.Popen(
+            ["mosquitto_sub", *base, "-t", "zigbee2mqtt/+", "-v", "-W", "4"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    try:
+        for n in noms:
+            try:
+                subprocess.run(
+                    ["mosquitto_pub", *base, "-t", f"zigbee2mqtt/{n}/get",
+                     "-m", '{"state":""}'],
+                    capture_output=True, timeout=3,
+                )
+            except (subprocess.SubprocessError, FileNotFoundError):
+                pass
+        sortie, _ = ecoute.communicate(timeout=8)
+    except subprocess.TimeoutExpired:
+        ecoute.kill()
+        return {}
+    vus = {}
+    for ligne in (sortie or "").splitlines():
+        topic, _, charge = ligne.partition(" ")
+        nom = topic.split("/", 1)[-1]
+        if nom not in noms or not charge:
+            continue
+        try:
+            vus[nom] = json.loads(charge)
+        except json.JSONDecodeError:
+            continue
+    return vus
+
+
 # ── Endpoints ───────────────────────────────────────────────────────────────
+
+@app.get("/devices", dependencies=[Depends(require_lecture)])
+def devices() -> dict:
+    """Les appareils du pont, avec leur état.
+
+    Différé depuis la v2.4 (« Deferred to v2.5 »), livré ici parce que la carte
+    du Hall en a besoin : une carte qui ne sait pas dire si une lampe est
+    allumée ne vaut pas la peine d'être ouverte.
+    """
+    inv = _inventaire()
+    noms = [d["friendly_name"] for d in inv]
+    etats = _etats(noms)
+    sortie = []
+    for d in inv:
+        n = d["friendly_name"]
+        e = etats.get(n) or {}
+        dfn = d.get("definition") or {}
+        sortie.append({
+            "nom": n,
+            "genre": _genre(d),
+            "modele": dfn.get("model"),
+            "description": dfn.get("description"),
+            # `None` et non « OFF » quand l'appareil n'a pas répondu : une
+            # lampe injoignable n'est pas une lampe éteinte, et la carte doit
+            # pouvoir montrer la différence.
+            "etat": e.get("state"),
+            "luminosite": e.get("brightness"),
+            "qualite": e.get("linkquality"),
+            "joignable": bool(e),
+        })
+    sortie.sort(key=lambda x: x["nom"])
+    return {"pont": _bridge_state(), "appareils": sortie}
+
+
+@app.post("/devices/{nom}/set", dependencies=[Depends(require_jwt)])
+def set_device(nom: str, body: dict) -> dict:
+    """Allume ou éteint un appareil.
+
+    SOUS JETON, alors que la lecture se contente de `require_lecture` : lire
+    l'état d'une lampe est de l'information, la piloter est un acte dans le
+    monde physique. Le relais du Hall ajoute une seconde condition, le LAN.
+    """
+    etat = str((body or {}).get("etat", "")).upper()
+    if etat not in ("ON", "OFF", "TOGGLE"):
+        raise HTTPException(400, "etat doit valoir ON, OFF ou TOGGLE")
+    if nom not in [d["friendly_name"] for d in _inventaire()]:
+        # Même message pour « inconnu » et « le pont ne répond pas » : on ne
+        # renseigne pas sur l'existence d'un appareil.
+        raise HTTPException(404, "appareil inconnu")
+    base = _mqtt_base()
+    if not base:
+        raise HTTPException(503, "identifiants MQTT indisponibles")
+    try:
+        proc = subprocess.run(
+            ["mosquitto_pub", *base, "-t", f"zigbee2mqtt/{nom}/set",
+             "-m", json.dumps({"state": etat})],
+            capture_output=True, text=True, timeout=6,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        raise HTTPException(503, "courtier MQTT injoignable")
+    if proc.returncode != 0:
+        raise HTTPException(502, "le courtier a refuse la commande")
+    # On relit APRÈS avoir commandé : l'appareil, pas notre intention, dit ce
+    # qui s'est passé. Un TOGGLE n'a d'ailleurs pas d'autre façon de répondre.
+    return {"nom": nom, "etat": (_etats([nom]).get(nom) or {}).get("state")}
+
 
 @app.get("/components", dependencies=[Depends(require_lecture)])
 def components() -> dict:

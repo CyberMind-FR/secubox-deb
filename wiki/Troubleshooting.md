@@ -131,7 +131,6 @@ secubox-netdiag
 
 **Solutions:**
 
-1. Check CrowdSec is running:
    ```bash
    systemctl status crowdsec
    cscli metrics
@@ -245,7 +244,6 @@ This is a known issue with the Marvell 88E6341 DSA (Distributed Switch Architect
 | System | `journalctl` |
 | Nginx | `/var/log/nginx/` |
 | HAProxy | `/var/log/haproxy.log` |
-| CrowdSec | `cscli metrics` / `journalctl -u crowdsec` |
 | SecuBox modules | `journalctl -u secubox-*` |
 | Audit | `/var/log/secubox/audit.log` |
 

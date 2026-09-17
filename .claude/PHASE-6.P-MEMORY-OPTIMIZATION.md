@@ -22,7 +22,6 @@
 | 297 MB | java | peertube indexer |
 | 283 MB | peertube node | media server |
 | **174 MB** | **uvicorn secubox_toolbox** | ⚠ heaviest SecuBox FastAPI |
-| 201 MB | crowdsec | LAPI + scenario engine |
 | 189 MB | systemd-journal | retention queue |
 | 164 MB | grafana | dashboard |
 | 161 MB | python3 (mitm WAF) | LXC mitmproxy |

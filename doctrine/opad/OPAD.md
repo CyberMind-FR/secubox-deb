@@ -187,7 +187,6 @@ La SecuBox écoute les requêtes DNS (port 53 UDP) en mode promiscuous. Lorsqu'u
 | `modes` | list | `["nxdomain", "sinkhole"]` | Modes de réponse |
 | `sinkhole_ip` | IPv4 | `10.254.254.254` | IP de sinkhole (si mode sinkhole) |
 | `ttl` | int | `60` | TTL de la réponse injectée (secondes) |
-| `blocklists` | list | `["crowdsec", "abuse.ch"]` | Sources de domaines malveillants |
 | `dry_run` | bool | `false` | Log uniquement, pas d'injection |
 
 #### 5.1.3 Modes de réponse
@@ -266,7 +265,6 @@ La SecuBox analyse les flux TCP établis (via observation de SYN/SYN-ACK) et inj
 | `target_success_rate` | float | `0.90` | Taux de disruption réussie |
 | `double_ended` | bool | `true` | Envoyer RST aux deux endpoints (client+serveur) |
 | `timing_window_ms` | int | `100` | Fenêtre d'injection (ms) |
-| `trigger_sources` | list | `["crowdsec", "suricata"]` | Sources de détection malveillante |
 
 #### 5.3.3 Journalisation
 
@@ -590,7 +588,6 @@ arp_redirect_sources = ["nac"]
 | Malware DNS (C2, phishing) | DNS-R | 99% |
 | Connexion TCP malveillante (C2, exfiltration) | RST-I | 90% |
 | Device compromis (quarantaine) | DHCP-R / ARP-R | 95% |
-| Blocklists dynamiques (CrowdSec, Suricata) | DNS-R + RST-I | 98% |
 
 ### 10.2 Partiel (◐)
 

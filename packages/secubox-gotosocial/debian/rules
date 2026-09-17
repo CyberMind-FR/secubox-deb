@@ -15,6 +15,3 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-gotosocial/etc/nginx/secubox.d
 	[ -f nginx/gotosocial.conf ] && cp nginx/gotosocial.conf debian/secubox-gotosocial/etc/nginx/secubox.d/ || true
-	# Systemd service
-	install -d debian/secubox-gotosocial/usr/lib/systemd/system
-	[ -d systemd ] && cp systemd/*.service debian/secubox-gotosocial/usr/lib/systemd/system/ || true

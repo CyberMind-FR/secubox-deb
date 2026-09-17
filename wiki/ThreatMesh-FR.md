@@ -58,7 +58,6 @@ refuse tout ce qui y figure.
 
 ## 🆚 Pourquoi souverain
 
-| Avant (CrowdSec CAPI) | Maintenant (ThreatMesh) |
 |------------------------|-------------------------|
 | La liste centrale d'une entreprise | **La vôtre**, depuis des sources ouvertes |
 | Ils peuvent **bannir votre IP** | **Personne ne peut vous exclure** |
@@ -77,7 +76,6 @@ central toxique (CAPI) est abandonné.
 | **Feeds** | `secubox-threatfeed` (timer, 6 h) | tire des listes gratuites — feodo, sslbl, FireHOL, Spamhaus DROP, blocklist.de, CINS, ET-compromised, DShield — dans la table partagée `threat_intel` |
 | **Mesh** | `secubox-threatmesh` (service) | diffuse les décisions détectées localement aux pairs du mesh via WireGuard ; ingère les décisions des pairs (`mesh:<node>`), comptées par consensus ; port `:8780` verrouillé au mesh par nftables |
 | **Application** | `secubox-blacklist-sync` | vide `threat_intel` → ensembles de drop nft `blacklist_v4/v6` |
-| **Visualiser** | tableau de bord `/threatmesh/` + `/api/v1/threatmesh/decisions` (compatible bouncer CrowdSec) | statut, sources, pairs, IP à plus fort consensus |
 
 ### 🎯 La porte de confiance (zéro carpet-bomb de faux positifs)
 

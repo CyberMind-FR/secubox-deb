@@ -23,6 +23,7 @@ DATA_SIZE="2G"        # Taille partition data
 OUT_DIR="${REPO_DIR}/output"
 KEEP_ROOTFS=0
 APT_MIRROR="http://deb.debian.org/debian"
+APT_SECURITY="http://security.debian.org/debian-security"
 APT_SECUBOX="https://apt.secubox.in"
 CONVERT_VDI=0         # Convertir en VDI pour VirtualBox
 USE_LOCAL_CACHE=0     # Utiliser cache APT local
@@ -51,7 +52,7 @@ Usage: sudo bash build-image.sh [OPTIONS]
   --profile PROFILE  isp|full — surcharge SECUBOX_PROFILE du board (défaut: du board)
   --suite   SUITE    Debian suite (défaut: bookworm)
   --out     DIR      Répertoire de sortie (défaut: ./output)
-  --size    SIZE     Taille totale image (défaut: 4G)
+  --size    SIZE     Taille totale image (défaut: 8G)
   --vdi               Convertir en VDI (VirtualBox) en plus du raw
   --local-cache      Utiliser cache APT local (apt-cacher-ng + repo local)
   --slipstream       Intégrer les .deb de output/debs/ dans l'image
@@ -165,6 +166,7 @@ if [[ $USE_LOCAL_CACHE -eq 1 ]]; then
   # Vérifier apt-cacher-ng
   if curl -sf "http://${LOCAL_CACHE_HOST}:${LOCAL_CACHE_PORT}" >/dev/null 2>&1; then
     APT_MIRROR="http://${LOCAL_CACHE_HOST}:${LOCAL_CACHE_PORT}/deb.debian.org/debian"
+    APT_SECURITY="http://${LOCAL_CACHE_HOST}:${LOCAL_CACHE_PORT}/security.debian.org/debian-security"
     log "Cache APT local détecté : ${APT_MIRROR}"
   else
     warn "apt-cacher-ng non accessible — utilisation du miroir distant"
@@ -236,7 +238,7 @@ INCLUDE_PKGS+=",avahi-daemon,avahi-utils,ieee-data,procps,openssl"
 INCLUDE_PKGS+=",fonts-noto-color-emoji,locales,console-setup"
 
 # Optional heavy services (installed but may be disabled)
-# Note: crowdsec, netdata, glances are large - moved to post-debootstrap for --no-install-recommends
+# Note: netdata, glances are large - moved to post-debootstrap for --no-install-recommends
 
 if [[ $IS_X64 -eq 1 ]]; then
   # x64 : ajouter GRUB EFI + linux-image
@@ -269,6 +271,28 @@ if [[ $NEED_QEMU -eq 1 ]]; then
 fi
 
 ok "Debootstrap terminé"
+
+# ── LES SOURCES APT, ÉCRITES EN ENTIER ────────────────────────────
+#
+# CE QUE ÇA CORRIGE, ET C'EST GRAVE POUR UNE APPLIANCE DE SÉCURITÉ : on s'en
+# remettait au `sources.list` que debootstrap laisse derrière lui, qui ne
+# contient QUE la suite principale. Les images partaient donc SANS
+# `${SUITE}-security` — aucune mise à jour de sécurité Debian, jamais, sur un
+# produit dont c'est le métier. Le même oubli vit sur la box en marche.
+#
+# `-updates` entre aussi : c'est là que Debian pousse les correctifs qui ne
+# passent pas par la voie sécurité (données de fuseaux horaires, régressions).
+#
+# Les autres constructeurs du dépôt le faisaient déjà — `image/lib/common.sh`
+# porte exactement ce bloc. C'est build-image.sh, le constructeur PRINCIPAL,
+# qui ne l'avait pas.
+log "Sources APT (${SUITE} + updates + security)..."
+cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
+deb ${APT_MIRROR} ${SUITE} main contrib non-free non-free-firmware
+deb ${APT_MIRROR} ${SUITE}-updates main contrib non-free non-free-firmware
+deb ${APT_SECURITY} ${SUITE}-security main contrib non-free non-free-firmware
+EOF
+ok "Sources APT écrites"
 
 # ── Étape 2 : Configuration base ──────────────────────────────────
 log "2/7 Configuration système de base..."
@@ -601,25 +625,34 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
 ok "Python dependencies installed"
 
-# Install heavy services that aren't in debootstrap (crowdsec, netdata, glances, X11)
+# Install heavy services that aren't in debootstrap (netdata, glances, X11)
 log "Installing security services and optional components..."
 
-# Add CrowdSec repository
-log "  Adding CrowdSec repository..."
-chroot "${ROOTFS}" bash -c '
-  curl -s https://install.crowdsec.net | bash 2>/dev/null || true
-' 2>/dev/null || warn "CrowdSec repo setup failed"
-
-# Install security services
-# For lite profiles, install only essential services
+# CROWDSEC N'EST PLUS DU PRODUIT (#1362), ET N'ENTRE PLUS DANS L'IMAGE.
+#
+# Il a été purgé de la box et du dépôt : le bannissement WAF passe par nftban,
+# autonome, et le code qui appelait CrowdSec était mort. L'image continuait
+# pourtant de l'installer — chaque appliance neuve repartait donc avec un
+# composant décommissionné, que personne ne configurait et qui ne protégeait
+# rien.
+#
+# LE FAIRE ENTRER COÛTAIT PLUS QUE SA PRÉSENCE : l'ajout du dépôt se faisait par
+# `curl https://install.crowdsec.net | bash` DANS le chroot — un script distant
+# tiers, non épinglé, exécuté pendant la construction de l'image, avec le droit
+# d'écrire partout dans le système qu'on est en train de sceller. Une appliance
+# de sécurité ne se construit pas comme ça.
+#
+# C'est aussi un bloqueur pour Trixie (#1294) : rien ne garantit que cet
+# installateur connaisse la nouvelle suite, et son échec était masqué par un
+# `|| true`.
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
 if [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    crowdsec glances netdata haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
+    glances netdata haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
 else
   log "  Installing lite security services (no netdata/glances)..."
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    crowdsec haproxy qrencode 2>/dev/null" || warn "Some services not installed"
+    haproxy qrencode 2>/dev/null" || warn "Some services not installed"
 fi
 
 # Install X11 packages for kiosk/UI mode (lighter xorg install)
@@ -1168,7 +1201,7 @@ cat > "${ROOTFS}/usr/bin/secubox-logs" <<'LOGS_CMD'
 # SecuBox Live Security Logs
 echo "📋 SecuBox Security Logs (Ctrl+C to exit)"
 echo "─────────────────────────────────────────"
-journalctl -f -u 'secubox-*' -u crowdsec -u suricata -u nginx --no-pager 2>/dev/null || \
+journalctl -f -u 'secubox-*' -u suricata -u nginx --no-pager 2>/dev/null || \
 journalctl -f --no-pager
 LOGS_CMD
 chmod +x "${ROOTFS}/usr/bin/secubox-logs"
@@ -1220,7 +1253,7 @@ echo ""
 
 # Core services
 echo -e "${WHITE}  🔧 Core Services${RESET}"
-services=(nginx haproxy secubox-api secubox-hub crowdsec suricata)
+services=(nginx haproxy secubox-api secubox-hub suricata)
 for svc in "${services[@]}"; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         echo -e "     ${ok} ${GRAY}${svc}${RESET}"
@@ -1434,22 +1467,40 @@ fallocate -l "${IMG_SIZE}" "${IMG_FILE}"
 
 if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
   # GPT + ESP pour UEFI (x64 ou arm64 VM)
-  # ESP: 512MB, ROOT: 5.5GB, DATA: remaining (~2GB)
+  # ESP: 1 GiB (voir le bloc ARM ci-dessous), ROOT: 5.5GB, DATA: remaining
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart ESP  fat32  1MiB   513MiB \
-    mkpart ROOT ext4   513MiB 6145MiB \
-    mkpart DATA ext4   6145MiB 100% \
+    mkpart ESP  fat32  1MiB   1025MiB \
+    mkpart ROOT ext4   1025MiB 6657MiB \
+    mkpart DATA ext4   6657MiB 100% \
     set 1 esp on \
     set 1 boot on
 else
   # GPT pour ARM hardware (boot + rootfs + data)
-  # boot: 256MB, ROOT: 5.5GB, DATA: remaining
+  #
+  # /boot À 1 GiB, ET NON 256 Mio (#1294).
+  #
+  # CE QUI EST ARRIVÉ AVEC 256 Mio, sur gk2 le 2026-09-17 : un `apt upgrade`
+  # ordinaire a tiré un noyau de backports, `update-initramfs` a échoué en
+  # plein vol — « No space left on device » — et dpkg a laissé DEUX paquets
+  # noyau non configurés, avec `/initrd.img` pointant sur un fichier qui
+  # n'existait pas. La carte restait amorçable par chance : son u-boot charge
+  # un noyau posé à la main, pas les liens Debian.
+  #
+  # POURQUOI 256 Mio NE SUFFIT PAS, ET NE POUVAIT PAS SUFFIRE. Un seul noyau
+  # arm64 récent pèse ~43 Mio, son initramfs ~12 Mio ; Debian en garde DEUX
+  # (courant + précédent), et cette plateforme ajoute ses propres images à
+  # DTB sur mesure — sur gk2, trois images de 41 à 44 Mio, soit 129 Mio avant
+  # même le premier noyau Debian. La partition était pleine par construction.
+  #
+  # 1 GiB laisse de quoi traverser plusieurs mises à jour de noyau sans jamais
+  # se retrouver à devoir choisir entre démarrer et mettre à jour. C'est pris
+  # sur DATA, qui s'étend jusqu'au bout du disque.
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart boot fat32  2MiB   258MiB \
-    mkpart ROOT ext4   258MiB 5890MiB \
-    mkpart DATA ext4   5890MiB 100% \
+    mkpart boot fat32  2MiB   1026MiB \
+    mkpart ROOT ext4   1026MiB 6658MiB \
+    mkpart DATA ext4   6658MiB 100% \
     set 1 boot on
 fi
 

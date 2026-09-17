@@ -507,10 +507,18 @@ log "Creating partitions..."
 umount "${TARGET_DISK}"* 2>/dev/null || true
 
 # Create GPT with ESP + root + data
+#
+# ESP À 1 GiB, ET NON 512 Mio (#1294). Un seul noyau arm64 récent pèse ~43 Mio
+# et son initramfs ~12 Mio ; Debian en garde deux, et cette plateforme ajoute
+# ses propres images à DTB sur mesure. Constaté sur gk2 le 2026-09-17 : un
+# `apt upgrade` ordinaire a rempli la partition, `update-initramfs` a échoué en
+# plein vol et dpkg a laissé deux paquets noyau non configurés. Une partition
+# de démarrage trop petite ne se voit pas à l'installation — elle se voit le
+# jour d'une mise à jour, quand il est trop tard pour la redimensionner.
 parted -s "$TARGET_DISK" \
     mklabel gpt \
-    mkpart ESP fat32 1MiB 513MiB \
-    mkpart ROOT ext4 513MiB 80% \
+    mkpart ESP fat32 1MiB 1025MiB \
+    mkpart ROOT ext4 1025MiB 80% \
     mkpart DATA ext4 80% 100% \
     set 1 esp on \
     set 1 boot on
@@ -758,8 +766,7 @@ DISABLE_ON_LIVE=(
     secubox-haproxy
     secubox-zkp
     secubox-nac
-    secubox-crowdsec
-    secubox-dpi
+        secubox-dpi
     secubox-qos
     secubox-mediaflow
     secubox-cdn

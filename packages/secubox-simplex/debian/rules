@@ -17,8 +17,6 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-simplex/usr/share/secubox/menu.d
 	install -m 644 menu.d/816-simplex.json $(CURDIR)/debian/secubox-simplex/usr/share/secubox/menu.d/
 	# Systemd service
-	install -d $(CURDIR)/debian/secubox-simplex/usr/lib/systemd/system
-	install -m 644 debian/secubox-simplex.service $(CURDIR)/debian/secubox-simplex/usr/lib/systemd/system/
 	# Config directory
 	install -d $(CURDIR)/debian/secubox-simplex/etc/secubox/simplex
 	install -d $(CURDIR)/debian/secubox-simplex/etc/secubox/simplex/tls

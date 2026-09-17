@@ -33,7 +33,6 @@ This document catalogs all SecuBox Debian modules, their features, and UI screen
 ### Security & Firewall
 | Module | Icon | Path | Description |
 |--------|------|------|-------------|
-| secubox-crowdsec | `🛡️` | `/crowdsec/` | Collaborative security engine |
 | secubox-waf | `🔥` | `/waf/` | Web Application Firewall |
 | secubox-vortex-firewall | `🔥` | `/vortex-firewall/` | nftables threat enforcement |
 | secubox-waf-ng | `🔍` | `127.0.0.1:8085` | sbxwaf inline WAF inspection engine (Go) |
@@ -68,7 +67,6 @@ This document catalogs all SecuBox Debian modules, their features, and UI screen
 | Module | Icon | Path | Description |
 |--------|------|------|-------------|
 | secubox-netdata | `📊` | `/netdata/` | Real-time performance monitoring |
-| secubox-dpi | `🔬` | `/dpi/` | Deep packet inspection (netifyd) |
 | secubox-device-intel | `📱` | `/device-intel/` | Asset discovery, fingerprinting |
 | secubox-watchdog | `👁️` | `/watchdog/` | Service & container monitoring |
 | secubox-mediaflow | `🎬` | `/mediaflow/` | Media stream analytics |
@@ -297,7 +295,6 @@ Web Application Firewall:
 - OWASP rule sets
 - Custom rules
 - Request inspection
-- CrowdSec integration
 - Audit logging
 
 **Screenshot Location:** `docs/screenshots/waf.png`
@@ -330,7 +327,6 @@ Deep Packet Inspection:
 - Application identification
 - Traffic classification
 - Flow analysis
-- netifyd integration
 
 **Screenshot Location:** `docs/screenshots/dpi.png`
 
@@ -423,7 +419,6 @@ docs/screenshots/<module-name>.png
 
 - [ ] hub.png
 - [ ] soc.png
-- [ ] crowdsec.png
 - [ ] vortex-firewall.png
 - [ ] vortex-dns.png
 - [ ] device-intel.png

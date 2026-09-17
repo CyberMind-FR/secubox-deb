@@ -167,6 +167,43 @@ def _cadence(req: Request) -> None:
     _compteur[ip] = essais
 
 
+async def require_admin(jeton=Depends(require_jwt)):
+    """La surface d'administration, réservée au profil `admin` (#1366).
+
+    CE QUE ÇA CORRIGE. `/file`, `/profils` et leurs actions n'exigeaient qu'un
+    jeton VALIDE — donc n'importe quel porteur authentifié, y compris un
+    appareil admis en `guest` cinq minutes plus tôt. Or la file porte le nom,
+    l'appareil, le message et l'empreinte de gens qui demandent à entrer, et
+    `/file/accepter` fait entrer. Un jeton dit QUI l'on est, pas ce que l'on a
+    le droit de faire ; il fallait la seconde question.
+
+    LE RÔLE SE CHERCHE À DEUX ENDROITS, et l'oublier serait refuser l'accès à
+    l'administrateur lui-même : les comptes humains vivent dans `user_store`,
+    mais l'administrateur de CE module est le plus souvent un APPAREIL
+    (`sbx-…`), dont le profil vit dans le registre des appareils. Même ordre de
+    lecture que le `verify` de `secubox_core.auth`.
+    """
+    sub = (jeton or {}).get("sub") if isinstance(jeton, dict) else None
+    role = ""
+    try:
+        from secubox_core import user_store
+        u = user_store.get_user(sub) or {}
+        role = u.get("role", "") if isinstance(u, dict) else ""
+    except Exception:
+        role = ""
+    if not role:
+        try:
+            role = appareils.profil_de(sub) if appareils.get(sub) else ""
+        except Exception:
+            role = ""
+    if role != "admin":
+        # 403 et non 404 : la carlette distingue les deux — sur un refus elle
+        # affiche « réservé à l'administration », et ne laisse pas croire que
+        # le service est en panne.
+        raise HTTPException(403, "profil administrateur requis")
+    return jeton
+
+
 def _qui(req: Request) -> str:
     u = getattr(req.state, "user", None)
     return str(getattr(u, "username", None) or u or "admin")
@@ -459,13 +496,13 @@ class Verdict(BaseModel):
     profil: str = "guest"
 
 
-@app.get("/file", dependencies=[Depends(require_jwt)])
+@app.get("/file", dependencies=[Depends(require_admin)])
 async def file_attente():
     """Les demandes à trancher, avec leur empreinte."""
     return {"en_attente": profileur().en_attente()}
 
 
-@app.get("/profils", dependencies=[Depends(require_jwt)])
+@app.get("/profils", dependencies=[Depends(require_admin)])
 async def profils():
     """Les accès accordés — la matière du profileur.
 
@@ -476,7 +513,7 @@ async def profils():
     return {"admis": profileur().admis(), "profils": list(PROFILS)}
 
 
-@app.post("/file/accepter", dependencies=[Depends(require_jwt)])
+@app.post("/file/accepter", dependencies=[Depends(require_admin)])
 async def accepter(v: Verdict, req: Request):
     """Admettre un appareil. **L'issue est toujours `guest`.**
 
@@ -510,7 +547,7 @@ async def accepter(v: Verdict, req: Request):
             "lien": (porte + "/?entree=" + jeton) if jeton else ""}
 
 
-@app.post("/file/refuser", dependencies=[Depends(require_jwt)])
+@app.post("/file/refuser", dependencies=[Depends(require_admin)])
 async def refuser(v: Verdict, req: Request):
     try:
         d = profileur().refuse(v.did, par=_qui(req), motif=v.motif)
@@ -519,7 +556,7 @@ async def refuser(v: Verdict, req: Request):
     return {"ok": True, "did": d.did}
 
 
-@app.post("/profils/promouvoir", dependencies=[Depends(require_jwt)])
+@app.post("/profils/promouvoir", dependencies=[Depends(require_admin)])
 async def promouvoir(v: Verdict, req: Request):
     """Changer le profil d'un admis. C'est ICI, et nulle part ailleurs, que
     `admin` devient possible."""
@@ -537,7 +574,7 @@ async def promouvoir(v: Verdict, req: Request):
     return {"ok": True, "did": d.did, "profil": d.profil}
 
 
-@app.post("/profils/revoquer", dependencies=[Depends(require_jwt)])
+@app.post("/profils/revoquer", dependencies=[Depends(require_admin)])
 async def revoquer(v: Verdict, req: Request):
     try:
         d = profileur().revoque(v.did, par=_qui(req))

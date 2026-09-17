@@ -15,5 +15,3 @@ override_dh_auto_install:
 	install -m 644 nginx/magicmirror.conf $(CURDIR)/debian/secubox-magicmirror/etc/nginx/secubox.d/
 	install -d $(CURDIR)/debian/secubox-magicmirror/usr/share/secubox/menu.d
 	install -m 644 menu.d/819-magicmirror.json $(CURDIR)/debian/secubox-magicmirror/usr/share/secubox/menu.d/
-	install -d $(CURDIR)/debian/secubox-magicmirror/usr/lib/systemd/system
-	install -m 644 debian/secubox-magicmirror.service $(CURDIR)/debian/secubox-magicmirror/usr/lib/systemd/system/

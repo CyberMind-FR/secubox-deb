@@ -5,6 +5,266 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-16 — CARTE ZIGBEE, ET LA FILE D'ACCÈS ENFIN VISIBLE (ref #1365, #1366)
+
+### La carte Zigbee
+
+Une liste d'appareils, un petit bouton emoji par ligne. Le module savait dire si
+le pont tournait, jamais ce qu'il y avait au bout : `/devices` était annoncé
+« deferred to v2.5 » depuis la v2.4. Livré, avec `/devices/{nom}/set`.
+
+**On demande l'état, on ne l'attend pas.** Le topic retenu `zigbee2mqtt/<nom>`
+peut être VIDE — après un redémarrage du pont, ou quand le conteneur a été gelé.
+Lire le retenu seul aurait rendu une carte vide en prétendant que tout va bien.
+On publie un `/get` sur chaque appareil, en **une** écoute pour tous.
+
+**Un appareil qui n'a pas répondu rend `etat: null`, pas « OFF ».** Une lampe
+hors de portée n'est pas une lampe éteinte ; les confondre ferait cliquer dans le
+vide en croyant agir. La carte l'affiche ⚠️, bouton désactivé.
+
+**Le nom est validé par liste blanche, pas par expression régulière** : il
+devient un segment de topic MQTT. Un nom « bien formé » permettrait d'écrire dans
+un topic arbitraire du courtier, `bridge/request/…` compris — qui pilote le pont.
+
+**On envoie `TOGGLE`**, pas un ON/OFF calculé depuis l'affichage : entre le
+dernier rafraîchissement et le clic, quelqu'un a pu toucher l'interrupteur mural.
+
+**LAN deux fois** — `lan:true` masque la carte aux clients WAN, et le relais
+nginx refuse aussi côté serveur. Le premier n'est que de l'affichage ; sans le
+second, il suffirait d'appeler l'API à la main depuis l'extérieur pour éteindre
+les lumières de la maison.
+
+### La file d'accès, invisible depuis le Hall
+
+La carlette essaie `/file` : si ça répond elle montre la file, sinon elle
+retombe sur « votre demande ». **Cette route n'était pas relayée par le Hall** —
+un administrateur y retombait donc TOUJOURS sur sa propre fiche, « Session
+ouverte, profil admin », et rien d'autre. La file existait, il ne pouvait pas la
+voir, et le demandeur attendait pendant ce temps.
+
+**Trouvé en corrigeant :** `/file`, `/profils` et leurs actions n'exigeaient
+qu'un jeton VALIDE — donc tout porteur authentifié, y compris un appareil admis
+en `guest`. Or la file porte les noms, appareils, messages et empreintes de gens
+qui demandent à entrer. Relayer sans corriger aurait élargi l'exposition ; les
+six routes exigent maintenant le profil `admin`, cherché dans **les deux**
+registres (`user_store` puis `appareils`) — l'oublier aurait verrouillé
+l'administrateur hors de sa propre file. Exercé sur cinq identités réelles avant
+livraison.
+
+`/profils/` reste hors du Hall : promouvoir et révoquer sont des gestes de
+gouvernance. La proximité des noms est exactement ce qui rend ce choix important.
+
+### Deux culs-de-sac fermés
+
+« Session ouverte, profil 👑 admin » n'offrait ni geste ni lien — **« Ouvrir SBX
+OS »** est posé dans les deux vues. Et le lien « Profileur » portait
+`target="_top"` : il remplaçait le Hall entier, arrêtant la radio et la vidéo. Il
+demande maintenant au Hall d'ouvrir la page **à côté**.
+
+### Le piège du jour : l'agrégateur servait du code périmé
+
+Il tournait depuis la veille et monte les modules **en processus**. Après
+`dpkg -i`, `require_admin` était sur le disque mais **pas dans le processus qui
+sert** — le relais fraîchement ouvert exposait donc la file sans sa garde.
+Détecté par une route qui n'existe que dans le code neuf : `/zigbee/devices`
+rendait **404** via l'agrégateur et **401** via groupd. Redémarrage (40 s), puis
+vérification : `/devices` → 401, `/nexistepas` → 404 — le 401 est propre à la
+route, donc le code est bien à jour.
+
+**La leçon générale :** poser le paquet ne suffit pas pour un module monté en
+processus. Vérifier avec une route neuve, pas avec un code de retour.
+
+### Deux défauts que la console du navigateur a nommés
+
+**La CSP du Hall ne listait pas `zigbee.gk2` en `frame-src`** : cliquer la carte
+ne faisait *rien de visible*, le navigateur refusant le cadre en silence. Ajouté
+aux trois déclarations qui portaient déjà `lyrion` — et vérifié **des deux
+côtés**, car autoriser `frame-src` ne suffit pas : la console z2m ne renvoie ni
+`X-Frame-Options` ni `frame-ancestors`, elle accepte donc le cadre.
+
+**Un garde-fou écrit après un `return`.** Dans `api()` de la carlette d'accès, le
+contrôle « cette réponse n'est pas du JSON » suivait le `return r.json()` : jamais
+exécuté. On retombait sur l'échec de `r.json()` — ça marchait, mais par accident,
+et l'erreur parlait de syntaxe JSON au lieu de dire que la route est absente.
+
+### Une fausse alerte, et ce qu'elle apprend
+
+Le formulaire « cet appareil n'a pas d'accès » vu sur une session **authentifiée**
+n'était pas une régression : c'était l'état transitoire pendant le redémarrage de
+l'agrégateur. Les appels échouaient en `NetworkError`, la carlette retombait sur
+son dernier visage possible. Le journal nginx l'a tranché —
+`GET /api/v1/acces/file → 200, 17 octets`, soit une file vide, donc reçue.
+
+**Ne pas diagnostiquer une carte sur une capture d'écran quand le journal du
+serveur répond à la question.**
+
+## 2026-09-16 — anibal-amiot N'EST PLUS HÉBERGÉ ICI (ref #1364)
+
+Trois demandes successives, du plus étroit au plus large : supprimer l'envoi de
+statistiques, puis la synchronisation GitHub, puis le site.
+
+### Ce qui partait vers l'extérieur
+
+`/etc/secubox/metrics.toml` expédiait les chiffres de fréquentation à un
+destinataire **hors du parc**, avec une note à son intention. Deux minuteries —
+dont une **quotidienne**. Supprimé.
+
+### La synchronisation
+
+Le site était rapatrié depuis `github.com/anibaledel/livreedhermes` **toutes les
+5 minutes** en `git reset --hard`. Amont détaché, `metablog-sync.timer` arrêté.
+Il était le **seul** des ~170 sites metablog adossé à git : la minuterie
+n'existait que pour lui, et tourner sur un dépôt sans amont aurait produit un
+échec toutes les 5 minutes.
+
+### Le site
+
+**Vérifié avant de supprimer, et c'est ce qui a rendu le geste sûr :** le dépôt
+GitHub est **public**, 529 Mo, poussé la veille ; et le **DNS pointe déjà vers
+GitHub Pages** (185.199.108-111.153, `www` en CNAME vers `anibaledel.github.io`).
+Le site avait donc déjà migré — la box ne recevait plus son trafic, et le contenu
+ne risquait rien.
+
+Retirés : le vhost dédié, le **bloc caché dans le nginx monolithique** (36
+lignes, invisible d'un `ls` — le piège déjà rencontré sur ganimed), 6 vhosts
+HAProxy (`--allow-shrink` obligatoire, ACL 202 → 190), 6 routes sbxwaf, 3
+certificats Let's Encrypt, et 1,2 Go de contenu. Les six noms répondent **421** ;
+les sites voisins du même monolithe répondent toujours **200**.
+
+### La cardlet Tirage, retirée avec le reste
+
+Elle embarquait le site via le relais de même origine `/aa/`, qui mandatait
+`127.0.0.1:8900` avec `Host: anibal-amiot.com`. Laissée en place, elle aurait
+affiché un cadre vide. Entrée du registre, fichier de carte et bloc `location`
+sont partis ensemble — ils n'avaient de sens qu'ensemble. Vérifié : `/aa/` rend
+maintenant le repli du Hall, **identique octet pour octet** à n'importe quel
+chemin inexistant.
+
+### Une erreur de raisonnement, corrigée
+
+J'ai d'abord écarté l'archivage du contenu en invoquant le manque de place — en
+lisant `/` (carte SD, 1,9 Go libres) alors que le site vivait sur `/data`
+(**916 Go, 50 %**). L'argument était faux ; la décision tenait sur l'autre motif,
+le seul qui comptait : contenu public sur GitHub et DNS déjà migré.
+
+Conservé dans `/var/backups/anibal-amiot/` : les configurations d'origine et les
+certificats. Les fixtures de test gardant ce nom sont des **exemples**, pas de la
+logique — comme pour ganimed, elles restent.
+
+## 2026-09-16 — LE TABLEAU WAF NE POUVAIT PAS SE CONNECTER (ref #1363)
+
+`https://waf.gk2.secubox.in/login.html?redirect=%2F` répondait **404**.
+
+Sur un 401, `tableau.html` envoie vers `/login.html`. Ce chemin est **absolu**,
+donc résolu dans la racine de CE vhost — `…/www/waf` — où la page n'existe pas.
+La page partagée vit un niveau au-dessus, dans `…/www/`.
+
+L'enchaînement était rompu de bout en bout : tous les endpoints du module
+répondent 401 hors LAN et sans jeton, la page rebondissait, et le rebond tombait
+dans le vide. **L'opérateur ne pouvait pas se connecter du tout.**
+
+### Pourquoi pas une redirection vers admin.gk2, qui a une page qui marche
+
+Parce que `login.html` n'accepte **que des chemins de même origine** pour son
+`?redirect=` — garde-fou délibéré contre la redirection ouverte (« never //host
+or /\host — open-redirect safe »). Renvoyer l'opérateur sur admin.gk2 l'aurait
+connecté puis laissé là-bas, le retour étant refusé par ce garde-fou, à juste
+titre. La connexion doit se faire **sur cette origine**.
+
+Cela fonctionne parce que le cookie de session porte le domaine parent
+(`sso_cookie_domain = ".gk2.secubox.in"`) : une connexion faite ici vaut pour
+tout le parc.
+
+### Deux `location`, et pourquoi la seconde n'est pas optionnelle
+
+* `= /login.html` avec un **`root` statique** sur la racine partagée — jamais un
+  `alias` + `try_files`, qui perdrait l'extension et renverrait la page en
+  `application/octet-stream` ;
+* `/api/v1/auth/` vers `auth.sock` — sans quoi la page s'afficherait mais ne
+  connecterait **personne**, son formulaire postant sur une route absente de
+  cette origine.
+
+Vérifié au-delà du code de retour : identifiants faux → **401
+`{"detail":"Identifiants incorrects"}`**, exactement comme sur `admin.gk2`.
+
+## 2026-09-15 — LES UNITÉS VESTIGES ET LES COQUILLES (ref #1362)
+
+Suite du décommissionnement de Wazuh. L'audit avait trié 19 unités jamais
+démarrées en trois groupes ; les deux visés ici ont été traités
+**différemment, parce qu'ils ne sont pas la même chose**.
+
+### Groupe A — dix unités retirées, zéro module retiré
+
+`gotosocial, jabber, jitsi, magicmirror, matrix, newsbin, ollama, redroid,
+simplex, voip`. Leur unité individuelle était `enabled` et n'avait **jamais
+démarré** : le `systemctl start` du postinst échouait à chaque installation,
+masqué par un `|| true`.
+
+Ces modules ne sont pas morts — ils sont servis **deux fois autrement** :
+montés en processus par l'agrégateur, qui les liste dans `aggregator.toml`,
+et leur socket tenu par `secubox-groupd` depuis leur déclaration dans
+`groupable-root.d`. L'unité était un reste d'avant ce regroupement.
+
+**VÉRIFIÉ AVANT RETRAIT, et c'est ce qui a autorisé le geste** — le précédent
+du masquage de standalones, qui avait cassé le login admin, imposait de
+regarder le routage d'abord :
+
+* aucune `location` nginx ne pointe vers `/run/secubox/<module>.sock` : tout
+  passe par `aggregator.sock` ;
+* `groupd` lit ses déclarations, **jamais** les fichiers `.service`.
+
+Après pose : les dix répondent **avec les mêmes codes qu'avant** (200 ×8,
+401 ×2 — 401 = authentification exigée, donc vivant). L'unité de
+provisionnement `secubox-jitsi-provision`, qui elle avait démarré, est
+intacte.
+
+Le postinst retire en plus le lien d'activation laissé dans
+`/etc/systemd/system` par un `enable` d'une version antérieure : dpkg ne le
+connaît pas et ne l'aurait pas effacé.
+
+### Groupe C — six paquets purgés, `webmail` exclu
+
+`domoticz, homeassistant, localai, master-link, mmpm, webmail-lxc`. Aucun
+dans `aggregator.toml`, aucune API montée.
+
+Trois d'entre eux étaient déjà **déclarés supplantés** — `Breaks/Replaces`
+par `p2p`, `magicmirror` et `mail`. C'étaient des paquets transitionnels que
+l'autoremove annoncé n'a jamais emportés. Ces champs sont **conservés** :
+ils restent le chemin de mise à niveau d'une installation ancienne.
+
+`secubox-profil-reseau` dépendait de `domoticz` et `homeassistant`,
+`secubox-profil-media` de `localai` : les garder en `Depends` aurait rendu
+ces méta-paquets **ininstallables**. Corrigé.
+
+### Ce qui a failli être emporté
+
+**`webmail` est exclu, et la vérification a montré qu'il fallait aller plus
+loin que le nom.** Le conteneur `roundcube` tourne, `webmail.gk2` répond 200
+— mais c'est `hall.gk2.net.conf` qui le sert, pas le paquet. Et
+`secubox-webmail-lxc` ne contenait qu'un changelog et une `location` vers une
+API non montée : le retirer ne touche ni le conteneur ni le vhost. Vérifié
+à 200 avant **et** après la purge.
+
+**MMPM a failli passer pour mort.** Mon test initial lisait un 404 sur
+`/api/v1/mmpm/status` comme « rien ne répond ». Un 404 ne distingue pas
+« module non monté » de « cet endpoint n'existe pas ». La fonction MMPM est
+**vivante**, servie par `magicmirror` sous `/api/v1/magicmirror/mmpm/*` —
+c'est le paquet `secubox-mmpm`, lui, qui ne route qu'un chemin mort que
+personne n'appelle. Vérifié à 200 après la purge.
+
+### Ce qui n'a pas été touché
+
+`WIP.md` et `TODO.md` gardent leurs mentions : ce sont des journaux datés et
+des cases cochées, c'est-à-dire des registres. Seules les références
+**vivantes** — tableaux d'état, backlog de portage, catalogue `tutorial/` —
+ont été retirées. Le total « 125 modules » de `MIGRATION-MAP.md` est laissé
+tel quel : il ne correspond ni aux 321 paquets du dépôt ni aux 159 installés,
+c'est un nombre tenu à la main déjà faux avant ce passage — le corriger de 7
+aurait ajouté une fausse précision.
+
+**Le groupe B (`mail-lxc`) et `webmail` restent en place.** Rien n'a été
+retiré au-delà de ce qui est listé ici.
+
 ## 2026-09-14 — LEURRE HTTP, FILIGRANE, ET LE DICTIONNAIRE QUI SE REGROUPE (ref #1290)
 
 ### Le leurre

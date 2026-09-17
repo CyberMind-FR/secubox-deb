@@ -36,7 +36,6 @@ var Tiers = map[string]Tier{
 var AvailablePackages = []string{
 	"secubox-core",
 	"secubox-hub",
-	"secubox-crowdsec",
 	"secubox-netdata",
 	"secubox-wireguard",
 	"secubox-dpi",

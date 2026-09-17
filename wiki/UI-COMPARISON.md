@@ -74,7 +74,6 @@
 
 | Service | OpenWRT | Debian |
 |---------|---------|--------|
-| CrowdSec | ✅ | ✅ |
 | WireGuard | ✅ | ✅ |
 | nftables | ✅ | ✅ |
 | HAProxy | ✅ | ✅ |
@@ -91,12 +90,10 @@
 | OpenWRT Package | Debian Package | Status |
 |-----------------|----------------|--------|
 | luci-app-secubox | secubox-hub | ✅ Complete |
-| luci-app-crowdsec-dashboard | secubox-crowdsec | ✅ Complete |
 | luci-app-wireguard-dashboard | secubox-wireguard | ✅ Complete |
 | luci-app-auth-guardian | secubox-auth | ✅ Complete |
 | luci-app-client-guardian | secubox-nac | ✅ Complete |
 | luci-app-network-modes | secubox-netmodes | ✅ Complete |
-| luci-app-netifyd-dashboard | secubox-dpi | ✅ Complete |
 | luci-app-bandwidth-manager | secubox-qos | ✅ Complete |
 | luci-app-vhost-manager | secubox-vhost | ✅ Complete |
 | luci-app-cdn-cache | secubox-cdn | ✅ Complete |

@@ -117,7 +117,6 @@ sudo apt install secubox-full   # 或 secubox-lite
 
 | 类别 | 模块 | 数量 |
 |------|------|------|
-| **安全** | CrowdSec、WAF、NAC、Auth、加固、AI-Insights、IPBlock | 15 |
 | **网络** | WireGuard、HAProxy、DPI、QoS、网络模式、Interceptor | 12 |
 | **SOC** | Fleet 监控、告警关联、威胁地图、控制台 TUI | 6 |
 | **监控** | Netdata、Metrics、Threats、OpenClaw OSINT | 8 |
