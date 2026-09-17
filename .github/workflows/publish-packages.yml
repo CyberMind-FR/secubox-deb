@@ -105,8 +105,24 @@ jobs:
 
       - name: Export public GPG key
         run: |
-          gpg --armor --export packages@secubox.in > repo/secubox-keyring.gpg
-          gpg --export packages@secubox.in > repo/secubox-keyring.gpg.bin
+          # LE .gpg DOIT ETRE BINAIRE (#1294). `signed-by=` d'apt exige un
+          # trousseau binaire sous `.gpg` (ou armored sous `.asc`). C'etait
+          # l'inverse : l'armored partait sous `.gpg` et le binaire sous un
+          # `.gpg.bin` que personne ne consommait. Consequence : la commande
+          # d'installation publiee — `curl .../secubox-keyring.gpg | tee
+          # /usr/share/keyrings/secubox.gpg` — produisait un trousseau
+          # inutilisable et TOUT apt update finissait en
+          # « NO_PUBKEY 44E50F0178E8BC7E », bookworm comme trixie.
+          #
+          # Le defaut etait connu : validate-staged-repo.sh, build-image.sh et
+          # build-installer-iso.sh le contournent chacun par un `gpg --dearmor`
+          # a la volee. Le seul endroit sans contournement etait celui des
+          # utilisateurs. Corrige ici, a la source ; les contournements restent
+          # valides, `--dearmor` sur une entree binaire etant un passe-plat.
+          gpg --export packages@secubox.in > repo/secubox-keyring.gpg
+          gpg --armor --export packages@secubox.in > repo/secubox-keyring.asc
+          # Conserve : d'anciens scripts peuvent encore le viser.
+          cp repo/secubox-keyring.gpg repo/secubox-keyring.gpg.bin
           cp repo/secubox-keyring.gpg repo/dists/
 
       - name: Generate install script

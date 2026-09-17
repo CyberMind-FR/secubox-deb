@@ -31,10 +31,15 @@ bash "$REPO/repo/scripts/generate-gpg-key.sh"
 
 # The underlying script exits early (without exporting) when the key already
 # exists.  Always export here so the wrapper is idempotent end-to-end.
-gpg --homedir "$GPG_HOME" --armor --export "$KEY_EMAIL" \
-  > "$OUT_DIR/secubox-keyring.gpg"
+# Le .gpg doit etre BINAIRE : `signed-by=` d'apt refuse un armored sous ce
+# nom, et c'est le fichier que la commande d'installation publiee verse dans
+# /usr/share/keyrings/. L'armored reste disponible sous .asc (#1294).
 gpg --homedir "$GPG_HOME" --export "$KEY_EMAIL" \
-  > "$OUT_DIR/secubox-keyring.gpg.bin"
+  > "$OUT_DIR/secubox-keyring.gpg"
+gpg --homedir "$GPG_HOME" --armor --export "$KEY_EMAIL" \
+  > "$OUT_DIR/secubox-keyring.asc"
+# Conserve : d'anciens scripts peuvent encore viser ce nom.
+cp "$OUT_DIR/secubox-keyring.gpg" "$OUT_DIR/secubox-keyring.gpg.bin"
 
 # Extract long fingerprint (no spaces) — used in reprepro conf/distributions SignWith.
 gpg --homedir "$GPG_HOME" \
