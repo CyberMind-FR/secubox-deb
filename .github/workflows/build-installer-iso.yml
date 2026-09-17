@@ -165,8 +165,7 @@ jobs:
           ## Security
           | Module | Description | API Endpoints |
           |--------|-------------|---------------|
-          | secubox-crowdsec | Intrusion prevention | /api/v1/crowdsec/* |
-          | secubox-waf | Web application firewall | /api/v1/waf/* |
+                    | secubox-waf | Web application firewall | /api/v1/waf/* |
           | secubox-auth | OAuth2/OIDC | /api/v1/auth/* |
           | secubox-nac | Network access control | /api/v1/nac/* |
 

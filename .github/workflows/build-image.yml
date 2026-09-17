@@ -316,7 +316,7 @@ jobs:
 
             **124 SecuBox packages** across all security domains:
             - **Core:** hub, core, portal, system, console
-            - **Security:** crowdsec, waf, auth, nac, threats, ipblock, mac-guard
+            - **Security:** waf, auth, nac, threats, ipblock, mac-guard, hardening
             - **Networking:** wireguard, haproxy, dpi, qos, netmodes, vhost, cdn
             - **Applications:** mail, gitea, nextcloud, ollama, jellyfin, matrix
             - **SOC:** soc-agent, soc-gateway, soc-web

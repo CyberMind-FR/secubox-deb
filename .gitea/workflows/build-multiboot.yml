@@ -260,7 +260,7 @@ jobs:
 
             ### 🔧 SecuBox Modules Included
             - secubox-core, secubox-hub
-            - secubox-crowdsec, secubox-haproxy
+            - secubox-haproxy
             - secubox-system, secubox-hardening
             - secubox-ipblock, and more...
 

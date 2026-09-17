@@ -331,7 +331,7 @@ jobs:
 
             **33 packages** including:
             - Core infrastructure (hub, core, portal)
-            - Security (crowdsec, waf, auth, nac)
+            - Security (waf, auth, nac)
             - Networking (wireguard, netmodes, dpi, qos)
             - Applications (mail, gitea, nextcloud, webmail)
             - Publishing (droplet, streamlit, metablogizer)
