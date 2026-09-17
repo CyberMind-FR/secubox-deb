@@ -7,6 +7,7 @@ ConditionArchitecture=arm64
 
 [Service]
 Type=oneshot
+ExecCondition=/usr/sbin/secubox-led-board
 ExecStart=/usr/sbin/secubox-healthbump
 StandardOutput=journal
 StandardError=journal

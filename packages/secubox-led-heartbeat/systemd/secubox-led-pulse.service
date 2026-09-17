@@ -4,7 +4,8 @@ After=network.target secubox-healthbump.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/secubox-led-pulse
+ExecCondition=/usr/sbin/secubox-led-board
+ExecStart=/usr/sbin/secubox-led-pulse
 Restart=always
 RestartSec=5
 

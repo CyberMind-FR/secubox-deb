@@ -1,3 +1,15 @@
+secubox-core (1.5.5-1~bookworm1) bookworm; urgency=medium
+
+  * Cesse de livrer secubox-led-heartbeat (script + unite) : le fichier
+    etait revendique par deux paquets, ce qui faisait echouer net
+    l'installation de secubox-led-heartbeat. Les LED sont un IS31FL3199
+    propre au MOCHAbin et n'ont rien a faire dans un paquet installe sur
+    tous les boards (ref #1362).
+
+  * Deplace aussi secubox-led-k2000 vers secubox-led-heartbeat :
+    meme raison, du LED MOCHAbin dans un paquet installe partout.
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 11:37:27 +0200
+
 secubox-core (1.5.4-1~bookworm1) bookworm; urgency=medium
 
   * LE PAQUET LIVRAIT LE SCRIPT DE PREMIER DEMARRAGE SANS SON UNITE (#1362).

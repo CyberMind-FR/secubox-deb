@@ -7,6 +7,7 @@ ConditionPathExists=/sys/class/leds
 
 [Service]
 Type=simple
+ExecCondition=/usr/sbin/secubox-led-board
 ExecStart=/usr/sbin/secubox-led-heartbeat
 Restart=on-failure
 RestartSec=5

@@ -8,6 +8,10 @@ override_dh_auto_install:
 		debian/secubox-led-heartbeat/usr/sbin/secubox-healthbump
 	install -D -m 755 usr/sbin/secubox-led \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led
+	install -D -m 755 usr/sbin/secubox-led-board \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-board
+	install -D -m 755 usr/sbin/secubox-led-k2000 \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-k2000
 	install -D -m 755 usr/sbin/secubox-led-pulse \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-pulse
 	install -D -m 755 usr/sbin/secubox-led-trigger \
@@ -27,6 +31,8 @@ override_dh_auto_install:
 		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-pulse.service
 	install -D -m 644 systemd/secubox-led-trigger.service \
 		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-trigger.service
+	install -D -m 644 systemd/secubox-leds.service \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-leds.service
 	# Legacy service (backward compatibility)
 	install -D -m 644 systemd/secubox-led-heartbeat.service \
 		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-heartbeat.service

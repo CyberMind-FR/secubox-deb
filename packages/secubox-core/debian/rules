@@ -53,6 +53,11 @@ override_dh_auto_install:
 	install -m 755 usr/bin/secubox \
 	               debian/secubox-core/usr/bin/secubox
 
+	# LE CHAUFFE-LED APPARTIENT A SON PROPRE PAQUET (#1362). secubox-core
+	# livrait AUSSI usr/sbin/secubox-led-heartbeat et son unite — deux paquets
+	# revendiquant le meme fichier, ce qui fait echouer dpkg net :
+	#   « trying to overwrite ..., which is also in package secubox-core ».
+	# L'installation de secubox-led-heartbeat etait donc impossible.
 	# Systemd services
 	install -d debian/secubox-core/usr/lib/systemd/system
 	install -m 644 debian/secubox-core.service \
@@ -110,12 +115,6 @@ override_dh_auto_install:
 
 	# LED scripts and services
 	install -d debian/secubox-core/usr/sbin
-	install -m 755 usr/sbin/secubox-led-heartbeat \
-	               debian/secubox-core/usr/sbin/
-	install -m 755 usr/sbin/secubox-led-k2000 \
-	               debian/secubox-core/usr/sbin/
 	# User provisioning push (gk2/admin → Nextcloud/PhotoPrism, #410)
 	install -m 755 usr/sbin/secubox-user-sync \
 	               debian/secubox-core/usr/sbin/
-	install -m 644 systemd/secubox-led-heartbeat.service \
-	               debian/secubox-core/usr/lib/systemd/system/

@@ -6,7 +6,8 @@ ConditionArchitecture=arm64
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/secubox-led-trigger status
+ExecCondition=/usr/sbin/secubox-led-board
+ExecStart=/usr/sbin/secubox-led-trigger status
 RemainAfterExit=yes
 
 [Install]

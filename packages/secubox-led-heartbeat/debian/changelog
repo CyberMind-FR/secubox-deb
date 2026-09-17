@@ -1,3 +1,20 @@
+secubox-led-heartbeat (2.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Reprend la propriete du script et de l'unite secubox-led-heartbeat
+    a secubox-core (Breaks/Replaces << 1.5.5).
+  * Nouvelle garde board secubox-led-board : les LED n'existent que sur
+    MOCHAbin. Posee en ExecCondition= sur les quatre unites et en tete du
+    postinst, qui n'active plus rien ailleurs.
+  * Corrige secubox-led-pulse et secubox-led-trigger, dont l'ExecStart
+    pointait sur /usr/local/bin — un chemin qu'aucun paquet ne livre
+    (ref #1362).
+
+  * Recupere secubox-led-k2000, jusqu'ici livre par secubox-core.
+  * Empaquette secubox-leds.service (bring-up I2C du pilote
+    leds-is31fl319x), jusqu'ici orpheline dans /etc/systemd/system.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 11:37:27 +0200
+
 secubox-led-heartbeat (2.1.2-1~bookworm1) bookworm; urgency=medium
 
   * pulse_brightness(): swing 0.0-1.0 instead of 0.3-1.0. At the

@@ -44,6 +44,17 @@ compile_overlay() {
 
 case "$1" in
     configure)
+        # LES LED N'EXISTENT QUE SUR MOCHABIN (IS31FL3199 en I2C). Sans cette
+        # garde, une vm-x64 ou un rpi400 se retrouvait avec un overlay Device
+        # Tree compile dans /boot, un modprobe et trois services actifs contre
+        # une puce absente — heritage de l'epoque ou secubox-core, installe
+        # partout, livrait ce groupe. Ailleurs : on installe les fichiers,
+        # on n'active rien.
+        if ! /usr/sbin/secubox-led-board; then
+            echo "secubox-led-heartbeat: board sans LED SecuBox — rien active."
+            exit 0
+        fi
+
         # Compile and install Device Tree overlay
         compile_overlay || true
 

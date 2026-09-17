@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Bring-up I2C des LED MOCHAbin : le pilote leds-is31fl319x ne fixe pas
+# toujours la puce du premier coup au boot ; ce cycle unbind/bind fait
+# apparaitre /sys/class/leds/*:led1 avant que heartbeat ne s'y attache.
+# Gardee par secubox-led-board : no-op hors MOCHAbin (#1362).
+[Unit]
+Description=SecuBox LED Configuration
+After=local-fs.target systemd-modules-load.service
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecCondition=/usr/sbin/secubox-led-board
+ExecStart=/sbin/modprobe i2c-dev
+ExecStart=/bin/sh -c 'for i in 1 2 3 4 5; do test -e /sys/class/leds/green:led1/trigger && break; echo 1-0064 > /sys/bus/i2c/drivers/leds-is31fl319x/unbind 2>/dev/null; echo 1-0064 > /sys/bus/i2c/drivers/leds-is31fl319x/bind 2>/dev/null; sleep 2; done'
+ExecStart=/bin/sh -c 'echo heartbeat > /sys/class/leds/green:led1/trigger 2>/dev/null || true'
+ExecStart=/bin/sh -c 'echo 0 > /sys/class/leds/red:led1/brightness 2>/dev/null || true'
+ExecStart=/bin/sh -c 'echo 0 > /sys/class/leds/blue:led1/brightness 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target

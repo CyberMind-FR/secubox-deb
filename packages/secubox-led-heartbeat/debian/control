@@ -14,6 +14,8 @@ Depends: ${misc:Depends},
          secubox-core,
          device-tree-compiler,
          i2c-tools
+Breaks: secubox-core (<< 1.5.5)
+Replaces: secubox-core (<< 1.5.5)
 Recommends: secubox-heartbeat
 Description: SecuBox LED heartbeat status indicator
  Visual system health indicator using MOCHAbin RGB LEDs.

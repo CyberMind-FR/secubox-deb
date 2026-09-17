@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-led-board
+#
+# Garde board du groupe LED. Les LED SecuBox sont un IS31FL3199 câblé en I2C
+# sur le MOCHAbin — elles n'existent NULLE PART ailleurs. Ce paquet était
+# auparavant livré par secubox-core, installé sur tous les boards : la vm-x64
+# et le rpi400 recevaient donc un overlay Device Tree dans /boot, un modprobe
+# et trois services tournant contre une puce absente.
+#
+# Sort 0 uniquement sur un board porteur des LED. Utilisé en ExecCondition=
+# (une unité activée à la main devient un no-op ailleurs) et dans le postinst.
+set -uo pipefail
+readonly MODULE="led-board"
+readonly VERSION="2.1.2"
+
+# /proc/device-tree/compatible est une liste de chaînes séparées par des NUL.
+if [ -r /proc/device-tree/compatible ] &&
+   tr '\0' '\n' < /proc/device-tree/compatible | grep -qi 'mochabin'; then
+    exit 0
+fi
+
+# Repli : la puce elle-même est déjà pilotée (overlay déjà appliqué).
+for l in /sys/class/leds/*; do
+    [ -e "$l/device/name" ] || continue
+    grep -qi 'is31fl319' "$l/device/name" 2>/dev/null && exit 0
+done
+
+exit 1
