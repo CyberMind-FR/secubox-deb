@@ -89,34 +89,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          df -h
-
-      - name: Add swap (OOM du chroot arm64 sous qemu)
-        # `apt update` DANS le chroot arm64 emule tombe par intermittence sur :
-        #   E: Could not read from .../bookworm-security_InRelease
-        #      - getline (12: Cannot allocate memory)
-        # La jambe qui tombe CHANGE d'un run a l'autre — `isp` echoue pendant
-        # que `full` passe, puis les deux — donc ce n'est pas le profil, c'est
-        # la pression memoire du runner. qemu-user double l'empreinte de chaque
-        # processus emule, et apt lit les index en memoire.
-        #
-        # Le swap ne rend pas le build plus rapide ; il lui evite d'etre un
-        # tirage au sort. A poser APRES la liberation de disque, qui fait la
-        # place du fichier.
-        run: |
-          echo "avant :"; free -h; swapon --show || true
-          if ! swapon --show | grep -q /swapfile; then
-            sudo fallocate -l 12G /swapfile
-            sudo chmod 600 /swapfile
-            sudo mkswap /swapfile >/dev/null
-            sudo swapon /swapfile
-          fi
-          # vm.swappiness par defaut (60) suffit : on veut que le noyau accepte
-          # de repousser des pages plutot que d'invoquer l'OOM killer.
-          echo "apres :"; free -h; swapon --show
+      - name: Marge disque + swap
+        uses: ./.github/actions/runner-headroom
 
       - name: Setup QEMU + binfmt
         if: contains(matrix.board, 'arm') || contains(matrix.board, 'espresso') || contains(matrix.board, 'mocha')
@@ -240,6 +214,15 @@ jobs:
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
 
     steps:
+      # Le checkout passe EN PREMIER : l'action composite vit dans le depot, on
+      # ne peut pas l'utiliser avant de l'avoir. Il etait plus bas, juste pour
+      # les scripts d'image — il sert desormais aux deux.
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Marge disque + swap
+        uses: ./.github/actions/runner-headroom
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -280,11 +263,6 @@ jobs:
             gpg --clearsign SHA256SUMS
             mv SHA256SUMS.asc SHA256SUMS.gpg
           fi
-
-      - name: Checkout for scripts
-        uses: actions/checkout@v5
-        with:
-          sparse-checkout: image
 
       - name: Delete existing release assets (if any)
         run: |

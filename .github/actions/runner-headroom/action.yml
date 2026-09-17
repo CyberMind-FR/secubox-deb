@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+name: 'Runner headroom'
+description: >
+  Libère du disque puis pose du swap sur un runner GitHub. Les deux jobs de
+  build-image en ont besoin, pour des raisons différentes — factorisé ici pour
+  qu'ils ne divergent pas (#1294).
+
+inputs:
+  swap-size:
+    description: 'Taille du fichier de swap (suffixes fallocate : G, M).'
+    required: false
+    default: '12G'
+
+runs:
+  using: composite
+  steps:
+    - name: Libérer du disque
+      shell: bash
+      run: |
+        # Les images arm64 approchent 1,7 Go compressées ; le job release en
+        # télécharge six d'un coup. Le runner part avec ~14 Go libres.
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        df -h /
+
+    - name: Poser du swap
+      shell: bash
+      run: |
+        # POURQUOI. `apt update` DANS le chroot arm64 émulé tombe par
+        # intermittence sur :
+        #   E: Could not read from .../bookworm-security_InRelease
+        #      - getline (12: Cannot allocate memory)
+        # La jambe de matrice qui tombe CHANGE d'un run à l'autre — `isp`
+        # échoue pendant que `full` passe, puis les deux — donc ce n'est pas le
+        # profil, c'est la pression mémoire du runner. qemu-user double
+        # l'empreinte de chaque processus émulé, et apt lit ses index en
+        # mémoire.
+        #
+        # Le swap n'accélère rien ; il évite que le build soit un tirage au
+        # sort. À poser APRÈS la libération de disque, qui en fait la place.
+        echo "avant :"; free -h; swapon --show || true
+        if swapon --show 2>/dev/null | grep -q '^/swapfile'; then
+          echo "swapfile déjà actif — rien à faire"
+        else
+          sudo fallocate -l "${{ inputs.swap-size }}" /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile >/dev/null
+          sudo swapon /swapfile
+        fi
+        # vm.swappiness par défaut (60) convient : on veut que le noyau accepte
+        # de repousser des pages plutôt que d'invoquer l'OOM killer.
+        echo "après :"; free -h; swapon --show
