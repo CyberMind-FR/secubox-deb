@@ -236,7 +236,7 @@ INCLUDE_PKGS+=",avahi-daemon,avahi-utils,ieee-data,procps,openssl"
 INCLUDE_PKGS+=",fonts-noto-color-emoji,locales,console-setup"
 
 # Optional heavy services (installed but may be disabled)
-# Note: crowdsec, netdata, glances are large - moved to post-debootstrap for --no-install-recommends
+# Note: netdata, glances are large - moved to post-debootstrap for --no-install-recommends
 
 if [[ $IS_X64 -eq 1 ]]; then
   # x64 : ajouter GRUB EFI + linux-image
@@ -601,25 +601,34 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
 ok "Python dependencies installed"
 
-# Install heavy services that aren't in debootstrap (crowdsec, netdata, glances, X11)
+# Install heavy services that aren't in debootstrap (netdata, glances, X11)
 log "Installing security services and optional components..."
 
-# Add CrowdSec repository
-log "  Adding CrowdSec repository..."
-chroot "${ROOTFS}" bash -c '
-  curl -s https://install.crowdsec.net | bash 2>/dev/null || true
-' 2>/dev/null || warn "CrowdSec repo setup failed"
-
-# Install security services
-# For lite profiles, install only essential services
+# CROWDSEC N'EST PLUS DU PRODUIT (#1362), ET N'ENTRE PLUS DANS L'IMAGE.
+#
+# Il a été purgé de la box et du dépôt : le bannissement WAF passe par nftban,
+# autonome, et le code qui appelait CrowdSec était mort. L'image continuait
+# pourtant de l'installer — chaque appliance neuve repartait donc avec un
+# composant décommissionné, que personne ne configurait et qui ne protégeait
+# rien.
+#
+# LE FAIRE ENTRER COÛTAIT PLUS QUE SA PRÉSENCE : l'ajout du dépôt se faisait par
+# `curl https://install.crowdsec.net | bash` DANS le chroot — un script distant
+# tiers, non épinglé, exécuté pendant la construction de l'image, avec le droit
+# d'écrire partout dans le système qu'on est en train de sceller. Une appliance
+# de sécurité ne se construit pas comme ça.
+#
+# C'est aussi un bloqueur pour Trixie (#1294) : rien ne garantit que cet
+# installateur connaisse la nouvelle suite, et son échec était masqué par un
+# `|| true`.
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
 if [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    crowdsec glances netdata haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
+    glances netdata haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
 else
   log "  Installing lite security services (no netdata/glances)..."
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    crowdsec haproxy qrencode 2>/dev/null" || warn "Some services not installed"
+    haproxy qrencode 2>/dev/null" || warn "Some services not installed"
 fi
 
 # Install X11 packages for kiosk/UI mode (lighter xorg install)
@@ -1151,7 +1160,7 @@ cat > "${ROOTFS}/usr/bin/secubox-logs" <<'LOGS_CMD'
 # SecuBox Live Security Logs
 echo "📋 SecuBox Security Logs (Ctrl+C to exit)"
 echo "─────────────────────────────────────────"
-journalctl -f -u 'secubox-*' -u crowdsec -u suricata -u nginx --no-pager 2>/dev/null || \
+journalctl -f -u 'secubox-*' -u suricata -u nginx --no-pager 2>/dev/null || \
 journalctl -f --no-pager
 LOGS_CMD
 chmod +x "${ROOTFS}/usr/bin/secubox-logs"
@@ -1203,7 +1212,7 @@ echo ""
 
 # Core services
 echo -e "${WHITE}  🔧 Core Services${RESET}"
-services=(nginx haproxy secubox-api secubox-hub crowdsec suricata)
+services=(nginx haproxy secubox-api secubox-hub suricata)
 for svc in "${services[@]}"; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         echo -e "     ${ok} ${GRAY}${svc}${RESET}"

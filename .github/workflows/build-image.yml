@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: ''
+      suite:
+        description: 'Debian suite (bookworm = oldstable, trixie = stable)'
+        required: false
+        type: string
+        default: 'bookworm'
     secrets:
       GPG_PRIVATE_KEY:
         required: false
@@ -45,12 +50,30 @@ on:
         required: false
         type: boolean
         default: false
+      suite:
+        description: 'Debian suite'
+        required: false
+        type: choice
+        options:
+          - bookworm   # oldstable depuis que Trixie est stable (2026)
+          - trixie     # stable — portage en cours, ref #1294
+        default: bookworm
   push:
     tags:
       - 'v*'
 
 env:
-  DEBIAN_SUITE: bookworm
+  # LA SUITE EST UN PARAMÈTRE, AVEC bookworm POUR DÉFAUT (#1294).
+  #
+  # Elle était figée ici en dur, ce qui rendait `build-image.sh --suite` inutile
+  # depuis la CI : le script savait construire une Trixie, le workflow ne savait
+  # pas le lui demander.
+  #
+  # LE REPLI N'EST PAS DÉCORATIF : le déclencheur `push: tags` ne porte AUCUN
+  # `inputs`, et une suite vide ferait appeler `debootstrap` sans nom de suite —
+  # échec au milieu d'une construction de 90 minutes. `|| 'bookworm'` garde donc
+  # le comportement d'aujourd'hui pour tout appelant qui ne demande rien.
+  DEBIAN_SUITE: ${{ inputs.suite || 'bookworm' }}
 
 jobs:
   # Build system images
@@ -254,9 +277,9 @@ jobs:
 
             | Image | Board | Architecture | Description |
             |-------|-------|--------------|-------------|
-            | `secubox-mochabin-bookworm.img.gz` | MOCHAbin | arm64 | Marvell Armada 7040 (Pro) |
-            | `secubox-rpi400-bookworm.img.gz` | Raspberry Pi 400 | arm64 | Pi 400 / Pi 4 |
-            | `secubox-vm-x64-bookworm.img.gz` | VirtualBox/QEMU | amd64 | VM for testing |
+            | `secubox-mochabin-${{ env.DEBIAN_SUITE }}.img.gz` | MOCHAbin | arm64 | Marvell Armada 7040 (Pro) |
+            | `secubox-rpi400-${{ env.DEBIAN_SUITE }}.img.gz` | Raspberry Pi 400 | arm64 | Pi 400 / Pi 4 |
+            | `secubox-vm-x64-${{ env.DEBIAN_SUITE }}.img.gz` | VirtualBox/QEMU | amd64 | VM for testing |
             | `create-qemu-arm64-vm.sh` | QEMU ARM64 | script | Run ARM64 on x86 hosts |
 
             *ESPRESSObin v7 and Ultra board images are no longer published in
@@ -268,15 +291,15 @@ jobs:
             **ARM64 boards (MOCHAbin, Raspberry Pi 400):**
             ```bash
             # Flash to SD card or eMMC
-            gunzip -c secubox-mochabin-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+            gunzip -c secubox-mochabin-${{ env.DEBIAN_SUITE }}.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
             sync
             ```
 
             **VirtualBox (x64):**
             ```bash
             # Convert to VDI
-            gunzip secubox-vm-x64-bookworm.img.gz
-            VBoxManage convertfromraw secubox-vm-x64-bookworm.img secubox.vdi --format VDI
+            gunzip secubox-vm-x64-${{ env.DEBIAN_SUITE }}.img.gz
+            VBoxManage convertfromraw secubox-vm-x64-${{ env.DEBIAN_SUITE }}.img secubox.vdi --format VDI
 
             # Create VM
             VBoxManage createvm --name SecuBox --ostype Debian_64 --register

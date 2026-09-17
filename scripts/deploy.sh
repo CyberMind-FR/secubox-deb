@@ -8,9 +8,9 @@
 #  scripts/deploy.sh — Déploiement SSH sur board SecuBox
 #
 #  Usage :
-#    bash scripts/deploy.sh secubox-crowdsec root@192.168.1.1
+#    bash scripts/deploy.sh secubox-waf-ng root@192.168.1.1
 #    bash scripts/deploy.sh --all root@192.168.1.1
-#    bash scripts/deploy.sh secubox-crowdsec root@192.168.1.1 --restart
+#    bash scripts/deploy.sh secubox-waf-ng root@192.168.1.1 --restart
 # ══════════════════════════════════════════════════════════════════
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"

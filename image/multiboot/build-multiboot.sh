@@ -622,7 +622,7 @@ setup_shared_data() {
 
     mkdir -p "$MNT_DATA"/{etc/secubox,var/lib/secubox,srv/secubox,log/secubox}
     mkdir -p "$MNT_DATA/etc/secubox"/{tls,modules}
-    mkdir -p "$MNT_DATA/var/lib/secubox"/{crowdsec,haproxy,wireguard,dpi,hub}
+    mkdir -p "$MNT_DATA/var/lib/secubox"/{haproxy,wireguard,dpi,hub}
     mkdir -p "$MNT_DATA/srv/secubox"/{mitmproxy,nginx,certs}
 
     # Create default configs

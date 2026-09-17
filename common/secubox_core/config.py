@@ -45,8 +45,7 @@ def _load() -> dict:
         "global": {"hostname": "secubox", "timezone": "Europe/Paris", "board": "unknown"},
         "api":    {"socket_dir": "/tmp/secubox", "jwt_secret": os.environ.get("SECUBOX_JWT_SECRET", "dev-secret")},
         "auth":   {"users": {"admin": {"password": "secubox"}}},
-        "crowdsec": {"lapi_url": "http://127.0.0.1:8080", "lapi_key": ""},
-        "dpi":    {"mode": "inline", "engine": "netifyd", "interface": "eth0", "mirror_if": "ifb0"},
+        "dpi":    {"mode": "inline", "engine": "ndpid", "interface": "eth0", "mirror_if": "ifb0"},
         "wireguard": {"interface": "wg0", "listen_port": 51820},
     }
     return _CONFIG
@@ -57,8 +56,8 @@ def get_config(section: str = "") -> dict:
     Retourne la section demandée, ou la config complète si section="".
 
     Exemple :
-        cfg = get_config("crowdsec")
-        url = cfg["lapi_url"]
+        cfg = get_config("wireguard")
+        port = cfg["listen_port"]
     """
     cfg = _load()
     if not section:

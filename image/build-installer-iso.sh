@@ -758,8 +758,7 @@ DISABLE_ON_LIVE=(
     secubox-haproxy
     secubox-zkp
     secubox-nac
-    secubox-crowdsec
-    secubox-dpi
+        secubox-dpi
     secubox-qos
     secubox-mediaflow
     secubox-cdn

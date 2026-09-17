@@ -58,7 +58,7 @@ name: child
 inherits: base
 packages:
   required:
-    - secubox-crowdsec
+    - secubox-waf-ng
   excluded:
     - secubox-dpi
 `
@@ -360,7 +360,7 @@ name: tier-lite
 inherits: base
 packages:
   required:
-    - secubox-crowdsec
+    - secubox-waf-ng
 `
 	if err := os.WriteFile(filepath.Join(dir, "tier-lite.yaml"), []byte(tier), 0644); err != nil {
 		t.Fatal(err)
@@ -376,8 +376,8 @@ packages:
 	if !contains(result.Packages.Required, "secubox-core") {
 		t.Errorf("missing secubox-core from base")
 	}
-	if !contains(result.Packages.Required, "secubox-crowdsec") {
-		t.Errorf("missing secubox-crowdsec from tier-lite")
+	if !contains(result.Packages.Required, "secubox-waf-ng") {
+		t.Errorf("missing secubox-waf-ng from tier-lite")
 	}
 }
 

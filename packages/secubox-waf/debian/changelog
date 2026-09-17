@@ -1,3 +1,18 @@
+secubox-waf (1.10.32-1~bookworm1) bookworm; urgency=medium
+
+  * LE MOTEUR MITMPROXY NE FAIT PLUS PARTIE DU PAQUET (#1362). Le WAF a migre
+    vers sbxwaf (Go) il y a longtemps, mais le paquet LIVRAIT toujours l'ancien
+    moteur : `mitmproxy/secubox_waf.py`, `mitmproxy/media_cache.py`, l'addon et
+    son unite systemd, plus une migration /srv -> /data de repertoires deja
+    effaces. Retires.
+  .
+    LA DISTINCTION EST DELIBEREE, et c'est ce qui rend ce retrait sur : seul le
+    MOTEUR WAF mitmproxy meurt. `sbxmitm` / `secubox-toolbox-mitm` — l'analyseur
+    R2/R3 — est un composant DISTINCT et CONSERVE. Purger sur le seul mot
+    « mitmproxy » aurait emporte 57 fichiers Go d'un outil vivant.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 08:42:30 +0200
+
 secubox-waf (1.10.31-1~bookworm1) bookworm; urgency=medium
 
   * LA PAGE DE CONNEXION RENVOYAIT UN 404 (#1363).

@@ -4,21 +4,10 @@
 set -e
 
 if [ "$1" = "configure" ]; then
-    # #319 /data migration. Move legacy /srv/<dir> → /data/<dir> and leave a
-    # symlink behind for back-compat. Idempotent.
-    for _d in mitmproxy-waf mitmproxy mitmproxy-in; do
-      if [ -d "/srv/$_d" ] && [ ! -L "/srv/$_d" ] && [ ! -e "/data/$_d" ]; then
-        mkdir -p /data
-        _was_active=""
-        if systemctl is-active --quiet secubox-waf; then
-          systemctl stop secubox-waf || true
-          _was_active=1
-        fi
-        mv "/srv/$_d" "/data/$_d" && ln -s "/data/$_d" "/srv/$_d" \
-          && echo "secubox-waf: migrated /srv/$_d → /data/$_d"
-        [ -n "$_was_active" ] && systemctl start secubox-waf || true
-      fi
-    done
+    # LA MIGRATION /srv -> /data DU MOTEUR MITMPROXY EST RETIREE (#1362).
+    # Elle deplacait /srv/mitmproxy{,-waf,-in}, repertoires d'un moteur
+    # decommissionne et deja effaces. Elle ne pouvait plus rien trouver, et
+    # laissait croire que ce moteur fait encore partie du produit.
 
 
     # Create log directory
@@ -45,7 +34,7 @@ if [ "$1" = "configure" ]; then
     echo "=============================================="
     echo "SecuBox WAF installed."
     echo ""
-    echo "To install the mitmproxy LXC container, run:"
+    echo "To install the WAF container, run:"
     echo "  wafctl install"
     echo ""
     echo "To start the WAF after container install:"

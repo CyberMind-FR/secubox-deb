@@ -229,8 +229,7 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
     "dpi-all": [
         "secubox-dpi",
         "secubox-ndpid",
-        "secubox-netifyd",
-        "secubox-mediaflow",
+            "secubox-mediaflow",
     ],
     "traffic-qos": [
         "secubox-traffic",

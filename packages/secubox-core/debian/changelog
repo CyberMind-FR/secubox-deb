@@ -1,3 +1,18 @@
+secubox-core (1.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * CROWDSEC ET NETIFYD RETIRES DE LA BIBLIOTHEQUE PARTAGEE (#1362). Tous deux
+    sont purges du produit depuis un moment, mais `secubox_core` en gardait les
+    traces VIVANTES : une entree `crowdsec` dans MODULE_METADATA, une section
+    `[crowdsec]` dans la configuration par defaut, et un moteur DPI par defaut
+    nomme `netifyd` — un moteur absent. Un defaut qui nomme ce qui n'existe pas
+    n'est pas un defaut, c'est un piege pour le prochain lecteur.
+  .
+    Le moteur DPI par defaut devient `ndpid`, celui qui tourne reellement
+    (nDPId -> nDPIsrvd -> sbxdpi). Les exemples de docstring citent desormais
+    des modules qui existent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 08:42:30 +0200
+
 secubox-core (1.5.2-1~bookworm1) bookworm; urgency=medium
 
   * UN SEUL PRÉDICAT POUR « CE PORTEUR EST-IL ADMIS ? » (ref #1359).

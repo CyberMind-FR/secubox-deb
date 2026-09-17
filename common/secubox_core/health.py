@@ -79,7 +79,7 @@ def make_health_response(
         @app.get("/health")
         async def health():
             return make_health_response(
-                module="crowdsec",
+                module="waf",
                 version="1.2.0",
                 dev_stage=DevStage.production
             )
@@ -119,12 +119,12 @@ def health_from_checks(
         @app.get("/health")
         async def health():
             checks = {
-                "engine_running": pgrep("crowdsec"),
+                "engine_running": pgrep("sbxwaf"),
                 "lapi_ok": lapi_reachable(),
                 "config_valid": validate_config(),
             }
             return health_from_checks(
-                module="crowdsec",
+                module="waf",
                 version="2.0.0",
                 checks=checks,
                 critical_checks=["engine_running"]
@@ -166,7 +166,6 @@ MODULE_METADATA: Dict[str, Dict[str, Any]] = {
     # Core modules
     "hub": {"version": "1.7.0", "dev_stage": "production"},
     "waf": {"version": "1.2.0", "dev_stage": "production"},
-    "crowdsec": {"version": "2.0.0", "dev_stage": "production"},
     "haproxy": {"version": "1.1.0", "dev_stage": "production"},
     "wireguard": {"version": "2.0.0", "dev_stage": "production"},
     "vhost": {"version": "1.1.0", "dev_stage": "production"},

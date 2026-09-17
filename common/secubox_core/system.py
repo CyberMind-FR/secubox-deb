@@ -82,7 +82,7 @@ def service_status(service: str) -> dict:
     Retourne l'état d'un service systemd.
 
     Args:
-        service: Nom du service (ex: "secubox-crowdsec", "nginx")
+        service: Nom du service (ex: "secubox-waf-ng", "nginx")
 
     Returns:
         {"name": "...", "running": bool, "enabled": bool, "status": "active|inactive|failed"}

@@ -202,7 +202,7 @@ OUTPUT_COUNT=$(find "${DEBS_DIR}" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null 
 log "Found ${CACHE_COUNT} packages in cache, ${OUTPUT_COUNT} in output/debs"
 
 # Skip list: packages with missing deps or wrong arch
-SKIP_PKGS="secubox-daemon secubox-ndpid secubox-netifyd secubox-rtty"
+SKIP_PKGS="secubox-daemon secubox-ndpid secubox-rtty"
 
 # Copy from output/debs FIRST (prefer newer local builds over cache)
 if [[ -d "$DEBS_DIR" ]]; then

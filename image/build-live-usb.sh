@@ -713,7 +713,7 @@ cat > "${ROOTFS}/usr/bin/secubox-logs" <<'LOGS_CMD'
 # SecuBox Live Security Logs
 echo "📋 SecuBox Security Logs (Ctrl+C to exit)"
 echo "─────────────────────────────────────────"
-journalctl -f -u 'secubox-*' -u crowdsec -u suricata -u nginx --no-pager 2>/dev/null || \
+journalctl -f -u 'secubox-*' -u suricata -u nginx --no-pager 2>/dev/null || \
 journalctl -f --no-pager
 LOGS_CMD
 chmod +x "${ROOTFS}/usr/bin/secubox-logs"
@@ -1218,10 +1218,7 @@ ok "Python dependencies installed"
 
 # Install heavy security services (not in debootstrap to keep initial download small)
 log "Installing security services..."
-# Add CrowdSec repository
 chroot "${ROOTFS}" bash -c '
-  curl -s https://install.crowdsec.net | bash 2>/dev/null || true
-' 2>/dev/null || warn "CrowdSec repo setup failed"
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
 # Install Python packages that fail during debootstrap
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
