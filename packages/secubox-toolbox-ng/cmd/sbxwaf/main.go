@@ -33,6 +33,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -1105,6 +1106,21 @@ func main() {
 	if *correlate != "" {
 		sum, err := CorrélerMenaces(*correlate)
 		if err != nil {
+			// UN JOURNAL ABSENT N'EST PAS UNE ERREUR (#1362). Après un
+			// redémarrage, `waf-threats.log` n'existe pas tant qu'aucune menace
+			// n'a été écrite — et le service de synthèse, lancé au démarrage,
+			// échouait alors en dur : `secubox-waf-campaigns` en échec sur une
+			// box parfaitement saine, et un état systemd « degraded » qui ne
+			// voulait rien dire.
+			//
+			// « Rien à corréler » et « je n'arrive pas à corréler » sont deux
+			// choses différentes. On rend une synthèse VIDE, en le disant sur
+			// stderr, et on sort proprement. Toute autre erreur reste fatale.
+			if errors.Is(err, os.ErrNotExist) {
+				fmt.Fprintf(os.Stderr, "sbxwaf: %s absent — aucune menace à corréler\n", *correlate)
+				os.Stdout.Write([]byte("{\"campagnes\":[],\"attaquants\":0}\n"))
+				return
+			}
 			log.Fatalf("sbxwaf: corrélation %q: %v", *correlate, err)
 		}
 		b, _ := json.MarshalIndent(sum, "", "  ")

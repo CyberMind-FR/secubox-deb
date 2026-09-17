@@ -1,3 +1,31 @@
+secubox-waf-ng (1.18.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE JOURNAL DES MENACES N'ETAIT DECLARE NULLE PART (#1362).
+    `secubox-waf-campaigns` echouait a CHAQUE demarrage, laissant systemd en
+    « degraded » de facon permanente. Mesure sur gk2 le 2026-09-17.
+  .
+    La cause n'est pas le correlateur : c'est que /var/log/secubox/waf n'avait
+    aucune regle tmpfiles. Le repertoire prenait donc la propriete du premier
+    processus qui le creait — ici secubox:secubox en 0770 — alors que l'unite
+    documente l'inverse : « le journal des menaces est 0640 secubox-waf, lui
+    seul (et le WAF) le lit ». Le service, qui tourne en secubox-waf, ne
+    pouvait meme pas ENTRER dans le repertoire.
+  .
+    Le meme piege etait deja connu pour cookie-audit, dont la regle porte ce
+    commentaire : « systemd reapplique ces regles a chaque demarrage : le
+    repertoire retrouve son proprietaire meme si un autre composant l'a recree
+    en secubox ». Le repertoire waf/ n'avait jamais recu le meme traitement.
+  .
+    UN ROUGE PERMANENT NE SIGNALE PLUS RIEN. On apprend a l'ignorer, et le jour
+    ou il dit vraiment quelque chose, personne ne le voit.
+  .
+  * `sbxwaf --correlate` : un journal ABSENT n'est plus une erreur fatale. Apres
+    un redemarrage le fichier n'existe pas tant qu'aucune menace n'a ete ecrite.
+    « Rien a correler » rend desormais une synthese vide et sort avec 0 ; toute
+    autre erreur reste fatale.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 11:13:01 +0200
+
 secubox-waf-ng (1.18.0-1~bookworm1) bookworm; urgency=medium
 
   * UN DICTIONNAIRE QUI AVANCE NE SE RÉPÈTE JAMAIS — et c'est ce qui le rendait

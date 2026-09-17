@@ -1,3 +1,26 @@
+secubox-toolbox-ng (0.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * UN JOURNAL ABSENT N'EST PAS UNE ERREUR (#1362). `sbxwaf --correlate`
+    appelait `log.Fatalf` quand `waf-threats.log` n'existait pas. Or apres un
+    redemarrage ce fichier N'EXISTE PAS tant qu'aucune menace n'a ete ecrite :
+    le service de synthese, lance au demarrage, echouait donc en dur sur une
+    box parfaitement saine. Constate sur gk2 le 2026-09-17 — un etat systemd
+    « degraded » qui ne voulait rien dire.
+  .
+    « Rien a correler » et « je n'arrive pas a correler » sont deux choses
+    differentes, et les confondre rend l'etat des services illisible : on
+    apprend a ignorer un rouge permanent, et le jour ou il signale vraiment
+    quelque chose, personne ne le voit.
+  .
+    Un journal absent rend desormais une synthese VIDE, le dit sur stderr, et
+    sort avec 0. Toute autre erreur reste fatale — on ne masque que le cas
+    qu'on a identifie.
+  .
+    Verifie dans les deux sens : fichier absent -> code 0 et
+    `{"campagnes":[],"attaquants":0}` ; fichier vide -> meme synthese, code 0.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 11:08:43 +0200
+
 secubox-toolbox-ng (0.5.1-1~bookworm1) bookworm; urgency=medium
 
   * sbxdpi : les talkers sont NOMMÉS, et chaque nom dit sa source (ref #1342).
