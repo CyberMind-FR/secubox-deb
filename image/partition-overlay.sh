@@ -78,7 +78,14 @@ CONFIG_SIZE="512M"
 DATA_SIZE="2G"
 SNAP_SIZE="1G"
 SWAP_SIZE="512M"
-ESP_SIZE="512M"
+# 1 GiB, ET NON 512 Mio (#1294). Un noyau arm64 récent pèse ~43 Mio et son
+# initramfs ~12 Mio ; Debian en garde deux, et cette plateforme ajoute ses
+# propres images à DTB sur mesure. Constaté sur gk2 le 2026-09-17 : un
+# `apt upgrade` ordinaire a rempli la partition, `update-initramfs` a échoué
+# en plein vol, et dpkg a laissé deux paquets noyau non configurés. Une
+# partition de démarrage trop petite ne se voit pas à l'installation — elle se
+# voit le jour d'une mise à jour, quand il est trop tard pour l'agrandir.
+ESP_SIZE="1G"
 DRY_RUN=0
 
 # Parse arguments

@@ -52,7 +52,7 @@ Usage: sudo bash build-image.sh [OPTIONS]
   --profile PROFILE  isp|full — surcharge SECUBOX_PROFILE du board (défaut: du board)
   --suite   SUITE    Debian suite (défaut: bookworm)
   --out     DIR      Répertoire de sortie (défaut: ./output)
-  --size    SIZE     Taille totale image (défaut: 4G)
+  --size    SIZE     Taille totale image (défaut: 8G)
   --vdi               Convertir en VDI (VirtualBox) en plus du raw
   --local-cache      Utiliser cache APT local (apt-cacher-ng + repo local)
   --slipstream       Intégrer les .deb de output/debs/ dans l'image
@@ -1450,22 +1450,40 @@ fallocate -l "${IMG_SIZE}" "${IMG_FILE}"
 
 if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
   # GPT + ESP pour UEFI (x64 ou arm64 VM)
-  # ESP: 512MB, ROOT: 5.5GB, DATA: remaining (~2GB)
+  # ESP: 1 GiB (voir le bloc ARM ci-dessous), ROOT: 5.5GB, DATA: remaining
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart ESP  fat32  1MiB   513MiB \
-    mkpart ROOT ext4   513MiB 6145MiB \
-    mkpart DATA ext4   6145MiB 100% \
+    mkpart ESP  fat32  1MiB   1025MiB \
+    mkpart ROOT ext4   1025MiB 6657MiB \
+    mkpart DATA ext4   6657MiB 100% \
     set 1 esp on \
     set 1 boot on
 else
   # GPT pour ARM hardware (boot + rootfs + data)
-  # boot: 256MB, ROOT: 5.5GB, DATA: remaining
+  #
+  # /boot À 1 GiB, ET NON 256 Mio (#1294).
+  #
+  # CE QUI EST ARRIVÉ AVEC 256 Mio, sur gk2 le 2026-09-17 : un `apt upgrade`
+  # ordinaire a tiré un noyau de backports, `update-initramfs` a échoué en
+  # plein vol — « No space left on device » — et dpkg a laissé DEUX paquets
+  # noyau non configurés, avec `/initrd.img` pointant sur un fichier qui
+  # n'existait pas. La carte restait amorçable par chance : son u-boot charge
+  # un noyau posé à la main, pas les liens Debian.
+  #
+  # POURQUOI 256 Mio NE SUFFIT PAS, ET NE POUVAIT PAS SUFFIRE. Un seul noyau
+  # arm64 récent pèse ~43 Mio, son initramfs ~12 Mio ; Debian en garde DEUX
+  # (courant + précédent), et cette plateforme ajoute ses propres images à
+  # DTB sur mesure — sur gk2, trois images de 41 à 44 Mio, soit 129 Mio avant
+  # même le premier noyau Debian. La partition était pleine par construction.
+  #
+  # 1 GiB laisse de quoi traverser plusieurs mises à jour de noyau sans jamais
+  # se retrouver à devoir choisir entre démarrer et mettre à jour. C'est pris
+  # sur DATA, qui s'étend jusqu'au bout du disque.
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart boot fat32  2MiB   258MiB \
-    mkpart ROOT ext4   258MiB 5890MiB \
-    mkpart DATA ext4   5890MiB 100% \
+    mkpart boot fat32  2MiB   1026MiB \
+    mkpart ROOT ext4   1026MiB 6658MiB \
+    mkpart DATA ext4   6658MiB 100% \
     set 1 boot on
 fi
 
