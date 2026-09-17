@@ -15,8 +15,8 @@ NGINX_ENABLED_DIR="/etc/nginx/sites-enabled"
 # The sync script + service may live at non-standard paths on different hosts;
 # we try systemctl first, fall back to `command -v`.
 HAPROXYCTL="${HAPROXYCTL:-haproxyctl}"
-SYNC_SCRIPT="${SYNC_SCRIPT:-sync-mitmproxy-routes.sh}"
-SYNC_SERVICE="${SYNC_SERVICE:-sync-mitmproxy-routes.service}"
+SYNC_SCRIPT="${SYNC_SCRIPT:-sync-waf-routes.sh}"
+SYNC_SERVICE="${SYNC_SERVICE:-sync-waf-routes.service}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

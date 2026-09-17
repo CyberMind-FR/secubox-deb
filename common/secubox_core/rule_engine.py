@@ -24,7 +24,7 @@ The engine exposes :
     source  = "static" | "generative" | "default"
 
 Used by :
-  - mitmproxy addons before deciding to MITM
+  - les sidecars sbxmitm avant de decider d'intercepter
   - local_store.py to tag analysis_status
   - aggregator to produce the inspection breakdown
 """

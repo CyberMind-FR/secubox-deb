@@ -101,11 +101,6 @@ def check_secubox_hub() -> tuple[bool, dict]:
     return (unit_ok, {"systemd_active": unit_ok})
 
 
-def check_mitmproxy_lxc() -> tuple[bool, dict]:
-    running = _lxc_running("mitmproxy")
-    return (running, {"lxc_state": "RUNNING" if running else "STOPPED"})
-
-
 def check_gitea_lxc() -> tuple[bool, dict]:
     running = _lxc_running("gitea")
     http_ok = False
@@ -129,7 +124,10 @@ def check_mail_lxc() -> tuple[bool, dict]:
 
 def check_cookie_audit_ledger() -> tuple[bool, dict]:
     """Ledger should have been touched in the last 2h if traffic exists."""
-    path = "/data/lxc/mitmproxy/rootfs/var/log/secubox/cookie-audit/server.jsonl"
+    # Chemin HOTE (#1362). Il pointait dans le rootfs du LXC mitmproxy,
+    # supprime : la sonde rapportait exists=False en permanence. Les sept
+    # autres references du depot utilisent ce chemin-ci, ecrit par sbxmitm.
+    path = "/var/log/secubox/cookie-audit/server.jsonl"
     age = _file_mtime_age(path)
     if age is None:
         return False, {"ledger": path, "exists": False}
@@ -174,7 +172,11 @@ REGISTRY: Dict[str, CheckFn] = {
     "nginx":               check_nginx,
     "secubox-metrics":     check_secubox_metrics,
     "secubox-hub":         check_secubox_hub,
-    "mitmproxy-lxc":       check_mitmproxy_lxc,
+    # "mitmproxy-lxc" RETIRE (#1362) : le conteneur mitmproxy a ete supprime
+    # avec le decommissionnement du WAF mitmproxy. La sonde rapportait donc
+    # un echec PERMANENT — un voyant rouge qui ne designe rien n'apprend
+    # plus rien et finit par masquer les vrais. L'inspection vit maintenant
+    # dans sbxwaf (moteur Go, :8085), deja couvert par ses propres sondes.
     "gitea-lxc":           check_gitea_lxc,
     "mail-lxc":            check_mail_lxc,
     "cookie-audit-ledger": check_cookie_audit_ledger,

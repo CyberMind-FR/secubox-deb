@@ -20,7 +20,9 @@
 
 [caps]
 mail       = "500M"   # postfix + dovecot + rspamd
-mitmproxy  = "400M"   # WAF inspector
+# mitmproxy RETIRE (#1362) : le conteneur a ete supprime avec le
+# decommissionnement du WAF mitmproxy. L'inspection vit dans sbxwaf,
+# processus HOTE — un quota LXC ne s'y applique pas.
 matrix     = "400M"   # synapse
 nextcloud  = "600M"   # NC + bundled mariadb
 lyrion     = "500M"   # Logitech Media Server

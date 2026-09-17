@@ -1,3 +1,11 @@
+secubox-system-tuning (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Retire les quotas LXC du conteneur mitmproxy, supprime. L'inspection
+    vit dans sbxwaf, processus HOTE — un quota LXC ne s'y applique pas
+    (ref #1362).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 12:29:39 +0200
+
 secubox-system-tuning (1.2.1-1~bookworm1) bookworm; urgency=high
 
   * Purge des references authelia (SSO decommissionne) : commentaires,

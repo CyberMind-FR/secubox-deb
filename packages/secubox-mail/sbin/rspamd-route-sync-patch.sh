@@ -3,7 +3,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 #
 # Phase 2 deploy-time helper. Idempotently makes the board's
-# /usr/local/bin/sync-mitmproxy-routes.sh treat 10.100.0.10–.12 as
+# /usr/local/bin/sync-waf-routes.sh treat 10.100.0.10–.12 as
 # live containers (mail/horde/roundcube) instead of "dead" ones that
 # get auto-rerouted to webui.
 #
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-SCRIPT=/usr/local/bin/sync-mitmproxy-routes.sh
+SCRIPT=/usr/local/bin/sync-waf-routes.sh
 if [ -f "$SCRIPT" ]; then
     # Remove 10.100.0.10, .11, .12 from DEAD_CONTAINER_IPS if present (idempotent).
     for ip in 10.100.0.10 10.100.0.11 10.100.0.12; do

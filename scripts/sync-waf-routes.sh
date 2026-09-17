@@ -6,7 +6,7 @@
 
 
 # Re-exec self under flock to prevent concurrent runs (added 2026-05-12)
-LOCK=/run/sync-mitmproxy-routes.lock
+LOCK=/run/sync-waf-routes.lock
 exec 9>"$LOCK"
 flock -n 9 || { echo "[$(date "+%F %T")] another instance running, skipping"; exit 0; }
 
@@ -24,7 +24,6 @@ flock -n 9 || { echo "[$(date "+%F %T")] another instance running, skipping"; ex
 
 set -euo pipefail
 
-LXC_CONTAINER="mitmproxy"
 ROUTES_FILE="/etc/secubox/waf/haproxy-routes.json"
 HAPROXY_CFG="/etc/haproxy/haproxy.cfg"
 NGINX_METABLOG="/etc/nginx/sites-enabled/metablogizer"
@@ -152,13 +151,16 @@ main() {
     if [[ $updated -gt 0 ]]; then
         log "Writing $updated routes to the sbxwaf routes table..."
         echo "$routes_json" | tee "$ROUTES_FILE" > /dev/null
-        # Legacy guarded step: mirror into the old mitmproxy WAF LXC if it exists
-        # (no-op on current boxes; sbxwaf hot-reloads $ROUTES_FILE on the host).
-        if lxc-info -n "$LXC_CONTAINER" 2>/dev/null | grep -q "RUNNING"; then
-            echo "$routes_json" | lxc-attach -n "$LXC_CONTAINER" -- tee "$ROUTES_FILE" > /dev/null || true
-            lxc-attach -n "$LXC_CONTAINER" -- systemctl restart mitmproxy 2>/dev/null || true
-        fi
-        systemctl reload secubox-waf-ng 2>/dev/null || true
+        # RIEN A NOTIFIER (#1362). sbxwaf relit lui-meme la table : il `stat`
+        # le fichier a chaque requete et echange la carte quand le mtime
+        # change (echange sans course, cf. cmd/sbxwaf/main.go). Ecrire le
+        # fichier SUFFIT.
+        #
+        # Il y avait ici deux etapes mortes. Le miroir vers le LXC mitmproxy
+        # visait un conteneur supprime avec le decommissionnement du WAF. Et
+        # `systemctl reload secubox-waf-ng` echouait A CHAQUE FOIS — l'unite
+        # n'a pas d'ExecReload, systemd repond « Job type reload is not
+        # applicable » — echec masque par le `|| true`, donc jamais remarque.
         log "Routes synced"
     else
         log "All routes up to date"

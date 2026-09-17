@@ -71,7 +71,9 @@ lyrion              = "200000 100000"
 maigret             = "200000 100000"
 mail                = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
 mastodon            = "200000 100000"
-mitmproxy           = "200000 100000"
+# mitmproxy RETIRE (#1362) : le conteneur a ete supprime avec le
+# decommissionnement du WAF mitmproxy. L'inspection vit dans sbxwaf,
+# processus HOTE — un quota LXC ne s'y applique pas.
 mqtt                = "200000 100000"
 nextcloud           = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
 openclaw            = "200000 100000"

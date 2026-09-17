@@ -2,7 +2,8 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 
 """Shared mitm-ingest helper for SecuBox modules receiving events from
-secubox-toolbox mitmproxy addons (cookies/dpi/avatar/soc/threat-analyst).
+sidecars sbxmitm (cookies/dpi/avatar/soc/threat-analyst) — anciennement
+les addons Python mitmproxy, retires (#1362).
 
 Each module mounts its ingest route once at app startup :
 
