@@ -1,3 +1,18 @@
+secubox-core (1.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * LE PAQUET LIVRAIT LE SCRIPT DE PREMIER DEMARRAGE SANS SON UNITE (#1362).
+    `/usr/bin/secubox-firstboot` etait installe, mais rien ne le lancait :
+    l'unite `secubox-firstboot.service` avait ete posee A LA MAIN dans
+    /etc/systemd/system de gk2. Une installation NEUVE n'executait donc jamais
+    son premier demarrage — ni JWT, ni cles SSH, ni nom d'hote, ni nftables.
+  .
+    L'unite entre dans le paquet et le postinst l'ACTIVE sans la demarrer :
+    l'initialisation appartient au demarrage, pas a l'installation. Son
+    `ConditionPathExists=!/var/lib/secubox/.firstboot_done` la rend inerte sur
+    une box deja initialisee, ce qui rend l'activation sure meme en mise a jour.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 11:29:24 +0200
+
 secubox-core (1.5.3-1~bookworm1) bookworm; urgency=medium
 
   * CROWDSEC ET NETIFYD RETIRES DE LA BIBLIOTHEQUE PARTAGEE (#1362). Tous deux

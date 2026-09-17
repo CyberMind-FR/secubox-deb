@@ -1,3 +1,21 @@
+secubox-mediaflow (2.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * L'UNITE yt-dlp-refresh N'ETAIT JAMAIS INSTALLEE (#1362). Les fichiers
+    `debian/secubox-mediaflow.secubox-yt-dlp-refresh.{service,timer}`
+    existaient et portaient le nom que debhelper attend — mais
+    `dh_installsystemd` SANS `--name` n'installe que `debian/<paquet>.service`.
+    Toute unite supplementaire demande un appel explicite.
+  .
+    Le binaire /usr/sbin/secubox-yt-dlp-refresh etait donc livre, son unite
+    non. Sur gk2, quelqu'un avait recopie l'unite A LA MAIN dans
+    /etc/systemd/system : elle y fonctionnait, mais ne protegeait AUCUNE autre
+    installation — et comptait comme une unite orpheline.
+  .
+    VERIFIE DANS LE .deb, pas seulement dans les sources :
+    usr/lib/systemd/system/secubox-yt-dlp-refresh.{service,timer} y sont.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 11:27:02 +0200
+
 secubox-mediaflow (2.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Identifiants dérivés : les hachages hérités (MD5/SHA-1) passent par

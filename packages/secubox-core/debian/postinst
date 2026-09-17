@@ -106,6 +106,10 @@ case "$1" in
 
     # Enable runtime directory service (ensures /run/secubox exists before other services)
     systemctl enable --now secubox-runtime.service 2>/dev/null || true
+    # ACTIVÉE, PAS DÉMARRÉE : l'initialisation appartient au démarrage, pas à
+    # l'installation d'un paquet. Sur une box déjà initialisée le
+    # `ConditionPathExists=!` la rend inerte, donc l'activation est sûre ici.
+    systemctl enable secubox-firstboot.service 2>/dev/null || true
 
     # Shared-dir traversal guard (#630): self-heals the recurring 0750 clobber
     # (from this and other module postinsts) that breaks kbin/toolbox.

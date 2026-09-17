@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox — initialisation au premier démarrage.
+#
+# LE PAQUET LIVRAIT LE SCRIPT SANS L'UNITÉ QUI L'EXÉCUTE (#1362).
+# `/usr/bin/secubox-firstboot` était bien installé, mais rien ne le lançait :
+# sur gk2, l'unité avait été posée à la main dans /etc/systemd/system. Une
+# installation NEUVE n'exécutait donc jamais son premier démarrage — ni JWT,
+# ni clés SSH, ni nom d'hôte, ni nftables.
+#
+# `ConditionPathExists=!` garde l'idempotence : sur une box déjà initialisée,
+# l'unité est activée mais ne fait rien. C'est ce qui rend l'activation sûre
+# dans le postinst, y compris sur une mise à jour.
+[Unit]
+Description=SecuBox First Boot Initialization
+After=network.target
+ConditionPathExists=!/var/lib/secubox/.firstboot_done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/secubox-firstboot
+ExecStartPost=/usr/bin/touch /var/lib/secubox/.firstboot_done
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

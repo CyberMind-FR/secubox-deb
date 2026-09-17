@@ -20,3 +20,17 @@ override_dh_auto_install:
 	# R4 cloner helper (#736): keep yt-dlp current for Discovered Media
 	install -d debian/secubox-mediaflow/usr/sbin
 	install -m 0755 sbin/secubox-yt-dlp-refresh debian/secubox-mediaflow/usr/sbin/
+
+# L'UNITE DE RAFRAICHISSEMENT N'ETAIT JAMAIS INSTALLEE (#1362). Les fichiers
+# `debian/secubox-mediaflow.secubox-yt-dlp-refresh.{service,timer}` existaient
+# et portaient le nom que debhelper attend — mais `dh_installsystemd` SANS
+# `--name` n'installe que `debian/<paquet>.service`. Toute unite supplementaire
+# demande un appel explicite.
+#
+# Consequence : le binaire /usr/sbin/secubox-yt-dlp-refresh etait livre, son
+# unite non. Sur gk2 quelqu'un avait donc recopie l'unite a la main dans
+# /etc/systemd/system, ou elle ne protegeait aucune autre installation et
+# comptait comme une orpheline.
+override_dh_installsystemd:
+	dh_installsystemd
+	dh_installsystemd --name=secubox-yt-dlp-refresh
