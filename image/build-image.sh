@@ -117,7 +117,14 @@ PROFILE_TAG="${SECUBOX_PROFILE#secubox-}"
 # Redirect to build-rpi-usb.sh for Raspberry Pi boards
 if [[ "${USE_RPI_SCRIPT:-0}" == "1" ]] || [[ "$BOARD" == "rpi400" ]] || [[ "$BOARD" == "rpi4" ]]; then
   log "Raspberry Pi board detected - using build-rpi-usb.sh"
-  RPI_ARGS="--out ${OUT_DIR}"
+  # LA SUITE ET LE PROFIL DOIVENT SUIVRE (#1294). Ils ne l'etaient pas :
+  # build-rpi-usb.sh retombait sur son propre defaut SUITE="bookworm", donc un
+  # `--suite trixie` produisait une image BOOKWORM dans un artefact nomme
+  # `-trixie` — un mensonge silencieux, du genre qui coute une journee. Et sans
+  # profil, les deux profils rpi ecrivaient le MEME nom de fichier et
+  # s'ecrasaient l'un l'autre des qu'ils se croisaient (merge-multiple du job
+  # release, ou un simple --out partage).
+  RPI_ARGS="--out ${OUT_DIR} --suite ${SUITE} --profile ${PROFILE_TAG}"
   [[ ${SLIPSTREAM_DEBS:-0} -eq 1 ]] && RPI_ARGS="$RPI_ARGS --slipstream"
   [[ ${INCLUDE_KIOSK:-0} -eq 1 ]] && RPI_ARGS="$RPI_ARGS --kiosk"
   exec bash "${SCRIPT_DIR}/build-rpi-usb.sh" $RPI_ARGS

@@ -22,6 +22,10 @@ SECUBOX_VERSION="3.0.0-alpha.2"
 
 # ── Defaults ──────────────────────────────────────────────────────
 SUITE="bookworm"
+# Repli sur la variable exportee par build-image.sh, puis sur "full" —
+# le profil entre dans le nom de l'image, il ne peut pas etre vide (#1294).
+PROFILE_TAG="${SECUBOX_PROFILE#secubox-}"
+PROFILE_TAG="${PROFILE_TAG:-full}"
 IMG_SIZE="8G"
 OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
@@ -64,6 +68,7 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --suite)        SUITE="$2";         shift 2 ;;
+    --profile)      PROFILE_TAG="$2";   shift 2 ;;
     --out)          OUT_DIR="$2";       shift 2 ;;
     --size)         IMG_SIZE="$2";      shift 2 ;;
     --local-cache)  USE_LOCAL_CACHE=1;  shift   ;;
@@ -94,7 +99,9 @@ fi
 # ── Variables ─────────────────────────────────────────────────────
 WORK_DIR=$(mktemp -d)
 ROOTFS="${WORK_DIR}/rootfs"
-IMG_FILE="${OUT_DIR}/secubox-rpi-arm64-${SUITE}.img"
+# Le PROFIL fait partie du nom, comme dans build-image.sh (#1112). Sans lui,
+# `isp` et `full` produisaient le meme fichier et s'ecrasaient.
+IMG_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-rpi-arm64-${SUITE}.img"
 
 cleanup() {
   log "Cleaning up..."
