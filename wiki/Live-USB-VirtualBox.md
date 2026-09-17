@@ -27,7 +27,7 @@ cd secubox-deb
 bash image/create-vbox-vm.sh --download
 
 # …or pin a specific pre-release:
-bash image/create-vbox-vm.sh --download v3.0.0-alpha.1
+bash image/create-vbox-vm.sh --download v3.0.0-alpha.4
 ```
 
 That's it. The script converts the image to VDI, creates an EFI VM named
@@ -68,7 +68,7 @@ If you prefer to drive `VBoxManage` yourself:
 
 ```bash
 # 1) Get + extract the image
-gh release download v3.0.0-alpha.1 -p 'secubox-live-amd64-bookworm.img.gz'
+gh release download v3.0.0-alpha.4 -p 'secubox-live-amd64-bookworm.img.gz'
 gunzip secubox-live-amd64-bookworm.img.gz
 
 # 2) Convert to VDI

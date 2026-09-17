@@ -29,7 +29,7 @@ VirtualBox amd64, image **téléchargée** depuis les releases GitHub, VM créé
 
 ```bash
 bash image/create-vbox-vm.sh --download
-# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.1
+# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.4
 ```
 
 La VM redirige les ports invité 22/80/443 vers l'hôte. Accès :

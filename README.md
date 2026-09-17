@@ -32,14 +32,15 @@
 ---
 
 SecuBox turns a small ARM board — or any x86 PC — into a complete, self-hosted
-security appliance running on Debian bookworm: firewall, VPN, intrusion
+security appliance running on Debian bookworm — Trixie port in progress
+([#1294](https://github.com/CyberMind-FR/secubox-deb/issues/1294)): firewall, VPN, intrusion
 detection, WAF, and a suite of sovereign services, all behind one web dashboard.
 
 ## Why SecuBox
 
 - **Your hardware, your rules.** Everything runs on the box you own. No cloud
   account, no telemetry, no third-party cookie ever leaves the appliance.
-- **Whole stack, one install.** 176 packages covering security, networking,
+- **Whole stack, one install.** 181 packages covering security, networking,
   applications and operations — instead of a weekend of glue work.
 - **Runs on what you already have.** Raspberry Pi, ESPRESSObin, MOCHAbin,
   a repurposed laptop, or a VM on your desktop.
@@ -92,8 +93,8 @@ KVM or QEMU: [Official AMD64 GK2 Clone installation guide](docs/INSTALL-AMD64-GK
 **Boot it from a USB stick on any x86_64 PC — nothing is written to the disk.**
 
 ```bash
-# The bootable live image currently ships with the Alpha 3 pre-release
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v3.0.0-alpha.1/secubox-live-amd64-bookworm.img.gz
+# The bootable live image currently ships with the Alpha 4 pre-release
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v3.0.0-alpha.4/secubox-live-amd64-bookworm.img.gz
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress   # /dev/sdX = your USB device
 ```
 
@@ -126,12 +127,12 @@ Flashing, U-Boot and first-boot steps:
 [ARM / U-Boot](https://github.com/CyberMind-FR/secubox-deb/wiki/ARM-Installation) ·
 [Supported hardware](https://github.com/CyberMind-FR/secubox-deb/wiki/Hardware)
 
-### 🧪 Testing Alpha 3
+### 🧪 Testing Alpha 4
 
-`v3.0.0-alpha.1` is the current pre-release — 177 packages, disk images and
+`v3.0.0-alpha.4` is the current pre-release — 181 packages, disk images and
 Live USB builds for every supported board. It is a **pre-release**: run it on a
 test box, not on the link your household depends on.
-Guided path: [**Démarrage rapide Alpha3**](https://github.com/CyberMind-FR/secubox-deb/wiki) —
+Guided path: [**Démarrage rapide Alpha4**](https://github.com/CyberMind-FR/secubox-deb/wiki) —
 VM in one command, or real arm64 hardware — first section of the wiki home.
 
 ### Verifying downloads
