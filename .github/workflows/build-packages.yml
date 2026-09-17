@@ -12,6 +12,12 @@ on:
   pull_request:
     branches: [main, master]
   workflow_call:
+    inputs:
+      suite:
+        description: 'Suite Debian (bookworm = cible actuelle, trixie = portage)'
+        required: false
+        type: string
+        default: 'bookworm'
     secrets:
       GPG_PRIVATE_KEY:
         required: false
@@ -34,6 +40,18 @@ on:
           - amd64
           - arm64
           - both
+      suite:
+        description: 'Suite Debian'
+        required: false
+        type: choice
+        options: [bookworm, trixie]
+        default: bookworm
+
+env:
+  # SUITE PARAMETRABLE (#1294). Le repli litteral `bookworm` n'est pas
+  # decoratif : un `push` ne porte aucun input, et sans lui la suite serait
+  # VIDE — le retamponnage forgerait alors des versions en `~1`.
+  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'bookworm' }}
 
 jobs:
   # Discover all packages dynamically.
@@ -280,6 +298,15 @@ jobs:
           if grep -qE 'golang-go' debian/control; then
             DEPFLAG="-d"
           fi
+          # RETAMPONNAGE PAR SUITE (#1294). Le suffixe `~bookworm1` et le champ
+          # distribution sont une propriete de la CONSTRUCTION, pas du code :
+          # les porter a la main voudrait dire une entree de changelog par
+          # paquet ET par suite — 173 fichiers a re-editer a chaque release, et
+          # deux sources de verite qui divergeront. On les pose ici.
+          # L'arbre de la CI est ephemere ; le depot n'est pas touche.
+          bash "$GITHUB_WORKSPACE/scripts/restamp-changelog.sh" \
+            "${{ env.DEBIAN_SUITE }}" debian/changelog
+
           dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}
 
           echo "✅ Build OK: ${{ matrix.package }} (${{ matrix.arch }})"
@@ -412,7 +439,7 @@ jobs:
           # colonne 1, ce qui referme le bloc YAML. Sorti dans un fichier, il
           # est aussi lisible et verifiable (`bash -n`).
           ssh "$cible" \
-            "APT_BASE=/data/apt APT_DIST=bookworm bash -s" \
+            "APT_BASE=/data/apt APT_DIST=${{ env.DEBIAN_SUITE }} bash -s" \
             < .github/scripts/apt-publish-remote.sh
 
       - name: Delete existing release assets (if any)
@@ -444,7 +471,7 @@ jobs:
           body: |
             ## SecuBox-DEB ${{ github.ref_name }}
 
-            Debian bookworm packages for GlobalScale MOCHAbin / ESPRESSObin (arm64) and x86_64.
+            Debian ${{ env.DEBIAN_SUITE }} packages for GlobalScale MOCHAbin / ESPRESSObin (arm64) and x86_64.
 
             **${{ env.SBX_NB_DEBS }} paquets**, dont :
             - Core infrastructure (hub, core, portal)
@@ -457,7 +484,7 @@ jobs:
             ```bash
             curl -fsSL https://apt.secubox.in/secubox-keyring.gpg | \
               sudo tee /usr/share/keyrings/secubox.gpg > /dev/null
-            echo "deb [signed-by=/usr/share/keyrings/secubox.gpg] https://apt.secubox.in bookworm main" | \
+            echo "deb [signed-by=/usr/share/keyrings/secubox.gpg] https://apt.secubox.in ${{ env.DEBIAN_SUITE }} main" | \
               sudo tee /etc/apt/sources.list.d/secubox.list
             sudo apt update && sudo apt install secubox-full
             ```

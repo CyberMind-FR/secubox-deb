@@ -1,3 +1,16 @@
+secubox-matrix (1.1.2-3~bookworm1) bookworm; urgency=medium
+
+  * Aligne le numero de version sur la convention du depot : suffixe de
+    suite `~bookworm1`. Ce paquet portait une revision nue, ce qui rend
+    le retamponnage par suite incoherent — `1.2.0-1~trixie1` trie EN
+    DESSOUS de `1.2.0-1` (semantique du tilde), donc une construction
+    trixie aurait paru plus ancienne que la bookworm. La revision est
+    incrementee en meme temps : ajouter le suffixe a revision egale
+    aurait ete un downgrade pour les installations existantes
+    (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 17:11:58 +0200
+
 secubox-matrix (1.1.2-2) bookworm; urgency=medium
 
   * UNITE VESTIGE RETIREE (#1362). Ce module etait livre avec une unite
