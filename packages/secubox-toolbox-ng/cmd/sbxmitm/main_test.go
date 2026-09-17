@@ -75,8 +75,8 @@ func TestForgeChainsToCA(t *testing.T) {
 }
 
 // TestLoadCACombinedPEM proves loadCA pulls the right blocks out of a COMBINED
-// cert+key bundle — the real shape of mitmproxy's confdir `mitmproxy-ca.pem`,
-// which the live R3 CA uses and the worker unit points --ca-key at. mitmproxy
+// paquet cert+cle — la forme reelle de `sbxmitm-ca.pem` (heritee du confdir
+// mitmproxy), utilisee par la CA R3 vivante et visee par --ca-key. L'ancien
 // writes the PRIVATE KEY block first, then the CERTIFICATE; loadCA must scan by
 // type, not position.
 func TestLoadCACombinedPEM(t *testing.T) {
@@ -102,13 +102,13 @@ func TestLoadCACombinedPEM(t *testing.T) {
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: kder})
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 
-	// mitmproxy-ca.pem layout: key THEN cert in one file.
-	combined := filepath.Join(dir, "mitmproxy-ca.pem")
+	// disposition sbxmitm-ca.pem : la cle PUIS le cert dans un seul fichier.
+	combined := filepath.Join(dir, "sbxmitm-ca.pem")
 	if err := os.WriteFile(combined, append(append([]byte{}, keyPEM...), certPEM...), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// mitmproxy-ca-cert.pem: cert only.
-	certOnly := filepath.Join(dir, "mitmproxy-ca-cert.pem")
+	// sbxmitm-ca-cert.pem : le cert seul.
+	certOnly := filepath.Join(dir, "sbxmitm-ca-cert.pem")
 	if err := os.WriteFile(certOnly, certPEM, 0o644); err != nil {
 		t.Fatal(err)
 	}

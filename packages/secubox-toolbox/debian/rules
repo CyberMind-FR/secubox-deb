@@ -31,6 +31,8 @@ override_dh_auto_install:
 	install -d debian/secubox-toolbox/usr/sbin
 	install -m 0755 scripts/toolbox-up debian/secubox-toolbox/usr/sbin/
 	install -m 0755 scripts/ca-init    debian/secubox-toolbox/usr/sbin/secubox-toolbox-ca-init
+	install -m 0755 sbin/secubox-toolbox-ca-rename \
+	  debian/secubox-toolbox/usr/sbin/secubox-toolbox-ca-rename
 	# rlevel-per-peer (task 4/8) : root-scoped ctl owning peer-rlevel.json +
 	# the @rlevel_off nft set (see sbin/sbxmitm-policyctl header).
 	install -m 0755 sbin/sbxmitm-policyctl debian/secubox-toolbox/usr/sbin/

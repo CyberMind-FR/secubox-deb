@@ -6,7 +6,7 @@
 //
 // These helpers wire the ported policy (policy.go) + HMAC fake-identity jar
 // (jar.go) into the MITM response path. They mirror the INTENT of the Python
-// privacy_guard._anonymize and privacy.fake_id poison (mitmproxy_addons/
+// privacy_guard._anonymize and privacy.fake_id poison (l'ancien mitmproxy_addons/
 // privacy_guard.py, secubox_toolbox/privacy.py) — best-effort privacy hygiene,
 // NOT byte-identical to the Python request-Cookie path. The jar values
 // themselves ARE byte-exact (proven in jar_test.go).

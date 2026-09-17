@@ -106,13 +106,24 @@ fi
 echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-secubox-wg.conf
 sysctl -p /etc/sysctl.d/99-secubox-wg.conf >/dev/null 2>&1 || true
 
-# ── CA WG : mitmproxy-readable combined PEM (key+cert) ──
-# mitm 11 looks for <confdir>/mitmproxy-ca.pem at startup. If present, it
-# uses our pre-generated CA instead of auto-generating an ugly one with
-# CN=mitmproxy. We MUST pre-generate it with a full DN so Android/Chrome
-# don't show "Ce certificat émis par null" (Chrome can't render certs
-# without a complete subject).
-if [ ! -f "$CA_WG_DIR/mitmproxy-ca.pem" ]; then
+# ── CA WG : PEM combine (cle+cert) lu par sbxmitm ──
+# Le nom `mitmproxy-ca.pem` venait de la convention de confdir de mitmproxy,
+# qui cherchait ce fichier au demarrage et forgeait sinon une CA CN=mitmproxy
+# affichee « emis par null » par Chrome. sbxmitm prend --ca-cert/--ca-key en
+# arguments explicites : cette contrainte n'existe plus, le materiel s'appelle
+# desormais sbxmitm-* (#1362). On garde le DN complet, qui lui reste requis —
+# Chrome et Android refusent d'afficher un certificat sans sujet complet.
+#
+# MIGRATION D'ABORD. La garde ci-dessous decide de GENERER quand le fichier
+# est absent. Si l'ancien materiel etait encore nomme mitmproxy-*, la garde
+# le verrait absent et forgerait une CA NEUVE — invalidant d'un coup tous les
+# clients WireGuard qui font confiance a l'actuelle. Le renommage doit donc
+# passer avant.
+if [ -x /usr/sbin/secubox-toolbox-ca-rename ]; then
+    /usr/sbin/secubox-toolbox-ca-rename || log "migration du nom de CA : echec non bloquant"
+fi
+
+if [ ! -f "$CA_WG_DIR/sbxmitm-ca.pem" ]; then
     log "generating dedicated WG CA (full DN, 10y)"
     cd "$CA_WG_DIR"
 
@@ -141,28 +152,28 @@ CNF
     openssl req -new -x509 -days 3650 -key _key.pem -out _cert.pem \
         -config _ca.cnf -sha256 2>/dev/null
 
-    # Combined key+cert for mitm (mitmproxy-ca.pem)
-    cat _key.pem _cert.pem > mitmproxy-ca.pem
-    # 0640 (not 0600) : mitm-wg.service runs as secubox-toolbox group and
-    # needs to read the combined key+cert. 0600 → PermissionError →
+    # Cle+cert combines pour sbxmitm (sbxmitm-ca.pem)
+    cat _key.pem _cert.pem > sbxmitm-ca.pem
+    # 0640 (et non 0600) : les workers sbxmitm tournent sous le groupe
+    # secubox-toolbox et doivent lire le cle+cert combine. 0600 → PermissionError →
     # service crash-loops (~190 restarts in 5 min if undetected).
-    chmod 0640 mitmproxy-ca.pem
-    chown root:secubox-toolbox mitmproxy-ca.pem
+    chmod 0640 sbxmitm-ca.pem
+    chown root:secubox-toolbox sbxmitm-ca.pem
 
     # Public cert only (what we serve via /wg/ca.pem)
-    cp _cert.pem mitmproxy-ca-cert.pem
-    chmod 0644 mitmproxy-ca-cert.pem
-    chown root:secubox-toolbox mitmproxy-ca-cert.pem
+    cp _cert.pem sbxmitm-ca-cert.pem
+    chmod 0644 sbxmitm-ca-cert.pem
+    chown root:secubox-toolbox sbxmitm-ca-cert.pem
 
     # DER fallback for Android (some installers prefer .cer DER)
-    openssl x509 -in _cert.pem -outform DER -out mitmproxy-ca-cert.cer 2>/dev/null
-    chmod 0644 mitmproxy-ca-cert.cer
-    chown root:secubox-toolbox mitmproxy-ca-cert.cer
+    openssl x509 -in _cert.pem -outform DER -out sbxmitm-ca-cert.cer 2>/dev/null
+    chmod 0644 sbxmitm-ca-cert.cer
+    chown root:secubox-toolbox sbxmitm-ca-cert.cer
 
     rm -f _key.pem _cert.pem _ca.cnf
-    log "WG CA generated : $(openssl x509 -in mitmproxy-ca-cert.pem -noout -subject 2>&1 | head -1)"
+    log "WG CA generated : $(openssl x509 -in sbxmitm-ca-cert.pem -noout -subject 2>&1 | head -1)"
 else
-    log "WG CA exists, keeping ($(openssl x509 -in $CA_WG_DIR/mitmproxy-ca-cert.pem -noout -subject 2>&1 | head -1))"
+    log "WG CA exists, keeping ($(openssl x509 -in $CA_WG_DIR/sbxmitm-ca-cert.pem -noout -subject 2>&1 | head -1))"
 fi
 
 # ── Enable wg-quick service ──

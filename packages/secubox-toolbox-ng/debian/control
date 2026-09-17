@@ -24,7 +24,8 @@ Description: SecuBox-Deb — outils Go du parc (sbxmitm, sbx-sentinel, sbx-authw
  (/api/v1/dpi/) pour la cardlet DPI du Hall, derriere nginx + JWT FastAPI.
  .
  Multi-core Go re-implementation of the R3 toolbox MITM engine (#662),
- ported off the GIL-bound Python mitmproxy worker fleet. Ships the
+ porte hors de l'ancienne flotte de workers Python mitmproxy, bridee par
+ le GIL et retiree depuis. Livre le
  standalone sbxmitm binary plus a DISABLED systemd template unit.
  .
  This package is the Phase-6-cutover migration target. The unit is NOT

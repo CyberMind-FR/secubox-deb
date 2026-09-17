@@ -4,7 +4,7 @@
 // SecuBox-Deb :: toolbox-ng :: transparency-banner loader inject (#662)
 //
 // Ports the LIVE transparency-banner injection from the authoritative Python
-// addon (../secubox-toolbox/mitmproxy_addons/inject_banner.py) into the Go
+// addon (l'ancien mitmproxy_addons/inject_banner.py) into the Go
 // engine. With stream_inject ON the Python addon injects a tiny LOADER
 // <script src="/__toolbox/loader.js" data-mh=.. data-wg=.. async></script> and
 // SERVES /__toolbox/loader.js + /__toolbox/bundle itself for ANY origin (the

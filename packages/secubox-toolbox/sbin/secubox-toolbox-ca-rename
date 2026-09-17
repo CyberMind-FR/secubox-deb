@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-toolbox-ca-rename
+#
+# Renomme le materiel de CA `mitmproxy-*` en `sbxmitm-*`.
+#
+# POURQUOI CE NOM EXISTAIT. mitmproxy imposait sa convention de confdir : il
+# cherchait `<confdir>/mitmproxy-ca.pem` au demarrage et, faute de le trouver,
+# forgeait tout seul une CA CN=mitmproxy que Chrome affiche « emis par null ».
+# Le nom n'etait donc pas un choix, c'etait une contrainte. sbxmitm prend
+# --ca-cert et --ca-key en arguments explicites : la contrainte est morte,
+# le nom doit suivre le moteur (#1362).
+#
+# POURQUOI UN SCRIPT PLUTOT QU'UN `mv`. La CA est VIVANTE — « Gondwana ToolBoX
+# R3 CA », 10 ans, installee dans le magasin de confiance de chaque client du
+# reseau WireGuard (Android, iOS, navigateurs). La confiance porte sur le
+# CONTENU du certificat, pas sur son chemin : renommer le fichier ne casse
+# rien... a une condition. Le provisionnement teste `[ ! -f ca.pem ]` pour
+# decider s'il doit generer. Renommer sans migrer lui ferait voir un fichier
+# absent, donc FORGER UNE CA NEUVE — et tous les clients existants
+# tomberaient en erreur de certificat d'un coup.
+#
+# Ce script deplace donc l'existant AVANT que quoi que ce soit ne teste son
+# absence, en preservant mode et proprietaire, et laisse un lien symbolique
+# de l'ancien nom vers le nouveau pour que rien de ce qui aurait ete oublie
+# ne casse. Idempotent : rejouable sans effet.
+
+set -uo pipefail
+readonly MODULE="toolbox-ca-rename"
+readonly VERSION="2.10.0"
+
+log() { echo "[${MODULE}] $*"; }
+
+# Repertoires portant du materiel de CA nomme par mitmproxy.
+readonly DIRS=(
+    /etc/secubox/toolbox/ca-wg
+    /etc/secubox/toolbox/ca-wg/backup
+    /etc/secubox/toolbox/mitm
+)
+
+renommes=0
+liens=0
+
+for d in "${DIRS[@]}"; do
+    [ -d "$d" ] || continue
+    for ancien in "$d"/mitmproxy-*; do
+        # Le glob non resolu se presente tel quel quand le repertoire est vide.
+        [ -e "$ancien" ] || continue
+        # Ne pas toucher aux sauvegardes horodatees ni a un lien deja pose.
+        case "$ancien" in
+            *.bak.*|*.bak) continue ;;
+        esac
+        [ -L "$ancien" ] && continue
+
+        base=$(basename "$ancien")
+        nouveau="$d/sbxmitm-${base#mitmproxy-}"
+
+        if [ -e "$nouveau" ] && [ ! -L "$nouveau" ]; then
+            log "deja migre, on garde : $nouveau"
+        else
+            rm -f "$nouveau"
+            # `mv` preserve mode et proprietaire — ils comptent : la CA
+            # combinee est en 0640 root:secubox-toolbox, et 0600 ferait
+            # boucler le worker sur PermissionError.
+            if mv "$ancien" "$nouveau"; then
+                log "renomme : $base -> $(basename "$nouveau")"
+                renommes=$((renommes + 1))
+            else
+                log "ECHEC du renommage : $ancien" >&2
+                continue
+            fi
+        fi
+
+        # Compatibilite : tout ce qui pointerait encore l'ancien nom suit le
+        # lien. A retirer quand plus aucune reference n'existera.
+        if [ ! -e "$ancien" ]; then
+            ln -sf "$(basename "$nouveau")" "$ancien" && liens=$((liens + 1))
+        fi
+    done
+done
+
+if [ "$renommes" -eq 0 ] && [ "$liens" -eq 0 ]; then
+    log "rien a migrer"
+else
+    log "$renommes fichier(s) renomme(s), $liens lien(s) de compatibilite"
+fi
+
+# Verification : l'empreinte de la CA publique doit etre inchangee. C'est le
+# seul controle qui prouve que les clients existants font toujours confiance.
+cert=/etc/secubox/toolbox/ca-wg/sbxmitm-ca-cert.pem
+if [ -f "$cert" ]; then
+    log "CA R3 : $(openssl x509 -in "$cert" -noout -subject 2>/dev/null | sed 's/^subject=//')"
+    log "empreinte : $(openssl x509 -in "$cert" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)"
+fi
+
+exit 0

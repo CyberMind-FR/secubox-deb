@@ -1,3 +1,17 @@
+secubox-toolbox (2.9.3-1~bookworm1) bookworm; urgency=medium
+
+  * Renomme le materiel de CA mitmproxy-* en sbxmitm-*. Ce nom venait de la
+    convention de confdir de mitmproxy, moteur retire : sbxmitm prend
+    --ca-cert/--ca-key en arguments explicites, la contrainte est morte.
+    Couvre le bundle de provisionnement WireGuard (.pem, .cer, .p12).
+  * Nouveau secubox-toolbox-ca-rename, appele par le postinst AVANT tout
+    redemarrage d'unite : le provisionnement WG teste l'absence du fichier
+    pour decider de generer. Renommer sans migrer lui aurait fait forger une
+    CA NEUVE, invalidant d'un coup tous les clients WireGuard qui font
+    confiance a l'actuelle. Liens de compatibilite poses (ref #1362).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 12:13:00 +0200
+
 secubox-toolbox (2.9.1-1~bookworm1) bookworm; urgency=medium
 
   * Provisionnement WG : /wg/profile/new (et .nmconnection, qr.png) acceptent un

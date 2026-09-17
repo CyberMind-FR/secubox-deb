@@ -5,7 +5,7 @@
 //
 // Restores the dpi / cookies / ja4 EVENTS that feed the kbin "Qui te piste?"
 // cumulative-stats page, frozen since the #662 Phase-7 cutover decommissioned
-// the Python mitmproxy relay addons (packages/secubox-toolbox/mitmproxy_addons/
+// the Python mitmproxy relay addons (l'ancien mitmproxy_addons/
 // {dpi,cookies,ja4}.py). The Go engine is now the live R3 MITM core; this file
 // re-implements EXACTLY what those addons did — extract privacy-safe flow
 // metadata and fire-and-forget it to the analysis sidecar sockets, which

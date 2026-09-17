@@ -3,7 +3,7 @@
 //
 // SecuBox-Deb :: toolbox-ng :: cosmetic / popup-ad hiding CSS inject (#662)
 //
-// PORTS the ad_ghost cosmetic-hide <style> (../secubox-toolbox/mitmproxy_addons/
+// PORTS the ad_ghost cosmetic-hide <style> (l'ancien mitmproxy_addons/
 // ad_ghost.py, _COSMETIC groups: ads / consent_nag / newsletter / social_widgets)
 // into the Go engine, which the #662 cutover left unported — so the engine was
 // injecting only the transparency banner loader, NOT the ad/popup-hiding style.

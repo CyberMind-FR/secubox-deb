@@ -10,7 +10,7 @@
 // live request/response path (Phase 5+ wiring).
 //
 // Addon → socket mapping the live engine will use (verbatim from the Python
-// addons' TARGET constants, packages/secubox-toolbox/mitmproxy_addons/*.py):
+// addons' TARGET constants, l'ancien mitmproxy_addons/*.py):
 //
 //	addon         socket path                       route
 //	cookies   →   /run/secubox/cookies.sock         POST /inject

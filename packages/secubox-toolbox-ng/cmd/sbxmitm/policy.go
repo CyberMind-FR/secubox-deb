@@ -24,7 +24,7 @@ import (
 
 // ── ad_ghost: static ad/tracker host pattern (port of _AD_HOST) ──────────────
 //
-// Python (mitmproxy_addons/ad_ghost.py):
+// Python (l'ancien mitmproxy_addons/ad_ghost.py):
 //
 //	_AD_HOST = re.compile(
 //	    r"(?:^|\.)(?:doubleclick|googlesyndication|googleadservices|"

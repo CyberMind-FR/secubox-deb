@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 #
-# ToolBoX CA init : gen self-signed CA + populate mitmproxy confdir.
+# ToolBoX CA init : gen self-signed CA + populate sbxmitm confdir.
 # Idempotent, no-op if CA already exists.
 set -euo pipefail
 readonly CA_DIR="/etc/secubox/toolbox/ca"
@@ -35,8 +35,9 @@ openssl req -x509 -newkey rsa:2048 -nodes \
 chmod 0600 "$CA_DIR/key.pem"
 chmod 0644 "$CA_DIR/ca.pem"
 
-# Pre-populate mitmproxy confdir : it expects mitmproxy-ca.pem combining cert+key
-cat "$CA_DIR/ca.pem" "$CA_DIR/key.pem" > "$MITM_DIR/mitmproxy-ca.pem"
-chmod 0600 "$MITM_DIR/mitmproxy-ca.pem"
+# Pre-remplit le confdir sbxmitm : PEM combinant cert+cle (anciennement
+# mitmproxy-ca.pem, nomme d'apres la convention de mitmproxy — #1362)
+cat "$CA_DIR/ca.pem" "$CA_DIR/key.pem" > "$MITM_DIR/sbxmitm-ca.pem"
+chmod 0600 "$MITM_DIR/sbxmitm-ca.pem"
 
 echo "[ca-init] OK : CA installed at $CA_DIR/ca.pem"

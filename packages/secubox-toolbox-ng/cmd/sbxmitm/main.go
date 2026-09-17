@@ -3,6 +3,13 @@
 //
 // SecuBox-Deb :: toolbox-ng :: forging MITM PoC (#662 Phase 1)
 //
+// NOTE DE PROVENANCE (#1362). Les commentaires de ce paquet citent des
+// addons `l'ancien mitmproxy_addons/*.py` : cet arbre Python a ete RETIRE DEPUIS
+// du depot, en meme temps que mitmproxy lui-meme. Les references sont
+// conservees telles quelles parce qu'elles disent d'ou vient chaque
+// portage — les renommer en `sbxmitm_*` ferait mentir le code sur son
+// origine. Aucune n'est un chemin a suivre.
+//
 // De-risking spike for migrating the R3 MITM engine off Python mitmproxy onto a
 // multi-core Go core. Pure standard library (no external modules) so it builds
 // offline and cross-compiles to arm64 with `GOOS=linux GOARCH=arm64 go build`.
@@ -499,7 +506,7 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// redirect to the client so the BROWSER follows it (correct URL bar, origin,
 	// cookie scope, method semantics). Go's http.Client follows by default, which
 	// would collapse a 301/302 into the final 200 under the original URL (wrong).
-	// Mirror mitmproxy's pass-through behaviour.
+	// Reprend le comportement de laisser-passer de l'ancien moteur.
 	up := &http.Client{
 		Timeout:       30 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },

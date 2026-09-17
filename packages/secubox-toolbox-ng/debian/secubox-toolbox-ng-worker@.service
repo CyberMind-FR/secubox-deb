@@ -4,7 +4,7 @@
 # ── DISABLED BY DESIGN (DARK) ────────────────────────────────────────────────
 # This is the Phase-6 CUTOVER MIGRATION TARGET. It is NOT enabled or started by
 # the package (postinst does not `systemctl enable --now`). The live R3 tunnel
-# keeps running on the Python mitmproxy workers
+# tournait autrefois sur les workers Python mitmproxy, retires depuis
 # (secubox-toolbox-mitm-wg-worker@{1..4}, ports 8081-8084) until the cutover is
 # performed manually.
 #
@@ -13,9 +13,9 @@
 # (`iif wg-toolbox tcp dport 443/80 → 10.99.1.1:numgen inc mod 4 → 808{1..4}`),
 # on 809%i ports so the Go and Python fleets coexist during a side-by-side
 # canary. The engine recovers the original destination via SO_ORIGINAL_DST
-# (works for this non-root user under NoNewPrivileges, same as mitmdump).
+# (fonctionne pour cet utilisateur non-root sous NoNewPrivileges).
 #
-# Forges with the LIVE R3 CA clients already trust — mitmproxy's confdir bundle
+# Forge avec la CA R3 VIVANTE a laquelle les clients font deja confiance —
 # (CN "Gondwana ToolBoX R3 CA"), group-readable by secubox-toolbox — NOT the
 # root-only ca-wg key.pem (CN "WG CA"), which clients do NOT trust.
 #
@@ -52,15 +52,15 @@ Group=secubox-toolbox
 # --media-buffer default (false, see main.go) applies and the tee is a no-op.
 EnvironmentFile=-/etc/secubox/toolbox-ng.env
 
-# Forge with the LIVE R3 CA the clients trust: cert = mitmproxy-ca-cert.pem,
-# key = mitmproxy-ca.pem (a combined cert+key bundle — loadCA scans for the
+# Forge avec la CA R3 VIVANTE : cert = sbxmitm-ca-cert.pem,
+# cle = sbxmitm-ca.pem (paquet cert+cle combine — loadCA y cherche la
 # PRIVATE KEY block). Both are group-readable by secubox-toolbox. The anti-track
 # jar key is best-effort: absent → poison stays off.
 ExecStart=/usr/sbin/sbxmitm \
   --transparent \
   --listen 10.99.1.1:809%i \
-  --ca-cert /etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem \
-  --ca-key /etc/secubox/toolbox/ca-wg/mitmproxy-ca.pem \
+  --ca-cert /etc/secubox/toolbox/ca-wg/sbxmitm-ca-cert.pem \
+  --ca-key /etc/secubox/toolbox/ca-wg/sbxmitm-ca.pem \
   --jar-key /etc/secubox/secrets/privacy-jar.key \
   $SBX_MEDIA_BUFFER_ARGS
 

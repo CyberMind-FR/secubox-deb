@@ -5,7 +5,7 @@
 //
 // Restores the kbin "/social" cross-site tracker graph, frozen since the #662
 // Phase-7 cutover decommissioned the in-process Python `social_graph` addon
-// (packages/secubox-toolbox/mitmproxy_addons/social_graph.py). The graph reads
+// (l'ancien mitmproxy_addons/social_graph.py). The graph reads
 // social_nodes/social_links in toolbox.db, folded from raw social_edges — and
 // the edges stopped flowing when the Python addon was retired.
 //
@@ -49,7 +49,7 @@ import (
 
 // ── registrableSocial: port of social_graph._registrable_domain ─────────────
 //
-// Python (mitmproxy_addons/social_graph.py):
+// Python (l'ancien mitmproxy_addons/social_graph.py):
 //
 //	h = (host or "").lower().strip(".")
 //	if not h or h.replace(".", "").isdigit(): return h     # raw IP → as-is

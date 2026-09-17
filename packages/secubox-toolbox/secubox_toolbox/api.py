@@ -1626,7 +1626,7 @@ async def ca_fingerprint(request: Request, ca: str = "auto") -> dict:
     showing the wrong (R1/R2) fingerprint to R3 users.
     """
     from pathlib import Path
-    r3 = Path("/etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem")
+    r3 = Path("/etc/secubox/toolbox/ca-wg/sbxmitm-ca-cert.pem")
     default = Path("/etc/secubox/toolbox/ca/ca.pem")
     want_wg = False
     if ca == "wg":
@@ -1999,7 +1999,7 @@ async def wg_ca_pem() -> Response:
     Separate from the R1/R2 CA at /ca/mobileconfig. iPhone in R3 mode must
     install BOTH the WG profile (tunnel) AND this CA (trust mitm certs).
     """
-    p = Path("/etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem")
+    p = Path("/etc/secubox/toolbox/ca-wg/sbxmitm-ca-cert.pem")
     if not p.exists():
         raise HTTPException(404, "mitm-wg CA not yet generated")
     return Response(
@@ -2015,7 +2015,7 @@ async def wg_ca_der() -> Response:
     """DER (binary) version of the mitm-wg CA. Some Android installers
     (especially Android 11+ Settings → CA certificate) prefer DER over PEM
     and reject the .pem extension. Same cert, just binary-encoded."""
-    p = Path("/etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.cer")
+    p = Path("/etc/secubox/toolbox/ca-wg/sbxmitm-ca-cert.cer")
     if not p.exists():
         raise HTTPException(404, "mitm-wg CA DER not yet generated")
     return Response(
@@ -2091,7 +2091,7 @@ async def wg_toolbox_xpi() -> Response:
 async def wg_ca_mobileconfig() -> Response:
     """iOS profile that installs the mitm-wg CA in trust store."""
     import uuid as _uuid
-    p = Path("/etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem")
+    p = Path("/etc/secubox/toolbox/ca-wg/sbxmitm-ca-cert.pem")
     if not p.exists():
         raise HTTPException(404, "mitm-wg CA not yet generated")
     pem = p.read_text()

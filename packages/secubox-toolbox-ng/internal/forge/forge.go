@@ -34,7 +34,7 @@ type CA struct {
 }
 
 // LoadCA reads a CA cert and key from PEM files (certPath, keyPath).
-// Both files may be combined cert+key bundles (e.g. mitmproxy-ca.pem with
+// Les deux fichiers peuvent etre des paquets cert+cle combines (sbxmitm-ca.pem,
 // PRIVATE KEY first then CERTIFICATE); LoadCA scans by block Type.
 func LoadCA(certPath, keyPath string) (*CA, error) {
 	cpem, err := os.ReadFile(certPath)
@@ -46,7 +46,7 @@ func LoadCA(certPath, keyPath string) (*CA, error) {
 		return nil, fmt.Errorf("read ca key: %w", err)
 	}
 	// Scan for the right block TYPE rather than assuming position: the live R3
-	// CA the toolbox forges with (mitmproxy confdir `mitmproxy-ca.pem`) is a
+	// La CA avec laquelle la toolbox forge (`sbxmitm-ca.pem`) est un
 	// COMBINED cert+key bundle, and --ca-key may point at it. Tolerate cert and
 	// key co-residing in either file, in any order.
 	cblk := firstPEMBlock(cpem, func(b *pem.Block) bool { return b.Type == "CERTIFICATE" })

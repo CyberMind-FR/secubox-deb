@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * Unites sbxmitm recablees sur la CA renommee sbxmitm-ca*.pem.
+  * Prose corrigee : les unites decrivaient encore la flotte de workers
+    Python mitmproxy, retiree depuis. Les commentaires de provenance du Go
+    sont conserves — ils disent d'ou vient chaque portage — mais le chemin
+    mitmproxy_addons/ n'existe plus et est signale comme tel (ref #1362).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 12:13:00 +0200
+
 secubox-toolbox-ng (0.5.2-1~bookworm1) bookworm; urgency=medium
 
   * UN JOURNAL ABSENT N'EST PAS UNE ERREUR (#1362). `sbxwaf --correlate`

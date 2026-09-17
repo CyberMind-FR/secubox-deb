@@ -4,7 +4,7 @@
 // SecuBox-Deb :: toolbox-ng :: WG persona identity (mac_hash) (#662 Phase 6 prep)
 //
 // Byte-exact port of the Python WG-peer identity resolver
-// (packages/secubox-toolbox/mitmproxy_addons/_common.py: _wg_hash_of /
+// (l'ancien mitmproxy_addons/_common.py: _wg_hash_of /
 // mac_hash_of). Python is the source of truth; this mirrors it exactly, proven
 // by the cross-engine parity harness (testdata/wg-peers-fixture.json +
 // testdata/machash-fixtures.json + machash_test.go ↔ tests/test_machash_parity.py).

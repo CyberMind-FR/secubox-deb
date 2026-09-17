@@ -309,5 +309,15 @@ fi
     ;;
 esac
 
+# Renommage du materiel de CA mitmproxy-* -> sbxmitm-* (#1362). Place avant
+# la section ajoutee automatiquement par debhelper, donc avant que dh ne
+# redemarre la moindre unite : les workers
+# sbxmitm pointent desormais les nouveaux noms, et le provisionnement WG
+# genererait une CA NEUVE s'il trouvait l'ancienne absente — ce qui casserait
+# la confiance de tous les clients WireGuard existants. Idempotent.
+if [ "$1" = "configure" ] && [ -x /usr/sbin/secubox-toolbox-ca-rename ]; then
+    /usr/sbin/secubox-toolbox-ca-rename || true
+fi
+
 #DEBHELPER#
 exit 0
