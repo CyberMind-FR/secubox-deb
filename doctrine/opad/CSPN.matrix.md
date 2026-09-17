@@ -68,7 +68,6 @@ Les composants suivants sont **hors périmètre CSPN** (fournis par des tiers ou
 | **Stack réseau Debian** | Fourni par Debian bookworm (non modifié) | Debian Project |
 | **Kernel Linux** | Mainline 6.6 LTS (non patché) | kernel.org |
 | **Firmware Marvell** | Blob propriétaire non auditable | Marvell |
-| **CrowdSec** | Dépendance externe (API REST consommée) | CrowdSec SAS |
 | **Suricata** | Dépendance externe (IDS/IPS) | OISF |
 | **nDPId** | DPI externe (analyseur protocoles) | utoni/nDPId |
 
@@ -103,8 +102,6 @@ Les composants suivants sont **hors périmètre CSPN** (fournis par des tiers ou
 | **CAP-11** | **Observation DHCP** | Capture des DHCPDISCOVER/OFFER/REQUEST/ACK | pcap/BPF | ✅ |
 | **CAP-12** | **Observation TCP** | Reconstruction de flux TCP (SYN tracking, SEQ/ACK) | pcap/BPF | ✅ |
 | **CAP-13** | **Observation ARP** | Capture de toutes les requêtes/réponses ARP | pcap/BPF | ✅ |
-| **CAP-14** | **DPI passif** | Détection de protocoles (via nDPId) | netifyd | ✅ |
-| **CAP-15** | **Détection CrowdSec** | Intégration des décisions CrowdSec (IP ban, CTI) | CrowdSec API | ✅ |
 | **CAP-16** | **Détection Suricata** | Intégration des alertes Suricata (signatures) | Suricata EVE | ✅ |
 
 **Note :** Les capacités d'observation **ne sont pas directement des capacités de mitigation**, mais elles alimentent les moteurs de décision (WALL/Policy, MIND/Scoring) qui déclenchent les injections.
@@ -115,8 +112,6 @@ Les composants suivants sont **hors périmètre CSPN** (fournis par des tiers ou
 
 | ID | Capacité | Description | Module | Status |
 |----|----------|-------------|--------|--------|
-| **CAP-20** | **Blocklists DNS** | Blocage par domaine (CrowdSec, abuse.ch, custom) | WALL/Policy | ✅ |
-| **CAP-21** | **Blocklists IP** | Blocage par IP (CrowdSec CTI) | WALL/Policy | ✅ |
 | **CAP-22** | **Scoring comportemental** | Détection d'anomalies (volume, patterns) | MIND/Scoring | ✅ |
 | **CAP-23** | **Quarantaine NAC** | Isolation de devices non conformes | AUTH/Registry | ✅ |
 | **CAP-24** | **Seuils configurables** | Ajustement dynamique des seuils de déclenchement | WALL/Policy | ✅ |
@@ -238,7 +233,6 @@ Les composants suivants sont **hors périmètre CSPN** (fournis par des tiers ou
 | **M05** | DNS amplification | ◐ | — | — | — | ◉ | **◐** |
 
 **Notes :**
-- **M01, M02, M03** : DNS-R avec blocklists CrowdSec/abuse.ch → 99% de succès. Couverture **◉**.
 - **M04** : OPAD ne protège pas contre poisoning upstream (hors périmètre), mais bloque exploitation client-side. Couverture **◐**.
 - **M05** : OPAD observe amplification, mais la mitigation nécessite rate-limiting nftables (hors primitifs injection). Couverture **◐**.
 
@@ -281,7 +275,6 @@ Les composants suivants sont **hors périmètre CSPN** (fournis par des tiers ou
 
 **Notes :**
 - **M13, M14** : DNS-R bloque résolution C2, RST-I termine connexions TCP si IP hardcodée. Couverture **◉**.
-- **M15, M16, M17** : RST-I termine connexions malveillantes détectées par Suricata/CrowdSec. Couverture **◉**.
 - **M18, M19** : DNS-R bloque pools de minage/C2 botnet, RST-I termine connexions. Couverture **◉**.
 - **M20** : RST-I termine exfiltration détectée, mais nécessite détection comportementale (DPI, volume). Couverture **◐**.
 
@@ -469,7 +462,6 @@ OPAD **injecte des réponses falsifiées** (DNS-R, DHCP-R, RST-I, ARP-R), mais *
 - Complémentaire à OPAD (nftables drop = layer 3, OPAD inject = layer 7)
 
 **Exemple workflow combiné :**
-1. CrowdSec détecte IP malveillante → ban
 2. **nftables** : `nft add element inet filter blocklist_v4 { 1.2.3.4 }` → drop hard
 3. **OPAD** : Si connexion déjà établie, RST-I pour terminer immédiatement (pas attendre timeout)
 

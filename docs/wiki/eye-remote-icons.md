@@ -142,7 +142,6 @@ These icons represent SecuBox security modules:
 
 | Icon | Name | Module |
 |------|------|--------|
-| ![auth](../../remote-ui/round/assets/icons/auth-48.png) | `auth` | AUTH - CrowdSec IDS |
 | ![wall](../../remote-ui/round/assets/icons/wall-48.png) | `wall` | WALL - Firewall |
 | ![boot](../../remote-ui/round/assets/icons/boot-48.png) | `boot` | BOOT - Boot security |
 | ![mind](../../remote-ui/round/assets/icons/mind-48.png) | `mind` | MIND - DPI Analysis |

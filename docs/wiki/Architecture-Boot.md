@@ -58,7 +58,6 @@ After `pivot_root`, systemd orchestrates the 10-phase SecuBox-DEB startup:
 | Phase | Services | SecuBox Pairs |
 |-------|----------|---------------|
 | 1 — Network | nftables, WireGuard, Tailscale | MESH↔AUTH |
-| 2 — Perimeter Security | CrowdSec, HAProxy | WALL↔MIND |
 | 3 — DPI dual-stream | nDPId (active/shadow) | WALL↔MIND |
 | 4 — Runtime API | FastAPI/Uvicorn, 4R buffer | BOOT↔ROOT |
 | 5 — ZKP auth | GK·HAM-HASH (L1/L2/L3) | BOOT↔ROOT |
@@ -106,7 +105,6 @@ systemctl isolate secubox-kiosk.target
 - FastAPI/Uvicorn on Unix socket (HAProxy TLS frontend)
 - 4R double-buffer active on L2
 - nDPId dual-stream listening
-- CrowdSec in agent mode
 - No interactive shell, no external SSH
 
 ```bash

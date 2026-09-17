@@ -101,7 +101,6 @@ secubox-netdiag
 
 **解决方案:**
 
-1. 检查 CrowdSec 是否运行:
    ```bash
    systemctl status crowdsec
    cscli metrics
@@ -167,7 +166,6 @@ secubox-netdiag
 | 系统 | `journalctl` |
 | Nginx | `/var/log/nginx/` |
 | HAProxy | `/var/log/haproxy.log` |
-| CrowdSec | `cscli metrics` / `journalctl -u crowdsec` |
 | SecuBox 模块 | `journalctl -u secubox-*` |
 | 审计 | `/var/log/secubox/audit.log` |
 

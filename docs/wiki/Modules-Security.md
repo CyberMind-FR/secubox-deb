@@ -15,7 +15,6 @@ Security modules for threat detection, prevention, and response.
 
 | Module | Function | Status |
 |--------|----------|--------|
-| secubox-crowdsec | IDS/IPS community | ✅ Active |
 | secubox-waf | Web Application Firewall | ✅ Active |
 | secubox-ipblock | IP blocking | ✅ Active |
 | secubox-threats | Threat intelligence | ✅ Active |
@@ -38,10 +37,6 @@ Community-driven IDS/IPS with automatic bouncing.
 ### Endpoints
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/crowdsec/status` | Service status |
-| GET | `/api/v1/crowdsec/decisions` | Active decisions |
-| POST | `/api/v1/crowdsec/ban` | Manual ban |
-| DELETE | `/api/v1/crowdsec/unban/{ip}` | Remove ban |
 
 ---
 
@@ -95,7 +90,6 @@ Threat intelligence aggregation.
 ### Sources
 - AbuseIPDB
 - Emerging Threats
-- CrowdSec CTI
 - Custom feeds
 
 ### Features

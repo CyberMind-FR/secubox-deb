@@ -21,10 +21,8 @@ Getting started with SecuBox-DEB development.
 
 ### Security Stack
 - **Firewall**: nftables (not iptables)
-- **IDS/IPS**: Suricata + CrowdSec
 - **WAF**: HAProxy + sbxwaf
 - **DNS**: Unbound (Vortex DNS) + blocklists
-- **DPI**: nDPId + netifyd (dual-stream via tc mirred)
 - **Auth**: SecuBox-ZKP (Hamiltonian NP / GK-HAM-2025)
 - **P2P Mesh**: MirrorNet (did:plc + WireGuard + Chain of Hamiltonians)
 
@@ -186,7 +184,6 @@ journalctl -u secubox-* -f --output json | jq '.MESSAGE'
 - Use ACCEPT default firewall policies
 - Suggest Python libraries with known vulnerabilities
 - Ignore double-buffer schema for configs
-- Mention "CrowdSec Ambassador" or "CyberMind Produits SASU"
 
 ---
 
@@ -194,7 +191,6 @@ journalctl -u secubox-* -f --output json | jq '.MESSAGE'
 
 - [ANSSI CSPN](https://www.ssi.gouv.fr/entreprise/certification_cspn/)
 - [nDPId](https://github.com/utoni/nDPId)
-- [CrowdSec Docs](https://docs.crowdsec.net)
 - [Suricata Docs](https://docs.suricata.io)
 - [nftables Wiki](https://wiki.nftables.org)
 

@@ -23,6 +23,7 @@ DATA_SIZE="2G"        # Taille partition data
 OUT_DIR="${REPO_DIR}/output"
 KEEP_ROOTFS=0
 APT_MIRROR="http://deb.debian.org/debian"
+APT_SECURITY="http://security.debian.org/debian-security"
 APT_SECUBOX="https://apt.secubox.in"
 CONVERT_VDI=0         # Convertir en VDI pour VirtualBox
 USE_LOCAL_CACHE=0     # Utiliser cache APT local
@@ -165,6 +166,7 @@ if [[ $USE_LOCAL_CACHE -eq 1 ]]; then
   # Vérifier apt-cacher-ng
   if curl -sf "http://${LOCAL_CACHE_HOST}:${LOCAL_CACHE_PORT}" >/dev/null 2>&1; then
     APT_MIRROR="http://${LOCAL_CACHE_HOST}:${LOCAL_CACHE_PORT}/deb.debian.org/debian"
+    APT_SECURITY="http://${LOCAL_CACHE_HOST}:${LOCAL_CACHE_PORT}/security.debian.org/debian-security"
     log "Cache APT local détecté : ${APT_MIRROR}"
   else
     warn "apt-cacher-ng non accessible — utilisation du miroir distant"
@@ -269,6 +271,28 @@ if [[ $NEED_QEMU -eq 1 ]]; then
 fi
 
 ok "Debootstrap terminé"
+
+# ── LES SOURCES APT, ÉCRITES EN ENTIER ────────────────────────────
+#
+# CE QUE ÇA CORRIGE, ET C'EST GRAVE POUR UNE APPLIANCE DE SÉCURITÉ : on s'en
+# remettait au `sources.list` que debootstrap laisse derrière lui, qui ne
+# contient QUE la suite principale. Les images partaient donc SANS
+# `${SUITE}-security` — aucune mise à jour de sécurité Debian, jamais, sur un
+# produit dont c'est le métier. Le même oubli vit sur la box en marche.
+#
+# `-updates` entre aussi : c'est là que Debian pousse les correctifs qui ne
+# passent pas par la voie sécurité (données de fuseaux horaires, régressions).
+#
+# Les autres constructeurs du dépôt le faisaient déjà — `image/lib/common.sh`
+# porte exactement ce bloc. C'est build-image.sh, le constructeur PRINCIPAL,
+# qui ne l'avait pas.
+log "Sources APT (${SUITE} + updates + security)..."
+cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
+deb ${APT_MIRROR} ${SUITE} main contrib non-free non-free-firmware
+deb ${APT_MIRROR} ${SUITE}-updates main contrib non-free non-free-firmware
+deb ${APT_SECURITY} ${SUITE}-security main contrib non-free non-free-firmware
+EOF
+ok "Sources APT écrites"
 
 # ── Étape 2 : Configuration base ──────────────────────────────────
 log "2/7 Configuration système de base..."

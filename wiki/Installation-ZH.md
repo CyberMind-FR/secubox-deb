@@ -107,7 +107,6 @@ qemu-system-x86_64 \
 - `secubox-portal` - Web 认证
 
 **安全：**
-- `secubox-crowdsec` - IDS/IPS（CrowdSec）
 - `secubox-waf` - Web 应用防火墙
 - `secubox-auth` - OAuth2、强制门户
 - `secubox-nac` - 网络访问控制

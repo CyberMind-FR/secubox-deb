@@ -89,7 +89,6 @@ externe.
 
 ## Notes
 
-- Le paquet `crowdsec` peut rester installé : il est simplement arrêté et
   désactivé au démarrage.
 - `secubox-blacklist-sync` et `secubox-threatmesh-bridge` en dépendent par
   `Requisite=` : sans CrowdSec ils ne démarrent pas, au lieu d'échouer en boucle.

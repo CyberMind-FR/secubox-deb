@@ -156,6 +156,5 @@ python3 -m pytest scripts/tests/test_check_dashboard_cache.py -v
 
 ## Reference implementation
 
-- Read-through : `packages/secubox-crowdsec/api/main.py:106-138`
 - Read-through (after PR #146) : `packages/secubox-waf/api/main.py`
 - Background-refresh : `packages/secubox-system/api/main.py` (search for `create_task`)

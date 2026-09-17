@@ -53,7 +53,6 @@ Chemin Hamiltonien AUTH → MESH :
 | Index | Icône | Rôle | Couleur charte |
 |-------|-------|------|----------------|
 | 0 | AUTH | VPN / chiffrement | `#C04E24` |
-| 1 | WALL | Pare-feu nftables/CrowdSec | `#9A6010` |
 | 2 | BOOT | Système / OS | `#803018` |
 | 3 | MIND | Charge IA / CPU | `#3D35A0` |
 | 4 | ROOT | Privilèges / intégrité | `#0A5840` |

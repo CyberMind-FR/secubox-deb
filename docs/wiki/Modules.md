@@ -22,7 +22,6 @@
 | 🏠 **SecuBox Hub** | Dashboard | Central dashboard and control center |
 | 🛡️ **Security Operations Center** | Dashboard | SOC with world clock, threat map, tickets |
 | 📋 **Migration Roadmap** | Dashboard | OpenWRT to Debian migration tracking |
-| 🛡️ **CrowdSec** | Security | Collaborative security engine |
 | 🔥 **Web Application Firewall** | Security | WAF with 300+ security rules |
 | 🔥 **Vortex Firewall** | Security | nftables threat enforcement |
 | 🔒 **System Hardening** | Security | Kernel and system hardening |
@@ -45,7 +44,6 @@
 | 🌐 **Exposure Settings** | Privacy | Unified exposure (Tor, SSL, DNS, Mesh) |
 | 🔐 **Zero-Knowledge Proofs** | Privacy | ZKP Hamiltonian management |
 | 📊 **Netdata** | Monitoring | Real-time system monitoring |
-| 🔬 **Deep Packet Inspection** | Monitoring | DPI with netifyd |
 | 📱 **Device Intelligence** | Monitoring | Asset discovery and fingerprinting |
 | 👁️ **Watchdog** | Monitoring | Service and container monitoring |
 | 🎬 **Media Flow** | Monitoring | Media traffic analytics |
@@ -143,7 +141,6 @@ WAF with 300+ security rules
 **Features:**
 - OWASP rules
 - Custom rules
-- CrowdSec integration
 
 ![Web Application Firewall](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/waf.png)
 
@@ -538,7 +535,6 @@ Real-time system metrics dashboard
 **Features:**
 - System overview
 - Service status
-- WAF/CrowdSec stats
 - Connection monitoring
 - Live updates
 
@@ -827,7 +823,6 @@ ML-based threat detection and security insights
 - ML-based threat detection
 - Anomaly detection
 - Log analysis with trained models
-- CrowdSec and Suricata integration
 
 ---
 

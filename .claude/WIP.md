@@ -742,7 +742,6 @@ voir autre chose que HTTP, et l'accueil devient un bureau.
   `secubox-blacklist-sync` et `secubox-threatmesh-bridge` sont liés par
   `Requisite=` : sans CrowdSec ils ne partent pas, au lieu d'échouer en boucle.
 - Charge de la box : **15–22 → 5–7**.
-- Le paquet `crowdsec` reste installé mais inactif — dépose, pas purge.
 
 **Hors-HTTP : `sbx-authwatch` (première version)**
 - 9 modules, **43 tests**. Lit SSH, SMTP et IMAP — journal *et* fichiers —
@@ -1269,7 +1268,6 @@ Companion devient un vrai client d'écriture pour le micro-blog billets. Live-v�
 Deux dashboards refaits cyan, un gros trou de contrôle WAF colmaté, module Nextcloud réparé. Live-vérifié gk2. Détail dans HISTORY.md.
 
 - **WAF webui** 🛡️ — dashboard sbxwaf restylé cyan hybrid-skin (cartes emoji, pulse live, refresh réactif) ; endpoints préservés ; rend la donnée live (198k threats).
-- **WAF autoban→firewall** 🔥 (PR #866) — le bridge CrowdSec était **silencieusement OFF** (unit passe `--crowdsec-url` mais pas `--crowdsec-jwt-file` → branche 'disabled' → `Report()` jamais appelé). 198k threats, ~0 ban réel (un IP a tapé 36 881×). Ajout `CscliReporter` (`cscli decisions add` = vrai drop nft bouncer, le chemin du ban manuel qui marche) + dedup 5-min par IP (anti-storm `signal: killed`). Rebuild arm64 + deploy. Prouvé : 5 hits honeypot → 1 seule décision.
 - **WAF analyse efficacité** 📊 — détection forte / contrôle faible (2 bans seulement) ; ~26% du pattern-matching (voip/xmpp = 39/149) inutile en HTTP ; top /24 = 26% du volume. Fixes classés.
 - **Nextcloud** ☁️ (PR #867) — `/nextcloud/` montrait Stopped/vide : probe status cassé (lxc-info/occ **sans sudo** + lxc_path `/srv/lxc` vs `/data/lxc` ; seul `sudo nextcloudctl` est permis ; **`NoNewPrivileges=yes` bloquait sudo** — gotcha wireguard). Fix : port-probe privilege-free + ops via `sudo nextcloudctl` (occ passthrough) + **cache daemon-thread 60s** (le startup uvicorn ne firait pas) + web_url public. Webui restylé cyan. Vérifié : running v32.0.10, 2 users, 5.8G.
 
@@ -1286,7 +1284,6 @@ Session multi-fix, **live-vérifiée sur gk2**, portable mergé (PR #865). Déta
 
 - **Auth (systémique, fleet-wide)** 🔑 — `require_jwt` : un Bearer périmé (vieux `sbx_token` localStorage) shadowait le cookie session valide → **boucle login sur tous les panels**. Fix : Bearer **puis** cookie. Prouvé (Bearer périmé + cookie valide → 200).
 - **Mail** 📧 — reset gk2-only ; **mailbox réparée** (ownership idmap → host `105000`) ; **submission 587/465** (SASL dovecot + vrai cert) ; **status TCP-probe** (fini les "Stopped" faux) ; domaine → `gk2.secubox.in` ; **webui reskin cyan** ; **`/user/password`** réparé (écrivait un fichier non lu) ; Roundcube **`password`** (self-service) + **`ident_switch`** (Gmail externe, vendored).
-- **DPI** 🔍 — `/exfil` sert le cumulatif (**7 devices**, "no devices" corrigé) ; moteur = `secubox-dpi-flowcap` (plus netifyd) ; **webui régénéré cyan**.
 - **openclaw** 🕷️ — CT lookup fallback certSpotter.
 - **ACME HTTP-01** 🔒 — câblé live (nginx `:8880` + route HAProxy) ; émission LE marchait pour aucun vhost WAF-routé.
 
@@ -1666,7 +1663,6 @@ Tout mergé sur master + déployé sur gk2. Détail dans HISTORY 2026-06-18.
   (health-batch 3.3 s → 8 ms) ; clients/rich enrichit 12 max. **hub 1.4.6**.
 - ✅ **#646 (PR #647)** — adaptive Accept-Encoding strip : plus de pages
   CSP-strict tirées décompressées via le worker R3 GIL-bound. **toolbox 2.6.53**.
-- ✅ **crowdsec** réparé (403 transitoire CDN → `dpkg --configure` RC=0, audit clean).
 
 - ✅ **#623 (PR #648, merged 9950e9ec)** — clobber systémique RÉSOLU au source.
   La vraie cause : boilerplate scaffold `install -d -m 750 /var/lib/secubox` +
@@ -1842,7 +1838,6 @@ sur le browsing des appareils, à tous les niveaux egress.
 
 | Track | Issue | Livré | Tag |
 |---|---|---|---|
-| 13.A spine | #521 | nft set `inet secubox_blacklist` + forward-drop chain ; sync CrowdSec+threat-intel | v2.13.17 (2.6.8) |
 | 13.B DNS-guard | #522 | résout domaines blocklistés → IPs (anti-DoH bypass) + détection DoH/DoT count-only | v2.13.17 (2.6.9) |
 | 13.C attribution | #524 | per-device (WG/lease hash) blocked-attempts + quarantine set + endpoints | v2.13.18 (2.6.10) |
 | 13.D feedback | #527 | escalation evaluator (detections→nft/cscli/quarantine), audit-log, **default OFF** | v2.13.19 (2.6.11) |
@@ -1976,7 +1971,6 @@ Le graphe montre les trackers cross-site réels (relais ad-tech
 
 | Bug | Cause racine | Fix |
 |---|---|---|
-| CrowdSec firewall status faux | bouncer tournait mais sans tables nft (flush externe) | restart bouncer → `ip crowdsec` + `ip6 crowdsec6` recréées, 100 décisions live |
 | WAF /threats + tracked attackers vides | `/var/log/secubox` 0750 secubox-toolbox bloquait traversal aggregator (user `secubox`) | chmod 0755 live |
 | WAF /stats timeout 30s+ | `_get_threat_stats()` re-parsait 110 MB / 332k JSONL à CHAQUE requête (CPU 89%) | **#509 double-buffer cache** (disk + byte-position incrémental) `secubox-waf 1.2.2` |
 | SOC /soc/ status WAF+firewall faux | consommait les mêmes endpoints WAF cassés | résolu en cascade par le fix WAF |
@@ -2370,7 +2364,6 @@ ask).
 * **Phase 7.C** (kept in #498, long-term) :
   - eBPF/XDP kernel filter (replace Python WAF hot-path)
   - ModSecurity in HAProxy with OWASP CRS rules
-  - Federation : CrowdSec Hub + AlienVault OTX + Spamhaus DROP
 * **Wiki page** `WAF-active-enforcement` documenting Phase 7.A/A.2/B setup +
   operator runbook.
 * **FAQ entry** : "How are scanners dropped?" → links to Phase 7 pipeline.
@@ -2382,9 +2375,7 @@ ask).
 
 ### ✅ Done
 
-* Bridge mitm WAF (LXC) → CrowdSec LAPI (host) → nft drops, full chain E2E :
   login 200 + alert 201 + cscli decision + nft entry, ~12s round-trip.
-* `_ban_via_crowdsec()` in `secubox_waf.py` uses watcher JWT auth (POST
   /v1/alerts), urllib stdlib (no httpx dep), 25-min JWT cache, auto-refresh
   on 401. Stats : `bans_pushed`, `bans_failed`.
 * `secubox-cs-bridge.service` (socat 10.100.0.1:8080 → 127.0.0.1:8080) so
@@ -2392,7 +2383,6 @@ ask).
 * `secubox-waf-cs-bridge-setup` script : idempotent, registers machine with
   `cscli machines add -f -` (avoids touching local_api_credentials.yaml),
   writes config TOML.
-* `crowdsec.toml.example` documents schema (enabled/url/machine_id/password/duration).
 * Merged to master in `3eb5378e`. Worktree 498 cleaned.
 
 ### ⬜ Next up
@@ -2718,7 +2708,6 @@ Le Pi 400 doit servir de démo terrain. Tout ce qui distingue un appareil
   protection disabled at runtime + table truncated.
 * **#395 WAF cred-004 false-positive** on NC mobile login-poll
   (`/index.php/login/v2/poll?token=...`) fixed live + source-side.
-* **CrowdSec allowlist** `secubox-trusted` with 4 internal nets.
 * **8 GB swap** total (was 4 GB).
 * **IP forwarding** root-fixed: `99-secubox-hardening.conf` set
   `ip_forward=0`, overrode our `90-secubox-lxc-forward.conf`
@@ -3168,7 +3157,6 @@ RGPD / ePrivacy compliance reconciler — server ledger (mitmproxy addon) ⨝ br
 - v1.4.0 — `CookieAudit` live tile (red/green RGPD verdict + per-category breakdown)
 - v1.4.1 — double-init guard (`window.__SBX_HEALTH_BANNER__`) — script was loaded twice (`index.html` + nginx `sub_filter` in `webui.conf:33`)
 - v1.4.2 — `sectionContainer()` now appends inside `.hb-content` instead of `#health-banner` — fixes latent #92 bug where live sections were positioned **outside** the visible scroll area
-- v1.4.3 — removed the 5 module tiles (waf/crowdsec/haproxy/nginx/system) — redundant with the persistent indicators top-right
 - v1.4.4 — dead-code cleanup: removed `MODULE_EMOJIS` / `STATUS_EMOJIS` constants + ~40 lines of `.hb-mod*` CSS
 - Also activated `[visitor_origin]` / `[live_hosts]` / `[cert_status]` in board conf (VisitorOrigin stays disabled at runtime — missing GeoLite mmdb)
 
@@ -3699,7 +3687,6 @@ Add web-based mode control to the Eye Remote admin dashboard for safer manual ga
 
 ### Completed
 - **Mode Control API** (`mode_api.py`):
-  - HTTP API on port 8081 (8080 used by CrowdSec)
   - `GET /api/status`: Current gadget mode and functions
   - `POST /api/switch/<mode>`: Switch composite/network/storage/silent/hid
   - `GET /health`: Health check endpoint
@@ -3876,7 +3863,6 @@ Add web-based mode control to the Eye Remote admin dashboard for safer manual ga
 - [x] Added Smart Doctor advisor with rule-based diagnostics
 - [x] Implemented spunky emoji-based UI with animations
 - [x] Added `/api/v1/metrics/health/summary` endpoint to metrics API
-- [x] Module status LEDs: WAF 🛡️, CrowdSec 👮, HAProxy 🌐, Nginx 🌍, System 💻
 - [x] Score-based vibes: VIBING (95%+), SOLID (85%+), OKAY (70%+), MEH (50%+), YIKES (<50%)
 - [x] Deployed to all HTML pages (hub, soc, nac)
 
@@ -4120,8 +4106,6 @@ python scripts/generate-docs.py --include-screenshots
 - `packages/secubox-hub/www/shared/error.html` — NEW
 - `packages/secubox-hub/www/shared/sidebar.js` — JSON.parse fix
 - `packages/secubox-waf/www/waf/index.html` — Full rework
-- `packages/secubox-crowdsec/api/main.py` — Enrollment fix
-- `packages/secubox-crowdsec/www/crowdsec/index.html` — Enrollment UI
 - `/etc/nginx/sites-enabled/webui.conf` — Error page routing
 
 ---
@@ -4151,9 +4135,7 @@ python scripts/generate-docs.py --include-screenshots
 - **Load**: Still high (~10) due to Streamlit processes
 
 ### Commits
-- `676630ca` fix(crowdsec): Display total bans count
 - `fb5c33ea` feat(auth): Add session event logging
-- `0887b81e` feat(crowdsec): Add SecuBox auth parser and scenario
 
 ### ⬜ Next Up (from user requests)
 - [ ] Add active WebUI sessions display to System module
@@ -4174,7 +4156,6 @@ python scripts/generate-docs.py --include-screenshots
 - [x] **NFTables Eyeremote Donut** with breakdown:
   - ✅ Accept (green)
   - 🛡️ CAPI DROP (red)
-  - 👁️ CrowdSec DROP (orange)
   - ✋ Manual DROP (yellow)
 - [x] **Mini Histograms** for system health:
   - 🔥 CPU (red) | 💾 Memory (yellow) | 💿 Disk (green) | 🌐 Network (blue)
@@ -4184,7 +4165,6 @@ python scripts/generate-docs.py --include-screenshots
 
 ### NFTables Stats
 - IPv4 Processed: 3.3M packets
-- CAPI DROP: 524 | CrowdSec DROP: 57 | Manual DROP: 2,250
 - Cron job: `/etc/cron.d/secubox-nft-cache` (every minute)
 
 ### Files Updated
@@ -4200,7 +4180,6 @@ python scripts/generate-docs.py --include-screenshots
 
 ### Multi-Layer Concentric Donuts — COMPLETE
 - [x] `createConcentricGauge()` for Hub System Health (CPU/RAM/Disk)
-- [x] `createMultiLayerDonut()` for CrowdSec categories
 - [x] `createCountryDonut()` for WAF Top Countries with flags
 - [x] `createSiteDonut()` for WAF Top Attacked Sites with emojis
 - [x] Ring gauges replaced by eyeremote-style concentric visualization
@@ -4212,7 +4191,6 @@ python scripts/generate-docs.py --include-screenshots
 
 ### SOC Dashboard Updates — COMPLETE
 - [x] Firewall packet stats bubbles (DROP/ACCEPT/REJECT)
-- [x] CrowdSec category multi-layer donut
 - [x] sidebar.js injection added
 - [x] Fixed CATEGORY_EMOJI definition (syntax error)
 
@@ -4332,15 +4310,12 @@ python scripts/generate-docs.py --include-screenshots
 - [x] Identified 91 running services, 87 with Unix sockets
 - [x] Fixed `ai-gateway` — permission denied for `/tmp/secubox/ai-gateway`
 - [x] Fixed `mcp-server` — socket now active
-- [x] Restarted `crowdsec`, `vhost`, `wireguard`, `system` — all responding
-- [x] Verified all critical services: hub, waf, crowdsec, haproxy, vhost, wireguard
 
 ### Services Status
 | Service | Status | Notes |
 |---------|--------|-------|
 | hub | ✅ TCP:8001 | VM compatibility mode |
 | waf | ✅ socket | v1.2.0 |
-| crowdsec | ✅ socket | v2.0.0 |
 | haproxy | ✅ socket | healthy |
 | vhost | ✅ socket | ok |
 | wireguard | ✅ socket | v2.0.0 |
@@ -4377,7 +4352,6 @@ Layer 4: Escalade    → Si repair échoue → notifier admin / hub central
 ```
 
 ### Modules à migrer vers ce pattern
-- [ ] secubox-crowdsec (CAPI, hub, bouncer)
 - [ ] secubox-wireguard (peers, routes)
 - [ ] secubox-nginx (vhosts, configs)
 - [ ] secubox-dns (zones, unbound)
@@ -4548,7 +4522,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
   - Client IP display, 4h ban duration notice
   - Legal notice (Art. 323-1 Code Penal)
   - CyberMind/SecuBox branding
-- [x] Updated ban_ip() to use SSH to host for CrowdSec
 - [x] Ban page shows {client_ip} placeholder replaced dynamically
 
 ### Whitelist Updates
@@ -4564,7 +4537,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [ ] TODO: Investigate why use_backend causes 400 errors
 
 ### CrowdSec Integration
-- [x] Cleared all CrowdSec decisions
 - [x] Verified SSH from mitmproxy container to host works
 - [x] Ban commands execute successfully via SSH chain
 - [x] Dashboard shows: 0 bans, 1 bouncer, 1 machine, 43k parsed logs
@@ -4605,7 +4577,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] Tested ban_ip SSH chain (works manually)
 - [x] Routed webui through WAF (HAProxy→mitmproxy→nginx)
 - [x] Fixed Host header preservation in mitmproxy addon
-- [ ] Test autoban end-to-end (3 threats → CrowdSec ban)
 - [ ] IP-based webui access through WAF (192.168.1.200:9443)
 
 ### System Services Fixed
@@ -4742,7 +4713,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 ### Service Socket Restoration
 - [x] Restarted all secubox-* services
 - [x] 86 API sockets now active
-- [x] Verified hub, crowdsec, system, haproxy all working
 
 ### System Load Issues (Ongoing)
 - [ ] mitmdump using 95% CPU (821MB RAM) - investigate
@@ -4798,7 +4768,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 ### Module Health Prober System
 - [x] Created `/usr/lib/secubox/health/module_prober.py`
 - [x] Multilayer checks: systemd → socket → API
-- [x] 8 core modules monitored (hub, crowdsec, dpi, haproxy, vhost, wireguard, system, heartbeat)
 - [x] Results cached to `/var/cache/secubox/health/modules.json`
 - [x] Created `secubox-module-prober.service` (enabled)
 - [x] Added API router `/api/v1/hub/module-health/`:
@@ -4884,7 +4853,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] Mode `darkpublish`: Protected by default, whitelist access
 - [x] Mode `lightexposure`: Open by default, blacklist blocking
 - [x] Global + per-vhost whitelist/blacklist
-- [x] CrowdSec/fail2ban integration for dynamic blocking
 - [x] Rate limiting and geo-blocking options
 
 ### Enhanced Navbar (Adaptive LEDs)
@@ -5002,10 +4970,8 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 
 ### SecuBox CLI v2.0.0
 - [x] Enhanced `secubox` unified CLI with new commands:
-  - `secubox threats` - View CrowdSec + WAF threats
   - `secubox waf` - WAF inspection status
   - `secubox firewall` - nftables rules
-  - `secubox bans` - CrowdSec active bans
   - `secubox vhosts` - HAProxy virtual hosts
   - `secubox certs` - SSL certificate status
   - `secubox mode [kiosk|tui|console]` - Display mode
@@ -5055,7 +5021,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] Graduated Response System (GH Issue #37):
   - Warning page on first detection (not immediate block)
   - Counter: shows attempts vs threshold (e.g., "1/3")
-  - Auto-ban via CrowdSec after 3 attempts in 5 min window
   - SecuBox-themed alert page with license/legal notice
 - [ ] WebUI integration: WAF status, blocked requests, rules
 
@@ -5067,7 +5032,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] Streamlit: 26 instances running
 - [x] Matrix: PostgreSQL permissions fixed, Synapse running
 - [x] All traffic tagged with X-SecuBox-WAF: inspected
-- [ ] CrowdSec integration with WAF logs (future)
 
 ### Phase 5: Package Updates ✅ COMPLETE
 - [x] Create `secubox-waf` package (mitmproxy + wafctl + config)
@@ -5112,7 +5076,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] CAPI status now shows registered ✅
 
 ### WAF Dashboard Fixes
-- [x] Fixed `_get_bans()` to flatten nested CrowdSec data
 - [x] Added Country, ASN columns to bans table
 - [x] Added `allow-sudo.conf` drop-in for service
 - [x] Bans display with full details (IP, scenario, country, ASN, duration)
@@ -5120,7 +5083,6 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 ### WAF Graduated Response (Phase 3 Enhancement)
 - [x] Implemented progressive threat response:
   - First detection → Warning page (not block)
-  - 3 attempts → Auto-ban via CrowdSec
 - [x] Beautiful SecuBox-themed alert page
 - [x] Counter shows "Warnings: X / 3"
 - [x] License/legal notice included
@@ -5128,13 +5090,9 @@ board/mochabin/kernel/config-6.12-openwrt-merged.fragment
 - [x] Saved addon to `packages/secubox-waf/config/mitmproxy-addon.py`
 
 ### Commits
-- `271f4d4` fix(crowdsec,waf): Fix dashboard API data and display
 - [x] All cards now show real data
 
 ### Known Issues (External - Cannot Fix)
-- CrowdSec Central API: 403 Forbidden (IP 82.67.100.75 blocked by CrowdSec)
-- Hub Update: 403 from cdn-hub.crowdsec.net (same IP blocking)
-- These require contacting CrowdSec support or waiting for IP unblock
 
 ---
 
@@ -5473,7 +5431,6 @@ default_backend nginx_vhosts
 - FastAPI backend with 5 routers (25+ endpoints)
 - secubox_waf.py mitmproxy addon (90+ patterns, 14 categories)
 - WebUI dashboard (status, settings, filters)
-- CrowdSec integration for auto-banning
 - HAProxy route sync for traffic inspection
 
 **Files Created:**
@@ -5571,7 +5528,6 @@ SecuBox-OpenWrt → migration-export.sh → archive.tar.gz → migration-import.
 | network | UCI /etc/config/network | netplan YAML |
 | firewall | UCI /etc/config/firewall | nftables |
 | wireguard | /etc/wireguard/*.conf | Direct copy |
-| crowdsec | /etc/crowdsec/* | Direct copy |
 | dhcp | UCI /etc/config/dhcp | dnsmasq.conf |
 | haproxy | /etc/haproxy/* | Direct copy |
 | nginx | /etc/nginx/* | Direct copy |
@@ -5794,7 +5750,6 @@ Le **Smart-Strip** est l'interface HMI modulaire de SecuBox : 6 indicateurs lumi
 | Index | Icône | Rôle | Charte |
 |-------|-------|------|--------|
 | 0 | AUTH | VPN / chiffrement | `#C04E24` |
-| 1 | WALL | Pare-feu nftables/CrowdSec | `#9A6010` |
 | 2 | BOOT | Système / OS | `#803018` |
 | 3 | MIND | Charge IA / CPU | `#3D35A0` |
 | 4 | ROOT | Privilèges / intégrité | `#0A5840` |
@@ -7609,7 +7564,6 @@ release.yml        → All packages + images
 - **`/usr/bin/secubox-status`** — System status command with CRT colors
   - System info (hostname, uptime, memory, disk)
   - Network interfaces with IP addresses
-  - Core services status (nginx, haproxy, crowdsec, etc.)
   - Display mode indicator (kiosk/TUI/console)
   - Quick access links
 - **`/usr/sbin/secubox-boot-banner`** — Boot-time banner script
@@ -7835,7 +7789,6 @@ release.yml        → All packages + images
 ### SecuBox SOC — Hierarchical Security Operations Center (Phases 1-4) ✅
 
 **Phase 1: secubox-soc-agent v1.0.0** — Edge Node Metrics Agent
-- **Collector**: CPU, memory, disk, network, CrowdSec/Suricata/WAF alerts
 - **Upstreamer**: HMAC-SHA256 signed push to gateway (60s interval)
 - **Command Handler**: Whitelist-based remote command execution
 - **Enrollment**: One-time token workflow with HMAC key generation
@@ -8341,7 +8294,6 @@ release.yml        → All packages + images
 - **50 SecuBox packages** captured in manifest
 - **Configuration**: secubox.conf, mesh.toml, users.json, traffic-shaper.json, etc.
 - **Network**: netplan + WireGuard configs
-- **Services**: nginx sites, CrowdSec, nftables rules
 - **LXC containers**: mailserver, roundcube, streamlit
 - **Output**: `output/c3box-clone-preseed.tar.gz` (36KB)
 
@@ -8623,7 +8575,6 @@ release.yml        → All packages + images
 - **Tested on VM** — All commands working:
   - Node info shows DID, role, ZKP expiry
   - Mesh status shows running state, uptime
-  - Telemetry shows CPU/memory/disk, nftables rules, CrowdSec bans
 
 ### Go Daemon Telemetry Implementation ✅
 - **pkg/hamiltonian/hamiltonian.go** — Fixed `currentTimestamp()` to use `time.Now().Unix()`
@@ -8631,7 +8582,6 @@ release.yml        → All packages + images
   - `getCPUPercent()` — Reads from /proc/stat
   - `getDiskPercent()` — Uses syscall.Statfs for root filesystem
   - `getNFTablesRuleCount()` — Parses `nft list ruleset` output
-  - `getCrowdSecBans()` — Queries `cscli decisions list`
 
 ---
 
@@ -8640,7 +8590,6 @@ release.yml        → All packages + images
 ### API Documentation Expansion ✅
 - **wiki/API-Reference.md** — Comprehensive API docs for all 48 modules
   - Core modules: hub, portal, system (70+ endpoints)
-  - Security modules: crowdsec, waf, mitmproxy, hardening, nac, auth (150+ endpoints)
   - Network modules: netmodes, wireguard, qos, dpi, traffic, vhost, cdn (200+ endpoints)
   - Services modules: haproxy, netdata, mediaflow (80+ endpoints)
   - Application modules: mail, dns, users, gitea, nextcloud (100+ endpoints)
@@ -8673,7 +8622,6 @@ release.yml        → All packages + images
 - **Metrics Dashboard** — Migrated from OpenWRT luci-app-metrics-dashboard
   - FastAPI backend with caching (30s TTL)
   - System overview: uptime, load, memory, vhosts, certs, LXC count
-  - Service status: HAProxy, WAF, CrowdSec
   - WAF stats: active bans, alerts (24h), blocked requests
   - Connections: TCP by port (HTTPS/HTTP/SSH)
   - P31 Phosphor CRT theme (#33ff66 green glow)
@@ -8853,7 +8801,6 @@ Total modules: **41** (was 35)
 - **nextcloudctl v1.2.0** — Full Nextcloud LXC management
 - **Debian bookworm LXC** — PHP 8.2, Nginx, Redis, SQLite
 - **Nextcloud 30.0.4** — Latest stable release
-- **Port 9080** — Avoids CrowdSec conflict (8080)
 - **Redis caching** — Fixed systemd unit for LXC
 - **Admin user** — ncadmin / secubox123
 - **WebDAV, CalDAV, CardDAV** — All enabled
@@ -8875,7 +8822,6 @@ Total modules: **41** (was 35)
 - **Hub profile** — Menu, systemd, monitoring access
 - **Mail profile** — LXC containers, ACME, mail data
 - **WireGuard profile** — wg tools, config, QR codes
-- **CrowdSec profile** — cscli, logs, API socket
 - **Generic profile** — For simple API services
 - **Install script** — scripts/install-apparmor.sh
 
@@ -9119,7 +9065,6 @@ All optional mail security features implemented:
 - **secubox-waf** : Web Application Firewall (300+ rules, 17 categories)
   - SQLi, XSS, RCE, LFI detection
   - VoIP/SIP, XMPP, router botnet patterns
-  - CrowdSec auto-ban integration
   - Rate limiting per IP
 - **secubox-haproxy** : Updated with WAF MITM integration
   - `/waf/status`, `/waf/toggle`, `/waf/routes`, `/waf/sync-routes`
@@ -9252,7 +9197,6 @@ curl -sk https://localhost:8443/api/v1/hub/menu | jq '.total_modules'
   - Unix socket control server implemented
 
 - **2026-03-21** (Session 2):
-  - WAF module created (300+ rules, CrowdSec integration)
   - HAProxy WAF MITM integration complete
   - 2-layer architecture: mail-lxc, webmail-lxc containers
   - Unified secubox-publish module

@@ -216,7 +216,6 @@ def _escalate_to_hub(module: str, repairs: list):
 | secubox-hub | ✅ | ✅ | ✅ | Central, répare tous les modules |
 | secubox-haproxy | ✅ | - | ✅ | + /certificates/repair, /vhosts/repair |
 | secubox-waf | ✅ | ✅ | ✅ | Repair rules, logs, routes |
-| secubox-crowdsec | ⬜ | ⬜ | ⬜ | TODO: CAPI, hub, bouncer |
 | secubox-wireguard | ⬜ | ⬜ | ⬜ | TODO: peers, routes |
 | ... | ⬜ | ⬜ | ⬜ | À implémenter |
 

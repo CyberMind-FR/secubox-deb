@@ -87,7 +87,6 @@ Every module page must include:
 |--------|------|-------------|
 | Users | `/users/` | Unified Identity Management |
 | WireGuard VPN | `/wireguard/` | VPN tunnel management |
-| CrowdSec | `/crowdsec/` | Collaborative security engine |
 | WAF | `/waf/` | Web Application Firewall |
 | sbxwaf | `127.0.0.1:8085` | Inline WAF traffic inspection (Go engine) |
 | Hardening | `/hardening/` | Kernel and system hardening |

@@ -51,12 +51,10 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-core** | — | ✅ | ✅ | kiosk.py (board detect, kiosk mgmt) v1.1.0 | ✅ |
 | **secubox-hub** | ✅ (71) | ✅ | ✅ | 50+ endpoints (net mode select) v1.1.0 | ✅ |
 | **secubox-portal** | ✅ | ✅ | ✅ | login, auth, theme, branding v2.1.0 | ✅ |
-| **secubox-crowdsec** | ✅ (54) | ✅ | ✅ | 54 endpoints | ✅ |
 | **secubox-netdata** | ✅ (16) | ✅ | ✅ | 16 endpoints | ✅ |
 | **secubox-wireguard** | ✅ (28) | ✅ | ✅ | 28+ endpoints | ✅ |
 | **secubox-vhost** | ✅ | ✅ | ✅ | vhosts, ssl, certs | ✅ |
 | **secubox-mediaflow** | ✅ (20) | ✅ | ✅ | streams, alerts... | ✅ |
-| **secubox-dpi** | ✅ | ✅ | ✅ | 40+ endpoints netifyd | ✅ |
 | **secubox-qos** | ✅ (80) | ✅ | ✅ | 80+ endpoints HTB + VLAN v1.1.0 | ✅ |
 | **secubox-auth** | ✅ (11) | ✅ | ✅ | 20+ endpoints | ✅ |
 | **secubox-cdn** | ✅ (36) | ✅ | ✅ | 25+ endpoints | ✅ |
@@ -74,7 +72,6 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-webmail** | ✅ | ✅ | ✅ | Roundcube/SOGo | ✅ |
 | **secubox-mail-lxc** | — | ✅ | ✅ | LXC backend (no UI) | ✅ |
 | **secubox-publish** | ✅ | ✅ | ✅ | Unified publishing | ✅ |
-| **secubox-waf** | ✅ | ✅ | ✅ | 300+ rules, CrowdSec | ✅ |
 | **secubox-gitea** | ✅ | ✅ | ✅ | Git server LXC | ✅ |
 | **secubox-nextcloud** | ✅ | ✅ | ✅ | File sync LXC | ✅ |
 | **secubox-c3box** | ✅ | ✅ | ✅ | Services portal | ✅ |

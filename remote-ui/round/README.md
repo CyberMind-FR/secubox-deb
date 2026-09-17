@@ -740,7 +740,6 @@ SecuBox (Armada/x86)              RPi Zero W + HyperPixel
 | Code | Service | Couleur | Description |
 |------|---------|---------|-------------|
 | AUTH | secubox-auth | `#C04E24` | Authentification / SSO |
-| WALL | secubox-crowdsec | `#9A6010` | WAF / IDS |
 | BOOT | secubox-hub | `#803018` | Dashboard principal |
 | MIND | secubox-ai-insights | `#3D35A0` | IA / Insights |
 | ROOT | secubox-system | `#0A5840` | Système |

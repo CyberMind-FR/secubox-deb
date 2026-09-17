@@ -26,7 +26,6 @@ These OpenWrt packages exist in Debian with renamed equivalents:
 
 | OpenWrt (`luci-app-*`) | Debian (`secubox-*`) | Status |
 |------------------------|----------------------|--------|
-| crowdsec-dashboard | crowdsec | ✅ |
 | netdata-dashboard | netdata | ✅ |
 | wireguard-dashboard | wireguard | ✅ |
 | network-modes | netmodes | ✅ |

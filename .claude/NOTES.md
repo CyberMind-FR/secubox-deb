@@ -86,7 +86,6 @@ modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_dri
 
 | Category | Count | Examples |
 |----------|-------|----------|
-| **luci-app-*** | ~55 | secubox, crowdsec-dashboard, network-modes, vhost-manager |
 | **secubox-app-*** | ~45 | haproxy, mitmproxy, localai, streamlit, gitea |
 | **RPCD backends** | ~100 | /usr/libexec/rpcd/luci.* shell scripts |
 
@@ -116,10 +115,7 @@ docker0: Docker bridge (disabled)
 | Layer | Component | Status |
 |-------|-----------|--------|
 | **Firewall** | nftables (fw4) | DEFAULT DROP, input/forward chains |
-| **IDS** | CrowdSec | Running (PID 18930), enrolled |
-| **Bouncer** | crowdsec-firewall-bouncer | Enabled, 10s update freq |
 | **WAF** | mitmproxy-in (LXC) | HAProxy backend, autoban enabled |
-| **DPI** | Dual-stream (nDPId + netifyd) | LAN + TAP correlation |
 | **DNS** | AdGuardHome + BIND | Running |
 
 ### Key UCI Configs
@@ -201,10 +197,8 @@ lxc-start -n haproxy
 Based on this analysis, the running services to prioritize:
 
 1. **secubox-core** — orchestration daemon
-2. **crowdsec** + bouncer — IDS/IPS
 3. **haproxy** (LXC) — TLS termination, routing
 4. **mitmproxy-in** (LXC) — WAF inspection
-5. **dpi-dual** (nDPId + netifyd) — traffic analysis
 6. **uhttpd** — LuCI web server
 7. **streamlit** (LXC) — dashboard apps
 8. **metablogizer** — static site generator
@@ -335,5 +329,4 @@ async def stop_cache_refresh():
 ### Implementation in SecuBox
 
 Applied to:
-- `secubox-crowdsec/api/routers/status.py` — CrowdSec status/metrics/hub
 - `secubox-system/api/main.py` — System stats (planned)

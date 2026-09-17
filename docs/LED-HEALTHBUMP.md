@@ -249,7 +249,6 @@ LED1: 🟢 Hardware OK
 | `/etc/systemd/system/secubox-healthbump.service` | Oneshot health check unit |
 | `/etc/systemd/system/secubox-healthbump.timer` | 30s health check timer |
 | `/tmp/secubox/led-status` | Current LED status output |
-| `/tmp/secubox-ban-rate` | CrowdSec ban rate tracking |
 
 ## Hardware
 

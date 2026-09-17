@@ -112,7 +112,6 @@ Déduits de l'exposition à l'utilisateur, pas de la richesse technique.
 | Module | Difficulté |
 |---|---|
 | `secubox-haproxy` | la chaîne HAProxy → WAF → nginx → module est invisible à l'utilisateur et pourtant cause la plupart des erreurs |
-| `secubox-crowdsec` | 31 routes, concepts de sécurité peu intuitifs |
 | `secubox-wireguard` | dépend de conditions réseau extérieures à la board |
 | `secubox-mastodon` | la fédération demande d'expliquer un modèle avant tout geste |
 | `secubox-aggregator` | infrastructure pure, aucun geste utilisateur, mais cause de pannes visibles |

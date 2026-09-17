@@ -120,16 +120,12 @@ Détection et prévention d'intrusions.
 | Endpoint | Méthode | Auth | Description |
 |----------|---------|------|-------------|
 | `/components` | GET | Non | Composants système |
-| `/metrics` | GET | Oui | Métriques CrowdSec |
 | `/decisions` | GET | Oui | Décisions actives (bans) |
 | `/alerts` | GET | Oui | Alertes sécurité |
 | `/bouncers` | GET | Oui | Statut bouncers |
 | `/ban` | POST | Oui | Bannir adresse IP |
 | `/unban` | POST | Oui | Débannir adresse IP |
 | `/nftables` | GET | Oui | Statistiques nftables |
-| `/service/start` | POST | Oui | Démarrer CrowdSec |
-| `/service/stop` | POST | Oui | Arrêter CrowdSec |
-| `/console/enroll` | POST | Oui | Enregistrer à Console CrowdSec |
 
 #### Exemple Bannir IP
 ```bash

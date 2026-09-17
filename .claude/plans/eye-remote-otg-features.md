@@ -55,7 +55,6 @@ GADGET_MODES = {
 | Ring | Metric | Source |
 |------|--------|--------|
 | AUTH | Active sessions / Failed logins | `/api/v1/auth/stats` |
-| WALL | Blocked IPs / WAF events | `/api/v1/crowdsec/metrics` |
 | BOOT | Uptime / Boot count | `/api/v1/system/status` |
 | MIND | CPU / RAM usage | `/api/v1/system/metrics` |
 | ROOT | Disk usage / IO | `/api/v1/system/storage` |
@@ -177,7 +176,6 @@ POST /api/v1/eye-remote/storage/restore
 1. **Welcome** — Detect connected SecuBox, show model info
 2. **Network** — Configure WAN/LAN interfaces
 3. **Security** — Set admin password, generate TLS cert
-4. **Services** — Enable/disable modules (CrowdSec, WireGuard, DPI)
 5. **Mesh** — Join MirrorNet or standalone mode
 6. **Verify** — Test connectivity, show dashboard preview
 7. **Complete** — Reboot into production mode

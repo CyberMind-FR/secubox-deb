@@ -24,7 +24,6 @@
 | 📋 **Migration Roadmap** | Dashboard | OpenWRT zu Debian Migration-Tracking |
 | 📈 **System Metrics** | Dashboard | Echtzeit-Systemmetriken-Dashboard |
 | ⚙️ **Admin Panel** | Dashboard | Systemverwaltungspanel |
-| 🛡️ **CrowdSec** | Security | Kollaborative Sicherheits-Engine mit Verhaltensanalyse |
 | 🔥 **Web Application Firewall** | Security | WAF mit 300+ OWASP-Sicherheitsregeln |
 | 🔥 **Vortex Firewall** | Security | nftables-basierte Bedrohungsdurchsetzungs-Firewall |
 | 🔒 **System Hardening** | Security | Kernel- und Systemhärtung für ANSSI CSPN-Konformität |
@@ -69,8 +68,6 @@
 | 💬 **SimpleX Chat** | Privacy | Datenschutzorientiertes Messaging |
 | 🔐 **Secret Vault** | Privacy | Geheimnis- und Anmeldedatenverwaltung |
 | 📊 **Netdata** | Monitoring | Echtzeit-Systemüberwachung |
-| 🔬 **Deep Packet Inspection** | Monitoring | DPI mit netifyd/nDPId |
-| 🔬 **Netifyd DPI** | Monitoring | Netifyd Deep Packet Inspection |
 | 🔬 **nDPId** | Monitoring | nDPI-Daemon für Verkehrsanalyse |
 | 📱 **Device Intelligence** | Monitoring | Asset-Erkennung und Fingerprinting |
 | 👁️ **Watchdog** | Monitoring | Service- und Container-Überwachung |
@@ -142,7 +139,6 @@
 | 🔌 **SaaS Relay** | Network | SaaS-/API-Proxy-Relay |
 | 🎯 **Security Posture** | Security | Ehrliche, board-wahrheitsgemäße Sicherheits-Scorecard |
 | 📡 **SENTINELLE-GSM** | Security | Passiver Rogue-BTS-Sensor (MIND-Schicht) |
-| 🕸️ **ThreatMesh** | Security | Souveränes Threat-Intel-Mesh (CrowdSec-CAPI-Ersatz) |
 | 🧰 **ToolBoX (Cabine)** | Security | Captive-AP + einvernehmlicher MITM-Datenschutz-Analysator |
 | 💻 **VM Manager** | System | Virtualisierungsverwaltung |
 | 🔎 **YaCy** | Network | Peer-to-Peer-Suchmaschine |

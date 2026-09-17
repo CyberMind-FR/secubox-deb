@@ -53,7 +53,6 @@ Think of your SecuBox as a **house with a smart doorman**. The doorman keeps one
 
 ## 🆚 Why sovereign
 
-| Before (CrowdSec CAPI) | Now (ThreatMesh) |
 |------------------------|------------------|
 | One company's central list | **Your own**, from open sources |
 | They can **ban your IP** | **No one can lock you out** |
@@ -72,7 +71,6 @@ CrowdSec's offline detection engine (LAPI) is kept — only the toxic central fe
 | **Feeds** | `secubox-threatfeed` (timer, 6 h) | pulls free lists — feodo, sslbl, FireHOL, Spamhaus DROP, blocklist.de, CINS, ET-compromised, DShield — into the shared `threat_intel` table |
 | **Mesh** | `secubox-threatmesh` (service) | gossips locally-detected decisions to mesh peers over WireGuard; ingests peer decisions (`mesh:<node>`), consensus-counted; port `:8780` locked to the mesh by nftables |
 | **Enforce** | `secubox-blacklist-sync` | drains `threat_intel` → nft `blacklist_v4/v6` drop sets |
-| **See it** | `/threatmesh/` dashboard + `/api/v1/threatmesh/decisions` (CrowdSec-bouncer-compatible) | status, sources, peers, top-consensus IPs |
 
 ### 🎯 The confidence gate (no false-positive carpet-bomb)
 

@@ -85,7 +85,6 @@ per-category effectiveness. Charts are inline SVG, no external library.
 
 ## Notes
 
-- The `crowdsec` package may stay installed; it is simply stopped and disabled
   at boot.
 - `secubox-blacklist-sync` and `secubox-threatmesh-bridge` depend on it through
   `Requisite=`: without CrowdSec they do not start, instead of failing in a loop.

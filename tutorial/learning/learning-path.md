@@ -113,7 +113,6 @@ Ce qu'il faut savoir avant tout le reste.
 | 5.3 | Partager sans exposer | Intermédiaire | `secubox-nextcloud` |
 | 5.4 | Se connecter de l'extérieur | Intermédiaire | `secubox-wireguard` |
 | 5.5 | Naviguer par Tor | Avancé | `secubox-tor` |
-| 5.6 | Ce que le pare-feu bloque | Avancé | `secubox-crowdsec` |
 | 5.7 | Sauvegarder ses données | Intermédiaire | `À documenter` |
 
 **À la fin** : on comprend ce qui protège quoi, et pourquoi.

@@ -40,7 +40,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-console` | misc | lite | — | — | — | 1 | — | — | oui |
 | `secubox-cookies` | misc | lite | oui | 18 | — | — | — | — | oui |
 | `secubox-core` | system | all | — | — | — | 1 | — | 1 | oui |
-| `secubox-crowdsec` | security | lite | oui | 31 | 1 | 1 | — | — | oui |
 | `secubox-cve-triage` | security | lite | oui | 26 | 1 | 1 | — | 6 | oui |
 | `secubox-cyberfeed` | misc | lite | oui | 17 | — | 1 | — | — | oui |
 | `secubox-daemon` | system | lite | — | — | — | — | — | — | — |
@@ -106,7 +105,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-netboot` | À documenter | À documenter | oui | 18 | 5 | 2 | — | — | oui |
 | `secubox-netdata` | monitoring | lite | oui | 35 | — | 1 | — | — | oui |
 | `secubox-netdiag` | misc | lite | oui | 16 | — | 1 | — | — | oui |
-| `secubox-netifyd` | misc | lite | oui | 24 | — | 1 | — | — | oui |
 | `secubox-netmodes` | network | lite | oui | 32 | — | 1 | — | — | oui |
 | `secubox-nettweak` | misc | lite | oui | 12 | — | 1 | — | — | oui |
 | `secubox-network-anomaly` | network | lite | oui | 10 | — | 1 | — | 1 | oui |
@@ -545,15 +543,10 @@ SecuBox CrowdSec Dashboard
 
 - **Catégorie** : security · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 31 route(s), socket `/run/secubox/crowdsec.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/crowdsec
-- **CLI** : `crowdsecctl`
-- **Units systemd** : `secubox-crowdsec.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
 - **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-crowdsec/`
 
 ### `secubox-cve-triage`
 
@@ -1607,15 +1600,11 @@ SecuBox Netifyd - Network Intelligence Daemon Dashboard
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 24 route(s), socket `/run/secubox/netifyd.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/netifyd
 - **CLI** : À documenter
-- **Units systemd** : `secubox-netifyd.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
 - **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-netifyd/`
 
 ### `secubox-netmodes`
 

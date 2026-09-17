@@ -506,7 +506,6 @@ ces cartes-là, pas des cartes à écrire — la formulation précédente
 
 ### 🔜 Pont bans mesh → moteur sbxwaf
 
-- [ ] Alimenter sbxwaf (bouncer CrowdSec) avec les bans fédérés threatmesh (#768) :
   `cscli decisions add --ip <IP> -R "secubox-mesh" -d 4h` en plus du nft
   `inet secubox_meshban` actuel.
 - [ ] Anti-boucle : dans `secubox-threatmesh-bridge`, filtrer les décisions de *reason*
@@ -641,7 +640,6 @@ ces cartes-là, pas des cartes à écrire — la formulation précédente
 - #121 metablog ingest : dirs en `secubox:secubox`
 
 ### 🟠 T1 — Plan d'enforcement sécurité (mission CSPN ; détection→action)
-- #498 Phase 7 — WAF active enforcement (mitm→CrowdSec→nft drop) *(worktree actif)*
 - ✅ #519 Phase 13 — enforcement plane **FERMÉ 2026-06-22** (livré + réparé :
   blacklist-sync avortait sur NXDOMAIN + timeout unit → fix `|| true` +
   TimeoutStartSec 600 ; vérifié live, default-off). Inclut 13.B #522.
@@ -780,7 +778,6 @@ ces cartes-là, pas des cartes à écrire — la formulation précédente
 
 ### Système — bugs gk2 (2026-06-10) — ✅ résolus
 
-- [x] **CrowdSec firewall** — restart bouncer → tables nft recréées.
 - [x] **WAF /var/log/secubox traversal** — fix source #511/#512 (mergé).
 - [x] **WAF /stats perf** (#509/#510, `secubox-waf 1.2.2`) — double-buffer cache.
 - [x] **PeerTube + PhotoPrism** — LXC redémarrés.
@@ -1083,7 +1080,6 @@ Ces 4 jobs sont distincts du chain kiosk #436. À investiguer un par un.
   both as part of the tuning package so other boards inherit it on
   apt install. Bump secubox-system-tuning to 1.1.0.
 
-- [ ] **CrowdSec public-IP allowlist**: operator's home/cellular IP
   not in `secubox-trusted` allowlist (would need them to run
   `curl ifconfig.me`). Without it they may hit external bf
   scenarios. Add when known.
@@ -1239,12 +1235,10 @@ Ces 4 jobs sont distincts du chain kiosk #436. À investiguer un par un.
 ## ✅ PHASE 3 — Modules (S07–S12) — TERMINÉ (33 modules)
 
 All 33 modules ported and running:
-- [x] **P3-01** `secubox-crowdsec` — 54 endpoints
 - [x] **P3-02** `secubox-netdata` — 16 endpoints
 - [x] **P3-03** `secubox-wireguard` — 28+ endpoints
 - [x] **P3-04** `secubox-vhost` — vhosts, SSL, certs
 - [x] **P3-05** `secubox-mediaflow` — streams, alerts
-- [x] **P3-06** `secubox-dpi` — 40+ endpoints netifyd
 - [x] **P3-07** `secubox-qos` — 60+ endpoints HTB
 - [x] **P3-08** `secubox-auth` — 20+ endpoints
 - [x] **P3-09** `secubox-cdn` — 25+ endpoints
@@ -1260,7 +1254,6 @@ All 33 modules ported and running:
 - [x] **P3-19** `secubox-mail` — Postfix/Dovecot + DKIM + SpamAssassin + Postgrey + ClamAV
 - [x] **P3-20** `secubox-users` — unified identity
 - [x] **P3-21** `secubox-webmail` — Roundcube
-- [x] **P3-22** `secubox-waf` — 300+ rules, CrowdSec
 - [x] **P3-23** `secubox-gitea` — Git server LXC
 - [x] **P3-24** `secubox-nextcloud` — File sync LXC
 - [x] **P3-25** `secubox-c3box` — Services portal
@@ -1282,7 +1275,6 @@ All 33 modules ported and running:
 
 - [x] **P5-01** AppArmor profiles pour chaque service
   - Base profile: /etc/apparmor.d/local/secubox-base
-  - Hub, Mail, WireGuard, CrowdSec specific profiles
   - Generic profile for simple services
   - Install script: scripts/install-apparmor.sh
 - [x] **P5-02** Kernel config hardening — secubox-hardening module
@@ -1352,7 +1344,6 @@ All 33 modules ported and running:
 **Current status:**
 - 52 packages total (48 modules + metapackages)
 - Mail server: DKIM + SpamAssassin + Postgrey + ClamAV
-- WAF: 300+ rules with CrowdSec integration
 - Hardening: Kernel sysctl + module blacklist
 - Documentation: Comprehensive API docs in 3 languages
 
@@ -1427,7 +1418,6 @@ Advanced security features:
 - [x] **P10-07** `secubox-dns-provider` — DNS API (OVH, Gandi) ✅
 - [x] **P10-08** `secubox-threats` — Threat dashboard ✅
 - [x] **P10-09** `secubox-openclaw` — OSINT tool ✅
-- [x] **P10-10** `secubox-netifyd` — DPI daemon ✅
 
 ---
 
@@ -1595,7 +1585,6 @@ components:
     - secubox-ollama      # Too heavy
     - secubox-jellyfin    # Needs GPU
   optimize:
-    - secubox-crowdsec: --no-hub-download
     - secubox-nginx: --worker-processes 1
 tweaks:
   kernel:

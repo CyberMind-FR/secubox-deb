@@ -91,9 +91,7 @@ Siehe [[Installation]] für detaillierte Anweisungen.
 | Stack | Beschreibung | Module |
 |-------|--------------|--------|
 | 🟠 **AUTH** | Authentifizierung, ZeroTrust, MFA | auth, portal, users, nac |
-| 🟡 **WALL** | Firewall, CrowdSec, WAF, IDS/IPS | crowdsec, waf, threats, ipblock |
 | 🔴 **BOOT** | Deployment, Bereitstellung | cloner, vault, vm, rezapp |
-| 🟣 **MIND** | KI, Verhaltensanalyse, DPI | dpi, netifyd, ai-insights, soc |
 | 🟢 **ROOT** | System, CLI, Härtung | core, hub, system, console |
 | 🔵 **MESH** | Netzwerk, WireGuard, QoS | wireguard, haproxy, netmodes, turn |
 
@@ -123,7 +121,6 @@ Siehe [[Module|MODULES-DE]] für vollständige Moduldokumentation.
 
 ## 🟡 WALL — Sicherheitsfunktionen
 
-- **CrowdSec** — Community-getriebenes IDS/IPS
 - **WAF** — 300+ ModSecurity-Regeln
 - **nftables** — Standard-DROP-Richtlinie
 - **AI-Insights** — ML-Bedrohungserkennung

@@ -409,7 +409,6 @@ ip addr show
 | 内存 | 1-2 GB | 4 GB |
 | 网络 | 3× GbE | 4× GbE + 2× 10GbE |
 | DPI 模式 | 仅被动模式 | 支持内联模式 |
-| CrowdSec | 精简模式 | 完整模式 |
 | SecuBox 配置 | secubox-lite | secubox-full |
 
 ## 另请参阅

@@ -160,18 +160,13 @@ Intrusion detection and prevention.
 |----------|--------|------|-------------|
 | `/components` | GET | No | System components |
 | `/access` | GET | No | Connection endpoints |
-| `/metrics` | GET | Yes | CrowdSec metrics |
 | `/decisions` | GET | Yes | Active decisions (bans) |
 | `/alerts` | GET | Yes | Security alerts |
 | `/bouncers` | GET | Yes | Bouncer status |
 | `/ban` | POST | Yes | Ban IP address |
 | `/unban` | POST | Yes | Unban IP address |
 | `/nftables` | GET | Yes | nftables statistics |
-| `/service/start` | POST | Yes | Start CrowdSec |
-| `/service/stop` | POST | Yes | Stop CrowdSec |
-| `/service/restart` | POST | Yes | Restart CrowdSec |
 | `/console/status` | GET | Yes | Console connection status |
-| `/console/enroll` | POST | Yes | Enroll to CrowdSec Console |
 | `/migrate` | POST | Yes | Migrate from OpenWrt |
 
 #### Ban IP Example
@@ -538,8 +533,6 @@ Streaming service detection.
 | `/delete_alert` | POST | Yes | Delete alert |
 | `/get_settings` | GET | Yes | Settings |
 | `/set_settings` | POST | Yes | Save settings |
-| `/start_netifyd` | POST | Yes | Start DPI |
-| `/stop_netifyd` | POST | Yes | Stop DPI |
 
 ---
 

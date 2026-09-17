@@ -18,7 +18,6 @@ Since GitHub wiki uses Markdown (no CSS), we use **emoji badges** and **consiste
 | Module | Badge | Hex | Category Focus |
 |--------|-------|-----|----------------|
 | **AUTH** | `🟠` | `#C04E24` | Authentication, ZeroTrust, MFA |
-| **WALL** | `🟡` | `#9A6010` | Firewall, nftables, CrowdSec, IDS/IPS |
 | **BOOT** | `🔴` | `#803018` | Deployment, provisioning, installation |
 | **MIND** | `🟣` | `#3D35A0` | AI, behavioral analysis, nDPId, ML |
 | **ROOT** | `🟢` | `#0A5840` | Terminal CLI, Debian system, hardening |
@@ -74,7 +73,6 @@ Organize modules into these six stacks:
 - secubox-nac
 
 ## 🟡 WALL — Security Stack
-- secubox-crowdsec
 - secubox-waf
 - secubox-threats
 - secubox-ipblock
@@ -88,7 +86,6 @@ Organize modules into these six stacks:
 
 ## 🟣 MIND — Intelligence Stack
 - secubox-dpi
-- secubox-netifyd
 - secubox-soc-agent
 - secubox-soc-gateway
 - secubox-soc-web

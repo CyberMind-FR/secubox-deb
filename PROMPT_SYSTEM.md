@@ -99,10 +99,8 @@ Séparation de privilèges formelle entre chaque couche. Ne jamais croiser les r
 | Module | Techno | Statut |
 |--------|--------|--------|
 | firewall | nftables | actif |
-| dpi | nDPId + netifyd (tc mirred dual-stream) | actif |
 | dns | Unbound (Vortex DNS) | actif |
 | waf | HAProxy + sbxwaf | actif |
-| ids | Suricata + CrowdSec | actif |
 | zkp | SecuBox-ZKP (GK-HAM-2025) | en développement |
 | mirrornet | MirrorNet P2P mesh | en développement |
 | parameters | double-buffer 4R | actif |
@@ -133,7 +131,6 @@ Fonts : Cinzel (titres) · IM Fell English (corps) · JetBrains Mono (code/termi
 - [ ] Suggérer Python < 3.11
 - [ ] Ignorer le schéma double-buffer pour les configs
 - [ ] Modifier `active/` directement sans swap
-- [ ] Mentionner "CrowdSec Ambassador" ou "CyberMind Produits SASU"
 - [ ] Utiliser `subprocess.shell=True` sans validation d'input
 
 ---

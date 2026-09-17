@@ -94,7 +94,6 @@ Après `pivot_root`, systemd prend la main. Il orchestre les 10 phases de démar
 | Phase | Services | Paires SecuBox |
 |---|---|---|
 | Phase 1 — Réseau | nftables, WireGuard, Tailscale | MESH↔AUTH |
-| Phase 2 — Sécurité périmétrique | CrowdSec, HAProxy | WALL↔MIND |
 | Phase 3 — DPI dual-stream | nDPId (actif/shadow) | WALL↔MIND |
 | Phase 4 — Runtime API | FastAPI/Uvicorn, double-buffer 4R | BOOT↔ROOT |
 | Phase 5 — ZKP auth | GK·HAM-HASH (L1/L2/L3) | BOOT↔ROOT |
@@ -167,7 +166,6 @@ Caractéristiques :
 - FastAPI/Uvicorn exposé sur socket Unix local (HAProxy assure le TLS en façade).
 - Double-buffer 4R actif sur L2 (routing twins actif/shadow, swap atomique conditionné par ZKP, rollback automatique en cas d'échec de preuve).
 - nDPId dual-stream en écoute (flux actif et shadow traités en parallèle).
-- CrowdSec en mode agent (pas de console cloud en production souveraine).
 - Aucun shell interactif, aucun accès SSH depuis l'extérieur.
 - Health-check exposé sur port local uniquement (`/healthz`, `127.0.0.1:8080`).
 
