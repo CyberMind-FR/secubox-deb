@@ -1,3 +1,20 @@
+secubox-zigbee (2.6.8-1~bookworm1) bookworm; urgency=high
+
+  * DEPENDANCE MANQUANTE : mosquitto-clients (#1365). Ce module appelle
+    `mosquitto_sub` et `mosquitto_pub` en SOUS-PROCESSUS — six fois — pour
+    lire l'etat des appareils et leur envoyer des ordres. Rien ne le declarait.
+  .
+    DPKG NE PEUT PAS LE DEVINER : un binaire lance par subprocess n'apparait
+    dans aucun `Depends` calcule. Le paquet s'installait donc sans lui, et
+    surtout `apt autoremove` le proposait au retrait — il figurait parmi les
+    28 « plus necessaires » sur gk2 le 2026-09-17. L'accepter aurait casse la
+    carte Zigbee en silence : l'API aurait rendu une liste vide, que la carte
+    aurait affichee comme « le pont ne declare aucun appareil ».
+  .
+    Marque `manual` sur gk2 en attendant ce paquet.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 09:10:34 +0200
+
 secubox-zigbee (2.6.7-1~bookworm1) bookworm; urgency=medium
 
   * LES APPAREILS, ENFIN (#1365). Le module annoncait depuis la v2.4 que

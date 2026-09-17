@@ -18,7 +18,8 @@ Depends: ${misc:Depends},
          python3-fastapi,
          python3-toml,
          openssl,
-         udev
+         udev,
+         mosquitto-clients
 Recommends: secubox-iot-hub
 Description: SecuBox Zigbee — Coordinator RF IoT (MIND layer)
  Hosts zigbee2mqtt 2.x in a Debian bookworm LXC at 10.100.0.111 on br-lxc.
