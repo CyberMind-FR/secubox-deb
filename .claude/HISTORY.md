@@ -5,6 +5,65 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-18 — TRIXIE DÉMARRE, ET CE QU'IL A RÉVÉLÉ (ref #1294, #1362, #1027, #1049)
+
+### L'image Trixie a été démarrée, pas seulement construite
+
+Debian 13 vit entièrement — GRUB `2.12-9+deb13u2`, noyau `6.12.107+deb13-amd64`,
+mode kiosque, Chromium plein écran. Mais le kiosque affichait
+`ERR_CONNECTION_REFUSED`, et le journal apt de l'image donnait la raison :
+**142 paquets sur 162 retirés à la construction**. `secubox-core` déclarait
+`Depends: python3-jose`, retiré de Debian 13 ; tout ce qui en dépend a suivi.
+
+Migré vers **PyJWT**, présent dans les deux suites. Un seul import concerné, et
+`secubox-portal` utilisait déjà PyJWT : le dépôt portait deux bibliothèques JWT
+pour le même besoin.
+
+### Ce que la réparation a mis au jour
+
+`apt.secubox.in` servait un **index vieux d'un mois** : exporté le 24 août avec
+146 paquets, quand sa base reprepro en contenait 331, à des versions plus
+récentes. Chaque import mettait à jour la base sans réexporter `dists/`.
+Régénéré : 162 paquets publiés aux bonnes versions.
+
+Trois dépendances dures insatisfiables faisaient échouer **toute transaction apt
+qui les contenait**, emportant les autres. Relevé dans les index Debian
+officiels : `netdata`, `wkhtmltopdf` et `mitmproxy` ont été **retirés de Debian
+13** ; `rtty`, `ndpid` et `python3-weasyprint` n'y ont jamais été.
+
+`secubox-ndpid-engine` existait dans le dépôt, déclarait déjà `Provides: ndpid`,
+et **n'avait jamais été construit** — faute de `debian/control`, le seul critère
+de découverte de la CI. Il a désormais un vrai `debian/` ; le binaire produit
+annonce `nDPId version 1.7.0-release`. `secubox-rtty` et `secubox-netdata` sont
+**décommissionnés** — pour netdata il fallait défaire six attaches, dont deux
+`Depends` durs dans les métapaquets `isp` et `profils`.
+
+### Rangement des worktrees : rien perdu
+
+Inventaire des 13 worktrees avant de toucher à quoi que ce soit. Trois foyers de
+risque : #1027 portait **127 lignes non commitées sur une branche jamais
+poussée**, #1049 avait divergé de son distant, `license-phase-b-full` n'avait
+jamais été poussée. Les trois sont sur origin ; pour #1049 la poussée était
+refusée et l'état local est sauvegardé sous `sauvegarde/1049-local-20260918`
+plutôt que forcé.
+
+Les deux branches porteuses de contenu unique sont **transposées** sur master —
+pas fusionnées : `fix/1027` avait 5175 commits de retard, la fusionner aurait
+fait reculer master d'autant. Trois conflits résolus **par combinaison** : sur
+`sbxwaf`, le saut d'inspection par type de contenu (master) et par hôte (#1027)
+sont complémentaires et coexistent. `go build` et `go test` au vert des deux
+côtés.
+
+### Chaîne de construction
+
+Une jambe de matrice en échec ne coûte plus la publication des autres — le
+défaut existait à deux étages, corrigé dans `build-image.yml` puis dans
+l'orchestrateur `release.yml`, dont le commentaire promettait déjà ce qu'il ne
+faisait pas. Suite Debian paramétrable de bout en bout sans figer 173
+changelogs. Swap sur les runners : six chroots arm64 émulés d'affilée sans OOM.
+Le trousseau `.gpg` publié est enfin **binaire** — la commande d'installation
+documentée produisait un trousseau inutilisable, pour bookworm aussi.
+
 ## 2026-09-16 — CARTE ZIGBEE, ET LA FILE D'ACCÈS ENFIN VISIBLE (ref #1365, #1366)
 
 ### La carte Zigbee
