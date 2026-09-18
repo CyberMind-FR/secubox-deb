@@ -85,6 +85,20 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
+          # DIRE CE QUI MANQUE, PLUTOT QUE D'ECHOUER SUR `no valid OpenPGP data`
+          # (#1294). Le secret n'existe pas sur ce depot — `gh api
+          # actions/secrets` en compte ZERO. La publication par la CI est donc
+          # morte depuis le 24 aout, et personne ne l'a vu : le job `Publish
+          # Packages` se contentait d'etre `skipped`, et un job saute ne rougit
+          # pas. C'est ainsi que l'index apt est reste fige un mois entier
+          # pendant que la base reprepro, elle, avancait.
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::error::GPG_PRIVATE_KEY absent des secrets du depot."
+            echo "::error::La publication signee est impossible. Deux issues :"
+            echo "::error::  - definir le secret (Settings > Secrets > Actions), ou"
+            echo "::error::  - retirer SignWith de la strophe visee dans conf/distributions."
+            exit 1
+          fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           gpg --list-keys
 
