@@ -92,6 +92,40 @@ case "$1" in
       rm -f /etc/nginx/sites-enabled/default
 
       install -d -m 755 /etc/nginx/secubox.d
+
+      # RETIRER LES RESIDUS dpkg DE sites-enabled (#1294).
+      #
+      # Le nginx.conf de Debian fait `include /etc/nginx/sites-enabled/*;` —
+      # un glob NU. Il avale donc les `.dpkg-new` / `.dpkg-old` qu'un conflit
+      # de conffile depose a cote du fichier actif. Nos propres inclusions
+      # (`secubox.d/*.conf`) y echappent grace au suffixe ; celle de Debian,
+      # non.
+      #
+      # UN SEUL de ces residus suffit a empecher nginx de demarrer, et il
+      # survit au retrait du paquet qui l'a engendre : plus personne ne le
+      # possede, donc aucun postrm ne le nettoie. Constate sur une image
+      # trixie, ou un hall.gk2.net.conf.dpkg-new orphelin referencait un
+      # `$lan_client` dont le bloc geo etait parti avec son paquet :
+      #   [emerg] unknown "lan_client" variable — configuration test failed
+      # nginx etait installe ET active, et refusait simplement de demarrer.
+      #
+      # On ARCHIVE au lieu de supprimer : un fichier qu'aucun paquet ne
+      # possede peut porter une configuration qu'un operateur voudra relire.
+      _residus=""
+      for _f in /etc/nginx/sites-enabled/*.dpkg-new \
+                /etc/nginx/sites-enabled/*.dpkg-old \
+                /etc/nginx/sites-enabled/*.dpkg-dist; do
+        [ -e "$_f" ] || continue
+        install -d -m 755 /var/backups/secubox/nginx-residus
+        if mv -f "$_f" /var/backups/secubox/nginx-residus/ 2>/dev/null; then
+          _residus="${_residus} $(basename "$_f")"
+        fi
+      done
+      if [ -n "$_residus" ]; then
+        echo "secubox-core: residus dpkg ecartes de sites-enabled :${_residus}" >&2
+        echo "secubox-core: archives dans /var/backups/secubox/nginx-residus/" >&2
+      fi
+
       # Only reload nginx if the resulting config is valid. On HAProxy
       # boards the operator-tuned file is preserved, so this passes; on
       # standalone boards the freshly-installed file is also valid.

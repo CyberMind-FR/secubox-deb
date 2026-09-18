@@ -1,3 +1,14 @@
+secubox-core (1.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : ecarte les residus dpkg de /etc/nginx/sites-enabled avant le
+    test nginx. Le nginx.conf de Debian y fait un `include ... /*` NU, qui
+    avale les .dpkg-new/.dpkg-old ; un seul suffit a empecher nginx de
+    demarrer, et il survit au retrait du paquet qui l'a engendre — plus
+    personne ne le possede, aucun postrm ne le nettoie. Archives plutot que
+    supprimes (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 09:52:21 +0200
+
 secubox-core (1.5.5-1~bookworm1) bookworm; urgency=medium
 
   * Cesse de livrer secubox-led-heartbeat (script + unite) : le fichier
