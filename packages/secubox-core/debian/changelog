@@ -1,3 +1,13 @@
+secubox-core (1.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * Le Hall devient la page d'accueil du vhost de base, dans les DEUX blocs
+    server (HTTPS et HTTP localhost/kiosque). `location = /` teste la
+    presence du repertoire : /hall/ si secubox-webos est la, /sbxos/ sinon
+    — rediriger en aveugle rendrait un 404 sur une image ou seul SBX OS est
+    installe (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 10:08:11 +0200
+
 secubox-core (1.5.6-1~bookworm1) bookworm; urgency=medium
 
   * postinst : ecarte les residus dpkg de /etc/nginx/sites-enabled avant le
