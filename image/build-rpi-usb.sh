@@ -24,7 +24,13 @@ SECUBOX_VERSION="3.0.0-alpha.2"
 SUITE="bookworm"
 # Repli sur la variable exportee par build-image.sh, puis sur "full" —
 # le profil entre dans le nom de l'image, il ne peut pas etre vide (#1294).
-PROFILE_TAG="${SECUBOX_PROFILE#secubox-}"
+# `${VAR#prefixe}` NE FOURNIT PAS de valeur par defaut sous `set -u` : si
+# SECUBOX_PROFILE n'est pas defini, la substitution echoue avant d'avoir pu
+# retomber sur quoi que ce soit. Ce script a DEUX appelants — build-image.sh,
+# qui exporte la variable, et le workflow live-usb, qui l'appelle en direct
+# sans elle. Il faut donc neutraliser l'absence AVANT de retirer le prefixe.
+PROFILE_TAG="${SECUBOX_PROFILE:-}"
+PROFILE_TAG="${PROFILE_TAG#secubox-}"
 PROFILE_TAG="${PROFILE_TAG:-full}"
 IMG_SIZE="8G"
 OUT_DIR="${REPO_DIR}/output"

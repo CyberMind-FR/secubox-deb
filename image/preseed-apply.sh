@@ -175,12 +175,9 @@ if [ -f "${PRESEED_DIR}/services/haproxy.cfg" ]; then
     log "  - HAProxy config restored"
 fi
 
-# CrowdSec
-if [ -d "${PRESEED_DIR}/services/crowdsec" ]; then
-    mkdir -p /etc/crowdsec
-    cp -a "${PRESEED_DIR}/services/crowdsec/"* /etc/crowdsec/ 2>/dev/null || true
-    log "  - CrowdSec config restored"
-fi
+# CrowdSec RETIRE (#1362) : purge du projet, remplace par le bannissement
+# nftables autonome de sbxwaf. Restaurer sa configuration ne servait plus
+# qu'a recreer /etc/crowdsec sur un systeme qui n'a pas le demon.
 
 # nftables
 if [ -f "${PRESEED_DIR}/services/nftables.conf" ]; then
@@ -241,7 +238,7 @@ else
     fi
 
     # Restart services in background to not block boot
-    for svc in nginx haproxy crowdsec nftables; do
+    for svc in nginx haproxy nftables; do
         if [ -f "/lib/systemd/system/${svc}.service" ] || [ -f "/etc/systemd/system/${svc}.service" ]; then
             systemctl restart "$svc" &>/dev/null &
             log "  - Restart triggered: $svc"

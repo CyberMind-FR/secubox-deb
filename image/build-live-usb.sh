@@ -1218,14 +1218,13 @@ ok "Python dependencies installed"
 
 # Install heavy security services (not in debootstrap to keep initial download small)
 log "Installing security services..."
-chroot "${ROOTFS}" bash -c '
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
 # Install Python packages that fail during debootstrap
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   python3-cryptography python3-jwt python3-zmq 2>/dev/null" || warn "Some Python packages not installed"
 
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  crowdsec glances netdata mosquitto coturn lxc debootstrap 2>/dev/null" || warn "Some services not installed"
+  glances netdata mosquitto coturn lxc debootstrap 2>/dev/null" || warn "Some services not installed"
 ok "Security services installed"
 
 # Create symlinks for uvicorn to ensure all service files can find it
@@ -1730,9 +1729,6 @@ role = "admin"
 password = "secubox"
 role = "admin"
 
-[crowdsec]
-lapi_url = "http://127.0.0.1:8080"
-lapi_key = ""
 
 [wireguard]
 interface = "wg0"
@@ -3066,7 +3062,7 @@ echo ""
 
 # Core services
 echo -e "${WHITE}  🔧 Core Services${RESET}"
-services=(nginx haproxy secubox-api secubox-hub crowdsec suricata)
+services=(nginx haproxy secubox-api secubox-hub suricata)
 for svc in "${services[@]}"; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         echo -e "     ${ok} ${GRAY}${svc}${RESET}"

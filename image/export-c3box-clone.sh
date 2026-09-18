@@ -214,8 +214,8 @@ mv "${EXPORT_DIR}/services/secubox.d" "${EXPORT_DIR}/services/nginx-conf" 2>/dev
 # HAProxy
 $SSH_CMD "cat /etc/haproxy/haproxy.cfg 2>/dev/null || true" > "${EXPORT_DIR}/services/haproxy.cfg" 2>/dev/null || true
 
-# CrowdSec
-$SSH_CMD "[ -d /etc/crowdsec ] && tar -czf - -C /etc crowdsec 2>/dev/null || true" | tar -xzf - -C "${EXPORT_DIR}/services/" 2>/dev/null || true
+# CrowdSec RETIRE (#1362) : purge du projet — il n'y a plus de /etc/crowdsec
+# a exporter depuis une board a jour.
 
 echo "## Service Configurations" >> "$MANIFEST_FILE"
 ls -la "${EXPORT_DIR}/services/" 2>/dev/null >> "$MANIFEST_FILE" || true
