@@ -1,0 +1,65 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Reprend la logique de construire.sh, qui construisait ce paquet A LA MAIN.
+# Tant qu'il n'y avait pas de debian/control, la CI ne voyait meme pas ce
+# repertoire : elle decouvre les paquets par `packages/*/debian/control`.
+# D'ou un paquet qui existait dans le depot sans jamais etre construit ni
+# publie — et une dependance `ndpid` insatisfiable cote client (#1294).
+
+NDPID_VERSION ?= 1.7.0
+NDPID_DEPOT   ?= https://github.com/utoni/nDPId
+SRC            = $(CURDIR)/nDPId-src
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# Source recuperee a la construction, comme le faisait construire.sh.
+	# --depth 50 : assez pour atteindre une etiquette, sans tirer tout
+	# l'historique.
+	[ -d "$(SRC)" ] || git clone --depth 50 "$(NDPID_DEPOT)" "$(SRC)"
+	cd "$(SRC)" && git submodule update --init libnDPI
+	# PAS DE NINJA. Le CMakeLists de nDPId s'appuie sur la semantique de make
+	# et fabrique une commande `ninja - install` invalide quand on lui impose
+	# Ninja. L'erreur — « loading 'build.ninja': No such file » — se lit comme
+	# un probleme de configuration alors qu'il n'en est pas un.
+	#
+	# BUILD_NDPI=ON embarque nDPI 6.x en STATIQUE : nDPId exige >= 5.0.0 et
+	# Debian fournit la 4.2. Remplacer la bibliotheque systeme casserait tout
+	# ce qui s'appuie dessus ; l'embarquer ne coute que 4 Mo.
+	cd "$(SRC)" && cmake -S . -B build -DBUILD_NDPI=ON -DCMAKE_BUILD_TYPE=Release
+
+override_dh_auto_build:
+	cd "$(SRC)" && cmake --build build -j$$(nproc)
+	# Garde : un cmake qui « reussit » sans produire les binaires est un echec
+	# silencieux. On le constate ici plutot qu'a l'installation.
+	test -x "$(SRC)/build/nDPId"
+	test -x "$(SRC)/build/nDPIsrvd"
+
+override_dh_auto_test:
+	# La suite amont demande des captures reseau : hors de portee d'un build.
+
+override_dh_auto_install:
+	install -d debian/secubox-ndpid-engine/usr/sbin
+	install -m 0755 "$(SRC)/build/nDPId" "$(SRC)/build/nDPIsrvd" \
+		debian/secubox-ndpid-engine/usr/sbin/
+	install -d debian/secubox-ndpid-engine/lib/systemd/system
+	install -m 0644 systemd/secubox-ndpid.service systemd/secubox-ndpisrvd.service \
+		debian/secubox-ndpid-engine/lib/systemd/system/
+	install -d debian/secubox-ndpid-engine/etc/secubox
+	install -m 0644 conf/ndpid-engine.env debian/secubox-ndpid-engine/etc/secubox/
+
+override_dh_installsystemd:
+	# Nommees explicitement : un `dh_installsystemd` nu traite toutes les
+	# unites et passe outre les options qui suivent (piege rencontre sur
+	# secubox-netmodes, #1362).
+	dh_installsystemd --name=secubox-ndpisrvd
+	dh_installsystemd --name=secubox-ndpid
+
+override_dh_auto_clean:
+	rm -rf "$(SRC)"
+	dh_auto_clean

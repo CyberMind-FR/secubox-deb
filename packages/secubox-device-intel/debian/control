@@ -17,5 +17,5 @@ Description: SecuBox Device Intel — network asset discovery + fingerprinting
  Distinct from sibling packages in the monitoring cluster:
   - secubox-watchdog — LXC + service + HTTP health monitor.
   - secubox-health-doctor — vital-services check.
-  - secubox-netdata, secubox-glances, secubox-metrics — system
+  - secubox-glances, secubox-metrics — system
     metrics dashboards.

@@ -18,6 +18,6 @@ Description: SecuBox Watchdog — LXC + service + HTTP health monitor
     target set: focuses on SecuBox-internal critical services).
   - secubox-device-intel — asset discovery + device fingerprinting
     (network-side, not service-side).
-  - secubox-netdata, secubox-glances, secubox-metrics — system
+  - secubox-glances, secubox-metrics — system
     metrics dashboards (different upstreams: Netdata vs Glances vs
     Prometheus).

@@ -1,0 +1,39 @@
+Source: secubox-ndpid-engine
+Section: net
+Priority: optional
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13),
+               cmake,
+               build-essential,
+               pkg-config,
+               libpcap-dev,
+               git,
+               ca-certificates,
+               autoconf,
+               automake,
+               libtool
+Standards-Version: 4.6.2
+
+Package: secubox-ndpid-engine
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+# Provides: ndpid — C'EST LE POINT DE TOUT CE PAQUET (#1294).
+# secubox-ndpid declare « Depends: ndpid | ndpi-reader ». Ni l'un ni l'autre
+# n'existe dans AUCUNE Debian : la dependance n'a jamais pu etre satisfaite
+# depuis l'archive, et elle faisait echouer toute transaction apt qui
+# contenait secubox-ndpid — emportant les autres paquets avec elle.
+# En fournissant `ndpid` depuis notre propre depot, elle devient satisfiable.
+Provides: ndpid
+Description: SecuBox — moteur DPI nDPId + nDPIsrvd (nDPI 6.x statique)
+ Les deux démons qui PRODUISENT les événements de flux que sbxdpi agrège :
+ nDPId capture et classe, nDPIsrvd distribue.
+ .
+ Sans eux, sbxdpi servait un instantané gelé — connected:false, total_flows
+ figé, hosts et fingerprints à zéro — parce que son socket distributeur
+ n'existait pas. L'alternative « ndpi-reader » était satisfaite par
+ ndpiReader, l'outil de démonstration de libndpi, qui écrit du CSV dans un
+ fichier et ne parle à personne.
+ .
+ nDPI 6.x est liée STATIQUEMENT : nDPId exige au moins la 5.0.0 et Debian
+ fournit la 4.2. Remplacer la bibliothèque système casserait tout ce qui
+ s'appuie dessus ; l'embarquer ne coûte que 4 Mo.

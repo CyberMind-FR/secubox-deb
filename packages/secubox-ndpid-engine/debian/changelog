@@ -1,0 +1,17 @@
+secubox-ndpid-engine (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premiere entree de changelog : ce paquet existait dans le depot avec un
+    debian/control.in et un construire.sh lance A LA MAIN, mais sans
+    debian/control — or la CI decouvre les paquets par ce fichier. Il n'a
+    donc JAMAIS ete construit ni publie, et sa promesse `Provides: ndpid`
+    n'a jamais atteint personne.
+  * Consequence cote client : secubox-ndpid declarait
+    `Depends: ndpid | ndpi-reader`, absents de toute Debian et fournis par
+    aucun paquet publie. La dependance etait insatisfiable, et elle faisait
+    echouer TOUTE transaction apt qui contenait secubox-ndpid.
+  * debian/rules reprend fidelement la logique de construire.sh : clone de
+    nDPId, sous-module libnDPI, cmake avec BUILD_NDPI=ON (nDPI 6.x statique,
+    Debian n'ayant que la 4.2), et garde explicite sur la production des deux
+    binaires (ref #1294).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 10:27:01 +0200

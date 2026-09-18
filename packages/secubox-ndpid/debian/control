@@ -12,7 +12,12 @@ Architecture: all
 # ne les fournit : secubox-dpi-engine est construit HORS CI et n'existe
 # meme pas dans ce depot.
 Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-zmq
-Recommends: secubox-dpi, ndpid | ndpi-reader
+# secubox-ndpid-engine FOURNIT `ndpid` (Provides). Il est desormais un vrai
+# paquet construit par la CI (#1294) : la dependance redevient satisfiable
+# depuis notre propre depot. Elle reste en Recommends et non en Depends —
+# le tableau de bord doit pouvoir s'installer et se degrader si le moteur
+# n'est pas la, plutot que de faire echouer toute la transaction apt.
+Recommends: secubox-dpi, secubox-ndpid-engine | ndpid | ndpi-reader
 Description: SecuBox nDPId — DPI dashboard with JA3/JA4 TLS fingerprinting
  nDPId-backed deep packet inspection dashboard: JA3/JA3S/JA4 TLS
  fingerprinting, protocol detection, application classification,
