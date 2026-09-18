@@ -1,3 +1,11 @@
+secubox-bbs (0.32.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'ingest peuple gateway_contenu — mosaique de vignettes de bout en bout.
+    Travail repris de la branche #1049, restee non fusionnee depuis le
+    19 aout (ref #1049).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 10:25:06 +0200
+
 secubox-bbs (0.32.0-1~bookworm1) bookworm; urgency=medium
 
   * NOTIFIER UNE RÉPONSE PAR COURRIEL (ref #1361), à l'adresse déclarée à
