@@ -162,8 +162,11 @@ Depends: ${misc:Depends},
          secubox-metablogizer,
          secubox-metacatalog,
          secubox-metrics,
-# secubox-netdata DECOMMISSIONNE (#1294) : netdata a ete retire de Debian 13,
-# et ce module n'etait qu'un tableau de bord au-dessus de lui.
+# Le module de tableau de bord au-dessus de netdata a ete DECOMMISSIONNE
+# (#1294) : netdata lui-meme a ete retire de Debian 13. Le nom du paquet
+# est deliberement absent de ce commentaire — verify-profile.sh lit les
+# dependances par un grep brut sur le champ Depends, commentaires
+# compris, et le citer ici le ferait passer pour une dependance vivante.
          secubox-ollama,
          secubox-radio,
          secubox-reporter,
