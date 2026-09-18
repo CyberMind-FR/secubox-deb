@@ -17,7 +17,7 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 # ── Defaults ──────────────────────────────────────────────────────
 BOARD="mochabin"
 SUITE="bookworm"
-IMG_SIZE="8G"         # Taille de l'image totale (increased for full install)
+IMG_SIZE=""           # vide = calcule plus bas selon le profil (#1294)
 ROOT_SIZE="5.5G"      # Taille partition rootfs (needs ~4GB for full install)
 DATA_SIZE="2G"        # Taille partition data
 OUT_DIR="${REPO_DIR}/output"
@@ -1470,6 +1470,43 @@ umount -lf "${ROOTFS}/sys"  2>/dev/null || true
 umount -lf "${ROOTFS}/dev"  2>/dev/null || true
 
 # Créer fichier image
+# LES BORNES ETAIENT EN DUR, INDEPENDANTES DE --size (#1294).
+#
+# ESP 1025 MiB, ROOT jusqu'a 6657 MiB, DATA en `100%`. Consequence : agrandir
+# l'image avec --size n'agrandissait QUE DATA — jamais ROOT. Le reglage qui
+# semblait commander la capacite ne commandait rien.
+#
+# Constate en demarrant une image trixie : `/` plein a 5,4 Go, 40 paquets
+# encore non configures, dpkg incapable d'ecrire ne serait-ce que son propre
+# fichier d'etat — « No space left on device » au milieu d'une configuration.
+#
+# ESP reste fixe : il porte plusieurs noyaux et leurs initrd, 1 Gio suffit et
+# ne croit pas avec l'image. DATA garde une part fixe. ROOT prend le reste,
+# et grandit donc reellement avec --size.
+if [[ -z "${IMG_SIZE}" ]]; then
+  # `full` embarque tout le catalogue applicatif : 8 Gio n'y suffisent pas.
+  case "${PROFILE_TAG}" in
+    isp) IMG_SIZE="8G"  ;;
+    *)   IMG_SIZE="12G" ;;
+  esac
+  log "Taille non precisee — profil ${PROFILE_TAG} : ${IMG_SIZE}"
+fi
+
+# Conversion en MiB, seule unite que parted manipule ici sans ambiguite.
+case "${IMG_SIZE}" in
+  *G|*g) IMG_MIB=$(( ${IMG_SIZE%[Gg]} * 1024 )) ;;
+  *M|*m) IMG_MIB=${IMG_SIZE%[Mm]} ;;
+  *)     IMG_MIB=$(( IMG_SIZE / 1048576 )) ;;
+esac
+ESP_MIB=1024          # portee par plusieurs noyaux — fixe
+DATA_MIB=1536         # part fixe reservee a /data
+ROOT_END=$(( IMG_MIB - DATA_MIB ))
+if (( ROOT_END - ESP_MIB < 3072 )); then
+  echo "Image trop petite : ROOT ferait $(( ROOT_END - ESP_MIB )) MiB, 3072 minimum" >&2
+  exit 1
+fi
+log "Decoupage : ESP ${ESP_MIB} MiB, ROOT $(( ROOT_END - ESP_MIB )) MiB, DATA ${DATA_MIB} MiB"
+
 fallocate -l "${IMG_SIZE}" "${IMG_FILE}"
 
 if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
@@ -1477,9 +1514,9 @@ if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
   # ESP: 1 GiB (voir le bloc ARM ci-dessous), ROOT: 5.5GB, DATA: remaining
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart ESP  fat32  1MiB   1025MiB \
-    mkpart ROOT ext4   1025MiB 6657MiB \
-    mkpart DATA ext4   6657MiB 100% \
+    mkpart ESP  fat32  1MiB   $(( ESP_MIB + 1 ))MiB \
+    mkpart ROOT ext4   $(( ESP_MIB + 1 ))MiB ${ROOT_END}MiB \
+    mkpart DATA ext4   ${ROOT_END}MiB 100% \
     set 1 esp on \
     set 1 boot on
 else
@@ -1505,9 +1542,9 @@ else
   # sur DATA, qui s'étend jusqu'au bout du disque.
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart boot fat32  2MiB   1026MiB \
-    mkpart ROOT ext4   1026MiB 6658MiB \
-    mkpart DATA ext4   6658MiB 100% \
+    mkpart boot fat32  2MiB   $(( ESP_MIB + 2 ))MiB \
+    mkpart ROOT ext4   $(( ESP_MIB + 2 ))MiB $(( ROOT_END + 1 ))MiB \
+    mkpart DATA ext4   $(( ROOT_END + 1 ))MiB 100% \
     set 1 boot on
 fi
 

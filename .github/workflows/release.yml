@@ -59,7 +59,12 @@ jobs:
     uses: ./.github/workflows/build-image.yml
     with:
       board: all
-      size: '8G'
+      # TAILLE NON FORCEE (#1294). `8G` figeait les deux profils a la meme
+      # dimension, et build-image.sh choisit desormais selon le profil : 8G
+      # pour `isp`, 12G pour `full`, qui embarque tout le catalogue
+      # applicatif. Une image trixie `full` s'est remplie a ras bord —
+      # 40 paquets non configures, dpkg incapable d'ecrire son propre fichier
+      # d'etat.
       suite: ${{ github.event.inputs.suite || 'bookworm' }}
     secrets: inherit
 
