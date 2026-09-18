@@ -1,3 +1,14 @@
+secubox-toolbox (2.9.4-1~bookworm1) bookworm; urgency=medium
+
+  * unbound : la boucle locale est retablie dans 99-secubox-wg.conf.
+    Declarer `interface:` NE S'AJOUTE PAS au defaut d'unbound, il le
+    REMPLACE : ce drop-in ajoutait les adresses WireGuard en RETIRANT
+    127.0.0.1, que son propre commentaire croyait conservee. La machine
+    repondait aux pairs WG et n'avait aucune resolution pour elle-meme
+    (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 18:34:21 +0200
+
 secubox-toolbox (2.9.3-1~bookworm1) bookworm; urgency=medium
 
   * Renomme le materiel de CA mitmproxy-* en sbxmitm-*. Ce nom venait de la

@@ -1487,6 +1487,32 @@ fi
 # ── Étape 6 : Construction de l'image ─────────────────────────────
 log "6/7 Construction image GPT ${IMG_SIZE}..."
 
+# RENDRE SON PROPRE resolv.conf A L'IMAGE (#1294).
+#
+# debootstrap copie le /etc/resolv.conf de la MACHINE DE CONSTRUCTION dans le
+# chroot, pour qu'apt puisse resoudre pendant l'installation. Personne ne le
+# nettoyait ensuite : l'image partait donc avec le fichier du runner GitHub —
+# en-tete « managed by systemd-resolved » et domaine de recherche
+# `bx.internal.cloudapp.net` compris, constate tel quel dans une image livree.
+#
+# Sur la board, ce fichier pointe 127.0.0.53, le talon de systemd-resolved,
+# qui n'y tourne PAS : la machine n'avait aucune resolution, et quatre services
+# tombaient en cascade faute de reseau (adblock-sync, threatfeed, deux
+# cache-warm).
+#
+# On ecrit donc le fichier que la board doit avoir : unbound en local, deux
+# resolveurs publics en filet pour l'amorcage — le temps qu'unbound soit
+# debout, ou s'il ne l'est pas.
+cat > "${ROOTFS}/etc/resolv.conf" <<'RESOLV'
+# SecuBox — unbound ecoute en local (cf. secubox-toolbox, drop-ins
+# /etc/unbound/unbound.conf.d/). Les deux suivants ne servent qu'au
+# demarrage, avant qu'unbound ne reponde, ou s'il est arrete.
+nameserver 127.0.0.1
+nameserver 9.9.9.9
+nameserver 1.1.1.1
+RESOLV
+log "resolv.conf de l'image ecrit (127.0.0.1 + filet public)"
+
 # Démonter les filesystems avant création image
 umount -lf "${ROOTFS}/proc" 2>/dev/null || true
 umount -lf "${ROOTFS}/sys"  2>/dev/null || true
