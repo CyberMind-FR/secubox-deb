@@ -723,6 +723,29 @@ elif ! curl -sf "${APT_SECUBOX}/dists/${SUITE}/Release" >/dev/null 2>&1; then
   # construction pour une source d'appoint.
   warn "apt.secubox.in ne publie pas « ${SUITE} » — dépôt ignoré, les paquets"
   warn "viendront du slipstream. Publier la suite lèvera cet avertissement."
+elif ! curl -sf "${APT_SECUBOX}/dists/${SUITE}/InRelease" >/dev/null 2>&1 \
+     && ! curl -sf "${APT_SECUBOX}/dists/${SUITE}/Release.gpg" >/dev/null 2>&1; then
+  # SUITE PUBLIEE MAIS NON SIGNEE (#1294).
+  #
+  # La suite `trixie` est servie sans signature : le depot GitHub ne porte
+  # AUCUN secret, GPG_PRIVATE_KEY comprise, donc plus rien ne peut etre signe
+  # par la chaine. `SignWith` a ete retire de cette strophe seule — bookworm
+  # garde la sienne, ses clients la validant via signed-by=.
+  #
+  # Sans le dire a apt, la construction mourait ici :
+  #   E: The repository '... trixie Release' is not signed.   -> exit 100
+  #
+  # `trusted=yes` est EXPLICITE et LOCAL a cette source. Ce n'est pas un
+  # relachement global : les depots Debian gardent leur verification, et la
+  # ligne porte la raison pour que personne ne la prenne pour un oubli.
+  warn "apt.secubox.in ne signe pas « ${SUITE} » — source marquee trusted=yes"
+  warn "Retablir la signature : definir GPG_PRIVATE_KEY et remettre SignWith."
+  cat > "${ROOTFS}/etc/apt/sources.list.d/secubox.list" <<EOF
+# Suite non signee — cf. #1294. trusted=yes est volontaire et limite a cette
+# source ; les depots Debian conservent leur verification.
+deb [trusted=yes] ${APT_SECUBOX} ${SUITE} main
+EOF
+  SECUBOX_REPO_OK=1
 elif curl -sf "${APT_SECUBOX}/secubox-keyring.gpg" 2>/dev/null \
        | gpg --dearmor > "${ROOTFS}/usr/share/keyrings/secubox.gpg" 2>/dev/null \
      && [ -s "${ROOTFS}/usr/share/keyrings/secubox.gpg" ]; then
