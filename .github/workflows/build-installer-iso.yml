@@ -18,6 +18,11 @@ on:
         description: 'ISO name prefix'
         required: false
         default: 'secubox-installer'
+      suite:
+        description: 'Suite Debian'
+        type: choice
+        options: [bookworm, trixie]
+        default: bookworm
   push:
     tags:
       - 'v*'
@@ -27,7 +32,9 @@ on:
     branches: [main, master]
 
 env:
-  DEBIAN_SUITE: bookworm
+  # SUITE PARAMETRABLE (#1294) : elle etait figee, donc une demande trixie
+  # produisait un ISO BOOKWORM sous un nom annoncant trixie.
+  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'bookworm' }}
 
 jobs:
   build-iso:
@@ -286,8 +293,8 @@ jobs:
 
             | File | Description |
             |------|-------------|
-            | `secubox-installer-amd64-bookworm.iso.gz` | Bootable ISO (UEFI/BIOS) |
-            | `secubox-installer-amd64-bookworm.img.gz` | Raw USB image |
+            | `secubox-installer-amd64-${{ env.DEBIAN_SUITE }}.iso.gz` | Bootable ISO (UEFI/BIOS) |
+            | `secubox-installer-amd64-${{ env.DEBIAN_SUITE }}.img.gz` | Raw USB image |
 
             ### Features
 
@@ -311,10 +318,10 @@ jobs:
 
             ```bash
             # Download and extract
-            gunzip secubox-installer-amd64-bookworm.img.gz
+            gunzip secubox-installer-amd64-${{ env.DEBIAN_SUITE }}.img.gz
 
             # Flash (replace sdX with your USB device)
-            sudo dd if=secubox-installer-amd64-bookworm.img of=/dev/sdX bs=4M status=progress conv=fsync
+            sudo dd if=secubox-installer-amd64-${{ env.DEBIAN_SUITE }}.img of=/dev/sdX bs=4M status=progress conv=fsync
             ```
 
             ### Credentials

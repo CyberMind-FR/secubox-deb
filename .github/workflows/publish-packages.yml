@@ -41,6 +41,11 @@ on:
         required: false
 
 env:
+  # UNE SEULE SOURCE POUR LA SUITE (#1294). `github.event.inputs` est NUL lors
+  # d'un appel `workflow_call` : lu seul, il faisait toujours retomber sur
+  # bookworm, y compris quand release.yml demandait trixie. Il faut les deux
+  # formes, plus le repli litteral pour le declencheur `workflow_run`.
+  DEBIAN_SUITE: ${{ inputs.distribution || github.event.inputs.distribution || 'bookworm' }}
   REPO_HOST: apt.secubox.in
   REPO_USER: deploy
   REPO_PATH: /var/www/apt.secubox.in
@@ -94,7 +99,7 @@ jobs:
 
       - name: Add packages to repository
         env:
-          DIST: ${{ github.event.inputs.distribution || 'bookworm' }}
+          DIST: ${{ env.DEBIAN_SUITE }}
         run: |
           echo "Adding packages to $DIST..."
           for deb in debs/*.deb; do
@@ -139,7 +144,7 @@ jobs:
             sudo tee /usr/share/keyrings/secubox.gpg > /dev/null
 
           # Add repository
-          echo "deb [signed-by=/usr/share/keyrings/secubox.gpg] https://apt.secubox.in bookworm main" | \
+          echo "deb [signed-by=/usr/share/keyrings/secubox.gpg] https://apt.secubox.in ${{ env.DEBIAN_SUITE }} main" | \
             sudo tee /etc/apt/sources.list.d/secubox.list
 
           # Update package lists
@@ -173,7 +178,7 @@ jobs:
       - name: Verify deployment
         run: |
           echo "Verifying deployment..."
-          curl -sf "https://${REPO_HOST}/dists/bookworm/Release" | head -10
+          curl -sf "https://${REPO_HOST}/dists/${{ env.DEBIAN_SUITE }}/Release" | head -10
           echo ""
           echo "Repository published successfully!"
           echo "Install with: curl -fsSL https://${REPO_HOST}/install.sh | sudo bash"

@@ -12,6 +12,10 @@ on:
         description: 'Target platform(s)'
         type: string
         default: 'all'
+      suite:
+        description: 'Suite Debian (bookworm = cible actuelle, trixie = portage)'
+        type: string
+        default: 'bookworm'
     secrets:
       GPG_PRIVATE_KEY:
         required: false
@@ -30,12 +34,21 @@ on:
         description: 'Compress output (gzip)'
         type: boolean
         default: true
+      suite:
+        description: 'Suite Debian'
+        type: choice
+        options: [bookworm, trixie]
+        default: bookworm
   push:
     tags:
       - 'v*'
 
 env:
-  DEBIAN_SUITE: bookworm
+  # SUITE PARAMETRABLE (#1294). Elle etait figee a `bookworm` : demander une
+  # live USB trixie produisait donc une image BOOKWORM, le nom d'artefact
+  # venant de l'entree et non du contenu. Le repli litteral couvre le push de
+  # tag, qui ne porte aucun input.
+  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'bookworm' }}
 
 jobs:
   # Matrix build for all platforms
@@ -325,21 +338,21 @@ jobs:
 
             | Image | Platform | Architecture | Boot Method | Flasher Tool |
             |-------|----------|--------------|-------------|--------------|
-            | `secubox-live-amd64-bookworm.img.gz` | x64 PC | amd64 | GRUB UEFI/BIOS | `secubox-flash-disk` (press `d`) |
+            | `secubox-live-amd64-${{ env.DEBIAN_SUITE }}.img.gz` | x64 PC | amd64 | GRUB UEFI/BIOS | `secubox-flash-disk` (press `d`) |
             | `secubox-mochabin-live-usb.img.gz` | MOCHAbin | arm64 | U-Boot extlinux | `secubox-flash-emmc` (press `f`) |
-            | `secubox-rpi-arm64-bookworm.img.gz` | Raspberry Pi 400 | arm64 | Pi firmware | Manual install |
+            | `secubox-rpi-arm64-${{ env.DEBIAN_SUITE }}.img.gz` | Raspberry Pi 400 | arm64 | Pi firmware | Manual install |
 
             ### Flash to USB Drive
 
             ```bash
             # x64 PC
-            zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+            zcat secubox-live-amd64-${{ env.DEBIAN_SUITE }}.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
 
             # MOCHAbin
             sudo dd if=secubox-mochabin-live-usb.img of=/dev/sdX bs=4M status=progress
 
             # Raspberry Pi 400
-            zcat secubox-rpi-arm64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+            zcat secubox-rpi-arm64-${{ env.DEBIAN_SUITE }}.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
             ```
 
             ### Boot & Install to Internal Storage

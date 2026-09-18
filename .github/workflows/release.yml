@@ -23,6 +23,11 @@ on:
         description: 'Publish to APT repo'
         type: boolean
         default: true
+      suite:
+        description: 'Suite Debian (bookworm = cible actuelle, trixie = portage)'
+        type: choice
+        options: [bookworm, trixie]
+        default: bookworm
   # Callable as a reusable workflow (sync-all.yml references it). Without this,
   # `uses: ./.github/workflows/release.yml` makes the CALLER fail to parse at
   # startup ("workflow file issue") — which is why sync-all was red at 0s. The
@@ -31,10 +36,18 @@ on:
   # callable path is not exercised today — it only restores a valid reference.
   workflow_call:
 
+env:
+  # Pour les ETAPES de create-release uniquement : le contexte `env` n'est pas
+  # disponible dans le `with:` d'un appel de workflow reutilisable, d'ou
+  # l'expression repetee en clair sur chaque appel ci-dessous (#1294).
+  DEBIAN_SUITE: ${{ github.event.inputs.suite || 'bookworm' }}
+
 jobs:
   # Build all packages
   build-packages:
     uses: ./.github/workflows/build-packages.yml
+    with:
+      suite: ${{ github.event.inputs.suite || 'bookworm' }}
     secrets: inherit
 
   # Build system images (optional).
@@ -47,6 +60,7 @@ jobs:
     with:
       board: all
       size: '8G'
+      suite: ${{ github.event.inputs.suite || 'bookworm' }}
     secrets: inherit
 
   # Build Live USB images (all platforms) — partial-release resilient.
@@ -56,6 +70,7 @@ jobs:
     uses: ./.github/workflows/build-all-live-usb.yml
     with:
       platform: all
+      suite: ${{ github.event.inputs.suite || 'bookworm' }}
     secrets: inherit
 
   # Publish to APT repository — partial-release resilient.
@@ -63,6 +78,8 @@ jobs:
     if: ${{ always() && needs.build-packages.result != 'cancelled' && github.event.inputs.publish != 'false' }}
     needs: build-packages
     uses: ./.github/workflows/publish-packages.yml
+    with:
+      distribution: ${{ github.event.inputs.suite || 'bookworm' }}
     secrets: inherit
 
   # Create unified release. Ships whatever artifacts the upstream jobs
@@ -84,18 +101,28 @@ jobs:
           path: release/packages/
 
       - name: Download image artifacts
-        if: needs.build-images.result == 'success'
+        # `!= 'cancelled'` ET NON `== 'success'`. C'est le meme defaut que dans
+        # build-image.yml, mais UN ETAGE AU-DESSUS — et le commentaire de ce job
+        # affirme deja « ships whatever artifacts the upstream jobs managed to
+        # produce ». Il ne le faisait pas : une matrice partiellement reussie
+        # rend `result == 'failure'`, donc AUCUNE image n'etait recuperee, meme
+        # quand cinq sur six avaient abouti. C'est ce qui a vide v3.0.0-alpha.4
+        # de ses images (#1294).
+        if: needs.build-images.result != 'cancelled' && needs.build-images.result != 'skipped'
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          pattern: secubox-*-bookworm
+          pattern: secubox-*-${{ env.DEBIAN_SUITE }}
           path: release/images/
           merge-multiple: true
 
       - name: Download Live USB artifacts
-        if: needs.build-live-usb.result == 'success'
+        # Meme raison que ci-dessus.
+        if: needs.build-live-usb.result != 'cancelled' && needs.build-live-usb.result != 'skipped'
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          pattern: secubox-*-bookworm
+          pattern: secubox-*-${{ env.DEBIAN_SUITE }}
           path: release/live-usb/
           merge-multiple: true
 
@@ -150,7 +177,7 @@ jobs:
           ### From Live USB Image
           \`\`\`bash
           # Flash to USB
-          gunzip -c secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+          gunzip -c secubox-live-amd64-${{ env.DEBIAN_SUITE }}.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
 
           # VirtualBox VM
           bash image/create-vbox-vm.sh --name SecuBox --memory 4096
