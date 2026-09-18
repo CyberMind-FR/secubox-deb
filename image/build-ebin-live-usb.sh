@@ -169,7 +169,7 @@ INCLUDE_PKGS+=",pciutils,usbutils,parted,dosfstools,e2fsprogs,lsb-release,gdisk"
 INCLUDE_PKGS+=",pv,dialog,fonts-terminus,kbd"
 
 # Python dependencies for SecuBox modules (apt packages)
-# Note: python3-cryptography, python3-jose, python3-zmq installed post-debootstrap
+# Note: python3-cryptography, python3-jwt, python3-zmq installed post-debootstrap
 # (they fail during cross-arch debootstrap due to Rust/native deps)
 INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
 INCLUDE_PKGS+=",python3-aiosqlite,python3-jinja2,python3-jwt"
@@ -235,7 +235,7 @@ ok "Critical packages verified"
 # Install Python packages that fail during cross-arch debootstrap
 log "Installing Python cryptography packages post-debootstrap..."
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-    python3-cryptography python3-jose python3-zmq 2>&1" | tail -10 || warn "Some Python packages not installed"
+    python3-cryptography python3-jwt python3-zmq 2>&1" | tail -10 || warn "Some Python packages not installed"
 
 # Hostname
 echo "secubox-live" > "${ROOTFS}/etc/hostname"

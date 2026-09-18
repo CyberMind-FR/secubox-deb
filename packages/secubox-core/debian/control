@@ -17,7 +17,7 @@ Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends},
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip,
- python3-jose,
+ python3-jwt,
  python3-cryptography,
  python3-httpx | python3-pip,
  nginx,

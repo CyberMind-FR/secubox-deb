@@ -16,7 +16,7 @@ Depends: ${misc:Depends},
  python3-uvicorn,
  python3-argon2,
  python3-pyotp,
- python3-jose,
+ python3-jwt,
  secubox-core (>= 1.4.3),
  secubox-users (>= 1.4)
 Description: SecuBox Auth Guardian

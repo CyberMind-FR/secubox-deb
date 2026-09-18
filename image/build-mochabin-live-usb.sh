@@ -252,7 +252,7 @@ chroot "${ROOTFS}" bash -c "apt-get update -qq && DEBIAN_FRONTEND=noninteractive
 
 # Python crypto packages
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-    python3-cryptography python3-jose python3-zmq 2>&1" | tail -10 || warn "Some Python packages not installed"
+    python3-cryptography python3-jwt python3-zmq 2>&1" | tail -10 || warn "Some Python packages not installed"
 
 # Hostname
 echo "secubox-mochabin" > "${ROOTFS}/etc/hostname"

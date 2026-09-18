@@ -1222,7 +1222,7 @@ chroot "${ROOTFS}" bash -c '
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
 # Install Python packages that fail during debootstrap
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  python3-cryptography python3-jose python3-zmq 2>/dev/null" || warn "Some Python packages not installed"
+  python3-cryptography python3-jwt python3-zmq 2>/dev/null" || warn "Some Python packages not installed"
 
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   crowdsec glances netdata mosquitto coturn lxc debootstrap 2>/dev/null" || warn "Some services not installed"

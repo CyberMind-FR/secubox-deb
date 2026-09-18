@@ -146,7 +146,7 @@ INCLUDE_PKGS+=",parted,dosfstools,e2fsprogs,pciutils,usbutils"
 INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
 INCLUDE_PKGS+=",python3-aiosqlite,python3-jinja2,python3-jwt"
 INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
-INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
+INCLUDE_PKGS+=",python3-jwt,python3-toml,python3-netifaces"
 # Auth/users engine runtime deps — WITHOUT these secubox-auth crashes at import
 # (import pyotp / import qrcode) → nginx 502 → no login. Pure-Python, apt-safe.
 # argon2 (compiled cffi) goes via the pip step below, mirroring cryptography.

@@ -22,7 +22,18 @@ from typing import Any, Callable, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+# PyJWT ET NON python-jose (#1294). python3-jose a ete RETIRE de Debian 13 :
+# il n'existe plus que dans oldstable, et un debootstrap trixie echoue net sur
+# « Couldn't find these debs: python3-jose ». Comme secubox-core en dependait,
+# TOUTE la pile devenait ininstallable sur trixie.
+#
+# python3-jwt existe dans les DEUX suites (2.6.0 en bookworm, 2.10.1 en
+# trixie), l'API encode/decode est identique, et ExpiredSignatureError derive
+# de PyJWTError comme elle derivait de JWTError — la clause `except` garde donc
+# exactement la meme portee. secubox-portal utilisait deja PyJWT : cette
+# migration supprime aussi une seconde bibliotheque JWT pour le meme besoin.
+import jwt
+from jwt import PyJWTError as JWTError
 from pydantic import BaseModel
 
 from . import sessions as _sessions

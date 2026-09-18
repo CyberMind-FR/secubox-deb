@@ -154,7 +154,7 @@ install_base_packages() {
         python3-venv \
         python3-uvicorn \
         python3-fastapi \
-        python3-jose \
+        python3-jwt \
         python3-httpx \
         python3-psutil \
         python3-jinja2
