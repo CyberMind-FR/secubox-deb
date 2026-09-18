@@ -98,9 +98,23 @@ ExecStartPre=+/bin/chmod 0770 /var/lib/secubox/waf
 # reellement mort soit encore constate comme tel. Ce n'est pas « une minute de
 # plus par securite » — c'est la duree au-dela de laquelle plus rien de sain ne
 # se passe sur un point d'entree qui accuse reception avant d'envoyer l'alerte.
+# CORPS NON INSPECTE POUR LE POINT DE DEPOT (#1027).
+#
+# Un envoi anonyme de 210 Mio etait refuse en 403 : une regle LFI filait sur les
+# octets COMPRESSES de l'archive. Dans un mebioctet de donnees compressees, une
+# sequence ressemblant a `../` finit par apparaitre par hasard — et chercher des
+# motifs textuels dans des octets qui n'en sont pas ne peut produire QUE des
+# faux positifs.
+#
+# LA RENONCIATION EST ETROITE ET NOMINATIVE. Chemin, requete et UA de cet hote
+# restent pleinement inspectes, regles bloquantes comprises ; seule la lecture
+# du corps est levee, et pour ce seul hote. Ce n'est PAS un `waf_bypass` : la
+# requete traverse toujours sbxwaf — routage, reveil, bannissement nft, journal
+# des menaces. Chaque saut est journalise en `body-inspect-skipped`.
 ExecStart=/usr/sbin/sbxwaf \
   --listen 127.0.0.1:8085 \
   --upstream-timeout 120s \
+  --waf-skip-body-hosts depot.gk2.secubox.in \
   --routes /etc/secubox/waf/haproxy-routes.json \
   --rules /etc/secubox/waf/waf-rules.json \
   --on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json \

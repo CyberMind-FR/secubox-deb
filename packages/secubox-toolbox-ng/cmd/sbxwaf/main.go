@@ -173,6 +173,25 @@ type Server struct {
 	// services. Configurable via --waf-skip-hosts.
 	trustedHosts map[string]struct{}
 
+	// skipBodyHosts : hotes dont le CORPS n'est pas inspecte, chemin, requete
+	// et UA restant pleinement inspectes, regles bloquantes comprises (#1027).
+	//
+	// POURQUOI CE MECANISME EXISTE. Le point de depot public a ete refuse en
+	// 403 sur un envoi legitime : une regle LFI a file sur les octets
+	// COMPRESSES d'une archive. Dans un mebioctet de donnees compressees, une
+	// sequence ressemblant a `../` finit par apparaitre par hasard.
+	//
+	// INSPECTER UN CORPS OPAQUE NE PROTEGE DE RIEN. Une archive, une image,
+	// une video ne sont pas du texte : y chercher des motifs textuels ne peut
+	// produire que des faux positifs. Le corps est donc saute LA OU IL
+	// N'APPRENAIT RIEN, et nulle part ailleurs.
+	//
+	// CE N'EST PAS UN CONTOURNEMENT DU WAF. La requete traverse toujours
+	// sbxwaf : routage, reveil a la demande, journal des menaces, CrowdSec.
+	// Seule la lecture d'octets opaques est levee. Un `waf_bypass` HAProxy,
+	// lui, ferait sortir la requete de la chaine entiere.
+	skipBodyHosts map[string]struct{}
+
 	// cookieAudit is the Task 5.1 RGPD Set-Cookie ledger.
 	// When non-nil, ModifyResponse calls Record for every upstream response.
 	// Nil means auditing is disabled (--cookie-audit-log="").
@@ -501,7 +520,30 @@ func (s *Server) handler() http.Handler {
 				// Un corps binaire n'est pas inspecte : les regles textuelles
 				// n'y trouvent que des faux positifs. Voir corpsBinaire().
 				binaire := corpsBinaire(r.Header.Get("Content-Type"))
-				if isStatic || binaire {
+				// CORPS OPAQUE : on ne le lit pas (#1027). Chemin, requete et UA
+				// restent inspectes, regles bloquantes comprises — seule la
+				// recherche de motifs textuels dans des octets qui n'en sont pas
+				// est levee. Un depot d'archive etait refuse en 403 parce qu'une
+				// regle LFI filait sur des octets compresses.
+				sansCorps := s.isSkipBodyHost(r.Host)
+				if sansCorps {
+					// LE SAUT EST JOURNALISE. Une renonciation d'inspection qui
+					// ne laisse aucune trace est indistinguable d'un defaut : le
+					// jour ou l'on cherchera pourquoi un envoi n'a pas ete vu,
+					// cette ligne sera la seule reponse.
+					if s.threatLog != nil {
+						s.threatLog.Record(ThreatRecord{
+							ClientIP: ip,
+							Host:     r.Host,
+							Method:   r.Method,
+							Path:     rawPath,
+							Category: "body-inspect-skipped",
+							Severity: "audit",
+							Action:   "body-inspect-skipped",
+							UA:       r.Header.Get("User-Agent"),
+						})
+					}
+				} else if isStatic || binaire {
 					// Fingerprint-only pass: detect/escalate on path+query+ua, no
 					// body read, no block evaluation.
 					//
@@ -970,6 +1012,36 @@ func parseTrustedHosts(csv string) map[string]struct{} {
 	return m
 }
 
+// hostDans dit si l'en-tete Host figure dans l'ensemble donne, avec ou sans
+// port (#1027).
+//
+// FACTORISE A PARTIR D'isTrustedHost. Deux ensembles d'hotes lus par deux
+// comparateurs differents finiraient par diverger sur la casse ou sur le port
+// — et la divergence se verrait le jour ou l'un des deux laisserait passer ce
+// que l'autre bloque.
+func hostDans(ensemble map[string]struct{}, hostHeader string) bool {
+	if len(ensemble) == 0 {
+		return false
+	}
+	lh := strings.ToLower(strings.TrimSpace(hostHeader))
+	if _, ok := ensemble[lh]; ok {
+		return true
+	}
+	if bare, _, err := net.SplitHostPort(lh); err == nil {
+		if _, ok := ensemble[bare]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// isSkipBodyHost dit si le CORPS des requetes de cet hote doit rester
+// non inspecte. Chemin, requete et UA le restent pleinement. Voir
+// skipBodyHosts pour le pourquoi.
+func (s *Server) isSkipBodyHost(hostHeader string) bool {
+	return hostDans(s.skipBodyHosts, hostHeader)
+}
+
 // isTrustedHost reports whether the given Host header value (with optional port)
 // belongs to the trusted-host whitelist. Matches the Python check_request
 // trusted-host skip (secubox_waf.py:761-763). Checked before WAF inspection so
@@ -1092,6 +1164,11 @@ func main() {
 	wafSkipHosts := flag.String("waf-skip-hosts",
 		"git.gk2.secubox.in,git.secubox.in,admin.gk2.secubox.in,10.100.0.1:9080",
 		"comma-separated hostnames to bypass WAF inspection entirely (mirrors Python trusted-host list)")
+	// Corps non inspecte pour ces hotes (#1027) : voir skipBodyHosts.
+	// VIDE PAR DEFAUT. Sauter le corps est une renonciation, meme etroite :
+	// elle doit etre demandee hote par hote, jamais heritee.
+	wafSkipBodyHosts := flag.String("waf-skip-body-hosts", "",
+		"hotes (separes par des virgules) dont le corps de requete n'est pas inspecte ; chemin, requete et UA le restent")
 	// escalate mode: separate long-window counter (a slow scanner probing over
 	// hours/days must still trip a ban even though each individual probe is
 	// only observed, not blocked).
@@ -1234,9 +1311,13 @@ func main() {
 		maxBodyInspect: *maxBodyInspectFlag,
 		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
 		trustedHosts: parseTrustedHosts(*wafSkipHosts),
+		// Meme analyseur : un hote est un hote, et deux facons de les lire
+		// finiraient par diverger sur la casse ou le port.
+		skipBodyHosts: parseTrustedHosts(*wafSkipBodyHosts),
 	}
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
-	log.Printf("sbxwaf: body-inspect cap=%d bytes; trusted-skip hosts=%d", *maxBodyInspectFlag, len(srv.trustedHosts))
+	log.Printf("sbxwaf: body-inspect cap=%d bytes; trusted-skip hosts=%d; body-skip hosts=%d",
+		*maxBodyInspectFlag, len(srv.trustedHosts), len(srv.skipBodyHosts))
 
 	// Ban nft natif (#1070 phase B). Autonome : le
 	// drop nft est effectif de façon autonome, persiste au restart (journal) et

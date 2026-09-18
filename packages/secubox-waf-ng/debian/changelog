@@ -1,3 +1,19 @@
+secubox-waf-ng (1.18.4-1~bookworm1) bookworm; urgency=medium
+
+  * Corps non inspecte pour le point de depot (--waf-skip-body-hosts).
+    Un envoi anonyme de 210 Mio etait refuse en 403 : une regle LFI filait
+    sur les octets COMPRESSES de l'archive, ou une sequence ressemblant a
+    `../` finit par apparaitre par hasard. La renonciation est etroite et
+    nominative — chemin, requete et UA restent inspectes — et CHAQUE saut
+    est journalise en `body-inspect-skipped` : une renonciation muette
+    serait indistinguable d'un defaut.
+  * Travail repris du worktree #1027, ou il dormait NON COMMITE depuis le
+    13 aout. Fusionne avec la detection par type de contenu ajoutee depuis
+    sur master : les deux mecanismes coexistent, l'un par hote, l'autre par
+    Content-Type (ref #1027).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 10:23:54 +0200
+
 secubox-waf-ng (1.18.3-1~bookworm1) bookworm; urgency=medium
 
   * secubox-waf-ratelimit.nft rendu rejouable (idiome create-then-delete).
