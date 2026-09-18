@@ -32,7 +32,7 @@ SUITE="bookworm"
 PROFILE_TAG="${SECUBOX_PROFILE:-}"
 PROFILE_TAG="${PROFILE_TAG#secubox-}"
 PROFILE_TAG="${PROFILE_TAG:-full}"
-IMG_SIZE="8G"
+IMG_SIZE=""           # vide = choisi selon le profil plus bas (#1294)
 OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
 USE_LOCAL_CACHE=0
@@ -1325,6 +1325,18 @@ ok "Chroot safety net removed"
 # Step 7: Create image
 # ══════════════════════════════════════════════════════════════════
 log "7/7 Creating bootable image..."
+
+# Le decoupage de ce script est SAIN — la racine est en `100%`, elle grandit
+# donc reellement avec --size, contrairement a build-image.sh dont les bornes
+# etaient figees en MiB (#1294). Seul le defaut est aligne ici : `full`
+# embarque tout le catalogue applicatif et 8 Gio n'y suffisent pas.
+if [[ -z "${IMG_SIZE}" ]]; then
+  case "${PROFILE_TAG}" in
+    isp) IMG_SIZE="8G"  ;;
+    *)   IMG_SIZE="12G" ;;
+  esac
+  log "Taille non precisee — profil ${PROFILE_TAG} : ${IMG_SIZE}"
+fi
 
 rm -f "${IMG_FILE}" "${IMG_FILE}.gz"
 truncate -s "${IMG_SIZE}" "${IMG_FILE}"
