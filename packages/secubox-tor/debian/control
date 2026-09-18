@@ -7,7 +7,16 @@ Standards-Version: 4.6.2
 
 Package: secubox-tor
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0), tor, unbound, nftables
+# dns-root-data EST INDISPENSABLE AVEC unbound (#1294).
+# Le paquet Debian unbound livre root-auto-trust-anchor-file.conf, qui
+# exige /var/lib/unbound/root.key. Cette ancre vient de dns-root-data,
+# que unbound RECOMMANDE sans l'exiger — et la construction d'image
+# installe avec --no-install-recommends. Resultat sur une image trixie
+# fraiche : unbound boucle en echec (26 redemarrages constates) et le
+# systeme n'a AUCUNE resolution DNS, alors qu'unbound-anchor, l'outil
+# qui sait semer l'ancre, n'est pas installe non plus.
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), tor, unbound, nftables,
+         dns-root-data
 Description: SecuBox Tor — Tor relay + hidden-services manager
  Manages a local Tor daemon: transparent-proxy + SOCKS modes,
  hidden-service publishing, circuit monitoring, identity rotation,

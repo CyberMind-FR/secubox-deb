@@ -1,3 +1,15 @@
+secubox-ad-guard (1.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Depends: dns-root-data. unbound livre un
+    root-auto-trust-anchor-file.conf qui exige /var/lib/unbound/root.key ;
+    cette ancre vient de dns-root-data, que unbound RECOMMANDE sans
+    l'exiger — et la construction d'image installe avec
+    --no-install-recommends. Sur une image trixie fraiche, unbound
+    bouclait en echec (26 redemarrages) et la machine n'avait aucune
+    resolution DNS (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 17:28:10 +0200
+
 secubox-ad-guard (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * postinst : cesse d'activer secubox-ad-guard.service, qui n'est pas
