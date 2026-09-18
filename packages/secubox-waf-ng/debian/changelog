@@ -1,3 +1,33 @@
+secubox-waf-ng (1.4.0-1~bookworm1) bookworm; urgency=high
+
+  * Le corps des requetes peut etre exclu de l'inspection POUR DES HOTES
+    NOMMES (ref #1027). Un envoi anonyme de 210 Mio sur le point de depot etait
+    refuse en 403 : une regle LFI filait sur les octets COMPRESSES de
+    l'archive. Dans un mebioctet de donnees compressees, une sequence
+    ressemblant a `../` finit par apparaitre par hasard — et chercher des
+    motifs textuels dans des octets qui n'en sont pas ne peut produire QUE des
+    faux positifs.
+  * LA RENONCIATION EST ETROITE. Chemin, requete et UA restent pleinement
+    inspectes, regles bloquantes comprises ; seule la lecture du corps est
+    levee, et pour les seuls hotes declares. Ce n'est PAS un `waf_bypass` : la
+    requete traverse toujours sbxwaf — routage, reveil a la demande, journal
+    des menaces, CrowdSec. Un `waf_bypass` HAProxy, lui, la ferait sortir de la
+    chaine entiere.
+  * CHAQUE SAUT EST JOURNALISE en `body-inspect-skipped`. Une renonciation
+    d'inspection qui ne laisse aucune trace est indistinguable d'un defaut : le
+    jour ou l'on cherchera pourquoi un envoi n'a pas ete vu, cette ligne sera
+    la seule reponse.
+  * Le drapeau est VIDE PAR DEFAUT : sauter le corps se demande hote par hote,
+    ne s'herite jamais.
+  * `depot.gk2.secubox.in` y est declare dans l'unite livree.
+  * Six tests, dont trois sur ce qui doit RESTER bloque : une attaque dans
+    l'URL d'un hote declare, un hote non declare, et le corps quand la liste
+    est vide. Le corps arrive entier a l'amont — un WAF qui avalerait les
+    octets livrerait un fichier tronque, corruption silencieuse pire que le
+    refus qu'on corrige.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 16:05:00 +0200
+
 secubox-waf-ng (1.3.2-1~bookworm1) bookworm; urgency=high
 
   * Le WAF detectait sans jamais pouvoir bannir (ref #1017). Deux defauts

@@ -65,8 +65,22 @@ ExecStartPre=+/bin/chmod 0750 /var/log/secubox/cookie-audit
 ExecStartPre=+/bin/mkdir -p /var/log/secubox/waf
 ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/log/secubox/waf
 ExecStartPre=+/bin/chmod 0750 /var/log/secubox/waf
+# CORPS NON INSPECTE POUR LE POINT DE DEPOT (#1027).
+#
+# Un envoi anonyme de 210 Mio etait refuse en 403 : une regle LFI filait sur les
+# octets COMPRESSES de l'archive. Dans un mebioctet de donnees compressees, une
+# sequence ressemblant a `../` finit par apparaitre par hasard — et chercher des
+# motifs textuels dans des octets qui n'en sont pas ne peut produire QUE des
+# faux positifs.
+#
+# LA RENONCIATION EST ETROITE ET NOMINATIVE. Chemin, requete et UA de cet hote
+# restent pleinement inspectes, regles bloquantes comprises ; seule la lecture
+# du corps est levee, et pour ce seul hote. Ce n'est pas un `waf_bypass` : la
+# requete traverse toujours sbxwaf — routage, reveil, journal des menaces,
+# CrowdSec. Chaque saut est journalise en `body-inspect-skipped`.
 ExecStart=/usr/sbin/sbxwaf \
   --listen 127.0.0.1:8085 \
+  --waf-skip-body-hosts depot.gk2.secubox.in \
   --routes /etc/secubox/waf/haproxy-routes.json \
   --rules /etc/secubox/waf/waf-rules.json \
   --on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json \
