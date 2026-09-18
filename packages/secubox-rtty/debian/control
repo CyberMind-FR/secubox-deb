@@ -7,9 +7,12 @@ Standards-Version: 4.6.2
 
 Package: secubox-rtty
 Architecture: all
+# DEPENDANCE INSATISFIABLE, PASSEE EN Recommends (#1294).
+# rtty n'a JAMAIS ete dans Debian — ni bookworm ni trixie. Cette
+# dependance dure n'a donc jamais pu etre satisfaite depuis l'archive.
 Depends: ${misc:Depends},
-         secubox-core,
-         rtty
+         secubox-core
+Recommends: rtty
 Description: SecuBox Remote Terminal Access (rtty)
  Web-based remote terminal access module for SecuBox.
  Features:

@@ -1,3 +1,12 @@
+secubox-netdata (1.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Depends -> Recommends sur netdata, retire de Debian 13.
+    Une dependance dure insatisfiable ne rend pas seulement CE paquet
+    ininstallable : elle fait echouer toute transaction apt qui le
+    contient, et emporte les autres avec elle (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 10:15:43 +0200
+
 secubox-netdata (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * Identifiants dérivés : les hachages hérités (MD5/SHA-1) passent par

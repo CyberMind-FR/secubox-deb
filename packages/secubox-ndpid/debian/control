@@ -7,8 +7,12 @@ Standards-Version: 4.6.2
 
 Package: secubox-ndpid
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.0), ndpid | ndpi-reader, python3-zmq
-Recommends: secubox-dpi
+# DEPENDANCE INSATISFIABLE, PASSEE EN Recommends (#1294).
+# ndpid et ndpi-reader ne sont dans AUCUNE Debian, et aucun paquet SecuBox
+# ne les fournit : secubox-dpi-engine est construit HORS CI et n'existe
+# meme pas dans ce depot.
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), python3-zmq
+Recommends: secubox-dpi, ndpid | ndpi-reader
 Description: SecuBox nDPId — DPI dashboard with JA3/JA4 TLS fingerprinting
  nDPId-backed deep packet inspection dashboard: JA3/JA3S/JA4 TLS
  fingerprinting, protocol detection, application classification,

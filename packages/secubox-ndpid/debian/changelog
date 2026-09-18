@@ -1,3 +1,12 @@
+secubox-ndpid (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Depends -> Recommends sur ndpid | ndpi-reader, absents de toute Debian.
+    Une dependance dure insatisfiable ne rend pas seulement CE paquet
+    ininstallable : elle fait echouer toute transaction apt qui le
+    contient, et emporte les autres avec elle (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 10:15:43 +0200
+
 secubox-ndpid (1.1.1-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

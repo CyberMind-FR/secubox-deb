@@ -9,7 +9,13 @@ Rules-Requires-Root: no
 
 Package: secubox-netdata
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.3), netdata
+# DEPENDANCE INSATISFIABLE, PASSEE EN Recommends (#1294).
+# netdata a ete RETIRE de Debian 13 : present en bookworm, absent de trixie.
+# Ce module est un TABLEAU DE BORD au-dessus de netdata, pas netdata
+# lui-meme. Une dependance dure le rendait ininstallable sur trixie, et
+# emportait avec lui TOUTE transaction apt qui le contenait.
+Depends: ${misc:Depends}, secubox-core (>= 1.4.3)
+Recommends: netdata
 Description: SecuBox Netdata Dashboard
  Monitoring temps réel via Netdata REST v2 : CPU, RAM, réseau, température, processus.
  .

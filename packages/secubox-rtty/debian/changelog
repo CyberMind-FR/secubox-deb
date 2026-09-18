@@ -1,3 +1,12 @@
+secubox-rtty (1.1.1-1~bookworm2) bookworm; urgency=medium
+
+  * Depends -> Recommends sur rtty, absent de toute Debian.
+    Une dependance dure insatisfiable ne rend pas seulement CE paquet
+    ininstallable : elle fait echouer toute transaction apt qui le
+    contient, et emporte les autres avec elle (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 10:15:43 +0200
+
 secubox-rtty (1.1.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit

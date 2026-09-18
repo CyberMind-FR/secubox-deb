@@ -1,3 +1,12 @@
+secubox-reporter (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Depends -> Recommends sur python3-weasyprint | wkhtmltopdf, absents de main.
+    Une dependance dure insatisfiable ne rend pas seulement CE paquet
+    ininstallable : elle fait echouer toute transaction apt qui le
+    contient, et emporte les autres avec elle (ref #1294).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 18 Sep 2026 10:15:43 +0200
+
 secubox-reporter (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est
