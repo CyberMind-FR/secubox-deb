@@ -107,15 +107,19 @@ jobs:
           [ "$requested_arch" = "both" ] && requested_arch=""
           requested_pkg="${REQUESTED_PKG:-}"
 
-          # Combos {paquet, arm64} qui NE BUILDENT PAS dans le CI stock (runner
+                    # Combos {paquet, arm64} qui NE BUILDENT PAS dans le CI stock (runner
           # amd64) et sont produits HORS-CI :
-          #  - secubox-ndpid-engine : le cmake-cross de nDPId exige libpcap-dev:arm64
-          #    + crossbuild depuis les dépôts ports (indispo sur archive.ubuntu) ;
-          #    le .deb arm64 se fait en chroot bookworm-arm64 (debootstrap+qemu).
           #  - secubox-zia-llm : embarque des binaires llama prebuilt non
-          #    versionnés (absents du checkout CI) → install échoue.
-          # Sans exclusion, ces 2 jobs rougissent tout le run .deb (donc Release).
-          SKIP_ARM64="secubox-ndpid-engine secubox-zia-llm"
+          #    versionnes (absents du checkout CI) -> install echoue.
+          #
+          # secubox-ndpid-engine N'EST PLUS EXCLU (#1308). Il l'etait parce que le
+          # cmake-cross de nDPId exige libpcap-dev:arm64 depuis les depots ports,
+          # indisponibles sur le runner Ubuntu. Mais la voie croisee etait de toute
+          # facon la mauvaise : debian/rules appelle `cmake` DIRECTEMENT, sans
+          # fichier de chaine croisee, donc `-a arm64` aurait produit des binaires
+          # amd64 estampilles arm64 — un mensonge silencieux, pire que l'absence.
+          # Il se construit desormais EN NATIF dans un conteneur arm64 emule.
+          SKIP_ARM64="secubox-zia-llm"
           arm64_ok() { case " $SKIP_ARM64 " in *" $1 "*) return 1;; *) return 0;; esac; }
 
           combos=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
@@ -199,6 +203,17 @@ jobs:
           echo "⏭ Skipping arm64 build for Architecture: all package"
           echo "  arch-all packages are architecture-independent"
           exit 0
+
+      # Emulation arm64 pour les paquets qui doivent se construire EN NATIF.
+      # Seul secubox-ndpid-engine en releve : son debian/rules appelle cmake
+      # directement et y rebatit nDPI 6.x depuis les sources. Emuler coute du
+      # temps ; produire des binaires de la mauvaise architecture couterait
+      # bien davantage (#1308).
+      - name: Setup QEMU (build arm64 natif emule)
+        if: matrix.arch == 'arm64' && matrix.package == 'secubox-ndpid-engine'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
       - name: Install build dependencies
         if: "!(matrix.arch == 'arm64' && steps.check-arch.outputs.is_arch_all == 'true')"
@@ -307,7 +322,32 @@ jobs:
           bash "$GITHUB_WORKSPACE/scripts/restamp-changelog.sh" \
             "${{ env.DEBIAN_SUITE }}" debian/changelog
 
-          dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}
+          # CONSTRUCTION NATIVE EMULEE pour ce qui ne se croise pas. Dans le
+          # conteneur arm64, dpkg-buildpackage travaille SANS `-a` : tout y est
+          # deja arm64, donc aucune option de croisement, aucun fichier de
+          # chaine, et cmake compile nDPI pour la bonne architecture. Le .deb
+          # tombe dans packages/, ou « Collect artifacts » le ramasse comme les
+          # autres.
+          NATIF_ARM64="secubox-ndpid-engine"
+          besoin_natif=0
+          case " $NATIF_ARM64 " in *" ${{ matrix.package }} "*) besoin_natif=1 ;; esac
+
+          if [ "${{ matrix.arch }}" = "arm64" ] && [ "$besoin_natif" = "1" ]; then
+            echo "-> construction arm64 NATIVE (emulee) de ${{ matrix.package }}"
+            docker run --rm --platform linux/arm64 \
+              -v "$GITHUB_WORKSPACE":/w \
+              -w "/w/packages/${{ matrix.package }}" \
+              -e DEBIAN_FRONTEND=noninteractive \
+              "debian:${{ env.DEBIAN_SUITE }}" \
+              bash -c 'set -e
+                apt-get update -qq
+                apt-get install -y -qq --no-install-recommends \
+                  build-essential dpkg-dev debhelper devscripts fakeroot \
+                  cmake pkg-config libpcap-dev git ca-certificates
+                dpkg-buildpackage -us -uc -b'
+          else
+            dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}
+          fi
 
           echo "✅ Build OK: ${{ matrix.package }} (${{ matrix.arch }})"
 
