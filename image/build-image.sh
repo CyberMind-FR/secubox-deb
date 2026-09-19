@@ -860,6 +860,9 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     # correction ne vaudrait que pour un seul chemin (#1308).
     log "Politique memoire (zram + secubox.slice)..."
     bash "${SCRIPT_DIR}/apply-memory-policy.sh" "${ROOTFS}"
+    # Arbitrages de services : dnsmasq confisquait le port 53 et faisait
+    # tomber unbound ET lxc-net d'un coup (#1308).
+    bash "${SCRIPT_DIR}/apply-service-policy.sh" "${ROOTFS}"
 
     # ── Nginx cleanup after package install ──────────────────────────────────
     log "Cleaning bad nginx configs from conf.d..."
