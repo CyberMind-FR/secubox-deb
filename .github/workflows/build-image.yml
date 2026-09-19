@@ -93,7 +93,15 @@ jobs:
         uses: ./.github/actions/runner-headroom
 
       - name: Setup QEMU + binfmt
-        if: contains(matrix.board, 'arm') || contains(matrix.board, 'espresso') || contains(matrix.board, 'mocha')
+        # Tout sauf vm-x64 est arm64 — c'est la regle qu'applique deja, plus
+        # bas, l'etape « Determine architecture ». Le test par sous-chaine qui
+        # tenait ici ratait `rpi400`, qui ne contient ni « arm », ni
+        # « espresso », ni « mocha » : le seul board arm64 dont le nom ne le dit
+        # pas etait donc le seul a ne jamais recevoir l'emulation rapide. La
+        # construction aboutissait quand meme — `Install build tools` installe
+        # qemu-user-static, qui enregistre les gestionnaires — mais par le
+        # chemin lent, d'ou des durees de 93 a 114 min contre un plafond de 90.
+        if: matrix.board != 'vm-x64'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
@@ -175,7 +183,10 @@ jobs:
             $SLIPSTREAM_OPT \
             $KIOSK_OPT
           sudo chown -R $(id -u):$(id -g) output/
-        timeout-minutes: 90
+        # 90 min etait sous la duree reelle : les constructions rpi400 mesurees
+        # tiennent 93, 105 et 114 min. Le plafond ne coupait donc pas une
+        # derive, il coupait le travail normal.
+        timeout-minutes: 180
 
       - name: List output
         run: |
