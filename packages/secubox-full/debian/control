@@ -10,6 +10,14 @@ Rules-Requires-Root: no
 Package: secubox-full
 Architecture: all
 Depends: ${misc:Depends},
+# MOTEUR DPI, tire explicitement. C'est lui qui fournit /usr/sbin/nDPId et
+# nDPIsrvd (nDPI 6.x statique) ; sans lui le tableau de bord tourne au-dessus
+# de la libndpi 4.2 de Debian, sans son moteur — constate sur la VM trixie.
+# Il n'arrivait par aucun chemin : le tableau de bord ne le cite qu'en
+# Recommends, et la construction installe avec --no-install-recommends.
+# (Ne JAMAIS citer un nom de paquet en prose dans un bloc Depends : le
+#  verificateur lit tout le bloc et le prendrait pour une dependance.)
+ secubox-ndpid-engine,
 # Gestion d'energie du parc : profilectl derive les manifestes de cycle
 # de vie, le sleeper endort les modules inactifs. Sans ce paquet, une
 # image neuve garde TOUT allume — sur un rpi400 (4 Go) la machine se

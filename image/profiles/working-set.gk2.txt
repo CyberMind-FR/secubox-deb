@@ -2,6 +2,14 @@
 # Régénérer : scripts/snapshot-working-set.sh root@192.168.1.200
 # Source de vérité pour scripts/verify-profile.sh — un module de profil DOIT y figurer
 # (ou ne ship aucun service = lib/config). Snapshot 2026-08-21.
+# --- apps LXC-native du catalogue all.gk2.secubox.in (pas de service hôte enabled) ---
+# AJOUT MANUEL 2026-09-19 : ndpid + ndpid-engine. Le moteur EST installe
+# sur gk2 (secubox-ndpid-engine 1.7.0, proprietaire de /usr/sbin/nDPId et
+# nDPIsrvd) mais le snapshot ne le voyait pas — il ne releve que les
+# services « enabled », or le moteur n'en expose pas sous ce nom.
+# NE PAS regenerer a l'aveugle : un snapshot pris pendant que le sleeper
+# a endormi les modules on-demand RETIRE dns, hub, hardening et consorts,
+# et invalide les trois profils. Verifie le 2026-09-19 (#1308).
 admin
 aggregator
 antirootkit
@@ -15,6 +23,7 @@ cloner
 console
 core
 cs-bridge
+defaults
 dns
 dns-provider
 domoticz
@@ -63,6 +72,8 @@ modem
 module-prober
 mqtt
 nac
+ndpid
+ndpid-engine
 netboot
 netboot-confirm-healthy
 netdata
@@ -113,6 +124,7 @@ threats
 toolbox
 toolbox-wg-restore
 tor
+torrent
 traffic
 turn
 users
@@ -126,12 +138,8 @@ waf-ng
 waf-ratelimit
 waker
 watchdog
+webmail
 wireguard
 yacy
-zigbee
-defaults
-# --- apps LXC-native du catalogue all.gk2.secubox.in (pas de service hôte enabled) ---
-torrent
 ytsas
-webmail
-nextcloud
+zigbee

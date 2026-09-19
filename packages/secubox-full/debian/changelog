@@ -1,9 +1,10 @@
-secubox-full (1.3.0-1~bookworm2) bookworm; urgency=medium
+secubox-full (1.3.0-1~bookworm3) bookworm; urgency=medium
 
-  * Depend de secubox-profiles. Le paquet qui derive les manifestes de
-    cycle de vie et porte le sleeper n'etait tire par AUCUN profil : une
-    image neuve gardait donc tout allume. Sur rpi400 (4 Go) la machine se
-    figeait — le noyau vivait, mais plus aucun fork() n'aboutissait (#1308).
+  * Tire explicitement secubox-ndpid-engine, qui fournit /usr/sbin/nDPId et
+    nDPIsrvd (nDPI 6.x statique). Il est installe et en service sur gk2 mais
+    n'arrivait dans aucune image neuve. Le working-set gagne ndpid-engine :
+    le snapshot ne le voyait pas, ne relevant que les services « enabled ».
+    (#1308)
 
- -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 15:44:31 +0200
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 23:15:19 +0200
 

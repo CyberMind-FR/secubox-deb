@@ -10,8 +10,15 @@ Rules-Requires-Root: no
 Package: secubox-dpi
 Architecture: any
 Depends: ${misc:Depends}, secubox-core (>= 1.4.0), iproute2, libndpi-bin,
- python3-geoip2, geoip-database
-Recommends: secubox-ndpid
+ python3-geoip2, geoip-database,
+# LE DPI N'EST PAS UNE OPTION. Il figure en tete de la pile annoncee du
+# projet, et le laisser en Recommends le rendait absent de toute image :
+# la construction installe avec --no-install-recommends, et la selection
+# par profil ne suit que les Depends. Constate sur la VM trixie — le
+# tableau de bord tournait au-dessus de la libndpi 4.2 de Debian, sans
+# jamais son moteur. Le paquet vise est Architecture: all et ses propres
+# dependances sont satisfaites partout : durcir ne ferme aucune arche.
+ secubox-ndpid-engine
 Description: SecuBox DPI Analytics — nDPId/sbxdpi app/protocol classification
  Analytics layer over the SecuBox DPI pipeline: top applications, top
  protocols, bandwidth-by-app, bandwidth-by-device, talkers, and risk
