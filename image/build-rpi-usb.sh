@@ -764,7 +764,15 @@ if [[ $DEBS_INSTALLED -eq 0 ]]; then
 fi
 
 # Install collected packages
-DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
+# `ls` rend non-nul quand le glob ne correspond a rien ; sous `set -o pipefail`
+# le pipeline herite de cet echec, et `set -e` tuait alors TOUTE la
+# construction sur un repertoire vide — sans un mot sur la cause reelle, a
+# l'etape 5/7, juste avant l'assemblage. Compter les fichiers sans pipeline
+# fragile, et laisser le test ci-dessous dire clairement ce qui manque.
+shopt -s nullglob
+_debs=("${ROOTFS}/tmp/secubox-debs/"*.deb)
+shopt -u nullglob
+DEB_COUNT=${#_debs[@]}
 if [[ $DEB_COUNT -gt 0 ]]; then
   log "Installing ${DEB_COUNT} SecuBox packages..."
 
@@ -786,10 +794,20 @@ if [[ $DEB_COUNT -gt 0 ]]; then
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
   # Count installed
-  INSTALLED=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | wc -l)
+  # Meme piege que le comptage plus haut : `grep` rend 1 quand il ne trouve
+  # rien, `pipefail` propage, `set -e` tue — c'est-a-dire precisement dans le
+  # cas ou l'on a le plus besoin de savoir que rien ne s'est installe.
+  INSTALLED=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep -c "^ii" || true)
   ok "Installed ${INSTALLED}/${DEB_COUNT} SecuBox packages"
 else
-  warn "No SecuBox packages found to install"
+  # NE PAS continuer. Une image nommee « secubox-<profil>-... » sans un seul
+  # paquet SecuBox est un mensonge, et un mensonge qui se decouvre tard : elle
+  # demarre, elle a l'air saine, et il manque tout. Le cas s'est deja paye une
+  # fois (17 paquets sur 162). Mieux vaut echouer ici, fort et clair.
+  echo "  Attendus dans : ${REPO_DIR}/output/debs (option --slipstream)" >&2
+  echo "  ou dans       : ${REPO_DIR}/cache/repo/pool" >&2
+  echo "  En CI, l'etape « Download package artifacts » remplit le premier." >&2
+  err "Aucun paquet SecuBox a installer — image non produite."
 fi
 
 rm -rf "${ROOTFS}/tmp/secubox-debs"
