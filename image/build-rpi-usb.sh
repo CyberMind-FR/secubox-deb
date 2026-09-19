@@ -149,6 +149,12 @@ INCLUDE_PKGS+=",parted,dosfstools,e2fsprogs,pciutils,usbutils"
 # lettre morte : c'est ce generateur qui la lit au demarrage. Un rpi400
 # sans swap se fige des que les modules s'accumulent (#1308).
 INCLUDE_PKGS+=",systemd-zram-generator"
+# xz-utils : les gabarits LXC Debian livrent leur rootfs en .tar.xz et
+# refusent de demarrer sans l'outil — « ERROR: Missing required tool: xz »,
+# lxc-create echoue avant meme de commencer. Constate sur la VM trixie :
+# secubox-jellyfin-provision tombait pour cette seule raison, le pont et
+# le reseau etant par ailleurs corrects (#1308).
+INCLUDE_PKGS+=",xz-utils"
 
 # Python dependencies for SecuBox modules (apt packages)
 # NOTE: python3-cryptography excluded - fails to configure under QEMU emulation

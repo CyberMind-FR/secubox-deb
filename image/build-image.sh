@@ -232,6 +232,12 @@ INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq,cloud-guest-u
 # demarrage. Sans swap, l'epuisement memoire fige la machine entiere —
 # le noyau vit, mais plus aucun fork() n'aboutit (#1308).
 INCLUDE_PKGS+=",systemd-zram-generator"
+# xz-utils : les gabarits LXC Debian livrent leur rootfs en .tar.xz et
+# refusent de demarrer sans l'outil — « ERROR: Missing required tool: xz »,
+# lxc-create echoue avant meme de commencer. Constate sur la VM trixie :
+# secubox-jellyfin-provision tombait pour cette seule raison, le pont et
+# le reseau etant par ailleurs corrects (#1308).
+INCLUDE_PKGS+=",xz-utils"
 
 # Python dependencies for SecuBox modules (apt packages)
 # Only pure-Python packages here: debootstrap second-stage cannot reliably run
