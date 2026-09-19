@@ -59,6 +59,28 @@ lxc.net.0.ipv4.gateway = $LXC_GW
 # purge signal, so this must be a real mount, not container-overlay space.
 lxc.mount.entry = $DATA_DIR data/torrent none bind,create=dir 0 0
 EOF
+
+    # DECALER LA PROPRIETE DU ROOTFS SUR L'IDMAP.
+    #
+    # La config ci-dessus declare `lxc.idmap = u 0 100000 65536` : dans le
+    # conteneur, l'uid 0 EST l'uid 100000 de l'hote. Or `lxc-create -t
+    # download` deballe le rootfs en root, donc en uid 0 de l'HOTE. L'init du
+    # conteneur ne peut alors pas lire sa propre racine, et lxc-start echoue :
+    #
+    #   conf - lxc_setup_rootfs_prepare_root - Failed to setup rootfs
+    #
+    # Le message ne nomme ni les droits ni l'idmap, ce qui envoie chercher du
+    # cote du reseau, d'AppArmor ou des espaces de noms — trois fausses pistes
+    # verifiees une a une sur la VM trixie avant d'arriver ici (#1308).
+    #
+    # Idempotent : rejouer ne coute qu'un parcours. On ne decale QUE si la
+    # racine est encore a l'uid 0, pour ne pas re-decaler un rootfs deja bon.
+    if [ -d "$LXC_PATH/$LXC_NAME/rootfs" ] \
+       && [ "$(stat -c %u "$LXC_PATH/$LXC_NAME/rootfs")" = "0" ]; then
+        log "Decalage de la propriete du rootfs sur l'idmap (0 -> 100000)..."
+        chown -R 100000:100000 "$LXC_PATH/$LXC_NAME/rootfs"
+        chown 100000:100000 "$LXC_PATH/$LXC_NAME"
+    fi
   lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
   sleep 5
   # Seed DNS: the download-template rootfs ships no resolver, so apt/npm can't

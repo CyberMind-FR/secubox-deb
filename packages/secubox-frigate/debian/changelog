@@ -1,9 +1,13 @@
-secubox-frigate (0.2.1-1~bookworm3) bookworm; urgency=medium
+secubox-frigate (0.2.1-1~bookworm4) bookworm; urgency=medium
 
-  * /data/frigate : le prerm prenait soin de le PRESERVER, mais rien ne le
-    creait. Sur une installation neuve le service mourait donc au demarrage
-    (« Failed to set up mount namespacing »), constate sur rpi400. Le postinst
-    le cree quand /data existe, et l'unite tolere son absence (prefixe `-`).
+  * Le rootfs du conteneur est decale sur l'idmap. La config declare
+    `lxc.idmap = u 0 100000 65536` — dans le conteneur, l'uid 0 EST l'uid
+    100000 de l'hote — mais `lxc-create -t download` deballait le rootfs en
+    root, donc a l'uid 0 de l'HOTE. L'init du conteneur ne pouvait pas lire
+    sa propre racine et lxc-start echouait sur « Failed to setup rootfs »,
+    un message qui ne nomme ni les droits ni l'idmap. Constate sur la VM
+    trixie, ou trois fausses pistes ont ete verifiees avant celle-ci :
+    reseau, AppArmor, espaces de noms non privilegies. (#1308)
 
- -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 10:02:12 +0200
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 23:06:29 +0200
 
