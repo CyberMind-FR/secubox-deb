@@ -1,6 +1,9 @@
-secubox-isp (1.0.0-1~bookworm1) bookworm; urgency=medium
+secubox-isp (1.0.0-1~bookworm2) bookworm; urgency=medium
 
-  * Métapaquet initial : socle routeur/FAI propre (profil « isp »), dérivé du
-    working-set réel du board de référence (ref #1112).
+  * Depend de secubox-profiles. Le paquet qui derive les manifestes de
+    cycle de vie et porte le sleeper n'etait tire par AUCUN profil : une
+    image neuve gardait donc tout allume. Sur rpi400 (4 Go) la machine se
+    figeait — le noyau vivait, mais plus aucun fork() n'aboutissait (#1308).
 
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 Aug 2026 12:00:00 +0000
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 15:44:31 +0200
+

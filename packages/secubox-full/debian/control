@@ -10,6 +10,12 @@ Rules-Requires-Root: no
 Package: secubox-full
 Architecture: all
 Depends: ${misc:Depends},
+# Gestion d'energie du parc : profilectl derive les manifestes de cycle
+# de vie, le sleeper endort les modules inactifs. Sans ce paquet, une
+# image neuve garde TOUT allume — sur un rpi400 (4 Go) la machine se
+# fige (#1308). Aucun profil ne le tirait, pas meme lite, que sa petite
+# cible rend pourtant le plus demandeur.
+ secubox-profiles,
  secubox-isp (>= 1.0),
  secubox-bbs (>= 1.0),
  secubox-billets (>= 1.0),

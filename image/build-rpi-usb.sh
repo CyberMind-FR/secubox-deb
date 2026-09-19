@@ -862,6 +862,63 @@ fi
 
 rm -rf "${ROOTFS}/tmp/secubox-debs"
 
+# ── Borne memoire collective des modules SecuBox ─────────────────────────
+#
+# POURQUOI UNE SLICE ET PAS 140 MemoryMax. Sur l'image livree, 140 unites
+# secubox se levaient au demarrage dont 118 interpretes Python persistants ;
+# NEUF portaient une borne memoire. Les borner une par une demanderait de
+# toucher 140 paquets et de deviner, pour chacun, un chiffre qu'on ne connait
+# pas. Une slice plafonne l'AGREGAT, qui est ce qui compte reellement.
+#
+# CE QUE CELA CHANGE. Sans plafond, l'epuisement frappe la machine entiere :
+# le noyau vit, mais plus aucun fork() n'aboutit — sshd accepte le TCP sans
+# jamais repondre, et un shell console se fige a la premiere commande. Avec
+# la slice, la pression reste CONFINEE : le noyau reclame et, au besoin, tue
+# a l'interieur de secubox.slice, pendant que systemd, sshd et la console
+# gardent leur part. On perd un module ; on ne perd plus la machine. C'est
+# toute la difference entre un incident et un deplacement (#1308).
+#
+# POURQUOI DES POURCENTAGES. L'image ne sait pas sur quoi elle tournera — un
+# rpi400 a 4 Go, un MOCHAbin davantage. systemd accepte MemoryHigh/MemoryMax
+# en pourcentage de la memoire physique, resolu au demarrage : la meme image
+# se borne correctement sur chaque machine, sans rien coder en dur.
+#
+# MemoryHigh est le frein (reclamation soutenue, le processus ralentit),
+# MemoryMax le mur (OOM dans la slice). Laisser un ecart entre les deux donne
+# au noyau une chance de recuperer avant de tuer quoi que ce soit.
+log "Borne memoire collective (secubox.slice)..."
+cat > "${ROOTFS}/etc/systemd/system/secubox.slice" <<'SLICE'
+[Unit]
+Description=SecuBox — modules, sous plafond memoire collectif
+Before=slices.target
+
+[Slice]
+MemoryAccounting=yes
+MemoryHigh=60%
+MemoryMax=75%
+SLICE
+
+# Rattachement des unites a la slice. Un drop-in par unite : c'est le seul
+# moyen, systemd n'assigne pas de slice par convention de nom. Genere ici
+# plutot que livre dans 140 paquets — la regle est la meme pour tous, et la
+# dupliquer 140 fois la rendrait impossible a faire evoluer.
+_rattachees=0
+for _u in "${ROOTFS}"/lib/systemd/system/secubox-*.service \
+          "${ROOTFS}"/usr/lib/systemd/system/secubox-*.service; do
+  [ -e "$_u" ] || continue
+  _n=$(basename "$_u")
+  # Les unites @ sont des modeles : le drop-in du modele vaut pour toutes
+  # ses instances, inutile de les enumerer.
+  install -d "${ROOTFS}/etc/systemd/system/${_n}.d"
+  cat > "${ROOTFS}/etc/systemd/system/${_n}.d/50-secubox-memoire.conf" <<'DROPIN'
+[Service]
+Slice=secubox.slice
+DROPIN
+  _rattachees=$((_rattachees + 1))
+done
+ok "${_rattachees} unite(s) rattachee(s) a secubox.slice"
+
+
 # ── Nginx cleanup after package install ──────────────────────────────────
 log "Cleaning bad nginx configs from conf.d..."
 for conf in "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf "${ROOTFS}/etc/nginx/conf.d/secubox-"*; do

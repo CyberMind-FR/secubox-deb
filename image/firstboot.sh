@@ -506,6 +506,51 @@ if [[ -x /usr/sbin/secubox-kiosk-setup ]]; then
     fi
 fi
 
+# ── 15. Cycle de vie des modules — dériver puis endormir ─────────
+#
+# POURQUOI ICI ET PAS À LA CONSTRUCTION. L'inventaire des modules se dérive
+# avec `secubox-profilectl scan`, qui exige root, un systemd VIVANT
+# (`systemctl list-unit-files`) et `lxc-ls`. Rien de tout cela n'est fiable
+# dans un chroot émulé au moment du build : le scan refuse d'écrire plutôt
+# que de produire un inventaire faux — et il a raison. Le premier démarrage
+# est donc le seul endroit où il peut travailler correctement.
+#
+# POURQUOI C'EST NÉCESSAIRE. Une image neuve n'a AUCUN manifeste dans
+# /etc/secubox/modules.d/, et le sleeper n'y est pas activé. Sur gk2 il y en
+# a 186 — dont 70 on-demand — mais `dpkg -S` ne leur trouve aucun paquet :
+# ils existent par sédimentation, posés à la main au fil des mois. Même motif
+# que les répertoires de #1307, mêmes conséquences : invisible en production,
+# fatal sur matériel neuf. Sans manifeste, aucun module n'est déclaré
+# endormable, tout tourne en permanence, et sur un rpi400 (4 Go) la machine
+# se fige — le noyau vit, mais plus aucun fork() n'aboutit (#1308).
+#
+# `scan` n'écrase pas un manifeste existant sans --force : relancer est sans
+# danger, et une correction manuelle fait ensuite autorité.
+if [[ -x /usr/sbin/secubox-profilectl ]] || command -v secubox-profilectl >/dev/null 2>&1; then
+    log "Dérivation des manifestes de modules (profilectl scan)..."
+    if secubox-profilectl scan >/dev/null 2>&1; then
+        n=$(find /etc/secubox/modules.d -name '*.toml' 2>/dev/null | wc -l)
+        ok "${n} manifeste(s) dérivé(s)"
+
+        # Le sleeper n'agit QUE sur les modules déclarés eager ou on-demand
+        # (cf. lifecycle.is_sleepable) et ne touche jamais un module protégé.
+        # Sans lui, les manifestes ne servent à rien : personne ne les lit
+        # pour endormir quoi que ce soit.
+        if systemctl enable --now secubox-sleeper.service >/dev/null 2>&1; then
+            ok "Sleeper activé — les modules inactifs s'endormiront"
+        else
+            log "Sleeper indisponible (paquet secubox-profiles absent ?)"
+        fi
+    else
+        # Non fatal : une box sans manifeste démarre, elle consomme
+        # simplement tout. Mieux vaut un premier démarrage abouti qu'un
+        # firstboot qui échoue sur cette étape.
+        log "profilectl scan a échoué — modules laissés en always-on"
+    fi
+else
+    log "secubox-profilectl absent — pas de dérivation de cycle de vie"
+fi
+
 log "=== First boot terminé ==="
 log "Interface : https://${HOSTNAME}/ ou https://$(hostname -I | awk '{print $1}')/"
 log "Login     : admin / ${ADMIN_PASS}"
