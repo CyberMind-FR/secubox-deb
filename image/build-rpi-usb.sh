@@ -254,43 +254,6 @@ EOF
 # Root password
 chroot "${ROOTFS}" bash -c 'echo "root:secubox" | chpasswd'
 
-# ── Swap compresse en memoire (zram) ─────────────────────────────────────
-#
-# POURQUOI. Un rpi400 a 4 Go et AUCUN swap : ni fstab, ni swapfile, ni zram,
-# ni dphys-swapfile. Les modules SecuBox sont des interpretes Python
-# persistants ; des qu'ils s'accumulent, la memoire s'epuise et il n'y a rien
-# pour absorber le debordement. Le symptome est deroutant parce que le noyau,
-# lui, va tres bien : la machine repond au ping, sshd et nginx acceptent le
-# TCP — mais plus aucun fork() n'aboutit. Un shell s'ouvre sur la console,
-# puis la premiere commande se fige. Constate sur materiel reel (#1308).
-#
-# POURQUOI ZRAM ET PAS UN FICHIER D'ECHANGE. Le stockage est une carte SD.
-# Y ecrire du swap l'use vite et donne des latences qui aggravent le blocage
-# au lieu de le soulager. zram compresse en RAM : il coute du CPU — dont un
-# Pi 4 a quatre coeurs a revendre pendant qu'il attend la memoire — et zero
-# ecriture sur la carte. `zram-size = ram` avec zstd rend environ 2 a 3 fois
-# son volume en pages froides, ce qui suffit largement a passer la bourrasque
-# du demarrage.
-#
-# Ce n'est PAS un permis de tout lancer : les bornes memoire et le filtrage
-# par profil restent les vraies limites. zram est le filet, pas le plancher.
-mkdir -p "${ROOTFS}/etc/systemd"
-cat > "${ROOTFS}/etc/systemd/zram-generator.conf" <<'ZRAM'
-[zram0]
-zram-size = ram
-compression-algorithm = zstd
-swap-priority = 100
-fs-type = swap
-ZRAM
-
-# Pages froides poussees plus tot vers zram : la compression est bon marche,
-# la penurie ne l'est pas. Valeur classique pour un swap compresse.
-mkdir -p "${ROOTFS}/etc/sysctl.d"
-cat > "${ROOTFS}/etc/sysctl.d/90-secubox-zram.conf" <<'SYSCTL'
-vm.swappiness = 150
-vm.page-cluster = 0
-SYSCTL
-
 # Timezone
 ln -sf /usr/share/zoneinfo/Europe/Paris "${ROOTFS}/etc/localtime"
 
@@ -862,61 +825,11 @@ fi
 
 rm -rf "${ROOTFS}/tmp/secubox-debs"
 
-# ── Borne memoire collective des modules SecuBox ─────────────────────────
-#
-# POURQUOI UNE SLICE ET PAS 140 MemoryMax. Sur l'image livree, 140 unites
-# secubox se levaient au demarrage dont 118 interpretes Python persistants ;
-# NEUF portaient une borne memoire. Les borner une par une demanderait de
-# toucher 140 paquets et de deviner, pour chacun, un chiffre qu'on ne connait
-# pas. Une slice plafonne l'AGREGAT, qui est ce qui compte reellement.
-#
-# CE QUE CELA CHANGE. Sans plafond, l'epuisement frappe la machine entiere :
-# le noyau vit, mais plus aucun fork() n'aboutit — sshd accepte le TCP sans
-# jamais repondre, et un shell console se fige a la premiere commande. Avec
-# la slice, la pression reste CONFINEE : le noyau reclame et, au besoin, tue
-# a l'interieur de secubox.slice, pendant que systemd, sshd et la console
-# gardent leur part. On perd un module ; on ne perd plus la machine. C'est
-# toute la difference entre un incident et un deplacement (#1308).
-#
-# POURQUOI DES POURCENTAGES. L'image ne sait pas sur quoi elle tournera — un
-# rpi400 a 4 Go, un MOCHAbin davantage. systemd accepte MemoryHigh/MemoryMax
-# en pourcentage de la memoire physique, resolu au demarrage : la meme image
-# se borne correctement sur chaque machine, sans rien coder en dur.
-#
-# MemoryHigh est le frein (reclamation soutenue, le processus ralentit),
-# MemoryMax le mur (OOM dans la slice). Laisser un ecart entre les deux donne
-# au noyau une chance de recuperer avant de tuer quoi que ce soit.
-log "Borne memoire collective (secubox.slice)..."
-cat > "${ROOTFS}/etc/systemd/system/secubox.slice" <<'SLICE'
-[Unit]
-Description=SecuBox — modules, sous plafond memoire collectif
-Before=slices.target
-
-[Slice]
-MemoryAccounting=yes
-MemoryHigh=60%
-MemoryMax=75%
-SLICE
-
-# Rattachement des unites a la slice. Un drop-in par unite : c'est le seul
-# moyen, systemd n'assigne pas de slice par convention de nom. Genere ici
-# plutot que livre dans 140 paquets — la regle est la meme pour tous, et la
-# dupliquer 140 fois la rendrait impossible a faire evoluer.
-_rattachees=0
-for _u in "${ROOTFS}"/lib/systemd/system/secubox-*.service \
-          "${ROOTFS}"/usr/lib/systemd/system/secubox-*.service; do
-  [ -e "$_u" ] || continue
-  _n=$(basename "$_u")
-  # Les unites @ sont des modeles : le drop-in du modele vaut pour toutes
-  # ses instances, inutile de les enumerer.
-  install -d "${ROOTFS}/etc/systemd/system/${_n}.d"
-  cat > "${ROOTFS}/etc/systemd/system/${_n}.d/50-secubox-memoire.conf" <<'DROPIN'
-[Service]
-Slice=secubox.slice
-DROPIN
-  _rattachees=$((_rattachees + 1))
-done
-ok "${_rattachees} unite(s) rattachee(s) a secubox.slice"
+# Politique memoire commune a toutes les images — zram + secubox.slice.
+# Partagee avec build-image.sh : deux copies divergeraient, et la
+# correction ne vaudrait que pour un seul chemin (#1308).
+log "Politique memoire (zram + secubox.slice)..."
+bash "${SCRIPT_DIR}/apply-memory-policy.sh" "${ROOTFS}"
 
 
 # ── Nginx cleanup after package install ──────────────────────────────────

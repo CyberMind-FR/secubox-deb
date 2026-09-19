@@ -30,6 +30,14 @@ Il ECHOUE si le meta-paquet manque, plutot que de retomber sur « tout
 copier ». Produire une image `isp` au contenu `full` est precisement le
 mensonge que ce script existe pour empecher, et un avertissement de plus dans
 un journal de 1 700 lignes n'aurait protege personne.
+
+DEUX FORMES DE PROFIL. L'argument <profil> est soit un NOM — le meta-paquet
+`secubox-<nom>` fait alors autorite — soit un CHEMIN vers un fichier listant
+les modules voulus, un par ligne (le prefixe `secubox-` est optionnel, les
+lignes vides et les commentaires `#` sont ignores). La seconde forme permet
+de composer un profil a l'installation sans qu'un meta-paquet existe pour
+lui : on donne la liste des modules, la fermeture transitive de leurs
+Depends fait le reste.
 """
 
 from __future__ import annotations
@@ -70,15 +78,30 @@ def champ(deb: Path, nom: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 4:
-        print(f"usage: {argv[0]} <repertoire-debs> <profil> <destination>", file=sys.stderr)
+    if len(argv) not in (4, 5):
+        print(f"usage: {argv[0]} <repertoire-debs> <profil> <destination> [arch]",
+              file=sys.stderr)
         return 2
     src, profil, dest = Path(argv[1]), argv[2], Path(argv[3])
+    arch = argv[4] if len(argv) == 5 else None
 
     debs = sorted(src.glob("secubox-*.deb"))
     if not debs:
         print(f"[profil] aucun .deb SecuBox dans {src}", file=sys.stderr)
         return 1
+
+    # FILTRER L'ARCHITECTURE AVANT D'INDEXER. Un meme paquet peut exister en
+    # _amd64 ET _arm64 dans le meme repertoire ; sans ce filtre l'index garde
+    # celui qui arrive en dernier dans l'ordre alphabetique — donc « amd64 »
+    # gagne toujours, y compris pour une image arm64. Le .deb serait installe
+    # par `dpkg -i --force-*`, qui ne protege de rien ici, et l'image
+    # emporterait des binaires de la mauvaise architecture.
+    if arch:
+        debs = [d for d in debs
+                if d.name.endswith(f"_{arch}.deb") or d.name.endswith("_all.deb")]
+        if not debs:
+            print(f"[profil] aucun .deb en {arch} ni en all dans {src}", file=sys.stderr)
+            return 1
 
     # Index paquet -> (fichier, depends). Quand plusieurs versions du meme
     # paquet trainent, la derniere en ordre alphabetique gagne — c'est le
@@ -89,6 +112,26 @@ def main(argv: list[str]) -> int:
         if p:
             index[p] = (d, noms_depends(champ(d, "Depends")))
 
+    # Forme « fichier » : une liste de modules composee a la main. On la
+    # reconnait a l'existence du chemin, jamais a sa syntaxe — un profil
+    # nomme ne contient pas de separateur, donc aucune ambiguite en pratique.
+    chemin = Path(profil)
+    if chemin.is_file():
+        racines: list[str] = []
+        for ligne in chemin.read_text(encoding="utf-8").splitlines():
+            ligne = ligne.split("#", 1)[0].strip()
+            if not ligne:
+                continue
+            racines.append(ligne if ligne.startswith("secubox-") else f"secubox-{ligne}")
+        inconnus = [r for r in racines if r not in index]
+        if inconnus:
+            print(f"[profil] modules inconnus dans {chemin} : {', '.join(inconnus)}", file=sys.stderr)
+            return 1
+        if not racines:
+            print(f"[profil] {chemin} ne liste aucun module.", file=sys.stderr)
+            return 1
+        return _copier(index, racines, dest, f"liste {chemin.name}")
+
     meta = f"secubox-{profil}"
     if meta not in index:
         print(f"[profil] meta-paquet {meta} introuvable dans {src}.", file=sys.stderr)
@@ -97,9 +140,14 @@ def main(argv: list[str]) -> int:
         print(f"[profil] mensonge. Disponibles : {', '.join(sorted(k for k in index if k.startswith('secubox-')) [:6])}...", file=sys.stderr)
         return 1
 
-    # Fermeture transitive depuis le meta-paquet.
+    return _copier(index, [meta], dest, profil)
+
+
+def _copier(index: dict[str, tuple[Path, set[str]]], racines: list[str],
+            dest: Path, etiquette: str) -> int:
+    """Fermeture transitive depuis les racines, puis copie."""
     vus: set[str] = set()
-    pile = [meta]
+    pile = list(racines)
     while pile:
         p = pile.pop()
         if p in vus or p not in index:
@@ -112,7 +160,8 @@ def main(argv: list[str]) -> int:
         shutil.copy2(index[p][0], dest / index[p][0].name)
 
     ecartes = len(index) - len(vus)
-    print(f"[profil] {profil} : {len(vus)} paquet(s) retenu(s), {ecartes} ecarte(s) sur {len(index)}")
+    print(f"[profil] {etiquette} : {len(vus)} paquet(s) retenu(s), "
+          f"{ecartes} ecarte(s) sur {len(index)}")
     return 0
 
 

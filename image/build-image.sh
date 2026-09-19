@@ -227,6 +227,11 @@ INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,apt-transport-https"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq,cloud-guest-utils,parted,u-boot-tools,libubootenv-tool"
+# Swap compresse en RAM. Sans ce generateur, la configuration zram posee
+# par apply-memory-policy.sh reste lettre morte : c'est lui qui la lit au
+# demarrage. Sans swap, l'epuisement memoire fige la machine entiere —
+# le noyau vit, mais plus aucun fork() n'aboutit (#1308).
+INCLUDE_PKGS+=",systemd-zram-generator"
 
 # Python dependencies for SecuBox modules (apt packages)
 # Only pure-Python packages here: debootstrap second-stage cannot reliably run
@@ -805,23 +810,22 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     log "Slipstream: installation des paquets locaux..."
     install -d "${ROOTFS}/tmp/secubox-debs"
 
-    # Filter packages by architecture: only copy _all.deb and _${DEBIAN_ARCH}.deb
-    SLIP_COUNT=0
-    SKIP_COUNT=0
-    for deb in "${DEBS_DIR}"/secubox-*.deb; do
-      [[ -f "$deb" ]] || continue
-      deb_name=$(basename "$deb")
-      case "$deb_name" in
-        *_all.deb|*_${DEBIAN_ARCH}.deb)
-          cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
-          ((SLIP_COUNT++)) || true
-          ;;
-        *)
-          ((SKIP_COUNT++)) || true
-          ;;
-      esac
-    done
-    [[ $SKIP_COUNT -gt 0 ]] && log "Slipstream: skipped ${SKIP_COUNT} packages (wrong architecture)"
+    # SELECTION PAR PROFIL, pas seulement par architecture. La boucle qui
+    # tenait ici ne filtrait que l'architecture : tous les modules SecuBox
+    # etaient donc installes par-dessus le profil que `apt-get install
+    # ${SECUBOX_PROFILE}` venait pourtant d'honorer. Resultat mesure sur
+    # l'image rpi400 : 175 paquets, 140 unites au demarrage, et une machine
+    # de 4 Go qui se fige (#1308). Le selecteur suit les Depends du
+    # meta-paquet et ne retient que les modules atteignables ; il filtre
+    # aussi l'architecture, qu'il faut donc lui passer.
+    #
+    # Le profil peut etre un NOM (meta-paquet) ou un FICHIER listant les
+    # modules voulus — c'est ce qui permettra de composer un profil a
+    # l'installation sans qu'un meta-paquet existe pour lui.
+    python3 "${SCRIPT_DIR}/select-profile-debs.py" \
+      "${DEBS_DIR}" "${SECUBOX_PROFILE_SELECTION:-${PROFILE_TAG}}" \
+      "${ROOTFS}/tmp/secubox-debs" "${DEBIAN_ARCH}"
+    SLIP_COUNT=$(find "${ROOTFS}/tmp/secubox-debs" -name '*.deb' | wc -l)
     log "Slipstream: ${SLIP_COUNT} packages to install"
 
     # Installer secubox-core en premier (dépendance)
@@ -850,6 +854,12 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     # Nettoyer
     rm -rf "${ROOTFS}/tmp/secubox-debs"
     ok "Slipstream: ${INSTALLED_COUNT}/${SLIP_COUNT} paquets installés"
+
+    # Politique memoire commune a toutes les images — zram + secubox.slice.
+    # Partagee avec build-rpi-usb.sh : deux copies divergeraient, et la
+    # correction ne vaudrait que pour un seul chemin (#1308).
+    log "Politique memoire (zram + secubox.slice)..."
+    bash "${SCRIPT_DIR}/apply-memory-policy.sh" "${ROOTFS}"
 
     # ── Nginx cleanup after package install ──────────────────────────────────
     log "Cleaning bad nginx configs from conf.d..."
