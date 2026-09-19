@@ -29,7 +29,7 @@ from .export import format_apt, format_json, format_pkglist, resolve_packages
 from .lifecycle import effective_lifecycle
 from .manifest import LIFECYCLES, WAKE_CLASSES, ManifestError, load_all
 from .observe import Actual, is_on, load_route_values, load_routes, observe, observe_all
-from .scan import discover, write_drafts
+from .scan import charger_politique, discover, write_drafts
 from .snapshot import SNAP_DIR
 from .snapshot import read as read_snapshot
 from .state import OFF, StateError, load_pins, load_profile
@@ -309,7 +309,18 @@ def _cmd_scan(args) -> int:
               "Corrigez le fichier de routes puis relancez `scan --force`.",
               file=sys.stderr)
         routes = set()
-    manifests = discover(units=units, lxc_names=lxc_names, routes=routes)
+    # Politique de cycle de vie. Sans elle, tout module decouvert retombe sur
+    # `always-on` et le sleeper n'a rien a endormir — ce qui etait le cas sur
+    # toute image neuve (#1308). Absente ou illisible, elle rend {} et on
+    # garde ce defaut sur : ne rien savoir ne justifie pas d'endormir.
+    politique = charger_politique()
+    if politique:
+        print(f"politique de cycle de vie : {politique['source']} "
+              f"({len(politique['lifecycle'])} module(s))")
+    else:
+        print("aucune politique de cycle de vie — tout reste always-on")
+    manifests = discover(units=units, lxc_names=lxc_names, routes=routes,
+                         politique=politique)
     written = write_drafts(manifests, mod_dir, force=args.force)
     skipped = len(manifests) - len(written)
     print(f"{len(manifests)} module(s) découvert(s) — {len(written)} manifeste(s) écrit(s), "

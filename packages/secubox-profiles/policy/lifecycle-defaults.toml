@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: profiles — politique de cycle de vie par défaut
+#
+# À QUOI SERT CE FICHIER. `secubox-profilectl scan` dérive un manifeste par
+# unité secubox-*.service, mais refuse — à raison — de DEVINER si un module
+# peut dormir : se tromper couperait un service qu'on croyait joignable. Sans
+# indication, tout retombe donc sur `always-on`, le défaut sûr, et le sleeper
+# tourne sans rien avoir à endormir. C'est exactement ce qu'on a constaté sur
+# une image neuve : 86 manifestes dérivés, aucun avec une ligne `lifecycle`.
+#
+# D'OÙ VIENNENT CES VALEURS. Elles ne sont pas inventées : ce sont celles de
+# gk2, en production, accumulées module par module. Elles ne se déduisent
+# d'aucun champ — ni `portal_domain` (aucun manifeste n'en porte), ni la
+# table de routes WAF (66 des 70 `on-demand` n'ont aucune route). C'est du
+# jugement opérationnel, et il n'existait que dans /etc/secubox/modules.d/
+# d'une seule machine, sans qu'aucun paquet ne le possède. Même sédimentation
+# que les répertoires de #1307 : invisible en production, absent partout
+# ailleurs. Ce fichier le met sous version (#1308).
+#
+# CE QUI PRIME SUR QUOI. Un manifeste existant fait toujours autorité — scan
+# n'écrase pas sans --force. Cette politique ne s'applique qu'au moment de la
+# DÉRIVATION, pour un module qu'on découvre. Un module absent d'ici garde
+# `always-on` : ne rien savoir ne justifie jamais d'endormir.
+#
+# Un module `protected` reste `always-on` quoi qu'on écrive ici — cf.
+# lifecycle.effective_lifecycle : on ne laisse jamais dormir le cœur.
+
+# Toujours actifs — infrastructure dont l'arrêt casserait le reste.
+[lifecycle]
+"dpi"                        = "always-on"
+"dpi-flowcap"                = "always-on"
+"mail"                       = "always-on"
+"waf"                        = "always-on"
+"ytsas"                      = "always-on"
+
+# Éveillés d'avance : ils participent au sleep/wake mais démarrent tôt.
+eye-network_at_              = "eager"
+
+# À la demande — l'essentiel du parc. Endormis après inactivité,
+# réveillés sur requête réelle via les signaux de vhost de sbxwaf.
+"ad-guard"                   = "on-demand"
+"adblock-sync"               = "on-demand"
+"ai-gateway"                 = "on-demand"
+"ai-insights"                = "on-demand"
+"annuaire"                   = "on-demand"
+"annuaire-apply"             = "on-demand"
+"billets"                    = "on-demand"
+"c3box"                      = "on-demand"
+"config-advisor"             = "on-demand"
+"console"                    = "on-demand"
+"cookies"                    = "on-demand"
+"cs-bridge"                  = "on-demand"
+"cve-triage"                 = "on-demand"
+"cyberfeed"                  = "on-demand"
+"dirs-guard"                 = "on-demand"
+"dns"                        = "on-demand"
+"dns-guard"                  = "on-demand"
+"dns-provider"               = "on-demand"
+"domoticz"                   = "on-demand"
+"droplet"                    = "on-demand"
+"escalate"                   = "on-demand"
+"exposure"                   = "on-demand"
+"exposure-tor-reconcile"     = "on-demand"
+"eye-remote"                 = "on-demand"
+"eye-remote-dhcp"            = "on-demand"
+"firstboot"                  = "on-demand"
+"fmrelay"                    = "on-demand"
+"frigate-diskguard"          = "on-demand"
+"geoipupdate"                = "on-demand"
+"gitea"                      = "on-demand"
+"glances"                    = "on-demand"
+"gotosocial"                 = "on-demand"
+"grafana"                    = "on-demand"
+"haproxy"                    = "on-demand"
+"hardening"                  = "on-demand"
+"health-doctor"              = "on-demand"
+"health-doctor-runner"       = "on-demand"
+"health-prober"              = "on-demand"
+"healthbump"                 = "on-demand"
+"hexo"                       = "on-demand"
+"homeassistant"              = "on-demand"
+"hub"                        = "on-demand"
+"identity"                   = "on-demand"
+"interceptor"                = "on-demand"
+"ipblock"                    = "on-demand"
+"jabber"                     = "on-demand"
+"jellyfin"                   = "on-demand"
+"jitsi"                      = "on-demand"
+"ksm"                        = "on-demand"
+"led-health-bumper"          = "on-demand"
+"led-heartbeat"              = "on-demand"
+"led-pulse"                  = "on-demand"
+"led-trigger"                = "on-demand"
+"leds"                       = "on-demand"
+"localai"                    = "on-demand"
+"localrecall"                = "on-demand"
+"lyrion"                     = "on-demand"
+"magicmirror"                = "on-demand"
+"matrix"                     = "on-demand"
+"mcp-server"                 = "on-demand"
+"mesh"                       = "on-demand"
+"meshname"                   = "on-demand"
+"metablogizer"               = "on-demand"
+"nextcloud"                  = "on-demand"
+"peertube"                   = "on-demand"
+"photoprism"                 = "on-demand"
+"podcaster"                  = "on-demand"
+"rtty"                       = "on-demand"
+"streamlit"                  = "on-demand"
+"torrent"                    = "on-demand"
+
+# Manuels — ne démarrent que sur décision explicite d'un opérateur.
+"frigate"                    = "manual"
+"openclaw"                   = "manual"
+"picobrew"                   = "manual"
+"rustdesk"                   = "manual"
+"spiderfoot"                 = "manual"
+xray_at_                     = "manual"
+"yacy"                       = "manual"
+
+# ── Classe de réveil ──────────────────────────────────────────────────────
+# `urgent` dort plus difficilement (seuil d'inactivité multiplié par 4) et
+# dispose d'un budget de réveil plus court — cf. lifecycle.idle_threshold et
+# lifecycle.wake_budget. Réservé à ce dont la latence se voit tout de suite.
+# Tout ce qui n'est pas listé ici est `normal`.
+[wake_class]
+"dpi"                        = "urgent"
+"haproxy"                    = "urgent"
+"waf"                        = "urgent"

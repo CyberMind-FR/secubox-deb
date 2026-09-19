@@ -21,7 +21,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .manifest import CATEGORIES, PROTECTED_IDS, Manifest
+from .manifest import (CATEGORIES, DEFAULT_LIFECYCLE, DEFAULT_WAKE_CLASS,
+                       PROTECTED_IDS, Manifest)
 
 MENU_DIR = Path("/usr/share/secubox/menu.d")
 
@@ -89,9 +90,50 @@ def _route_for(mid: str, routes: set[str]) -> str | None:
     return None
 
 
+# Politique de cycle de vie : le fichier livre par le paquet, qu'un fichier
+# d'exploitation peut remplacer. L'ordre compte — le second gagne, entierement,
+# parce qu'une fusion partielle produirait un etat que personne n'a ecrit ni
+# relu.
+POLITIQUE_LIVREE = Path("/usr/share/secubox/lifecycle-defaults.toml")
+POLITIQUE_LOCALE = Path("/etc/secubox/lifecycle-defaults.toml")
+
+
+def charger_politique(*chemins: Path) -> dict:
+    """Lit la politique de cycle de vie. Silencieuse et sure : un fichier
+    absent, illisible ou mal forme rend {}, ce qui laisse tout en `always-on`.
+    Une politique ratee ne doit JAMAIS endormir par accident — et le defaut
+    sur est de ne rien endormir du tout."""
+    import tomllib
+    for chemin in (chemins or (POLITIQUE_LOCALE, POLITIQUE_LIVREE)):
+        try:
+            if not chemin.is_file():
+                continue
+            with open(chemin, "rb") as fh:
+                d = tomllib.load(fh)
+        except Exception:
+            continue
+        lc = d.get("lifecycle") or {}
+        wk = d.get("wake_class") or {}
+        if isinstance(lc, dict) and isinstance(wk, dict):
+            return {"lifecycle": lc, "wake_class": wk, "source": str(chemin)}
+    return {}
+
+
 def discover(*, units: list[str], lxc_names: set[str], routes: set[str],
-             menu_dir: Path = MENU_DIR) -> list[Manifest]:
-    """Dérive un manifeste par unit secubox-*.service."""
+             menu_dir: Path = MENU_DIR,
+             politique: dict | None = None) -> list[Manifest]:
+    """Dérive un manifeste par unit secubox-*.service.
+
+    `politique` porte le cycle de vie par defaut, sous la forme rendue par
+    `charger_politique` : {"lifecycle": {...}, "wake_class": {...}}. Un
+    module absent garde le defaut sur — ne rien savoir ne justifie jamais
+    d'endormir. scan refuse de DEVINER, et il a raison : se tromper couperait
+    un service qu'on croyait joignable. La politique n'est donc pas une
+    heuristique, c'est une decision prise ailleurs, ecrite et versionnee.
+    """
+    politique = politique or {}
+    _lc = politique.get("lifecycle", {})
+    _wk = politique.get("wake_class", {})
     menus = _menu_index(menu_dir)
     out: list[Manifest] = []
     for unit in sorted(units):
@@ -115,6 +157,8 @@ def discover(*, units: list[str], lxc_names: set[str], routes: set[str],
             lxc=mid if mid in lxc_names else None,
             portal_domain=domain,
             protected=mid in PROTECTED_IDS,
+            lifecycle=_lc.get(mid, DEFAULT_LIFECYCLE),
+            wake_class=_wk.get(mid, DEFAULT_WAKE_CLASS),
         ))
     return out
 
@@ -168,6 +212,14 @@ def to_toml(m: Manifest) -> str:
         lines.append(f"portal    = {{ domain = {_toml_str(m.portal_domain)} }}")
     lines.append(f"priority  = {m.priority}")
     lines.append(f"protected = {'true' if m.protected else 'false'}")
+    # L'ALLER-RETOUR N'EN ETAIT PAS UN. Ces deux champs n'etaient jamais
+    # emis : un manifeste porte a `on-demand` revenait `always-on` au premier
+    # passage par to_toml, en silence. La docstring promettait pourtant un
+    # aller-retour garanti avec load_manifest. Consequence mesuree sur une
+    # image neuve : 86 manifestes derives, PAS UN avec une ligne lifecycle,
+    # donc un sleeper actif qui n'avait rien a endormir (#1308).
+    lines.append(f"lifecycle  = {_toml_str(m.lifecycle)}")
+    lines.append(f"wake_class = {_toml_str(m.wake_class)}")
     if m.needs:
         lines.append(f"needs     = {_toml_list(m.needs)}")
     return "\n".join(lines) + "\n"
