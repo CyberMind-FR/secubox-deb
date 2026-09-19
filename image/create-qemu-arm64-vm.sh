@@ -105,7 +105,11 @@ for path in /usr/share/AAVMF/AAVMF_CODE.fd \
         break
     fi
 done
-[[ -z "$UEFI_CODE" ]] && fail "UEFI firmware not found. Install: apt install qemu-efi-aarch64 ovmf"
+# Not fatal here: a Raspberry Pi image boots without any firmware at all,
+# and the UEFI branch below re-checks this at the point where it matters.
+if [[ -z "$UEFI_CODE" ]]; then
+    warn "UEFI firmware not found (fine for Raspberry Pi images)"
+fi
 
 # Prepare image
 log "Preparing image: $IMAGE"
@@ -134,15 +138,57 @@ if [[ $CONVERT -eq 1 ]]; then
     IMAGE="$QCOW2"
 fi
 
-# Create UEFI vars file (writable copy)
+# ── Boot mode: UEFI, or direct-kernel for Raspberry Pi images ─────────────
+#
+# A Raspberry Pi image has NO UEFI. It boots through the proprietary Pi
+# firmware (config.txt + start4.elf), which `-machine virt` does not provide,
+# and which QEMU cannot emulate for a Pi 4/400 at all (its newest raspi
+# machine is raspi3b). Handing such an image to the pflash path drops the VM
+# into the EFI shell with no explanation — which reads exactly like "the
+# image is broken" when the image is perfectly fine.
+#
+# So: look for an EFI bootloader inside the FAT partition. When there is
+# none, pull the kernel and initrd straight out of the image and boot them
+# directly. That validates the whole userspace — packages, services, network
+# — which is what local validation is for. It does NOT validate the Pi boot
+# chain; only real hardware can do that.
+BOOT_MODE=uefi
+KERNEL_FILE=""
+INITRD_FILE=""
+
+if command -v mdir >/dev/null 2>&1 && command -v partx >/dev/null 2>&1; then
+    p1_start=$(partx -g -o START -n 1 "$IMAGE" 2>/dev/null | tr -d ' ' || true)
+    if [[ -n "$p1_start" ]]; then
+        p1_off=$(( p1_start * 512 ))
+        if ! mdir -i "${IMAGE}@@${p1_off}" ::/EFI >/dev/null 2>&1; then
+            BOOT_MODE=direct
+            EXTRACT_DIR="/tmp/${VM_NAME}-boot"
+            mkdir -p "$EXTRACT_DIR"
+            log "No EFI bootloader found — Raspberry Pi image, using direct kernel boot"
+            for f in vmlinuz initrd.img; do
+                mcopy -n -i "${IMAGE}@@${p1_off}" "::/${f}" "$EXTRACT_DIR/$f" 2>/dev/null \
+                    || fail "Could not extract ${f} from the image boot partition"
+            done
+            KERNEL_FILE="$EXTRACT_DIR/vmlinuz"
+            INITRD_FILE="$EXTRACT_DIR/initrd.img"
+            ok "Extracted kernel + initrd to $EXTRACT_DIR"
+        fi
+    fi
+fi
+
+# Create UEFI vars file (writable copy). Skipped entirely in direct-kernel
+# mode, where there is no firmware and $UEFI_CODE may legitimately be empty.
 VARS_FILE="/tmp/${VM_NAME}-uefi-vars.fd"
-if [[ ! -f "$VARS_FILE" ]] || [[ $(stat -c%s "$VARS_FILE") -ne $(stat -c%s "$UEFI_CODE") ]]; then
-    if [[ -n "$UEFI_VARS_TEMPLATE" ]] && [[ -f "$UEFI_VARS_TEMPLATE" ]]; then
-        cp "$UEFI_VARS_TEMPLATE" "$VARS_FILE"
-        log "Using UEFI vars template: $UEFI_VARS_TEMPLATE"
-    else
-        # Create file matching firmware size
-        truncate -s "$(stat -c%s "$UEFI_CODE")" "$VARS_FILE"
+if [[ "$BOOT_MODE" == "uefi" ]]; then
+    [[ -z "$UEFI_CODE" ]] && fail "UEFI firmware not found. Install: apt install qemu-efi-aarch64 ovmf"
+    if [[ ! -f "$VARS_FILE" ]] || [[ $(stat -c%s "$VARS_FILE") -ne $(stat -c%s "$UEFI_CODE") ]]; then
+        if [[ -n "$UEFI_VARS_TEMPLATE" ]] && [[ -f "$UEFI_VARS_TEMPLATE" ]]; then
+            cp "$UEFI_VARS_TEMPLATE" "$VARS_FILE"
+            log "Using UEFI vars template: $UEFI_VARS_TEMPLATE"
+        else
+            # Create file matching firmware size
+            truncate -s "$(stat -c%s "$UEFI_CODE")" "$VARS_FILE"
+        fi
     fi
 fi
 
@@ -154,10 +200,6 @@ QEMU_CMD=(
     -cpu cortex-a72
     -smp "$CPUS"
     -m "$RAM"
-
-    # UEFI firmware
-    -drive "if=pflash,format=raw,file=$UEFI_CODE,readonly=on"
-    -drive "if=pflash,format=raw,file=$VARS_FILE"
 
     # Boot disk
     -drive "if=virtio,format=$(qemu-img info --output=json "$IMAGE" | jq -r '.format'),file=$IMAGE"
@@ -172,6 +214,24 @@ QEMU_CMD=(
     # Serial console
     -serial mon:stdio
 )
+
+# Boot arguments, per the mode detected above.
+if [[ "$BOOT_MODE" == "uefi" ]]; then
+    QEMU_CMD+=(
+        -drive "if=pflash,format=raw,file=$UEFI_CODE,readonly=on"
+        -drive "if=pflash,format=raw,file=$VARS_FILE"
+    )
+else
+    # The image is attached as virtio, so its second partition is /dev/vda2
+    # here — not the mmcblk0p2 the Pi would see. `-machine virt` exposes a
+    # PL011, hence ttyAMA0. No Pi DTB is passed: QEMU generates the device
+    # tree for the virt machine, and a bcm2711 tree would not describe it.
+    QEMU_CMD+=(
+        -kernel "$KERNEL_FILE"
+        -initrd "$INITRD_FILE"
+        -append "root=/dev/vda2 rootfstype=ext4 rootwait console=ttyAMA0 loglevel=7"
+    )
+fi
 
 # Display options
 if [[ $NO_GUI -eq 1 ]]; then
