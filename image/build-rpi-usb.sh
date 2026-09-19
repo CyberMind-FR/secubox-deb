@@ -145,6 +145,10 @@ INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
 INCLUDE_PKGS+=",iproute2,iputils-ping,net-tools,wireguard-tools,dnsmasq"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,cron,rsync,jq"
 INCLUDE_PKGS+=",parted,dosfstools,e2fsprogs,pciutils,usbutils"
+# Swap compresse en RAM. Sans lui, la config zram ecrite plus bas reste
+# lettre morte : c'est ce generateur qui la lit au demarrage. Un rpi400
+# sans swap se fige des que les modules s'accumulent (#1308).
+INCLUDE_PKGS+=",systemd-zram-generator"
 
 # Python dependencies for SecuBox modules (apt packages)
 # NOTE: python3-cryptography excluded - fails to configure under QEMU emulation
@@ -249,6 +253,43 @@ EOF
 
 # Root password
 chroot "${ROOTFS}" bash -c 'echo "root:secubox" | chpasswd'
+
+# ── Swap compresse en memoire (zram) ─────────────────────────────────────
+#
+# POURQUOI. Un rpi400 a 4 Go et AUCUN swap : ni fstab, ni swapfile, ni zram,
+# ni dphys-swapfile. Les modules SecuBox sont des interpretes Python
+# persistants ; des qu'ils s'accumulent, la memoire s'epuise et il n'y a rien
+# pour absorber le debordement. Le symptome est deroutant parce que le noyau,
+# lui, va tres bien : la machine repond au ping, sshd et nginx acceptent le
+# TCP — mais plus aucun fork() n'aboutit. Un shell s'ouvre sur la console,
+# puis la premiere commande se fige. Constate sur materiel reel (#1308).
+#
+# POURQUOI ZRAM ET PAS UN FICHIER D'ECHANGE. Le stockage est une carte SD.
+# Y ecrire du swap l'use vite et donne des latences qui aggravent le blocage
+# au lieu de le soulager. zram compresse en RAM : il coute du CPU — dont un
+# Pi 4 a quatre coeurs a revendre pendant qu'il attend la memoire — et zero
+# ecriture sur la carte. `zram-size = ram` avec zstd rend environ 2 a 3 fois
+# son volume en pages froides, ce qui suffit largement a passer la bourrasque
+# du demarrage.
+#
+# Ce n'est PAS un permis de tout lancer : les bornes memoire et le filtrage
+# par profil restent les vraies limites. zram est le filet, pas le plancher.
+mkdir -p "${ROOTFS}/etc/systemd"
+cat > "${ROOTFS}/etc/systemd/zram-generator.conf" <<'ZRAM'
+[zram0]
+zram-size = ram
+compression-algorithm = zstd
+swap-priority = 100
+fs-type = swap
+ZRAM
+
+# Pages froides poussees plus tot vers zram : la compression est bon marche,
+# la penurie ne l'est pas. Valeur classique pour un swap compresse.
+mkdir -p "${ROOTFS}/etc/sysctl.d"
+cat > "${ROOTFS}/etc/sysctl.d/90-secubox-zram.conf" <<'SYSCTL'
+vm.swappiness = 150
+vm.page-cluster = 0
+SYSCTL
 
 # Timezone
 ln -sf /usr/share/zoneinfo/Europe/Paris "${ROOTFS}/etc/localtime"
@@ -743,9 +784,14 @@ DEBS_INSTALLED=0
 if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
   DEBS_DIR="${REPO_DIR}/output/debs"
   if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/secubox-*.deb >/dev/null 2>&1; then
-    log "Slipstream: installing packages from output/debs/..."
-    cp "${DEBS_DIR}"/secubox-*_all.deb "${ROOTFS}/tmp/secubox-debs/" 2>/dev/null || true
-    cp "${DEBS_DIR}"/secubox-*_arm64.deb "${ROOTFS}/tmp/secubox-debs/" 2>/dev/null || true
+    log "Slipstream: selection du profil ${PROFILE_TAG} depuis output/debs/..."
+    # Le profil FILTRE desormais. Auparavant les deux `cp` prenaient tout, si
+    # bien que `isp` et `full` produisaient la meme image — 175 paquets, 140
+    # unites au demarrage, et un rpi400 (4 Go, sans swap) qui se figeait
+    # (#1308). Le selecteur suit les Depends du meta-paquet et echoue si
+    # celui-ci manque, plutot que de retomber sur « tout copier ».
+    python3 "${SCRIPT_DIR}/select-profile-debs.py" \
+      "${DEBS_DIR}" "${PROFILE_TAG}" "${ROOTFS}/tmp/secubox-debs"
     DEBS_INSTALLED=1
   else
     warn "Slipstream: no .deb files found in ${DEBS_DIR}"
@@ -756,9 +802,13 @@ fi
 if [[ $DEBS_INSTALLED -eq 0 ]]; then
   CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
   if [[ -d "$CACHE_DEBS" ]]; then
-    log "Installing SecuBox packages from cache..."
-    find "$CACHE_DEBS" -name "secubox-*_all.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \;
-    find "$CACHE_DEBS" -name "secubox-*_arm64.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \; 2>/dev/null || true
+    log "Selection du profil ${PROFILE_TAG} depuis le cache..."
+    # Meme regle que pour le slipstream : le profil filtre, ici aussi.
+    _plat=$(mktemp -d)
+    find "$CACHE_DEBS" -name "secubox-*.deb" -exec cp {} "$_plat/" \; 2>/dev/null || true
+    python3 "${SCRIPT_DIR}/select-profile-debs.py" \
+      "$_plat" "${PROFILE_TAG}" "${ROOTFS}/tmp/secubox-debs"
+    rm -rf "$_plat"
     DEBS_INSTALLED=1
   fi
 fi
