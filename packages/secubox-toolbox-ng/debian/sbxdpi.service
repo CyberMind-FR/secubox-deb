@@ -46,7 +46,7 @@ ReadOnlyPaths=/etc/secubox
 # under /var/cache/secubox/dpi (pre-created 0750 secubox-toolbox by tmpfiles).
 ReadWritePaths=/run/secubox
 # Le snapshot va sur le SSD /data (jamais l'eMMC racine).
-ReadWritePaths=/data/secubox/sbxdpi
+ReadWritePaths=-/data/secubox/sbxdpi
 MemoryHigh=96M
 MemoryMax=128M
 TasksMax=64

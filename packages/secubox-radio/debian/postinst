@@ -3,6 +3,14 @@ set -e
 
 case "$1" in
   configure)
+    # STOCKAGE SUR /data. Ces repertoires existaient sur gk2 par sedimentation,
+    # jamais par empaquetage : une image NEUVE ne les avait donc pas, et le
+    # namespace du service echouait au demarrage. Constate sur rpi400 (journal
+    # du 27 avril). Cree seulement si /data est present — le `-` pose devant le
+    # chemin dans l'unite couvre le cas ou il ne l'est pas.
+    if [ -d /data ]; then
+        install -d -m 0755 -o secubox-radio -g secubox /data/secubox/radio 2>/dev/null || true
+    fi
     # UN UTILISATEUR DEDIE, comme chaque module : la separation des privileges
     # est une exigence CSPN, et elle ne vaut que si personne ne l'oublie.
     if ! getent passwd secubox-radio >/dev/null; then

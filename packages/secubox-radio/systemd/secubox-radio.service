@@ -59,7 +59,7 @@ IPAddressDeny=localhost link-local multicast
 
 # LE PARC EST SUR /data, LE SSD. L'eMMC s'est deja remplie sur cette board et a
 # produit des 502 sur des modules qui n'avaient rien demande.
-ReadWritePaths=/var/lib/secubox/radio /run/secubox /data/secubox/radio
+ReadWritePaths=/var/lib/secubox/radio /run/secubox -/data/secubox/radio
 
 # Une radio n'est pas un service critique : bornee, elle ne prend pas la place
 # de ce qui l'est. Le processeur de cette board est deja sature.

@@ -28,7 +28,7 @@ NoNewPrivileges=false
 # reste root:root 1777, cree hors des unites.
 RuntimeDirectoryMode=0775
 
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /sys/kernel/mm/ksm
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox -/sys/kernel/mm/ksm
 
 [Install]
 WantedBy=multi-user.target

@@ -79,7 +79,7 @@ ReadWritePaths=/run/secubox
 # #812 R4 media buffer (opt-in, see SBX_MEDIA_BUFFER_ARGS above) writes captured
 # bytes + the metatag log under /data/secubox/media-buffer; harmless to grant
 # even while the feature is off (tmpfiles pre-creates the dir 0750 secubox).
-ReadWritePaths=/data/secubox/media-buffer
+ReadWritePaths=-/data/secubox/media-buffer
 MemoryHigh=100M
 MemoryMax=128M
 TasksMax=128

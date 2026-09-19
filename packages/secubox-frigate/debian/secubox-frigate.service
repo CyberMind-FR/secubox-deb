@@ -24,7 +24,7 @@ NoNewPrivileges=true
 # la board rend des 502 sur des modules qui n'avaient rien demande. Le parent
 # reste root:root 1777, cree hors des unites.
 RuntimeDirectoryMode=0775
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox /var/cache/secubox /data/frigate
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox /var/cache/secubox -/data/frigate
 
 [Install]
 WantedBy=multi-user.target
