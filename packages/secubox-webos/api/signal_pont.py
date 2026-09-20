@@ -15,9 +15,12 @@ POURQUOI UN PONT PLUTÔT QU'UN JETON DANS LE NAVIGATEUR. La page du module
 lisait d'abord son jeton dans `localStorage`. C'est la convention de plusieurs
 cartes du parc, mais elle place un secret durable dans un stockage que toute
 extension, tout XSS et toute personne ayant accès à la machine peut lire — pour
-un module qui, lui, commande une messagerie chiffrée de bout en bout. Le jeton
-rejoint donc les autres identités du profil : `/etc/secubox/secrets/webos-acces/
-<qui>/signal`, en 0600, derrière le login (#1309).
+un module qui, lui, commande une messagerie chiffrée de bout en bout.
+
+Ce qui vit dans les identités du profil — `/etc/secubox/secrets/webos-acces/
+<qui>/signal`, 0600, derrière le login — est donc l'AUTORISATION, pas un
+secret : sa présence dit que cette personne a autorisé la passerelle. Le jeton
+présenté au démon est forgé ici, pour un appel, et vaut 60 secondes (#1309).
 
 Le démon n'écoute que sur une socket Unix ; ce pont est le seul à la joindre
 pour le compte d'un humain, et il n'expose que ce qu'une carte a le droit de
@@ -31,6 +34,13 @@ import httpx
 
 from . import acces
 
+try:
+    from secubox_core import auth
+except ImportError:  # arbre de developpement
+    import sys
+    sys.path.insert(0, "/usr/lib/python3/dist-packages")
+    from secubox_core import auth
+
 # Le démon n'a pas de port : on parle à sa socket. httpx sait le faire via un
 # transport UDS, ce qui évite d'ouvrir quoi que ce soit sur le réseau.
 _SOCKET = "/run/secubox/signal.sock"
@@ -39,11 +49,24 @@ _DELAI = 15.0
 
 
 def _jeton(qui: str) -> Optional[str]:
-    """Le jeton de session Signal de cette personne, ou None."""
-    d = acces.secret_de(qui, "signal")
-    if not d or not d.get("secret"):
+    """Un jeton COURT et PORTE, forge pour cet appel-ci.
+
+    CE QUI A CHANGE, ET POURQUOI. La premiere version presentait au demon le
+    secret lu dans le coffre. C'etait faux a deux titres : le demon attend un
+    JWT du parc, et un secret depose a la main n'en est pas un — l'appel
+    echouait sur « jeton mal forme ». Mais surtout, un secret DURABLE presente
+    a chaque requete se rejoue ; un jeton de 60 secondes, non.
+
+    Le coffre garde donc ce qu'il sait le mieux garder : l'AUTORISATION. Sa
+    presence dit que cette personne a autorise la passerelle, derriere son
+    login. Le jeton, lui, est forge ici, pour cet appel, et meurt avec lui.
+    """
+    if not acces.a_acces(qui, "signal"):
         return None
-    return str(d["secret"])
+    # `scope` porte l'intention : un jeton taille pour Signal n'ouvre rien
+    # d'autre, et sa duree se compte en secondes parce qu'il ne sert qu'a
+    # traverser une socket locale.
+    return auth.create_token(qui, expires_in=60, scope="signal")
 
 
 def _vide(detail: str) -> dict:
@@ -58,7 +81,12 @@ async def _appel(qui: str, methode: str, chemin: str,
     donc le jeton. On rend une raison courte et typée — la même règle que
     nc_super, et pour la même raison.
     """
-    jeton = _jeton(qui)
+    try:
+        jeton = _jeton(qui)
+    except Exception:
+        # create_token leve si aucun secret n'est provisionne. On ne relaie
+        # pas le detail : son texte nomme le fichier de configuration.
+        return _vide("secret du parc non configuré")
     if not jeton:
         return _vide("aucun accès Signal pour ce profil")
     transport = httpx.AsyncHTTPTransport(uds=_SOCKET)
@@ -90,6 +118,22 @@ async def contacts(qui: str) -> dict:
 
 async def groupes(qui: str) -> dict:
     return await _appel(qui, "GET", "/groups")
+
+
+async def lier(qui: str) -> dict:
+    """Demarrer l'appairage. Le QR revient en SVG, deja trace par le demon :
+    l'URI `sgnl://` qu'il encode lie quiconque la scanne, et ne doit donc
+    exister nulle part ailleurs que dans cette image."""
+    return await _appel(qui, "POST", "/link/start")
+
+
+async def lier_etat(qui: str) -> dict:
+    return await _appel(qui, "GET", "/link/status")
+
+
+async def delier(qui: str) -> dict:
+    """Delier le compte. IRREVERSIBLE — un nouvel appairage sera necessaire."""
+    return await _appel(qui, "DELETE", "/link")
 
 
 async def envoyer(qui: str, dest: str, corps: str) -> dict:

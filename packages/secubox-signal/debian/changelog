@@ -1,3 +1,16 @@
+secubox-signal (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * La page du module devient une COQUILLE. Elle ne porte plus aucun
+    jeton et n'appelle plus qu'une route : /healthz, qui ne demande rien
+    a personne. Tout ce qui exige une identite — appairage, envoi,
+    contacts — se fait depuis la carte « Signal + » du Hall, via le pont
+    serveur.
+  * Ce que cela supprime : un secret durable dans le localStorage d'un
+    navigateur, lisible par toute extension et tout XSS, pour un module
+    qui commande une messagerie chiffree de bout en bout. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 15:15:58 +0200
+
 secubox-signal (0.1.5-1~bookworm1) bookworm; urgency=medium
 
   * VRAIE verification HS256. La v1 se contentait de « le jeton n'est pas

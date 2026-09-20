@@ -652,6 +652,21 @@ async def signal_groupes(user=Depends(require_jwt)):
     return await signal_pont.groupes(_qui(user))
 
 
+@router.post("/acces/signal/lier")
+async def signal_lier(user=Depends(require_jwt)):
+    return await signal_pont.lier(_qui(user))
+
+
+@router.get("/acces/signal/lier/etat")
+async def signal_lier_etat(user=Depends(require_jwt)):
+    return await signal_pont.lier_etat(_qui(user))
+
+
+@router.delete("/acces/signal/lier")
+async def signal_delier(user=Depends(require_jwt)):
+    return await signal_pont.delier(_qui(user))
+
+
 @router.post("/acces/signal/envoyer")
 async def signal_envoyer(charge: dict, user=Depends(require_jwt)):
     return await signal_pont.envoyer(_qui(user),

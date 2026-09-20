@@ -1,3 +1,21 @@
+secubox-webos (1.0.315-1~bookworm6) bookworm; urgency=medium
+
+  * Le pont FORGE un jeton court au lieu de presenter le secret du coffre.
+    La version precedente envoyait au demon le secret lu dans les
+    identites du profil : faux a deux titres — le demon attend un JWT du
+    parc, et un secret depose a la main n'en est pas un, d'ou un « jeton
+    mal forme » ; et un secret DURABLE presente a chaque requete se
+    rejoue. Le coffre porte desormais l'AUTORISATION (sa presence dit que
+    la personne a autorise la passerelle, derriere son login) et le pont
+    forge un jeton scope=signal de 60 secondes, pour l'appel en cours.
+  * L'appairage passe par le pont (lier / lier/etat / delier). Le laisser
+    sur la page du module aurait oblige celle-ci a porter un jeton — ce
+    que ce travail vise a supprimer. La carte fait QR, suivi, envoi et
+    contacts : quatre appels au pont, ZERO acces au stockage du
+    navigateur. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 15:18:27 +0200
+
 secubox-webos (1.0.315-1~bookworm5) bookworm; urgency=medium
 
   * Carte « Signal + » servie PAR LE HALL (cardlets/signal.html). Elle

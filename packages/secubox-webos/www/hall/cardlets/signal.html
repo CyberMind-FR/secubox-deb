@@ -97,9 +97,14 @@ function rendreSansAcces(detail) {
 
 function rendreEnvoi(s) {
   if (!s.linked) {
-    $('zone').innerHTML = '<p class="m">Aucun compte lié.</p>' +
-      '<p><a class="lien" href="https://signal.gk2.secubox.in/" target="_blank" ' +
-      'rel="noopener">Appairer depuis la page du module →</a></p>';
+    // L'APPAIRAGE SE FAIT ICI, pas ailleurs. Le renvoyer vers la page du
+    // module obligerait celle-ci a porter un jeton — ce que tout ce travail
+    // vise justement a supprimer.
+    $('zone').innerHTML =
+      '<p class="m">Aucun compte lié.</p>' +
+      '<p><button id="b-lier">Générer un QR d\'appairage</button></p>' +
+      '<div id="qr"></div>';
+    $('b-lier').addEventListener('click', lier);
     return;
   }
   $('zone').innerHTML =
@@ -121,6 +126,35 @@ function rendreEnvoi(s) {
       if (d.ok) $('c').value = '';
     } catch (e) { journal('échec : ' + e.message); }
   });
+}
+
+async function lier() {
+  $('qr').textContent = 'génération…';
+  try {
+    const r = await fetch(PONT + '/lier', { method:'POST', credentials:'same-origin' });
+    const d = await r.json();
+    if (!d.ok) { $('qr').textContent = d.detail || 'échec'; return; }
+    // Le SVG est tracé par le démon : l'URI sgnl:// qu'il encode lie
+    // quiconque la scanne, et ne traverse donc jamais le navigateur.
+    $('qr').innerHTML = (d.data && d.data.qr_svg) || '';
+    journal('Scannez depuis Signal → Paramètres → Appareils liés');
+    suivre();
+  } catch (e) { $('qr').textContent = 'échec : ' + e.message; }
+}
+
+// Le QR expire en 10 minutes : on suit l'etat plutot que de laisser
+// l'utilisateur deviner si son scan a pris.
+function suivre() {
+  let n = 0;
+  const t = setInterval(async function () {
+    if (++n > 60) { clearInterval(t); return; }
+    try {
+      const d = await (await fetch(PONT + '/lier/etat', { credentials:'same-origin' })).json();
+      const e = d.ok && d.data ? d.data.state : '';
+      if (e === 'linked')  { clearInterval(t); journal('compte lié'); etat(); }
+      if (e === 'expired') { clearInterval(t); journal('QR expiré — régénérez-en un'); }
+    } catch (_) {}
+  }, 3000);
 }
 
 etat(); setInterval(etat, 20000);
