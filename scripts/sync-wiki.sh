@@ -130,14 +130,20 @@ commit_and_push() {
 
     cd "$WIKI_CLONE_DIR"
 
-    # Check for changes
-    if git diff --quiet HEAD; then
+    # Detecter les changements APRES mise en index. `git diff HEAD` ne voit
+    # que les fichiers SUIVIS : une page NOUVELLE y est invisible, et le
+    # script concluait « No changes to commit » en la laissant au sol. Une
+    # page ajoutee a wiki/ n'atteignait donc jamais le wiki GitHub — sauf si
+    # un fichier deja suivi changeait en meme temps, ce qui masquait le
+    # defaut. Constate en restaurant trois pages : le script les a recopiees
+    # puis declare n'avoir rien a faire.
+    git add -A
+    if git diff --cached --quiet; then
         log "No changes to commit"
         return
     fi
 
-    # Stage and commit
-    git add -A
+    # Commit
     git commit -m "$COMMIT_MSG"
     log "Changes committed: $COMMIT_MSG"
 
