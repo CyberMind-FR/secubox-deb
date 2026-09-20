@@ -5,6 +5,63 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-20 — LE WAF APPREND DE SON PROPRE JOURNAL (ref #1310)
+
+### Des motifs mesurés, pas recopiés
+
+Question posée : le WAF bloque-t-il encore ? Réponse mesurée sur gk2 —
+**128 détections, 25 bannissements** sur la fenêtre observée, avec de vraies
+prises de `recon_crawler`. Le moteur est vivant.
+
+Mes propres tests, eux, passaient tous. Ce n'était pas une faille : `sbxwaf`
+saute l'inspection pour les clients RFC1918 (`privateCIDR`), **par conception**.
+Un test depuis le LAN ne peut structurellement rien prouver sur le WAF. Il
+fallait interroger le trafic réel.
+
+D'où la méthode : confronter les **5 152 requêtes externes** du journal aux
+156 motifs existants, et ne retenir que **ce qui passait à travers**. Trois
+trous, quatre motifs, règles **1.5.0** :
+
+| motif | prises | faux positifs |
+|---|---:|---:|
+| `wordpress-001` | 423 | 0 |
+| `wordpress-002` | 273 | 0 |
+| `scan-012` | 23 | 0 |
+| `livewire-001` | 4 | 0 |
+
+Le zéro est **vérifié, pas espéré** : les chemins légitimes du parc —
+`/netmodes/`, `/system/`, `/portal/`, `/api/v1/`, les clones gitea — ont été
+testés un à un contre chaque motif.
+
+Un cinquième candidat, `%2f(etc|root|home)%2f`, a été **écarté** : zéro
+occurrence mesurée. Un motif sans preuve n'ajoute que du bruit à auditer.
+
+### Ce que `scan-012` révèle, et ne règle pas
+
+L'attaquant écrit `/%2eenv` là où `/\.env` l'attraperait : il encode le point
+pour passer sous des motifs qui testent le chemin **brut**. Vingt-trois
+requêtes mesurées, dont `/%2f%2eaws%2fcredentials`.
+
+Le motif bouche le trou **visible**. Il ne ferme pas la famille — double
+encodage (`%252e`), UTF-8 sur-long (`%c0%ae`). La vraie réponse est de
+**normaliser le chemin avant de le comparer**, dans `sbxwaf`. Cela rendrait
+`scan-012` inutile, ce qui serait le bon signe. Ouvert en #1310.
+
+### Deux pièges rencontrés
+
+`waf-rules.json` n'appartient à **aucun paquet** : `debian/rules` installe
+`config/` vers `/usr/share/secubox/waf/` et ne livre en conffile que
+`vhost_profiles.json`. Le fichier de `/etc` est **opérateur-seedé par
+conception** — l'ensemencer est le chemin sanctionné, pas une entorse à la
+règle dpkg.
+
+Et `/var/log/secubox/waf-threats.log` est un **lien mort** vers
+`/srv/mitmproxy/logs/`, purgé avec mitmproxy. Zéro référence, personne
+n'écrit à travers — mais il m'a fait chercher le journal au mauvais endroit.
+Le vrai journal est `/var/log/secubox/waf/waf-threats.log`.
+
+---
+
 ## 2026-09-18 — TRIXIE DÉMARRE, ET CE QU'IL A RÉVÉLÉ (ref #1294, #1362, #1027, #1049)
 
 ### L'image Trixie a été démarrée, pas seulement construite
