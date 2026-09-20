@@ -1,3 +1,38 @@
+secubox-acces (1.5.6-1~bookworm3) bookworm; urgency=medium
+
+  * INVENTAIRE DES ACCES ET DES PRIVILEGES (ref #1313). Nouvelle route de
+    lecture `GET /profils/inventaire` et sa vue dans le profileur.
+  * CE QUE LE PROFILEUR NE MONTRAIT PAS. `/profils` ne rend que les demandes
+    `acceptee` : un appareil REFUSE ou EXPIRE etait invisible, alors que « a
+    qui avons-nous dit non, et quand » est une question d'audit legitime. La
+    seule trace vivait dans un fichier que personne n'ouvre.
+  * LA MATRICE DE PRIVILEGES EST DERIVEE, JAMAIS ECRITE A LA MAIN. On
+    interroge l'application : quelles routes portent reellement
+    `require_admin`. Une table tenue a la main serait juste le jour de son
+    ecriture puis deriverait — quelqu'un ajoute une route gardee, personne ne
+    pense a la table, et l'ecran d'audit affirme tranquillement une chose
+    fausse. On aurait remplace une absence d'information par une
+    DESINFORMATION, ce qui est pire parce que ca se croit.
+  * L'INVENTAIRE DIT CE QUI DEPLAIT. `PROFILS` est ordonne (guest < user <
+    admin), ce qui laisse croire a trois niveaux. Or il n'existe AUCUN
+    `require_user` et `PROFILS.index` n'est compare nulle part : `user`
+    n'accorde aujourd'hui rien de plus que `guest`. Promouvoir de l'un a
+    l'autre change une etiquette, pas un droit. Le profil sans effet est donc
+    MARQUE et sa remarque affichee — trois lignes d'apparence egalement
+    significative fabriqueraient la croyance qu'on veut empecher.
+  * LECTURE SEULE, delibereement. Les gestes qui MODIFIENT restent en
+    `/file/*` et `/profils/*` : les redoubler multiplierait les chemins par
+    lesquels un droit peut changer, donc les endroits a auditer.
+  * L'inventaire ne peut pas faire tomber le profileur : il est appele hors
+    du `Promise.all`. Un ecran d'audit indisponible ne doit pas retirer a
+    l'administrateur le moyen d'admettre quelqu'un.
+  * 11 tests, dont celui qui compte : la matrice suit une route ajoutee apres
+    coup. Si quelqu'un remplace un jour la derivation par une table ecrite a
+    la main, ce test-la tombera, seul.
+  * Verifie sur l'application REELLE : 7 routes d'administration trouvees.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 18:26:35 +0200
+
 secubox-acces (1.5.6-1~bookworm2) bookworm; urgency=medium
 
   * Carlette : le geste de validation ne passe plus sous la ligne de

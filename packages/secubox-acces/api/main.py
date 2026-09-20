@@ -39,6 +39,7 @@ from secubox_core.auth import (_emit_session_event, create_token, require_jwt,
 
 from .identite import empreinte_courte, nom_de_compte, verifie_signature
 from .lien import LienInvalide, Liens
+from .inventaire import inventaire
 from .profileur import PROFILS, DemandeInvalide, Profileur
 from .session import Portier, SessionRefusee
 
@@ -511,6 +512,27 @@ async def profils():
     droite ce qui vit déjà.
     """
     return {"admis": profileur().admis(), "profils": list(PROFILS)}
+
+
+@app.get("/profils/inventaire", dependencies=[Depends(require_admin)])
+async def profils_inventaire():
+    """L'inventaire COMPLET des accès et des privilèges (#1313).
+
+    Distinct de `/profils`, qui sert à DÉCIDER : celui-ci sert à AUDITER, et
+    les deux besoins ne se recouvrent pas.
+
+      * Tous les appareils, dans TOUS leurs états. `/profils` ne rend que les
+        `acceptee` ; un refus ou une expiration y est invisible, alors que
+        « à qui avons-nous dit non, et quand » est une question d'audit.
+      * Ce que chaque profil autorise RÉELLEMENT, dérivé des routes de cette
+        application plutôt que d'une table tenue à la main — laquelle serait
+        juste le jour de son écriture, puis dériverait en silence.
+
+    Lecture seule, délibérément. Les gestes qui MODIFIENT vivent déjà en
+    `/file/*` et `/profils/*` : les redoubler ici multiplierait les chemins
+    par lesquels un droit peut changer, donc les endroits à auditer.
+    """
+    return inventaire(app, profileur())
 
 
 @app.post("/file/accepter", dependencies=[Depends(require_admin)])

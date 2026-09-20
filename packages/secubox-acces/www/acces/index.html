@@ -260,6 +260,19 @@
           resté en plan — et ça se voit ici.</p>
         <div id="profils"><p class="vide">Chargement…</p></div>
       </section>
+
+      <!-- INVENTAIRE COMPLET (#1313). Le profileur au-dessus sert a DECIDER :
+           il ne montre que ce qui attend et ce qui vit. Cette section sert a
+           AUDITER, et les deux besoins ne se recouvrent pas — un appareil
+           refuse ou expire n'apparait nulle part ailleurs, alors que « a qui
+           avons-nous dit non, et quand » est une question legitime. -->
+      <section class="carte" id="audit-carte">
+        <div class="sec-h"><span class="k">Inventaire</span><div class="rule"></div><span>📋</span></div>
+        <h2>Tous les accès, tous les états</h2>
+        <p class="sous">Ce que le profileur ne montre pas : les refus, les
+          expirations, et ce que chaque profil autorise réellement.</p>
+        <div id="audit"><p class="vide">Chargement…</p></div>
+      </section>
     </div>
   </div>
 
@@ -611,6 +624,139 @@ async function rendFormulaire() {
 
 // ── Le visage se DÉDUIT, il ne se choisit pas ───────────────────────────────
 
+// ── INVENTAIRE ─────────────────────────────────────────────────────────────
+//
+// CET ECRAN DOIT DIRE CE QUI DEPLAIT. `PROFILS` est ordonne — guest < user <
+// admin — ce qui laisse croire a trois niveaux de droits. Le serveur derive la
+// verite des routes reellement gardees, et elle est moins flatteuse : `user`
+// n'accorde aujourd'hui rien de plus que `guest`.
+//
+// Afficher trois lignes d'apparence egalement significative fabriquerait
+// exactement la croyance qu'on veut empecher — celle d'un administrateur qui
+// promeut en pensant donner un droit. Le profil sans effet est donc MARQUE, et
+// sa remarque affichee.
+const ETIQ_ETAT = {
+  acceptee:   ['✅', 'Admis'],
+  en_attente: ['⏳', 'En attente'],
+  refusee:    ['⛔', 'Refusé'],
+  expiree:    ['⌛', 'Expiré'],
+};
+
+function quandCourt(t) {
+  if (!t) return '—';
+  return new Date(t * 1000).toLocaleDateString('fr-FR',
+    { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function rendAudit(inv) {
+  const c = $('audit');
+  c.textContent = '';
+
+  // Le resume d'abord : combien, et dans quel etat. C'est la question qu'on
+  // se pose avant de lire une liste.
+  const r = inv.resume || {};
+  const res = el('p', 'sous');
+  const parEtat = Object.entries(r.par_etat || {})
+    .map(([e, n]) => (ETIQ_ETAT[e] ? ETIQ_ETAT[e][0] + ' ' : '') + n + ' ' + e)
+    .join(' · ');
+  res.textContent = (r.total || 0) + ' appareil(s) connu(s)' + (parEtat ? ' — ' + parEtat : '');
+  c.appendChild(res);
+
+  // ── ce que chaque profil autorise ───────────────────────────────────────
+  const hP = el('h3', null, 'Niveaux de droits');
+  hP.style.cssText = 'font-size:.9rem;margin:16px 0 6px';
+  c.appendChild(hP);
+
+  const priv = inv.privileges || {};
+  for (const nom of (inv.profils || [])) {
+    const v = priv[nom]; if (!v) continue;
+    const b = el('div', 'bloc');
+    b.style.cssText = 'border:1px solid var(--line-2,#ddd);border-radius:10px;'
+                    + 'padding:10px 12px;margin-bottom:8px';
+    const t = el('div');
+    t.style.cssText = 'display:flex;align-items:baseline;gap:8px;flex-wrap:wrap';
+    const n = el('strong', null, nom);
+    t.appendChild(n);
+    // LE MARQUAGE EST LE POINT. Un profil sans effet ne doit pas se presenter
+    // comme les autres — sinon l'ecran ment par mise en page.
+    const p = el('span', 'etat ' + (v.effectif ? 'acceptee' : 'expiree'),
+                 v.effectif ? v.nombre_routes + ' route(s) réservée(s)' : 'aucun droit propre');
+    t.appendChild(p);
+    b.appendChild(t);
+    if (v.remarque) {
+      const rq = el('p', 'sous', v.remarque);
+      rq.style.cssText = 'margin:6px 0 0;font-size:.78rem';
+      b.appendChild(rq);
+    }
+    if ((v.routes || []).length) {
+      const ul = el('ul');
+      ul.style.cssText = 'margin:8px 0 0;padding-left:18px;font-size:.78rem';
+      for (const rt of v.routes) {
+        const li = el('li');
+        const code = el('code', null, rt.methodes.join(',') + ' ' + rt.chemin);
+        li.appendChild(code);
+        if (rt.resume) li.appendChild(el('span', 'sous', ' — ' + rt.resume));
+        ul.appendChild(li);
+      }
+      b.appendChild(ul);
+    }
+    c.appendChild(b);
+  }
+
+  // ── la liste complete ───────────────────────────────────────────────────
+  const hA = el('h3', null, 'Appareils');
+  hA.style.cssText = 'font-size:.9rem;margin:18px 0 6px';
+  c.appendChild(hA);
+
+  const liste = inv.appareils || [];
+  if (!liste.length) { c.appendChild(el('p', 'vide', 'Aucun appareil connu.')); return; }
+
+  const enveloppe = el('div');
+  enveloppe.style.cssText = 'overflow-x:auto';   // jamais de defilement du corps
+  const tb = el('table');
+  tb.style.cssText = 'width:100%;border-collapse:collapse;font-size:.8rem';
+  const thead = el('thead');
+  const trh = el('tr');
+  for (const t of ['État', 'Nom', 'Appareil', 'Profil', 'Demandé', 'Traité', 'Par']) {
+    const th = el('th', null, t);
+    th.style.cssText = 'text-align:left;padding:5px 8px;border-bottom:1px solid var(--line-2,#ddd);'
+                     + 'font-weight:700;white-space:nowrap';
+    trh.appendChild(th);
+  }
+  thead.appendChild(trh); tb.appendChild(thead);
+
+  const tbody = el('tbody');
+  // Les etats qui demandent une action d'abord, les archives ensuite.
+  const ordre = { en_attente: 0, acceptee: 1, refusee: 2, expiree: 3 };
+  liste.slice().sort((a, b2) =>
+    (ordre[a.etat] ?? 9) - (ordre[b2.etat] ?? 9) || (b2.demandee_le || 0) - (a.demandee_le || 0)
+  ).forEach(d => {
+    const tr = el('tr');
+    const et = ETIQ_ETAT[d.etat] || ['•', d.etat];
+    const cells = [
+      et[0] + ' ' + et[1],
+      d.nom || '—',
+      d.appareil || '—',
+      // Un profil n'a de sens que sur un appareil ADMIS : l'afficher sur un
+      // refus laisserait croire a un droit accorde.
+      d.etat === 'acceptee' ? (d.profil || 'guest') : '—',
+      quandCourt(d.demandee_le),
+      quandCourt(d.traitee_le),
+      d.traitee_par || '—',
+    ];
+    cells.forEach(v => {
+      const td = el('td', null, String(v));
+      td.style.cssText = 'padding:5px 8px;border-bottom:1px solid var(--line-1,#eee);white-space:nowrap';
+      tr.appendChild(td);
+    });
+    if (d.motif_refus) tr.title = 'Motif : ' + d.motif_refus;
+    tbody.appendChild(tr);
+  });
+  tb.appendChild(tbody);
+  enveloppe.appendChild(tb);
+  c.appendChild(enveloppe);
+}
+
 async function rafraichis() {
   // Même règle qu'en carlette : l'ouverture ne dépend pas du visage affiché.
   // LE LIEN PASSE EN PREMIER : il vient d'être cliqué, et il est à usage
@@ -627,6 +773,14 @@ async function rafraichis() {
   try {
     const [f, p, u] = await Promise.all([
       api('/file'), api('/profils'), api('/invitation/url')]);
+    // L'INVENTAIRE NE DOIT PAS POUVOIR FAIRE TOMBER LE PROFILEUR. Il est en
+    // lecture et sert a auditer ; le profileur, lui, sert a DECIDER. Le mettre
+    // dans le Promise.all ci-dessus ferait basculer toute la page en vue
+    // « visiteur » si cette seule route echouait — un ecran d'audit indisponible
+    // ne doit pas retirer a l'administrateur le moyen d'admettre quelqu'un.
+    api('/profils/inventaire')
+      .then(inv => { $('audit-carte').hidden = false; rendAudit(inv); })
+      .catch(() => { $('audit-carte').hidden = true; });
     $('admin').hidden = false;
     $('visiteur').hidden = true;
     tuiles(f.en_attente, p.admis);
