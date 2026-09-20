@@ -1,3 +1,44 @@
+secubox-signal (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Le groupe PRIMAIRE du demon est `secubox`, et la socket en herite. nginx
+    tourne en www-data, membre de `secubox` et d'aucun autre groupe du parc.
+  * Le chown de la socket est RETIRE du demon. La voie evidente — garder le
+    groupe primaire et chowner au demarrage — echouait : `chown` releve du
+    groupe d'appels systeme @privileged, que SystemCallFilter interdit. Le
+    demon mourait sur SIGSYS (status=31/SYS, core-dump). Le bac a sable avait
+    raison ; c'est la conception qui devait ceder. Poser le bon groupe coute
+    un mot dans l'unite.
+  * Les helpers partages sont references sous /shared/sbxui/, ou la
+    consolidation SBXSliceBar les a places. A la racine de /shared/ ils
+    rendaient une 404 — donc du text/html — que le navigateur refuse pour un
+    .js ou un .css a cause de X-Content-Type-Options: nosniff. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 14:48:28 +0200
+
+secubox-signal (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * La socket est placee dans le groupe `secubox`, et le demon y appartient.
+    nginx tourne en www-data, membre de `secubox` et d'AUCUN autre groupe du
+    parc : une socket laissee au groupe primaire du demon donnait 502 sur
+    toutes les routes proxifiees — dont la cardlet — pendant que la page
+    statique repondait 200. Le symptome accusait le demon ; la cause etait un
+    groupe. Constate en activant le vhost sur gk2. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 14:44:36 +0200
+
+secubox-signal (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le vhost ecoute sur 9080, pas 9089. Le parc route ses modules par
+    server_name sur un port unique — la table sbxwaf pointe tous ses vhosts
+    vers 9080. Un port propre aurait demande une route incoherente avec le
+    reste, sans rien proteger de plus. Constate en activant le vhost sur gk2.
+  * tmpfiles : regles d'etat retirees. systemd-tmpfiles REFUSE la transition
+    de proprietaire /var/lib/secubox (secubox) -> .../signal (secubox-signal)
+    et emettait un avertissement a chaque demarrage pour un travail que le
+    postinst et les ExecStartPre font deja. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 14:40:15 +0200
+
 secubox-signal (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Premiere version — passerelle Signal (ref #1309).

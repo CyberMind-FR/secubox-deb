@@ -8,6 +8,10 @@ case "$1" in
               --home /var/lib/secubox/signal \
               --shell /usr/sbin/nologin secubox-signal >/dev/null
     fi
+    # Appartenance au groupe `secubox` : l'unite y place le groupe PRIMAIRE
+    # du processus, ce qui rend la socket lisible par nginx (www-data en est
+    # membre). L'adduser reste utile pour les outils lances a la main.
+    adduser secubox-signal secubox >/dev/null 2>&1 || true
     # 0700 : le stockage porte les CLES du lien Signal. Rien d'autre ne doit
     # pouvoir les lire, pas meme les autres services du parc.
     install -d -m 0700 -o secubox-signal -g secubox-signal \

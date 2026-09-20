@@ -13,7 +13,15 @@ ConditionPathExists=/usr/sbin/sbx-signald
 Type=notify
 NotifyAccess=main
 User=secubox-signal
-Group=secubox-signal
+# GROUPE PRIMAIRE `secubox`, pas `secubox-signal`. nginx tourne en www-data,
+# membre de `secubox` et d'aucun autre groupe du parc : c'est ainsi que la
+# socket devient lisible par le mandataire, sans le moindre chown.
+#
+# La voie evidente — laisser le groupe primaire et chowner la socket au
+# demarrage — ECHOUE : `chown` releve de @privileged, que SystemCallFilter
+# interdit plus bas. Le demon mourait alors sur SIGSYS (status=31/SYS). Le
+# bac a sable avait raison ; c'est la conception qui devait ceder.
+Group=secubox
 
 # Le stockage de signal-cli porte les CLES du lien : 0700, jamais plus large.
 ExecStartPre=+/bin/mkdir -p /var/lib/secubox/signal/cli /var/lib/secubox/signal/attachments
