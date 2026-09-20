@@ -5,7 +5,7 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
-**[SecuBox](Home)** | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH) | **v2.2.4-pre1**
+**[SecuBox](Home)** | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH) | **v3.0.0-alpha.4**
 
 ---
 
@@ -13,6 +13,7 @@
 
 * [[Home]]
 * [[Architecture]]
+* [[Trixie]]
 * [[Hardware-Matrix]]
 * [[Roadmap]]
 

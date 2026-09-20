@@ -32,7 +32,8 @@
 ---
 
 SecuBox turns a small ARM board — or any x86 PC — into a complete, self-hosted
-security appliance running on Debian bookworm — Trixie port in progress
+security appliance running on Debian bookworm, with **Debian 13 (Trixie)
+images now published** for VM and Raspberry Pi
 ([#1294](https://github.com/CyberMind-FR/secubox-deb/issues/1294)): firewall, VPN, intrusion
 detection, WAF, and a suite of sovereign services, all behind one web dashboard.
 
@@ -93,7 +94,8 @@ KVM or QEMU: [Official AMD64 GK2 Clone installation guide](docs/INSTALL-AMD64-GK
 **Boot it from a USB stick on any x86_64 PC — nothing is written to the disk.**
 
 ```bash
-# The bootable live image currently ships with the Alpha 4 pre-release
+# The bootable live image ships with the Alpha 4 release (Debian 12 base —
+# the Trixie images are the VM and Raspberry Pi ones, see Quick Deploy below)
 wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v3.0.0-alpha.4/secubox-live-amd64-bookworm.img.gz
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress   # /dev/sdX = your USB device
 ```
@@ -109,18 +111,20 @@ Full walkthrough and troubleshooting: [Live USB](https://github.com/CyberMind-FR
 
 **For 24/7 operation on dedicated hardware.**
 
-| Target | Best for | Published image |
-|---|---|---|
-| Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-bookworm.img.gz` (live) |
-| Any x86_64 PC | Permanent install | `secubox-installer-amd64-bookworm.iso.gz` |
-| MOCHAbin | Enterprise | `secubox-mochabin-live-usb.img.gz` |
-| VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-bookworm.img.gz` |
+| Target | Best for | Published image | Suite |
+|---|---|---|---|
+| VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-trixie.img.gz` | **Debian 13** |
+| Raspberry Pi 4 / 400 | Desktop appliance, kiosk | `secubox-full-rpi-arm64-trixie.img.gz` | **Debian 13** |
+| Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-bookworm.img.gz` (live) | Debian 12 |
+| Any x86_64 PC | Permanent install | `secubox-installer-amd64-bookworm.iso.gz` | Debian 12 |
+| MOCHAbin | Enterprise | `secubox-mochabin-live-usb.img.gz` | Debian 12 |
 
-> ESPRESSObin and Raspberry Pi are supported targets, but their images are not
-> in the current release assets — build them from source
-> ([Building](https://github.com/CyberMind-FR/secubox-deb/wiki/Building)) or
-> check the [releases page](https://github.com/CyberMind-FR/secubox-deb/releases)
-> for a later build.
+Each board ships in two profiles: `isp` (a lean gateway) and `full` (the
+complete service suite). The profile is no longer cosmetic — it genuinely
+selects which modules are installed.
+
+> ESPRESSObin images are not in the current release assets — build them from
+> source ([Building](https://github.com/CyberMind-FR/secubox-deb/wiki/Building)).
 
 Flashing, U-Boot and first-boot steps:
 [Installation](https://github.com/CyberMind-FR/secubox-deb/wiki/Installation) ·
@@ -129,9 +133,23 @@ Flashing, U-Boot and first-boot steps:
 
 ### 🧪 Testing Alpha 4
 
-`v3.0.0-alpha.4` is the current pre-release — 181 packages, disk images and
-Live USB builds for every supported board. It is a **pre-release**: run it on a
+`v3.0.0-alpha.4` is the current release — 181 packages, disk images and Live
+USB builds for every supported board, now including **Debian 13 (Trixie)**
+images for VM and Raspberry Pi. It remains a **pre-release line**: run it on a
 test box, not on the link your household depends on.
+
+What the Trixie images carry, verified on a booted machine rather than only in
+the build log:
+
+- **Profiles that actually filter.** `isp` and `full` used to produce byte-identical
+  images; they now differ by the modules they install.
+- **zram swap and a collective memory ceiling.** SecuBox modules run under a
+  `secubox.slice` capped as a percentage of physical RAM, so a module storm
+  costs you a module — not the machine.
+- **Module lifecycle derived at first boot**, with the sleeper putting idle
+  modules to sleep.
+- **The nDPI 6.x engine**, now built by CI for **both** amd64 and arm64.
+
 Guided path: [**Démarrage rapide Alpha4**](https://github.com/CyberMind-FR/secubox-deb/wiki) —
 VM in one command, or real arm64 hardware — first section of the wiki home.
 
