@@ -1,3 +1,28 @@
+secubox-signal (0.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * VRAIE verification HS256. La v1 se contentait de « le jeton n'est pas
+    vide » : ce n'etait pas une simplification mais un trou, n'importe
+    quelle chaine ouvrant l'API d'un module qui commande une messagerie
+    chiffree de bout en bout.
+    Signature verifiee en HMAC-SHA256, comparaison a temps constant,
+    algorithme CONTRAINT a HS256 — accepter celui que le jeton s'attribue
+    est la faille classique des implementations JWT — et fenetre exp/nbf
+    avec 30 s de tolerance.
+  * AUCUN repli sur un secret par defaut. Le secret vient de
+    SECUBOX_JWT_SECRET ou de api.jwt_secret dans /etc/secubox/secubox.conf,
+    la meme chaine que le reste du parc. Absent, AUCUN jeton n'est accepte
+    et le demon l'annonce au demarrage — la doctrine de #942 : un secret
+    manquant est un defaut de provisionnement, pas une raison de degrader.
+  * Le motif du 401 est rendu tel quel : « pas de secret configure » et
+    « jeton expire » se distinguent enfin, ce qui manquait cruellement au
+    diagnostic.
+  * Sans dependance : HS256 tient dans crypto/hmac. 8 tests couvrent le
+    jeton valide, l'absence de secret, la signature falsifiee, alg=none,
+    HS512, l'expiration, les formes mal formees et la section de conf.
+    (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 15:08:49 +0200
+
 secubox-signal (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * La cardlet honore le theme du Hall. Elle l'ignorait : le Hall passe

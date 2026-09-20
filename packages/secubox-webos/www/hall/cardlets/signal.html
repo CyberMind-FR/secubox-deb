@@ -1,0 +1,127 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SBX-SIGNAL — carte servie PAR LE HALL (#1309).
+
+  Elle n'appelle JAMAIS le démon en direct : tout passe par le pont
+  /api/v1/webos/acces/signal/*, qui lit le jeton dans les identités du profil
+  côté serveur. Le jeton ne traverse donc pas le navigateur, et cette carte
+  étant servie par le Hall, les appels sont en MÊME ORIGINE — ni CORS, ni
+  élargissement de connect-src.
+
+  Le dépôt du jeton, lui, passe par la carte générique
+  /cardlets/delegue.html?svc=signal : elle lit ?svc= et sait traiter tout
+  service déclaré `manuel` dans la liste fermée.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal</title>
+<link rel="stylesheet" href="/shared/sbxui/spicy.css">
+<style>
+  :root { --fond:#fff; --texte:#1a1a22; --muted:#6b6b7a; --bord:#e2e2ea;
+          --accent:#3a76f0; --ok:#2f9e5f; --off:#8a8a93; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9;
+      --muted:#8a8a99; --bord:#2a2a36; --accent:#6f9bff; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --bord:#2a2a36; --accent:#6f9bff; }
+  body { margin:0; background:var(--fond); color:var(--texte);
+         font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .w { display:flex; flex-direction:column; gap:.6rem; padding:.75rem .85rem; }
+  .t { display:flex; align-items:center; gap:.5rem; }
+  .p { width:.6rem; height:.6rem; border-radius:50%; background:var(--off); }
+  .p[data-e="up"] { background:var(--ok); }
+  .m { color:var(--muted); }
+  form { display:grid; gap:.45rem; }
+  input, textarea { font:inherit; padding:.45rem .6rem; border-radius:.35rem;
+    border:1px solid var(--bord); background:var(--fond); color:inherit; width:100%; }
+  textarea { min-height:3.2rem; resize:vertical; }
+  button { font:inherit; padding:.42rem .8rem; border-radius:.35rem; cursor:pointer;
+    border:1px solid var(--accent); background:var(--accent); color:#fff; }
+  button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  a.lien { color:var(--accent); }
+  .j { font-size:.85em; color:var(--muted); border-top:1px solid var(--bord); padding-top:.35rem; }
+</style>
+
+<div class="w">
+  <div class="t"><span class="p" id="p" aria-hidden="true"></span>
+    <strong>Signal</strong><span class="m" id="etat">…</span></div>
+  <div id="zone" class="m">chargement…</div>
+  <div class="j" id="j"></div>
+</div>
+
+<script>
+// Thème : paramètre à l'ouverture, puis postMessage si l'utilisateur change.
+(function(){ var t=new URLSearchParams(location.search).get('theme');
+  if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
+addEventListener('message', function(e){ var d=e.data;
+  if(d && d.sbx==='theme' && (d.theme==='dark'||d.theme==='light'))
+    document.documentElement.setAttribute('data-theme', d.theme); });
+
+const $ = (i)=>document.getElementById(i);
+const PONT = '/api/v1/webos/acces/signal';
+
+function journal(t){ $('j').textContent = t; }
+
+async function etat() {
+  try {
+    // MÊME ORIGINE : la carte est servie par le Hall, le cookie de session
+    // suffit. Aucun jeton n'est lu ni stocké ici.
+    const r = await fetch(PONT + '/etat', { credentials:'same-origin' });
+    if (r.status === 401) { rendreNonConnecte(); return; }
+    const d = await r.json();
+    if (!d.ok) { rendreSansAcces(d.detail); return; }
+    const s = d.data || {};
+    $('p').dataset.e = s.backend === 'up' ? 'up' : 'off';
+    $('etat').textContent = s.linked ? (s.account || 'lié') : 'non appairé';
+    rendreEnvoi(s);
+  } catch (e) { rendreSansAcces('démon injoignable'); }
+}
+
+function rendreNonConnecte() {
+  $('p').dataset.e = 'off'; $('etat').textContent = '';
+  $('zone').innerHTML = 'Connectez-vous au Hall pour utiliser Signal.';
+}
+
+function rendreSansAcces(detail) {
+  $('p').dataset.e = 'off'; $('etat').textContent = '';
+  // On NOMME ce qui manque et on mène au bon endroit : un « aucun accès »
+  // sans chemin de sortie oblige à deviner.
+  $('zone').innerHTML =
+    '<p>' + (detail || 'aucun accès') + '</p>' +
+    '<p><a class="lien" href="/cardlets/delegue.html?svc=signal" target="_top">' +
+    'Déposer le jeton Signal dans mon profil →</a></p>';
+}
+
+function rendreEnvoi(s) {
+  if (!s.linked) {
+    $('zone').innerHTML = '<p class="m">Aucun compte lié.</p>' +
+      '<p><a class="lien" href="https://signal.gk2.secubox.in/" target="_blank" ' +
+      'rel="noopener">Appairer depuis la page du module →</a></p>';
+    return;
+  }
+  $('zone').innerHTML =
+    '<form id="f">' +
+    '<input id="d" placeholder="+33…  ou identifiant de groupe" required>' +
+    '<textarea id="c" placeholder="Message" maxlength="4096" required></textarea>' +
+    '<div><button type="submit">Envoyer</button></div></form>';
+  $('f').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    journal('envoi…');
+    try {
+      const r = await fetch(PONT + '/envoyer', {
+        method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ dest: $('d').value.trim(), corps: $('c').value })
+      });
+      const d = await r.json();
+      journal(d.ok ? 'message mis en file' : ('refusé — ' + (d.detail || r.status)));
+      if (d.ok) $('c').value = '';
+    } catch (e) { journal('échec : ' + e.message); }
+  });
+}
+
+etat(); setInterval(etat, 20000);
+</script>

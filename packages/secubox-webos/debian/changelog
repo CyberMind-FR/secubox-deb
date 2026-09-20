@@ -1,3 +1,16 @@
+secubox-webos (1.0.315-1~bookworm5) bookworm; urgency=medium
+
+  * Carte « Signal + » servie PAR LE HALL (cardlets/signal.html). Elle
+    n'appelle jamais le demon en direct : tout passe par le pont
+    /api/v1/webos/acces/signal/*, donc aucun jeton ne transite par le
+    navigateur. Etant servie par le Hall, ses appels sont en MEME ORIGINE
+    — ni CORS, ni elargissement de connect-src.
+  * Le depot du jeton passe par delegue.html?svc=signal, qui est
+    generique : il lit ?svc= et traite tout service declare `manuel` dans
+    la liste fermee. Rien a ecrire pour cela. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 15:10:59 +0200
+
 secubox-webos (1.0.315-1~bookworm4) bookworm; urgency=medium
 
   * Le jeton de session Signal rejoint les IDENTITES DU PROFIL : il vit

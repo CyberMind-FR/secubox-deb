@@ -36,11 +36,14 @@ type API struct {
 	lien etatLien
 }
 
-// Verificateur decouple l'API du mecanisme de jeton. Le parc verifie le JWT
-// en amont (nginx + Hall) ; le demon revalide, parce qu'une socket Unix
-// lisible par un autre service du parc n'est pas une frontiere de confiance.
+// Verificateur decouple l'API du mecanisme de jeton. Le demon REVALIDE meme
+// derriere le Hall : une socket Unix lisible par un autre service du parc
+// n'est pas une frontiere de confiance.
+//
+// Valide rend le SUJET du jeton, pas un booleen : savoir QUI agit est ce qui
+// permettra le multi-comptes (RFC §11) sans rouvrir cette interface.
 type Verificateur interface {
-	Valide(jeton string) bool
+	Valide(jeton string) (string, error)
 }
 
 type etatLien struct {
@@ -78,9 +81,16 @@ func (a *API) Routes() http.Handler {
 
 func (a *API) protege(h http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jeton := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if a.jwt == nil || !a.jwt.Valide(jeton) {
-			probleme(w, http.StatusUnauthorized, "Jeton absent, expire ou invalide")
+		brut := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if a.jwt == nil {
+			probleme(w, http.StatusUnauthorized, "Verificateur de jeton absent")
+			return
+		}
+		if _, err := a.jwt.Valide(brut); err != nil {
+			// Le motif est rendu tel quel : il distingue « pas de secret
+			// configure » d'un « jeton expire », et cette distinction est
+			// exactement ce qui manque quand on diagnostique un 401.
+			probleme(w, http.StatusUnauthorized, err.Error())
 			return
 		}
 		h(w, r)
