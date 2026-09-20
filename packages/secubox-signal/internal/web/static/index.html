@@ -111,7 +111,12 @@ const API = '/api/v1/signal';
 // Le jeton est depose par le Hall dans le stockage de session. En son absence
 // la page reste lisible mais les routes protegees repondront 401 — et on le
 // montrera, plutot que d'afficher un vide ambigu.
-const jeton = () => sessionStorage.getItem('sbx_jwt') || '';
+// Convention du parc : localStorage 'sbx_token'. Les repli couvrent les
+// quelques modules plus anciens qui nomment la cle autrement.
+const jeton = () => localStorage.getItem('sbx_token')
+                 || localStorage.getItem('secubox_token')
+                 || localStorage.getItem('jwt_token')
+                 || '';
 const entetes = () => ({ 'Authorization': 'Bearer ' + jeton(), 'Content-Type': 'application/json' });
 
 function journal(texte) {

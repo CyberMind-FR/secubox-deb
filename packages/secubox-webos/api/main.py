@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from secubox_core.auth import require_jwt, create_token
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, acces, actions, nc_super
+from api import registry, flags, cardlets, acces, actions, nc_super, signal_pont
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
@@ -629,6 +629,35 @@ async def acces_revoque(svc: str, user=Depends(require_jwt)):
 # ── Nextcloud « Super Cardlet » : lecture + actions AU NOM de la personne ─────
 # Le secret ne quitte jamais la box (nc_super lit acces.secret_de côté serveur).
 # La carte reçoit des titres, des chiffres et le résultat de SES actions.
+
+# ── SBX-SIGNAL : messagerie AU NOM de la personne (#1309) ────────────────────
+# Le jeton de session Signal vit dans les identites du profil
+# (/etc/secubox/secrets/webos-acces/<qui>/signal, 0600, derriere le login) et
+# ne rejoint JAMAIS le navigateur. Le pont lit le coffre cote serveur et parle
+# a la socket du demon ; la carte recoit des etats et le resultat de SES
+# actions. Meme doctrine que le super-cardlet Nextcloud ci-dessous.
+
+@router.get("/acces/signal/etat")
+async def signal_etat(user=Depends(require_jwt)):
+    return await signal_pont.etat(_qui(user))
+
+
+@router.get("/acces/signal/contacts")
+async def signal_contacts(user=Depends(require_jwt)):
+    return await signal_pont.contacts(_qui(user))
+
+
+@router.get("/acces/signal/groupes")
+async def signal_groupes(user=Depends(require_jwt)):
+    return await signal_pont.groupes(_qui(user))
+
+
+@router.post("/acces/signal/envoyer")
+async def signal_envoyer(charge: dict, user=Depends(require_jwt)):
+    return await signal_pont.envoyer(_qui(user),
+                                     str(charge.get("dest") or ""),
+                                     str(charge.get("corps") or ""))
+
 
 @router.get("/acces/nextcloud/tableau")
 async def nc_tableau(user=Depends(require_jwt)):

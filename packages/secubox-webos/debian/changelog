@@ -1,3 +1,25 @@
+secubox-webos (1.0.315-1~bookworm4) bookworm; urgency=medium
+
+  * Le jeton de session Signal rejoint les IDENTITES DU PROFIL : il vit
+    desormais dans /etc/secubox/secrets/webos-acces/<qui>/signal, en 0600,
+    derriere le login — au meme endroit que les autres identites, et sous
+    la meme protection.
+  * Il ne rejoint JAMAIS le navigateur. La page lisait son jeton dans
+    localStorage : c'est la convention de plusieurs cartes du parc, mais
+    elle place un secret durable dans un stockage que toute extension,
+    tout XSS et toute personne ayant acces a la machine peut lire — pour
+    un module qui commande une messagerie chiffree de bout en bout.
+  * api/signal_pont.py : le Hall parle au demon AU NOM de la personne, sur
+    la doctrine exacte de nc_super — lecture du coffre cote serveur, appel
+    a la socket Unix, et retour limite a ce qu'une carte a le droit de
+    savoir. Aucune exception ne remonte telle quelle : son texte pourrait
+    contenir le jeton.
+  * `signal` enregistre dans la liste FERMEE des services, en flux
+    `manuel` : il n'existe aucun flux de delegation cote Signal, et il ne
+    faut pas en inventer un. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 15:02:36 +0200
+
 secubox-webos (1.0.315-1~bookworm3) bookworm; urgency=medium
 
   * frame-src du Hall : signal.gk2.secubox.in ajoute aux TROIS listes.

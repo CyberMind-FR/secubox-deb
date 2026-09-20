@@ -1,3 +1,18 @@
+secubox-signal (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * La cardlet honore le theme du Hall. Elle l'ignorait : le Hall passe
+    ?theme=dark a l'ouverture puis un postMessage {sbx:'theme'} quand
+    l'utilisateur en change, et sans couleur explicite le texte restait
+    noir sur fond sombre — presente mais illisible. Palette complete en
+    clair sur :root, redefinie pour le sombre dans les DEUX etats (media
+    query et [data-theme]), et fond du body explicite : un body
+    transparent emprunte le fond de l'hote.
+  * La page du module lit le jeton dans localStorage 'sbx_token', la
+    convention du parc (108 occurrences). Le sessionStorage 'sbx_jwt' que
+    j'avais suppose n'existait nulle part ailleurs. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 14:57:34 +0200
+
 secubox-signal (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * Le groupe PRIMAIRE du demon est `secubox`, et la socket en herite. nginx

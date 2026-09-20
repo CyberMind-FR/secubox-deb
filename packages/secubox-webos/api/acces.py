@@ -78,6 +78,16 @@ SERVICES: dict[str, dict[str, str]] = {
     "mail": {"nom": "Mail", "hote": "webmail.gk2.secubox.in", "flux": "manuel"},
     "mastodon": {"nom": "Social", "hote": "social.gk2.secubox.in", "flux": "mastodon"},
     "photoprism": {"nom": "Photos", "hote": "photoprism.gk2.secubox.in", "flux": "manuel"},
+    # SBX-SIGNAL (#1309). `manuel` : le jeton de session Signal est deposé par
+    # la personne, une fois, depuis la console d'accès — il n'existe aucun flux
+    # de délégation côté Signal, et il ne faut pas en inventer un.
+    #
+    # Le jeton vit donc là où vivent les autres identités du profil :
+    # /etc/secubox/secrets/webos-acces/<qui>/signal, en 0600, derrière le login.
+    # Il ne rejoint JAMAIS le navigateur : le pont `signal_pont` lit le coffre
+    # côté serveur et parle au démon au nom de la personne, comme nc_super le
+    # fait pour Nextcloud.
+    "signal": {"nom": "Signal", "hote": "signal.gk2.secubox.in", "flux": "manuel"},
 }
 
 # Où Mastodon renvoie après approbation. Un `urn:…:oob` obligerait à recopier un
