@@ -63,6 +63,35 @@ substituée (une prise d'hier reste une prise) ; on replie pour **comparer**,
 jamais pour **transmettre**. Et `..` est **préservé** — le résoudre détruirait
 l'accusation en même temps que le masque.
 
+### Cinq motifs CVE ne s'exécutaient pas
+
+Trouvé **par hasard**, en lisant le journal de démarrage après un
+redéploiement. Trois `cve_voip` (Asterisk ×2, OpenSIPS) et deux `cve_xmpp`
+(Prosody, Strophe.js) utilisaient l'échappement unicode d'octet nul, que
+**RE2 ne connaît pas**. sbxwaf les rejetait au chargement et poursuivait :
+écrits, relus, livrés, versionnés — et **inertes depuis leur introduction**.
+
+Corrigés en `\x00`, vérifiés sous Go avant livraison. 159 motifs déclarés,
+**159 désormais chargés** (154 avant).
+
+**La leçon n'est pas l'échappement, c'est le silence.** Un motif absent ne se
+distingue **en rien** d'un motif qui ne matche jamais : les deux produisent
+zéro prise, zéro ligne, zéro alerte. Comparer le nombre de motifs **chargés**
+au nombre de motifs **déclarés** rendrait l'écart visible en permanence — à
+faire dans sbxwaf.
+
+L'en-tête de `rules.go` affirmait que tous les motifs compilent sous RE2 et
+qu'aucune règle de production n'est supprimée. C'était faux. Corrigé sur
+place, avec la raison.
+
+### Piège de packaging
+
+`/usr/sbin/sbxwaf` est livré par **`secubox-waf-ng`**, pas par
+`secubox-toolbox-ng` — ce dernier n'en porte que la *source* (`cmd/sbxwaf/`)
+et livre `sbxmitm`, `sbxdpi`, `sbx-sentinel`. J'ai construit et déployé le
+mauvais paquet d'abord ; **seule la comparaison d'empreinte du binaire l'a
+révélé** — `dpkg` annonçait « Setting up » sans que rien ne change.
+
 ### Le nettoyage mitmproxy a déterré un module mort
 
 `cookie_audit` : **`CookieAuditAggregator` n'est instancié nulle part** hors
