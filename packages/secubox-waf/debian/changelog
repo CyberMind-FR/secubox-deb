@@ -1,3 +1,23 @@
+secubox-waf (1.10.32-1~bookworm2) bookworm; urgency=medium
+
+  * Regles 1.5.0 — quatre motifs TIRES DU JOURNAL de gk2, pas d'une liste
+    generique. Rejoues sur 10 422 lignes reelles : 723 requetes
+    nouvellement qualifiees, ZERO faux positif.
+      wordpress-001  423 req.  /wp-(login|admin|config|content|includes|json|cron)
+      wordpress-002  273 req.  /(wordpress|wp)/
+      scan-012        23 req.  %2e%2e|%2f%2e|/%2e
+      livewire-001     4 req.  /livewire/(update|upload-file)
+  * scan-012 traite une EVASION ACTIVE : l'attaquant ecrit /%2eenv la ou
+    /\.env l'attraperait, encodant le point pour passer sous des motifs qui
+    testent le chemin BRUT. Ce motif bouche le trou visible ; il ne ferme
+    pas la famille (double encodage %252e, UTF-8 sur-long %c0%ae). La vraie
+    reponse est de NORMALISER le chemin avant comparaison, dans sbxwaf.
+  * Un cinquieme candidat — %2f(etc|root|home)%2f — a ete ECARTE : zero
+    occurrence mesuree. Un motif sans preuve n'est que du bruit a auditer.
+    (ref #1266)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 15:55:51 +0200
+
 secubox-waf (1.10.32-1~bookworm1) bookworm; urgency=medium
 
   * LE MOTEUR MITMPROXY NE FAIT PLUS PARTIE DU PAQUET (#1362). Le WAF a migre

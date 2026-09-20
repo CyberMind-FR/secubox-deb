@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "version": "1.4.2",
-    "updated": "2026-08-29",
-    "changelog": "URGENT: router-goform '\\`|;' groupe -> (\\$\\(|\\`|;) : sans parentheses, l'alternance matchait tout UA contenant ';' (tous les navigateurs bloques en router_botnet). Voir aussi mirai-scan Mozi\\b.",
+    "version": "1.5.0",
+    "updated": "2026-09-20",
+    "changelog": "1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
     "sources": [
       "OWASP Top 10",
       "CERT advisories",
@@ -273,6 +273,11 @@
           "id": "scan-011",
           "pattern": "/phpmyadmin",
           "desc": "sonde phpmyadmin (générique)"
+        },
+        {
+          "id": "scan-012",
+          "pattern": "%2e%2e|%2f%2e|/%2e",
+          "desc": "Point ou barre encodes pour contourner les motifs de chemin (/%2eenv, /%2f%2eaws%2fcredentials) — 23 requetes mesurees"
         }
       ]
     },
@@ -959,6 +964,21 @@
           "cve": "CVE-2024-3400",
           "vendor": "paloaltonetworks",
           "source": "nuclei"
+        },
+        {
+          "id": "wordpress-001",
+          "pattern": "/wp-(login|admin|config|content|includes|json|cron)",
+          "desc": "Sonde WordPress — aucun WordPress n'est heberge (422 requetes mesurees)"
+        },
+        {
+          "id": "wordpress-002",
+          "pattern": "/(wordpress|wp)/",
+          "desc": "Prefixe WordPress classique sous /wordpress/ ou /wp/ (273 requetes)"
+        },
+        {
+          "id": "livewire-001",
+          "pattern": "/livewire/(update|upload-file)",
+          "desc": "Sonde RCE Laravel Livewire"
         }
       ],
       "_note": "graine ; maintenu à chaud par wafgen (secubox-cve-triage)"
