@@ -1,3 +1,14 @@
+secubox-acces (1.5.6-1~bookworm2) bookworm; urgency=medium
+
+  * Carlette : le geste de validation ne passe plus sous la ligne de
+    flottaison (ref #1372). Les gestes sont colles en bas du bloc et le corps
+    defile ; l'empreinte est compactee sans perdre en lisibilite ; « Accorder »
+    prend le poids de l'action principale. Au-dela de trois demandes, une ligne
+    dit le reste et ou le traiter — la pastille donnait le total, rien ne
+    disait que les suivantes se traitaient ailleurs.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 18:01:02 +0200
+
 secubox-acces (1.5.6-1~bookworm1) bookworm; urgency=medium
 
   * UN GARDE-FOU ECRIT APRES UN `return` (#1366). Le controle « cette reponse

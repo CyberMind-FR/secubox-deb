@@ -1,3 +1,20 @@
+secubox-billets (0.8.59-1~bookworm2) bookworm; urgency=medium
+
+  * Commentaires : PUBLICATION DIRECTE (ref #1372). La file de moderation est
+    retiree, un commentaire parait des son envoi. Les gardes qui protegent
+    reellement — CSRF, pot de miel, jeton de formulaire signe, cadence par IP —
+    s'appliquent AVANT et restent intacts ; la file n'ajoutait qu'un delai
+    humain APRES eux, retenant surtout les messages legitimes.
+  * L'IDENTITE SECUBOX FAIT AUTORITE. Un visiteur porteur d'une session
+    SecuBox voit son nom de session REMPLACER ce qu'il a tape — pas pre-remplir
+    un champ modifiable : un nom qu'on peut choisir n'identifie personne. Sans
+    session, le nom libre reste accepte. Lecture tolerante : jeton absent,
+    expire ou illisible valent identite absente, jamais une erreur au visiteur.
+  * `pending` reste dans le modele : d'anciens messages en portent l'etat.
+  * 2 tests reecrits, 2 ajoutes.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 18:01:02 +0200
+
 secubox-billets (0.8.59-1~bookworm1) bookworm; urgency=medium
 
   * Identifiants dérivés : les hachages hérités (MD5/SHA-1) passent par

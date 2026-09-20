@@ -1,3 +1,10 @@
+secubox-webos (1.0.315-1~bookworm9) bookworm; urgency=medium
+
+  * Hall : la carlette Acces passe de 320 a 430 px (ref #1372). A 320, le
+    bouton « Accorder » sortait du cadre — il existait, personne ne le voyait.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 18:01:02 +0200
+
 secubox-webos (1.0.315-1~bookworm8) bookworm; urgency=medium
 
   * La carte Signal porte enfin un <!DOCTYPE html> — sans lui le navigateur
