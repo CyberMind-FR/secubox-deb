@@ -1,0 +1,178 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  SBX-SIGNAL — page /mega du module.
+-->
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal — SecuBox</title>
+<link rel="stylesheet" href="/shared/spicy.css">
+<script defer src="/shared/aide.js"></script>
+<style>
+  :root {
+    --sig-fond:#f7f7f9; --sig-carte:#fff; --sig-bord:#e2e2e8;
+    --sig-texte:#1b1b20; --sig-doux:#6b6b7a;
+    --sig-accent:#3a76f0; --sig-ok:#2f9e5f; --sig-alerte:#c8492f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --sig-fond:#141419; --sig-carte:#1d1d24; --sig-bord:#2e2e38;
+      --sig-texte:#e8e8ee; --sig-doux:#9a9aa8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --sig-fond:#141419; --sig-carte:#1d1d24; --sig-bord:#2e2e38;
+    --sig-texte:#e8e8ee; --sig-doux:#9a9aa8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--sig-fond); color:var(--sig-texte);
+         font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { display:flex; align-items:center; gap:.6rem; padding:1rem 1.2rem;
+           border-bottom:1px solid var(--sig-bord); background:var(--sig-carte); }
+  header h1 { margin:0; font-size:1.05rem; font-weight:650; letter-spacing:-.01em; }
+  .pastille { width:.62rem; height:.62rem; border-radius:50%; background:var(--sig-doux); }
+  .pastille[data-etat="up"] { background:var(--sig-ok); }
+  main { max-width:56rem; margin:0 auto; padding:1.2rem; display:grid; gap:1.1rem; }
+  .carte { background:var(--sig-carte); border:1px solid var(--sig-bord);
+           border-radius:.6rem; padding:1rem 1.1rem; }
+  .carte h2 { margin:0 0 .7rem; font-size:.78rem; text-transform:uppercase;
+              letter-spacing:.09em; color:var(--sig-doux); font-weight:600; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:.35rem .9rem; margin:0; }
+  dt { color:var(--sig-doux); }
+  dd { margin:0; font-variant-numeric:tabular-nums; }
+  .avert { border-left:3px solid var(--sig-alerte); padding-left:.8rem; color:var(--sig-alerte); }
+  button { font:inherit; padding:.5rem .9rem; border-radius:.4rem; cursor:pointer;
+           border:1px solid var(--sig-bord); background:var(--sig-carte); color:inherit; }
+  button.primaire { background:var(--sig-accent); border-color:var(--sig-accent); color:#fff; }
+  button:focus-visible { outline:2px solid var(--sig-accent); outline-offset:2px; }
+  #qr { display:grid; place-items:center; padding:1rem; }
+  #qr svg { max-width:min(320px,70vw); height:auto; border-radius:.4rem; }
+  .envoi { display:grid; gap:.6rem; grid-template-columns:1fr; }
+  .envoi input, .envoi textarea { font:inherit; padding:.55rem .7rem; border-radius:.4rem;
+    border:1px solid var(--sig-bord); background:var(--sig-fond); color:inherit; width:100%; }
+  .envoi textarea { min-height:5rem; resize:vertical; }
+  @media (min-width:40rem) { .envoi { grid-template-columns:16rem 1fr; align-items:start; }
+                             .envoi textarea, .envoi .ligne { grid-column:1/-1; } }
+  .flux { max-height:14rem; overflow:auto; font-size:.9em; }
+  .flux div { padding:.25rem 0; border-bottom:1px solid var(--sig-bord); }
+</style>
+
+<header>
+  <span class="pastille" id="pastille" aria-hidden="true"></span>
+  <h1>Signal</h1>
+  <span id="compte" style="color:var(--sig-doux)">…</span>
+</header>
+
+<main>
+  <section class="carte" aria-labelledby="t-etat">
+    <h2 id="t-etat">État</h2>
+    <dl>
+      <dt>Backend</dt><dd id="e-backend">—</dd>
+      <dt>Compte lié</dt><dd id="e-compte">—</dd>
+      <dt>Rétention</dt><dd id="e-retention">—</dd>
+      <dt>Abonnés au flux</dt><dd id="e-flux">—</dd>
+    </dl>
+    <p id="e-corps" class="avert" hidden>
+      Le contenu des messages est conservé. Ce n'est pas le réglage par défaut —
+      voir la RFC, §7.
+    </p>
+  </section>
+
+  <section class="carte" aria-labelledby="t-lien">
+    <h2 id="t-lien">Appairage</h2>
+    <p style="margin-top:0;color:var(--sig-doux)">
+      La box se lie comme <strong>appareil secondaire</strong> d'un compte existant.
+      Elle ne s'enregistre jamais comme appareil primaire.
+    </p>
+    <button class="primaire" id="b-lier">Générer un QR d'appairage</button>
+    <div id="qr"></div>
+  </section>
+
+  <section class="carte" aria-labelledby="t-envoi">
+    <h2 id="t-envoi">Envoyer</h2>
+    <form class="envoi" id="f-envoi">
+      <input id="dest" placeholder="+33…  ou identifiant de groupe" required>
+      <textarea id="corps" placeholder="Message" maxlength="4096" required></textarea>
+      <div class="ligne"><button class="primaire" type="submit">Envoyer</button></div>
+    </form>
+  </section>
+
+  <section class="carte" aria-labelledby="t-flux">
+    <h2 id="t-flux">Événements</h2>
+    <div class="flux" id="flux"><div style="color:var(--sig-doux)">en attente…</div></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const API = '/api/v1/signal';
+
+// Le jeton est depose par le Hall dans le stockage de session. En son absence
+// la page reste lisible mais les routes protegees repondront 401 — et on le
+// montrera, plutot que d'afficher un vide ambigu.
+const jeton = () => sessionStorage.getItem('sbx_jwt') || '';
+const entetes = () => ({ 'Authorization': 'Bearer ' + jeton(), 'Content-Type': 'application/json' });
+
+function journal(texte) {
+  const d = document.createElement('div');
+  d.textContent = new Date().toLocaleTimeString() + ' — ' + texte;
+  $('flux').prepend(d);
+}
+
+async function etat() {
+  try {
+    const h = await (await fetch(API + '/healthz')).json();
+    $('pastille').dataset.etat = h.backend === 'up' ? 'up' : 'off';
+    $('e-backend').textContent = { up:'actif', down:'arrêté', unlinked:'non appairé' }[h.backend] || h.backend;
+    $('compte').textContent = 'v' + (h.version || '');
+  } catch { $('e-backend').textContent = 'injoignable'; }
+
+  try {
+    const s = await (await fetch(API + '/status', { headers: entetes() })).json();
+    if (s.status === 401) return;
+    $('e-compte').textContent = s.account || '—';
+    $('e-retention').textContent = s.retention_hours ? s.retention_hours + ' h' : '—';
+    $('e-flux').textContent = s.queue_depth ?? '—';
+    $('e-corps').hidden = !s.store_body;
+  } catch {}
+}
+
+$('b-lier').addEventListener('click', async () => {
+  $('qr').textContent = 'génération…';
+  try {
+    const r = await fetch(API + '/link/start', { method:'POST', headers: entetes() });
+    const d = await r.json();
+    if (!r.ok) { $('qr').textContent = d.detail || 'échec'; return; }
+    $('qr').innerHTML = d.qr_svg;  // SVG tracé côté serveur, jamais l'URI
+    journal('QR généré — scannez depuis Signal → Appareils liés');
+  } catch (e) { $('qr').textContent = 'échec : ' + e.message; }
+});
+
+$('f-envoi').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const dest = $('dest').value.trim(), corps = $('corps').value;
+  const cle = dest.startsWith('+') ? 'to' : 'group_id';
+  try {
+    const r = await fetch(API + '/messages', {
+      method:'POST', headers: entetes(), body: JSON.stringify({ [cle]: dest, body: corps })
+    });
+    journal(r.ok ? 'message mis en file' : 'envoi refusé (' + r.status + ')');
+    if (r.ok) $('corps').value = '';
+  } catch (e) { journal('envoi échoué : ' + e.message); }
+});
+
+// Flux temps reel. Une coupure est normale (redemarrage du demon) : on se
+// reconnecte sans bruit plutot que d'afficher une erreur a chaque fois.
+function brancherFlux() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  let ws;
+  try { ws = new WebSocket(proto + '://' + location.host + API + '/ws'); }
+  catch { return setTimeout(brancherFlux, 10000); }
+  ws.onmessage = (m) => { try { const e = JSON.parse(m.data); journal(e.type); } catch {} };
+  ws.onclose = () => setTimeout(brancherFlux, 10000);
+}
+
+etat(); setInterval(etat, 15000); brancherFlux();
+</script>
+</html>

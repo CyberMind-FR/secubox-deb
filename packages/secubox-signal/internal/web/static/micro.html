@@ -1,0 +1,69 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  SBX-SIGNAL — cardlet /micro, encadree par le Hall.
+  Le Hall porte deja la session : ce document ne demande PAS de JWT, sinon il
+  serait blanc pour tout le monde.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal</title>
+<link rel="stylesheet" href="/shared/spicy.css">
+<style>
+  :root { --sig-accent:#3a76f0; --sig-ok:#2f9e5f; --sig-off:#8a8a93; }
+  body { margin:0; font:13px/1.45 system-ui,sans-serif; background:transparent; }
+  .sig { display:flex; flex-direction:column; gap:.55rem; padding:.7rem .8rem; }
+  .sig-tete { display:flex; align-items:center; gap:.5rem; }
+  .sig-pastille { width:.6rem; height:.6rem; border-radius:50%; background:var(--sig-off); flex:0 0 auto; }
+  .sig-pastille[data-etat="up"] { background:var(--sig-ok); }
+  .sig-compte { font-variant-numeric:tabular-nums; opacity:.8; }
+  .sig-vide { opacity:.65; font-style:italic; }
+  .sig-msg { display:flex; justify-content:space-between; gap:.6rem; }
+  .sig-msg time { opacity:.6; font-variant-numeric:tabular-nums; flex:0 0 auto; }
+  .sig-pair { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sig-pied { display:flex; justify-content:space-between; font-size:.85em; opacity:.7; }
+</style>
+
+<div class="sig" id="sig">
+  <div class="sig-tete">
+    <span class="sig-pastille" id="pastille" aria-hidden="true"></span>
+    <strong>Signal</strong>
+    <span class="sig-compte" id="compte">…</span>
+  </div>
+  <div id="liste" class="sig-vide">chargement…</div>
+  <div class="sig-pied">
+    <span id="retention"></span>
+    <span id="flux"></span>
+  </div>
+</div>
+
+<script>
+// Le cardlet reste maitre de SON contenu (cf. slicebar.js) : il se rafraichit
+// seul et ne suppose rien du Hall au-dela du CSS partage.
+const $ = (id) => document.getElementById(id);
+
+async function rafraichir() {
+  try {
+    const r = await fetch('/api/v1/signal/healthz', { credentials: 'same-origin' });
+    const h = await r.json();
+    $('pastille').dataset.etat = h.backend === 'up' ? 'up' : 'off';
+    $('compte').textContent =
+      h.backend === 'unlinked' ? 'non appairé' :
+      h.backend === 'up'       ? 'lié'        : 'backend absent';
+    // L'historique demande un jeton : encadre dans le Hall, le cardlet ne
+    // l'a pas. On montre donc l'etat, pas le contenu — et on le DIT, plutot
+    // que d'afficher un vide qui ressemblerait a « aucun message ».
+    $('liste').className = 'sig-vide';
+    $('liste').textContent = h.backend === 'up'
+      ? 'Ouvrir pour lire les conversations'
+      : 'Appairer un compte depuis la page du module';
+    $('retention').textContent = '';
+    $('flux').textContent = 'v' + (h.version || '');
+  } catch (e) {
+    $('pastille').dataset.etat = 'off';
+    $('compte').textContent = 'injoignable';
+    $('liste').textContent = 'Le démon ne répond pas';
+  }
+}
+rafraichir();
+setInterval(rafraichir, 15000);
+</script>

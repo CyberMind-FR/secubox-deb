@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    # Utilisateur systeme dedie : le module ne tourne jamais en root.
+    if ! getent passwd secubox-signal >/dev/null; then
+      adduser --system --group --no-create-home \
+              --home /var/lib/secubox/signal \
+              --shell /usr/sbin/nologin secubox-signal >/dev/null
+    fi
+    # 0700 : le stockage porte les CLES du lien Signal. Rien d'autre ne doit
+    # pouvoir les lire, pas meme les autres services du parc.
+    install -d -m 0700 -o secubox-signal -g secubox-signal \
+            /var/lib/secubox/signal /var/lib/secubox/signal/cli \
+            /var/lib/secubox/signal/attachments
+    install -d -m 0750 -o secubox-signal -g secubox-signal /var/log/secubox/signal
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-signal.conf 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

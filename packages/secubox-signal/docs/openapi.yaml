@@ -1,0 +1,365 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+openapi: "3.1.0"
+info:
+  title: SBX-SIGNAL — passerelle Signal
+  version: "0.1.0"
+  summary: Envoi et réception Signal depuis une SecuBox, et relais des alertes Sentinel.
+  description: |
+    Passerelle Signal de SecuBox-Deb. Le démon `sbx-signald` pilote `signal-cli`
+    et expose cette API sur une socket Unix — `/run/secubox/signal.sock` — que
+    nginx relaie sous `signal.gk2.secubox.in`.
+
+    **Le contenu des messages n'est pas conservé par défaut.** L'historique ne
+    rend que des métadonnées, sauf si `retention.store_body` a été activé
+    explicitement par l'exploitant. Voir la RFC, §7.
+  license:
+    name: LicenseRef-CMSD-1.0
+    url: https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENCE-CMSD-1.0.md
+  contact:
+    name: CyberMind
+    url: https://cybermind.fr
+
+servers:
+  - url: https://signal.gk2.secubox.in/api/v1/signal
+    description: vhost du module
+
+tags:
+  - name: état
+  - name: appairage
+  - name: messages
+  - name: annuaire
+  - name: pièces jointes
+
+security:
+  - bearerAuth: []
+
+paths:
+  /healthz:
+    get:
+      tags: [état]
+      summary: Vivacité du démon
+      description: Sans authentification — consommé par systemd et le Hall.
+      security: []
+      responses:
+        "200":
+          description: vivant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /status:
+    get:
+      tags: [état]
+      summary: État du lien et du backend
+      responses:
+        "200":
+          description: état courant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /link/start:
+    post:
+      tags: [appairage]
+      summary: Démarrer l'appairage
+      description: |
+        Lance `signal-cli link` et rend le QR à scanner depuis
+        *Signal → Appareils liés*. L'URI d'appairage est un secret de courte
+        durée : elle n'est ni journalisée ni persistée.
+      responses:
+        "201":
+          description: appairage engagé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkStart" }
+        "409":
+          description: un compte est déjà lié — délier d'abord
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Probleme" }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /link/status:
+    get:
+      tags: [appairage]
+      summary: Progression de l'appairage
+      responses:
+        "200":
+          description: progression
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkStatus" }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /link:
+    delete:
+      tags: [appairage]
+      summary: Délier le compte
+      description: |
+        Efface l'état local de `signal-cli`. **Irréversible** : un nouvel
+        appairage sera nécessaire. L'opération est journalisée dans l'audit.
+      responses:
+        "204": { description: délié }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /contacts:
+    get:
+      tags: [annuaire]
+      summary: Contacts connus
+      responses:
+        "200":
+          description: liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /groups:
+    get:
+      tags: [annuaire]
+      summary: Groupes rejoints
+      responses:
+        "200":
+          description: liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Groupe" }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /messages:
+    get:
+      tags: [messages]
+      summary: Historique
+      description: |
+        Rend des **métadonnées** — horodatage, pair, taille, identifiant. Le
+        champ `body` n'est présent que si `retention.store_body` est activé.
+      parameters:
+        - { name: peer,   in: query, schema: { type: string }, description: "numéro E.164 ou identifiant de groupe" }
+        - { name: limit,  in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: cursor, in: query, schema: { type: string }, description: "curseur rendu par l'appel précédent" }
+      responses:
+        "200":
+          description: page d'historique
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageMessages" }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+    post:
+      tags: [messages]
+      summary: Envoyer un message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnvoiMessage" }
+      responses:
+        "202":
+          description: accepté et mis en file
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccuseEnvoi" }
+        "400": { $ref: "#/components/responses/RequeteInvalide" }
+        "409":
+          description: aucun compte lié
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Probleme" }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /attachments:
+    post:
+      tags: [pièces jointes]
+      summary: Déposer une pièce jointe
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        "201":
+          description: déposée
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PieceJointe" }
+        "413":
+          description: trop volumineuse — voir `attachments.max_bytes`
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Probleme" }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /attachments/{id}:
+    get:
+      tags: [pièces jointes]
+      summary: Récupérer une pièce jointe
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: contenu
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { description: inconnue ou expirée }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+  /ws:
+    get:
+      tags: [état]
+      summary: Flux d'événements (WebSocket)
+      description: |
+        Bascule en WebSocket. Chaque trame est un objet `Evenement`, discriminé
+        par `type` : `message.received`, `message.sent`, `link.progress`,
+        `backend.state`.
+      responses:
+        "101": { description: protocole basculé }
+        "401": { $ref: "#/components/responses/NonAutorise" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    NonAutorise:
+      description: jeton absent, expiré ou invalide
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Probleme" }
+    RequeteInvalide:
+      description: requête mal formée
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Probleme" }
+
+  schemas:
+    Probleme:
+      type: object
+      description: RFC 9457 — problem details.
+      properties:
+        type:   { type: string }
+        title:  { type: string }
+        status: { type: integer }
+        detail: { type: string }
+      required: [title, status]
+
+    Health:
+      type: object
+      properties:
+        status:  { type: string, enum: [ok, degraded] }
+        version: { type: string }
+        backend: { type: string, enum: [up, down, unlinked] }
+      required: [status, backend]
+
+    Status:
+      type: object
+      properties:
+        linked:        { type: boolean }
+        account:       { type: [string, "null"], description: "numéro E.164 du compte lié" }
+        device_name:   { type: [string, "null"] }
+        backend:       { type: string, enum: [up, down, unlinked] }
+        queue_depth:   { type: integer }
+        store_body:    { type: boolean, description: "le contenu est-il conservé" }
+        retention_hours: { type: integer }
+      required: [linked, backend, queue_depth]
+
+    LinkStart:
+      type: object
+      properties:
+        link_id: { type: string }
+        qr_svg:  { type: string, description: "QR en SVG, tracé côté serveur" }
+        expires_at: { type: string, format: date-time }
+      required: [link_id, qr_svg, expires_at]
+
+    LinkStatus:
+      type: object
+      properties:
+        state:  { type: string, enum: [pending, linked, expired, failed] }
+        detail: { type: [string, "null"] }
+      required: [state]
+
+    Contact:
+      type: object
+      properties:
+        number:   { type: [string, "null"] }
+        uuid:     { type: [string, "null"] }
+        name:     { type: [string, "null"] }
+        blocked:  { type: boolean }
+      required: [blocked]
+
+    Groupe:
+      type: object
+      properties:
+        id:      { type: string }
+        name:    { type: [string, "null"] }
+        members: { type: integer }
+      required: [id, members]
+
+    EnvoiMessage:
+      type: object
+      properties:
+        to:          { type: string, description: "numéro E.164" }
+        group_id:    { type: string }
+        body:        { type: string, maxLength: 4096 }
+        attachments: { type: array, items: { type: string }, description: "identifiants rendus par POST /attachments" }
+      anyOf:
+        - required: [to]
+        - required: [group_id]
+
+    AccuseEnvoi:
+      type: object
+      properties:
+        id:    { type: string }
+        state: { type: string, enum: [queued, sent, failed] }
+      required: [id, state]
+
+    Message:
+      type: object
+      properties:
+        id:        { type: string }
+        ts:        { type: string, format: date-time }
+        direction: { type: string, enum: [in, out] }
+        peer:      { type: string }
+        group_id:  { type: [string, "null"] }
+        size:      { type: integer, description: "taille du corps en octets" }
+        body:      { type: [string, "null"], description: "présent seulement si retention.store_body" }
+        attachments: { type: array, items: { type: string } }
+      required: [id, ts, direction, peer, size]
+
+    PageMessages:
+      type: object
+      properties:
+        items:       { type: array, items: { $ref: "#/components/schemas/Message" } }
+        next_cursor: { type: [string, "null"] }
+      required: [items]
+
+    PieceJointe:
+      type: object
+      properties:
+        id:         { type: string }
+        size:       { type: integer }
+        media_type: { type: string }
+        expires_at: { type: string, format: date-time }
+      required: [id, size, media_type]
+
+    Evenement:
+      type: object
+      properties:
+        type: { type: string, enum: [message.received, message.sent, link.progress, backend.state] }
+        ts:   { type: string, format: date-time }
+        data: { type: object, additionalProperties: true }
+      required: [type, ts]

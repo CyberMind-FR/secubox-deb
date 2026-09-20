@@ -1,0 +1,42 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+
+# VERSION EPINGLEE. Un `latest` rendrait la construction non reproductible et
+# ferait entrer une version non relue le jour ou amont publie. La relever est
+# une decision, pas un effet de bord.
+SIGNAL_CLI_VERSION := 0.13.12
+ARCHIVE := signal-cli-$(SIGNAL_CLI_VERSION).tar.gz
+AMONT   := https://github.com/AsamK/signal-cli/releases/download/v$(SIGNAL_CLI_VERSION)/$(ARCHIVE)
+
+# Somme de controle de l'archive amont. SANS ELLE, ce paquet installerait
+# aveuglement ce que le reseau lui rend — ce qui, pour le composant qui tient
+# les cles du lien Signal, serait difficile a defendre.
+SHA256 := PLACEHOLDER_A_RENSEIGNER_A_LA_PREMIERE_CONSTRUCTION
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# Hors-ligne si l'archive est deja la (cache de la CI, ou miroir local).
+	[ -f $(ARCHIVE) ] || curl -fsSL -o $(ARCHIVE) "$(AMONT)"
+	@if [ "$(SHA256)" = "PLACEHOLDER_A_RENSEIGNER_A_LA_PREMIERE_CONSTRUCTION" ]; then \
+	  echo "ERREUR : la somme SHA256 de $(ARCHIVE) n'est pas renseignee." >&2; \
+	  echo "Calculer avec : sha256sum $(ARCHIVE), puis la poser dans debian/rules." >&2; \
+	  echo "Un moteur telecharge sans verification ne sera pas empaquete." >&2; \
+	  exit 1; \
+	fi
+	echo "$(SHA256)  $(ARCHIVE)" | sha256sum -c -
+	tar xf $(ARCHIVE)
+
+override_dh_auto_install:
+	install -d debian/secubox-signal-engine/usr/lib/secubox/signal
+	cp -a signal-cli-$(SIGNAL_CLI_VERSION)/* \
+	      debian/secubox-signal-engine/usr/lib/secubox/signal/
+	chmod 0755 debian/secubox-signal-engine/usr/lib/secubox/signal/bin/signal-cli
+
+override_dh_auto_test:
+	# Rien a tester : ce paquet ne fait que transporter un binaire amont.
+
+override_dh_clean:
+	dh_clean
+	rm -rf signal-cli-$(SIGNAL_CLI_VERSION)

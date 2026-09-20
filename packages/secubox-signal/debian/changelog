@@ -1,0 +1,12 @@
+secubox-signal (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premiere version — passerelle Signal (ref #1309).
+    Demon Go sbx-signald pilotant signal-cli en JSON-RPC sur stdio, API REST
+    et WebSocket sur socket Unix, appairage par QR trace cote serveur, cardlet
+    Hall et page de module.
+  * Le contenu des messages n'est PAS conserve par defaut : seules des
+    metadonnees, expediteur hache, retention 24 h.
+  * Relais Sentinel avec garde-fou anti-avalanche : au-dela du seuil horaire,
+    les alertes sont agregees en un message de synthese plutot qu'emises.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 14:24:39 +0200

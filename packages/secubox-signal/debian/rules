@@ -1,0 +1,46 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+
+# Construction hors-ligne : le vendor/ est versionne, GOPROXY est coupe. Un
+# build qui telecharge n'est pas reproductible, et la CI n'a pas toujours le
+# reseau au moment ou elle en aurait besoin.
+export GOFLAGS = -mod=vendor
+export GOPROXY = off
+export GOCACHE = $(CURDIR)/_gocache
+export GOPATH  = $(CURDIR)/_gopath
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go build -trimpath -ldflags=-s -o sbx-signald ./cmd/sbx-signald
+
+override_dh_auto_test:
+	# Les tests qui n'ont pas besoin du backend tournent au build. Ceux qui
+	# le reclament vivent dans tests/integration et sont lances a la main.
+	go test ./internal/...
+
+override_dh_auto_install:
+	install -D -m 0755 sbx-signald            debian/secubox-signal/usr/sbin/sbx-signald
+	install -D -m 0644 conf/signal.toml       debian/secubox-signal/etc/secubox/signal.toml
+	install -D -m 0644 systemd/secubox-signal.service \
+	                   debian/secubox-signal/lib/systemd/system/secubox-signal.service
+	install -D -m 0644 nginx/signal.vhost.conf \
+	                   debian/secubox-signal/etc/secubox/nginx-available/signal.vhost.conf
+	install -D -m 0644 menu.d/27-signal.json  debian/secubox-signal/usr/share/secubox/menu.d/27-signal.json
+	install -D -m 0644 tmpfiles/secubox-signal.conf \
+	                   debian/secubox-signal/usr/lib/tmpfiles.d/secubox-signal.conf
+	install -d         debian/secubox-signal/usr/share/secubox/www/signal
+	install -m 0644 internal/web/static/*.html \
+	                   debian/secubox-signal/usr/share/secubox/www/signal/
+	install -D -m 0644 docs/openapi.yaml      debian/secubox-signal/usr/share/doc/secubox-signal/openapi.yaml
+	install -D -m 0644 docs/RFC-SBX-SIGNAL.md debian/secubox-signal/usr/share/doc/secubox-signal/RFC-SBX-SIGNAL.md
+
+override_dh_installsystemd:
+	# Nommer l'unite EXPLICITEMENT : un dh_installsystemd nu traite TOUTES
+	# les unites du paquet et annule les --no-enable qui suivraient.
+	dh_installsystemd --name=secubox-signal
+
+override_dh_clean:
+	dh_clean
+	rm -rf _gocache _gopath sbx-signald

@@ -1,0 +1,30 @@
+Source: secubox-signal
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.22~)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-signal
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+ adduser,
+# Le backend N'EST PAS dans Debian — ni stable, ni testing, ni unstable.
+# C'est pourquoi un paquet separe l'embarque, exactement comme le moteur nDPI.
+# La dependance est DURE : une passerelle sans backend demarre, affiche une
+# interface, et ne peut rien envoyer. Autant que apt le dise a l'installation
+# plutot que l'exploitant le decouvre au premier message.
+ secubox-signal-engine
+Description: SecuBox-Deb — passerelle Signal (sbx-signald)
+ Passerelle Signal integree au Hall : messages, contacts, groupes, pieces
+ jointes, et relais des alertes Sentinel vers un telephone.
+ .
+ Le demon Go sbx-signald pilote signal-cli en JSON-RPC sur stdio et expose une
+ API REST + WebSocket sur /run/secubox/signal.sock, servie par nginx sous
+ signal.gk2.secubox.in. Jamais de port TCP direct.
+ .
+ LE CONTENU DES MESSAGES N'EST PAS CONSERVE par defaut : la base ne retient
+ que des metadonnees, l'expediteur est hache, et la retention est de 24 h.
+ Activer retention.store_body est une decision qui engage l'exploitant.
