@@ -1,3 +1,15 @@
+secubox-webos (1.0.315-1~bookworm3) bookworm; urgency=medium
+
+  * frame-src du Hall : signal.gk2.secubox.in ajoute aux TROIS listes.
+    Une carte encadree demande DEUX autorisations, une de chaque cote :
+    `frame-ancestors` sur la page encadree — posee dans le vhost du module
+    — et `frame-src` sur la page ENCADRANTE, qui est une liste FERMEE.
+    Sans la seconde, le cadre reste vide et le navigateur ne signale rien
+    d'autre qu'une violation de CSP. La carte Signal ne s'affichait pas
+    pour cette seule raison. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 14:54:32 +0200
+
 secubox-webos (1.0.315-1~bookworm2) bookworm; urgency=medium
 
   * La carte Signal entre au Hall : entree de registre et ajout a
