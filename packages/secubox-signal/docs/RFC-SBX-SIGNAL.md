@@ -13,7 +13,7 @@
 | **Issue** | [#1309](https://github.com/CyberMind-FR/secubox-deb/issues/1309) |
 | **Module SBX** | `MESH` (transport), consommateur de `MIND` (Sentinel) |
 | **Auteur** | CyberMind — Gérald Kerma |
-| **Cibles** | Debian 12 (bookworm) et 13 (trixie), `arm64` et `amd64` |
+| **Cibles** | **amd64** : bookworm et trixie. **arm64** : trixie seulement — voir §3.1 |
 
 ---
 
@@ -61,6 +61,33 @@ pour trois raisons :
 |---|---|---|
 | `secubox-signal-engine` | `signal-cli` + JRE headless, `Provides: signal-cli` | `all` |
 | `secubox-signal` | `sbx-signald`, API, WebUI, vhost, unité systemd | `any` |
+
+### 3.1 arm64 exige Trixie — et cette contrainte n'est pas negociable
+
+Cette RFC affirmait d'abord « compatible ARM64 et AMD64 (Debian Bookworm) ».
+**C'etait faux**, et le deploiement sur gk2 l'a montre. La chaine de
+contraintes se referme ainsi :
+
+| suite | JVM max | signal-cli possible | libsignal exigee | binaire aarch64 |
+|---|---|---|---|---|
+| bookworm | Java 17 | ≤ 0.12.8 | 0.36.1 | **n'existe pas** |
+| trixie | Java 25 | 0.13.24 / 0.14.x | 0.87.0 | publie |
+
+Deux faits mesures, pas deduits :
+
+1. La distribution JVM de `signal-cli` embarque un `libsignal_jni.so`
+   **x86-64 uniquement**. Un paquet `Architecture: all` ne pouvait donc pas
+   convenir — il transportait un binaire d'une seule architecture.
+2. `exquo/signal-libs-build` publie des `libsignal_jni.so` aarch64 de
+   **0.72.1 a 0.103.0**. La 0.36.1 qu'exige signal-cli 0.12.8 — la derniere
+   version compatible Java 17 — n'y figure pas et n'y figurera pas.
+
+**Sur bookworm arm64, aucune combinaison ne fonctionne** sans construire
+libsignal soi-meme, en Rust, dans une version que l'amont ne maintient plus.
+
+Le module vise donc **arm64 sur trixie**, ce qui s'aligne sur le portage deja
+engage (#1294, #1295). Le paquet moteur passe en `Architecture: any` et
+embarque la bibliotheque native de sa cible.
 
 ## 4. Architecture
 

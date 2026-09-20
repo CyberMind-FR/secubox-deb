@@ -1,3 +1,15 @@
+secubox-webos (1.0.315-1~bookworm8) bookworm; urgency=medium
+
+  * La carte Signal porte enfin un <!DOCTYPE html> — sans lui le navigateur
+    la rendait en Quirks Mode, avec la mise en page qui s'ensuit.
+  * Sa feuille de style passe par ../spicy.css, le chemin qu'utilisent les
+    dix autres cartes du Hall. /shared/sbxui/ n'y resout pas : il rend le
+    repli SPA, donc du text/html que X-Content-Type-Options: nosniff refuse
+    pour une feuille de style. La carte s'affichait sans aucun style.
+    (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 15:27:56 +0200
+
 secubox-webos (1.0.315-1~bookworm7) bookworm; urgency=medium
 
   * L'APPAIRAGE NE DEMANDE PLUS D'AUTORISATION PREALABLE. Il etait derriere

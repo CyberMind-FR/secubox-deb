@@ -1,17 +1,34 @@
 #!/usr/bin/make -f
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 
-# VERSION EPINGLEE. Un `latest` rendrait la construction non reproductible et
+# VERSION EPINGLEE — ET CONTRAINTE PAR LA JVM DE DEBIAN, pas par le gout du
+# neuf. Mesure sur les binaires eux-memes (version du format de classe) :
+#
+#   signal-cli 0.12.8  -> format 61 -> Java 17   <= bookworm en a 17
+#   signal-cli 0.13.24 -> format 65 -> Java 21
+#   signal-cli 0.14.8  -> format 69 -> Java 25
+#
+# La 0.14.8 avait ete epinglee parce qu'elle etait la derniere amont. Sur gk2
+# elle ne demarrait pas du tout :
+#   UnsupportedClassVersionError: class file version 69.0, this version of the
+#   Java Runtime only recognizes class file versions up to 61.0
+# et bookworm-backports n'offre aucun JRE plus recent.
+#
+# 0.12.8 convient AUSSI aux images trixie : une JVM plus recente lit un
+# format plus ancien. Une seule version pour les deux suites.
+#
+# AVANT DE RELEVER CETTE VERSION : verifier le format de classe, pas la date
+# de publication. Un `latest` rendrait la construction non reproductible et
 # ferait entrer une version non relue le jour ou amont publie. La relever est
 # une decision, pas un effet de bord.
-SIGNAL_CLI_VERSION := 0.14.8
+SIGNAL_CLI_VERSION := 0.12.8
 ARCHIVE := signal-cli-$(SIGNAL_CLI_VERSION).tar.gz
 AMONT   := https://github.com/AsamK/signal-cli/releases/download/v$(SIGNAL_CLI_VERSION)/$(ARCHIVE)
 
 # Somme de controle de l'archive amont. SANS ELLE, ce paquet installerait
 # aveuglement ce que le reseau lui rend — ce qui, pour le composant qui tient
 # les cles du lien Signal, serait difficile a defendre.
-SHA256 := ccd408e831eff7e41ebaaf309704840bb00d78a7869f35ad700dbae5b5a5bb65
+SHA256 := 8c1cf50f5533df3f90623fb300eadb48891965e2964b0537fe91c8fac0e3247c
 
 %:
 	dh $@

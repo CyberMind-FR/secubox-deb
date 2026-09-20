@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
@@ -18,7 +19,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Signal</title>
-<link rel="stylesheet" href="/shared/sbxui/spicy.css">
+<!-- ../spicy.css : le chemin qu'utilisent les dix autres cartes du
+     Hall. /shared/sbxui/ n'y resout pas et rend le repli SPA, donc
+     du text/html que nosniff refuse pour une feuille de style. -->
+<link rel="stylesheet" href="../spicy.css">
 <style>
   :root { --fond:#fff; --texte:#1a1a22; --muted:#6b6b7a; --bord:#e2e2ea;
           --accent:#3a76f0; --ok:#2f9e5f; --off:#8a8a93; }
