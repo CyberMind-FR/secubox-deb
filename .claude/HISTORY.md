@@ -5,60 +5,88 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
-## 2026-09-20 — LE WAF APPREND DE SON PROPRE JOURNAL (ref #1310)
+## 2026-09-20 — LE WAF, ET UNE ERREUR DE MESURE QUE J'AI DÛ DÉFAIRE (ref #1310, #1311)
 
-### Des motifs mesurés, pas recopiés
+### D'abord la question : le WAF bloque-t-il encore ?
 
-Question posée : le WAF bloque-t-il encore ? Réponse mesurée sur gk2 —
-**128 détections, 25 bannissements** sur la fenêtre observée, avec de vraies
-prises de `recon_crawler`. Le moteur est vivant.
-
-Mes propres tests, eux, passaient tous. Ce n'était pas une faille : `sbxwaf`
+Oui — **128 détections, 25 bannissements** sur la fenêtre observée, vraies
+prises de `recon_crawler`. Mes propres tests, eux, passaient tous : `sbxwaf`
 saute l'inspection pour les clients RFC1918 (`privateCIDR`), **par conception**.
-Un test depuis le LAN ne peut structurellement rien prouver sur le WAF. Il
-fallait interroger le trafic réel.
+Un test depuis le LAN ne peut structurellement rien prouver.
 
-D'où la méthode : confronter les **5 152 requêtes externes** du journal aux
-156 motifs existants, et ne retenir que **ce qui passait à travers**. Trois
-trous, quatre motifs, règles **1.5.0** :
+### Des motifs tirés du journal — et un de trop
 
-| motif | prises | faux positifs |
+Méthode : confronter les 5 152 requêtes externes aux 156 motifs, ne garder que
+ce qui passait. Quatre motifs ajoutés en 1.5.0.
+
+**L'un d'eux n'aurait jamais dû l'être.** J'avais rejoué les regex sur les
+chemins **bruts** du journal. Or `MatchExcept` fait déjà `unquotePlus(rawPath)` :
+sbxwaf compare les chemins **décodés**. Les quatre chemins pourcent-encodés
+observés étaient donc **déjà attrapés** :
+
+| brut | décodé | déjà pris par |
+|---|---|---|
+| `/%2eenv` | `/.env` | `scanners/scan-003` |
+| `/%2f%2eaws%2fcredentials` | `//.aws/credentials` | `honeypot/honey-011` |
+
+Les « 23 requêtes nouvellement qualifiées » n'ont jamais existé, et
+« l'évasion active » que je décrivais n'en était pas une. C'était exactement
+le bruit non mesuré que je prétendais éviter en écartant un cinquième
+candidat. **`scan-012` retiré** — 1.5.1, 159 motifs.
+
+Les trois autres tiennent, recomptés sur la forme décodée :
+
+| motif | réellement nouvelles | ce que j'avais annoncé |
 |---|---:|---:|
-| `wordpress-001` | 423 | 0 |
-| `wordpress-002` | 273 | 0 |
-| `scan-012` | 23 | 0 |
-| `livewire-001` | 4 | 0 |
+| `wordpress-001` | **394** | 423 |
+| `wordpress-002` | **261** | 273 |
+| `livewire-001` | **4** | 4 |
 
-Le zéro est **vérifié, pas espéré** : les chemins légitimes du parc —
-`/netmodes/`, `/system/`, `/portal/`, `/api/v1/`, les clones gitea — ont été
-testés un à un contre chaque motif.
+Le gain live, lui, est observé et non rejoué : les `/wp-` passent de
+`host_anomaly:unrouted` à `product_absent_probes` / `high`, avec bannissement.
+La prise ne dépend plus de ce que l'hôte visé soit routé ou non — c'était un
+accident, c'est devenu une règle.
 
-Un cinquième candidat, `%2f(etc|root|home)%2f`, a été **écarté** : zéro
-occurrence mesurée. Un motif sans preuve n'ajoute que du bruit à auditer.
+### Le repliage de chemin : livré, et honnêtement sans gain mesuré
 
-### Ce que `scan-012` révèle, et ne règle pas
+Le décodage simple existe déjà. Restent ouverts par construction : `%252e`,
+`%c0%ae`, et les séparateurs masquants. **Sur les 10 646 requêtes
+journalisées, le repliage change ZERO verdict** — 149 produisent une variante,
+mais les motifs attrapaient déjà leur forme non repliée.
 
-L'attaquant écrit `/%2eenv` là où `/\.env` l'attraperait : il encode le point
-pour passer sous des motifs qui testent le chemin **brut**. Vingt-trois
-requêtes mesurées, dont `/%2f%2eaws%2fcredentials`.
+Livré quand même : correct, testé, gratuit sur 98,6 % du trafic. Mais c'est de
+la **défense en profondeur**, pas la correction d'un manque constaté, et le
+présenter autrement serait mentir sur la mesure.
 
-Le motif bouche le trou **visible**. Il ne ferme pas la famille — double
-encodage (`%252e`), UTF-8 sur-long (`%c0%ae`). La vraie réponse est de
-**normaliser le chemin avant de le comparer**, dans `sbxwaf`. Cela rendrait
-`scan-012` inutile, ce qui serait le bon signe. Ouvert en #1310.
+Deux règles gravées dans `replierchemin.go` : la variante est **ajoutée**, pas
+substituée (une prise d'hier reste une prise) ; on replie pour **comparer**,
+jamais pour **transmettre**. Et `..` est **préservé** — le résoudre détruirait
+l'accusation en même temps que le masque.
 
-### Deux pièges rencontrés
+### Le nettoyage mitmproxy a déterré un module mort
 
-`waf-rules.json` n'appartient à **aucun paquet** : `debian/rules` installe
-`config/` vers `/usr/share/secubox/waf/` et ne livre en conffile que
-`vhost_profiles.json`. Le fichier de `/etc` est **opérateur-seedé par
-conception** — l'ensemencer est le chemin sanctionné, pas une entorse à la
-règle dpkg.
+`cookie_audit` : **`CookieAuditAggregator` n'est instancié nulle part** hors
+tests. 20 tests verts sur du code que rien n'exécute, config `enabled = true`,
+cache figé au **17 août**, et 170 Mo de registre écrits par sbxwaf que
+personne ne lit. C'est le module RGPD / ePrivacy. Ouvert en #1311.
 
-Et `/var/log/secubox/waf-threats.log` est un **lien mort** vers
-`/srv/mitmproxy/logs/`, purgé avec mitmproxy. Zéro référence, personne
-n'écrit à travers — mais il m'a fait chercher le journal au mauvais endroit.
-Le vrai journal est `/var/log/secubox/waf/waf-threats.log`.
+Au passage, `secubox.conf` pointait `ledger_path` vers le rootfs de l'LXC
+mitmproxy purgé. Le défaut interne était **déjà le bon** : l'override valait
+moins que pas de config du tout.
+
+### Nettoyé sur gk2 (archive `/var/backups/mitmproxy-vestiges/`)
+
+Manifeste `modules.d/mitmproxy.toml` d'un module sans paquet ni unité ni
+conteneur ; `mitmproxy` dans `heartbeat.toml` surveillant une unité
+inexistante, dans `groups.d/{g4,tout}.conf` et dans deux profils ; lien mort
+`/var/log/secubox/waf-threats.log` → `/srv/mitmproxy/` ; CA bidon
+`CN=mitmproxy` dans `/root/.mitmproxy`.
+
+**Non touché, délibérément** : les liens de compat `ca-wg/mitmproxy-*`, que
+`ca-init`, `ca-rename` et `wg-provision` référencent encore — leur retrait est
+conditionné, par le script lui-même, à l'absence de toute référence. Et le
+conteneur `toolbox-mitm` (arrêté, service disparu) : supprimer un LXC est
+irréversible, ce n'est pas une décision de ménage.
 
 ---
 
