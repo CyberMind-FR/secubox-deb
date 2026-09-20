@@ -1,6 +1,6 @@
-secubox-signal-engine (0.13.12-1~bookworm1) bookworm; urgency=medium
+secubox-signal-engine (0.14.8-1~bookworm1) bookworm; urgency=medium
 
-  * Premier empaquetage de signal-cli 0.13.12 (ref #1309).
+  * Premier empaquetage de signal-cli 0.14.8 (ref #1309).
     signal-cli n'est dans aucune Debian ; ce paquet l'embarque, sur le modele
     de secubox-ndpid-engine. Version EPINGLEE et somme SHA256 verifiee : le
     composant qui tiendra les cles du lien Signal ne s'installe pas a

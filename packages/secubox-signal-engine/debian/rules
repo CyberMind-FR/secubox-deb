@@ -4,14 +4,14 @@
 # VERSION EPINGLEE. Un `latest` rendrait la construction non reproductible et
 # ferait entrer une version non relue le jour ou amont publie. La relever est
 # une decision, pas un effet de bord.
-SIGNAL_CLI_VERSION := 0.13.12
+SIGNAL_CLI_VERSION := 0.14.8
 ARCHIVE := signal-cli-$(SIGNAL_CLI_VERSION).tar.gz
 AMONT   := https://github.com/AsamK/signal-cli/releases/download/v$(SIGNAL_CLI_VERSION)/$(ARCHIVE)
 
 # Somme de controle de l'archive amont. SANS ELLE, ce paquet installerait
 # aveuglement ce que le reseau lui rend — ce qui, pour le composant qui tient
 # les cles du lien Signal, serait difficile a defendre.
-SHA256 := PLACEHOLDER_A_RENSEIGNER_A_LA_PREMIERE_CONSTRUCTION
+SHA256 := ccd408e831eff7e41ebaaf309704840bb00d78a7869f35ad700dbae5b5a5bb65
 
 %:
 	dh $@
@@ -19,12 +19,6 @@ SHA256 := PLACEHOLDER_A_RENSEIGNER_A_LA_PREMIERE_CONSTRUCTION
 override_dh_auto_build:
 	# Hors-ligne si l'archive est deja la (cache de la CI, ou miroir local).
 	[ -f $(ARCHIVE) ] || curl -fsSL -o $(ARCHIVE) "$(AMONT)"
-	@if [ "$(SHA256)" = "PLACEHOLDER_A_RENSEIGNER_A_LA_PREMIERE_CONSTRUCTION" ]; then \
-	  echo "ERREUR : la somme SHA256 de $(ARCHIVE) n'est pas renseignee." >&2; \
-	  echo "Calculer avec : sha256sum $(ARCHIVE), puis la poser dans debian/rules." >&2; \
-	  echo "Un moteur telecharge sans verification ne sera pas empaquete." >&2; \
-	  exit 1; \
-	fi
 	echo "$(SHA256)  $(ARCHIVE)" | sha256sum -c -
 	tar xf $(ARCHIVE)
 

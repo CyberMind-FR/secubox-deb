@@ -6,6 +6,20 @@
 # reseau au moment ou elle en aurait besoin.
 export GOFLAGS = -mod=vendor
 export GOPROXY = off
+
+# CARTOGRAPHIE D'ARCHITECTURE. `dpkg-buildpackage -a arm64` positionne
+# DEB_HOST_ARCH mais Go l'ignore : sans cette traduction, un paquet estampille
+# arm64 embarquerait un binaire amd64 — un .deb d'apparence correcte qui casse
+# au premier lancement sur la cible. C'est exactement le defaut rencontre sur
+# le moteur nDPI (#1308) ; on ne le refait pas ici.
+#
+# CGO_ENABLED=0 : les deux dependances sont en Go pur (modernc.org/sqlite n'a
+# pas besoin de la libsqlite3). La compilation croisee ne demande donc AUCUNE
+# chaine d'outils C, et le binaire sort statique.
+include /usr/share/dpkg/architecture.mk
+export CGO_ENABLED = 0
+export GOOS   = linux
+export GOARCH = $(shell dpkg-architecture -qDEB_HOST_GNU_CPU -a$(DEB_HOST_ARCH) 2>/dev/null | sed -e 's/^x86_64$$/amd64/' -e 's/^aarch64$$/arm64/' -e 's/^arm$$/arm/')
 export GOCACHE = $(CURDIR)/_gocache
 export GOPATH  = $(CURDIR)/_gopath
 
@@ -14,11 +28,23 @@ export GOPATH  = $(CURDIR)/_gopath
 
 override_dh_auto_build:
 	go build -trimpath -ldflags=-s -o sbx-signald ./cmd/sbx-signald
+	# Garde : un `go build` qui reussit sans produire la bonne architecture
+	# est un echec silencieux. On le refuse ici, pas chez l'utilisateur.
+	file sbx-signald
+	@case "$(DEB_HOST_ARCH)" in \
+	  arm64) file sbx-signald | grep -q 'ARM aarch64' || { echo "ERREUR: binaire non-arm64" >&2; exit 1; } ;; \
+	  amd64) file sbx-signald | grep -q 'x86-64'      || { echo "ERREUR: binaire non-amd64" >&2; exit 1; } ;; \
+	esac
 
 override_dh_auto_test:
-	# Les tests qui n'ont pas besoin du backend tournent au build. Ceux qui
-	# le reclament vivent dans tests/integration et sont lances a la main.
+	# Les tests ne tournent QU'EN NATIF : executer des binaires arm64 sur un
+	# hote amd64 demanderait une emulation que le build n'a pas a supposer.
+	# En croise on se contente de verifier que tout COMPILE.
+ifeq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
 	go test ./internal/...
+else
+	go build ./internal/...
+endif
 
 override_dh_auto_install:
 	install -D -m 0755 sbx-signald            debian/secubox-signal/usr/sbin/sbx-signald
