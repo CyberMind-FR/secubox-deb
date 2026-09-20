@@ -35,15 +35,23 @@ async def _prep(c, slug):
     return pcsrf, old_token
 
 
-async def test_comment_goes_pending(pub):
+async def test_commentaire_publie_directement(pub):
+    """Un commentaire parait DES SON ENVOI — plus de file de moderation (#1372).
+
+    C'etait l'inverse jusqu'ici : le premier message d'un visiteur partait en
+    `pending` et attendait un geste humain.
+    """
     c, conn, bid, slug = pub
     pcsrf, tok = await _prep(c, slug)
     r = await c.post(f"/b/{slug}/comment",
                      data={"author_name": "Alice", "body": "joli billet", "csrf": pcsrf,
                            "ts_token": tok, "website": ""})
-    assert r.status_code == 303 and "c=pending" in r.headers["location"]
-    pend = await repo.list_pending_comments(conn)
-    assert len(pend) == 1 and pend[0]["author_name"] == "Alice"
+    assert r.status_code == 303 and "c=ok" in r.headers["location"]
+    # Visible tout de suite, sans moderation.
+    approuves = await repo.list_approved_comments(conn, bid)
+    assert [a["author_name"] for a in approuves] == ["Alice"]
+    # Et rien ne s'accumule dans une file que plus personne ne relevera.
+    assert await repo.list_pending_comments(conn) == []
 
 
 async def test_honeypot_drops_silently(pub):
@@ -89,23 +97,59 @@ async def test_rate_limited_after_5(pub):
     assert "c=rate" in last.headers["location"]
 
 
-async def test_auto_approve_returning_visitor(pub):
+async def test_les_deux_messages_paraissent(pub):
+    """Le premier message ne vaut plus moins que le suivant (#1372).
+
+    Le comportement precedent distinguait le visiteur INCONNU du visiteur
+    REVENU : le premier attendait, le second passait. Cette distinction n'a plus
+    d'objet, et ce test garde qu'elle a bien disparu — deux messages d'affilee
+    paraissent tous les deux.
+    """
     c, conn, bid, slug = pub
     pcsrf, tok = await _prep(c, slug)
-    # first comment from this client -> pending; approve it (captures the real ip_hash)
     await c.post(f"/b/{slug}/comment",
                  data={"author_name": "Reg", "body": "ancien", "csrf": pcsrf,
                        "ts_token": tok, "website": ""})
-    cid = (await repo.list_pending_comments(conn))[0]["id"]
-    await repo.moderate_comment(conn, cid, "approved")
-    # a second comment, same name + same client ip -> auto-approved
     tok2 = antispam.issue_form_token(SECRET, now_epoch=int(time.time()) - 10)
     r = await c.post(f"/b/{slug}/comment",
                      data={"author_name": "Reg", "body": "nouveau", "csrf": pcsrf,
                            "ts_token": tok2, "website": ""})
-    assert "c=ok" in r.headers["location"]  # auto-approved
-    approved = await repo.list_approved_comments(conn, bid)
-    assert any(a["body"] == "nouveau" for a in approved)
+    assert "c=ok" in r.headers["location"]
+    corps = {a["body"] for a in await repo.list_approved_comments(conn, bid)}
+    assert corps == {"ancien", "nouveau"}
+
+
+async def test_identite_secubox_fait_autorite(pub, monkeypatch):
+    """Une session SecuBox REMPLACE le nom tape (#1372).
+
+    Le point n'est pas de pre-remplir un champ : c'est d'empecher qu'un visiteur
+    connecte signe du nom de quelqu'un d'autre. Un nom qu'on peut choisir
+    n'identifie personne.
+    """
+    from api.routes import public as mod
+    monkeypatch.setattr(mod, "identite_secubox", lambda request: "gerald")
+
+    c, conn, bid, slug = pub
+    pcsrf, tok = await _prep(c, slug)
+    await c.post(f"/b/{slug}/comment",
+                 data={"author_name": "je-suis-quelqu-un-dautre", "body": "bonjour",
+                       "csrf": pcsrf, "ts_token": tok, "website": ""})
+    approuves = await repo.list_approved_comments(conn, bid)
+    assert [a["author_name"] for a in approuves] == ["gerald"]
+
+
+async def test_sans_session_le_nom_libre_reste(pub, monkeypatch):
+    """Sans session SecuBox, rien ne change : le nom libre est conserve."""
+    from api.routes import public as mod
+    monkeypatch.setattr(mod, "identite_secubox", lambda request: None)
+
+    c, conn, bid, slug = pub
+    pcsrf, tok = await _prep(c, slug)
+    await c.post(f"/b/{slug}/comment",
+                 data={"author_name": "Passante", "body": "bonjour", "csrf": pcsrf,
+                       "ts_token": tok, "website": ""})
+    approuves = await repo.list_approved_comments(conn, bid)
+    assert [a["author_name"] for a in approuves] == ["Passante"]
 
 
 async def test_approved_comment_renders_on_page(pub):

@@ -21,6 +21,49 @@ from ..services import security as sec
 
 VISITOR_COOKIE = "billets_visitor"
 PCSRF_COOKIE = "billets_pcsrf"
+
+# IDENTIFIER L'INVITE PAR SA SESSION SECUBOX (#1372).
+#
+# Un commentaire portait jusqu'ici le nom que le visiteur avait tape. Quand ce
+# visiteur a par ailleurs une session SecuBox — il arrive par le Hall, ou il
+# s'est connecte sur le domaine parent — ce nom libre est au mieux redondant,
+# au pire une usurpation : rien n'empechait d'ecrire le nom de quelqu'un
+# d'autre.
+#
+# L'IDENTITE DE LA SESSION FAIT AUTORITE quand elle existe. Elle n'est pas
+# proposee comme valeur par defaut d'un champ que le visiteur pourrait ensuite
+# changer : elle REMPLACE ce qu'il a tape. Un nom qu'on peut choisir n'identifie
+# personne.
+#
+# En l'absence de session, rien ne change : le nom libre reste accepte, et le
+# commentaire n'est simplement pas attribue.
+try:                                                # pragma: no cover
+    from secubox_core.auth import SESSION_COOKIE, _validate_token
+except Exception:                                   # pragma: no cover
+    SESSION_COOKIE, _validate_token = None, None
+
+
+def identite_secubox(request: Request) -> str | None:
+    """Nom de l'utilisateur SecuBox porte par la requete, ou None.
+
+    Tolerante par construction : billets doit servir ses pages meme si
+    `secubox_core` est absent (tests isoles) ou si le jeton est expire. Une
+    identite illisible vaut une identite absente — jamais une erreur rendue au
+    visiteur, qui n'y peut rien et ne comprendrait pas.
+    """
+    if SESSION_COOKIE is None or _validate_token is None:
+        return None
+    tok = request.cookies.get(SESSION_COOKIE)
+    if not tok:
+        return None
+    try:
+        charge = _validate_token(tok)
+    except Exception:                               # noqa: BLE001
+        return None
+    if not charge:
+        return None
+    sub = charge.get("sub")
+    return sub if isinstance(sub, str) and sub.strip() else None
 EMOJIS = [e.value for e in ReactionEmoji]
 # LIMITES DE MESSAGES — RETIREES PAR DEFAUT (#1268), pas supprimées du code.
 # Billets est exposé publiquement : ces deux gardes (cadence par IP, délai de
@@ -166,15 +209,24 @@ def register_public(app: FastAPI, templates: Jinja2Templates) -> None:
             vt = vt if 0 <= vt <= 86400 else None
         except (TypeError, ValueError):
             vt = None
-        auto = await repo.has_prior_approved(conn, ip_hash, data.author_name)
-        status = "approved" if auto else "pending"
-        await repo.add_comment(conn, row["id"], author_name=data.author_name,
+        # PUBLICATION DIRECTE (#1372). La file de moderation est retiree : un
+        # commentaire parait des son envoi.
+        #
+        # CE N'EST PAS UN RELACHEMENT DES GARDES. Ce qui protege reellement
+        # billets s'est deja applique plus haut, et reste intact : jeton CSRF,
+        # pot de miel, jeton de formulaire signe, cadence par IP. La file
+        # n'ajoutait qu'un delai humain APRES ces controles — elle retenait
+        # surtout les commentaires legitimes, puisque les robots etaient deja
+        # arretes avant. `pending` reste dans le modele : d'anciens messages en
+        # portent l'etat, et le webui d'administration doit encore les traiter.
+        qui = identite_secubox(request)
+        await repo.add_comment(conn, row["id"], author_name=qui or data.author_name,
                                email_hash=antispam.email_hash(data.author_email, secret),
                                body=data.body, ip_hash=ip_hash, honeypot=False,
-                               status=status, now=_now(), video_t=vt)
-        code = "ok" if auto else "pending"
+                               status="approved", now=_now(), video_t=vt)
+        code = "ok"
         return rep(code, cible=f"/b/{slug}?c={code}#comments",
-                   who=data.author_name, msg=data.body, when="à l'instant", t=vt)
+                   who=qui or data.author_name, msg=data.body, when="à l'instant", t=vt)
 
 
 def _now() -> str:

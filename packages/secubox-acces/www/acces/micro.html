@@ -44,7 +44,17 @@
          text-align:center; padding:.1rem .45rem; border-radius:999px;
          background:var(--a); color:#fff; }
   .cpt[hidden] { display:none; }
-  .corps { padding:0 .8rem .8rem; display:flex; flex-direction:column; gap:.6rem; }
+  .corps { padding:0 .8rem .8rem; display:flex; flex-direction:column; gap:.6rem;
+           overflow-y:auto; }
+
+  /* LE GESTE NE DOIT JAMAIS PASSER SOUS LA LIGNE DE FLOTTAISON (#1372).
+     La carlette est bornée en hauteur par le Hall. Empiler nom + appareil +
+     message + empreinte + gestes poussait « Accorder » hors du cadre : le
+     bouton existait, personne ne le voyait — ce qui revient exactement au
+     même qu'un bouton absent, en plus trompeur pour qui lit le code.
+     Les gestes sont donc COLLÉS EN BAS du bloc, et le corps défile. */
+  .bloc .gestes { position:sticky; bottom:0; margin-top:.5rem;
+                  padding-top:.45rem; background:inherit; }
 
   .bloc { border:1px solid var(--bord,#e2ddd3); border-radius:12px; padding:.7rem .75rem;
           background:var(--carte,rgba(127,127,127,.04)); }
@@ -68,7 +78,9 @@
   button { font:inherit; font-size:.74rem; font-weight:600; cursor:pointer;
            padding:.36rem .7rem; border-radius:8px; border:1px solid var(--bord,#e2ddd3);
            background:transparent; color:inherit; }
-  button.oui  { color:var(--v); border-color:color-mix(in srgb,var(--v) 40%,var(--bord,#ccc)); }
+  /* « Accorder » est L'ACTION de cette carlette, pas une option parmi
+     d'autres : elle se donne le poids qui va avec. */
+  button.oui  { background:var(--v); color:#fff; border-color:var(--v); font-weight:700; }
   button.non  { color:var(--r); border-color:color-mix(in srgb,var(--r) 40%,var(--bord,#ccc)); }
   button.fort { background:var(--l); color:#fff; border-color:var(--l); }
   button[disabled] { opacity:.5; cursor:progress; }
@@ -192,6 +204,14 @@ function rendFile(liste) {
       bouton('Refuser', 'non', () => poste('/file/refuser', { did: d.did, motif: '' })));
     b.appendChild(g);
     c.appendChild(b);
+  }
+  // CE QUI N'EST PAS MONTRÉ DOIT SE DIRE. La carlette ne tient que trois
+  // demandes ; la pastille annonce bien le total, mais rien n'indiquait que les
+  // suivantes existaient ET qu'elles se traitent ailleurs. Un administrateur
+  // pouvait en laisser dormir sans le savoir.
+  if (liste.length > 3) {
+    c.appendChild(el('p', 'aide',
+      '+ ' + (liste.length - 3) + ' autre(s) demande(s) — à traiter dans le profileur.'));
   }
   // LE PROFILEUR VIT EN /mega, pas ici : la carlette montre ce qui passe, la
   // page porte ce qui se gère.
