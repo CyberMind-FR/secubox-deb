@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "version": "1.5.0",
+    "version": "1.5.1",
     "updated": "2026-09-20",
     "changelog": "1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
     "sources": [
@@ -273,11 +273,6 @@
           "id": "scan-011",
           "pattern": "/phpmyadmin",
           "desc": "sonde phpmyadmin (générique)"
-        },
-        {
-          "id": "scan-012",
-          "pattern": "%2e%2e|%2f%2e|/%2e",
-          "desc": "Point ou barre encodes pour contourner les motifs de chemin (/%2eenv, /%2f%2eaws%2fcredentials) — 23 requetes mesurees"
         }
       ]
     },

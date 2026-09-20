@@ -1,3 +1,31 @@
+secubox-waf (1.10.32-1~bookworm3) bookworm; urgency=medium
+
+  * Regles 1.5.1 — RETRAIT de scan-012, qui etait REDONDANT (ref #1310).
+  * MON ERREUR DE MESURE, corrigee. J'avais rejoue les motifs candidats sur
+    les chemins BRUTS du journal. Or sbxwaf compare les chemins DECODES :
+    `unquotePlus` applique un url.PathUnescape avant toute comparaison.
+    Les 4 chemins pourcent-encodes observes etaient donc DEJA attrapes :
+      /%2eenv                 -> /.env            scanners/scan-003
+      /%2f%2eenv              -> //.env           scanners/scan-003
+      /%2fbackend%2f%2eenv    -> //backend/.env   scanners/scan-003
+      /%2f%2eaws%2fcredentials-> //.aws/credentials honeypot/honey-011
+    Les « 23 requetes nouvellement qualifiees » annoncees en 1.5.0 etaient un
+    ARTEFACT de cette methode. Le motif n'ajoutait rien : exactement le bruit
+    non mesure que j'avais dit ecarter en rejetant un cinquieme candidat.
+  * Les trois autres motifs TIENNENT, recomptes correctement (sur la forme
+    decodee, et en retirant ce que les 156 motifs d'origine couvraient deja) :
+      wordpress-001   394 requetes reellement nouvelles  (annonce : 423)
+      wordpress-002   261 requetes reellement nouvelles  (annonce : 273)
+      livewire-001      4 requetes reellement nouvelles  (annonce :   4)
+    Total honnete : 659, non 723.
+  * Confirme sur trafic reel : les requetes /wp- passent de la categorie
+    `host_anomaly:unrouted` a `product_absent_probes` en severite high, avec
+    bannissement effectif. Le gain est reel — la prise ne depend plus de ce
+    que l'hote vise soit route ou non.
+  * 160 -> 159 motifs.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 16:24:44 +0200
+
 secubox-waf (1.10.32-1~bookworm2) bookworm; urgency=medium
 
   * Regles 1.5.0 — quatre motifs TIRES DU JOURNAL de gk2, pas d'une liste

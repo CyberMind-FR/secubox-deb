@@ -1,3 +1,33 @@
+secubox-toolbox-ng (0.5.3-1~bookworm3) bookworm; urgency=medium
+
+  * sbxwaf : repliage du chemin AVANT comparaison (ref #1310).
+    `unquotePlus` decode UNE fois. Cela couvre tout le trafic observe — les
+    quatre seuls chemins pourcent-encodes du journal de gk2 etaient DEJA
+    attrapes apres ce decodage unique. Restaient ouverts, par construction :
+    le double encodage (%252e, qu'un tour laisse en %2e) et les separateurs
+    masquants (//, /./, /. final).
+  * MESURE HONNETE : sur les 10 646 requetes journalisees, le repliage change
+    ZERO verdict. 149 requetes (1,4 %) produisent une variante, mais les
+    motifs attrapaient deja leur forme non repliee. C'est donc de la DEFENSE
+    EN PROFONDEUR, pas la correction d'un manque constate.
+  * LA VARIANTE EST AJOUTEE, JAMAIS SUBSTITUEE. Le decodage existant reste
+    le premier element du texte scanne ; la forme repliee vient s'y ajouter
+    quand elle differe. Une prise d'hier reste une prise : le changement ne
+    peut qu'ajouter. Aucun reglage patiemment mesure n'est menace.
+  * ON REPLIE POUR COMPARER, JAMAIS POUR TRANSMETTRE. Le chemin envoye au
+    backend reste celui du client, octet pour octet — %2f dans un identifiant
+    gitea n'est pas un separateur, le replier casserait l'URL.
+  * `..` EST PRESERVE. Le resoudre detruirait l'accusation en meme temps que
+    le masque : c'est le `..` que les motifs cherchent.
+  * Decodage borne a 3 passes : sans borne, `%25%32%35...` est une primitive
+    de deni de service dont l'attaquant choisit la longueur.
+  * Nom distinct de `normaliserChemin` (profiler.go), qui reduit un chemin a
+    sa FORME pour REGROUPER des sondes. Buts opposes, ne pas fusionner.
+  * 8 tests, dont la non-regression sur les chemins legitimes du parc et le
+    garde-fou anti-DoS. Suite sbxwaf complete verte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 16:22:21 +0200
+
 secubox-toolbox-ng (0.5.3-1~bookworm2) bookworm; urgency=medium
 
   * /data/secubox/sbxdpi et /data/secubox/media-buffer tolerees absentes dans

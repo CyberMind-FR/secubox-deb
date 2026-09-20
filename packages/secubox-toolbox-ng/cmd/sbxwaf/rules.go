@@ -345,6 +345,18 @@ func (r *Rules) MatchExcept(method, rawPath, rawQuery, body, ua string, includeB
 	decodedPath := unquotePlus(rawPath)
 	decodedQuery := unquotePlus(rawQuery)
 	scanParts := []string{decodedPath, decodedQuery, body, ua}
+
+	// Variante normalisée (voir replierchemin.go). Elle est AJOUTÉE, jamais
+	// substituée : tout ce que le décodage simple attrapait aujourd'hui
+	// continue d'être attrapé, et on ne gagne que des prises. La quasi-totalité
+	// du trafic ne produit aucune variante et ne paie donc rien.
+	if v := varianteNormalisee(rawPath, decodedPath); v != "" {
+		scanParts = append(scanParts, v)
+	}
+	if v := varianteNormalisee(rawQuery, decodedQuery); v != "" {
+		scanParts = append(scanParts, v)
+	}
+
 	scanText := strings.ToLower(strings.Join(scanParts, " "))
 
 	r.mu.RLock()
