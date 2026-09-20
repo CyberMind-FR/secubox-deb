@@ -341,9 +341,18 @@ jobs:
               "debian:${{ env.DEBIAN_SUITE }}" \
               bash -c 'set -e
                 apt-get update -qq
+                # nDPId ne se contente pas de compiler : son CMake tire nDPI
+                # 6.x en ExternalProject et lance le script de build de nDPI,
+                # qui reclame ses propres outils. Sans eux la configuration
+                # s'arrete net sur « Required Executables missing: git, wget,
+                # unzip, make, flock » — apres avoir pourtant compile nDPIsrvd,
+                # ce qui laisse croire a un probleme d'emulation alors que le
+                # conteneur est simplement plus maigre que le runner Ubuntu,
+                # ou ces outils sont presents d'office.
                 apt-get install -y -qq --no-install-recommends \
                   build-essential dpkg-dev debhelper devscripts fakeroot \
-                  cmake pkg-config libpcap-dev git ca-certificates
+                  cmake pkg-config libpcap-dev git ca-certificates \
+                  wget unzip util-linux autoconf automake libtool
                 dpkg-buildpackage -us -uc -b'
           else
             dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}
