@@ -333,6 +333,18 @@ jobs:
           case " $NATIF_ARM64 " in *" ${{ matrix.package }} "*) besoin_natif=1 ;; esac
 
           if [ "${{ matrix.arch }}" = "arm64" ] && [ "$besoin_natif" = "1" ]; then
+            # AUCUNE APOSTROPHE DANS LE `bash -c '...'` CI-DESSOUS : la
+            # charge utile est entre quotes simples, une apostrophe francaise
+            # la referme et le shell meurt sur « unexpected EOF while looking
+            # for matching ' ». Les explications restent donc ici, dehors.
+            #
+            # Outils au-dela du strict necessaire a la compilation : nDPId ne
+            # fait pas que compiler, son CMake tire nDPI 6.x en ExternalProject
+            # et lance le script de build de nDPI, qui reclame git, wget,
+            # unzip, make et flock. Le runner Ubuntu les a d'office, d'ou le
+            # succes en amd64 ; le conteneur debian est minimal. Sans eux, la
+            # configuration s'arrete APRES avoir compile nDPIsrvd, ce qui
+            # ressemble a tort a un probleme d'emulation.
             echo "-> construction arm64 NATIVE (emulee) de ${{ matrix.package }}"
             docker run --rm --platform linux/arm64 \
               -v "$GITHUB_WORKSPACE":/w \
@@ -341,14 +353,6 @@ jobs:
               "debian:${{ env.DEBIAN_SUITE }}" \
               bash -c 'set -e
                 apt-get update -qq
-                # nDPId ne se contente pas de compiler : son CMake tire nDPI
-                # 6.x en ExternalProject et lance le script de build de nDPI,
-                # qui reclame ses propres outils. Sans eux la configuration
-                # s'arrete net sur « Required Executables missing: git, wget,
-                # unzip, make, flock » — apres avoir pourtant compile nDPIsrvd,
-                # ce qui laisse croire a un probleme d'emulation alors que le
-                # conteneur est simplement plus maigre que le runner Ubuntu,
-                # ou ces outils sont presents d'office.
                 apt-get install -y -qq --no-install-recommends \
                   build-essential dpkg-dev debhelper devscripts fakeroot \
                   cmake pkg-config libpcap-dev git ca-certificates \
