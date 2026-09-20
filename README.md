@@ -60,6 +60,7 @@ detection, WAF, and a suite of sovereign services, all behind one web dashboard.
 | 🔄 **Automatic updates** | Security patches applied on their own |
 | 🎭 **Decoy & watermark** | Unrouted hosts and bait paths get a plausible, inert page — watermarked, so a fake credential replayed later is recognised as ours. Learning only: no bans follow |
 | 🧬 **Actor intelligence** | Scanners correlated across addresses and countries; a walking subdomain dictionary is regrouped into one campaign instead of dozens of fragments |
+| 🔐 **Signal gateway** | Alerts reach a phone over end-to-end encryption, not an inbox — and the channel talks back. Message bodies are **not** stored ([SBX-SIGNAL](packages/secubox-signal/README.md), pre-release) |
 
 > A visual tour of the dashboard lives in the
 > [wiki gallery](https://github.com/CyberMind-FR/secubox-deb/wiki/UI-COMPARISON).
@@ -175,6 +176,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 | [Troubleshooting](https://github.com/CyberMind-FR/secubox-deb/wiki/Troubleshooting) | When it does not boot |
 | [Project overview](docs/PROJECT-OVERVIEW.md) | Long form: flagship programmes, release history, CTL grammar |
 | [Cryptographic policy](docs/POLITIQUE-CRYPTO.md) | Which algorithms, why, and the two protocol-imposed exceptions — the reference document for CSPN evaluation |
+| [SBX-SIGNAL RFC](packages/secubox-signal/docs/RFC-SBX-SIGNAL.md) | Signal gateway: why a separate engine package, why message bodies are not stored, how alert floods are capped |
 
 ## 🤝 Contributing
 
