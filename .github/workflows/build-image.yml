@@ -114,7 +114,35 @@ jobs:
             parted dosfstools e2fsprogs rsync \
             gzip pigz xz-utils
 
-      - name: Download package artifacts
+      # PROVENANCE DES PAQUETS. L'etape ne demandait QUE « le dernier run
+      # reussi de build-packages.yml » — sans aucun lien avec le commit
+      # construit. Une image pouvait donc porter l'estampille d'un commit et
+      # le contenu d'un autre, ce qui s'est produit trois fois en une journee
+      # (#1308) :
+      #   - une image bâtie a 13h44 a pris les paquets de la veille, parce
+      #     qu'elle courait contre sa propre construction de paquets ;
+      #   - un test cible sur UN SEUL paquet a suffi a empoisonner le
+      #     pointeur : l'image suivante n'a trouve que 2 .deb.
+      #
+      # On tente d'abord l'agregat DU COMMIT construit. S'il n'existe pas
+      # encore — cas normal quand paquets et image partent du meme push — on
+      # retombe sur le dernier reussi, mais la provenance est IMPRIMEE. Le
+      # silence etait le vrai defaut : se tromper de paquets est rattrapable,
+      # ne pas savoir lesquels on a pris ne l'est pas.
+      - name: Download package artifacts (commit exact)
+        id: debs-exact
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build-packages.yml
+          name: secubox-debs-all
+          commit: ${{ github.sha }}
+          path: output/debs/
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Download package artifacts (repli — dernier reussi)
+        id: debs-fallback
+        if: steps.debs-exact.outcome != 'success'
         uses: dawidd6/action-download-artifact@v3
         with:
           workflow: build-packages.yml
@@ -122,6 +150,25 @@ jobs:
           path: output/debs/
           if_no_artifact_found: warn
         continue-on-error: true
+
+      - name: Provenance des paquets
+        run: |
+          n=$(find output/debs -name '*.deb' 2>/dev/null | wc -l)
+          if [ "${{ steps.debs-exact.outcome }}" = "success" ]; then
+            echo "paquets : agregat DU COMMIT ${{ github.sha }}"
+          else
+            echo "paquets : REPLI sur le dernier run reussi de build-packages.yml"
+            echo "          (aucun agregat pour ${{ github.sha }} au moment du telechargement)"
+          fi
+          echo "paquets : ${n} .deb disponibles"
+          # Un agregat partiel est le piege observe : 2 .deb au lieu de 180,
+          # parce qu'un run cible sur un seul paquet avait pris la place. La
+          # selection par profil echouera plus loin faute de meta-paquet,
+          # mais autant le dire ICI, ou la cause est encore lisible.
+          if [ "$n" -lt 50 ]; then
+            echo "::warning::agregat suspect — ${n} .deb seulement." \
+                 "Un run de paquets cible a-t-il pris la place du dernier complet ?"
+          fi
 
       - name: Verify profile is clean (#1112)
         run: |
