@@ -1,3 +1,19 @@
+secubox-webos (1.0.315-1~bookworm7) bookworm; urgency=medium
+
+  * L'APPAIRAGE NE DEMANDE PLUS D'AUTORISATION PREALABLE. Il etait derriere
+    la garde a_acces, ce qui revenait a demander une cle pour fabriquer la
+    serrure : il n'y a rien a autoriser tant qu'aucun compte n'est lie.
+    Toute personne connectee au Hall peut desormais appairer, et c'est
+    l'appairage REUSSI qui inscrit l'autorisation dans le profil — inutile
+    de la redemander par un formulaire.
+  * La carte propose donc le QR, plus un renvoi vers un depot
+    d'identifiant. Le libelle « Deposer le jeton Signal » etait de surcroit
+    perime : depuis que le pont forge son jeton a chaque appel, le coffre
+    ne contient AUCUN secret a coller, et l'utilisateur en aurait cherche
+    un en vain. (ref #1309)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 15:22:29 +0200
+
 secubox-webos (1.0.315-1~bookworm6) bookworm; urgency=medium
 
   * Le pont FORGE un jeton court au lieu de presenter le secret du coffre.

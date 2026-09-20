@@ -10,9 +10,10 @@
   étant servie par le Hall, les appels sont en MÊME ORIGINE — ni CORS, ni
   élargissement de connect-src.
 
-  Le dépôt du jeton, lui, passe par la carte générique
-  /cardlets/delegue.html?svc=signal : elle lit ?svc= et sait traiter tout
-  service déclaré `manuel` dans la liste fermée.
+  IL N'Y A RIEN A DEPOSER. L'appairage est le premier pas — c'est lui qui
+  cree le lien Signal — et c'est lui qui inscrit l'autorisation dans le
+  profil. Le coffre ne contient aucun secret a coller : le jeton presente au
+  demon est forge par le pont a chaque appel et vaut 60 secondes.
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -87,12 +88,15 @@ function rendreNonConnecte() {
 
 function rendreSansAcces(detail) {
   $('p').dataset.e = 'off'; $('etat').textContent = '';
-  // On NOMME ce qui manque et on mène au bon endroit : un « aucun accès »
-  // sans chemin de sortie oblige à deviner.
+  // PAS DE FORMULAIRE, PAS DE JETON A COLLER. Le premier pas de Signal est
+  // l'appairage : c'est lui qui cree le lien, et c'est lui qui inscrit
+  // l'autorisation dans le profil. Renvoyer vers un depot d'identifiant
+  // ferait chercher un secret qui n'existe pas.
   $('zone').innerHTML =
-    '<p>' + (detail || 'aucun accès') + '</p>' +
-    '<p><a class="lien" href="/cardlets/delegue.html?svc=signal" target="_top">' +
-    'Déposer le jeton Signal dans mon profil →</a></p>';
+    '<p class="m">Aucun compte lié à cette SecuBox.</p>' +
+    '<p><button id="b-lier">Générer un QR d\'appairage</button></p>' +
+    '<div id="qr"></div>';
+  $('b-lier').addEventListener('click', lier);
 }
 
 function rendreEnvoi(s) {

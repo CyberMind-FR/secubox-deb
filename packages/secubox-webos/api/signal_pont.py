@@ -48,7 +48,7 @@ _BASE = "http://signal/api/v1/signal"
 _DELAI = 15.0
 
 
-def _jeton(qui: str) -> Optional[str]:
+def _jeton(qui: str, *, exige_acces: bool = True) -> Optional[str]:
     """Un jeton COURT et PORTE, forge pour cet appel-ci.
 
     CE QUI A CHANGE, ET POURQUOI. La premiere version presentait au demon le
@@ -61,7 +61,11 @@ def _jeton(qui: str) -> Optional[str]:
     presence dit que cette personne a autorise la passerelle, derriere son
     login. Le jeton, lui, est forge ici, pour cet appel, et meurt avec lui.
     """
-    if not acces.a_acces(qui, "signal"):
+    # L'APPAIRAGE NE DEMANDE PAS D'AUTORISATION PREALABLE, et c'est le sens
+    # meme du flux : il n'y a rien a autoriser tant qu'aucun compte n'est lie.
+    # C'est l'appairage REUSSI qui inscrit l'autorisation dans le profil.
+    # L'exiger avant revenait a demander une cle pour fabriquer la serrure.
+    if exige_acces and not acces.a_acces(qui, "signal"):
         return None
     # `scope` porte l'intention : un jeton taille pour Signal n'ouvre rien
     # d'autre, et sa duree se compte en secondes parce qu'il ne sert qu'a
@@ -74,7 +78,7 @@ def _vide(detail: str) -> dict:
 
 
 async def _appel(qui: str, methode: str, chemin: str,
-                 corps: Any = None) -> dict:
+                 corps: Any = None, *, exige_acces: bool = True) -> dict:
     """Un appel au démon, au nom de `qui`.
 
     AUCUNE EXCEPTION NE REMONTE TELLE QUELLE : son texte peut contenir l'URL,
@@ -82,7 +86,7 @@ async def _appel(qui: str, methode: str, chemin: str,
     nc_super, et pour la même raison.
     """
     try:
-        jeton = _jeton(qui)
+        jeton = _jeton(qui, exige_acces=exige_acces)
     except Exception:
         # create_token leve si aucun secret n'est provisionne. On ne relaie
         # pas le detail : son texte nomme le fichier de configuration.
@@ -121,14 +125,33 @@ async def groupes(qui: str) -> dict:
 
 
 async def lier(qui: str) -> dict:
-    """Demarrer l'appairage. Le QR revient en SVG, deja trace par le demon :
-    l'URI `sgnl://` qu'il encode lie quiconque la scanne, et ne doit donc
-    exister nulle part ailleurs que dans cette image."""
-    return await _appel(qui, "POST", "/link/start")
+    """Demarrer l'appairage. Ouvert a toute personne connectee au Hall : voir
+    _jeton — exiger l'autorisation avant reviendrait a demander une cle pour
+    fabriquer la serrure.
+
+    Le QR revient en SVG, deja trace par le demon : l'URI `sgnl://` qu'il
+    encode lie quiconque la scanne, et ne doit exister nulle part ailleurs
+    que dans cette image."""
+    return await _appel(qui, "POST", "/link/start", exige_acces=False)
 
 
 async def lier_etat(qui: str) -> dict:
-    return await _appel(qui, "GET", "/link/status")
+    """Suivre l'appairage, et INSCRIRE l'autorisation quand il aboutit.
+
+    C'est ici que le profil gagne son acces : le lien Signal existe, donc la
+    personne a bel et bien autorise la passerelle — inutile de le lui demander
+    une seconde fois par un formulaire.
+    """
+    r = await _appel(qui, "GET", "/link/status", exige_acces=False)
+    if r.get("ok") and (r.get("data") or {}).get("state") == "linked":
+        if not acces.a_acces(qui, "signal"):
+            # `pose_manuel` refuse un compte ou un secret vide. On y inscrit
+            # donc ce que le coffre porte reellement : la trace que cette
+            # personne a appaire. Ce n'est PAS une cle — le jeton presente au
+            # demon est forge a chaque appel et vaut 60 secondes.
+            compte = (r.get("data") or {}).get("account") or "appairé"
+            acces.pose_manuel(qui, "signal", compte, "autorisation-par-appairage")
+    return r
 
 
 async def delier(qui: str) -> dict:
