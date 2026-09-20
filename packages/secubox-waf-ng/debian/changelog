@@ -1,3 +1,22 @@
+secubox-waf-ng (1.18.4-1~bookworm2) bookworm; urgency=medium
+
+  * sbxwaf : repliage du chemin avant comparaison (ref #1310). Le code vit
+    dans ../secubox-toolbox-ng/cmd/sbxwaf/replierchemin.go ; c'est CE paquet
+    qui livre le binaire /usr/sbin/sbxwaf.
+  * `unquotePlus` decode UNE fois, ce qui couvre tout le trafic observe.
+    Restaient ouverts par construction : le double encodage (%252e), l'UTF-8
+    sur-long (%c0%ae) et les separateurs masquants (//, /./, /. final).
+  * MESURE HONNETE : sur 10 646 requetes journalisees, ZERO verdict change.
+    149 requetes (1,4 %) produisent une variante, mais les motifs attrapaient
+    deja leur forme non repliee. DEFENSE EN PROFONDEUR, pas correction d'un
+    manque constate.
+  * La variante est AJOUTEE au texte scanne, jamais substituee : une prise
+    d'hier reste une prise. Zero risque de regression par construction.
+  * On replie pour COMPARER, jamais pour TRANSMETTRE. `..` est PRESERVE.
+    Decodage borne a 3 passes (anti-DoS).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 16:28:43 +0200
+
 secubox-waf-ng (1.18.4-1~bookworm1) bookworm; urgency=medium
 
   * Corps non inspecte pour le point de depot (--waf-skip-body-hosts).

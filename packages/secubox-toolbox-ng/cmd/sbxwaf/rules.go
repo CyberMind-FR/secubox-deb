@@ -44,11 +44,16 @@
 //
 // RE2 vs Python regex gap (checked against packages/secubox-waf/config/waf-rules.json):
 //
-//	All 50+ patterns in the production rules file compile under RE2 without
-//	errors — none use lookaheads, lookbehinds, or backreferences.  The
-//	skip-on-compile-error path is a safety net; it does not suppress any
-//	production rule.  If future rules add unsupported syntax, they will be
-//	skipped and logged.
+//	CETTE AFFIRMATION A ETE FAUSSE (#1310). Cinq motifs CVE — trois cve_voip,
+//	deux cve_xmpp — utilisaient `\u0000`, que RE2 ne connait pas : ils etaient
+//	SILENCIEUSEMENT IGNORES, ecrits et livres mais ne protegeant rien. Corriges
+//	en `\x00` (regles 1.5.2).
+//
+//	La lecon n'est pas l'echappement, c'est le SILENCE : le filet de securite
+//	journalise au demarrage puis se tait, et un motif absent ne se distingue
+//	pas d'un motif qui ne matche jamais. Un compte de motifs charges compare
+//	au compte de motifs declares rendrait l'ecart visible — c'est le vrai
+//	correctif, il reste a faire.
 package main
 
 import (

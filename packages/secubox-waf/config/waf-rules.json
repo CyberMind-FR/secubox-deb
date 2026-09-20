@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "version": "1.5.1",
+    "version": "1.5.2",
     "updated": "2026-09-20",
     "changelog": "1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
     "sources": [
@@ -481,13 +481,13 @@
         },
         {
           "id": "cve-ast-2022-42706",
-          "pattern": "Via:.*branch=z9hG4bK.*\\u0000",
+          "pattern": "Via:.*branch=z9hG4bK.*\\x00",
           "desc": "Asterisk Via header overflow",
           "cve": "CVE-2022-42706"
         },
         {
           "id": "cve-ast-2023-37457",
-          "pattern": "Route:.*<sip:.*;lr>\\s*,\\s*<sip:.*;lr>.*\\u0000",
+          "pattern": "Route:.*<sip:.*;lr>\\s*,\\s*<sip:.*;lr>.*\\x00",
           "desc": "Asterisk Route header crash",
           "cve": "CVE-2023-37457"
         },
@@ -517,7 +517,7 @@
         },
         {
           "id": "cve-opensips-2023-49323",
-          "pattern": "Contact:.*<sip:.*>;\\+sip\\.instance=.*\\u0000",
+          "pattern": "Contact:.*<sip:.*>;\\+sip\\.instance=.*\\x00",
           "desc": "OpenSIPS crash",
           "cve": "CVE-2023-49323"
         }
@@ -536,7 +536,7 @@
         },
         {
           "id": "cve-prosody-2022-0217",
-          "pattern": "<stream:stream.*version=[\"'].*\\u0000",
+          "pattern": "<stream:stream.*version=[\"'].*\\x00",
           "desc": "Prosody stream DoS",
           "cve": "CVE-2022-0217"
         },
@@ -560,7 +560,7 @@
         },
         {
           "id": "cve-strophe-2022-29168",
-          "pattern": "Strophe\\.js.*<body.*xmlns=.*\\u0000",
+          "pattern": "Strophe\\.js.*<body.*xmlns=.*\\x00",
           "desc": "Strophe.js parsing crash",
           "cve": "CVE-2022-29168"
         },

@@ -1,3 +1,25 @@
+secubox-waf (1.10.32-1~bookworm4) bookworm; urgency=medium
+
+  * Regles 1.5.2 — CINQ MOTIFS CVE NE S'EXECUTAIENT PAS (ref #1310).
+    Ils utilisaient `\u0000`, que RE2 ne connait pas. sbxwaf les rejetait au
+    chargement et poursuivait : ecrits, livres, versionnes, et ne protegeant
+    RIEN depuis leur introduction.
+      cve_voip/cve-ast-2022-42706        Asterisk
+      cve_voip/cve-ast-2023-37457        Asterisk
+      cve_voip/cve-opensips-2023-49323   OpenSIPS
+      cve_xmpp/cve-prosody-2022-0217     Prosody
+      cve_xmpp/cve-strophe-2022-29168    Strophe.js
+    Corriges en `\x00`, verifie sous Go : les cinq compilent et attrapent
+    bien un octet nul.
+  * DECOUVERT PAR HASARD, en lisant le journal de demarrage apres un
+    redeploiement. C'est le probleme : l'avertissement passe une fois au
+    demarrage puis se tait, et un motif absent ne se distingue en rien d'un
+    motif qui ne matche jamais. Comparer le nombre de motifs CHARGES au
+    nombre de motifs DECLARES rendrait l'ecart visible — a faire dans sbxwaf.
+  * 159 motifs declares, dont 159 desormais reellement charges (154 avant).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 20 Sep 2026 16:30:51 +0200
+
 secubox-waf (1.10.32-1~bookworm3) bookworm; urgency=medium
 
   * Regles 1.5.1 — RETRAIT de scan-012, qui etait REDONDANT (ref #1310).
