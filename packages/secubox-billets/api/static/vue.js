@@ -243,8 +243,35 @@
   var ETATS = {
     ok: "publié", pending: "en attente de modération", slow: "trop vite — réessayez",
     rate: "trop de messages — patientez", bad: "refusé (2 à 2000 caractères)",
-    csrf: "session expirée — rechargez", absent: "billet introuvable"
+    csrf: "session expirée — rechargez", absent: "billet introuvable",
+    // Ne devrait plus jamais s'afficher : le client reprend un jeton frais et
+    // rejoue l'envoi. Le message reste, pour le cas où la reprise échoue elle
+    // aussi — et il dit alors la VÉRITÉ, à savoir qu'il faut recharger.
+    expire: "formulaire expiré — rechargez la page"
   };
+
+  // REPRENDRE UN JETON PLUTÔT QUE D'ACCUSER LA PERSONNE (#1372).
+  //
+  // Le jeton anti-robot est cuit dans le HTML et meurt au bout d'une heure.
+  // Le parcours le plus ordinaire — ouvrir un billet, le lire, revenir plus
+  // tard, commenter — tombait donc en plein dedans, avec un message qui
+  // reprochait d'avoir été trop VITE. La personne réessayait plus lentement,
+  // et échouait encore.
+  //
+  // `/jeton` délivre un couple frais. On le reprend et on rejoue UNE fois :
+  // le visiteur ne voit rien, ce qui est le bon comportement — l'expiration
+  // d'un jeton est notre affaire, pas la sienne.
+  function reprendJetons(f) {
+    return fetch("/jeton", { credentials: "same-origin",
+                             headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var c = f.querySelector('[name="csrf"]'), t = f.querySelector('[name="ts_token"]');
+        if (c && j.csrf) c.value = j.csrf;
+        if (t && j.ts_token) t.value = j.ts_token;
+        return !!(j.csrf || j.ts_token);
+      }).catch(function () { return false; });
+  }
 
   function ajouteConsole(qui, texte, attente, t) {
     if (!clines) return;
@@ -262,7 +289,7 @@
     });
   }
 
-  function envoyer(nom, texte, dire) {
+  function envoyer(nom, texte, dire, dejaRejoue) {
     var f = document.getElementById("msgbox");
     if (!f) { dire("indisponible", true); return Promise.resolve(false); }
     var c = f.querySelector('[name="csrf"]'), t = f.querySelector('[name="ts_token"]');
@@ -275,6 +302,15 @@
       method: "POST", body: fd, credentials: "same-origin",
       headers: { "Accept": "application/json" }
     }).then(function (r) { return r.json(); }).then(function (d) {
+      // UNE SEULE REPRISE, et jamais deux. Rejouer en boucle sur un serveur qui
+      // refuse transformerait une gêne en martèlement — et le message de
+      // repli, lui, est enfin exact.
+      if (!d.ok && (d.c === "expire" || d.c === "csrf") && !dejaRejoue) {
+        return reprendJetons(f).then(function (repris) {
+          if (!repris) { dire(ETATS[d.c] || d.c, true); return false; }
+          return envoyer(nom, texte, dire, true);
+        });
+      }
       dire(ETATS[d.c] || d.c, !d.ok);
       if (!d.ok) return false;
       var qui = d.who || nom, quoi = d.msg || texte, attente = (d.c === "pending");

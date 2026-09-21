@@ -160,3 +160,71 @@ async def test_approved_comment_renders_on_page(pub):
     page = await c.get(f"/b/{slug}")
     assert "Vera" in page.text
     assert 'rel="nofollow ugc noopener noreferrer"' in page.text  # autolinked
+
+
+async def test_jeton_expire_dit_expire_et_non_trop_vite(pub):
+    """Une page ouverte depuis plus d'une heure ne doit PAS dire « trop vite ».
+
+    C'est le bug rapporté (#1372) : le jeton anti-robot meurt au bout d'une
+    heure et il est cuit dans le HTML. Le parcours le plus ordinaire — ouvrir
+    un billet, le lire, revenir plus tard, commenter — tombait dedans, et le
+    message reprochait d'avoir été trop VITE. La personne réessayait alors
+    plus lentement, et échouait encore.
+    """
+    c, conn, bid, slug = pub
+    pcsrf, _ = await _prep(c, slug)
+    vieux = antispam.issue_form_token(SECRET, now_epoch=int(time.time()) - 7200)
+    r = await c.post(f"/b/{slug}/comment",
+                     data={"author_name": "Lente", "body": "message écrit plus tard",
+                           "csrf": pcsrf, "ts_token": vieux, "website": ""})
+    assert "c=expire" in r.headers["location"]
+    assert "c=slow" not in r.headers["location"]
+
+
+async def test_jeton_invalide_dit_expire(pub):
+    """Une signature illisible se traite comme une expiration.
+
+    Du point de vue du visiteur, les deux se réparent pareil : reprendre un
+    jeton. Les distinguer dans l'interface n'apprendrait rien à personne et
+    lui demanderait de comprendre notre plomberie.
+    """
+    c, conn, bid, slug = pub
+    pcsrf, _ = await _prep(c, slug)
+    r = await c.post(f"/b/{slug}/comment",
+                     data={"author_name": "X", "body": "bonjour bonjour",
+                           "csrf": pcsrf, "ts_token": "n-importe-quoi", "website": ""})
+    assert "c=expire" in r.headers["location"]
+
+
+async def test_jeton_frais_passe_toujours(pub):
+    """Non-régression : le cas normal ne doit pas devenir une expiration."""
+    c, conn, bid, slug = pub
+    pcsrf, tok = await _prep(c, slug)
+    r = await c.post(f"/b/{slug}/comment",
+                     data={"author_name": "Alice", "body": "juste après ouverture",
+                           "csrf": pcsrf, "ts_token": tok, "website": ""})
+    assert "c=ok" in r.headers["location"]
+
+
+def test_etat_du_jeton_nomme_sa_cause():
+    """`form_token_etat` distingue les trois causes qu'un booléen confondait."""
+    now = int(time.time())
+    frais = antispam.issue_form_token(SECRET, now_epoch=now)
+    vieux = antispam.issue_form_token(SECRET, now_epoch=now - 7200)
+    futur = antispam.issue_form_token(SECRET, now_epoch=now)
+
+    assert antispam.form_token_etat(SECRET, frais, now_epoch=now, min_delay=0) == "ok"
+    assert antispam.form_token_etat(SECRET, vieux, now_epoch=now, min_delay=0) == "expire"
+    assert antispam.form_token_etat(SECRET, "bidon", now_epoch=now, min_delay=0) == "invalide"
+    # « trop tôt » n'arrive que si un délai de réflexion est ARMÉ — ce qui
+    # n'est plus le cas par défaut depuis #1268.
+    assert antispam.form_token_etat(SECRET, futur, now_epoch=now, min_delay=5) == "trop_tot"
+
+
+def test_form_token_ok_reste_compatible():
+    """L'ancienne forme booléenne garde exactement son sens."""
+    now = int(time.time())
+    frais = antispam.issue_form_token(SECRET, now_epoch=now)
+    vieux = antispam.issue_form_token(SECRET, now_epoch=now - 7200)
+    assert antispam.form_token_ok(SECRET, frais, now_epoch=now, min_delay=0) is True
+    assert antispam.form_token_ok(SECRET, vieux, now_epoch=now, min_delay=0) is False

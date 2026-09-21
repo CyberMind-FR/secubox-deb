@@ -18,7 +18,18 @@
 
 /* ── L'ECRAN ───────────────────────────────────────────────────────────────── */
 .vue-stage{margin:22px 0 0;border:1px solid var(--edge);border-radius:18px;overflow:hidden;
-  box-shadow:var(--lift);cursor:default;background:#05080c}
+  box-shadow:var(--lift);cursor:default;background:#05080c;
+  /* LA SCENE CESSE DE MANGER LA PAGE (#1372). Elle herite d'un 16/9 : sur un
+     ecran large, elle prenait presque toute la hauteur utile et repoussait les
+     commentaires sous la ligne de flottaison — on ne savait meme pas qu'il y
+     en avait.
+
+     ON PLAFONNE LA HAUTEUR, ON NE TOUCHE PAS AU RATIO. Changer le rapport
+     d'image deformerait ou bordurerait les embeds video, qui sont en 16/9 chez
+     la source. Le plafond, lui, ne s'applique QUE quand la scene deviendrait
+     trop haute : sur un ecran etroit ou en portrait, ou le 16/9 tient deja
+     dans peu de hauteur, il ne change rigoureusement rien. */
+  max-height:58vh}
 .vue-stage.flat{aspect-ratio:21/8}
 .vue-stage::after{content:"";position:absolute;left:0;top:0;height:3px;width:100%;background:var(--tone);opacity:.9;z-index:9}
 .vue .frame{opacity:1}                        /* hors carte : l'embed est visible d'emblée */

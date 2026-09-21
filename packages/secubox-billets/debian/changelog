@@ -1,3 +1,36 @@
+secubox-billets (0.8.59-1~bookworm3) bookworm; urgency=medium
+
+  * « TROP VITE — REESSAYEZ » REPROCHAIT L'INVERSE DE CE QUI S'ETAIT PASSE
+    (ref #1372). Le jeton anti-robot meurt au bout d'une heure (max_age=3600)
+    et il est CUIT dans le HTML rendu. Le parcours le plus ordinaire — ouvrir
+    un billet, le lire, revenir plus tard, commenter — tombait donc dedans.
+    Et comme le delai de reflexion vaut ZERO par defaut depuis #1268, « trop
+    tot » ne pouvait plus arriver : le seul refus qu'un visiteur reel
+    rencontrait etait l'EXPIRATION, affichee « trop vite ». La personne
+    reessayait alors plus LENTEMENT, et echouait encore.
+  * `form_token_etat` nomme la cause — ok / trop_tot / expire / invalide — la
+    ou un booleen confondait trois choses. `form_token_ok` est conservee.
+  * LE CLIENT SE RATTRAPE SEUL. Sur `expire` ou `csrf`, vue.js et immersif.js
+    reprennent un couple frais sur /jeton et rejouent UNE fois. Le visiteur ne
+    voit rien : l'expiration d'un jeton est notre affaire, pas la sienne. Une
+    seule reprise, jamais deux — rejouer en boucle sur un serveur qui refuse
+    transformerait une gene en martelement.
+  * immersif.js etait le pire des deux : il prenait /jeton UNE fois au
+    chargement et le gardait pour toujours. Dans une vue ou l'on RESTE,
+    passer l'heure etait l'issue normale, pas le cas limite — au-dela, plus
+    aucun message ne pouvait partir.
+  * Le message de repli dit enfin la verite : « formulaire expire — rechargez
+    la page ».
+  * LA SCENE CESSE DE MANGER LA PAGE. `.vue-stage` herite d'un 16/9 : sur un
+    ecran large elle prenait presque toute la hauteur utile et repoussait les
+    commentaires sous la ligne de flottaison. Plafonnee a 58vh. On ne touche
+    PAS au rapport d'image — le changer bordurerait les embeds video, qui
+    sont en 16/9 a la source ; le plafond ne s'applique que quand la scene
+    deviendrait trop haute, et ne change rien en portrait.
+  * 5 tests ajoutes, dont la non-regression du cas normal.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 07:34:51 +0200
+
 secubox-billets (0.8.59-1~bookworm2) bookworm; urgency=medium
 
   * Commentaires : PUBLICATION DIRECTE (ref #1372). La file de moderation est

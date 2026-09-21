@@ -149,12 +149,30 @@
   var ETATS = {
     ok: "publié", pending: "en attente de modération", slow: "trop vite — réessayez",
     rate: "trop de messages — patientez", bad: "refusé (2 à 2000 caractères)",
-    csrf: "session expirée — rechargez", absent: "billet introuvable"
+    csrf: "session expirée — rechargez", absent: "billet introuvable",
+    // Ne devrait plus s'afficher : on reprend un jeton frais et on rejoue.
+    expire: "formulaire expiré — rechargez la page"
   };
+
+  // LE JETON ÉTAIT PRIS UNE FOIS ET GARDÉ POUR TOUJOURS (#1372).
+  //
+  // Il meurt au bout d'une heure. Dans une vue immersive — celle où l'on
+  // reste, justement, parce qu'on regarde — passer l'heure était l'issue
+  // NORMALE, pas le cas limite. Au-delà, plus aucun message ne pouvait
+  // partir, et le refus s'affichait « trop vite », soit l'exact contraire de
+  // ce qui venait de se produire.
+  //
+  // On le reprend donc à la demande, et on rejoue une fois. L'expiration d'un
+  // jeton est notre affaire, pas celle du visiteur.
   var JET = null;
-  fetch("/jeton", { headers: { "Accept": "application/json" }, credentials: "same-origin" })
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (d) { JET = d; }).catch(function () {});
+  function prendJetons() {
+    return fetch("/jeton", { headers: { "Accept": "application/json" },
+                             credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { JET = d; return !!d; })
+      .catch(function () { return false; });
+  }
+  prendJetons();
 
   function saisie(slug) {
     var f = theater.querySelector(".tmsg"); if (!f) return;
@@ -176,26 +194,38 @@
       if (m.length < 2) { quoi.focus(); return; }
       LS.set("nom", n);
       envoi.disabled = true; dire("envoi… @" + mmss(posTh()));
-      var fd = new FormData();
-      fd.append("csrf", JET.csrf); fd.append("ts_token", JET.ts_token);
-      fd.append("website", ""); fd.append("author_name", n); fd.append("body", m);
       var vt = Math.floor(posTh());
-      if (vt >= 0 && vt <= 86400) fd.append("video_t", String(vt));
-      fetch("/b/" + encodeURIComponent(slug) + "/comment", {
-        method: "POST", body: fd, credentials: "same-origin",
-        headers: { "Accept": "application/json" }
-      }).then(function (r) { return r.json(); }).then(function (d) {
-        envoi.disabled = false;
-        dire(ETATS[d.c] || d.c, !d.ok);
-        if (!d.ok) return;
-        quoi.value = ""; quoi.focus();
-        var ligne = { who: n, msg: m, when: "à l'instant", slug: slug,
-                      t: (d.t == null ? null : d.t) };
-        (ACT.comments[slug] = ACT.comments[slug] || []).unshift(ligne);
-        poseSub(ligne, d.c === "pending");
-        var sub = theater.querySelector(".tsub"); if (sub) sub.classList.add("mienne");
-        placeActivity();
-      }).catch(function () { envoi.disabled = false; dire("envoi impossible", true); });
+
+      function poste(dejaRejoue) {
+        var fd = new FormData();
+        fd.append("csrf", JET.csrf); fd.append("ts_token", JET.ts_token);
+        fd.append("website", ""); fd.append("author_name", n); fd.append("body", m);
+        if (vt >= 0 && vt <= 86400) fd.append("video_t", String(vt));
+        return fetch("/b/" + encodeURIComponent(slug) + "/comment", {
+          method: "POST", body: fd, credentials: "same-origin",
+          headers: { "Accept": "application/json" }
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          // UNE SEULE REPRISE. Rejouer en boucle sur un serveur qui refuse
+          // transformerait une gêne en martèlement.
+          if (!d.ok && (d.c === "expire" || d.c === "csrf") && !dejaRejoue) {
+            return prendJetons().then(function (repris) {
+              if (!repris) { envoi.disabled = false; dire(ETATS[d.c] || d.c, true); return; }
+              return poste(true);
+            });
+          }
+          envoi.disabled = false;
+          dire(ETATS[d.c] || d.c, !d.ok);
+          if (!d.ok) return;
+          quoi.value = ""; quoi.focus();
+          var ligne = { who: d.who || n, msg: d.msg || m, when: "à l'instant", slug: slug,
+                        t: (d.t == null ? null : d.t) };
+          (ACT.comments[slug] = ACT.comments[slug] || []).unshift(ligne);
+          poseSub(ligne, d.c === "pending");
+          var sub = theater.querySelector(".tsub"); if (sub) sub.classList.add("mienne");
+          placeActivity();
+        }).catch(function () { envoi.disabled = false; dire("envoi impossible", true); });
+      }
+      poste(false);
     });
   }
 

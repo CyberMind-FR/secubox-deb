@@ -190,9 +190,18 @@ def register_public(app: FastAPI, templates: Jinja2Templates) -> None:
         # Délai de réflexion (jeton signé). Le jeton reste VERIFIE — c'est lui qui
         # prouve que le formulaire vient bien de nous ; seul le délai minimal est
         # réglable, et vaut zéro par défaut.
-        if not antispam.form_token_ok(secret, ts_token, now_epoch=int(time.time()),
-                                      min_delay=DELAI):
-            return rep("slow")
+        # LE REFUS DOIT DIRE SA CAUSE (#1372). Le jeton meurt au bout d'une
+        # heure et il est cuit dans le HTML rendu : une page laissée ouverte —
+        # on lit un billet, on revient plus tard, on commente — échouait avec
+        # « trop vite », c'est-à-dire l'exact contraire de ce qui s'était
+        # passé. La personne réessayait alors plus LENTEMENT, et échouait
+        # encore. `expire` est distinct pour que le client puisse se rattraper
+        # seul en reprenant un jeton frais sur /jeton.
+        etat_jeton = antispam.form_token_etat(secret, ts_token,
+                                              now_epoch=int(time.time()),
+                                              min_delay=DELAI)
+        if etat_jeton != "ok":
+            return rep("expire" if etat_jeton in ("expire", "invalide") else "slow")
         ip_hash = sec.hash_ip(_client_ip(request), secret)
         if _comment_limiter is not None and not _comment_limiter.check_and_add(ip_hash):
             return rep("rate")
