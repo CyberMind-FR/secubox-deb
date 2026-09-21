@@ -12,6 +12,24 @@ Architecture: any
 Depends: ${misc:Depends},
  adduser,
  apparmor
+# SBXWAF PREND LA PLACE DE DEUX PAQUETS DECOMMISSIONNES (#1319).
+#
+#   secubox-mitmproxy  l'inspection WAF, qui vit desormais dans sbxwaf (Go,
+#                      127.0.0.1:8085, backend HAProxy sbxwaf_inspector) ;
+#   secubox-crowdsec   le bannissement, repris par nftban NATIF dans sbxwaf.
+#
+# POURQUOI LE DECLARER PLUTOT QUE SE CONTENTER DE RETIRER LES ANCIENS DU
+# DEPOT. Retirer un paquet de l'index empeche de l'INSTALLER ; cela ne touche
+# pas les appliances qui l'ont DEJA. Sans `Conflicts`, une box qui porte encore
+# secubox-crowdsec le garderait indefiniment — un composant que plus personne
+# ne configure, qui ne protege rien, et qui continue de tourner. C'est
+# exactement la surface d'attaque que l'appliance est censee reduire.
+#
+# `Replaces` accompagne `Conflicts` : c'est la forme conventionnelle pour
+# « ceci supplante cela », et elle permet a apt de substituer au lieu de
+# refuser la transaction.
+Conflicts: secubox-mitmproxy, secubox-crowdsec
+Replaces: secubox-mitmproxy, secubox-crowdsec
 Description: SecuBox-Deb — MOTEUR du pare-feu applicatif (sbxwaf, Go, natif hote)
  LE MOTEUR. Il inspecte, decide et bannit ; l'interface qui le montre est
  dans secubox-waf.

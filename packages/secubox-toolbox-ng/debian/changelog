@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.5.3-1~bookworm4) bookworm; urgency=medium
+
+  * DECLARE PRENDRE LA PLACE DE secubox-mitmproxy (ref #1319) pour la part
+    ANALYSE : sbxmitm (R2/R3), sbxdpi (nDPI) et sbx-sentinel remplacent la
+    flotte de workers Python.
+  * Deux paquets declarent legitimement remplacer le meme ancien quand ils
+    s'en partagent les roles : secubox-waf-ng reprend l'inspection, celui-ci
+    reprend l'analyse. Aucun des deux ne suffit seul.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 11:21:14 +0200
+
 secubox-toolbox-ng (0.5.3-1~bookworm3) bookworm; urgency=medium
 
   * sbxwaf : repliage du chemin AVANT comparaison (ref #1310).

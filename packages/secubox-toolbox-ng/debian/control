@@ -10,6 +10,16 @@ Rules-Requires-Root: no
 Package: secubox-toolbox-ng
 Architecture: arm64
 Depends: ${misc:Depends}
+# LES ANALYSEURS AUSSI CHANGENT DE MOTEUR (#1319). secubox-mitmproxy portait
+# la flotte de workers Python ; elle est remplacee ici par sbxmitm (analyseur
+# R2/R3), sbxdpi (classification nDPI) et sbx-sentinel (analyse asynchrone).
+#
+# Deux paquets peuvent legitimement declarer remplacer le meme ancien quand
+# ils s'en partagent les roles : secubox-waf-ng reprend l'inspection WAF,
+# celui-ci reprend l'analyse. Aucun des deux ne suffit seul a le remplacer,
+# et c'est pourquoi les deux le declarent.
+Conflicts: secubox-mitmproxy
+Replaces: secubox-mitmproxy
 Description: SecuBox-Deb — outils Go du parc (sbxmitm, sbx-sentinel, sbx-authwatch, sbxdpi)
  LE MODULE GO DU PARC vit ici (go.mod, vendor/), et il porte CINQ commandes :
  sbxmitm, sbx-sentinel, sbx-authwatch, sbxdpi — livrees par ce paquet — et

@@ -1,3 +1,17 @@
+secubox-waf-ng (1.18.4-1~bookworm5) bookworm; urgency=medium
+
+  * DECLARE PRENDRE LA PLACE DE secubox-mitmproxy ET secubox-crowdsec
+    (ref #1319). sbxwaf reprend l'inspection WAF du premier et le
+    bannissement du second, via nftban NATIF.
+  * POURQUOI LE DECLARER PLUTOT QUE SE CONTENTER DE RETIRER LES ANCIENS DU
+    DEPOT : retirer un paquet de l'index empeche de l'INSTALLER, cela ne
+    touche pas les appliances qui l'ont DEJA. Sans `Conflicts`, une box qui
+    porte encore secubox-crowdsec le garderait indefiniment — un composant
+    que plus personne ne configure et qui ne protege rien. C'est exactement
+    la surface d'attaque que l'appliance est censee reduire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 11:21:14 +0200
+
 secubox-waf-ng (1.18.4-1~bookworm4) bookworm; urgency=medium
 
   * LE CHEMIN DE BLOCAGE AVAIT ETE MANQUE (ref #1313). La 1.18.4-3 renseignait
