@@ -1,0 +1,403 @@
+SecuBox-DEB — Guide complet, 16 pages
+v3.0.0-alpha.2 · créé le 21 septembre 2026
+Source : SecuBox-DEB_Guide_16_pages_Mockup_v3.pdf
+
+────────────────────────────────────────────────────────────────────────
+  TRANSCRIPTION TEXTE
+────────────────────────────────────────────────────────────────────────
+
+  Le PDF ne contient AUCUN texte extractible : 16 pages, 18 images, zéro
+  caractère récupérable par pdftotext.
+
+  Ce fichier est la transcription lisible par une machine. Il rend le
+  document cherchable, comparable d'une version à l'autre, citable depuis
+  une issue et accessible aux lecteurs d'écran.
+
+  Il est transcrit à la lecture des pages rendues. En cas de doute, le PDF
+  fait foi — c'est lui le document, ceci en est la voix.
+
+  Bandeau permanent : SOUVERAIN · SÛR · MODULAIRE · OUVERT
+  Signature : « Un numérique plus humain, c'est possible ! »
+  Liens : secubox.in · docs.secubox.in · github.com/CyberMind-FR/secubox-deb
+          forum.secubox.in · radio.gk2.secubox.in · all.gk2.net
+
+════════════════════════════════════════════════════════════════════════
+ 1/16 — COUVERTURE
+════════════════════════════════════════════════════════════════════════
+« Un internet qui vous appartient. »
+Reprenez le contrôle de votre numérique.
+Conçu en France, pour des territoires plus libres. Par une communauté pour tous.
+
+Une solution complète et modulaire pour communiquer, partager, créer et
+naviguer en toute confidentialité.
+
+  · Protégez votre vie privée — contre le pistage, les publicités, les menaces
+  · Des services essentiels — mail, cloud, vidéo, chat, radio, partage
+  · 100 % modulaire — installez uniquement ce dont vous avez besoin
+  · Économique et durable — matériel réutilisable, faible consommation
+  · Pour tous — particuliers, associations, PME, écoles, collectivités
+
+Panneaux : Nextcloud · PeerTube · Mail · Chat · Radio · Et bien plus…
+Services en pied : Mail souverain · Nextcloud · PeerTube · Radio · Navigation sans pistage
+« Petites boîtes, grands changements ! »
+
+════════════════════════════════════════════════════════════════════════
+ 2/16 — QU'EST-CE QUE SECUBOX-DEB ?
+════════════════════════════════════════════════════════════════════════
+Une solution libre, souveraine et modulaire.
+
+Système complet basé sur Debian réunissant en un seul appareil des services
+essentiels pour communiquer, collaborer, partager et naviguer.
+
+  Souverain   vos données restent chez vous
+  Modulaire   installez uniquement ce dont vous avez besoin
+  Ouvert      logiciels libres, audités, communauté active
+  Sûr         security by design
+  Durable     matériel réutilisable, faible consommation
+
+Chiffres : 100+ modules · 1 appareil multi-services · faible consommation
+           · des usages sans limites
+
+Mission : rendre un numérique plus humain, plus sûr et plus libre, accessible
+à tous, sur tous les territoires.
+
+  [TYPO À CORRIGER] « Des outils libres pour des pitsoyens libres »
+                    → citoyens
+
+════════════════════════════════════════════════════════════════════════
+ 3/16 — SIX DOMAINES   ← page d'architecture
+════════════════════════════════════════════════════════════════════════
+Plus de 100 modules libres organisés en 6 grands domaines.
+
+ 1. COMMUNICATION            Mail (serveur + webmail) · Chat et visioconférence
+                             (Nextcloud Talk) · Forum/BBS · Messagerie
+                             instantanée · Invitations et espaces privés
+
+ 2. CLOUD & COLLABORATION    Nextcloud (fichiers, agenda, contacts) · Édition
+                             collaborative · Partage sécurisé · Sauvegarde et
+                             versioning · Accès multi-appareils
+
+ 3. MÉDIAS & PUBLICATION     PeerTube · Radio SecuBox (webradios locales) ·
+                             Blog et flux RSS · Galerie photo (Photoprism) ·
+                             Publication de sites
+
+ 4. SÉCURITÉ & ANALYSE       SBX WAF : protection web
+                             SBX MITM : analyse du trafic (avec consentement)
+                             SBX DPI : identification des applications
+                             SBX Sentinel : supervision et alertes
+                             Tableaux de bord · Outils de diagnostic
+
+ 5. RÉSEAU & FÉDÉRATION      MirrorNet · Fédération (Fediverse) · Accès
+                             distant (WireGuard) · Services maillés
+
+ 6. SYSTÈME & ADMINISTRATION SBXOS (interface web Hall) · App Store ·
+                             Utilisateurs et permissions · Mises à jour et
+                             sauvegardes · Supervision
+
+════════════════════════════════════════════════════════════════════════
+ 4/16 — COMMUNIQUER EN TOUTE LIBERTÉ
+════════════════════════════════════════════════════════════════════════
+Chaque service est présenté en triptyque :
+  le service · « Ce que ça remplace » · « Pourquoi ce choix ? »
+
+  MAIL              remplace Gmail, Outlook, iCloud
+                    webmail, agenda, contacts · anti-spam, anti-phishing ·
+                    chiffrement TLS/OpenPGP · compatible Thunderbird/Outlook
+
+  CHAT              remplace WhatsApp, Telegram, Discord
+                    Nextcloud Talk · messages, appels audio/vidéo, salons,
+                    partage de fichiers · chiffrement bout en bout (optionnel)
+
+  VISIOCONFÉRENCE   remplace Zoom, Google Meet, Teams
+                    salles permanentes · sans inscription externe ·
+                    navigateur et mobile
+
+  FORUM / BBS       remplace Reddit, Discourse, Facebook Groups
+                    discussions thématiques · modération simple · intégration
+                    radio et PeerTube · accessible de l'extérieur si souhaité
+
+Maquettes : SecuMail · Nextcloud Talk · Réunion SecuBox · SecuBBS
+
+════════════════════════════════════════════════════════════════════════
+ 5/16 — VOS FICHIERS, VOTRE ORGANISATION
+════════════════════════════════════════════════════════════════════════
+  NEXTCLOUD               remplace Google Drive, Dropbox, iCloud, OneDrive
+                          synchronisation · partage · agenda, contacts, tâches
+                          · galerie photos · édition collaborative · HTTPS/VPN
+
+  AGENDA & CONTACTS       remplace Google Calendar, Outlook, Contacts Google
+                          agendas partagés · invitations · CardDAV · tâches
+
+  ÉDITION COLLABORATIVE   remplace Microsoft Office, Google Docs
+                          OnlyOffice ou Collabora Online · temps réel ·
+                          compatible Word/Excel/PowerPoint · historique
+
+  [ÉCART CONSTATÉ] L'édition collaborative est la SEULE des onze fonctions
+                   montrées qui n'a AUCUN paquet dans le dépôt. La maquette
+                   affiche un document nommé « Projet SecuBox ».
+
+════════════════════════════════════════════════════════════════════════
+ 6/16 — REGARDEZ, ÉCOUTEZ, PARTAGEZ AUTREMENT
+════════════════════════════════════════════════════════════════════════
+  PEERTUBE        remplace YouTube, Vimeo, Dailymotion
+                  instance propre · aucune publicité ni pistage · fédération
+
+  RADIO           remplace Spotify, Deezer, radios commerciales
+                  webradios libres et locales · playlists · commentaires et
+                  tchat en direct · intégration PeerTube
+
+  FLUX RSS & BLOG remplace Google News, abonnements payants
+                  agrégation RSS · catégories et favoris · blog Markdown intégré
+
+  GALERIE PHOTO   remplace Google Photos, iCloud, Flickr
+                  PHOTOPRISM · classement automatique (IA locale) · albums et
+                  partages privés · aucune analyse cloud
+
+════════════════════════════════════════════════════════════════════════
+ 7/16 — UN INTERNET PLUS SÛR, CHEZ VOUS   ← cible du travail sécurité
+════════════════════════════════════════════════════════════════════════
+  SBX WAF       remplace Cloudflare, Sucuri, Akamai
+                filtrage des requêtes malveillantes · SQLi, XSS, scans ·
+                règles adaptatives, listes noires/blanches · supervision
+                Maquette : « Requêtes/min 427 · Menaces bloquées 19 »
+                Dernières menaces : tentative SQL injection · scan de
+                vulnérabilités · bot malveillant (crawler) · accès pays non
+                autorisé · tentative XSS — toutes « Bloqué »
+
+  SBX MITM      remplace AdGuard, Pi-hole, services DNS tiers
+                blocage des publicités (réponse HTTP 204) · suppression des
+                traqueurs et scripts tiers · inspection AVEC CONSENTEMENT ·
+                listes filtrantes (EasyList, OISD, HaGeZi)
+                Maquette : 1 842 requêtes — traqueurs 48 %, publicités 28 %,
+                requêtes autorisées 18 %, autres 6 %
+
+  SBX DPI       remplace Netify, GlassWire, solutions cloud
+                identification des applications (nDPI-like) · détection des
+                usages inhabituels · RESPECT DE LA VIE PRIVÉE, pas
+                d'inspection du contenu personnel
+                Maquette : streaming 28 %, réseaux sociaux 18 %, navigation
+                15 %, messagerie 12 %, mises à jour 10 %, autres 17 %
+
+  SBX SENTINEL  remplace solutions de monitoring cloud
+                centralise alertes et événements · temps réel (web, mail,
+                interface) · journalisation horodatée · fonctionne hors ligne
+
+  « La sécurité est un droit, pas un luxe. »
+
+════════════════════════════════════════════════════════════════════════
+ 8/16 — UN RÉSEAU PLUS LIBRE ET PLUS PROCHE
+════════════════════════════════════════════════════════════════════════
+  MIRRORNET            remplace les CDN centralisés, clouds propriétaires
+                       réplication pair à pair · sélection des contenus ·
+                       fonctionne avec une connexion limitée · écoles,
+                       fablabs, associations
+
+  FÉDÉRATION           remplace les réseaux sociaux centralisés
+                       ActivityPub, Matrix, XMPP · PeerTube, Mastodon,
+                       Nextcloud, Kbin, Matrix, Mobilizon, Pixelfed
+
+  ACCÈS DISTANT        remplace les VPN commerciaux (NordVPN, etc.)
+                       WireGuard · aucun service exposé inutilement ·
+                       contrôle des accès et permissions
+
+  « Relier les personnes, pas les empires. »
+
+════════════════════════════════════════════════════════════════════════
+ 9/16 — UNE INTELLIGENCE UTILE, LOCALE ET RESPONSABLE
+════════════════════════════════════════════════════════════════════════
+  IA LOCALE              remplace ChatGPT, Gemini, Copilot
+                         LEXIE IA · modèles ouverts (Llama, Mistral) ·
+                         fonctionne SANS INTERNET · interface depuis SBXOS
+
+  ANALYSE & VEILLE       remplace services OSINT en ligne
+                         Maigret, SpiderFoot · cartographie · recherche
+                         d'expositions de données · usages légaux et éthiques
+
+  AUTOMATISATION         remplace cron manuel, scripts dispersés
+                         tâches planifiées · intégration Nextcloud, mail ·
+                         alertes et notifications
+
+  ÉDUCATION & DÉCOUVERTE tutoriels · approche pédagogique et transparente ·
+                         sensibilisation aux enjeux du numérique
+
+  « L'IA peut être un outil formidable… si c'est vous qui la contrôlez ! »
+
+════════════════════════════════════════════════════════════════════════
+ 10/16 — SBXOS : UNE INTERFACE SIMPLE, PUISSANTE ET À VOTRE IMAGE
+════════════════════════════════════════════════════════════════════════
+  ← PAGE DE REVERSE DESIGN DU HALL
+
+  SBXOS HALL          all.gk2.net — tableau de bord personnel
+                      services en vignettes claires, accès en un clic ·
+                      vignettes personnalisables · MODES UTILISATEUR ET
+                      ADMINISTRATEUR · responsive · design léger et rapide
+                      Vignettes : Nextcloud, Mail, PeerTube, Radio, Forum,
+                      Photoprism, Lexie IA, BBS, Outils Toolbox, Modules
+                      App Store, Réseau MirrorNet, Aide Documentation
+
+  BiB                 Browser Inside Browser — navigation sans être suivi
+                      suppression des traqueurs publicitaires · neutralisation
+                      des cookies tiers · accès aux sites via votre SecuBox
+                      Maquette : « 12 traqueurs bloqués · cookies neutralisés
+                      · connexion sécurisée »
+
+  APP STORE SECUBOX   catalogue de modules vérifiés · installation en un clic
+                      · mises à jour automatiques · compatible profils
+                      lite / standard / pro
+
+  MODULE COMPOSER     création de modules personnalisés · interface guidée ·
+                      tests et déploiement sécurisés
+                      Extrait YAML : name, version, description,
+                      services: [nextcloud, photoprism, sbxwaf, lexie],
+                      profiles: [standard, pro]
+
+════════════════════════════════════════════════════════════════════════
+ 11/16 — CONFORMITÉ, VIE PRIVÉE ET SÉRÉNITÉ
+════════════════════════════════════════════════════════════════════════
+  RESPECT DU RGPD     hébergement local · journalisation et traçabilité ·
+                      GESTION DES CONSENTEMENTS · anonymisation et
+                      pseudonymisation · exports et suppression ·
+                      MODÈLES DE REGISTRE DE TRAITEMENT
+
+  Les 6 principes : licéité · transparence · minimisation · contrôle ·
+                    sécurité · durée limitée
+
+  Chiffres clés (CNIL 2024 / EDPB 2023) :
+    55,2 M€  amendes CNIL 2024 (+40 % vs 2023)
+    87       sanctions prononcées
+    4,3 M€   amende moyenne
+    323 M€   total des amendes RGPD en Europe 2023
+
+  PROTECTION DE LA VIE PRIVÉE  blocage des traqueurs (AdGuard, MITM 204) ·
+                               navigation via BiB · isolation LXC/profils ·
+                               DNS sécurisé · analyse par appareil
+                               Maquette : 98 % navigation protégée ·
+                               1 248 traqueurs · 327 publicités ·
+                               18 tentatives de fingerprinting ·
+                               6 connexions hors UE bloquées
+
+  AUDIT ET CONFORMITÉ  CyberScore automatisé · rapports exportables ·
+                       tableaux de bord multi-profils
+                       Maquette : CyberScore PME A- 87/100 —
+                       Sécurité 92 · Vie privée 88 · Conformité 85 ·
+                       Résilience 80
+
+  Références : CNIL · ANSSI · RGPD (UE) 2016/679
+
+  [À RAPPROCHER] La gestion des consentements et le registre de traitement
+                 sont portés par le collecteur cookie_audit — qui ne tourne
+                 pas (voir issue #1311).
+
+════════════════════════════════════════════════════════════════════════
+ 12/16 — SECUBOX DANS LES TERRITOIRES
+════════════════════════════════════════════════════════════════════════
+Cinq publics : Écoles & éducation · Associations · Collectivités locales ·
+Entreprises & artisans · Citoyens & familles
+
+  EXEMPLE : VILLAGE3B — une cabine numérique pour tous
+  Bornes SecuBox dans les villages de Maurienne : WiFi public sécurisé ·
+  diagnostic de navigation · sensibilisation à la vie privée · accès aux
+  services locaux · projet réplicable.
+  Réseau montré : Val-Cenis, Bonneval-sur-Arc, Saint-Michel-de-Maurienne,
+  Lanslebourg, Modane, Aussois, Saint-Jean-de-Maurienne, Notre-Dame-du-Cruet
+
+  « Des villages connectés entre eux, pas aux empires. »
+
+════════════════════════════════════════════════════════════════════════
+ 13/16 — REJOINDRE L'AVENTURE
+════════════════════════════════════════════════════════════════════════
+Quatre voies : Utiliser · Contribuer · Soutenir · Rejoindre
+Quatre piliers : S'INFORMER · SE PROTÉGER · PARTAGER · CONSTRUIRE
+
+  PROCHAINS OBJECTIFS (2026 et au-delà)
+    · Sortie de SecuBox v3.0 stable
+    · CERTIFICATION ANSSI CSPN (objectif)
+    · Extension du réseau MirrorNet
+    · Plus de modules communautaires
+    · Déploiement dans de nouveaux territoires
+    · Programme écoles et associations
+    · Internationalisation (communautés locales)
+
+════════════════════════════════════════════════════════════════════════
+ 14/16 — FEUILLE DE ROUTE   ← la roadmap de référence
+════════════════════════════════════════════════════════════════════════
+  COURT TERME (0–6 mois) — Stabiliser et simplifier
+    · Sortie de SecuBox v3.0 stable
+    · Finalisation des modules essentiels
+    · Interface SBXOS encore plus intuitive
+    · Documentation et tutoriels enrichis
+    · Outils d'audit et de conformité (CyberScore)
+    · Premiers déploiements VILLAGE3B
+    · Communauté et contributeurs renforcés
+
+  MOYEN TERME (6–18 mois) — Étendre et fédérer
+    · Réseau MirrorNet (fédération de SecuBox)
+    · Module Composer avancé (création facile)
+    · Déploiement massif : collectivités, écoles, associations
+    · Nouveaux modules (IA locale, IoT, cartographie)
+    · Marketplace communautaire sécurisée
+    · Interopérabilité accrue (standards ouverts)
+    · Accompagnement des partenaires
+
+  LONG TERME (18 mois et +) — Essaimer et pérenniser
+    · CERTIFICATION ANSSI CSPN (objectif)
+    · Réseau de territoires autonomes interconnectés
+    · Outils avancés de résilience (mode déconnecté)
+    · Nouveaux services : identité souveraine, VoIP, visioconférence,
+      outils collaboratifs avancés
+    · Internationalisation (autres pays, autres langues)
+    · Modèle économique durable et solidaire
+    · Une communauté mondiale de contributeurs
+
+  OÙ NOUS SOMMES — v3.0
+    128 modules · SBXOS opérationnel · communauté active · premiers
+    déploiements · outils d'audit · partenaires engagés
+
+  D'OÙ ON VIENT : idée · premiers prototypes · communauté naissante ·
+                  modules de base · premiers utilisateurs · VILLAGE3B pilote
+
+════════════════════════════════════════════════════════════════════════
+ 15/16 — PASSEZ À L'ACTION   ← offres commerciales
+════════════════════════════════════════════════════════════════════════
+  SecuBox Home        49 €/mois ou achat unique — maison et familles
+  SecuBox Community   69 €/mois ou achat unique — associations, collectifs
+  SecuBox Pro         99 €/mois ou achat unique — pros, écoles, collectivités
+
+  Installation en 6 étapes : préparer le matériel (MOCHAbin, Mini PC,
+  Raspberry Pi 5) · télécharger l'image · flasher · démarrer · configurer ·
+  rejoindre la communauté.
+
+════════════════════════════════════════════════════════════════════════
+ 16/16 — MERCI ET À TRÈS BIENTÔT
+════════════════════════════════════════════════════════════════════════
+« SecuBox-DEB, c'est bien plus qu'une technologie : c'est une communauté, des
+territoires, des idées et des personnes. »
+
+Panneaux : LIBERTÉ · VIE PRIVÉE · SOLIDARITÉ · TERRAINS RÉSILIENTS · AVENIR
+« Des villages connectés pas aux empires, mais aux gens. »
+« Le numérique d'intérêt général est entre nos mains. »
+
+────────────────────────────────────────────────────────────────────────
+  POINTS RELEVÉS À LA TRANSCRIPTION
+────────────────────────────────────────────────────────────────────────
+
+  1. TYPO — page 2 : « pitsoyens » → citoyens.
+
+  2. VERSION — le pied de page indique v3.0.0-alpha.2 ; la release courante
+     est alpha.4.
+
+  3. MODULES — la page 14 annonce « 128 modules » ; le dépôt en porte 174.
+     L'un des deux compte autre chose que l'autre ; il faut dire lequel.
+
+  4. ÉDITION COLLABORATIVE — seule fonction montrée sans paquet
+     correspondant (page 5). Dans un guide diffusé, une capture est une
+     promesse.
+
+  5. URL — radio.gk2.secubox.in et all.gk2.net sont les adresses du NŒUD DE
+     DÉVELOPPEMENT. Un guide public qui les cite expose une machine réelle à
+     un lectorat inconnu.
+
+  6. TARIFS — la page 15 engage des prix (49 / 69 / 99 €/mois). C'est le
+     seul engagement contractuel du document ; il mérite d'être daté.
+
+  Analyse complète : ../../audits/ANALYSE-DOCUMENTS-REFERENCE.md

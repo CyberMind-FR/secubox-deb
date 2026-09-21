@@ -5,41 +5,51 @@
 
 # Références SBX OS — documents de conception
 
-## Ce qui est ici, et ce qui n'y est pas
+Le **guide 16 pages** est la référence produit. Il définit le *reverse design*
+— ses maquettes d'interface fixent la cible que l'implémentation doit
+atteindre — et il porte la **feuille de route** (court / moyen / long terme,
+page 14).
 
-Le guide 16 pages pèse **48 Mo**. Il n'est pas versé dans le dépôt : un
-binaire de cette taille alourdit chaque clone pour tout le monde, et il
-n'apporterait rien qu'une empreinte ne dise déjà.
+| document | rôle | SHA-256 |
+|---|---|---|
+| `SecuBox-DEB_Guide_16_pages_Mockup_v3.pdf` | référence produit et reverse design | `504f1330a9e41817bef4…` |
+| `LDXOS-Hall-Sketchbook.pdf` | carnet de croquis du Hall | `7e69b5d63af7263712a7…` |
+| `SBX_OS_Compagnon_Mockup_v1.pdf` | compagnon SBX OS | `7977b8e05dda938ac358…` |
 
-Seul le compagnon, léger, est archivé. Les autres sont identifiés par leur
-empreinte — ce qui suffit à savoir **quelle version** une analyse a examinée,
-qui est la seule chose dont un audit a besoin.
+## La transcription, et pourquoi elle existe
 
-| document | pages | taille | SHA-256 |
-|---|---:|---:|---|
-| `SecuBox-DEB_Guide_16_pages_Mockup_v3.pdf` | — | 47.2 Mo | `504f1330a9e41817bef4246d…` |
-| `LDXOS-Hall-Sketchbook.pdf` | — | 10.2 Mo | `7e69b5d63af7263712a730e2…` |
-| `SBX_OS_Compagnon_Mockup_v1.pdf` | — | 0.0 Mo | `7977b8e05dda938ac358b834…` |
+[`Guide_16_pages_v3.0.0-alpha.2.txt`](Guide_16_pages_v3.0.0-alpha.2.txt)
 
-## Le guide 16 pages est la référence produit
+Le PDF ne contient **aucun texte extractible** : 16 pages, 18 images, zéro
+caractère récupérable par `pdftotext`.
 
-Il définit le **reverse design** : ses maquettes d'interface fixent la cible
-que l'implémentation doit atteindre. Analyse dans
-[`../../audits/ANALYSE-DOCUMENTS-REFERENCE.md`](../../audits/ANALYSE-DOCUMENTS-REFERENCE.md).
+Ce n'est pas un détail de forme. Sans transcription, le document n'est :
 
-## Ce qui lui manque, et c'est important
+* **ni cherchable** — impossible de savoir si « Photoprism » y figure sans
+  ouvrir les 16 pages et les regarder une à une ;
+* **ni comparable** — on ne peut pas *differ* une v4 contre la v3 ;
+* **ni citable** depuis une issue, un commit ou une spécification ;
+* **ni accessible** aux lecteurs d'écran ;
+* **ni visible** d'aucune chaîne automatique.
 
-**Il ne contient aucun texte extractible.** 16 pages, 18 images, zéro
-caractère récupérable.
+La démonstration a été faite à nos dépens : ce document était **déjà la
+référence** pendant qu'un audit interne affirmait le contraire, faute de
+pouvoir le lire. L'écart n'était pas dans les faits, il était dans le format.
 
-Ce n'est pas un détail de forme. Un document de référence que seule une
-lecture humaine peut consulter n'est ni cherchable, ni comparable d'une
-version à l'autre, ni citable depuis une issue, ni accessible aux lecteurs
-d'écran — et il échappe à toute chaîne automatique.
+**Le PDF reste la forme diffusée ; le texte est la forme vérifiable.** Les
+deux doivent avancer ensemble — une transcription qui prend du retard est
+pire qu'aucune, parce qu'on la croit à jour.
 
-La démonstration est faite : ce document existait et était la référence
-pendant qu'un audit interne affirmait le contraire, faute de pouvoir le lire.
+## Points relevés à la lecture
 
-**À produire** : une version texte ou Markdown du même contenu, à côté. Le
-PDF reste la forme diffusée ; le texte devient la forme vérifiable. C'est ce
-que fait déjà `docs/dossiers/anssi/` pour le dossier ANSSI.
+| | |
+|---|---|
+| Page 2 | « pour des **pitsoyens** libres » → *citoyens* |
+| Pied de page | `v3.0.0-alpha.2` alors qu'**alpha.4** est publiée |
+| Page 14 | annonce **128 modules** ; le dépôt en porte **174** |
+| Page 5 | **OnlyOffice / Collabora** : seule des onze fonctions montrées sans paquet |
+| Liens | `radio.gk2.secubox.in`, `all.gk2.net` — adresses du **nœud de développement** |
+| Page 15 | engage des **tarifs** (49 / 69 / 99 €/mois) — seul engagement contractuel |
+
+Analyse complète :
+[`../../audits/ANALYSE-DOCUMENTS-REFERENCE.md`](../../audits/ANALYSE-DOCUMENTS-REFERENCE.md)
