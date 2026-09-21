@@ -1,3 +1,30 @@
+secubox-billets (0.8.59-1~bookworm5) bookworm; urgency=medium
+
+  * ERREUR 153 : `referrerpolicy="no-referrer"` CASSAIT LES EMBEDS YOUTUBE
+    (ref #1372). `sanitize.py` forcait cet attribut sur chaque iframe depuis
+    le durcissement anti-SSRF du 11 juillet. YouTube a resserre depuis sa
+    verification d'integration : il EXIGE un referent pour valider le
+    domaine qui embarque. Sans referent, il refuse, et le lecteur affiche
+    « erreur 153 » a la place de la video.
+  * LE CODE N'A PAS CHANGE ; L'EXIGENCE D'EN FACE, OUI. Le durcissement
+    d'origine etait defendable — ne rien dire au tiers. Il est devenu une
+    panne.
+  * LA PAGE SE CONTREDISAIT ELLE-MEME : son en-tete envoie
+    `Referrer-Policy: strict-origin-when-cross-origin`, et l'attribut de
+    l'iframe disait `no-referrer`. On aligne les deux sur l'en-tete, qui
+    n'envoie que l'ORIGINE et jamais le chemin : YouTube obtient de quoi
+    valider, et l'article precis que lit la personne ne fuite pas.
+  * L'ATTRIBUT `allow` ETAIT PERDU a la reecriture — il figurait dans la
+    liste blanche mais la forme canonique ne le reemettait pas. Plein ecran
+    et lecture automatique etaient donc refuses, et vue.js devait les
+    reposer a la main. Restitue, borne a ce dont un lecteur video a besoin :
+    ni camera, ni micro, ni geolocalisation.
+  * POURQUOI LE FIL JOUAIT ET PAS LA PAGE BILLET : le fil construit un embed
+    NU, la page billet sert la forme canonique stockee — celle qui portait
+    l'attribut fautif.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 17:57:58 +0200
+
 secubox-billets (0.8.59-1~bookworm4) bookworm; urgency=medium
 
   * MODE SOUVERAIN POUR LES EMBEDS TIERS (ref #1372). L'iframe YouTube

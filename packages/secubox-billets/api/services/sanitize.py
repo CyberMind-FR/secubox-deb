@@ -27,6 +27,30 @@ _EMBED_ATTRS = {
     "span": {"class"},
 }
 _IFRAME_SANDBOX = "allow-scripts allow-same-origin allow-popups allow-presentation"
+
+# `no-referrer` CASSAIT LES EMBEDS YOUTUBE (#1372, erreur 153 du lecteur).
+#
+# Le durcissement d'origine (juillet, travail anti-SSRF) etait defendable :
+# ne rien dire au tiers. Mais YouTube a resserre depuis sa verification
+# d'integration — il EXIGE un referent pour valider le domaine qui embarque.
+# Sans referent, il refuse, et le lecteur affiche « erreur 153 » a la place
+# de la video. Le code n'a pas change ; l'exigence d'en face, oui.
+#
+# `strict-origin-when-cross-origin` n'envoie que l'ORIGINE
+# (https://billets.gk2.secubox.in), jamais le chemin : YouTube obtient ce
+# qu'il lui faut pour valider, et l'article precis que lit la personne ne
+# fuite pas. C'est aussi EXACTEMENT ce que la page envoie deja dans son
+# en-tete `Referrer-Policy` — l'attribut de l'iframe la contredisait.
+_IFRAME_REFERRER = "strict-origin-when-cross-origin"
+
+# L'ATTRIBUT `allow` ETAIT PERDU A LA REECRITURE. Il figure pourtant dans la
+# liste blanche d'attributs, mais la forme canonique ne le reemettait pas :
+# le plein ecran et la lecture automatique etaient donc refuses au lecteur,
+# et vue.js devait les reposer a la main apres coup. On le rend ici, borne a
+# ce dont un lecteur video a besoin — pas de camera, pas de micro, pas de
+# geolocalisation.
+_IFRAME_ALLOW = ("accelerometer; autoplay; clipboard-write; encrypted-media; "
+                 "gyroscope; picture-in-picture; fullscreen")
 _IFRAME_RE = re.compile(r"<iframe\b[^>]*>(?:\s*</iframe>)?", re.IGNORECASE | re.DOTALL)
 
 
@@ -65,7 +89,8 @@ def _harden_iframes(html: str, allowed_hosts: set[str]) -> str:
             f'<iframe src="{escape(src, quote=True)}" '
             f'width="{escape(width, quote=True)}" height="{escape(height, quote=True)}" '
             f'title="{escape(title, quote=True)}" loading="lazy" '
-            f'sandbox="{_IFRAME_SANDBOX}" referrerpolicy="no-referrer" '
+            f'sandbox="{_IFRAME_SANDBOX}" referrerpolicy="{_IFRAME_REFERRER}" '
+            f'allow="{_IFRAME_ALLOW}" '
             f'allowfullscreen></iframe>'
         )
     return _IFRAME_RE.sub(repl, html)
