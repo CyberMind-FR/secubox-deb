@@ -36,15 +36,40 @@
 {%- set cover = (billet.media | selectattr('thumb') | list | first) if billet.media else None -%}
 {%- set poster = ('/media/' ~ cover.thumb) if cover else (billet.poster or billet.embed_snapshot_url) -%}
 {%- set joue = billet.embed_html and billet.embed_is_video -%}
+{#- MODE SOUVERAIN (#1372).
+
+    Un embed PeerTube vient de NOTRE instance : le charger d'emblee ne fait
+    sortir aucune donnee, et la lecture demarre tout de suite. Un embed
+    YouTube, lui, part chez un tiers DES L'ANALYSE DE LA PAGE — avant tout
+    clic, avant tout consentement, et pour un lecteur qui n'a peut-etre pas
+    l'intention de regarder.
+
+    Ce n'est pas qu'une question de principe : c'est aussi ce qui rendait
+    visible l'erreur 153 du lecteur YouTube sur une page qu'on venait juste
+    d'ouvrir. Un refus d'integration s'affichait a la place de l'image, sans
+    que personne n'ait rien demande.
+
+    On separe donc les deux :
+      souverain  -> l'iframe porte son `src`, elle charge tout de suite
+      tiers      -> l'iframe porte `data-src`, et n'est armee qu'au CLIC
+
+    Le lecteur voit l'instantane local — present pour les 82 billets YouTube —
+    et decide. S'il ne clique pas, aucune requete ne quitte la box. C'est
+    exactement ce que la page 11 du guide produit promet.                  -#}
+{%- set souverain = is_pt or not is_yt -%}
+{%- set cadre_src = billet.embed_html|replace('www.youtube.com/embed/', 'www.youtube-nocookie.com/embed/')|replace('youtube.com/embed/', 'youtube-nocookie.com/embed/') -%}
 
 <main class="vue-wrap">
 <article class="h-entry billet billet-full vue-billet" data-cat="{{ billet.cat }}" data-slug="{{ billet.slug }}">
 
   <!-- L'ECRAN : identique à celui des cartes du fil, en grand. -->
   <div class="vue-stage screen{{ '' if joue or poster else ' flat' }}" id="scene">
-    {% if prov %}<span class="provider {{ prov }}">{{ 'PeerTube · souverain' if is_pt else 'YouTube' }}</span>{% endif %}
+    {% if prov %}<span class="provider {{ prov }}">{{ 'PeerTube · souverain' if is_pt else 'YouTube · clic pour charger' }}</span>{% endif %}
     {% if poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}
-    {% if joue %}<div class="frame live">{{ billet.embed_html|safe }}</div>
+    {% if joue and souverain %}<div class="frame live">{{ cadre_src|safe }}</div>
+    {% elif joue %}{# tiers : arme, pas charge — voir MODE SOUVERAIN plus haut #}
+    <div class="frame differe" data-differe="1">{{ cadre_src|replace(' src=', ' data-src=')|safe }}</div>
+    <div class="glyph"><div class="play-badge">▶</div></div>
     {% else %}<div class="glyph"><div class="play-badge">{{ '▶' if billet.embed_is_video else '✎' }}</div></div>{% endif %}
 
     <!-- couche CRT : lignes de balayage + vignette, purement décorative -->

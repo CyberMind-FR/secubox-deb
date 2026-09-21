@@ -1,3 +1,33 @@
+secubox-billets (0.8.59-1~bookworm4) bookworm; urgency=medium
+
+  * MODE SOUVERAIN POUR LES EMBEDS TIERS (ref #1372). L'iframe YouTube
+    portait son `src` DANS LE HTML : la requete partait chez le tiers des
+    l'analyse de la page — avant tout clic, avant tout consentement, et pour
+    un lecteur qui n'avait peut-etre pas l'intention de regarder.
+  * CE N'EST PAS QU'UNE QUESTION DE PRINCIPE. C'est aussi ce qui rendait
+    visible l'ERREUR 153 du lecteur YouTube — un refus d'integration —
+    affiche a la place de l'image sur une page qu'on venait d'ouvrir.
+  * Desormais : PeerTube (notre instance) charge tout de suite, il ne fait
+    sortir aucune donnee. YouTube est ARME mais pas charge — `data-src` au
+    lieu de `src` — et le CLIC vaut consentement. Le lecteur voit
+    l'instantane LOCAL, present pour les 82 billets YouTube, et decide.
+    S'il ne clique pas, aucune requete ne quitte la box.
+  * Les URL YouTube sont reecrites en youtube-nocookie.com, deja presente
+    dans la liste frame-src du Hall.
+  * Le bandeau dit la verite : « YouTube · clic pour charger » au lieu du
+    seul nom du fournisseur.
+  * `.frame.differe` est invisible ET non cliquable : sans cela il
+    recouvrirait l'instantane et avalerait le clic qui sert justement de
+    consentement. `visibility` et non `display:none` — un iframe masque par
+    display puis revele est re-cree par certains navigateurs, ce qui ferait
+    repartir la lecture depuis zero au lieu de reprendre.
+  * C'est ce que la page 11 du guide produit promet : « blocage des
+    traqueurs », « vos donnees ne quittent pas votre box ».
+  * 269 billets : 82 YouTube, 147 PeerTube. Les 147 souverains ne changent
+    pas de comportement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 17:05:20 +0200
+
 secubox-billets (0.8.59-1~bookworm3) bookworm; urgency=medium
 
   * « TROP VITE — REESSAYEZ » REPROCHAIT L'INVERSE DE CE QUI S'ETAIT PASSE

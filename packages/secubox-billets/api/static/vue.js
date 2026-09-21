@@ -35,8 +35,12 @@
     return null;
   }
 
-  var ifr = scene ? scene.querySelector(".frame.live iframe") : null;
-  var src0 = ifr ? (ifr.getAttribute("src") || "") : "";
+  // MODE SOUVERAIN (#1372). Un embed tiers est ARME mais pas charge : son
+  // iframe porte `data-src`, pas `src`, et aucune requete ne quitte la box
+  // tant que le lecteur n'a pas clique. On accepte donc les deux formes.
+  var ifr = scene ? scene.querySelector(".frame.live iframe, .frame.differe iframe") : null;
+  var differe = !!(scene && scene.querySelector(".frame.differe"));
+  var src0 = ifr ? (ifr.getAttribute("src") || ifr.getAttribute("data-src") || "") : "";
   var base = 0, t0 = 0, joue = false;
 
   function lance(muted, at) {
@@ -48,10 +52,24 @@
     base = at || 0; t0 = performance.now(); joue = true;
     if (scene) scene.classList.add("playing");
   }
+  // LE CLIC EST LE CONSENTEMENT. Tant qu'il n'a pas eu lieu, le lecteur voit
+  // l'instantane local et rien ne part chez le tiers. Une seule fois : rearmer
+  // rechargerait le lecteur en cours de lecture.
+  if (differe && scene) {
+    var arme = false;
+    scene.addEventListener("click", function () {
+      if (arme || !ifr || !src0) return;
+      arme = true;
+      var c = scene.querySelector(".frame.differe");
+      if (c) c.className = "frame live";
+      lance(false, LS.get("bpos:" + slug, 0));
+    });
+  }
+
   function pos() { return joue ? base + (performance.now() - t0) / 1000 : base; }
   function retiens() { if (slug && joue) LS.set("bpos:" + slug, Math.max(0, Math.floor(pos()))); }
 
-  if (ifr && src0 && embedSrc(src0, false, 0)) {
+  if (ifr && src0 && embedSrc(src0, false, 0) && !differe) {
     // On REPREND là où le fil s'était arrêté, avec le son.
     lance(false, LS.get("bpos:" + slug, 0));
     setInterval(retiens, 4000);

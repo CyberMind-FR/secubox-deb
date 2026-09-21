@@ -34,6 +34,17 @@
 .vue-stage::after{content:"";position:absolute;left:0;top:0;height:3px;width:100%;background:var(--tone);opacity:.9;z-index:9}
 .vue .frame{opacity:1}                        /* hors carte : l'embed est visible d'emblée */
 .vue .frame.live{z-index:2}
+
+/* MODE SOUVERAIN (#1372). Le cadre d'un embed TIERS existe dans le DOM mais
+   son iframe ne porte pas de `src` : rien n'est charge. Il doit donc rester
+   INVISIBLE et NON CLIQUABLE, sinon il recouvrirait l'instantane local et
+   avalerait le clic qui, justement, sert de consentement.
+
+   `visibility` et non `display:none` : un iframe en display:none que l'on
+   revele ensuite est re-cree par certains navigateurs, ce qui ferait repartir
+   la lecture depuis zero au lieu de reprendre. */
+.vue .frame.differe{visibility:hidden;pointer-events:none;z-index:0}
+.vue-stage:has(.frame.differe) .glyph{cursor:pointer}
 .vue .glyph{opacity:.85}
 .vue-stage .poster{filter:saturate(.95)}
 .vue-stage.playing .poster,.vue-stage.playing .glyph{opacity:0;transition:opacity .35s}
