@@ -42,6 +42,12 @@ de la même manière :
 Le dossier liste sept fonctions. Six sont **réalisées**, la septième est
 correctement annoncée comme future.
 
+> **Avertissement ajouté après coup.** Cette section a d'abord conclu qu'il
+> n'existait **aucun écart de type 1**. C'était faux, et la §2.3 documente
+> celui qui avait été manqué. Le défaut de méthode est explicite : cette
+> section compare le dossier au **code source**, et le code source n'est pas
+> ce que les utilisateurs reçoivent.
+
 | Fonction annoncée | Verdict | Preuve |
 |---|---|---|
 | Terminaison et routage des VHOST | ✅ | `packages/secubox-haproxy` + `haproxyctl` |
@@ -172,6 +178,122 @@ n'a pas frappé cette fois.
 **Aucune image ESPRESSObin n'a donc encore été produite.** L'affirmation du
 dossier reste au conditionnel (« envisagé »), ce qui la sauve ; elle
 deviendrait fausse à l'indicatif.
+
+### 2.3 L'ÉCART DE TYPE 1 QUE CET AUDIT AVAIT MANQUÉ
+
+*Ajouté le 21 septembre, après avoir passé l'audit au prompt de contradiction
+externe. Il contredit la conclusion la plus flatteuse de la §1 — « aucun écart
+de type 1 » — et c'est le plus grave de tout ce document.*
+
+#### La question que l'audit n'avait pas posée
+
+L'audit comparait le **document** au **code source**. Il n'a jamais demandé
+**ce que les utilisateurs reçoivent réellement**.
+
+Or entre le code et l'utilisateur il y a un canal : `apt.secubox.in`. Et ce
+canal dit autre chose que la source.
+
+#### Ce que le dépôt publié contient
+
+Index `bookworm/main/binary-arm64`, relevé le 21 septembre :
+
+| | |
+|---|---|
+| paquets publiés | 169 |
+| **en retard sur la source** | **138 sur 152 communs — 91 %** |
+| sources **jamais publiées** en arm64 | **22** |
+
+Exemples : `secubox-billets` publié en **0.8.10** contre **0.8.59** en source ;
+`secubox-waf-ng` en **1.5.11** contre **1.18.4**. Parmi les jamais publiés :
+`secubox-acces`, `secubox-sbxos`, `secubox-ndpid-engine`.
+
+#### Et il livre encore ce qui est réputé purgé
+
+**CrowdSec et mitmproxy sont décommissionnés du code et de `gk2`. Le dépôt
+publié les distribue toujours :**
+
+```
+Package: secubox-crowdsec    1.1.1-1~bookworm2
+Package: secubox-mitmproxy   1.2.0-1~bookworm1
+```
+
+Vingt paquets publiés référencent CrowdSec. Deux le font en dépendance :
+
+| paquet publié | lien |
+|---|---|
+| `secubox-lite 1.1.0` | **`Depends: crowdsec`** — dépendance **dure** |
+| `secubox-full 1.3.0` | `Recommends: crowdsec` |
+
+Le `secubox-full` de la **source**, lui, est propre : `Recommends:
+wireguard-tools`, aucun CrowdSec. L'écart est donc entièrement dans le canal.
+
+#### Pourquoi personne ne l'a vu
+
+**Aucune publication n'a abouti depuis au moins le 5 septembre.** Huit
+exécutions de `release.yml`, toutes en échec ou annulées, sur deux semaines.
+
+C'est le motif qui traverse tout cet audit : **un dépôt APT périmé ressemble
+exactement à un dépôt à jour.** Il répond, il sert des paquets, ses signatures
+sont valides. Rien, dans son fonctionnement normal, ne dit qu'il a cessé de
+suivre la source.
+
+#### Pourquoi c'est un écart de type 1, et le plus grave
+
+Le dossier annonce en §7 une « installation de bout en bout **reproductible** ».
+Une appliance installée aujourd'hui depuis le canal officiel :
+
+* reçoit un logiciel périmé à 91 % ;
+* peut installer `secubox-crowdsec` et `secubox-mitmproxy`, **deux composants
+  décommissionnés** ;
+* et si elle choisit le profil `lite` — celui de l'ESPRESSObin —, elle
+  installe CrowdSec **obligatoirement**.
+
+Une appliance de sécurité qui livre des composants retirés parce qu'ils ne
+servaient plus à rien, c'est exactement la « surface d'attaque minimale » prise
+à revers. Et cela invalide, en l'état, la reproductibilité annoncée : ce qui
+sort du canal n'est pas ce que la source décrit.
+
+#### Ce qui a été fait
+
+*Repris le 21 septembre, directement sur `gk2` — la voie CI restant morte
+faute du secret `GPG_PRIVATE_KEY`, que seul le porteur du dépôt peut poser.*
+
+| | |
+|---|---|
+| `secubox-crowdsec` | **retiré** du dépôt |
+| `secubox-mitmproxy` | **retiré** du dépôt |
+| `secubox-lite` | republié en 1.1.0-2 — `Recommends: wireguard-tools`, plus de CrowdSec |
+| `secubox-full`, `secubox-isp` | republiés propres |
+| `secubox-waf-ng` | `Conflicts`/`Replaces: secubox-mitmproxy, secubox-crowdsec` |
+| `secubox-toolbox-ng` | `Conflicts`/`Replaces: secubox-mitmproxy` |
+| 9 paquets courants | publiés, dont `secubox-acces` et `secubox-signal` jamais parus |
+
+**L'ordre n'était pas indifférent** : publier les méta-paquets propres
+d'abord, vérifier qu'ils ne dépendent plus de rien de purgé, et supprimer
+seulement ensuite. L'inverse aurait rendu `secubox-lite` non installable.
+
+**Et déclarer ne remplace pas retirer, ni l'inverse.** Retirer un paquet de
+l'index empêche de l'**installer** ; cela ne touche pas les appliances qui
+l'ont **déjà**. Sans `Conflicts`, une box portant encore `secubox-crowdsec` le
+garderait indéfiniment — un composant que plus personne ne configure et qui ne
+protège rien.
+
+Vérifié par HTTP, du point de vue d'un client : 169 paquets servis, les deux
+purgés absents, `InRelease` resigné, *Good signature from SecuBox APT
+Repository*.
+
+**Reste** : 13 paquets publiés portent encore un `Recommends`/`Suggests` vers
+CrowdSec ou mitmproxy. Liens **mous** — apt ignore une recommandation
+insatisfiable — et leur source est déjà propre ; ils disparaîtront à mesure
+que ces paquets seront republiés.
+
+#### Ce que cela apprend sur la méthode de l'audit
+
+La §9 dit : « quand un document justifie une **absence**, c'est là qu'il faut
+aller mesurer ». Cet écart ajoute une seconde règle, et elle porte plus loin :
+
+**auditer le code ne suffit pas — il faut auditer ce qui est LIVRÉ.** Entre les
+deux il y a une chaîne qui peut tomber en silence, et qui est tombée.
 
 ---
 
