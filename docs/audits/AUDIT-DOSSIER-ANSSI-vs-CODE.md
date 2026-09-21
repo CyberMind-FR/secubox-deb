@@ -73,23 +73,105 @@ existe : **16 modules**, dont `waf`, `haproxy`, `vortex-firewall`, `certs`,
 **Écart de type 2.** Le document se sous-vend. La correction est d'une ligne
 dans le dossier, pas dans le code.
 
-### 2.2 Mais la cible ESPRESSObin n'est **jamais construite**
+### 2.2 La cible ESPRESSObin n'est jamais construite — et on savait mal pourquoi
 
 Le dossier écrit : « Un profil Edge/WAF plus minimal est envisagé pour des
 plateformes telles qu'ESPRESSObin. »
 
-- Les configurations existent : `board/espressobin-v7`, `board/espressobin-ultra`.
-- **La CI les exclut** de la matrice de construction (`build-image.yml`,
-  réf. #503) : seuls `mochabin`, `vm-x64` et `rpi400` sont bâtis.
+Les configurations existent (`board/espressobin-v7`, `board/espressobin-ultra`)
+et **la CI les exclut** depuis #503, dont la justification écrite était :
 
-Le profil existe, la carte est décrite, et **aucune image n'est jamais
-produite ni démarrée** pour cette cible. L'annonce reste au conditionnel
-(« envisagé »), ce qui la sauve — mais si elle passe un jour à l'indicatif,
-elle deviendra fausse tant que la CI ne bâtira pas.
+> those board builds fail in the cross-arm64 chroot stage and block the
+> downstream release.yml job for every image
 
-**À faire** : soit rétablir la construction ESPRESSObin en CI, soit retirer
-la mention de la carte. La laisser sans la construire est le seul choix qui
-ne se voit pas et se paie plus tard.
+**Cette phrase était fausse sur ses deux moitiés.** L'audit a déclenché une
+construction pour la vérifier, plutôt que de recopier la justification.
+
+#### Le blocage de la publication n'existait plus
+
+Il a été corrigé en **#1294** : le job `release` porte désormais
+`if: !cancelled()`, posé précisément parce que la chute de `mochabin/full` sur
+`v3.0.0-alpha.4` avait emporté cinq images abouties. Un échec ESPRESSObin ne
+coûtait donc plus, depuis des semaines, que sa propre jambe. **L'exclusion
+survivait à sa raison d'être.**
+
+#### Et l'échec n'était pas dans le chroot
+
+Le chroot aboutissait. Le journal de la construction témoin dit :
+
+```
+6/7 Construction image GPT 3584M...
+Image trop petite : ROOT ferait 1024 MiB, 3072 minimum
+```
+
+Arithmétique : `IMG 3584 − DATA 1536 − ESP 1024 = ROOT 1024`.
+
+`ESP 1024` et `DATA 1536` sont des parts **fixes**, dimensionnées pour une
+image `full` de 8 à 12 Gio où elles pèsent 20 à 30 %. Sur les 3584 MiB de
+l'ESPRESSObin elles prennent **72 % du disque** avant le moindre paquet.
+
+Et ces 3584 MiB ne sont pas une erreur : `# Image size: 3.5G for 4GB eMMC
+compatibility`, confirmé par le README de la carte — « 3.5GB max » pour les
+modèles à eMMC 4 Go. **Agrandir l'image l'aurait rendue inflashable sur le
+matériel visé.**
+
+L'image était donc **arithmétiquement impossible depuis toujours**. Personne
+ne l'avait vu parce que personne ne la bâtissait : **l'exclusion masquait le
+défaut qu'on lui imputait.**
+
+#### Troisième couche : la CI écrasait le profil déclaré par la carte
+
+`board/espressobin-v7/config.mk` déclare, en connaissant le matériel :
+
+```make
+# Profil Lite (RAM limitée 1-2 GB)
+SECUBOX_PROFILE=secubox-lite
+SWAP_SIZE=512M
+```
+
+Mais la matrice CI passait `profile: ["full","isp"]` **en dur pour toutes les
+cartes**, et `build-image.sh` applique `--profile` de manière
+inconditionnelle. La CI répondait donc **`full` — 95 modules** à une carte qui
+demande `lite`, sur un Armada 3720 dual-core A53.
+
+#### Ce qui a été corrigé (#1318)
+
+| | |
+|---|---|
+| Matrice | dérivée des `config.mk` — espressobin-v7 bâtit **lite + isp**, les autres cartes inchangées |
+| Découpage | proportionnel sous 6144 MiB : ESP 256 / DATA 512 ; minimum ROOT dépendant du **profil** (3072 pour `full`, 2048 sinon) |
+| Exclusion #503 | levée — sa raison avait disparu avec #1294 |
+
+Vérifié pour chaque carte et chaque profil : `espressobin-v7/lite` obtient
+ROOT 2816 ≥ 2048 (**passe**), `espressobin-v7/full` obtient 2816 < 3072
+(**refusé**, ce qui est correct — il ne tient pas). Les cartes ≥ 6 Gio sont
+inchangées.
+
+#### Ce qui reste, et qui n'est pas propre à cette carte
+
+La construction bute désormais plus loin, à l'étape 3/7, sur un défaut
+**connu, intermittent et commun à toutes les images arm64** :
+
+```
+E: Could not read from .../bookworm-security_InRelease
+   - getline (12: Cannot allocate memory)
+```
+
+Le dépôt le documente déjà dans `runner-headroom` : « la jambe qui tombe
+change d'un run à l'autre […] ce n'est pas le profil, c'est la pression
+mémoire du runner ». `qemu-user` double l'empreinte de chaque processus émulé,
+et apt lit ses index en mémoire. La parade de #1294 — 12 Gio de swap — a
+réduit la fréquence sans supprimer la panne.
+
+Une configuration apt frugale a été ajoutée dans le chroot (`Languages
+"none"`, `GzipIndexes`, acquisition sérielle) : aucune n'y était posée, apt
+tournait avec ses défauts. **Cela réduit une probabilité, cela ne ferme pas le
+défaut** — et un run vert ne prouvera pas le contraire, seulement que la panne
+n'a pas frappé cette fois.
+
+**Aucune image ESPRESSObin n'a donc encore été produite.** L'affirmation du
+dossier reste au conditionnel (« envisagé »), ce qui la sauve ; elle
+deviendrait fausse à l'indicatif.
 
 ---
 
@@ -239,6 +321,7 @@ Mais la V1.2 devra intégrer ce qui a changé depuis :
 | §4.2 cinq motifs CVE inertes | **Corrigé** (#1310), 159/159 chargés |
 | §2.1 profil Edge/WAF classé « à développer » alors qu'il existe | **Documenté ici** ; correction à porter en V1.2 |
 | Mesure FP/FN faite et non publiée | **Documentée ici** ; à porter en V1.2 |
+| §2.2 ESPRESSObin exclue de la CI sur une justification **périmée et inexacte** | **Corrigé** (#1318) : matrice dérivée, découpage proportionnel, exclusion levée |
 
 ## 8. Écarts ouverts, par ordre de gravité
 
@@ -247,12 +330,38 @@ Mais la V1.2 devra intégrer ce qui a changé depuis :
    et se taire de la même manière.
 2. **Le collecteur RGPD ne tourne pas** (#1311). 170 Mo collectés, jamais
    réconciliés, alors qu'une saisine CNIL est en cours.
-3. **ESPRESSObin annoncé, jamais bâti** (§2.2). Soit on le construit, soit on
-   retire la mention.
-4. **Aucun format d'événement normalisé** (§3). Annoncé futur, donc pas un
+3. **ESPRESSObin : trois couches retirées, une quatrième reste** (§2.2). La
+   matrice, le découpage et l'exclusion sont corrigés (#1318). La
+   construction bute maintenant sur le défaut mémoire apt/qemu, **commun à
+   toutes les images arm64** et seulement atténué. Tant qu'aucune image n'est
+   produite, la mention du dossier doit rester au conditionnel.
+4. **Le défaut mémoire apt sous émulation n'est pas fermé.** Il frappe au
+   hasard, toutes cartes confondues, et la parade actuelle est
+   probabiliste — 12 Gio de swap, plus une configuration apt frugale. Une
+   construction d'image qui réussit *en moyenne* n'est pas une chaîne de
+   production reproductible, ce que §7 exige pourtant en premier point.
+5. **Aucun format d'événement normalisé** (§3). Annoncé futur, donc pas un
    mensonge — mais c'est le verrou de toute la vision Mesh.
-5. **threatmesh ne signe rien** (§6). Le paquet existe ; la condition de
+6. **threatmesh ne signe rien** (§6). Le paquet existe ; la condition de
    confiance n°1 du dossier n'a pas commencé.
+
+---
+
+## 9. Ce que cet audit a appris sur les audits
+
+L'écart §2.2 n'a pas été trouvé en lisant le code : il a été trouvé en
+**déclenchant une construction** pour vérifier une justification écrite.
+
+La justification de #503 était consignée, datée, et citée de bonne foi partout
+— y compris dans la première version de cet audit. Elle était fausse sur ses
+deux moitiés. Une raison écrite vieillit exactement comme le code qu'elle
+décrit, à ceci près que **personne ne la relit** : elle est devenue la preuve
+qu'on n'avait pas besoin de vérifier.
+
+La règle qui en sort : quand un document justifie une **absence** — une carte
+non bâtie, un test non lancé, une fonction désactivée — c'est là qu'il faut
+aller mesurer. Une fonction présente se vérifie en la regardant ; une absence
+ne se vérifie qu'en essayant de la lever.
 
 ---
 
