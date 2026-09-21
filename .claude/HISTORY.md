@@ -5,6 +5,62 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-21 — LE DOSSIER ANSSI CONFRONTÉ AU CODE (ref #1313, #1317)
+
+Le dossier technique ANSSI V1.1 date du 22 août ; le code a un mois de plus.
+Chaque affirmation vérifiable a été confrontée au code, et au comportement
+observé sur gk2 quand c'était possible. Archive versionnée dans
+`docs/dossiers/anssi/` — empreintes SHA-256 et texte extrait, pour qu'un audit
+reste rattachable à **sa** version du document.
+
+### Trois espèces d'écart, parce qu'elles ne se corrigent pas pareil
+
+**Type 1 — le document promet ce que le code ne fait pas.** Le seul vraiment
+grave : il fait dire une chose fausse à un lecteur institutionnel.
+**Aucun trouvé.** Les sept fonctions de §3 ont du code derrière, la septième
+étant correctement annoncée comme future. Et le dossier ne porte aucun vestige
+de CrowdSec ni de mitmproxy, purgés depuis.
+
+**Type 2 — le code fait ce que le document ne dit pas.** Le profil Edge/WAF
+minimal **existe** (`secure-gateway.toml`, 16 modules) alors que §8 le classe
+« à développer ». Et la mesure de faux positifs exigée en §7 a été **faite** le
+20 septembre — 659 requêtes nouvellement qualifiées, zéro faux positif
+vérifié — sans figurer nulle part.
+
+Mais ESPRESSObin est annoncé et **jamais bâti** : les cartes existent dans
+`board/`, la CI les exclut (#503). L'annonce reste au conditionnel, ce qui la
+sauve ; elle deviendra fausse si elle passe à l'indicatif.
+
+**Type 3 — les deux s'accordent, sur une chose creuse.** La plus difficile à
+voir. Trois trouvailles, toutes sur l'objectif §7 « journalisation exploitable
+et traçable », et toutes **silencieuses**.
+
+### L'écart repris : le journal ne disait pas quelle règle avait décidé
+
+`rule_id` était écrit **vide, en dur**, à trois endroits. `Match` ne rendait
+que (catégorie, sévérité, mode) et **jetait** l'identifiant du motif — que la
+boucle tenait pourtant dans la main.
+
+Une ligne disait donc `product_absent_probes` sans dire **lequel** des motifs
+avait tranché. Impossible de savoir si un motif sert encore, de mesurer les
+faux positifs par motif, ou de rattacher un blocage à sa règle : c'est
+l'**explicabilité** que le dossier promet en §6.
+
+`MatchDetail` l'expose ; les trois méthodes existantes gardent leur signature
+(25 appels de test en dépendent). `logEscalate` porte aussi la règle — une
+escalade sans sa règle est aussi opaque qu'une détection sans la sienne.
+
+### L'écart ouvert n°1, et c'est le même mal
+
+Aucun contrôle **motifs chargés ⟷ motifs déclarés** (#1317). Un motif rejeté
+au chargement et un motif qui n'attrape jamais rien produisent exactement la
+même chose : zéro prise, zéro ligne, zéro alerte. Rien ne les sépare — et
+c'est pour ça que cinq motifs CVE ont pu rester inertes.
+
+Corriger cinq motifs sans ce contrôle, c'est recommencer au prochain.
+
+---
+
 ## 2026-09-20 — LE WAF, ET UNE ERREUR DE MESURE QUE J'AI DÛ DÉFAIRE (ref #1310, #1311)
 
 ### D'abord la question : le WAF bloque-t-il encore ?
