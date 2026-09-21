@@ -34,8 +34,16 @@ on:
         type: choice
         options:
           - mochabin
-          - espressobin-v7    # on-demand only — disabled in scheduled CI, ref #503
-          - espressobin-ultra # on-demand only — disabled in scheduled CI, ref #503
+          # espressobin-v7 est REVENU dans la matrice par defaut (#1318) : la
+          # raison de son exclusion (#503) — une jambe en echec qui sautait la
+          # publication de TOUTES les autres — a ete corrigee depuis, le job
+          # `release` portant desormais `if: !cancelled()` (#1294).
+          - espressobin-v7
+          # ultra reste a la demande : son `board/` est le plus maigre du parc
+          # (ni extlinux/, ni boot-usb), donc le moins eprouve. On le rebranche
+          # quand v7 aura tourne quelques fois — pas avant, et pas « parce que
+          # c'est la meme famille ».
+          - espressobin-ultra # a la demande — board/ incomplet, voir #1318
           - vm-x64
           - vm-arm64
           - rpi400
@@ -68,22 +76,44 @@ env:
   DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'bookworm' }}
 
 jobs:
+  # LA MATRICE EST DERIVEE DES CARTES, PLUS CODEE EN DUR (#1318).
+  #
+  # Elle portait `profile: ["full","isp"]` pour TOUTES les cartes, et
+  # `build-image.sh` applique `--profile` de maniere INCONDITIONNELLE : il
+  # ecrase le `SECUBOX_PROFILE` que la carte declare dans son `config.mk`.
+  #
+  # L'ESPRESSObin dit d'elle-meme `SECUBOX_PROFILE=secubox-lite`, avec le
+  # commentaire « RAM limitee 1-2 GB » et `SWAP_SIZE=512M`. La CI repondait
+  # `full`, soit 95 modules sur un Armada 3720 dual-core A53 — le scenario
+  # exact qui avait fait caler le rpi400 (140 unites, 4 Go, aucun swap), sauf
+  # que cette carte a DEUX FOIS MOINS de memoire et QUATRE FOIS MOINS de coeurs.
+  #
+  # La carte sait ce qu'elle peut porter ; la matrice ne savait rien. Ecrire
+  # les profils en YAML revenait a decider a la place de la carte, depuis
+  # l'endroit le moins informe de la chaine. Le job ci-dessous LIT les cartes.
+  matrice:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.calcul.outputs.include }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: calcul
+        run: |
+          set -euo pipefail
+          cartes='${{ inputs.board || github.event.inputs.board || 'defaut' }}'
+          [ "$cartes" = "all" ] && cartes=defaut
+          m=$(python3 .github/scripts/matrice-images.py --cartes "$cartes")
+          echo "$m" | python3 -m json.tool
+          echo "include=$(echo "$m" | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin)["include"]))')" >> "$GITHUB_OUTPUT"
+
   # Build system images
   build-image:
+    needs: matrice
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        # Handle all event types: push (tags), workflow_call, workflow_dispatch
-        # Scheduled / tag-push matrix excludes espressobin-v7 + espressobin-ultra (#503) :
-        # those board builds fail in the cross-arm64 chroot stage and block the
-        # downstream release.yml job for every image even though fail-fast is off.
-        # Operators can still build them on-demand via workflow_dispatch (the
-        # choice list above retains the entries).
-        board: ${{ (github.event_name == 'push' || (inputs.board == 'all' || inputs.board == '')) && fromJson('["mochabin","vm-x64","rpi400"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","vm-x64","rpi400"]') || fromJson(format('["{0}"]', inputs.board || github.event.inputs.board || 'vm-x64'))) }}
-        # Chaque board est décliné en deux profils templatés (#1112) : isp (socle
-        # routeur/FAI propre) et full (isp + apps working du catalogue all.gk2).
-        profile: ["full", "isp"]
+        include: ${{ fromJson(needs.matrice.outputs.include) }}
 
     steps:
       - name: Checkout
