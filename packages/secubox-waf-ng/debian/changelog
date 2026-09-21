@@ -1,3 +1,20 @@
+secubox-waf-ng (1.18.4-1~bookworm4) bookworm; urgency=medium
+
+  * LE CHEMIN DE BLOCAGE AVAIT ETE MANQUE (ref #1313). La 1.18.4-3 renseignait
+    `rule_id` sur la detection et l'escalade, mais PAS sur le blocage : le
+    quatrieme site portait `RuleID: ""` avec une indentation differente, et
+    mon remplacement l'a saute. Verifie sur gk2 avant de le croire corrige :
+    des detections `scanners` sur /.env et /.git/config sortaient encore sans
+    regle APRES redemarrage du nouveau binaire.
+  * C'etait le site qui comptait LE PLUS : une requete BLOQUEE sans sa regle
+    est precisement la decision qu'on ne peut pas expliquer.
+  * Les quatre autres sites d'ecriture ne passent PAS par les motifs —
+    exemption LAN, saut d'inspection de corps, troncature, anomalie d'hote.
+    Un `rule_id` vide y est correct : ces evenements ne viennent d'aucune
+    regle, et leur en inventer une serait pire que le vide.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 09:24:35 +0200
+
 secubox-waf-ng (1.18.4-1~bookworm3) bookworm; urgency=medium
 
   * LE JOURNAL NE DISAIT PAS QUELLE REGLE AVAIT DECIDE (ref #1313).

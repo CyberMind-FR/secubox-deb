@@ -709,10 +709,11 @@ func (s *Server) handler() http.Handler {
 							Path:     rawPath,
 							Category: cat,
 							Severity: sev,
-							// rules.Match does not return a rule ID in its current
-							// signature (returns cat, sev, hit). RuleID is left empty
-							// here; Task 2.x can extend Match to return it if needed.
-							RuleID: "",
+							// C'EST LE CHEMIN DE BLOCAGE, et c'est celui qui compte le
+							// plus (#1313) : une requete BLOQUEE sans sa regle est une
+							// decision qu'on ne peut pas expliquer — exactement ce que
+							// le dossier ANSSI exige en §6.
+							RuleID: motif,
 							Action: action,
 							UA:     r.Header.Get("User-Agent"),
 							Tool:   étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
