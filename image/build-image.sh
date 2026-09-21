@@ -1566,11 +1566,45 @@ case "${IMG_SIZE}" in
   *M|*m) IMG_MIB=${IMG_SIZE%[Mm]} ;;
   *)     IMG_MIB=$(( IMG_SIZE / 1048576 )) ;;
 esac
-ESP_MIB=1024          # portee par plusieurs noyaux — fixe
-DATA_MIB=1536         # part fixe reservee a /data
+# LES PARTS FIXES ETAIENT DIMENSIONNEES POUR UNE IMAGE `full` (#1318).
+#
+# ESP 1024 + DATA 1536 sont justes sur 8 a 12 Gio : ils y pesent 20 a 30 %.
+# Sur les 3584 MiB de l'ESPRESSObin v7 — une taille DELIBEREE et documentee,
+# « 3.5G for 4GB eMMC compatibility » — ils prennent 72 % du disque avant
+# qu'on ait installe le moindre paquet, et il ne reste que 1024 MiB de ROOT
+# contre 3072 exiges. L'image etait donc ARITHMETIQUEMENT IMPOSSIBLE, et
+# personne ne l'avait vu parce que personne ne la batissait : l'exclusion CI
+# (#503) masquait le defaut qu'on lui imputait.
+#
+# Agrandir l'image n'etait PAS la solution : elle deviendrait inflashable sur
+# les cartes a eMMC 4 Go, que le README cible explicitement.
+#
+# On reduit donc les parts quand l'image est petite. L'ESP ne porte qu'un
+# noyau et son initrd — une soixantaine de Mio ; 256 laisse de la marge pour
+# un second noyau. DATA est un point de montage VIDE a la construction : il
+# grandit a l'execution, et sur les machines du parc /data est de toute facon
+# un volume separe.
+if (( IMG_MIB < 6144 )); then
+  ESP_MIB=256
+  DATA_MIB=512
+  log "Image petite (${IMG_MIB} MiB) — parts reduites : ESP ${ESP_MIB}, DATA ${DATA_MIB}"
+else
+  ESP_MIB=1024        # portee par plusieurs noyaux
+  DATA_MIB=1536       # part reservee a /data
+fi
+
+# LE MINIMUM DE ROOT DEPEND DU PROFIL, PAS D'UNE CONSTANTE. 3072 MiB etait le
+# besoin de `full`, applique a tout le monde — y compris a `lite` (37 modules)
+# et `isp`, qui embarquent une fraction du catalogue. Une constante unique
+# refusait de batir des images qui auraient tenu sans peine.
+case "${PROFILE_TAG}" in
+  full) ROOT_MIN=3072 ;;
+  *)    ROOT_MIN=2048 ;;
+esac
+
 ROOT_END=$(( IMG_MIB - DATA_MIB ))
-if (( ROOT_END - ESP_MIB < 3072 )); then
-  echo "Image trop petite : ROOT ferait $(( ROOT_END - ESP_MIB )) MiB, 3072 minimum" >&2
+if (( ROOT_END - ESP_MIB < ROOT_MIN )); then
+  echo "Image trop petite : ROOT ferait $(( ROOT_END - ESP_MIB )) MiB, ${ROOT_MIN} minimum pour le profil ${PROFILE_TAG}" >&2
   exit 1
 fi
 log "Decoupage : ESP ${ESP_MIB} MiB, ROOT $(( ROOT_END - ESP_MIB )) MiB, DATA ${DATA_MIB} MiB"
