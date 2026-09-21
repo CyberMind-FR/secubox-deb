@@ -312,6 +312,38 @@ deb ${APT_SECURITY} ${SUITE}-security main contrib non-free non-free-firmware
 EOF
 ok "Sources APT écrites"
 
+# RÉDUIRE L'APPÉTIT MÉMOIRE D'APT DANS LE CHROOT ÉMULÉ (#1318).
+#
+# `apt-get update` tombe par intermittence sur :
+#     E: Could not read from .../bookworm-security_InRelease
+#        - getline (12: Cannot allocate memory)
+#
+# Le swap de 12 Gio posé en #1294 a réduit la fréquence sans supprimer la
+# panne : qemu-user double l'empreinte de chaque processus émulé, et apt lit
+# ses index EN MÉMOIRE. Ajouter encore du swap traite le symptôme depuis
+# l'extérieur ; on peut aussi demander à apt d'en vouloir moins.
+#
+#   Languages "none"   — les fichiers de traduction pèsent plusieurs Mio par
+#                        suite et ne servent à RIEN dans une image construite
+#                        sans interface interactive.
+#   GzipIndexes        — les index restent compressés sur disque, apt les
+#                        décompresse à la volée. C'est déjà le défaut des
+#                        images de conteneur, pour exactement cette raison.
+#   Queue-Mode access  — une acquisition à la fois plutôt qu'en parallèle :
+#                        on échange de la vitesse contre un pic mémoire plus
+#                        bas, ce qui est le bon sens du marché ici.
+#
+# Ce fichier vit dans l'image finale, et c'est VOULU : une appliance qui met
+# à jour ses paquets sur une carte à 1-2 Go a le même intérêt qu'un chroot
+# émulé à ne pas charger des traductions qu'aucun humain ne lira.
+cat > "${ROOTFS}/etc/apt/apt.conf.d/99secubox-frugal" <<'EOF'
+Acquire::Languages "none";
+Acquire::GzipIndexes "true";
+Acquire::CompressionTypes::Order:: "gz";
+APT::Acquire::Queue-Mode "access";
+EOF
+ok "apt frugal configuré (pas de traductions, index gzip, acquisition série)"
+
 # ── Étape 2 : Configuration base ──────────────────────────────────
 log "2/7 Configuration système de base..."
 
