@@ -1,3 +1,25 @@
+secubox-metrics (1.12.7-1~bookworm2) bookworm; urgency=medium
+
+  * LE COLLECTEUR RGPD NE TOURNAIT PAS (ref #1311). CookieAuditAggregator
+    n'etait instancie NULLE PART hors tests : ni tache dans le lifespan, ni
+    route. 170 Mo de registre ecrits par sbxwaf s'accumulaient sans jamais
+    etre reconcilies, pendant qu'un cache fige au 17 aout donnait l'illusion
+    d'un inventaire a jour.
+  * VINGT TESTS VERTS SUR DU CODE QUE RIEN N'EXECUTAIT. Ils construisaient
+    l'objet eux-memes : ils validaient la logique sans jamais constater que
+    personne ne l'appelait. C'est ainsi qu'un module RGPD a pu dormir un mois
+    avec une saisine CNIL en cours.
+  * Cable : import, config, instanciation, demarrage dans le lifespan, et
+    route GET /api/v1/metrics/cookie-audit gardee par require_lecture — le
+    tableau de bord vie privee annonce dans le guide produit n'avait aucune
+    route pour se remplir.
+  * 7 tests de CABLAGE, distincts des 20 de logique : ils verifient que le
+    collecteur est instancie, demarre et expose. Une suite qui teste une
+    classe orpheline rend la meme couleur verte qu'une suite qui teste une
+    fonction vivante.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 16:21:15 +0200
+
 secubox-metrics (1.12.7-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

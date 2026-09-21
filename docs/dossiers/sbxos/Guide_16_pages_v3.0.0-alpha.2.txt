@@ -284,9 +284,17 @@ Maquettes : SecuMail · Nextcloud Talk · Réunion SecuBox · SecuBBS
 
   Références : CNIL · ANSSI · RGPD (UE) 2016/679
 
-  [À RAPPROCHER] La gestion des consentements et le registre de traitement
-                 sont portés par le collecteur cookie_audit — qui ne tourne
-                 pas (voir issue #1311).
+  [CORRIGÉ le 21/09] La gestion des consentements et le registre de
+                     traitement sont portés par le collecteur cookie_audit.
+                     Il n'était INSTANCIÉ NULLE PART hors tests : ni lecteur
+                     de configuration, ni tâche, ni route — 170 Mo de
+                     registre s'accumulaient sans être réconciliés.
+                     Câblé (#1311) : get_cookie_audit_config() dans le cœur,
+                     aggrégateur démarré dans le lifespan, route
+                     /api/v1/metrics/cookie-audit gardée par require_lecture.
+                     ÉTEINT PAR DÉFAUT — le registre peut peser des centaines
+                     de Mo, l'allumer d'office sur une carte à 1-2 Go
+                     prendrait une décision à la place de l'exploitant.
 
 ════════════════════════════════════════════════════════════════════════
  12/16 — SECUBOX DANS LES TERRITOIRES
@@ -391,7 +399,9 @@ Panneaux : LIBERTÉ · VIE PRIVÉE · SOLIDARITÉ · TERRAINS RÉSILIENTS · AVE
 
   4. ÉDITION COLLABORATIVE — seule fonction montrée sans paquet
      correspondant (page 5). Dans un guide diffusé, une capture est une
-     promesse.
+     promesse. NON CORRIGÉ : livrer OnlyOffice ou Collabora est un chantier,
+     pas une retouche. Deux issues possibles — le livrer, ou retirer la
+     capture. Le laisser tel quel est le seul choix qui trompe.
 
   5. URL — radio.gk2.secubox.in et all.gk2.net sont les adresses du NŒUD DE
      DÉVELOPPEMENT. Un guide public qui les cite expose une machine réelle à
@@ -399,5 +409,13 @@ Panneaux : LIBERTÉ · VIE PRIVÉE · SOLIDARITÉ · TERRAINS RÉSILIENTS · AVE
 
   6. TARIFS — la page 15 engage des prix (49 / 69 / 99 €/mois). C'est le
      seul engagement contractuel du document ; il mérite d'être daté.
+
+  ÉTAT DES ANOMALIES AU 21/09/2026
+
+    corrigé dans le code   collecteur RGPD câblé (#1311)
+    corrigé dans le code   écart motifs déclarés/chargés mesurable (#1317)
+    à corriger dans le PDF typo « pitsoyens », version alpha.2, 128 modules,
+                           URL du nœud de développement
+    à trancher             édition collaborative : livrer ou retirer
 
   Analyse complète : ../../audits/ANALYSE-DOCUMENTS-REFERENCE.md

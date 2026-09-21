@@ -51,21 +51,30 @@ if _ici not in _sys.path:
 from visitor_origin import VisitorOriginAggregator
 from live_hosts import LiveHostsAggregator
 from cert_status import CertStatusAggregator
+from cookie_audit import CookieAuditAggregator
 
 try:
     from secubox_core.config import (
         get_visitor_origin_config,
         get_live_hosts_config,
         get_cert_status_config,
+        get_cookie_audit_config,
     )
 except ImportError:  # dev fallback
     def get_visitor_origin_config(): return {"enabled": False, "window_minutes": 60, "min_count": 5, "top_n": 5, "asn_db_path": "/var/lib/GeoIP/GeoLite2-ASN.mmdb", "nft_table": "secubox_metrics", "nft_set": "seen_src", "nft_family": "inet"}
     def get_live_hosts_config():     return {"enabled": False, "window_minutes": 60, "top_n": 5, "haproxy_socket": "/run/haproxy/admin.sock", "frontend_filter": "*"}
     def get_cert_status_config():    return {"enabled": False, "letsencrypt_live_dir": "/etc/letsencrypt/live", "warn_days": 30, "critical_days": 7}
+    def get_cookie_audit_config():   return {"enabled": False}
 
 visitor_origin_agg = VisitorOriginAggregator(get_visitor_origin_config())
 live_hosts_agg     = LiveHostsAggregator(get_live_hosts_config())
 cert_status_agg    = CertStatusAggregator(get_cert_status_config())
+# LE COLLECTEUR RGPD N'ETAIT INSTANCIE NULLE PART (#1311). Le module existait,
+# avec 20 tests verts et une section de configuration active — mais rien ne le
+# construisait, rien ne le demarrait, et aucune route ne l'exposait. 170 Mo de
+# registre s'accumulaient sans jamais etre reconcilies, pendant qu'un cache
+# fige au 17 aout donnait l'illusion d'un inventaire a jour.
+cookie_audit_agg   = CookieAuditAggregator(get_cookie_audit_config())
 
 from vhost_stats import VhostStatsAggregator, famille  # noqa: E402
 from secubox_core.auth import require_lecture
@@ -137,6 +146,12 @@ async def lifespan(_app):
         asyncio.create_task(visitor_origin_agg.run_forever()),
         asyncio.create_task(live_hosts_agg.run_forever()),
         asyncio.create_task(cert_status_agg.run_forever()),
+        # `run_forever` se garde lui-meme : quand `enabled` est faux il ecrit un
+        # payload vide et se rendort. Le demarrer inconditionnellement est donc
+        # sans risque, et c'est preferable a un `if` ici — un demarrage
+        # conditionnel se serait a nouveau desynchronise de la configuration,
+        # qui est exactement le defaut qu'on repare.
+        asyncio.create_task(cookie_audit_agg.run_forever()),
         asyncio.create_task(_rendre_memoire_glibc()),
     ]
     try:
@@ -901,6 +916,16 @@ async def live_hosts_endpoint():
         content=live_hosts_agg.current(),
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+@app.get("/api/v1/metrics/cookie-audit", dependencies=[Depends(require_lecture)])
+async def cookie_audit_metrics():
+    """Inventaire RGPD des cookies deposes, par vhost (#1311).
+
+    L'agregateur existait sans etre expose : le tableau de bord vie privee
+    annonce dans le guide produit n'avait aucune route pour se remplir.
+    """
+    return cookie_audit_agg.current()
 
 
 @app.get("/api/v1/metrics/cert-status", dependencies=[Depends(require_lecture)])

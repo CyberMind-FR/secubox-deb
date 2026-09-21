@@ -1,3 +1,23 @@
+secubox-waf-ng (1.18.4-1~bookworm6) bookworm; urgency=medium
+
+  * L'ECART « MOTIFS DECLARES vs MOTIFS CHARGES » EST DESORMAIS MESURABLE
+    (ref #1317). Le chargeur comptait les motifs COMPILES et journalisait
+    chaque rejet une fois au demarrage, puis se taisait. Or un motif rejete
+    et un motif qui n'attrape jamais rien produisent EXACTEMENT la meme
+    chose : zero prise, zero ligne, zero alerte. Rien ne les separait — et
+    c'est ce silence qui a laisse cinq motifs CVE inertes (#1310).
+  * `Integrite()` rend declares, charges et LES IDENTIFIANTS des rejetes :
+    savoir qu'il en manque cinq sans savoir lesquels ne permet pas d'agir.
+    Interrogeable a chaud, parce que l'ecart PERSISTE tant que le fichier
+    n'est pas corrige alors qu'une ligne de journal passe une fois.
+  * Le log de rejet dit « ALERTE » : des motifs ecrits et livres qui ne
+    protegent rien ne sont pas une information de niveau info.
+  * 5 tests, dont la survie de la mesure au rechargement A CHAUD — les regles
+    se rechargent sans redemarrage, une mesure valable au seul demarrage
+    laisserait repasser le defaut.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 16:21:15 +0200
+
 secubox-waf-ng (1.18.4-1~bookworm5) bookworm; urgency=medium
 
   * DECLARE PRENDRE LA PLACE DE secubox-mitmproxy ET secubox-crowdsec

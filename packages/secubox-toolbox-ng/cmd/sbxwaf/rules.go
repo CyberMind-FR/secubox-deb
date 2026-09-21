@@ -115,6 +115,20 @@ type rulesData struct {
 		id   string
 		data compiledCategory
 	}
+
+	// DECLARES vs CHARGES — l'ecart qui n'existait nulle part (#1317).
+	//
+	// Le chargeur comptait les motifs COMPILES et journalisait chaque rejet,
+	// une fois, au demarrage. Puis il se taisait. Or un motif rejete et un
+	// motif qui n'attrape jamais rien produisent EXACTEMENT la meme chose :
+	// zero prise, zero ligne, zero alerte. Rien ne les separait.
+	//
+	// C'est ce silence qui a laisse cinq motifs CVE inertes — ecrits, relus,
+	// livres, versionnes — sans que personne ne s'en apercoive (#1310). Les
+	// corriger sans rendre l'ecart MESURABLE, c'etait accepter de recommencer
+	// au prochain.
+	declares int
+	rejetes  []string
 }
 
 // Rules is a hot-reloadable, RW-locked WAF rule set.
@@ -242,10 +256,17 @@ func loadRulesJSON(path string) *rulesData {
 			if p.Pattern == "" {
 				continue
 			}
+			// Compte AVANT la tentative : un motif declare le reste, qu'il
+			// compile ou non. C'est la difference entre les deux nombres qui
+			// porte l'information.
+			data.declares++
 			// Case-insensitive prefix, matching Python re.compile(pat, re.IGNORECASE).
 			re, err := regexp.Compile("(?i)" + p.Pattern)
 			if err != nil {
 				log.Printf("sbxwaf/rules: category %q pattern %q failed to compile (skipped): %v", catID, p.ID, err)
+				// L'IDENTIFIANT, PAS SEULEMENT LE COMPTE. Savoir qu'il en
+				// manque cinq sans savoir lesquels ne permet pas d'agir.
+				data.rejetes = append(data.rejetes, catID+"/"+p.ID)
 				continue
 			}
 			cc.patterns = append(cc.patterns, compiledPattern{
@@ -264,6 +285,13 @@ func loadRulesJSON(path string) *rulesData {
 	}
 
 	log.Printf("sbxwaf/rules: loaded %d patterns in %d categories from %s", total, len(data.cats), path)
+	if len(data.rejetes) > 0 {
+		// « ALERTE » et non « info » : des motifs ecrits et livres ne
+		// protegent rien. Le message porte les identifiants pour qu'on puisse
+		// aller les corriger sans les rechercher.
+		log.Printf("sbxwaf/rules: ALERTE — %d motifs DECLARES, %d CHARGES : %d NE PROTEGENT RIEN (%s)",
+			data.declares, total, len(data.rejetes), strings.Join(data.rejetes, ", "))
+	}
 	return data
 }
 
@@ -412,4 +440,26 @@ func (r *Rules) MatchDetail(method, rawPath, rawQuery, body, ua string, includeB
 		}
 	}
 	return "", "", "", "", false
+}
+
+// Integrite rend l'ecart entre motifs DECLARES et motifs CHARGES (#1317).
+//
+// POURQUOI UNE METHODE, ET PAS SEULEMENT UN LOG. Une ligne de journal passe
+// une fois au demarrage puis disparait dans le flot. L'ecart, lui, PERSISTE
+// tant que le fichier de regles n'est pas corrige : il doit pouvoir etre
+// interroge a tout moment — par /healthz, par la carlette WAF, par un test.
+//
+// `rejetes` porte les identifiants et pas seulement le compte : savoir qu'il
+// manque cinq motifs sans savoir lesquels ne permet pas d'agir.
+func (r *Rules) Integrite() (declares, charges int, rejetes []string) {
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	if cur == nil {
+		return 0, 0, nil
+	}
+	for _, c := range cur.cats {
+		charges += len(c.data.patterns)
+	}
+	return cur.declares, charges, append([]string(nil), cur.rejetes...)
 }

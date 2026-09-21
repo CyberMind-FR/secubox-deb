@@ -140,6 +140,18 @@ _CERT_STATUS_DEFAULTS = {
 }
 
 
+_COOKIE_AUDIT_DEFAULTS = {
+    # ENABLED=False PAR DEFAUT, et c'est volontaire. Ce collecteur lit un
+    # registre d'audit de cookies qui peut peser des centaines de mega-octets ;
+    # l'allumer d'office sur une carte a 1-2 Go serait une decision prise a la
+    # place de l'exploitant. `secubox.conf` l'active explicitement la ou il sert.
+    "enabled": False,
+    "ledger_path": "/var/log/secubox/cookie-audit/server.jsonl",
+    "ingest_dir": "/var/lib/secubox/cookie-audit/ingest",
+    "classifier": {},
+}
+
+
 def _merged(defaults: dict, section: str) -> dict:
     out = dict(defaults)
     out.update(get_config(section))
@@ -159,3 +171,15 @@ def get_live_hosts_config() -> dict:
 def get_cert_status_config() -> dict:
     """Return [cert_status] merged with defaults."""
     return _merged(_CERT_STATUS_DEFAULTS, "cert_status")
+
+
+def get_cookie_audit_config() -> dict:
+    """Return [cookie_audit] merged with defaults.
+
+    MANQUANT JUSQU'ICI (#1311). Le module `cookie_audit` existait, testE (20
+    tests) et configurE dans `secubox.conf` — mais aucun lecteur ne rendait sa
+    section, aucun code ne l'instanciait, et son agregateur n'etait jamais
+    demarre. 170 Mo de registre s'accumulaient sans jamais etre reconcilies,
+    alors que c'est la brique RGPD / ePrivacy du produit.
+    """
+    return _merged(_COOKIE_AUDIT_DEFAULTS, "cookie_audit")

@@ -1,3 +1,15 @@
+secubox-core (1.5.7-1~bookworm3) bookworm; urgency=medium
+
+  * get_cookie_audit_config() — le lecteur de section MANQUANT (ref #1311).
+    Le module cookie_audit existait, teste (20 tests) et configure dans
+    secubox.conf, mais aucun lecteur ne rendait sa section : la configuration
+    de l'exploitant n'atteignait jamais le collecteur.
+  * DEFAUT A `enabled = false`, et c'est un choix : le registre peut peser des
+    centaines de Mo, l'allumer d'office sur une carte a 1-2 Go prendrait une
+    decision a la place de l'exploitant.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 16:21:15 +0200
+
 secubox-core (1.5.7-1~bookworm2) bookworm; urgency=medium
 
   * firstboot derive les manifestes de cycle de vie (profilectl scan) puis
