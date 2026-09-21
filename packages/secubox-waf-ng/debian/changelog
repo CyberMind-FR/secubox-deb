@@ -1,3 +1,29 @@
+secubox-waf-ng (1.18.4-1~bookworm3) bookworm; urgency=medium
+
+  * LE JOURNAL NE DISAIT PAS QUELLE REGLE AVAIT DECIDE (ref #1313).
+    `rule_id` etait ecrit VIDE, en dur, a trois endroits de main.go, avec un
+    commentaire qui l'assumait : `Match` ne rendait que (categorie, severite,
+    mode) et JETAIT l'identifiant du motif, que la boucle tenait pourtant
+    dans la main.
+  * CE QUE CA COUTAIT. Une ligne disait « product_absent_probes » sans dire
+    LEQUEL des motifs de la categorie avait tranche. Impossible, en lisant le
+    journal, de savoir si un motif sert encore, de mesurer les faux positifs
+    PAR MOTIF, ou de rattacher un blocage a sa regle. C'est ce qui a laisse
+    cinq motifs CVE inertes sans que rien ne le signale (#1310), et ce qui a
+    oblige a rejouer les regex a la main pour savoir ce qui attrapait quoi.
+  * Le dossier technique ANSSI promet « l'explicabilite des decisions de
+    blocage ». Une decision qu'on ne peut pas rattacher a sa regle n'est pas
+    explicable.
+  * `MatchDetail` expose l'identifiant. LES TROIS METHODES EXISTANTES GARDENT
+    LEUR SIGNATURE, delibereement : 25 appels de test en dependent, et les
+    faire bouger aurait melange un changement de fond avec du bruit de
+    refonte. `logEscalate` porte aussi la regle — une escalade sans sa regle
+    est aussi opaque qu'une detection sans la sienne.
+  * 7 tests, dont la non-regression : MatchExcept et MatchDetail doivent
+    rendre exactement le meme verdict.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 21 Sep 2026 09:18:52 +0200
+
 secubox-waf-ng (1.18.4-1~bookworm2) bookworm; urgency=medium
 
   * sbxwaf : repliage du chemin avant comparaison (ref #1310). Le code vit

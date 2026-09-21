@@ -32,8 +32,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -585,13 +585,20 @@ func (s *Server) handler() http.Handler {
 					}
 				}
 
-				cat, sev, mode, hit := s.rules.MatchModes(
+				// `motif` PORTE L'IDENTIFIANT DE LA REGLE QUI A TOUCHE (#1313).
+				// Le journal ecrivait `rule_id: ""` en dur : une ligne disait
+				// « product_absent_probes » sans dire LEQUEL des motifs avait
+				// decide. On ne pouvait donc pas savoir, en lisant le journal,
+				// si un motif servait encore — c'est ce qui a laisse cinq
+				// motifs CVE inertes sans que rien ne le signale (#1310).
+				cat, sev, mode, motif, hit := s.rules.MatchDetail(
 					r.Method,
 					rawPath,
 					r.URL.RawQuery,
 					string(bodyBytes),
 					r.Header.Get("User-Agent"),
 					includeBlock,
+					nil,
 				)
 				// Phase G (#1080) : règle adaptative par vhost. Une empreinte de
 				// reconnaissance (scanners / recon_crawler / product_absent_probes)
@@ -611,13 +618,13 @@ func (s *Server) handler() http.Handler {
 				// inondé par chaque clone). Décision auditable par le fichier
 				// déclaratif versionné.
 				if hit && s.vhostProfiles.doitSupprimer(r.Host, rawPath, cat) {
-					c2, s2, m2, h2 := s.rules.MatchExcept(
+					c2, s2, m2, mo2, h2 := s.rules.MatchDetail(
 						r.Method, rawPath, r.URL.RawQuery, string(bodyBytes),
 						r.Header.Get("User-Agent"), includeBlock,
 						s.vhostProfiles.categoriesSupprimables(),
 					)
 					if h2 {
-						cat, sev, mode, hit = c2, s2, m2, true
+						cat, sev, mode, motif, hit = c2, s2, m2, mo2, true
 					} else {
 						hit = false
 					}
@@ -635,7 +642,7 @@ func (s *Server) handler() http.Handler {
 							Path:     rawPath,
 							Category: cat,
 							Severity: sev,
-							RuleID:   "",
+							RuleID:   motif,
 							Action:   "detect",
 							UA:       r.Header.Get("User-Agent"),
 							Tool:     étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
@@ -652,12 +659,12 @@ func (s *Server) handler() http.Handler {
 					// count into s.ban.
 					if s.escalateBan == nil {
 						// No counter → observe like detect, never ban.
-						s.logEscalate(r, ip, rawPath, cat, sev, "detect")
+						s.logEscalate(r, ip, rawPath, cat, sev, motif, "detect")
 						hit = false
 					} else if count, banned := s.escalateBan.Record(ip, time.Now().Unix()); banned {
 						// Threshold crossed: ban for real, exactly as the block
 						// path's ban branch does — but gated on escalateBan.
-						s.logEscalate(r, ip, rawPath, cat, sev, "banned")
+						s.logEscalate(r, ip, rawPath, cat, sev, motif, "banned")
 						// Mirror the block path's journald line so an operator
 						// tailing `journalctl -u secubox-waf-ng` for THREAT sees
 						// escalate bans too — otherwise a banned scanner is
@@ -668,7 +675,7 @@ func (s *Server) handler() http.Handler {
 						return
 					} else {
 						// Still observing: log and let it through.
-						s.logEscalate(r, ip, rawPath, cat, sev, "detect")
+						s.logEscalate(r, ip, rawPath, cat, sev, motif, "detect")
 						hit = false
 					}
 				}
@@ -980,7 +987,11 @@ func (s *Server) recordHostAnomalyAvecLeurre(r *http.Request, host, leurre, fili
 	}
 }
 
-func (s *Server) logEscalate(r *http.Request, ip, rawPath, cat, sev, action string) {
+// `ruleID` PORTE LA REGLE QUI A DECIDE (#1313). Une escalade sans sa regle
+// est aussi opaque qu'une detection sans la sienne : on sait qu'on a agi,
+// pas sur quoi. C'est ce que le dossier ANSSI appelle l'explicabilite d'une
+// decision de blocage.
+func (s *Server) logEscalate(r *http.Request, ip, rawPath, cat, sev, ruleID, action string) {
 	if s.threatLog == nil {
 		return
 	}
@@ -991,7 +1002,7 @@ func (s *Server) logEscalate(r *http.Request, ip, rawPath, cat, sev, action stri
 		Path:     rawPath,
 		Category: cat,
 		Severity: sev,
-		RuleID:   "",
+		RuleID:   ruleID,
 		Action:   action,
 		UA:       r.Header.Get("User-Agent"),
 		Tool:     étiquetteOutil(r.Header.Get("User-Agent"), rawPath),

@@ -347,6 +347,32 @@ func (r *Rules) MatchModes(method, rawPath, rawQuery, body, ua string, includeBl
 // legitimate recon and must be acted on rather than let through. A nil exclure
 // makes this identical to MatchModes.
 func (r *Rules) MatchExcept(method, rawPath, rawQuery, body, ua string, includeBlock bool, exclure map[string]bool) (cat, sev, mode string, hit bool) {
+	cat, sev, mode, _, hit = r.MatchDetail(method, rawPath, rawQuery, body, ua, includeBlock, exclure)
+	return cat, sev, mode, hit
+}
+
+// MatchDetail is MatchExcept plus the ID OF THE PATTERN that fired.
+//
+// POURQUOI CETTE METHODE EXISTE (#1313). Le moteur SAIT quel motif a touche —
+// la boucle tient `p` dans la main — et jetait l'information : `Match` ne
+// rendait que (categorie, severite, mode). Le journal de menaces ecrivait donc
+// `"rule_id": ""` sur toute detection de chemin, en dur, a trois endroits.
+//
+// CE QUE CA COUTAIT. Une ligne de journal disait « product_absent_probes » sans
+// dire LEQUEL des motifs de la categorie avait decide. Impossible, en lisant le
+// journal, de savoir si un motif sert encore, s'il fait des faux positifs, ou
+// s'il n'a jamais rien attrape depuis qu'on l'a ecrit — c'est exactement ce qui
+// a permis a cinq motifs CVE de rester inertes sans que rien ne le signale
+// (#1310), et ce qui m'a oblige a rejouer les regex a la main pour savoir ce
+// qui attrapait quoi.
+//
+// Le dossier technique ANSSI promet « explicabilite des decisions de blocage ».
+// Une decision qu'on ne peut pas rattacher a sa regle n'est pas explicable.
+//
+// LA SIGNATURE DES TROIS AUTRES EST INCHANGEE, deliberement : 25 appels de test
+// en dependent, et les faire bouger pour un champ supplementaire aurait melange
+// un changement de fond avec du bruit de refonte.
+func (r *Rules) MatchDetail(method, rawPath, rawQuery, body, ua string, includeBlock bool, exclure map[string]bool) (cat, sev, mode, ruleID string, hit bool) {
 	decodedPath := unquotePlus(rawPath)
 	decodedQuery := unquotePlus(rawQuery)
 	scanParts := []string{decodedPath, decodedQuery, body, ua}
@@ -369,7 +395,7 @@ func (r *Rules) MatchExcept(method, rawPath, rawQuery, body, ua string, includeB
 	r.mu.RUnlock()
 
 	if cur == nil {
-		return "", "", "", false
+		return "", "", "", "", false
 	}
 
 	for _, c := range cur.cats {
@@ -381,9 +407,9 @@ func (r *Rules) MatchExcept(method, rawPath, rawQuery, body, ua string, includeB
 		}
 		for _, p := range c.data.patterns {
 			if p.re.MatchString(scanText) {
-				return c.id, p.severity, c.data.mode, true
+				return c.id, p.severity, c.data.mode, p.id, true
 			}
 		}
 	}
-	return "", "", "", false
+	return "", "", "", "", false
 }

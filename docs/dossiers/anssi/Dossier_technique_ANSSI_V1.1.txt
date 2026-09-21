@@ -1,0 +1,268 @@
+CYBERMIND | SECUBOX-DEB | DOSSIER TECHNIQUE
+
+
+                                                     CYBERMIND
+
+                                             SecuBox-Deb
+                      Alpha & architecture VHOST/WAF de bordure
+            Dossier technique destiné à l’Agence nationale de la sécurité des systèmes d’information (ANSSI)
+
+
+
+ Émetteur                                                            CyberMind — Gérald Kerma
+ Projet                                                              SecuBox-Deb
+ État                                                                Alpha
+ Nature                                                              Projet open source
+ Version                                                             1.1 illustrée — 22 août 2026
+ Objet                                                               Présentation technique et sollicitation d’un regard critique
+
+
+                      Protection locale • Observation périphérique • Mutualisation maîtrisée
+
+
+
+Contact institutionnel
+CyberMind — Gérald Kerma
+785 route du Cruet l'Église
+73130 Notre-Dame-du-Cruet — Savoie, France
+(+33) 7 75 74 41 72 • contact@cybermind.fr • gandalf@gk2.net
+cybermind.fr • github.com/CyberMind-FR/secubox-deb • gk2.net
+
+
+
+
+                                       Diffusion externe - Présentation technique - 22 août 2026
+CYBERMIND | SECUBOX-DEB | DOSSIER TECHNIQUE
+
+
+
+
+                                   Diffusion externe - Présentation technique - 22 août 2026
+CYBERMIND | SECUBOX-DEB | DOSSIER TECHNIQUE
+
+              Planche de synthèse V1.1 - architecture Alpha, positionnement WAF, déception contrôlée et vision Mesh.
+
+
+
+
+                                        Diffusion externe - Présentation technique - 22 août 2026
+CYBERMIND | SECUBOX-DEB | DOSSIER TECHNIQUE
+
+
+1. Synthèse exécutive
+SecuBox-Deb est une appliance logicielle libre basée sur Debian, conçue pour réunir des fonctions de sécurité réseau,
+de reverse proxy, de WAF, de VPN et de services auto-hébergés dans une architecture modulaire. Le développement
+actuel cible notamment la plateforme ARM64 MOCHAbin. Un profil Edge/WAF plus minimal est envisagé pour des
+plateformes telles qu’ESPRESSObin.
+
+La phase Alpha marque le passage d’un développement rapide et fortement assisté par des outils d’IA à une phase de
+validation en conditions réelles. L’objectif n’est pas de présenter l’IA comme une garantie de sécurité, mais comme un
+accélérateur de production dont les résultats doivent maintenant être soumis à des tests reproductibles, à la relecture, à
+l’analyse de sécurité et à la contradiction extérieure.
+
+Cas d’usage prioritaire
+Déployer une SecuBox en bordure comme relais VHOST / reverse proxy / WAF, afin de protéger les services réellement
+publiés tout en observant les requêtes adressées à des hosts inconnus, des chemins inexistants, des scanners
+automatisés ou des ressources leurres.
+
+Hypothèse de roadmap
+À terme, plusieurs nœuds périphériques pourraient partager des signaux de sécurité authentifiés et corrélés. Les petits
+nœuds rencontreraient certaines attaques avant l’infrastructure centrale ; celle-ci pourrait exploiter ces observations, tout
+en exécutant elle-même un profil SecuBox Edge virtualisé. Cette architecture Mesh est une orientation de R&D, pas une
+fonction annoncée comme validée.
+
+
+
+2. Positionnement face aux WAF existants
+ Architecture             Protection                  Observation locale               Mutualisation            Hosts inconnus /
+                          applicative                                                                           leurres
+ WAF classique isolé      Oui                         Oui                              Limitée / produit        Variable
+ WAF cloud                Oui                         Partielle / distante             Centralisée              Variable
+                                                                                       fournisseur
+ SecuBox Alpha            Oui                      Oui                                 Locale     Expérimentation
+ SecuBox Mesh             Oui                      Oui                                 Distribuée et corrélée
+                                                                                                  Oui, sous contrôle
+ envisagé
+Le différenciateur recherché n’est donc pas seulement un moteur WAF supplémentaire. Le relais de bordure devient
+également un capteur local : il protège, observe et produit des événements exploitables. Contrairement à une
+mutualisation exclusivement centralisée chez un fournisseur cloud, la vision SecuBox conserve une capacité de
+protection autonome au niveau de chaque nœud.
+
+
+
+
+                                         Diffusion externe - Présentation technique - 22 août 2026
+CYBERMIND | SECUBOX-DEB | DOSSIER TECHNIQUE
+
+
+3. Architecture VHOST/WAF de bordure
+INTERNET
+
+    ↓ trafic légitime / bots / scans
+
+[ SecuBox Edge : VHOST + reverse proxy + WAF + journalisation ]
+
+    ├─ VHOST connu            → service publié
+
+    ├─ HOST inconnu           → observation / classification
+
+    └─ HOST leurre            → déception contrôlée / télémétrie
+
+Fonctions du profil Alpha
+   Terminaison et routage des VHOST ;
+   reverse proxy vers les services explicitement publiés ;
+   filtrage applicatif WAF ;
+   journalisation et classification des événements ;
+   détection des requêtes visant des noms, chemins ou services inexistants ;
+   expérimentation de leurres contrôlés sans contre-attaque ;
+   export futur d’événements normalisés vers une couche de corrélation.
+
+
+
+4. Déception : au-delà du honeypot
+Le projet souhaite distinguer le service réellement exposé du mécanisme de déception. Un honeypot classique est une
+ressource leurre clairement matérialisée. SecuBox explore aussi une déception plus diffuse : des VHOST, chemins ou
+réponses contrôlés peuvent servir à qualifier un comportement qui cherche précisément ce qui n’a jamais été publié.
+
+Métaphore pédagogique : « le honeypot est une vitrine ; la fumée rend visible celui qui cherche le feu ».
+
+Cette image ne désigne pas une riposte offensive. Le périmètre reste défensif : détection, observation, qualification,
+limitation, quarantaine ou blocage local. Les mécanismes doivent éviter toute interaction intrusive avec les systèmes
+distants.
+
+
+
+5. Architecture distribuée envisagée
+SecuBox A ─┐
+
+SecuBox B ─┼──► événements signés ─► corrélation ─► politiques de protection
+
+SecuBox C ─┤                                                        │
+
+SecuBox N ─┘                                                        ▼
+
+                                                infrastructure centrale
+
+                                                + SecuBox Edge virtualisée
+
+Principe : « les petits protègent le gros ; le gros se protège aussi en virtualisant un petit ». Une infrastructure centrale
+peut ainsi bénéficier des mêmes mécanismes de bordure que les nœuds périphériques, tout en disposant d’une capacité
+supérieure de corrélation et de filtrage.
+
+
+
+
+                                        Diffusion externe - Présentation technique - 22 août 2026
+CYBERMIND | SECUBOX-DEB | DOSSIER TECHNIQUE
+
+
+6. Conditions de confiance pour une mutualisation
+Une observation locale ne doit jamais devenir automatiquement une blacklist globale. La roadmap doit intégrer :
+
+   identité et authentification forte des nœuds ; signature et intégrité des événements ;
+   horodatage, durée de vie, révocation et provenance ;
+   niveaux de confiance et corrélation multi-source ;
+   gestion des faux positifs, NAT, proxys et infrastructures partagées ;
+   résistance à l’empoisonnement de réputation et aux nœuds compromis ;
+   minimisation des données partagées et politiques de conservation ;
+   explicabilité des décisions de blocage et possibilité de retour arrière.
+
+
+
+7. Alpha : objectifs de validation
+   installation de bout en bout reproductible ;
+   profils matériels validés et personnalisables ;
+   mises à jour, rollback et récupération fiables ;
+   stabilité et comportement en charge ;
+   journalisation exploitable et traçable ;
+   validation VHOST / reverse proxy / WAF ;
+   mesure des faux positifs et faux négatifs ;
+   tests sur hosts inconnus, scans et scénarios de déception ;
+   revue de la chaîne de développement assistée par IA ;
+   retours d’utilisateurs Alpha et d’experts externes.
+
+
+
+8. Roadmap synthétique
+Étape                                                               Contenu
+Socle actuel                                                        Debian ARM64, réseau, filtrage, reverse proxy, services
+                                                                    modulaires, Web/API.
+Alpha                                                               Déploiements réels, stabilité, profils, VHOST/WAF,
+                                                                    observation, mesures et retours.
+À développer / valider                                              Profil Edge/WAF minimal, événements normalisés,
+                                                                    réputation, corrélation, déception.
+Vision Mesh                                                         Nœuds autonomes partageant des signaux vérifiables
+                                                                    pour une protection collective.
+
+
+
+9. Références ANSSI pertinentes
+Référence d’architecture : le guide ANSSI sur l’interconnexion sécurisée d’un SI à Internet décrit le cloisonnement, les
+relais applicatifs, les sondes de détection et les pare-feux intermédiaires. La V1.1 positionne SecuBox comme
+proposition expérimentale de bordure, sans revendiquer de conformité ou de qualification.
+
+Passerelle Internet sécurisée : L’ANSSI recommande des architectures de zones exposées intégrant notamment relais
+applicatifs, détection, journalisation et filtrage, et décrit l’usage de reverse proxy voire de WAF pour certains services
+exposés.
+
+Pare-feux maîtrisés / virtualisation : Les recommandations ANSSI relatives aux zones exposées abordent
+explicitement la virtualisation des pare-feux et les architectures de passerelles sécurisées.
+
+S-SDLC / DevSecOps : L’ANSSI identifie la sécurisation du cycle de développement logiciel comme un enjeu majeur
+2025-2027.
+
+Assistants de programmation IA : La publication ANSSI/BSI sur les AI Coding Assistants souligne leurs gains
+potentiels mais aussi la nécessité de maîtriser les risques et de conserver une validation humaine et technique forte.
+                                        Diffusion externe - Présentation technique - 22 août 2026
+CYBERMIND | SECUBOX-DEB | DOSSIER TECHNIQUE
+
+
+
+
+                                   Diffusion externe - Présentation technique - 22 août 2026
+CYBERMIND | SECUBOX-DEB | DOSSIER TECHNIQUE
+
+
+10. Points proposés à la discussion avec l’ANSSI
+1.   Pertinence d’un profil VHOST/WAF minimal de bordure sur matériel ARM ;
+2.   frontières fonctionnelles entre relais applicatif, WAF, détection et déception ;
+3.   modèle de confiance pour la mutualisation de signaux de sécurité ;
+4.   prévention de l’empoisonnement d’une réputation distribuée ;
+5.   architecture de virtualisation d’un profil Edge dans une infrastructure centrale ;
+6.   méthode de validation adaptée à un projet open source entrant en Alpha ;
+7.   bon niveau de séparation entre expérimentation, qualification future éventuelle et communication publique.
+
+
+
+11. Statut et limites
+Ce dossier est un document de présentation technique. Il ne constitue ni une déclaration de conformité, ni une demande
+implicite de qualification, ni l’affirmation d’une validation par l’ANSSI. Les fonctions Mesh, la mutualisation distribuée, les
+mécanismes de réputation et certains mécanismes de déception sont des orientations de développement et
+d’expérimentation.
+
+
+
+12. Contact
+Gérald Kerma
+Fondateur — CyberMind
+Responsable du projet SecuBox-Deb
+
+CyberMind
+785 route du Cruet l'Église
+73130 Notre-Dame-du-Cruet — Savoie, France
+
+(+33) 7 75 74 41 72
+contact@cybermind.fr
+gandalf@gk2.net
+
+cybermind.fr
+github.com/CyberMind-FR/secubox-deb
+gk2.net
+
+Réseaux : GitHub CyberMind-FR · LinkedIn CyberMind · YouTube CyberMind
+
+
+
+
+                                         Diffusion externe - Présentation technique - 22 août 2026
+
