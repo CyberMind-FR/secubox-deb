@@ -32,6 +32,16 @@
 # Toujours actifs — infrastructure dont l'arrêt casserait le reste.
 [lifecycle]
 "dpi"                        = "always-on"
+# API APPELÉE PAR LE PANNEAU, SERVIE PAR SON PROPRE BACKEND (#1322). Le waker
+# ne réveille que sur les vhosts de sites ; un module dont nginx route
+# `/api/v1/<mod>/` vers SON socket (et non `aggregator.sock`) rend donc 502
+# dans l'admin dès que le sleeper l'a endormi, sans rien pour le réveiller.
+# Constaté sur `metablogizer` : trois rechutes en une matinée, service
+# `inactive`+`disabled` sans trace au journal, et le `POST /webhook` des
+# déploiements GitHub muet avec lui. Critère de tri : route nginx propre
+# + appelée par une page de /usr/share/secubox/www = always-on.
+"metablogizer"               = "always-on"
+"podcaster"                  = "always-on"
 "dpi-flowcap"                = "always-on"
 "mail"                       = "always-on"
 "waf"                        = "always-on"
@@ -104,11 +114,9 @@ eye-network_at_              = "eager"
 "mcp-server"                 = "on-demand"
 "mesh"                       = "on-demand"
 "meshname"                   = "on-demand"
-"metablogizer"               = "on-demand"
 "nextcloud"                  = "on-demand"
 "peertube"                   = "on-demand"
 "photoprism"                 = "on-demand"
-"podcaster"                  = "on-demand"
 "rtty"                       = "on-demand"
 "streamlit"                  = "on-demand"
 "torrent"                    = "on-demand"

@@ -71,3 +71,38 @@ def test_watchdog_should_manage_false_for_sleepable():
 
 def test_watchdog_should_manage_protected_wins_over_on_demand():
     assert watchdog_should_manage(_m(lifecycle="on-demand", protected=True)) is True
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# La politique LIVRÉE (#1322) — un module dont le panneau appelle l'API et
+# dont nginx route vers son propre backend ne doit jamais être endormi.
+# ─────────────────────────────────────────────────────────────────────────
+
+def _politique_livree() -> dict:
+    import tomllib
+    from pathlib import Path
+    p = Path(__file__).resolve().parent.parent / "policy" / "lifecycle-defaults.toml"
+    with open(p, "rb") as fh:
+        return tomllib.load(fh)
+
+
+def test_la_politique_livree_est_lisible_et_bornee():
+    """Une valeur hors vocabulaire ferait silencieusement retomber un module
+    sur `always-on` (charger_politique ne valide pas) : le défaut serait sûr,
+    mais l'intention écrite ici serait perdue sans que rien ne le dise."""
+    d = _politique_livree()
+    assert set(d["lifecycle"].values()) <= {"always-on", "eager", "on-demand", "manual"}
+    assert set(d["wake_class"].values()) <= {"normal", "urgent"}
+
+
+def test_les_modules_a_api_du_panneau_ne_dorment_pas():
+    """CE QUI A ÉTÉ SUBI (#1322). `metablogizer` était `on-demand` : le sleeper
+    l'arrêtait ET le désactivait, le waker ne réveille que sur les vhosts de
+    sites — le panneau rendait 502 sur /api/v1/metablogizer/ sans que rien ne
+    puisse le relever, et le `POST /webhook` des déploiements tombait avec.
+
+    Critère : route nginx vers son propre backend (pas `aggregator.sock`) +
+    API appelée par une page de /usr/share/secubox/www."""
+    lc = _politique_livree()["lifecycle"]
+    for mod in ("metablogizer", "podcaster"):
+        assert lc.get(mod) == "always-on", f"{mod} doit rester always-on"

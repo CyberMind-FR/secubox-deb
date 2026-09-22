@@ -68,10 +68,23 @@ case "$1" in
         # (a security service like the WAF must be always-on, NEVER on-demand),
         # auto-enabling it fleet-wide could sleep something that must stay up.
         # The operator enables it deliberately, once the sleepable set is
-        # verified: `systemctl enable --now secubox-sleeper.service`. We only
-        # try-restart it here so an UPGRADE refreshes an operator who ALREADY
-        # opted in (no-op when it is inactive/disabled — never starts it).
-        systemctl try-restart secubox-sleeper.service 2>/dev/null || true
+        # verified: `systemctl enable --now secubox-sleeper.service`.
+        #
+        # ON UPGRADE, WE MUST *START* IT, NOT try-restart IT. The dh snippet
+        # stops the unit before this script runs; `try-restart` then finds it
+        # inactive and does nothing — so an operator who HAD opted in lost the
+        # sleeper at every upgrade, silently, which is precisely the case this
+        # line was written to serve. Observed on gk2 (2026-09-22): 5 days of
+        # uptime, gone after a `dpkg -i`, and nothing said so.
+        #
+        # `enabled` IS the record of that opt-in — it is what
+        # `enable --now` leaves behind, and `--no-enable` guarantees a fresh
+        # install never has it. Starting only when enabled therefore keeps the
+        # pilot's promise (never auto-start on a new board) while restoring the
+        # operator's choice on upgrade.
+        if systemctl is-enabled --quiet secubox-sleeper.service 2>/dev/null; then
+            systemctl start secubox-sleeper.service 2>/dev/null || true
+        fi
 
         # Config sync for the sbxwaf-side wake trigger + the health monitor
         # (ref #896 — supersedes the nginx-sync path of Task 7, PIVOT
