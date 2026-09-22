@@ -8,8 +8,12 @@ case "$1" in
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
     systemctl daemon-reload
-    systemctl enable secubox-hub.service
-    systemctl start  secubox-hub.service || true
+    # Le standalone secubox-hub.service (:8001) est un VESTIGE : le module
+    # `hub` est servi par secubox-aggregator (aggregator.toml) et la route
+    # nginx pointe sur aggregator.sock. On ne l'active plus, et on l'arrête
+    # s'il tourne encore d'une installation precedente — sinon un second
+    # uvicorn charge la meme app pour personne.
+    systemctl disable --now secubox-hub.service 2>/dev/null || true
     install -d -m 755 /etc/nginx/secubox.d
     # Activer le vhost du panneau s'il ne l'est pas déjà (idempotent, et
     # jamais forcé : un lien existant vers autre chose est respecté).

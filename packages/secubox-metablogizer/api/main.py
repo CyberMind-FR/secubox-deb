@@ -876,7 +876,11 @@ async def get_site(name: str):
         if f.is_file():
             files.append(str(f.relative_to(scan_dir)))
 
-    published = (NGINX_ENABLED_DIR / f"{name}.conf").exists()
+    # MEME CALCUL QUE LA LISTE (scan_sites). L'ancien test « <nom>.conf existe
+    # dans sites-enabled » date du modele un-fichier-par-site : sous le nginx
+    # monolithique il est TOUJOURS faux, et la page detail affichait « non
+    # publie » pour chacun des 160 sites servis (constate le 2026-09-22).
+    published = sites_scan.site_est_servi(site_dir, NGINX_METABLOGS_CONF)
 
     # LES MÉTADONNÉES VIENNENT DE site.json (#1089). Auparavant ce handler
     # construisait sa réponse à partir de rien : titre, description, catégorie,

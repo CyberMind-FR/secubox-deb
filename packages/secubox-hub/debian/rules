@@ -16,7 +16,10 @@ override_dh_auto_install:
 	# package). Ships $lan_client and the /__sbx_auth_verify +
 	# @sbx_auth_login named locations into BOTH include dirs so the ex-SSO vhosts
 	# keep resolving them; LAN passes, everything else is denied.
+	# Route AUSSI installee dans secubox-routes.d/ : seul ce repertoire est
+	# inclus par les vhosts ; dans secubox.d/ elle n'etait jamais lue.
 	install -d debian/secubox-hub/etc/nginx/secubox-routes.d
+	[ -f nginx/hub.conf ] && cp nginx/hub.conf debian/secubox-hub/etc/nginx/secubox-routes.d/ || true
 	[ -f nginx/zz-sbx-authgate.conf ] && cp nginx/zz-sbx-authgate.conf debian/secubox-hub/etc/nginx/secubox.d/ || true
 	[ -f nginx/zz-sbx-authgate.conf ] && cp nginx/zz-sbx-authgate.conf debian/secubox-hub/etc/nginx/secubox-routes.d/ || true
 	# Vhost principal du panneau (#987). Sous /etc : dpkg le traite en

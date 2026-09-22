@@ -98,6 +98,23 @@ def run_cmd(cmd: list, timeout: int = 30) -> tuple:
         return False, "", str(e)
 
 
+def site_est_servi(site_dir: Path, nginx: "Path | str") -> bool:
+    """Le site a-t-il un bloc `server` dans le nginx monolithique ?
+
+    `nginx` est soit le contenu deja lu (scan), soit le chemin du fichier
+    (page detail). Un seul calcul pour la liste ET le detail : ils divergeaient
+    (le detail testait un `<nom>.conf` d'un modele disparu) et le meme site se
+    disait publie dans un ecran, non publie dans l'autre.
+    """
+    if isinstance(nginx, Path):
+        try:
+            nginx = nginx.read_text()
+        except OSError:
+            return False
+    return (f"root {site_dir}" in nginx
+            or f"root {site_dir}/public" in nginx)
+
+
 def read_site_config(site_dir: Path) -> dict:
     """Read site.json (if any), enrich from git, validate (warn-only).
 
@@ -112,8 +129,11 @@ def read_site_config(site_dir: Path) -> dict:
     if config_file.exists():
         try:
             doc = json.loads(config_file.read_text())
-        except json.JSONDecodeError as e:
-            logger.warning("site.json malformed for %s: %s", name, e)
+        except (json.JSONDecodeError, OSError) as e:
+            # OSError = illisible (site.json root:600 laissé par une commande
+            # lancée en root) : un seul site ne doit pas empêcher l'API de
+            # démarrer — même tolérance que pour un JSON malformé.
+            logger.warning("site.json unreadable for %s: %s", name, e)
             doc = {}
     doc["name"] = name
     doc = _schema_enrich(doc, site_dir)
@@ -239,10 +259,7 @@ def scan_sites(
         domain = domaine_du_site(site_dir, domain_suffix)
         port = cfg.get("port", base_port)
 
-        published = (
-            f"root {site_dir}" in nginx_content
-            or f"root {site_dir}/public" in nginx_content
-        )
+        published = site_est_servi(site_dir, nginx_content)
 
         size = "0"
         success, out, _ = run_cmd(["du", "-sh", str(site_dir)])
