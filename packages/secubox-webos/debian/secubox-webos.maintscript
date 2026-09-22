@@ -1,0 +1,1 @@
+mv_conffile /etc/nginx/sites-enabled/hall.gk2.net.conf /etc/nginx/sites-available/hall.gk2.net.conf 1.0.317-1~bookworm1~

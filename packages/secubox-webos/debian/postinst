@@ -16,9 +16,38 @@ if [ "$1" = "configure" ]; then
     fi
     systemctl daemon-reload || true
     systemctl enable --now secubox-webos.service || true
-    # Recharge nginx seulement si la conf valide (le vhost hall.gk2.net est livré).
+fi
+
+# CE BLOC EST APRES LE JETON DEBHELPER, ET C'EST TOUT L'INTERET. C'est la que
+# dpkg-maintscript-helper execute le `mv_conffile` qui deplace le vhost de
+# sites-enabled/ vers sites-available/ : pose avant, le lien d'activation
+# voyait encore l'ancien fichier en place, ne faisait rien, et le deplacement
+# laissait le Hall SANS lien — nginx gardait sa configuration chargee et le
+# premier reload venu l'aurait perdu. Vu sur gk2 le 2026-09-22.
+#DEBHELPER#
+
+if [ "$1" = "configure" ]; then
+    # Activation du vhost : lien sites-enabled -> sites-available, pose une
+    # seule fois. Un lien deja present (ou pointant ailleurs) est RESPECTE, et
+    # une absence deliberee n'est pas retablie de force au `dpkg -i` suivant :
+    # desactiver un site est une decision d'exploitation.
+    if [ -f /etc/nginx/sites-available/hall.gk2.net.conf ] && \
+       [ ! -e /etc/nginx/sites-enabled/hall.gk2.net.conf ] && \
+       [ ! -L /etc/nginx/sites-enabled/hall.gk2.net.conf ]; then
+        ln -s ../sites-available/hall.gk2.net.conf \
+              /etc/nginx/sites-enabled/hall.gk2.net.conf
+    fi
+    # Filet : un `.dpkg-dist`/`.dpkg-new` laisse dans sites-enabled par une
+    # version anterieure (qui y livrait le conffile) reste charge par le glob
+    # de nginx et le fait echouer. On l'ecarte plutot que de le supprimer.
+    for _f in /etc/nginx/sites-enabled/hall.gk2.net.conf.dpkg-*; do
+        [ -e "$_f" ] || continue
+        mkdir -p /var/backups/nginx
+        mv -f "$_f" /var/backups/nginx/ 2>/dev/null || true
+    done
+    # Recharge nginx SEULEMENT si la configuration valide — et maintenant que
+    # le lien est pose, ce reload sert le vhost depuis son nouvel emplacement.
     if [ -x /usr/sbin/nginx ] && nginx -t 2>/dev/null; then
         systemctl reload nginx || true
     fi
 fi
-#DEBHELPER#
