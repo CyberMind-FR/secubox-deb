@@ -72,6 +72,38 @@ def enregistre_domaine(site: Path, domaine: str) -> dict:
     return {"ok": True, "detail": domaine}
 
 
+def marque_publie(site: Path, publie: bool) -> dict:
+    """Écrit `published` dans `site.json` selon le VERDICT de l'assistant.
+
+    Le schéma exige la clé, et c'est l'action publish/unpublish qui la pilote
+    (site_schema.CHAMPS_EDITABLES l'exclut de l'édition). L'assistant, qui EST
+    l'action publish, ne l'écrivait pas : chaque site publié par lui violait le
+    schéma (« 'published' is a required property » à chaque scan) et se
+    présentait sans état. Même prudence qu'`enregistre_domaine` : un fichier
+    illisible n'est pas écrasé.
+    """
+    fichier = site / "site.json"
+    doc = {}
+    if fichier.exists():
+        try:
+            doc = json.loads(fichier.read_text())
+            if not isinstance(doc, dict):
+                doc = {}
+        except (json.JSONDecodeError, OSError):
+            return {"ok": False, "detail": "site.json illisible, état non enregistré"}
+    if doc.get("published") is publie:
+        return {"ok": True, "detail": "déjà à jour"}
+    doc["published"] = publie
+    doc.setdefault("name", site.name)
+    try:
+        tmp = fichier.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+        tmp.replace(fichier)
+    except OSError as e:
+        return {"ok": False, "detail": f"écriture site.json : {e}"}
+    return {"ok": True, "detail": "published" if publie else "unpublished"}
+
+
 def publie_vhost(domaine: str) -> dict:
     """Régénère la configuration nginx pour que le domaine soit SERVI (#1023).
 
@@ -138,6 +170,9 @@ async def publish_wizard(
     ok = (bool(steps["content"].get("index_present"))
           and bool(steps["route"].get("route_ok"))
           and bool(steps["vhost"].get("ok")))
+    # L'état écrit suit le verdict, pas l'intention : un assistant qui a échoué
+    # ne marque pas le site publié.
+    steps["etat"] = marque_publie(site, ok)
     return {"ok": ok, "domain": domain, "steps": steps}
 
 

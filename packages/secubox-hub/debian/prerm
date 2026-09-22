@@ -2,7 +2,7 @@
 set -e
 case "$1" in
   remove|deconfigure)
-    rm -f /etc/nginx/secubox.d/hub.conf
+    rm -f /etc/nginx/secubox.d/hub.conf /etc/nginx/secubox-routes.d/hub.conf
     systemctl reload nginx 2>/dev/null || true
     ;;
   upgrade)

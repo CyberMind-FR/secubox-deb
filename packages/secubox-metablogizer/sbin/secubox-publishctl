@@ -11,6 +11,7 @@ WAF_ROUTES_FILE="${SBX_WAF_ROUTES_FILE:-/etc/secubox/waf/haproxy-routes.json}"
 HAPROXY_CERTS_DIR="${SBX_HAPROXY_CERTS_DIR:-/etc/haproxy/certs}"
 BACKEND_IP="192.168.1.200"
 GK2_SUFFIX=".gk2.secubox.in"
+ACME_WEBROOT="${SBX_ACME_WEBROOT:-/usr/share/secubox/www}"
 DOMAIN_RE='^(([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)$'
 
 emit() { python3 -c 'import json,sys; print(json.dumps({"ok": sys.argv[1]=="true", "detail": sys.argv[2]}))' "$1" "$2"; }
@@ -92,9 +93,17 @@ cert() {
     emit true "wildcard"; return 0
   fi
   mkdir -p "$HAPROXY_CERTS_DIR" || die "cannot create $HAPROXY_CERTS_DIR"
-  if ! certbot certonly --non-interactive --agree-tos --standalone \
-        --preferred-challenges http -d "$domain" >/dev/null 2>&1; then
-    die "certbot failed for $domain"
+  # WEBROOT, PAS STANDALONE. `--standalone` veut ecouter :80, or :80 est a
+  # HAProxy sur la box : certbot mourait en « Address already in use » et
+  # AUCUN domaine custom n'a jamais recu de certificat par l'assistant
+  # (constate sur wall.gk2.net le 2026-09-22). HAProxy route deja
+  # /.well-known/acme-challenge/ vers nginx :8880, dont la racine est
+  # $ACME_WEBROOT — c'est le chemin qu'ont pris hall.gk2.net et all.gk2.net.
+  mkdir -p "$ACME_WEBROOT/.well-known/acme-challenge"
+  if ! certbot certonly --non-interactive --agree-tos --webroot \
+        -w "$ACME_WEBROOT" --preferred-challenges http \
+        -d "$domain" >/dev/null 2>&1; then
+    die "certbot failed for $domain (webroot $ACME_WEBROOT)"
   fi
   local live="/etc/letsencrypt/live/$domain"
   cat "$live/fullchain.pem" "$live/privkey.pem" > "$HAPROXY_CERTS_DIR/$domain.pem"
