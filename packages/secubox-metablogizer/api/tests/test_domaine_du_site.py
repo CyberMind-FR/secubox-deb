@@ -117,10 +117,16 @@ def test_le_vhost_publie_ne_reclame_jamais_le_port_80():
     from pathlib import Path as _P
 
     src = (_P(__file__).resolve().parent.parent / "main.py").read_text()
-    debut = src.index("async def publish_site(")
-    fin = src.index("async def unpublish_site(", debut)
+    # Depuis #1322, publier passe par le SEUL générateur unifié : le gabarit
+    # par-site (`publish_site`) est retiré — sa présence réintroduirait deux
+    # blocs pour un même domaine (#1016).
+    assert "async def publish_site(" not in src, \
+        "le gabarit nginx par-site est revenu : publier doit passer par regenerate_nginx_config"
+    debut = src.index("def regenerate_nginx_config(")
+    fin = src.index("\n@app.", debut)
     corps = "\n".join(l for l in src[debut:fin].splitlines()
                       if not l.lstrip().startswith("#"))
-    assert "listen 80;" not in corps, "le vhost publié réclame le port 80"
-    assert "listen {BASE_PORT};" in corps, \
-        "le vhost publié doit écouter sur le port du module"
+    assert "listen 80;" not in corps and "listen 0.0.0.0:80;" not in corps, \
+        "le vhost généré réclame le port 80"
+    assert "listen 0.0.0.0:{port};" in corps or "listen {BASE_PORT};" in corps, \
+        "le vhost généré doit écouter sur le port du module"

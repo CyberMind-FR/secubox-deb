@@ -176,3 +176,21 @@ def test_deux_declarations_egales_restent_signalees(monkeypatch, tmp_path):
     ok, n, msg = main.regenerate_nginx_config()
     assert n == 1
     assert "ecarte" in msg and "tdah" in msg
+
+
+def test_un_site_depublie_n_a_pas_de_bloc(monkeypatch, tmp_path):
+    """DÉPUBLIÉ = PAS DE BLOC (#1322). `published: false` dans site.json est une
+    intention explicite ; le générateur l'ignorait, et « site unpublish » ne
+    retirait jamais le bloc. Une clé ABSENTE reste émise : les sites d'avant
+    le schéma n'ont rien demandé."""
+    import json
+    a = site(tmp_path, "aa", "aa.gk2.secubox.in")
+    b = site(tmp_path, "bb", "bb.gk2.secubox.in")
+    c = site(tmp_path, "cc", "cc.gk2.secubox.in")
+    (pathlib.Path(b["directory"]) / "site.json").write_text(json.dumps({"name": "bb", "published": False}))
+    (pathlib.Path(c["directory"]) / "site.json").write_text(json.dumps({"name": "cc", "published": True}))
+    main, enabled = prepare(monkeypatch, tmp_path, [a, b, c])
+    ok, n, msg = main.regenerate_nginx_config()
+    assert ok
+    assert noms_emis(enabled / "metablogizer") == ["aa.gk2.secubox.in", "cc.gk2.secubox.in"]
+    assert "bb (bb.gk2.secubox.in) — dépublié (site.json)" in msg
