@@ -41,6 +41,10 @@
 # déploiements GitHub muet avec lui. Critère de tri : route nginx propre
 # + appelée par une page de /usr/share/secubox/www = always-on.
 "metablogizer"               = "always-on"
+# Capteur de SECURITE : un service qui surveille ne doit jamais dormir,
+# et sa route passe par son propre socket (l'agregateur ne declenche pas
+# son demarrage, cf. secubox-sentinelle-gsm/nginx/sentinelle-gsm.conf).
+"sentinelle-gsm"             = "always-on"
 "podcaster"                  = "always-on"
 "dpi-flowcap"                = "always-on"
 "mail"                       = "always-on"

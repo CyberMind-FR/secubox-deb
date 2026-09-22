@@ -1,23 +1,8 @@
-secubox-profiles (0.19.5-1~bookworm1) bookworm; urgency=medium
+secubox-profiles (0.19.6-1~bookworm1) bookworm; urgency=medium
 
-  * Politique de cycle de vie : `metablogizer` et `podcaster` passent en
-    always-on (#1322). Le waker ne réveille que sur les vhosts de sites ; un
-    module dont nginx route `/api/v1/<mod>/` vers SON propre backend (et non
-    `aggregator.sock`) rend donc 502 dans le panneau dès que le sleeper l'a
-    endormi, et rien ne le relève. Constaté sur metablogizer : trois rechutes
-    en une matinée, unité `inactive` + `disabled` sans trace au journal (le
-    journal de gk2 ne retient que quelques minutes), et le `POST /webhook` des
-    déploiements GitHub muet avec elle.
-  * postinst : sur upgrade, le sleeper est RELANCÉ s'il était activé, au lieu
-    d'un `try-restart` que le snippet dh rendait inopérant (il stoppe l'unité
-    avant, si bien que `try-restart` la trouvait inactive et ne faisait rien).
-    Un opérateur ayant activé le sleeper le perdait à chaque mise à jour, sans
-    un mot — constaté sur gk2 : 5 jours d'uptime, disparus après un `dpkg -i`.
-    `enabled` reste le témoin de l'opt-in, donc une image neuve (--no-enable)
-    ne démarre toujours rien.
-  * Deux tests sur la politique LIVRÉE : vocabulaire borné (une valeur hors
-    vocabulaire retomberait silencieusement sur always-on, l'intention écrite
-    serait perdue) et non-régression du critère ci-dessus.
+  * Politique de cycle de vie : `sentinelle-gsm` en always-on (#1323). C'est un
+    capteur de SÉCURITÉ — la règle que ce fichier énonce déjà — et sa route
+    passe par son propre socket, l'agrégateur ne déclenchant pas son démarrage.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 14:54:58 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 17:54:51 +0200
 
