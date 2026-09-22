@@ -1,3 +1,0 @@
-# Automatically added by dh_installdeb/13.14.1ubuntu5
-dpkg-maintscript-helper mv_conffile /etc/nginx/sites-enabled/hall.gk2.net.conf /etc/nginx/sites-available/hall.gk2.net.conf 1.0.317-1\~bookworm1\~ -- "$@"
-# End automatically added section

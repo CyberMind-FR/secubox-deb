@@ -103,3 +103,4 @@ img/
 /packages/secubox-toolbox-ng/_gocache/
 /packages/secubox-toolbox-ng/_gopath/
 packages/secubox-ndpid-engine/nDPId-src/
+*.debhelper
