@@ -1,13 +1,14 @@
-secubox-torrent (2.4.4-1~bookworm2) bookworm; urgency=medium
+secubox-torrent (2.4.5-1~bookworm1) bookworm; urgency=medium
 
-  * Le rootfs du conteneur est decale sur l'idmap. La config declare
-    `lxc.idmap = u 0 100000 65536` — dans le conteneur, l'uid 0 EST l'uid
-    100000 de l'hote — mais `lxc-create -t download` deballait le rootfs en
-    root, donc a l'uid 0 de l'HOTE. L'init du conteneur ne pouvait pas lire
-    sa propre racine et lxc-start echouait sur « Failed to setup rootfs »,
-    un message qui ne nomme ni les droits ni l'idmap. Constate sur la VM
-    trixie, ou trois fausses pistes ont ete verifiees avant celle-ci :
-    reseau, AppArmor, espaces de noms non privilegies. (#1308)
+  * La route d'admin /api/v1/torrent/ passe par l'agrégateur au lieu du LXC
+    (10.100.0.160:8090). Le conteneur est `on-demand` : éteint, nginx rendait
+    502 — et la cardlet `quick.html?svc=torrent` du Hall interroge cette route
+    en boucle (908 requêtes en 502 sur gk2 le 2026-09-22, le tiers du journal
+    d'erreur). L'API hôte du module, elle, répond conteneur éteint
+    (`/status` → `enabled:false`) et porte `/container/{start,stop,restart}` :
+    de quoi afficher l'état ET rallumer, ce qu'un proxy vers un conteneur
+    éteint ne fera jamais. Le moteur WebTorrent reste dans le LXC, exposé par
+    le vhost public — seul endroit qui ait besoin de son adresse.
 
- -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 23:06:29 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 15:51:48 +0200
 
