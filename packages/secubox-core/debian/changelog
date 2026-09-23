@@ -1,3 +1,22 @@
+secubox-core (1.5.9-1~bookworm1) bookworm; urgency=medium
+
+  * LE COMMENTAIRE QUI DÉCRIT LA LIGNE EMPÊCHAIT LA LIGNE D'ÊTRE POSÉE
+    (closes #1351). Le postinst ajoute `proxy_set_header X-SecuBox-LAN
+    $lan_client;` au snippet de mandat, sous le garde `grep -q 'X-SecuBox-LAN'`.
+    Or le snippet contient déjà ce nom — DANS LE COMMENTAIRE qui explique la
+    ligne. grep le trouvait, le postinst concluait « déjà posée », et la
+    directive n'a jamais existé sur aucune board.
+  * CE QUE ÇA COÛTAIT. Sans ce verdict, `require_lecture` ne voit aucune marque
+    LAN et exige un jeton, quel que soit `[tableau_de_bord]`. Sur gk2 : 6586
+    refus en une heure depuis un seul poste, toutes les cartes du Hall vides, et
+    rien pour dire pourquoi — le mode tableau de bord était armé et ne
+    s'appliquait jamais.
+  * Le garde reconnaît maintenant la DIRECTIVE et non la chaîne. Le reste du
+    mécanisme est inchangé : on ajoute, on teste avec `nginx -t`, on retire si
+    le test échoue — perdre un affichage, jamais une barrière.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 18:13:19 +0200
+
 secubox-core (1.5.8-1~bookworm3) bookworm; urgency=medium
 
   * secubox-waf-route : un service déclare SA PROPRE route sbxwaf, comme il

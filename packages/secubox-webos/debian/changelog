@@ -1,3 +1,34 @@
+secubox-webos (1.0.336-1~bookworm1) bookworm; urgency=medium
+
+  * LE VERDICT LAN ATTEINT ENFIN LES MODULES (ref #1351). Le Hall expose ses
+    API une par une — c'est délibéré, un include global ouvrirait ici tout ce
+    qu'un module déclare ailleurs. Mais sur dix-neuf routes, UNE SEULE
+    transmettait `$lan_client` : les autres ne posaient aucune marque, et
+    `require_lecture` exigeait un jeton même sur le réseau local. Quinze routes
+    la portent désormais ; les quatre écartées visent un LXC, le vhost admin,
+    ou incluent déjà le snippet.
+  * UN TEST GARDE LA LISTE, parce qu'une liste tenue à la main diverge : il
+    échoue si une route mandate vers une socket SecuBox sans transmettre le
+    verdict, et il vérifie que la variable est bien `$lan_client` — en écrire
+    une autre passerait `nginx -t` (une variable inconnue vaut vide) et rendrait
+    le verdict TOUJOURS faux.
+  * LA GARDE DES SONDES (`sonde.js`). Une lecture refusée était réessayée
+    toutes les deux secondes, indéfiniment : 1560 refus sur la seule route
+    `profiles/lifecycles` en une heure. On espace au lieu d'arrêter — trente
+    secondes, puis le double à chaque refus, jusqu'à cinq minutes ; un retour à
+    200 remet le compteur à zéro. Arrêter pour de bon obligerait à recharger la
+    carte après s'être connecté, ce que personne ne devine.
+  * ELLE ENVELOPPE `fetch` UNE SEULE FOIS plutôt que de corriger douze boucles
+    écrites douze fois — et un test garde que toute carte qui sonde la charge,
+    AVANT ses propres scripts : chargée après, elle arriverait trop tard pour
+    la première salve.
+  * ET UN TEST VÉRIFIE QUE CHAQUE SCRIPT DU HALL EST INSTALLÉ. `debian/rules`
+    les liste fichier par fichier ; un script ajouté sans sa ligne existe dans
+    le dépôt, passe les tests, et MANQUE sur la board. C'est arrivé le même
+    jour au cockpit de gabriel-mood, livré avec un répertoire web vide.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 18:13:19 +0200
+
 secubox-webos (1.0.335-1~bookworm1) bookworm; urgency=medium
 
   * PLACEMENT DE LA BARRE DE VOLUME GÉNÉRALE (ref #1349). La 1.0.334 la posait
