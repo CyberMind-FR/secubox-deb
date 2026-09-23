@@ -1,3 +1,24 @@
+secubox-surf (1.0.20-1~bookworm1) bookworm; urgency=medium
+
+  * Le JavaScript de la page relayée voit ses appels réseau RÉÉCRITS vers
+    l'origine surf : fetch, XMLHttpRequest, sendBeacon, EventSource, et les
+    sources média posées au runtime (audio/video/source/track).
+    Le HTML et le CSS étaient réécrits côté serveur ; un `fetch()` dont l'URL
+    est CONSTRUITE au runtime ne pouvait pas l'être. La page demandait donc sa
+    ressource à son hôte d'origine — cross-origin depuis
+    surf-<hôte>.gk2.secubox.in, sans en-tête CORS — et le navigateur bloquait.
+    Constaté sur radiofrance.fr : le lecteur interroge /transistor/aod/<id>
+    pour obtenir l'URL du média, la requête est refusée, et plus rien ne se lit
+    (« Invalid URI. Load of media resource failed »). Le module RECENSAIT ces
+    appels sans les réécrire ; il les réécrit désormais.
+  * Posé dans le script de TÊTE et non en pied : les scripts du site appellent
+    fetch dès leur évaluation, un habillage installé en fin de page arriverait
+    après la première requête — donc après la panne.
+  * Les schémas data:, blob:, about: et les URL relatives passent intacts :
+    les réécrire casserait un média déjà local.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 07:52:27 +0200
+
 secubox-surf (1.0.19-1~bookworm1) bookworm; urgency=medium
 
   * egress : résolution ROBUSTE du SOCKS Tor. L'env SECUBOX_TOR_SOCKS gagne ;

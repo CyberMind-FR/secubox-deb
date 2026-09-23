@@ -530,6 +530,108 @@ _INJECTION_TETE = """
   window.__sbx={cookies:0,popups:0,notifs:0,pubs:0,tiers:0,trackers:0,total:0};
   var S=window.__sbx;
 
+  // ── REECRITURE DES APPELS RESEAU DU JAVASCRIPT (#1323) ──────────────────
+  // CE QUE LE RELAIS NE POUVAIT PAS REECRIRE COTE SERVEUR. Le HTML et le CSS
+  // sont reecrits a la source ; un `fetch()` dont l'URL est CONSTRUITE au
+  // runtime, non. La page arrivait donc a demander une ressource a son hote
+  // d'origine — cross-origin depuis `surf-<hote>.gk2.secubox.in`, sans en-tete
+  // CORS — et le navigateur bloquait. Constate sur radiofrance.fr : le lecteur
+  // interroge `/transistor/aod/<id>` pour obtenir l'URL du media, la requete
+  // est refusee, et plus rien ne se lit (« Invalid URI. Load of media resource
+  // failed »). Le module RECENSAIT ces appels sans les reecrire ; il les
+  // reecrit desormais.
+  //
+  // POSE ICI, DANS LE SCRIPT DE TETE, ET PAS EN PIED : les scripts du site
+  // appellent `fetch` des leur evaluation. Un habillage installe en fin de
+  // page arriverait apres la premiere requete — donc apres la panne.
+  try{
+    var _SUF="gk2.secubox.in";
+    function _orig(h){ return "surf-"+h.toLowerCase().replace(/-/g,"--").replace(/\./g,"-")+"."+_SUF; }
+    function _map(u){
+      try{
+        if(u==null||u==="") return u;
+        var s=String(u);
+        // Les schemas non-web (data:, blob:, about:) passent intacts : les
+        // reecrire casserait un media deja local.
+        if(/^(data|blob|about|javascript|mailto|tel):/i.test(s)) return u;
+        var a=new URL(s, location.href);
+        if(a.protocol!=="http:"&&a.protocol!=="https:") return u;
+        var h=a.hostname.toLowerCase();
+        if(h===location.hostname) return u;                    // deja nous
+        if(h.slice(-(_SUF.length+1))==="."+_SUF) return u;     // deja une origine surf
+        return "https://"+_orig(h)+a.pathname+a.search+a.hash;
+      }catch(e){ return u; }
+    }
+    window.__sbxMap=_map;   // le script de pied le reutilise
+
+    // fetch — l'entree peut etre une chaine, une URL, ou un Request deja
+    // construit. On RECONSTRUIT le Request plutot que d'en muter l'url, qui
+    // est en lecture seule.
+    if(typeof window.fetch==="function"){
+      var _f=window.fetch;
+      window.fetch=function(entree, opts){
+        try{
+          if(entree && typeof entree==="object" && "url" in entree && typeof Request!=="undefined"){
+            var n=_map(entree.url);
+            if(n!==entree.url) entree=new Request(n, entree);
+          }else{
+            entree=_map(entree);
+          }
+        }catch(e){}
+        return _f.call(this, entree, opts);
+      };
+    }
+
+    // XMLHttpRequest — le vieux chemin, encore majoritaire dans les lecteurs.
+    try{
+      var _o=XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open=function(m,u){
+        var a=[].slice.call(arguments); a[1]=_map(u);
+        return _o.apply(this,a);
+      };
+    }catch(e){}
+
+    // sendBeacon et EventSource, pour ne pas laisser deux portes ouvertes.
+    try{
+      if(navigator.sendBeacon){
+        var _b=navigator.sendBeacon.bind(navigator);
+        navigator.sendBeacon=function(u,d){ return _b(_map(u),d); };
+      }
+    }catch(e){}
+    try{
+      if(window.EventSource){
+        var _E=window.EventSource;
+        window.EventSource=function(u,c){ return new _E(_map(u),c); };
+        window.EventSource.prototype=_E.prototype;
+      }
+    }catch(e){}
+
+    // SOURCES MEDIA POSEES AU RUNTIME. Un lecteur qui a obtenu son URL la
+    // donne a un <audio>/<video>/<source> : sans cette passe, on aurait
+    // reecrit la requete qui CHERCHE le media, pas celle qui le JOUE.
+    try{
+      var _sa=Element.prototype.setAttribute;
+      Element.prototype.setAttribute=function(n,v){
+        try{ if(v!=null && /^src$/i.test(String(n))){
+          var t=this.tagName;
+          if(t==="AUDIO"||t==="VIDEO"||t==="SOURCE"||t==="TRACK") v=_map(v);
+        } }catch(e){}
+        return _sa.call(this,n,v);
+      };
+      ["HTMLMediaElement","HTMLSourceElement"].forEach(function(C){
+        try{ if(!window[C]) return;
+          var d=Object.getOwnPropertyDescriptor(window[C].prototype,"src");
+          if(!d||!d.set) return;
+          Object.defineProperty(window[C].prototype,"src",{
+            configurable:true, enumerable:d.enumerable, get:d.get,
+            set:function(v){ d.set.call(this,_map(v)); }
+          });
+        }catch(e){}
+      });
+    }catch(e){}
+  }catch(e){}
+
+
   // DEBLOCAGE CMP DIDOMI (#1235). Le contenu de BFM/Altice (et autres) est rendu
   // APRES consentement Didomi ; sans accord, la page reste VIDE (ecran noir). Le
   // polling cmp() peut rater la fenetre ou Didomi charge ; le hook OFFICIEL
