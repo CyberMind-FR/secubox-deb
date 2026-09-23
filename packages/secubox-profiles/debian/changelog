@@ -1,23 +1,8 @@
-secubox-profiles (0.19.3-1~bookworm2) bookworm; urgency=medium
+secubox-profiles (0.19.6-1~bookworm1) bookworm; urgency=medium
 
-  * to_toml emet enfin lifecycle et wake_class. Ils n'etaient JAMAIS ecrits :
-    un manifeste porte a « on-demand » revenait « always-on » au premier
-    passage, en silence — alors que la docstring promettait un aller-retour
-    garanti avec load_manifest. Consequence mesuree sur une image neuve : 86
-    manifestes derives, pas un avec une ligne lifecycle, donc un sleeper
-    actif qui n'avait rien a endormir.
-  * Politique de cycle de vie livree (usr/share/secubox/lifecycle-defaults.toml,
-    remplacable par /etc/secubox/). 83 modules : 70 on-demand, 7 manual,
-    5 always-on, 1 eager. Ces valeurs ne sont pas inventees — ce sont celles
-    de gk2, accumulees module par module, et elles ne se deduisent d'AUCUN
-    champ : aucun manifeste ne porte de portal_domain, et 66 des 70
-    on-demand n'ont aucune route WAF. C'est du jugement operationnel qui
-    n'existait que sur une machine, sans qu'aucun paquet ne le possede.
-  * scan applique cette politique a la DERIVATION seulement. Un manifeste
-    existant fait toujours autorite (pas d'ecrasement sans --force), et un
-    module absent de la politique garde always-on : ne rien savoir ne
-    justifie jamais d'endormir. Une politique absente ou illisible rend {},
-    ce qui laisse tout eveille. (#1308)
+  * Politique de cycle de vie : `sentinelle-gsm` en always-on (#1323). C'est un
+    capteur de SÉCURITÉ — la règle que ce fichier énonce déjà — et sa route
+    passe par son propre socket, l'agrégateur ne déclenchant pas son démarrage.
 
- -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 21:43:23 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 17:54:51 +0200
 

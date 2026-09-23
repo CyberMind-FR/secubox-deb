@@ -4,1650 +4,809 @@
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox #1323 — Vigie SOC, trois écrans.
+
+  ELLE NE PEINT RIEN QU'ELLE N'A OBSERVÉ. La page précédente était un bundle
+  React qui interrogeait `/api/v1/soc-gateway/*` — une console de flotte
+  multi-box jamais déployée ici : aucune unité, aucune route, agrégateur 404.
+  L'écran restait donc vide, et on croyait le SOC cassé alors qu'il visait à
+  côté. Celle-ci lit les SOURCES VIVANTES de la box : le WAF (menaces, bans,
+  campagnes corrélées, géo), les métriques, les profils, la sentinelle GSM.
+
+  Le magasin /api/v1/soc/ (tickets, renseignement) reste en complément : son
+  API fonctionne mais personne n'y écrit, et une page bâtie dessus n'aurait
+  affiché que des zéros.
+
+  UN PANNEAU QUI NE PEUT PAS LIRE SA SOURCE LE DIT. Pas de zéro par défaut :
+  un compteur absent est un compteur MANQUANT, pas un compteur nul — c'est la
+  différence entre « rien ne nous attaque » et « on ne voit plus rien ».
 -->
-
-<html lang="en" data-theme="dark">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox SOC Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/design-tokens.css">
-    <style>
-        /* ═══════════════════════════════════════════════════════════════
-           SECUBOX SOC DASHBOARD — Hybrid Glass + Matrix Skin
-           ═══════════════════════════════════════════════════════════════ */
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: var(--font-display);
-            background: var(--bg-deep);
-            color: var(--text-dark);
-            min-height: 100vh;
-            line-height: 1.5;
-        }
-
-        /* Layout */
-        .layout { display: flex; min-height: 100vh; }
-
-        /* ═══════════════════════════════════════════════════════════════
-           SIDEBAR — Glass Effect
-           ═══════════════════════════════════════════════════════════════ */
-        .sidebar { display: none !important; 
-            width: 240px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border-right: 1px solid var(--glass-border);
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100vh;
-            z-index: 100;
-        }
-
-        .sidebar-header {
-            padding: var(--space-l);
-            border-bottom: 1px solid var(--glass-border);
-        }
-
-        /* Brand-logo CSS is owned by /shared/sidebar.css — sidebar.js
-           injects the SecuBox lock + version using classes .logo-icon
-           / .logo / .logo-version. We used to redefine those classes
-           here (turning the lock emoji into a 40x40 gradient box) which
-           overrode the shared styling and made the SOC logo look unlike
-           every other module. Don't reintroduce them. */
-
-        .sidebar-nav { flex: 1; padding: var(--space-m); overflow-y: auto; }
-        .nav-section { margin-bottom: var(--space-l); }
-
-        .nav-section-title {
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: var(--muted-dark);
-            padding: var(--space-s) var(--space-m);
-            margin-bottom: var(--space-xs);
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: var(--space-m);
-            padding: var(--space-s) var(--space-m);
-            border-radius: var(--radius-sm);
-            color: var(--muted-dark);
-            text-decoration: none;
-            transition: all 0.2s ease;
-            font-size: 14px;
-        }
-
-        .nav-item:hover { background: var(--glass-highlight); color: var(--text-dark); }
-
-        .nav-item.active {
-            background: rgba(20, 140, 102, 0.15);
-            color: var(--root-light);
-            border-left: 2px solid var(--root-light);
-            margin-left: -2px;
-        }
-
-        .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
-        .nav-item .badge { margin-left: auto; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-family: var(--font-mono); }
-        .nav-item .badge.beta { background: rgba(245, 158, 11, 0.2); color: var(--wall-light); }
-        .nav-item .badge.alpha { background: rgba(239, 68, 68, 0.2); color: var(--boot-light); }
-        .nav-item .status-led { margin-left: auto; font-size: 10px; }
-
-        .sidebar-footer { padding: var(--space-m); border-top: 1px solid var(--glass-border); }
-        .user-info { display: flex; align-items: center; gap: var(--space-m); padding: var(--space-s); }
-        .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 14px; }
-        .user-name { font-size: 13px; font-weight: 500; }
-        .user-role { font-size: 10px; color: var(--muted-dark); text-transform: uppercase; }
-
-        /* ═══════════════════════════════════════════════════════════════
-           MAIN CONTENT
-           ═══════════════════════════════════════════════════════════════ */
-        .main {
-            flex: 1;
-            margin-left: 240px;
-            padding: var(--space-xl);
-            background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-dark) 100%);
-            min-height: 100vh;
-        }
-
-        .page-header { margin-bottom: var(--space-xl); }
-        .page-title { font-size: 28px; font-weight: 600; margin-bottom: var(--space-xs); }
-        .page-subtitle { color: var(--muted-dark); font-size: 14px; }
-
-        /* ═══════════════════════════════════════════════════════════════
-           GLASS CARDS — Dashboard Style
-           ═══════════════════════════════════════════════════════════════ */
-        .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: var(--space-l);
-            margin-bottom: var(--space-xl);
-        }
-
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-l);
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s ease;
-        }
-
-        .glass-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-            border-color: rgba(255, 255, 255, 0.12);
-        }
-
-        .glass-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: var(--card-accent, var(--root-light));
-            opacity: 0.8;
-        }
-
-        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-m); }
-        .card-icon { font-size: 24px; filter: drop-shadow(var(--shadow-glow) var(--card-accent, var(--root-light))); }
-
-        .card-status {
-            display: flex;
-            align-items: center;
-            gap: var(--space-xs);
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--card-accent, #148C66);
-            text-shadow: 0 0 8px currentColor;
-        }
-
-        .card-status::before {
-            content: '';
-            width: 8px; height: 8px;
-            background: currentColor;
-            border-radius: 50%;
-            box-shadow: 0 0 8px currentColor;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        .card-status.warning { color: var(--wall-light); }
-        .card-status.danger { color: var(--boot-light); }
-
-        .card-metric {
-            font-size: 36px;
-            font-weight: 700;
-            color: var(--card-accent, #00ff88);
-            font-family: var(--font-mono);
-            line-height: 1;
-            margin-bottom: var(--space-s);
-            text-shadow: 0 0 10px currentColor;
-        }
-
-        .card-label { font-size: 13px; color: var(--muted-dark); margin-bottom: var(--space-m); }
-
-        .card-trend {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-xs);
-            font-size: 12px;
-            padding: 4px 8px;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-        }
-
-        .card-trend.up { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
-        .card-trend.down { background: rgba(192, 96, 64, 0.15); color: var(--boot-light); }
-
-        /* ═══════════════════════════════════════════════════════════════
-           MATRIX PANEL — Terminal Style
-           ═══════════════════════════════════════════════════════════════ */
-        .matrix-panel {
-            background: var(--surface-dark);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-md);
-            overflow: hidden;
-            margin-bottom: var(--space-xl);
-        }
-
-        .matrix-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: var(--space-m) var(--space-l);
-            background: var(--bg-elevated);
-            border-bottom: 1px solid var(--glass-border);
-            font-family: var(--font-mono);
-            font-size: 13px;
-        }
-
-        .matrix-title {
-            display: flex;
-            align-items: center;
-            gap: var(--space-s);
-            color: var(--root-light);
-            font-weight: 500;
-        }
-
-        .matrix-title::before { content: '>'; animation: blink 1s step-end infinite; }
-        @keyframes blink { 50% { opacity: 0; } }
-
-        .matrix-body { padding: var(--space-m); font-family: var(--font-mono); font-size: 13px; line-height: 1.8; }
-        .matrix-row { display: flex; align-items: flex-start; padding: var(--space-xs) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
-        .matrix-row:last-child { border-bottom: none; }
-        .matrix-label { color: var(--muted-dark); min-width: 120px; }
-        .matrix-value { color: var(--text-dark); flex: 1; }
-        .matrix-value .highlight { color: var(--root-light); }
-        .matrix-value .warning { color: var(--wall-light); }
-        .matrix-value .danger { color: var(--boot-light); }
-        .matrix-value .info { color: var(--mesh-light); }
-        .flag { font-size: 14px; margin-right: var(--space-xs); }
-
-        /* ═══════════════════════════════════════════════════════════════
-           ACTIVITY PANEL
-           ═══════════════════════════════════════════════════════════════ */
-        .row { display: flex; gap: var(--space-l); }
-        .col-2 { flex: 1; }
-
-        .activity-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-        }
-
-        .activity-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: var(--space-l);
-            border-bottom: 1px solid var(--glass-border);
-        }
-
-        .activity-title { font-size: 16px; font-weight: 600; }
-        .activity-filter { display: flex; gap: var(--space-s); }
-
-        .filter-btn {
-            padding: var(--space-xs) var(--space-s);
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--glass-border);
-            background: transparent;
-            color: var(--muted-dark);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .filter-btn:hover, .filter-btn.active {
-            background: var(--glass-highlight);
-            color: var(--text-dark);
-            border-color: rgba(255, 255, 255, 0.15);
-        }
-
-        .activity-list { max-height: 300px; overflow-y: auto; }
-
-        .activity-item {
-            display: flex;
-            align-items: flex-start;
-            gap: var(--space-m);
-            padding: var(--space-m) var(--space-l);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            transition: background 0.2s ease;
-        }
-
-        .activity-item:hover { background: var(--glass-highlight); }
-
-        .activity-icon {
-            width: 32px; height: 32px;
-            border-radius: var(--radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            flex-shrink: 0;
-        }
-
-        .activity-icon.waf { background: rgba(232, 132, 90, 0.15); color: var(--auth-light); }
-        .activity-icon.ssl { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
-        .activity-icon.auth { background: rgba(44, 112, 192, 0.15); color: var(--mesh-light); }
-
-        .activity-content { flex: 1; min-width: 0; }
-        .activity-text { font-size: 13px; color: var(--text-dark); margin-bottom: 2px; }
-
-        .activity-text code {
-            font-family: var(--font-mono);
-            background: var(--bg-elevated);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 12px;
-            color: var(--wall-light);
-        }
-
-        .activity-meta { font-size: 11px; color: var(--muted-dark); font-family: var(--font-mono); }
-
-        /* ═══════════════════════════════════════════════════════════════
-           CHART CARD
-           ═══════════════════════════════════════════════════════════════ */
-        .chart-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-l);
-            margin-bottom: var(--space-xl);
-        }
-
-        .chart-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: var(--space-l);
-        }
-
-        .chart-title { font-size: 16px; font-weight: 600; }
-        .chart-legend { display: flex; gap: var(--space-m); font-size: 12px; }
-        .legend-item { display: flex; align-items: center; gap: var(--space-xs); color: var(--muted-dark); }
-        .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-
-        .chart-area {
-            height: 120px;
-            display: flex;
-            align-items: flex-end;
-            gap: 2px;
-            padding: var(--space-s) 0;
-        }
-
-        .chart-bar {
-            flex: 1;
-            background: linear-gradient(180deg, var(--root-light), rgba(20, 140, 102, 0.3));
-            border-radius: 2px 2px 0 0;
-            min-height: 4px;
-            transition: all 0.3s ease;
-        }
-
-        .chart-bar:hover { filter: brightness(1.2); }
-
-        .chart-labels {
-            display: flex;
-            justify-content: space-between;
-            margin-top: var(--space-s);
-            font-size: 10px;
-            color: var(--muted-dark);
-            font-family: var(--font-mono);
-        }
-
-        /* Health bars */
-        .health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-m); }
-
-        .health-item {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-md);
-            padding: var(--space-m);
-        }
-
-        .health-header { display: flex; justify-content: space-between; margin-bottom: var(--space-s); font-size: 13px; }
-        .health-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
-        .health-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-        .health-fill.ok { background: linear-gradient(90deg, var(--root-light), #16a34a); }
-        .health-fill.warn { background: linear-gradient(90deg, var(--wall-light), var(--auth-light)); }
-        .health-fill.danger { background: linear-gradient(90deg, var(--boot-light), #ef4444); }
-        .health-percent { font-family: var(--font-mono); font-size: 12px; color: var(--muted-dark); margin-top: var(--space-xs); text-align: right; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
-
-        /* Responsive */
-        @media (max-width: 1024px) { .row { flex-direction: column; } }
-        @media (max-width: 768px) {
-            .sidebar { display: none !important;  transform: translateX(-100%); transition: transform 0.3s ease; }
-            .sidebar.open { transform: translateX(0); }
-            .main { margin-left: 0; padding: var(--space-m); }
-        }
-
-        /* Loading spinner */
-        .loading { opacity: 0.5; animation: loading-pulse 1.5s infinite; }
-        @keyframes loading-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
-
-        /* Three-column status layout */
-        .status-columns {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: var(--space-l);
-            margin-bottom: var(--space-xl);
-        }
-        .status-col { margin-bottom: 0; }
-        @media (max-width: 1200px) { .status-columns { grid-template-columns: 1fr; } }
-
-        /* Categories as small tags with emojis */
-        .categories-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-        .cat-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 3px;
-            padding: 2px 6px;
-            font-size: 10px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            white-space: nowrap;
-        }
-        .cat-tag.scanner { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); }
-        .cat-tag.bruteforce { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); }
-        .cat-tag.honeypot { border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.1); }
-        .cat-tag.waf { border-color: rgba(232, 132, 90, 0.4); background: rgba(232, 132, 90, 0.1); }
-        .cat-tag.http { border-color: rgba(44, 112, 192, 0.4); background: rgba(44, 112, 192, 0.1); }
-        .cat-tag.ssh { border-color: rgba(20, 140, 102, 0.4); background: rgba(20, 140, 102, 0.1); }
-        .cat-tag.sqli { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.15); }
-        .cat-tag.xss { border-color: rgba(251, 146, 60, 0.5); background: rgba(251, 146, 60, 0.15); }
-
-        /* Autoban panel */
-        .autoban-panel {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            margin-bottom: var(--space-xl);
-            overflow: hidden;
-        }
-        .autoban-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: var(--space-m);
-            padding: var(--space-m) var(--space-l);
-            background: var(--bg-elevated);
-            border-bottom: 1px solid var(--glass-border);
-        }
-        .autoban-title {
-            font-family: var(--font-mono);
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--boot-light);
-        }
-        .autoban-controls {
-            display: flex;
-            align-items: center;
-            gap: var(--space-s);
-            flex-wrap: wrap;
-        }
-        .ban-input, .ban-select {
-            padding: 6px 10px;
-            font-size: 12px;
-            font-family: var(--font-mono);
-            background: var(--bg-deep);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-sm);
-            color: var(--text-dark);
-        }
-        .ban-input { width: 140px; }
-        .ban-select { width: 110px; }
-        .ban-btn {
-            padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--boot-light), #ef4444);
-            border: none;
-            border-radius: var(--radius-sm);
-            color: white;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .ban-btn:hover { filter: brightness(1.1); transform: scale(1.02); }
-        .ban-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .recent-bans {
-            padding: var(--space-m);
-            max-height: 100px;
-            overflow-y: auto;
-            font-family: var(--font-mono);
-            font-size: 11px;
-        }
-        .ban-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 4px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-        .ban-item:last-child { border-bottom: none; }
-        .ban-ip { color: var(--boot-light); }
-        .ban-meta { color: var(--muted-dark); }
-        .unban-btn {
-            padding: 2px 6px;
-            font-size: 10px;
-            background: transparent;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 3px;
-            color: var(--boot-light);
-            cursor: pointer;
-        }
-        .unban-btn:hover { background: rgba(239, 68, 68, 0.2); }
-
-        /* ═══════════════════════════════════════════════════════════════
-           TRIPLE EYEMOTE SENSORS
-           ═══════════════════════════════════════════════════════════════ */
-        .eyemotes-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: var(--space-m);
-            margin-bottom: var(--space-xl);
-        }
-        @media (max-width: 1200px) { .eyemotes-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 768px) { .eyemotes-grid { grid-template-columns: 1fr; } }
-        .eyemote-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-m);
-            display: flex;
-            flex-direction: column;
-        }
-        .eyemote-card h2 {
-            font-size: 0.85rem;
-            color: var(--muted-dark);
-            margin-bottom: var(--space-s);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .eyemote-mini {
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: var(--space-s) 0;
-        }
-        .eyemote-svg-mini { width: 160px; height: 160px; }
-        .eyemote-svg-mini .ring-fill { transition: stroke-dasharray 0.8s ease-out; }
-        .eyemote-svg-mini .eyemote-pupil { animation: pupilPulse 2s infinite; }
-        @keyframes pupilPulse {
-            0%, 100% { r: 8; opacity: 1; }
-            50% { r: 10; opacity: 0.8; }
-        }
-        .eyemote-total-mini {
-            position: absolute;
-            font-family: var(--font-mono);
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #00ff41;
-            text-shadow: 0 0 12px rgba(0,255,65,0.5);
-        }
-        .eyemote-total-mini.visitor { color: #00d4ff; text-shadow: 0 0 12px rgba(0,212,255,0.5); }
-        .eyemote-total-mini.vhost { color: #f97316; text-shadow: 0 0 12px rgba(249,115,22,0.5); }
-        .eyemote-legend-mini {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            max-height: 180px;
-            overflow-y: auto;
-        }
-        .legend-row-mini {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 5px 8px;
-            background: rgba(255,255,255,0.03);
-            border-radius: var(--radius-sm);
-            border-left: 3px solid;
-        }
-        .legend-row-mini .row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .legend-row-mini .row-val { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; min-width: 55px; }
-        .legend-row-mini .row-flags { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; }
-        .flag-mini {
-            width: 20px; height: 20px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.7rem; border: 2px solid; position: relative;
-        }
-        .flag-mini .fm-count {
-            position: absolute; bottom: -2px; right: -2px;
-            font-size: 0.45rem; background: #000; color: #fff;
-            padding: 1px 2px; border-radius: 3px; font-family: var(--font-mono);
-        }
-        .vhost-badge {
-            display: inline-flex; align-items: center; gap: 3px;
-            padding: 2px 6px; background: rgba(255,255,255,0.05);
-            border-radius: var(--radius-sm); font-size: 0.65rem;
-            font-family: var(--font-mono); border: 1px solid;
-        }
-        .vhost-badge .vb-count { font-weight: 700; }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.1); }
-        }
-    </style>
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Vigie SOC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  /* Palette et fontes du système SecuBox (.claude/CLAUDE.md), signatures
+     spicy.css du Hall : filet dégradé sous l'en-tête, halo sur les grands
+     chiffres, barres en dégradé. Sombre d'abord — une console de veille se
+     lit sur fond de nuit ; le clair reste complet pour le plein jour. */
+  :root {
+    color-scheme: dark light;
+    --nuit:#0d0e14; --surface:#161821; --surface-2:#1d1f2b;
+    --bord:#282b39; --bord-vif:#3a3e52;
+    --texte:#e8e6d9; --muted:#8b8b9c; --faible:#63637a;
+    --braise:#ff6b4a; --braise-fond:#2a1410;
+    --ambre:#d9b451;  --ambre-fond:#241d0e;
+    --vert:#4ecb8d;   --vert-fond:#0f2418;
+    --cyan:#38d2f0;   --violet:#8b62e8;
+    --r:10px; --ombre:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --nuit:#f4f2ec; --surface:#fff; --surface-2:#faf8f3;
+      --bord:#e2ded3; --bord-vif:#cfc9ba;
+      --texte:#1c1d24; --muted:#62636f; --faible:#8b8c98;
+      --braise:#c53a1c; --braise-fond:#fdeae5; --ambre:#96721a; --ambre-fond:#faf1d9;
+      --vert:#1d7a4e; --vert-fond:#e6f5ec; --cyan:#0a7f9c; --violet:#5b3bab;
+      --ombre:0 1px 2px rgba(28,29,36,.06), 0 8px 24px -14px rgba(28,29,36,.18);
+    }
+  }
+  :root[data-theme="light"] {
+    --nuit:#f4f2ec; --surface:#fff; --surface-2:#faf8f3;
+    --bord:#e2ded3; --bord-vif:#cfc9ba; --texte:#1c1d24; --muted:#62636f; --faible:#8b8c98;
+    --braise:#c53a1c; --braise-fond:#fdeae5; --ambre:#96721a; --ambre-fond:#faf1d9;
+    --vert:#1d7a4e; --vert-fond:#e6f5ec; --cyan:#0a7f9c; --violet:#5b3bab;
+    --ombre:0 1px 2px rgba(28,29,36,.06), 0 8px 24px -14px rgba(28,29,36,.18);
+  }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--nuit); color:var(--texte); display:flex;
+         font-family:"Inter",system-ui,-apple-system,sans-serif; font-size:15px;
+         line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .page { flex:1; min-width:0; max-width:1240px; margin:0 auto; padding:24px 22px 56px; }
+
+  .bandeau { display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap;
+             padding-bottom:14px; position:relative; }
+  .bandeau::after { content:""; position:absolute; left:0; right:0; bottom:0; height:2px;
+    border-radius:2px; opacity:.85;
+    background:linear-gradient(90deg,var(--vert),var(--cyan),var(--violet),var(--ambre)); }
+  .marque { font-family:"Cinzel",Georgia,serif; font-weight:600; font-size:1.6rem;
+            letter-spacing:.02em; line-height:1.1; }
+  .marque span { color:var(--cyan); }
+  .sous { color:var(--muted); font-size:.84rem; max-width:48ch; }
+  .horodate { margin-left:auto; text-align:right; font-family:"JetBrains Mono",monospace;
+              font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--faible); }
+  .horodate b { display:block; color:var(--muted); font-weight:500; }
+  .pouls { display:inline-block; width:6px; height:6px; border-radius:50%;
+           background:var(--vert); margin-right:5px; vertical-align:1px;
+           animation:bat 2.6s ease-in-out infinite; }
+  .pouls.mort { background:var(--braise); animation:none; }
+  @keyframes bat { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+  .onglets { display:flex; gap:6px; margin:18px 0 6px; flex-wrap:wrap; }
+  .onglet { font-size:.78rem; font-weight:500; color:var(--muted); background:var(--surface);
+            border:1px solid var(--bord); border-radius:8px; padding:7px 13px; cursor:pointer;
+            display:flex; gap:7px; align-items:center; font-family:inherit; }
+  .onglet:hover { border-color:var(--bord-vif); color:var(--texte); }
+  .onglet[aria-selected="true"] { color:var(--texte); border-color:var(--cyan);
+            background:var(--surface-2);
+            box-shadow:0 0 0 1px color-mix(in srgb,var(--cyan) 28%,transparent); }
+  .onglet .pt { width:6px; height:6px; border-radius:50%; background:var(--faible); }
+  .onglet[aria-selected="true"] .pt { background:var(--cyan); }
+  .onglet:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+  .ecran[hidden] { display:none; }
+
+  .sect { margin:30px 0 13px; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .sect h2 { font-family:"Cinzel",Georgia,serif; font-weight:500; font-size:1.02rem;
+             margin:0; letter-spacing:.015em; }
+  .sect .quoi { color:var(--faible); font-size:.78rem; }
+  .src { margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:.62rem;
+         color:var(--faible); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .panneau { background:var(--surface); border:1px solid var(--bord); border-radius:var(--r);
+             padding:16px 18px; box-shadow:var(--ombre); }
+  .panneau > h3 { margin:0 0 12px; font-size:.8rem; font-weight:600;
+                  display:flex; align-items:baseline; gap:8px; }
+  .panneau > h3 .c { margin-left:auto; font-family:"JetBrains Mono",monospace;
+                     font-size:.66rem; color:var(--faible); font-weight:400; }
+  .muet { color:var(--faible); font-size:.76rem; font-style:italic; padding:8px 0; }
+
+  .posture { display:grid; grid-template-columns:minmax(230px,300px) 1fr; gap:18px; }
+  .jour { background:var(--surface); border:1px solid var(--bord); border-radius:var(--r);
+          padding:20px 22px; box-shadow:var(--ombre);
+          display:flex; flex-direction:column; justify-content:center; }
+  .eti { font-family:"JetBrains Mono",monospace; font-size:.62rem; letter-spacing:.12em;
+         text-transform:uppercase; color:var(--faible); }
+  .jour .v { font-family:"JetBrains Mono",monospace; font-weight:700; font-size:3rem;
+             line-height:1.02; letter-spacing:-.02em; font-variant-numeric:tabular-nums;
+             color:var(--braise); margin:4px 0 2px;
+             text-shadow:0 0 22px color-mix(in srgb,var(--braise) 26%,transparent); }
+  .jour .detail { color:var(--muted); font-size:.8rem; }
+  .jour .detail b { color:var(--texte); font-variant-numeric:tabular-nums; font-weight:600; }
+  .jour .part { display:flex; height:6px; border-radius:3px; overflow:hidden;
+                margin-top:14px; background:var(--bord); }
+  .jour .part i { display:block; height:100%; }
+  .jour .leg { display:flex; gap:14px; margin-top:8px; font-size:.68rem; color:var(--muted);
+               font-family:"JetBrains Mono",monospace; }
+  .jour .leg em { font-style:normal; display:inline-block; width:7px; height:7px;
+                  border-radius:2px; margin-right:5px; }
+
+  .echelle { display:flex; flex-direction:column; gap:7px; }
+  .cat { display:grid; grid-template-columns:168px 1fr 62px; gap:10px; align-items:center; }
+  .cat .nom { font-family:"JetBrains Mono",monospace; font-size:.68rem; color:var(--muted);
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cat .bar { height:9px; border-radius:5px; background:var(--surface-2); overflow:hidden;
+              border:1px solid var(--bord); }
+  .cat .bar i { display:block; height:100%;
+                background:linear-gradient(90deg,var(--cyan),var(--violet)); }
+  .cat .nb { font-family:"JetBrains Mono",monospace; font-size:.7rem; text-align:right;
+             font-variant-numeric:tabular-nums; }
+  .cat.tete .nom { color:var(--texte); font-weight:500; }
+  .cat.tete .bar i { background:linear-gradient(90deg,var(--braise),var(--ambre)); }
+  .cat.tete .nb { color:var(--braise); font-weight:700; }
+  .cat.leurre .bar i { background:linear-gradient(90deg,var(--ambre),color-mix(in srgb,var(--ambre) 40%,var(--violet))); }
+
+  .geo { display:grid; grid-template-columns:1.35fr .65fr; gap:18px; align-items:start; }
+  .carte { background:var(--surface); border:1px solid var(--bord); border-radius:var(--r);
+           padding:14px 16px 10px; box-shadow:var(--ombre); }
+  .carte svg { width:100%; height:auto; display:block; overflow:visible; }
+  .grat { stroke:var(--bord); stroke-width:1; fill:none; }
+  .grat.ppl { stroke:var(--bord-vif); stroke-dasharray:3 5; opacity:.55; }
+  .bulle { fill:color-mix(in srgb,var(--braise) 26%,transparent); stroke:var(--braise); stroke-width:1.2; }
+  .bulle.tiede { fill:color-mix(in srgb,var(--ambre) 22%,transparent); stroke:var(--ambre); }
+  .bulle.froid { fill:color-mix(in srgb,var(--cyan) 20%,transparent); stroke:var(--cyan); }
+  .cible { fill:none; stroke:var(--vert); stroke-width:1.4; }
+  .cible-n { fill:var(--vert); }
+  .etiq { font-family:"JetBrains Mono",monospace; font-size:9.5px; fill:var(--muted); }
+  .etiq.fort { fill:var(--texte); font-weight:700; }
+  .legende { display:flex; gap:16px; margin-top:8px; padding-top:9px; border-top:1px solid var(--bord);
+             font-family:"JetBrains Mono",monospace; font-size:.62rem; color:var(--faible); flex-wrap:wrap; }
+  .legende em { font-style:normal; display:inline-block; width:8px; height:8px;
+                border-radius:50%; margin-right:5px; vertical-align:-1px; }
+
+  .res { display:grid; grid-template-columns:1fr 54px; gap:9px 9px; align-items:center;
+         margin-bottom:9px; }
+  .res .n { font-family:"JetBrains Mono",monospace; font-size:.68rem; color:var(--muted);
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .res .v { font-family:"JetBrains Mono",monospace; font-size:.7rem; text-align:right;
+            font-variant-numeric:tabular-nums; }
+  .res .bar { grid-column:1 / -1; height:5px; border-radius:3px; background:var(--surface-2);
+              border:1px solid var(--bord); overflow:hidden; margin-top:-5px; }
+  .res .bar i { display:block; height:100%; background:linear-gradient(90deg,var(--braise),var(--ambre)); }
+  .res.pale .bar i { background:linear-gradient(90deg,var(--cyan),var(--violet)); }
+  .verdict { margin-top:12px; padding:11px 12px; border-radius:8px; background:var(--braise-fond);
+             border:1px solid var(--braise); font-size:.75rem; color:var(--muted); line-height:1.45; }
+  .verdict.doux { background:var(--ambre-fond); border-color:var(--ambre); }
+  .verdict b { color:var(--texte); }
+
+  .flux { display:grid; grid-template-columns:1fr 260px; gap:18px; align-items:start; }
+  .ruban { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px;
+           max-height:400px; overflow-y:auto; }
+  .evt { display:grid; grid-template-columns:3px 64px 1fr auto; gap:10px; align-items:center;
+         background:var(--surface-2); border:1px solid var(--bord); border-radius:7px;
+         padding:7px 11px 7px 0; }
+  .evt .stripe { align-self:stretch; border-radius:3px 0 0 3px; background:var(--ambre); }
+  .evt.haut .stripe { background:var(--braise); }
+  .evt.radio .stripe { background:var(--violet); }
+  .evt .t { font-family:"JetBrains Mono",monospace; font-size:.66rem; color:var(--faible);
+            font-variant-numeric:tabular-nums; }
+  .evt .quoi { min-width:0; }
+  .evt .ip { font-family:"JetBrains Mono",monospace; font-size:.74rem; font-weight:500; }
+  .evt .cat { display:block; font-family:"JetBrains Mono",monospace; font-size:.62rem;
+              color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .evt .sev { font-family:"JetBrains Mono",monospace; font-size:.58rem; letter-spacing:.08em;
+              text-transform:uppercase; color:var(--ambre); border:1px solid var(--ambre);
+              border-radius:4px; padding:1px 6px; }
+  .evt.haut .sev { color:var(--braise); border-color:var(--braise); }
+  .evt.radio .sev { color:var(--violet); border-color:var(--violet); }
+  .evt.neuf { animation:arrive .5s ease-out; }
+  @keyframes arrive { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:none} }
+
+  .champ { background:linear-gradient(160deg,var(--surface),var(--surface-2));
+           border:1px solid var(--bord); border-radius:var(--r); padding:18px; box-shadow:var(--ombre); }
+  .leurres { display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:10px; }
+  .leurre { border:1px solid var(--bord); border-radius:8px; padding:10px 11px;
+            background:var(--nuit); position:relative; overflow:hidden; }
+  .leurre::before { content:""; position:absolute; inset:0; border-radius:8px;
+    background:radial-gradient(120% 90% at 0% 0%,color-mix(in srgb,var(--ambre) 12%,transparent),transparent 62%); }
+  .leurre > * { position:relative; }
+  .leurre .svc { font-family:"JetBrains Mono",monospace; font-size:.7rem; font-weight:500; }
+  .leurre .port { font-family:"JetBrains Mono",monospace; font-size:.58rem; color:var(--faible); }
+  .leurre .n { font-family:"JetBrains Mono",monospace; font-size:1.14rem; font-weight:700;
+               color:var(--ambre); font-variant-numeric:tabular-nums; margin-top:6px;
+               text-shadow:0 0 14px color-mix(in srgb,var(--ambre) 22%,transparent); }
+  .leurre .fil { height:3px; border-radius:2px; background:var(--bord); margin-top:7px; overflow:hidden; }
+  .leurre .fil i { display:block; height:100%; background:var(--ambre); }
+
+  .chaine { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
+  .maillon { display:flex; align-items:center; gap:9px; border:1px solid var(--bord);
+             border-radius:8px; padding:9px 11px; background:var(--surface); }
+  .maillon .p { width:7px; height:7px; border-radius:50%; background:var(--vert); flex:0 0 auto; }
+  .maillon.warn .p { background:var(--ambre); }
+  .maillon.mal .p { background:var(--braise); }
+  .maillon .t { min-width:0; }
+  .maillon .t b { display:block; font-size:.74rem; font-weight:500; }
+  .maillon .t span { font-family:"JetBrains Mono",monospace; font-size:.62rem; color:var(--muted);
+                     display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .meta { display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:14px; }
+  .mes { background:var(--surface); border:1px solid var(--bord); border-radius:var(--r);
+         padding:15px 17px; box-shadow:var(--ombre); }
+  .mes .v { font-family:"JetBrains Mono",monospace; font-size:1.7rem; font-weight:700;
+            font-variant-numeric:tabular-nums; line-height:1.1; margin:5px 0 3px; }
+  .mes .d { font-size:.74rem; color:var(--muted); }
+  .mes .jauge { height:6px; border-radius:3px; background:var(--surface-2);
+                border:1px solid var(--bord); overflow:hidden; margin-top:10px; }
+  .mes .jauge i { display:block; height:100%; background:linear-gradient(90deg,var(--cyan),var(--violet)); }
+  .mes.alerte { border-color:var(--braise); }
+  .mes.alerte .v { color:var(--braise); }
+  .mes.alerte .jauge i { background:linear-gradient(90deg,var(--ambre),var(--braise)); }
+  .mes.bien .v { color:var(--vert); }
+
+  .organes { display:flex; flex-direction:column; gap:7px; }
+  .organe { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center;
+            border:1px solid var(--bord); border-radius:8px; padding:9px 11px; background:var(--surface-2); }
+  .organe .p { width:7px; height:7px; border-radius:50%; background:var(--vert); }
+  .organe.idle .p { background:var(--faible); }
+  .organe.absent .p { background:var(--braise); }
+  .organe b { font-family:"JetBrains Mono",monospace; font-size:.72rem; font-weight:500; }
+  .organe span.d { font-size:.66rem; color:var(--muted); display:block;
+                   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .organe .et { font-family:"JetBrains Mono",monospace; font-size:.58rem; letter-spacing:.08em;
+                text-transform:uppercase; color:var(--faible); }
+  .organe.absent .et { color:var(--braise); }
+
+  .gsm { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px; }
+  .gsm li { border:1px solid var(--violet); border-radius:8px; padding:10px 12px;
+            background:color-mix(in srgb,var(--violet) 9%,var(--surface-2)); }
+  .gsm .haut { display:flex; align-items:center; gap:9px; margin-bottom:5px; }
+  .gsm .score { font-family:"JetBrains Mono",monospace; font-size:.9rem; font-weight:700;
+                color:var(--violet); font-variant-numeric:tabular-nums; }
+  .gsm .cell { font-family:"JetBrains Mono",monospace; font-size:.72rem; }
+  .gsm .t { margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:.62rem; color:var(--faible); }
+  .gsm .pq { font-size:.72rem; color:var(--muted); line-height:1.4; margin:0; }
+  .radio { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+
+  @media (max-width:980px) { .posture,.geo,.flux,.radio { grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion: reduce) { .pouls,.evt.neuf { animation:none; } }
+</style>
 </head>
-<body class="hybrid-dark">
-    <nav class="sidebar" id="sidebar"></nav>
-    
-        <!-- SIDEBAR -->
-        <!-- MAIN CONTENT -->
-        <main class="main">
-            <header class="page-header">
-                <h1 class="page-title">Security Operations Center</h1>
-                <p class="page-subtitle">Real-time threat monitoring and system status — <span id="last-update">updating...</span></p>
-            </header>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
 
-            <!-- GLASS CARDS GRID - Eyeremote Style -->
-            <div class="cards-grid">
-                <!-- WAF Card -->
-                <div class="glass-card" style="--card-accent: #ef4444; border-left: 3px solid #ef4444;">
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
-                        <div id="waf-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
-                        <div style="flex:1;min-width:0;">
-                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-                                <span style="font-size:1.1em;">🛡️</span>
-                                <span class="card-status" id="waf-card-status" style="font-size:0.65rem;">LOADING</span>
-                            </div>
-                            <div class="card-metric" id="threats-blocked" style="font-size:1.5rem;line-height:1;">-</div>
-                            <div style="font-size:0.65rem;color:var(--muted-dark);">Threats 24h</div>
-                        </div>
-                    </div>
-                    <div id="waf-card-histogram" style="display:flex;align-items:flex-end;height:20px;gap:1px;margin-top:8px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
-                </div>
+<div class="page">
+  <header class="bandeau">
+    <div>
+      <div class="marque">Vigie <span>SOC</span></div>
+      <div class="sous">Ce que la box a vu, bloqué et retenu — lu sur les sources vivantes.</div>
+    </div>
+    <div class="horodate">
+      <b><span class="pouls" id="pouls"></span><span id="etat-flux">lecture…</span></b>
+      <span id="horo">—</span>
+    </div>
+  </header>
 
-                <!-- Network Card -->
-                <div class="glass-card" style="--card-accent: #3b82f6; border-left: 3px solid #3b82f6;">
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
-                        <div id="net-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
-                        <div style="flex:1;min-width:0;">
-                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-                                <span style="font-size:1.1em;">🌐</span>
-                                <span class="card-status" style="font-size:0.65rem;">ACTIVE</span>
-                            </div>
-                            <div class="card-metric" id="throughput" style="font-size:1.5rem;line-height:1;">-</div>
-                            <div style="font-size:0.65rem;color:var(--muted-dark);">MB/s Throughput</div>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;" id="throughput-trend">
-                        <span style="background:rgba(59,130,246,0.2);color:#60a5fa;padding:2px 6px;border-radius:3px;">HTTP -</span>
-                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;">HTTPS -</span>
-                    </div>
-                </div>
+  <div class="onglets" role="tablist">
+    <button class="onglet" role="tab" aria-selected="true" aria-controls="e1" id="t1"><span class="pt"></span>Vigie</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e2" id="t2"><span class="pt"></span>Meta-metrics</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e3" id="t3"><span class="pt"></span>Centrale d'alertes</button>
+  </div>
 
-                <!-- Health Card -->
-                <div class="glass-card" style="--card-accent: #22c55e; border-left: 3px solid #22c55e;">
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
-                        <div id="health-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
-                        <div style="flex:1;min-width:0;">
-                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-                                <span style="font-size:1.1em;">⚡</span>
-                                <span class="card-status" id="health-status" style="font-size:0.65rem;">LOADING</span>
-                            </div>
-                            <div class="card-metric" id="active-services" style="font-size:1.5rem;line-height:1;">-</div>
-                            <div style="font-size:0.65rem;color:var(--muted-dark);">Active Services</div>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;" id="uptime-info">
-                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;">-% healthy</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TWO-COLUMN STATUS PANELS -->
-            <div class="status-columns">
-                <!-- WAF STATUS -->
-                <div class="matrix-panel status-col">
-                    <div class="matrix-header">
-                        <span class="matrix-title">🛡️ WAF</span>
-                        <span style="color: var(--muted-dark);" id="waf-version">v- · -</span>
-                    </div>
-                    <div class="matrix-body">
-                        <div class="matrix-row">
-                            <span class="matrix-label">Status</span>
-                            <span class="matrix-value" id="waf-status-detail"><span class="highlight">● LOADING</span></span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Countries</span>
-                            <span class="matrix-value" id="top-countries">Loading...</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Categories</span>
-                            <span class="matrix-value categories-list" id="waf-categories">Loading...</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Last Threat</span>
-                            <span class="matrix-value" id="last-threat">No recent threats</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- FIREWALL STATUS -->
-                <div class="matrix-panel status-col">
-                    <div class="matrix-header">
-                        <span class="matrix-title">🔥 FIREWALL</span>
-                        <span style="color: var(--muted-dark);" id="fw-info">nftables</span>
-                    </div>
-                    <div class="matrix-body">
-                        <div class="matrix-row">
-                            <span class="matrix-label">Status</span>
-                            <span class="matrix-value" id="fw-status"><span class="highlight">● LOADING</span></span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Tables</span>
-                            <span class="matrix-value" id="fw-tables">-</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Chains</span>
-                            <span class="matrix-value" id="fw-chains">-</span>
-                        </div>
-                        <div class="matrix-row">
-                            <span class="matrix-label">Rules</span>
-                            <span class="matrix-value" id="fw-rules">-</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TRIPLE EYEMOTE SENSORS -->
-            <div class="eyemotes-grid">
-                <!-- Eyemote 1: Attack Origin by Continent -->
-                <div class="eyemote-card">
-                    <h2>👁️ Attack Origin</h2>
-                    <div class="eyemote-mini">
-                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgOrigin">
-                            <defs><radialGradient id="eyeGlow1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00ff41" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
-                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow1)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="originRing1" cx="100" cy="100" r="85" fill="none" stroke="#DF0024" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="originRing2" cx="100" cy="100" r="68" fill="none" stroke="#0085C7" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="originRing3" cx="100" cy="100" r="51" fill="none" stroke="#F4C300" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="originRing4" cx="100" cy="100" r="34" fill="none" stroke="#009F3D" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="originRing5" cx="100" cy="100" r="17" fill="none" stroke="#666666" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle cx="100" cy="100" r="8" fill="#00ff41" class="eyemote-pupil"/>
-                        </svg>
-                        <div class="eyemote-total-mini" id="originTotal">0</div>
-                    </div>
-                    <div class="eyemote-legend-mini" id="originLegend"></div>
-                </div>
-
-                <!-- Eyemote 2: Visitors by Country -->
-                <div class="eyemote-card">
-                    <h2>👤 Visitors</h2>
-                    <div class="eyemote-mini">
-                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVisitors">
-                            <defs><radialGradient id="eyeGlow2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
-                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow2)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="visitorRing1" cx="100" cy="100" r="85" fill="none" stroke="#00d4ff" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="visitorRing2" cx="100" cy="100" r="68" fill="none" stroke="#0ea5e9" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="visitorRing3" cx="100" cy="100" r="51" fill="none" stroke="#6366f1" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="visitorRing4" cx="100" cy="100" r="34" fill="none" stroke="#8b5cf6" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="visitorRing5" cx="100" cy="100" r="17" fill="none" stroke="#a855f7" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle cx="100" cy="100" r="8" fill="#00d4ff" class="eyemote-pupil"/>
-                        </svg>
-                        <div class="eyemote-total-mini visitor" id="visitorTotal">0</div>
-                    </div>
-                    <div class="eyemote-legend-mini" id="visitorLegend"></div>
-                </div>
-
-                <!-- Eyemote 3: Target Vhosts -->
-                <div class="eyemote-card">
-                    <h2>🎯 Target Vhosts</h2>
-                    <div class="eyemote-mini">
-                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVhosts">
-                            <defs><radialGradient id="eyeGlow3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
-                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow3)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="vhostRing1" cx="100" cy="100" r="85" fill="none" stroke="#ef4444" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="vhostRing2" cx="100" cy="100" r="68" fill="none" stroke="#f97316" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="vhostRing3" cx="100" cy="100" r="51" fill="none" stroke="#eab308" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="vhostRing4" cx="100" cy="100" r="34" fill="none" stroke="#22c55e" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
-                            <circle class="ring-fill" id="vhostRing5" cx="100" cy="100" r="17" fill="none" stroke="#14b8a6" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
-                            <circle cx="100" cy="100" r="8" fill="#f97316" class="eyemote-pupil"/>
-                        </svg>
-                        <div class="eyemote-total-mini vhost" id="vhostTotal">0</div>
-                    </div>
-                    <div class="eyemote-legend-mini" id="vhostLegend"></div>
-                </div>
-            </div>
-
-            <!-- SYSTEM HEALTH - Mini Histograms -->
-            <div class="health-grid" style="margin-bottom: var(--space-xl); display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
-                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">🔥 CPU</span><span id="cpu-pct" style="font-size:0.75rem;font-weight:600;color:#ef4444;">0%</span></div>
-                    <div id="cpu-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
-                    <div id="cpu-load" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
-                </div>
-                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">💾 Memory</span><span id="mem-pct" style="font-size:0.75rem;font-weight:600;color:#eab308;">0%</span></div>
-                    <div id="mem-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
-                    <div id="mem-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
-                </div>
-                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">💿 Disk</span><span id="disk-pct" style="font-size:0.75rem;font-weight:600;color:#22c55e;">0%</span></div>
-                    <div id="disk-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
-                    <div id="disk-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
-                </div>
-                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">🌐 Network</span><span id="net-pct" style="font-size:0.75rem;font-weight:600;color:#3b82f6;">0%</span></div>
-                    <div id="net-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
-                    <div id="net-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
-                </div>
-            </div>
-
-            <!-- CHART + ACTIVITY ROW -->
-            <div class="row">
-                <div class="col-2">
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <span class="chart-title">Threat Activity (24h)</span>
-                            <div class="chart-legend">
-                                <span class="legend-item"><span class="legend-dot" style="background: var(--root-light);"></span>Blocked</span>
-                            </div>
-                        </div>
-                        <div class="chart-area" id="threat-chart">
-                            <!-- Bars will be populated by JS -->
-                        </div>
-                        <div class="chart-labels">
-                            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-2">
-                    <div class="activity-panel">
-                        <div class="activity-header">
-                            <span class="activity-title">Recent Activity</span>
-                            <div class="activity-filter">
-                                <button class="filter-btn active" onclick="filterActivity('all')">All</button>
-                                <button class="filter-btn" onclick="filterActivity('threats')">Threats</button>
-                                <button class="filter-btn" onclick="filterActivity('system')">System</button>
-                            </div>
-                        </div>
-                        <div class="activity-list" id="activity-list">
-                            <div class="activity-item loading">
-                                <div class="activity-icon waf">🛡️</div>
-                                <div class="activity-content">
-                                    <div class="activity-text">Loading activity...</div>
-                                    <div class="activity-meta">--</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+  <!-- ÉCRAN 1 — VIGIE -->
+  <section class="ecran" id="e1" role="tabpanel" aria-labelledby="t1">
+    <div class="sect"><h2>Posture du jour</h2><span class="quoi">ce qui est arrivé, ce qui est passé</span>
+      <span class="src">waf/stats</span></div>
+    <div class="posture">
+      <div class="jour">
+        <div class="eti">Menaces vues aujourd'hui</div>
+        <div class="v" id="p-total">—</div>
+        <div class="detail" id="p-detail">lecture…</div>
+        <div class="part"><i id="p-obs" style="width:0;background:var(--braise)"></i><i id="p-ecart" style="width:0;background:var(--vert)"></i></div>
+        <div class="leg"><span><em style="background:var(--braise)"></em>observées</span><span><em style="background:var(--vert)"></em>écartées</span></div>
+      </div>
+      <div class="panneau">
+        <h3>Catégories retenues <span class="c" id="p-ncat">—</span></h3>
+        <div class="echelle" id="p-cats"><p class="muet">lecture…</p></div>
+      </div>
     </div>
 
-    <script src="/shared/sidebar.js"></script>
-    <script src="/shared/health-banner.js"></script>
-    <script>
-        const API_HUB = '/api/v1/hub';
-        const API_WAF = '/api/v1/waf';
-        const API_METRICS = '/api/v1/metrics';
-
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
-        }
-
-        function checkAuth() {
-            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine), accepte par
-            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
-            // seule une vraie 401 redirige (gere dans les appels fetch).
-            return true;
-        }
-
-        async function api(url, method = 'GET', body = null, requireAuth = true) {
-            const token = getToken();
-            if (requireAuth && !token) { checkAuth(); return null; }
-            try {
-                const opts = { method, headers: { 'Content-Type': 'application/json' } };
-                if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-                if (body) opts.body = JSON.stringify(body);
-                const res = await fetch(url, opts);
-                if (res.status === 401 && requireAuth) { checkAuth(); return null; }
-                if (!res.ok) return null;
-                return await res.json();
-            } catch (e) { console.error('API error:', url, e); return null; }
-        }
-
-        // Activity items storage
-        let activityItems = [];
-
-        function addActivity(type, icon, text, meta) {
-            activityItems.unshift({ type, icon, text, meta, time: new Date() });
-            if (activityItems.length > 20) activityItems.pop();
-            renderActivity();
-        }
-
-        function renderActivity(filter = 'all') {
-            const list = document.getElementById('activity-list');
-            const filtered = filter === 'all' ? activityItems : activityItems.filter(i => i.type === filter);
-
-            if (filtered.length === 0) {
-                list.innerHTML = '<div class="activity-item"><div class="activity-content"><div class="activity-text" style="color: var(--muted-dark);">No activity yet</div></div></div>';
-                return;
-            }
-
-            list.innerHTML = filtered.slice(0, 10).map(item => `
-                <div class="activity-item">
-                    <div class="activity-icon ${item.type}">${item.icon}</div>
-                    <div class="activity-content">
-                        <div class="activity-text">${item.text}</div>
-                        <div class="activity-meta">${item.meta}</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function filterActivity(type) {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-            renderActivity(type);
-        }
-
-        function updateStatusLed(id, status) {
-            const el = document.getElementById(id);
-            if (el) el.textContent = status === 'ok' ? '🟢' : status === 'degraded' ? '🟡' : '🔴';
-        }
-
-        async function loadHealthBatch() {
-            const data = await api(API_HUB + '/health', 'GET', null, false);
-            if (!data) {
-                document.getElementById('active-services').textContent = '?';
-                document.getElementById('health-status').textContent = 'OFFLINE';
-                document.getElementById('health-status').className = 'card-status danger';
-                document.getElementById('health-card-donut').innerHTML = createHealthCardDonut(0, 0, 0);
-                return;
-            }
-
-            // Basic health check (hub itself is running)
-            if (data.status === 'ok') {
-                document.getElementById('health-status').textContent = 'ONLINE';
-                document.getElementById('health-status').className = 'card-status';
-            }
-
-            // Try to get module health from module-health endpoint
-            const moduleHealth = await api(API_HUB + '/module-health/summary');
-            if (moduleHealth) {
-                const healthy = moduleHealth.healthy || 0;
-                const total = moduleHealth.total || 0;
-                document.getElementById('active-services').textContent = healthy;
-                document.getElementById('health-status').textContent = healthy === total ? 'HEALTHY' : 'DEGRADED';
-                document.getElementById('health-status').className = 'card-status' + (healthy === total ? '' : ' warning');
-                document.getElementById('uptime-info').textContent = Math.round(moduleHealth.health_percent || 0) + '% healthy';
-            } else {
-                // Fallback: just show hub is up
-                document.getElementById('active-services').textContent = '1';
-                document.getElementById('health-status').textContent = 'ONLINE';
-                document.getElementById('health-status').className = 'card-status';
-            }
-        }
-
-        async function loadWAFStats() {
-            const data = await api(API_WAF + '/stats', 'GET', null, false);
-            if (!data) {
-                document.getElementById('threats-blocked').textContent = '0';
-                document.getElementById('waf-card-status').textContent = 'OFFLINE';
-                document.getElementById('waf-card-status').className = 'card-status danger';
-                document.getElementById('waf-version').textContent = 'v- · offline';
-                document.getElementById('waf-status-detail').innerHTML = '<span class="danger">● OFFLINE</span>';
-                document.getElementById('top-countries').innerHTML = '<span style="color:var(--muted);">-</span>';
-                document.getElementById('waf-categories').innerHTML = '<span class="cat-tag">-</span>';
-                document.getElementById('waf-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
-                return;
-            }
-
-            const blocked = data.blocked_24h || data.blocked_today || 0;
-            document.getElementById('threats-blocked').textContent = blocked.toLocaleString();
-            document.getElementById('waf-card-status').textContent = data.running ? 'ACTIVE' : 'INACTIVE';
-            document.getElementById('waf-card-status').className = 'card-status' + (data.running ? '' : ' danger');
-
-            // Card donut: blocked vs allowed (estimate 10x traffic)
-            const total = blocked * 10 || 1;
-            document.getElementById('waf-card-donut').innerHTML = createCardDonut(blocked, total, '#ef4444', '🛡️', 'threats');
-
-            // WAF matrix details
-            document.getElementById('waf-version').textContent = `v${data.version || '1.2.0'} · ${data.rules_loaded || 0} rules`;
-            document.getElementById('waf-status-detail').innerHTML = `<span class="highlight">● ${data.running ? 'ACTIVE' : 'INACTIVE'}</span> · ${data.rules_loaded || 0} rules`;
-
-            // Top countries with concentric donut
-            if (data.top_countries && data.top_countries.length > 0) {
-                document.getElementById('top-countries').innerHTML = createCountryDonut(data.top_countries, 110);
-            }
-
-            // WAF categories with emojis
-            if (data.categories_list || data.top_categories) {
-                const cats = data.categories_list || data.top_categories;
-                document.getElementById("waf-categories").innerHTML = createCategoryDonut(cats, 80);
-            } else {
-                document.getElementById('waf-categories').innerHTML = '<span class="cat-tag">-</span>';
-            }
-
-            // Last threat with full info
-            if (data.last_threat) {
-                const t = data.last_threat;
-                const vhost = t.vhost ? `<span class="info">${t.vhost}</span> · ` : '';
-                document.getElementById('last-threat').innerHTML = `${vhost}<span class="danger">${t.type || 'Attack'}</span> from ${t.ip || 'unknown'} · ${t.time_ago || 'recently'}`;
-                addActivity('waf', '🛡️', `WAF blocked <code>${t.type || 'attack'}</code> from <code>${t.ip || 'unknown'}</code>`, t.time_ago || 'just now');
-            }
-
-            // Chart data
-            if (data.hourly_blocks) {
-                const chartEl = document.getElementById('threat-chart');
-                const max = Math.max(...data.hourly_blocks, 1);
-                chartEl.innerHTML = data.hourly_blocks.map(v =>
-                    `<div class="chart-bar" style="height: ${(v / max * 100)}%;" title="${v} blocks"></div>`
-                ).join('');
-            } else {
-                // Generate random chart data for demo
-                const chartEl = document.getElementById('threat-chart');
-                chartEl.innerHTML = Array(24).fill(0).map(() => {
-                    const h = Math.random() * 100;
-                    return `<div class="chart-bar" style="height: ${h}%;"></div>`;
-                }).join('');
-            }
-
-            // Also load top attacked sites with full DNS names
-            await loadTopVhosts();
-
-            // Store stats for double-cache eyemotes
-            window._socStats = data;
-            if (window._socEvents) {
-                updateAllEyemotes(window._socEvents, data);
-            }
-        }
-
-        async function loadTopVhosts() {
-            const data = await api(API_WAF + '/alerts?limit=100&aggregate=true');
-            if (!data || !data.alerts) return;
-
-            // Store events for double-cache eyemotes
-            window._socEvents = data.alerts;
-            if (window._socStats) {
-                updateAllEyemotes(data.alerts, window._socStats);
-            }
-
-            // Aggregate by vhost
-            const vhostCounts = {};
-            data.alerts.forEach(a => {
-                if (a.vhost) {
-                    vhostCounts[a.vhost] = (vhostCounts[a.vhost] || 0) + (a.count || 1);
-                }
-            });
-
-            // Sort by count
-            const topVhosts = Object.entries(vhostCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
-
-            if (topVhosts.length > 0) {
-                // Add to activity panel
-                topVhosts.forEach(([vhost, count]) => {
-                    if (count > 10) {
-                        addActivity('waf', '🎯', `Site <code>${vhost}</code> under attack`, `${count} hits`);
-                    }
-                });
-            }
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // TRIPLE EYEMOTE SENSORS (with double-cache)
-        // ═══════════════════════════════════════════════════════════════
-
-        // Country to Continent mapping
-        const COUNTRY_CONTINENT = {
-            'FR': 'europe', 'DE': 'europe', 'GB': 'europe', 'IT': 'europe', 'ES': 'europe',
-            'NL': 'europe', 'BE': 'europe', 'PL': 'europe', 'SE': 'europe', 'NO': 'europe',
-            'FI': 'europe', 'DK': 'europe', 'AT': 'europe', 'CH': 'europe', 'PT': 'europe',
-            'IE': 'europe', 'CZ': 'europe', 'RO': 'europe', 'HU': 'europe', 'GR': 'europe',
-            'UA': 'europe', 'RU': 'europe', 'BY': 'europe', 'SK': 'europe', 'BG': 'europe',
-            'CN': 'asia', 'JP': 'asia', 'KR': 'asia', 'IN': 'asia', 'ID': 'asia',
-            'TH': 'asia', 'VN': 'asia', 'PH': 'asia', 'MY': 'asia', 'SG': 'asia',
-            'TW': 'asia', 'HK': 'asia', 'PK': 'asia', 'BD': 'asia', 'IR': 'asia',
-            'TR': 'asia', 'SA': 'asia', 'AE': 'asia', 'IL': 'asia', 'KZ': 'asia',
-            'ZA': 'africa', 'EG': 'africa', 'NG': 'africa', 'KE': 'africa', 'MA': 'africa',
-            'DZ': 'africa', 'TN': 'africa', 'GH': 'africa', 'ET': 'africa', 'TZ': 'africa',
-            'AU': 'oceania', 'NZ': 'oceania', 'FJ': 'oceania', 'PG': 'oceania',
-            'US': 'americas', 'CA': 'americas', 'MX': 'americas', 'BR': 'americas',
-            'AR': 'americas', 'CL': 'americas', 'CO': 'americas', 'PE': 'americas',
-            'VE': 'americas', 'EC': 'americas', 'CU': 'americas', 'PR': 'americas', 'PA': 'americas'
-        };
-
-        function getContinent(cc) { return COUNTRY_CONTINENT[cc?.toUpperCase()] || 'americas'; }
-
-        // Ring config for mini eyemotes
-        const RING_CONFIG_MINI = [
-            { id: 1, continent: 'americas', color: '#DF0024', circ: 534 },
-            { id: 2, continent: 'europe', color: '#0085C7', circ: 427 },
-            { id: 3, continent: 'asia', color: '#F4C300', circ: 320 },
-            { id: 4, continent: 'oceania', color: '#009F3D', circ: 214 },
-            { id: 5, continent: 'africa', color: '#666666', circ: 107 }
-        ];
-        const VISITOR_COLORS = ['#00d4ff', '#0ea5e9', '#6366f1', '#8b5cf6', '#a855f7'];
-        const VHOST_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6'];
-
-        // Double-cache for eyemotes
-        window._socEvents = null;
-        window._socStats = null;
-
-        // Generic eyemote updater
-        function updateEyemoteMini(prefix, events, colors, totalId, legendId, isVhost = false) {
-            const counts = { americas: 0, europe: 0, asia: 0, oceania: 0, africa: 0 };
-            const countryData = { americas: {}, europe: {}, asia: {}, oceania: {}, africa: {} };
-            const vhostData = {};
-
-            events.forEach(e => {
-                const continent = getContinent(e.country);
-                const count = e.count || 1;
-                counts[continent] = (counts[continent] || 0) + count;
-                if (e.country) countryData[continent][e.country] = (countryData[continent][e.country] || 0) + count;
-                if (isVhost && e.vhost) vhostData[e.vhost] = (vhostData[e.vhost] || 0) + count;
-            });
-
-            const total = Object.values(counts).reduce((a, b) => a + b, 0);
-            const totalEl = document.getElementById(totalId);
-            if (totalEl) totalEl.textContent = total;
-
-            // Update rings
-            RING_CONFIG_MINI.forEach((cfg, i) => {
-                const count = counts[cfg.continent] || 0;
-                const pct = total > 0 ? count / total : 0;
-                const ringEl = document.getElementById(prefix + 'Ring' + cfg.id);
-                if (ringEl) {
-                    ringEl.style.stroke = colors[i];
-                    ringEl.style.strokeDasharray = (pct * cfg.circ) + ' ' + cfg.circ;
-                }
-            });
-
-            // Update legend
-            const legendEl = document.getElementById(legendId);
-            if (!legendEl) return;
-
-            if (isVhost) {
-                const vhosts = Object.entries(vhostData).sort((a, b) => b[1] - a[1]).slice(0, 5);
-                if (vhosts.length === 0) {
-                    legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.7rem;text-align:center;">No targets</div>';
-                } else {
-                    legendEl.innerHTML = vhosts.map(([vh, cnt], i) => {
-                        const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
-                        const emoji = vh.includes('git') ? '💻' : vh.includes('mail') ? '📧' : vh.includes('api') ? '⚡' : '🌐';
-                        return '<div class="legend-row-mini" style="border-color:' + VHOST_COLORS[i] + '"><span class="row-dot" style="background:' + VHOST_COLORS[i] + '"></span><span class="row-val">' + cnt + ' <span style="font-size:0.55rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="vhost-badge" style="border-color:' + VHOST_COLORS[i] + '">' + emoji + ' ' + vh.replace(/\.gk2\.secubox\.in$/, '').slice(0, 12) + '</span></div>';
-                    }).join('');
-                }
-            } else {
-                const continents = ['americas', 'europe', 'asia', 'oceania', 'africa'];
-                legendEl.innerHTML = continents.map((cont, i) => {
-                    const contTotal = counts[cont] || 0;
-                    if (contTotal === 0) return '';
-                    const pct = total > 0 ? Math.round(contTotal / total * 100) : 0;
-                    const countries = Object.entries(countryData[cont]).sort((a, b) => b[1] - a[1]).slice(0, 5);
-                    const flags = countries.map(([cc, cnt]) => {
-                        const flagPct = Math.round(cnt / contTotal * 100);
-                        return '<span class="flag-mini" style="border-color:' + colors[i] + '" title="' + cc + ': ' + cnt + '">' + countryToFlag(cc) + '<span class="fm-count">' + flagPct + '%</span></span>';
-                    }).join('');
-                    return '<div class="legend-row-mini" style="border-color:' + colors[i] + '"><span class="row-dot" style="background:' + colors[i] + '"></span><span class="row-val">' + contTotal + ' <span style="font-size:0.55rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="row-flags">' + flags + '</span></div>';
-                }).filter(Boolean).join('');
-                if (!legendEl.innerHTML) legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.7rem;text-align:center;">No data</div>';
-            }
-        }
-
-        // Update all 3 eyemotes (called when either events or stats are ready)
-        function updateAllEyemotes(events, statsData) {
-            // 1. Attack Origin - by continent
-            updateEyemoteMini('origin', events, RING_CONFIG_MINI.map(c => c.color), 'originTotal', 'originLegend', false);
-
-            // 2. Visitors - unique IPs by continent
-            const visitorEvents = [];
-            const seenIps = new Set();
-            events.forEach(e => {
-                if (e.ip && !seenIps.has(e.ip)) {
-                    seenIps.add(e.ip);
-                    visitorEvents.push({ country: e.country, count: 1 });
-                }
-            });
-            updateEyemoteMini('visitor', visitorEvents, VISITOR_COLORS, 'visitorTotal', 'visitorLegend', false);
-
-            // 3. Target Vhosts - attacks per vhost
-            const vhostEvents = [];
-            if (statsData?.top_vhosts) {
-                Object.entries(statsData.top_vhosts).forEach(([vh, data]) => {
-                    const count = typeof data === 'object' ? data.count || 0 : data;
-                    vhostEvents.push({ vhost: vh, count: count, country: 'XX' });
-                });
-            }
-            updateEyemoteMini('vhost', vhostEvents, VHOST_COLORS, 'vhostTotal', 'vhostLegend', true);
-        }
-
-        // Category emoji mapping
-        const CATEGORY_EMOJI = {
-            'scanner': '🔍', 'scanners': '🔍',
-            'bruteforce': '🔨', 'brute-force': '🔨',
-            'honeypot': '🍯', 'honeypots': '🍯',
-            'waf': '🛡️', 'http': '🌐',
-            'ssh': '🔐', 'ftp': '📁',
-            'sqli': '💉', 'sql-injection': '💉',
-            'xss': '⚠️', 'rce': '💣',
-            'lfi': '📂', 'rfi': '🔗',
-            'spam': '📧', 'botnet': '🤖', 'router_botnet': '🤖',
-            'exploit': '🎯', 'crawler': '🕷️', 'recon_crawler': '🕷️',
-            'default': '📌'
-        };
-        // Country flag emoji from ISO code
-        function countryToFlag(code) {
-            if (!code || code === "LAN" || code.length !== 2) return "🌐";
-            return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
-        }
-
-        // Concentric donut for countries with flags
-        function createCountryDonut(countries, size) {
-            size = size || 120;
-            const center = size / 2;
-            if (!countries || countries.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            
-            const total = countries.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            
-            const COUNTRY_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#a855f7"];
-            const topCountries = countries.slice(0, 6);
-            const ringWidth = 7;
-            const spacing = 2;
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            topCountries.forEach(function(c, i) {
-                const r = Math.max(5, center - 8 - (i * (ringWidth + spacing)));
-                if (r < 8) return; // Skip if ring too small
-                const pct = c.count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const color = COUNTRY_COLORS[i % COUNTRY_COLORS.length];
-                const code = c.country || c.code || "??";
-                const flag = countryToFlag(code);
-                
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + flag + " " + code + ": " + c.count + " (" + Math.round(pct*100) + "%)</title></circle>";
-                
-                const angle = -Math.PI/2 + (i * Math.PI / 4);
-                const iconX = center + Math.cos(angle) * (r + 2);
-                const iconY = center + Math.sin(angle) * (r + 2);
-                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"10\" style=\"pointer-events:none;\">" + flag + "</text>";
-            });
-            
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"6\">ATTACKS</text>";
-            svg += "</svg>";
-            
-            const legend = topCountries.slice(0, 4).map(function(c, i) {
-                const code = c.country || c.code || "??";
-                const flag = countryToFlag(code);
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + COUNTRY_COLORS[i % COUNTRY_COLORS.length] + ";border-radius:1px;\"></span>" + flag + " " + c.count + "</span>";
-            }).join(" ");
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
-        }
-
-        const CAT_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#0ea5e9", "#14b8a6"];
-        
-        // Donut chart for categories (eyeremote style)
-        function createCategoryDonut(cats, size) {
-            size = size || 100;
-            if (!cats || cats.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            const total = cats.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            const radius = size / 2 - 5;
-            const innerRadius = radius * 0.55;
-            let cumulative = 0;
-            const slices = cats.slice(0, 8).map((cat, i) => {
-                const name = cat.name || cat.category || "unknown";
-                const count = cat.count || 0;
-                const pct = count / total;
-                const startAngle = cumulative * 2 * Math.PI - Math.PI / 2;
-                cumulative += pct;
-                const endAngle = cumulative * 2 * Math.PI - Math.PI / 2;
-                const x1o = Math.cos(startAngle) * radius, y1o = Math.sin(startAngle) * radius;
-                const x2o = Math.cos(endAngle) * radius, y2o = Math.sin(endAngle) * radius;
-                const x1i = Math.cos(startAngle) * innerRadius, y1i = Math.sin(startAngle) * innerRadius;
-                const x2i = Math.cos(endAngle) * innerRadius, y2i = Math.sin(endAngle) * innerRadius;
-                const largeArc = pct > 0.5 ? 1 : 0;
-                const color = CAT_COLORS[i % CAT_COLORS.length];
-                const emoji = CATEGORY_EMOJI[name.toLowerCase()] || CATEGORY_EMOJI.default;
-                return "<path d=\"M" + x1o + "," + y1o + " A" + radius + "," + radius + " 0 " + largeArc + ",1 " + x2o + "," + y2o + " L" + x2i + "," + y2i + " A" + innerRadius + "," + innerRadius + " 0 " + largeArc + ",0 " + x1i + "," + y1i + " Z\" fill=\"" + color + "\" style=\"cursor:pointer;transition:opacity 0.2s;\" onmouseover=\"this.style.opacity=0.7\" onmouseout=\"this.style.opacity=1\"><title>" + emoji + " " + name + ": " + count + " (" + Math.round(pct*100) + "%)</title></path>";
-            });
-            const centerText = "<text x=\"0\" y=\"-4\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text><text x=\"0\" y=\"10\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"7\">ALERTS</text>";
-            const legend = cats.slice(0, 5).map((c, i) => {
-                const nm = c.name || c.category || "?";
-                const em = CATEGORY_EMOJI[nm.toLowerCase()] || "📌";
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;margin:1px;\"><span style=\"width:6px;height:6px;background:" + CAT_COLORS[i % CAT_COLORS.length] + ";border-radius:1px;\"></span>" + em + "</span>";
-            }).join("");
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\"><svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"-" + size/2 + " -" + size/2 + " " + size + " " + size + "\">" + slices.join("") + centerText + "</svg><div style=\"font-size:0.6rem;margin-top:4px;\">" + legend + "</div></div>";
-        }
-
-
-        // Multi-layer concentric donut for categories (eyeremote style)
-        function createMultiLayerDonut(data, colors, icons, size) {
-            size = size || 120;
-            const center = size / 2;
-            if (!data || data.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            
-            const total = data.reduce((s, c) => s + (c.count || 0), 0);
-            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
-            
-            // Take top 6 categories for concentric rings
-            const topData = data.slice(0, 6);
-            const ringWidth = 7;
-            const spacing = 2;
-            
-            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
-            
-            // Draw rings from outer to inner with emojis around them
-            topData.forEach(function(cat, i) {
-                const r = Math.max(5, center - 8 - (i * (ringWidth + spacing)));
-                if (r < 8) return; // Skip if ring too small
-                const pct = cat.count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const color = colors[i % colors.length];
-                const name = cat.name || cat.category || "?";
-                const icon = icons[name.toLowerCase()] || "📌";
-                
-                // Background ring
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
-                
-                // Progress arc with hover
-                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + icon + " " + name + ": " + cat.count + " (" + Math.round(pct*100) + "%)</title></circle>";
-                
-                // Emoji icon positioned around the ring
-                const angle = -Math.PI/2 + (i * Math.PI / 4);
-                const iconX = center + Math.cos(angle) * (r + 2);
-                const iconY = center + Math.sin(angle) * (r + 2);
-                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"9\" style=\"pointer-events:none;\">" + icon + "</text>";
-            });
-            
-            // Center total
-            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
-            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"6\">ALERTS</text>";
-            
-            svg += "</svg>";
-            
-            // Compact legend with colored dots and emojis
-            const legend = topData.slice(0, 4).map(function(cat, i) {
-                const name = cat.name || cat.category || "?";
-                const icon = icons[name.toLowerCase()] || "📌";
-                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + colors[i % colors.length] + ";border-radius:1px;\"></span>" + icon + " " + cat.count + "</span>";
-            }).join(" ");
-            
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
-        }
-
-
-        function renderCategories(cats, containerId) {
-            const el = document.getElementById(containerId);
-            if (!cats || cats.length === 0) {
-                el.innerHTML = '<span class="cat-tag">None</span>';
-                return;
-            }
-            el.innerHTML = cats.slice(0, 6).map(cat => {
-                const name = typeof cat === 'object' ? cat.name || cat.category : cat;
-                const count = typeof cat === 'object' ? cat.count : null;
-                const emoji = CATEGORY_EMOJI[name.toLowerCase()] || CATEGORY_EMOJI.default;
-                const cssClass = name.toLowerCase().replace(/[^a-z]/g, '');
-                return `<span class="cat-tag ${cssClass}">${emoji} ${name}${count ? ` (${count})` : ''}</span>`;
-            }).join('');
-        }
-
-        async function loadFirewallStats() {
-            // Firewall summary from the hub endpoint (public, no auth required)
-            const fwData = await api(API_HUB + '/public/firewall_summary', 'GET', null, false);
-            if (fwData && !fwData.error && fwData.tables > 0) {
-                document.getElementById('fw-status').innerHTML = '<span class="highlight">● ACTIVE</span>';
-                document.getElementById('fw-tables').textContent = fwData.tables;
-                document.getElementById('fw-chains').textContent = fwData.chains || '-';
-                document.getElementById('fw-rules').textContent = fwData.rules || '-';
-            } else {
-                document.getElementById('fw-status').innerHTML = '<span class="warning">● UNKNOWN</span>';
-                document.getElementById('fw-tables').textContent = '-';
-                document.getElementById('fw-chains').textContent = '-';
-                document.getElementById('fw-rules').textContent = '-';
-            }
-        }
-
-        function formatNum(n) {
-            if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
-            if (n >= 1000) return (n/1000).toFixed(1) + 'K';
-            return n.toString();
-        }
-
-        // Mini donut for card headers (60x60)
-        function createCardDonut(value, max, color, icon, label) {
-            const size = 60, cx = 30, cy = 30, r = 22;
-            const pct = max > 0 ? Math.min(value / max, 1) : 0;
-            const circ = 2 * Math.PI * r;
-            const dash = Math.max(circ * pct, circ * 0.05); // Min 5% visible arc
-            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" width="60" height="60">';
-            // Background circle
-            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="6"/>';
-            // Progress arc
-            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + dash + ' ' + circ + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" style="filter:drop-shadow(0 0 3px ' + color + ');"/>';
-            // Center icon
-            svg += '<text x="' + cx + '" y="' + (cy + 5) + '" text-anchor="middle" dominant-baseline="middle" style="font-size:16px;">' + icon + '</text>';
-            svg += '</svg>';
-            return svg;
-        }
-
-        // Multi-segment card donut (for health: CPU/Mem/Disk)
-        function createHealthCardDonut(cpu, mem, disk) {
-            const size = 60, cx = 30, cy = 30;
-            const rings = [
-                { r: 24, val: cpu || 0, color: '#ef4444' },
-                { r: 17, val: mem || 0, color: '#f97316' },
-                { r: 10, val: disk || 0, color: '#22c55e' }
-            ];
-            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" width="60" height="60">';
-            rings.forEach(function(ring) {
-                const circ = 2 * Math.PI * ring.r;
-                const dash = Math.max(circ * (ring.val / 100), circ * 0.03);
-                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring.r + '" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4"/>';
-                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring.r + '" fill="none" stroke="' + ring.color + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + dash + ' ' + circ + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" style="filter:drop-shadow(0 0 2px ' + ring.color + ');"/>';
-            });
-            svg += '</svg>';
-            return svg;
-        }
-
-        async function loadMetrics() {
-            const data = await api(API_METRICS + '/overview', 'GET', null, false);
-            if (!data) {
-                document.getElementById('cpu-load').textContent = '-';
-                document.getElementById('cpu-pct').textContent = '-';
-                document.getElementById('mem-info').textContent = '-';
-                document.getElementById('mem-pct').textContent = '-';
-                return;
-            }
-
-            // System metrics (use histogram updates)
-            const cpu = data.cpu_percent || (data.load_avg ? data.load_avg[0] * 10 : 0);
-            const mem = data.mem_pct || data.memory_percent || 0;
-
-            document.getElementById('cpu-load').textContent = data.load || (data.load_avg ? data.load_avg.join(' ') : '-');
-            document.getElementById('cpu-pct').textContent = Math.round(cpu) + '%';
-            document.getElementById('cpu-pct').style.color = getHealthColor(cpu);
-            updateMiniHistogram('cpu-histogram', cpu, '#ef4444');
-
-            document.getElementById('mem-info').textContent = `${data.mem_used_kb ? Math.round(data.mem_used_kb / 1024) : '-'} / ${data.mem_total_kb ? Math.round(data.mem_total_kb / 1024) : '-'} MB`;
-            document.getElementById('mem-pct').textContent = Math.round(mem) + '%';
-            document.getElementById('mem-pct').style.color = getHealthColor(mem);
-            updateMiniHistogram('mem-histogram', mem, '#eab308');
-
-            // Uptime
-            if (data.uptime) {
-                const days = Math.floor(data.uptime / 86400);
-                document.getElementById('uptime-info').textContent = `${days}d uptime`;
-            }
-        }
-
-        // Mini histogram history
-        const healthHistory = { cpu: [], mem: [], disk: [], net: [] };
-        const HIST_MAX = 12;
-
-        function updateMiniHistogram(id, value, color) {
-            const key = id.replace('-histogram', '');
-            if (!healthHistory[key]) healthHistory[key] = [];
-            healthHistory[key].push(value);
-            if (healthHistory[key].length > HIST_MAX) healthHistory[key].shift();
-
-            const el = document.getElementById(id);
-            if (!el) return;
-
-            const maxH = 20;
-            let bars = '';
-            healthHistory[key].forEach((v, i) => {
-                const h = Math.max(2, (v / 100) * maxH);
-                const opacity = 0.4 + (i / HIST_MAX) * 0.6;
-                bars += '<div style="flex:1;height:' + h + 'px;background:' + color + ';opacity:' + opacity + ';border-radius:1px;"></div>';
-            });
-            el.innerHTML = bars;
-        }
-
-        function getHealthColor(pct) {
-            if (pct < 50) return '#22c55e';
-            if (pct < 75) return '#eab308';
-            if (pct < 90) return '#f97316';
-            return '#ef4444';
-        }
-
-        async function loadDashboard() {
-            const data = await api(API_HUB + '/dashboard', 'GET', null, true);
-            if (!data) return;
-
-            // CPU
-            if (data.cpu_percent !== undefined) {
-                const cpu = Math.round(data.cpu_percent);
-                document.getElementById('cpu-pct').textContent = cpu + '%';
-                document.getElementById('cpu-pct').style.color = getHealthColor(cpu);
-                updateMiniHistogram('cpu-histogram', cpu, '#ef4444');
-            }
-            // Memory
-            if (data.memory_percent !== undefined) {
-                const mem = Math.round(data.memory_percent);
-                document.getElementById('mem-pct').textContent = mem + '%';
-                document.getElementById('mem-pct').style.color = getHealthColor(mem);
-                updateMiniHistogram('mem-histogram', mem, '#eab308');
-            }
-            // Disk
-            if (data.disk_percent !== undefined) {
-                const disk = Math.round(data.disk_percent);
-                document.getElementById('disk-pct').textContent = disk + '%';
-                document.getElementById('disk-pct').style.color = getHealthColor(disk);
-                updateMiniHistogram('disk-histogram', disk, '#22c55e');
-            }
-
-            // Health card donut (CPU/Mem/Disk concentric)
-            const cpu = data.cpu_percent || 0;
-            const mem = data.memory_percent || 0;
-            const disk = data.disk_percent || 0;
-            document.getElementById('health-card-donut').innerHTML = createHealthCardDonut(cpu, mem, disk);
-
-            // Load
-            if (data.load_avg) {
-                document.getElementById('cpu-load').textContent = 'Load: ' + data.load_avg[0]?.toFixed(2);
-            }
-
-            // Version
-            if (data.build_info && data.build_info.version) {
-                var sv = document.getElementById('sidebar-version'); if(sv) sv.textContent = 'v' + data.build_info.version;
-            }
-        }
-
-        async function loadConnections() {
-            const data = await api(API_METRICS + '/connections', 'GET', null, false);
-            if (!data) {
-                document.getElementById('throughput').textContent = '-';
-                document.getElementById('throughput-trend').textContent = '- HTTP · - HTTPS';
-                return;
-            }
-
-            const total = data.total_tcp || (data.http + data.https + data.ssh) || 0;
-            document.getElementById('throughput').textContent = total;
-            document.getElementById('throughput-trend').textContent = `${data.http || 0} HTTP · ${data.https || 0} HTTPS`;
-        }
-
-        async function loadNetwork() {
-            const data = await api(API_HUB + '/network_summary', 'GET', null, true);
-            if (!data) {
-                document.getElementById('net-info').textContent = 'Unknown';
-                document.getElementById('net-pct').textContent = '-';
-                updateMiniHistogram('net-histogram', 0, '#3b82f6');
-                document.getElementById('net-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
-                return;
-            }
-            // Network activity (interfaces up percentage)
-            const netPct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 0;
-            const netPctEl = document.getElementById('net-pct');
-            if (netPctEl) {
-                netPctEl.textContent = netPct + '%';
-                netPctEl.style.color = data.wan_status === 'connected' ? '#22c55e' : '#ef4444';
-            }
-            updateMiniHistogram('net-histogram', netPct, '#3b82f6');
-
-            const netInfoEl = document.getElementById('net-info');
-            if (netInfoEl) netInfoEl.textContent = data.wan_status || 'Unknown';
-
-            // Network card donut
-            document.getElementById('net-card-donut').innerHTML = createCardDonut(
-                data.interfaces_up || 0,
-                data.interfaces || 1,
-                data.wan_status === 'connected' ? '#22c55e' : '#ef4444',
-                '🌐',
-                'ifaces'
-            );
-        }
-
-        function updateTimestamp() {
-            document.getElementById('last-update').textContent = 'Last update: ' + new Date().toLocaleTimeString();
-        }
-
-        async function refresh() {
-            updateTimestamp();
-            await Promise.all([
-                loadHealthBatch(),
-                loadWAFStats(),
-                loadFirewallStats(),
-                loadMetrics(),
-                loadDashboard(),
-                loadConnections(),
-                loadNetwork()
-            ]);
-        }
-
-        // Initial load
-        if (checkAuth()) {
-            refresh();
-            setInterval(refresh, 15000);
-        }
-    </script>
+    <div class="sect"><h2>D'où l'on frappe</h2><span class="quoi">le drapeau ment, le réseau dit vrai</span>
+      <span class="src">waf/alerts?aggregate · waf/campaigns</span></div>
+    <div class="geo">
+      <div class="carte">
+        <svg viewBox="-28 -16 800 236" role="img" aria-label="Carte des origines d'attaque : bulles proportionnelles au volume, positionnées aux coordonnées réelles des pays.">
+          <line class="grat" x1="0" y1="0" x2="740" y2="0"/>
+          <line class="grat ppl" x1="0" y1="57" x2="740" y2="57"/>
+          <line class="grat ppl" x1="0" y1="114" x2="740" y2="114"/>
+          <line class="grat ppl" x1="0" y1="171" x2="740" y2="171"/>
+          <line class="grat" x1="0" y1="200" x2="740" y2="200"/>
+          <line class="grat ppl" x1="146" y1="0" x2="146" y2="200"/>
+          <line class="grat ppl" x1="292" y1="0" x2="292" y2="200"/>
+          <line class="grat ppl" x1="438" y1="0" x2="438" y2="200"/>
+          <line class="grat ppl" x1="584" y1="0" x2="584" y2="200"/>
+          <text class="etiq" x="-24" y="4">65°N</text>
+          <text class="etiq" x="-24" y="118">20°N</text>
+          <text class="etiq" x="-24" y="204">5°S</text>
+          <text class="etiq" x="140" y="218">90°O</text>
+          <text class="etiq" x="434" y="218">10°E</text>
+          <text class="etiq" x="580" y="218">60°E</text>
+          <circle class="cible" cx="390" cy="53" r="17"/>
+          <circle class="cible" cx="390" cy="53" r="25" opacity=".45"/>
+          <circle class="cible-n" cx="390" cy="53" r="3"/>
+          <text class="etiq fort" x="390" y="92" text-anchor="middle" style="fill:var(--vert)">gk2</text>
+          <g id="carte-bulles"></g>
+        </svg>
+        <div class="legende">
+          <span><em style="background:color-mix(in srgb,var(--braise) 50%,transparent);border:1px solid var(--braise)"></em>&gt; 1 000 coups</span>
+          <span><em style="background:color-mix(in srgb,var(--ambre) 45%,transparent);border:1px solid var(--ambre)"></em>200 – 1 000</span>
+          <span><em style="background:color-mix(in srgb,var(--cyan) 40%,transparent);border:1px solid var(--cyan)"></em>moins de 200</span>
+          <span id="carte-pied">—</span>
+        </div>
+      </div>
+      <div class="panneau">
+        <h3>Campagnes corrélées <span class="c" id="camp-n">—</span></h3>
+        <div id="camps"><p class="muet">lecture…</p></div>
+      </div>
+    </div>
+
+    <div class="sect"><h2>Flux direct</h2><span class="quoi">chaque bannissement, à la seconde</span>
+      <span class="src">waf/bans</span></div>
+    <div class="flux">
+      <div class="panneau"><h3>Derniers bans <span class="c" id="bans-n">—</span></h3>
+        <ul class="ruban" id="bans"><li class="muet">lecture…</li></ul></div>
+      <div class="panneau"><h3>Le champ de leurres <span class="c">services inexistants</span></h3>
+        <div class="leurres" id="leurres"><p class="muet">lecture…</p></div></div>
+    </div>
+  </section>
+
+  <!-- ÉCRAN 2 — META-METRICS -->
+  <section class="ecran" id="e2" role="tabpanel" aria-labelledby="t2" hidden>
+    <div class="sect"><h2>La box se regarde</h2><span class="quoi">ce qui tourne, ce qui tient, ce qui serre</span>
+      <span class="src">metrics/overview · metrics/health/summary</span></div>
+    <div class="meta" id="meta-sys"><p class="muet">lecture…</p></div>
+
+    <div class="sect"><h2>Le parc</h2><span class="quoi">les modules et ce qu'ils font de leur journée</span>
+      <span class="src">profiles/lifecycles</span></div>
+    <div class="geo">
+      <div class="panneau"><h3>Cycle de vie des modules <span class="c" id="parc-n">—</span></h3>
+        <div class="echelle" id="parc"><p class="muet">lecture…</p></div></div>
+      <div class="panneau"><h3>Qui dort en ce moment <span class="c" id="dorment-n">—</span></h3>
+        <div class="chaine" id="dorment" style="grid-template-columns:1fr"><p class="muet">lecture…</p></div></div>
+    </div>
+
+    <div class="sect"><h2>Ce qui sert</h2><span class="quoi">vhosts, hôtes vivants, certificats</span>
+      <span class="src">metrics/vhost-stats · metrics/live-hosts · metrics/cert-status</span></div>
+    <div class="meta" id="meta-sert"><p class="muet">lecture…</p></div>
+  </section>
+
+  <!-- ÉCRAN 3 — CENTRALE D'ALERTES -->
+  <section class="ecran" id="e3" role="tabpanel" aria-labelledby="t3" hidden>
+    <div class="sect"><h2>Deux mondes, un ruban</h2>
+      <span class="quoi">le réseau et la radio, dans le même ordre chronologique</span>
+      <span class="src">waf/bans · sensor/gsm/alerts</span></div>
+    <div class="panneau"><h3>Alertes <span class="c" id="cent-n">—</span></h3>
+      <ul class="ruban" id="centrale" style="max-height:none"><li class="muet">lecture…</li></ul></div>
+
+    <div class="sect"><h2>Sentinelle GSM</h2><span class="quoi">qui écoute l'air autour de la box</span>
+      <span class="src">sensor/gsm/status · /components · /alerts · /trusted</span></div>
+    <div class="radio">
+      <div class="panneau"><h3>Chaîne radio <span class="c" id="radio-etat">—</span></h3>
+        <div class="organes" id="organes"><p class="muet">lecture…</p></div>
+        <div id="radio-mot"></div></div>
+      <div class="panneau"><h3>Dernières alertes radio <span class="c" id="gsm-n">—</span></h3>
+        <ul class="gsm" id="gsm"><li class="muet">lecture…</li></ul></div>
+    </div>
+
+    <div class="sect"><h2>La chaîne</h2><span class="quoi">ce qui tient debout derrière</span>
+      <span class="src">soc/summary · waf/stats · sensor/gsm/status</span></div>
+    <div class="chaine" id="chaine"><p class="muet">lecture…</p></div>
+  </section>
+</div>
+
+<script>
+"use strict";
+(function () {
+  var API = "/api/v1";
+
+  // ── Lecture : un panneau qui ne peut pas lire sa source le DIT ──────
+  // Jamais de zéro par défaut : un compteur absent est un compteur MANQUANT.
+  // Confondre les deux, c'est afficher « rien ne nous attaque » quand la
+  // vérité est « on ne voit plus rien ».
+  function jeton() {
+    try { return localStorage.getItem("sbx_token") || localStorage.getItem("secubox_token"); }
+    catch (e) { return null; }
+  }
+  function lis(chemin) {
+    var t = jeton();
+    var h = { Accept: "application/json" };
+    if (t) { h.Authorization = "Bearer " + t; }
+    return fetch(API + chemin, { headers: h, credentials: "same-origin" })
+      .then(function (r) {
+        if (r.status === 401) { return { __erreur: "session requise" }; }
+        if (!r.ok) { return { __erreur: "HTTP " + r.status }; }
+        var ct = r.headers.get("content-type") || "";
+        if (ct.indexOf("application/json") === -1) { return { __erreur: "réponse non JSON" }; }
+        return r.json();
+      })
+      .catch(function (e) { return { __erreur: String(e && e.message || e) }; });
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(t) {
+    return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c];
+    });
+  }
+  function nb(n) {
+    if (n == null || isNaN(n)) { return "—"; }
+    return Number(n).toLocaleString("fr-FR");
+  }
+  function muet(el, msg) { el.innerHTML = '<p class="muet">' + esc(msg) + "</p>"; }
+  function heure(ts) {
+    if (!ts) { return "—"; }
+    var d = new Date(ts > 1e12 ? ts : ts * 1000);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleTimeString("fr-FR");
+  }
+  function sev(s) {
+    s = String(s || "").toLowerCase();
+    return (s === "critical" || s === "high") ? "haut" : (s === "low" ? "bas" : "moyen");
+  }
+
+  // ── Coordonnées : positions RÉELLES, projection équirectangulaire ───
+  // Fenêtre lon −130…130, lat 65…−5 : l'essentiel du trafic observé y tient
+  // sans écraser l'Europe contre le bord.
+  var LATLON = {
+    FR:[46.2,2.2], AD:[42.5,1.5], US:[39.8,-98.6], BE:[50.5,4.5], GB:[54,-2],
+    NL:[52.1,5.3], DE:[51.2,10.4], SG:[1.35,103.8], CN:[35.9,104.2], HK:[22.3,114.2],
+    RU:[61.5,105], IN:[21,78], BR:[-10,-55], CA:[56,-106], JP:[36,138], KR:[36,128],
+    UA:[49,32], PL:[52,19], IT:[42.8,12.6], ES:[40.2,-3.7], CH:[46.8,8.2],
+    SE:[62,15], RO:[45.9,25], TR:[39,35], IR:[32,53], VN:[14.1,108.3], ID:[-2.5,118],
+    TH:[15,101], PA:[8.5,-80], SC:[-4.6,55.5], LT:[55.2,23.9], BG:[42.7,25.5],
+    CZ:[49.8,15.5], AT:[47.5,14.5], IE:[53.4,-8], PT:[39.4,-8.2], FI:[64,26],
+    NO:[62,10], DK:[56,10], LU:[49.8,6.1], MD:[47,28.8], RS:[44,21], HU:[47.2,19.5]
+  };
+  function projette(iso) {
+    var c = LATLON[iso];
+    if (!c) { return null; }
+    var lat = c[0], lon = c[1];
+    if (lon < -130 || lon > 130 || lat > 65 || lat < -5) { return null; }
+    return { x: (lon + 130) / 260 * 740, y: (65 - lat) / 70 * 200 };
+  }
+
+  // ════════ ÉCRAN 1 ════════
+  function posture(d) {
+    if (d.__erreur) {
+      $("p-total").textContent = "—";
+      $("p-detail").textContent = "WAF illisible : " + d.__erreur;
+      muet($("p-cats"), "catégories indisponibles");
+      $("pouls").className = "pouls mort";
+      $("etat-flux").textContent = "WAF injoignable";
+      return;
+    }
+    var c = d.counters || d;
+    var total = c.total_threats != null ? c.total_threats : d.threats_today;
+    var obs = c.observed_threats != null ? c.observed_threats : d.observed_today;
+    $("p-total").textContent = nb(total);
+    if (total != null && obs != null) {
+      var ecart = Math.max(0, total - obs);
+      $("p-detail").innerHTML = "<b>" + nb(obs) + "</b> observées &middot; <b>" + nb(ecart) + "</b> écartées d'emblée";
+      $("p-obs").style.width = (obs / total * 100).toFixed(1) + "%";
+      $("p-ecart").style.width = (ecart / total * 100).toFixed(1) + "%";
+    } else {
+      $("p-detail").textContent = "détail du partage indisponible";
+    }
+    $("pouls").className = "pouls";
+    $("etat-flux").textContent = "flux WAF actif";
+    $("horo").textContent = new Date().toLocaleString("fr-FR");
+
+    var parCat = c.by_category || {};
+    var lignes = Object.keys(parCat).map(function (k) { return [k, parCat[k]]; })
+      .sort(function (a, b) { return b[1] - a[1]; });
+    if (!lignes.length) { muet($("p-cats"), "aucune catégorie retenue"); }
+    else {
+      var max = lignes[0][1] || 1;
+      $("p-ncat").textContent = lignes.length + " · aujourd'hui";
+      $("p-cats").innerHTML = lignes.slice(0, 14).map(function (l, i) {
+        var cls = i < 3 ? " tete" : (l[0].indexOf("leurre:") === 0 ? " leurre" : "");
+        return '<div class="cat' + cls + '"><span class="nom" title="' + esc(l[0]) + '">' + esc(l[0]) + "</span>" +
+          '<span class="bar"><i style="width:' + Math.max(2, l[1] / max * 100).toFixed(1) + '%"></i></span>' +
+          '<span class="nb">' + nb(l[1]) + "</span></div>";
+      }).join("");
+    }
+
+    // Leurres : des services qui n'existent pas, et qu'on frappe quand même.
+    var PORTS = { telnet:"23", rdp:"3389", vnc:"5900", mysql:"3306", postgres:"5432",
+                  mongodb:"27017", redis:"6379", mssql:"1433", elasticsearch:"9200", ftp:"21", smb:"445" };
+    var leurres = lignes.filter(function (l) { return l[0].indexOf("leurre:") === 0; });
+    if (!leurres.length) { muet($("leurres"), "aucun leurre frappé aujourd'hui"); }
+    else {
+      var maxL = leurres[0][1] || 1;
+      $("leurres").innerHTML = leurres.map(function (l) {
+        var nom = l[0].slice(7);
+        return '<div class="leurre"><div class="svc">' + esc(nom) + "</div>" +
+          '<div class="port">' + esc(PORTS[nom] || "—") + "</div>" +
+          '<div class="n">' + nb(l[1]) + "</div>" +
+          '<div class="fil"><i style="width:' + Math.max(4, l[1] / maxL * 100).toFixed(0) + '%"></i></div></div>';
+      }).join("");
+    }
+  }
+
+  function carte(d) {
+    var g = $("carte-bulles");
+    if (d.__erreur) { $("carte-pied").textContent = "géo illisible : " + d.__erreur; return; }
+    var liste = d.alerts || [];
+    var parPays = {}, ips = 0, coups = 0;
+    liste.forEach(function (a) {
+      var n = a.count || 1; ips += 1; coups += n;
+      var iso = (a.country || "").toUpperCase();
+      if (!iso || iso.length !== 2) { return; }
+      parPays[iso] = (parPays[iso] || 0) + n;
+    });
+    var rangs = Object.keys(parPays).map(function (k) { return [k, parPays[k]]; })
+      .sort(function (a, b) { return b[1] - a[1]; });
+    $("carte-pied").textContent = nb(ips) + " adresses · " + nb(coups) + " coups";
+    if (!rangs.length) { g.innerHTML = ""; $("carte-pied").textContent += " · aucun pays résolu"; return; }
+    var max = rangs[0][1] || 1;
+    g.innerHTML = rangs.slice(0, 16).map(function (r) {
+      var p = projette(r[0]);
+      if (!p) { return ""; }
+      var cls = r[1] > 1000 ? "" : (r[1] >= 200 ? " tiede" : " froid");
+      var ray = 4 + 11 * Math.sqrt(r[1] / max);
+      return '<circle cx="' + p.x.toFixed(0) + '" cy="' + p.y.toFixed(0) + '" r="' + ray.toFixed(1) +
+        '" class="bulle' + cls + '"><title>' + esc(r[0]) + " — " + nb(r[1]) + " coups</title></circle>" +
+        '<text class="etiq" x="' + p.x.toFixed(0) + '" y="' + (p.y + ray + 12).toFixed(0) +
+        '" text-anchor="middle">' + esc(r[0]) + " " + nb(r[1]) + "</text>";
+    }).join("");
+  }
+
+  function campagnes(d) {
+    var el = $("camps");
+    if (d.__erreur) { muet(el, "campagnes illisibles : " + d.__erreur); return; }
+    if (d.available === false) { muet(el, "corrélation non disponible (sbxwaf --correlate)"); return; }
+    var camps = d.campagnes || [];
+    $("camp-n").textContent = nb(d.attaquants) + " attaquants";
+    if (!camps.length) { muet(el, "aucune campagne corrélée pour l'instant"); return; }
+    var max = camps.reduce(function (m, c) { return Math.max(m, c.sondes || 0); }, 1);
+    el.innerHTML = camps.slice(0, 7).map(function (c) {
+      return '<div class="res"><span class="n" title="' + esc(c.signature || "") + '">' +
+        esc(c.signature || "—") + "</span>" +
+        '<span class="v">' + nb(c.attaquants) + "&#8239;IP</span>" +
+        '<span class="bar"><i style="width:' + Math.max(4, (c.sondes || 0) / max * 100).toFixed(0) + '%"></i></span></div>';
+    }).join("") +
+    '<p class="verdict doux">Une campagne, c\'est le même mode opératoire vu depuis plusieurs ' +
+    "adresses. Lues une par une, elles se fondent dans le bruit ; regroupées, elles désignent une main.</p>";
+  }
+
+  function bans(d, cible, compteur) {
+    var el = $(cible);
+    if (d.__erreur) { el.innerHTML = '<li class="muet">bans illisibles : ' + esc(d.__erreur) + "</li>"; return []; }
+    var liste = d.bans || [];
+    if (compteur) { $(compteur).textContent = nb(d.total != null ? d.total : liste.length) + " actifs"; }
+    if (!liste.length) { el.innerHTML = '<li class="muet">aucun bannissement actif</li>'; return []; }
+    el.innerHTML = liste.slice(0, 40).map(function (b, i) {
+      var s = sev(b.severity_max || b.sev || b.severity);
+      var cats = b.categories && typeof b.categories === "object" && !Array.isArray(b.categories)
+        ? Object.keys(b.categories).join(", ")
+        : (Array.isArray(b.categories) ? b.categories.join(", ") : (b.cat || "—"));
+      return '<li class="evt' + (s === "haut" ? " haut" : "") + (i === 0 ? " neuf" : "") + '">' +
+        '<span class="stripe"></span><span class="t">' + esc(heure(b.last_seen || b.at || b.first_seen)) + "</span>" +
+        '<span class="quoi"><span class="ip">' + esc(b.ip || "—") + "</span>" +
+        '<span class="cat">' + esc(cats) + "</span></span>" +
+        '<span class="sev">' + esc(s) + "</span></li>";
+    }).join("");
+    return liste;
+  }
+
+  // ════════ ÉCRAN 2 ════════
+  function tuile(eti, val, detail, pct, cls) {
+    return '<div class="mes' + (cls ? " " + cls : "") + '"><div class="eti">' + esc(eti) + "</div>" +
+      '<div class="v">' + esc(val) + "</div><div class=\"d\">" + esc(detail) + "</div>" +
+      (pct == null ? "" : '<div class="jauge"><i style="width:' + Math.min(100, pct).toFixed(0) + '%"></i></div>') +
+      "</div>";
+  }
+  function meta(ov, sante) {
+    var el = $("meta-sys"), t = [];
+    if (ov.__erreur && sante.__erreur) { muet(el, "métriques illisibles : " + ov.__erreur); return; }
+    var d = ov.__erreur ? {} : ov;
+    var disque = d.disk || d.disque || {};
+    var mem = d.memory || d.memoire || {};
+    var cpu = d.cpu || {};
+    if (disque.percent != null || disque.used_percent != null) {
+      var pc = disque.percent != null ? disque.percent : disque.used_percent;
+      t.push(tuile("Disque racine", pc + " %", (disque.used || "—") + " occupés sur " + (disque.total || "—"),
+                   pc, pc >= 85 ? "alerte" : (pc < 60 ? "bien" : "")));
+    }
+    if (mem.percent != null) {
+      t.push(tuile("Mémoire", mem.percent + " %", (mem.used || "—") + " sur " + (mem.total || "—"), mem.percent, ""));
+    }
+    if (cpu.load1 != null || d.load1 != null) {
+      var l1 = cpu.load1 != null ? cpu.load1 : d.load1;
+      t.push(tuile("Charge moyenne", String(l1), "sur 1 minute", Math.min(100, l1 * 12), ""));
+    }
+    if (!sante.__erreur && sante.overall) {
+      t.push(tuile("Santé générale", String(sante.overall).toUpperCase(),
+                   (sante.services_ok != null ? sante.services_ok + " services sains" : "synthèse metrics"),
+                   null, sante.overall === "green" ? "bien" : (sante.overall === "red" ? "alerte" : "")));
+    }
+    el.innerHTML = t.length ? t.join("") : '<p class="muet">aucune mesure exploitable dans la réponse</p>';
+  }
+
+  function parc(d) {
+    var el = $("parc"), dor = $("dorment");
+    if (d.__erreur) { muet(el, "profils illisibles : " + d.__erreur); muet(dor, "—"); return; }
+    var l = d.lifecycles || [];
+    if (!l.length) { muet(el, "aucun module déclaré"); muet(dor, "—"); return; }
+    var parCycle = {};
+    l.forEach(function (m) { var k = m.lifecycle || "?"; parCycle[k] = (parCycle[k] || 0) + 1; });
+    var rangs = Object.keys(parCycle).map(function (k) { return [k, parCycle[k]]; })
+      .sort(function (a, b) { return b[1] - a[1]; });
+    var max = rangs[0][1] || 1;
+    $("parc-n").textContent = l.length + " modules";
+    el.innerHTML = rangs.map(function (r) {
+      return '<div class="cat"><span class="nom">' + esc(r[0]) + "</span>" +
+        '<span class="bar"><i style="width:' + (r[1] / max * 100).toFixed(0) + '%"></i></span>' +
+        '<span class="nb">' + r[1] + "</span></div>";
+    }).join("");
+    var endormis = l.filter(function (m) { return m.sleep_state === "asleep"; });
+    $("dorment-n").textContent = endormis.length + " endormis";
+    dor.innerHTML = endormis.length
+      ? endormis.slice(0, 12).map(function (m) {
+          return '<div class="maillon warn"><span class="p"></span><span class="t"><b>' + esc(m.id) +
+            "</b><span>" + esc(m.portal_domain || m.lifecycle || "") + "</span></span></div>";
+        }).join("")
+      : '<p class="muet">aucun module endormi en ce moment</p>';
+  }
+
+  function sert(vh, hotes, certs) {
+    var t = [];
+    if (!vh.__erreur) {
+      var n = vh.total != null ? vh.total : (Array.isArray(vh.vhosts) ? vh.vhosts.length : null);
+      if (n != null) { t.push(tuile("Vhosts servis", nb(n), "blocs server actifs", null, "")); }
+    }
+    if (!hotes.__erreur) {
+      var h = hotes.total != null ? hotes.total : (Array.isArray(hotes.hosts) ? hotes.hosts.length : null);
+      if (h != null) { t.push(tuile("Hôtes vivants", nb(h), "vus sur le réseau local", null, "")); }
+    }
+    if (!certs.__erreur) {
+      var c = certs.certificates || certs.certs || [];
+      var exp = Array.isArray(c) ? c.filter(function (x) { return (x.days_left != null ? x.days_left : 99) < 21; }).length : null;
+      t.push(tuile("Certificats", Array.isArray(c) ? nb(c.length) : "—",
+                   exp ? exp + " à renouveler sous 21 j" : "aucun à renouveler sous 21 j",
+                   null, exp ? "alerte" : "bien"));
+    }
+    var el = $("meta-sert");
+    el.innerHTML = t.length ? t.join("") : '<p class="muet">sources indisponibles (session requise ?)</p>';
+  }
+
+  // ════════ ÉCRAN 3 ════════
+  function radio(st, comp, al) {
+    var org = $("organes");
+    if (st.__erreur) {
+      muet(org, "sentinelle injoignable : " + st.__erreur);
+      $("radio-etat").textContent = "—";
+    } else {
+      $("radio-etat").textContent = "état : " + (st.overall || "?");
+      var etats = st.states || {};
+      var liste = (!comp.__erreur && comp.components) ? comp.components
+        : Object.keys(etats).map(function (k) { return { name: k, state: etats[k], detail: "" }; });
+      org.innerHTML = liste.map(function (c) {
+        var cls = c.state === "absent" ? " absent" : (c.state === "idle" ? " idle" : "");
+        return '<div class="organe' + cls + '"><span class="p"></span>' +
+          '<span><b>' + esc(c.name) + '</b><span class="d">' + esc(c.detail || "") + "</span></span>" +
+          '<span class="et">' + esc(c.state) + "</span></div>";
+      }).join("");
+      if (etats.sdr === "absent") {
+        $("radio-mot").innerHTML = '<p class="verdict doux">La chaîne est saine mais <b>sourde</b> : ' +
+          "la clé SDR n'est pas branchée, donc rien n'écoute. Les alertes ci-contre sont les " +
+          "<b>dernières entendues</b>, pas des alertes vivantes." +
+          (st.rx_only ? " Réception seule, aucun IMSI en clair conservé en production." : "") + "</p>";
+      } else { $("radio-mot").innerHTML = ""; }
+    }
+    var el = $("gsm");
+    if (al.__erreur) { el.innerHTML = '<li class="muet">alertes radio illisibles : ' + esc(al.__erreur) + "</li>"; return []; }
+    var alertes = al.alerts || [];
+    $("gsm-n").textContent = alertes.length + " au total";
+    if (!alertes.length) { el.innerHTML = '<li class="muet">aucune alerte radio</li>'; return []; }
+    el.innerHTML = alertes.slice(0, 6).map(function (a) {
+      return "<li><div class=\"haut\"><span class=\"score\">" + esc(a.score) + "</span>" +
+        '<span class="cell">' + esc(a.cell_id || "—") + '</span><span class="t">#' + esc(a.id) + "</span></div>" +
+        '<p class="pq">' + esc(a.reason || "") + "</p></li>";
+    }).join("");
+    return alertes;
+  }
+
+  function centrale(listeBans, listeGsm) {
+    var el = $("centrale"), lignes = [];
+    (listeGsm || []).slice(0, 4).forEach(function (a) {
+      lignes.push({ t: a.ts, html: '<li class="evt radio"><span class="stripe"></span>' +
+        '<span class="t">radio</span><span class="quoi"><span class="ip">' + esc(a.cell_id || "—") + "</span>" +
+        '<span class="cat">' + esc(a.reason || "") + "</span></span>" +
+        '<span class="sev">score ' + esc(a.score) + "</span></li>" });
+    });
+    (listeBans || []).slice(0, 12).forEach(function (b) {
+      var s = sev(b.severity_max || b.sev || b.severity);
+      var ts = b.last_seen || b.at || b.first_seen;
+      var cats = b.categories && typeof b.categories === "object" && !Array.isArray(b.categories)
+        ? Object.keys(b.categories).join(", ")
+        : (Array.isArray(b.categories) ? b.categories.join(", ") : (b.cat || "—"));
+      lignes.push({ t: ts, html: '<li class="evt' + (s === "haut" ? " haut" : "") + '">' +
+        '<span class="stripe"></span><span class="t">' + esc(heure(ts)) + "</span>" +
+        '<span class="quoi"><span class="ip">' + esc(b.ip || "—") + '</span><span class="cat">' + esc(cats) +
+        "</span></span><span class=\"sev\">" + esc(s) + "</span></li>" });
+    });
+    lignes.sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
+    $("cent-n").textContent = lignes.length + " événements";
+    el.innerHTML = lignes.length ? lignes.map(function (l) { return l.html; }).join("")
+                                 : '<li class="muet">aucun événement</li>';
+  }
+
+  function chaine(soc, waf, gsm) {
+    var m = [];
+    function ligne(nom, detail, cls) {
+      return '<div class="maillon' + (cls ? " " + cls : "") + '"><span class="p"></span>' +
+        '<span class="t"><b>' + esc(nom) + '</b><span>' + esc(detail) + "</span></span></div>";
+    }
+    m.push(ligne("WAF", waf.__erreur ? waf.__erreur : "flux vivant", waf.__erreur ? "mal" : ""));
+    m.push(ligne("Sentinelle", gsm.__erreur ? gsm.__erreur : ("état " + (gsm.overall || "?")),
+                 gsm.__erreur ? "mal" : (gsm.overall === "green" ? "" : "warn")));
+    if (!soc.__erreur) {
+      var a = soc.alerts || {}, tk = soc.tickets || {};
+      m.push(ligne("Alertes SOC", (a.unacknowledged || 0) + " non acquittées", a.critical ? "mal" : ""));
+      m.push(ligne("Tickets", (tk.open || 0) + " ouverts sur " + (tk.total || 0), tk.critical ? "mal" : ""));
+    } else {
+      m.push(ligne("Magasin SOC", soc.__erreur, "warn"));
+    }
+    $("chaine").innerHTML = m.join("");
+  }
+
+  // ── Onglets ────────────────────────────────────────────────────────
+  var onglets = [].slice.call(document.querySelectorAll(".onglet"));
+  onglets.forEach(function (o) {
+    o.addEventListener("click", function () {
+      onglets.forEach(function (autre) {
+        var actif = autre === o;
+        autre.setAttribute("aria-selected", String(actif));
+        $(autre.getAttribute("aria-controls")).hidden = !actif;
+      });
+    });
+  });
+
+  // ── Chargement ─────────────────────────────────────────────────────
+  var dernierBans = [], dernierGsm = [];
+  function charge() {
+    lis("/waf/stats").then(posture);
+    lis("/waf/alerts?aggregate=true&limit=400").then(carte);
+    lis("/waf/campaigns").then(campagnes);
+    lis("/waf/bans").then(function (d) {
+      dernierBans = bans(d, "bans", "bans-n");
+      centrale(dernierBans, dernierGsm);
+    });
+
+    Promise.all([lis("/metrics/overview"), lis("/metrics/health/summary")])
+      .then(function (r) { meta(r[0], r[1]); });
+    lis("/profiles/lifecycles").then(parc);
+    Promise.all([lis("/metrics/vhost-stats"), lis("/metrics/live-hosts"), lis("/metrics/cert-status")])
+      .then(function (r) { sert(r[0], r[1], r[2]); });
+
+    Promise.all([lis("/sensor/gsm/status"), lis("/sensor/gsm/components"), lis("/sensor/gsm/alerts")])
+      .then(function (r) {
+        dernierGsm = radio(r[0], r[1], r[2]);
+        centrale(dernierBans, dernierGsm);
+        return Promise.all([lis("/soc/summary"), lis("/waf/stats")]).then(function (s) {
+          chaine(s[0], s[1], r[0]);
+        });
+      });
+  }
+  charge();
+  // La posture bouge lentement ; une minute suffit, et c'est autant de
+  // requêtes en moins sur une board qui a d'autres choses à faire.
+  setInterval(charge, 60000);
+})();
+</script>
 </body>
 </html>

@@ -9,6 +9,12 @@ Package: secubox-soc
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.4.0)
 Replaces: secubox-hub, secubox-soc-web
+# secubox-soc-web EST DECOMMISSIONNE (#1323) : son bundle React interrogeait
+# /api/v1/soc-gateway/*, console de flotte multi-box jamais deployee — aucune
+# unite, aucune route, agregateur 404. L'ecran restait vide et l'on croyait le
+# SOC casse. Conflicts (et non le seul Replaces) pour que dpkg le RETIRE au
+# lieu de laisser les deux se disputer /usr/share/secubox/www/soc/.
+Conflicts: secubox-soc-web
 Breaks: secubox-hub (<< 1.9.10-1~bookworm1)
 Description: SecuBox SOC — Security Operations Center aggregator
  Aggregates alerts, threat-map data, and P2P intel from Hub and WAF
@@ -19,4 +25,4 @@ Description: SecuBox SOC — Security Operations Center aggregator
   - secubox-soc-agent — edge node agent reporting up to a gateway.
   - secubox-soc-gateway — central fleet-monitoring hub
     (multi-board aggregator).
-  - secubox-soc-web — React-based browser dashboard frontend.
+  - la page Vigie SOC (www/soc/), trois ecrans lus sur les sources vivantes.

@@ -118,6 +118,30 @@
         input:focus, textarea:focus { outline: none; border-color: var(--primary); }
         dl.form { grid-template-columns: 12rem 1fr; align-items: start; }
         .ok { color: var(--green); }
+
+        /* Chaîne de publication (#1322) : un maillon = une puce, un verdict. */
+        .chaine { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.5rem; margin: 0.5rem 0 0.75rem; }
+        .maillon {
+            border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.6rem;
+            background: var(--bg-dark); cursor: default; min-width: 0;
+        }
+        .maillon .m-nom { display: flex; align-items: center; gap: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.75rem; color: var(--text-dim); }
+        .maillon .m-verdict { font-size: 1rem; }
+        .maillon .m-detail { font-size: 0.8rem; margin-top: 0.25rem; word-break: break-word; color: var(--text); }
+        .maillon.ok { border-color: var(--green); }
+        .maillon.ok .m-verdict { color: var(--green); }
+        .maillon.ko { border-color: var(--red); }
+        .maillon.ko .m-verdict { color: var(--red); }
+        .maillon.attente { border-color: var(--yellow); }
+        .maillon.attente .m-verdict { color: var(--yellow); }
+        .etat-ligne { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin-bottom: 0.5rem; }
+        .btn.warn { border-color: var(--yellow); color: var(--yellow); }
+        .btn.danger { border-color: var(--red); color: var(--red); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .journal { font-size: 0.85rem; margin-top: 0.5rem; white-space: pre-wrap; max-height: 9rem; overflow: auto; }
+        .journal .ok { color: var(--green); }
+        .journal .ko { color: var(--red); }
+        #f-file { width: auto; }
     </style>
 </head>
 <body class="crt-light">
@@ -132,13 +156,50 @@
             <a href="index.html" class="btn" style="margin-left:auto">← Back to list</a>
         </header>
 
+        <div class="card" id="card-chaine">
+            <h2>Chaîne de publication</h2>
+            <div class="etat-ligne">
+                <span id="etat-publie" class="badge"></span>
+                <span id="etat-exposition" class="badge"></span>
+                <span id="etat-url" class="hint"></span>
+                <button type="button" class="btn" id="btn-chaine" title="Relire les six maillons" style="margin-left:auto">🔄 Vérifier</button>
+            </div>
+            <div class="chaine" id="chaine">
+                <div class="maillon attente" data-m="contenu"><div class="m-nom"><span class="m-verdict">…</span>Contenu</div><div class="m-detail"></div></div>
+                <div class="maillon attente" data-m="domaine"><div class="m-nom"><span class="m-verdict">…</span>Domaine</div><div class="m-detail"></div></div>
+                <div class="maillon attente" data-m="vhost"><div class="m-nom"><span class="m-verdict">…</span>Vhost</div><div class="m-detail"></div></div>
+                <div class="maillon attente" data-m="route"><div class="m-nom"><span class="m-verdict">…</span>Route</div><div class="m-detail"></div></div>
+                <div class="maillon attente" data-m="dns"><div class="m-nom"><span class="m-verdict">…</span>DNS</div><div class="m-detail"></div></div>
+                <div class="maillon attente" data-m="cert"><div class="m-nom"><span class="m-verdict">…</span>Certificat</div><div class="m-detail"></div></div>
+            </div>
+            <div class="actions">
+                <button type="button" class="btn primary" id="btn-publier">🚀 Publier</button>
+                <button type="button" class="btn" id="btn-exposition">🌍 Exposer (WAN)</button>
+                <button type="button" class="btn" id="btn-cert">🔐 Demander le certificat</button>
+                <button type="button" class="btn" id="btn-dns">🔎 Vérifier le DNS</button>
+                <button type="button" class="btn" id="btn-vhost" title="Régénérer le bloc nginx et réaligner la route sur le domaine courant">⚙️ Appliquer le vhost</button>
+            </div>
+            <div class="journal" id="journal"></div>
+        </div>
+
+        <div class="card">
+            <h2>Contenu</h2>
+            <div class="actions">
+                <input type="file" id="f-file" accept=".zip,.tar.gz,.tgz,.html,.htm">
+                <button type="button" class="btn primary" id="btn-upload">📤 Téléverser</button>
+                <span id="upload-status" class="hint"></span>
+            </div>
+            <p class="hint" style="margin-top:0.5rem">Archive .zip / .tar.gz (avec un index.html) ou un seul fichier .html, déposé dans la racine servie.</p>
+        </div>
+
         <div class="card">
             <h2>Metadata</h2>
             <dl id="meta-dl"></dl>
         </div>
 
         <div class="card">
-            <h2>Snapshot</h2>
+            <h2>Snapshot <button type="button" class="btn" id="btn-snapshot" style="float:right">📸 Rafraîchir la vignette</button></h2>
+            <p id="snapshot-status" class="hint"></p>
             <a id="snapshot-link" target="_blank" rel="noopener">
                 <img id="snapshot" alt="Aperçu du site">
             </a>
@@ -159,6 +220,8 @@
             <h2>Paramétrer les détails</h2>
             <form id="edit-form">
                 <dl class="form">
+                    <dt><label for="f-domain">Domain</label></dt>
+                    <dd><input id="f-domain" type="text" autocomplete="off" placeholder="wall.gk2.net"><span class="hint"> — enregistrer puis « Appliquer le vhost » pour que nginx et la route suivent</span></dd>
                     <dt><label for="f-title">Title</label></dt>
                     <dd><input id="f-title" type="text" autocomplete="off"></dd>
                     <dt><label for="f-description">Description</label></dt>
@@ -308,6 +371,7 @@
             }
 
             // Pré-remplir le formulaire d'édition.
+            document.getElementById('f-domain').value = d.domain || '';
             document.getElementById('f-title').value = d.title || '';
             document.getElementById('f-description').value = d.description || '';
             document.getElementById('f-category').value = d.category || '';
@@ -329,6 +393,7 @@
             // null EFFACE le champ côté serveur ; on envoie null pour un champ vidé.
             const orNull = v => (v === '' ? null : v);
             const body = {
+                domain: orNull(val('f-domain')),
                 title: orNull(val('f-title')),
                 description: orNull(val('f-description')),
                 category: orNull(val('f-category')),
@@ -380,8 +445,169 @@
             render(d);
         }
 
+        // ─── Chaîne de publication (#1322) ───────────────────────────────
+        // Un verdict par maillon, un geste par bouton. Chaque geste rend la
+        // chaîne relue côté serveur : l'écran n'affirme jamais un état qu'il
+        // n'a pas constaté (leçon #1016 / #1023).
+
+        async function apiPost(path, body) {
+            const t = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+            const h = t ? { 'Authorization': `Bearer ${t}` } : {};
+            const opts = { method: 'POST', credentials: 'same-origin', headers: h };
+            if (body instanceof FormData) { opts.body = body; }
+            else if (body !== undefined) { h['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+            const res = await fetch(API + path, opts);
+            const ct = res.headers.get('content-type') || '';
+            const data = ct.includes('application/json') ? await res.json().catch(() => null) : null;
+            return { status: res.status, ok: res.ok, data };
+        }
+
+        function journal(msg, ok) {
+            const j = document.getElementById('journal');
+            const line = document.createElement('div');
+            line.className = ok === undefined ? '' : (ok ? 'ok' : 'ko');
+            line.textContent = `${new Date().toLocaleTimeString()} ${ok === undefined ? '…' : (ok ? '✓' : '✗')} ${msg}`;
+            j.prepend(line);
+        }
+
+        let chaine = null;
+
+        function renderChaine(c) {
+            chaine = c;
+            for (const [nom, m] of Object.entries(c.maillons)) {
+                const el = document.querySelector(`.maillon[data-m="${nom}"]`);
+                if (!el) continue;
+                el.className = 'maillon ' + (m.ok ? 'ok' : 'ko');
+                el.querySelector('.m-verdict').textContent = m.ok ? '✓' : '✗';
+                el.querySelector('.m-detail').textContent = m.detail || '';
+                el.title = m.detail || '';
+            }
+            const pub = document.getElementById('etat-publie');
+            pub.textContent = c.published ? 'Publié' : (c.intention === false ? 'Dépublié' : 'Non servi');
+            pub.className = 'badge ' + (c.published ? 'published' : 'draft');
+            const exp = document.getElementById('etat-exposition');
+            exp.textContent = c.exposition === 'wan' ? 'WAN — exposé' : 'LAN seulement';
+            exp.className = 'badge ' + (c.exposition === 'wan' ? 'published' : 'draft');
+            document.getElementById('etat-url').innerHTML =
+                `<a href="https://${encodeURIComponent(c.domain)}/" target="_blank" rel="noopener">https://${esc(c.domain)}/</a>`;
+
+            const bPub = document.getElementById('btn-publier');
+            bPub.textContent = c.published ? '⏸ Dépublier' : '🚀 Publier';
+            bPub.className = 'btn ' + (c.published ? 'warn' : 'primary');
+            const bExp = document.getElementById('btn-exposition');
+            bExp.textContent = c.exposition === 'wan' ? '🏠 Restreindre au LAN' : '🌍 Exposer (WAN)';
+            bExp.disabled = !c.published;
+            bExp.title = c.published ? '' : 'Publier d\'abord';
+            const bCert = document.getElementById('btn-cert');
+            const cert = c.maillons.cert;
+            const bientot = cert.ok && typeof cert.jours_restants === 'number' && cert.jours_restants < 20;
+            bCert.textContent = cert.ok ? (bientot ? '🔐 Renouveler le certificat' : '🔐 Certificat OK') : '🔐 Demander le certificat';
+            bCert.disabled = cert.ok && !bientot;
+            bCert.title = c.wildcard ? 'Sous-domaine *.gk2 : couvert par le wildcard' : (cert.detail || '');
+
+            // La carte « Snapshot » et le badge d'en-tête suivent la chaîne.
+            const badge = document.getElementById('status-badge');
+            badge.textContent = c.published ? 'Published' : 'Draft';
+            badge.className = 'badge ' + (c.published ? 'published' : 'draft');
+        }
+
+        async function loadChaine() {
+            if (!currentName) return;
+            document.querySelectorAll('.maillon').forEach(el => { el.className = 'maillon attente'; el.querySelector('.m-verdict').textContent = '…'; });
+            const c = await api(`/site/${encodeURIComponent(currentName)}/chaine`);
+            if (c && c.maillons) renderChaine(c);
+            else journal('chaîne illisible (API)', false);
+        }
+
+        function boutonsOccupes(occupe) {
+            document.querySelectorAll('#card-chaine .btn').forEach(b => { b.disabled = occupe; });
+            if (!occupe && chaine) renderChaine(chaine);
+        }
+
+        async function geste(libelle, path, body) {
+            boutonsOccupes(true);
+            journal(libelle);
+            try {
+                const r = await apiPost(`/site/${encodeURIComponent(currentName)}${path}`, body);
+                const d = r.data || {};
+                const detail = d.detail || (d.etapes ? Object.entries(d.etapes).map(([k, v]) => `${k}: ${v && (v.detail || (v.ok === false ? 'échec' : 'ok'))}`).join(' · ') : `HTTP ${r.status}`);
+                journal(`${libelle} — ${detail}`, r.ok && d.ok !== false);
+                if (d.chaine) renderChaine(d.chaine); else await loadChaine();
+                // Certificat custom : certbot tourne en tâche de fond — on
+                // relit la chaîne un peu plus tard pour voir le maillon virer.
+                if (path === '/cert' && d.mode === 'provisioning') setTimeout(loadChaine, 20000);
+            } catch (e) {
+                journal(`${libelle} — ${e}`, false);
+            } finally {
+                boutonsOccupes(false);
+            }
+        }
+
+        document.getElementById('btn-chaine').addEventListener('click', loadChaine);
+        document.getElementById('btn-publier').addEventListener('click', () => {
+            if (!chaine) return;
+            if (chaine.published) {
+                if (!confirm(`Dépublier ${chaine.domain} ? Le bloc nginx ET la route sbxwaf sont retirés.`)) return;
+                geste('Dépublication', '/unpublish');
+            } else {
+                geste('Publication', '/publish');
+            }
+        });
+        document.getElementById('btn-exposition').addEventListener('click', () => {
+            if (!chaine) return;
+            const wan = chaine.exposition !== 'wan';
+            geste(wan ? 'Exposition WAN' : 'Restriction au LAN', '/exposure', { wan });
+        });
+        document.getElementById('btn-cert').addEventListener('click', () => geste('Demande de certificat', '/cert'));
+        document.getElementById('btn-vhost').addEventListener('click', () => geste('Application du vhost', '/vhost'));
+        document.getElementById('btn-dns').addEventListener('click', async () => {
+            boutonsOccupes(true);
+            const d = await api(`/site/${encodeURIComponent(currentName)}/dns`);
+            journal(`DNS — ${d ? d.detail : 'illisible'}`, !!(d && d.ok));
+            if (d && chaine) { chaine.maillons.dns = d; renderChaine(chaine); }
+            boutonsOccupes(false);
+        });
+
+        // ─── Contenu : téléversement ─────────────────────────────────────
+        document.getElementById('btn-upload').addEventListener('click', async () => {
+            const input = document.getElementById('f-file');
+            const status = document.getElementById('upload-status');
+            if (!input.files.length) { status.textContent = 'Choisir un fichier'; status.className = 'hint error'; return; }
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            status.textContent = 'Envoi…'; status.className = 'hint';
+            const r = await apiPost(`/site/${encodeURIComponent(currentName)}/upload`, fd);
+            if (r.ok) {
+                status.textContent = '✓ Contenu déposé'; status.className = 'hint ok';
+                journal(`Téléversement de ${input.files[0].name}`, true);
+                input.value = '';
+                await loadChaine();
+            } else {
+                const msg = (r.data && (r.data.detail || r.data.error)) || `HTTP ${r.status}`;
+                status.textContent = '✗ ' + msg; status.className = 'hint error';
+                journal(`Téléversement — ${msg}`, false);
+            }
+        });
+
+        // ─── Snapshot : capture à la demande ─────────────────────────────
+        document.getElementById('btn-snapshot').addEventListener('click', async () => {
+            const b = document.getElementById('btn-snapshot');
+            const st = document.getElementById('snapshot-status');
+            b.disabled = true; st.textContent = 'Capture en cours (chromium)…'; st.className = 'hint';
+            const r = await apiPost(`/site/${encodeURIComponent(currentName)}/snapshot`);
+            const d = r.data || {};
+            if (r.ok && d.ok) {
+                st.textContent = '✓ Vignette rafraîchie'; st.className = 'hint ok';
+                const snap = document.getElementById('snapshot');
+                snap.src = `${API}/site/${encodeURIComponent(currentName)}/screenshot?t=${Date.now()}`;
+            } else {
+                st.textContent = '✗ ' + (d.detail || d.error || `HTTP ${r.status}`); st.className = 'hint error';
+            }
+            b.disabled = false;
+        });
+
         document.getElementById('edit-form').addEventListener('submit', saveDetails);
-        loadSite();
+        loadSite().then(loadChaine);
     </script>
 </body>
 </html>

@@ -1,23 +1,25 @@
-secubox-metablogizer (1.8.15-1~bookworm1) bookworm; urgency=medium
+secubox-metablogizer (1.8.16-1~bookworm1) bookworm; urgency=medium
 
-  * Publication depuis l'assistant : trois maillons cassés, constatés sur
-    wall.gk2.net le 2026-09-22.
-    - secubox-publishctl cert : certbot --webroot (/usr/share/secubox/www,
-      déjà routé par HAProxy → nginx :8880) au lieu de --standalone, qui
-      voulait :80 (occupé par HAProxy) et échouait TOUJOURS en « Address
-      already in use » — aucun domaine custom n'a jamais reçu de certificat
-      par l'assistant.
-    - GET /site/{name} : `published` calculé comme la liste (bloc dans le
-      nginx monolithique) via sites_scan.site_est_servi ; l'ancien test
-      « <nom>.conf existe » datait du modèle un-fichier-par-site et était
-      toujours faux → chaque page détail disait « non publié ».
-    - publish_wizard écrit `published` dans site.json selon son verdict
-      (marque_publie) ; il ne l'écrivait pas, chaque site publié violait le
-      schéma (« 'published' is a required property » à chaque scan).
-  * sites_scan.read_site_config tolère un site.json illisible (OSError) comme
-    un JSON malformé : un seul site.json root:600 (coin, laissé par une
-    commande lancée en root) empêchait l'API de démarrer — 502 sur tout le
-    panneau.
+  * Poste de pilotage d'un site (#1322) : la vue détail commande chaque maillon
+    de la chaîne d'enregistrement au lieu d'un simple formulaire.
+    - routers/pilotage.py : GET /site/{name}/chaine (six verdicts : contenu,
+      domaine, vhost, route, dns, cert + publié/exposition), GET …/dns
+      (résolveur PUBLIC — le résolveur local fait du split-DNS), POST …/cert
+      (refusé en NXDOMAIN pour ne pas brûler les tentatives Let's Encrypt),
+      POST …/exposure {wan} (WAN = route sbxwaf, LAN = retirée), POST …/vhost
+      (régénère nginx + réaligne la route après une édition de domaine),
+      POST …/snapshot (capture à la demande, verrou et garde de charge du
+      shotter).
+    - POST /site/{name}/publish|unpublish réécrits sur le modèle monolithique :
+      intention dans site.json + bloc unifié + route sbxwaf ; l'ancienne paire
+      écrivait un <nom>.conf par site qui doublait le bloc unifié (#1016).
+      Dépublier retire AUSSI la route : une route vers un domaine sans bloc
+      sert le site d'un voisin.
+    - Le générateur n'émet plus un site `published: false` (clé absente =
+      émis) — « site unpublish » ne retirait jamais le bloc.
+    - site.html : carte « Chaîne de publication » (puces de verdict, journal
+      des gestes, boutons publier/dépublier, WAN/LAN, certificat, DNS, vhost),
+      téléversement de contenu, rafraîchissement de la vignette, champ Domain.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 08:33:21 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 09:41:57 +0200
 
