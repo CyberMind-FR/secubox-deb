@@ -103,7 +103,7 @@
   <!-- Le spectre en miniature : il dit « ça vit » mieux qu'aucun libellé. -->
   <div class="spectre" aria-hidden="true">
     {#each (img?.fft ?? new Array(32).fill(-100)).filter((_, i) => i % 4 === 0) as v}
-      <i style="height:{Math.max(2, Math.min(100, (v + 100)))}%"></i>
+      <i style="transform:scaleY({Math.max(0.02, Math.min(1, (v + 100) / 100))})"></i>
     {/each}
   </div>
 
@@ -115,7 +115,7 @@
   <div class="histo" aria-label="répartition des indices">
     {#each ORDRE as k}
       <div class="col" title="{NOM[k]} {Math.round((indices[k] ?? 0) * 100)} %">
-        <div class="tube"><i style="height:{Math.max(2, (indices[k] ?? 0) * 100)}%"
+        <div class="tube"><i style="transform:scaleY({Math.max(0.02, indices[k] ?? 0)})"
                              class:tete={k === tete}></i></div>
         <span class="ic">{EMOJI[k]}</span>
       </div>
@@ -200,8 +200,17 @@
   .spectre { display: flex; align-items: flex-end; gap: 1px;
     flex: 1 1 auto; min-height: 26px; max-height: 64px;
     background: rgba(5,7,15,.45); border-radius: 7px; padding: 2px; }
-  .spectre i { flex: 1; background: linear-gradient(180deg, rgba(159,244,255,.75), rgba(70,229,255,.25));
-    border-radius: 1px 1px 0 0; transition: height .1s linear; }
+  /* MISE À L'ÉCHELLE, PAS HAUTEUR EN POURCENTAGE — et c'est ce qui avait fait
+     disparaître le spectre. Une hauteur en pourcentage se résout contre le
+     parent, qui doit avoir une hauteur DÉFINIE ; en rendant `.spectre`
+     flexible (`flex: 1 1 auto` avec des bornes) sa hauteur est devenue
+     indéfinie pour ce calcul, et toutes les barres sont tombées à zéro. La
+     carte s'affichait donc parfaitement, sans son spectre.
+     `scaleY` sur une barre pleine hauteur ne dépend d'aucun parent, et se
+     compose en plus sur le GPU — ce qui ne gâche rien à vingt images/seconde. */
+  .spectre i { flex: 1; height: 100%; transform-origin: bottom;
+    background: linear-gradient(180deg, rgba(159,244,255,.75), rgba(70,229,255,.25));
+    border-radius: 1px 1px 0 0; transition: transform .1s linear; will-change: transform; }
 
   /* L'histogramme : six colonnes, l'emoji sous chacune. Pas de libellé texte —
      la place ne le permet pas, et l'emoji suffit à identifier la colonne ; le
@@ -214,8 +223,11 @@
   .col { display: grid; grid-template-rows: 1fr auto; gap: 2px; justify-items: center; }
   .tube { width: 100%; display: flex; align-items: flex-end;
     background: rgba(255,255,255,.05); border-radius: 5px; overflow: hidden; }
-  .tube i { display: block; width: 100%; border-radius: 5px 5px 0 0;
-    background: rgba(70,229,255,.45); transition: height .3s ease; }
+  /* Même raison que pour le spectre : la colonne vit dans une rangée de
+     grille en `1fr`, dont la hauteur n'est pas définie pour un pourcentage. */
+  .tube i { display: block; width: 100%; height: 100%; transform-origin: bottom;
+    border-radius: 5px 5px 0 0; background: rgba(70,229,255,.45);
+    transition: transform .3s ease; will-change: transform; }
   /* La colonne de tête se détache, sinon six barres voisines se lisent comme
      une égalité alors qu'il y a un classement. */
   .tube i.tete { background: linear-gradient(180deg, var(--cyan), rgba(70,229,255,.5)); }

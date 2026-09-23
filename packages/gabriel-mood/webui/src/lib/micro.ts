@@ -18,6 +18,7 @@ export type Image = {
   vad: boolean; speech_rate: number; jitter: number; shimmer: number
   clarity: number; latency_ms: number; cpu: number
   calibration: number; observations?: number; age_s?: number
+  sans_son_s?: number
   ambiance?: { bpm: number; pulsation: number; part: number; dominante: boolean; presente: boolean }
   source_reelle: boolean; reserve: string
 }
@@ -69,6 +70,9 @@ export class Micro {
   #ws: WebSocket | null = null
   #surImage: (i: Image) => void
   #surEtat: (e: Etat, motif: string) => void
+  #veille: number | undefined
+  #derniereImage = 0
+  #surVisible = () => { void this.#reveille() }
 
   constructor(surImage: (i: Image) => void, surEtat: (e: Etat, m: string) => void) {
     this.#surImage = surImage
@@ -130,6 +134,7 @@ export class Micro {
         if (m.type === 'reprise') { this.reprise = m.motif || ''; return }
         if (m.type === 'refus') { this.arrete(); this.#pose('erreur', m.motif); return }
         this.derniere = m as Image
+        this.#derniereImage = Date.now()
         this.#surImage(m as Image)
       }
       this.#ws.onclose = () => { if (this.etat === 'ecoute') this.#pose('arrete') }
@@ -146,6 +151,27 @@ export class Micro {
       // pas pour réémettre. Le relier renverrait la voix dans les haut-parleurs
       // et créerait une boucle, ce que personne n'attend d'un analyseur.
       src.connect(nœud)
+
+      // ── LE CONTEXTE AUDIO SE FAIT SUSPENDRE, ET C'EST LE COUPABLE ────────
+      //
+      // Les navigateurs suspendent l'AudioContext d'un onglet passé en
+      // arrière-plan. Au retour, il reste SUSPENDU : le worklet ne tourne
+      // plus, plus un octet ne part, et les chiffres restent figés à l'écran —
+      // parfaitement crédibles. D'où « les stats semblent vides, il faut
+      // arrêter et relancer l'écoute ». On le réveille donc dès que la page
+      // redevient visible, ce qui rend le geste manuel inutile.
+      document.addEventListener('visibilitychange', this.#surVisible)
+
+      // ── ET UNE VEILLE, POUR TOUT LE RESTE ───────────────────────────────
+      //
+      // La suspension n'est pas la seule façon de se taire : la permission
+      // peut être révoquée, la machine mise en veille, le périphérique
+      // débranché. Plutôt que d'énumérer les causes, on surveille l'EFFET —
+      // plus d'images qui arrivent — et on remonte le flux. Surveiller un
+      // effet couvre les causes qu'on n'a pas prévues.
+      this.#derniereImage = Date.now()
+      this.#veille = window.setInterval(() => { void this.#reveille() }, 3000)
+
       this.#pose('ecoute')
     } catch (e: any) {
       this.arrete()
@@ -154,7 +180,28 @@ export class Micro {
     }
   }
 
+  // #reveille : relance ce qui s'est tu, sans rien demander à personne.
+  async #reveille() {
+    if (this.etat !== 'ecoute') return
+    // 1. Le contexte audio suspendu : le cas courant, et le moins coûteux.
+    if (this.#ctx && this.#ctx.state === 'suspended') {
+      try { await this.#ctx.resume() } catch { /* on tentera autrement */ }
+    }
+    // 2. Plus d'image depuis dix secondes : quelque chose s'est rompu plus
+    //    profond. On refait la session plutôt que de laisser un écran figé —
+    //    le geste que l'utilisateur faisait à la main.
+    const mort = Date.now() - this.#derniereImage > 10000
+    const muet = (this.derniere?.sans_son_s ?? 0) > 8
+    if (mort || muet) {
+      this.arrete()
+      await this.demarre()
+    }
+  }
+
   arrete() {
+    clearInterval(this.#veille)
+    this.#veille = undefined
+    document.removeEventListener('visibilitychange', this.#surVisible)
     // ON COUPE LE MICRO POUR DE BON. Laisser la piste ouverte garderait la
     // pastille d'enregistrement allumée dans l'onglet : le navigateur dirait
     // vrai, et nous aurions menti.

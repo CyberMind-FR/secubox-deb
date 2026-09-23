@@ -1,3 +1,48 @@
+gabriel-mood (0.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * LE BPM EFFAÇAIT LES ÉMOTIONS, et c'était un défaut de calcul, pas une
+    décision. La « part d'ambiance » rapportait l'énergie de fond à l'énergie
+    TOTALE — or pendant les pauses le fond EST l'énergie, si bien que ces
+    trames comptaient une fois de chaque côté. Quelqu'un qui parle un cinquième
+    du temps, c'est-à-dire tout le monde, dépassait le seuil dès que la pièce
+    atteignait le cinquième de sa voix : un ventilateur suffisait à effacer la
+    lecture.
+  * La question utile n'est pas « quelle fraction de l'énergie est de
+    l'ambiance » mais « la pièce couvre-t-elle la voix ». On compare désormais
+    les deux MOYENNES sur leurs trames respectives : la part vaut un demi quand
+    elles s'égalent, ce qui rend le seuil lisible et interprétable. Une musique
+    de fond plus faible que la voix n'écarte plus rien — elle reste un contexte.
+  * LE SPECTRE AVAIT DISPARU DE LA CARTE. En rendant sa hauteur flexible, elle
+    est devenue indéfinie pour le calcul des pourcentages : les barres, dont la
+    hauteur était en `%`, tombaient toutes à zéro. La carte s'affichait
+    parfaitement, sans son spectre. Les barres sont désormais mises à l'échelle
+    par `transform`, qui ne dépend d'aucun parent — et se compose sur le GPU,
+    ce qui ne gâche rien à vingt images par seconde. Même correction pour les
+    colonnes de l'histogramme, qui avaient le même défaut latent.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 13:17:08 +0200
+
+gabriel-mood (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Les mesures se figeaient et il fallait arrêter puis relancer l'écoute.
+  * LA CAUSE LA PLUS PROBABLE : les navigateurs SUSPENDENT l'AudioContext d'un
+    onglet passé en arrière-plan, et au retour il reste suspendu. Le worklet ne
+    tourne plus, plus un octet ne part, et les derniers chiffres restent à
+    l'écran — parfaitement crédibles. On le réveille désormais dès que la page
+    redevient visible, ce qui rend le geste manuel inutile.
+  * ET UNE VEILLE POUR TOUT LE RESTE. La suspension n'est pas la seule façon de
+    se taire : permission révoquée, machine en veille, périphérique débranché.
+    Plutôt que d'énumérer les causes, on surveille l'EFFET — plus d'images qui
+    arrivent — et on remonte la session. Surveiller un effet couvre les causes
+    qu'on n'a pas prévues.
+  * LE SILENCE D'UN MICRO ET CELUI D'UN TUYAU NE SE RESSEMBLENT PAS, et
+    produisaient pourtant le même écran. La board mesure maintenant depuis
+    combien de temps plus RIEN ne lui parvient (`sans_son_s`) et l'interface le
+    dit en toutes lettres : ce n'est pas quelqu'un qui se tait, c'est le flux
+    qui est rompu.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 13:12:57 +0200
+
 gabriel-mood (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * LA FENÊTRE SE COMPTE EN VOIX, PAS EN SECONDES. C'était le défaut de fond :

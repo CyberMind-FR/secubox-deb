@@ -132,6 +132,14 @@
     le concernant.
   </div>
 
+  {#if etat === 'ecoute' && (img?.sans_son_s ?? 0) > 3}
+    <div class="avis erreur">🔌 Plus aucun son ne parvient à la board depuis
+      {img?.sans_son_s?.toFixed(0)} s — ce n'est pas un silence, c'est le tuyau
+      qui est muet. Le plus souvent : l'onglet est passé en arrière-plan et le
+      navigateur a suspendu le micro. La session se remonte toute seule ; si
+      cela persiste, vérifiez l'autorisation du micro.</div>
+  {/if}
+
   {#if img?.age_s}
     <div class="avis">⏱ Lecture mesurée il y a {img.age_s.toFixed(0)} s et
       tenue pendant le silence — une humeur ne s'éteint pas parce qu'on
@@ -153,7 +161,9 @@
       {#if img.ambiance?.bpm}({Math.round(img.ambiance.bpm)} BPM,
         {Math.round((img.ambiance.part ?? 0) * 100)} % de l'énergie){/if}.
       Une musique est harmonique et périodique — exactement ce qu'on cherche
-      quand on cherche une voix : on mesurerait l'instrument, pas vous.</div>
+      quand on cherche une voix : on mesurerait l'instrument, pas vous.
+      La part se lit en comparant la pièce à votre voix : un demi veut dire
+      qu'elles s'égalent.</div>
   {:else if img?.reference === 'mixte'}
     <div class="avis">👥 Référence MIXTE : la vôtre pèse
       {Math.round((img.calibration ?? 0) * 100)} %, le reste est emprunté à

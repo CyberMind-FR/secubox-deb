@@ -62,7 +62,13 @@ type Ambiance struct {
 // d'une conversation ordinaire et ne prouve rien.
 const SeuilPulsation = 0.34
 
-// SeuilDominante : au-dessus, ce qu'on mesurerait ne serait plus une personne.
+// SeuilDominante : au-dessus, la pièce couvre la voix et ce qu'on mesurerait
+// ne serait plus une personne.
+//
+// 0,55 sur la NOUVELLE définition — les deux moyennes comparées entre elles —
+// veut dire « le fond est un peu plus fort que la voix ». C'est le bon endroit :
+// en-dessous, une voix reste mesurable dans une pièce animée, et l'ambiance
+// n'est qu'un CONTEXTE qui explique qu'on parle plus haut.
 const SeuilDominante = 0.55
 
 // Ecouteur suit l'enveloppe d'énergie pour y chercher une pulsation.
@@ -72,6 +78,7 @@ const SeuilDominante = 0.55
 // précisément ce qu'on essaie de séparer.
 type Ecouteur struct {
 	env      []float64 // enveloppe d'énergie, un point par trame
+	marques  []bool    // cette trame portait-elle de la parole ?
 	fond     []float64 // énergie des trames SANS parole
 	pas      float64   // durée d'une trame, en secondes
 	capacite int
@@ -91,8 +98,10 @@ func NouvelEcouteur(pasSecondes, duree float64) *Ecouteur {
 // Observe ajoute une trame.
 func (e *Ecouteur) Observe(rms float64, parole bool) {
 	e.env = append(e.env, rms)
+	e.marques = append(e.marques, parole)
 	if len(e.env) > e.capacite {
 		e.env = e.env[1:]
+		e.marques = e.marques[1:]
 	}
 	if !parole {
 		e.fond = append(e.fond, rms)
@@ -169,19 +178,42 @@ func (e *Ecouteur) Analyse() Ambiance {
 	}
 
 	bpm := 60.0 / (float64(meilleur) * e.pas)
-	// La PART de l'ambiance : l'énergie de fond rapportée à l'énergie totale.
-	// C'est elle qui décide entre « contexte » et « on écarte », parce qu'une
-	// pulsation nette mais très discrète ne gêne personne.
-	var totale, fond float64
+	// ── LA PART DE L'AMBIANCE, ET J'AI DÛ LA REFAIRE ─────────────────────
+	//
+	// Elle rapportait l'énergie de fond à l'énergie TOTALE. C'était faux, et
+	// faux dans le sens qui fait mal : pendant les pauses, `fond` vaut `env`,
+	// si bien que ces trames comptaient 1:1 des deux côtés. Quelqu'un qui parle
+	// un cinquième du temps — ce qui est le cas de tout le monde — voyait donc
+	// sa « part d'ambiance » passer 0,55 dès que la pièce atteignait le
+	// cinquième de sa voix. Résultat : le BPM EFFAÇAIT LES ÉMOTIONS, sur un
+	// simple ventilateur.
+	//
+	// La question utile n'est pas « quelle fraction de l'énergie est de
+	// l'ambiance » mais « la pièce couvre-t-elle la voix ». On compare donc les
+	// deux MOYENNES, sur leurs trames respectives : la part vaut un demi quand
+	// elles s'égalent, ce qui est exactement le point où la mesure cesse d'être
+	// une mesure de quelqu'un.
+	var sommeFond, sommeVoix float64
+	var nFond, nVoix int
 	for i := range e.env {
-		totale += e.env[i]
-	}
-	for _, v := range e.fond {
-		fond += v
+		if i < len(e.marques) && e.marques[i] {
+			sommeVoix += e.env[i]
+			nVoix++
+		} else {
+			sommeFond += e.env[i]
+			nFond++
+		}
 	}
 	part := 0.0
-	if totale > 1e-12 {
-		part = math.Min(1, fond/totale)
+	if nFond > 0 {
+		moyFond := sommeFond / float64(nFond)
+		moyVoix := 0.0
+		if nVoix > 0 {
+			moyVoix = sommeVoix / float64(nVoix)
+		}
+		if moyFond+moyVoix > 1e-12 {
+			part = moyFond / (moyFond + moyVoix)
+		}
 	}
 	return Ambiance{
 		BPM: math.Round(bpm*10) / 10, Pulsation: math.Round(score*100) / 100,

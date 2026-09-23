@@ -120,3 +120,82 @@ func TestUneAmbianceDominanteEcarteLaFenetre(t *testing.T) {
 		t.Fatalf("ambiance à %.2f de part non déclarée dominante", a.Part)
 	}
 }
+
+// ── LE BPM NE DOIT PAS EFFACER LES ÉMOTIONS ────────────────────────────────
+//
+// C'est le défaut signalé, et il venait d'une part calculée à l'envers : elle
+// rapportait le fond à l'énergie TOTALE, or pendant les pauses le fond EST
+// l'énergie. Quelqu'un qui parle un cinquième du temps — c'est-à-dire tout le
+// monde — dépassait le seuil dès que la pièce atteignait le cinquième de sa
+// voix. Un ventilateur suffisait à effacer la lecture.
+
+func TestUneMusiqueDeFondNEcartePasUneVoixPlusForte(t *testing.T) {
+	e := NouvelEcouteur(pasTrame, 14)
+	const bpm = 110.0
+	duree := 14.0
+	n := int(duree / pasTrame)
+	for i := 0; i < n; i++ {
+		tt := float64(i) * pasTrame
+		p := math.Mod(tt, 60/bpm)
+		fond := 0.02 + 0.05*math.Exp(-p*14) // musique audible
+		// On parle un cinquième du temps, à une énergie franche.
+		if math.Mod(tt, 5) < 1 {
+			e.Observe(0.30, true)
+		} else {
+			e.Observe(fond, false)
+		}
+	}
+	a := e.Analyse()
+	if !a.Presente {
+		t.Fatalf("la pulsation devrait être vue : %+v", a)
+	}
+	if a.Dominante {
+		t.Fatalf("une musique de fond plus FAIBLE que la voix écarte la fenêtre "+
+			"(part %.2f) : c'est le défaut qui effaçait les émotions", a.Part)
+	}
+}
+
+// Et le cas symétrique reste vrai : quand la pièce couvre RÉELLEMENT la voix,
+// ce qu'on mesurerait ne serait plus une personne.
+func TestUneMusiqueQuiCouvreLaVoixEcarteBien(t *testing.T) {
+	e := NouvelEcouteur(pasTrame, 14)
+	const bpm = 128.0
+	duree := 14.0
+	n := int(duree / pasTrame)
+	for i := 0; i < n; i++ {
+		tt := float64(i) * pasTrame
+		p := math.Mod(tt, 60/bpm)
+		fond := 0.10 + 0.45*math.Exp(-p*14) // musique forte
+		if math.Mod(tt, 5) < 1 {
+			e.Observe(0.12, true) // on parle doucement par-dessus
+		} else {
+			e.Observe(fond, false)
+		}
+	}
+	a := e.Analyse()
+	if !a.Presente || !a.Dominante {
+		t.Fatalf("une musique plus forte que la voix doit écarter : %+v", a)
+	}
+}
+
+// LA PART VAUT UN DEMI QUAND LES DEUX S'ÉGALENT : c'est ce qui rend le seuil
+// lisible, et interprétable par qui lit le chiffre à l'écran.
+func TestLaPartVautUnDemiADeuxSourcesEgales(t *testing.T) {
+	e := NouvelEcouteur(pasTrame, 14)
+	const bpm = 100.0
+	duree := 14.0
+	n := int(duree / pasTrame)
+	for i := 0; i < n; i++ {
+		tt := float64(i) * pasTrame
+		p := math.Mod(tt, 60/bpm)
+		if math.Mod(tt, 2) < 1 {
+			e.Observe(0.20, true)
+		} else {
+			e.Observe(0.20+0.001*math.Exp(-p*14), false)
+		}
+	}
+	a := e.Analyse()
+	if a.Part < 0.42 || a.Part > 0.58 {
+		t.Fatalf("part %.2f pour deux sources d'égale énergie, attendu ~0,50", a.Part)
+	}
+}

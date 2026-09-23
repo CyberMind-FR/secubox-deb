@@ -120,6 +120,9 @@ type Image struct {
 	// mesurée. Zéro quand elle est fraîche. Une lecture tenue pendant une
 	// pause doit dire son âge, sinon elle se lit comme une mesure en cours.
 	AgeLecture float64 `json:"age_s"`
+	// SansSon : depuis combien de secondes plus RIEN n'arrive du navigateur.
+	// Distinct d'un silence : là, c'est le tuyau qui est muet, pas la personne.
+	SansSon float64 `json:"sans_son_s"`
 
 	SourceReelle bool   `json:"source_reelle"`
 	Reserve      string `json:"reserve"`
@@ -604,6 +607,14 @@ func (a *Analyseur) lectureTenue() (ser.Lecture, float64) {
 	return a.bonneLec, age.Seconds()
 }
 
+// sansSon : depuis combien de temps la source n'a rien livré.
+func (a *Analyseur) sansSon() float64 {
+	if n, ok := a.source.(interface{ SansSon() time.Duration }); ok {
+		return n.SansSon().Seconds()
+	}
+	return 0
+}
+
 // tendances : l'écart de chaque indice à sa moyenne récente.
 //
 // UN INDICE QUI MONTE ET UN INDICE QUI DESCEND NE DISENT PAS LA MÊME CHOSE à
@@ -677,6 +688,7 @@ func (a *Analyseur) majImage(v vad.Verdict, rms float64) {
 		Fiabilite:    math.Round(lec.Fiabilite*100) / 100,
 		Observations: lec.Observations,
 		AgeLecture:   math.Round(age*10) / 10,
+		SansSon:      math.Round(a.sansSon()*10) / 10,
 		SourceReelle: a.source.Decrit().Reelle,
 		Reserve:      lec.Reserve,
 	}

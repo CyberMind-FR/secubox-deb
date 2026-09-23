@@ -38,6 +38,7 @@ type Navigateur struct {
 	debut   time.Time
 	recus   int64
 	rejetes int64
+	dernier time.Time
 	// PLAFOND DE TAMPON. Si l'analyse prend du retard, on jette les
 	// échantillons les plus ANCIENS : sur un flux temps réel, du vieux son
 	// n'a aucune valeur, et l'accumuler ferait grossir la mémoire jusqu'à ce
@@ -62,6 +63,7 @@ func (n *Navigateur) Pousse(x []float64) {
 	}
 	n.tampon = append(n.tampon, x...)
 	n.recus += int64(len(x))
+	n.dernier = time.Now()
 	if trop := len(n.tampon) - n.plafond; trop > 0 {
 		n.tampon = n.tampon[trop:]
 		n.rejetes += int64(trop)
@@ -92,6 +94,24 @@ func (n *Navigateur) Ferme() error {
 	n.mu.Unlock()
 	n.pret.Broadcast()
 	return nil
+}
+
+// SansSon : depuis combien de temps plus rien n'arrive du navigateur.
+//
+// LE SILENCE D'UN MICRO ET LE SILENCE D'UN TUYAU NE SE RESSEMBLENT PAS, et
+// pourtant ils produisaient le même écran : des chiffres figés. Quand le
+// navigateur cesse d'émettre — onglet mis en arrière-plan et contexte audio
+// suspendu, permission révoquée, machine en veille — l'analyse n'a plus rien à
+// se mettre sous la dent et la dernière image reste à l'écran, parfaitement
+// crédible. On mesure donc le silence du TUYAU, pour pouvoir le distinguer de
+// quelqu'un qui se tait.
+func (n *Navigateur) SansSon() time.Duration {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.dernier.IsZero() {
+		return 0
+	}
+	return time.Since(n.dernier)
 }
 
 // Retard : le nombre d'échantillons en attente, c'est-à-dire la latence
