@@ -1,3 +1,29 @@
+gabriel-mood (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA LAMPE PREND LA COULEUR DE L'HUMEUR (ref #1331). La table des teintes
+    vit ici, pas dans le Hall : traduire un état en couleur est du SENS, et le
+    sens appartient au module qui produit l'état. Le Hall n'apporte que ce que
+    nous n'avons pas — la session et le nom de la lampe.
+  * LA RÈGLE DU MODULE VAUT AUSSI POUR LE MUR. « Ne jamais présenter les
+    émotions comme des certitudes » ne s'arrête pas à l'écran : une lampe rouge
+    affirme, et elle affirme à toute la pièce, à quelqu'un qui n'a lu ni la
+    réserve ni le pourcentage. D'où deux règles, pas deux ornements —
+    l'indéterminé n'a PAS de teinte (blanc chaud : la lampe redevient une
+    lampe), et la confiance module la LUMINOSITÉ, si bien qu'une lecture
+    hésitante donne une lumière basse.
+  * RIEN NE S'ALLUME AU CHARGEMENT. Sans le garde, ouvrir le Hall suffirait à
+    changer la lumière d'une pièce — un effet physique déclenché par personne.
+    La première émission exige une écoute réelle, et l'arrêt rend la lampe au
+    blanc chaud : laisser un rouge au mur après la mesure, ce serait une
+    affirmation qui survit à ce qui la justifiait.
+  * UN TEST GO GARDE UNE TABLE TYPESCRIPT. Rien ne relie `Etats` à
+    `couleur.ts` : ajouter une émotion sans sa teinte donnerait une lampe qui
+    reste blanche pour celle-là, sans erreur ni message. C'est la panne qui
+    s'est déjà répétée trois fois ici (routes sbxwaf, frame-src du Hall, test
+    CSP périmé) — une liste tenue à la main dont la divergence est muette. On
+    la relie par un test plutôt que par de la discipline.
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 14:01:07 +0200
+
 gabriel-mood (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * LE SPECTROGRAMME ENTRE DANS LA CARTE. Elle n'avait que des barres — elles

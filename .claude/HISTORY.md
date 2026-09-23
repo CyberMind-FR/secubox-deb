@@ -5,6 +5,89 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-23 — CE QUE PERSONNE NE TIENT, ET CE QU'ON N'A PAS MESURÉ (ref #1323, #1328, #1329)
+
+Deux jours, sept paquets livrés, un module neuf. Mais ce qui mérite d'être
+gardé tient en deux leçons, et elles se sont chacune répétées trois fois.
+
+### La poignée de main disait qui nous étions
+
+Le relais `surf` rendait 404 sur des pages que `curl` obtenait en 200, depuis
+la même machine, la même seconde, la même IP. Rien dans les en-têtes ne nous
+distinguait : User-Agent recopié, `Accept-Language` identique, cookies portés.
+
+C'est **sous** HTTP que ça se jouait. `httpx` impose son propre
+`DEFAULT_CIPHERS` — 42 suites là où le système en propose 60 — et cet ordre-là,
+ce nombre-là, forment un `ClientHello` reconnaissable. Fastly, Cloudflare et
+Akamai le lisent et répondent 404 : pas un blocage, un **classement**. Nous nous
+annoncions comme un robot avant d'avoir dit un mot.
+
+`contexte_tls()` rend le contexte du système, et le 404 est devenu 200. La
+leçon n'est pas sur le TLS : elle est que nous avions cherché la cause pendant
+des heures dans la seule couche que nous savions lire.
+
+### Trois diagnostics par le raisonnement, trois fois faux, le même jour
+
+1. La dérive du plancher de bruit du VAD expliquait les indéterminés — j'avais
+   même prédit la pente, 47 dB en dix secondes. **Mesuré : le plancher ne bouge
+   pas** (−80 dB, 79 % de détection). La vraie cause était la fenêtre comptée en
+   secondes au lieu d'être comptée en voix.
+2. Le `min-height: 100%` d'un parent à hauteur automatique expliquait la carte
+   sans spectrogramme. **Reproduction minimale : les deux formes rendent pareil.**
+   La vraie cause : `--dump-dom` montrait `canvas` = 0 — la carte n'avait
+   jamais eu de spectrogramme.
+3. La capture d'écran blanche prouvait une page cassée. **Profil chromium neuf :
+   la page allait bien depuis le début.**
+
+Un `--dump-dom`, un test jetable, une page de reproduction : une commande a
+tranché chaque fois ce que le raisonnement avait mal deviné. Et le seul bug de
+fond de `gabriel-mood` — YIN dix pour cent trop haut, presque deux demi-tons —
+a été trouvé par un test, pas par une relecture : j'avais écrit une
+autocorrélation (N−τ termes, décroissants) là où YIN demande une
+**inter**corrélation à fenêtre fixe (W termes, constants).
+
+### Des listes que personne ne tient
+
+Le même défaut, trois fois, sous trois formes :
+
+- La table de routes `sbxwaf` — 275 entrées posées à la main. Un paquet neuf
+  rendait 421 parce que personne n'avait pensé à y ajouter sa ligne.
+- Le `frame-src` du Hall — 22 origines énumérées pour 192 services. Un service
+  neuf n'était pas encadrable, et rien ne le disait sauf la console.
+- Un test CSP qui interdisait `unsafe-inline` **partout**, alors que la
+  politique le tolérait dans `style-src` depuis longtemps. Le test ne gardait
+  plus la règle : il gardait son souvenir.
+
+Le remède est le même dans les trois cas, et ce n'est pas « tenir la liste à
+jour ». C'est que **la déclaration vienne de celui qui possède la chose** :
+`secubox-waf-route` laisse un paquet poser sa propre route dans son `postinst` ;
+le `frame-src` est devenu `https://*.gk2.secubox.in` ; et les trois tests CSP
+qui ont remplacé le test global disent chacun une règle vraie et précise.
+
+### gabriel-mood — des indices, jamais des certitudes
+
+Module neuf, entièrement local : VAD, FFT, YIN, gigue et miroitement, puis cinq
+affinités (Calme, Joie, Tension, Fatigue, Concentration). La contrainte posée
+au départ — **ne jamais présenter les émotions comme des certitudes** — a tenu
+la conception de bout en bout, et c'est elle qui a rendu le reste simple :
+
+- un **plafond de confiance** à 0,72, parce qu'aucune prosodie ne prouve un
+  état intérieur ;
+- une **réserve** nommée, avec son motif (bruit, peu de voix, étalonnage,
+  ambiance) — l'incertitude se dit, elle ne se cache pas dans un pourcentage ;
+- une **référence apprise en ligne** (médiane de Robbins-Monro, MAD en ligne,
+  fiabilité `n/(n+N0)`) plutôt qu'un étalonnage qui bloque la lecture tant
+  qu'il n'est pas fini — l'incertitude **élargit la dispersion**, elle
+  n'interdit pas de mesurer ;
+- un ensemble **anonymisé à k = 3** — à un contributeur la moyenne *est* la
+  personne, à deux une soustraction révèle l'autre.
+
+L'API reste non authentifiée : c'est un choix assumé et borné par `CPUQuota`,
+pas un oubli. Le « moins de 8 % de processeur sur ARM64 » n'a été mesuré que
+sur x86-64 (1,6 %).
+
+---
+
 ## 2026-09-21 — LE DOSSIER ANSSI CONFRONTÉ AU CODE (ref #1313, #1317)
 
 Le dossier technique ANSSI V1.1 date du 22 août ; le code a un mois de plus.

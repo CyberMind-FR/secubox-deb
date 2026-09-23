@@ -104,3 +104,10 @@ img/
 /packages/secubox-toolbox-ng/_gopath/
 packages/secubox-ndpid-engine/nDPId-src/
 *.debhelper
+
+# Montage dh_install de gabriel-mood : le repertoire que debhelper remplit et
+# le binaire construit. Versionnes par accident a la creation du module, ils
+# ajoutaient 17 Mo de binaire a CHAQUE construction. Meme raison que dist/
+# plus haut, et que les *.debhelper retires le 2026-09-22.
+packages/gabriel-mood/debian/gabriel-mood/
+packages/gabriel-mood/debian/gabriel-moodd

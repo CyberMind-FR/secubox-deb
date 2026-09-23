@@ -6,7 +6,67 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-09-16*
+*Mis à jour : 2026-09-23*
+
+---
+
+## 2026-09-23 — Relais surf, gabriel-mood, routes déclaratives (#1323, #1328, #1329)
+
+### ✅ Fait — dans le dépôt ET déployé
+
+- **gabriel-mood 0.6.0** — module neuf, détecteur d'indices prosodiques 100 %
+  local. VAD six sous-bandes, FFT, YIN, gigue/miroitement, cinq affinités avec
+  **plafond de confiance 0,72** et réserve motivée. Référence apprise en ligne
+  (médiane Robbins-Monro + MAD, `Fiabilite = n/(n+N0)`), persistée ; base de
+  calme partagée ; ensemble anonymisé à **k = 3**, valeurs arrondies à 0,05.
+  Mesure instantanée pondérée avec hystérésis (`MargeBascule`). Ambiance et BPM
+  (60–180) détectés et **retirés** de la lecture au lieu de l'effacer.
+  Vues `/micro` (carte du Hall, 352 px, spectro + histogramme + métriques) et
+  `/mega` synchronisées par `BroadcastChannel`. `mood.gk2.secubox.in` ouvert WAN.
+- **secubox-surf 1.0.27** — `contexte_tls()` : le relais n'impose plus le
+  `DEFAULT_CIPHERS` de `httpx`, dont l'empreinte TLS valait 404 chez Fastly,
+  Cloudflare et Akamai. Médias ranimés (`ranime_media`, manifestes réécrits,
+  `/_sbx/hls.js`), rendu carbone avec ardoise d'observation et garde de délai
+  (18 s, 3 rendus). Moisson d'un média écouté dans le BiB.
+- **secubox-core** — `secubox-waf-route` : un paquet **déclare sa propre route**
+  `sbxwaf` dans son `postinst`. Remplace la table de 275 lignes tenue à la main,
+  cause des 421 sur tout service neuf. Adopté par podcaster et metablogizer.
+- **secubox-webos 1.0.331** — `frame-src 'self' https://*.gk2.secubox.in` (22
+  origines énumérées → un motif) ; délégation `Permissions-Policy` du micro vers
+  `mood.gk2` ; carte « Mes sites » (mosaïque, une à la une, bande défilante).
+- **secubox-metanews 0.1.42** — `TitreLisible` : un sujet ne porte plus
+  `Vidéo. $content.TitleNoTags` mais le titre de son article le plus récent ;
+  sujets orphelins purgés.
+- **secubox-metablogizer 1.8.21** — vhost à son nom (fin du 421), séquence de
+  publication en NDJSON avec battement 8 s, gestes rapides sur les vignettes.
+- **secubox-bbs 0.32.4** — un lien vers une vidéo de la box devient un lecteur
+  PeerTube (plafond 3 par message, dédoublonné, passe unique en fin de `Render`
+  et non par paragraphe) ; trois tests CSP précis remplacent l'interdiction
+  globale qui ne décrivait plus la politique réelle.
+- **La lampe bibli suit l'humeur (#1331)** — `gabriel-mood` **0.7.0**,
+  `secubox-zigbee` **2.7.0**, `secubox-webos` **1.0.332**. `LIGHT-BIBLI` prend
+  la teinte de l'émotion dominante ; la confiance module la luminosité, et un
+  indéterminé rend un blanc chaud plutôt qu'une couleur devinée. **LAN
+  seulement** : la garantie est dans `hall.vhost.conf` (`$lan_client = 0 → 403`),
+  pas dans le JavaScript — vérifié, 401 depuis le LAN et 403 avec un
+  `X-Forwarded-For` public. Rien ne s'allume au chargement, et l'arrêt de
+  l'écoute rend la lampe au blanc. Un test Go garde la table de teintes
+  TypeScript, que rien d'autre ne relie aux états.
+- **secubox-appstore 0.4.12** — catalogue 134 → 175, groupes, profils reliés,
+  ajout/retrait de modules avec gardes.
+
+### ⬜ Next Up
+
+1. **`gabriel-mood` : mesurer le processeur sur ARM64** — la cible « < 8 % »
+   n'a été vérifiée que sur x86-64 (1,6 %). Tant que gk2 ne l'a pas mesurée,
+   l'annonce reste une intention, pas un fait.
+2. **`gabriel-mood` : l'API est non authentifiée** — choix assumé, borné par
+   `CPUQuota`. À trancher : jeton comme les autres modules, ou restriction LAN.
+3. **`style-src 'unsafe-inline'` dans le BBS** — les tests disent maintenant la
+   vérité, mais la tolérance demeure. La sortie propre est un nonce, ce qui
+   demande de toucher SBXAide.
+4. **`health-banner.js`** — URL absolue vers `admin.gk2` bloquée par la CSP,
+   émetteur non localisé dans le dépôt.
 
 ---
 

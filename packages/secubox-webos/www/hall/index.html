@@ -3488,6 +3488,54 @@ addEventListener('message', ev=>{
     }
   });
 
+  // LA LAMPE DE LA BIBLIOTHÈQUE SUIT L'HUMEUR (#1331).
+  //
+  // LA GARANTIE « LAN SEULEMENT » N'EST PAS ICI, ET C'EST VOULU. Elle est dans
+  // `hall.vhost.conf`, qui rend 403 sur /api/v1/zigbee/ quand `$lan_client`
+  // vaut 0. Une session WAN ne peut donc PAS allumer une lampe, quoi que fasse
+  // ce fichier — et c'est la seule forme de garantie qui tienne, puisque tout
+  // ce qui est écrit ici est modifiable par qui lit la page. Le code ci-dessous
+  // ne protège rien : il évite seulement d'insister quand le serveur a tranché.
+  //
+  // LA COULEUR VIENT DE MOOD, PAS D'ICI. Traduire un état en teinte est du
+  // sens, et il appartient au module qui produit l'état. Le Hall apporte les
+  // deux choses que mood n'a pas : la session, et le nom de la lampe.
+  (function(){
+    const LAMPE = 'LIGHT-BIBLI';
+    const REPOS = 1500;   // ms : le pont ne suit pas un ordre par image
+    let dernier = 0, enVol = false, renonce = false;
+    addEventListener('message', ev=>{
+      const d = ev.data;
+      if(!d || d.sbx!=='mood-lumiere' || !d.couleur || renonce) return;
+      // On ne retient que ce qui vient d'un cadre qu'on a nous-mêmes posé :
+      // n'importe quelle page encadrée pourrait sinon piloter la lumière.
+      if(!cadresDe('mood').some(f=>f.contentWindow===ev.source)) return;
+      const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
+      // Sans jeton, l'appel vaudrait 401 vingt fois par minute. On attend
+      // plutôt qu'une session s'ouvre — elle ouvrira aussi la lampe.
+      if(!j) return;
+      const t = Date.now();
+      if(enVol || t - dernier < REPOS) return;
+      dernier = t; enVol = true;
+      // `/devices/` N'EST PAS FACULTATIF. Le relais du vhost remplace le
+      // préfixe `/api/v1/zigbee/` par `/`, si bien que l'URL doit porter le
+      // chemin tel que le module l'expose — `/devices/<nom>/set`. Sans lui,
+      // l'appel rend 404 sans jamais atteindre la garde d'authentification,
+      // et rien dans la page ne le signale.
+      fetch('/api/v1/zigbee/devices/'+encodeURIComponent(LAMPE)+'/set', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+j},
+        body: JSON.stringify({couleur:d.couleur, luminosite:d.luminosite})
+      }).then(r=>{
+        // 403 : le vhost dit que cette session n'est pas sur le LAN.
+        // 404 : ce pont-là n'a pas de lampe de ce nom.
+        // Ni l'un ni l'autre ne changera d'avis pendant la session : on cesse
+        // d'appeler, au lieu de frapper à la même porte toutes les 1,5 s.
+        if(r.status===403 || r.status===404) renonce = true;
+      }).catch(()=>{}).then(()=>{ enVol = false; });
+    });
+  })();
+
   addEventListener('message', ev=>{
     const d=ev.data;
     if(!d||d.sbx!=='media'||!d.id) return;

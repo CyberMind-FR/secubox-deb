@@ -1,3 +1,27 @@
+secubox-webos (1.0.332-1~bookworm1) bookworm; urgency=medium
+
+  * LE HALL RELAIE L'HUMEUR VERS LIGHT-BIBLI (ref #1331), et seulement depuis
+    un cadre qu'il a lui-même posé pour mood : n'importe quelle page encadrée
+    pourrait sinon piloter la lumière.
+  * LA GARANTIE « LAN SEULEMENT » N'EST PAS DANS LE JAVASCRIPT, et c'est voulu.
+    Elle est dans `hall.vhost.conf`, qui rend 403 sur /api/v1/zigbee/ quand
+    `$lan_client` vaut 0 : une session WAN ne PEUT pas allumer une lampe, quoi
+    que fasse la page — et c'est la seule forme de garantie qui tienne, puisque
+    tout ce qui est écrit dans la page est modifiable par qui la lit. Le code
+    n'y ajoute qu'une politesse : sur 403 ou 404 il cesse d'appeler, au lieu de
+    frapper à la même porte toutes les 1,5 seconde.
+  * LE CHEMIN PORTE `/devices/`. Le relais du vhost remplace le préfixe
+    `/api/v1/zigbee/` par `/` : l'URL doit donc porter le chemin tel que le
+    module l'expose. L'oubli rendait 404 sans même atteindre la garde
+    d'authentification, et rien dans la page ne l'aurait dit — c'est un curl
+    qui l'a trouvé, pas une relecture.
+  * UN ORDRE PAR IMAGE ÉTAIT EXCLU. À vingt images par seconde, le pont
+    décrocherait et la lampe clignoterait au rythme des micro-variations de
+    confiance — donnant à voir du bruit de mesure en le faisant passer pour de
+    l'humeur. Repos de 1,5 s, et rien n'est émis tant que la couleur n'a pas
+    changé pour de bon.
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 14:01:07 +0200
+
 secubox-webos (1.0.331-1~bookworm1) bookworm; urgency=medium
 
   * La tuile Gabriel Mood passe à 352 px : sa carte porte désormais
