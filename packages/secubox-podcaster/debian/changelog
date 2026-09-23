@@ -1,5 +1,27 @@
 secubox-podcaster (1.0.38-1~bookworm1) bookworm; urgency=medium
 
+  * Le paquet pose SA PROPRE route sbxwaf, comme il pose déjà son vhost.
+    C'était le maillon manquant : HAProxy dirigeait bien podcaster.gk2 vers
+    l'inspecteur et nginx servait bien le portail, mais sbxwaf ne connaissait
+    pas le nom et rendait 421. La route avait été ajoutée une fois à la main et
+    vivait dans un fichier qu'aucun paquet ne possède — même sédimentation que
+    les manifestes modules.d : invisible tant qu'elle tient, fatale le jour où
+    elle saute.
+  * Tant que le module était `on-demand`, son absence ne se voyait pas : sbxwaf
+    trouvait le nom dans `on-demand-vhosts.json` et passait la main au waker.
+    Le module est passé `always-on` (#1323) — il n'y figure donc plus, et il ne
+    restait plus rien pour rattraper la route manquante.
+  * Fusion idempotente reprise de secubox-socialrelay, jamais une réécriture :
+    272 routes vivent dans cette table, posées par d'autres modules. Une table
+    illisible fait ABANDONNER plutôt que repartir d'un dictionnaire vide, qui
+    couperait toute la box. L'adresse est lue sur un voisin du même port au
+    lieu d'imposer 127.0.0.1, que sbxwaf n'atteindrait pas si la table est
+    écrite pour l'IP de la board.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 07:09:24 +0200
+
+secubox-podcaster (1.0.38-1~bookworm1) bookworm; urgency=medium
+
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,
     components, access, stats — repondaient sans authentification : c'etait le
     motif « three-fold » du parc, un choix assume, mais une lecture publique

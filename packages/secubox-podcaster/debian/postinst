@@ -32,6 +32,55 @@ case "$1" in
       ln -sf ../sites-available/podcaster.gk2.conf /etc/nginx/sites-enabled/podcaster.gk2.conf
     fi
 
+    # ROUTE SBXWAF — POSEE PAR CE PAQUET, comme le vhost juste au-dessus.
+    # C'est LE maillon qui manquait : HAProxy dirigeait bien l'hote vers
+    # l'inspecteur et nginx servait bien le portail, mais sbxwaf ne
+    # connaissait pas le nom et rendait 421. La route avait ete ajoutee une
+    # fois a la main et vivait dans un fichier qu'aucun paquet ne possede --
+    # meme sedimentation que les manifestes modules.d : invisible tant
+    # qu'elle tient, fatale le jour ou elle saute (constate le 2026-09-23).
+    #
+    # Tant que le module etait `on-demand`, son absence ne se voyait pas :
+    # sbxwaf trouvait le nom dans `on-demand-vhosts.json` et passait la main
+    # au waker. Le module est passe `always-on` -- il n'y figure donc plus,
+    # et il ne restait plus rien pour rattraper la route manquante.
+    #
+    # Motif repris de secubox-socialrelay : fusion IDEMPOTENTE, jamais une
+    # reecriture de la table (272 routes y vivent, posees par d'autres).
+    WAF_ROUTES="/etc/secubox/waf/haproxy-routes.json"
+    if [ -f "$WAF_ROUTES" ] && command -v python3 >/dev/null 2>&1; then
+      python3 - "$WAF_ROUTES" "podcaster.gk2.secubox.in" 9080 <<'SBXROUTE' || true
+import json, os, sys
+chemin, dom, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+try:
+    d = json.load(open(chemin))
+    if not isinstance(d, dict):
+        raise ValueError
+except Exception:
+    # ON N'ECRASE PAS UNE TABLE QU'ON N'A PAS SU LIRE : repartir d'un
+    # dictionnaire vide couperait tous les autres services de la box.
+    sys.exit(0)
+# L'adresse est celle que la table emploie DEJA pour les vhosts nginx
+# locaux : on lit un voisin plutot que d'imposer 127.0.0.1, que sbxwaf
+# n'atteindrait pas si la table est ecrite pour l'IP de la board.
+hote = "127.0.0.1"
+for v in d.values():
+    if isinstance(v, list) and len(v) == 2 and v[1] == port:
+        hote = v[0]
+        break
+if d.get(dom) != [hote, port]:
+    d[dom] = [hote, port]
+    tmp = chemin + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(d, fh, indent=2, sort_keys=True)
+    os.replace(tmp, chemin)
+SBXROUTE
+      # Rechargement seulement si sbxwaf tourne : il relit la table a chaud.
+      if systemctl is-active --quiet secubox-waf-ng 2>/dev/null; then
+        systemctl reload secubox-waf-ng 2>/dev/null || \
+          systemctl restart secubox-waf-ng 2>/dev/null || true
+      fi
+    fi
     # Reload nginx only if the resulting config is valid.
     if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
       systemctl reload nginx 2>/dev/null || true
