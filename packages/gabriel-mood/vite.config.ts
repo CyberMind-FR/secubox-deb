@@ -8,15 +8,26 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 
 export default defineConfig({
   plugins: [svelte()],
-  // Le cockpit est servi sous /gabriel-mood/ par nginx : sans cette base, tous
-  // les chemins d'actifs partiraient à la racine et 404eraient.
-  base: '/gabriel-mood/',
+  // BASE RELATIVE, ET C'EST CE QUI PERMET LES DEUX SERVICES À LA FOIS : la
+  // même construction est servie à la racine de `mood.gk2.secubox.in` ET sous
+  // `/gabriel-mood/` de l'admin. Une base absolue aurait forcé à choisir, ou à
+  // construire deux fois.
+  base: './',
   root: 'webui',
   build: {
     outDir: '../dist',
     emptyOutDir: true,
     sourcemap: false,
     target: 'es2022',
+    rollupOptions: {
+      // DEUX ENTRÉES : le cockpit (/mega) et la carte du Hall (/micro). Elles
+      // partagent les composants, le style et surtout le lien de
+      // synchronisation — les livrer séparément dupliquerait tout.
+      input: {
+        index: 'webui/index.html',
+        micro: 'webui/micro.html',
+      },
+    },
   },
   server: {
     port: 5178,

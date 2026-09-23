@@ -1383,6 +1383,12 @@ const FEATURED = [
   // attend la mosaïque du service.
   {id:"metablogizer", label:"Mes sites", icon:"🌐", color:"#3d6b4a",
    carte:"/cardlets/metablog.html", mode:"admin", h:300, auth:true},
+  // GABRIEL MOOD (#1323). `micro_audio` délègue la permission du micro à CETTE
+  // carte et à aucune autre. La carte n'écoute JAMAIS d'elle-même : il faut un
+  // clic, dans la carte ou dans le cockpit — et les deux vues se synchronisent
+  // par BroadcastChannel, de sorte qu'un seul micro est ouvert à la fois.
+  {id:"mood",       label:"Mood",      icon:"🎙", color:"#1f6b7a", url:"mood.gk2.secubox.in",
+   micro:"/micro.html", h:268, micro_audio:true},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mastodon", h:182},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214},
@@ -1546,7 +1552,15 @@ function featCardHTML(f,s){
       + ETOILE + AIDE
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'+haut
       + ' src="'+u+sep+'theme='+th+'"'
-      + ' title="'+esc(f.label)+'" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>'
+      // LE MICRO N'EST DÉLÉGUÉ QU'À QUI LE DEMANDE (#1323). Poser
+      // `allow="microphone"` sur TOUTES les cartes déléguerait la permission à
+      // une vingtaine de services qui n'en ont aucun besoin — et il suffirait
+      // qu'un seul d'entre eux serve un jour du contenu inattendu pour que ce
+      // soit un vrai problème. La fiche le déclare (`micro_audio: true`), donc
+      // c'est une décision écrite quelque part, pas un défaut global.
+      // L'utilisateur garde le dernier mot : le navigateur lui demande.
+      + ' title="'+esc(f.label)+'" allow="autoplay; fullscreen'
+      + (f.micro_audio ? '; microphone' : '') + '" allowfullscreen loading="lazy"></iframe>'
       + '</article>';
   }
   // À DÉFAUT DE /micro, LE SERVICE LUI-MÊME (#1256). Tant qu'il n'a pas de vue

@@ -11,21 +11,37 @@
   import FFTCanvas from './FFTCanvas.svelte'
   import EmojiGauge from './EmojiGauge.svelte'
   import { Micro, type Image, type Etat } from './src/lib/micro'
+  import { Lien, type Role } from './src/lib/lien'
 
   let img: Image | null = $state(null)
   let etat: Etat = $state('arrete')
   let motif = $state('')
   let journal: string[] = $state([])
   let montreJSON = $state(false)
+  let role: Role = $state('seul')
+
+  // UNE SEULE CAPTURE, PLUSIEURS ÉCRANS. Si la carte du Hall tient déjà le
+  // micro, ce cockpit la SUIT au lieu d'ouvrir une seconde session : deux
+  // sessions, ce serait deux étalons apprenant la même voix chacun de son
+  // côté, et deux lectures différentes de la même personne au même instant.
+  const lien = new Lien(
+    (i) => { img = i },
+    (r) => { role = r },
+  )
 
   const micro = new Micro(
     (i) => {
       img = i
+      lien.diffuse(i)
       // Le flux JSON garde les vingt dernières images : au-delà, le DOM
       // grossit sans que personne ne relise le haut.
       journal = [JSON.stringify(abrege(i)), ...journal].slice(0, 20)
     },
-    (e, m) => { etat = e; motif = m },
+    (e, m) => {
+      etat = e; motif = m
+      if (e === 'ecoute') lien.prendLaMain()
+      else if (role === 'meneur') lien.rendLaMain()
+    },
   )
 
   // On abrège la FFT dans le flux affiché : cent vingt-huit nombres par image,
@@ -68,14 +84,16 @@
       </div>
     </div>
 
-    <div class="live" class:actif={etat === 'ecoute'}>
-      <span class="pastille" class:pouls={etat === 'ecoute' && img?.vad}></span>
-      <span class="mono">{etat === 'ecoute' ? 'LIVE' : 'HORS LIGNE'}</span>
+    <div class="live" class:actif={etat === 'ecoute' || role === 'suiveur'}>
+      <span class="pastille" class:pouls={(etat === 'ecoute' || role === 'suiveur') && img?.vad}></span>
+      <span class="mono">{etat === 'ecoute' ? 'LIVE' : role === 'suiveur' ? 'SYNCHRONISÉ' : 'HORS LIGNE'}</span>
     </div>
 
     <div class="actions">
       {#if etat === 'ecoute'}
         <button onclick={() => micro.arrete()}>⏹ Arrêter</button>
+      {:else if role === 'suiveur'}
+        <span class="dim petit">🎙 une autre vue tient le micro — affichage synchronisé</span>
       {:else}
         <button class="primaire" onclick={() => micro.demarre()}
                 disabled={etat === 'demande'}>

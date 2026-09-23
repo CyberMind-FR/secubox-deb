@@ -1,3 +1,43 @@
+gabriel-mood (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Fiche `debian/secubox.yaml` : le module existe désormais pour l'App Store,
+    dont le catalogue est généré en parcourant les fiches du monorepo.
+  * La description longue dit ce que le module NE FAIT PAS, délibérément : une
+    fiche d'App Store se lit avant d'installer, c'est-à-dire au seul moment où
+    l'on décide. « Détecteur d'humeur » laisserait croire à un diagnostic.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:29:56 +0200
+
+gabriel-mood (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Vhost dédié `mood.gk2.secubox.in`, vue `/micro.html` pour la carte du Hall,
+    et les deux vues SYNCHRONISÉES.
+  * POURQUOI UNE ORIGINE À LUI. Le micro, dans une iframe, exige une chaîne de
+    délégation complète : le parent délègue (`allow` + sa propre
+    `Permissions-Policy`), l'encadré autorise pour SON origine. Servi sous un
+    préfixe de l'admin, ce module partageait l'origine du panneau, dont la
+    politique n'a aucune raison de parler du micro. Et `getUserMedia` n'existe
+    tout simplement pas hors contexte sécurisé — le bouton échouerait sur un
+    « undefined » au lieu d'un refus lisible.
+  * UNE SEULE CAPTURE, PLUSIEURS ÉCRANS. Si la carte et le cockpit ouvraient
+    chacun leur WebSocket, il y aurait deux sessions — donc DEUX ÉTALONS
+    apprenant la même voix chacun de son côté, et deux lectures différentes de
+    la même personne au même instant. Celui où l'on clique tient le micro et
+    rediffuse ; l'autre suit. `BroadcastChannel`, donc même origine, donc le
+    vhost. Si le meneur disparaît sans prévenir — un onglet qu'on ferme
+    n'envoie rien — les suiveurs le disent au bout de deux secondes plutôt que
+    de garder à l'écran une image figée qui passerait pour une mesure en cours.
+  * LA CARTE N'ÉCOUTE JAMAIS D'ELLE-MÊME. Une tuile qui se met à écouter parce
+    qu'on a ouvert le Hall serait une trahison, même techniquement autorisée.
+  * Base de construction RELATIVE : la même sortie est servie à la racine du
+    vhost dédié ET sous `/gabriel-mood/` de l'admin. Le worklet est résolu
+    contre `document.baseURI` pour la même raison — un chemin absolu aurait
+    marché à un endroit sur deux.
+  * La réserve tient en une ligne sur la carte, mais elle y est : c'est
+    justement d'un coup d'œil qu'un emoji se prend pour un diagnostic.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:28:00 +0200
+
 gabriel-mood (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * La route WebSocket n'inclut plus `snippets/secubox-proxy.conf`. Il pose

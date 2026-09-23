@@ -1,1 +1,2 @@
 /etc/nginx/secubox-routes.d/gabriel-mood.conf
+/etc/nginx/sites-available/mood.gk2.secubox.in.conf

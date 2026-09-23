@@ -49,9 +49,40 @@ fi
 # End automatically added section
 
 
-# La route nginx n'est utile que si nginx accepte la configuration : recharger
-# à l'aveugle propagerait une erreur au lieu de la signaler.
-if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
-    systemctl reload nginx 2>/dev/null || true
+# ── LE VHOST DÉDIÉ ET SA ROUTE ────────────────────────────────────────────
+#
+# UN SERVICE DÉCLARE SA PROPRE ROUTE, comme il déclare son vhost et son unité.
+# Le 421 n'a qu'une cause : sbxwaf reçoit un nom qu'il ne connaît pas, et cette
+# table n'appartenait longtemps à aucun paquet.
+HOTE=mood.gk2.secubox.in
+
+mkdir -p /etc/nginx/snippets/exposure
+if [ ! -f "/etc/nginx/snippets/exposure/$HOTE.conf" ]; then
+    cat > "/etc/nginx/snippets/exposure/$HOTE.conf" <<'EXPO'
+# Filtre d'exposition — semé à « lan » par gabriel-mood.
+# Édité par le module secubox-exposure, qui fait autorité une fois le fichier
+# créé. Cette page demande le MICRO : l'ouvrir au monde n'est pas une décision
+# qu'un paquet prend à la place de l'opérateur.
+allow 127.0.0.1;
+allow 10.0.0.0/8;
+allow 172.16.0.0/12;
+allow 192.168.0.0/16;
+deny all;
+EXPO
+fi
+
+if command -v nginx >/dev/null 2>&1; then
+    ln -sf ../sites-available/$HOTE.conf /etc/nginx/sites-enabled/$HOTE.conf
+    # La route ne vaut que si nginx accepte la configuration : poser l'une sans
+    # l'autre échange un 421 contre un 502, ce qui n'est pas un progrès.
+    if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx 2>/dev/null || true
+        if command -v secubox-waf-route >/dev/null 2>&1; then
+            secubox-waf-route "$HOTE" 9080 || true
+        fi
+    else
+        echo "gabriel-mood : nginx -t a échoué, vhost NON activé" >&2
+        rm -f /etc/nginx/sites-enabled/$HOTE.conf
+    fi
 fi
 exit 0

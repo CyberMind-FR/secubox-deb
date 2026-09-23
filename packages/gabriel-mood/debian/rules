@@ -47,6 +47,13 @@ override_dh_auto_install:
 	  debian/gabriel-mood/usr/lib/tmpfiles.d/gabriel-mood.conf
 	install -D -m 0644 nginx/gabriel-mood.conf \
 	  debian/gabriel-mood/etc/nginx/secubox-routes.d/gabriel-mood.conf
+	# Vhost dédié : dans sites-available, JAMAIS sites-enabled — nginx y fait
+	# un glob, et le `.dpkg-dist` déposé sur un fichier modifié localement y
+	# entrerait, faisant refuser TOUTE la configuration. Lien par le postinst.
+	install -D -m 0644 nginx/mood.vhost.conf \
+	  debian/gabriel-mood/etc/nginx/sites-available/mood.gk2.secubox.in.conf
+	install -D -m 0644 debian/secubox.yaml \
+	  debian/gabriel-mood/usr/share/secubox/modules.d/gabriel-mood.yaml
 	install -D -m 0644 menu.d/54-gabriel-mood.json \
 	  debian/gabriel-mood/usr/share/secubox/menu.d/54-gabriel-mood.json
 	install -D -m 0644 docs/modules/gabriel-mood.md \

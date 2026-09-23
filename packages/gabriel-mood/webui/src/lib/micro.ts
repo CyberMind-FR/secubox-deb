@@ -68,8 +68,11 @@ export class Micro {
           channelCount: 1,
         },
       })
+      // RÉSOLU CONTRE LA PAGE, pas contre une racine supposée : le même
+      // paquet est servi à la racine d'un vhost dédié ET sous un préfixe de
+      // l'admin. Un chemin absolu aurait marché à un endroit sur deux.
       await this.#ctx.audioWorklet.addModule(
-        new URL('../../public/capteur.js', import.meta.url))
+        new URL('capteur.js', document.baseURI).href)
 
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
       this.#ws = new WebSocket(`${proto}://${location.host}/ws/mood`)

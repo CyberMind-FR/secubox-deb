@@ -1,3 +1,23 @@
+secubox-webos (1.0.330-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Gabriel Mood dans le Hall (#1323), avec sa vue `/micro.html` et le
+    cockpit en agrandissement — le motif /micro–/mega habituel.
+  * LE MICRO SE DÉLÈGUE, IL NE SE SUPPOSE PAS. `microphone=(self)` n'autorisait
+    que l'origine du Hall : une carte encadrée depuis un autre hôte se voyait
+    refuser la permission AVANT même qu'on demande quoi que ce soit à
+    l'utilisateur. Le symptôme est trompeur — ça ressemble à un bug de code,
+    pas à une politique. On nomme donc `mood.gk2.secubox.in`, et elle seule.
+  * ET L'IFRAME AUSSI, MAIS PAS TOUTES. Poser `allow="microphone"` sur toutes
+    les cartes déléguerait la permission à une vingtaine de services qui n'en
+    ont aucun besoin, et il suffirait qu'un seul serve un jour du contenu
+    inattendu pour que ce soit un vrai problème. La fiche le déclare
+    (`micro_audio: true`) : c'est une décision écrite quelque part, pas un
+    défaut global.
+  * L'utilisateur garde évidemment le dernier mot — le navigateur lui demande,
+    et la carte n'écoute jamais d'elle-même.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:28:49 +0200
+
 secubox-webos (1.0.329-1~bookworm1) bookworm; urgency=medium
 
   * Le journal par hôte du Hall entre dans le paquet (#1323). La ligne
