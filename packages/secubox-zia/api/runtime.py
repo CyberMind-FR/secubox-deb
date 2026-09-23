@@ -46,12 +46,62 @@ def _type_de(msg: str) -> str:
     return ""
 
 
-# Alias de lexique → service canonique (le mot courant n'est pas l'id du service).
+# ── LE LEXIQUE (#1349) ───────────────────────────────────────────────────────
+#
+# IL TENAIT EN SEPT MOTS, et c'était le vrai défaut : on ne parle pas d'un
+# service par son identifiant. Personne ne dit « nextcloud », on dit « mes
+# fichiers » ; personne ne dit « metanews », on dit « les actus ».
+#
+# UN ALIAS DE PLUS NE PROMET RIEN. La disponibilité réelle reste tranchée en
+# aval par Tools.act et la politique : reconnaître un mot, c'est seulement
+# pouvoir répondre « cette commande n'existe pas pour ce service » au lieu de
+# ne rien répondre du tout. Le second silence est bien pire — il ressemble à
+# une panne du module.
 _ALIAS = {
-    "cloud": "nextcloud",
+    # Fichiers
+    "cloud": "nextcloud", "nuage": "nextcloud", "fichier": "nextcloud",
+    "fichiers": "nextcloud", "document": "nextcloud", "documents": "nextcloud",
+    "drive": "nextcloud",
+    # Son
     "podcast": "podcaster", "podcasts": "podcaster", "épisode": "podcaster",
     "episode": "podcaster", "émission": "podcaster", "emission": "podcaster",
+    "musique": "radio", "webradio": "radio", "station": "radio",
+    # Image
+    "vidéo": "peertube", "video": "peertube", "vidéos": "peertube",
+    "videos": "peertube", "photo": "photoprism", "photos": "photoprism",
+    "photothèque": "photoprism", "phototheque": "photoprism",
+    "télé": "freeboxtv", "tele": "freeboxtv", "télévision": "freeboxtv",
+    "television": "freeboxtv", "tv": "freeboxtv", "chaîne": "freeboxtv",
+    "chaine": "freeboxtv",
+    # Écrit
+    "actu": "metanews", "actus": "metanews", "actualité": "metanews",
+    "actualités": "metanews", "actualites": "metanews", "journal": "metanews",
+    "news": "metanews", "article": "billets", "articles": "billets",
+    "billet": "billets", "blog": "billets",
+    "forum": "bbs", "forums": "bbs", "gazette": "bbs",
+    # Courrier & social
+    "mail": "mail", "mails": "mail", "courriel": "mail", "courriels": "mail",
+    "webmail": "mail", "messagerie": "mail",
+    "mastodon": "mastodon", "fédivers": "mastodon", "fedivers": "mastodon",
+    # Réseau & maison
+    "pare-feu": "waf", "firewall": "waf", "sécurité": "waf", "securite": "waf",
+    "téléchargement": "torrent", "telechargement": "torrent",
+    "torrents": "torrent",
+    "lampe": "zigbee", "lampes": "zigbee", "lumière": "zigbee",
+    "lumiere": "zigbee", "ampoule": "zigbee",
 }
+
+# ── CE QUI DÉSIGNE TOUT (#1349) ──────────────────────────────────────────────
+#
+# « Baisse le son » ne nomme aucune source, et c'est la formulation NORMALE.
+# Avant, faute de ce vocabulaire, la commande retombait sur un défaut caché —
+# la radio — si bien qu'un ordre général ne touchait qu'une seule source. C'est
+# exactement le symptôme rapporté : « la radio semble réglée plus fort et les
+# autres restent trop bas ». Elles restaient où elles étaient.
+_TOUT = re.compile(
+    r"\b(tout|tous|toutes|partout|g[ée]n[ée]ral|g[ée]n[ée]rale|globale?|"
+    r"ensemble|syst[èe]me|ambiant)\b"
+)
 
 
 def _service_de(msg: str) -> str:
@@ -72,6 +122,9 @@ def _service_de(msg: str) -> str:
 # tranchée plus loin par Tools.act/policy — ici, aucune exécution, aucune invention.
 _VOL_PCT = re.compile(r"(\d{1,3})\s*%")
 _NUM = re.compile(r"\b(0?[.,]\d+|[01](?:[.,]\d+)?)\b")
+# Le pas d'un « monte le son ». Assez pour s'entendre, assez petit pour qu'on
+# puisse le redire deux fois sans sursauter.
+_PAS_VOLUME = 0.15
 
 
 def _commande(low: str):
@@ -83,6 +136,24 @@ def _commande(low: str):
     # Couper le son.
     if re.search(r"\b(coupe|couper|coupe[- ]?son|muet|silence|mute|chut)\b", low):
         return ("media.mute", {"value": True})
+    # ── VOLUME RELATIF (#1349) ─────────────────────────────────────────────
+    #
+    # « BAISSE LE SON » N'ÉTAIT PAS RECONNU. C'est pourtant la formulation la
+    # plus courante — plus courante, de loin, que « volume à 40 % ». Faute de
+    # cette règle, la phrase la plus naturelle ne déclenchait rien, et le
+    # module paraissait sourd.
+    #
+    # ON RÉGLE PAR PAS, PAS PAR VALEUR ABSOLUE : ZIA ne connaît pas le volume
+    # courant, et il serait faux de l'inventer. C'est le Hall qui détient
+    # l'état et applique le pas — le seul endroit qui sache de combien il
+    # part. Placé APRÈS la coupure (« coupe ») et le rétablissement pour ne
+    # pas leur voler « remonte le son ».
+    if re.search(r"\b(plus fort|augmente|augmenter|monte|monter)\b", low) \
+            and re.search(r"\b(son|volume|audio|niveau)\b", low):
+        return ("media.volume.relative", {"value": _PAS_VOLUME})
+    if re.search(r"\b(moins fort|baisse|baisser|diminue|diminuer|descends?)\b", low) \
+            and re.search(r"\b(son|volume|audio|niveau)\b", low):
+        return ("media.volume.relative", {"value": -_PAS_VOLUME})
     # Volume : un pourcentage explicite, ou « volume/niveau » + nombre décimal.
     m = _VOL_PCT.search(low)
     if m:
@@ -114,10 +185,23 @@ def _commande(low: str):
 
 def _phrase_action(service: str, action: str, params: dict) -> str:
     v = params.get("value")
+    # « le son de hall » ne se dit pas : le maître porte sur TOUT, et la phrase
+    # doit le dire, sans quoi on croit n'avoir réglé qu'une source de plus.
+    if service == "hall":
+        if action == "media.mute":
+            return "Je coupe tout le son." if v else "Je remets le son."
+        if action == "media.volume":
+            return f"Je règle le volume général à {round((v or 0) * 100)} %."
+        if action == "media.volume.relative":
+            sens = "monte" if (v or 0) > 0 else "baisse"
+            return f"Je {sens} le volume général de {abs(round((v or 0) * 100))} %."
     if action == "media.mute":
         return f"Je coupe le son de {service}." if v else f"Je remets le son de {service}."
     if action == "media.volume":
         return f"Je règle le volume de {service} à {round((v or 0) * 100)} %."
+    if action == "media.volume.relative":
+        sens = "monte" if (v or 0) > 0 else "baisse"
+        return f"Je {sens} le volume de {service} de {abs(round((v or 0) * 100))} %."
     return {
         "media.pause": f"Je mets {service} en pause.",
         "media.stop": f"J'arrête {service}.",
@@ -221,7 +305,19 @@ async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dic
     cmd = _commande(low)
     if cmd:
         action, params = cmd
-        cible = _service_de(low) or "radio"
+        # LA CIBLE PAR DÉFAUT D'UN RÉGLAGE DE SON EST LE MAÎTRE, PLUS LA RADIO
+        # (#1349). `or "radio"` envoyait tout ordre non ciblé sur la seule
+        # radio : « baisse le son » baissait la radio et laissait les autres
+        # sources où elles étaient. Le volume et la coupure portent désormais
+        # sur l'ensemble quand rien n'est nommé, ou quand un mot le dit
+        # explicitement. Les commandes de TRANSPORT gardent la radio par
+        # défaut : « suivant » sans cible ne veut rien dire pour un ensemble.
+        nomme = _service_de(low)
+        if action in ("media.volume", "media.volume.relative", "media.mute") \
+                and (not nomme or _TOUT.search(low)):
+            cible = "hall"
+        else:
+            cible = nomme or "radio"
         target = f"service:{cible}"
         trace.append({"tool": "act", "args": {"target": target, "action": action}})
         res = await tools.call("act", {"target": target, "action": action, "params": params}, role)

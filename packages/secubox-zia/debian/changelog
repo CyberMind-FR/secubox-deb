@@ -1,3 +1,33 @@
+secubox-zia (0.1.15-1~bookworm1) bookworm; urgency=medium
+
+  * LE LEXIQUE TENAIT EN SEPT MOTS (ref #1349). On ne parle pas d'un service
+    par son identifiant : personne ne dit « nextcloud », on dit « mes
+    fichiers » ; personne ne dit « metanews », on dit « les actus ». Une
+    cinquantaine d'entrées couvrent désormais fichiers, son, image, écrit,
+    courrier, réseau et maison. Reconnaître un mot ne promet rien — la
+    disponibilité reste tranchée en aval — mais permet de répondre « cette
+    commande n'existe pas ici » au lieu de ne rien répondre, et ce second
+    silence est bien pire : il ressemble à une panne du module.
+  * « BAISSE LE SON » N'ÉTAIT PAS RECONNU. Le volume n'était compris qu'avec un
+    nombre explicite, alors que la formulation relative est de loin la plus
+    courante. Elle rend un PAS et non une valeur : ZIA ignore le volume
+    courant, et il serait faux de l'inventer — c'est le Hall qui détient l'état
+    et applique le cran.
+  * LA CIBLE PAR DÉFAUT D'UN RÉGLAGE DE SON ÉTAIT LA RADIO. `or "radio"`
+    envoyait tout ordre non ciblé sur elle seule : « baisse le son » baissait la
+    radio et laissait les autres sources où elles étaient — d'où l'impression
+    qu'elle était réglée plus fort que tout le reste. Le volume et la coupure
+    portent maintenant sur l'ENSEMBLE quand rien n'est nommé, ou quand un mot
+    le dit (« tout », « partout », « général », « système »). Les commandes de
+    transport gardent la radio : « suivant » ne veut rien dire pour un ensemble.
+  * LE HALL ENTRE AU BOOTSTRAP des capacités, et pas seulement dans un
+    manifeste : ZIA est SERVIE DANS le Hall, son volume général n'est pas la
+    capacité d'un module qu'on peut ne pas avoir installé.
+  * « Je règle le volume de hall » ne se dit pas : le maître a ses propres
+    phrases. 34 tests neufs.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 16:34:57 +0200
+
 secubox-zia (0.1.14-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

@@ -1,3 +1,12 @@
+secubox-radio (0.1.69-1~bookworm1) bookworm; urgency=medium
+
+  * DÉCLARE `media.volume.relative` (ref #1349) — « baisse le son de la radio »
+    fonctionne. Le PAS est appliqué par le Hall, qui détient le réglage de
+    cette source ; la carte ne connaît que le volume effectif qu'on lui impose,
+    maître compris. Le message déclaré est une forme, pas un transport.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 16:34:57 +0200
+
 secubox-radio (0.1.68-1~bookworm2) bookworm; urgency=medium
 
   * /data/secubox/radio tolere absent dans l'unite et cree par le postinst.

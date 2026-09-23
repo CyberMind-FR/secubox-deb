@@ -3,12 +3,70 @@
   "transport": "sbx-postmessage",
   "_note": "Capacités du podcaster, ancrées sur www/podcaster/portal/micro.html (handler sbx:'cmd', l.468-491). Contrairement à la radio (direct), le podcaster PARCOURT ses épisodes : next/prev présents. Pas de zoom.",
   "actions": {
-    "media.toggle": {"message": {"sbx": "cmd", "action": "toggle"}},
-    "media.pause":  {"message": {"sbx": "cmd", "action": "pause"}},
-    "media.stop":   {"message": {"sbx": "cmd", "action": "stop"}},
-    "media.next":   {"message": {"sbx": "cmd", "action": "next"}},
-    "media.prev":   {"message": {"sbx": "cmd", "action": "prev"}},
-    "media.mute":   {"message": {"sbx": "cmd", "action": "muet"}, "value": {"field": "v", "type": "boolean"}},
-    "media.volume": {"message": {"sbx": "cmd", "action": "vol"}, "value": {"field": "v", "type": "number", "min": 0, "max": 1}}
+    "media.toggle": {
+      "message": {
+        "sbx": "cmd",
+        "action": "toggle"
+      }
+    },
+    "media.pause": {
+      "message": {
+        "sbx": "cmd",
+        "action": "pause"
+      }
+    },
+    "media.stop": {
+      "message": {
+        "sbx": "cmd",
+        "action": "stop"
+      }
+    },
+    "media.next": {
+      "message": {
+        "sbx": "cmd",
+        "action": "next"
+      }
+    },
+    "media.prev": {
+      "message": {
+        "sbx": "cmd",
+        "action": "prev"
+      }
+    },
+    "media.mute": {
+      "message": {
+        "sbx": "cmd",
+        "action": "muet"
+      },
+      "value": {
+        "field": "v",
+        "type": "boolean"
+      }
+    },
+    "media.volume": {
+      "message": {
+        "sbx": "cmd",
+        "action": "vol"
+      },
+      "value": {
+        "field": "v",
+        "type": "number",
+        "min": 0,
+        "max": 1
+      }
+    },
+    "media.volume.relative": {
+      "message": {
+        "sbx": "cmd",
+        "action": "vol.relatif"
+      },
+      "value": {
+        "field": "v",
+        "type": "number",
+        "min": -1,
+        "max": 1
+      },
+      "_note": "Le PAS est applique par le Hall, qui detient le reglage de cette source ; la cardlet ne connait que le volume effectif qu'on lui impose. Le message declare ici est une forme, pas un transport (#1349)."
+    }
   }
 }

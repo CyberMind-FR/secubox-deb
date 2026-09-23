@@ -43,6 +43,28 @@ _SERVICE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 # (handler `addEventListener('message')`, branche `d.sbx==='cmd'`). Forme interne
 # déjà normalisée. prev/next volontairement absents.
 _BOOTSTRAP: dict = {
+    # LE HALL — le volume général (#1349). Au bootstrap et pas seulement dans un
+    # manifeste, parce que ce n'est pas la capacité d'un module qu'on peut ne pas
+    # avoir installé : ZIA est SERVIE DANS le Hall. S'il manquait, la cible par
+    # défaut de « baisse le son » n'existerait pas, et la phrase la plus courante
+    # retomberait dans le silence qu'on vient de corriger.
+    #
+    # Ces actions ne sont postées à AUCUN cadre : `sbxExecuteAction` les
+    # intercepte avant la résolution de capacité, comme il le fait pour `voice`.
+    # Le message déclaré ici sert de forme, pas de transport.
+    "hall": {
+        "transport": "sbx-natif",
+        "actions": {
+            "media.mute":   {"message": {"sbx": "cmd", "action": "maitre.muet"},
+                             "value": {"field": "v", "type": "boolean"}},
+            "media.volume": {"message": {"sbx": "cmd", "action": "maitre.vol"},
+                             "value": {"field": "v", "type": "number", "min": 0.0, "max": 1.0}},
+            # UN PAS, PAS UNE VALEUR : ZIA ignore le volume courant et ne doit
+            # pas l'inventer. Le Hall détient l'état et applique le pas.
+            "media.volume.relative": {"message": {"sbx": "cmd", "action": "maitre.vol.relatif"},
+                             "value": {"field": "v", "type": "number", "min": -1.0, "max": 1.0}},
+        },
+    },
     "radio": {
         "transport": "sbx-postmessage",
         "actions": {
@@ -53,6 +75,11 @@ _BOOTSTRAP: dict = {
                              "value": {"field": "v", "type": "boolean"}},
             "media.volume": {"message": {"sbx": "cmd", "action": "vol"},
                              "value": {"field": "v", "type": "number", "min": 0.0, "max": 1.0}},
+            # Le PAS est applique par le Hall, qui detient le reglage de cette
+            # source ; la cardlet ne connait que le volume effectif qu'on lui
+            # impose, maitre compris. Forme, pas transport (#1349).
+            "media.volume.relative": {"message": {"sbx": "cmd", "action": "vol.relatif"},
+                             "value": {"field": "v", "type": "number", "min": -1.0, "max": 1.0}},
             "ui.zoom":      {"message": {"sbx": "cmd", "action": "zoom"}},
         },
     },

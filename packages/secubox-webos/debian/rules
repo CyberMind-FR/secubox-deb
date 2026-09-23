@@ -18,6 +18,11 @@ override_dh_auto_install:
 	install -m 0644 nginx/webos.conf $(CURDIR)/debian/secubox-webos/etc/nginx/secubox.d/webos.conf
 	install -m 0644 nginx/hall.vhost.conf $(CURDIR)/debian/secubox-webos/etc/nginx/sites-available/hall.gk2.net.conf
 	install -m 0644 etc/webos.toml.example $(CURDIR)/debian/secubox-webos/etc/secubox/webos.toml.example
+	# LE HALL DÉCLARE SA CAPACITÉ DE VOLUME GÉNÉRAL (#1349). Sans ce manifeste,
+	# ZIA refuserait l'action faute de la connaître — le Hall l'exécute
+	# nativement, mais c'est le registre qui dit ce qui est PERMIS.
+	install -D -m 0644 capabilities.d/hall.json \
+	  $(CURDIR)/debian/secubox-webos/usr/share/secubox/capabilities.d/hall.json
 	install -d $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/cardlets
 	install -m 0644 www/hall/cardlets/*.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/cardlets/
 	install -m 0644 www/hall/index.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/index.html
