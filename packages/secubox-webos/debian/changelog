@@ -1,3 +1,19 @@
+secubox-webos (1.0.325-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Mes sites » : la bande de vignettes et la barre à pastilles étaient
+    INVISIBLES. Elles n'étaient pas absentes — le journal nginx montrait les
+    2 287 vignettes demandées et servies — mais hors champ : la « une » en 16/9
+    sur une carte de 460 px en mangeait 259, plus l'en-tête, et le reste
+    passait sous le pli que `overflow:hidden` coupe net. La carte s'adapte
+    désormais à la hauteur qu'on lui donne : en-tête, bande (64 px) et barre à
+    hauteur fixe, la une prend ce qui reste.
+  * Le marqueur `data-mega` passe sur <html> et non sur <body> : un sélecteur
+    `body[data-mega] html` ne peut rien atteindre — html est le PARENT de body.
+    Posé sur body seul, l'`overflow:hidden` de <html> tenait bon et la grille
+    dépliée restait invisible sous le pli.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 06:50:16 +0200
+
 secubox-webos (1.0.324-1~bookworm1) bookworm; urgency=medium
 
   * Carte « Mes sites » reprise sur la grammaire de PeerTube : une grande

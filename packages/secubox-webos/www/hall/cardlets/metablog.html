@@ -45,17 +45,30 @@
   html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
   body { background:var(--fond); color:var(--texte);
          font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
-  /* MEGA : la page se déroule, la barre reste en pied. */
-  body[data-mega], body[data-mega] html { overflow:auto; }
+  /* MEGA : la page se déroule. Le marqueur est posé sur <html> AUSSI, parce
+     qu'un sélecteur `body[data-mega] html` ne peut rien atteindre — html est
+     le PARENT de body. Posé sur body seul, l'ancien `overflow:hidden` de
+     <html> tenait bon et la grille dépliée restait invisible sous le pli. */
+  html[data-mega], html[data-mega] body { overflow:auto; height:auto; }
 
-  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .72rem .2rem; gap:.42rem; }
-  body[data-mega] .mw { height:auto; min-height:100%; padding:1rem 1.1rem .2rem; gap:.62rem; }
+  /* LA CARTE S'ADAPTE À SA HAUTEUR, ELLE NE LA DICTE PAS. Le Hall lui donne
+     300 px ; une « une » en 16/9 sur 460 px de large en mange 259, plus
+     l'en-tête : la bande et la barre à pastilles passaient sous le pli et
+     `overflow:hidden` les coupait. Elles étaient bien dans le DOM — le
+     journal nginx montrait les 2 287 vignettes demandées — simplement hors
+     champ. D'où : en-tête, bande et barre à hauteur FIXE, la une prend ce
+     qui reste. `min-height:0` est indispensable, sans quoi un enfant flex
+     refuse de rétrécir sous sa taille de contenu. */
+  .mw { display:flex; flex-direction:column; height:100%; min-height:0;
+        padding:.6rem .72rem .2rem; gap:.42rem; }
+  html[data-mega] .mw { height:auto; min-height:100%; padding:1rem 1.1rem .2rem; gap:.62rem; }
+  .tete, .bande, #sbxbar { flex:0 0 auto; }
 
   .tete { display:flex; align-items:center; gap:.45rem; }
   .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
               font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
   .tete b { font-size:.88rem; }
-  body[data-mega] .tete b { font-size:1.05rem; }
+  html[data-mega] .tete b { font-size:1.05rem; }
   .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em; text-transform:uppercase;
              color:var(--muted); font-variant-numeric:tabular-nums; }
 
@@ -63,42 +76,51 @@
      voile : une bande de texte sous l'image aurait mangé la hauteur utile. */
   .une { position:relative; display:block; width:100%; border:1px solid var(--border);
          border-radius:11px; overflow:hidden; background:var(--fond); padding:0;
-         cursor:pointer; font:inherit; color:inherit; text-align:left; flex:0 0 auto; }
+         cursor:pointer; font:inherit; color:inherit; text-align:left;
+         flex:1 1 auto; min-height:76px; }
   .une:hover, .une:focus-visible { border-color:var(--cyan); outline:none; }
-  .une img { display:block; width:100%; aspect-ratio:16/9; object-fit:cover;
+  .une img { display:block; width:100%; height:100%; object-fit:cover;
              object-position:top center; background:color-mix(in srgb, var(--muted) 12%, transparent); }
-  body[data-mega] .une img { aspect-ratio:21/9; }
+  /* En MEGA la page défile : la une reprend un format d'affiche plutôt que
+     d'étirer une capture sur toute la hauteur disponible. */
+  html[data-mega] .une { flex:0 0 auto; }
+  html[data-mega] .une img { height:auto; aspect-ratio:21/9; }
   .une .voile { position:absolute; left:0; right:0; bottom:0; padding:.55rem .6rem .45rem;
                 background:linear-gradient(180deg, transparent, rgba(0,0,0,.72)); color:#fff; }
   .une .t { display:block; font-size:.82rem; font-weight:600; line-height:1.25;
             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  body[data-mega] .une .t { font-size:1rem; }
+  html[data-mega] .une .t { font-size:1rem; }
   .une .d { display:block; font-family:"JetBrains Mono",ui-monospace,monospace;
             font-size:.58rem; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-  /* LA BANDE — les suivantes. Elle défile horizontalement si besoin plutôt que
-     de se tasser : une vignette de 40 px ne montre plus rien. */
-  .bande { display:flex; gap:.36rem; overflow-x:auto; overflow-y:hidden; flex:0 0 auto;
+  /* LA BANDE — les suivantes. Hauteur FIXE : c'est elle qui garantit que la bande survit au partage de
+     la carte. Elle défile horizontalement plutôt que de se tasser — une
+     vignette de 40 px ne montre plus rien. */
+  .bande { display:flex; gap:.36rem; height:64px; overflow-x:auto; overflow-y:hidden;
            scrollbar-width:none; padding-bottom:.1rem; }
   .bande::-webkit-scrollbar { height:0; display:none; }
-  body[data-mega] .bande { flex-wrap:wrap; overflow:visible; gap:.62rem; }
-  .vig { position:relative; flex:0 0 auto; width:76px; border:1px solid var(--border);
+  html[data-mega] .bande { flex-wrap:wrap; overflow:visible; height:auto; gap:.62rem; }
+  .vig { position:relative; flex:0 0 auto; width:76px; height:100%;
+         display:flex; flex-direction:column; border:1px solid var(--border);
          border-radius:8px; overflow:hidden; background:var(--fond); padding:0;
          cursor:pointer; font:inherit; color:inherit; text-align:left; }
-  body[data-mega] .vig { width:170px; }
+  html[data-mega] .vig { width:170px; height:auto; }
   .vig:hover, .vig:focus-visible { border-color:var(--cyan); outline:none; }
-  .vig img { display:block; width:100%; aspect-ratio:16/10; object-fit:cover;
+  .vig img { display:block; width:100%; flex:1 1 auto; min-height:0; object-fit:cover;
              object-position:top center; background:color-mix(in srgb, var(--muted) 12%, transparent); }
-  .vig .l { display:block; padding:.18rem .3rem .26rem; font-size:.55rem; font-weight:500;
-            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  body[data-mega] .vig .l { font-size:.72rem; padding:.3rem .42rem .38rem; }
+  html[data-mega] .vig img { flex:0 0 auto; aspect-ratio:16/10; }
+  .vig .l { display:block; flex:0 0 auto; padding:.16rem .3rem .22rem; font-size:.55rem;
+            font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  html[data-mega] .vig .l { font-size:.72rem; padding:.3rem .42rem .38rem; }
 
   /* Pas encore de capture : une plaque sobre plutôt qu'une image cassée —
      162 sites ne se photographient pas en un tour de shotter. */
-  .sans { display:grid; place-items:center; width:100%; aspect-ratio:16/10;
+  .sans { display:grid; place-items:center; width:100%; flex:1 1 auto; min-height:0;
           font-size:1rem; color:var(--muted);
           background:color-mix(in srgb, var(--muted) 9%, transparent); }
-  .une .sans { aspect-ratio:16/9; font-size:1.6rem; }
+  .une .sans { height:100%; font-size:1.6rem; }
+  html[data-mega] .sans { flex:0 0 auto; aspect-ratio:16/10; }
+  html[data-mega] .une .sans { height:auto; aspect-ratio:21/9; }
 
   /* ACCÈS ADMIN, DISCRET ET CONDITIONNEL. Visible seulement en session : un
      invité n'a rien à faire d'un bouton qui le mènerait à une connexion. */
@@ -107,12 +129,12 @@
              background:color-mix(in srgb, var(--fond) 80%, transparent);
              color:var(--muted); font-size:.72rem; line-height:1; cursor:pointer;
              padding:0; align-items:center; justify-content:center; }
-  body[data-admin] .une .reglage { display:flex; }
+  html[data-admin] .une .reglage { display:flex; }
   .reglage:hover, .reglage:focus-visible { color:var(--chaud); border-color:var(--chaud); outline:none; }
 
   .etat { color:var(--muted); font-size:.72rem; text-align:center; margin:auto 0; }
-  #sbxbar { margin-top:auto; }
-  body[data-mega] #sbxbar { margin-top:1rem; }
+  #sbxbar { margin-top:0; }
+  html[data-mega] #sbxbar { margin-top:1rem; }
 </style>
 </head>
 <body>
@@ -142,7 +164,7 @@
 
   var q = new URLSearchParams(location.search);
   var MEGA = q.get("mega") === "1";
-  if (MEGA) { document.body.setAttribute("data-mega", ""); }
+  if (MEGA) { document.documentElement.setAttribute("data-mega", ""); }
   // Le thème vient du Hall : la carte ne décide pas seule de son fond, sinon
   // elle jure avec le cadre qui la porte.
   var th = q.get("theme");
@@ -155,7 +177,7 @@
   // les réglages. Un invité ne voit pas le bouton.
   try {
     if (localStorage.getItem("sbx_token") || localStorage.getItem("secubox_token")) {
-      document.body.setAttribute("data-admin", "");
+      document.documentElement.setAttribute("data-admin", "");
     }
   } catch (e) { /* stockage refusé : pas de bouton, c'est le repli sûr. */ }
 
