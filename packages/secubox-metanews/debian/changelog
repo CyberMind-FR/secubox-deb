@@ -1,3 +1,34 @@
+secubox-metanews (0.1.37-1~bookworm1) bookworm; urgency=medium
+
+  * Passe de RAFRAÎCHISSEMENT au démarrage : un sujet n'est recomposé que s'il
+    REÇOIT un article. Après le correctif « le titre suit le plus récent », les
+    sujets déjà en base continuaient donc d'afficher celui de leur article
+    fondateur — et rien ne les en aurait sortis tant qu'aucune nouvelle dépêche
+    ne les rejoignait. Idempotente (recomposer relit et recalcule) et bornée
+    aux trente derniers jours : on ne réécrit pas les archives pour un titre
+    que plus personne ne lit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:33:27 +0200
+
+secubox-metanews (0.1.36-1~bookworm1) bookworm; urgency=medium
+
+  * LE SUJET PORTE LE TITRE LE PLUS RÉCENT (#1323). Un sujet gardait celui de
+    son article FONDATEUR : nourri pendant des semaines, il s'annonçait sous le
+    titre du premier jour — « JOURNAL DE 7H du 26 août » en tête d'un fil
+    alimenté jusqu'au 14 septembre. La vignette et le résumé suivaient déjà la
+    fraîcheur (les articles sont rendus du plus récent au plus ancien) ; seul
+    le titre restait en arrière, et c'est pourtant lui qu'on lit en premier.
+  * `ArticlesDuSujet` départage les ex æquo par `id DESC` : deux articles
+    publiés à la même seconde rendaient un ordre arbitraire, et le titre —
+    qui suit désormais le plus récent — aurait changé d'une recomposition à
+    l'autre sans raison.
+  * Test en DEUX TEMPS, comme la vraie vie : le sujet naît un jour, des
+    éditions le rejoignent ensuite. Tout insérer d'un coup ne prouvait rien —
+    le plus récent pouvait fonder le sujet lui-même, et le test passait avec
+    comme sans le correctif.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:30:55 +0200
+
 secubox-metanews (0.1.35-1~bookworm1) bookworm; urgency=medium
 
   * Radar : le classement des sujets remonte enfin le RÉCENT. SujetsListe

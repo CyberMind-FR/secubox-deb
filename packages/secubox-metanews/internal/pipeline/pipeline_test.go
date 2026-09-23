@@ -83,3 +83,51 @@ func contient(l []string, x string) bool {
 	}
 	return false
 }
+
+// LE TITRE DU SUJET SUIT LE PLUS RÉCENT (#1323).
+//
+// Un sujet nourri sur plusieurs jours gardait le titre de l'article FONDATEUR :
+// « JOURNAL DE 7H du 26 août » s'affichait en tête d'un fil alimenté jusqu'au
+// 14 septembre. La vignette et le résumé suivaient déjà la fraîcheur ; le
+// titre restait en arrière, et c'est pourtant lui qu'on lit en premier.
+func TestSujetPorteLeTitreLePlusRecent(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, _ := st.AddSource(store.Source{Slug: "radio", Name: "Radio", URL: "u", Enabled: true})
+	now := int64(1_800_000_000)
+	inserer := func(ref, titre string, pub int64) {
+		st.UpsertArticle(store.Article{
+			SourceID: src, Ref: ref, Title: titre, URL: "http://r/" + ref,
+			Summary:     "Le journal de la rédaction, édition du jour.",
+			PublishedAt: pub, Fingerprint: linker.Empreinte(titre, ref),
+			Entities: cluster.Entites(titre),
+		})
+	}
+	p := New(st, linker.NewRSS(nil), nil)
+
+	// EN DEUX TEMPS, comme dans la vraie vie : le sujet naît un jour, et des
+	// éditions le rejoignent les jours suivants. Tout insérer d'un coup ne
+	// prouverait rien — le plus récent pourrait fonder le sujet lui-même.
+	inserer("j1", "JOURNAL DE 7H, du mercredi", now)
+	if _, err := p.Regrouper(now + 60); err != nil {
+		t.Fatal(err)
+	}
+	if tops, _ := st.SujetsListe("", 10); len(tops) != 1 || tops[0].Title != "JOURNAL DE 7H, du mercredi" {
+		t.Fatalf("le sujet devait naître avec le titre du premier article, got %+v", tops)
+	}
+
+	inserer("j2", "JOURNAL DE 12H30, du mercredi", now+3600)
+	inserer("j3", "JOURNAL DE 18H, du mercredi", now+7200)
+	if _, err := p.Regrouper(now + 8000); err != nil {
+		t.Fatal(err)
+	}
+	tops, _ := st.SujetsListe("", 100)
+	if len(tops) != 1 {
+		t.Fatalf("attendu 1 sujet (même journal), got %d : %+v", len(tops), tops)
+	}
+	if got := tops[0].Title; got != "JOURNAL DE 18H, du mercredi" {
+		t.Fatalf("le sujet doit porter le titre le PLUS RÉCENT, got %q", got)
+	}
+}

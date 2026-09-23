@@ -203,6 +203,29 @@ func (p *Pipe) Reclasser(now int64) (int, error) {
 	return detaches, nil
 }
 
+// Rafraichir RECOMPOSE TOUS LES SUJETS RÉCENTS, une fois (#1323).
+//
+// POURQUOI UNE PASSE À PART. `recomposer` n'est appelé que sur un sujet TOUCHÉ
+// — un sujet qui reçoit un article. Un sujet intact garde donc éternellement
+// ce que la version précédente avait calculé, titre compris : après le
+// correctif « le titre suit le plus récent », les sujets déjà en base
+// continuaient d'afficher celui de leur article fondateur, et rien ne les en
+// aurait sortis tant qu'aucune nouvelle dépêche ne les rejoignait.
+//
+// Idempotente : recomposer relit les articles et recalcule ; deux passages
+// donnent le même résultat. Bornée aux sujets récents — les archives n'ont
+// pas besoin d'être réécrites pour un titre qu'on ne lit plus.
+func (p *Pipe) Rafraichir(now int64, depuis int64) (int, error) {
+	sujets, err := p.st.SujetsRecents(depuis)
+	if err != nil {
+		return 0, err
+	}
+	for _, t := range sujets {
+		p.recomposer(t.ID, t.UpdatedAt)
+	}
+	return len(sujets), nil
+}
+
 // recomposer recalcule résumé, compteur d'ORIGINES (clones fondus), entités,
 // tags et importance d'un sujet.
 func (p *Pipe) recomposer(topicID string, now int64) {
@@ -214,7 +237,7 @@ func (p *Pipe) recomposer(topicID string, now int64) {
 	if err != nil {
 		return
 	}
-	origines := map[string]bool{}  // clones fondus par empreinte
+	origines := map[string]bool{}   // clones fondus par empreinte
 	distinctSrc := map[int64]bool{} // diversité par flux
 	ent := []string{}
 	var items []resume.Item
@@ -231,6 +254,16 @@ func (p *Pipe) recomposer(topicID string, now int64) {
 		if a.PublishedAt > recent {
 			recent = a.PublishedAt
 		}
+	}
+	// LE TITRE SUIT LE PLUS RÉCENT (#1323). `ArticlesDuSujet` rend les articles
+	// du plus récent au plus ancien ; le sujet, lui, gardait le titre de
+	// l'article FONDATEUR. Un sujet nourri pendant des semaines s'annonçait
+	// donc sous le titre du premier jour — « JOURNAL DE 7H du 26 août » en tête
+	// d'un fil alimenté jusqu'au 14 septembre. La vignette et le résumé
+	// suivaient déjà la fraîcheur ; le titre restait en arrière, et c'est lui
+	// qu'on lit en premier.
+	if arts[0].Title != "" {
+		t.Title = arts[0].Title
 	}
 	t.Vignette = vignette
 	t.SourcesCount = int64(len(origines))

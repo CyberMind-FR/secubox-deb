@@ -251,7 +251,10 @@ func (s *Store) ArticlesSansSujet(limit int) ([]Article, error) {
 
 // ArticlesDuSujet retourne les articles d'un sujet.
 func (s *Store) ArticlesDuSujet(topicID string) ([]Article, error) {
-	return s.scanArticles(`WHERE topic_id=? ORDER BY published_at DESC`, topicID)
+	// `id DESC` en second : deux articles publiés à la MÊME seconde rendraient
+	// sinon un ordre arbitraire, et le titre du sujet — qui suit désormais le
+	// plus récent — changerait d'une recomposition à l'autre sans raison.
+	return s.scanArticles(`WHERE topic_id=? ORDER BY published_at DESC, id DESC`, topicID)
 }
 
 // ArticlesRecents retourne les articles les plus récents (toutes sources), pour

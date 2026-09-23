@@ -31,14 +31,14 @@ var version = "dev"
 
 func main() {
 	var (
-		socket   = flag.String("socket", "/run/secubox/metanews.sock", "socket unix d'écoute")
-		base     = flag.String("db", "/var/lib/secubox/metanews/metanews.db", "base SQLite")
-		conf     = flag.String("conf", "/etc/secubox/secubox.conf", "config (pour api.jwt_secret)")
-		jwtFlag  = flag.String("jwt-secret", "", "secret JWT de flotte (sinon lu du conf)")
-		bbsSock  = flag.String("bbs-socket", "/run/secubox/bbs.sock", "socket du BBS (pour Discuter)")
-		bbsCat   = flag.String("bbs-cat", "actualites", "slug de catégorie BBS des fils MetaNews")
-		pollSec  = flag.Int("poll", 300, "période de sondage des flux, en secondes")
-		montre   = flag.Bool("version", false, "afficher la version")
+		socket  = flag.String("socket", "/run/secubox/metanews.sock", "socket unix d'écoute")
+		base    = flag.String("db", "/var/lib/secubox/metanews/metanews.db", "base SQLite")
+		conf    = flag.String("conf", "/etc/secubox/secubox.conf", "config (pour api.jwt_secret)")
+		jwtFlag = flag.String("jwt-secret", "", "secret JWT de flotte (sinon lu du conf)")
+		bbsSock = flag.String("bbs-socket", "/run/secubox/bbs.sock", "socket du BBS (pour Discuter)")
+		bbsCat  = flag.String("bbs-cat", "actualites", "slug de catégorie BBS des fils MetaNews")
+		pollSec = flag.Int("poll", 300, "période de sondage des flux, en secondes")
+		montre  = flag.Bool("version", false, "afficher la version")
 	)
 	flag.Parse()
 	if *montre {
@@ -66,10 +66,21 @@ func main() {
 	// il bloquait le demarrage du serveur (socket jamais ouvert, 502 partout).
 	// Idempotent — apres la premiere passe il ne trouve plus rien.
 	go func() {
-		if n, err := pipe.Reclasser(time.Now().Unix()); err != nil {
+		maintenant := time.Now().Unix()
+		if n, err := pipe.Reclasser(maintenant); err != nil {
 			jr.Printf("reclasser : %v", err)
 		} else if n > 0 {
 			jr.Printf("reclasser : %d articles remis a leur place", n)
+		}
+		// RAFRAICHISSEMENT DES SUJETS DEJA EN BASE (#1323). Un sujet n'est
+		// recompose que s'il RECOIT un article ; ceux qui n'en recoivent plus
+		// gardaient le titre de leur article fondateur, meme vieux de
+		// semaines. Une passe au demarrage les remet a jour. Idempotente, et
+		// bornee aux trente derniers jours : on ne reecrit pas les archives.
+		if n, err := pipe.Rafraichir(maintenant, maintenant-30*24*3600); err != nil {
+			jr.Printf("rafraichir : %v", err)
+		} else if n > 0 {
+			jr.Printf("rafraichir : %d sujets recomposes", n)
 		}
 	}()
 	srv := web.New(st, pipe, web.Options{JWTSecret: secret, BBSSocket: *bbsSock, BBSCat: *bbsCat}, jr, version)
