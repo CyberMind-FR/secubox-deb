@@ -1,0 +1,22 @@
+Source: secubox-surf
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-surf
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-httpx,
+         python3-uvicorn | python3-pip,
+         python3-socksio | python3-pip
+Description: SecuBox Surf — relais de navigation par-origine (le BiB)
+ Le navigateur de relais du Hall : chaque hôte distant est servi sous une
+ origine propre, `surf-<hote-aplati>.gk2.secubox.in`, ce qui cloisonne
+ cookies et stockage par site visité au lieu de les laisser se rejoindre.
+ .
+ Le relais réécrit les URL absolues du HTML et du CSS vers l'origine de
+ surf, coupe les pisteurs, et sait rejouer une page lourde avec un Chromium
+ sans tête dont il fige le DOM abouti (rendu statique, mis en cache).
+ .
+ MetaNews en dépend : chaque clic sur un lien de source y passe.

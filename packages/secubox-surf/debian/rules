@@ -1,0 +1,37 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	# Le module Python, servi par uvicorn depuis /usr/lib/secubox/surf
+	# (WorkingDirectory de l'unité) : le paquetage suit l'arborescence que
+	# l'unité attend, `surf.serveur:app`.
+	install -d debian/secubox-surf/usr/lib/secubox/surf/surf
+	install -m 644 surf/*.py debian/secubox-surf/usr/lib/secubox/surf/surf/
+
+	# VHOST DANS sites-available, JAMAIS sites-enabled : nginx charge
+	# `include sites-enabled/*`, et le `.dpkg-dist` que dpkg y dépose sur un
+	# fichier modifié localement entrerait dans le glob — la configuration
+	# entière refuserait alors de charger. Le lien d'activation est posé par
+	# postinst (cf. secubox-webos, même correctif).
+	install -d debian/secubox-surf/etc/nginx/sites-available
+	install -m 644 nginx/surf.conf \
+	               debian/secubox-surf/etc/nginx/sites-available/surf.conf
+
+	install -d debian/secubox-surf/usr/lib/systemd/system
+	install -m 644 systemd/secubox-surf.service \
+	               debian/secubox-surf/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	# L'unité est activée et démarrée par le postinst, qui vérifie d'abord
+	# que le module s'importe : un relais qui ne démarre pas doit le dire au
+	# moment de l'installation, pas au premier clic d'un utilisateur.
+	dh_installsystemd --no-enable --no-start --name=secubox-surf
