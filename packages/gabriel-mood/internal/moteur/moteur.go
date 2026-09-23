@@ -64,6 +64,24 @@ const (
 	// était fraîche.
 	VoixParFenetre = 180 // ~2 s de parole effective
 	PlafondFenetre = 750 // ~8 s d'horloge, quoi qu'il arrive
+	// ── LA MESURE INSTANTANÉE, CORRIGÉE ENSUITE ──────────────────────────
+	//
+	// Attendre la fenêtre pleine, c'est attendre deux secondes de voix avant de
+	// bouger : l'affichage avance alors par PALIERS, et un palier de deux
+	// secondes se lit comme un blocage.
+	//
+	// On rend donc une estimation dès qu'on a de quoi — approximative, et elle
+	// le dit — puis on la CORRIGE à mesure que la fenêtre se remplit. C'est un
+	// schéma prédiction/correction : plus on a de voix, plus l'estimation pèse,
+	// et la fenêtre pleine a le dernier mot.
+	//
+	// SON POIDS EST SA COMPLÉTUDE. Une estimation faite sur un quart de la
+	// fenêtre entre pour un quart dans ce qui s'affiche — pas pour un quart
+	// arbitraire, pour le quart qu'elle représente vraiment. C'est ce qui rend
+	// la correction honnête plutôt que cosmétique : on ne lisse pas pour que
+	// ce soit joli, on pondère par ce qu'on sait.
+	PasInstantane  = 24 // ~0,26 s : de quoi bouger sans clignoter
+	VoixMinInstant = 24
 	// Conservé pour la cadence du débit syllabique, qui se calcule sur
 	// l'enveloppe d'énergie et non sur les seules trames voisées.
 	FenetreTraits = 100
@@ -159,6 +177,8 @@ type Analyseur struct {
 	bonneQuand time.Time
 	// Indices lissés d'une fenêtre à l'autre — voir `lisse`.
 	indLisses map[string]float64
+	// L'étiquette actuellement affichée, pour l'hystérésis.
+	teteTenue string
 	traits    ser.Traits
 
 	// agrégation sur la fenêtre
@@ -338,9 +358,20 @@ func (a *Analyseur) analyseTrame(trame []float64) {
 	// décide. Le plafond d'horloge évite qu'un long silence laisse une fenêtre
 	// à demi remplie traîner indéfiniment.
 	a.fenTrames++
-	if a.fenVoisees >= VoixParFenetre || a.fenTrames >= PlafondFenetre {
+	switch {
+	case a.fenVoisees >= VoixParFenetre || a.fenTrames >= PlafondFenetre:
+		// FENÊTRE PLEINE : la mesure qui fait autorité, poids entier.
 		a.ambiant = a.oreille.Analyse()
-		a.majTraits()
+		a.majTraits(1)
+	case a.fenVoisees >= VoixMinInstant && a.fenTrames%PasInstantane == 0:
+		// ESTIMATION EN COURS DE ROUTE : elle pèse ce qu'elle représente.
+		poids := float64(a.fenVoisees) / float64(VoixParFenetre)
+		if poids > 0.85 {
+			// On ne laisse pas une estimation partielle peser presque autant
+			// que la fenêtre pleine : le dernier mot doit rester à celle-ci.
+			poids = 0.85
+		}
+		a.majTraitsPartiel(poids)
 	}
 	a.majImage(v, rms)
 }
@@ -379,7 +410,16 @@ func (a *Analyseur) reduitSpectre() {
 }
 
 // majTraits recalcule les traits agrégés et la lecture, une fois par fenêtre.
-func (a *Analyseur) majTraits() {
+// majTraitsPartiel : la même chose, SANS remettre les compteurs à zéro.
+//
+// C'est toute la différence : la fenêtre continue de se remplir, et chaque
+// passage rend une estimation un peu meilleure que la précédente.
+func (a *Analyseur) majTraitsPartiel(poids float64) { a.calculeTraits(poids, false) }
+
+// majTraits : la fenêtre pleine, qui fait autorité et repart à zéro.
+func (a *Analyseur) majTraits(poids float64) { a.calculeTraits(poids, true) }
+
+func (a *Analyseur) calculeTraits(poids float64, ferme bool) {
 	var moy, moy2 float64
 	for _, e := range a.fenEnergies {
 		moy += e
@@ -417,14 +457,30 @@ func (a *Analyseur) majTraits() {
 	a.traits = t
 	a.mu.Unlock()
 
-	a.ref.Observe(t)
+	// L'ORDINAIRE NE S'APPREND QU'À LA FERMETURE DE LA FENÊTRE. Observer à
+	// chaque estimation partielle compterait huit fois la même voix, et
+	// l'ordinaire se figerait sur la seconde en cours au lieu d'apprendre les
+	// heures.
+	if ferme {
+		a.ref.Observe(t)
+	}
 	// ON NE PARTAGE QUE CE QUI EST ÉTABLI (le seuil de fiabilité est dans
 	// Contribue) : un ordinaire approximatif mis en commun donnerait un
 	// à-peu-près commun, et personne n'y gagnerait.
 	if a.partage != nil {
 		a.partage.Contribue(a.session, a.ref)
 	}
-	lec := a.lisse(a.classif.Evalue(t))
+	brute := a.classif.Evalue(t)
+	// UNE ESTIMATION PARTIELLE N'EFFACE JAMAIS RIEN. Elle sert à corriger plus
+	// tôt, pas à remplacer une lecture par un aveu d'ignorance : pendant une
+	// pause, la part voisée de la fenêtre en cours baisse mécaniquement, et
+	// l'estimation devient indéterminée alors que la fenêtre, elle, finira par
+	// se remplir. La laisser passer rallumait l'ancien défaut — la carte
+	// s'éteignait à chaque respiration.
+	if !ferme && brute.Etat == ser.Indetermine {
+		return
+	}
+	lec := a.lisse(brute, poids)
 
 	a.mu.Lock()
 	a.derniereLec = lec
@@ -447,7 +503,9 @@ func (a *Analyseur) majTraits() {
 	}
 	a.mu.Unlock()
 
-	a.fenVoisees, a.fenTotal, a.fenTrames = 0, 0, 0
+	if ferme {
+		a.fenVoisees, a.fenTotal, a.fenTrames = 0, 0, 0
+	}
 }
 
 // debitSyllabique compte les NOYAUX de syllabe : les sommets de l'enveloppe
@@ -523,9 +581,14 @@ func (a *Analyseur) debitSyllabique() float64 {
 // l'hésitation dans les barres, et n'en tire une étiquette qu'ensuite.
 const InertieIndices = 0.45
 
+// MargeBascule : de combien un prétendant doit dépasser l'étiquette en place
+// pour la remplacer. Trois centièmes — assez pour ignorer les croisements de
+// bruit, assez peu pour qu'un vrai changement passe en une ou deux fenêtres.
+const MargeBascule = 0.03
+
 // lisse tempère les indices d'une lecture avec ceux des fenêtres précédentes,
 // puis en redérive l'état et la confiance.
-func (a *Analyseur) lisse(lec ser.Lecture) ser.Lecture {
+func (a *Analyseur) lisse(lec ser.Lecture, poids float64) ser.Lecture {
 	if lec.Etat == ser.Indetermine || lec.Indices == nil {
 		// UNE FENÊTRE SANS LECTURE N'EFFACE PAS LA MÉMOIRE mais n'y entre pas
 		// non plus : l'entrée suivante reprendra où l'on s'était arrêté, ce
@@ -539,8 +602,13 @@ func (a *Analyseur) lisse(lec ser.Lecture) ser.Lecture {
 		}
 		return lec
 	}
+	// LE POIDS DE L'ESTIMATION MULTIPLIE L'INERTIE. Une estimation faite sur un
+	// quart de la fenêtre déplace l'affichage d'un quart de ce qu'une fenêtre
+	// pleine déplacerait. La correction est donc continue, et proportionnée à
+	// ce qu'on sait — pas à ce qu'on voudrait montrer.
+	inertie := InertieIndices * poids
 	for k, v := range lec.Indices {
-		a.indLisses[k] = InertieIndices*v + (1-InertieIndices)*a.indLisses[k]
+		a.indLisses[k] = inertie*v + (1-inertie)*a.indLisses[k]
 	}
 	sortie := make(map[string]float64, len(a.indLisses))
 	tete, second := "", ""
@@ -555,6 +623,24 @@ func (a *Analyseur) lisse(lec ser.Lecture) ser.Lecture {
 			second, vs = k, v
 		}
 	}
+	// ── HYSTÉRÉSIS SUR L'ÉTIQUETTE ────────────────────────────────────────
+	//
+	// Près de l'origine, deux indices se croisent et se recroisent pour trois
+	// millièmes d'écart. Sans marge, l'étiquette change à chaque croisement —
+	// et comme on mesure maintenant huit fois plus souvent, elle changerait
+	// huit fois plus souvent.
+	//
+	// ON NE CACHE RIEN EN FAISANT CELA : les barres continuent d'afficher la
+	// distribution exacte, et l'on voit donc le prétendant monter. Seule
+	// l'ÉTIQUETTE — qui est une simplification, et que l'on lit comme un
+	// verdict — attend d'être départagée franchement.
+	if a.teteTenue != "" && tete != a.teteTenue {
+		if sortie[tete]-sortie[a.teteTenue] < MargeBascule {
+			tete = a.teteTenue
+			vt = sortie[tete]
+		}
+	}
+	a.teteTenue = tete
 	lec.Indices = sortie
 	lec.Etat = tete
 	// La confiance suit la distribution lissée, avec les mêmes garde-fous.

@@ -1,3 +1,40 @@
+gabriel-mood (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE SPECTROGRAMME ENTRE DANS LA CARTE. Elle n'avait que des barres — elles
+    disent l'instant, pas le mouvement, et une voix se reconnaît à son
+    mouvement. On réutilise le composant du cockpit plutôt que d'en réécrire un
+    petit : deux rendus du même signal finissent toujours par ne plus se
+    ressembler, et l'on ne sait alors plus lequel croire.
+  * MESURE INSTANTANÉE, CORRIGÉE ENSUITE. Attendre la fenêtre pleine, c'était
+    attendre deux secondes de voix avant de bouger : l'affichage avançait par
+    PALIERS, et un palier de deux secondes se lit comme un blocage. On rend
+    désormais une estimation tous les quarts de seconde et on la corrige à
+    mesure que la fenêtre se remplit. Mesuré : les indices bougent dès 0,6 s.
+  * SON POIDS EST SA COMPLÉTUDE, et c'est ce qui rend la correction honnête
+    plutôt que cosmétique. Une estimation faite sur un quart de la fenêtre entre
+    pour un quart dans ce qui s'affiche — pas pour un quart arbitraire, pour le
+    quart qu'elle représente vraiment. On ne lisse pas pour que ce soit joli,
+    on pondère par ce qu'on sait, et la fenêtre pleine garde le dernier mot.
+  * UNE ESTIMATION PARTIELLE N'EFFACE JAMAIS RIEN. Première version : pendant
+    une pause, la part voisée de la fenêtre en cours baisse mécaniquement,
+    l'estimation devenait indéterminée, et la carte s'éteignait de nouveau à
+    chaque respiration — le défaut qu'on venait de corriger, rallumé par son
+    propre correctif. Une partielle ne peut plus que corriger, jamais remplacer
+    une lecture par un aveu d'ignorance.
+  * HYSTÉRÉSIS SUR L'ÉTIQUETTE. Près de l'origine, deux indices se croisent
+    pour trois millièmes d'écart ; en mesurant huit fois plus souvent,
+    l'étiquette changeait huit fois plus souvent. Un prétendant doit désormais
+    dépasser l'étiquette en place de trois centièmes. ON NE CACHE RIEN : les
+    barres affichent la distribution exacte et l'on voit le prétendant monter ;
+    seule l'étiquette — qui est une simplification, et qu'on lit comme un
+    verdict — attend d'être départagée franchement.
+  * L'ordinaire ne s'apprend qu'à la fermeture de la fenêtre : observer à
+    chaque estimation partielle compterait huit fois la même voix, et
+    l'ordinaire se figerait sur la seconde en cours au lieu d'apprendre les
+    heures.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 13:23:34 +0200
+
 gabriel-mood (0.5.2-1~bookworm1) bookworm; urgency=medium
 
   * LE BPM EFFAÇAIT LES ÉMOTIONS, et c'était un défaut de calcul, pas une

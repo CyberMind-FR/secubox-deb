@@ -13,6 +13,7 @@
      parce qu'on a ouvert le Hall serait une trahison, même techniquement
      autorisée. Il faut un clic, ici comme ailleurs. -->
 <script lang="ts">
+  import FFTCanvas from './FFTCanvas.svelte'
   import { Micro, type Image, type Etat } from './src/lib/micro'
   import { Lien, type Role } from './src/lib/lien'
 
@@ -100,11 +101,14 @@
     <div class="piste"><div class="curseur" style="left:{((img?.activation ?? 0) + 1) / 2 * 100}%"></div></div>
   </div>
 
-  <!-- Le spectre en miniature : il dit « ça vit » mieux qu'aucun libellé. -->
-  <div class="spectre" aria-hidden="true">
-    {#each (img?.fft ?? new Array(32).fill(-100)).filter((_, i) => i % 4 === 0) as v}
-      <i style="transform:scaleY({Math.max(0.02, Math.min(1, (v + 100) / 100))})"></i>
-    {/each}
+  <!-- LE SPECTRE *ET* LE SPECTROGRAMME, par le composant du cockpit.
+       La carte n'avait que des barres : elles disent l'instant, pas le
+       mouvement — et une voix se reconnaît à son mouvement. Réutiliser le
+       composant plutôt que d'en réécrire un petit évite surtout qu'ils
+       divergent : deux rendus du même signal finissent toujours par ne plus
+       se ressembler, et l'on ne sait alors plus lequel croire. -->
+  <div class="spectro">
+    <FFTCanvas bandes={img?.fft ?? []} voix={img?.vad ?? false} hauteur={78} compact />
   </div>
 
   <!-- L'HISTOGRAMME DES SIX INDICES. Il tenait dans la place laissée vide, et
@@ -200,6 +204,8 @@
   .spectre { display: flex; align-items: flex-end; gap: 1px;
     flex: 1 1 auto; min-height: 26px; max-height: 64px;
     background: rgba(5,7,15,.45); border-radius: 7px; padding: 2px; }
+  .spectro { flex: 1 1 auto; min-height: 72px; max-height: 96px; overflow: hidden; }
+
   /* MISE À L'ÉCHELLE, PAS HAUTEUR EN POURCENTAGE — et c'est ce qui avait fait
      disparaître le spectre. Une hauteur en pourcentage se résout contre le
      parent, qui doit avoir une hauteur DÉFINIE ; en rendant `.spectre`

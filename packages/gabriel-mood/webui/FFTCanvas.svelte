@@ -6,7 +6,10 @@
      spectrogramme dit les dernières secondes. L'un sans l'autre ne suffit pas —
      une voix se reconnaît à son mouvement, pas à un arrêt sur image. -->
 <script lang="ts">
-  let { bandes = [] as number[], voix = false, hauteur = 190 } = $props()
+  // `compact` : sans les légendes. Dans une tuile du Hall, deux lignes de
+  // titre mangent un tiers de la place et rognent le spectrogramme — alors
+  // qu'à cette taille on reconnaît les deux vues sans qu'on les nomme.
+  let { bandes = [] as number[], voix = false, hauteur = 190, compact = false } = $props()
 
   let canevas: HTMLCanvasElement | undefined = $state()
   let cascade: HTMLCanvasElement | undefined = $state()
@@ -77,14 +80,16 @@
 </script>
 
 <div class="spectre" style="--h:{hauteur}px">
-  <div class="etiquette dim mono">FFT · instant</div>
+  {#if !compact}<div class="etiquette dim mono">FFT · instant</div>{/if}
   <canvas bind:this={canevas} use:ajuste class="barres"></canvas>
-  <div class="etiquette dim mono">Spectrogramme · 50 Hz → 8 kHz, échelle log</div>
+  {#if !compact}
+    <div class="etiquette dim mono">Spectrogramme · 50 Hz → 8 kHz, échelle log</div>
+  {/if}
   <canvas bind:this={cascade} use:ajuste class="cascade"></canvas>
 </div>
 
 <style>
-  .spectre { display: grid; gap: 4px; }
+  .spectre { display: grid; gap: 4px; grid-auto-rows: min-content; }
   .etiquette { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
   canvas { width: 100%; display: block; border-radius: 14px; background: rgba(5,7,15,.6); }
   .barres  { height: calc(var(--h) * .52); }
