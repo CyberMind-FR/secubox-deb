@@ -12,7 +12,9 @@ export type Image = {
   timestamp: number; fft: number[]; pitch: number; energy: number
   calm: number; joy: number; stress: number; anger: number
   fatigue: number; focus: number
-  state: string; confidence: number; activation: number
+  state: string; motif?: string; reference?: string
+  confidence: number; activation: number
+  trends?: Record<string, number>
   vad: boolean; speech_rate: number; jitter: number; shimmer: number
   clarity: number; latency_ms: number; cpu: number; calibration: number
   source_reelle: boolean; reserve: string

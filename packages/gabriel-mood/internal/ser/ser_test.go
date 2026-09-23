@@ -108,7 +108,7 @@ func TestSansAssezDeVoixOnNeRepondPas(t *testing.T) {
 // (indices présents, réserve présente) pour que l'interface l'affiche
 // proprement au lieu d'un trou.
 func TestLIndetermineResteLisible(t *testing.T) {
-	l := LectureIndeterminee("motif", false)
+	l := LectureIndeterminee(MotifBruit, "motif", false)
 	if len(l.Indices) != len(Etats) {
 		t.Fatalf("%d indices, veut %d", len(l.Indices), len(Etats))
 	}

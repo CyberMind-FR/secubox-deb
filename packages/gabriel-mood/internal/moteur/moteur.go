@@ -71,8 +71,16 @@ type Image struct {
 	Concentre float64 `json:"focus"`
 
 	Etat       string  `json:"state"`
+	Motif      string  `json:"motif,omitempty"`
+	Reference  string  `json:"reference,omitempty"`
 	Confiance  float64 `json:"confidence"`
 	Activation float64 `json:"activation"`
+
+	// TENDANCES : où va chaque indice, et pas seulement où il est. Un calme à
+	// 0,55 qui MONTE et un calme à 0,55 qui descend ne racontent pas la même
+	// chose, et c'est souvent la pente qui intéresse — pas la valeur.
+	// Différence entre l'indice courant et sa moyenne sur la mémoire courte.
+	Tendances map[string]float64 `json:"trends"`
 
 	Voix    bool    `json:"vad"`
 	Debit   float64 `json:"speech_rate"` // syllabes/minute
@@ -122,10 +130,27 @@ type Analyseur struct {
 	cpuFenetre   time.Time
 	derniereF0   float64
 	derniereClar float64
+
+	// Mémoire courte des indices, pour les tendances. Vingt secondes : assez
+	// pour qu'une pente veuille dire quelque chose, assez court pour qu'elle
+	// suive la conversation.
+	memoire []map[string]float64
+
+	partage *ser.EtalonPartage
+	session string
 }
 
+// MemoireTendance : combien de lectures on garde pour calculer une pente. Une
+// lecture par fenêtre de traits, soit environ une par seconde.
+const MemoireTendance = 20
+
 // Nouveau prépare la chaîne pour une source donnée.
-func Nouveau(src audio.Source) *Analyseur {
+func Nouveau(src audio.Source) *Analyseur { return NouveauAvecPartage(src, nil, "") }
+
+// NouveauAvecPartage relie la chaîne à l'ordinaire du GROUPE : elle s'en sert
+// comme repère tant que l'ordinaire personnel n'existe pas, et y contribue le
+// sien une fois qu'il est complet.
+func NouveauAvecPartage(src audio.Source, partage *ser.EtalonPartage, session string) *Analyseur {
 	plan := fft.NouveauPlan(TailleTrame)
 	raies := TailleTrame/2 + 1
 	etalon := ser.NouvelEtalon(1800) // une demi-heure d'ordinaire glissant
@@ -144,7 +169,7 @@ func Nouveau(src audio.Source) *Analyseur {
 		bandes:     make([]float64, BandesAffichees),
 		cpuFenetre: time.Now(),
 	}
-	a.derniereLec = ser.LectureIndeterminee("session qui démarre", false)
+	a.derniereLec = ser.LectureIndeterminee(ser.MotifPeuDeVoix, "session qui démarre", false)
 	return a
 }
 
@@ -307,6 +332,7 @@ func (a *Analyseur) majTraits() {
 		Jitter:        a.pert.Jitter(),
 		Shimmer:       a.pert.Shimmer(),
 		Centre:        mfcc.CentreDeGravite(a.puissance, audio.Echantillonnage),
+		Platitude:     mfcc.PlatitudeSpectrale(a.puissance),
 		Pente:         mfcc.PenteSpectrale(a.puissance, audio.Echantillonnage),
 		PartVoisee:    part,
 		TramesVoisees: a.fenVoisees,
@@ -317,10 +343,29 @@ func (a *Analyseur) majTraits() {
 	a.mu.Unlock()
 
 	a.etalon.Observe(t)
+	// ON NE PARTAGE QUE CE QUI EST ÉTABLI. Un ordinaire incomplet mis en
+	// commun donnerait un à-peu-près commun, et personne n'y gagnerait.
+	if a.partage != nil && a.etalon.Pret() {
+		a.partage.Contribue(a.session, a.etalon)
+	}
 	lec := a.classif.Evalue(t)
 
 	a.mu.Lock()
 	a.derniereLec = lec
+	// ON NE MÉMORISE QUE LES LECTURES QUI EN SONT. Empiler les indices d'un
+	// refus — tous à zéro — ferait plonger toutes les tendances à chaque
+	// silence, et l'on lirait « le calme s'effondre » alors que personne ne
+	// parlait.
+	if lec.Etat != ser.Indetermine && lec.Indices != nil {
+		c := make(map[string]float64, len(lec.Indices))
+		for k, v := range lec.Indices {
+			c[k] = v
+		}
+		a.memoire = append(a.memoire, c)
+		if len(a.memoire) > MemoireTendance {
+			a.memoire = a.memoire[1:]
+		}
+	}
 	a.mu.Unlock()
 
 	a.fenVoisees, a.fenTotal = 0, 0
@@ -379,6 +424,33 @@ func (a *Analyseur) debitSyllabique() float64 {
 	return float64(compte) / duree * 60
 }
 
+// tendances : l'écart de chaque indice à sa moyenne récente.
+//
+// UN INDICE QUI MONTE ET UN INDICE QUI DESCEND NE DISENT PAS LA MÊME CHOSE à
+// valeur égale, et c'est souvent la pente qui intéresse plutôt que le niveau.
+//
+// Il faut quelques lectures pour qu'une moyenne existe : en-dessous on rend
+// une carte VIDE plutôt que des zéros, qui se liraient comme « stable » alors
+// qu'on ne sait encore rien.
+func (a *Analyseur) tendances() map[string]float64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if len(a.memoire) < 4 {
+		return nil
+	}
+	courant := a.memoire[len(a.memoire)-1]
+	out := make(map[string]float64, len(courant))
+	for _, k := range ser.Etats {
+		var somme float64
+		for _, m := range a.memoire {
+			somme += m[k]
+		}
+		moy := somme / float64(len(a.memoire))
+		out[k] = math.Round((courant[k]-moy)*1000) / 1000
+	}
+	return out
+}
+
 func (a *Analyseur) majImage(v vad.Verdict, rms float64) {
 	a.mu.RLock()
 	lec := a.derniereLec
@@ -416,7 +488,9 @@ func (a *Analyseur) majImage(v vad.Verdict, rms float64) {
 		Calme:      get(ser.Calme), Joie: get(ser.Joie),
 		Tension: get(ser.Tension), Colere: get(ser.Colere),
 		Fatigue: get(ser.Fatigue), Concentre: get(ser.Concentre),
-		Etat: lec.Etat, Confiance: lec.Confiance, Activation: lec.Activation,
+		Etat: lec.Etat, Motif: lec.Motif, Reference: lec.Reference,
+		Confiance:  lec.Confiance,
+		Activation: lec.Activation, Tendances: a.tendances(),
 		Voix:         v.Parole,
 		Clarte:       math.Round(a.derniereClar*100) / 100,
 		LatenceMs:    math.Round(lat*10) / 10,

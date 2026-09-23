@@ -1,3 +1,58 @@
+gabriel-mood (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * MOINS D'INDÉTERMINÉS, ET DES POURCENTAGES QUI SE LISENT.
+  * Le CALME devient le repos statistique. C'était le vrai défaut : « votre
+    voix est dans son ordinaire » et « je n'entends rien d'exploitable »
+    sortaient tous deux en « indéterminé », alors qu'ils n'ont rien à voir.
+    L'étalon apprend l'ordinaire de CETTE voix — une voix à son ordinaire est
+    donc, par construction, au repos de cette personne, et cela a un nom.
+  * L'INDÉTERMINÉ NE DIT PLUS QUE LE DÉFAUT DE MESURE, avec son motif : bruit
+    (spectre plat), voix insuffisante, ou étalonnage. Trois énoncés sur le
+    SIGNAL, qui appellent trois gestes différents — approcher le micro, parler,
+    attendre — là où un mot unique n'en suggérait aucun.
+  * Les affinités étaient trop larges : six gaussiennes généreuses rendaient
+    partout des valeurs voisines, le premier indice dépassait à peine le
+    second, et tout finissait « indéterminé » faute d'écart. Ce n'était pas de
+    la prudence, c'était une distribution qui ne distinguait rien.
+  * FOND INCOMPRESSIBLE de 6 % : aucun indice ne peut plus atteindre 100 %. La
+    première correction rendait 1,00 sur un cas franc, les cinq autres
+    étiquettes exactement à zéro — ce qui affirme qu'aucune autre lecture n'est
+    concevable. Le plafond protégeait la confiance ; il ne protégeait pas les
+    indices, qui sont pourtant ce qu'on lit en premier.
+  * Confiance recalée : elle saturait à 0,72 sur tous les cas nets, donc ne
+    distinguait plus rien. Elle s'étale maintenant de 0,2 à 0,7.
+  * ÉTALON PROVISOIRE à 45 observations au lieu de 180 : trois minutes de
+    silence ressemblent à une panne. On répond plus tôt EN LE DISANT, confiance
+    bridée à 0,40 tant que l'ordinaire n'est pas complet.
+  * TENDANCES : chaque indice porte sa pente sur vingt secondes. Un calme à
+    0,55 qui monte et un calme à 0,55 qui descend ne racontent pas la même
+    chose. Diagramme multi-lignes, émoticônes posées à hauteur de leur courbe.
+    Le trait s'INTERROMPT sur un refus : relier deux mesures séparées par un
+    trou reviendrait à inventer ce qui s'est passé entre.
+  * ENSEMBLE ANONYMISÉ (`GET /api/mood/commun`). Chacun garde sa page et sa
+    lecture ; seule la moyenne est publiée, et seulement à partir de TROIS
+    participants. Ce seuil n'est pas décoratif : à un, la moyenne EST la
+    personne ; à deux, qui connaît la sienne obtient l'autre par soustraction.
+    Valeurs arrondies au vingtième, contre la soustraction dans le temps.
+  * FUITE FERMÉE au passage : `GET /api/mood` rendait « la session la plus
+    récemment active » quand aucune n'était nommée. Sur un LAN à une personne,
+    la commodité ne coûtait rien ; ouvert au WAN, cela livrait à n'importe quel
+    passant la lecture en direct de qui utilisait la page.
+  * BASE CALME PARTAGÉE : les ordinaires personnels mis en commun servent de
+    repère à qui vient d'arriver, le temps que le sien se constitue. Même
+    seuil de trois — une médiane de hauteur identifie assez bien quelqu'un.
+    La lecture DIT qu'elle compare à d'autres voix (`reference: "groupe"`) et
+    sa confiance est bridée à 0,30 : ce qu'on mesure alors est en partie une
+    différence entre personnes, pas seulement un écart à soi-même. L'ordinaire
+    personnel reprend la main dès qu'il existe, et un départ efface la
+    contribution.
+  * Deux nombres par personne et par trait — centre et dispersion — et non un
+    seul : avec trois contributeurs, trois médianes ne permettent pas
+    d'interquartile robuste, et la base commune rendait des écarts nuls partout.
+  * Exposition ouverte au WAN, à la demande de l'opérateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:58:51 +0200
+
 gabriel-mood (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Fiche `debian/secubox.yaml` : le module existe désormais pour l'App Store,

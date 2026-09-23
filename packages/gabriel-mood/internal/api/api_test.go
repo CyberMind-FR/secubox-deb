@@ -301,3 +301,68 @@ func TestLesReponsesNeSontPasMisesEnCache(t *testing.T) {
 		}
 	}
 }
+
+// ── LA FUITE ENTRE SESSIONS ────────────────────────────────────────────────
+//
+// `GET /api/mood` rendait « la session la plus récemment active » quand aucune
+// n'était nommée. Sur un réseau local avec une seule personne, la commodité ne
+// coûtait rien ; ouvert au WAN, cela livrait à n'importe quel passant la
+// lecture en direct de qui utilisait la page. C'est exactement la donnée dont
+// tout ce module s'applique à dire qu'elle ne doit servir à évaluer personne.
+
+func TestSansSessionNommeeOnNeLivrePasCelleDunAutre(t *testing.T) {
+	s, srv := serveur(t)
+	// Quelqu'un ouvre une session et parle.
+	c, _, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	var accueil message
+	if err := c.ReadJSON(&accueil); err != nil {
+		t.Fatal(err)
+	}
+	if s.Sessions.Nombre() != 1 {
+		t.Fatalf("%d sessions", s.Sessions.Nombre())
+	}
+
+	// Un passant interroge l'API sans rien connaître.
+	r, err := http.Get(srv.URL + "/api/mood")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var h Humeur
+	json.NewDecoder(r.Body).Decode(&h)
+	if h.Session != "" {
+		t.Fatalf("l'identifiant de session d'un autre a fuité : %q", h.Session)
+	}
+	if h.Etat != ser.Indetermine {
+		t.Errorf("état %q rendu à qui ne possède aucune session", h.Etat)
+	}
+}
+
+// Et celui qui POSSÈDE la session la lit toujours : refermer la fuite ne doit
+// pas casser l'usage légitime.
+func TestAvecSonIdentifiantOnLitBienSaSession(t *testing.T) {
+	_, srv := serveur(t)
+	c, _, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	var accueil message
+	if err := c.ReadJSON(&accueil); err != nil {
+		t.Fatal(err)
+	}
+	r, err := http.Get(srv.URL + "/api/mood?session=" + accueil.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var h Humeur
+	json.NewDecoder(r.Body).Decode(&h)
+	if h.Session != accueil.Session {
+		t.Fatalf("session %q rendue pour %q", h.Session, accueil.Session)
+	}
+}

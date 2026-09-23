@@ -59,15 +59,23 @@ HOTE=mood.gk2.secubox.in
 mkdir -p /etc/nginx/snippets/exposure
 if [ ! -f "/etc/nginx/snippets/exposure/$HOTE.conf" ]; then
     cat > "/etc/nginx/snippets/exposure/$HOTE.conf" <<'EXPO'
-# Filtre d'exposition — semé à « lan » par gabriel-mood.
-# Édité par le module secubox-exposure, qui fait autorité une fois le fichier
-# créé. Cette page demande le MICRO : l'ouvrir au monde n'est pas une décision
-# qu'un paquet prend à la place de l'opérateur.
-allow 127.0.0.1;
-allow 10.0.0.0/8;
-allow 172.16.0.0/12;
-allow 192.168.0.0/16;
-deny all;
+# Filtre d'exposition de gabriel-mood — OUVERT, à la demande de l'operateur.
+# Edite par le module secubox-exposure, qui fait autorite une fois le fichier
+# cree : ce contenu n'est que la valeur de depart, et n'est jamais reecrit.
+#
+# CE QUI REND L'OUVERTURE ACCEPTABLE. La page demande le micro, mais c'est
+# CELUI DU VISITEUR, sur SA machine, et son navigateur le lui demande
+# explicitement : rien du micro de la box ne circule. Surtout,
+# `GET /api/mood` ne rend plus « la session la plus recente » quand aucune
+# n'est nommee — sans quoi un passant aurait lu en direct l'humeur de qui
+# utilisait la page.
+#
+# CE QUI RESTE OUVERT, ET QU'IL FAUT SAVOIR : n'importe qui peut ouvrir une
+# session et faire travailler la board. Un plafond CPU est pose dans l'unite
+# (CPUQuota), mais il n'y a pas d'authentification ici.
+#
+# Pour refermer : remplacer par les quatre `allow` prives + `deny all`.
+allow all;
 EXPO
 fi
 

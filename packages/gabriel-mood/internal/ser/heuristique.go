@@ -39,12 +39,26 @@ import (
 // partage d'affinité entre six étiquettes, normalisé pour sommer à un parce
 // que l'affichage le demande. On ne prétend pas mesurer une vraisemblance.
 type Heuristique struct {
-	etalon *Etalon
+	etalon  *Etalon
+	partage *EtalonPartage
 }
 
 // NouvelleHeuristique lie le classifieur à l'étalon du locuteur. Sans étalon,
 // il refuse de répondre — c'est le point le plus important de ce fichier.
 func NouvelleHeuristique(e *Etalon) *Heuristique { return &Heuristique{etalon: e} }
+
+// AvecEtalonPartage branche l'ordinaire du groupe comme référence de SECOURS.
+// Il ne sert QUE tant que l'ordinaire personnel n'est pas utilisable, et la
+// lecture le dit (`Reference: "groupe"`).
+func (h *Heuristique) AvecEtalonPartage(p *EtalonPartage) *Heuristique {
+	h.partage = p
+	return h
+}
+
+// PlafondGroupe : comparé à d'AUTRES voix, on se croit encore moins que sur un
+// étalon personnel provisoire. Ce qu'on mesure alors est en partie une
+// différence entre personnes, pas seulement un écart à soi-même.
+const PlafondGroupe = 0.30
 
 func (h *Heuristique) Nom() string { return "heuristique-prosodique-v1" }
 
@@ -52,32 +66,59 @@ func (h *Heuristique) Nom() string { return "heuristique-prosodique-v1" }
 // qu'une moyenne veuille dire quoi que ce soit.
 const MinTramesVoisees = 25
 
+// SeuilBruit : au-delà de cette platitude spectrale moyenne, ce qu'on entend
+// est un bruit large et non une voix. Une voyelle est harmonique — son spectre
+// a des pics — et se situe bien en-dessous de 0,4.
+const SeuilBruit = 0.55
+
+// PartVoiseeMin : en-dessous, la fenêtre est surtout du silence ou du bruit.
+const PartVoiseeMin = 0.12
+
 // Evalue rend la lecture des traits courants.
 func (h *Heuristique) Evalue(t Traits) Lecture {
-	etalonne := h.etalon != nil && h.etalon.Pret()
-	if t.TramesVoisees < MinTramesVoisees {
-		return LectureIndeterminee(
-			fmt.Sprintf("pas assez de voix sur la fenêtre (%d trames voisées, il en faut %d)",
-				t.TramesVoisees, MinTramesVoisees), etalonne)
+	complet := h.etalon != nil && h.etalon.Pret()
+	utilisable := h.etalon != nil && h.etalon.Utilisable()
+
+	// ── D'ABORD : PEUT-ON MESURER ? ──────────────────────────────────────
+	// Ces trois refus portent sur le SIGNAL, jamais sur la personne. Les
+	// confondre avec « humeur neutre » était le défaut de la version
+	// précédente : elle rangeait sur la même ligne « je n'entends rien
+	// d'exploitable » et « cette voix est dans son ordinaire ».
+	if t.TramesVoisees < MinTramesVoisees || t.PartVoisee < PartVoiseeMin {
+		return LectureIndeterminee(MotifPeuDeVoix,
+			fmt.Sprintf("pas assez de voix sur la fenêtre (%d trames voisées, %.0f %% de la durée)",
+				t.TramesVoisees, t.PartVoisee*100), complet)
 	}
-	if !etalonne {
+	if t.Platitude > SeuilBruit {
+		return LectureIndeterminee(MotifBruit,
+			fmt.Sprintf("spectre plat (%.2f) : c'est du bruit, pas une voix — "+
+				"approchez le micro ou coupez ce qui souffle", t.Platitude), complet)
+	}
+	reference := "vous"
+	var e map[string]float64
+	switch {
+	case utilisable:
+		e = h.etalon.Ecarts(t)
+	case h.partage.Utilisable():
+		// SECOURS : l'ordinaire du groupe, le temps que le vôtre se constitue.
+		// Même pièce, mêmes micros — ce qui retire le plus gros des
+		// confusions — mais ce sont d'autres voix, et la lecture le dit.
+		e = h.partage.Ecarts(t)
+		reference = "groupe"
+	default:
 		p := 0.0
 		if h.etalon != nil {
 			p = h.etalon.Progression()
 		}
-		return LectureIndeterminee(
-			fmt.Sprintf("étalonnage en cours (%.0f %%) : sans votre ordinaire, "+
-				"un écart ne veut rien dire", p*100), false)
+		return LectureIndeterminee(MotifEtalonnage,
+			fmt.Sprintf("étalonnage %.0f %% : sans votre ordinaire — ni assez de "+
+				"voix dans le groupe pour servir de repère — un écart ne veut rien dire",
+				p*100), false)
 	}
-
-	e := h.etalon.Ecarts(t)
 	var pourquoi []string
 	dire := func(f string, a ...any) { pourquoi = append(pourquoi, fmt.Sprintf(f, a...)) }
 
 	// ── AXE 1 : ACTIVATION ────────────────────────────────────────────────
-	// Moyenne pondérée des écarts qui montent ensemble. Les poids disent
-	// simplement lesquels sont les plus robustes : l'énergie et la hauteur
-	// avant le débit, qui dépend beaucoup de ce qu'on est en train de dire.
 	activation := 0.35*e["f0"] + 0.35*e["energie"] + 0.20*e["debit"] + 0.10*e["centre"]
 	activation = math.Max(-3, math.Min(3, activation)) / 3 // -1..+1
 	switch {
@@ -90,18 +131,12 @@ func (h *Heuristique) Evalue(t Traits) Lecture {
 	}
 
 	// ── AXE 2 : TENUE ─────────────────────────────────────────────────────
-	// Irrégularité, en interquartiles pour le jitter et en valeur brute
-	// bornée pour le shimmer (dont on n'a pas d'étalon — il dépend moins de la
-	// personne que du placement du micro, qu'on suppose constant).
 	irregularite := 0.6*e["jitter"] + 0.4*math.Max(-3, math.Min(3, (t.Shimmer-0.5)/0.5))
 	irregularite = math.Max(-3, math.Min(3, irregularite)) / 3
 	if irregularite > 0.30 {
 		dire("voix plus irrégulière que d'habitude (jitter %.2f %%, shimmer %.2f dB)",
 			t.Jitter, t.Shimmer)
 	}
-	// Étendue mélodique : une voix monocorde et une voix ample ne se lisent
-	// pas pareil à activation égale. Deux demi-tons est une parole plate,
-	// six une parole animée.
 	melodie := math.Max(-1, math.Min(1, (t.F0Etendue-4)/3))
 	if melodie < -0.4 {
 		dire("intonation plate (%.1f demi-tons)", t.F0Etendue)
@@ -110,55 +145,117 @@ func (h *Heuristique) Evalue(t Traits) Lecture {
 	}
 
 	// ── AFFINITÉS ─────────────────────────────────────────────────────────
-	// Chaque étiquette est une position dans le plan (activation, tenue). On
-	// mesure une proximité, pas une vraisemblance.
+	//
+	// LE CALME EST CENTRÉ SUR L'ORIGINE, et c'est le cœur de la révision.
+	// L'étalon apprend l'ordinaire de CETTE voix : une voix à son ordinaire
+	// est donc, par construction, au repos de cette personne. Le calme n'est
+	// pas une étiquette parmi six, c'est le point de départ dont les autres
+	// sont des écarts — et il doit gagner nettement quand rien ne dévie.
+	//
+	// LES LARGEURS ONT ÉTÉ RESSERRÉES. Trop généreuses, six gaussiennes
+	// larges rendaient partout des valeurs voisines : le premier indice
+	// dépassait à peine le second, et tout finissait « indéterminé » faute
+	// d'écart. Ce n'était pas de la prudence, c'était une distribution qui ne
+	// distinguait rien.
 	score := map[string]float64{
-		// calme : peu activé, régulier, mélodie moyenne
-		Calme: aff(activation, -0.25, 0.55) * aff(irregularite, -0.4, 0.8),
-		// joie : activé, ample, plutôt régulier
-		Joie: aff(activation, 0.55, 0.55) * aff(irregularite, -0.2, 0.9) * aff(melodie, 0.6, 0.8),
-		// tension : activé ET irrégulier ET brillant, mélodie resserrée
-		Tension: aff(activation, 0.45, 0.6) * aff(irregularite, 0.6, 0.8) * aff(melodie, -0.2, 1.0),
-		// colère : très activé, très fort, brillant et dur
-		Colere: aff(activation, 0.85, 0.5) * aff(e["energie"]/3, 0.7, 0.6) * aff(irregularite, 0.5, 1.0),
-		// fatigue : peu activé, irrégulier, mélodie plate, spectre qui s'affaisse
-		Fatigue: aff(activation, -0.55, 0.5) * aff(irregularite, 0.4, 0.9) * aff(melodie, -0.6, 0.9),
-		// concentration : peu activé, très régulier, débit modéré, plat
-		Concentre: aff(activation, -0.15, 0.5) * aff(irregularite, -0.5, 0.7) *
-			aff(melodie, -0.4, 0.9) * aff(e["debit"]/3, -0.1, 0.8),
+		Calme: aff(activation, -0.05, 0.36) * aff(irregularite, -0.35, 0.62) *
+			aff(melodie, 0.0, 1.1),
+		Joie: aff(activation, 0.60, 0.40) * aff(irregularite, -0.25, 0.70) *
+			aff(melodie, 0.65, 0.62),
+		Tension: aff(activation, 0.42, 0.40) * aff(irregularite, 0.62, 0.55) *
+			aff(melodie, -0.25, 0.75),
+		Colere: aff(activation, 0.92, 0.36) * aff(e["energie"]/3, 0.75, 0.45) *
+			aff(irregularite, 0.55, 0.75),
+		Fatigue: aff(activation, -0.62, 0.36) * aff(irregularite, 0.45, 0.65) *
+			aff(melodie, -0.62, 0.65),
+		Concentre: aff(activation, -0.22, 0.30) * aff(irregularite, -0.55, 0.48) *
+			aff(melodie, -0.45, 0.60) * aff(e["debit"]/3, -0.05, 0.62),
 	}
 	if t.Pente < -12 && score[Fatigue] > 0 {
-		// Un spectre qui s'affaisse fortement dans les aigus accompagne la
-		// voix relâchée. Indice faible : on l'ajoute, on ne décide pas avec.
 		score[Fatigue] *= 1.2
 		dire("spectre affaissé dans les aigus (%.1f dB/kHz)", t.Pente)
 	}
 
-	indices := normalise(score)
+	// CONTRASTE. Élever à une puissance > 1 avant de normaliser écarte les
+	// valeurs proches sans changer leur ORDRE : c'est un réglage d'affichage
+	// honnête (on ne renverse rien), et il rend lisible un classement qui
+	// existait déjà mais se lisait comme une égalité.
+	indices := normaliseContraste(score, 1.35)
 
-	// ── L'ÉTAT RETENU, ET SA CONFIANCE ────────────────────────────────────
 	tete, second := deuxPremiers(indices)
-	// La confiance tient à l'ÉCART entre les deux premiers, pas à la valeur du
-	// premier : six étiquettes à 0,17 chacune font un premier à 0,18 qui ne
-	// veut rien dire. Un écart franc, lui, dit qu'une lecture se détache.
-	conf := (indices[tete] - indices[second]) * 2
-	// Et elle est rabotée par la qualité du signal : une fenêtre à moitié
-	// muette ne peut pas fonder une lecture assurée.
-	conf *= math.Min(1, t.PartVoisee/0.5)
-	conf = math.Max(0, math.Min(PlafondConfiance, conf))
 
-	if conf < 0.15 {
-		l := LectureIndeterminee("aucune lecture ne se détache nettement des autres", true)
-		l.Indices, l.Activation = indices, activation
-		l.Suffisant = true
-		l.Pourquoi = append(l.Pourquoi, pourquoi...)
-		return l
+	// ── LA CONFIANCE ──────────────────────────────────────────────────────
+	//
+	// Elle combine ce qui se détache (l'écart au suivant) et la valeur du
+	// premier : une lecture à 0,55 qui dépasse la suivante de 0,2 est plus
+	// solide qu'une lecture à 0,22 avec le même écart.
+	//
+	// LE FACTEUR EST CALÉ POUR QUE LE PLAFOND RESTE RARE. Une première version
+	// saturait à 0,72 sur TOUS les cas nets — le chiffre ne distinguait alors
+	// plus rien, et un nombre qui vaut toujours pareil ferait mieux de ne pas
+	// s'afficher. On veut une échelle qui serve : autour de 0,25 quand deux
+	// lectures se disputent, autour de 0,5 sur un cas franc, le plafond
+	// seulement pour l'évidence.
+	conf := 0.62 * (0.55*(indices[tete]-indices[second])*2 + 0.45*indices[tete])
+	conf *= math.Min(1, t.PartVoisee/0.45)
+	plafond := PlafondConfiance
+	if reference == "groupe" {
+		plafond = PlafondGroupe
+		dire("comparé à l'ordinaire du GROUPE, pas encore au vôtre : lecture de secours")
+	} else if !complet {
+		// ÉTALON PROVISOIRE : on répond, mais on ne se croit pas.
+		plafond = PlafondProvisoire
+		dire("étalon provisoire (%.0f %%) : lecture indicative", h.etalon.Progression()*100)
 	}
+	conf = math.Max(0, math.Min(plafond, conf))
+
+	// ON NE RETOMBE PLUS DANS « INDÉTERMINÉ » FAUTE D'ÉCART. Le signal est
+	// mesurable : il y a donc une réponse, et c'est la confiance qui dit
+	// combien elle se détache. Se taire ici revenait à traiter une voix
+	// ordinaire comme un défaut de mesure.
 	return Lecture{
 		Etat: tete, Confiance: arrondi(conf, 3), Indices: indices,
-		Pourquoi: pourquoi, Reserve: Reserve, Etalonne: true,
-		Suffisant: true, Activation: arrondi(activation, 3),
+		Pourquoi: pourquoi, Reserve: Reserve, Etalonne: complet,
+		Reference: reference, Suffisant: true, Activation: arrondi(activation, 3),
 	}
+}
+
+// FondIncompressible : la part d'incertitude qu'on mélange à toute
+// distribution.
+//
+// ELLE REND 100 % STRUCTURELLEMENT IMPOSSIBLE, et c'est le point. Sans elle,
+// un cas franc sortait à 1,00 — les cinq autres étiquettes exactement à zéro —
+// ce qui affirme qu'aucune autre lecture n'est concevable. Aucun classifieur
+// prosodique ne peut dire cela, et sûrement pas six gaussiennes. Le plafond de
+// confiance protégeait le chiffre de confiance ; il ne protégeait pas les
+// indices eux-mêmes, qui sont pourtant ce qu'on lit en premier.
+//
+// Six pour cent répartis uniformément : assez pour qu'aucune barre ne se vide
+// tout à fait, trop peu pour brouiller un classement net.
+const FondIncompressible = 0.06
+
+// normaliseContraste : comme normalise, mais en accentuant les écarts, puis en
+// mélangeant le fond incompressible.
+//
+// L'ORDRE EST STRICTEMENT PRÉSERVÉ — élever des valeurs positives à une même
+// puissance est monotone, et ajouter une constante à toutes ne renverse rien.
+// On ne fabrique aucune préférence : on rend visible celle qui existait, et on
+// s'interdit de la présenter comme exclusive.
+func normaliseContraste(m map[string]float64, puissance float64) map[string]float64 {
+	accentue := make(map[string]float64, len(m))
+	for k, v := range m {
+		if v < 0 {
+			v = 0
+		}
+		accentue[k] = math.Pow(v, puissance)
+	}
+	net := normalise(accentue)
+	part := FondIncompressible / float64(len(net))
+	out := make(map[string]float64, len(net))
+	for k, v := range net {
+		out[k] = arrondi((1-FondIncompressible)*v+part, 3)
+	}
+	return out
 }
 
 // aff : affinité gaussienne d'une valeur à une position attendue. Largeur

@@ -85,7 +85,7 @@ type reponseExterne struct {
 // Evalue interroge le service, et retombe sur le secours à la moindre anicroche.
 func (e *Externe) Evalue(t Traits) Lecture {
 	if t.TramesVoisees < MinTramesVoisees {
-		return LectureIndeterminee(
+		return LectureIndeterminee(MotifPeuDeVoix,
 			fmt.Sprintf("pas assez de voix sur la fenêtre (%d trames voisées)",
 				t.TramesVoisees), false)
 	}
@@ -133,11 +133,6 @@ func (e *Externe) Evalue(t Traits) Lecture {
 	if conf > PlafondConfiance {
 		conf = PlafondConfiance
 	}
-	if conf < 0.15 {
-		l := LectureIndeterminee("aucune lecture ne se détache nettement des autres", true)
-		l.Indices, l.Suffisant = indices, true
-		return l
-	}
 	pourquoi := []string{"modèle externe : " + orDefault(r.Modele, "sans nom")}
 	if r.Corpus != "" {
 		pourquoi = append(pourquoi, "entraîné sur : "+r.Corpus)
@@ -158,7 +153,8 @@ func (e *Externe) Evalue(t Traits) Lecture {
 func (e *Externe) replie(t Traits, err error) Lecture {
 	e.derniere = err
 	if e.secours == nil {
-		return LectureIndeterminee("service d'inférence injoignable : "+err.Error(), false)
+		return LectureIndeterminee(MotifPeuDeVoix,
+			"service d'inférence injoignable : "+err.Error(), false)
 	}
 	l := e.secours.Evalue(t)
 	l.Pourquoi = append([]string{"repli sur l'heuristique (" + err.Error() + ")"}, l.Pourquoi...)

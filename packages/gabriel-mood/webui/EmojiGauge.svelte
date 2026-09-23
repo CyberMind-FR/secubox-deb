@@ -45,7 +45,13 @@
         {/if}
       </div>
     {:else}
-      <div class="dim petit mono">indice dominant · {(confiance * 100).toFixed(0)} % d'écart au suivant</div>
+      <!-- LE POURCENTAGE DE L'INDICE DE TÊTE, en grand et en premier : c'est
+           le chiffre qu'on cherche. La confiance le suit, plus petite — elle
+           dit à quel point cette lecture se détache des cinq autres, ce qui
+           est une question différente et secondaire. -->
+      <div class="part mono">{Math.round((indices[tete] ?? 0) * 100)}<span class="pc">%</span></div>
+      <div class="dim petit mono">confiance {(confiance * 100).toFixed(0)} %
+        {#if !etalonne}· étalon provisoire{/if}</div>
     {/if}
   </div>
 
@@ -71,6 +77,8 @@
   .jauge { display: grid; gap: 12px; }
   .visage { font-size: 4.2rem; line-height: 1; transition: opacity .35s ease; }
   .nom { font-size: 1.15rem; font-weight: 600; letter-spacing: .01em; }
+  .part { font-size: 1.85rem; font-weight: 650; color: var(--cyan-b); line-height: 1.05; }
+  .pc { font-size: .85rem; margin-left: 2px; opacity: .65; }
   .petit { font-size: .74rem; }
   .axe { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
   .piste { position: relative; height: 4px; border-radius: 999px;

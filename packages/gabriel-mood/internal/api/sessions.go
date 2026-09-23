@@ -13,6 +13,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/gabriel-mood/internal/audio"
 	"github.com/CyberMind-FR/secubox-deb/gabriel-mood/internal/moteur"
+	"github.com/CyberMind-FR/secubox-deb/gabriel-mood/internal/ser"
 	"github.com/CyberMind-FR/secubox-deb/gabriel-mood/internal/store"
 )
 
@@ -47,13 +48,15 @@ func (s *Session) Activite() time.Time {
 
 // Sessions : le registre.
 type Sessions struct {
-	mu   sync.RWMutex
-	tout map[string]*Session
-	db   *store.Store
+	mu      sync.RWMutex
+	tout    map[string]*Session
+	db      *store.Store
+	Partage *ser.EtalonPartage
 }
 
 func NouveauRegistre(db *store.Store) *Sessions {
-	return &Sessions{tout: map[string]*Session{}, db: db}
+	return &Sessions{tout: map[string]*Session{}, db: db,
+		Partage: ser.NouvelEtalonPartage()}
 }
 
 func identifiant() string {
@@ -69,9 +72,11 @@ func identifiant() string {
 // Ouvre crée une session et sa chaîne.
 func (r *Sessions) Ouvre(origine string) *Session {
 	src := audio.NouveauNavigateur(origine, audio.Echantillonnage*2)
+	id := identifiant()
 	s := &Session{
-		ID: identifiant(), Debut: time.Now(), Source: src,
-		Analyseur: moteur.Nouveau(src), derniere: time.Now(),
+		ID: id, Debut: time.Now(), Source: src,
+		Analyseur: moteur.NouveauAvecPartage(src, r.Partage, id),
+		derniere:  time.Now(),
 	}
 	r.mu.Lock()
 	r.tout[s.ID] = s
@@ -86,6 +91,10 @@ func (r *Sessions) Ferme(s *Session) {
 		return
 	}
 	s.Source.Ferme()
+	// UN DÉPART EFFACE LA CONTRIBUTION. Rien ne subsiste d'une personne qui a
+	// fermé son onglet — et surtout pas son ordinaire vocal, qui l'identifie
+	// mieux qu'on ne le croit.
+	r.Partage.Retire(s.ID)
 	r.mu.Lock()
 	delete(r.tout, s.ID)
 	r.mu.Unlock()

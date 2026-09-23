@@ -10,6 +10,8 @@
 <script lang="ts">
   import FFTCanvas from './FFTCanvas.svelte'
   import EmojiGauge from './EmojiGauge.svelte'
+  import TendancesChart from './TendancesChart.svelte'
+  import Ensemble from './Ensemble.svelte'
   import { Micro, type Image, type Etat } from './src/lib/micro'
   import { Lien, type Role } from './src/lib/lien'
 
@@ -124,6 +126,18 @@
       c'est votre droit le plus strict. Le bouton reste là si vous changez d'avis.</div>
   {:else if etat === 'erreur'}
     <div class="avis erreur">⚠ {motif}</div>
+  {:else if img?.reference === 'groupe'}
+    <div class="avis">👥 Lecture de SECOURS : vous êtes comparé à l'ordinaire du
+      GROUPE, pas encore au vôtre — d'autres voix, dans la même pièce et sur les
+      mêmes micros. C'est indicatif, et la confiance est bridée en conséquence.
+      Dès que votre propre ordinaire sera constitué, il prendra le relais.</div>
+  {:else if img?.motif === 'bruit'}
+    <div class="avis erreur">🔇 Ce qui arrive est du bruit, pas une voix —
+      approchez le micro, ou coupez ce qui souffle à côté. Rien n'est mesurable
+      en l'état, et le module préfère le dire que de rendre un chiffre.</div>
+  {:else if img?.motif === 'voix-insuffisante' && etat === 'ecoute'}
+    <div class="avis">🤫 Trop peu de voix sur la dernière fenêtre — parlez, ou
+      rapprochez-vous du micro.</div>
   {:else if img && !img.source_reelle}
     <div class="avis erreur">⚠ VOIX FABRIQUÉE — démonstration. Rien de ce qui
       s'affiche ne vient de quelqu'un.</div>
@@ -166,6 +180,16 @@
           <div class="dim minuscule">{c.d}</div>
         </div>
       {/each}
+    </section>
+
+    <section class="verre bloc ensemble">
+      <h2>Ensemble · anonymisé</h2>
+      <Ensemble />
+    </section>
+
+    <section class="verre bloc tendances">
+      <h2>Tendances · 90 s</h2>
+      <TendancesChart image={img} />
     </section>
 
     <section class="verre bloc flux">
@@ -225,15 +249,17 @@
 
   .grille { display: grid; gap: 14px;
     grid-template-columns: minmax(280px, 340px) 1fr;
-    grid-template-areas: "humeur spectre" "carrelettes carrelettes" "flux flux"; }
+    grid-template-areas: "humeur spectre" "carrelettes carrelettes" "tendances ensemble" "flux flux"; }
   .humeur { grid-area: humeur; }
   .spectre { grid-area: spectre; }
   .carrelettes { grid-area: carrelettes; display: grid; gap: 10px;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .tendances { grid-area: tendances; }
+  .ensemble { grid-area: ensemble; }
   .flux { grid-area: flux; }
   @media (max-width: 860px) {
     .grille { grid-template-columns: 1fr;
-      grid-template-areas: "humeur" "spectre" "carrelettes" "flux"; }
+      grid-template-areas: "humeur" "spectre" "carrelettes" "tendances" "ensemble" "flux"; }
     .bandeau { grid-template-columns: 1fr; justify-items: start; }
   }
 

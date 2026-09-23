@@ -60,13 +60,42 @@ type Traits struct {
 	Shimmer       float64 // dB
 	Centre        float64 // centre de gravité spectral, Hz
 	Pente         float64 // pente spectrale, dB/kHz
+	Platitude     float64 // platitude spectrale 0..1 — 1 = bruit large, 0 = son harmonique
 	PartVoisee    float64 // proportion de trames voisées, 0..1
 	TramesVoisees int     // combien de trames ont réellement porté de la voix
 }
 
+// L'INDÉTERMINÉ N'EST PAS UNE HUMEUR, C'EST UN DÉFAUT DE MESURE.
+//
+// Il l'était devenu par accident : quand aucune étiquette ne se détachait
+// nettement, on rendait « indéterminé » — ce qui rangeait sur la même ligne
+// « je n'entends rien d'exploitable » et « cette voix est simplement dans son
+// ordinaire ». Les deux n'ont rien à voir, et la seconde a un nom : le calme.
+//
+// Désormais, `indetermine` signifie UNIQUEMENT qu'on ne peut pas mesurer, et
+// le motif dit laquelle des trois causes :
+//
+//	MotifBruit      — le signal est là mais c'est du bruit, pas de la voix ;
+//	MotifPeuDeVoix  — trop peu de trames voisées sur la fenêtre ;
+//	MotifEtalonnage — on ne connaît pas encore l'ordinaire de cette personne.
+//
+// Ce sont trois énoncés sur le SIGNAL. Aucun ne dit quoi que ce soit sur qui
+// parle, et c'est exactement ce qu'on veut : ne rien affirmer faute de mesure
+// n'est pas la même chose que constater un état neutre.
+const (
+	MotifBruit      = "bruit"
+	MotifPeuDeVoix  = "voix-insuffisante"
+	MotifEtalonnage = "etalonnage"
+)
+
 // Les états nommés. Ce sont des ÉTIQUETTES D'INDICE : « tension » désigne un
 // faisceau acoustique (hauteur haute, irrégularité, spectre brillant), pas un
 // état intérieur constaté.
+//
+// LE CALME EST LE REPOS, et ce n'est pas une convention arbitraire : l'étalon
+// apprend l'ordinaire de CETTE voix, donc une voix à son ordinaire est, par
+// construction, au repos de cette personne. Quand rien ne dévie, la réponse
+// juste est « calme » — pas « je ne sais pas ».
 const (
 	Indetermine = "indetermine"
 	Calme       = "calm"
@@ -97,26 +126,34 @@ const PlafondConfiance = 0.72
 
 // Lecture : le résultat, avec ce qu'il faut pour ne pas le surinterpréter.
 type Lecture struct {
-	Etat       string             `json:"state"`
-	Confiance  float64            `json:"confidence"`
-	Indices    map[string]float64 `json:"indices"`
-	Pourquoi   []string           `json:"pourquoi"`
-	Reserve    string             `json:"reserve"`
-	Etalonne   bool               `json:"etalonne"`
-	Suffisant  bool               `json:"signal_suffisant"`
-	Activation float64            `json:"activation"` // -1..+1, le seul axe solide
+	Etat string `json:"state"`
+	// Motif : POURQUOI c'est indéterminé, quand ça l'est. Vide sinon. Il
+	// distingue les trois causes possibles — bruit, pas assez de voix, étalon
+	// incomplet — qui appellent trois gestes différents de la part de qui lit.
+	Motif     string             `json:"motif,omitempty"`
+	Confiance float64            `json:"confidence"`
+	Indices   map[string]float64 `json:"indices"`
+	Pourquoi  []string           `json:"pourquoi"`
+	Reserve   string             `json:"reserve"`
+	Etalonne  bool               `json:"etalonne"`
+	// Reference : sur QUOI l'écart a été mesuré — « vous » ou « le groupe ».
+	// Ça ne peut pas être implicite : lire « tension » sans savoir qu'on est
+	// comparé à d'AUTRES voix, ce serait croire à une mesure personnelle.
+	Reference  string  `json:"reference,omitempty"`
+	Suffisant  bool    `json:"signal_suffisant"`
+	Activation float64 `json:"activation"` // -1..+1, le seul axe solide
 }
 
 // LectureIndeterminee : la réponse quand on ne sait pas. Elle est NORMALE, et
 // c'est pour cela qu'elle est construite ici plutôt qu'improvisée sur place :
 // il ne doit exister qu'une seule façon de dire « je ne sais pas ».
-func LectureIndeterminee(motif string, etalonne bool) Lecture {
+func LectureIndeterminee(code, motif string, etalonne bool) Lecture {
 	ind := make(map[string]float64, len(Etats))
 	for _, e := range Etats {
 		ind[e] = 0
 	}
 	return Lecture{
-		Etat: Indetermine, Confiance: 0, Indices: ind,
+		Etat: Indetermine, Motif: code, Confiance: 0, Indices: ind,
 		Pourquoi: []string{motif}, Reserve: Reserve, Etalonne: etalonne,
 	}
 }
@@ -157,11 +194,29 @@ type Etalon struct {
 	capacite int
 }
 
-// MinimumEtalon : le nombre d'observations avant de répondre autre chose
-// qu'« indéterminé ». Une observation par seconde : trois minutes de voix.
-// C'est long, et c'est voulu — un étalon bâclé produit des écarts imaginaires,
-// donc des humeurs imaginaires.
-const MinimumEtalon = 180
+// DEUX SEUILS, ET C'EST LA CORRECTION DU DÉFAUT LE PLUS VISIBLE.
+//
+// Il n'y en avait qu'un — cent quatre-vingts observations, soit trois bonnes
+// minutes de PAROLE effective, et bien davantage en temps réel. Pendant tout
+// ce temps le module ne disait rien du tout, et l'on ne pouvait pas savoir
+// s'il travaillait ou s'il était en panne. Un module muet trois minutes est un
+// module qu'on referme.
+//
+// L'ordinaire d'une voix ne se découvre pourtant pas d'un coup : une
+// quarantaine d'observations donnent déjà une médiane et un interquartile
+// utilisables, grossiers mais réels. On répond donc à partir de là, EN LE
+// DISANT (`Provisoire`), et la confiance est bridée tant que l'étalon n'est
+// pas complet. Annoncer « provisoire » est honnête ; se taire trois minutes
+// était seulement inutilisable.
+const (
+	MinimumEtalonProvisoire = 45
+	MinimumEtalon           = 180
+)
+
+// PlafondProvisoire : tant que l'étalon n'est pas complet, la confiance ne
+// dépasse pas ceci. Un ordinaire estimé sur quarante mesures est un ordinaire
+// approximatif, et l'écart qu'on y lit l'est tout autant.
+const PlafondProvisoire = 0.40
 
 // NouvelEtalon garde au plus `capacite` observations glissantes.
 func NouvelEtalon(capacite int) *Etalon {
@@ -195,8 +250,11 @@ func (e *Etalon) Observe(t Traits) {
 	}
 }
 
-// Pret : l'étalon a-t-il vu assez de voix pour servir de référence ?
+// Pret : l'étalon est-il COMPLET ?
 func (e *Etalon) Pret() bool { return len(e.f0) >= e.minimum }
+
+// Utilisable : a-t-on de quoi répondre, même grossièrement ?
+func (e *Etalon) Utilisable() bool { return len(e.f0) >= MinimumEtalonProvisoire }
 
 // Progression : 0..1, de quoi afficher une barre honnête pendant l'étalonnage
 // plutôt que de laisser croire à une panne.

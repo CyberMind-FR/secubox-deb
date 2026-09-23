@@ -38,6 +38,8 @@ type Humeur struct {
 	Debit     float64 `json:"speech_rate"`
 
 	Indices    map[string]float64 `json:"indices"`
+	Tendances  map[string]float64 `json:"trends"`
+	Motif      string             `json:"motif,omitempty"`
 	Activation float64            `json:"activation"`
 	Jitter     float64            `json:"jitter"`
 	Shimmer    float64            `json:"shimmer"`
@@ -66,6 +68,7 @@ func (s *Serveur) Routes() *http.ServeMux {
 	m := http.NewServeMux()
 	m.HandleFunc("/api/mood", s.humeur)
 	m.HandleFunc("/api/mood/traits", s.traits)
+	m.HandleFunc("/api/mood/commun", s.commun)
 	m.HandleFunc("/api/mood/historique", s.historique)
 	m.HandleFunc("/api/mood/oubli", s.oubli)
 	m.HandleFunc("/api/sante", s.sante)
@@ -85,10 +88,11 @@ func (s *Serveur) humeur(w http.ResponseWriter, r *http.Request) {
 		// à une mesure.
 		ecris(w, http.StatusOK, Humeur{
 			Etat: ser.Indetermine, Emoji: ser.Emoji[ser.Indetermine],
-			Indices:  map[string]float64{},
-			Pourquoi: []string{"aucune session ouverte : personne n'est en train d'être écouté"},
-			Reserve:  ser.Reserve,
-			Source:   audio.Description{Genre: "absente", Detail: "aucun navigateur connecté"},
+			Indices: map[string]float64{},
+			Pourquoi: []string{"aucune session nommée : précisez ?session=<id>, " +
+				"celui que la WebSocket vous a remis à l'ouverture"},
+			Reserve: ser.Reserve,
+			Source:  audio.Description{Genre: "absente", Detail: "aucun navigateur connecté"},
 		})
 		return
 	}
@@ -98,8 +102,9 @@ func (s *Serveur) humeur(w http.ResponseWriter, r *http.Request) {
 	ecris(w, http.StatusOK, Humeur{
 		Etat: lec.Etat, Confiance: lec.Confiance,
 		Pitch: img.Pitch, Energie: img.Energie, Debit: t.Debit,
-		Indices: lec.Indices, Activation: lec.Activation,
-		Jitter: t.Jitter, Shimmer: t.Shimmer, PartVoisee: t.PartVoisee,
+		Indices: lec.Indices, Tendances: img.Tendances, Motif: lec.Motif,
+		Activation: lec.Activation,
+		Jitter:     t.Jitter, Shimmer: t.Shimmer, PartVoisee: t.PartVoisee,
 		Session: sess.ID, Etalonnage: img.Etalonnage, Suffisant: lec.Suffisant,
 		Pourquoi: lec.Pourquoi, Reserve: ser.Reserve,
 		Source: sess.Analyseur.Source(), Emoji: ser.Emoji[lec.Etat],
@@ -189,11 +194,27 @@ func (s *Serveur) sante(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// sessionDemandee : la session NOMMÉE, et elle seule.
+//
+// ELLE RENDAIT « LA PLUS RÉCEMMENT ACTIVE » QUAND AUCUNE N'ÉTAIT NOMMÉE, et
+// c'était une fuite. Sur un réseau local avec une seule personne, la commodité
+// ne coûtait rien. Exposé au WAN, `GET /api/mood` livrait à n'importe quel
+// passant la lecture de qui était en train d'utiliser la page — hauteur,
+// débit, état, en temps réel. C'est précisément le genre de donnée dont tout
+// ce module s'applique à dire qu'elle ne doit servir à évaluer personne.
+//
+// L'identifiant de session n'est connu que de celui à qui la WebSocket l'a
+// remis. Sans lui, on répond « aucune session », ce qui est vrai du point de
+// vue de l'appelant : il n'en a aucune.
+//
+// Le contrat annoncé n'en souffre pas — le cockpit et la carte se nourrissent
+// du flux, pas de cette route — et `/api/mood?session=…` reste exactement ce
+// qu'il a toujours été pour qui la possède.
 func (s *Serveur) sessionDemandee(r *http.Request) (*Session, bool) {
 	if id := r.URL.Query().Get("session"); id != "" {
 		return s.Sessions.Par(id)
 	}
-	return s.Sessions.Courante()
+	return nil, false
 }
 
 func atoiBorne(s string, min, max int) int {
