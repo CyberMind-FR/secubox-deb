@@ -13,6 +13,7 @@ import os
 import json
 import time
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Optional
 
@@ -51,11 +52,17 @@ def board_tier() -> str:
     return "pro"
 
 
-def load_catalog() -> list:
+def load_catalog_raw() -> dict:
+    """Le catalogue ENTIER : modules et groupes. `load_catalog` n'en rend que
+    la liste des modules, et les groupes seraient perdus en route."""
     try:
-        return json.loads(CATALOG_FILE.read_text(encoding="utf-8")).get("modules", [])
+        return json.loads(CATALOG_FILE.read_text(encoding="utf-8"))
     except Exception:
-        return []
+        return {}
+
+
+def load_catalog() -> list:
+    return load_catalog_raw().get("modules", [])
 
 
 def _dpkg_state() -> dict:
@@ -96,6 +103,9 @@ def compute_state(force: bool = False) -> dict:
     dpkg = _dpkg_state()
     installed_names = [m["name"] for m in catalog if dpkg.get(m["name"], {}).get("installed")]
     active = _svc_active(installed_names)
+    # Une seule interrogation d'APT par calcul d'état — elle est mise en cache
+    # avec lui : `apt-cache` coûte, et l'appeler par module serait absurde.
+    dispo = _installables()
     brank = TIER_RANK.get(board_tier(), 2)
     result = {}
     for m in catalog:
@@ -105,8 +115,15 @@ def compute_state(force: bool = False) -> dict:
         running = bool(active.get(name))
         tier = m.get("tier", "lite")
         tier_locked = (tier != "all") and (TIER_RANK.get(tier, 1) > brank)
+        # « DISPONIBLE » VEUT DIRE INSTALLABLE, PAS « CONNU DU CATALOGUE ».
+        # L'état se calculait sans jamais demander à APT s'il pouvait fournir
+        # le paquet : une carte annonçait « available » avec un bouton grisé,
+        # ce qui ne veut rien dire pour celui qui la lit (constaté sur `isp`).
+        # 14 modules du catalogue ne sont pas publiés au dépôt ; ils le disent.
+        publie = (name in dispo) if dispo else True
         if not installed:
-            state = "tier-locked" if tier_locked else "available"
+            state = ("tier-locked" if tier_locked
+                     else "available" if publie else "unpublished")
         elif running:
             state = "running"
         else:
@@ -117,6 +134,7 @@ def compute_state(force: bool = False) -> dict:
             "running": running,
             "version": d.get("version"),
             "tier_locked": tier_locked,
+            "installable": publie,
             "state": state,
         }
     _state_cache["ts"] = now
@@ -149,6 +167,17 @@ async def catalog(category: Optional[str] = None, tier: Optional[str] = None,
                   state: Optional[str] = None, q: Optional[str] = None):
     st = compute_state()
     items = list(st.values())
+    # INSTALLABLE, MARQUÉ À LA LECTURE (#1323). 25 entrées du catalogue
+    # existent en source mais ne sont pas publiées au dépôt : sans ce
+    # marquage, l'interface offrirait un bouton « installer » voué à échouer.
+    # On ne les purge pas — elles reviendront une fois publiées, et un module
+    # absent du catalogue est un module qu'on ne sait plus nommer.
+    profils_par_module = {}
+    for pr in _profils():
+        for mod in pr["modules"]:
+            profils_par_module.setdefault(mod, []).append(pr["name"])
+    for m in items:
+        m["profils"] = profils_par_module.get(m["name"], [])
     if category:
         items = [m for m in items if m["category"] == category]
     if tier:
@@ -240,7 +269,7 @@ async def module(name: str):
 ACTIONS = {"start", "stop", "restart", "enable", "disable"}
 # Les verbes de PARC : ils touchent dpkg. `install` s'annule par `remove` ;
 # `remove` emporte un service en production, d'où la confirmation explicite.
-ACTIONS_PARC = {"install", "remove"}
+ACTIONS_PARC = {"install", "remove", "repair"}
 ACTIONS_CONFIRMEES = {"remove"}
 APPSTORECTL = "/usr/sbin/secubox-appstorectl"
 
@@ -270,6 +299,203 @@ def _appstorectl(args, input_text=None):
 def _config_path(name: str) -> Path:
     short = name[len("secubox-"):] if name.startswith("secubox-") else name
     return Path(f"/etc/secubox/{short}.toml")
+
+
+PROFILS_DIR = Path(os.environ.get("SECUBOX_PROFILES", "/etc/secubox/profiles"))
+
+
+def _installables() -> set:
+    """Les modules qu'APT peut RÉELLEMENT installer, maintenant (#1323).
+
+    CALCULÉ EN DIRECT, PAS FIGÉ AU CATALOGUE. Le catalogue est généré à la
+    construction, dans le monorepo, où l'état des dépôts de la board est
+    inconnu : 25 de ses entrées existent en source mais ne sont pas publiées.
+    Les purger serait pire — elles reviendront dès qu'elles seront publiées, et
+    un module absent du catalogue est un module qu'on ne sait plus nommer. On
+    marque donc chaque entrée `installable` à la lecture, pour que l'interface
+    grise le bouton plutôt que de proposer un geste voué à l'échec.
+    """
+    try:
+        r = subprocess.run(["apt-cache", "pkgnames", "secubox-"],
+                           capture_output=True, text=True, timeout=20)
+        return set(r.stdout.split())
+    except Exception:  # noqa: BLE001 — apt absent ou lent : on ne bloque pas
+        return set()
+
+
+def _profils() -> list:
+    """Les profils de secubox-profiles, vus du catalogue.
+
+    Un profil est une SÉLECTION de modules ; le dire ici permet de répondre
+    « ce module fait partie de Media Lab » au lieu de laisser deviner. On ne
+    lit que `name`, `label` et `on` : le reste appartient au moteur de profils.
+    """
+    out = []
+    if not PROFILS_DIR.is_dir():
+        return out
+    for f in sorted(PROFILS_DIR.glob("*.toml")):
+        try:
+            with open(f, "rb") as fh:
+                d = tomllib.load(fh)
+        except Exception:  # noqa: BLE001 — un profil illisible n'en cache pas les autres
+            continue
+        on = d.get("on") or []
+        if not isinstance(on, list):
+            continue
+        out.append({"name": d.get("name") or f.stem,
+                    "label": d.get("label") or f.stem,
+                    "modules": [f"secubox-{m}" if not str(m).startswith("secubox-")
+                                else str(m) for m in on],
+                    "count": len(on)})
+    return out
+
+
+def _route_nginx(court: str) -> dict:
+    """Quelque chose, dans la configuration nginx CHARGÉE, mène-t-il à ce module ?
+
+    Trois formes coexistent sur la board et sont toutes légitimes : une route
+    dans `secubox-routes.d/`, un vhost dédié dans `sites-enabled/`, ou un
+    relais posé par le Hall. On cherche la trace d'`/api/v1/<nom>/` dans ce
+    que nginx lit vraiment, plutôt que l'existence d'un chemin conventionnel.
+    """
+    motif = f"/api/v1/{court}/"
+    illisibles = 0
+    for rep in (Path("/etc/nginx/secubox-routes.d"), Path("/etc/nginx/sites-enabled")):
+        if not rep.is_dir():
+            continue
+        for f in rep.iterdir():
+            # nginx n'inclut que `*.conf` dans secubox-routes.d, mais
+            # sites-enabled est globé en entier : on lit les deux comme lui.
+            if rep.name == "secubox-routes.d" and f.suffix != ".conf":
+                continue
+            try:
+                if motif in f.read_text(errors="ignore"):
+                    return {"ok": True, "bloquant": True, "detail": str(f)}
+            except (OSError, IsADirectoryError):
+                # CE QU'ON N'A PAS PU LIRE N'EST PAS ABSENT. L'App Store
+                # tourne sans privilège et plusieurs vhosts sont en 0600 root
+                # (webui.conf le premier) : traduire « illisible » en
+                # « manquant » déclarait 55 modules cassés alors qu'ils
+                # répondent. On le COMPTE, et on conclut en conséquence.
+                illisibles += 1
+                continue
+    if illisibles:
+        return {"ok": None, "bloquant": False,
+                "detail": f"indéterminé — {illisibles} fichier(s) nginx illisibles "
+                          f"par ce service (droits root)"}
+    return {"ok": False, "bloquant": True, "detail": f"aucune route vers {motif}"}
+
+
+@app.get("/module/{name}/check", dependencies=[Depends(require_lecture)])
+async def module_check(name: str):
+    """Qu'est-ce qui MANQUE à ce module pour fonctionner ? (#1323)
+
+    UN MODULE N'EST PAS QU'UN PAQUET. Pour répondre sous son nom, il lui faut
+    une unité, une route nginx, une route sbxwaf, parfois une configuration —
+    et chacun de ces maillons a déjà manqué séparément sur cette board : la
+    route sbxwaf de podcaster (421), le vhost du Hall, l'unité de metablogizer
+    désactivée par le sleeper. Un état « installé » ne dit donc rien.
+
+    On REGARDE, on ne répare pas : la réparation est un geste, et elle porte
+    son propre verbe.
+    """
+    etat = compute_state()
+    name = _resolve(name, etat)
+    m = etat[name]
+    court = name[len("secubox-"):] if name.startswith("secubox-") else name
+
+    def fichier(chemin, quoi, pourquoi):
+        return {"maillon": quoi, "ok": Path(chemin).exists(),
+                "detail": chemin, "pourquoi": pourquoi}
+
+    maillons = [
+        {"maillon": "paquet", "ok": bool(m.get("installed")),
+         "detail": m.get("version") or "absent",
+         "pourquoi": "sans le paquet, rien d'autre n'existe"},
+    ]
+    if m.get("installed"):
+        unite = Path(f"/usr/lib/systemd/system/secubox-{court}.service")
+        if unite.exists() or Path(f"/lib/systemd/system/secubox-{court}.service").exists():
+            maillons.append({"maillon": "unité", "ok": True,
+                             "detail": f"secubox-{court}.service",
+                             "pourquoi": "le service qui répond"})
+        # LA ROUTE SE CHERCHE PARTOUT OÙ NGINX LA LIRAIT, pas à un seul
+        # chemin. Un module peut être servi par `secubox-routes.d/<nom>.conf`,
+        # par son PROPRE vhost (radio, metablogizer, torrent…), ou par un
+        # relais du Hall. Tester le seul premier cas déclarait `radio` cassé
+        # alors qu'il répond 200 — et un diagnostic qui crie au loup est pire
+        # que pas de diagnostic.
+        maillons.append({"maillon": "route nginx", **_route_nginx(court),
+                         "pourquoi": "sans elle, le nom n'atteint pas le module"})
+        # LE MANIFESTE N'EST PAS BLOQUANT. Son absence ne casse rien : le
+        # module retombe sur `always-on`, le défaut sûr. C'est une observation,
+        # pas une panne — la compter comme manquante ferait sonner l'alarme
+        # pour un module qui marche.
+        man = Path(f"/etc/secubox/modules.d/{court}.toml")
+        maillons.append({"maillon": "manifeste", "ok": man.exists(), "bloquant": False,
+                         "detail": str(man) if man.exists() else "absent — always-on par défaut",
+                         "pourquoi": "porte le cycle de vie ; absent, le module ne dort jamais"})
+        # Route sbxwaf : on ne la cherche que si le module a un domaine portail.
+        dom = None
+        try:
+            with open(f"/etc/secubox/modules.d/{court}.toml", "rb") as fh:
+                dom = tomllib.load(fh).get("portal_domain")
+        except Exception:  # noqa: BLE001
+            pass
+        if dom:
+            try:
+                table = json.loads(Path("/etc/secubox/waf/haproxy-routes.json")
+                                   .read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                table = {}
+            maillons.append({"maillon": "route sbxwaf", "ok": dom in table,
+                             "detail": dom,
+                             "pourquoi": "sans elle sbxwaf rend 421 sur ce nom"})
+    # Seuls les maillons BLOQUANTS comptent comme manquants.
+    manquants = [x["maillon"] for x in maillons
+                 if x["ok"] is False and x.get("bloquant", True)]
+    indetermines = [x["maillon"] for x in maillons if x["ok"] is None]
+    return {"module": name, "state": m.get("state"),
+            "maillons": maillons, "manquants": manquants,
+            "indetermines": indetermines,
+            "reparable": bool(m.get("installed")) and bool(manquants),
+            "ok": not manquants}
+
+
+@app.get("/groupes", dependencies=[Depends(require_lecture)])
+async def groupes():
+    """Les fonctionnalités : une intention, plusieurs paquets (#1323).
+
+    Une CATÉGORIE range, un GROUPE propose. On ne veut pas installer « les 14
+    modules classés média », on veut « écouter et regarder chez soi » — trois
+    modules choisis qui marchent ensemble.
+    """
+    cat = load_catalog_raw()
+    dispo = _installables()
+    etat = compute_state()
+    out = []
+    for g in cat.get("groupes", []):
+        membres = []
+        for n in g.get("modules", []):
+            membres.append({"name": n,
+                            "installed": n in etat,
+                            "installable": n in dispo})
+        out.append({**g, "membres": membres,
+                    "installes": sum(1 for m in membres if m["installed"]),
+                    "total": len(membres)})
+    return {"groupes": out, "count": len(out)}
+
+
+@app.get("/profils", dependencies=[Depends(require_lecture)])
+async def profils():
+    """Les profils, et ce qu'ils contiennent — le lien catalogue ↔ profils."""
+    etat = compute_state()
+    out = []
+    for p in _profils():
+        presents = sum(1 for m in p["modules"] if m in etat)
+        out.append({**p, "installes": presents,
+                    "manquants": [m for m in p["modules"] if m not in etat][:40]})
+    return {"profils": out, "count": len(out)}
 
 
 @app.post("/module/{name}/action/{verb}", dependencies=[Depends(require_jwt)])

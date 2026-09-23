@@ -1,3 +1,76 @@
+secubox-appstore (0.4.10-1~bookworm1) bookworm; urgency=medium
+
+  * CE QU'ON N'A PAS PU LIRE N'EST PAS ABSENT. Le diagnostic lisait les
+    configurations nginx sans privilège ; plusieurs vhosts sont en 0600 root
+    (webui.conf le premier), l'erreur était avalée, et 55 modules INSTALLÉS ET
+    FONCTIONNELS étaient déclarés sans route. Un fichier illisible rend
+    désormais un verdict `indéterminé` — ni réussite, ni panne — et le compte
+    des fichiers concernés est dit. Deuxième fois dans la même journée qu'un
+    contrôle traduit « je ne sais pas » en « c'est cassé » ; c'est la faute
+    qu'un diagnostic ne peut pas se permettre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:12:33 +0200
+
+secubox-appstore (0.4.9-1~bookworm1) bookworm; urgency=medium
+
+  * Le diagnostic ne crie plus au loup. Il cherchait la route d'un module au
+    SEUL chemin `secubox-routes.d/<nom>.conf` ; or trois formes coexistent et
+    sont toutes légitimes — une route là, un vhost dédié dans sites-enabled
+    (radio, metablogizer, torrent…), ou un relais posé par le Hall. `radio`
+    était donc déclaré cassé alors qu'il répond 200. On cherche désormais la
+    trace d'`/api/v1/<nom>/` dans ce que nginx lit vraiment.
+  * Le manifeste modules.d n'est plus compté comme manquant : son absence ne
+    casse rien, le module retombe sur `always-on`, le défaut sûr. C'est une
+    observation, pas une panne — la compter faisait sonner l'alarme pour un
+    module qui marche. Les maillons portent maintenant `bloquant`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:11:26 +0200
+
+secubox-appstore (0.4.8-1~bookworm1) bookworm; urgency=medium
+
+  * « DISPONIBLE » VEUT DIRE INSTALLABLE. L'état se calculait sans jamais
+    demander à APT s'il pouvait fournir le paquet : la carte d'`isp` annonçait
+    « available » avec un bouton grisé — ce qui ne veut rien dire pour qui la
+    lit. Un module connu du catalogue mais non publié au dépôt est désormais
+    `unpublished`, et son état le dit. 14 modules sont dans ce cas.
+  * VÉRIFIER ET RÉPARER (#1323). GET /module/{nom}/check dit ce qui MANQUE :
+    paquet, unité, route nginx, manifeste modules.d, route sbxwaf. Un module
+    n'est pas qu'un paquet — chacun de ces maillons a déjà manqué séparément
+    sur cette board : la route sbxwaf de podcaster (421), le vhost du Hall,
+    l'unité de metablogizer désactivée par le sleeper. Un état « installé » ne
+    disait donc rien.
+  * Le verbe `repair` réinstalle le paquet, ce qui REJOUE son postinst : depuis
+    que chaque paquet pose sa propre route, son vhost et son unité, cela
+    reconstruit les maillons manquants sans avoir à les connaître un par un.
+    `--force-confold` : ni la configuration ni les données ne bougent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:09:49 +0200
+
+secubox-appstore (0.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * GROUPES — une fonctionnalité, plusieurs paquets (#1323). Sept groupes
+    déclarés dans groupes.yaml : Média, Publication, Veille, Bouclier, Maison
+    connectée, Nuage personnel, Correspondance. Une CATÉGORIE range, un GROUPE
+    propose : on ne veut pas installer « les 14 modules classés média », on
+    veut « écouter et regarder chez soi » — trois modules choisis qui marchent
+    ensemble. Nouveau GET /groupes, avec l'état installé/installable de chaque
+    membre. Le générateur REFUSE un groupe citant un module absent du
+    catalogue : mieux vaut casser la construction, que quelqu'un lit, que
+    l'interface, où l'utilisateur ne comprendrait rien.
+  * PROFILS RELIÉS (#1323). GET /profils rend full, lite, media-lab et
+    secure-gateway avec ce qu'ils contiennent et ce qui manque ; et chaque
+    entrée du catalogue porte désormais les profils qui l'incluent. Le lien
+    manquait : un profil était une liste de noms, sans rapport visible avec
+    l'App Store qui les installe.
+  * INSTALLABLE, MARQUÉ À LA LECTURE. 25 entrées du catalogue existent en
+    source mais ne sont pas publiées au dépôt ; l'interface offrait donc des
+    boutons voués à l'échec. Chaque entrée porte maintenant `installable`,
+    calculé en direct sur les dépôts de la board. On ne les purge PAS : elles
+    reviendront une fois publiées, et un module absent du catalogue est un
+    module qu'on ne sait plus nommer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:07:53 +0200
+
 secubox-appstore (0.4.6-1~bookworm1) bookworm; urgency=medium
 
   * Un refus n'est plus une panne : les codes de sortie de secubox-appstorectl

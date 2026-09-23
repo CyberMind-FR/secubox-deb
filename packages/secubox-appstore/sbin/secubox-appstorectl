@@ -74,6 +74,23 @@ case "$action" in
             -o Dpkg::Options::=--force-confold "$module"
         echo "installed $module ($cand)"
         ;;
+    repair)
+        # REPARER, C'EST REJOUER LE POSTINST. Depuis que chaque paquet pose sa
+        # propre route sbxwaf, son vhost et son unite (#1323), une
+        # reinstallation RECONSTRUIT les maillons manquants sans qu'on ait a
+        # les connaitre un par un — et sans toucher aux donnees ni a la
+        # configuration, que `--force-confold` laisse en place.
+        if ! dpkg -s "$module" >/dev/null 2>&1; then
+            echo "appstorectl: $module n'est pas installe" >&2; exit 8
+        fi
+        mkdir -p "$(dirname "$VERROU")"
+        exec 9>"$VERROU"
+        flock -w 300 9 || { echo "appstorectl: une autre operation est en cours" >&2; exit 5; }
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get install -y --reinstall --no-install-recommends \
+            -o Dpkg::Options::=--force-confold "$module"
+        echo "repaired $module"
+        ;;
     remove)
         for p in $PROTEGES; do
             if [ "$p" = "$module" ]; then
