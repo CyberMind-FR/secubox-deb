@@ -17,6 +17,26 @@ esac
 unit="${module}.service"
 short="${module#secubox-}"
 
+# ─────────────────────────────────────────────────────────────────────────
+# CE SCRIPT EST LA FRONTIERE DE SECURITE (#1323). Le sudoers accorde
+# NOPASSWD sur LUI : tout verbe ajoute ici devient exécutable en root depuis
+# une page web. Les gardes vivent donc ici, jamais dans l'API — une API qu'on
+# contourne laisserait le script nu.
+#
+# JAMAIS DESINSTALLABLES. Retirer l'un d'eux coupe la box, y compris
+# l'interface depuis laquelle on vient de le demander — il n'y aurait plus
+# de chemin de retour. La liste est explicite et courte : on protege le
+# socle, pas tout le parc.
+PROTEGES="
+secubox-core secubox-aggregator secubox-appstore secubox-hub secubox-profiles
+secubox-waf secubox-waf-ng secubox-defaults secubox-release secubox-certs
+secubox-haproxy secubox-users secubox-auth secubox-acces secubox-webos
+"
+
+# Une seule operation dpkg a la fois : deux clics rapides ne doivent pas se
+# marcher dessus et laisser dpkg a moitie configure.
+VERROU=/run/secubox/appstorectl.lock
+
 case "$action" in
     start|stop|restart|enable|disable)
         exec systemctl "$action" "$unit"
@@ -35,6 +55,53 @@ case "$action" in
         mv -f "$tmp" "$dest"
         trap - EXIT
         echo "wrote $dest"
+        ;;
+    install)
+        # Le paquet doit EXISTER dans un depot configure : sans ce controle,
+        # une faute de frappe partirait chercher sur le reseau et l'echec
+        # remonterait en 500 opaque plutot qu'en « module inconnu ».
+        cand="$(apt-cache policy "$module" 2>/dev/null | awk '/Candidat|Candidate/ {print $2; exit}')"
+        if [ -z "$cand" ] || [ "$cand" = "(none)" ] || [ "$cand" = "(aucun)" ]; then
+            echo "appstorectl: $module absent des depots" >&2; exit 4
+        fi
+        mkdir -p "$(dirname "$VERROU")"
+        exec 9>"$VERROU"
+        flock -w 300 9 || { echo "appstorectl: une autre operation est en cours" >&2; exit 5; }
+        export DEBIAN_FRONTEND=noninteractive
+        # --no-install-recommends : on installe ce qui est demande, pas la
+        # moitie du parc par ricochet. Les vraies dependances passent, elles.
+        apt-get install -y --no-install-recommends \
+            -o Dpkg::Options::=--force-confold "$module"
+        echo "installed $module ($cand)"
+        ;;
+    remove)
+        for p in $PROTEGES; do
+            if [ "$p" = "$module" ]; then
+                echo "appstorectl: $module est protege, retrait refuse" >&2; exit 6
+            fi
+        done
+        # REFUS SI LE RETRAIT CASCADE. `apt-get remove` emporte en silence tout
+        # ce qui depend du paquet : demander le retrait d'une brique commune
+        # desinstallerait la moitie de la box sans que personne ne l'ait voulu.
+        # On regarde donc d'abord qui en depend, et on s'arrete si quelqu'un
+        # en depend encore.
+        deps="$(apt-cache rdepends --installed --no-recommends --no-suggests \
+                  --no-conflicts --no-breaks --no-replaces --no-enhances \
+                  "$module" 2>/dev/null | tail -n +3 | tr -d ' |' \
+                  | grep -v "^$module$" | grep . || true)"
+        if [ -n "$deps" ]; then
+            echo "appstorectl: $module est requis par : $(echo $deps | tr '\n' ' ')" >&2
+            exit 7
+        fi
+        mkdir -p "$(dirname "$VERROU")"
+        exec 9>"$VERROU"
+        flock -w 300 9 || { echo "appstorectl: une autre operation est en cours" >&2; exit 5; }
+        export DEBIAN_FRONTEND=noninteractive
+        # `remove`, JAMAIS `purge` : la configuration et les donnees du module
+        # restent en place. Un retrait se repense ; une purge ne se defait pas.
+        # `--no-auto-remove` : on retire CE paquet, pas ce qu'apt juge orphelin.
+        apt-get remove -y --no-auto-remove "$module"
+        echo "removed $module"
         ;;
     *)
         echo "appstorectl: unknown action '$action'" >&2; exit 2 ;;

@@ -236,7 +236,12 @@ async def module(name: str):
 # The API runs as the unprivileged `secubox` user; all privileged work goes
 # through the validated root helper /usr/sbin/secubox-appstorectl via a narrow
 # sudoers rule (start/stop/restart/enable/disable + write-config only).
+# Les verbes de CYCLE DE VIE : réversibles d'un clic, sans confirmation.
 ACTIONS = {"start", "stop", "restart", "enable", "disable"}
+# Les verbes de PARC : ils touchent dpkg. `install` s'annule par `remove` ;
+# `remove` emporte un service en production, d'où la confirmation explicite.
+ACTIONS_PARC = {"install", "remove"}
+ACTIONS_CONFIRMEES = {"remove"}
 APPSTORECTL = "/usr/sbin/secubox-appstorectl"
 
 
@@ -268,13 +273,53 @@ def _config_path(name: str) -> Path:
 
 
 @app.post("/module/{name}/action/{verb}", dependencies=[Depends(require_jwt)])
-async def module_action(name: str, verb: str):
-    name = _resolve(name, compute_state())
-    if verb not in ACTIONS:
+async def module_action(name: str, verb: str, confirmer: str | None = None):
+    """Agir sur un module : cycle de vie, ou ajout/retrait dans le parc (#1323).
+
+    LA CONFIRMATION EST UN NOM, PAS UNE CASE À COCHER. `remove` exige que
+    l'appelant RÉÉCRIVE le nom complet du module (`?confirmer=secubox-radio`).
+    Une case se coche par réflexe et se pré-remplit par erreur ; retaper un nom
+    oblige à lire lequel on retire.
+
+    Les gardes de fond — liste de protection, refus si d'autres paquets en
+    dépendent, jamais de purge — vivent dans secubox-appstorectl, qui est la
+    vraie frontière : le sudoers lui accorde NOPASSWD.
+    """
+    verbe_parc = verb in ACTIONS_PARC
+    if verb not in ACTIONS and not verbe_parc:
         raise HTTPException(status_code=400, detail=f"unknown action {verb!r}")
+    if verb == "install":
+        # `install` porte sur un module PAS ENCORE installé : le résoudre
+        # contre l'état courant le rejetterait en 404. On valide sur le
+        # catalogue, seule liste de ce qui a le droit d'entrer.
+        connus = {m.get("name") for m in load_catalog()}
+        if name not in connus:
+            alt = f"secubox-{name}"
+            if alt not in connus:
+                raise HTTPException(status_code=404,
+                                    detail=f"module {name!r} absent du catalogue")
+            name = alt
+    else:
+        name = _resolve(name, compute_state())
+    if verb in ACTIONS_CONFIRMEES and confirmer != name:
+        raise HTTPException(status_code=428,
+                            detail=f"confirmation requise : renvoyez ?confirmer={name}")
     rc, out, err = _appstorectl([verb, name])
     if rc != 0:
-        raise HTTPException(status_code=500, detail=f"{verb} failed: {err or out}")
+        # UN REFUS N'EST PAS UNE PANNE. Le script sort sur des codes parlants ;
+        # les rendre tous en 500 dirait « le serveur a cassé » là où la vérité
+        # est « votre demande est refusée, et voici pourquoi » — et l'interface
+        # ne pourrait qu'afficher une erreur générique au lieu du motif.
+        STATUTS = {
+            2: 400,   # nom hors liste blanche, ou verbe inconnu du script
+            4: 404,   # paquet absent des dépôts configurés
+            5: 409,   # une autre opération dpkg est en cours (verrou)
+            6: 403,   # module protégé : retrait interdit
+            7: 409,   # d'autres paquets en dépendent encore
+        }
+        raise HTTPException(status_code=STATUTS.get(rc, 500),
+                            detail=f"{verb} refusé : {err or out}" if rc in STATUTS
+                                   else f"{verb} failed: {err or out}")
     new = compute_state(force=True).get(name, {})
     return {"status": "ok", "action": verb, "module": name,
             "state": new.get("state"), "running": new.get("running"), "message": out}

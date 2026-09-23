@@ -1,3 +1,41 @@
+secubox-appstore (0.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * Un refus n'est plus une panne : les codes de sortie de secubox-appstorectl
+    deviennent des statuts parlants — 404 paquet absent des dépôts, 403 module
+    protégé, 409 dépendants ou opération dpkg déjà en cours, 400 nom refusé.
+    Tout rendre en 500 disait « le serveur a cassé » là où la vérité est
+    « votre demande est refusée, et voici pourquoi », et l'interface ne
+    pouvait afficher qu'une erreur générique au lieu du motif.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:03:17 +0200
+
+secubox-appstore (0.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * AJOUT ET RETRAIT DE MODULES (#1323). L'App Store ne savait que démarrer,
+    arrêter et activer : `install` et `remove` n'existaient pas. Ils existent,
+    et les gardes vivent dans secubox-appstorectl — le sudoers lui accorde
+    NOPASSWD, c'est donc LUI la frontière de sécurité, pas l'API qu'on peut
+    contourner.
+  * Ce que le script refuse : un nom hors `secubox-*` ; l'installation d'un
+    paquet absent des dépôts (une faute de frappe doit dire « inconnu », pas
+    échouer en 500 après un aller-retour réseau) ; le retrait d'un module
+    PROTÉGÉ (core, aggregator, appstore, hub, profiles, waf, waf-ng, defaults,
+    release, certs, haproxy, users, auth, acces, webos — les retirer couperait
+    la box, y compris la page d'où on l'a demandé) ; et le retrait d'un module
+    dont un autre paquet dépend ENCORE, qu'`apt-get remove` emporterait en
+    silence avec ses dépendants.
+  * `remove`, jamais `purge` : configuration et données restent en place. Un
+    retrait se repense ; une purge ne se défait pas. `--no-auto-remove` : on
+    retire CE paquet, pas ce qu'apt juge orphelin. `--no-install-recommends` à
+    l'installation : on installe ce qui est demandé, pas la moitié du parc.
+  * Un verrou `flock` sérialise les opérations dpkg : deux clics rapides ne
+    doivent pas laisser dpkg à moitié configuré.
+  * L'API exige une confirmation qui est un NOM, pas une case : `remove`
+    réclame `?confirmer=<nom complet>` et rend 428 sinon. Une case se coche par
+    réflexe ; retaper un nom oblige à lire lequel on retire.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:01:26 +0200
+
 secubox-appstore (0.4.4-1~bookworm1) bookworm; urgency=medium
 
   * Le catalogue passe de 134 à 175 modules : 57 paquets sur 175 n'avaient pas
