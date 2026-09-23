@@ -18,15 +18,49 @@ export type Image = {
   vad: boolean; speech_rate: number; jitter: number; shimmer: number
   clarity: number; latency_ms: number; cpu: number
   calibration: number; observations?: number
+  ambiance?: { bpm: number; pulsation: number; part: number; dominante: boolean; presente: boolean }
   source_reelle: boolean; reserve: string
 }
 
 export type Etat = 'arrete' | 'demande' | 'ecoute' | 'refuse' | 'erreur'
 
+// LA CLÉ DE RÉFÉRENCE : fabriquée ICI, gardée ICI.
+//
+// Le serveur ne l'attribue pas — il ne peut donc pas relier deux visites
+// autrement que par ce que ce navigateur lui présente. Effacer le stockage du
+// navigateur suffit à redevenir inconnu, et le bouton « Oublier » efface aussi
+// la ligne côté board.
+//
+// CE QU'ELLE PERMET, ET C'EST LE PRIX ASSUMÉ : deux visites qui présentent la
+// même clé sont, par construction, reconnues comme la même personne. C'est ce
+// qui évite de tout réapprendre à chaque rechargement.
+const CLE_REF = 'gabriel-mood-ref'
+
+export function cleReference(): string {
+  try {
+    const v = localStorage.getItem(CLE_REF)
+    if (v && /^[0-9a-f]{16,64}$/.test(v)) return v
+    const b = new Uint8Array(16)
+    crypto.getRandomValues(b)
+    const neuf = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+    localStorage.setItem(CLE_REF, neuf)
+    return neuf
+  } catch {
+    // Stockage refusé (navigation privée, réglage strict) : on fonctionne
+    // sans, simplement la référence ne survivra pas au rechargement.
+    return ''
+  }
+}
+
+export function oublieCleReference() {
+  try { localStorage.removeItem(CLE_REF) } catch { /* rien à faire */ }
+}
+
 export class Micro {
   etat: Etat = 'arrete'
   motif = ''
   session = ''
+  reprise = ''
   derniere: Image | null = null
   octetsEnvoyes = 0
 
@@ -85,12 +119,15 @@ export class Micro {
         this.#ws!.onopen = () => ok()
         this.#ws!.onerror = () => ko(new Error('la board ne répond pas'))
       })
-      this.#ws.send(JSON.stringify({ type: 'bonjour', sampleRate: 48000 }))
+      this.#ws.send(JSON.stringify({
+        type: 'bonjour', sampleRate: 48000, ref: cleReference(),
+      }))
 
       this.#ws.onmessage = (ev) => {
         if (typeof ev.data !== 'string') return
         const m = JSON.parse(ev.data)
         if (m.type === 'pret') { this.session = m.session; return }
+        if (m.type === 'reprise') { this.reprise = m.motif || ''; return }
         if (m.type === 'refus') { this.arrete(); this.#pose('erreur', m.motif); return }
         this.derniere = m as Image
         this.#surImage(m as Image)

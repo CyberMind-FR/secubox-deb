@@ -366,3 +366,146 @@ func TestAvecSonIdentifiantOnLitBienSaSession(t *testing.T) {
 		t.Fatalf("session %q rendue pour %q", h.Session, accueil.Session)
 	}
 }
+
+// ── LA PERSISTANCE DE LA RÉFÉRENCE ─────────────────────────────────────────
+//
+// C'est LE défaut signalé : « les étalonnages ne terminent pas », 6 %, 26 %,
+// 27 %. Ce n'étaient pas des compteurs bloqués mais trois sessions, chacune
+// repartie de zéro parce que la référence mourait avec la connexion.
+
+func pousseVoix(t *testing.T, c *websocket.Conn, secondes float64) {
+	t.Helper()
+	const bloc = audio.Echantillonnage / 50 // 20 ms
+	n := int(secondes * 50)
+	for i := 0; i < n; i++ {
+		b := make([]byte, bloc*2)
+		for j := 0; j < bloc; j++ {
+			k := i*bloc + j
+			tt := float64(k) / audio.Echantillonnage
+			env := 0.5 + 0.5*math.Sin(2*math.Pi*4*tt)
+			v := 0.3 * env * (math.Sin(2*math.Pi*130*tt) +
+				0.5*math.Sin(2*math.Pi*260*tt) + 0.3*math.Sin(2*math.Pi*820*tt))
+			binary.LittleEndian.PutUint16(b[2*j:], uint16(int16(v*32767)))
+		}
+		if err := c.WriteMessage(websocket.BinaryMessage, b); err != nil {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestLaReferenceSurvitAuRechargement(t *testing.T) {
+	s, srv := serveur(t)
+	const cle = "a1b2c3d4e5f60718"
+
+	// Première visite : on parle un peu.
+	c1, _, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var accueil message
+	if err := c1.ReadJSON(&accueil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c1.WriteJSON(message{Type: "bonjour", Ref: cle, Echantillonnage: 48000}); err != nil {
+		t.Fatal(err)
+	}
+	// On laisse la lecture des images se faire, sinon le tampon d'écriture du
+	// serveur se remplit et bloque l'analyse.
+	go func() {
+		for {
+			var img moteur.Image
+			if c1.ReadJSON(&img) != nil {
+				return
+			}
+		}
+	}()
+	pousseVoix(t, c1, 3)
+	time.Sleep(400 * time.Millisecond)
+	c1.Close()
+
+	// La référence doit avoir été enregistrée à la fermeture.
+	var vue int
+	for i := 0; i < 100; i++ {
+		if r, ok := s.Store.ChargeReference(cle); ok && r.Observations() > 0 {
+			vue = r.Observations()
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if vue == 0 {
+		t.Fatal("rien n'a été retenu : la référence meurt encore avec la session")
+	}
+
+	// Deuxième visite, même clé : on doit reprendre là où on s'était arrêté.
+	c2, _, err := websocket.DefaultDialer.Dial(wsURL(srv), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c2.Close()
+	var a2 message
+	if err := c2.ReadJSON(&a2); err != nil {
+		t.Fatal(err)
+	}
+	if err := c2.WriteJSON(message{Type: "bonjour", Ref: cle, Echantillonnage: 48000}); err != nil {
+		t.Fatal(err)
+	}
+	// ON LE DIT : reprendre en silence laisserait croire à une lecture née de
+	// la session en cours.
+	deadline := time.Now().Add(3 * time.Second)
+	var repris bool
+	for time.Now().Before(deadline) {
+		c2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		var m message
+		if err := c2.ReadJSON(&m); err != nil {
+			break
+		}
+		if m.Type == "reprise" {
+			repris = true
+			if !strings.Contains(m.Motif, "retrouvée") {
+				t.Errorf("motif de reprise peu clair : %q", m.Motif)
+			}
+			break
+		}
+	}
+	if !repris {
+		t.Fatal("la reprise n'est pas annoncée au navigateur")
+	}
+}
+
+// UNE CLÉ FARFELUE N'ENTRE PAS DANS LA BASE. Elle vient d'un inconnu : on ne
+// s'en sert pas comme d'un dépotoir.
+func TestUneCleInvalideEstIgnoree(t *testing.T) {
+	for _, c := range []string{"", "court", strings.Repeat("a", 65),
+		"../../etc/passwd", "ZZZZZZZZZZZZZZZZ", "a1b2c3d4e5f6071!"} {
+		if store.CleReference(c) {
+			t.Errorf("clé acceptée à tort : %q", c)
+		}
+	}
+	if !store.CleReference("a1b2c3d4e5f60718") {
+		t.Error("une clé valide est refusée")
+	}
+}
+
+// « OUBLIER » DOIT ATTEINDRE LA RÉFÉRENCE. En effacer l'historique en laissant
+// ce qui permet de vous reconnaître n'oublierait rien.
+func TestLOubliAtteintLaReference(t *testing.T) {
+	s, srv := serveur(t)
+	const cle = "b1b2c3d4e5f60718"
+	r := ser.NouvelleReference()
+	for i := 0; i < 50; i++ {
+		r.Observe(ser.Traits{F0Median: 130 + float64(i%5), Energie: .3, Debit: 150,
+			Jitter: .8, Centre: 1400, TramesVoisees: 60})
+	}
+	if err := s.Store.EnregistreReference(cle, r); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := http.Post(srv.URL+"/api/mood/oubli?ref="+cle, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep.Body.Close()
+	if _, ok := s.Store.ChargeReference(cle); ok {
+		t.Fatal("la référence survit à l'oubli")
+	}
+}

@@ -108,6 +108,8 @@ type Analyseur struct {
 	banc    *mfcc.Banc
 	yin     *pitch.Estimateur
 	vad     *vad.Detecteur
+	oreille *vad.Ecouteur
+	ambiant vad.Ambiance
 	pert    *pitch.Perturbation
 	ref     *ser.Reference
 	classif ser.Classifieur
@@ -161,10 +163,13 @@ func NouveauAvecPartage(src audio.Source, partage *ser.EtalonPartage, session st
 	// plus sûre. Il n'y a plus de phase d'apprentissage à attendre.
 	ref := ser.NouvelleReference()
 	a := &Analyseur{
-		plan:       plan,
-		banc:       mfcc.NouveauBanc(26, raies, audio.Echantillonnage, 50, 8000),
-		yin:        pitch.NouvelEstimateur(TailleTrame, audio.Echantillonnage),
-		vad:        vad.Nouveau(raies, audio.Echantillonnage, vad.Normal, 12),
+		plan: plan,
+		banc: mfcc.NouveauBanc(26, raies, audio.Echantillonnage, 50, 8000),
+		yin:  pitch.NouvelEstimateur(TailleTrame, audio.Echantillonnage),
+		vad:  vad.Nouveau(raies, audio.Echantillonnage, vad.Normal, 12),
+		// Douze secondes d'écoute de la pièce : à 60 BPM, c'est douze
+		// battements — assez pour qu'une périodicité veuille dire quelque chose.
+		oreille:    vad.NouvelEcouteur(float64(PasTrame)/audio.Echantillonnage, 12),
 		pert:       pitch.NouvellePerturbation(80),
 		ref:        ref,
 		classif:    ser.NouvelleHeuristique(ref).AvecEtalonPartage(partage),
@@ -185,6 +190,24 @@ func (a *Analyseur) RemplaceClassifieur(c ser.Classifieur) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.classif = c
+}
+
+// RepriseReference installe une référence relue du disque.
+//
+// EN PLACE : le classifieur tient un pointeur vers elle, et lui en donner un
+// autre le laisserait travailler sur l'ancienne — une session qui aurait l'air
+// de reprendre sans rien reprendre.
+func (a *Analyseur) RepriseReference(r ser.Reference) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ref.Reprendre(r)
+}
+
+// Reference rend une COPIE de la référence courante, pour l'enregistrer.
+func (a *Analyseur) Reference() ser.Reference {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return *a.ref
 }
 
 // Source décrit d'où viennent les échantillons.
@@ -254,6 +277,11 @@ func (a *Analyseur) analyseTrame(trame []float64) {
 		a.derniereF0, a.derniereClar = 0, 0
 	}
 
+	// L'AMBIANCE S'ÉCOUTE À CHAQUE TRAME, mais ne s'analyse qu'une fois par
+	// fenêtre : chercher une périodicité coûte une autocorrélation, et le
+	// tempo d'une pièce ne change pas en dix millisecondes.
+	a.oreille.Observe(rms, v.Parole)
+
 	a.fenEnergies = append(a.fenEnergies, rms)
 	a.fenTotal++
 	if v.Parole {
@@ -273,6 +301,7 @@ func (a *Analyseur) analyseTrame(trame []float64) {
 	a.reduitSpectre()
 
 	if a.nTrame%FenetreTraits == 0 {
+		a.ambiant = a.oreille.Analyse()
 		a.majTraits()
 	}
 	a.majImage(v, rms)
@@ -339,6 +368,8 @@ func (a *Analyseur) majTraits() {
 		Shimmer:       a.pert.Shimmer(),
 		Centre:        mfcc.CentreDeGravite(a.puissance, audio.Echantillonnage),
 		Platitude:     mfcc.PlatitudeSpectrale(a.puissance),
+		AmbiancePart:  a.ambiant.Part,
+		AmbianceBPM:   a.ambiant.BPM,
 		Pente:         mfcc.PenteSpectrale(a.puissance, audio.Echantillonnage),
 		PartVoisee:    part,
 		TramesVoisees: a.fenVoisees,

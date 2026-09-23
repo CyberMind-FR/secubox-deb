@@ -24,7 +24,11 @@ import (
 // un ordinaire qui n'est celui de personne, et des écarts imaginaires pour
 // tout le monde.
 type Session struct {
-	ID        string
+	ID string
+	// CleRef : la clé que le NAVIGATEUR présente pour retrouver sa référence.
+	// Distincte de l'identifiant de session, qui meurt avec la connexion :
+	// celle-ci survit, c'est tout son objet, et c'est aussi tout son prix.
+	CleRef    string
 	Debut     time.Time
 	Source    *audio.Navigateur
 	Analyseur *moteur.Analyseur

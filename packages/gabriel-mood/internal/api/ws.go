@@ -68,7 +68,10 @@ func memeOrigine(r *http.Request) bool {
 }
 
 type message struct {
-	Type            string `json:"type"`
+	Type string `json:"type"`
+	// Ref : la clé que le navigateur présente pour retrouver sa référence.
+	// Il la fabrique et la garde lui-même ; le serveur ne l'attribue pas.
+	Ref             string `json:"ref,omitempty"`
 	Echantillonnage int    `json:"sampleRate,omitempty"`
 	Motif           string `json:"motif,omitempty"`
 	Session         string `json:"session,omitempty"`
@@ -85,7 +88,13 @@ func (s *Serveur) websocket(w http.ResponseWriter, r *http.Request) {
 	c.SetReadLimit(tailleMaxMessage)
 
 	sess := s.Sessions.Ouvre(r.RemoteAddr)
-	defer s.Sessions.Ferme(sess)
+	defer func() {
+		// ON ENREGISTRE AVANT DE PARTIR. Sans cela, une session fermée avant
+		// le prochain battement d'archivage perdrait tout ce qu'elle a appris
+		// — exactement le défaut qu'on répare.
+		s.enregistreReference(sess)
+		s.Sessions.Ferme(sess)
+	}()
 
 	_ = c.WriteJSON(message{
 		Type: "pret", Session: sess.ID, Images: imagesParSeconde,
@@ -119,6 +128,9 @@ func (s *Serveur) websocket(w http.ResponseWriter, r *http.Request) {
 			var m message
 			if json.Unmarshal(corps, &m) != nil {
 				continue
+			}
+			if m.Type == "bonjour" {
+				s.repriseReference(c, sess, m.Ref)
 			}
 			if m.Type == "bonjour" && m.Echantillonnage != 0 &&
 				m.Echantillonnage != audio.Echantillonnage {
@@ -167,6 +179,33 @@ func (s *Serveur) envoieImages(c *websocket.Conn, sess *Session, stop <-chan str
 	}
 }
 
+// repriseReference : le navigateur présente sa clé, on lui rend son ordinaire.
+func (s *Serveur) repriseReference(c *websocket.Conn, sess *Session, cle string) {
+	if cle == "" || s.Store == nil || !store.CleReference(cle) {
+		return
+	}
+	sess.CleRef = cle
+	r, ok := s.Store.ChargeReference(cle)
+	if !ok {
+		return
+	}
+	sess.Analyseur.RepriseReference(r)
+	// ON LE DIT. Reprendre en silence une référence constituée ailleurs
+	// laisserait croire à une lecture née de la session en cours.
+	_ = c.WriteJSON(message{Type: "reprise", Session: sess.ID,
+		Motif: "référence retrouvée : " + itoa(r.Observations()) + " mesures antérieures"})
+}
+
+func (s *Serveur) enregistreReference(sess *Session) {
+	if sess == nil || sess.CleRef == "" || s.Store == nil {
+		return
+	}
+	ref := sess.Analyseur.Reference()
+	if err := s.Store.EnregistreReference(sess.CleRef, &ref); err != nil {
+		log.Printf("référence : %v", err)
+	}
+}
+
 // archive écrit UNE LIGNE PAR MINUTE — des agrégats, jamais du son.
 func (s *Serveur) archive(sess *Session, stop <-chan struct{}) {
 	tic := time.NewTicker(20 * time.Second)
@@ -180,6 +219,9 @@ func (s *Serveur) archive(sess *Session, stop <-chan struct{}) {
 			if t.TramesVoisees == 0 {
 				continue // rien à dire d'une minute sans voix
 			}
+			// La référence est enregistrée au même rythme : une session longue
+			// ne doit pas tout remettre en jeu sur sa fermeture.
+			s.enregistreReference(sess)
 			lec := sess.Analyseur.Lecture()
 			if err := s.Store.Enregistre(store.Resume{
 				Minute:  time.Now().Truncate(time.Minute).Unix(),

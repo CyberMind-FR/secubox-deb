@@ -51,15 +51,21 @@ import (
 // Traits : ce que le traitement du signal a effectivement mesuré sur la
 // fenêtre écoulée. Rien d'interprété à ce stade.
 type Traits struct {
-	F0Median      float64 // Hz, sur les trames voisées
-	F0Etendue     float64 // demi-tons (écart-type)
-	Energie       float64 // RMS, 0..1
-	EnergieVar    float64 // écart-type du RMS sur la fenêtre
-	Debit         float64 // syllabes estimées par minute
-	Jitter        float64 // %
-	Shimmer       float64 // dB
-	Centre        float64 // centre de gravité spectral, Hz
-	Pente         float64 // pente spectrale, dB/kHz
+	F0Median   float64 // Hz, sur les trames voisées
+	F0Etendue  float64 // demi-tons (écart-type)
+	Energie    float64 // RMS, 0..1
+	EnergieVar float64 // écart-type du RMS sur la fenêtre
+	Debit      float64 // syllabes estimées par minute
+	Jitter     float64 // %
+	Shimmer    float64 // dB
+	Centre     float64 // centre de gravité spectral, Hz
+	Pente      float64 // pente spectrale, dB/kHz
+	// AmbiancePart : poids de ce qui joue dans la pièce, 0..1. AmbianceBPM :
+	// son tempo, 0 si aucune pulsation nette. Une ambiance discrète est un
+	// CONTEXTE — on parle plus haut quand il y a du fond, et c'est utile à
+	// savoir ; une ambiance dominante fait écarter la fenêtre.
+	AmbiancePart  float64
+	AmbianceBPM   float64
 	Platitude     float64 // platitude spectrale 0..1 — 1 = bruit large, 0 = son harmonique
 	PartVoisee    float64 // proportion de trames voisées, 0..1
 	TramesVoisees int     // combien de trames ont réellement porté de la voix
@@ -86,6 +92,11 @@ const (
 	MotifBruit      = "bruit"
 	MotifPeuDeVoix  = "voix-insuffisante"
 	MotifEtalonnage = "etalonnage"
+	// MotifAmbiance : il y a de la musique ou une machine dans la pièce, et
+	// elle domine. Ce qu'on mesurerait alors ne serait plus une personne —
+	// une musique est harmonique et périodique, c'est-à-dire exactement ce
+	// qu'on cherche quand on cherche une voix.
+	MotifAmbiance = "ambiance"
 )
 
 // Les états nommés. Ce sont des ÉTIQUETTES D'INDICE : « tension » désigne un

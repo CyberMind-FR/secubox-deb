@@ -177,6 +177,21 @@ func (r *Reference) amorce() {
 	r.Jitter.rel, r.Centre.rel = relJitter, relCentre
 }
 
+// Reprendre installe une référence relue du disque, EN PLACE.
+//
+// En place, et c'est important : le classifieur tient un pointeur vers cette
+// référence. Le remplacer par un autre pointeur laisserait le classifieur
+// travailler sur l'ancienne — une session qui aurait l'air de reprendre sans
+// rien reprendre du tout, ce qui est le pire des deux mondes.
+//
+// Les dispersions relatives sont reposées : ce sont des constantes du code,
+// pas des données de la personne, et elles ne voyagent donc pas avec la
+// référence.
+func (r *Reference) Reprendre(autre Reference) {
+	*r = autre
+	r.amorce()
+}
+
 // Observe intègre une fenêtre de traits. Les fenêtres SANS voix ne comptent
 // pas : le silence n'a pas de hauteur, et l'inclure abaisserait l'ordinaire.
 func (r *Reference) Observe(t Traits) {

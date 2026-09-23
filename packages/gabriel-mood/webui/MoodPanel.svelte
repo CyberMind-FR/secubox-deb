@@ -12,7 +12,7 @@
   import EmojiGauge from './EmojiGauge.svelte'
   import TendancesChart from './TendancesChart.svelte'
   import Ensemble from './Ensemble.svelte'
-  import { Micro, type Image, type Etat } from './src/lib/micro'
+  import { Micro, oublieCleReference, cleReference, type Image, type Etat } from './src/lib/micro'
   import { Lien, type Role } from './src/lib/lien'
 
   let img: Image | null = $state(null)
@@ -66,11 +66,22 @@
       d: 'mesuré, pas estimé' },
     { n: 'VAD',     v: img?.vad ? 'voix' : 'silence', u: '',
       d: img?.vad ? 'trame retenue pour l’analyse' : 'trame écartée' },
+    { n: 'Ambiance', v: img?.ambiance?.bpm ? Math.round(img.ambiance.bpm).toString() : '—',
+      u: img?.ambiance?.bpm ? 'BPM' : '',
+      d: img?.ambiance?.presente
+        ? `${Math.round((img.ambiance.part ?? 0) * 100)} % de l’énergie — contexte`
+        : 'aucune pulsation détectée dans la pièce' },
   ])
 
   async function oublie() {
-    if (!confirm('Effacer tout l’historique conservé sur la board ?')) return
+    if (!confirm('Effacer tout l’historique conservé sur la board, ET la '
+      + 'référence qui permet de vous reconnaître d’une visite à l’autre ?')) return
+    const cle = cleReference()
     await fetch('/api/mood/oubli', { method: 'POST' })
+    if (cle) await fetch('/api/mood/oubli?ref=' + cle, { method: 'POST' })
+    // ET DES DEUX CÔTÉS : effacer la ligne de la board en laissant la clé dans
+    // le navigateur n'oublierait rien — la prochaine visite la représenterait.
+    oublieCleReference()
     journal = []
   }
 </script>
@@ -121,11 +132,22 @@
     le concernant.
   </div>
 
+  {#if micro.reprise && etat === 'ecoute'}
+    <div class="avis">↩ {micro.reprise} — votre référence a été retrouvée, la
+      lecture ne repart pas de zéro.</div>
+  {/if}
+
   {#if etat === 'refuse'}
     <div class="avis">🎙 Le micro a été refusé. Rien ne peut être analysé — et
       c'est votre droit le plus strict. Le bouton reste là si vous changez d'avis.</div>
   {:else if etat === 'erreur'}
     <div class="avis erreur">⚠ {motif}</div>
+  {:else if img?.motif === 'ambiance'}
+    <div class="avis erreur">🎵 Ce qui joue dans la pièce domine
+      {#if img.ambiance?.bpm}({Math.round(img.ambiance.bpm)} BPM,
+        {Math.round((img.ambiance.part ?? 0) * 100)} % de l'énergie){/if}.
+      Une musique est harmonique et périodique — exactement ce qu'on cherche
+      quand on cherche une voix : on mesurerait l'instrument, pas vous.</div>
   {:else if img?.reference === 'mixte'}
     <div class="avis">👥 Référence MIXTE : la vôtre pèse
       {Math.round((img.calibration ?? 0) * 100)} %, le reste est emprunté à

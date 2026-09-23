@@ -73,6 +73,7 @@ func (s *Serveur) Routes() *http.ServeMux {
 	m.HandleFunc("/api/mood", s.humeur)
 	m.HandleFunc("/api/mood/traits", s.traits)
 	m.HandleFunc("/api/mood/commun", s.commun)
+	m.HandleFunc("/api/mood/evolution", s.evolution)
 	m.HandleFunc("/api/mood/historique", s.historique)
 	m.HandleFunc("/api/mood/oubli", s.oubli)
 	m.HandleFunc("/api/sante", s.sante)
@@ -170,9 +171,15 @@ func (s *Serveur) oubli(w http.ResponseWriter, r *http.Request) {
 	}
 	var n int64
 	var err error
-	if id := r.URL.Query().Get("session"); id != "" {
-		n, err = s.Store.OublieSession(id)
-	} else {
+	switch {
+	case r.URL.Query().Get("ref") != "":
+		// « REDEVENEZ-MOI INCONNU » : la clé de référence est la seule chose
+		// qui relie deux visites entre elles. L'effacer est le geste le plus
+		// complet qu'on puisse offrir côté board.
+		n, err = s.Store.OublieReference(r.URL.Query().Get("ref"))
+	case r.URL.Query().Get("session") != "":
+		n, err = s.Store.OublieSession(r.URL.Query().Get("session"))
+	default:
 		n, err = s.Store.Tout()
 	}
 	if err != nil {

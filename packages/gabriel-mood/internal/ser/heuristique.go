@@ -71,6 +71,11 @@ const MinTramesVoisees = 25
 // a des pics — et se situe bien en-dessous de 0,4.
 const SeuilBruit = 0.55
 
+// SeuilAmbiance : au-delà, ce qui joue dans la pièce pèse plus que la voix.
+// Même valeur que le seuil de dominance du détecteur de tempo — c'est la même
+// décision, prise au même endroit conceptuel.
+const SeuilAmbiance = 0.55
+
 // PartVoiseeMin : en-dessous, la fenêtre est surtout du silence ou du bruit.
 const PartVoiseeMin = 0.12
 
@@ -94,6 +99,14 @@ func (h *Heuristique) Evalue(t Traits) Lecture {
 		return LectureIndeterminee(MotifPeuDeVoix,
 			fmt.Sprintf("pas assez de voix sur la fenêtre (%d trames voisées, %.0f %% de la durée)",
 				t.TramesVoisees, t.PartVoisee*100), vivante)
+	}
+	if t.AmbiancePart > SeuilAmbiance {
+		return LectureIndeterminee(MotifAmbiance,
+			fmt.Sprintf("ce qui joue dans la pièce domine (%.0f %% de l'énergie%s) : "+
+				"ce qu'on mesurerait ne serait plus une personne",
+				t.AmbiancePart*100,
+				map[bool]string{true: fmt.Sprintf(", tempo %.0f BPM", t.AmbianceBPM)}[t.AmbianceBPM > 0]),
+			vivante)
 	}
 	if t.Platitude > SeuilBruit {
 		return LectureIndeterminee(MotifBruit,
@@ -139,6 +152,13 @@ func (h *Heuristique) Evalue(t Traits) Lecture {
 		dire("voix plus basse et plus posée que votre ordinaire (activation %+.2f)", activation)
 	default:
 		dire("voix proche de votre ordinaire (activation %+.2f)", activation)
+	}
+	if t.AmbianceBPM > 0 {
+		// CONTEXTE, PAS GÊNE. On parle plus haut quand il y a du fond : le
+		// dire évite de lire comme de l'activation ce qui n'est qu'une pièce
+		// bruyante.
+		dire("ambiance à %.0f BPM dans la pièce (%.0f %% de l'énergie) — "+
+			"on parle plus haut quand il y a du fond", t.AmbianceBPM, t.AmbiancePart*100)
 	}
 
 	// ── AXE 2 : TENUE ─────────────────────────────────────────────────────

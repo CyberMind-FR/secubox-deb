@@ -1,8 +1,8 @@
 Package: gabriel-mood
-Version: 0.3.0-1~bookworm1
+Version: 0.4.0-1~bookworm1
 Architecture: arm64
 Maintainer: Gerald Kerma <devel@cybermind.fr>
-Installed-Size: 8849
+Installed-Size: 8851
 Depends: adduser
 Recommends: nginx
 Section: sound

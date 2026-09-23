@@ -26,8 +26,11 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/gabriel-mood/internal/ser"
 
 	_ "modernc.org/sqlite"
 )
@@ -69,6 +72,28 @@ CREATE TABLE IF NOT EXISTS resume (
   PRIMARY KEY (minute, session)
 );
 CREATE INDEX IF NOT EXISTS idx_resume_minute ON resume(minute DESC);
+
+-- LA RÉFÉRENCE D'UNE VOIX, POUR QU'ELLE SURVIVE À UN RECHARGEMENT.
+--
+-- CE QUI EST STOCKÉ TIENT EN QUINZE NOMBRES : cinq traits, chacun avec son
+-- centre, sa dispersion et son compte. On ne peut en reconstituer ni parole,
+-- ni voix, ni même une phrase — c'est le résumé de ce qui est ORDINAIRE chez
+-- quelqu'un, pas un enregistrement de ce qu'il a dit.
+--
+-- LA CLÉ EST FABRIQUÉE PAR LE NAVIGATEUR et rangée dans son stockage local.
+-- Le serveur ne l'attribue pas : il ne peut donc pas la relier à une adresse,
+-- un compte ou une session précédente autrement que par ce que le navigateur
+-- lui présente. Effacer le stockage du navigateur suffit à redevenir inconnu,
+-- et POST /api/mood/oubli efface aussi la ligne cote board.
+--
+-- CE QU'IL FAUT SAVOIR QUAND MÊME : deux visites qui présentent la même clé
+-- sont, par construction, reconnues comme la même. C'est le prix de la
+-- persistance, il est assumé, et il est révocable des deux côtés.
+CREATE TABLE IF NOT EXISTS reference (
+  cle  TEXT    PRIMARY KEY,
+  maj  INTEGER NOT NULL,
+  doc  TEXT    NOT NULL
+);
 `
 
 // Ouvre la base et pose le schéma.
@@ -127,6 +152,69 @@ func (s *Store) Depuis(debut time.Time, limite int) ([]Resume, error) {
 	return out, lignes.Err()
 }
 
+// CleReference : une clé recevable.
+//
+// ELLE VIENT DU NAVIGATEUR, donc d'un inconnu : on ne la range pas telle
+// quelle. Seize à soixante-quatre caractères hexadécimaux, rien d'autre —
+// c'est assez pour être unique et ça interdit d'un coup les clés absurdement
+// longues, les caractères de contrôle et tout ce qui ressemblerait à une
+// tentative de se servir de la base comme d'un dépotoir.
+func CleReference(c string) bool {
+	if len(c) < 16 || len(c) > 64 {
+		return false
+	}
+	for _, r := range c {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// ChargeReference relit la référence d'une clé. Absente ou illisible, on rend
+// `false` — on repart d'une référence neuve plutôt que d'installer quelque
+// chose qu'on n'a pas su lire.
+func (s *Store) ChargeReference(cle string) (ser.Reference, bool) {
+	var doc string
+	if err := s.db.QueryRow(`SELECT doc FROM reference WHERE cle=?`, cle).Scan(&doc); err != nil {
+		return ser.Reference{}, false
+	}
+	var r ser.Reference
+	if err := json.Unmarshal([]byte(doc), &r); err != nil {
+		return ser.Reference{}, false
+	}
+	if r.Observations() <= 0 {
+		return ser.Reference{}, false
+	}
+	return r, true
+}
+
+// EnregistreReference retient la référence d'une clé.
+func (s *Store) EnregistreReference(cle string, r *ser.Reference) error {
+	if r == nil || r.Observations() <= 0 {
+		return nil
+	}
+	doc, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(
+		`INSERT OR REPLACE INTO reference(cle,maj,doc) VALUES(?,?,?)`,
+		cle, time.Now().Unix(), string(doc))
+	return err
+}
+
+// OublieReference efface la référence d'une clé — le geste « redevenez-moi
+// inconnu », côté board.
+func (s *Store) OublieReference(cle string) (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM reference WHERE cle=?`, cle)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // Purge efface ce qui est plus vieux que `avant`.
 //
 // ELLE EXISTE PARCE QU'UN HISTORIQUE QUI NE S'EFFACE PAS EST UN DOSSIER. Le
@@ -138,6 +226,13 @@ func (s *Store) Purge(avant time.Time) (int64, error) {
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
+	// LES RÉFÉRENCES AUSSI. Une référence qui survit des mois à sa dernière
+	// visite n'est plus un service rendu, c'est une trace qu'on garde sans
+	// raison — et la seule chose ici qui relie deux visites entre elles.
+	if r2, err := s.db.Exec(`DELETE FROM reference WHERE maj < ?`, avant.Unix()); err == nil {
+		m, _ := r2.RowsAffected()
+		n += m
+	}
 	return n, nil
 }
 
@@ -152,12 +247,17 @@ func (s *Store) OublieSession(id string) (int64, error) {
 	return n, nil
 }
 
-// Tout efface l'historique entier.
+// Tout efface l'historique entier, RÉFÉRENCES COMPRISES. « Oublier » qui
+// laisserait en place ce qui permet de vous reconnaître n'oublierait rien.
 func (s *Store) Tout() (int64, error) {
 	res, err := s.db.Exec(`DELETE FROM resume`)
 	if err != nil {
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
+	if r2, err := s.db.Exec(`DELETE FROM reference`); err == nil {
+		m, _ := r2.RowsAffected()
+		n += m
+	}
 	return n, nil
 }

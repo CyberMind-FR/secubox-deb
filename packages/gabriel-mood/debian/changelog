@@ -1,3 +1,42 @@
+gabriel-mood (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA RÉFÉRENCE SURVIT AU RECHARGEMENT. Quinze nombres — cinq traits, chacun
+    avec son centre, sa dispersion et son compte — rangés sous une clé que le
+    NAVIGATEUR fabrique et garde. Le serveur ne l'attribue pas : il ne peut
+    donc relier deux visites que par ce que le navigateur lui présente.
+  * Le prix est assumé et dit : deux visites qui présentent la même clé sont
+    reconnues comme la même personne. C'est ce qui évite de tout réapprendre.
+    Révocable des DEUX côtés — « Oublier » efface la ligne sur la board ET la
+    clé dans le navigateur, car n'en effacer qu'une n'oublierait rien.
+  * Les références se purgent comme le reste après la rétention : une
+    référence qui survit des mois à sa dernière visite n'est plus un service,
+    c'est une trace qu'on garde sans raison.
+  * AMBIANCE ET TEMPO. De la musique dans la pièce n'ajoute pas du bruit :
+    elle ajoute du bruit HARMONIQUE ET PÉRIODIQUE, c'est-à-dire exactement ce
+    qu'on cherche quand on cherche une voix. Le VAD la prend pour de la parole,
+    YIN lui trouve une hauteur, et l'on mesure une guitare en l'attribuant à
+    quelqu'un. Le plancher de bruit appris n'y peut rien : il apprend un
+    bourdonnement constant, pas une musique qui module.
+  * On la repère par son TEMPO — une pulsation régulière entre 60 et 180 BPM,
+    cherchée dans l'enveloppe d'énergie HORS parole. Une conversation a un
+    rythme syllabique plus rapide et bien moins régulier : un test vérifie
+    qu'elle n'est jamais prise pour de la musique, ce qui écarterait
+    précisément ce qu'on veut mesurer.
+  * DEUX RÉPONSES SELON LA FORCE : une ambiance discrète devient un CONTEXTE
+    (on parle plus haut quand il y a du fond — le dire évite de lire comme de
+    l'activation ce qui n'est qu'une pièce bruyante) ; une ambiance dominante
+    fait écarter la fenêtre, avec son motif. Ce n'est pas une séparation de
+    sources : on ne retire pas la musique, on refuse de faire semblant de ne
+    pas l'entendre.
+  * RÉSUMÉ D'ÉVOLUTION (`GET /api/mood/evolution?heures=24&session=…`) :
+    agrégats par heure, répartition des états, et une tendance obtenue en
+    comparant les deux moitiés de la période. Grossier, et voulu — une
+    régression sur des indices bruités donnerait une pente à trois décimales
+    dont aucune n'aurait de sens. AUCUNE PRÉDICTION : on décrit ce qui a été
+    mesuré, au passé. Même règle de session que /api/mood.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:32:54 +0200
+
 gabriel-mood (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * PLUS D'ÉTALONNAGE À ATTENDRE : la référence est vivante dès la première
