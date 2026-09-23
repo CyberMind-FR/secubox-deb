@@ -45,6 +45,18 @@ if [ "$1" = "configure" ]; then
         mkdir -p /var/backups/nginx
         mv -f "$_f" /var/backups/nginx/ 2>/dev/null || true
     done
+
+    # ROUTE SBXWAF — POSEE PAR CE PAQUET (#1323), comme son vhost et son unite.
+    # Sans elle, sbxwaf recoit un nom qu'il ne connait pas et rend 421, meme si
+    # HAProxy dirige bien et que nginx sert bien. Cette table n'appartenait a
+    # aucun paquet : 275 routes posees a la main, invisibles tant qu'elles
+    # tiennent, fatales le jour ou l'une saute (vu sur podcaster).
+    # L'outil vient de secubox-core, dont ce paquet depend deja ; le garde
+    # `command -v` couvre l'ordre de configuration a la premiere installation.
+    if command -v secubox-waf-route >/dev/null 2>&1; then
+      secubox-waf-route hall.gk2.secubox.in 9080 || true
+      secubox-waf-route hall.gk2.net 9080 || true
+    fi
     # Recharge nginx SEULEMENT si la configuration valide — et maintenant que
     # le lien est pose, ce reload sert le vhost depuis son nouvel emplacement.
     if [ -x /usr/sbin/nginx ] && nginx -t 2>/dev/null; then

@@ -1,3 +1,12 @@
+secubox-webos (1.0.326-1~bookworm1) bookworm; urgency=medium
+
+  * Le paquet pose SA PROPRE route sbxwaf via secubox-waf-route (#1323),
+    comme il pose déjà son vhost. Sans elle, sbxwaf reçoit un nom qu'il ne
+    connaît pas et rend 421, même si HAProxy dirige bien et que nginx sert
+    bien. Idempotent : une route déjà juste ne réécrit ni ne recharge rien.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 07:27:23 +0200
+
 secubox-webos (1.0.325-1~bookworm1) bookworm; urgency=medium
 
   * Carte « Mes sites » : la bande de vignettes et la barre à pastilles étaient

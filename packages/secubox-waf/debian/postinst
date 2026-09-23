@@ -85,6 +85,17 @@ EXPO
         echo "secubox-waf: nginx -t a echoue — vhost ${VHOST} depose mais non active" >&2
         rm -f "/etc/nginx/sites-enabled/${VHOST}.conf"
     fi
+    # ROUTE SBXWAF — POSEE PAR CE PAQUET (#1323), comme son vhost et son unite.
+    # Sans elle, sbxwaf recoit un nom qu'il ne connait pas et rend 421, meme si
+    # HAProxy dirige bien et que nginx sert bien. Cette table n'appartenait a
+    # aucun paquet : 275 routes posees a la main, invisibles tant qu'elles
+    # tiennent, fatales le jour ou l'une saute (vu sur podcaster).
+    # L'outil vient de secubox-core, dont ce paquet depend deja ; le garde
+    # `command -v` couvre l'ordre de configuration a la premiere installation.
+    if command -v secubox-waf-route >/dev/null 2>&1; then
+      secubox-waf-route waf.gk2.secubox.in 9080 || true
+    fi
+
 fi
 
 #DEBHELPER#

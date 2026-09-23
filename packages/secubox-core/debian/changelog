@@ -1,3 +1,19 @@
+secubox-core (1.5.8-1~bookworm3) bookworm; urgency=medium
+
+  * secubox-waf-route : un service déclare SA PROPRE route sbxwaf, comme il
+    déclare son vhost et son unité (#1323). La table haproxy-routes.json
+    n'appartenait à aucun paquet — 275 routes posées à la main, invisibles
+    tant qu'elles tiennent, fatales le jour où l'une saute (vu sur podcaster,
+    421 en pleine production). Livré par core, dont tous les modules
+    dépendent : sept postinst n'ont plus à réimplémenter la même fusion.
+    Deux prudences non négociables : une table ILLISIBLE fait abandonner
+    plutôt que repartir d'un dictionnaire vide (ce qui couperait toute la
+    box), et l'adresse est lue sur un voisin du même port au lieu d'imposer
+    127.0.0.1, injoignable depuis sbxwaf si la table vise l'IP de la board.
+    Écriture atomique : sbxwaf relit ce fichier à chaud.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 07:27:23 +0200
+
 secubox-core (1.5.7-1~bookworm3) bookworm; urgency=medium
 
   * get_cookie_audit_config() — le lecteur de section MANQUANT (ref #1311).

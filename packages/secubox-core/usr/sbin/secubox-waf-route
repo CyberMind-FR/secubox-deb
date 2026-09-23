@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: core — inscription d'une route sbxwaf par le paquet qui la porte
+CyberMind — https://cybermind.fr
+
+UN SERVICE DÉCLARE SA PROPRE ROUTE, comme il déclare son vhost et son unité.
+
+Le 421 n'a qu'une cause : sbxwaf reçoit un nom d'hôte qu'il ne connaît pas.
+HAProxy peut très bien diriger le nom vers l'inspecteur, nginx très bien le
+servir — si la table `/etc/secubox/waf/haproxy-routes.json` l'ignore, la
+requête meurt là. Or cette table n'appartenait à AUCUN paquet : 275 routes
+posées à la main, une par une, au fil des années. Invisible tant que ça tient,
+fatal le jour où une entrée saute — arrivé à `podcaster` le 2026-09-23.
+
+Ce script existe pour qu'un `postinst` n'ait plus à réimplémenter la fusion :
+
+    secubox-waf-route podcaster.gk2.secubox.in 9080
+
+DEUX PRUDENCES QUI NE SONT PAS NÉGOCIABLES :
+
+  * Une table ILLISIBLE fait ABANDONNER, jamais repartir d'un dictionnaire
+    vide. Réécrire la table couperait d'un coup tous les autres services de
+    la box — le remède serait cent fois pire que le mal.
+  * L'adresse n'est pas imposée. On lit celle qu'emploient DÉJÀ les voisins du
+    même port : la table de gk2 est écrite pour `192.168.1.200`, et un
+    `127.0.0.1` posé d'autorité y serait injoignable depuis sbxwaf.
+
+Idempotent : une route déjà correcte ne réécrit rien et ne recharge rien.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+TABLE = os.environ.get("SBX_WAF_ROUTES", "/etc/secubox/waf/haproxy-routes.json")
+# Un nom d'hôte, pas une expression : on refuse tout ce qui n'en est pas un
+# plutôt que d'écrire une clé qui ne correspondra jamais à une requête.
+NOM = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9._-]{0,251}[a-zA-Z0-9])?$")
+
+
+def adresse_voisine(table: dict, port: int, defaut: str = "127.0.0.1") -> str:
+    """L'adresse que la table emploie déjà pour ce port, sinon le défaut."""
+    for valeur in table.values():
+        if isinstance(valeur, list) and len(valeur) == 2 and valeur[1] == port:
+            return str(valeur[0])
+    return defaut
+
+
+def recharge_sbxwaf() -> None:
+    """sbxwaf relit sa table à chaud ; on ne le touche que s'il tourne."""
+    actif = subprocess.run(
+        ["systemctl", "is-active", "--quiet", "secubox-waf-ng"],
+        capture_output=True,
+    )
+    if actif.returncode != 0:
+        return
+    for verbe in ("reload", "restart"):
+        r = subprocess.run(["systemctl", verbe, "secubox-waf-ng"],
+                           capture_output=True)
+        if r.returncode == 0:
+            return
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 3:
+        print("usage: secubox-waf-route <domaine> <port>", file=sys.stderr)
+        return 2
+    domaine, brut = argv[1], argv[2]
+    if not NOM.match(domaine):
+        print(f"secubox-waf-route: domaine invalide : {domaine}", file=sys.stderr)
+        return 2
+    try:
+        port = int(brut)
+        if not (1 <= port <= 65535):
+            raise ValueError
+    except ValueError:
+        print(f"secubox-waf-route: port invalide : {brut}", file=sys.stderr)
+        return 2
+
+    if not os.path.isfile(TABLE):
+        # Pas de table : sbxwaf n'est pas (encore) installé. Ce n'est pas une
+        # erreur d'installation du service — il s'inscrira au prochain passage.
+        print(f"secubox-waf-route: {TABLE} absent, rien à faire")
+        return 0
+    try:
+        with open(TABLE) as fh:
+            table = json.load(fh)
+        if not isinstance(table, dict):
+            raise ValueError("la table n'est pas un objet")
+    except Exception as exc:  # noqa: BLE001 — JSON tronqué, droits, disque…
+        print(f"secubox-waf-route: table illisible ({exc}) — ABANDON, "
+              "on ne réécrit pas ce qu'on n'a pas su lire", file=sys.stderr)
+        return 1
+
+    cible = [adresse_voisine(table, port), port]
+    if table.get(domaine) == cible:
+        return 0                      # déjà juste : ni écriture, ni rechargement
+
+    table[domaine] = cible
+    dossier = os.path.dirname(TABLE) or "."
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".routes-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(table, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        # Écriture ATOMIQUE : sbxwaf relit ce fichier à chaud, et il ne doit
+        # jamais tomber sur un JSON à moitié écrit — il perdrait 275 routes
+        # le temps d'un `os.replace` non atomique.
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, TABLE)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    print(f"secubox-waf-route: {domaine} -> {cible[0]}:{cible[1]}")
+    recharge_sbxwaf()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

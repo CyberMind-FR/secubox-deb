@@ -108,6 +108,11 @@ override_dh_auto_install:
 	install -d debian/secubox-core/usr/sbin
 	install -m 755 usr/sbin/secubox-dirs-guard.sh \
 	               debian/secubox-core/usr/sbin/secubox-dirs-guard.sh
+	# UN SERVICE DECLARE SA PROPRE ROUTE (#1323). Livre ici parce que tous les
+	# modules dependent deja de secubox-core : sept postinst n'ont pas a
+	# reimplementer chacun la meme fusion JSON.
+	install -m 755 usr/sbin/secubox-waf-route \
+	               debian/secubox-core/usr/sbin/secubox-waf-route
 	install -m 644 systemd/secubox-dirs-guard.service \
 	               debian/secubox-core/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-dirs-guard.timer \
