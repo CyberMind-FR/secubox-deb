@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from secubox_core.auth import require_jwt
@@ -132,48 +132,206 @@ def _site_dir(name: str) -> Path:
     return d
 
 
-@router.post("/publish/wizard")
-async def publish_wizard(
-    name: str = Form(...),
-    domain: str = Form(None),
-    file: UploadFile = File(...),
-    user=Depends(require_jwt),
-):
+# ── L'ASSISTANT REND COMPTE PENDANT QU'IL TRAVAILLE (#1323) ────────────────
+#
+# CE QU'ON VOYAIT. « Publication… », puis plus rien. L'assistant dépose le
+# contenu, versionne, enregistre le domaine, régénère nginx, pose la route WAF
+# et demande le certificat — sur la board, des dizaines de secondes à plusieurs
+# minutes. Tout cela dans UNE requête dont la réponse n'arrive qu'à la fin : la
+# page restait figée, sans un mot, et l'on ne pouvait ni savoir où l'on en
+# était, ni distinguer un travail en cours d'un blocage.
+#
+# LES ÉTAPES EXISTAIENT POURTANT, mais seulement dans le compte rendu final, et
+# la page n'en affichait que quatre sur six. `vhost` — qui décide pourtant du
+# verdict — n'était montré nulle part : une publication refusée par `nginx -t`
+# affichait quatre pastilles vertes et aucune rouge.
+#
+# CE QU'ON FAIT. La séquence devient un GÉNÉRATEUR : chaque étape est rendue
+# dès qu'elle est finie. Deux emballages s'en servent — la réponse JSON d'hier,
+# inchangée pour les appelants existants (le hub de publication, les tests), et
+# un flux NDJSON quand le client le demande, une ligne par étape. La page
+# allume ses pastilles au fil de l'eau.
+#
+# L'ORDRE N'EST PAS LIBRE : le domaine s'enregistre AVANT la régénération, sans
+# quoi le générateur relit le disque et retombe sur `<nom>.gk2.secubox.in`.
+
+# Les étapes, dans l'ordre, avec leur libellé. La page n'a plus à les deviner :
+# une étape ajoutée ici apparaît d'elle-même à l'écran.
+# Entre deux battements. Bien en-deçà des 30 s d'HAProxy, assez espacé pour ne
+# pas noyer le flux.
+BATTEMENT_SEC = 8.0
+
+ETAPES_ASSISTANT = [
+    ("content", "Contenu"),
+    ("version", "Version"),
+    ("domaine", "Domaine"),
+    ("vhost", "Service"),
+    ("route", "Route"),
+    ("cert", "Certificat"),
+]
+
+
+async def _sequence_publication(name: str, domain: str, data: bytes, nom_fichier: str):
+    """Déroule la publication en rendant chaque étape DÈS qu'elle est finie."""
     site = _site_dir(name)
     docroot = site / "public"
     docroot.mkdir(parents=True, exist_ok=True)
-    domain = domain or f"{name}{DEFAULT_DOMAIN_SUFFIX}"
-    steps: dict = {}
 
-    data = await file.read()
     try:
-        steps["content"] = extract_archive(docroot, data, file.filename or "index.html")
+        contenu = extract_archive(docroot, data, nom_fichier or "index.html")
     except ContentError as e:
         raise HTTPException(400, f"unsafe upload: {e}")
+    yield "content", contenu
 
     # Chaque étape ci-dessous shelle un sous-processus (git, nginx, publishctl).
     # On les DÉCHARGE sur des threads (`to_thread`) : sinon elles bloquent la
     # boucle asyncio pendant des minutes — la requête 504 au délai amont et TOUT
     # le reste de l'API (dont /deploys du panneau, /sites) pendouille (#1105).
-    steps["version"] = await asyncio.to_thread(git_commit_push, site, f"publish {name} via wizard")
-    # ORDRE VOULU : le domaine est enregistré AVANT la régénération, sans quoi
-    # le générateur relit le disque et retombe sur `<nom>.gk2.secubox.in`.
-    steps["domaine"] = enregistre_domaine(site, domain)
-    steps["vhost"] = await asyncio.to_thread(publie_vhost, domain)
-    steps["route"] = await asyncio.to_thread(apply_route, domain, BASE_PORT)
-    steps["cert"] = await _cert_step(domain)
+    yield "version", await asyncio.to_thread(git_commit_push, site,
+                                             f"publish {name} via wizard")
+    yield "domaine", enregistre_domaine(site, domain)
+    yield "vhost", await asyncio.to_thread(publie_vhost, domain)
+    yield "route", await asyncio.to_thread(apply_route, domain, BASE_PORT)
+    yield "cert", await _cert_step(domain)
 
-    # `ok` EXIGE MAINTENANT QUE LE DOMAINE SOIT SERVI. Le compte rendu
-    # d'origine se satisfaisait du contenu et de la route — un domaine sans
-    # bloc `server` passait donc pour publié alors qu'il montrait le site du
-    # voisin. Une étape qui n'entre pas dans le verdict ne protège de rien.
-    ok = (bool(steps["content"].get("index_present"))
-          and bool(steps["route"].get("route_ok"))
-          and bool(steps["vhost"].get("ok")))
-    # L'état écrit suit le verdict, pas l'intention : un assistant qui a échoué
-    # ne marque pas le site publié.
-    steps["etat"] = marque_publie(site, ok)
-    return {"ok": ok, "domain": domain, "steps": steps}
+
+def etat_etape(cle: str, res: dict) -> tuple[str, str]:
+    """L'état d'une étape, et ce qu'on en dit à l'écran.
+
+    C'EST AU SERVEUR DE TRANCHER, PAS À LA PAGE. Chaque étape rend une forme
+    qui lui est propre — `index_present`, `route_ok`, `ok`, `mode`… La page
+    marquait donc `version` et `cert` réussies EN DUR, quelle qu'ait été leur
+    issue : un `git push` refusé s'affichait en vert. Une pastille qui ment est
+    pire qu'une pastille absente, parce qu'on la croit.
+
+    Trois états, et le troisième compte : `encours` pour un certificat custom
+    que certbot obtient en tâche de fond. Le peindre en vert serait mentir, en
+    rouge serait alarmer pour rien.
+    """
+    res = res or {}
+    if cle == "content":
+        ok = bool(res.get("index_present"))
+        return ("ok" if ok else "echec",
+                "" if ok else "aucun index.html dans l'archive")
+    if cle == "version":
+        if res.get("committed") or res.get("pushed"):
+            return "ok", res.get("commit", "")
+        return "echec", res.get("reason", "rien n'a été versionné")
+    if cle == "route":
+        ok = bool(res.get("route_ok"))
+        return ("ok" if ok else "echec", "" if ok else str(res.get("detail", "")))
+    if cle == "cert":
+        if res.get("mode") == "provisioning":
+            return "encours", str(res.get("detail", ""))
+        return "ok", str(res.get("mode", ""))
+    # `domaine` et `vhost` disent tous deux `ok` / `detail`.
+    ok = bool(res.get("ok"))
+    return ("ok" if ok else "echec", str(res.get("detail", "")))
+
+
+def _verdict(steps: dict) -> bool:
+    """`ok` EXIGE QUE LE DOMAINE SOIT SERVI. Le compte rendu d'origine se
+    satisfaisait du contenu et de la route — un domaine sans bloc `server`
+    passait donc pour publié alors qu'il montrait le site du voisin. Une étape
+    qui n'entre pas dans le verdict ne protège de rien."""
+    return (bool(steps.get("content", {}).get("index_present"))
+            and bool(steps.get("route", {}).get("route_ok"))
+            and bool(steps.get("vhost", {}).get("ok")))
+
+
+@router.post("/publish/wizard")
+async def publish_wizard(
+    name: str = Form(...),
+    domain: str = Form(None),
+    file: UploadFile = File(...),
+    flux: int = 0,
+    user=Depends(require_jwt),
+):
+    domain = domain or f"{name}{DEFAULT_DOMAIN_SUFFIX}"
+    data = await file.read()
+    nom_fichier = file.filename or "index.html"
+    site = _site_dir(name)
+
+    if not flux:
+        steps: dict = {}
+        async for nom, res in _sequence_publication(name, domain, data, nom_fichier):
+            steps[nom] = res
+        ok = _verdict(steps)
+        # L'état écrit suit le verdict, pas l'intention : un assistant qui a
+        # échoué ne marque pas le site publié.
+        steps["etat"] = marque_publie(site, ok)
+        return {"ok": ok, "domain": domain, "steps": steps}
+
+    # FLUX NDJSON : une ligne par étape, la dernière portant le verdict. On
+    # n'attend pas la fin pour parler — c'est tout l'objet du correctif.
+    async def lignes():
+        steps: dict = {}
+        yield json.dumps({"type": "debut", "domain": domain,
+                          "etapes": [{"cle": c, "libelle": l}
+                                     for c, l in ETAPES_ASSISTANT]}) + "\n"
+
+        # LE FLUX DOIT BATTRE PENDANT UNE ÉTAPE LONGUE.
+        #
+        # HAProxy coupe à 30 s D'INACTIVITÉ (`timeout server`, section
+        # `defaults`). Or régénérer nginx pour cent soixante-trois sites, ou
+        # pousser un dépôt git, peut dépasser cela sans émettre un octet : la
+        # connexion tomberait au milieu, et la page croirait à un plantage
+        # alors que la publication, elle, se poursuit côté serveur.
+        #
+        # On émet donc un battement régulier tant qu'une étape travaille. Il
+        # tient la connexion ouverte ET il dit la vérité : « toujours en cours
+        # sur cette étape-là », ce qu'aucune barre de progression inventée ne
+        # saurait faire honnêtement.
+        file: asyncio.Queue = asyncio.Queue()
+
+        async def travaille():
+            try:
+                async for nom, res in _sequence_publication(name, domain, data, nom_fichier):
+                    await file.put(("etape", nom, res))
+            except HTTPException as e:
+                await file.put(("echec", None, str(e.detail)))
+            except Exception as e:  # noqa: BLE001 — l'appelant doit savoir, pas deviner
+                await file.put(("echec", None, f"{type(e).__name__}: {e}"))
+            finally:
+                await file.put(("fini", None, None))
+
+        tache = asyncio.create_task(travaille())
+        rate = False
+        motif = ""
+        while True:
+            try:
+                genre, nom, charge = await asyncio.wait_for(file.get(), BATTEMENT_SEC)
+            except asyncio.TimeoutError:
+                yield json.dumps({"type": "attente"}) + "\n"
+                continue
+            if genre == "fini":
+                break
+            if genre == "echec":
+                rate, motif = True, charge
+                continue
+            steps[nom] = charge
+            etat, detail = etat_etape(nom, charge)
+            yield json.dumps({"type": "etape", "cle": nom, "etat": etat,
+                              "detail": detail, "res": charge},
+                             default=str) + "\n"
+        await tache
+        if rate:
+            # Le flux a déjà commencé : on ne peut plus changer le code HTTP.
+            # On dit donc l'échec DANS le flux — sans quoi la page attendrait
+            # une suite qui ne viendrait jamais.
+            yield json.dumps({"type": "fin", "ok": False, "detail": motif}) + "\n"
+            return
+        ok = _verdict(steps)
+        steps["etat"] = marque_publie(site, ok)
+        yield json.dumps({"type": "fin", "ok": ok, "domain": domain,
+                          "steps": steps}, default=str) + "\n"
+
+    return StreamingResponse(lignes(), media_type="application/x-ndjson",
+                             # Sans cela, nginx tamponne la réponse et la rend
+                             # d'un bloc à la fin : le flux existerait sans que
+                             # personne ne le voie passer.
+                             headers={"X-Accel-Buffering": "no",
+                                      "Cache-Control": "no-store"})
 
 
 class RouteRequest(BaseModel):

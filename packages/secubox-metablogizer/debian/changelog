@@ -1,3 +1,42 @@
+secubox-metablogizer (1.8.18-1~bookworm1) bookworm; urgency=medium
+
+  * L'assistant de publication rend compte PENDANT qu'il travaille (#1323).
+    On voyait « Publication… », puis plus rien. L'assistant dépose le contenu,
+    versionne, enregistre le domaine, régénère nginx, pose la route WAF et
+    demande le certificat — sur la board, des dizaines de secondes à plusieurs
+    minutes, le tout dans UNE requête dont la réponse n'arrive qu'à la fin. La
+    page restait figée sans un mot : impossible de distinguer un travail en
+    cours d'un blocage, et rien ne permettait de reprendre.
+  * La séquence est devenue un générateur ; chaque étape part dès qu'elle est
+    finie, en NDJSON. La réponse JSON d'hier reste identique pour les appelants
+    existants (hub de publication, tests) — le flux est demandé par `?flux=1`.
+  * LA PAGE N'AFFICHAIT QUE QUATRE ÉTAPES SUR SIX, et pas « Service », celle
+    qui décide pourtant du verdict : une publication refusée par `nginx -t`
+    montrait quatre pastilles vertes et aucune rouge. La liste des étapes est
+    désormais annoncée PAR LE SERVEUR au début du flux ; elle ne peut plus
+    diverger.
+  * C'EST LE SERVEUR QUI DIT SI UNE ÉTAPE A RÉUSSI. La page marquait `version`
+    et `cert` vertes EN DUR : un `git push` refusé s'affichait comme un succès.
+    Une pastille qui ment est pire qu'une pastille absente, parce qu'on la
+    croit. Trois états, dont `encours` pour un certificat que certbot obtient
+    en tâche de fond — le peindre en vert serait mentir, en rouge alarmer pour
+    rien.
+  * LE FLUX BAT toutes les huit secondes pendant une étape longue. HAProxy
+    coupe à 30 s D'INACTIVITÉ (`timeout server`), or régénérer nginx pour cent
+    soixante-trois sites peut les dépasser sans émettre un octet : la connexion
+    serait tombée au milieu et la page aurait cru à un plantage, alors que la
+    publication se poursuivait. `X-Accel-Buffering: no` pour que nginx ne
+    retienne pas le flux jusqu'à la fin.
+  * En cas d'échec, on nomme les étapes fautives et leur motif, et le bouton
+    redevient actif — il restait désactivé, obligeant à recharger la page pour
+    réessayer. Une panne imprévue sort désormais par le flux avec son motif, au
+    lieu de couper la connexion en silence.
+  * 13 tests, qui n'utilisent pas TestClient (cassé selon la version de
+    starlette) mais déroulent la séquence et le flux directement ; celui du
+    battement échoue bien sans lui.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 09:59:59 +0200
+
 secubox-metablogizer (1.8.17-1~bookworm1) bookworm; urgency=medium
 
   * GET /public/mosaique (#1323) : projection ÉTROITE des sites servis pour la

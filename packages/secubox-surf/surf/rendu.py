@@ -177,6 +177,24 @@ def rends(url: str, budget_ms: int = 9000,
             _ouverte = False
         if len(dom) < 500:
             return None
+        # LA COPIE DOIT ÊTRE CELLE DE LA PAGE DEMANDÉE.
+        #
+        # Le site peut naviguer AILLEURS pendant le rendu : portail de
+        # consentement (first-id), mur anti-robot, redirection marketing. La
+        # box bloque ces destinations, Chromium affiche sa page d'erreur, et
+        # c'est ELLE que `--dump-dom` rendait — mise en cache cinq minutes sous
+        # le nom de l'article. Le visiteur recevait alors `gate.first-id.fr`
+        # au lieu de son journal, et une relance n'y changeait rien avant
+        # expiration.
+        #
+        # Le contrôle est simple parce que la réécriture nous le donne : un
+        # rendu de NOTRE origine en est truffé (chaque lien, chaque image, y a
+        # été rabattu). Zéro occurrence, c'est qu'on regarde une autre page.
+        # Dans le doute on rend None : l'appelant sert la voie légère figée,
+        # qui est lisible — une copie fausse, elle, ne l'est jamais.
+        hote = url.split("//", 1)[-1].split("/", 1)[0].split(":")[0]
+        if hote and hote not in dom:
+            return None
         medias = _classe(list(_ardoise))
         _au_cache(url, dom, medias)
         return dom, medias

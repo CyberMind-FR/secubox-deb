@@ -51,6 +51,36 @@ _SITES_LOURDS = {"bfmtv.com"}
 # Le lecteur prete aux pages figees (cf. relais.ranime_media).
 _HLS_JS = Path("/usr/lib/secubox/surf/hls.min.js")
 
+# Ce qu'on accepte d'attendre AVANT de rendre la voie légère figée. HAProxy
+# coupe à 30 s ; il faut de la marge pour aller chercher l'amont et le figer.
+_ATTENTE_CARBONE = 18.0
+# Combien de copies carbone peuvent cuire EN MÊME TEMPS. Chaque rendu est un
+# Chromium ; `rendu.rends` les sérialise déjà par un verrou, mais rien
+# n'empêcherait d'empiler cent threads en attente de ce verrou. Sur une carte
+# arm64 c'est le genre d'empilement qui ne se voit qu'une fois la RAM pleine.
+_MAX_RENDUS = 3
+# Les rendus en cours, par URL : deux visiteurs de la même page n'en lancent
+# qu'un seul, et le second profite du travail du premier.
+_rendus: dict[str, "asyncio.Task"] = {}
+
+
+def _tache_rendu(url_surf: str):
+    """La tâche de rendu pour cette URL — celle en cours, ou une nouvelle.
+
+    Rend None quand trop de rendus cuisent déjà : l'appelant sert alors la voie
+    légère figée. Refuser une copie coûte une page moins belle ; l'accepter
+    sans limite coûte la board.
+    """
+    t = _rendus.get(url_surf)
+    if t is not None and not t.done():
+        return t
+    if len(_rendus) >= _MAX_RENDUS:
+        return None
+    t = asyncio.ensure_future(asyncio.to_thread(rendu.rends, url_surf))
+    _rendus[url_surf] = t
+    t.add_done_callback(lambda _t: _rendus.pop(url_surf, None))
+    return t
+
 
 # Un seul client async par mode, réutilisé : ouvrir une connexion par requête
 # jetterait le bénéfice du keep-alive vers l'amont.
@@ -407,10 +437,32 @@ async def app(scope, receive, send):
     if (methode == "GET" and veut_carbone and est_document
             and rendu.MARQUEUR_UA not in ua and rendu.disponible()):
         url_surf = "https://" + hote_proxy + chemin + (("?" + qs) if qs else "")
-        # Rendu headless = subprocess BLOQUANT (~15-40s) : hors de l'event loop,
-        # sinon il gèle tout le relais. Un thread, et le verrou global de rendu.py
-        # serialise les Chromium (un seul a la fois sur arm64).
-        rendu_fait = await asyncio.to_thread(rendu.rends, url_surf)
+        # LE RENDU NE TIENT PAS DANS UNE REQUETE, ET N'AVAIT PAS A ESSAYER.
+        # Chromium met ~40 s ; HAProxy coupe a 30 (`timeout client/server` de
+        # la section defaults — le `proxy_read_timeout 120s` de nginx ne s'y
+        # oppose pas, il est EN AVAL du plus court). Attendre la copie carbone
+        # dans la requete, c'etait donc garantir la page « Service recovering »
+        # au PREMIER visiteur d'un article, a chaque fois.
+        #
+        # On attend maintenant un budget BORNE, puis on rend la voie legere
+        # FIGEE — lisible, sans ballet de consentement — pendant que la copie
+        # se termine en fond et se met en cache. Le visiteur suivant, lui, a la
+        # carbone immediatement. Personne n'attend plus pour rien.
+        rendu_fait = None
+        tache = _tache_rendu(url_surf)
+        if tache is not None:
+            try:
+                # `shield` : le delai d'attente ne doit pas ANNULER le rendu.
+                # Sans lui, on jetterait a 18 s un travail de 40 s deja engage,
+                # et le visiteur suivant le relancerait de zero.
+                rendu_fait = await asyncio.wait_for(asyncio.shield(tache),
+                                                    _ATTENTE_CARBONE)
+            except asyncio.TimeoutError:
+                # La copie n'est pas prête : elle se termine en fond et servira
+                # au visiteur suivant. Celui-ci a la voie légère figée.
+                rendu_fait = None
+            except Exception:  # noqa: BLE001 — un rendu qui casse ne casse pas la page
+                rendu_fait = None
         if rendu_fait:
             dom, medias_vus = rendu_fait
             # Le DOM rendu porte DEJA des origines surf (le relais les a
@@ -488,6 +540,10 @@ async def app(scope, receive, send):
         # ballet first-id. r.text est le HTML BRUT amont -> sur_hote normal
         # (raw -> surf), pas de double-reecriture.
         corps = relais.fige(r.text, base, sur_hote).encode()
+        # ON DIT LAQUELLE DES DEUX ON SERT. Les deux voies rendent du HTML figé
+        # d'apparence voisine ; sans cet en-tête, diagnostiquer « pourquoi cette
+        # page n'a pas sa copie carbone » demande de deviner.
+        entetes_out["x-surf-rendu"] = "leger-fige"
     elif "text/html" in ct:
         # JARRE D'ETAT (#1235) : on REINJECTE le storage retenu pour cet hote,
         # inline dans la tete, AVANT les scripts du site (pendant du Cookie

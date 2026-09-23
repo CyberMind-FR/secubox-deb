@@ -72,6 +72,16 @@ func main() {
 		} else if n > 0 {
 			jr.Printf("reclasser : %d articles remis a leur place", n)
 		}
+		// REPARATION DES TITRES-GABARITS (#1323). Certains flux publient leur
+		// propre code de mise en page : « Vidéo. $content.TitleNoTags ». Le
+		// correctif a l'ingestion ne vaut que pour ce qui ARRIVE ; ce qui est
+		// deja en base doit etre repris. AVANT le rafraichissement, qui va
+		// reprendre le titre de l'article le plus recent — donc celui-ci.
+		if n, err := pipe.ReparerTitres(maintenant - 30*24*3600); err != nil {
+			jr.Printf("reparer-titres : %v", err)
+		} else if n > 0 {
+			jr.Printf("reparer-titres : %d titres rendus lisibles", n)
+		}
 		// RAFRAICHISSEMENT DES SUJETS DEJA EN BASE (#1323). Un sujet n'est
 		// recompose que s'il RECOIT un article ; ceux qui n'en recoivent plus
 		// gardaient le titre de leur article fondateur, meme vieux de

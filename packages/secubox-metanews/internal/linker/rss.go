@@ -235,9 +235,12 @@ func analyserRSS(corps []byte) ([]Contenu, error) {
 		if date == "" {
 			date = it.Date
 		}
+		// Le corps sert DEUX fois : tel quel, et comme secours quand le titre
+		// n'est qu'un gabarit non substitué (cf. titre.go).
+		corps := nettoyer(it.Desc)
 		out = append(out, Contenu{
-			Titre:      strings.TrimSpace(it.Title),
-			Corps:      nettoyer(it.Desc),
+			Titre:      TitreLisible(strings.TrimSpace(it.Title), corps),
+			Corps:      corps,
 			URL:        strings.TrimSpace(it.Link),
 			Ref:        ref,
 			Auteur:     strings.TrimSpace(it.Creator),
@@ -281,9 +284,10 @@ func analyserAtom(corps []byte) ([]Contenu, error) {
 				break
 			}
 		}
+		corps := nettoyer(corpsTxt)
 		out = append(out, Contenu{
-			Titre:      strings.TrimSpace(e.Title),
-			Corps:      nettoyer(corpsTxt),
+			Titre:      TitreLisible(strings.TrimSpace(e.Title), corps),
+			Corps:      corps,
 			URL:        strings.TrimSpace(lien),
 			Ref:        firstNon(strings.TrimSpace(e.ID), strings.TrimSpace(lien)),
 			Auteur:     strings.TrimSpace(e.Author.Name),

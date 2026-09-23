@@ -1,3 +1,88 @@
+secubox-metanews (0.1.41-1~bookworm1) bookworm; urgency=medium
+
+  * Un sujet abîmé que plus aucun article ne désigne guérit quand même (#1323).
+    Un sujet prend le titre de son article le plus récent : réparer les
+    articles DEVRAIT suffire. Mais les deux écritures sont distinctes, et une
+    interruption entre elles laisse des sujets au gabarit que rien ne reprendra
+    — leurs articles, eux, sont devenus propres. Onze sujets se trouvaient dans
+    cet état, orphelins d'une passe tuée par un redémarrage, et aucune des deux
+    versions précédentes ne pouvait plus les atteindre.
+  * La passe cherche donc aussi les SUJETS pour eux-mêmes, avec le même partage
+    des rôles : trois `LIKE` en SQL pour déblayer, `PorteUnGabarit` en Go pour
+    trancher. Recomposer y remet le titre de l'article le plus récent, devenu
+    lisible.
+  * Test dédié, qui rejoue exactement l'état laissé par l'interruption.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 09:42:26 +0200
+
+secubox-metanews (0.1.40-1~bookworm1) bookworm; urgency=medium
+
+  * La réparation remonte jusqu'au SUJET (#1323). Les 79 articles étaient bien
+    corrigés en base, mais onze sujets continuaient d'afficher
+    « $content.TitleNoTags » — et c'est le sujet qu'on lit. J'avais laissé ce
+    soin à Rafraichir, qui passe juste après ; il n'y arrivait pas. Un article
+    réparé dont le sujet ne l'est pas n'est pas réparé POUR LE LECTEUR.
+  * Réparer 79 articles ne touche qu'une vingtaine de sujets : on les recompose
+    sur-le-champ, au lieu d'espérer qu'un balayage général y parvienne.
+  * ET LE BALAYAGE N'Y PARVENAIT PAS — défaut introduit avec Rafraichir en
+    0.1.37, mesuré aujourd'hui seulement. « Bornée à trente jours » laissait
+    29 324 sujets à recomposer : des heures de carte arm64, en concurrence avec
+    le sondage des flux, et tout reperdu au redémarrage suivant. Une passe qui
+    n'aboutit jamais ne sert à rien. Elle est désormais bornée AUSSI en nombre
+    (400, le haut de la pile) : c'est ce qu'un lecteur voit, et ça finit.
+  * Deux tests, tous deux vérifiés défaillants sans leur correctif.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 09:40:55 +0200
+
+secubox-metanews (0.1.39-1~bookworm1) bookworm; urgency=medium
+
+  * La passe de réparation se fait oublier (#1323). La version précédente
+    chargeait les 41 231 articles de la fenêtre pour en corriger 79 : six
+    minutes de sqlite pur-Go sur la carte, à 40 % d'un cœur, pendant que le
+    sondage des flux tournait à côté. Mesuré sur gk2, pas supposé.
+  * Le SQL déblaie, Go tranche. Trois `LIKE` (`$`, `{`, `<`) forment un
+    SUR-ENSEMBLE grossier des formes de gabarit et ramènent 115 lignes au lieu
+    de 41 231 ; c'est ensuite `PorteUnGabarit` qui décide, seul capable de
+    distinguer « $content.TitleNoTags » de « $400m » ou « A$AP Rocky ». Le SQL
+    ne décide rien — s'il décidait, il se tromperait.
+  * Un test verrouille ce contrat : toute forme de gabarit DOIT ressortir du
+    pré-filtre. S'il en ratait une, la réparation sauterait l'article sans rien
+    dire, et le titre resterait illisible sans qu'on sache pourquoi.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 09:24:31 +0200
+
+secubox-metanews (0.1.38-1~bookworm1) bookworm; urgency=medium
+
+  * Un titre qui n'est qu'un gabarit cède la place au résumé (#1323). Le
+    Dauphiné publie depuis des semaines des titres de la forme
+    « Vidéo. $content.TitleNoTags » : le chapeau est là, mais le titre est
+    resté une référence que le moteur du site n'a pas substituée. 79 dépêches
+    sur 2 sources, et autant de sujets qui s'annoncent par du jargon.
+  * On a de quoi réparer : le résumé du même article porte la vraie première
+    phrase. Le chapeau se garde — « Vidéo », « Savoie », « Notre enquête »
+    disent quelque chose de vrai sur la dépêche.
+  * UN `$` NE FAIT PAS UN GABARIT, et c'est le point délicat. « TikTok to pay
+    $400m », « A$AP Rocky », « LAPSUS$ » sont de VRAIS titres, et il y en a des
+    dizaines en base : un premier filtre sur ce seul caractère en attrapait une
+    centaine pour 79 vrais cas. On exige donc la forme complète d'une référence
+    de gabarit — des accolades, ou un POINT entre deux identifiants. Le test
+    qui protège les vrais titres est celui qui compte : abîmer un titre juste
+    est plus grave que laisser passer un gabarit.
+  * Une abréviation ne coupe pas la phrase : « M. Dupont » porte un point qui
+    ne termine rien. On ne coupe qu'à partir d'une longueur où une phrase est
+    plausible. Heuristique assumée — au pire une phrase un peu longue, jamais
+    un titre réduit à « M. ».
+  * PASSE DE RÉPARATION au démarrage, car corriger l'ingestion ne vaut que pour
+    ce qui ARRIVE : les 79 dépêches déjà enregistrées — un mois de publications
+    — auraient gardé leur gabarit pour toujours, et c'est justement ce qu'on
+    voit à l'écran. Idempotente (un titre réparé ne porte plus de gabarit),
+    bornée à trente jours, et placée AVANT le rafraîchissement des sujets qui
+    reprend le titre de l'article le plus récent.
+  * Sans corps, on ne fabrique rien : un gabarit affiché reste préférable à une
+    dépêche sans titre, qu'on ne saurait plus ni désigner ni retrouver.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 09:14:35 +0200
+
 secubox-metanews (0.1.37-1~bookworm1) bookworm; urgency=medium
 
   * Passe de RAFRAÎCHISSEMENT au démarrage : un sujet n'est recomposé que s'il

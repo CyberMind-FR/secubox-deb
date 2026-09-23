@@ -249,6 +249,31 @@ func (s *Store) ArticlesSansSujet(limit int) ([]Article, error) {
 	return s.scanArticles(`WHERE topic_id='' ORDER BY published_at DESC LIMIT ?`, limit)
 }
 
+// ArticlesSuspectsDeGabarit rend les articles récents dont le titre POURRAIT
+// contenir une référence de gabarit non substituée.
+//
+// LE SQL NE DÉCIDE RIEN, il déblaie. Les trois `LIKE` sont un SUR-ENSEMBLE
+// grossier des formes que `linker.PorteUnGabarit` reconnaît — `$`, `{`, `<` —
+// et c'est Go qui tranche ensuite, avec la seule expression qui sache
+// distinguer « $content.TitleNoTags » de « $400m » ou de « A$AP Rocky ».
+//
+// POURQUOI NE PAS TOUT LIRE. La première version chargeait les 41 231 articles
+// de la fenêtre pour en corriger 79 : six minutes de sqlite pur-Go sur la
+// carte, à 40 % d'un cœur, pendant que le sondage des flux tournait à côté. Le
+// pré-filtre ramène quelques centaines de lignes et la passe redevient
+// instantanée. Une passe de démarrage doit se faire oublier.
+func (s *Store) ArticlesSuspectsDeGabarit(depuis int64) ([]Article, error) {
+	return s.scanArticles(
+		`WHERE published_at>=? AND (title LIKE '%$%' OR title LIKE '%{%' OR title LIKE '%<%')
+		 ORDER BY published_at DESC, id DESC`, depuis)
+}
+
+// RenommerArticle corrige le titre d'un article déjà enregistré.
+func (s *Store) RenommerArticle(id int64, titre string) error {
+	_, err := s.db.Exec(`UPDATE article SET title=? WHERE id=?`, titre, id)
+	return err
+}
+
 // ArticlesDuSujet retourne les articles d'un sujet.
 func (s *Store) ArticlesDuSujet(topicID string) ([]Article, error) {
 	// `id DESC` en second : deux articles publiés à la MÊME seconde rendraient
@@ -311,6 +336,35 @@ func (s *Store) SetArticleSujet(articleID int64, topicID string) error {
 // regroupement d'un nouvel article).
 func (s *Store) SujetsRecents(since int64) ([]Topic, error) {
 	return s.scanTopics(`WHERE updated_at >= ? ORDER BY updated_at DESC`, since)
+}
+
+// SujetsSuspectsDeGabarit : les sujets récents dont le titre POURRAIT porter
+// une référence de gabarit. Même partage des rôles que pour les articles — le
+// SQL déblaie, `linker.PorteUnGabarit` tranche.
+//
+// POURQUOI UN PASSAGE À PART. Un sujet prend le titre de son article le plus
+// récent : réparer les articles devrait suffire. Mais les deux écritures sont
+// distinctes, et rien ne garantit qu'elles se soient faites dans le même
+// passage — une interruption entre les deux laisse des sujets abîmés que plus
+// rien ne vient reprendre, puisque leurs articles, eux, sont devenus propres.
+// C'est exactement ce qui est arrivé : onze sujets orphelins d'une passe tuée
+// par un redémarrage.
+func (s *Store) SujetsSuspectsDeGabarit(depuis int64, limite int) ([]Topic, error) {
+	return s.scanTopics(
+		`WHERE updated_at >= ? AND (title LIKE '%$%' OR title LIKE '%{%' OR title LIKE '%<%')
+		 ORDER BY updated_at DESC LIMIT ?`, depuis, limite)
+}
+
+// SujetsDerniers : les N sujets les plus récemment touchés.
+//
+// POUR LES PASSES D'ENTRETIEN, QUI DOIVENT FINIR. Trente jours de sujets, sur
+// cette base, font 29 324 lignes : les recomposer toutes au démarrage occupe
+// la carte des heures durant, en concurrence avec le sondage des flux, et un
+// simple redémarrage fait tout reperdre. Une passe qui n'aboutit jamais ne
+// sert à rien. On borne donc au haut de la pile — c'est ce qu'un lecteur voit.
+func (s *Store) SujetsDerniers(since int64, limite int) ([]Topic, error) {
+	return s.scanTopics(`WHERE updated_at >= ? ORDER BY updated_at DESC LIMIT ?`,
+		since, limite)
 }
 
 // SujetsListe retourne les sujets pour l'affichage (catégorie vide = tous).

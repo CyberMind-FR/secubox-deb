@@ -1,3 +1,45 @@
+secubox-surf (1.0.27-1~bookworm1) bookworm; urgency=medium
+
+  * Une copie carbone doit être celle de la page DEMANDÉE (#1323). Le site peut
+    naviguer ailleurs pendant le rendu — portail de consentement first-id, mur
+    anti-robot, redirection marketing. La box bloque la destination, Chromium
+    rend sa page d'erreur, et c'est ELLE que `--dump-dom` renvoyait : mise en
+    cache cinq minutes sous le nom de l'article. Le visiteur recevait
+    « gate.first-id.fr » au lieu de son journal, et recharger n'y changeait
+    rien avant expiration. Constaté en vérifiant le correctif précédent.
+  * Le contrôle est simple parce que la réécriture le donne : un rendu de NOTRE
+    origine en est truffé — chaque lien, chaque image y a été rabattu. Zéro
+    occurrence, c'est une autre page. On rend alors None, et l'appelant sert la
+    voie légère figée, qui est lisible : une copie fausse, elle, ne l'est
+    jamais. Rien n'entre en cache dans ce cas.
+  * Tests (13 au total) ; celui-ci échoue bien sans la garde.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 09:11:59 +0200
+
+secubox-surf (1.0.26-1~bookworm1) bookworm; urgency=medium
+
+  * Le premier visiteur d'un article lourd voit enfin quelque chose (#1323).
+    La copie carbone demande ~40 s à Chromium ; HAProxy coupe à 30 (`timeout
+    client/server` de la section `defaults` — le `proxy_read_timeout 120s` de
+    nginx ne s'y oppose pas, il est EN AVAL du plus court). Attendre le rendu
+    DANS la requête, c'était donc garantir la page « Service recovering » au
+    premier visiteur, à chaque fois : la copie aboutissait et se mettait en
+    cache, mais personne ne la voyait avant un second accès.
+  * On attend désormais un budget BORNÉ (18 s), puis on sert la voie légère
+    FIGÉE — lisible, sans ballet de consentement — pendant que la copie se
+    termine en fond. Le visiteur suivant a la carbone immédiatement. Le rendu
+    n'est pas annulé au passage du délai (`shield`) : jeter à 18 s un travail
+    de 40 s déjà engagé aurait fait tout recommencer au suivant.
+  * Deux visiteurs de la même page ne lancent qu'un rendu, et au plus trois
+    cuisent à la fois. `rendu.rends` les sérialisait déjà par un verrou, mais
+    rien n'empêchait d'empiler des threads EN ATTENTE de ce verrou — sur une
+    carte arm64, le genre d'empilement qui ne se voit qu'une fois la RAM pleine.
+  * `x-surf-rendu: leger-fige` sur la voie de repli. Les deux voies rendent du
+    HTML figé d'apparence voisine ; sans cet en-tête, diagnostiquer « pourquoi
+    cette page n'a pas eu sa copie carbone » demandait de deviner.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 09:07:56 +0200
+
 secubox-surf (1.0.25-1~bookworm1) bookworm; urgency=medium
 
   * Le FLUX passe par la box, pas seulement la page (#1323). Un manifeste

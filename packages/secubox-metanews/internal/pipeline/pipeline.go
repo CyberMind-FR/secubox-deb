@@ -213,10 +213,89 @@ func (p *Pipe) Reclasser(now int64) (int, error) {
 // aurait sortis tant qu'aucune nouvelle dépêche ne les rejoignait.
 //
 // Idempotente : recomposer relit les articles et recalcule ; deux passages
-// donnent le même résultat. Bornée aux sujets récents — les archives n'ont
-// pas besoin d'être réécrites pour un titre qu'on ne lit plus.
+// donnent le même résultat. DOUBLEMENT bornée — par la fenêtre de temps, et
+// par `MaxRafraichis`. La seconde borne a été ajoutée après coup : la fenêtre
+// seule laissait près de trente mille sujets, et la passe n'aboutissait jamais
+// avant le redémarrage suivant. Les archives, elles, n'ont pas besoin d'être
+// réécrites pour un titre que plus personne ne lit.
+// ReparerTitres réécrit les titres déjà en base qui ne sont qu'un gabarit.
+//
+// POURQUOI UNE PASSE, ET PAS SEULEMENT LE CORRECTIF À L'INGESTION. Un article
+// n'est lu qu'une fois : réparer `TitreLisible` ne touche que ce qui arrivera
+// APRÈS. Les soixante-dix-neuf dépêches déjà enregistrées — un mois de
+// publications du Dauphiné — garderaient « $content.TitleNoTags » pour
+// toujours, et c'est précisément ce qu'on voit à l'écran.
+//
+// Idempotente : un titre réparé ne porte plus de gabarit, la passe suivante
+// l'ignore. Bornée comme Rafraichir — on ne réécrit pas les archives.
+//
+// ELLE RECOMPOSE CE QU'ELLE TOUCHE, et c'est le point qui m'a manqué d'abord.
+// J'avais laissé ce soin à Rafraichir, qui passe juste après — mais Rafraichir
+// balaie TOUS les sujets de la fenêtre, soit près de trente mille : il n'en
+// avait recomposé qu'une partie avant qu'un redémarrage ne l'interrompe, et
+// onze sujets gardaient leur gabarit sans que rien ne l'explique. Réparer
+// quatre-vingts articles ne touche qu'une vingtaine de sujets : on les reprend
+// ici, tout de suite, au lieu d'espérer qu'un balayage y arrive.
+func (p *Pipe) ReparerTitres(depuis int64) (int, error) {
+	arts, err := p.st.ArticlesSuspectsDeGabarit(depuis)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	touches := map[string]bool{}
+	for _, a := range arts {
+		if !linker.PorteUnGabarit(a.Title) {
+			continue
+		}
+		neuf := linker.TitreLisible(a.Title, a.Summary)
+		if neuf == a.Title {
+			continue
+		}
+		if err := p.st.RenommerArticle(a.ID, neuf); err != nil {
+			return n, err
+		}
+		if a.TopicID != "" {
+			touches[a.TopicID] = true
+		}
+		n++
+	}
+	// LES SUJETS ABÎMÉS QUE PLUS AUCUN ARTICLE NE DÉSIGNE. Un sujet prend le
+	// titre de son article le plus récent, donc réparer les articles DEVRAIT
+	// suffire — sauf que les deux écritures sont distinctes. Une interruption
+	// entre elles laisse des sujets au gabarit que rien ne reprendra jamais :
+	// leurs articles, eux, sont devenus propres. On les cherche donc aussi
+	// pour eux-mêmes ; recomposer y remettra le bon titre.
+	for _, t := range p.sujetsAGabarit(depuis) {
+		touches[t] = true
+	}
+	maintenant := time.Now().Unix()
+	for id := range touches {
+		p.recomposer(id, maintenant)
+	}
+	return n, nil
+}
+
+func (p *Pipe) sujetsAGabarit(depuis int64) []string {
+	sujets, err := p.st.SujetsSuspectsDeGabarit(depuis, MaxRafraichis)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, t := range sujets {
+		if linker.PorteUnGabarit(t.Title) {
+			out = append(out, t.ID)
+		}
+	}
+	return out
+}
+
+// MaxRafraichis borne le balayage de démarrage. Sans borne il portait sur
+// 29 324 sujets — des heures de carte pour des titres que plus personne ne
+// regarde, et jamais terminé. Le haut de la pile est ce qu'un lecteur voit.
+const MaxRafraichis = 400
+
 func (p *Pipe) Rafraichir(now int64, depuis int64) (int, error) {
-	sujets, err := p.st.SujetsRecents(depuis)
+	sujets, err := p.st.SujetsDerniers(depuis, MaxRafraichis)
 	if err != nil {
 		return 0, err
 	}

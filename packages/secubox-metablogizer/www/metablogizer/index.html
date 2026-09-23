@@ -137,6 +137,20 @@
         .wizard-steps span { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: .75rem; opacity: .7; color: var(--p31-dim); }
         .wizard-steps span.ok { border-color: var(--green); color: var(--green); opacity: 1; }
         .wizard-steps span.fail { border-color: var(--red); color: var(--red); opacity: 1; }
+        /* EN COURS : ni vert ni rouge. Un certificat que certbot obtient en
+           tâche de fond n'est pas acquis, et n'est pas raté non plus. */
+        .wizard-steps span.encours { border-color: var(--p31-dim); opacity: 1;
+            animation: wiz-pulse 1.2s ease-in-out infinite; }
+        .wizard-steps span.actif { border-color: var(--p31-accent, #7cf);
+            color: var(--p31-accent, #7cf); opacity: 1;
+            animation: wiz-pulse 1.2s ease-in-out infinite; }
+        @keyframes wiz-pulse { 50% { opacity: .45; } }
+        @media (prefers-reduced-motion: reduce) {
+            .wizard-steps span.actif, .wizard-steps span.encours { animation: none; }
+        }
+        .wizard-steps span .wiz-pourquoi { display: block; font-size: .68rem;
+            opacity: .85; margin-top: 2px; max-width: 22ch; white-space: normal; }
+        .wiz-encours { font-size: .78rem; color: var(--p31-dim); margin: 6px 0; }
         #wiz-result.result { max-height: 240px; overflow: auto; background: var(--bg-row); padding: 10px; border-radius: 8px; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; color: var(--text); margin-top: 0.5rem; }
 
         .toast { position: fixed; bottom: 20px; right: 20px; padding: 0.75rem 1.25rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); pointer-events: none; }
@@ -239,13 +253,12 @@
 
             <section class="card" id="publish-wizard">
                 <h2>🚀 Publier un site</h2>
-                <div class="wizard-steps" id="wiz-steps">
-                    <span data-step="content">1 · Contenu</span>
-                    <span data-step="version">2 · Version</span>
-                    <span data-step="route">3 · Route</span>
-                    <span data-step="cert">4 · Certificat</span>
-                    <span data-step="backup">5 · Sauvegarde</span>
-                </div>
+                <!-- Les étapes sont ANNONCÉES PAR LE SERVEUR au début du flux :
+                     la page n'en tient plus la liste, qui divergeait (elle en
+                     montrait quatre sur six, et pas « Service », celle qui
+                     décide pourtant du verdict). -->
+                <div class="wizard-steps" id="wiz-steps"></div>
+                <div id="wiz-encours" class="wiz-encours" hidden></div>
                 <div class="form-group"><label>Nom du site</label>
                     <input id="wiz-name" placeholder="zem"></div>
                 <div class="form-group"><label>Domaine</label>
@@ -843,50 +856,160 @@
 
         setInterval(() => { if (!document.hidden) refresh(); }, 60000);
     </script>
-    <!-- Publish wizard: multipart upload to the wizard endpoint, then an
-         on-demand backup download. Reuses token()/API/esc() from above. -->
+    <!-- L'ASSISTANT SUIT LE FLUX DU SERVEUR (#1323).
+         Avant : un POST unique, « Publication… », puis plus rien pendant les
+         dizaines de secondes que prennent git, nginx et certbot. Les pastilles
+         n'apparaissaient qu'à la toute fin, et seulement quatre sur six —
+         « Service », qui décide du verdict, n'était montrée nulle part. Une
+         publication refusée par `nginx -t` affichait donc quatre pastilles
+         vertes et aucune rouge : « ça s'arrête sans avancer ».
+         Maintenant : le serveur rend chaque étape dès qu'elle est finie
+         (NDJSON), la page les allume au fil de l'eau, et dit ce qui a manqué. -->
     <script>
         (function () {
-            function mark(step, ok) {
-                var el = document.querySelector('#wiz-steps [data-step="' + step + '"]');
-                if (el) el.classList.add(ok ? 'ok' : 'fail');
-            }
+            var barre = document.getElementById('wiz-steps');
+            var encours = document.getElementById('wiz-encours');
+            var bouton = document.getElementById('wiz-go');
             var lastName = '';
-            document.getElementById('wiz-go').addEventListener('click', async function () {
+
+            function poseEtapes(etapes) {
+                barre.innerHTML = '';
+                etapes.forEach(function (e, i) {
+                    var sp = document.createElement('span');
+                    sp.dataset.step = e.cle;
+                    sp.textContent = (i + 1) + ' · ' + e.libelle;
+                    barre.appendChild(sp);
+                });
+            }
+            function etat(cle, classe, pourquoi) {
+                var el = barre.querySelector('[data-step="' + cle + '"]');
+                if (!el) { return; }
+                el.classList.remove('ok', 'fail', 'encours', 'actif');
+                if (classe) { el.classList.add(classe); }
+                var ex = el.querySelector('.wiz-pourquoi');
+                if (ex) { ex.remove(); }
+                if (pourquoi) {
+                    var d = document.createElement('small');
+                    d.className = 'wiz-pourquoi';
+                    d.textContent = pourquoi;
+                    el.appendChild(d);
+                }
+            }
+            // La prochaine étape non encore traitée : on la montre EN COURS,
+            // sinon le temps passé sur elle ressemble à un blocage.
+            function suivante(faites) {
+                var toutes = [].slice.call(barre.querySelectorAll('[data-step]'));
+                for (var i = 0; i < toutes.length; i++) {
+                    var c = toutes[i].dataset.step;
+                    if (!faites[c]) { etat(c, 'actif'); encours.hidden = false;
+                        encours.textContent = '⏳ ' + toutes[i].textContent.replace(/^\d+ · /, '') + '…';
+                        return; }
+                }
+                encours.hidden = true;
+            }
+
+            bouton.addEventListener('click', async function () {
                 var name = document.getElementById('wiz-name').value.trim();
                 var domain = document.getElementById('wiz-domain').value.trim();
                 var f = document.getElementById('wiz-file').files[0];
                 var out = document.getElementById('wiz-result');
                 if (!name || !f) { out.textContent = 'nom et fichier requis'; return; }
-                document.querySelectorAll('#wiz-steps span').forEach(function (s) { s.classList.remove('ok', 'fail'); });
-                out.textContent = 'Publication…';
+                barre.innerHTML = ''; encours.hidden = true;
+                out.textContent = '';
+                // ON REND LA MAIN QUOI QU'IL ARRIVE. Le bouton restait
+                // désactivé après un échec : plus moyen de corriger et de
+                // relancer sans recharger la page.
+                bouton.disabled = true;
                 var fd = new FormData();
-                fd.append('name', name); if (domain) fd.append('domain', domain); fd.append('file', f);
-                var t = token();
+                fd.append('name', name); if (domain) { fd.append('domain', domain); }
+                fd.append('file', f);
+                var t = (typeof token === 'function') ? token() : '';
                 var auth = t ? { 'Authorization': 'Bearer ' + t } : {};
+                var faites = {};
                 try {
-                    let res = await fetch(API + '/publish/wizard',
+                    var res = await fetch(API + '/publish/wizard?flux=1',
                         { method: 'POST', headers: auth, body: fd, credentials: 'same-origin' });
                     if (res.status === 401) {
-                        res = await fetch(API + '/publish/wizard',
+                        res = await fetch(API + '/publish/wizard?flux=1',
                             { method: 'POST', body: fd, credentials: 'same-origin' });
                     }
-                    if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
-                    const d = await res.json().catch(function () { return {}; });
-                    out.textContent = JSON.stringify(d, null, 2);
-                    if (d.steps) { ['content', 'version', 'route', 'cert'].forEach(function (s) {
-                        var v = d.steps[s]; mark(s, s === 'content' ? v.index_present : s === 'route' ? v.route_ok : true);
-                    }); }
-                    if (d.ok) {
-                        mark('backup', true); lastName = name;
-                        document.getElementById('wiz-backup').disabled = false;
-                        toast('✅ ' + name + ' publié');
-                        allSites = null; if (mosaicLoaded) loadMosaic(true); if (sitesTabLoaded) loadSitesTab(true); loadStatus();
+                    if (res.status === 401) {
+                        if (!/\/login\.html$/.test(location.pathname)) {
+                            window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname);
+                        }
+                        return;
                     }
-                } catch (e) { out.textContent = 'erreur: ' + e; }
+                    if (!res.ok || !res.body) {
+                        // Un 4xx AVANT le flux (archive refusée) reste du JSON.
+                        var err = await res.json().catch(function () { return {}; });
+                        out.textContent = err.detail || ('erreur HTTP ' + res.status);
+                        return;
+                    }
+                    var lecteur = res.body.getReader();
+                    var dec = new TextDecoder();
+                    var reste = '';
+                    for (;;) {
+                        var bout = await lecteur.read();
+                        if (bout.done) { break; }
+                        reste += dec.decode(bout.value, { stream: true });
+                        var lignes = reste.split('\n');
+                        reste = lignes.pop();
+                        lignes.forEach(function (l) {
+                            if (!l.trim()) { return; }
+                            var m; try { m = JSON.parse(l); } catch (e) { return; }
+                            if (m.type === 'debut') {
+                                poseEtapes(m.etapes); suivante(faites);
+                            } else if (m.type === 'attente') {
+                                // Battement du serveur : la publication vit
+                                // toujours. On le montre, sinon une étape
+                                // longue ne se distingue pas d'un blocage.
+                                if (!encours.hidden) {
+                                    encours.textContent = encours.textContent
+                                        .replace(/…+$/, '') + '…';
+                                }
+                            } else if (m.type === 'etape') {
+                                faites[m.cle] = true;
+                                etat(m.cle, m.etat === 'ok' ? 'ok' : m.etat === 'encours' ? 'encours' : 'fail',
+                                     m.etat === 'ok' ? '' : m.detail);
+                                suivante(faites);
+                            } else if (m.type === 'fin') {
+                                encours.hidden = true;
+                                if (m.ok) {
+                                    lastName = name;
+                                    document.getElementById('wiz-backup').disabled = false;
+                                    out.textContent = '✅ ' + name + ' publié sur ' + (m.domain || domain);
+                                    if (typeof toast === 'function') { toast('✅ ' + name + ' publié'); }
+                                    allSites = null;
+                                    if (typeof mosaicLoaded !== 'undefined' && mosaicLoaded) { loadMosaic(true); }
+                                    if (typeof sitesTabLoaded !== 'undefined' && sitesTabLoaded) { loadSitesTab(true); }
+                                    if (typeof loadStatus === 'function') { loadStatus(); }
+                                } else {
+                                    // DIRE CE QUI A MANQUÉ, pas « échec ». Sans
+                                    // cela l'utilisateur ne peut que constater.
+                                    var rates = [].slice.call(barre.querySelectorAll('.fail'))
+                                        .map(function (e) { return e.textContent.replace(/^\d+ · /, ''); });
+                                    out.textContent = m.detail ? m.detail
+                                        : rates.length ? ('Publication incomplète — ' + rates.join(', ')
+                                            + '. Le site n\'est pas marqué publié ; corrigez et relancez.')
+                                        : 'Publication incomplète.';
+                                }
+                            }
+                        });
+                    }
+                } catch (e) {
+                    out.textContent = 'erreur : ' + e;
+                    // Une coupure en plein vol laisse des pastilles en attente :
+                    // on les éteint plutôt que de les laisser tourner à vide.
+                    barre.querySelectorAll('.actif').forEach(function (el) {
+                        el.classList.remove('actif');
+                    });
+                    encours.hidden = true;
+                } finally {
+                    bouton.disabled = false;
+                }
             });
             document.getElementById('wiz-backup').addEventListener('click', function () {
-                if (lastName) window.location = API + '/publish/export/' + encodeURIComponent(lastName);
+                if (lastName) { window.location = API + '/publish/export/' + encodeURIComponent(lastName); }
             });
         })();
     </script>
