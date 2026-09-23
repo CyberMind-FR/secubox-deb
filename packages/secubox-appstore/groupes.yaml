@@ -15,6 +15,12 @@
 # ce qu'il coûte. Un module cité ici doit exister au catalogue — le générateur
 # refuse le contraire plutôt que de livrer un bouton qui échouera.
 #
+# L'ORDRE EST UNE LOGIQUE, PAS UN HASARD. On descend du socle vers l'agrément :
+# ce qui fait tenir le lien (Socle FAI), ce qui le protège (Bouclier), ce qui
+# donne une adresse (Nuage, Correspondance), puis ce qu'on en fait (Média,
+# Publication, Veille, Maison). Un groupe cité plus haut ne dépend jamais d'un
+# groupe cité plus bas — c'est ce qui rend l'ordre lisible pour qui installe.
+#
 # Format volontairement plat (pas de PyYAML dans la chaîne de construction) :
 #   groupe: <identifiant>
 #   label: <nom lisible>
@@ -22,31 +28,19 @@
 #   modules:
 #     - secubox-<nom>
 
-groupe: media
-label: Média
-description: "Écouter et regarder chez soi : radio, balados et vidéo, servis par la box."
+groupe: isp
+label: Socle FAI
+description: "Être son propre opérateur : résolution, routage, partage et garde du lien."
 modules:
-  - secubox-radio
-  - secubox-podcaster
-  - secubox-peertube
-  - secubox-lyrion
+  - secubox-isp
+  - secubox-dns
+  - secubox-dns-guard
+  - secubox-vortex-dns
+  - secubox-netmodes
+  - secubox-qos
+  - secubox-nac
+  - secubox-wan-link-guard
 
-groupe: publication
-label: Publication
-description: "Publier : sites statiques, billets et dépôt de fichiers éphémères."
-modules:
-  - secubox-metablogizer
-  - secubox-billets
-  - secubox-droplet
-
-groupe: veille
-label: Veille
-description: "Suivre ce qui se dit : agrégation de sources, fil d'actualité et forum local."
-modules:
-  - secubox-metanews
-  - secubox-cyberfeed
-  - secubox-bbs
-  - secubox-socialrelay
 
 groupe: bouclier
 label: Bouclier
@@ -58,6 +52,53 @@ modules:
   - secubox-ipblock
   - secubox-antirootkit
 
+
+groupe: nuage
+label: Nuage personnel
+description: "Ses fichiers et ses photos chez soi, partagés sans intermédiaire."
+modules:
+  - secubox-nextcloud
+  - secubox-photoprism
+  - secubox-smb
+
+
+groupe: correspondance
+label: Correspondance
+description: "Écrire et recevoir : courrier, messagerie chiffrée et relais social."
+modules:
+  - secubox-mail
+  - secubox-signal
+  - secubox-mastodon
+
+groupe: media
+label: Média
+description: "Écouter et regarder chez soi : radio, balados et vidéo, servis par la box."
+modules:
+  - secubox-radio
+  - secubox-podcaster
+  - secubox-peertube
+  - secubox-lyrion
+
+
+groupe: publication
+label: Publication
+description: "Publier : sites statiques, billets et dépôt de fichiers éphémères."
+modules:
+  - secubox-metablogizer
+  - secubox-billets
+  - secubox-droplet
+
+
+groupe: veille
+label: Veille
+description: "Suivre ce qui se dit : agrégation de sources, fil d'actualité et forum local."
+modules:
+  - secubox-metanews
+  - secubox-cyberfeed
+  - secubox-bbs
+  - secubox-socialrelay
+
+
 groupe: maison
 label: Maison connectée
 description: "Piloter le domicile : passerelle Zigbee, courtier MQTT et vidéosurveillance."
@@ -68,18 +109,3 @@ modules:
   - secubox-mqtt
   - secubox-frigate
 
-groupe: nuage
-label: Nuage personnel
-description: "Ses fichiers et ses photos chez soi, partagés sans intermédiaire."
-modules:
-  - secubox-nextcloud
-  - secubox-photoprism
-  - secubox-smb
-
-groupe: correspondance
-label: Correspondance
-description: "Écrire et recevoir : courrier, messagerie chiffrée et relais social."
-modules:
-  - secubox-mail
-  - secubox-signal
-  - secubox-mastodon

@@ -65,6 +65,23 @@
       </div>
     </header>
 
+    <!-- GROUPES (#1323) : une fonctionnalité, plusieurs paquets. Ils viennent
+         AVANT la barre de filtres parce qu'ils répondent à une autre question :
+         les filtres servent à retrouver un module qu'on nomme déjà, les groupes
+         à choisir quand on ne sait pas encore lequel. L'ordre descend du socle
+         vers l'agrément — ce qui fait tenir le lien, puis ce qu'on en fait. -->
+    <section id="groupes-panel" style="margin:18px 0 6px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+        <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">Fonctionnalités</h2>
+        <span style="font-size:11px;color:var(--text-muted,#6b6b7a)" id="groupes-stat">…</span>
+        <button type="button" id="groupes-raz" onclick="groupeChoisi(null)"
+                style="margin-left:auto;display:none;font:inherit;font-size:11px;padding:3px 9px;cursor:pointer;
+                       background:none;color:var(--text-muted,#6b6b7a);border:1px solid var(--line,#2a2a3a);border-radius:8px">
+          ✕ tout le catalogue</button>
+      </div>
+      <div id="groupes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:10px"></div>
+    </section>
+
     <div class="as-bar">
       <input id="q" type="search" placeholder="Search modules…" oninput="render()">
       <select id="category" onchange="render()"><option value="">All categories</option></select>
@@ -72,7 +89,8 @@
         <option>lite</option><option>standard</option><option>pro</option><option>all</option></select>
       <select id="state" onchange="render()"><option value="">All states</option>
         <option value="running">running</option><option value="installed">installed</option>
-        <option value="available">available</option><option value="tier-locked">tier-locked</option></select>
+        <option value="available">available</option><option value="unpublished">unpublished</option>
+        <option value="tier-locked">tier-locked</option></select>
       <span class="as-stat" id="stat">loading…</span>
     </div>
     <div class="as-grid" id="grid"></div>
@@ -125,7 +143,43 @@
       ALL=(data&&Array.isArray(data.modules))?data.modules:[];
       document.getElementById('board-badge').textContent='tier '+((cats&&cats.board_tier)||'?');
       render();
+      loadGroupes();
       loadMesh();
+    }
+
+    // ── GROUPES ────────────────────────────────────────────────────────────
+    let GROUPES=[], GROUPE=null;
+    async function loadGroupes(){
+      const d=await jget('/groupes');
+      GROUPES=(d&&Array.isArray(d.groupes))?d.groupes:[];
+      const z=document.getElementById('groupes'), st=document.getElementById('groupes-stat');
+      if(!GROUPES.length){ st.textContent='aucune'; z.innerHTML=''; return; }
+      st.textContent=GROUPES.length+' fonctionnalités · cliquez pour filtrer';
+      z.innerHTML=GROUPES.map(g=>{
+        const complet=g.installes>=g.total;
+        // LE COMPTE EST LE MESSAGE. « 3/4 » dit d'un coup ce qu'il reste à
+        // faire, là où un bouton « installer » seul laisserait croire qu'on
+        // repart de zéro.
+        const teinte=complet?'var(--matrix-green,#00ff41)':'var(--cyber-cyan,#00d4ff)';
+        return '<button type="button" class="groupe-carte" data-g="'+esc(g.id)+'" onclick="groupeChoisi(\''+esc(g.id)+'\')"'
+          +' style="text-align:left;font:inherit;cursor:pointer;padding:11px 12px;border-radius:10px;'
+          +'background:var(--panel,#14141c);border:1px solid '+(GROUPE===g.id?teinte:'var(--line,#2a2a3a)')+'">'
+          +'<div style="display:flex;align-items:baseline;gap:8px">'
+          +'<b style="font-size:.86rem">'+esc(g.label)+'</b>'
+          +'<span style="margin-left:auto;font:600 11px/1 \'JetBrains Mono\',monospace;color:'+teinte+'">'
+          + g.installes+'/'+g.total+'</span></div>'
+          +'<div style="font-size:11px;color:var(--text-muted,#6b6b7a);margin-top:4px;line-height:1.35">'+esc(g.description)+'</div>'
+          +'</button>';
+      }).join('');
+    }
+    function groupeChoisi(id){
+      GROUPE=(GROUPE===id)?null:id;            // recliquer défait le choix
+      document.getElementById('groupes-raz').style.display=GROUPE?'':'none';
+      loadGroupes(); render();
+    }
+    function membresDu(id){
+      const g=GROUPES.find(x=>x.id===id);
+      return g?g.membres.map(m=>m.name):[];
     }
 
     async function loadMesh(){
@@ -161,7 +215,12 @@
     function render(){
       const q=document.getElementById('q').value.toLowerCase();
       const cat=document.getElementById('category').value, tier=document.getElementById('tier').value, state=document.getElementById('state').value;
+      // Le groupe choisi RESTREINT le catalogue ; les filtres s'appliquent
+      // ensuite, à l'intérieur. L'inverse aurait été déroutant : on choisit
+      // une fonctionnalité, puis on cherche dedans.
+      const membres=GROUPE?membresDu(GROUPE):null;
       let items=ALL.filter(m=>{
+        if(membres&&membres.indexOf(m.name)<0)return false;
         if(cat&&m.category!==cat)return false; if(tier&&m.tier!==tier)return false; if(state&&m.state!==state)return false;
         if(q&&!(m.name.toLowerCase().includes(q)||(m.description||'').toLowerCase().includes(q)))return false; return true;});
       const running=ALL.filter(m=>m.state==='running').length, installed=ALL.filter(m=>m.installed).length;

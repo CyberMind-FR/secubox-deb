@@ -1,3 +1,27 @@
+secubox-appstore (0.4.11-1~bookworm1) bookworm; urgency=medium
+
+  * LES GROUPES SE VOIENT ENFIN. L'API /groupes existait depuis 0.4.7 mais la
+    page ne l'affichait pas : une fonctionnalité qu'on ne voit pas n'existe
+    pas. Une bande « Fonctionnalités » ouvre désormais la page, AVANT la barre
+    de filtres — les filtres servent à retrouver un module qu'on nomme déjà,
+    les groupes à choisir quand on ne sait pas encore lequel. Cliquer un
+    groupe restreint le catalogue ; recliquer défait le choix.
+  * Chaque carte porte son COMPTE (« 3/4 ») plutôt qu'un bouton « installer »
+    seul, qui laisserait croire qu'on repart de zéro. Vert quand le groupe est
+    complet.
+  * NOUVEAU GROUPE « Socle FAI » : isp, dns, dns-guard, vortex-dns, netmodes,
+    qos, nac, wan-link-guard — être son propre opérateur : résolution,
+    routage, partage et garde du lien.
+  * L'ORDRE DES GROUPES EST UNE LOGIQUE, pas un hasard : on descend du socle
+    vers l'agrément — ce qui fait tenir le lien (Socle FAI), ce qui le protège
+    (Bouclier), ce qui donne une adresse (Nuage, Correspondance), puis ce
+    qu'on en fait (Média, Publication, Veille, Maison). Un groupe cité plus
+    haut ne dépend jamais d'un groupe cité plus bas.
+  * L'état `unpublished` entre dans le filtre des états : on peut enfin lister
+    d'un geste les modules que le dépôt ne fournit pas encore.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:25:24 +0200
+
 secubox-appstore (0.4.10-1~bookworm1) bookworm; urgency=medium
 
   * CE QU'ON N'A PAS PU LIRE N'EST PAS ABSENT. Le diagnostic lisait les
