@@ -1,3 +1,12 @@
+secubox-webos (1.0.331-1~bookworm1) bookworm; urgency=medium
+
+  * La tuile Gabriel Mood passe à 352 px : sa carte porte désormais
+    l'histogramme des six indices et une bande de métriques, là où il n'y avait
+    que le nom de l'état. La carte s'adapte d'elle-même à la hauteur qu'on lui
+    donne, ce nombre n'est donc plus un réglage critique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:45:43 +0200
+
 secubox-webos (1.0.330-1~bookworm1) bookworm; urgency=medium
 
   * Carte Gabriel Mood dans le Hall (#1323), avec sa vue `/micro.html` et le
