@@ -5,22 +5,38 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox-Deb :: WebOS / Hall — RÉFÉRENCE DE RENDU (#1175).
+  SecuBox-Deb :: WebOS / Hall — RÉFÉRENCE DE RENDU (#1347, remplace #1175).
 
-  Ceci n'est PAS le Hall. C'est la CIBLE VISUELLE : transcription fidèle et
-  statique de l'affiche « SBXOS · le bureau numérique souverain ». Aucune API,
-  aucun JS, aucune donnée réelle — chiffres et libellés sont des maquettes.
-  Sert de témoin à comparer côte à côte avec index.html (desktop ET iPhone).
+  CECI N'EST PAS LE HALL. C'est la CIBLE : transcription statique de l'affiche
+  « SBX OS Hall — votre Internet, vos services, chez vous ». Aucune API, aucun
+  JS, aucune donnée réelle — chiffres et libellés sont des maquettes.
 
-  Règles : polices locales, aucune origine tierce (CSP hall), palette = mêmes
-  tokens que index.html. Volontairement verrouillée en clair (canon papier) ;
-  le mode sombre se dérive des tokens de index.html, pas d'ici.
-  Doc associée : docs/dossiers/webos-hall-render-ref.md
+  POURQUOI CE FICHIER A ÉTÉ RÉÉCRIT. Il décrivait un modèle à menus (Fichier,
+  Édition, Affichage, Outils, Aide) avec « Studio SBX », quand l'affiche en
+  usage montrait une grille de vingt cartes, une barre du bas à cinq onglets et
+  un mode téléphone. DEUX CIBLES COEXISTAIENT, et rien ne disait laquelle
+  faisait foi — si bien qu'on pouvait déclarer le Hall conforme ou non selon
+  celle qu'on choisissait. Une mesure d'écart n'a de sens que contre une
+  référence unique.
+
+  CE QUI N'EXISTE PAS ENCORE SE SIGNALE. Une référence qui ressemble à une
+  capture laisse croire que tout est fait ; celle-ci porte un liseré et un
+  numéro d'issue sur chaque élément absent du Hall au 2026-09-23. C'est ce qui
+  la rend MESURABLE : le jour où plus aucun liseré n'apparaît, l'écart est
+  clos. Les marques sont à retirer au fur et à mesure, avec leur issue.
+
+  VERROUILLÉE EN SOMBRE, à l'inverse de la version précédente qui l'était en
+  clair. L'affiche est en bleu nuit, et une cible qui bascule avec le thème du
+  lecteur n'est plus un témoin : on ne saurait plus ce qu'on compare. Les
+  valeurs sont celles du bloc sombre de index.html, recopiées telles quelles.
+
+  Règles conservées : polices locales, aucune origine tierce (CSP du Hall),
+  aucun script. Doc associée : docs/dossiers/webos-hall-render-ref.md
 -->
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>SBXOS — référence de rendu · Hall</title>
+<title>SBX OS — référence de rendu · Hall</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <meta name="sbx-no-health-banner">
@@ -29,279 +45,474 @@
 @font-face{font-family:"Inter";src:url("fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
 @font-face{font-family:"JetBrains Mono";src:url("fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
 
-/* Canon clair — mêmes tokens que index.html, sans bascule sombre (cf. entête). */
+/* Canon SOMBRE — valeurs recopiées du bloc sombre de index.html. */
 :root{
-  --ink:#17232d; --paper:#eef2f6; --panel:#ffffff; --line:#dbe3e9; --line-2:#c5cfd7;
-  --soft:#f1f4f7; --dim:#647685;
-  --mint:#1f7a58; --mint-s:#e3f2ec; --coral:#a73d42; --coral-s:#f6e7e8;
-  --sky:#1655a0; --sky-s:#e7f0fa; --cyan:#0a91c8; --gold:#b8912f;
-  --shadow:0 1px 2px rgba(20,45,60,.05),0 8px 26px rgba(20,45,60,.10);
-  --lift:0 2px 6px rgba(20,45,60,.09),0 18px 40px -14px rgba(20,45,60,.26);
-  /* Ambiance affiche : papier plus chaud que le --paper écran. */
-  --poster:#f2f1ec;
+  --ink:#e9f0f6; --paper:#0a121b; --panel:#111f2c; --line:#22384a; --line-2:#2d4658;
+  --soft:#132534; --dim:#8ba0b1;
+  --coral:#e07d82; --coral-s:#3a1d1e; --mint:#5fce9f; --mint-s:#123028;
+  --amber:#e0b06a; --amber-s:#3a2a12; --cyan:#33c4de; --cyan-s:#0f3441;
+  --sky:#6aa8e6; --sky-s:#14304a; --gold:#d9bd6a; --gold-s:#2b2718; --violet:#a08ce6;
+  --nav:#070f18; --nav-2:#0f2032; --nav-ink:#dfe8f0; --nav-dim:#6f88a0; --nav-line:#1b2d40;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -14px rgba(0,0,0,.6);
+  --lift:0 2px 6px rgba(0,0,0,.5),0 20px 44px -16px rgba(0,0,0,.7);
+  --r:16px;
+  /* Le liseré des éléments qui n'existent pas encore. */
+  --manque:#f2a33c;
 }
-*{box-sizing:border-box} html,body{margin:0}
-body{background:var(--poster);color:var(--ink);font-family:"Inter",system-ui,sans-serif;
-  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
-.serif{font-family:"Fraunces",Georgia,serif}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;margin:0}
 .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
 
-.sheet{max-width:1060px;margin:0 auto;padding:clamp(26px,6vw,72px) clamp(14px,4vw,44px) clamp(30px,7vw,80px)}
+/* ── L'en-tête de la référence elle-même (hors maquette) ──────────────── */
+.doc{max-width:1500px;margin:0 auto;padding:26px 22px 60px}
+.duo{padding-top:4px}
+.doc-tete{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;
+  justify-content:space-between;margin-bottom:22px}
+.doc-tete h1{font-size:1.75rem;letter-spacing:-.01em}
+.doc-tete p{margin:.4rem 0 0;color:var(--dim);max-width:62ch}
+.legende{border:1px solid var(--line);background:var(--panel);border-radius:12px;
+  padding:12px 14px;min-width:270px}
+.legende b{display:block;font-size:.78rem;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--dim);margin-bottom:8px;font-weight:600}
+.legende ul{margin:0;padding-left:0;list-style:none;display:grid;gap:6px}
+.legende li{display:flex;gap:8px;align-items:center;font-size:.82rem}
+.puce{width:14px;height:14px;border-radius:4px;flex:0 0 auto}
+.puce.ok{background:var(--mint-s);border:1px solid var(--mint)}
+.puce.ko{background:transparent;border:1.5px dashed var(--manque)}
 
-/* ── bandeau de garde (n'appartient pas à la maquette) ───────── */
-.warn{max-width:1060px;margin:0 auto;padding:7px clamp(14px,4vw,44px);background:#fbf0e4;
-  border-bottom:1px solid #e6d3b8;font-family:"JetBrains Mono",monospace;font-size:.6rem;
-  letter-spacing:.08em;text-transform:uppercase;color:#8a5a1c}
+/* ── La maquette « poste » ────────────────────────────────────────────── */
+.ecran{background:var(--nav);border:1px solid var(--nav-line);border-radius:22px;
+  padding:14px;box-shadow:var(--lift);overflow:hidden}
+.mast{display:flex;align-items:center;gap:12px;padding:8px 10px;margin-bottom:12px;
+  background:var(--nav-2);border:1px solid var(--nav-line);border-radius:14px}
+.marque{display:flex;align-items:center;gap:8px;font-family:Fraunces,serif;
+  font-size:1.05rem;color:var(--nav-ink);font-weight:700}
+.rond{width:26px;height:26px;border-radius:50%;background:var(--cyan-s);
+  border:1px solid var(--cyan);display:grid;place-items:center;font-size:.8rem}
+.drop{color:var(--nav-dim);font-size:.84rem;white-space:nowrap}
+.cherche{flex:1;min-width:120px;background:var(--nav);border:1px solid var(--nav-line);
+  border-radius:999px;padding:7px 14px;color:var(--nav-dim);font-size:.84rem;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.icone{width:30px;height:30px;border-radius:50%;background:var(--nav);
+  border:1px solid var(--nav-line);display:grid;place-items:center;font-size:.85rem;
+  position:relative;flex:0 0 auto}
+.badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;
+  border-radius:8px;background:var(--coral);color:#fff;font-size:.62rem;font-weight:700;
+  display:grid;place-items:center;line-height:1}
+.qui{display:flex;align-items:center;gap:7px;background:var(--nav);
+  border:1px solid var(--nav-line);border-radius:999px;padding:4px 12px 4px 5px;
+  font-size:.78rem;color:var(--nav-ink);white-space:nowrap}
+.qui .pt{color:var(--mint);font-size:.68rem}
+.btn-lexie{background:var(--panel);border:1px solid var(--line-2);border-radius:999px;
+  padding:6px 16px;font-size:.82rem;color:var(--ink);font-weight:600}
 
-/* ── wordmark ───────────────────────────────────────────────── */
-.word{text-align:center;line-height:.86;font-weight:700;letter-spacing:.01em;
-  font-size:clamp(64px,16vw,190px);color:#16233a;font-family:"Fraunces",Georgia,serif}
-.tag{text-align:center;font-family:"Fraunces",Georgia,serif;font-weight:400;
-  font-size:clamp(20px,4.6vw,52px);color:#16233a;margin-top:.28em;line-height:1.1}
-.rule{width:clamp(70px,12vw,150px);height:2px;background:var(--gold);margin:.55em auto 0}
+/* ── La grille de cartes ──────────────────────────────────────────────── */
+.grille{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.carte{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:11px 12px 12px;min-height:150px;display:flex;flex-direction:column;gap:8px;
+  box-shadow:var(--shadow);position:relative}
+.carte>h3{font-family:Inter,sans-serif;font-size:.9rem;font-weight:700;
+  display:flex;align-items:center;gap:7px}
+.carte>h3 .em{font-size:1rem}
+.etiq{margin-left:auto;font-size:.62rem;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;padding:2px 7px;border-radius:999px;
+  background:var(--soft);color:var(--dim);border:1px solid var(--line)}
+.etiq.vif{background:var(--coral-s);color:var(--coral);border-color:var(--coral)}
+.etiq.on{background:var(--mint-s);color:var(--mint);border-color:var(--mint)}
+.etiq.dodo{background:var(--amber-s);color:var(--amber);border-color:var(--amber)}
+.ligne{display:flex;gap:7px;align-items:center;font-size:.78rem;color:var(--ink)}
+.ligne .d{color:var(--dim)}
+.dim{color:var(--dim);font-size:.75rem}
+.visuel{border-radius:10px;height:74px;border:1px solid var(--line);
+  background:linear-gradient(140deg,var(--sky-s),var(--soft));display:grid;
+  place-items:center;color:var(--dim);font-size:.72rem}
+.pied{margin-top:auto;display:flex;align-items:center;gap:7px;font-size:.68rem;
+  color:var(--dim);border-top:1px solid var(--line);padding-top:7px}
+.pt-vert{width:7px;height:7px;border-radius:50%;background:var(--mint);flex:0 0 auto}
+.jauge{height:6px;border-radius:3px;background:var(--soft);overflow:hidden}
+.jauge>i{display:block;height:100%;background:var(--cyan)}
+.chiffres{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.chiffres b{display:block;font-size:1.05rem;font-family:"JetBrains Mono",monospace}
+.chiffres span{font-size:.58rem;color:var(--dim);letter-spacing:.03em}
+.puces{display:flex;gap:5px;flex-wrap:wrap}
+.pastille{font-size:.66rem;padding:2px 8px;border-radius:999px;background:var(--soft);
+  border:1px solid var(--line);color:var(--dim)}
 
-/* ── fenêtre ────────────────────────────────────────────────── */
-.win{margin-top:clamp(26px,5vw,58px);background:var(--panel);border:1px solid var(--line);
-  border-radius:10px;box-shadow:var(--lift);overflow:hidden}
-.titlebar{display:flex;align-items:center;gap:16px;padding:11px 15px;border-bottom:1px solid var(--line);
-  font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--ink)}
-.titlebar .knob{width:9px;height:9px;border-radius:50%;background:var(--sky);flex:0 0 auto}
-.menus{display:flex;gap:17px;color:var(--ink);white-space:nowrap;overflow:hidden}
-.menus span{cursor:default}
-.tb-right{margin-left:auto;display:flex;align-items:center;gap:13px;color:var(--dim);white-space:nowrap}
-.tb-right .state{display:flex;align-items:center;gap:7px;color:var(--ink)}
-.tb-right .bar-sep{width:1px;height:14px;background:var(--line-2)}
-.tb-right .wctl{display:flex;gap:13px;font-size:.8rem;color:var(--dim)}
-.led{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--mint)}
-.led.live{background:var(--mint)} .led.sky{background:var(--sky)}
+/* ── La barre du bas ──────────────────────────────────────────────────── */
+.barre{margin-top:12px;display:flex;align-items:center;justify-content:space-around;
+  background:var(--nav-2);border:1px solid var(--nav-line);border-radius:16px;
+  padding:8px 10px;position:relative}
+.onglet{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--nav-dim);
+  padding:6px 14px;border-radius:999px;position:relative}
+.onglet.actif{background:var(--sky-s);color:var(--sky);font-weight:600}
+.medaillon{width:40px;height:40px;border-radius:50%;background:var(--cyan-s);
+  border:1px solid var(--cyan);display:grid;place-items:center;font-size:1.1rem}
 
-/* ── entête de vue ──────────────────────────────────────────── */
-.viewhead{display:flex;align-items:flex-end;gap:18px;padding:clamp(20px,3.6vw,34px) clamp(18px,3.4vw,32px) clamp(14px,2.4vw,22px)}
-.viewhead h1{margin:0;font-family:"Fraunces",Georgia,serif;font-weight:400;
-  font-size:clamp(34px,6vw,58px);line-height:1;color:#16233a}
-.viewhead .sub{font-family:"JetBrains Mono",monospace;font-size:.74rem;color:var(--dim);margin-top:10px}
-.viewhead .sub b{color:var(--ink);font-weight:400}
-.health{margin-left:auto;text-align:right;font-family:"JetBrains Mono",monospace;font-size:.72rem}
-.health .l1{display:flex;align-items:center;justify-content:flex-end;gap:8px;color:var(--ink)}
-.health .l2{color:var(--dim);font-size:.66rem;margin-top:5px}
+/* ── Le téléphone ─────────────────────────────────────────────────────── */
+.duo{display:grid;grid-template-columns:1fr 292px;gap:20px;align-items:start}
+.tel{position:relative;background:var(--nav);border:1px solid var(--nav-line);border-radius:30px;
+  padding:12px;box-shadow:var(--lift)}
+.tel-haut{display:flex;justify-content:space-between;align-items:center;
+  color:var(--nav-dim);font-size:.7rem;padding:2px 8px 10px}
+.tel .marque{font-size:.95rem;padding:0 4px 10px}
+.tel-col{display:grid;gap:9px}
+.tuile{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:10px 11px;display:flex;align-items:center;gap:10px;position:relative}
+.tuile .ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;
+  font-size:.95rem;flex:0 0 auto}
+.tuile b{display:block;font-size:.82rem}
+.tuile .s{font-size:.7rem;color:var(--dim)}
 
-/* ── grille de cardlets ─────────────────────────────────────── */
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding:0 clamp(18px,3.4vw,32px) clamp(18px,3.4vw,30px)}
-@media(max-width:760px){.grid{grid-template-columns:1fr}}
+/* ── Les cinq fonctions annoncées ─────────────────────────────────────── */
+.fonctions{margin-top:26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:12px}
+.fn{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;
+  border-left:3px solid var(--manque)}
+.fn.partiel{border-left-color:var(--amber)}
+.fn h4{margin:0 0 5px;font-size:.86rem;font-family:Inter,sans-serif}
+.fn p{margin:0;font-size:.78rem;color:var(--dim)}
+.fn .num{font-family:"JetBrains Mono",monospace;font-size:.68rem;color:var(--manque);
+  font-weight:700}
 
-.cl{background:var(--panel);border:1px solid var(--line);border-radius:8px;
-  box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden}
-.cl .clh{display:flex;align-items:center;gap:13px;padding:16px 17px 13px;border-bottom:1px solid var(--line)}
-.cl .clh svg{flex:0 0 auto}
-.cl .clh .t{min-width:0}
-.cl .clh .t b{display:block;font-family:"Fraunces",Georgia,serif;font-weight:400;
-  font-size:1.42rem;line-height:1.05;color:#16233a}
-.cl .clh .t .st{display:flex;align-items:center;gap:6px;margin-top:4px;
-  font-family:"JetBrains Mono",monospace;font-size:.58rem;letter-spacing:.11em;
-  text-transform:uppercase;color:var(--mint)}
-.cl .clh .act{margin-left:auto;display:flex;align-items:center;gap:7px;
-  font-family:"JetBrains Mono",monospace;font-size:.58rem;letter-spacing:.11em;
-  text-transform:uppercase;color:var(--sky);white-space:nowrap}
-.cl .clb{padding:14px 17px;flex:1}
-.cl .clf{display:flex;align-items:center;gap:11px;padding:12px 17px;border-top:1px solid var(--line);
-  font-family:"JetBrains Mono",monospace;font-size:.62rem;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--sky)}
-.cl .clf .r{margin-left:auto;display:flex;align-items:center;gap:9px;
-  letter-spacing:.04em;text-transform:none;color:var(--dim)}
-.cl .clf .r b{color:var(--ink);font-weight:500}
+/* ── CE QUI N'EXISTE PAS ENCORE ───────────────────────────────────────
+   EN FIN DE FEUILLE, ET C'EST LE SUJET. Ce bloc etait declare plus haut :
+   `.barre` et `.tel`, definis apres lui, reecrasaient sa bordure et son fond,
+   si bien que la barre du bas et le telephone s'affichaient comme ACQUIS.
+   Une reference dont le marquage depend de l'ordre des regles ment sur ce
+   qui reste a faire — exactement ce qu'elle est censee empecher. Vu en la
+   regardant, pas en la relisant. */
+.manque{border:1.5px dashed var(--manque) !important;background:
+  repeating-linear-gradient(135deg,transparent 0 9px,rgba(242,163,60,.05) 9px 18px),
+  var(--panel) !important}
+.tel.manque{background:
+  repeating-linear-gradient(135deg,transparent 0 9px,rgba(242,163,60,.05) 9px 18px),
+  var(--nav) !important}
+.barre.manque{background:
+  repeating-linear-gradient(135deg,transparent 0 9px,rgba(242,163,60,.05) 9px 18px),
+  var(--nav-2) !important}
+.tag{position:absolute;top:-9px;right:10px;background:var(--manque);color:#12202c;
+  font-size:.6rem;font-weight:800;padding:1px 7px;border-radius:999px;
+  font-family:"JetBrains Mono",monospace;letter-spacing:.02em;z-index:2}
+.tag.bas{top:auto;bottom:-9px}
 
-/* Radio */
-.np{display:flex;align-items:baseline;gap:10px;font-family:"JetBrains Mono",monospace;font-size:.74rem}
-.np .n1{color:var(--ink)} .np .n2{color:var(--dim);font-size:.68rem}
-.np .tc{margin-left:auto;color:var(--ink)}
-.wave{display:block;width:100%;height:104px;margin-top:11px;fill:var(--sky);opacity:.85}
-.wave-mini{width:60px;height:24px;fill:var(--sky);opacity:.7}
-.play{width:0;height:0;border-left:13px solid var(--sky);border-top:8px solid transparent;
-  border-bottom:8px solid transparent;flex:0 0 auto}
-
-/* Forum */
-.topics{display:flex;flex-direction:column;gap:11px}
-.tp{display:flex;align-items:flex-start;gap:10px;font-family:"JetBrains Mono",monospace;font-size:.72rem}
-.tp .dot{width:6px;height:6px;border-radius:50%;background:var(--sky);margin-top:6px;flex:0 0 auto}
-.tp .tt{min-width:0;flex:1}
-.tp .tt .a{color:var(--ink)}
-.tp .tt .b{color:var(--dim);font-size:.66rem;margin-top:2px}
-.tp .when{color:var(--dim);font-size:.66rem;white-space:nowrap}
-.tp .cnt{min-width:32px;text-align:center;border:1px solid var(--sky);border-radius:5px;
-  padding:1px 6px;font-size:.64rem;color:var(--sky);flex:0 0 auto}
-
-/* Cloud */
-.qhead{display:flex;font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--ink)}
-.qhead .r{margin-left:auto}
-.meter{height:9px;border-radius:5px;background:var(--soft);border:1px solid var(--line);
-  margin-top:9px;overflow:hidden}
-.meter i{display:block;height:100%;width:25%;background:var(--sky)}
-.qsub{font-family:"JetBrains Mono",monospace;font-size:.62rem;color:var(--dim);margin-top:6px}
-.files{margin-top:14px;display:flex;flex-direction:column;gap:9px}
-.fl{display:flex;align-items:center;gap:10px;font-family:"JetBrains Mono",monospace;font-size:.72rem}
-.fl .nm{color:var(--ink)} .fl .sz{margin-left:auto;color:var(--dim);font-size:.68rem}
-
-/* Photos — vignettes de substitution (aucun asset tiers). */
-.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
-.th{aspect-ratio:4/3;border-radius:4px;background:var(--soft)}
-.th1{background:linear-gradient(#cfe0ee 0 42%,#8fa9bd 42% 58%,#5d7488 58% 100%)}
-.th2{background:linear-gradient(#dbe6d2 0 30%,#7d9c63 30% 62%,#c9c3a4 62% 100%)}
-.th3{background:linear-gradient(#cfe2ea 0 38%,#6f9080 38% 70%,#4d6a72 70% 100%)}
-.th4{background:linear-gradient(#dde7ee 0 45%,#93a9b6 45% 60%,#6d8593 60% 100%)}
-.th5{background:linear-gradient(#f0dfc0 0 40%,#d8b878 40% 68%,#a98f52 68% 100%)}
-.th6{background:linear-gradient(#d9e4cd 0 35%,#7f9c5c 35% 100%)}
-
-/* ── barre d'état ───────────────────────────────────────────── */
-.statusbar{display:flex;align-items:center;gap:20px;padding:11px 16px;border-top:1px solid var(--line);
-  background:var(--panel);font-family:"JetBrains Mono",monospace;font-size:.66rem;color:var(--dim)}
-.statusbar .i{display:flex;align-items:center;gap:8px}
-.statusbar .r{margin-left:auto;display:flex;align-items:center;gap:14px}
-@media(max-width:620px){.statusbar{flex-wrap:wrap;gap:10px} .menus span:nth-child(n+4){display:none}}
-
-/* ── pied d'affiche ─────────────────────────────────────────── */
-.ornament{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:clamp(26px,5vw,54px);color:var(--gold)}
-.ornament i{display:block;width:clamp(50px,10vw,120px);height:1px;background:var(--gold);opacity:.65}
-.baseline{text-align:center;margin-top:clamp(16px,3vw,30px);font-family:"Fraunces",Georgia,serif;
-  font-size:clamp(22px,4.4vw,46px);color:#16233a}
-.baseline em{font-style:normal;color:var(--gold)}
+@media(max-width:1180px){
+  .grille{grid-template-columns:repeat(3,1fr)}
+  .duo{grid-template-columns:1fr}
+}
+@media(max-width:760px){ .grille{grid-template-columns:repeat(2,1fr)} }
 </style>
 </head>
 <body>
+<div class="doc">
 
-<div class="warn">Référence de rendu — maquette statique, données fictives · ne pas confondre avec le Hall</div>
+  <div class="doc-tete">
+    <div>
+      <h1>SBX OS · Hall — référence de rendu</h1>
+      <p>La cible, pas l'état. Transcription statique de l'affiche ; aucune donnée
+         réelle. Ce qui porte un liseré orange et un numéro n'existe pas dans
+         <span class="mono">www/hall/index.html</span> au 2026-09-23 — retirer la
+         marque en même temps que l'issue se ferme.</p>
+    </div>
+    <div class="legende">
+      <b>Lecture</b>
+      <ul>
+        <li><span class="puce ok"></span> présent dans le Hall aujourd'hui</li>
+        <li><span class="puce ko"></span> à bâtir — le numéro renvoie à son issue</li>
+      </ul>
+    </div>
+  </div>
 
-<div class="sheet">
+  <div class="duo">
+  <div class="ecran">
 
-  <div class="word">SBXOS</div>
-  <div class="tag">le bureau numérique souverain</div>
-  <div class="rule"></div>
-
-  <div class="win">
-
-    <div class="titlebar">
-      <span class="knob"></span>
-      <nav class="menus"><span>Fichier</span><span>Édition</span><span>Affichage</span><span>Aller</span><span>Outils</span><span>Aide</span></nav>
-      <div class="tb-right">
-        <span class="state"><i class="led"></i> Système opérationnel</span>
-        <span class="bar-sep"></span>
-        <span>10:42</span>
-        <span class="wctl"><span>&minus;</span><span>&#9723;</span><span>&times;</span></span>
-      </div>
+    <!-- BARRE DU HAUT. Tout y existe déjà, au texte près : le champ de
+         recherche du Hall dit « chercher un service, ou surfer une adresse… ». -->
+    <div class="mast">
+      <span class="marque"><span class="rond">◎</span> SbX</span>
+      <span class="drop">🗂️ Services ▾</span>
+      <span class="drop">🗄️ Système ▾</span>
+      <span class="cherche">Rechercher un service, ou surfez une adresse…</span>
+      <span class="icone">🔔<span class="badge">3</span></span>
+      <span class="icone">🌊</span>
+      <span class="icone">◐</span>
+      <span class="qui"><span class="rond">🐙</span> admin<br><span class="pt">● Connecté</span></span>
+      <span class="btn-lexie">Lexie</span>
     </div>
 
-    <header class="viewhead">
-      <div>
-        <h1>Hall</h1>
-        <div class="sub"><b>4 services actifs</b> &nbsp;·&nbsp; Tout est sous votre contrôle.</div>
+    <div class="grille">
+
+      <!-- RANGÉE 1 -->
+      <div class="carte">
+        <h3><span class="em">📰</span> MetaNews <span class="etiq">60 sujets</span></h3>
+        <div class="visuel">une du jour · 72 sources</div>
+        <div class="dim">Le journal du 8h — sécurité, climat, technique</div>
+        <div class="pied"><span class="pt-vert"></span> metanews.gk2.secubox.in</div>
       </div>
-      <div class="health">
-        <div class="l1"><i class="led"></i> Système sain</div>
-        <div class="l2">Tous les services opérationnels</div>
+
+      <div class="carte">
+        <h3><span class="em">📓</span> Billets <span class="etiq">274 publiés</span></h3>
+        <div class="visuel">carnet ouvert</div>
+        <div class="dim">Tutoriel · Astrodynamique · Carnet de route</div>
+        <div class="pied"><span class="pt-vert"></span> gk2.secubox.in</div>
       </div>
-    </header>
 
-    <div class="grid">
+      <div class="carte">
+        <h3><span class="em">📻</span> Radio <span class="etiq vif">En direct</span></h3>
+        <div class="visuel">pochette</div>
+        <div class="ligne"><b>Muse — Invincible</b></div>
+        <div class="dim mono">00:17 / 04:12 · à suivre : Kid Francescoli</div>
+        <div class="pied"><span class="pt-vert"></span> radio.gk2.secubox.in</div>
+      </div>
 
-      <!-- Radio — cardlet active de référence (brief §6) -->
-      <section class="cl">
-        <div class="clh">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#16233a" stroke-width="1.3" stroke-linecap="round">
-            <path d="M7 8a6 6 0 0 1 10 0M4.5 5.5a9.5 9.5 0 0 1 15 0"/>
-            <circle cx="12" cy="12" r="1.6"/><path d="M12 13.6 9 21h6l-3-7.4z"/>
-          </svg>
-          <div class="t"><b>Radio</b><span class="st"><i class="led"></i> En direct</span></div>
-          <div class="act"><svg class="wave-mini" viewBox="0 0 60 24"><rect x="0" y="8,0" width="3" height="8" rx="1.5"/><rect x="5" y="2,0" width="3" height="20" rx="1.5"/><rect x="10" y="7,0" width="3" height="10" rx="1.5"/><rect x="15" y="7,0" width="3" height="10" rx="1.5"/><rect x="20" y="3,0" width="3" height="18" rx="1.5"/><rect x="25" y="6,5" width="3" height="11" rx="1.5"/><rect x="30" y="1,0" width="3" height="22" rx="1.5"/><rect x="35" y="7,0" width="3" height="10" rx="1.5"/><rect x="40" y="7,5" width="3" height="9" rx="1.5"/><rect x="45" y="4,5" width="3" height="15" rx="1.5"/><rect x="50" y="5,0" width="3" height="14" rx="1.5"/><rect x="55" y="1,0" width="3" height="22" rx="1.5"/></svg></div>
+      <!-- La carte mood. L'affiche la nomme « À l'écoute », le registre « Mood ».
+           Un seul des deux noms doit survivre. -->
+      <div class="carte">
+        <h3><span class="em">🎙</span> À l'écoute</h3>
+        <div class="ligne"><b>Indéterminé</b></div>
+        <div class="dim">référence 0 % · 0 mesure</div>
+        <div class="visuel">spectrogramme</div>
+        <div class="chiffres">
+          <div><b>-6</b><span>Hz</span></div>
+          <div><b>-39</b><span>dB</span></div>
+          <div><b>—</b><span>silence</span></div>
+          <div><b>182</b><span>bpm</span></div>
         </div>
-        <div class="clb">
-          <div class="np"><span class="n1">Studio SBX</span><span class="tc">02:18:47</span></div>
-          <div class="np"><span class="n2">Émission en cours</span></div>
-          <svg class="wave" viewBox="0 0 640 120" preserveAspectRatio="none"><rect x="2" y="53,0" width="6" height="14" rx="3"/><rect x="12" y="23,5" width="6" height="73" rx="3"/><rect x="22" y="17,5" width="6" height="85" rx="3"/><rect x="32" y="26,0" width="6" height="68" rx="3"/><rect x="42" y="39,0" width="6" height="42" rx="3"/><rect x="52" y="47,0" width="6" height="26" rx="3"/><rect x="62" y="40,0" width="6" height="40" rx="3"/><rect x="72" y="46,5" width="6" height="27" rx="3"/><rect x="82" y="44,0" width="6" height="32" rx="3"/><rect x="92" y="43,5" width="6" height="33" rx="3"/><rect x="102" y="35,0" width="6" height="50" rx="3"/><rect x="112" y="17,5" width="6" height="85" rx="3"/><rect x="122" y="22,0" width="6" height="76" rx="3"/><rect x="132" y="43,0" width="6" height="34" rx="3"/><rect x="142" y="28,0" width="6" height="64" rx="3"/><rect x="152" y="20,0" width="6" height="80" rx="3"/><rect x="162" y="18,5" width="6" height="83" rx="3"/><rect x="172" y="35,0" width="6" height="50" rx="3"/><rect x="182" y="46,5" width="6" height="27" rx="3"/><rect x="192" y="36,0" width="6" height="48" rx="3"/><rect x="202" y="47,0" width="6" height="26" rx="3"/><rect x="212" y="44,0" width="6" height="32" rx="3"/><rect x="222" y="45,5" width="6" height="29" rx="3"/><rect x="232" y="40,0" width="6" height="40" rx="3"/><rect x="242" y="20,5" width="6" height="79" rx="3"/><rect x="252" y="23,5" width="6" height="73" rx="3"/><rect x="262" y="34,5" width="6" height="51" rx="3"/><rect x="272" y="35,5" width="6" height="49" rx="3"/><rect x="282" y="22,0" width="6" height="76" rx="3"/><rect x="292" y="13,5" width="6" height="93" rx="3"/><rect x="302" y="31,5" width="6" height="57" rx="3"/><rect x="312" y="47,0" width="6" height="26" rx="3"/><rect x="322" y="35,0" width="6" height="50" rx="3"/><rect x="332" y="43,0" width="6" height="34" rx="3"/><rect x="342" y="44,5" width="6" height="31" rx="3"/><rect x="352" y="47,5" width="6" height="25" rx="3"/><rect x="362" y="42,0" width="6" height="36" rx="3"/><rect x="372" y="26,5" width="6" height="67" rx="3"/><rect x="382" y="26,5" width="6" height="67" rx="3"/><rect x="392" y="28,0" width="6" height="64" rx="3"/><rect x="402" y="44,5" width="6" height="31" rx="3"/><rect x="412" y="22,5" width="6" height="75" rx="3"/><rect x="422" y="11,5" width="6" height="97" rx="3"/><rect x="432" y="29,0" width="6" height="62" rx="3"/><rect x="442" y="41,0" width="6" height="38" rx="3"/><rect x="452" y="37,5" width="6" height="45" rx="3"/><rect x="462" y="35,5" width="6" height="49" rx="3"/><rect x="472" y="39,5" width="6" height="41" rx="3"/><rect x="482" y="52,0" width="6" height="16" rx="3"/><rect x="492" y="44,0" width="6" height="32" rx="3"/><rect x="502" y="34,0" width="6" height="52" rx="3"/><rect x="512" y="26,0" width="6" height="68" rx="3"/><rect x="522" y="25,0" width="6" height="70" rx="3"/><rect x="532" y="49,5" width="6" height="21" rx="3"/><rect x="542" y="25,5" width="6" height="69" rx="3"/><rect x="552" y="13,5" width="6" height="93" rx="3"/><rect x="562" y="20,5" width="6" height="79" rx="3"/><rect x="572" y="34,5" width="6" height="51" rx="3"/><rect x="582" y="43,0" width="6" height="34" rx="3"/><rect x="592" y="30,0" width="6" height="60" rx="3"/><rect x="602" y="35,5" width="6" height="49" rx="3"/><rect x="612" y="48,5" width="6" height="23" rx="3"/><rect x="622" y="45,0" width="6" height="30" rx="3"/><rect x="632" y="42,5" width="6" height="35" rx="3"/></svg>
-        </div>
-        <div class="clf">
-          <span class="play"></span>
-          <span class="r" style="margin-left:0"><b>128 kbps</b> · Stéréo</span>
-          <span class="r">Auditeurs <b>342</b></span>
-        </div>
-      </section>
+        <div class="dim" style="font-size:.66rem">Indices acoustiques — pas un état intérieur.</div>
+      </div>
 
-      <!-- Forum / BBS -->
-      <section class="cl">
-        <div class="clh">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1655a0" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v7a2.5 2.5 0 0 1-2.5 2.5H9l-4.5 4v-4A2.5 2.5 0 0 1 3 13.5z"/>
-            <path d="M7.5 8.5h9M7.5 11.5h6"/>
-          </svg>
-          <div class="t"><b>Forum</b><span class="st"><i class="led"></i> 12 en ligne</span></div>
-          <div class="act">Nouveau sujet &plus;</div>
-        </div>
-        <div class="clb">
-          <div class="topics">
-            <div class="tp"><i class="dot"></i><div class="tt"><div class="a">Bienvenue sur le forum SBXOS</div><div class="b">par Admin</div></div><span class="when">10:15</span><span class="cnt">24</span></div>
-            <div class="tp"><i class="dot"></i><div class="tt"><div class="a">Auto-hébergement : vos retours</div><div class="b">par Léo</div></div><span class="when">09:47</span><span class="cnt">18</span></div>
-            <div class="tp"><i class="dot"></i><div class="tt"><div class="a">Mise à jour 1.2.0 disponible</div><div class="b">par Équipe</div></div><span class="when">Hier</span><span class="cnt">37</span></div>
-            <div class="tp"><i class="dot"></i><div class="tt"><div class="a">Partage de configs &amp; astuces</div><div class="b">par Marc</div></div><span class="when">Hier</span><span class="cnt">12</span></div>
-          </div>
-        </div>
-        <div class="clf">Voir tous les sujets<span class="r">&rsaquo;</span></div>
-      </section>
+      <div class="carte">
+        <h3><span class="em">📺</span> Freebox TV <span class="etiq">France 3</span></h3>
+        <div class="visuel">flux en cours</div>
+        <div class="puces"><span class="pastille">France 2</span><span class="pastille">France 3</span>
+          <span class="pastille">France 5</span><span class="pastille">Gulli</span></div>
+        <div class="pied">filtrer une chaîne… (177)</div>
+      </div>
 
-      <!-- Cloud — quota AVANT les noms de fichiers (défaut privacy, brief §7) -->
-      <section class="cl">
-        <div class="clh">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1655a0" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M7 18h10a4 4 0 0 0 .5-7.97 6 6 0 0 0-11.4-1.6A3.6 3.6 0 0 0 7 18z"/>
-          </svg>
-          <div class="t"><b>Cloud</b><span class="st"><i class="led"></i> Synchronisé</span></div>
-          <div class="act">Ouvrir</div>
-        </div>
-        <div class="clb">
-          <div class="qhead"><span>Stockage utilisé</span><span class="r">256 Go / 1 To</span></div>
-          <div class="meter"><i></i></div>
-          <div class="qsub">25 % utilisé</div>
-          <div class="files">
-            <div class="fl"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h9A1.5 1.5 0 0 1 21 9.7v8.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5z"/></svg><span class="nm">Documents</span><span class="sz">12,4 Go · 238 fichiers</span></div>
-            <div class="fl"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h9A1.5 1.5 0 0 1 21 9.7v8.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5z"/></svg><span class="nm">Projets</span><span class="sz">45,7 Go · 128 fichiers</span></div>
-            <div class="fl"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h9A1.5 1.5 0 0 1 21 9.7v8.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5z"/></svg><span class="nm">Partages</span><span class="sz">18,9 Go · 64 fichiers</span></div>
-            <div class="fl"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><path d="M6 3h7l5 5v13H6z"/><path d="M13 3v5h5"/></svg><span class="nm">Présentation.pdf</span><span class="sz">2,3 Mo · modifié hier</span></div>
-          </div>
-        </div>
-        <div class="clf">Dernière sauvegarde<span class="r">aujourd&rsquo;hui à <b>10:31</b></span></div>
-      </section>
+      <!-- RANGÉE 2 -->
+      <div class="carte">
+        <h3><span class="em">📧</span> Mail <span class="etiq vif">7</span></h3>
+        <div class="ligne">✉️ <span>Gérald Amiot — <span class="d">Invitation réunion</span></span></div>
+        <div class="ligne">✉️ <span>CyberMind — <span class="d">Re: documentation</span></span></div>
+        <div class="ligne">✉️ <span>SecuBox — <span class="d">Mise à jour disponible</span></span></div>
+        <div class="pied"><span class="pt-vert"></span> webmail.gk2.secubox.in</div>
+      </div>
 
-      <!-- Photos -->
-      <section class="cl">
-        <div class="clh">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1f7a58" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/>
-            <path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/>
-          </svg>
-          <div class="t"><b>Photos</b><span class="st"><i class="led"></i> 1 243 éléments</span></div>
-          <div class="act">Voir tout</div>
+      <div class="carte">
+        <h3><span class="em">☁️</span> Cloud <span class="etiq">405 fichiers</span></h3>
+        <div class="ligne">📁 Photos</div>
+        <div class="ligne">📁 Documents</div>
+        <div class="ligne">📁 Partages</div>
+        <div class="pied"><span class="pt-vert"></span> cloud.gk2.secubox.in</div>
+      </div>
+
+      <div class="carte">
+        <h3><span class="em">📹</span> PeerTube <span class="etiq dodo">En veille</span></h3>
+        <div class="visuel">trois vignettes</div>
+        <div class="dim">De Beyoncé et Lady Gaga… · Satanism: Suspicion…</div>
+        <div class="pied"><span class="pt-vert"></span> peertube.gk2.secubox.in</div>
+      </div>
+
+      <div class="carte">
+        <h3><span class="em">🧩</span> ZIA <span class="etiq">IA locale</span></h3>
+        <div class="dim">Comment puis-je vous aider ?</div>
+        <div class="puces"><span class="pastille">les podcasts</span><span class="pastille">aide</span>
+          <span class="pastille">les sujets récents</span></div>
+        <div class="pied">Demande à ZIA…</div>
+      </div>
+
+      <div class="carte">
+        <h3><span class="em">🧲</span> Torrent <span class="etiq">2 actifs</span></h3>
+        <div class="ligne">Ubuntu 24.04 <span class="d" style="margin-left:auto">71 %</span></div>
+        <div class="jauge"><i style="width:71%"></i></div>
+        <div class="ligne">Documentaire <span class="d" style="margin-left:auto">42 %</span></div>
+        <div class="jauge"><i style="width:42%"></i></div>
+        <div class="pied"><span class="pt-vert"></span> ↓ 4,2 Mo/s · ↑ 320 ko/s</div>
+      </div>
+
+      <!-- RANGÉE 3 -->
+      <div class="carte">
+        <h3><span class="em">🛰️</span> SocialRelay</h3>
+        <div class="visuel">boîtier</div>
+        <div class="dim">#sbxos #webos · #sbx</div>
+        <div class="pied"><span class="pt-vert"></span> socialrelay.gk2.secubox.in</div>
+      </div>
+
+      <div class="carte">
+        <h3><span class="em">🔭</span> Renseignement <span class="etiq">Shadow observé</span></h3>
+        <div class="chiffres">
+          <div><b>223</b><span>acteurs</span></div>
+          <div><b>25</b><span>campagnes</span></div>
+          <div><b>0</b><span>événements</span></div>
+          <div><b>0</b><span>bloqués</span></div>
         </div>
-        <div class="clb">
-          <div class="thumbs">
-            <div class="th th1"></div><div class="th th2"></div><div class="th th3"></div>
-            <div class="th th4"></div><div class="th th5"></div><div class="th th6"></div>
-          </div>
+        <div class="dim mono" style="font-size:.68rem">ACT-0040 · ACT-0323 · ACT-0070</div>
+        <div class="pied"><span class="pt-vert"></span> Récents, par score</div>
+      </div>
+
+      <div class="carte">
+        <h3><span class="em">🛡️</span> Sécurité</h3>
+        <div class="chiffres">
+          <div><b>223</b><span>acteurs</span></div>
+          <div><b>25</b><span>campagnes</span></div>
+          <div><b>0</b><span>événements</span></div>
+          <div><b>0</b><span>bloqués</span></div>
         </div>
-        <div class="clf">Sauvegarde active<span class="r">aujourd&rsquo;hui à <b>10:31</b> <i class="led"></i></span></div>
-      </section>
+        <div class="dim">WAF activé</div>
+        <div class="pied"><span class="pt-vert"></span> waf.gk2.secubox.in</div>
+      </div>
+
+      <div class="carte manque">
+        <span class="tag">#1337</span>
+        <h3><span class="em">🕸️</span> Mesh</h3>
+        <div class="ligne"><b>3</b> SecuBox connectées</div>
+        <div class="ligne"><span class="pt-vert"></span> Maison <span class="d">(local)</span> <span class="d" style="margin-left:auto">en ligne</span></div>
+        <div class="ligne"><span class="pt-vert"></span> Atelier <span class="d" style="margin-left:auto">en ligne</span></div>
+        <div class="ligne"><span class="pt-vert"></span> Village3B <span class="d" style="margin-left:auto">en ligne</span></div>
+        <div class="pied">le nœud local doit se distinguer des distants</div>
+      </div>
+
+      <div class="carte manque">
+        <span class="tag">#1338</span>
+        <h3><span class="em">🔋</span> Énergie</h3>
+        <div class="chiffres">
+          <div><b>12%</b><span>CPU</span></div>
+          <div><b>48%</b><span>RAM</span></div>
+          <div><b>35%</b><span>SSD</span></div>
+          <div><b>42°</b><span>Temp.</span></div>
+        </div>
+        <div class="visuel" style="height:44px">courbe d'historique</div>
+        <div class="pied"><span class="pt-vert"></span> Stable — dire QUEL disque</div>
+      </div>
+
+      <!-- RANGÉE 4 -->
+      <div class="carte">
+        <h3><span class="em">🔧</span> DevWatch <span class="etiq vif">Direct</span></h3>
+        <div class="dim mono" style="font-size:.7rem;line-height:1.7">
+          webos 1.0.32<br>zigbee 2.7.0<br>bbs 0.32.4<br>appstore 0.4.12<br>metanews 0.1.42</div>
+        <div class="pied"><span class="pt-vert"></span> versions du parc</div>
+      </div>
+
+      <div class="carte">
+        <h3><span class="em">🌐</span> DPI — Trafic vivant</h3>
+        <div class="visuel">planisphère</div>
+        <div class="ligne"><b class="mono">1,2k</b> <span class="d">req/s</span></div>
+        <div class="puces"><span class="pastille">Autorisé</span><span class="pastille">Filtré</span>
+          <span class="pastille">Bloqué</span></div>
+        <div class="pied"><span class="pt-vert"></span> dpi-live</div>
+      </div>
+
+      <div class="carte">
+        <h3><span class="em">🔑</span> Accès</h3>
+        <div class="ligne"><span class="pt-vert"></span> Accès accordé</div>
+        <div class="dim mono" style="font-size:.7rem">aafc 7d62 d710 4db9 2542 e1b0</div>
+        <div class="dim">Session : admin</div>
+        <div class="pied">Ouvrir SBX OS</div>
+      </div>
+
+      <div class="carte manque">
+        <span class="tag">#1339</span>
+        <h3><span class="em">🪪</span> Identité</h3>
+        <div class="ligne">🔐 Clés GPG <span class="d" style="margin-left:auto">3</span></div>
+        <div class="ligne">📜 Certificats <span class="d" style="margin-left:auto">2</span></div>
+        <div class="ligne">🔗 LSCloud <span class="d" style="margin-left:auto">1</span></div>
+        <div class="pied">Gérer mes identités — la clé vit PAR ORIGINE</div>
+      </div>
+
+      <div class="carte manque">
+        <span class="tag">#1340</span>
+        <h3><span class="em">✉️</span> Invitations</h3>
+        <div class="visuel" style="height:56px">QR</div>
+        <div class="dim">Créer un accès invité</div>
+        <div class="puces"><span class="pastille">24 h</span><span class="pastille">7 j</span>
+          <span class="pastille">30 j</span></div>
+        <div class="pied">Scanner pour se connecter — acte, donc jeton</div>
+      </div>
 
     </div>
 
-    <div class="statusbar">
-      <span class="i"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.6"><path d="M12 3l7 3v6c0 4.4-3 7.9-7 9-4-1.1-7-4.6-7-9V6z"/></svg> Chiffrement actif</span>
-      <span class="i"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.6"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg> Données locales uniquement</span>
-      <span class="r">
-        <span>Utilisateur : vous</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>
-      </span>
+    <!-- BARRE DU BAS. Aucun de ces cinq onglets n'existe ; le bas du Hall est
+         aujourd'hui occupé par la statusbar et les overlays surf / TV / viewer. -->
+    <div class="barre manque" style="border-radius:16px">
+      <span class="tag bas">#1345</span>
+      <span class="onglet actif">🏠 Hall</span>
+      <span class="onglet">⭐ Favoris</span>
+      <span class="medaillon">🤖</span>
+      <span class="onglet">🔔 Notifications <span class="badge" style="position:static">3</span></span>
+      <span class="onglet">⚙️ Réglages</span>
     </div>
 
   </div>
 
-  <div class="ornament"><i></i>&#10022;<i></i></div>
-  <div class="baseline">Vos services. Votre matériel. Votre règle<em>.</em></div>
+  <!-- ── LE TÉLÉPHONE ───────────────────────────────────────────────────
+       Une colonne, l'essentiel. Le Hall n'a qu'un @media(max-width:720px)
+       qui masque les menus : ni colonne unique, ni tuiles compactes. -->
+  <div class="tel manque">
+    <span class="tag">#1346</span>
+    <div class="tel-haut"><span>9:41</span><span>▮▮▮ ᯤ 🔋</span></div>
+    <div class="marque"><span class="rond">◎</span> SBX OS</div>
+    <div class="tel-col">
+      <div class="tuile">
+        <span class="ic" style="background:var(--violet);color:#fff">▶</span>
+        <span><b>Radio</b><span class="s">Muse — Invincible</span></span>
+      </div>
+      <div class="tuile">
+        <span class="ic" style="background:var(--mint-s);color:var(--mint)">🛡️</span>
+        <span><b>Sécurité</b><span class="s">0 événement</span></span>
+      </div>
+      <div class="tuile">
+        <span class="ic" style="background:var(--sky-s);color:var(--sky)">✉️</span>
+        <span><b>Mail</b><span class="s">7 nouveaux</span></span>
+      </div>
+      <div class="tuile">
+        <span class="ic" style="background:var(--cyan-s);color:var(--cyan)">☁️</span>
+        <span><b>Cloud</b><span class="s">405 fichiers</span></span>
+      </div>
+      <div class="tuile">
+        <span class="ic" style="background:var(--gold-s);color:var(--gold)">🕸️</span>
+        <span><b>Mesh</b><span class="s">3 connectées</span></span>
+      </div>
+    </div>
+    <div class="barre" style="margin-top:12px;padding:6px 4px">
+      <span class="onglet actif" style="padding:5px 9px">🏠</span>
+      <span class="onglet" style="padding:5px 9px">⭐</span>
+      <span class="medaillon" style="width:32px;height:32px;font-size:.9rem">🤖</span>
+      <span class="onglet" style="padding:5px 9px">🔔</span>
+      <span class="onglet" style="padding:5px 9px">⚙️</span>
+    </div>
+  </div>
+  </div>
+
+  <!-- ── LES CINQ FONCTIONS ANNONCÉES SOUS L'AFFICHE ─────────────────── -->
+  <div class="fonctions">
+    <div class="fn partiel">
+      <h4>1 · Une grille magnétique <span class="num">#1341</span></h4>
+      <p>Cartes alignées <b>et redimensionnables</b>. Le glisser-déposer existe ;
+         le redimensionnement non — aucune poignée dans le Hall.</p>
+    </div>
+    <div class="fn">
+      <h4>2 · Trois niveaux de priorité <span class="num">#1342</span></h4>
+      <p>Focus · Normal · Veille. Une seule mention dans le Hall, et c'est un
+         commentaire. Reste à trancher si « veille » suspend le travail de la
+         carte ou seulement son apparence.</p>
+    </div>
+    <div class="fn">
+      <h4>3 · Lexie au centre <span class="num">#1343</span></h4>
+      <p>Palette de commandes (Ctrl+K ou Espace). Lexie existe, mais c'est un
+         bouton vocal ; son seul raccourci est Échap pour fermer.</p>
+    </div>
+    <div class="fn">
+      <h4>4 · Un centre de notifications <span class="num">#1344</span></h4>
+      <p>Tous les événements réunis. Rien aujourd'hui : ni cloche, ni badge,
+         ni écran.</p>
+    </div>
+    <div class="fn">
+      <h4>5 · Mode mobile optimisé <span class="num">#1346</span></h4>
+      <p>Une colonne, l'essentiel. Chaque <span class="mono">/micro</span> devra
+         tenir dans la largeur — plusieurs ont une hauteur fixe au registre.</p>
+    </div>
+  </div>
 
 </div>
 </body>
