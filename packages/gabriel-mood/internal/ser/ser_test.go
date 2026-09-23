@@ -5,7 +5,6 @@ package ser
 
 import (
 	"math"
-	"strings"
 	"testing"
 )
 
@@ -18,13 +17,13 @@ func ordinaire() Traits {
 	}
 }
 
-func etalonne(t *testing.T) (*Etalon, *Heuristique) {
+func etalonne(t *testing.T) (*Reference, *Heuristique) {
 	t.Helper()
-	e := NouvelEtalon(600)
+	e := NouvelleReference()
 	base := ordinaire()
 	// De la variation, sinon l'écart interquartile est nul et tous les écarts
 	// se retrouvent à zéro — ce qui masquerait les bugs qu'on cherche.
-	for i := 0; i < MinimumEtalon+40; i++ {
+	for i := 0; i < 260; i++ {
 		v := base
 		d := float64(i%20-10) / 10
 		v.F0Median += d * 6
@@ -34,8 +33,8 @@ func etalonne(t *testing.T) (*Etalon, *Heuristique) {
 		v.Centre += d * 120
 		e.Observe(v)
 	}
-	if !e.Pret() {
-		t.Fatal("étalon non prêt")
+	if e.Fiabilite() < 0.75 {
+		t.Fatalf("référence trop jeune : fiabilité %.2f", e.Fiabilite())
 	}
 	return e, NouvelleHeuristique(e)
 }
@@ -77,17 +76,100 @@ func TestAucuneLectureNeDepasseLePlafondDeConfiance(t *testing.T) {
 	}
 }
 
-func TestSansEtalonOnNeRepondPas(t *testing.T) {
-	h := NouvelleHeuristique(NouvelEtalon(600))
+// ── LE CONTRAT A CHANGÉ, ET C'EST LE POINT ────────────────────────────────
+//
+// L'ancien test exigeait le SILENCE tant que l'étalon n'était pas constitué.
+// Ce mur ne tombait jamais en pratique — une mesure par fenêtre DE VOIX fait
+// dix minutes d'usage, et un rechargement repartait de zéro — et il exprimait
+// mal l'incertitude : il n'existe aucun instant où l'on « connaît » une voix.
+//
+// La promesse à garder n'est donc plus « se taire », c'est « ne pas se croire ».
+// Une référence jeune doit rendre une lecture TIMIDE, pas une lecture absente.
+
+func TestAvantToutObservationOnNeRepondPas(t *testing.T) {
+	// Zéro mesure, personne d'autre en ligne : il n'y a littéralement rien.
+	h := NouvelleHeuristique(NouvelleReference())
 	l := h.Evalue(ordinaire())
-	if l.Etat != Indetermine {
-		t.Fatalf("état %q rendu sans étalon", l.Etat)
+	if l.Etat != Indetermine || l.Motif != MotifEtalonnage {
+		t.Fatalf("état %q motif %q sur une référence absolument vierge", l.Etat, l.Motif)
 	}
-	if l.Etalonne {
-		t.Error("prétend être étalonné")
+}
+
+func TestUneReferenceJeuneRepondMaisNeSeCroitPas(t *testing.T) {
+	r := NouvelleReference()
+	base := ordinaire()
+	// Six mesures : de quoi situer un centre, pas de quoi le garantir.
+	for i := 0; i < 6; i++ {
+		v := base
+		v.F0Median += float64(i%3) * 4
+		r.Observe(v)
 	}
-	if !strings.Contains(strings.ToLower(strings.Join(l.Pourquoi, " ")), "étalonnage") {
-		t.Errorf("le motif n'explique pas l'étalonnage : %v", l.Pourquoi)
+	h := NouvelleHeuristique(r)
+	l := h.Evalue(base)
+
+	if l.Etat == Indetermine {
+		t.Fatal("six mesures suffisent à répondre : se taire ici était le défaut")
+	}
+	if l.Fiabilite > 0.30 {
+		t.Errorf("fiabilité %.2f sur six mesures : trop sûre de soi", l.Fiabilite)
+	}
+	if l.Confiance > 0.35 {
+		t.Errorf("confiance %.2f sur six mesures : la jeunesse doit brider", l.Confiance)
+	}
+	if l.Observations != 6 {
+		t.Errorf("%d observations rapportées", l.Observations)
+	}
+}
+
+// LA FIABILITÉ MONTE, ET ELLE NE REDESCEND PAS TOUTE SEULE. C'est ce qui
+// remplace le pourcentage d'étalonnage : une pente, pas un palier.
+func TestLaFiabiliteMonteAvecLesMesures(t *testing.T) {
+	r := NouvelleReference()
+	base := ordinaire()
+	precedente := -1.0
+	for _, n := range []int{5, 25, 100, 400} {
+		for r.Observations() < n {
+			v := base
+			v.F0Median += float64(r.Observations()%7) - 3
+			r.Observe(v)
+		}
+		f := r.Fiabilite()
+		if f <= precedente {
+			t.Fatalf("fiabilité %.3f à %d mesures, après %.3f", f, n, precedente)
+		}
+		precedente = f
+	}
+	if precedente < 0.85 {
+		t.Errorf("fiabilité %.2f après 400 mesures : trop basse", precedente)
+	}
+	if precedente >= 1 {
+		t.Error("fiabilité à 1 : on ne finit jamais de connaître une voix")
+	}
+}
+
+// L'INCERTITUDE ÉLARGIT LA DISPERSION, et c'est ce qui rend les lectures
+// jeunes naturellement calmes. Le MÊME écart brut doit peser moins quand on
+// connaît mal la voix — sans qu'aucune règle ne l'interdise explicitement.
+func TestUneReferenceMalConnueAmortitLesEcarts(t *testing.T) {
+	jeune, mure := NouvelleReference(), NouvelleReference()
+	base := ordinaire()
+	for i := 0; i < 5; i++ {
+		v := base
+		v.F0Median += float64(i%3) * 4
+		jeune.Observe(v)
+	}
+	for i := 0; i < 400; i++ {
+		v := base
+		v.F0Median += float64(i%7) - 3
+		mure.Observe(v)
+	}
+	sonore := base
+	sonore.F0Median = base.F0Median * 1.5
+
+	ej := jeune.Ecarts(sonore)["f0"]
+	em := mure.Ecarts(sonore)["f0"]
+	if !(ej < em) {
+		t.Fatalf("écart jeune %.2f >= mûr %.2f : l'incertitude n'amortit rien", ej, em)
 	}
 }
 
@@ -178,25 +260,25 @@ func TestLaReponseNeClignotePasAEgalite(t *testing.T) {
 }
 
 func TestLEtalonIgnoreLeSilence(t *testing.T) {
-	e := NouvelEtalon(600)
+	e := NouvelleReference()
 	muet := Traits{TramesVoisees: 0, F0Median: 0}
 	for i := 0; i < 500; i++ {
 		e.Observe(muet)
 	}
-	if e.Pret() {
-		t.Fatal("l'étalon s'est constitué sur du silence")
+	if e.Vivante() {
+		t.Fatal("la référence s'est constituée sur du silence")
 	}
-	if e.Progression() != 0 {
-		t.Errorf("progression %.2f sur du silence", e.Progression())
+	if e.Fiabilite() != 0 {
+		t.Errorf("fiabilité %.2f sur du silence", e.Fiabilite())
 	}
 }
 
 // L'étalon doit résister à quelques valeurs aberrantes — un saut d'octave, une
 // porte qui claque — sinon l'ordinaire qu'il apprend n'est celui de personne.
 func TestLEtalonResisteAUneAberration(t *testing.T) {
-	e := NouvelEtalon(600)
+	e := NouvelleReference()
 	base := ordinaire()
-	for i := 0; i < MinimumEtalon+40; i++ {
+	for i := 0; i < 260; i++ {
 		v := base
 		v.F0Median += float64(i%10) - 5
 		e.Observe(v)

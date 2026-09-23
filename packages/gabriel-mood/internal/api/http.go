@@ -45,13 +45,17 @@ type Humeur struct {
 	Shimmer    float64            `json:"shimmer"`
 	PartVoisee float64            `json:"voiced_ratio"`
 
-	Session    string            `json:"session"`
-	Etalonnage float64           `json:"calibration"`
-	Suffisant  bool              `json:"signal_suffisant"`
-	Pourquoi   []string          `json:"pourquoi"`
-	Reserve    string            `json:"reserve"`
-	Source     audio.Description `json:"source"`
-	Emoji      string            `json:"emoji"`
+	Session string `json:"session"`
+	// « calibration » garde son nom JSON pour les consommateurs existants,
+	// mais ce n'est plus une progression vers un achèvement : c'est la
+	// fiabilité de la référence, qui monte sans jamais « finir ».
+	Fiabilite    float64           `json:"calibration"`
+	Observations int               `json:"observations"`
+	Suffisant    bool              `json:"signal_suffisant"`
+	Pourquoi     []string          `json:"pourquoi"`
+	Reserve      string            `json:"reserve"`
+	Source       audio.Description `json:"source"`
+	Emoji        string            `json:"emoji"`
 }
 
 func ecris(w http.ResponseWriter, code int, v any) {
@@ -105,7 +109,7 @@ func (s *Serveur) humeur(w http.ResponseWriter, r *http.Request) {
 		Indices: lec.Indices, Tendances: img.Tendances, Motif: lec.Motif,
 		Activation: lec.Activation,
 		Jitter:     t.Jitter, Shimmer: t.Shimmer, PartVoisee: t.PartVoisee,
-		Session: sess.ID, Etalonnage: img.Etalonnage, Suffisant: lec.Suffisant,
+		Session: sess.ID, Fiabilite: img.Fiabilite, Observations: img.Observations, Suffisant: lec.Suffisant,
 		Pourquoi: lec.Pourquoi, Reserve: ser.Reserve,
 		Source: sess.Analyseur.Source(), Emoji: ser.Emoji[lec.Etat],
 	})

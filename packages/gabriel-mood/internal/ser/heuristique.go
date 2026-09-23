@@ -39,13 +39,13 @@ import (
 // partage d'affinité entre six étiquettes, normalisé pour sommer à un parce
 // que l'affichage le demande. On ne prétend pas mesurer une vraisemblance.
 type Heuristique struct {
-	etalon  *Etalon
+	ref     *Reference
 	partage *EtalonPartage
 }
 
 // NouvelleHeuristique lie le classifieur à l'étalon du locuteur. Sans étalon,
 // il refuse de répondre — c'est le point le plus important de ce fichier.
-func NouvelleHeuristique(e *Etalon) *Heuristique { return &Heuristique{etalon: e} }
+func NouvelleHeuristique(r *Reference) *Heuristique { return &Heuristique{ref: r} }
 
 // AvecEtalonPartage branche l'ordinaire du groupe comme référence de SECOURS.
 // Il ne sert QUE tant que l'ordinaire personnel n'est pas utilisable, et la
@@ -76,8 +76,14 @@ const PartVoiseeMin = 0.12
 
 // Evalue rend la lecture des traits courants.
 func (h *Heuristique) Evalue(t Traits) Lecture {
-	complet := h.etalon != nil && h.etalon.Pret()
-	utilisable := h.etalon != nil && h.etalon.Utilisable()
+	// PLUS DE SEUIL : une référence est vivante dès sa première mesure, et sa
+	// FIABILITÉ dit à quel point on peut s'y fier. Ce qui était un mur est
+	// devenu une pente — et le module répond pendant la montée.
+	vivante := h.ref != nil && h.ref.Vivante()
+	fiab := 0.0
+	if h.ref != nil {
+		fiab = h.ref.Fiabilite()
+	}
 
 	// ── D'ABORD : PEUT-ON MESURER ? ──────────────────────────────────────
 	// Ces trois refus portent sur le SIGNAL, jamais sur la personne. Les
@@ -87,33 +93,38 @@ func (h *Heuristique) Evalue(t Traits) Lecture {
 	if t.TramesVoisees < MinTramesVoisees || t.PartVoisee < PartVoiseeMin {
 		return LectureIndeterminee(MotifPeuDeVoix,
 			fmt.Sprintf("pas assez de voix sur la fenêtre (%d trames voisées, %.0f %% de la durée)",
-				t.TramesVoisees, t.PartVoisee*100), complet)
+				t.TramesVoisees, t.PartVoisee*100), vivante)
 	}
 	if t.Platitude > SeuilBruit {
 		return LectureIndeterminee(MotifBruit,
 			fmt.Sprintf("spectre plat (%.2f) : c'est du bruit, pas une voix — "+
-				"approchez le micro ou coupez ce qui souffle", t.Platitude), complet)
+				"approchez le micro ou coupez ce qui souffle", t.Platitude), vivante)
 	}
 	reference := "vous"
 	var e map[string]float64
 	switch {
-	case utilisable:
-		e = h.etalon.Ecarts(t)
+	case vivante:
+		e = h.ref.Ecarts(t)
+		// MÉLANGE AVEC LE GROUPE TANT QU'ON SE CONNAÎT MAL. Ce n'est pas un
+		// remplacement mais une PONDÉRATION : au début la référence du groupe
+		// pèse lourd, et sa part fond à mesure que la vôtre se précise. Aucun
+		// basculement brusque, aucun instant où la lecture change de nature
+		// sans prévenir.
+		if g := h.partage.Ecarts(t); g != nil && fiab < 0.75 {
+			for k, v := range e {
+				e[k] = fiab*v + (1-fiab)*g[k]
+			}
+			reference = "mixte"
+		}
 	case h.partage.Utilisable():
-		// SECOURS : l'ordinaire du groupe, le temps que le vôtre se constitue.
-		// Même pièce, mêmes micros — ce qui retire le plus gros des
-		// confusions — mais ce sont d'autres voix, et la lecture le dit.
 		e = h.partage.Ecarts(t)
 		reference = "groupe"
 	default:
-		p := 0.0
-		if h.etalon != nil {
-			p = h.etalon.Progression()
-		}
+		// Premier instant d'une première session, personne d'autre en ligne :
+		// il n'y a littéralement aucune mesure. Ce n'est plus un étalonnage
+		// qui dure, c'est une fenêtre qui n'a encore rien porté.
 		return LectureIndeterminee(MotifEtalonnage,
-			fmt.Sprintf("étalonnage %.0f %% : sans votre ordinaire — ni assez de "+
-				"voix dans le groupe pour servir de repère — un écart ne veut rien dire",
-				p*100), false)
+			"première mesure en cours : aucune voix encore observée", false)
 	}
 	var pourquoi []string
 	dire := func(f string, a ...any) { pourquoi = append(pourquoi, fmt.Sprintf(f, a...)) }
@@ -198,14 +209,23 @@ func (h *Heuristique) Evalue(t Traits) Lecture {
 	// seulement pour l'évidence.
 	conf := 0.62 * (0.55*(indices[tete]-indices[second])*2 + 0.45*indices[tete])
 	conf *= math.Min(1, t.PartVoisee/0.45)
+	// LA FIABILITÉ MULTIPLIE LA CONFIANCE, elle ne la bloque pas. Une référence
+	// à peine ébauchée donne une lecture timide, pas un silence — et la
+	// dispersion élargie l'a déjà rendue prudente en amont, si bien que les
+	// deux effets vont dans le même sens sans qu'on ait rien à arbitrer.
 	plafond := PlafondConfiance
-	if reference == "groupe" {
+	switch reference {
+	case "groupe":
 		plafond = PlafondGroupe
-		dire("comparé à l'ordinaire du GROUPE, pas encore au vôtre : lecture de secours")
-	} else if !complet {
-		// ÉTALON PROVISOIRE : on répond, mais on ne se croit pas.
-		plafond = PlafondProvisoire
-		dire("étalon provisoire (%.0f %%) : lecture indicative", h.etalon.Progression()*100)
+		dire("comparé à l'ordinaire du GROUPE : votre voix n'a pas encore été observée")
+	case "mixte":
+		conf *= 0.45 + 0.55*fiab
+		dire("référence à %.0f %% la vôtre, le reste emprunté au groupe", fiab*100)
+	default:
+		conf *= 0.45 + 0.55*fiab
+		if fiab < 0.5 {
+			dire("référence encore jeune (%d mesures) : lecture indicative", h.ref.Observations())
+		}
 	}
 	conf = math.Max(0, math.Min(plafond, conf))
 
@@ -215,7 +235,8 @@ func (h *Heuristique) Evalue(t Traits) Lecture {
 	// ordinaire comme un défaut de mesure.
 	return Lecture{
 		Etat: tete, Confiance: arrondi(conf, 3), Indices: indices,
-		Pourquoi: pourquoi, Reserve: Reserve, Etalonne: complet,
+		Pourquoi: pourquoi, Reserve: Reserve, Etalonne: fiab >= 0.75,
+		Fiabilite: arrondi(fiab, 3), Observations: h.ref.Observations(),
 		Reference: reference, Suffisant: true, Activation: arrondi(activation, 3),
 	}
 }

@@ -126,6 +126,11 @@
       c'est votre droit le plus strict. Le bouton reste là si vous changez d'avis.</div>
   {:else if etat === 'erreur'}
     <div class="avis erreur">⚠ {motif}</div>
+  {:else if img?.reference === 'mixte'}
+    <div class="avis">👥 Référence MIXTE : la vôtre pèse
+      {Math.round((img.calibration ?? 0) * 100)} %, le reste est emprunté à
+      l'ordinaire du groupe — même pièce, mêmes micros. La part empruntée fond
+      à mesure que la vôtre se précise, sans basculement brusque.</div>
   {:else if img?.reference === 'groupe'}
     <div class="avis">👥 Lecture de SECOURS : vous êtes comparé à l'ordinaire du
       GROUPE, pas encore au vôtre — d'autres voix, dans la même pièce et sur les
@@ -143,11 +148,19 @@
       s'affiche ne vient de quelqu'un.</div>
   {/if}
 
-  {#if etat === 'ecoute' && img && img.calibration < 1}
+  <!-- PLUS DE BARRE QUI DOIT SE REMPLIR. L'ancienne promettait un achèvement
+       qui n'arrivait jamais : 6 %, 26 %, 27 % — trois sessions, trois
+       compteurs repartis de zéro, et rien à l'écran entre-temps. Ce qui
+       s'affiche est désormais la FIABILITÉ de la référence : elle monte, elle
+       ne bloque rien, et le module répond pendant la montée. -->
+  {#if etat === 'ecoute' && img && img.calibration < 0.75}
     <div class="avis">
-      Étalonnage {Math.round(img.calibration * 100)} % — le module apprend
-      <em>votre</em> ordinaire. Tant qu'il ne le connaît pas, un écart ne veut
-      rien dire, et aucun état n'est affirmé. Comptez quelques minutes de parole.
+      Référence en construction — {img.observations ?? 0} mesure{(img.observations ?? 0) > 1 ? 's' : ''}
+      de votre voix, fiabilité {Math.round(img.calibration * 100)} %.
+      <strong>Les lectures ci-dessous sont déjà réelles</strong>, simplement
+      prudentes : moins la référence est sûre, plus les écarts sont amortis et
+      plus la confiance est bridée. Elle s'affine à mesure que vous parlez, sans
+      jamais « finir ».
       <div class="jauge-cal"><i style="width:{img.calibration * 100}%"></i></div>
     </div>
   {/if}
@@ -160,7 +173,8 @@
         etat={img?.state ?? 'indetermine'}
         confiance={img?.confidence ?? 0}
         activation={img?.activation ?? 0}
-        etalonnage={img?.calibration ?? 0}
+        fiabilite={img?.calibration ?? 0}
+        observations={img?.observations ?? 0}
         indices={{
           calm: img?.calm ?? 0, joy: img?.joy ?? 0, stress: img?.stress ?? 0,
           anger: img?.anger ?? 0, fatigue: img?.fatigue ?? 0, focus: img?.focus ?? 0,

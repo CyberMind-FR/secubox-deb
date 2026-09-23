@@ -88,9 +88,13 @@ type Image struct {
 	Shimmer float64 `json:"shimmer"`     // dB
 	Clarte  float64 `json:"clarity"`     // 0..1, qualité de la mesure de hauteur
 
-	LatenceMs  float64 `json:"latency_ms"`
-	ChargeCPU  float64 `json:"cpu"`         // part d'un cœur, 0..1
-	Etalonnage float64 `json:"calibration"` // 0..1
+	LatenceMs float64 `json:"latency_ms"`
+	ChargeCPU float64 `json:"cpu"` // part d'un cœur, 0..1
+	// Fiabilite REMPLACE « calibration » : ce n'était pas une progression vers
+	// un achèvement, et l'afficher comme telle promettait une fin qui n'arrive
+	// jamais. Le champ JSON garde son nom pour les consommateurs existants.
+	Fiabilite    float64 `json:"calibration"` // 0..1
+	Observations int     `json:"observations"`
 
 	SourceReelle bool   `json:"source_reelle"`
 	Reserve      string `json:"reserve"`
@@ -105,7 +109,7 @@ type Analyseur struct {
 	yin     *pitch.Estimateur
 	vad     *vad.Detecteur
 	pert    *pitch.Perturbation
-	etalon  *ser.Etalon
+	ref     *ser.Reference
 	classif ser.Classifieur
 
 	anneau *audio.Anneau
@@ -153,15 +157,17 @@ func Nouveau(src audio.Source) *Analyseur { return NouveauAvecPartage(src, nil, 
 func NouveauAvecPartage(src audio.Source, partage *ser.EtalonPartage, session string) *Analyseur {
 	plan := fft.NouveauPlan(TailleTrame)
 	raies := TailleTrame/2 + 1
-	etalon := ser.NouvelEtalon(1800) // une demi-heure d'ordinaire glissant
+	// RÉFÉRENCE EN LIGNE : utilisable dès la première mesure, et de plus en
+	// plus sûre. Il n'y a plus de phase d'apprentissage à attendre.
+	ref := ser.NouvelleReference()
 	a := &Analyseur{
 		plan:       plan,
 		banc:       mfcc.NouveauBanc(26, raies, audio.Echantillonnage, 50, 8000),
 		yin:        pitch.NouvelEstimateur(TailleTrame, audio.Echantillonnage),
 		vad:        vad.Nouveau(raies, audio.Echantillonnage, vad.Normal, 12),
 		pert:       pitch.NouvellePerturbation(80),
-		etalon:     etalon,
-		classif:    ser.NouvelleHeuristique(etalon),
+		ref:        ref,
+		classif:    ser.NouvelleHeuristique(ref).AvecEtalonPartage(partage),
 		anneau:     audio.NouvelAnneau(TailleTrame, PasTrame),
 		source:     src,
 		debut:      time.Now(),
@@ -342,11 +348,12 @@ func (a *Analyseur) majTraits() {
 	a.traits = t
 	a.mu.Unlock()
 
-	a.etalon.Observe(t)
-	// ON NE PARTAGE QUE CE QUI EST ÉTABLI. Un ordinaire incomplet mis en
-	// commun donnerait un à-peu-près commun, et personne n'y gagnerait.
-	if a.partage != nil && a.etalon.Pret() {
-		a.partage.Contribue(a.session, a.etalon)
+	a.ref.Observe(t)
+	// ON NE PARTAGE QUE CE QUI EST ÉTABLI (le seuil de fiabilité est dans
+	// Contribue) : un ordinaire approximatif mis en commun donnerait un
+	// à-peu-près commun, et personne n'y gagnerait.
+	if a.partage != nil {
+		a.partage.Contribue(a.session, a.ref)
 	}
 	lec := a.classif.Evalue(t)
 
@@ -495,7 +502,8 @@ func (a *Analyseur) majImage(v vad.Verdict, rms float64) {
 		Clarte:       math.Round(a.derniereClar*100) / 100,
 		LatenceMs:    math.Round(lat*10) / 10,
 		ChargeCPU:    math.Round(charge*1000) / 1000,
-		Etalonnage:   math.Round(a.etalon.Progression()*100) / 100,
+		Fiabilite:    math.Round(lec.Fiabilite*100) / 100,
+		Observations: lec.Observations,
 		SourceReelle: a.source.Decrit().Reelle,
 		Reserve:      lec.Reserve,
 	}

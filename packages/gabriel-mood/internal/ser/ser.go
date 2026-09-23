@@ -139,9 +139,14 @@ type Lecture struct {
 	// Reference : sur QUOI l'écart a été mesuré — « vous » ou « le groupe ».
 	// Ça ne peut pas être implicite : lire « tension » sans savoir qu'on est
 	// comparé à d'AUTRES voix, ce serait croire à une mesure personnelle.
-	Reference  string  `json:"reference,omitempty"`
-	Suffisant  bool    `json:"signal_suffisant"`
-	Activation float64 `json:"activation"` // -1..+1, le seul axe solide
+	Reference string `json:"reference,omitempty"`
+	// Fiabilite : 0 à 1, à quel point la référence est connue. REMPLACE le
+	// pourcentage d'étalonnage, qui promettait un achèvement — on ne « finit »
+	// jamais de connaître une voix, on la connaît de mieux en mieux.
+	Fiabilite    float64 `json:"fiabilite"`
+	Observations int     `json:"observations"`
+	Suffisant    bool    `json:"signal_suffisant"`
+	Activation   float64 `json:"activation"` // -1..+1, le seul axe solide
 }
 
 // LectureIndeterminee : la réponse quand on ne sait pas. Elle est NORMALE, et
@@ -173,7 +178,7 @@ type Classifieur interface {
 	Nom() string
 }
 
-// ── L'ÉTALON PERSONNEL ─────────────────────────────────────────────────────
+// ── L'ORDINAIRE D'UNE PERSONNE ─────────────────────────────────────────────
 //
 // SANS LUI, TOUT CE QUI PRÉCÈDE EST FAUX. Un seuil absolu sur la hauteur ou le
 // débit compare des personnes entre elles, ce qui n'a pas de sens : une voix
@@ -181,92 +186,16 @@ type Classifieur interface {
 // voix-là. On apprend donc l'ordinaire de CE locuteur, et on ne lit que les
 // écarts à cet ordinaire.
 //
-// Médiane et écart interquartile plutôt que moyenne et écart-type : quelques
-// trames aberrantes — un saut d'octave, une porte qui claque — déplacent une
-// moyenne et laissent une médiane tranquille.
-type Etalon struct {
-	minimum  int
-	f0       []float64
-	energie  []float64
-	debit    []float64
-	jitter   []float64
-	centre   []float64
-	capacite int
-}
-
-// DEUX SEUILS, ET C'EST LA CORRECTION DU DÉFAUT LE PLUS VISIBLE.
+// L'IMPLÉMENTATION VIT DANS reference.go, et elle a remplacé un étalon à
+// SEUIL qui accumulait cent quatre-vingts mesures avant de débloquer une
+// réponse. Ce seuil n'aboutissait pas — une mesure par fenêtre DE VOIX fait
+// dix minutes d'usage réel, et un rechargement de page repartait de zéro — et
+// il exprimait mal l'incertitude : il n'existe aucun instant où l'on
+// « connaît » une voix, on la connaît de mieux en mieux.
 //
-// Il n'y en avait qu'un — cent quatre-vingts observations, soit trois bonnes
-// minutes de PAROLE effective, et bien davantage en temps réel. Pendant tout
-// ce temps le module ne disait rien du tout, et l'on ne pouvait pas savoir
-// s'il travaillait ou s'il était en panne. Un module muet trois minutes est un
-// module qu'on referme.
-//
-// L'ordinaire d'une voix ne se découvre pourtant pas d'un coup : une
-// quarantaine d'observations donnent déjà une médiane et un interquartile
-// utilisables, grossiers mais réels. On répond donc à partir de là, EN LE
-// DISANT (`Provisoire`), et la confiance est bridée tant que l'étalon n'est
-// pas complet. Annoncer « provisoire » est honnête ; se taire trois minutes
-// était seulement inutilisable.
-const (
-	MinimumEtalonProvisoire = 45
-	MinimumEtalon           = 180
-)
+// Voir `Reference` et `Suivi`.
 
-// PlafondProvisoire : tant que l'étalon n'est pas complet, la confiance ne
-// dépasse pas ceci. Un ordinaire estimé sur quarante mesures est un ordinaire
-// approximatif, et l'écart qu'on y lit l'est tout autant.
-const PlafondProvisoire = 0.40
-
-// NouvelEtalon garde au plus `capacite` observations glissantes.
-func NouvelEtalon(capacite int) *Etalon {
-	if capacite < MinimumEtalon {
-		capacite = MinimumEtalon
-	}
-	return &Etalon{minimum: MinimumEtalon, capacite: capacite}
-}
-
-func pousse(s []float64, v float64, max int) []float64 {
-	s = append(s, v)
-	if len(s) > max {
-		s = s[len(s)-max:]
-	}
-	return s
-}
-
-// Observe enregistre une fenêtre de voix dans l'ordinaire du locuteur.
-// Les fenêtres SANS voix ne sont pas observées : le silence n'a pas de hauteur,
-// et l'inclure abaisserait l'ordinaire de tout le monde.
-func (e *Etalon) Observe(t Traits) {
-	if t.TramesVoisees < 10 || t.F0Median <= 0 {
-		return
-	}
-	e.f0 = pousse(e.f0, t.F0Median, e.capacite)
-	e.energie = pousse(e.energie, t.Energie, e.capacite)
-	e.jitter = pousse(e.jitter, t.Jitter, e.capacite)
-	e.centre = pousse(e.centre, t.Centre, e.capacite)
-	if t.Debit > 0 {
-		e.debit = pousse(e.debit, t.Debit, e.capacite)
-	}
-}
-
-// Pret : l'étalon est-il COMPLET ?
-func (e *Etalon) Pret() bool { return len(e.f0) >= e.minimum }
-
-// Utilisable : a-t-on de quoi répondre, même grossièrement ?
-func (e *Etalon) Utilisable() bool { return len(e.f0) >= MinimumEtalonProvisoire }
-
-// Progression : 0..1, de quoi afficher une barre honnête pendant l'étalonnage
-// plutôt que de laisser croire à une panne.
-func (e *Etalon) Progression() float64 {
-	p := float64(len(e.f0)) / float64(e.minimum)
-	if p > 1 {
-		return 1
-	}
-	return p
-}
-
-// ecart rend l'écart robuste d'une valeur à l'ordinaire, en « interquartiles ».
+// ecart rend l'écart robuste d'une valeur à une série, en « interquartiles ».
 // Zéro quand on ne sait pas — jamais une valeur inventée.
 func ecart(serie []float64, v float64) float64 {
 	if len(serie) < 8 {
@@ -281,19 +210,5 @@ func ecart(serie []float64, v float64) float64 {
 		return 0
 	}
 	z := (v - med) / iq
-	// On borne : au-delà de trois interquartiles, la valeur est aberrante et
-	// sa magnitude exacte ne veut plus rien dire. La laisser filer donnerait
-	// un indice écrasant à une seule mesure douteuse.
 	return math.Max(-3, math.Min(3, z))
-}
-
-// Ecarts : la position des traits courants dans l'ordinaire du locuteur.
-func (e *Etalon) Ecarts(t Traits) map[string]float64 {
-	return map[string]float64{
-		"f0":      ecart(e.f0, t.F0Median),
-		"energie": ecart(e.energie, t.Energie),
-		"debit":   ecart(e.debit, t.Debit),
-		"jitter":  ecart(e.jitter, t.Jitter),
-		"centre":  ecart(e.centre, t.Centre),
-	}
 }

@@ -11,8 +11,9 @@
 <script lang="ts">
   let {
     etat = 'indetermine', confiance = 0, indices = {} as Record<string, number>,
-    activation = 0, etalonnage = 0,
+    activation = 0, fiabilite = 0, observations = 0,
   } = $props()
+
 
   const EMOJI: Record<string, string> = {
     calm: '😌', joy: '😊', stress: '😬', anger: '😠',
@@ -37,11 +38,10 @@
     <div class="nom">{NOM[tete] ?? etat}</div>
     {#if etat === 'indetermine'}
       <div class="dim petit">
-        {#if etalonnage < 1}
-          Étalonnage {Math.round(etalonnage * 100)} % — sans votre ordinaire,
-          un écart ne veut rien dire.
+        {#if observations < 1}
+          Première mesure en cours — aucune voix encore observée.
         {:else}
-          Aucune lecture ne se détache des autres.
+          Signal insuffisant pour lire quoi que ce soit.
         {/if}
       </div>
     {:else}
@@ -51,7 +51,7 @@
            est une question différente et secondaire. -->
       <div class="part mono">{Math.round((indices[tete] ?? 0) * 100)}<span class="pc">%</span></div>
       <div class="dim petit mono">confiance {(confiance * 100).toFixed(0)} %
-        {#if !etalonne}· étalon provisoire{/if}</div>
+        · référence {(fiabilite * 100).toFixed(0)} % ({observations})</div>
     {/if}
   </div>
 

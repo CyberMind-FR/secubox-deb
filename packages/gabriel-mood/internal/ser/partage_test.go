@@ -5,16 +5,18 @@ package ser
 
 import "testing"
 
-func etalonDe(f0, energie, debit float64) *Etalon {
-	e := NouvelEtalon(600)
-	for i := 0; i < MinimumEtalon+10; i++ {
+func etalonDe(f0, energie, debit float64) *Reference {
+	r := NouvelleReference()
+	// Assez de mesures pour dépasser le seuil de partage : une référence
+	// approximative ne doit pas entrer dans le repère commun.
+	for i := 0; i < 260; i++ {
 		d := float64(i%20-10) / 10
-		e.Observe(Traits{
+		r.Observe(Traits{
 			F0Median: f0 + d*18, Energie: energie + d*0.08, Debit: debit + d*30,
 			Jitter: 0.8 + d*0.3, Centre: 1400 + d*300, TramesVoisees: 60,
 		})
 	}
-	return e
+	return r
 }
 
 // ── LE SEUIL EST LA PROMESSE ───────────────────────────────────────────────
@@ -78,11 +80,12 @@ func TestUnDepartEffaceLaContribution(t *testing.T) {
 // personne, et il embarque du bruit dans la référence de tout le monde.
 func TestUnEtalonIncompletNeContribuePas(t *testing.T) {
 	p := NouvelEtalonPartage()
-	partiel := NouvelEtalon(600)
-	for i := 0; i < MinimumEtalonProvisoire+5; i++ {
-		partiel.Observe(Traits{F0Median: 130, Energie: .3, TramesVoisees: 60})
+	partiel := NouvelleReference()
+	for i := 0; i < 5; i++ {
+		partiel.Observe(Traits{F0Median: 130, Energie: .3, Debit: 150,
+			Jitter: .8, Centre: 1400, TramesVoisees: 60})
 	}
-	if partiel.Pret() {
+	if partiel.Fiabilite() >= FiabiliteMinPartage {
 		t.Skip("fixture invalide")
 	}
 	p.Contribue("a", partiel)
@@ -103,7 +106,7 @@ func TestUneLectureDeSecoursSeDeclareEtSeBride(t *testing.T) {
 	p.Contribue("c", etalonDe(185, .40, 195))
 
 	// Quelqu'un qui arrive : son propre étalon est vide.
-	h := NouvelleHeuristique(NouvelEtalon(600)).AvecEtalonPartage(p)
+	h := NouvelleHeuristique(NouvelleReference()).AvecEtalonPartage(p)
 	l := h.Evalue(Traits{F0Median: 240, F0Etendue: 6, Energie: .62, Debit: 260,
 		Jitter: 1.4, Shimmer: .7, Centre: 2600, Platitude: .2,
 		PartVoisee: .6, TramesVoisees: 60})
@@ -123,7 +126,7 @@ func TestUneLectureDeSecoursSeDeclareEtSeBride(t *testing.T) {
 }
 
 func TestSansBaseCommuneNiPersonnelleOnSeTait(t *testing.T) {
-	h := NouvelleHeuristique(NouvelEtalon(600)).AvecEtalonPartage(NouvelEtalonPartage())
+	h := NouvelleHeuristique(NouvelleReference()).AvecEtalonPartage(NouvelEtalonPartage())
 	l := h.Evalue(Traits{F0Median: 240, Energie: .6, Platitude: .2,
 		PartVoisee: .6, TramesVoisees: 60})
 	if l.Etat != Indetermine || l.Motif != MotifEtalonnage {

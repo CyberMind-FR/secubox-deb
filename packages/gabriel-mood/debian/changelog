@@ -1,3 +1,46 @@
+gabriel-mood (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * PLUS D'ÉTALONNAGE À ATTENDRE : la référence est vivante dès la première
+    mesure et se précise ensuite. Mesuré : réponse dès la 1re mesure (confiance
+    0,20), fiabilité 0,50 à 25 mesures, 0,80 à 100, 0,94 à 400 — jamais 1.
+  * LE DÉFAUT SIGNALÉ — 6 %, 26 %, 27 % qui ne finissent pas — n'était pas un
+    compteur bloqué mais TROIS SESSIONS DIFFÉRENTES. L'étalon vivait dans la
+    session : chaque rechargement de page repartait de zéro. Et il comptait une
+    mesure par fenêtre DE VOIX, pas par seconde : 180 observations font dix
+    bonnes minutes d'usage réel.
+  * PLUS GRAVE QUE LE COMPTEUR : LE SEUIL EXPRIMAIT MAL L'INCERTITUDE. Il
+    n'existe aucun instant où l'on « connaît » une voix — on la connaît de
+    mieux en mieux. Un mur binaire transforme ce continuum en tout-ou-rien, et
+    pendant tout le « rien » on ne peut pas distinguer un module qui travaille
+    d'un module en panne.
+  * L'ESTIMATEUR EST EN LIGNE. Centre par médiane courante (pas de taille
+    décroissante dans la direction du signe : converge vers la médiane et ne se
+    laisse pas emporter par un saut d'octave, ce qu'une moyenne ferait),
+    dispersion suivie de même.
+  * ET L'INCERTITUDE ÉLARGIT LA DISPERSION AU LIEU D'INTERDIRE. C'est le cœur
+    de la révision : diviser par une dispersion plus large rapetisse tous les
+    écarts, donc une référence mal connue produit D'ELLE-MÊME des lectures plus
+    timides, qui penchent vers le repos. Aucune règle à poser, aucun déclic —
+    l'arithmétique s'en charge, progressivement.
+  * LES PRIORS NE TOUCHENT JAMAIS AU CENTRE. À une seule mesure on ne connaît
+    aucune dispersion : on part d'ordres de grandeur de la parole
+    conversationnelle (l'interquartile d'une fondamentale tourne autour de 10 à
+    15 % de sa médiane). Ils servent UNIQUEMENT à dire « on ne sait pas encore
+    à quel point ça varie ». Le centre est celui de CETTE voix dès la première
+    mesure : « tout est relatif à la personne » tient entier.
+  * RÉFÉRENCE MIXTE plutôt que bascule : tant qu'on se connaît mal, l'ordinaire
+    du groupe est PONDÉRÉ avec le vôtre, et sa part fond à mesure. Plus aucun
+    instant où la lecture change de nature sans prévenir.
+  * Les deux tests qui gardaient le mur ont été REMPLACÉS, pas supprimés : ils
+    gardent désormais la promesse qui compte — une référence jeune rend une
+    lecture TIMIDE, pas une lecture absente. Et un test vérifie que le même
+    écart brut pèse moins quand la voix est mal connue.
+  * L'interface ne parle plus d'étalonnage : elle montre la fiabilité et le
+    nombre de mesures, en disant que les lectures affichées sont DÉJÀ réelles,
+    simplement prudentes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:12:18 +0200
+
 gabriel-mood (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * MOINS D'INDÉTERMINÉS, ET DES POURCENTAGES QUI SE LISENT.

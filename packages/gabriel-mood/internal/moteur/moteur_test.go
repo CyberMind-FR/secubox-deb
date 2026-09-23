@@ -63,17 +63,27 @@ func TestAucuneImageNAffirmeUneCertitude(t *testing.T) {
 	}
 }
 
-// AVANT L'ÉTALONNAGE, ON NE DIT PAS D'HUMEUR. C'est le cas NORMAL des
-// premières minutes, pas une panne.
-func TestAvantEtalonnageLEtatResteIndetermine(t *testing.T) {
+// LA RÉFÉRENCE EST VIVANTE DÈS LES PREMIÈRES SECONDES, et la fiabilité dit à
+// quel point on peut s'y fier. C'est ce qui remplace le pourcentage
+// d'étalonnage : une pente, pas un mur — le module répond pendant la montée.
+func TestLaChaineRepondTotEtSeDeclarePeuSure(t *testing.T) {
 	a := Nouveau(audio.NouvelleSynthese(false))
 	nourrit(a, voix(130, audio.Echantillonnage*3, 0.3))
 	img := a.Derniere()
-	if img.Etat != ser.Indetermine {
-		t.Fatalf("état %q rendu après trois secondes, sans étalon", img.Etat)
+	if img.Fiabilite < 0 || img.Fiabilite > 1 {
+		t.Errorf("fiabilité %.2f hors [0,1]", img.Fiabilite)
 	}
-	if img.Etalonnage <= 0 || img.Etalonnage > 1 {
-		t.Errorf("progression d'étalonnage %.2f hors [0,1]", img.Etalonnage)
+	if img.Etat != ser.Indetermine {
+		// Elle a répondu : alors elle doit se déclarer peu sûre.
+		if img.Confiance > 0.45 {
+			t.Errorf("confiance %.2f après trois secondes : trop assurée", img.Confiance)
+		}
+		if img.Fiabilite > 0.5 {
+			t.Errorf("fiabilité %.2f après trois secondes : trop assurée", img.Fiabilite)
+		}
+	}
+	if img.Observations < 1 {
+		t.Error("aucune observation comptée après trois secondes de voix")
 	}
 }
 

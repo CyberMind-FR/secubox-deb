@@ -78,20 +78,23 @@ func NouvelEtalonPartage() *EtalonPartage {
 	}
 }
 
-// Contribue enregistre l'ordinaire d'une session. Seuls les étalons COMPLETS
-// sont acceptés : mettre en commun des à-peu-près donnerait un à-peu-près
-// commun, et personne n'y gagnerait.
-func (p *EtalonPartage) Contribue(session string, e *Etalon) {
-	if p == nil || e == nil || !e.Pret() {
+// FiabiliteMinPartage : on ne met en commun qu'une référence déjà solide.
+// Mettre en commun des à-peu-près donnerait un à-peu-près commun, et personne
+// n'y gagnerait — surtout pas celui qui vient d'arriver et s'y fie.
+const FiabiliteMinPartage = 0.70
+
+// Contribue enregistre l'ordinaire d'une session.
+func (p *EtalonPartage) Contribue(session string, r *Reference) {
+	if p == nil || r == nil || r.Fiabilite() < FiabiliteMinPartage {
 		return
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.f0[session] = resumeDe(e.f0)
-	p.energie[session] = resumeDe(e.energie)
-	p.debit[session] = resumeDe(e.debit)
-	p.jitter[session] = resumeDe(e.jitter)
-	p.centre[session] = resumeDe(e.centre)
+	p.f0[session] = resume{r.F0.Centre, r.F0.Disp}
+	p.energie[session] = resume{r.Energie.Centre, r.Energie.Disp}
+	p.debit[session] = resume{r.Debit.Centre, r.Debit.Disp}
+	p.jitter[session] = resume{r.Jitter.Centre, r.Jitter.Disp}
+	p.centre[session] = resume{r.Centre.Centre, r.Centre.Disp}
 }
 
 // Retire oublie une session. UN DÉPART EFFACE LA CONTRIBUTION : rien ne
@@ -164,17 +167,6 @@ func ecartGroupe(m map[string]resume, v float64) float64 {
 		return -3
 	}
 	return z
-}
-
-// resumeDe : le centre et la dispersion d'une série, en robuste.
-func resumeDe(s []float64) resume {
-	if len(s) < 4 {
-		return resume{}
-	}
-	c := append([]float64(nil), s...)
-	sort.Float64s(c)
-	q1, q3 := c[len(c)/4], c[3*len(c)/4]
-	return resume{centre: c[len(c)/2], dispersion: q3 - q1}
 }
 
 // Ecarts : la position des traits courants dans l'ordinaire DU GROUPE.

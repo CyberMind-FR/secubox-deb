@@ -16,7 +16,8 @@ export type Image = {
   confidence: number; activation: number
   trends?: Record<string, number>
   vad: boolean; speech_rate: number; jitter: number; shimmer: number
-  clarity: number; latency_ms: number; cpu: number; calibration: number
+  clarity: number; latency_ms: number; cpu: number
+  calibration: number; observations?: number
   source_reelle: boolean; reserve: string
 }
 

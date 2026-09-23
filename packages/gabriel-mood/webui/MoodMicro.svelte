@@ -73,8 +73,9 @@
     <div class="visage" style="opacity:{opacite}">{EMOJI[tete]}</div>
     <div class="dit">
       <div class="nom">{NOM[tete]}</div>
-      {#if img && img.calibration < 1 && actif}
-        <div class="dim minus">étalonnage {Math.round(img.calibration * 100)} %</div>
+      {#if img && img.calibration < 0.75 && actif}
+        <div class="dim minus">référence {Math.round(img.calibration * 100)} %
+          · {img.observations ?? 0} mesures</div>
       {:else if actif && img}
         <div class="dim minus mono">
           {img.pitch ? img.pitch.toFixed(0) + ' Hz' : '—'} ·
