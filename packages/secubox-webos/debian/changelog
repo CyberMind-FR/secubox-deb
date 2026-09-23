@@ -1,3 +1,29 @@
+secubox-webos (1.0.333-1~bookworm1) bookworm; urgency=medium
+
+  * UNE SEULE RÉFÉRENCE DE RENDU (closes #1347). `render-ref.html` décrivait un
+    modèle à menus — Fichier, Édition, Affichage, Outils, Aide — avec « Studio
+    SBX », quand l'affiche en usage montre une grille de vingt cartes, une barre
+    du bas à cinq onglets et un mode téléphone. DEUX CIBLES COEXISTAIENT et rien
+    ne disait laquelle faisait foi : on pouvait déclarer le Hall conforme ou non
+    selon celle qu'on choisissait. Une mesure d'écart n'a de sens que contre une
+    référence unique.
+  * CE QUI N'EXISTE PAS ENCORE S'Y SIGNALE. Chaque élément absent du Hall porte
+    un liseré et son numéro d'issue (#1337 à #1346). Une référence qui ressemble
+    à une capture laisse croire que tout est fait ; celle-ci est MESURABLE — le
+    jour où plus aucun liseré n'apparaît, l'écart est clos. Les marques sont à
+    retirer avec leur issue.
+  * LE MARQUAGE DÉPENDAIT DE L'ORDRE DES RÈGLES, et je ne l'ai vu qu'en
+    REGARDANT la page. `.barre` et `.tel`, déclarées après `.manque`,
+    écrasaient sa bordure : la barre du bas et le téléphone s'affichaient comme
+    ACQUIS alors qu'ils n'existent pas. Une référence dont le marquage ment sur
+    ce qui reste à faire est exactement ce qu'elle est censée empêcher.
+  * VERROUILLÉE EN SOMBRE, à l'inverse de la précédente qui l'était en clair :
+    l'affiche est en bleu nuit, et une cible qui bascule avec le thème du
+    lecteur n'est plus un témoin. Contraintes conservées — aucun script, aucune
+    origine tierce, polices locales, `noindex`.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 16:12:16 +0200
+
 secubox-webos (1.0.332-1~bookworm1) bookworm; urgency=medium
 
   * LE HALL RELAIE L'HUMEUR VERS LIGHT-BIBLI (ref #1331), et seulement depuis

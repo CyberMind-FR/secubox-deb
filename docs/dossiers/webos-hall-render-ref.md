@@ -5,7 +5,51 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
-# WebOS / Hall — référence de rendu « SBXOS » (#1175)
+# WebOS / Hall — référence de rendu « SBX OS » (#1347, remplace #1175)
+
+> **Réécrite le 2026-09-23.** La version #1175 transcrivait l'affiche
+> *« SBXOS · le bureau numérique souverain »* du 24 août : un modèle à menus
+> (Fichier, Édition, Affichage, Outils, Aide) avec « Studio SBX ». L'affiche en
+> usage montre depuis une grille de vingt cartes, une barre du bas à cinq
+> onglets et un mode téléphone en une colonne.
+>
+> **Deux cibles coexistaient, et rien ne disait laquelle faisait foi** — on
+> pouvait donc déclarer le Hall conforme ou non selon celle qu'on choisissait.
+> C'est le même défaut que la table de routes sbxwaf, le `frame-src` du Hall ou
+> le test CSP périmé : une déclaration que personne ne possède. Il n'y a plus
+> qu'une référence, et c'est ce fichier.
+>
+> **Ce qui n'existe pas encore s'y signale.** Chaque élément absent du Hall au
+> 2026-09-23 porte un liseré orange et son numéro d'issue (#1337 à #1346). Une
+> référence qui ressemble à une capture laisse croire que tout est fait ;
+> celle-ci est mesurable — le jour où plus aucun liseré n'apparaît, l'écart est
+> clos. **Retirer la marque en même temps que l'issue se ferme.**
+>
+> **Verrouillée en sombre**, à l'inverse de la précédente qui l'était en clair :
+> l'affiche est en bleu nuit, et une cible qui bascule avec le thème du lecteur
+> n'est plus un témoin.
+
+## L'écart mesuré au 2026-09-23
+
+| Manque | Issue |
+|---|---|
+| Carte **Mesh** — SecuBox du parc | #1337 |
+| Carte **Énergie** — CPU/RAM/disque/température | #1338 |
+| Carte **Identité** — GPG, certificats, LSCloud | #1339 |
+| Carte **Invitations** — accès invité par QR | #1340 |
+| Cartes **redimensionnables** (le glisser-déposer existe) | #1341 |
+| Priorités **Focus / Normal / Veille** | #1342 |
+| **Palette de commandes** (Ctrl+K ou Espace) | #1343 |
+| **Centre de notifications** | #1344 |
+| **Barre du bas** à cinq onglets | #1345 |
+| **Shell mobile** une colonne | #1346 |
+
+Les seize autres cartes de l'affiche existent. Le registre du Hall en déclare
+**34** au total : l'affiche est une sélection, pas l'inventaire.
+
+---
+
+## Historique — la version #1175
 
 **Fichier témoin** : `packages/secubox-webos/www/hall/render-ref.html` → servi sur
 `https://hall.gk2.net/render-ref.html` (installé par `debian/rules`).
