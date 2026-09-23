@@ -338,6 +338,43 @@ func (s *Store) SujetsRecents(since int64) ([]Topic, error) {
 	return s.scanTopics(`WHERE updated_at >= ? ORDER BY updated_at DESC`, since)
 }
 
+// PurgerSujetsVides retire les sujets qui n'ont plus aucun article.
+//
+// LE FANTÔME. `Reclasser` détache les articles mal rattachés et les remet au
+// bon endroit ; quand un sujet perd ainsi son dernier article, il RESTE — avec
+// son titre, son résumé et sa vignette d'alors. Il n'est plus recomposable
+// (`recomposer` sort tout de suite s'il n'y a rien à lire) et pourtant il
+// continue d'être listé. Cinq cent quatre-vingt-dix-huit s'étaient accumulés,
+// et deux d'entre eux affichaient encore « $content.TitleNoTags » après que
+// TOUS les articles eurent été réparés : c'est par eux que le défaut s'est vu.
+//
+// LA MARGE D'ÂGE N'EST PAS DE LA PRUDENCE DÉCORATIVE. `Regrouper` crée le
+// sujet PUIS lui rattache l'article : entre les deux, le sujet est légitimement
+// vide. Le sondage tourne en même temps que cette passe — sans marge, on
+// supprimerait un sujet en train de naître.
+//
+// Les événements suivent (`ON DELETE CASCADE`), à condition que les clés
+// étrangères soient actives ; on les retire explicitement pour ne pas en
+// dépendre.
+func (s *Store) PurgerSujetsVides(avant int64) (int, error) {
+	if _, err := s.db.Exec(
+		`DELETE FROM topic_event WHERE topic_id IN (
+			SELECT id FROM topic WHERE updated_at < ?
+			AND NOT EXISTS(SELECT 1 FROM article a WHERE a.topic_id = topic.id))`,
+		avant); err != nil {
+		return 0, err
+	}
+	res, err := s.db.Exec(
+		`DELETE FROM topic WHERE updated_at < ?
+		 AND NOT EXISTS(SELECT 1 FROM article a WHERE a.topic_id = topic.id)`,
+		avant)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 // SujetsSuspectsDeGabarit : les sujets récents dont le titre POURRAIT porter
 // une référence de gabarit. Même partage des rôles que pour les articles — le
 // SQL déblaie, `linker.PorteUnGabarit` tranche.

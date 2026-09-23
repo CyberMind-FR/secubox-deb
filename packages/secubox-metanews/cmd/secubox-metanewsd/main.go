@@ -72,6 +72,16 @@ func main() {
 		} else if n > 0 {
 			jr.Printf("reclasser : %d articles remis a leur place", n)
 		}
+		// LES SUJETS FANTOMES (#1323). Reclasser vient de deplacer des
+		// articles ; un sujet qui perd le dernier RESTE, avec son titre et sa
+		// vignette d'alors, et n'est plus recomposable — mais reste liste. Une
+		// heure de marge : Regrouper cree le sujet PUIS lui rattache
+		// l'article, et le sondage tourne en meme temps que cette passe.
+		if n, err := st.PurgerSujetsVides(maintenant - 3600); err != nil {
+			jr.Printf("purge-sujets-vides : %v", err)
+		} else if n > 0 {
+			jr.Printf("purge-sujets-vides : %d sujets sans article retires", n)
+		}
 		// REPARATION DES TITRES-GABARITS (#1323). Certains flux publient leur
 		// propre code de mise en page : « Vidéo. $content.TitleNoTags ». Le
 		// correctif a l'ingestion ne vaut que pour ce qui ARRIVE ; ce qui est

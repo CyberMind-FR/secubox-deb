@@ -86,3 +86,79 @@ func TestLePreFiltreSArreteALaFenetre(t *testing.T) {
 		t.Fatalf("veut le seul article récent, a %d : %+v", len(arts), arts)
 	}
 }
+
+// ── LES SUJETS FANTÔMES ────────────────────────────────────────────────────
+// Reclasser détache les articles mal rattachés ; un sujet qui perd le dernier
+// RESTE, avec son titre d'alors, et n'est plus recomposable — mais reste
+// listé. C'est par deux d'entre eux que le défaut s'est vu : ils affichaient
+// encore « $content.TitleNoTags » alors que tous les articles étaient réparés.
+
+func TestUnSujetSansArticleEstRetire(t *testing.T) {
+	s := ouvrir(t)
+	maintenant := time.Now().Unix()
+	vieux := maintenant - 7200
+	if err := s.CreerSujet(Topic{ID: "fantome", Title: "Vidéo. $content.TitleNoTags",
+		UpdatedAt: vieux}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AjouterEvenement("fantome", vieux, "resume", ""); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.PurgerSujetsVides(maintenant - 3600)
+	if err != nil || n != 1 {
+		t.Fatalf("purge = %d, %v ; veut 1", n, err)
+	}
+	if _, err := s.SujetParID("fantome"); err == nil {
+		t.Error("le sujet fantôme est toujours là")
+	}
+	// Ses événements partent avec lui : sans quoi ils s'accumuleraient en
+	// désignant un sujet qui n'existe plus.
+	lignes, _ := s.Timeline("fantome")
+	if len(lignes) != 0 {
+		t.Errorf("%d événement(s) orphelin(s) subsistent", len(lignes))
+	}
+}
+
+func TestUnSujetQUI_NAIT_NEstPasPurge(t *testing.T) {
+	// `Regrouper` crée le sujet PUIS lui rattache l'article : entre les deux
+	// il est légitimement vide, et le sondage tourne EN MÊME TEMPS que la
+	// passe. Sans marge d'âge, on supprimerait un sujet en train de naître.
+	s := ouvrir(t)
+	maintenant := time.Now().Unix()
+	if err := s.CreerSujet(Topic{ID: "tout-neuf", Title: "À peine né",
+		UpdatedAt: maintenant}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.PurgerSujetsVides(maintenant - 3600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("un sujet qui naît a été purgé (%d)", n)
+	}
+	if _, err := s.SujetParID("tout-neuf"); err != nil {
+		t.Errorf("le sujet neuf a disparu : %v", err)
+	}
+}
+
+func TestUnSujetHABITE_NEstJamaisPurge(t *testing.T) {
+	s := ouvrir(t)
+	maintenant := time.Now().Unix()
+	vieux := maintenant - 7200
+	src, _ := s.AddSource(Source{Slug: "d", Name: "D", URL: "https://x/rss", Enabled: true})
+	if err := s.CreerSujet(Topic{ID: "habite", Title: "Un vrai sujet", UpdatedAt: vieux}); err != nil {
+		t.Fatal(err)
+	}
+	id, _, err := s.UpsertArticle(Article{SourceID: src, Ref: "a1", Title: "Titre",
+		PublishedAt: vieux})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetArticleSujet(id, "habite"); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.PurgerSujetsVides(maintenant - 3600)
+	if err != nil || n != 0 {
+		t.Fatalf("purge = %d, %v ; un sujet habité ne doit JAMAIS partir", n, err)
+	}
+}

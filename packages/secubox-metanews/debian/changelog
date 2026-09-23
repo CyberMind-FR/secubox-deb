@@ -1,3 +1,23 @@
+secubox-metanews (0.1.42-1~bookworm1) bookworm; urgency=medium
+
+  * Les sujets fantômes sont retirés (#1323). `Reclasser` détache les articles
+    mal rattachés et les remet au bon endroit ; quand un sujet perd ainsi son
+    DERNIER article, il restait — avec son titre, son résumé et sa vignette
+    d'alors. Plus recomposable (il n'y a plus rien à lire), et pourtant
+    toujours listé. 598 s'étaient accumulés sur gk2, et rien ne les retirait
+    jamais : aucun chemin de suppression n'existait.
+  * C'est par eux que le défaut s'est vu : après réparation de la totalité des
+    articles, deux sujets affichaient encore « $content.TitleNoTags ». Ils
+    n'avaient aucun article — donc aucune chance de guérir.
+  * UNE HEURE DE MARGE, et ce n'est pas de la prudence décorative : `Regrouper`
+    crée le sujet PUIS lui rattache l'article, et le sondage tourne en même
+    temps que la passe. Sans marge, on supprimerait un sujet en train de naître.
+    Un test le vérifie, comme il vérifie qu'un sujet habité ne part jamais.
+  * Les événements du sujet partent avec lui, explicitement — sans dépendre de
+    l'activation des clés étrangères.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 10:05:56 +0200
+
 secubox-metanews (0.1.41-1~bookworm1) bookworm; urgency=medium
 
   * Un sujet abîmé que plus aucun article ne désigne guérit quand même (#1323).
