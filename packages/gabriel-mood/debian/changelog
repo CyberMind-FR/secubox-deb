@@ -1,3 +1,23 @@
+gabriel-mood (0.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE COCKPIT EST DE NOUVEAU LIVRÉ, et sa construction ne peut plus être
+    oubliée en silence (closes #1335). La 0.8.0 a installé un répertoire web
+    VIDE par-dessus une installation qui marchait : 403 sur « / » faute
+    d'index, et 500 sur « /micro.html » parce que le repli SPA bouclait sur un
+    « /index.html » absent. La carte du Hall était blanche.
+  * LA CAUSE ÉTAIT UN AVERTISSEMENT QUI N'ARRÊTAIT RIEN. `debian/rules`
+    imprimait « ATTENTION : dist/ absent » puis réussissait. Or `dist/` est
+    gitignoré — à juste titre, c'est un produit de construction — donc un
+    worktree neuf ne l'a JAMAIS, et la 0.8.0 est sortie d'un worktree créé
+    pour #1333. Une ligne d'avertissement au milieu de plusieurs centaines
+    n'est pas une garde : c'est une ligne de journal.
+  * LA CONSTRUCTION ÉCHOUE MAINTENANT, et elle dit quoi faire (`npm ci &&
+    npm run build`). Le paquet ANNONCE servir un cockpit — l'option `--www`,
+    la route nginx, la carte du Hall ; le livrer vide n'est pas une
+    dégradation gracieuse, c'est une régression muette qui écrase du bon.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 14:49:09 +0200
+
 gabriel-mood (0.8.0-1~bookworm1) bookworm; urgency=medium
 
   * LA MUSIQUE NE COUVRE PLUS LES ÉMOTIONS (closes #1333). Le symptôme était

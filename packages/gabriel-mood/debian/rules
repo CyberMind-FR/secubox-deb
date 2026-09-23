@@ -60,11 +60,28 @@ override_dh_auto_install:
 	  debian/gabriel-mood/usr/share/doc/gabriel-mood/gabriel-mood.md
 	# LE COCKPIT EST CONSTRUIT EN AMONT (npm/vite), comme secubox-soc-web : la
 	# chaîne de construction du paquet n'a pas node, et l'y ajouter ferait
-	# dépendre un paquet Go d'un écosystème entier. `dist/` absent, le service
-	# sert l'API seule et le dit dans son journal.
+	# dépendre un paquet Go d'un écosystème entier.
+	#
+	# ET SON ABSENCE ARRÊTE LA CONSTRUCTION (#1335). Il y avait ici un `echo
+	# ATTENTION` qui laissait le paquet réussir. `dist/` étant gitignoré — à
+	# juste titre, c'est un produit de construction — un worktree neuf ne l'a
+	# jamais : la 0.8.0 a donc été livrée avec un répertoire web VIDE, par
+	# dessus une installation qui marchait. Résultat sur la board : 403 sur
+	# « / » faute d'index, et 500 sur « /micro.html » parce que le repli SPA
+	# boucle sur un `/index.html` absent.
+	#
+	# UN AVERTISSEMENT QUI N'ARRÊTE RIEN N'EST PAS UNE GARDE, c'est une ligne
+	# de journal au milieu de plusieurs centaines. Le paquet ANNONCE servir un
+	# cockpit — l'option `--www`, la route nginx, la carte du Hall : le livrer
+	# vide n'est pas une dégradation gracieuse, c'est une régression muette.
+	if [ ! -d dist ] || [ ! -f dist/index.html ] || [ ! -f dist/micro.html ]; then \
+	  echo "ERREUR : le cockpit n'est pas construit." >&2; \
+	  echo "  dist/index.html et dist/micro.html sont attendus ici." >&2; \
+	  echo "  Construire d'abord :  cd packages/gabriel-mood && npm ci && npm run build" >&2; \
+	  exit 1; \
+	fi
 	install -d debian/gabriel-mood/usr/share/secubox/www/gabriel-mood
-	if [ -d dist ]; then cp -r dist/. debian/gabriel-mood/usr/share/secubox/www/gabriel-mood/; \
-	else echo "ATTENTION : dist/ absent, cockpit non livré (npm run build)"; fi
+	cp -r dist/. debian/gabriel-mood/usr/share/secubox/www/gabriel-mood/
 
 override_dh_installsystemd:
 	dh_installsystemd --name=gabriel-mood
