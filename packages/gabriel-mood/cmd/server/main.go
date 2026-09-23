@@ -35,11 +35,15 @@ var version = "dev"
 
 func main() {
 	var (
-		socket    = flag.String("socket", "/run/secubox/gabriel-mood.sock", "socket unix d'écoute")
-		adresse   = flag.String("adresse", "", "adresse TCP (développement ; vide = socket unix)")
-		base      = flag.String("db", "/var/lib/secubox/gabriel-mood/mood.db", "historique (vide = aucun)")
-		www       = flag.String("www", "/usr/share/secubox/www/gabriel-mood", "racine du cockpit")
-		retention = flag.Duration("retention", 14*24*time.Hour, "durée de conservation des résumés (0 = ne rien garder)")
+		socket  = flag.String("socket", "/run/secubox/gabriel-mood.sock", "socket unix d'écoute")
+		adresse = flag.String("adresse", "", "adresse TCP (développement ; vide = socket unix)")
+		base    = flag.String("db", "/var/lib/secubox/gabriel-mood/mood.db", "historique (vide = aucun)")
+		www     = flag.String("www", "/usr/share/secubox/www/gabriel-mood", "racine du cockpit")
+		// « 336h », pas « 14d » : `time.ParseDuration` ne connaît pas le jour,
+		// un jour n'ayant pas de durée fixe. L'usage le rappelle, parce que
+		// l'erreur de flag, elle, ne dit que « invalid value ».
+		retention = flag.Duration("retention", 14*24*time.Hour,
+			"conservation des résumés, en h/m/s — PAS en jours (336h = 14 jours ; 0 = ne rien garder)")
 		inference = flag.String("inference", "", "socket d'un service d'inférence externe (facultatif)")
 		montre    = flag.Bool("version", false, "afficher la version")
 	)

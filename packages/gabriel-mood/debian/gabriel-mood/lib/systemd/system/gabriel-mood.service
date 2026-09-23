@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+[Unit]
+Description=Gabriel Mood — indices prosodiques, analyse locale
+Documentation=file:///usr/share/doc/gabriel-mood/gabriel-mood.md
+After=network.target
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+# `336h` ET PAS `14d` : `time.ParseDuration` de Go ne connaît pas le jour
+# (ns, µs, ms, s, m, h — c'est tout, parce qu'un « jour » n'a pas de durée
+# fixe). Écrit `14d`, le service refusait de démarrer — ce qui est la bonne
+# réaction, mais il valait mieux ne pas l'écrire.
+ExecStart=/usr/sbin/gabriel-moodd \
+    --socket /run/secubox/gabriel-mood.sock \
+    --db /var/lib/secubox/gabriel-mood/mood.db \
+    --www /usr/share/secubox/www/gabriel-mood \
+    --retention 336h
+Restart=on-failure
+RestartSec=5
+
+# RuntimeDirectory N'EST PAS DÉCLARÉ : /run/secubox est partagé par une
+# centaine d'unités, et un RuntimeDirectory=secubox ici effacerait leurs
+# sockets à chaque redémarrage de CE service.
+StateDirectory=secubox/gabriel-mood
+StateDirectoryMode=0750
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+# LE BRIEF DEMANDAIT `read-only` ; `yes` est STRICTEMENT PLUS FERMÉ (le
+# répertoire devient inaccessible au lieu d'être lisible) et ne coûte rien :
+# ce service ne lit rien dans /home et n'a aucune raison d'y voir quoi que ce
+# soit. On resserre plutôt que de desserrer.
+ProtectHome=yes
+ReadWritePaths=/var/lib/secubox/gabriel-mood /run/secubox
+
+# PAS DE MATÉRIEL AUDIO, ET C'EST STRUCTUREL. Le micro est celui du navigateur ;
+# ce service ne touche jamais /dev/snd. `PrivateDevices=yes` le rend
+# impossible à contourner, et si quelqu'un ajoute un jour une capture locale,
+# il butera ici — c'est-à-dire au bon endroit, avec la question posée.
+PrivateDevices=yes
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0027
+
+# AUCUNE SORTIE RÉSEAU. Ce module n'appelle personne : il écoute une socket
+# unix, et le navigateur vient à lui par nginx. `AF_UNIX` seul suffit donc, et
+# c'est la garantie la plus forte de la promesse « rien ne sort de la board » —
+# plus forte que n'importe quelle phrase de documentation.
+RestrictAddressFamilies=AF_UNIX
+
+# Plafonds : le budget annoncé est de 60 Mo et moins de 8 % d'un cœur. On les
+# pose en LIMITE, pas en vœu — un dépassement doit se voir, pas s'installer.
+MemoryMax=192M
+MemoryHigh=96M
+CPUQuota=60%
+
+[Install]
+WantedBy=multi-user.target

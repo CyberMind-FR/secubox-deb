@@ -1,3 +1,29 @@
+secubox-metablogizer (1.8.21-1~bookworm1) bookworm; urgency=medium
+
+  * Boutons rapides sur les vignettes de la mosaïque (#1323) : ouvrir le
+    détail, publier ou dépublier, ouvrir le site. Les deux gestes les plus
+    fréquents demandaient jusqu'ici de passer par l'onglet Sites puis d'y
+    retrouver la ligne — sur cent soixante-douze vignettes, ce n'est pas un
+    détail.
+  * DÉPUBLIER SE CONFIRME, PUBLIER NON. Dépublier retire un site du web : sur
+    une grille de cette taille, un clic de travers doit coûter une question.
+    Publier ne casse rien et se défait d'un clic.
+  * ÉTAT D'ATTENTE PENDANT LA BASCULE. Publier régénère nginx pour tous les
+    sites — des dizaines de secondes sur la board. Sans cela la vignette
+    resterait muette et l'on cliquerait une deuxième fois.
+  * L'état affiché après la bascule est RELU depuis la board, jamais corrigé à
+    la main dans le DOM : la publication touche le vhost, la route et le
+    certificat, et ce qui s'affiche doit venir de ce que la board CONSTATE, pas
+    de ce qu'on espérait.
+  * `data-nom` plutôt qu'un `onclick` qui interpole le nom : un site nommé
+    « l'atelier » aurait cassé l'attribut. Et l'écouteur est DÉLÉGUÉ sur la
+    grille — la mosaïque est reconstruite à chaque frappe dans le filtre, et
+    rattacher 172 écouteurs à chaque fois serait du gaspillage pur.
+  * Hors ligne s'affiche en neutre et pas en rouge : un brouillon n'est pas une
+    panne, et le rouge le ferait lire comme telle.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:09:47 +0200
+
 secubox-metablogizer (1.8.20-1~bookworm1) bookworm; urgency=medium
 
   * Le vhost charge (#1323). La version précédente redéclarait

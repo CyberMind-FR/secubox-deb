@@ -132,6 +132,27 @@
         .value-ok { color: var(--green); }
         .value-bad { color: var(--red); }
 
+        /* Boutons rapides de vignette (#1323). Discrets au repos — une grille
+           de 172 tuiles couverte de boutons colorés serait illisible — et
+           francs au survol, là où l'attention est déjà posée. */
+        .mosaic-footer { display: flex; gap: 4px; padding: 6px 8px; align-items: center; }
+        .tuile-btn {
+            flex: 1; display: inline-flex; align-items: center; justify-content: center;
+            gap: 4px; padding: 3px 6px; font-size: .68rem; line-height: 1.4;
+            border: 1px solid var(--border); border-radius: 7px;
+            background: transparent; color: var(--p31-dim);
+            text-decoration: none; cursor: pointer; white-space: nowrap;
+            transition: border-color .12s, color .12s, background .12s;
+        }
+        .tuile-btn:hover { color: var(--p31-fg, #e8e6d9); border-color: var(--p31-dim); }
+        .tuile-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+        .tuile-btn[disabled] { opacity: .55; cursor: progress; }
+        /* En ligne = vert. Hors ligne = neutre, PAS rouge : un brouillon n'est
+           pas une panne, et le rouge le ferait lire comme telle. */
+        .tuile-btn.actif { color: var(--green); border-color: rgba(120,220,150,.35); }
+        .tuile-btn.actif:hover { background: rgba(120,220,150,.08); }
+        .tuile-btn[href] { flex: 0 0 auto; padding: 3px 8px; }
+
         /* Publish wizard */
         .wizard-steps { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
         .wizard-steps span { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: .75rem; opacity: .7; color: var(--p31-dim); }
@@ -520,6 +541,7 @@
             }
             const sorted = filtered.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
             grid.innerHTML = sorted.map(renderMosaicTile).join('');
+            poseGestesTuiles();
         }
 
         function renderMosaicTile(s) {
@@ -559,8 +581,96 @@
                     '<div class="mosaic-domain" title="' + domain + '">' + (domain || '—') + '</div>' +
                     '<span class="badge ' + (published ? 'published' : 'draft') + '">' + (published ? '✅ publié' : '📝 non publié') + '</span>' +
                 '</div>' +
-                (openUrl ? '<div class="mosaic-footer"><a href="' + openUrl + '" target="_blank" rel="noopener">↗ ouvrir</a></div>' : '') +
+                // BOUTONS RAPIDES (#1323). Cent soixante-douze vignettes, et
+                // pour chacune il fallait passer par l'onglet Sites puis
+                // retrouver la ligne : les deux gestes les plus fréquents —
+                // ouvrir le détail, publier ou dépublier — sont maintenant là.
+                //
+                // `data-nom` plutôt qu'un `onclick` qui interpole le nom : un
+                // nom de site contenant une apostrophe casserait l'attribut,
+                // et c'est exactement le genre de chose qu'on découvre le jour
+                // où quelqu'un crée « l'atelier ». L'écouteur est délégué sur
+                // la grille (voir plus bas), il n'y a donc PAS un écouteur par
+                // vignette : sur 172 tuiles, ça compte.
+                '<div class="mosaic-footer">' +
+                    '<button class="tuile-btn" data-geste="details" data-nom="' + name + '"' +
+                        ' title="Ouvrir la vue détaillée">⚙ détails</button>' +
+                    '<button class="tuile-btn ' + (published ? 'actif' : '') + '"' +
+                        ' data-geste="bascule" data-nom="' + name + '"' +
+                        ' data-publie="' + (published ? '1' : '0') + '"' +
+                        ' title="' + (published ? 'Dépublier ce site' : 'Publier ce site') + '">' +
+                        (published ? '⏻ en ligne' : '⭘ hors ligne') + '</button>' +
+                    (openUrl ? '<a class="tuile-btn" href="' + openUrl + '" target="_blank" rel="noopener" title="Ouvrir le site">↗</a>' : '') +
+                '</div>' +
             '</div>';
+        }
+
+        // ── LES GESTES DE VIGNETTE ────────────────────────────────────────
+        //
+        // Écouteur DÉLÉGUÉ, posé une fois sur la grille : la mosaïque est
+        // reconstruite à chaque filtre, et rattacher 172 écouteurs à chaque
+        // frappe dans le champ de recherche serait gaspiller pour rien.
+        let gestesTuilesPoses = false;
+        function poseGestesTuiles() {
+            if (gestesTuilesPoses) return;
+            const grid = document.getElementById('mosaic-grid');
+            if (!grid) return;
+            gestesTuilesPoses = true;
+            grid.addEventListener('click', function (ev) {
+                const b = ev.target.closest('button.tuile-btn');
+                if (!b) return;
+                const nom = b.dataset.nom;
+                if (b.dataset.geste === 'details') {
+                    window.location = 'site.html?name=' + encodeURIComponent(nom);
+                    return;
+                }
+                if (b.dataset.geste === 'bascule') {
+                    basculePublication(nom, b.dataset.publie !== '1', b);
+                }
+            });
+        }
+
+        // DÉPUBLIER SE CONFIRME, PUBLIER NON. Dépublier retire un site du web :
+        // sur une grille de 172 vignettes, un clic de travers doit coûter une
+        // question. Publier ne casse rien et se défait d'un clic.
+        async function basculePublication(nom, versPublie, bouton) {
+            if (!versPublie && !confirm('Retirer « ' + nom + ' » du web ?\n\n'
+                    + 'Le site ne sera plus servi. Son contenu reste intact et '
+                    + 'vous pouvez le republier à tout moment.')) return;
+
+            // PUBLIER RÉGÉNÈRE NGINX POUR TOUS LES SITES : c'est long (des
+            // dizaines de secondes sur la board). Sans état d'attente, la
+            // vignette resterait muette et l'on cliquerait une deuxième fois.
+            const avant = bouton.textContent;
+            bouton.disabled = true;
+            bouton.textContent = versPublie ? '⏳ publication…' : '⏳ retrait…';
+            try {
+                const t = token();
+                const r = await fetch(API + '/site/' + encodeURIComponent(nom)
+                        + (versPublie ? '/publish' : '/unpublish'),
+                    { method: 'POST', credentials: 'same-origin',
+                      headers: t ? { 'Authorization': 'Bearer ' + t } : {} });
+                const d = await r.json().catch(function () { return {}; });
+                if (!r.ok || d.ok === false) {
+                    throw new Error(d.detail || d.erreur || ('HTTP ' + r.status));
+                }
+                if (typeof toast === 'function') {
+                    toast((versPublie ? '✅ ' : '⭘ ') + nom + (versPublie ? ' publié' : ' retiré du web'));
+                }
+                // On relit la liste plutôt que de corriger la vignette à la
+                // main : la publication touche le vhost, la route et le
+                // certificat, et l'état affiché doit venir de ce que la board
+                // CONSTATE, pas de ce que l'on espérait.
+                allSites = null;
+                await ensureSites(true);
+                renderMosaic();
+                if (typeof sitesTabLoaded !== 'undefined' && sitesTabLoaded) renderSitesTable();
+            } catch (e) {
+                bouton.disabled = false;
+                bouton.textContent = avant;
+                if (typeof toast === 'function') toast('⚠ ' + nom + ' : ' + e.message);
+                else alert(nom + ' : ' + e.message);
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════

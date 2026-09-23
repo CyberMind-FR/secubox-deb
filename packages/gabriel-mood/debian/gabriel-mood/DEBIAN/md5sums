@@ -1,0 +1,10 @@
+3c7de4f85a94b4b829888d9974670d3c  lib/systemd/system/gabriel-mood.service
+48d6736b858250ced381f5894414c68e  usr/lib/tmpfiles.d/gabriel-mood.conf
+e88f106f610535fcf73d86141759ecf2  usr/sbin/gabriel-moodd
+045b551328e2431140c2456f0b7b7dec  usr/share/doc/gabriel-mood/changelog.Debian.gz
+0db8452019eb295425f611a002ae341f  usr/share/doc/gabriel-mood/gabriel-mood.md.gz
+3247a7c9908c7df09466f7f283491d9c  usr/share/secubox/menu.d/54-gabriel-mood.json
+325660a62f500366bf6a84f4381167ce  usr/share/secubox/www/gabriel-mood/assets/index-BX_MiTL0.css
+f42c8ef4e201b950351f1c3e5cfb7f3d  usr/share/secubox/www/gabriel-mood/assets/index-CCrVzYvC.js
+66b36351aa2c5c85d67d43f033d6dfb5  usr/share/secubox/www/gabriel-mood/capteur.js
+51d97d4c797f66f929285516615943e9  usr/share/secubox/www/gabriel-mood/index.html

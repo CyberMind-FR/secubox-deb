@@ -1,0 +1,43 @@
+gabriel-mood (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * La route WebSocket n'inclut plus `snippets/secubox-proxy.conf`. Il pose
+    `proxy_http_version 1.1` — d'où le doublon que nginx refusait — mais
+    surtout `proxy_set_header Connection ""`, soit exactement le contraire de
+    ce qu'une WebSocket demande. L'inclure puis « corriger » par-dessus aurait
+    donné une configuration qui se contredit à la lecture. On écrit ce dont on
+    a besoin, en toutes lettres.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:08:47 +0200
+
+gabriel-mood (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'unité passait `--retention 14d`, que Go refuse : `time.ParseDuration` ne
+    connaît pas le jour (ns, µs, ms, s, m, h — un « jour » n'ayant pas de durée
+    fixe). Le service sortait en code 2 au démarrage. Il a eu raison de refuser
+    plutôt que de retomber en silence sur un défaut, mais il valait mieux ne
+    pas l'écrire : c'est `336h`.
+  * L'aide du drapeau le rappelle désormais — l'erreur de flag, elle, ne dit
+    que « invalid value ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:07:40 +0200
+
+gabriel-mood (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Première version. Détecteur d'indices prosodiques, entièrement local.
+  * DSP en Go pur : FFT radix-2 avec correction de gain de fenêtre, YIN par
+    intercorrélation fenêtrée (la forme naïve coûte deux millions d'opérations
+    par trame), banc mel, VAD à plancher de bruit appris, jitter/shimmer.
+  * Le micro est celui du NAVIGATEUR, poussé en PCM par la WebSocket. La board
+    de test n'a d'ailleurs aucune entrée son — ce qui n'a aucune importance,
+    et le module le dit au lieu de planter.
+  * Aucun échantillon audio n'écrit sur le disque, et un test du schéma le
+    vérifie : toute colonne ajoutée qui ressemblerait à du son le fait échouer.
+  * « Ne jamais présenter les émotions comme des certitudes » est tenu dans le
+    CODE : confiance plafonnée à 0,72, refus de répondre sans étalon personnel,
+    réserve attachée à chaque réponse, justifications transmises avec le
+    verdict, et un classifieur explicable plutôt qu'un modèle sur corpus
+    d'acteurs. Un modèle externe peut être branché ; il passe par les mêmes
+    garde-fous.
+  * 60 tests, dont ceux qui gardent ces promesses.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:02:45 +0200

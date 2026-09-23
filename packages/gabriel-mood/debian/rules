@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+export DH_VERBOSE = 1
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+GOARCH_amd64 = amd64
+GOARCH_arm64 = arm64
+GOARCH_armhf = arm
+export GOARCH = $(or $(GOARCH_$(DEB_HOST_ARCH)),$(DEB_HOST_ARCH))
+# CGO_ENABLED=0 : tout le dépôt se croise vers arm64 sans chaîne C. C'est aussi
+# ce qui a décidé la FFT, le VAD et le pitch en Go pur, et ce qui renvoie ONNX
+# dans un processus séparé (cf. internal/ser/externe.go).
+export CGO_ENABLED = 0
+# PAS DE TÉLÉCHARGEMENT DE COMPILATEUR PENDANT LA CONSTRUCTION. Sans cela, une
+# dépendance qui exige une version plus récente fait silencieusement récupérer
+# toute une chaîne Go dans le GOPATH du paquet — un build qui dépend du réseau,
+# et un cache en lecture seule qui fait ensuite échouer `clean`.
+export GOTOOLCHAIN = local
+export GOFLAGS = -mod=vendor -trimpath
+export GOCACHE = $(CURDIR)/.gocache
+export GOPATH  = $(CURDIR)/.gopath
+VERSION := $(shell dpkg-parsechangelog -S Version | cut -d- -f1)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go vet ./...
+	go build -ldflags "-s -w -X main.version=$(VERSION)" -o debian/gabriel-moodd ./cmd/server
+
+override_dh_auto_test:
+	if [ "$(GOARCH)" = "$$(go env GOHOSTARCH)" ]; then go test ./...; else \
+	  echo "tests ignores : construction croisee vers $(GOARCH)"; fi
+
+override_dh_auto_clean:
+	# Le cache de modules est déposé en lecture seule : sans ce chmod, `clean`
+	# échoue et le paquet ne se reconstruit plus.
+	chmod -R u+w .gocache .gopath 2>/dev/null || true
+	rm -rf .gocache .gopath debian/gabriel-moodd
+
+override_dh_auto_install:
+	install -D -m 0755 debian/gabriel-moodd \
+	  debian/gabriel-mood/usr/sbin/gabriel-moodd
+	install -D -m 0644 systemd/gabriel-mood.service \
+	  debian/gabriel-mood/lib/systemd/system/gabriel-mood.service
+	install -D -m 0644 tmpfiles/gabriel-mood.conf \
+	  debian/gabriel-mood/usr/lib/tmpfiles.d/gabriel-mood.conf
+	install -D -m 0644 nginx/gabriel-mood.conf \
+	  debian/gabriel-mood/etc/nginx/secubox-routes.d/gabriel-mood.conf
+	install -D -m 0644 menu.d/54-gabriel-mood.json \
+	  debian/gabriel-mood/usr/share/secubox/menu.d/54-gabriel-mood.json
+	install -D -m 0644 docs/modules/gabriel-mood.md \
+	  debian/gabriel-mood/usr/share/doc/gabriel-mood/gabriel-mood.md
+	# LE COCKPIT EST CONSTRUIT EN AMONT (npm/vite), comme secubox-soc-web : la
+	# chaîne de construction du paquet n'a pas node, et l'y ajouter ferait
+	# dépendre un paquet Go d'un écosystème entier. `dist/` absent, le service
+	# sert l'API seule et le dit dans son journal.
+	install -d debian/gabriel-mood/usr/share/secubox/www/gabriel-mood
+	if [ -d dist ]; then cp -r dist/. debian/gabriel-mood/usr/share/secubox/www/gabriel-mood/; \
+	else echo "ATTENTION : dist/ absent, cockpit non livré (npm run build)"; fi
+
+override_dh_installsystemd:
+	dh_installsystemd --name=gabriel-mood

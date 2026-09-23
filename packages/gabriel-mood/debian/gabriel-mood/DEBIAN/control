@@ -1,0 +1,26 @@
+Package: gabriel-mood
+Version: 0.1.2-1~bookworm1
+Architecture: arm64
+Maintainer: Gerald Kerma <devel@cybermind.fr>
+Installed-Size: 8815
+Depends: adduser
+Recommends: nginx
+Section: sound
+Priority: optional
+Homepage: https://secubox.in
+Description: SecuBox — indices prosodiques de la voix, analyses localement
+ Gabriel Mood mesure ce qu'une voix fait entendre : hauteur, energie, debit,
+ irregularite de periode et d'amplitude, couleur spectrale. Il en tire des
+ INDICES, presentes comme tels.
+ .
+ Il ne lit pas les emotions. La litterature etablit solidement que ces
+ grandeurs suivent l'ACTIVATION — on parle plus haut, plus fort et plus vite
+ quand on est active, quelle qu'en soit la cause — et n'etablit pas la valence :
+ rien dans le signal ne distingue de facon fiable la joie de la colere. Le
+ module le dit dans son interface, dans son API, et le tient dans son code :
+ la confiance est plafonnee, et sans etalon personnel aucun etat n'est affirme.
+ .
+ Le micro est celui du navigateur. L'audio traverse le reseau local, est
+ analyse sur la board, et disparait : aucun echantillon n'est ecrit sur le
+ disque. Seuls des agregats par minute sont conservés, avec une purge
+ automatique et un geste d'effacement.

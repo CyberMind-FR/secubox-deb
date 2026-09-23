@@ -1,0 +1,73 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+   Style CyberMind : bleu nuit, cyan électrique, verre dépoli, coins XL. */
+
+:root {
+  --nuit-0: #05070f;
+  --nuit-1: #0a0f1c;
+  --nuit-2: #111a2e;
+  --nuit-3: #1a2740;
+  --cyan:   #46e5ff;
+  --cyan-b: #9ff4ff;
+  --ambre:  #ffc24d;
+  --rouge:  #ff6b7a;
+  --vert:   #5cf0a8;
+  --encre:  #e8f2ff;
+  --encre-2: #9fb3cc;
+  --verre:  rgba(18, 30, 52, .62);
+  --bord:   rgba(70, 229, 255, .16);
+  --rxl: 26px;
+  --r: 18px;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, monospace;
+  --titre: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background:
+    radial-gradient(1200px 700px at 12% -10%, rgba(70,229,255,.10), transparent 60%),
+    radial-gradient(900px 600px at 105% 5%, rgba(120,90,255,.10), transparent 60%),
+    var(--nuit-0);
+  color: var(--encre);
+  font-family: var(--titre);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* VERRE DÉPOLI. `backdrop-filter` n'est pas gratuit : sur la board, une dizaine
+   de panneaux flous coûtent plus cher que toute l'analyse. On le réserve donc
+   aux grandes surfaces et on retombe sur un fond opaque là où il manque. */
+.verre {
+  background: var(--verre);
+  border: 1px solid var(--bord);
+  border-radius: var(--rxl);
+  box-shadow: 0 18px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .verre { backdrop-filter: blur(16px) saturate(1.2); }
+}
+
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.dim  { color: var(--encre-2); }
+
+/* Le bandeau LIVE. Il ne clignote QUE lorsque du son arrive vraiment : une
+   pastille rouge permanente finit par ne plus rien vouloir dire. */
+@keyframes pouls { 50% { opacity: .35; } }
+.pouls { animation: pouls 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pouls { animation: none; } }
+
+button {
+  font: inherit; color: inherit; cursor: pointer;
+  background: linear-gradient(180deg, rgba(70,229,255,.16), rgba(70,229,255,.06));
+  border: 1px solid var(--bord); border-radius: var(--r);
+  padding: .55rem 1.1rem; transition: border-color .15s, transform .08s;
+}
+button:hover { border-color: rgba(70,229,255,.45); }
+button:active { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+button[disabled] { opacity: .45; cursor: not-allowed; }
+button.primaire { background: linear-gradient(180deg, rgba(70,229,255,.32), rgba(70,229,255,.12)); }
+button.danger { border-color: rgba(255,107,122,.4); }
