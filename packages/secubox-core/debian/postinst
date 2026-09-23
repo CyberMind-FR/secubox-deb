@@ -71,7 +71,16 @@ case "$1" in
       # require_lecture ne voit aucune marque LAN et exige un jeton : on perd
       # un affichage, pas une barriere.
       _snip=/etc/nginx/snippets/secubox-proxy.conf
-      if ! grep -q 'X-SecuBox-LAN' "$_snip"; then
+      # LE GARDE RECONNAIT LA DIRECTIVE, PAS LA CHAINE (#1351).
+      #
+      # Il valait `grep -q 'X-SecuBox-LAN'`, et le snippet contient ce nom DANS
+      # LE COMMENTAIRE qui explique la ligne. grep le trouvait, le postinst
+      # concluait « deja posee », et la directive n'etait jamais ajoutee : le
+      # commentaire qui documente la ligne etait precisement ce qui l'empechait
+      # d'exister. Resultat sur gk2 : le verdict LAN n'arrivait a aucun module,
+      # le mode tableau de bord ne s'appliquait jamais, et toute lecture du
+      # Hall rendait 401 — 6586 refus en une heure.
+      if ! grep -qE '^[[:space:]]*proxy_set_header[[:space:]]+X-SecuBox-LAN' "$_snip"; then
         cp -a "$_snip" "$_snip.sbxbak"
         printf 'proxy_set_header   X-SecuBox-LAN     $lan_client;\n' >> "$_snip"
         if nginx -t 2>/dev/null; then
