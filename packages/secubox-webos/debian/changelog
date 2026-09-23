@@ -1,3 +1,18 @@
+secubox-webos (1.0.324-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Mes sites » reprise sur la grammaire de PeerTube : une grande
+    vignette à la une qui TOURNE, une bande de suivantes en dessous, et la
+    barre à pastilles du Hall en pied pour changer de tri (récents, illustrés,
+    A–Z, sans aperçu). Un damier figé de 162 tuiles ne dit pas qu'un parc vit ;
+    c'est la rotation qui le montre, et le survol qui la suspend — on ne lit
+    pas un titre qui s'échappe.
+  * Les boutons de la bande sont RÉUTILISÉS d'une rotation à l'autre au lieu
+    d'être recréés : reconstruire innerHTML détruirait les <img> et les
+    rechargerait, si bien que les vignettes disparaîtraient par intermittence
+    le temps du chargement (même défaut, même remède que sur PeerTube).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 06:44:00 +0200
+
 secubox-webos (1.0.323-1~bookworm1) bookworm; urgency=medium
 
   * Le relais Lyrion du Hall passe par l'agrégateur au lieu de `lyrion.sock`.

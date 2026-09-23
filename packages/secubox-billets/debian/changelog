@@ -1,3 +1,15 @@
+secubox-billets (0.8.60-1~bookworm1) bookworm; urgency=medium
+
+  * La carte du Hall retrouve ses vignettes. Le calcul de `vignette` lisait
+    `m["url"]` — une clé qui N'EXISTE PAS : `_billet_view` verse dans `media`
+    les colonnes brutes de la table (`filename`, `thumb`), jamais d'`url`.
+    `.get("url")` rendait donc toujours None et la carte affichait son dégradé
+    de repli même quand le billet portait bien une image (constaté sur « Go »,
+    média image/png). On sert `/media/<thumb>` — la vignette, pas l'original :
+    une carte de 300 px n'a que faire d'un fichier de 1 024 × 1 536.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 06:44:00 +0200
+
 secubox-billets (0.8.59-1~bookworm5) bookworm; urgency=medium
 
   * ERREUR 153 : `referrerpolicy="no-referrer"` CASSAIT LES EMBEDS YOUTUBE

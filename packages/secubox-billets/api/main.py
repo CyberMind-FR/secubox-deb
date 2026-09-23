@@ -415,7 +415,14 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             # Une vignette seulement si le billet en a une : un cadre gris a la
             # place d'une image absente ferait croire a un chargement en panne.
             img = next((m for m in v.get("media", []) if str(m.get("mime", "")).startswith("image/")), None)
-            v["vignette"] = (img or {}).get("url") or None
+            # `/media/<thumb>`, ET NON `m["url"]` : la table `media` porte
+            # `filename` et `thumb`, jamais d'`url` — `_billet_view` y verse les
+            # colonnes brutes. `.get("url")` rendait donc TOUJOURS None, et la
+            # carte du Hall affichait son dégradé de repli même quand le billet
+            # portait bien une image (constaté sur « Go », média image/png).
+            # C'est `thumb` qu'on veut, pas `filename` : une carte de 300 px n'a
+            # que faire d'un original de 1 024 × 1 536.
+            v["vignette"] = f"{base}/media/{img['thumb']}" if (img or {}).get("thumb") else None
         import json as _json
         resp = templates.TemplateResponse(request, "micro.html", {
             "dernier": vues[0] if vues else None,
