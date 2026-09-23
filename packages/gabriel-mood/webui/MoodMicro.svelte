@@ -78,7 +78,11 @@
     <div class="visage" style="opacity:{opacite}">{EMOJI[tete]}</div>
     <div class="dit">
       <div class="nom">{NOM[tete]}</div>
-      {#if img && img.calibration < 0.75 && actif}
+      {#if img?.age_s}
+        <!-- UNE LECTURE TENUE DIT SON ÂGE. Sans cela elle se lirait comme une
+             mesure en cours, alors que la personne s'est tue. -->
+        <div class="dim minus">mesuré il y a {img.age_s.toFixed(0)} s</div>
+      {:else if img && img.calibration < 0.75 && actif}
         <div class="dim minus">référence {Math.round(img.calibration * 100)} %
           · {img.observations ?? 0} mesures</div>
       {:else if actif && img}

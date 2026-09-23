@@ -17,7 +17,7 @@ export type Image = {
   trends?: Record<string, number>
   vad: boolean; speech_rate: number; jitter: number; shimmer: number
   clarity: number; latency_ms: number; cpu: number
-  calibration: number; observations?: number
+  calibration: number; observations?: number; age_s?: number
   ambiance?: { bpm: number; pulsation: number; part: number; dominante: boolean; presente: boolean }
   source_reelle: boolean; reserve: string
 }

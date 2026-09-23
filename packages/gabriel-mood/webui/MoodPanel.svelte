@@ -132,6 +132,12 @@
     le concernant.
   </div>
 
+  {#if img?.age_s}
+    <div class="avis">⏱ Lecture mesurée il y a {img.age_s.toFixed(0)} s et
+      tenue pendant le silence — une humeur ne s'éteint pas parce qu'on
+      respire. Au-delà de {12} s sans voix, elle s'effacera.</div>
+  {/if}
+
   {#if micro.reprise && etat === 'ecoute'}
     <div class="avis">↩ {micro.reprise} — votre référence a été retrouvée, la
       lecture ne repart pas de zéro.</div>

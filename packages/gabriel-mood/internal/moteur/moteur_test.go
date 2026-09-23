@@ -182,3 +182,120 @@ func TestLeCoutParTrameResteRaisonnable(t *testing.T) {
 	}
 	t.Logf("coût mesuré : %v/trame (budget 8 %% d'un cœur = %v)", parTrame, budget)
 }
+
+// ── LA FENÊTRE SE COMPTE EN VOIX, PAS EN SECONDES ──────────────────────────
+//
+// C'était le défaut de fond signalé — « vers 10-15 secondes on part dans les
+// indéterminés ». La fenêtre valait une seconde d'HORLOGE, et personne ne
+// parle cent pour cent du temps : dès qu'on marquait une pause pour respirer
+// ou écouter, elle n'avait plus assez de trames voisées et la lecture
+// disparaissait. Sur une conversation ordinaire, la moitié du temps.
+
+func paroleAvecPauses(a *Analyseur, secondes int) {
+	for s := 0; s < secondes; s++ {
+		if s%4 == 2 || s%4 == 3 {
+			nourrit(a, make([]float64, audio.Echantillonnage)) // pause
+		} else {
+			nourrit(a, voix(130, audio.Echantillonnage, 0.30))
+		}
+	}
+}
+
+func TestUneConversationAvecPausesNePerdPasSaLecture(t *testing.T) {
+	a := Nouveau(audio.NouvelleSynthese(false))
+	paroleAvecPauses(a, 8) // de quoi amorcer
+	perdues := 0
+	for s := 0; s < 24; s++ {
+		if s%4 == 2 || s%4 == 3 {
+			nourrit(a, make([]float64, audio.Echantillonnage))
+		} else {
+			nourrit(a, voix(130, audio.Echantillonnage, 0.30))
+		}
+		if a.Derniere().Etat == ser.Indetermine {
+			perdues++
+		}
+	}
+	if perdues > 2 {
+		t.Fatalf("%d secondes sur 24 sans lecture : la respiration éteint encore la carte", perdues)
+	}
+}
+
+// MAIS UNE LECTURE TENUE DIT SON ÂGE. Afficher indéfiniment la dernière humeur
+// connue serait pire que de ne rien afficher : ça se lit comme une mesure en
+// cours.
+func TestUneLectureTenueVieillitPuisSEfface(t *testing.T) {
+	a := Nouveau(audio.NouvelleSynthese(false))
+	paroleAvecPauses(a, 12)
+	if a.Derniere().Etat == ser.Indetermine {
+		t.Skip("pas de lecture à tenir dans cette fixture")
+	}
+	// On triche sur l'horloge plutôt que d'attendre douze secondes.
+	a.mu.Lock()
+	a.bonneQuand = time.Now().Add(-PeremptionLecture - time.Second)
+	a.derniereLec = ser.LectureIndeterminee(ser.MotifPeuDeVoix, "silence", true)
+	a.mu.Unlock()
+	lec, age := a.lectureTenue()
+	if lec.Etat != ser.Indetermine {
+		t.Errorf("une lecture périmée est encore servie (%s, %.1f s)", lec.Etat, age)
+	}
+}
+
+// « BRUIT » ET « AMBIANCE » NE SE MASQUENT PAS. Ils disent que le signal est
+// mauvais MAINTENANT : les cacher derrière une ancienne lecture empêcherait de
+// comprendre pourquoi ça ne marche pas, et d'aller approcher le micro.
+func TestUnDefautDeSignalNEstJamaisMasqueParUneAncienneLecture(t *testing.T) {
+	a := Nouveau(audio.NouvelleSynthese(false))
+	paroleAvecPauses(a, 12)
+	a.mu.Lock()
+	a.bonneLec = ser.Lecture{Etat: ser.Calme, Confiance: .5}
+	a.bonneQuand = time.Now()
+	a.derniereLec = ser.LectureIndeterminee(ser.MotifBruit, "spectre plat", true)
+	a.mu.Unlock()
+	if lec, _ := a.lectureTenue(); lec.Etat != ser.Indetermine || lec.Motif != ser.MotifBruit {
+		t.Fatalf("le motif « bruit » est masqué : %s / %s", lec.Etat, lec.Motif)
+	}
+}
+
+// ── LA STABILITÉ DE L'ÉTIQUETTE ────────────────────────────────────────────
+//
+// Une étiquette d'humeur ne doit pas changer toutes les deux secondes. Près de
+// l'origine — là où se tient justement une voix ordinaire — trois étiquettes
+// se disputent la tête, et le moindre frémissement de mesure faisait changer
+// la gagnante. Ce n'est pas un changement d'humeur, c'est du bruit de mesure
+// qui a l'air d'un changement d'humeur, ce qui est pire.
+func TestLEtiquetteNeClignotePasSurUneVoixConstante(t *testing.T) {
+	a := Nouveau(audio.NouvelleSynthese(false))
+	nourrit(a, voix(130, audio.Echantillonnage*8, 0.30)) // amorçage
+	var precedent string
+	bascules := 0
+	for s := 0; s < 24; s++ {
+		nourrit(a, voix(130, audio.Echantillonnage, 0.30))
+		e := a.Derniere().Etat
+		if e == ser.Indetermine {
+			continue
+		}
+		if precedent != "" && e != precedent {
+			bascules++
+		}
+		precedent = e
+	}
+	// Sur une voix rigoureusement constante, au plus quelques bascules — et
+	// celles qui restent sont légitimes : trois étiquettes voisines de
+	// l'origine, ce que la confiance basse dit par ailleurs.
+	if bascules > 6 {
+		t.Fatalf("%d bascules d'étiquette sur 24 s de voix constante", bascules)
+	}
+}
+
+// Le lissage ne sert pas à gagner de l'assurance : à distribution lissée, la
+// confiance retenue est la plus PRUDENTE des deux.
+func TestLeLissageNeGonflePasLaConfiance(t *testing.T) {
+	a := Nouveau(audio.NouvelleSynthese(false))
+	nourrit(a, voix(130, audio.Echantillonnage*10, 0.30))
+	for s := 0; s < 12; s++ {
+		nourrit(a, voix(130, audio.Echantillonnage, 0.30))
+		if c := a.Derniere().Confiance; c > ser.PlafondConfiance {
+			t.Fatalf("confiance %.3f au-dessus du plafond après lissage", c)
+		}
+	}
+}

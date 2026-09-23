@@ -1,3 +1,39 @@
+gabriel-mood (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA FENÊTRE SE COMPTE EN VOIX, PAS EN SECONDES. C'était le défaut de fond :
+    elle valait une seconde d'HORLOGE, et personne ne parle cent pour cent du
+    temps. Dès qu'on marquait une pause — respirer, chercher un mot, écouter
+    quelqu'un — elle n'avait plus assez de trames voisées et la lecture
+    disparaissait. Sur une conversation ordinaire, la moitié du temps.
+  * On accumule désormais jusqu'à ~2 s de parole EFFECTIVE, avec un plafond
+    d'horloge de 8 s pour ne pas rendre une lecture vieille comme si elle était
+    fraîche. Mesuré sur 24 s de parole avec pauses : 0 seconde sans lecture,
+    contre la moitié auparavant. Et une fenêtre plus longue rend des indices
+    moins nerveux — une seconde de voix, c'était de toute façon trop court.
+  * LA DERNIÈRE LECTURE EST TENUE PENDANT LE SILENCE, avec son âge. Une humeur
+    ne s'éteint pas parce qu'on respire ; mais afficher indéfiniment la
+    dernière connue serait pire que rien, puisqu'elle se lirait comme une
+    mesure en cours. Au-delà de douze secondes sans voix, elle s'efface.
+  * « BRUIT » ET « AMBIANCE » NE SE MASQUENT JAMAIS derrière une ancienne
+    lecture : ils disent que le signal est mauvais MAINTENANT, et les cacher
+    empêcherait de comprendre qu'il faut approcher le micro.
+  * LISSAGE DES INDICES. Sur une voix rigoureusement constante, le classement
+    basculait entre « calme » et « joie » d'une fenêtre à l'autre : près de
+    l'origine — là où se tient justement une voix ordinaire — trois étiquettes
+    se disputent la tête, et le moindre frémissement de mesure faisait changer
+    la gagnante. Ce n'est pas un changement d'humeur, c'est du bruit de mesure
+    qui en a l'air, ce qui est pire.
+  * On lisse les INDICES, pas l'étiquette : décider puis stabiliser la décision
+    cacherait l'hésitation, tandis que lisser la distribution la montre dans
+    les barres. Et le lissage ne sert pas à gagner de l'assurance — à
+    distribution lissée, on garde la plus PRUDENTE des deux confiances.
+  * L'ambiance sort enfin dans l'image : elle était calculée et servait de
+    garde-fou, mais n'avait jamais été ajoutée au champ JSON, si bien que
+    l'interface ne pouvait rien en montrer.
+  * Cinq tests de plus, sur les promesses qui viennent d'être faites.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:54:56 +0200
+
 gabriel-mood (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * La carte du Hall remplit sa place : histogramme des six indices et bande de

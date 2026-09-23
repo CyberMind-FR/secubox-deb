@@ -46,9 +46,26 @@ const (
 	// largement — la hauteur d'une voix ne change pas en dix millisecondes —
 	// et divise par deux le poste le plus cher de la chaîne.
 	PasPitch = 2
-	// Fenêtre d'agrégation des traits : une seconde de voix. Plus court, les
-	// indices sautent à chaque syllabe ; plus long, ils ne suivent plus la
-	// conversation.
+	// ── LA FENÊTRE SE COMPTE EN VOIX, PAS EN SECONDES ────────────────────
+	//
+	// Elle valait cent trames d'horloge, soit une seconde. C'était le défaut
+	// de fond : PERSONNE NE PARLE CENT POUR CENT DU TEMPS. Dès qu'on marquait
+	// une pause — respirer, chercher un mot, écouter quelqu'un — la fenêtre
+	// n'avait plus assez de trames voisées, et la lecture disparaissait. Sur
+	// une conversation ordinaire, cela veut dire qu'elle disparaît la moitié
+	// du temps.
+	//
+	// Et une seconde de voix, c'est de toute façon trop court : les indices
+	// sautaient d'une syllabe à l'autre, avec des confiances de 0,05 à 0,20
+	// qui ne valaient rien.
+	//
+	// On accumule donc JUSQU'À AVOIR ASSEZ DE VOIX, avec un plafond d'horloge
+	// pour ne pas rendre une lecture vieille de dix secondes comme si elle
+	// était fraîche.
+	VoixParFenetre = 180 // ~2 s de parole effective
+	PlafondFenetre = 750 // ~8 s d'horloge, quoi qu'il arrive
+	// Conservé pour la cadence du débit syllabique, qui se calcule sur
+	// l'enveloppe d'énergie et non sur les seules trames voisées.
 	FenetreTraits = 100
 )
 
@@ -82,11 +99,15 @@ type Image struct {
 	// Différence entre l'indice courant et sa moyenne sur la mémoire courte.
 	Tendances map[string]float64 `json:"trends"`
 
-	Voix    bool    `json:"vad"`
-	Debit   float64 `json:"speech_rate"` // syllabes/minute
-	Jitter  float64 `json:"jitter"`      // %
-	Shimmer float64 `json:"shimmer"`     // dB
-	Clarte  float64 `json:"clarity"`     // 0..1, qualité de la mesure de hauteur
+	Voix bool `json:"vad"`
+	// L'AMBIANCE DE LA PIÈCE : ce qui joue, son tempo, son poids. Elle DOIT
+	// sortir dans l'image : une lecture écartée pour cause de musique doit
+	// pouvoir s'expliquer d'un coup d'œil, sinon elle ressemble à une panne.
+	Ambiance vad.Ambiance `json:"ambiance"`
+	Debit    float64      `json:"speech_rate"` // syllabes/minute
+	Jitter   float64      `json:"jitter"`      // %
+	Shimmer  float64      `json:"shimmer"`     // dB
+	Clarte   float64      `json:"clarity"`     // 0..1, qualité de la mesure de hauteur
 
 	LatenceMs float64 `json:"latency_ms"`
 	ChargeCPU float64 `json:"cpu"` // part d'un cœur, 0..1
@@ -95,6 +116,10 @@ type Image struct {
 	// jamais. Le champ JSON garde son nom pour les consommateurs existants.
 	Fiabilite    float64 `json:"calibration"` // 0..1
 	Observations int     `json:"observations"`
+	// AgeLecture : depuis combien de secondes la lecture affichée a été
+	// mesurée. Zéro quand elle est fraîche. Une lecture tenue pendant une
+	// pause doit dire son âge, sinon elle se lit comme une mesure en cours.
+	AgeLecture float64 `json:"age_s"`
 
 	SourceReelle bool   `json:"source_reelle"`
 	Reserve      string `json:"reserve"`
@@ -126,12 +151,18 @@ type Analyseur struct {
 	nTrame      int
 	derniere    Image
 	derniereLec ser.Lecture
-	traits      ser.Traits
+	// La dernière lecture qui EN ÉTAIT une, et quand. Voir `lectureTenue`.
+	bonneLec   ser.Lecture
+	bonneQuand time.Time
+	// Indices lissés d'une fenêtre à l'autre — voir `lisse`.
+	indLisses map[string]float64
+	traits    ser.Traits
 
 	// agrégation sur la fenêtre
 	fenEnergies  []float64
 	fenVoisees   int
 	fenTotal     int
+	fenTrames    int
 	cpuCumul     time.Duration
 	cpuFenetre   time.Time
 	derniereF0   float64
@@ -300,7 +331,11 @@ func (a *Analyseur) analyseTrame(trame []float64) {
 
 	a.reduitSpectre()
 
-	if a.nTrame%FenetreTraits == 0 {
+	// LA FENÊTRE SE FERME QUAND ELLE A DE QUOI DIRE, pas quand la pendule le
+	// décide. Le plafond d'horloge évite qu'un long silence laisse une fenêtre
+	// à demi remplie traîner indéfiniment.
+	a.fenTrames++
+	if a.fenVoisees >= VoixParFenetre || a.fenTrames >= PlafondFenetre {
 		a.ambiant = a.oreille.Analyse()
 		a.majTraits()
 	}
@@ -386,10 +421,13 @@ func (a *Analyseur) majTraits() {
 	if a.partage != nil {
 		a.partage.Contribue(a.session, a.ref)
 	}
-	lec := a.classif.Evalue(t)
+	lec := a.lisse(a.classif.Evalue(t))
 
 	a.mu.Lock()
 	a.derniereLec = lec
+	if lec.Etat != ser.Indetermine {
+		a.bonneLec, a.bonneQuand = lec, time.Now()
+	}
 	// ON NE MÉMORISE QUE LES LECTURES QUI EN SONT. Empiler les indices d'un
 	// refus — tous à zéro — ferait plonger toutes les tendances à chaque
 	// silence, et l'on lirait « le calme s'effondre » alors que personne ne
@@ -406,7 +444,7 @@ func (a *Analyseur) majTraits() {
 	}
 	a.mu.Unlock()
 
-	a.fenVoisees, a.fenTotal = 0, 0
+	a.fenVoisees, a.fenTotal, a.fenTrames = 0, 0, 0
 }
 
 // debitSyllabique compte les NOYAUX de syllabe : les sommets de l'enveloppe
@@ -462,6 +500,110 @@ func (a *Analyseur) debitSyllabique() float64 {
 	return float64(compte) / duree * 60
 }
 
+// InertieIndices : le poids de la NOUVELLE fenêtre dans les indices affichés.
+//
+// UNE ÉTIQUETTE D'HUMEUR NE DOIT PAS CHANGER TOUTES LES DEUX SECONDES. Mesuré
+// sur une voix parfaitement constante, le classement basculait entre « calme »
+// et « joie » d'une fenêtre à l'autre : près de l'origine — là où se tient
+// justement une voix ordinaire — trois étiquettes se disputent la tête, et le
+// moindre frémissement de mesure fait changer la gagnante. Ce n'est pas un
+// changement d'humeur, c'est du bruit de mesure qui a l'air d'un changement
+// d'humeur, ce qui est pire.
+//
+// On lisse donc, mais PAS TROP : à 0,45, une vraie bascule met deux à trois
+// fenêtres à s'imposer — quelques secondes de voix — et le bruit d'une seule
+// fenêtre ne suffit plus. Lisser davantage effacerait les changements qu'on
+// veut justement voir.
+//
+// ON LISSE LES INDICES, PAS L'ÉTIQUETTE. Décider d'abord puis stabiliser la
+// décision cacherait qu'il y a eu hésitation ; lisser la distribution montre
+// l'hésitation dans les barres, et n'en tire une étiquette qu'ensuite.
+const InertieIndices = 0.45
+
+// lisse tempère les indices d'une lecture avec ceux des fenêtres précédentes,
+// puis en redérive l'état et la confiance.
+func (a *Analyseur) lisse(lec ser.Lecture) ser.Lecture {
+	if lec.Etat == ser.Indetermine || lec.Indices == nil {
+		// UNE FENÊTRE SANS LECTURE N'EFFACE PAS LA MÉMOIRE mais n'y entre pas
+		// non plus : l'entrée suivante reprendra où l'on s'était arrêté, ce
+		// qui est le comportement attendu après une pause.
+		return lec
+	}
+	if a.indLisses == nil {
+		a.indLisses = make(map[string]float64, len(lec.Indices))
+		for k, v := range lec.Indices {
+			a.indLisses[k] = v
+		}
+		return lec
+	}
+	for k, v := range lec.Indices {
+		a.indLisses[k] = InertieIndices*v + (1-InertieIndices)*a.indLisses[k]
+	}
+	sortie := make(map[string]float64, len(a.indLisses))
+	tete, second := "", ""
+	var vt, vs float64
+	for _, k := range ser.Etats {
+		v := math.Round(a.indLisses[k]*1000) / 1000
+		sortie[k] = v
+		switch {
+		case v > vt || (v == vt && k < tete):
+			tete, second, vt, vs = k, tete, v, vt
+		case v > vs || (v == vs && k < second):
+			second, vs = k, v
+		}
+	}
+	lec.Indices = sortie
+	lec.Etat = tete
+	// La confiance suit la distribution lissée, avec les mêmes garde-fous.
+	conf := 0.62 * (0.55*(vt-vs)*2 + 0.45*vt)
+	if conf > lec.Confiance {
+		// On ne PROFITE pas du lissage pour se croire davantage : il sert à
+		// stabiliser, pas à gagner de l'assurance. On garde la plus prudente.
+		conf = lec.Confiance
+	}
+	lec.Confiance = math.Round(math.Max(0, conf)*1000) / 1000
+	return lec
+}
+
+// PeremptionLecture : au-delà, une lecture tenue n'est plus d'actualité.
+//
+// Douze secondes : de quoi traverser une pause, une question, le temps
+// d'écouter quelqu'un — et pas de quoi faire passer pour actuelle l'humeur
+// d'une conversation terminée.
+const PeremptionLecture = 12 * time.Second
+
+// lectureTenue : ce qu'on affiche vraiment.
+//
+// ON NE REMPLACE PAS UNE LECTURE PAR « INDÉTERMINÉ » PARCE QUE QUELQU'UN A
+// CESSÉ DE PARLER DEUX SECONDES. C'était le défaut le plus visible : la carte
+// s'allumait, puis s'éteignait à la première respiration. Un indice d'humeur
+// n'est pas un compteur temps réel — il décrit une minute de voix, et il reste
+// vrai pendant qu'on se tait.
+//
+// MAIS IL VIEILLIT, et on le dit : passé le délai, on repasse à l'indéterminé
+// pour de bon. Afficher indéfiniment la dernière humeur connue serait pire que
+// de ne rien afficher, parce que ça se lit comme une mesure en cours.
+//
+// LES AUTRES REFUS NE SE TIENNENT PAS. « Bruit » et « ambiance » disent que le
+// signal est mauvais MAINTENANT : les masquer derrière une ancienne lecture
+// empêcherait justement de comprendre pourquoi ça ne marche pas, et d'aller
+// approcher le micro.
+func (a *Analyseur) lectureTenue() (ser.Lecture, float64) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.derniereLec.Etat != ser.Indetermine {
+		return a.derniereLec, 0
+	}
+	if a.derniereLec.Motif != ser.MotifPeuDeVoix || a.bonneQuand.IsZero() {
+		return a.derniereLec, 0
+	}
+	age := time.Since(a.bonneQuand)
+	if age > PeremptionLecture {
+		return a.derniereLec, 0
+	}
+	return a.bonneLec, age.Seconds()
+}
+
 // tendances : l'écart de chaque indice à sa moyenne récente.
 //
 // UN INDICE QUI MONTE ET UN INDICE QUI DESCEND NE DISENT PAS LA MÊME CHOSE à
@@ -490,9 +632,7 @@ func (a *Analyseur) tendances() map[string]float64 {
 }
 
 func (a *Analyseur) majImage(v vad.Verdict, rms float64) {
-	a.mu.RLock()
-	lec := a.derniereLec
-	a.mu.RUnlock()
+	lec, age := a.lectureTenue()
 
 	ind := lec.Indices
 	get := func(k string) float64 {
@@ -530,11 +670,13 @@ func (a *Analyseur) majImage(v vad.Verdict, rms float64) {
 		Confiance:  lec.Confiance,
 		Activation: lec.Activation, Tendances: a.tendances(),
 		Voix:         v.Parole,
+		Ambiance:     a.ambiant,
 		Clarte:       math.Round(a.derniereClar*100) / 100,
 		LatenceMs:    math.Round(lat*10) / 10,
 		ChargeCPU:    math.Round(charge*1000) / 1000,
 		Fiabilite:    math.Round(lec.Fiabilite*100) / 100,
 		Observations: lec.Observations,
+		AgeLecture:   math.Round(age*10) / 10,
 		SourceReelle: a.source.Decrit().Reelle,
 		Reserve:      lec.Reserve,
 	}
