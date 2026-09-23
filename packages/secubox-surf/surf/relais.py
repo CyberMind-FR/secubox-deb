@@ -789,6 +789,83 @@ _INJECTION_TETE = """
       }catch(e){}
     });
   }catch(e){}
+
+  // ── MOISSON (#1323) : garder chez soi ce qu'on ecoute ───────────────────
+  // UN GESTE, PAS UN PASSAGE AUTOMATIQUE. Le relais a deja fait transiter ce
+  // media ; le laisser repartir sans trace oblige a le redemander au site a
+  // chaque ecoute — un site qui peut le retirer, le deplacer, disparaitre.
+  // On pose donc une pastille sur chaque lecteur, et c'est l'utilisateur qui
+  // decide. Rien n'est moissonne en passant.
+  try{
+    var _vus = new WeakSet();
+    function _srcDe(el){
+      try{
+        if(el.currentSrc) return el.currentSrc;
+        if(el.src) return el.src;
+        var s = el.querySelector && el.querySelector("source[src]");
+        return s ? s.src : "";
+      }catch(e){ return ""; }
+    }
+    function _titre(){
+      try{ return (document.title || "").slice(0, 120); }catch(e){ return ""; }
+    }
+    function _pastille(el){
+      if(_vus.has(el)) return;
+      var u = _srcDe(el);
+      // Un blob: ou un data: n'a pas d'adresse que la box puisse aller
+      // rechercher : la pastille mentirait.
+      if(!u || !/^https?:/i.test(u)) return;
+      _vus.add(el);
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = "\u2913 garder";
+      b.title = "Garder ce media sur la box";
+      b.setAttribute("data-sbx-moisson", "");
+      b.style.cssText = "position:absolute;z-index:2147483000;right:8px;top:8px;"
+        + "font:600 11px/1 system-ui,sans-serif;letter-spacing:.04em;padding:5px 9px;"
+        + "border-radius:7px;border:1px solid rgba(255,255,255,.35);cursor:pointer;"
+        + "background:rgba(12,14,20,.78);color:#e8e6d9;backdrop-filter:blur(3px)";
+      b.addEventListener("click", function(ev){
+        ev.preventDefault(); ev.stopPropagation();
+        b.disabled = true; b.textContent = "\u2026";
+        fetch("/_sbx/moisson", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({url: _srcDe(el), titre: _titre()})
+        }).then(function(r){ return r.json(); })
+          .then(function(d){
+            b.textContent = d && d.ok ? (d.deja ? "\u2713 deja gardee" : "\u2713 gardee") : "\u2717 refus";
+            b.title = (d && d.detail) || b.title;
+            if(d && d.ok){ b.style.borderColor = "#4ecb8d"; b.style.color = "#4ecb8d"; }
+            else { b.disabled = false; b.style.borderColor = "#ff6b4a"; }
+          })
+          .catch(function(){ b.disabled = false; b.textContent = "\u2717 echec"; });
+      });
+      // On enveloppe SANS DEPLACER le lecteur dans le DOM : le sortir de sa
+      // place casserait les mises en page qui le positionnent, et certains
+      // lecteurs se reinitialisent quand on les reparente.
+      var p = el.parentElement;
+      if(!p) return;
+      try{
+        var pos = getComputedStyle(p).position;
+        if(pos === "static") p.style.position = "relative";
+        p.appendChild(b);
+      }catch(e){}
+    }
+    function _balaye(){
+      try{
+        var l = document.querySelectorAll("audio,video");
+        for(var i=0;i<l.length;i++) _pastille(l[i]);
+      }catch(e){}
+    }
+    _balaye();
+    // Les lecteurs arrivent souvent APRES la page (consentement, chargement
+    // differe) : on regarde le DOM changer plutot que de sonder en boucle.
+    try{
+      new MutationObserver(function(){ _balaye(); })
+        .observe(document.documentElement, {childList:true, subtree:true});
+    }catch(e){ setInterval(_balaye, 4000); }
+  }catch(e){}
 })();
 </script>
 """

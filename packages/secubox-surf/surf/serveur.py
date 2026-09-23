@@ -36,6 +36,7 @@ from urllib.parse import parse_qs, unquote
 
 from . import relais
 from . import egress
+from . import moisson
 from . import jarre
 from . import rendu
 
@@ -135,6 +136,79 @@ async def app(scope, receive, send):
             import json as _json
             await repond(200, [("content-type", "application/json")],
                          _json.dumps({"ok": True, "jarre": jarre.etat()}).encode())
+        return
+
+    # ── MOISSON (#1323) : garder chez soi ce qu'on a ecoute ─────────────────
+    # `POST surf-<site>.../_sbx/moisson` avec {url, titre} va CHERCHER le media
+    # par l'egress du relais — pas depuis le navigateur — et en garde une copie
+    # locale. C'est un GESTE, jamais un passage automatique : rien n'est
+    # moissonne sans qu'on le demande. `GET` rend ce qui est garde ;
+    # `GET .../_sbx/moisson/<cle>` sert la piece, sans ressortir.
+    if cible and chemin0.startswith("/_sbx/moisson"):
+        import json as _json
+        reste = chemin0[len("/_sbx/moisson"):].strip("/")
+        if scope["method"] == "GET" and reste:
+            p = moisson.chemin_de(reste)
+            if not p:
+                await repond(404, [("content-type", "application/json")],
+                             b'{"ok":false,"detail":"piece inconnue"}')
+                return
+            fiche = next((e for e in moisson.liste() if e["cle"] == reste), {})
+            # `Accept-Ranges: none` : on sert la piece entiere. Le Range
+            # partiel viendra quand un lecteur le reclamera vraiment ; annoncer
+            # un support qu'on n'a pas ferait echouer la lecture en silence.
+            await repond(200, [("content-type", fiche.get("mime", "application/octet-stream")),
+                               ("content-length", str(p.stat().st_size)),
+                               ("accept-ranges", "none"),
+                               ("cache-control", "private, max-age=3600")],
+                         p.read_bytes())
+            return
+        if scope["method"] == "GET":
+            await repond(200, [("content-type", "application/json")],
+                         _json.dumps({"ok": True, "moisson": moisson.liste()},
+                                     ensure_ascii=False).encode())
+            return
+        if scope["method"] == "DELETE" and reste:
+            ok = moisson.oublie(reste)
+            await repond(200 if ok else 404, [("content-type", "application/json")],
+                         _json.dumps({"ok": ok}).encode())
+            return
+        if scope["method"] == "POST":
+            corps0 = await _lire_corps(receive)
+            try:
+                d = _json.loads(corps0 or b"{}")
+                url = str(d.get("url") or "").strip()
+                titre = str(d.get("titre") or "").strip()
+                if not url.startswith(("http://", "https://")):
+                    raise ValueError("adresse non http(s)")
+                deja = moisson.deja(url)
+                if deja:
+                    # Deja garde : on rend la fiche existante plutot que de
+                    # retelecharger. Un second clic ne doit pas couter un media.
+                    await repond(200, [("content-type", "application/json")],
+                                 _json.dumps({"ok": True, "deja": True, "piece": deja},
+                                             ensure_ascii=False).encode())
+                    return
+                # MÊME SORTIE QUE LE RELAIS. Un média servi depuis un
+                # `.onion` doit être moissonné DANS le tunnel : sortir en
+                # direct le rendrait injoignable, et trahirait la visite.
+                cl = _client("tor" if egress._onion(cible) else "direct")
+                r = await cl.get(url, follow_redirects=True,
+                                 headers={"user-agent": "SecuBox-Surf/moisson"})
+                if r.status_code >= 400:
+                    raise ValueError(f"source en {r.status_code}")
+                mime = (r.headers.get("content-type") or "").split(";")[0].strip()
+                piece = moisson.range_media(url, titre, mime, r.content, origine=cible)
+                await repond(200, [("content-type", "application/json")],
+                             _json.dumps({"ok": True, "piece": piece},
+                                         ensure_ascii=False).encode())
+            except Exception as e:  # noqa: BLE001 — la cause exacte aide l'operateur
+                await repond(400, [("content-type", "application/json")],
+                             _json.dumps({"ok": False, "detail": str(e)[:160]},
+                                         ensure_ascii=False).encode())
+            return
+        await repond(405, [("content-type", "application/json")],
+                     b'{"ok":false,"detail":"methode refusee"}')
         return
 
     # ── JARRE D'ETAT (#1235) ────────────────────────────────────────────────

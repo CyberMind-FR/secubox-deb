@@ -1,3 +1,18 @@
+secubox-webos (1.0.327-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Mes sites » : l'AGRANDIR ouvre le service, plus la carte gonflée.
+    L'entrée portait un identifiant propre et aucune URL : le Hall retombait
+    donc sur son motif « cardlet sans vhost » — prévu pour DPI et Surf, qui
+    n'ont AUCUN service derrière — et agrandissait la carte elle-même. On
+    obtenait une pseudo-mega sans intérêt là où l'on attend la mosaïque du
+    service. L'entrée porte désormais l'identifiant du service
+    (`metablogizer`) et déclare `mode:"admin"`, puisque sa page vit sur
+    l'admin et qu'aucun vhost public ne la sert (421).
+  * `noVhost` ne s'applique plus à une entrée qui DÉCLARE son mode : avoir une
+    carte ne veut pas dire n'avoir aucun service.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:21:05 +0200
+
 secubox-webos (1.0.326-1~bookworm1) bookworm; urgency=medium
 
   * Le paquet pose SA PROPRE route sbxwaf via secubox-waf-route (#1323),

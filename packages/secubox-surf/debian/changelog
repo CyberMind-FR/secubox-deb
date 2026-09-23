@@ -1,3 +1,41 @@
+secubox-surf (1.0.22-1~bookworm1) bookworm; urgency=medium
+
+  * Moisson : un serveur MUET ne bloque plus une pièce légitime. Beaucoup de
+    serveurs omettent `content-type` ou rendent `application/octet-stream` ;
+    refuser sur ce seul motif écartait des médias valides. On retombe alors sur
+    l'extension de l'URL — une deuxième source, pas une invention — et une page
+    HTML reste refusée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:21:05 +0200
+
+secubox-surf (1.0.21-1~bookworm1) bookworm; urgency=medium
+
+  * LA MOISSON (#1323) : garder chez soi ce qu'on a écouté. Un média embarqué
+    dans une page relayée est déjà passé PAR LA BOX ; le laisser repartir sans
+    trace oblige à le redemander au site à chaque écoute — un site qui peut le
+    retirer, le déplacer, disparaître. Une pastille « ⤓ garder » apparaît sur
+    chaque lecteur audio/vidéo ; le relais va chercher la pièce PAR SA PROPRE
+    SORTIE (donc dans le tunnel pour un .onion, où sortir en direct la rendrait
+    injoignable et trahirait la visite) et en garde une copie locale, servie
+    ensuite sans ressortir.
+  * CE N'EST PAS UN CACHE. Un cache se vide tout seul et n'appartient à
+    personne ; ici c'est un GESTE — rien n'est moissonné en passant, rien
+    n'expire de soi-même, et ce qui est gardé porte d'où il vient.
+  * Gardes : seuls les types média sont acceptés (pas de copie d'Internet par
+    mégarde), plafond de 2 Gio par pièce, écriture atomique, nom de fichier
+    assaini et préfixé d'une empreinte de l'URL — un titre distant peut porter
+    des barres obliques et des points d'ascension. Le chemin servi vient de
+    l'index, jamais de l'appelant : on ne peut pas remonter hors de la moisson.
+    Re-garder la même adresse rend la fiche existante sans retélécharger.
+  * La pastille n'est posée que sur un lecteur dont la source est http(s) : sur
+    un blob: ou un data:, la box n'aurait rien à aller chercher et le bouton
+    mentirait. Elle enveloppe sans DÉPLACER le lecteur — le reparenter casse
+    les mises en page et réinitialise certains lecteurs.
+  * Endpoints : POST /_sbx/moisson (garder), GET (lister), GET /<clé> (servir),
+    DELETE /<clé> (oublier).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:18:10 +0200
+
 secubox-surf (1.0.20-1~bookworm1) bookworm; urgency=medium
 
   * Le JavaScript de la page relayée voit ses appels réseau RÉÉCRITS vers

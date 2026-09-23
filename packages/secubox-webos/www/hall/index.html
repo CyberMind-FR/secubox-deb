@@ -1375,10 +1375,14 @@ const FEATURED = [
   // d'appareil vit dans IndexedDB, donc PAR ORIGINE ; servie ailleurs, elle
   // aurait ete une deuxieme identite pour un seul appareil.
   {id:"sbxos",      label:"SBX OS",    icon:"▲", color:"#5b46b8", carte:"/sbxos/", h:420},
-  // MES SITES (#1323) : la mosaïque des vignettes que le shotter produit déjà.
-  // Pas de vhost — la carte EST la page, servie par le Hall ; cliquer une
-  // tuile ouvre le site dans le surfer, mégabarre gardée.
-  {id:"metablog",   label:"Mes sites", icon:"🌐", color:"#3d6b4a", carte:"/cardlets/metablog.html", h:300, auth:true},
+  // MES SITES (#1323) : la carte est la MOSAÏQUE des vignettes ; l'agrandir
+  // ouvre le SERVICE, pas la carte gonflée. `metablogizer` n'a pas de vhost
+  // public (421) — sa page vit sur l'admin — d'où `mode:"admin"` : sans lui,
+  // le Hall retombait sur le motif « cardlet sans vhost » et agrandissait la
+  // carte elle-même, ce qui donnait une pseudo-mega sans intérêt là où l'on
+  // attend la mosaïque du service.
+  {id:"metablogizer", label:"Mes sites", icon:"🌐", color:"#3d6b4a",
+   carte:"/cardlets/metablog.html", mode:"admin", h:300, auth:true},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mastodon", h:182},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214},
@@ -1752,10 +1756,14 @@ function svcDesc(id){
   // SANS `url`. `host(s)` retombait alors sur « dpi.gk2.secubox.in » — un hôte
   // inexistant que la CSP frame-src BLOQUE → cadre vide. On le marque pour que
   // modeURL/plainURL agrandissent la cardlet elle-même au lieu d'un vhost fantôme.
-  const noVhost = !!(f && f.carte && !f.url);
+  // UNE ENTREE QUI DECLARE SON MODE N'EST PAS « SANS VHOST ». Le motif
+  // noVhost sert aux cardlets qui n'ont AUCUN service derriere (DPI, Surf) :
+  // on agrandit alors la carte faute de mieux. Un module dont la page vit sur
+  // l'admin en a un, lui — l'agrandir doit l'ouvrir (#1323).
+  const noVhost = !!(f && f.carte && !f.url && !f.mode);
   return {id:id, label:(f&&f.label)||s.name||id, icon:(f&&f.icon)||icon(s.icon),
           url:(f&&f.url)||host(s), path:s.path||('/'+id+'/'),
-          carte:(f&&f.carte)||null, noVhost:noVhost};
+          carte:(f&&f.carte)||null, noVhost:noVhost, mode:(f&&f.mode)||null};
 }
 function modeURL(mode){
   if(!_svc) return 'about:blank';
@@ -1853,7 +1861,9 @@ function openService(id, mode, sub, subLabel){
   document.getElementById('eb-led').className='led '+st;
   document.getElementById('eb-reload').onclick=()=>{ const f=_frames[_mode]; if(f) f.src=modeURL(_mode); };
   var l=document.getElementById('sb-loc'); if(l) l.textContent=d.label+(subLabel?' · '+subLabel:'');
-  setMode(mode||_mode||'embed');
+  // Le mode DECLARE par l'entree l'emporte sur le defaut : c'est lui qui sait
+  // ou vit la page du service.
+  setMode(mode||d.mode||_mode||'embed');
   loadCtx(id, sub);
   showView('embed');
 }
