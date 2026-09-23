@@ -1,3 +1,17 @@
+secubox-webos (1.0.323-1~bookworm1) bookworm; urgency=medium
+
+  * Le relais Lyrion du Hall passe par l'agrégateur au lieu de `lyrion.sock`.
+    Le module est `on-demand` : son unité dort et le socket n'existe alors
+    plus, si bien que ce relais rendait 502 EN BOUCLE — 877 requêtes sur la
+    seule matinée du 2026-09-23, la barre média sondant `now-playing` en
+    continu — sans que rien ne le réveille, le waker n'agissant que sur les
+    vhosts de sites. L'agrégateur répond toujours, et sans allumer le LXC :
+    afficher « rien ne joue » n'exige pas de démarrer un serveur de musique.
+    Même correctif que sur le vhost d'administration ; il restait celui-ci,
+    sur un chemin différent (racine du socket contre /api/v1/lyrion/).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 05:54:24 +0200
+
 secubox-webos (1.0.322-1~bookworm1) bookworm; urgency=medium
 
   * Relais de la carte « Mes sites » : les vignettes sont servies DIRECTEMENT
