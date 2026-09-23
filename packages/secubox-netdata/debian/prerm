@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|deconfigure)
+    rm -f /etc/nginx/secubox.d/netdata.conf
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+  upgrade)
+    # Don't remove nginx config on upgrade
+    ;;
+esac
+systemctl stop    secubox-netdata.service 2>/dev/null || true
+systemctl disable secubox-netdata.service 2>/dev/null || true
+#DEBHELPER#
+

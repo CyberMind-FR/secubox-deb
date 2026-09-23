@@ -1,0 +1,41 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/secubox-netdata/usr/lib/secubox/netdata/api/routers
+	install -m 644 api/__init__.py api/main.py \
+	               debian/secubox-netdata/usr/lib/secubox/netdata/api/
+	install -m 644 api/routers/__init__.py \
+	               debian/secubox-netdata/usr/lib/secubox/netdata/api/routers/
+
+	# Route d'API : secubox.d/ ET secubox-routes.d/ — seul le second est inclus
+	# par les vhosts, le premier n'est jamais lu (voir secubox-ai-insights).
+	install -d debian/secubox-netdata/etc/nginx/secubox.d
+	install -d debian/secubox-netdata/etc/nginx/secubox-routes.d
+	install -m 644 nginx/netdata.conf debian/secubox-netdata/etc/nginx/secubox.d/
+	install -m 644 nginx/netdata.conf debian/secubox-netdata/etc/nginx/secubox-routes.d/
+
+	install -d debian/secubox-netdata/usr/lib/systemd/system
+	install -m 644 systemd/secubox-netdata.service \
+	               debian/secubox-netdata/usr/lib/systemd/system/
+
+	install -d debian/secubox-netdata/usr/share/secubox/menu.d
+	install -m 644 menu.d/40-netdata.json \
+	               debian/secubox-netdata/usr/share/secubox/menu.d/
+
+	# Frontend LuCI conserve : arborescence copiee telle quelle, vues comprises.
+	install -d debian/secubox-netdata/usr/share/secubox/www
+	cp -r www/. debian/secubox-netdata/usr/share/secubox/www/
+	find debian/secubox-netdata/usr/share/secubox/www -type f -exec chmod 644 {} +
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start --name=secubox-netdata

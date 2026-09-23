@@ -1,3 +1,18 @@
+secubox-appstore (0.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * Le catalogue passe de 134 à 175 modules : 57 paquets sur 175 n'avaient pas
+    de debian/secubox.yaml et étaient donc INVISIBLES dans l'App Store — dont
+    54 pourtant installés sur gk2 (acces, bbs, billets, certs, metanews,
+    podcaster, profiles, radio, sbxos, sentinelle-gsm, signal, surf…). Le
+    catalogue est généré à la construction en parcourant ces fiches : sans
+    fiche, pas de module. Chacune est dérivée de ce que le paquet déclare déjà
+    (debian/control pour le nom, la description et les dépendances ; le
+    manifeste modules.d pour la catégorie), jamais inventée.
+  * Les fiches préexistantes ne sont pas touchées : un choix d'opérateur reste
+    un choix d'opérateur, y compris ses 63 `misc`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 07:56:50 +0200
+
 secubox-appstore (0.4.3-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,
