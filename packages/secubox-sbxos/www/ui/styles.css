@@ -63,6 +63,17 @@ body {
   padding: calc(.7rem + env(safe-area-inset-top,0px)) .9rem .5rem;
 }
 .marque { font-weight:800; letter-spacing:.02em; color:var(--accent); }
+
+/* ENCADRE DANS LE HALL (#1293) : la mégabarre porte déjà le nom, l'identité
+   et la sortie. Garder notre bandeau mettrait DEUX chromes l'un sous l'autre —
+   deux marques, deux lignes de bienvenue — et volerait 60 px de damier sur un
+   écran déjà réduit par le cadre. On ne masque que la marque et la salutation :
+   la pastille de profil RESTE, c'est le seul endroit où le porteur voit sous
+   quelle identité il agit, et l'effacer le laisserait deviner. */
+body[data-encadre] .mast { padding-top:.35rem; padding-bottom:.1rem; }
+body[data-encadre] .mast .marque,
+body[data-encadre] .mast .bonjour { display:none; }
+body[data-encadre] .mast .profil { margin-left:0; }
 .bonjour { color:var(--encre-terne); font-size:.84rem; }
 .profil {
   margin-left:auto; font-size:.62rem; font-weight:800; letter-spacing:.09em;

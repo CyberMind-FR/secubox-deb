@@ -1,10 +1,13 @@
-secubox-webos (1.0.319-1~bookworm1) bookworm; urgency=medium
+secubox-webos (1.0.320-1~bookworm1) bookworm; urgency=medium
 
-  * postinst : le commentaire expliquant le placement du bloc ne cite plus le
-    jeton debhelper littéralement — debhelper le substitue PARTOUT, commentaire
-    compris, ce qui coupait la ligne en deux et faisait échouer le script
-    (« , : command not found », dpkg status 127). Constaté sur gk2 en
-    installant 1.0.318.
+  * SBX OS s'ouvre SOUS LA MÉGABARRE (#1293). Deux pièces manquaient :
+    - le vhost servait /sbxos/ avec le `frame-ancestors 'none'` hérité du
+      serveur, si bien que la coquille refusait d'être encadrée — pourtant
+      même origine, même site. La location redéclare sa CSP en
+      `frame-ancestors 'self'`, comme /acces.html et les cardlets encadrées ;
+    - le Hall ne connaissait pas SBX OS. Entrée `carte` SANS `url` (le motif
+      « pas de vhost » de Freebox TV) : le Hall agrandit alors la page
+      elle-même plutôt qu'un hôte fantôme que la CSP bloquerait.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 16:04:06 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 05:37:31 +0200
 
