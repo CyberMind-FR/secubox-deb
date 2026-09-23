@@ -1,3 +1,58 @@
+gabriel-mood (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA MUSIQUE NE COUVRE PLUS LES ÉMOTIONS (closes #1333). Le symptôme était
+    « le BPM casse les émotions » ; le BPM n'y était pour rien. C'était son
+    jumeau : la même musique produisait le tempo affiché ET la panne.
+  * LA CAUSE ÉTAIT UN ÉCART ENTRE UN COMMENTAIRE ET SON CODE. Le plancher de
+    bruit promettait d'apprendre « pendant les silences, sans se laisser tirer
+    vers le haut par la parole ». Il montait en fait de 0,05 dB à CHAQUE trame
+    dont l'énergie le dépassait, parole comprise — soit deux décibels par
+    seconde à quarante pour cent de parole. Avec une musique au niveau de la
+    voix, le plancher l'atteignait en une dizaine de secondes, la voix ne le
+    dépassait plus de la marge exigée, la détection tombait de 88 % à 30 %, et
+    la lecture passait en « pas assez de voix » pendant que la personne parlait.
+    C'est aussi l'explication du « vers 10-15 secondes, on part dans les
+    indéterminés » rapporté plus tôt.
+  * GELER L'APPRENTISSAGE PENDANT LA PAROLE NE MARCHE PAS, ET JE L'AI ESSAYÉ
+    AVANT DE LE SAVOIR. Le plancher sert à décider ce QU'EST la parole ; l'en
+    faire dépendre ferme une boucle. Mesuré : rappel parfait, et CENT POUR CENT
+    de fausses détections, y compris en pièce calme — le module aurait analysé
+    la musique comme une personne, ce qui est bien pire qu'un indéterminé.
+  * LE PLANCHER EST DÉSORMAIS UN QUANTILE, PAS UN LISSAGE. Vingt pour cent de
+    l'énergie observée sur trois secondes : la parole est intermittente, donc
+    un cinquième de la fenêtre est du bruit tant qu'elle n'occupe pas les
+    quatre cinquièmes. Aucune circularité. Borné par le creux de la fenêtre
+    (+12 dB) pour le seul cas qui échappe au quantile — le monologue, où la
+    distribution devient bimodale : plancher à -19 dB sans ce plafond, -59,8 dB
+    avec, dans une pièce à -70 dB.
+  * MESURÉ CONTRE L'ANCIEN, SUR UN BANC OÙ CHAQUE SOUS-BANDE FLUCTUE
+    INDÉPENDAMMENT — un vrai bruit n'excite pas les six bandes ensemble, et
+    c'est ce que suppose la règle des trois bandes. Fausses détections, selon
+    la fluctuation du bruit : ±2 dB 7,7 % contre 7,7-17,4 % ; ±4 dB 7,7 %
+    contre 14,7-26,6 % ; ±6 dB 17,4 % contre 96,4 %. Rappel de 100 % partout
+    dans les deux cas. Les deux réglages (marge 1 dB, plafond 12 dB) sont
+    tirés de ces tables, pas de la théorie.
+  * QUAND LA PIÈCE COUVRE VRAIMENT LA VOIX, ON LE DIT. Deux sources dans les
+    mêmes bandes à la même énergie ne se séparent pas — c'est de la physique,
+    pas un défaut qu'on corrigera. Le refus reste donc, mais il change de
+    message : « la pièce couvre votre voix (tempo 112 BPM) : baissez ce qui
+    joue, ou approchez le micro » au lieu de « pas assez de voix ». Même
+    verdict, deux gestes opposés ; dire le premier quand c'est le second, c'est
+    demander à quelqu'un de répéter plus fort ce qu'il vient de dire.
+  * LE MOTIF EST ENFIN STOCKÉ. La base savait dire qu'une minute était
+    indéterminée, jamais laquelle des trois gardes avait tranché — il a fallu
+    rejouer des scénarios synthétiques pour retrouver la cause de ce bogue.
+    Colonne relue à l'aune de la promesse de confidentialité, comme son test
+    de garde l'exige : quatre codes fermés, aucun texte libre, rien du signal.
+    Migration explicite — `CREATE TABLE IF NOT EXISTS` ne migre rien.
+  * L'AMORÇAGE SUIT LE PLANCHER au lieu d'un compteur séparé. Les deux avaient
+    divergé : la décision se libérait à cinquante trames quand le plancher
+    n'était calculé qu'à cent, et l'intervalle déclarait « parole » sur tout.
+  * `Ambiance.Dominante` disait « la fenêtre doit être écartée » ; aucun code
+    ne le faisait. Le commentaire dit maintenant ce qui est.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 14:44:29 +0200
+
 gabriel-mood (0.7.0-1~bookworm1) bookworm; urgency=medium
 
   * LA LAMPE PREND LA COULEUR DE L'HUMEUR (ref #1331). La table des teintes

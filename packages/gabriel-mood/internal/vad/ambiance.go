@@ -54,8 +54,12 @@ type Ambiance struct {
 	BPM       float64 `json:"bpm"`       // 0 si aucune pulsation nette
 	Pulsation float64 `json:"pulsation"` // 0..1, netteté de la périodicité
 	Part      float64 `json:"part"`      // 0..1, poids de l'ambiance dans l'énergie
-	Dominante bool    `json:"dominante"` // la fenêtre doit être écartée
-	Presente  bool    `json:"presente"`  // assez nette pour être signalée
+	// Dominante : la pièce pèse plus que la voix. C'est un CONSTAT, pas un
+	// ordre — la décision d'écarter la fenêtre est prise dans `ser`, avec le
+	// reste des traits sous les yeux. Le commentaire disait « la fenêtre doit
+	// être écartée », ce qu'aucun code ne faisait (#1333).
+	Dominante bool `json:"dominante"`
+	Presente  bool `json:"presente"` // assez nette pour être signalée
 }
 
 // SeuilPulsation : en-dessous, la périodicité n'est pas plus nette que celle

@@ -51,8 +51,13 @@ func TestAucuneColonneNePeutContenirDuSon(t *testing.T) {
 			}
 		}
 	}
+	// `motif` ajoutée en #1333, ET RELUE COMME CE TEST L'EXIGE : elle ne peut
+	// porter que l'un des quatre codes fermés de `ser` — « bruit »,
+	// « voix-insuffisante », « etalonnage », « ambiance ». Aucun texte libre,
+	// rien qui vienne du signal, rien qui vienne de la personne. Elle dit
+	// POURQUOI on a refusé de mesurer, pas ce qui a été entendu.
 	attendu := []string{"minute", "session", "f0", "f0_etendue", "energie", "debit",
-		"jitter", "shimmer", "activation", "etat", "confiance", "part_voisee"}
+		"jitter", "shimmer", "activation", "etat", "motif", "confiance", "part_voisee"}
 	if !reflect.DeepEqual(noms, attendu) {
 		t.Errorf("le schéma a changé :\n  %v\nattendu :\n  %v\n"+
 			"Toute colonne ajoutée doit être relue à l'aune de la promesse de confidentialité.",
@@ -140,5 +145,40 @@ func TestLaLimiteEstBornee(t *testing.T) {
 	out, _ = s.Depuis(time.Time{}, 10)
 	if len(out) != 10 {
 		t.Fatalf("%d lignes pour une limite de 10", len(out))
+	}
+}
+
+// TestLeMotifResteUnVocabulaireFerme : la relecture faite en #1333 ne vaut que
+// tant que la colonne garde sa nature.
+//
+// Une colonne TEXT est une invitation permanente à y mettre « juste un détail
+// de plus » — le message complet, l'appareil, un bout de transcription. Ce test
+// est le rappel que `motif` est un CODE, et que l'élargir demande de refaire la
+// relecture de confidentialité, pas seulement de changer une chaîne.
+func TestLeMotifResteUnVocabulaireFerme(t *testing.T) {
+	permis := map[string]bool{
+		"": true, "bruit": true, "voix-insuffisante": true,
+		"etalonnage": true, "ambiance": true,
+	}
+	s := ouvrir(t)
+	n := int64(0)
+	for code := range permis {
+		n++
+		if err := s.Enregistre(Resume{
+			Minute: time.Now().Unix() + n, Session: "s", Etat: "indetermine", Motif: code,
+		}); err != nil {
+			t.Fatalf("motif %q refusé à l'écriture : %v", code, err)
+		}
+	}
+	rs, err := s.Depuis(time.Now().Add(-time.Hour), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rs {
+		if !permis[r.Motif] {
+			t.Errorf("motif %q relu depuis la base : hors du vocabulaire fermé. "+
+				"Si le vocabulaire s'élargit, la relecture de confidentialité "+
+				"de TestAucuneColonneNePeutContenirDuSon est à refaire.", r.Motif)
+		}
 	}
 }
