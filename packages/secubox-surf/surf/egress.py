@@ -32,6 +32,7 @@ import httpx
 
 import os
 import socket
+import ssl
 
 # LE SOCKS DE TOR N'EST PAS TOUJOURS SUR LOOPBACK. Sur gk2 il est lié aux IP
 # LAN et mesh (192.168.1.200, 10.10.0.1), PAS à 127.0.0.1. Supposer loopback
@@ -115,12 +116,40 @@ ENTETES_NAV = {
 }
 
 
+# ── LA POIGNÉE DE MAIN (#1323) ──────────────────────────────────────────────
+#
+# CE QU'ON A VU. `edge.api.brightcove.com` rendait 200 à curl, 200 à urllib, et
+# 404 au relais — même adresse, même seconde, même machine, mêmes en-têtes. Ni
+# le jeton, ni la query, ni le `Host` : le chemin sur le fil était identique
+# octet pour octet. Le 404 venait d'AVANT la requête HTTP.
+#
+# LA CAUSE. httpx n'utilise pas les réglages TLS du système : il impose sa
+# propre liste de suites (`DEFAULT_CIPHERS`, 42 suites contre 60). Ce choix
+# donne au ClientHello une empreinte reconnaissable, et les bordures qui
+# profilent leurs clients — Fastly ici, mais Cloudflare et Akamai font pareil —
+# répondent à cette empreinte par un refus poli. Preuve par substitution : le
+# contexte système rend 200, le même contexte AVEC les suites de httpx rend
+# 404, ALPN et paquet de certificats inchangés.
+#
+# CE QU'ON FAIT. On sort avec la poignée de main du SYSTÈME, celle de tous les
+# autres outils de la box. Ce n'est pas un déguisement : c'est cesser d'en
+# porter un. Un relais dont la sortie est signée « bibliothèque Python » n'est
+# pas un relais — la moitié du web lui répond autre chose qu'au navigateur
+# qu'il sert.
+#
+# Le paquet de certificats reste celui du système (`ca-certificates`), déjà
+# géré par la distribution : le contexte par défaut le prend.
+def contexte_tls() -> ssl.SSLContext:
+    """Le contexte TLS du système, vérification comprise."""
+    return ssl.create_default_context()
+
+
 def _client_proxy(proxy: str, timeout: float, verify: bool) -> httpx.Client:
     """httpx a renomme `proxies=` en `proxy=` selon la version. Le POC doit
     tourner sur celle de la box (0.23) comme sur une recente : on essaie la
     forme moderne, on retombe sur l'ancienne."""
-    commun = dict(timeout=timeout, verify=verify, follow_redirects=False,
-                  headers=ENTETES_NAV)
+    commun = dict(timeout=timeout, verify=(contexte_tls() if verify else False),
+                  follow_redirects=False, headers=ENTETES_NAV)
     try:
         return httpx.Client(proxy=proxy, **commun)          # httpx >= 0.26
     except TypeError:
@@ -148,7 +177,7 @@ def client_pour(hote: str, mode: str = "auto", timeout: float = 25.0) -> httpx.C
         return _client_proxy(TOR_SOCKS, timeout, verify)
 
     return httpx.Client(timeout=timeout, follow_redirects=False,
-                        headers=ENTETES_NAV)
+                        headers=ENTETES_NAV, verify=contexte_tls())
 
 
 def tor_vivant() -> bool:

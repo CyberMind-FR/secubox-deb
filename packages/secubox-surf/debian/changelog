@@ -1,3 +1,88 @@
+secubox-surf (1.0.25-1~bookworm1) bookworm; urgency=medium
+
+  * Le FLUX passe par la box, pas seulement la page (#1323). Un manifeste
+    HLS/DASH est un document à URL, au même titre qu'une feuille de style : il
+    cite ses pistes, ses qualités et ses segments. Servi tel quel, il les citait
+    EN DIRECT, et le lecteur allait les chercher au vrai CDN. Relais en
+    trompe-l'œil : la page venait de la box, la vidéo de Brightcove — or c'est
+    la vidéo qui pèse, et c'est elle qui trace, un segment étant une requête
+    datée portant l'adresse du spectateur.
+  * Sur une page relayée normalement, l'injection de tête rabattait déjà ces
+    requêtes. Sur une copie CARBONE il n'y a plus d'injection — tout le JS est
+    parti — donc la réécriture doit se faire dans le manifeste lui-même.
+  * Les adresses RELATIVES sont laissées telles quelles : elles se résolvent
+    contre l'URL du manifeste, qui est déjà une origine surf ; les réécrire les
+    casserait. La query n'est pas touchée non plus — le jeton fastly y vit.
+  * Tests (11 au total) : les pistes absolues sont rabattues, le jeton survit,
+    le relatif reste relatif.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 08:55:51 +0200
+
+secubox-surf (1.0.24-1~bookworm1) bookworm; urgency=medium
+
+  * Le relais sort avec la poignée de main du SYSTÈME (#1323). Sans quoi le
+    média ranimé n'aurait rien eu à jouer : `edge.api.brightcove.com` rendait
+    200 à curl, 200 à urllib, et 404 au relais — même adresse, même seconde,
+    même machine, mêmes en-têtes, chemin identique octet pour octet sur le fil.
+    Le refus venait d'AVANT la requête HTTP.
+  * La cause : httpx n'utilise pas les réglages TLS du système, il impose sa
+    propre liste de suites (42 contre 60). Cette liste donne au ClientHello une
+    empreinte reconnaissable, et les bordures qui profilent leurs clients —
+    Fastly ici, Cloudflare et Akamai font de même — y répondent par un refus
+    poli plutôt que par une erreur franche. Preuve par substitution : contexte
+    système → 200 ; le MÊME contexte avec les suites de httpx → 404 ; ALPN et
+    paquet de certificats inchangés dans les deux cas.
+  * Ce n'est pas un déguisement, c'est cesser d'en porter un : un relais dont
+    la sortie est signée « bibliothèque Python » n'est pas un relais, puisqu'une
+    part du web lui répond autre chose qu'au navigateur qu'il sert. La portée
+    dépasse donc la vidéo de BFM — tout site qui profile son client était
+    concerné, en silence.
+  * La vérification des certificats ne bouge pas (contexte par défaut, magasin
+    du système) ; `.onion` reste le seul cas non vérifié, comme avant.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 08:53:17 +0200
+
+secubox-surf (1.0.23-1~bookworm1) bookworm; urgency=medium
+
+  * Copie carbone : le média rejoue (#1323). Sur un site figé — bfmtv — la
+    vidéo ne partait pas. `fige` retire TOUT le JS, c'est sa raison d'être :
+    elle empêche le ballet de consentement de rejouer chez l'utilisateur. Mais
+    le lecteur vidéo est du JS lui aussi. Le `<video>` que Chromium avait
+    construit était sérialisé avec `src="blob:…"` : un handle MediaSource qui
+    n'appartient qu'au processus qui l'a créé. Chez l'utilisateur il ne désigne
+    RIEN, et plus aucun script ne vient le nourrir. La page s'affichait, le
+    média était mort avec le rendu.
+  * L'URL du média ne se devine pas : le Chromium du rendu l'a DEMANDÉE, et il
+    l'a demandée AU RELAIS (l'injection de tête rabat fetch/XHR/`.src` vers
+    l'origine surf). Le relais note donc ce qu'il sert au rendu en cours —
+    ni CDP, ni websocket, ni dépendance : on lit ce qui passe déjà. Le verrou
+    qui sérialise les Chromium rend cette ardoise sans ambiguïté.
+  * L'ardoise se cache AVEC le DOM. Sans ce compagnon, une copie relue du cache
+    aurait de nouveau un lecteur muet : le DOM survivait, l'observation non, et
+    le média n'aurait joué qu'une fois sur N, au hasard du TTL.
+  * On ne prend pas « le premier média trouvé » : un article BFM porte la vidéo
+    du reportage ET le direct radio de la chaîne en pied de page. L'identifiant
+    du lecteur et l'URL de son média portent le même numéro — quand ce lien
+    existe, il tranche sans deviner.
+  * On ne ranime QUE ce qui était vivant. Un `blob:` prouve qu'un média jouait
+    vraiment là ; les `<video>` sans source d'une page figée sont les
+    emplacements publicitaires (le carbone en garde deux sur un article BFM).
+    Leur donner une source, ce serait installer une réclame là où il n'y en
+    avait pas.
+  * Le décor du lecteur mort est retiré par la fratrie qui suit la balise :
+    sinon notre lecteur joue DERRIÈRE un skin inerte et l'on clique dans le
+    vide.
+  * hls.js est VENDU AVEC le relais et servi sur l'origine du site
+    (`/_sbx/hls.js`) : le prendre au Hall lierait le relais à un autre
+    paquet, le prendre à un CDN ferait sortir le navigateur pour lire une vidéo
+    qui, elle, reste dedans.
+  * `--autoplay-policy=no-user-gesture-required` au rendu : sans geste,
+    Chromium bloque la lecture, le lecteur ne va jamais chercher son manifeste
+    et l'ardoise reste vide. Personne n'écoute ce Chromium.
+  * Tests (8) sur le cas réel, le piège du direct radio compris.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 08:47:32 +0200
+
 secubox-surf (1.0.22-1~bookworm1) bookworm; urgency=medium
 
   * Moisson : un serveur MUET ne bloque plus une pièce légitime. Beaucoup de

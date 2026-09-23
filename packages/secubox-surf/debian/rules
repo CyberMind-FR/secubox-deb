@@ -17,6 +17,14 @@ override_dh_auto_install:
 	install -d debian/secubox-surf/usr/lib/secubox/surf/surf
 	install -m 644 surf/*.py debian/secubox-surf/usr/lib/secubox/surf/surf/
 
+	# LE LECTEUR PRÊTÉ AUX PAGES FIGÉES. Une copie carbone n'a plus de JS :
+	# c'est le relais qui redonne une source jouable au média, et il lui faut
+	# hls.js pour cela. Il est VENDU AVEC le relais, pas emprunté au Hall :
+	# l'origine surf doit pouvoir le servir sans dépendre d'un autre paquet —
+	# c'est le même motif que la route déclarée par son propre paquet (#1323).
+	install -m 644 vendor-hls.min.js \
+	               debian/secubox-surf/usr/lib/secubox/surf/hls.min.js
+
 	# VHOST DANS sites-available, JAMAIS sites-enabled : nginx charge
 	# `include sites-enabled/*`, et le `.dpkg-dist` que dpkg y dépose sur un
 	# fichier modifié localement entrerait dans le glob — la configuration

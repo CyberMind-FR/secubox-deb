@@ -36,6 +36,7 @@ contourne.
 
 from __future__ import annotations
 
+import html
 import re
 import base64
 from dataclasses import dataclass, field
@@ -934,7 +935,160 @@ _RE_PRELOAD_JS = re.compile(
     r'<link\b[^>]*\bas\s*=\s*["\']?script["\']?[^>]*>', re.IGNORECASE)
 
 
-def fige(corps: str, base: str, sur_hote) -> str:
+# ── RANIMER LE MEDIA D'UNE COPIE CARBONE (#1323) ────────────────────────────
+#
+# LE SYMPTOME. Sur un site figé, la vidéo ne joue pas. On voit le décor du
+# lecteur, parfois son image d'attente, et rien ne part.
+#
+# LA CAUSE. `fige` retire TOUT le JS — c'est sa raison d'être, elle empêche le
+# ballet de consentement de rejouer chez l'utilisateur. Mais le lecteur vidéo
+# est du JS lui aussi. Le `<video>` que Chromium avait construit est sérialisé
+# avec `src="blob:…"` : un handle MediaSource qui n'appartient qu'au processus
+# qui l'a créé. Chez l'utilisateur, il ne désigne RIEN, et plus aucun script ne
+# viendra le nourrir. La page est bien là ; le média est mort avec le rendu.
+#
+# CE QU'ON FAIT. On rend au `<video>` une source RÉELLE et on lui donne un
+# lecteur. L'URL ne se devine pas : elle vient de ce que le rendu a demandé au
+# relais (`rendu.observe`), et à défaut de ce que le DOM cite encore.
+#
+# ON NE RANIME QUE CE QUI ÉTAIT VIVANT : un `blob:` prouve qu'un média jouait
+# vraiment là. Les `<video>` SANS source d'une page figée sont les emplacements
+# publicitaires (le carbone en garde deux sur un article BFM) — leur donner une
+# source, ce serait installer une réclame là où il n'y en avait pas.
+_RE_BALISE_MEDIA = re.compile(r'<(video|audio)\b([^>]*)>', re.IGNORECASE)
+_RE_A_SRC = re.compile(r'\ssrc\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
+_RE_A_ID = re.compile(r'\sid\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
+_RE_A_POSTER = re.compile(r'\sposter\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
+_RE_URL_MEDIA = re.compile(
+    r'https?://[^\s"\'<>\\]+?\.(?:m3u8|mpd|mp4|m4v|webm|m4a|mp3|ogg|oga)'
+    r'(?:\?[^\s"\'<>\\]*)?', re.IGNORECASE)
+# Un identifiant de vidéo, pas une date ni un compteur : six chiffres au moins,
+# c'est ce que posent les plateformes (Brightcove, Dailymotion, JWPlayer).
+_RE_ID_LONG = re.compile(r'\d{6,}')
+
+
+def _hls(u: str) -> bool:
+    return ".m3u8" in u.lower() or ".mpd" in u.lower()
+
+
+def _medias_du_dom(corps: str) -> list[str]:
+    """Les URL de média que le DOM cite encore, manifestes d'abord."""
+    vus, out = set(), []
+    for m in _RE_URL_MEDIA.finditer(corps):
+        u = html.unescape(m.group(0))
+        if u not in vus:
+            vus.add(u)
+            out.append(u)
+    return [u for u in out if _hls(u)] + [u for u in out if not _hls(u)]
+
+
+def _pour_ce_lecteur(cands: list[str], indice: str) -> str | None:
+    """Le média de CE lecteur, parmi les candidats.
+
+    Un article porte souvent plusieurs médias : la vidéo dont il parle, mais
+    aussi le direct radio de la chaîne, posé en pied de page. Prendre « le
+    premier » ferait jouer la radio à la place du reportage. L'identifiant du
+    lecteur (`bitmovinplayer-video-player_bitmovin_6405413659112`) et l'URL de
+    son média (`…/videos/6405413659112/master.m3u8`) portent le MÊME numéro :
+    quand ce lien existe, il tranche sans deviner. Sinon on prend le premier
+    manifeste — l'ordre vient de ce que le rendu a demandé, donc du lecteur
+    principal, et ce n'est un pari que lorsqu'on n'a rien de mieux.
+    """
+    if not cands:
+        return None
+    nums = set(_RE_ID_LONG.findall(indice))
+    if nums:
+        for u in cands:
+            if nums & set(_RE_ID_LONG.findall(u)):
+                return u
+    return cands[0]
+
+
+_LECTEUR = """
+<style>
+/* Le décor du lecteur mort reste dans le DOM : barre de progression inerte,
+   bouton lecture qui ne répond pas, calque de publicité par-dessus. Il est
+   TOUJOURS posé APRÈS la balise média (tous les lecteurs construisent ainsi :
+   la vidéo, puis son habillage en surimpression). On le retire donc par la
+   fratrie qui suit — sinon notre lecteur joue DERRIÈRE un skin qui ne fait
+   plus rien, et l'utilisateur clique dans le vide. */
+[data-sbx-media]{position:relative!important;z-index:2147482000!important;
+  display:block!important;width:100%!important;height:auto!important;
+  max-height:80vh!important;background:#000!important}
+[data-sbx-media] ~ *{display:none!important}
+</style>
+<script>
+(function(){
+  var els = document.querySelectorAll("[data-sbx-media]");
+  if(!els.length) return;
+  function joue(el, u){
+    if(el.dataset.sbxMedia !== "hls"){ el.src = u; return; }
+    // HLS : Safari sait, les autres non. On ne charge hls.js que dans ce cas —
+    // 400 Ko qu'on n'inflige pas a une page qui lit un mp4.
+    if(el.canPlayType("application/vnd.apple.mpegurl")){ el.src = u; return; }
+    var s = document.createElement("script");
+    s.src = "/_sbx/hls.js";
+    s.onload = function(){
+      try{
+        if(!window.Hls || !window.Hls.isSupported()){ el.src = u; return; }
+        var h = new window.Hls({enableWorker:false});
+        h.loadSource(u); h.attachMedia(el);
+      }catch(e){ el.src = u; }
+    };
+    // Le lecteur manque : plutot qu'un cadre noir muet, on tente la source
+    // telle quelle — un navigateur qui sait lire HLS nativement s'en sortira.
+    s.onerror = function(){ el.src = u; };
+    document.head.appendChild(s);
+  }
+  for(var i=0;i<els.length;i++){
+    var el = els[i], u = el.getAttribute("data-sbx-src");
+    if(u) joue(el, u);
+  }
+})();
+</script>
+"""
+
+
+def ranime_media(corps: str, base: str, sur_hote, observes=()) -> str:
+    """Rend une source jouable aux médias d'une copie carbone (cf. ci-dessus)."""
+    cands = [u for u in observes if u] or _medias_du_dom(corps)
+    if not cands:
+        return corps
+    trouve = [False]
+
+    def _balise(m):
+        balise, attrs = m.group(1), m.group(2)
+        src = _RE_A_SRC.search(attrs)
+        if not src or not src.group(2).strip().lower().startswith("blob:"):
+            return m.group(0)
+        ident = (_RE_A_ID.search(attrs).group(2) if _RE_A_ID.search(attrs) else "")
+        u = _pour_ce_lecteur(cands, ident)
+        if not u:
+            return m.group(0)
+        # L'URL part vers l'origine surf du média : le ranimer en direct
+        # sortirait du relais, et c'est précisément ce qu'on ne veut pas.
+        relaye, _ = _map_url(u, base, sur_hote)
+        reste = _RE_A_SRC.sub("", attrs)
+        poster = _RE_A_POSTER.search(reste)
+        trouve[0] = True
+        # On ne pose PAS `src` : un `<video src="…m3u8">` que le navigateur ne
+        # sait pas lire déclenche une erreur de chargement avant même que
+        # hls.js soit là. C'est le script d'amorce qui choisit comment servir.
+        return ('<%s%s data-sbx-media="%s" data-sbx-src="%s" controls '
+                'preload="metadata" playsinline%s>' % (
+                    balise, reste.rstrip(), "hls" if _hls(u) else "direct",
+                    html.escape(relaye, quote=True),
+                    "" if poster else ' poster=""'))
+
+    corps = _RE_BALISE_MEDIA.sub(_balise, corps)
+    if not trouve[0]:
+        return corps
+    if "</body>" in corps:
+        return corps.replace("</body>", _LECTEUR + "</body>", 1)
+    return corps + _LECTEUR
+
+
+def fige(corps: str, base: str, sur_hote, medias=()) -> str:
     """FIGER une copie carbone (#1235). Le DOM vient d'un rendu headless : le JS
     a deja tout materialise (consentement passe, contenu injecte, pisteurs
     coupes). On RETIRE tout le JS pour que la page ne REJOUE pas son ballet
@@ -965,7 +1119,9 @@ def fige(corps: str, base: str, sur_hote) -> str:
             parts.append(v + (" " + mo[1] if len(mo) > 1 else ""))
         return 'srcset="%s"' % ", ".join(parts)
     corps = _RE_SRCSET.sub(_srcset, corps)
-    return corps
+    # EN DERNIER, et pour cause : ranimer injecte NOTRE script d'amorce, et il
+    # ne doit pas repasser sous le retrait du JS quelques lignes plus haut.
+    return ranime_media(corps, base, sur_hote, medias)
 
 
 def reecris_html(corps: str, base: str, rap: Rapport, sur_hote,
@@ -1100,6 +1256,34 @@ def _recense_js(texte: str, rap: Rapport, ou: str):
         rap.note("worker", "degrade",
                  "%d web worker : script chargé à part, à réécrire aussi sinon "
                  "il sort du cadre." % len(wk), " · ".join(wk[:3]))
+
+
+# ── LES MANIFESTES DE FLUX (#1323) ──────────────────────────────────────────
+#
+# Un manifeste HLS/DASH est un DOCUMENT À URL, au même titre qu'une feuille de
+# style : il cite les pistes, les qualités et les segments. Servi tel quel, il
+# les cite EN DIRECT — et le lecteur, lui, les demanderait au vrai CDN.
+#
+# Le résultat serait un relais en trompe-l'œil : la page passe par la box, la
+# vidéo non. Or c'est la vidéo qui pèse, et c'est elle qui trace — chaque
+# segment est une requête datée vers Brightcove, avec l'adresse du spectateur.
+#
+# Sur une page RELAYÉE normalement, l'injection de tête rabattait déjà ces
+# requêtes. Sur une copie CARBONE, il n'y a plus d'injection : tout le JS est
+# parti. La réécriture doit donc se faire ici, dans le manifeste lui-même.
+#
+# Les adresses RELATIVES sont laissées telles quelles : elles se résolvent
+# contre l'URL du manifeste, qui est déjà une origine surf. Les réécrire
+# reviendrait à les casser.
+_RE_URL_ABS = re.compile(r'https?://[^\s"\'<>]+', re.IGNORECASE)
+
+
+def reecris_manifeste(corps: str, base: str, sur_hote) -> str:
+    """Rabat vers le relais les adresses absolues d'un manifeste HLS/DASH."""
+    def _u(m):
+        v, _ = _map_url(m.group(0), base, sur_hote)
+        return v
+    return _RE_URL_ABS.sub(_u, corps)
 
 
 def reecris_css(corps: str, base: str, rap: Rapport, sur_hote) -> str:

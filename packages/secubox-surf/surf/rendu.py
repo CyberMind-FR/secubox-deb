@@ -44,6 +44,45 @@ _UA = ("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 "
        "Firefox/128.0 " + MARQUEUR_UA)
 
 
+# ── CE QUE LE RENDU A VU PASSER (#1323) ─────────────────────────────────────
+#
+# La copie carbone retire TOUT le JS. Le lecteur video de la page ne tourne
+# donc plus, et le `<video>` qu'il avait construit reste avec un `blob:` —
+# le handle MediaSource d'un Chromium qui n'existe plus. Servi tel quel, il
+# ne designe rien : la page s'affiche, le media ne joue pas.
+#
+# Pour le rendre jouable, il faut l'URL VRAIE du media. On ne la DEVINE pas :
+# le Chromium du rendu l'a DEMANDEE, et il l'a demandee AU RELAIS (l'injection
+# de tete rabat fetch/XHR/`<video>.src` vers l'origine surf). Le relais n'a
+# donc qu'a noter ce qu'il sert au rendu en cours. Pas de CDP, pas de
+# websocket, pas de dependance : on lit ce qui passe deja.
+#
+# Le verrou de `rends` serialise les Chromium — UN SEUL rendu a la fois sur
+# cette carte. Cette ardoise peut donc etre un emplacement global : il n'y a
+# jamais deux rendus a melanger.
+_MAX_ARDOISE = 8
+_ardoise: list[str] = []
+_ouverte = False
+
+
+def observe(url_media: str) -> None:
+    """Le relais signale un media servi AU RENDU en cours (no-op sinon)."""
+    if not _ouverte or url_media in _ardoise:
+        return
+    if len(_ardoise) < _MAX_ARDOISE:
+        _ardoise.append(url_media)
+
+
+def _manifeste(u: str) -> bool:
+    return ".m3u8" in u.lower() or ".mpd" in u.lower()
+
+
+def _classe(medias: list[str]) -> list[str]:
+    """Manifestes d'abord : une piste HLS bat un fichier isole, car c'est elle
+    qui porte toutes les qualites. L'ordre d'arrivee departage le reste."""
+    return [u for u in medias if _manifeste(u)] + [u for u in medias if not _manifeste(u)]
+
+
 def disponible() -> bool:
     return Path(CHROMIUM).exists()
 
@@ -53,35 +92,49 @@ def _cle(url: str) -> Path:
     return _CACHE / (h + ".html")
 
 
-def _du_cache(url: str) -> str | None:
+def _du_cache(url: str) -> tuple[str, list[str]] | None:
     f = _cle(url)
     try:
         if f.exists() and (time.time() - f.stat().st_mtime) < _TTL:
-            return f.read_text(encoding="utf-8", errors="replace")
+            dom = f.read_text(encoding="utf-8", errors="replace")
+            # LES MEDIAS SE CACHENT AVEC LE DOM. Sans ce compagnon, un rendu
+            # relu du cache rendrait une page dont le lecteur est de nouveau
+            # muet : le DOM survivrait, l'observation non — et le media ne
+            # jouerait qu'une fois sur N, au hasard du TTL.
+            g = f.with_suffix(".media")
+            medias = g.read_text(encoding="utf-8").split("\n") if g.exists() else []
+            return dom, [u for u in medias if u]
     except OSError:
         pass
     return None
 
 
-def _au_cache(url: str, html: str) -> None:
+def _au_cache(url: str, html: str, medias: list[str]) -> None:
     try:
         _CACHE.mkdir(parents=True, exist_ok=True)
         f = _cle(url)
         tmp = f.with_suffix(".tmp")
         tmp.write_text(html, encoding="utf-8")
         tmp.replace(f)
+        g = f.with_suffix(".media")
+        gtmp = g.with_suffix(".media.tmp")
+        gtmp.write_text("\n".join(medias), encoding="utf-8")
+        gtmp.replace(g)
     except OSError:
         pass
 
 
-def rends(url: str, budget_ms: int = 9000, timeout: float = 90.0) -> str | None:
-    """Le DOM abouti d'une URL (origine surf), via Chromium headless.
+def rends(url: str, budget_ms: int = 9000,
+          timeout: float = 90.0) -> tuple[str, list[str]] | None:
+    """Le DOM abouti d'une URL (origine surf) ET les medias qu'il a charges.
 
     Renvoie None si l'outil manque, si le rendu echoue, ou s'il est trop maigre.
     Mise en cache par URL (TTL court) : le rendu est lourd, on ne le refait pas
     a chaque requete. Un verrou global serialise les rendus — un seul Chromium a
-    la fois, c'est le garde-fou de cout sur une petite carte arm64.
+    la fois, c'est le garde-fou de cout sur une petite carte arm64, et c'est
+    aussi ce qui rend l'ardoise des medias sans ambiguite.
     """
+    global _ouverte
     if not disponible():
         return None
     cache = _du_cache(url)
@@ -93,6 +146,8 @@ def rends(url: str, budget_ms: int = 9000, timeout: float = 90.0) -> str | None:
         cache = _du_cache(url)
         if cache is not None:
             return cache
+        _ardoise.clear()
+        _ouverte = True
         try:
             p = subprocess.run(
                 [CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu",
@@ -108,12 +163,20 @@ def rends(url: str, budget_ms: int = 9000, timeout: float = 90.0) -> str | None:
                  # arm64 ou chaque sous-ressource relayee coute.
                  "--blink-settings=imagesEnabled=false",
                  "--disable-remote-fonts",
+                 # ON NE COUPE PAS LE SON. Chromium bloque la lecture auto sans
+                 # geste : le lecteur n'irait alors JAMAIS chercher son
+                 # manifeste, et l'ardoise resterait vide. On l'autorise pour
+                 # que le media se declare — personne n'ecoute ce Chromium.
+                 "--autoplay-policy=no-user-gesture-required",
                  "--virtual-time-budget=%d" % budget_ms, "--dump-dom", url],
                 capture_output=True, text=True, timeout=timeout)
             dom = p.stdout or ""
         except (subprocess.TimeoutExpired, OSError):
             return None
+        finally:
+            _ouverte = False
         if len(dom) < 500:
             return None
-        _au_cache(url, dom)
-        return dom
+        medias = _classe(list(_ardoise))
+        _au_cache(url, dom, medias)
+        return dom, medias

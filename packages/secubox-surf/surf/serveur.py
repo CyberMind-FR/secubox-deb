@@ -32,6 +32,8 @@ import asyncio
 
 import httpx
 
+from pathlib import Path
+
 from urllib.parse import parse_qs, unquote
 
 from . import relais
@@ -46,6 +48,9 @@ from . import rendu
 # declaratif (comme waf_bypass) ; pour l'instant, la liste connue + `?_sbxr`.
 _SITES_LOURDS = {"bfmtv.com"}
 
+# Le lecteur prete aux pages figees (cf. relais.ranime_media).
+_HLS_JS = Path("/usr/lib/secubox/surf/hls.min.js")
+
 
 # Un seul client async par mode, réutilisé : ouvrir une connexion par requête
 # jetterait le bénéfice du keep-alive vers l'amont.
@@ -54,8 +59,11 @@ _clients: dict[str, httpx.AsyncClient] = {}
 
 def _client(mode: str) -> httpx.AsyncClient:
     if mode not in _clients:
+        # POIGNEE DE MAIN DU SYSTEME (#1323) : httpx impose sinon sa propre
+        # liste de suites TLS, dont l'empreinte vaut au relais des reponses
+        # differentes de celles du navigateur qu'il sert. Cf. egress.
         commun = dict(timeout=25.0, follow_redirects=False,
-                      headers=egress.ENTETES_NAV)
+                      headers=egress.ENTETES_NAV, verify=egress.contexte_tls())
         if mode == "tor":
             try:
                 _clients[mode] = httpx.AsyncClient(proxy=egress.TOR_SOCKS, **commun)
@@ -64,6 +72,31 @@ def _client(mode: str) -> httpx.AsyncClient:
         else:
             _clients[mode] = httpx.AsyncClient(**commun)
     return _clients[mode]
+
+
+_EXT_MEDIA = (".m3u8", ".mpd", ".mp4", ".m4v", ".webm", ".m4a", ".mp3", ".ogg", ".oga")
+_CT_MEDIA = ("application/x-mpegurl", "application/vnd.apple.mpegurl",
+             "application/dash+xml", "audio/mpegurl", "audio/x-mpegurl")
+# Les SEGMENTS d'un flux : ce sont eux qu'il ne faut PAS noter.
+_EXT_SEGMENT = (".ts", ".m4s", ".aac", ".vtt")
+
+
+def _est_media(ct: str, chemin: str) -> bool:
+    c = chemin.lower().split("?")[0]
+    if c.endswith(_EXT_SEGMENT):
+        return False
+    if any(t in ct for t in _CT_MEDIA):
+        return True
+    if c.endswith(_EXT_MEDIA):
+        return True
+    # `video/mp4` sur une URL sans extension : un fichier servi par une API.
+    return ct.startswith(("video/", "audio/")) and "mp2t" not in ct
+
+
+def _est_manifeste(ct: str, chemin: str) -> bool:
+    """Un manifeste de flux : HLS ou DASH, par type déclaré ou par extension."""
+    c = chemin.lower().split("?")[0]
+    return (any(t in ct for t in _CT_MEDIA) or c.endswith((".m3u8", ".mpd")))
 
 
 async def _lire_corps(receive) -> bytes:
@@ -136,6 +169,22 @@ async def app(scope, receive, send):
             import json as _json
             await repond(200, [("content-type", "application/json")],
                          _json.dumps({"ok": True, "jarre": jarre.etat()}).encode())
+        return
+
+    # ── LE LECTEUR DE LA COPIE CARBONE (#1323) ─────────────────────────────
+    # Une page figee n'a plus son lecteur : on lui en prete un. hls.js est
+    # servi par le relais, sur l'origine du site — le charger depuis un CDN
+    # ferait sortir le navigateur du relais pour lire une video qui, elle, y
+    # reste. Servi par nous, il ne trahit rien.
+    if chemin0 == "/_sbx/hls.js":
+        try:
+            octets = _HLS_JS.read_bytes()
+        except OSError:
+            await repond(404, [("content-type", "text/plain")], b"lecteur absent")
+            return
+        await repond(200, [("content-type", "application/javascript"),
+                           ("content-length", str(len(octets))),
+                           ("cache-control", "public, max-age=86400")], octets)
         return
 
     # ── MOISSON (#1323) : garder chez soi ce qu'on a ecoute ─────────────────
@@ -361,8 +410,9 @@ async def app(scope, receive, send):
         # Rendu headless = subprocess BLOQUANT (~15-40s) : hors de l'event loop,
         # sinon il gèle tout le relais. Un thread, et le verrou global de rendu.py
         # serialise les Chromium (un seul a la fois sur arm64).
-        dom = await asyncio.to_thread(rendu.rends, url_surf)
-        if dom:
+        rendu_fait = await asyncio.to_thread(rendu.rends, url_surf)
+        if rendu_fait:
+            dom, medias_vus = rendu_fait
             # Le DOM rendu porte DEJA des origines surf (le relais les a
             # reecrites pour Chromium). fige() ne doit pas les re-reecrire
             # (surf-surf--… casse le CSS) : on laisse les hotes deja surf, on ne
@@ -373,7 +423,7 @@ async def app(scope, receive, send):
                 if relais.est_pisteur(h):
                     return None
                 return relais.origine_de(h)
-            corps = relais.fige(dom, base, sur_hote_fige).encode()
+            corps = relais.fige(dom, base, sur_hote_fige, medias_vus).encode()
             # NO-STORE (#1235) : sinon le navigateur garde une version (parfois la
             # legere d'avant) et ne re-fetche pas la carbone. On veut toujours du
             # frais pour un site lourd.
@@ -421,6 +471,17 @@ async def app(scope, receive, send):
                                          origine_req=entetes_in.get("origin", ""))
     ct = r.headers.get("content-type", "").lower()
 
+    # ── L'ARDOISE DU RENDU (#1323) ──────────────────────────────────────────
+    # Quand c'est le Chromium de la copie carbone qui demande, et qu'on lui
+    # sert un MEDIA, on le note : la page figee n'aura plus de JS pour aller
+    # le chercher, et c'est cette trace qui lui rendra une source jouable.
+    #
+    # ON NE NOTE QUE LES MANIFESTES ET LES FICHIERS ENTIERS. Un flux HLS, ce
+    # sont des centaines de segments `.ts` : les enregistrer noierait le seul
+    # renseignement utile — l'adresse du manifeste, qui les liste tous.
+    if rendu.MARQUEUR_UA in ua and r.status_code < 400 and _est_media(ct, chemin):
+        rendu.observe(cible_url)
+
     if "text/html" in ct and _figer_leger:
         # REPLI FIGÉ (#1235) : le rendu carbone a echoue, mais c'est un site
         # lourd : on FIGE la voie legere (scripts retires) pour ne pas rejouer le
@@ -438,6 +499,14 @@ async def app(scope, receive, send):
                           .replace("&", "\\u0026"))
         corps = relais.reecris_html(r.text, base, rap, sur_hote,
                                     etat_js=etat_js).encode()
+    elif _est_manifeste(ct, chemin):
+        # LE FLUX AUSSI PASSE PAR LA BOX. Un manifeste laissé tel quel cite ses
+        # pistes en direct : la page viendrait de la box, la vidéo du CDN — et
+        # c'est la vidéo qui pèse et qui trace. Cf. relais.reecris_manifeste.
+        try:
+            corps = relais.reecris_manifeste(r.text, base, sur_hote).encode()
+        except Exception:  # noqa: BLE001 — un manifeste illisible passe tel quel
+            corps = r.content
     elif "css" in ct:
         corps = relais.reecris_css(r.text, base, rap, sur_hote).encode()
     elif "javascript" in ct or "ecmascript" in ct:
