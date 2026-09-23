@@ -42,7 +42,12 @@
     calm: 'Calme', joy: 'Joie', stress: 'Tension', anger: 'Colère',
     fatigue: 'Fatigue', focus: 'Concentration', indetermine: 'Indéterminé',
   }
+  const ORDRE = ['calm', 'joy', 'stress', 'anger', 'fatigue', 'focus']
   const tete = $derived(img?.state && img.state in EMOJI ? img.state : 'indetermine')
+  const indices = $derived({
+    calm: img?.calm ?? 0, joy: img?.joy ?? 0, stress: img?.stress ?? 0,
+    anger: img?.anger ?? 0, fatigue: img?.fatigue ?? 0, focus: img?.focus ?? 0,
+  } as Record<string, number>)
   const opacite = $derived(0.34 + Math.min(img?.confidence ?? 0, 0.72) * 0.9)
   const actif = $derived(etat === 'ecoute' || role === 'suiveur')
 
@@ -98,6 +103,35 @@
     {/each}
   </div>
 
+  <!-- L'HISTOGRAMME DES SIX INDICES. Il tenait dans la place laissée vide, et
+       il change la nature de la carte : un emoji seul se lit comme un verdict,
+       six barres montrent ce qui a été ÉCARTÉ. C'est la même information qu'au
+       cockpit, et c'est justement pour ça qu'elle doit être là — la carte est
+       ce qu'on regarde le plus souvent. -->
+  <div class="histo" aria-label="répartition des indices">
+    {#each ORDRE as k}
+      <div class="col" title="{NOM[k]} {Math.round((indices[k] ?? 0) * 100)} %">
+        <div class="tube"><i style="height:{Math.max(2, (indices[k] ?? 0) * 100)}%"
+                             class:tete={k === tete}></i></div>
+        <span class="ic">{EMOJI[k]}</span>
+      </div>
+    {/each}
+  </div>
+
+  <!-- LES MÉTRIQUES, MÊME QUAND RIEN N'EST VOISÉ. C'est ce qui manquait le
+       plus : une carte qui dit « à l'écoute · 0 mesure · Indéterminé » sans
+       rien montrer de ce qu'elle entend laisse croire à une panne. Le niveau
+       et l'état du VAD répondent tout de suite à « pourquoi il ne dit rien ». -->
+  <div class="metriques mono">
+    <span title="Hauteur de la voix">{img?.pitch ? img.pitch.toFixed(0) : '—'}<b>Hz</b></span>
+    <span title="Débit syllabique">{img?.speech_rate ? img.speech_rate.toFixed(0) : '—'}<b>syl</b></span>
+    <span title="Énergie RMS">{img ? (img.energy * 100).toFixed(0) : '—'}<b>%</b></span>
+    <span class:on={img?.vad} title="Détection de voix">{img?.vad ? 'voix' : 'silence'}</span>
+    {#if img?.ambiance?.bpm}
+      <span class="amb" title="Ambiance détectée dans la pièce">{Math.round(img.ambiance.bpm)}<b>bpm</b></span>
+    {/if}
+  </div>
+
   <div class="pied">
     {#if etat === 'ecoute'}
       <button class="agir" onclick={() => micro.arrete()}>⏹ arrêter</button>
@@ -122,8 +156,20 @@
 </div>
 
 <style>
-  :global(body) { background: transparent; }
-  .carte { display: grid; gap: 7px; padding: 10px 12px; font-size: 13px; }
+  /* LA CARTE ÉPOUSE LA HAUTEUR QU'ON LUI DONNE, au lieu que je devine un
+     nombre de pixels. Le Hall fixe la taille de la tuile ; deviner laissait
+     soit du vide en bas, soit un débordement — et la bonne valeur change avec
+     le contenu affiché (l'avis d'ambiance, le message de reprise…).
+     Ce qui reste va à l'histogramme, qui est ce qui gagne le plus à être grand. */
+  :global(html, body) { height: 100%; background: transparent; }
+  /* `100dvh` ET PAS `100%` : `min-height: 100%` se résout contre le parent, et
+     le parent (`#carte`) a une hauteur automatique — la règle ne s'appliquait
+     donc à rien, et il restait quatre-vingts pixels de vide en bas de la
+     tuile. La hauteur de la fenêtre, elle, ne dépend d'aucune chaîne de
+     parents. `dvh` plutôt que `vh` pour les navigateurs mobiles, dont la barre
+     d'adresse fait varier la seconde. */
+  .carte { display: flex; flex-direction: column; gap: 7px;
+    padding: 10px 12px; font-size: 13px; min-height: 100dvh; }
   .tete { display: flex; align-items: center; gap: 7px; }
   .minus { font-size: .66rem; }
   .pastille { width: 7px; height: 7px; border-radius: 50%; background: #3a4a63; flex: 0 0 auto; }
@@ -140,13 +186,52 @@
     border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px rgba(70,229,255,.8);
     transition: left .3s ease; }
 
-  .spectre { display: flex; align-items: flex-end; gap: 1px; height: 26px; }
+  /* Un fond, même au repos : sans lui, un spectre vide est indiscernable
+     d'un trou dans la mise en page, et l'on cherche ce qui manque. */
+  /* LA PLACE SE PARTAGE ENTRE LES DEUX, avec un plafond sur chacun. Laisser
+     l'histogramme tout prendre donnait six grandes boîtes vides tant que
+     personne ne parle — techniquement correct, visuellement inquiétant. Les
+     bornes hautes gardent les deux à une taille où ils se lisent sans que
+     l'un écrase l'autre. */
+  .spectre { display: flex; align-items: flex-end; gap: 1px;
+    flex: 1 1 auto; min-height: 26px; max-height: 64px;
+    background: rgba(5,7,15,.45); border-radius: 7px; padding: 2px; }
   .spectre i { flex: 1; background: linear-gradient(180deg, rgba(159,244,255,.75), rgba(70,229,255,.25));
     border-radius: 1px 1px 0 0; transition: height .1s linear; }
 
-  .pied { display: flex; align-items: center; min-height: 26px; }
+  /* L'histogramme : six colonnes, l'emoji sous chacune. Pas de libellé texte —
+     la place ne le permet pas, et l'emoji suffit à identifier la colonne ; le
+     `title` donne le nom et le pourcentage au survol. */
+  /* L'HISTOGRAMME PREND LA PLACE QUI RESTE. C'est lui qui la mérite : six
+     barres plus hautes se comparent mieux, et c'est la seule chose de cette
+     carte qui gagne réellement à s'étirer. */
+  .histo { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;
+    align-items: stretch; flex: 1 1 auto; min-height: 44px; max-height: 96px; }
+  .col { display: grid; grid-template-rows: 1fr auto; gap: 2px; justify-items: center; }
+  .tube { width: 100%; display: flex; align-items: flex-end;
+    background: rgba(255,255,255,.05); border-radius: 5px; overflow: hidden; }
+  .tube i { display: block; width: 100%; border-radius: 5px 5px 0 0;
+    background: rgba(70,229,255,.45); transition: height .3s ease; }
+  /* La colonne de tête se détache, sinon six barres voisines se lisent comme
+     une égalité alors qu'il y a un classement. */
+  .tube i.tete { background: linear-gradient(180deg, var(--cyan), rgba(70,229,255,.5)); }
+  .ic { font-size: .72rem; line-height: 1; opacity: .75; }
+
+  .metriques { display: flex; flex-wrap: wrap; gap: 4px; font-size: .64rem;
+    flex: 0 0 auto; }
+  .metriques span { padding: 2px 6px; border-radius: 7px;
+    background: rgba(255,255,255,.04); color: var(--encre-2);
+    border: 1px solid transparent; }
+  .metriques b { font-weight: 400; opacity: .55; margin-left: 1px; }
+  .metriques span.on { color: var(--cyan-b); border-color: rgba(70,229,255,.3); }
+  .metriques span.amb { color: var(--ambre); border-color: rgba(255,194,77,.28); }
+
+  .pied { display: flex; align-items: center; min-height: 26px; flex: 0 0 auto; }
   .agir { width: 100%; padding: .3rem .6rem; font-size: .74rem; border-radius: 11px; }
   .avis { font-size: .66rem; color: var(--ambre); }
+  /* La réserve reste en bas quoi qu'il arrive : c'est la dernière chose lue,
+     et elle ne doit pas flotter au milieu quand la carte est haute. */
   .reserve { font-size: .62rem; color: var(--encre-2); opacity: .8;
-    border-top: 1px solid var(--bord); padding-top: 5px; }
+    border-top: 1px solid var(--bord); padding-top: 5px;
+    margin-top: auto; flex: 0 0 auto; }
 </style>

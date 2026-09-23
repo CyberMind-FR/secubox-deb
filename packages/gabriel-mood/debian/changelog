@@ -1,3 +1,32 @@
+gabriel-mood (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * La carte du Hall remplit sa place : histogramme des six indices et bande de
+    métriques, là où il n'y avait que du vide sous la réserve.
+  * L'HISTOGRAMME CHANGE LA NATURE DE LA CARTE. Un emoji seul se lit comme un
+    verdict ; six barres montrent ce qui a été ÉCARTÉ. C'est la même
+    information qu'au cockpit, et c'est justement pour cela qu'elle doit être
+    là — la carte est ce qu'on regarde le plus souvent.
+  * LES MÉTRIQUES S'AFFICHENT MÊME QUAND RIEN N'EST VOISÉ, et c'est ce qui
+    manquait le plus : une carte qui annonce « à l'écoute · 0 mesure ·
+    Indéterminé » sans rien montrer de ce qu'elle entend laisse croire à une
+    panne. Le niveau et l'état du VAD répondent tout de suite à « pourquoi il
+    ne dit rien ».
+  * La colonne de tête se détache dans l'histogramme : six barres voisines se
+    liraient comme une égalité alors qu'il y a un classement.
+  * LA CARTE ÉPOUSE LA HAUTEUR QUE LE HALL LUI DONNE, au lieu qu'on devine un
+    nombre de pixels — deviner laissait soit du vide en bas, soit un
+    débordement, et la bonne valeur change avec ce qui s'affiche (avis
+    d'ambiance, message de reprise). `100dvh` et pas `100%` : `min-height: 100%`
+    se résout contre le parent, dont la hauteur est automatique — la règle ne
+    s'appliquait donc à rien, et il restait quatre-vingts pixels de vide.
+  * La place qui reste se partage entre le spectre et l'histogramme, avec un
+    plafond sur chacun : laisser l'histogramme tout prendre donnait six grandes
+    boîtes vides tant que personne ne parle — correct, mais inquiétant.
+  * Le spectre a un fond même au repos : sans lui, un spectre vide est
+    indiscernable d'un trou dans la mise en page.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:37:45 +0200
+
 gabriel-mood (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * LA RÉFÉRENCE SURVIT AU RECHARGEMENT. Quinze nombres — cinq traits, chacun
