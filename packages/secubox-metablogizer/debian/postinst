@@ -4,6 +4,47 @@ mkdir -p /run/secubox /srv/metablogizer/sites
 # #494: do NOT chown the shared parent /run/secubox (owned by tmpfiles.d at
 # 1777 root root). Only own this module's own data dir.
 chown secubox:secubox /srv/metablogizer/sites 2>/dev/null || true
+# ── LE VHOST DÉDIÉ ET SA ROUTE (#1323) ────────────────────────────────────
+#
+# UN SERVICE DÉCLARE SA PROPRE ROUTE, comme il déclare son vhost et son unité.
+# Le 421 n'a qu'une cause : sbxwaf reçoit un nom d'hôte qu'il ne connaît pas.
+# La table n'appartenait à aucun paquet — 275 routes posées à la main au fil
+# des années, invisibles tant que ça tient, fatales le jour où une entrée
+# saute. `secubox-waf-route` (secubox-core) fait la fusion idempotente.
+HOTE=metablogizer.gk2.secubox.in
+
+# Filtre d'exposition, semé à « lan » S'IL MANQUE et jamais écrasé ensuite :
+# publier au monde la console qui pilote la publication de tous les sites
+# n'est pas une décision qu'un paquet prend à la place de l'opérateur.
+mkdir -p /etc/nginx/snippets/exposure
+if [ ! -f "/etc/nginx/snippets/exposure/$HOTE.conf" ]; then
+    cat > "/etc/nginx/snippets/exposure/$HOTE.conf" <<'EXPO'
+# Filtre d'exposition — semé à « lan » par secubox-metablogizer (#1323).
+# Édité par le module secubox-exposure, qui fait autorité une fois le fichier
+# créé. Cette console pilote la publication de tous les sites de la box :
+# ouverte au monde, elle donne la main sur chacun d'eux.
+allow 127.0.0.1;
+allow 10.0.0.0/8;
+allow 172.16.0.0/12;
+allow 192.168.0.0/16;
+deny all;
+EXPO
+fi
+
+ln -sf ../sites-available/$HOTE.conf /etc/nginx/sites-enabled/$HOTE.conf
+
+# La route ne vaut que si nginx accepte la configuration : poser l'une sans
+# l'autre donne un 502 au lieu d'un 421, ce qui n'est pas un progrès.
+if nginx -t >/dev/null 2>&1; then
+    systemctl reload nginx 2>/dev/null || true
+    if command -v secubox-waf-route >/dev/null 2>&1; then
+        secubox-waf-route "$HOTE" 9080 || true
+    fi
+else
+    echo "secubox-metablogizer : nginx -t a échoué, vhost NON activé" >&2
+    rm -f /etc/nginx/sites-enabled/$HOTE.conf
+fi
+
 systemctl daemon-reload
 systemctl enable secubox-metablogizer 2>/dev/null || true
 systemctl start secubox-metablogizer 2>/dev/null || true

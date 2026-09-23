@@ -1,3 +1,46 @@
+secubox-metablogizer (1.8.20-1~bookworm1) bookworm; urgency=medium
+
+  * Le vhost charge (#1323). La version précédente redéclarait
+    `proxy_buffering` et `proxy_read_timeout`, que `snippets/secubox-proxy.conf`
+    pose déjà : `nginx -t` refusait la directive en double. La garde du postinst
+    a fait son travail — vhost non activé, route non posée, box inchangée — et
+    c'est ainsi qu'on l'a su, plutôt qu'en découvrant un 502.
+  * Incidemment : le snippet portant déjà `proxy_buffering off`, le flux NDJSON
+    de l'assistant de publication passait correctement depuis le début côté
+    admin.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 10:59:03 +0200
+
+secubox-metablogizer (1.8.19-1~bookworm1) bookworm; urgency=medium
+
+  * metablogizer.gk2.secubox.in existe enfin (#1323). Le panneau ne vivait que
+    sous `admin.gk2.secubox.in/metablogizer/` ; le nom propre répondait 421.
+    Le Hall en avait pris acte — sa fiche porte `mode:"admin"` avec, en
+    commentaire, « metablogizer n'a pas de vhost public (421) ». Le 421 était
+    donc ATTENDU, mais il reste un 421 pour qui tape l'adresse, et l'adresse
+    est la première chose qu'on essaie. Tous les autres services ont leur
+    porte ; celui qui gère cent soixante-dix sites n'en avait pas.
+  * LA ROUTE VIENT DU PAQUET, pas d'une main. Le 421 n'a qu'une cause : sbxwaf
+    reçoit un nom qu'il ne connaît pas. Cette table n'appartenait à aucun
+    paquet — 275 entrées posées une à une au fil des années, invisibles tant
+    que ça tient. Le postinst appelle `secubox-waf-route`, idempotent.
+  * ET IL NE POSE LA ROUTE QUE SI `nginx -t` PASSE : router vers un vhost qui
+    ne charge pas échange un 421 contre un 502, ce qui n'est pas un progrès.
+  * Le vhost va dans `sites-available` avec un lien posé par le postinst, et
+    jamais directement dans `sites-enabled` : nginx y fait un glob, et le
+    `.dpkg-dist` déposé sur un fichier modifié localement y entrerait — toute
+    la configuration refuserait alors de charger.
+  * Filtre d'exposition semé à « lan » s'il manque, jamais écrasé ensuite.
+    Publier au monde la console qui pilote la publication de tous les sites
+    n'est pas une décision qu'un paquet prend à la place de l'opérateur.
+  * `frame-ancestors` nomme les deux noms du Hall et eux seuls : c'est CE
+    côté-ci qui décide qui peut l'encadrer.
+  * `proxy_buffering off` sur l'API : l'assistant de publication répond en flux
+    NDJSON, et nginx retiendrait sinon la réponse jusqu'à la fin — exactement
+    le défaut qu'on vient de corriger.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 10:58:13 +0200
+
 secubox-metablogizer (1.8.18-1~bookworm1) bookworm; urgency=medium
 
   * L'assistant de publication rend compte PENDANT qu'il travaille (#1323).

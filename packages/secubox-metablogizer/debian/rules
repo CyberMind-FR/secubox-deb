@@ -57,6 +57,15 @@ override_dh_auto_install:
 	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
 	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
 	# elle n etait jamais lue.
+	# VHOST DÉDIÉ (#1323) — dans sites-available, JAMAIS sites-enabled.
+	# nginx charge `include sites-enabled/*` : le `.dpkg-dist` que dpkg y
+	# déposerait sur un fichier modifié localement entrerait dans le glob et
+	# la configuration entière refuserait de charger. Le lien d'activation est
+	# posé par le postinst (même correctif que secubox-webos et secubox-surf).
+	install -d debian/secubox-metablogizer/etc/nginx/sites-available
+	install -m 644 nginx/metablogizer.vhost.conf \
+	  debian/secubox-metablogizer/etc/nginx/sites-available/metablogizer.gk2.secubox.in.conf
+
 	install -d debian/secubox-metablogizer/etc/nginx/secubox-routes.d
 	[ -f nginx/metablogizer.conf ] && cp nginx/metablogizer.conf debian/secubox-metablogizer/etc/nginx/secubox-routes.d/ || true
 	# Example config
