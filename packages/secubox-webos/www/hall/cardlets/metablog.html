@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox #1323 — carte « Mes sites » : la mosaïque des vignettes.
+
+  ELLE MONTRE CE QUI EST SERVI, ET RIEN D'AUTRE. Source unique :
+  /api/v1/metablogizer/public/mosaique — une projection étroite qui ne rend
+  que les sites PUBLIÉS, c'est-à-dire ceux que n'importe qui peut déjà ouvrir.
+  Ni chemin sur disque, ni site en brouillon, ni dépôt d'origine : le Hall est
+  ouvert aux invités, et une carte n'a pas à en savoir plus que le passant.
+
+  CLIQUER OUVRE DANS LE SURFER, PAS DANS UN ONGLET. Le Hall relaie
+  `{sbx:'surf', url}` vers son overlay, mégabarre visible : on reste chez soi
+  pour visiter ses propres sites. Un onglet réel les aurait sortis du Hall —
+  et sur un site qu'on héberge soi-même, c'est un aller sans retour.
+
+  /micro = la carte (quelques vignettes, le compte) ; /mega = la grille
+  entière. Même fichier, même code : `?mega=1`. Deux pages auraient divergé.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mes sites — mosaïque</title>
+<link rel="stylesheet" href="../spicy.css">
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
+          --accent:#3d6b4a; --cyan:#0784a8; --chaud:#c8791f; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#6db38a; --cyan:#38d2f0; --chaud:#e0a45c; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#6db38a; --cyan:#38d2f0; --chaud:#e0a45c; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
+  /* MICRO : hauteur contrainte, rien ne déborde. MEGA : la page défile. */
+  body:not([data-mega]) { overflow:hidden; scrollbar-width:none; }
+  body:not([data-mega])::-webkit-scrollbar { width:0; display:none; }
+
+  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .72rem; gap:.45rem; }
+  body[data-mega] .mw { height:auto; padding:1rem 1.1rem 2rem; gap:.7rem; }
+
+  .tete { display:flex; align-items:center; gap:.45rem; }
+  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
+              font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
+  .tete b { font-size:.88rem; }
+  body[data-mega] .tete b { font-size:1.05rem; }
+  .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em; text-transform:uppercase;
+             color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  /* La grille : des vignettes, pas des lignes de texte. Le contenu d'un site
+     se reconnaît d'un coup d'œil ; son nom de domaine, non. */
+  .grille { display:grid; gap:.42rem; overflow:hidden;
+            grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); }
+  body[data-mega] .grille { gap:.7rem; overflow:visible;
+            grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); }
+
+  .tuile { display:block; border:1px solid var(--border); border-radius:9px; overflow:hidden;
+           background:var(--fond); cursor:pointer; padding:0; text-align:left;
+           font:inherit; color:inherit; position:relative; }
+  .tuile:hover, .tuile:focus-visible { border-color:var(--cyan); outline:none; }
+  .tuile:focus-visible { box-shadow:0 0 0 2px color-mix(in srgb, var(--cyan) 45%, transparent); }
+  .vue { display:block; width:100%; aspect-ratio:16/10; object-fit:cover; object-position:top center;
+         background:color-mix(in srgb, var(--muted) 12%, transparent); border:0; }
+  /* Pas encore de capture : une plaque sobre plutôt qu'une image cassée —
+     162 sites ne se photographient pas en un tour de shotter. */
+  .vide { display:grid; place-items:center; aspect-ratio:16/10; font-size:1.1rem;
+          color:var(--muted); background:color-mix(in srgb, var(--muted) 9%, transparent); }
+  .nom { display:block; padding:.3rem .42rem .38rem; font-size:.64rem; font-weight:500;
+         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  body[data-mega] .nom { font-size:.78rem; padding:.42rem .55rem .5rem; }
+  .dom { display:block; font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.55rem;
+         color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  body[data-mega] .dom { font-size:.64rem; }
+
+  /* ACCÈS ADMIN, DISCRET ET CONDITIONNEL. Visible seulement en session — un
+     invité n'a rien à faire d'un bouton qui le mènerait à une page de
+     connexion. Posé sur la vignette, pas à côté : la tuile reste une tuile. */
+  .reglage { position:absolute; top:.28rem; right:.28rem; display:none;
+             width:22px; height:22px; border-radius:6px; border:1px solid var(--border);
+             background:color-mix(in srgb, var(--fond) 82%, transparent);
+             color:var(--muted); font-size:.68rem; line-height:1; cursor:pointer;
+             padding:0; align-items:center; justify-content:center; }
+  body[data-admin] .tuile .reglage { display:flex; }
+  .reglage:hover, .reglage:focus-visible { color:var(--chaud); border-color:var(--chaud); outline:none; }
+
+  .etat { color:var(--muted); font-size:.72rem; text-align:center; margin:auto 0; }
+  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.35rem;
+          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
+          text-transform:uppercase; color:var(--muted); background:none; border-left:0;
+          border-right:0; border-bottom:0; font-family:inherit; cursor:pointer; width:100%; }
+  .pied:hover { color:var(--accent); }
+  .pied .grow { flex:1; }
+  body[data-mega] .pied { display:none; }
+  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
+           animation:bat 2.4s ease-in-out infinite; }
+  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
+  @media (prefers-reduced-motion: reduce) { .pouls { animation:none; opacity:.7 } }
+</style>
+
+<div class="mw">
+  <div class="tete">
+    <span class="ic">🌐</span><b>Mes sites</b>
+    <span class="n" id="n"></span>
+  </div>
+  <div class="grille" id="grille"></div>
+  <p class="etat" id="etat">lecture…</p>
+  <button type="button" class="pied" id="tout">
+    <span class="pouls"></span><span>voir tous les sites</span><span class="grow"></span>
+    <span id="rang"></span>
+  </button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var el = function (id) { return document.getElementById(id); };
+  function esc(t) {
+    return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c];
+    });
+  }
+
+  var q = new URLSearchParams(location.search);
+  var MEGA = q.get("mega") === "1";
+  if (MEGA) { document.body.setAttribute("data-mega", ""); }
+  // Le thème vient du Hall, qui le passe en requête : la carte ne décide pas
+  // seule de son fond, sinon elle jure avec le cadre qui la porte.
+  var th = q.get("theme");
+  if (th === "dark" || th === "light") {
+    document.documentElement.setAttribute("data-theme", th);
+  }
+
+  // MICRO n'en montre qu'une poignée : la carte doit tenir dans sa hauteur,
+  // et une grille tronquée à mi-vignette donne l'impression d'un défaut.
+  var PLAFOND = MEGA ? 400 : 8;
+
+  // SESSION : le jeton du Hall vit dans localStorage, même origine. On ne
+  // l'utilise pas pour appeler quoi que ce soit ici — seulement pour savoir
+  // s'il y a lieu de PROPOSER les réglages. Un invité ne voit pas le bouton.
+  function enSession() {
+    try { return !!(localStorage.getItem("sbx_token") || localStorage.getItem("secubox_token")); }
+    catch (e) { return false; }
+  }
+  if (enSession()) { document.body.setAttribute("data-admin", ""); }
+
+  var ADMIN = "https://admin.gk2.secubox.in";
+  function reglages(site) {
+    // La vue détail en MODE ÉDITION : `edit=1` ouvre le formulaire déplié et
+    // y pose le curseur, au lieu de laisser chercher en bas de page.
+    var url = ADMIN + "/metablogizer/site.html?name=" + encodeURIComponent(site.name) + "&edit=1";
+    try { parent.postMessage({ sbx: "surf", url: url }, "*"); }
+    catch (e) { window.open(url, "_blank", "noopener"); }
+  }
+
+  function ouvrir(site) {
+    var url = "https://" + site.domain + "/";
+    // LE SURFER, PAS UN ONGLET (#1323). Le Hall garde sa mégabarre au-dessus :
+    // on visite ses propres sites sans sortir de chez soi.
+    try { parent.postMessage({ sbx: "surf", url: url }, "*"); }
+    catch (e) { window.open(url, "_blank", "noopener"); }
+  }
+
+  function rendre(d) {
+    var sites = (d && d.sites) || [];
+    el("etat").hidden = true;
+    if (!sites.length) {
+      el("etat").hidden = false;
+      el("etat").textContent = "aucun site publié pour l'instant.";
+      return;
+    }
+    el("n").textContent = sites.length + (MEGA ? " sites publiés" : " sites");
+    el("rang").textContent = MEGA ? "" : ("+" + Math.max(0, sites.length - PLAFOND));
+
+    var g = el("grille");
+    g.textContent = "";
+    sites.slice(0, PLAFOND).forEach(function (s) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "tuile";
+      b.title = s.title + " — " + s.domain;
+      var apercu = s.vignette
+        ? '<img class="vue" loading="lazy" alt="Aperçu de ' + esc(s.title) + '"' +
+          ' src="/api/v1/metablogizer/site/' + encodeURIComponent(s.name) + '/screenshot">'
+        : '<span class="vue vide" aria-hidden="true">🗒️</span>';
+      b.innerHTML = apercu +
+        '<span class="nom">' + esc(s.title) +
+        '<span class="dom">' + esc(s.domain) + "</span></span>";
+      b.addEventListener("click", function () { ouvrir(s); });
+
+      var r = document.createElement("button");
+      r.type = "button";
+      r.className = "reglage";
+      r.title = "Réglages de " + s.title + " (vue détail, édition)";
+      r.setAttribute("aria-label", "Réglages de " + s.title);
+      r.textContent = "⚙";
+      // `stopPropagation` : sans lui, le clic traverse et OUVRE LE SITE
+      // par-dessus les réglages — deux actions pour un geste.
+      r.addEventListener("click", function (ev) { ev.stopPropagation(); reglages(s); });
+      b.appendChild(r);
+
+      g.appendChild(b);
+    });
+  }
+
+  function panne(msg) {
+    el("etat").hidden = false;
+    el("etat").textContent = msg;
+    el("n").textContent = "";
+  }
+
+  function charge() {
+    fetch("/api/v1/metablogizer/public/mosaique", { headers: { Accept: "application/json" } })
+      .then(function (r) {
+        var ct = r.headers.get("content-type") || "";
+        // Le Hall rend sa coquille SPA en 200 pour une route inconnue : sans
+        // ce contrôle, on parserait du HTML et la carte resterait muette sans
+        // qu'on sache pourquoi.
+        if (!r.ok || ct.indexOf("application/json") === -1) { throw new Error("relais absent"); }
+        return r.json();
+      })
+      .then(rendre)
+      .catch(function (e) { panne("mosaïque injoignable (" + e.message + ")."); });
+  }
+
+  el("tout").addEventListener("click", function () {
+    // /mega : la même carte, grille entière, dans le cadre du Hall.
+    try { parent.postMessage({ sbx: "ouvrir-carte", id: "metablog" }, "*"); } catch (e) {}
+    location.search = "?mega=1" + (th ? "&theme=" + th : "");
+  });
+
+  charge();
+  // Les vignettes changent au rythme du shotter, pas à la seconde.
+  setInterval(charge, 300000);
+})();
+</script>

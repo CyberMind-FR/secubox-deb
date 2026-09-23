@@ -1,3 +1,38 @@
+secubox-webos (1.0.322-1~bookworm1) bookworm; urgency=medium
+
+  * Relais de la carte « Mes sites » : les vignettes sont servies DIRECTEMENT
+    depuis le cache du shotter (alias statique, motif repris du vhost
+    d'administration) au lieu de passer par le module — ce sont des fichiers
+    déjà produits hors ligne, et 162 tuiles ne doivent pas réveiller 162 fois
+    une API. La projection `public/mosaique`, elle, garde le snippet de
+    mandataire standard (X-Real-IP, Authorization) plutôt que deux en-têtes
+    posés à la main.
+  * La carte est marquée `auth` : `require_lecture` refuse sans jeton tant que
+    le mode tableau de bord n'est pas activé sur la box, et un invité n'a pas
+    à voir une carte condamnée à afficher « injoignable ».
+  * L'expression régulière de la location est entre GUILLEMETS quand elle porte
+    des accolades : `{1,64}` était lu par nginx comme une ouverture de bloc et
+    la configuration entière refusait de charger.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 05:51:39 +0200
+
+secubox-webos (1.0.321-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Mes sites » (#1323) : la mosaïque des vignettes des sites servis.
+    /micro montre huit tuiles et le compte, /mega déploie la grille entière —
+    même fichier, `?mega=1` (deux pages auraient divergé). Cliquer une tuile
+    ouvre le site DANS LE SURFER, mégabarre gardée : on visite ses propres
+    sites sans sortir du Hall, là où un onglet réel est un aller sans retour.
+  * En session, chaque tuile porte un ⚙ discret qui mène à la vue détail du
+    site en mode édition. Invisible pour un invité — un bouton qui ne mène
+    qu'à une page de connexion ne rend service à personne.
+  * Deux relais GET-only vers le module : `public/mosaique` et les vignettes
+    (expression régulière bornée sur le nom). Le Hall n'avait aucune route
+    vers metablogizer : ses appels tombaient sur la coquille SPA, rendue en
+    200 text/html — une carte muette sans la moindre erreur pour le dire.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 05:48:21 +0200
+
 secubox-webos (1.0.320-1~bookworm1) bookworm; urgency=medium
 
   * SBX OS s'ouvre SOUS LA MÉGABARRE (#1293). Deux pièces manquaient :

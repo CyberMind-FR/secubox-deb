@@ -1,3 +1,19 @@
+secubox-metablogizer (1.8.17-1~bookworm1) bookworm; urgency=medium
+
+  * GET /public/mosaique (#1323) : projection ÉTROITE des sites servis pour la
+    carte « Mes sites » du Hall — nom, domaine, titre, présence de vignette.
+    On ne relaie pas /sites, qui porte chemins sur disque, tailles et sites non
+    publiés, quand le Hall est ouvert aux invités : ne sort que ce qui est déjà
+    public par construction. `vignette` dit si une capture existe, pour que la
+    carte pose une plaque sobre plutôt qu'une image cassée — 162 sites ne se
+    photographient pas en un tour de shotter.
+  * site.html : `?edit=1` ouvre la vue détail EN ÉDITION — défilement jusqu'au
+    formulaire et curseur dans le premier champ. La page porte désormais la
+    chaîne, le contenu, la vignette et les métadonnées : arriver en haut pour
+    aller éditer en bas était devenu une traversée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 05:48:21 +0200
+
 secubox-metablogizer (1.8.16-1~bookworm1) bookworm; urgency=medium
 
   * Poste de pilotage d'un site (#1322) : la vue détail commande chaque maillon
