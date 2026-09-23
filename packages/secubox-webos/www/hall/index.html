@@ -1368,6 +1368,17 @@ const FEATURED = [
   // les autres cartes média (radio/podcaster) ; la restriction LAN (souveraineté)
   // se fait CÔTÉ SERVEUR sur le relais, pas en masquant la carte.
   {id:"freeboxtv",  label:"Freebox TV", icon:"📺", color:"#2b6cb0", carte:"/cardlets/freeboxtv.html", h:360},
+  // SBX OS (#1293) : pas une cardlet mais la COQUILLE, servie par le Hall a
+  // `/sbxos/`. Entree `carte` sans `url` — le meme motif que Freebox TV
+  // au-dessus : pas de vhost, donc le Hall agrandit la page elle-meme plutot
+  // qu'un hote fantome. Il fallait que ce soit le Hall qui la serve : la cle
+  // d'appareil vit dans IndexedDB, donc PAR ORIGINE ; servie ailleurs, elle
+  // aurait ete une deuxieme identite pour un seul appareil.
+  {id:"sbxos",      label:"SBX OS",    icon:"▲", color:"#5b46b8", carte:"/sbxos/", h:420},
+  // MES SITES (#1323) : la mosaïque des vignettes que le shotter produit déjà.
+  // Pas de vhost — la carte EST la page, servie par le Hall ; cliquer une
+  // tuile ouvre le site dans le surfer, mégabarre gardée.
+  {id:"metablog",   label:"Mes sites", icon:"🌐", color:"#3d6b4a", carte:"/cardlets/metablog.html", h:300, auth:true},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mastodon", h:182},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214},

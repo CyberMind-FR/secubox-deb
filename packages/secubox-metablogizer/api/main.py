@@ -758,6 +758,39 @@ def get_access_detailed():
 # SCREENSHOTS — Mosaic tab thumbnails (#956)
 # =============================================================================
 
+@app.get("/public/mosaique", dependencies=[Depends(require_lecture)])
+async def public_mosaique():
+    """La mosaïque des sites SERVIS, pour la cardlet du Hall (#1323).
+
+    PROJECTION VOLONTAIREMENT ÉTROITE. `/sites` porte tout ce que le panneau
+    d'administration sait — chemins sur disque, tailles, sites non publiés,
+    dépôts d'origine — et le Hall est ouvert aux invités. On n'y relaie donc
+    pas `/sites` : on rend ce qui est DÉJÀ public par construction (un site
+    publié est un site que n'importe qui peut ouvrir) et rien d'autre.
+
+    `vignette` dit si une capture existe : la carte affiche une tuile sobre
+    plutôt qu'une image cassée quand le shotter n'est pas encore passé — 162
+    sites ne se photographient pas en un tour.
+    """
+    sites = await asyncio.to_thread(load_sites)
+    out = []
+    for s in sites:
+        if not s.get("published"):
+            continue
+        nom = s["name"]
+        cfg = _load_site_json(SITES_ROOT / nom)
+        out.append({
+            "name": nom,
+            "domain": s.get("domain"),
+            "title": cfg.get("title") or nom,
+            "category": cfg.get("category"),
+            "vignette": _screenshots.png_path(SHOTS_CACHE_DIR, nom).exists(),
+            "last_updated": cfg.get("last_updated"),
+        })
+    out.sort(key=lambda x: ((x["vignette"] is False), x["name"]))
+    return {"sites": out, "total": len(out)}
+
+
 @app.get("/site/{name}/screenshot", dependencies=[Depends(require_lecture)])
 async def get_site_screenshot(name: str):
     """Serve the conserved thumbnail for the Mosaic tab.

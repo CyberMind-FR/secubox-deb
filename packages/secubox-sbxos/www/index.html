@@ -35,6 +35,17 @@
 <link rel="stylesheet" href="./ui/styles.css">
 </head>
 <body>
+<script>
+  /* AVANT TOUT RENDU (#1293). Encadré par le Hall, SBX OS efface son propre
+     bandeau : la mégabarre le porte déjà. Posé ici, et non dans le module qui
+     suit, pour que le bandeau ne soit jamais PEINT puis retiré — un sursaut
+     à chaque ouverture, sur la seule page qui se veut un système. */
+  try {
+    if (new URLSearchParams(location.search).get("embed") === "1") {
+      document.body.setAttribute("data-encadre", "");
+    }
+  } catch (e) { /* URL exotique : on garde le bandeau, c'est le repli sûr. */ }
+</script>
 
 <header class="mast">
   <span class="marque">▲ SBX&nbsp;OS</span>

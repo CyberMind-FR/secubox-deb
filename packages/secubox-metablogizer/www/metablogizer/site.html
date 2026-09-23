@@ -607,7 +607,23 @@
         });
 
         document.getElementById('edit-form').addEventListener('submit', saveDetails);
-        loadSite().then(loadChaine);
+
+        // MODE ÉDITION (#1323). La cardlet « Mes sites » du Hall amène ici
+        // avec `edit=1` : on va droit au formulaire et on y pose le curseur,
+        // au lieu de laisser chercher en bas d'une page qui porte désormais
+        // la chaîne, le contenu, la vignette et les métadonnées.
+        function modeEdition() {
+            if (new URLSearchParams(location.search).get('edit') !== '1') return;
+            const f = document.getElementById('edit-form');
+            if (!f) return;
+            f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const premier = document.getElementById('f-domain');
+            // `preventScroll` : le focus ne doit pas doubler le défilement
+            // qu'on vient de lancer — sinon la page saute deux fois.
+            if (premier) premier.focus({ preventScroll: true });
+        }
+
+        loadSite().then(() => { loadChaine(); modeEdition(); });
     </script>
 </body>
 </html>

@@ -1,3 +1,14 @@
+secubox-sbxos (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Encadré dans le Hall (`?embed=1`), SBX OS efface son propre bandeau : la
+    mégabarre porte déjà le nom, l'identité et la sortie, et deux chromes l'un
+    sous l'autre volaient 60 px de damier sur un écran déjà réduit par le
+    cadre. La pastille de profil RESTE — c'est le seul endroit où le porteur
+    voit sous quelle identité il agit. Le marqueur est posé avant le premier
+    rendu, pour que le bandeau ne soit jamais peint puis retiré.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 05:37:31 +0200
+
 secubox-sbxos (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * LA PASTILLE ROUGE SUR CHAQUE VIGNETTE : le même défaut que l'écran noir, mais

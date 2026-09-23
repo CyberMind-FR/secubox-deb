@@ -1,3 +1,19 @@
+secubox-metablogizer (1.8.17-1~bookworm1) bookworm; urgency=medium
+
+  * GET /public/mosaique (#1323) : projection ÉTROITE des sites servis pour la
+    carte « Mes sites » du Hall — nom, domaine, titre, présence de vignette.
+    On ne relaie pas /sites, qui porte chemins sur disque, tailles et sites non
+    publiés, quand le Hall est ouvert aux invités : ne sort que ce qui est déjà
+    public par construction. `vignette` dit si une capture existe, pour que la
+    carte pose une plaque sobre plutôt qu'une image cassée — 162 sites ne se
+    photographient pas en un tour de shotter.
+  * site.html : `?edit=1` ouvre la vue détail EN ÉDITION — défilement jusqu'au
+    formulaire et curseur dans le premier champ. La page porte désormais la
+    chaîne, le contenu, la vignette et les métadonnées : arriver en haut pour
+    aller éditer en bas était devenu une traversée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 05:48:21 +0200
+
 secubox-metablogizer (1.8.16-1~bookworm1) bookworm; urgency=medium
 
   * Poste de pilotage d'un site (#1322) : la vue détail commande chaque maillon
@@ -23,3 +39,437 @@ secubox-metablogizer (1.8.16-1~bookworm1) bookworm; urgency=medium
 
  -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 09:41:57 +0200
 
+secubox-metablogizer (1.8.15-1~bookworm1) bookworm; urgency=medium
+
+  * Publication depuis l'assistant : trois maillons cassés, constatés sur
+    wall.gk2.net le 2026-09-22.
+    - secubox-publishctl cert : certbot --webroot (/usr/share/secubox/www,
+      déjà routé par HAProxy → nginx :8880) au lieu de --standalone, qui
+      voulait :80 (occupé par HAProxy) et échouait TOUJOURS en « Address
+      already in use » — aucun domaine custom n'a jamais reçu de certificat
+      par l'assistant.
+    - GET /site/{name} : `published` calculé comme la liste (bloc dans le
+      nginx monolithique) via sites_scan.site_est_servi ; l'ancien test
+      « <nom>.conf existe » datait du modèle un-fichier-par-site et était
+      toujours faux → chaque page détail disait « non publié ».
+    - publish_wizard écrit `published` dans site.json selon son verdict
+      (marque_publie) ; il ne l'écrivait pas, chaque site publié violait le
+      schéma (« 'published' is a required property » à chaque scan).
+  * sites_scan.read_site_config tolère un site.json illisible (OSError) comme
+    un JSON malformé : un seul site.json root:600 (coin, laissé par une
+    commande lancée en root) empêchait l'API de démarrer — 502 sur tout le
+    panneau.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Sep 2026 08:33:21 +0200
+
+secubox-metablogizer (1.8.14-1~bookworm1) bookworm; urgency=medium
+
+  * mitmproxy-routes.json renomme waf-routes.json : cette table appartient
+    a la lignee WAF (sbxwaf), pas a l'analyseur sbxmitm (ref #1362).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 17 Sep 2026 12:29:39 +0200
+
+secubox-metablogizer (1.8.13-1~bookworm1) bookworm; urgency=medium
+
+  * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,
+    components, access, stats — repondaient sans authentification : c'etait le
+    motif « three-fold » du parc, un choix assume, mais une lecture publique
+    reste de la reconnaissance offerte. Elles passent sous
+    `require_lecture` : jeton, OU mode tableau de bord depuis le LAN si
+    l'operateur l'a arme dans /etc/secubox/secubox.conf.
+  * Le defaut est FERME : sans `[tableau_de_bord] actif = true`, ces routes
+    exigent un jeton, y compris depuis le LAN.
+  * Les sondes de sante restent publiques. Les routes deja sous require_jwt ne
+    changent pas — le mode ne les ouvre jamais.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 10 Sep 2026 23:55:00 +0200
+
+secubox-metablogizer (1.8.12-1~bookworm1) bookworm; urgency=medium
+
+  * Publication NON bloquante (#1105) : publish_wizard/publish_route
+    déchargent git/nginx/publishctl sur des threads (asyncio.to_thread) au lieu
+    de shell-er en synchrone sur la boucle. Le certificat d'un domaine custom
+    (certbot HTTP-01, lent) part en tâche de fond → la requête rend la main tout
+    de suite (fini l'erreur 504) ; un *.gk2.secubox.in réutilise le wildcard et
+    reste attendu. La boucle n'est plus gelée → « Déploiements récents » (et la
+    liste des sites) se chargent enfin pendant une publication.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:59:05 +0000
+
+secubox-metablogizer (1.8.11-1~bookworm1) bookworm; urgency=medium
+
+  * Durcissement (revue #1089) : source_url et gitea_repo deviennent des href
+    sur la page ; le schéma les restreint désormais à `^https?://` (une URI
+    javascript: y serait un XSS stocké, déclenché au clic sur un jeton opérateur)
+    et site.html filtre le schéma à l'affichage — double couche, comme les alias.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 07:40:00 +0200
+
+secubox-metablogizer (1.8.10-1~bookworm1) bookworm; urgency=medium
+
+  * Page site (#1089) : les métadonnées revenaient vides. GET /site/{name} ne
+    lisait PAS site.json — titre, description, catégorie, tags, ALIASES,
+    version, last_updated étaient perdus. Il renvoie désormais le site.json
+    enrichi (via read_site_config).
+  * PUT /site/{name} : paramétrer les détails (title/description/category/tags/
+    aliases/source_url/gitea_repo), écriture atomique + validation schéma (un
+    alias non-domaine est refusé avant écriture).
+  * Schéma site.json : champs source_url (amont GitHub) + gitea_repo (miroir),
+    enregistrés et liés — aucune opération git.
+  * site.html : rend les aliases (multiples), la vignette snapshot (endpoint
+    existant), les liens Source GitHub + miroir Gitea corrects (fin du lien
+    Gitea deviné), et un formulaire d'édition. Sorties utilisateur échappées.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 07:00:00 +0200
+
+secubox-metablogizer (1.8.9-1~bookworm1) bookworm; urgency=medium
+
+  * metablog-sync : purge le cache média du WAF (`wafctl purge-cache` via sudo)
+    UNIQUEMENT quand un site a réellement changé — supprime le « vieux skin »
+    servi jusqu'à 1 h après une synchro git de contenu (anibal-amiot et autres
+    sites adossés à git). Best-effort : une synchro réussie n'échoue jamais sur
+    un défaut de cache ; le bilan JSON gagne un champ `cache_waf`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 05:00:00 +0200
+
+secubox-metablogizer (1.8.8-1~bookworm1) bookworm; urgency=high
+
+  * SUPPRIMER UN SITE COUPAIT TOUS LES AUTRES (ref #1041). `force_remove`
+    faisait `os.chmod(parent, 0o700)` pour debloquer une suppression. Ce parent
+    est PARTAGE : `/data/metablogizer/sites` perdait ses bits groupe et autres,
+    `www-data` ne pouvait plus le traverser, et les 174 sites tombaient en 500.
+    Constate en production : anibal-amiot, www.gk2, torrent-search, tous muets.
+  * LE DEFAUT NE SE SIGNALAIT PAS. La suppression REUSSISSAIT ; la panne
+    n apparaissait qu au prochain acces a un site voisin, sans lien apparent
+    avec l action qui l avait causee.
+  * ON AJOUTE LES BITS MANQUANTS, ON NE REMPLACE PLUS LE MODE, et on ne touche
+    PLUS AU PARENT : si ses droits empechent vraiment de delier, la suppression
+    echoue franchement plutot que de casser le voisinage.
+  * SECOND DEFAUT, PREEXISTANT : le gestionnaire d erreur rejouait `func(entry)`
+    a l aveugle. Quand l appel fautif est `os.open` (repertoire en 0o000), cette
+    signature attend un argument de plus — `TypeError`, et la suppression
+    s arretait la. La fonction relache desormais l arbre vise puis retente une
+    fois.
+  * LA GARDE EXERCE VRAIMENT LE DEFAUT. Ecrite d abord avec un repertoire en
+    0o500, elle passait meme avec le bogue : en 0o500 la suppression aboutit
+    sans jamais echouer, donc le chemin fautif n etait pas emprunte. Il faut
+    0o000. Verifie dans les deux sens.
+  * 184 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 14 Aug 2026 16:40:00 +0200
+
+secubox-metablogizer (1.8.2-1~bookworm1) bookworm; urgency=high
+
+  * AUCUN FICHIER CACHE N'EST PLUS SERVI. Un site adosse a git porte un `.git/`
+    DANS son docroot : `https://<site>/.git/config` repondait 200, et
+    l'historique complet du depot se reconstituait avec un outil public.
+    Constate en direct sur anibal-amiot.fr. Le depot etait public, donc sans
+    consequence cette fois — la meme configuration sur un depot prive aurait
+    livre son contenu entier, y compris tout secret jamais commite.
+  * La regle porte sur TOUT nom commencant par un point, pas seulement `.git` :
+    `.env`, `.htpasswd`, `.ssh` posent le meme probleme, et enumerer les cas
+    connus revient a attendre le premier qu'on n'a pas prevu.
+  * Elle s'applique a TOUS les sites generes, pas au seul qui l'a revelee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 18:50:00 +0200
+
+secubox-metablogizer (1.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * Cadence de `metablog-sync.timer` portee de 15 a 5 minutes : un `git push`
+    se voit desormais dans les cinq minutes.
+  * LE COUT D UN PASSAGE A VIDE EST QUASI NUL, et c est ce qui rend cette
+    cadence tenable. L outil compare le SHA local a celui de l amont et
+    s arrete la si rien n a bouge — pas de checkout, pas d ecriture, aucun
+    horodatage touche. Ce qui coute, c est le `git fetch` : une poignee
+    d octets par depot.
+  * La cadence reste reglable sans reconstruire le paquet : un fichier dans
+    /etc/systemd/system/metablog-sync.timer.d/ surcharge la ligne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 18:30:00 +0200
+
+secubox-metablogizer (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * SYNCHRONISATION DES SITES ADOSSES A GIT. `metablog-sync` remet au niveau de
+    son amont tout site dont le `public/` est un depot git — rien a declarer,
+    la presence d un `.git` suffit. Un site televerse a la main n en a pas et
+    reste naturellement ignore : aucune liste a tenir, donc aucune a oublier de
+    tenir.
+  * `git reset --hard` ET NON `git pull`. Un site servi n est pas un espace de
+    travail : personne n y committe, et une divergence locale — un fichier
+    retouche a chaud pour depanner — ferait echouer tous les pulls suivants EN
+    SILENCE. On aligne sur l amont, qui est la source de verite declaree.
+  * La branche suivie est DEMANDEE au depot, jamais devinee : un depot sur
+    `master` synchronise contre `main` echouerait a chaque passage, avec une
+    erreur qui ne dit pas qu on s est trompe de nom.
+  * Rien n est touche si l amont n a pas bouge — le cas ordinaire d une
+    minuterie est « rien de neuf », il doit etre gratuit et ne pas reecrire des
+    horodatages que le reste de la chaine surveille.
+  * Un echec reste un echec meme si d autres sites reussissent : une minuterie
+    qui rend toujours 0 ne se voit jamais dans `systemctl --failed`. Et
+    l erreur de git est RENDUE, pas resumee — « echec » ne dit pas si l amont
+    est injoignable, la branche absente ou le disque plein.
+  * `metablog-sync.timer` : au demarrage puis tous les quarts d heure.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 18:15:00 +0200
+
+secubox-metablogizer (1.7.5-1~bookworm1) bookworm; urgency=medium
+
+  * L'assistant de publication rend enfin un site SERVI (ref #1023). Quatre
+    defauts, un meme angle mort : chaque etape rendait compte de son succes,
+    aucune ne verifiait que le domaine repondait avec le bon contenu.
+    - L'archive est deballee de son dossier enveloppe. `zip -r site.zip site/`
+      prefixe tous ses membres ; le contenu atterrissait un cran trop bas et
+      `index_present` restait faux.
+    - La configuration nginx est regeneree. Les 163 sites partagent le port
+      8900 et se distinguent par `server_name` : un domaine sans bloc tombe sur
+      LE PREMIER BLOC DU PORT, et sert le site d'un voisin sans rien signaler.
+    - Le domaine est ecrit dans `site.json`, sans quoi il s'evapore a la
+      premiere regeneration.
+    - Le budget de `haproxyctl vhost add` passe de 120 s a 300 s : la mesure sur
+      gk2 donne 1 min 02 s pour un seul vhost, la configuration entiere etant
+      regeneree a chaque fois.
+  * Un site sans `index.html` rend enfin la page d'accueil du module au lieu du
+    `403 Forbidden` nu de nginx. Le critere d'origine exigeait une TAILLE nulle :
+    un dossier de 12 Mio dont l'index manquait — le cas exact d'une archive
+    deballee un cran trop bas — y echappait. Six sites sur gk2 etaient dans ce
+    cas. La bonne question est « ai-je un index a servir ? », pas « ce dossier
+    pese-t-il quelque chose ? ».
+  * Cette page est refaite : francais, charte du panneau, elle NOMME le domaine
+    demande et enonce les deux causes possibles. Elle est rendue avec un vrai
+    404 et un `X-Robots-Tag: noindex` — servie en 200, une page d'attente se
+    fait indexer a la place du site qu'elle remplace.
+  * Les archives DEJA deballees un cran trop bas sont rattrapees d'elles-memes :
+    quand la racine n'a pas d'index, qu'elle ne contient qu'un seul
+    sous-dossier, et que celui-ci en a un, c'est lui qui est servi. ON NE
+    DEPLACE PAS LES FICHIERS DE L'UTILISATEUR — remonter le contenu serait une
+    reecriture silencieuse de son depot ; servir le bon dossier donne le meme
+    resultat visible sans toucher un octet. Le rattrapage est journalise, jamais
+    muet. Deux sous-dossiers, ou un fichier a la racine, et l'on s'abstient :
+    descendre reviendrait a tirer au sort lequel EST le site.
+  * Un site peut declarer des ALIAS dans son `site.json` : `gk2.net` et
+    `www.gk2.net` servent ce que sert `www.gk2.secubox.in`, depuis une seule
+    verite. Ecrire un second bloc nginx a cote aurait fait diverger les deux au
+    premier changement de racine. Les alias passent par les memes gardes que le
+    domaine principal, et un alias deja pris est ecarte SANS emporter le site.
+    Le motif de validation n'est pas cosmetique : `server_name` se termine par
+    un point-virgule, un nom qui en contient un fermerait la directive.
+  * Le deballage ne desarme pas la garde zip-slip : un segment `..` n'est jamais
+    traite comme une enveloppe. Assainir une archive hostile au lieu de la
+    refuser aurait efface la trace de la tentative.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 09:30:00 +0200
+
+secubox-metablogizer (1.7.4-1~bookworm1) bookworm; urgency=medium
+
+  * La configuration unifiee ne redeclare plus un domaine deja servi par un
+    autre vhost nginx active (ref #1016). Cinq domaines etaient declares deux
+    fois sur le port 8900, et c'est l'ORDRE ALPHABETIQUE des noms de fichiers
+    qui decidait lequel servait : `ganimed.fr.conf` passe avant `metablogizer`
+    et gagne, `wall.ganimed.fr.conf` passe apres et perd. Rien dans le code ne
+    le decidait.
+  * Ce hasard portait a consequence : `ganimed.fr.conf` contient le point ACME
+    et la redirection `www` vers l'apex, que le bloc genere n'a pas. Si le
+    genere l'emportait, le renouvellement de certificat casserait. Un fichier
+    maintenu a la main porte une intention, un bloc genere n'est qu'un defaut :
+    le second cede au premier, explicitement.
+  * Deux sites configures sur le MEME domaine (`tdah`/`rtdah`,
+    `zem`/`zemialos`) n'emettent plus qu'un bloc, et l'ecart est DIT — dans le
+    journal et dans le message de retour. nginx l'ignorait en silence : le
+    panneau affichait deux sites publies alors qu'un seul repondait, exactement
+    le mode de defaillance de #1012.
+  * Le fichier genere s'exclut de sa propre comparaison : sans cela le second
+    passage verrait ses propres blocs comme « deja servis ailleurs » et
+    effacerait tout, transformant une regeneration idempotente en suppression.
+  * A EGALITE, L'INTENTION L'EMPORTE SUR LE DEFAUT (ref #1016). Deux sites
+    peuvent reclamer le meme domaine : l'un parce qu'il l'ECRIT dans son
+    site.json, l'autre parce qu'il HERITE du nom de son repertoire. C'etait
+    l'ordre de scan qui tranchait — et sur gk2 il donnait `zem.gk2.secubox.in`
+    a un repertoire sans index.html, d'ou un 403, alors qu'un autre site
+    revendiquait explicitement ce domaine et portait la page. Le tri est
+    stable : deux sites egalement explicites gardent leur ordre et leur conflit
+    reste signale plutot que tranche en douce.
+  * Les tests du module etaient bloques a la collecte hors board (une config
+    illisible n'est pas une config absente). 153 tests passent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 15:25:00 +0200
+
+secubox-metablogizer (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le vhost publie ne reclame plus le port 80 (ref #1012). Sur une board
+    SecuBox, HAProxy detient 0.0.0.0:80 : un vhost qui le reclame empeche nginx
+    de DEMARRER — bind() to 0.0.0.0:80 failed (98: Address already in use) — et
+    tous les vhosts de l'hote tombent avec lui. Le defaut restait invisible tant
+    que nginx n'etait que RECHARGE (un rechargement ne rebind pas), et n'a
+    eclate qu'au premier redemarrage franc, longtemps apres la publication
+    fautive. Le vhost ecoute desormais sur le port du module, celui vers lequel
+    la chaine HAProxy -> sbxwaf achemine deja ces sites.
+  * La publication ecrivait un `server_name` en `.local` (ref #1012). Signale
+    sur aletheia.gk2.secubox.in, qui rendait le contenu d'un tout autre site
+    (MAGIC-CHESS-360) en 200, sans qu'aucune erreur ne soit levee : nginx,
+    n'associant le Host demande a aucun `server_name`, servait le premier bloc
+    serveur venu.
+  * Le domaine etait calcule a CINQ endroits et un seul etait juste — celui de
+    l'affichage. Le panneau affirmait donc `aletheia.gk2.secubox.in` pendant que
+    nginx portait `server_name aletheia.local`, ce qui a rendu le defaut
+    invisible. Un seul calcul partage desormais (`sites_scan.domaine_du_site`),
+    utilise par l'affichage, le detail, la creation, le QR code et la
+    publication.
+  * A la creation, un domaine non fourni ne grave plus `.local` dans le
+    site.json — c'est cette valeur que la publication relisait ensuite.
+  * Le suffixe `.local` herite est retire EN FIN de chaine et non remplace
+    partout : `want` sert sous `wanted.`, et un `replace` mutilait les domaines
+    portant `.local` ailleurs qu'en suffixe.
+  * Un site.json illisible ne fait plus retomber sur `.local` : la publication
+    reste possible sous le nom du repertoire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 12:10:00 +0200
+
+secubox-metablogizer (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est
+    le seul repertoire que le vhost principal inclut. Livree dans secubox.d/
+    uniquement, la route n'etait JAMAIS lue, et il fallait la recopier a la
+    main pour que le module fonctionne.
+  * Source du depot realignee sur la version VIVANTE, a l'octet pres : les
+    deux avaient diverge. (ref #989)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 07:40:00 +0200
+
+secubox-metablogizer (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Mosaic tab site-list cache (#974): GET /sites and GET /status used to
+    recompute the whole fleet on every request (git x2 + du per site,
+    ~14.6s measured for 172 sites on the board under load, blocking the
+    module's single-worker event loop and observed hanging past 90s under
+    concurrent traffic). New api/sites_scan.py + metablog-audit.timer
+    (5 minutes) move that scan out of band, with an atomic same-directory
+    tmp+rename write; GET /sites now only reads the cache and reports
+    `available: false` explicitly when it hasn't been written yet or is
+    unreadable, instead of returning an empty list indistinguishable from a
+    genuinely empty fleet. POST /sites/refresh triggers an out-of-band
+    rescan on demand (fire-and-forget, never inline). Mosaic + Sites tabs
+    surface cache freshness/unavailability instead of silently showing
+    stale or blank data.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 04 Aug 2026 12:00:00 +0200
+
+secubox-metablogizer (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Mosaic tab thumbnails (#956): GET /site/{name}/screenshot serves the
+    conserved PNG (public, 404 until first capture — never triggers one).
+    New metablog-shots.timer captures a single site every 2 minutes,
+    load-guarded (skips above load 40), file-locked against overlap, and
+    picks the site whose thumbnail is missing or stalest by publish date; a
+    failed capture keeps the previous image and falls behind in the queue
+    instead of blocking it.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 02 Aug 2026 12:00:00 +0200
+
+secubox-metablogizer (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
+    (remove the hard cascade-stop when secubox-core restarts/fails).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 12:00:00 +0200
+
+secubox-metablogizer (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Publisher wizard: upload zip/html -> gitea version -> sbxwaf route via new
+    secubox-publishctl root helper (+ sudoers) -> cert (wildcard for *.gk2,
+    certbot for custom) -> portable .sbxsite backup. Retires the dead
+    mitmproxy-LXC route sync (the zem 421). New POST
+    /publish/{wizard,route,export,import} endpoints.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 11 Jul 2026 13:00:00 +0200
+
+secubox-metablogizer (1.2.3-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
+secubox-metablogizer (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * feature: uploads are now versioned back into each site's Gitea repo — every
+    /site/{name}/upload auto commits + pushes to origin (git_commit_push),
+    serialized under the per-site lock, best-effort (a Gitea failure never fails
+    the upload). Response carries a "gitea" status object.
+  * postinst: configure the metablogizer service user to push to Gitea's
+    internal LXC endpoint (the public host NAT-hairpins and stalls the pack
+    transfer).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 09:00:00 +0200
+
+secubox-metablogizer (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * #494: postinst no longer chowns the shared /run/secubox parent; only the
+    module's own /srv/metablogizer/sites is owned (see also #121).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 10:45:00 +0000
+
+secubox-metablogizer (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * debian/secubox-metablogizer.service: lower uvicorn --log-level from
+    warning to info so the webhook deploy success line
+    `logger.info("deploy site=…")` reaches journald. Previously only
+    error paths were visible, making successful auto-deploys silent.
+    The 8 info-level log sites in api/main.py are all event-driven
+    (startup + webhook + sync) — no flood concern. Closes #119.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 05:10:00 +0000
+
+secubox-metablogizer (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * metablogizerctl site publish: new --public-domain <fqdn> flag.
+    When given:
+      - Inject the FQDN into the nginx vhost server_name (so the
+        same nginx instance answers Host: <fqdn> coming back through
+        HAProxy → mitmproxy).
+      - Persist public_domain in site.json (consumed by unpublish).
+      - Run `haproxyctl vhost add <fqdn> mitmproxy_inspector true`
+        to wire the routing-layer backend.
+      - Trigger the mitmproxy route sync via
+        `systemctl start sync-mitmproxy-routes.service`
+        (falls back to `sync-mitmproxy-routes.sh` in PATH; warns if
+        neither is available).
+    Without the flag the behavior is unchanged from 1.1.x (internal
+    nginx vhost only).
+  * metablogizerctl site unpublish: reads public_domain from site.json
+    and auto-reverses the HAProxy vhost add + re-triggers the route
+    sync. No-op if the site was never published with --public-domain.
+  * Validates --public-domain syntactically against
+    ^[a-zA-Z0-9.-]+$ (defence-in-depth: blocks shell/TOML injection
+    via the API boundary that callers like dropletctl expose).
+  * Closes #200.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 May 2026 07:10:00 +0200
+
+secubox-metablogizer (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * metablogizerctl: forge tor noun verbs (issue #184) — the Emancipate
+    verb of the Punk Exposure Engine at the publishing layer.
+    Subcommands:
+      tor expose <site>   Publish site via Tor hidden service
+      tor revoke <site>   Stop publishing via Tor
+      tor list            List Tor-exposed sites with onion addresses
+      tor status <site>   Show stanza + onion + tor service state
+    When secubox-exposure is installed, delegates to it for consistency
+    with other exposure channels (DNS+SSL, Mesh). Otherwise falls back
+    to direct /etc/tor/secubox-metablogizer.d/ stanza management.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 17 May 2026 11:23:12 +0200
+
+secubox-metablogizer (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add metablogizerctl three-fold commands: components, access (JSON output)
+  * Update version to 1.1.0
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 11:30:00 +0100
+
+secubox-metablogizer (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release with three-fold architecture
+  * Site management and publishing
+  * Migration from OpenWrt support
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 08:00:00 +0100
