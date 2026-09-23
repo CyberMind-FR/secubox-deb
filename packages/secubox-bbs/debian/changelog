@@ -1,3 +1,21 @@
+secubox-bbs (0.32.3-1~bookworm1) bookworm; urgency=medium
+
+  * Un lien de source reste DANS le Hall (#1323). Les liens de la salle de
+    rédaction portaient `target="_blank"` : embarqué, c'était un aller sans
+    retour — on perdait la mosaïque, la barre média et tout ce qui joue, pour
+    lire un article. Et surtout on SORTAIT DU RELAIS : la page était alors
+    chargée en direct par le navigateur, sans passer par le BiB, donc sans
+    coupure des pisteurs ni cloisonnement par origine. Le lien de sortie
+    annulait la protection que tout le reste met en place.
+  * Encadré, un lien externe demande maintenant au Hall de l'ouvrir dans son
+    surfeur (`{sbx:'surf', url}`) : la mégabarre reste, le relais fait son
+    travail. Hors cadre, le lien garde son comportement — la page BBS doit
+    rester utilisable seule. Seul l'EXTÉRIEUR est détourné : un lien vers la
+    box s'ouvre normalement. Un clic avec modificateur (ouvrir dans un onglet
+    est alors délibéré) n'est pas touché non plus.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Sep 2026 08:23:38 +0200
+
 secubox-bbs (0.32.2-1~bookworm1) bookworm; urgency=medium
 
   * Le paquet pose SA PROPRE route sbxwaf via secubox-waf-route (#1323),
