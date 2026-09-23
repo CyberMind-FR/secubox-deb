@@ -23,6 +23,17 @@
   (60–180) détectés et **retirés** de la lecture au lieu de l'effacer.
   Vues `/micro` (carte du Hall, 352 px, spectro + histogramme + métriques) et
   `/mega` synchronisées par `BroadcastChannel`. `mood.gk2.secubox.in` ouvert WAN.
+- **La musique ne couvre plus les émotions (#1333)** — `gabriel-mood` **0.8.0**.
+  Rapporté comme « le BPM casse les émotions » ; le BPM n'y était pour rien,
+  c'était son jumeau. Le plancher de bruit du VAD montait de 0,05 dB sur
+  **chaque** trame dépassante, parole comprise — alors que son commentaire
+  promettait l'inverse. Avec une musique au niveau de la voix il l'atteignait
+  en dix secondes et la détection tombait de 88 % à 30 %. Remplacé par un
+  quantile à 20 % sur 3 s, borné à +12 dB au-dessus du creux pour le cas du
+  monologue. Fausses détections mesurées contre l'ancien : 17,4 % contre
+  96,4 % à ±6 dB de fluctuation, rappel 100 % dans les deux cas. Quand la
+  pièce couvre vraiment la voix, le refus le **dit** au lieu d'accuser la
+  personne. Le motif est enfin stocké — son absence avait coûté l'enquête.
 - **secubox-surf 1.0.27** — `contexte_tls()` : le relais n'impose plus le
   `DEFAULT_CIPHERS` de `httpx`, dont l'empreinte TLS valait 404 chez Fastly,
   Cloudflare et Akamai. Médias ranimés (`ranime_media`, manifestes réécrits,

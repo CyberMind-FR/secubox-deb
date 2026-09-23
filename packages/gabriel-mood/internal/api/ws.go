@@ -228,7 +228,8 @@ func (s *Serveur) archive(sess *Session, stop <-chan struct{}) {
 				Session: sess.ID, F0Median: t.F0Median, F0Etendue: t.F0Etendue,
 				Energie: t.Energie, Debit: t.Debit, Jitter: t.Jitter,
 				Shimmer: t.Shimmer, Activation: lec.Activation,
-				Etat: lec.Etat, Confiance: lec.Confiance, PartVoisee: t.PartVoisee,
+				Etat: lec.Etat, Motif: lec.Motif, Confiance: lec.Confiance,
+				PartVoisee: t.PartVoisee,
 			}); err != nil {
 				log.Printf("archive : %v", err)
 			}

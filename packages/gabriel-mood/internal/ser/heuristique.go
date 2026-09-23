@@ -96,6 +96,22 @@ func (h *Heuristique) Evalue(t Traits) Lecture {
 	// précédente : elle rangeait sur la même ligne « je n'entends rien
 	// d'exploitable » et « cette voix est dans son ordinaire ».
 	if t.TramesVoisees < MinTramesVoisees || t.PartVoisee < PartVoiseeMin {
+		// DEUX CAUSES, DEUX MESSAGES, DEUX GESTES (#1333). On refuse dans les
+		// deux cas — mais « vous ne parlez pas » envoie parler, tandis que
+		// « la pièce vous couvre » envoie baisser le son ou approcher le
+		// micro. Dire le premier quand c'est le second, c'est demander à
+		// quelqu'un de répéter plus fort ce qu'il vient déjà de dire.
+		//
+		// LA MUSIQUE AU NIVEAU DE LA VOIX EST INDÉTECTABLE, et ce n'est pas un
+		// défaut qu'on corrigera : deux sources dans les mêmes bandes, à la
+		// même énergie, ne se séparent pas par un vote de sous-bandes. Ce
+		// qu'on peut faire, c'est ne pas en accuser la personne.
+		if t.AmbianceBPM > 0 {
+			return LectureIndeterminee(MotifAmbiance,
+				fmt.Sprintf("la pièce couvre votre voix (tempo %.0f BPM, %d trames voisées "+
+					"seulement) : baissez ce qui joue, ou approchez le micro",
+					t.AmbianceBPM, t.TramesVoisees), vivante)
+		}
 		return LectureIndeterminee(MotifPeuDeVoix,
 			fmt.Sprintf("pas assez de voix sur la fenêtre (%d trames voisées, %.0f %% de la durée)",
 				t.TramesVoisees, t.PartVoisee*100), vivante)

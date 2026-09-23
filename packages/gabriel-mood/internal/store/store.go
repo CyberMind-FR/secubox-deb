@@ -51,6 +51,14 @@ type Resume struct {
 	Shimmer    float64 `json:"shimmer"`
 	Activation float64 `json:"activation"`
 	Etat       string  `json:"etat"`
+	// Motif : POURQUOI c'est indéterminé, quand ça l'est. Vide sinon.
+	//
+	// AJOUTÉ PARCE QUE SON ABSENCE A COÛTÉ UNE ENQUÊTE (#1333). La base savait
+	// dire qu'une minute était indéterminée, jamais laquelle des trois gardes
+	// avait tranché — bruit, pas assez de voix, ou ambiance. Les trois appellent
+	// des gestes différents, et rien ne permettait de les distinguer après coup :
+	// il a fallu rejouer des scénarios synthétiques pour retrouver la cause.
+	Motif      string  `json:"motif,omitempty"`
 	Confiance  float64 `json:"confiance"`
 	PartVoisee float64 `json:"part_voisee"`
 }
@@ -67,6 +75,7 @@ CREATE TABLE IF NOT EXISTS resume (
   shimmer     REAL    NOT NULL DEFAULT 0,
   activation  REAL    NOT NULL DEFAULT 0,
   etat        TEXT    NOT NULL DEFAULT '',
+  motif       TEXT    NOT NULL DEFAULT '',
   confiance   REAL    NOT NULL DEFAULT 0,
   part_voisee REAL    NOT NULL DEFAULT 0,
   PRIMARY KEY (minute, session)
@@ -106,7 +115,46 @@ func Ouvre(chemin string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("schéma : %w", err)
 	}
+	// `CREATE TABLE IF NOT EXISTS` NE MIGRE RIEN : une base déjà en place garde
+	// ses colonnes d'origine, et le schéma ci-dessus n'est appliqué qu'à une
+	// base neuve. Sans ce rattrapage, la colonne `motif` n'existerait que sur
+	// les installations futures — c'est-à-dire nulle part où l'on en a besoin.
+	if err := ajouteColonne(db, "resume", "motif", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migration motif : %w", err)
+	}
 	return &Store{db: db}, nil
+}
+
+// ajouteColonne ajoute une colonne si elle manque. On INTERROGE le schéma
+// plutôt que d'exécuter l'ALTER en avalant son erreur : « la colonne existe
+// déjà » et « la table n'existe pas » se ressemblent trop dans un message, et
+// avaler la seconde masquerait une base cassée.
+func ajouteColonne(db *sql.DB, table, colonne, definition string) error {
+	lignes, err := db.Query("SELECT name FROM pragma_table_info(?)", table)
+	if err != nil {
+		return err
+	}
+	defer lignes.Close()
+	vues := 0
+	for lignes.Next() {
+		var n string
+		if err := lignes.Scan(&n); err != nil {
+			return err
+		}
+		vues++
+		if n == colonne {
+			return nil
+		}
+	}
+	if err := lignes.Err(); err != nil {
+		return err
+	}
+	if vues == 0 {
+		return fmt.Errorf("table %q absente", table)
+	}
+	_, err = db.Exec("ALTER TABLE " + table + " ADD COLUMN " + colonne + " " + definition)
+	return err
 }
 
 func (s *Store) Ferme() error { return s.db.Close() }
@@ -116,10 +164,10 @@ func (s *Store) Ferme() error { return s.db.Close() }
 func (s *Store) Enregistre(r Resume) error {
 	_, err := s.db.Exec(
 		`INSERT OR REPLACE INTO resume
-		 (minute,session,f0,f0_etendue,energie,debit,jitter,shimmer,activation,etat,confiance,part_voisee)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 (minute,session,f0,f0_etendue,energie,debit,jitter,shimmer,activation,etat,motif,confiance,part_voisee)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		r.Minute, r.Session, r.F0Median, r.F0Etendue, r.Energie, r.Debit,
-		r.Jitter, r.Shimmer, r.Activation, r.Etat, r.Confiance, r.PartVoisee)
+		r.Jitter, r.Shimmer, r.Activation, r.Etat, r.Motif, r.Confiance, r.PartVoisee)
 	return err
 }
 
@@ -132,7 +180,7 @@ func (s *Store) Depuis(debut time.Time, limite int) ([]Resume, error) {
 	}
 	lignes, err := s.db.Query(
 		`SELECT minute,session,f0,f0_etendue,energie,debit,jitter,shimmer,
-		        activation,etat,confiance,part_voisee
+		        activation,etat,motif,confiance,part_voisee
 		 FROM resume WHERE minute >= ? ORDER BY minute DESC LIMIT ?`,
 		debut.Unix(), limite)
 	if err != nil {
@@ -144,7 +192,7 @@ func (s *Store) Depuis(debut time.Time, limite int) ([]Resume, error) {
 		var r Resume
 		if err := lignes.Scan(&r.Minute, &r.Session, &r.F0Median, &r.F0Etendue,
 			&r.Energie, &r.Debit, &r.Jitter, &r.Shimmer, &r.Activation,
-			&r.Etat, &r.Confiance, &r.PartVoisee); err != nil {
+			&r.Etat, &r.Motif, &r.Confiance, &r.PartVoisee); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
