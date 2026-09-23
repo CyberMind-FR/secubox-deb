@@ -83,19 +83,40 @@ func fichesSecuBox(s string) string {
 			return tout
 		}
 		adresse, texte := m[1], m[2]
-		svc := serviceDe(adresse)
-		if svc == "" {
+		// UNE VIDEO N'EST PAS UN LIEN DE SERVICE (#1328). On la laisse
+		// intacte : `lecteursDeLiens` la transformera en lecteur a la fin du
+		// rendu, ou la rendra ici meme au tour suivant si le plafond est
+		// atteint. Poser une pastille maintenant obligerait a la defaire, ce
+		// qui est toujours plus fragile que de ne pas la poser.
+		if estPeertube(adresse) {
 			return tout
 		}
-		if strings.TrimSpace(texte) == "" {
-			texte = adresse
+		if serviceDe(adresse) == "" {
+			return tout
 		}
-		// `adresse` et `texte` viennent d'un HTML deja echappe ; on les
-		// reechappe pour l'attribut `title`, ou une apostrophe suffirait a
-		// sortir du contexte.
-		return `<a class="fiche-sbx" href="` + adresse + `" title="` +
-			html.EscapeString(html.UnescapeString(texte)) + `">` +
-			`<span class="fiche-svc">` + html.EscapeString(svc) + `</span>` +
-			`<span class="fiche-txt">` + texte + `</span></a>`
+		return ficheDe(adresse, texte)
 	})
+}
+
+// ficheDe construit la pastille d'un lien de service.
+//
+// EXTRAITE parce que `lecteursDeLiens` en a besoin aussi : au-delà du plafond
+// de lecteurs, ou sur un doublon, il rend la pastille plutôt qu'un lien nu —
+// sans quoi ces liens-là seraient les seuls du fil à ne pas porter leur
+// étiquette de service. Deux endroits qui construisent le même balisage
+// finissent toujours par diverger.
+func ficheDe(adresse, texte string) string {
+	svc := serviceDe(adresse)
+	if svc == "" {
+		return `<a href="` + adresse + `">` + texte + `</a>`
+	}
+	if strings.TrimSpace(texte) == "" {
+		texte = adresse
+	}
+	// `adresse` et `texte` viennent d'un HTML deja echappe ; on les reechappe
+	// pour l'attribut `title`, ou une apostrophe suffirait a sortir du contexte.
+	return `<a class="fiche-sbx" href="` + adresse + `" title="` +
+		html.EscapeString(html.UnescapeString(texte)) + `">` +
+		`<span class="fiche-svc">` + html.EscapeString(svc) + `</span>` +
+		`<span class="fiche-txt">` + texte + `</span></a>`
 }

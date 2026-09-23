@@ -48,8 +48,8 @@ func TestNewsroomMurReseaux(t *testing.T) {
 	}
 	out := buf.String()
 	for _, want := range []string{
-		`class="rgrid"`,          // la grille du mur
-		`class="rcard hasbg"`,    // carte AVEC fond (média présent)
+		`class="rgrid"`,                         // la grille du mur
+		`class="rcard hasbg"`,                   // carte AVEC fond (média présent)
 		`class="rbg" src="/media-vignette?u=x"`, // le média RELAYÉ en fond
 		"Un post relayé de Mastodon",            // le texte du post par-dessus
 		"/t/12",                                 // lien vers le fil pour discuter

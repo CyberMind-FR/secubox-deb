@@ -103,7 +103,10 @@ func Render(src string) template.HTML {
 		}
 	}
 	fermer()
-	return template.HTML(b.String())
+	// UNE SEULE FOIS, SUR LE MESSAGE ENTIER (#1328). Le plafond de lecteurs et
+	// le dedoublonnage n'ont de sens qu'a cette echelle : c'est un message qui
+	// cite trois fois la meme video, pas un paragraphe.
+	return template.HTML(lecteursDeLiens(b.String()))
 }
 
 // inline echappe D'ABORD, puis reintroduit les seules balises produites ici.
@@ -118,6 +121,13 @@ func inline(s string) template.HTML {
 	e = mediasIntegres(e)
 	// APRES mediasIntegres : une piece jointe devient un lecteur, elle n'a pas
 	// a devenir une fiche. Ce qui reste ici est un lien vers un service.
+	//
+	// LES LIENS VIDEO SONT LAISSES INTACTS : `fichesSecuBox` les saute, et
+	// `lecteursDeLiens` les traite UNE FOIS sur le message entier, a la fin de
+	// Render. La raison est bete et je m'y suis pris les pieds : `inline` est
+	// appelee PAR PARAGRAPHE, si bien qu'un compteur pose ici donnerait son
+	// budget de lecteurs a CHAQUE paragraphe — et le dedoublonnage ne verrait
+	// jamais deux occurrences separees par une ligne vide.
 	e = fichesSecuBox(e)
 	e = paires(e, "**", "<strong>", "</strong>")
 	e = paires(e, "`", "<code>", "</code>")

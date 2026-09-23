@@ -45,11 +45,11 @@ func TestCompteSbxBorne(t *testing.T) {
 	}
 	mauvais := []string{
 		"", "ab", // trop court
-		"Majuscule",              // nginx rend du minuscule ; on n'invente pas
-		"avec espace",            //
-		"../../etc/passwd",       // traversee
+		"Majuscule",        // nginx rend du minuscule ; on n'invente pas
+		"avec espace",      //
+		"../../etc/passwd", // traversee
 		"<script>alert(1)</script>",
-		"nom\navec\nsaut",        // injection d'en-tete
+		"nom\navec\nsaut", // injection d'en-tete
 	}
 	for _, c := range mauvais {
 		if reCompteSbx.MatchString(c) {

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/ytid"
@@ -69,7 +70,49 @@ func embedMediaURL(u string) (string, bool) {
 // estPeertube reconnaît une URL de NOTRE instance PeerTube (visionnage ou embed).
 // On ne borne pas l'hôte ici — le rendu ne fait qu'un <iframe> vers l'URL fournie,
 // déjà écrite par la passerelle depuis nos propres répliques.
+// ── L'ORIGINE DÉCLARÉE ─────────────────────────────────────────────────────
+//
+// Elle est posée une fois au démarrage, comme la liste des fiches : `Render`
+// est appelée depuis les gabarits, sans porteur d'options, et lui en ajouter un
+// aurait touché chaque appel de rendu du module.
+var (
+	peertubeMu      sync.RWMutex
+	peertubeOrigine string
+)
+
+// ConfigurerPeerTube déclare l'instance dont on accepte de cadrer le lecteur.
+// Vide, aucune vidéo ne s'intègre — c'est le bon défaut : une autre
+// installation n'a pas notre instance.
+func ConfigurerPeerTube(origine string) {
+	peertubeMu.Lock()
+	defer peertubeMu.Unlock()
+	peertubeOrigine = strings.TrimRight(strings.TrimSpace(origine), "/")
+}
+
+// estPeertube reconnaît une URL de NOTRE instance PeerTube.
+//
+// ELLE NE TESTAIT QUE LE CHEMIN, et c'était tolérable tant qu'elle ne servait
+// qu'au média d'un fil passerelle — une URL posée par la passerelle, pas par un
+// visiteur. Depuis qu'elle sert aussi aux liens des MESSAGES (#1328), n'importe
+// qui pouvait coller `https://ailleurs.example/w/x` et obtenir un cadre vers
+// `ailleurs.example`. La CSP l'aurait bloqué — `frame-src` ne nomme que notre
+// instance — mais on aurait rendu un cadre vide là où un lien cliquable était
+// utile, et l'on aurait compté sur la CSP pour rattraper une décision qu'on
+// n'aurait pas dû prendre.
+//
+// ÉLARGIR L'USAGE D'UNE FONCTION ÉLARGIT CE CONTRE QUOI ELLE DOIT SE DÉFENDRE.
 func estPeertube(u string) bool {
+	peertubeMu.RLock()
+	origine := peertubeOrigine
+	peertubeMu.RUnlock()
+	if origine == "" {
+		return false
+	}
+	// Le séparateur compte : sans lui, `https://peertube.gk2.secubox.in.mal.tld`
+	// passerait pour notre instance.
+	if u != origine && !strings.HasPrefix(u, origine+"/") {
+		return false
+	}
 	return strings.Contains(u, "/videos/embed/") ||
 		strings.Contains(u, "/videos/watch/") ||
 		strings.Contains(u, "/w/")

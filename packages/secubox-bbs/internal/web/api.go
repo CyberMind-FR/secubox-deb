@@ -189,7 +189,7 @@ func (s *Server) apiCreerFil(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Title      string `json:"title"`
 		Body       string `json:"body"`
-		Category   string `json:"category"`   // slug ; défaut « actualites »
+		Category   string `json:"category"` // slug ; défaut « actualites »
 		SourceURL  string `json:"source_url"`
 		Visibility string `json:"visibility"` // "public" | "local" (défaut)
 	}

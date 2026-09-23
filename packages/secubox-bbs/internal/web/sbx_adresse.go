@@ -12,11 +12,11 @@
 // ON NE LA RECOPIE PAS DANS LA BASE DU BBS, et c'est la décision centrale.
 // Copier créerait deux versions d'un même fait :
 //
-//   • elles divergent — quelqu'un corrige son adresse côté accès, le BBS
+//   - elles divergent — quelqu'un corrige son adresse côté accès, le BBS
 //     continue d'écrire à l'ancienne ;
-//   • révoquer un appareil ne couperait plus rien : le BBS garderait sa copie
+//   - révoquer un appareil ne couperait plus rien : le BBS garderait sa copie
 //     et continuerait de notifier quelqu'un qu'on vient d'écarter ;
-//   • et l'adresse existerait à deux endroits à effacer le jour où il faut
+//   - et l'adresse existerait à deux endroits à effacer le jour où il faut
 //     l'effacer.
 //
 // En la RELISANT au moment d'envoyer, il n'y a qu'un propriétaire. Un appareil

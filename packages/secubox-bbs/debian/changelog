@@ -1,3 +1,39 @@
+secubox-bbs (0.32.4-1~bookworm1) bookworm; urgency=medium
+
+  * Un lien vers une vidéo de la box devient un LECTEUR (#1328). Coller
+    `https://peertube.gk2.secubox.in/w/xxxx` donnait une pastille et l'adresse
+    en toutes lettres : pour regarder, il fallait cliquer, sortir du fil, et
+    revenir.
+  * RIEN NE MANQUAIT, EN RÉALITÉ. `objetMediaPeertube` construisait déjà le
+    lecteur — il servait en TÊTE des fils passerelle ; la CSP autorisait déjà
+    `frame-src https://peertube.gk2.secubox.in` ; `--peertube-origine` était
+    déjà passé à l'unité. Ce qui manquait était le chemin entre les deux : le
+    rendu d'un MESSAGE ne consultait jamais cette machinerie. Il voyait une
+    ancre vers un de nos services et la confiait à `fichesSecuBox`, dont c'est
+    le travail. Une vidéo n'est pas un lien de service.
+  * L'ORDRE PORTE LA RÈGLE : ce qui peut se REGARDER devient un lecteur, ce qui
+    reste est un lien de service et prend sa pastille.
+  * `estPeertube` NE TESTAIT QUE LE CHEMIN — n'importe quelle URL contenant
+    `/w/` passait. C'était tolérable tant qu'elle ne servait qu'au média d'un
+    fil passerelle, posé par la passerelle. En l'exposant aux liens que
+    n'importe qui poste, on aurait cadré `https://ailleurs.example/w/x`. La CSP
+    l'aurait bloqué, mais on aurait rendu un cadre vide là où un lien cliquable
+    était utile, en comptant sur elle pour rattraper une décision qu'on
+    n'aurait pas dû prendre. Elle vérifie désormais l'origine déclarée.
+    ÉLARGIR L'USAGE D'UNE FONCTION ÉLARGIT CE CONTRE QUOI ELLE DOIT SE DÉFENDRE.
+  * Dédoublonnage : le même lien collé deux fois — une fois nu, une fois en
+    lien Markdown — donnait deux lecteurs de la même vidéo, ce que montrait la
+    capture signalée. La seconde occurrence redevient une pastille : on ne fait
+    pas disparaître ce que quelqu'un a écrit.
+  * Au plus trois lecteurs par message : un message qui cite douze vidéos n'en
+    veut pas douze cadres, ni pour le navigateur, ni pour l'instance.
+  * La passe se fait UNE FOIS sur le message entier et non dans `inline` :
+    celle-ci est appelée PAR PARAGRAPHE, si bien qu'un compteur posé là donnait
+    son budget à chaque paragraphe, et le dédoublonnage ne voyait jamais deux
+    occurrences séparées par une ligne vide.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 13:10:01 +0200
+
 secubox-bbs (0.32.3-1~bookworm1) bookworm; urgency=medium
 
   * Un lien de source reste DANS le Hall (#1323). Les liens de la salle de

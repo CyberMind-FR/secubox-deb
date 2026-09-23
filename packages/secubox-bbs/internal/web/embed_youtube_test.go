@@ -72,10 +72,10 @@ func TestEmbedContenuMirrorRendPeertube(t *testing.T) {
 
 func TestPeertubeEmbedURL(t *testing.T) {
 	cas := map[string]string{
-		"https://peertube.gk2.secubox.in/w/jDerWdgx1NrBTiRkFt9xuV":        "https://peertube.gk2.secubox.in/videos/embed/jDerWdgx1NrBTiRkFt9xuV",
-		"https://peertube.gk2.secubox.in/videos/watch/abc-123":            "https://peertube.gk2.secubox.in/videos/embed/abc-123",
-		"https://peertube.gk2.secubox.in/videos/embed/deja":               "https://peertube.gk2.secubox.in/videos/embed/deja",
-		"https://autre.example/chemin/quelconque":                        "https://autre.example/chemin/quelconque",
+		"https://peertube.gk2.secubox.in/w/jDerWdgx1NrBTiRkFt9xuV": "https://peertube.gk2.secubox.in/videos/embed/jDerWdgx1NrBTiRkFt9xuV",
+		"https://peertube.gk2.secubox.in/videos/watch/abc-123":     "https://peertube.gk2.secubox.in/videos/embed/abc-123",
+		"https://peertube.gk2.secubox.in/videos/embed/deja":        "https://peertube.gk2.secubox.in/videos/embed/deja",
+		"https://autre.example/chemin/quelconque":                  "https://autre.example/chemin/quelconque",
 	}
 	for in, want := range cas {
 		if got := peertubeEmbedURL(in); got != want {

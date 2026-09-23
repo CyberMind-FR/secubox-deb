@@ -18,9 +18,9 @@ import (
 // SourceType : le résultat du typage — la valeur `Source` posée sur le fil, son
 // glyphe et son étiquette pour la rédaction.
 type SourceType struct {
-	Source  string // "video" | "podcast" | "film" | "livre" | "conference" | "web"
-	Glyphe  string
-	Label   string
+	Source string // "video" | "podcast" | "film" | "livre" | "conference" | "web"
+	Glyphe string
+	Label  string
 }
 
 var famillesSource = []struct {

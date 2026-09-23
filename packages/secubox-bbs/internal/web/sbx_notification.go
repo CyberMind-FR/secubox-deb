@@ -7,9 +7,9 @@
 //
 // TROIS CHOSES SÉPARÉES, ET C'EST CE QUI REND L'ENSEMBLE SÛR :
 //
-//     SI l'on notifie    la préférence du membre, dans la base du BBS
-//     OÙ l'on notifie    le registre des appareils, relu à CHAQUE envoi
-//     PAR OÙ            le relais du conteneur mail, 10.100.0.10:25
+//	SI l'on notifie    la préférence du membre, dans la base du BBS
+//	OÙ l'on notifie    le registre des appareils, relu à CHAQUE envoi
+//	PAR OÙ            le relais du conteneur mail, 10.100.0.10:25
 //
 // L'adresse n'est jamais recopiée ici. Un appareil révoqué cesse d'être notifié
 // sans qu'aucun message n'ait eu à circuler — voir sbx_adresse.go.

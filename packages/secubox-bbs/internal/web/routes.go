@@ -35,17 +35,17 @@ type page struct {
 	// comptes membres uniques parmi eux (#presence). Affichés dans le bandeau.
 	Online        int
 	MembresOnline int
-	Mod                       Modules
-	Stats                     store.Stats
-	Cats                      []store.Category
-	Threads                   []store.Thread
-	Cat                       store.Category
-	T                         store.Thread
-	Posts                     []postView
-	Err, Invite               string
-	Intro, Vide               string
-	Note                      string
-	Cards                     []card
+	Mod           Modules
+	Stats         store.Stats
+	Cats          []store.Category
+	Threads       []store.Thread
+	Cat           store.Category
+	T             store.Thread
+	Posts         []postView
+	Err, Invite   string
+	Intro, Vide   string
+	Note          string
+	Cards         []card
 	// Medias : la médiathèque du podcaster regroupée par flux (#1056) —
 	// sous-dossiers ordonnés par type, épisodes jouables en ligne.
 	Medias []PodFeed
@@ -57,7 +57,7 @@ type page struct {
 	// le widget lecteur incorporé (iframe /mini) + un bouton « détacher ».
 	RadioBase string
 	// Lecteur détaché (#1056) : le pop-out qui continue en fenêtre séparée.
-	PlayerFeed                          *PodFeed
+	PlayerFeed                                *PodFeed
 	PlayerSrc, PlayerEp, PlayerT, PlayerTitle string
 	// MicroJSON : les fils de la carte /micro, deja serialises. STRING simple :
 	// la donnee voyage dans un ATTRIBUT, et c'est html/template qui doit
@@ -201,6 +201,10 @@ func (s *Server) routes() {
 	s.mux.Handle("/static/", s.statique(http.FileServer(http.FS(assets))))
 	s.mux.HandleFunc("/", s.accueil)
 	ConfigurerFiches(s.opt.MediaOrigines)
+	// L'INSTANCE DONT ON ACCEPTE DE CADRER LE LECTEUR. Vide, aucune vidéo ne
+	// s'intègre : une autre installation n'a pas notre PeerTube, et cadrer une
+	// instance inconnue lui donnerait un contexte d'exécution dans la page.
+	ConfigurerPeerTube(s.opt.PeerTubeOrigine)
 	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
 	s.mux.HandleFunc("/yt-vignette", s.servirYtVignette)
 	s.mux.HandleFunc("/mn-vignette", s.servirMNVignette)
@@ -308,9 +312,9 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	return page{
 		Site: site, Initiale: ini, Hote: r.Host, Vue: vue, V: v, VCSS: s.vCSS,
 		Medaillons: s.medaillons,
-		Base:  "https://" + r.Host,
-		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true, Reseaux: true},
-		Stats: st, Cats: cats, Titre: site,
+		Base:       "https://" + r.Host,
+		Mod:        Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true, Reseaux: true},
+		Stats:      st, Cats: cats, Titre: site,
 		NonLus:        nonLus,
 		Online:        online,
 		MembresOnline: membres,
@@ -1407,7 +1411,7 @@ func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieSession, Value: jeton, Path: "/",
-		HttpOnly: true, SameSite: s.sameSite(),   // #1251 : encadre = contexte tiers
+		HttpOnly: true, SameSite: s.sameSite(), // #1251 : encadre = contexte tiers
 		Secure: s.opt.DerriereTLS, MaxAge: 30 * 24 * 3600,
 	})
 	http.Redirect(w, r, "/", http.StatusSeeOther)

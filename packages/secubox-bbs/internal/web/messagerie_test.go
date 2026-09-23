@@ -271,12 +271,12 @@ func TestLaCoquilleRendSesTroisColonnesEtSaLigneDEtat(t *testing.T) {
 	}
 	corps := w.Body.String()
 	for _, zone := range []string{
-		`class="mast"`,   // masthead partage (avmast)
-		`class="wrap"`,   // conteneur trois colonnes newsroom
-		`class="rail"`,   // rails gauche + droite
-		`class="feed"`,   // colonne centrale
-		`class="post`,    // le corps du fil, reutilise
-		`newsroom.css`,   // la feuille newsroom l'emporte
+		`class="mast"`,     // masthead partage (avmast)
+		`class="wrap"`,     // conteneur trois colonnes newsroom
+		`class="rail"`,     // rails gauche + droite
+		`class="feed"`,     // colonne centrale
+		`class="post`,      // le corps du fil, reutilise
+		`newsroom.css`,     // la feuille newsroom l'emporte
 		`Derniers billets`, // rail de droite partage (avrail)
 	} {
 		if !strings.Contains(corps, zone) {
