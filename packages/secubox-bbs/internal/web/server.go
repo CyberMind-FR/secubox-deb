@@ -555,6 +555,18 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 	// styles inline. Un style n'exécute AUCUN code — script-src reste strict
 	// ('self', jamais 'unsafe-inline'). On ne garde pas l'empreinte de style de la
 	// bannière : une empreinte rendrait 'unsafe-inline' inopérant (spec CSP).
+	//
+	// LE RISQUE RÉSIDUEL, ÉCRIT PLUTÔT QUE SOUS-ENTENDU (#1329). « Un style
+	// n'exécute pas de code » est vrai et ne suffit pas : du CSS exfiltre par
+	// sélecteurs d'attribut suivis d'un `background-image` vers un tiers, et
+	// sert à l'habillage trompeur. C'est sans commune mesure avec `script-src`
+	// — d'où la décision — mais c'est une DÉCISION, pas une neutralité, et
+	// dans un dépôt qui vise CSPN elle doit se lire ici.
+	//
+	// LA SORTIE PROPRE serait un `nonce` sur `style-src` : il permettrait de
+	// retirer `unsafe-inline` sans casser la carte. Elle demande que SBXAide
+	// sache lire le nonce, donc une modification de la lib partagée — et la
+	// lib est utilisée ailleurs, ce qui en fait un chantier à part entière.
 	style := "'self' 'unsafe-inline'"
 	// `frame-src 'none'` par defaut : aucune page tierce ne s'integre. Seule
 	// une instance PeerTube explicitement configuree ouvre cette porte, et
