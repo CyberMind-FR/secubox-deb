@@ -1,3 +1,49 @@
+secubox-webos (1.0.335-1~bookworm1) bookworm; urgency=medium
+
+  * PLACEMENT DE LA BARRE DE VOLUME GÉNÉRALE (ref #1349). La 1.0.334 la posait
+    à `30px + --dock-h`, c'est-à-dire à la RÉSERVE totale — qui inclut sa propre
+    hauteur : la barre s'éloignait d'un cran à chaque mesure. Deux variables
+    désormais, et la distinction compte : `--dock-b` la place juste au-dessus
+    des rangées sans se compter elle-même, `--dock-h` reste la réserve rendue
+    au contenu et l'inclut. Sans cette seconde, le bas des pages serait passé
+    sous la barre — visible seulement en lisant jusqu'en bas, donc jamais en la
+    testant.
+  * Elle disparaît quand toutes les rangées sont repliées, et non plus
+    seulement quand il n'y a aucun flux : un maître posé au-dessus de rien ne
+    commanderait rien tout en ayant l'air de régler quelque chose.
+  * Vu en la RENDANT, pas en la relisant.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 16:40:22 +0200
+
+secubox-webos (1.0.334-1~bookworm1) bookworm; urgency=medium
+
+  * UN VOLUME GÉNÉRAL, QUI N'EXISTAIT PAS (ref #1349). Le Hall n'offrait que
+    des curseurs PAR SOURCE : qui cherchait un volume système cherchait quelque
+    chose qui n'existait nulle part dans le code.
+  * IL MULTIPLIE, IL NE REMPLACE PAS — `effectif = maître × réglage de la
+    source`. On pose une fois l'équilibre entre une radio masterisée fort et
+    une vidéo plus sage, et le maître déplace l'ensemble sans le défaire. Le
+    curseur de chaque rangée continue d'afficher le réglage de SA source, sinon
+    baisser le maître ferait glisser tous les curseurs et l'on perdrait
+    l'équilibre qu'on venait de poser.
+  * IL EST HORS DU DOCK, et ce n'est pas un détail : les rangées sont
+    réécrites à chaque changement de composition. Un maître posé dedans serait
+    effacé dès qu'un flux s'ouvre ou se ferme — exactement quand on s'en sert.
+  * LE RÉSULTAT D'UNE ACTION REPART VERS L'APPELANT. Il était JETÉ : ZIA
+    demandait, n'apprenait jamais si l'action avait eu lieu, et répondait de la
+    même façon qu'elle ait agi ou non. Un échec qui ressemble à un succès est
+    pire qu'une erreur — on cherche le problème partout sauf là où il est.
+  * LE VOLUME RELATIF EST CALCULÉ PAR LE HALL, pour toute source et pas
+    seulement pour le maître : lui seul détient le réglage de chaque flux.
+    Demander « baisse de 15 % » à une cardlet lui demanderait un état qu'elle
+    n'a pas — elle ne connaît que le volume effectif qu'on lui impose.
+  * IL NE PEUT QUE BAISSER, et c'est assumé. `HTMLMediaElement.volume` est
+    borné à [0,1] par la spécification ; dépasser l'unité demande un étage de
+    gain Web Audio dont le prix est réel — un flux sans CORS qui y passe
+    devient MUET. Traité séparément ; ce qui est livré ici ne risque rien.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 16:34:57 +0200
+
 secubox-webos (1.0.333-1~bookworm1) bookworm; urgency=medium
 
   * UNE SEULE RÉFÉRENCE DE RENDU (closes #1347). `render-ref.html` décrivait un

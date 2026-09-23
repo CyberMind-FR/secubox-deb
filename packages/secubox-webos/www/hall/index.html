@@ -540,6 +540,21 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .mediadock{position:fixed;left:0;right:0;bottom:30px;z-index:58;
   display:flex;flex-direction:column;gap:6px;padding:0 12px 8px;pointer-events:none}
 .mediadock:empty{display:none}
+/* LE VOLUME GÉNÉRAL (#1349). Posé juste au-dessus des rangées, il MULTIPLIE
+   leur réglage : chaque source garde son équilibre, une seule main les baisse
+   toutes. */
+.dockmaitre{position:fixed;left:0;right:0;bottom:var(--dock-b,30px);pointer-events:auto;
+  z-index:59;display:flex;align-items:center;gap:10px;justify-content:center;
+  padding:5px 12px;background:var(--nav);border-top:1px solid var(--nav-line);
+  color:var(--nav-ink);font-size:.78rem}
+.dockmaitre[hidden]{display:none!important}
+.dm-et{color:var(--nav-dim);letter-spacing:.02em}
+.dockmaitre button{background:none;border:0;color:var(--nav-ink);cursor:pointer;
+  font-size:.95rem;padding:2px 4px;border-radius:6px}
+.dockmaitre button:hover{background:var(--nav-2)}
+.dm-vol{width:min(220px,34vw);accent-color:var(--cyan)}
+.dm-pct{color:var(--nav-dim);min-width:3.4em;text-align:right;
+  font-variant-numeric:tabular-nums}
 /* REPLI DE LA BARRE (#1258). Deux flux tiennent sans manger l'ecran, mais on
    n'a pas toujours envie de les voir : la barre se replie sur les pastilles,
    qui disent deja ce qui joue. Rien ne s'arrete — c'est un pli, pas un arret,
@@ -1255,6 +1270,18 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
          Le son vit DANS les cadres, sur d'autres origines — le Hall ne peut pas
          toucher leur <audio>, et c'est heureux. Les services annoncent leur
          état, la barre leur renvoie les commandes. Même canal que le thème. -->
+    <!-- LE MAÎTRE EST HORS DU DOCK, ET CE N'EST PAS UN DÉTAIL : `dessine()`
+         réécrit `innerHTML` du dock à chaque changement de composition. Un
+         maître posé dedans serait effacé dès qu'un flux s'ouvre ou se ferme,
+         c'est-à-dire exactement quand on s'en sert. -->
+    <div class="dockmaitre" id="dockmaitre" hidden>
+      <span class="dm-et">Volume général</span>
+      <button id="dm-muet" type="button" title="Couper tout le son" aria-label="Couper tout le son">🔊</button>
+      <input id="dm-vol" class="dm-vol" type="range" min="0" max="1" step="0.05" value="1"
+             title="Volume général — multiplie le réglage de chaque source"
+             aria-label="Volume général">
+      <span class="dm-pct mono" id="dm-pct">100 %</span>
+    </div>
     <div class="mediadock" id="mediadock" aria-live="polite"></div>
 
   <!-- SERVICE EMBARQUÉ : page propre, vhost réel inline -->
@@ -2324,13 +2351,43 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   try { const v = JSON.parse(localStorage.getItem(CLEF_MEDIA) || '{}'); if (v && typeof v==='object') etatsMedia = v; } catch(e){}
   function sauveMedia(){ try { localStorage.setItem(CLEF_MEDIA, JSON.stringify(etatsMedia)); } catch(e){} }
   function etatMedia(id){ return etatsMedia[id] || (etatsMedia[id] = {vol:1, muet:false}); }
+
+  // ── LE VOLUME GÉNÉRAL (#1349) ───────────────────────────────────────────
+  //
+  // IL N'Y EN AVAIT AUCUN. Le Hall n'offrait que des curseurs PAR SOURCE ; qui
+  // cherchait un volume système cherchait quelque chose qui n'existait pas, et
+  // une commande vocale sans service nommé mourait sur le garde de
+  // `sbxExecuteAction` — en silence.
+  //
+  // IL MULTIPLIE, IL NE REMPLACE PAS. `effectif = maître × réglage de la
+  // source` : on règle une fois l'équilibre entre une radio masterisée fort et
+  // une vidéo plus sage, et le maître déplace ensuite l'ensemble sans défaire
+  // cet équilibre. Un maître qui écraserait les réglages obligerait à tout
+  // refaire à chaque fois qu'on baisse le son.
+  //
+  // IL NE PEUT QUE BAISSER, et c'est assumé ici. `HTMLMediaElement.volume` est
+  // borné à [0,1] par la spécification : dépasser l'unité demande un étage de
+  // gain Web Audio, dont le prix est réel — un flux sans CORS qui y passe
+  // devient MUET. Traité séparément ; ce qu'on livre ici ne risque rien.
+  const CLEF_MAITRE = 'sbx.hall.dock.maitre';
+  var maitre = {vol:1, muet:false};
+  try { const v = JSON.parse(localStorage.getItem(CLEF_MAITRE) || 'null');
+        if (v && typeof v==='object') maitre = {vol:Number(v.vol)||0, muet:!!v.muet}; } catch(e){}
+  if(!(maitre.vol>=0 && maitre.vol<=1)) maitre.vol = 1;
+  function sauveMaitre(){ try{ localStorage.setItem(CLEF_MAITRE, JSON.stringify(maitre)); }catch(e){} }
+  // Le volume réellement envoyé à une source.
+  function volEffectif(em){ return Math.max(0, Math.min(1, (em.vol==null?1:Number(em.vol)) * maitre.vol)); }
   // Applique l'etat retenu a une rangee : slider, bouton, et commande au flux.
   function appliqueMedia(id){
     const em = etatsMedia[id]; if(!em) return;
     const r = dock.querySelector('.mrow[data-id="'+id+'"]'); if(!r) return;
     const sl = r.querySelector('.mvol'), bt = r.querySelector('button[data-a="muet"]');
-    if(sl && em.vol!=null){ sl.value = em.vol; commande(id,'vol', Number(em.vol)); }
-    if(bt && em.muet!=null){ bt.textContent = em.muet ? '🔇' : '🔊'; commande(id,'muet', !!em.muet); }
+    // LE CURSEUR DE LA RANGÉE MONTRE LE RÉGLAGE DE LA SOURCE, pas le volume
+    // effectif : sinon, baisser le maître ferait glisser tous les curseurs et
+    // l'on perdrait l'équilibre qu'on avait posé entre les sources.
+    if(sl && em.vol!=null){ sl.value = em.vol; commande(id,'vol', volEffectif(em)); }
+    if(bt && em.muet!=null){ bt.textContent = em.muet ? '🔇' : '🔊';
+      commande(id,'muet', !!em.muet || !!maitre.muet); }
   }
 
   const dock=document.getElementById('mediadock');
@@ -2506,6 +2563,12 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   function dessine(){
     pastilles();
     const ids=[...flux.keys()];
+    // Pas de flux, pas de maître : une barre de volume qui ne commande rien
+    // n'est pas neutre, elle laisse croire qu'on a réglé quelque chose.
+    // La barre du maître est décidée plus bas, une fois `visibles` connu : une
+    // rangée repliée ne compte pas, et un maître posé au-dessus de rien ne
+    // commanderait rien tout en ayant l'air de régler quelque chose.
+    const dm=document.getElementById('dockmaitre');
     // On ne reconstruit que si la composition change : réécrire le HTML à
     // chaque seconde ferait clignoter le texte et perdrait le focus.
     if(dock.dataset.ids!==ids.join(',')){
@@ -2538,8 +2601,19 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     // La réserve suit ce qui RESTE visible : une rangée rangée ne réserve plus
     // rien, mais les autres si. On mesure après avoir posé les classes.
     const visibles = ids.filter(id=>!estRange(id)).length;
+    // LE MAÎTRE COMPTE DANS LA RÉSERVE (#1349). `--dock-h` sert à la fois au
+    // rembourrage du contenu et à la hauteur du viewer ; oublier la barre de
+    // volume générale ferait passer le bas des pages dessous — visible
+    // seulement quand on lit jusqu'en bas, donc jamais en la testant.
+    // Deux variables, et la distinction compte : `--dock-b` place la barre du
+    // maître JUSTE au-dessus des rangées (sans se compter elle-même, sinon elle
+    // s'éloignerait d'un cran à chaque mesure) ; `--dock-h` est la réserve
+    // totale rendue au contenu, elle, l'inclut.
+    if(dm) dm.hidden = !visibles;
+    const hMaitre2 = (dm && !dm.hidden) ? dm.offsetHeight : 0;
+    document.documentElement.style.setProperty('--dock-b', (30 + (visibles ? dock.offsetHeight : 0)) + 'px');
     document.documentElement.style.setProperty(
-      '--dock-h', visibles ? dock.offsetHeight + 'px' : '0px');
+      '--dock-h', visibles ? (dock.offsetHeight + hMaitre2) + 'px' : '0px');
     ids.forEach(id=>{
       const r=dock.querySelector('.mrow[data-id="'+id+'"]'); if(!r) return;
       const e=flux.get(id).etat||{};
@@ -3334,6 +3408,47 @@ function estCadreConnu(src){
 }
 function sbxExecuteAction(req){
   if(!req || req.kind!=='sbx-action' || !req.service || !req.action) return false;
+  // ── LE VOLUME GÉNÉRAL (#1349) ────────────────────────────────────────────
+  //
+  // AVANT LA RÉSOLUTION DE CAPACITÉ, et pour la même raison que `voice` juste
+  // en dessous : le maître est natif du Hall, il n'est la capacité d'aucune
+  // cardlet et n'a donc aucune entrée au registre de ZIA. Le chercher là
+  // rendrait `null`, et la commande serait refusée alors qu'elle est valide.
+  //
+  // CE SERVICE EST CE QUE ZIA VISE QUAND AUCUN AUTRE N'EST NOMMÉ. « Baisse le
+  // son » ne désigne pas une source ; sans ce point d'entrée, la phrase
+  // mourait sur le garde ci-dessus — en silence, ce qui est le pire des
+  // échecs puisqu'il ressemble à un succès.
+  // ── LE VOLUME RELATIF EST TOUJOURS CALCULÉ ICI (#1349) ───────────────────
+  //
+  // Pour n'importe quelle source, pas seulement le maître : c'est le Hall qui
+  // détient le réglage de chaque flux (`etatMedia(id).vol`), et personne
+  // d'autre ne peut donc dire de combien partir. Poster « baisse de 15 % » à
+  // une cardlet lui demanderait un état qu'elle n'a pas — elle ne connaît que
+  // le volume effectif qu'on vient de lui imposer, maître compris.
+  if(req.action==='media.volume.relative' && req.service!=='hall'){
+    if(typeof window.dockPas!=='function') return false;
+    const n=Number((req.params||{}).value); if(!isFinite(n)) return false;
+    return !!window.dockPas(req.service, n);
+  }
+  if(req.service==='hall'){
+    if(typeof window.dockMaitre!=='function') return false;
+    const v=(req.params||{}).value;
+    if(req.action==='media.volume'){
+      const n=Number(v); if(!isFinite(n)) return false;
+      window.dockMaitre(Math.max(0,Math.min(1,n)), null); return true;
+    }
+    if(req.action==='media.volume.relative'){
+      // UN PAS, PAS UNE VALEUR. ZIA ne connaît pas le volume courant et ne
+      // doit pas l'inventer : « baisse le son » ne dit pas d'où l'on part.
+      // C'est ici, et seulement ici, qu'on le sait.
+      const n=Number(v); if(!isFinite(n)) return false;
+      const e=window.dockMaitreEtat();
+      window.dockMaitre(Math.max(0,Math.min(1, e.vol + n)), null); return true;
+    }
+    if(req.action==='media.mute'){ window.dockMaitre(null, !!v); return true; }
+    return false;
+  }
   const cap=SBXCapabilities.resolve(req.service, req.action, req.params||{});
   if(!cap || !cap.message) return false;   // capacité inconnue → on n'invente rien
   // LEXIE N'EST PAS UNE CARDLET (#1287). `sbxPost` poste à un CADRE ; la fenêtre
@@ -3362,7 +3477,19 @@ addEventListener('message', ev=>{
   // ACTION (couche ZIA) : le chat ZIA relaie une action DÉJÀ VALIDÉE. On gate la
   // SOURCE (cadre connu) — elle agit sur un autre service — puis on exécute.
   if(d.sbx==='action' && d.req){
-    if(estCadreConnu(ev.source)) sbxExecuteAction(d.req);
+    // LE RÉSULTAT REPART VERS L'APPELANT (#1349). Il était JETÉ : ZIA
+    // demandait une action, n'apprenait jamais si elle avait eu lieu, et
+    // répondait donc de la même façon qu'elle ait agi ou non. Un échec qui
+    // ressemble à un succès est pire qu'une erreur — on cherche le problème
+    // partout sauf là où il est.
+    if(estCadreConnu(ev.source)){
+      const ok = sbxExecuteAction(d.req);
+      try{
+        ev.source.postMessage({sbx:'sbx-action-result', id:(d.req&&d.req.id)||null,
+          service:(d.req&&d.req.service)||null, action:(d.req&&d.req.action)||null,
+          ok:!!ok}, ev.origin && ev.origin!=='null' ? ev.origin : '*');
+      }catch(e){ /* cadre parti entre-temps */ }
+    }
     return;
   }
   if(d.sbx==='surf' && d.url){ ouvreSurf(d.url); return; }
@@ -3660,9 +3787,56 @@ addEventListener('message', ev=>{
   dock.addEventListener('input', e=>{
     const c=e.target.closest('.mvol'); if(!c) return;
     const id=c.closest('.mrow').dataset.id;
-    commande(id, 'vol', Number(c.value));
     etatMedia(id).vol = Number(c.value); sauveMedia();   // #1361
+    commande(id, 'vol', volEffectif(etatMedia(id)));     // #1349 : × le maître
   });
+
+  // ── LE MAÎTRE : une main sur toutes les sources (#1349) ─────────────────
+  function peintMaitre(){
+    const sl=document.getElementById('dm-vol'), bt=document.getElementById('dm-muet'),
+          pc=document.getElementById('dm-pct');
+    if(sl) sl.value = maitre.vol;
+    if(bt) bt.textContent = maitre.muet ? '🔇' : '🔊';
+    // Le pourcentage est affiché : « le curseur est aux trois quarts » ne se
+    // lit pas, et c'est justement quand on cherche pourquoi une source est
+    // basse qu'on a besoin du nombre.
+    if(pc) pc.textContent = maitre.muet ? 'coupé' : Math.round(maitre.vol*100)+' %';
+  }
+  function reappliqueTout(){
+    [...flux.keys()].forEach(id=>{
+      const em=etatMedia(id);
+      commande(id,'vol', volEffectif(em));
+      commande(id,'muet', !!em.muet || !!maitre.muet);
+    });
+  }
+  // dockMaitre : le point d'entrée unique. Le dock l'appelle, ZIA aussi —
+  // deux chemins vers le même geste, pas deux implémentations.
+  window.dockMaitre=function(v, muet){
+    if(v!=null){ const n=Number(v); if(isFinite(n)) maitre.vol=Math.max(0,Math.min(1,n)); }
+    if(muet!=null) maitre.muet=!!muet;
+    sauveMaitre(); peintMaitre(); reappliqueTout();
+    return {vol:maitre.vol, muet:maitre.muet};
+  };
+  window.dockMaitreEtat=function(){ return {vol:maitre.vol, muet:maitre.muet}; };
+  // dockPas : déplacer d'un CRAN le réglage d'une source nommée. Rend false si
+  // la source n'a pas de flux ouvert — « baisse la radio » quand la radio ne
+  // joue pas n'est pas une réussite, et le dire vaut mieux que de ranger un
+  // réglage que personne n'entendra.
+  window.dockPas=function(id, pas){
+    if(!id || !flux.has(id)) return false;
+    const em=etatMedia(id), n=Number(pas); if(!isFinite(n)) return false;
+    em.vol = Math.max(0, Math.min(1, (em.vol==null?1:Number(em.vol)) + n));
+    sauveMedia();
+    const r=dock.querySelector('.mrow[data-id="'+id+'"] .mvol'); if(r) r.value=em.vol;
+    commande(id,'vol', volEffectif(em));
+    return true;
+  };
+  (function(){
+    const sl=document.getElementById('dm-vol'), bt=document.getElementById('dm-muet');
+    if(sl) sl.addEventListener('input', ()=>window.dockMaitre(Number(sl.value), null));
+    if(bt) bt.addEventListener('click', ()=>window.dockMaitre(null, !maitre.muet));
+    peintMaitre();
+  })();
 
   dock.addEventListener('click', e=>{
     const b=e.target.closest('button[data-a]'); if(!b) return;

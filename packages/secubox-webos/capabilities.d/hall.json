@@ -1,0 +1,43 @@
+{
+  "service": "hall",
+  "transport": "sbx-natif",
+  "_note": "LE HALL N'EST PAS UNE CARDLET. Ces actions ne sont postées à aucun cadre : sbxExecuteAction les intercepte AVANT la résolution de capacité et appelle window.dockMaitre, comme il le fait déjà pour 'voice' (la fenêtre vocale de Lexie, native elle aussi). Le manifeste existe pour que ZIA sache que l'action est PERMISE et pour qu'elle borne la valeur — pas pour transporter un message.",
+  "_pourquoi": "C'est la cible par défaut d'un réglage de son que personne n'a ciblé. « Baisse le son » ne nomme aucune source : sans ce service, la commande retombait sur la radio seule, et l'ordre général ne touchait qu'une source (#1349).",
+  "actions": {
+    "media.mute": {
+      "message": {
+        "sbx": "cmd",
+        "action": "maitre.muet"
+      },
+      "value": {
+        "field": "v",
+        "type": "boolean"
+      }
+    },
+    "media.volume": {
+      "message": {
+        "sbx": "cmd",
+        "action": "maitre.vol"
+      },
+      "value": {
+        "field": "v",
+        "type": "number",
+        "min": 0,
+        "max": 1
+      }
+    },
+    "media.volume.relative": {
+      "message": {
+        "sbx": "cmd",
+        "action": "maitre.vol.relatif"
+      },
+      "value": {
+        "field": "v",
+        "type": "number",
+        "min": -1,
+        "max": 1
+      },
+      "_note": "Un PAS, pas une valeur : « baisse le son » ne dit pas de combien partir. Le Hall detient l'etat courant et l'applique — lui seul sait d'ou il part."
+    }
+  }
+}

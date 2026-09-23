@@ -1,3 +1,11 @@
+secubox-podcaster (1.0.39-1~bookworm1) bookworm; urgency=medium
+
+  * DÉCLARE `media.volume.relative` (ref #1349) — « monte le son du podcast »
+    fonctionne. Le pas est appliqué par le Hall, seul détenteur du réglage de
+    la source.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 16:34:57 +0200
+
 secubox-podcaster (1.0.38-1~bookworm1) bookworm; urgency=medium
 
   * Le paquet pose SA PROPRE route sbxwaf, comme il pose déjà son vhost.
