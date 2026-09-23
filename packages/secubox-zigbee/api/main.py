@@ -30,6 +30,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from secubox_core.auth import require_jwt
 from secubox_core.auth import require_lecture
 
+from .couleur import charge_pour
+
 LXC_NAME = os.environ.get("SECUBOX_LXC_NAME", "zigbee")
 LXC_IP = os.environ.get("SECUBOX_LXC_IP", "10.100.0.111")
 LXC_PATH = os.environ.get("SECUBOX_LXC_PATH", "/data/lxc")
@@ -170,6 +172,19 @@ def _genre(dev: dict) -> str:
     return "inconnu"
 
 
+def _capacites(dev: dict) -> list:
+    """Ce que l'appareil sait faire, d'apres le pont lui-meme.
+
+    On lit les `features` de l'expose plutot qu'une table de modeles tenue
+    ici : le pont connait son materiel, nous ne ferions que recopier sa
+    connaissance en retard d'une reference.
+    """
+    for e in ((dev.get("definition") or {}).get("exposes") or []):
+        if e.get("type") in ("light", "switch"):
+            return [f.get("name") for f in (e.get("features") or []) if f.get("name")]
+    return []
+
+
 def _etats(noms: list) -> dict:
     """L'état courant de chaque appareil nommé.
 
@@ -256,35 +271,50 @@ def devices() -> dict:
 
 @app.post("/devices/{nom}/set", dependencies=[Depends(require_jwt)])
 def set_device(nom: str, body: dict) -> dict:
-    """Allume ou éteint un appareil.
+    """Commande un appareil : etat, couleur, luminosite.
 
     SOUS JETON, alors que la lecture se contente de `require_lecture` : lire
-    l'état d'une lampe est de l'information, la piloter est un acte dans le
+    l'etat d'une lampe est de l'information, la piloter est un acte dans le
     monde physique. Le relais du Hall ajoute une seconde condition, le LAN.
+
+    La couleur et la luminosite (#1331) sont verifiees contre ce que le pont
+    annonce pour CET appareil : on refuse une couleur a un interrupteur au
+    lieu de la lui envoyer pour rien. Les trois champs sont optionnels, mais
+    pas tous les trois a la fois.
     """
-    etat = str((body or {}).get("etat", "")).upper()
-    if etat not in ("ON", "OFF", "TOGGLE"):
-        raise HTTPException(400, "etat doit valoir ON, OFF ou TOGGLE")
-    if nom not in [d["friendly_name"] for d in _inventaire()]:
-        # Même message pour « inconnu » et « le pont ne répond pas » : on ne
+    body = body or {}
+    dev = next((d for d in _inventaire() if d.get("friendly_name") == nom), None)
+    if dev is None:
+        # Meme message pour « inconnu » et « le pont ne repond pas » : on ne
         # renseigne pas sur l'existence d'un appareil.
         raise HTTPException(404, "appareil inconnu")
+    try:
+        charge = charge_pour(
+            _capacites(dev),
+            etat=body.get("etat"),
+            couleur=body.get("couleur"),
+            luminosite=body.get("luminosite"),
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     base = _mqtt_base()
     if not base:
         raise HTTPException(503, "identifiants MQTT indisponibles")
     try:
         proc = subprocess.run(
             ["mosquitto_pub", *base, "-t", f"zigbee2mqtt/{nom}/set",
-             "-m", json.dumps({"state": etat})],
+             "-m", json.dumps(charge)],
             capture_output=True, text=True, timeout=6,
         )
     except (subprocess.SubprocessError, FileNotFoundError):
         raise HTTPException(503, "courtier MQTT injoignable")
     if proc.returncode != 0:
         raise HTTPException(502, "le courtier a refuse la commande")
-    # On relit APRÈS avoir commandé : l'appareil, pas notre intention, dit ce
-    # qui s'est passé. Un TOGGLE n'a d'ailleurs pas d'autre façon de répondre.
-    return {"nom": nom, "etat": (_etats([nom]).get(nom) or {}).get("state")}
+    # On relit APRES avoir commande : l'appareil, pas notre intention, dit ce
+    # qui s'est passe. Un TOGGLE n'a d'ailleurs pas d'autre facon de repondre.
+    vu = _etats([nom]).get(nom) or {}
+    return {"nom": nom, "etat": vu.get("state"),
+            "luminosite": vu.get("brightness"), "commande": charge}
 
 
 @app.get("/components", dependencies=[Depends(require_lecture)])

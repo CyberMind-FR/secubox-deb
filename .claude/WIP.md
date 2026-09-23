@@ -43,6 +43,15 @@
   PeerTube (plafond 3 par message, dédoublonné, passe unique en fin de `Render`
   et non par paragraphe) ; trois tests CSP précis remplacent l'interdiction
   globale qui ne décrivait plus la politique réelle.
+- **La lampe bibli suit l'humeur (#1331)** — `gabriel-mood` **0.7.0**,
+  `secubox-zigbee` **2.7.0**, `secubox-webos` **1.0.332**. `LIGHT-BIBLI` prend
+  la teinte de l'émotion dominante ; la confiance module la luminosité, et un
+  indéterminé rend un blanc chaud plutôt qu'une couleur devinée. **LAN
+  seulement** : la garantie est dans `hall.vhost.conf` (`$lan_client = 0 → 403`),
+  pas dans le JavaScript — vérifié, 401 depuis le LAN et 403 avec un
+  `X-Forwarded-For` public. Rien ne s'allume au chargement, et l'arrêt de
+  l'écoute rend la lampe au blanc. Un test Go garde la table de teintes
+  TypeScript, que rien d'autre ne relie aux états.
 - **secubox-appstore 0.4.12** — catalogue 134 → 175, groupes, profils reliés,
   ajout/retrait de modules avec gardes.
 

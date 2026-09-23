@@ -16,6 +16,7 @@
   import FFTCanvas from './FFTCanvas.svelte'
   import { Micro, type Image, type Etat } from './src/lib/micro'
   import { Lien, type Role } from './src/lib/lien'
+  import { lumierePour, lumiereNeutre, vautLaPeine, type Lumiere } from './src/lib/couleur'
 
   let img: Image | null = $state(null)
   let etat: Etat = $state('arrete')
@@ -51,6 +52,32 @@
   } as Record<string, number>)
   const opacite = $derived(0.34 + Math.min(img?.confidence ?? 0, 0.72) * 0.9)
   const actif = $derived(etat === 'ecoute' || role === 'suiveur')
+
+  // LA LAMPE SUIT L'HUMEUR — mais seulement si quelqu'un écoute (#1331).
+  //
+  // ON N'ALLUME RIEN AU CHARGEMENT. Sans le garde `aEmis`, ouvrir le Hall
+  // suffirait à changer la lumière d'une pièce : un effet physique déclenché
+  // par personne, pour une carte que l'on n'a même pas regardée. La première
+  // émission ne peut donc venir que d'une écoute réelle.
+  //
+  // ET ON REND LA LAMPE EN PARTANT. Quand l'écoute s'arrête, on repasse au
+  // blanc chaud : laisser un rouge au mur après la fin de la mesure, ce serait
+  // une affirmation qui survit à ce qui la justifiait.
+  //
+  // LE HALL DÉCIDE S'IL OBÉIT. Il connaît la lampe et il porte la session ;
+  // hors LAN, son propre relais rendra 403. D'ici, on ne fait que dire ce
+  // qu'on lit — on ne commande rien.
+  let derniere: Lumiere | null = null
+  let aEmis = false
+  $effect(() => {
+    if (parent === window) return          // hors cadre : personne à qui parler
+    if (!actif && !aEmis) return           // jamais écouté : la lampe ne nous regarde pas
+    const l = actif ? lumierePour(tete, img?.confidence ?? 0) : lumiereNeutre()
+    if (!vautLaPeine(derniere, l)) return
+    derniere = l
+    aEmis = actif || aEmis
+    try { parent.postMessage({ sbx: 'mood-lumiere', ...l }, '*') } catch { /* cadre parti */ }
+  })
 
   // LE HALL OUVRE LA GRANDE VUE, PAS NOUS. Encadré, on lui demande par le
   // protocole sbx ; hors cadre, on y va directement. Ouvrir un onglet depuis

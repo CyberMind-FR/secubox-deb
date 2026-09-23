@@ -1,3 +1,24 @@
+secubox-zigbee (2.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * COULEUR ET LUMINOSITÉ SUR /devices/{nom}/set (ref #1331). Les trois champs
+    sont optionnels, mais pas tous les trois à la fois : un corps vide
+    publierait `{}` sur le topic /set, accepté par le courtier, sans effet, et
+    compté comme un succès.
+  * ON REFUSE AU LIEU D'IGNORER. Un interrupteur à qui l'on envoie une couleur
+    l'ignore en silence : la commande réussit, rien ne bouge, et l'appelant
+    croit avoir agi. On cherche alors le bug dans le réseau, dans le pont, dans
+    la radio — partout sauf dans l'évidence. Les capacités viennent des
+    `features` annoncées par le pont pour CET appareil, pas d'une table de
+    modèles tenue ici : deux références au même nom de modèle n'exposent pas
+    forcément la même chose.
+  * LA CONVERSION sRGB → CIE APPARTIENT AU MODULE (`api/couleur.py`). Une lampe
+    Zigbee ne connaît pas le sRGB, elle connaît `color_xy` ; si chaque appelant
+    convertissait, chacun le ferait différemment — la matrice n'est pas unique.
+    C'est la « Wide RGB D65 », celle du parc ; la matrice sRGB standard donne
+    des couleurs plausibles mais décalées, surtout dans les verts, une erreur
+    invisible au code et visible au mur. 27 tests, sans courtier ni FastAPI.
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 14:01:07 +0200
+
 secubox-zigbee (2.6.8-1~bookworm1) bookworm; urgency=high
 
   * DEPENDANCE MANQUANTE : mosquitto-clients (#1365). Ce module appelle
