@@ -139,9 +139,17 @@ def _write_sessions(rows: list) -> None:
 
 
 def _append_audit(event: str, username: str, details: dict) -> None:
+    # Créé en 0640, et ramené à 0640 s'il était plus large : le journal
+    # d'authentification a été trouvé en 0666 sur gk2 — n'importe quel compte
+    # pouvait y forger ou effacer une connexion (#1366).
     line = json.dumps({"ts": time.time(), "event": event, "user": username, **details}) + "\n"
-    with _AUDIT_FILE.open("a") as _f:
-        _f.write(line)
+    fd = os.open(_AUDIT_FILE, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o640)
+    try:
+        if os.fstat(fd).st_mode & 0o037:
+            os.fchmod(fd, 0o640)
+        os.write(fd, line.encode())
+    finally:
+        os.close(fd)
 
 
 def _session_validator(jti: str) -> bool:
@@ -463,6 +471,11 @@ def _save(p: Path, data):
     """Save JSON file safely."""
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(data, indent=2))
+    # Jamais modifiable par tous (#1366). La lecture reste telle quelle :
+    # sessions.json est lu par d'autres modules (voir postinst).
+    mode = p.stat().st_mode
+    if mode & 0o002:
+        os.chmod(p, mode & 0o775)
 
 
 def _load_history() -> List[Dict[str, Any]]:

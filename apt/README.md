@@ -40,14 +40,29 @@ cd /srv/apt
 reprepro export
 ```
 
-### GPG Key Setup
+### Clé de signature (état réel, #1366)
+
+apt.secubox.in est hébergé **et signé sur gk2** (`/srv/apt → /data/apt`,
+servi par `/var/www/apt.secubox.in/dists → /data/apt/dists`).
+
+| | |
+|---|---|
+| Empreinte | `219B A872 E393 3EAA C348  6A13 44E5 0F01 78E8 BC7E` |
+| Identité | SecuBox APT Repository `<apt@secubox.in>`, rsa4096, créée 2026-05-11 |
+| Clé privée | **une seule copie** : `/root/.gnupg` sur gk2 (celle de reprepro, `conf/options` sans `gnupghome`) |
+| Révocation | `/root/.gnupg/openpgp-revocs.d/219BA872….rev` + copie hors ligne |
+
+- **Ne jamais générer de nouvelle clé** : tous les clients font confiance à
+  celle-ci. `31848880…6DB9` (packages@secubox.in, 2026-05-12) est une clé
+  de mise en scène jamais publiée ; elle ne signe rien.
+- La copie de `/data/secubox-repo/gpg` (lisible par le compte `secubox`) a
+  été détruite : l'API `secubox-repo` ne peut plus signer. Signer se fait
+  en root, en attendant la session de signature du Coffre (#1367, P2).
+- Aucun secret GPG sur GitHub : la CI construit, gk2 signe.
 
 ```bash
-# Generate signing key (if not exists)
-gpg --gen-key
-
-# Export public key for clients
-gpg --armor --export your@email.com > /srv/apt/secubox.gpg
+# Signer après une mise à jour (root sur gk2)
+GPG_TTY=$(tty) reprepro -b /srv/apt export bookworm
 ```
 
 ## Usage
