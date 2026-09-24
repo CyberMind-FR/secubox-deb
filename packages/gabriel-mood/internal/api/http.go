@@ -9,6 +9,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/gabriel-mood/internal/audio"
@@ -22,6 +23,14 @@ type Serveur struct {
 	Store    *store.Store
 	Version  string
 	Racine   http.Handler // les fichiers du cockpit, s'ils sont livrés
+
+	// Administration (#1371). Nil : réglages par défaut, surface admin fermée.
+	Reglages  *Reglages
+	Verif     VerifAdmin
+	Demarre   time.Time
+	Inference string
+	purgeMu   sync.Mutex
+	purgeLe   time.Time
 }
 
 // Humeur : la réponse de GET /api/mood.
@@ -78,6 +87,7 @@ func (s *Serveur) Routes() *http.ServeMux {
 	m.HandleFunc("/api/mood/oubli", s.oubli)
 	m.HandleFunc("/api/sante", s.sante)
 	m.HandleFunc("/ws/mood", s.websocket)
+	s.routesAdmin(m)
 	if s.Racine != nil {
 		m.Handle("/", s.Racine)
 	}
@@ -180,7 +190,14 @@ func (s *Serveur) oubli(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Query().Get("session") != "":
 		n, err = s.Store.OublieSession(r.URL.Query().Get("session"))
 	default:
-		n, err = s.Store.Tout()
+		// PLUS D'EFFACEMENT GÉNÉRAL ICI (#1371). Sans paramètre, cette route
+		// PUBLIQUE effaçait l'historique de tout le monde et toutes les
+		// références : le bouton « Oublier » d'un visiteur vidait la board.
+		// Chacun oublie SA session et SA référence ; tout effacer est un geste
+		// d'administration (/api/mood/admin/purge).
+		ecris(w, http.StatusBadRequest, map[string]string{
+			"erreur": "précisez ?session= ou ?ref= — effacer tout se fait depuis l'administration"})
+		return
 	}
 	if err != nil {
 		ecris(w, http.StatusInternalServerError, map[string]string{"erreur": err.Error()})

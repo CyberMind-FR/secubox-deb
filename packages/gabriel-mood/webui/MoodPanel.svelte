@@ -74,10 +74,13 @@
   ])
 
   async function oublie() {
-    if (!confirm('Effacer tout l’historique conservé sur la board, ET la '
+    if (!confirm('Effacer ce que la board a conservé de votre session, ET la '
       + 'référence qui permet de vous reconnaître d’une visite à l’autre ?')) return
     const cle = cleReference()
-    await fetch('/api/mood/oubli', { method: 'POST' })
+    // VOTRE session, pas celle des autres (#1371). Sans paramètre, cette route
+    // effaçait l'historique de tout le monde ; elle le refuse désormais, et
+    // tout effacer se fait depuis l'administration.
+    if (micro.session) await fetch('/api/mood/oubli?session=' + encodeURIComponent(micro.session), { method: 'POST' })
     if (cle) await fetch('/api/mood/oubli?ref=' + cle, { method: 'POST' })
     // ET DES DEUX CÔTÉS : effacer la ligne de la board en laissant la clé dans
     // le navigateur n'oublierait rien — la prochaine visite la représenterait.
@@ -113,7 +116,7 @@
           {etat === 'demande' ? '…' : '🎙 Écouter'}
         </button>
       {/if}
-      <button class="danger" onclick={oublie} title="Efface l’historique conservé">
+      <button class="danger" onclick={oublie} title="Efface l’historique conservé de votre session">
         🧹 Oublier
       </button>
     </div>

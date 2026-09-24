@@ -46,6 +46,10 @@ func main() {
 			"conservation des résumés, en h/m/s — PAS en jours (336h = 14 jours ; 0 = ne rien garder)")
 		inference = flag.String("inference", "", "socket d'un service d'inférence externe (facultatif)")
 		montre    = flag.Bool("version", false, "afficher la version")
+		reglages  = flag.String("reglages", "/var/lib/secubox/gabriel-mood/reglages.json",
+			"réglages tenus par l'administration (#1371)")
+		authSock = flag.String("auth-socket", "/run/secubox/auth.sock",
+			"socket de secubox-auth : garde de l'administration (vide = fermée)")
 	)
 	flag.Parse()
 	if *montre {
@@ -87,9 +91,15 @@ func main() {
 	}
 
 	srv := &api.Serveur{
-		Sessions: api.NouveauRegistre(db),
-		Store:    db,
-		Version:  version,
+		Sessions:  api.NouveauRegistre(db),
+		Store:     db,
+		Version:   version,
+		Reglages:  api.ChargeReglages(*reglages, *retention),
+		Demarre:   time.Now(),
+		Inference: *inference,
+	}
+	if *authSock != "" {
+		srv.Verif = api.VerifParSocket(*authSock)
 	}
 	if st, err := os.Stat(*www); err == nil && st.IsDir() {
 		srv.Racine = http.FileServer(http.Dir(*www))
@@ -102,7 +112,7 @@ func main() {
 	}
 
 	if db != nil && *retention > 0 {
-		go purgeQuotidienne(db, *retention, jr)
+		go purgePeriodique(srv, jr)
 	}
 
 	ecoute, err := ouvre(*socket, *adresse)
@@ -159,16 +169,17 @@ func ouvre(socket, adresse string) (net.Listener, error) {
 	return l, nil
 }
 
-func purgeQuotidienne(db *store.Store, retention time.Duration, jr *log.Logger) {
+func purgePeriodique(srv *api.Serveur, jr *log.Logger) {
 	// UN HISTORIQUE QUI NE S'EFFACE PAS EST UN DOSSIER. Première passe tout de
-	// suite : si la rétention vient d'être raccourcie, l'effet doit être
-	// immédiat, pas dans vingt-quatre heures.
+	// suite, puis toutes les heures : la rétention se règle désormais depuis
+	// l'administration (#1371), et un réglage raccourci ne doit pas attendre
+	// vingt-quatre heures pour prendre effet.
 	for {
-		if n, err := db.Purge(time.Now().Add(-retention)); err != nil {
+		if n, err := srv.PurgeSelonReglages(); err != nil {
 			jr.Printf("purge : %v", err)
 		} else if n > 0 {
-			jr.Printf("purge : %d résumés retirés (au-delà de %s)", n, retention)
+			jr.Printf("purge : %d résumés retirés (au-delà de %s)", n, srv.Reglages.Retention())
 		}
-		time.Sleep(24 * time.Hour)
+		time.Sleep(time.Hour)
 	}
 }

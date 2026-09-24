@@ -230,10 +230,12 @@ func TestUneSessionFermeeEstOubliee(t *testing.T) {
 // ── LA CONFIDENTIALITÉ ─────────────────────────────────────────────────────
 
 func TestLOubliEfface(t *testing.T) {
+	// Chacun oublie SA session (#1371) : la voisine garde la sienne.
 	s, srv := serveur(t)
-	s.Store.Enregistre(store.Resume{
-		Minute: time.Now().Truncate(time.Minute).Unix(), Session: "x", Energie: 1})
-	r, err := http.Post(srv.URL+"/api/mood/oubli", "", nil)
+	m0 := time.Now().Truncate(time.Minute).Unix()
+	s.Store.Enregistre(store.Resume{Minute: m0, Session: "x", Energie: 1})
+	s.Store.Enregistre(store.Resume{Minute: m0, Session: "voisine", Energie: 1})
+	r, err := http.Post(srv.URL+"/api/mood/oubli?session=x", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,8 +246,27 @@ func TestLOubliEfface(t *testing.T) {
 		t.Fatalf("%v lignes effacées", m["efface"])
 	}
 	res, _ := s.Store.Depuis(time.Time{}, 10)
-	if len(res) != 0 {
-		t.Fatalf("%d lignes subsistent", len(res))
+	if len(res) != 1 || res[0].Session != "voisine" {
+		t.Fatalf("après oubli de x : %+v", res)
+	}
+}
+
+func TestLOubliSansCibleNEffacePlusToutLeMonde(t *testing.T) {
+	// LA FAUTE CORRIGÉE (#1371) : sans paramètre, la route publique vidait la
+	// board entière — le bouton d'un visiteur effaçait tous les autres.
+	s, srv := serveur(t)
+	s.Store.Enregistre(store.Resume{
+		Minute: time.Now().Truncate(time.Minute).Unix(), Session: "voisine", Energie: 1})
+	r, err := http.Post(srv.URL+"/api/mood/oubli", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Body.Close()
+	if r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("code %d, attendu 400", r.StatusCode)
+	}
+	if res, _ := s.Store.Depuis(time.Time{}, 10); len(res) != 1 {
+		t.Fatal("un oubli sans cible a effacé l'historique des autres")
 	}
 }
 

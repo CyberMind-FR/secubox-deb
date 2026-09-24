@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox-Deb :: gabriel-mood — panneau d'administration (#1371).
+
+  AVANT, L'ENTRÉE « GABRIEL MOOD » DU PANNEAU OUVRAIT LE COCKPIT PUBLIC, ré-
+  embarqué : aucun réglage, aucune métrique. Ici : ce que la board GARDE
+  (rétention, historique, mémoire des voix), combien elle en garde, et les
+  garanties du module — affichées, jamais réglables.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Gabriel Mood</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <style>
+        :root {
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row:  rgba(20, 30, 45, 0.6);
+            --border:  rgba(100, 150, 200, 0.2);
+            --text:    #e8e6d9;
+            --cyan:    #00d4ff;
+            --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
+            --green:   #00dd44;  --blue:   #4488ff;   --purple: #a371f7;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { margin-left: 220px; padding: 1.5rem; padding-top: 60px; min-height: 100vh;
+                background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); }
+        :root.sbx-embed .sidebar, :root.sbx-embed .global-menu-bar, :root.sbx-embed .global-status-bar { display: none !important; }
+        :root.sbx-embed .main { margin-left: 0 !important; padding-top: 1.2rem; }
+
+        .header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.2rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .header .sub { font-size: .75rem; color: var(--p31-dim); margin-top: .3rem; }
+        .btn-group { display: flex; gap: .5rem; flex-wrap: wrap; }
+        .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+               padding: .45rem .8rem; border-radius: 6px; border: 1px solid var(--border);
+               background: var(--bg-row); color: var(--text); cursor: pointer; text-decoration: none; }
+        .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.3); }
+        .btn.primary { border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { border-color: var(--red); color: var(--red); }
+        .btn:disabled { opacity: .5; cursor: default; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .7rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: .8rem .9rem; backdrop-filter: blur(10px); }
+        .stat-card .value { font-size: 1.35rem; font-weight: 700; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
+        .stat-card .label { font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; color: var(--p31-dim); margin-top: .25rem; }
+        .stat-card.cyan .value { color: var(--cyan); } .stat-card.green .value { color: var(--green); }
+        .stat-card.blue .value { color: var(--blue); } .stat-card.purple .value { color: var(--purple); }
+        .stat-card.orange .value { color: var(--orange); }
+
+        .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; backdrop-filter: blur(10px); }
+        .card h3 { color: var(--cyan); font-size: .9rem; margin-bottom: .8rem; }
+        .card .note { font-size: .7rem; color: var(--p31-dim); line-height: 1.5; margin-top: .6rem; }
+
+        .barres { display: grid; grid-template-columns: repeat(24, 1fr); align-items: end; gap: 3px; height: 110px;
+                  border-bottom: 1px solid var(--border); padding-bottom: 2px; }
+        .barres i { display: block; background: linear-gradient(0deg, var(--blue), var(--cyan)); border-radius: 2px 2px 0 0; min-height: 1px; }
+        .barres i.vide { background: var(--border); }
+        .axe { display: flex; justify-content: space-between; font-size: .6rem; color: var(--p31-dim); margin-top: .3rem; font-variant-numeric: tabular-nums; }
+
+        .rows { display: grid; gap: .35rem; }
+        .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .8rem; align-items: center;
+               background: var(--bg-row); border-left: 3px solid var(--border); border-radius: 4px; padding: .45rem .7rem; font-size: .78rem; }
+        .row .k { color: var(--p31-dim); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; }
+        .row .v { color: var(--cyan); font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+        .row.ok { border-left-color: var(--green); } .row.warn { border-left-color: var(--orange); }
+        .etat { display: grid; grid-template-columns: 7rem minmax(0, 1fr) 3.5rem; gap: .6rem; align-items: center; font-size: .74rem; }
+        .etat .jauge { height: 8px; background: var(--bg-row); border-radius: 4px; overflow: hidden; }
+        .etat .jauge i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--blue)); }
+        .etat .n { text-align: right; color: var(--p31-dim); font-variant-numeric: tabular-nums; }
+
+        form.reglages { display: grid; gap: .7rem; }
+        .interrupteur { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--bg-row);
+                        border-radius: 6px; padding: .55rem .75rem; font-size: .8rem; cursor: pointer; }
+        .interrupteur small { display: block; color: var(--p31-dim); font-size: .66rem; margin-top: .15rem; }
+        .interrupteur input { width: 1.1rem; height: 1.1rem; accent-color: var(--cyan); flex: none; }
+        .champ { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--bg-row);
+                 border-radius: 6px; padding: .55rem .75rem; font-size: .8rem; }
+        .champ input { width: 5rem; font-family: inherit; font-size: .85rem; background: var(--bg-dark); color: var(--cyan);
+                       border: 1px solid var(--border); border-radius: 4px; padding: .3rem .4rem; text-align: right; }
+        :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+        .toast { position: fixed; right: 1rem; bottom: 1rem; background: var(--cyan); color: #001018; padding: .6rem .9rem;
+                 border-radius: 6px; font-size: .78rem; display: none; max-width: 90vw; z-index: 10; }
+        .toast.show { display: flex; gap: .8rem; align-items: center; }
+        .toast.error { background: var(--red); color: #fff; }
+        .toast button { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+
+        @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .main { margin-left: 0; padding: 1rem; padding-top: 60px; } }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>🎙 Gabriel Mood</h1>
+                <div class="sub" id="subline">Chargement…</div>
+            </div>
+            <div class="btn-group">
+                <button class="btn" type="button" id="refresh">↻ Actualiser</button>
+                <a class="btn primary" id="cockpit" target="_blank" rel="noopener">↗ Ouvrir le cockpit</a>
+            </div>
+        </header>
+
+        <section class="grid" id="stats" aria-label="Métriques"></section>
+
+        <div class="cols">
+            <section class="card">
+                <h3>📊 Activité — 24 dernières heures</h3>
+                <div class="barres" id="barres" aria-label="Minutes de voix conservées par heure"></div>
+                <div class="axe"><span id="axe-debut">−24 h</span><span>−12 h</span><span>maintenant</span></div>
+                <p class="note">Minutes de voix résumées et conservées, heure par heure. Des agrégats, jamais du son.</p>
+            </section>
+
+            <section class="card">
+                <h3>🎭 Lectures des 7 derniers jours</h3>
+                <div class="rows" id="etats"></div>
+                <p class="note">Répartition des lectures conservées. Ce sont des indices acoustiques relatifs à chaque voix, pas des émotions constatées.</p>
+            </section>
+
+            <section class="card">
+                <h3>⚙️ Ce que la board garde</h3>
+                <form class="reglages" id="reglages">
+                    <label class="interrupteur" for="r-historique">
+                        <span>Historique<small>Conserver un résumé par minute de voix (hauteur, débit, énergie…)</small></span>
+                        <input type="checkbox" id="r-historique">
+                    </label>
+                    <label class="interrupteur" for="r-memoire">
+                        <span>Mémoire des voix<small>Reconnaître une voix d'une visite à l'autre (15 nombres, clé tenue par le navigateur)</small></span>
+                        <input type="checkbox" id="r-memoire">
+                    </label>
+                    <div class="champ">
+                        <label for="r-retention">Rétention (jours)</label>
+                        <input type="number" id="r-retention" min="1" max="90" step="1" inputmode="numeric">
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn primary" type="submit">💾 Enregistrer</button>
+                    </div>
+                </form>
+                <p class="note">Raccourcir la rétention efface aussitôt ce qui la dépasse.</p>
+            </section>
+
+            <section class="card">
+                <h3>🛡️ Garanties du module</h3>
+                <div class="rows" id="garanties"></div>
+                <p class="note">Ces valeurs ne se règlent pas : ce sont des garanties vérifiées par les tests du module.</p>
+            </section>
+
+            <section class="card">
+                <h3>🧹 Purge</h3>
+                <div class="rows" id="purge-etat"></div>
+                <div class="btn-group" style="margin-top:.8rem">
+                    <button class="btn" type="button" data-purge="retention">🧹 Appliquer la rétention maintenant</button>
+                    <button class="btn danger" type="button" data-purge="tout">🗑️ Tout effacer</button>
+                </div>
+                <p class="note">« Tout effacer » retire l'historique de toutes les sessions ET les voix mémorisées. Les visiteurs, eux, n'effacent que leur propre session.</p>
+            </section>
+
+            <section class="card">
+                <h3>🔌 Entrées et moteur</h3>
+                <div class="rows" id="moteur"></div>
+            </section>
+        </div>
+    </main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
