@@ -35,6 +35,12 @@ VM_RAM=4096
 VM_CPUS=4
 VM_VRAM=128
 SSH_PORT=2222
+# BRIDGE : interface hôte à laquelle ponter la VM (#1361). Vide = NAT, comme
+# avant. En NAT, un autre nœud ne peut pas joindre la VM en UDP entrant et mDNS
+# ne traverse pas : aucun test de mesh MirrorNet n'est possible avec la VM que
+# ce script produisait — c'est en pont sur eno0 que le test du 2026-09-24 a pu
+# être mené.
+BRIDGE=""
 HTTPS_PORT=9443
 HTTP_PORT=8080
 IMAGE=""            # chemin explicite (.img/.img.gz/.vdi) ; sinon auto
@@ -77,6 +83,9 @@ Options:
   -s, --ssh PORT        Port hôte → 22 invité (défaut: $SSH_PORT)
   -w, --https PORT      Port hôte → 443 invité (défaut: $HTTPS_PORT)
       --http PORT       Port hôte → 80 invité (défaut: $HTTP_PORT)
+  -b, --bridge IFACE    Ponter la VM sur l'interface hôte IFACE (ex. eno0) au
+                        lieu du NAT : la VM obtient une adresse du LAN. Requis
+                        pour tester le mesh MirrorNet contre une autre box.
       --headless        Démarre sans fenêtre
       --no-start        Crée la VM sans la démarrer
   -f, --force, --delete Supprime la VM existante puis recrée
@@ -103,6 +112,13 @@ while [[ $# -gt 0 ]]; do
         -c|--cpus)    VM_CPUS="$2"; shift 2 ;;
         --vram)       VM_VRAM="$2"; shift 2 ;;
         -s|--ssh)     SSH_PORT="$2"; shift 2 ;;
+        -b|--bridge)
+            BRIDGE="$2"
+            # Refuser une interface inexistante ICI : VirtualBox l'accepterait
+            # et la VM démarrerait sans réseau, ce qui ressemble à une panne
+            # de l'image et fait chercher au mauvais endroit.
+            ip link show "$BRIDGE" >/dev/null 2>&1 || { echo "interface « $BRIDGE » introuvable" >&2; exit 1; }
+            shift 2 ;;
         -w|--https)   HTTPS_PORT="$2"; shift 2 ;;
         --http)       HTTP_PORT="$2"; shift 2 ;;
         --headless)   HEADLESS=1; shift ;;
@@ -215,19 +231,34 @@ VBoxManage modifyvm "$VM_NAME" \
     --firmware efi64 \
     --chipset ich9 \
     --boot1 disk --boot2 none \
-    --nic1 nat --nictype1 virtio \
-    --natpf1 "SSH,tcp,,${SSH_PORT},,22" \
-    --natpf1 "HTTPS,tcp,,${HTTPS_PORT},,443" \
-    --natpf1 "HTTP,tcp,,${HTTP_PORT},,80" \
     --audio-enabled off \
     --usb-ehci off --usb-xhci on \
     --clipboard-mode bidirectional
+
+if [[ -n "$BRIDGE" ]]; then
+    VBoxManage modifyvm "$VM_NAME" --nic1 bridged --bridgeadapter1 "$BRIDGE" --nictype1 virtio
+else
+    VBoxManage modifyvm "$VM_NAME" --nic1 nat --nictype1 virtio \
+        --natpf1 "SSH,tcp,,${SSH_PORT},,22" \
+        --natpf1 "HTTPS,tcp,,${HTTPS_PORT},,443" \
+        --natpf1 "HTTP,tcp,,${HTTP_PORT},,80"
+fi
 
 VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
 VBoxManage storageattach "$VM_NAME" \
     --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$VDI"
 
 # ── Récapitulatif ────────────────────────────────────────────────
+if [[ -n "$BRIDGE" ]]; then
+    MAC=$(VBoxManage showvminfo "$VM_NAME" --machinereadable | sed -n 's/^macaddress1="\(.*\)"$/\1/p')
+    ACCES="  Réseau  : en pont sur ${BRIDGE} — adresse donnée par le DHCP du LAN
+  MAC     : ${MAC}  (la retrouver : ip neigh | grep -i <mac au format aa:bb:…>)"
+else
+    ACCES="  Accès (après démarrage) :
+    SSH   : ssh -p ${SSH_PORT} root@localhost
+    HTTPS : https://localhost:${HTTPS_PORT}
+    HTTP  : http://localhost:${HTTP_PORT}"
+fi
 cat <<EOF
 
 ${GREEN}══════════════════════════════════════════════════════════${NC}
@@ -237,10 +268,7 @@ ${GREEN}════════════════════════
   RAM/CPU : ${VM_RAM} Mo / ${VM_CPUS} vCPU
   Disque  : ${VDI}
 
-  Accès (après démarrage) :
-    SSH   : ssh -p ${SSH_PORT} root@localhost
-    HTTPS : https://localhost:${HTTPS_PORT}
-    HTTP  : http://localhost:${HTTP_PORT}
+${ACCES}
   Identifiants par défaut : root / secubox
 ══════════════════════════════════════════════════════════
 EOF
