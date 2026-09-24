@@ -221,6 +221,7 @@ func (s *Server) routes() {
 	// ENTRER AVEC SA SESSION SECUBOX (#1360) — voir sbx_entree.go pour ce qui
 	// rend l'en-tête digne de foi : socket unix + nginx qui l'écrase.
 	s.mux.HandleFunc("/sbx/entrer", s.sbxEntree)
+	s.mux.HandleFunc("/sbx/auto", s.sbxAuto)
 	s.mux.HandleFunc("/login", s.connexion)
 	s.mux.HandleFunc("/logout", s.deconnexion)
 	s.mux.HandleFunc("/invite/", s.invitation)
@@ -1441,6 +1442,10 @@ func (s *Server) deconnexion(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.SetCookie(w, &http.Cookie{Name: cookieSession, Value: "", Path: "/", MaxAge: -1})
+	// Se déconnecter ne doit pas être aussitôt défait par l'entrée automatique
+	// du Hall (#1373) : une heure sans tentative.
+	http.SetCookie(w, &http.Cookie{Name: cookieAutoNon, Value: "1", Path: "/", MaxAge: 3600,
+		SameSite: s.sameSite(), Secure: s.opt.DerriereTLS})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -2260,6 +2265,17 @@ func (s *Server) compteAction(w http.ResponseWriter, r *http.Request) {
 		// Le code ne transite qu'UNE fois, pour etre affiche. Il n'est stocke
 		// nulle part en clair — ni en base, ni en session.
 		http.Redirect(w, r, "/compte?code="+url.QueryEscape(code), http.StatusSeeOther)
+	case "nom":
+		// SON PROPRE NOM (#1373). Le pseudonyme technique (`sbx-…`, clé du
+		// compte) ne change pas ; le nom affiché, si.
+		nom, ok := nomAffichable(r.PostFormValue("nom"))
+		if !ok {
+			http.Redirect(w, r, "/compte?err="+url.QueryEscape("nom : 1 à 40 caractères imprimables"),
+				http.StatusSeeOther)
+			return
+		}
+		s.st.PoseNomAffiche(v.ID, nom)
+		http.Redirect(w, r, "/compte?msg="+url.QueryEscape("nom affiché : "+nom), http.StatusSeeOther)
 	case "sessions":
 		s.st.RevokeOtherSessions(v.ID, jeton)
 		http.Redirect(w, r, "/compte?msg="+url.QueryEscape("autres sessions fermees"),

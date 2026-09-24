@@ -8,12 +8,17 @@
   rédaction. CSP stricte respectée — aucun onclick ni style en ligne : les
   actions sont des attributs data-*, la mise en forme vit dans newsroom.css.
 -->
-{{define "newsroom"}}<!doctype html><html lang="fr"><head>
+{{define "newsroom"}}<!doctype html><html lang="fr" data-connecte="{{if .V.Connecte}}1{{else}}0{{end}}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{.Titre}} — {{.Site}}</title>
 <meta name="sbx-no-health-banner">
 <link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">
 </head><body>
+{{if not .V.Connecte}}<div class="embed-entree" role="region" aria-label="Entrer">
+  <span>Vous lisez en visiteur.</span>
+  <a class="btn primary" href="/sbx/entrer">Entrer avec ma session SecuBox</a>
+  <a class="btn" href="/login">Autre compte</a>
+</div>{{end}}
 
 {{template "avmast" .}}
 

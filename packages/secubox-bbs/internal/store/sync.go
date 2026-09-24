@@ -235,3 +235,10 @@ func (s *Store) AdopteCompte(handle string) error {
 	}
 	return nil
 }
+
+// PoseNomAffiche change le nom AFFICHÉ d'un compte, jamais son pseudonyme
+// technique (#1373) : `sbx-ff90…` reste la clé, « Gandalf » est ce qu'on lit.
+func (s *Store) PoseNomAffiche(id int64, nom string) error {
+	_, err := s.db.Exec(`UPDATE users SET display_name = ? WHERE id = ?`, nom, id)
+	return err
+}
