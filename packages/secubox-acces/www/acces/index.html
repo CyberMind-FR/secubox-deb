@@ -371,7 +371,7 @@ const poste = (chemin, corps) => api(chemin, {
 function tuiles(attente, admis) {
   // « Jamais entré » est la mesure qui manquait : elle compte les accès
   // accordés dont personne n'a jamais rien fait.
-  const jamais = admis.filter(a => !a.session_le).length;
+  const jamais = admis.filter(a => !(a.derniere_connexion || a.session_le)).length;
   const items = [
     ['⏳ En attente', attente.length, 'demandes à trancher', 'k-ambre'],
     ['🎟️ Accès accordés', admis.length, 'appareils admis', 'k-vert'],
@@ -539,9 +539,11 @@ function rendProfils(admis, profils, p) {
     for (const n of pastilleBBS(a.compte || a.compte_appareil, p.bbs, noms)) k.appendChild(n);
     b.appendChild(k);
 
-    const s = el('div', 'etat-session' + (a.session_le ? '' : ' jamais'),
-      a.session_le
-        ? 'Dernière session : ' + new Date(a.session_le * 1000).toLocaleString('fr-FR')
+    const vu = a.derniere_connexion || a.session_le;
+    const s = el('div', 'etat-session' + (vu ? '' : ' jamais'),
+      vu
+        ? 'Dernière connexion : ' + new Date(vu * 1000).toLocaleString('fr-FR')
+          + (a.rattache_le && vu < a.rattache_le ? ' (avant rattachement — à rouvrir)' : '')
         : "Jamais entré — l'accès est accordé, l'appareil n'a pas encore ouvert de session.");
     b.appendChild(s);
 
@@ -760,6 +762,18 @@ function quandCourt(t) {
     { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
+// DERNIÈRE CONNEXION (#1379) : date et heure, adresse ; « ↺ » quand elle
+// précède le rattachement — elle a eu lieu sous l'identité précédente.
+function derniereConnexion(d) {
+  if (!d.derniere_connexion) return d.etat === 'acceptee' ? 'jamais' : '—';
+  const t = new Date(d.derniere_connexion * 1000);
+  let txt = t.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    + ' ' + t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (d.derniere_ip) txt += ' · ' + d.derniere_ip;
+  if (d.rattache_le && d.derniere_connexion < d.rattache_le) txt += ' ↺';
+  return txt;
+}
+
 function rendAudit(inv) {
   const c = $('audit');
   c.textContent = '';
@@ -829,7 +843,7 @@ function rendAudit(inv) {
   tb.style.cssText = 'width:100%;border-collapse:collapse;font-size:.8rem';
   const thead = el('thead');
   const trh = el('tr');
-  for (const t of ['État', 'Nom', 'Appareil', 'Profil', 'Demandé', 'Traité', 'Par']) {
+  for (const t of ['État', 'Nom', 'Appareil', 'Compte', 'Profil', 'Dernière connexion', 'Demandé', 'Traité', 'Par']) {
     const th = el('th', null, t);
     th.style.cssText = 'text-align:left;padding:5px 8px;border-bottom:1px solid var(--line-2,#ddd);'
                      + 'font-weight:700;white-space:nowrap';
@@ -849,9 +863,13 @@ function rendAudit(inv) {
       et[0] + ' ' + et[1],
       d.nom || '—',
       d.appareil || '—',
+      // SOUS QUEL NOM IL ENTRE (#1379) : le compte rattaché, sinon son compte
+      // d'appareil.
+      d.compte ? '→ ' + d.compte : (d.compte_appareil || '—'),
       // Un profil n'a de sens que sur un appareil ADMIS : l'afficher sur un
       // refus laisserait croire a un droit accorde.
       d.etat === 'acceptee' ? (d.profil || 'guest') : '—',
+      derniereConnexion(d),
       quandCourt(d.demandee_le),
       quandCourt(d.traitee_le),
       d.traitee_par || '—',

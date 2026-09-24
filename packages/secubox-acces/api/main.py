@@ -486,6 +486,9 @@ async def session_ouvrir(corps: OuvertureIn, req: Request, reponse: Response):
         "jti": jti, "expires_in": d["duree"],
         "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:100],
         "voie": "acces-signature",
+        # L'APPAREIL, pas seulement le compte (#1379) : rattaché, le compte est
+        # celui d'un humain — sans cela on ne sait plus quel appareil est entré.
+        "appareil": corps.did,
     })
     profileur().note_session(corps.did, jti)
     log.info("session ouverte : compte %s (%s, « %s »), profil %s",
@@ -520,6 +523,15 @@ async def profils(req: Request):
     droite ce qui vit déjà.
     """
     admis = profileur().admis()
+    # Dernière connexion réelle, lue dans le journal d'authentification (#1379).
+    try:
+        from .inventaire import _toutes, dernieres_connexions
+        vus = dernieres_connexions(list(_toutes(profileur())))
+    except Exception:
+        vus = {}
+    for a in admis:
+        a["derniere_connexion"] = max(int(a.get("session_le") or 0),
+                                      int((vus.get(a.get("did")) or {}).get("ts") or 0)) or None
     comptes = _comptes_secubox()
     noms = [a.get("compte") or a.get("compte_appareil") for a in admis] + [c["handle"] for c in comptes]
     return {"admis": admis, "profils": list(PROFILS),
