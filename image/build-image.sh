@@ -811,9 +811,25 @@ if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
   # --profile ; défaut secubox-full (#1112). C'est le point de bascule qui fait
   # émettre au MÊME pipeline une image « isp » (socle propre) ou « full ».
   SECUBOX_PROFILE="${SECUBOX_PROFILE:-secubox-full}"
-  chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-    -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef ${SECUBOX_PROFILE}" \
-    || warn "${SECUBOX_PROFILE} non disponible"
+  # UN PROFIL QUI NE S'INSTALLE PAS N'EST PAS UN AVERTISSEMENT (#1361).
+  # C'était un `warn` suivi de rien : l'image « full » alpha.5 est sortie avec
+  # le seul secubox-core, parce qu'UNE dépendance (secubox-ndpid-engine) manquait
+  # au dépôt. On dit POURQUOI, en simulant l'installation — c'est la seule ligne
+  # utile au milieu de mille. En slipstream, les paquets locaux ont justement
+  # pour rôle de combler le dépôt : on continue, et verify-profile.sh tranchera
+  # une fois tout installé.
+  if ! chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+      -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef ${SECUBOX_PROFILE}"; then
+    raison=$(chroot "${ROOTFS}" apt-get install -s "${SECUBOX_PROFILE}" 2>&1 \
+             | grep -E "Depends:|not installable|has no installation candidate|Unable to locate" | head -8)
+    if [[ ${SLIPSTREAM_DEBS:-0} -eq 1 ]]; then
+      warn "${SECUBOX_PROFILE} incomplet depuis le dépôt — le slipstream doit combler :"
+      echo "${raison}" | sed 's/^/        /'
+    else
+      echo "${raison}" | sed 's/^/        /' >&2
+      err "${SECUBOX_PROFILE} ininstallable depuis ${APT_SECUBOX} — image NON produite (voir ci-dessus ; --slipstream pour bâtir depuis les .deb locaux)"
+    fi
+  fi
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 else
   warn "APT repo SecuBox non disponible — skip (Phase 4)"
@@ -961,6 +977,18 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
   else
     warn "Slipstream: pas de secubox-*.deb dans output/ ou output/debs/"
   fi
+fi
+
+# ── LE PROFIL EST-IL VRAIMENT LÀ ? (#1361) ─────────────────────────────────
+# Dernière barrière avant de produire l'image, quel que soit le chemin (dépôt
+# ou slipstream). Sans elle, une image « full » ne contenant que le noyau
+# sortait sans une erreur — et c'est au premier démarrage qu'on l'apprenait,
+# par un firstboot en échec et un kiosque sans interface.
+if [[ ${SECUBOX_REPO_OK:-0} -eq 1 ]] || [[ ${SLIPSTREAM_DEBS:-0} -eq 1 ]]; then
+  log "Vérification du profil ${SECUBOX_PROFILE}..."
+  bash "${SCRIPT_DIR}/verify-profile.sh" "${ROOTFS}" "${SECUBOX_PROFILE}" \
+    || err "profil ${SECUBOX_PROFILE} incomplet — image NON produite"
+  ok "profil ${SECUBOX_PROFILE} complet"
 fi
 
 # VirtualBox/QEMU Guest Tools pour VM
