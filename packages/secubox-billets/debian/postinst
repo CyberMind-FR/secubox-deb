@@ -44,6 +44,43 @@ case "$1" in
     if [ ! -e /etc/nginx/sites-enabled/billets.conf ] && [ -e /etc/nginx/sites-available/billets.conf ]; then
       ln -s ../sites-available/billets.conf /etc/nginx/sites-enabled/billets.conf 2>/dev/null || true
     fi
+
+    # ── LE PAQUET DÉCLARE SA PROPRE ROUTE (#1356) ────────────────────────
+    #
+    # `billets.gk2.secubox.in` n'avait AUCUNE entrée dans la table de sbxwaf.
+    # Le nom lui était donc inconnu, et il l'envoyait dans son fourre-tout —
+    # lequel aboutit sur un « / » gardé. Résultat : un 401 qui accuse le mode
+    # tableau de bord, alors que le vhost de billets répondait parfaitement
+    # 200 sur son port. On cherche le défaut dans l'authentification pendant
+    # que la cause est dans le routage.
+    #
+    # La table n'appartenait à aucun paquet : des centaines de routes posées à
+    # la main au fil des années, invisibles tant que ça tient, fatales le jour
+    # où une entrée manque. `secubox-waf-route` (secubox-core) fait la fusion
+    # idempotente — le paquet qui possède le service possède sa route.
+    HOTE=billets.gk2.secubox.in
+
+    # PAS DE FILTRE D'EXPOSITION SEMÉ ICI, ET C'EST UN CHOIX (#1356).
+    # J'en avais posé un, puis mesuré : `billets.conf` ne l'inclut nulle part.
+    # Un fichier que personne ne lit est une déclaration morte — elle rassure
+    # à la lecture et ne protège rien, ce qui est pire que son absence.
+    #
+    # Et l'inclure changerait la donne sans qu'on l'ait demandé : billets est
+    # déclaré `enabled`, `ssl` et `cadrable` dans haproxy.toml, c'est un site
+    # PUBLIÉ. Le restreindre au LAN casserait sa raison d'être. L'exposition de
+    # ce domaine se décide dans HAProxy, pas dans un snippet inerte.
+
+    # ON NE ROUTE QUE SI NGINX ACCEPTE SA CONFIGURATION. Router vers un vhost
+    # que nginx refuse de charger échange un 421 contre un 502, ce qui n'est
+    # pas un progrès.
+    if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx 2>/dev/null || true
+        if command -v secubox-waf-route >/dev/null 2>&1; then
+            secubox-waf-route "$HOTE" 8910 || true
+        fi
+    else
+        echo "secubox-billets: nginx -t echoue — route sbxwaf NON posee" >&2
+    fi
     ;;
 esac
 #DEBHELPER#
