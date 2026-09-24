@@ -13,9 +13,11 @@ package web
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -73,4 +75,105 @@ func clientAuthHTTP(base string, c *http.Client) authAmont {
 		jeton, _ := rep["access_token"].(string)
 		return jeton != ""
 	}
+}
+
+// ── La session SecuBox, reconnue ici (#1369) ────────────────────────────────
+//
+// UN APPAREIL CONNECTE AU HALL EST CONNECTE A LA BBS. Avant, la BBS ne lisait
+// que son propre cookie : un iPhone ouvert au Hall arrivait ici anonyme, sans un
+// bouton, et la seule issue etait une seconde connexion avec un mot de passe
+// que l'appareil — entre par sa cle — n'a jamais eu.
+//
+// LA VERIFICATION EST CELLE DE SECUBOX, PAS UNE COPIE. /auth/verify controle la
+// signature, l'expiration, la revocation (jti) et l'etat du compte : refaire
+// ici la seule signature laisserait passer une session revoquee la-bas.
+
+// sessionSecubox : ce que /auth/verify dit d'un jeton.
+type sessionSecubox struct {
+	User    string
+	Groupes string
+}
+
+// verifSession interroge secubox-auth. ok=false pour tout refus, y compris
+// l'injoignable : on ferme, on ne devine pas.
+type verifSession func(jeton string) (sessionSecubox, bool)
+
+func clientVerifSocket(socket string) verifSession {
+	c := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+			},
+		},
+	}
+	return clientVerifHTTP("http://auth", c)
+}
+
+func clientVerifHTTP(base string, c *http.Client) verifSession {
+	if c == nil {
+		c = &http.Client{Timeout: 5 * time.Second}
+	}
+	cache := &cacheVerif{m: map[[32]byte]entreeVerif{}}
+	return func(jeton string) (sessionSecubox, bool) {
+		if jeton == "" {
+			return sessionSecubox{}, false
+		}
+		cle := sha256.Sum256([]byte(jeton))
+		if e, ok := cache.lit(cle); ok {
+			return e.s, e.ok
+		}
+		req, err := http.NewRequest("GET", base+"/auth/verify", nil)
+		if err != nil {
+			return sessionSecubox{}, false
+		}
+		req.Header.Set("Authorization", "Bearer "+jeton)
+		resp, err := c.Do(req)
+		if err != nil {
+			// Injoignable : refus, et PAS de mise en cache — une panne passagere
+			// ne doit pas deconnecter tout le monde pour la duree du cache.
+			return sessionSecubox{}, false
+		}
+		defer resp.Body.Close()
+		s := sessionSecubox{User: resp.Header.Get("Remote-User"), Groupes: resp.Header.Get("Remote-Groups")}
+		ok := resp.StatusCode == http.StatusOK && s.User != ""
+		cache.pose(cle, entreeVerif{s: s, ok: ok, jusqua: time.Now().Add(dureeCacheVerif)})
+		return s, ok
+	}
+}
+
+// Le cache borne le cout : chaque page affichee appelle qui(). Trente secondes,
+// c'est aussi le delai maximal pendant lequel une revocation reste ignoree ici.
+const dureeCacheVerif = 30 * time.Second
+const tailleCacheVerif = 512
+
+type entreeVerif struct {
+	s      sessionSecubox
+	ok     bool
+	jusqua time.Time
+}
+
+type cacheVerif struct {
+	mu sync.Mutex
+	m  map[[32]byte]entreeVerif
+}
+
+func (c *cacheVerif) lit(k [32]byte) (entreeVerif, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.m[k]
+	if !ok || time.Now().After(e.jusqua) {
+		delete(c.m, k)
+		return entreeVerif{}, false
+	}
+	return e, true
+}
+
+func (c *cacheVerif) pose(k [32]byte, e entreeVerif) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.m) >= tailleCacheVerif {
+		c.m = map[[32]byte]entreeVerif{}
+	}
+	c.m[k] = e
 }

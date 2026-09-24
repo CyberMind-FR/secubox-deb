@@ -1,3 +1,19 @@
+secubox-bbs (0.33.0-1~bookworm1) bookworm; urgency=high
+
+  * La session SecuBox du Hall ouvre la BBS (ref #1369) : sans session BBS,
+    le cookie secubox_session est validé par /auth/verify (signature,
+    révocation, compte actif ; cache 30 s) et ouvre le compte d'origine
+    SecuBox du même nom — jamais un homonyme local.
+  * SÉCURITÉ : les routes d'administration (users, invites, settings,
+    invite, backup, reindex) n'exigeaient qu'une signature valide — un
+    appareil invité pouvait lister les comptes et leurs adresses ou émettre
+    des invitations. Elles exigent désormais un administrateur confirmé par
+    secubox-auth, et restent fermées sans lui.
+  * API /api/v1/bbs/comptes/etat et /comptes/sync (+ adoption explicite d'un
+    compte local), pour l'écran des accès du Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Sep 2026 11:06:01 +0200
+
 secubox-bbs (0.32.5-1~bookworm1) bookworm; urgency=medium
 
   * REPUBLIER METTAIT UN BILLET DE PLUS (closes #1358). Le pont vers billets

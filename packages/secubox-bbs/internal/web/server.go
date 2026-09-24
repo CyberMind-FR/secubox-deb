@@ -159,6 +159,10 @@ type Server struct {
 	// authAmont : verificateur de mot de passe pour les comptes d'origine
 	// SecuBox. Nil = aucun compte SecuBox ne peut se connecter.
 	authAmont authAmont
+	// verif : validation d'une session SecuBox par /auth/verify (#1369). Nil =
+	// la session du Hall n'ouvre rien ici, et les routes d'administration sont
+	// fermees.
+	verif verifSession
 	// encodeQR : remplace en test pour verifier CE QUE le QR contient.
 	encodeQR func(string) ([]byte, error)
 	// youtube : connecteur souverain #1056, construit par l'appelant (main.go)
@@ -404,6 +408,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	}
 	if opt.AuthSocket != "" {
 		s.authAmont = clientAuthSocket(opt.AuthSocket)
+		s.verif = clientVerifSocket(opt.AuthSocket)
 	}
 	if opt.PodcastDB != "" {
 		s.resoudreEpisode = resolveurPodcaster(opt.PodcastDB)
@@ -424,6 +429,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	s.routesAPI()
 	s.routesFichiers()
 	s.routesAPISysop()
+	s.routesAPIComptes()
 	s.routesMembre()
 	// #1114 : rattrape la visibilité publique des médias déjà cités dans des
 	// posts publics (tâche de fond, ne retarde pas le démarrage).
@@ -630,9 +636,40 @@ func (s *Server) qui(r *http.Request) visiteur {
 	v := visiteur{CSRF: s.csrfDe(r)}
 	c, err := r.Cookie(cookieSession)
 	if err != nil || c.Value == "" {
-		return v
+		return s.quiSecubox(r, v)
 	}
 	id, err := s.st.UserBySession(c.Value)
+	if err != nil {
+		return s.quiSecubox(r, v)
+	}
+	info, err := s.st.UserInfo(id)
+	if err != nil {
+		return v
+	}
+	v.UserInfo, v.Connecte = info, true
+	v.Avatar = s.st.Avatar(id)
+	return v
+}
+
+// quiSecubox : a defaut de session BBS, la session SecuBox du Hall (#1369).
+//
+// SEULS LES COMPTES D'ORIGINE SECUBOX. Un compte local du meme nom est un
+// homonyme possible : l'ouvrir sur la foi d'un pseudonyme SecuBox serait la
+// prise de place que la synchronisation refuse deja (sync.go). Pour qu'un
+// compte local suive le Hall, l'administrateur l'ADOPTE, explicitement.
+func (s *Server) quiSecubox(r *http.Request, v visiteur) visiteur {
+	if s.verif == nil {
+		return v
+	}
+	c, err := r.Cookie("secubox_session")
+	if err != nil || c.Value == "" {
+		return v
+	}
+	ses, ok := s.verif(c.Value)
+	if !ok {
+		return v
+	}
+	id, err := s.st.UserSecuboxParHandle(ses.User)
 	if err != nil {
 		return v
 	}

@@ -158,6 +158,14 @@ def _session_validator(jti: str) -> bool:
 
 def _on_session_event(event: str, username: str, details: dict) -> None:
     _append_audit(event, username, details)
+    if event == "sessions_coupees":
+        # Couper des sessions PRÉCISES (#1369). Un appareil rattaché à « gk2 »
+        # ouvre ses sessions au nom de gk2 : le révoquer ne doit couper que les
+        # siennes, pas gk2 sur tous ses autres appareils.
+        cibles = set(details.get("jtis") or [])
+        if cibles:
+            _write_sessions([r for r in _read_sessions() if r.get("id") not in cibles])
+        return
     if event == "login_success":
         rows = _read_sessions()
         rows.append({

@@ -11,7 +11,11 @@ package store
 // refleterait pas ; une revocation non plus, et le compte resterait ouvert ici
 // apres avoir ete ferme la-bas. On delegue, ou on ne synchronise pas.
 
-import "strings"
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+)
 
 type ExternalUser struct {
 	Handle   string
@@ -172,4 +176,62 @@ func nilSiFaux(b bool) any {
 func (s *Store) SetAuthSourceLocale(id int64) error {
 	_, err := s.db.Exec(`UPDATE users SET auth_source = 'local' WHERE id = ?`, id)
 	return err
+}
+
+// UserSecuboxParHandle : le compte d'origine SecuBox actif portant ce nom, et
+// lui seul. Sert a reconnaitre la session du Hall (#1369) : un compte LOCAL
+// homonyme n'est jamais rendu.
+func (s *Store) UserSecuboxParHandle(handle string) (int64, error) {
+	var id int64
+	err := s.db.QueryRow(`SELECT id FROM users WHERE handle = ? COLLATE NOCASE
+		AND auth_source = 'secubox' AND disabled_at IS NULL`, strings.TrimSpace(handle)).Scan(&id)
+	return id, err
+}
+
+// EtatCompte : ce que la BBS sait d'un nom de compte, pour l'ecran des acces.
+type EtatCompte struct {
+	Existe    bool   `json:"existe"`
+	Role      string `json:"role,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Desactive bool   `json:"desactive"`
+}
+
+// EtatComptes rend l'etat de chaque nom demande ; un nom inconnu vaut
+// `existe: false`, jamais une erreur.
+func (s *Store) EtatComptes(handles []string) (map[string]EtatCompte, error) {
+	out := make(map[string]EtatCompte, len(handles))
+	for _, h := range handles {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		var e EtatCompte
+		err := s.db.QueryRow(`SELECT role, auth_source, disabled_at IS NOT NULL
+			FROM users WHERE handle = ? COLLATE NOCASE`, h).Scan(&e.Role, &e.Source, &e.Desactive)
+		if err == nil {
+			e.Existe = true
+		} else if err != sql.ErrNoRows {
+			return out, err
+		}
+		out[h] = e
+	}
+	return out, nil
+}
+
+// AdopteCompte fait passer un compte LOCAL a l'origine SecuBox (#1369).
+//
+// C'est le geste inverse de SetAuthSourceLocale, et il est EXPLICITE : c'est
+// l'administrateur qui affirme que le « gk2 » local et le « gk2 » SecuBox sont
+// la meme personne. Des lors le mot de passe est verifie par secubox-auth, la
+// session du Hall ouvre ce compte, et la synchronisation le tient a jour.
+func (s *Store) AdopteCompte(handle string) error {
+	res, err := s.db.Exec(`UPDATE users SET auth_source = 'secubox'
+		WHERE handle = ? COLLATE NOCASE AND auth_source <> 'secubox'`, strings.TrimSpace(handle))
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("aucun compte local nommé %q", handle)
+	}
+	return nil
 }

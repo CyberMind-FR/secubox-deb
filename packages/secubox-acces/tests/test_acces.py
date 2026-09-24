@@ -305,3 +305,53 @@ def test_l_adresse_est_validee_sans_etre_verifiee(prof):
     # Correcte : conservée en minuscules.
     f["email"] = "Gerald@Example.FR"
     assert prof.demande(f).email == "gerald@example.fr"
+
+
+# ── LE RATTACHEMENT À UN COMPTE SECUBOX (#1369) ─────────────────────────────
+
+def test_rattache_l_appareil_ouvre_au_nom_du_compte(prof, portier):
+    """Le téléphone de gk2 était « sbx-… », un inconnu de plus : rattaché, il
+    ouvre ses sessions au nom de gk2."""
+    priv, jeton = admis(prof)
+    prof.rattache(DID, compte="gk2", profil="admin", par="gerald")
+    defi = portier.defi(DID, jeton)
+    ouvert = portier.ouvre(DID, jeton, defi, signe(priv, bytes.fromhex(defi)))
+    assert ouvert["compte_lie"] == "gk2" and ouvert["profil"] == "admin"
+
+
+def test_le_rattachement_persiste_et_rend_les_sessions_a_couper(prof, tmp_path):
+    admis(prof)
+    prof.note_session(DID, "jti-avant-1")
+    prof.note_session(DID, "jti-avant-2")
+    d, anciens = prof.rattache(DID, compte="gk2", profil="admin", par="gerald")
+    assert anciens == ["jti-avant-1", "jti-avant-2"]
+    relu = Profileur(tmp_path / "demandes.json").demande_de(DID)
+    assert relu.compte == "gk2" and relu.jtis == []
+
+
+def test_on_ne_rattache_qu_un_appareil_admis(prof):
+    _, pub = paire()
+    prof.demande(form(pub))          # déposée, pas acceptée
+    with pytest.raises(DemandeInvalide):
+        prof.rattache(DID, compte="gk2", profil="admin", par="gerald")
+
+
+def test_la_revocation_oublie_le_rattachement(prof):
+    admis(prof)
+    prof.rattache(DID, compte="gk2", profil="admin", par="gerald")
+    prof.revoque(DID, par="gerald")
+    assert prof.demande_de(DID).compte is None
+
+
+def test_les_jti_retenus_sont_bornes(prof):
+    admis(prof)
+    for i in range(50):
+        prof.note_session(DID, f"j{i}")
+    assert len(prof.demande_de(DID).jtis) == 20 and prof.demande_de(DID).jtis[-1] == "j49"
+
+
+def test_la_vue_admin_montre_le_compte_d_appareil_pas_les_jti(prof):
+    admis(prof)
+    prof.note_session(DID, "secret-de-session")
+    vue = prof.admis()[0]
+    assert "jtis" not in vue and vue["compte_appareil"].startswith("sbx-")
