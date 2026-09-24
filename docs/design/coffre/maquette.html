@@ -1,0 +1,481 @@
+<title>Le Coffre SecuBox</title>
+<meta name="description" content="Maquette de la carte Coffre du Hall (#1364) : scellé, ouvert, recouvrement.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600&display=swap">
+<style>
+/* Palette : charte SecuBox (AUTH = accent du Coffre, ROOT = ouvert/sain,
+   MESH = maillage, WALL = avertissement). Neutres teintés vers l'ardoise. */
+:root{
+  --ground:#eceff0; --surface:#f8f9f9; --sunk:#e2e6e7; --line:#cbd2d4;
+  --ink:#16201f; --muted:#56615f; --faint:#7d8886;
+  --auth:#c04e24; --auth-soft:#f4ddd3; --root:#0a5840; --root-soft:#d4ebe2;
+  --mesh:#104a88; --mesh-soft:#d6e3f3; --wall:#9a6010; --wall-soft:#f2e4cc;
+  --crit:#a3261b; --shadow:0 1px 0 rgba(22,32,31,.04),0 8px 24px -12px rgba(22,32,31,.18);
+  --f-ui:"Space Grotesk",system-ui,sans-serif; --f-mono:"JetBrains Mono",Consolas,monospace;
+  --f-title:"Cinzel",Georgia,serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#0d1312; --surface:#141c1b; --sunk:#0f1716; --line:#26312f;
+  --ink:#e4ebe9; --muted:#9aa7a4; --faint:#6e7a77;
+  --auth:#e06030; --auth-soft:#3a1d12; --root:#2fae80; --root-soft:#0f2c22;
+  --mesh:#5b93d6; --mesh-soft:#12243a; --wall:#d89a3a; --wall-soft:#33250f;
+  --crit:#e5604f; --shadow:0 1px 0 rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0d1312; --surface:#141c1b; --sunk:#0f1716; --line:#26312f;
+  --ink:#e4ebe9; --muted:#9aa7a4; --faint:#6e7a77;
+  --auth:#e06030; --auth-soft:#3a1d12; --root:#2fae80; --root-soft:#0f2c22;
+  --mesh:#5b93d6; --mesh-soft:#12243a; --wall:#d89a3a; --wall-soft:#33250f;
+  --crit:#e5604f; --shadow:0 1px 0 rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font:15px/1.5 var(--f-ui);margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:28px 64px;display:grid;gap:36px}
+h1,h2,h3{margin:0;text-wrap:balance}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+p{margin:0}
+a{color:var(--mesh)}
+:focus-visible{outline:2px solid var(--auth);outline-offset:2px}
+
+/* En-tête */
+header.intro{display:grid;gap:10px;max-width:70ch}
+header.intro h1{font-family:var(--f-title);font-weight:700;font-size:clamp(28px,4vw,40px);letter-spacing:.02em}
+header.intro p{color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+
+/* Pastilles d'état */
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600;border:1px solid transparent;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.p-auth{background:var(--auth-soft);color:var(--auth)}
+.p-root{background:var(--root-soft);color:var(--root)}
+.p-mesh{background:var(--mesh-soft);color:var(--mesh)}
+.p-wall{background:var(--wall-soft);color:var(--wall)}
+.p-line{border-color:var(--line);color:var(--muted)}
+.p-line::before{display:none}
+
+/* Section d'état */
+section.state{display:grid;gap:14px}
+.state-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px}
+.state-head h2{font-size:20px;font-weight:600}
+.state-head p{color:var(--muted);flex:1 1 320px}
+
+/* La carte du Hall */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.card-top{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);position:relative;flex-wrap:wrap}
+.card-top::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,var(--root),var(--mesh),var(--auth))}
+.card-top h3{font-family:var(--f-title);font-size:19px;font-weight:700;letter-spacing:.04em}
+.card-top .spacer{flex:1}
+.lockglyph{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--auth-soft);color:var(--auth)}
+.lockglyph.open{background:var(--root-soft);color:var(--root)}
+.card-body{padding:18px;display:grid;gap:18px}
+
+/* Scellé */
+.sealed{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:22px}
+@media (max-width:820px){.sealed{grid-template-columns:1fr}}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;background:var(--sunk);flex-wrap:wrap}
+.seg button{font:inherit;font-size:13px;border:0;background:transparent;color:var(--muted);padding:6px 12px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
+.field{display:grid;gap:6px}
+.field label{font-size:13px;font-weight:600}
+.field input{font:inherit;font-family:var(--f-mono);padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--ground);color:var(--ink);width:100%}
+.hint{font-size:12.5px;color:var(--muted)}
+.btn{font:inherit;font-weight:600;font-size:14px;border-radius:9px;padding:10px 16px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.btn.primary{background:var(--auth);border-color:var(--auth);color:#fff}
+.btn.go{background:var(--root);border-color:var(--root);color:#fff}
+.btn:hover{filter:brightness(1.06)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.req{display:grid;gap:8px;background:var(--sunk);border:1px solid var(--line);border-radius:11px;padding:14px}
+.req h4{margin:0;font-size:13px}
+.req ul{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+.req li{display:grid;grid-template-columns:18px 1fr;gap:8px;font-size:13.5px}
+.tick{width:16px;height:16px;border-radius:50%;margin-top:2px;display:grid;place-items:center;font-size:10px;font-weight:700}
+.tick.ok{background:var(--root-soft);color:var(--root)}
+.tick.need{background:var(--auth-soft);color:var(--auth)}
+.what{font-size:13px;color:var(--muted)}
+.what b{color:var(--ink);font-weight:600}
+.panel[hidden]{display:none}
+
+/* Ouvert */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+@media (max-width:720px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--surface);padding:12px 14px;display:grid;gap:2px}
+.kpi .v{font-family:var(--f-mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}}
+.block{display:grid;gap:10px;align-content:start}
+.block-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.block-h h4{margin:0;font-size:14px}
+.block-h .spacer{flex:1}
+.list{border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:10px 14px;border-top:1px solid var(--line);align-items:center}
+.li:first-child{border-top:0}
+.li .n{font-weight:600;font-size:14px;overflow-wrap:anywhere}
+.li .s{font-size:12.5px;color:var(--muted);grid-column:1}
+.li .r{grid-row:1/span 2;grid-column:2;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:11px}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:13.5px}
+th,td{text-align:left;padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
+thead th{border-top:0;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunk)}
+td.mono{font-size:12.5px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:3px 11px;background:var(--surface);color:var(--muted);cursor:pointer}
+.chip[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:600}
+.sign{display:grid;gap:12px;border:1px solid var(--line);border-radius:11px;padding:14px;background:linear-gradient(180deg,var(--sunk),var(--surface))}
+.fpr{font-family:var(--f-mono);font-size:12.5px;letter-spacing:.04em;word-spacing:.2em;overflow-wrap:anywhere}
+.meter{height:6px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--root);transition:width .4s linear}
+.switch{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px}
+.switch input{appearance:none;width:34px;height:20px;border-radius:20px;background:var(--line);position:relative;cursor:pointer;flex:none;margin:0}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--surface);transition:left .15s}
+.switch input:checked{background:var(--root)}
+.switch input:checked::after{left:17px}
+.journal{font-family:var(--f-mono);font-size:12px;display:grid;border:1px solid var(--line);border-radius:11px;overflow-x:auto}
+.jl{display:grid;grid-template-columns:62px 150px minmax(180px,1fr) 92px;gap:10px;padding:7px 12px;border-top:1px solid var(--line);white-space:nowrap;min-width:560px}
+.jl:first-child{border-top:0}
+.jl .h{color:var(--faint)}
+.jl .who{color:var(--muted)}
+.example{font-size:12px;color:var(--faint);font-style:italic}
+
+/* Recouvrement */
+.shares{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.shares{grid-template-columns:1fr}}
+.share{border:1px solid var(--line);border-radius:11px;padding:14px;display:grid;gap:8px;background:var(--surface)}
+.share.got{border-color:var(--root)}
+.share .node{font-weight:600}
+.share .addr{font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
+.dots{display:flex;gap:6px}
+.dots i{width:12px;height:12px;border-radius:50%;border:2px solid var(--root)}
+.dots i.on{background:var(--root)}
+
+.foot{color:var(--muted);font-size:13px;max-width:75ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="intro">
+  <span class="eyebrow">Maquette · #1364 · secubox-vault 2.0</span>
+  <h1>Le Coffre</h1>
+  <p>La carte du Hall qui garde la clé de signature du dépôt, les secrets des services, les graines TOTP et les clés GPG. Tant qu'un humain authentifié ne l'a pas ouverte, rien de ce qu'elle garde en niveau 1 n'est lisible, pas même par root. Les trois états sont présentés ci-dessous. Les champs sont manipulables ; aucune donnée ne quitte la page.</p>
+  <div class="legend">
+    <span class="pill p-auth">scellé</span>
+    <span class="pill p-root">ouvert</span>
+    <span class="pill p-mesh">maillage</span>
+    <span class="pill p-wall">à surveiller</span>
+  </div>
+</header>
+
+<!-- ─────────────── 1. SCELLÉ ─────────────── -->
+<section class="state" aria-labelledby="s1">
+  <div class="state-head">
+    <span class="eyebrow">État 1</span>
+    <h2 id="s1">Scellé</h2>
+    <p>Après un redémarrage, 15 minutes d'inactivité ou un scellement manuel. Il faut déjà être connecté au Hall : la carte demande en plus un secret d'ouverture.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <span class="lockglyph" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="8" rx="2" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>
+      <h3>Coffre</h3>
+      <span class="pill p-auth">scellé depuis 2 h 14</span>
+      <span class="spacer"></span>
+      <div class="seg" role="group" aria-label="Origine de la demande">
+        <button type="button" id="o-lan" aria-pressed="true" data-origin="lan">LAN</button>
+        <button type="button" id="o-wan" aria-pressed="false" data-origin="wan">WAN · via sbxwaf</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="sealed">
+        <form id="unlock" class="block" autocomplete="off">
+          <div class="seg" role="group" aria-label="Serrure">
+            <button type="button" aria-pressed="true" data-m="phrase">Phrase</button>
+            <button type="button" aria-pressed="false" data-m="device">Clé d'appareil</button>
+            <button type="button" aria-pressed="false" data-m="code">Code de secours</button>
+          </div>
+
+          <div class="panel field" data-p="phrase">
+            <label for="phr">Phrase du Coffre</label>
+            <input id="phr" type="password" value="exemple de phrase longue">
+            <span class="hint">Dérivée par argon2id (256 Mio, 3 passes, ≈ 1 s sur gk2). Elle transite dans la session TLS et n'est jamais enregistrée.</span>
+          </div>
+          <div class="panel field" data-p="device" hidden>
+            <label>Clé d'appareil enrôlée</label>
+            <div class="list">
+              <div class="li"><span class="n">YubiKey 5C · gk2</span><span class="s">enrôlée le 2026-09-24 · origine hall.gk2</span><span class="r"><span class="pill p-line">PRF</span></span></div>
+              <div class="li"><span class="n">Téléphone · gk2</span><span class="s">passkey · origine hall.gk2</span><span class="r"><span class="pill p-line">PRF</span></span></div>
+            </div>
+            <span class="hint">L'authentificateur rend 32 octets propres à ce Coffre (extension WebAuthn PRF). Aucune clé longue ne sort de l'appareil.</span>
+          </div>
+          <div class="panel field" data-p="code" hidden>
+            <label for="rc">Code de secours</label>
+            <input id="rc" value="7HQK-2M9D-XW4P-RB6T">
+            <span class="hint">Un des 5 codes imprimés à la création. Il est consommé : pensez à en régénérer.</span>
+          </div>
+
+          <div class="row">
+            <button class="btn primary" type="submit" id="go">Ouvrir le Coffre</button>
+            <span class="hint" id="msg" role="status"></span>
+          </div>
+        </form>
+
+        <div class="block">
+          <div class="req">
+            <h4 id="req-t">Ce que demande une ouverture depuis le LAN</h4>
+            <ul id="req"></ul>
+          </div>
+          <p class="what"><b>Reste disponible, scellé :</b> connexions au Hall (graines TOTP, niveau 0), services, WAF, maillage. <b>Indisponible :</b> signature du dépôt, clés GPG, clé de récupération Nextcloud, jarres de cookies.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────── 2. OUVERT ─────────────── -->
+<section class="state" aria-labelledby="s2">
+  <div class="state-head">
+    <span class="eyebrow">État 2</span>
+    <h2 id="s2">Ouvert</h2>
+    <p>La clé maîtresse est en mémoire verrouillée et n'est jamais écrite sur disque. Tout ce qui suit est un exemple : les noms de secrets sont ceux de gk2, pas leurs valeurs.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <span class="lockglyph open" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="8" rx="2" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 5.8-1" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>
+      <h3>Coffre</h3>
+      <span class="pill p-root">ouvert par gk2 · LAN</span>
+      <span class="spacer"></span>
+      <span class="hint mono" id="relock">rescellement dans 14:32</span>
+      <button class="btn" type="button">Sceller</button>
+    </div>
+    <div class="card-body">
+      <div class="kpis">
+        <div class="kpi"><span class="v">4</span><span class="l">serrures actives</span></div>
+        <div class="kpi"><span class="v">6</span><span class="l">secrets scellés (niveau 1)</span></div>
+        <div class="kpi"><span class="v">31</span><span class="l">secrets de démarrage (niveau 0)</span></div>
+        <div class="kpi"><span class="v">3</span><span class="l">compartiments</span></div>
+      </div>
+
+      <div class="grid2">
+        <div class="block">
+          <div class="block-h"><h4>Signature du dépôt apt</h4><span class="spacer"></span><span class="pill p-auth" id="sgn-pill">clé chiffrée au repos</span></div>
+          <div class="sign">
+            <div>
+              <div class="eyebrow">SecuBox APT Repository · apt@secubox.in</div>
+              <div class="fpr">219B A872 E393 3EAA C348 6A13 44E5 0F01 78E8 BC7E</div>
+            </div>
+            <div class="row"><span class="pill p-line">rsa4096</span><span class="pill p-line">créée 2026-05-11</span><span class="pill p-wall">sans expiration</span><span class="pill p-line">apt.secubox.in</span></div>
+            <div class="meter" aria-hidden="true"><i id="sgn-bar"></i></div>
+            <div class="row">
+              <button class="btn go" type="button" id="sgn">Ouvrir une session de signature · 15 min</button>
+              <span class="hint" id="sgn-msg">La phrase de la clé est confiée à gpg-agent pour la durée de la session, puis oubliée.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="block-h"><h4>Serrures</h4><span class="spacer"></span><button class="btn" type="button">Ajouter</button></div>
+          <div class="list">
+            <div class="li"><span class="n">Phrase d'administration</span><span class="s">argon2id · m=256 Mio t=3</span><span class="r"><span class="pill p-root">active</span></span></div>
+            <div class="li"><span class="n">YubiKey 5C · gk2</span><span class="s">WebAuthn PRF · hall.gk2</span><span class="r"><span class="pill p-root">active</span></span></div>
+            <div class="li"><span class="n">Codes de secours</span><span class="s">4 sur 5 restants · un utilisé le 2026-09-24</span><span class="r"><span class="pill p-wall">régénérer</span></span></div>
+            <div class="li"><span class="n">Parts du maillage</span><span class="s">Shamir 2 sur 3 · gk2, SecuBox-Mesh-2, c3box</span><span class="r"><span class="pill p-mesh">1 nœud éteint</span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-h">
+          <h4>Secrets</h4>
+          <span class="spacer"></span>
+          <div class="chips" role="group" aria-label="Filtrer par niveau">
+            <button type="button" class="chip" aria-pressed="true" data-f="all">Tous</button>
+            <button type="button" class="chip" aria-pressed="false" data-f="1">Niveau 1 · scellé</button>
+            <button type="button" class="chip" aria-pressed="false" data-f="0">Niveau 0 · démarrage</button>
+          </div>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Secret</th><th>Compartiment</th><th>Niveau</th><th>Consommé par</th><th>Origine sur gk2</th></tr></thead>
+            <tbody id="secrets"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="block">
+          <div class="block-h"><h4>Courriel chiffré</h4><span class="spacer"></span><span class="pill p-line">optionnel · par boîte</span></div>
+          <div class="list">
+            <div class="li"><label class="switch" for="m1"><input id="m1" type="checkbox" checked> Roundcube enigma · gk2@secubox.in</label><span class="s">clé privée dans le compartiment gk2, prêtée à la session webmail</span></div>
+            <div class="li"><label class="switch" for="m2"><input id="m2" type="checkbox" checked> Annuaire de clés WKD · secubox.in</label><span class="s">/.well-known/openpgpkey/ publie les clés publiques</span></div>
+            <div class="li"><label class="switch" for="m3"><input id="m3" type="checkbox"> En-têtes Autocrypt</label><span class="s">annoncer la clé dans chaque courriel sortant</span></div>
+            <div class="li"><label class="switch" for="m4"><input id="m4" type="checkbox"> Boîte chiffrée au repos (mail_crypt)</label><span class="s">clé de boîte emballée par le mot de passe de l'utilisateur</span></div>
+          </div>
+        </div>
+        <div class="block">
+          <div class="block-h"><h4>Nextcloud</h4><span class="spacer"></span><span class="pill p-wall">conteneur arrêté</span></div>
+          <div class="list">
+            <div class="li"><span class="n">Chiffrement côté serveur</span><span class="s">app encryption · à mesurer au démarrage du conteneur</span><span class="r"><span class="pill p-line">inconnu</span></span></div>
+            <div class="li"><span class="n">Clé de récupération administrateur</span><span class="s">gardée au niveau 1</span><span class="r"><span class="pill p-line">à créer</span></span></div>
+            <div class="li"><span class="n">secret · passwordsalt · base</span><span class="s">config.php → niveau 0</span><span class="r"><span class="pill p-line">à migrer</span></span></div>
+            <div class="li"><span class="n">Dossiers chiffrés de bout en bout</span><span class="s">app end_to_end_encryption · clés chez les clients</span><span class="r"><span class="pill p-line">option</span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-h"><h4>Journal chaîné</h4><span class="spacer"></span><span class="pill p-root">chaîne intacte</span></div>
+        <div class="journal" id="journal"></div>
+        <span class="example">Lignes d'exemple. Chaque ligne porte l'empreinte de la précédente : une ligne modifiée ou retirée casse la chaîne.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────── 3. RECOUVREMENT ─────────────── -->
+<section class="state" aria-labelledby="s3">
+  <div class="state-head">
+    <span class="eyebrow">État 3</span>
+    <h2 id="s3">Recouvrement par le maillage</h2>
+    <p>Phrase oubliée, clé d'appareil perdue, plus de code de secours. Deux nœuds MirrorNet sur trois rendent leur part, chacun après un TOTP validé chez lui. Le TOTP autorise le nœud à rendre sa part ; la clé elle-même n'en dérive pas.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <span class="lockglyph" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="4" cy="11" r="2.2" fill="currentColor"/><circle cx="12" cy="11" r="2.2" fill="currentColor"/><circle cx="8" cy="4" r="2.2" fill="currentColor"/><path d="M4 11 8 4l4 7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>
+      <h3>Coffre</h3>
+      <span class="pill p-mesh">recouvrement en cours</span>
+      <span class="spacer"></span>
+      <div class="dots" aria-label="Parts reçues"><i class="on"></i><i id="d2"></i></div>
+      <span class="hint mono" id="count">1 / 2 parts</span>
+    </div>
+    <div class="card-body">
+      <div class="shares">
+        <div class="share got">
+          <span class="node">gk2</span><span class="addr">10.10.0.1 · wg-mesh</span>
+          <span class="pill p-root">part rendue</span>
+          <span class="hint">TOTP validé par gk2 à 09:41, part chiffrée pour la X25519 de la box</span>
+        </div>
+        <div class="share" id="sh2">
+          <span class="node">SecuBox-Mesh-2</span><span class="addr">10.10.0.4 · poignée de main il y a 12 s</span>
+          <div class="field"><label for="otp2">Code TOTP sur ce nœud</label><input id="otp2" inputmode="numeric" value="482 913"></div>
+          <button class="btn go" type="button" id="ask2">Demander la part</button>
+        </div>
+        <div class="share">
+          <span class="node">c3box</span><span class="addr">10.10.0.3 · aucune poignée de main</span>
+          <span class="pill p-wall">hors ligne</span>
+          <span class="hint">Nœud éteint. Il ne peut pas rendre sa part : deux autres suffisent.</span>
+        </div>
+      </div>
+      <p class="what" id="rec-msg"><b>À la reconstitution</b>, la carte demande immédiatement une nouvelle phrase et régénère les codes de secours. Les parts ne sont valables qu'une fois.</p>
+    </div>
+  </div>
+</section>
+
+<p class="foot">Conception : <span class="mono">docs/design/coffre/README.md</span>. Niveau 1 = protégé par la clé maîtresse, absente du disque. Niveau 0 = <span class="mono">systemd-creds</span> (clé d'hôte) : illisible dans une copie du disque ou une sauvegarde, lisible par root sur la box en marche.</p>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+  // Exigences selon l'origine
+  const REQ = {
+    lan: [["ok", "Session Hall ouverte (gk2, rôle admin)"], ["ok", "TOTP validé à la connexion"], ["need", "Un secret d'ouverture : phrase, clé d'appareil ou code de secours"]],
+    wan: [["ok", "Session Hall ouverte (gk2, rôle admin)"], ["need", "TOTP frais, saisi il y a moins de 60 s"], ["need", "Un secret d'ouverture : phrase ou clé d'appareil"], ["need", "5 essais par heure et par identité au plus"], ["need", "Courriel d'alerte envoyé à gk2@secubox.in à l'ouverture"]]
+  };
+  const setOrigin = o => {
+    $$("[data-origin]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.origin === o)));
+    $("#req-t").textContent = "Ce que demande une ouverture depuis le " + (o === "lan" ? "LAN" : "WAN");
+    $("#req").innerHTML = REQ[o].map(([k, t]) => `<li><span class="tick ${k}">${k === "ok" ? "✓" : "!"}</span><span>${t}</span></li>`).join("");
+    const code = $('[data-m="code"]');
+    code.disabled = o === "wan";
+    code.title = o === "wan" ? "Code de secours refusé à distance : il n'est accepté que depuis le LAN" : "";
+    if (o === "wan" && code.getAttribute("aria-pressed") === "true") setMethod("phrase");
+  };
+  $$("[data-origin]").forEach(b => b.addEventListener("click", () => setOrigin(b.dataset.origin)));
+
+  const setMethod = m => {
+    $$("[data-m]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === m)));
+    $$("[data-p]").forEach(p => p.hidden = p.dataset.p !== m);
+  };
+  $$("[data-m]").forEach(b => b.addEventListener("click", () => setMethod(b.dataset.m)));
+  setOrigin("lan");
+
+  $("#unlock").addEventListener("submit", e => {
+    e.preventDefault();
+    const m = $("#msg");
+    m.textContent = "Dérivation argon2id…";
+    setTimeout(() => { m.textContent = "Ouvert. La carte passe à l'état 2 (maquette : voir plus bas)."; }, 900);
+  });
+
+  // Secrets : noms réels de gk2, valeurs jamais montrées
+  const S = [
+    ["Phrase de la clé apt 219BA872", "box", 1, "secubox-releasectl", "aucune (clé sans phrase)"],
+    ["Clé de récupération Nextcloud", "box", 1, "nextcloud (occ)", "à créer"],
+    ["Clé GPG gk2@secubox.in", "gk2", 1, "roundcube enigma", "à créer"],
+    ["Jarre de cookies du relais de navigation", "gk2", 1, "BiB", "privacy-jar.key"],
+    ["Export de l'identité DID", "box", 1, "secubox-identity", "/export/encrypted"],
+    ["Clé privée RustDesk", "box", 1, "rustdesk", "secrets/rustdesk-key"],
+    ["Graines TOTP (admin, gk2)", "box", 0, "secubox-auth", "users.json, en clair"],
+    ["Secret de session JWT", "box", 0, "tous les modules", "secubox.conf"],
+    ["mqtt-homeassistant · -z2m · -domoticz …", "box", 0, "mosquitto, ponts", "secrets/mqtt-* (5)"],
+    ["smb-admin · smb-gk2", "box", 0, "samba", "secrets/smb-*"],
+    ["actor-credential", "box", 0, "sbxwaf", "secrets/actor-credential"],
+    ["rspamd-controller.pw", "box", 0, "rspamd", "secrets/rspamd-controller.pw"]
+  ];
+  const tier = t => t === 1 ? '<span class="pill p-auth">1 · scellé</span>' : '<span class="pill p-line">0 · démarrage</span>';
+  const render = f => {
+    $("#secrets").innerHTML = S.filter(r => f === "all" || String(r[2]) === f)
+      .map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${tier(r[2])}</td><td>${r[3]}</td><td class="mono">${r[4]}</td></tr>`).join("");
+  };
+  $$("[data-f]").forEach(c => c.addEventListener("click", () => {
+    $$("[data-f]").forEach(x => x.setAttribute("aria-pressed", String(x === c)));
+    render(c.dataset.f);
+  }));
+  render("all");
+
+  // Journal chaîné (exemple)
+  const J = [
+    ["09:41:07", "ouverture", "gk2 · LAN · phrase", "a3f0…91c2"],
+    ["09:41:52", "session signature", "secubox-releasectl · 15 min", "7be1…04d9"],
+    ["09:43:10", "lecture niveau 1", "phrase clé apt → gpg-agent", "c28a…e713"],
+    ["09:56:52", "fin de session", "gpg-preset-passphrase --forget", "19dd…a0b4"],
+    ["10:11:52", "scellement", "inactivité 15 min", "f604…3e58"]
+  ];
+  $("#journal").innerHTML = J.map(r => `<div class="jl"><span>${r[0]}</span><span>${r[1]}</span><span class="who">${r[2]}</span><span class="h">${r[3]}</span></div>`).join("");
+
+  // Session de signature
+  let t = null;
+  $("#sgn").addEventListener("click", () => {
+    if (t) { clearInterval(t); t = null; $("#sgn-bar").style.width = "0"; $("#sgn").textContent = "Ouvrir une session de signature · 15 min"; $("#sgn-pill").className = "pill p-auth"; $("#sgn-pill").textContent = "clé chiffrée au repos"; $("#sgn-msg").textContent = "Session close : gpg-agent a oublié la phrase."; return; }
+    let left = 900;
+    $("#sgn-pill").className = "pill p-root"; $("#sgn-pill").textContent = "signature possible";
+    $("#sgn").textContent = "Clore la session";
+    const tick = () => {
+      $("#sgn-bar").style.width = (left / 900 * 100) + "%";
+      $("#sgn-msg").textContent = `reprepro peut signer encore ${Math.floor(left / 60)} min ${String(left % 60).padStart(2, "0")} s.`;
+      if (--left < 0) $("#sgn").click();
+    };
+    tick(); t = setInterval(tick, 1000);
+  });
+
+  // Recouvrement
+  $("#ask2").addEventListener("click", () => {
+    $("#sh2").classList.add("got");
+    $("#ask2").replaceWith(Object.assign(document.createElement("span"), { className: "pill p-root", textContent: "part rendue" }));
+    $("#d2").classList.add("on");
+    $("#count").textContent = "2 / 2 parts";
+    $("#rec-msg").innerHTML = "<b>Clé reconstituée.</b> Choisissez une nouvelle phrase ; 5 nouveaux codes de secours vont être affichés une seule fois.";
+  });
+
+  // Compte à rebours de rescellement
+  let r = 14 * 60 + 32;
+  setInterval(() => { if (r > 0) r--; $("#relock").textContent = `rescellement dans ${Math.floor(r / 60)}:${String(r % 60).padStart(2, "0")}`; }, 1000);
+})();
+</script>
