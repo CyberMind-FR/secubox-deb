@@ -23,6 +23,34 @@ case "$1" in
         systemctl enable secubox-p2p.service
         systemctl start secubox-p2p.service || true
 
+        # ── MIRRORNET : L'ÉTAT DEVIENT UN TUNNEL (#1360) ───────────────────
+        # L'API écrit wg_mesh.json ; ces unités root l'appliquent et publient
+        # les poignées de main. Sans elles, un enrôlement « réussi » ne monte
+        # aucun tunnel, et le statut des pairs reste une supposition.
+        systemctl enable secubox-p2p-mesh.path secubox-p2p-mesh.service \
+                         secubox-p2p-mesh-liveness.timer >/dev/null 2>&1 || true
+        systemctl start secubox-p2p-mesh.path secubox-p2p-mesh-liveness.timer || true
+        systemctl start secubox-p2p-mesh-liveness.service || true
+        # Appliquer l'état DÉJÀ présent : l'unité .path ne réagit qu'aux
+        # changements, et un pair inscrit avant la mise à jour attendrait le
+        # prochain enrôlement pour avoir son tunnel.
+        systemctl start secubox-p2p-mesh.service || true
+
+        # Écouteur d'enrôlement 7331 : activé seulement si nginx l'accepte. Un
+        # site qui casse `nginx -t` casserait TOUS les vhosts, pas seulement
+        # l'enrôlement. On retire l'essai posé à la main pendant le test du
+        # 2026-09-24, que ce fichier remplace.
+        rm -f /etc/nginx/sites-enabled/p2p-masterlink.conf /etc/nginx/sites-available/p2p-masterlink.conf
+        if [ -f /etc/nginx/sites-available/secubox-p2p-masterlink.conf ] && \
+           [ ! -e /etc/nginx/sites-enabled/secubox-p2p-masterlink.conf ]; then
+            ln -s ../sites-available/secubox-p2p-masterlink.conf \
+                  /etc/nginx/sites-enabled/secubox-p2p-masterlink.conf
+            if ! nginx -t >/dev/null 2>&1; then
+                rm -f /etc/nginx/sites-enabled/secubox-p2p-masterlink.conf
+                echo "secubox-p2p: nginx -t refuse l'ecouteur 7331 — enrolement non expose" >&2
+            fi
+        fi
+
         # Reload nginx if running
         if systemctl is-active --quiet nginx; then
             systemctl reload nginx || true

@@ -1,3 +1,68 @@
+secubox-p2p (1.11.6-1~bookworm1) bookworm; urgency=medium
+
+  * LE PREMIER ESSAI RÉEL A ÉCHOUÉ, ET C'ÉTAIT MOI (ref #1360). L'unité
+    `.path` se déclenchait bien et le pair était bien dans l'état — mais le
+    service était SAUTÉ : son `ExecCondition` était du shell en ligne,
+    `/bin/sh -c '… "\"private_key\"…" …'`, et systemd réinterprète les
+    échappements avant de passer la ligne au shell, qui recevait une chaîne
+    coupée (« Unterminated quoted string »). `systemd-analyze verify` ne l'a
+    pas vu : il lit la syntaxe, il n'exécute pas la condition. La condition
+    devient `sbx-mesh-up --check`, et un test interdit désormais le shell
+    citable dans nos unités.
+  * `sbx-mesh-join` l'avait dit honnêtement : « Tunnel: NOT ESTABLISHED ». La
+    vérification par ping ajoutée en 1.11.5 a fait exactement son travail.
+  * Le postinst applique l'état déjà présent à la mise à jour : l'unité
+    `.path` ne réagit qu'aux changements.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 24 Sep 2026 07:44:29 +0200
+
+secubox-p2p (1.11.5-1~bookworm1) bookworm; urgency=medium
+
+  * L'ENRÔLEMENT MONTE ENFIN UN TUNNEL (closes #1360). Test de bout en bout
+    VM VirtualBox contre gk2 : `sbx-mesh-join` affichait « SUCCESS: Joined
+    mesh network! », le maître comptait le pair approuvé — et AUCUN tunnel
+    n'existait. La requête de jonction ne portait pas de clé WireGuard, et
+    l'approbation écrivait dans le registre hérité `peers.json`, jamais dans
+    `wg_mesh.json`, qui est la source de vérité du transport.
+  * LA JONCTION ÉCHANGE LES CLÉS. Le pair envoie sa clé publique (sa clé
+    privée ne quitte jamais la machine) ; le maître alloue une adresse,
+    inscrit le pair au transport et renvoie sa propre clé, son port et
+    l'adresse attribuée. Le pair compose l'endpoint du maître avec l'adresse
+    qu'il vient lui-même de joindre — derrière nginx, le maître ne voit que
+    127.0.0.1 et ne pourrait que deviner.
+  * LE SERVICE RESTE SANS PRIVILÈGE. L'API écrit l'état ; l'unité root
+    `secubox-p2p-mesh.path` le voit changer et l'applique par `wg syncconf`,
+    sans couper les sessions existantes. Aucune surface sudo n'est ouverte :
+    secubox-p2pctl reste verrouillé sur wg-ephemeral. `sbx-mesh-up` n'écrit
+    plus l'état que s'il a changé — sinon il redéclenchait sa propre unité
+    sans fin.
+  * L'ALLOCATEUR IGNORAIT LES PAIRS RÉELS. Il ne regardait que `peers.json` :
+    la VM de test y avait reçu 10.10.0.2, l'adresse de c3box. Monter ce tunnel
+    aurait détourné la route d'un autre pair, en silence — WireGuard déplace
+    une route vers le dernier arrivé sans rien dire. L'allocation voit
+    désormais toutes les sources, une adresse tenue par une autre clé est
+    refusée, et un pair en collision qui se réenrôle est DÉPLACÉ.
+  * LE STATUT EST MESURÉ, PLUS SUPPOSÉ. `online_peers` valait le nombre de
+    pairs CONFIGURÉS : gk2 annonçait deux pairs en ligne qui n'avaient jamais
+    établi de poignée de main — dont une machine éteinte — et ignorait le seul
+    réellement connecté. Un minuteur root publie les poignées de main ; le
+    statut vaut « online », « offline » ou, si la mesure manque, « unknown » —
+    jamais une supposition. Un test gravait l'ancienne règle (« tout est en
+    ligne ») : il dit maintenant la vraie.
+  * L'ÉCOUTEUR 7331 EST LIVRÉ. `sbx-mesh-invite`/`sbx-mesh-join` visaient un
+    port que rien n'ouvrait : `API_PORT = 7331` n'était qu'une constante. Site
+    nginx LAN seulement, routes master-link seulement, activé par le postinst
+    si `nginx -t` l'accepte.
+  * `sbx-mesh-join` N'ANNONCE PLUS APPROUVÉ UNE DEMANDE EN ATTENTE. Il lisait
+    `"success":true` comme une approbation, or le maître le renvoie aussi pour
+    une demande mise en file. Et il VÉRIFIE le tunnel par un ping à travers
+    wg-mesh avant de dire qu'il est monté.
+  * DURCISSEMENT : toute valeur multiligne est refusée au rendu de
+    `wg-mesh.conf`. wg-quick lit ce fichier en root et exécute ses `PostUp` ;
+    un endpoint contenant un saut de ligne y serait une commande.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 24 Sep 2026 07:42:49 +0200
+
 secubox-p2p (1.11.4-1~bookworm1) bookworm; urgency=medium
 
   * `secubox-master-link` DECOMMISSIONNE (#1362). La description annoncait

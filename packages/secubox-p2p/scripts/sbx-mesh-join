@@ -224,11 +224,55 @@ echo "║ Master:      $MASTER_IP"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 
+# ── CLÉ WIREGUARD DU PAIR (#1360) ─────────────────────────────────────────
+# La jonction n'échangeait AUCUNE clé : le maître inscrivait le pair à son
+# registre, et aucun tunnel ne pouvait se former. On génère (ou réutilise) la
+# clé du pair et on l'envoie ; la clé privée ne quitte jamais cette machine.
+WG_STATE=/var/lib/secubox/p2p/wg_mesh.json
+WG_PORT=51822
+WG_PUB=""
+if [ "$SYSTEM" != "openwrt" ] && command -v wg >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    mkdir -p /var/lib/secubox/p2p
+    WG_PUB=$(python3 - "$WG_STATE" "$WG_PORT" <<'PY2'
+import json, os, subprocess, sys
+path, port = sys.argv[1], int(sys.argv[2])
+try:
+    st = json.load(open(path))
+except Exception:
+    st = {"peers": []}
+if not st.get("private_key"):
+    st["private_key"] = subprocess.run(["wg", "genkey"], capture_output=True,
+                                       text=True, check=True).stdout.strip()
+st["public_key"] = subprocess.run(["wg", "pubkey"], input=st["private_key"],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+st.setdefault("listen_port", port)
+st.setdefault("peers", [])
+st["role"] = "peer"
+old = os.umask(0o077)
+tmp = path + ".tmp"
+json.dump(st, open(tmp, "w"), indent=2)
+os.umask(old)
+os.replace(tmp, path)
+print(st["public_key"])
+PY2
+    ) || WG_PUB=""
+    # Le service p2p tourne sous `secubox` et lit cet état.
+    chown secubox:secubox "$WG_STATE" 2>/dev/null || true
+    chmod 600 "$WG_STATE" 2>/dev/null || true
+fi
+
 # Build join request
+if [ -n "$WG_PUB" ]; then
+JSON_DATA=$(cat <<EOF
+{"token":"$TOKEN","fingerprint":"$FINGERPRINT","hostname":"$HOSTNAME","address":"$ADDRESS","wg_public_key":"$WG_PUB","wg_port":$WG_PORT}
+EOF
+)
+else
 JSON_DATA=$(cat <<EOF
 {"token":"$TOKEN","fingerprint":"$FINGERPRINT","hostname":"$HOSTNAME","address":"$ADDRESS"}
 EOF
 )
+fi
 
 # Detect master type
 echo "Detecting master type..."
@@ -276,7 +320,14 @@ case "$MASTER_TYPE" in
 esac
 
 # Parse response
-if echo "$RESPONSE" | grep -q '"status":"approved"' || echo "$RESPONSE" | grep -q '"success":true'; then
+#
+# `"success":true` NE VEUT PAS DIRE APPROUVÉ (#1360). Le maître le renvoie
+# aussi pour une demande MISE EN ATTENTE — le script annonçait alors
+# « SUCCESS … APPROVED » pour une jonction que personne n'avait acceptée. Seul
+# le statut fait foi ; `success` seul ne vaut que pour les anciens maîtres
+# OpenWrt, qui ne renvoient pas de statut.
+if echo "$RESPONSE" | grep -q '"status":"approved"' || \
+   { echo "$RESPONSE" | grep -q '"success":true' && ! echo "$RESPONSE" | grep -q '"status"'; }; then
     echo ""
     echo "✓ SUCCESS: Joined mesh network!"
     echo "  Status: APPROVED"
@@ -286,6 +337,51 @@ if echo "$RESPONSE" | grep -q '"status":"approved"' || echo "$RESPONSE" | grep -
 
     # Save config
     save_config
+
+    # ── MONTER LE TUNNEL, ET LE PROUVER (#1360) ───────────────────────────
+    # « Joined mesh network » ne décrivait que l'inscription au registre : le
+    # tunnel n'existait pas. On applique ce que le maître a renvoyé, puis on
+    # VÉRIFIE par un ping à travers le tunnel — le seul verdict qui compte.
+    if [ -n "$WG_PUB" ] && echo "$RESPONSE" | grep -q '"master_public_key"'; then
+        MESH_IP=$(printf '%s' "$RESPONSE" | python3 -c '
+import json, sys, os
+path, master_ip = sys.argv[1], sys.argv[2]
+wg = json.load(sys.stdin)["wg"]
+st = json.load(open(path))
+st.update({
+    "address": wg["address"],
+    "network": wg["network"],
+    "role": "peer",
+    "enabled": True,
+    "peers": [{
+        "public_key": wg["master_public_key"],
+        "endpoint": "%s:%d" % (master_ip, int(wg["master_port"])),
+        "allowed_ips": wg["network"],
+        "mesh_ip": wg["master_mesh_ip"],
+        "name": "master",
+    }],
+})
+old = os.umask(0o077)
+tmp = path + ".tmp"
+json.dump(st, open(tmp, "w"), indent=2)
+os.umask(old)
+os.replace(tmp, path)
+print(wg["master_mesh_ip"])
+' "$WG_STATE" "$MASTER_IP") || MESH_IP=""
+        chown secubox:secubox "$WG_STATE" 2>/dev/null || true
+        if [ -n "$MESH_IP" ] && command -v sbx-mesh-up >/dev/null 2>&1; then
+            echo "  Mesh address: $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["address"])' "$WG_STATE")"
+            sbx-mesh-up >/dev/null 2>&1 || echo "  ! sbx-mesh-up failed (run it as root to see why)"
+            if ping -c 3 -W 2 "$MESH_IP" >/dev/null 2>&1; then
+                echo "  Tunnel: UP — master reachable at $MESH_IP through wg-mesh"
+            else
+                echo "  Tunnel: NOT ESTABLISHED — enrolled, but no traffic to $MESH_IP yet"
+                echo "          (master applies the peer asynchronously; retry: ping $MESH_IP)"
+            fi
+        fi
+    elif [ -n "$WG_PUB" ]; then
+        echo "  ! Master returned no WireGuard offer: enrolled WITHOUT a tunnel"
+    fi
 
     echo ""
     echo "Master IP saved. You are now part of the mesh."

@@ -140,7 +140,11 @@ def test_peer_nodes_uses_name_and_mesh_ip():
     nodes = mesh.peer_nodes(state)
     assert [n["name"] for n in nodes] == ["c3box", "10.10.0.3", "gk2"]
     assert [n["address"] for n in nodes] == ["10.10.0.2", "10.10.0.3", "10.10.0.1"]
-    assert all(n["status"] == "online" for n in nodes)
+    # SANS MESURE, LE STATUT EST « INCONNU » (#1360). Ce test exigeait
+    # « online » pour des pairs dont personne n'avait mesuré la vivacité : il
+    # gravait le défaut au lieu de le garder. Sur gk2, cette règle faisait
+    # annoncer en ligne deux pairs qui n'avaient jamais échangé un paquet.
+    assert all(n["status"] == "unknown" for n in nodes)
 
 
 def test_peer_nodes_empty():

@@ -1,0 +1,6 @@
+[Unit]
+Description=SecuBox P2P — publish wg-mesh handshakes for the unprivileged API (#1360)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sbx-mesh-liveness

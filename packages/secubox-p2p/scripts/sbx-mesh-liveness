@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-p2p :: sbx-mesh-liveness
+#
+# Dépose les dernières poignées de main de wg-mesh là où le service p2p (non
+# privilégié) peut les lire (#1360). Lire les poignées de main passe par
+# netlink WireGuard, qui exige CAP_NET_ADMIN : le service ne le peut pas, et
+# son statut « en ligne » était écrit en dur — deux pairs annoncés en ligne sur
+# gk2 n'avaient jamais échangé un paquet.
+#
+# CE QUI SORT EST PUBLIC : des clés PUBLIQUES et des horodatages. Aucune clé
+# privée, aucune adresse d'endpoint.
+set -euo pipefail
+readonly OUT_DIR=/run/secubox/p2p
+readonly OUT="${OUT_DIR}/wg-mesh-handshakes.json"
+install -d -m 0755 "$OUT_DIR"
+tmp=$(mktemp "${OUT_DIR}/.hs.XXXXXX")
+# Écriture atomique : le service ne doit jamais lire un JSON à moitié écrit.
+# La sortie de `wg` passe par l'ENTRÉE STANDARD, jamais interpolée dans le code.
+{ wg show wg-mesh latest-handshakes 2>/dev/null || true; } | python3 -c '
+import json, sys, time
+hs = {}
+for line in sys.stdin:
+    parts = line.split()
+    if len(parts) == 2 and parts[1].isdigit():
+        hs[parts[0]] = int(parts[1])
+json.dump({"written_at": int(time.time()), "handshakes": hs}, open(sys.argv[1], "w"))
+' "$tmp"
+chmod 0644 "$tmp"
+mv -f "$tmp" "$OUT"

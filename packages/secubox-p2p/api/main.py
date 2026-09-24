@@ -16,6 +16,7 @@ import functools
 import logging
 import subprocess
 import asyncio
+import ipaddress
 import json
 import os
 import re
@@ -617,6 +618,12 @@ class JoinRequest(BaseModel):
     fingerprint: str
     hostname: Optional[str] = None
     address: Optional[str] = None
+    # LA CLÉ WIREGUARD DU PAIR (#1360). Sans elle, la jonction inscrivait le
+    # pair au registre et s'arrêtait là : aucun tunnel ne pouvait se former.
+    # Optionnelle pour rester compatible avec les anciens scripts et les
+    # maîtres OpenWrt ; un pair qui ne l'envoie pas est inscrit sans transport.
+    wg_public_key: Optional[str] = None
+    wg_port: Optional[int] = None
 
 
 class ApproveRequest(BaseModel):
@@ -650,7 +657,15 @@ async def get_status():
 
     # Mesh view is driven by the wg-mesh transport (wg_mesh.json), which p2p
     # now owns (Gondwana Phase 1). The web UI reads total_peers/active_peers.
-    wg_peer_count = len(mesh.peer_nodes(get_wg_mesh_config()))
+    # CONFIGURÉS ET VIVANTS NE SONT PAS LA MÊME CHOSE (#1360). `online_peers`
+    # valait le nombre de pairs configurés : gk2 annonçait deux pairs en ligne
+    # qui n'avaient jamais établi de poignée de main. On compte désormais ceux
+    # dont la dernière poignée de main est récente — et, si la mesure manque,
+    # on le DIT (`liveness: unavailable`) au lieu de supposer.
+    handshakes = mesh.load_handshakes()
+    wg_nodes = mesh.peer_nodes(get_wg_mesh_config(), handshakes)
+    wg_peer_count = len(wg_nodes)
+    wg_online = sum(1 for n in wg_nodes if n["status"] == "online")
 
     # Get master-link status
     ml_config = get_ml_config()
@@ -662,9 +677,10 @@ async def get_status():
         "lan_ip": get_lan_ip(),
         "wan_ip": get_wan_ip(),
         "peer_count": wg_peer_count or len(peers),
-        "online_peers": wg_peer_count or len(online_peers),
+        "online_peers": wg_online if wg_peer_count else len(online_peers),
         "total_peers": wg_peer_count or len(peers),
-        "active_peers": wg_peer_count or len(online_peers),
+        "active_peers": wg_online if wg_peer_count else len(online_peers),
+        "liveness": "measured" if handshakes is not None else "unavailable",
         "service_count": len(services) if isinstance(services, list) else 0,
         "threat_count": len(threats) if isinstance(threats, dict) else 0,
         "master_link": {
@@ -725,7 +741,7 @@ async def list_peers():
     when there are no wg-mesh peers configured.
     """
     init_dirs()
-    nodes = mesh.peer_nodes(get_wg_mesh_config())
+    nodes = mesh.peer_nodes(get_wg_mesh_config(), mesh.load_handshakes())
     if nodes:
         return {"peers": nodes, "count": len(nodes)}
 
@@ -1231,7 +1247,7 @@ async def get_mesh_status():
     """
     init_dirs()
     wg = get_wg_mesh_config()
-    peer_views = mesh.peer_nodes(wg)
+    peer_views = mesh.peer_nodes(wg, mesh.load_handshakes())
     local_id = get_node_id()
 
     if peer_views:
@@ -2075,13 +2091,24 @@ def ml_join(req: JoinRequest, request: Request):
     # Check if already exists
     existing = next((r for r in requests if r.get("fingerprint") == req.fingerprint), None)
     if existing:
+        # UN PAIR DÉJÀ APPROUVÉ PEUT REVENIR AVEC SA CLÉ (#1360) : c'est le cas
+        # de tout nœud enrôlé avant l'échange de clés, et d'un nœud réinstallé.
+        # On met sa clé à jour et on le (ré)inscrit au transport, au lieu de lui
+        # répondre « déjà approuvé » sans rien lui donner pour monter le tunnel.
+        existing["address"] = peer_address or existing.get("address")
+        _record_wg_identity(existing, req)
         if existing.get("status") == "approved":
+            _provision(existing)
+            save_ml_requests(requests)
             return {
                 "status": "approved",
                 "fingerprint": req.fingerprint,
-                "message": "Already approved"
+                "message": "Already approved",
+                "mesh_ip": existing.get("mesh_ip"),
+                "wg": _wg_offer(existing),
             }
         elif existing.get("status") == "pending":
+            save_ml_requests(requests)
             return {
                 "status": "pending",
                 "fingerprint": req.fingerprint,
@@ -2096,6 +2123,7 @@ def ml_join(req: JoinRequest, request: Request):
         "timestamp": now.isoformat(),
         "status": "pending"
     }
+    _record_wg_identity(join_request, req)
 
     # Check global auto-approve or token auto-approve
     global_auto = config.get("auto_approve", False)
@@ -2112,6 +2140,7 @@ def ml_join(req: JoinRequest, request: Request):
 
         # Add to peers
         _add_approved_peer(join_request)
+        _provision(join_request)
 
         requests.append(join_request)
         save_ml_requests(requests)
@@ -2121,7 +2150,9 @@ def ml_join(req: JoinRequest, request: Request):
             "status": "approved",
             "fingerprint": req.fingerprint,
             "depth": peer_depth,
-            "message": "Auto-approved"
+            "message": "Auto-approved",
+            "mesh_ip": join_request.get("mesh_ip"),
+            "wg": _wg_offer(join_request),
         }
 
     # Manual approval required
@@ -2137,9 +2168,131 @@ def ml_join(req: JoinRequest, request: Request):
 
 
 def _assign_mesh_ip(join_request: Dict) -> None:
-    """Allocate the next free mesh IP, deduping against persisted peers."""
-    taken = [p.get("mesh_ip", "") for p in load_json(PEERS_FILE, {"peers": []}).get("peers", [])]
+    """Allocate the next free mesh IP, deduping against EVERY source.
+
+    Ne regardait que `peers.json`, et ignorait donc les pairs WireGuard réels :
+    la VM de test a reçu 10.10.0.2, l'adresse de c3box (#1360).
+    """
+    legacy = load_json(PEERS_FILE, {"peers": []}).get("peers", [])
+    taken = mesh.taken_mesh_ips(get_wg_mesh_config(), legacy, get_ml_requests())
     join_request["mesh_ip"] = mesh.allocate_mesh_ip(mesh.MESH_NETWORK, taken)
+
+
+def _master_wg_pubkey(state: Dict) -> Optional[str]:
+    """La clé publique du maître — stockée, ou dérivée de la privée.
+
+    Sur gk2, l'état porte la clé privée ADOPTÉE du fichier wg-quick, mais pas la
+    publique. `wg pubkey` est un pur calcul : il ne touche pas l'interface et
+    ne demande aucun privilège.
+    """
+    if mesh.valid_wg_key(state.get("public_key")):
+        return state["public_key"]
+    priv = state.get("private_key")
+    if not priv:
+        return None
+    try:
+        r = subprocess.run(["wg", "pubkey"], input=priv, capture_output=True,
+                           text=True, timeout=5)
+        pk = r.stdout.strip()
+        return pk if r.returncode == 0 and mesh.valid_wg_key(pk) else None
+    except Exception:
+        return None
+
+
+def _add_mesh_peer(join_request: Dict) -> bool:
+    """Inscrit le pair dans `wg_mesh.json` — le TRANSPORT, pas le registre.
+
+    L'écriture de l'état suffit : l'unité `secubox-p2p-mesh.path` (root) voit
+    le fichier changer et applique la configuration par `sbx-mesh-up`. Le
+    service reste sans privilège, et aucune nouvelle surface sudo n'est ouverte.
+    """
+    pk = join_request.get("wg_public_key")
+    ip = join_request.get("mesh_ip")
+    if not (pk and ip):
+        return False
+    state = get_wg_mesh_config()
+    peer = {
+        "public_key": pk,
+        "allowed_ips": f"{ip}/32",
+        "mesh_ip": ip,
+        "name": join_request.get("hostname") or ip,
+        "fingerprint": join_request.get("fingerprint"),
+        "added": datetime.utcnow().isoformat(),
+    }
+    ep = join_request.get("wg_endpoint")
+    if ep:
+        peer["endpoint"] = ep
+    mesh.upsert_mesh_peer(state, peer)
+    save_json(WG_MESH_CONFIG, state)
+    return True
+
+
+def _wg_offer(join_request: Dict) -> Optional[Dict]:
+    """Ce que le pair doit savoir pour monter SON côté du tunnel.
+
+    L'endpoint du maître n'est PAS renvoyé : le pair le compose avec l'adresse
+    qu'il vient lui-même de joindre. Le deviner ici (derrière nginx, l'adresse
+    vue est 127.0.0.1) serait moins fiable que ce que le pair sait déjà.
+    """
+    if not (join_request.get("wg_public_key") and join_request.get("mesh_ip")):
+        return None
+    state = get_wg_mesh_config()
+    master_pk = _master_wg_pubkey(state)
+    if not master_pk:
+        return None
+    return {
+        "master_public_key": master_pk,
+        "master_port": state.get("listen_port", WG_PORT),
+        "master_mesh_ip": (state.get("address") or "10.10.0.1/24").split("/")[0],
+        "address": f"{join_request['mesh_ip']}/24",
+        "network": state.get("network", WG_NETWORK),
+    }
+
+
+def _provision(join_request: Dict) -> None:
+    """Inscrit le pair au transport ; réattribue son adresse si elle est prise.
+
+    CAS RÉEL : la VM de test avait été approuvée avec 10.10.0.2, l'adresse de
+    c3box — l'ancien allocateur ignorait les pairs WireGuard. Reconduire cette
+    adresse au réenrôlement aurait détourné la route de c3box. On la libère et
+    on en prend une vraiment libre.
+    """
+    if not join_request.get("wg_public_key"):
+        return
+    try:
+        _add_mesh_peer(join_request)
+    except ValueError:
+        join_request.pop("mesh_ip", None)
+        _assign_mesh_ip(join_request)
+        _add_mesh_peer(join_request)
+    # Le registre hérité suit, sinon l'interface afficherait l'ancienne adresse.
+    legacy = load_json(PEERS_FILE, {"peers": []})
+    for lp in legacy.get("peers", []):
+        if lp.get("fingerprint") == join_request.get("fingerprint"):
+            lp["mesh_ip"] = join_request["mesh_ip"]
+    save_json(PEERS_FILE, legacy)
+
+
+def _record_wg_identity(join_request: Dict, req: "JoinRequest") -> None:
+    """Valide et consigne la clé et l'endpoint annoncés par le pair.
+
+    L'endpoint n'est construit qu'à partir d'une adresse IP VALIDE : il finit
+    dans un fichier de configuration rendu, et un nom arbitraire y ferait
+    entrer n'importe quoi.
+    """
+    if req.wg_public_key is None:
+        return
+    if not mesh.valid_wg_key(req.wg_public_key):
+        raise HTTPException(status_code=400, detail="invalid WireGuard public key")
+    join_request["wg_public_key"] = req.wg_public_key
+    port = req.wg_port or WG_PORT
+    if not (1 <= int(port) <= 65535):
+        raise HTTPException(status_code=400, detail="invalid WireGuard port")
+    try:
+        ipaddress.ip_address(join_request.get("address") or "")
+        join_request["wg_endpoint"] = f"{join_request['address']}:{int(port)}"
+    except ValueError:
+        join_request.pop("wg_endpoint", None)
 
 
 def _add_approved_peer(join_request: Dict):
@@ -2205,6 +2358,7 @@ async def ml_approve(req: ApproveRequest, user: dict = Depends(require_jwt)):
 
         # Add to peers
         _add_approved_peer(join_request)
+        _provision(join_request)
 
         save_ml_requests(requests)
 
