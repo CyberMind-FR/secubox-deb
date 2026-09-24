@@ -456,6 +456,23 @@ func (s *Server) moderer(w http.ResponseWriter, r *http.Request) {
 	case "retablir":
 		err = s.st.RetablitMessage(v.ID, cible)
 	case "depublier":
+		// ON PREVIENT BILLETS AVANT D'OUBLIER LE LIEN (#1358). `Depublie`
+		// effacait la ligne locale sans rien dire au module : le billet restait
+		// en ligne, et l'on venait de perdre son identifiant — donc le seul
+		// moyen de le retirer un jour. Si l'appel echoue, on NE supprime PAS la
+		// ligne : mieux vaut un fil qui se dit encore publie, et qu'on peut
+		// redepublier, qu'un billet orphelin que plus personne ne voit.
+		if bp, ok := s.st.EstPublie(cible); ok && s.bil != nil && bp.BilletID != "" {
+			var session string
+			if c, e := r.Cookie("secubox_session"); e == nil {
+				session = c.Value
+			}
+			if e := s.bil.Retire(bp.BilletID, session); e != nil {
+				http.Error(w, "billets n'a pas retire le billet : "+e.Error()+
+					" — le fil reste marque publie, reessayez", http.StatusConflict)
+				return
+			}
+		}
 		err = s.st.Depublie(v.ID, cible)
 	case "salon":
 		parent, _ := strconv.ParseInt(r.FormValue("parent"), 10, 64)
@@ -1823,7 +1840,19 @@ func (s *Server) publier(w http.ResponseWriter, r *http.Request, id int64) {
 	if c, err := r.Cookie("secubox_session"); err == nil {
 		session = c.Value
 	}
+	// REPUBLIER MET A JOUR, IL NE DUPLIQUE PAS (#1358). Le lien fil -> billet
+	// etait deja tenu par le magasin, et `publier` ne le consultait jamais :
+	// corriger un titre creait un billet de plus, et `MarkPublished` faisant un
+	// INSERT OR REPLACE, le BBS oubliait le precedent — qui restait en ligne
+	// sans que plus rien ne puisse le retirer. Trois exemplaires du meme fil
+	// sur la board, et quarante-trois billets en trop sur deux cent
+	// soixante-seize.
+	var dejaPublie string
+	if b, ok := s.st.EstPublie(id); ok {
+		dejaPublie = b.BilletID
+	}
 	f := billets.Fil{ID: id, Titre: t.Title, Public: true, Session: session,
+		BilletID: dejaPublie,
 		// L'attribution nominative est une DECISION, jamais le defaut :
 		// l'autorite de l'operateur est anonymisante.
 		Attribuer: r.PostFormValue("attribuer") == "1",

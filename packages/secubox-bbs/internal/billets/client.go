@@ -30,6 +30,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -43,8 +44,17 @@ type Message struct {
 type Fil struct {
 	// Session : le jeton de session SecuBox de L'OPERATEUR qui declenche la
 	// publication. Le BBS n'a pas d'identite propre chez billets.
-	Session  string
-	ID       int64
+	Session string
+	ID      int64
+	// BilletID : l'identifiant du billet DEJA publie pour ce fil, s'il existe.
+	//
+	// VIDE, ON CREE ; RENSEIGNE, ON MET A JOUR (#1358). Sans ce champ, chaque
+	// republication faisait un POST de plus : corriger un titre produisait un
+	// billet neuf, et le BBS — dont `MarkPublished` fait un INSERT OR REPLACE —
+	// oubliait le precedent, qui restait en ligne sans que plus rien ne puisse
+	// le retirer. Mesure au moment du correctif : 276 billets dont 43 en trop,
+	// certains fils en TROIS exemplaires.
+	BilletID string
 	Titre    string
 	Public   bool
 	Messages []Message
@@ -180,8 +190,15 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 		"status":  "published",
 	})
 
-	req, err := http.NewRequest("POST", strings.TrimRight(c.Base, "/")+"/admin/api/billets",
-		bytes.NewReader(charge))
+	// UN SEUL CONSTRUCTEUR DE CORPS, DEUX VERBES. Ecrire une seconde fonction
+	// pour la mise a jour ferait diverger les deux charges utiles au premier
+	// champ ajoute — et la divergence ne se verrait que sur les billets
+	// republies, c'est-a-dire les plus anciens.
+	methode, cible := "POST", strings.TrimRight(c.Base, "/")+"/admin/api/billets"
+	if id := strings.TrimSpace(f.BilletID); id != "" {
+		methode, cible = "PUT", cible+"/"+url.PathEscape(id)
+	}
+	req, err := http.NewRequest(methode, cible, bytes.NewReader(charge))
 	if err != nil {
 		return r, err
 	}
@@ -255,6 +272,55 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 // rendrait invisible aux tests — et une logique non testable finit non testee.
 // L'appeler directement permet de verifier ce qu'elle fait, pendant qu'un autre
 // test verifie que `Publier` rend la main sans l'attendre.
+// Retire supprime un billet chez billets.
+//
+// APPELE AVANT D'OUBLIER LE LIEN LOCAL (#1358). `Store.Depublie` effacait la
+// ligne du BBS sans rien dire a billets : le billet restait en ligne, et l'on
+// venait de perdre son identifiant — donc le seul moyen de le retirer un jour.
+// L'ordre compte : on retire chez billets, et on n'oublie qu'ensuite.
+//
+// UN 404 EST UN SUCCES. Le billet a pu etre supprime depuis l'administration
+// de billets ; exiger qu'il existe encore bloquerait la depublication d'un fil
+// dont le billet n'est deja plus la, ce qui est precisement l'etat qu'on veut
+// atteindre.
+func (c *Client) Retire(billetID, session string) error {
+	id := strings.TrimSpace(billetID)
+	if id == "" {
+		return errors.New("aucun billet a retirer")
+	}
+	session = strings.TrimSpace(session)
+	if session == "" {
+		session = strings.TrimSpace(c.Session)
+	}
+	if session == "" {
+		return errors.New("aucune session SecuBox — connectez-vous avant de depublier")
+	}
+	req, err := http.NewRequest("DELETE",
+		strings.TrimRight(c.Base, "/")+"/admin/api/billets/"+url.PathEscape(id), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Cookie", "secubox_session="+session)
+	cl := c.HTTP
+	if cl == nil {
+		cl = &http.Client{Timeout: 15 * time.Second}
+	}
+	resp, err := cl.Do(req)
+	if err != nil {
+		return fmt.Errorf("billets injoignable : %w", err)
+	}
+	defer resp.Body.Close()
+	corps, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode == http.StatusNotFound {
+		return nil // deja parti : c'est l'etat voulu
+	}
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("billets a refuse (%d) : %s", resp.StatusCode,
+			strings.TrimSpace(string(corps[:min(len(corps), 200)])))
+	}
+	return nil
+}
+
 func (c *Client) TransfereEtReecrit(billetID, session, texte string, js []Jointe) Resultat {
 	var r Resultat
 	t := c.transfereMedias(billetID, session, texte, js, &r)
