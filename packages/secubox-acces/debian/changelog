@@ -1,3 +1,19 @@
+secubox-acces (1.6.3-1~bookworm1) bookworm; urgency=medium
+
+  * Affichage des accès refait (ref #1381), mesuré par rendu à 1280 et 400 px :
+    - la page débordait à droite (grille 1fr 1fr élargie par son contenu :
+      4e tuile et Profileur coupés) — colonnes en minmax(0,…) ;
+    - demandes et invitation côte à côte, Profileur sur toute la largeur ;
+    - Profileur en liste dense, une ligne par appareil (nom, empreinte
+      courte, compte, profil segmenté ou « suit gk2 », dernière venue
+      relative, BBS, révoquer), triée par dernière venue, filtres Tous /
+      Rattachés / Seuls / Jamais entrés, rattachement groupé en tête ;
+      rattacher/détacher par la liste déroulante, avec confirmation ;
+    - mobile : chaque ligne devient une carte compacte ;
+    - inventaire : « suit <compte> » pour un appareil rattaché.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Sep 2026 12:50:28 +0200
+
 secubox-acces (1.6.2-1~bookworm1) bookworm; urgency=medium
 
   * Inventaire des appareils : colonnes Compte (rattaché ou compte

@@ -134,7 +134,11 @@
   .tuile .note { font-size:.68rem; color:var(--faint); margin-top:8px; }
 
   /* ── CARTES ───────────────────────────────────────────────────────────── */
-  .duo { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  /* minmax(0,…) : sans lui, une colonne prend la largeur de son plus long
+     contenu (une liste déroulante, une empreinte) et la page déborde (#1381). */
+  .duo { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:18px; align-items:start; }
+  #admin { display:grid; gap:18px; min-width:0; }
+  .carte, .tuile { min-width:0; }
   @media (max-width: 900px) { .duo { grid-template-columns:1fr; } }
   .carte { background:var(--surface); border:1px solid var(--line); border-radius:16px;
            box-shadow:var(--ombre); padding:20px; }
@@ -216,6 +220,60 @@
     font-size:.74rem; color:var(--muted); }
   .etat-session.jamais { color:var(--ambre); font-weight:600; }
 
+  /* ── PROFILEUR EN LISTE DENSE (#1381) ─────────────────────────────────── */
+  .outils { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin-bottom:12px; }
+  .filtres { display:inline-flex; flex-wrap:wrap; gap:4px; padding:3px; border-radius:11px;
+             background:var(--sunk); border:1px solid var(--line-soft); }
+  .filtres button { border:0; background:transparent; color:var(--muted); padding:.3rem .7rem;
+                    border-radius:8px; font-size:.74rem; }
+  .filtres button[aria-pressed="true"] { background:var(--surface); color:var(--ink);
+                    box-shadow:0 1px 2px rgba(0,0,0,.12); }
+  .filtres button .n { font-variant-numeric:tabular-nums; color:var(--faint); margin-left:.3rem; }
+  .lot { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-left:auto; font-size:.74rem; color:var(--muted); }
+  .lot select, .cpt select { font:inherit; font-size:.74rem; padding:.28rem .45rem; border-radius:8px;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:11rem; }
+  .liste { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .ligne, .ligne-tete { display:grid; align-items:center; gap:6px 14px; padding:9px 12px;
+    grid-template-columns: 22px minmax(9rem,1.3fr) minmax(9rem,1fr) minmax(8.5rem,.9fr) minmax(8rem,.9fr) auto; }
+  .ligne-tete { background:var(--sunk); font-size:.62rem; letter-spacing:.12em; text-transform:uppercase;
+                color:var(--faint); font-weight:700; padding-top:7px; padding-bottom:7px; }
+  .ligne { border-top:1px solid var(--line-soft); background:var(--surface); }
+  .ligne:hover { background:var(--surface-2); }
+  .ligne .choix { width:1rem; height:1rem; accent-color:var(--laiton); margin:0; }
+  .ident { min-width:0; }
+  .ident .nom { font-family:"Chivo"; font-weight:800; font-size:.9rem; }
+  .ident .app { font-size:.72rem; color:var(--muted); margin-left:.35rem; }
+  .ident .emp { display:block; font-family:"IBM Plex Mono"; font-size:.66rem; color:var(--faint);
+                letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cpt { display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0; }
+  .badge { display:inline-flex; align-items:center; gap:.25rem; font-size:.72rem; font-weight:700;
+           padding:.14rem .55rem; border-radius:999px; border:1px solid currentColor; white-space:nowrap; }
+  .badge.lie { color:var(--violet); } .badge.seul { color:var(--faint); border-style:dashed; }
+  .raccourci { font-size:.7rem; padding:.18rem .5rem; border-radius:999px; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+  .seg .cran { border:0; border-radius:0; padding:.22rem .55rem; font-size:.68rem; }
+  .seg .cran + .cran { border-left:1px solid var(--line); }
+  .suit { font-size:.72rem; color:var(--muted); }
+  .suit b { color:var(--violet); }
+  .vu { font-size:.74rem; min-width:0; }
+  .vu { display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
+  .vu .quand { font-variant-numeric:tabular-nums; }
+  .vu .quand.jamais { color:var(--ambre); font-weight:700; }
+  .vu .ou { display:block; font-family:"IBM Plex Mono"; font-size:.64rem; color:var(--faint); }
+  .vu .bbs { font-size:.62rem; padding:.05rem .45rem; }
+  .act { display:flex; gap:6px; justify-content:flex-end; }
+  .act button { font-size:.7rem; padding:.28rem .6rem; }
+  .ligne.vide { display:block; color:var(--muted); font-size:.8rem; }
+  @media (max-width: 900px) {
+    .duo { grid-template-columns:minmax(0,1fr); }
+    .ligne-tete { display:none; }
+    .ligne { grid-template-columns:22px minmax(0,1fr) auto;
+             grid-template-areas:"c i a" ". k k" ". p v"; }
+    .ligne > .choix { grid-area:c; } .ident { grid-area:i; } .act { grid-area:a; }
+    .cpt { grid-area:k; } .prof { grid-area:p; } .vu { grid-area:v; align-items:flex-end; }
+    .lot { margin-left:0; }
+  }
+
   .vide { color:var(--muted); font-size:.82rem; padding:.6rem 0; }
   .err { color:var(--rouge); font-size:.78rem; margin-top:.6rem; }
 
@@ -256,24 +314,30 @@
   <div id="admin" hidden>
     <div class="tuiles" id="tuiles"></div>
 
-    <div class="duo" style="margin-top:18px">
+    <!-- MISE EN PAGE (#1381) : ce qui attend et l'invitation côte à côte, puis
+         le Profileur sur toute la largeur. En deux colonnes égales, le
+         Profileur étouffait, et la grille débordait de la page. -->
+    <div class="duo">
       <section class="carte">
         <div class="sec-h"><span class="k">Ce qui attend</span><div class="rule"></div><span>⏳</span></div>
         <h2>Demandes à trancher</h2>
         <p class="sous">Comparez l'empreinte avec celle affichée sur l'appareil du
           demandeur. C'est la seule vérification, et elle ne s'automatise pas.</p>
         <div id="file"><p class="vide">Chargement…</p></div>
-        <div style="margin-top:14px" id="inviter"></div>
       </section>
-
       <section class="carte">
-        <div class="sec-h"><span class="k">Ce qui vit</span><div class="rule"></div><span>🎚️</span></div>
-        <h2>Profileur</h2>
-        <p class="sous">On ne promeut pas une demande, on promeut un accès. Un
-          appareil admis qui n'a <b>jamais ouvert de session</b> est un parcours
-          resté en plan — et ça se voit ici.</p>
-        <div id="profils"><p class="vide">Chargement…</p></div>
+        <div class="sec-h"><span class="k">Inviter</span><div class="rule"></div><span>🎟️</span></div>
+        <div id="inviter"></div>
       </section>
+    </div>
+
+    <section class="carte">
+      <div class="sec-h"><span class="k">Ce qui vit</span><div class="rule"></div><span>🎚️</span></div>
+      <h2>Profileur</h2>
+      <p class="sous">Un appareil admis entre sous son propre compte, ou sous
+        celui auquel il est <b>rattaché</b> — il en prend alors le rôle.</p>
+      <div id="profils"><p class="vide">Chargement…</p></div>
+    </section>
 
       <!-- INVENTAIRE COMPLET (#1313). Le profileur au-dessus sert a DECIDER :
            il ne montre que ce qui attend et ce qui vit. Cette section sert a
@@ -287,7 +351,6 @@
           expirations, et ce que chaque profil autorise réellement.</p>
         <div id="audit"><p class="vide">Chargement…</p></div>
       </section>
-    </div>
   </div>
 
   <!-- DEMANDEUR / INCONNU -->
@@ -421,26 +484,49 @@ function rendFile(liste) {
  */
 function pastilleBBS(nom, bbs, comptesSecubox) {
   const z = el('span', 'bbs');
-  if (bbs && bbs._erreur) { z.classList.add('att'); z.textContent = 'BBS : ' + bbs._erreur; return [z]; }
+  if (bbs && bbs._erreur) return [];   // dit une fois, en tête de liste
   const e = (bbs || {})[nom];
   if (!e || !e.existe) {
-    z.classList.add('att'); z.textContent = 'BBS : inconnu';
+    z.classList.add('att'); z.textContent = 'BBS ?';
     z.title = 'La BBS ne connaît pas ce compte : synchronisez.';
     return [z];
   }
-  if (e.desactive) { z.classList.add('ko'); z.textContent = 'BBS : désactivé'; return [z]; }
+  if (e.desactive) { z.classList.add('ko'); z.textContent = 'BBS fermé'; return [z]; }
   if (e.source === 'secubox') {
-    z.classList.add('ok'); z.textContent = 'BBS : synchronisé · ' + e.role;
+    z.classList.add('ok'); z.textContent = 'BBS ✓ ' + e.role;
     z.title = 'La session du Hall ouvre ce compte dans la BBS.';
     return [z];
   }
-  z.classList.add('att'); z.textContent = 'BBS : compte local · ' + e.role;
+  z.classList.add('att'); z.textContent = 'BBS local · ' + e.role;
   z.title = "Compte créé dans la BBS elle-même : la session du Hall ne l'ouvre pas.";
   if (!comptesSecubox.has(nom)) return [z];
   // ADOPTER, C'EST AFFIRMER que le « gk2 » local et le « gk2 » SecuBox sont la
   // meme personne. Nom par nom, et seulement pour un compte SecuBox existant.
-  return [z, bouton('Adopter dans la BBS', 'oui',
+  return [z, bouton('adopter', 'oui',
     () => poste('/profils/bbs/synchroniser', { adopter: [nom] }))];
+}
+
+// ── PROFILEUR (#1381) ─────────────────────────────────────────────────────
+// Une ligne par appareil : qui, sous quel compte, quel rôle, quand il est
+// venu, ce que la BBS en sait, et le geste. Trié par dernière venue ; les
+// filtres répondent aux questions qu'on se pose vraiment.
+let FILTRE = 'tous';
+const vuDe = a => a.derniere_connexion || a.session_le || 0;
+
+function depuis(ts) {
+  if (!ts) return '';
+  const s = Date.now() / 1000 - ts;
+  if (s < 90) return "à l'instant";
+  if (s < 3600) return 'il y a ' + Math.round(s / 60) + ' min';
+  if (s < 86400) return 'il y a ' + Math.round(s / 3600) + ' h';
+  if (s < 86400 * 45) return 'il y a ' + Math.round(s / 86400) + ' j';
+  return new Date(ts * 1000).toLocaleDateString('fr-FR');
+}
+
+function rattache(did, compte, avant) {
+  const quoi = compte ? 'rattacher cet appareil à « ' + compte + ' »' : 'le détacher (retour à son propre compte, profil invité)';
+  if (!confirm('Voulez-vous ' + quoi + ' ? Ses sessions ouvertes seront fermées.')) return Promise.resolve(false);
+  return poste('/profils/rattacher', { did, compte }).then(() => true);
 }
 
 function rendProfils(admis, profils, p) {
@@ -449,11 +535,29 @@ function rendProfils(admis, profils, p) {
   c.textContent = '';
   const comptes = (p.comptes || []).filter(x => !x.desactive);
   const noms = new Set(comptes.map(x => x.handle));
+  const roleDe = h => (comptes.find(x => x.handle === h) || {}).role || '?';
 
-  // RATTACHER PAR LOT (#1373) : cocher les appareils qui sont en fait la même
-  // personne — le téléphone et le Safari et l'appli Google de gk2 — et les
-  // rattacher d'un geste au compte proposé.
-  const lot = el('div', 'bbs-barre');
+  const tests = {
+    tous: () => true,
+    lies: a => !!a.compte,
+    seuls: a => !a.compte,
+    jamais: a => !vuDe(a),
+  };
+
+  // ── barre d'outils : filtres à gauche, rattachement groupé à droite ──
+  const outils = el('div', 'outils');
+  const filtres = el('div', 'filtres');
+  filtres.setAttribute('role', 'group');
+  filtres.setAttribute('aria-label', 'Filtrer les appareils');
+  for (const [k, lib] of [['tous', 'Tous'], ['lies', 'Rattachés'], ['seuls', 'Seuls'], ['jamais', 'Jamais entrés']]) {
+    const b = el('button', null, lib);
+    b.type = 'button';
+    b.appendChild(el('span', 'n', String(admis.filter(tests[k]).length)));
+    b.setAttribute('aria-pressed', String(FILTRE === k));
+    b.onclick = () => { FILTRE = k; rendProfils(admis, profils, p); };
+    filtres.appendChild(b);
+  }
+  const lot = el('div', 'lot');
   const cible = el('select');
   cible.setAttribute('aria-label', 'Compte cible du rattachement groupé');
   for (const x of comptes) {
@@ -462,96 +566,132 @@ function rendProfils(admis, profils, p) {
     cible.appendChild(o);
   }
   if (p.compte_par_defaut) cible.value = p.compte_par_defaut;
-  const compteur = el('span', null, '0 appareil coché');
+  const compteur = el('span', null, 'aucun coché');
   const lancer = bouton('Rattacher la sélection', 'oui', async () => {
     const dids = [...c.querySelectorAll('input.choix:checked')].map(i => i.value);
     if (!dids.length) throw new Error('Cochez au moins un appareil.');
+    if (!confirm('Rattacher ' + dids.length + ' appareil(s) à « ' + cible.value + ' » ? Leurs sessions ouvertes seront fermées.')) return;
     for (const did of dids) await poste('/profils/rattacher', { did, compte: cible.value });
   });
-  lot.append(el('span', null, 'Sélection →'), cible, lancer, compteur);
-  c.appendChild(lot);
+  lot.append(compteur, el('span', null, '→'), cible, lancer,
+    bouton('↻ Synchroniser la BBS', null, () => poste('/profils/bbs/synchroniser', { adopter: [] })));
+  outils.append(filtres, lot);
+  c.appendChild(outils);
+  if (p.bbs && p.bbs._erreur) {
+    const n = el('p', 'err', 'BBS : ' + p.bbs._erreur);
+    n.style.marginTop = '0';
+    c.appendChild(n);
+  }
   c.addEventListener('change', ev => {
     if (!ev.target.classList || !ev.target.classList.contains('choix')) return;
     const n = c.querySelectorAll('input.choix:checked').length;
-    compteur.textContent = n + (n > 1 ? ' appareils cochés' : ' appareil coché');
+    compteur.textContent = n ? n + ' coché' + (n > 1 ? 's' : '') : 'aucun coché';
   });
 
-  const barre = el('div', 'bbs-barre');
-  barre.append(el('span', null, 'Comptes SecuBox → BBS'),
-    bouton('Synchroniser la BBS', null, () => poste('/profils/bbs/synchroniser', { adopter: [] })));
-  if (p.bbs && p.bbs._erreur) barre.appendChild(el('span', 'bbs att', p.bbs._erreur));
-  c.appendChild(barre);
+  // ── la liste ──
+  const liste = el('div', 'liste');
+  const tete = el('div', 'ligne-tete');
+  for (const t of ['', 'Appareil', 'Compte', 'Profil', 'Dernière venue', '']) tete.appendChild(el('span', null, t));
+  liste.appendChild(tete);
 
-  if (!admis.length) { c.appendChild(el('p', 'vide', 'Aucun accès accordé pour l’instant.')); return; }
-  for (const a of admis) {
-    const b = el('div', 'bloc');
-    const q = el('div', 'qui');
+  const vus = admis.filter(tests[FILTRE]).sort((a, b) => vuDe(b) - vuDe(a));
+  if (!vus.length) liste.appendChild(el('div', 'ligne vide', admis.length ? 'Aucun appareil dans ce filtre.' : 'Aucun accès accordé pour l’instant.'));
+
+  for (const a of vus) {
+    const l = el('div', 'ligne');
+
     const coche = el('input', 'choix');
     coche.type = 'checkbox';
     coche.value = a.did;
     coche.setAttribute('aria-label', 'Choisir ' + (a.nom || 'cet appareil'));
-    q.append(coche, el('span', 'nom', a.nom || '(sans nom)'), el('span', 'app', a.appareil || ''));
-    if (a.compte) q.appendChild(el('span', 'lie', '→ ' + a.compte));
-    b.appendChild(q);
-    b.appendChild(el('div', 'empreinte', a.empreinte || ''));
 
-    const r = el('div', 'rang');
-    r.appendChild(el('span', 'lab', 'Profil'));
-    for (const p of profils) {
-      const cr = el('button', 'cran', rang(p));
-      cr.dataset.p = p;
-      cr.title = RANG_DIT[p] || p;
-      cr.setAttribute('aria-pressed', String(a.profil === p));
-      cr.onclick = () => {
-        cr.disabled = true;
-        poste('/profils/promouvoir', { did: a.did, profil: p })
-          .then(rafraichis).catch(e => { cr.disabled = false; alerte(e.message); });
-      };
-      r.appendChild(cr);
-    }
-    b.appendChild(r);
+    const ident = el('div', 'ident');
+    ident.append(el('span', 'nom', a.nom || '(sans nom)'), el('span', 'app', a.appareil || ''));
+    const emp = el('span', 'emp', a.empreinte || '');
+    emp.title = 'Empreinte : ' + (a.empreinte || '—');
+    ident.appendChild(emp);
 
-    // RATTACHEMENT (#1369) : l'appareil entre-t-il comme lui-meme (sbx-…) ou
-    // comme un compte SecuBox ? Le profil suit alors le role du compte.
-    const k = el('div', 'compte');
-    k.appendChild(el('span', 'lab', 'Compte'));
+    // Compte : rattaché ou seul ; la liste déroulante rattache au changement.
+    const cpt = el('div', 'cpt');
+    cpt.appendChild(a.compte ? el('span', 'badge lie', '→ ' + a.compte)
+                             : el('span', 'badge seul', a.compte_appareil || 'seul'));
     const sel = el('select');
-    sel.setAttribute('aria-label', 'Compte SecuBox de cet appareil');
-    const moi = el('option', null, 'lui-même · ' + (a.compte_appareil || 'sbx-…'));
-    moi.value = '';
-    sel.appendChild(moi);
+    sel.setAttribute('aria-label', 'Rattacher ' + (a.nom || 'cet appareil') + ' à un compte');
+    const o0 = el('option', null, a.compte ? 'détacher…' : 'rattacher à…');
+    o0.value = '__';
+    sel.appendChild(o0);
+    if (a.compte) { const od = el('option', null, '— son propre compte'); od.value = ''; sel.appendChild(od); }
     for (const x of comptes) {
-      const o = el('option', null, x.handle + ' · ' + x.role + (x.handle === p.compte_par_defaut ? ' (proposé)' : ''));
+      if (x.handle === a.compte) continue;
+      const o = el('option', null, x.handle + ' · ' + x.role);
       o.value = x.handle;
       sel.appendChild(o);
     }
-    sel.value = a.compte || '';
-    k.appendChild(sel);
-    const appliquer = bouton('Rattacher', 'oui',
-      () => poste('/profils/rattacher', { did: a.did, compte: sel.value }));
-    appliquer.title = 'Les sessions déjà ouvertes par cet appareil seront fermées';
-    k.appendChild(appliquer);
+    sel.onchange = () => {
+      const v = sel.value;
+      if (v === '__') return;
+      sel.disabled = true;
+      rattache(a.did, v).then(fait => { if (fait) rafraichis(); else { sel.value = '__'; sel.disabled = false; } })
+        .catch(e => { sel.disabled = false; sel.value = '__'; alerte(e.message); });
+    };
+    cpt.appendChild(sel);
     if (!a.compte && p.compte_par_defaut) {
-      k.appendChild(bouton('→ ' + p.compte_par_defaut, null,
-        () => poste('/profils/rattacher', { did: a.did, compte: p.compte_par_defaut })));
+      const r = bouton('→ ' + p.compte_par_defaut, 'raccourci', async () => {
+        if (!(await rattache(a.did, p.compte_par_defaut))) return;
+      });
+      r.title = 'Rattacher au compte proposé';
+      cpt.appendChild(r);
     }
-    if (a.compte) k.appendChild(el('span', 'lie', 'entre comme ' + a.compte));
-    for (const n of pastilleBBS(a.compte || a.compte_appareil, p.bbs, noms)) k.appendChild(n);
-    b.appendChild(k);
 
-    const vu = a.derniere_connexion || a.session_le;
-    const s = el('div', 'etat-session' + (vu ? '' : ' jamais'),
-      vu
-        ? 'Dernière connexion : ' + new Date(vu * 1000).toLocaleString('fr-FR')
-          + (a.rattache_le && vu < a.rattache_le ? ' (avant rattachement — à rouvrir)' : '')
-        : "Jamais entré — l'accès est accordé, l'appareil n'a pas encore ouvert de session.");
-    b.appendChild(s);
+    // Profil : rattaché, il SUIT le compte ; seul, il se règle ici.
+    const prof = el('div', 'prof');
+    if (a.compte) {
+      const s2 = el('span', 'suit', 'suit ');
+      s2.appendChild(el('b', null, a.compte));
+      s2.append(' · ' + roleDe(a.compte));
+      prof.appendChild(s2);
+    } else {
+      const seg = el('div', 'seg');
+      for (const pr of profils) {
+        const cr = el('button', 'cran', pr);
+        cr.type = 'button';
+        cr.dataset.p = pr;
+        cr.title = RANG_DIT[pr] || pr;
+        cr.setAttribute('aria-pressed', String(a.profil === pr));
+        cr.onclick = () => {
+          if (a.profil === pr) return;
+          cr.disabled = true;
+          poste('/profils/promouvoir', { did: a.did, profil: pr })
+            .then(rafraichis).catch(e => { cr.disabled = false; alerte(e.message); });
+        };
+        seg.appendChild(cr);
+      }
+      prof.appendChild(seg);
+    }
 
-    const g = el('div', 'gestes');
-    g.appendChild(bouton('Révoquer', 'non', () => poste('/profils/revoquer', { did: a.did })));
-    b.appendChild(g);
-    c.appendChild(b);
+    // Dernière venue, relative ; le détail au survol.
+    const vu = el('div', 'vu');
+    const ts = vuDe(a);
+    const q = el('span', 'quand' + (ts ? '' : ' jamais'), ts ? depuis(ts) : 'jamais entré');
+    if (ts) q.title = new Date(ts * 1000).toLocaleString('fr-FR')
+      + (a.rattache_le && ts < a.rattache_le ? ' — avant le rattachement : session à rouvrir' : '');
+    vu.appendChild(q);
+    if (a.rattache_le && ts && ts < a.rattache_le) vu.appendChild(el('span', 'ou', '↺ avant rattachement'));
+    for (const n of pastilleBBS(a.compte || a.compte_appareil, p.bbs, noms)) {
+      if (n.tagName === 'BUTTON') { n.classList.add('raccourci'); }
+      vu.appendChild(n);
+    }
+
+    const act = el('div', 'act');
+    act.appendChild(bouton('Révoquer', 'non', async () => {
+      if (!confirm('Révoquer l’accès de « ' + (a.nom || a.did) + ' » ? Ses sessions seront fermées.')) return;
+      await poste('/profils/revoquer', { did: a.did });
+    }));
+
+    l.append(coche, ident, cpt, prof, vu, act);
+    liste.appendChild(l);
   }
+  c.appendChild(liste);
 }
 
 /**
@@ -868,7 +1008,9 @@ function rendAudit(inv) {
       d.compte ? '→ ' + d.compte : (d.compte_appareil || '—'),
       // Un profil n'a de sens que sur un appareil ADMIS : l'afficher sur un
       // refus laisserait croire a un droit accorde.
-      d.etat === 'acceptee' ? (d.profil || 'guest') : '—',
+      // Rattaché, le rôle est celui du compte : le profil propre de l'appareil
+      // ne joue plus, l'afficher tromperait (#1381).
+      d.etat !== 'acceptee' ? '—' : (d.compte ? 'suit ' + d.compte : (d.profil || 'guest')),
       derniereConnexion(d),
       quandCourt(d.demandee_le),
       quandCourt(d.traitee_le),
