@@ -9,6 +9,10 @@ override_dh_auto_install:
 	# CLI controller
 	install -d debian/secubox-users/usr/sbin
 	install -m 755 sbin/usersctl debian/secubox-users/usr/sbin/
+	# Comptes dans les services (#1375) : helper root + sudoers exact + réglages.
+	install -m 755 sbin/secubox-usersctl-services debian/secubox-users/usr/sbin/
+	install -D -m 0440 sudoers/secubox-users debian/secubox-users/etc/sudoers.d/secubox-users
+	install -D -m 0644 conf/users.toml debian/secubox-users/etc/secubox/users.toml
 	# Frontend
 	install -d debian/secubox-users/usr/share/secubox/www/users
 	cp -r www/users/. debian/secubox-users/usr/share/secubox/www/users/
