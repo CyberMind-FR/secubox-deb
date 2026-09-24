@@ -1,3 +1,15 @@
+secubox-users (1.8.1-1~bookworm1) bookworm; urgency=high
+
+  * Droits : get_user_permissions ne lisait que `roles` (liste), or
+    users.json v2 porte `role` au singulier — tout administrateur était
+    traité en `user`, sans users.view ni users.edit (ref #1377). Refusait
+    🧩 Services, activer/désactiver, TOTP admin, sessions. Un appareil admis
+    prend le rôle de son profil (registre des appareils).
+  * Fenêtre Services : couleurs posées (libellés illisibles sous la peau
+    partagée), erreur affichée en rouge lisible.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Sep 2026 12:36:08 +0200
+
 secubox-users (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Comptes dans les services modulaires (ref #1375) : helper root

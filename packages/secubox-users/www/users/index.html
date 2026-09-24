@@ -86,6 +86,16 @@
 
         .pill { font-size: 0.62rem; padding: 0.18rem 0.5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
         .modal-content.large { max-width: 760px; width: 96vw; }
+        /* Couleurs POSÉES, pas héritées (#1377) : la peau partagée repeignait
+           les libellés de cette fenêtre en vert sombre, illisibles. */
+        #services-modal .svc-tete, #services-modal .svc-tete span, #services-modal .svc-envoi,
+        #services-modal .svc-ligne .nom { color: var(--text) !important; }
+        #services-modal .svc-tete b { color: var(--cyan) !important; }
+        #services-modal .svc-ligne .etat, #services-modal .svc-note { color: #9aa6b4 !important; }
+        #services-modal .svc-erreur { color: var(--red) !important; background: rgba(255,68,102,.08) !important;
+            border: 1px solid rgba(255,68,102,.4); border-radius: 6px; padding: .7rem .8rem; font-size: .8rem; text-align: left; }
+        #services-modal .svc-attente { color: #9aa6b4 !important; background: none !important; padding: 1rem; font-size: .8rem; text-align: center; }
+        #services-modal .svc-envoi input { accent-color: var(--cyan); width: auto; }
         .svc-note { font-size: .68rem; color: var(--p31-dim, #6b7b8b); margin-top: .3rem; }
         .svc-tete { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; font-size: .78rem; color: var(--p31-dim, #6b7b8b); }
         .svc-tete b { color: var(--cyan, #00d4ff); font-weight: 400; }
@@ -303,7 +313,7 @@
                 <button class="btn sm" type="button" data-svc="rafraichir">↻ Mesurer</button>
                 <button class="btn sm" type="button" data-svc="mdp-secubox">🔑 Réinitialiser le mot de passe SecuBox</button>
             </div>
-            <div id="svc-liste" class="svc-liste"><div class="empty">Mesure en cours…</div></div>
+            <div id="svc-liste" class="svc-liste"><div class="svc-attente">Mesure en cours…</div></div>
             <div id="svc-mdp" class="svc-mdp" hidden></div>
         </div>
     </div>
@@ -631,10 +641,10 @@
 
         async function chargeServices(force) {
             const el = document.getElementById('svc-liste');
-            el.innerHTML = '<div class="empty">Mesure en cours… (chaque service est interrogé dans son conteneur)</div>';
+            el.innerHTML = '<div class="svc-attente">Mesure en cours… chaque service est interrogé dans son conteneur.</div>';
             const d = await api('/user/' + encodeURIComponent(svcUser) + '/services' + (force ? '?rafraichir=true' : ''));
             if (d && d.services) rendServices(d);
-            else el.innerHTML = '<div class="empty">❌ ' + esc((d && d.detail) || 'mesure impossible') + '</div>';
+            else el.innerHTML = '<div class="svc-erreur">❌ ' + esc((d && d.detail) || 'mesure impossible') + '</div>';
         }
 
         function montreMotDePasse(r, quoi) {

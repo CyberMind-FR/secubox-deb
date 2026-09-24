@@ -362,12 +362,29 @@ def get_user_permissions(username: str) -> List[str]:
 
     for user in data.get("users", []):
         if user.get("username") == username:
-            user_roles = user.get("roles", ["user"])
+            # LE RÔLE EST AU SINGULIER dans users.json v2 (`role: "admin"`).
+            # Ne lire que `roles` (liste) rangeait tout administrateur en
+            # `user` — sans users.view ni users.edit (#1377).
+            user_roles = list(user.get("roles") or [])
+            if user.get("role"):
+                user_roles.append(user["role"])
+            if not user_roles:
+                user_roles = ["user"]
             all_perms = set()
             for role_id in user_roles:
                 if role_id in role_map:
                     all_perms.update(role_map[role_id].get("permissions", []))
             return list(all_perms)
+    # UN APPAREIL ADMIS (sbx-…) n'est pas dans users.json : son profil vit dans
+    # le registre des appareils. Admin là-bas, admin ici.
+    try:
+        from secubox_core import appareils
+        if appareils.get(username):
+            role = appareils.profil_de(username)
+            if role in role_map:
+                return list(role_map[role].get("permissions", []))
+    except Exception:
+        pass
     return []
 
 def user_has_permission(username: str, permission: str) -> bool:
