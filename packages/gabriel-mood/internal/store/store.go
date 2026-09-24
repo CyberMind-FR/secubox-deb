@@ -309,3 +309,66 @@ func (s *Store) Tout() (int64, error) {
 	}
 	return n, nil
 }
+
+// Statistiques : ce que l'administration a besoin de voir (#1371). Des
+// COMPTES, jamais des lignes : le panneau dit combien et depuis quand, il ne
+// rejoue pas l'historique de quelqu'un.
+type Statistiques struct {
+	Resumes      int64            `json:"resumes"`
+	Sessions     int64            `json:"sessions"`
+	References   int64            `json:"references"`
+	PlusAncien   int64            `json:"plus_ancien"`
+	PlusRecent   int64            `json:"plus_recent"`
+	TailleOctets int64            `json:"taille_octets"`
+	ParHeure     []int64          `json:"par_heure"` // 24 cases, la dernière = l'heure en cours
+	Etats        map[string]int64 `json:"etats"`     // sur 7 jours
+}
+
+func (s *Store) Statistiques(maintenant time.Time) (Statistiques, error) {
+	var st Statistiques
+	if err := s.db.QueryRow(`SELECT COUNT(*), COUNT(DISTINCT session),
+		COALESCE(MIN(minute),0), COALESCE(MAX(minute),0) FROM resume`).
+		Scan(&st.Resumes, &st.Sessions, &st.PlusAncien, &st.PlusRecent); err != nil {
+		return st, err
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM reference`).Scan(&st.References); err != nil {
+		return st, err
+	}
+	var pages, taille int64
+	if s.db.QueryRow(`PRAGMA page_count`).Scan(&pages) == nil &&
+		s.db.QueryRow(`PRAGMA page_size`).Scan(&taille) == nil {
+		st.TailleOctets = pages * taille
+	}
+
+	st.ParHeure = make([]int64, 24)
+	fin := maintenant.Truncate(time.Hour).Add(time.Hour)
+	debut := fin.Add(-24 * time.Hour)
+	rows, err := s.db.Query(`SELECT (minute - ?) / 3600, COUNT(*) FROM resume
+		WHERE minute >= ? AND minute < ? GROUP BY 1`, debut.Unix(), debut.Unix(), fin.Unix())
+	if err != nil {
+		return st, err
+	}
+	for rows.Next() {
+		var h, n int64
+		if rows.Scan(&h, &n) == nil && h >= 0 && h < 24 {
+			st.ParHeure[h] = n
+		}
+	}
+	rows.Close()
+
+	st.Etats = map[string]int64{}
+	rows, err = s.db.Query(`SELECT etat, COUNT(*) FROM resume WHERE minute >= ? AND etat <> ''
+		GROUP BY etat`, maintenant.Add(-7*24*time.Hour).Unix())
+	if err != nil {
+		return st, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var e string
+		var n int64
+		if rows.Scan(&e, &n) == nil {
+			st.Etats[e] = n
+		}
+	}
+	return st, rows.Err()
+}

@@ -181,7 +181,7 @@ func (s *Serveur) envoieImages(c *websocket.Conn, sess *Session, stop <-chan str
 
 // repriseReference : le navigateur présente sa clé, on lui rend son ordinaire.
 func (s *Serveur) repriseReference(c *websocket.Conn, sess *Session, cle string) {
-	if cle == "" || s.Store == nil || !store.CleReference(cle) {
+	if cle == "" || s.Store == nil || !store.CleReference(cle) || !s.Reglages.Valeurs().MemoireVoix {
 		return
 	}
 	sess.CleRef = cle
@@ -197,7 +197,7 @@ func (s *Serveur) repriseReference(c *websocket.Conn, sess *Session, cle string)
 }
 
 func (s *Serveur) enregistreReference(sess *Session) {
-	if sess == nil || sess.CleRef == "" || s.Store == nil {
+	if sess == nil || sess.CleRef == "" || s.Store == nil || !s.Reglages.Valeurs().MemoireVoix {
 		return
 	}
 	ref := sess.Analyseur.Reference()
@@ -222,6 +222,9 @@ func (s *Serveur) archive(sess *Session, stop <-chan struct{}) {
 			// La référence est enregistrée au même rythme : une session longue
 			// ne doit pas tout remettre en jeu sur sa fermeture.
 			s.enregistreReference(sess)
+			if !s.Reglages.Valeurs().Historique {
+				continue // réglage (#1371) : la board ne garde rien
+			}
 			lec := sess.Analyseur.Lecture()
 			if err := s.Store.Enregistre(store.Resume{
 				Minute:  time.Now().Truncate(time.Minute).Unix(),

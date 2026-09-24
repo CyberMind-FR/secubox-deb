@@ -82,6 +82,11 @@ override_dh_auto_install:
 	fi
 	install -d debian/gabriel-mood/usr/share/secubox/www/gabriel-mood
 	cp -r dist/. debian/gabriel-mood/usr/share/secubox/www/gabriel-mood/
+	# Panneau d'administration (#1371) : statique, sans étape de construction.
+	install -D -m 0644 admin/index.html \
+	  debian/gabriel-mood/usr/share/secubox/www/gabriel-mood-admin/index.html
+	install -D -m 0644 admin/admin.js \
+	  debian/gabriel-mood/usr/share/secubox/www/gabriel-mood-admin/admin.js
 
 override_dh_installsystemd:
 	dh_installsystemd --name=gabriel-mood
