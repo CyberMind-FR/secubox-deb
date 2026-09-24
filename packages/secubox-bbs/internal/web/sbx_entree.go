@@ -27,9 +27,13 @@
 package web
 
 import (
+	"encoding/json"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
@@ -72,15 +76,30 @@ func (s *Server) sbxEntree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	vers := r.URL.Query().Get("vers")
+	s.ouvreSessionSbx(w, r, compte, r.Header.Get(enteteProfilSbx), vers)
+}
+
+// ouvreSessionSbx : le compte SecuBox vérifié devient une session BBS. Commun à
+// /sbx/entrer (vérifié par nginx) et /sbx/auto (vérifié par le démon).
+func (s *Server) ouvreSessionSbx(w http.ResponseWriter, r *http.Request, compte, profil, vers string) {
+	// UN APPAREIL A UN NOM (#1373). Admis par le Hall, il a déclaré « Gandalf »
+	// ou « Gk2 » : c'est ce qu'on affiche, pas « sbx-ff90aec2d8d8 ». Lu dans le
+	// registre des appareils, posé à la création, et repris tant que le membre
+	// n'a pas choisi lui-même son nom dans « Mon compte ».
+	nom := nomAppareil(compte)
 	id, err := s.st.UserByHandle(compte)
 	if err != nil {
-		// PREMIÈRE VENUE : on crée le membre. Le nom affiché est le compte —
-		// le nom « humain » déclaré à l'admission vit côté SecuBox et n'est pas
-		// à nous ; l'afficher ici obligerait le BBS à le tenir à jour.
-		id, err = s.st.CreateUser(compte, compte, roleDepuisProfil(r.Header.Get(enteteProfilSbx)))
+		// PREMIÈRE VENUE : on crée le membre — rédacteur s'il est `user` au
+		// Hall, lecteur s'il n'est que `guest` (roleDepuisProfil).
+		id, err = s.st.CreateUser(compte, orNom(nom, compte), roleDepuisProfil(profil))
 		if err != nil {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
+		}
+	} else if nom != "" {
+		if u, e := s.st.UserInfo(id); e == nil && u.Display == u.Handle {
+			s.st.PoseNomAffiche(id, nom)
 		}
 	}
 
@@ -95,14 +114,113 @@ func (s *Server) sbxEntree(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true, SameSite: s.sameSite(),
 		Secure: s.opt.DerriereTLS, MaxAge: 30 * 24 * 3600,
 	})
+	http.Redirect(w, r, cheminInterne(vers), http.StatusSeeOther)
+}
 
-	// ON REVIENT D'OÙ L'ON VENAIT, quand c'est un chemin INTERNE. Un `?vers=`
-	// venu de l'extérieur ferait de cette route un tremplin de redirection : on
-	// n'accepte donc qu'un chemin absolu sans hôte, et sans `//` qui en
-	// introduirait un.
-	vers := r.URL.Query().Get("vers")
-	if !strings.HasPrefix(vers, "/") || strings.HasPrefix(vers, "//") {
-		vers = "/"
+// ON REVIENT D'OÙ L'ON VENAIT, quand c'est un chemin INTERNE. Un `?vers=` venu
+// de l'extérieur ferait de ces routes un tremplin de redirection : on n'accepte
+// donc qu'un chemin absolu sans hôte, et sans `//` ni `\` qui en introduiraient un.
+func cheminInterne(vers string) string {
+	if !strings.HasPrefix(vers, "/") || strings.HasPrefix(vers, "//") || strings.Contains(vers, "\\") {
+		return "/"
 	}
-	http.Redirect(w, r, vers, http.StatusSeeOther)
+	return vers
+}
+
+// ── ENTRÉE AUTOMATIQUE, EMBARQUÉ DANS LE HALL (#1373) ───────────────────────
+//
+// Encadrée par le Hall, la BBS masque son en-tête — et avec lui « Entrer ». La
+// seule entrée restait sur /login, que personne n'atteint depuis le cadre :
+// l'iPhone connecté au Hall lisait la BBS en anonyme, sans un bouton.
+//
+// /sbx/auto fait ce que ferait le clic sur « Entrer avec ma session SecuBox »,
+// sans nginx : le démon soumet LUI-MÊME le cookie secubox_session à
+// /auth/verify (s.verif). Pas de session Hall, ou refus : on rend la page
+// demandée telle quelle, et un drapeau court empêche de réessayer en boucle.
+
+// Drapeau anti-boucle, LISIBLE par le script (pas HttpOnly) : c'est lui qui
+// décide de tenter l'entrée. Il ne porte aucun secret.
+const cookieAutoNon = "sbx_auto_non"
+
+func (s *Server) sbxAuto(w http.ResponseWriter, r *http.Request) {
+	vers := cheminInterne(r.URL.Query().Get("vers"))
+	refus := func() {
+		http.SetCookie(w, &http.Cookie{
+			Name: cookieAutoNon, Value: "1", Path: "/", MaxAge: 600,
+			SameSite: s.sameSite(), Secure: s.opt.DerriereTLS,
+		})
+		http.Redirect(w, r, vers, http.StatusSeeOther)
+	}
+	if s.verif == nil {
+		refus()
+		return
+	}
+	c, err := r.Cookie("secubox_session")
+	if err != nil || c.Value == "" {
+		refus()
+		return
+	}
+	ses, ok := s.verif(c.Value)
+	compte := strings.ToLower(strings.TrimSpace(ses.User))
+	if !ok || !reCompteSbx.MatchString(compte) {
+		refus()
+		return
+	}
+	s.ouvreSessionSbx(w, r, compte, ses.Groupes, vers)
+}
+
+// cheminAppareils : le registre tenu par secubox-acces (0640 secubox ; le
+// compte secubox-bbs est du groupe). Variable pour les tests.
+var cheminAppareils = "/etc/secubox/appareils.json"
+
+// nomAppareil rend le nom déclaré d'un compte d'appareil, nettoyé, ou "".
+// Registre absent ou illisible : "" — le compte garde son nom technique.
+func nomAppareil(compte string) string {
+	if !strings.HasPrefix(compte, "sbx-") {
+		return ""
+	}
+	b, err := os.ReadFile(cheminAppareils)
+	if err != nil {
+		return ""
+	}
+	var reg struct {
+		Appareils []struct {
+			Compte string `json:"compte"`
+			Nom    string `json:"nom"`
+		} `json:"appareils"`
+	}
+	if json.Unmarshal(b, &reg) != nil {
+		return ""
+	}
+	for _, a := range reg.Appareils {
+		if a.Compte == compte {
+			n, ok := nomAffichable(a.Nom)
+			if ok {
+				return n
+			}
+		}
+	}
+	return ""
+}
+
+// nomAffichable : 1 à 40 caractères imprimables, espaces resserrés. Le nom
+// vient d'un formulaire ouvert (la demande d'accès) : on le borne ici aussi.
+func nomAffichable(nom string) (string, bool) {
+	nom = strings.Join(strings.Fields(nom), " ")
+	if nom == "" || utf8.RuneCountInString(nom) > 40 {
+		return "", false
+	}
+	for _, r := range nom {
+		if unicode.IsControl(r) {
+			return "", false
+		}
+	}
+	return nom, true
+}
+
+func orNom(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

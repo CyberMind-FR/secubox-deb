@@ -1,3 +1,10 @@
+secubox-acces (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Rattachement par lot (ref #1373) : cases à cocher sur les appareils
+    admis, compte cible (proposé : gk2), un geste pour toute la sélection.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Sep 2026 12:14:13 +0200
+
 secubox-acces (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Rattacher un appareil admis à un compte SecuBox (ref #1369) :

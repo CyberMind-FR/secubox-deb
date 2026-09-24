@@ -6,7 +6,7 @@
 -->
 
 {{define "vignette"}}<span class="av">{{if .A}}<img src="/f/{{.A}}" alt="">{{else}}{{.I}}{{end}}</span>{{end}}
-{{define "layout"}}<!doctype html><html lang="fr"><head>
+{{define "layout"}}<!doctype html><html lang="fr" data-connecte="{{if .V.Connecte}}1{{else}}0{{end}}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{.Titre}} — {{.Site}}</title>
 <!-- La banniere de sante du WAF ne s'affiche PAS ici, et c'est voulu.
@@ -32,6 +32,11 @@
 <meta name="sbx-no-health-banner">
 <link rel="stylesheet" href="/static/bbs.css?v={{.VCSS}}">
 </head><body>
+{{if not .V.Connecte}}<div class="embed-entree" role="region" aria-label="Entrer">
+  <span>Vous lisez en visiteur.</span>
+  <a class="btn primary" href="/sbx/entrer">Entrer avec ma session SecuBox</a>
+  <a class="btn" href="/login">Autre compte</a>
+</div>{{end}}
 
 <!-- COQUILLE A TROIS COLONNES (maquette de reference, www/mockup-reference.html).
      Trois zones qui defilent CHACUNE DE LEUR COTE : on garde sa place dans la

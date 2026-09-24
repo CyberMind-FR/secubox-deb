@@ -939,3 +939,11 @@ audio.jointe{width:100%}
   padding:6px 12px;border:1px solid var(--line);border-top:0;border-radius:0 0 10px 10px;
   background:var(--soft);text-decoration:none;color:inherit}
 .jointe-pdf .jpdf-lien:hover{border-color:var(--sky)}
+
+/* ENTRÉE EMBARQUÉE (#1373). Encadrée par le Hall, la BBS masque son en-tête —
+   et « Entrer » avec lui. Cette bande n'existe que là, et seulement pour un
+   visiteur anonyme : l'entrée automatique a échoué ou n'a pas eu lieu. */
+.embed-entree{display:none}
+:root.sbx-embed .embed-entree{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;
+  margin:10px 14px 0;padding:10px 12px;border:1px solid var(--line,#1e3a4a);border-radius:12px;font-size:13px}
+:root.sbx-embed .embed-entree span{flex:1 1 12rem;opacity:.75}

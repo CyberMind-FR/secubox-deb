@@ -24,6 +24,21 @@
   // du Hall la remplace — et SYNCHRONISE le thème passé par le Hall (?theme=).
   try {
     if (window.top !== window.self) { r.classList.add('sbx-embed'); }
+    // ENTRÉE AUTOMATIQUE (#1373). Embarquée et anonyme, la BBS tente d'entrer
+    // avec la session SecuBox du Hall : /sbx/auto la fait vérifier par
+    // secubox-auth et revient ici. Échec ou déconnexion volontaire : le drapeau
+    // `sbx_auto_non` (posé par le serveur) arrête les tentatives un moment, et
+    // la bande « Entrer » reste visible. Le repli en sessionStorage couvre un
+    // navigateur qui refuserait le cookie : jamais de boucle.
+    if (r.classList.contains('sbx-embed') && r.getAttribute('data-connecte') === '0'
+        && document.cookie.indexOf('sbx_auto_non=') < 0) {
+      var deja = 0;
+      try { deja = +sessionStorage.getItem('sbx-auto') || 0; } catch (e) {}
+      if (Date.now() - deja > 600000) {
+        try { sessionStorage.setItem('sbx-auto', String(Date.now())); } catch (e) {}
+        location.replace('/sbx/auto?vers=' + encodeURIComponent(location.pathname + location.search));
+      }
+    }
     var qt = new URLSearchParams(location.search).get('theme');
     if (qt === 'dark' || qt === 'light') {
       r.setAttribute('data-theme', qt);

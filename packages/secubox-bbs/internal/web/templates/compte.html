@@ -32,6 +32,16 @@
 </div>
 
 <div class="card pad s42a6ced">
+  <h3 class="s7b1eb4e">Mon nom affiché</h3>
+  <form method="post" action="/compte/nom" class="row s491198d">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <input name="nom" value="{{.V.Display}}" maxlength="40" required aria-label="Nom affiché" class="sa9ef1c9">
+    <button class="btn primary" type="submit">Enregistrer</button>
+  </form>
+  <div class="note sf9f81af">Ce que les autres lisent à côté de vos messages. Votre identifiant ({{.V.Handle}}) ne change pas.</div>
+</div>
+
+<div class="card pad s42a6ced">
   <h3 class="s7b1eb4e">Mon avatar</h3>
   <div class="row s381c37d">
     <span class="av s39203eb">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span>

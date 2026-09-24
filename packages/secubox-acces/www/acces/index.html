@@ -209,6 +209,9 @@
   .bbs { display:inline-flex; align-items:center; gap:.35rem; font-size:.7rem; font-weight:600;
     border-radius:999px; padding:.15rem .6rem; border:1px solid currentColor; }
   .bbs.ok { color:var(--vert); } .bbs.att { color:var(--ambre); } .bbs.ko { color:var(--rouge); }
+  .qui input.choix { width:1rem; height:1rem; accent-color:var(--vert); align-self:center; }
+  .bbs-barre select { font:inherit; font-size:.78rem; padding:.3rem .5rem; border-radius:8px;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink); }
   .bbs-barre { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:.8rem;
     font-size:.74rem; color:var(--muted); }
   .etat-session.jamais { color:var(--ambre); font-weight:600; }
@@ -447,6 +450,32 @@ function rendProfils(admis, profils, p) {
   const comptes = (p.comptes || []).filter(x => !x.desactive);
   const noms = new Set(comptes.map(x => x.handle));
 
+  // RATTACHER PAR LOT (#1373) : cocher les appareils qui sont en fait la même
+  // personne — le téléphone et le Safari et l'appli Google de gk2 — et les
+  // rattacher d'un geste au compte proposé.
+  const lot = el('div', 'bbs-barre');
+  const cible = el('select');
+  cible.setAttribute('aria-label', 'Compte cible du rattachement groupé');
+  for (const x of comptes) {
+    const o = el('option', null, x.handle + ' · ' + x.role);
+    o.value = x.handle;
+    cible.appendChild(o);
+  }
+  if (p.compte_par_defaut) cible.value = p.compte_par_defaut;
+  const compteur = el('span', null, '0 appareil coché');
+  const lancer = bouton('Rattacher la sélection', 'oui', async () => {
+    const dids = [...c.querySelectorAll('input.choix:checked')].map(i => i.value);
+    if (!dids.length) throw new Error('Cochez au moins un appareil.');
+    for (const did of dids) await poste('/profils/rattacher', { did, compte: cible.value });
+  });
+  lot.append(el('span', null, 'Sélection →'), cible, lancer, compteur);
+  c.appendChild(lot);
+  c.addEventListener('change', ev => {
+    if (!ev.target.classList || !ev.target.classList.contains('choix')) return;
+    const n = c.querySelectorAll('input.choix:checked').length;
+    compteur.textContent = n + (n > 1 ? ' appareils cochés' : ' appareil coché');
+  });
+
   const barre = el('div', 'bbs-barre');
   barre.append(el('span', null, 'Comptes SecuBox → BBS'),
     bouton('Synchroniser la BBS', null, () => poste('/profils/bbs/synchroniser', { adopter: [] })));
@@ -457,7 +486,12 @@ function rendProfils(admis, profils, p) {
   for (const a of admis) {
     const b = el('div', 'bloc');
     const q = el('div', 'qui');
-    q.append(el('span', 'nom', a.nom || '(sans nom)'), el('span', 'app', a.appareil || ''));
+    const coche = el('input', 'choix');
+    coche.type = 'checkbox';
+    coche.value = a.did;
+    coche.setAttribute('aria-label', 'Choisir ' + (a.nom || 'cet appareil'));
+    q.append(coche, el('span', 'nom', a.nom || '(sans nom)'), el('span', 'app', a.appareil || ''));
+    if (a.compte) q.appendChild(el('span', 'lie', '→ ' + a.compte));
     b.appendChild(q);
     b.appendChild(el('div', 'empreinte', a.empreinte || ''));
 

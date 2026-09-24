@@ -661,6 +661,11 @@ func (s *Server) quiSecubox(r *http.Request, v visiteur) visiteur {
 	if s.verif == nil {
 		return v
 	}
+	// Déconnecté volontairement (#1373) : la session du Hall ne rouvre pas
+	// la BBS dans la foulée.
+	if _, err := r.Cookie(cookieAutoNon); err == nil {
+		return v
+	}
 	c, err := r.Cookie("secubox_session")
 	if err != nil || c.Value == "" {
 		return v

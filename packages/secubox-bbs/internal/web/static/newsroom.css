@@ -557,3 +557,11 @@ a{color:inherit;text-decoration:none}
 /* AVATAR DE SOURCE (#1266b) : la miniature du média remplace la mascotte, en
    tuile arrondie — distincte pour chaque fil vidéo. */
 .zani-stamp.src-vig { object-fit: cover; border-radius: 10px; background: #0a0a0f; }
+
+/* ENTRÉE EMBARQUÉE (#1373). Encadrée par le Hall, la BBS masque son en-tête —
+   et « Entrer » avec lui. Cette bande n'existe que là, et seulement pour un
+   visiteur anonyme : l'entrée automatique a échoué ou n'a pas eu lieu. */
+.embed-entree{display:none}
+:root.sbx-embed .embed-entree{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;
+  margin:10px 14px 0;padding:10px 12px;border:1px solid var(--line,#1e3a4a);border-radius:12px;font-size:13px}
+:root.sbx-embed .embed-entree span{flex:1 1 12rem;opacity:.75}
