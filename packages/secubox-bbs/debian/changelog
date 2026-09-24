@@ -1,3 +1,33 @@
+secubox-bbs (0.32.5-1~bookworm1) bookworm; urgency=medium
+
+  * REPUBLIER METTAIT UN BILLET DE PLUS (closes #1358). Le pont vers billets
+    était en ÉCRITURE SEULE : chaque publication faisait un POST, quelle que
+    soit l'histoire du fil. Corriger un titre et republier créait donc un
+    billet neuf — et `MarkPublished`, qui fait un INSERT OR REPLACE, faisait
+    oublier le précédent au BBS : il restait en ligne sans que plus rien ne
+    puisse le retirer. Mesuré sur la board : **276 billets dont 43 en trop**,
+    certains fils en TROIS exemplaires, avec `updated_at == created_at` sur
+    les trois — aucun n'avait jamais été mis à jour.
+  * LE LIEN ÉTAIT POURTANT DÉJÀ TENU. `Store.EstPublie` existe et rend le
+    `billet_id` du fil ; `publier` ne le consultait simplement jamais. Il le
+    consulte, et le client choisit alors PUT plutôt que POST — un seul
+    constructeur de corps pour les deux verbes, sinon les charges utiles
+    divergeraient au premier champ ajouté, et seulement sur les billets
+    republiés, c'est-à-dire les plus anciens.
+  * DÉPUBLIER NE RETIRAIT RIEN. `Store.Depublie` effaçait la ligne locale sans
+    rien dire à billets. Son commentaire disait « billets dit ce qui EST
+    publié » — mais la table du BBS n'est pas le module billets. L'intention
+    était juste, elle s'arrêtait à la frontière : le billet restait en ligne,
+    et l'on venait de perdre son identifiant, donc le seul moyen de le retirer
+    un jour. C'est pire que de ne rien suivre.
+  * L'ORDRE COMPTE : on retire chez billets, on n'oublie qu'ensuite. Si l'appel
+    échoue, la ligne locale est CONSERVÉE — mieux vaut un fil qui se dit encore
+    publié, et qu'on peut redépublier, qu'un billet orphelin que plus personne
+    ne voit. Un 404 vaut succès : le billet a pu être supprimé depuis
+    l'administration de billets, et c'est justement l'état recherché.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 24 Sep 2026 06:46:26 +0200
+
 secubox-bbs (0.32.4-1~bookworm1) bookworm; urgency=medium
 
   * Un lien vers une vidéo de la box devient un LECTEUR (#1328). Coller
