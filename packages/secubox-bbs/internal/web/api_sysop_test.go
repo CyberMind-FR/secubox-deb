@@ -23,6 +23,11 @@ func appelSysop(t *testing.T, srv *Server, methode, chemin, corps string) (*http
 		r.Header.Set("Content-Type", "application/json")
 	}
 	r.Header.Set("Authorization", "Bearer "+jetonHS256("le-secret-partage", "admin", time.Hour))
+	// Le panneau parle au nom d'un administrateur : secubox-auth le confirme
+	// (#1369). Sans verificateur, les routes d'administration sont fermees.
+	if srv.verif == nil {
+		srv.verif = verifFixe("admin", "admin")
+	}
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, r)
 	var j map[string]any

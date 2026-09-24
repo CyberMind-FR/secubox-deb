@@ -39,11 +39,13 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Literal, Optional
 
-from .identite import CleInvalide, charge_cle, empreinte_courte
+from .identite import CleInvalide, charge_cle, empreinte_courte, nom_de_compte
 
 #: Profils, du moins au plus doté. L'ORDRE COMPTE : il sert à comparer.
 PROFILS = ("guest", "user", "admin")
 PROFIL_ADMISSION = "guest"
+#: Sessions retenues par appareil pour pouvoir les couper (#1369).
+JTIS_MAX = 20
 
 #: Une demande non traitée finit par expirer — une file qui ne se vide jamais
 #: cesse d'être lue, et une file qu'on ne lit plus ne sert à rien.
@@ -89,6 +91,15 @@ class Demande:
     #: n'a JAMAIS ouvert de session est un parcours resté en plan, et c'est
     #: précisément ce qu'on ne voyait pas avant.
     session_le: Optional[int] = None
+    #: Compte SecuBox (secubox-users) auquel l'administrateur a RATTACHÉ cet
+    #: appareil (#1369). Rattaché, l'appareil ouvre ses sessions AU NOM de ce
+    #: compte — « gk2 » et non « sbx-… » —, donc avec son rôle, et la BBS
+    #: comme tout le reste le reconnaît. Non rattaché : le compte d'appareil.
+    compte: Optional[str] = None
+    #: Les sessions (jti) ouvertes par CET appareil. Rattaché, son jeton porte
+    #: le nom d'un humain : révoquer l'appareil ne peut plus se faire par nom
+    #: de compte sans déconnecter l'humain partout. On coupe par jti.
+    jtis: list = field(default_factory=list)
 
     @property
     def empreinte(self) -> str:
@@ -107,6 +118,10 @@ class Demande:
         # La clé entière n'apprend rien à l'œil et allonge la file ; l'empreinte
         # est ce qu'on compare.
         d.pop("cle_publique", None)
+        d.pop("jtis", None)
+        # Le compte que porte l'appareil tant qu'il n'est pas rattaché : c'est
+        # sous ce nom que la BBS et le reste de la box le connaissent.
+        d["compte_appareil"] = nom_de_compte(self.cle_publique)
         return d
 
     def vue_demandeur(self) -> dict:
@@ -232,10 +247,12 @@ class Profileur:
         """La demande complète — réservée au portier, qui a besoin de la clé."""
         return self._demandes.get(did)
 
-    def note_session(self, did: str) -> None:
+    def note_session(self, did: str, jti: str = "") -> None:
         d = self._demandes.get(did)
         if d:
             d.session_le = int(time.time())
+            if jti:
+                d.jtis = (list(d.jtis) + [jti])[-JTIS_MAX:]
             self._ecrit()
 
     # — côté administrateur ————————————————————————————————————————
@@ -306,6 +323,31 @@ class Profileur:
         self._ecrit()
         return d
 
+    def rattache(self, did: str, *, compte: Optional[str], profil: str,
+                 par: str) -> tuple[Demande, list]:
+        """Rattache un appareil ADMIS à un compte SecuBox — ou l'en détache
+        (`compte=None`). Geste d'administrateur, persistant pour cet appareil.
+
+        Rend aussi les jti des sessions déjà ouvertes : elles portent l'ANCIENNE
+        identité, et l'appelant doit les couper. Garder une session « sbx-… »
+        vivante après un rattachement à « gk2 », ou l'inverse, laisserait deux
+        identités au même appareil.
+        """
+        d = self._demandes.get(did)
+        if not d or d.etat != "acceptee":
+            raise DemandeInvalide("aucun accès accordé à cet appareil")
+        if profil not in PROFILS:
+            raise DemandeInvalide(f"profil inconnu : {profil}")
+        anciens = list(d.jtis)
+        d.compte = compte or None
+        d.profil = profil
+        d.jtis = []
+        d.session_le = None
+        d.traitee_par = par
+        d.traitee_le = int(time.time())
+        self._ecrit()
+        return d, anciens
+
     def revoque(self, did: str, *, par: str) -> Demande:
         """Retire l'accès. La demande repasse en `refusee` plutôt que d'être
         effacée : garder la trace évite qu'un appareil écarté revienne sans que
@@ -319,6 +361,8 @@ class Profileur:
         d.traitee_par = par
         d.traitee_le = int(time.time())
         d.motif_refus = "accès révoqué"
+        d.compte = None
+        d.jtis = []
         self._ecrit()
         return d
 

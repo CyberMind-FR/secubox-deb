@@ -200,6 +200,17 @@
   .cran[data-p="user"][aria-pressed="true"]   { background:var(--vert); }
   .cran[data-p="admin"][aria-pressed="true"]  { background:var(--violet); }
   .etat-session { font-size:.68rem; color:var(--faint); margin-top:.5rem; }
+  /* Rattachement a un compte SecuBox et etat BBS (#1369). */
+  .compte { display:flex; align-items:center; gap:.4rem; margin-top:.6rem; flex-wrap:wrap; }
+  .compte .lab { font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+  .compte select { font:inherit; font-size:.78rem; padding:.3rem .5rem; border-radius:8px;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:100%; }
+  .compte .lie { font-family:"IBM Plex Mono"; font-size:.76rem; font-weight:600; }
+  .bbs { display:inline-flex; align-items:center; gap:.35rem; font-size:.7rem; font-weight:600;
+    border-radius:999px; padding:.15rem .6rem; border:1px solid currentColor; }
+  .bbs.ok { color:var(--vert); } .bbs.att { color:var(--ambre); } .bbs.ko { color:var(--rouge); }
+  .bbs-barre { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:.8rem;
+    font-size:.74rem; color:var(--muted); }
   .etat-session.jamais { color:var(--ambre); font-weight:600; }
 
   .vide { color:var(--muted); font-size:.82rem; padding:.6rem 0; }
@@ -400,9 +411,48 @@ function rendFile(liste) {
   }
 }
 
-function rendProfils(admis, profils) {
+/**
+ * CE QUE LA BBS FAIT DE CE COMPTE (#1369). Rattacher un appareil a « gk2 » ne
+ * sert a rien la-bas si elle ignore gk2, le tient pour un homonyme local, ou
+ * l'a ferme : l'ecran le dit, et propose le geste qui aligne.
+ */
+function pastilleBBS(nom, bbs, comptesSecubox) {
+  const z = el('span', 'bbs');
+  if (bbs && bbs._erreur) { z.classList.add('att'); z.textContent = 'BBS : ' + bbs._erreur; return [z]; }
+  const e = (bbs || {})[nom];
+  if (!e || !e.existe) {
+    z.classList.add('att'); z.textContent = 'BBS : inconnu';
+    z.title = 'La BBS ne connaît pas ce compte : synchronisez.';
+    return [z];
+  }
+  if (e.desactive) { z.classList.add('ko'); z.textContent = 'BBS : désactivé'; return [z]; }
+  if (e.source === 'secubox') {
+    z.classList.add('ok'); z.textContent = 'BBS : synchronisé · ' + e.role;
+    z.title = 'La session du Hall ouvre ce compte dans la BBS.';
+    return [z];
+  }
+  z.classList.add('att'); z.textContent = 'BBS : compte local · ' + e.role;
+  z.title = "Compte créé dans la BBS elle-même : la session du Hall ne l'ouvre pas.";
+  if (!comptesSecubox.has(nom)) return [z];
+  // ADOPTER, C'EST AFFIRMER que le « gk2 » local et le « gk2 » SecuBox sont la
+  // meme personne. Nom par nom, et seulement pour un compte SecuBox existant.
+  return [z, bouton('Adopter dans la BBS', 'oui',
+    () => poste('/profils/bbs/synchroniser', { adopter: [nom] }))];
+}
+
+function rendProfils(admis, profils, p) {
+  p = p || {};
   const c = $('profils');
   c.textContent = '';
+  const comptes = (p.comptes || []).filter(x => !x.desactive);
+  const noms = new Set(comptes.map(x => x.handle));
+
+  const barre = el('div', 'bbs-barre');
+  barre.append(el('span', null, 'Comptes SecuBox → BBS'),
+    bouton('Synchroniser la BBS', null, () => poste('/profils/bbs/synchroniser', { adopter: [] })));
+  if (p.bbs && p.bbs._erreur) barre.appendChild(el('span', 'bbs att', p.bbs._erreur));
+  c.appendChild(barre);
+
   if (!admis.length) { c.appendChild(el('p', 'vide', 'Aucun accès accordé pour l’instant.')); return; }
   for (const a of admis) {
     const b = el('div', 'bloc');
@@ -426,6 +476,34 @@ function rendProfils(admis, profils) {
       r.appendChild(cr);
     }
     b.appendChild(r);
+
+    // RATTACHEMENT (#1369) : l'appareil entre-t-il comme lui-meme (sbx-…) ou
+    // comme un compte SecuBox ? Le profil suit alors le role du compte.
+    const k = el('div', 'compte');
+    k.appendChild(el('span', 'lab', 'Compte'));
+    const sel = el('select');
+    sel.setAttribute('aria-label', 'Compte SecuBox de cet appareil');
+    const moi = el('option', null, 'lui-même · ' + (a.compte_appareil || 'sbx-…'));
+    moi.value = '';
+    sel.appendChild(moi);
+    for (const x of comptes) {
+      const o = el('option', null, x.handle + ' · ' + x.role + (x.handle === p.compte_par_defaut ? ' (proposé)' : ''));
+      o.value = x.handle;
+      sel.appendChild(o);
+    }
+    sel.value = a.compte || '';
+    k.appendChild(sel);
+    const appliquer = bouton('Rattacher', 'oui',
+      () => poste('/profils/rattacher', { did: a.did, compte: sel.value }));
+    appliquer.title = 'Les sessions déjà ouvertes par cet appareil seront fermées';
+    k.appendChild(appliquer);
+    if (!a.compte && p.compte_par_defaut) {
+      k.appendChild(bouton('→ ' + p.compte_par_defaut, null,
+        () => poste('/profils/rattacher', { did: a.did, compte: p.compte_par_defaut })));
+    }
+    if (a.compte) k.appendChild(el('span', 'lie', 'entre comme ' + a.compte));
+    for (const n of pastilleBBS(a.compte || a.compte_appareil, p.bbs, noms)) k.appendChild(n);
+    b.appendChild(k);
 
     const s = el('div', 'etat-session' + (a.session_le ? '' : ' jamais'),
       a.session_le
@@ -785,7 +863,7 @@ async function rafraichis() {
     $('visiteur').hidden = true;
     tuiles(f.en_attente, p.admis);
     rendFile(f.en_attente);
-    rendProfils(p.admis, p.profils);
+    rendProfils(p.admis, p.profils, p);
     rendInviter(u);
     if (u.sbxos) DESTINATION = u.sbxos;   // confirmation, la résolution a déjà eu lieu
   } catch (e) {

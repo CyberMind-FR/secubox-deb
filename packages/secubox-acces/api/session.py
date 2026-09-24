@@ -147,6 +147,9 @@ class Portier:
             # du nom déclaré — voir identite.nom_de_compte.
             "cle": demande.cle_publique,
             "profil": demande.profil or "guest",
+            # Le compte SecuBox rattaché, s'il y en a un (#1369) : la session
+            # s'ouvrira à SON nom.
+            "compte_lie": demande.compte,
             "did": did,
             "duree": SESSION_S,
         }

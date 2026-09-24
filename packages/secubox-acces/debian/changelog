@@ -1,3 +1,19 @@
+secubox-acces (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rattacher un appareil admis à un compte SecuBox (ref #1369) :
+    POST /profils/rattacher {did, compte}. Rattaché, l'appareil ouvre ses
+    sessions AU NOM du compte (gk2 et non sbx-…), le profil suit le rôle du
+    compte ; les sessions déjà ouvertes sont coupées. Un compte fermé depuis
+    n'ouvre plus rien, sans repli sur le compte d'appareil.
+  * Révoquer un appareil rattaché coupe SES sessions (jti), pas celles du
+    compte sur ses autres appareils.
+  * /profils : comptes SecuBox, compte proposé (réglage compte_par_defaut,
+    sinon le nom du nœud, sinon le premier admin) et état BBS de chaque
+    compte ; POST /profils/bbs/synchroniser (et adoption d'un homonyme local).
+  * Écran : sélecteur de compte, bouton « → gk2 », pastille BBS.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Sep 2026 11:06:01 +0200
+
 secubox-acces (1.5.6-1~bookworm3) bookworm; urgency=medium
 
   * INVENTAIRE DES ACCES ET DES PRIVILEGES (ref #1313). Nouvelle route de

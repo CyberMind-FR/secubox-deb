@@ -465,6 +465,14 @@ async def session_ouvrir(corps: OuvertureIn, req: Request, reponse: Response):
     # étiquette lue par l'administrateur ; le premier est ce que le reste de la
     # box sait valider.
     compte = nom_de_compte(d["cle"])
+    # RATTACHÉ, L'APPAREIL ENTRE AU NOM DU COMPTE (#1369). Le compte est relu à
+    # chaque ouverture : désactivé ou supprimé depuis le rattachement, il ne
+    # s'ouvre plus — et l'on ne retombe PAS sur le compte d'appareil, qui
+    # ferait entrer par la bande quelqu'un que l'administrateur vient de fermer.
+    if d.get("compte_lie"):
+        if not _compte_actif(d["compte_lie"]):
+            raise HTTPException(403, "le compte rattaché à cet appareil est fermé")
+        compte = d["compte_lie"]
 
     # ON SUIT LA VOIE CANONIQUE DE `login`, À LA LETTRE. Un `jti` explicite, et
     # l'événement qui ENREGISTRE la session : `_validate_token` refuse tout
@@ -479,7 +487,7 @@ async def session_ouvrir(corps: OuvertureIn, req: Request, reponse: Response):
         "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:100],
         "voie": "acces-signature",
     })
-    profileur().note_session(corps.did)
+    profileur().note_session(corps.did, jti)
     log.info("session ouverte : compte %s (%s, « %s »), profil %s",
              compte, corps.did, d["nom"], d["profil"])
     return {"ok": True, "nom": d["nom"], "compte": compte, "profil": d["profil"]}
@@ -504,14 +512,22 @@ async def file_attente():
 
 
 @app.get("/profils", dependencies=[Depends(require_admin)])
-async def profils():
+async def profils(req: Request):
     """Les accès accordés — la matière du profileur.
 
     On ne promeut pas une demande, on promeut un ACCÈS. Séparer les deux listes
     est ce qui rend l'écran lisible : à gauche ce qui attend une décision, à
     droite ce qui vit déjà.
     """
-    return {"admis": profileur().admis(), "profils": list(PROFILS)}
+    admis = profileur().admis()
+    comptes = _comptes_secubox()
+    noms = [a.get("compte") or a.get("compte_appareil") for a in admis] + [c["handle"] for c in comptes]
+    return {"admis": admis, "profils": list(PROFILS),
+            # De quoi rattacher (#1369) : les comptes SecuBox, et celui que
+            # l'écran propose d'abord.
+            "comptes": comptes,
+            "compte_par_defaut": _compte_par_defaut(comptes),
+            "bbs": await _etat_bbs(req, noms)}
 
 
 @app.get("/profils/inventaire", dependencies=[Depends(require_admin)])
@@ -596,8 +612,175 @@ async def promouvoir(v: Verdict, req: Request):
     return {"ok": True, "did": d.did, "profil": d.profil}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Rattachement aux comptes SecuBox, et ce que la BBS en sait (#1369)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# UN APPAREIL ADMIS N'ÉTAIT PERSONNE. Chaque appareil recevait son compte
+# « sbx-<empreinte> » : le téléphone de gk2 était un inconnu de plus, sans les
+# droits de gk2, et la BBS le voyait anonyme. Rattacher dit « cet appareil,
+# c'est gk2 » : un geste d'administrateur, persistant pour CET appareil.
+
+BBS_SOCK = "/run/secubox/bbs.sock"
+
+
+def _conf_acces() -> dict:
+    try:
+        import tomllib
+        with open(CONF, "rb") as f:
+            return tomllib.load(f).get("acces", {}) or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _comptes_secubox() -> list[dict]:
+    """Les comptes de secubox-users : nom, rôle, état. Ni empreinte, ni TOTP."""
+    from secubox_core import user_store
+    out = []
+    for u in user_store.load_with_fallback().get("users", []):
+        h = str(u.get("username") or "").strip()
+        if h:
+            out.append({"handle": h, "nom": u.get("display_name") or h,
+                        "role": u.get("role") or "user",
+                        "desactive": not u.get("enabled", True)})
+    return out
+
+
+def _compte_actif(nom: str) -> Optional[dict]:
+    for c in _comptes_secubox():
+        if c["handle"] == nom and not c["desactive"]:
+            return c
+    return None
+
+
+def _compte_par_defaut(comptes: list) -> str:
+    """Le compte que l'écran propose d'abord.
+
+    Réglé (`compte_par_defaut`), il s'impose. Sinon : le compte qui porte le
+    NOM DU NŒUD — sur gk2, c'est « gk2 », l'opérateur de la box —, et à défaut
+    le premier administrateur. Une proposition, jamais un rattachement : le
+    geste reste celui de l'administrateur.
+    """
+    actifs = [c for c in comptes if not c["desactive"]]
+    regle = str(_conf_acces().get("compte_par_defaut", "") or "").strip()
+    if regle and any(c["handle"] == regle for c in actifs):
+        return regle
+    import socket
+    noeud = socket.gethostname().split(".")[0]
+    if any(c["handle"] == noeud for c in actifs):
+        return noeud
+    return next((c["handle"] for c in actifs if c["role"] == "admin"), "")
+
+
+def _profil_du_role(role: str) -> str:
+    # Le profil d'un appareil rattaché EST le rôle du compte : le jeton porte
+    # le nom du compte, et c'est ce rôle que la box lira partout.
+    return "admin" if role == "admin" else "user"
+
+
+def _coupe_sessions(compte: str, jtis: list) -> None:
+    if jtis:
+        _emit_session_event("sessions_coupees", compte, {"jtis": list(jtis), "voie": "acces"})
+
+
+def _jeton_de(req: Request) -> str:
+    """Le jeton de l'administrateur qui regarde : relayé à la BBS, qui le fait
+    valider par secubox-auth. Acces n'a aucune autorité propre chez elle."""
+    a = req.headers.get("authorization", "")
+    if a.startswith("Bearer "):
+        return a[7:]
+    return req.cookies.get("secubox_session", "")
+
+
+async def _bbs(req: Request, methode: str, chemin: str, **kw):
+    import httpx
+    tr = httpx.AsyncHTTPTransport(uds=BBS_SOCK)
+    async with httpx.AsyncClient(transport=tr, base_url="http://bbs", timeout=8) as c:
+        return await c.request(methode, chemin,
+                               headers={"Authorization": "Bearer " + _jeton_de(req)}, **kw)
+
+
+async def _etat_bbs(req: Request, noms: list) -> dict:
+    """{nom: {existe, role, source, desactive}}, ou {"_erreur": …} : l'écran dit
+    que la BBS n'a pas répondu plutôt que de montrer des comptes absents."""
+    noms = sorted({n for n in noms if n})
+    if not noms:
+        return {}
+    try:
+        r = await _bbs(req, "GET", "/api/v1/bbs/comptes/etat", params=[("h", n) for n in noms])
+    except Exception as e:  # socket absente, BBS arrêtée
+        return {"_erreur": f"BBS injoignable ({type(e).__name__})"}
+    if r.status_code != 200:
+        return {"_erreur": f"BBS : {r.status_code}"}
+    return r.json().get("comptes", {})
+
+
+class Rattachement(BaseModel):
+    did: str
+    #: Nom du compte secubox-users. Vide = détacher.
+    compte: str = Field(default="", max_length=64)
+
+
+@app.post("/profils/rattacher", dependencies=[Depends(require_admin)])
+async def rattacher(v: Rattachement, req: Request):
+    """Rattacher un appareil admis à un compte SecuBox, ou l'en détacher.
+
+    Le profil suit le rôle du compte. Les sessions déjà ouvertes par
+    l'appareil sont coupées : elles portent l'ancienne identité.
+    """
+    nom = v.compte.strip()
+    if nom:
+        c = _compte_actif(nom)
+        if not c:
+            raise HTTPException(400, f"« {nom} » n'est pas un compte SecuBox actif")
+        profil = _profil_du_role(c["role"])
+    else:
+        # Détaché, l'appareil redevient lui-même, au plus bas : repartir de
+        # « guest » oblige à une promotion explicite, lisible au journal.
+        profil = "guest"
+    avant = profileur().demande_de(v.did)
+    ancien = (avant.compte if avant else None) or (nom_de_compte(avant.cle_publique) if avant else "")
+    try:
+        d, jtis = profileur().rattache(v.did, compte=nom or None, profil=profil, par=_qui(req))
+    except DemandeInvalide as e:
+        raise HTTPException(400, str(e)) from e
+    _coupe_sessions(ancien, jtis)
+    appareils.inscris(nom_de_compte(d.cle_publique), nom=d.nom, profil=d.profil,
+                      did=d.did, empreinte=d.empreinte)
+    log.info("appareil %s rattaché à %s (profil %s) par %s — %d session(s) coupée(s)",
+             d.did, d.compte or "son compte d'appareil", d.profil, d.traitee_par, len(jtis))
+    return {"ok": True, "did": d.did, "compte": d.compte, "profil": d.profil,
+            "sessions_coupees": len(jtis)}
+
+
+class SyncBBS(BaseModel):
+    #: Comptes LOCAUX de la BBS à faire passer à l'origine SecuBox — nom par
+    #: nom, parce que c'est affirmer que deux homonymes sont une même personne.
+    adopter: list[str] = Field(default_factory=list, max_length=20)
+
+
+@app.post("/profils/bbs/synchroniser", dependencies=[Depends(require_admin)])
+async def synchroniser_bbs(v: SyncBBS, req: Request):
+    """Pousser les comptes SecuBox à la BBS (et adopter les homonymes choisis)."""
+    comptes = _comptes_secubox()
+    if not comptes:
+        raise HTTPException(503, "comptes SecuBox illisibles — rien n'est envoyé")
+    try:
+        r = await _bbs(req, "POST", "/api/v1/bbs/comptes/sync",
+                       json={"comptes": comptes, "adopter": v.adopter})
+    except Exception as e:
+        raise HTTPException(502, f"BBS injoignable ({type(e).__name__})") from e
+    if r.status_code != 200:
+        raise HTTPException(r.status_code if r.status_code < 500 else 502,
+                            (r.json() or {}).get("error", "refus de la BBS"))
+    return r.json()
+
+
 @app.post("/profils/revoquer", dependencies=[Depends(require_admin)])
 async def revoquer(v: Verdict, req: Request):
+    avant = profileur().demande_de(v.did)
+    jtis = list(avant.jtis) if avant else []
+    compte = (avant.compte or nom_de_compte(avant.cle_publique)) if avant else ""
     try:
         d = profileur().revoque(v.did, par=_qui(req))
     except DemandeInvalide as e:
@@ -606,4 +789,7 @@ async def revoquer(v: Verdict, req: Request):
     # « révoqué » pendant que le registre laisserait encore passer les jetons
     # déjà émis — un refus qui ne refuse rien.
     appareils.revoque(nom_de_compte(d.cle_publique))
-    return {"ok": True, "did": d.did}
+    # Rattaché, l'appareil a ouvert ses sessions au nom d'un HUMAIN : révoquer
+    # le compte d'appareil ne les touche pas. On les coupe une à une (#1369).
+    _coupe_sessions(compte, jtis)
+    return {"ok": True, "did": d.did, "sessions_coupees": len(jtis)}

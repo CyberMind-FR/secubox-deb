@@ -30,10 +30,10 @@ import (
 )
 
 func (s *Server) routesAPISysop() {
-	s.mux.HandleFunc("/api/v1/bbs/users", s.jwt(s.apiUsers))
-	s.mux.HandleFunc("/api/v1/bbs/users/", s.jwt(s.apiUsersAction))
-	s.mux.HandleFunc("/api/v1/bbs/invites", s.jwt(s.apiInvites))
-	s.mux.HandleFunc("/api/v1/bbs/settings", s.jwt(s.apiSettings))
+	s.mux.HandleFunc("/api/v1/bbs/users", s.admin(s.apiUsers))
+	s.mux.HandleFunc("/api/v1/bbs/users/", s.admin(s.apiUsersAction))
+	s.mux.HandleFunc("/api/v1/bbs/invites", s.admin(s.apiInvites))
+	s.mux.HandleFunc("/api/v1/bbs/settings", s.admin(s.apiSettings))
 }
 
 type userJSON struct {

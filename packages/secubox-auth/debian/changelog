@@ -1,3 +1,11 @@
+secubox-auth (1.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Événement sessions_coupees : ferme des sessions PRÉCISES par jti (ref
+    #1369). Un appareil rattaché à gk2 ouvre ses sessions au nom de gk2 ; le
+    révoquer ne doit pas déconnecter gk2 de ses autres appareils.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Sep 2026 11:06:01 +0200
+
 secubox-auth (1.1.5-1~bookworm1) bookworm; urgency=high
 
   * Journal d'authentification jamais modifiable par tous : audit.log est

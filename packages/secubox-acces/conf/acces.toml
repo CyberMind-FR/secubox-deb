@@ -23,3 +23,7 @@ session_s = 604800
 # Une demande non traitée expire au bout de 14 jours : une file qui ne se vide
 # jamais cesse d'être lue.
 expiration_s = 1209600
+# LE COMPTE SECUBOX PROPOSÉ quand on rattache un appareil (#1369). Vide : le
+# compte qui porte le nom du nœud (« gk2 » sur gk2), sinon le premier admin.
+# C'est une proposition : rattacher reste un geste de l'administrateur.
+compte_par_defaut = ""
