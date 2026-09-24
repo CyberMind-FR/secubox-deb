@@ -1,3 +1,30 @@
+secubox-billets (0.8.62-1~bookworm1) bookworm; urgency=medium
+
+  * LE PAQUET DÉCLARE SA PROPRE ROUTE sbxwaf (closes #1356).
+    `billets.gk2.secubox.in` n'avait AUCUNE entrée dans la table : le nom était
+    inconnu de sbxwaf, qui l'envoyait dans son fourre-tout — lequel aboutit sur
+    un « / » gardé. La carte Billets du Hall restait vide et le domaine rendait
+    401 en accusant le mode tableau de bord, alors que le vhost répondait
+    parfaitement 200 sur son port. On cherche alors le défaut dans
+    l'authentification pendant que la cause est dans le routage.
+  * LA TABLE N'APPARTENAIT À AUCUN PAQUET — des centaines de routes posées à la
+    main, invisibles tant que ça tient, fatales le jour où une entrée manque.
+    `secubox-waf-route` fait la fusion idempotente, sous garde `nginx -t` :
+    router vers un vhost que nginx refuse échangerait un 421 contre un 502,
+    ce qui n'est pas un progrès.
+  * LE VHOST PORTE ENFIN SON NOM. Il disait `billets.example.com` et répondait
+    quand même — parce qu'il est seul sur son port, donc serveur par défaut de
+    ce port, et pour aucune raison tenant à son nom. Un second vhost sur 8910
+    l'aurait fait basculer sans prévenir.
+  * PAS DE FILTRE D'EXPOSITION SEMÉ. J'en avais posé un, puis mesuré :
+    `billets.conf` ne l'inclut nulle part. Un fichier que personne ne lit
+    rassure à la lecture et ne protège rien — pire que son absence. Et
+    l'inclure changerait la donne sans qu'on l'ait demandé : billets est
+    déclaré `enabled`, `ssl` et `cadrable` dans haproxy.toml, c'est un site
+    PUBLIÉ. Son exposition se décide là, pas dans un snippet inerte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 24 Sep 2026 05:04:09 +0200
+
 secubox-billets (0.8.61-1~bookworm1) bookworm; urgency=medium
 
   * LE VHOST TRANSMET LE VERDICT LAN (ref #1354). `billets.gk2.secubox.in`
