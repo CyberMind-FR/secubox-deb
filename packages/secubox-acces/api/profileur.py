@@ -96,6 +96,9 @@ class Demande:
     #: compte — « gk2 » et non « sbx-… » —, donc avec son rôle, et la BBS
     #: comme tout le reste le reconnaît. Non rattaché : le compte d'appareil.
     compte: Optional[str] = None
+    #: Quand le rattachement a eu lieu (#1379). Une dernière session plus
+    #: ancienne a été ouverte sous l'identité précédente.
+    rattache_le: Optional[int] = None
     #: Les sessions (jti) ouvertes par CET appareil. Rattaché, son jeton porte
     #: le nom d'un humain : révoquer l'appareil ne peut plus se faire par nom
     #: de compte sans déconnecter l'humain partout. On coupe par jti.
@@ -342,7 +345,10 @@ class Profileur:
         d.compte = compte or None
         d.profil = profil
         d.jtis = []
-        d.session_le = None
+        # LA DERNIÈRE SESSION N'EST PAS EFFACÉE (#1379) : c'était de l'historique,
+        # et l'écran affichait « jamais entré » pour un appareil utilisé la
+        # veille. On note plutôt quand le rattachement a eu lieu.
+        d.rattache_le = int(time.time())
         d.traitee_par = par
         d.traitee_le = int(time.time())
         self._ecrit()

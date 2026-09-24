@@ -355,3 +355,48 @@ def test_la_vue_admin_montre_le_compte_d_appareil_pas_les_jti(prof):
     prof.note_session(DID, "secret-de-session")
     vue = prof.admis()[0]
     assert "jtis" not in vue and vue["compte_appareil"].startswith("sbx-")
+
+
+# ── LA DERNIÈRE CONNEXION (#1379) ───────────────────────────────────────────
+
+def test_rattacher_n_efface_plus_la_derniere_session(prof):
+    admis(prof)
+    prof.note_session(DID, "j1")
+    avant = prof.demande_de(DID).session_le
+    d, _ = prof.rattache(DID, compte="gk2", profil="admin", par="gerald")
+    assert d.session_le == avant and d.rattache_le >= avant
+
+
+def test_la_derniere_connexion_se_lit_dans_le_journal(prof, tmp_path):
+    import json as _j
+    from api.inventaire import _toutes, dernieres_connexions
+    admis(prof)
+    d = prof.demande_de(DID)
+    compte = nom_de_compte(d.cle_publique)
+    prof.note_session(DID, "jti-apres")
+    journal = tmp_path / "audit.log"
+    journal.write_text("\n".join(_j.dumps(e) for e in [
+        {"ts": 100, "event": "login_success", "user": compte, "jti": "x", "ip": "192.168.1.150"},
+        {"ts": 300, "event": "login_success", "user": "gk2", "jti": "jti-apres", "ip": "192.168.1.151"},
+        {"ts": 900, "event": "login_success", "user": "gk2", "jti": "autre-appareil", "ip": "10.0.0.9"},
+        {"ts": 950, "event": "logout", "user": compte},
+        "pas du json",
+    ]) + "\n")
+    vus = dernieres_connexions(list(_toutes(prof)), str(journal))
+    assert vus[DID]["ts"] == 300 and vus[DID]["ip"] == "192.168.1.151"
+
+
+def test_l_appareil_nomme_dans_l_evenement_l_emporte(prof, tmp_path):
+    import json as _j
+    from api.inventaire import _toutes, dernieres_connexions
+    admis(prof)
+    journal = tmp_path / "audit.log"
+    journal.write_text(_j.dumps({"ts": 500, "event": "login_success", "user": "gk2",
+                                 "jti": "inconnu", "appareil": DID, "ip": "1.2.3.4"}) + "\n")
+    assert dernieres_connexions(list(_toutes(prof)), str(journal))[DID]["ts"] == 500
+
+
+def test_sans_journal_on_ne_plante_pas(prof):
+    from api.inventaire import _toutes, dernieres_connexions
+    admis(prof)
+    assert dernieres_connexions(list(_toutes(prof)), "/nexiste/pas") == {}

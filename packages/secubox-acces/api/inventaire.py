@@ -57,6 +57,8 @@ prendre — pas un fait à présenter comme acquis.
 
 from __future__ import annotations
 
+import json
+
 from typing import Any, Iterable
 
 from .profileur import PROFILS
@@ -194,6 +196,15 @@ def inventaire(app: Any, profileur: Any) -> dict[str, Any]:
         p = str(d.get("profil") or "guest")
         par_profil[p] = par_profil.get(p, 0) + 1
 
+    dernieres = dernieres_connexions(demandes)
+    for d in demandes:
+        vu = dernieres.get(d.get("did"), {})
+        ts = max(int(d.get("session_le") or 0), int(vu.get("ts") or 0))
+        d["derniere_connexion"] = ts or None
+        d["derniere_ip"] = vu.get("ip") or None
+        d["dernier_navigateur"] = vu.get("ua") or None
+        d.pop("_jtis", None)
+
     return {
         "appareils": demandes,
         "profils": list(PROFILS),
@@ -218,4 +229,48 @@ def _toutes(profileur: Any) -> Iterable[dict[str, Any]]:
     reg = getattr(profileur, "_demandes", None)
     if not reg:
         return []
-    return [d.vue_admin() for d in reg.values()]
+    out = []
+    for d in reg.values():
+        v = d.vue_admin()
+        v["_jtis"] = list(getattr(d, "jtis", []) or [])
+        out.append(v)
+    return out
+
+
+# Le journal de secubox-auth : chaque ouverture de session y est une ligne
+# `login_success` (compte, jti, ip, navigateur — et, depuis #1379, l'appareil).
+AUDIT_AUTH = "/var/lib/secubox/auth/audit.log"
+
+
+def dernieres_connexions(demandes: list[dict[str, Any]], chemin: str = AUDIT_AUTH) -> dict[str, dict[str, Any]]:
+    """{did: {ts, ip, ua}} — la plus récente connexion de chaque appareil.
+
+    TROIS FAÇONS DE RECONNAÎTRE UN APPAREIL, de la plus sûre à la plus ancienne :
+    l'appareil nommé dans l'événement ; une session (jti) qu'il a ouverte ; le
+    compte d'appareil `sbx-…`, pour tout ce qui précède le rattachement. Le
+    journal manque ou est illisible : rien, et l'on retombe sur session_le.
+    """
+    par_did = {d["did"]: d["did"] for d in demandes if d.get("did")}
+    par_jti = {j: d["did"] for d in demandes for j in d.get("_jtis", [])}
+    par_compte = {d["compte_appareil"]: d["did"] for d in demandes if d.get("compte_appareil")}
+    out: dict[str, dict[str, Any]] = {}
+    try:
+        f = open(chemin, encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    with f:
+        for ligne in f:
+            if '"login_success"' not in ligne:
+                continue
+            try:
+                e = json.loads(ligne)
+            except ValueError:
+                continue
+            did = (par_did.get(e.get("appareil") or "") or par_jti.get(e.get("jti") or "")
+                   or par_compte.get(e.get("user") or ""))
+            if not did:
+                continue
+            ts = float(e.get("ts") or 0)
+            if ts > float(out.get(did, {}).get("ts") or 0):
+                out[did] = {"ts": int(ts), "ip": e.get("ip") or "", "ua": (e.get("user_agent") or "")[:120]}
+    return out
