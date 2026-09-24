@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox :: Utilisateurs (#1375)
+[users]
+# CRÉATION FORCÉE : les services dans lesquels tout nouvel utilisateur reçoit
+# un compte, et que « Créer partout » complète. Gérés : email (boîte + webmail),
+# nextcloud, peertube, gitea.
+services_par_defaut = ["email", "nextcloud", "peertube"]
+
+# Envoi d'un mot de passe provisoire à l'adresse de récupération. Vides, ces
+# réglages reprennent ceux du relais de /etc/secubox/metrics.toml [rapport].
+smtp_hote = ""
+smtp_port = 25
+expediteur = ""

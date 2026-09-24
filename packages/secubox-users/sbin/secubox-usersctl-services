@@ -1,0 +1,404 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: secubox-usersctl-services
+CyberMind — https://cybermind.fr
+
+Le compte d'un utilisateur DANS les services modulaires (#1375) : Nextcloud,
+courriel (et donc webmail, qui ouvre la même boîte), Gitea, PeerTube.
+
+POURQUOI UN HELPER ROOT. Le panneau Utilisateurs tourne en `secubox` dans
+l'agrégateur ; créer un compte Nextcloud ou une boîte aux lettres demande
+d'entrer dans un conteneur LXC — du root. Avant, l'API appelait les `ctl` en
+processus : sans sudo, cela échouait, et en silence.
+
+LA DEMANDE ARRIVE SUR STDIN, EN JSON. La ligne sudoers est donc EXACTE (aucun
+argument autorisé), et le mot de passe ne passe jamais par argv :
+
+    {"service": "nextcloud|email|gitea|peertube",
+     "action":  "etat|creer|retirer|activer|desactiver|reinitialiser",
+     "user": "gk2", "email": "gk2@secubox.in", "nom": "Gk2",
+     "password": "…"}                 # creer / reinitialiser seulement
+
+Sortie : un objet JSON. Codes : 0 fait, 1 échec, 2 demande invalide,
+3 non pris en charge par ce service, 4 service indisponible (conteneur arrêté).
+
+Chaque action qui modifie est journalisée dans /var/log/secubox/audit.log —
+sans le mot de passe.
+"""
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+LXC_PATH = "/data/lxc"
+AUDIT = Path("/var/log/secubox/audit.log")
+DELAI = 90
+
+RE_USER = re.compile(r"^[a-z0-9][a-z0-9._-]{1,31}$")
+RE_EMAIL = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+ACTIONS = ("etat", "creer", "retirer", "activer", "desactiver", "reinitialiser")
+
+
+class NonPrisEnCharge(Exception):
+    pass
+
+
+class Indisponible(Exception):
+    pass
+
+
+class Echec(Exception):
+    pass
+
+
+def lance(argv, entree=None, delai=DELAI):
+    p = subprocess.run(argv, input=entree, capture_output=True, text=True, timeout=delai)
+    return p.returncode, p.stdout, p.stderr
+
+
+def lxc_actif(nom: str) -> bool:
+    for extra in (["-P", LXC_PATH], []):
+        try:
+            rc, out, _ = lance(["lxc-info", "-n", nom, "-s", *extra], delai=10)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if rc == 0:
+            return "RUNNING" in out
+    return False
+
+
+def exige(nom: str):
+    if not lxc_actif(nom):
+        raise Indisponible(f"conteneur {nom} arrêté")
+
+
+# ── Nextcloud ────────────────────────────────────────────────────────────────
+
+class Nextcloud:
+    ctl = "/usr/sbin/nextcloudctl"
+
+    def etat(self, d):
+        exige("nextcloud")
+        rc, out, _ = lance([self.ctl, "occ", "user:info", "--output=json", d["user"]])
+        if rc != 0:
+            return {"existe": False, "actif": None}
+        try:
+            info = json.loads(out[out.index("{"):])
+        except ValueError:
+            return {"existe": True, "actif": None}
+        return {"existe": True, "actif": bool(info.get("enabled", True))}
+
+    def creer(self, d):
+        exige("nextcloud")
+        self._ok(lance([self.ctl, "user", "add", d["user"], d.get("nom") or d["user"]],
+                       entree=d["password"] + "\n"))
+
+    def retirer(self, d):
+        exige("nextcloud")
+        self._ok(lance([self.ctl, "user", "del", d["user"]]))
+
+    def activer(self, d):
+        exige("nextcloud")
+        self._ok(lance([self.ctl, "user", "enable", d["user"]]))
+
+    def desactiver(self, d):
+        exige("nextcloud")
+        self._ok(lance([self.ctl, "user", "disable", d["user"]]))
+
+    def reinitialiser(self, d):
+        exige("nextcloud")
+        self._ok(lance([self.ctl, "user", "setpass", d["user"]], entree=d["password"] + "\n"))
+
+    @staticmethod
+    def _ok(r):
+        rc, out, err = r
+        if rc != 0:
+            raise Echec((err or out).strip()[-400:] or f"code {rc}")
+
+
+# ── Courriel (boîte + webmail) ───────────────────────────────────────────────
+#
+# LE WEBMAIL N'A PAS DE COMPTE À LUI : Roundcube ouvre la boîte IMAP. Créer la
+# boîte, c'est donner le webmail ; la retirer, c'est le reprendre.
+
+class Courriel:
+    ctl = "/usr/sbin/mailctl"
+
+    def _adresse(self, d):
+        e = d.get("email") or ""
+        if not RE_EMAIL.match(e):
+            raise Echec("adresse de courriel absente ou invalide pour cet utilisateur")
+        return e.lower()
+
+    def etat(self, d):
+        exige("mail")
+        e = self._adresse(d)
+        rc, out, err = lance([self.ctl, "user", "list"])
+        if rc != 0:
+            raise Echec((err or out).strip()[-300:])
+        present = any(l.strip().split(" ")[0].lower() == e for l in out.splitlines())
+        return {"existe": present, "actif": None, "identifiant": e}
+
+    def creer(self, d):
+        exige("mail")
+        Nextcloud._ok(lance([self.ctl, "user", "add", self._adresse(d)], entree=d["password"] + "\n"))
+
+    def retirer(self, d):
+        # Retire l'ACCÈS (compte et routage) ; les messages déjà reçus restent
+        # sur le disque de la boîte, pour une restauration.
+        exige("mail")
+        Nextcloud._ok(lance([self.ctl, "user", "del", self._adresse(d)]))
+
+    def activer(self, d):
+        raise NonPrisEnCharge("le courriel ne sait pas suspendre une boîte")
+
+    desactiver = activer
+
+    def reinitialiser(self, d):
+        exige("mail")
+        Nextcloud._ok(lance([self.ctl, "user", "passwd", self._adresse(d)], entree=d["password"] + "\n"))
+
+
+# ── Gitea ────────────────────────────────────────────────────────────────────
+#
+# giteactl visait un conteneur Alpine (su-exec, /etc/gitea) ; celui de gk2 est
+# une Debian où Gitea tourne en `gitea` avec /var/lib/gitea/custom/conf/app.ini.
+# On détecte, au lieu de supposer.
+
+class Gitea:
+    CONFS = ("/var/lib/gitea/custom/conf/app.ini", "/etc/gitea/conf/app.ini")
+
+    def _base(self):
+        exige("gitea")
+        for c in self.CONFS:
+            rc, _, _ = lance(["lxc-attach", "-n", "gitea", "-P", LXC_PATH, "--", "test", "-f", c], delai=15)
+            if rc == 0:
+                return ["lxc-attach", "-n", "gitea", "-P", LXC_PATH, "--", "runuser", "-u",
+                        "gitea" if c.startswith("/var/lib") else "git", "--",
+                        "/usr/local/bin/gitea", "admin", "user"], ["--config", c]
+        raise Indisponible("configuration Gitea introuvable dans le conteneur")
+
+    def etat(self, d):
+        base, conf = self._base()
+        rc, out, err = lance(base + ["list"] + conf)
+        if rc != 0:
+            raise Echec((err or out).strip()[-300:])
+        for l in out.splitlines()[1:]:
+            col = l.split()
+            if len(col) >= 4 and col[1] == d["user"]:
+                return {"existe": True, "actif": col[3].lower() == "true"}
+        return {"existe": False, "actif": None}
+
+    def creer(self, d):
+        base, conf = self._base()
+        email = d.get("email") or f"{d['user']}@localhost"
+        # La CLI Gitea ne lit pas le mot de passe sur stdin : il passe en
+        # argument, DANS le conteneur, le temps d'un appel.
+        Nextcloud._ok(lance(base + ["create", "--username", d["user"], "--email", email,
+                                    "--password", d["password"], "--must-change-password=false"] + conf))
+
+    def retirer(self, d):
+        base, conf = self._base()
+        Nextcloud._ok(lance(base + ["delete", "--username", d["user"]] + conf))
+
+    def activer(self, d):
+        raise NonPrisEnCharge("la CLI Gitea ne suspend pas un compte")
+
+    desactiver = activer
+
+    def reinitialiser(self, d):
+        base, conf = self._base()
+        Nextcloud._ok(lance(base + ["change-password", "--username", d["user"], "--password",
+                                    d["password"], "--must-change-password=false"] + conf))
+
+
+# ── PeerTube (API REST, comme peertubectl) ───────────────────────────────────
+
+class PeerTube:
+    CONF = Path("/etc/secubox/peertube.toml")
+    SECRET = Path("/etc/secubox/secrets/peertube-admin")
+
+    def _conf(self):
+        import tomllib
+        try:
+            c = tomllib.loads(self.CONF.read_text())
+        except (OSError, ValueError):
+            c = {}
+        plat = {}
+        for v in c.values():
+            if isinstance(v, dict):
+                plat.update(v)
+        plat.update({k: v for k, v in c.items() if not isinstance(v, dict)})
+        return (f"http://{plat.get('ip', '10.100.0.120')}:{plat.get('http_port', 9000)}",
+                plat.get("public_hostname", "peertube.gk2.secubox.in"))
+
+    def _req(self, methode, chemin, corps=None, jeton=None, formulaire=False):
+        base, hote = self._conf()
+        h = {"Host": hote}
+        donnees = None
+        if corps is not None:
+            if formulaire:
+                donnees = urllib.parse.urlencode(corps).encode()
+                h["Content-Type"] = "application/x-www-form-urlencoded"
+            else:
+                donnees = json.dumps(corps).encode()
+                h["Content-Type"] = "application/json"
+        if jeton:
+            h["Authorization"] = "Bearer " + jeton
+        req = urllib.request.Request(base + chemin, data=donnees, headers=h, method=methode)
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                b = r.read()
+                return r.status, (json.loads(b) if b else {})
+        except urllib.error.HTTPError as e:
+            try:
+                return e.code, json.loads(e.read() or b"{}")
+            except ValueError:
+                return e.code, {}
+        except OSError as e:
+            raise Indisponible(f"PeerTube injoignable ({e})")
+
+    def _jeton(self):
+        exige("peertube")
+        code, cl = self._req("GET", "/api/v1/oauth-clients/local")
+        if code != 200:
+            raise Indisponible("PeerTube : clients OAuth illisibles")
+        code, tok = self._req("POST", "/api/v1/users/token", {
+            "client_id": cl["client_id"], "client_secret": cl["client_secret"],
+            "grant_type": "password", "username": "root",
+            "password": self.SECRET.read_text().strip()}, formulaire=True)
+        if code != 200 or not tok.get("access_token"):
+            raise Echec("PeerTube : authentification administrateur refusée")
+        return tok["access_token"]
+
+    def _trouve(self, j, user):
+        code, r = self._req("GET", "/api/v1/users?count=50&search=" + urllib.parse.quote(user), jeton=j)
+        if code != 200:
+            raise Echec(f"PeerTube : liste des comptes ({code})")
+        for u in r.get("data", []):
+            if u.get("username") == user:
+                return u
+        return None
+
+    def etat(self, d):
+        j = self._jeton()
+        u = self._trouve(j, d["user"])
+        return {"existe": bool(u), "actif": (not u.get("blocked")) if u else None}
+
+    def creer(self, d):
+        j = self._jeton()
+        if not d.get("email"):
+            raise Echec("PeerTube exige une adresse de courriel")
+        code, r = self._req("POST", "/api/v1/users", {
+            "username": d["user"].replace("-", "_"), "password": d["password"],
+            "email": d["email"], "role": 2, "videoQuota": -1, "videoQuotaDaily": -1}, jeton=j)
+        if code not in (200, 201, 204):
+            raise Echec(f"PeerTube : création refusée ({code}) {r.get('detail') or r.get('error') or ''}")
+
+    def _action(self, d, fn):
+        j = self._jeton()
+        u = self._trouve(j, d["user"])
+        if not u:
+            raise Echec("compte PeerTube introuvable")
+        code, r = fn(j, u["id"])
+        if code not in (200, 201, 204):
+            raise Echec(f"PeerTube : {code} {r.get('detail') or r.get('error') or ''}")
+
+    def retirer(self, d):
+        self._action(d, lambda j, i: self._req("DELETE", f"/api/v1/users/{i}", jeton=j))
+
+    def activer(self, d):
+        self._action(d, lambda j, i: self._req("POST", f"/api/v1/users/{i}/unblock", {}, jeton=j))
+
+    def desactiver(self, d):
+        self._action(d, lambda j, i: self._req("POST", f"/api/v1/users/{i}/block",
+                                               {"reason": "suspendu depuis SecuBox"}, jeton=j))
+
+    def reinitialiser(self, d):
+        self._action(d, lambda j, i: self._req("PUT", f"/api/v1/users/{i}",
+                                               {"password": d["password"]}, jeton=j))
+
+
+ADAPTATEURS = {"nextcloud": Nextcloud, "email": Courriel, "gitea": Gitea, "peertube": PeerTube}
+
+
+def valide(d: dict) -> dict:
+    if not isinstance(d, dict):
+        raise ValueError("demande JSON attendue")
+    if d.get("service") not in ADAPTATEURS:
+        raise NonPrisEnCharge(f"service non géré : {d.get('service')}")
+    if d.get("action") not in ACTIONS:
+        raise ValueError("action inconnue")
+    if not RE_USER.match(str(d.get("user", ""))):
+        raise ValueError("nom d'utilisateur invalide")
+    if d.get("email") and not RE_EMAIL.match(str(d["email"])):
+        raise ValueError("adresse de courriel invalide")
+    nom = str(d.get("nom") or "")
+    if len(nom) > 60 or any(ord(c) < 32 for c in nom):
+        raise ValueError("nom affiché invalide")
+    if d["action"] in ("creer", "reinitialiser"):
+        pw = str(d.get("password") or "")
+        if not (10 <= len(pw) <= 128) or any(ord(c) < 32 for c in pw):
+            raise ValueError("mot de passe : 10 à 128 caractères imprimables")
+    return d
+
+
+def audit(d: dict, ok: bool, detail: str = ""):
+    if d.get("action") == "etat":
+        return
+    try:
+        AUDIT.parent.mkdir(parents=True, exist_ok=True)
+        with AUDIT.open("a") as f:
+            f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "module": "users",
+                                "evenement": "service_" + d.get("action", "?"),
+                                "service": d.get("service"), "user": d.get("user"),
+                                "ok": ok, "detail": detail[:200]}, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def main() -> int:
+    try:
+        d = valide(json.loads(sys.stdin.read(8192) or "null"))
+    except NonPrisEnCharge as e:
+        print(json.dumps({"ok": False, "erreur": str(e), "pris_en_charge": False}))
+        return 3
+    except (ValueError, TypeError) as e:
+        print(json.dumps({"ok": False, "erreur": str(e)}))
+        return 2
+    a = ADAPTATEURS[d["service"]]()
+    sortie = {"service": d["service"], "action": d["action"], "user": d["user"]}
+    try:
+        r = getattr(a, d["action"])(d)
+        sortie.update({"ok": True, "etat": r} if d["action"] == "etat" else {"ok": True})
+        audit(d, True)
+        return 0
+    except NonPrisEnCharge as e:
+        sortie.update({"ok": False, "erreur": str(e), "pris_en_charge": False})
+        return 3
+    except Indisponible as e:
+        sortie.update({"ok": False, "erreur": str(e), "disponible": False})
+        audit(d, False, str(e))
+        return 4
+    except (Echec, subprocess.TimeoutExpired, OSError) as e:
+        sortie.update({"ok": False, "erreur": str(e)})
+        audit(d, False, str(e))
+        return 1
+    finally:
+        print(json.dumps(sortie, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

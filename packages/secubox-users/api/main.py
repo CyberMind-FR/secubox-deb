@@ -30,6 +30,7 @@ except ImportError:
         return {}
 
 from . import engine as _engine_mod
+from . import comptes_services as _cs
 
 app = FastAPI(
     title="SecuBox Users API",
@@ -144,6 +145,11 @@ class UserCreate(BaseModel):
     email: str
     password: str
     services: List[str] = []
+    #: CRÉATION FORCÉE (#1375) : vide, la liste `services_par_defaut` de
+    #: /etc/secubox/users.toml s'applique. `forcer=False` n'ouvre aucun service.
+    forcer: bool = True
+    #: Adresse EXTERNE, facultative, où envoyer un mot de passe réinitialisé.
+    email_recuperation: Optional[str] = None
 
     @validator('username')
     def validate_username(cls, v):
@@ -157,6 +163,7 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     enabled: Optional[bool] = None
     services: Optional[List[str]] = None
+    email_recuperation: Optional[str] = None
 
 class PasswordChange(BaseModel):
     password: str
@@ -483,47 +490,32 @@ def create_user(user: UserCreate):
     except _engine_mod.EngineError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Provision to external services (password used for service setup only, not stored here)
+    # COMPTES DANS LES SERVICES (#1375), par le helper root. Avant : des `ctl`
+    # appelés en processus, sans sudo — donc en échec — avec des sous-commandes
+    # qui n'existaient pas (`user-add`).
+    voulus = [x for x in user.services if x in _cs.GERES]
+    if not voulus and user.forcer:
+        voulus = _cs.conf()["services_par_defaut"]
+    rec = _engine.get_user(user.username) or new_user
+    rec = dict(rec, email=user.email)
     provision_results = {}
-    for svc in user.services:
-        if svc not in SERVICES:
-            continue
-        ctl = get_service_ctl(svc)
-        if ctl:
-            try:
-                if svc == "nextcloud":
-                    result = subprocess.run(
-                        [ctl, "occ", "user:add", "--password-from-env", user.username],
-                        input=user.password,
-                        capture_output=True, text=True, timeout=30
-                    )
-                elif svc == "gitea":
-                    result = subprocess.run(
-                        [ctl, "user", "add", "--username", user.username,
-                         "--email", user.email, "--password", user.password],
-                        capture_output=True, text=True, timeout=30
-                    )
-                else:
-                    result = subprocess.run(
-                        [ctl, "user-add", user.username, user.email, user.password],
-                        capture_output=True, text=True, timeout=30
-                    )
-                provision_results[svc] = result.returncode == 0
-            except Exception:
-                provision_results[svc] = False
-        else:
-            provision_results[svc] = False
+    for svc in voulus:
+        try:
+            _cs.agit(rec, svc, "creer", password=user.password)
+            provision_results[svc] = True
+        except _cs.ActionRefusee as e:
+            provision_results[svc] = e.detail
 
-    # Persist services list via engine's atomic I/O
-    if user.services:
-        doc = _engine._load()
-        for u in doc.get("users", []):
-            if u.get("username") == user.username:
-                u["services"] = [s for s in user.services if s in SERVICES]
-                u["provision_results"] = provision_results
-                break
-        _engine._save(doc)
-        new_user = _engine.get_user(user.username) or new_user
+    doc = _engine._load()
+    for u in doc.get("users", []):
+        if u.get("username") == user.username:
+            u["services"] = [x for x in voulus if provision_results.get(x) is True]
+            u["provision_results"] = provision_results
+            if user.email_recuperation:
+                u["email_recuperation"] = user.email_recuperation.strip()
+            break
+    _engine._save(doc)
+    new_user = _engine.get_user(user.username) or new_user
 
     return {"success": True, "user": new_user, "provision_results": provision_results}
 
@@ -541,7 +533,7 @@ async def update_user(username: str, update: UserUpdate):
             raise HTTPException(status_code=404, detail=str(exc))
 
     # For email and services, update via engine's atomic I/O
-    if update.email is not None or update.services is not None:
+    if update.email is not None or update.services is not None or update.email_recuperation is not None:
         doc = _engine._load()
         found = False
         for user in doc.get("users", []):
@@ -549,6 +541,8 @@ async def update_user(username: str, update: UserUpdate):
                 found = True
                 if update.email is not None:
                     user["email"] = update.email
+                if update.email_recuperation is not None:
+                    user["email_recuperation"] = update.email_recuperation.strip()
                 if update.services is not None:
                     user["services"] = update.services
                     user["updated"] = datetime.now().isoformat()
@@ -590,30 +584,16 @@ def delete_user(username: str):
     if not user_record:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Deprovision from external services
+    # Retirer ses comptes des services (#1375), par le helper root.
     deprovision_results = {}
     for svc in user_record.get("services", []):
-        ctl = get_service_ctl(svc)
-        if ctl:
-            try:
-                if svc == "nextcloud":
-                    result = subprocess.run(
-                        [ctl, "occ", "user:delete", username],
-                        capture_output=True, text=True, timeout=30
-                    )
-                elif svc == "gitea":
-                    result = subprocess.run(
-                        [ctl, "user", "delete", "--username", username],
-                        capture_output=True, text=True, timeout=30
-                    )
-                else:
-                    result = subprocess.run(
-                        [ctl, "user-del", username],
-                        capture_output=True, text=True, timeout=30
-                    )
-                deprovision_results[svc] = result.returncode == 0
-            except Exception:
-                deprovision_results[svc] = False
+        if svc not in _cs.GERES:
+            continue
+        try:
+            _cs.agit(user_record, svc, "retirer")
+            deprovision_results[svc] = True
+        except _cs.ActionRefusee as e:
+            deprovision_results[svc] = e.detail
 
     # Delegate deletion to engine
     try:
@@ -649,33 +629,140 @@ def change_password(username: str, pwd: PasswordChange):
     except _engine_mod.EngineError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Propagate to external services
+    # Même mot de passe dans ses services (#1375), par le helper root.
     results = {}
     for svc in user_record.get("services", []):
-        ctl = get_service_ctl(svc)
-        if ctl:
-            try:
-                if svc == "nextcloud":
-                    result = subprocess.run(
-                        [ctl, "occ", "user:resetpassword", "--password-from-env", username],
-                        input=pwd.password,
-                        capture_output=True, text=True, timeout=30
-                    )
-                elif svc == "gitea":
-                    result = subprocess.run(
-                        [ctl, "admin", "user", "change-password",
-                         "--username", username, "--password", pwd.password],
-                        capture_output=True, text=True, timeout=30
-                    )
-                else:
-                    result = subprocess.run(
-                        [ctl, "user-passwd", username, pwd.password],
-                        capture_output=True, text=True, timeout=30
-                    )
-                results[svc] = result.returncode == 0
-            except Exception:
-                results[svc] = False
+        if svc not in _cs.GERES:
+            continue
+        try:
+            _cs.agit(user_record, svc, "reinitialiser", password=pwd.password)
+            results[svc] = True
+        except _cs.ActionRefusee as e:
+            results[svc] = e.detail
     return {"success": True, "password_results": results}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Comptes dans les services modulaires (#1375)
+# ══════════════════════════════════════════════════════════════════
+
+_CODE_HTTP = {2: 400, 3: 409, 4: 503}
+
+
+class ActionService(BaseModel):
+    #: Envoyer le mot de passe provisoire à l'adresse de récupération.
+    envoyer: bool = False
+
+
+def _utilisateur(username: str) -> dict:
+    u = _engine.get_user(username)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    return u
+
+
+def _note_services(username: str, svc: str, present: bool) -> None:
+    doc = _engine._load()
+    for u in doc.get("users", []):
+        if u.get("username") == username:
+            l = [x for x in u.get("services", []) if x != svc]
+            if present:
+                l.append(svc)
+            u["services"] = l
+            u["updated"] = datetime.now().isoformat()
+            break
+    _engine._save(doc)
+
+
+def _envoi(u: dict, quoi: str, pw: str, envoyer: bool) -> dict:
+    if not envoyer:
+        return {}
+    dest = u.get("email_recuperation") or ""
+    if not dest:
+        return {"envoi": "aucune adresse de récupération"}
+    ok, err = _cs.envoie(dest, *_cs.message_mot_de_passe(u, quoi, pw))
+    return {"envoye_a": dest} if ok else {"envoi": "échec : " + err}
+
+
+@app.get("/user/{username}/services", dependencies=[Depends(require_permission("users.view"))])
+def services_de(username: str, rafraichir: bool = False):
+    """État MESURÉ du compte de l'utilisateur dans chaque service géré."""
+    u = _utilisateur(username)
+    return {"username": username, "services": _cs.etat(u, force=rafraichir),
+            "defaut": _cs.conf()["services_par_defaut"],
+            "email": u.get("email"), "email_recuperation": u.get("email_recuperation")}
+
+
+@app.post("/user/{username}/services/{service}/{action}",
+          dependencies=[Depends(require_permission("users.edit"))])
+def service_action(username: str, service: str, action: str, corps: Optional[ActionService] = None):
+    """creer · retirer · activer · desactiver · reinitialiser · reparer."""
+    u = _utilisateur(username)
+    try:
+        r = _cs.agit(u, service, action)
+    except _cs.ActionRefusee as e:
+        raise HTTPException(status_code=_CODE_HTTP.get(e.code, 502), detail=e.detail)
+    if action in ("creer", "reparer") and ("creer" in r["etapes"] or "activer" in r["etapes"]):
+        _note_services(username, service, True)
+    elif action == "retirer":
+        _note_services(username, service, False)
+    if r.get("mot_de_passe"):
+        r.update(_envoi(u, _cs.LIBELLES[service], r["mot_de_passe"], bool(corps and corps.envoyer)))
+    return {"ok": True, "service": service, "action": action, **r}
+
+
+@app.post("/user/{username}/services/tout", dependencies=[Depends(require_permission("users.edit"))])
+def services_tout(username: str, corps: Optional[ActionService] = None):
+    """CRÉER PARTOUT : répare chaque service par défaut (crée ce qui manque).
+    Un seul mot de passe provisoire pour tous les services créés."""
+    u = _utilisateur(username)
+    pw = _cs.mot_de_passe_provisoire()
+    resultats, cree = {}, False
+    for svc in _cs.conf()["services_par_defaut"]:
+        try:
+            r = _cs.agit(u, svc, "reparer", password=pw)
+            resultats[svc] = r["etapes"]
+            if "creer" in r["etapes"]:
+                cree = True
+            if "creer" in r["etapes"] or "activer" in r["etapes"]:
+                _note_services(username, svc, True)
+        except _cs.ActionRefusee as e:
+            resultats[svc] = {"erreur": e.detail}
+    out = {"ok": True, "resultats": resultats}
+    if cree:
+        out["mot_de_passe"] = pw
+        out.update(_envoi(u, "services SecuBox", pw, bool(corps and corps.envoyer)))
+    return out
+
+
+@app.post("/user/{username}/password/reinitialiser",
+          dependencies=[Depends(require_permission("users.password"))])
+def reinitialise_mot_de_passe(username: str, corps: Optional[ActionService] = None):
+    """Mot de passe SecuBox provisoire (à changer à la connexion), propagé aux
+    services de l'utilisateur, envoyé si demandé à son adresse de récupération."""
+    u = _utilisateur(username)
+    pw = _cs.mot_de_passe_provisoire()
+    try:
+        _engine.set_password(username, pw)
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    doc = _engine._load()
+    for x in doc.get("users", []):
+        if x.get("username") == username:
+            x["must_change_password"] = True
+            break
+    _engine._save(doc)
+    services = {}
+    for svc in u.get("services", []):
+        if svc in _cs.GERES:
+            try:
+                _cs.agit(u, svc, "reinitialiser", password=pw)
+                services[svc] = True
+            except _cs.ActionRefusee as e:
+                services[svc] = e.detail
+    out = {"ok": True, "mot_de_passe": pw, "services": services}
+    out.update(_envoi(u, "compte SecuBox", pw, bool(corps and corps.envoyer)))
+    return out
 
 
 # ══════════════════════════════════════════════════════════════════

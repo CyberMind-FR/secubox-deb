@@ -85,6 +85,20 @@
         .tab-content.active { display: block; }
 
         .pill { font-size: 0.62rem; padding: 0.18rem 0.5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+        .modal-content.large { max-width: 760px; width: 96vw; }
+        .svc-note { font-size: .68rem; color: var(--p31-dim, #6b7b8b); margin-top: .3rem; }
+        .svc-tete { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; font-size: .78rem; color: var(--p31-dim, #6b7b8b); }
+        .svc-tete b { color: var(--cyan, #00d4ff); font-weight: 400; }
+        .svc-envoi { display: flex; gap: .4rem; align-items: center; width: 100%; font-size: .72rem; }
+        .svc-liste { display: grid; gap: .4rem; }
+        .svc-ligne { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; gap: .4rem .8rem; align-items: center;
+            background: rgba(20,30,45,.6); border-left: 3px solid var(--border, rgba(100,150,200,.2)); border-radius: 4px; padding: .5rem .7rem; }
+        .svc-ligne.ok { border-left-color: var(--green, #00dd44); } .svc-ligne.pause { border-left-color: var(--orange, #ff9944); }
+        .svc-ligne.absent { border-left-color: var(--p31-dim, #6b7b8b); } .svc-ligne.ko { border-left-color: var(--red, #ff4466); }
+        .svc-ligne .nom { font-size: .85rem; } .svc-ligne .etat { font-size: .68rem; color: var(--p31-dim, #6b7b8b); display: block; }
+        .svc-ligne .gestes { display: flex; flex-wrap: wrap; gap: .3rem; justify-content: flex-end; }
+        .svc-mdp { margin-top: .8rem; padding: .7rem; border: 1px solid var(--cyan, #00d4ff); border-radius: 6px; font-size: .8rem; }
+        .svc-mdp code { font-size: 1rem; color: var(--cyan, #00d4ff); letter-spacing: .06em; user-select: all; }
         .pill.up { background: rgba(0,221,68,0.15); color: var(--green); border: 1px solid var(--green); }
         .pill.down { background: rgba(255,68,102,0.15); color: var(--red); border: 1px solid var(--red); }
 
@@ -220,8 +234,13 @@
                     <input type="password" id="new-password" placeholder="Password" required>
                 </div>
                 <div class="form-group">
+                    <label>Courriel de récupération (externe, facultatif)</label>
+                    <input type="email" id="new-email-recup" placeholder="moi@ailleurs.example">
+                </div>
+                <div class="form-group">
                     <label>Provision to Services</label>
                     <div class="checkbox-grid" id="serviceCheckboxes"></div>
+                    <div class="svc-note">Aucun coché : création forcée dans les services par défaut.</div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn" onclick="hideModal('add-user-modal')">Cancel</button>
@@ -245,6 +264,10 @@
                     <input type="email" id="edit-email" required>
                 </div>
                 <div class="form-group">
+                    <label>Courriel de récupération (externe, facultatif)</label>
+                    <input type="email" id="edit-email-recup" placeholder="moi@ailleurs.example">
+                </div>
+                <div class="form-group">
                     <label>Status</label>
                     <select id="edit-enabled">
                         <option value="true">Enabled</option>
@@ -260,6 +283,28 @@
                     <button type="submit" class="btn primary">Save Changes</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Comptes dans les services (#1375) -->
+    <div class="modal" id="services-modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3>🧩 Services de <span id="svc-user"></span></h3>
+                <button class="modal-close" onclick="hideModal('services-modal')">&times;</button>
+            </div>
+            <div class="svc-tete">
+                <span>📧 <b id="svc-email">—</b></span>
+                <span>🛟 récupération : <b id="svc-recup">aucune</b></span>
+                <label class="svc-envoi"><input type="checkbox" id="svc-envoyer"> envoyer les mots de passe provisoires à l'adresse de récupération</label>
+            </div>
+            <div class="btn-group" style="margin:.6rem 0">
+                <button class="btn primary sm" type="button" data-svc="tout">➕ Créer partout (défaut)</button>
+                <button class="btn sm" type="button" data-svc="rafraichir">↻ Mesurer</button>
+                <button class="btn sm" type="button" data-svc="mdp-secubox">🔑 Réinitialiser le mot de passe SecuBox</button>
+            </div>
+            <div id="svc-liste" class="svc-liste"><div class="empty">Mesure en cours…</div></div>
+            <div id="svc-mdp" class="svc-mdp" hidden></div>
         </div>
     </div>
 
@@ -418,7 +463,7 @@
                         ((u.totp_enabled || u.totp || u.mfa_enabled)
                             ? '<button class="btn sm" data-act="reset-2fa" data-username="' + esc(u.username) + '" title="Clear this user\'s TOTP enrollment">🔑 Reset 2FA</button>'
                             : '') +
-                        '<button class="btn sm" data-act="sync" data-username="' + esc(u.username) + '">🔄 Sync</button>' +
+                        '<button class="btn sm primary" data-act="services" data-username="' + esc(u.username) + '" title="Comptes dans Nextcloud, courriel, PeerTube, Gitea">🧩 Services</button>' +
                         '<button class="btn sm danger" data-act="delete" data-username="' + esc(u.username) + '">🗑️ Delete</button>' +
                     '</span>' +
                 '</div>';
@@ -463,7 +508,7 @@
             const username = t.getAttribute('data-username');
             const act = t.getAttribute('data-act');
             if (act === 'edit') showEditUser(username);
-            else if (act === 'sync') syncUser(username);
+            else if (act === 'sync' || act === 'services') ouvreServices(username);
             else if (act === 'delete') deleteUser(username);
             else if (act === 'reset-2fa') resetTotp(username);
         });
@@ -484,9 +529,10 @@
             const password = document.getElementById('new-password').value;
             const services = Array.from(document.querySelectorAll('#serviceCheckboxes input:checked')).map(cb => cb.value);
 
+            const email_recuperation = document.getElementById('new-email-recup').value.trim() || null;
             const result = await api('/user', {
                 method: 'POST',
-                body: JSON.stringify({ username, email, password, services })
+                body: JSON.stringify({ username, email, password, services, email_recuperation })
             });
 
             if (result && result.success) {
@@ -505,6 +551,7 @@
             document.getElementById('edit-username').value = user.username;
             document.getElementById('edit-username-title').textContent = user.username;
             document.getElementById('edit-email').value = user.email || '';
+            document.getElementById('edit-email-recup').value = user.email_recuperation || '';
             document.getElementById('edit-enabled').value = user.enabled !== false ? 'true' : 'false';
             document.getElementById('edit-password').value = '';
             showModal('edit-user-modal');
@@ -519,7 +566,8 @@
 
             const result = await api('/user/' + encodeURIComponent(username), {
                 method: 'PUT',
-                body: JSON.stringify({ email, enabled })
+                body: JSON.stringify({ email, enabled,
+                    email_recuperation: document.getElementById('edit-email-recup').value.trim() })
             });
 
             if (password) {
@@ -542,10 +590,96 @@
             }
         }
 
-        async function syncUser(username) {
-            const result = await api('/user/' + encodeURIComponent(username) + '/sync', { method: 'POST' });
-            toast(result && result.success ? '✅ User synced to services' : '❌ Sync failed', !(result && result.success));
+        // ── Comptes dans les services (#1375) ─────────────────────────────────
+        // État MESURÉ par le helper root (le compte existe-t-il, est-il actif ?),
+        // gestes rapides : créer/retirer, activer/désactiver, réparer, mot de passe.
+        let svcUser = null;
+
+        function etatService(e) {
+            if (e.disponible === false) return ['ko', '⚪ service indisponible' + (e.erreur ? ' — ' + e.erreur : '')];
+            if (e.existe === null || e.existe === undefined) return ['ko', '⚠️ ' + (e.erreur || 'état inconnu')];
+            if (!e.existe) return ['absent', '➖ pas de compte'];
+            if (e.actif === false) return ['pause', '⏸ compte suspendu'];
+            return ['ok', '✅ compte actif' + (e.identifiant ? ' · ' + e.identifiant : '')];
         }
+
+        function btnSvc(txt, svc, action, cls, titre) {
+            return '<button class="btn sm ' + (cls || '') + '" type="button" data-svc="' + esc(action) + '" data-nom="' + esc(svc) + '"' +
+                (titre ? ' title="' + esc(titre) + '"' : '') + '>' + txt + '</button>';
+        }
+
+        function rendServices(d) {
+            document.getElementById('svc-email').textContent = d.email || '—';
+            document.getElementById('svc-recup').textContent = d.email_recuperation || 'aucune';
+            const el = document.getElementById('svc-liste');
+            el.innerHTML = Object.entries(d.services || {}).map(([svc, e]) => {
+                const [cls, txt] = etatService(e);
+                const defaut = (d.defaut || []).includes(svc) ? ' · défaut' : '';
+                let g = '';
+                if (e.disponible !== false && e.existe !== null && e.existe !== undefined) {
+                    g += e.existe ? btnSvc('🗑️ Retirer', svc, 'retirer', 'danger', 'Retire le compte de ce service')
+                                  : btnSvc('➕ Créer', svc, 'creer', 'primary', 'Crée le compte avec un mot de passe provisoire');
+                    if (e.existe && e.actif === true) g += btnSvc('⏸ Désactiver', svc, 'desactiver');
+                    if (e.existe && e.actif === false) g += btnSvc('▶ Activer', svc, 'activer', 'good');
+                    if (e.existe) g += btnSvc('🔑 Mot de passe', svc, 'reinitialiser', '', 'Mot de passe provisoire pour ce service');
+                }
+                g += btnSvc('🛠 Réparer', svc, 'reparer', '', 'Crée le compte s\'il manque, le réactive s\'il est suspendu');
+                return '<div class="svc-ligne ' + cls + '"><span><span class="nom">' + esc(e.libelle || svc) + esc(defaut) +
+                    '</span><span class="etat">' + esc(txt) + '</span></span><span class="gestes">' + g + '</span></div>';
+            }).join('') || '<div class="empty">Aucun service géré.</div>';
+        }
+
+        async function chargeServices(force) {
+            const el = document.getElementById('svc-liste');
+            el.innerHTML = '<div class="empty">Mesure en cours… (chaque service est interrogé dans son conteneur)</div>';
+            const d = await api('/user/' + encodeURIComponent(svcUser) + '/services' + (force ? '?rafraichir=true' : ''));
+            if (d && d.services) rendServices(d);
+            else el.innerHTML = '<div class="empty">❌ ' + esc((d && d.detail) || 'mesure impossible') + '</div>';
+        }
+
+        function montreMotDePasse(r, quoi) {
+            const box = document.getElementById('svc-mdp');
+            if (!r || !r.mot_de_passe) { box.hidden = true; return; }
+            box.hidden = false;
+            box.innerHTML = '🔑 Mot de passe provisoire (' + esc(quoi) + ') — affiché <b>une seule fois</b> : <code>' +
+                esc(r.mot_de_passe) + '</code>' +
+                (r.envoye_a ? '<br>📨 envoyé à ' + esc(r.envoye_a) : (r.envoi ? '<br>⚠️ ' + esc(r.envoi) : ''));
+        }
+
+        async function ouvreServices(username) {
+            svcUser = username;
+            document.getElementById('svc-user').textContent = username;
+            document.getElementById('svc-mdp').hidden = true;
+            showModal('services-modal');
+            chargeServices(false);
+        }
+
+        document.getElementById('services-modal').addEventListener('click', async e => {
+            const b = e.target.closest('[data-svc]');
+            if (!b || !svcUser) return;
+            const act = b.getAttribute('data-svc');
+            const svc = b.getAttribute('data-nom');
+            const envoyer = document.getElementById('svc-envoyer').checked;
+            if (act === 'rafraichir') return chargeServices(true);
+            if (act === 'retirer' && !confirm('Retirer le compte ' + svcUser + ' de ' + svc + ' ?')) return;
+            if (act === 'mdp-secubox' && !confirm('Remplacer le mot de passe SecuBox de ' + svcUser + ' (et de ses services) par un mot de passe provisoire ?')) return;
+            b.disabled = true;
+            let chemin, quoi;
+            if (act === 'tout') { chemin = '/services/tout'; quoi = 'services créés'; }
+            else if (act === 'mdp-secubox') { chemin = '/password/reinitialiser'; quoi = 'SecuBox et ses services'; }
+            else { chemin = '/services/' + encodeURIComponent(svc) + '/' + encodeURIComponent(act); quoi = svc; }
+            const r = await api('/user/' + encodeURIComponent(svcUser) + chemin,
+                { method: 'POST', body: JSON.stringify({ envoyer }) });
+            b.disabled = false;
+            if (r && r.ok) {
+                toast('✅ ' + (r.etapes ? r.etapes.join(', ') : 'fait'));
+                montreMotDePasse(r, quoi);
+                chargeServices(true);
+                loadUsers();
+            } else if (r) {
+                toast('❌ ' + (r.detail || 'échec'), true);
+            }
+        });
 
         async function deleteUser(username) {
             if (!confirm('Delete user "' + username + '" and remove from all services?')) return;
