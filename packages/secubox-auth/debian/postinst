@@ -31,6 +31,14 @@ case "$1" in
         chmod 644 /var/lib/secubox/auth/sessions.json
     fi
 
+    # Journal et historique d'authentification : 0640, jamais modifiables
+    # par tous. Trouvés en 0666 sur gk2 (#1366) — un compte quelconque
+    # pouvait y forger ou effacer une connexion. Seul secubox-auth les lit.
+    for f in audit.log history.json webhooks.json; do
+        [ -f "/var/lib/secubox/auth/$f" ] && chmod 0640 "/var/lib/secubox/auth/$f"
+    done
+    find /var/lib/secubox/auth -maxdepth 1 -type f -perm -o+w -exec chmod o-w {} +
+
     systemctl daemon-reload
     systemctl enable secubox-auth.service
     systemctl start  secubox-auth.service || true

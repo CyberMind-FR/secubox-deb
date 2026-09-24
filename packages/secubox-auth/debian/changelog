@@ -1,3 +1,14 @@
+secubox-auth (1.1.5-1~bookworm1) bookworm; urgency=high
+
+  * Journal d'authentification jamais modifiable par tous : audit.log est
+    créé en 0640 et ramené à 0640 s'il était plus large ; toute sauvegarde
+    JSON retire l'écriture pour « autres » (ref #1366). Trouvé en 0666 sur
+    gk2 : n'importe quel compte pouvait forger ou effacer une connexion.
+  * postinst : audit.log, history.json, webhooks.json → 0640 ; o-w sur le
+    reste de /var/lib/secubox/auth (sessions.json garde sa lecture).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Sep 2026 09:31:42 +0200
+
 secubox-auth (1.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Identifiants dérivés : les hachages hérités (MD5/SHA-1) passent par
