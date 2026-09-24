@@ -1,3 +1,14 @@
+secubox-hub (1.9.16-1~bookworm1) bookworm; urgency=medium
+
+  * LES TREIZE ROUTES DE webui.conf TRANSMETTENT LE VERDICT LAN (ref #1354).
+    C'était le plus gros porteur de l'oubli : `admin.gk2.secubox.in` rendait
+    401 sur toutes ses métriques — health/summary, visitor-origin, live-hosts,
+    cert-status — alors que le mode tableau de bord est armé et que la requête
+    vient du réseau local. Le module ne pouvait pas le savoir : nginx ne lui
+    transmettait aucune marque.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 24 Sep 2026 05:06:24 +0200
+
 secubox-hub (1.9.15-1~bookworm1) bookworm; urgency=medium
 
   * Le paquet pose SA PROPRE route sbxwaf via secubox-waf-route (#1323),
