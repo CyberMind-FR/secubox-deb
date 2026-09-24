@@ -1,0 +1,13 @@
+[Unit]
+Description=Publish wg-mesh handshakes every 20 s (liveness for /status, /peers)
+
+# 20 s : bien sous le seuil de péremption du fichier (120 s) et sous celui de
+# vivacité d'un pair (180 s). Plus fréquent n'apprendrait rien — WireGuard ne
+# renégocie qu'environ toutes les deux minutes.
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=20s
+Unit=secubox-p2p-mesh-liveness.service
+
+[Install]
+WantedBy=timers.target

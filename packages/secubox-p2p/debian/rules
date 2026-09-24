@@ -44,6 +44,8 @@ override_dh_auto_install:
 
 	# Install root mesh provisioner CLI
 	install -m 755 $(CURDIR)/scripts/sbx-mesh-up $(CURDIR)/debian/secubox-p2p/usr/bin/
+	# Publication des poignées de main pour l'API non privilégiée (#1360)
+	install -m 755 $(CURDIR)/scripts/sbx-mesh-liveness $(CURDIR)/debian/secubox-p2p/usr/bin/
 
 	# Create runtime directory
 	install -d $(CURDIR)/debian/secubox-p2p/run/secubox
@@ -58,6 +60,18 @@ override_dh_auto_install:
 		$(CURDIR)/debian/secubox-p2p/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/secubox-p2p-ephemeral-sweep.timer \
 		$(CURDIR)/debian/secubox-p2p/lib/systemd/system/
+
+	# Pont état -> wg-mesh, sans surface sudo supplémentaire (#1360)
+	for u in secubox-p2p-mesh.path secubox-p2p-mesh.service \
+	         secubox-p2p-mesh-liveness.service secubox-p2p-mesh-liveness.timer; do \
+		install -m 644 $(CURDIR)/systemd/$$u $(CURDIR)/debian/secubox-p2p/lib/systemd/system/; \
+	done
+
+	# Écouteur d'enrôlement 7331 (#1360) — site nginx, activé par le postinst
+	# seulement si `nginx -t` l'accepte.
+	install -d $(CURDIR)/debian/secubox-p2p/etc/nginx/sites-available
+	install -m 644 $(CURDIR)/nginx/p2p-masterlink.conf \
+		$(CURDIR)/debian/secubox-p2p/etc/nginx/sites-available/secubox-p2p-masterlink.conf
 
 	# Install scoped sudoers (secubox -> secubox-p2pctl, exact path only)
 	install -d $(CURDIR)/debian/secubox-p2p/etc/sudoers.d

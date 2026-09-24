@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox P2P — apply wg-mesh when its state changes (#1360)
+
+# LE PONT ENTRE LE SERVICE ET WIREGUARD. Le service p2p tourne sous `secubox`
+# et ne peut pas toucher l'interface : il écrit l'état, et cette unité root le
+# voit changer. Aucune surface sudo supplémentaire — secubox-p2pctl reste
+# verrouillé sur wg-ephemeral, comme il doit l'être.
+[Path]
+PathChanged=/var/lib/secubox/p2p/wg_mesh.json
+Unit=secubox-p2p-mesh.service
+
+[Install]
+WantedBy=paths.target

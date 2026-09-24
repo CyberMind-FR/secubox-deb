@@ -6,6 +6,21 @@
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "must run as root" >&2; exit 1; }
 
+# --check : le test d'ExecCondition de secubox-p2p-mesh.service (#1360).
+#
+# Il vivait dans l'unité elle-même, en `/bin/sh -c '… "\"private_key\"…" …'`.
+# systemd réinterprète les échappements AVANT de passer la ligne au shell :
+# celui-ci recevait une chaîne coupée (« Unterminated quoted string »), la
+# condition échouait, et le service était SAUTÉ à chaque enrôlement — l'état
+# changeait, le tunnel ne montait jamais. `systemd-analyze verify` ne l'a pas
+# vu : il lit la syntaxe, il n'exécute pas la condition. Aucun guillemet ne
+# reste dans l'unité. Sortie 0 = appliquer, 1 = rien à monter (pas de clé).
+if [[ "${1:-}" == "--check" ]]; then
+    python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("private_key") else 1)' \
+        /var/lib/secubox/p2p/wg_mesh.json 2>/dev/null
+    exit $?
+fi
+
 STATE=/var/lib/secubox/p2p/wg_mesh.json
 CONF=/etc/wireguard/wg-mesh.conf
 
@@ -15,7 +30,8 @@ sys.path.insert(0, "/usr/lib/secubox/p2p")
 from api import mesh
 
 state_path, conf_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-state = json.loads(state_path.read_text()) if state_path.exists() else {"peers": []}
+original = json.loads(state_path.read_text()) if state_path.exists() else {"peers": []}
+state = json.loads(json.dumps(original))
 
 # Adopt the live key if state has none (preserves the gk2<->c3box handshake).
 existing = conf_path.read_text() if conf_path.exists() else None
@@ -32,10 +48,24 @@ if not state.get("private_key"):
 conf_path.parent.mkdir(parents=True, exist_ok=True)
 conf_path.write_text(mesh.render_wg_conf(state))
 conf_path.chmod(0o600)
-state_path.write_text(json.dumps(state, indent=2))
+# N'ÉCRIRE L'ÉTAT QUE S'IL A CHANGÉ (#1360). Ce script est lancé par
+# secubox-p2p-mesh.path à chaque modification de ce fichier : le réécrire
+# systématiquement le relancerait sans fin — systemd finirait par couper l'unité
+# (trigger-limit-hit) et plus aucun enrôlement ne serait appliqué.
+if state != original:
+    state_path.write_text(json.dumps(state, indent=2))
 print(f"rendered {conf_path} (addr {state.get('address')}, peers {len(state.get('peers', []))})")
 PY
 
-wg-quick down wg-mesh 2>/dev/null || true
-wg-quick up wg-mesh
+# APPLIQUER SANS COUPER (#1360). Ce script est désormais déclenché à CHAQUE
+# changement de l'état (unité secubox-p2p-mesh.path) : un `down/up` complet
+# ferait tomber tous les tunnels existants à chaque nouvel enrôlement. Si
+# l'interface existe, `wg syncconf` n'applique que la différence ; seule la
+# première montée passe par wg-quick.
+if ip link show wg-mesh >/dev/null 2>&1; then
+    wg syncconf wg-mesh <(wg-quick strip wg-mesh)
+    echo "synced wg-mesh (live, existing sessions kept)"
+else
+    wg-quick up wg-mesh
+fi
 wg show wg-mesh

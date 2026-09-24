@@ -1,0 +1,19 @@
+[Unit]
+Description=SecuBox P2P — render and apply wg-mesh from wg_mesh.json (#1360)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Root oneshot, comme le balayage éphémère : rendu du fichier wg-quick puis
+# `wg syncconf` (sans couper les sessions existantes) ou première montée.
+# Sans clé privée dans l'état, il n'y a rien à monter : on ne tente pas.
+ExecCondition=/usr/bin/sbx-mesh-up --check
+ExecStart=/usr/bin/sbx-mesh-up
+# Mesurer tout de suite après avoir appliqué : sinon un nouveau pair resterait
+# « inconnu » jusqu'au prochain tour du minuteur.
+ExecStartPost=-/usr/bin/sbx-mesh-liveness
+
+[Install]
+# Au démarrage aussi : un mesh enrôlé doit remonter seul après un reboot.
+WantedBy=multi-user.target
