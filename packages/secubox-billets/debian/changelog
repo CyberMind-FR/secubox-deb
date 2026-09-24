@@ -1,3 +1,18 @@
+secubox-billets (0.8.61-1~bookworm1) bookworm; urgency=medium
+
+  * LE VHOST TRANSMET LE VERDICT LAN (ref #1354). `billets.gk2.secubox.in`
+    rendait 401 en disant que le mode tableau de bord « est inactif ou la
+    requête n'est pas LAN » — alors qu'il était actif et que la requête venait
+    bien du réseau local. C'est la MARQUE qui manquait : le bloc écrivait ses
+    en-têtes à la main, sans `X-SecuBox-LAN`, et `require_lecture` ne pouvait
+    donc pas savoir d'où venait l'appel.
+  * Le même oubli existait sur 51 routes de 29 paquets — corrigé partout, et
+    gardé par `tests/test_verdict_lan_vhosts.py`, qui balaie le dépôt sans
+    présupposer où vit un vhost : c'est ce présupposé qui avait fait manquer
+    CE paquet-ci au premier audit.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 24 Sep 2026 05:00:21 +0200
+
 secubox-billets (0.8.60-1~bookworm1) bookworm; urgency=medium
 
   * La carte du Hall retrouve ses vignettes. Le calcul de `vignette` lisait
