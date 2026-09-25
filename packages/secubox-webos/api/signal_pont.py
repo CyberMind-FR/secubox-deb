@@ -124,6 +124,21 @@ async def groupes(qui: str) -> dict:
     return await _appel(qui, "GET", "/groups")
 
 
+# QUI A LANCÉ L'APPAIRAGE (#1434). Sans cette trace, lier_etat() inscrivait
+# l'autorisation pour QUICONQUE l'interrogeait une fois le démon lié : il
+# suffisait qu'une personne appaire pour que tout autre utilisateur du Hall
+# obtienne l'accès au compte Signal de la box. Seul l'initiateur, dans la
+# fenêtre de l'appairage, reçoit l'autorisation.
+FENETRE_APPAIRAGE_S = 15 * 60
+_APPAIRAGE: dict = {}
+
+
+def _initiateur_valide(qui: str) -> bool:
+    import time
+    return bool(qui) and _APPAIRAGE.get("qui") == qui and \
+        time.time() - _APPAIRAGE.get("t", 0) < FENETRE_APPAIRAGE_S
+
+
 async def lier(qui: str) -> dict:
     """Demarrer l'appairage. Ouvert a toute personne connectee au Hall : voir
     _jeton — exiger l'autorisation avant reviendrait a demander une cle pour
@@ -132,7 +147,11 @@ async def lier(qui: str) -> dict:
     Le QR revient en SVG, deja trace par le demon : l'URI `sgnl://` qu'il
     encode lie quiconque la scanne, et ne doit exister nulle part ailleurs
     que dans cette image."""
-    return await _appel(qui, "POST", "/link/start", exige_acces=False)
+    r = await _appel(qui, "POST", "/link/start", exige_acces=False)
+    if r.get("ok"):
+        import time
+        _APPAIRAGE.update(qui=qui, t=time.time())
+    return r
 
 
 async def lier_etat(qui: str) -> dict:
@@ -144,13 +163,14 @@ async def lier_etat(qui: str) -> dict:
     """
     r = await _appel(qui, "GET", "/link/status", exige_acces=False)
     if r.get("ok") and (r.get("data") or {}).get("state") == "linked":
-        if not acces.a_acces(qui, "signal"):
+        if not acces.a_acces(qui, "signal") and _initiateur_valide(qui):
             # `pose_manuel` refuse un compte ou un secret vide. On y inscrit
             # donc ce que le coffre porte reellement : la trace que cette
             # personne a appaire. Ce n'est PAS une cle — le jeton presente au
             # demon est forge a chaque appel et vaut 60 secondes.
             compte = (r.get("data") or {}).get("account") or "appairé"
             acces.pose_manuel(qui, "signal", compte, "autorisation-par-appairage")
+            _APPAIRAGE.clear()
     return r
 
 
