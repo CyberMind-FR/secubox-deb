@@ -1,3 +1,11 @@
+secubox-webos (1.0.338-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : /identite/ (SBX Identity Manager, même origine que les clés
+    d'appareil) et /api/v1/sbxid/ ; l'administration SBX OS réservée au
+    réseau local (ref #1422).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:52:57 +0200
+
 secubox-webos (1.0.337-1~bookworm1) bookworm; urgency=medium
 
   * Hall : la console admin (⚙) d'une carte ne se déduit plus de son

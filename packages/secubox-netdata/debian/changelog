@@ -1,3 +1,12 @@
+secubox-netdata (1.1.5-1~bookworm1) bookworm; urgency=high
+
+  * Ne livre plus /etc/nginx/secubox-routes.d/netdata.conf (ref #1422). La
+    route /api/v1/netdata/ est déjà dans webui.conf (secubox-hub, vers
+    l'agrégateur) : le doublon faisait échouer `nginx -t`, donc tout
+    rechargement de nginx sur la box (constaté sur gk2 après 1.1.4).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:56:43 +0200
+
 secubox-netdata (1.1.4-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

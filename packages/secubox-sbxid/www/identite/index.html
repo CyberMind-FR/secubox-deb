@@ -1,0 +1,284 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     Source-Disclosed License — All rights reserved except as expressly granted.
+     See LICENCE-CMSD-1.0.md for terms.
+
+     SBX Identity Manager (#1422) — servi par le Hall (hall.gk2.secubox.in/identite/)
+     parce que la clé de l'appareil vit dans l'IndexedDB DE CETTE ORIGINE.
+     Référence visuelle : docs/design/sbxos-identite-maquette.html. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SBX Identity Manager</title>
+<style>
+:root{
+  --bg:#f3f4f7; --surf:#fff; --surf2:#eceef3; --line:#d7dbe4; --text:#1b1e27; --muted:#5b6173;
+  --acc:#0074a3; --gold:#8a6a1c; --ok:#17804a; --ok-soft:rgba(23,128,74,.12); --bad:#c0303c; --bad-soft:rgba(192,48,60,.10);
+  --warn:#a86b00; --warn-soft:rgba(168,107,0,.12);
+  --display:"Cinzel",Georgia,"Times New Roman",serif; --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"DejaVu Sans Mono",Menlo,monospace; --r:10px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{color-scheme:dark;
+  --bg:#0b0d12; --surf:#131722; --surf2:#1a1f2d; --line:#262d3e; --text:#e8e6d9; --muted:#8b90a3;
+  --acc:#00d4ff; --gold:#c9a84c; --ok:#3ddc84; --ok-soft:rgba(61,220,132,.12); --bad:#ff5d6c; --bad-soft:rgba(255,93,108,.12);
+  --warn:#f0b429; --warn-soft:rgba(240,180,41,.12);}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--body);padding-inline:16px;padding-block:0 40px}
+.wrap{max-width:1100px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:18px 12px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--display);font-size:21px;color:var(--gold)}
+.brand small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.who{margin-left:auto;font-size:13px;color:var(--muted);text-align:right}
+nav{display:flex;gap:4px;flex-wrap:wrap;padding-block:12px}
+nav a{text-decoration:none;color:var(--muted);padding:7px 12px;border-radius:8px;border:1px solid transparent;font-size:14px}
+nav a[aria-current=page]{color:var(--text);background:var(--surf);border-color:var(--line)}
+section{display:none}section.on{display:block}
+h1{font-family:var(--display);font-size:19px;margin:6px 0 4px}
+h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:20px 0 8px}
+.lead{color:var(--muted);max-width:70ch;margin:0 0 14px}
+.grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+button,input,select{font:inherit;color:inherit}
+input[type=text]{background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+button{cursor:pointer;background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+button:hover{border-color:var(--acc)}button:disabled{opacity:.45;cursor:not-allowed}
+button.prim{background:var(--acc);border-color:var(--acc);color:var(--bg);font-weight:700}
+button.danger{color:var(--bad)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--mono);font-size:11.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surf2);white-space:nowrap}
+.chip.role{color:var(--gold)}.chip.cap{color:var(--acc)}
+.chip.ok{color:var(--ok);background:var(--ok-soft);border-color:transparent}
+.chip.bad{color:var(--bad);background:var(--bad-soft);border-color:transparent}
+.chip.warn{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+dt{color:var(--muted);font-size:13px}dd{margin:0;font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere}
+.dev{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.dev:first-child{border-top:0}
+.dev .n{font-weight:700}.dev .m{font-size:12.5px;color:var(--muted)}
+.dev.rev .n{text-decoration:line-through;color:var(--muted)}
+.act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+pre{background:var(--surf2);border:1px solid var(--line);border-radius:9px;padding:12px;font:12px/1.55 var(--mono);overflow-x:auto;margin:8px 0 0;white-space:pre}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+td.c,th.c{text-align:center}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--acc)}.dot.no{background:transparent;border:1px solid var(--line)}
+.hint{font-size:12.5px;color:var(--muted);border-left:2px solid var(--gold);padding-left:10px;margin-top:10px}
+.msg{padding:14px;border-radius:var(--r);border:1px solid var(--line);background:var(--surf)}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--text);color:var(--bg);padding:9px 16px;border-radius:9px;max-width:calc(100% - 32px);z-index:9}
+.audit li{display:grid;grid-template-columns:120px 170px 1fr;gap:10px;padding:5px 0;border-top:1px solid var(--line);font-size:13px}
+.audit{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto}
+.audit time{font-family:var(--mono);font-size:12px;color:var(--muted)}.audit .ev{font-family:var(--mono);font-size:12px;color:var(--acc)}
+@media (max-width:560px){.audit li{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand">SBX Identity Manager<small>SBX OS · identité, appareils, capacités · #1422</small></div>
+  <div class="who" id="who">…</div>
+</header>
+<nav aria-label="Écrans">
+  <a href="#moi">Mon identité</a>
+  <a href="#appareils">Mes appareils</a>
+  <a href="#admin" id="nav-admin" hidden>Administration SBX OS</a>
+  <a href="#mesh">Nœud &amp; Mesh</a>
+</nav>
+
+<section id="v-moi">
+  <h1>Mon identité</h1>
+  <p class="lead">Une seule identité SBX OS, prouvée par vos appareils. Vos capacités ouvrent des modules et des fonctionnalités, jamais le système : ni SSH, ni sudo, ni root.</p>
+  <div id="moi-corps"></div>
+</section>
+
+<section id="v-appareils">
+  <h1>Mes appareils</h1>
+  <p class="lead">Chaque appareil prouve votre identité avec sa propre clé, qui ne quitte jamais l'appareil. Le révoquer coupe ses sessions immédiatement.</p>
+  <div class="card"><div id="devs"></div></div>
+</section>
+
+<section id="v-admin">
+  <h1>Administration SBX OS</h1>
+  <p class="lead">Séparée de l'administration système. Les comptes système n'apparaissent pas ici.</p>
+  <div id="adm-demandes"></div>
+  <h2>Personnes</h2><div class="card scroll"><table id="people"></table></div>
+  <h2>Journal</h2><div class="card"><ul class="audit" id="audit"></ul></div>
+  <h2>Rôles → capacités</h2><div class="card scroll"><table id="matrix"></table></div>
+</section>
+
+<section id="v-mesh">
+  <h1>Nœud &amp; Mesh</h1>
+  <p class="lead">Un nœud héberge votre identité, il ne la possède pas. Changer de nœud ne change pas votre <span style="font-family:var(--mono)">user_uuid</span>.</p>
+  <div class="card" id="mesh"></div>
+</section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module">
+const API = '/api/v1/sbxid';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LIB = {guest:'Invité', member:'Membre', subscriber:'Abonné', beta_tester:'Bêta-testeur', moderator:'Modérateur', sbx_operator:'Opérateur SBX'};
+let ETAT = null, ROLES = null;
+
+function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true, 2800); }
+async function api(chemin, opts={}){
+  const r = await fetch(API + chemin, {credentials:'same-origin', headers:{'Content-Type':'application/json'}, ...opts});
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw Object.assign(new Error(j.detail || ('HTTP ' + r.status)), {status:r.status});
+  return j;
+}
+const quand = t => t ? new Date(t*1000).toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}) : '—';
+
+// ── Mon identité ─────────────────────────────────────────────────────────
+function rendMoi(){
+  const c = $('#moi-corps');
+  if (!ETAT.identite){
+    c.innerHTML = `<div class="msg"><b>${esc(ETAT.motif || 'Aucune identité SBX OS pour cette session.')}</b>
+      <p class="hint">Ouvrez votre session depuis un appareil admis : <a href="/i/acces/">porte d'accès</a>.</p></div>`;
+    return;
+  }
+  const u = ETAT.identite;
+  c.innerHTML = `<div class="grid"><div class="card">
+     <dl><dt>pseudo</dt><dd>${esc(u.pseudo)}</dd><dt>user_uuid</dt><dd>${esc(u.user_uuid)}</dd>
+     <dt>nœud d'accueil</dt><dd>${esc(u.home_node)}</dd><dt>époque</dt><dd>${esc(u.epoch)}</dd>
+     <dt>abonnement</dt><dd>${esc(u.tier)}</dd><dt>statut</dt><dd>${esc(u.status)}</dd>
+     ${(ETAT.liens||[]).map(l=>`<dt>lien ${esc(l.app)}</dt><dd>${esc(l.app_handle)}</dd>`).join('')}</dl></div>
+   <div class="card"><h2 style="margin-top:0">Rôles</h2><div class="chips">${u.roles.map(r=>`<span class="chip role">${esc(LIB[r]||r)}</span>`).join('')}</div>
+     <h2>Ce que vous pouvez faire</h2><div class="chips">${u.capabilities.map(c=>`<span class="chip cap">${esc(c)}</span>`).join('') || '<span class="muted">aucune (compte suspendu)</span>'}</div>
+     <p class="hint">Aucune capacité SBX OS n'ouvre SSH, sudo ou root.</p></div></div>`;
+}
+
+// ── Mes appareils ────────────────────────────────────────────────────────
+function rendAppareils(){
+  const box = $('#devs');
+  if (!ETAT.identite){ box.innerHTML = '<p class="muted">Pas d\'identité SBX OS pour cette session.</p>'; return; }
+  box.innerHTML = '';
+  ETAT.appareils.forEach(d => {
+    const cur = d.device_uuid === ETAT.appareil_courant, row = document.createElement('div');
+    row.className = 'dev' + (d.revoked_at ? ' rev' : '');
+    const conf = {trusted:['ok','certifié'], verified:['','vérifié'], pending:['warn','en attente']}[d.trust] || ['', d.trust];
+    row.innerHTML = `<div><div class="n" data-n>${esc(d.name)} ${cur?'<span class="chip ok">cet appareil</span>':''}</div>
+      <div class="m">${d.revoked_at ? 'révoqué le '+quand(d.revoked_at) : 'dernière session : '+quand(d.last_seen_at)} · <span class="chip ${conf[0]}">${conf[1]}</span>
+      ${d.certificate ? ' · certificat jusqu\'au '+esc(d.certificate.expires.slice(0,10)) : ''}</div>
+      <div class="m" style="font-family:var(--mono)">${esc(d.did)}</div></div><div class="act"></div>`;
+    const a = row.querySelector('.act');
+    if (!d.revoked_at){
+      const bC = btn(d.certificate ? 'Voir le certificat' : (cur ? 'Émettre le certificat' : 'Certificat'));
+      bC.disabled = !d.certificate && !cur;
+      bC.title = (!d.certificate && !cur) ? "S'émet depuis l'appareil lui-même : sa clé ne le quitte pas" : '';
+      bC.onclick = () => d.certificate ? voirCert(d, row) : emetCert(d, row);
+      const bR = btn('Renommer'); bR.onclick = () => renomme(d, row, a);
+      const bX = btn('Révoquer', 'danger'); bX.onclick = () => confirme(a, cur ? 'Révoquer l\'appareil que vous utilisez ?' : `Révoquer « ${d.name} » ?`, () => revoque(d));
+      a.append(bC, bR, bX);
+    }
+    box.appendChild(row);
+  });
+}
+function btn(t, cls){ const b=document.createElement('button'); b.type='button'; b.textContent=t; if(cls) b.className=cls; return b; }
+function confirme(a, q, oui){
+  a.innerHTML = `<span style="color:var(--bad);font-size:12.5px">${esc(q)}</span>`;
+  const y = btn('Confirmer', 'danger'), n = btn('Annuler'); y.onclick = oui; n.onclick = charge; a.append(y, n);
+}
+function renomme(d, row, a){
+  const n = row.querySelector('[data-n]'), inp = document.createElement('input');
+  inp.type='text'; inp.id='rn-'+d.device_uuid; inp.value=d.name; inp.setAttribute('aria-label','Nouveau nom');
+  n.replaceWith(inp); a.innerHTML=''; const ok = btn('Enregistrer','prim'); a.append(ok); inp.focus();
+  const fin = async () => { try { await api('/appareils/'+d.device_uuid, {method:'PATCH', body:JSON.stringify({nom:inp.value})}); toast('Appareil renommé'); } catch(e){ toast(e.message); } charge(); };
+  ok.onclick = fin; inp.onkeydown = e => { if (e.key==='Enter') fin(); if (e.key==='Escape') charge(); };
+}
+async function revoque(d){
+  try { const r = await api('/appareils/'+d.device_uuid+'/revoquer', {method:'POST'}); toast(`Appareil révoqué · ${r.sessions_coupees||0} session(s) coupée(s)`); }
+  catch(e){ toast(e.message); }
+  charge();
+}
+async function voirCert(d, row){
+  try { const r = await api('/appareils/'+d.device_uuid+'/certificat'); montreYaml(row, r.yaml); } catch(e){ toast(e.message); }
+}
+async function emetCert(d, row){
+  try {
+    const {identite, signe} = await import('/i/acces/appareil.js');
+    const id = await identite();
+    const prep = await api('/appareils/'+d.device_uuid+'/certificat/preparer', {method:'POST'});
+    const sig = await signe(id.paire, prep.message_hex);            // la clé ne quitte pas l'appareil
+    const r = await api('/appareils/'+d.device_uuid+'/certificat/signer', {method:'POST', body:JSON.stringify({serial:prep.serial, sig_user:sig})});
+    toast('Certificat émis : signé par votre appareil et par le nœud');
+    await charge(); const nouveau = [...document.querySelectorAll('#devs .dev')].find(x => x.textContent.includes(d.did));
+    if (nouveau) montreYaml(nouveau, r.yaml);
+  } catch(e){ toast(e.message); }
+}
+function montreYaml(row, yaml){
+  let p = row.nextElementSibling;
+  if (p && p.tagName === 'PRE'){ p.remove(); return; }
+  p = document.createElement('pre'); p.textContent = yaml; row.after(p);
+}
+
+// ── Administration ───────────────────────────────────────────────────────
+async function rendAdmin(){
+  let pers, jour, dem;
+  try { [pers, jour, dem] = await Promise.all([api('/admin/personnes'), api('/admin/journal'), api('/admin/demandes')]); }
+  catch(e){ $('#nav-admin').hidden = true; return; }
+  $('#nav-admin').hidden = false;
+  const n = dem.en_attente.length;
+  $('#adm-demandes').innerHTML = n ? `<div class="msg"><b>${n} demande(s) d'accès en attente</b> — à trancher dans <a href="/acces/">la porte d'accès</a> (l'Identity Manager l'absorbera à la prochaine étape).</div>` : '';
+  const assign = ROLES.roles.filter(r => !r.derive).map(r => r.id);
+  const t = $('#people');
+  t.innerHTML = `<thead><tr><th>Personne</th>${assign.map(r=>`<th class="c">${esc(LIB[r]||r)}</th>`).join('')}<th>Abonnement</th><th class="c">Appareils</th><th>Statut</th></tr></thead><tbody>` +
+    pers.personnes.map(p => `<tr><td><b>${esc(p.pseudo)}</b><div style="font-family:var(--mono);font-size:11px;color:var(--muted)">${esc(p.user_uuid.slice(0,8))}…</div></td>
+      ${assign.map(r => `<td class="c"><input type="checkbox" id="r-${esc(p.user_uuid)}-${r}" data-u="${esc(p.user_uuid)}" data-r="${r}" ${p.roles.includes(r)?'checked':''} aria-label="${esc(p.pseudo)} ${esc(LIB[r]||r)}"></td>`).join('')}
+      <td style="font-family:var(--mono)">${esc(p.tier)}</td><td class="c">${p.appareils}</td>
+      <td>${ETAT.identite && p.user_uuid===ETAT.identite.user_uuid ? '<span class="chip ok">vous</span>' :
+        `<button type="button" data-s="${esc(p.user_uuid)}" data-v="${p.status==='suspended'?'active':'suspended'}" class="${p.status==='suspended'?'':'danger'}">${p.status==='suspended'?'Réactiver':'Suspendre'}</button>`}</td></tr>`).join('') + '</tbody>';
+  t.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = async () => {
+    const roles = [...t.querySelectorAll(`input[data-u="${cb.dataset.u}"]:checked`)].map(x => x.dataset.r);
+    try { await api('/admin/personnes/'+cb.dataset.u+'/roles', {method:'PUT', body:JSON.stringify({roles})}); toast('Rôles enregistrés'); }
+    catch(e){ toast(e.message); } charge();
+  });
+  t.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => {
+    try { await api('/admin/personnes/'+b.dataset.s+'/statut', {method:'POST', body:JSON.stringify({status:b.dataset.v})}); toast(b.dataset.v==='suspended'?'Personne suspendue':'Personne réactivée'); }
+    catch(e){ toast(e.message); } charge();
+  });
+  $('#audit').innerHTML = jour.evenements.map(e => `<li><time>${quand(e.at)}</time><span class="ev">${esc(e.event)}</span><span>${esc(e.actor)} · ${esc(e.detail||'')}</span></li>`).join('') || '<li>Journal vide.</li>';
+  const all = ROLES.capacites, rs = ROLES.roles;
+  $('#matrix').innerHTML = `<thead><tr><th>Capacité</th>${rs.map(r=>`<th class="c">${esc(LIB[r.id]||r.label)}</th>`).join('')}</tr></thead><tbody>` +
+    all.map(c => `<tr><td style="font-family:var(--mono)">${esc(c)}</td>${rs.map(r=>`<td class="c"><span class="dot ${r.capacites.includes(c)?'':'no'}"></span></td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+
+// ── Nœud & Mesh ──────────────────────────────────────────────────────────
+async function rendMesh(){
+  try {
+    const m = await api('/mesh');
+    $('#mesh').innerHTML = `<dl><dt>nœud</dt><dd>${esc(m.node.did||'clé illisible')}</dd><dt>clé Ed25519</dt><dd>${esc(m.node.pubkey||'—')}</dd>
+      <dt>personnes hébergées</dt><dd>${m.personnes_hebergees}</dd><dt>migrations</dt><dd>${m.migrations.length||'aucune'}</dd></dl>
+      <p class="hint">${esc(m.etat)}</p>`;
+  } catch(e){ $('#mesh').textContent = e.message; }
+}
+
+// ── Chargement & navigation ─────────────────────────────────────────────
+async function charge(){
+  try {
+    [ETAT, ROLES] = await Promise.all([api('/moi'), api('/roles')]);
+  } catch(e){
+    $('#who').innerHTML = e.status===401 ? '<a href="/i/acces/">Ouvrir une session</a>' : esc(e.message);
+    $('#moi-corps').innerHTML = `<div class="msg"><b>${esc(e.message)}</b><p class="hint">Ouvrez votre session depuis un appareil admis : <a href="/i/acces/">porte d'accès</a>.</p></div>`;
+    return;
+  }
+  const u = ETAT.identite;
+  $('#who').innerHTML = u ? `<b>${esc(u.pseudo)}</b><br><span style="font-family:var(--mono);font-size:11px">${esc(u.user_uuid.slice(0,8))}… · ${u.capabilities.length} capacités</span>`
+                          : (ETAT.systeme ? 'compte système · administration seulement' : 'sans identité SBX OS');
+  rendMoi(); rendAppareils(); rendAdmin(); rendMesh();
+}
+function vue(){
+  let v = (location.hash || '#moi').slice(1); if (!['moi','appareils','admin','mesh'].includes(v)) v = 'moi';
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === 'v-'+v));
+  document.querySelectorAll('nav a').forEach(a => a.getAttribute('href')==='#'+v ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'));
+}
+window.addEventListener('hashchange', vue); vue(); charge();
+</script>
+</body>
+</html>

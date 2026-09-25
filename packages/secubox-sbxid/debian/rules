@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/secubox-sbxid/usr/lib/secubox/sbxid/api
+	install -m 644 api/*.py debian/secubox-sbxid/usr/lib/secubox/sbxid/api/
+	install -d debian/secubox-sbxid/usr/share/secubox/www/identite
+	install -m 644 www/identite/index.html debian/secubox-sbxid/usr/share/secubox/www/identite/
+	install -d debian/secubox-sbxid/etc/secubox/nginx-available
+	install -m 644 nginx/identity.vhost.conf debian/secubox-sbxid/etc/secubox/nginx-available/identity.conf
