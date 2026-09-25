@@ -1,3 +1,18 @@
+secubox-federation (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * Aperçus dans les objets .sbx (ref #1395) : jusqu'à 4 captures, réduites
+    en JPEG 640 px, membres apercu-N.jpg listés dans `integrite` (donc sous
+    la signature) et décrits dans `apercus`. À l'ouverture : membre non
+    déclaré, altéré, ou autre chose qu'un JPEG borné = paquet refusé.
+  * sbxctl app publish : --apercu FICHIER (répétable), --sans-apercu ; par
+    défaut la capture du shotter metablogizer (<shots>/<site>/screenshot.png).
+    Un site déjà au catalogue sans aperçu est republié s'il en a un.
+  * Catalogue : aperçus rangés à côté du paquet ; sbx-certd sert
+    GET /api/appstore/object/{id}/apercu/{n} (image/jpeg, nosniff).
+  * L'import du metablogizer ignore ce membre de plus (test de compatibilité).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 09:35:21 +0200
+
 secubox-federation (0.3.1-1~bookworm1) bookworm; urgency=medium
 
   * sbxctl app publish --tous (ref #1393) : tous les métablogs de la box ;

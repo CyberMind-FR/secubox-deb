@@ -1,3 +1,11 @@
+secubox-appstore (0.4.15-1~bookworm1) bookworm; urgency=medium
+
+  * Objets fédérés (ref #1395) : chaque carte montre l'aperçu embarqué dans
+    le paquet .sbx (signé par l'éditeur) ; clic = visionneuse de tous les
+    aperçus ; cadre neutre « pas d'aperçu » sinon.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 09:35:21 +0200
+
 secubox-appstore (0.4.14-1~bookworm1) bookworm; urgency=medium
 
   * Objets fédérés (ref #1393) : recherche (nom, description, licence,
