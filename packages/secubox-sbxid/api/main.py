@@ -344,8 +344,35 @@ def personnes(ctx=Depends(exige_admin)):
     for r in db().execute("SELECT user_uuid FROM sbx_users ORDER BY pseudo"):
         p = store.personne(db(), r[0])
         p["appareils"] = len([a for a in store.appareils_de(db(), r[0]) if not a["revoked_at"]])
+        p["liens"] = comptes.liens(db(), r[0])
         out.append(p)
     return {"personnes": out}
+
+
+@app.get("/admin/appareils")
+def appareils(ctx=Depends(exige_admin)):
+    """#1460 : chaque COMPTE D'APPAREIL (`sbx-<empreinte>`, le nom qu'on lit
+    dans les sessions) → la personne, l'appareil, l'état de sa demande. Pour
+    que l'admin Utilisateurs dise « gandalf · iPhone » et non une empreinte."""
+    _rafraichit()
+    out = {}
+    for d in _demandes():
+        cle = d.get("cle_publique")
+        if not cle:
+            continue
+        try:
+            compte, did = "sbx-" + S.empreinte_cle(cle)[:12], S.did_appareil(cle)
+        except (S.Refus, ValueError):
+            continue
+        dev = store.appareil_par_did(db(), did)
+        pseudo = None
+        if dev and dev["user_uuid"]:
+            r = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (dev["user_uuid"],)).fetchone()
+            pseudo = r[0] if r else None
+        out[compte] = {"pseudo": pseudo, "appareil": (dev["device_name"] if dev else None) or d.get("appareil") or d.get("nom"),
+                       "etat": d.get("etat"), "revoque": bool(dev and dev["revoked_at"]),
+                       "compte_rattache": d.get("compte") or None}
+    return {"appareils": out}
 
 
 class NouvellePersonne(BaseModel):
