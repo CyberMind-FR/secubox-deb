@@ -1,3 +1,12 @@
+secubox-waf-ng (1.18.5-1~bookworm1) bookworm; urgency=high
+
+  * Corrélateur de campagnes (secubox-waf-campaigns) : SupplementaryGroups=
+    secubox (ref #1416). Il ne lisait le journal des menaces (secubox:secubox
+    0660) que parce qu'il était lisible par tous ; le durcissement des
+    permissions l'avait mis en échec (« permission denied »).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:35:01 +0200
+
 secubox-waf-ng (1.18.4-1~bookworm6) bookworm; urgency=medium
 
   * L'ECART « MOTIFS DECLARES vs MOTIFS CHARGES » EST DESORMAIS MESURABLE

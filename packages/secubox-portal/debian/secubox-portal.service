@@ -6,7 +6,8 @@ StartLimitIntervalSec=600
 StartLimitBurst=10
 
 [Service]
-UMask=0000
+# UMask=0002 (#1416) : jamais d'écriture « autres » ; les lectures restent.
+UMask=0002
 Type=simple
 User=secubox
 Group=secubox

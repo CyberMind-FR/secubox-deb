@@ -1,3 +1,13 @@
+secubox-core (1.5.11-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (ref #1416, audit #1405 S6) : le postinst retire l'écriture
+    « autres » des fichiers et dossiers de /etc/secubox et /var/lib/secubox
+    laissés en 0666/0777 par les unités en UMask=0000 (réglage TOTP admin,
+    garde anti-rejeu TOTP, clé du nœud…). Lectures conservées ; sockets,
+    liens et dossiers à sticky bit intouchés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:13:39 +0200
+
 secubox-core (1.5.10-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ — contournement du second facteur (closes #1406). La route

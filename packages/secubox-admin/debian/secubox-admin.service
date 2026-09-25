@@ -4,7 +4,8 @@ After=network.target secubox-core.service
 Wants=secubox-core.service
 
 [Service]
-UMask=0000
+# UMask=0002 (#1416) : jamais d'écriture « autres » ; les lectures restent.
+UMask=0002
 Type=simple
 User=root
 Group=root

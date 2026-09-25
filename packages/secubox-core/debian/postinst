@@ -207,6 +207,18 @@ case "$1" in
         systemctl start haproxy 2>/dev/null || true
     fi
 
+    # ── Plus rien d'inscriptible par tous (#1416) ──
+    # 73 unités tournaient en UMask=0000 : leurs fichiers d'état étaient en
+    # 0666, dont le réglage « TOTP admin obligatoire » et la garde anti-rejeu
+    # TOTP. On retire SEULEMENT l'écriture « autres » (les lectures restent),
+    # sur fichiers et dossiers réguliers — jamais les sockets ni les liens.
+    # Idempotent : ne touche que ce qui est encore o+w.
+    for d in /etc/secubox /var/lib/secubox; do
+      [ -d "$d" ] || continue
+      find "$d" -xdev \( -type f -o -type d \) -perm -0002 ! -perm -1000 \
+        -exec chmod o-w {} + 2>/dev/null || true
+    done
+
     # ── Python dependencies (ensure compatible versions) ──
     # Debian bookworm ships old pydantic v1 and fastapi, upgrade via pip
     if command -v pip3 >/dev/null 2>&1; then

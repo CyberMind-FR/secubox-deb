@@ -14,6 +14,11 @@ After=secubox-waf-ng.service
 [Service]
 Type=oneshot
 User=secubox-waf
+# LECTURE DU JOURNAL PAR LE GROUPE, PAS PAR « AUTRES » (#1416). Le journal
+# des menaces appartient à secubox:secubox en 0660 ; le corrélateur ne le
+# lisait que parce qu'il était lisible par tous. Ce oneshot seul rejoint le
+# groupe secubox — pas le compte secubox-waf entier.
+SupplementaryGroups=secubox
 Group=secubox-waf
 # La synthèse (info attaquants, non secrète) est lisible par le tableau de bord.
 ExecStartPre=+/bin/mkdir -p /var/cache/secubox/waf

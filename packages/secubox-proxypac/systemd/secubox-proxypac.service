@@ -16,7 +16,8 @@ ExecStartPre=+/bin/rm -f /run/secubox/proxypac.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/proxypac.sock --log-level warning
 Restart=on-failure
 RestartSec=5
-UMask=0000
+# UMask=0002 (#1416) : jamais d'écriture « autres » ; les lectures restent.
+UMask=0002
 # false : l'API délègue root via `sudo -n` (torctl/proxypac-wpad) ; NNP=true
 # ferait échouer silencieusement /transparent et /wpad/apply (ok:false).
 NoNewPrivileges=false
