@@ -1,3 +1,13 @@
+secubox-vault (1.1.2-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (closes #1414, audit #1405 S5). Les 13 routes du coffre
+    (lire, lister, créer, exporter AVEC valeurs, importer, audit…)
+    n'exigeaient qu'un JWT : un appareil guest lisait tous les secrets. Le
+    coffre relève de SecuBox System : réservé aux comptes système admin
+    actifs de users.json — jamais un appareil ni un utilisateur SBX OS.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:10:37 +0200
+
 secubox-vault (1.1.1-1~bookworm1) bookworm; urgency=high
 
   * SECRETS SERVIS SANS AUTHENTIFICATION. 13 routes sur 14 etaient ouvertes,
