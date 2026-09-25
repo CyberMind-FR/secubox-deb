@@ -352,3 +352,13 @@ def test_appareils_nommes_1460(banc):
     assert g["pseudo"] == "gandalf" and g["etat"] == "acceptee" and g["compte_rattache"] == "gk2"
     assert a["sbx-" + S.empreinte_cle(banc.pa)[:12]]["pseudo"] == "alice"
     assert all("liens" in p for p in main.personnes(ctx)["personnes"])
+
+
+def test_routes_admin_en_parallele_1462(banc):
+    """Trois appels simultanés (l'admin Utilisateurs) : chaque thread a SA connexion."""
+    from concurrent.futures import ThreadPoolExecutor
+    ctx = main.exige_admin(_req("tok-g"))
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        res = list(ex.map(lambda f: f(), [lambda: main.personnes(ctx), lambda: main.appareils(ctx),
+                                          lambda: main.demandes(ctx), lambda: main.exige_admin(_req("tok-g"))] * 3))
+    assert all(r for r in res)

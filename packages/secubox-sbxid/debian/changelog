@@ -1,3 +1,10 @@
+secubox-sbxid (0.3.4-1~bookworm1) bookworm; urgency=high
+
+  * Une connexion SQLite par thread (ref #1462) : les routes admin appelées
+    en parallèle (admin Utilisateurs) rendaient 500 (ProgrammingError).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:02:49 +0200
+
 secubox-sbxid (0.3.3-1~bookworm1) bookworm; urgency=medium
 
   * /admin/appareils : compte d'appareil sbx-… → personne, appareil, état ;
