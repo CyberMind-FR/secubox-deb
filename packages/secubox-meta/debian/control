@@ -198,7 +198,8 @@ Depends: ${misc:Depends},
          secubox-sbxos,
          secubox-portal,
          secubox-acces
-Recommends: secubox-surf,
+Recommends: secubox-sbxid,
+         secubox-surf,
          secubox-devwatch
 Suggests: secubox-ui-manager
 Description: SecuBox — service « Hall »

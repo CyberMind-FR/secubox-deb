@@ -1,3 +1,9 @@
+secubox-meta (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-sbxid recommandé par secubox-service-hall (ref #1422).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:52:57 +0200
+
 secubox-meta (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Métapaquets imbriqués (ref #1397), générés depuis arbre.yaml :

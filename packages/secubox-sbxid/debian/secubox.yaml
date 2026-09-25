@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+name: secubox-sbxid
+category: security
+tier: lite
+description: "SBX Identity Manager — identité SBX OS unifiée, appareils, capacités, certificats"
+
+depends:
+  - secubox-core
+  - secubox-acces

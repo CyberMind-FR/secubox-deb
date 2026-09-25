@@ -220,6 +220,7 @@ requiert:
   - secubox-portal
   - secubox-acces
 recommande:
+  - secubox-sbxid
   - secubox-surf
   - secubox-devwatch
 suggere:

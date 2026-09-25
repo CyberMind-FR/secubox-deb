@@ -20,9 +20,10 @@ override_dh_auto_install:
 	# Route d'API : secubox.d/ ET secubox-routes.d/ — seul le second est inclus
 	# par les vhosts, le premier n'est jamais lu (voir secubox-ai-insights).
 	install -d debian/secubox-netdata/etc/nginx/secubox.d
-	install -d debian/secubox-netdata/etc/nginx/secubox-routes.d
 	install -m 644 nginx/netdata.conf debian/secubox-netdata/etc/nginx/secubox.d/
-	install -m 644 nginx/netdata.conf debian/secubox-netdata/etc/nginx/secubox-routes.d/
+	# PAS dans secubox-routes.d (#1422) : webui.conf (secubox-hub) route déjà
+	# /api/v1/netdata/ vers l'agrégateur ; deux `location` identiques font
+	# échouer `nginx -t` et bloquent TOUT rechargement de nginx.
 
 	install -d debian/secubox-netdata/usr/lib/systemd/system
 	install -m 644 systemd/secubox-netdata.service \

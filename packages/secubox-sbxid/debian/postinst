@@ -1,0 +1,65 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+DOMAIN="identity.gk2.secubox.in"
+NGX_AVAIL="/etc/secubox/nginx-available/identity.conf"
+WAF_ROUTES="/etc/secubox/waf/haproxy-routes.json"
+
+case "$1" in
+  configure)
+    # Données : sbx.db (personnes, appareils, rôles, certificats, journal).
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/sbxid
+
+    # Déclaration dans l'agrégateur (qui sert /api/v1/sbxid).
+    python3 - <<'TOML' || echo "secubox-sbxid: déclaration dans aggregator.toml impossible" >&2
+import pathlib, re
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+if f.exists():
+    s = f.read_text()
+    if '"sbxid"' not in s:
+        s2 = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "sbxid",', s, count=1)
+        if s2 != s:
+            f.write_text(s2)
+            print("secubox-sbxid: déclaré dans aggregator.toml")
+TOML
+
+    # identity.gk2 → le Hall : vhost, HAProxy, route WAF (idempotent).
+    if [ -f "$NGX_AVAIL" ] && [ -d /etc/nginx/sites-enabled ]; then
+      cp -f "$NGX_AVAIL" /etc/nginx/sites-available/identity.conf
+      ln -sf ../sites-available/identity.conf /etc/nginx/sites-enabled/identity.conf
+      if ! nginx -t >/dev/null 2>&1; then
+        rm -f /etc/nginx/sites-enabled/identity.conf
+        echo "secubox-sbxid: vhost refusé par nginx -t, non activé" >&2
+      fi
+      nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+    if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
+      if ! grep -q "identity_gk2_secubox_in" /etc/secubox/haproxy.toml 2>/dev/null; then
+        haproxyctl vhost add "$DOMAIN" nginx_vhosts true >/dev/null 2>&1 || true
+        haproxyctl generate >/dev/null 2>&1 || true
+        systemctl reload haproxy >/dev/null 2>&1 || true
+      fi
+    fi
+    if [ -f "$WAF_ROUTES" ]; then
+      python3 - "$WAF_ROUTES" "$DOMAIN" <<'PY' || true
+import json, sys
+p, dom = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(p))
+except Exception:
+    d = {}
+if d.get(dom) != ["127.0.0.1", 9080]:
+    d[dom] = ["127.0.0.1", 9080]
+    json.dump(d, open(p, "w"), indent=2)   # sbxwaf recharge la table à chaud
+PY
+    fi
+
+    if [ -d /run/systemd/system ]; then
+      systemctl restart secubox-aggregator >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

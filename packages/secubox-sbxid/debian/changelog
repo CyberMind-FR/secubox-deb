@@ -1,0 +1,15 @@
+secubox-sbxid (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * SBX Identity Manager, première version (ref #1422, AUTH v3). Module
+    unifié qui régénère la partie SBX OS de users, acces, identity et avatar :
+    API /api/v1/sbxid (moi ; appareils : renommer, révoquer, certificat à
+    DOUBLE SIGNATURE réelle appareil P-256 + nœud Ed25519 ; administration
+    SBX OS : personnes, rôles-capacités, suspension, journal ; nœud du
+    maillage), base sbx.db, import idempotent des appareils admis d'acces
+    (comptes gk2/admin → gandalf, sbx_operator + moderator ; jamais de
+    compte système comme identité). Page servie par le Hall à /identite/ ;
+    identity.gk2.secubox.in y redirige. Les appareils refusés jamais
+    rattachés ne deviennent pas des personnes ; les accents se décomposent
+    (Gérald → gerald).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:52:40 +0200
