@@ -53,7 +53,7 @@ def adresse(pseudo: str) -> str:
     return f"{pseudo}@{DOMAINE}"
 
 
-def _helper(demande: Dict[str, Any], delai: int = 150) -> Dict[str, Any]:
+def _helper(demande: Dict[str, Any], delai: int = 300) -> Dict[str, Any]:
     try:
         p = subprocess.run(HELPER, input=json.dumps(demande), capture_output=True, text=True, timeout=delai)
     except (OSError, subprocess.TimeoutExpired) as e:
@@ -104,7 +104,8 @@ def etat(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
         r = helper(_demande(pseudo, svc, "etat"))
         services[svc] = {"libelle": LIBELLES[svc], "lie": svc in l,
                          "existe": bool(r.get("ok") and (r.get("etat") or {}).get("existe")),
-                         "disponible": r.get("disponible", True) is not False,
+                         "disponible": r.get("disponible", True) is not False or bool(r.get("endormi")),
+                         "endormi": bool(r.get("endormi")),
                          "erreur": None if r.get("ok") else r.get("erreur")}
     return {"pseudo": pseudo, "adresse": adresse(pseudo), "services": services, "bbs": l.get("bbs", [])}
 
@@ -133,7 +134,7 @@ def cree(c: sqlite3.Connection, uid: str, svcs: List[str]) -> Dict[str, Any]:
             continue                                   # déjà lié : réinitialisé ci-dessus
         r = helper(_demande(pseudo, svc, "creer", pw))
         ok = bool(r.get("ok"))
-        if not ok and "existe" in str(r.get("erreur", "")):
+        if not ok and "exist" in str(r.get("erreur", "")).lower():      # « existe » / « already exists »
             # déjà là (créé à la main, ou par une tentative précédente) : on
             # le reprend, avec le mot de passe commun
             ok = bool(helper(_demande(pseudo, svc, "reinitialiser", pw)).get("ok"))

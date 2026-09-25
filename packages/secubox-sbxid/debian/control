@@ -11,7 +11,7 @@ Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, python3-cry
          secubox-core (>= 1.5.16), secubox-aggregator
 Replaces: secubox-acces (<< 1.7.0~)
 Breaks: secubox-acces (<< 1.7.0~)
-Recommends: secubox-webos (>= 1.0.338), secubox-users (>= 1.8.4)
+Recommends: secubox-webos (>= 1.0.338), secubox-users (>= 1.8.6)
 Description: SecuBox — SBX Identity Manager (identité SBX OS unifiée)
  Une identité par personne (user_uuid), prouvée par ses appareils (clé
  P-256 non exportable), des rôles qui sont des profils de capacités (jamais

@@ -242,6 +242,20 @@ def _faux_helper(monkeypatch, existants=()):
     return appels, comptes_
 
 
+def _fini(lance, uid, ctx):
+    """#1458 : la route rend la main ; on relit le travail jusqu'au résultat (remis une fois)."""
+    import time as _t
+    assert lance == {"travail": "en_cours"}
+    for _ in range(200):
+        t = main.travail(uid, ctx)
+        if t["etat"] != "en_cours":
+            assert t["etat"] == "fini", t
+            assert main.travail(uid, ctx) == {"etat": "aucun"}          # remis UNE fois
+            return t
+        _t.sleep(0.02)
+    raise AssertionError("travail jamais fini")
+
+
 def test_personne_sans_appareil_et_ses_comptes(banc, monkeypatch):
     appels, cpt = _faux_helper(monkeypatch)
     ctx = main.exige_admin(_req("tok-g"))
@@ -254,7 +268,7 @@ def test_personne_sans_appareil_et_ses_comptes(banc, monkeypatch):
         main.cree_personne(main.NouvellePersonne(pseudo="cedre83"), ctx)
     assert e.value.status_code == 409
     uid = p["user_uuid"]
-    r = main.ouvre_comptes(uid, main.Services(services=["email", "nextcloud", "peertube"]), ctx)
+    r = _fini(main.ouvre_comptes(uid, main.Services(services=["email", "nextcloud", "peertube"]), ctx), uid, ctx)
     pw = r["mot_de_passe"]
     assert r["services"]["email"] is True and r["services"]["nextcloud"] is True
     assert "arrêté" in r["services"]["peertube"]
@@ -263,11 +277,11 @@ def test_personne_sans_appareil_et_ses_comptes(banc, monkeypatch):
     # PeerTube plus tard : le nouveau mot de passe vaut pour TOUS
     monkeypatch.setattr(CPT, "helper", lambda d, _h=CPT.helper: {"ok": True} if d["service"] == "peertube"
                         and d["action"] == "creer" else _h(d))
-    r2 = main.ouvre_comptes(uid, main.Services(services=["peertube"]), ctx)
+    r2 = _fini(main.ouvre_comptes(uid, main.Services(services=["peertube"]), ctx), uid, ctx)
     assert r2["services"] == {"email": True, "nextcloud": True, "peertube": True}
     assert cpt[("email", "cedre83")] == cpt[("nextcloud", "cedre83")] == r2["mot_de_passe"] != pw
     # réinitialiser : un geste, tous les services
-    r3 = main.reinitialise_comptes(uid, ctx)
+    r3 = _fini(main.reinitialise_comptes(uid, ctx), uid, ctx)
     assert set(r3["services"]) == {"email", "nextcloud", "peertube"} and r3["mot_de_passe"]
     assert all(x["action"] != "retirer" for x in appels)
 

@@ -70,7 +70,7 @@ def mot_de_passe_provisoire() -> str:
     return "".join(secrets.choice(_ALPHABET) for _ in range(16))
 
 
-def helper(demande: dict, delai: int = 150) -> tuple[int, dict]:
+def helper(demande: dict, delai: int = 300) -> tuple[int, dict]:
     try:
         p = subprocess.run(["sudo", "-n", HELPER], input=json.dumps(demande),
                            capture_output=True, text=True, timeout=delai)

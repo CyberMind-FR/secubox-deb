@@ -317,3 +317,13 @@ def test_sleeper_daemon_hint_probe_stub_is_safe_none():
     m = Manifest(id="x", category="infra", runtime="native", exposure="lan",
                 units=("x.service",), lifecycle="on-demand")
     assert daemon._hint_probe("x", m) is None
+
+
+def test_verrou_de_maintien_1458(tmp_path):
+    import os
+    from api import sleeper as SL
+    (tmp_path / "nextcloud").touch()
+    vieux = tmp_path / "peertube"; vieux.touch()
+    os.utime(vieux, (1, 1))                                    # outil mort il y a longtemps
+    assert SL._read_holds(tmp_path) == frozenset({"nextcloud"})
+    assert SL._read_holds(tmp_path / "absent") == frozenset()

@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -38,6 +39,13 @@ _LOG = logging.getLogger(__name__)
 # (liste JSON d'ids de module) — lecture au mieux-effort : absent/illisible
 # ne bloque jamais la boucle, ça revient juste à "rien n'est verrouillé".
 WAKE_LOCK_FILE = Path("/run/secubox/waker-active.json")
+# VERROUS DE MAINTIEN (#1458) : un outil qui TRAVAILLE dans un module on-demand
+# (création de comptes par le helper de secubox-users, maintenance) pose
+# /run/secubox/sleeper-hold/<id> et le rafraîchit ; tant qu'il est frais, le
+# sleeper ne l'endort pas. Le trafic du vhost, seul signal jusqu'ici, ne voit
+# pas ce travail-là. Un verrou oublié (outil mort) expire de lui-même.
+HOLD_DIR = Path("/run/secubox/sleeper-hold")
+HOLD_TTL_S = 900.0
 
 
 def should_sleep(m: Manifest, sig: Signal | None, *, hint_idle: bool | None,
@@ -89,6 +97,15 @@ def _read_wake_locked(path: Path = WAKE_LOCK_FILE) -> frozenset[str]:
     if not isinstance(data, list):
         return frozenset()
     return frozenset(x for x in data if isinstance(x, str))
+
+
+def _read_holds(path: Path = HOLD_DIR, now: float | None = None, ttl: float = HOLD_TTL_S) -> frozenset[str]:
+    """Les modules tenus éveillés par un verrou FRAIS, au mieux-effort."""
+    now = time.time() if now is None else now
+    try:
+        return frozenset(p.name for p in path.iterdir() if p.is_file() and now - p.stat().st_mtime < ttl)
+    except OSError:
+        return frozenset()
 
 
 def _default_stamp() -> str:
@@ -171,7 +188,7 @@ async def serve(*, root: Path, interval: float,
                 h = hint_probe(mid, m)
                 if h is not None:
                     hints[mid] = h
-            locked = _read_wake_locked()
+            locked = _read_wake_locked() | _read_holds()
             run_once(root=root, manifests=manifests, actuals=actuals,
                      signals=signals, hints=hints, run=run, observe=observe,
                      now=stamp_fn(), wake_locked=locked)

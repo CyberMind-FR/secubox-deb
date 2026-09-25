@@ -1,3 +1,20 @@
+secubox-users (1.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * Une indisponibilité juste après le réveil (« PeerTube injoignable »
+    pendant le démarrage) est attendue, comme un refus (ref #1458).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 17:18:33 +0200
+
+secubox-users (1.8.5-1~bookworm1) bookworm; urgency=medium
+
+  * Le helper de comptes réveille un module à la demande (wakectl) et le
+    TIENT éveillé (verrou du sleeper) le temps d'une action ; il reprend une
+    action refusée pendant le démarrage de l'application, jamais un « existe
+    déjà ». Une lecture d'état ne réveille rien (« endormi »). Délai 300 s.
+    (ref #1458)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 17:12:17 +0200
+
 secubox-users (1.8.4-1~bookworm1) bookworm; urgency=medium
 
   * Un nom de compte peut porter un point au milieu (« ani.skywalker »,

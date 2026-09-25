@@ -297,6 +297,22 @@ async function rendAdmin(){
 }
 
 // ── Comptes d'une personne (#1456) ──────────────────────────────────────
+// Le travail tourne sur la box (un module peut devoir se réveiller) : on relit
+// son résultat, remis une seule fois, au lieu de tenir la requête ouverte.
+async function attendsTravail(uid, box){
+  const suivi = document.createElement('div'); suivi.className = 'm'; suivi.style.cssText = 'font-size:12.5px;margin-top:8px';
+  suivi.textContent = 'En cours — un service endormi peut mettre une à deux minutes à se réveiller…';
+  box.appendChild(suivi);
+  for (let i = 0; i < 150; i++){
+    await new Promise(r => setTimeout(r, 3000));
+    let t; try { t = await api('/admin/personnes/'+uid+'/comptes/travail'); } catch(e){ continue; }
+    if (t.etat === 'en_cours') continue;
+    suivi.remove();
+    if (t.etat === 'echec'){ toast(t.detail || 'Échec'); return null; }
+    return t.etat === 'fini' ? t : null;
+  }
+  suivi.textContent = 'Toujours en cours : rouvrez « Comptes » plus tard.'; return null;
+}
 function montreMdp(box, r, quoi){
   if (!r.mot_de_passe) return;
   const d = document.createElement('div'); d.style.marginTop = '10px';
@@ -320,10 +336,11 @@ async function comptes(b, cols){
   for (const [svc, x] of Object.entries(e.services)){
     const l = document.createElement('div'); l.className = 'svc';
     const etat = x.lie ? '<span class="chip ok">lié</span>' : x.existe ? '<span class="chip warn">existe, non lié</span>'
+      : x.endormi ? '<span class="chip">endormi — réveillé à l\'ouverture</span>'
       : !x.disponible ? '<span class="chip bad">service arrêté</span>' : '<span class="chip">absent</span>';
     l.innerHTML = `<b>${esc(x.libelle)}</b>${etat}`;
     if (!x.lie){
-      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = svc; cb.checked = x.disponible;
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = svc; cb.checked = x.disponible; cb.disabled = !x.disponible;
       cb.setAttribute('aria-label', 'Ouvrir ' + x.libelle);
       const lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:4px;align-items:center;font-size:13px';
       lab.append(cb, x.existe ? 'reprendre' : 'ouvrir'); l.appendChild(lab); choix.push(cb);
@@ -351,7 +368,8 @@ async function comptes(b, cols){
       const services = choix.filter(c => c.checked).map(c => c.value); if (!services.length) return;
       go.disabled = true;
       try {
-        const r = await api('/admin/personnes/'+uid+'/comptes', {method:'POST', body:JSON.stringify({services})});
+        await api('/admin/personnes/'+uid+'/comptes', {method:'POST', body:JSON.stringify({services})});
+        const r = await attendsTravail(uid, td); if (!r){ go.disabled = false; return; }
         const ko = Object.entries(r.services).filter(([,v]) => v !== true);
         toast(ko.length ? 'Échec : ' + ko.map(([k,v]) => k+' ('+v+')').join(', ') : 'Comptes ouverts');
         montreMdp(td, r, 'Mot de passe de services');
@@ -363,7 +381,8 @@ async function comptes(b, cols){
   if (Object.values(e.services).some(x => x.lie)){
     const re = btn('Réinitialiser le mot de passe');
     re.onclick = () => confirme(act, 'Nouveau mot de passe dans TOUS ses services ?', async () => {
-      try { const r = await api('/admin/personnes/'+uid+'/comptes/reinitialiser', {method:'POST'}); montreMdp(td, r, 'Nouveau mot de passe'); }
+      try { await api('/admin/personnes/'+uid+'/comptes/reinitialiser', {method:'POST'});
+        const r = await attendsTravail(uid, td); if (r) montreMdp(td, r, 'Nouveau mot de passe'); }
       catch(y){ toast(y.message); }
     });
     act.appendChild(re);

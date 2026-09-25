@@ -1,3 +1,18 @@
+secubox-sbxid (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * Un compte déjà présent est repris quelle que soit la langue du message
+    (« already exists ») (ref #1458).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 17:18:33 +0200
+
+secubox-sbxid (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Ouvrir ou réinitialiser les comptes d'une personne tourne en arrière-plan
+    (un réveil de PeerTube dépasse les 30 s d'HAProxy) ; l'écran relit le
+    résultat, remis une fois. Service endormi affiché comme tel (ref #1458).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 17:12:17 +0200
+
 secubox-sbxid (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Personnes SBX OS sans appareil, créées par l'administration (ref #1456).
