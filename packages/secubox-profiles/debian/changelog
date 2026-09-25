@@ -1,3 +1,10 @@
+secubox-profiles (0.19.7-1~bookworm1) bookworm; urgency=medium
+
+  * Verrous de maintien (ref #1458) : /run/secubox/sleeper-hold/<id>, frais
+    (15 min), empêche le sleeper d'endormir un module où un outil travaille.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 17:12:17 +0200
+
 secubox-profiles (0.19.6-1~bookworm1) bookworm; urgency=medium
 
   * Politique de cycle de vie : `sentinelle-gsm` en always-on (#1323). C'est un

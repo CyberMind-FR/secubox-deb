@@ -79,9 +79,58 @@ def lxc_actif(nom: str) -> bool:
     return False
 
 
+# ── Modules à la demande (#1458) ─────────────────────────────────────────────
+#
+# Nextcloud et PeerTube dorment quand leur site est inactif (secubox-sleeper).
+# Une ACTION (créer, réinitialiser…) les réveille et les TIENT éveillés le
+# temps du travail : verrou /run/secubox/sleeper-hold/<module>, lu par le
+# sleeper — sans lui, le module était rendormi au milieu d'une création. Une
+# simple lecture d'état, elle, ne réveille rien : l'écran des comptes
+# interroge tous les services, et réveiller PeerTube pour un voyant serait
+# absurde.
+HOLD_DIR = Path("/run/secubox/sleeper-hold")
+WAKECTL = "/usr/sbin/secubox-wakectl"
+REVEIL_S = 240
+_CONTEXTE = {"action": "etat", "tenus": set(), "reveille": False}
+
+
+class Endormi(Indisponible):
+    pass
+
+
+def tiens(nom: str) -> None:
+    HOLD_DIR.mkdir(parents=True, exist_ok=True)
+    (HOLD_DIR / nom).touch()
+    _CONTEXTE["tenus"].add(nom)
+
+
+def relache() -> None:
+    for nom in _CONTEXTE["tenus"]:
+        try:
+            (HOLD_DIR / nom).unlink()
+        except OSError:
+            pass
+    _CONTEXTE["tenus"].clear()
+
+
 def exige(nom: str):
-    if not lxc_actif(nom):
-        raise Indisponible(f"conteneur {nom} arrêté")
+    if _CONTEXTE["action"] != "etat":
+        tiens(nom)                                   # avant le réveil : pas de fenêtre
+    if lxc_actif(nom):
+        return
+    if _CONTEXTE["action"] == "etat":
+        raise Endormi(f"{nom} endormi (réveillé à la première action)")
+    _CONTEXTE["reveille"] = True
+    try:
+        lance([WAKECTL, "wake", nom], delai=REVEIL_S)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    fin = time.time() + REVEIL_S
+    while time.time() < fin:
+        if lxc_actif(nom):
+            return
+        time.sleep(3)
+    raise Indisponible(f"conteneur {nom} arrêté (réveil sans effet)")
 
 
 # ── Nextcloud ────────────────────────────────────────────────────────────────
@@ -369,6 +418,26 @@ def audit(d: dict, ok: bool, detail: str = ""):
         pass
 
 
+def _agit_patiemment(a, d):
+    """Un module qu'on vient de réveiller a son conteneur debout AVANT son
+    application (PeerTube met une minute) : une action refusée pendant ce
+    démarrage est reprise, le verrou rafraîchi, dans la fenêtre de réveil."""
+    fin = time.time() + REVEIL_S
+    while True:
+        try:
+            return getattr(a, d["action"])(d)
+        except Endormi:
+            raise
+        except (Echec, Indisponible, OSError) as e:
+            # « injoignable » juste après le réveil = application pas encore
+            # debout : on attend ; hors réveil, l'erreur est vraie, on la rend
+            if (not _CONTEXTE["reveille"] or "exist" in str(e).lower() or time.time() > fin):
+                raise
+            for nom in _CONTEXTE["tenus"]:
+                (HOLD_DIR / nom).touch()
+            time.sleep(10)
+
+
 def main() -> int:
     try:
         d = valide(json.loads(sys.stdin.read(8192) or "null"))
@@ -380,14 +449,18 @@ def main() -> int:
         return 2
     a = ADAPTATEURS[d["service"]]()
     sortie = {"service": d["service"], "action": d["action"], "user": d["user"]}
+    _CONTEXTE["action"] = d["action"]
     try:
-        r = getattr(a, d["action"])(d)
+        r = _agit_patiemment(a, d)
         sortie.update({"ok": True, "etat": r} if d["action"] == "etat" else {"ok": True})
         audit(d, True)
         return 0
     except NonPrisEnCharge as e:
         sortie.update({"ok": False, "erreur": str(e), "pris_en_charge": False})
         return 3
+    except Endormi as e:
+        sortie.update({"ok": False, "erreur": str(e), "disponible": False, "endormi": True})
+        return 4
     except Indisponible as e:
         sortie.update({"ok": False, "erreur": str(e), "disponible": False})
         audit(d, False, str(e))
@@ -397,6 +470,7 @@ def main() -> int:
         audit(d, False, str(e))
         return 1
     finally:
+        relache()
         print(json.dumps(sortie, ensure_ascii=False))
 
 

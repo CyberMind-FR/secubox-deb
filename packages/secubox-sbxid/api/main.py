@@ -26,6 +26,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -392,19 +393,64 @@ class Services(BaseModel):
     services: List[str]
 
 
+# TRAVAIL EN ARRIÈRE-PLAN (#1458) : ouvrir un compte peut d'abord réveiller
+# un module endormi (PeerTube : une minute et plus) ; HAProxy coupe une requête
+# muette au bout de 30 s, et le mot de passe — rendu UNE fois — serait perdu
+# avec elle. La route lance donc le travail et rend la main ; l'écran relit
+# /comptes/travail jusqu'au résultat, qui n'est remis qu'une fois.
+_TRAVAUX: Dict[str, Dict[str, Any]] = {}
+_TRAVAUX_VERROU = threading.Lock()
+
+
+def _travail(user_uuid: str, faire, evenement: str, acteur: str) -> Dict[str, Any]:
+    with _TRAVAUX_VERROU:
+        if (_TRAVAUX.get(user_uuid) or {}).get("etat") == "en_cours":
+            raise HTTPException(409, "Un travail est déjà en cours pour cette personne")
+        _TRAVAUX[user_uuid] = {"etat": "en_cours", "depuis": int(time.time())}
+
+    def corps():
+        c = store.ouvre()                        # SA connexion : autre thread
+        try:
+            r = faire(c)
+            store.journal(c, acteur, evenement, f"{user_uuid[:8]} : " + ", ".join(
+                f"{k}={'ok' if x is True else 'échec'}" for k, x in r["services"].items()))
+            res = {"etat": "fini", **r}
+        except comptes.Refus as e:
+            res = {"etat": "echec", "code": e.code, "detail": e.detail}
+        except Exception as e:                   # jamais un travail « en cours » éternel
+            log.exception("sbxid : travail de comptes")
+            res = {"etat": "echec", "code": 500, "detail": type(e).__name__}
+        finally:
+            c.close()
+        with _TRAVAUX_VERROU:
+            _TRAVAUX[user_uuid] = res
+    threading.Thread(target=corps, daemon=True, name=f"comptes-{user_uuid[:8]}").start()
+    return {"travail": "en_cours"}
+
+
 @app.post("/admin/personnes/{user_uuid}/comptes")
 def ouvre_comptes(user_uuid: str, v: Services, ctx=Depends(exige_admin)):
-    r = _comptes(comptes.cree, user_uuid, v.services)
-    store.journal(db(), _acteur(ctx), "services.created",
-                  f"{user_uuid[:8]} : " + ", ".join(f"{k}={'ok' if x is True else 'échec'}" for k, x in r["services"].items()))
-    return r
+    _comptes(comptes._pseudo, user_uuid)          # 404/409 tout de suite, pas après le réveil
+    return _travail(user_uuid, lambda c: comptes.cree(c, user_uuid, v.services), "services.created", _acteur(ctx))
 
 
 @app.post("/admin/personnes/{user_uuid}/comptes/reinitialiser")
 def reinitialise_comptes(user_uuid: str, ctx=Depends(exige_admin)):
-    r = _comptes(comptes.reinitialise, user_uuid)
-    store.journal(db(), _acteur(ctx), "services.password_reset", user_uuid[:8])
-    return r
+    if not comptes.liens(db(), user_uuid).keys() & set(comptes.SERVICES):
+        raise HTTPException(409, "Aucun compte de service lié à cette personne")
+    return _travail(user_uuid, lambda c: comptes.reinitialise(c, user_uuid), "services.password_reset", _acteur(ctx))
+
+
+@app.get("/admin/personnes/{user_uuid}/comptes/travail")
+def travail(user_uuid: str, ctx=Depends(exige_admin)):
+    """Le résultat, remis UNE fois (il porte le mot de passe)."""
+    with _TRAVAUX_VERROU:
+        t = _TRAVAUX.get(user_uuid)
+        if not t:
+            return {"etat": "aucun"}
+        if t["etat"] != "en_cours":
+            del _TRAVAUX[user_uuid]
+        return t
 
 
 class LienBbs(BaseModel):
