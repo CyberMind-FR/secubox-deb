@@ -32,7 +32,15 @@ LOCAL_REPO_PORT="8080"
 SLIPSTREAM_DEBS=1     # Intégrer les .deb locaux dans l'image (default: ON)
 
 # SecuBox versioning
-SECUBOX_VERSION="3.0.0-alpha.2"
+# VERSION TIRÉE DU TAG (#1478) : figée à « 3.0.0-alpha.2 », elle s'affichait
+# sur l'écran d'accueil et dans build-info.json quel que soit le tag construit.
+_sbx_version() {
+  local v="${SECUBOX_VERSION:-}"
+  [[ -z "$v" && "${GITHUB_REF_NAME:-}" == v[0-9]* ]] && v="${GITHUB_REF_NAME#v}"
+  [[ -z "$v" ]] && v="$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+  echo "${v:-3.0.0-dev}"
+}
+SECUBOX_VERSION="$(_sbx_version)"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
