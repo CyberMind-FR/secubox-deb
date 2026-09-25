@@ -1,3 +1,15 @@
+secubox-messagerie (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Commentaires des Billets dans le mur (ref #1448) ; y répondre commente
+    le billet. Répondre à la radio ou aux Billets publie À LA SOURCE : plus
+    de doublon dans le mur.
+  * Reprise des messages privés du BBS dans « Privés » (lecture seule,
+    idempotente) ; un compte BBS lié à une identité SBX OS est vu sous son
+    pseudo (gk2 → gandalf) ; noms système masqués (« modération »).
+  * Migration du schéma 0.1 (auteur_type 'bbs').
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 16:14:32 +0200
+
 secubox-messagerie (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Première version (ref #1446) : mur public et messages privés servis par
