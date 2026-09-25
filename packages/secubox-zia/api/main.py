@@ -23,7 +23,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, APIRouter, Depends
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -133,6 +133,50 @@ app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 
 
+# ── RÔLE DÉRIVÉ, JAMAIS DÉCLARÉ (#1411) ────────────────────────────────────
+# Le rôle venait du corps de la requête : « "role":"admin" » suffisait à voir
+# les objets admin et à passer les actions réservées. Il est désormais tiré de
+# la SESSION (Bearer ou cookie, vérifiée par secubox_core : signature, jti,
+# porteur actif). Le corps ne peut plus que RESTREINDRE.
+_ORDRE = ["guest", "registered", "member", "admin"]
+
+
+def _role_du_porteur(request: Request) -> str:
+    from secubox_core import auth as _auth, user_store, appareils
+    jetons = []
+    a = request.headers.get("Authorization", "")
+    if a.startswith("Bearer "):
+        jetons.append(a[7:].strip())
+    c = request.cookies.get("secubox_session")
+    if c:
+        jetons.append(c)
+    for j in jetons:
+        p = _auth._validate_token(j)
+        if not p:
+            continue
+        sub = p.get("sub", "")
+        u = user_store.get_user(sub)
+        if u:
+            return "admin" if u.get("role") == "admin" else "member"
+        profil = appareils.profil_de(sub)
+        return {"admin": "admin", "user": "member"}.get(profil, "registered")
+    return "guest"
+
+
+def _role_effectif(request: Request, demande: Optional[str]) -> str:
+    """Le moindre du rôle de la session et du rôle demandé (s'il est connu)."""
+    reel = _role_du_porteur(request)
+    d = (demande or "").strip().lower()
+    if d in _ORDRE and _ORDRE.index(d) < _ORDRE.index(reel):
+        return d
+    return reel
+
+
+async def exige_admin(request: Request) -> None:
+    if _role_du_porteur(request) != "admin":
+        raise HTTPException(status_code=403, detail="Réservé aux administrateurs")
+
+
 class ChatIn(BaseModel):
     message: str
     role: Optional[str] = None      # guest|registered|member|admin (défaut config)
@@ -189,13 +233,13 @@ async def metrics() -> dict:
 
 
 @router.post("/v1/chat")
-async def chat(body: ChatIn) -> JSONResponse:
+async def chat(body: ChatIn, request: Request) -> JSONResponse:
     """Un message → texte + objets référencés (du bus, filtrés ACL) + trace + délégation.
 
     Le rôle borne ce qui est visible : le LLM ne voit jamais ce que le demandeur n'a pas
     le droit de voir. Les objets viennent des OUTILS, jamais de la génération.
     """
-    role = (body.role or CFG.get("default_role") or "guest").strip().lower()
+    role = _role_effectif(request, body.role)
     t0 = time.time()
     try:
         out = await runtime.respond(body.message, role, TOOLS, CFG, REMOTE)
@@ -223,13 +267,13 @@ async def capabilities() -> dict:
     return {"capabilities": BUS.caps.registry()}
 
 
-@router.get("/config", dependencies=[Depends(require_jwt)])
+@router.get("/config", dependencies=[Depends(exige_admin)])
 async def get_config() -> dict:
     """Config courante (TOML + surcouche admin). Pas de secret dans ZIA au P1."""
     return {k: CFG.get(k) for k in DEFAULT_CONFIG}
 
 
-@router.post("/config", dependencies=[Depends(require_jwt)])
+@router.post("/config", dependencies=[Depends(exige_admin)])
 async def set_config(body: Params) -> dict:
     """Réglage admin de ZIA — appliqué à chaud et persisté (surcouche JSON)."""
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -246,7 +290,7 @@ async def set_config(body: Params) -> dict:
             "config": {k: CFG.get(k) for k in DEFAULT_CONFIG}}
 
 
-@router.post("/llm/test", dependencies=[Depends(require_jwt)])
+@router.post("/llm/test", dependencies=[Depends(exige_admin)])
 async def llm_test() -> dict:
     """Ping du llama-server configuré (health + modèle) — pour valider llm_url."""
     url = str(CFG.get("llm_url", "") or "").strip()
