@@ -31,6 +31,7 @@ except ImportError:
 
 from . import engine as _engine_mod
 from . import comptes_services as _cs
+from .redact import redact_user
 
 app = FastAPI(
     title="SecuBox Users API",
@@ -470,16 +471,17 @@ async def get_access():
 # Protected User Endpoints
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/users", dependencies=[Depends(require_jwt)])
+@app.get("/users", dependencies=[Depends(require_permission("users.view"))])
 async def list_users():
     """List all users."""
     data = load_users()
+    # EXPURGÉ (#1409) : jamais de haché, de secret TOTP ni de code de secours.
     return {
-        "users": data.get("users", []),
+        "users": [redact_user(u) for u in data.get("users", [])],
         "total": len(data.get("users", []))
     }
 
-@app.get("/user/{username}", dependencies=[Depends(require_jwt)])
+@app.get("/user/{username}", dependencies=[Depends(require_permission("users.view", allow_self_for_param="username"))])
 async def get_user(username: str):
     """Get user details."""
     data = load_users()
@@ -489,10 +491,10 @@ async def get_user(username: str):
             user["service_status"] = {}
             for svc in user.get("services", []):
                 user["service_status"][svc] = check_service(svc)
-            return user
+            return redact_user(user)
     raise HTTPException(status_code=404, detail="User not found")
 
-@app.post("/user", dependencies=[Depends(require_jwt)])
+@app.post("/user", dependencies=[Depends(require_permission("users.create"))])
 def create_user(user: UserCreate):
     """Create a new user and provision to services."""
     # Delegate identity creation to engine.
@@ -536,7 +538,7 @@ def create_user(user: UserCreate):
 
     return {"success": True, "user": new_user, "provision_results": provision_results}
 
-@app.put("/user/{username}", dependencies=[Depends(require_jwt)])
+@app.put("/user/{username}", dependencies=[Depends(require_permission("users.edit"))])
 async def update_user(username: str, update: UserUpdate):
     """Update user."""
     # For the enabled flag, delegate to engine to get session revocation + audit
@@ -593,7 +595,7 @@ async def enable_user(username: str):
         raise HTTPException(status_code=404, detail=str(exc))
     return {"ok": True}
 
-@app.delete("/user/{username}", dependencies=[Depends(require_jwt)])
+@app.delete("/user/{username}", dependencies=[Depends(require_permission("users.delete"))])
 def delete_user(username: str):
     """Delete user and deprovision from services."""
     # Read services before deleting (engine will remove the record)
@@ -620,7 +622,7 @@ def delete_user(username: str):
 
     return {"success": True, "deprovision_results": deprovision_results}
 
-@app.post("/user/{username}/sync", dependencies=[Depends(require_jwt)])
+@app.post("/user/{username}/sync", dependencies=[Depends(require_permission("services.provision"))])
 async def sync_user(username: str):
     """Sync user to all their services."""
     data = load_users()
@@ -837,13 +839,13 @@ async def revoke_user_sessions(username: str):
 # Group Endpoints
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/groups", dependencies=[Depends(require_jwt)])
+@app.get("/groups", dependencies=[Depends(require_permission("groups.view"))])
 async def list_groups():
     """List all groups."""
     data = load_users()
     return {"groups": data.get("groups", [])}
 
-@app.post("/group", dependencies=[Depends(require_jwt)])
+@app.post("/group", dependencies=[Depends(require_permission("groups.create"))])
 async def create_group(group: GroupCreate):
     """Create a new group."""
     doc = _engine._load()
@@ -864,7 +866,7 @@ async def create_group(group: GroupCreate):
 
     return {"success": True, "group": new_group}
 
-@app.delete("/group/{name}", dependencies=[Depends(require_jwt)])
+@app.delete("/group/{name}", dependencies=[Depends(require_permission("groups.delete"))])
 async def delete_group(name: str):
     """Delete a group."""
     doc = _engine._load()
@@ -912,7 +914,7 @@ async def get_role(role_id: str):
             return role
     raise HTTPException(status_code=404, detail="Role not found")
 
-@app.post("/role", dependencies=[Depends(require_jwt)])
+@app.post("/role", dependencies=[Depends(require_permission("roles.create"))])
 async def create_role(role: RoleCreate):
     """Create a new role."""
     roles = load_roles()
@@ -941,7 +943,7 @@ async def create_role(role: RoleCreate):
 
     return {"success": True, "role": new_role}
 
-@app.put("/role/{role_id}", dependencies=[Depends(require_jwt)])
+@app.put("/role/{role_id}", dependencies=[Depends(require_permission("roles.edit"))])
 async def update_role(role_id: str, update: RoleUpdate):
     """Update a role."""
     roles = load_roles()
@@ -970,7 +972,7 @@ async def update_role(role_id: str, update: RoleUpdate):
 
     raise HTTPException(status_code=404, detail="Role not found")
 
-@app.delete("/role/{role_id}", dependencies=[Depends(require_jwt)])
+@app.delete("/role/{role_id}", dependencies=[Depends(require_permission("roles.delete"))])
 async def delete_role(role_id: str):
     """Delete a role."""
     roles = load_roles()
@@ -985,7 +987,7 @@ async def delete_role(role_id: str):
 
     raise HTTPException(status_code=404, detail="Role not found")
 
-@app.get("/user/{username}/roles", dependencies=[Depends(require_jwt)])
+@app.get("/user/{username}/roles", dependencies=[Depends(require_permission("roles.view", allow_self_for_param="username"))])
 async def get_user_roles(username: str):
     """Get roles assigned to a user."""
     data = load_users()
@@ -1002,7 +1004,7 @@ async def get_user_roles(username: str):
             }
     raise HTTPException(status_code=404, detail="User not found")
 
-@app.put("/user/{username}/roles", dependencies=[Depends(require_jwt)])
+@app.put("/user/{username}/roles", dependencies=[Depends(require_permission("roles.assign"))])
 async def assign_user_roles(username: str, assignment: UserRoleAssign):
     """Assign roles to a user."""
     roles = load_roles()
@@ -1024,7 +1026,7 @@ async def assign_user_roles(username: str, assignment: UserRoleAssign):
 
     raise HTTPException(status_code=404, detail="User not found")
 
-@app.get("/user/{username}/permissions", dependencies=[Depends(require_jwt)])
+@app.get("/user/{username}/permissions", dependencies=[Depends(require_permission("users.view", allow_self_for_param="username"))])
 async def get_user_permissions_endpoint(username: str):
     """Get all effective permissions for a user."""
     perms = get_user_permissions(username)
@@ -1043,7 +1045,7 @@ async def get_user_permissions_endpoint(username: str):
         ]
     }
 
-@app.post("/user/{username}/check-permission", dependencies=[Depends(require_jwt)])
+@app.post("/user/{username}/check-permission", dependencies=[Depends(require_permission("users.view", allow_self_for_param="username"))])
 async def check_user_permission(username: str, permission: str):
     """Check if a user has a specific permission."""
     has_perm = user_has_permission(username, permission)
@@ -1083,7 +1085,7 @@ async def get_acl():
         "total_permissions": len(PERMISSIONS)
     }
 
-@app.post("/acl/validate", dependencies=[Depends(require_jwt)])
+@app.post("/acl/validate", dependencies=[Depends(require_permission("roles.view"))])
 async def validate_acl(entries: List[ACLEntry]):
     """Validate a list of ACL entries."""
     results = []
@@ -1100,7 +1102,7 @@ async def validate_acl(entries: List[ACLEntry]):
 # Import/Export
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/export", dependencies=[Depends(require_jwt)])
+@app.get("/export", dependencies=[Depends(require_permission("system.export"))])
 async def export_users():
     """Export all users."""
     data = load_users()
@@ -1166,7 +1168,7 @@ async def import_users(file: UploadFile = File(...)):
 # Active Sessions
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/sessions", dependencies=[Depends(require_jwt)])
+@app.get("/sessions", dependencies=[Depends(require_permission("system.audit"))])
 async def get_sessions():
     """Get active user sessions from auth module."""
     sessions = []
@@ -1220,69 +1222,59 @@ async def get_sessions():
     }
 
 
-@app.delete("/session/{session_id}", dependencies=[Depends(require_jwt)])
+@app.delete("/session/{session_id}", dependencies=[Depends(require_permission("users.edit"))])
 def revoke_session(session_id: str):
-    """Revoke a specific session."""
+    """Revoke a specific session.
+
+    ÉCRIT DIRECTEMENT sessions.json (#1409) : la route de secubox-auth qu'on
+    appelait (DELETE /session/{id}) n'existe pas — la révocation ne faisait
+    rien. Le format est celui qu'auth lit : une LISTE de lignes {id=jti,…}.
+    """
+    rows = _lire_sessions()
+    reste = [r for r in rows if str(r.get("id", r.get("jti", ""))) != session_id]
+    if len(reste) == len(rows):
+        raise HTTPException(status_code=404, detail="Session inconnue")
+    _ecrire_sessions(reste)
+    return {"success": True, "session_id": session_id}
+
+
+def _lire_sessions() -> list:
     try:
-        result = subprocess.run(
-            ["curl", "-s", "-X", "DELETE", "--unix-socket", "/run/secubox/auth.sock",
-             f"http://localhost/session/{session_id}"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0:
-            return {"success": True, "session_id": session_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return {"success": False, "error": "Failed to revoke session"}
+        data = json.loads(Path(SESSIONS_FILE).read_text())
+    except (OSError, ValueError):
+        return []
+    if isinstance(data, list):
+        return data
+    # Ancien format fautif écrit par revoke-all : on le relit pour le réparer.
+    return list(data.get("sessions", [])) if isinstance(data, dict) else []
 
 
-@app.post("/sessions/revoke-all", dependencies=[Depends(require_jwt)])
+def _ecrire_sessions(rows: list) -> None:
+    """Écriture atomique, TOUJOURS une liste — un dict cassait le login."""
+    tmp = Path(SESSIONS_FILE + ".tmp")
+    tmp.write_text(json.dumps(rows))
+    try:
+        st = os.stat(SESSIONS_FILE)
+        os.chmod(tmp, st.st_mode & 0o777)
+    except OSError:
+        pass
+    os.replace(tmp, SESSIONS_FILE)
+
+
+@app.post("/sessions/revoke-all", dependencies=[Depends(require_permission("users.edit"))])
 def revoke_all_sessions():
     """EMERGENCY: Revoke ALL active sessions immediately.
     This is a panic button - all users will be logged out.
+
+    #1409 : écrit une LISTE vide. L'ancienne version écrivait un dict
+    {"sessions": [], …} que secubox-auth ne sait pas lire : le bouton de
+    panique cassait le login au lieu de déconnecter.
     """
-    revoked = 0
-    errors = []
+    revoked = len(_lire_sessions())
+    _ecrire_sessions([])
+    _engine._audit("sessions_revoke_all", "*", {"revoked": revoked})
+    return {"success": True, "revoked": revoked, "errors": []}
 
-    # Clear the sessions file
-    if os.path.exists(SESSIONS_FILE):
-        try:
-            # Read current count for reporting
-            data = json.loads(Path(SESSIONS_FILE).read_text())
-            if isinstance(data, list):
-                revoked = len(data)
-            else:
-                revoked = len(data.get("sessions", []))
-
-            # Write empty sessions
-            Path(SESSIONS_FILE).write_text(json.dumps({"sessions": [], "revoked_at": datetime.now().isoformat()}))
-        except Exception as e:
-            errors.append(f"Failed to clear sessions file: {e}")
-
-    # Also try to notify auth module via socket
-    try:
-        result = subprocess.run(
-            ["curl", "-s", "-X", "POST", "--unix-socket", "/run/secubox/auth.sock",
-             "http://localhost/sessions/revoke-all"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode != 0:
-            errors.append("Auth module notification failed")
-    except Exception as e:
-        errors.append(f"Auth socket error: {e}")
-
-    return {
-        "success": True,
-        "revoked": revoked,
-        "timestamp": datetime.now().isoformat(),
-        "warnings": errors if errors else None
-    }
-
-
-# ══════════════════════════════════════════════════════════════════
-# Health Check
-# ══════════════════════════════════════════════════════════════════
 
 @app.get("/health")
 async def health():

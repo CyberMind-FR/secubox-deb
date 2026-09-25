@@ -1,3 +1,23 @@
+secubox-users (1.8.2-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (closes #1409, audit #1405 S1+S2).
+    - GET /users et /user/{u} rendaient le haché du mot de passe, le secret
+      TOTP et les codes de secours à tout porteur de JWT, appareil guest
+      compris : redact_user existait mais n'était jamais appelé.
+    - 21 routes (créer, modifier, supprimer un compte, rôles, attribution de
+      rôles, groupes, export, sessions) n'exigeaient qu'un JWT : un appareil
+      guest pouvait se promouvoir admin. Chacune exige désormais sa
+      permission (users.*, roles.*, groups.*, system.export, system.audit),
+      la lecture de soi-même restant permise. Un test refuse toute route
+      gardée par le seul JWT.
+  * Révocations de session réparées : DELETE /session/{id} appelait une
+    route inexistante de secubox-auth (sans effet) ; POST
+    /sessions/revoke-all écrivait un dict dans sessions.json et CASSAIT le
+    login. Écriture directe, atomique, toujours une liste ; l'ancien format
+    est relu et réparé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 13:52:44 +0200
+
 secubox-users (1.8.1-1~bookworm1) bookworm; urgency=high
 
   * Droits : get_user_permissions ne lisait que `roles` (liste), or
