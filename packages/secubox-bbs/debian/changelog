@@ -1,3 +1,11 @@
+secubox-bbs (0.34.1-1~bookworm1) bookworm; urgency=medium
+
+  * Construit aussi pour amd64 (ref #1383) : Architecture: any, GOARCH tiré de
+    l'architecture Debian ciblée. Figé à arm64, le paquet manquait à l'image
+    VirtualBox, et le profil full ne pouvait pas s'y installer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 06:49:18 +0200
+
 secubox-bbs (0.34.0-1~bookworm1) bookworm; urgency=medium
 
   * Entrée automatique embarquée (ref #1373) : encadrée par le Hall et
