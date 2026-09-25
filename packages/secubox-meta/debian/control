@@ -1,0 +1,675 @@
+# GÉNÉRÉ par gen-meta.py depuis arbre.yaml (#1397) — ne pas éditer à la main.
+Source: secubox-meta
+Section: metapackages
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: sbxos
+Architecture: all
+Depends: ${misc:Depends},
+         secubox,
+         secubox-service-hall
+Recommends: secubox-service-assistant,
+         secubox-fonction-correspondance,
+         secubox-fonction-nuage,
+         secubox-fonction-media,
+         secubox-fonction-publication,
+         secubox-fonction-veille
+Suggests: secubox-fonction-maison,
+         secubox-fonction-ia,
+         secubox-fonction-provision
+Description: SecuBox — racine « SBX OS »
+ Le Hall et tous ses composants, posés sur la box : l'environnement complet.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-fonction-socle,
+         secubox-fonction-reseau,
+         secubox-fonction-bouclier
+Recommends: secubox-fonction-supervision
+Suggests: secubox-fonction-mesh
+Description: SecuBox — racine « SecuBox »
+ La box : socle, réseau d'opérateur et bouclier, sans interface grand public.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-socle
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-service-noyau,
+         secubox-service-identite,
+         secubox-service-administration
+Description: SecuBox — fonction « Socle »
+ Ce sans quoi rien ne tient : noyau, identité, administration.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-reseau
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-service-routage,
+         secubox-service-dns,
+         secubox-service-exposition
+Recommends: secubox-service-vpn
+Description: SecuBox — fonction « Réseau d'opérateur »
+ Être son propre opérateur : routage, résolution, exposition, tunnels.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-bouclier
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-service-waf
+Recommends: secubox-service-dpi,
+         secubox-service-detection
+Suggests: secubox-service-soc,
+         secubox-service-radio-veille
+Description: SecuBox — fonction « Bouclier »
+ Voir et arrêter ce qui frappe : pare-feu applicatif, inspection, détection.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-supervision
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-service-metriques
+Suggests: secubox-service-ecrans
+Description: SecuBox — fonction « Supervision »
+ Mesurer la box : métriques, tableaux, rapports.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-mesh
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-service-mesh
+Description: SecuBox — fonction « Maillage »
+ Relier les box entre elles : annuaire, fédération, overlay.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-correspondance
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-service-mail,
+         secubox-service-signal,
+         secubox-service-messagerie,
+         secubox-service-fediverse
+Suggests: secubox-service-visio
+Description: SecuBox — fonction « Correspondance »
+ Écrire et recevoir : courrier, messageries chiffrées, fédivers, visio.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-nuage
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-service-fichiers,
+         secubox-service-photos,
+         secubox-service-git
+Description: SecuBox — fonction « Nuage personnel »
+ Ses fichiers, ses photos et son code chez soi.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-media
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-service-radio,
+         secubox-service-video
+Suggests: secubox-service-musique
+Description: SecuBox — fonction « Média »
+ Écouter et regarder chez soi : radio, balados, vidéo, musique.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-publication
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-service-sites,
+         secubox-service-bbs
+Description: SecuBox — fonction « Publication »
+ Publier : sites, billets, forum, dépôt de fichiers.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-veille
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-service-actualites
+Suggests: secubox-service-osint
+Description: SecuBox — fonction « Veille »
+ Suivre ce qui se dit : actualité, flux, recherche libre.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-maison
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-service-domotique
+Description: SecuBox — fonction « Maison connectée »
+ Piloter le domicile : Zigbee, MQTT, vidéosurveillance.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-ia
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-service-ia
+Description: SecuBox — fonction « IA locale »
+ Des modèles qui tournent chez soi, et la passerelle qui garde les données.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-provision
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-service-provision
+Description: SecuBox — fonction « Provision »
+ Sauvegarder, cloner, déployer d'autres box.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-hall
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-webos,
+         secubox-sbxui,
+         secubox-sbxos,
+         secubox-portal,
+         secubox-acces
+Recommends: secubox-surf,
+         secubox-devwatch
+Suggests: secubox-ui-manager
+Description: SecuBox — service « Hall »
+ SBX OS : le Hall, son registre de services, ses objets UI et l'admission des appareils.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-assistant
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-zia,
+         secubox-voice
+Suggests: secubox-zia-llm
+Description: SecuBox — service « Assistant ZIA »
+ ZIA et Lexie : l'IA locale du Hall, sa voix et son oreille.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-noyau
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core,
+         secubox-aggregator,
+         secubox-groupd,
+         secubox-defaults,
+         secubox-system,
+         secubox-hardening
+Recommends: secubox-health,
+         secubox-health-doctor,
+         secubox-watchdog,
+         secubox-system-tuning
+Suggests: secubox-led-heartbeat,
+         secubox-ksm,
+         secubox-console,
+         secubox-system-hub
+Description: SecuBox — service « Noyau »
+ Bibliothèque centrale, passerelle d'API, hôte de groupe, santé.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-identite
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-auth,
+         secubox-users,
+         secubox-identity
+Recommends: secubox-vault,
+         secubox-avatar
+Suggests: secubox-zkp
+Description: SecuBox — service « Identité »
+ Comptes, authentification, identité décentralisée, coffre de secrets.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-administration
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-admin,
+         secubox-appstore,
+         secubox-profiles,
+         secubox-certs
+Recommends: secubox-repo,
+         secubox-backup,
+         secubox-config-advisor
+Suggests: secubox-rustdesk,
+         secubox-assist
+Description: SecuBox — service « Administration »
+ Tableau d'administration, App Store, profils, dépôt, certificats.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-routage
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-netmodes,
+         secubox-routes,
+         secubox-nac
+Recommends: secubox-qos,
+         secubox-traffic,
+         secubox-netdiag,
+         secubox-mac-guard
+Suggests: secubox-nettweak,
+         secubox-modem,
+         secubox-wan-link-guard
+Description: SecuBox — service « Routage »
+ Modes réseau, routes, contrôle d'accès, qualité de service.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-dns
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-dns,
+         secubox-vortex-dns
+Recommends: secubox-dns-guard,
+         secubox-dns-provider,
+         secubox-network-anomaly
+Description: SecuBox — service « Résolution DNS »
+ Zones faisant autorité, résolveur récursif pare-feu, garde DNS.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-exposition
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-haproxy,
+         secubox-vhost,
+         secubox-exposure
+Recommends: secubox-cdn
+Suggests: secubox-mirror,
+         secubox-proxypac,
+         secubox-saas-relay
+Description: SecuBox — service « Exposition »
+ Frontal HAProxy, hôtes virtuels, publication de services vers l'extérieur.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-vpn
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-wireguard
+Recommends: secubox-tor
+Suggests: secubox-reality,
+         secubox-macro
+Description: SecuBox — service « Tunnels »
+ WireGuard, sortie Reality, Tor.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-mesh
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-annuaire,
+         secubox-p2p
+Recommends: secubox-federation,
+         secubox-meshname
+Suggests: secubox-mesh,
+         secubox-yggdrasil,
+         secubox-daemon,
+         secubox-meshtastic
+Description: SecuBox — service « Maillage »
+ Annuaire-miroir, pair à pair, fédération SBX, overlay Yggdrasil.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-waf
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-waf,
+         secubox-waf-ng
+Recommends: secubox-ipblock,
+         secubox-vortex-firewall,
+         secubox-toolbox-ng
+Description: SecuBox — service « Pare-feu applicatif »
+ Moteur sbxwaf et son interface, listes de blocage, pare-feu à flux de menaces.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-dpi
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-dpi,
+         secubox-ndpid-engine
+Recommends: secubox-mediaflow
+Suggests: secubox-ndpid,
+         secubox-interceptor
+Description: SecuBox — service « Inspection de flux »
+ nDPId et sbxdpi : quelle application parle, sur quel flux.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-detection
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-security-posture,
+         secubox-threats
+Recommends: secubox-cve-triage,
+         secubox-cyberfeed,
+         secubox-threatmesh,
+         secubox-antirootkit,
+         secubox-device-intel
+Suggests: secubox-ossec,
+         secubox-threat-analyst,
+         secubox-ad-guard,
+         secubox-cookies,
+         secubox-ai-insights,
+         secubox-toolbox
+Description: SecuBox — service « Détection »
+ Posture de sécurité, menaces, CVE, renseignement partagé.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-soc
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-soc
+Recommends: secubox-soc-web
+Suggests: secubox-soc-agent
+Description: SecuBox — service « Centre opérationnel »
+ Agrégation des alertes et son tableau web.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-radio-veille
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: secubox-rbs-sensor,
+         secubox-sentinelle-gsm
+Description: SecuBox — service « Veille radio »
+ Capteurs de fausses stations de base : matériel radio requis.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-metriques
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-metrics
+Recommends: secubox-glances,
+         secubox-reporter
+Suggests: secubox-grafana,
+         secubox-netdata
+Description: SecuBox — service « Métriques »
+ Métriques temps réel, tableaux et rapports.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-ecrans
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: secubox-c3box,
+         secubox-daemon-c3box,
+         secubox-eye-remote,
+         secubox-eye-square,
+         secubox-magicmirror
+Description: SecuBox — service « Écrans »
+ Écrans de situation et déports USB (Eye Remote, C3BOX).
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-mail
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-mail
+Recommends: secubox-smtp-relay
+Description: SecuBox — service « Courrier »
+ Serveur de courrier complet (conteneur mail, webmail) ; absorbe mail-lxc, webmail et webmail-lxc.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-signal
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-signal,
+         secubox-signal-engine
+Description: SecuBox — service « Signal »
+ Passerelle Signal et son moteur signal-cli embarqué.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-messagerie
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-matrix
+Suggests: secubox-jabber,
+         secubox-simplex
+Description: SecuBox — service « Messageries »
+ Matrix, XMPP, SimpleX : des messageries qu'on héberge.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-fediverse
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-gotosocial
+Recommends: secubox-socialrelay,
+         secubox-billets
+Suggests: secubox-mastodon
+Description: SecuBox — service « Fédivers »
+ Présence fédérée et relais social avec consentement.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-visio
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-jitsi,
+         secubox-turn
+Suggests: secubox-voip
+Description: SecuBox — service « Visio et téléphonie »
+ Jitsi, TURN/STUN, PBX.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-fichiers
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-nextcloud
+Recommends: secubox-droplet
+Suggests: secubox-smb
+Description: SecuBox — service « Fichiers »
+ Nextcloud, partage SMB noyau, dépôt de fichiers éphémères.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-photos
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-photoprism
+Description: SecuBox — service « Photos »
+ PhotoPrism.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-git
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-gitea
+Description: SecuBox — service « Forge Git »
+ Gitea.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-radio
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-radio
+Recommends: secubox-podcaster
+Suggests: secubox-fmrelay
+Description: SecuBox — service « Radio »
+ Radio et télé collaboratives, balados, relais FM.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-video
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-peertube
+Recommends: secubox-jellyfin,
+         secubox-freeboxtv
+Suggests: secubox-torrent,
+         secubox-ytsas,
+         secubox-media
+Description: SecuBox — service « Vidéo »
+ PeerTube, Jellyfin, flux Freebox TV, torrent et SAS web.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-musique
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-lyrion
+Description: SecuBox — service « Musique »
+ Lyrion (LMS).
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-sites
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-metablogizer,
+         secubox-publish
+Recommends: secubox-metacatalog
+Suggests: secubox-hexo
+Description: SecuBox — service « Sites »
+ Métablogs, plateforme de publication, catalogue.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-bbs
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-bbs
+Description: SecuBox — service « Forum »
+ BBS auto-hébergé.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-actualites
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-metanews
+Suggests: secubox-newsbin,
+         secubox-yacy
+Description: SecuBox — service « Actualité »
+ Radar d'actualité multi-sources.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-osint
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: secubox-openclaw,
+         secubox-spiderfoot,
+         secubox-maigret
+Description: SecuBox — service « OSINT »
+ Enquête en sources ouvertes, en bac à sable.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-domotique
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-mqtt
+Recommends: secubox-zigbee,
+         secubox-iot-guard
+Suggests: secubox-frigate,
+         secubox-picobrew
+Description: SecuBox — service « Domotique »
+ Courtier MQTT, coordinateur Zigbee, garde IoT, NVR.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-ia
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-ai-gateway
+Recommends: secubox-ollama,
+         secubox-localrecall
+Suggests: secubox-mcp-server,
+         secubox-streamlit,
+         secubox-streamforge
+Description: SecuBox — service « IA »
+ Passerelle souveraine, inférence locale, mémoire, MCP.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-provision
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: secubox-cloner,
+         secubox-netboot
+Suggests: secubox-rezapp,
+         secubox-release,
+         secubox-vm,
+         secubox-redroid
+Description: SecuBox — service « Provision »
+ Clonage, amorçage réseau, déploiement, anneaux de release, VM.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.

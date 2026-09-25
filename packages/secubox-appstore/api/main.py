@@ -486,6 +486,88 @@ async def groupes():
     return {"groupes": out, "count": len(out)}
 
 
+# ── MÉTAPAQUETS IMBRIQUÉS (#1397) ─────────────────────────────────────────
+# L'arbre vient de secubox-meta (arbre.yaml → debian/control), figé dans le
+# catalogue à la construction. Ici on n'ajoute que l'ÉTAT : ce qui est installé
+# sur CETTE box — nœuds, modules, et leurs dépendances système (lxc, openssl…).
+_etat_paquets = {"ts": 0.0, "data": {}}
+
+
+def _dpkg_noms(noms) -> dict:
+    """État dpkg d'une liste de paquets quelconques (pas seulement secubox-*)."""
+    noms = sorted(set(noms))
+    if not noms:
+        return {}
+    out = {}
+    try:
+        r = subprocess.run(
+            ["dpkg-query", "-W", "-f=${Package}\t${db:Status-Abbrev}\t${Version}\n", *noms],
+            capture_output=True, text=True, timeout=15)
+        for ligne in r.stdout.splitlines():
+            p = ligne.split("\t")
+            if len(p) >= 3 and p[1].strip().startswith("ii"):
+                out[p[0]] = p[2].strip()
+    except Exception:
+        pass
+    return out
+
+
+@app.get("/metapaquets", dependencies=[Depends(require_lecture)])
+async def metapaquets():
+    """L'arbre sbxos ⊃ secubox ⊃ fonctions ⊃ services ⊃ modules, avec l'état.
+
+    Chaque nœud dit, par force de lien, combien de modules il atteint et combien
+    sont installés : « requis 5/5 · recommandés 2/4 · suggérés 0/3 ».
+    """
+    arbre = load_catalog_raw().get("arbre")
+    if not arbre:
+        return {"noeuds": [], "paquets": {}, "disponible": False}
+    noeuds = arbre["noeuds"]
+    fiches = arbre["paquets"]
+    metas = {n["meta"]: n for n in noeuds}
+    now = time.time()
+    if now - _etat_paquets["ts"] > _STATE_TTL:
+        noms = set(metas) | set(fiches)
+        for f in fiches.values():
+            for champ in ("depends", "recommends", "suggests"):
+                noms.update(d["nom"] for d in f.get(champ, []))
+        _etat_paquets.update(ts=now, data=_dpkg_noms(noms))
+    inst = _etat_paquets["data"]
+
+    def atteint(m, force_max, vus=None):
+        """Feuilles atteintes depuis m, chacune avec la force la plus faible du chemin."""
+        vus = vus if vus is not None else {}
+        rang = {"requiert": 0, "recommande": 1, "suggere": 2}
+        for lien in ("requiert", "recommande", "suggere"):
+            f = max(force_max, rang[lien])
+            for x in metas[m][lien]:
+                if x in metas:
+                    atteint(x, f, vus)
+                elif f < vus.get(x, 9):
+                    vus[x] = f
+        return vus
+
+    out = []
+    for n in noeuds:
+        feuilles = atteint(n["meta"], 0)
+        compte = {}
+        for nom, f in feuilles.items():
+            c = compte.setdefault(("requis", "recommandes", "suggeres")[f], [0, 0])
+            c[1] += 1
+            c[0] += 1 if nom in inst else 0
+        out.append({**n, "installe": n["meta"] in inst, "version": inst.get(n["meta"], ""),
+                    "compte": {k: {"installes": v[0], "total": v[1]} for k, v in compte.items()}})
+    paquets = {}
+    for nom, f in fiches.items():
+        d = dict(f)
+        d["installe"], d["version"] = nom in inst, inst.get(nom, "")
+        for champ in ("depends", "recommends", "suggests"):
+            d[champ] = [dict(x, installe=x["nom"] in inst) for x in f.get(champ, [])]
+        paquets[nom] = d
+    return {"noeuds": out, "paquets": paquets, "hors_arbre": arbre.get("hors_arbre", []),
+            "disponible": True}
+
+
 @app.get("/profils", dependencies=[Depends(require_lecture)])
 async def profils():
     """Les profils, et ce qu'ils contiennent — le lien catalogue ↔ profils."""

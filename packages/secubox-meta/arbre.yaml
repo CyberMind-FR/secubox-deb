@@ -1,0 +1,635 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# L'ARBRE DES MÉTAPAQUETS (#1397) — source unique ; debian/control en est tiré
+# par gen-meta.py, et un test refuse un control qui aurait divergé.
+#
+#   sbxos                    le Hall et tous ses composants
+#    └─ secubox              la box elle-même
+#        └─ secubox-fonction-*   une intention (se protéger, écrire, publier…)
+#            └─ secubox-service-*   un service qui marche (courrier, WAF…)
+#                └─ secubox-<module>   les paquets réels
+#
+# TROIS FORCES DE LIEN, pas une :
+#   requiert    → Depends     sans lui, le nœud ne fonctionne pas
+#   recommande  → Recommends  installé par défaut, retirable sans casser
+#   suggere     → Suggests    POC, bouchon, matériel spécifique, vestige :
+#                             jamais installé sans le demander
+# Un module vide ou d'usage marginal n'est JAMAIS « requiert ». Un paquet qui
+# n'existe que pour une architecture non plus (le métapaquet est `all`).
+#
+# PROFILER, C'EST CHOISIR UN NŒUD : `apt install secubox-service-mail` pose le
+# courrier seul ; `secubox-fonction-correspondance` tout l'écrit ; `secubox`
+# la box ; `sbxos` la box et son Hall. `--no-install-recommends` réduit chaque
+# nœud à son strict nécessaire.
+#
+# Format plat (pas de PyYAML dans la chaîne de construction) :
+#   meta: <paquet>      niveau: racine|fonction|service
+#   label / description
+#   requiert: / recommande: / suggere:   listes « - paquet »
+#
+# hors-arbre : paquets volontairement absents de l'arbre (transitionnels,
+# décommissionnés, anciens métapaquets). Le générateur exige que CHAQUE paquet
+# du dépôt soit dans l'arbre OU ici — un module neuf oublié casse la
+# construction, pas l'installation.
+
+hors-arbre:
+  - secubox-mail-lxc          # transitionnel → secubox-mail
+  - secubox-webmail           # transitionnel → secubox-mail
+  - secubox-soc-gateway       # décommissionné (console de flotte jamais déployée)
+  - secubox-hub               # remplacé par portal (Replaces << 1.9.6)
+  - secubox-full              # anciens métapaquets d'image, conservés tels quels
+  - secubox-lite
+  - secubox-isp
+  - secubox-profil-socle
+  - secubox-profil-defense
+  - secubox-profil-reseau
+  - secubox-profil-media
+  - secubox-profil-provision
+  - secubox-profil-complet
+
+
+# ═══ RACINES ═══════════════════════════════════════════════════════════════
+
+meta: sbxos
+niveau: racine
+label: SBX OS
+description: "Le Hall et tous ses composants, posés sur la box : l'environnement complet."
+requiert:
+  - secubox
+  - secubox-service-hall
+recommande:
+  - secubox-service-assistant
+  - secubox-fonction-correspondance
+  - secubox-fonction-nuage
+  - secubox-fonction-media
+  - secubox-fonction-publication
+  - secubox-fonction-veille
+suggere:
+  - secubox-fonction-maison
+  - secubox-fonction-ia
+  - secubox-fonction-provision
+
+meta: secubox
+niveau: racine
+label: SecuBox
+description: "La box : socle, réseau d'opérateur et bouclier, sans interface grand public."
+requiert:
+  - secubox-fonction-socle
+  - secubox-fonction-reseau
+  - secubox-fonction-bouclier
+recommande:
+  - secubox-fonction-supervision
+suggere:
+  - secubox-fonction-mesh
+
+
+# ═══ FONCTIONS ═════════════════════════════════════════════════════════════
+
+meta: secubox-fonction-socle
+niveau: fonction
+label: Socle
+description: "Ce sans quoi rien ne tient : noyau, identité, administration."
+requiert:
+  - secubox-service-noyau
+  - secubox-service-identite
+  - secubox-service-administration
+
+meta: secubox-fonction-reseau
+niveau: fonction
+label: Réseau d'opérateur
+description: "Être son propre opérateur : routage, résolution, exposition, tunnels."
+requiert:
+  - secubox-service-routage
+  - secubox-service-dns
+  - secubox-service-exposition
+recommande:
+  - secubox-service-vpn
+
+meta: secubox-fonction-bouclier
+niveau: fonction
+label: Bouclier
+description: "Voir et arrêter ce qui frappe : pare-feu applicatif, inspection, détection."
+requiert:
+  - secubox-service-waf
+recommande:
+  - secubox-service-dpi
+  - secubox-service-detection
+suggere:
+  - secubox-service-soc
+  - secubox-service-radio-veille
+
+meta: secubox-fonction-supervision
+niveau: fonction
+label: Supervision
+description: "Mesurer la box : métriques, tableaux, rapports."
+requiert:
+  - secubox-service-metriques
+suggere:
+  - secubox-service-ecrans
+
+meta: secubox-fonction-mesh
+niveau: fonction
+label: Maillage
+description: "Relier les box entre elles : annuaire, fédération, overlay."
+requiert:
+  - secubox-service-mesh
+
+meta: secubox-fonction-correspondance
+niveau: fonction
+label: Correspondance
+description: "Écrire et recevoir : courrier, messageries chiffrées, fédivers, visio."
+recommande:
+  - secubox-service-mail
+  - secubox-service-signal
+  - secubox-service-messagerie
+  - secubox-service-fediverse
+suggere:
+  - secubox-service-visio
+
+meta: secubox-fonction-nuage
+niveau: fonction
+label: Nuage personnel
+description: "Ses fichiers, ses photos et son code chez soi."
+recommande:
+  - secubox-service-fichiers
+  - secubox-service-photos
+  - secubox-service-git
+
+meta: secubox-fonction-media
+niveau: fonction
+label: Média
+description: "Écouter et regarder chez soi : radio, balados, vidéo, musique."
+recommande:
+  - secubox-service-radio
+  - secubox-service-video
+suggere:
+  - secubox-service-musique
+
+meta: secubox-fonction-publication
+niveau: fonction
+label: Publication
+description: "Publier : sites, billets, forum, dépôt de fichiers."
+recommande:
+  - secubox-service-sites
+  - secubox-service-bbs
+
+meta: secubox-fonction-veille
+niveau: fonction
+label: Veille
+description: "Suivre ce qui se dit : actualité, flux, recherche libre."
+recommande:
+  - secubox-service-actualites
+suggere:
+  - secubox-service-osint
+
+meta: secubox-fonction-maison
+niveau: fonction
+label: Maison connectée
+description: "Piloter le domicile : Zigbee, MQTT, vidéosurveillance."
+recommande:
+  - secubox-service-domotique
+
+meta: secubox-fonction-ia
+niveau: fonction
+label: IA locale
+description: "Des modèles qui tournent chez soi, et la passerelle qui garde les données."
+recommande:
+  - secubox-service-ia
+
+meta: secubox-fonction-provision
+niveau: fonction
+label: Provision
+description: "Sauvegarder, cloner, déployer d'autres box."
+recommande:
+  - secubox-service-provision
+
+
+# ═══ SERVICES ══════════════════════════════════════════════════════════════
+
+meta: secubox-service-hall
+niveau: service
+label: Hall
+description: "SBX OS : le Hall, son registre de services, ses objets UI et l'admission des appareils."
+requiert:
+  - secubox-webos
+  - secubox-sbxui
+  - secubox-sbxos
+  - secubox-portal
+  - secubox-acces
+recommande:
+  - secubox-surf
+  - secubox-devwatch
+suggere:
+  - secubox-ui-manager
+
+meta: secubox-service-assistant
+niveau: service
+label: Assistant ZIA
+description: "ZIA et Lexie : l'IA locale du Hall, sa voix et son oreille."
+recommande:
+  - secubox-zia
+  - secubox-voice
+suggere:
+  - secubox-zia-llm             # binaire statique arm64 seulement
+
+meta: secubox-service-noyau
+niveau: service
+label: Noyau
+description: "Bibliothèque centrale, passerelle d'API, hôte de groupe, santé."
+requiert:
+  - secubox-core
+  - secubox-aggregator
+  - secubox-groupd
+  - secubox-defaults
+  - secubox-system
+  - secubox-hardening
+recommande:
+  - secubox-health
+  - secubox-health-doctor
+  - secubox-watchdog
+  - secubox-system-tuning
+suggere:
+  - secubox-led-heartbeat
+  - secubox-ksm
+  - secubox-console
+  - secubox-system-hub
+
+meta: secubox-service-identite
+niveau: service
+label: Identité
+description: "Comptes, authentification, identité décentralisée, coffre de secrets."
+requiert:
+  - secubox-auth
+  - secubox-users
+  - secubox-identity
+recommande:
+  - secubox-vault
+  - secubox-avatar
+suggere:
+  - secubox-zkp
+
+meta: secubox-service-administration
+niveau: service
+label: Administration
+description: "Tableau d'administration, App Store, profils, dépôt, certificats."
+requiert:
+  - secubox-admin
+  - secubox-appstore
+  - secubox-profiles
+  - secubox-certs
+recommande:
+  - secubox-repo
+  - secubox-backup
+  - secubox-config-advisor
+suggere:
+  - secubox-rustdesk
+  - secubox-assist
+
+meta: secubox-service-routage
+niveau: service
+label: Routage
+description: "Modes réseau, routes, contrôle d'accès, qualité de service."
+requiert:
+  - secubox-netmodes
+  - secubox-routes
+  - secubox-nac
+recommande:
+  - secubox-qos
+  - secubox-traffic
+  - secubox-netdiag
+  - secubox-mac-guard
+suggere:
+  - secubox-nettweak
+  - secubox-modem
+  - secubox-wan-link-guard      # propre au MOCHAbin
+
+meta: secubox-service-dns
+niveau: service
+label: Résolution DNS
+description: "Zones faisant autorité, résolveur récursif pare-feu, garde DNS."
+requiert:
+  - secubox-dns
+  - secubox-vortex-dns
+recommande:
+  - secubox-dns-guard
+  - secubox-dns-provider
+  - secubox-network-anomaly
+
+meta: secubox-service-exposition
+niveau: service
+label: Exposition
+description: "Frontal HAProxy, hôtes virtuels, publication de services vers l'extérieur."
+requiert:
+  - secubox-haproxy
+  - secubox-vhost
+  - secubox-exposure
+recommande:
+  - secubox-cdn
+suggere:
+  - secubox-mirror
+  - secubox-proxypac
+  - secubox-saas-relay
+
+meta: secubox-service-vpn
+niveau: service
+label: Tunnels
+description: "WireGuard, sortie Reality, Tor."
+requiert:
+  - secubox-wireguard
+recommande:
+  - secubox-tor
+suggere:
+  - secubox-reality
+  - secubox-macro
+
+meta: secubox-service-mesh
+niveau: service
+label: Maillage
+description: "Annuaire-miroir, pair à pair, fédération SBX, overlay Yggdrasil."
+requiert:
+  - secubox-annuaire
+  - secubox-p2p
+recommande:
+  - secubox-federation
+  - secubox-meshname
+suggere:
+  - secubox-mesh
+  - secubox-yggdrasil
+  - secubox-daemon
+  - secubox-meshtastic
+
+meta: secubox-service-waf
+niveau: service
+label: Pare-feu applicatif
+description: "Moteur sbxwaf et son interface, listes de blocage, pare-feu à flux de menaces."
+requiert:
+  - secubox-waf
+  - secubox-waf-ng
+recommande:
+  - secubox-ipblock
+  - secubox-vortex-firewall
+  - secubox-toolbox-ng
+
+meta: secubox-service-dpi
+niveau: service
+label: Inspection de flux
+description: "nDPId et sbxdpi : quelle application parle, sur quel flux."
+requiert:
+  - secubox-dpi
+  - secubox-ndpid-engine
+recommande:
+  - secubox-mediaflow
+suggere:
+  - secubox-ndpid
+  - secubox-interceptor
+
+meta: secubox-service-detection
+niveau: service
+label: Détection
+description: "Posture de sécurité, menaces, CVE, renseignement partagé."
+requiert:
+  - secubox-security-posture
+  - secubox-threats
+recommande:
+  - secubox-cve-triage
+  - secubox-cyberfeed
+  - secubox-threatmesh
+  - secubox-antirootkit
+  - secubox-device-intel
+suggere:
+  - secubox-ossec
+  - secubox-threat-analyst
+  - secubox-ad-guard
+  - secubox-cookies
+  - secubox-ai-insights
+  - secubox-toolbox
+
+meta: secubox-service-soc
+niveau: service
+label: Centre opérationnel
+description: "Agrégation des alertes et son tableau web."
+requiert:
+  - secubox-soc
+recommande:
+  - secubox-soc-web
+suggere:
+  - secubox-soc-agent
+
+meta: secubox-service-radio-veille
+niveau: service
+label: Veille radio
+description: "Capteurs de fausses stations de base : matériel radio requis."
+suggere:
+  - secubox-rbs-sensor
+  - secubox-sentinelle-gsm      # arm64 seulement
+
+meta: secubox-service-metriques
+niveau: service
+label: Métriques
+description: "Métriques temps réel, tableaux et rapports."
+requiert:
+  - secubox-metrics
+recommande:
+  - secubox-glances
+  - secubox-reporter
+suggere:
+  - secubox-grafana
+  - secubox-netdata
+
+meta: secubox-service-ecrans
+niveau: service
+label: Écrans
+description: "Écrans de situation et déports USB (Eye Remote, C3BOX)."
+suggere:
+  - secubox-c3box
+  - secubox-daemon-c3box
+  - secubox-eye-remote
+  - secubox-eye-square
+  - secubox-magicmirror
+
+meta: secubox-service-mail
+niveau: service
+label: Courrier
+description: "Serveur de courrier complet (conteneur mail, webmail) ; absorbe mail-lxc, webmail et webmail-lxc."
+requiert:
+  - secubox-mail
+recommande:
+  - secubox-smtp-relay
+
+meta: secubox-service-signal
+niveau: service
+label: Signal
+description: "Passerelle Signal et son moteur signal-cli embarqué."
+requiert:
+  - secubox-signal
+  - secubox-signal-engine
+
+meta: secubox-service-messagerie
+niveau: service
+label: Messageries
+description: "Matrix, XMPP, SimpleX : des messageries qu'on héberge."
+recommande:
+  - secubox-matrix
+suggere:
+  - secubox-jabber
+  - secubox-simplex
+
+meta: secubox-service-fediverse
+niveau: service
+label: Fédivers
+description: "Présence fédérée et relais social avec consentement."
+requiert:
+  - secubox-gotosocial
+recommande:
+  - secubox-socialrelay
+  - secubox-billets
+suggere:
+  - secubox-mastodon
+
+meta: secubox-service-visio
+niveau: service
+label: Visio et téléphonie
+description: "Jitsi, TURN/STUN, PBX."
+recommande:
+  - secubox-jitsi
+  - secubox-turn
+suggere:
+  - secubox-voip
+
+meta: secubox-service-fichiers
+niveau: service
+label: Fichiers
+description: "Nextcloud, partage SMB noyau, dépôt de fichiers éphémères."
+requiert:
+  - secubox-nextcloud
+recommande:
+  - secubox-droplet
+suggere:
+  - secubox-smb
+
+meta: secubox-service-photos
+niveau: service
+label: Photos
+description: "PhotoPrism."
+requiert:
+  - secubox-photoprism
+
+meta: secubox-service-git
+niveau: service
+label: Forge Git
+description: "Gitea."
+requiert:
+  - secubox-gitea
+
+meta: secubox-service-radio
+niveau: service
+label: Radio
+description: "Radio et télé collaboratives, balados, relais FM."
+requiert:
+  - secubox-radio
+recommande:
+  - secubox-podcaster
+suggere:
+  - secubox-fmrelay
+
+meta: secubox-service-video
+niveau: service
+label: Vidéo
+description: "PeerTube, Jellyfin, flux Freebox TV, torrent et SAS web."
+requiert:
+  - secubox-peertube
+recommande:
+  - secubox-jellyfin
+  - secubox-freeboxtv
+suggere:
+  - secubox-torrent
+  - secubox-ytsas
+  - secubox-media
+
+meta: secubox-service-musique
+niveau: service
+label: Musique
+description: "Lyrion (LMS)."
+requiert:
+  - secubox-lyrion
+
+meta: secubox-service-sites
+niveau: service
+label: Sites
+description: "Métablogs, plateforme de publication, catalogue."
+requiert:
+  - secubox-metablogizer
+  - secubox-publish
+recommande:
+  - secubox-metacatalog
+suggere:
+  - secubox-hexo
+
+meta: secubox-service-bbs
+niveau: service
+label: Forum
+description: "BBS auto-hébergé."
+requiert:
+  - secubox-bbs
+
+meta: secubox-service-actualites
+niveau: service
+label: Actualité
+description: "Radar d'actualité multi-sources."
+requiert:
+  - secubox-metanews
+suggere:
+  - secubox-newsbin
+  - secubox-yacy
+
+meta: secubox-service-osint
+niveau: service
+label: OSINT
+description: "Enquête en sources ouvertes, en bac à sable."
+suggere:
+  - secubox-openclaw
+  - secubox-spiderfoot
+  - secubox-maigret
+
+meta: secubox-service-domotique
+niveau: service
+label: Domotique
+description: "Courtier MQTT, coordinateur Zigbee, garde IoT, NVR."
+requiert:
+  - secubox-mqtt
+recommande:
+  - secubox-zigbee
+  - secubox-iot-guard
+suggere:
+  - secubox-frigate
+  - secubox-picobrew
+
+meta: secubox-service-ia
+niveau: service
+label: IA
+description: "Passerelle souveraine, inférence locale, mémoire, MCP."
+requiert:
+  - secubox-ai-gateway
+recommande:
+  - secubox-ollama
+  - secubox-localrecall
+suggere:
+  - secubox-mcp-server
+  - secubox-streamlit
+  - secubox-streamforge
+
+meta: secubox-service-provision
+niveau: service
+label: Provision
+description: "Clonage, amorçage réseau, déploiement, anneaux de release, VM."
+recommande:
+  - secubox-cloner
+  - secubox-netboot
+suggere:
+  - secubox-rezapp
+  - secubox-release
+  - secubox-vm
+  - secubox-redroid
