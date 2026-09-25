@@ -126,6 +126,17 @@ func (c Catalogue) Liste(typ string, caPub ed25519.PublicKey, revoques map[strin
 	return out, nil
 }
 
+// Contient : cette version de cet objet est-elle déjà au catalogue ?
+func (c Catalogue) Contient(id, version string) bool {
+	es, _ := c.lit()
+	for _, e := range es {
+		if e.ID == id && e.Version == version {
+			return true
+		}
+	}
+	return false
+}
+
 // Trouve l'entrée courante d'un id (dernière version).
 func (c Catalogue) Trouve(id string) (*Entree, string, error) {
 	es, err := c.lit()

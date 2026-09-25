@@ -12,8 +12,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -44,28 +47,90 @@ func clesCA(ch federation.Chemins) func() (ed25519.PublicKey, map[string]bool) {
 	}
 }
 
-// app publish --site NOM : emballe, signe, vérifie, range au catalogue.
+// options de publication, communes au site unique et à la publication en masse.
+type optsPub struct {
+	canal, version, auteur, licence, wallet, support, descr string
+	force                                                   bool
+	// poses : les options PASSÉES explicitement. Les autres héritent de la
+	// version déjà au catalogue — republier en masse ne doit pas remettre la
+	// licence ou le portefeuille choisis pour un site aux valeurs par défaut.
+	poses map[string]bool
+}
+
+// app publish --site NOM | --tous : emballe, signe, vérifie, range au catalogue.
 func publieApp(ch federation.Chemins, args []string) error {
 	cfg, err := config(ch)
 	if err != nil {
 		return err
 	}
-	var site, canal, version, auteur, licence, wallet, support, descr string
-	drapeaux("publish", args, func(f *flag.FlagSet) {
+	var site string
+	var tous bool
+	var o optsPub
+	fs := drapeaux("publish", args, func(f *flag.FlagSet) {
 		f.StringVar(&site, "site", "", "métablog à publier (nom du site)")
-		f.StringVar(&canal, "channel", "stable", "stable | beta | alpha")
-		f.StringVar(&version, "version", "", "version (défaut : celle du site, sinon la date)")
-		f.StringVar(&auteur, "author", cfg.Owner, "auteur")
-		f.StringVar(&licence, "license", "tous-droits-reserves", "licence")
-		f.StringVar(&wallet, "wallet", "", "rétribution : portefeuille (métadonnée)")
-		f.StringVar(&support, "support-url", "", "rétribution : page de soutien (métadonnée)")
-		f.StringVar(&descr, "description", "", "description")
+		f.BoolVar(&tous, "tous", false, "publier TOUS les métablogs de la box")
+		f.BoolVar(&o.force, "force", false, "republier une version déjà au catalogue")
+		f.StringVar(&o.canal, "channel", "stable", "stable | beta | alpha")
+		f.StringVar(&o.version, "version", "", "version (défaut : celle du site, sinon la date)")
+		f.StringVar(&o.auteur, "author", cfg.Owner, "auteur")
+		f.StringVar(&o.licence, "license", "tous-droits-reserves", "licence")
+		f.StringVar(&o.wallet, "wallet", "", "rétribution : portefeuille (métadonnée)")
+		f.StringVar(&o.support, "support-url", "", "rétribution : page de soutien (métadonnée)")
+		f.StringVar(&o.descr, "description", "", "description")
 	})
-	if site == "" {
-		return errors.New("--site requis")
+	o.poses = map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { o.poses[f.Name] = true })
+	if tous == (site != "") {
+		return errors.New("--site NOM ou --tous (l'un ou l'autre)")
 	}
+	priv, err := cleBox(ch)
+	if err != nil {
+		return err
+	}
+	cat := sbxobj.Catalogue{Dir: ch.ObjetsDe(cfg)}
+	if !tous {
+		_, err := publieUn(ch, cat, priv, site, o)
+		return err
+	}
+	// EN MASSE : un site en erreur n'arrête pas les autres ; le bilan dit tout.
+	es, err := os.ReadDir(ch.Sites)
+	if err != nil {
+		return err
+	}
+	var publies, deja, vides, erreurs int
+	for _, e := range es {
+		if !e.IsDir() {
+			continue
+		}
+		dir := filepath.Join(ch.Sites, e.Name())
+		if !dirExiste(filepath.Join(dir, ".git")) && !dirExiste(filepath.Join(dir, "public")) {
+			vides++
+			continue
+		}
+		etat, err := publieUn(ch, cat, priv, e.Name(), o)
+		switch {
+		case err != nil:
+			erreurs++
+			fmt.Printf("✗ %-28s %v\n", e.Name(), err)
+		case etat == "deja":
+			deja++
+		default:
+			publies++
+		}
+	}
+	fmt.Printf("bilan       %d publié(s) · %d déjà à jour · %d vide(s) ignoré(s) · %d erreur(s)\n", publies, deja, vides, erreurs)
+	if erreurs > 0 {
+		return fmt.Errorf("%d site(s) en erreur", erreurs)
+	}
+	return nil
+}
+
+func dirExiste(p string) bool { st, err := os.Stat(p); return err == nil && st.IsDir() }
+
+// publieUn rend "publie" ou "deja".
+func publieUn(ch federation.Chemins, cat sbxobj.Catalogue, priv ed25519.PrivateKey, site string, o optsPub) (string, error) {
 	dir := filepath.Join(ch.Sites, site)
-	domaine := ""
+	domaine, version, descr := "", o.version, o.descr
 	var sj map[string]any
 	if b, err := os.ReadFile(filepath.Join(dir, "site.json")); err == nil && json.Unmarshal(b, &sj) == nil {
 		domaine, _ = sj["domain"].(string)
@@ -75,40 +140,63 @@ func publieApp(ch federation.Chemins, args []string) error {
 		}
 		if descr == "" {
 			descr, _ = sj["description"].(string)
+			if descr == "" {
+				descr, _ = sj["title"].(string)
+			}
 		}
 	}
 	if version == "" {
 		version = time.Now().UTC().Format("2006.01.02")
 	}
-	priv, err := cleBox(ch)
-	if err != nil {
-		return err
+	if descr == "" {
+		descr = titreAccueil(dir)
+	}
+	id := "metablog." + site
+	if !o.force && cat.Contient(id, version) {
+		return "deja", nil
+	}
+	if prec, _, err := cat.Trouve(id); err == nil {
+		herite := func(nom string, courant *string, val string) {
+			if !o.poses[nom] && val != "" {
+				*courant = val
+			}
+		}
+		herite("channel", &o.canal, prec.Channel)
+		herite("license", &o.licence, prec.License)
+		herite("author", &o.auteur, prec.Author)
+		herite("wallet", &o.wallet, prec.Wallet)
+		herite("support-url", &o.support, prec.SupportURL)
+		// Une description déjà publiée l'emporte sur celle qu'on devine
+		// (site.json, <title>) : elle a pu être écrite à la main.
+		if !o.poses["description"] && prec.Description != "" {
+			descr = prec.Description
+		}
 	}
 	certY, _ := os.ReadFile(ch.Cert())
-	o := sbxobj.Objet{ID: "metablog." + site, Name: site, Type: "metablog", Version: version, Channel: canal,
-		Author: auteur, License: licence, Wallet: wallet, SupportURL: support, Description: descr}
+	obj := sbxobj.Objet{ID: id, Name: site, Type: "metablog", Version: version, Channel: o.canal,
+		Author: o.auteur, License: o.licence, Wallet: o.wallet, SupportURL: o.support, Description: descr}
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("sbx-%s-%d.sbx", site, os.Getpid()))
 	defer os.Remove(tmp)
-	if _, err := sbxobj.Emballe(sbxobj.Emballage{SiteDir: dir, Objet: o, Domaine: domaine, Cle: priv,
+	if _, err := sbxobj.Emballe(sbxobj.Emballage{SiteDir: dir, Objet: obj, Domaine: domaine, Cle: priv,
 		Certificat: string(certY), Sortie: tmp, Maintenant: time.Now()}); err != nil {
-		return err
+		return "", err
 	}
 	caPub, rev := clesCA(ch)()
 	p, err := sbxobj.Ouvre(tmp, caPub, rev, time.Now())
 	if err != nil {
-		return fmt.Errorf("paquet produit invalide : %w", err)
+		return "", fmt.Errorf("paquet produit invalide : %w", err)
 	}
 	defer p.Ferme()
-	e, err := sbxobj.Catalogue{Dir: ch.Objets()}.Ajoute(tmp, p, time.Now())
+	e, err := cat.Ajoute(tmp, p, time.Now())
 	if err != nil {
-		return err
+		return "", err
 	}
 	cert := "✓ éditeur certifié"
 	if !e.Certifie {
 		cert = "⚠ " + e.Motif
 	}
 	fmt.Printf("publié      %s@%s (%s, %d Ko) — %s\n", e.ID, e.Version, e.Channel, e.Taille/1024, cert)
-	return nil
+	return "publie", nil
 }
 
 func listeApps(ch federation.Chemins, args []string) error {
@@ -119,7 +207,7 @@ func listeApps(ch federation.Chemins, args []string) error {
 	var typ string
 	drapeaux("list", args, func(f *flag.FlagSet) { f.StringVar(&typ, "type", "", "type d'objet") })
 	caPub, rev, canaux := ch.Confiance(cfg, clesCA(ch))
-	es, err := sbxobj.Catalogue{Dir: ch.Objets()}.Liste(typ, caPub, rev, canaux, time.Now())
+	es, err := sbxobj.Catalogue{Dir: ch.ObjetsDe(cfg)}.Liste(typ, caPub, rev, canaux, time.Now())
 	if err != nil {
 		return err
 	}
@@ -151,9 +239,10 @@ func installeObjet(ch federation.Chemins, args []string) error {
 		f.StringVar(&nom, "nom", "", "nom du site installé (défaut : celui du paquet)")
 		f.BoolVar(&accepte, "accepte-non-certifie", false, "installer malgré un éditeur non certifié par la CA")
 	})
+	cfg, _ := config(ch)
 	chemin := cible
 	if !strings.HasSuffix(cible, ".sbx") {
-		_, c, err := sbxobj.Catalogue{Dir: ch.Objets()}.Trouve(cible)
+		_, c, err := sbxobj.Catalogue{Dir: ch.ObjetsDe(cfg)}.Trouve(cible)
 		if err != nil {
 			return err
 		}
@@ -179,4 +268,37 @@ func installeObjet(ch federation.Chemins, args []string) error {
 	fmt.Printf("installé    %s@%s → %s (non publié : le publier depuis le metablogizer)\n",
 		p.Objet.ID, p.Objet.Version, dossier)
 	return nil
+}
+
+var reTitre = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+
+// titreAccueil : le <title> de la page d'accueil — sur le disque (public/)
+// ou, pour un site qui ne vit que dans git, dans la révision courante.
+// Une carte d'App Store sans description ne dit rien de ce qu'on installe.
+func titreAccueil(dir string) string {
+	var page []byte
+	for _, p := range []string{"public/index.html", "index.html"} {
+		if b, err := os.ReadFile(filepath.Join(dir, p)); err == nil {
+			page = b
+			break
+		}
+	}
+	if page == nil && dirExiste(filepath.Join(dir, ".git")) {
+		reel, _ := filepath.EvalSymlinks(dir)
+		for _, p := range []string{"HEAD:public/index.html", "HEAD:index.html"} {
+			if b, err := exec.Command("git", "-c", "safe.directory="+reel, "-C", reel, "show", p).Output(); err == nil {
+				page = b
+				break
+			}
+		}
+	}
+	m := reTitre.FindSubmatch(page)
+	if m == nil {
+		return ""
+	}
+	t := strings.Join(strings.Fields(html.UnescapeString(string(m[1]))), " ")
+	if r := []rune(t); len(r) > 200 {
+		t = string(r[:200])
+	}
+	return t
 }

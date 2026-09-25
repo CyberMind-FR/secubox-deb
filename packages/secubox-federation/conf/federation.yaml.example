@@ -26,3 +26,8 @@ sync:
 #  pro:
 #    sync:
 #      waf: 5m
+
+# Où ranger le catalogue des objets publiés (défaut /var/lib/secubox/federation/objets).
+# Sur une box dont /var est sur carte SD, préférer le disque de données.
+#catalogue:
+#  dir: /data/secubox/federation/objets

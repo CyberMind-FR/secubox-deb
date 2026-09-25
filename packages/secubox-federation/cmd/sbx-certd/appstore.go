@@ -54,7 +54,10 @@ func (s *serveur) clesCA() (ed25519.PublicKey, map[string]bool) {
 	return caPub, nil
 }
 
-func (s *serveur) cat() sbxobj.Catalogue { return sbxobj.Catalogue{Dir: s.ch.Objets()} }
+func (s *serveur) cat() sbxobj.Catalogue {
+	cfg, _ := s.config()
+	return sbxobj.Catalogue{Dir: s.ch.ObjetsDe(cfg)}
+}
 
 func (s *serveur) catalogue(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.config()

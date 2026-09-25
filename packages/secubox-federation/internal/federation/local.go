@@ -42,6 +42,14 @@ func (c Chemins) DirCA() string   { return filepath.Join(c.Etat, "ca") }
 func (c Chemins) Demande() string { return filepath.Join(c.Etat, "demande.json") }
 func (c Chemins) Objets() string  { return filepath.Join(c.Etat, "objets") }
 
+// ObjetsDe : le répertoire du catalogue, réglé par catalogue.dir s'il l'est.
+func (c Chemins) ObjetsDe(cfg *Config) string {
+	if cfg != nil && cfg.Catalogue.Dir != "" {
+		return cfg.Catalogue.Dir
+	}
+	return c.Objets()
+}
+
 // Confiance : la clé de CA qui fait foi ICI (la sienne pour l'autorité, celle
 // épinglée pour un membre), la liste de révocation connue, et les canaux que
 // le certificat VALIDE de cette box ouvre.

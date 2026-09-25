@@ -104,6 +104,11 @@ type Config struct {
 		DureeJours int  `yaml:"duree_jours"`
 		AutoJoin   bool `yaml:"auto_join"`
 	} `yaml:"ca"`
+	// Catalogue : où ranger les objets publiés. Sur gk2, le SSD (/data) plutôt
+	// que la carte SD qui porte /var/lib (#1393).
+	Catalogue struct {
+		Dir string `yaml:"dir"`
+	} `yaml:"catalogue"`
 }
 
 // Charge lit le fichier ; absent, rend une config « hors fédération ».

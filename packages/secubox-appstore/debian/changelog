@@ -1,3 +1,11 @@
+secubox-appstore (0.4.14-1~bookworm1) bookworm; urgency=medium
+
+  * Objets fédérés (ref #1393) : recherche (nom, description, licence,
+    auteur) et affichage par pages de 48 — le catalogue de gk2 compte ~165
+    métablogs.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 08:49:55 +0200
+
 secubox-appstore (0.4.13-1~bookworm1) bookworm; urgency=medium
 
   * Objets fédérés (ref #1391) : section de l'App Store alimentée par
