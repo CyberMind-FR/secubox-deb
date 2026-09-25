@@ -863,11 +863,14 @@ async def rotate_identity():
     return {"status": "rotated", "identity": identity}
 
 
-@app.post("/identity/sign", dependencies=[Depends(require_jwt)])
-async def sign_message(message: str):
-    """Sign a message with local private key."""
-    signature = identity_manager.sign(message)
-    return {"message": message, "signature": signature}
+@app.post("/identity/sign")
+async def sign_message():
+    """RETIRÉE (#1426, audit #1417 S8). Elle signait N'IMPORTE QUEL message avec
+    une clé du nœud pour tout porteur de JWT — appareil guest compris : un
+    oracle de signature. Aucun appelant. Signer au nom du nœud passe désormais
+    par node.key dans secubox-sbxid (double signature appareil + nœud)."""
+    raise HTTPException(status_code=410,
+                        detail="Route retirée : le nœud ne signe plus à la demande (voir docs/AUTH_V3.md)")
 
 
 @app.post("/identity/verify", dependencies=[Depends(require_jwt)])
