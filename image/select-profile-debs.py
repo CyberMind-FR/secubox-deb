@@ -155,6 +155,16 @@ def _copier(index: dict[str, tuple[Path, set[str]]], racines: list[str],
         vus.add(p)
         pile.extend(n for n in index[p][1] if n.startswith("secubox-"))
 
+    # UN MODULE REQUIS MAIS ABSENT POUR CETTE ARCHITECTURE (#1428). Sans ce
+    # message, `apt-get install -f` retirait ensuite le module qui le requiert,
+    # puis le méta-paquet du profil — et l'image échouait sur un « profil
+    # absent » sans dire lequel manquait (alpha.6 : secubox-dpi amd64 seul).
+    manquants = sorted({(p, n) for p in vus for n in index[p][1]
+                        if n.startswith("secubox-") and n not in index})
+    for p, n in manquants:
+        print(f"[profil] ATTENTION : {p} requiert {n}, absent des .deb pour cette architecture",
+              file=sys.stderr)
+
     dest.mkdir(parents=True, exist_ok=True)
     for p in sorted(vus):
         shutil.copy2(index[p][0], dest / index[p][0].name)
