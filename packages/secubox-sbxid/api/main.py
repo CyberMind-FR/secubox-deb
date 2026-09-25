@@ -219,9 +219,15 @@ def route_moi(ctx=Depends(moi)):
                 "motif": "Cette session n'est pas celle d'un appareil SBX OS "
                          + ("(compte système : administration seulement)" if ctx["systeme"] else "admis")}
     uid = ctx["user"]["user_uuid"]
+    appareils = store.appareils_de(db(), uid)
+    sess = store.sessions_par_did(_demandes())
+    for a in appareils:                           # #1472 : de quoi distinguer trois iPhone
+        v = sess.get(a["did"]) or {}
+        a.update(agent=v.get("agent"), ip=v.get("ip"))
+        a["last_seen_at"] = a["last_seen_at"] or v.get("vu")
     return {"identite": ctx["user"], "appareil_courant": (ctx["device"] or {}).get("device_uuid"),
             "par_compte": ctx["sub"] if ctx.get("par_compte") else None, "connexions": _connexions(ctx),
-            "appareils": store.appareils_de(db(), uid), "systeme": ctx["systeme"],
+            "appareils": appareils, "systeme": ctx["systeme"],
             "liens": [dict(r) for r in db().execute("SELECT app, app_handle FROM sbx_app_links WHERE user_uuid=?", (uid,))]}
 
 
@@ -370,6 +376,7 @@ def appareils(ctx=Depends(exige_admin)):
     que l'admin Utilisateurs dise « gandalf · iPhone » et non une empreinte."""
     _rafraichit()
     out = {}
+    sess = store.sessions_par_did(_demandes())
     for d in _demandes():
         cle = d.get("cle_publique")
         if not cle:
@@ -385,7 +392,8 @@ def appareils(ctx=Depends(exige_admin)):
             pseudo = r[0] if r else None
         out[compte] = {"pseudo": pseudo, "appareil": (dev["device_name"] if dev else None) or d.get("appareil") or d.get("nom"),
                        "etat": d.get("etat"), "revoque": bool(dev and dev["revoked_at"]),
-                       "compte_rattache": d.get("compte") or None}
+                       "compte_rattache": d.get("compte") or None,
+                       **{k: (sess.get(did) or {}).get(k) for k in ("agent", "ip", "vu")}}
     return {"appareils": out}
 
 

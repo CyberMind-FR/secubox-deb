@@ -393,3 +393,24 @@ def test_relier_un_compte_existant_1468(banc, monkeypatch):
     # délier rend le service au mot de passe commun
     main.delie(g, "nextcloud", "admin", ctx)
     assert "nextcloud" not in CPT.propres(c, g)
+
+
+def test_appareil_nomme_par_son_navigateur_1472(banc, tmp_path, monkeypatch):
+    sess = tmp_path / "sessions.json"
+    sess.write_text(json.dumps([
+        {"id": "jti-g", "username": "gk2", "ip": "192.168.1.150", "created": "2026-09-25T15:15:00",
+         "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile Safari/604.1"},
+        {"id": "zz", "username": "sbx-" + S.empreinte_cle(banc.pa)[:12], "ip": "10.0.0.2", "created": "2026-09-25T10:00:00",
+         "user_agent": "Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/20100101 Firefox/155.0"}]))
+    monkeypatch.setattr(store, "SESSIONS", sess)
+    m = main.route_moi(main.moi(_req("tok-g")))
+    a = m["appareils"][0]
+    assert a["agent"] == "iOS 17.5 · Safari 17" and a["ip"] == "192.168.1.150" and a["last_seen_at"] == __import__("calendar").timegm((2026, 9, 25, 15, 15, 0))
+    ap = main.appareils(main.exige_admin(_req("tok-g")))["appareils"]
+    assert ap["sbx-" + S.empreinte_cle(banc.pa)[:12]]["agent"] == "Linux · Firefox 155"
+
+
+def test_ua_tronque_1472():
+    base = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_6_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+    assert store.agent_court(base + "Cr") == "iOS 26.6 · Chrome"
+    assert store.agent_court(base.replace("26_6_0", "18_7") + "Vers") == "iOS 18.7 · Safari"

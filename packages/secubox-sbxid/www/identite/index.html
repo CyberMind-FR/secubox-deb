@@ -196,6 +196,7 @@ function rendAppareils(){
     row.className = 'dev' + (d.revoked_at ? ' rev' : '');
     const conf = {trusted:['ok','certifié'], verified:['','vérifié'], pending:['warn','en attente']}[d.trust] || ['', d.trust];
     row.innerHTML = `<div><div class="n" data-n>${esc(d.name)} ${cur?'<span class="chip ok">cet appareil</span>':''}</div>
+      ${d.agent || d.ip ? `<div class="m" title="Dernière session connue de cet appareil">🧭 ${esc(d.agent || 'navigateur inconnu')}${d.ip ? ' · <span style="font-family:var(--mono)">'+esc(d.ip)+'</span>' : ''}</div>` : ''}
       <div class="m">${d.revoked_at ? 'révoqué le '+quand(d.revoked_at) : 'dernière session : '+quand(d.last_seen_at)} · <span class="chip ${conf[0]}">${conf[1]}</span>
       ${d.certificate ? ' · certificat jusqu\'au '+esc(d.certificate.expires.slice(0,10)) : ''}</div>
       <div class="m" style="font-family:var(--mono)">${esc(d.did)}</div></div><div class="act"></div>`;
