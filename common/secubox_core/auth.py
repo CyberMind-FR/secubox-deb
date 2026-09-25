@@ -437,7 +437,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
         _emit_session_event("login_failed", req.username, {
             "reason": "invalid_credentials",
             "ip": client_ip,
-            "user_agent": user_agent[:100] if user_agent else "",
+            "user_agent": user_agent[:300] if user_agent else "",
         })
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -456,7 +456,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
         _emit_session_event("login_failed", req.username, {
             "reason": "second_factor_required", "detail": motif,
             "ip": client_ip,
-            "user_agent": user_agent[:100] if user_agent else "",
+            "user_agent": user_agent[:300] if user_agent else "",
         })
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -472,7 +472,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
         "jti": jti,
         "expires_in": 86400,
         "ip": client_ip,
-        "user_agent": user_agent[:100] if user_agent else "",
+        "user_agent": user_agent[:300] if user_agent else "",
     })
     return TokenResponse(access_token=tok)
 

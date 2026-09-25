@@ -1,3 +1,10 @@
+secubox-sbxid (0.3.9-1~bookworm1) bookworm; urgency=medium
+
+  * Sessions d'appareil et inventaire : user_agent sur 300 caractères
+    (ref #1474).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:40:25 +0200
+
 secubox-sbxid (0.3.8-1~bookworm1) bookworm; urgency=medium
 
   * Navigateur reconnu même quand sessions.json a tronqué le user agent
