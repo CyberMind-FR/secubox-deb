@@ -1,3 +1,12 @@
+secubox-modem (1.2.3-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
+    ses fichiers en 0666 et ses dossiers en 0777, inscriptibles par tout
+    compte de la machine. 0002 retire seulement l'écriture « autres » ;
+    toutes les lectures existantes sont conservées.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:13:17 +0200
+
 secubox-modem (1.2.2-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

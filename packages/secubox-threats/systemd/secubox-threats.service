@@ -16,7 +16,8 @@ ExecStartPre=+/bin/rm -f /run/secubox/threats.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/threats.sock --log-level warning
 Restart=on-failure
 RestartSec=5
-UMask=0000
+# UMask=0002 (#1416) : jamais d'écriture « autres » ; les lectures restent.
+UMask=0002
 # Sandboxing disabled - causes namespace errors with Python symlinks on some kernels
 # PrivateTmp=true
 # ProtectSystem=full

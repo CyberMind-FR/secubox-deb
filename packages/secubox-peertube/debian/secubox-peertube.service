@@ -16,8 +16,8 @@ ExecStartPre=+/bin/rm -f /run/secubox/peertube.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/peertube.sock --log-level warning
 Restart=on-failure
 RestartSec=5
-UMask=0000
-
+# UMask=0002 (#1416) : jamais d'écriture « autres » ; les lectures restent.
+UMask=0002
 # CSPN: the dashboard stays unprivileged. Cookie installs are spooled to
 # /run/secubox/peertube-yt-cookies.txt and applied by the root-run
 # peertube-cookie-install.path/.service (#407) — no sudo needed here.
