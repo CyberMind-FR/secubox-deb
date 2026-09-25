@@ -124,19 +124,45 @@ def capacites_du_porteur(payload: Dict[str, Any]) -> Set[str]:
 def personne_du_porteur(payload: Dict[str, Any]) -> Optional[Dict[str, str]]:
     """La PERSONNE SBX OS derrière une session (#1446) : {user_uuid, pseudo}
     si la session vient d'un appareil rattaché à une identité active ; None
-    sinon (compte système ouvert par mot de passe, appareil inconnu…)."""
-    d = _demande_de(payload.get("sub", ""), payload.get("jti", ""))
-    if not d or d.get("etat") != "acceptee" or not SBX_DB.exists():
+    sinon (appareil inconnu, refusé, révoqué…).
+
+    SESSION DE COMPTE SANS APPAREIL (#1450) : ouverte par mot de passe (+TOTP),
+    elle ne porte aucune clé. Elle désigne alors la personne propriétaire des
+    appareils ACCEPTÉS pour ce compte — gk2 → gandalf — à condition qu'il n'y
+    en ait qu'UNE ; ambigu ou aucune → None. Une session qui vient d'un
+    appareil ne retombe jamais sur son compte : un appareil refusé ou révoqué
+    reste sans identité."""
+    sub = payload.get("sub", "")
+    d = _demande_de(sub, payload.get("jti", ""))
+    if not SBX_DB.exists():
+        return None
+    if d is None and sub and not sub.startswith("sbx-"):
+        dids = []
+        for x in _demandes():
+            if x.get("compte") == sub and x.get("etat") == "acceptee" and x.get("cle_publique"):
+                try:
+                    dids.append(S.did_appareil(x["cle_publique"]))
+                except (S.Refus, ValueError):
+                    pass
+    elif d and d.get("etat") == "acceptee":
+        try:
+            dids = [S.did_appareil(d["cle_publique"])]
+        except (S.Refus, KeyError, ValueError):
+            return None
+    else:
+        return None
+    if not dids:
         return None
     try:
-        did = S.did_appareil(d["cle_publique"])
         c = sqlite3.connect(f"file:{SBX_DB}?mode=ro", uri=True, timeout=2)
-    except (S.Refus, KeyError, ValueError, sqlite3.Error):
+    except sqlite3.Error:
         return None
     try:
-        r = c.execute("SELECT u.user_uuid, u.pseudo FROM sbx_devices d JOIN sbx_users u ON u.user_uuid=d.user_uuid"
-                      " WHERE d.did=? AND d.revoked_at IS NULL AND u.status='active'", (did,)).fetchone()
-        return {"user_uuid": r[0], "pseudo": r[1]} if r else None
+        ph = ",".join("?" * len(dids))
+        rows = c.execute("SELECT DISTINCT u.user_uuid, u.pseudo FROM sbx_devices d JOIN sbx_users u"
+                         f" ON u.user_uuid=d.user_uuid WHERE d.did IN ({ph}) AND d.revoked_at IS NULL"
+                         " AND u.status='active'", dids).fetchall()
+        return {"user_uuid": rows[0][0], "pseudo": rows[0][1]} if len(rows) == 1 else None
     except sqlite3.Error:
         return None
     finally:

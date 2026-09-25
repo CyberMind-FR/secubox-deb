@@ -1,3 +1,11 @@
+secubox-messagerie (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * La session gk2 signe « gandalf » et non plus « modération » ; les
+    messages déjà signés par le compte s'affichent sous son pseudo et
+    restent retirables par lui (ref #1450).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 16:18:18 +0200
+
 secubox-messagerie (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Commentaires des Billets dans le mur (ref #1448) ; y répondre commente

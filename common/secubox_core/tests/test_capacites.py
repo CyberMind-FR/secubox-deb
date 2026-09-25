@@ -80,3 +80,22 @@ def test_personne_du_porteur(banc):
     assert C.personne_du_porteur({"sub": "sbx-z", "jti": "j-membre"})["pseudo"] == "alice"
     assert C.personne_du_porteur({"sub": "sbx-z", "jti": "j-revoque"}) is None
     assert C.personne_du_porteur({"sub": "gk2", "jti": "portail"}) is None     # compte système : pas une personne
+
+
+def _comptes(tmp_path, **par_jti):
+    f = tmp_path / "d.json"
+    d = json.loads(f.read_text())
+    for x in d["demandes"]:
+        x["compte"] = par_jti.get(x["jtis"][0])
+    f.write_text(json.dumps(d))
+
+
+def test_session_de_compte_sans_appareil(banc, tmp_path):
+    """#1450 : gk2 par mot de passe → la personne dont les appareils sont rattachés à gk2."""
+    _comptes(tmp_path, **{"j-membre": "gk2", "j-revoque": "gk2"})     # eve révoquée : ne compte pas
+    assert C.personne_du_porteur({"sub": "gk2", "jti": "portail"})["pseudo"] == "alice"
+    assert C.personne_du_porteur({"sub": "root", "jti": "portail"}) is None     # aucun appareil rattaché
+    # une session D'APPAREIL ne retombe jamais sur son compte
+    assert C.personne_du_porteur({"sub": "gk2", "jti": "j-revoque"}) is None
+    _comptes(tmp_path, **{"j-membre": "gk2", "j-invite": "gk2"})      # deux personnes : ambigu
+    assert C.personne_du_porteur({"sub": "gk2", "jti": "portail"}) is None
