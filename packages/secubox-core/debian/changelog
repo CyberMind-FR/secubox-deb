@@ -1,3 +1,16 @@
+secubox-core (1.5.12-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_core.sbxid — socle du SBX Identity Mesh (ref #1417, AUTH v3 M1) :
+    entités Node / User / Device / Certificate, rôles-capacités (aucune
+    capacité système possible), forme canonique sans flottant, DOUBLE
+    SIGNATURE (appareil P-256 au format WebCrypto + nœud Ed25519 node.key),
+    migration à trois signatures, présentation YAML sbxos/v1, schéma sbx.db.
+    Interopérable avec l'annuaire (même forme canonique, signatures
+    vérifiées par annuaire.crypto). Bibliothèque pure : aucun service ne
+    l'appelle encore, aucun comportement ne change. 22 tests.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:37:38 +0200
+
 secubox-core (1.5.11-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : le postinst retire l'écriture
