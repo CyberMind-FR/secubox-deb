@@ -2,6 +2,12 @@
 
 > #1405 · 2026-09-25 · modèle cible. L'état de départ est dans
 > [AUDIT_AUTHENTICATION.md](AUDIT_AUTHENTICATION.md).
+>
+> **Maquette interactive** (référence validée) : [design/sbxos-identite-maquette.html](design/sbxos-identite-maquette.html),
+> servie sur la box à `/acces/maquette.html`. Six écrans : Mes appareils (certificat, révocation,
+> déconnexion des autres), connexion sans formulaire (rejeu 60 s à usage unique), administration SBX OS
+> (invitations par lien, rôles, suspension, journal d'audit, matrice des capacités), abonnements,
+> Identity Mesh, séparation Système / SBX OS.
 
 ## 1. Deux mondes qui ne se touchent pas
 

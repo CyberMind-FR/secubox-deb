@@ -1,3 +1,15 @@
+secubox-acces (1.6.4-1~bookworm1) bookworm; urgency=medium
+
+  * Maquette interactive de l'Identity Manager SBX OS (ref #1405), servie à
+    /acces/maquette.html — référence validée pour la refonte AUTH v2 :
+    Mes appareils (certificat sbxos/v1, renommer, révoquer, déconnecter les
+    autres), connexion sans formulaire (rejeu 60 s à usage unique),
+    administration SBX OS (invitations par lien, rôles, suspension, journal
+    d'audit, matrice des capacités), abonnements, Identity Mesh, séparation
+    Système / SBX OS. Données d'exemple, aucun appel réseau (testé).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 14:05:44 +0200
+
 secubox-acces (1.6.3-1~bookworm1) bookworm; urgency=medium
 
   * Affichage des accès refait (ref #1381), mesuré par rendu à 1280 et 400 px :

@@ -12,6 +12,8 @@ override_dh_auto_install:
 	install -m 644 www/acces/index.html debian/secubox-acces/usr/share/secubox/www/acces/
 	install -m 644 www/acces/micro.html debian/secubox-acces/usr/share/secubox/www/acces/
 	install -m 644 www/acces/appareil.js debian/secubox-acces/usr/share/secubox/www/acces/
+	# Maquette de l'Identity Manager (#1405) — référence, données d'exemple.
+	install -m 644 www/acces/maquette.html debian/secubox-acces/usr/share/secubox/www/acces/
 	install -d debian/secubox-acces/usr/share/secubox/menu.d
 	install -m 644 menu.d/26-acces.json debian/secubox-acces/usr/share/secubox/menu.d/
 	install -d debian/secubox-acces/etc/secubox
