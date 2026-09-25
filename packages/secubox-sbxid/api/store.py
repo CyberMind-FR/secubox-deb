@@ -28,6 +28,7 @@ from secubox_core import sbxid as S
 
 DB = Path("/var/lib/secubox/sbxid/sbx.db")
 DEMANDES = Path("/var/lib/secubox/acces/demandes.json")
+BBS_DB = Path("/var/lib/secubox/bbs/index.db")
 
 # Comptes système → identité SBX OS de leur exploitant (décision #1405).
 EXPLOITANT = {"gk2": "gandalf", "admin": "gandalf"}
@@ -124,10 +125,45 @@ def importe_existant(c: sqlite3.Connection, home_node: str, demandes: Optional[P
     if EXPLOITANT and c.execute("SELECT 1 FROM sbx_users WHERE pseudo='gandalf'").fetchone():
         uid = c.execute("SELECT user_uuid FROM sbx_users WHERE pseudo='gandalf'").fetchone()[0]
         c.execute("INSERT OR IGNORE INTO sbx_app_links VALUES (?,?,?,?)", (uid, "bbs", "gk2", "gk2"))
+    lie_comptes_bbs_d_appareil(c)
     apres = c.execute("SELECT count(*) FROM sbx_users").fetchone()[0]
     if n_app:
         journal(c, "import", "import.acces", f"{apres - avant} personne(s), {n_app} appareil(s)")
     return {"personnes": apres - avant, "appareils": n_app}
+
+
+def _handles_bbs(bbs_db: Optional[Path] = None) -> set:
+    try:
+        b = sqlite3.connect(f"file:{bbs_db or BBS_DB}?mode=ro", uri=True, timeout=2)
+        try:
+            return {r[0] for r in b.execute("SELECT handle FROM users WHERE handle LIKE 'sbx-%'")}
+        finally:
+            b.close()
+    except sqlite3.Error:
+        return set()
+
+
+def lie_comptes_bbs_d_appareil(c: sqlite3.Connection, bbs_db: Optional[Path] = None) -> int:
+    """#1454 : le BBS ouvre un compte `sbx-<empreinte>` à un appareil qui s'y
+    présente avant d'être rattaché. Ce compte EST la personne propriétaire de
+    l'appareil : on le lie (sbx_app_links), sans rien réécrire dans le BBS,
+    lu en lecture seule. Seulement un compte qui existe, d'un appareil non
+    révoqué, d'une personne active ; un lien déjà posé ne bouge pas."""
+    handles = _handles_bbs(bbs_db)
+    if not handles:
+        return 0
+    n = 0
+    for uid, cle in c.execute("SELECT d.user_uuid, d.public_key FROM sbx_devices d JOIN sbx_users u"
+                              " ON u.user_uuid=d.user_uuid WHERE d.revoked_at IS NULL AND u.status='active'").fetchall():
+        try:
+            h = "sbx-" + S.empreinte_cle(cle)[:12]
+        except (S.Refus, ValueError):
+            continue
+        if h in handles:
+            n += c.execute("INSERT OR IGNORE INTO sbx_app_links VALUES (?,?,?,?)", (uid, "bbs", h, h)).rowcount
+    if n:
+        journal(c, "import", "lien.bbs", f"{n} compte(s) BBS d'appareil lié(s)")
+    return n
 
 
 # ── Lectures ───────────────────────────────────────────────────────────────
