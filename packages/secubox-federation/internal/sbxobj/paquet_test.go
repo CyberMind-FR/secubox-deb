@@ -236,7 +236,7 @@ func TestLeMetablogizerImporteLeSbx(t *testing.T) {
 		t.Skip("secubox-metablogizer absent")
 	}
 	b := nouveauBanc(t, map[string]bool{"metapack": true})
-	b.emballe(t)
+	b.emballeAvecApercu(t) // un membre de plus : l'import l'ignore
 	dest := t.TempDir()
 	script := `
 import sys, importlib.util

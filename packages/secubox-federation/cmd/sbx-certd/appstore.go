@@ -8,6 +8,7 @@
 //	GET  /api/appstore/catalog[?type=metablog]   objets, éditeur re-vérifié, canal comparé au certificat
 //	GET  /api/appstore/object/{id}                une fiche
 //	GET  /api/appstore/object/{id}/sbx            le paquet signé
+//	GET  /api/appstore/object/{id}/apercu/{n}     n-ième aperçu (JPEG embarqué et signé, #1395)
 //	POST /api/appstore/install {id, nom}          ADMIN — installe, jamais par-dessus, non publié
 package main
 
@@ -17,6 +18,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +31,7 @@ func (s *serveur) routesAppStore(m *http.ServeMux) {
 	m.HandleFunc("GET /api/appstore/catalog", s.catalogue)
 	m.HandleFunc("GET /api/appstore/object/{id}", s.fiche)
 	m.HandleFunc("GET /api/appstore/object/{id}/sbx", s.paquetBrut)
+	m.HandleFunc("GET /api/appstore/object/{id}/apercu/{n}", s.apercu)
 	m.HandleFunc("POST /api/appstore/install", s.installe)
 }
 
@@ -95,6 +98,23 @@ func (s *serveur) paquetBrut(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+e.Name+"-"+e.Version+`.sbx"`)
+	http.ServeFile(w, r, chemin)
+}
+
+func (s *serveur) apercu(w http.ResponseWriter, r *http.Request) {
+	n, err := strconv.Atoi(r.PathValue("n"))
+	if err != nil {
+		erreur(w, 400, "numéro d'aperçu invalide")
+		return
+	}
+	chemin, err := s.cat().Apercu(r.PathValue("id"), n)
+	if err != nil {
+		erreur(w, 404, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
 	http.ServeFile(w, r, chemin)
 }
 

@@ -60,6 +60,16 @@
     .fed-meta{font-size:11px;color:var(--text-muted,#6b6b7a);margin:4px 0}
     .fed-retri{font-size:11px;color:var(--gold-hermetic,#c9a84c);margin:0 0 4px}
     .fed-retri a{color:var(--cyber-cyan,#00d4ff)}
+    /* Aperçus embarqués dans le .sbx (#1395) */
+    .fed-shot{display:block;padding:0;border:1px solid var(--line,#2a2a3a);border-radius:6px;overflow:hidden;
+      aspect-ratio:640/328;background:#0a0a0f;cursor:zoom-in;width:100%}
+    .fed-shot img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
+    .fed-shot:focus-visible{outline:2px solid var(--cyber-cyan,#00d4ff);outline-offset:2px}
+    .fed-shot.vide{display:flex;align-items:center;justify-content:center;cursor:default;
+      color:var(--text-muted,#6b6b7a);font-size:11px;letter-spacing:.4px}
+    .fed-shot.vide span{font-size:26px;opacity:.5;margin-right:6px}
+    .fed-lb{display:grid;gap:10px}
+    .fed-lb img{width:100%;border-radius:6px;border:1px solid var(--line,#2a2a3a)}
   </style>
 </head>
 <body class="crt-light hybrid-dark">
@@ -335,7 +345,13 @@
         const btn=(o.certifie&&!o.verrouille)?'<button class="as-btn" data-install="'+esc(o.id)+'" data-name="'+esc(o.name)+'">Installer</button>'
                                             :'<button class="as-btn" disabled title="'+esc(o.verrouille?'canal non ouvert':(o.motif||''))+'">Installer</button>';
         const retri=(o.wallet||o.support_url)?'<div class="fed-retri">💠 '+esc(o.wallet||'')+(o.support_url?' · <a href="'+esc(o.support_url)+'" target="_blank" rel="noopener">soutenir</a>':'')+'</div>':'';
+        const n=+o.apercus||0;
+        const shot=n
+          ?'<button type="button" class="fed-shot" data-apercu="'+esc(o.id)+'" data-n="'+n+'" data-name="'+esc(o.name)+'" title="Agrandir l\'aperçu">'
+            +'<img loading="lazy" decoding="async" width="640" height="328" src="'+FED+'/object/'+encodeURIComponent(o.id)+'/apercu/1" alt="Aperçu de '+esc(o.name)+'"></button>'
+          :'<div class="fed-shot vide" aria-hidden="true"><span>'+(FED_ICO[o.type]||'🧩')+'</span>pas d\'aperçu</div>';
         return '<div class="as-card">'
+          +shot
           +'<div class="as-top"><span class="as-ico">'+(FED_ICO[o.type]||'🧩')+'</span><span class="as-name">'+esc(o.name)+'</span></div>'
           +'<div class="as-desc">'+esc(o.description||'')+'</div>'
           +'<div class="fed-meta">✍️ '+esc(o.author)+' · ⚖️ '+esc(o.license)+' · v'+esc(o.version)+'</div>'
@@ -350,6 +366,8 @@
     document.getElementById('fed-plus').addEventListener('click',e=>{
       if(e.target.id==='fed-plus-btn'){FED_N+=FED_PAGE; renderFed();}});
     document.getElementById('fed-grid').addEventListener('click',async e=>{
+      const a=e.target.closest('[data-apercu]');
+      if(a){ouvreApercus(a.dataset.apercu,+a.dataset.n,a.dataset.name);return;}
       const b=e.target.closest('[data-install]'); if(!b)return;
       const nom=prompt('Nom du site à créer (il ne doit pas exister) :', b.dataset.name+'-copie');
       if(!nom)return;
@@ -361,6 +379,25 @@
       b.disabled=false;
       alert(r&&r.ok?('✅ Installé : '+j.nom+'\n'+(j.suite||'')):('❌ '+(j.erreur||'échec')));
     });
+
+    // Visionneuse : tous les aperçus signés du paquet, en grand.
+    function ouvreApercus(id,n,nom){
+      let ov=document.getElementById('fed-lb');
+      if(!ov){
+        ov=document.createElement('div'); ov.id='fed-lb'; ov.className='as-over';
+        ov.innerHTML='<div class="as-modal" role="dialog" aria-modal="true" aria-labelledby="fed-lb-t"><h2 id="fed-lb-t"></h2>'
+          +'<div class="fed-lb" id="fed-lb-imgs"></div><div class="as-row"><span class="as-msg">Aperçu embarqué dans le paquet, couvert par la signature de l\'éditeur.</span>'
+          +'<button type="button" class="as-btn" id="fed-lb-x">Fermer</button></div></div>';
+        document.body.appendChild(ov);
+        ov.addEventListener('click',e=>{if(e.target===ov||e.target.id==='fed-lb-x')ov.classList.remove('on');});
+        document.addEventListener('keydown',e=>{if(e.key==='Escape')ov.classList.remove('on');});
+      }
+      document.getElementById('fed-lb-t').textContent=nom;
+      let h='';
+      for(let i=1;i<=n;i++)h+='<img src="'+FED+'/object/'+encodeURIComponent(id)+'/apercu/'+i+'" alt="Aperçu '+i+' de '+esc(nom)+'">';
+      document.getElementById('fed-lb-imgs').innerHTML=h;
+      ov.classList.add('on'); document.getElementById('fed-lb-x').focus();
+    }
 
     document.addEventListener('DOMContentLoaded',load);
     document.addEventListener('DOMContentLoaded',loadFed);

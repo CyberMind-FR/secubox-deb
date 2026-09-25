@@ -43,8 +43,9 @@ type Emballage struct {
 	Objet      Objet
 	Domaine    string // domaine d'origine (information, pour l'import metablogizer)
 	Cle        ed25519.PrivateKey
-	Certificat string // YAML du certificat SBX de l'éditeur (vide : non certifié)
-	Sortie     string // chemin du .sbx produit
+	Certificat string   // YAML du certificat SBX de l'éditeur (vide : non certifié)
+	Sortie     string   // chemin du .sbx produit
+	Apercus    []string // captures (PNG/JPEG), réduites et embarquées — 4 au plus
 	Maintenant time.Time
 }
 
@@ -88,16 +89,39 @@ func Emballe(e Emballage) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(e.Apercus) > ApercusMax {
+		return nil, fmt.Errorf("%d aperçus : %d au plus", len(e.Apercus), ApercusMax)
+	}
+	integ := map[string]any{membre: "sha256:" + somme}
+	membres := []string{membre}
+	apercus := []any{}
+	for i, src := range e.Apercus {
+		jpg, l, h, err := Vignette(src)
+		if err != nil {
+			return nil, err
+		}
+		nom := membreApercu(i + 1)
+		if err := os.WriteFile(filepath.Join(tmp, nom), jpg, 0o644); err != nil {
+			return nil, err
+		}
+		s, _ := sha256Fichier(filepath.Join(tmp, nom))
+		integ[nom] = "sha256:" + s
+		membres = append(membres, nom)
+		apercus = append(apercus, map[string]any{"fichier": nom, "largeur": l, "hauteur": h})
+	}
 	pub := e.Cle.Public().(ed25519.PublicKey)
 	man := map[string]any{
 		// Champs lus par l'import du metablogizer — inchangés.
 		"name": e.Objet.Name, "domain": e.Domaine, "has_git": aGit,
 		// Ce que la fédération y ajoute.
 		"objet":     e.Objet.carte(),
-		"integrite": map[string]any{membre: "sha256:" + somme},
+		"integrite": integ,
 		"editeur": map[string]any{"did": sbxcert.DID(pub), "pubkey": sbxcert.FormatPub(pub),
 			"certificat": e.Certificat},
 		"cree": e.Maintenant.UTC().Format(time.RFC3339),
+	}
+	if len(apercus) > 0 {
+		man["apercus"] = apercus
 	}
 	msg, err := canon.Encode(man)
 	if err != nil {
@@ -111,7 +135,7 @@ func Emballe(e Emballage) (map[string]any, error) {
 	if err := os.MkdirAll(filepath.Dir(e.Sortie), 0o755); err != nil {
 		return nil, err
 	}
-	return man, tarGz(e.Sortie+".tmp", tmp, []string{membre, membreManifeste}, func() error {
+	return man, tarGz(e.Sortie+".tmp", tmp, append(membres, membreManifeste), func() error {
 		return os.Rename(e.Sortie+".tmp", e.Sortie)
 	})
 }
@@ -120,10 +144,11 @@ func Emballe(e Emballage) (map[string]any, error) {
 type Paquet struct {
 	Manifeste map[string]any
 	Objet     Objet
-	Editeur   string // DID
-	Certifie  bool   // l'éditeur tient un certificat valide de la CA donnée
-	Motif     string // pourquoi il ne l'est pas
-	Membre    string // content.tar | repo.bundle
+	Editeur   string   // DID
+	Certifie  bool     // l'éditeur tient un certificat valide de la CA donnée
+	Motif     string   // pourquoi il ne l'est pas
+	Membre    string   // content.tar | repo.bundle
+	Apercus   []string // chemins des aperçus extraits et vérifiés, dans l'ordre
 	dir       string
 }
 
@@ -181,11 +206,10 @@ func (p *Paquet) verifie(caPub ed25519.PublicKey, revoques map[string]bool, main
 	}
 	// INTÉGRITÉ : chaque membre présent est listé, et chaque listé est intact.
 	integ, _ := man["integrite"].(map[string]any)
-	if len(integ) != 1 {
-		return errors.New("intégrité : exactement un membre de contenu attendu")
-	}
+	nContenu := 0
 	for membre, attendu := range integ {
-		if membre != membreContenu && membre != membreDepot {
+		apercu := reApercu.MatchString(membre)
+		if membre != membreContenu && membre != membreDepot && !apercu {
 			return fmt.Errorf("membre inattendu : %s", membre)
 		}
 		somme, err := sha256Fichier(filepath.Join(p.dir, membre))
@@ -195,11 +219,44 @@ func (p *Paquet) verifie(caPub ed25519.PublicKey, revoques map[string]bool, main
 		if attendu != "sha256:"+somme {
 			return fmt.Errorf("membre %s altéré (SHA-256)", membre)
 		}
-		p.Membre = membre
+		if !apercu {
+			p.Membre = membre
+			nContenu++
+		}
+	}
+	if nContenu != 1 {
+		return errors.New("intégrité : exactement un membre de contenu attendu")
 	}
 	for _, autre := range []string{membreContenu, membreDepot} {
 		if autre != p.Membre && fichierExiste(filepath.Join(p.dir, autre)) {
 			return fmt.Errorf("membre %s non couvert par la signature", autre)
+		}
+	}
+	// APERÇUS : la liste signée dit lesquels, dans quel ordre ; tout aperçu
+	// présent y figure ; chacun est un JPEG borné (il finira dans un <img>).
+	liste, _ := man["apercus"].([]any)
+	if len(liste) > ApercusMax {
+		return errors.New("trop d'aperçus")
+	}
+	declares := map[string]bool{}
+	for _, x := range liste {
+		a, _ := x.(map[string]any)
+		f, _ := a["fichier"].(string)
+		if !reApercu.MatchString(f) || declares[f] {
+			return fmt.Errorf("aperçu mal déclaré : %q", f)
+		}
+		if _, ok := integ[f]; !ok {
+			return fmt.Errorf("aperçu %s non couvert par la signature", f)
+		}
+		if err := verifieApercu(filepath.Join(p.dir, f)); err != nil {
+			return fmt.Errorf("%s : %v", f, err)
+		}
+		declares[f] = true
+		p.Apercus = append(p.Apercus, filepath.Join(p.dir, f))
+	}
+	for i := 1; i <= ApercusMax; i++ {
+		if f := membreApercu(i); !declares[f] && fichierExiste(filepath.Join(p.dir, f)) {
+			return fmt.Errorf("aperçu %s non déclaré", f)
 		}
 	}
 	ob, _ := json.Marshal(man["objet"])
@@ -371,7 +428,7 @@ func tarGz(sortie, dir string, membres []string, apres func() error) error {
 	return apres()
 }
 
-// extraitMembres : seulement les trois membres admis, fichiers réguliers,
+// extraitMembres : seulement les membres admis (dont les aperçus), fichiers réguliers,
 // taille bornée.
 func extraitMembres(chemin, dir string) error {
 	f, err := os.Open(chemin)
@@ -396,7 +453,7 @@ func extraitMembres(chemin, dir string) error {
 		if h.Typeflag != tar.TypeReg {
 			return fmt.Errorf("membre %q : fichier ordinaire attendu", h.Name)
 		}
-		if h.Name != membreManifeste && h.Name != membreContenu && h.Name != membreDepot {
+		if h.Name != membreManifeste && h.Name != membreContenu && h.Name != membreDepot && !reApercu.MatchString(h.Name) {
 			return fmt.Errorf("membre inattendu : %q", h.Name)
 		}
 		if vus[h.Name] {

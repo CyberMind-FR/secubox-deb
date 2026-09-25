@@ -30,6 +30,7 @@ type Entree struct {
 	Taille   int64  `json:"taille"`
 	SHA256   string `json:"sha256"`
 	Publie   string `json:"publie_le"`
+	Apercus  int    `json:"apercus"` // rangés à côté : <Fichier sans .sbx>.apercu-N.jpg
 	// certificat : gardé pour re-vérifier l'éditeur à chaque lecture (une
 	// révocation survenue depuis la publication doit se voir).
 	Certificat string `json:"certificat,omitempty"`
@@ -69,13 +70,24 @@ func (c Catalogue) Ajoute(chemin string, p *Paquet, maintenant time.Time) (*Entr
 	if err := os.Rename(dest+".tmp", dest); err != nil {
 		return nil, err
 	}
+	// Aperçus : extraits À CÔTÉ du paquet, pour être servis sans le rouvrir.
+	// Ceux d'une publication précédente de la même version partent d'abord.
+	base := strings.TrimSuffix(dest, ".sbx")
+	for i := 1; i <= ApercusMax; i++ {
+		os.Remove(base + "." + membreApercu(i))
+	}
+	for i, src := range p.Apercus {
+		if err := copie(src, base+"."+membreApercu(i+1)); err != nil {
+			return nil, err
+		}
+	}
 	somme, _ := sha256Fichier(dest)
 	st, _ := os.Stat(dest)
 	ed, _ := p.Manifeste["editeur"].(map[string]any)
 	cy, _ := ed["certificat"].(string)
 	e := Entree{Objet: p.Objet, Editeur: p.Editeur, Certifie: p.Certifie, Motif: p.Motif,
 		Fichier: nom, Taille: st.Size(), SHA256: somme, Publie: maintenant.UTC().Format(time.RFC3339),
-		Certificat: cy}
+		Certificat: cy, Apercus: len(p.Apercus)}
 	es, err := c.lit()
 	if err != nil {
 		return nil, err
@@ -135,6 +147,18 @@ func (c Catalogue) Contient(id, version string) bool {
 		}
 	}
 	return false
+}
+
+// Apercu : le chemin du n-ième aperçu de la dernière version d'un objet.
+func (c Catalogue) Apercu(id string, n int) (string, error) {
+	e, chemin, err := c.Trouve(id)
+	if err != nil {
+		return "", err
+	}
+	if n < 1 || n > e.Apercus {
+		return "", errors.New("pas d'aperçu")
+	}
+	return strings.TrimSuffix(chemin, ".sbx") + "." + membreApercu(n), nil
 }
 
 // Trouve l'entrée courante d'un id (dernière version).

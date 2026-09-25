@@ -50,7 +50,9 @@ func clesCA(ch federation.Chemins) func() (ed25519.PublicKey, map[string]bool) {
 // options de publication, communes au site unique et à la publication en masse.
 type optsPub struct {
 	canal, version, auteur, licence, wallet, support, descr string
-	force                                                   bool
+	force, sansApercu                                       bool
+	apercus                                                 []string
+	shots                                                   string
 	// poses : les options PASSÉES explicitement. Les autres héritent de la
 	// version déjà au catalogue — republier en masse ne doit pas remettre la
 	// licence ou le portefeuille choisis pour un site aux valeurs par défaut.
@@ -77,11 +79,21 @@ func publieApp(ch federation.Chemins, args []string) error {
 		f.StringVar(&o.wallet, "wallet", "", "rétribution : portefeuille (métadonnée)")
 		f.StringVar(&o.support, "support-url", "", "rétribution : page de soutien (métadonnée)")
 		f.StringVar(&o.descr, "description", "", "description")
+		f.Func("apercu", "capture PNG/JPEG à embarquer (répétable, 4 au plus ; --site seulement)", func(v string) error {
+			o.apercus = append(o.apercus, v)
+			return nil
+		})
+		f.StringVar(&o.shots, "shots", "/var/cache/secubox/metablogizer/shots",
+			"captures du metablogizer (défaut d'aperçu : <shots>/<site>/screenshot.png)")
+		f.BoolVar(&o.sansApercu, "sans-apercu", false, "n'embarquer aucun aperçu")
 	})
 	o.poses = map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { o.poses[f.Name] = true })
 	if tous == (site != "") {
 		return errors.New("--site NOM ou --tous (l'un ou l'autre)")
+	}
+	if tous && len(o.apercus) > 0 {
+		return errors.New("--apercu ne vaut que pour un site (--site) ; --tous prend les captures du metablogizer")
 	}
 	priv, err := cleBox(ch)
 	if err != nil {
@@ -125,7 +137,8 @@ func publieApp(ch federation.Chemins, args []string) error {
 	return nil
 }
 
-func dirExiste(p string) bool { st, err := os.Stat(p); return err == nil && st.IsDir() }
+func dirExiste(p string) bool     { st, err := os.Stat(p); return err == nil && st.IsDir() }
+func fichierExiste(p string) bool { st, err := os.Stat(p); return err == nil && st.Mode().IsRegular() }
 
 // publieUn rend "publie" ou "deja".
 func publieUn(ch federation.Chemins, cat sbxobj.Catalogue, priv ed25519.PrivateKey, site string, o optsPub) (string, error) {
@@ -151,11 +164,23 @@ func publieUn(ch federation.Chemins, cat sbxobj.Catalogue, priv ed25519.PrivateK
 	if descr == "" {
 		descr = titreAccueil(dir)
 	}
+	apercus := o.apercus
+	if len(apercus) == 0 && !o.sansApercu && o.shots != "" {
+		if c := filepath.Join(o.shots, site, "screenshot.png"); fichierExiste(c) {
+			apercus = []string{c}
+		}
+	}
+	if o.sansApercu {
+		apercus = nil
+	}
 	id := "metablog." + site
-	if !o.force && cat.Contient(id, version) {
+	prec, _, errPrec := cat.Trouve(id)
+	// Déjà à jour… sauf si le catalogue n'a pas d'aperçu et qu'on en a un.
+	sansApercuAuCatalogue := errPrec == nil && prec.Apercus == 0 && len(apercus) > 0
+	if !o.force && cat.Contient(id, version) && !sansApercuAuCatalogue {
 		return "deja", nil
 	}
-	if prec, _, err := cat.Trouve(id); err == nil {
+	if errPrec == nil {
 		herite := func(nom string, courant *string, val string) {
 			if !o.poses[nom] && val != "" {
 				*courant = val
@@ -178,7 +203,7 @@ func publieUn(ch federation.Chemins, cat sbxobj.Catalogue, priv ed25519.PrivateK
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("sbx-%s-%d.sbx", site, os.Getpid()))
 	defer os.Remove(tmp)
 	if _, err := sbxobj.Emballe(sbxobj.Emballage{SiteDir: dir, Objet: obj, Domaine: domaine, Cle: priv,
-		Certificat: string(certY), Sortie: tmp, Maintenant: time.Now()}); err != nil {
+		Certificat: string(certY), Sortie: tmp, Maintenant: time.Now(), Apercus: apercus}); err != nil {
 		return "", err
 	}
 	caPub, rev := clesCA(ch)()
@@ -195,7 +220,7 @@ func publieUn(ch federation.Chemins, cat sbxobj.Catalogue, priv ed25519.PrivateK
 	if !e.Certifie {
 		cert = "⚠ " + e.Motif
 	}
-	fmt.Printf("publié      %s@%s (%s, %d Ko) — %s\n", e.ID, e.Version, e.Channel, e.Taille/1024, cert)
+	fmt.Printf("publié      %s@%s (%s, %d Ko, %d aperçu(s)) — %s\n", e.ID, e.Version, e.Channel, e.Taille/1024, e.Apercus, cert)
 	return "publie", nil
 }
 
