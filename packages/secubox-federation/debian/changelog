@@ -1,3 +1,18 @@
+secubox-federation (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * sbxctl app publish --tous (ref #1393) : tous les métablogs de la box ;
+    sites vides ignorés, version déjà au catalogue sautée (--force pour
+    republier), un site en erreur n'arrête pas les autres, bilan final.
+  * catalogue.dir (federation.yaml) : emplacement du catalogue — le disque de
+    données plutôt qu'une carte SD.
+  * Description d'un métablog : description, sinon titre, de son site.json,
+    sinon le <title> de sa page d'accueil (disque ou révision git courante).
+  * Republier hérite de la version au catalogue : canal, licence, auteur,
+    portefeuille, page de soutien et description saisis pour un site ne
+    reviennent pas aux valeurs par défaut (sauf option passée).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 08:49:55 +0200
+
 secubox-federation (0.2.2-1~bookworm1) bookworm; urgency=medium
 
   * app publish d'un site sous git en root : git refusait le dépôt du compte

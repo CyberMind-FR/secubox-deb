@@ -114,7 +114,10 @@
       <p style="font-size:11px;color:var(--text-muted,#6b6b7a);margin:3px 0 8px;font-family:'JetBrains Mono',monospace">
         Paquets .sbx signés par leur éditeur, vérifiés à l'installation (signature, intégrité, certificat SBX). Un site installé arrive non publié.</p>
       <div class="fed-filtres" id="fed-filtres" role="group" aria-label="Type d'objet"></div>
+      <input id="fed-q" type="search" placeholder="Chercher un objet (nom, description, licence)…" aria-label="Chercher un objet fédéré"
+        style="width:100%;max-width:420px;margin:0 0 10px;padding:6px 10px;border-radius:8px;border:1px solid var(--line,#2a2a3a);background:var(--panel,#14141c);color:inherit;font:inherit;font-size:12px">
       <div class="as-grid" id="fed-grid"></div>
+      <div id="fed-plus" style="margin-top:10px"></div>
     </section>
 
     <section id="mesh-panel" style="margin-top:24px">
@@ -298,7 +301,9 @@
     const FED_TYPES=[['','Tout'],['app','Applications'],['site','Sites'],['metablog','Métablogs'],
       ['waf','WAF'],['dataset','Données'],['archive','Archives'],['config','Configurations']];
     const FED_ICO={app:'🧩',site:'🌐',metablog:'📰',waf:'🛡️',dataset:'🗂️',archive:'📦',config:'⚙️',template:'🧱'};
-    let FED_ALL=[], FED_TYPE='metablog';
+    // PAR PAGES (#1393) : 165 métablogs ne s'affichent pas d'un bloc.
+    const FED_PAGE=48;
+    let FED_ALL=[], FED_TYPE='metablog', FED_N=FED_PAGE;
     function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
     async function loadFed(){
       let d=null;
@@ -314,10 +319,15 @@
         const n=k?FED_ALL.filter(o=>o.type===k).length:FED_ALL.length;
         return '<button type="button" class="fed-chip'+(FED_TYPE===k?' on':'')+'" data-t="'+k+'">'+esc(l)+' <span>'+n+'</span></button>';
       }).join('');
-      const items=FED_ALL.filter(o=>!FED_TYPE||o.type===FED_TYPE);
-      const g=document.getElementById('fed-grid');
-      if(!items.length){g.innerHTML='<div style="color:var(--text-muted,#6b6b7a);padding:18px">Aucun objet de ce type dans le catalogue.</div>';return;}
-      g.innerHTML=items.map(o=>{
+      const q=(document.getElementById('fed-q').value||'').toLowerCase();
+      const items=FED_ALL.filter(o=>(!FED_TYPE||o.type===FED_TYPE)
+        &&(!q||(o.name+' '+(o.description||'')+' '+(o.license||'')+' '+(o.author||'')).toLowerCase().includes(q)));
+      const g=document.getElementById('fed-grid'), plus=document.getElementById('fed-plus');
+      if(!items.length){g.innerHTML='<div style="color:var(--text-muted,#6b6b7a);padding:18px">Aucun objet ne correspond.</div>';plus.innerHTML='';return;}
+      plus.innerHTML=items.length>FED_N
+        ?'<button type="button" class="as-btn" id="fed-plus-btn">Afficher '+Math.min(FED_PAGE,items.length-FED_N)+' de plus ('+FED_N+'/'+items.length+')</button>'
+        :'<span style="font-size:11px;color:var(--text-muted,#6b6b7a)">'+items.length+' objet(s)</span>';
+      g.innerHTML=items.slice(0,FED_N).map(o=>{
         const sig=o.certifie?'<span class="pill s-running" title="Éditeur certifié par la CA de la fédération">✓ signé · certifié</span>'
                            :'<span class="pill s-unpublished" title="'+esc(o.motif||'')+'">⚠ éditeur non certifié</span>';
         const lock=o.verrouille?'<span class="pill tier" title="Canal non ouvert par le certificat de cette box">🔒 '+esc(o.channel)+'</span>'
@@ -335,7 +345,10 @@
       }).join('');
     }
     document.getElementById('fed-filtres').addEventListener('click',e=>{
-      const b=e.target.closest('[data-t]'); if(!b)return; FED_TYPE=b.dataset.t; renderFed();});
+      const b=e.target.closest('[data-t]'); if(!b)return; FED_TYPE=b.dataset.t; FED_N=FED_PAGE; renderFed();});
+    document.getElementById('fed-q').addEventListener('input',()=>{FED_N=FED_PAGE; renderFed();});
+    document.getElementById('fed-plus').addEventListener('click',e=>{
+      if(e.target.id==='fed-plus-btn'){FED_N+=FED_PAGE; renderFed();}});
     document.getElementById('fed-grid').addEventListener('click',async e=>{
       const b=e.target.closest('[data-install]'); if(!b)return;
       const nom=prompt('Nom du site à créer (il ne doit pas exister) :', b.dataset.name+'-copie');
