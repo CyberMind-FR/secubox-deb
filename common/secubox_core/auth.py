@@ -398,6 +398,19 @@ def _check_password(username: str, password: str) -> bool:
     return user_store.verify_password(username, password)
 
 
+def _second_facteur_requis(username: str) -> str:
+    """Motif pour lequel ce compte ne peut PAS ouvrir de session sur mot de
+    passe seul, ou "" s'il le peut (#1406)."""
+    u = user_store.get_user(username) or {}
+    if (u.get("totp") or {}).get("enabled"):
+        return "totp"
+    if u.get("must_change_password"):
+        return "mot de passe a changer"
+    if u.get("role") == "admin":
+        return "admin (TOTP obligatoire)"
+    return ""
+
+
 # Legacy /auth/login endpoint kept for backwards compat ────────────────
 router = APIRouter(tags=["auth"])
 
@@ -429,6 +442,26 @@ async def login(req: LoginRequest, request: Request, response: Response):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Identifiants incorrects",
+        )
+    # UN SEUL FACTEUR NE SUFFIT PAS PARTOUT (#1406). Cette route est montee
+    # par 47 modules (/api/v1/<module>/auth/login) et, dans l'agregateur qui
+    # monte aussi secubox-auth, sa session est ENREGISTREE : elle ouvrait une
+    # session complete sur mot de passe seul, TOTP des admins contourne.
+    # Elle applique desormais la politique du vrai login : un compte a
+    # second facteur, a mot de passe a changer, ou admin (TOTP obligatoire)
+    # passe par /api/v1/auth/login. Verifie APRES le mot de passe : qui ne
+    # l'a pas n'apprend rien de l'etat du compte.
+    motif = _second_facteur_requis(req.username)
+    if motif:
+        _emit_session_event("login_failed", req.username, {
+            "reason": "second_factor_required", "detail": motif,
+            "ip": client_ip,
+            "user_agent": user_agent[:100] if user_agent else "",
+        })
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ce compte exige la connexion complete (second facteur) — "
+                   "se connecter par /api/v1/auth/login",
         )
     jti = secrets.token_hex(8)
     tok = create_token(req.username, jti=jti)
