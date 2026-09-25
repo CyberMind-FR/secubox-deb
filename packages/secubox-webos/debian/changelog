@@ -1,3 +1,12 @@
+secubox-webos (1.0.340-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (closes #1434, audit #1405 P1) : pont Signal. Une fois le démon
+    lié, lier_etat() donnait l'accès au compte Signal de la box à QUICONQUE
+    l'interrogeait. Seule la personne qui a lancé l'appairage, dans les
+    15 minutes, reçoit désormais l'autorisation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:34:01 +0200
+
 secubox-webos (1.0.339-1~bookworm1) bookworm; urgency=high
 
   * Relais radio du Hall : X-Sbx-User-Id / X-Sbx-User / X-Sbx-Role venus du
