@@ -140,9 +140,13 @@ class Nextcloud:
 
     def etat(self, d):
         exige("nextcloud")
-        rc, out, _ = lance([self.ctl, "occ", "user:info", "--output=json", d["user"]])
+        rc, out, err = lance([self.ctl, "occ", "user:info", "--output=json", d["user"]])
         if rc != 0:
-            return {"existe": False, "actif": None}
+            # SEUL « user not found » dit « absent » (#1470) : un occ en échec
+            # (Nextcloud qui démarre) faisait croire le compte gk2 inexistant.
+            if "user not found" in (out + err).lower():
+                return {"existe": False, "actif": None}
+            raise Echec(((err or out).strip() or f"occ user:info : code {rc}")[-300:])
         try:
             info = json.loads(out[out.index("{"):])
         except ValueError:

@@ -82,3 +82,14 @@ def test_injoignable_apres_reveil_est_attendu(H):
                 raise H.Indisponible("PeerTube injoignable (refused)")
     H._agit_patiemment(A(), {"action": "creer"})
     assert n["k"] == 2
+
+
+def test_nextcloud_seul_user_not_found_vaut_absent(H, monkeypatch):
+    """#1470 : un occ en échec (démarrage) n'est pas « absent »."""
+    H._CONTEXTE.update(action="etat", reveille=False)
+    H._etat["up"] = True
+    sorties = {"u": (1, "user not found\n", ""), "boot": (1, "", "Nextcloud is not installed / maintenance")}
+    monkeypatch.setattr(H, "lance", lambda argv, entree=None, delai=0: sorties[argv[-1]])
+    assert H.Nextcloud().etat({"user": "u"}) == {"existe": False, "actif": None}
+    with pytest.raises(H.Echec):
+        H.Nextcloud().etat({"user": "boot"})

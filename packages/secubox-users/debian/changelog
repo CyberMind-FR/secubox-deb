@@ -1,3 +1,11 @@
+secubox-users (1.8.8-1~bookworm1) bookworm; urgency=medium
+
+  * Helper, Nextcloud : seul « user not found » vaut « compte absent » ; un occ
+    en échec (démarrage) remonte en erreur au lieu de cacher un compte
+    existant (ref #1470).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:26:21 +0200
+
 secubox-users (1.8.7-1~bookworm1) bookworm; urgency=medium
 
   * Admin Utilisateurs (ref #1460) : onglets « Personnes SBX OS » (rôles,
