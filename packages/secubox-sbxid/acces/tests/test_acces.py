@@ -400,3 +400,18 @@ def test_sans_journal_on_ne_plante_pas(prof):
     from api.inventaire import _toutes, dernieres_connexions
     admis(prof)
     assert dernieres_connexions(list(_toutes(prof)), "/nexiste/pas") == {}
+
+
+def test_session_etat_ignore_un_cookie_mort(monkeypatch):
+    """#1435 — un cookie coupé n'est pas une session : l'appareil doit rouvrir."""
+    import asyncio
+    from starlette.requests import Request
+    import secubox_core.auth as A
+    main = pytest.importorskip("api.main")
+    monkeypatch.setattr(A, "_validate_token", lambda t: {"sub": "gk2"} if t == "vivant" else None)
+    def req(val):
+        h = [(b"cookie", f"{A.SESSION_COOKIE}={val}".encode())] if val else []
+        return Request({"type": "http", "method": "GET", "path": "/", "headers": h})
+    assert asyncio.run(main.session_etat(req("vivant"))) == {"session": True}
+    assert asyncio.run(main.session_etat(req("coupe"))) == {"session": False}
+    assert asyncio.run(main.session_etat(req(None))) == {"session": False}

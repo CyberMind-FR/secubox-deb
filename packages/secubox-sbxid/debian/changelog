@@ -1,3 +1,12 @@
+secubox-sbxid (0.2.1-1~bookworm1) bookworm; urgency=high
+
+  * /api/v1/acces/session/etat VALIDE le cookie au lieu de constater sa
+    présence (closes #0). Un cookie coupé (rattachement, révocation,
+    expiration) laissait croire l'appareil connecté : le Hall ne rouvrait
+    jamais la session et le BBS bouclait sur /sbx/entrer ↔ /login (iPad).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:31:50 +0200
+
 secubox-sbxid (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorbe secubox-acces (ref #1424) : admission des appareils, défi signé,
