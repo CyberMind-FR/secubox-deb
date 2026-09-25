@@ -1,3 +1,10 @@
+secubox-webos (1.0.339-1~bookworm1) bookworm; urgency=high
+
+  * Relais radio du Hall : X-Sbx-User-Id / X-Sbx-User / X-Sbx-Role venus du
+    client vidés — une identité ne se déclare pas (ref #1430).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:15:48 +0200
+
 secubox-webos (1.0.338-1~bookworm1) bookworm; urgency=medium
 
   * Hall : /identite/ (SBX Identity Manager, même origine que les clés

@@ -73,5 +73,22 @@ case "$1" in
     ;;
 esac
 
+# ── Le vhost public : le PAQUET fait foi (#1430) ────────────────────────
+# Il n'était jamais installé par le paquet : le fichier actif était une copie
+# manuelle, retouchée sur place — un correctif de sécurité du paquet n'y
+# arrivait donc pas. Sauvegarde, installation, nginx -t, retour arrière.
+if [ "$1" = configure ] && [ -f /etc/secubox/nginx-available/radio.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+  ACTIF=/etc/nginx/sites-enabled/radio.conf
+  [ -f "$ACTIF" ] && cp -p "$ACTIF" "$ACTIF.avant-paquet" 2>/dev/null || true
+  cp -f /etc/secubox/nginx-available/radio.conf "$ACTIF"
+  if nginx -t >/dev/null 2>&1; then
+    systemctl reload nginx >/dev/null 2>&1 || true
+  elif [ -f "$ACTIF.avant-paquet" ]; then
+    mv -f "$ACTIF.avant-paquet" "$ACTIF"
+    echo "secubox-radio: vhost refusé par nginx -t, ancien conservé" >&2
+  fi
+  rm -f "$ACTIF.avant-paquet"
+fi
+
 #DEBHELPER#
 exit 0
