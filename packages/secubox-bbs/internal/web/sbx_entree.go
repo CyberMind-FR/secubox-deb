@@ -104,7 +104,7 @@ func (s *Server) ouvreSessionSbx(w http.ResponseWriter, r *http.Request, compte,
 	}
 
 	s.st.NoteLogin(id, r.RemoteAddr)
-	jeton, err := s.st.NewSession(id, r.RemoteAddr, r.UserAgent())
+	jeton, err := s.st.NewSessionSbx(id, r.RemoteAddr, r.UserAgent()) // #1440
 	if err != nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return

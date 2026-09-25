@@ -646,9 +646,30 @@ func (s *Server) qui(r *http.Request) visiteur {
 	if err != nil {
 		return v
 	}
+	// UNE SESSION OUVERTE PAR LE HALL NE SURVIT PAS À SA SOURCE (#1440). Elle
+	// vivait 30 jours quoi qu'il advienne côté SecuBox : appareil révoqué,
+	// déconnexion, rattachement à un autre compte — la BBS restait ouverte.
+	// Elle exige désormais une session SecuBox vivante, du MÊME compte
+	// (vérifiée par le démon, cache 30 s) ; sinon on la ferme, et le visiteur
+	// retombe sur la voie SecuBox ordinaire.
+	if s.verif != nil && s.st.SessionOrigine(c.Value) == "sbx" && !s.sourceVivante(r, info.Handle) {
+		_ = s.st.CloseSession(c.Value)
+		return s.quiSecubox(r, v)
+	}
 	v.UserInfo, v.Connecte = info, true
 	v.Avatar = s.st.Avatar(id)
 	return v
+}
+
+// sourceVivante : la session SecuBox du navigateur vaut encore, et c'est bien
+// celle de ce compte.
+func (s *Server) sourceVivante(r *http.Request, handle string) bool {
+	c, err := r.Cookie("secubox_session")
+	if err != nil || c.Value == "" {
+		return false
+	}
+	ses, ok := s.verif(c.Value)
+	return ok && strings.EqualFold(ses.User, handle)
 }
 
 // quiSecubox : a defaut de session BBS, la session SecuBox du Hall (#1369).
