@@ -85,7 +85,6 @@ network-ready
 newsbin
 nextcloud
 ollama
-ossec
 p2p
 peertube
 photoprism

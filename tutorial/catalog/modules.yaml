@@ -4155,48 +4155,6 @@ modules:
       presente: true
       chemin: "/srv/secubox/www/openclaw"
       vhosts: []
-  - id: secubox-ossec
-    nom: "secubox-ossec"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox OSSEC HIDS integration"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd:
-      - "secubox-ossec.service"
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/ossec.sock"
-      health: "/api/v1/ossec/health"
-      authentifie: false
-      nb_routes: 16
-      routes:
-        - "GET /active-response"
-        - "GET /agents"
-        - "GET /alerts"
-        - "GET /alerts/stats"
-        - "GET /decoders"
-        - "GET /health"
-        - "GET /logs"
-        - "GET /rootcheck"
-        - "GET /rules"
-        - "GET /status"
-        - "GET /syscheck"
-        - "POST /restart"
-        - "POST /rootcheck/scan"
-        - "POST /start"
-        - "POST /stop"
-        - "POST /syscheck/scan"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/ossec"
-      vhosts: []
   - id: secubox-p2p
     nom: "secubox-p2p"
     categorie: "misc"

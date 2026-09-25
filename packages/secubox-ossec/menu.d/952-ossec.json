@@ -1,9 +1,0 @@
-{
-  "id": "ossec",
-  "name": "OSSEC HIDS",
-  "icon": "🔒",
-  "path": "/ossec/",
-  "category": "wall",
-  "order": 952,
-  "description": "Host intrusion detection"
-}

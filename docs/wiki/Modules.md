@@ -1385,19 +1385,6 @@ Open Source Intelligence
 
 ---
 
-### 🛡️ OSSEC HIDS
-
-**Category:** Security
-
-Host-based Intrusion Detection
-
-**Features:**
-- Alert viewing
-- File integrity monitoring
-- Rootkit detection
-
----
-
 ### 📹 PeerTube
 
 **Category:** Media

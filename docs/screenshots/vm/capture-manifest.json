@@ -894,18 +894,6 @@
       "timestamp": "2026-06-26T09:58:00.723119"
     },
     {
-      "module_id": "ossec",
-      "module_name": "Ossec",
-      "category": "Security",
-      "path": "/ossec/",
-      "screenshot_path": "docs/screenshots/vm/ossec.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/ossec-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-06-26T09:58:19.609354"
-    },
-    {
       "module_id": "master-link",
       "module_name": "Master Link",
       "category": "VPN",

@@ -38,7 +38,6 @@
 | 🔬 **Threat Analyst** | Security | AI驱动的威胁分析 |
 | 🔴 **CVE Triage** | Security | CVE漏洞跟踪和分类 |
 | 🛡️ **Wazuh SIEM** | Security | Wazuh SIEM集成 |
-| 🔒 **OSSEC HIDS** | Security | OSSEC主机入侵检测 |
 | 🦞 **OpenClaw Scanner** | Security | 网络漏洞扫描器 |
 | 🔌 **IoT Guard** | Security | IoT设备安全监控 |
 | 🌐 **Network Modes** | Network | 网络拓扑配置 |
@@ -997,14 +996,6 @@ Wazuh SIEM集成
 **功能:** 日志分析, 文件完整性, 漏洞检测, 合规
 
 ![Wazuh SIEM](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/wazuh.png)
-
-#### 🔒 OSSEC HIDS
-
-OSSEC主机入侵检测
-
-**功能:** 日志分析, Rootkit检测, 文件完整性, 主动响应
-
-![OSSEC HIDS](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/ossec.png)
 
 #### 🦞 OpenClaw Scanner
 

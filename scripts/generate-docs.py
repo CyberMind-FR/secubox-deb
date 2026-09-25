@@ -344,21 +344,6 @@ MODULES = {
             "zh": ["日志分析", "文件完整性", "漏洞检测", "合规"]
         }
     },
-    "ossec": {
-        "name": "OSSEC HIDS", "icon": "🔒", "category": "Security",
-        "description": {
-            "en": "OSSEC host-based intrusion detection",
-            "fr": "Détection d'intrusion basée hôte OSSEC",
-            "de": "OSSEC-hostbasierte Einbruchserkennung",
-            "zh": "OSSEC主机入侵检测"
-        },
-        "features": {
-            "en": ["Log analysis", "Rootkit detection", "File integrity", "Active response"],
-            "fr": ["Analyse logs", "Détection rootkits", "Intégrité fichiers", "Réponse active"],
-            "de": ["Log-Analyse", "Rootkit-Erkennung", "Dateiintegrität", "Aktive Reaktion"],
-            "zh": ["日志分析", "Rootkit检测", "文件完整性", "主动响应"]
-        }
-    },
     "openclaw": {
         "name": "OpenClaw Scanner", "icon": "🦞", "category": "Security",
         "description": {

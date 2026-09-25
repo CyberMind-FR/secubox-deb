@@ -38,7 +38,6 @@
 | 🔬 **Threat Analyst** | Security | AI-powered threat analysis |
 | 🔴 **CVE Triage** | Security | CVE vulnerability tracking and triage |
 | 🛡️ **Wazuh SIEM** | Security | Wazuh SIEM integration |
-| 🔒 **OSSEC HIDS** | Security | OSSEC host-based intrusion detection |
 | 🦞 **OpenClaw Scanner** | Security | Network vulnerability scanner |
 | 🔌 **IoT Guard** | Security | IoT device security monitoring |
 | 🌐 **Network Modes** | Network | Network topology configuration |
@@ -1001,14 +1000,6 @@ Wazuh SIEM integration
 **Features:** Log analysis, File integrity, Vulnerability detection, Compliance
 
 ![Wazuh SIEM](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/wazuh.png)
-
-#### 🔒 OSSEC HIDS
-
-OSSEC host-based intrusion detection
-
-**Features:** Log analysis, Rootkit detection, File integrity, Active response
-
-![OSSEC HIDS](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/ossec.png)
 
 #### 🦞 OpenClaw Scanner
 
