@@ -1,0 +1,544 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     Source-Disclosed License — All rights reserved except as expressly granted.
+     See LICENCE-CMSD-1.0.md for terms.
+
+     MAQUETTE INTERACTIVE — SBX OS Identity Manager (#1405, docs/AUTH_V2.md).
+     Référence visuelle et fonctionnelle validée par l'utilisateur : « conserve ce
+     mockup impeccable ». Données d'exemple, aucun appel réseau. Source unique :
+     docs/design/sbxos-identite-maquette.html ; copie servie par secubox-acces
+     (/acces/maquette.html) — garder les deux identiques (test). -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SBX OS Identity Manager</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f3f4f7; --surf:#ffffff; --surf2:#eceef3; --line:#d7dbe4; --text:#1b1e27; --muted:#5b6173;
+  --acc:#0074a3; --acc-soft:rgba(0,116,163,.10); --gold:#8a6a1c;
+  --ok:#17804a; --ok-soft:rgba(23,128,74,.12); --bad:#c0303c; --bad-soft:rgba(192,48,60,.10); --warn:#a86b00; --warn-soft:rgba(168,107,0,.12);
+  --display:"Cinzel",Georgia,serif; --body:"Atkinson Hyperlegible",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#0b0d12; --surf:#131722; --surf2:#1a1f2d; --line:#262d3e; --text:#e8e6d9; --muted:#8b90a3;
+  --acc:#00d4ff; --acc-soft:rgba(0,212,255,.10); --gold:#c9a84c;
+  --ok:#3ddc84; --ok-soft:rgba(61,220,132,.12); --bad:#ff5d6c; --bad-soft:rgba(255,93,108,.12); --warn:#f0b429; --warn-soft:rgba(240,180,41,.12);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0b0d12; --surf:#131722; --surf2:#1a1f2d; --line:#262d3e; --text:#e8e6d9; --muted:#8b90a3;
+  --acc:#00d4ff; --acc-soft:rgba(0,212,255,.10); --gold:#c9a84c;
+  --ok:#3ddc84; --ok-soft:rgba(61,220,132,.12); --bad:#ff5d6c; --bad-soft:rgba(255,93,108,.12); --warn:#f0b429; --warn-soft:rgba(240,180,41,.12);
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:15px/1.5 var(--body);padding-inline:16px;padding-block:0 40px}
+.wrap{max-width:1180px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:18px 14px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--display);font-size:22px;letter-spacing:.02em;color:var(--gold)}
+.brand small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.04em}
+.who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+select,input,button{font:inherit;color:inherit}
+select,input[type=text]{background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:6px 9px}
+button{cursor:pointer;background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+button:hover{border-color:var(--acc)}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.prim{background:var(--acc);border-color:var(--acc);color:var(--bg);font-weight:700}
+button.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+button:disabled{opacity:.45;cursor:not-allowed}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap;padding-block:12px}
+nav.tabs a{text-decoration:none;color:var(--muted);padding:7px 12px;border-radius:8px;font-size:14px;border:1px solid transparent}
+nav.tabs a[aria-current="page"]{color:var(--text);background:var(--surf);border-color:var(--line)}
+nav.tabs a .k{font-family:var(--mono);font-size:10px;color:var(--acc);margin-right:6px}
+section.view{display:none}
+section.view.on{display:block}
+h1{font-family:var(--display);font-size:20px;margin:6px 0 4px;text-wrap:balance}
+h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px;font-weight:700}
+.lead{color:var(--muted);max-width:68ch;margin:0 0 14px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+@media (max-width:860px){.g2{grid-template-columns:1fr}}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.mono{font-family:var(--mono);font-size:12.5px}
+.muted{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--mono);font-size:11.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surf2);white-space:nowrap}
+.chip.role{border-color:color-mix(in srgb,var(--gold) 55%,var(--line));color:var(--gold)}
+.chip.cap{color:var(--acc)}
+.chip.ok{color:var(--ok);background:var(--ok-soft);border-color:transparent}
+.chip.bad{color:var(--bad);background:var(--bad-soft);border-color:transparent}
+.chip.warn{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+dl.kv dt{color:var(--muted);font-size:13px}
+dl.kv dd{margin:0;font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere}
+.dev{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.dev:first-child{border-top:0}
+.dev .ico{width:40px;height:40px;border-radius:10px;background:var(--surf2);display:grid;place-items:center;color:var(--acc)}
+.dev .ico svg{width:22px;height:22px}
+.dev .name{font-weight:700}
+.dev .meta{font-size:12.5px;color:var(--muted)}
+.dev .act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.dev.revoked .name{text-decoration:line-through;color:var(--muted)}
+.confirm{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--bad)}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--text);color:var(--bg);padding:9px 16px;border-radius:9px;font-size:14px;max-width:calc(100% - 32px);z-index:9}
+.steps{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.steps li{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--surf)}
+.steps li .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:12px;background:var(--surf2);color:var(--muted)}
+.steps li.done .n{background:var(--ok-soft);color:var(--ok)}
+.steps li.fail .n{background:var(--bad-soft);color:var(--bad)}
+.steps li.cur{border-color:var(--acc)}
+.steps li b{display:block}
+.steps li span{font-size:13px;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
+td.c,th.c{text-align:center}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--acc)}
+.dot.no{background:transparent;border:1px solid var(--line)}
+pre.code{background:var(--surf2);border:1px solid var(--line);border-radius:9px;padding:12px;font:12px/1.55 var(--mono);overflow-x:auto;margin:0;white-space:pre}
+.timer{font-family:var(--mono);font-size:26px;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:var(--surf2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc);transition:width .9s linear}
+.world{border-radius:var(--r);padding:16px;border:1px solid var(--line)}
+.world.sys{background:var(--surf2)}
+.world h3{margin:0 0 4px;font-family:var(--display);font-size:16px}
+.acct{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px dashed var(--line);font-size:13.5px}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.plan{border:1px solid var(--line);border-radius:var(--r);padding:14px;background:var(--surf);display:grid;gap:8px;align-content:start}
+.plan.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+.plan .price{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.node{display:grid;gap:4px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surf)}
+.nodes{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.nodes .arrow{font-family:var(--mono);color:var(--muted)}
+@media (max-width:560px){.nodes{grid-template-columns:1fr}.nodes .arrow{text-align:center;transform:rotate(90deg)}}
+.hint{font-size:12.5px;color:var(--muted);border-left:2px solid var(--gold);padding-left:10px;margin-top:10px}
+.cert{margin:4px 0 0 52px}
+.audit{list-style:none;margin:0;padding:0;display:grid;gap:0;max-height:260px;overflow:auto}
+.audit li{display:grid;grid-template-columns:62px 150px 1fr;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+.audit li:first-child{border-top:0}
+.audit time{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.audit .ev{font-family:var(--mono);font-size:12px;color:var(--acc)}
+@media (max-width:560px){.audit li{grid-template-columns:52px 1fr}.audit li span:last-child{grid-column:1/-1}}
+.invbox{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));align-items:end}
+.invbox label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.linkout{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.linkout code{font-family:var(--mono);font-size:12.5px;background:var(--surf2);border:1px solid var(--line);border-radius:7px;padding:5px 8px;overflow-wrap:anywhere}
+.sample{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));border-radius:6px;padding:1px 6px}
+@media (prefers-reduced-motion: reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<header class="top">
+  <div class="brand">SBX OS Identity Manager<small>maquette interactive · #1405 · AUTH v2</small></div>
+  <span class="sample" title="Données d'exemple : rien n'est envoyé à une box">données d'exemple</span>
+  <div class="who"><label for="as">Vu par</label>
+    <select id="as"></select>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Écrans">
+  <a href="#appareils"><span class="k">HALL</span>Mes appareils</a>
+  <a href="#connexion"><span class="k">SSO</span>Connexion sans formulaire</a>
+  <a href="#admin"><span class="k">ADMIN</span>Administration SBX OS</a>
+  <a href="#abonnements"><span class="k">USER</span>Abonnements</a>
+  <a href="#mesh"><span class="k">SIM</span>Identity Mesh</a>
+  <a href="#mondes"><span class="k">SÉPARATION</span>Système · SBX OS</a>
+</nav>
+
+<!-- 1. MES APPAREILS -->
+<section class="view" id="v-appareils">
+  <h1>Mes appareils</h1>
+  <p class="lead">Chaque appareil prouve votre identité avec sa propre clé. Il n'est pas une identité : le révoquer coupe ses sessions partout, sans toucher à votre compte.</p>
+  <div class="grid g2">
+    <div class="card">
+      <h2 style="margin-top:0">Votre identité SBX</h2>
+      <dl class="kv" id="me-kv"></dl>
+      <h2>Rôles</h2><div class="chips" id="me-roles"></div>
+      <h2>Ce que vous pouvez faire</h2><div class="chips" id="me-caps"></div>
+      <p class="hint">Aucune capacité SBX OS n'ouvre SSH, sudo ou root. Ce sont des accès aux modules et aux fonctionnalités.</p>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Appareils</h2><span class="mono muted" id="dev-count"></span></div>
+      <div class="row" style="margin:8px 0 4px"><button id="kill-others">Déconnecter les autres appareils</button></div>
+      <div id="devs"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. CONNEXION -->
+<section class="view" id="v-connexion">
+  <h1>Connexion sans formulaire</h1>
+  <p class="lead">L'appareil signe un défi ; le Hall obtient une session. Pour ouvrir le BBS, le Hall demande un jeton de rejeu à usage unique, valable 60 secondes, lié à cette session et au seul BBS.</p>
+  <div class="grid g2">
+    <div class="card">
+      <div class="row"><label for="cx-dev">Appareil</label><select id="cx-dev"></select></div>
+      <ol class="steps" id="cx-steps" style="margin-top:12px"></ol>
+      <div class="row" style="margin-top:12px">
+        <button class="prim" id="cx-go">Ouvrir le Hall</button>
+        <button id="cx-bbs" disabled>Ouvrir le BBS</button>
+        <button id="cx-replay" disabled>Rejouer le même jeton</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Jeton de rejeu</h2>
+      <div class="timer" id="cx-timer">—</div>
+      <div class="bar" style="margin:8px 0 12px"><i id="cx-bar" style="width:0"></i></div>
+      <h2>Réponse de /auth/verify</h2>
+      <pre class="code" id="cx-verify">Aucune session ouverte.</pre>
+    </div>
+  </div>
+</section>
+
+<!-- 3. ADMIN -->
+<section class="view" id="v-admin">
+  <h1>Administration SBX OS</h1>
+  <p class="lead">Séparée de l'administration système. On y valide des invitations, on attribue des rôles, on lit les capacités qui en découlent. Les comptes système n'y apparaissent jamais.</p>
+  <div id="adm-guard"></div>
+  <div id="adm-body">
+    <h2>Inviter quelqu'un</h2>
+    <div class="card">
+      <form id="mkinv" class="invbox">
+        <label for="mi-pseudo">Pseudo proposé<input type="text" id="mi-pseudo" placeholder="ex. fanny" autocomplete="off" required></label>
+        <label for="mi-mail">Courriel (facultatif)<input type="text" id="mi-mail" placeholder="fanny@exemple.fr" autocomplete="off"></label>
+        <label for="mi-role">Rôle à l'arrivée<select id="mi-role"></select></label>
+        <label for="mi-exp">Validité<select id="mi-exp"><option value="1">24 heures</option><option value="7" selected>7 jours</option><option value="14">14 jours</option></select></label>
+        <button class="prim" type="submit">Créer l'invitation</button>
+      </form>
+      <div id="mi-out"></div>
+    </div>
+    <h2>Invitations en attente</h2>
+    <div class="card"><div id="inv"></div></div>
+    <h2>Personnes</h2>
+    <div class="card scroll"><table id="people"></table></div>
+    <h2>Journal d'audit</h2>
+    <div class="card"><ul class="audit" id="audit"></ul></div>
+    <h2>Rôles → capacités</h2>
+    <div class="card scroll"><table id="matrix"></table>
+      <div class="row" style="margin-top:12px">
+        <label for="newcap">Ajouter une capacité</label>
+        <input type="text" id="newcap" placeholder="ex. radio.moderate" autocomplete="off">
+        <button id="addcap">Ajouter</button><span id="capmsg" class="mono"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. ABONNEMENTS -->
+<section class="view" id="v-abonnements">
+  <h1>Abonnements</h1>
+  <p class="lead">L'abonnement appartient à la personne (<span class="mono">user_uuid</span>), jamais à l'appareil : il suit sur l'iPhone, le Mac et le Pi 400. Le rôle <span class="mono">subscriber</span> en découle automatiquement.</p>
+  <div class="plans" id="plans"></div>
+  <div class="card" style="margin-top:14px">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Effet sur vos capacités</h2><span class="mono muted" id="sub-exp"></span></div>
+    <div class="chips" id="sub-caps" style="margin-top:10px"></div>
+    <p class="hint">ReelBox n'existe pas encore : sa place est réservée dans le modèle, ses capacités (<span class="mono">reelbox.use</span>) aussi.</p>
+  </div>
+</section>
+
+<!-- 5. MESH -->
+<section class="view" id="v-mesh">
+  <h1>SBX Identity Mesh</h1>
+  <p class="lead">Un nœud héberge votre identité, il ne la possède pas. Changer de box demande l'accord des deux administrateurs ; les deux nœuds signent le certificat de migration.</p>
+  <div class="nodes">
+    <div class="node"><b>GK4-3</b><span class="mono muted">did:plc:4be1…  · nœud d'origine</span><span id="n-from" class="chip ok" style="justify-self:start">héberge gandalf</span></div>
+    <div class="arrow">──▶</div>
+    <div class="node"><b>GK4-2</b><span class="mono muted">did:plc:9a07…  · nouveau nœud</span><span id="n-to" class="chip" style="justify-self:start">en attente</span></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><ol class="steps" id="mig"></ol>
+      <div class="row" style="margin-top:12px"><button class="prim" id="mig-next">Demander la migration</button><button id="mig-reset">Recommencer</button></div></div>
+    <div class="card"><h2 style="margin-top:0">Ce qui voyage</h2>
+      <div class="chips" style="margin-bottom:10px"><span class="chip ok">user_uuid (inchangé)</span><span class="chip ok">appareils autorisés</span><span class="chip ok">préférences</span><span class="chip ok">abonnements</span><span class="chip ok">capacités</span><span class="chip warn">messages BBS : restent sur GK4-3</span></div>
+      <h2>Certificat de migration</h2><pre class="code" id="mig-cert">Pas encore signé.</pre></div>
+  </div>
+</section>
+
+<!-- 6. MONDES -->
+<section class="view" id="v-mondes">
+  <h1>Deux mondes séparés</h1>
+  <p class="lead">L'exploitant a deux identités : son compte système, avec TOTP, qui administre la box, et son identité SBX OS, qui poste sur le forum. L'une n'ouvre jamais l'autre.</p>
+  <div class="grid g2">
+    <div class="world sys"><h3>SecuBox System</h3><p class="muted" style="margin:0 0 8px;font-size:13px">Linux et administration de la box · mot de passe + TOTP · SSH pour root</p><div id="sysacc"></div></div>
+    <div class="world card"><h3>SBX OS</h3><p class="muted" style="margin:0 0 8px;font-size:13px">Humains · appareils · capacités · jamais SSH, sudo ni root</p><div id="sbxacc"></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2 style="margin-top:0">Essayer de franchir la frontière</h2>
+    <div class="row"><button id="try-ssh">Donner « ssh » au rôle sbx_operator</button><button id="try-sys">Migrer « gk2 » dans SBX OS</button></div>
+    <pre class="code" id="try-out" style="margin-top:10px">—</pre></div>
+</section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const ICON={
+ iphone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M11 18.5h2"/></svg>',
+ mac:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M1.5 19.5h21"/></svg>',
+ ipad:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.5" y="2.5" width="15" height="19" rx="2"/><path d="M11 18.5h2"/></svg>',
+ android:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="7" y="2.5" width="10" height="19" rx="2"/><circle cx="12" cy="18" r=".8" fill="currentColor"/></svg>',
+ linux:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="8" width="19" height="9" rx="1.5"/><path d="M6 11h1M9 11h1M12 11h1M15 11h1M7 14h10"/></svg>'
+};
+const CAPS=["hall.read","hall.write","bbs.read","bbs.write","bbs.moderate","billets.read","billets.publish","radio.listen","radio.chat","metablog.publish","peertube.upload","nextcloud.files","reelbox.use","reelbox.beta","modules.experimental","admin.users","admin.invites","admin.modules","admin.audit"];
+const BASE=["hall.read","bbs.read","billets.read","radio.listen"];
+const MEMBER=BASE.concat(["hall.write","bbs.write","billets.publish","radio.chat"]);
+const S={
+ roles:{
+  guest:{label:"Invité",caps:BASE.slice()},
+  member:{label:"Membre",caps:MEMBER.slice()},
+  subscriber:{label:"Abonné",caps:MEMBER.concat(["metablog.publish","peertube.upload","nextcloud.files","reelbox.use"]),derived:true},
+  beta_tester:{label:"Bêta-testeur",caps:MEMBER.concat(["reelbox.beta","modules.experimental","metablog.publish"])},
+  moderator:{label:"Modérateur",caps:MEMBER.concat(["bbs.moderate"])},
+  sbx_operator:{label:"Opérateur SBX",caps:MEMBER.concat(["bbs.moderate","metablog.publish","peertube.upload","nextcloud.files","reelbox.use","admin.users","admin.invites","admin.modules","admin.audit"])}
+ },
+ users:[
+  {uuid:"550e8400-e29b-41d4-a716-446655440000",pseudo:"gandalf",email:"gandalf@gk2.net",roles:["sbx_operator","moderator"],home:"did:plc:983c9c6d…",plan:"association",status:"active",
+   links:"BBS #1 (ex-handle gk2) · 214 messages"},
+  {uuid:"7f3a91c2-4b8e-4a51-9d0e-2c41f0b6a913",pseudo:"alice",email:"alice@exemple.fr",roles:["member"],home:"did:plc:983c9c6d…",plan:"free",status:"active",links:"BBS #4 · 37 messages"},
+  {uuid:"a1c0e7d4-58f2-4e3a-b6c1-7d9e2f40c8b5",pseudo:"bruno",email:"",roles:["member","beta_tester"],home:"did:plc:983c9c6d…",plan:"premium",status:"active",links:"BBS #6 · 9 messages"},
+  {uuid:"c93b5e20-1f7a-4d86-8e0b-5a2c7f91d346",pseudo:"chloé",email:"",roles:["guest"],home:"did:plc:983c9c6d…",plan:"free",status:"active",links:"—"}
+ ],
+ devices:[
+  {uuid:"9c21e4b0-…-7f",user:"gandalf",name:"iPhone de Gérald",kind:"iphone",trust:"trusted",seen:"à l'instant",sessions:2,cur:true,did:"did:sbx:da8dbbc5ab0e…"},
+  {uuid:"3b7a02d1-…-4e",user:"gandalf",name:"MacBook atelier",kind:"mac",trust:"trusted",seen:"il y a 2 h",sessions:1,did:"did:sbx:6be31df3fdbe…"},
+  {uuid:"e04c9f18-…-a2",user:"gandalf",name:"Pi 400 salon (kiosque)",kind:"linux",trust:"verified",seen:"hier, 21:14",sessions:1,did:"did:sbx:1f0b77a4c2d9…"},
+  {uuid:"61d8b3ce-…-09",user:"alice",name:"Pixel 8",kind:"android",trust:"verified",seen:"il y a 18 min",sessions:1,did:"did:sbx:77e2a9…"},
+  {uuid:"c2f7a410-…-5b",user:"bruno",name:"iPad",kind:"ipad",trust:"verified",seen:"il y a 3 j",sessions:0,did:"did:sbx:b4d1e0…"}
+ ],
+ invites:[
+  {id:"inv-1",pseudo:"david",email:"david@exemple.fr",device:"iPhone 13",kind:"iphone",fp:"4a56 a1f0 6304 d7e9",when:"il y a 12 min",role:"member"},
+  {id:"inv-2",pseudo:"emma",email:"",device:"Firefox · Linux",kind:"linux",fp:"0e33 1982 49c4 7876",when:"il y a 2 h",role:"guest"}
+ ],
+ system:[["root","Linux · SSH par clé"],["admin","administration SecuBox · TOTP"],["gk2","administration SecuBox · TOTP"],["operator","administration SecuBox"]],
+ as:"gandalf"
+};
+const $=s=>document.querySelector(s), el=(t,a,h)=>{const e=document.createElement(t);if(a)for(const k in a)e.setAttribute(k,a[k]);if(h!=null)e.innerHTML=h;return e;};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const AUDIT=[["08:02","device.session_open","gandalf · iPhone de Gérald"],["07:41","invite.created","gandalf → emma (invité)"],["07:12","role.granted","gandalf → bruno : Bêta-testeur"],["06:55","device.revoked","alice · ancien Galaxy S9 · 2 sessions coupées"]];
+function audit(ev,d){const t=new Date();AUDIT.unshift([String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"),ev,S.as+" · "+d]);renderAudit();}
+function renderAudit(){const u=$("#audit");if(!u)return;u.innerHTML=AUDIT.slice(0,40).map(([t,e,d])=>`<li><time>${t}</time><span class="ev">${esc(e)}</span><span>${esc(d)}</span></li>`).join("");}
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600);}
+function user(p){return S.users.find(u=>u.pseudo===p);}
+function effRoles(u){const r=u.roles.filter(x=>x!=="subscriber");if(u.plan==="premium"||u.plan==="association")r.push("subscriber");return r;}
+function caps(u){if(u.status==="suspended")return [];const s=new Set();effRoles(u).forEach(r=>(S.roles[r]?S.roles[r].caps:[]).forEach(c=>s.add(c)));return CAPS.filter(c=>s.has(c)).concat([...s].filter(c=>!CAPS.includes(c)));}
+function can(p,c){return caps(user(p)).includes(c);}
+
+/* sélecteur « vu par » */
+const as=$("#as");
+S.users.forEach(u=>as.appendChild(el("option",{value:u.pseudo},u.pseudo+" · "+effRoles(u).map(r=>S.roles[r].label).join(", "))));
+try{const v=localStorage.getItem("sbxid.as");if(v&&user(v))S.as=v;}catch(e){}
+as.value=S.as;
+as.addEventListener("change",()=>{S.as=as.value;try{localStorage.setItem("sbxid.as",S.as)}catch(e){}renderAll();});
+
+/* 1. appareils */
+function renderMe(){
+ const u=user(S.as);
+ $("#me-kv").innerHTML=[["user_uuid",u.uuid],["pseudo",u.pseudo],["courriel",u.email||"—"],["nœud d'accueil",u.home],["contenus",u.links]].map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+ $("#me-roles").innerHTML=effRoles(u).map(r=>`<span class="chip role">${esc(S.roles[r].label)}${S.roles[r].derived?" · dérivé":""}</span>`).join("");
+ $("#me-caps").innerHTML=caps(u).map(c=>`<span class="chip cap">${esc(c)}</span>`).join("");
+ const ds=S.devices.filter(d=>d.user===S.as);
+ const act=ds.filter(d=>!d.revoked).length;
+ $("#dev-count").textContent=act+" actif"+(act>1?"s":"")+" · "+ds.reduce((n,d)=>n+(d.revoked?0:d.sessions),0)+" session(s)";
+ const box=$("#devs");box.innerHTML="";
+ if(!ds.length){box.innerHTML='<p class="muted">Aucun appareil.</p>';return;}
+ ds.forEach(d=>{
+  const row=el("div",{class:"dev"+(d.revoked?" revoked":"")});
+  const trust={trusted:["ok","de confiance"],verified:["","vérifié"],pending:["warn","en attente"]}[d.trust];
+  row.innerHTML=`<div class="ico">${ICON[d.kind]}</div>
+   <div><div class="name" data-name>${esc(d.name)}${d.cur?' <span class="chip ok">cet appareil</span>':""}</div>
+   <div class="meta">${d.revoked?"révoqué · sessions coupées":esc(d.seen)+" · "+d.sessions+" session(s)"} · <span class="chip ${trust[0]}">${trust[1]}</span></div>
+   <div class="meta mono">${esc(d.did)}</div></div>
+   <div class="act"></div>`;
+  const a=row.querySelector(".act");
+  if(!d.revoked){
+   const bR=el("button",null,"Renommer"), bX=el("button",{class:"danger"},"Révoquer"), bC=el("button",{"aria-expanded":d.showCert?"true":"false"},"Certificat");
+   bC.onclick=()=>{d.showCert=!d.showCert;renderMe();};
+   bR.onclick=()=>{const n=row.querySelector("[data-name]");const inp=el("input",{type:"text",id:"rn-"+d.uuid,value:d.name,"aria-label":"Nouveau nom"});const ok=el("button",{class:"prim"},"OK");
+     n.replaceWith(inp);a.innerHTML="";a.append(ok);inp.focus();inp.select();
+     const fin=()=>{const v=inp.value.trim();if(v&&v!==d.name){audit("device.renamed",d.name+" → "+v);d.name=v;toast("Appareil renommé");}renderMe();};ok.onclick=fin;inp.onkeydown=e=>{if(e.key==="Enter")fin();if(e.key==="Escape")renderMe();};};
+   bX.onclick=()=>{a.innerHTML="";const c=el("div",{class:"confirm"},d.cur?"Révoquer l'appareil que vous utilisez ?":"Révoquer « "+esc(d.name)+" » ?");
+     const y=el("button",{class:"danger"},"Révoquer"), n=el("button",null,"Annuler");c.append(y,n);a.append(c);
+     y.onclick=()=>{const k=d.sessions;d.revoked=true;d.sessions=0;d.showCert=false;audit("device.revoked",d.name+" · "+k+" session(s) coupée(s)");toast(k+" session(s) coupée(s) · appareil révoqué");renderMe();renderCx();};n.onclick=renderMe;};
+   a.append(bC,bR,bX);
+  }
+  box.appendChild(row);
+  if(d.showCert&&!d.revoked){const u=user(d.user);const c=el("pre",{class:"code cert"});c.textContent=certYaml(u,d);box.appendChild(c);}
+ });
+}
+
+function certYaml(u,d){return `apiVersion: sbxos/v1
+identity:
+  node: did:plc:983c9c6d…        # GK2, clé Ed25519 de la fédération
+  user: ${u.uuid}
+  device: ${d.uuid}
+  device_key: "p256:04${d.did.slice(8,20)}…"
+  pseudo: ${u.pseudo}
+roles: [${effRoles(u).join(", ")}]
+capabilities: [${caps(u).join(", ")}]
+restrictions: {vault: own-only, system: none}
+issued: 2026-09-25T08:00:00Z
+expires: 2027-09-25T00:00:00Z
+signature: {issuer: did:plc:983c9c6d…, algorithm: ed25519, value: "…"}`;}
+$("#kill-others").onclick=()=>{let n=0;S.devices.filter(d=>d.user===S.as&&!d.cur&&!d.revoked).forEach(d=>{n+=d.sessions;d.sessions=0;});
+ audit("sessions.revoke_others",n+" session(s)");toast(n?n+" session(s) coupée(s) sur vos autres appareils":"Aucune autre session ouverte");renderMe();};
+
+/* 2. connexion */
+const CX={state:0,replay:null,t:null,used:false,left:0};
+function renderCx(){
+ const sel=$("#cx-dev");const keep=sel.value;sel.innerHTML="";
+ S.devices.filter(d=>d.user===S.as).forEach(d=>sel.appendChild(el("option",{value:d.uuid},d.name+(d.revoked?" (révoqué)":""))));
+ if(keep&&[...sel.options].some(o=>o.value===keep))sel.value=keep;
+ const st=[
+  ["Défi","32 octets aléatoires, 120 s, usage unique"],
+  ["Signature","ECDSA P-256 par la clé non exportable de l'appareil"],
+  ["Contrôles","appareil non révoqué · invitation validée · personne active"],
+  ["Session Hall","cookie HttpOnly · sub = user_uuid · jti = session_uuid"],
+  ["Rejeu → BBS","jeton à usage unique, 60 s, audience « bbs »"],
+  ["BBS ouvert","échange serveur à serveur · aucun formulaire"]];
+ const fail=CX.fail;
+ $("#cx-steps").innerHTML=st.map((s,i)=>`<li class="${i<CX.state?"done":i===CX.state&&fail?"fail":i===CX.state?"cur":""}"><div class="n">${i<CX.state?"✓":i===CX.state&&fail?"✕":i+1}</div><div><b>${s[0]}</b><span>${i===CX.state&&fail?esc(fail):s[1]}</span></div></li>`).join("");
+ $("#cx-bbs").disabled=!(CX.state===4&&!fail);
+ $("#cx-replay").disabled=!(CX.state===6);
+}
+function dev(){return S.devices.find(d=>d.uuid===$("#cx-dev").value);}
+function verifyOut(d){const u=user(S.as);return `HTTP/1.1 200 OK
+Remote-User: ${u.pseudo}
+X-Sbx-User: ${u.uuid}
+X-Sbx-Device: ${d.uuid}
+X-Sbx-Caps: ${caps(u).join(",")}`;}
+$("#cx-go").onclick=()=>{
+ clearInterval(CX.t);CX.fail=null;CX.used=false;CX.state=0;const d=dev();renderCx();
+ let i=0;const tick=()=>{ if(i===2&&(d.revoked||user(S.as).status==="suspended")){CX.state=2;CX.fail=d.revoked?"appareil révoqué : session refusée":"personne suspendue : session refusée";renderCx();$("#cx-verify").textContent="HTTP/1.1 401 Unauthorized\n{\"detail\":\"appareil révoqué\"}";return;}
+  CX.state=++i;renderCx(); if(i<4)setTimeout(tick,420); else {$("#cx-verify").textContent=verifyOut(d);toast("Hall ouvert sans formulaire");}};
+ setTimeout(tick,300);
+};
+$("#cx-bbs").onclick=()=>{
+ CX.state=5;renderCx();CX.left=60;CX.used=false;const bar=$("#cx-bar");bar.style.width="100%";$("#cx-timer").textContent="60 s";
+ clearInterval(CX.t);CX.t=setInterval(()=>{CX.left--;$("#cx-timer").textContent=CX.left>0?CX.left+" s":"expiré";bar.style.width=(Math.max(0,CX.left)/60*100)+"%";if(CX.left<=0)clearInterval(CX.t);},1000);
+ setTimeout(()=>{CX.used=true;CX.state=6;renderCx();toast("BBS ouvert en tant que "+S.as);$("#cx-timer").textContent="consommé";clearInterval(CX.t);bar.style.width="0";},900);
+};
+$("#cx-replay").onclick=()=>{$("#cx-verify").textContent='POST /api/sbx/auth/echange\nHTTP/1.1 409 Conflict\n{"detail":"jeton de rejeu déjà consommé"}';toast("Refusé : un jeton de rejeu ne sert qu'une fois");};
+$("#cx-dev").onchange=()=>{CX.state=0;CX.fail=null;renderCx();$("#cx-verify").textContent="Aucune session ouverte.";};
+
+/* 3. admin */
+function renderAdmin(){
+ initInvForm();renderAudit();
+ const ok=can(S.as,"admin.invites");
+ $("#adm-guard").innerHTML=ok?"":`<div class="card" style="border-color:var(--bad)"><b style="color:var(--bad)">403 · capacité requise : admin.invites</b><p class="muted" style="margin:6px 0 0">${esc(S.as)} n'a pas ce droit. Passez « Vu par » sur gandalf pour voir l'écran.</p></div>`;
+ $("#adm-body").hidden=!ok; if(!ok)return;
+ const inv=$("#inv");inv.innerHTML="";
+ if(!S.invites.length)inv.innerHTML='<p class="muted" style="margin:0">Aucune invitation en attente.</p>';
+ S.invites.forEach(v=>{
+  const row=el("div",{class:"dev"});
+  row.innerHTML=`<div class="ico">${ICON[v.kind]}</div><div><div class="name">${esc(v.pseudo)} <span class="meta">· ${esc(v.device)}</span></div>
+   <div class="meta">${esc(v.email||"sans courriel")} · ${esc(v.when)} · empreinte <span class="mono">${esc(v.fp)}</span></div></div><div class="act"></div>`;
+  const a=row.querySelector(".act");
+  const sel=el("select",{id:"r-"+v.id,"aria-label":"Rôle"});Object.keys(S.roles).filter(r=>!S.roles[r].derived).forEach(r=>sel.appendChild(el("option",{value:r},S.roles[r].label)));sel.value=v.role;
+  const y=el("button",v.byLink?{class:"prim",disabled:"",title:"L'invité doit d'abord ouvrir le lien sur son appareil"}:{class:"prim"},"Valider"), n=el("button",{class:"danger"},v.byLink?"Annuler":"Refuser");
+  y.onclick=()=>{S.users.push({uuid:crypto.randomUUID?crypto.randomUUID():"new-"+Date.now(),pseudo:v.pseudo,email:v.email,roles:[sel.value],home:"did:plc:983c9c6d…",plan:"free",status:"active",links:"—"});
+   S.devices.push({uuid:(crypto.randomUUID?crypto.randomUUID().slice(0,13):"d")+"…",user:v.pseudo,name:v.device,kind:v.kind,trust:"verified",seen:"à l'instant",sessions:0,did:"did:sbx:"+v.fp.replace(/ /g,"").toLowerCase()+"…"});
+   S.invites=S.invites.filter(x=>x!==v);as.appendChild(el("option",{value:v.pseudo},v.pseudo));audit("invite.validated",v.pseudo+" · "+S.roles[sel.value].label);toast(v.pseudo+" validé · rôle "+S.roles[sel.value].label);renderAdmin();};
+  n.onclick=()=>{S.invites=S.invites.filter(x=>x!==v);audit(v.byLink?"invite.cancelled":"invite.refused",v.pseudo);toast("Invitation de "+v.pseudo+(v.byLink?" annulée":" refusée"));renderAdmin();};
+  a.append(sel,y,n);inv.appendChild(row);
+ });
+ const assignable=Object.keys(S.roles).filter(r=>!S.roles[r].derived);
+ $("#people").innerHTML=`<thead><tr><th>Personne</th>${assignable.map(r=>`<th class="c">${esc(S.roles[r].label)}</th>`).join("")}<th>Abonnement</th><th>Capacités</th><th>Statut</th></tr></thead><tbody>`+
+  S.users.map(u=>`<tr><td><b>${esc(u.pseudo)}</b><div class="mono muted" style="font-size:11px">${esc(u.uuid.slice(0,8))}…</div></td>${assignable.map(r=>`<td class="c"><input type="checkbox" id="ur-${esc(u.pseudo)}-${r}" data-u="${esc(u.pseudo)}" data-r="${r}" ${u.roles.includes(r)?"checked":""} aria-label="${esc(u.pseudo)} ${esc(S.roles[r].label)}"></td>`).join("")}<td class="mono">${u.plan}</td><td class="mono">${caps(u).length}</td><td>${u.pseudo===S.as?'<span class="chip ok">vous</span>':`<button data-sus="${esc(u.pseudo)}" class="${u.status==="suspended"?"":"danger"}">${u.status==="suspended"?"Réactiver":"Suspendre"}</button>`}</td></tr>`).join("")+"</tbody>";
+ $("#people").querySelectorAll("[data-sus]").forEach(b=>b.onclick=()=>{const u=user(b.dataset.sus);u.status=u.status==="suspended"?"active":"suspended";
+  let k=0;if(u.status==="suspended")S.devices.filter(d=>d.user===u.pseudo).forEach(d=>{k+=d.sessions;d.sessions=0;});
+  audit(u.status==="suspended"?"user.suspended":"user.reactivated",u.pseudo+(k?" · "+k+" session(s) coupée(s)":""));toast(u.pseudo+(u.status==="suspended"?" suspendu · plus aucune session":" réactivé"));renderAll();});
+ $("#people").querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{const u=user(cb.dataset.u);if(cb.checked)u.roles.push(cb.dataset.r);else u.roles=u.roles.filter(x=>x!==cb.dataset.r);audit(cb.checked?"role.granted":"role.revoked",u.pseudo+" : "+S.roles[cb.dataset.r].label);toast((cb.checked?"Rôle attribué : ":"Rôle retiré : ")+S.roles[cb.dataset.r].label);renderAll();});
+ const roles=Object.keys(S.roles), allc=CAPS.concat(Object.values(S.roles).flatMap(r=>r.caps).filter((c,i,a)=>!CAPS.includes(c)&&a.indexOf(c)===i));
+ $("#matrix").innerHTML=`<thead><tr><th>Capacité</th>${roles.map(r=>`<th class="c">${esc(S.roles[r].label)}</th>`).join("")}</tr></thead><tbody>`+
+  allc.map(c=>`<tr><td class="mono">${esc(c)}</td>${roles.map(r=>`<td class="c"><span class="dot ${S.roles[r].caps.includes(c)?"":"no"}" title="${S.roles[r].caps.includes(c)?"oui":"non"}"></span></td>`).join("")}</tr>`).join("")+"</tbody>";
+}
+function initInvForm(){const sel=$("#mi-role");if(sel.options.length)return;Object.keys(S.roles).filter(r=>!S.roles[r].derived).forEach(r=>sel.appendChild(el("option",{value:r},S.roles[r].label)));sel.value="member";
+ $("#mkinv").addEventListener("submit",e=>{e.preventDefault();const p=$("#mi-pseudo").value.trim();if(!p){$("#mi-pseudo").focus();return;}
+  if(user(p)){$("#mi-out").innerHTML='<p class="mono" style="color:var(--bad)">Ce pseudo existe déjà.</p>';return;}
+  const code=Array.from({length:3},()=>Math.random().toString(36).slice(2,6).toUpperCase()).join("-"), j=+$("#mi-exp").value, role=$("#mi-role").value;
+  const url="https://hall.gk2.secubox.in/i/acces/?invitation="+code;
+  $("#mi-out").innerHTML=`<div class="linkout"><code id="mi-url">${esc(url)}</code><button type="button" id="mi-copy">Copier le lien</button><span class="muted" style="font-size:13px">code <b class="mono">${code}</b> · ${esc(S.roles[role].label)} · expire dans ${j} j · usage unique</span></div>`;
+  $("#mi-copy").onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(url).then(()=>toast("Lien copié"),()=>{const r=document.createRange();r.selectNodeContents($("#mi-url"));getSelection().removeAllRanges();getSelection().addRange(r);toast("Lien sélectionné : Ctrl+C");});};
+  S.invites.unshift({id:"inv-"+code,pseudo:p,email:$("#mi-mail").value.trim(),device:"en attente de l'appareil",kind:"android",fp:"—",when:"à l'instant (lien envoyé)",role,byLink:true});
+  audit("invite.created",p+" ("+S.roles[role].label+", "+j+" j)");$("#mi-pseudo").value="";$("#mi-mail").value="";renderAdmin();});}
+const INTERDIT=/^(ssh|sudo|root|system\.)/i;
+function addCap(name,role){
+ name=name.trim().toLowerCase();
+ if(!/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_.]*$/.test(name))return{ok:false,msg:"format attendu : module.action"};
+ if(INTERDIT.test(name))return{ok:false,msg:"refusé par la base : CHECK (capability NOT GLOB 'ssh*' …) — une capacité SBX OS ne touche jamais au système"};
+ S.roles[role||"sbx_operator"].caps.push(name);return{ok:true,msg:"ajoutée à Opérateur SBX"};
+}
+$("#addcap").onclick=()=>{const r=addCap($("#newcap").value);const m=$("#capmsg");m.textContent=r.msg;m.style.color=r.ok?"var(--ok)":"var(--bad)";if(r.ok){$("#newcap").value="";renderAll();}};
+
+/* 4. abonnements */
+const PLANS={free:["Free","0 €","Hall, BBS, Billets, radio"],premium:["Premium","4 € / mois","+ Nextcloud, PeerTube, métablogs, ReelBox"],association:["Association","cotisation annuelle","Premium, pour les membres d'une association adhérente"]};
+function renderPlans(){
+ const u=user(S.as);$("#plans").innerHTML="";
+ Object.entries(PLANS).forEach(([k,p])=>{const c=el("div",{class:"plan"+(u.plan===k?" on":"")});
+  c.innerHTML=`<b>${p[0]}</b><span class="price">${p[1]}</span><span class="muted" style="font-size:13px">${p[2]}</span>`;
+  const b=el("button",u.plan===k?{class:"prim",disabled:""}:null,u.plan===k?"Plan actuel":"Choisir "+p[0]);
+  b.onclick=()=>{u.plan=k;audit("subscription.changed",u.pseudo+" → "+p[0]);toast("Abonnement "+p[0]+" · tous les appareils de "+u.pseudo);renderAll();};c.appendChild(b);$("#plans").appendChild(c);});
+ if(u.auto===undefined)u.auto=u.plan!=="free";
+ const se=$("#sub-exp");se.innerHTML="";
+ if(u.plan==="free")se.textContent="sans échéance";
+ else{se.append(`expire le 25/09/2027 · `);const lab=el("label",{for:"auto-renew"});const cb=el("input",{type:"checkbox",id:"auto-renew"});cb.checked=!!u.auto;
+  cb.onchange=()=>{u.auto=cb.checked;audit("subscription.auto_renew",u.pseudo+" : "+(cb.checked?"activé":"désactivé"));toast(cb.checked?"Renouvellement automatique activé":"Renouvellement automatique désactivé");};
+  lab.append(cb," renouvellement automatique");se.append(lab);}
+ const sub=new Set(S.roles.subscriber.caps), mine=caps(u);
+ $("#sub-caps").innerHTML=mine.map(c=>`<span class="chip ${sub.has(c)&&!MEMBER.includes(c)?"ok":"cap"}">${esc(c)}</span>`).join("")+(effRoles(u).includes("subscriber")?"":' <span class="muted" style="font-size:13px">Choisissez Premium ou Association pour ajouter les capacités en vert.</span>');
+}
+
+/* 5. mesh */
+const MIG=["Demande de migration|gandalf demande à être hébergé par GK4-2","Accueil approuvé|l'admin de GK4-2 valide l'arrivée","Départ approuvé|l'admin de GK4-3 valide le départ","Certificat et synchronisation|les deux nœuds signent ; identité, appareils, préférences et abonnements passent sur GK4-2"];
+let mig=0;
+function renderMig(){
+ $("#mig").innerHTML=MIG.map((s,i)=>{const[a,b]=s.split("|");return `<li class="${i<mig?"done":i===mig?"cur":""}"><div class="n">${i<mig?"✓":i+1}</div><div><b>${a}</b><span>${b}</span></div></li>`;}).join("");
+ const lab=["Demander la migration","Approuver (admin GK4-2)","Approuver (admin GK4-3)","Signer et synchroniser"];
+ $("#mig-next").textContent=mig<4?lab[mig]:"Migration terminée";$("#mig-next").disabled=mig>=4;
+ $("#n-from").className="chip "+(mig>=4?"":"ok");$("#n-from").textContent=mig>=4?"a transmis gandalf":"héberge gandalf";
+ $("#n-to").className="chip "+(mig>=4?"ok":mig>0?"warn":"");$("#n-to").textContent=mig>=4?"héberge gandalf":mig>0?"demande reçue":"en attente";
+ $("#mig-cert").textContent=mig<4?"Pas encore signé.":`apiVersion: sbxos/v1
+kind: MigrationCertificate
+user: 550e8400-e29b-41d4-a716-446655440000   # inchangé
+pseudo: gandalf
+from: {node: GK4-3, did: "did:plc:4be1…"}
+to:   {node: GK4-2, did: "did:plc:9a07…"}
+devices: [9c21e4b0-…, 3b7a02d1-…, e04c9f18-…]
+roles: [sbx_operator, moderator]
+subscription: {tier: association, expires: 2027-09-25}
+signatures:
+  - {by: "did:plc:9a07…", algorithm: ed25519, value: "…"}   # accueil
+  - {by: "did:plc:4be1…", algorithm: ed25519, value: "…"}   # départ`;
+}
+$("#mig-next").onclick=()=>{mig++;audit("sim.migration_step",MIG[mig-1].split("|")[0]);renderMig();if(mig===4)toast("gandalf est hébergé par GK4-2 · même user_uuid");};
+$("#mig-reset").onclick=()=>{mig=0;renderMig();};
+
+/* 6. mondes */
+function renderWorlds(){
+ $("#sysacc").innerHTML=S.system.map(([n,d])=>`<div class="acct"><span class="mono"><b>${n}</b></span><span class="muted">${d}</span></div>`).join("");
+ $("#sbxacc").innerHTML=S.users.map(u=>`<div class="acct"><span><b>${esc(u.pseudo)}</b> <span class="mono muted" style="font-size:11px">${esc(u.uuid.slice(0,8))}…</span></span><span class="chips">${effRoles(u).map(r=>`<span class="chip role">${esc(S.roles[r].label)}</span>`).join("")}</span></div>`).join("");
+}
+$("#try-ssh").onclick=()=>{const r=addCap("ssh.login","sbx_operator");$("#try-out").textContent="INSERT INTO sbx_capabilities VALUES ('ssh.login')\n→ "+r.msg;};
+$("#try-sys").onclick=()=>{$("#try-out").textContent="migrate --user gk2\n→ refusé : gk2 est un compte système. Les comptes root, admin, gk2 et operator ne sont jamais migrés dans sbx_users.\n   Les messages BBS de l'ancien handle gk2 sont rattachés à gandalf (sbx_app_links).";};
+
+/* navigation */
+const VIEWS=["appareils","connexion","admin","abonnements","mesh","mondes"];
+function show(){let v=(location.hash||"#appareils").slice(1);if(!VIEWS.includes(v))v="appareils";
+ VIEWS.forEach(x=>$("#v-"+x).classList.toggle("on",x===v));
+ document.querySelectorAll("nav.tabs a").forEach(a=>a.getAttribute("href")==="#"+v?a.setAttribute("aria-current","page"):a.removeAttribute("aria-current"));}
+window.addEventListener("hashchange",show);
+function renderAll(){renderMe();renderCx();renderAdmin();renderPlans();renderMig();renderWorlds();
+ [...as.options].forEach(o=>{const u=user(o.value);if(u)o.textContent=u.pseudo+" · "+effRoles(u).map(r=>S.roles[r].label).join(", ");});}
+renderAll();show();
+})();
+</script>
+
+</body>
+</html>
