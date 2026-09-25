@@ -54,7 +54,7 @@ func main() {
 	}
 	ch := federation.CheminsParDefaut()
 	for env, cible := range map[string]*string{"SBX_FEDERATION_ETAT": &ch.Etat,
-		"SBX_FEDERATION_CONFIG": &ch.Config, "SBX_NODE_KEY": &ch.NodeKey, "SBX_CA_KEY": &ch.CAKey} {
+		"SBX_FEDERATION_CONFIG": &ch.Config, "SBX_NODE_KEY": &ch.NodeKey, "SBX_CA_KEY": &ch.CAKey, "SBX_SITES": &ch.Sites} {
 		if v := os.Getenv(env); v != "" {
 			*cible = v
 		}
@@ -79,6 +79,7 @@ func (s *serveur) routes() http.Handler {
 	m.HandleFunc("GET /api/federation/join/{did}", s.suiviAdhesion)
 	m.HandleFunc("POST /api/cert/renew", s.renouvelle)
 	m.HandleFunc("GET /api/cert/crl", s.crl)
+	s.routesAppStore(m)
 	m.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { ecris(w, 200, map[string]any{"ok": true}) })
 	return m
 }
@@ -280,3 +281,5 @@ func (s *serveur) crl(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(y)
 }
+
+func logf(f string, a ...any) { log.Printf(f, a...) }

@@ -1,3 +1,26 @@
+secubox-federation (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * app publish d'un site sous git en root : git refusait le dépôt du compte
+    secubox (« dubious ownership ») ; safe.directory limité au dépôt emballé, par
+    son chemin RÉEL (/srv → /data sur gk2) (ref #1391).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 08:43:43 +0200
+
+secubox-federation (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Métablogs dans l'App Store (ref #1391, P5a de #1388) : paquet .sbx = le
+    .sbxsite du metablogizer, étendu (fiche SBXObject avec rétribution,
+    SHA-256 par membre, certificat SBX de l'éditeur, signature Ed25519) —
+    toujours importable par le metablogizer.
+  * sbxctl app publish / app list / install : vérifie signature, intégrité et
+    certificat de l'éditeur (droit metapack) ; n'écrase JAMAIS un site ;
+    installe non publié.
+  * sbx-certd : /api/appstore/catalog, /object/{id}, /object/{id}/sbx,
+    POST /api/appstore/install (administrateur confirmé par secubox-auth ;
+    éditeur certifié exigé).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 08:41:39 +0200
+
 secubox-federation (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Fédération SBX v2, phase 1 (ref #1389, #1388) : CA GK2, certificat SBX v2

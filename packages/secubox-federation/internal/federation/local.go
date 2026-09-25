@@ -22,6 +22,7 @@ type Chemins struct {
 	NodeKey string // /etc/secubox/secrets/annuaire/node.key — l'identité annuaire de la box
 	Etat    string // /var/lib/secubox/federation
 	CAKey   string // /etc/secubox/secrets/federation/ca.key (autorité seulement)
+	Sites   string // /srv/metablogizer/sites — où s'installent les métablogs
 }
 
 func CheminsParDefaut() Chemins {
@@ -30,6 +31,7 @@ func CheminsParDefaut() Chemins {
 		NodeKey: "/etc/secubox/secrets/annuaire/node.key",
 		Etat:    "/var/lib/secubox/federation",
 		CAKey:   "/etc/secubox/secrets/federation/ca.key",
+		Sites:   "/srv/metablogizer/sites",
 	}
 }
 
@@ -38,6 +40,21 @@ func (c Chemins) CAPub() string   { return filepath.Join(c.Etat, "ca.pub") }
 func (c Chemins) CRL() string     { return filepath.Join(c.Etat, "crl.yaml") }
 func (c Chemins) DirCA() string   { return filepath.Join(c.Etat, "ca") }
 func (c Chemins) Demande() string { return filepath.Join(c.Etat, "demande.json") }
+func (c Chemins) Objets() string  { return filepath.Join(c.Etat, "objets") }
+
+// Confiance : la clé de CA qui fait foi ICI (la sienne pour l'autorité, celle
+// épinglée pour un membre), la liste de révocation connue, et les canaux que
+// le certificat VALIDE de cette box ouvre.
+func (c Chemins) Confiance(cfg *Config, clesCA func() (ed25519.PublicKey, map[string]bool)) (ed25519.PublicKey, map[string]bool, []string) {
+	caPub, rev := clesCA()
+	var canaux []string
+	if cert, err := c.CertLocal(); err == nil && cert != nil && caPub != nil {
+		if cert.Verification(caPub, time.Now(), rev).Valide {
+			canaux = cert.Channels
+		}
+	}
+	return caPub, rev, canaux
+}
 
 // CertLocal : le certificat de CETTE box, s'il existe.
 func (c Chemins) CertLocal() (*sbxcert.Certificat, error) {

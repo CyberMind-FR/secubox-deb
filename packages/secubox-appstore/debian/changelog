@@ -1,3 +1,14 @@
+secubox-appstore (0.4.13-1~bookworm1) bookworm; urgency=medium
+
+  * Objets fédérés (ref #1391) : section de l'App Store alimentée par
+    /api/appstore/catalog (secubox-federation) — filtres Applications,
+    Sites, Métablogs, WAF, Données, Archives, Configurations ; cartes avec
+    auteur, licence, version, canal (🔒 s'il n'est pas ouvert par le
+    certificat de la box), signature et certification de l'éditeur,
+    rétribution ; bouton Installer (administrateur, site non publié).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 08:42:24 +0200
+
 secubox-appstore (0.4.12-1~bookworm1) bookworm; urgency=medium
 
   * Catalogue régénéré : 176 modules, gabriel-mood compris.

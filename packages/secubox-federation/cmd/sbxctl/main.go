@@ -66,7 +66,19 @@ func main() {
 	if v := os.Getenv("SBX_CA_KEY"); v != "" {
 		ch.CAKey = v
 	}
+	if v := os.Getenv("SBX_SITES"); v != "" {
+		ch.Sites = v
+	}
 	var err error
+	if os.Args[1] == "install" {
+		err = installeObjet(ch, os.Args[2:])
+		rendAuDemon(ch)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sbxctl :", err)
+			os.Exit(1)
+		}
+		return
+	}
 	switch strings.Join(os.Args[1:min(3, len(os.Args))], " ") {
 	case "ca init":
 		err = caInit(ch)
@@ -88,6 +100,10 @@ func main() {
 		err = exporte(ch, os.Args[3:])
 	case "cert verify":
 		err = verifie(ch, os.Args[3:])
+	case "app publish":
+		err = publieApp(ch, os.Args[3:])
+	case "app list":
+		err = listeApps(ch, os.Args[3:])
 	case "version", "--version":
 		fmt.Println("sbxctl", version)
 	default:
@@ -101,6 +117,26 @@ func main() {
 		fmt.Fprintln(os.Stderr, "sbxctl :", err)
 		os.Exit(1)
 	}
+}
+
+// rendAuMetablogizer : un site installé par root appartient au compte
+// `secubox`, comme les 168 autres — sinon le metablogizer ne peut pas le publier.
+func rendAuMetablogizer(dossier string) {
+	if os.Geteuid() != 0 {
+		return
+	}
+	u, err := user.Lookup("secubox")
+	if err != nil {
+		return
+	}
+	uid, _ := strconv.Atoi(u.Uid)
+	gid, _ := strconv.Atoi(u.Gid)
+	filepath.Walk(dossier, func(p string, _ os.FileInfo, err error) error {
+		if err == nil {
+			os.Lchown(p, uid, gid)
+		}
+		return nil
+	})
 }
 
 func rendAuDemon(ch federation.Chemins) {
@@ -135,6 +171,9 @@ func aide() {
   cert demandes | issue --did DID [--tier T] [--owner O] [--jours N]
   cert revoke SERIAL [--motif M] | renew [--url URL] [--socket S]
   cert export [--out F] | verify FICHIER
+  app publish --site NOM [--channel C] [--license L] [--wallet W] [--support-url U]
+  app list [--type metablog]
+  install ID|FICHIER.sbx [--nom N] [--accepte-non-certifie]
 `)
 }
 

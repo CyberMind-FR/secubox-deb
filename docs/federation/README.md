@@ -151,10 +151,38 @@ sbxctl cert renew | export [--out F] | verify FICHIER
 | **P2** | mTLS dérivé du certificat SBX ; `sbx-fed` : synchronisation initiée par la box au rythme du tier ; inscription des émissions au journal de l'annuaire | à faire |
 | **P3** | canaux apt stable/beta/alpha (anneaux de secubox-release) ouverts par le certificat ; alpha réservé à premium | à faire |
 | **P4** | flux WAF `community` / `pro` / `premium` signés, incrémentaux (`/feeds/waf/<niveau>`) | à faire |
-| **P5** | `SBXObject` (app, site, metablog, waf, dataset, archive, config, template), paquets `.sbx`, `sbxctl install/clone`, App Store fédéré et vues Fédération du Hall | à faire |
+| **P5a** | Métablogs : `.sbx` = `.sbxsite` du metablogizer signé (fiche, SHA-256, certificat éditeur), `sbxctl app publish/list`, `sbxctl install` (jamais d'écrasement, non publié), `/api/appstore/*`, section « Objets fédérés » de l'App Store | ✅ #1391 — 3 métablogs publiés sur gk2 |
+| **P5** | autres types (`app`, `site`, `waf`, `dataset`, `archive`, `config`, `template`), `sbxctl clone`, vues Fédération du Hall | à faire |
 | **P6** | réplication MirrorNet des objets, métadonnées de rétribution (`author`, `wallet`, `license`, `support_url`) | à faire |
 
-## 8. Sécurité
+## 8. Objets SBX — le paquet `.sbx` (P5a)
+
+Un `.sbx` de métablog **est** le `.sbxsite` du metablogizer (tar.gz :
+`manifest.json` + `content.tar` ou `repo.bundle`), étendu — le metablogizer
+l'importe toujours :
+
+```json
+{
+  "name": "aletheia", "domain": "aletheia.gk2.secubox.in", "has_git": false,
+  "objet": {"id": "metablog.aletheia", "name": "aletheia", "type": "metablog",
+            "version": "2026.09.25", "channel": "stable", "author": "CyberMind",
+            "license": "CC-BY-SA-4.0", "wallet": "cybermind", "support_url": "https://cybermind.fr"},
+  "integrite": {"content.tar": "sha256:…"},
+  "editeur": {"did": "did:plc:…", "pubkey": "ed25519:…", "certificat": "<YAML du certificat SBX>"},
+  "cree": "2026-09-25T06:43:00Z",
+  "signature": "ed25519:…"
+}
+```
+
+À l'installation : membres admis seulement, SHA-256 de chacun, signature de
+l'éditeur, certificat de l'éditeur valide pour la CA **avec le droit
+`metapack`** ; contenu extrait sous `public/` sans traversée ni lien ; un site
+existant n'est **jamais** écrasé ; le site arrive **non publié** (la
+publication — vhost, WAF, certificat, DNS — reste un geste du metablogizer).
+Depuis l'App Store, un éditeur non certifié ne s'installe pas ; en ligne de
+commande, `--accepte-non-certifie` le permet en le disant.
+
+## 9. Sécurité
 
 - Signatures Ed25519 partout, canonicalisation unique (Go = Python, testé).
 - Sujet auto-certifiant ; demande et renouvellement avec preuve de clé ;
