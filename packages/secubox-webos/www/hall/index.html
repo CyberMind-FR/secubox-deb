@@ -1362,7 +1362,9 @@ const FEATURED = [
   // #1240 : Actor Intelligence (TPI inverse) — acteurs corrélés au-delà de l'IP,
   // campagnes, ThreatVector. Lit l'API read-only de sbx-actord (shadow). auth:true
   // (donnée de sécurité réservée à la session, comme la carte Sécurité).
-  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"actor.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true, admin:"/actor/"},
+  // SANS `url` (#1466) : actor.gk2 n'est pas servi — l'agrandir ouvrait une
+  // page d'erreur. Carte sans vhost = elle s'agrandit sur elle-même ; ⚙️ → /actor/.
+  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", carte:"/cardlets/actor.html", h:360, auth:true, admin:"/actor/"},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214, admin:"/droplet/"},
   {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true, admin:"/nextcloud/"},
   {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264, admin:"/mastodon/"},
@@ -1425,6 +1427,9 @@ const FEATURED = [
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214, admin:"/droplet/"},
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222, admin:false},
   // « Signal » et « Signal + » : NON PUBLIÉES (#1444) — voir cardlets-unreleased/.
+  // MES COMPTES (#1466) : les comptes de la personne SBX OS (courriel, Nextcloud,
+  // PeerTube, BBS) liés par l'Identity Manager, avec leur lien d'ouverture.
+  {id:"comptes",    label:"Mes comptes", icon:"🗝️", color:"#6a4fb3", carte:"/cardlets/comptes.html", h:272, auth:true, admin:false},
   // MESSAGERIE (#1446) : mur public + messages privés, servie par le Hall (même
   // origine : la session SBX OS signe ; sinon pseudo de visiteur). Pas de vhost :
   // /mega = la même page agrandie. Le chat de la radio y est centralisé.
@@ -4755,6 +4760,7 @@ const CARDLET_ICONES = {
       photoprism:"Photos : aperçu authentifié ; validez l'accès souverain d'abord.",
       mail:"Mail : aperçu authentifié, accès souverain.",
       zia:"Assistant 100 % local : demande-lui un média, un doc, un sujet — le bus reste la source de vérité.",
+      comptes:"Vos comptes de la box — courriel, cloud, vidéo, forum — et leur lien. Un seul mot de passe pour tous ; le forum s'ouvre d'office.",
       messagerie:"Le mur de la box : écrivez à tous ou à une personne, répondez en privé ou publiquement. Le chat de la radio y passe aussi.",
       toolbox:"Boîte à outils du parc — accès direct.",
       // super-carte

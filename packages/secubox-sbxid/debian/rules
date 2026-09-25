@@ -20,6 +20,11 @@ override_dh_auto_install:
 		acces/www/acces/maquette.html debian/secubox-sbxid/usr/share/secubox/www/acces/
 	install -d debian/secubox-sbxid/usr/share/secubox/menu.d
 	install -m 644 acces/menu.d/26-acces.json debian/secubox-sbxid/usr/share/secubox/menu.d/
+	install -m 644 menu.d/124-identite.json debian/secubox-sbxid/usr/share/secubox/menu.d/
+	install -d debian/secubox-sbxid/usr/share/secubox/www/sbxid
+	install -m 644 www/sbxid/index.html debian/secubox-sbxid/usr/share/secubox/www/sbxid/
+	install -d debian/secubox-sbxid/etc/nginx/secubox-routes.d
+	install -m 644 nginx/sbxid-routes.conf debian/secubox-sbxid/etc/nginx/secubox-routes.d/sbxid.conf
 	install -d debian/secubox-sbxid/etc/secubox
 	install -m 644 acces/conf/acces.toml debian/secubox-sbxid/etc/secubox/
 	install -d debian/secubox-sbxid/etc/nginx/secubox.d
