@@ -6,7 +6,31 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-09-23*
+*Mis à jour : 2026-09-25*
+
+---
+
+## 2026-09-25 — Identité SBX OS : personnes, appareils, comptes liés (#1405)
+
+### ✅ Fait — dans le dépôt ET déployé sur gk2
+- Messagerie 0.2 (#1446, #1448) — mur + privés, radio/Billets centralisés, MP BBS repris.
+- Session de compte → sa personne (#1450, #1452) ; comptes BBS d'appareil liés (#1454).
+- Personnes sans appareil, comptes de services liés, mot de passe unique (#1456) ;
+  comptes existants reliés avec leur propre mot de passe (#1468, #1470).
+- Helper qui réveille et tient un module on-demand (#1458).
+- Admin Utilisateurs : personnes SBX, demandes, sessions nommées (#1460) ; 500 sbxid (#1462).
+- Menu « Identité SBX OS », carte « Mes comptes », carte Renseignement (#1466).
+- Appareils nommés par navigateur/système (#1472) ; UA non tronqué (#1474).
+- OSSEC HIDS retiré (#1464).
+
+### ⬜ Next Up
+1. **Demandes côté utilisateur** (#1405 étape 3) : depuis le Hall, demander un
+   compte manquant ou relier un compte existant → validation, suivi, révocation.
+2. **Certificat client des abonnements** : maquette d'abord, puis écran de
+   demande embarqué dans les webui, lien de maillage par certificat.
+3. **SSO par rejeu** : jarre de cookies des services **vaultée par user_uuid**
+   dans le conteneur de rejeu de la personne (secubox-vault).
+4. Purger des sessions listées celles qui sont expirées ou d'appareil refusé.
 
 ---
 
