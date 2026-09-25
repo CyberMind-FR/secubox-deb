@@ -15,6 +15,7 @@ appartient à la personne qui les exploite — « gandalf » (décision #1405).
 """
 from __future__ import annotations
 
+import calendar
 import json
 import re
 import sqlite3
@@ -164,6 +165,81 @@ def lie_comptes_bbs_d_appareil(c: sqlite3.Connection, bbs_db: Optional[Path] = N
     if n:
         journal(c, "import", "lien.bbs", f"{n} compte(s) BBS d'appareil lié(s)")
     return n
+
+
+# ── Sessions → appareils (#1472) ────────────────────────────────────────────
+SESSIONS = Path("/var/lib/secubox/auth/sessions.json")
+
+
+def agent_court(ua: str) -> str:
+    """« iOS 17.5 · Safari 17 », « Linux · Firefox 155 » — de quoi distinguer
+    trois iPhone, rien de plus (ni empreinte, ni version de moteur)."""
+    ua = ua or ""
+    sys_ = ""
+    for motif, nom in ((r"iPhone OS (\d+)[_.](\d+)", "iOS"), (r"iPad.*OS (\d+)[_.](\d+)", "iPadOS"),
+                       (r"Android (\d+(?:\.\d+)?)", "Android"), (r"Mac OS X (\d+)[_.](\d+)", "macOS"),
+                       (r"Windows NT (\d+\.\d+)", "Windows")):
+        m = re.search(motif, ua)
+        if m:
+            sys_ = nom + " " + ".".join(g for g in m.groups() if g)
+            break
+    if not sys_:
+        sys_ = "Linux" if "Linux" in ua else ("CrOS" if "CrOS" in ua else "")
+    nav = ""
+    for motif, nom in ((r"Edg/(\d+)", "Edge"), (r"Firefox/(\d+)", "Firefox"), (r"FxiOS/(\d+)", "Firefox"),
+                       (r"CriOS/(\d+)", "Chrome"), (r"OPR/(\d+)", "Opera"), (r"Chrome/(\d+)", "Chrome"),
+                       (r"Version/(\d+)[.\d]* .*Safari", "Safari")):
+        m = re.search(motif, ua)
+        if m:
+            nav = f"{nom} {m.group(1)}"
+            break
+    if not nav:
+        # UA TRONQUÉ (sessions.json le coupe à 100 caractères) : sur iOS, le nom
+        # du navigateur commence juste après « (KHTML, like Gecko) » — on le
+        # reconnaît à son début (« Cr… » = Chrome, « Vers… » = Safari).
+        m = re.search(r"\(KHTML, like Gecko\) (\w+)$", ua)
+        if m:
+            debut = m.group(1)
+            for pre, nom in (("Cr", "Chrome"), ("Fx", "Firefox"), ("Ed", "Edge"), ("Ve", "Safari"),
+                             ("OPT", "Opera"), ("Mob", "app intégrée")):
+                if debut.startswith(pre):
+                    nav = nom
+                    break
+    return " · ".join(x for x in (sys_, nav) if x) or (ua[:40] if ua else "")
+
+
+def sessions_par_did(demandes: List[Dict[str, Any]], chemin: Optional[Path] = None) -> Dict[str, Dict[str, Any]]:
+    """La DERNIÈRE session connue de chaque appareil (did) : son navigateur,
+    son adresse, sa date. Rattachée par jti (appareil rattaché à un compte) ou
+    par le nom de compte d'appareil sbx-<empreinte>."""
+    try:
+        brut = json.loads((chemin or SESSIONS).read_text())
+        sess = brut if isinstance(brut, list) else brut.get("sessions", [])
+    except (OSError, ValueError):
+        return {}
+    par_jti = {x.get("id"): x for x in sess if x.get("id")}
+    par_nom: Dict[str, List[Dict[str, Any]]] = {}
+    for x in sess:
+        par_nom.setdefault(x.get("username") or "", []).append(x)
+    out: Dict[str, Dict[str, Any]] = {}
+    for d in demandes:
+        cle = d.get("cle_publique")
+        if not cle:
+            continue
+        try:
+            did, nom = S.did_appareil(cle), "sbx-" + S.empreinte_cle(cle)[:12]
+        except (S.Refus, ValueError):
+            continue
+        vus = [par_jti[j] for j in (d.get("jtis") or []) if j in par_jti] + par_nom.get(nom, [])
+        if not vus:
+            continue
+        x = max(vus, key=lambda v: v.get("created") or "")
+        try:
+            t = calendar.timegm(time.strptime((x.get("created") or "")[:19], "%Y-%m-%dT%H:%M:%S"))   # UTC
+        except ValueError:
+            t = None
+        out[did] = {"agent": agent_court(x.get("user_agent") or ""), "ip": x.get("ip"), "vu": t}
+    return out
 
 
 # ── Lectures ───────────────────────────────────────────────────────────────

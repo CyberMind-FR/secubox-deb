@@ -1,3 +1,18 @@
+secubox-sbxid (0.3.8-1~bookworm1) bookworm; urgency=medium
+
+  * Navigateur reconnu même quand sessions.json a tronqué le user agent
+    (« Cr… » = Chrome iOS, « Vers… » = Safari) (ref #1472).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:36:20 +0200
+
+secubox-sbxid (0.3.7-1~bookworm1) bookworm; urgency=medium
+
+  * Mes appareils : chaque appareil porte le navigateur et le système de sa
+    dernière session (« iOS 17.5 · Safari 17 · 192.168.1.150 »), rattachée par
+    jti ou par sbx-<empreinte> ; aussi dans /admin/appareils (ref #1472).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:34:57 +0200
+
 secubox-sbxid (0.3.6-1~bookworm1) bookworm; urgency=medium
 
   * Relier un compte de service EXISTANT à une personne (ref #1468) :
