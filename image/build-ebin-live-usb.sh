@@ -252,7 +252,13 @@ echo "Europe/Paris" > "${ROOTFS}/etc/timezone"
 chroot "${ROOTFS}" dpkg-reconfigure -f noninteractive tzdata 2>/dev/null || true
 
 # Locale
-chroot "${ROOTFS}" bash -c "locale-gen en_US.UTF-8 fr_FR.UTF-8 || true"
+# locale-gen de Debian IGNORE ses arguments : il ne genere que ce que
+# /etc/locale.gen declare. Sans ces lignes, rien n'etait genere et
+# update-locale refusait « invalid locale settings » (#1401).
+for _loc in en_US.UTF-8 fr_FR.UTF-8; do
+  grep -q "^${_loc} UTF-8" "${ROOTFS}/etc/locale.gen" 2>/dev/null || echo "${_loc} UTF-8" >> "${ROOTFS}/etc/locale.gen"
+done
+chroot "${ROOTFS}" locale-gen || true
 echo 'LANG=fr_FR.UTF-8' > "${ROOTFS}/etc/default/locale"
 
 # Console font with UTF-8 box-drawing character support (Terminus)

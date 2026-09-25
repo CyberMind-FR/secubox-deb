@@ -84,7 +84,9 @@ jobs:
             arch: arm64
             script: build-rpi-usb.sh
             artifact_name: secubox-rpi-arm64
-            output_pattern: "secubox-rpi-arm64-*.img*"
+            # Nommee d'apres son PROFIL depuis #1112 : secubox-full-rpi-arm64-….
+            # Le motif accepte l'ancien et le nouveau nom (#1401).
+            output_pattern: "secubox-*rpi-arm64-*.img*"
             needs_qemu: true
             embed_image: false
             extra_args: "--kiosk"
@@ -221,12 +223,20 @@ jobs:
         run: |
           cd output/
           echo "=== Generating SHA256 checksums ==="
+          shopt -s nullglob
+          : > SHA256SUMS
           for f in ${{ matrix.output_pattern }}; do
             if [[ -f "$f" ]]; then
               sha256sum "$f" >> SHA256SUMS
               echo "  $f"
             fi
           done
+          # Aucune image au motif : le DIRE, avec ce qui est la (#1401).
+          if [[ ! -s SHA256SUMS ]]; then
+            echo "::error::aucune image ne correspond a « ${{ matrix.output_pattern }} » dans output/ :"
+            ls -la
+            exit 1
+          fi
           cat SHA256SUMS
 
       - name: Upload artifact
