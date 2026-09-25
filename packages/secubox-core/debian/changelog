@@ -1,3 +1,19 @@
+secubox-core (1.5.10-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ — contournement du second facteur (closes #1406). La route
+    /login héritée de secubox_core.auth, montée par 47 modules
+    (/api/v1/<module>/auth/login) et joignable par le frontal public,
+    ouvrait une session complète sur mot de passe SEUL : dans l'agrégateur,
+    qui monte aussi secubox-auth, la session était enregistrée et le TOTP
+    des comptes admin ne protégeait plus rien.
+    Elle applique désormais la politique du vrai login : 403 si le compte a
+    le TOTP actif, doit changer son mot de passe, ou est admin — vérifié
+    APRÈS le mot de passe. Les comptes sans second facteur (délégation BBS,
+    pages zia/netmodes/devwatch) continuent de fonctionner ; un admin déjà
+    connecté par le portail garde son cookie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 13:44:02 +0200
+
 secubox-core (1.5.9-1~bookworm1) bookworm; urgency=medium
 
   * LE COMMENTAIRE QUI DÉCRIT LA LIGNE EMPÊCHAIT LA LIGNE D'ÊTRE POSÉE
