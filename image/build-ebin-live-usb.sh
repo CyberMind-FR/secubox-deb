@@ -427,8 +427,14 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
         fi
 
         # Install all packages (force overwrite for duplicate files, ignore errors)
-        chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb 2>&1 || true' | \
-            grep -v "^dpkg: warning" | head -50 || true
+        # JAMAIS « dpkg … | head » : head referme le tube, dpkg casse en ecrivant et
+        # s'interrompt avant la fin de la configuration — le profil restait absent
+        # alors que le journal annoncait tout installe (#1403). Sortie dans un
+        # fichier, filtrage ENSUITE.
+        SLIP_LOG=$(mktemp)
+        chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb' >"${SLIP_LOG}" 2>&1 || true
+        grep -v "^dpkg: warning" "${SLIP_LOG}" | head -50 || true
+        rm -f "${SLIP_LOG}"
 
         # Fix broken dependencies
         chroot "${ROOTFS}" apt-get -f install -y --fix-broken 2>&1 | tail -10 || true

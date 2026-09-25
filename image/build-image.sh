@@ -899,8 +899,14 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
 
     # Installer tous les autres paquets
     log "Installing all packages..."
-    chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb' 2>&1 | \
-      grep -v "^dpkg: warning" | grep -v "^Selecting\|^Preparing\|^Unpacking\|^Setting up" | head -30 || true
+    # JAMAIS « dpkg … | head » : head referme le tube, dpkg casse en ecrivant et
+    # s'interrompt avant la fin de la configuration — le profil restait absent
+    # alors que le journal annoncait tout installe (#1403). Sortie dans un
+    # fichier, filtrage ENSUITE.
+    SLIP_LOG=$(mktemp)
+    chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb' >"${SLIP_LOG}" 2>&1 || true
+    grep -v "^dpkg: warning" "${SLIP_LOG}" | grep -v "^Selecting\|^Preparing\|^Unpacking\|^Setting up" | head -30 || true
+    rm -f "${SLIP_LOG}"
 
     # Resolve any remaining Debian deps declared in packages/secubox-*/debian/control
     # that weren't pre-installed via INCLUDE_PKGS (issue #218). `apt-get install -f`
@@ -910,6 +916,9 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
 
     # Configure (idempotent — most packages were already set up by the -f run)
     chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
+    # L'etat du profil AVANT verify-profile : si quelque chose manque encore,
+    # le journal dit a quel stade (absent, deballe, configure) — #1403.
+    log "Profil ${SECUBOX_PROFILE} apres slipstream : $(chroot "${ROOTFS}" dpkg-query -W -f='${db:Status-Abbrev} ${Version}' "${SECUBOX_PROFILE}" 2>/dev/null || echo absent)"
 
     # Count installed
     INSTALLED_COUNT=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | wc -l)
