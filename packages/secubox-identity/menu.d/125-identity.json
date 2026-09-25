@@ -1,9 +1,0 @@
-{
-  "id": "identity",
-  "name": "Identity",
-  "category": "auth",
-  "icon": "🔐",
-  "path": "/identity/",
-  "order": 125,
-  "description": "Decentralized Identity"
-}

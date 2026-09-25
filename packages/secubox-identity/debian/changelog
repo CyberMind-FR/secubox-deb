@@ -1,3 +1,10 @@
+secubox-identity (1.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * Plus d'entrée « Identity » dans le menu admin : l'Identity Manager est
+    désormais secubox-sbxid (entrée « Identité SBX OS ») (ref #1466).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:14:14 +0200
+
 secubox-identity (1.1.9-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (closes #1426, audit #1417 S8) : POST /identity/sign retirée

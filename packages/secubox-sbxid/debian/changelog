@@ -1,3 +1,11 @@
+secubox-sbxid (0.3.5-1~bookworm1) bookworm; urgency=medium
+
+  * Entrée de menu admin « Identité SBX OS » (/sbxid/ → Hall /identite/#admin,
+    là où vivent les clés d'appareil) (ref #1466) ; www/sbxid/ pour que le
+    menu la retienne (il exige une page).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:14:14 +0200
+
 secubox-sbxid (0.3.4-1~bookworm1) bookworm; urgency=high
 
   * Une connexion SQLite par thread (ref #1462) : les routes admin appelées

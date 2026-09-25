@@ -1,3 +1,18 @@
+secubox-webos (1.0.345-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Mes comptes » à 272 px : quatre comptes sans défilement (ref #1466).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:17:00 +0200
+
+secubox-webos (1.0.344-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Mes comptes » (ref #1466) : les comptes liés de la personne SBX
+    OS (courriel, Nextcloud, PeerTube, BBS) avec leur lien d'ouverture.
+  * Carte « Renseignement » : ne vise plus actor.gk2 (non servi) ; elle
+    s'agrandit sur elle-même, l'administration reste sous /actor/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:14:14 +0200
+
 secubox-webos (1.0.343-1~bookworm1) bookworm; urgency=medium
 
   * Carte « Messagerie » (ref #1446) : mur public et messages privés servis

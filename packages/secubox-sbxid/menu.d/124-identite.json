@@ -1,0 +1,9 @@
+{
+  "id": "sbxid",
+  "name": "Identité SBX OS",
+  "category": "auth",
+  "icon": "🪪",
+  "path": "/sbxid/",
+  "order": 124,
+  "description": "SBX Identity Manager — personnes, rôles, appareils, comptes liés, demandes (s'ouvre dans le Hall)"
+}

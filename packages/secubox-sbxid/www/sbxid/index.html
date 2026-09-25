@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  SecuBox #1466 — entrée d'administration de l'Identity Manager.
+  Le gestionnaire vit dans le Hall (/identite/), l'origine des clés d'appareil ;
+  cette page n'existe que pour le menu admin, et y renvoie (nginx le fait déjà
+  en 302 : ceci est le repli).
+-->
+<html lang="fr"><head><meta charset="utf-8"><title>Identité SBX OS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;display:grid;place-items:center;min-height:100vh;background:#0b0d12;color:#e8e6d9;font:15px system-ui,sans-serif}a{color:#00d4ff}</style>
+</head><body>
+<p>Ouverture de l'Identity Manager… <a id="l" href="/identite/#admin">continuer</a></p>
+<script>
+  var h = location.hostname.replace(/^admin\./, 'hall.');
+  var u = 'https://' + h + '/identite/#admin';
+  document.getElementById('l').href = u;
+  (window.top || window).location.replace(u);
+</script>
+</body></html>

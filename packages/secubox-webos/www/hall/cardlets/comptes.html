@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1466 — carte « Mes comptes » du Hall.
+
+  Les comptes de la PERSONNE SBX OS (courriel, Nextcloud, PeerTube, BBS),
+  tels que l'Identity Manager les a liés à son user_uuid — lus sur
+  /api/v1/sbxid/moi, de même origine. Des noms et des liens, jamais un secret.
+  Le BBS s'ouvre sans mot de passe (session du Hall) ; les autres demandent le
+  mot de passe de services, un seul pour tous.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mes comptes</title>
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
+         --surf2:#f5f7fc; --cyan:#0784a8; --ok:#0f9d54; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --surf2:#10151f; --cyan:#28d6ff; --ok:#35d07f; } }
+  :root[data-theme="dark"]{ --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --surf2:#10151f; --cyan:#28d6ff; --ok:#35d07f; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px;overflow:hidden}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.45rem}
+  .h{display:flex;align-items:center;gap:7px}
+  .h b{font-size:.86rem}
+  .h .qui{margin-left:auto;font-size:.68rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .h .qui strong{color:var(--cyan)}
+  .liste{display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1;min-height:0}
+  a.cpt{display:grid;grid-template-columns:1.6rem minmax(0,1fr) auto;align-items:center;gap:8px;text-decoration:none;color:inherit;
+    border:1px solid var(--line);border-radius:9px;padding:6px 9px;background:var(--surf2)}
+  a.cpt:hover,a.cpt:focus-visible{border-color:var(--cyan);outline:none}
+  a.cpt .ic{font-size:1.05rem;text-align:center}
+  a.cpt .n{font-size:.8rem;font-weight:600}
+  a.cpt .id{display:block;font-size:.68rem;color:var(--muted);font-family:"JetBrains Mono",ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  a.cpt .go{font-size:.66rem;color:var(--cyan);white-space:nowrap}
+  a.cpt .go.passif{color:var(--ok)}
+  .vide{color:var(--muted);font-size:.76rem;line-height:1.45;padding:6px 2px}
+  .vide a{color:var(--cyan)}
+  .pied{font-size:.62rem;color:var(--faint);border-top:1px solid var(--line);padding-top:.35rem}
+  .pied a{color:var(--muted)}
+</style>
+<div class="mw">
+  <div class="h"><span aria-hidden="true">🗝️</span><b>Mes comptes</b><span class="qui" id="qui"></span></div>
+  <div class="liste" id="liste"><div class="vide">Lecture…</div></div>
+  <div class="pied">Un seul mot de passe pour vos services · <a href="/identite/" target="_top">Mon identité</a></div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var q = new URLSearchParams(location.search), th = q.get('theme');
+  if (th === 'dark' || th === 'light') document.documentElement.setAttribute('data-theme', th);
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, txt){ var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  // Les services de la box : hôte dérivé de celui du Hall (hall.X → <svc>.X).
+  var dom = location.hostname.replace(/^hall\./, '');
+  var SVC = {
+    email:     {ic:'📧', nom:'Courriel',  hote:'webmail', aide:'mot de passe de services'},
+    nextcloud: {ic:'☁️', nom:'Nextcloud', hote:'nc',      aide:'mot de passe de services'},
+    peertube:  {ic:'📹', nom:'PeerTube',  hote:'peertube', chemin:'/login', aide:'mot de passe de services'},
+    bbs:       {ic:'💬', nom:'Forum BBS', hote:'bbs',     chemin:'/sbx/auto', passif:true},
+    gitea:     {ic:'🦊', nom:'Gitea',     hote:'git',     aide:'mot de passe de services'}
+  };
+  function vide(html){ $('liste').innerHTML = '<div class="vide">' + html + '</div>'; }
+  fetch('/api/v1/sbxid/moi', {credentials:'same-origin', headers:{Accept:'application/json'}})
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(m){
+      if (!m.identite){ vide('Pas d\'identité SBX OS pour cette session. <a href="/identite/" target="_top">Ouvrir mon identité</a>'); return; }
+      $('qui').replaceChildren('', el('strong', null, m.identite.pseudo));
+      var liens = (m.liens || []).filter(function(l){ return SVC[l.app]; });
+      // un seul lien par service : le nom « réel » avant un compte d'appareil sbx-…
+      var vu = {};
+      liens.sort(function(a, b){ return (/^sbx-/i.test(a.app_handle) ? 1 : 0) - (/^sbx-/i.test(b.app_handle) ? 1 : 0); });
+      liens = liens.filter(function(l){ if (vu[l.app]) return false; vu[l.app] = 1; return true; });
+      if (!liens.length){ vide('Aucun compte lié pour l\'instant. L\'administration de la box peut vous en ouvrir (courriel, Nextcloud, PeerTube).'); return; }
+      var box = $('liste'); box.replaceChildren();
+      liens.forEach(function(l){
+        var s = SVC[l.app], a = el('a', 'cpt');
+        a.href = 'https://' + s.hote + '.' + dom + (s.chemin || '/');
+        a.target = '_blank'; a.rel = 'noopener';
+        a.append(el('span', 'ic', s.ic));
+        var t = el('span'); t.append(el('span', 'n', s.nom), el('span', 'id', l.app_handle)); a.append(t);
+        a.append(el('span', 'go' + (s.passif ? ' passif' : ''), s.passif ? 'ouvert d\'office ↗' : 'ouvrir ↗'));
+        a.title = s.passif ? 'Ouvert avec votre session du Hall, sans mot de passe' : ('Identifiant ' + l.app_handle + ' · ' + s.aide);
+        box.appendChild(a);
+      });
+    })
+    .catch(function(){ vide('Identité injoignable pour le moment.'); });
+})();
+</script>
