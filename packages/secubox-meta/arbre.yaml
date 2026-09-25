@@ -572,9 +572,11 @@ suggere:
 meta: secubox-service-bbs
 niveau: service
 label: Forum
-description: "BBS auto-hébergé."
+description: "BBS auto-hébergé et messagerie de la box."
 requiert:
   - secubox-bbs
+recommande:
+  - secubox-messagerie        # mur public + messages privés (#1446)
 
 meta: secubox-service-actualites
 niveau: service

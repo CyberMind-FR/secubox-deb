@@ -1,0 +1,19 @@
+Source: secubox-messagerie
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-messagerie
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-httpx,
+         secubox-core (>= 1.5.14), secubox-aggregator
+Recommends: secubox-webos (>= 1.0.343), secubox-sbxid
+Description: SecuBox — messagerie de la box (mur public et messages privés)
+ Un mur public et des messages privés, pour les personnes (identité SBX OS)
+ comme pour les visiteurs (un pseudo). On écrit à une personne ou à tous,
+ on répond en privé ou publiquement. Le chat de la radio y est centralisé
+ et y répondre le republie dans la radio.
+ .
+ Servi par le Hall : https://hall.<nœud>/messagerie/

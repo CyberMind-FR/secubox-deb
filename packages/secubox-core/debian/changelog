@@ -1,3 +1,11 @@
+secubox-core (1.5.14-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_core.capacites.personne_du_porteur(payload) (ref #1446) : la
+    personne SBX OS (user_uuid, pseudo) derrière une session, pour signer
+    un message sans jamais exposer le compte système.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:59:47 +0200
+
 secubox-core (1.5.13-1~bookworm1) bookworm; urgency=high
 
   * secubox_core.capacites (ref #1438, AUTH v3 M3) : require_capability(cap),

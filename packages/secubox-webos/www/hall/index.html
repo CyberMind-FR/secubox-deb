@@ -1425,6 +1425,10 @@ const FEATURED = [
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214, admin:"/droplet/"},
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222, admin:false},
   // « Signal » et « Signal + » : NON PUBLIÉES (#1444) — voir cardlets-unreleased/.
+  // MESSAGERIE (#1446) : mur public + messages privés, servie par le Hall (même
+  // origine : la session SBX OS signe ; sinon pseudo de visiteur). Pas de vhost :
+  // /mega = la même page agrandie. Le chat de la radio y est centralisé.
+  {id:"messagerie", label:"Messagerie", icon:"💬", color:"#0784a8", carte:"/messagerie/", h:340, admin:false},
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mail", h:182},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:174},
@@ -4751,6 +4755,7 @@ const CARDLET_ICONES = {
       photoprism:"Photos : aperçu authentifié ; validez l'accès souverain d'abord.",
       mail:"Mail : aperçu authentifié, accès souverain.",
       zia:"Assistant 100 % local : demande-lui un média, un doc, un sujet — le bus reste la source de vérité.",
+      messagerie:"Le mur de la box : écrivez à tous ou à une personne, répondez en privé ou publiquement. Le chat de la radio y passe aussi.",
       toolbox:"Boîte à outils du parc — accès direct.",
       // super-carte
       "nextcloud-super":"Super-carte Cloud : plusieurs onglets d'un même service — Fichiers (WebDAV), Activité, Partages, jauge de quota ; partager (lien public), téléverser, supprimer, sans quitter le Hall.",

@@ -74,3 +74,9 @@ def test_dependance_refuse_et_accepte(banc):
     assert asyncio.run(garde({"sub": "gk2", "jti": "x"}))["sub"] == "gk2"
     with pytest.raises(S.Refus):
         C.require_capability("ssh.login")
+
+
+def test_personne_du_porteur(banc):
+    assert C.personne_du_porteur({"sub": "sbx-z", "jti": "j-membre"})["pseudo"] == "alice"
+    assert C.personne_du_porteur({"sub": "sbx-z", "jti": "j-revoque"}) is None
+    assert C.personne_du_porteur({"sub": "gk2", "jti": "portail"}) is None     # compte système : pas une personne

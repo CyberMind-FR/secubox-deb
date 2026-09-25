@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+  configure)
+    # Données : messages.db (mur, messages privés, modération).
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/messagerie
+
+    # Déclaration dans l'agrégateur (qui sert /api/v1/messagerie).
+    python3 - <<'TOML' || echo "secubox-messagerie: déclaration dans aggregator.toml impossible" >&2
+import pathlib, re
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+if f.exists():
+    s = f.read_text()
+    if '"messagerie"' not in s:
+        s = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "messagerie",', s, count=1)
+        f.write_text(s)
+        print("secubox-messagerie: déclaré dans aggregator.toml")
+TOML
+
+    if [ -d /run/systemd/system ]; then
+      systemctl restart secubox-aggregator >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

@@ -600,8 +600,9 @@ Package: secubox-service-bbs
 Architecture: all
 Depends: ${misc:Depends},
          secubox-bbs
+Recommends: secubox-messagerie
 Description: SecuBox — service « Forum »
- BBS auto-hébergé.
+ BBS auto-hébergé et messagerie de la box.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.

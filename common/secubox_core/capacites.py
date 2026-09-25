@@ -121,6 +121,28 @@ def capacites_du_porteur(payload: Dict[str, Any]) -> Set[str]:
     return out
 
 
+def personne_du_porteur(payload: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """La PERSONNE SBX OS derrière une session (#1446) : {user_uuid, pseudo}
+    si la session vient d'un appareil rattaché à une identité active ; None
+    sinon (compte système ouvert par mot de passe, appareil inconnu…)."""
+    d = _demande_de(payload.get("sub", ""), payload.get("jti", ""))
+    if not d or d.get("etat") != "acceptee" or not SBX_DB.exists():
+        return None
+    try:
+        did = S.did_appareil(d["cle_publique"])
+        c = sqlite3.connect(f"file:{SBX_DB}?mode=ro", uri=True, timeout=2)
+    except (S.Refus, KeyError, ValueError, sqlite3.Error):
+        return None
+    try:
+        r = c.execute("SELECT u.user_uuid, u.pseudo FROM sbx_devices d JOIN sbx_users u ON u.user_uuid=d.user_uuid"
+                      " WHERE d.did=? AND d.revoked_at IS NULL AND u.status='active'", (did,)).fetchone()
+        return {"user_uuid": r[0], "pseudo": r[1]} if r else None
+    except sqlite3.Error:
+        return None
+    finally:
+        c.close()
+
+
 def require_capability(cap: str):
     """Dépendance FastAPI : session valide ET capacité `cap`."""
     S.valide_capacite(cap)                          # jamais une capacité système

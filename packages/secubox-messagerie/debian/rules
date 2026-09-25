@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/secubox-messagerie/usr/lib/secubox/messagerie/api
+	install -m 644 api/*.py debian/secubox-messagerie/usr/lib/secubox/messagerie/api/
+	install -d debian/secubox-messagerie/usr/share/secubox/www/messagerie
+	install -m 644 www/messagerie/index.html debian/secubox-messagerie/usr/share/secubox/www/messagerie/

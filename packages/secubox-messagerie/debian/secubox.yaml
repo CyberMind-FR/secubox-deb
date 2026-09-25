@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+name: secubox-messagerie
+category: communication
+tier: lite
+description: "Messagerie de la box — mur public, messages privés, chat radio centralisé"
+
+depends:
+  - secubox-core

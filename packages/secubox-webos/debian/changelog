@@ -1,3 +1,11 @@
+secubox-webos (1.0.343-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Messagerie » (ref #1446) : mur public et messages privés servis
+    par le Hall (/messagerie/ + relais /api/v1/messagerie/ vers
+    l'agrégateur, X-Real-IP pour le plafond des visiteurs).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 16:02:47 +0200
+
 secubox-webos (1.0.342-1~bookworm1) bookworm; urgency=medium
 
   * Cartes « Signal » et « Signal + » retirées du Hall (closes #1444) :
