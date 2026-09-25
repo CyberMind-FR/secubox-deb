@@ -417,13 +417,17 @@ async def session_etat(req: Request):
     déclaré par l'appareil — donc déconnecté de son compte d'administration,
     par le geste même qui devait l'aider.
 
-    On ne DÉCODE pas le jeton ici : on constate seulement qu'un cookie de
-    session est présent. Cette route est ouverte, et lui faire valider un jeton
-    en ferait un oracle — « ce jeton est-il encore bon ? » se demande à
-    l'endroit qui l'exige, pas à celui qui l'observe.
+    LE COOKIE EST VALIDÉ, pas seulement constaté (#1435). La version qui ne
+    regardait que sa PRÉSENCE enfermait l'appareil : un rattachement coupe
+    l'ancienne session (à juste titre), le cookie reste, et cette route
+    répondait « déjà connecté » — le Hall ne re-signait jamais le défi et le
+    BBS bouclait sur un cookie mort (iPad, 2026-09-25). L'argument de
+    l'« oracle » ne tenait pas : toute API protégée dit déjà si un jeton vaut
+    (401). Une session VALIDE n'est toujours jamais écrasée.
     """
-    from secubox_core.auth import SESSION_COOKIE
-    return {"session": bool(req.cookies.get(SESSION_COOKIE))}
+    from secubox_core.auth import SESSION_COOKIE, _validate_token
+    tok = req.cookies.get(SESSION_COOKIE)
+    return {"session": bool(tok and _validate_token(tok))}
 
 
 @app.get("/session/defi")
