@@ -399,7 +399,7 @@ async def session_entree(corps: EntreeIn, req: Request, reponse: Response):
     set_session_cookie(reponse, jwt, expires_in=SESSION_LIEN_S)
     _emit_session_event("login_success", compte, {
         "jti": jti, "expires_in": SESSION_LIEN_S,
-        "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:100],
+        "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:300],
         "voie": "acces-lien-unique",
     })
     profileur().note_session(did)
@@ -488,7 +488,7 @@ async def session_ouvrir(corps: OuvertureIn, req: Request, reponse: Response):
     set_session_cookie(reponse, jwt, expires_in=d["duree"])
     _emit_session_event("login_success", compte, {
         "jti": jti, "expires_in": d["duree"],
-        "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:100],
+        "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:300],
         "voie": "acces-signature",
         # L'APPAREIL, pas seulement le compte (#1379) : rattaché, le compte est
         # celui d'un humain — sans cela on ne sait plus quel appareil est entré.

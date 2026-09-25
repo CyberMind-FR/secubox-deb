@@ -1,3 +1,10 @@
+secubox-auth (1.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * sessions.json : user_agent sur 300 caractères, 100 coupait avant le nom
+    du navigateur (ref #1474).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:40:25 +0200
+
 secubox-auth (1.1.7-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

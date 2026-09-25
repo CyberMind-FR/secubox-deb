@@ -272,5 +272,5 @@ def dernieres_connexions(demandes: list[dict[str, Any]], chemin: str = AUDIT_AUT
                 continue
             ts = float(e.get("ts") or 0)
             if ts > float(out.get(did, {}).get("ts") or 0):
-                out[did] = {"ts": int(ts), "ip": e.get("ip") or "", "ua": (e.get("user_agent") or "")[:120]}
+                out[did] = {"ts": int(ts), "ip": e.get("ip") or "", "ua": (e.get("user_agent") or "")[:300]}
     return out

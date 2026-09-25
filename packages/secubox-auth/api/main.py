@@ -239,7 +239,7 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
           or request.headers.get("X-Real-IP", "")
           or (request.client.host if request.client else ""))
-    ua = request.headers.get("User-Agent", "")[:100]
+    ua = request.headers.get("User-Agent", "")[:300]   # #1474 : 100 coupait avant le navigateur
     user = user_store.get_user(req.username)
 
     if not user or not user.get("enabled"):
