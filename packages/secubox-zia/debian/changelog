@@ -1,3 +1,15 @@
+secubox-zia (0.1.16-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (closes #1411, audit #1405 S3). POST /v1/chat prenait le rôle
+    dans le CORPS de la requête, sans authentification : « "role":"admin" »
+    ouvrait la vue admin des objets et les actions réservées. Le rôle est
+    désormais DÉRIVÉ de la session (Bearer ou cookie, vérifiée par
+    secubox_core) ; le corps ne peut plus que le restreindre.
+  * /config (URL du LLM, délégation distante) et /llm/test : réservés aux
+    administrateurs (étaient ouverts à tout JWT, appareil guest compris).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 13:55:29 +0200
+
 secubox-zia (0.1.15-1~bookworm1) bookworm; urgency=medium
 
   * LE LEXIQUE TENAIT EN SEPT MOTS (ref #1349). On ne parle pas d'un service
