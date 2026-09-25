@@ -156,9 +156,10 @@ class UserCreate(BaseModel):
     def validate_username(cls, v):
         if not v or len(v) < 3:
             raise ValueError('Username must be at least 3 characters')
-        if not v.isalnum() and '_' not in v and '-' not in v:
-            raise ValueError('Username can only contain letters, numbers, _ and -')
-        return v.lower()
+        v = v.lower()
+        if not _engine_mod.USERNAME_RE.match(v):
+            raise ValueError('Username: lettres, chiffres, _ - et . (ni en tête ni doublé)')
+        return v
 
 class UserUpdate(BaseModel):
     email: Optional[str] = None

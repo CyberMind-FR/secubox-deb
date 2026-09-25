@@ -215,3 +215,117 @@ def test_compte_bbs_d_appareil_lie_a_sa_personne(banc, tmp_path):
         "SELECT u.pseudo, l.app_id FROM sbx_app_links l JOIN sbx_users u USING(user_uuid) WHERE l.app='bbs'")}
     assert liens == {("gandalf", "gk2"), ("gandalf", h)}
     assert store.lie_comptes_bbs_d_appareil(c, tmp_path / "absent.db") == 0
+
+
+# ── #1456 : personnes sans appareil, comptes de services, BBS lié ─────────
+from api import comptes as CPT
+
+
+def _faux_helper(monkeypatch, existants=()):
+    appels, comptes_ = [], {k: "ancien" for k in existants}
+
+    def h(d):
+        appels.append(d)
+        cle = (d["service"], d["user"])
+        if d["action"] == "etat":
+            return {"ok": True, "etat": {"existe": cle in comptes_}}
+        if d["action"] == "creer":
+            if d["service"] == "peertube":
+                return {"ok": False, "erreur": "conteneur peertube arrêté", "disponible": False}
+            comptes_[cle] = d["password"]
+            return {"ok": True}
+        if d["action"] == "reinitialiser":
+            comptes_[cle] = d["password"]
+            return {"ok": True}
+        return {"ok": False, "erreur": "?"}
+    monkeypatch.setattr(CPT, "helper", h)
+    return appels, comptes_
+
+
+def test_personne_sans_appareil_et_ses_comptes(banc, monkeypatch):
+    appels, cpt = _faux_helper(monkeypatch)
+    ctx = main.exige_admin(_req("tok-g"))
+    p = main.cree_personne(main.NouvellePersonne(pseudo="Cedre83", email="cedre@exemple.org"), ctx)
+    assert p["pseudo"] == "cedre83" and "member" in p["roles"]
+    for mauvais in ("gk2", "a..b", "x y"):
+        with pytest.raises(HTTPException):
+            main.cree_personne(main.NouvellePersonne(pseudo=mauvais), ctx)
+    with pytest.raises(HTTPException) as e:
+        main.cree_personne(main.NouvellePersonne(pseudo="cedre83"), ctx)
+    assert e.value.status_code == 409
+    uid = p["user_uuid"]
+    r = main.ouvre_comptes(uid, main.Services(services=["email", "nextcloud", "peertube"]), ctx)
+    pw = r["mot_de_passe"]
+    assert r["services"]["email"] is True and r["services"]["nextcloud"] is True
+    assert "arrêté" in r["services"]["peertube"]
+    assert cpt[("email", "cedre83")] == cpt[("nextcloud", "cedre83")] == pw     # UN mot de passe
+    assert r["adresse"] == "cedre83@secubox.in"
+    # PeerTube plus tard : le nouveau mot de passe vaut pour TOUS
+    monkeypatch.setattr(CPT, "helper", lambda d, _h=CPT.helper: {"ok": True} if d["service"] == "peertube"
+                        and d["action"] == "creer" else _h(d))
+    r2 = main.ouvre_comptes(uid, main.Services(services=["peertube"]), ctx)
+    assert r2["services"] == {"email": True, "nextcloud": True, "peertube": True}
+    assert cpt[("email", "cedre83")] == cpt[("nextcloud", "cedre83")] == r2["mot_de_passe"] != pw
+    # réinitialiser : un geste, tous les services
+    r3 = main.reinitialise_comptes(uid, ctx)
+    assert set(r3["services"]) == {"email", "nextcloud", "peertube"} and r3["mot_de_passe"]
+    assert all(x["action"] != "retirer" for x in appels)
+
+
+def test_lier_le_compte_bbs_existant(banc, tmp_path, monkeypatch):
+    import sqlite3
+    b = tmp_path / "bbs.db"
+    x = sqlite3.connect(b)
+    x.execute("CREATE TABLE users (handle TEXT COLLATE NOCASE, disabled_at INTEGER)")
+    x.executemany("INSERT INTO users VALUES (?,?)", [("Ani.skywalker", None), ("gk2", None), ("parti", 5)])
+    x.commit(); x.close()
+    monkeypatch.setattr(CPT, "BBS_DB", b)
+    ctx = main.exige_admin(_req("tok-g"))
+    ani = main.cree_personne(main.NouvellePersonne(pseudo="ani.skywalker"), ctx)["user_uuid"]
+    assert main.lie_bbs(ani, main.LienBbs(handle="ani.skywalker"), ctx)["handle"] == "Ani.skywalker"
+    for h, code in (("inconnu", 404), ("parti", 404), ("gk2", 409)):
+        with pytest.raises(HTTPException) as e:
+            main.lie_bbs(ani, main.LienBbs(handle=h), ctx)
+        assert e.value.status_code == code, h
+    autre = main.cree_personne(main.NouvellePersonne(pseudo="autre"), ctx)["user_uuid"]
+    with pytest.raises(HTTPException) as e:                 # déjà lié à quelqu'un
+        main.lie_bbs(autre, main.LienBbs(handle="Ani.skywalker"), ctx)
+    assert e.value.status_code == 409
+    main.delie(ani, "bbs", "Ani.skywalker", ctx)
+    assert CPT.liens(main.db(), ani) == {}
+
+
+def test_admission_rattachee_a_une_personne_existante(banc, monkeypatch):
+    """Le téléphone de cedre, admis, devient un appareil de cedre83 — pas une nouvelle personne."""
+    import asyncio
+    import sys
+    kn, pn = _cle()
+    f = store.DEMANDES
+    brut = json.loads(f.read_text())
+    brut["demandes"].append({"did": "did:sbx:tel", "cle_publique": pn, "nom": "Cèdre", "appareil": "Android",
+                             "etat": "en_attente", "demandee_le": 9, "jtis": []})
+    f.write_text(json.dumps(brut))
+    faux = types.ModuleType("faux_acces_main")
+
+    class Verdict:
+        def __init__(self, did, motif=""):
+            self.did, self.motif = did, motif
+
+    async def accepter(v, req):
+        b = json.loads(f.read_text())
+        for d in b["demandes"]:
+            if d["did"] == v.did:
+                d.update(etat="acceptee", profil="guest")
+        f.write_text(json.dumps(b))
+        return {"ok": True, "lien": ""}
+    faux.Verdict, faux.accepter, faux.refuser = Verdict, accepter, accepter
+    faux.profileur, faux._coupe_sessions = (lambda: None), (lambda *a: None)
+    monkeypatch.setitem(sys.modules, "faux_acces_main", faux)
+    ctx = main.exige_admin(_req("tok-g"))
+    cedre = main.cree_personne(main.NouvellePersonne(pseudo="cedre83", role="member"), ctx)["user_uuid"]
+    out = asyncio.run(main.accepte("did:sbx:tel", main.Decision(role="guest", personne=cedre), _req("tok-g"), ctx))
+    assert out["pseudo"] == "cedre83"
+    c = main.db()
+    assert [a["name"] for a in store.appareils_de(c, cedre)] == ["Android"]
+    assert store.roles_de(c, cedre) == ["member"]                    # ses rôles, pas « guest »
+    assert not c.execute("SELECT 1 FROM sbx_users WHERE pseudo='cedre'").fetchone()   # pas de fantôme

@@ -1,3 +1,13 @@
+secubox-sbxid (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Personnes SBX OS sans appareil, créées par l'administration (ref #1456).
+  * Leurs comptes Courriel / Nextcloud / PeerTube (helper de secubox-users),
+    liés à la personne, UN mot de passe de services réinitialisable d'un geste.
+  * Lier un compte BBS existant à une personne (connexion passive).
+  * Admission d'un appareil rattachée à une personne existante.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 16:55:22 +0200
+
 secubox-sbxid (0.2.4-1~bookworm1) bookworm; urgency=medium
 
   * Un compte BBS sbx-<empreinte> d'un appareil non révoqué est lié à la

@@ -61,6 +61,13 @@ dt{color:var(--muted);font-size:13px}dd{margin:0;font-family:var(--mono);font-si
 .dev .n{font-weight:700}.dev .m{font-size:12.5px;color:var(--muted)}
 .dev.rev .n{text-decoration:line-through;color:var(--muted)}
 .act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.form-ligne{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.form-ligne label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.form-ligne input,.form-ligne select,.cpt input{background:var(--surf2);border:1px solid var(--line);border-radius:8px;padding:6px 9px;min-width:0}
+tr.cpt td{background:var(--surf2);padding:12px}
+.cpt .svc{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0}
+.cpt .svc b{min-width:9.5rem}
+.pw{font-family:var(--mono);font-size:15px;letter-spacing:.04em;padding:8px 10px;border:1px dashed var(--gold);border-radius:8px;display:inline-block;user-select:all}
 pre{background:var(--surf2);border:1px solid var(--line);border-radius:9px;padding:12px;font:12px/1.55 var(--mono);overflow-x:auto;margin:8px 0 0;white-space:pre}
 .scroll{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px}
@@ -106,7 +113,17 @@ td.c,th.c{text-align:center}
   <h1>Administration SBX OS</h1>
   <p class="lead">Séparée de l'administration système. Les comptes système n'apparaissent pas ici.</p>
   <h2>Demandes d'accès</h2><div class="card" id="adm-demandes"></div>
-  <h2>Personnes</h2><div class="card scroll"><table id="people"></table></div>
+  <h2>Personnes</h2>
+  <div class="card" style="margin-bottom:10px">
+    <form class="form-ligne" id="f-personne" autocomplete="off">
+      <label>Pseudo<input id="np-pseudo" required minlength="2" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,30}[A-Za-z0-9_\-]" placeholder="cedre83"></label>
+      <label>Rôle<select id="np-role"></select></label>
+      <label style="flex:1;min-width:14rem">Adresse de récupération (externe, facultative)<input id="np-email" type="email" maxlength="200" placeholder="prenom@exemple.org"></label>
+      <button class="prim">Créer la personne</button>
+    </form>
+    <p class="m" style="font-size:12.5px;color:var(--muted);margin:8px 0 0">Sans appareil pour l'instant : ses comptes peuvent l'attendre, et son premier appareil lui sera rattaché à l'admission.</p>
+  </div>
+  <div class="card scroll"><table id="people"></table></div>
   <h2>Journal</h2><div class="card"><ul class="audit" id="audit"></ul></div>
   <h2>Rôles → capacités</h2><div class="card scroll"><table id="matrix"></table></div>
 </section>
@@ -124,7 +141,7 @@ const API = '/api/v1/sbxid';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LIB = {guest:'Invité', member:'Membre', subscriber:'Abonné', beta_tester:'Bêta-testeur', moderator:'Modérateur', sbx_operator:'Opérateur SBX'};
-let ETAT = null, ROLES = null;
+let ETAT = null, ROLES = null, PERS = [];
 
 function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true, 2800); }
 async function api(chemin, opts={}){
@@ -239,13 +256,28 @@ async function rendAdmin(){
   try { [pers, jour, dem] = await Promise.all([api('/admin/personnes'), api('/admin/journal'), api('/admin/demandes')]); }
   catch(e){ $('#nav-admin').hidden = true; return; }
   $('#nav-admin').hidden = false;
+  PERS = pers.personnes;
   rendDemandes(dem.en_attente);
+  const npr = $('#np-role');
+  if (!npr.options.length){
+    ROLES.roles.filter(r => !r.derive).forEach(r => { const o = document.createElement('option'); o.value = r.id; o.textContent = LIB[r.id]||r.id; npr.appendChild(o); });
+    npr.value = 'member';
+  }
+  $('#f-personne').onsubmit = async ev => {
+    ev.preventDefault();
+    try {
+      const p = await api('/admin/personnes', {method:'POST', body:JSON.stringify({pseudo:$('#np-pseudo').value, role:npr.value, email:$('#np-email').value||null})});
+      toast(`${p.pseudo} créé·e — ouvrez ses comptes`); $('#f-personne').reset(); npr.value = 'member';
+    } catch(e){ toast(e.message); }
+    charge();
+  };
   const assign = ROLES.roles.filter(r => !r.derive).map(r => r.id);
   const t = $('#people');
-  t.innerHTML = `<thead><tr><th>Personne</th>${assign.map(r=>`<th class="c">${esc(LIB[r]||r)}</th>`).join('')}<th>Abonnement</th><th class="c">Appareils</th><th>Statut</th></tr></thead><tbody>` +
+  t.innerHTML = `<thead><tr><th>Personne</th>${assign.map(r=>`<th class="c">${esc(LIB[r]||r)}</th>`).join('')}<th>Abonnement</th><th class="c">Appareils</th><th>Comptes</th><th>Statut</th></tr></thead><tbody>` +
     pers.personnes.map(p => `<tr><td><b>${esc(p.pseudo)}</b><div style="font-family:var(--mono);font-size:11px;color:var(--muted)">${esc(p.user_uuid.slice(0,8))}…</div></td>
       ${assign.map(r => `<td class="c"><input type="checkbox" id="r-${esc(p.user_uuid)}-${r}" data-u="${esc(p.user_uuid)}" data-r="${r}" ${p.roles.includes(r)?'checked':''} aria-label="${esc(p.pseudo)} ${esc(LIB[r]||r)}"></td>`).join('')}
       <td style="font-family:var(--mono)">${esc(p.tier)}</td><td class="c">${p.appareils}</td>
+      <td><button type="button" data-c="${esc(p.user_uuid)}" aria-expanded="false">Comptes</button></td>
       <td>${ETAT.identite && p.user_uuid===ETAT.identite.user_uuid ? '<span class="chip ok">vous</span>' :
         `<button type="button" data-s="${esc(p.user_uuid)}" data-v="${p.status==='suspended'?'active':'suspended'}" class="${p.status==='suspended'?'':'danger'}">${p.status==='suspended'?'Réactiver':'Suspendre'}</button>`}</td></tr>`).join('') + '</tbody>';
   t.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = async () => {
@@ -253,6 +285,7 @@ async function rendAdmin(){
     try { await api('/admin/personnes/'+cb.dataset.u+'/roles', {method:'PUT', body:JSON.stringify({roles})}); toast('Rôles enregistrés'); }
     catch(e){ toast(e.message); } charge();
   });
+  t.querySelectorAll('[data-c]').forEach(b => b.onclick = () => comptes(b, assign.length + 5));
   t.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => {
     try { await api('/admin/personnes/'+b.dataset.s+'/statut', {method:'POST', body:JSON.stringify({status:b.dataset.v})}); toast(b.dataset.v==='suspended'?'Personne suspendue':'Personne réactivée'); }
     catch(e){ toast(e.message); } charge();
@@ -261,6 +294,81 @@ async function rendAdmin(){
   const all = ROLES.capacites, rs = ROLES.roles;
   $('#matrix').innerHTML = `<thead><tr><th>Capacité</th>${rs.map(r=>`<th class="c">${esc(LIB[r.id]||r.label)}</th>`).join('')}</tr></thead><tbody>` +
     all.map(c => `<tr><td style="font-family:var(--mono)">${esc(c)}</td>${rs.map(r=>`<td class="c"><span class="dot ${r.capacites.includes(c)?'':'no'}"></span></td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+
+// ── Comptes d'une personne (#1456) ──────────────────────────────────────
+function montreMdp(box, r, quoi){
+  if (!r.mot_de_passe) return;
+  const d = document.createElement('div'); d.style.marginTop = '10px';
+  d.innerHTML = `<div class="m" style="font-size:12.5px">${esc(quoi)} — <b>à transmettre maintenant</b>, il ne sera plus affiché. Il vaut pour tous ses services.</div>`;
+  const code = document.createElement('span'); code.className = 'pw'; code.textContent = r.mot_de_passe;
+  const cp = btn('Copier'); cp.onclick = () => navigator.clipboard.writeText(r.mot_de_passe).then(()=>toast('Copié'), ()=>toast('Sélectionnez-le pour le copier'));
+  d.append(code, ' ', cp); box.appendChild(d);
+}
+async function comptes(b, cols){
+  const tr = b.closest('tr'), ouvert = tr.nextElementSibling && tr.nextElementSibling.classList.contains('cpt');
+  if (ouvert){ tr.nextElementSibling.remove(); b.setAttribute('aria-expanded','false'); return; }
+  b.setAttribute('aria-expanded','true');
+  const ligne = document.createElement('tr'); ligne.className = 'cpt';
+  const td = document.createElement('td'); td.colSpan = cols; td.textContent = 'Lecture des services…';
+  ligne.appendChild(td); tr.after(ligne);
+  const uid = b.dataset.c;
+  let e;
+  try { e = await api('/admin/personnes/'+uid+'/comptes'); } catch(x){ td.textContent = x.message; return; }
+  td.innerHTML = `<div class="m" style="font-size:12.5px;margin-bottom:6px">Adresse : <b style="font-family:var(--mono)">${esc(e.adresse)}</b> · un seul mot de passe pour tous ses services</div>`;
+  const choix = [];
+  for (const [svc, x] of Object.entries(e.services)){
+    const l = document.createElement('div'); l.className = 'svc';
+    const etat = x.lie ? '<span class="chip ok">lié</span>' : x.existe ? '<span class="chip warn">existe, non lié</span>'
+      : !x.disponible ? '<span class="chip bad">service arrêté</span>' : '<span class="chip">absent</span>';
+    l.innerHTML = `<b>${esc(x.libelle)}</b>${etat}`;
+    if (!x.lie){
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = svc; cb.checked = x.disponible;
+      cb.setAttribute('aria-label', 'Ouvrir ' + x.libelle);
+      const lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:4px;align-items:center;font-size:13px';
+      lab.append(cb, x.existe ? 'reprendre' : 'ouvrir'); l.appendChild(lab); choix.push(cb);
+    }
+    td.appendChild(l);
+  }
+  const bbs = document.createElement('div'); bbs.className = 'svc';
+  bbs.innerHTML = '<b>BBS</b>';
+  e.bbs.forEach(h => {
+    const c = document.createElement('span'); c.className = 'chip ok'; c.textContent = h;
+    const x = btn('✕'); x.title = 'Délier ' + h; x.setAttribute('aria-label', 'Délier ' + h);
+    x.onclick = async () => { try { await api(`/admin/personnes/${uid}/liens/bbs/${encodeURIComponent(h)}`, {method:'DELETE'}); toast('Délié'); } catch(y){ toast(y.message); } b.click(); b.click(); };
+    bbs.append(c, x);
+  });
+  const inp = document.createElement('input'); inp.placeholder = 'compte BBS existant'; inp.setAttribute('aria-label','Compte BBS à lier');
+  const lier = btn('Lier'); lier.onclick = async () => {
+    try { const r = await api(`/admin/personnes/${uid}/bbs`, {method:'POST', body:JSON.stringify({handle:inp.value})}); toast('BBS lié : ' + r.handle); b.click(); b.click(); }
+    catch(y){ toast(y.message); }
+  };
+  bbs.append(inp, lier); td.appendChild(bbs);
+  const act = document.createElement('div'); act.className = 'act'; act.style.justifyContent = 'flex-start'; act.style.marginTop = '8px';
+  if (choix.length){
+    const go = btn('Ouvrir les comptes cochés', 'prim');
+    go.onclick = async () => {
+      const services = choix.filter(c => c.checked).map(c => c.value); if (!services.length) return;
+      go.disabled = true;
+      try {
+        const r = await api('/admin/personnes/'+uid+'/comptes', {method:'POST', body:JSON.stringify({services})});
+        const ko = Object.entries(r.services).filter(([,v]) => v !== true);
+        toast(ko.length ? 'Échec : ' + ko.map(([k,v]) => k+' ('+v+')').join(', ') : 'Comptes ouverts');
+        montreMdp(td, r, 'Mot de passe de services');
+      } catch(y){ toast(y.message); }
+      go.disabled = false;
+    };
+    act.appendChild(go);
+  }
+  if (Object.values(e.services).some(x => x.lie)){
+    const re = btn('Réinitialiser le mot de passe');
+    re.onclick = () => confirme(act, 'Nouveau mot de passe dans TOUS ses services ?', async () => {
+      try { const r = await api('/admin/personnes/'+uid+'/comptes/reinitialiser', {method:'POST'}); montreMdp(td, r, 'Nouveau mot de passe'); }
+      catch(y){ toast(y.message); }
+    });
+    act.appendChild(re);
+  }
+  td.appendChild(act);
 }
 
 function rendDemandes(liste){
@@ -276,12 +384,17 @@ function rendDemandes(liste){
     const sel = document.createElement('select'); sel.id = 'role-'+d.did; sel.setAttribute('aria-label','Rôle à l\'arrivée');
     assign.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = LIB[r]||r; sel.appendChild(o); });
     sel.value = 'member';
+    // RATTACHER À UNE PERSONNE EXISTANTE (#1456) : le téléphone de cedre devient
+    // un appareil de cedre83, au lieu d'une nouvelle personne.
+    const qui = document.createElement('select'); qui.setAttribute('aria-label','Personne');
+    qui.innerHTML = '<option value="">nouvelle personne</option>' + PERS.map(p => `<option value="${esc(p.user_uuid)}">→ ${esc(p.pseudo)}</option>`).join('');
+    qui.onchange = () => { sel.hidden = !!qui.value; };
     const ok = btn('Accepter','prim'), non = btn('Refuser','danger');
     ok.onclick = async () => {
       ok.disabled = non.disabled = true;
       try {
-        const r = await api('/admin/demandes/'+encodeURIComponent(d.did)+'/accepter', {method:'POST', body:JSON.stringify({role:sel.value})});
-        toast(`${r.pseudo || d.nom} admis · ${LIB[sel.value]||sel.value}`);
+        const r = await api('/admin/demandes/'+encodeURIComponent(d.did)+'/accepter', {method:'POST', body:JSON.stringify({role:sel.value, personne:qui.value||null})});
+        toast(qui.value ? `Appareil rattaché à ${r.pseudo}` : `${r.pseudo || d.nom} admis · ${LIB[sel.value]||sel.value}`);
         if (r.lien){
           a.innerHTML = '';
           const code = document.createElement('code'); code.textContent = r.lien; code.style.cssText='font-family:var(--mono);font-size:12px;overflow-wrap:anywhere;max-width:420px';
@@ -295,7 +408,7 @@ function rendDemandes(liste){
       try { await api('/admin/demandes/'+encodeURIComponent(d.did)+'/refuser', {method:'POST', body:JSON.stringify({})}); toast('Demande refusée'); } catch(e){ toast(e.message); }
       charge();
     });
-    a.append(sel, ok, non); box.appendChild(row);
+    a.append(qui, sel, ok, non); box.appendChild(row);
   });
 }
 

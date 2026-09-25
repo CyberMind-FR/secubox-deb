@@ -669,7 +669,7 @@ func (s *Server) sourceVivante(r *http.Request, handle string) bool {
 		return false
 	}
 	ses, ok := s.verif(c.Value)
-	return ok && strings.EqualFold(ses.User, handle)
+	return ok && (strings.EqualFold(ses.User, handle) || (ses.Bbs != "" && strings.EqualFold(ses.Bbs, handle)))
 }
 
 // quiSecubox : a defaut de session BBS, la session SecuBox du Hall (#1369).
@@ -695,7 +695,13 @@ func (s *Server) quiSecubox(r *http.Request, v visiteur) visiteur {
 	if !ok {
 		return v
 	}
-	id, err := s.st.UserSecuboxParHandle(ses.User)
+	// COMPTE LIÉ À LA PERSONNE (#1456) : l'administration SBX OS a affirmé que
+	// ce compte BBS est celui de la personne — l'équivalent de l'adoption,
+	// décidé là où vivent les identités. Il passe avant le nom de session.
+	id, err := s.compteLie(ses)
+	if err != nil {
+		id, err = s.st.UserSecuboxParHandle(ses.User)
+	}
 	if err != nil {
 		return v
 	}

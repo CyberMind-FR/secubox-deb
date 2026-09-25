@@ -1,3 +1,12 @@
+secubox-bbs (0.35.0-1~bookworm1) bookworm; urgency=medium
+
+  * Connexion passive au compte lié (ref #1456) : la session du Hall d'une
+    personne SBX OS ouvre SON compte BBS (Remote-Sbx-Bbs / X-Sbx-Compte-Bbs),
+    même local, sans créer de compte sbx-… ; un lien vers un nom absent ne
+    crée rien et retombe sur le comportement d'avant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 16:55:22 +0200
+
 secubox-bbs (0.34.2-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (closes #1440, audit #1405 P1) : une session BBS ouverte par le

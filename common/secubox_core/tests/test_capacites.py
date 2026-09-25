@@ -99,3 +99,15 @@ def test_session_de_compte_sans_appareil(banc, tmp_path):
     assert C.personne_du_porteur({"sub": "gk2", "jti": "j-revoque"}) is None
     _comptes(tmp_path, **{"j-membre": "gk2", "j-invite": "gk2"})      # deux personnes : ambigu
     assert C.personne_du_porteur({"sub": "gk2", "jti": "portail"}) is None
+
+
+def test_compte_lie(banc, tmp_path):
+    """#1456 : le compte BBS lié à la personne ; un nom réel avant un sbx-…"""
+    db = sqlite3.connect(tmp_path / "sbx.db")
+    alice = db.execute("SELECT user_uuid FROM sbx_users WHERE pseudo='alice'").fetchone()[0]
+    db.executemany("INSERT INTO sbx_app_links VALUES (?,?,?,?)",
+                   [(alice, "bbs", "sbx-0123456789ab", "sbx-0123456789ab"), (alice, "bbs", "cedre83", "cedre83")])
+    db.commit(); db.close()
+    assert C.compte_lie({"sub": "sbx-z", "jti": "j-membre"}, "bbs") == "cedre83"
+    assert C.compte_lie({"sub": "sbx-z", "jti": "j-membre"}, "email") is None
+    assert C.compte_lie({"sub": "sbx-z", "jti": "j-revoque"}, "bbs") is None

@@ -165,3 +165,48 @@ func TestNomAffichableBorne(t *testing.T) {
 		}
 	}
 }
+
+// #1456 : la personne SBX OS a un compte BBS à elle (local, « Ani.skywalker ») —
+// son appareil l'ouvre, sans créer de compte sbx-… ni rien demander.
+func TestLeCompteLieALaPersonneEstCeluiQuOnOuvre(t *testing.T) {
+	srv, s := banc(t)
+	ani, err := s.CreateUser("Ani.skywalker", "Ani", store.RoleMember)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.verif = func(string) (sessionSecubox, bool) {
+		return sessionSecubox{User: "sbx-0123456789ab", Groupes: "user", Bbs: "ani.skywalker"}, true
+	}
+	w := auto(t, srv, "/", true)
+	c := cookieNomme(w, cookieSession)
+	if c == nil {
+		t.Fatal("aucune session posée")
+	}
+	if id, _ := s.UserBySession(c.Value); id != ani {
+		t.Errorf("session ouverte sur %d, attendu le compte lié %d", id, ani)
+	}
+	if _, err := s.UserByHandle("sbx-0123456789ab"); err == nil {
+		t.Error("un compte d'appareil a été créé alors qu'un compte lié existe")
+	}
+	// la session Hall reste « vivante » pour ce compte : la BBS ne la ferme pas
+	r := httptest.NewRequest("GET", "/", nil)
+	r.AddCookie(&http.Cookie{Name: "secubox_session", Value: "x"})
+	if !srv.sourceVivante(r, "Ani.skywalker") {
+		t.Error("la session du compte lié est jugée morte")
+	}
+}
+
+// Un lien vers un nom absent ne vaut rien : on retombe sur le compte d'appareil.
+func TestUnLienVersUnNomAbsentNeCreeRien(t *testing.T) {
+	srv, s := banc(t)
+	srv.verif = func(string) (sessionSecubox, bool) {
+		return sessionSecubox{User: "sbx-0123456789ab", Groupes: "user", Bbs: "fantome"}, true
+	}
+	auto(t, srv, "/", true)
+	if _, err := s.UserByHandle("fantome"); err == nil {
+		t.Error("le compte lié a été créé")
+	}
+	if _, err := s.UserByHandle("sbx-0123456789ab"); err != nil {
+		t.Error("le repli sur le compte d'appareil n'a pas eu lieu")
+	}
+}

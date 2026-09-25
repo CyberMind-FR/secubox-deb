@@ -524,10 +524,18 @@ async def verify(request: Request):
             role = appareils.profil_de(sub) if appareils.get(sub) else ""
     except Exception:
         role = ""
-    return JSONResponse(
-        {"ok": True, "user": sub},
-        headers={"Remote-User": sub, "Remote-Groups": role},
-    )
+    # COMPTE BBS LIÉ (#1456) : la personne SBX OS derrière la session peut
+    # avoir un compte BBS à elle (« cedre83 ») ; le BBS l'ouvre alors au lieu
+    # du compte d'appareil. Import tardif : capacites importe ce module.
+    headers = {"Remote-User": sub, "Remote-Groups": role}
+    try:
+        from secubox_core import capacites as _cap
+        lie = _cap.compte_lie(payload, "bbs")
+        if lie:
+            headers["Remote-Sbx-Bbs"] = lie
+    except Exception:
+        pass
+    return JSONResponse({"ok": True, "user": sub}, headers=headers)
 
 
 @router.post("/logout")

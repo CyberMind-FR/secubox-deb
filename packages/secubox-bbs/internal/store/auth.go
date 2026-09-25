@@ -432,6 +432,15 @@ func (s *Store) UserByHandle(handle string) (int64, error) {
 	return id, err
 }
 
+// UserByHandleNocase : comme UserByHandle, sans égard à la casse (#1456) —
+// un lien SBX OS nomme « Ani.skywalker » comme il l'entend.
+func (s *Store) UserByHandleNocase(handle string) (int64, error) {
+	var id int64
+	err := s.db.QueryRow(
+		`SELECT id FROM users WHERE handle = ? COLLATE NOCASE AND disabled_at IS NULL`, handle).Scan(&id)
+	return id, err
+}
+
 // UserInfo : ce qu'il faut pour afficher un bandeau, rien de plus.
 type UserInfo struct {
 	ID        int64

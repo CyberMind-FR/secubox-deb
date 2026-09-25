@@ -39,7 +39,7 @@ from secubox_core import capacites as _cap
 from secubox_core import sbxid as S
 from secubox_core import user_store
 
-from . import store
+from . import comptes, store
 
 log = logging.getLogger("secubox.sbxid")
 app = FastAPI(title="SBX Identity Manager", version="0.1.0")
@@ -347,6 +347,86 @@ def personnes(ctx=Depends(exige_admin)):
     return {"personnes": out}
 
 
+class NouvellePersonne(BaseModel):
+    pseudo: str = Field(min_length=2, max_length=32)
+    role: str = "member"
+    email: Optional[str] = Field(default=None, max_length=200)      # adresse de RÉCUPÉRATION, externe
+
+
+@app.post("/admin/personnes")
+def cree_personne(n: NouvellePersonne, ctx=Depends(exige_admin)):
+    """Une personne SBX OS sans appareil encore (#1456) : ses comptes de services
+    peuvent l'attendre ; son premier appareil lui sera RATTACHÉ à l'admission."""
+    pseudo = n.pseudo.strip().lower()
+    if not comptes.RE_NOM.match(pseudo) or pseudo in S.COMPTES_SYSTEME:
+        raise HTTPException(400, "Pseudo : a-z 0-9 . _ - (2 à 32), jamais un compte système")
+    if db().execute("SELECT 1 FROM sbx_users WHERE pseudo=?", (pseudo,)).fetchone():
+        raise HTTPException(409, f"« {pseudo} » existe déjà")
+    try:
+        roles = S.roles_effectifs([n.role])
+    except S.Refus as e:
+        raise HTTPException(400, str(e))
+    n_ = _noeud()
+    uid = str(uuid.uuid4())
+    db().execute("INSERT INTO sbx_users (user_uuid,pseudo,email,home_node,created_at) VALUES (?,?,?,?,?)",
+                 (uid, pseudo, (n.email or "").strip() or None, n_.did if n_ else "did:plc:" + "0" * 32, int(time.time())))
+    for x in roles:
+        db().execute("INSERT INTO sbx_user_roles VALUES (?,?,?,?)", (uid, x, _acteur(ctx), int(time.time())))
+    store.journal(db(), _acteur(ctx), "user.created", f"{pseudo} · {', '.join(roles)}")
+    return store.personne(db(), uid)
+
+
+def _comptes(f, *a):
+    try:
+        return f(db(), *a)
+    except comptes.Refus as e:
+        raise HTTPException(e.code, e.detail)
+
+
+@app.get("/admin/personnes/{user_uuid}/comptes")
+def comptes_de(user_uuid: str, ctx=Depends(exige_admin)):
+    return _comptes(comptes.etat, user_uuid)
+
+
+class Services(BaseModel):
+    services: List[str]
+
+
+@app.post("/admin/personnes/{user_uuid}/comptes")
+def ouvre_comptes(user_uuid: str, v: Services, ctx=Depends(exige_admin)):
+    r = _comptes(comptes.cree, user_uuid, v.services)
+    store.journal(db(), _acteur(ctx), "services.created",
+                  f"{user_uuid[:8]} : " + ", ".join(f"{k}={'ok' if x is True else 'échec'}" for k, x in r["services"].items()))
+    return r
+
+
+@app.post("/admin/personnes/{user_uuid}/comptes/reinitialiser")
+def reinitialise_comptes(user_uuid: str, ctx=Depends(exige_admin)):
+    r = _comptes(comptes.reinitialise, user_uuid)
+    store.journal(db(), _acteur(ctx), "services.password_reset", user_uuid[:8])
+    return r
+
+
+class LienBbs(BaseModel):
+    handle: str = Field(min_length=2, max_length=64)
+
+
+@app.post("/admin/personnes/{user_uuid}/bbs")
+def lie_bbs(user_uuid: str, v: LienBbs, ctx=Depends(exige_admin)):
+    """Relier le compte BBS EXISTANT de la personne : ses messages et ses fils
+    restent les siens, et la session du Hall l'ouvre sans mot de passe."""
+    h = _comptes(comptes.lie_bbs, user_uuid, v.handle)
+    store.journal(db(), _acteur(ctx), "link.bbs", f"{user_uuid[:8]} ↔ {h}")
+    return {"ok": True, "handle": h}
+
+
+@app.delete("/admin/personnes/{user_uuid}/liens/{app}/{ident}")
+def delie(user_uuid: str, app: str, ident: str, ctx=Depends(exige_admin)):
+    _comptes(comptes.delie, user_uuid, app, ident)
+    store.journal(db(), _acteur(ctx), "link.removed", f"{user_uuid[:8]} ✕ {app}:{ident}")
+    return {"ok": True}
+
+
 class Roles(BaseModel):
     roles: List[str]
 
@@ -408,6 +488,9 @@ def demandes(ctx=Depends(exige_admin)):
 class Decision(BaseModel):
     role: str = "member"
     motif: str = Field(default="", max_length=200)
+    #: Rattacher l'appareil à une personne EXISTANTE (#1456) plutôt que d'en
+    #: créer une d'après le nom déclaré.
+    personne: Optional[str] = None
 
 
 def _acces_ou_503():
@@ -432,12 +515,26 @@ async def accepte(did: str, dcn: Decision, request: Request, ctx=Depends(exige_a
     cle = next((d.get("cle_publique") for d in _demandes() if d.get("did") == did), None)
     dev = store.appareil_par_did(db(), S.did_appareil(cle)) if cle else None
     pseudo = None
-    if dev and dev["user_uuid"]:
+    if dev and dcn.personne and dcn.personne != dev["user_uuid"]:
+        if not db().execute("SELECT 1 FROM sbx_users WHERE user_uuid=?", (dcn.personne,)).fetchone():
+            raise HTTPException(404, "Personne inconnue")
+        ancien = dev["user_uuid"]
+        db().execute("UPDATE sbx_devices SET user_uuid=? WHERE device_uuid=?", (dcn.personne, dev["device_uuid"]))
+        # la personne née de la demande n'a plus rien : on ne laisse pas de fantôme
+        if ancien and not db().execute("SELECT 1 FROM sbx_devices WHERE user_uuid=?", (ancien,)).fetchone():
+            for t in ("sbx_user_roles", "sbx_app_links", "sbx_preferences"):
+                db().execute(f"DELETE FROM {t} WHERE user_uuid=?", (ancien,))
+            db().execute("DELETE FROM sbx_users WHERE user_uuid=?", (ancien,))
+        dev = store.appareil_par_did(db(), S.did_appareil(cle))
+        roles = []                                    # la personne garde SES rôles
+    if dev and dev["user_uuid"] and roles:
         db().execute("DELETE FROM sbx_user_roles WHERE user_uuid=?", (dev["user_uuid"],))
         for x in roles:
             db().execute("INSERT INTO sbx_user_roles VALUES (?,?,?,?)", (dev["user_uuid"], x, _acteur(ctx), int(time.time())))
+    if dev and dev["user_uuid"]:
         pseudo = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (dev["user_uuid"],)).fetchone()[0]
-    store.journal(db(), _acteur(ctx), "invite.validated", f"{pseudo or did} · {', '.join(roles)}")
+    store.journal(db(), _acteur(ctx), "invite.validated",
+                  f"{pseudo or did} · " + (', '.join(roles) if roles else "rattaché à sa personne"))
     return {"ok": True, "pseudo": pseudo, "roles": roles, "lien": out.get("lien", "")}
 
 

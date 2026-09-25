@@ -28,6 +28,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"regexp"
@@ -40,6 +41,15 @@ import (
 
 // L'en-tête que nginx pose depuis `Remote-User`.
 const enteteMembreSbx = "X-Sbx-Membre"
+
+// enteteCompteBbs : le compte BBS lié à la personne SBX OS (#1456), posé par
+// nginx depuis Remote-Sbx-Bbs de /auth/verify — écrasé comme X-Sbx-Membre.
+const enteteCompteBbs = "X-Sbx-Compte-Bbs"
+
+// Un handle BBS existant (« Ani.skywalker ») : lettres, chiffres, . _ -
+var reCompteLie = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$`)
+
+var errPasDeLien = errors.New("pas de compte lié")
 
 // Et celui qui porte le profil, depuis `Remote-Groups`.
 const enteteProfilSbx = "X-Sbx-Profil"
@@ -77,12 +87,28 @@ func (s *Server) sbxEntree(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vers := r.URL.Query().Get("vers")
-	s.ouvreSessionSbx(w, r, compte, r.Header.Get(enteteProfilSbx), vers)
+	s.ouvreSessionSbx(w, r, compte, r.Header.Get(enteteProfilSbx), vers,
+		strings.TrimSpace(r.Header.Get(enteteCompteBbs)))
+}
+
+// compteLie : le compte BBS lié à la personne SBX OS, s'il existe et n'est pas
+// désactivé (#1456). Jamais créé ici : un lien vers un nom absent ne vaut rien.
+func (s *Server) compteLie(ses sessionSecubox) (int64, error) {
+	h := strings.TrimSpace(ses.Bbs)
+	if h == "" || !reCompteLie.MatchString(h) {
+		return 0, errPasDeLien
+	}
+	return s.st.UserByHandleNocase(h)
 }
 
 // ouvreSessionSbx : le compte SecuBox vérifié devient une session BBS. Commun à
 // /sbx/entrer (vérifié par nginx) et /sbx/auto (vérifié par le démon).
-func (s *Server) ouvreSessionSbx(w http.ResponseWriter, r *http.Request, compte, profil, vers string) {
+func (s *Server) ouvreSessionSbx(w http.ResponseWriter, r *http.Request, compte, profil, vers, lie string) {
+	// La personne a un compte BBS à elle (#1456) : on ouvre CELUI-LÀ.
+	if id, err := s.compteLie(sessionSecubox{Bbs: lie}); err == nil {
+		s.ouvreSessionId(w, r, id, vers)
+		return
+	}
 	// UN APPAREIL A UN NOM (#1373). Admis par le Hall, il a déclaré « Gandalf »
 	// ou « Gk2 » : c'est ce qu'on affiche, pas « sbx-ff90aec2d8d8 ». Lu dans le
 	// registre des appareils, posé à la création, et repris tant que le membre
@@ -103,6 +129,11 @@ func (s *Server) ouvreSessionSbx(w http.ResponseWriter, r *http.Request, compte,
 		}
 	}
 
+	s.ouvreSessionId(w, r, id, vers)
+}
+
+// ouvreSessionId : la session BBS elle-même, une fois le compte choisi.
+func (s *Server) ouvreSessionId(w http.ResponseWriter, r *http.Request, id int64, vers string) {
 	s.st.NoteLogin(id, r.RemoteAddr)
 	jeton, err := s.st.NewSessionSbx(id, r.RemoteAddr, r.UserAgent()) // #1440
 	if err != nil {
@@ -166,7 +197,7 @@ func (s *Server) sbxAuto(w http.ResponseWriter, r *http.Request) {
 		refus()
 		return
 	}
-	s.ouvreSessionSbx(w, r, compte, ses.Groupes, vers)
+	s.ouvreSessionSbx(w, r, compte, ses.Groupes, vers, ses.Bbs)
 }
 
 // cheminAppareils : le registre tenu par secubox-acces (0640 secubox ; le
