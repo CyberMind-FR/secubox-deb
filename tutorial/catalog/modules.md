@@ -112,7 +112,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-nextcloud` | misc | pro | oui | 22 | 1 | 1 | oui | 1 | oui |
 | `secubox-ollama` | ai | pro | oui | 15 | — | 1 | — | — | oui |
 | `secubox-openclaw` | misc | lite | oui | 14 | 1 | — | — | 3 | oui |
-| `secubox-ossec` | misc | lite | oui | 16 | — | 1 | — | — | oui |
 | `secubox-p2p` | misc | lite | oui | 57 | 1 | 1 | — | 14 | oui |
 | `secubox-peertube` | misc | lite | oui | 46 | 1 | 9 | oui | 4 | oui |
 | `secubox-photoprism` | misc | lite | oui | 27 | 1 | 1 | oui | — | oui |
@@ -1718,22 +1717,6 @@ SecuBox OpenClaw OSINT Module
 - **Tests** : 3
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-openclaw/`
-
-### `secubox-ossec`
-
-SecuBox OSSEC HIDS integration
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 16 route(s), socket `/run/secubox/ossec.sock`, authentification À documenter
-- **Interface web** : oui, /srv/secubox/www/ossec
-- **CLI** : À documenter
-- **Units systemd** : `secubox-ossec.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-ossec/`
 
 ### `secubox-p2p`
 

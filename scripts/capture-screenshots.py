@@ -111,7 +111,7 @@ def categorize_module(module_id: str) -> str:
         "vortex-firewall": "Security", "ipblock": "Security", "mac-guard": "Security",
         "interceptor": "Security", "cookies": "Security", "threats": "Security",
         "threat-analyst": "Security", "cve-triage": "Security", "wazuh": "Security",
-        "ossec": "Security", "openclaw": "Security", "iot-guard": "Security",
+        "openclaw": "Security", "iot-guard": "Security",
 
         # Network
         "netmodes": "Network", "qos": "Network", "traffic": "Network",

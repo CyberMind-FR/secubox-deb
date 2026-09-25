@@ -1,3 +1,9 @@
+secubox-appstore (0.4.17-1~bookworm1) bookworm; urgency=medium
+
+  * Catalogue régénéré : secubox-ossec retiré (ref #1464).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:08:53 +0200
+
 secubox-appstore (0.4.16-1~bookworm1) bookworm; urgency=medium
 
   * Métapaquets imbriqués (ref #1397) : le catalogue embarque l'arbre de

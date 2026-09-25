@@ -401,7 +401,6 @@ recommande:
   - secubox-antirootkit
   - secubox-device-intel
 suggere:
-  - secubox-ossec
   - secubox-threat-analyst
   - secubox-ad-guard
   - secubox-cookies

@@ -1,3 +1,9 @@
+secubox-profils (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-profil-defense ne dépend plus de secubox-ossec, retiré (ref #1464).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:07:43 +0200
+
 secubox-profils (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * COQUILLES RETIREES DES PROFILS (#1362). `secubox-profil-reseau`
