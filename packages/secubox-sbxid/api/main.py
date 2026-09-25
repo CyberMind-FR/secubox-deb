@@ -68,18 +68,32 @@ def _noeud() -> Optional[S.Node]:
 _DB = None
 
 
+# UNE CONNEXION PAR THREAD (#1462). FastAPI sert les routes synchrones dans un
+# pool de threads ; une connexion SQLite unique, créée par l'un, levait
+# ProgrammingError dans les autres — invisible tant que les appels venaient un
+# par un, 500 dès que l'admin Utilisateurs en a lancé trois ensemble.
+# `_DB` est le jeton de GÉNÉRATION : None = (ré)ouvrir (et importer) ; les tests
+# le remettent à None pour repartir d'une base neuve.
+_LOCAL = threading.local()
+
+
 def db():
     global _DB
     if _DB is None:
-        _DB = store.ouvre()
+        _DB = object()
+        c = store.ouvre()
+        _LOCAL.c, _LOCAL.gen = c, _DB
         n = _noeud()
         try:
-            r = store.importe_existant(_DB, n.did if n else "did:plc:" + "0" * 32)
+            r = store.importe_existant(c, n.did if n else "did:plc:" + "0" * 32)
             if r["appareils"]:
                 log.info("sbxid : import %s", r)
         except Exception as e:                        # l'import ne doit jamais empêcher de servir
             log.error("sbxid : import impossible : %s", e)
-    return _DB
+        return c
+    if getattr(_LOCAL, "gen", None) is not _DB:
+        _LOCAL.c, _LOCAL.gen = store.ouvre(), _DB
+    return _LOCAL.c
 
 
 # ── Qui appelle ────────────────────────────────────────────────────────────
