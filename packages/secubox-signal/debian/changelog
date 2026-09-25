@@ -1,3 +1,20 @@
+secubox-signal (0.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * cmd/sbx-signald/main.go RECONSTRUIT (ref #1385). Le source d'origine
+    n'avait jamais ete commite (.gitignore non ancre, corrige dans #1384) :
+    le paquet ne se construisait plus nulle part, et la CI d'alpha.6
+    restait bloquee dessus. Refait depuis internal/, l'essai d'integration
+    et le binaire 0.1.6 de gk2 (memes fermetures, memes messages, socket
+    0660, notification systemd READY=1).
+  * SIGHUP (ExecReload) ne tue plus le demon : il est journalise, la
+    configuration se relit au redemarrage.
+  * signal-cli mort est RECUEILLI (il restait zombie), journalise avec son
+    stderr, et le client redevient « non demarre ». Sur gk2 la JVM meurt
+    au lancement : signal-cli embarque un libsignal_jni.so x86-64 (limite
+    connue de secubox-signal-engine, hors de ce correctif).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 25 Sep 2026 10:09:44 +0200
+
 secubox-signal (0.1.7-1~bookworm1) bookworm; urgency=medium
 
   * La cardlet /micro porte un <!DOCTYPE html>. Sans lui le navigateur la

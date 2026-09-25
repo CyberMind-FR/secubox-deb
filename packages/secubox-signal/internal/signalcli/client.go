@@ -24,6 +24,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -94,6 +96,9 @@ func (c *Client) Start(ctx context.Context) error {
 		"--config", c.stateDir,
 		"--output=json",
 		"daemon", "--no-receive-stdout")
+	// Son stderr rejoint le journal de l'unite : c'est la que la JVM dit
+	// POURQUOI elle meurt (bibliotheque native absente, par exemple).
+	cmd.Stderr = os.Stderr
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -115,6 +120,7 @@ func (c *Client) lire() {
 	for {
 		ligne, err := c.stdout.ReadBytes('\n')
 		if err != nil {
+			c.fin()
 			return
 		}
 		var r reponse
@@ -134,6 +140,29 @@ func (c *Client) lire() {
 			}
 		}
 	}
+}
+
+// fin : signal-cli s'est arrete (ou a ete arrete). On RECUEILLE le processus
+// — sans Wait il restait zombie — on le journalise, et le client revient a
+// l'etat « non demarre » : les appels le disent au lieu d'attendre le delai.
+func (c *Client) fin() {
+	c.mu.Lock()
+	cmd := c.cmd
+	c.cmd, c.stdin, c.stdout = nil, nil, nil
+	c.mu.Unlock()
+	if cmd == nil {
+		return
+	}
+	log.Printf("signal-cli s'est arrete : %v", cmd.Wait())
+	// Les appels en vol n'auront jamais de reponse : on les libere.
+	c.attentes.Range(func(id, ch any) bool {
+		c.attentes.Delete(id)
+		ch.(chan reponse) <- reponse{Error: &struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}{-1, "backend signal-cli arrete"}}
+		return true
+	})
 }
 
 // Call emet une requete et attend sa reponse.
