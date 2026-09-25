@@ -5,6 +5,64 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
+## 2026-09-25 — UNE PERSONNE, SES APPAREILS, SES COMPTES (ref #1405)
+
+Journée d'identité : SBX OS a désormais des **personnes** qui ne sont pas des
+comptes système, avec leurs appareils, leurs comptes de services et un lieu où
+se parler. Quinze issues livrées et déployées sur gk2.
+
+### Messagerie de la box — closes #1446, closes #1448
+`secubox-messagerie` 0.2 : mur public + messages privés servis par le Hall
+(`/messagerie/`), identité SBX OS ou pseudo de visiteur (publié d'emblée,
+modéré ensuite), réponse privée ou publique. **Centralisée** : chat de la radio
+et commentaires des Billets dans le mur — y répondre publie À LA SOURCE (un
+message vit à un seul endroit). Les MP du BBS sont repris dans « Privés »,
+gk2 y apparaît sous **gandalf**. Noms système jamais affichés.
+
+### Une session de compte désigne sa personne — closes #1450, closes #1452
+Ouverte par mot de passe, la session gk2 n'avait pas d'identité : elle signait
+« modération ». Règle unique (`capacites.personne_du_porteur`, reprise par
+`/moi`) : la personne **unique** propriétaire des appareils acceptés pour ce
+compte ; ambigu ou aucun → rien ; une session d'appareil ne retombe jamais sur
+son compte.
+
+### Personnes SBX OS et comptes liés — closes #1454, closes #1456, closes #1468, closes #1470
+- Personne créée **sans appareil** par l'Administration SBX OS ; son premier
+  appareil lui est **rattaché** à l'admission (pas de personne fantôme).
+- Comptes Courriel / Nextcloud / PeerTube ouverts par le helper root de
+  secubox-users, liés au `user_uuid` ; **un seul mot de passe de services**,
+  rendu une fois, réinitialisable d'un geste partout.
+- Compte **existant** relié (gk2@secubox.in, gk2 Nextcloud, gk2 PeerTube pour
+  gandalf) : vérifié, jamais recréé, il garde **son** mot de passe.
+- BBS lié → **connexion passive** : `/auth/verify` rend `Remote-Sbx-Bbs`, le
+  BBS ouvre ce compte sans mot de passe (et plus un `sbx-…` d'appareil).
+- cedre83 et ani.skywalker créés ainsi (courriel, Nextcloud, PeerTube, BBS).
+
+### Le sleeper rendormait pendant la création — closes #1458
+Un conteneur on-demand démarré à la main était endormi au tick suivant : le
+sleeper juge sur le **trafic du vhost**, pas sur l'état. Verrous de maintien
+`/run/secubox/sleeper-hold/<id>` ; le helper réveille et tient le module le
+temps de son action, et patiente pendant le démarrage de l'application.
+
+### Voir et administrer — closes #1460, closes #1462, closes #1466, closes #1472, closes #1474
+- Admin Utilisateurs : onglets « Personnes SBX OS » et « Demandes » (file
+  unique), sessions nommées « personne · appareil ».
+- sbxid : une connexion SQLite **par thread** (500 dès trois appels parallèles).
+- Menu admin « Identité SBX OS » ; carte Hall « Mes comptes » ; carte
+  Renseignement sans `actor.gk2` (non servi).
+- Chaque appareil porte navigateur et système de sa dernière session ; le
+  user agent n'est plus coupé à 100 caractères (juste avant le navigateur).
+
+### Retraits — closes #1464
+OSSEC HIDS (`secubox-ossec`, une coquille sans moteur) retiré de partout.
+
+### Leçons
+- **Un échec n'est pas une absence.** Nextcloud qui démarre faisait lire
+  « compte gk2 inexistant » ; on a relié `admin` à sa place.
+- **Un état n'est pas une activité.** Le sleeper ne voit que le trafic ; tout
+  outil qui travaille dans un module endormi doit le tenir éveillé.
+- **Une connexion partagée tient tant que personne n'appelle deux fois.**
+
 ## 2026-09-23 — CE QUE PERSONNE NE TIENT, ET CE QU'ON N'A PAS MESURÉ (ref #1323, #1328, #1329)
 
 Deux jours, sept paquets livrés, un module neuf. Mais ce qui mérite d'être

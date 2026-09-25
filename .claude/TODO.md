@@ -6,7 +6,26 @@
 -->
 
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-09-14*
+*Mis à jour : 2026-09-25*
+
+---
+
+## 2026-09-25 — suites identité SBX OS (#1405)
+
+- [ ] **Demandes de compte depuis le Hall** : « il me manque Nextcloud » ou
+      « relier mon compte existant », validées par l'administration, suivies,
+      révocables.
+- [ ] **Certificat client pour les abonnements** — maquette, puis demande
+      embarquée dans les webui ; lien de maillage par certificat.
+- [ ] **Jarre de cookies vaultée** par personne dans son conteneur de rejeu ;
+      la révocation de l'appareil ou de la personne la purge.
+- [ ] **Sessions listées** : retirer celles qui sont expirées ou d'appareils
+      refusés (elles sont déjà refusées à l'usage, mais encombrent la liste).
+- [ ] **MacIntel de gandalf** sans session récente : garder ou révoquer.
+- [ ] **`scripts/generate-docs.py`** : erreur de syntaxe ligne ~1802 sur master
+      (antérieure au retrait d'OSSEC).
+- [ ] **identity / avatar** : l'ancien module d'identité n'est plus au menu ;
+      le rendre transitionnel vers secubox-sbxid.
 
 ---
 

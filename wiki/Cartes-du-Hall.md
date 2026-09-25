@@ -28,6 +28,8 @@ En ajoutant une carte, mettre à jour les **trois** ensemble.
 | 📻 **Radio** | Flux en direct, lecteur souverain qui suit le thème et l'état du Hall. |
 | 💬 **BBS** | Derniers fils et salons ; les liens média deviennent un objet souverain (voir / garder / diffuser). |
 | 🎟️ **Billets** | Dernières publications ; objet média embarqué, titre et détails enrichis. |
+| 💬 **Messagerie** | Mur public + messages privés de la box ; chat radio et commentaires Billets centralisés, y répondre publie à la source. |
+| 🗝️ **Mes comptes** | Les comptes liés de la personne (courriel, Nextcloud, PeerTube, BBS) et leur lien ; un mot de passe pour tous, le forum ouvert d'office. |
 | 🗞️ **MetaNews** | Topics clusterisés et leurs sources, ouverts en profondeur dans le Hall. |
 | 🌐 **Surf (BiB)** | Navigateur de relais : surfe une adresse à travers la box, pisteurs coupés, 🎬 pour rapatrier un média croisé. |
 | ✋ **Qui frappe ?** | Tentatives d'accès en cours vues par le WAF — donnée de sécurité, session requise. |

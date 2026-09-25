@@ -52,6 +52,8 @@
 * [[ToolBox]] 👁️ cabine numérique · rapport vie privée
 * [[Anti-Track]] 🛡️ bloque · empoisonne · anonymise
 * [[Billets]] 📮 micro-blog gateway · média vignette zoomable
+* [[Messagerie]] 💬 mur public, messages privés, radio/Billets/BBS centralisés
+* [[Identite-SBX-OS]] 🪪 personnes, appareils, comptes liés, connexion passive
 * [[Metalogue]] 🕸️ OSINT suite · Maigret + SpiderFoot (Maltego-style)
 * [[WAF]] 🛡️ pare-feu applicatif autonome (nft direct, hors-HTTP) | [FR](WAF-FR)
 * [[ThreatMesh]] 🛰️ blocklist souveraine (feeds + mesh, sans CAPI) | [FR](ThreatMesh-FR)
