@@ -1,3 +1,19 @@
+secubox-radio (0.1.70-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (closes #1430, audit #1405 S4).
+    - radio.gk2 passait le chemin tel quel : les routes COURTES (montées
+      sysop par parAdmin) étaient publiques — /current rendait la vue
+      d'administration (constaté sur gk2). Elles répondent 404 sur ce vhost
+      et ne sont pas relayées par le Hall.
+    - X-Sbx-User-Id, X-Sbx-User, X-Sbx-Role venus du client sont vidés :
+      seule une porte déclare une identité. X-Sbx-Radio-Sysop (secret)
+      inchangé.
+  * Le postinst installe désormais le vhost (sauvegarde, nginx -t, retour
+    arrière) : le fichier actif était une copie manuelle qu'aucune mise à
+    jour n'atteignait.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:15:33 +0200
+
 secubox-radio (0.1.69-1~bookworm1) bookworm; urgency=medium
 
   * DÉCLARE `media.volume.relative` (ref #1349) — « baisse le son de la radio »
