@@ -48,8 +48,11 @@ def banc(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DEMANDES", f)
     monkeypatch.setattr(main, "NODE_KEY", k)
     monkeypatch.setattr(main, "_DB", None)
+    monkeypatch.setattr(main._cap, "SBX_DB", tmp_path / "sbx.db")
+    monkeypatch.setattr(main._cap, "DEMANDES", f)
     sessions = {"tok-g": {"sub": "gk2", "jti": "jti-g"}, "tok-a": {"sub": "sbx-" + S.empreinte_cle(pa)[:12], "jti": "zz"},
-                "tok-sys": {"sub": "operator", "jti": "j"}, "tok-adm": {"sub": "admin", "jti": "portail"}}
+                "tok-sys": {"sub": "operator", "jti": "j"}, "tok-adm": {"sub": "admin", "jti": "portail"},
+                "tok-gpw": {"sub": "gk2", "jti": "portail"}}
     monkeypatch.setattr(main._auth, "_validate_token", lambda t: sessions.get(t))
     systeme = {"admin": {"role": "admin", "enabled": True}, "gk2": {"role": "admin", "enabled": True},
                "operator": {"role": "operator"}}
@@ -183,3 +186,14 @@ def test_admission_par_l_identity_manager(banc, tmp_path, monkeypatch):
     assert "Chloé" not in [d["nom"] for d in main.demandes(ctx)["en_attente"]]
     with pytest.raises(HTTPException):
         asyncio.run(main.accepte("did:sbx:nouveau", main.Decision(role="root"), req, ctx))
+
+
+def test_session_gk2_par_mot_de_passe(banc):
+    """#1452 : sans appareil, le compte gk2 désigne gandalf ; rien ne se signe pour autant."""
+    m = main.route_moi(main.moi(_req("tok-gpw")))
+    assert m["identite"]["pseudo"] == "gandalf" and m["par_compte"] == "gk2" and m["appareil_courant"] is None
+    assert main.route_moi(main.moi(_req("tok-adm")))["identite"] is None   # admin : aucun appareil rattaché
+    dev = m["appareils"][0]["device_uuid"]
+    with pytest.raises(HTTPException) as e:
+        main.prepare(dev, main.moi(_req("tok-gpw")))
+    assert e.value.status_code == 409

@@ -1,3 +1,12 @@
+secubox-sbxid (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * /moi : une session de compte ouverte sans appareil (mot de passe + TOTP)
+    désigne la personne unique propriétaire des appareils acceptés pour ce
+    compte — gk2 → gandalf (ref #1452, même règle que #1450). Aucun
+    certificat ne se signe sans appareil de session.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 16:21:54 +0200
+
 secubox-sbxid (0.2.2-1~bookworm1) bookworm; urgency=medium
 
   * « Connexions liées » côté utilisateur (ref #1442) : compte de la

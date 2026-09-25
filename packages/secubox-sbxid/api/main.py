@@ -35,6 +35,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from secubox_core import auth as _auth
+from secubox_core import capacites as _cap
 from secubox_core import sbxid as S
 from secubox_core import user_store
 
@@ -140,6 +141,15 @@ def moi(request: Request) -> Dict[str, Any]:
            "systeme": _systeme_admin(p.get("sub", ""))}
     if dev and not dev["revoked_at"] and dev["user_uuid"]:
         ctx["user"] = store.personne(db(), dev["user_uuid"])
+    elif dev is None:
+        # SESSION DE COMPTE SANS APPAREIL (#1452, même règle que #1450) : ouverte
+        # par mot de passe, elle désigne la personne unique propriétaire des
+        # appareils acceptés pour ce compte (gk2 → gandalf). Sans appareil de
+        # session, rien ne se signe : le certificat reste exigé DEPUIS l'appareil.
+        per = _cap.personne_du_porteur(p)
+        if per:
+            ctx["user"] = store.personne(db(), per["user_uuid"])
+            ctx["par_compte"] = True
     return ctx
 
 
@@ -194,7 +204,8 @@ def route_moi(ctx=Depends(moi)):
                 "motif": "Cette session n'est pas celle d'un appareil SBX OS "
                          + ("(compte système : administration seulement)" if ctx["systeme"] else "admis")}
     uid = ctx["user"]["user_uuid"]
-    return {"identite": ctx["user"], "appareil_courant": ctx["device"]["device_uuid"], "connexions": _connexions(ctx),
+    return {"identite": ctx["user"], "appareil_courant": (ctx["device"] or {}).get("device_uuid"),
+            "par_compte": ctx["sub"] if ctx.get("par_compte") else None, "connexions": _connexions(ctx),
             "appareils": store.appareils_de(db(), uid), "systeme": ctx["systeme"],
             "liens": [dict(r) for r in db().execute("SELECT app, app_handle FROM sbx_app_links WHERE user_uuid=?", (uid,))]}
 
