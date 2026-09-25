@@ -1,3 +1,12 @@
+secubox-core (1.5.13-1~bookworm1) bookworm; urgency=high
+
+  * secubox_core.capacites (ref #1438, AUTH v3 M3) : require_capability(cap),
+    le middleware unique — session → appareil → personne (sbx.db) → capacités ;
+    administrateur système = toutes les capacités SBX OS ; appareil révoqué ou
+    personne suspendue = aucune ; repli sur le profil d'appareil sans sbx.db.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:37:22 +0200
+
 secubox-core (1.5.12-1~bookworm1) bookworm; urgency=medium
 
   * secubox_core.sbxid — socle du SBX Identity Mesh (ref #1417, AUTH v3 M1) :

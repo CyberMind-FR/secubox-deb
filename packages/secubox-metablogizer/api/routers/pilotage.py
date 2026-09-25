@@ -36,6 +36,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
+# ÉCRIRE EXIGE metablog.publish (#1438) — toute session publiait, exposait, supprimait.
+from secubox_core.capacites import require_capability as _require_capability
+_ECRIRE = _require_capability("metablog.publish")
+
 
 import sites_scan
 from publish.certs import is_wildcard_domain, provision_cert
@@ -327,17 +331,17 @@ def depublier(site_dir: Path) -> dict:
             "etapes": etapes, "chaine": chaine_du_site(site_dir)}
 
 
-@router.post("/site/{name}/publish", dependencies=[Depends(require_jwt)])
+@router.post("/site/{name}/publish", dependencies=[Depends(_ECRIRE)])
 async def post_publish(name: str):
     return await asyncio.to_thread(publier, _site_dir(name))
 
 
-@router.post("/site/{name}/unpublish", dependencies=[Depends(require_jwt)])
+@router.post("/site/{name}/unpublish", dependencies=[Depends(_ECRIRE)])
 async def post_unpublish(name: str):
     return await asyncio.to_thread(depublier, _site_dir(name))
 
 
-@router.post("/site/{name}/vhost", dependencies=[Depends(require_jwt)])
+@router.post("/site/{name}/vhost", dependencies=[Depends(_ECRIRE)])
 async def post_vhost(name: str):
     """Appliquer le vhost après une édition (domaine, alias) : régénère nginx
     et, si le site est exposé, réaligne la route sbxwaf sur le domaine courant."""
@@ -357,7 +361,7 @@ class Exposition(BaseModel):
     wan: bool
 
 
-@router.post("/site/{name}/exposure", dependencies=[Depends(require_jwt)])
+@router.post("/site/{name}/exposure", dependencies=[Depends(_ECRIRE)])
 async def post_exposure(name: str, body: Exposition):
     """WAN = route sbxwaf (+ vhost HAProxy) ; LAN = on la retire, le vhost
     nginx reste et le site répond en *.gk2 depuis le réseau local."""
@@ -377,7 +381,7 @@ async def post_exposure(name: str, body: Exposition):
     return await asyncio.to_thread(_exposer)
 
 
-@router.post("/site/{name}/cert", dependencies=[Depends(require_jwt)])
+@router.post("/site/{name}/cert", dependencies=[Depends(_ECRIRE)])
 async def post_cert(name: str):
     """(Re)demander le certificat. Wildcard : instantané, attendu. Domaine
     custom : certbot HTTP-01, lent → tâche de fond, la page ré-interroge
@@ -397,7 +401,7 @@ async def post_cert(name: str):
             "detail": "certbot (webroot HTTP-01) en cours — le certificat arrive en tâche de fond"}
 
 
-@router.post("/site/{name}/snapshot", dependencies=[Depends(require_jwt)])
+@router.post("/site/{name}/snapshot", dependencies=[Depends(_ECRIRE)])
 async def post_snapshot(name: str):
     """Capturer la vignette MAINTENANT, hors du tour du shotter. Un seul
     chromium à la fois (verrou partagé avec metablog-shots) et jamais sous
