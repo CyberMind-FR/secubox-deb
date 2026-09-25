@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox — fédération SBX (sbx-certd : certificats, adhésion)
+After=network.target
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+ExecStartPre=+/bin/sh -c 'mkdir -p /run/secubox && chown secubox:secubox /run/secubox'
+ExecStart=/usr/sbin/sbx-certd --socket /run/secubox/federation.sock
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/var/lib/secubox/federation /run/secubox
+ReadOnlyPaths=/etc/secubox
+RestrictAddressFamilies=AF_UNIX
+MemoryDenyWriteExecute=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

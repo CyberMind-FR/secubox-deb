@@ -1,0 +1,13 @@
+secubox-federation (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Fédération SBX v2, phase 1 (ref #1389, #1388) : CA GK2, certificat SBX v2
+    signé Ed25519 (sujet = DID annuaire de la box, canonicalisation identique
+    à annuaire.crypto.canonical_bytes — vérifiable en Python), demandes
+    d'adhésion signées (fenêtre de rejeu 15 min), émission sur décision de
+    l'administrateur, renouvellement avec preuve de clé (grâce 30 j), liste de
+    révocation signée, tiers community/standard/pro/premium configurables.
+  * sbx-certd : /api/federation/{status,ca,join,join/{did}}, /api/cert/{renew,crl}.
+  * sbxctl : ca init, federation status|join|fetch, cert
+    demandes|issue|revoke|renew|export|verify.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 08:30:25 +0200

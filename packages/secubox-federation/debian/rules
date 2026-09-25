@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: federation — Go pur, hors ligne (vendor/), CGO_ENABLED=0.
+# L'architecture Go suit la cible Debian (amd64 pour les VM, arm64 pour les
+# boards) — voir #1383.
+
+export DH_VERBOSE = 1
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+GOARCH_amd64 = amd64
+GOARCH_arm64 = arm64
+export GOARCH = $(or $(GOARCH_$(DEB_HOST_ARCH)),$(DEB_HOST_ARCH))
+export GOOS = linux
+export CGO_ENABLED = 0
+export GOFLAGS = -mod=vendor -trimpath
+export GOPROXY = off
+export GOTOOLCHAIN = local
+export GOCACHE = $(CURDIR)/_gocache
+export GOPATH  = $(CURDIR)/_gopath
+VERSION := $(shell dpkg-parsechangelog -S Version | cut -d- -f1)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go vet ./...
+	go build -ldflags "-s -w -X main.version=$(VERSION)" -o debian/sbx-certd ./cmd/sbx-certd
+	go build -ldflags "-s -w -X main.version=$(VERSION)" -o debian/sbxctl ./cmd/sbxctl
+
+override_dh_auto_test:
+	if [ "$(GOARCH)" = "$$(go env GOHOSTARCH)" ]; then go test ./...; else \
+	  echo "tests ignores : construction croisee vers $(GOARCH)"; fi
+
+override_dh_auto_clean:
+	chmod -R u+w _gocache _gopath 2>/dev/null || true
+	rm -rf _gocache _gopath debian/sbx-certd debian/sbxctl
+
+override_dh_auto_install:
+	install -D -m 0755 debian/sbx-certd debian/secubox-federation/usr/sbin/sbx-certd
+	install -D -m 0755 debian/sbxctl    debian/secubox-federation/usr/sbin/sbxctl
+	install -D -m 0644 systemd/secubox-federation.service \
+	  debian/secubox-federation/lib/systemd/system/secubox-federation.service
+	install -D -m 0644 nginx/federation.conf \
+	  debian/secubox-federation/etc/nginx/secubox-routes.d/federation.conf
+	install -D -m 0644 conf/federation.yaml.example \
+	  debian/secubox-federation/usr/share/doc/secubox-federation/federation.yaml.example
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-federation

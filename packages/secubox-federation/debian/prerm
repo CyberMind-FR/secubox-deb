@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+case "$1" in
+  remove|deconfigure) systemctl stop secubox-federation.service || true ;;
+esac
+#DEBHELPER#
+exit 0

@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+set -e
+case "$1" in
+  configure)
+    # L'état appartient au démon (`secubox`) ; la clé de CA n'existe que si
+    # l'administrateur la crée (`sbxctl ca init`) — jamais ici.
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/federation
+    install -d -o secubox -g secubox -m 0700 /etc/secubox/secrets/federation
+    systemctl daemon-reload || true
+    systemctl enable secubox-federation.service || true
+    systemctl restart secubox-federation.service || true
+    nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
+    ;;
+esac
+#DEBHELPER#
+exit 0
