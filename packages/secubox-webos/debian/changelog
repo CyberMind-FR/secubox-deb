@@ -1,3 +1,11 @@
+secubox-webos (1.0.341-1~bookworm1) bookworm; urgency=medium
+
+  * Menu de connexion du Hall, bloc « Mes identités » : identité SBX OS et
+    connexion liée (« cet appareil → gk2 »), entrée « 🪪 Gestion des
+    identités » qui ouvre /identite/ dans le Hall (ref #1442).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:49:40 +0200
+
 secubox-webos (1.0.340-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (closes #1434, audit #1405 P1) : pont Signal. Une fois le démon

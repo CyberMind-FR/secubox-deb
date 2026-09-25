@@ -151,7 +151,22 @@ function rendMoi(){
      ${(ETAT.liens||[]).map(l=>`<dt>lien ${esc(l.app)}</dt><dd>${esc(l.app_handle)}</dd>`).join('')}</dl></div>
    <div class="card"><h2 style="margin-top:0">Rôles</h2><div class="chips">${u.roles.map(r=>`<span class="chip role">${esc(LIB[r]||r)}</span>`).join('')}</div>
      <h2>Ce que vous pouvez faire</h2><div class="chips">${u.capabilities.map(c=>`<span class="chip cap">${esc(c)}</span>`).join('') || '<span class="muted">aucune (compte suspendu)</span>'}</div>
-     <p class="hint">Aucune capacité SBX OS n'ouvre SSH, sudo ou root.</p></div></div>`;
+     <p class="hint">Aucune capacité SBX OS n'ouvre SSH, sudo ou root.</p></div></div>
+   ${rendConnexions(ETAT.connexions)}`;
+}
+
+function rendConnexions(c){
+  if (!c) return '';
+  const ratt = (c.rattachements||[]).map(r => `<li>${esc(r.appareil)}${r.courant?' <span class="chip ok">cet appareil</span>':''} → ${r.compte ? '<b style="font-family:var(--mono)">'+esc(r.compte)+'</b>' : '<span style="color:var(--muted)">non rattaché</span>'}</li>`).join('');
+  const liens = (c.liens||[]).map(l => `<span class="chip">${esc(l.app)} : ${esc(l.app_handle)}</span>`).join('');
+  const svc = (c.services||[]).map(x => `<span class="chip cap">${esc(x)}</span>`).join('');
+  return `<h2>Connexions liées</h2><div class="card">
+    <dl><dt>session ouverte sous</dt><dd>${esc(c.session_compte)}${c.compte_systeme ? ' <span class="chip warn">compte système</span>' : ''}</dd>
+    <dt>depuis</dt><dd>${esc(c.appareil_courant || 'un appareil non identifié')}</dd></dl>
+    <h2>Appareils → compte</h2><ul style="margin:0;padding-left:18px;font-size:14px">${ratt || '<li>aucun</li>'}</ul>
+    <h2>Applications</h2><div class="chips">${liens || '<span style="color:var(--muted)">aucun lien</span>'}</div>
+    <h2>Services délégués par le Hall</h2><div class="chips">${svc || '<span style="color:var(--muted)">aucun</span>'}</div>
+    <p class="hint">Des noms seulement : aucun secret ne quitte le coffre. Les accès aux services se gèrent dans le Hall (« Gérer les accès… »).</p></div>`;
 }
 
 // ── Mes appareils ────────────────────────────────────────────────────────

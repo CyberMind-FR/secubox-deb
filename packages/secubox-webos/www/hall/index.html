@@ -1192,6 +1192,10 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                  aucun secret ; seule la saisie d'un identifiant dédié repart en
                  pleine page. -->
             <p class="who-titre">🔑 Mes identités <span id="ident-n"></span><button type="button" role="menuitem" id="who-acces" class="who-gerer">Gérer les accès…</button></p>
+            <!-- LA CONNEXION LIÉE (#1442) : sous quelle identité SBX OS, et à
+                 quel compte cet appareil est rattaché — puis la gestion. -->
+            <p class="who-note" id="who-sbx">identité SBX OS…</p>
+            <button type="button" role="menuitem" id="who-sbxid">🪪 Gestion des identités…</button>
             <div class="who-ident" id="who-ident">
               <p class="who-note">lecture du registre…</p>
             </div>
@@ -3946,7 +3950,22 @@ addEventListener('message', ev=>{
     if(z) z.innerHTML = '<p class="who-note">Connectez-vous à votre compte SecuBox pour voir vos identités.</p>';
     if(n) n.textContent = '';
   }
+  // Identité SBX OS et connexion liée (#1442) — lue sur l'Identity Manager,
+  // même origine (la clé de l'appareil vit ici).
+  async function chargeSbx(){
+    const p = document.getElementById('who-sbx');
+    if(!p) return;
+    try{
+      const r = await fetch('/api/v1/sbxid/moi', {credentials:'same-origin', headers:{'Accept':'application/json'}});
+      if(!r.ok){ p.textContent = 'Identité SBX OS : ouvrez une session depuis un appareil admis.'; return; }
+      const d = await r.json(), c = d.connexions || {};
+      const ici = (c.rattachements||[]).find(x=>x.courant);
+      const lien = ici && ici.compte ? ' · cet appareil → '+ici.compte : (c.compte_systeme ? ' · compte système '+c.session_compte : '');
+      p.textContent = d.identite ? ('SBX OS : '+d.identite.pseudo+lien) : ('Session '+(c.session_compte||'?')+' — pas d\'identité SBX OS'+lien);
+    }catch(e){ p.textContent = 'Identité SBX OS indisponible.'; }
+  }
   async function chargeIdentites(){
+    chargeSbx();
     // INDISPONIBLE HORS SESSION : un invité ne voit pas les identités et NE
     // DÉCLENCHE PAS la lecture du registre (le bloc est de toute façon camouflé
     // par .non-connecte). La donnée n'existe pour la carte qu'avec une session.
@@ -4181,6 +4200,16 @@ addEventListener('message', ev=>{
     addEventListener('focus', ()=>sondeSession(), {once:true});
   });
 
+  document.getElementById('who-sbxid').addEventListener('click', ()=>{
+    const box=document.getElementById('eb-frames');
+    if(box && typeof showView==='function'){
+      box.innerHTML='<iframe src="/identite/" title="Gestion des identités"></iframe>';
+      const n=document.getElementById('eb-name'); if(n) n.textContent='Gestion des identités';
+      const i=document.getElementById('eb-ic'); if(i) i.textContent='🪪';
+      showView('embed');
+    } else { location.href='/identite/'; }
+    ouvre(false);
+  });
   document.getElementById('who-acces').addEventListener('click', ()=>{
     // Cadre du Hall, même origine : la page d'accès n'est pas un service, on
     // la pose donc directement plutôt que de passer par openService().
