@@ -1,0 +1,28 @@
+# /etc/secubox/federation.yaml — fédération SBX (#1389)
+#
+# SANS CE FICHIER, LA BOX EST AUTONOME ET HORS FÉDÉRATION. Il ne donne aucun
+# droit à lui seul : c'est le CERTIFICAT émis par l'autorité qui fait le tier.
+# Toute synchronisation est initiée par la box.
+
+role: member            # member (une box) | authority (la CA GK2)
+tier: pro               # tier DEMANDÉ à l'adhésion
+owner: CyberMind
+
+federation:
+  url: https://admin.gk2.secubox.in
+
+# Surcharges locales : une box peut synchroniser MOINS souvent que son tier ne
+# le permet, jamais plus souvent.
+sync:
+  waf: 5m
+  appstore: 15m
+  metapack: 30m
+
+# Côté autorité seulement.
+#ca:
+#  duree_jours: 365
+#  auto_join: false      # vrai : toute demande valide est émise sans décision humaine
+#tiers:
+#  pro:
+#    sync:
+#      waf: 5m

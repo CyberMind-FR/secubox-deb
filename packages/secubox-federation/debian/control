@@ -1,0 +1,23 @@
+Source: secubox-federation
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.22~)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-federation
+Architecture: any
+Depends: ${misc:Depends}, secubox-core
+Description: SecuBox — fédération SBX (GK2) : certificats et adhésion
+ Phase 1 de la fédération SBX v2 : autorité de certification GK2, certificat
+ SBX v2 signé Ed25519 (sujet = identité annuaire de la box, canonicalisation
+ identique à secubox-annuaire), demandes d'adhésion signées, renouvellement
+ avec preuve de clé, liste de révocation signée, niveaux d'abonnement
+ configurables (/etc/secubox/federation.yaml).
+ .
+ La box reste autonome : sans fichier de configuration elle est hors
+ fédération, et toute synchronisation est initiée par elle.
+ .
+ Fournit sbx-certd (API sur /run/secubox/federation.sock) et sbxctl.

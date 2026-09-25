@@ -1,0 +1,10 @@
+_gocache/
+_gopath/
+/debian/sbx-certd
+/debian/sbxctl
+/debian/secubox-federation/
+/debian/.debhelper/
+/debian/files
+/debian/*.substvars
+/debian/*.debhelper*
+/debian/debhelper-build-stamp
