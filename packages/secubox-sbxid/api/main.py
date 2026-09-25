@@ -43,6 +43,8 @@ from . import store
 log = logging.getLogger("secubox.sbxid")
 app = FastAPI(title="SBX Identity Manager", version="0.1.0")
 
+DELEGATIONS = Path(os.environ.get("SECUBOX_WEBOS_ACCES", "/etc/secubox/secrets/webos-acces"))
+_QUI_OK = "abcdefghijklmnopqrstuvwxyz0123456789._-"   # même règle que webos/acces.qui_sur
 NODE_KEY = Path(os.environ.get("SBXID_NODE_KEY", "/etc/secubox/secrets/annuaire/node.key"))
 _CERTS_EN_COURS: Dict[str, Dict[str, Any]] = {}      # serial → {payload, device, expire}
 
@@ -160,14 +162,39 @@ def health():
     return {"ok": True, "module": "sbxid", "version": app.version, "node": n.did if n else None}
 
 
+def _connexions(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Les CONNEXIONS LIÉES (#1442) : sous quel compte la session est ouverte,
+    à quel compte chaque appareil est rattaché, les liens d'application, les
+    services délégués par le Hall. Des NOMS, jamais un secret."""
+    sub = ctx.get("sub", "")
+    uid = (ctx.get("user") or {}).get("user_uuid")
+    par_did = {S.did_appareil(d["cle_publique"]): d for d in _demandes()
+               if d.get("cle_publique") and d.get("etat") == "acceptee"}
+    rattachements = []
+    if uid:
+        for a in db().execute("SELECT device_name, did FROM sbx_devices WHERE user_uuid=? AND revoked_at IS NULL", (uid,)):
+            d = par_did.get(a["did"], {})
+            rattachements.append({"appareil": a["device_name"], "compte": d.get("compte") or None,
+                                  "courant": bool(ctx.get("device")) and ctx["device"]["did"] == a["did"]})
+    qui = "".join(c for c in sub.lower() if c in _QUI_OK)[:64] or "_"
+    try:
+        services = sorted(f.stem for f in (DELEGATIONS / qui).glob("*.json"))
+    except OSError:
+        services = []
+    liens = [dict(r) for r in db().execute("SELECT app, app_handle FROM sbx_app_links WHERE user_uuid=?", (uid,))] if uid else []
+    return {"session_compte": sub, "compte_systeme": ctx.get("systeme", False),
+            "appareil_courant": (ctx.get("device") or {}).get("device_name"),
+            "rattachements": rattachements, "liens": liens, "services": services}
+
+
 @app.get("/moi")
 def route_moi(ctx=Depends(moi)):
     if not ctx["user"]:
-        return {"identite": None, "systeme": ctx["systeme"], "sub": ctx["sub"],
+        return {"identite": None, "systeme": ctx["systeme"], "sub": ctx["sub"], "connexions": _connexions(ctx),
                 "motif": "Cette session n'est pas celle d'un appareil SBX OS "
                          + ("(compte système : administration seulement)" if ctx["systeme"] else "admis")}
     uid = ctx["user"]["user_uuid"]
-    return {"identite": ctx["user"], "appareil_courant": ctx["device"]["device_uuid"],
+    return {"identite": ctx["user"], "appareil_courant": ctx["device"]["device_uuid"], "connexions": _connexions(ctx),
             "appareils": store.appareils_de(db(), uid), "systeme": ctx["systeme"],
             "liens": [dict(r) for r in db().execute("SELECT app, app_handle FROM sbx_app_links WHERE user_uuid=?", (uid,))]}
 

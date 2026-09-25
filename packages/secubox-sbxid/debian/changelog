@@ -1,3 +1,11 @@
+secubox-sbxid (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * « Connexions liées » côté utilisateur (ref #1442) : compte de la
+    session, rattachement de chaque appareil, liens d'applications, services
+    délégués par le Hall — des noms, jamais un secret.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:49:40 +0200
+
 secubox-sbxid (0.2.1-1~bookworm1) bookworm; urgency=high
 
   * /api/v1/acces/session/etat VALIDE le cookie au lieu de constater sa
