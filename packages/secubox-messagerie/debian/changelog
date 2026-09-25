@@ -1,0 +1,9 @@
+secubox-messagerie (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Première version (ref #1446) : mur public et messages privés servis par
+    le Hall (/messagerie/), identité SBX OS ou pseudo de visiteur (publié
+    d'emblée, modération a posteriori par bbs.moderate, plafond par
+    adresse), réponse privée ou publique, chat de la radio centralisé dans
+    le mur et surpostage des réponses dans la radio.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:59:18 +0200

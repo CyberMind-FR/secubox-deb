@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1446 — Messagerie de la box.
+
+  Servie PAR LE HALL (même origine : la session SBX OS signe les messages).
+  Carte du Hall = cette page ; /mega = la même, agrandie (?mega=1).
+    MUR     — public, centralisé : messages de la box + chat de la radio.
+    PRIVÉS  — ce qu'on m'a écrit et ce que j'ai écrit à une personne.
+  Sans identité SBX OS : un pseudo de visiteur, publié d'emblée.
+  Tout texte venu d'un message est posé en textContent, jamais en HTML.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Messagerie de la box</title>
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
+         --surf2:#f5f7fc; --cyan:#0784a8; --gold:#b7810a; --prive:#7a4fc9; --radio:#b0503a; --err:#c0392b;
+         --moi:#e8f4f8; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --surf2:#10151f; --cyan:#28d6ff; --gold:#f0b429; --prive:#b394ff; --radio:#ff8a6a; --err:#ff6b5b;
+    --moi:#12303a; } }
+  :root[data-theme="dark"]{ --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --surf2:#10151f; --cyan:#28d6ff; --gold:#f0b429; --prive:#b394ff; --radio:#ff8a6a; --err:#ff6b5b;
+    --moi:#12303a; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px;overflow:hidden}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.45rem;max-width:760px;margin:0 auto}
+  .h{display:flex;align-items:center;gap:7px}
+  .h b{font-size:.86rem}
+  .h .qui{margin-left:auto;font-size:.66rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .h .qui strong{color:var(--cyan)}
+  .onglets{display:flex;gap:4px}
+  .onglets button{border:1px solid var(--line);background:none;color:var(--muted);border-radius:999px;
+    padding:3px 11px;font-size:.7rem;cursor:pointer}
+  .onglets button[aria-selected="true"]{border-color:var(--cyan);color:var(--cyan);font-weight:600}
+  .onglets .c{font-variant-numeric:tabular-nums;color:var(--faint);margin-left:3px}
+  .fil{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;padding-right:2px}
+  .msg{border:1px solid var(--line);border-radius:10px;padding:6px 9px;background:var(--surf2)}
+  .msg.moi{background:var(--moi)}
+  .msg.prive{border-left:3px solid var(--prive)}
+  .msg.radio{border-left:3px solid var(--radio)}
+  .msg .t{display:flex;align-items:baseline;gap:6px;font-size:.68rem;color:var(--faint)}
+  .msg .t .p{font-weight:700;color:var(--texte);font-size:.74rem}
+  .msg .t .v{font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:5px;padding:0 4px}
+  .msg .t .d{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .msg .cit{font-size:.66rem;color:var(--faint);margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .msg .corps{font-size:.8rem;line-height:1.42;margin:3px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+  .msg .corps.sup{color:var(--faint);font-style:italic}
+  .msg .a{display:flex;gap:10px;margin-top:3px}
+  .msg .a button{border:0;background:none;padding:0;font-size:.66rem;color:var(--muted);cursor:pointer}
+  .msg .a button:hover,.msg .a button:focus-visible{color:var(--cyan)}
+  .msg .a button.x:hover{color:var(--err)}
+  .vide{color:var(--faint);font-size:.74rem;text-align:center;padding:18px 4px}
+  form{display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--line);padding-top:.45rem}
+  .rep{display:none;align-items:center;gap:6px;font-size:.68rem;color:var(--muted)}
+  .rep.on{display:flex}
+  .rep span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rep button{border:0;background:none;color:var(--faint);cursor:pointer;font-size:.8rem}
+  .ligne{display:flex;gap:5px}
+  input,select,textarea{font:inherit;font-size:.78rem;color:var(--texte);background:var(--surf2);
+    border:1px solid var(--line);border-radius:8px;padding:5px 8px;min-width:0}
+  input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+  #pseudo{width:9.5rem}
+  #dest{flex:1}
+  textarea{resize:none;height:2.4rem;flex:1}
+  .envoi{border:1px solid var(--cyan);background:var(--cyan);color:var(--fond);border-radius:8px;
+    padding:0 13px;font-weight:600;font-size:.76rem;cursor:pointer}
+  .envoi:disabled{opacity:.5;cursor:default}
+  .etat{font-size:.66rem;color:var(--muted);min-height:.9rem}
+  .etat.err{color:var(--err)}
+  .mega textarea{height:4.2rem}
+  .mega .msg .corps{font-size:.88rem}
+  @media (prefers-reduced-motion:no-preference){ .msg{animation:v .18s ease-out} @keyframes v{from{opacity:.4}to{opacity:1}} }
+</style>
+</head>
+<body>
+<div class="mw">
+  <div class="h"><span aria-hidden="true">💬</span><b>Messagerie</b><span class="qui" id="qui"></span></div>
+  <div class="onglets" role="tablist">
+    <button role="tab" id="o-mur" aria-selected="true">Mur public<span class="c" id="c-mur"></span></button>
+    <button role="tab" id="o-prives" aria-selected="false">Privés<span class="c" id="c-prives"></span></button>
+  </div>
+  <div class="fil" id="fil" role="log" aria-live="polite"></div>
+  <form id="f" autocomplete="off">
+    <div class="rep" id="rep"><span id="rep-t"></span>
+      <select id="rep-v" aria-label="Visibilité de la réponse">
+        <option value="public">publiquement</option><option value="prive">en privé</option>
+      </select>
+      <button type="button" id="rep-x" aria-label="Annuler la réponse">✕</button></div>
+    <div class="ligne" id="l-haut">
+      <input id="pseudo" maxlength="32" placeholder="Votre pseudo" aria-label="Votre pseudo">
+      <select id="dest" aria-label="Destinataire"><option value="">À tous (mur public)</option></select>
+    </div>
+    <div class="ligne">
+      <textarea id="corps" maxlength="2000" placeholder="Écrire un message…" aria-label="Message"></textarea>
+      <button class="envoi" id="envoi">Envoyer</button>
+    </div>
+    <div class="etat" id="etat"></div>
+  </form>
+</div>
+<script>
+"use strict";
+const Q = new URLSearchParams(location.search);
+const th = Q.get('theme'); if (th === 'dark' || th === 'light') document.documentElement.setAttribute('data-theme', th);
+if (Q.get('mega') === '1' || window.top === window) document.body.classList.add('mega');
+const API = '/api/v1/messagerie';
+const $ = id => document.getElementById(id);
+let vue = 'mur', moi = {type: 'anonyme'}, reponse = null, dernier = '';
+const memo = { get(k){ try { return localStorage.getItem(k) || ''; } catch(e){ return ''; } },
+               set(k, v){ try { localStorage.setItem(k, v); } catch(e){} } };
+$('pseudo').value = memo.get('sbx.messagerie.pseudo');
+
+function el(tag, cls, txt){ const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+function quand(s){
+  if (!s) return '';
+  const d = new Date(s * 1000), n = new Date();
+  return d.toDateString() === n.toDateString()
+    ? d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})
+    : d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'}) + ' ' + d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+}
+function etat(t, err){ $('etat').textContent = t || ''; $('etat').classList.toggle('err', !!err); }
+async function jget(u){ const r = await fetch(u, {credentials: 'same-origin', headers: {Accept: 'application/json'}}); if (!r.ok) throw r; return r.json(); }
+
+function peint(liste){
+  const fil = $('fil'), bas = fil.scrollHeight - fil.scrollTop - fil.clientHeight < 40;
+  const index = {}; liste.forEach(m => index[m.id] = m);
+  fil.replaceChildren();
+  if (!liste.length){
+    fil.append(el('div', 'vide', vue === 'mur' ? 'Le mur est vide : écrivez le premier message.' :
+      (moi.type === 'anonyme' ? 'Vos messages privés apparaîtront ici après votre premier message.' : 'Aucun message privé.')));
+    return;
+  }
+  for (const m of liste){
+    const b = el('article', 'msg' + (m.de_moi ? ' moi' : '') + (m.prive ? ' prive' : '') + (m.source === 'radio' ? ' radio' : ''));
+    const t = el('div', 't');
+    t.append(el('span', 'p', m.pseudo));
+    if (m.source === 'radio') t.append(el('span', 'v', '📻 radio'));
+    else if (m.auteur_type === 'visiteur') t.append(el('span', 'v', 'visiteur'));
+    if (m.prive) t.append(el('span', null, '→ ' + (m.de_moi ? (m.dest_pseudo || '?') : 'vous')));
+    t.append(el('span', 'd', quand(m.cree_le)));
+    b.append(t);
+    if (m.parent && index[m.parent]) b.append(el('div', 'cit', '↳ ' + index[m.parent].pseudo + ' : ' + index[m.parent].corps));
+    else if (m.parent && m.parent.startsWith('radio:')) b.append(el('div', 'cit', '↳ réponse au chat de la radio'));
+    b.append(el('div', 'corps' + (m.supprime ? ' sup' : ''), m.supprime ? 'message retiré' : m.corps));
+    if (!m.supprime){
+      const a = el('div', 'a');
+      if (!m.de_moi){
+        const r = el('button', null, m.prive ? 'Répondre' : 'Répondre'); r.type = 'button';
+        r.onclick = () => repondre(m, m.prive ? 'prive' : 'public'); a.append(r);
+        if (!m.prive && m.source !== 'radio'){
+          const rp = el('button', null, 'En privé'); rp.type = 'button'; rp.onclick = () => repondre(m, 'prive'); a.append(rp);
+        }
+      }
+      if (m.source !== 'radio' && (m.de_moi || moi.moderateur)){
+        const x = el('button', 'x', m.de_moi ? 'Retirer' : 'Modérer'); x.type = 'button'; x.onclick = () => retire(m); a.append(x);
+      }
+      if (a.childNodes.length) b.append(a);
+    }
+    fil.append(b);
+  }
+  if (bas) fil.scrollTop = fil.scrollHeight;
+}
+
+async function charge(){
+  try {
+    const [f, p] = await Promise.all([jget(API + '/fil'), jget(API + '/prives')]);
+    moi = f.moi || moi;
+    $('qui').replaceChildren();
+    if (moi.type === 'sbx' || moi.type === 'systeme'){
+      $('qui').append('en tant que ', el('strong', null, moi.pseudo), moi.moderateur ? ' · modération' : '');
+    } else $('qui').textContent = 'visiteur — publié aussitôt, modéré ensuite';
+    $('pseudo').hidden = moi.type === 'sbx' || moi.type === 'systeme';
+    $('c-mur').textContent = f.messages.length || '';
+    $('c-prives').textContent = p.messages.length || '';
+    const liste = vue === 'mur' ? f.messages : p.messages;
+    const sig = vue + JSON.stringify(liste.map(m => [m.id, m.supprime])) + moi.type;
+    if (sig !== dernier){ dernier = sig; peint(liste); }
+  } catch(e){ etat('Messagerie injoignable pour le moment.', true); }
+}
+async function annuaire(){
+  try {
+    const d = await jget(API + '/annuaire');
+    for (const p of d.personnes){ const o = el('option', null, 'À ' + p.pseudo + ' (privé)'); o.value = p.ref; $('dest').append(o); }
+  } catch(e){}
+}
+function onglet(v){
+  vue = v; dernier = '';
+  $('o-mur').setAttribute('aria-selected', v === 'mur'); $('o-prives').setAttribute('aria-selected', v === 'prives');
+  charge();
+}
+function repondre(m, vis){
+  reponse = m;
+  $('rep-t').textContent = 'Réponse à ' + m.pseudo + ' : « ' + m.corps.slice(0, 60) + ' »';
+  $('rep-v').value = vis;
+  $('rep-v').hidden = m.source === 'radio';
+  $('rep').classList.add('on'); $('l-haut').querySelector('#dest').hidden = true;
+  $('corps').focus();
+}
+function finReponse(){ reponse = null; $('rep').classList.remove('on'); $('dest').hidden = false; }
+async function envoie(ev){
+  ev.preventDefault();
+  const corps = $('corps').value.trim(); if (!corps) return;
+  const b = {corps};
+  if (!$('pseudo').hidden){ b.pseudo = $('pseudo').value.trim(); memo.set('sbx.messagerie.pseudo', b.pseudo); }
+  if (reponse){ b.parent = reponse.id; if (reponse.source !== 'radio') b.public = $('rep-v').value === 'public'; }
+  else if ($('dest').value) b.destinataire = $('dest').value;
+  $('envoi').disabled = true;
+  try {
+    const r = await fetch(API + '/messages', {method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-Sbx-Messagerie': '1'}, body: JSON.stringify(b)});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok){ etat(typeof d.detail === 'string' ? d.detail : 'Message non envoyé (' + r.status + ')', true); return; }
+    $('corps').value = ''; finReponse();
+    etat(d.prive ? 'Message privé envoyé.' : 'Publié sur le mur.');
+    if (d.prive !== (vue === 'prives')) onglet(d.prive ? 'prives' : 'mur'); else { dernier = ''; charge(); }
+    $('fil').scrollTop = $('fil').scrollHeight;
+  } finally { $('envoi').disabled = false; }
+}
+async function retire(m){
+  if (!confirm(m.de_moi ? 'Retirer votre message ?' : 'Retirer ce message (modération) ?')) return;
+  const r = await fetch(API + '/messages/' + encodeURIComponent(m.id), {method: 'DELETE', credentials: 'same-origin',
+    headers: {'X-Sbx-Messagerie': '1'}});
+  etat(r.ok ? 'Message retiré.' : 'Retrait refusé.', !r.ok); dernier = ''; charge();
+}
+$('o-mur').onclick = () => onglet('mur');
+$('o-prives').onclick = () => onglet('prives');
+$('rep-x').onclick = finReponse;
+$('f').addEventListener('submit', envoie);
+$('corps').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); $('f').requestSubmit(); } });
+charge(); annuaire();
+setInterval(() => { if (!document.hidden && navigator.onLine) charge(); }, 8000);
+</script>
+</body>
+</html>
