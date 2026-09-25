@@ -382,7 +382,13 @@ EOF
 fi
 
 # locale
-chroot "${ROOTFS}" bash -c "locale-gen en_US.UTF-8 || true"
+# locale-gen de Debian IGNORE ses arguments : il ne genere que ce que
+# /etc/locale.gen declare. Sans ces lignes, rien n'etait genere et
+# update-locale refusait « invalid locale settings » (#1401).
+for _loc in en_US.UTF-8; do
+  grep -q "^${_loc} UTF-8" "${ROOTFS}/etc/locale.gen" 2>/dev/null || echo "${_loc} UTF-8" >> "${ROOTFS}/etc/locale.gen"
+done
+chroot "${ROOTFS}" locale-gen || true
 chroot "${ROOTFS}" bash -c "update-locale LANG=en_US.UTF-8 || true"
 
 # Mot de passe root par défaut (à changer au premier boot)
@@ -820,8 +826,11 @@ if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
   # une fois tout installé.
   if ! chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
       -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef ${SECUBOX_PROFILE}"; then
+    # `|| true` : apt -s rend 100 quand le profil est insatisfiable — c'est
+    # justement le cas qu'on diagnostique. Sous set -e + pipefail, sans lui,
+    # LE DIAGNOSTIC TUAIT LA CONSTRUCTION avant que le slipstream comble (#1401).
     raison=$(chroot "${ROOTFS}" apt-get install -s "${SECUBOX_PROFILE}" 2>&1 \
-             | grep -E "Depends:|not installable|has no installation candidate|Unable to locate" | head -8)
+             | grep -E "Depends:|not installable|has no installation candidate|Unable to locate" | head -8) || true
     if [[ ${SLIPSTREAM_DEBS:-0} -eq 1 ]]; then
       warn "${SECUBOX_PROFILE} incomplet depuis le dépôt — le slipstream doit combler :"
       echo "${raison}" | sed 's/^/        /'
