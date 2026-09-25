@@ -67,7 +67,7 @@ jobs:
       # d'avant le 25/09 (secubox-ossec encore dedans, rien du jour), la
       # construction du tag étant encore en file. Sur un tag : on attend.
       - name: Attendre les paquets de ce commit
-        if: $github.event_name != 'workflow_run' && startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name != 'workflow_run' && startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -82,7 +82,7 @@ jobs:
 
       - name: Download SecuBox packages (commit exact)
         id: debs-exact
-        if: $github.event_name != 'workflow_run'
+        if: github.event_name != 'workflow_run'
         uses: dawidd6/action-download-artifact@v3
         with:
           workflow: build-packages.yml
@@ -93,7 +93,7 @@ jobs:
         continue-on-error: true
 
       - name: Download SecuBox packages (repli — dernier réussi)
-        if: $github.event_name != 'workflow_run' && steps.debs-exact.outcome != 'success'
+        if: github.event_name != 'workflow_run' && steps.debs-exact.outcome != 'success'
         uses: dawidd6/action-download-artifact@v3
         with:
           workflow: build-packages.yml
@@ -103,7 +103,7 @@ jobs:
         continue-on-error: true
 
       - name: Provenance des paquets
-        if: $github.event_name != 'workflow_run'
+        if: github.event_name != 'workflow_run'
         run: |
           if [ "${{ steps.debs-exact.outcome }}" = "success" ]; then
             echo "paquets : agrégat DU COMMIT ${{ github.sha }}"
