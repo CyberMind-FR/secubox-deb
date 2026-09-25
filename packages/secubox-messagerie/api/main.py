@@ -44,7 +44,7 @@ from pydantic import BaseModel, Field
 from secubox_core import auth as _auth
 from secubox_core import capacites as _cap
 
-app = FastAPI(title="SecuBox Messagerie", version="0.2.0")
+app = FastAPI(title="SecuBox Messagerie", version="0.2.1")
 
 DB = Path(os.environ.get("MESSAGERIE_DB", "/var/lib/secubox/messagerie/messages.db"))
 RADIO_SOCK = os.environ.get("MESSAGERIE_RADIO_SOCK", "/run/secubox/radio.sock")
@@ -111,6 +111,8 @@ def qui(request: Request) -> Dict[str, Any]:
             if per:
                 refs = [per["user_uuid"]] + ["bbs:" + h for h, (u, _) in _liens_bbs().items()
                                               if u == per["user_uuid"]]
+                if not p.get("sub", "").startswith("sbx-"):
+                    refs.append("sys:" + p["sub"])      # ce qu'elle a signé « modération » avant #1450
                 return {"type": "sbx", "ref": per["user_uuid"], "pseudo": per["pseudo"],
                         "moderateur": "bbs.moderate" in caps, "refs": refs}
             if "bbs.moderate" in caps:                  # exploitant système sans identité SBX
@@ -164,6 +166,13 @@ def _nom_affiche(nom: Optional[str], liens: Optional[Dict[str, tuple]] = None) -
     if n.lower() in SYSTEME:
         return "modération"
     return n or "compte supprimé"
+
+
+def _pseudo_du_compte(compte: str) -> Optional[str]:
+    """#1450 : un message signé par une session de compte avant que le compte
+    ne désigne sa personne s'affiche sous le pseudo de celle-ci."""
+    per = _cap.personne_du_porteur({"sub": compte, "jti": ""})
+    return per["pseudo"] if per else None
 
 
 def _pseudos_sbx(casse: bool = False) -> Dict[str, str]:
@@ -317,6 +326,8 @@ def _vue(r: sqlite3.Row, refs: List[str], liens: Dict[str, tuple]) -> Dict[str, 
     pseudo, dest_pseudo = r["pseudo"], r["dest_pseudo"]
     if r["source"] == "bbs":
         pseudo = _nom_affiche(pseudo, liens)
+    elif r["auteur_ref"].startswith("sys:"):
+        pseudo = _pseudo_du_compte(r["auteur_ref"][4:]) or pseudo
     if (r["destinataire"] or "").startswith("bbs:"):
         dest_pseudo = _nom_affiche(dest_pseudo, liens)
     return {"id": r["id"], "cree_le": r["cree_le"], "auteur_type": r["auteur_type"], "pseudo": pseudo,

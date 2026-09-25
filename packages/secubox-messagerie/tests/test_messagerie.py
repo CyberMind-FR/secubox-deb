@@ -231,3 +231,13 @@ def test_migration_0_1(tmp_path, monkeypatch):
     mod.db().execute("INSERT INTO messages (id,cree_le,auteur_type,auteur_ref,pseudo,corps) "
                      "VALUES ('b',2,'bbs','bbs:x','x','y')")
     assert [r[0] for r in mod.db().execute("SELECT id FROM messages ORDER BY id")] == ["a", "b"]
+
+
+def test_ancien_message_de_compte_rendu_a_sa_personne(m, monkeypatch):
+    """#1450 : signé « modération » par la session gk2 avant le correctif."""
+    ecrit(m, {"type": "systeme", "ref": "sys:gk2", "pseudo": "modération", "moderateur": True}, corps="BIENVENUE")
+    monkeypatch.setattr(m._cap, "personne_du_porteur",
+                        lambda p: {"user_uuid": "u-gandalf", "pseudo": "gandalf"} if p["sub"] == "gk2" else None)
+    m._QUI = dict(GANDALF, refs=GANDALF["refs"] + ["sys:gk2"])
+    v = [x for x in m.fil(req())["messages"] if x["corps"] == "BIENVENUE"][0]
+    assert v["pseudo"] == "gandalf" and v["de_moi"]
