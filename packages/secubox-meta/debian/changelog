@@ -1,0 +1,12 @@
+secubox-meta (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Métapaquets imbriqués (ref #1397), générés depuis arbre.yaml :
+    racines `sbxos` (le Hall et tous ses composants) ⊃ `secubox` (la box),
+    11 fonctions (secubox-fonction-*), 37 services (secubox-service-*).
+  * Trois forces de lien : requiert (Depends), recommande (Recommends),
+    suggere (Suggests). Modules marginaux, POC, matériel spécifique et
+    paquets arm64 seuls ne sont jamais requis.
+  * gen-meta.py refuse : référence inconnue, cycle, transitionnel dans
+    l'arbre, arm64 seul en Depends, paquet du dépôt ni rangé ni hors-arbre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 09:50:38 +0200

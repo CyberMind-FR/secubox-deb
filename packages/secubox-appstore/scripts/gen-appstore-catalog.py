@@ -59,6 +59,28 @@ def parse_groupes(path):
     return groupes
 
 
+def arbre_meta():
+    """L'arbre des métapaquets (#1397), résolu par le générateur de secubox-meta.
+
+    Même garde que pour les groupes : un arbre invalide casse la construction
+    ici aussi, plutôt que d'afficher des métapaquets que personne n'a construits.
+    """
+    import importlib.util
+    gen = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                       "secubox-meta", "gen-meta.py")
+    if not os.path.exists(gen):
+        return None
+    spec = importlib.util.spec_from_file_location("gen_meta", gen)
+    gm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gm)
+    depot = gm.paquets_du_depot(exclure_source="secubox-meta")
+    noeuds, hors = gm.lit_arbre()
+    erreurs = gm.valide(noeuds, hors, depot)
+    if erreurs:
+        raise SystemExit("gen-appstore-catalog: arbre des métapaquets invalide : " + erreurs[0])
+    return gm.resolu(noeuds, hors, depot)
+
+
 def main(out):
     base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     catalog = []
@@ -97,10 +119,11 @@ def main(out):
                 f"absents du catalogue : {', '.join(inconnus)}")
 
     data = {"version": 1, "modules": uniq, "count": len(uniq),
-            "groupes": groupes}
+            "groupes": groupes, "arbre": arbre_meta()}
     with open(out, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f"wrote {out}: {len(uniq)} modules, {len(groupes)} groupes")
+    na = len(data["arbre"]["noeuds"]) if data["arbre"] else 0
+    print(f"wrote {out}: {len(uniq)} modules, {len(groupes)} groupes, {na} métapaquets")
 
 if __name__ == "__main__":
     main(sys.argv[1] if len(sys.argv) > 1 else "catalog.json")

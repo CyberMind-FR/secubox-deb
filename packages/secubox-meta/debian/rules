@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Métapaquets imbriqués (#1397). debian/control est GÉNÉRÉ depuis arbre.yaml :
+# la construction vérifie qu'il n'a pas divergé (sinon : relancer gen-meta.py).
+%:
+	dh $@
+
+override_dh_auto_build:
+	python3 gen-meta.py --check

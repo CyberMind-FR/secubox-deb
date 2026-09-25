@@ -70,6 +70,43 @@
     .fed-shot.vide span{font-size:26px;opacity:.5;margin-right:6px}
     .fed-lb{display:grid;gap:10px}
     .fed-lb img{width:100%;border-radius:6px;border:1px solid var(--line,#2a2a3a)}
+    /* Métapaquets imbriqués (#1397) : la force du lien se lit dans le trait */
+    .mp-legende{display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--text-muted,#6b6b7a);margin:0 0 8px}
+    .mp-legende i{display:inline-block;width:18px;margin-right:5px;vertical-align:middle;border-top:2px solid var(--cyber-cyan,#00d4ff)}
+    .mp-legende i.rec{border-top-style:dashed} .mp-legende i.sug{border-top-style:dotted;border-color:var(--text-muted,#6b6b7a)}
+    .mp-arbre{font-size:12px;overflow-x:auto}
+    .mp-noeud>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;
+      padding:6px 8px;border-radius:8px}
+    .mp-noeud>summary::-webkit-details-marker{display:none}
+    .mp-noeud>summary:hover{background:rgba(0,212,255,.05)}
+    .mp-noeud>summary:focus-visible{outline:2px solid var(--cyber-cyan,#00d4ff)}
+    .mp-noeud>summary::before{content:'▸';color:var(--text-muted,#6b6b7a);width:10px}
+    .mp-noeud[open]>summary::before{content:'▾'}
+    .mp-label{font-weight:700;font-size:13px}
+    .mp-racine>summary .mp-label{font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:15px}
+    .mp-pq{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted,#6b6b7a)}
+    .mp-cpt{font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:auto;white-space:nowrap}
+    .mp-cpt b{font-weight:600}
+    .mp-desc{flex-basis:100%;color:var(--text-muted,#6b6b7a);font-size:11px;padding-left:16px}
+    .mp-cmd{font:inherit;font-size:10px;padding:2px 7px;border-radius:6px;cursor:pointer;background:none;
+      color:var(--text-muted,#6b6b7a);border:1px solid var(--line,#2a2a3a)}
+    .mp-cmd:hover{color:var(--cyber-cyan,#00d4ff);border-color:var(--cyber-cyan,#00d4ff)}
+    .mp-enf{margin-left:14px;padding-left:10px;border-left:2px solid var(--cyber-cyan,#00d4ff)}
+    .mp-enf.recommande{border-left-style:dashed;border-left-color:rgba(0,212,255,.55)}
+    .mp-enf.suggere{border-left-style:dotted;border-left-color:var(--text-muted,#6b6b7a);opacity:.85}
+    .mp-force{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted,#6b6b7a);margin:4px 0 0 2px}
+    .mp-mod>summary .mp-label{font-weight:600;font-size:12px}
+    .mp-pt{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--line,#2a2a3a);flex:none;align-self:center}
+    .mp-pt.on{background:var(--matrix-green,#00ff41);box-shadow:0 0 6px rgba(0,255,65,.5)}
+    .mp-deps{padding:4px 0 8px 30px;display:grid;gap:4px}
+    .mp-deps div{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+    .mp-deps span.k{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted,#6b6b7a);width:88px}
+    .mp-chip{font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:1px 7px;border-radius:10px;
+      border:1px solid var(--line,#2a2a3a);color:var(--text-muted,#6b6b7a)}
+    .mp-chip.sbx{color:var(--cyber-cyan,#00d4ff)}
+    .mp-chip.on{border-color:#1d5a2a}
+    .mp-chip.on::before{content:'✓ ';color:var(--matrix-green,#00ff41)}
+    .mp-abs{font-size:11px;color:var(--gold-hermetic,#c9a84c)}
   </style>
 </head>
 <body class="crt-light hybrid-dark">
@@ -99,6 +136,21 @@
           ✕ tout le catalogue</button>
       </div>
       <div id="groupes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:10px"></div>
+    </section>
+
+    <!-- MÉTAPAQUETS (#1397). L'arbre qui sert à PROFILER : on installe un
+         nœud, pas une liste. sbxos pose la box et son Hall ; secubox la box ;
+         une fonction une intention ; un service un service qui marche. -->
+    <section id="mp-panel" style="margin:18px 0 10px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px">
+        <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">Métapaquets</h2>
+        <span style="font-size:11px;color:var(--text-muted,#6b6b7a)" id="mp-stat">…</span>
+      </div>
+      <div class="mp-legende" aria-label="Légende">
+        <span><i></i>requis (Depends)</span><span><i class="rec"></i>recommandé — installé par défaut, retirable</span>
+        <span><i class="sug"></i>suggéré — optionnel</span><span><span class="mp-pt on"></span> installé sur cette box</span>
+      </div>
+      <div class="mp-arbre" id="mp-arbre"></div>
     </section>
 
     <div class="as-bar">
@@ -179,6 +231,7 @@
       document.getElementById('board-badge').textContent='tier '+((cats&&cats.board_tier)||'?');
       render();
       loadGroupes();
+      loadMeta();
       loadMesh();
     }
 
@@ -216,6 +269,71 @@
       const g=GROUPES.find(x=>x.id===id);
       return g?g.membres.map(m=>m.name):[];
     }
+
+    // ── MÉTAPAQUETS ────────────────────────────────────────────────────────
+    let MP=null;
+    async function loadMeta(){
+      MP=await jget('/metapaquets');
+      const z=document.getElementById('mp-arbre'), st=document.getElementById('mp-stat');
+      if(!MP||!MP.disponible){st.textContent='arbre indisponible';z.innerHTML='';return;}
+      const N={}; MP.noeuds.forEach(n=>N[n.meta]=n);
+      const niv={};MP.noeuds.forEach(n=>niv[n.niveau]=(niv[n.niveau]||0)+1);
+      st.textContent=(niv.racine||0)+' racines · '+(niv.fonction||0)+' fonctions · '+(niv.service||0)+' services · '
+        +Object.keys(MP.paquets).length+' modules';
+      // Les racines qu'aucun nœud ne contient : sbxos (qui contient secubox).
+      const contenus=new Set(); MP.noeuds.forEach(n=>['requiert','recommande','suggere'].forEach(l=>n[l].forEach(x=>contenus.add(x))));
+      z.innerHTML=MP.noeuds.filter(n=>n.niveau==='racine'&&!contenus.has(n.meta)).map(n=>noeud(n,N,0)).join('');
+    }
+    function compteur(c){
+      const parts=[['requis','requis'],['recommandes','recom.'],['suggeres','sugg.']].filter(([k])=>c[k]).map(([k,l])=>{
+        const v=c[k], plein=v.installes>=v.total;
+        return l+' <b style="color:'+(plein?'var(--matrix-green,#00ff41)':(k==='requis'?'var(--cinnabar,#e63946)':'var(--cyber-cyan,#00d4ff)'))+'">'+v.installes+'/'+v.total+'</b>';
+      });
+      return parts.join(' · ');
+    }
+    function noeud(n,N,prof){
+      const cls='mp-noeud'+(n.niveau==='racine'?' mp-racine':'');
+      const ouvert=prof<2?' open':'';
+      let h='<details class="'+cls+'"'+ouvert+'><summary>'
+        +'<span class="mp-pt'+(n.installe?' on':'')+'" title="'+(n.installe?'métapaquet installé':'métapaquet non installé')+'"></span>'
+        +'<span class="mp-label">'+esc(n.label)+'</span><span class="mp-pq">'+esc(n.meta)+'</span>'
+        +'<button type="button" class="mp-cmd" data-cmd="apt install '+esc(n.meta)+'" title="Copier la commande d\'installation">apt install</button>'
+        +'<span class="mp-cpt">'+compteur(n.compte||{})+'</span>'
+        +'<span class="mp-desc">'+esc(n.description)+'</span></summary>';
+      for(const [lien,titre] of [['requiert','requis'],['recommande','recommandés'],['suggere','suggérés']]){
+        if(!n[lien].length)continue;
+        h+='<div class="mp-enf '+lien+'"><div class="mp-force">'+titre+'</div>'
+          +n[lien].map(x=>N[x]?noeud(N[x],N,prof+1):module(x)).join('')+'</div>';
+      }
+      return h+'</details>';
+    }
+    function puces(liste){
+      return liste.map(d=>'<span class="mp-chip'+(d.nom.startsWith('secubox-')?' sbx':'')+(d.installe?' on':'')+'" title="'
+        +esc(d.contrainte?d.nom+' ('+d.contrainte+')':d.nom)+(d.alternatives?' | '+esc(d.alternatives.join(' | ')):'')+'">'
+        +esc(d.nom.replace(/^secubox-/,''))+'</span>').join('');
+    }
+    function module(nom){
+      const p=MP.paquets[nom]||{paquet:nom,depends:[],recommends:[],suggests:[]};
+      const abs=(p.absorbe&&p.absorbe.length)?'<span class="mp-abs" title="Paquets remplacés (Replaces), transitionnels ou disparus">absorbe '
+        +p.absorbe.map(a=>esc(a.replace(/^secubox-/,''))).join(', ')+'</span>':'';
+      const arch=(p.architecture&&p.architecture!=='all'&&p.architecture!=='any')?'<span class="pill">'+esc(p.architecture)+' seul.</span>':'';
+      let deps='';
+      for(const [c,l] of [['depends','dépend de'],['recommends','recommande'],['suggests','suggère']])
+        if(p[c]&&p[c].length)deps+='<div><span class="k">'+l+'</span>'+puces(p[c])+'</div>';
+      return '<details class="mp-noeud mp-mod"><summary>'
+        +'<span class="mp-pt'+(p.installe?' on':'')+'"></span>'
+        +'<span class="mp-label">'+esc(nom.replace(/^secubox-/,''))+'</span>'
+        +(p.version?'<span class="mp-pq">'+esc(p.version)+'</span>':'<span class="mp-pq">non installé</span>')
+        +arch+abs+'<span class="mp-desc">'+esc(p.resume||'')+'</span></summary>'
+        +'<div class="mp-deps">'+(deps||'<div><span class="k">dépend de</span>—</div>')+'</div></details>';
+    }
+    document.getElementById('mp-arbre').addEventListener('click',async e=>{
+      const b=e.target.closest('[data-cmd]'); if(!b)return;
+      e.preventDefault();                       // ne pas replier le nœud
+      try{await navigator.clipboard.writeText(b.dataset.cmd);b.textContent='copié ✓';}
+      catch(_){b.textContent=b.dataset.cmd;}
+      setTimeout(()=>{b.textContent='apt install';},1600);
+    });
 
     async function loadMesh(){
       const d=await jget('/mesh-catalog');

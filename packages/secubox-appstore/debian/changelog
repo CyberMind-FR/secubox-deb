@@ -1,3 +1,17 @@
+secubox-appstore (0.4.16-1~bookworm1) bookworm; urgency=medium
+
+  * Métapaquets imbriqués (ref #1397) : le catalogue embarque l'arbre de
+    secubox-meta (sbxos ⊃ secubox ⊃ fonctions ⊃ services ⊃ modules) ; un
+    arbre invalide casse la construction.
+  * GET /metapaquets : l'arbre avec l'état de CETTE box — par nœud, modules
+    requis/recommandés/suggérés installés ; par module, ses vraies
+    dépendances debian/control (SecuBox et système) avec leur état, et les
+    paquets qu'il a absorbés (secubox-mail ← mail-lxc, webmail, webmail-lxc).
+  * Interface : section « Métapaquets », arbre dépliable, force du lien lue
+    dans le trait, bouton « apt install <nœud> ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 09:52:45 +0200
+
 secubox-appstore (0.4.15-1~bookworm1) bookworm; urgency=medium
 
   * Objets fédérés (ref #1395) : chaque carte montre l'aperçu embarqué dans
