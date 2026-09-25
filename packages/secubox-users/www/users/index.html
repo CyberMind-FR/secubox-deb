@@ -126,6 +126,14 @@
             transition: all 0.15s;
         }
         .session-row { grid-template-columns: 1.6em 1.6fr auto 1fr auto auto; }
+        .sbx-row { display: grid; grid-template-columns: 1.6em minmax(0,1.2fr) minmax(0,1.4fr) auto minmax(0,1.4fr) auto; gap: 0.6rem; align-items: center; padding: 0.55rem 0.4rem; border-bottom: 1px solid var(--border); }
+        .dem-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 0.6rem; align-items: center; padding: 0.6rem 0.4rem; border-bottom: 1px solid var(--border); }
+        .dem-row .fp { font-family: 'JetBrains Mono', monospace; color: var(--cyan); }
+        .dem-row select { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.2rem 0.4rem; font-size: 0.72rem; }
+        .sbx-lead { font-size: 0.75rem; color: var(--p31-dim); margin: 0 0 0.6rem; }
+        .sbx-lead a { color: var(--cyan); }
+        .who .sub { font-size: 0.65rem; color: var(--p31-dim); }
+        @media (max-width: 720px) { .sbx-row { grid-template-columns: 1.6em 1fr; } .dem-row { grid-template-columns: 1fr; } }
         .user-row:hover, .session-row:hover { background: rgba(0,212,255,0.08); }
         .user-row.enabled { border-left-color: var(--green); }
         .user-row.disabled { border-left-color: var(--red); background: rgba(255,68,102,0.06); }
@@ -211,11 +219,21 @@
 
         <div class="card">
             <div class="tabs">
-                <div class="tab active" data-tab="users">👥 Users</div>
+                <div class="tab active" data-tab="users" title="Comptes de SecuBox System : administration, techniques">🛠️ Comptes système</div>
+                <div class="tab" data-tab="sbx" title="Les personnes de SBX OS — sans privilège système">🧑 Personnes SBX OS <span class="pill" id="sbxCount"></span></div>
+                <div class="tab" data-tab="demandes" title="Demandes d'accès des appareils — la même file que la page Accès et l'Identity Manager">📨 Demandes <span class="pill" id="demCount"></span></div>
                 <div class="tab" data-tab="sessions">🔐 Sessions</div>
             </div>
             <div id="users" class="tab-content active">
                 <div class="user-list" id="userList">Loading…</div>
+            </div>
+            <div id="sbx" class="tab-content">
+                <p class="sbx-lead">Les humains de SBX OS : jamais un compte système, jamais SSH ni sudo. Leurs rôles, appareils et comptes de services se gèrent dans l'<a id="lienIdentite" target="_blank" rel="noopener">Identity Manager ↗</a>.</p>
+                <div class="user-list" id="sbxList">Loading…</div>
+            </div>
+            <div id="demandes" class="tab-content">
+                <p class="sbx-lead">Une seule file : tranchée ici, elle l'est aussi dans la page Accès et l'Identity Manager. Comparez l'empreinte avec l'écran de l'appareil avant d'accepter.</p>
+                <div class="user-list" id="demList">Loading…</div>
             </div>
             <div id="sessions" class="tab-content">
                 <div class="session-list" id="sessionList">Loading…</div>
@@ -480,6 +498,100 @@
             }).join('');
         }
 
+        // ── SBX OS (#1460) : personnes, appareils nommés, demandes ─────────
+        // Même source que l'Identity Manager (API sbxid) : rien n'est recopié.
+        const SBX = '/api/v1/sbxid';
+        const LIB_ROLE = { guest: 'invité', member: 'membre', subscriber: 'abonné', beta_tester: 'bêta', moderator: 'modérateur', sbx_operator: 'opérateur SBX' };
+        let sbxAppareils = {}, sbxPersonnes = [];
+        async function sbx(path, opts) {
+            opts = opts || {};
+            try {
+                const res = await fetch(SBX + path, Object.assign({ credentials: 'same-origin' }, opts, {
+                    headers: authHeaders(Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {}))
+                }));
+                const data = await res.json().catch(() => null);
+                if (!res.ok) return { erreur: (data && data.detail) || ('HTTP ' + res.status), status: res.status };
+                return data;
+            } catch (e) { return { erreur: e.message }; }
+        }
+        (function () {
+            const h = location.hostname.replace(/^admin\./, 'hall.');
+            document.getElementById('lienIdentite').href = 'https://' + h + '/identite/';
+        })();
+        async function loadSbx() {
+            const [p, a] = await Promise.all([sbx('/admin/personnes'), sbx('/admin/appareils')]);
+            const el = document.getElementById('sbxList');
+            if (a && a.appareils) sbxAppareils = a.appareils;
+            if (!p || p.erreur) { el.innerHTML = '<div class="empty-state">🧑<br>' + esc((p && p.erreur) || 'Identity Manager injoignable') + '</div>'; return; }
+            sbxPersonnes = p.personnes || [];
+            document.getElementById('sbxCount').textContent = sbxPersonnes.length;
+            el.innerHTML = sbxPersonnes.map(x => {
+                const actif = x.status === 'active';
+                const roles = (x.roles || []).map(r => '<span class="service-tag">' + esc(LIB_ROLE[r] || r) + '</span>').join('');
+                const liens = Object.entries(x.liens || {}).map(([app, ids]) =>
+                    '<span class="service-tag" title="' + esc(ids.join(', ')) + '">' + (SERVICE_ICONS[app] || (app === 'bbs' ? '💬' : '🔗')) + ' ' + esc(app) + '</span>').join('');
+                return '<div class="sbx-row">' +
+                    '<span class="dot">' + (actif ? '🟢' : '⚪') + '</span>' +
+                    '<span class="who"><span class="name">' + esc(x.pseudo) + '</span><span class="sub">' + esc((x.user_uuid || '').slice(0, 8)) + '… · ' + esc(x.tier || 'free') + '</span></span>' +
+                    '<span class="services">' + (roles || '—') + '</span>' +
+                    '<span class="pill">' + x.appareils + ' appareil' + (x.appareils > 1 ? 's' : '') + '</span>' +
+                    '<span class="services">' + (liens || '<span class="empty" style="padding:0">aucun compte lié</span>') + '</span>' +
+                    '<span class="pill ' + (actif ? 'up' : 'down') + '">' + esc(actif ? 'active' : x.status) + '</span>' +
+                '</div>';
+            }).join('') || '<div class="empty-state">🧑<br>Aucune personne</div>';
+        }
+        async function loadDemandes() {
+            const d = await sbx('/admin/demandes');
+            const el = document.getElementById('demList');
+            if (!d || d.erreur) { el.innerHTML = '<div class="empty-state">📨<br>' + esc((d && d.erreur) || 'injoignable') + '</div>'; return; }
+            const liste = d.en_attente || [];
+            document.getElementById('demCount').textContent = liste.length || '';
+            if (!liste.length) { el.innerHTML = '<div class="empty-state">📨<br>Aucune demande en attente</div>'; return; }
+            const roles = Object.keys(LIB_ROLE).filter(r => r !== 'subscriber');
+            el.innerHTML = liste.map(x => '<div class="dem-row" data-did="' + esc(x.did) + '">' +
+                '<span class="who"><span class="name">' + esc(x.nom) + ' <span class="sub">· ' + esc(x.appareil || '') + '</span></span>' +
+                '<span class="sub">' + esc(new Date((x.demandee_le || 0) * 1000).toLocaleString()) + (x.email ? ' · ' + esc(x.email) : '') + (x.message ? ' · « ' + esc(x.message) + ' »' : '') + '</span>' +
+                '<span class="sub">empreinte : <span class="fp">' + esc(x.empreinte) + '</span></span></span>' +
+                '<span class="actions">' +
+                    '<select data-champ="personne" aria-label="Personne"><option value="">nouvelle personne</option>' +
+                        sbxPersonnes.map(p => '<option value="' + esc(p.user_uuid) + '">→ ' + esc(p.pseudo) + '</option>').join('') + '</select>' +
+                    '<select data-champ="role" aria-label="Rôle">' + roles.map(r => '<option value="' + r + '"' + (r === 'member' ? ' selected' : '') + '>' + esc(LIB_ROLE[r]) + '</option>').join('') + '</select>' +
+                    '<button class="btn sm good" data-act="accepter">✔ Accepter</button>' +
+                    '<button class="btn sm danger" data-act="refuser">✖ Refuser</button>' +
+                '</span></div>').join('');
+        }
+        document.getElementById('demList').addEventListener('click', async e => {
+            const b = e.target.closest('[data-act]'); if (!b) return;
+            const row = b.closest('[data-did]'), did = row.getAttribute('data-did');
+            const personne = row.querySelector('[data-champ=personne]').value || null;
+            const role = row.querySelector('[data-champ=role]').value;
+            if (b.getAttribute('data-act') === 'refuser' && !confirm('Refuser cette demande ?')) return;
+            row.querySelectorAll('button').forEach(x => x.disabled = true);
+            const r = await sbx('/admin/demandes/' + encodeURIComponent(did) + '/' + b.getAttribute('data-act'),
+                { method: 'POST', body: JSON.stringify(b.getAttribute('data-act') === 'accepter' ? { role: role, personne: personne } : {}) });
+            if (r && r.erreur) toast('❌ ' + r.erreur, true);
+            else toast(b.getAttribute('data-act') === 'accepter' ? ('✔ ' + (personne ? 'Rattaché à ' : 'Admis : ') + (r.pseudo || '')) : 'Demande refusée');
+            loadDemandes(); loadSbx(); loadSessions();
+        });
+        document.getElementById('demList').addEventListener('change', e => {
+            const sel = e.target.closest('[data-champ=personne]'); if (!sel) return;
+            sel.closest('.dem-row').querySelector('[data-champ=role]').hidden = !!sel.value;   // la personne garde SES rôles
+        });
+
+        // Une session d'appareil porte un nom technique (sbx-<empreinte>) : on dit
+        // QUI c'est (la personne SBX OS) et avec QUOI (l'appareil).
+        function qui(nom) {
+            const a = sbxAppareils[nom];
+            if (!a) return nom;
+            return (a.pseudo || a.compte_rattache || 'appareil non rattaché') + (a.appareil ? ' · ' + a.appareil : '');
+        }
+        function etiquette(nom) {
+            const a = sbxAppareils[nom];
+            if (!a) return '';
+            if (a.revoque || a.etat === 'refusee') return ' <span class="pill down" title="appareil refusé ou révoqué : cette session devrait être coupée">révoqué</span>';
+            return ' <span class="pill">SBX OS</span>';
+        }
+
         async function loadSessions() {
             const data = await api('/sessions');
             const sessions = (data && data.sessions) || [];
@@ -497,9 +609,9 @@
                 const deviceShort = device.length > 34 ? device.slice(0, 34) + '…' : device;
                 return '<div class="session-row' + (s.current ? ' current' : '') + '">' +
                     '<span class="dot">' + (s.current ? '🟢' : '⚪') + '</span>' +
-                    '<span class="who"><span class="name">' + esc(s.username) +
-                        (s.current ? ' <span class="pill up">current</span>' : '') + '</span>' +
-                        '<span class="email">' + esc(s.email || '') + '</span></span>' +
+                    '<span class="who"><span class="name">' + esc(qui(s.username)) +
+                        (s.current ? ' <span class="pill up">current</span>' : '') + etiquette(s.username) + '</span>' +
+                        '<span class="email">' + esc(s.email || (sbxAppareils[s.username] ? s.username : '')) + '</span></span>' +
                     '<span class="ip"><code>' + esc(s.ip || 'unknown') + '</code></span>' +
                     '<span class="device">' + esc(deviceShort) + '</span>' +
                     '<span class="started">' + esc(started) + '</span>' +
@@ -824,7 +936,7 @@
             loadStatus();
             loadServices();
             loadUsers();
-            loadSessions();
+            loadSbx().then(() => { loadDemandes(); loadSessions(); });
             loadAuthSettings();
         }
 

@@ -343,3 +343,12 @@ def test_admission_rattachee_a_une_personne_existante(banc, monkeypatch):
     assert [a["name"] for a in store.appareils_de(c, cedre)] == ["Android"]
     assert store.roles_de(c, cedre) == ["member"]                    # ses rôles, pas « guest »
     assert not c.execute("SELECT 1 FROM sbx_users WHERE pseudo='cedre'").fetchone()   # pas de fantôme
+
+
+def test_appareils_nommes_1460(banc):
+    ctx = main.exige_admin(_req("tok-g"))
+    a = main.appareils(ctx)["appareils"]
+    g = a["sbx-" + S.empreinte_cle(banc.pg)[:12]]
+    assert g["pseudo"] == "gandalf" and g["etat"] == "acceptee" and g["compte_rattache"] == "gk2"
+    assert a["sbx-" + S.empreinte_cle(banc.pa)[:12]]["pseudo"] == "alice"
+    assert all("liens" in p for p in main.personnes(ctx)["personnes"])
