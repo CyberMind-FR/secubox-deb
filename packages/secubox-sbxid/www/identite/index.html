@@ -105,7 +105,7 @@ td.c,th.c{text-align:center}
 <section id="v-admin">
   <h1>Administration SBX OS</h1>
   <p class="lead">Séparée de l'administration système. Les comptes système n'apparaissent pas ici.</p>
-  <div id="adm-demandes"></div>
+  <h2>Demandes d'accès</h2><div class="card" id="adm-demandes"></div>
   <h2>Personnes</h2><div class="card scroll"><table id="people"></table></div>
   <h2>Journal</h2><div class="card"><ul class="audit" id="audit"></ul></div>
   <h2>Rôles → capacités</h2><div class="card scroll"><table id="matrix"></table></div>
@@ -224,8 +224,7 @@ async function rendAdmin(){
   try { [pers, jour, dem] = await Promise.all([api('/admin/personnes'), api('/admin/journal'), api('/admin/demandes')]); }
   catch(e){ $('#nav-admin').hidden = true; return; }
   $('#nav-admin').hidden = false;
-  const n = dem.en_attente.length;
-  $('#adm-demandes').innerHTML = n ? `<div class="msg"><b>${n} demande(s) d'accès en attente</b> — à trancher dans <a href="/acces/">la porte d'accès</a> (l'Identity Manager l'absorbera à la prochaine étape).</div>` : '';
+  rendDemandes(dem.en_attente);
   const assign = ROLES.roles.filter(r => !r.derive).map(r => r.id);
   const t = $('#people');
   t.innerHTML = `<thead><tr><th>Personne</th>${assign.map(r=>`<th class="c">${esc(LIB[r]||r)}</th>`).join('')}<th>Abonnement</th><th class="c">Appareils</th><th>Statut</th></tr></thead><tbody>` +
@@ -247,6 +246,42 @@ async function rendAdmin(){
   const all = ROLES.capacites, rs = ROLES.roles;
   $('#matrix').innerHTML = `<thead><tr><th>Capacité</th>${rs.map(r=>`<th class="c">${esc(LIB[r.id]||r.label)}</th>`).join('')}</tr></thead><tbody>` +
     all.map(c => `<tr><td style="font-family:var(--mono)">${esc(c)}</td>${rs.map(r=>`<td class="c"><span class="dot ${r.capacites.includes(c)?'':'no'}"></span></td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+
+function rendDemandes(liste){
+  const box = $('#adm-demandes'); box.innerHTML = '';
+  if (!liste.length){ box.innerHTML = '<p style="margin:0;color:var(--muted)">Aucune demande en attente.</p>'; return; }
+  const assign = ROLES.roles.filter(r => !r.derive).map(r => r.id);
+  liste.forEach(d => {
+    const row = document.createElement('div'); row.className = 'dev';
+    row.innerHTML = `<div><div class="n">${esc(d.nom)} <span class="m">· ${esc(d.appareil||'')}</span></div>
+      <div class="m">${quand(d.demandee_le)}${d.email ? ' · '+esc(d.email) : ''}${d.message ? ' · « '+esc(d.message)+' »' : ''}</div>
+      <div class="m">empreinte à comparer avec l'écran de l'appareil : <b style="font-family:var(--mono)">${esc(d.empreinte)}</b></div></div><div class="act"></div>`;
+    const a = row.querySelector('.act');
+    const sel = document.createElement('select'); sel.id = 'role-'+d.did; sel.setAttribute('aria-label','Rôle à l\'arrivée');
+    assign.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = LIB[r]||r; sel.appendChild(o); });
+    sel.value = 'member';
+    const ok = btn('Accepter','prim'), non = btn('Refuser','danger');
+    ok.onclick = async () => {
+      ok.disabled = non.disabled = true;
+      try {
+        const r = await api('/admin/demandes/'+encodeURIComponent(d.did)+'/accepter', {method:'POST', body:JSON.stringify({role:sel.value})});
+        toast(`${r.pseudo || d.nom} admis · ${LIB[sel.value]||sel.value}`);
+        if (r.lien){
+          a.innerHTML = '';
+          const code = document.createElement('code'); code.textContent = r.lien; code.style.cssText='font-family:var(--mono);font-size:12px;overflow-wrap:anywhere;max-width:420px';
+          const cp = btn('Copier le lien d\'entrée'); cp.onclick = () => navigator.clipboard.writeText(r.lien).then(()=>toast('Lien copié (usage unique)'), ()=>toast('Sélectionnez le lien pour le copier'));
+          a.append(code, cp); return;
+        }
+      } catch(e){ toast(e.message); }
+      charge();
+    };
+    non.onclick = () => confirme(a, `Refuser la demande de « ${d.nom} » ?`, async () => {
+      try { await api('/admin/demandes/'+encodeURIComponent(d.did)+'/refuser', {method:'POST', body:JSON.stringify({})}); toast('Demande refusée'); } catch(e){ toast(e.message); }
+      charge();
+    });
+    a.append(sel, ok, non); box.appendChild(row);
+  });
 }
 
 // ── Nœud & Mesh ──────────────────────────────────────────────────────────

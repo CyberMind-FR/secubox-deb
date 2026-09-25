@@ -12,3 +12,16 @@ override_dh_auto_install:
 	install -m 644 www/identite/index.html debian/secubox-sbxid/usr/share/secubox/www/identite/
 	install -d debian/secubox-sbxid/etc/secubox/nginx-available
 	install -m 644 nginx/identity.vhost.conf debian/secubox-sbxid/etc/secubox/nginx-available/identity.conf
+	# ── ACCÈS, ABSORBÉ (#1424) — mêmes chemins qu'avant : aucune rupture ──
+	install -d debian/secubox-sbxid/usr/lib/secubox/acces/api
+	install -m 644 acces/api/*.py debian/secubox-sbxid/usr/lib/secubox/acces/api/
+	install -d debian/secubox-sbxid/usr/share/secubox/www/acces
+	install -m 644 acces/www/acces/index.html acces/www/acces/micro.html acces/www/acces/appareil.js \
+		acces/www/acces/maquette.html debian/secubox-sbxid/usr/share/secubox/www/acces/
+	install -d debian/secubox-sbxid/usr/share/secubox/menu.d
+	install -m 644 acces/menu.d/26-acces.json debian/secubox-sbxid/usr/share/secubox/menu.d/
+	install -d debian/secubox-sbxid/etc/secubox
+	install -m 644 acces/conf/acces.toml debian/secubox-sbxid/etc/secubox/
+	install -d debian/secubox-sbxid/etc/nginx/secubox.d
+	install -m 644 acces/nginx/acces.conf debian/secubox-sbxid/etc/nginx/secubox.d/
+	install -m 644 acces/nginx/acces.vhost.conf debian/secubox-sbxid/etc/secubox/nginx-available/acces.conf

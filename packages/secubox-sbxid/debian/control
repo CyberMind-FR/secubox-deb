@@ -7,7 +7,10 @@ Standards-Version: 4.6.2
 
 Package: secubox-sbxid
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.12), secubox-acces (>= 1.6.4), secubox-aggregator, python3-cryptography
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, python3-cryptography, python3-qrcode,
+         secubox-core (>= 1.5.12), secubox-aggregator
+Replaces: secubox-acces (<< 1.7.0~)
+Breaks: secubox-acces (<< 1.7.0~)
 Recommends: secubox-webos (>= 1.0.338)
 Description: SecuBox — SBX Identity Manager (identité SBX OS unifiée)
  Une identité par personne (user_uuid), prouvée par ses appareils (clé
@@ -17,3 +20,6 @@ Description: SecuBox — SBX Identity Manager (identité SBX OS unifiée)
  .
  Servi par le Hall : https://hall.<nœud>/identite/ — l'origine où vivent
  les clés d'appareil. identity.<nœud> y redirige.
+ .
+ Absorbe secubox-acces (admission des appareils, défi signé, sessions) :
+ mêmes chemins d'API et de pages qu'avant.

@@ -1,9 +1,0 @@
-#!/bin/sh
-set -e
-case "$1" in
-  remove|deconfigure)
-    systemctl stop secubox-acces.service >/dev/null 2>&1 || true
-    ;;
-esac
-#DEBHELPER#
-exit 0
