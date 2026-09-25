@@ -1,3 +1,11 @@
+secubox-users (1.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * Un nom de compte peut porter un point au milieu (« ani.skywalker »,
+    homonyme d'un compte BBS) : même règle que le helper de services
+    (ref #1456).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 16:38:53 +0200
+
 secubox-users (1.8.3-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

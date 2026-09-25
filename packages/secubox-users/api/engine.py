@@ -21,7 +21,9 @@ from typing import Any, Callable, Dict, List, Optional
 
 log = logging.getLogger("secubox.users.engine")
 
-USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+# Même règle que le helper de services (#1456) : le point est admis au milieu
+# (« ani.skywalker », homonyme d'un compte BBS), jamais en tête ni doublé.
+USERNAME_RE = re.compile(r"^(?!.*\.\.)[a-z0-9_][a-z0-9._-]{0,30}[a-z0-9_-]$")
 ALLOWED_ROLES = {"admin", "operator", "viewer"}
 
 

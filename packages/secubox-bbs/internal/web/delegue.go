@@ -92,6 +92,9 @@ func clientAuthHTTP(base string, c *http.Client) authAmont {
 type sessionSecubox struct {
 	User    string
 	Groupes string
+	// Bbs : le compte BBS lié à la PERSONNE SBX OS derrière la session
+	// (#1456, en-tête Remote-Sbx-Bbs), posé par l'administration SBX OS.
+	Bbs string
 }
 
 // verifSession interroge secubox-auth. ok=false pour tout refus, y compris
@@ -135,7 +138,8 @@ func clientVerifHTTP(base string, c *http.Client) verifSession {
 			return sessionSecubox{}, false
 		}
 		defer resp.Body.Close()
-		s := sessionSecubox{User: resp.Header.Get("Remote-User"), Groupes: resp.Header.Get("Remote-Groups")}
+		s := sessionSecubox{User: resp.Header.Get("Remote-User"), Groupes: resp.Header.Get("Remote-Groups"),
+			Bbs: resp.Header.Get("Remote-Sbx-Bbs")}
 		ok := resp.StatusCode == http.StatusOK && s.User != ""
 		cache.pose(cle, entreeVerif{s: s, ok: ok, jusqua: time.Now().Add(dureeCacheVerif)})
 		return s, ok

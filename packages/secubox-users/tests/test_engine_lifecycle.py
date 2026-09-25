@@ -82,3 +82,11 @@ def test_atomic_write_does_not_corrupt_on_failure(tmp_path: Path, monkeypatch):
 
     doc = json.loads(p.read_text())
     assert [u["username"] for u in doc["users"]] == ["alice"]
+
+
+def test_nom_avec_point_1456():
+    from api import engine as E
+    for ok in ("ani.skywalker", "cedre83", "gk2", "a_b-c"):
+        assert E.USERNAME_RE.match(ok), ok
+    for ko in (".x", "a..b", "ab.", "x", "Ani", "a b"):
+        assert not E.USERNAME_RE.match(ko), ko

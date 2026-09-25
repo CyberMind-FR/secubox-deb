@@ -169,6 +169,27 @@ def personne_du_porteur(payload: Dict[str, Any]) -> Optional[Dict[str, str]]:
         c.close()
 
 
+def compte_lie(payload: Dict[str, Any], app: str) -> Optional[str]:
+    """Le compte de l'application `app` lié à la personne SBX OS derrière la
+    session (#1456) — pour qu'un service ouvre CE compte sans nouvelle saisie.
+    Un nom « réel » passe avant un compte d'appareil `sbx-…` ; None si la
+    session ne désigne personne, ou que rien n'est lié."""
+    per = personne_du_porteur(payload)
+    if not per:
+        return None
+    try:
+        c = sqlite3.connect(f"file:{SBX_DB}?mode=ro", uri=True, timeout=2)
+        try:
+            ids = [r[0] for r in c.execute("SELECT app_id FROM sbx_app_links WHERE user_uuid=? AND app=?"
+                                           " ORDER BY app_id", (per["user_uuid"], app))]
+        finally:
+            c.close()
+    except sqlite3.Error:
+        return None
+    ids.sort(key=lambda h: h.lower().startswith("sbx-"))
+    return ids[0] if ids else None
+
+
 def require_capability(cap: str):
     """Dépendance FastAPI : session valide ET capacité `cap`."""
     S.valide_capacite(cap)                          # jamais une capacité système

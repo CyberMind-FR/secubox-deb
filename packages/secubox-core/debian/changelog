@@ -1,3 +1,10 @@
+secubox-core (1.5.16-1~bookworm1) bookworm; urgency=medium
+
+  * capacites.compte_lie(payload, app) ; /auth/verify renvoie Remote-Sbx-Bbs,
+    le compte BBS lié à la personne SBX OS de la session (ref #1456).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 16:55:22 +0200
+
 secubox-core (1.5.15-1~bookworm1) bookworm; urgency=medium
 
   * personne_du_porteur : une session de compte sans appareil (mot de passe
