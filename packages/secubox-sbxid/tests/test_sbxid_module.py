@@ -197,3 +197,21 @@ def test_session_gk2_par_mot_de_passe(banc):
     with pytest.raises(HTTPException) as e:
         main.prepare(dev, main.moi(_req("tok-gpw")))
     assert e.value.status_code == 409
+
+
+def test_compte_bbs_d_appareil_lie_a_sa_personne(banc, tmp_path):
+    """#1454 : le compte BBS sbx-<empreinte> d'un appareil de gandalf est gandalf."""
+    import sqlite3
+    b = tmp_path / "bbs.db"
+    h = "sbx-" + S.empreinte_cle(banc.pg)[:12]
+    x = sqlite3.connect(b)
+    x.execute("CREATE TABLE users (handle TEXT)")
+    x.executemany("INSERT INTO users VALUES (?)", [(h,), ("sbx-000000000000",), ("cedre83",)])
+    x.commit(); x.close()
+    c = main.db()
+    assert store.lie_comptes_bbs_d_appareil(c, b) == 1
+    assert store.lie_comptes_bbs_d_appareil(c, b) == 0            # idempotent
+    liens = {(r[0], r[1]) for r in c.execute(
+        "SELECT u.pseudo, l.app_id FROM sbx_app_links l JOIN sbx_users u USING(user_uuid) WHERE l.app='bbs'")}
+    assert liens == {("gandalf", "gk2"), ("gandalf", h)}
+    assert store.lie_comptes_bbs_d_appareil(c, tmp_path / "absent.db") == 0
