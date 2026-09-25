@@ -1,3 +1,11 @@
+secubox-identity (1.1.9-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (closes #1426, audit #1417 S8) : POST /identity/sign retirée
+    (410). Elle signait tout message avec une clé du nœud pour n'importe
+    quel JWT, appareil guest compris. Aucun appelant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:07:26 +0200
+
 secubox-identity (1.1.8-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
