@@ -1,3 +1,11 @@
+secubox-toolbox-ng (0.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * Construit aussi pour amd64 (ref #1383) : Architecture: any, GOARCH tiré de
+    l'architecture Debian ciblée (sbxmitm, sbx-sentinel, sbx-authwatch,
+    sbxdpi) — l'image VirtualBox n'avait pas de moteur WAF.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 06:49:18 +0200
+
 secubox-toolbox-ng (0.5.3-1~bookworm4) bookworm; urgency=medium
 
   * DECLARE PRENDRE LA PLACE DE secubox-mitmproxy (ref #1319) pour la part
@@ -46,4 +54,3 @@ secubox-toolbox-ng (0.5.3-1~bookworm2) bookworm; urgency=medium
     presentes sur gk2 par sedimentation, absentes de toute image neuve.
 
  -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 10:02:12 +0200
-

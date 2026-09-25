@@ -13,7 +13,13 @@ export DH_VERBOSE = 1
 
 # Build the static arm64 binary offline from the committed vendor/ tree.
 export GOOS = linux
-export GOARCH = arm64
+# L'ARCHITECTURE SUIT LA CIBLE DEBIAN (#1383). Elle etait figee a arm64 : le
+# paquet n'existait donc pas pour amd64, et l'image VirtualBox (vm-x64) en
+# profil full ne pouvait pas s'installer — ce que l'ancien `|| warn` taisait.
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+GOARCH_amd64 = amd64
+GOARCH_arm64 = arm64
+export GOARCH = $(or $(GOARCH_$(DEB_HOST_ARCH)),$(DEB_HOST_ARCH))
 export CGO_ENABLED = 0
 export GOFLAGS = -mod=vendor
 export GOPROXY = off

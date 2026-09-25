@@ -159,6 +159,27 @@ jobs:
       # retombe sur le dernier reussi, mais la provenance est IMPRIMEE. Le
       # silence etait le vrai defaut : se tromper de paquets est rattrapable,
       # ne pas savoir lesquels on a pris ne l'est pas.
+      # ATTENDRE LES PAQUETS DE CE COMMIT (#1383). Sur un tag, paquets et images
+      # partent du MÊME push, en parallèle : au tag v3.0.0-alpha.6, l'image
+      # vm-x64 a demandé l'agrégat à 19:45 alors qu'il n'existait qu'à 22:27.
+      # Elle a pris 0 .deb, installé depuis apt.secubox.in (figé) et la
+      # vérification du profil l'a refusée. On attend donc que build-packages
+      # ait FINI pour ce commit, puis on télécharge. 2 h 45 au plus : un job
+      # hébergé est coupé à 6 h, et la construction elle-même en prend jusqu'à 3.
+      - name: Attendre les paquets de ce commit
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 33); do
+            st=$(gh run list -R "$GITHUB_REPOSITORY" --workflow build-packages.yml \
+                   --commit "$GITHUB_SHA" --json status -q '.[0].status' 2>/dev/null || true)
+            echo "build-packages pour ${GITHUB_SHA:0:9} : ${st:-pas encore lancé} ($(date -u +%H:%M))"
+            [ "$st" = "completed" ] && exit 0
+            sleep 300
+          done
+          echo "::warning::paquets du commit toujours pas prêts après 2 h 45 — repli sur le dernier agrégat"
+
       - name: Download package artifacts (commit exact)
         id: debs-exact
         uses: dawidd6/action-download-artifact@v3
