@@ -1,3 +1,11 @@
+secubox-webos (1.0.342-1~bookworm1) bookworm; urgency=medium
+
+  * Cartes « Signal » et « Signal + » retirées du Hall (closes #1444) :
+    signal.html déplacé dans cardlets-unreleased/, gardé au dépôt mais plus
+    installé. Le module secubox-signal n'est pas touché.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:52:03 +0200
+
 secubox-webos (1.0.341-1~bookworm1) bookworm; urgency=medium
 
   * Menu de connexion du Hall, bloc « Mes identités » : identité SBX OS et
