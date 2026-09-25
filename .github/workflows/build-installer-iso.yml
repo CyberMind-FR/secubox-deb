@@ -62,8 +62,38 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
-      - name: Download packages from latest build
-        if: github.event_name != 'workflow_run'
+      # PAQUETS DU MÊME COMMIT (#1478, même schéma que build-image #1383). Le
+      # live d'alpha.6 a pris l'agrégat de la DERNIÈRE construction réussie —
+      # d'avant le 25/09 (secubox-ossec encore dedans, rien du jour), la
+      # construction du tag étant encore en file. Sur un tag : on attend.
+      - name: Attendre les paquets de ce commit
+        if: $github.event_name != 'workflow_run' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 33); do
+            st=$(gh run list -R "$GITHUB_REPOSITORY" --workflow build-packages.yml \
+                   --commit "$GITHUB_SHA" --json status -q '.[0].status' 2>/dev/null || true)
+            echo "build-packages pour ${GITHUB_SHA:0:9} : ${st:-pas encore lancé} ($(date -u +%H:%M))"
+            [ "$st" = "completed" ] && exit 0
+            sleep 300
+          done
+          echo "::warning::paquets du commit toujours pas prêts après 2 h 45 — repli sur le dernier agrégat"
+
+      - name: Download SecuBox packages (commit exact)
+        id: debs-exact
+        if: $github.event_name != 'workflow_run'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build-packages.yml
+          name: secubox-debs-all
+          commit: ${{ github.sha }}
+          path: output/debs/
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Download SecuBox packages (repli — dernier réussi)
+        if: $github.event_name != 'workflow_run' && steps.debs-exact.outcome != 'success'
         uses: dawidd6/action-download-artifact@v3
         with:
           workflow: build-packages.yml
@@ -71,6 +101,15 @@ jobs:
           path: output/debs/
           if_no_artifact_found: warn
         continue-on-error: true
+
+      - name: Provenance des paquets
+        if: $github.event_name != 'workflow_run'
+        run: |
+          if [ "${{ steps.debs-exact.outcome }}" = "success" ]; then
+            echo "paquets : agrégat DU COMMIT ${{ github.sha }}"
+          else
+            echo "::warning::paquets : agrégat d'un AUTRE commit (le plus récent réussi) — l'image ne reflète pas ${{ github.sha }}"
+          fi
 
       - name: List available packages
         run: |

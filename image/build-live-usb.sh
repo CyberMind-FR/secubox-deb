@@ -19,7 +19,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="3.0.0-alpha.2"
+# VERSION TIRÉE DU TAG (#1478) : figée à « 3.0.0-alpha.2 », elle s'affichait
+# sur l'écran d'accueil et dans build-info.json quel que soit le tag construit.
+_sbx_version() {
+  local v="${SECUBOX_VERSION:-}"
+  [[ -z "$v" && "${GITHUB_REF_NAME:-}" == v[0-9]* ]] && v="${GITHUB_REF_NAME#v}"
+  [[ -z "$v" ]] && v="$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+  echo "${v:-3.0.0-dev}"
+}
+SECUBOX_VERSION="$(_sbx_version)"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -1318,9 +1326,33 @@ Options=mode=0755,uid=secubox,gid=secubox,size=100M
 WantedBy=local-fs.target
 MOUNTUNIT
 
-# Enable the mount unit
+# SEMER LE TMPFS (#1478). Monté VIDE, il masquait tout ce que les postinst
+# avaient créé sous /var/lib/secubox : dossiers de données (billets, zkp, waf,
+# reality, antirootkit… en 226/NAMESPACE en boucle) et le marqueur
+# .kiosk-enabled (« CONSOLE MODE » au lieu du kiosk). Le squelette est figé
+# juste avant le squashfs (voir plus bas) et recopié ici sans rien écraser.
+cat > "${ROOTFS}/etc/systemd/system/secubox-varlib-seed.service" << 'SEEDUNIT'
+[Unit]
+Description=SecuBox: seed the /var/lib/secubox tmpfs from the image skeleton (#1478)
+DefaultDependencies=no
+After=var-lib-secubox.mount
+Requires=var-lib-secubox.mount
+Before=sysinit.target
+ConditionPathIsDirectory=/usr/share/secubox/var-lib-skel
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/cp -an /usr/share/secubox/var-lib-skel/. /var/lib/secubox/
+
+[Install]
+WantedBy=var-lib-secubox.mount
+SEEDUNIT
+
+# Enable the mount unit (and its seed)
 chroot "${ROOTFS}" systemctl enable var-lib-secubox.mount 2>/dev/null || true
-log "tmpfs mount unit created for /var/lib/secubox"
+chroot "${ROOTFS}" systemctl enable secubox-varlib-seed.service 2>/dev/null || true
+log "tmpfs mount unit created for /var/lib/secubox (seeded at boot)"
 
 # Find all .deb files in cache/repo or output/
 # Note: Packages may be in output/ directly OR output/debs/ subdirectory
@@ -3346,8 +3378,12 @@ if [[ -d "${ROOTFS}/usr/share/secubox/www" ]]; then
 fi
 
 # Fix /etc/secubox ownership
+# PAS DE chown -R (#1478) : il écrasait les propriétaires posés par les postinst
+# (zia.toml, voice.toml, devwatch.toml… en secubox:secubox 0640) et ces
+# services ne lisaient plus leur configuration. Seuls le dossier et tls/.
 if [[ -d "${ROOTFS}/etc/secubox" ]]; then
-  chown -R root:root "${ROOTFS}/etc/secubox"
+  chown root:root "${ROOTFS}/etc/secubox"
+  chown -R root:root "${ROOTFS}/etc/secubox/tls" 2>/dev/null || true
   chmod 755 "${ROOTFS}/etc/secubox"
   chmod 755 "${ROOTFS}/etc/secubox/tls" 2>/dev/null || true
   chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem" 2>/dev/null || true
@@ -3363,6 +3399,15 @@ if [[ -d "${ROOTFS}/etc/nginx/secubox.d" ]]; then
 fi
 
 ok "Permissions fixed"
+
+# Squelette de /var/lib/secubox (#1478) : figé ICI, après tous les postinst,
+# recopié au démarrage dans le tmpfs par secubox-varlib-seed.service.
+if [[ -d "${ROOTFS}/var/lib/secubox" ]]; then
+  rm -rf "${ROOTFS}/usr/share/secubox/var-lib-skel"
+  mkdir -p "${ROOTFS}/usr/share/secubox"
+  cp -a "${ROOTFS}/var/lib/secubox" "${ROOTFS}/usr/share/secubox/var-lib-skel"
+  log "Squelette /var/lib/secubox : $(find "${ROOTFS}/usr/share/secubox/var-lib-skel" -mindepth 1 | wc -l) entrées"
+fi
 
 # ══════════════════════════════════════════════════════════════════
 # Step 7: Create SquashFS
