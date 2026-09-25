@@ -8,6 +8,10 @@ secubox-signal (0.1.8-1~bookworm1) bookworm; urgency=medium
     0660, notification systemd READY=1).
   * SIGHUP (ExecReload) ne tue plus le demon : il est journalise, la
     configuration se relit au redemarrage.
+  * signal-cli mort est RECUEILLI (il restait zombie), journalise avec son
+    stderr, et le client redevient « non demarre ». Sur gk2 la JVM meurt
+    au lancement : signal-cli embarque un libsignal_jni.so x86-64 (limite
+    connue de secubox-signal-engine, hors de ce correctif).
 
  -- Gerald Kerma <devel@cybermind.fr>  Fri, 25 Sep 2026 10:09:44 +0200
 
