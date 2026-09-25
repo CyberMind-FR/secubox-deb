@@ -142,3 +142,44 @@ def test_on_ne_touche_pas_aux_appareils_d_autrui(banc):
     with pytest.raises(HTTPException) as e:
         main.renomme(g["device"]["device_uuid"], main.Renomme(nom="piraté"), ctx_a)
     assert e.value.status_code == 403
+
+
+def test_admission_par_l_identity_manager(banc, tmp_path, monkeypatch):
+    """Accepter = acces ouvre la porte (guest), sbxid donne le rôle SBX OS."""
+    import asyncio
+    import sys
+    kn, pn = _cle()
+    f = store.DEMANDES
+    brut = json.loads(f.read_text())
+    brut["demandes"].append({"did": "did:sbx:nouveau", "cle_publique": pn, "nom": "Chloé", "appareil": "iPad",
+                             "etat": "en_attente", "demandee_le": 9, "jtis": []})
+    f.write_text(json.dumps(brut))
+    faux = types.ModuleType("faux_acces_main")
+
+    class Verdict:
+        def __init__(self, did, motif=""):
+            self.did, self.motif = did, motif
+
+    async def accepter(v, req):                  # ce que fait acces : etat → acceptee, profil guest
+        b = json.loads(f.read_text())
+        for d in b["demandes"]:
+            if d["did"] == v.did:
+                d.update(etat="acceptee", profil="guest", traitee_par=req.state.user)
+        f.write_text(json.dumps(b))
+        return {"ok": True, "lien": "https://hall/i/acces/?entree=XYZ"}
+
+    async def refuser(v, req):
+        return {"ok": True}
+    faux.Verdict, faux.accepter, faux.refuser = Verdict, accepter, refuser
+    faux.profileur, faux._coupe_sessions = (lambda: None), (lambda *a: None)
+    monkeypatch.setitem(sys.modules, "faux_acces_main", faux)
+    ctx = main.exige_admin(_req("tok-g"))
+    att = main.demandes(ctx)["en_attente"]
+    chloe = next(d for d in att if d["nom"] == "Chloé")
+    assert len(chloe["empreinte"].split()) == 6
+    req = _req("tok-g")
+    out = asyncio.run(main.accepte("did:sbx:nouveau", main.Decision(role="member"), req, ctx))
+    assert out["pseudo"] == "chloe" and out["roles"] == ["member"] and "entree=" in out["lien"]
+    assert "Chloé" not in [d["nom"] for d in main.demandes(ctx)["en_attente"]]
+    with pytest.raises(HTTPException):
+        asyncio.run(main.accepte("did:sbx:nouveau", main.Decision(role="root"), req, ctx))

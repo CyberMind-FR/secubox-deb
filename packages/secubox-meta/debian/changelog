@@ -1,3 +1,10 @@
+secubox-meta (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-service-hall requiert secubox-sbxid (qui absorbe secubox-acces,
+    désormais transitionnel et hors-arbre) (ref #1424).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:03:11 +0200
+
 secubox-meta (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-sbxid recommandé par secubox-service-hall (ref #1422).

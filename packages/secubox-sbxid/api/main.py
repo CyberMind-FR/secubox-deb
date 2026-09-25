@@ -121,8 +121,18 @@ def _systeme_admin(sub: str) -> bool:
     return u.get("role") == "admin" and u.get("enabled", True)
 
 
+def _rafraichit() -> None:
+    """Un appareil admis entre-temps devient une personne (import idempotent)."""
+    n = _noeud()
+    try:
+        store.importe_existant(db(), n.did if n else "did:plc:" + "0" * 32)
+    except Exception as e:
+        log.error("sbxid : rafraîchissement : %s", e)
+
+
 def moi(request: Request) -> Dict[str, Any]:
     p = _charge_session(request)
+    _rafraichit()
     dev = _appareil_de_session(p)
     ctx = {"sub": p.get("sub", ""), "device": dict(dev) if dev else None, "user": None,
            "systeme": _systeme_admin(p.get("sub", ""))}
@@ -290,6 +300,7 @@ def roles(ctx=Depends(moi)):
 
 @app.get("/admin/personnes")
 def personnes(ctx=Depends(exige_admin)):
+    _rafraichit()
     out = []
     for r in db().execute("SELECT user_uuid FROM sbx_users ORDER BY pseudo"):
         p = store.personne(db(), r[0])
@@ -346,10 +357,60 @@ def journal(ctx=Depends(exige_admin), n: int = 100):
 
 @app.get("/admin/demandes")
 def demandes(ctx=Depends(exige_admin)):
-    """Les demandes d'admission EN ATTENTE (tranchées, pour l'instant, dans acces)."""
-    return {"en_attente": [{"nom": d.get("nom"), "appareil": d.get("appareil"), "demandee_le": d.get("demandee_le"),
-                            "empreinte": S.empreinte_cle(d["cle_publique"])[:24]}
+    """Les demandes d'admission EN ATTENTE, tranchées ici (#1424)."""
+    def emp(cle):
+        h = S.empreinte_cle(cle)[:24]
+        return " ".join(h[i:i + 4] for i in range(0, 24, 4))
+    return {"en_attente": [{"did": d.get("did"), "nom": d.get("nom"), "appareil": d.get("appareil"),
+                            "message": d.get("message") or "", "email": d.get("email") or "",
+                            "demandee_le": d.get("demandee_le"), "empreinte": emp(d["cle_publique"])}
                            for d in _demandes() if d.get("etat") == "en_attente" and d.get("cle_publique")]}
+
+
+class Decision(BaseModel):
+    role: str = "member"
+    motif: str = Field(default="", max_length=200)
+
+
+def _acces_ou_503():
+    acc = _module_acces()
+    if acc is None:
+        raise HTTPException(503, "Module d'accès indisponible dans ce processus")
+    return acc
+
+
+@app.post("/admin/demandes/{did}/accepter")
+async def accepte(did: str, dcn: Decision, request: Request, ctx=Depends(exige_admin)):
+    """Admettre = 1) ouvrir la porte (acces : l'appareil pourra signer son
+    défi), 2) donner une place dans SBX OS (le rôle choisi, ici)."""
+    try:
+        roles = S.roles_effectifs([dcn.role])
+    except S.Refus as e:
+        raise HTTPException(400, str(e))
+    acc = _acces_ou_503()
+    request.state.user = _acteur(ctx)
+    out = await acc.accepter(acc.Verdict(did=did), request)
+    _rafraichit()
+    cle = next((d.get("cle_publique") for d in _demandes() if d.get("did") == did), None)
+    dev = store.appareil_par_did(db(), S.did_appareil(cle)) if cle else None
+    pseudo = None
+    if dev and dev["user_uuid"]:
+        db().execute("DELETE FROM sbx_user_roles WHERE user_uuid=?", (dev["user_uuid"],))
+        for x in roles:
+            db().execute("INSERT INTO sbx_user_roles VALUES (?,?,?,?)", (dev["user_uuid"], x, _acteur(ctx), int(time.time())))
+        pseudo = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (dev["user_uuid"],)).fetchone()[0]
+    store.journal(db(), _acteur(ctx), "invite.validated", f"{pseudo or did} · {', '.join(roles)}")
+    return {"ok": True, "pseudo": pseudo, "roles": roles, "lien": out.get("lien", "")}
+
+
+@app.post("/admin/demandes/{did}/refuser")
+async def refuse(did: str, dcn: Decision, request: Request, ctx=Depends(exige_admin)):
+    acc = _acces_ou_503()
+    request.state.user = _acteur(ctx)
+    await acc.refuser(acc.Verdict(did=did, motif=dcn.motif), request)
+    nom = next((d.get("nom") for d in _demandes() if d.get("did") == did), did)
+    store.journal(db(), _acteur(ctx), "invite.refused", f"{nom}" + (f" · {dcn.motif}" if dcn.motif else ""))
+    return {"ok": True}
 
 
 # ── Maillage ───────────────────────────────────────────────────────────────

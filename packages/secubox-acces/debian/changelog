@@ -1,3 +1,10 @@
+secubox-acces (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Paquet transitionnel (ref #1424) : tout son contenu est passé dans
+    secubox-sbxid (SBX Identity Manager), aux mêmes chemins.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:03:11 +0200
+
 secubox-acces (1.6.4-1~bookworm1) bookworm; urgency=medium
 
   * Maquette interactive de l'Identity Manager SBX OS (ref #1405), servie à

@@ -38,6 +38,7 @@
 hors-arbre:
   - secubox-mail-lxc          # transitionnel → secubox-mail
   - secubox-webmail           # transitionnel → secubox-mail
+  - secubox-acces             # transitionnel → secubox-sbxid (#1424)
   - secubox-soc-gateway       # décommissionné (console de flotte jamais déployée)
   - secubox-hub               # remplacé par portal (Replaces << 1.9.6)
   - secubox-full              # anciens métapaquets d'image, conservés tels quels
@@ -218,9 +219,8 @@ requiert:
   - secubox-sbxui
   - secubox-sbxos
   - secubox-portal
-  - secubox-acces
-recommande:
   - secubox-sbxid
+recommande:
   - secubox-surf
   - secubox-devwatch
 suggere:

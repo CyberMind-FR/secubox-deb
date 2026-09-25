@@ -12,17 +12,34 @@ case "$1" in
     # Données : sbx.db (personnes, appareils, rôles, certificats, journal).
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/sbxid
 
+    # ── ACCÈS, ABSORBÉ (#1424) : ce que faisait le postinst de secubox-acces ──
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/acces
+    if systemctl list-unit-files secubox-acces.service >/dev/null 2>&1; then
+      systemctl disable --now secubox-acces.service >/dev/null 2>&1 || true
+      rm -f /lib/systemd/system/secubox-acces.service
+      systemctl daemon-reload || true
+    fi
+    if [ -f /etc/secubox/nginx-available/acces.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+      rm -f /etc/nginx/sites-enabled/acces.conf
+      if nginx -t >/dev/null 2>&1; then BASE_SAINE=1; else BASE_SAINE=0; fi
+      cp -f /etc/secubox/nginx-available/acces.conf /etc/nginx/sites-enabled/acces.conf
+      if [ "$BASE_SAINE" = 1 ] && ! nginx -t >/dev/null 2>&1; then
+        rm -f /etc/nginx/sites-enabled/acces.conf
+        echo "secubox-sbxid: vhost acces refusé par nginx -t, non activé" >&2
+      fi
+    fi
+
     # Déclaration dans l'agrégateur (qui sert /api/v1/sbxid).
     python3 - <<'TOML' || echo "secubox-sbxid: déclaration dans aggregator.toml impossible" >&2
 import pathlib, re
 f = pathlib.Path("/etc/secubox/aggregator.toml")
 if f.exists():
     s = f.read_text()
-    if '"sbxid"' not in s:
-        s2 = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "sbxid",', s, count=1)
-        if s2 != s:
-            f.write_text(s2)
-            print("secubox-sbxid: déclaré dans aggregator.toml")
+    for mod in ("acces", "sbxid"):
+        if f'"{mod}"' not in s:
+            s = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "' + mod + '",', s, count=1)
+            print("secubox-sbxid: " + mod + " déclaré dans aggregator.toml")
+    f.write_text(s)
 TOML
 
     # identity.gk2 → le Hall : vhost, HAProxy, route WAF (idempotent).

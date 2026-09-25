@@ -1,3 +1,15 @@
+secubox-sbxid (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorbe secubox-acces (ref #1424) : admission des appareils, défi signé,
+    ouverture de session, lien d'entrée, porte d'accès — code déplacé dans
+    ce paquet, MÊMES chemins (/api/v1/acces/*, /i/acces/, /acces/,
+    acces.gk2) : aucune rupture pour les appareils ni le Hall.
+    Replaces/Breaks secubox-acces (<< 1.7.0~), désormais transitionnel.
+  * L'Identity Manager tranche les demandes d'admission : accepter en
+    choisissant le rôle SBX OS, refuser — la personne apparaît aussitôt.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:03:11 +0200
+
 secubox-sbxid (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * SBX Identity Manager, première version (ref #1422, AUTH v3). Module
