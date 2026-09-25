@@ -51,6 +51,15 @@
     .as-row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center}
     .as-msg{font-size:12px;margin-right:auto;color:var(--text-muted,#6b6b7a)}
     .as-deps{color:var(--text-muted,#6b6b7a);font-size:12px;margin:6px 0}
+    /* Objets fédérés (#1391) */
+    .fed-filtres{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+    .fed-chip{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;cursor:pointer;
+      border:1px solid var(--line,#2a2a3a);background:transparent;color:var(--text-muted,#6b6b7a)}
+    .fed-chip span{opacity:.7;font-family:'JetBrains Mono',monospace}
+    .fed-chip.on{border-color:var(--cyber-cyan,#00d4ff);color:var(--cyber-cyan,#00d4ff)}
+    .fed-meta{font-size:11px;color:var(--text-muted,#6b6b7a);margin:4px 0}
+    .fed-retri{font-size:11px;color:var(--gold-hermetic,#c9a84c);margin:0 0 4px}
+    .fed-retri a{color:var(--cyber-cyan,#00d4ff)}
   </style>
 </head>
 <body class="crt-light hybrid-dark">
@@ -94,6 +103,19 @@
       <span class="as-stat" id="stat">loading…</span>
     </div>
     <div class="as-grid" id="grid"></div>
+
+    <!-- OBJETS FÉDÉRÉS (#1391). L'App Store ne distribue plus seulement des
+         modules : des objets SBX signés — métablogs d'abord. Chaque carte dit
+         qui l'a publié, sous quelle licence, sur quel canal, et si la
+         fédération a certifié l'éditeur. -->
+    <section id="fed-panel" style="margin-top:24px">
+      <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">
+        🌐 Objets fédérés <span id="fed-stat" style="font-size:12px;color:var(--text-muted,#6b6b7a);font-family:'JetBrains Mono',monospace">—</span></h2>
+      <p style="font-size:11px;color:var(--text-muted,#6b6b7a);margin:3px 0 8px;font-family:'JetBrains Mono',monospace">
+        Paquets .sbx signés par leur éditeur, vérifiés à l'installation (signature, intégrité, certificat SBX). Un site installé arrive non publié.</p>
+      <div class="fed-filtres" id="fed-filtres" role="group" aria-label="Type d'objet"></div>
+      <div class="as-grid" id="fed-grid"></div>
+    </section>
 
     <section id="mesh-panel" style="margin-top:24px">
       <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">
@@ -271,7 +293,64 @@
       document.getElementById('m-msg').textContent=r.ok?'saved ✓ (restart the service to apply)':('save failed: '+((r.j&&r.j.detail)||'error'));
     }
     document.getElementById('over').addEventListener('click',e=>{if(e.target.id==='over')closeModal();});
+    // ── OBJETS FÉDÉRÉS (#1391) ────────────────────────────────────────────
+    const FED='/api/appstore';
+    const FED_TYPES=[['','Tout'],['app','Applications'],['site','Sites'],['metablog','Métablogs'],
+      ['waf','WAF'],['dataset','Données'],['archive','Archives'],['config','Configurations']];
+    const FED_ICO={app:'🧩',site:'🌐',metablog:'📰',waf:'🛡️',dataset:'🗂️',archive:'📦',config:'⚙️',template:'🧱'};
+    let FED_ALL=[], FED_TYPE='metablog';
+    function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+    async function loadFed(){
+      let d=null;
+      try{const r=await fetch(FED+'/catalog',{credentials:'same-origin'});if(r.ok)d=await r.json();}catch(e){}
+      FED_ALL=(d&&Array.isArray(d.objets))?d.objets:[];
+      const st=document.getElementById('fed-stat');
+      st.textContent=d?(FED_ALL.length+' objet(s) · canaux ouverts : '+((d.canaux_ouverts||[]).join(', ')||'aucun')):'fédération indisponible';
+      renderFed();
+    }
+    function renderFed(){
+      const f=document.getElementById('fed-filtres');
+      f.innerHTML=FED_TYPES.map(([k,l])=>{
+        const n=k?FED_ALL.filter(o=>o.type===k).length:FED_ALL.length;
+        return '<button type="button" class="fed-chip'+(FED_TYPE===k?' on':'')+'" data-t="'+k+'">'+esc(l)+' <span>'+n+'</span></button>';
+      }).join('');
+      const items=FED_ALL.filter(o=>!FED_TYPE||o.type===FED_TYPE);
+      const g=document.getElementById('fed-grid');
+      if(!items.length){g.innerHTML='<div style="color:var(--text-muted,#6b6b7a);padding:18px">Aucun objet de ce type dans le catalogue.</div>';return;}
+      g.innerHTML=items.map(o=>{
+        const sig=o.certifie?'<span class="pill s-running" title="Éditeur certifié par la CA de la fédération">✓ signé · certifié</span>'
+                           :'<span class="pill s-unpublished" title="'+esc(o.motif||'')+'">⚠ éditeur non certifié</span>';
+        const lock=o.verrouille?'<span class="pill tier" title="Canal non ouvert par le certificat de cette box">🔒 '+esc(o.channel)+'</span>'
+                              :'<span class="pill">'+esc(o.channel)+'</span>';
+        const btn=(o.certifie&&!o.verrouille)?'<button class="as-btn" data-install="'+esc(o.id)+'" data-name="'+esc(o.name)+'">Installer</button>'
+                                            :'<button class="as-btn" disabled title="'+esc(o.verrouille?'canal non ouvert':(o.motif||''))+'">Installer</button>';
+        const retri=(o.wallet||o.support_url)?'<div class="fed-retri">💠 '+esc(o.wallet||'')+(o.support_url?' · <a href="'+esc(o.support_url)+'" target="_blank" rel="noopener">soutenir</a>':'')+'</div>':'';
+        return '<div class="as-card">'
+          +'<div class="as-top"><span class="as-ico">'+(FED_ICO[o.type]||'🧩')+'</span><span class="as-name">'+esc(o.name)+'</span></div>'
+          +'<div class="as-desc">'+esc(o.description||'')+'</div>'
+          +'<div class="fed-meta">✍️ '+esc(o.author)+' · ⚖️ '+esc(o.license)+' · v'+esc(o.version)+'</div>'
+          +retri
+          +'<div class="as-badges"><span class="pill cat">'+esc(o.type)+'</span>'+lock+sig+'</div>'
+          +'<div class="as-actions">'+btn+'</div></div>';
+      }).join('');
+    }
+    document.getElementById('fed-filtres').addEventListener('click',e=>{
+      const b=e.target.closest('[data-t]'); if(!b)return; FED_TYPE=b.dataset.t; renderFed();});
+    document.getElementById('fed-grid').addEventListener('click',async e=>{
+      const b=e.target.closest('[data-install]'); if(!b)return;
+      const nom=prompt('Nom du site à créer (il ne doit pas exister) :', b.dataset.name+'-copie');
+      if(!nom)return;
+      b.disabled=true;
+      const h={'Content-Type':'application/json'}; const t=jeton(); if(t)h.Authorization='Bearer '+t;
+      let r,j={};
+      try{r=await fetch(FED+'/install',{method:'POST',credentials:'same-origin',headers:h,
+        body:JSON.stringify({id:b.dataset.install,nom:nom.trim()})});j=await r.json().catch(()=>({}));}catch(err){j={erreur:String(err)};}
+      b.disabled=false;
+      alert(r&&r.ok?('✅ Installé : '+j.nom+'\n'+(j.suite||'')):('❌ '+(j.erreur||'échec')));
+    });
+
     document.addEventListener('DOMContentLoaded',load);
+    document.addEventListener('DOMContentLoaded',loadFed);
   </script>
   <script src="/shared/crt-engine.js"></script>
 </body>

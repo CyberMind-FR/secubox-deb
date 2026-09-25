@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-federation
 Architecture: any
-Depends: ${misc:Depends}, secubox-core
+Depends: ${misc:Depends}, secubox-core, git
 Description: SecuBox — fédération SBX (GK2) : certificats et adhésion
  Phase 1 de la fédération SBX v2 : autorité de certification GK2, certificat
  SBX v2 signé Ed25519 (sujet = identité annuaire de la box, canonicalisation

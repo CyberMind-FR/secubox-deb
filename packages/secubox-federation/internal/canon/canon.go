@@ -20,6 +20,7 @@
 package canon
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -103,6 +104,13 @@ func enc(b *strings.Builder, v any) error {
 			m[k] = e
 		}
 		return enc(b, m)
+	case json.Number:
+		// Un nombre relu d'un JSON : seul l'entier est admis (voir flottants).
+		n, err := x.Int64()
+		if err != nil {
+			return fmt.Errorf("canon : nombre non entier refusé (%s)", x)
+		}
+		b.WriteString(strconv.FormatInt(n, 10))
 	case float32, float64:
 		return fmt.Errorf("canon : flottant refusé (%v) — représentation différente en Go et en Python", x)
 	default:
