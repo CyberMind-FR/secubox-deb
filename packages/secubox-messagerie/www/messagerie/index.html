@@ -7,8 +7,10 @@
 
   Servie PAR LE HALL (même origine : la session SBX OS signe les messages).
   Carte du Hall = cette page ; /mega = la même, agrandie (?mega=1).
-    MUR     — public, centralisé : messages de la box + chat de la radio.
-    PRIVÉS  — ce qu'on m'a écrit et ce que j'ai écrit à une personne.
+    MUR     — public, centralisé : messages de la box, chat de la radio,
+              commentaires des Billets (y répondre publie À LA SOURCE).
+    PRIVÉS  — ce qu'on m'a écrit et ce que j'ai écrit à une personne, y compris
+              les messages privés repris du BBS (#1448).
   Sans identité SBX OS : un pseudo de visiteur, publié d'emblée.
   Tout texte venu d'un message est posé en textContent, jamais en HTML.
 -->
@@ -46,6 +48,9 @@
   .msg.moi{background:var(--moi)}
   .msg.prive{border-left:3px solid var(--prive)}
   .msg.radio{border-left:3px solid var(--radio)}
+  .msg.billets{border-left:3px solid var(--gold)}
+  .msg .t a{color:var(--muted);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .msg .t a:hover,.msg .t a:focus-visible{color:var(--cyan);text-decoration:underline}
   .msg .t{display:flex;align-items:baseline;gap:6px;font-size:.68rem;color:var(--faint)}
   .msg .t .p{font-weight:700;color:var(--texte);font-size:.74rem}
   .msg .t .v{font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:5px;padding:0 4px}
@@ -138,27 +143,33 @@ function peint(liste){
     return;
   }
   for (const m of liste){
-    const b = el('article', 'msg' + (m.de_moi ? ' moi' : '') + (m.prive ? ' prive' : '') + (m.source === 'radio' ? ' radio' : ''));
+    const b = el('article', 'msg' + (m.de_moi ? ' moi' : '') + (m.prive ? ' prive' : '') + (m.source === 'radio' ? ' radio' : '') + (m.source === 'billets' ? ' billets' : ''));
     const t = el('div', 't');
     t.append(el('span', 'p', m.pseudo));
     if (m.source === 'radio') t.append(el('span', 'v', '📻 radio'));
+    else if (m.source === 'billets'){
+      t.append(el('span', 'v', '🎟️ billets'));
+      const a = el('a', null, 'sur « ' + m.sujet + ' »');
+      a.href = 'https://' + location.hostname.replace(/^hall\./, 'billets.') + '/b/' + encodeURIComponent(m.billet) + '#comments';
+      a.target = '_blank'; a.rel = 'noopener'; t.append(a);
+    }
+    else if (m.source === 'bbs') t.append(el('span', 'v', 'BBS'));
     else if (m.auteur_type === 'visiteur') t.append(el('span', 'v', 'visiteur'));
     if (m.prive) t.append(el('span', null, '→ ' + (m.de_moi ? (m.dest_pseudo || '?') : 'vous')));
     t.append(el('span', 'd', quand(m.cree_le)));
     b.append(t);
     if (m.parent && index[m.parent]) b.append(el('div', 'cit', '↳ ' + index[m.parent].pseudo + ' : ' + index[m.parent].corps));
-    else if (m.parent && m.parent.startsWith('radio:')) b.append(el('div', 'cit', '↳ réponse au chat de la radio'));
     b.append(el('div', 'corps' + (m.supprime ? ' sup' : ''), m.supprime ? 'message retiré' : m.corps));
     if (!m.supprime){
       const a = el('div', 'a');
       if (!m.de_moi){
         const r = el('button', null, m.prive ? 'Répondre' : 'Répondre'); r.type = 'button';
         r.onclick = () => repondre(m, m.prive ? 'prive' : 'public'); a.append(r);
-        if (!m.prive && m.source !== 'radio'){
+        if (!m.prive && m.source === 'local'){
           const rp = el('button', null, 'En privé'); rp.type = 'button'; rp.onclick = () => repondre(m, 'prive'); a.append(rp);
         }
       }
-      if (m.source !== 'radio' && (m.de_moi || moi.moderateur)){
+      if (m.source === 'local' && (m.de_moi || moi.moderateur)){
         const x = el('button', 'x', m.de_moi ? 'Retirer' : 'Modérer'); x.type = 'button'; x.onclick = () => retire(m); a.append(x);
       }
       if (a.childNodes.length) b.append(a);
@@ -199,7 +210,8 @@ function repondre(m, vis){
   reponse = m;
   $('rep-t').textContent = 'Réponse à ' + m.pseudo + ' : « ' + m.corps.slice(0, 60) + ' »';
   $('rep-v').value = vis;
-  $('rep-v').hidden = m.source === 'radio';
+  // radio et Billets sont publics : on y répond publiquement, À LA SOURCE
+  $('rep-v').hidden = m.source === 'radio' || m.source === 'billets';
   $('rep').classList.add('on'); $('l-haut').querySelector('#dest').hidden = true;
   $('corps').focus();
 }
@@ -209,7 +221,7 @@ async function envoie(ev){
   const corps = $('corps').value.trim(); if (!corps) return;
   const b = {corps};
   if (!$('pseudo').hidden){ b.pseudo = $('pseudo').value.trim(); memo.set('sbx.messagerie.pseudo', b.pseudo); }
-  if (reponse){ b.parent = reponse.id; if (reponse.source !== 'radio') b.public = $('rep-v').value === 'public'; }
+  if (reponse){ b.parent = reponse.id; if ($('rep-v').hidden === false) b.public = $('rep-v').value === 'public'; }
   else if ($('dest').value) b.destinataire = $('dest').value;
   $('envoi').disabled = true;
   try {
@@ -218,7 +230,8 @@ async function envoie(ev){
     const d = await r.json().catch(() => ({}));
     if (!r.ok){ etat(typeof d.detail === 'string' ? d.detail : 'Message non envoyé (' + r.status + ')', true); return; }
     $('corps').value = ''; finReponse();
-    etat(d.prive ? 'Message privé envoyé.' : 'Publié sur le mur.');
+    etat(d.source === 'radio' ? 'Publié dans le chat de la radio.' : d.source === 'billets' ? 'Publié en commentaire du billet.'
+      : d.prive ? 'Message privé envoyé.' : 'Publié sur le mur.');
     if (d.prive !== (vue === 'prives')) onglet(d.prive ? 'prives' : 'mur'); else { dernier = ''; charge(); }
     $('fil').scrollTop = $('fil').scrollHeight;
   } finally { $('envoi').disabled = false; }
