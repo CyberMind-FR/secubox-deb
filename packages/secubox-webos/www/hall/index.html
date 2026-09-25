@@ -1424,8 +1424,7 @@ const FEATURED = [
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214, admin:"/droplet/"},
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222, admin:false},
-  {id:"signal",     label:"Signal",    icon:"🔐", color:"#3a76f0", url:"signal.gk2.secubox.in", micro:"/micro", h:196},
-  {id:"signal-pont",label:"Signal +",  icon:"🔐", color:"#3a76f0", url:"signal.gk2.secubox.in", carte:"/cardlets/signal.html", h:250, auth:true, admin:"/signal/"},
+  // « Signal » et « Signal + » : NON PUBLIÉES (#1444) — voir cardlets-unreleased/.
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mail", h:182},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:174},
@@ -1482,7 +1481,7 @@ const FEATURED = [
 // atteignable par SYSTEME, ou tout le parc est liste.
 const EMBEDDABLE = new Set(["metanews","socialrelay","bbs","radio","billets","depot",
                             "peertube","nextcloud","photoprism","mastodon","mail",
-                            "ytsas","torrent","signal"]);
+                            "ytsas","torrent"]);
 // ORDRE PAR DEFAUT — LES PLUS ABOUTIES D'ABORD (#1266).
 // Trois degres, et l'ordre les respecte : un service qui SERT sa carte a plus
 // a montrer qu'un apercu de sa page, qui en a lui-meme plus qu'un portrait
