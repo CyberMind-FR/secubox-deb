@@ -919,6 +919,12 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     # L'etat du profil AVANT verify-profile : si quelque chose manque encore,
     # le journal dit a quel stade (absent, deballe, configure) — #1403.
     log "Profil ${SECUBOX_PROFILE} apres slipstream : $(chroot "${ROOTFS}" dpkg-query -W -f='${db:Status-Abbrev} ${Version}' "${SECUBOX_PROFILE}" 2>/dev/null || echo absent)"
+    # Absent : apt-get install -f l'a retiré faute d'une dépendance. La nommer (#1428).
+    if ! chroot "${ROOTFS}" dpkg-query -W -f='${db:Status-Abbrev}' "${SECUBOX_PROFILE}" 2>/dev/null | grep -q '^ii'; then
+      warn "${SECUBOX_PROFILE} retiré ou non configuré — dépendances en cause :"
+      chroot "${ROOTFS}" apt-get install -s "${SECUBOX_PROFILE}" 2>&1 \
+        | grep -E "Depends:|not installable|has no installation candidate" | head -8 | sed 's/^/        /' || true
+    fi
 
     # Count installed
     INSTALLED_COUNT=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | wc -l)
