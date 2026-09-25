@@ -162,7 +162,7 @@ function rendConnexions(c){
   const svc = (c.services||[]).map(x => `<span class="chip cap">${esc(x)}</span>`).join('');
   return `<h2>Connexions liées</h2><div class="card">
     <dl><dt>session ouverte sous</dt><dd>${esc(c.session_compte)}${c.compte_systeme ? ' <span class="chip warn">compte système</span>' : ''}</dd>
-    <dt>depuis</dt><dd>${esc(c.appareil_courant || 'un appareil non identifié')}</dd></dl>
+    <dt>depuis</dt><dd>${esc(c.appareil_courant || (ETAT.par_compte ? 'mot de passe — sans appareil' : 'un appareil non identifié'))}</dd></dl>
     <h2>Appareils → compte</h2><ul style="margin:0;padding-left:18px;font-size:14px">${ratt || '<li>aucun</li>'}</ul>
     <h2>Applications</h2><div class="chips">${liens || '<span style="color:var(--muted)">aucun lien</span>'}</div>
     <h2>Services délégués par le Hall</h2><div class="chips">${svc || '<span style="color:var(--muted)">aucun</span>'}</div>
