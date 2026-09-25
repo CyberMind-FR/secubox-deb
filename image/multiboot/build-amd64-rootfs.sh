@@ -235,13 +235,15 @@ setup_users() {
     # Set root password
     echo "root:secubox" | chroot "$OUTPUT_DIR" chpasswd
 
-    # Create secubox user
-    chroot "$OUTPUT_DIR" useradd -m -s /bin/bash -G sudo secubox || true
-    echo "secubox:secubox" | chroot "$OUTPUT_DIR" chpasswd
-
-    # Allow sudo without password for secubox
-    echo "secubox ALL=(ALL) NOPASSWD:ALL" > "$OUTPUT_DIR/etc/sudoers.d/secubox"
-    chmod 440 "$OUTPUT_DIR/etc/sudoers.d/secubox"
+    # L'UTILISATEUR DE CONSOLE N'EST PAS `secubox` (#1432). `secubox` est le compte
+    # de SERVICE sous lequel tournent tous les modules : lui donner un shell, le
+    # groupe sudo et NOPASSWD: ALL faisait de toute compromission d'un module un
+    # accès root, et rendait vides de sens les règles sudoers étroites des
+    # paquets. La console a son propre compte, et sudo y demande le mot de passe.
+    chroot "$OUTPUT_DIR" useradd -m -s /bin/bash -G sudo sbxadmin || true
+    echo "sbxadmin:secubox" | chroot "$OUTPUT_DIR" chpasswd
+    chroot "$OUTPUT_DIR" passwd -e sbxadmin >/dev/null 2>&1 || true
+    rm -f "$OUTPUT_DIR/etc/sudoers.d/secubox"
 }
 
 setup_boot() {
