@@ -1422,8 +1422,14 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   # Install all packages (force overwrite for duplicate files)
   log "Installing all packages..."
   # Use bash -c to ensure glob expansion happens inside chroot
-  chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb 2>&1' | \
-    grep -v "^dpkg: warning" | grep -v "^Selecting\|^Preparing\|^Unpacking\|^Setting up" | head -50 || true
+  # JAMAIS « dpkg … | head » : head referme le tube, dpkg casse en ecrivant et
+  # s'interrompt avant la fin de la configuration — le profil restait absent
+  # alors que le journal annoncait tout installe (#1403). Sortie dans un
+  # fichier, filtrage ENSUITE.
+  SLIP_LOG=$(mktemp)
+  chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb' >"${SLIP_LOG}" 2>&1 || true
+  grep -v "^dpkg: warning" "${SLIP_LOG}" | grep -v "^Selecting\|^Preparing\|^Unpacking\|^Setting up" | head -50 || true
+  rm -f "${SLIP_LOG}"
 
   # Configure packages (skip apt-get -f as pip provides Python deps)
   # Second pass: reconfigure any packages that failed
