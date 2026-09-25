@@ -338,12 +338,27 @@ async function comptes(b, cols){
     const etat = x.lie ? '<span class="chip ok">lié</span>' : x.existe ? '<span class="chip warn">existe, non lié</span>'
       : x.endormi ? '<span class="chip">endormi — réveillé à l\'ouverture</span>'
       : !x.disponible ? '<span class="chip bad">service arrêté</span>' : '<span class="chip">absent</span>';
-    l.innerHTML = `<b>${esc(x.libelle)}</b>${etat}`;
+    l.innerHTML = `<b>${esc(x.libelle)}</b>${etat}` + (x.lie ? ` <span style="font-family:var(--mono);font-size:12px">${esc(x.identifiant)}</span>`
+      + (x.propre ? ' <span class="chip" title="Compte relié : il garde son mot de passe, jamais réinitialisé d\'ici">mot de passe propre</span>' : '') : '');
+    if (x.lie){
+      const dl = btn('✕'); dl.title = 'Délier ' + x.identifiant; dl.setAttribute('aria-label', 'Délier ' + x.identifiant);
+      dl.onclick = async () => { try { await api(`/admin/personnes/${uid}/liens/${svc}/${encodeURIComponent(x.identifiant)}`, {method:'DELETE'}); toast('Délié'); } catch(y){ toast(y.message); } b.click(); b.click(); };
+      l.appendChild(dl);
+    }
     if (!x.lie){
       const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = svc; cb.checked = x.disponible; cb.disabled = !x.disponible;
       cb.setAttribute('aria-label', 'Ouvrir ' + x.libelle);
       const lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:4px;align-items:center;font-size:13px';
       lab.append(cb, x.existe ? 'reprendre' : 'ouvrir'); l.appendChild(lab); choix.push(cb);
+      // OU RELIER UN COMPTE EXISTANT (#1468) : vérifié, jamais créé, il garde son mot de passe
+      const ex = document.createElement('input'); ex.placeholder = 'ou relier : compte existant'; ex.size = 22;
+      ex.setAttribute('aria-label', 'Compte ' + x.libelle + ' existant à relier');
+      const rl = btn('Relier'); rl.onclick = async () => {
+        if (!ex.value.trim()) return;
+        try { const r = await api(`/admin/personnes/${uid}/lier`, {method:'POST', body:JSON.stringify({app:svc, ident:ex.value})}); toast('Relié : ' + r.ident); b.click(); b.click(); }
+        catch(y){ toast(y.message); }
+      };
+      l.append(ex, rl);
     }
     td.appendChild(l);
   }

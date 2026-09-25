@@ -362,3 +362,34 @@ def test_routes_admin_en_parallele_1462(banc):
         res = list(ex.map(lambda f: f(), [lambda: main.personnes(ctx), lambda: main.appareils(ctx),
                                           lambda: main.demandes(ctx), lambda: main.exige_admin(_req("tok-g"))] * 3))
     assert all(r for r in res)
+
+
+def test_relier_un_compte_existant_1468(banc, monkeypatch):
+    """gandalf relie ses comptes d'avant (gk2@, admin Nextcloud) : vérifiés,
+    jamais créés, et leur mot de passe n'est JAMAIS réinitialisé d'ici."""
+    appels, cpt = _faux_helper(monkeypatch, existants=[("email", "gk2"), ("nextcloud", "admin"), ("peertube", "gk2")])
+    ctx = main.exige_admin(_req("tok-g"))
+    c = main.db()
+    g = c.execute("SELECT user_uuid FROM sbx_users WHERE pseudo='gandalf'").fetchone()[0]
+    assert main.lie_existant(g, main.LienExistant(app="email", ident="gk2"), ctx)["ident"] == "gk2@secubox.in"
+    main.lie_existant(g, main.LienExistant(app="nextcloud", ident="admin"), ctx)
+    with pytest.raises(HTTPException) as e:                       # absent du service
+        main.lie_existant(g, main.LienExistant(app="peertube", ident="personne"), ctx)
+    assert e.value.status_code == 404
+    et = CPT.etat(c, g)["services"]
+    assert et["email"]["lie"] and et["email"]["propre"] and et["email"]["identifiant"] == "gk2@secubox.in"
+    # le mot de passe commun ne touche pas un compte relié
+    with pytest.raises(CPT.Refus) as r:
+        CPT.reinitialise(c, g)
+    assert r.value.code == 409
+    r = CPT.cree(c, g, ["peertube"])                              # PeerTube ouvert d'ici : mot de passe commun
+    assert cpt[("email", "gk2")] == "ancien" and cpt[("nextcloud", "admin")] == "ancien"
+    assert all(not (a["action"] == "reinitialiser" and a["user"] in ("gk2", "admin")) for a in appels)
+    # un nom système ne se relie qu'à l'exploitant
+    alice = c.execute("SELECT user_uuid FROM sbx_users WHERE pseudo='alice'").fetchone()[0]
+    with pytest.raises(HTTPException) as e:
+        main.lie_existant(alice, main.LienExistant(app="peertube", ident="gk2"), ctx)
+    assert e.value.status_code == 409
+    # délier rend le service au mot de passe commun
+    main.delie(g, "nextcloud", "admin", ctx)
+    assert "nextcloud" not in CPT.propres(c, g)

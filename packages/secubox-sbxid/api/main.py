@@ -507,6 +507,22 @@ def lie_bbs(user_uuid: str, v: LienBbs, ctx=Depends(exige_admin)):
     return {"ok": True, "handle": h}
 
 
+class LienExistant(BaseModel):
+    app: str = Field(min_length=2, max_length=20)
+    ident: str = Field(min_length=2, max_length=120)
+
+
+@app.post("/admin/personnes/{user_uuid}/lier")
+def lie_existant(user_uuid: str, v: LienExistant, ctx=Depends(exige_admin)):
+    """Relier un compte de service EXISTANT (#1468) — vérifié, jamais créé ; il
+    garde son mot de passe."""
+    if v.app == "bbs":
+        return lie_bbs(user_uuid, LienBbs(handle=v.ident), ctx)
+    ident = _comptes(comptes.lie_existant, user_uuid, v.app, v.ident)
+    store.journal(db(), _acteur(ctx), "link." + v.app, f"{user_uuid[:8]} ↔ {ident} (mot de passe propre)")
+    return {"ok": True, "app": v.app, "ident": ident}
+
+
 @app.delete("/admin/personnes/{user_uuid}/liens/{app}/{ident}")
 def delie(user_uuid: str, app: str, ident: str, ctx=Depends(exige_admin)):
     _comptes(comptes.delie, user_uuid, app, ident)

@@ -1,3 +1,12 @@
+secubox-sbxid (0.3.6-1~bookworm1) bookworm; urgency=medium
+
+  * Relier un compte de service EXISTANT à une personne (ref #1468) :
+    vérifié dans le service, jamais créé, il garde SON mot de passe (exclu du
+    mot de passe commun et des réinitialisations) ; un nom système ne se
+    relie qu'à l'exploitant. Le panneau sonde le compte relié.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 18:23:19 +0200
+
 secubox-sbxid (0.3.5-1~bookworm1) bookworm; urgency=medium
 
   * Entrée de menu admin « Identité SBX OS » (/sbxid/ → Hall /identite/#admin,
