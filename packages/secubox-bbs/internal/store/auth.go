@@ -452,6 +452,31 @@ func (s *Store) UserInfo(id int64) (UserInfo, error) {
 	return u, err
 }
 
+// NewSessionSbx : une session ouverte par le Hall, qui DÉRIVE d'une session
+// SecuBox et ne doit pas lui survivre (#1440).
+func (s *Store) NewSessionSbx(userID int64, ip, ua string) (string, error) {
+	jeton, err := s.NewSession(userID, ip, ua)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256([]byte(jeton))
+	if _, err := s.db.Exec(`UPDATE sessions SET origine = 'sbx' WHERE token_sha256 = ?`, sum[:]); err != nil {
+		return "", err
+	}
+	return jeton, nil
+}
+
+// SessionOrigine rend « sbx » pour une session ouverte par le Hall, « local »
+// sinon (ou si la session est inconnue).
+func (s *Store) SessionOrigine(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	var o string
+	if err := s.db.QueryRow(`SELECT origine FROM sessions WHERE token_sha256 = ?`, sum[:]).Scan(&o); err != nil {
+		return "local"
+	}
+	return o
+}
+
 // CloseSession revoque une session precise (deconnexion).
 func (s *Store) CloseSession(token string) error {
 	sum := sha256.Sum256([]byte(token))

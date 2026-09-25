@@ -1,3 +1,14 @@
+secubox-bbs (0.34.2-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (closes #1440, audit #1405 P1) : une session BBS ouverte par le
+    Hall (/sbx/entrer, /sbx/auto) vivait 30 jours quoi qu'il advienne côté
+    SecuBox. Elle porte désormais son origine (migration 0026) et exige une
+    session SecuBox vivante du MÊME compte (cache 30 s) ; sinon elle est
+    fermée. Sessions locales inchangées ; sessions déjà ouvertes : non
+    marquées, elles expirent normalement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:46:09 +0200
+
 secubox-bbs (0.34.1-1~bookworm1) bookworm; urgency=medium
 
   * Construit aussi pour amd64 (ref #1383) : Architecture: any, GOARCH tiré de
