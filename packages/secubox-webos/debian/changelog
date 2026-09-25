@@ -1,3 +1,16 @@
+secubox-webos (1.0.337-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la console admin (⚙) d'une carte ne se déduit plus de son
+    identifiant (ref #1386). « mood » ouvrait admin…/mood/ — « Module Not
+    Found » — au lieu de /gabriel-mood/. Mesuré sur gk2 : 14 cartes touchées.
+    Chaque carte déclare admin:"/chemin/" (mood, forums→/bbs/, cloud et
+    cloud+→/nextcloud/, dépôt et contenu→/droplet/, renseignement→/actor/,
+    signal+→/signal/, social→/mastodon/, sécurité→/waf/) ou admin:false
+    (freeboxtv, surfviewer, metanews, socialrelay : pas de console — ⚙
+    masqué, le mode admin retombe sur le service).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 07:36:55 +0200
+
 secubox-webos (1.0.336-1~bookworm1) bookworm; urgency=medium
 
   * LE VERDICT LAN ATTEINT ENFIN LES MODULES (ref #1351). Le Hall expose ses
@@ -1398,4 +1411,3 @@ secubox-webos (1.0.238-1~bookworm1) bookworm; urgency=medium
     ALSA abandonné. Le 🎧 « écouter ici » joue le vrai flux du lecteur web.
 
  -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 11:36:15 +0200
-

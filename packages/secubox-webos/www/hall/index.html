@@ -1354,15 +1354,15 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 // Cloud=nc, Mail=webmail, Outils=kbin. Chaque carte s'affiche même si le module
 // n'est pas (encore) dans le registre.
 const FEATURED = [
-  {id:"securite",   label:"Sécurité",   icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=securite", h:238, auth:true},
+  {id:"securite",   label:"Sécurité",   icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=securite", h:238, auth:true, admin:"/waf/"},
   // #1240 : Actor Intelligence (TPI inverse) — acteurs corrélés au-delà de l'IP,
   // campagnes, ThreatVector. Lit l'API read-only de sbx-actord (shadow). auth:true
   // (donnée de sécurité réservée à la session, comme la carte Sécurité).
-  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"actor.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true},
-  {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214},
-  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true},
-  {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264},
-  {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264},
+  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"actor.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true, admin:"/actor/"},
+  {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214, admin:"/droplet/"},
+  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true, admin:"/nextcloud/"},
+  {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264, admin:"/mastodon/"},
+  {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264, admin:"/bbs/"},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", micro:"/micro", h:222},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro", h:330},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in", carte:"/cardlets/peertube.html", h:300},
@@ -1386,15 +1386,15 @@ const FEATURED = [
   // quota, activité, partages ET actions (partager/supprimer/envoyer), au nom de
   // la personne via le broker (le secret ne quitte jamais la box). auth:true —
   // n'a de sens qu'une fois la session ouverte.
-  {id:"nextcloud-super", label:"Cloud +", icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/nextcloud-super.html", h:340, auth:true},
+  {id:"nextcloud-super", label:"Cloud +", icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/nextcloud-super.html", h:340, auth:true, admin:"/nextcloud/"},
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=photoprism", h:182},
-  {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in", micro:"/micro", h:300},
+  {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in", micro:"/micro", h:300, admin:false},
   {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:236},
   // Freebox TV (#1238) : grille des chaînes + lecteur HLS (sas ffmpeg RTSP→HLS
   // on-demand, secubox-freeboxtv). Cardlet locale (pas de vhost). Visible comme
   // les autres cartes média (radio/podcaster) ; la restriction LAN (souveraineté)
   // se fait CÔTÉ SERVEUR sur le relais, pas en masquant la carte.
-  {id:"freeboxtv",  label:"Freebox TV", icon:"📺", color:"#2b6cb0", carte:"/cardlets/freeboxtv.html", h:360},
+  {id:"freeboxtv",  label:"Freebox TV", icon:"📺", color:"#2b6cb0", carte:"/cardlets/freeboxtv.html", h:360, admin:false},
   // SBX OS (#1293) : pas une cardlet mais la COQUILLE, servie par le Hall a
   // `/sbxos/`. Entree `carte` sans `url` — le meme motif que Freebox TV
   // au-dessus : pas de vhost, donc le Hall agrandit la page elle-meme plutot
@@ -1415,13 +1415,13 @@ const FEATURED = [
   // clic, dans la carte ou dans le cockpit — et les deux vues se synchronisent
   // par BroadcastChannel, de sorte qu'un seul micro est ouvert à la fois.
   {id:"mood",       label:"Mood",      icon:"🎙", color:"#1f6b7a", url:"mood.gk2.secubox.in",
-   micro:"/micro.html", h:352, micro_audio:true},
+   micro:"/micro.html", h:352, micro_audio:true, admin:"/gabriel-mood/"},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mastodon", h:182},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
-  {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214},
-  {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222},
+  {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214, admin:"/droplet/"},
+  {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222, admin:false},
   {id:"signal",     label:"Signal",    icon:"🔐", color:"#3a76f0", url:"signal.gk2.secubox.in", micro:"/micro", h:196},
-  {id:"signal-pont",label:"Signal +",  icon:"🔐", color:"#3a76f0", url:"signal.gk2.secubox.in", carte:"/cardlets/signal.html", h:250, auth:true},
+  {id:"signal-pont",label:"Signal +",  icon:"🔐", color:"#3a76f0", url:"signal.gk2.secubox.in", carte:"/cardlets/signal.html", h:250, auth:true, admin:"/signal/"},
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mail", h:182},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:174},
@@ -1453,7 +1453,7 @@ const FEATURED = [
   // Surf & Viewer (#1266b) : rappel EN SLICES des favoris (partage/répète),
   // propositions au parc (propose/cumule ×N) et liens collés. Carte servie par
   // le Hall — MÊME origine que le viewer, donc même localStorage.
-  {id:"surfviewer", label:"Surf & Viewer", icon:"🧭", color:"#3c6e8f", carte:"/cardlets/surfviewer.html", h:250},
+  {id:"surfviewer", label:"Surf & Viewer", icon:"🧭", color:"#3c6e8f", carte:"/cardlets/surfviewer.html", h:250, admin:false},
   // SURF n'est pas un service de la box : c'est un navigateur de relais. Il
   // sert sa propre carte (barre d'adresse + cadre), et s'ouvre aussi en overlay
   // depuis les sources MetaNews ou la barre de recherche (#1337).
@@ -1677,7 +1677,7 @@ function render(data,src){
     // et la chaine l'etait toujours. On ne le propose plus quand il n'y a pas
     // de vhost — la carte vivante s'ouvre dans le Hall, pas ailleurs.
     rh+=rowHTML({attrs:'data-open="'+esc(f.id)+'"', icon:f.icon, label:f.label, state:st,
-                 admin:f.id, tab:(f.url?'https://'+f.url+'/':null)});
+                 admin:(f.admin===false?null:f.id), tab:(f.url?'https://'+f.url+'/':null)});
   });
   rail.innerHTML=rh;
   // featured grid (principal)
@@ -1803,7 +1803,13 @@ function svcDesc(id){
   // l'admin en a un, lui — l'agrandir doit l'ouvrir (#1323).
   const noVhost = !!(f && f.carte && !f.url && !f.mode);
   return {id:id, label:(f&&f.label)||s.name||id, icon:(f&&f.icon)||icon(s.icon),
-          url:(f&&f.url)||host(s), path:s.path||('/'+id+'/'),
+          url:(f&&f.url)||host(s),
+          // LA CONSOLE ADMIN N'EST PAS TOUJOURS « /<id de la carte>/ » (#1386) :
+          // la carte « mood » vit sous /gabriel-mood/, « forums » sous /bbs/.
+          // Déduite de l'identifiant, elle ouvrait « Module Not Found ».
+          // `admin:"/chemin/"` la nomme ; `admin:false` dit qu'il n'y en a pas.
+          path:(f&&typeof f.admin==='string')?f.admin:(s.path||('/'+id+'/')),
+          sansAdmin:!!(f&&f.admin===false),
           carte:(f&&f.carte)||null, noVhost:noVhost, mode:(f&&f.mode)||null};
 }
 function modeURL(mode){
@@ -1851,6 +1857,8 @@ function frameFor(mode){
 // ⧉ ne change pas la vue du Hall : il SORT le service en onglet réel.
 function setMode(mode){
   if(mode==='tab'){ window.open(plainURL(),'_blank','noopener'); return; }
+  // Sans console admin, ⚙ n'a rien à ouvrir : on reste sur le service.
+  if(mode==='admin' && _svc && _svc.sansAdmin) mode='embed';
   _mode=mode;
   const f=frameFor(mode), box=document.getElementById('eb-frames');
   [].forEach.call(box.children, c=>{ c.style.display = (c===f)?'block':'none'; });
@@ -1858,6 +1866,7 @@ function setMode(mode){
   // rien. Ne restent que les sorties — ⧉ onglet réel, et l'autre vue. (#1187)
   document.querySelectorAll('#modesw button').forEach(b=>{
     const courant = b.dataset.mode===mode;
+    if(b.dataset.mode==='admin') b.hidden = !!(_svc && _svc.sansAdmin);
     b.classList.toggle('on', courant);
     b.classList.toggle('self', courant);
   });
