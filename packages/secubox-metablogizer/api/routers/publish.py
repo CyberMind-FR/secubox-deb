@@ -15,6 +15,10 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from secubox_core.auth import require_jwt
+# ÉCRIRE EXIGE metablog.publish (#1438) — toute session publiait, exposait, supprimait.
+from secubox_core.capacites import require_capability as _require_capability
+_ECRIRE = _require_capability("metablog.publish")
+
 from secubox_core.config import get_config
 
 from publish.content import extract_archive, ContentError
@@ -245,7 +249,7 @@ async def publish_wizard(
     domain: str = Form(None),
     file: UploadFile = File(...),
     flux: int = 0,
-    user=Depends(require_jwt),
+    user=Depends(_ECRIRE),
 ):
     domain = domain or f"{name}{DEFAULT_DOMAIN_SUFFIX}"
     data = await file.read()
@@ -355,7 +359,7 @@ async def _cert_step(domain: str) -> dict:
 
 
 @router.post("/publish/route")
-async def publish_route(req: RouteRequest, user=Depends(require_jwt)):
+async def publish_route(req: RouteRequest, user=Depends(_ECRIRE)):
     """Route an already-created site's domain through the WAF and provision its
     cert, WITHOUT a content upload. Used by the secubox-publish hub so it never
     writes /etc/nginx or /etc/haproxy itself (it runs unprivileged)."""
@@ -380,7 +384,7 @@ async def publish_export(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/publish/import")
-async def publish_import(file: UploadFile = File(...), user=Depends(require_jwt)):
+async def publish_import(file: UploadFile = File(...), user=Depends(_ECRIRE)):
     data = await file.read()
     tmp = Path(tempfile.mkdtemp())
     art = tmp / "upload.sbxsite"

@@ -32,6 +32,10 @@ from ..services import feeds, media
 
 try:
     from secubox_core.auth import require_jwt
+    try:
+        from secubox_core.capacites import require_capability
+    except ImportError:          # secubox-core antérieur à #1438
+        require_capability = None
 except Exception:  # pragma: no cover - secubox_core absent in isolated tests
     require_jwt = None
 
@@ -99,6 +103,11 @@ def register_jwt_admin(app: FastAPI) -> None:
     """Register the /admin/api/* JSON surface. No-op if secubox_core is absent."""
     if require_jwt is None:
         return
+    # ÉCRIRE EXIGE UNE CAPACITÉ (#1438) : un jeton dit QUI, pas CE QU'IL PEUT.
+    # Toute session (appareil guest compris) créait, modifiait, supprimait des
+    # billets. Lire reste ouvert à une session ; écrire et modérer exigent
+    # billets.publish (l'exploitant système l'a d'office).
+    _ecrire = require_capability("billets.publish") if require_capability else require_jwt
 
     async def _enrichir(request: Request, billet_id: str, data: BilletIn) -> None:
         """MEME enrichissement que le formulaire d'administration (#1268).
@@ -167,7 +176,7 @@ def register_jwt_admin(app: FastAPI) -> None:
         return {"tags": await repo.list_tags(request.app.state.conn)}
 
     @app.post("/admin/api/billets")
-    async def api_create(request: Request, payload: BilletPayload, user=Depends(require_jwt)):
+    async def api_create(request: Request, payload: BilletPayload, user=Depends(_ecrire)):
         data = _billet_in(payload)
         conn = request.app.state.conn
         billet_id = await repo.create_billet(conn, data, now=_now())
@@ -177,7 +186,7 @@ def register_jwt_admin(app: FastAPI) -> None:
 
     @app.put("/admin/api/billets/{billet_id}")
     async def api_update(request: Request, billet_id: str, payload: BilletPayload,
-                         user=Depends(require_jwt)):
+                         user=Depends(_ecrire)):
         conn = request.app.state.conn
         if await repo.get_by_id(conn, billet_id) is None:
             raise HTTPException(404, "billet not found")
@@ -190,7 +199,7 @@ def register_jwt_admin(app: FastAPI) -> None:
         return {"success": True, **_view(await repo.get_by_id(conn, billet_id))}
 
     @app.delete("/admin/api/billets/{billet_id}")
-    async def api_delete(request: Request, billet_id: str, user=Depends(require_jwt)):
+    async def api_delete(request: Request, billet_id: str, user=Depends(_ecrire)):
         conn = request.app.state.conn
         if await repo.get_by_id(conn, billet_id) is None:
             raise HTTPException(404, "billet not found")
@@ -199,7 +208,7 @@ def register_jwt_admin(app: FastAPI) -> None:
 
     @app.post("/admin/api/billets/{billet_id}/media")
     async def api_media(request: Request, billet_id: str, file: UploadFile = File(...),
-                        user=Depends(require_jwt)):
+                        user=Depends(_ecrire)):
         conn = request.app.state.conn
         if await repo.get_by_id(conn, billet_id) is None:
             raise HTTPException(404, "billet not found")
@@ -227,13 +236,13 @@ def register_jwt_admin(app: FastAPI) -> None:
 
     @app.get("/admin/api/comments")
     async def api_comments(request: Request, status: str = "pending",
-                           user=Depends(require_jwt)):
+                           user=Depends(_ecrire)):
         rows = await repo.list_pending_comments(request.app.state.conn)
         return {"comments": [dict(r) for r in rows]}
 
     @app.post("/admin/api/comments/{comment_id}/approve")
     async def api_comment_approve(request: Request, comment_id: str,
-                                  user=Depends(require_jwt)):
+                                  user=Depends(_ecrire)):
         conn = request.app.state.conn
         if await repo.get_comment(conn, comment_id) is None:
             raise HTTPException(404, "comment not found")
@@ -242,7 +251,7 @@ def register_jwt_admin(app: FastAPI) -> None:
 
     @app.delete("/admin/api/comments/{comment_id}")
     async def api_comment_delete(request: Request, comment_id: str,
-                                 user=Depends(require_jwt)):
+                                 user=Depends(_ecrire)):
         conn = request.app.state.conn
         if await repo.get_comment(conn, comment_id) is None:
             raise HTTPException(404, "comment not found")

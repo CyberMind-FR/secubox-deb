@@ -1,3 +1,11 @@
+secubox-billets (0.8.63-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (ref #1438) : /admin/api — créer, modifier, supprimer un billet,
+    ses médias, modérer les commentaires exigent billets.publish (toute
+    session, appareil guest compris, le pouvait).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:37:22 +0200
+
 secubox-billets (0.8.62-1~bookworm1) bookworm; urgency=medium
 
   * LE PAQUET DÉCLARE SA PROPRE ROUTE sbxwaf (closes #1356).

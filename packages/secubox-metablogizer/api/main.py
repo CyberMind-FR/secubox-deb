@@ -31,6 +31,10 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
+# ÉCRIRE EXIGE metablog.publish (#1438) — toute session publiait, exposait, supprimait.
+from secubox_core.capacites import require_capability as _require_capability
+_ECRIRE = _require_capability("metablog.publish")
+
 from secubox_core.config import get_config
 from secubox_core import screenshots as _screenshots
 
@@ -952,7 +956,7 @@ async def get_site(name: str):
     }
 
 
-@app.put("/site/{name}", dependencies=[Depends(require_jwt)])
+@app.put("/site/{name}", dependencies=[Depends(_ECRIRE)])
 async def update_site(name: str, patch: SiteUpdate):
     """Paramétrer les détails d'un site (#1089).
 
@@ -997,7 +1001,7 @@ async def update_site(name: str, patch: SiteUpdate):
     return {"success": True, "name": name, "site": _load_site_json(site_dir)}
 
 
-@app.post("/site", dependencies=[Depends(require_jwt)])
+@app.post("/site", dependencies=[Depends(_ECRIRE)])
 async def create_site(site: SiteCreate):
     """Create a new site"""
     SITES_ROOT.mkdir(parents=True, exist_ok=True)
@@ -1048,7 +1052,7 @@ async def create_site(site: SiteCreate):
     return {"success": True, "name": site.name, "domain": domain}
 
 
-@app.delete("/site/{name}", dependencies=[Depends(require_jwt)])
+@app.delete("/site/{name}", dependencies=[Depends(_ECRIRE)])
 async def delete_site(name: str):
     """Delete a site"""
     site_dir = SITES_ROOT / name
@@ -1080,7 +1084,7 @@ async def delete_site(name: str):
 # alphabétique qui tranche. Publier = intention dans site.json + bloc unifié +
 # route sbxwaf ; dépublier = l'inverse, route comprise.
 
-@app.post("/site/{name}/deploy", dependencies=[Depends(require_jwt)])
+@app.post("/site/{name}/deploy", dependencies=[Depends(_ECRIRE)])
 async def deploy_site(name: str):
     """Manually pull a site's latest content from its git repo and redeploy.
 
@@ -1139,7 +1143,7 @@ async def deploy_site(name: str):
         raise HTTPException(500, "git-failed")
 
 
-@app.post("/republish-all", dependencies=[Depends(require_jwt)])
+@app.post("/republish-all", dependencies=[Depends(_ECRIRE)])
 async def republish_all():
     """Republish all sites by regenerating nginx config"""
     success, count, message = regenerate_nginx_config()
@@ -1252,7 +1256,7 @@ def _read_domain(site_dir: Path) -> str:
         return ""
 
 
-@app.post("/site/{name}/upload", dependencies=[Depends(require_jwt)])
+@app.post("/site/{name}/upload", dependencies=[Depends(_ECRIRE)])
 async def upload_content(name: str, file: UploadFile = File(...)):
     """Upload content to a site (.zip / .tar.gz archive, or a single .html).
 
@@ -1336,7 +1340,7 @@ class MigrateRequest(BaseModel):
     source: str = "192.168.255.1"
 
 
-@app.post("/migrate", dependencies=[Depends(require_jwt)])
+@app.post("/migrate", dependencies=[Depends(_ECRIRE)])
 async def migrate(req: MigrateRequest, background_tasks: BackgroundTasks):
     """Migrate MetaBlogizer data from OpenWrt source"""
     def do_migrate():

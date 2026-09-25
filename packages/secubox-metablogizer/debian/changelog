@@ -1,3 +1,11 @@
+secubox-metablogizer (1.8.22-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (ref #1438) : toute écriture (créer, modifier, supprimer,
+    déployer, publier, exposer, certificat, vhost, import, migration…) exige
+    metablog.publish ; toute session, appareil guest compris, le pouvait.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Sep 2026 15:37:22 +0200
+
 secubox-metablogizer (1.8.21-1~bookworm1) bookworm; urgency=medium
 
   * Boutons rapides sur les vignettes de la mosaïque (#1323) : ouvrir le
