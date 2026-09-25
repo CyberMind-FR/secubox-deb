@@ -187,8 +187,8 @@ EOF
 mkdir -p "${ROOTFS}/etc/live/boot.conf.d"
 cat > "${ROOTFS}/etc/live/boot.conf.d/secubox.conf" <<EOF
 LIVE_HOSTNAME=secubox
-LIVE_USERNAME=secubox
-LIVE_USER_FULLNAME="SecuBox User"
+LIVE_USERNAME=sbxadmin
+LIVE_USER_FULLNAME="SecuBox administrateur (console)"
 LIVE_USER_DEFAULT_GROUPS="audio cdrom dip floppy video plugdev netdev sudo"
 PERSISTENCE=true
 EOF
@@ -196,13 +196,15 @@ EOF
 # Root password (secubox)
 chroot "${ROOTFS}" bash -c 'echo "root:secubox" | chpasswd'
 
-# Create secubox user
-chroot "${ROOTFS}" useradd -m -s /bin/bash -G sudo secubox 2>/dev/null || true
-chroot "${ROOTFS}" bash -c 'echo "secubox:secubox" | chpasswd'
-
-# Allow sudo without password for secubox
-echo "secubox ALL=(ALL) NOPASSWD: ALL" > "${ROOTFS}/etc/sudoers.d/secubox"
-chmod 440 "${ROOTFS}/etc/sudoers.d/secubox"
+# L'UTILISATEUR DE CONSOLE N'EST PAS `secubox` (#1432). `secubox` est le compte
+# de SERVICE sous lequel tournent tous les modules : lui donner un shell, le
+# groupe sudo et NOPASSWD: ALL faisait de toute compromission d'un module un
+# accès root, et rendait vides de sens les règles sudoers étroites des
+# paquets. La console a son propre compte, et sudo y demande le mot de passe.
+chroot "${ROOTFS}" useradd -m -s /bin/bash -G sudo sbxadmin 2>/dev/null || true
+chroot "${ROOTFS}" bash -c 'echo "sbxadmin:secubox" | chpasswd'
+chroot "${ROOTFS}" passwd -e sbxadmin >/dev/null 2>&1 || true   # à changer à la 1re connexion
+rm -f "${ROOTFS}/etc/sudoers.d/secubox"
 
 # Enable SSH root login
 sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' "${ROOTFS}/etc/ssh/sshd_config"
