@@ -3,6 +3,23 @@ set -e
 
 case "$1" in
     configure)
+        # PORT DU MESH (#1499). Les box installees avant que firstboot ouvre
+        # 51822 ne peuvent que JOINDRE le mesh : une poignee de main initiee
+        # d'ailleurs tombe sur le `drop` de inet secubox_filter. Une table a
+        # part ne suffirait pas — un accept d'une table n'annule pas le drop
+        # d'une autre sur le meme crochet. On ne touche qu'a CE jeu de regles
+        # (genere par firstboot) : ailleurs (gk2) il n'existe pas, et rien
+        # ne change.
+        if [ -f /etc/nftables.conf ] \
+           && grep -q "table inet secubox_filter" /etc/nftables.conf \
+           && ! grep -q "dport 51822" /etc/nftables.conf \
+           && grep -q "udp dport 51820 accept" /etc/nftables.conf; then
+            sed -i '0,/^\([[:space:]]*\)udp dport 51820 accept$/s//&\n\1udp dport 51822 accept  # MirrorNet (secubox-p2p, #1499)/' /etc/nftables.conf
+        fi
+        if nft list chain inet secubox_filter input >/dev/null 2>&1 \
+           && ! nft list chain inet secubox_filter input 2>/dev/null | grep -q "dport 51822"; then
+            nft insert rule inet secubox_filter input udp dport 51822 accept 2>/dev/null || true
+        fi
         # Create secubox user if it doesn't exist
         if ! getent passwd secubox > /dev/null 2>&1; then
             adduser --system --group --home /var/lib/secubox --no-create-home secubox
