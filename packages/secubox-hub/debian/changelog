@@ -1,3 +1,12 @@
+secubox-hub (1.9.18-1~bookworm1) bookworm; urgency=medium
+
+  * Ne livre plus www/nac/index.html (ancienne page « Network Access
+    Control », mai 2026) : la page de NAC appartient à secubox-nac. Les
+    deux paquets livraient le même fichier — conflit dpkg selon l'ordre
+    dans les images (ref #1504).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 21:10:00 +0200
+
 secubox-hub (1.9.17-1~bookworm1) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées

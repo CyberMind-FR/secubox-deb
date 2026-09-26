@@ -10,6 +10,8 @@ Rules-Requires-Root: no
 Package: secubox-nac
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.4.3), dnsmasq, nftables, nginx, ieee-data
+Replaces: secubox-hub (<< 1.9.18~)
+Breaks: secubox-hub (<< 1.9.18~)
 Description: SecuBox NAC / Client Guardian
  Contrôle d'accès réseau : zones nftables, portail captif, contrôle parental, quarantaine.
  .
