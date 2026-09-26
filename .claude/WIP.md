@@ -9890,3 +9890,9 @@ Le support a été ajouté dans le DTS upstream Linux (torvalds/linux) mais:
 - Endpoints: 
 - Migration: %
 - Commits: 
+
+## CI Sync 2026-09-26
+- Packages: 
+- Endpoints: 
+- Migration: %
+- Commits: 
