@@ -1,3 +1,9 @@
+secubox-fmrelay (0.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * /var/lib/secubox/fmrelay déclaré en tmpfiles.d et préfixé « - » (ref #1482).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 05:55:05 +0200
+
 secubox-fmrelay (0.2.4-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

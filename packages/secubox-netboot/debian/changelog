@@ -1,3 +1,10 @@
+secubox-netboot (0.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Dossiers déclarés en tmpfiles.d, /var/lib/secubox/netboot préfixé « - »
+    (ref #1482).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 05:55:05 +0200
+
 secubox-netboot (0.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Profils : endpoint /boards (modèles depuis board/<name>/) ; sélecteur de

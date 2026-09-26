@@ -38,7 +38,7 @@ StandardError=journal
 NoNewPrivileges=yes
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/run/secubox /var/lib/secubox/fmrelay /var/log/secubox
+ReadWritePaths=/run/secubox -/var/lib/secubox/fmrelay /var/log/secubox
 
 [Install]
 WantedBy=multi-user.target

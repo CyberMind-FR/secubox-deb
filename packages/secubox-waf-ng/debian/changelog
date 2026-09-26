@@ -1,3 +1,11 @@
+secubox-waf-ng (1.18.6-1~bookworm1) bookworm; urgency=medium
+
+  * /var/lib/secubox/waf et /var/cache/secubox/waf déclarés en tmpfiles.d
+    (mêmes droits que gk2) et préfixés « - » : image neuve et tmpfs du live
+    ne montaient pas le namespace (ref #1482).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 05:55:05 +0200
+
 secubox-waf-ng (1.18.5-1~bookworm1) bookworm; urgency=high
 
   * Corrélateur de campagnes (secubox-waf-campaigns) : SupplementaryGroups=

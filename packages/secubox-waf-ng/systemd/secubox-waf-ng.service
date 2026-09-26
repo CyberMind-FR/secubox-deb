@@ -147,7 +147,7 @@ ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
 ReadOnlyPaths=/etc/secubox
-ReadWritePaths=/var/log/secubox/waf /var/log/secubox/cookie-audit /var/cache/secubox/waf /run/secubox /var/lib/secubox/waf
+ReadWritePaths=/var/log/secubox/waf /var/log/secubox/cookie-audit -/var/cache/secubox/waf /run/secubox -/var/lib/secubox/waf
 
 # #1070 phase B — BAN NFT NATIF. --nft-ban laisse le WAF poser ses propres drops
 # dans le set nft `inet secubox waf_ban{,6}` (persistants, retrait différé par le
