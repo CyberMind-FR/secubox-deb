@@ -122,12 +122,6 @@ KNOWN_SERVICES = {
         "icon": "vpn",
         "dependencies": ["secubox-core"],
     },
-    "secubox-netdata": {
-        "description": "Real-time performance monitoring",
-        "category": "monitoring",
-        "icon": "chart",
-        "dependencies": ["secubox-core"],
-    },
     "secubox-dpi": {
         "description": "Deep packet inspection with nDPId",
         "category": "security",

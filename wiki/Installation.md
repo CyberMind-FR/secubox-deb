@@ -121,7 +121,6 @@ qemu-system-x86_64 \
 **Applications:**
 - `secubox-mail` - Email server
 - `secubox-dns` - DNS server
-- `secubox-netdata` - Monitoring
 
 ## Post-Installation
 

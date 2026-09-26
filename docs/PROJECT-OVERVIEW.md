@@ -387,7 +387,7 @@ opkg                             →    apt + repo apt.secubox.in
 
 **Network:** secubox-netmodes, secubox-dpi, secubox-qos, secubox-vhost, secubox-haproxy
 
-**Monitoring:** secubox-netdata, secubox-mediaflow, secubox-cdn
+**Monitoring:** secubox-mediaflow, secubox-cdn
 
 **DNS/Email:** secubox-dns, secubox-mail, secubox-webmail
 

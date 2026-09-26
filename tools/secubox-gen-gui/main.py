@@ -138,7 +138,6 @@ COMPONENTS = {
         ("secubox-haproxy", "HAProxy LB", True),
     ],
     "monitoring": [
-        ("secubox-netdata", "Netdata", True),
         ("secubox-prometheus", "Prometheus", False),
         ("secubox-grafana", "Grafana", False),
     ],

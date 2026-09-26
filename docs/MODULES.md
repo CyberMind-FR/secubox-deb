@@ -9,7 +9,7 @@
 
 *Last Updated: 2026-03-24*
 
-**Total: 46 modules | ~900+ API endpoints**
+**Total: 45 modules | ~900+ API endpoints**
 
 This document catalogs all SecuBox Debian modules, their features, and UI screenshots locations.
 
@@ -66,7 +66,6 @@ This document catalogs all SecuBox Debian modules, their features, and UI screen
 ### Monitoring & Analytics
 | Module | Icon | Path | Description |
 |--------|------|------|-------------|
-| secubox-netdata | `📊` | `/netdata/` | Real-time performance monitoring |
 | secubox-device-intel | `📱` | `/device-intel/` | Asset discovery, fingerprinting |
 | secubox-watchdog | `👁️` | `/watchdog/` | Service & container monitoring |
 | secubox-mediaflow | `🎬` | `/mediaflow/` | Media stream analytics |
@@ -301,23 +300,7 @@ Web Application Firewall:
 
 ---
 
-### 11. secubox-netdata
-**Path:** `/netdata/`
-**API:** `/api/v1/netdata/`
-**Endpoints:** 16
-
-Real-time monitoring:
-- System metrics
-- Process monitoring
-- Network stats
-- Disk I/O
-- Custom charts
-
-**Screenshot Location:** `docs/screenshots/netdata.png`
-
----
-
-### 12. secubox-dpi
+### 11. secubox-dpi
 **Path:** `/dpi/`
 **API:** `/api/v1/dpi/`
 **Endpoints:** 40+
@@ -332,7 +315,7 @@ Deep Packet Inspection:
 
 ---
 
-### 13. secubox-tor
+### 12. secubox-tor
 **Path:** `/tor/`
 **API:** `/api/v1/tor/`
 **Endpoints:** 15+
@@ -348,7 +331,7 @@ Tor network services:
 
 ---
 
-### 14. secubox-mail
+### 13. secubox-mail
 **Path:** `/mail/`
 **API:** `/api/v1/mail/`
 **Endpoints:** 25+
@@ -364,7 +347,7 @@ Mail server (Postfix/Dovecot):
 
 ---
 
-### 15. secubox-roadmap
+### 14. secubox-roadmap
 **Path:** `/roadmap/`
 **API:** `/api/v1/roadmap/`
 **Endpoints:** 5
@@ -426,7 +409,6 @@ docs/screenshots/<module-name>.png
 - [ ] wireguard.png
 - [ ] qos.png
 - [ ] waf.png
-- [ ] netdata.png
 - [ ] dpi.png
 - [ ] tor.png
 - [ ] mail.png

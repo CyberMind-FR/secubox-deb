@@ -92,7 +92,6 @@
 }
 
 /* SecuBox brand colors for each module */
-.sb-color-netdata { --module-color: #00ab44; }
 .sb-color-wireguard { --module-color: var(--mesh-light); }
 .sb-color-network-modes { --module-color: var(--auth-light); }
 .sb-color-client-guardian { --module-color: var(--boot-light); }

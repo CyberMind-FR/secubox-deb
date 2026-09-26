@@ -60,7 +60,6 @@
 
 | Module | Screenshot | Status |
 |--------|------------|--------|
-| 📊 **Netdata** | ![Netdata](screenshots/vm/netdata.png) | ✅ Captured |
 | 🔬 **Deep Packet Inspection** | ![Deep Packet Inspection](screenshots/vm/dpi.png) | ✅ Captured |
 | 📱 **Device Intelligence** | ![Device Intelligence](screenshots/vm/device-intel.png) | ✅ Captured |
 | 👁️ **Watchdog** | ![Watchdog](screenshots/vm/watchdog.png) | ✅ Captured |

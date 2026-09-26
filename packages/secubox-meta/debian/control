@@ -431,8 +431,7 @@ Depends: ${misc:Depends},
          secubox-metrics
 Recommends: secubox-glances,
          secubox-reporter
-Suggests: secubox-grafana,
-         secubox-netdata
+Suggests: secubox-grafana
 Description: SecuBox — service « Métriques »
  Métriques temps réel, tableaux et rapports.
  .
@@ -608,8 +607,7 @@ Description: SecuBox — service « Actualité »
 Package: secubox-service-osint
 Architecture: all
 Depends: ${misc:Depends}
-Suggests: secubox-openclaw,
-         secubox-spiderfoot,
+Suggests: secubox-spiderfoot,
          secubox-maigret
 Description: SecuBox — service « OSINT »
  Enquête en sources ouvertes, en bac à sable.
@@ -651,8 +649,7 @@ Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-cloner,
          secubox-netboot
-Suggests: secubox-rezapp,
-         secubox-release,
+Suggests: secubox-release,
          secubox-vm,
          secubox-redroid
 Description: SecuBox — service « Provision »

@@ -61,7 +61,6 @@ Domaine d'analyse en profondeur : DPI, métriques, inspection du trafic.
 
 | Module | Rôle | Statut |
 |--------|------|--------|
-| `secubox-netdata` | Monitoring temps réel | ✅ |
 | `secubox-reporter` | Rapports et alertes | ✅ |
 | `secubox-mediaflow` | Analyse des flux média | ✅ |
 
@@ -131,7 +130,7 @@ Les domaines fonctionnent en paires complémentaires :
 │  CrowdSec · HAProxy · DNS · NAC                             │
 ├─────────────────────────────────────────────────────────────┤
 │                        MIND (Analyse)                        │
-│  nDPId · Netdata · Reporter · MediaFlow                     │
+│  nDPId · Reporter · MediaFlow                               │
 ├───────────────────────┬─────────────────────────────────────┤
 │      MESH (Réseau)    │         AUTH (Identité)             │
 │  WireGuard · Routes   │  ZKP · TURN · Vault                 │
@@ -188,7 +187,7 @@ graph TB
 1. **BOOT** : Plymouth → FirstBoot → HW-Detect
 2. **ROOT** : Core → API → Hub → System
 3. **MESH** : WireGuard → Routes → NetModes
-5. **MIND** : Netdata → nDPId → Reporter
+5. **MIND** : nDPId → Reporter
 6. **AUTH** : Vault → ZKP → TURN
 
 ---

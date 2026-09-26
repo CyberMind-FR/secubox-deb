@@ -92,7 +92,7 @@ Voir [[Installation-FR]] pour les instructions détaillées.
 |-------|-------------|---------|
 | 🟠 **AUTH** | Authentification, ZeroTrust, MFA | auth, portal, users, nac |
 | 🟡 **WALL** | Pare-feu, WAF, IDS/IPS, veille d'authentification | waf, authwatch, threats, ipblock |
-| 🔴 **BOOT** | Déploiement, provisioning | cloner, vault, vm, rezapp |
+| 🔴 **BOOT** | Déploiement, provisioning | cloner, vault, vm |
 | 🟢 **ROOT** | Système, CLI, durcissement | core, hub, system, console |
 | 🔵 **MESH** | Réseau, WireGuard, QoS | wireguard, haproxy, netmodes, turn |
 

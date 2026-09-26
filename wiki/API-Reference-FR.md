@@ -291,20 +291,6 @@ Gestion hôtes virtuels.
 | `/certificate/issue` | POST | Oui | Émettre cert Let's Encrypt |
 | `/reload` | POST | Oui | Recharger nginx |
 
-### API Netdata (`/api/v1/netdata/`)
-
-Proxy monitoring système.
-
-| Endpoint | Méthode | Auth | Description |
-|----------|---------|------|-------------|
-| `/status` | GET | Non | Statut Netdata |
-| `/charts` | GET | Oui | Graphiques disponibles |
-| `/data` | GET | Oui | Données graphique |
-| `/cpu` | GET | Oui | Métriques CPU |
-| `/memory` | GET | Oui | Métriques mémoire |
-| `/disk` | GET | Oui | Métriques disque |
-| `/alerts` | GET | Oui | Alertes actives |
-
 ---
 
 ## Modules Applications

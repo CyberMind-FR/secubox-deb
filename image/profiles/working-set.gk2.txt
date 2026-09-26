@@ -76,7 +76,6 @@ ndpid
 ndpid-engine
 netboot
 netboot-confirm-healthy
-netdata
 netdiag
 netmodes
 nettweak
@@ -103,7 +102,6 @@ redroid
 release-api
 repo
 reporter
-rezapp
 roadmap
 routes
 runtime

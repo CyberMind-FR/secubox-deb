@@ -221,7 +221,6 @@
     const PAGE_METRICS_CONFIG = {
         '/waf/': { metrics: ['blocked', 'threats', 'inspected'], api: '/api/v1/waf/stats' },
         '/wireguard/': { metrics: ['peers', 'tx', 'rx'], api: '/api/v1/wireguard/status' },
-        '/netdata/': { metrics: ['cpu', 'mem', 'disk'], api: '/api/v1/hub/dashboard' },
         '/dpi/': { metrics: ['flows', 'protocols', 'hosts'], api: '/api/v1/dpi/stats' },
         '/nac/': { metrics: ['devices', 'blocked', 'quarantine'], api: '/api/v1/nac/stats' },
         '/qos/': { metrics: ['bandwidth', 'rules', 'shaped'], api: '/api/v1/qos/stats' },
@@ -500,7 +499,7 @@
     // Page icons for menu bar
     const PAGE_ICONS = {
         '/': '🏠', '/hub/': '🏠', '/soc/': '🛡️', '/waf/': '🔥',
-        '/wireguard/': '🔐', '/netdata/': '📊', '/system/': '⚙️', '/vhost/': '🌐',
+        '/wireguard/': '🔐', '/system/': '⚙️', '/vhost/': '🌐',
         '/dpi/': '🔍', '/netmodes/': '🔀', '/qos/': '📶', '/nac/': '🚫',
         '/auth/': '🔑', '/cdn/': '💾', '/mediaflow/': '🎬', '/portal/': '🚪',
         '/metrics/': '📈', '/certs/': '📜', '/vortex-dns/': '🌀', '/eye-remote/': '👁️',

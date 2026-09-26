@@ -52,7 +52,6 @@ SERVICES = [
     {"name": "mail", "category": "comm", "icon": "📧", "desc": "Email Server", "port": 25, "critical": False},
     {"name": "webmail", "category": "comm", "icon": "💌", "desc": "Roundcube/SOGo", "port": None, "critical": False},
     {"name": "users", "category": "comm", "icon": "👥", "desc": "Identity Manager", "port": None, "critical": False},
-    {"name": "netdata", "category": "monitoring", "icon": "📈", "desc": "Real-time Monitoring", "port": 19999, "critical": False},
     {"name": "cdn", "category": "network", "icon": "🌐", "desc": "Cache Server", "port": None, "critical": False},
     {"name": "mediaflow", "category": "apps", "icon": "🎬", "desc": "Media Streaming", "port": None, "critical": False},
 ]

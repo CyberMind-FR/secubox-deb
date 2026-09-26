@@ -436,7 +436,6 @@ recommande:
   - secubox-reporter
 suggere:
   - secubox-grafana
-  - secubox-netdata
 
 meta: secubox-service-ecrans
 niveau: service
@@ -582,7 +581,6 @@ niveau: service
 label: OSINT
 description: "Enquête en sources ouvertes, en bac à sable."
 suggere:
-  - secubox-openclaw
   - secubox-spiderfoot
   - secubox-maigret
 
@@ -621,7 +619,6 @@ recommande:
   - secubox-cloner
   - secubox-netboot
 suggere:
-  - secubox-rezapp
   - secubox-release
   - secubox-vm
   - secubox-redroid

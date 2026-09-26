@@ -33,7 +33,6 @@ depends:
   - secubox-dns
   - secubox-vortex-dns
   - secubox-meshname
-  - secubox-netdata
   - secubox-mediaflow
   - secubox-device-intel
   - secubox-watchdog

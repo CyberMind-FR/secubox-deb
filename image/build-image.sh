@@ -264,7 +264,7 @@ INCLUDE_PKGS+=",avahi-daemon,avahi-utils,ieee-data,procps,openssl"
 INCLUDE_PKGS+=",fonts-noto-color-emoji,locales,console-setup"
 
 # Optional heavy services (installed but may be disabled)
-# Note: netdata, glances are large - moved to post-debootstrap for --no-install-recommends
+# Note: glances is large - moved to post-debootstrap for --no-install-recommends
 
 if [[ $IS_X64 -eq 1 ]]; then
   # x64 : ajouter GRUB EFI + linux-image
@@ -689,7 +689,7 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
 ok "Python dependencies installed"
 
-# Install heavy services that aren't in debootstrap (netdata, glances, X11)
+# Install heavy services that aren't in debootstrap (glances, X11)
 log "Installing security services and optional components..."
 
 # CROWDSEC N'EST PLUS DU PRODUIT (#1362), ET N'ENTRE PLUS DANS L'IMAGE.
@@ -712,9 +712,9 @@ log "Installing security services and optional components..."
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
 if [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    glances netdata haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
+    glances haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
 else
-  log "  Installing lite security services (no netdata/glances)..."
+  log "  Installing lite security services (no glances)..."
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     haproxy qrencode 2>/dev/null" || warn "Some services not installed"
 fi

@@ -91,7 +91,7 @@ Siehe [[Installation]] für detaillierte Anweisungen.
 | Stack | Beschreibung | Module |
 |-------|--------------|--------|
 | 🟠 **AUTH** | Authentifizierung, ZeroTrust, MFA | auth, portal, users, nac |
-| 🔴 **BOOT** | Deployment, Bereitstellung | cloner, vault, vm, rezapp |
+| 🔴 **BOOT** | Deployment, Bereitstellung | cloner, vault, vm |
 | 🟢 **ROOT** | System, CLI, Härtung | core, hub, system, console |
 | 🔵 **MESH** | Netzwerk, WireGuard, QoS | wireguard, haproxy, netmodes, turn |
 

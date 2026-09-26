@@ -34,7 +34,7 @@ LOG_DIRS = ["/var/log", "/var/log/secubox"]
 SECUBOX_SERVICES = [
     "secubox-hub", "secubox-wireguard", "secubox-dpi",
     "secubox-nac", "secubox-qos", "secubox-system", "secubox-reporter",
-    "secubox-netdata", "secubox-vhost", "secubox-auth",
+    "secubox-vhost", "secubox-auth",
     "secubox-cdn", "secubox-netmodes", "secubox-mediaflow",
 ]
 

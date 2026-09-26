@@ -17,7 +17,7 @@ SF_PORT="${SECUBOX_SF_PORT:-5001}"
 
 err() { echo "[ERROR] $*" >&2; }
 
-# ---- lxc helpers (mirror openclawctl / maigretctl) ----
+# ---- lxc helpers (mirror maigretctl) ----
 lxc_running() { local _s; _s=$(lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null); [[ "$_s" == *"State:"*"RUNNING"* ]]; }
 lxc_exists()  { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
 # Run a command in the container. Extra args after the command string are

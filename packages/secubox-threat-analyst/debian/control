@@ -20,4 +20,3 @@ Description: SecuBox Threat Analyst — AI agent that writes detection scenarios
   - secubox-network-anomaly — DNS-log anomaly detection.
   - secubox-cyberfeed — threat-intel feed aggregator.
   - secubox-ipblock — nftables-driven IP blocklist enforcement.
-  - secubox-openclaw — OSINT / domain reconnaissance.

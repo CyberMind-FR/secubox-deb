@@ -12,7 +12,7 @@
 # `À documenter` signifie que la donnee est absente du depot, jamais
 # qu'elle est inconnue de l'auteur : c'est une tache, pas une lacune de
 # redaction.
-# modules: 173
+# modules: 170
 
 modules:
   - id: secubox-ad-guard
@@ -1608,7 +1608,6 @@ modules:
       - "secubox-dns"
       - "secubox-vortex-dns"
       - "secubox-meshname"
-      - "secubox-netdata"
       - "secubox-mediaflow"
       - "secubox-device-intel"
       - "secubox-watchdog"
@@ -3644,67 +3643,6 @@ modules:
       chemin: "À documenter"
       vhosts:
         - "boot.gk2.secubox.in"
-  - id: secubox-netdata
-    nom: "secubox-netdata"
-    categorie: "monitoring"
-    tier: "lite"
-    description: "SecuBox Netdata Dashboard"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd:
-      - "secubox-netdata.service"
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/netdata.sock"
-      health: "/api/v1/netdata/health"
-      authentifie: true
-      nb_routes: 35
-      routes:
-        - "DELETE /webhooks/{webhook_id}"
-        - "GET /alarms"
-        - "GET /alerts"
-        - "GET /charts"
-        - "GET /cpu"
-        - "GET /data"
-        - "GET /debug"
-        - "GET /disk"
-        - "GET /health"
-        - "GET /history"
-        - "GET /info"
-        - "GET /logs"
-        - "GET /memory"
-        - "GET /netdata_alarms"
-        - "GET /netdata_info"
-        - "GET /netdata_status"
-        - "GET /network"
-        - "GET /processes"
-        - "GET /secubox_logs"
-        - "GET /sensors"
-        - "GET /stats"
-        - "GET /stats/history"
-        - "GET /status"
-        - "GET /summary"
-        - "GET /system"
-        - "GET /thresholds"
-        - "GET /webhooks"
-        - "POST /restart"
-        - "POST /restart_netdata"
-        - "POST /start"
-        - "POST /start_netdata"
-        - "POST /stop"
-        - "POST /stop_netdata"
-        - "POST /thresholds"
-        - "POST /webhooks"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/netdata"
-      vhosts: []
   - id: secubox-netdiag
     nom: "secubox-netdiag"
     categorie: "misc"
@@ -4078,46 +4016,6 @@ modules:
     interface_web:
       presente: true
       chemin: "/srv/secubox/www/ollama"
-      vhosts: []
-  - id: secubox-openclaw
-    nom: "secubox-openclaw"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox OpenClaw OSINT Module"
-    manifeste: true
-    lxc: false
-    tests: 3
-    depends:
-      - "secubox-core"
-    cli:
-      - "openclawctl"
-    systemd: []
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/openclaw.sock"
-      health: "/api/v1/openclaw/health"
-      authentifie: true
-      nb_routes: 14
-      routes:
-        - "DELETE /scan/{scan_id}"
-        - "GET /certs/{domain}"
-        - "GET /config"
-        - "GET /dns/{domain}"
-        - "GET /health"
-        - "GET /ports/{ip}"
-        - "GET /scan/{scan_id}"
-        - "GET /scans"
-        - "GET /status"
-        - "GET /whois/{target}"
-        - "POST /install"
-        - "POST /scan/domain"
-        - "POST /scan/email"
-        - "POST /scan/ip"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/openclaw"
       vhosts: []
   - id: secubox-p2p
     nom: "secubox-p2p"
@@ -4917,49 +4815,6 @@ modules:
     interface_web:
       presente: true
       chemin: "/srv/secubox/www/reporter"
-      vhosts: []
-  - id: secubox-rezapp
-    nom: "secubox-rezapp"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox RezApp - Application deployment and management"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd:
-      - "secubox-rezapp.service"
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/rezapp.sock"
-      health: "/api/v1/rezapp/health"
-      authentifie: true
-      nb_routes: 17
-      routes:
-        - "DELETE /templates/{name}"
-        - "GET /app/{name}"
-        - "GET /app/{name}/logs"
-        - "GET /apps"
-        - "GET /health"
-        - "GET /images"
-        - "GET /stats"
-        - "GET /status"
-        - "GET /templates"
-        - "GET /templates/{name}"
-        - "POST /app/deploy"
-        - "POST /app/undeploy"
-        - "POST /app/{name}/restart"
-        - "POST /app/{name}/start"
-        - "POST /app/{name}/stop"
-        - "POST /images/pull"
-        - "POST /templates"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/rezapp"
       vhosts: []
   - id: secubox-roadmap
     nom: "secubox-roadmap"

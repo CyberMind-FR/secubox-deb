@@ -121,7 +121,6 @@ qemu-system-x86_64 \
 **应用：**
 - `secubox-mail` - 邮件服务器
 - `secubox-dns` - DNS 服务器
-- `secubox-netdata` - 监控
 
 ## 安装后配置
 

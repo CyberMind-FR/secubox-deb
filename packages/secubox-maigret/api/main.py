@@ -67,7 +67,7 @@ def _valid_username(u): return bool(u) and bool(_USERNAME_RE.fullmatch(u))
 def _valid_id(i): return bool(i) and bool(_ID_RE.fullmatch(i))
 
 
-# ---- single-flight, stale-while-revalidate cache (ported from openclaw) ----
+# ---- single-flight, stale-while-revalidate cache ----
 _STATS_CACHE: dict = {}
 _CACHE_LOCKS: dict = {}
 _CACHE_LOCKS_GUARD = threading.Lock()
@@ -222,7 +222,12 @@ def lookup_report(lookup_id: str):
     if not f.exists():
         raise HTTPException(404, "not found")
     record = json.loads(f.read_text())
-    from . import report as _report
+    try:
+        from . import report as _report
+    except ImportError:
+        # fpdf2 n'est pas dans Debian bookworm : l'export PDF est facultatif,
+        # l'enquête elle-même n'en dépend pas (#1487).
+        raise HTTPException(503, "export PDF indisponible : python3-fpdf2 n'est pas installé")
     try:
         pdf = _report.build_pdf(record)
     except Exception as e:  # noqa: BLE001 — never 500 the panel over a render glitch

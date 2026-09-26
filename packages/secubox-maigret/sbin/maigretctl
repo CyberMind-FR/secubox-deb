@@ -21,7 +21,7 @@ err() { echo "[ERROR] $*" >&2; }
 _valid_username() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]]; }
 _valid_id()       { [[ "$1" =~ ^[a-f0-9]{8}$ ]]; }
 
-# ---- lxc helpers (mirror openclawctl / nextcloudctl) ----
+# ---- lxc helpers (mirror nextcloudctl) ----
 lxc_running() { local _s; _s=$(lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null); [[ "$_s" == *"State:"*"RUNNING"* ]]; }
 lxc_exists()  { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
 # Run a command in the container. Extra args after the command string are

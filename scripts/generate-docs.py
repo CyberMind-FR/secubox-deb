@@ -344,21 +344,6 @@ MODULES = {
             "zh": ["日志分析", "文件完整性", "漏洞检测", "合规"]
         }
     },
-    "openclaw": {
-        "name": "OpenClaw Scanner", "icon": "🦞", "category": "Security",
-        "description": {
-            "en": "Network vulnerability scanner",
-            "fr": "Scanner de vulnérabilités réseau",
-            "de": "Netzwerk-Schwachstellen-Scanner",
-            "zh": "网络漏洞扫描器"
-        },
-        "features": {
-            "en": ["Port scanning", "Service detection", "Vulnerability checks", "Reports"],
-            "fr": ["Scan ports", "Détection services", "Vérifications vulnérabilités", "Rapports"],
-            "de": ["Port-Scanning", "Diensterkennung", "Schwachstellenprüfungen", "Berichte"],
-            "zh": ["端口扫描", "服务检测", "漏洞检查", "报告"]
-        }
-    },
     "iot-guard": {
         "name": "IoT Guard", "icon": "🔌", "category": "Security",
         "description": {
@@ -780,21 +765,6 @@ MODULES = {
     # =========================================================================
     # MONITORING
     # =========================================================================
-    "netdata": {
-        "name": "Netdata", "icon": "📊", "category": "Monitoring",
-        "description": {
-            "en": "Real-time system monitoring",
-            "fr": "Surveillance système temps réel",
-            "de": "Echtzeit-Systemüberwachung",
-            "zh": "实时系统监控"
-        },
-        "features": {
-            "en": ["Metrics", "Alerts", "Charts", "Plugins"],
-            "fr": ["Métriques", "Alertes", "Graphiques", "Plugins"],
-            "de": ["Metriken", "Warnungen", "Diagramme", "Plugins"],
-            "zh": ["指标", "告警", "图表", "插件"]
-        }
-    },
     "dpi": {
         "name": "Deep Packet Inspection", "icon": "🔬", "category": "Monitoring",
         "description": {
@@ -1842,21 +1812,6 @@ MODULES = {
             "fr": ["Conteneur Android", "ADB", "Installation d'apps", "Vue écran"],
             "de": ["Android-Container", "ADB", "App-Installation", "Bildschirmansicht"],
             "zh": ["Android 容器", "ADB", "应用安装", "屏幕查看"]
-        }
-    },
-    "rezapp": {
-        "name": "RezApp", "icon": "📦", "category": "Services",
-        "description": {
-            "en": "Application deployment and management",
-            "fr": "Déploiement et gestion d'applications",
-            "de": "Anwendungsbereitstellung und -verwaltung",
-            "zh": "应用部署与管理"
-        },
-        "features": {
-            "en": ["App deploy", "Lifecycle", "Config", "Status"],
-            "fr": ["Déploiement d'apps", "Cycle de vie", "Config", "État"],
-            "de": ["App-Deploy", "Lebenszyklus", "Konfiguration", "Status"],
-            "zh": ["应用部署", "生命周期", "配置", "状态"]
         }
     },
     "rustdesk": {

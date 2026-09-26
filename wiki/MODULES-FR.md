@@ -9,7 +9,7 @@
 
 *Documentation complète des modules*
 
-**Total des modules:** 127
+**Total des modules:** 124
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -38,7 +38,6 @@
 | 🔬 **Threat Analyst** | Security | Analyse des menaces assistée par IA |
 | 🔴 **CVE Triage** | Security | Suivi et triage des vulnérabilités CVE |
 | 🛡️ **Wazuh SIEM** | Security | Intégration SIEM Wazuh |
-| 🦞 **OpenClaw Scanner** | Security | Scanner de vulnérabilités réseau |
 | 🔌 **IoT Guard** | Security | Surveillance sécurité appareils IoT |
 | 🌐 **Network Modes** | Network | Configuration topologie réseau |
 | 📊 **QoS Manager** | Network | QoS avec HTB/VLAN |
@@ -66,7 +65,6 @@
 | 🔐 **Zero-Knowledge Proofs** | Privacy | Authentification ZKP Hamiltonien |
 | 💬 **SimpleX Chat** | Privacy | Messagerie axée sur la vie privée |
 | 🔐 **Secret Vault** | Privacy | Gestion des secrets et identifiants |
-| 📊 **Netdata** | Monitoring | Surveillance système temps réel |
 | 🔬 **nDPId** | Monitoring | Démon nDPI pour analyse trafic |
 | 📱 **Device Intelligence** | Monitoring | Découverte actifs et empreintes |
 | 👁️ **Watchdog** | Monitoring | Surveillance services et conteneurs |
@@ -132,7 +130,6 @@
 | 🍺 **PicoBrew** | IoT | Contrôleur de brassage / fermentation |
 | 🎙️ **Podcaster** | Media | Gestionnaire de podcasts moderne |
 | 🤖 **ReDroid** | Apps | Runtime Android en conteneur |
-| 📦 **RezApp** | Services | Déploiement et gestion d'applications |
 | 🖥️ **RustDesk** | Access | Relais de bureau distant auto-hébergé |
 | 🔌 **SaaS Relay** | Network | Relais proxy SaaS / API |
 | 🎯 **Security Posture** | Security | Carte de score de sécurité honnête (vérité board) |
@@ -576,14 +573,6 @@ Gestionnaire de podcasts moderne
 
 ### Monitoring
 
-#### 📊 Netdata
-
-Surveillance système temps réel
-
-**Fonctionnalités:** Métriques, Alertes, Graphiques, Plugins
-
-![Netdata](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/netdata.png)
-
 #### 🔬 Deep Packet Inspection
 
 DPI avec netifyd/nDPId
@@ -992,14 +981,6 @@ Intégration SIEM Wazuh
 
 ![Wazuh SIEM](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/wazuh.png)
 
-#### 🦞 OpenClaw Scanner
-
-Scanner de vulnérabilités réseau
-
-**Fonctionnalités:** Scan ports, Détection services, Vérifications vulnérabilités, Rapports
-
-![OpenClaw Scanner](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/openclaw.png)
-
 #### 🔌 IoT Guard
 
 Surveillance sécurité appareils IoT
@@ -1083,14 +1064,6 @@ Catalogue et registre de services
 **Fonctionnalités:** Registre services, Découverte, Métadonnées, UI catalogue
 
 ![Metacatalog](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/metacatalog.png)
-
-#### 📦 RezApp
-
-Déploiement et gestion d'applications
-
-**Fonctionnalités:** Déploiement d'apps, Cycle de vie, Config, État
-
-![RezApp](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/rezapp.png)
 
 ---
 

@@ -77,7 +77,7 @@ def test_grant_issue_appends_and_owner_sees_it(journal, box, center_did):
 
 def test_grant_issue_default_capability_is_config(journal, box, center_did):
     box_priv, box_pub, box_did = box
-    result = grant_issue(journal, box_priv, box_did, center_did, "netdata", "override")
+    result = grant_issue(journal, box_priv, box_did, center_did, "metrics", "override")
     assert result["capability"] == "config"
 
 

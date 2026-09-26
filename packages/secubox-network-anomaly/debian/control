@@ -21,7 +21,6 @@ Description: SecuBox Network Anomaly — DNS-log anomaly detection
   - secubox-cve-triage — CVE vulnerability triage.
   - secubox-cyberfeed — threat-intel feed aggregator.
   - secubox-ipblock — nftables-driven IP blocklist enforcement.
-  - secubox-openclaw — OSINT / reconnaissance.
  .
  For DNS-layer blocking (rather than detection only), see
  secubox-dns-guard or secubox-vortex-dns.

@@ -76,7 +76,6 @@ mastodon            = "200000 100000"
 # processus HOTE — un quota LXC ne s'y applique pas.
 mqtt                = "200000 100000"
 nextcloud           = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
-openclaw            = "200000 100000"
 picobrew            = "200000 100000"
 roundcube           = "200000 100000"
 rustdesk            = "200000 100000"

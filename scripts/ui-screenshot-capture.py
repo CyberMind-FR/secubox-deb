@@ -97,7 +97,6 @@ MODULES = [
 
     # Monitoring
     {"name": "Metrics", "path": "/metrics/", "category": "monitoring"},
-    {"name": "Netdata", "path": "/netdata/", "category": "monitoring"},
     {"name": "Media Flow", "path": "/mediaflow/", "category": "monitoring"},
     {"name": "Device Intel", "path": "/device-intel/", "category": "monitoring"},
 

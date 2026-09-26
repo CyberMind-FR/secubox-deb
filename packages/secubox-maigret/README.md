@@ -27,7 +27,7 @@ aggregator (user: secubox)  ──imports──▶  api/main.py  (mounted in-pro
 ```
 
 - **Passive only** — Maigret discovers accounts; it never actively probes the
-  target, so there is no active-scan authorization gate (unlike OpenClaw).
+  target, so there is no active-scan authorization gate.
 - Lookups run as **detached workers** (`start_new_session=True`) — nothing
   blocks the aggregator's shared event loop; every API handler is plain `def`.
 - The username is **never interpolated into a shell string** — it is passed as

@@ -1,3 +1,10 @@
+secubox-meta (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * OpenClaw, RezApp et Netdata décommissionnés : références retirées
+    (ref #1487).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 06:13:58 +0200
+
 secubox-meta (0.1.5-1~bookworm1) bookworm; urgency=medium
 
   * secubox-service-signal supprimé ; fmrelay retiré (ref #1485).

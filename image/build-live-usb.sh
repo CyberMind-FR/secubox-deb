@@ -1238,7 +1238,7 @@ chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --
   python3-cryptography python3-jwt python3-zmq 2>/dev/null" || warn "Some Python packages not installed"
 
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  glances netdata mosquitto coturn lxc debootstrap 2>/dev/null" || warn "Some services not installed"
+  glances mosquitto coturn lxc debootstrap 2>/dev/null" || warn "Some services not installed"
 ok "Security services installed"
 
 # Create symlinks for uvicorn to ensure all service files can find it
@@ -2792,7 +2792,6 @@ INCOMPLETE_MODULES=(
   secubox-jabber
   secubox-torrent
   secubox-osip
-  secubox-openclaw
   secubox-jellyfin
   secubox-localai
   secubox-cipher

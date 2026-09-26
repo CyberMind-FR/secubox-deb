@@ -1,3 +1,10 @@
+secubox-profiles (0.19.9-1~bookworm1) bookworm; urgency=medium
+
+  * OpenClaw, RezApp et Netdata décommissionnés : références retirées
+    (ref #1487).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 06:13:58 +0200
+
 secubox-profiles (0.19.8-1~bookworm1) bookworm; urgency=medium
 
   * fmrelay retiré des profils full / media-lab et du cycle de vie (ref #1485).

@@ -1,3 +1,10 @@
+secubox-metacatalog (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * OpenClaw, RezApp et Netdata décommissionnés : références retirées
+    (ref #1487).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 06:13:58 +0200
+
 secubox-metacatalog (1.2.2-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

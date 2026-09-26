@@ -111,7 +111,7 @@ def categorize_module(module_id: str) -> str:
         "vortex-firewall": "Security", "ipblock": "Security", "mac-guard": "Security",
         "interceptor": "Security", "cookies": "Security", "threats": "Security",
         "threat-analyst": "Security", "cve-triage": "Security", "wazuh": "Security",
-        "openclaw": "Security", "iot-guard": "Security",
+        "iot-guard": "Security",
 
         # Network
         "netmodes": "Network", "qos": "Network", "traffic": "Network",
@@ -129,7 +129,7 @@ def categorize_module(module_id: str) -> str:
         "simplex": "Privacy", "vault": "Privacy",
 
         # Monitoring
-        "netdata": "Monitoring", "dpi": "Monitoring", "netifyd": "Monitoring",
+        "dpi": "Monitoring", "netifyd": "Monitoring",
         "ndpid": "Monitoring", "device-intel": "Monitoring", "watchdog": "Monitoring",
         "mediaflow": "Monitoring", "glances": "Monitoring",
 
@@ -165,7 +165,7 @@ def categorize_module(module_id: str) -> str:
         "system": "System", "backup": "System", "config-advisor": "System",
         "reporter": "System", "mirror": "System", "cloner": "System",
         "ksm": "System", "avatar": "System", "rtty": "System",
-        "vm": "System", "redroid": "System", "rezapp": "System",
+        "vm": "System", "redroid": "System",
         "picobrew": "System", "saas-relay": "System", "magicmirror": "System",
         "mmpm": "System", "eye-remote": "System",
     }

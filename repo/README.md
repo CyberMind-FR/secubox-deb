@@ -196,7 +196,6 @@ ssh-keyscan -H apt.secubox.in
 ### Monitoring
 | Package | Description |
 |---------|-------------|
-| `secubox-netdata` | Netdata integration |
 | `secubox-mediaflow` | Media flow analysis |
 | `secubox-device-intel` | Asset discovery and fingerprinting |
 | `secubox-watchdog` | Container/service/endpoint monitoring |
