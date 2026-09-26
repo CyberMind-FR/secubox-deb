@@ -106,7 +106,7 @@
 <div class="mw">
   <div class="tete">
     <span class="ic">☁️</span>
-    <span class="nm"><b>Cloud</b><span class="h" id="hote">nc.gk2.secubox.in</span></span>
+    <span class="nm"><b>Cloud</b><span class="h" id="hote" data-sbx-hote>nc.gk2.secubox.in</span></span>
     <span class="jauge" id="jauge" style="display:none">
       <span class="pct" id="pct"></span>
       <span class="bar"><i id="barre"></i></span>
@@ -128,11 +128,12 @@
 <input type="file" id="picker" style="display:none">
 <div class="toast" id="toast"></div>
 
+<script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script>
 (function () {
   "use strict";
-  var HOTE = 'nc.gk2.secubox.in', ID = 'nextcloud';
+  var HOTE = SBX_DOMAINE.hote('nc.gk2.secubox.in'), ID = 'nextcloud';
   var el = function (i) { return document.getElementById(i); };
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (x) {
       return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[x]; }); };
@@ -169,17 +170,17 @@
   function sansAcces(etatSvc, code) {
     el('onglets').style.display = 'none'; el('jauge').style.display = 'none'; el('pied').style.display = 'none';
     if (code === 401 || code === 403) {
-      var meme = /(^|\.)gk2\.secubox\.in$/.test(location.hostname);
+      var meme = SBX_DOMAINE.meme;   // #1493
       el('corps').innerHTML = meme
         ? '<div class="sans"><p>Il manque votre session <b>SecuBox</b> pour voir vos fichiers.</p>'
           + '<button id="cnx">Connexion SecuBox…</button></div>'
         : '<div class="sans"><p>Ce domaine ne porte pas le témoin de session.</p>'
           + '<button id="bascule">Récupérer ma session…</button></div>';
       var b = el('bascule'); if (b) b.addEventListener('click', function () {
-        top.location.href = 'https://hall.gk2.secubox.in/relais.html?retour=' + encodeURIComponent(top.location.origin + '/'); });
+        top.location.href = SBX_DOMAINE.hall+'/relais.html?retour=' + encodeURIComponent(top.location.origin + '/'); });
       var k = el('cnx'); if (k) k.addEventListener('click', function () {
         if (parent !== window) { try { parent.postMessage({ sbx:'connexion' }, '*'); } catch (e) {} }
-        else window.open('https://admin.gk2.secubox.in/login.html', 'sbx-session', 'width=520,height=560,noopener'); });
+        else window.open(SBX_DOMAINE.admin+'/login.html', 'sbx-session', 'width=520,height=560,noopener'); });
       return;
     }
     var att = etatSvc && etatSvc.demande;

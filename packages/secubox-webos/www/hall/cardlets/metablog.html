@@ -30,6 +30,7 @@
 <title>Mes sites — mosaïque</title>
 <link rel="stylesheet" href="../spicy.css">
 <link rel="stylesheet" href="../slicebar.css">
+<script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script src="../slicebar.js"></script>
 <style>
@@ -182,7 +183,7 @@
     }
   } catch (e) { /* stockage refusé : pas de bouton, c'est le repli sûr. */ }
 
-  var ADMIN = "https://admin.gk2.secubox.in";
+  var ADMIN = SBX_DOMAINE.admin;   // #1493
   var SHOT = "/api/v1/metablogizer/site/";
 
   // TRIS — plusieurs lectures du MÊME parc, choisies par la barre à pastilles

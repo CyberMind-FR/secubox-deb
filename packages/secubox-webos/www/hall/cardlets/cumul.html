@@ -22,6 +22,7 @@
 <title>Carte cumulative — vue micro</title>
 <link rel="stylesheet" href="../spicy.css">
 <link rel="stylesheet" href="../slicebar.css">
+<script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script src="../slicebar.js"></script>
 <style>
@@ -316,10 +317,10 @@
     securite: {
       titre: 'Sécurité', icon: '🛡️',
       couches: [
-        { nom: 'Pare-feu', host: 'waf.gk2.secubox.in', charge: couchePosture },
-        { nom: 'Qui frappe ?', host: 'waf.gk2.secubox.in', charge: coucheQuiFrappe },
-        { nom: 'Analyse', host: 'waf.gk2.secubox.in', charge: coucheAnalyse },
-        { nom: 'Renseignement', host: 'waf.gk2.secubox.in', charge: coucheActeurs }
+        { nom: 'Pare-feu', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: couchePosture },
+        { nom: 'Qui frappe ?', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: coucheQuiFrappe },
+        { nom: 'Analyse', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: coucheAnalyse },
+        { nom: 'Renseignement', host: SBX_DOMAINE.hote('waf.gk2.secubox.in'), charge: coucheActeurs }
       ]
     },
     // GROUPES « embed » : la couche EST la carte réelle du service, avec SON
@@ -328,31 +329,31 @@
     contenu: {
       titre: 'Contenu', icon: '📦', embed: true,
       couches: [
-        { nom: 'Dépôt', host: 'depot.gk2.secubox.in', charge: coucheEmbed('/cardlets/quick.html?svc=depot') },
-        { nom: 'YTSaS', host: 'ytsas.gk2.secubox.in', charge: coucheEmbed('/cardlets/quick.html?svc=ytsas') },
-        { nom: 'Torrent', host: 'torrent.gk2.secubox.in', charge: coucheEmbed('/cardlets/quick.html?svc=torrent') }
+        { nom: 'Dépôt', host: SBX_DOMAINE.hote('depot.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=depot') },
+        { nom: 'YTSaS', host: SBX_DOMAINE.hote('ytsas.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=ytsas') },
+        { nom: 'Torrent', host: SBX_DOMAINE.hote('torrent.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=torrent') }
       ]
     },
     cloud: {
       titre: 'Cloud', icon: '☁️', embed: true,
       couches: [
-        { nom: 'Mail', host: 'webmail.gk2.secubox.in', charge: coucheEmbed('/cardlets/delegue.html?svc=mail') },
-        { nom: 'Cloud', host: 'nc.gk2.secubox.in', charge: coucheEmbed('/cardlets/delegue.html?svc=nextcloud') },
-        { nom: 'Photos', host: 'photoprism.gk2.secubox.in', charge: coucheEmbed('/cardlets/delegue.html?svc=photoprism') }
+        { nom: 'Mail', host: SBX_DOMAINE.hote('webmail.gk2.secubox.in'), charge: coucheEmbed('/cardlets/delegue.html?svc=mail') },
+        { nom: 'Cloud', host: SBX_DOMAINE.hote('nc.gk2.secubox.in'), charge: coucheEmbed('/cardlets/delegue.html?svc=nextcloud') },
+        { nom: 'Photos', host: SBX_DOMAINE.hote('photoprism.gk2.secubox.in'), charge: coucheEmbed('/cardlets/delegue.html?svc=photoprism') }
       ]
     },
     social: {
       titre: 'Social', icon: '🐘', embed: true,
       couches: [
-        { nom: 'Mastodon', host: 'social.gk2.secubox.in', charge: coucheEmbed('/cardlets/delegue.html?svc=mastodon') },
-        { nom: 'Relay', host: 'socialrelay.gk2.secubox.in', charge: coucheEmbed('https://socialrelay.gk2.secubox.in/micro') }
+        { nom: 'Mastodon', host: SBX_DOMAINE.hote('social.gk2.secubox.in'), charge: coucheEmbed('/cardlets/delegue.html?svc=mastodon') },
+        { nom: 'Relay', host: SBX_DOMAINE.hote('socialrelay.gk2.secubox.in'), charge: coucheEmbed(SBX_DOMAINE.hote('https://socialrelay.gk2.secubox.in/micro')) }
       ]
     },
     forums: {
       titre: 'Forums', icon: '💬', embed: true,
       couches: [
-        { nom: 'BBS', host: 'bbs.gk2.secubox.in', charge: coucheEmbed('https://bbs.gk2.secubox.in/micro') },
-        { nom: 'Billets', host: 'billets.gk2.secubox.in', charge: coucheEmbed('https://billets.gk2.secubox.in/micro') }
+        { nom: 'BBS', host: SBX_DOMAINE.hote('bbs.gk2.secubox.in'), charge: coucheEmbed(SBX_DOMAINE.hote('https://bbs.gk2.secubox.in/micro')) },
+        { nom: 'Billets', host: SBX_DOMAINE.hote('billets.gk2.secubox.in'), charge: coucheEmbed(SBX_DOMAINE.hote('https://billets.gk2.secubox.in/micro')) }
       ]
     }
   };

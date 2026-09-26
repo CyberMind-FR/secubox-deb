@@ -49,13 +49,14 @@
   <div id="suite"></div>
 </div>
 
+<script src="domaine.js"></script>
 <script>
 (function () {
   "use strict";
   // LISTE CLOSE DES RETOURS. Tout ce qui n'y figure pas est refusé : une
   // redirection vers une destination fournie par l'appelant emporterait le
   // jeton chez n'importe qui.
-  var RETOURS = ['https://hall.gk2.net', 'https://hall.gk2.secubox.in'];
+  var RETOURS = SBX_DOMAINE.retours;   // #1493 : déduite du domaine de la box
 
   var msg = document.getElementById('msg');
   var suite = document.getElementById('suite');
@@ -79,7 +80,7 @@
     .then(function (r) {
       if (r.code === 401 || r.code === 403) {
         msg.textContent = 'Vous n’êtes pas connecté à la box.';
-        suite.innerHTML = '<a class="b2" href="https://admin.gk2.secubox.in/login.html'
+        suite.innerHTML = '<a class="b2" href="' + SBX_DOMAINE.admin + '/login.html'
           + '?retour=' + encodeURIComponent(location.href) + '">Connexion SecuBox…</a>';
         return;
       }

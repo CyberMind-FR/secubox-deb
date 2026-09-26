@@ -125,6 +125,7 @@
   <div class="acces" id="acces"></div>
 </div>
 
+<script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script>
 (function () {
@@ -140,7 +141,7 @@
     // « Ajouter » doublaient ce que la carte fait déjà : la liste des torrents
     // avec pause/reprise, et le champ magnet juste dessous. Deux boutons qui
     // menaient au même endroit, en plus loin.
-    torrent: { ic:'🧲', nom:'Torrent', hote:'torrent.gk2.secubox.in', mod:'torrent',
+    torrent: { ic:'🧲', nom:'Torrent', hote:SBX_DOMAINE.hote('torrent.gk2.secubox.in'), mod:'torrent',
       couleur:'#3c6e8f',
       chiffres:[['total','📦','au total'],['downloading','⬇','en cours'],
                 ['to_peertube','📹','vers PeerTube']],
@@ -148,12 +149,12 @@
     // PAS DE BOUTONS (#1320) : la carte fait deja ce que le service fait —
     // une URL, un bouton de capture, et la liste des dernieres. « Ouvrir » et
     // « Nouvelle capture » ne menaient qu'a la meme chose, en plus loin.
-    ytsas: { ic:'🎬', nom:'YTSaS', hote:'ytsas.gk2.secubox.in', mod:'ytsas',
+    ytsas: { ic:'🎬', nom:'YTSaS', hote:SBX_DOMAINE.hote('ytsas.gk2.secubox.in'), mod:'ytsas',
       couleur:'#b03030',
       chiffres:[['total','🎞️','captures'],['jobs','⚙️','tâches'],
                 ['to_peertube','📹','vers PeerTube']],
       acces:[] },
-    depot: { ic:'📦', nom:'Dépôt', hote:'depot.gk2.secubox.in', mod:'droplet',
+    depot: { ic:'📦', nom:'Dépôt', hote:SBX_DOMAINE.hote('depot.gk2.secubox.in'), mod:'droplet',
       couleur:'#3d6b4a',
       chiffres:[['sites_count','🌐','sites'],['apps_count','🧩','applications']],
       acces:[] }
