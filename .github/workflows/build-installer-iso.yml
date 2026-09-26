@@ -88,6 +88,9 @@ jobs:
           workflow: build-packages.yml
           name: secubox-debs-all
           commit: ${{ github.sha }}
+          # #1501 : les paquets sont construits même si le dernier job
+          # (publication de la release) échoue ; ne pas exiger « success ».
+          workflow_conclusion: completed
           path: output/debs/
           if_no_artifact_found: warn
         continue-on-error: true
