@@ -46,9 +46,10 @@ def test_executer_waf_sans_historique_n_envoie_rien():
     assert envois == []  # rien expédié
 
 
-def test_config_waf_par_defaut_gk2(monkeypatch, tmp_path):
+def test_config_waf_par_defaut_sans_destinataire(monkeypatch, tmp_path):
+    # #1497 : une box neuve n'envoie son rapport WAF à personne par défaut.
     monkeypatch.setattr(rw, "CONF", tmp_path / "absent.toml")
     c = rw.config_waf()
-    assert c["destinataire"] == "gk2@secubox.in"
+    assert c["destinataire"] == ""
     assert c["jours"] == 7
 

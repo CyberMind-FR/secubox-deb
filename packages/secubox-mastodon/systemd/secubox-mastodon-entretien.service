@@ -1,4 +1,6 @@
 [Unit]
+# #1497 : conteneur pas encore provisionne = rien a entretenir.
+ConditionPathExists=/data/lxc/mastodon/config
 # ENTRETIEN PERIODIQUE DE L'INSTANCE FEDEREE.
 #
 # Une instance Mastodon accumule indefiniment ce qu'elle recoit du reste du

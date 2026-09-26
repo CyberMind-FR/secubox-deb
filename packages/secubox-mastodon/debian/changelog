@@ -1,3 +1,10 @@
+secubox-mastodon (0.3.6-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-mastodon-entretien : ignoré tant que le conteneur n'est pas
+    provisionné (ref #1497).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 13:00:00 +0200
+
 secubox-mastodon (0.3.5-1~bookworm1) bookworm; urgency=medium
 
   * Le paquet pose SA PROPRE route sbxwaf via secubox-waf-route (#1323),

@@ -256,7 +256,7 @@ log "1/8 Debootstrap ${SUITE} amd64..."
 mkdir -p "${ROOTFS}"
 
 # Core system packages
-INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server,locales"
+INCLUDE_PKGS="systemd,systemd-sysv,systemd-timesyncd,dbus,netplan.io,nftables,openssh-server,locales"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,console-setup"
 INCLUDE_PKGS+=",iproute2,iputils-ping,iputils-arping,ethtool,net-tools,wireguard-tools,isc-dhcp-client"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
@@ -1852,6 +1852,16 @@ for svc in "${ROOTFS}/usr/lib/systemd/system/secubox-"*.service; do
       continue
       ;;
   esac
+  # CE QUE LE PAQUET N'ACTIVE PAS, L'IMAGE NON PLUS (#1497). Cette boucle
+  # activait TOUT secubox-*.service ; sur une box neuve on voyait alors :
+  #  - les modeles (`x@.service`) lies tels quels -> instance absurde
+  #    `secubox-toolbox-ng-worker@multi-user`, qui tirait wg-quick@wg-toolbox ;
+  #  - les taches a minuterie (rapports, balayages, entretien) lancees a
+  #    CHAQUE demarrage au lieu de l'etre par leur .timer ;
+  #  - les unites sans [Install], que leur paquet declenche autrement.
+  case "$svc_name" in *@.service) continue ;; esac
+  [[ -f "${svc%.service}.timer" ]] && continue
+  grep -qE '^(WantedBy|RequiredBy)=' "$svc" || continue
   # Create symlink to enable service
   ln -sf "/usr/lib/systemd/system/${svc_name}" \
     "${ROOTFS}/etc/systemd/system/multi-user.target.wants/${svc_name}"

@@ -1,4 +1,6 @@
 [Unit]
+# #1497 : sans eth2 (PC amd64, autre carte) il n'y a rien a regler.
+ConditionPathExists=/sys/class/net/eth2
 Description=SecuBox: disable eth2 flow-control pause (mvpp2 MAC TX wedge workaround)
 Documentation=file:///usr/share/doc/secubox/FAQ-NETWORK-WAN-RECOVERY.md
 After=sys-subsystem-net-devices-eth2.device

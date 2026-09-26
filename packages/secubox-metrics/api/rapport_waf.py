@@ -33,8 +33,11 @@ if _ici not in sys.path:
 
 CONF = Path("/etc/secubox/metrics.toml")
 
+# AUCUN DESTINATAIRE PAR DÉFAUT (#1497). Le défaut « gk2@secubox.in » faisait
+# qu'une box NEUVE expédiait son rapport WAF à la boîte de gk2. Un rapport
+# part vers qui la config `[rapport.waf]` désigne, ou ne part pas.
 DEFAUTS = {
-    "destinataire": "gk2@secubox.in",
+    "destinataire": "",
     "jours": 7,
     "periode": "quotidien",
 }
@@ -57,6 +60,8 @@ def config_waf() -> dict:
 def executer_waf(lire_hist, construire_pdf, envoyer, cfg: Optional[dict] = None) -> dict:
     """Lit l'historique WAF, produit le PDF, l'expédie. Rien si pas de données."""
     c = cfg or config_waf()
+    if not c.get("destinataire"):
+        return {"envoye": False, "raison": "aucun destinataire configuré ([rapport.waf])"}
     hist = lire_hist()
     if not hist or not hist.get("jours"):
         return {"envoye": False, "raison": "aucun historique WAF"}
@@ -310,10 +315,17 @@ def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
 
 def main(argv=None) -> int:
     """Point d'entrée de la tâche planifiée (service oneshot)."""
+    cfg = config_waf()
+    # Avant les imports lourds (matplotlib, absent d'une box neuve) : sans
+    # destinataire il n'y a rien à produire, et ce n'est pas une panne (#1497).
+    if not cfg.get("destinataire"):
+        print("rapport WAF : non configuré ([rapport.waf] destinataire) — "
+              "rien à envoyer", file=sys.stderr)
+        return 0
     import rapport
     try:
         res = executer_waf(rapport._lire_waf_historique, construire_pdf_waf,
-                           rapport.envoyer)
+                           rapport.envoyer, cfg)
     except Exception as e:  # noqa: BLE001 — une tâche planifiée journalise et sort
         print(f"rapport WAF : échec : {e}", file=sys.stderr)
         return 1

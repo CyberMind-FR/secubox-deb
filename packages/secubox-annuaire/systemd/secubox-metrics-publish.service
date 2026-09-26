@@ -1,4 +1,6 @@
 [Unit]
+# #1497 : pas de cle de noeud (box neuve, `annuairectl init` non fait) = rien a publier.
+ConditionPathExists=/etc/secubox/secrets/annuaire/node.key
 Description=SecuBox Annuaire — publish this node's signed fleet metrics snapshot (fleet-metrics)
 Documentation=file:///usr/share/doc/secubox-annuaire/README
 After=secubox-annuaire.service
