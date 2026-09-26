@@ -14,6 +14,8 @@ Architecture: all
 # présence a déjà fait planter l'agrégateur en 502 par ImportError. La version
 # utilisée (16.0) vient de pip, dans /usr/local/lib/python3.11/dist-packages.
 # Vérifié le 2026-08-02 : apt candidat 10.4-1, pip installé 16.0.
+Replaces: secubox-metrics (<< 1.12.9~)
+Breaks: secubox-metrics (<< 1.12.9~)
 Depends: ${misc:Depends}, ${python3:Depends},
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip,

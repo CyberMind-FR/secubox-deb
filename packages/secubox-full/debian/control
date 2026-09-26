@@ -25,8 +25,8 @@ Depends: ${misc:Depends},
 # cible rend pourtant le plus demandeur.
  secubox-profiles,
  secubox-isp (>= 1.0),
- secubox-bbs (>= 1.0),
- secubox-billets (>= 1.0),
+ secubox-bbs,
+ secubox-billets,
  secubox-nextcloud (>= 1.0),
  secubox-gitea (>= 1.0),
  secubox-jellyfin (>= 1.0),
@@ -36,11 +36,11 @@ Depends: ${misc:Depends},
  secubox-torrent (>= 1.0),
  secubox-webmail (>= 1.0),
  secubox-mail (>= 1.0),
- secubox-ytsas (>= 1.0),
+ secubox-ytsas,
  secubox-zigbee (>= 1.0),
  secubox-metablogizer (>= 1.0),
  secubox-publish (>= 1.0),
- secubox-radio (>= 1.0)
+ secubox-radio
 Recommends: wireguard-tools
 Description: SecuBox Full — socle ISP + applications working (catalogue all.gk2)
  Métapaquet showcase : le socle secubox-isp PLUS les applications

@@ -332,7 +332,12 @@ jobs:
           besoin_natif=0
           case " $NATIF_ARM64 " in *" ${{ matrix.package }} "*) besoin_natif=1 ;; esac
 
-          if [ "${{ matrix.arch }}" = "arm64" ] && [ "$besoin_natif" = "1" ]; then
+          # AMD64 AUSSI (#1491) : compilé à même le runner Ubuntu 24.04, le
+          # moteur amd64 dépendait de libc6 >= 2.38 et libpcap0.8t64 —
+          # ininstallable sur bookworm, et les profils isp/full jamais produits.
+          # Le conteneur debian de la suite cible sert donc aux deux
+          # architectures (amd64 : natif, sans émulation).
+          if [ "$besoin_natif" = "1" ]; then
             # AUCUNE APOSTROPHE DANS LE `bash -c '...'` CI-DESSOUS : la
             # charge utile est entre quotes simples, une apostrophe francaise
             # la referme et le shell meurt sur « unexpected EOF while looking
@@ -345,8 +350,8 @@ jobs:
             # succes en amd64 ; le conteneur debian est minimal. Sans eux, la
             # configuration s'arrete APRES avoir compile nDPIsrvd, ce qui
             # ressemble a tort a un probleme d'emulation.
-            echo "-> construction arm64 NATIVE (emulee) de ${{ matrix.package }}"
-            docker run --rm --platform linux/arm64 \
+            echo "-> construction ${{ matrix.arch }} NATIVE dans debian:${{ env.DEBIAN_SUITE }} de ${{ matrix.package }}"
+            docker run --rm --platform linux/${{ matrix.arch }} \
               -v "$GITHUB_WORKSPACE":/w \
               -w "/w/packages/${{ matrix.package }}" \
               -e DEBIAN_FRONTEND=noninteractive \

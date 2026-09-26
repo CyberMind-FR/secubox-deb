@@ -81,7 +81,10 @@ apply_settings() {
     log "Display mode: $SECUBOX_MODE"
 
     # Send boot mode to Plymouth
-    send_plymouth_mode "$SECUBOX_MODE"
+    # L'entrée GRUB « Kiosk » passe secubox.kiosk=1 SANS secubox.mode : l'écran
+    # d'accueil annonçait « CONSOLE MODE » en démarrant le kiosk (#1491).
+    if [[ "$SECUBOX_KIOSK" == "1" ]]; then send_plymouth_mode kiosk
+    else send_plymouth_mode "$SECUBOX_MODE"; fi
 
     # Handle display mode (kiosk/tui/console)
     case "$SECUBOX_MODE" in

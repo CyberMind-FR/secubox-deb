@@ -241,7 +241,7 @@ jobs:
             echo "Release exists, cleaning up for retry..."
             # Get existing asset names
             existing=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
-            for asset in release/packages/*.deb release/images/*.img.gz release/images/*.img.xz release/live-usb/*.img*; do
+            for asset in release/images/*.img.gz release/images/*.img.xz release/live-usb/*.img*; do
               [ -f "$asset" ] || continue
               name=$(basename "$asset")
               if echo "$existing" | grep -qF "$name"; then
@@ -256,8 +256,10 @@ jobs:
         with:
           name: SecuBox-DEB ${{ github.ref_name || github.event.inputs.version }}
           body_path: release/RELEASE_NOTES.md
+          # PAS DE .deb ICI (#1491) : build-packages les publie déjà dans cette
+          # release ; les supprimer puis les renvoyer (≈ 460 fichiers) faisait
+          # sauter la limite secondaire de l'API GitHub et échouer la release.
           files: |
-            release/packages/*.deb
             release/images/*.img.gz
             release/images/*.img.xz
             release/live-usb/*.img*

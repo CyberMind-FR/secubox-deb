@@ -2399,6 +2399,9 @@ xset s noblank 2>/dev/null || true
 # URL to display - use localhost for universal compatibility
 URL="https://localhost/"
 
+# Taille réelle de l'écran (#1491) : sans gestionnaire de fenêtres,
+# --start-fullscreen laisse une fenêtre à demi-largeur.
+G=$(xdpyinfo 2>/dev/null | awk '/dimensions:/{sub("x",",",$2); print $2}')
 # Chromium with VT-switch-friendly flags (--start-fullscreen, not --kiosk)
 # exec replaces shell with chromium - on exit, X session ends
 exec chromium \
@@ -2410,7 +2413,10 @@ exec chromium \
     --noerrdialogs \
     --disable-translate \
     --ignore-certificate-errors \
-    --disable-features=TranslateUI \
+    --disable-features=Translate,TranslateUI \
+    --test-type \
+    --lang=fr \
+    ${G:+--window-size=$G} \
     --window-position=0,0 \
     "$URL"
 XSESSION
@@ -2504,8 +2510,13 @@ XCONF
     xinit /bin/bash -c "
         xset s off 2>/dev/null
         xset -dpms 2>/dev/null
+        # TAILLE RÉELLE DE L'ÉCRAN (#1491) : sans gestionnaire de fenêtres,
+        # --start-fullscreen laissait une fenêtre à demi-largeur ; --test-type
+        # masque le bandeau « --no-sandbox », Translate la bulle de traduction.
+        G=\$(xdpyinfo 2>/dev/null | awk '/dimensions:/{sub(\"x\",\",\",\$2); print \$2}')
         exec chromium --start-fullscreen --no-first-run --no-sandbox --disable-gpu \
             --disable-pinch --noerrdialogs --disable-translate \
+            --test-type --disable-features=Translate,TranslateUI --lang=fr \${G:+--window-size=\$G} \
             --ignore-certificate-errors --window-position=0,0 '$URL'
     " -- :0 vt7 -nolisten tcp -keeptty 2>/dev/null &
     sleep 3
@@ -3404,6 +3415,10 @@ if [[ -d "${ROOTFS}/etc/nginx/secubox.d" ]]; then
 fi
 
 ok "Permissions fixed"
+
+# Arbitrages de services, comme l'image VM (#1491) : dnsmasq confisquait le
+# port 53 et échouait au démarrage du live (unbound le tient).
+bash "${SCRIPT_DIR}/apply-service-policy.sh" "${ROOTFS}"
 
 # Squelette de /var/lib/secubox (#1478) : figé ICI, après tous les postinst,
 # recopié au démarrage dans le tmpfs par secubox-varlib-seed.service.
