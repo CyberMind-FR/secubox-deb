@@ -1,9 +1,0 @@
-{
-  "id": "signal",
-  "name": "Signal",
-  "category": "mesh",
-  "icon": "🔐",
-  "path": "/signal/",
-  "order": 27,
-  "description": "SBX-SIGNAL — passerelle Signal : messages, groupes, alertes Sentinel"
-}

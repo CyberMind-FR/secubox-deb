@@ -1542,42 +1542,6 @@ modules:
       presente: false
       chemin: "À documenter"
       vhosts: []
-  - id: secubox-fmrelay
-    nom: "secubox-fmrelay"
-    categorie: "À documenter"
-    tier: "À documenter"
-    description: "À documenter"
-    manifeste: false
-    lxc: false
-    tests: 0
-    depends: []
-    cli:
-      - "fmrelayctl"
-      - "secubox-fmrelay-icy"
-      - "secubox-fmrelay-runner"
-    systemd: []
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "À documenter"
-      health: "À documenter"
-      authentifie: false
-      nb_routes: 9
-      routes:
-        - "GET /access"
-        - "GET /components"
-        - "GET /healthz"
-        - "GET /mounts"
-        - "GET /now-playing"
-        - "GET /status"
-        - "GET /version"
-        - "POST /start"
-        - "POST /stop"
-    interface_web:
-      presente: true
-      chemin: "À documenter"
-      vhosts: []
   - id: secubox-frigate
     nom: "secubox-frigate"
     categorie: "misc"

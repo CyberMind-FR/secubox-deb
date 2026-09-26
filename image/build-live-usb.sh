@@ -2814,7 +2814,6 @@ INCOMPLETE_MODULES=(
   # physical RTL-SDR + GSM modem present. Operators install + enable
   # them by hand once they wire the SDR / EP06.
   secubox-sentinelle-gsm
-  secubox-fmrelay
   # LXC-backed modules — their host control plane immediately tries to
   # probe the container at 10.100.0.X over the br-lxc bridge. On live
   # USB the LXC stack isn't initialised + the container doesn't exist,

@@ -122,7 +122,6 @@
 | 🖥️ **RTTY Console** | System | 远程终端访问 |
 | 🧑 **Avatar Manager** | Apps | 身份与头像管理器 |
 | 📜 **Certificate Manager** | Security | ACME / TLS 证书管理器 |
-| 📻 **FM Relay** | Media | rtl_fm 转 Icecast MP3 挂载，含实时 RDS 元数据 |
 | 📊 **Grafana** | Monitoring | 安全指标仪表板 |
 | ❤️ **Hub Health** | Dashboard | 服务健康与状态面板 |
 | 🧠 **KSM Optimizer** | System | 内核同页内存（KSM）优化仪表板 |
@@ -562,14 +561,6 @@ Usenet/NNTP客户端
 **功能:** NZB下载, 自动处理, 搜索, 分类
 
 ![Newsbin](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/newsbin.png)
-
-#### 📻 FM Relay
-
-rtl_fm 转 Icecast MP3 挂载，含实时 RDS 元数据
-
-**功能:** SDR FM 采集, Icecast 流, RDS 元数据, 电台预设
-
-![FM Relay](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/fmrelay.png)
 
 #### 🎙️ Podcaster
 
