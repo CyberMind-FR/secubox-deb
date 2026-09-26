@@ -1351,7 +1351,14 @@ SEEDUNIT
 
 # Enable the mount unit (and its seed)
 chroot "${ROOTFS}" systemctl enable var-lib-secubox.mount 2>/dev/null || true
-chroot "${ROOTFS}" systemctl enable secubox-varlib-seed.service 2>/dev/null || true
+# LIENS EXPLICITES (#1482) : `systemctl enable` dans le chroot échouait en
+# silence — le semis était livré DÉSACTIVÉ et ne servait à rien.
+mkdir -p "${ROOTFS}/etc/systemd/system/var-lib-secubox.mount.wants" \
+         "${ROOTFS}/etc/systemd/system/sysinit.target.wants"
+ln -sf ../secubox-varlib-seed.service "${ROOTFS}/etc/systemd/system/var-lib-secubox.mount.wants/secubox-varlib-seed.service"
+ln -sf ../secubox-varlib-seed.service "${ROOTFS}/etc/systemd/system/sysinit.target.wants/secubox-varlib-seed.service"
+[[ -L "${ROOTFS}/etc/systemd/system/sysinit.target.wants/secubox-varlib-seed.service" ]] \
+  || { echo "ERREUR : semis de /var/lib/secubox non activé" >&2; exit 1; }
 log "tmpfs mount unit created for /var/lib/secubox (seeded at boot)"
 
 # Find all .deb files in cache/repo or output/
