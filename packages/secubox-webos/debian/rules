@@ -38,6 +38,7 @@ override_dh_auto_install:
 	install -m 0644 www/hall/slicebar.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/slicebar.js
 	install -m 0644 www/hall/aide.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/aide.js
 	install -m 0644 www/hall/sonde.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/sonde.js
+	install -m 0644 www/hall/domaine.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/domaine.js
 	install -m 0644 www/hall/spicy.css $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/spicy.css
 	install -m 0644 www/hall/hls.min.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/hls.min.js
 	install -d $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/medaillons

@@ -1,3 +1,14 @@
+secubox-webos (1.0.347-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : le domaine de la box est DÉDUIT de l'hôte, plus écrit en dur
+    (domaine.js partagé). Connexion, relais, retour autorisé, WebUI admin et
+    hôtes des cartes suivent la box qui sert la page : hall.<dom> -> admin.<dom>,
+    IP/localhost -> même origine, alias gk2.net -> gk2.secubox.in. Sur une VM
+    ou une box bêta, « Connexion SecuBox… » n'envoie plus s'authentifier sur
+    gk2 (ref #1493). Sur gk2, strictement identique.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 12:00:00 +0200
+
 secubox-webos (1.0.346-1~bookworm1) bookworm; urgency=medium
 
   * Route messagerie : verdict LAN transmis ; carte « Mes comptes » : garde

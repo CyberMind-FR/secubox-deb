@@ -136,6 +136,7 @@
     </div>
   </div>
 
+<script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
@@ -150,9 +151,9 @@
     // DNS) → INnavigable. On droppe `.onion` et on marque par un `0` de tete
     // (hors base32) → `surf-0<56>` = 62 car. Le relais route en Tor (egress).
     var mo = h.match(/^([a-z2-7]{56})\.onion$/);
-    if (mo) return 'surf-0' + mo[1] + '.gk2.secubox.in';
+    if (mo) return 'surf-0' + mo[1] + SBX_DOMAINE.hote('.gk2.secubox.in');
     var plat = h.replace(/-/g, '--').replace(/\./g, '-');
-    return 'surf-' + plat + '.gk2.secubox.in';
+    return 'surf-' + plat + SBX_DOMAINE.hote('.gk2.secubox.in');
   }
 
   // PORTAILS DE CONSENTEMENT NAVIGUES EN DUR (#1365). Certains sites (BFM →
@@ -224,8 +225,8 @@
   // L'INVERSE, pour lire l'hote reel d'une adresse surf (navigation interne).
   function cibleDe(origine) {
     var h = String(origine || '').toLowerCase();
-    if (h.indexOf('surf-') !== 0 || h.indexOf('.gk2.secubox.in') < 0) return null;
-    var plat = h.slice(5, h.indexOf('.gk2.secubox.in'));
+    if (h.indexOf('surf-') !== 0 || h.indexOf(SBX_DOMAINE.hote('.gk2.secubox.in')) < 0) return null;
+    var plat = h.slice(5, h.indexOf(SBX_DOMAINE.hote('.gk2.secubox.in')));
     var mo = plat.match(/^0([a-z2-7]{56})$/);
     if (mo) return mo[1] + '.onion';
     return plat.replace(/--/g, '\x00').replace(/-/g, '.').replace(/\x00/g, '-');

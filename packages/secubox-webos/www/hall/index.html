@@ -1351,6 +1351,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
   <span id="sb-info" class="mono">chargement du registre…</span>
 </footer>
 
+<script src="domaine.js"></script>
 <script>
 // Services PRINCIPAUX = curation « all.gk2.net » (apps grand public, cf. design).
 // Tout le reste va sous SYSTÈME. Les ids inexistants sont simplement ignorés.
@@ -1469,6 +1470,9 @@ const FEATURED = [
   // sert sa propre carte (barre d'adresse + cadre), et s'ouvre aussi en overlay
   // depuis les sources MetaNews ou la barre de recherche (#1337).
 ];
+// #1493 : les url des cartes sont écrites pour gk2 ; sur une autre box on les
+// réécrit vers son domaine (identité sur gk2).
+FEATURED.forEach(f=>{ if(f.url) f.url=SBX_DOMAINE.hote(f.url); if(f.carte) f.carte=SBX_DOMAINE.hote(f.carte); });
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
 // Les autres afficheront un repli « ouvrir dans un onglet » tant que leur cadrage
 // n'autorise pas hall.gk2.secubox.in.
@@ -1543,7 +1547,7 @@ const MOCK={services:[
   {id:"toolbox",name:"ToolBoX",category:"wall",icon:"🧰",description:"Boîte à outils réseau",health:{state:"online"},installed:true,active:true},
 ]};
 
-function host(s){ return (s.urls&&(s.urls.wan||s.urls.lan)) || (s.id+".gk2.secubox.in"); }
+function host(s){ return (s.urls&&(s.urls.wan||s.urls.lan)) || SBX_DOMAINE.hote(s.id+".gk2.secubox.in"); }
 
 function featCardHTML(f,s){
   s=s||{}; const st=(s.health&&s.health.state)||"unknown";
@@ -1799,7 +1803,7 @@ function showView(v){
 // ⧉ onglet réel · ⚙️ WebUI admin · ▦ service embarqué. Les deux modes EMBARQUÉS
 // gardent CHACUN leur iframe vivante : basculer ne recharge pas l'app, on ne
 // fait que montrer l'autre cadre (état, lecture, formulaire en cours préservés).
-const ADMIN_HOST='admin.gk2.secubox.in';
+const ADMIN_ORIGINE=SBX_DOMAINE.admin;   // #1493 : déduit, plus écrit en dur
 let _svc=null, _mode='embed', _sub=null, _frames={};
 
 function svcDesc(id){
@@ -1838,7 +1842,7 @@ function modeURL(mode){
   // La console admin recevait l'URL SANS theme : embarquee dans un Hall
   // sombre, elle s'ouvrait en clair. Le separateur depend du chemin, qui
   // porte deja parfois une requete.
-  if(mode==='admin') return 'https://'+ADMIN_HOST+_svc.path
+  if(mode==='admin') return ADMIN_ORIGINE+_svc.path
     + (_svc.path.indexOf('?')>=0?'&':'?') + 'theme=' + thAdmin;
   const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   return 'https://'+_svc.url+(_sub||'/')+'?embed=1&theme='+th;
@@ -1848,7 +1852,7 @@ function modeURL(mode){
 // https://admin.gk2…/<module>/, la page qu'on avait sous les yeux.
 function plainURL(){
   if(!_svc) return '/';
-  if(_mode==='admin') return 'https://'+ADMIN_HOST+_svc.path;
+  if(_mode==='admin') return ADMIN_ORIGINE+_svc.path;
   // Cardlet sans vhost : l'onglet réel ouvre la cardlet elle-même (même origine).
   if(_svc.noVhost && _svc.carte) return location.origin+_svc.carte;
   return 'https://'+_svc.url+(_sub||'/');
@@ -2242,7 +2246,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   .then(r=>r.ok?r.json():Promise.reject(r.status))
   .then(d=>{ const n=(d&&d.services||[]).length;
     if(!n){ render(MOCK,'Registre <b>activé mais vide</b> — aperçu maquette.'); return; }
-    render(d,'<b>hall.gk2.net</b> — mon bureau numérique souverain : mes services et mes données, hébergés chez moi sur ma SecuBox, sous mon contrôle.');
+    render(d,'<b>'+location.hostname+'</b> — mon bureau numérique souverain : mes services et mes données, hébergés chez moi sur ma SecuBox, sous mon contrôle.');
   }).catch(()=>{});
 
 // RADIO (#1232) — rien à PILOTER depuis le Hall : le lecteur /micro porte ses
@@ -3603,7 +3607,7 @@ addEventListener('message', ev=>{
     if(!d||d.sbx!=='connexion') return;
     const c=document.querySelector('iframe[data-micro]');
     if(!c) return;
-    window.open('https://admin.gk2.secubox.in/login.html',
+    window.open(SBX_DOMAINE.admin+'/login.html',
                 'sbx-session', 'width=520,height=560,noopener');
   });
 
@@ -4011,7 +4015,7 @@ addEventListener('message', ev=>{
   // Et le cookie de session porte `.gk2.secubox.in` : sur hall.gk2.net il
   // n'arrivera JAMAIS. Proposer « se connecter » là-bas enverrait la personne
   // se connecter pour rien ; on l'amène d'abord sur le bon domaine.
-  const SBX_DOM = /(^|\.)gk2\.secubox\.in$/.test(location.hostname);
+  const SBX_DOM = SBX_DOMAINE.meme;   // #1493
   var _moi = null;
   async function sondeSession(){
     try{
@@ -4185,17 +4189,17 @@ addEventListener('message', ev=>{
       // ON NE DEMENAGE PLUS, ON VA CHERCHER LA SESSION. Rediriger vers l'autre
       // domaine faisait perdre le domaine public ; le relais, lui, revient ici
       // avec un jeton et tout fonctionne a l'identique des deux cotes.
-      location.href = 'https://hall.gk2.secubox.in/relais.html?retour='
+      location.href = SBX_DOMAINE.hall+'/relais.html?retour='
         + encodeURIComponent(location.origin + location.pathname);
       return;
     }
     if(_moi){
       // La déconnexion appartient à la box, pas au Hall : on l'ouvre là où
       // elle est, plutôt que d'effacer un cookie qu'on ne possède pas.
-      window.open('https://admin.gk2.secubox.in/login.html?deconnexion=1',
+      window.open(SBX_DOMAINE.admin+'/login.html?deconnexion=1',
                   'sbx-session', 'width=520,height=560,noopener');
     } else {
-      window.open('https://admin.gk2.secubox.in/login.html',
+      window.open(SBX_DOMAINE.admin+'/login.html',
                   'sbx-session', 'width=520,height=560,noopener');
     }
     // La fenêtre est `noopener` : elle ne peut pas nous prévenir, et c'est

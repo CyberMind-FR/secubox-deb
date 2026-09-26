@@ -21,6 +21,7 @@
 <title>PeerTube — vue micro</title>
 <link rel="stylesheet" href="../spicy.css">
 <link rel="stylesheet" href="../slicebar.css">
+<script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script src="../slicebar.js"></script>
 <style>
@@ -136,7 +137,7 @@
   // L'API et les vignettes passent par le relais de MEME origine (la carte
   // vit sous `connect-src 'self'` et `img-src 'self'`) ; le lecteur, lui,
   // reste sur l'origine de PeerTube — voir lance().
-  var PT_HOTE = 'peertube.gk2.secubox.in';
+  var PT_HOTE = SBX_DOMAINE.hote('peertube.gk2.secubox.in');
   // SLICES (#peertube-slices) : plusieurs sources pour la MÊME carte, choisies
   // par la barre à bullets en bas — comme la radio. Récentes/Populaires sont
   // deux tris de l'API vidéos ; Catégories parcourt le catalogue par genre ;
