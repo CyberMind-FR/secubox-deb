@@ -67,10 +67,16 @@ func TestTierNames(t *testing.T) {
 }
 
 func TestAvailablePackages(t *testing.T) {
-	// 13 depuis le retrait de secubox-crowdsec (#1362) : le paquet est purge du
-	// produit, la liste ne doit plus le proposer a l'installation.
-	if len(AvailablePackages) != 13 {
-		t.Errorf("AvailablePackages len = %d, want 13", len(AvailablePackages))
+	// 12 depuis le retrait de secubox-crowdsec (#1362) puis de secubox-netdata
+	// (#1487) : un paquet purge du produit ne doit plus etre propose a
+	// l'installation.
+	if len(AvailablePackages) != 12 {
+		t.Errorf("AvailablePackages len = %d, want 12", len(AvailablePackages))
+	}
+	for _, p := range AvailablePackages {
+		if p == "secubox-netdata" || p == "secubox-crowdsec" {
+			t.Errorf("AvailablePackages propose encore %q, decommissionne", p)
+		}
 	}
 
 	// Verify secubox-core is first
