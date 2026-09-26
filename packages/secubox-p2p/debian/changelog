@@ -1,3 +1,12 @@
+secubox-p2p (1.11.8-1~bookworm1) bookworm; urgency=medium
+
+  * Port du mesh (UDP 51822) ouvert dans inet secubox_filter sur les box
+    installées par firstboot (nftables.conf + règle vive) : une box neuve
+    peut désormais être JOINTE, pas seulement joindre (ref #1499). Sans
+    effet là où ce jeu de règles n'existe pas (gk2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 13:20:00 +0200
+
 secubox-p2p (1.11.7-1~bookworm1) bookworm; urgency=medium
 
   * secubox-p2p-ephemeral-sweep : ignoré tant que /var/lib/secubox/p2p

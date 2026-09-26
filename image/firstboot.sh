@@ -457,6 +457,10 @@ table inet secubox_filter {
         # WireGuard
         udp dport 51820 accept
 
+        # MirrorNet (secubox-p2p, wg-mesh) — sans lui la box ne peut que
+        # JOINDRE le mesh, jamais etre jointe (relais, maitre) (#1499).
+        udp dport 51822 accept
+
         # Drop silencieux
         drop
     }
