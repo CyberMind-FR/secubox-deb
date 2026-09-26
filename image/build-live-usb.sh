@@ -2606,18 +2606,42 @@ echo ""
 
 # Find available disks
 log "Scanning disks..."
+# Le disque qui porte le système live : sur un live, `findmnt /` répond
+# « overlay » et ne désigne rien — c'est le MÉDIUM qu'il faut remonter
+# jusqu'à son disque parent (#1495).
+LIVE_DISK=""
+for m in /usr/lib/live/mount/medium /run/live/medium /lib/live/mount/medium; do
+    src=$(findmnt -n -o SOURCE "$m" 2>/dev/null) || continue
+    LIVE_DISK=$(lsblk -n -o PKNAME "$src" 2>/dev/null | head -1)
+    [[ -z "$LIVE_DISK" ]] && LIVE_DISK=$(basename "$src")
+    break
+done
 DISKS=()
-while IFS= read -r line; do
-    disk=$(echo "$line" | awk '{print $1}')
-    size=$(echo "$line" | awk '{print $2}')
-    model=$(echo "$line" | awk '{$1=$2=""; print $0}' | xargs)
-    # Skip USB boot disk (where we're running from)
-    mountpoint -q / && ROOT_DEV=$(findmnt -n -o SOURCE /) && \
-      [[ "$ROOT_DEV" == *"$disk"* ]] && continue
-    DISKS+=("$disk|$size|$model")
-done < <(lsblk -d -n -o NAME,SIZE,MODEL | grep -E '^(sd|nvme|vd)')
+# TOUS les disques, eMMC comprise (mmcblk*) ; seules les pseudo-unités
+# (loop, zram, ram, lecteurs optiques) et les zones boot/rpmb d'une eMMC
+# sont écartées.
+while read -r disk size type; do
+    [[ "$type" == disk ]] || continue
+    [[ "$disk" =~ ^(loop|zram|ram|sr) ]] && continue
+    [[ "$disk" =~ (boot[0-9]+|rpmb)$ ]] && continue
+    [[ -n "$LIVE_DISK" && "$disk" == "$LIVE_DISK" ]] && continue
+    model=$(lsblk -d -n -o MODEL "/dev/$disk" 2>/dev/null | xargs)
+    tran=$(lsblk -d -n -o TRAN "/dev/$disk" 2>/dev/null | xargs)
+    DISKS+=("$disk|$size|${model:-?} ${tran:+[$tran]}")
+done < <(lsblk -d -n -o NAME,SIZE,TYPE)
 
-[[ ${#DISKS[@]} -eq 0 ]] && err "No available disks found"
+if [[ ${#DISKS[@]} -eq 0 ]]; then
+    echo ""
+    warn "Aucun disque interne visible par le noyau (live : ${LIVE_DISK:-?})."
+    lsblk -d -o NAME,SIZE,TYPE,TRAN,MODEL
+    # Cause n°1 sur portable/mini-PC : NVMe caché derrière Intel RST/VMD.
+    if lspci -nn 2>/dev/null | grep -qiE 'RAID bus controller|Volume Management Device|VMD'; then
+        warn "Contrôleur RAID/VMD détecté : le SSD est masqué par Intel RST."
+        warn "Dans le BIOS, passer le mode de stockage SATA/NVMe de RAID à AHCI."
+    fi
+    lspci -nn 2>/dev/null | grep -iE 'SATA|NVM|RAID|Non-Volatile|storage' || true
+    err "No available disks found"
+fi
 
 echo ""
 echo -e "${BOLD}Available disks:${NC}"
@@ -2665,7 +2689,7 @@ partprobe "$TARGET"
 sleep 2
 
 # Determine partition names
-if [[ "$TARGET" == *nvme* ]]; then
+if [[ "$TARGET" == *nvme* || "$TARGET" == *mmcblk* ]]; then
     PART_ESP="${TARGET}p1"
     PART_ROOT="${TARGET}p2"
     PART_DATA="${TARGET}p3"
