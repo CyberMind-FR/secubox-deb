@@ -104,7 +104,6 @@ Package: secubox-fonction-correspondance
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-service-mail,
-         secubox-service-signal,
          secubox-service-messagerie,
          secubox-service-fediverse
 Suggests: secubox-service-visio
@@ -465,17 +464,6 @@ Description: SecuBox — service « Courrier »
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.
 
-Package: secubox-service-signal
-Architecture: all
-Depends: ${misc:Depends},
-         secubox-signal,
-         secubox-signal-engine
-Description: SecuBox — service « Signal »
- Passerelle Signal et son moteur signal-cli embarqué.
- .
- Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
- Recommends = installé par défaut mais retirable, Suggests = optionnel.
-
 Package: secubox-service-messagerie
 Architecture: all
 Depends: ${misc:Depends}
@@ -550,7 +538,6 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-radio
 Recommends: secubox-podcaster
-Suggests: secubox-fmrelay
 Description: SecuBox — service « Radio »
  Radio et télé collaboratives, balados, relais FM.
  .

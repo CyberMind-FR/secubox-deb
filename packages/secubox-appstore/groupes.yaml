@@ -67,7 +67,6 @@ label: Correspondance
 description: "Écrire et recevoir : courrier, messagerie chiffrée et relais social."
 modules:
   - secubox-mail
-  - secubox-signal
   - secubox-mastodon
 
 groupe: media

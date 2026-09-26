@@ -1,3 +1,9 @@
+secubox-meta (0.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-service-signal supprimé ; fmrelay retiré (ref #1485).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 06:01:26 +0200
+
 secubox-meta (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * secubox-service-detection ne suggère plus secubox-ossec, retiré (ref #1464).

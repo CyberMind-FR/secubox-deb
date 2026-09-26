@@ -10,7 +10,7 @@ on = [
   "avatar", "backup", "billets", "c3box", "cdn", "certs",
   "cloner", "config-advisor", "cookies", "core", "cs-bridge",
   "cyberfeed", "dns", "dns-guard", "dns-provider", "dpi", "dpi-flowcap",
-  "droplet", "exposure", "eye-remote", "eye-remote-dhcp", "fmrelay", "frigate",
+  "droplet", "exposure", "eye-remote", "eye-remote-dhcp", "frigate",
   "gitea", "glances", "grafana", "haproxy", "hardening", "health-doctor",
   "health-prober", "hub", "identity", "ipblock", "ksm", "led-heartbeat",
   "led-trigger", "leds", "localrecall", "lyrion", "mail", "mcp-server",

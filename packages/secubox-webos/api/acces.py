@@ -84,7 +84,7 @@ SERVICES: dict[str, dict[str, str]] = {
     #
     # Le jeton vit donc là où vivent les autres identités du profil :
     # /etc/secubox/secrets/webos-acces/<qui>/signal, en 0600, derrière le login.
-    # Il ne rejoint JAMAIS le navigateur : le pont `signal_pont` lit le coffre
+    # Il ne rejoint JAMAIS le navigateur : le serveur lit le coffre
     # côté serveur et parle au démon au nom de la personne, comme nc_super le
     # fait pour Nextcloud.
     "signal": {"nom": "Signal", "hote": "signal.gk2.secubox.in", "flux": "manuel"},

@@ -1,3 +1,12 @@
+secubox-webos (1.0.346-1~bookworm1) bookworm; urgency=medium
+
+  * Route messagerie : verdict LAN transmis ; carte « Mes comptes » : garde
+    des sondes chargée (tests test_verdict_lan).
+  * Pont Signal retiré (routes /acces/signal/*, signal_pont, carte non
+    publiée) : Signal est décommissionné (ref #1485).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 06:01:26 +0200
+
 secubox-webos (1.0.345-1~bookworm1) bookworm; urgency=medium
 
   * Carte « Mes comptes » à 272 px : quatre comptes sans défilement (ref #1466).

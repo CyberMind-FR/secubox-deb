@@ -1695,21 +1695,6 @@ MODULES = {
             "zh": ["ACME 签发", "续期", "SAN / 通配符", "清单"]
         }
     },
-    "fmrelay": {
-        "name": "FM Relay", "icon": "📻", "category": "Media",
-        "description": {
-            "en": "rtl_fm to Icecast MP3 mount with live RDS metadata",
-            "fr": "rtl_fm vers mount MP3 Icecast avec métadonnées RDS live",
-            "de": "rtl_fm zu Icecast-MP3-Mount mit Live-RDS-Metadaten",
-            "zh": "rtl_fm 转 Icecast MP3 挂载，含实时 RDS 元数据"
-        },
-        "features": {
-            "en": ["SDR FM capture", "Icecast stream", "RDS metadata", "Station presets"],
-            "fr": ["Capture FM SDR", "Flux Icecast", "Métadonnées RDS", "Préréglages stations"],
-            "de": ["SDR-FM-Empfang", "Icecast-Stream", "RDS-Metadaten", "Senderspeicher"],
-            "zh": ["SDR FM 采集", "Icecast 流", "RDS 元数据", "电台预设"]
-        }
-    },
     "grafana": {
         "name": "Grafana", "icon": "📊", "category": "Monitoring",
         "description": {

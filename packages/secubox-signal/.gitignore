@@ -1,5 +1,0 @@
-_gocache/
-_gopath/
-# ANCRÉ (#1383) : sans « / », le motif ignorait AUSSI le dossier cmd/sbx-signald,
-# et le source du démon n'a jamais été commité.
-/sbx-signald

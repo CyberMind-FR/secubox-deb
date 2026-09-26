@@ -54,7 +54,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-exposure` | misc | lite | oui | 26 | 1 | 1 | — | 9 | oui |
 | `secubox-eye-remote` | dashboard | lite | oui | 12 | — | 1 | — | 11 | oui |
 | `secubox-eye-square` | À documenter | À documenter | — | — | — | — | — | 22 | — |
-| `secubox-fmrelay` | À documenter | À documenter | oui | 9 | 3 | — | — | — | oui |
 | `secubox-frigate` | misc | lite | oui | 5 | 2 | 3 | oui | 4 | oui |
 | `secubox-full` | misc | lite | — | — | — | — | — | — | — |
 | `secubox-gitea` | publishing | pro | oui | 31 | 1 | 1 | oui | — | oui |
@@ -770,22 +769,6 @@ SecuBox Eye Remote USB Gadget Integration
 - **Tests** : 22
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-eye-square/`
-
-### `secubox-fmrelay`
-
-À documenter
-
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 9 route(s), socket `À documenter`, authentification À documenter
-- **Interface web** : oui, À documenter
-- **CLI** : `fmrelayctl`, `secubox-fmrelay-icy`, `secubox-fmrelay-runner`
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-fmrelay/`
 
 ### `secubox-frigate`
 

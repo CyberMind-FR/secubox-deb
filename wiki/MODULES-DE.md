@@ -122,7 +122,6 @@
 | 🖥️ **RTTY Console** | System | Remote-Terminal-Zugriff |
 | 🧑 **Avatar Manager** | Apps | Identitäts- und Avatar-Manager |
 | 📜 **Certificate Manager** | Security | ACME-/TLS-Zertifikatsverwaltung |
-| 📻 **FM Relay** | Media | rtl_fm zu Icecast-MP3-Mount mit Live-RDS-Metadaten |
 | 📊 **Grafana** | Monitoring | Sicherheitsmetrik-Dashboards |
 | ❤️ **Hub Health** | Dashboard | Service-Gesundheits- und Statusübersicht |
 | 🧠 **KSM Optimizer** | System | KSM-Speicheroptimierungs-Dashboard (Kernel Same-Page) |
@@ -564,14 +563,6 @@ Usenet/NNTP-Client
 **Funktionen:** NZB-Downloads, Auto-Verarbeitung, Suche, Kategorien
 
 ![Newsbin](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/newsbin.png)
-
-#### 📻 FM Relay
-
-rtl_fm zu Icecast-MP3-Mount mit Live-RDS-Metadaten
-
-**Funktionen:** SDR-FM-Empfang, Icecast-Stream, RDS-Metadaten, Senderspeicher
-
-![FM Relay](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/fmrelay.png)
 
 #### 🎙️ Podcaster
 

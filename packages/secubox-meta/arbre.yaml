@@ -144,7 +144,6 @@ label: Correspondance
 description: "Écrire et recevoir : courrier, messageries chiffrées, fédivers, visio."
 recommande:
   - secubox-service-mail
-  - secubox-service-signal
   - secubox-service-messagerie
   - secubox-service-fediverse
 suggere:
@@ -459,14 +458,6 @@ requiert:
 recommande:
   - secubox-smtp-relay
 
-meta: secubox-service-signal
-niveau: service
-label: Signal
-description: "Passerelle Signal et son moteur signal-cli embarqué."
-requiert:
-  - secubox-signal
-  - secubox-signal-engine
-
 meta: secubox-service-messagerie
 niveau: service
 label: Messageries
@@ -533,7 +524,6 @@ requiert:
 recommande:
   - secubox-podcaster
 suggere:
-  - secubox-fmrelay
 
 meta: secubox-service-video
 niveau: service

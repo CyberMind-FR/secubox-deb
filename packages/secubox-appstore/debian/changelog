@@ -1,3 +1,10 @@
+secubox-appstore (0.4.18-1~bookworm1) bookworm; urgency=medium
+
+  * Signal retiré des groupes ; catalogue régénéré sans signal ni fmrelay
+    (ref #1485).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 06:01:26 +0200
+
 secubox-appstore (0.4.17-1~bookworm1) bookworm; urgency=medium
 
   * Catalogue régénéré : secubox-ossec retiré (ref #1464).
