@@ -18,6 +18,14 @@ on:
         required: false
         type: string
         default: 'bookworm'
+      publish:
+        # #1507 : sur un tag, ce workflow tourne AUSSI par son propre
+        # déclencheur ; l'appelant (release.yml) passe false pour ne pas
+        # envoyer les mêmes .deb en parallèle (« already_exists »).
+        description: 'Publier les .deb dans la release et le dépôt'
+        required: false
+        type: boolean
+        default: true
     secrets:
       GPG_PRIVATE_KEY:
         required: false
@@ -417,7 +425,7 @@ jobs:
   publish:
     needs: collect
     runs-on: ubuntu-latest
-    if: ${{ always() && needs.collect.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ always() && needs.collect.result == 'success' && startsWith(github.ref, 'refs/tags/v') && inputs.publish != false }}
     environment: production
 
     steps:

@@ -48,6 +48,8 @@ jobs:
     uses: ./.github/workflows/build-packages.yml
     with:
       suite: ${{ github.event.inputs.suite || 'bookworm' }}
+      # Les .deb du tag sont publiés par le run propre de build-packages (#1507).
+      publish: false
     secrets: inherit
 
   # Build system images (optional).
@@ -241,7 +243,7 @@ jobs:
             echo "Release exists, cleaning up for retry..."
             # Get existing asset names
             existing=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
-            for asset in release/images/*.img.gz release/images/*.img.xz release/live-usb/*.img*; do
+            for asset in release/images/*.img.gz release/images/*.img.xz release/live-usb/*.img.gz release/live-usb/*.img.xz release/live-usb/*.sha256; do
               [ -f "$asset" ] || continue
               name=$(basename "$asset")
               if echo "$existing" | grep -qF "$name"; then
@@ -262,7 +264,11 @@ jobs:
           files: |
             release/images/*.img.gz
             release/images/*.img.xz
-            release/live-usb/*.img*
+            # Compressées SEULEMENT (#1507) : `*.img*` attrapait l'image brute
+            # (8 Go) et GitHub refuse tout fichier de plus de 2 Go.
+            release/live-usb/*.img.gz
+            release/live-usb/*.img.xz
+            release/live-usb/*.sha256
             release/create-qemu-arm64-vm.sh
             release/create-vbox-vm.sh
             release/SHA256SUMS
