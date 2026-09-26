@@ -1,3 +1,12 @@
+secubox-core (1.5.18-1~bookworm1) bookworm; urgency=medium
+
+  * log_format sbx_host livré ici (/etc/nginx/conf.d/secubox-hosts-log.conf) :
+    neuf vhosts l'utilisent, secubox-metrics — seul à le définir — n'est dans
+    aucun profil, nginx -t échouait sur image neuve. Replaces/Breaks
+    secubox-metrics (<< 1.12.9~) (ref #1491).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 10:00:24 +0200
+
 secubox-core (1.5.17-1~bookworm1) bookworm; urgency=medium
 
   * user_agent des événements de session gardé sur 300 caractères (ref #1474).

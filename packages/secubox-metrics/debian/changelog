@@ -1,3 +1,9 @@
+secubox-metrics (1.12.9-1~bookworm2) bookworm; urgency=medium
+
+  * secubox-hosts-log.conf passe à secubox-core (ref #1491).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 10:00:24 +0200
+
 secubox-metrics (1.12.8-1~bookworm2) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées

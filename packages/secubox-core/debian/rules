@@ -34,6 +34,12 @@ override_dh_auto_install:
 	   debian/secubox-core/usr/share/secubox-core/nginx/
 	cp ../../common/nginx/secubox-proxy.conf \
 	   debian/secubox-core/usr/share/secubox-core/nginx/
+	# FORMAT DE JOURNAL sbx_host (#1491) : utilisé par neuf vhosts (radio,
+	# peertube, photoprism, waf, Hall…) mais défini jusqu'ici par
+	# secubox-metrics seul, qui n'est dans aucun profil — une image neuve
+	# échouait à nginx -t. Il vit donc dans le paquet toujours installé.
+	install -D -m 0644 ../../common/nginx/secubox-hosts-log.conf \
+	   debian/secubox-core/etc/nginx/conf.d/secubox-hosts-log.conf
 
 	# Styled nginx error page (5xx) — served via error_page alias in secubox.conf
 	install -d debian/secubox-core/usr/share/secubox-core/www
