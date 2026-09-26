@@ -21,6 +21,10 @@ RemainAfterExit=yes
 ExecStart=/usr/sbin/picobrewctl install
 # Provisionnement lourd : ne pas le tuer prématurément (debootstrap + pip).
 TimeoutStartSec=1800
+# #1497 : au premier demarrage le reseau (DNS, miroir) peut ne pas etre
+# pret ; un echec n'est pas definitif, on retente plus tard.
+Restart=on-failure
+RestartSec=15min
 
 [Install]
 WantedBy=multi-user.target

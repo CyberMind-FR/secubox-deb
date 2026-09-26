@@ -1,3 +1,11 @@
+secubox-metrics (1.12.10-1~bookworm1) bookworm; urgency=medium
+
+  * Rapports planifié et WAF : plus de destinataire ni de famille par
+    défaut ; sans config `[rapport.*]`, rien ne part (une box neuve
+    n'écrit plus à gk2) (ref #1497).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 13:00:00 +0200
+
 secubox-metrics (1.12.9-1~bookworm2) bookworm; urgency=medium
 
   * secubox-hosts-log.conf passe à secubox-core (ref #1491).

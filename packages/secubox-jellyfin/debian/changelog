@@ -1,3 +1,10 @@
+secubox-jellyfin (2.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * Provision : Restart=on-failure toutes les 15 min — un premier
+    démarrage sans réseau prêt n'est plus un échec définitif (ref #1497).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 13:00:00 +0200
+
 secubox-jellyfin (2.0.6-1~bookworm2) bookworm; urgency=medium
 
   * Le rootfs du conteneur est decale sur l'idmap. La config declare

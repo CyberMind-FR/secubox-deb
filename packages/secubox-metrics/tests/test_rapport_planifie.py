@@ -79,11 +79,13 @@ def test_executer_transmet_le_resume_emoji_des_statuts():
     assert "💥 500" in recu["resume"]
 
 
-def test_config_planifie_par_defaut_anibal_vers_gk2(monkeypatch, tmp_path):
+def test_config_planifie_par_defaut_ne_vise_personne(monkeypatch, tmp_path):
+    # #1497 : plus de défaut anibal-amiot -> gk2 (famille décommissionnée,
+    # et une box neuve écrivait à gk2).
     monkeypatch.setattr(rp, "CONF", tmp_path / "absent.toml")
     c = rp.config_planifie()
-    assert c["famille"] == "anibal-amiot"
-    assert c["destinataire"] == "gk2@secubox.in"
+    assert c["famille"] == ""
+    assert c["destinataire"] == ""
     assert c["periode"] == "semaine"
 
 

@@ -1,4 +1,6 @@
 [Unit]
+# #1497 : aucun pair ephemere n'a jamais ete cree = rien a balayer.
+ConditionPathIsDirectory=/var/lib/secubox/p2p
 Description=SecuBox P2P — ephemeral wg-ephemeral peer sweep (TTL backstop)
 After=network.target
 

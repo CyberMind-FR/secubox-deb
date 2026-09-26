@@ -23,6 +23,10 @@ RemainAfterExit=yes
 ExecStart=/usr/lib/secubox/jellyfin/install-lxc.sh
 # Heavy provisioning: don't kill it prematurely (debootstrap + dpkg).
 TimeoutStartSec=1800
+# #1497 : au premier demarrage le reseau (DNS, miroir) peut ne pas etre
+# pret ; un echec n'est pas definitif, on retente plus tard.
+Restart=on-failure
+RestartSec=15min
 
 [Install]
 WantedBy=multi-user.target

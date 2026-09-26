@@ -1,3 +1,10 @@
+secubox-wan-link-guard (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-eth2-flowctl-off : ConditionPathExists=/sys/class/net/eth2 —
+    ignoré sans eth2 (PC amd64) (ref #1497).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 13:00:00 +0200
+
 secubox-wan-link-guard (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial packaging: backport the live gk2 WAN link guard into source (#913).

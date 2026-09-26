@@ -28,6 +28,11 @@ override_dh_auto_install:
 	  install -m 644 $$f debian/secubox-core/lib/systemd/system/$$u.d/10-cadence.conf; \
 	done
 
+	# Pont LXC hors du calcul « en ligne » (#1497) : drop-in, donc valable
+	# quel que soit le paquet qui a ecrit 10-secubox-lxc-bridge.network.
+	install -D -m 644 ../secubox-core/systemd/network/10-online.conf \
+	  debian/secubox-core/usr/lib/systemd/network/10-secubox-lxc-bridge.network.d/10-online.conf
+
 	# Ressources partagées
 	install -d debian/secubox-core/usr/share/secubox-core/nginx
 	cp ../../common/nginx/secubox.conf \

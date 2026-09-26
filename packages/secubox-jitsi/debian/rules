@@ -40,3 +40,10 @@ override_dh_auto_install:
 	# breaks).
 	install -d debian/secubox-jitsi/etc/nginx/sites-available
 	install -m 644 nginx/jitsi-vhost.conf debian/secubox-jitsi/etc/nginx/sites-available/jitsi.conf
+
+# La seule unite est le provisionnement, que postinst active et lance en
+# --no-block. Laisse a debhelper, elle etait RELANCEE de facon synchrone a
+# chaque configure : dpkg attendait tout le telechargement du conteneur
+# (jusqu'a 30 min, vecu sur amd64 neuf, #1497). Meme choix que jellyfin.
+override_dh_installsystemd:
+	true

@@ -23,6 +23,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
  python3-cryptography,
  python3-httpx | python3-pip,
  nginx,
+ systemd-timesyncd | time-daemon,
  nftables,
  openssl
 Recommends: wireguard-tools

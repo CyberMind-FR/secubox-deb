@@ -1,3 +1,10 @@
+secubox-picobrew (2.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * Provision : Restart=on-failure toutes les 15 min — un premier
+    démarrage sans réseau prêt n'est plus un échec définitif (ref #1497).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 13:00:00 +0200
+
 secubox-picobrew (2.0.4-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

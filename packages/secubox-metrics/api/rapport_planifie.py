@@ -67,9 +67,12 @@ CONF = Path("/etc/secubox/metrics.toml")
 
 # Ce que la demande #1059 fixe par défaut : la famille anibal-amiot, vers la
 # boîte interne gk2, chaque semaine. Tout est surchargeable par config.
+# #1497 : plus de défaut. anibal-amiot est décommissionné (#1364), et le
+# défaut faisait qu'une box NEUVE tentait d'expédier ce rapport à gk2. Sans
+# `[rapport.planifie]` déclarant famille ET destinataire, rien ne part.
 DEFAUTS = {
-    "famille": "anibal-amiot",
-    "destinataire": "gk2@secubox.in",
+    "famille": "",
+    "destinataire": "",
     "periode": "semaine",
 }
 
@@ -123,10 +126,15 @@ def executer(agg, construire_pdf, envoyer, cfg: dict | None = None) -> dict:
 
 def main(argv=None) -> int:
     """Point d'entrée de la tâche planifiée (service oneshot)."""
+    cfg = resoudre_config(sys.argv[1:] if argv is None else argv)
+    # Avant les imports lourds (matplotlib) : non configuré n'est pas une panne.
+    if not cfg.get("famille") or not cfg.get("destinataire"):
+        print("rapport planifié : non configuré ([rapport.planifie] famille "
+              "et destinataire) — rien à envoyer", file=sys.stderr)
+        return 0
     from vhost_stats import VhostStatsAggregator
     import rapport
 
-    cfg = resoudre_config(sys.argv[1:] if argv is None else argv)
     agg = VhostStatsAggregator()
     derniere = "raison inconnue"
     for essai in range(1, ESSAIS + 1):
