@@ -31,7 +31,7 @@ Les modules suivants sont fonctionnels et testés :
 |-------|---------|
 | 🟠 AUTH | auth, portal, users, nac |
 | 🟡 WALL | waf, authwatch, threats, ipblock, sbxwaf |
-| 🔴 BOOT | cloner, vault, vm, rezapp |
+| 🔴 BOOT | cloner, vault, vm |
 | 🟢 ROOT | core, hub, system, console |
 | 🔵 MESH | wireguard, haproxy, netmodes, qos |
 

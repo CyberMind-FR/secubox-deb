@@ -38,7 +38,6 @@ from pathlib import Path
 MODULE_MAP = {
     "luci.secubox":             "hub",
     "luci.crowdsec-dashboard":  "crowdsec",
-    "luci.netdata-dashboard":   "netdata",
     "luci.wireguard-dashboard": "wireguard",
     "luci.network-modes":       "netmodes",
     "luci.client-guardian":     "nac",

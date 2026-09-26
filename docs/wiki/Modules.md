@@ -9,7 +9,7 @@
 
 *Complete module documentation*
 
-**Total modules:** 124
+**Total modules:** 121
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -43,7 +43,6 @@
 | 🧅 **Tor Network** | Privacy | Tor anonymity and hidden services |
 | 🌐 **Exposure Settings** | Privacy | Unified exposure (Tor, SSL, DNS, Mesh) |
 | 🔐 **Zero-Knowledge Proofs** | Privacy | ZKP Hamiltonian management |
-| 📊 **Netdata** | Monitoring | Real-time system monitoring |
 | 📱 **Device Intelligence** | Monitoring | Asset discovery and fingerprinting |
 | 👁️ **Watchdog** | Monitoring | Service and container monitoring |
 | 🎬 **Media Flow** | Monitoring | Media traffic analytics |
@@ -447,22 +446,6 @@ ZKP Hamiltonian management
 - Key management
 
 ![Zero-Knowledge Proofs](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/zkp.png)
-
----
-
-### 📊 Netdata
-
-**Category:** Monitoring
-
-Real-time system monitoring
-
-**Features:**
-- Metrics
-- Alerts
-- Charts
-- Plugins
-
-![Netdata](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/netdata.png)
 
 ---
 
@@ -1372,19 +1355,6 @@ Local LLM inference
 
 ---
 
-### 🕵️ OpenClaw OSINT
-
-**Category:** Security
-
-Open Source Intelligence
-
-**Features:**
-- Domain reconnaissance
-- IP intelligence
-- Subdomain discovery
-
----
-
 ### 📹 PeerTube
 
 **Category:** Media
@@ -1447,19 +1417,6 @@ System report generation
 - PDF/HTML reports
 - Scheduled generation
 - Security reports
-
----
-
-### 📦 RezApp
-
-**Category:** Apps
-
-Application deployment
-
-**Features:**
-- Application templates
-- Docker/LXC deployment
-- Health monitoring
 
 ---
 

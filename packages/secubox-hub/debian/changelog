@@ -1,3 +1,10 @@
+secubox-hub (1.9.17-1~bookworm1) bookworm; urgency=medium
+
+  * OpenClaw, RezApp et Netdata décommissionnés : références retirées
+    (ref #1487).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Sep 2026 06:13:58 +0200
+
 secubox-hub (1.9.16-1~bookworm1) bookworm; urgency=medium
 
   * LES TREIZE ROUTES DE webui.conf TRANSMETTENT LE VERDICT LAN (ref #1354).

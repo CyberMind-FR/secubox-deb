@@ -214,15 +214,6 @@
         "status_code": 200
       },
       {
-        "module": "netdata",
-        "name": "Netdata",
-        "category": "Monitoring",
-        "success": true,
-        "screenshot": "docs/screenshots/vm/netdata.png",
-        "error": null,
-        "status_code": 200
-      },
-      {
         "module": "dpi",
         "name": "Deep Packet Inspection",
         "category": "Monitoring",

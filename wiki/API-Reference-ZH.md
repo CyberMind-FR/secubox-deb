@@ -291,20 +291,6 @@ curl -X POST https://localhost/api/v1/wireguard/peer \
 | `/certificate/issue` | POST | 是 | 签发 Let's Encrypt 证书 |
 | `/reload` | POST | 是 | 重载 nginx |
 
-### Netdata API (`/api/v1/netdata/`)
-
-系统监控代理。
-
-| 端点 | 方法 | 认证 | 描述 |
-|------|------|------|------|
-| `/status` | GET | 否 | Netdata 状态 |
-| `/charts` | GET | 是 | 可用图表 |
-| `/data` | GET | 是 | 图表数据 |
-| `/cpu` | GET | 是 | CPU 指标 |
-| `/memory` | GET | 是 | 内存指标 |
-| `/disk` | GET | 是 | 磁盘指标 |
-| `/alerts` | GET | 是 | 活动告警 |
-
 ---
 
 ## 应用模块

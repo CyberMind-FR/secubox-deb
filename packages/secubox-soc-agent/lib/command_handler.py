@@ -45,7 +45,7 @@ ALLOWED_COMMANDS = {
 
 # Services that can be managed remotely
 ALLOWED_SERVICES = {
-    "nginx", "haproxy", "suricata", "netdata",
+    "nginx", "haproxy", "suricata",
     "secubox-hub", "secubox-watchdog", "secubox-soc-agent"
 }
 

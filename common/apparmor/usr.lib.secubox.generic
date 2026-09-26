@@ -4,7 +4,6 @@
 #include <tunables/global>
 
 # This profile can be symlinked for simple services:
-# ln -s usr.lib.secubox.generic usr.lib.secubox.netdata
 # ln -s usr.lib.secubox.generic usr.lib.secubox.mediaflow
 # etc.
 

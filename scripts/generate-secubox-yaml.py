@@ -27,7 +27,7 @@ CATEGORY_MAP = {
     # Network
     r'wireguard|vpn|netmodes|network|dns|vortex|ddns|haproxy': 'network',
     # Monitoring
-    r'netdata|metrics|grafana|prometheus|health|doctor': 'monitoring',
+    r'metrics|grafana|prometheus|health|doctor': 'monitoring',
     # System
     r'core|system|hub|portal|admin|backup|config|daemon': 'system',
     # Media

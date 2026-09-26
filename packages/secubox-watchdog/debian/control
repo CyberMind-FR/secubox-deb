@@ -19,5 +19,5 @@ Description: SecuBox Watchdog — LXC + service + HTTP health monitor
   - secubox-device-intel — asset discovery + device fingerprinting
     (network-side, not service-side).
   - secubox-glances, secubox-metrics — system
-    metrics dashboards (different upstreams: Netdata vs Glances vs
+    metrics dashboards (different upstreams: Glances vs
     Prometheus).

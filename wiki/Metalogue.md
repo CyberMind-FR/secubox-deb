@@ -13,8 +13,7 @@
 
 Metalogue is the SecuBox **OSINT investigation suite**: a set of self-hosted,
 LXC-sandboxed tools that reproduce the Maltego experience (entity collection →
-correlation → dossier) without any cloud transforms. It complements
-[[OpenClaw|Anti-Track]]-style *active* recon (openclaw: DNS/ports/IP) with
+correlation → dossier) without any cloud transforms. It focuses on
 **passive** collection, automation, and a graph hub.
 
 Each tool runs in its own unprivileged LXC container (`10.100.0.x`), driven by a
@@ -57,7 +56,7 @@ graphe — le **hub Maltego intérimaire** en attendant OpenCTI. UI complète se
 
 ### 4️⃣ Corrélation / graphe (OpenCTI — futur)
 Le vrai hub Maltego : entités, relations, timeline, ingestion des findings de
-Maigret + SpiderFoot + openclaw. Différé sur un nœud plus costaud (stack
+Maigret + SpiderFoot. Différé sur un nœud plus costaud (stack
 Elasticsearch trop lourde pour le board arm64).
 
 ---

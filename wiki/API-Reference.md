@@ -468,28 +468,6 @@ Virtual host management.
 | `/migrate` | POST | Yes | Migrate from OpenWrt |
 | `/logs/{domain}` | GET | Yes | Virtual host logs |
 
-### Netdata API (`/api/v1/netdata/`)
-
-System monitoring proxy.
-
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/status` | GET | No | Netdata status |
-| `/info` | GET | Yes | Netdata info |
-| `/charts` | GET | Yes | Available charts |
-| `/data` | GET | Yes | Chart data |
-| `/stats` | GET | No | System stats |
-| `/cpu` | GET | Yes | CPU metrics |
-| `/memory` | GET | Yes | Memory metrics |
-| `/disk` | GET | Yes | Disk metrics |
-| `/network` | GET | Yes | Network metrics |
-| `/processes` | GET | Yes | Process list |
-| `/sensors` | GET | Yes | Hardware sensors |
-| `/alerts` | GET | Yes | Active alerts |
-| `/alarms` | GET | Yes | Alarm list |
-| `/restart_netdata` | POST | Yes | Restart service |
-| `/secubox_logs` | GET | Yes | SecuBox logs |
-
 ### CDN Cache API (`/api/v1/cdn/`)
 
 Content caching and delivery.

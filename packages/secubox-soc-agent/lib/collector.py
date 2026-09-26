@@ -25,7 +25,6 @@ logger = logging.getLogger("secubox.soc-agent.collector")
 # Paths
 SURICATA_EVE_LOG = Path("/var/log/suricata/eve.json")
 WAF_ALERTS_DIR = Path("/var/log/secubox/waf")
-NETDATA_SOCK = Path("/run/netdata/netdata.sock")
 
 # Cache for expensive operations
 _alert_cache: Dict[str, Any] = {}
@@ -161,7 +160,7 @@ def get_services_status() -> List[Dict[str, Any]]:
     """Get status of key SecuBox services."""
     services = [
         "nginx", "haproxy", "suricata",
-        "secubox-hub", "secubox-watchdog", "netdata"
+        "secubox-hub", "secubox-watchdog"
     ]
 
     results = []

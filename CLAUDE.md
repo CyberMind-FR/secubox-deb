@@ -219,7 +219,6 @@ secubox-deb/
 ├── packages/                   ← 14 paquets Debian
 │   ├── secubox-core/           ← Bibliothèque partagée Python
 │   ├── secubox-hub/            ← luci-app-secubox → dashboard central
-│   ├── secubox-netdata/        ← luci-app-netdata-dashboard
 │   ├── secubox-wireguard/      ← luci-app-wireguard-dashboard
 │   ├── secubox-dpi/            ← dashboard DPI (nDPId) + dpi-dual
 │   ├── secubox-netmodes/       ← luci-app-network-modes
@@ -609,7 +608,6 @@ cd packages/secubox-dpi && uvicorn api.main:app --reload --uds /tmp/dpi.sock
 |-------|--------|------------|--------|
 | 1 | secubox-core | — | Dépendance de tous |
 | 2 | secubox-hub | Facile | Référence de pattern |
-| 4 | secubox-netdata | Facile | Proxy simple |
 | 5 | secubox-wireguard | Facile | wg CLI natif |
 | 6 | secubox-vhost | Facile | Templates nginx |
 | 7 | secubox-dpi | Moyen | Socket nDPId |

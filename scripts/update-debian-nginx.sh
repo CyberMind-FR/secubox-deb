@@ -9,7 +9,7 @@
 
 BASEDIR="/home/reepost/CyberMindStudio/secubox-deb/secubox-deb"
 
-modules="hub crowdsec netdata wireguard dpi netmodes nac auth qos mediaflow cdn vhost system waf portal dns haproxy droplet metablogizer publish streamlit streamforge mail webmail mail-lxc webmail-lxc users"
+modules="hub crowdsec wireguard dpi netmodes nac auth qos mediaflow cdn vhost system waf portal dns haproxy droplet metablogizer publish streamlit streamforge mail webmail mail-lxc webmail-lxc users"
 
 for mod in $modules; do
     PKG_DIR="$BASEDIR/packages/secubox-$mod"

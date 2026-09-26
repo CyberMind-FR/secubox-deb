@@ -22,7 +22,6 @@ MODULES=(
     "login"
     "dashboard"
     "crowdsec"
-    "netdata"
     "wireguard"
     "dpi"
     "netmodes"

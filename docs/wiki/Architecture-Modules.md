@@ -19,7 +19,7 @@ SecuBox organizes modules into 6 functional stacks:
 |-------|-------|----------|-------------|
 | 🟠 AUTH | Orange | Authentication | auth, portal, nac, users |
 | 🔴 BOOT | Red | Deployment | cloner, vault, vm, backup |
-| 🟣 MIND | Purple | Intelligence | dpi, ai-insights, netdata |
+| 🟣 MIND | Purple | Intelligence | dpi, ai-insights |
 | 🟢 ROOT | Green | System | core, hub, system, admin |
 | 🔵 MESH | Blue | Network | wireguard, haproxy, qos, mesh |
 

@@ -79,7 +79,6 @@ All 120+ SecuBox modules. Best for full-featured deployments.
 Essential modules only:
 - secubox-core
 - secubox-hub
-- secubox-netdata
 - secubox-wireguard
 - secubox-system
 

@@ -119,7 +119,7 @@ sudo apt install secubox-full   # 或 secubox-lite
 |------|------|------|
 | **网络** | WireGuard、HAProxy、DPI、QoS、网络模式、Interceptor | 12 |
 | **SOC** | Fleet 监控、告警关联、威胁地图、控制台 TUI | 6 |
-| **监控** | Netdata、Metrics、Threats、OpenClaw OSINT | 8 |
+| **监控** | Metrics、Threats | 6 |
 | **应用** | Ollama、Jellyfin、HomeAssistant、Matrix、Jitsi、PeerTube | 21 |
 | **系统工具** | Glances、MQTT、TURN、Vault、Cloner、VM | 22 |
 | **邮件和 DNS** | Postfix/Dovecot、Webmail、DNS Provider | 9 |

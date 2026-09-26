@@ -11,7 +11,7 @@
 > Ne pas éditer à la main — corriger la source, le plus souvent
 > `packages/<module>/debian/secubox.yaml`, puis relancer le script.
 
-**173 modules** recensés.
+**170 modules** recensés.
 
 `À documenter` signale une donnée **absente du dépôt**. C'est une tâche,
 pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
@@ -102,7 +102,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-nac` | security | lite | oui | 52 | — | 1 | — | 7 | oui |
 | `secubox-ndpid` | misc | lite | oui | 29 | — | 1 | — | — | oui |
 | `secubox-netboot` | À documenter | À documenter | oui | 18 | 5 | 2 | — | — | oui |
-| `secubox-netdata` | monitoring | lite | oui | 35 | — | 1 | — | — | oui |
 | `secubox-netdiag` | misc | lite | oui | 16 | — | 1 | — | — | oui |
 | `secubox-netmodes` | network | lite | oui | 32 | — | 1 | — | — | oui |
 | `secubox-nettweak` | misc | lite | oui | 12 | — | 1 | — | — | oui |
@@ -110,7 +109,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-newsbin` | misc | lite | oui | 32 | — | 1 | — | — | oui |
 | `secubox-nextcloud` | misc | pro | oui | 22 | 1 | 1 | oui | 1 | oui |
 | `secubox-ollama` | ai | pro | oui | 15 | — | 1 | — | — | oui |
-| `secubox-openclaw` | misc | lite | oui | 14 | 1 | — | — | 3 | oui |
 | `secubox-p2p` | misc | lite | oui | 57 | 1 | 1 | — | 14 | oui |
 | `secubox-peertube` | misc | lite | oui | 46 | 1 | 9 | oui | 4 | oui |
 | `secubox-photoprism` | misc | lite | oui | 27 | 1 | 1 | oui | — | oui |
@@ -127,7 +125,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-release` | À documenter | À documenter | oui | 8 | 2 | — | — | 6 | — |
 | `secubox-repo` | misc | lite | oui | 23 | 1 | 1 | — | — | oui |
 | `secubox-reporter` | misc | lite | oui | 11 | — | 1 | — | — | oui |
-| `secubox-rezapp` | misc | lite | oui | 17 | — | 1 | — | — | oui |
 | `secubox-roadmap` | misc | lite | oui | 6 | — | 1 | — | — | oui |
 | `secubox-routes` | misc | lite | oui | 13 | — | 1 | — | — | oui |
 | `secubox-rtty` | misc | lite | oui | 14 | — | 1 | — | — | oui |
@@ -791,7 +788,7 @@ Frigate NVR for SecuBox
 SecuBox Full — All 49 modules
 
 - **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-system`, `secubox-crowdsec`, `secubox-waf`, `secubox-vortex-firewall`, `secubox-auth`, `secubox-nac`, `secubox-wireguard`, `secubox-mesh`, `secubox-p2p`, `secubox-netmodes`, `secubox-dpi`, `secubox-qos`, `secubox-traffic`, `secubox-vhost`, `secubox-haproxy`, `secubox-cdn`, `secubox-dns`, `secubox-vortex-dns`, `secubox-meshname`, `secubox-netdata`, `secubox-mediaflow`, `secubox-device-intel`, `secubox-watchdog`, `secubox-metrics`, `secubox-soc`, `secubox-roadmap`, `secubox-mail`, `secubox-mail-lxc`, `secubox-webmail`, `secubox-users`, `secubox-gitea`, `secubox-nextcloud`, `secubox-droplet`, `secubox-streamlit`, `secubox-streamforge`, `secubox-metablogizer`, `secubox-publish`, `secubox-c3box`, `secubox-backup`, `secubox-tor`, `secubox-exposure`, `secubox-zkp`, `secubox-mitmproxy`, `secubox-repo`, `secubox-hardening`
+- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-system`, `secubox-crowdsec`, `secubox-waf`, `secubox-vortex-firewall`, `secubox-auth`, `secubox-nac`, `secubox-wireguard`, `secubox-mesh`, `secubox-p2p`, `secubox-netmodes`, `secubox-dpi`, `secubox-qos`, `secubox-traffic`, `secubox-vhost`, `secubox-haproxy`, `secubox-cdn`, `secubox-dns`, `secubox-vortex-dns`, `secubox-meshname`, `secubox-mediaflow`, `secubox-device-intel`, `secubox-watchdog`, `secubox-metrics`, `secubox-soc`, `secubox-roadmap`, `secubox-mail`, `secubox-mail-lxc`, `secubox-webmail`, `secubox-users`, `secubox-gitea`, `secubox-nextcloud`, `secubox-droplet`, `secubox-streamlit`, `secubox-streamforge`, `secubox-metablogizer`, `secubox-publish`, `secubox-c3box`, `secubox-backup`, `secubox-tor`, `secubox-exposure`, `secubox-zkp`, `secubox-mitmproxy`, `secubox-repo`, `secubox-hardening`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : À documenter
@@ -1544,22 +1541,6 @@ SecuBox nDPId Module
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-netboot/`
 
-### `secubox-netdata`
-
-SecuBox Netdata Dashboard
-
-- **Catégorie** : monitoring · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 35 route(s), socket `/run/secubox/netdata.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/netdata
-- **CLI** : À documenter
-- **Units systemd** : `secubox-netdata.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-netdata/`
-
 ### `secubox-netdiag`
 
 SecuBox Network Diagnostics — Troubleshooting Tools
@@ -1684,22 +1665,6 @@ Local AI inference with Ollama
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-ollama/`
-
-### `secubox-openclaw`
-
-SecuBox OpenClaw OSINT Module
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 14 route(s), socket `/run/secubox/openclaw.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/openclaw
-- **CLI** : `openclawctl`
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : 3
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-openclaw/`
 
 ### `secubox-p2p`
 
@@ -1957,22 +1922,6 @@ SecuBox Reporter - System report generation
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-reporter/`
-
-### `secubox-rezapp`
-
-SecuBox RezApp - Application deployment and management
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 17 route(s), socket `/run/secubox/rezapp.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/rezapp
-- **CLI** : À documenter
-- **Units systemd** : `secubox-rezapp.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-rezapp/`
 
 ### `secubox-roadmap`
 

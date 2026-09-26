@@ -356,8 +356,8 @@ var DevStatusWidget = {
             status: 'production',
             progress: 90,
             icon: '📈',
-            description: 'Glances, Netdata, system health',
-            components: ['glances', 'netdata', 'health-checks'],
+            description: 'Glances, system health',
+            components: ['glances', 'health-checks'],
             dependsOn: [],
             usedBy: ['ai-security']
         },
@@ -510,7 +510,6 @@ var DevStatusWidget = {
 
         // Monitoring components
         'glances': { name: 'Glances', type: 'backend', status: 'production', packages: ['secubox-app-glances', 'luci-app-glances'] },
-        'netdata': { name: 'Netdata', type: 'backend', status: 'production', packages: ['luci-app-netdata-dashboard'] },
         'health-checks': { name: 'Health Checks', type: 'backend', status: 'production', packages: [] },
         'ndpid': { name: 'nDPId', type: 'backend', status: 'production', packages: ['secubox-app-ndpid', 'luci-app-ndpid'] },
         'flow-analyzer': { name: 'Flow Analyzer', type: 'backend', status: 'production', packages: [] },

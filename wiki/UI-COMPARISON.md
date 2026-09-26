@@ -77,7 +77,6 @@
 | WireGuard | ✅ | ✅ |
 | nftables | ✅ | ✅ |
 | HAProxy | ✅ | ✅ |
-| Netdata | ✅ | ✅ |
 | LXC | ❌ | ✅ |
 | AppArmor | ❌ | ✅ |
 | Audit | ❌ | ✅ |
@@ -97,7 +96,6 @@
 | luci-app-bandwidth-manager | secubox-qos | ✅ Complete |
 | luci-app-vhost-manager | secubox-vhost | ✅ Complete |
 | luci-app-cdn-cache | secubox-cdn | ✅ Complete |
-| luci-app-netdata-dashboard | secubox-netdata | ✅ Complete |
 | luci-app-media-flow | secubox-mediaflow | ✅ Complete |
 | luci-app-system-hub | secubox-system | ✅ Complete |
 | luci-app-droplet | secubox-droplet | ✅ Complete |

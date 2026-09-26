@@ -117,7 +117,6 @@ Every module page must include:
 | Module | Path | Description |
 |--------|------|-------------|
 | Metrics | `/metrics/` | Metrics Dashboard |
-| Netdata | `/netdata/` | Real-time monitoring |
 | Media Flow | `/mediaflow/` | Media traffic analytics |
 | Device Intel | `/device-intel/` | Asset discovery |
 

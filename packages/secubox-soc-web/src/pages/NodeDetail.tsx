@@ -29,7 +29,6 @@ const SERVICES = [
   { name: 'nginx', label: 'Nginx' },
   { name: 'haproxy', label: 'HAProxy' },
   { name: 'suricata', label: 'Suricata' },
-  { name: 'netdata', label: 'Netdata' },
 ]
 
 export default function NodeDetail() {

@@ -821,7 +821,6 @@ export_services() {
     zigbee2mqtt
     domoticz
     photoprism
-    rezapp
     haproxy
     crowdsec
     dns

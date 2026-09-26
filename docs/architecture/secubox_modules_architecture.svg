@@ -88,7 +88,7 @@
   <text x="140" y="246" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="9" fill="#534AB7">nDPId + netifyd dual</text>
 
   <rect x="230" y="212" width="160" height="44" rx="6" fill="#E8E7FB" stroke="#3D35A0" stroke-width="0.8"/>
-  <text x="310" y="230" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="11" font-weight="500" fill="#3D35A0">Netdata</text>
+  <text x="310" y="230" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="11" font-weight="500" fill="#3D35A0">Metrics</text>
   <text x="310" y="246" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="9" fill="#534AB7">Monitoring temps réel</text>
 
   <rect x="400" y="212" width="160" height="44" rx="6" fill="#E8E7FB" stroke="#3D35A0" stroke-width="0.8"/>

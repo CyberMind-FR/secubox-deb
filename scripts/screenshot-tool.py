@@ -102,7 +102,6 @@ MODULES = {
     "zkp": {"path": "/zkp/", "name": "Zero-Knowledge Proofs", "category": "Privacy", "icon": "🔐"},
 
     # Monitoring
-    "netdata": {"path": "/netdata/", "name": "Netdata", "category": "Monitoring", "icon": "📊"},
     "dpi": {"path": "/dpi/", "name": "Deep Packet Inspection", "category": "Monitoring", "icon": "🔬"},
     "device-intel": {"path": "/device-intel/", "name": "Device Intelligence", "category": "Monitoring", "icon": "📱"},
     "watchdog": {"path": "/watchdog/", "name": "Watchdog", "category": "Monitoring", "icon": "👁️"},

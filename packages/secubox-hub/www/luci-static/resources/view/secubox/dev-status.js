@@ -47,7 +47,6 @@ return view.extend({
 				{ name: 'Media Flow', status: 'completed' },
 				{ name: 'VHost Manager', status: 'completed' },
 				{ name: 'WireGuard Dashboard', status: 'completed' },
-				{ name: 'Netdata Dashboard', status: 'completed' },
 				{ name: 'Client Guardian', status: 'completed' },
 				{ name: 'Network Modes', status: 'completed' },
 				{ name: 'Traffic Shaper', status: 'completed' },

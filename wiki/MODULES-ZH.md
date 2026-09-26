@@ -9,7 +9,7 @@
 
 *完整的模块文档*
 
-**模块总数:** 128
+**模块总数:** 125
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -38,7 +38,6 @@
 | 🔬 **Threat Analyst** | Security | AI驱动的威胁分析 |
 | 🔴 **CVE Triage** | Security | CVE漏洞跟踪和分类 |
 | 🛡️ **Wazuh SIEM** | Security | Wazuh SIEM集成 |
-| 🦞 **OpenClaw Scanner** | Security | 网络漏洞扫描器 |
 | 🔌 **IoT Guard** | Security | IoT设备安全监控 |
 | 🌐 **Network Modes** | Network | 网络拓扑配置 |
 | 📊 **QoS Manager** | Network | HTB/VLAN服务质量 |
@@ -66,7 +65,6 @@
 | 🔐 **Zero-Knowledge Proofs** | Privacy | ZKP哈密顿认证 |
 | 💬 **SimpleX Chat** | Privacy | 注重隐私的消息 |
 | 🔐 **Secret Vault** | Privacy | 密钥和凭据管理 |
-| 📊 **Netdata** | Monitoring | 实时系统监控 |
 | 🔬 **nDPId** | Monitoring | 用于流量分析的nDPI守护进程 |
 | 📱 **Device Intelligence** | Monitoring | 资产发现和指纹识别 |
 | 👁️ **Watchdog** | Monitoring | 服务和容器监控 |
@@ -132,7 +130,6 @@
 | 🍺 **PicoBrew** | IoT | 自酿 / 发酵控制器 |
 | 🎙️ **Podcaster** | Media | 现代播客管理器 |
 | 🤖 **ReDroid** | Apps | 容器中的 Android 运行时 |
-| 📦 **RezApp** | Services | 应用部署与管理 |
 | 🖥️ **RustDesk** | Access | 自托管远程桌面中继 |
 | 🔌 **SaaS Relay** | Network | SaaS / API 代理中继 |
 | 🎯 **Security Posture** | Security | 诚实的、基于真实状态的安全评分卡 |
@@ -576,14 +573,6 @@ Usenet/NNTP客户端
 
 ### Monitoring
 
-#### 📊 Netdata
-
-实时系统监控
-
-**功能:** 指标, 告警, 图表, 插件
-
-![Netdata](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/netdata.png)
-
 #### 🔬 Deep Packet Inspection
 
 使用netifyd/nDPId的DPI
@@ -992,14 +981,6 @@ Wazuh SIEM集成
 
 ![Wazuh SIEM](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/wazuh.png)
 
-#### 🦞 OpenClaw Scanner
-
-网络漏洞扫描器
-
-**功能:** 端口扫描, 服务检测, 漏洞检查, 报告
-
-![OpenClaw Scanner](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/openclaw.png)
-
 #### 🔌 IoT Guard
 
 IoT设备安全监控
@@ -1083,14 +1064,6 @@ Git服务器(LXC)
 **功能:** 服务注册, 发现, 元数据, 目录界面
 
 ![Metacatalog](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/metacatalog.png)
-
-#### 📦 RezApp
-
-应用部署与管理
-
-**功能:** 应用部署, 生命周期, 配置, 状态
-
-![RezApp](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/rezapp.png)
 
 ---
 

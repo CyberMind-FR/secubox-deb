@@ -1,8 +1,8 @@
 {
   "generated": "2026-06-26T10:11:32.453975",
   "base_url": "https://192.168.1.200",
-  "total_modules": 126,
-  "successful": 126,
+  "total_modules": 123,
+  "successful": 123,
   "failed": 0,
   "modules": [
     {
@@ -762,18 +762,6 @@
       "timestamp": "2026-06-26T09:56:03.961285"
     },
     {
-      "module_id": "netdata",
-      "module_name": "Netdata",
-      "category": "Monitoring",
-      "path": "/netdata/",
-      "screenshot_path": "docs/screenshots/vm/netdata.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/netdata-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-06-26T09:56:07.074488"
-    },
-    {
       "module_id": "netdiag",
       "module_name": "Netdiag",
       "category": "Network",
@@ -868,18 +856,6 @@
       "status_code": 200,
       "error": null,
       "timestamp": "2026-06-26T09:57:53.626104"
-    },
-    {
-      "module_id": "openclaw",
-      "module_name": "Openclaw",
-      "category": "Security",
-      "path": "/openclaw/",
-      "screenshot_path": "docs/screenshots/vm/openclaw.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/openclaw-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-06-26T09:58:00.723119"
     },
     {
       "module_id": "master-link",
@@ -1024,18 +1000,6 @@
       "status_code": 200,
       "error": null,
       "timestamp": "2026-06-26T10:01:11.660958"
-    },
-    {
-      "module_id": "rezapp",
-      "module_name": "Rezapp",
-      "category": "System",
-      "path": "/rezapp/",
-      "screenshot_path": "docs/screenshots/vm/rezapp.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/rezapp-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-06-26T10:01:30.288750"
     },
     {
       "module_id": "roadmap",

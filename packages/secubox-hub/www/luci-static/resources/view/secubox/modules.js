@@ -209,7 +209,6 @@ return view.extend({
 
 	getModuleDashboard: function(id) {
 		var paths = {
-			'netdata': 'admin/secubox/netdata/dashboard',
 			'wireguard': 'admin/services/wireguard',
 			'network_modes': 'admin/secubox/network/modes/overview',
 			'client_guardian': 'admin/secubox/client-guardian/overview',

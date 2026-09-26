@@ -212,7 +212,6 @@ secubox-deb/
 │   ├── secubox-core/           ← Bibliothèque partagée Python
 │   ├── secubox-hub/            ← luci-app-secubox → dashboard central
 │   ├── secubox-crowdsec/       ← luci-app-crowdsec-dashboard
-│   ├── secubox-netdata/        ← luci-app-netdata-dashboard
 │   ├── secubox-wireguard/      ← luci-app-wireguard-dashboard
 │   ├── secubox-dpi/            ← luci-app-netifyd-dashboard + dpi-dual
 │   ├── secubox-netmodes/       ← luci-app-network-modes
@@ -601,7 +600,6 @@ cd packages/secubox-crowdsec && uvicorn api.main:app --reload --uds /tmp/crowdse
 |-------|--------|------------|--------|
 | 1 | secubox-core | — | Dépendance de tous |
 | 2 | secubox-hub | Facile | Référence de pattern |
-| 4 | secubox-netdata | Facile | Proxy simple |
 | 5 | secubox-wireguard | Facile | wg CLI natif |
 | 6 | secubox-vhost | Facile | Templates nginx |
 | 8 | secubox-mediaflow | Facile | Consomme secubox-dpi |

@@ -238,7 +238,6 @@ jobs:
           ## Monitoring
           | Module | Description | API Endpoints |
           |--------|-------------|---------------|
-          | secubox-netdata | Real-time metrics | /api/v1/netdata/* |
           | secubox-metrics | Dashboard metrics | /api/v1/metrics/* |
           | secubox-soc | Security operations | /api/v1/soc/* |
 

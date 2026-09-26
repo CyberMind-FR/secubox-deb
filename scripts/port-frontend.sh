@@ -54,7 +54,6 @@ log "Source repo : $SRC_REPO"
 # ── Mapping luci-app-X → secubox-Y ───────────────────────────────
 declare -A MODULE_MAP=(
   ["crowdsec-dashboard"]="crowdsec"
-  ["netdata-dashboard"]="netdata"
   ["wireguard-dashboard"]="wireguard"
   ["network-modes"]="netmodes"
   ["client-guardian"]="nac"

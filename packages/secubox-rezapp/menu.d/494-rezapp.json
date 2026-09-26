@@ -1,9 +1,0 @@
-{
-  "id": "rezapp",
-  "name": "RezApp",
-  "icon": "📦",
-  "path": "/rezapp/",
-  "category": "root",
-  "order": 494,
-  "description": "Application deployment and management"
-}

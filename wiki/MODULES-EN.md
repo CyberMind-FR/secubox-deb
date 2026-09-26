@@ -9,7 +9,7 @@
 
 *Complete module documentation*
 
-**Total modules:** 128
+**Total modules:** 125
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -38,7 +38,6 @@
 | 🔬 **Threat Analyst** | Security | AI-powered threat analysis |
 | 🔴 **CVE Triage** | Security | CVE vulnerability tracking and triage |
 | 🛡️ **Wazuh SIEM** | Security | Wazuh SIEM integration |
-| 🦞 **OpenClaw Scanner** | Security | Network vulnerability scanner |
 | 🔌 **IoT Guard** | Security | IoT device security monitoring |
 | 🌐 **Network Modes** | Network | Network topology configuration |
 | 📊 **QoS Manager** | Network | Quality of Service with HTB/VLAN |
@@ -66,7 +65,6 @@
 | 🔐 **Zero-Knowledge Proofs** | Privacy | ZKP Hamiltonian authentication |
 | 💬 **SimpleX Chat** | Privacy | Privacy-focused messaging |
 | 🔐 **Secret Vault** | Privacy | Secrets and credentials management |
-| 📊 **Netdata** | Monitoring | Real-time system monitoring |
 | 🔬 **nDPId** | Monitoring | nDPI daemon for traffic analysis |
 | 📱 **Device Intelligence** | Monitoring | Asset discovery and fingerprinting |
 | 👁️ **Watchdog** | Monitoring | Service and container monitoring |
@@ -132,7 +130,6 @@
 | 🍺 **PicoBrew** | IoT | Homebrew / fermentation controller |
 | 🎙️ **Podcaster** | Media | Modern podcast manager |
 | 🤖 **ReDroid** | Apps | Android-in-container runtime |
-| 📦 **RezApp** | Services | Application deployment and management |
 | 🖥️ **RustDesk** | Access | Self-hosted remote desktop relay |
 | 🔌 **SaaS Relay** | Network | SaaS / API proxy relay |
 | 🎯 **Security Posture** | Security | Honest board-truthful security scorecard |
@@ -576,14 +573,6 @@ Modern podcast manager
 
 ### Monitoring
 
-#### 📊 Netdata
-
-Real-time system monitoring
-
-**Features:** Metrics, Alerts, Charts, Plugins
-
-![Netdata](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/netdata.png)
-
 #### 🔬 Deep Packet Inspection
 
 DPI with netifyd/nDPId
@@ -992,14 +981,6 @@ Wazuh SIEM integration
 
 ![Wazuh SIEM](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/wazuh.png)
 
-#### 🦞 OpenClaw Scanner
-
-Network vulnerability scanner
-
-**Features:** Port scanning, Service detection, Vulnerability checks, Reports
-
-![OpenClaw Scanner](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/openclaw.png)
-
 #### 🔌 IoT Guard
 
 IoT device security monitoring
@@ -1083,14 +1064,6 @@ Service catalog and registry
 **Features:** Service registry, Discovery, Metadata, Catalog UI
 
 ![Metacatalog](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/metacatalog.png)
-
-#### 📦 RezApp
-
-Application deployment and management
-
-**Features:** App deploy, Lifecycle, Config, Status
-
-![RezApp](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/rezapp.png)
 
 ---
 

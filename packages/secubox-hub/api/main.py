@@ -351,7 +351,6 @@ _health_batch_lock = asyncio.Lock()
 # MODULES dict is dynamically populated from installed services
 # These are the "expected" core modules - actual list comes from systemd
 CORE_MODULES = {
-    "netdata":  "secubox-netdata",
     "wireguard":"secubox-wireguard",
     "dpi":      "secubox-dpi",
     "netmodes": "secubox-netmodes",
@@ -1962,7 +1961,6 @@ DEFAULT_MENU = [
     {"id": "cdn", "name": "CDN Cache", "category": "mesh", "icon": "💾", "path": "/cdn/", "order": 240},
     {"id": "haproxy", "name": "HAProxy", "category": "mesh", "icon": "⚖️", "path": "/haproxy/", "order": 250},
     {"id": "dns", "name": "DNS", "category": "mesh", "icon": "🌐", "path": "/dns/", "order": 260},
-    {"id": "netdata", "name": "Netdata", "category": "mind", "icon": "📊", "path": "/netdata/", "order": 300},
     {"id": "mediaflow", "name": "Media Flow", "category": "boot", "icon": "📺", "path": "/mediaflow/", "order": 310},
     {"id": "droplet", "name": "Droplet", "category": "boot", "icon": "📤", "path": "/droplet/", "order": 400},
     {"id": "metablogizer", "name": "MetaBlogizer", "category": "mind", "icon": "📝", "path": "/metablogizer/", "order": 410},

@@ -201,10 +201,10 @@ class RoleAssignment(BaseModel):
     role: str
 
 SECUBOX_SERVICES = [
-    "secubox-hub","secubox-netdata","secubox-wireguard",
+    "secubox-hub","secubox-wireguard",
     "secubox-dpi","secubox-netmodes","secubox-nac","secubox-auth",
     "secubox-qos","secubox-mediaflow","secubox-cdn","secubox-vhost",
-    "secubox-system","netdata","nginx","nftables","dnsmasq",
+    "secubox-system","nginx","nftables","dnsmasq",
 ]
 
 # ══════════════════════════════════════════════════════════════════
@@ -976,7 +976,7 @@ async def get_components_by_category(user=Depends(require_jwt)):
     return {
         "security": ["secubox-nac", "secubox-auth"],
         "network": ["secubox-netmodes", "secubox-wireguard", "secubox-vhost"],
-        "monitoring": ["secubox-netdata", "secubox-dpi", "secubox-mediaflow"],
+        "monitoring": ["secubox-dpi", "secubox-mediaflow"],
         "performance": ["secubox-qos", "secubox-cdn"],
     }
 

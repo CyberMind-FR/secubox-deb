@@ -134,7 +134,6 @@ declare -a MODULES=(
     "exposure|/cgi-bin/luci/admin/services/exposure|Exposure Engine"
 
     # Monitoring modules
-    "netdata|/cgi-bin/luci/admin/services/netdata|Netdata Metrics"
     "glances|/cgi-bin/luci/admin/services/glances|Glances"
     "metrics|/cgi-bin/luci/admin/services/metrics|System Metrics"
     "watchdog|/cgi-bin/luci/admin/services/watchdog|Watchdog"

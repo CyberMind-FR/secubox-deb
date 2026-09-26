@@ -97,7 +97,7 @@ SecuBox OS est organisé en 6 stacks fonctionnelles :
 |-------|--------------|--------------|
 | 🟠 **AUTH** | Orange | auth, portal, nac, users |
 | 🔴 **BOOT** | Rouge | cloner, vault, vm, backup |
-| 🟣 **MIND** | Violet | dpi, ai-insights, netdata |
+| 🟣 **MIND** | Violet | dpi, ai-insights |
 | 🟢 **ROOT** | Vert | core, hub, system, admin |
 | 🔵 **MESH** | Bleu | wireguard, haproxy, qos, mesh |
 

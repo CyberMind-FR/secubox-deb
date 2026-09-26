@@ -181,7 +181,6 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
         "secubox-network-anomaly",
         "secubox-cyberfeed",
         "secubox-ipblock",
-        "secubox-openclaw",
     ],
     "publishing": [
         "secubox-droplet",
@@ -244,7 +243,6 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
         "secubox-portal",
     ],
     "monitoring": [
-        "secubox-netdata",
         "secubox-glances",
         "secubox-metrics",
         "secubox-health-doctor",
