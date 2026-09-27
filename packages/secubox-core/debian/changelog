@@ -1,3 +1,11 @@
+secubox-core (1.5.22-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-proxy.conf vide l'en-tête X-SecuBox-Maillage : seul l'écouteur
+    wg-mesh de l'annuaire peut le poser, un client ne peut pas le forger
+    (ref #1530).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 15:00:00 +0200
+
 secubox-core (1.5.21-1~bookworm1) bookworm; urgency=medium
 
   * capacites_du_porteur : capacités = rôles ∪ autorisations de la

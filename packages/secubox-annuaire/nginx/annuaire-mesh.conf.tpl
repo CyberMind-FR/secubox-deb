@@ -33,6 +33,9 @@ server {
         rewrite ^/api/v1/annuaire/(.*)$ /$1 break;
         proxy_pass http://unix:/run/secubox/annuaire.sock;
         include /etc/nginx/snippets/secubox-proxy.conf;
+        # Pair du maillage (#1530) : lecture publique des enregistrements SIGNÉS
+        # (le lecteur vérifie) ; l'écouteur n'accepte que 10.10.0.0/24.
+        proxy_set_header X-SecuBox-Maillage 1;
         proxy_intercept_errors on;
     }
 
@@ -42,6 +45,9 @@ server {
         rewrite ^/api/v1/annuaire/(.*)$ /$1 break;
         proxy_pass http://unix:/run/secubox/annuaire.sock;
         include /etc/nginx/snippets/secubox-proxy.conf;
+        # Pair du maillage (#1530) : lecture publique des enregistrements SIGNÉS
+        # (le lecteur vérifie) ; l'écouteur n'accepte que 10.10.0.0/24.
+        proxy_set_header X-SecuBox-Maillage 1;
         proxy_intercept_errors on;
     }
 
@@ -53,6 +59,9 @@ server {
         rewrite ^/api/v1/annuaire/(.*)$ /$1 break;
         proxy_pass http://unix:/run/secubox/annuaire.sock;
         include /etc/nginx/snippets/secubox-proxy.conf;
+        # Pair du maillage (#1530) : lecture publique des enregistrements SIGNÉS
+        # (le lecteur vérifie) ; l'écouteur n'accepte que 10.10.0.0/24.
+        proxy_set_header X-SecuBox-Maillage 1;
         proxy_intercept_errors on;
     }
 

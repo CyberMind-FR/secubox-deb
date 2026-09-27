@@ -36,44 +36,9 @@ case "$1" in
             sysctl -p /etc/sysctl.d/30-secubox-nonlocal-bind.conf >/dev/null 2>&1 || true
         fi
 
-        # Render the Gondwana mesh federation listener IFF a wg-mesh exists.
-        # Bind only the node's wg-mesh IPv4 — never 0.0.0.0 (minimal surface).
-        MESH_TPL=/usr/share/secubox/annuaire/annuaire-mesh.conf.tpl
-        MESH_CONF=/etc/nginx/conf.d/annuaire-mesh.conf
-        MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
-        if [ -n "$MESH_IP" ] && [ -f "$MESH_TPL" ]; then
-            sed "s/__MESH_IP__/$MESH_IP/g" "$MESH_TPL" > "$MESH_CONF"
-            # A broken render must NEVER persist on disk — the next nginx -t by
-            # ANY actor (reboot, another package's postinst) would otherwise
-            # fail board-wide. Validate now; revert immediately on failure.
-            if ! nginx -t >/dev/null 2>&1; then
-                rm -f "$MESH_CONF" 2>/dev/null || true
-            fi
-        else
-            # No mesh interface (or template missing) → ensure no stale listener.
-            rm -f "$MESH_CONF" 2>/dev/null || true
-        fi
-
-        # Durable wg-mesh nft allow for the federation listener (:8799).
-        # On vortex-firewall nodes /etc/nftables.conf holds `table inet
-        # secubox_filter` with a terminal `drop` in chain input; a rule added
-        # anywhere after it is dead. Insert the accept BEFORE the drop in the
-        # boot source so it survives reboot. Legacy `inet filter` nodes (broad
-        # 10/8 accept, e.g. the hub) need nothing → skipped. Validated with
-        # `nft -c` and reverted on failure (board-wide nft blast radius).
-        NFT_CONF=/etc/nftables.conf
-        if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
-           && grep -q 'table inet secubox_filter' "$NFT_CONF" \
-           && ! grep -q 'tcp dport 8799' "$NFT_CONF"; then
-            awk '/^[[:space:]]*drop[[:space:]]*$/ && !d {print "        iifname \"wg-mesh\" ip saddr 10.10.0.0/24 tcp dport 8799 accept"; d=1} {print}' \
-                "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
-            if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
-                mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
-                nft -f "$NFT_CONF" >/dev/null 2>&1 || true
-            else
-                rm -f "$NFT_CONF.sbxtmp" 2>/dev/null || true
-            fi
-        fi
+        # Écouteur maillage :8799, règle nft wg-mesh, identité du nœud (#1530) :
+        # un seul script, rejoué aussi par sbx-mesh-up à chaque jonction.
+        /usr/sbin/secubox-annuaire-maillage || true
 
         # Satellite dashboards (#768): the legacy nginx vhost
         # (/etc/nginx/sites-available/secubox) includes /etc/nginx/secubox.d/

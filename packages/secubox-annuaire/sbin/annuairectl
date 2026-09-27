@@ -82,6 +82,11 @@ def _save_priv(priv: bytes) -> None:
     finally:
         os.close(fd)
     os.chmod(KEY_PATH, 0o600)
+    # LANCÉ EN ROOT, la clé serait illisible par les services (#1530) : elle
+    # prend le propriétaire de son répertoire (secubox), comme sur gk2.
+    if os.geteuid() == 0:
+        st = os.stat(d)
+        os.chown(KEY_PATH, st.st_uid, st.st_gid)
 
 
 def _journal():

@@ -22,8 +22,24 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from secubox_core.auth import require_lecture
+from secubox_core import auth as _auth
+
+
+async def lecture_ou_pair(request: Request) -> Dict[str, Any]:
+    """Lecture gardée (#1256) SAUF pour un pair du maillage (#1530).
+
+    /services, /log/export et /fleet/self sont PUBLICS par conception : ce sont
+    des enregistrements signés que le pair vérifie. Depuis #1256 ils exigeaient
+    un jeton, et plus aucune box ne lisait celles des autres : la Flotte ne
+    montrait que soi, la réplication du journal s'était arrêtée. La marque
+    X-SecuBox-Maillage n'est posée que par l'écouteur wg-mesh (:8799,
+    10.10.0.0/24) et vidée par secubox-proxy.conf partout ailleurs."""
+    if request.headers.get("X-SecuBox-Maillage", "").strip() == "1":
+        return {"sub": None, "pair_maillage": True}
+    creds = await _auth._bearer(request)
+    return await require_lecture(request, creds)
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -448,7 +464,7 @@ class PullServicesRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@app.get("/services", dependencies=[Depends(require_lecture)])
+@app.get("/services", dependencies=[Depends(lecture_ou_pair)])
 async def list_services():
     """List all non-revoked service offers (public)."""
     from annuaire.verbs import _get_offers  # noqa: PLC0415
@@ -716,7 +732,7 @@ async def list_bans():
     return {"banned_ips": banned_ips(j), "bans": _get_bans(j)}
 
 
-@app.get("/log/export", dependencies=[Depends(require_lecture)])
+@app.get("/log/export", dependencies=[Depends(lecture_ou_pair)])
 async def export_log():
     """Export the full signed log for a peer to pull (public).
 
@@ -724,7 +740,9 @@ async def export_log():
     with its author_pubkey so a consumer can verify and re-append.
     """
     from annuaire.verbs import export_entries  # noqa: PLC0415
-    return {"entries": export_entries(get_journal())}
+    # Hors de la boucle d'événements (#1530) : servi par un seul worker, un
+    # export long gelait TOUTES les routes de l'annuaire.
+    return {"entries": await asyncio.to_thread(export_entries, get_journal())}
 
 
 @app.post("/node/publish", dependencies=[Depends(_require_jwt)])
@@ -817,7 +835,7 @@ async def pull_log(req: PullLogRequest):
 _FLEET_TTL_S = 5 * 60  # 5x the publish interval (sbx-fleetctl publish timer)
 
 
-@app.get("/fleet/self", dependencies=[Depends(require_lecture)])
+@app.get("/fleet/self", dependencies=[Depends(lecture_ou_pair)])
 async def get_fleet_self():
     """This node's own signed MetricSnapshot, or {} if not yet published (public)."""
     return fleet_store.read() or {}
