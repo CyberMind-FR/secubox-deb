@@ -318,7 +318,18 @@ Migration SQL : additive seulement (nouvelles tables, aucune colonne supprimée)
 (`sqlite` en WAL). Les `groups` de `secubox-users` (toujours vides) deviennent des
 communautés sans membres, puis l'objet est retiré de `secubox-users`.
 
-## 9. Décisions ouvertes (avant tout code)
+## 9. Décisions
+
+### 9.0 Tranchées le 2026-09-27 (Gandalf, #1511)
+
+| # | Décision | Conséquence pour le plan |
+|---|---|---|
+| D1 | **Les deux** : aura collective par défaut (lecture commune de Mood, ≥ 3 sessions) **et** aura individuelle sur consentement explicite | P5 livre d'abord l'aura collective (aucune donnée personnelle) ; l'aura individuelle n'existe que si la personne l'active : son navigateur relaie son propre état vers sbxid (état + horodatage, durée de vie courte, visibilité choisie). Mood reste inchangé et anonyme ; le seuil 3 et le plafond 0.72 ne sont jamais contournés. |
+| D2 | **Mood expose sa palette en lecture** | ajout additif à gabriel-mood (palette servie depuis la même source que `couleur.ts`, testée par les mêmes tests) ; aucun changement de calcul. |
+| D3 | **Étendre le journal signé de l'annuaire** | nouveaux genres d'opération pour personne, communauté, aura (et activité publique) dans `annuaire/model.py` ; ces opérations sont **signées par le nœud d'origine seul**, hors des règles de quorum de gouvernance (`ONE_NODE_ONE_VOICE`), et répliquées par `mesh_sync`. À concevoir en P7 sans modifier la sémantique des opérations existantes. |
+| D4 | **Salons privés BBS adossés aux communautés** | un salon privé peut être ouvert à une communauté ; `salon_membres` reste pour les ajouts nominatifs ; le BBS (Go) lit l'appartenance aux communautés — à réaliser en P2. |
+
+### 9.1 Formulation d'origine des questions
 
 - **D1 — Aura et anonymat de Mood.** Mood ne connaît personne, et ses garanties
   (seuil 3, plafond 0.72) sont testées. Une aura par personne ne peut donc venir
