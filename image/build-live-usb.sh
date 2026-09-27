@@ -2408,6 +2408,8 @@ xset s noblank 2>/dev/null || true
 
 # URL to display - use localhost for universal compatibility
 URL="https://localhost/"
+# Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522).
+[ -x /usr/sbin/premier-pas-url ] && URL="${URL%/}/$(/usr/sbin/premier-pas-url 2>/dev/null)"
 
 # Taille réelle de l'écran (#1491) : sans gestionnaire de fenêtres,
 # --start-fullscreen laisse une fenêtre à demi-largeur.
@@ -2516,6 +2518,8 @@ XCONF
 (
     sleep 2
     URL="https://localhost/"
+    # Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522).
+    [ -x /usr/sbin/premier-pas-url ] && URL="${URL%/}/$(/usr/sbin/premier-pas-url 2>/dev/null)"
     export DISPLAY=:0
     xinit /bin/bash -c "
         xset s off 2>/dev/null

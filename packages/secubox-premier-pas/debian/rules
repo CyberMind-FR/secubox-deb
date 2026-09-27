@@ -5,10 +5,14 @@
 override_dh_auto_install:
 	install -d debian/secubox-premier-pas/usr/lib/secubox/premier-pas/premier_pas
 	install -m 644 premier_pas/*.py debian/secubox-premier-pas/usr/lib/secubox/premier-pas/premier_pas/
+	install -d debian/secubox-premier-pas/usr/lib/secubox/premier-pas/api
+	install -m 644 api/*.py debian/secubox-premier-pas/usr/lib/secubox/premier-pas/api/
+	install -D -m 644 www/premier-pas/index.html debian/secubox-premier-pas/usr/share/secubox/www/premier-pas/index.html
 	install -D -m 755 sbin/premier-pasctl debian/secubox-premier-pas/usr/sbin/premier-pasctl
+	install -D -m 755 sbin/premier-pas-url debian/secubox-premier-pas/usr/sbin/premier-pas-url
 	install -D -m 755 sbin/secubox-majauto debian/secubox-premier-pas/usr/sbin/secubox-majauto
 	install -d debian/secubox-premier-pas/usr/lib/systemd/system
-	install -m 644 systemd/*.service systemd/*.timer debian/secubox-premier-pas/usr/lib/systemd/system/
+	install -m 644 systemd/*.service systemd/*.timer systemd/*.path debian/secubox-premier-pas/usr/lib/systemd/system/
 	install -D -m 644 exemples/profil.toml debian/secubox-premier-pas/usr/share/doc/secubox-premier-pas/examples/profil.toml
 
 override_dh_auto_test:

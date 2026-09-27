@@ -59,6 +59,27 @@ case "$1" in
       fi
       install -m 644 /usr/share/secubox-core/nginx/secubox-proxy.conf \
         /etc/nginx/snippets/secubox-proxy.conf
+      install -m 644 /usr/share/secubox-core/nginx/secubox-api-aggregator.conf \
+        /etc/nginx/snippets/secubox-api-aggregator.conf
+
+      # ROUTE /api/ DES SITES DÉJÀ INSTALLÉS (#1537). Le site « secubox » n'est
+      # posé qu'à la première installation ; ceux d'avant ne routaient aucune
+      # API agrégée. On ajoute l'include après chaque secubox.d/*.conf, on teste,
+      # et on revient en arrière si nginx refuse (ex. une route /api/ existe déjà).
+      _site=/etc/nginx/sites-available/secubox
+      if [ -f "$_site" ] && ! grep -q 'secubox-api-aggregator.conf' "$_site" \
+         && grep -q 'include /etc/nginx/secubox.d/\*.conf;' "$_site"; then
+        cp -a "$_site" "$_site.sbxbak"
+        sed -i 's|^\([[:space:]]*\)include /etc/nginx/secubox.d/\*.conf;|&\n\1include /etc/nginx/snippets/secubox-api-aggregator.conf;   # #1537|' "$_site"
+        if nginx -t 2>/dev/null; then
+          rm -f "$_site.sbxbak"
+          systemctl reload nginx 2>/dev/null || true
+          echo "secubox-core : route /api/ vers l'agrégateur ajoutée au site secubox"
+        else
+          mv -f "$_site.sbxbak" "$_site"
+          echo "secubox-core : route /api/ non ajoutée (nginx -t refuse) — site inchangé" >&2
+        fi
+      fi
 
       # VERDICT LAN POUR LA LECTURE GARDEE (#1256) — ajoute SI nginx l'accepte.
       #

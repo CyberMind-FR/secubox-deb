@@ -1,0 +1,275 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     Source-Disclosed License — All rights reserved except as expressly granted.
+     See LICENCE-CMSD-1.0.md for terms.
+
+     SecuBox Premier Pas — face KIOSQUE (#1522, couche 2).
+     Référence : docs/design/premier-pas-maquette.html (validée le 2026-09-27).
+     Aucune police externe : une box neuve peut être hors ligne au premier
+     démarrage. Lue sur une télé depuis le canapé : gros corps, gros boutons. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox Premier Pas</title>
+<style>
+:root{
+  --bg:#0a0d14; --surf:#121826; --surf2:#19203a; --line:#263150; --text:#e8e6d9; --muted:#8e96ab;
+  --acc:#00d4ff; --acc-soft:rgba(0,212,255,.12); --gold:#c9a84c; --ok:#3ddc84; --bad:#ff5d6c;
+  --display:"Cinzel","Trajan Pro",Georgia,"Times New Roman",serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,"DejaVu Sans",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"DejaVu Sans Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}   /* sinon label{display:grid} gagne sur hidden */
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:clamp(17px,1.6vw,22px)/1.5 var(--body);padding-inline:clamp(16px,4vw,64px);padding-block:clamp(14px,3vh,40px)}
+.cadre{max-width:1100px;margin:0 auto;min-height:100%;display:grid;grid-template-rows:auto auto 1fr;gap:clamp(14px,2.4vh,28px)}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.marque{font-family:var(--display);color:var(--gold);font-size:clamp(20px,2vw,28px);letter-spacing:.04em}
+.pas{font-family:var(--mono);color:var(--muted);font-size:.8em}
+.rail{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.rail span{flex:0 0 auto;padding:.3em .8em;border-radius:999px;border:1px solid var(--line);font-size:.72em;color:var(--muted);white-space:nowrap}
+.rail span.cur{border-color:var(--acc);color:var(--acc);background:var(--acc-soft);font-weight:700}
+.rail span.pret::after{content:" ✓";color:var(--ok)}
+.rail span.erreur{border-color:var(--bad);color:var(--bad)}
+main{background:var(--surf);border:1px solid var(--line);border-radius:14px;padding:clamp(18px,3vw,40px);display:flex;flex-direction:column;gap:clamp(12px,2vh,22px)}
+h1{font-family:var(--display);font-weight:500;font-size:clamp(26px,3vw,40px);margin:0;text-wrap:balance}
+.aide{color:var(--muted);max-width:56ch;margin:0}
+label{display:grid;gap:6px;font-size:.8em;color:var(--muted)}
+input,select{font:inherit;font-size:1.05em;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:.55em .8em;width:100%;max-width:32ch}
+input:focus-visible,select:focus-visible,button:focus-visible,.opt:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.champs{display:grid;gap:14px}
+.options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px}
+.opt{text-align:left;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:.8em 1em;cursor:pointer}
+.opt small{display:block;color:var(--muted);font-size:.75em}
+.opt[aria-pressed="true"]{border-color:var(--acc);background:var(--acc-soft)}
+.nav{display:flex;justify-content:space-between;gap:12px;margin-top:auto;padding-top:8px}
+button.b{font:inherit;padding:.6em 1.4em;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer}
+button.b.prim{background:var(--acc);border-color:var(--acc);color:var(--bg);font-weight:700}
+button.b:disabled{opacity:.45;cursor:default}
+.erreur{color:var(--bad);min-height:1.5em;margin:0}
+.recap{display:grid;grid-template-columns:auto 1fr;gap:.35em 1.2em;margin:0}
+.recap dt{color:var(--muted)} .recap dd{margin:0;font-family:var(--mono);font-size:.9em;overflow-wrap:anywhere}
+.barre{height:10px;border-radius:5px;background:var(--surf2);overflow:hidden}
+.barre i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
+.note{font-size:.78em;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="cadre">
+  <header><span class="marque">SecuBox · Premier Pas</span><span class="pas" id="pas">…</span></header>
+  <nav class="rail" id="rail" aria-label="Étapes"></nav>
+  <main id="ecran" aria-live="polite"><p class="aide">Chargement…</p></main>
+</div>
+
+<script>
+"use strict";
+const API = "/api/v1/premier-pas";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// LE JETON DE DÉMARRAGE arrive dans le fragment (le lanceur du kiosque le
+// pose) ; on le garde pour la session et on l'efface de la barre d'adresse.
+let JETON = "";
+try {
+  const h = location.hash.slice(1);
+  if (h) { sessionStorage.setItem("premier-pas.jeton", h); history.replaceState(null, "", location.pathname); }
+  JETON = sessionStorage.getItem("premier-pas.jeton") || "";
+} catch (_) { JETON = location.hash.slice(1); }
+
+let ETAT = null, CHOIX = null, cur = 0, brouillon = {};
+
+async function api(chemin, opts = {}) {
+  const r = await fetch(API + chemin, {...opts, headers: {"Content-Type": "application/json", "X-Premier-Pas": JETON}});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || ("Erreur " + r.status));
+  return j;
+}
+
+const PAGES = {
+  bienvenue: {
+    aide: "Une box SecuBox neuve. En quelques minutes, elle aura un nom, un administrateur, ses services et sa place dans votre maillage.",
+    corps: () => `<div class="champs">
+      <label>Langue<select id="c-langue"><option value="fr">Français</option><option value="en">English</option></select></label>
+      <label>Clavier<select id="c-clavier"><option value="fr">fr — azerty</option><option value="us">us — qwerty</option></select></label></div>`,
+    valeurs: () => ({langue: $("#c-langue").value, clavier: $("#c-clavier").value}),
+  },
+  nom: {
+    aide: "Le nom sous lequel vos appareils et les autres box la verront : lettres minuscules, chiffres et tirets.",
+    corps: p => `<label>Nom de la box<input id="c-nom" autocomplete="off" spellcheck="false" maxlength="63" value="${esc((p.box||{}).nom || (CHOIX.nom !== "secubox-live" ? CHOIX.nom : ""))}" placeholder="gk3"></label>`,
+    valeurs: () => ({nom: $("#c-nom").value}),
+  },
+  horloge: {
+    aide: "L'heure juste d'abord : les codes à usage unique de l'étape suivante en dépendent.",
+    corps: p => `<label>Fuseau horaire<input id="c-fuseau" value="${esc((p.box||{}).fuseau || CHOIX.fuseau)}"></label>
+      <p class="note">La box se synchronisera sur les serveurs de temps publics.</p>`,
+    valeurs: () => ({fuseau: $("#c-fuseau").value, ntp: true}),
+  },
+  admin: {
+    aide: "Votre compte d'administration (identifiant « admin »). Au moins 12 caractères : une phrase se retient mieux qu'un mot. À la première connexion, la box vous fera scanner un QR avec votre application d'authentification.",
+    corps: p => `${(p.admin||{}).mot_de_passe === "défini" ? '<p class="note">Un mot de passe est déjà choisi. Vous pouvez le remplacer.</p>' : ''}
+      <div class="champs"><label>Mot de passe<input id="c-mdp" type="password" autocomplete="new-password"></label>
+      <label>Encore une fois<input id="c-mdp2" type="password" autocomplete="new-password"></label></div>`,
+    valeurs: () => ({mot_de_passe: $("#c-mdp").value, confirmation: $("#c-mdp2").value}),
+    passable: p => (p.admin||{}).mot_de_passe === "défini" && !$("#c-mdp").value,
+  },
+  reseau: {
+    aide: "Comment la box se branche, et sous quel nom on la joint. Sans domaine, elle reste joignable sur le réseau local seulement.",
+    opts: [["routeur","Routeur","la box est la passerelle"],["pont","Pont","derrière votre box internet"],["lan","LAN seul","pas de domaine public"]],
+    cle: "mode", section: "reseau",
+    extra: p => `<label id="l-domaine">Domaine<input id="c-domaine" spellcheck="false" value="${esc((p.reseau||{}).domaine || "")}" placeholder="gk3.exemple.fr"></label>`,
+    valeurs: () => ({mode: brouillon.mode, domaine: brouillon.mode === "lan" ? "" : $("#c-domaine").value}),
+  },
+  services: {
+    aide: "Ce que la box fera. Vous pourrez ajouter ou retirer des services plus tard, depuis l'administration.",
+    options: () => CHOIX.profils.map(p => [p.id, p.libelle, p.modules + " modules"]),
+    cle: "profil", section: "services",
+    valeurs: () => ({profil: brouillon.profil}),
+  },
+  maillage: {
+    aide: "Rejoindre vos autres box (identités, Flotte, journal partagés), ou être la première.",
+    opts: [["rejoindre","Rejoindre une box","avec son invitation"],["premiere","Première box","elle deviendra maîtresse"],["plus_tard","Plus tard",""]],
+    cle: "mode", section: "maillage",
+    extra: p => `<div class="champs" id="l-rejoindre"><label>Adresse de la box maîtresse<input id="c-ip" inputmode="decimal" value="${esc((p.maillage||{}).rejoindre || "")}" placeholder="192.168.1.200"></label>
+      <label>Jeton d'invitation<input id="c-jeton" spellcheck="false" autocomplete="off" placeholder="sbx-mesh-invite sur la box maîtresse"></label></div>`,
+    valeurs: () => brouillon.mode === "rejoindre" ? {mode: "rejoindre", rejoindre: $("#c-ip").value, jeton: $("#c-jeton").value} : {mode: brouillon.mode},
+  },
+  majs: {
+    aide: "La box reçoit les correctifs de apt.secubox.in, vérifiés par la clé du dépôt.",
+    opts: [["oui","Automatiques","chaque nuit"],["non","Sur validation","je choisis quand"]],
+    cle: "auto", section: "apt", code: v => v === true ? "oui" : v === false ? "non" : v,
+    extra: p => `<label id="l-heure">Heure<input id="c-heure" value="${esc((p.apt||{}).heure || "03:00")}" inputmode="numeric" maxlength="5"></label>`,
+    valeurs: () => ({auto: brouillon.auto === "oui", heure: $("#c-heure").value}),
+  },
+};
+
+function optionsDe(pg) { return pg.opts || (pg.options ? pg.options() : null); }
+
+function rendRail() {
+  $("#rail").innerHTML = ETAT.etapes.map((e, i) =>
+    `<span class="${i === cur ? "cur" : ""} ${e.statut === "pret" && e.id !== "appliquer" ? "pret" : ""} ${e.statut === "erreur" ? "erreur" : ""}">${esc(e.libelle)}</span>`).join("");
+  $("#pas").textContent = `${cur + 1} / ${ETAT.etapes.length}`;
+}
+
+function rendEtape() {
+  const e = ETAT.etapes[cur], p = ETAT.profil, pg = PAGES[e.id];
+  rendRail();
+  if (e.id === "appliquer") return rendRecap();
+  let h = `<h1>${esc(e.libelle)}</h1><p class="aide">${esc(pg.aide)}</p>`;
+  const opts = optionsDe(pg);
+  if (opts) {
+    const actuel = pg.code ? pg.code((p[pg.section] || {})[pg.cle]) : (p[pg.section] || {})[pg.cle];
+    if (brouillon[pg.cle] === undefined) brouillon[pg.cle] = actuel ?? opts[0][0];
+    h += `<div class="options" role="group">${opts.map(o => `<button type="button" class="opt" data-v="${esc(o[0])}" aria-pressed="${brouillon[pg.cle] === o[0]}">${esc(o[1])}${o[2] ? `<small>${esc(o[2])}</small>` : ""}</button>`).join("")}</div>`;
+  }
+  if (pg.corps) h += pg.corps(p);
+  if (pg.extra) h += pg.extra(p);
+  h += `<p class="erreur" id="err">${esc(e.motif || "")}</p>
+    <div class="nav"><button type="button" class="b" id="prec" ${cur ? "" : "disabled"}>Retour</button>
+    <button type="button" class="b prim" id="suiv">Continuer</button></div>`;
+  $("#ecran").innerHTML = h;
+  document.querySelectorAll(".opt").forEach(b => b.onclick = () => {
+    brouillon[pg.cle] = b.dataset.v;
+    document.querySelectorAll(".opt").forEach(x => x.setAttribute("aria-pressed", x === b));
+    visibilite(e.id);
+  });
+  visibilite(e.id);
+  $("#prec").onclick = () => { cur--; brouillon = {}; rendEtape(); };
+  $("#suiv").onclick = () => enregistre(e.id, pg);
+  const premier = $("#ecran input, #ecran select, #ecran .opt[aria-pressed=true]");
+  if (premier) premier.focus();
+}
+
+function visibilite(id) {
+  const montre = (sel, oui) => { const n = $(sel); if (n) n.hidden = !oui; };
+  if (id === "reseau") montre("#l-domaine", brouillon.mode !== "lan");
+  if (id === "maillage") montre("#l-rejoindre", brouillon.mode === "rejoindre");
+  if (id === "majs") montre("#l-heure", brouillon.auto === "oui");
+}
+
+async function enregistre(id, pg) {
+  if (pg.passable && pg.passable(ETAT.profil)) { cur++; brouillon = {}; return rendEtape(); }
+  $("#suiv").disabled = true;
+  try {
+    ETAT = await api("/etape/" + id, {method: "PUT", body: JSON.stringify(pg.valeurs())});
+    const e = ETAT.etapes.find(x => x.id === id);
+    if (e.statut === "erreur") { $("#err").textContent = e.motif; return; }
+    cur++; brouillon = {}; rendEtape();
+  } catch (err) { $("#err").textContent = err.message; }
+  finally { const b = $("#suiv"); if (b) b.disabled = false; }
+}
+
+function rendRecap() {
+  const p = ETAT.profil, b = p.box || {}, r = p.reseau || {}, m = p.maillage || {}, a = p.apt || {};
+  const manque = ETAT.etapes.filter(e => e.statut !== "pret" && e.id !== "appliquer");
+  $("#ecran").innerHTML = `<h1>Appliquer</h1>
+    <p class="aide">${manque.length ? "Il reste à compléter : " + manque.map(e => esc(e.libelle)).join(", ") + "." : "Tout est prêt. La box applique, redémarre ses services et ouvre le Hall."}</p>
+    <dl class="recap"><dt>Nom</dt><dd>${esc(b.nom || "—")}</dd><dt>Fuseau</dt><dd>${esc(b.fuseau || "—")}</dd>
+    <dt>Administrateur</dt><dd>${(p.admin||{}).mot_de_passe === "défini" ? "mot de passe choisi · TOTP à la 1re connexion" : "—"}</dd>
+    <dt>Réseau</dt><dd>${esc(r.mode || "—")}${r.domaine ? " · " + esc(r.domaine) : ""}</dd>
+    <dt>Services</dt><dd>${esc((p.services||{}).profil || "—")}</dd>
+    <dt>Maillage</dt><dd>${esc(m.mode === "rejoindre" ? "rejoindre " + m.rejoindre : (m.mode || "—"))}</dd>
+    <dt>Mises à jour</dt><dd>${a.auto === true ? "automatiques · " + esc(a.heure || "03:00") : a.auto === false ? "sur validation" : "—"}</dd></dl>
+    <p class="erreur" id="err"></p>
+    <div class="nav"><button type="button" class="b" id="prec">Retour</button>
+    <button type="button" class="b prim" id="go" ${manque.length ? "disabled" : ""}>Appliquer</button></div>`;
+  $("#prec").onclick = () => { cur--; rendEtape(); };
+  $("#go").onclick = async () => {
+    $("#go").disabled = true;
+    try { await api("/appliquer", {method: "POST"}); suivi(); }
+    catch (err) { $("#err").textContent = err.message; $("#go").disabled = false; }
+  };
+}
+
+async function suivi() {
+  $("#ecran").innerHTML = `<h1>La box se configure</h1><p class="aide" id="act">Démarrage…</p>
+    <div class="barre" aria-hidden="true"><i id="bar"></i></div><p class="note">Ne l'éteignez pas. Cela peut prendre plusieurs minutes (services à installer).</p>`;
+  const tour = async () => {
+    let e;
+    try { e = await api("/etat"); } catch (_) { return setTimeout(tour, 3000); }
+    const m = e.moteur || {};
+    if (e.fait) return fini();
+    if (m.phase === "echec") {
+      $("#ecran").innerHTML = `<h1>Arrêt à l'étape « ${esc(m.etape)} »</h1><p class="aide">${esc(m.erreur || "")}</p>
+        <p class="note">Rien après cette étape n'a été touché. Corrigez puis relancez.</p>
+        <div class="nav"><span></span><button type="button" class="b prim" id="rep">Revenir à cette étape</button></div>`;
+      ETAT = e; $("#rep").onclick = () => { cur = Math.max(0, ETAT.etapes.findIndex(x => x.id === m.etape)); rendEtape(); };
+      return;
+    }
+    if (m.phase === "application") { $("#act").textContent = m.action || ""; $("#bar").style.width = Math.round(100 * (m.n || 0) / (m.total || 1)) + "%"; }
+    setTimeout(tour, 2000);
+  };
+  tour();
+}
+
+function fini() {
+  $("#rail").innerHTML = ""; $("#pas").textContent = "";
+  $("#ecran").innerHTML = `<h1>Votre box est prête</h1>
+    <p class="aide">Connectez-vous avec le compte « admin » et votre mot de passe. La box vous fera ensuite scanner le QR de votre application d'authentification.</p>
+    <div class="nav"><span></span><button type="button" class="b prim" id="hall">Ouvrir le Hall</button></div>`;
+  try { sessionStorage.removeItem("premier-pas.jeton"); } catch (_) {}
+  $("#hall").onclick = () => { location.href = "/"; };
+}
+
+(async function demarre() {
+  try { [ETAT, CHOIX] = await Promise.all([api("/etat"), api("/choix")]); }
+  catch (err) { $("#ecran").innerHTML = `<h1>Assistant indisponible</h1><p class="aide">${esc(err.message)}</p>`; return; }
+  if (ETAT.fait) return fini();
+  if (!JETON) {
+    $("#ecran").innerHTML = `<h1>Premier démarrage</h1><p class="aide">Cette box attend sa configuration. L'assistant s'utilise depuis l'écran branché sur la box (ou sa console).</p>`;
+    return;
+  }
+  if (ETAT.demande_en_cours || (ETAT.moteur || {}).phase === "application") return suivi();
+  // Profil vide : on commence par l'accueil. Sinon on reprend là où le
+  // moteur le dit — y compris « Appliquer » quand tout est prêt.
+  const vide = !Object.keys(ETAT.profil || {}).length;
+  cur = vide ? 0 : Math.max(0, ETAT.etapes.findIndex(e => e.id === ETAT.reprendre));
+  rendEtape();
+})();
+</script>
+</body>
+</html>

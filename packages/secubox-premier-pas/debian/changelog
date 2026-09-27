@@ -1,3 +1,17 @@
+secubox-premier-pas (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Face KIOSQUE (couche 2) : page /premier-pas/ (9 étapes, lisible sur une
+    télé, aucune police externe), API servie par l'agrégateur SANS privilège
+    (remplit le profil, hache le mot de passe en argon2, dépose une demande),
+    application par une unité .path root (premier-pasctl appliquer-demande).
+    Écriture seulement avec le jeton de démarrage (/run, 0640 root:secubox)
+    que le lanceur du kiosque passe à la page : nginx fait confiance à
+    X-Forwarded-For venant du LAN, l'adresse seule ne prouvait rien. Box
+    configurée : assistant fermé (409). premier-pas-url : suffixe d'URL des
+    lanceurs du kiosque (ref #1522).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 20:00:00 +0200
+
 secubox-premier-pas (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Premier paquet (#1522), couche 1 de la maquette validée

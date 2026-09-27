@@ -196,6 +196,32 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     return out
 
 
+# ── Jeton de démarrage (couche 2) ──────────────────────────────────────────
+
+JETON = Path("/run/secubox/premier-pas/jeton")
+
+
+def pose_jeton() -> str:
+    """Le secret qui autorise une face à écrire le profil tant que la box n'est
+    pas configurée. Créé par root dans /run (disparaît à l'arrêt), lisible par
+    le groupe secubox (l'API) ; le lanceur du kiosque le passe à la page."""
+    import grp
+    import secrets
+    JETON.parent.mkdir(parents=True, exist_ok=True)
+    if JETON.exists() and JETON.read_text().strip():
+        return JETON.read_text().strip()
+    jeton = secrets.token_urlsafe(24)
+    tmp = JETON.with_suffix(".tmp")
+    tmp.write_text(jeton + "\n")
+    try:
+        os.chown(tmp, 0, grp.getgrnam("secubox").gr_gid)
+    except (KeyError, PermissionError):
+        pass
+    os.chmod(tmp, 0o640)
+    os.replace(tmp, JETON)
+    return jeton
+
+
 # ── État partagé par les faces ─────────────────────────────────────────────
 
 def ecrit_etat(**etat: Any) -> None:

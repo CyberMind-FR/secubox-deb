@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: premier-pas-url — suffixe d'URL du kiosque (#1522)
+#
+# Box configurée : n'écrit RIEN (le kiosque ouvre le Hall comme avant).
+# Box neuve : écrit « premier-pas/#<jeton> », que les lanceurs du kiosque
+# ajoutent à leur URL. Le jeton (0640 root:secubox) est créé par
+# secubox-premier-pas.service ; on l'attend jusqu'à 30 s au démarrage.
+[ -e /var/lib/secubox/.premier-pas-fait ] && exit 0
+J=/run/secubox/premier-pas/jeton
+i=0
+while [ ! -s "$J" ] && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
+[ -r "$J" ] || exit 0
+printf 'premier-pas/#%s' "$(tr -d '\n' < "$J")"

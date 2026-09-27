@@ -420,7 +420,12 @@ determine_url() {
         fi
     done
 
-    echo "${url:-https://localhost/}"
+    url="${url:-https://localhost/}"
+    # Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522).
+    if [ -x /usr/sbin/premier-pas-url ]; then
+        url="${url%/}/$(/usr/sbin/premier-pas-url 2>/dev/null)"
+    fi
+    echo "$url"
 }
 
 # ══════════════════════════════════════════════════════════════════
@@ -532,6 +537,9 @@ for test_url in "https://localhost/" "https://127.0.0.1/" "http://localhost/"; d
         break
     fi
 done
+
+# Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522).
+[ -x /usr/sbin/premier-pas-url ] && URL="${URL%/}/$(/usr/sbin/premier-pas-url 2>/dev/null)"
 
 # Detect screen resolution for explicit window sizing
 # xrandr returns something like "1920x1080+0+0" for connected displays
