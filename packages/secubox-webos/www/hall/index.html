@@ -1168,16 +1168,8 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
             en demande un ; un administrateur compare une empreinte et vous entrez.</p>
           <button type="button" role="menuitem" id="who-session">J'ai déjà un compte — connexion…</button>
           <p class="who-note" id="who-etat">session non vérifiée</p>
-          <div class="who-sep"></div>
-          <button type="button" role="menuitem" id="who-defaut">⭐ Ordre actuel = défaut</button>
-          <p class="who-note">Fixe la bande de favoris d'aujourd'hui comme repli de la réinitialisation.</p>
-          <button type="button" role="menuitem" id="who-reset">↺ Réinitialiser l'affichage</button>
-          <p class="who-note">Ordre des cartes et thème, pour ce profil. Les favoris reviennent au défaut fixé.</p>
-          <div class="who-sep"></div>
-          <button type="button" role="menuitem" id="who-accueil">👋 Revoir l'accueil</button>
-          <p class="who-note">Le premier abord : ce qu'est le Hall et les gestes des cartes.</p>
-          <button type="button" role="menuitem" id="who-aide">❔ Aide du Hall</button>
-          <p class="who-note">Le guide complet : les cartes, la prise en main, la FAQ.</p>
+          <!-- EN HAUT DU MENU (#1526) : une fois connecté, « qui suis-je, sur quels
+               appareils, où » est la première question — pas l'affichage ni l'aide. -->
           <!-- OÙ SUIS-JE IDENTIFIÉ ? (#1272) On est connecté à une dizaine de
                services à la fois sans aucun endroit où le voir. Le registre
                RGPD du pare-feu le sait déjà — il servait à l'audit, il sert
@@ -1200,6 +1192,16 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
               <p class="who-note">lecture du registre…</p>
             </div>
           </div>
+          <div class="who-sep"></div>
+          <button type="button" role="menuitem" id="who-defaut">⭐ Ordre actuel = défaut</button>
+          <p class="who-note">Fixe la bande de favoris d'aujourd'hui comme repli de la réinitialisation.</p>
+          <button type="button" role="menuitem" id="who-reset">↺ Réinitialiser l'affichage</button>
+          <p class="who-note">Ordre des cartes et thème, pour ce profil. Les favoris reviennent au défaut fixé.</p>
+          <div class="who-sep"></div>
+          <button type="button" role="menuitem" id="who-accueil">👋 Revoir l'accueil</button>
+          <p class="who-note">Le premier abord : ce qu'est le Hall et les gestes des cartes.</p>
+          <button type="button" role="menuitem" id="who-aide">❔ Aide du Hall</button>
+          <p class="who-note">Le guide complet : les cartes, la prise en main, la FAQ.</p>
           <!-- DIFFUSIONS & PARTAGES (#diffusions-profil) : les broadcasts reçus
                du parc, gardés PAR PROFIL, révélés au survol. Un lien sbx partagé
                ou une diffusion s'y empile ; un clic la rouvre. -->
