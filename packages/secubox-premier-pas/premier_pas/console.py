@@ -199,8 +199,25 @@ class Console:
                 cadre = f"[ {shown[-(L - 20):]:<{L - 20}}]"
                 self.texte(y, 13, cadre, curses.A_REVERSE if actif else 0)
             y += 2
+        if page.id == "bienvenue":
+            self.texte(15, 2, "Préparer depuis une autre SecuBox, code :", self.GR)
+            self.texte(16, 2, code_affiche(), self.OR | curses.A_BOLD)
         self.texte(17, 2, (motif or self.msg)[:L - 4], self.KO)
         self.e.refresh()
+
+    def touche(self):
+        """Attend une touche, mais regarde toutes les 2 s si la box maîtresse
+        a proposé ou imposé une configuration."""
+        self.e.timeout(2000)
+        while True:
+            try:
+                return self.e.get_wch()
+            except curses.error:
+                p = R.proposition()
+                if p.get("statut") == "forcee":
+                    return "__force__"
+                if p.get("statut") == "en_attente" and p.get("a") != getattr(self, "vue_prop", None):
+                    return "__proposition__"
 
     def boucle_page(self, page: Page, n: int, total: int, motif: Optional[str]) -> str:
         """Rend 'suivant', 'precedent' ou 'quitter'."""
@@ -209,7 +226,9 @@ class Console:
             self.page(page, n, total, motif)
             vis = champs_visibles(page)
             c = vis[self.focus]
-            k = self.e.get_wch()
+            k = self.touche()
+            if k in ("__force__", "__proposition__"):
+                return k
             if k in ("\t", curses.KEY_DOWN):
                 self.focus = (self.focus + 1) % len(vis)
             elif k in (curses.KEY_BTAB, curses.KEY_UP):
@@ -230,6 +249,19 @@ class Console:
                 c.valeur += k
             motif = None
 
+    def recap_lignes(self, etat: Dict[str, Any]) -> List[str]:
+        p = etat["profil"]
+        b, r, m, a = p.get("box") or {}, p.get("reseau") or {}, p.get("maillage") or {}, p.get("apt") or {}
+        self.cadre("Appliquer", f"{len(P.ETAPES)}/{len(P.ETAPES)}")
+        lignes = [f"{b.get('nom', '—')} · {r.get('mode', '—')}{' · ' + r['domaine'] if r.get('domaine') else ''}",
+                  f"services {(p.get('services') or {}).get('profil', '—')}",
+                  f"maillage {m.get('mode', '—')}{' ' + m['rejoindre'] if m.get('rejoindre') else ''}",
+                  f"mises à jour {'auto ' + a.get('heure', '03:00') if a.get('auto') else 'sur validation'}",
+                  f"admin {'mot de passe choisi' if (p.get('admin') or {}).get('mot_de_passe') == 'défini' else '—'}"]
+        for i, s in enumerate(lignes):
+            self.texte(8 + i, 2, s)
+        return lignes
+
     def recap(self, etat: Dict[str, Any]) -> str:
         p = etat["profil"]
         b, r, m, a = p.get("box") or {}, p.get("reseau") or {}, p.get("maillage") or {}, p.get("apt") or {}
@@ -249,7 +281,9 @@ class Console:
         self.texte(17, 2, self.msg[:L - 4], self.KO)
         self.e.refresh()
         while True:
-            k = self.e.get_wch()
+            k = self.touche()
+            if k in ("__force__", "__proposition__"):
+                return k
             if k in ("\n", "\r", curses.KEY_ENTER) and not manque:
                 return "appliquer"
             if k == "\x1b":
@@ -257,12 +291,32 @@ class Console:
             if k == curses.KEY_F10:
                 return "quitter"
 
+    def proposition(self, p: Dict[str, Any]) -> str:
+        """La box maîtresse propose : la décision est ici. Rend accepter|refuser."""
+        self.vue_prop = p.get("a")
+        e = R.etat()
+        self.recap_lignes(e)
+        self.texte(6, 2, f"PROPOSITION DE {str(p.get('par', '?')).upper()}", self.OR | curses.A_BOLD)
+        self.texte(14, 2, "[ Entrée : Accepter et appliquer ]   [ R : Refuser ]", self.CY | curses.A_BOLD)
+        self.e.refresh()
+        self.e.timeout(-1)
+        while True:
+            k = self.e.get_wch()
+            if k in ("\n", "\r", curses.KEY_ENTER):
+                return "accepter"
+            if k in ("r", "R"):
+                return "refuser"
+
     def suivi(self) -> bool:
         """Suit l'application ; rend True si la box est configurée."""
+        self.e.timeout(-1)
         while True:
             e = R.etat()
             mo = e.get("moteur") or {}
             self.cadre("La box se configure", "")
+            prop = e.get("proposition") or {}
+            if prop.get("mode") == "forcer":
+                self.texte(6, 2, f"! Configuration imposée à distance par {prop.get('par', '?')}"[:L - 4], self.KO | curses.A_BOLD)
             if e["fait"]:
                 self.texte(8, 2, "Votre box est prête.", self.OK | curses.A_BOLD)
                 self.lignes("Connectez-vous avec « admin » et votre mot de passe ; la box vous fera "
@@ -287,6 +341,33 @@ class Console:
             time.sleep(1.5)
 
 
+def code_affiche() -> str:
+    """Le code d'appairage, groupé par 4 (espaces : la box maîtresse les ignore)."""
+    try:
+        c = R.M.JETON.read_text().strip()
+    except OSError:
+        return "(pas encore prêt)"
+    return " ".join(c[i:i + 4] for i in range(0, len(c), 4))
+
+
+def _traite_distant(c: "Console", action: str) -> Optional[bool]:
+    """Proposition ou application imposée : rend True si la box est prête,
+    False pour revenir à l'assistant, None si rien à faire."""
+    if action == "__force__":
+        return c.suivi()
+    if action == "__proposition__":
+        choix = c.proposition(R.proposition())
+        try:
+            if choix == "accepter":
+                R.accepte()
+                return c.suivi()
+            R.refuse()
+        except R.Refus as e:
+            c.msg = str(e)
+        return False
+    return None
+
+
 def lance(ecran) -> int:
     c = Console(ecran)
     etat = R.etat()
@@ -303,6 +384,12 @@ def lance(ecran) -> int:
     while True:
         if cur >= len(ps):
             action = c.recap(R.etat())
+            fin = _traite_distant(c, action)
+            if fin:
+                return 0
+            if fin is False:
+                cur = 0
+                continue
             if action == "quitter":
                 return 1
             if action == "precedent":
@@ -321,6 +408,13 @@ def lance(ecran) -> int:
         page = ps[cur]
         action = c.boucle_page(page, cur + 1, len(ids), motif)
         motif = None
+        fin = _traite_distant(c, action)
+        if fin:
+            return 0
+        if fin is False:
+            ps = pages(R.vue(R.lit()))            # le maître a pu tout remplir
+            cur = 0
+            continue
         if action == "quitter":
             return 1
         if action == "precedent":

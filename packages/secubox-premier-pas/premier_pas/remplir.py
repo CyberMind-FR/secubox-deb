@@ -96,7 +96,7 @@ def etat() -> Dict[str, Any]:
         etapes.append({"id": e, "libelle": P.LIBELLES[e], "statut": statut, "motif": ex.erreurs.get(e)})
     return {"fait": M.MARQUEUR.exists(), "complet": ex.complet, "reprendre": ex.premiere_etape,
             "etapes": etapes, "profil": vue(profil), "moteur": moteur,
-            "demande_en_cours": demande_path().exists()}
+            "demande_en_cours": demande_path().exists(), "proposition": proposition()}
 
 
 CHAMPS = {
@@ -110,6 +110,19 @@ CHAMPS = {
 }
 
 
+def hache_mdp(mdp: str, conf: str) -> str:
+    """La règle du mot de passe, UNE fois pour toutes les faces : contrôle,
+    puis empreinte argon2. Le clair ne sort jamais de cette fonction."""
+    if len(mdp) < MDP_MIN:
+        raise Refus(f"Au moins {MDP_MIN} caractères.")
+    if mdp != conf:
+        raise Refus("Les deux saisies diffèrent.")
+    if mdp.lower() in MDP_FAIBLES or re.fullmatch(r"(.)\1+", mdp):
+        raise Refus("Ce mot de passe est trop facile à deviner.")
+    from argon2 import PasswordHasher  # noqa: PLC0415
+    return PasswordHasher().hash(mdp)
+
+
 def enregistre(etape: str, valeurs: Dict[str, Any]) -> Dict[str, Any]:
     """Enregistre UNE étape et rend l'état à jour. Lève Refus sur une saisie
     refusée ; une valeur fausse mais bien formée apparaît dans l'examen, à
@@ -118,15 +131,15 @@ def enregistre(etape: str, valeurs: Dict[str, Any]) -> Dict[str, Any]:
         raise Refus("Cette box est déjà configurée : l'assistant est fermé.")
     profil = lit()
     if etape == "admin":
-        mdp, conf = str(valeurs.get("mot_de_passe", "")), str(valeurs.get("confirmation", ""))
-        if len(mdp) < MDP_MIN:
-            raise Refus(f"Au moins {MDP_MIN} caractères.")
-        if mdp != conf:
-            raise Refus("Les deux saisies diffèrent.")
-        if mdp.lower() in MDP_FAIBLES or re.fullmatch(r"(.)\1+", mdp):
-            raise Refus("Ce mot de passe est trop facile à deviner.")
-        from argon2 import PasswordHasher  # noqa: PLC0415
-        profil.setdefault("admin", {})["mot_de_passe"] = PasswordHasher().hash(mdp)
+        if "empreinte" in valeurs:
+            # Venue du panneau maître : il ne détient QUE l'empreinte (#1522).
+            e = str(valeurs["empreinte"])
+            if not P._ARGON2.match(e):
+                raise Refus("Empreinte argon2 invalide.")
+            profil.setdefault("admin", {})["mot_de_passe"] = e
+        else:
+            profil.setdefault("admin", {})["mot_de_passe"] = hache_mdp(
+                str(valeurs.get("mot_de_passe", "")), str(valeurs.get("confirmation", "")))
         profil["admin"]["totp"] = "enroler"
     elif etape in CHAMPS:
         section, permis = CHAMPS[etape]
@@ -159,3 +172,65 @@ def demande_appliquer() -> None:
         raise Refus(f"Profil incomplet : reprendre à « {P.LIBELLES[ex.premiere_etape]} ».")
     dossier().mkdir(parents=True, exist_ok=True)
     demande_path().write_text("appliquer\n")
+
+
+# ── Proposition de la box maîtresse (#1522) ────────────────────────────────
+# Le maître remplit le profil puis PROPOSE : la personne devant la box voit
+# le récapitulatif et accepte ou refuse. En mode FORCER, la box applique tout
+# de suite, mais son écran l'annonce : l'utilisateur est toujours prévenu.
+
+MODES_PROPOSITION = ("proposer", "forcer")
+
+
+def proposition_path() -> Path:
+    return dossier() / "proposition.json"
+
+
+def proposition() -> Dict[str, Any]:
+    try:
+        return json.loads(proposition_path().read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _ecrit_proposition(p: Dict[str, Any]) -> None:
+    dossier().mkdir(parents=True, exist_ok=True)
+    tmp = proposition_path().with_suffix(".tmp")
+    tmp.write_text(json.dumps(p, ensure_ascii=False))
+    os.chmod(tmp, 0o640)
+    os.replace(tmp, proposition_path())
+
+
+def propose(par: str, mode: str) -> Dict[str, Any]:
+    import time as _t
+    if mode not in MODES_PROPOSITION:
+        raise Refus("Mode : proposer ou forcer.")
+    par = re.sub(r"[^\w.-]", "", str(par))[:63] or "box maîtresse"
+    ex = P.examine(lit())
+    if not ex.complet:
+        raise Refus(f"Profil incomplet : reprendre à « {P.LIBELLES[ex.premiere_etape]} ».")
+    p = {"par": par, "mode": mode, "a": int(_t.time()),
+         "statut": "forcee" if mode == "forcer" else "en_attente"}
+    _ecrit_proposition(p)
+    if mode == "forcer":
+        demande_appliquer()
+    return p
+
+
+def accepte() -> Dict[str, Any]:
+    p = proposition()
+    if p.get("statut") != "en_attente":
+        raise Refus("Aucune proposition en attente.")
+    demande_appliquer()
+    p["statut"] = "acceptee"
+    _ecrit_proposition(p)
+    return p
+
+
+def refuse() -> Dict[str, Any]:
+    p = proposition()
+    if p.get("statut") != "en_attente":
+        raise Refus("Aucune proposition en attente.")
+    p["statut"] = "refusee"
+    _ecrit_proposition(p)
+    return p

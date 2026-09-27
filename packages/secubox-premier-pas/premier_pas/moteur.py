@@ -41,7 +41,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from . import profil as P
 
 MARQUEUR = Path("/var/lib/secubox/.premier-pas-fait")
-ETAT = Path("/run/secubox/premier-pas/etat.json")
+ETAT = Path("/run/secubox-premier-pas/etat.json")
 JOURNAL = Path("/var/log/secubox/premier-pas.log")
 SECUBOX_CONF = Path("/etc/secubox/secubox.conf")
 USERS_FILE = Path("/etc/secubox/users.json")
@@ -51,7 +51,7 @@ MAJAUTO_DROPIN = Path("/etc/systemd/system/secubox-majauto.timer.d/heure.conf")
 SOURCES = (
     Path("/boot/secubox/profil.toml"),
     Path("/boot/firmware/secubox/profil.toml"),   # Raspberry Pi
-    Path("/run/secubox/premier-pas/usb/profil.toml"),  # LABEL=SBXPROFIL monté ici
+    Path("/run/secubox-premier-pas/usb/profil.toml"),  # LABEL=SBXPROFIL monté ici
 )
 
 
@@ -198,28 +198,49 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
 
 # ── Jeton de démarrage (couche 2) ──────────────────────────────────────────
 
-JETON = Path("/run/secubox/premier-pas/jeton")
+JETON = Path("/run/secubox-premier-pas/jeton")
+# Le jeton LOCAL : seuls le kiosque et la console le connaissent. Jamais
+# affiché, jamais transmis à la box maîtresse — c'est lui qui prouve que
+# « Accepter » vient de la personne devant la box (#1522, validation).
+JETON_LOCAL = Path("/run/secubox-premier-pas/jeton-local")
 
 
-def pose_jeton() -> str:
-    """Le secret qui autorise une face à écrire le profil tant que la box n'est
-    pas configurée. Créé par root dans /run (disparaît à l'arrêt), lisible par
-    le groupe secubox (l'API) ; le lanceur du kiosque le passe à la page."""
+def _dossier_prive(d: Path) -> None:
+    """HORS de /run/secubox (#1540) : des services y portent RuntimeDirectory=
+    secubox, et systemd ré-approprie alors TOUT le dossier au dernier service
+    démarré — l'API (secubox) perdait la lecture de ses jetons. Ici : root:secubox
+    0750, posé explicitement, sans dépendre de l'umask."""
+    import grp
+    d.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chown(d, 0, grp.getgrnam("secubox").gr_gid)
+        os.chmod(d, 0o750)
+    except (KeyError, PermissionError):
+        pass
+
+
+def _pose(chemin: Path) -> str:
     import grp
     import secrets
-    JETON.parent.mkdir(parents=True, exist_ok=True)
-    if JETON.exists() and JETON.read_text().strip():
-        return JETON.read_text().strip()
+    _dossier_prive(chemin.parent)
+    if chemin.exists() and chemin.read_text().strip():
+        return chemin.read_text().strip()
     jeton = secrets.token_urlsafe(24)
-    tmp = JETON.with_suffix(".tmp")
+    tmp = chemin.with_suffix(".tmp")
     tmp.write_text(jeton + "\n")
     try:
         os.chown(tmp, 0, grp.getgrnam("secubox").gr_gid)
     except (KeyError, PermissionError):
         pass
     os.chmod(tmp, 0o640)
-    os.replace(tmp, JETON)
+    os.replace(tmp, chemin)
     return jeton
+
+
+def pose_jeton() -> str:
+    """Pose les deux jetons ; rend le jeton d'appairage (le « code »)."""
+    _pose(JETON_LOCAL)
+    return _pose(JETON)
 
 
 # ── État partagé par les faces ─────────────────────────────────────────────

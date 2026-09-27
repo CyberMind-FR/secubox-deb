@@ -1,3 +1,22 @@
+secubox-premier-pas (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * PANNEAU MAÎTRE (couche 4) : « Boxes à préparer » dans l'admin (menu
+    boot). Préparer le profil d'une future box (mot de passe haché à la
+    saisie), l'exporter (profil.toml pour la clé SBXPROFIL ou /boot), ou le
+    POUSSER à la box neuve avec le code affiché sur son écran — adresses
+    privées seulement (réseau local, maillage). Invitation au maillage par
+    l'API p2p existante.
+  * VALIDATION PAR L'UTILISATEUR : le maître propose, la personne devant la
+    box accepte ou refuse (kiosque et console) ; mode FORCER : application
+    immédiate, annoncée par une alerte à l'écran. Deux jetons : le code
+    d'appairage (affiché, connu du maître) remplit ; le jeton LOCAL (jamais
+    affiché ni transmis) seul décide — le maître ne peut pas accepter à la
+    place de l'utilisateur.
+  * Correctif : le code d'appairage gardait ses tirets (base64 urlsafe) ;
+    seuls les espaces d'affichage sont ignorés (ref #1522).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 23:00:00 +0200
+
 secubox-premier-pas (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Face CONSOLE (couche 3) : premier-pas-console sur tty1 (curses,

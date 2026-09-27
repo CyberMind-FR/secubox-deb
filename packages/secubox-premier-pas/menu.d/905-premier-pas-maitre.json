@@ -1,0 +1,9 @@
+{
+  "id": "premier-pas-maitre",
+  "name": "Boxes à préparer",
+  "category": "boot",
+  "icon": "🧭",
+  "path": "/premier-pas-maitre/",
+  "order": 905,
+  "description": "Préparer, exporter ou pousser le profil de premier démarrage d'une future SecuBox"
+}
