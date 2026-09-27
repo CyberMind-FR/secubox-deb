@@ -439,6 +439,15 @@ create_session() {
 
     # Chromium profile directory
     mkdir -p "$KIOSK_HOME/.config/chromium"
+    # Verrou de profil PÉRIMÉ : Chromium y inscrit le nom de la machine. Après
+    # un renommage (Premier Pas), il croit le profil utilisé « sur un autre
+    # ordinateur », refuse de démarrer, et le kiosque boucle jusqu'à l'échec
+    # (vu sur gk3, #1544). Aucun Chromium du kiosque en vie = verrou périmé.
+    if ! pgrep -u "$KIOSK_USER" -x chromium >/dev/null 2>&1; then
+        rm -f "$KIOSK_HOME/.config/chromium/SingletonLock" \
+              "$KIOSK_HOME/.config/chromium/SingletonCookie" \
+              "$KIOSK_HOME/.config/chromium/SingletonSocket"
+    fi
     chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config"
 
     # Detect if we're in a VM or on real hardware

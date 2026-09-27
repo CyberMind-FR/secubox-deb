@@ -133,7 +133,7 @@ const PAGES = {
   },
   services: {
     aide: "Ce que la box fera. Vous pourrez ajouter ou retirer des services plus tard, depuis l'administration.",
-    options: () => CHOIX.profils.map(p => [p.id, p.libelle, p.modules + " modules"]),
+    options: () => CHOIX.profils.map(p => [p.id, p.libelle, p.modules == null ? "ce que la box a déjà" : p.modules + " modules"]),
     cle: "profil", section: "services",
     valeurs: () => ({profil: brouillon.profil}),
   },

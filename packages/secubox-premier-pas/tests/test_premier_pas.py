@@ -29,6 +29,7 @@ def isole(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "ETAT", tmp_path / "etat.json")
     monkeypatch.setattr(M, "JOURNAL", tmp_path / "pp.log")
     monkeypatch.setattr(M, "SECUBOX_CONF", tmp_path / "secubox.conf")
+    monkeypatch.setattr(M, "HOSTS", tmp_path / "hosts")
     monkeypatch.setattr(M, "MAJAUTO_DROPIN", tmp_path / "heure.conf")
     monkeypatch.setattr(M, "_pose_empreinte_admin", lambda e: None)
     return tmp_path
@@ -147,3 +148,57 @@ def test_fuseaux_liste_region_ville():
     z = P.fuseaux()
     assert "Europe/Paris" in z
     assert not any(x.startswith(("Etc/", "posix/")) for x in z)
+
+
+def test_garder_les_modules_actuels_n_appelle_pas_profilectl(complet):
+    p = complet
+    p["services"]["profil"] = P.GARDER
+    assert P.examine(p, profils_connus=["full"]).complet
+    actions = M.plan(p)
+    s = [a for a in actions if a.etape == "services"]
+    assert len(s) == 1 and s[0].argv is None and s[0].fn is None
+
+
+def test_cause_d_echec_lisible():
+    sortie = "▶️ start eye-remote\n❌ gitea : systemctl enable secubox-gitea.service → rc=1 (masked)\n" + "\n".join(f"↩ rollback m{i}" for i in range(80))
+    c = M.cause(sortie)
+    assert "gitea" in c and "masked" in c
+    assert M.cause("tout va bien\nsauf la fin") == "tout va bien · sauf la fin"
+
+
+def test_maillage_reessaie_le_temps_que_le_reseau_revienne(complet, tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "ETAT", tmp_path / "etat.json")
+    monkeypatch.setattr(M, "JOURNAL", tmp_path / "journal.log")
+    monkeypatch.setattr(M.time, "sleep", lambda s: None)
+    monkeypatch.setattr(M, "_pose_empreinte_admin", lambda e: None)
+    monkeypatch.setattr(M, "_ecrit_conf", lambda d: None)
+    monkeypatch.setattr(M, "_renomme", lambda n: None)
+    monkeypatch.setattr(M, "_majauto", lambda a, h: None)
+    p = complet
+    p["maillage"] = {"mode": "rejoindre", "rejoindre": "192.168.1.200", "jeton": "ab" * 32}
+    appels = []
+    def executeur(argv):
+        appels.append(argv[0])
+        if argv[0] == "sbx-mesh-join" and appels.count("sbx-mesh-join") < 3:
+            return 1, "✗ FAILED to join mesh"
+        return 0, ""
+    r = M.appliquer(p, executeur, profils_connus=["full"], marqueur=tmp_path / "fait")
+    assert r.ok, r.detail
+    assert appels.count("sbx-mesh-join") == 3
+
+
+def test_renommer_met_a_jour_hosts_et_secubox_conf(tmp_path, monkeypatch):
+    # hostnamectl seul laissait « secubox-live » dans /etc/hosts : gk3 ne se résolvait plus (#1544).
+    hosts, conf = tmp_path / "hosts", tmp_path / "secubox.conf"
+    hosts.write_text("127.0.0.1  localhost secubox-live secubox secubox.local\n# secubox-live commentaire\n::1 localhost\n")
+    conf.write_text('[global]\nhostname  = "secubox-live"\n\n[api]\nsocket_dir = "/run/secubox"\n')
+    monkeypatch.setattr(M, "HOSTS", hosts)
+    monkeypatch.setattr(M, "SECUBOX_CONF", conf)
+    M._renomme("gk3", ancien="secubox-live")
+    h = hosts.read_text()
+    assert "127.0.0.1  localhost gk3 secubox secubox.local" in h
+    assert "# secubox-live commentaire" in h           # les commentaires ne bougent pas
+    assert "127.0.1.1\tgk3" in h
+    assert 'hostname  = "gk3"' in conf.read_text()
+    M._renomme("gk3", ancien="gk3")                     # idempotent
+    assert hosts.read_text().count("127.0.1.1") == 1

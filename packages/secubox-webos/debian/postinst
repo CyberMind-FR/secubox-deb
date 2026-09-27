@@ -1,6 +1,15 @@
 #!/bin/bash
 set -e
 if [ "$1" = "configure" ]; then
+    # LE HALL EST LE PRODUIT (#1544). Seul l'exemple était livré, à
+    # enabled = false : sur toute box neuve le registre répondait vide et le
+    # Hall n'affichait que des cartes creuses — gk2 avait son webos.toml posé
+    # à la main. On le crée s'il manque ; un fichier existant est respecté.
+    if [ ! -e /etc/secubox/webos.toml ]; then
+        printf '[webos]\nenabled = true\nregistry_enabled = true\n' > /etc/secubox/webos.toml
+        chmod 0644 /etc/secubox/webos.toml
+        echo "secubox-webos : webos.toml créé (registre du Hall activé)"
+    fi
     # nginx (www-data) doit pouvoir lire /run/secubox/webos.sock (owner secubox).
     if getent group secubox >/dev/null 2>&1 && id www-data >/dev/null 2>&1; then
         adduser www-data secubox >/dev/null 2>&1 || usermod -aG secubox www-data || true

@@ -1,3 +1,12 @@
+secubox-hub (1.9.19-1~bookworm1) bookworm; urgency=medium
+
+  * Le postinst DÉCLARE « hub » dans aggregator.toml : la route nginx
+    visait aggregator.sock, mais seul gk2 l'y avait (à la main). Sur une box
+    neuve, /api/v1/hub/ répondait 404 et plus rien n'écrivait menu.json —
+    Hall vide (vu sur gk3) (ref #1544).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 10:02:30 +0200
+
 secubox-hub (1.9.18-1~bookworm1) bookworm; urgency=medium
 
   * Ne livre plus www/nac/index.html (ancienne page « Network Access

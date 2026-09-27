@@ -110,3 +110,13 @@ def test_le_code_garde_ses_tirets_et_tolere_les_espaces(maitre, box_neuve):
     MA.enregistre("gk3", PROFIL)
     # Le vrai code contient un tiret (base64 urlsafe) ; affiché groupé par espaces.
     assert MA.pousse("gk3", "192.168.1.9", "code-e cran", "remplir", client=distant)["ok"]
+
+
+def test_rejoindre_devient_l_adresse_vue_par_la_box_neuve():
+    # L'invitation annonçait 192.168.255.1 (ancien maillage) : injoignable du LAN (#1544).
+    mes = ["127.0.0.1", "192.168.1.200", "192.168.255.1"]
+    assert MA.rejoindre_joignable("192.168.255.1", "192.168.1.9", mes, lambda a: "192.168.1.200") == "192.168.1.200"
+    # Une AUTRE box comme cible : on n'y touche pas.
+    assert MA.rejoindre_joignable("192.168.1.50", "192.168.1.9", mes, lambda a: "192.168.1.200") == "192.168.1.50"
+    # Route introuvable : on garde ce qu'on avait.
+    assert MA.rejoindre_joignable("192.168.255.1", "10.9.9.9", mes, lambda a: None) == "192.168.255.1"

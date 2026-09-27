@@ -91,7 +91,7 @@ legend{color:var(--cyan);font-size:.72rem;letter-spacing:.08em;text-transform:up
           <label id="l-dom">Domaine<input id="f-domaine" placeholder="gk3.secubox.in"></label>
         </fieldset>
         <fieldset><legend>Services · maillage · mises à jour</legend>
-          <label>Profil de services<input id="f-profil" value="full"></label>
+          <label>Profil de services<input id="f-profil" value="actuel" list="l-profils"></label><datalist id="l-profils"><option value="actuel">Garder les modules actuels</option><option value="lite"><option value="full"><option value="media-lab"><option value="secure-gateway"></datalist>
           <label>Maillage<select id="f-maillage"><option value="rejoindre">rejoindre cette box</option><option value="premiere">première box</option><option value="plus_tard">plus tard</option></select></label>
           <label>Mises à jour<select id="f-auto"><option value="oui">automatiques</option><option value="non">sur validation</option></select></label>
           <label>Heure<input id="f-heure" value="03:00"></label>
@@ -159,7 +159,7 @@ async function ouvre(nom) {
   $("#f-fuseau").value = b.fuseau || "Europe/Paris"; $("#f-langue").value = b.langue || "fr";
   $("#f-mdp").value = $("#f-mdp2").value = ""; $("#f-mdp-etat").value = (p.admin || {}).mot_de_passe || "demander";
   $("#f-mode").value = r.mode || "routeur"; $("#f-domaine").value = r.domaine || "";
-  $("#f-profil").value = (p.services || {}).profil || "full";
+  $("#f-profil").value = (p.services || {}).profil || "actuel";
   $("#f-maillage").value = m.mode || "rejoindre";
   $("#f-auto").value = a.auto === false ? "non" : "oui"; $("#f-heure").value = a.heure || "03:00";
   visibilite(); liste();
