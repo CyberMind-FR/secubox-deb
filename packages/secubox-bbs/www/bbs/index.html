@@ -133,6 +133,7 @@ body.hybrid-dark { background: var(--bg-dark); color: var(--text);
 <div class="onglets">
   <button class="onglet actif" type="button" data-vue="exploitation">📊 Exploitation</button>
   <button class="onglet" type="button" data-vue="sysop">⚿ Sysop</button>
+  <button class="onglet" type="button" data-vue="salons">🏛 Salons</button>
 </div>
 
 <div class="vue" data-vue="exploitation">
@@ -201,6 +202,48 @@ body.hybrid-dark { background: var(--bg-dark); color: var(--text);
       membres <b>connectés</b> du BBS : une invitation Mastodon sert plusieurs
       fois et ne se révoque pas d'ici. Vider un champ retire le réglage.
     </div>
+  </div>
+</div>
+
+<!-- #1523 : ce que seule la console /sysop savait faire — mêmes règles,
+     même journal (les routes JSON appellent les fonctions des formulaires). -->
+<div class="vue" data-vue="salons" hidden>
+  <div class="card">
+    <h3>🏛 Salons et sous-salons</h3>
+    <div id="salons-arbre">…</div>
+    <div class="reglages" style="max-width:none;flex-direction:row;flex-wrap:wrap;align-items:flex-end;margin-top:.8rem">
+      <label>Identifiant<input id="sl-slug" placeholder="reseau" pattern="[a-z0-9_-]+" maxlength="64"></label>
+      <label>Titre<input id="sl-titre" placeholder="Réseau"></label>
+      <label style="flex:1;min-width:14rem">Description<input id="sl-desc" placeholder="(facultative)"></label>
+      <label>Parent<select id="sl-parent"></select></label>
+      <button class="btn primary" type="button" onclick="creerSalon()">Créer le salon</button>
+    </div>
+    <div class="note">Un salon sans parent est de premier niveau ; un parent en fait un
+      sous-salon. L'identifiant (lettres minuscules, chiffres, tiret, souligné) est
+      revalidé par le serveur.</div>
+  </div>
+
+  <div class="card">
+    <h3>🔒 Salons privés</h3>
+    <div id="salons-prives">…</div>
+    <div class="card code" id="carte-lien-salon" style="display:none"></div>
+    <div class="note"><b>Un salon privé n'apparaît qu'à ses membres.</b> Ouvert à une
+      <b>communauté SBX OS</b>, il l'est à chacun de ses membres dont le compte BBS est
+      lié à son identité — les communautés se gèrent dans l'Identity Manager. Le lien
+      d'invitation n'ouvre aucun compte, sert une fois, expire en sept jours et n'est
+      affiché qu'ici, à son émission.</div>
+  </div>
+
+  <div class="card">
+    <h3>🔌 Passerelles</h3>
+    <div id="passerelles">…</div>
+  </div>
+
+  <div class="card">
+    <h3>📜 Journal de modération</h3>
+    <div id="journal-moderation">…</div>
+    <div class="note">Le journal n'a de valeur que s'il est <b>lu</b>. Chaque geste fait
+      d'ici y est inscrit au nom de votre compte BBS.</div>
   </div>
 </div>
 
@@ -278,6 +321,7 @@ document.addEventListener('click', function (e) {
   document.querySelectorAll('.onglet').forEach(o => o.classList.toggle('actif', o === b));
   document.querySelectorAll('.vue').forEach(v => { v.hidden = v.dataset.vue !== vue; });
   if (vue === 'sysop') chargerSysop();
+  if (vue === 'salons') chargerSalons();
 });
 
 async function chargerSysop() {
@@ -337,6 +381,91 @@ async function chargerSysop() {
     document.getElementById('masto-instance').value = r.instance || '';
     document.getElementById('masto-invitation').value = r.invitation || '';
   } catch (e) { toast('réglages : ' + e.message, true); }
+}
+
+// ── Salons (#1523) ───────────────────────────────────────────────────────────
+function quand(t) { return t ? new Date(t * 1000).toLocaleString('fr-FR') : '—'; }
+
+async function chargerSalons() {
+  let r;
+  try { r = await api('/admin/salons'); if (!r) return; }
+  catch (e) { document.getElementById('salons-arbre').textContent = e.message; return; }
+  const salons = r.salons || [];
+  document.getElementById('salons-arbre').innerHTML = salons.length
+    ? `<table class="sysop-table"><thead><tr><th>Salon</th><th>Identifiant</th><th class="num">Fils</th><th>Accès</th></tr></thead><tbody>${
+        salons.map(x => `<tr><td style="padding-left:${8 + 18 * x.profondeur}px">${x.profondeur ? '└ ' : ''}<b>${esc(x.titre)}</b>
+          ${x.desc ? `<div class="note" style="margin:0">${esc(x.desc)}</div>` : ''}</td>
+          <td><code>${esc(x.slug)}</code></td><td class="num">${x.fils}</td>
+          <td>${x.prive ? '<span class="etiq" style="color:var(--orange)">privé</span>' : x.public ? '<span class="etiq" style="color:var(--green)">public</span>' : '<span class="etiq">membres</span>'}</td></tr>`).join('')
+      }</tbody></table>`
+    : '<div class="row"><span class="name">aucun salon</span></div>';
+  document.getElementById('sl-parent').innerHTML = '<option value="0">— premier niveau —</option>' +
+    salons.map(x => `<option value="${x.id}">${'· '.repeat(x.profondeur)}sous ${esc(x.titre)}</option>`).join('');
+
+  const comptes = r.comptes || [], comms = r.communautes || [];
+  document.getElementById('salons-prives').innerHTML = `<table class="sysop-table"><thead><tr>
+      <th>Salon</th><th>État</th><th>Membres</th><th>Communautés</th><th></th></tr></thead><tbody>${
+    salons.map(x => {
+      const etat = `<button class="btn" type="button" onclick="rendPrive(${x.id}, ${!x.prive})">${x.prive ? 'Rouvrir' : 'Fermer'}</button>`;
+      if (!x.prive) return `<tr><td><b>${esc(x.titre)}</b></td><td><span class="etiq">ouvert</span> ${etat}</td>
+        <td class="note" style="margin:0">tous</td><td class="note" style="margin:0">salon ouvert</td><td></td></tr>`;
+      const membres = x.membres.map(m => `<span class="etiq">${esc(m.handle)}
+          <a href="#" onclick="membre(${x.id}, ${m.id}, 'retirer');return false" title="Retirer ${esc(m.handle)}" aria-label="Retirer ${esc(m.handle)}">✕</a></span>`).join(' ');
+      const convier = `<select id="cv-${x.id}" aria-label="Personne à convier">${comptes.map(c => `<option value="${c.id}">${esc(c.handle)}</option>`).join('')}</select>
+          <button class="btn" type="button" onclick="membre(${x.id}, +document.getElementById('cv-${x.id}').value, 'ajouter')">Convier</button>`;
+      const cs = x.communautes.map(c => `<span class="etiq">${esc(c.nom)}
+          <a href="#" onclick="communaute(${x.id}, '${esc(c.uuid)}', 'retirer');return false" title="Retirer ${esc(c.nom)}" aria-label="Retirer ${esc(c.nom)}">✕</a></span>`).join(' ');
+      const ouvrir = comms.length
+        ? `<select id="cm-${x.id}" aria-label="Communauté à qui ouvrir le salon">${comms.map(c => `<option value="${esc(c.uuid)}">${esc(c.nom)}</option>`).join('')}</select>
+           <button class="btn" type="button" onclick="communaute(${x.id}, document.getElementById('cm-${x.id}').value, 'ajouter')">Ouvrir</button>`
+        : '<span class="note" style="margin:0">aucune communauté SBX OS</span>';
+      return `<tr><td><b>${esc(x.titre)}</b></td><td><span class="etiq" style="color:var(--orange)">privé</span> ${etat}</td>
+        <td><div class="sysop-actions">${membres}${convier}</div></td>
+        <td><div class="sysop-actions">${cs}${ouvrir}</div></td>
+        <td><button class="btn primary" type="button" onclick="lienSalon(${x.id})">Émettre un lien</button></td></tr>`;
+    }).join('')}</tbody></table>`;
+
+  try {
+    const p = await api('/admin/passerelles'); if (!p) return;
+    const l = (p.passerelles || []).map(x => `<tr><td><span class="tag src">${esc(x.source)}</span></td><td>${quand(x.a)}</td>
+      <td class="num">${x.vus}</td><td class="num">${x.crees}</td><td class="num">${x.ignores}</td>
+      <td>${x.erreur ? `<span style="color:var(--red)">${esc(x.erreur)}</span>` : ''}</td></tr>`).join('');
+    document.getElementById('passerelles').innerHTML = l
+      ? `<table class="sysop-table"><thead><tr><th>Source</th><th>Quand</th><th class="num">Vus</th><th class="num">Créés</th><th class="num">Ignorés</th><th></th></tr></thead><tbody>${l}</tbody></table>`
+      : '<div class="row"><span class="name">aucun import enregistré</span></div>';
+  } catch (e) { document.getElementById('passerelles').textContent = e.message; }
+
+  try {
+    const j = await api('/admin/moderation'); if (!j) return;
+    const l = (j.journal || []).map(x => `<tr><td>${quand(x.a)}</td><td>${esc(x.acteur)}</td>
+      <td><span class="tag src">${esc(x.geste)}</span></td><td>${esc(x.cible)}</td><td>${esc(x.detail)}</td></tr>`).join('');
+    document.getElementById('journal-moderation').innerHTML = l
+      ? `<table class="sysop-table"><thead><tr><th>Quand</th><th>Qui</th><th>Geste</th><th>Cible</th><th>Détail</th></tr></thead><tbody>${l}</tbody></table>`
+      : '<div class="row"><span class="name">aucun geste de modération enregistré</span></div>';
+  } catch (e) { document.getElementById('journal-moderation').textContent = e.message; }
+}
+
+async function geste(chemin, corps, ok) {
+  try { const r = await poste(chemin, corps); if (!r) return null; toast(ok); chargerSalons(); return r; }
+  catch (e) { toast(e.message, true); return null; }
+}
+function creerSalon() {
+  const v = id => document.getElementById(id).value.trim();
+  if (!v('sl-slug') || !v('sl-titre')) { toast('identifiant et titre requis', true); return; }
+  geste('/admin/salons', { slug: v('sl-slug'), titre: v('sl-titre'), desc: v('sl-desc'),
+    parent: +document.getElementById('sl-parent').value }, 'salon créé')
+    .then(r => { if (r) ['sl-slug', 'sl-titre', 'sl-desc'].forEach(i => document.getElementById(i).value = ''); });
+}
+function rendPrive(id, prive) { geste(`/admin/salons/${id}/prive`, { prive: prive }, prive ? 'salon fermé' : 'salon rouvert'); }
+function membre(id, m, action) { geste(`/admin/salons/${id}/membres`, { membre: m, action: action }, action === 'retirer' ? 'retiré' : 'convié'); }
+function communaute(id, uuid, action) { geste(`/admin/salons/${id}/communautes`, { communaute: uuid, action: action }, action === 'retirer' ? 'fermé à la communauté' : 'ouvert à la communauté'); }
+async function lienSalon(id) {
+  try {
+    const r = await poste(`/admin/salons/${id}/invitation`, {}); if (!r) return;
+    const c = document.getElementById('carte-lien-salon');
+    // Le forum vit sous /bbs/ du Hall : c'est là que le membre ouvrira le lien.
+    c.style.display = ''; c.textContent = location.origin.replace(/\/\/admin\./, '//hall.') + '/bbs' + r.lien + '  — affiché une seule fois';
+  } catch (e) { toast(e.message, true); }
 }
 
 async function basculerCompte(id, desactiver) {

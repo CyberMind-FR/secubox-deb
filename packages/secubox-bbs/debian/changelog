@@ -1,3 +1,16 @@
+secubox-bbs (0.37.0-1~bookworm1) bookworm; urgency=medium
+
+  * Webui d'administration, onglet « Salons » : salons et sous-salons,
+    salons privés (fermer/rouvrir, membres listés, communautés SBX OS, lien
+    d'invitation), passerelles, journal de modération — ce que seule la
+    console /sysop savait faire. Routes JSON /api/v1/bbs/admin/* : mêmes
+    fonctions du store que /mod/*, acteur NOMMÉ (compte BBS de
+    l'administrateur, sinon refus) (ref #1523).
+  * CreeSousSalon revalide l'identifiant côté serveur ([a-z0-9_-]) : seul
+    le motif HTML le contraignait.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 11:22:18 +0200
+
 secubox-bbs (0.36.0-1~bookworm1) bookworm; urgency=medium
 
   * Salons privés adossés aux communautés SBX OS (décision D4) : un salon

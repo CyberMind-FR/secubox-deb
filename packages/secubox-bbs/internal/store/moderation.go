@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -273,10 +274,18 @@ func (s *Store) Moderations(borne int) ([]Moderation, error) {
 // UN SALON NE PEUT PAS ETRE SON PROPRE PARENT, ni descendre de lui-meme. Sans
 // cette garde, l'affichage de l'arbre boucle — et c'est la page d'accueil qui
 // se fige, pas une vue secondaire.
+var reSlugSalon = regexp.MustCompile(`^[a-z0-9_-]+$`)
+
 func (s *Store) CreeSousSalon(acteur int64, slug, titre, desc string, parent int64) (int64, error) {
 	slug, titre = strings.TrimSpace(slug), strings.TrimSpace(titre)
 	if slug == "" || titre == "" {
 		return 0, errors.New("un salon a besoin d'un identifiant et d'un titre")
+	}
+	// LE MOTIF DU FORMULAIRE, REVALIDÉ ICI (#1523). Le `pattern` HTML ne protège
+	// rien (il se retire d'un clic), et l'identifiant finit dans les URL
+	// (/c/<slug>) : la règle vit dans le store, pour toutes les portes.
+	if !reSlugSalon.MatchString(slug) || len(slug) > 64 {
+		return 0, errors.New("identifiant de salon : lettres minuscules, chiffres, tiret, souligné")
 	}
 	if parent > 0 {
 		var n int
