@@ -97,7 +97,10 @@ def test_champ_inconnu_refuse(api):
 
 def test_choix_liste_les_profils(api):
     c, _, _ = api
-    assert c.get("/choix").json()["profils"][0] == {"id": "full", "libelle": "Complet", "modules": 2}
+    profils = c.get("/choix").json()["profils"]
+    # « Garder les modules actuels » d'abord : le bon défaut d'une box déjà équipée (#1544).
+    assert profils[0]["id"] == "actuel"
+    assert profils[1] == {"id": "full", "libelle": "Complet", "modules": 2}
 
 
 MDP = "une-phrase-longue-et-sure"

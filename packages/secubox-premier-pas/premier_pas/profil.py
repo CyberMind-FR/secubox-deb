@@ -47,6 +47,11 @@ COMPTES_SYSTEME = frozenset({"root", "admin", "gk2", "operator"})
 MODES_RESEAU = {"routeur": "router", "pont": "bridge", "lan": "single"}
 MODES_MAILLAGE = ("rejoindre", "premiere", "plus_tard")
 PROFILS_DIR = Path("/usr/share/secubox/profiles")
+# « actuel » : garder les modules de l'image, sans secubox-profilectl. Un profil
+# nommé est un instantané d'une AUTRE box : il arrête ce qu'il ne liste pas et
+# bute sur les unités masquées d'ici (vu sur gk3, #1544).
+GARDER = "actuel"
+GARDER_LIBELLE = "Garder les modules actuels"
 
 _NOM = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 _DOMAINE = re.compile(r"^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
@@ -152,7 +157,7 @@ def examine(profil: Dict[str, Any], profils_connus: Optional[List[str]] = None) 
     connus = _profils_connus() if profils_connus is None else profils_connus
     if not choix:
         ex.manquantes.append("services")
-    elif connus and choix not in connus:
+    elif choix != GARDER and connus and choix not in connus:
         refuse("services", f"profil inconnu : {choix!r} (connus : {', '.join(connus)})")
 
     # maillage

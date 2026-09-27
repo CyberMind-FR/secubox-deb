@@ -14,6 +14,24 @@ case "$1" in
     # s'il tourne encore d'une installation precedente — sinon un second
     # uvicorn charge la meme app pour personne.
     systemctl disable --now secubox-hub.service 2>/dev/null || true
+    # …à condition d'y être DÉCLARÉ. Seul gk2 l'était (à la main) : sur une box
+    # neuve, /api/v1/hub/ répondait 404 et plus rien n'écrivait menu.json —
+    # le Hall restait vide (vu sur gk3, #1544). Déclaration unique, idempotente.
+    if [ -f /etc/secubox/aggregator.toml ] && python3 - <<'TOML'
+import pathlib, re, sys
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+s = f.read_text()
+if '"hub"' in s:
+    sys.exit(1)
+s2 = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "hub",', s, count=1)
+if s2 == s:
+    sys.exit(1)
+f.write_text(s2)
+TOML
+    then
+      echo "secubox-hub : déclaré dans aggregator.toml"
+      systemctl try-restart secubox-aggregator.service 2>/dev/null || true
+    fi
     install -d -m 755 /etc/nginx/secubox.d
     # Activer le vhost du panneau s'il ne l'est pas déjà (idempotent, et
     # jamais forcé : un lien existant vers autre chose est respecté).

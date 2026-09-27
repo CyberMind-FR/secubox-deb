@@ -1,3 +1,37 @@
+secubox-premier-pas (0.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * Renommer met aussi à jour /etc/hosts et secubox.conf (hostnamectl n'y
+    touche pas : « unable to resolve host gk3 »).
+  * Lanceur du kiosque : verrou de profil Chromium périmé retiré avant de
+    démarrer — après le renommage, Chromium refusait un profil « utilisé
+    sur un autre ordinateur » et le kiosque échouait (ref #1544).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 10:02:30 +0200
+
+secubox-premier-pas (0.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * Maillage : jusqu'à 12 essais espacés de 5 s — l'étape réseau vient de
+    reconfigurer les interfaces et le maître n'est pas joignable dans la
+    seconde (échec deux fois sur gk3, réussite à la main juste après)
+    (ref #1544).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 09:50:09 +0200
+
+secubox-premier-pas (0.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Services : option « Garder les modules actuels » (en tête, défaut du
+    panneau maître) — pas de secubox-profilectl. Un profil nommé est
+    l'instantané d'une autre box : sur gk3, « full » arrêtait 36 modules et
+    butait sur gitea masqué (rollback, assistant arrêté).
+  * Échec : le moteur montre les lignes qui disent la cause, pas la fin de
+    la sortie (on ne voyait que la liste des rollbacks).
+  * Poussée : la cible de maillage qui est une adresse du maître est
+    remplacée par celle qu'il utilise pour joindre la box neuve —
+    l'invitation annonçait 192.168.255.1 (préférence de get_lan_ip),
+    injoignable du LAN (ref #1544).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 09:48:05 +0200
+
 secubox-premier-pas (0.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Fuseau horaire : Europe/Paris proposé quand la box est en UTC (défaut

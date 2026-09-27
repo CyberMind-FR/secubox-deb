@@ -1,3 +1,11 @@
+secubox-webos (1.0.349-1~bookworm1) bookworm; urgency=medium
+
+  * Le postinst crée /etc/secubox/webos.toml (enabled = true) s'il manque :
+    seul l'exemple, à false, était livré — le registre du Hall répondait
+    vide sur toute box neuve (vu sur gk3) (ref #1544).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 10:02:30 +0200
+
 secubox-webos (1.0.348-1~bookworm1) bookworm; urgency=medium
 
   * Menu de connexion du Hall : « Mes identités » (accès, identité SBX OS

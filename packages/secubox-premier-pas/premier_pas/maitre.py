@@ -159,6 +159,38 @@ def _valeurs_etape(profil: Dict[str, Any], etape: str) -> Optional[Dict[str, Any
     return None
 
 
+def _mes_adresses() -> List[str]:
+    import json as _j, subprocess  # noqa: PLC0415
+    try:
+        r = subprocess.run(["ip", "-j", "-4", "addr"], capture_output=True, text=True, timeout=5)
+        return [a["local"] for i in _j.loads(r.stdout or "[]") for a in i.get("addr_info", [])]
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return []
+
+
+def _ip_vers(adresse: str) -> Optional[str]:
+    """L'adresse de CETTE box que la box neuve voit (route réelle, rien n'est envoyé)."""
+    import socket  # noqa: PLC0415
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect((adresse, 9))
+            return s.getsockname()[0]
+    except OSError:
+        return None
+
+
+def rejoindre_joignable(rejoindre: str, adresse: str, mes_adresses=None, ip_vers=None) -> str:
+    """L'invitation de secubox-p2p annonce l'adresse que préfère get_lan_ip()
+    — 192.168.255.x, l'ancien maillage OpenWrt — que la box neuve ne joint
+    pas depuis le LAN (vu sur gk3, #1544). Si la cible est l'une des adresses
+    du maître, on la remplace par celle qu'il utilise pour joindre la box."""
+    mes = _mes_adresses() if mes_adresses is None else mes_adresses
+    if rejoindre not in mes:
+        return rejoindre
+    vue = (ip_vers or _ip_vers)(adresse)
+    return vue or rejoindre
+
+
 def pousse(nom: str, adresse: str, code: str, mode: str = "proposer", client=None, par: str = "") -> Dict[str, Any]:
     """Remplit la box neuve étape par étape, puis la PROPOSE (l'utilisateur
     valide à l'écran) ou la FORCE (application immédiate, alerte à l'écran).
@@ -183,6 +215,8 @@ def pousse(nom: str, adresse: str, code: str, mode: str = "proposer", client=Non
         v = _valeurs_etape(profil, etape)
         if v is None:
             continue
+        if etape == "maillage" and v.get("rejoindre"):
+            v["rejoindre"] = rejoindre_joignable(str(v["rejoindre"]), adresse)
         r = client.put(f"{base}/etape/{etape}", json=v, headers=h)
         if r.status_code != 200:
             try:

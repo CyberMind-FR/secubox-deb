@@ -85,7 +85,7 @@ def choix():
         nom = Path("/etc/hostname").read_text().strip()
     except OSError:
         nom = ""
-    profils = []
+    profils = [{"id": P.GARDER, "libelle": P.GARDER_LIBELLE, "modules": None}]
     for p in sorted(P.PROFILS_DIR.glob("*.toml")) if P.PROFILS_DIR.is_dir() else []:
         try:
             d = tomllib.loads(p.read_text())

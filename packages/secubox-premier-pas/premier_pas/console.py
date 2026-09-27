@@ -52,14 +52,14 @@ class Page:
 
 def _profils() -> List[Tuple[str, str]]:
     import tomllib
-    out = []
+    out = [(P.GARDER, P.GARDER_LIBELLE)]
     for p in sorted(P.PROFILS_DIR.glob("*.toml")) if P.PROFILS_DIR.is_dir() else []:
         try:
             d = tomllib.loads(p.read_text())
             out.append((p.stem, f"{d.get('label', p.stem)[:34]} ({len(d.get('on', []))})"))
         except (OSError, ValueError):
             continue
-    return out or [("full", "full")]
+    return out
 
 
 def _fuseau() -> str:
