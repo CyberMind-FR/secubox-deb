@@ -17,6 +17,8 @@ def api(tmp_path, monkeypatch):
     monkeypatch.setenv("PREMIER_PAS_JETON", str(tmp_path / "jeton"))
     (tmp_path / "jeton").write_text("secret-de-demarrage\n")
     from api import main
+    from premier_pas import remplir
+    importlib.reload(remplir)
     importlib.reload(main)
     monkeypatch.setattr(main.M, "MARQUEUR", tmp_path / "fait")
     monkeypatch.setattr(main.M, "ETAT", tmp_path / "etat.json")

@@ -1,0 +1,24 @@
+[Unit]
+Description=SecuBox Premier Pas — assistant du premier démarrage, face console (tty1) (#1522)
+# Box neuve seulement ; le kiosque (tty7) et la console partagent le même profil.
+ConditionPathExists=!/var/lib/secubox/.premier-pas-fait
+After=secubox-premier-pas.service
+Conflicts=getty@tty1.service secubox-console.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/premier-pas-console
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Environment=TERM=linux LANG=C.UTF-8
+# Terminé (ou quitté par F10) : la console de la box reprend tty1.
+ExecStopPost=-/bin/systemctl --no-block start getty@tty1.service
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

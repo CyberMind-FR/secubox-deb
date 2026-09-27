@@ -23,6 +23,8 @@ PY
     fi
     systemctl enable secubox-premier-pas.service >/dev/null 2>&1 || true
     systemctl enable --now secubox-premier-pas-appliquer.path >/dev/null 2>&1 || true
+    # Face console sur tty1 : ne démarre que sur une box neuve (Condition).
+    systemctl enable secubox-premier-pas-console.service >/dev/null 2>&1 || true
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/premier-pas
     # API servie par l'agrégateur (comme la messagerie) : déclaration unique.
     python3 - <<'TOML' || echo "secubox-premier-pas : déclaration dans aggregator.toml impossible" >&2
