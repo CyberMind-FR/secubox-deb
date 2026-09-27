@@ -1,3 +1,13 @@
+secubox-core (1.5.23-1~bookworm1) bookworm; urgency=medium
+
+  * Site nginx « secubox » : route générique /api/ vers l'agrégateur
+    (snippet secubox-api-aggregator.conf, après secubox.d/), ajoutée aussi
+    aux sites déjà installés par le postinst (nginx -t, retour arrière si
+    refus). Sur une box installée sans HAProxy, toute API agrégée rendait la
+    page HTML de repli : le kiosque ne parlait à aucun module (ref #1537).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 20:30:00 +0200
+
 secubox-core (1.5.22-1~bookworm1) bookworm; urgency=medium
 
   * secubox-proxy.conf vide l'en-tête X-SecuBox-Maillage : seul l'écouteur

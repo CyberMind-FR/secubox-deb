@@ -39,6 +39,8 @@ override_dh_auto_install:
 	   debian/secubox-core/usr/share/secubox-core/nginx/
 	cp ../../common/nginx/secubox-proxy.conf \
 	   debian/secubox-core/usr/share/secubox-core/nginx/
+	cp ../../common/nginx/secubox-api-aggregator.conf \
+	   debian/secubox-core/usr/share/secubox-core/nginx/
 	# FORMAT DE JOURNAL sbx_host (#1491) : utilisé par neuf vhosts (radio,
 	# peertube, photoprism, waf, Hall…) mais défini jusqu'ici par
 	# secubox-metrics seul, qui n'est dans aucun profil — une image neuve

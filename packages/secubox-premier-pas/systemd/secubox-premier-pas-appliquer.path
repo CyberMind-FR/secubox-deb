@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox Premier Pas — une face demande l'application du profil (#1522)
+ConditionPathExists=!/var/lib/secubox/.premier-pas-fait
+
+[Path]
+PathExists=/var/lib/secubox/premier-pas/demande
+Unit=secubox-premier-pas-appliquer.service
+
+[Install]
+WantedBy=paths.target

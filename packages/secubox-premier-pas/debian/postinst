@@ -22,6 +22,22 @@ PY
         echo "secubox-premier-pas : box déjà configurée, assistant non ouvert"
     fi
     systemctl enable secubox-premier-pas.service >/dev/null 2>&1 || true
+    systemctl enable --now secubox-premier-pas-appliquer.path >/dev/null 2>&1 || true
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/premier-pas
+    # API servie par l'agrégateur (comme la messagerie) : déclaration unique.
+    python3 - <<'TOML' || echo "secubox-premier-pas : déclaration dans aggregator.toml impossible" >&2
+import pathlib, re
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+if f.exists():
+    s = f.read_text()
+    if '"premier-pas"' not in s:
+        s = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "premier-pas",', s, count=1)
+        f.write_text(s)
+        print("secubox-premier-pas : déclaré dans aggregator.toml")
+TOML
+    if [ -d /run/systemd/system ]; then
+        systemctl restart secubox-aggregator >/dev/null 2>&1 || true
+    fi
 fi
 #DEBHELPER#
 exit 0

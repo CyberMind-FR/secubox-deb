@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox Premier Pas — application du profil rempli par une face (#1522)
+# L'API (utilisateur secubox) ne touche pas au système : elle dépose une
+# demande ; ce service root applique, avec le moteur et ses garde-fous.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/premier-pasctl appliquer-demande
+TimeoutStartSec=2h
