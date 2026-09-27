@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Profil SecuBox Premier Pas — exemple (gk3, amd64). #1522
+# À poser en /boot/secubox/profil.toml, sur une clé USB nommée SBXPROFIL, ou
+# désigné par secubox.profil=<chemin> sur la ligne noyau. Complet : la box
+# s'applique seule, sans écran. Incomplet : l'assistant s'ouvre à l'étape
+# qui manque. Vérifier avant : premier-pasctl examiner --profil ce-fichier
+
+[box]
+nom     = "gk3"
+langue  = "fr"
+clavier = "fr"
+fuseau  = "Europe/Paris"
+ntp     = true
+
+[admin]
+# JAMAIS de mot de passe en clair. « demander » (l'écran le demandera) ou une
+# empreinte argon2 : python3 -c 'from argon2 import PasswordHasher as P; print(P().hash(input()))'
+mot_de_passe = "demander"
+totp         = "enroler"      # toujours sur l'écran de la box, à la 1re connexion
+
+[reseau]
+mode    = "routeur"           # routeur | pont | lan
+domaine = "gk3.secubox.in"    # absent si mode = "lan"
+
+[services]
+profil = "full"               # un profil de secubox-profilectl (full, lite, …)
+
+[maillage]
+mode      = "rejoindre"       # rejoindre | premiere | plus_tard
+rejoindre = "192.168.1.200"   # la box maîtresse
+jeton     = "e70e1f79f9b9cd4179950117ce5f78c2"   # sbx-mesh-invite, 15 min
+
+[apt]
+auto  = true
+heure = "03:00"

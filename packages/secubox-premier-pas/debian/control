@@ -1,0 +1,22 @@
+Source: secubox-premier-pas
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-premier-pas
+Architecture: all
+Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core, systemd-timesyncd | time-daemon
+Recommends: secubox-users, secubox-profiles, secubox-p2p
+Description: SecuBox Premier Pas — first-boot wizard engine and silent profile
+ One engine, one profile (profil.toml), four faces: kiosk, console, master
+ panel and silent. premier-pasctl validates a profile step by step (name,
+ clock, admin, network and domain, services, mesh, updates), shows the exact
+ plan, and applies it by driving the existing SecuBox tools (hostnamectl,
+ timedatectl, secubox-users engine, secubox-net-detect, secubox-profilectl,
+ sbx-mesh-join). An incomplete profile is never half-applied: the wizard
+ resumes at the missing step. Never stores a plaintext password.
+ .
+ Also ships secubox-majauto: nightly unattended upgrade of the SecuBox
+ packages only, from the signed apt.secubox.in repository.

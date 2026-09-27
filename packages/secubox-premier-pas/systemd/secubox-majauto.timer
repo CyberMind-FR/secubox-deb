@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox — mises à jour automatiques, chaque nuit (#1522)
+
+[Timer]
+# Heure réglée par l'étape « Mises à jour » (drop-in heure.conf).
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

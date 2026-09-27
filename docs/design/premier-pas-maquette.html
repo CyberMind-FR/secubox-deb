@@ -1,0 +1,338 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     Maquette VALIDÉE par Gandalf le 2026-09-27 (#1522) : référence de conception
+     du module secubox-premier-pas. Artifact : https://claude.ai/artifact/D71aKCtjpdRPqbLFNvE32H -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBX Premier Pas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f2f3f6; --surf:#ffffff; --surf2:#e9ecf2; --line:#d3d8e2; --text:#171a22; --muted:#596074;
+  --acc:#006f9c; --acc-soft:rgba(0,111,156,.10); --gold:#86661a; --gold-soft:rgba(134,102,26,.12);
+  --ok:#15784a; --ok-soft:rgba(21,120,74,.12); --warn:#9a6300; --bad:#b92e3a;
+  --term-bg:#0b0f17; --term-fg:#cfd6e4; --term-acc:#00c2ea; --term-gold:#d6b25a; --term-dim:#5d677d;
+  --display:"Cinzel",Georgia,"Times New Roman",serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"DejaVu Sans Mono",Menlo,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --bg:#0a0d14; --surf:#121826; --surf2:#19203a; --line:#263150; --text:#e8e6d9; --muted:#8e96ab;
+  --acc:#00d4ff; --acc-soft:rgba(0,212,255,.10); --gold:#c9a84c; --gold-soft:rgba(201,168,76,.13);
+  --ok:#3ddc84; --ok-soft:rgba(61,220,132,.12); --warn:#f0b429; --bad:#ff5d6c;}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --bg:#0a0d14; --surf:#121826; --surf2:#19203a; --line:#263150; --text:#e8e6d9; --muted:#8e96ab;
+  --acc:#00d4ff; --acc-soft:rgba(0,212,255,.10); --gold:#c9a84c; --gold-soft:rgba(201,168,76,.13);
+  --ok:#3ddc84; --ok-soft:rgba(61,220,132,.12); --warn:#f0b429; --bad:#ff5d6c;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--body);padding-inline:16px;padding-block:0 56px}
+.wrap{max-width:1180px;margin:0 auto}
+a{color:var(--acc)}
+code,.mono{font-family:var(--mono);font-size:.86em}
+h1,h2,h3{text-wrap:balance;margin:0}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(28px,4vw,40px);letter-spacing:.02em}
+h2{font-family:var(--display);font-weight:500;font-size:22px;letter-spacing:.03em}
+h3{font-size:15px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}
+p{margin:0}
+.lead{color:var(--muted);max-width:68ch}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+/* ── En-tête ─────────────────────────────────────────── */
+header.top{display:grid;gap:10px;padding-block:28px 22px;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--mono);font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);background:var(--surf2);white-space:nowrap}
+.chip.acc{color:var(--acc);border-color:transparent;background:var(--acc-soft)}
+.chip.gold{color:var(--gold);border-color:transparent;background:var(--gold-soft)}
+.chip.ok{color:var(--ok);border-color:transparent;background:var(--ok-soft)}
+
+/* ── Rail des étapes (la séquence est réelle : l'ordre compte) ── */
+.rail{display:flex;gap:6px;overflow-x:auto;padding-block:18px 6px;scrollbar-width:thin}
+.rail button{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;
+  border:1px solid var(--line);background:var(--surf);font-size:14px;white-space:nowrap}
+.rail button .n{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.rail button[aria-current="step"]{border-color:var(--acc);background:var(--acc-soft);color:var(--acc);font-weight:700}
+.rail button[aria-current="step"] .n{color:var(--acc)}
+.rail button.fait .n::after{content:" ✓";color:var(--ok)}
+.pas-note{color:var(--muted);font-size:14px;min-height:1.6em}
+
+/* ── Les quatre faces ─────────────────────────────── */
+.faces{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:14px}
+@media (max-width:900px){.faces{grid-template-columns:1fr}}
+.face{border:1px solid var(--line);border-radius:var(--r);background:var(--surf);display:flex;flex-direction:column;min-width:0}
+.face>header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 12px;padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.face>header p{color:var(--muted);font-size:13.5px}
+.face .corps{padding:16px;flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
+
+/* Kiosque : un écran de TV, lu depuis le canapé */
+.ecran{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:clamp(14px,3vw,26px);display:grid;gap:14px;aspect-ratio:16/10;max-width:100%;overflow:auto;align-content:start}
+.ecran .marque{display:flex;justify-content:space-between;align-items:center;font-family:var(--display);font-size:15px;color:var(--gold)}
+.ecran .marque span:last-child{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.ecran .titre{font-family:var(--display);font-size:clamp(20px,2.6vw,26px)}
+.ecran .aide{color:var(--muted);font-size:15px;max-width:52ch}
+.champ{display:grid;gap:4px}
+.champ label{font-size:13px;color:var(--muted)}
+.champ .val{font-size:18px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surf);font-family:var(--mono);overflow-wrap:anywhere}
+.options{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.opt{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surf);font-size:15px}
+.opt.choisi{border-color:var(--acc);background:var(--acc-soft)}
+.opt small{display:block;color:var(--muted);font-size:12.5px}
+.nav{display:flex;justify-content:space-between;gap:8px;margin-top:auto}
+.nav span{padding:8px 16px;border-radius:8px;border:1px solid var(--line);font-size:15px}
+.nav span.prim{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:700}
+.qr{width:96px;height:96px;background:
+  conic-gradient(from 90deg at 25% 25%,var(--text) 25%,transparent 0) 0 0/24px 24px,
+  linear-gradient(var(--surf),var(--surf));border:6px solid var(--surf);outline:1px solid var(--line);border-radius:4px}
+
+/* TUI : 80 × 24, rendu au caractère */
+.term{background:var(--term-bg);color:var(--term-fg);font:13px/1.35 var(--mono);border-radius:10px;padding:12px 14px;overflow-x:auto;white-space:pre;margin:0}
+.term .a{color:var(--term-acc)} .term .g{color:var(--term-gold)} .term .d{color:var(--term-dim)} .term .o{color:#3ddc84}
+
+/* Maître */
+.flotte{display:grid;gap:8px}
+.boite{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
+.boite.sel{border-color:var(--gold);background:var(--gold-soft)}
+.boite b{font-size:15px}
+.boite .etat{font-family:var(--mono);font-size:12px}
+.boite small{grid-column:2/4;color:var(--muted);font-size:13px}
+.puce{width:10px;height:10px;border-radius:50%}
+.barre{height:6px;border-radius:3px;background:var(--surf2);overflow:hidden}
+.barre i{display:block;height:100%;background:var(--gold)}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.actions span{padding:6px 12px;border-radius:8px;border:1px solid var(--line);font-size:14px}
+.actions span.gold{border-color:var(--gold);color:var(--gold)}
+
+/* Silencieux */
+pre.profil{margin:0;background:var(--surf2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12.5px/1.5 var(--mono);overflow-x:auto;white-space:pre}
+pre.profil .k{color:var(--acc)} pre.profil .c{color:var(--muted)} pre.profil .s{color:var(--gold)} pre.profil .hl{background:var(--acc-soft);display:inline-block;min-width:100%}
+.sources{display:grid;gap:6px;font-size:14px}
+.sources div{display:flex;gap:10px;align-items:baseline}
+.sources code{flex:0 0 auto}
+.sources span{color:var(--muted)}
+
+/* ── Moteur ───────────────────────────────────────── */
+section.bloc{margin-top:44px;display:grid;gap:14px}
+.table-x{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surf)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:14.5px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+tr:last-child td{border-bottom:0}
+tr.cur td{background:var(--acc-soft)}
+td .etat{font-family:var(--mono);font-size:12px;white-space:nowrap}
+.ex{color:var(--ok)} .ma{color:var(--warn)} .ne{color:var(--acc)}
+.couches{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px}
+.couche{padding:14px 16px;border-left:3px solid var(--line);background:var(--surf);border-radius:0 var(--r) var(--r) 0}
+.couche.c1{border-left-color:var(--gold)} .couche.c2{border-left-color:var(--acc)} .couche.c3{border-left-color:var(--ok)}
+.couche p{color:var(--muted);font-size:14.5px;margin-top:6px}
+ol.regles{margin:0;padding-left:1.3em;display:grid;gap:8px;max-width:78ch}
+ol.regles li::marker{color:var(--gold);font-family:var(--mono)}
+footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<header class="top">
+  <span class="eyebrow">Maquette · #1522 · module <code>secubox-premier-pas</code></span>
+  <h1>SBX Premier Pas</h1>
+  <p class="lead">Le premier démarrage d'une box neuve, avec un seul moteur et un seul profil. On peut le remplir sur l'écran de la box, dans la console, depuis le panneau d'une box maîtresse, ou ne rien remplir du tout et laisser un profil prêt faire le travail. Exemple ci-dessous : la future <b>gk3</b>, une amd64 réelle, préparée depuis gk2.</p>
+  <div class="chips"><span class="chip acc">kiosque</span><span class="chip acc">TUI</span><span class="chip gold">panneau maître</span><span class="chip ok">silencieux</span></div>
+</header>
+
+<nav class="rail" id="rail" aria-label="Étapes du premier démarrage"></nav>
+<p class="pas-note" id="note"></p>
+
+<div class="faces">
+  <article class="face" aria-labelledby="f1">
+    <header><h2 id="f1">Kiosque</h2><p>Chromium plein écran, sur la télé ou l'écran de la box</p></header>
+    <div class="corps"><div class="ecran" id="ecran"></div></div>
+  </article>
+
+  <article class="face" aria-labelledby="f2">
+    <header><h2 id="f2">Console</h2><p>tty1, même étape, au clavier · <code>secubox.mode=tui</code></p></header>
+    <div class="corps"><pre class="term" id="term" aria-label="Rendu console 80 colonnes"></pre></div>
+  </article>
+
+  <article class="face" aria-labelledby="f3">
+    <header><h2 id="f3">Panneau maître</h2><p>sur gk2 · Système › Boxes à préparer</p></header>
+    <div class="corps">
+      <div class="flotte">
+        <div class="boite sel"><span class="puce" style="background:var(--gold)"></span><b>gk3</b><span class="etat" id="m-etat">à distance · étape 3/9</span>
+          <small>amd64 · invitée par le maillage 10.10.0.6 · profil « maison-complete »</small></div>
+        <div class="barre" aria-hidden="true"><i id="m-barre" style="width:33%"></i></div>
+        <div class="boite"><span class="puce" style="background:var(--ok)"></span><b>secubox-live</b><span class="etat">configurée</span>
+          <small>amd64 · 10.10.0.5 · appliqué le 27/09 · profil « isp »</small></div>
+        <div class="boite"><span class="puce" style="background:var(--muted)"></span><b>atelier-rpi</b><span class="etat">profil prêt</span>
+          <small>rpi400 · profil exporté sur microSD, attend son premier démarrage</small></div>
+      </div>
+      <p id="m-detail" style="font-size:14.5px"></p>
+      <div class="actions"><span class="gold">Mener à distance</span><span>Exporter le profil</span><span>Copier le lien d'invitation</span></div>
+    </div>
+  </article>
+
+  <article class="face" aria-labelledby="f4">
+    <header><h2 id="f4">Silencieux</h2><p>aucun écran : le profil répond à tout</p></header>
+    <div class="corps">
+      <pre class="profil" id="profil"></pre>
+      <div class="sources">
+        <div><code>/boot/secubox/profil.toml</code><span>partition de démarrage, lue au premier démarrage</span></div>
+        <div><code>LABEL=SBXPROFIL</code><span>clé USB branchée au premier démarrage</span></div>
+        <div><code>secubox.profil=</code><span>paramètre noyau, chemin ou URL signée</span></div>
+      </div>
+    </div>
+  </article>
+</div>
+
+<section class="bloc" aria-labelledby="moteur">
+  <h2 id="moteur">Le moteur : ce que chaque étape fait déjà</h2>
+  <p class="lead">Le module n'invente rien : chaque étape pilote du code qui existe dans <code>secubox-deb</code>, relevé par l'audit du 27/09. La colonne état dit ce qui manque.</p>
+  <div class="table-x"><table id="table">
+    <thead><tr><th>Étape</th><th>Clé du profil</th><th>Code existant piloté</th><th>État</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="bloc" aria-labelledby="couches">
+  <h2 id="couches">Trois couches, trois faces</h2>
+  <div class="couches">
+    <div class="couche c1"><h3>1 · Schéma du profil</h3><p><code>profil.toml</code> versionné et validé. C'est la seule source : une face ne fait que le remplir. Il est exportable, signable par la box maîtresse (clé annuaire) et relisible.</p></div>
+    <div class="couche c2"><h3>2 · Moteur</h3><p><code>premier-pasctl plan|appliquer|annuler</code>, en root, idempotent. Chaque étape a son contrôle et son retour arrière (4R). Il écrit <code>/var/lib/secubox/.premier-pas-fait</code> à la fin, et seulement à la fin.</p></div>
+    <div class="couche c3"><h3>3 · Faces</h3><p>Une page kiosque servie localement, un écran Textual dans <code>secubox-console</code> et un panneau dans l'admin. Toutes lisent l'état du moteur par la même API locale, ce qui permet de passer d'une face à l'autre en cours de route.</p></div>
+  </div>
+</section>
+
+<section class="bloc" aria-labelledby="regles">
+  <h2 id="regles">Règles tirées de l'audit</h2>
+  <ol class="regles">
+    <li><b>Une porte, pas un script aveugle.</b> Tant que <code>.premier-pas-fait</code> manque, le kiosque et la console ouvrent l'assistant au lieu du Hall. Aujourd'hui la box démarre avec <code>admin / secubox</code> et rien ne l'arrête.</li>
+    <li><b>Un seul marqueur, sur disque.</b> <code>.firstboot-done</code> et <code>.firstboot_done</code> coexistent, et sur le live le marqueur vit dans un tmpfs : firstboot se relance à chaque démarrage (#1528).</li>
+    <li><b>Jamais de mot de passe en clair.</b> <code>firstboot.sh</code> écrit l'admin dans <code>secubox.conf</code>. L'assistant passe par le parcours d'auth existant : <code>setup_token</code> → <code>set-password</code> → <code>totp/enroll</code>.</li>
+    <li><b>L'heure avant le TOTP.</b> Un code refusé au premier login venait d'une horloge décalée de 3 min (#1497) : l'étape Horloge vient avant l'étape Administrateur.</li>
+    <li><b>Le domaine, une fois pour toutes.</b> Les cartes du Hall et le relais d'auth suivent le domaine (#1493), mais sur une box sans domaine elles visent encore <code>*.gk2.secubox.in</code>. L'étape Réseau le fixe, ou choisit « LAN seul ».</li>
+    <li><b>Le maillage apporte l'identité.</b> Rejoindre passe par <code>sbx-mesh-join</code>, qui rend désormais la box visible de la Flotte (#1530).</li>
+    <li><b>Silencieux = mêmes contrôles.</b> Un profil incomplet ou invalide ne configure rien à moitié : la box retombe sur l'assistant, à l'étape qui manque.</li>
+  </ol>
+</section>
+
+<footer>Maquette de conception, non fonctionnelle. Les écrans montrent un exemple (la future gk3), pas l'état réel d'une box. Suivi : issue #1522 · audit : <code>docs/sbxos/</code>.</footer>
+</div>
+
+<script>
+const ETAPES = [
+  {id:"bienvenue", t:"Bienvenue", cle:"langue, clavier", code:"<code>firstboot.sh</code> (locale), <code>secubox-cmdline-handler</code> (<code>secubox.mode=</code>)", etat:["ex","existe"],
+   aide:"Une box SecuBox neuve. En dix minutes, elle aura un nom, un administrateur, ses services et sa place dans votre maillage.",
+   champs:[["Langue","Français"],["Clavier","fr-azerty"]], tui:["Langue    [ Français        ]","Clavier   [ fr-azerty       ]"],
+   profil:"[box]\nlangue  = \"fr\"\nclavier = \"fr\"", maitre:"La box a répondu à l'invitation. Vous pouvez mener chaque étape d'ici ou la laisser à l'écran de la box."},
+  {id:"nom", t:"Nom de la box", cle:"box.nom", code:"<code>POST /api/v1/system/settings</code> → <code>hostnamectl</code>", etat:["ex","existe"],
+   aide:"Le nom sous lequel vos appareils et les autres box la verront.",
+   champs:[["Nom","gk3"]], tui:["Nom       [ gk3             ]"],
+   profil:"[box]\nnom = \"gk3\"", maitre:"Nom proposé par le profil : gk3. Aucun conflit dans l'annuaire."},
+  {id:"horloge", t:"Horloge", cle:"box.fuseau, ntp", code:"<code>timedatectl</code>, <code>systemd-timesyncd</code> (#1497)", etat:["ex","existe"],
+   aide:"L'heure juste d'abord : les codes à usage unique de l'étape suivante en dépendent.",
+   champs:[["Fuseau","Europe/Paris"],["Synchronisation","pool.ntp.org · synchronisée ✓"]], tui:["Fuseau    [ Europe/Paris    ]","NTP       synchronisée ✓"],
+   profil:"[box]\nfuseau = \"Europe/Paris\"\nntp    = true", maitre:"Horloge synchronisée, écart 0,04 s."},
+  {id:"admin", t:"Administrateur", cle:"admin.*", code:"auth : <code>setup_token</code> → <code>set-password</code> → <code>totp/enroll</code>, <code>login.html</code>", etat:["ma","à relier"],
+   aide:"Votre compte d'administration. Choisissez un mot de passe, puis scannez le QR avec votre application d'authentification.",
+   champs:[["Identifiant","admin"],["Mot de passe","••••••••••••••••"]], qr:true, tui:["Compte    admin","Mot passe [ **************** ]","TOTP      otpauth://totp/SecuBox:admin?…","          (QR affiché sur l'écran du kiosque)"],
+   profil:"[admin]\n# jamais de mot de passe en clair :\n# empreinte argon2 ou « demander »\nmot_de_passe = \"demander\"\ntotp         = \"enrôler\"", maitre:"Le mot de passe ne transite jamais par la box maîtresse : l'enrôlement TOTP se fait sur l'écran de gk3."},
+  {id:"reseau", t:"Réseau et domaine", cle:"reseau.*", code:"<code>secubox-net-detect apply</code>, netmodes <code>apply_mode/confirm/rollback</code>, <code>sso_cookie_domain</code>", etat:["ma","à relier"],
+   aide:"Comment la box se branche, et sous quel nom on la joint. Sans domaine, elle reste joignable sur le réseau local seulement.",
+   options:[["Routeur","la box est la passerelle",true],["Pont","derrière votre box internet",false],["LAN seul","pas de domaine public",false]],
+   champs:[["Domaine","gk3.secubox.in"]], tui:["Mode      (•) Routeur  ( ) Pont  ( ) LAN seul","Domaine   [ gk3.secubox.in  ]"],
+   profil:"[reseau]\nmode    = \"routeur\"\ndomaine = \"gk3.secubox.in\"", maitre:"Mode routeur : le changement est confirmé par la box, ou annulé après 120 s sans confirmation."},
+  {id:"modules", t:"Services", cle:"services.profil", code:"<code>secubox-profilectl apply</code> (R1..R4), méta-paquets <code>arbre.yaml</code>", etat:["ex","existe"],
+   aide:"Ce que la box fera. Vous pourrez ajouter ou retirer des services plus tard, depuis l'administration.",
+   options:[["Maison complète","messagerie, nuage, média, radio",true],["FAI / réseau","pare-feu, DNS, VPN",false],["Léger","l'essentiel, pour petite carte",false]],
+   tui:["Profil    (•) Maison complète  ( ) FAI  ( ) Léger","          71 paquets · 4,2 Go"],
+   profil:"[services]\nprofil = \"maison-complete\"   # arbre.yaml", maitre:"Profil maison-complete : 71 paquets depuis apt.secubox.in."},
+  {id:"maillage", t:"Maillage", cle:"maillage.*", code:"<code>sbx-mesh-join</code> → <code>secubox-annuaire-maillage</code> (#1530)", etat:["ex","existe"],
+   aide:"Rejoindre vos autres box : identités, Flotte et journal partagés. Ou être la première.",
+   options:[["Rejoindre gk2","avec l'invitation reçue",true],["Première box","elle deviendra maîtresse",false],["Plus tard","",false]],
+   tui:["Maillage  (•) Rejoindre gk2  ( ) Première box  ( ) Plus tard","Jeton     [ e70e1f79… ]  valable 14 min"],
+   profil:"[maillage]\nrejoindre = \"192.168.1.200\"\njeton     = \"e70e1f79f9b9cd41…\"", maitre:"Jeton d'invitation émis par gk2, 15 min. gk3 recevra 10.10.0.6."},
+  {id:"majs", t:"Mises à jour", cle:"apt.*", code:"<code>apply-apt-source.sh</code> (#1503), clé <code>219BA872…</code>", etat:["ne","à écrire"],
+   aide:"La box reçoit les correctifs de apt.secubox.in, vérifiés par la clé du dépôt.",
+   options:[["Automatiques","chaque nuit, 3 h",true],["Sur validation","je choisis quand",false]],
+   tui:["Source    apt.secubox.in  (signée 219BA872…) ✓","Mises à j (•) Automatiques 03:00  ( ) Sur validation"],
+   profil:"[apt]\nsource  = \"https://apt.secubox.in\"\nauto    = true\nheure   = \"03:00\"", maitre:"Mises à jour automatiques la nuit, comme sur secubox-live."},
+  {id:"recap", t:"Appliquer", cle:"—", code:"<code>premier-pasctl appliquer</code> → marqueur <code>.premier-pas-fait</code>", etat:["ne","à écrire"],
+   aide:"Tout est prêt. La box applique, redémarre ses services et ouvre le Hall.",
+   champs:[["Résumé","gk3 · routeur · gk3.secubox.in · maison complète · rejoint gk2"]],
+   tui:["gk3 · routeur · gk3.secubox.in · maison complète","rejoint gk2 · mises à jour 03:00","","[ Appliquer ]   [ Retour ]"],
+   profil:"# profil complet : la box s'applique\n# seule, sans aucun écran", maitre:"Application en cours : 6/9 étapes vérifiées. Retour arrière disponible à chaque étape."},
+];
+
+let cur = 3;
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function rendRail(){
+  $("#rail").innerHTML = ETAPES.map((e,i) =>
+    `<button type="button" id="pas-${e.id}" class="${i<cur?'fait':''}" ${i===cur?'aria-current="step"':''} data-i="${i}"><span class="n">${i+1}</span>${esc(e.t)}</button>`).join("");
+  $("#rail").querySelectorAll("button").forEach(b => b.onclick = () => { cur = +b.dataset.i; tout(); });
+}
+
+function rendEcran(e){
+  let h = `<div class="marque"><span>SecuBox · Premier Pas</span><span>${cur+1} / ${ETAPES.length}</span></div>
+    <div class="titre">${esc(e.t)}</div><p class="aide">${esc(e.aide)}</p>`;
+  if (e.options) h += `<div class="options">${e.options.map(o=>`<div class="opt ${o[2]?'choisi':''}">${esc(o[0])}${o[1]?`<small>${esc(o[1])}</small>`:''}</div>`).join("")}</div>`;
+  if (e.champs) h += e.champs.map(c=>`<div class="champ"><label>${esc(c[0])}</label><div class="val">${esc(c[1])}</div></div>`).join("");
+  if (e.qr) h += `<div style="display:flex;gap:14px;align-items:center"><div class="qr" role="img" aria-label="QR code d'enrôlement (illustration)"></div><p class="aide" style="font-size:14px">Scannez, puis tapez le code à 6 chiffres. L'heure de la box est juste : l'étape précédente l'a vérifié.</p></div>`;
+  h += `<div class="nav"><span>${cur? 'Retour' : 'Console'}</span><span class="prim">${cur===ETAPES.length-1?'Appliquer':'Continuer'}</span></div>`;
+  $("#ecran").innerHTML = h;
+}
+
+function rendTerm(e){
+  const W = 64, bord = "─".repeat(W);
+  const pad = s => { const t = s.length > W-2 ? s.slice(0,W-2) : s; return t + " ".repeat(W-2-t.length); };
+  const lignes = [
+    `<span class="g">┌${bord}┐</span>`,
+    `<span class="g">│</span> <span class="a">SECUBOX · PREMIER PAS</span>${" ".repeat(W-24-String(cur+1).length-String(ETAPES.length).length-3)}<span class="d">${cur+1}/${ETAPES.length}</span> <span class="g">│</span>`,
+    `<span class="g">├${bord}┤</span>`,
+    `<span class="g">│</span> ${esc(pad(e.t.toUpperCase()))}<span class="g">│</span>`,
+    `<span class="g">│</span> ${" ".repeat(W-2)}<span class="g">│</span>`,
+    ...e.tui.map(l => `<span class="g">│</span> ${esc(pad(l)).replace("✓",'<span class="o">✓</span>').replace("(•)",'<span class="a">(•)</span>')}<span class="g">│</span>`),
+    `<span class="g">│</span> ${" ".repeat(W-2)}<span class="g">│</span>`,
+    `<span class="g">├${bord}┤</span>`,
+    `<span class="g">│</span> <span class="d">${esc(pad("Tab champ · ←/→ choix · Entrée continuer · Échap retour"))}</span><span class="g">│</span>`,
+    `<span class="g">└${bord}┘</span>`,
+  ];
+  $("#term").innerHTML = lignes.join("\n");
+}
+
+function rendProfil(){
+  const tout = ETAPES.filter(e=>e.id!=="recap").map((e,i) => {
+    const bloc = esc(e.profil).replace(/^(\[.*\])$/gm,'<span class="k">$1</span>').replace(/(#.*)$/gm,'<span class="c">$1</span>').replace(/(&quot;[^&]*&quot;)/g,'<span class="s">$1</span>');
+    return ETAPES.indexOf(e)===cur ? `<span class="hl">${bloc}</span>` : bloc;
+  });
+  $("#profil").innerHTML = '<span class="c"># profil.toml · gk3 · signé par gk2 (did:plc:04637c…)</span>\n' + tout.join("\n\n");
+  if (ETAPES[cur].id==="recap") $("#profil").innerHTML += '\n\n<span class="hl"><span class="c"># → premier-pasctl appliquer --profil /boot/secubox/profil.toml</span></span>';
+}
+
+function rendTable(){
+  $("#table tbody").innerHTML = ETAPES.map((e,i)=>`<tr class="${i===cur?'cur':''}"><td><b>${esc(e.t)}</b></td><td><code>${esc(e.cle)}</code></td><td>${e.code}</td><td><span class="etat ${e.etat[0]}">${e.etat[1]}</span></td></tr>`).join("");
+}
+
+function tout(){
+  const e = ETAPES[cur];
+  rendRail(); rendEcran(e); rendTerm(e); rendProfil(); rendTable();
+  $("#note").textContent = `Étape ${cur+1} sur ${ETAPES.length} · ${e.t} : les quatre faces montrent la même étape du même moteur.`;
+  $("#m-etat").textContent = cur===ETAPES.length-1 ? "application…" : `à distance · étape ${cur+1}/${ETAPES.length}`;
+  $("#m-barre").style.width = Math.round((cur+1)/ETAPES.length*100) + "%";
+  $("#m-detail").textContent = e.maitre;
+  try { localStorage.setItem("premier-pas.etape", String(cur)); } catch(_) {}
+}
+try { const v = +localStorage.getItem("premier-pas.etape"); if (v >= 0 && v < ETAPES.length && localStorage.getItem("premier-pas.etape") !== null) cur = v; } catch(_) {}
+tout();
+</script>
+
+</body>
+</html>

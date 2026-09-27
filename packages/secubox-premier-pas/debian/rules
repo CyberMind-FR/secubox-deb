@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-premier-pas/usr/lib/secubox/premier-pas/premier_pas
+	install -m 644 premier_pas/*.py debian/secubox-premier-pas/usr/lib/secubox/premier-pas/premier_pas/
+	install -D -m 755 sbin/premier-pasctl debian/secubox-premier-pas/usr/sbin/premier-pasctl
+	install -D -m 755 sbin/secubox-majauto debian/secubox-premier-pas/usr/sbin/secubox-majauto
+	install -d debian/secubox-premier-pas/usr/lib/systemd/system
+	install -m 644 systemd/*.service systemd/*.timer debian/secubox-premier-pas/usr/lib/systemd/system/
+	install -D -m 644 exemples/profil.toml debian/secubox-premier-pas/usr/share/doc/secubox-premier-pas/examples/profil.toml
+
+override_dh_auto_test:
+	true
+
+# Activation choisie par le postinst : le service du premier démarrage oui,
+# la minuterie des mises à jour seulement quand le profil le demande.
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
