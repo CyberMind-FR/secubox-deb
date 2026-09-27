@@ -265,10 +265,23 @@ def personne(c, uid: str) -> Optional[Dict[str, Any]]:
     if not u:
         return None
     roles, tier = roles_de(c, uid), tier_de(c, uid)
+    caps = S.capacites(roles, tier, table_roles(c), suspendu=u["status"] == "suspended")
+    # Mêmes règles que capacites_du_porteur (#1519) : rôles ∪ autorisations de la
+    # personne ∪ autorisations de ses communautés (vide si suspendue).
+    accordees = S.capacites_accordees(c, uid)
     return {"user_uuid": uid, "pseudo": u["pseudo"], "email": u["email"] or "", "status": u["status"],
             "home_node": u["home_node"], "epoch": u["epoch"], "roles": S.roles_effectifs(roles, tier),
             "tier": tier,
-            "capabilities": S.capacites(roles, tier, table_roles(c), suspendu=u["status"] == "suspended")}
+            "capabilities": list(caps) + [x for x in S.CAPACITES if x in accordees and x not in caps],
+            "granted": sorted(accordees), "etat": S.etat_personne(c, uid),
+            "communities": communautes_de(c, uid)}
+
+
+def communautes_de(c, uid: str) -> List[Dict[str, Any]]:
+    return [{"community_uuid": cid, "name": n, "role": r} for (cid, n, r) in c.execute(
+        "SELECT m.community_uuid, k.name, m.role FROM sbx_community_members m "
+        "JOIN sbx_communities k USING (community_uuid) WHERE m.user_uuid=? AND k.archived_at IS NULL "
+        "ORDER BY k.name", (uid,))]
 
 
 def appareils_de(c, uid: str) -> List[Dict[str, Any]]:

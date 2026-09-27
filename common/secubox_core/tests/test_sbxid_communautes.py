@@ -188,3 +188,10 @@ def test_activite_refus(db):
     with pytest.raises(S.Refus):
         S.emet_activite(db, "mood_changed", author="u", visibility="private",
                         origin_node=NOEUD, context={"confiance": 0.5})
+
+
+@pytest.mark.parametrize("cap", ["admin.users", "admin.invites", "admin.modules", "admin.audit"])
+def test_l_administration_ne_s_accorde_pas(db, cap):
+    # Elle vient du rôle sbx_operator seul : node_admin reste vrai (#1519).
+    with pytest.raises(S.Refus):
+        S.accorde(db, "user", personne(db, "p"), cap, granted_by="x")

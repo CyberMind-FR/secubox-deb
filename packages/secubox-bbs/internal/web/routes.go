@@ -109,6 +109,10 @@ type page struct {
 	Sain        bool
 	Runs        []store.IngestRun
 	Comptes     []store.Compte
+	// Communautes SBX OS proposees pour ouvrir un salon prive, et celles
+	// auxquelles chaque salon est deja ouvert (#1519).
+	Communautes []store.Communaute
+	SalonComms  map[int64][]store.Communaute
 	Moi         store.Compte
 	// Messagerie (#1008). Convs : la boite de reception ; Fil : la conversation
 	// ouverte ; Avec : l'interlocuteur ; Corres : les comptes joignables.
@@ -489,6 +493,26 @@ func (s *Server) moderer(w http.ResponseWriter, r *http.Request) {
 			err = s.st.RetireMembre(cible, membre)
 		} else {
 			err = s.st.AjouteMembre(cible, membre, v.ID)
+		}
+	case "salon-communaute":
+		// OUVRIR UN SALON PRIVE A UNE COMMUNAUTE SBX OS (#1519, D4). Le nom est
+		// repris de sbx.db, jamais du formulaire : on n'ouvre qu'a une
+		// communaute qui existe et n'est pas archivee.
+		id := r.FormValue("communaute")
+		if r.FormValue("action") == "retirer" {
+			err = s.st.FermeACommunaute(cible, id)
+			break
+		}
+		comms, e := s.st.CommunautesActives()
+		err = e
+		if err == nil {
+			err = fmt.Errorf("communaute inconnue ou archivee")
+			for _, c := range comms {
+				if c.UUID == id {
+					err = s.st.OuvreACommunaute(cible, c, v.ID)
+					break
+				}
+			}
 		}
 	case "salon-invite":
 		// LE CODE N'EST MONTRE QU'UNE FOIS, ici, a celui qui l'a demande : la
@@ -2061,6 +2085,13 @@ func (s *Server) sysop(w http.ResponseWriter, r *http.Request) {
 	p.Sain = p.Integ.Diverging == 0 && p.Integ.Missing == 0 && p.Integ.Unreadable == 0
 	p.Runs, _ = s.st.IngestRuns(12)
 	p.Comptes, _ = s.st.Users()
+	p.Communautes, _ = s.st.CommunautesActives()
+	p.SalonComms = map[int64][]store.Communaute{}
+	for _, c := range p.Cats {
+		if c.Prive {
+			p.SalonComms[c.ID], _ = s.st.CommunautesDuSalon(c.ID)
+		}
+	}
 	p.Err = r.URL.Query().Get("err")
 	p.Invites, _ = s.st.Invites()
 	p.MastoInstance, _ = s.st.Reglage(store.CleMastodonInstance)

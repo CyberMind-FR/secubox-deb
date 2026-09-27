@@ -319,7 +319,8 @@ Chaque couche étend une brique existante nommée ; aucune ne remplace un module
 |---|---|
 | P0 | PhotoLibrary restreint aux administrateurs Nextcloud, déployé sur gk2 (#1514) ; permissions 0777 des dossiers photo : #1516 |
 | P1 | fait (#1517) : tables `sbx_communities`, `sbx_community_members`, `sbx_grants`, `sbx_activity` ; `etat_personne()`, `cree_communaute()`, `ajoute_membre()`, `accorde()`, `capacites_accordees()`, `emet_activite()` dans `common/secubox_core/sbxid.py` ; 25 tests ; migré sur gk2 (sauvegarde `/var/backups/sbxid/sbx-avant-1517-*.db`) |
-| P2 – P7 | à faire |
+| P2 | fait (#1519) : `capacites_du_porteur` et `store.personne` = rôles ∪ autorisations de la personne ∪ de ses communautés ; `admin.*` jamais accordable (vient du rôle `sbx_operator`) ; API `/admin/communautes`, `/admin/autorisations` ; onglet « Communautés » de l'Identity Manager ; salons privés BBS ouvrables à une communauté (migration BBS 0027, lecture seule de `sbx.db`, refus en cas d'erreur) ; déployé sur gk2 (core 1.5.21, sbxid 0.4.0, bbs 0.36.0) |
+| P3 – P7 | à faire ; la console sysop du BBS migre vers la webui d'administration (#1523) |
 
 Migration SQL : additive seulement (nouvelles tables, aucune colonne supprimée),
 `CREATE TABLE IF NOT EXISTS` comme le schéma actuel, sauvegarde `.backup` avant

@@ -1,3 +1,13 @@
+secubox-bbs (0.36.0-1~bookworm1) bookworm; urgency=medium
+
+  * Salons privés adossés aux communautés SBX OS (décision D4) : un salon
+    peut être ouvert à une communauté, dont les membres (compte BBS lié à
+    leur identité) y entrent ; lecture seule de sbx.db, refus en cas
+    d'erreur (on cache trop, jamais trop peu) ; ajouts nominatifs
+    conservés ; console sysop : colonne Communautés (ref #1519).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 12:30:00 +0200
+
 secubox-bbs (0.35.0-1~bookworm1) bookworm; urgency=medium
 
   * Connexion passive au compte lié (ref #1456) : la session du Hall d'une

@@ -61,6 +61,12 @@ dt{color:var(--muted);font-size:13px}dd{margin:0;font-family:var(--mono);font-si
 .dev .n{font-weight:700}.dev .m{font-size:12.5px;color:var(--muted)}
 .dev.rev .n{text-decoration:line-through;color:var(--muted)}
 .act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.kom{margin-bottom:10px}
+.kom summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.kom summary b{font-size:16px}
+.kom .blocs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:12px;margin-top:10px}
+.kom table{width:100%}
+.chip button{border:0;background:none;padding:0 0 0 4px;color:var(--bad);cursor:pointer;font:inherit}
 .form-ligne{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
 .form-ligne label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 .form-ligne input,.form-ligne select,.cpt input{background:var(--surf2);border:1px solid var(--line);border-radius:8px;padding:6px 9px;min-width:0}
@@ -94,6 +100,7 @@ td.c,th.c{text-align:center}
   <a href="#moi">Mon identité</a>
   <a href="#appareils">Mes appareils</a>
   <a href="#admin" id="nav-admin" hidden>Administration SBX OS</a>
+  <a href="#communautes" id="nav-kom" hidden>Communautés</a>
   <a href="#mesh">Nœud &amp; Mesh</a>
 </nav>
 
@@ -128,6 +135,20 @@ td.c,th.c{text-align:center}
   <h2>Rôles → capacités</h2><div class="card scroll"><table id="matrix"></table></div>
 </section>
 
+<section id="v-communautes">
+  <h1>Communautés</h1>
+  <p class="lead">Une communauté appartient à ses membres, pas au matériel. Ce que vous lui accordez, chacun de ses membres le reçoit — tant qu'il en fait partie et que la communauté n'est pas archivée. L'administration ne s'accorde pas : elle vient du rôle Opérateur SBX.</p>
+  <div class="card" style="margin-bottom:12px">
+    <form class="form-ligne" id="f-kom" autocomplete="off">
+      <label>Nom<input id="nk-nom" required maxlength="60" placeholder="Atelier fabrication"></label>
+      <label>Visibilité<select id="nk-vis"><option value="private">privée</option><option value="invited">sur invitation</option><option value="public">publique</option></select></label>
+      <label style="flex:1;min-width:14rem">Description (facultative)<input id="nk-desc" maxlength="500"></label>
+      <button class="prim">Créer la communauté</button>
+    </form>
+  </div>
+  <div id="koms"></div>
+</section>
+
 <section id="v-mesh">
   <h1>Nœud &amp; Mesh</h1>
   <p class="lead">Un nœud héberge votre identité, il ne la possède pas. Changer de nœud ne change pas votre <span style="font-family:var(--mono)">user_uuid</span>.</p>
@@ -141,7 +162,11 @@ const API = '/api/v1/sbxid';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LIB = {guest:'Invité', member:'Membre', subscriber:'Abonné', beta_tester:'Bêta-testeur', moderator:'Modérateur', sbx_operator:'Opérateur SBX'};
-let ETAT = null, ROLES = null, PERS = [];
+let ETAT = null, ROLES = null, PERS = [], CAPS = null;
+const VIS = {private:'privée', invited:'sur invitation', public:'publique'};
+const ROLE_K = {owner:'propriétaire', moderator:'modérateur', member:'membre'};
+const ETATS = {guest:'invité', invitation_requested:'demande en cours', invited:'invité·e', member:'membre',
+  community_assigned:'membre d\'une communauté', node_admin:'administrateur du nœud', suspended:'suspendu'};
 
 function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true, 2800); }
 async function api(chemin, opts={}){
@@ -168,7 +193,8 @@ function rendMoi(){
      ${(ETAT.liens||[]).map(l=>`<dt>lien ${esc(l.app)}</dt><dd>${esc(l.app_handle)}</dd>`).join('')}</dl></div>
    <div class="card"><h2 style="margin-top:0">Rôles</h2><div class="chips">${u.roles.map(r=>`<span class="chip role">${esc(LIB[r]||r)}</span>`).join('')}</div>
      <h2>Ce que vous pouvez faire</h2><div class="chips">${u.capabilities.map(c=>`<span class="chip cap">${esc(c)}</span>`).join('') || '<span class="muted">aucune (compte suspendu)</span>'}</div>
-     <p class="hint">Aucune capacité SBX OS n'ouvre SSH, sudo ou root.</p></div></div>
+     <h2>Communautés</h2><div class="chips">${(u.communities||[]).map(k=>`<span class="chip">${esc(k.name)} · ${esc(ROLE_K[k.role]||k.role)}</span>`).join('') || '<span class="muted">aucune</span>'}</div>
+     <p class="hint">État : ${esc(ETATS[u.etat]||u.etat||'—')}. Aucune capacité SBX OS n'ouvre SSH, sudo ou root.</p></div></div>
    ${rendConnexions(ETAT.connexions)}`;
 }
 
@@ -448,6 +474,65 @@ function rendDemandes(liste){
 }
 
 // ── Nœud & Mesh ──────────────────────────────────────────────────────────
+// ── Communautés (#1519) : Allow User + Allow Community ─────────────────────
+async function rendCommunautes(){
+  let l;
+  try { [l, CAPS] = await Promise.all([api('/admin/communautes'), CAPS ? Promise.resolve(CAPS) : api('/admin/capacites')]); }
+  catch(e){ $('#nav-kom').hidden = true; return; }
+  $('#nav-kom').hidden = false;
+  $('#f-kom').onsubmit = async ev => {
+    ev.preventDefault();
+    try { const k = await api('/admin/communautes', {method:'POST', body:JSON.stringify({name:$('#nk-nom').value, visibility:$('#nk-vis').value, description:$('#nk-desc').value})});
+          toast(`« ${k.name} » créée`); $('#f-kom').reset(); }
+    catch(e){ toast(e.message); }
+    rendCommunautes();
+  };
+  const box = $('#koms');
+  const ouvertes = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.k));
+  if (!l.communautes.length){ box.innerHTML = '<div class="card muted">Aucune communauté pour l\'instant.</div>'; return; }
+  const details = await Promise.all(l.communautes.map(k => api('/admin/communautes/'+k.community_uuid)));
+  const optCaps = Object.entries(CAPS.modules).filter(([m]) => m !== 'admin')
+    .map(([m, cs]) => `<optgroup label="${esc(m)}">${cs.map(c=>`<option>${esc(c)}</option>`).join('')}</optgroup>`).join('');
+  box.innerHTML = details.map(k => {
+    const dedans = new Set(k.members.map(m => m.user_uuid));
+    const candidats = PERS.filter(p => !dedans.has(p.user_uuid) && p.status === 'active');
+    return `<details class="card kom" data-k="${esc(k.community_uuid)}" ${ouvertes.has(k.community_uuid)?'open':''}>
+      <summary><b>${esc(k.name)}</b><span class="chip">${esc(VIS[k.visibility]||k.visibility)}</span>
+        <span class="chip">${k.members.length} membre${k.members.length>1?'s':''}</span>
+        ${k.grants.map(g=>`<span class="chip cap">${esc(g.capability)}</span>`).join('')}</summary>
+      ${k.description ? `<p class="hint">${esc(k.description)}</p>` : ''}
+      <div class="blocs">
+        <div><h3>Membres</h3>
+          <table><tbody>${k.members.map(m => `<tr><td><b>${esc(m.pseudo)}</b></td>
+            <td><select data-role="${esc(m.user_uuid)}" aria-label="Rôle de ${esc(m.pseudo)}">${Object.entries(ROLE_K).map(([v,t])=>`<option value="${v}" ${m.role===v?'selected':''}>${t}</option>`).join('')}</select></td>
+            <td><button type="button" class="danger" data-retire="${esc(m.user_uuid)}">Retirer</button></td></tr>`).join('') || '<tr><td class="muted">Aucun membre.</td></tr>'}</tbody></table>
+          ${candidats.length ? `<form class="form-ligne" data-ajout style="margin-top:8px">
+            <label>Personne<select name="u">${candidats.map(p=>`<option value="${esc(p.user_uuid)}">${esc(p.pseudo)}</option>`).join('')}</select></label>
+            <label>Rôle<select name="r">${Object.entries(ROLE_K).map(([v,t])=>`<option value="${v}" ${v==='member'?'selected':''}>${t}</option>`).join('')}</select></label>
+            <button>Ajouter</button></form>` : '<p class="hint">Toutes les personnes actives en font partie.</p>'}
+        </div>
+        <div><h3>Ce que la communauté accorde</h3>
+          <div class="chips">${k.grants.map(g=>`<span class="chip cap">${esc(g.capability)}<button type="button" data-revoque="${esc(g.grant_uuid)}" aria-label="Retirer ${esc(g.capability)}">✕</button></span>`).join('') || '<span class="muted">rien de plus que les rôles de chacun</span>'}</div>
+          <form class="form-ligne" data-accorde style="margin-top:8px">
+            <label>Capacité<select name="c">${optCaps}</select></label><button>Accorder</button></form>
+          <p class="hint" style="margin-top:12px"><button type="button" class="danger" data-archive>Archiver la communauté</button> — ses membres perdent ce qu'elle accordait.</p>
+        </div>
+      </div></details>`;
+  }).join('');
+  const act = async (fn, msg) => { try { await fn(); toast(msg); } catch(e){ toast(e.message); } rendCommunautes(); rendAdmin(); };
+  box.querySelectorAll('details').forEach(d => {
+    const k = d.dataset.k;
+    d.querySelectorAll('[data-role]').forEach(s => s.onchange = () => act(() => api(`/admin/communautes/${k}/membres/${s.dataset.role}`, {method:'PUT', body:JSON.stringify({role:s.value})}), 'Rôle enregistré'));
+    d.querySelectorAll('[data-retire]').forEach(b => b.onclick = () => act(() => api(`/admin/communautes/${k}/membres/${b.dataset.retire}`, {method:'DELETE'}), 'Membre retiré'));
+    const fa = d.querySelector('[data-ajout]');
+    if (fa) fa.onsubmit = ev => { ev.preventDefault(); act(() => api(`/admin/communautes/${k}/membres/${fa.u.value}`, {method:'PUT', body:JSON.stringify({role:fa.r.value})}), 'Membre ajouté'); };
+    const fg = d.querySelector('[data-accorde]');
+    fg.onsubmit = ev => { ev.preventDefault(); act(() => api('/admin/autorisations', {method:'POST', body:JSON.stringify({subject_kind:'community', subject_id:k, capability:fg.c.value})}), 'Capacité accordée à la communauté'); };
+    d.querySelectorAll('[data-revoque]').forEach(b => b.onclick = () => act(() => api('/admin/autorisations/'+b.dataset.revoque, {method:'DELETE'}), 'Capacité retirée'));
+    d.querySelector('[data-archive]').onclick = () => { if (confirm('Archiver cette communauté ? Ses membres perdent ce qu\'elle accordait.')) act(() => api(`/admin/communautes/${k}/archiver`, {method:'POST'}), 'Communauté archivée'); };
+  });
+}
+
 async function rendMesh(){
   try {
     const m = await api('/mesh');
@@ -469,10 +554,10 @@ async function charge(){
   const u = ETAT.identite;
   $('#who').innerHTML = u ? `<b>${esc(u.pseudo)}</b><br><span style="font-family:var(--mono);font-size:11px">${esc(u.user_uuid.slice(0,8))}… · ${u.capabilities.length} capacités</span>`
                           : (ETAT.systeme ? 'compte système · administration seulement' : 'sans identité SBX OS');
-  rendMoi(); rendAppareils(); rendAdmin(); rendMesh();
+  rendMoi(); rendAppareils(); await rendAdmin(); rendCommunautes(); rendMesh();
 }
 function vue(){
-  let v = (location.hash || '#moi').slice(1); if (!['moi','appareils','admin','mesh'].includes(v)) v = 'moi';
+  let v = (location.hash || '#moi').slice(1); if (!['moi','appareils','admin','communautes','mesh'].includes(v)) v = 'moi';
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === 'v-'+v));
   document.querySelectorAll('nav a').forEach(a => a.getAttribute('href')==='#'+v ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'));
 }

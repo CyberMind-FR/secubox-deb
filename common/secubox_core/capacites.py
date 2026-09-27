@@ -84,9 +84,17 @@ def _depuis_sbxdb(did: str) -> Optional[Set[str]]:
         for rid, cap in c.execute("SELECT role_id, capability FROM sbx_role_capabilities"):
             table.setdefault(rid, []).append(cap)
         try:
-            return set(S.capacites(roles, t[0] if t else "free", table or None))
+            caps = set(S.capacites(roles, t[0] if t else "free", table or None))
         except S.Refus:
             return set()
+        # « Allow User » + « Allow Community » (#1519) : ce qui est accordé à la
+        # personne et à ses communautés s'AJOUTE aux rôles. Base antérieure au
+        # P1 (tables absentes) : pas d'autorisations, les rôles suffisent.
+        try:
+            caps |= S.capacites_accordees(c, uid)
+        except sqlite3.OperationalError:
+            pass
+        return caps
     except sqlite3.Error:
         return None
     finally:
