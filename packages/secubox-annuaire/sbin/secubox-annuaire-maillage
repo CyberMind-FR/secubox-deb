@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox-Deb :: secubox-annuaire-maillage — rendre une box visible du maillage (#1530)
+#
+# CE QUI MANQUAIT. Rejoindre le maillage (secubox-p2p) montait wg-mesh, mais
+# rien ne posait ce que la Flotte et la réplication du journal demandent :
+# l'identité du nœud (node.key), l'écouteur :8799 lié à l'IP wg-mesh et la
+# règle nft qui l'ouvre sur l'interface. Le postinst de secubox-annuaire le
+# faisait — seulement si wg-mesh existait DÉJÀ à l'installation du paquet.
+# Une box qui rejoint ensuite restait invisible.
+#
+# Appelé par le postinst de secubox-annuaire ET par sbx-mesh-up (secubox-p2p)
+# après chaque montée ou synchronisation de wg-mesh. Idempotent.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo "doit tourner en root" >&2; exit 1; }
+
+MESH_TPL=/usr/share/secubox/annuaire/annuaire-mesh.conf.tpl
+MESH_CONF=/etc/nginx/conf.d/annuaire-mesh.conf
+NFT_CONF=/etc/nftables.conf
+KEY=/etc/secubox/secrets/annuaire/node.key
+MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
+
+# 1. Identité du nœud (sans elle : aucun instantané signé, Flotte vide).
+if [ -n "$MESH_IP" ] && [ ! -s "$KEY" ] && command -v annuairectl >/dev/null 2>&1; then
+    if runuser -u secubox -- annuairectl init >/dev/null 2>&1 || annuairectl init >/dev/null 2>&1; then
+        echo "[maillage] identité du nœud créée"
+    else
+        echo "[maillage] annuairectl init a échoué — la Flotte ne verra pas cette box" >&2
+    fi
+fi
+
+# 2. Écouteur :8799 lié à l'IP wg-mesh seulement (jamais 0.0.0.0).
+avant=$(cat "$MESH_CONF" 2>/dev/null || true)
+if [ -n "$MESH_IP" ] && [ -f "$MESH_TPL" ]; then
+    sed "s/__MESH_IP__/$MESH_IP/g" "$MESH_TPL" > "$MESH_CONF"
+    # Un rendu cassé ne doit JAMAIS rester : le prochain nginx -t échouerait
+    # pour toute la box.
+    if ! nginx -t >/dev/null 2>&1; then
+        rm -f "$MESH_CONF"
+        echo "[maillage] écouteur :8799 refusé par nginx -t — retiré" >&2
+    fi
+else
+    rm -f "$MESH_CONF"
+fi
+apres=$(cat "$MESH_CONF" 2>/dev/null || true)
+if [ "$avant" != "$apres" ]; then
+    systemctl reload nginx 2>/dev/null || true
+    echo "[maillage] écouteur :8799 ${MESH_IP:-retiré}"
+fi
+
+# 3. Règle nft durable, AVANT le drop terminal de inet secubox_filter (règle
+# vive aussi). Les nœuds « inet filter » historiques n'en ont pas besoin.
+if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
+   && grep -q 'table inet secubox_filter' "$NFT_CONF" \
+   && ! grep -q 'tcp dport 8799' "$NFT_CONF"; then
+    awk '/^[[:space:]]*drop[[:space:]]*$/ && !d {print "        iifname \"wg-mesh\" ip saddr 10.10.0.0/24 tcp dport 8799 accept"; d=1} {print}' \
+        "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
+    if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
+        mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
+        nft -f "$NFT_CONF" >/dev/null 2>&1 || true
+        echo "[maillage] :8799 ouvert sur wg-mesh"
+    else
+        rm -f "$NFT_CONF.sbxtmp"
+    fi
+fi
+
+# 4. Premier instantané signé tout de suite, sans attendre le minuteur.
+if [ -n "$MESH_IP" ] && [ -s "$KEY" ]; then
+    systemctl start --no-block secubox-metrics-publish.service 2>/dev/null || true
+fi
+exit 0

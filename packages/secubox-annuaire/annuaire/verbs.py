@@ -2022,14 +2022,22 @@ def export_entries(journal: Journal) -> List[Dict[str, Any]]:
     can verify without prior knowledge (and check the self-certifying binding).
     Entries are emitted in height order so version ties resolve consistently.
     """
+    # UNE CLÉ PAR AUTEUR, PAS PAR ENTRÉE (#1530). _get_inviter_pubkey relit le
+    # journal : l'appeler pour chaque entrée faisait un export QUADRATIQUE
+    # (5 097 entrées sur gk2 → ~26 M d'itérations) qui figeait l'annuaire
+    # plusieurs minutes. Les auteurs sont peu nombreux ; la clé d'un auteur ne
+    # change pas le temps d'une lecture.
+    cles: Dict[str, Optional[str]] = {}
     out: List[Dict[str, Any]] = []
     for entry in journal.iter_entries():
+        if entry.author not in cles:
+            cles[entry.author] = _get_inviter_pubkey(journal, entry.author)
         out.append({
             "op": entry.op.value if hasattr(entry.op, "value") else entry.op,
             "payload_type": entry.payload_type,
             "payload": entry.payload,
             "author": entry.author,
-            "author_pubkey": _get_inviter_pubkey(journal, entry.author),
+            "author_pubkey": cles[entry.author],
             "sig": entry.sig,
         })
     return out

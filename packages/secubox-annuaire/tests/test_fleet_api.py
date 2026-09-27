@@ -246,3 +246,23 @@ def test_fleet_never_500_on_unexpected_failure(client, monkeypatch):
     r = tc.get("/fleet")
     assert r.status_code == 200
     assert r.json() == {"nodes": []}
+
+
+# ---------------------------------------------------------------------------
+# Pair du maillage (#1530) : lecture publique des enregistrements signés, et
+# seulement par la marque que pose l'écouteur wg-mesh.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("chemin", ["/fleet/self", "/log/export", "/services"])
+def test_pair_du_maillage_lit_sans_jeton(client, monkeypatch, chemin):
+    tc, _ = client
+    monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
+    assert tc.get(chemin).status_code == 401                      # anonyme : gardé
+    assert tc.get(chemin, headers={"X-SecuBox-Maillage": "0"}).status_code == 401
+    assert tc.get(chemin, headers={"X-SecuBox-Maillage": "1"}).status_code == 200
+
+
+def test_la_marque_n_ouvre_pas_le_reste(client, monkeypatch):
+    tc, _ = client
+    monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
+    assert tc.get("/status", headers={"X-SecuBox-Maillage": "1"}).status_code == 401

@@ -69,3 +69,8 @@ else
     wg-quick up wg-mesh
 fi
 wg show wg-mesh
+# La box devient visible du maillage (#1530) : identité annuaire, écouteur
+# :8799 et règle nft — sans quoi la Flotte et la réplication l'ignorent.
+if [ -x /usr/sbin/secubox-annuaire-maillage ]; then
+    /usr/sbin/secubox-annuaire-maillage || true
+fi

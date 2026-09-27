@@ -1,3 +1,19 @@
+secubox-annuaire (0.10.6-1~bookworm1) bookworm; urgency=medium
+
+  * Export du journal (/log/export) linéaire et hors de la boucle
+    d'événements : la clé de chaque auteur une seule fois (137 s → 0,12 s
+    sur le journal de gk2) — l'export quadratique gelait tout l'annuaire.
+  * Une box qui rejoint le maillage devient visible : secubox-annuaire-
+    maillage (identité du nœud, écouteur :8799 sur wg-mesh, règle nft,
+    premier instantané) rejoué par le postinst et par sbx-mesh-up.
+    /services, /log/export et /fleet/self redeviennent lisibles par les
+    pairs du maillage (marque posée par l'écouteur :8799) : depuis #1256,
+    la Flotte ne montrait que soi et la réplication du journal était
+    arrêtée. annuairectl init lancé en root donne la clé au propriétaire
+    du dossier (ref #1530).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 15:00:00 +0200
+
 secubox-annuaire (0.10.5-1~bookworm1) bookworm; urgency=medium
 
   * secubox-metrics-publish : ignoré sans clé de nœud annuaire (box neuve)

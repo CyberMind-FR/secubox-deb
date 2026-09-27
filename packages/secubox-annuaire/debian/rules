@@ -29,6 +29,7 @@ override_dh_auto_install:
 	# Operator CLI
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/sbin
 	install -m 755 $(CURDIR)/sbin/annuairectl $(CURDIR)/debian/secubox-annuaire/usr/sbin/annuairectl
+	install -m 755 $(CURDIR)/sbin/secubox-annuaire-maillage $(CURDIR)/debian/secubox-annuaire/usr/sbin/secubox-annuaire-maillage
 
 	# Box operator CLI — delegated center grants (Centres & Grants, Task 7)
 	install -m 755 $(CURDIR)/sbin/sbx-centersctl $(CURDIR)/debian/secubox-annuaire/usr/sbin/sbx-centersctl
