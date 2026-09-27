@@ -1320,7 +1320,7 @@ ConditionPathExists=!/var/lib/secubox/.persistent
 What=tmpfs
 Where=/var/lib/secubox
 Type=tmpfs
-Options=mode=0755,uid=secubox,gid=secubox,size=100M
+Options=mode=0755,uid=secubox,gid=secubox,size=25%
 
 [Install]
 WantedBy=local-fs.target
@@ -2743,6 +2743,20 @@ ok "System files copied"
 
 # Create necessary directories
 mkdir -p "$MNT/proc" "$MNT/sys" "$MNT/dev" "$MNT/run" "$MNT/tmp" "$MNT/mnt"
+
+# /var/lib/secubox SUR LE DISQUE (#1528). En live c'est un tmpfs semé depuis
+# /usr/share/secubox/var-lib-skel ; rsync -x ne le traverse pas, et l'unité
+# var-lib-secubox.mount, copiée telle quelle, remontait un tmpfs sur la box
+# installée : tout l'état (identités, BBS, annuaire, mesh) perdu à chaque
+# redémarrage. On sème le disque depuis le squelette et on pose .persistent,
+# la condition que l'unité respecte déjà : le tmpfs ne se monte plus.
+mkdir -p "$MNT/var/lib/secubox"
+if [ -d /usr/share/secubox/var-lib-skel ]; then
+    cp -a /usr/share/secubox/var-lib-skel/. "$MNT/var/lib/secubox/"
+fi
+touch "$MNT/var/lib/secubox/.persistent"
+chroot "$MNT" chown secubox:secubox /var/lib/secubox 2>/dev/null || true
+ok "/var/lib/secubox persistant sur le disque"
 
 # Generate fstab
 log "Configuring fstab..."
