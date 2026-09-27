@@ -504,6 +504,10 @@ async function rendCommunautes(){
             <label>Capacité<select name="c">${optCaps}</select></label><button>Accorder</button></form>
           <p class="hint" style="margin-top:12px"><button type="button" class="danger" data-archive>Archiver la communauté</button> — ses membres perdent ce qu'elle accordait.</p>
         </div>
+        <div><h3>Salons BBS</h3>
+          <div data-salons><span class="muted">…</span></div>
+          <p class="hint">Un salon ouvert à la communauté l'est à chacun de ses membres dont le compte BBS est lié à son identité. « Réserver » rend d'abord privé un salon ouvert à tous.</p>
+        </div>
       </div></details>`;
   }).join('');
   const act = async (fn, msg) => { try { await fn(); toast(msg); } catch(e){ toast(e.message); } rendCommunautes(); rendAdmin(); };
@@ -516,6 +520,36 @@ async function rendCommunautes(){
     const fg = d.querySelector('[data-accorde]');
     fg.onsubmit = ev => { ev.preventDefault(); act(() => api('/admin/autorisations', {method:'POST', body:JSON.stringify({subject_kind:'community', subject_id:k, capability:fg.c.value})}), 'Capacité accordée à la communauté'); };
     d.querySelectorAll('[data-revoque]').forEach(b => b.onclick = () => act(() => api('/admin/autorisations/'+b.dataset.revoque, {method:'DELETE'}), 'Capacité retirée'));
+    // SALONS BBS (#1548) : lus à l'ouverture de la carte seulement — une
+    // requête vers la BBS par communauté affichée serait du gaspillage.
+    const zs = d.querySelector('[data-salons]');
+    const chargeSalons = async () => {
+      let l;
+      try { l = (await api(`/admin/communautes/${k}/salons`)).salons; }
+      catch(e){ zs.innerHTML = `<span class="muted">${esc(e.message)}</span>`; return; }
+      const ouverts = l.filter(x => x.ouvert), autres = l.filter(x => !x.ouvert);
+      zs.innerHTML = `<div class="chips">${ouverts.map(x => `<span class="chip ok">${esc(x.titre)}<button type="button" data-ferme="${x.id}" aria-label="Fermer ${esc(x.titre)} à la communauté">✕</button></span>`).join('')
+          || '<span class="muted">aucun salon</span>'}</div>
+        ${autres.length ? `<form class="form-ligne" data-salon style="margin-top:8px">
+          <label>Salon<select name="s">${autres.map(x => `<option value="${x.id}" data-prive="${x.prive ? 1 : 0}">${'· '.repeat(x.profondeur)}${esc(x.titre)}${x.prive ? '' : ' (ouvert à tous)'}</option>`).join('')}</select></label>
+          <button>Ouvrir à la communauté</button></form>` : ''}`;
+      zs.querySelectorAll('[data-ferme]').forEach(b => b.onclick = async () => {
+        try { await api(`/admin/communautes/${k}/salons/${b.dataset.ferme}`, {method:'POST', body:JSON.stringify({ouvrir:false})}); toast('Salon fermé à la communauté'); }
+        catch(e){ toast(e.message); }
+        chargeSalons();
+      });
+      const fs = zs.querySelector('[data-salon]');
+      if (fs) fs.onsubmit = async ev => {
+        ev.preventDefault();
+        const o = fs.s.selectedOptions[0], reserver = o.dataset.prive === '0';
+        if (reserver && !confirm(`« ${o.textContent.replace(' (ouvert à tous)','')} » est ouvert à tous : le réserver le rend privé — seuls ses membres nommés et la communauté y auront accès. Continuer ?`)) return;
+        try { await api(`/admin/communautes/${k}/salons/${fs.s.value}`, {method:'POST', body:JSON.stringify({ouvrir:true, reserver})}); toast(reserver ? 'Salon réservé à la communauté' : 'Salon ouvert à la communauté'); }
+        catch(e){ toast(e.message); }
+        chargeSalons();
+      };
+    };
+    if (d.open) chargeSalons();
+    d.addEventListener('toggle', () => { if (d.open) chargeSalons(); });
     d.querySelector('[data-archive]').onclick = () => { if (confirm('Archiver cette communauté ? Ses membres perdent ce qu\'elle accordait.')) act(() => api(`/admin/communautes/${k}/archiver`, {method:'POST'}), 'Communauté archivée'); };
   });
 }

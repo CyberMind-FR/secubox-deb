@@ -679,6 +679,76 @@ def retire_membre(cid: str, user_uuid: str, ctx=Depends(exige_admin)):
     return _communaute(cid)
 
 
+# ── Salons BBS d'une communauté (#1548, D4) ────────────────────────────────
+# La BBS tient les salons ; sbxid tient les communautés. On ne duplique rien :
+# ces routes RELAIENT le jeton de l'administrateur aux routes d'admin de la BBS
+# (#1523), qui le font valider par secubox-auth et journalisent le geste au nom
+# de SON compte BBS — comme acces le fait déjà pour les comptes.
+BBS_SOCK = os.environ.get("SBXID_BBS_SOCK", "/run/secubox/bbs.sock")
+
+
+def _jeton(request: Request) -> str:
+    a = request.headers.get("authorization", "")
+    return a[7:] if a.startswith("Bearer ") else request.cookies.get("secubox_session", "")
+
+
+def _bbs_http(methode: str, chemin: str, jeton: str, corps: Optional[dict] = None):
+    import httpx  # noqa: PLC0415
+    with httpx.Client(transport=httpx.HTTPTransport(uds=BBS_SOCK), base_url="http://bbs", timeout=8) as c:
+        r = c.request(methode, chemin, json=corps, headers={"Authorization": "Bearer " + jeton})
+    try:
+        j = r.json()
+    except ValueError:
+        j = {}
+    return r.status_code, j
+
+
+# Injectable pour les tests.
+bbs_appel = _bbs_http
+
+
+def _bbs(request: Request, methode: str, chemin: str, corps: Optional[dict] = None) -> dict:
+    try:
+        code, j = bbs_appel(methode, "/api/v1/bbs/admin" + chemin, _jeton(request), corps)
+    except Exception as e:  # socket absente, BBS arrêtée
+        raise HTTPException(503, f"BBS injoignable ({type(e).__name__})")
+    if code != 200:
+        raise HTTPException(code if code in (400, 401, 403, 404, 409) else 502, j.get("error") or f"BBS : {code}")
+    return j
+
+
+@app.get("/admin/communautes/{cid}/salons")
+def salons_de(cid: str, request: Request, ctx=Depends(exige_admin)):
+    """Tous les salons, et pour chacun : privé ? ouvert à CETTE communauté ?"""
+    _communaute(cid)
+    j = _bbs(request, "GET", "/salons")
+    return {"salons": [{"id": x["id"], "titre": x["titre"], "slug": x["slug"], "profondeur": x.get("profondeur", 0),
+                        "prive": x.get("prive", False), "fils": x.get("fils", 0),
+                        "ouvert": any(c.get("uuid") == cid for c in x.get("communautes") or [])}
+                       for x in j.get("salons", [])]}
+
+
+class SalonCommunaute(BaseModel):
+    ouvrir: bool = True
+    #: Un salon encore ouvert à tous est d'abord rendu privé : sans quoi
+    #: « l'ouvrir à la communauté » ne restreindrait rien (#1548).
+    reserver: bool = False
+
+
+@app.post("/admin/communautes/{cid}/salons/{sid}")
+def salon_communaute(cid: str, sid: int, v: SalonCommunaute, request: Request, ctx=Depends(exige_admin)):
+    c = _communaute(cid)
+    if c.get("archived_at"):
+        raise HTTPException(409, "Communauté archivée")
+    if v.ouvrir and v.reserver:
+        _bbs(request, "POST", f"/salons/{sid}/prive", {"prive": True})
+    _bbs(request, "POST", f"/salons/{sid}/communautes",
+         {"communaute": cid, "action": "ajouter" if v.ouvrir else "retirer"})
+    store.journal(db(), _acteur(ctx), "community.salon" if v.ouvrir else "community.salon.removed",
+                  f"{c['name']} ↔ salon {sid}" + (" (réservé)" if v.reserver and v.ouvrir else ""))
+    return salons_de(cid, request, ctx)
+
+
 class Autorisation(BaseModel):
     subject_kind: str = Field(pattern=r"^(user|community)$")
     subject_id: str = Field(min_length=36, max_length=36)

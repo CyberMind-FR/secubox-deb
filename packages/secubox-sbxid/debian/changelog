@@ -1,3 +1,14 @@
+secubox-sbxid (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Communautés : bloc « Salons BBS » dans la carte — ouvrir un salon privé
+    à la communauté, le fermer, ou « réserver » un salon ouvert à tous
+    (rendu privé puis ouvert, d'un geste). Routes
+    /admin/communautes/{cid}/salons : relais du jeton de l'administrateur
+    aux routes d'admin de la BBS (#1523), comme acces pour les comptes ;
+    journalisé des deux côtés (ref #1548).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 11:27:02 +0200
+
 secubox-sbxid (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Gestionnaire d'identité : la BBS s'OUVRE comme courriel, Nextcloud et
