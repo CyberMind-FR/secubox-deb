@@ -1,3 +1,15 @@
+secubox-nextcloud (1.7.7-1~bookworm1) bookworm; urgency=high
+
+  * PhotoLibrary (stockage externe sur /media/photos, qui contient les
+    photos de CHAQUE personne) était monté sans restriction, donc chez
+    tous les comptes : sur gk2, cedre83 listait PhotoLibrary/gk2. Il est
+    désormais réservé au groupe Nextcloud « admin » à la création (link-
+    photos) et réparé à l'installation du paquet (nouvelle commande
+    secure-photos, qui n'en crée jamais). Chaque personne garde son
+    montage Photos-<user> (ref #1514).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 09:40:00 +0200
+
 secubox-nextcloud (1.7.6-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

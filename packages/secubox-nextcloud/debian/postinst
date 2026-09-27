@@ -22,6 +22,13 @@ if [ "$1" = "configure" ]; then
     systemctl daemon-reload
     systemctl enable secubox-nextcloud.service || true
     systemctl start secubox-nextcloud.service || true
+
+    # PhotoLibrary visible de TOUS les comptes (#1514) : on restreint un montage
+    # existant aux administrateurs Nextcloud. N'en crée jamais ; sans conteneur
+    # en marche, ne fait rien (le prochain link-photos s'en chargera).
+    if [ -x /usr/sbin/nextcloudctl ]; then
+      timeout 180 /usr/sbin/nextcloudctl secure-photos || true
+    fi
 fi
 #DEBHELPER#
 exit 0

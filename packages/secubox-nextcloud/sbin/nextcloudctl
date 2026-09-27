@@ -446,6 +446,31 @@ cmd_setup() {
 # Photo integration (PhotoLibrary external storage → /media/photos)
 # ============================================================================
 
+# PhotoLibrary RÉSERVÉ AUX ADMINISTRATEURS NEXTCLOUD (#1514).
+# /media/photos contient les dossiers photo de CHAQUE personne (<user>/). Un
+# stockage externe sans « applicable » est, par défaut Nextcloud, monté chez
+# TOUS les comptes : sur gk2, cedre83 voyait PhotoLibrary/gk2 (30 Go). Chaque
+# personne garde son propre montage Photos-<user> (user-provision) ; la vue
+# d'ensemble est celle des administrateurs.
+photolibrary_id() {
+    lxc_attach "sudo -u www-data php /var/www/nextcloud/occ files_external:list --output=json" 2>/dev/null \
+        | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for m in d:
+    if m.get("mount_point")=="/PhotoLibrary":
+        print(m["mount_id"]); break'
+}
+
+restreint_photolibrary() {
+    local mid="$1"
+    lxc_attach "sudo -u www-data php /var/www/nextcloud/occ files_external:applicable --add-group admin $mid" >/dev/null 2>&1 \
+        && log "PhotoLibrary (mount $mid) restreint au groupe Nextcloud « admin »." \
+        || warn "Impossible de restreindre PhotoLibrary (mount $mid) — vérifier à la main : il est visible de TOUS les comptes."
+}
+
 link_photos() {
     # Expose the shared photo dir (bind-mounted at /media/photos, OUTSIDE the
     # NC data dir) as a Local external storage so the mobile client can sync
@@ -456,14 +481,17 @@ link_photos() {
     fi
     log "Wiring 'PhotoLibrary' external storage → /media/photos ..."
     lxc_attach "sudo -u www-data php /var/www/nextcloud/occ app:enable files_external" >/dev/null 2>&1 || true
-    if lxc_attach "sudo -u www-data php /var/www/nextcloud/occ files_external:list" 2>/dev/null | grep -q PhotoLibrary; then
-        log "PhotoLibrary already configured."
+    local mid
+    mid=$(photolibrary_id)
+    if [ -n "$mid" ]; then
+        log "PhotoLibrary already configured (mount id $mid)."
+        restreint_photolibrary "$mid"
         return 0
     fi
-    local mid
     mid=$(lxc_attach "sudo -u www-data php /var/www/nextcloud/occ files_external:create 'PhotoLibrary' local null::null -c datadir=/media/photos" 2>/dev/null | grep -oE '[0-9]+' | head -1)
     if [ -n "$mid" ]; then
         lxc_attach "sudo -u www-data php /var/www/nextcloud/occ files_external:option $mid filesystem_check_changes 1" >/dev/null 2>&1 || true
+        restreint_photolibrary "$mid"
         log "PhotoLibrary created (mount id $mid). Point the phone NC client's auto-upload here."
     else
         warn "Could not create PhotoLibrary mount (is files_external enabled?)."
@@ -958,6 +986,7 @@ Apps:
 
 Maintenance:
   link-photos          Wire the 'PhotoLibrary' external storage (→ PhotoPrism)
+  secure-photos        Restrict an existing PhotoLibrary to Nextcloud admins (#1514)
   occ <command>        Run Nextcloud occ command
   backup [name]        Create backup
   restore <file>       Restore from backup
@@ -1047,6 +1076,10 @@ case "${1:-}" in
         esac
         ;;
     link-photos) link_photos ;;
+    secure-photos)
+        # Répare un PhotoLibrary existant sans jamais en créer (#1514).
+        lxc_running || exit 0
+        mid=$(photolibrary_id); [ -n "$mid" ] && restreint_photolibrary "$mid" || true ;;
     user-provision) shift; user_provision "$@" ;;
     occ) shift; occ "$@" ;;
     backup) shift; cmd_backup "$@" ;;
