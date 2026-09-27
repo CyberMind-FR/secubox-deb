@@ -1,3 +1,17 @@
+secubox-core (1.5.20-1~bookworm1) bookworm; urgency=medium
+
+  * sbxid (Community Refactor P1) : tables sbx_communities,
+    sbx_community_members, sbx_grants (autorisation à une personne OU une
+    communauté, jamais ssh/sudo/root/system, garde aussi en SQL) et
+    sbx_activity (auteur, contexte, visibilité, horodatage, nœud
+    d'origine) ; fonctions cree_communaute, ajoute_membre, accorde,
+    capacites_accordees, emet_activite ; etat_personne() projette les six
+    états (guest … node_admin) depuis l'existant, sans nouvelle colonne.
+    Migration additive, idempotente ; aucun service ne l'appelle encore
+    (ref #1517).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 10:30:00 +0200
+
 secubox-core (1.5.19-1~bookworm1) bookworm; urgency=medium
 
   * Pont br-lxc hors du calcul « en ligne » (drop-in networkd) et Depends

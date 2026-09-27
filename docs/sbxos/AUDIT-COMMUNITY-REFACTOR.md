@@ -313,6 +313,14 @@ Chaque couche étend une brique existante nommée ; aucune ne remplace un module
 | **P6 — Shared Space** | `nextcloudctl` | groupe Nextcloud des membres du Node + Group Folder possédé par le Node, déclaré dans `sbx.db` ; carte Cloud du Hall en deux onglets distincts (personnel / partagé) |
 | **P7 — portabilité mesh** | certificats `sbxos/v1` + `sbx_migrations` + transport signé de l'annuaire | fiche de personne signée par son nœud d'origine, communautés et aura publiées selon leur visibilité, reconnues par les autres boxes ; la box d'origine reste l'autorité |
 
+**Avancement** (mis à jour à chaque couche) :
+
+| Couche | État |
+|---|---|
+| P0 | PhotoLibrary restreint aux administrateurs Nextcloud, déployé sur gk2 (#1514) ; permissions 0777 des dossiers photo : #1516 |
+| P1 | fait (#1517) : tables `sbx_communities`, `sbx_community_members`, `sbx_grants`, `sbx_activity` ; `etat_personne()`, `cree_communaute()`, `ajoute_membre()`, `accorde()`, `capacites_accordees()`, `emet_activite()` dans `common/secubox_core/sbxid.py` ; 25 tests ; migré sur gk2 (sauvegarde `/var/backups/sbxid/sbx-avant-1517-*.db`) |
+| P2 – P7 | à faire |
+
 Migration SQL : additive seulement (nouvelles tables, aucune colonne supprimée),
 `CREATE TABLE IF NOT EXISTS` comme le schéma actuel, sauvegarde `.backup` avant
 (`sqlite` en WAL). Les `groups` de `secubox-users` (toujours vides) deviennent des
