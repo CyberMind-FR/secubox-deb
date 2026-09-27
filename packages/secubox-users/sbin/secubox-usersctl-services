@@ -19,7 +19,7 @@ processus : sans sudo, cela échouait, et en silence.
 LA DEMANDE ARRIVE SUR STDIN, EN JSON. La ligne sudoers est donc EXACTE (aucun
 argument autorisé), et le mot de passe ne passe jamais par argv :
 
-    {"service": "nextcloud|email|gitea|peertube",
+    {"service": "nextcloud|email|gitea|peertube|bbs",
      "action":  "etat|creer|retirer|activer|desactiver|reinitialiser",
      "user": "gk2", "email": "gk2@secubox.in", "nom": "Gk2",
      "password": "…"}                 # creer / reinitialiser seulement
@@ -384,7 +384,73 @@ class PeerTube:
                                                {"password": d["password"]}, jeton=j))
 
 
-ADAPTATEURS = {"nextcloud": Nextcloud, "email": Courriel, "gitea": Gitea, "peertube": PeerTube}
+# ── BBS (bbsctl, sous SON utilisateur) ───────────────────────────────────────
+# Une personne SBX OS entre à la BBS par la session du Hall (compte LIÉ) ; il
+# lui faut donc un compte BBS à elle — jusqu'ici seulement « liable », jamais
+# créé : gek, sans compte, manquait aux messages privés (#1521). Il reçoit le
+# mot de passe commun des services (entrée directe de secours).
+#
+# bbsctl tourne sous secubox-bbs : lancé en root, il réécrirait
+# /etc/secubox/secrets/bbs/passwd (0600) au nom de root et la BBS ne lirait
+# plus aucun mot de passe.
+
+class Bbs:
+    DB = Path("/var/lib/secubox/bbs/index.db")
+    CTL = ["runuser", "-u", "secubox-bbs", "--", "/usr/sbin/bbsctl"]
+
+    def _compte(self, user):
+        """(id, handle réel, désactivé) — le handle garde sa casse (« Ani.skywalker »)."""
+        import sqlite3
+        try:
+            c = sqlite3.connect(f"file:{self.DB}?mode=ro", uri=True, timeout=5)
+            try:
+                return c.execute("SELECT id, handle, disabled_at IS NOT NULL FROM users "
+                                 "WHERE handle = ? COLLATE NOCASE", (user,)).fetchone()
+            finally:
+                c.close()
+        except sqlite3.Error as e:
+            raise Indisponible(f"BBS illisible : {e}")
+
+    def _lance(self, args, entree=None):
+        rc, out, err = lance(self.CTL + args, entree=entree)
+        try:
+            r = json.loads(out or "{}")
+        except ValueError:
+            r = {}
+        if rc != 0 or not r.get("ok"):
+            raise Echec(r.get("error") or (err or out).strip()[-300:] or f"bbsctl : code {rc}")
+        return r
+
+    def etat(self, d):
+        r = self._compte(d["user"])
+        return {"existe": bool(r), "actif": (not r[2]) if r else None, "identifiant": r[1] if r else None}
+
+    def creer(self, d):
+        if self._compte(d["user"]):
+            raise Echec("le compte BBS existe déjà")      # « exist » : l'appelant le reprend
+        self._lance(["user-add", d["user"]], entree=d["password"])
+
+    def reinitialiser(self, d):
+        r = self._compte(d["user"])
+        if not r:
+            raise Echec(f"compte BBS inconnu : {d['user']}")
+        self._lance(["user-passwd", r[1]], entree=d["password"])
+
+    def desactiver(self, d):
+        r = self._compte(d["user"])
+        if not r:
+            raise Echec(f"compte BBS inconnu : {d['user']}")
+        self._lance(["user-disable", str(r[0])])
+
+    def activer(self, d):
+        raise NonPrisEnCharge("réactiver un compte BBS se fait dans la console sysop")
+
+    def retirer(self, d):
+        # Jamais supprimé : ses messages et ses fils garderaient un auteur fantôme.
+        raise NonPrisEnCharge("un compte BBS se désactive, il ne se supprime pas")
+
+
+ADAPTATEURS = {"nextcloud": Nextcloud, "email": Courriel, "gitea": Gitea, "peertube": PeerTube, "bbs": Bbs}
 
 
 def valide(d: dict) -> dict:

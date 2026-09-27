@@ -8,9 +8,15 @@ SecuBox-Deb :: SBX Identity — les comptes d'une PERSONNE dans les services (#1
 CyberMind — https://cybermind.fr
 
 Une personne SBX OS (user_uuid) a ses comptes Courriel, Nextcloud, PeerTube
-— créés par le helper root de secubox-users, le même que pour les comptes
-système — et son compte BBS, relié (jamais recréé). Tout est rangé dans
-sbx_app_links : la personne est la clé, les comptes lui appartiennent.
+et BBS — créés par le helper root de secubox-users, le même que pour les
+comptes système. Tout est rangé dans sbx_app_links : la personne est la clé,
+les comptes lui appartiennent.
+
+LA BBS EST UN SERVICE COMME LES AUTRES (#1521). Elle n'était que « liable » :
+une personne sans compte BBS (gek) n'avait rien à lier et manquait aux
+messages privés. Elle s'ouvre désormais d'un même geste. Un compte BBS relié
+à la main (cedre83, Ani.skywalker : comptes d'avant) garde SON mot de passe ;
+seul un compte ouvert d'ici reçoit le mot de passe commun.
 
 COMPTE EXISTANT RELIÉ (#1468) : un compte qui existait avant (la boîte
 gk2@secubox.in de l'exploitant, l'« admin » de Nextcloud) se RELIE à la
@@ -38,7 +44,7 @@ from typing import Any, Callable, Dict, List, Optional
 HELPER = ["sudo", "-n", "/usr/sbin/secubox-usersctl-services"]
 BBS_DB = Path("/var/lib/secubox/bbs/index.db")
 DOMAINE = os.environ.get("SBXID_DOMAINE_COURRIEL", "secubox.in")
-SERVICES = ("email", "nextcloud", "peertube")
+SERVICES = ("email", "nextcloud", "peertube", "bbs")
 LIBELLES = {"email": "Courriel + webmail", "nextcloud": "Nextcloud", "peertube": "PeerTube", "bbs": "BBS"}
 SYSTEME = {"root", "admin", "gk2", "operator"}
 RE_NOM = re.compile(r"^(?!.*\.\.)[a-z0-9][a-z0-9._-]{0,30}[a-z0-9_-]$")      # celui du helper, sans point final
@@ -79,6 +85,8 @@ def _demande(pseudo: str, svc: str, action: str, password: str = "") -> Dict[str
     """`pseudo` est le NOM DANS LE SERVICE : le pseudo SBX OS pour un compte
     ouvert d'ici, l'identifiant relié sinon (« gk2@secubox.in », « admin »)."""
     user, email = (pseudo.split("@", 1)[0], pseudo) if "@" in pseudo else (pseudo, adresse(pseudo))
+    if svc == "bbs":
+        user = user.lower()          # handle relié « Ani.skywalker » : la BBS compare sans la casse
     d = {"service": svc, "action": action, "user": user, "email": email, "nom": user}
     if password:
         d["password"] = password
@@ -111,6 +119,11 @@ def propres(c: sqlite3.Connection, uid: str) -> set:
         "SELECT cle FROM sbx_preferences WHERE user_uuid=? AND cle LIKE 'mdp_propre:%' AND valeur='1'", (uid,))}
 
 
+def ouvert_ici(c: sqlite3.Connection, uid: str, svc: str) -> bool:
+    return bool(c.execute("SELECT 1 FROM sbx_preferences WHERE user_uuid=? AND cle=? AND valeur='1'",
+                          (uid, f"ouvert_ici:{svc}")).fetchone())
+
+
 def _nom_service(c, uid, svc, pseudo) -> str:
     """Le nom dans le service : celui qui est relié, sinon celui d'ici."""
     l = liens(c, uid).get(svc) or []
@@ -131,6 +144,11 @@ def etat(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
                          "disponible": r.get("disponible", True) is not False or bool(r.get("endormi")),
                          "endormi": bool(r.get("endormi")),
                          "erreur": None if r.get("ok") else r.get("erreur")}
+        if svc == "bbs":
+            if r.get("ok") and (r.get("etat") or {}).get("identifiant"):
+                services[svc]["identifiant"] = r["etat"]["identifiant"]      # « Ani.skywalker »
+            # un lien BBS d'avant #1521 garde son mot de passe
+            services[svc]["propre"] = svc in l and not ouvert_ici(c, uid, "bbs")
     return {"pseudo": pseudo, "adresse": adresse(pseudo), "services": services, "bbs": l.get("bbs", [])}
 
 
@@ -139,6 +157,8 @@ def _pose_partout(c, uid, pseudo, pw, sauf: Optional[str] = None) -> Dict[str, A
     out = {}
     pr = propres(c, uid)
     for svc in liens(c, uid):
+        if svc == "bbs" and not ouvert_ici(c, uid, "bbs"):
+            continue                                   # lien BBS d'avant #1521 : son mot de passe reste le sien
         if svc in SERVICES and svc != sauf and svc not in pr:     # un compte relié garde SON mot de passe
             r = helper(_demande(_nom_service(c, uid, svc, pseudo), svc, "reinitialiser", pw))
             out[svc] = True if r.get("ok") else (r.get("erreur") or "échec")
@@ -166,6 +186,8 @@ def cree(c: sqlite3.Connection, uid: str, svcs: List[str]) -> Dict[str, Any]:
             ok = bool(helper(_demande(pseudo, svc, "reinitialiser", pw)).get("ok"))
         if ok:
             _lie(c, uid, svc, adresse(pseudo) if svc == "email" else pseudo)
+            if svc == "bbs":
+                c.execute("INSERT OR REPLACE INTO sbx_preferences VALUES (?,?,?)", (uid, "ouvert_ici:bbs", "1"))
         resultats[svc] = True if ok else (r.get("erreur") or "échec")
     return {"mot_de_passe": pw if any(v is True for v in resultats.values()) else None,
             "adresse": adresse(pseudo), "services": resultats}
@@ -217,8 +239,10 @@ def lie_existant(c: sqlite3.Connection, uid: str, svc: str, ident: str) -> str:
     r = c.execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (uid,)).fetchone()
     if not r:
         raise Refus(404, "Personne inconnue")
+    if svc == "bbs":
+        return lie_bbs(c, uid, ident)
     if svc not in SERVICES:
-        raise Refus(400, "Services : " + ", ".join(SERVICES) + " (BBS : lien BBS)")
+        raise Refus(400, "Services : " + ", ".join(SERVICES))
     ident = ident.strip()
     if svc == "email":
         ident = (ident if "@" in ident else adresse(ident)).lower()
