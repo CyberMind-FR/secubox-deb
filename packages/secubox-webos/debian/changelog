@@ -1,3 +1,11 @@
+secubox-webos (1.0.348-1~bookworm1) bookworm; urgency=medium
+
+  * Menu de connexion du Hall : « Mes identités » (accès, identité SBX OS
+    de l'appareil, Gestion des identités) remonte juste sous l'état de
+    session, avant l'affichage et l'aide ; invité inchangé (ref #1526).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 13:10:00 +0200
+
 secubox-webos (1.0.347-1~bookworm1) bookworm; urgency=medium
 
   * Hall : le domaine de la box est DÉDUIT de l'hôte, plus écrit en dur
