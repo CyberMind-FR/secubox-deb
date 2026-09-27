@@ -841,6 +841,10 @@ umount -lf "${ROOTFS}/dev"  2>/dev/null || true
 
 ok "Rootfs cleaned"
 
+# Source apt signée pour les mises à jour de la box installée (#1503) :
+# remplace le dépôt local 127.0.0.1 (trusted=yes) utilisé pour s'installer.
+bash "${SCRIPT_DIR}/apply-apt-source.sh" "${ROOTFS}" "${SUITE}"
+
 # ── Step 7: Create SquashFS ───────────────────────────────────────
 log "7/9 Creating SquashFS filesystem..."
 mkdir -p "${ISO_DIR}/live"
