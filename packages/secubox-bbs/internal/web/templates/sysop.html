@@ -185,10 +185,12 @@
   <p class="note">Un salon privé n'apparaît qu'à ses membres — les autres n'en
   soupçonnent pas l'existence. Le rang (« réservé aux membres ») et
   l'appartenance (« ouvert à ces personnes ») se cumulent : fermer un salon ne
-  change pas son rang.</p>
+  change pas son rang. Ouvert à une <b>communauté SBX OS</b>, il l'est à chacun
+  de ses membres dont le compte BBS est lié à son identité — les communautés se
+  gèrent dans l'Identity Manager.</p>
 
   <table>
-    <thead><tr><th>Salon</th><th>État</th><th>Membres</th><th>Convier</th><th>Inviter</th></tr></thead>
+    <thead><tr><th>Salon</th><th>État</th><th>Membres</th><th>Convier</th><th>Communautés</th><th>Inviter</th></tr></thead>
     <tbody>
     {{range .Cats}}<tr>
       <td><b>{{.Title}}</b> <span class="mono s33ee298">{{.Slug}}</span></td>
@@ -219,6 +221,30 @@
           <button class="btn sm" name="action" value="ajouter" type="submit">Convier</button>
           <button class="btn sm" name="action" value="retirer" type="submit">Retirer</button>
         </form>
+        {{else}}<span class="note">salon ouvert</span>{{end}}
+      </td>
+      <td>
+        {{if .Prive}}
+        {{$id := .ID}}
+        {{range index $.SalonComms .ID}}
+        <form method="post" action="/mod/salon-communaute" class="row">
+          <input type="hidden" name="csrf" value="{{$.V.CSRF}}">
+          <input type="hidden" name="id" value="{{$id}}">
+          <input type="hidden" name="communaute" value="{{.UUID}}">
+          <span class="pill p-local">{{.Nom}}</span>
+          <button class="btn sm" name="action" value="retirer" type="submit">Retirer</button>
+        </form>
+        {{end}}
+        {{if $.Communautes}}
+        <form method="post" action="/mod/salon-communaute" class="row">
+          <input type="hidden" name="csrf" value="{{$.V.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <select name="communaute" aria-label="Communauté à qui ouvrir le salon">
+            {{range $.Communautes}}<option value="{{.UUID}}">{{.Nom}}</option>{{end}}
+          </select>
+          <button class="btn sm" name="action" value="ajouter" type="submit">Ouvrir</button>
+        </form>
+        {{else}}<span class="note">aucune communauté SBX OS</span>{{end}}
         {{else}}<span class="note">salon ouvert</span>{{end}}
       </td>
       <td>

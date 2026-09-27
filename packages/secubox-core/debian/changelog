@@ -1,3 +1,13 @@
+secubox-core (1.5.21-1~bookworm1) bookworm; urgency=medium
+
+  * capacites_du_porteur : capacités = rôles ∪ autorisations de la
+    personne ∪ autorisations de ses communautés actives (Allow User +
+    Allow Community) ; base antérieure au P1 tolérée. sbxid :
+    l'administration (admin.*) ne s'accorde pas, elle vient du seul rôle
+    sbx_operator (ref #1519).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 12:30:00 +0200
+
 secubox-core (1.5.20-1~bookworm1) bookworm; urgency=medium
 
   * sbxid (Community Refactor P1) : tables sbx_communities,

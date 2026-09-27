@@ -578,6 +578,160 @@ def fixe_statut(user_uuid: str, s: Statut, ctx=Depends(exige_admin)):
     return store.personne(db(), user_uuid)
 
 
+# ── Communautés et autorisations (#1519, Community Refactor P2) ──────────────
+# « Allow User » + « Allow Community » : une capacité (qui nomme son module)
+# accordée à une personne ou à une communauté. Les règles vivent dans
+# secubox_core.sbxid ; ici seulement la garde, le journal et les activités.
+
+def _origine() -> str:
+    n = _noeud()
+    return n.did if n else "did:plc:" + "0" * 32
+
+
+def _refus(f, *a, **k):
+    try:
+        return f(*a, **k)
+    except S.Refus as e:
+        raise HTTPException(400, str(e))
+
+
+def _communaute(cid: str) -> Dict[str, Any]:
+    r = db().execute("SELECT * FROM sbx_communities WHERE community_uuid=?", (cid,)).fetchone()
+    if not r:
+        raise HTTPException(404, "Communauté inconnue")
+    d = dict(r)
+    d["members"] = S.membres(db(), cid)
+    d["grants"] = [dict(g) for g in db().execute(
+        "SELECT grant_uuid, capability, granted_by, granted_at FROM sbx_grants "
+        "WHERE subject_kind='community' AND subject_id=? AND revoked_at IS NULL ORDER BY capability", (cid,))]
+    return d
+
+
+@app.get("/admin/capacites")
+def liste_capacites(ctx=Depends(exige_admin)):
+    """Ce qui peut s'accorder : les capacités SBX OS, rangées par module."""
+    par_module: Dict[str, List[str]] = {}
+    for c in S.CAPACITES:
+        par_module.setdefault(c.split(".", 1)[0], []).append(c)
+    return {"capacites": list(S.CAPACITES), "modules": par_module}
+
+
+@app.get("/admin/communautes")
+def communautes(ctx=Depends(exige_admin), archivees: bool = False):
+    q = ("SELECT c.*, (SELECT count(*) FROM sbx_community_members m WHERE m.community_uuid=c.community_uuid) AS n_members "
+         "FROM sbx_communities c " + ("" if archivees else "WHERE c.archived_at IS NULL ") + "ORDER BY c.name")
+    return {"communautes": [dict(r) for r in db().execute(q)]}
+
+
+class NouvelleCommunaute(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    visibility: str = Field(default="private", pattern=r"^(private|invited|public)$")
+    description: str = Field(default="", max_length=500)
+    portrait: Optional[str] = Field(default=None, max_length=64)
+
+
+@app.post("/admin/communautes")
+def cree_communaute(n: NouvelleCommunaute, ctx=Depends(exige_admin)):
+    cid = _refus(S.cree_communaute, db(), n.name, home_node=_origine(), created_by=_acteur(ctx),
+                 visibility=n.visibility, description=n.description, portrait=n.portrait)
+    store.journal(db(), _acteur(ctx), "community.created", f"{n.name.strip()} · {n.visibility}")
+    return _communaute(cid)
+
+
+@app.get("/admin/communautes/{cid}")
+def communaute(cid: str, ctx=Depends(exige_admin)):
+    return _communaute(cid)
+
+
+@app.post("/admin/communautes/{cid}/archiver")
+def archive_communaute(cid: str, ctx=Depends(exige_admin)):
+    c = _communaute(cid)
+    db().execute("UPDATE sbx_communities SET archived_at=? WHERE community_uuid=? AND archived_at IS NULL",
+                 (int(time.time()), cid))
+    store.journal(db(), _acteur(ctx), "community.archived", c["name"])
+    return _communaute(cid)
+
+
+class Appartenance(BaseModel):
+    role: str = Field(default="member", pattern=r"^(owner|moderator|member)$")
+
+
+@app.put("/admin/communautes/{cid}/membres/{user_uuid}")
+def ajoute_membre(cid: str, user_uuid: str, a: Appartenance, ctx=Depends(exige_admin)):
+    c = _communaute(cid)
+    deja = any(m["user_uuid"] == user_uuid for m in c["members"])
+    _refus(S.ajoute_membre, db(), cid, user_uuid, role=a.role, added_by=_acteur(ctx))
+    pseudo = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (user_uuid,)).fetchone()[0]
+    store.journal(db(), _acteur(ctx), "community.member", f"{c['name']} : {pseudo} ({a.role})")
+    if not deja:
+        S.emet_activite(db(), "community_joined", author=user_uuid, visibility="community",
+                        community_uuid=cid, origin_node=_origine(), context={"role": a.role})
+    return _communaute(cid)
+
+
+@app.delete("/admin/communautes/{cid}/membres/{user_uuid}")
+def retire_membre(cid: str, user_uuid: str, ctx=Depends(exige_admin)):
+    c = _communaute(cid)
+    if not S.retire_membre(db(), cid, user_uuid):
+        raise HTTPException(404, "Cette personne n'est pas membre")
+    pseudo = (db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (user_uuid,)).fetchone() or ["?"])[0]
+    store.journal(db(), _acteur(ctx), "community.member.removed", f"{c['name']} : {pseudo}")
+    return _communaute(cid)
+
+
+class Autorisation(BaseModel):
+    subject_kind: str = Field(pattern=r"^(user|community)$")
+    subject_id: str = Field(min_length=36, max_length=36)
+    capability: str = Field(min_length=3, max_length=64)
+
+
+def _sujet(kind: str, sid: str) -> str:
+    t, col = ("sbx_users", "pseudo") if kind == "user" else ("sbx_communities", "name")
+    k = "user_uuid" if kind == "user" else "community_uuid"
+    r = db().execute(f"SELECT {col} FROM {t} WHERE {k}=?", (sid,)).fetchone()
+    return r[0] if r else "?"
+
+
+@app.post("/admin/autorisations")
+def accorde(a: Autorisation, ctx=Depends(exige_admin)):
+    gid = _refus(S.accorde, db(), a.subject_kind, a.subject_id, a.capability, granted_by=_acteur(ctx))
+    nom = _sujet(a.subject_kind, a.subject_id)
+    store.journal(db(), _acteur(ctx), "grant.issued", f"{a.capability} → {a.subject_kind} {nom}")
+    S.emet_activite(db(), "permission_granted", author=_acteur(ctx), visibility="node",
+                    origin_node=_origine(),
+                    context={"capability": a.capability.strip().lower(), "subject_kind": a.subject_kind,
+                             "subject": a.subject_id})
+    return {"grant_uuid": gid}
+
+
+@app.delete("/admin/autorisations/{grant_uuid}")
+def revoque(grant_uuid: str, ctx=Depends(exige_admin)):
+    g = db().execute("SELECT subject_kind, subject_id, capability FROM sbx_grants WHERE grant_uuid=?",
+                     (grant_uuid,)).fetchone()
+    if not g or not S.revoque_autorisation(db(), grant_uuid):
+        raise HTTPException(404, "Autorisation inconnue ou déjà retirée")
+    store.journal(db(), _acteur(ctx), "grant.revoked", f"{g[2]} ✕ {g[0]} {_sujet(g[0], g[1])}")
+    return {"ok": True}
+
+
+@app.get("/admin/personnes/{user_uuid}/autorisations")
+def autorisations_de(user_uuid: str, ctx=Depends(exige_admin)):
+    """D'où vient chaque capacité : directe, ou par quelle communauté."""
+    if not db().execute("SELECT 1 FROM sbx_users WHERE user_uuid=?", (user_uuid,)).fetchone():
+        raise HTTPException(404, "Personne inconnue")
+    directes = [dict(r) for r in db().execute(
+        "SELECT grant_uuid, capability, granted_by, granted_at FROM sbx_grants WHERE subject_kind='user' "
+        "AND subject_id=? AND revoked_at IS NULL ORDER BY capability", (user_uuid,))]
+    par_communaute = [dict(r) for r in db().execute(
+        "SELECT g.grant_uuid, g.capability, c.community_uuid, c.name AS community FROM sbx_grants g "
+        "JOIN sbx_community_members m ON g.subject_kind='community' AND g.subject_id=m.community_uuid "
+        "JOIN sbx_communities c ON c.community_uuid=m.community_uuid "
+        "WHERE g.revoked_at IS NULL AND c.archived_at IS NULL AND m.user_uuid=? ORDER BY g.capability",
+        (user_uuid,))]
+    return {"directes": directes, "par_communaute": par_communaute,
+            "effectives": (store.personne(db(), user_uuid) or {}).get("capabilities", [])}
+
+
 @app.get("/admin/journal")
 def journal(ctx=Depends(exige_admin), n: int = 100):
     return {"evenements": [dict(r) for r in db().execute(

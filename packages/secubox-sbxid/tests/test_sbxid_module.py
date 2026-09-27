@@ -414,3 +414,40 @@ def test_ua_tronque_1472():
     base = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_6_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
     assert store.agent_court(base + "Cr") == "iOS 26.6 · Chrome"
     assert store.agent_court(base.replace("26_6_0", "18_7") + "Vers") == "iOS 18.7 · Safari"
+
+
+def test_communautes_et_autorisations_1519(banc):
+    ctx = main.exige_admin(_req("tok-g"))
+    alice = next(p for p in main.personnes(ctx)["personnes"] if p["pseudo"] == "alice")
+    k = main.cree_communaute(main.NouvelleCommunaute(name="Chorale", visibility="invited"), ctx)
+    assert k["name"] == "Chorale" and k["members"] == [] and k["home_node"].startswith("did:plc:")
+    with pytest.raises(HTTPException) as e:
+        main.cree_communaute(main.NouvelleCommunaute(name="chorale"), ctx)       # unicité sans casse
+    assert e.value.status_code == 400
+    cid = k["community_uuid"]
+    k = main.ajoute_membre(cid, alice["user_uuid"], main.Appartenance(role="moderator"), ctx)
+    assert k["members"][0]["role"] == "moderator"
+    main.accorde(main.Autorisation(subject_kind="community", subject_id=cid, capability="radio.chat"), ctx)
+    main.accorde(main.Autorisation(subject_kind="user", subject_id=alice["user_uuid"],
+                                   capability="peertube.upload"), ctx)
+    with pytest.raises(HTTPException) as e:                       # l'administration vient du rôle
+        main.accorde(main.Autorisation(subject_kind="community", subject_id=cid, capability="admin.users"), ctx)
+    assert e.value.status_code == 400
+    p = store.personne(main.db(), alice["user_uuid"])
+    assert {"radio.chat", "peertube.upload"} <= set(p["capabilities"])
+    assert p["etat"] == "community_assigned" and p["communities"][0]["name"] == "Chorale"
+    a = main.autorisations_de(alice["user_uuid"], ctx)
+    assert [g["capability"] for g in a["directes"]] == ["peertube.upload"]
+    assert a["par_communaute"][0]["community"] == "Chorale"
+    kinds = [r[0] for r in main.db().execute("SELECT kind FROM sbx_activity ORDER BY at")]
+    assert "community_joined" in kinds and "permission_granted" in kinds
+    # Archiver la communauté retire ce qu'elle donnait.
+    main.archive_communaute(cid, ctx)
+    p = store.personne(main.db(), alice["user_uuid"])
+    assert "radio.chat" not in p["granted"] and "peertube.upload" in p["granted"]
+    ev = {e["event"] for e in main.journal(ctx)["evenements"]}
+    assert {"community.created", "community.member", "grant.issued", "community.archived"} <= ev
+    # Réservé aux administrateurs.
+    with pytest.raises(HTTPException) as e:
+        main.exige_admin(_req("tok-a"))
+    assert e.value.status_code == 403

@@ -85,10 +85,19 @@ func (s *Store) PeutVoirSalon(catID, userID int64, sysop bool) (bool, error) {
 	err = s.db.QueryRow(
 		`SELECT 1 FROM salon_membres WHERE category_id = ? AND user_id = ?`,
 		catID, userID).Scan(&un)
-	if errors.Is(err, sql.ErrNoRows) {
+	if err == nil {
+		return true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	// Pas convie nommement : peut-etre par une de ses communautes (#1519).
+	// Une erreur de lecture de sbx.db REFUSE : on cache trop, jamais trop peu.
+	ouverts, err := s.salonsOuvertsParCommunaute(userID)
+	if err != nil {
 		return false, nil
 	}
-	return err == nil, err
+	return ouverts[catID], nil
 }
 
 // SalonsCachesPour rend les salons que cette personne ne doit PAS voir.
@@ -120,7 +129,19 @@ func (s *Store) SalonsCachesPour(userID int64, sysop bool) (map[int64]bool, erro
 		}
 		caches[id] = true
 	}
-	return caches, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// OUVERTS PAR UNE COMMUNAUTE (#1519, D4). Une erreur de lecture de sbx.db
+	// laisse la liste telle quelle : les salons restent caches.
+	if len(caches) > 0 && userID > 0 {
+		if ouverts, err := s.salonsOuvertsParCommunaute(userID); err == nil {
+			for id := range ouverts {
+				delete(caches, id)
+			}
+		}
+	}
+	return caches, nil
 }
 
 // MembresDuSalon liste qui a acces, pour la console du sysop.

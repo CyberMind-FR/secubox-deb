@@ -1,3 +1,15 @@
+secubox-sbxid (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Communautés et autorisations (Community Refactor P2) : API
+    /admin/communautes (création, membres et rôles, archivage),
+    /admin/autorisations (Allow User / Allow Community), /admin/capacites,
+    /admin/personnes/{u}/autorisations ; journal et activités
+    community_joined / permission_granted. Identity Manager : onglet «
+    Communautés » ; « Mon identité » montre l'état de cycle de vie et les
+    communautés (ref #1519).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 12:30:00 +0200
+
 secubox-sbxid (0.3.9-1~bookworm1) bookworm; urgency=medium
 
   * Sessions d'appareil et inventaire : user_agent sur 300 caractères

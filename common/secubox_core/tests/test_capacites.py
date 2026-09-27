@@ -111,3 +111,47 @@ def test_compte_lie(banc, tmp_path):
     assert C.compte_lie({"sub": "sbx-z", "jti": "j-membre"}, "bbs") == "cedre83"
     assert C.compte_lie({"sub": "sbx-z", "jti": "j-membre"}, "email") is None
     assert C.compte_lie({"sub": "sbx-z", "jti": "j-revoque"}, "bbs") is None
+
+
+# ── Allow User + Allow Community (#1519) ─────────────────────────────────────
+
+def _uid(pseudo, chemin):
+    db = sqlite3.connect(chemin, isolation_level=None)
+    return db, db.execute("SELECT user_uuid FROM sbx_users WHERE pseudo=?", (pseudo,)).fetchone()[0]
+
+
+def test_autorisation_directe_s_ajoute_aux_roles(banc, tmp_path):
+    db, bob = _uid("bob", tmp_path / "sbx.db")
+    invite = {"sub": "sbx-z", "jti": "j-invite"}
+    assert "radio.chat" not in C.capacites_du_porteur(invite)
+    S.accorde(db, "user", bob, "radio.chat", granted_by="test")
+    C._CACHE.clear()
+    caps = C.capacites_du_porteur(invite)
+    assert "radio.chat" in caps and "radio.listen" in caps     # rôle guest conservé
+
+
+def test_autorisation_de_communaute_et_archivage(banc, tmp_path):
+    db, bob = _uid("bob", tmp_path / "sbx.db")
+    k = S.cree_communaute(db, "Chorale", home_node="n", created_by="test")
+    S.ajoute_membre(db, k, bob, added_by="test")
+    S.accorde(db, "community", k, "bbs.write", granted_by="test")
+    C._CACHE.clear()
+    assert "bbs.write" in C.capacites_du_porteur({"sub": "sbx-z", "jti": "j-invite"})
+    db.execute("UPDATE sbx_communities SET archived_at=1 WHERE community_uuid=?", (k,))
+    C._CACHE.clear()
+    assert "bbs.write" not in C.capacites_du_porteur({"sub": "sbx-z", "jti": "j-invite"})
+
+
+def test_appareil_revoque_ne_recoit_aucune_autorisation(banc, tmp_path):
+    db, eve = _uid("eve", tmp_path / "sbx.db")
+    S.accorde(db, "user", eve, "radio.chat", granted_by="test")
+    C._CACHE.clear()
+    assert C.capacites_du_porteur({"sub": "sbx-z", "jti": "j-revoque"}) == set()
+
+
+def test_base_anterieure_sans_tables_p1(banc, tmp_path):
+    db = sqlite3.connect(tmp_path / "sbx.db", isolation_level=None)
+    for t in ("sbx_grants", "sbx_community_members", "sbx_communities"):
+        db.execute(f"DROP TABLE {t}")
+    C._CACHE.clear()
+    assert "billets.publish" in C.capacites_du_porteur({"sub": "sbx-z", "jti": "j-membre"})

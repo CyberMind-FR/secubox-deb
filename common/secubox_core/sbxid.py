@@ -640,6 +640,11 @@ def accorde(conn, subject_kind: str, subject_id: str, capability: str, *, grante
     cap = valide_capacite(capability)
     if cap not in CAPACITES:
         raise Refus(f"capacité inconnue : {cap!r}")
+    # L'administration ne s'accorde pas à la pièce (#1519) : elle vient du seul
+    # rôle sbx_operator. Sinon une communauté entière deviendrait administratrice
+    # et l'état node_admin (dérivé du rôle) mentirait.
+    if cap.startswith("admin."):
+        raise Refus(f"{cap!r} vient du rôle sbx_operator, pas d'une autorisation")
     if subject_kind == "user":
         if conn.execute("SELECT 1 FROM sbx_users WHERE user_uuid=?", (subject_id,)).fetchone() is None:
             raise Refus("personne inconnue")
