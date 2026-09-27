@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time as _time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -458,6 +459,37 @@ CREATE TABLE IF NOT EXISTS sbx_migrations (
   state TEXT NOT NULL CHECK (state IN ('requested','accepted','released','transferred','finalized','refused')),
   certificate TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sbx_audit (at INTEGER NOT NULL, actor TEXT NOT NULL, event TEXT NOT NULL, detail TEXT);
+-- Community Refactor P1 (#1517, docs/sbxos/AUDIT-COMMUNITY-REFACTOR.md §8).
+-- Une communauté appartient à ses membres, jamais au matériel : home_node dit
+-- seulement quel nœud fait autorité sur sa fiche (comme sbx_users.home_node).
+CREATE TABLE IF NOT EXISTS sbx_communities (
+  community_uuid TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, description TEXT,
+  portrait TEXT, visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','invited','public')),
+  home_node TEXT NOT NULL, epoch INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT, created_at INTEGER NOT NULL, archived_at INTEGER);
+CREATE TABLE IF NOT EXISTS sbx_community_members (
+  community_uuid TEXT NOT NULL REFERENCES sbx_communities, user_uuid TEXT NOT NULL REFERENCES sbx_users,
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner','moderator','member')),
+  added_by TEXT, added_at INTEGER NOT NULL, PRIMARY KEY (community_uuid, user_uuid));
+-- Autorisation accordée à une personne OU à une communauté. La capacité porte
+-- déjà le module (« bbs.read », « radio.chat »…) : pas de colonne module.
+-- Même garde que sbx_capabilities : jamais ssh, sudo, root ni system.
+CREATE TABLE IF NOT EXISTS sbx_grants (
+  grant_uuid TEXT PRIMARY KEY, subject_kind TEXT NOT NULL CHECK (subject_kind IN ('user','community')),
+  subject_id TEXT NOT NULL, capability TEXT NOT NULL REFERENCES sbx_capabilities CHECK (
+    lower(capability) NOT GLOB 'ssh*' AND lower(capability) NOT GLOB 'sudo*' AND
+    lower(capability) NOT GLOB 'root*' AND lower(capability) NOT GLOB 'system.*'),
+  granted_by TEXT, granted_at INTEGER NOT NULL, revoked_at INTEGER);
+CREATE INDEX IF NOT EXISTS sbx_grants_sujet ON sbx_grants (subject_kind, subject_id);
+CREATE TABLE IF NOT EXISTS sbx_activity (
+  activity_uuid TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN (
+    'user_joined','community_joined','file_shared','bbs_post','radio_live',
+    'mood_changed','avatar_changed','permission_granted')),
+  author TEXT NOT NULL, community_uuid TEXT, context TEXT,
+  visibility TEXT NOT NULL CHECK (visibility IN ('private','community','node','public')),
+  at INTEGER NOT NULL, origin_node TEXT NOT NULL,
+  CHECK (visibility <> 'community' OR community_uuid IS NOT NULL));
+CREATE INDEX IF NOT EXISTS sbx_activity_at ON sbx_activity (at);
 """
 
 
@@ -475,3 +507,198 @@ def initialise(conn) -> None:
         for c in caps:
             conn.execute("INSERT OR IGNORE INTO sbx_role_capabilities VALUES (?,?)", (r, c))
     conn.commit()
+
+
+# ── Community Refactor P1 (#1517) ────────────────────────────────────────────
+# Fonctions PURES sur une connexion sqlite déjà initialisée. Aucune n'est encore
+# appelée par un service : P2 branche les autorisations dans capacites.py, P4 les
+# producteurs d'activités. Voir docs/sbxos/AUDIT-COMMUNITY-REFACTOR.md.
+
+# Les six états du cycle de vie (mission §1). Ce ne sont PAS une colonne de
+# plus : ils se DÉDUISENT des données qui existent déjà (statut, rôles,
+# appartenances), pour qu'aucun état stocké ne puisse diverger de la réalité.
+ETATS_PERSONNE = ("guest", "invitation_requested", "invited", "member",
+                  "community_assigned", "node_admin")
+# Hors du cycle : une personne suspendue ou partie n'est dans aucun des six.
+ETATS_HORS_CYCLE = ("suspended", "departed", "deleted")
+
+VISIBILITES_COMMUNAUTE = ("private", "invited", "public")
+ROLES_COMMUNAUTE = ("owner", "moderator", "member")
+GENRES_ACTIVITE = ("user_joined", "community_joined", "file_shared", "bbs_post",
+                   "radio_live", "mood_changed", "avatar_changed", "permission_granted")
+VISIBILITES_ACTIVITE = ("private", "community", "node", "public")
+
+_NOM_COMMUNAUTE = re.compile(r"^[\w][\w .'’&+-]{0,59}$", re.UNICODE)
+
+
+def _horloge() -> int:
+    return int(_time.time())
+
+
+def etat_personne(conn, user_uuid: Optional[str], *, demande_en_attente: bool = False) -> str:
+    """Projette l'état de cycle de vie d'une personne depuis l'existant.
+
+    - pas de fiche : ``invitation_requested`` si un appareil attend une décision
+      (``Demande.etat == en_attente`` dans l'accès), sinon ``guest`` ;
+    - ``status = invited`` : ``invited`` ;
+    - rôle ``sbx_operator`` : ``node_admin`` (c'est lui qui porte ``admin.users``) ;
+    - membre d'au moins une communauté active : ``community_assigned`` ;
+    - tout rôle au-delà de ``guest`` : ``member`` ; sinon ``guest``.
+    Suspendue, partie ou supprimée : l'état hors cycle correspondant.
+    """
+    ligne = None
+    if user_uuid:
+        ligne = conn.execute("SELECT status FROM sbx_users WHERE user_uuid=?",
+                             (user_uuid,)).fetchone()
+    if ligne is None:
+        return "invitation_requested" if demande_en_attente else "guest"
+    statut = ligne[0]
+    if statut in ETATS_HORS_CYCLE:
+        return statut
+    if statut == "invited":
+        return "invited"
+    roles = {r for (r,) in conn.execute(
+        "SELECT role_id FROM sbx_user_roles WHERE user_uuid=?", (user_uuid,))}
+    if "sbx_operator" in roles:
+        return "node_admin"
+    if conn.execute(
+            "SELECT 1 FROM sbx_community_members m JOIN sbx_communities c USING (community_uuid) "
+            "WHERE m.user_uuid=? AND c.archived_at IS NULL LIMIT 1", (user_uuid,)).fetchone():
+        return "community_assigned"
+    if roles - {"guest"}:
+        return "member"
+    return "guest"
+
+
+def cree_communaute(conn, name: str, *, home_node: str, created_by: str,
+                    visibility: str = "private", description: str = "",
+                    portrait: Optional[str] = None) -> str:
+    """Crée une communauté ; rend son uuid. Le créateur n'en devient pas membre
+    d'office : c'est ``ajoute_membre(..., role="owner")`` qui le décide."""
+    nom = (name or "").strip()
+    if not _NOM_COMMUNAUTE.match(nom):
+        raise Refus(f"nom de communauté invalide : {nom!r} (1 à 60 caractères)")
+    if nom.lower() in COMPTES_SYSTEME:
+        raise Refus(f"{nom!r} est un nom de compte système")
+    if visibility not in VISIBILITES_COMMUNAUTE:
+        raise Refus(f"visibilité inconnue : {visibility!r}")
+    cid = str(uuid.uuid4())
+    try:
+        conn.execute(
+            "INSERT INTO sbx_communities (community_uuid,name,description,portrait,visibility,"
+            "home_node,created_by,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (cid, nom, description or None, portrait, visibility, home_node, created_by, _horloge()))
+    except Exception as e:  # sqlite3.IntegrityError sans importer sqlite3 ici
+        raise Refus(f"communauté {nom!r} déjà existante") from e
+    return cid
+
+
+def _communaute_active(conn, community_uuid: str) -> None:
+    r = conn.execute("SELECT archived_at FROM sbx_communities WHERE community_uuid=?",
+                     (community_uuid,)).fetchone()
+    if r is None:
+        raise Refus("communauté inconnue")
+    if r[0] is not None:
+        raise Refus("communauté archivée")
+
+
+def ajoute_membre(conn, community_uuid: str, user_uuid: str, *,
+                  role: str = "member", added_by: str) -> None:
+    """Ajoute (ou change le rôle d') une personne ACTIVE dans une communauté."""
+    if role not in ROLES_COMMUNAUTE:
+        raise Refus(f"rôle de communauté inconnu : {role!r}")
+    _communaute_active(conn, community_uuid)
+    p = conn.execute("SELECT status FROM sbx_users WHERE user_uuid=?", (user_uuid,)).fetchone()
+    if p is None:
+        raise Refus("personne inconnue")
+    if p[0] != "active":
+        raise Refus(f"personne non active ({p[0]})")
+    conn.execute(
+        "INSERT INTO sbx_community_members (community_uuid,user_uuid,role,added_by,added_at) "
+        "VALUES (?,?,?,?,?) ON CONFLICT (community_uuid,user_uuid) DO UPDATE SET role=excluded.role",
+        (community_uuid, user_uuid, role, added_by, _horloge()))
+
+
+def retire_membre(conn, community_uuid: str, user_uuid: str) -> bool:
+    return conn.execute("DELETE FROM sbx_community_members WHERE community_uuid=? AND user_uuid=?",
+                        (community_uuid, user_uuid)).rowcount > 0
+
+
+def membres(conn, community_uuid: str) -> List[Dict[str, Any]]:
+    return [{"user_uuid": u, "pseudo": p, "role": r} for (u, p, r) in conn.execute(
+        "SELECT m.user_uuid, u.pseudo, m.role FROM sbx_community_members m "
+        "JOIN sbx_users u USING (user_uuid) WHERE m.community_uuid=? ORDER BY u.pseudo",
+        (community_uuid,))]
+
+
+def accorde(conn, subject_kind: str, subject_id: str, capability: str, *, granted_by: str) -> str:
+    """« Allow User » / « Allow Community » : une capacité (qui nomme déjà son
+    module) pour une personne ou une communauté. Idempotent : une autorisation
+    active identique n'est pas dupliquée."""
+    if subject_kind not in ("user", "community"):
+        raise Refus(f"sujet inconnu : {subject_kind!r}")
+    cap = valide_capacite(capability)
+    if cap not in CAPACITES:
+        raise Refus(f"capacité inconnue : {cap!r}")
+    if subject_kind == "user":
+        if conn.execute("SELECT 1 FROM sbx_users WHERE user_uuid=?", (subject_id,)).fetchone() is None:
+            raise Refus("personne inconnue")
+    else:
+        _communaute_active(conn, subject_id)
+    deja = conn.execute(
+        "SELECT grant_uuid FROM sbx_grants WHERE subject_kind=? AND subject_id=? AND capability=? "
+        "AND revoked_at IS NULL", (subject_kind, subject_id, cap)).fetchone()
+    if deja:
+        return deja[0]
+    gid = str(uuid.uuid4())
+    conn.execute("INSERT INTO sbx_grants (grant_uuid,subject_kind,subject_id,capability,granted_by,"
+                 "granted_at) VALUES (?,?,?,?,?,?)",
+                 (gid, subject_kind, subject_id, cap, granted_by, _horloge()))
+    return gid
+
+
+def revoque_autorisation(conn, grant_uuid: str) -> bool:
+    return conn.execute("UPDATE sbx_grants SET revoked_at=? WHERE grant_uuid=? AND revoked_at IS NULL",
+                        (_horloge(), grant_uuid)).rowcount > 0
+
+
+def capacites_accordees(conn, user_uuid: str) -> set:
+    """Capacités accordées à la personne ET à ses communautés actives, hors
+    rôles. P2 les ajoutera à ``capacites_du_porteur`` ; une personne suspendue
+    n'en reçoit aucune."""
+    st = conn.execute("SELECT status FROM sbx_users WHERE user_uuid=?", (user_uuid,)).fetchone()
+    if st is None or st[0] != "active":
+        return set()
+    caps = {c for (c,) in conn.execute(
+        "SELECT capability FROM sbx_grants WHERE revoked_at IS NULL AND subject_kind='user' "
+        "AND subject_id=?", (user_uuid,))}
+    caps |= {c for (c,) in conn.execute(
+        "SELECT g.capability FROM sbx_grants g "
+        "JOIN sbx_community_members m ON g.subject_kind='community' AND g.subject_id=m.community_uuid "
+        "JOIN sbx_communities c ON c.community_uuid=m.community_uuid "
+        "WHERE g.revoked_at IS NULL AND c.archived_at IS NULL AND m.user_uuid=?", (user_uuid,))}
+    return caps
+
+
+def emet_activite(conn, kind: str, *, author: str, visibility: str, origin_node: str,
+                  context: Optional[Dict[str, Any]] = None,
+                  community_uuid: Optional[str] = None) -> str:
+    """Inscrit une activité (auteur, contexte, visibilité, horodatage, nœud
+    d'origine). Le contexte suit la forme canonique : pas de flottant, pour
+    pouvoir voyager signé entre boxes (P7)."""
+    if kind not in GENRES_ACTIVITE:
+        raise Refus(f"genre d'activité inconnu : {kind!r}")
+    if visibility not in VISIBILITES_ACTIVITE:
+        raise Refus(f"visibilité inconnue : {visibility!r}")
+    if visibility == "community" and not community_uuid:
+        raise Refus("une activité de communauté nomme sa communauté")
+    if not origin_node:
+        raise Refus("nœud d'origine requis")
+    ctx = None
+    if context is not None:
+        ctx = canonical_bytes(context).decode("ascii")
+    aid = str(uuid.uuid4())
+    conn.execute("INSERT INTO sbx_activity (activity_uuid,kind,author,community_uuid,context,"
+                 "visibility,at,origin_node) VALUES (?,?,?,?,?,?,?,?)",
+                 (aid, kind, author, community_uuid, ctx, visibility, _horloge(), origin_node))
+    return aid
