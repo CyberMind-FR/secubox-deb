@@ -847,6 +847,8 @@ bash "${SCRIPT_DIR}/apply-memory-policy.sh" "${ROOTFS}"
 # Arbitrages de services : dnsmasq confisquait le port 53 et faisait
 # tomber unbound ET lxc-net d'un coup (#1308).
 bash "${SCRIPT_DIR}/apply-service-policy.sh" "${ROOTFS}"
+# Source apt signée pour les mises à jour de la box (#1503).
+bash "${SCRIPT_DIR}/apply-apt-source.sh" "${ROOTFS}" "${SUITE}"
 
 
 # ── Nginx cleanup after package install ──────────────────────────────────

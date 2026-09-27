@@ -3453,6 +3453,8 @@ ok "Permissions fixed"
 # Arbitrages de services, comme l'image VM (#1491) : dnsmasq confisquait le
 # port 53 et échouait au démarrage du live (unbound le tient).
 bash "${SCRIPT_DIR}/apply-service-policy.sh" "${ROOTFS}"
+# Source apt signée pour les mises à jour de la box (#1503).
+bash "${SCRIPT_DIR}/apply-apt-source.sh" "${ROOTFS}" "${SUITE}"
 
 # Squelette de /var/lib/secubox (#1478) : figé ICI, après tous les postinst,
 # recopié au démarrage dans le tmpfs par secubox-varlib-seed.service.
