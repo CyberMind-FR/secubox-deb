@@ -1,0 +1,14 @@
+secubox-premier-pas (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier paquet (#1522), couche 1 de la maquette validée
+    (docs/design/premier-pas-maquette.html) : schéma du profil (profil.toml,
+    9 étapes, horloge avant administrateur, jamais de mot de passe en
+    clair), moteur premier-pasctl (examiner, plan, appliquer, etat,
+    silencieux) qui pilote les outils existants et s'arrête à la première
+    erreur, service de premier démarrage (profil prêt appliqué sans écran,
+    sinon reprise à l'étape manquante ; /boot/secubox/profil.toml, clé
+    SBXPROFIL, secubox.profil=), et secubox-majauto : mises à jour nocturnes
+    des seuls paquets SecuBox depuis apt.secubox.in. Box déjà configurée :
+    marquée faite à l'installation, l'assistant ne s'y ouvre pas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 18:00:00 +0200

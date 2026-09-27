@@ -1,0 +1,19 @@
+[Unit]
+Description=SecuBox — premier démarrage : profil prêt appliqué, sinon assistant (#1522)
+# Après le réseau et avant le kiosque/la console, qui lisent son état.
+After=network-online.target secubox-firstboot.service
+Wants=network-online.target
+Before=secubox-kiosk.service secubox-console.service
+ConditionPathExists=!/var/lib/secubox/.premier-pas-fait
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Clé USB « SBXPROFIL » : montée en lecture seule le temps de la lire.
+ExecStartPre=-/bin/sh -c 'd=/dev/disk/by-label/SBXPROFIL; m=/run/secubox/premier-pas/usb; [ -e "$d" ] && mkdir -p "$m" && mount -o ro "$d" "$m"'
+ExecStart=/usr/sbin/premier-pasctl silencieux
+ExecStopPost=-/bin/sh -c 'mountpoint -q /run/secubox/premier-pas/usb && umount /run/secubox/premier-pas/usb'
+TimeoutStartSec=2h
+
+[Install]
+WantedBy=multi-user.target

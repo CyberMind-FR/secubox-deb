@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox-Deb :: secubox-majauto — mises à jour SecuBox automatiques (#1522)
+#
+# Ne met à jour QUE les paquets SecuBox (secubox-*, sbxos*) venus du dépôt
+# signé apt.secubox.in, avec leurs nouvelles dépendances. Le reste du système
+# suit la politique Debian de l'administrateur. Les fichiers de configuration
+# locaux sont gardés (--force-confold) : jamais d'écrasement à l'aveugle.
+# Heure : minuterie secubox-majauto.timer (réglée par l'étape « Mises à jour »).
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+JOURNAL=/var/log/secubox/majauto.log
+mkdir -p "$(dirname "$JOURNAL")"
+exec >>"$JOURNAL" 2>&1
+echo "── $(date -Is) ──"
+# Si dpkg est occupé (une installation à la main), apt attend jusqu'à 10 min.
+LOCK=(-o DPkg::Lock::Timeout=600)
+apt-get "${LOCK[@]}" update -q -o Acquire::Retries=3
+mapfile -t PAQUETS < <(apt list --upgradable 2>/dev/null | awk -F/ '/^(secubox-|sbxos)/{print $1}')
+if [ "${#PAQUETS[@]}" -eq 0 ]; then
+    echo "à jour"; exit 0
+fi
+echo "à mettre à jour (${#PAQUETS[@]}) : ${PAQUETS[*]}"
+apt-get "${LOCK[@]}" install -y -q --only-upgrade \
+    -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef "${PAQUETS[@]}"
+echo "fait"

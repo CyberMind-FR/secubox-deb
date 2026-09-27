@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    # UNE BOX DÉJÀ EN SERVICE N'EST PAS UNE BOX NEUVE (#1522). Si un compte
+    # admin a déjà servi (mot de passe choisi, ou TOTP enrôlé), l'assistant n'a rien à faire ici : on pose le marqueur. Dans une
+    # image en construction, users.json n'existe pas encore (firstboot le
+    # crée) : l'assistant s'ouvrira au premier démarrage.
+    if [ ! -e /var/lib/secubox/.premier-pas-fait ] && [ -f /etc/secubox/users.json ] \
+       && python3 - <<'PY' 2>/dev/null
+import json, sys
+d = json.load(open("/etc/secubox/users.json"))
+admin = [u for u in d.get("users", []) if u.get("username") == "admin"]
+a = admin[0] if admin else {}
+# En service = mot de passe choisi OU TOTP déjà enrôlé (vu sur l'amd64 :
+# TOTP enrôlé mais mot de passe par défaut jamais changé).
+sys.exit(0 if a.get("password_hash") and (not a.get("must_change_password") or a.get("totp")) else 1)
+PY
+    then
+        mkdir -p /var/lib/secubox
+        date -Is > /var/lib/secubox/.premier-pas-fait
+        echo "secubox-premier-pas : box déjà configurée, assistant non ouvert"
+    fi
+    systemctl enable secubox-premier-pas.service >/dev/null 2>&1 || true
+fi
+#DEBHELPER#
+exit 0

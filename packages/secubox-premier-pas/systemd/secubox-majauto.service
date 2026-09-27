@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox — mises à jour automatiques des paquets SecuBox (#1522)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/apt/sources.list.d/secubox.list
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-majauto
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h
