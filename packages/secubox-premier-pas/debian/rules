@@ -8,6 +8,8 @@ override_dh_auto_install:
 	install -d debian/secubox-premier-pas/usr/lib/secubox/premier-pas/api
 	install -m 644 api/*.py debian/secubox-premier-pas/usr/lib/secubox/premier-pas/api/
 	install -D -m 644 www/premier-pas/index.html debian/secubox-premier-pas/usr/share/secubox/www/premier-pas/index.html
+	install -D -m 644 www/premier-pas-maitre/index.html debian/secubox-premier-pas/usr/share/secubox/www/premier-pas-maitre/index.html
+	install -D -m 644 menu.d/905-premier-pas-maitre.json debian/secubox-premier-pas/usr/share/secubox/menu.d/905-premier-pas-maitre.json
 	install -D -m 755 sbin/premier-pasctl debian/secubox-premier-pas/usr/sbin/premier-pasctl
 	install -D -m 755 sbin/premier-pas-url debian/secubox-premier-pas/usr/sbin/premier-pas-url
 	install -D -m 755 sbin/premier-pas-console debian/secubox-premier-pas/usr/sbin/premier-pas-console

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     Source-Disclosed License — All rights reserved except as expressly granted.
+     See LICENCE-CMSD-1.0.md for terms.
+
+     SecuBox Premier Pas — PANNEAU MAÎTRE (#1522, couche 4). Style : WEBUI-PANEL-
+     GUIDELINES (cyan hybrid-dark, Courier Prime, barre latérale partagée). -->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Boxes à préparer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<style>
+:root{
+  --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8); --bg-row:rgba(20,30,45,.6);
+  --border:rgba(100,150,200,.2); --text:#e8e6d9; --cyan:#00d4ff;
+  --red:#ff4466; --orange:#ff9944; --yellow:#ffcc00; --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
+}
+*{box-sizing:border-box}
+body{background:var(--bg-dark);color:var(--text);font-family:'Courier Prime',monospace;margin:0}
+.main{margin-left:220px;padding:1.5rem;padding-top:60px}
+.header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:1.2rem}
+.header h1{font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
+.header .sub{color:var(--p31-dim);font-size:.85rem;max-width:70ch}
+.btn{font-family:inherit;text-transform:uppercase;letter-spacing:.05em;font-size:.72rem;padding:.45rem .9rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-row);color:var(--text);cursor:pointer}
+.btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.3)}
+.btn.primary{background:var(--cyan);color:#0d1117;border-color:var(--cyan);font-weight:700}
+.btn.danger{color:var(--red);border-color:rgba(255,68,102,.4)}
+.btn.warn{color:var(--orange);border-color:rgba(255,153,68,.5)}
+.btn.sm{padding:.25rem .55rem;font-size:.65rem}
+.btn:disabled{opacity:.5;cursor:default}
+.grille{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:1rem}
+@media (max-width:1100px){.grille{grid-template-columns:1fr}}
+.card{background:var(--bg-card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:8px;padding:1rem 1.1rem}
+.card h3{color:var(--cyan);font-size:.95rem;margin:0 0 .8rem;letter-spacing:.05em}
+.liste{display:grid;gap:6px}
+.ligne{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;background:var(--bg-row);border-left:3px solid var(--p31-dim);border-radius:4px;padding:.55rem .7rem;cursor:pointer}
+.ligne:hover{transform:translateX(2px);border-left-color:var(--cyan)}
+.ligne.ok{border-left-color:var(--green)} .ligne.ko{border-left-color:var(--orange)} .ligne.sel{background:rgba(0,212,255,.08)}
+.ligne b{color:var(--cyan)} .ligne small{grid-column:2/4;color:var(--p31-dim);font-size:.75rem}
+label{display:grid;gap:3px;font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--p31-dim)}
+input,select{font-family:inherit;font-size:.85rem;background:var(--bg-row);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:.4rem .55rem;text-transform:none;letter-spacing:normal}
+input:focus,select:focus{outline:none;border-color:var(--cyan)}
+fieldset{border:1px solid var(--border);border-radius:6px;padding:.6rem .8rem .8rem;margin:0 0 .7rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.6rem}
+legend{color:var(--cyan);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;padding:0 .3rem}
+.actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
+.etat{font-size:.8rem;color:var(--p31-dim);margin-top:.6rem;white-space:pre-wrap}
+.pill{font-size:.65rem;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
+.p-ok{color:var(--green)} .p-ko{color:var(--orange)} .p-att{color:var(--yellow)} .p-err{color:var(--red)}
+.pas{display:flex;flex-wrap:wrap;gap:4px;margin-top:.5rem}
+.pas span{font-size:.65rem;padding:1px 6px;border-radius:4px;background:var(--bg-row);color:var(--p31-dim)}
+.pas span.ok{color:var(--green)}
+.toast{position:fixed;right:1rem;bottom:1rem;background:var(--cyan);color:#0d1117;padding:.6rem 1rem;border-radius:6px;font-weight:700;display:none;z-index:9}
+.toast.error{background:var(--red);color:#fff}
+[hidden]{display:none!important}
+@media (max-width:768px){.main{margin-left:0;padding:1rem;padding-top:60px}}
+</style>
+</head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+<main class="main">
+  <header class="header">
+    <div><h1>🧭 Boxes à préparer</h1>
+      <div class="sub">Préparez le profil d'une future SecuBox, exportez-le (clé USB « SBXPROFIL », /boot/secubox/profil.toml) ou poussez-le à la box neuve avec le code affiché sur son écran. Elle l'applique après validation de la personne devant elle — ou tout de suite en mode forcé, avec une alerte à l'écran.</div></div>
+    <button class="btn" id="nouveau">➕ Nouvelle box</button>
+  </header>
+
+  <div class="grille">
+    <section class="card"><h3>📋 Profils préparés</h3><div class="liste" id="liste"></div></section>
+
+    <section class="card" id="edition">
+      <h3 id="titre-ed">Nouvelle box</h3>
+      <form id="f" autocomplete="off">
+        <fieldset><legend>Box</legend>
+          <label>Nom<input id="f-nom" required pattern="[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?" placeholder="gk3"></label>
+          <label>Fuseau<input id="f-fuseau" value="Europe/Paris"></label>
+          <label>Langue<select id="f-langue"><option value="fr">fr</option><option value="en">en</option></select></label>
+        </fieldset>
+        <fieldset><legend>Administrateur</legend>
+          <label>Mot de passe<input id="f-mdp" type="password" autocomplete="new-password" placeholder="vide = « demander » à l'écran"></label>
+          <label>Encore<input id="f-mdp2" type="password" autocomplete="new-password"></label>
+          <label>Actuel<input id="f-mdp-etat" disabled value="demander"></label>
+        </fieldset>
+        <fieldset><legend>Réseau</legend>
+          <label>Mode<select id="f-mode"><option value="routeur">routeur</option><option value="pont">pont</option><option value="lan">LAN seul</option></select></label>
+          <label id="l-dom">Domaine<input id="f-domaine" placeholder="gk3.secubox.in"></label>
+        </fieldset>
+        <fieldset><legend>Services · maillage · mises à jour</legend>
+          <label>Profil de services<input id="f-profil" value="full"></label>
+          <label>Maillage<select id="f-maillage"><option value="rejoindre">rejoindre cette box</option><option value="premiere">première box</option><option value="plus_tard">plus tard</option></select></label>
+          <label>Mises à jour<select id="f-auto"><option value="oui">automatiques</option><option value="non">sur validation</option></select></label>
+          <label>Heure<input id="f-heure" value="03:00"></label>
+        </fieldset>
+        <div class="actions">
+          <button class="btn primary" type="submit">💾 Enregistrer</button>
+          <button class="btn" type="button" id="exporter">⬇️ Exporter profil.toml</button>
+          <button class="btn danger" type="button" id="supprimer">🗑️ Supprimer</button>
+        </div>
+        <div class="etat" id="examen"></div>
+      </form>
+
+      <h3 style="margin-top:1.2rem">🤝 Pousser à la box neuve</h3>
+      <fieldset><legend>Box neuve</legend>
+        <label>Adresse (LAN ou maillage)<input id="p-adr" inputmode="decimal" placeholder="192.168.1.60"></label>
+        <label>Code affiché sur son écran<input id="p-code" spellcheck="false" placeholder="xxxx xxxx xxxx …"></label>
+        <label>Mode<select id="p-mode">
+          <option value="proposer">proposer — l'utilisateur valide</option>
+          <option value="forcer">forcer — appliquer, avec alerte</option>
+          <option value="remplir">remplir seulement</option></select></label>
+      </fieldset>
+      <div class="actions"><button class="btn primary" id="pousser">🤝 Pousser</button></div>
+      <div class="etat" id="suivi"></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const API = "/api/v1/premier-pas";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let courant = null, suiviT = null;
+
+function toast(m, err) { const t = $("#toast"); t.textContent = m; t.className = "toast" + (err ? " error" : ""); t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 3500); }
+async function api(chemin, opts = {}) {
+  const r = await fetch(chemin.startsWith("/api/") ? chemin : API + chemin,
+    {credentials: "same-origin", headers: {"Content-Type": "application/json"}, ...opts});
+  const ct = r.headers.get("content-type") || "";
+  const j = ct.includes("json") ? await r.json().catch(() => ({})) : await r.text();
+  if (!r.ok) throw new Error((j && j.detail) || ("HTTP " + r.status));
+  return j;
+}
+
+async function liste() {
+  let l;
+  try { l = (await api("/maitre/profils")).profils; }
+  catch (e) { $("#liste").innerHTML = `<div class="etat">${esc(e.message)}</div>`; return; }
+  $("#liste").innerHTML = l.map(p => `<div class="ligne ${p.complet ? "ok" : "ko"} ${p.nom === courant ? "sel" : ""}" data-n="${esc(p.nom)}">
+      <span>${p.complet ? "🟢" : "🟠"}</span><b>${esc(p.nom)}</b><span class="pill ${p.complet ? "p-ok" : "p-ko"}">${p.complet ? "prêt" : "à compléter"}</span>
+      <small>${esc((p.profil.reseau || {}).mode || "—")} · ${esc((p.profil.services || {}).profil || "—")} · maillage ${esc((p.profil.maillage || {}).mode || "—")}${p.complet ? "" : " · reprendre à " + esc(p.reprendre)}</small></div>`).join("")
+    || `<div class="etat">Aucun profil. « Nouvelle box » pour en préparer un.</div>`;
+  document.querySelectorAll(".ligne").forEach(x => x.onclick = () => ouvre(x.dataset.n));
+}
+
+function visibilite() { $("#l-dom").hidden = $("#f-mode").value === "lan"; }
+
+async function ouvre(nom) {
+  const p = (await api("/maitre/profils/" + encodeURIComponent(nom))).profil;
+  courant = nom;
+  const b = p.box || {}, r = p.reseau || {}, a = p.apt || {}, m = p.maillage || {};
+  $("#titre-ed").textContent = "📝 " + nom;
+  $("#f-nom").value = nom; $("#f-nom").disabled = true;
+  $("#f-fuseau").value = b.fuseau || "Europe/Paris"; $("#f-langue").value = b.langue || "fr";
+  $("#f-mdp").value = $("#f-mdp2").value = ""; $("#f-mdp-etat").value = (p.admin || {}).mot_de_passe || "demander";
+  $("#f-mode").value = r.mode || "routeur"; $("#f-domaine").value = r.domaine || "";
+  $("#f-profil").value = (p.services || {}).profil || "full";
+  $("#f-maillage").value = m.mode || "rejoindre";
+  $("#f-auto").value = a.auto === false ? "non" : "oui"; $("#f-heure").value = a.heure || "03:00";
+  visibilite(); liste();
+}
+
+function nouveau() {
+  courant = null; $("#f").reset(); $("#f-nom").disabled = false; $("#titre-ed").textContent = "Nouvelle box";
+  $("#f-mdp-etat").value = "demander"; $("#examen").textContent = ""; visibilite(); liste();
+}
+
+async function invitation() {
+  // Le jeton d'invitation au maillage : l'API p2p existante, 1 h.
+  const i = await api("/api/v1/p2p/master-link/invite?ttl=3600&auto_approve=true", {method: "POST"});
+  return {rejoindre: i.master.lan_ip, jeton: i.token};
+}
+
+$("#f").onsubmit = async ev => {
+  ev.preventDefault();
+  const nom = $("#f-nom").value.trim().toLowerCase();
+  const prof = {
+    box: {fuseau: $("#f-fuseau").value, langue: $("#f-langue").value, clavier: $("#f-langue").value === "fr" ? "fr" : "us"},
+    reseau: {mode: $("#f-mode").value, domaine: $("#f-mode").value === "lan" ? "" : $("#f-domaine").value},
+    services: {profil: $("#f-profil").value},
+    maillage: {mode: $("#f-maillage").value},
+    apt: {auto: $("#f-auto").value === "oui", heure: $("#f-heure").value},
+    admin: {},
+  };
+  const mdp = $("#f-mdp").value;
+  if (mdp) prof.admin = {mot_de_passe: mdp, confirmation: $("#f-mdp2").value};
+  else if (!courant) prof.admin = {mot_de_passe: "demander"};
+  try {
+    if (prof.maillage.mode === "rejoindre") Object.assign(prof.maillage, await invitation());
+    const r = await api("/maitre/profils/" + encodeURIComponent(nom), {method: "PUT", body: JSON.stringify(prof)});
+    $("#f-mdp").value = $("#f-mdp2").value = "";
+    $("#examen").textContent = r.complet ? "✓ Profil complet : applicable sans écran."
+      : "À compléter : " + r.reprendre + (Object.keys(r.erreurs).length ? "\n" + Object.entries(r.erreurs).map(([k, v]) => `✗ ${k} : ${v}`).join("\n") : "");
+    toast("Profil « " + nom + " » enregistré");
+    await ouvre(nom);
+  } catch (e) { toast(e.message, true); }
+};
+
+$("#exporter").onclick = async () => {
+  if (!courant) return toast("Enregistrez d'abord le profil.", true);
+  try {
+    const t = await api("/maitre/profils/" + encodeURIComponent(courant) + "/export");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([t], {type: "text/plain"})); a.download = "profil.toml"; a.click();
+    toast("profil.toml exporté — à poser sur la clé SBXPROFIL ou dans /boot/secubox/");
+  } catch (e) { toast(e.message, true); }
+};
+
+// Confirmation en deux temps : la page n'utilise jamais confirm().
+$("#supprimer").onclick = async ev => {
+  if (!courant) return;
+  const b = ev.currentTarget;
+  if (b.dataset.arme !== "1") { b.dataset.arme = "1"; b.textContent = "🗑️ Confirmer ?"; setTimeout(() => { b.dataset.arme = ""; b.textContent = "🗑️ Supprimer"; }, 4000); return; }
+  try { await api("/maitre/profils/" + encodeURIComponent(courant), {method: "DELETE"}); toast("Profil supprimé"); nouveau(); }
+  catch (e) { toast(e.message, true); }
+};
+
+$("#pousser").onclick = async () => {
+  if (!courant) return toast("Choisissez un profil.", true);
+  const mode = $("#p-mode").value;
+  $("#pousser").disabled = true;
+  try {
+    const r = await api("/maitre/pousser", {method: "POST", body: JSON.stringify(
+      {nom: courant, adresse: $("#p-adr").value, code: $("#p-code").value, mode})});
+    if (!r.ok) { $("#suivi").textContent = `✗ Arrêt à « ${r.arret} » : ${r.detail}`; return; }
+    const pr = r.proposition || {};
+    $("#suivi").textContent = `✓ ${r.faites.length} étapes remplies.` + (pr.erreur ? `\n✗ ${pr.erreur}` :
+      mode === "proposer" ? "\n⏳ En attente de la validation de la personne devant la box." :
+      mode === "forcer" ? "\n⚠️ Application imposée : la box l'annonce à l'écran." : "");
+    suivre($("#p-adr").value);
+  } catch (e) { toast(e.message, true); }
+  finally { $("#pousser").disabled = false; }
+};
+
+function suivre(adr) {
+  clearTimeout(suiviT);
+  const tour = async () => {
+    try {
+      const e = await api("/maitre/distant?adresse=" + encodeURIComponent(adr));
+      const p = e.proposition || {}, m = e.moteur || {};
+      const st = e.fait ? "🟢 configurée" : p.statut === "refusee" ? "🔴 proposition refusée"
+        : p.statut === "en_attente" ? "🟡 en attente de validation"
+        : m.phase === "echec" ? `🔴 arrêt à « ${m.etape} » : ${m.erreur}`
+        : m.phase === "application" ? `⏳ ${m.action} (${m.n}/${m.total})` : "…";
+      $("#suivi").innerHTML = `<div>${esc(st)}</div><div class="pas">${e.etapes.map(x => `<span class="${x.statut === "pret" ? "ok" : ""}">${esc(x.libelle)}</span>`).join("")}</div>`;
+      if (e.fait || p.statut === "refusee" || m.phase === "echec") return;
+    } catch (err) { /* box en redémarrage de services : on réessaie */ }
+    suiviT = setTimeout(tour, 3000);
+  };
+  tour();
+}
+
+$("#nouveau").onclick = nouveau;
+$("#f-mode").onchange = visibilite;
+visibilite();
+liste();
+</script>
+</body>
+</html>

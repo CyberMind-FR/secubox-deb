@@ -26,7 +26,7 @@
 [hidden]{display:none!important}   /* sinon label{display:grid} gagne sur hidden */
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:clamp(17px,1.6vw,22px)/1.5 var(--body);padding-inline:clamp(16px,4vw,64px);padding-block:clamp(14px,3vh,40px)}
-.cadre{max-width:1100px;margin:0 auto;min-height:100%;display:grid;grid-template-rows:auto auto 1fr;gap:clamp(14px,2.4vh,28px)}
+.cadre{max-width:1100px;margin:0 auto;min-height:100%;display:grid;grid-template-rows:auto auto 1fr auto;gap:clamp(14px,2.4vh,28px)}
 header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
 .marque{font-family:var(--display);color:var(--gold);font-size:clamp(20px,2vw,28px);letter-spacing:.04em}
 .pas{font-family:var(--mono);color:var(--muted);font-size:.8em}
@@ -56,6 +56,11 @@ button.b:disabled{opacity:.45;cursor:default}
 .barre{height:10px;border-radius:5px;background:var(--surf2);overflow:hidden}
 .barre i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
 .note{font-size:.78em;color:var(--muted)}
+.code{font-family:var(--mono);color:var(--gold);letter-spacing:.08em;overflow-wrap:anywhere}
+.alerte{background:rgba(255,93,108,.14);border:1px solid var(--bad);color:var(--text);border-radius:12px;padding:.8em 1em}
+.alerte b{color:var(--bad)}
+.propose{background:rgba(201,168,76,.10);border:1px solid var(--gold);border-radius:12px;padding:.8em 1em}
+footer.pied{font-size:.72em;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -64,6 +69,7 @@ button.b:disabled{opacity:.45;cursor:default}
   <header><span class="marque">SecuBox · Premier Pas</span><span class="pas" id="pas">…</span></header>
   <nav class="rail" id="rail" aria-label="Étapes"></nav>
   <main id="ecran" aria-live="polite"><p class="aide">Chargement…</p></main>
+  <footer class="pied" id="pied" hidden>Préparer cette box depuis une autre SecuBox : code <span class="code" id="code"></span></footer>
 </div>
 
 <script>
@@ -225,8 +231,53 @@ function rendRecap() {
   };
 }
 
+function banniereForcee(p) {
+  return p && p.mode === "forcer"
+    ? `<p class="alerte"><b>Configuration imposée à distance</b> par ${esc(p.par)}. La box applique le profil préparé par cette box maîtresse.</p>`
+    : "";
+}
+
+function rendProposition(p) {
+  // La box maîtresse a rempli le profil et PROPOSE : la décision est ici.
+  ETAT_PROPOSITION_VUE = p.a;
+  $("#rail").innerHTML = "";
+  rendRecap();
+  $("#ecran").insertAdjacentHTML("afterbegin",
+    `<p class="propose"><b>Proposition de ${esc(p.par)}</b> : cette box maîtresse a préparé la configuration ci-dessous. Vérifiez-la, puis acceptez ou refusez.</p>`);
+  $("#prec").textContent = "Refuser";
+  $("#prec").disabled = false;
+  $("#go").textContent = "Accepter et appliquer";
+  $("#prec").onclick = async () => {
+    try { await api("/proposition/refuser", {method: "POST"}); ETAT = await api("/etat"); cur = 0; rendEtape(); }
+    catch (err) { $("#err").textContent = err.message; }
+  };
+  $("#go").onclick = async () => {
+    $("#go").disabled = true;
+    try { await api("/proposition/accepter", {method: "POST"}); suivi(); }
+    catch (err) { $("#err").textContent = err.message; $("#go").disabled = false; }
+  };
+}
+
+let ETAT_PROPOSITION_VUE = null, SUIVI = false;
+async function veille() {
+  // Une proposition peut arriver à tout moment depuis la box maîtresse.
+  if (!SUIVI) {
+    try {
+      const e = await api("/etat");
+      const p = e.proposition || {};
+      if (e.fait) return fini();
+      if (p.statut === "forcee" || (e.moteur || {}).phase === "application") { ETAT = e; return suivi(); }
+      if (p.statut === "en_attente" && p.a !== ETAT_PROPOSITION_VUE) { ETAT = e; rendProposition(p); }
+    } catch (_) {}
+  }
+  setTimeout(veille, 4000);
+}
+
 async function suivi() {
-  $("#ecran").innerHTML = `<h1>La box se configure</h1><p class="aide" id="act">Démarrage…</p>
+  SUIVI = true;
+  $("#pied").hidden = true;          // le code ne sert plus une fois l'application lancée
+  const prop = (ETAT && ETAT.proposition) || {};
+  $("#ecran").innerHTML = `${banniereForcee(prop)}<h1>La box se configure</h1><p class="aide" id="act">Démarrage…</p>
     <div class="barre" aria-hidden="true"><i id="bar"></i></div><p class="note">Ne l'éteignez pas. Cela peut prendre plusieurs minutes (services à installer).</p>`;
   const tour = async () => {
     let e;
@@ -247,7 +298,8 @@ async function suivi() {
 }
 
 function fini() {
-  $("#rail").innerHTML = ""; $("#pas").textContent = "";
+  SUIVI = true;
+  $("#rail").innerHTML = ""; $("#pas").textContent = ""; $("#pied").hidden = true;
   $("#ecran").innerHTML = `<h1>Votre box est prête</h1>
     <p class="aide">Connectez-vous avec le compte « admin » et votre mot de passe. La box vous fera ensuite scanner le QR de votre application d'authentification.</p>
     <div class="nav"><span></span><button type="button" class="b prim" id="hall">Ouvrir le Hall</button></div>`;
@@ -263,7 +315,11 @@ function fini() {
     $("#ecran").innerHTML = `<h1>Premier démarrage</h1><p class="aide">Cette box attend sa configuration. L'assistant s'utilise depuis l'écran branché sur la box (ou sa console).</p>`;
     return;
   }
-  if (ETAT.demande_en_cours || (ETAT.moteur || {}).phase === "application") return suivi();
+  try { const c = await api("/code"); $("#code").textContent = c.code.match(/.{1,4}/g).join(" "); $("#pied").hidden = false; } catch (_) {}
+  const prop = ETAT.proposition || {};
+  setTimeout(veille, 4000);
+  if (prop.statut === "forcee" || ETAT.demande_en_cours || (ETAT.moteur || {}).phase === "application") return suivi();
+  if (prop.statut === "en_attente") return rendProposition(prop);
   // Profil vide : on commence par l'accueil. Sinon on reprend là où le
   // moteur le dit — y compris « Appliquer » quand tout est prêt.
   const vide = !Object.keys(ETAT.profil || {}).length;
