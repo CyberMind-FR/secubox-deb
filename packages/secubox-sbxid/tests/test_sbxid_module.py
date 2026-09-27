@@ -476,3 +476,56 @@ def test_bbs_ouverte_d_un_geste_comme_les_autres_1521(banc, monkeypatch):
     assert CPT.etat(c, ani)["services"]["bbs"]["propre"] is True
     # Le nom transmis au helper est en minuscules (son RE_USER), la BBS compare sans casse.
     assert all(a["user"] == a["user"].lower() for a in appels if a["service"] == "bbs")
+
+
+def test_salons_bbs_d_une_communaute_1548(banc, monkeypatch):
+    """La carte d'une communauté ouvre et ferme ses salons BBS : sbxid RELAIE le
+    jeton de l'administrateur aux routes d'admin de la BBS (#1523) ; « réserver »
+    rend d'abord privé un salon ouvert à tous."""
+    ctx = main.exige_admin(_req("tok-g"))
+    k = main.cree_communaute(main.NouvelleCommunaute(name="Atelier"), ctx)["community_uuid"]
+    salons = {1: {"id": 1, "titre": "Atelier", "slug": "atelier", "profondeur": 0, "prive": False, "communautes": []},
+              3: {"id": 3, "titre": "Intendance", "slug": "intendance", "profondeur": 0, "prive": True, "communautes": []}}
+    appels = []
+
+    def faux(methode, chemin, jeton, corps=None):
+        appels.append((methode, chemin, jeton, corps))
+        if methode == "GET":
+            return 200, {"ok": True, "salons": list(salons.values())}
+        import re as _re
+        sid = int(_re.search(r"/salons/(\d+)/", chemin).group(1))
+        if chemin.endswith("/prive"):
+            salons[sid]["prive"] = corps["prive"]
+        elif corps["action"] == "ajouter":
+            if not salons[sid]["prive"]:
+                return 400, {"error": "salon non privé"}
+            salons[sid]["communautes"].append({"uuid": corps["communaute"], "nom": "Atelier"})
+        else:
+            salons[sid]["communautes"] = [c for c in salons[sid]["communautes"] if c["uuid"] != corps["communaute"]]
+        return 200, {"ok": True}
+    monkeypatch.setattr(main, "bbs_appel", faux)
+    req = _req("tok-g")
+
+    l = {s["id"]: s for s in main.salons_de(k, req, ctx)["salons"]}
+    assert not l[3]["ouvert"] and l[1]["prive"] is False
+    assert appels[0][2] == "tok-g"                               # le jeton de l'admin, relayé tel quel
+    # salon déjà privé : ouvert à la communauté
+    l = {s["id"]: s for s in main.salon_communaute(k, 3, main.SalonCommunaute(), req, ctx)["salons"]}
+    assert l[3]["ouvert"]
+    # salon ouvert à tous : « réserver » le rend privé PUIS l'ouvre
+    l = {s["id"]: s for s in main.salon_communaute(k, 1, main.SalonCommunaute(reserver=True), req, ctx)["salons"]}
+    assert l[1]["prive"] and l[1]["ouvert"]
+    # fermer
+    l = {s["id"]: s for s in main.salon_communaute(k, 3, main.SalonCommunaute(ouvrir=False), req, ctx)["salons"]}
+    assert not l[3]["ouvert"]
+    # l'erreur de la BBS remonte telle quelle
+    salons[1]["prive"] = False
+    with pytest.raises(HTTPException) as e:
+        main.salon_communaute(k, 1, main.SalonCommunaute(), req, ctx)
+    assert e.value.status_code == 400 and "privé" in e.value.detail
+    # BBS arrêtée : 503, pas une page blanche
+    monkeypatch.setattr(main, "bbs_appel", lambda *a, **kw: (_ for _ in ()).throw(OSError("socket")))
+    with pytest.raises(HTTPException) as e:
+        main.salons_de(k, req, ctx)
+    assert e.value.status_code == 503
+    assert main.db().execute("SELECT count(*) FROM sbx_audit WHERE event LIKE 'community.salon%'").fetchone()[0] == 3
