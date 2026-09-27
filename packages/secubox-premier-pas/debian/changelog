@@ -1,3 +1,17 @@
+secubox-premier-pas (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Face CONSOLE (couche 3) : premier-pas-console sur tty1 (curses,
+    bibliothèque standard : Textual n'existe dans bookworm qu'en 0.1.13),
+    cadre de 64 colonnes comme la maquette, mêmes 9 étapes, suivi de
+    l'application. Ne démarre que sur une box neuve.
+  * premier_pas.remplir : enregistrement des étapes, hachage argon2 et
+    demande d'application PARTAGÉS par le kiosque (API) et la console — un
+    moteur, un profil, plus de logique dupliquée dans l'API.
+  * ESCDELAY court : la queue d'une séquence de flèche ne finit plus tapée
+    dans un champ (ref #1522).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 21:30:00 +0200
+
 secubox-premier-pas (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Face KIOSQUE (couche 2) : page /premier-pas/ (9 étapes, lisible sur une

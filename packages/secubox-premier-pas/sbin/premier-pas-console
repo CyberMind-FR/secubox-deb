@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+"""premier-pas-console — l'assistant du premier démarrage, face console (#1522)."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/secubox/premier-pas")
+_ici = Path(__file__).resolve().parents[1]
+if (_ici / "premier_pas").is_dir():
+    sys.path.insert(0, str(_ici))
+
+from premier_pas import console  # noqa: E402
+
+sys.exit(console.main())

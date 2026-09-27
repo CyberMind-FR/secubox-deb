@@ -10,6 +10,7 @@ override_dh_auto_install:
 	install -D -m 644 www/premier-pas/index.html debian/secubox-premier-pas/usr/share/secubox/www/premier-pas/index.html
 	install -D -m 755 sbin/premier-pasctl debian/secubox-premier-pas/usr/sbin/premier-pasctl
 	install -D -m 755 sbin/premier-pas-url debian/secubox-premier-pas/usr/sbin/premier-pas-url
+	install -D -m 755 sbin/premier-pas-console debian/secubox-premier-pas/usr/sbin/premier-pas-console
 	install -D -m 755 sbin/secubox-majauto debian/secubox-premier-pas/usr/sbin/secubox-majauto
 	install -d debian/secubox-premier-pas/usr/lib/systemd/system
 	install -m 644 systemd/*.service systemd/*.timer systemd/*.path debian/secubox-premier-pas/usr/lib/systemd/system/
