@@ -145,3 +145,46 @@ def test_le_helper_ne_journalise_jamais_le_mot_de_passe(tmp_path, monkeypatch):
              "password": "secret-a-ne-pas-ecrire"}, True)
     ligne = (tmp_path / "audit.log").read_text()
     assert "secret-a-ne-pas-ecrire" not in ligne and json.loads(ligne)["service"] == "email"
+
+
+# ── BBS (#1521) : créé comme les autres, jamais supprimé ─────────────────────
+
+def _bbs_db(tmp_path):
+    import sqlite3
+    p = tmp_path / "index.db"
+    c = sqlite3.connect(p)
+    c.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, handle TEXT UNIQUE, disabled_at INTEGER)")
+    c.execute("INSERT INTO users (handle, disabled_at) VALUES ('Ani.skywalker', NULL), ('vieux', 12)")
+    c.commit(); c.close()
+    return p
+
+
+def test_bbs_etat_garde_la_casse_et_voit_la_desactivation(tmp_path, monkeypatch):
+    h = charge_helper()
+    monkeypatch.setattr(h.Bbs, "DB", _bbs_db(tmp_path))
+    b = h.Bbs()
+    assert b.etat({"user": "ani.skywalker"}) == {"existe": True, "actif": True, "identifiant": "Ani.skywalker"}
+    assert b.etat({"user": "vieux"})["actif"] is False
+    assert b.etat({"user": "gek"}) == {"existe": False, "actif": None, "identifiant": None}
+
+
+def test_bbs_creer_sous_l_utilisateur_de_la_bbs_avec_le_mot_de_passe_sur_stdin(tmp_path, monkeypatch):
+    h = charge_helper()
+    monkeypatch.setattr(h.Bbs, "DB", _bbs_db(tmp_path))
+    vus = []
+    monkeypatch.setattr(h, "lance", lambda argv, entree=None, delai=90: vus.append((argv, entree)) or (0, '{"ok": true}', ""))
+    h.Bbs().creer({"user": "gek", "password": "abcd-efgh-jkmn-pqrs"})
+    argv, entree = vus[0]
+    # Jamais root : passwd (0600, secubox-bbs) serait réécrit au nom de root.
+    assert argv[:4] == ["runuser", "-u", "secubox-bbs", "--"] and argv[-2:] == ["user-add", "gek"]
+    assert entree == "abcd-efgh-jkmn-pqrs" and "abcd" not in " ".join(argv)
+
+
+def test_bbs_existant_dit_existe_et_ne_se_supprime_jamais(tmp_path, monkeypatch):
+    h = charge_helper()
+    monkeypatch.setattr(h.Bbs, "DB", _bbs_db(tmp_path))
+    with pytest.raises(h.Echec, match="existe"):          # l'appelant reprend le compte
+        h.Bbs().creer({"user": "ani.skywalker", "password": "x" * 12})
+    with pytest.raises(h.NonPrisEnCharge):
+        h.Bbs().retirer({"user": "ani.skywalker"})
+    assert "bbs" in h.ADAPTATEURS

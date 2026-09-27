@@ -389,20 +389,7 @@ async function comptes(b, cols){
     }
     td.appendChild(l);
   }
-  const bbs = document.createElement('div'); bbs.className = 'svc';
-  bbs.innerHTML = '<b>BBS</b>';
-  e.bbs.forEach(h => {
-    const c = document.createElement('span'); c.className = 'chip ok'; c.textContent = h;
-    const x = btn('✕'); x.title = 'Délier ' + h; x.setAttribute('aria-label', 'Délier ' + h);
-    x.onclick = async () => { try { await api(`/admin/personnes/${uid}/liens/bbs/${encodeURIComponent(h)}`, {method:'DELETE'}); toast('Délié'); } catch(y){ toast(y.message); } b.click(); b.click(); };
-    bbs.append(c, x);
-  });
-  const inp = document.createElement('input'); inp.placeholder = 'compte BBS existant'; inp.setAttribute('aria-label','Compte BBS à lier');
-  const lier = btn('Lier'); lier.onclick = async () => {
-    try { const r = await api(`/admin/personnes/${uid}/bbs`, {method:'POST', body:JSON.stringify({handle:inp.value})}); toast('BBS lié : ' + r.handle); b.click(); b.click(); }
-    catch(y){ toast(y.message); }
-  };
-  bbs.append(inp, lier); td.appendChild(bbs);
+  // La BBS est désormais une ligne de services comme les autres (#1521) : ouvrir, ou relier.
   const act = document.createElement('div'); act.className = 'act'; act.style.justifyContent = 'flex-start'; act.style.marginTop = '8px';
   if (choix.length){
     const go = btn('Ouvrir les comptes cochés', 'prim');

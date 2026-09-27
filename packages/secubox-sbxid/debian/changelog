@@ -1,3 +1,12 @@
+secubox-sbxid (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Gestionnaire d'identité : la BBS s'OUVRE comme courriel, Nextcloud et
+    PeerTube, d'un même geste et avec le mot de passe commun — gek, sans
+    compte BBS, n'avait rien à lier et manquait aux messages privés. Un
+    compte BBS relié à la main garde son mot de passe (ref #1521).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 10:45:48 +0200
+
 secubox-sbxid (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Communautés et autorisations (Community Refactor P2) : API

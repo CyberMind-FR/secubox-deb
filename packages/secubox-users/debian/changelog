@@ -1,3 +1,12 @@
+secubox-users (1.8.9-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-usersctl-services : adaptateur « bbs » — etat (lecture seule de
+    index.db, casse du handle gardée), creer / reinitialiser par bbsctl SOUS
+    secubox-bbs (jamais root : passwd 0600), desactiver ; jamais supprimé
+    (l'attribution des écrits reste) (ref #1521).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 10:45:48 +0200
+
 secubox-users (1.8.8-1~bookworm1) bookworm; urgency=medium
 
   * Helper, Nextcloud : seul « user not found » vaut « compte absent » ; un occ

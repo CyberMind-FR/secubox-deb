@@ -451,3 +451,28 @@ def test_communautes_et_autorisations_1519(banc):
     with pytest.raises(HTTPException) as e:
         main.exige_admin(_req("tok-a"))
     assert e.value.status_code == 403
+
+
+def test_bbs_ouverte_d_un_geste_comme_les_autres_1521(banc, monkeypatch):
+    """gek n'avait aucun compte BBS, donc rien à lier : absent des messages
+    privés. La BBS s'ouvre maintenant avec les autres services ; un compte BBS
+    relié à la main (compte d'avant) garde, lui, SON mot de passe."""
+    appels, cpt = _faux_helper(monkeypatch, existants=[("bbs", "ani.skywalker")])
+    ctx = main.exige_admin(_req("tok-g"))
+    c = main.db()
+    gek = main.cree_personne(main.NouvellePersonne(pseudo="gek"), ctx)["user_uuid"]
+    assert "bbs" in CPT.etat(c, gek)["services"]
+    r = _fini(main.ouvre_comptes(gek, main.Services(services=["email", "bbs"]), ctx), gek, ctx)
+    assert r["services"] == {"email": True, "bbs": True}
+    assert cpt[("bbs", "gek")] == cpt[("email", "gek")] == r["mot_de_passe"]     # le mot de passe commun
+    assert CPT.liens(c, gek)["bbs"] == ["gek"]
+    r2 = _fini(main.reinitialise_comptes(gek, ctx), gek, ctx)                   # ouvert d'ici : suit le commun
+    assert r2["services"]["bbs"] is True and cpt[("bbs", "gek")] == r2["mot_de_passe"]
+    # Relié à la main (via /lier, app=bbs) : jamais réinitialisé d'ici.
+    ani = main.cree_personne(main.NouvellePersonne(pseudo="ani.skywalker"), ctx)["user_uuid"]
+    c.execute("INSERT INTO sbx_app_links VALUES (?,?,?,?)", (ani, "bbs", "Ani.skywalker", "Ani.skywalker"))
+    _fini(main.ouvre_comptes(ani, main.Services(services=["email"]), ctx), ani, ctx)
+    assert cpt[("bbs", "ani.skywalker")] == "ancien"
+    assert CPT.etat(c, ani)["services"]["bbs"]["propre"] is True
+    # Le nom transmis au helper est en minuscules (son RE_USER), la BBS compare sans casse.
+    assert all(a["user"] == a["user"].lower() for a in appels if a["service"] == "bbs")
