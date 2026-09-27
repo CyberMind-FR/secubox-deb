@@ -227,7 +227,8 @@ Depends: ${misc:Depends},
          secubox-defaults,
          secubox-system,
          secubox-hardening
-Recommends: secubox-health,
+Recommends: secubox-premier-pas,
+         secubox-health,
          secubox-health-doctor,
          secubox-watchdog,
          secubox-system-tuning

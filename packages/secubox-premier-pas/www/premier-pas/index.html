@@ -111,8 +111,9 @@ const PAGES = {
   },
   horloge: {
     aide: "L'heure juste d'abord : les codes à usage unique de l'étape suivante en dépendent.",
-    corps: p => `<label>Fuseau horaire<input id="c-fuseau" value="${esc((p.box||{}).fuseau || CHOIX.fuseau)}"></label>
-      <p class="note">La box se synchronisera sur les serveurs de temps publics.</p>`,
+    corps: p => `<label>Fuseau horaire<input id="c-fuseau" list="l-fuseaux" autocomplete="off" spellcheck="false" value="${esc((p.box||{}).fuseau || CHOIX.fuseau)}"></label>
+      <datalist id="l-fuseaux">${(CHOIX.fuseaux || []).map(z => `<option value="${esc(z)}">`).join("")}</datalist>
+      <p class="note">Tapez une ville (« Paris », « Montreal »…) pour la trouver dans la liste. La box se synchronisera sur les serveurs de temps publics.</p>`,
     valeurs: () => ({fuseau: $("#c-fuseau").value, ntp: true}),
   },
   admin: {

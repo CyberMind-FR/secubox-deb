@@ -1,3 +1,27 @@
+secubox-premier-pas (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Fuseau horaire : Europe/Paris proposé quand la box est en UTC (défaut
+    d'image, le choix de personne) ; liste des fuseaux où l'on cherche une
+    ville (« Paris ») ; un fuseau inconnu est refusé à la saisie plutôt
+    que par timedatectl pendant l'application (ref #1542).
+  * Politique Chromium TranslateEnabled=false : le drapeau seul n'enlevait
+    pas la bulle « Traduire » sur le kiosque.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 09:33:08 +0200
+
+secubox-premier-pas (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le lanceur passe son URL à la session par ~/.kiosk-url (0600) :
+    la session tourne sous secubox-kiosk, qui ne lit pas le jeton local
+    (constaté sur la box amd64 : le Hall restait affiché).
+  * --disable-features=Translate : --disable-translate est ignoré par
+    Chromium récent, qui proposait de traduire l'assistant.
+  * Livre /usr/sbin/secubox-kiosk-launcher (jusqu'ici posé par l'image
+    seule) : une box déjà flashée ouvre enfin l'assistant dans Chromium ;
+    le postinst relance le kiosque d'une box neuve (ref #1542).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 09:26:44 +0200
+
 secubox-premier-pas (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * PANNEAU MAÎTRE (couche 4) : « Boxes à préparer » dans l'admin (menu

@@ -145,3 +145,11 @@ def test_code_seulement_pour_l_ecran(api):
     c, _, _ = api
     assert c.get("/code", headers=J).status_code == 403
     assert c.get("/code", headers=LOC).json()["code"] == "secret-de-demarrage"
+
+
+def test_fuseau_inconnu_refuse_et_liste_fournie(api):
+    c, _, _ = api
+    assert "Europe/Paris" in c.get("/choix").json()["fuseaux"]
+    r = c.put("/etape/horloge", json={"fuseau": "Europe/Pariss", "ntp": True}, headers=J)
+    assert r.status_code != 200 and "Fuseau inconnu" in r.json()["detail"]
+    assert c.put("/etape/horloge", json={"fuseau": "Europe/Paris", "ntp": True}, headers=J).status_code == 200

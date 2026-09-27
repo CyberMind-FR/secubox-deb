@@ -39,6 +39,12 @@ if f.exists():
 TOML
     if [ -d /run/systemd/system ]; then
         systemctl restart secubox-aggregator >/dev/null 2>&1 || true
+        # Box neuve dont le kiosque tourne déjà (lanceur d'avant #1542) : le
+        # relancer pour qu'il ouvre l'assistant. Box configurée : on n'y touche pas.
+        if [ ! -e /var/lib/secubox/.premier-pas-fait ] \
+           && systemctl is-active --quiet secubox-kiosk.service; then
+            systemctl restart secubox-kiosk.service >/dev/null 2>&1 || true
+        fi
     fi
 fi
 #DEBHELPER#

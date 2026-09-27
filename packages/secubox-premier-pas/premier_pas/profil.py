@@ -178,3 +178,29 @@ def examine(profil: Dict[str, Any], profils_connus: Optional[List[str]] = None) 
         refuse("majs", "heure : HH:MM")
 
     return ex
+
+
+# ── Fuseau horaire proposé (#1542) ─────────────────────────────────────────
+# Une image neuve est en UTC : ce n'est le choix de personne. On propose
+# alors le fuseau de la langue par défaut de l'assistant (fr → Paris).
+FUSEAU_DEFAUT = "Europe/Paris"
+_FUSEAUX_NEUTRES = {"", "UTC", "Etc/UTC", "Etc/Universal", "Universal", "Zulu", "GMT", "Etc/GMT"}
+
+
+def fuseau_propose(chemin: Path = Path("/etc/timezone")) -> str:
+    try:
+        actuel = chemin.read_text().strip()
+    except OSError:
+        actuel = ""
+    return FUSEAU_DEFAUT if actuel in _FUSEAUX_NEUTRES else actuel
+
+
+def fuseaux() -> List[str]:
+    """Les fuseaux « Région/Ville » que la box connaît, pour la liste à chercher."""
+    try:
+        import zoneinfo  # noqa: PLC0415
+        tous = zoneinfo.available_timezones()
+    except Exception:  # noqa: BLE001
+        return [FUSEAU_DEFAUT]
+    return sorted(z for z in tous if "/" in z
+                  and not z.startswith(("Etc/", "posix/", "right/", "SystemV/", "US/", "Brazil/", "Canada/", "Chile/", "Mexico/")))
