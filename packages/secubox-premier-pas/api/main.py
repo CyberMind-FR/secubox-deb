@@ -80,10 +80,7 @@ def etat():
 @app.get("/choix")
 def choix():
     """Ce que les étapes proposent : profils de services, fuseau et nom actuels."""
-    try:
-        fuseau = Path("/etc/timezone").read_text().strip()
-    except OSError:
-        fuseau = "Europe/Paris"
+    fuseau = P.fuseau_propose()
     try:
         nom = Path("/etc/hostname").read_text().strip()
     except OSError:
@@ -95,7 +92,7 @@ def choix():
             profils.append({"id": p.stem, "libelle": d.get("label", p.stem), "modules": len(d.get("on", []))})
         except (OSError, ValueError):
             continue
-    return {"fuseau": fuseau, "nom": nom, "profils": profils,
+    return {"fuseau": fuseau, "fuseaux": P.fuseaux(), "nom": nom, "profils": profils,
             "modes_reseau": list(P.MODES_RESEAU), "modes_maillage": list(P.MODES_MAILLAGE)}
 
 

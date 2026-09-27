@@ -63,10 +63,7 @@ def _profils() -> List[Tuple[str, str]]:
 
 
 def _fuseau() -> str:
-    try:
-        return Path("/etc/timezone").read_text().strip() or "Europe/Paris"
-    except OSError:
-        return "Europe/Paris"
+    return P.fuseau_propose()
 
 
 def pages(profil: Dict[str, Any]) -> List[Page]:

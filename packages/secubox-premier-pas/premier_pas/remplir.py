@@ -153,6 +153,9 @@ def enregistre(etape: str, valeurs: Dict[str, Any]) -> Dict[str, Any]:
                 if k in ("nom", "domaine"):
                     v = v.lower()
             bloc[k] = v
+        if etape == "horloge" and bloc.get("fuseau") not in P.fuseaux():
+            # Refusé ici plutôt que par timedatectl, en pleine application (#1542).
+            raise Refus(f"Fuseau inconnu : « {bloc.get('fuseau')} ». Tapez une ville pour le trouver dans la liste.")
         if section == "reseau" and bloc.get("mode") == "lan":
             bloc.pop("domaine", None)
         if section == "maillage" and bloc.get("mode") != "rejoindre":

@@ -2408,8 +2408,11 @@ xset s noblank 2>/dev/null || true
 
 # URL to display - use localhost for universal compatibility
 URL="https://localhost/"
-# Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522).
+# Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522). Sous
+# l'utilisateur du kiosque, le jeton local est illisible : l'URL posée par
+# le lanceur (root) prime (#1542).
 [ -x /usr/sbin/premier-pas-url ] && URL="${URL%/}/$(/usr/sbin/premier-pas-url 2>/dev/null)"
+[ -s "$HOME/.kiosk-url" ] && URL="$(head -n1 "$HOME/.kiosk-url")"
 
 # Taille réelle de l'écran (#1491) : sans gestionnaire de fenêtres,
 # --start-fullscreen laisse une fenêtre à demi-largeur.
@@ -2518,8 +2521,9 @@ XCONF
 (
     sleep 2
     URL="https://localhost/"
-    # Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522).
+    # Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522, #1542).
     [ -x /usr/sbin/premier-pas-url ] && URL="${URL%/}/$(/usr/sbin/premier-pas-url 2>/dev/null)"
+    [ -s "$HOME/.kiosk-url" ] && URL="$(head -n1 "$HOME/.kiosk-url")"
     export DISPLAY=:0
     xinit /bin/bash -c "
         xset s off 2>/dev/null

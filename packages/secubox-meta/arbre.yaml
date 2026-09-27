@@ -247,6 +247,7 @@ requiert:
   - secubox-system
   - secubox-hardening
 recommande:
+  - secubox-premier-pas         # assistant du premier démarrage + majauto (#1522)
   - secubox-health
   - secubox-health-doctor
   - secubox-watchdog

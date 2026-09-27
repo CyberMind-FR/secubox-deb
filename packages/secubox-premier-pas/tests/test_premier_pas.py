@@ -130,3 +130,20 @@ def test_source_ligne_noyau(tmp_path):
     f = tmp_path / "p.toml"
     f.write_text("")
     assert M.cherche_profil(f"quiet secubox.profil={f}") == f
+
+
+# ── Fuseau horaire (#1542) ─────────────────────────────────────────────────
+
+def test_fuseau_propose_paris_si_utc(tmp_path):
+    tz = tmp_path / "timezone"
+    tz.write_text("Etc/UTC\n")
+    assert P.fuseau_propose(tz) == "Europe/Paris"
+    tz.write_text("America/Montreal\n")
+    assert P.fuseau_propose(tz) == "America/Montreal"
+    assert P.fuseau_propose(tmp_path / "absent") == "Europe/Paris"
+
+
+def test_fuseaux_liste_region_ville():
+    z = P.fuseaux()
+    assert "Europe/Paris" in z
+    assert not any(x.startswith(("Etc/", "posix/")) for x in z)

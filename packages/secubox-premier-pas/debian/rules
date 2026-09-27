@@ -14,6 +14,12 @@ override_dh_auto_install:
 	install -D -m 755 sbin/premier-pas-url debian/secubox-premier-pas/usr/sbin/premier-pas-url
 	install -D -m 755 sbin/premier-pas-console debian/secubox-premier-pas/usr/sbin/premier-pas-console
 	install -D -m 755 sbin/secubox-majauto debian/secubox-premier-pas/usr/sbin/secubox-majauto
+	# Le lanceur du kiosque n'était posé QUE par l'image : une box déjà flashée
+	# ne pouvait jamais ouvrir l'assistant (#1542). Source unique : image/sbin/.
+	install -D -m 755 kiosque/secubox-kiosk-launcher debian/secubox-premier-pas/usr/sbin/secubox-kiosk-launcher
+	# Chromium récent ignore --disable-translate(-features) : seule la politique
+	# gérée retire la bulle « Traduire » de l'assistant (#1542).
+	install -D -m 644 kiosque/secubox-kiosque-policy.json debian/secubox-premier-pas/etc/chromium/policies/managed/secubox-kiosque.json
 	install -d debian/secubox-premier-pas/usr/lib/systemd/system
 	install -m 644 systemd/*.service systemd/*.timer systemd/*.path debian/secubox-premier-pas/usr/lib/systemd/system/
 	install -D -m 644 exemples/profil.toml debian/secubox-premier-pas/usr/share/doc/secubox-premier-pas/examples/profil.toml
