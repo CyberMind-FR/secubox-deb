@@ -176,6 +176,8 @@ def test_modules_down_capped_at_20():
 # ---------------------------------------------------------------------------
 
 def test_default_cache_reader_maps_overview_shape(tmp_path, monkeypatch):
+    # Isolé des mesures directes (#1533) : ce test porte sur le cache seul.
+    monkeypatch.setattr(metrics_collect, "_vitals_direct", lambda: {})
     cache_path = tmp_path / "metrics-cache.json"
     cache_path.write_text(json.dumps({
         "overview": {
@@ -197,6 +199,8 @@ def test_default_cache_reader_maps_overview_shape(tmp_path, monkeypatch):
 
 
 def test_default_cache_reader_missing_file_returns_zeros(tmp_path, monkeypatch):
+    # Isolé des mesures directes (#1533) : ce test porte sur le cache seul.
+    monkeypatch.setattr(metrics_collect, "_vitals_direct", lambda: {})
     monkeypatch.setenv("METRICS_CACHE_PATH", str(tmp_path / "nope.json"))
     out = metrics_collect._default_cache_reader()
     assert out == {"cpu_pct": 0.0, "mem_pct": 0.0, "disk_pct": 0.0, "load1": 0.0, "uptime_s": 0}
@@ -298,3 +302,21 @@ def test_collect_snapshot_hostname_gethostname_fails_degrades(monkeypatch):
     )
     assert rec["hostname"] == "unknown"
     MetricSnapshot(**rec)
+
+
+def test_sans_cache_les_mesures_directes_remplissent(tmp_path, monkeypatch):
+    # #1533 : une box sans secubox-metrics ne publie plus 0 % partout.
+    monkeypatch.setenv(metrics_collect.METRICS_CACHE_PATH_ENV, str(tmp_path / "absent.json"))
+    monkeypatch.setattr(metrics_collect, "_vitals_direct", lambda: {"cpu_pct": 12.0, "disk_pct": 40.0})
+    out = metrics_collect._default_cache_reader()
+    assert out["cpu_pct"] == 12.0 and out["disk_pct"] == 40.0 and out["mem_pct"] == 0.0
+
+
+def test_inactif_n_est_pas_en_panne(monkeypatch):
+    # #1533 : seules les unités « failed » comptent comme en panne.
+    sortie = ("secubox-a.service loaded active running A\n"
+              "secubox-firstboot.service loaded inactive dead F\n"
+              "secubox-b.service loaded failed failed B\n")
+    monkeypatch.setattr(metrics_collect.subprocess, "run",
+                        lambda *a, **k: type("P", (), {"stdout": sortie})())
+    assert metrics_collect._default_unit_lister() == (1, ["secubox-b.service"])

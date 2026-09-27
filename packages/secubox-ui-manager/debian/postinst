@@ -35,8 +35,16 @@ case "$1" in
         systemctl daemon-reload
 
         # Enable services
-        systemctl enable secubox-ui-manager.service
-        systemctl enable secubox-ui-health.timer
+        # UNE UNITÉ MASQUÉE EST UNE DÉCISION D'ADMINISTRATION (#1534) : on la
+        # respecte au lieu d'échouer — sous `set -e`, l'échec bloquait toute
+        # la mise à jour apt de la box (auth, cdn… restaient non configurés).
+        for u in secubox-ui-manager.service secubox-ui-health.timer; do
+            if [ "$(systemctl is-enabled "$u" 2>/dev/null)" = "masked" ]; then
+                echo "secubox-ui-manager: $u masquée, laissée telle quelle"
+            else
+                systemctl enable "$u" || true
+            fi
+        done
 
         # Start if not in chroot
         if [ -z "$DPKG_ROOT" ] && systemctl is-system-running --quiet 2>/dev/null; then

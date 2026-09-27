@@ -1,3 +1,14 @@
+secubox-annuaire (0.10.7-1~bookworm1) bookworm; urgency=medium
+
+  * Flotte (#1533) : « en panne » = unité secubox-* en échec (failed)
+    seulement ; les tâches ponctuelles et modules endormis (inactive) ne
+    le sont pas. CPU, mémoire, disque (/ et /data), charge et durée de
+    fonctionnement mesurés au système quand le cache de secubox-metrics
+    manque : une box neuve ne publie plus 0 % partout, et le disque est
+    enfin mesuré.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 27 Sep 2026 17:00:00 +0200
+
 secubox-annuaire (0.10.6-1~bookworm1) bookworm; urgency=medium
 
   * Export du journal (/log/export) linéaire et hors de la boucle

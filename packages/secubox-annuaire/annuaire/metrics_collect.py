@@ -29,6 +29,7 @@ import json
 import os
 import socket
 import subprocess
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
@@ -61,6 +62,63 @@ def _clamp_pct(v: Any) -> float:
 # default readers — production path
 # ---------------------------------------------------------------------------
 
+def _cpu_pct_direct(pause: float = 0.25) -> float:
+    """% CPU mesuré sur /proc/stat entre deux lectures (#1533)."""
+    def lit():
+        with open("/proc/stat") as f:
+            v = [int(x) for x in f.readline().split()[1:]]
+        idle = v[3] + (v[4] if len(v) > 4 else 0)
+        return sum(v), idle
+    t1, i1 = lit()
+    time.sleep(pause)
+    t2, i2 = lit()
+    dt = t2 - t1
+    return 100.0 * (1 - (i2 - i1) / dt) if dt > 0 else 0.0
+
+
+def _vitals_direct() -> Dict[str, Any]:
+    """Mesures prises au système lui-même (#1533) : une box sans secubox-metrics
+    (box neuve, amd64 réelle) publiait 0 % partout, et le disque n'était mesuré
+    NULLE PART (secubox-metrics n'écrit pas disk_pct). Disque = le plus rempli
+    de / et /data, là où vivent système et données. Chaque mesure échoue seule."""
+    out: Dict[str, Any] = {}
+    try:
+        out["cpu_pct"] = _cpu_pct_direct()
+    except Exception:
+        pass
+    try:
+        info = {}
+        with open("/proc/meminfo") as f:
+            for ligne in f:
+                k, v = ligne.split(":", 1)
+                info[k] = int(v.split()[0])
+        if info.get("MemTotal"):
+            out["mem_pct"] = 100.0 * (1 - info.get("MemAvailable", 0) / info["MemTotal"])
+    except Exception:
+        pass
+    pcts = []
+    for point in ("/", "/data"):
+        try:
+            st = os.statvfs(point)
+            if st.f_blocks:
+                pcts.append(100.0 * (1 - st.f_bavail / st.f_blocks))
+        except OSError:
+            pass
+    if pcts:
+        out["disk_pct"] = max(pcts)
+    try:
+        with open("/proc/loadavg") as f:
+            out["load1"] = float(f.read().split()[0])
+    except Exception:
+        pass
+    try:
+        with open("/proc/uptime") as f:
+            out["uptime_s"] = int(float(f.read().split()[0]))
+    except Exception:
+        pass
+    return out
+
+
 def _default_cache_reader() -> Dict[str, Any]:
     """Best-effort read of /var/cache/secubox/metrics-cache.json (secubox-metrics'
     build_cache() output: {"overview": {...}, "waf": {...}, "connections": {...}}).
@@ -80,7 +138,7 @@ def _default_cache_reader() -> Dict[str, Any]:
             overview = {}
         load_str = str(overview.get("load", "0") or "0").split()
         load1 = _num(load_str[0]) if load_str else 0.0
-        return {
+        lu = {
             "cpu_pct": _num(overview.get("cpu_pct", 0)),
             "mem_pct": _num(overview.get("mem_pct", 0)),
             "disk_pct": _num(overview.get("disk_pct", 0)),
@@ -88,13 +146,22 @@ def _default_cache_reader() -> Dict[str, Any]:
             "uptime_s": int(_num(overview.get("uptime", 0))),
         }
     except Exception:
-        return zero
+        lu = dict(zero)
+    # Ce que le cache ne donne pas (absent, ou champ à 0), le système le dit.
+    direct = _vitals_direct()
+    for k, v in direct.items():
+        if not lu.get(k):
+            lu[k] = v
+    return lu
 
 
 def _default_unit_lister() -> Tuple[int, List[str]]:
     """List secubox-* service units via systemctl; (modules_up, modules_down[:20]).
 
-    "down" = any listed secubox-* unit whose ACTIVE column isn't "active".
+    "down" = unité secubox-* en ÉCHEC (ACTIVE = "failed") (#1533). Une unité
+    simplement « inactive » ne l'est pas : tâche ponctuelle pilotée par minuterie
+    (firstboot, certs-deploy, cache-warm@…) ou module endormi par le sleeper.
+    Les compter faisait passer toute la Flotte pour « down ».
     Never raises: a missing systemctl binary or unexpected output degrades
     to (0, []).
     """
@@ -114,7 +181,7 @@ def _default_unit_lister() -> Tuple[int, List[str]]:
             active = parts[2] if len(parts) > 2 else ""
             if active == "active":
                 up += 1
-            else:
+            elif active == "failed":
                 down.append(unit)
         return up, down[:20]
     except Exception:
