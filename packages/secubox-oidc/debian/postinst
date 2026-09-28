@@ -1,0 +1,22 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+if [ "$1" = "configure" ]; then
+    # Clé de signature (jamais réécrite), répertoires et registre des clients.
+    /usr/sbin/secubox-oidcctl init || echo "secubox-oidc : init incomplet" >&2
+    # Servi par l'agrégateur, sous /api/v1/oidc (le Hall l'expose en /oidc/).
+    python3 - <<'TOML' || echo "secubox-oidc : déclaration dans aggregator.toml impossible" >&2
+import pathlib, re
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+if f.exists():
+    s = f.read_text()
+    if '"oidc"' not in s:
+        s = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "oidc",', s, count=1)
+        f.write_text(s)
+        print("secubox-oidc : oidc déclaré dans aggregator.toml")
+TOML
+    systemctl restart secubox-aggregator >/dev/null 2>&1 || true
+fi
+#DEBHELPER#
+exit 0

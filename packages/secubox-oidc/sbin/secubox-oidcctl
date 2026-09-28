@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: secubox-oidcctl — clés et clients du fournisseur OIDC (#1589).
+
+  init                                   clé de signature + répertoires (idempotent)
+  client-add ID --redirect URI [--redirect URI…] [--app APP] [--name NOM]
+                                         (ré)enregistre un client ; imprime son
+                                         SECRET sur la sortie, UNE fois, pour
+                                         l'outil qui configure le service — qui
+                                         l'écrit aussitôt chez lui. Seule son
+                                         empreinte est gardée ici.
+  client-rm ID                           retire un client
+  client-ls                              liste les clients (jamais de secret)
+
+Réservé à root : c'est lui qui décide quel service peut demander une identité.
+"""
+import argparse
+import grp
+import json
+import os
+import re
+import secrets
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/secubox/oidc")
+from api import fournisseur as F  # noqa: E402
+
+ID = re.compile(r"^[a-z0-9][a-z0-9_-]{1,40}$")
+
+
+def _gid() -> int:
+    try:
+        return grp.getgrnam("secubox").gr_gid
+    except KeyError:
+        return 0
+
+
+def init() -> None:
+    gid = _gid()
+    F.CLIENTS.parent.mkdir(parents=True, exist_ok=True)
+    os.chown(F.CLIENTS.parent, 0, gid)
+    os.chmod(F.CLIENTS.parent, 0o750)
+    if not F.CLIENTS.exists():
+        _ecrit({})
+    cree = F.cree_cle()
+    # La clé est lue par l'agrégateur (utilisateur secubox) et par personne d'autre.
+    uid = _uid_secubox()
+    os.chown(F.CLE.parent, uid, gid)
+    os.chmod(F.CLE.parent, 0o700)
+    os.chown(F.CLE, uid, gid)
+    os.chmod(F.CLE, 0o600)
+    F.BASE.parent.mkdir(parents=True, exist_ok=True)
+    os.chown(F.BASE.parent, uid, gid)
+    os.chmod(F.BASE.parent, 0o700)
+    print("clé créée" if cree else "clé présente, inchangée")
+
+
+def _uid_secubox() -> int:
+    import pwd  # noqa: PLC0415
+    try:
+        return pwd.getpwnam("secubox").pw_uid
+    except KeyError:
+        return 0
+
+
+def _ecrit(d: dict) -> None:
+    fd, tmp = tempfile.mkstemp(dir=str(F.CLIENTS.parent), prefix=".clients.")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(d, f, indent=1, sort_keys=True)
+    os.chown(tmp, 0, _gid())
+    os.chmod(tmp, 0o640)
+    os.replace(tmp, F.CLIENTS)
+
+
+def client_add(a) -> None:
+    if not ID.match(a.id):
+        sys.exit("identifiant de client invalide")
+    for r in a.redirect:
+        if not r.startswith("https://") or "#" in r:
+            sys.exit(f"redirect_uri refusée (https, sans fragment) : {r}")
+    d = F.clients()
+    secret = secrets.token_urlsafe(40)
+    d[a.id] = {"name": a.name or a.id, "app": a.app or "", "redirect_uris": sorted(set(a.redirect)),
+               "secret_sha256": F.empreinte(secret)}
+    _ecrit(d)
+    print(secret)
+
+
+def client_rm(a) -> None:
+    d = F.clients()
+    if d.pop(a.id, None) is None:
+        sys.exit("client inconnu")
+    _ecrit(d)
+
+
+def client_ls(_a) -> None:
+    for cid, c in sorted(F.clients().items()):
+        print(f"{cid}\t{c.get('name')}\tapp={c.get('app') or '-'}\t{' '.join(c.get('redirect_uris') or [])}")
+
+
+def main() -> None:
+    if os.geteuid() != 0:
+        sys.exit("secubox-oidcctl : root requis")
+    p = argparse.ArgumentParser(prog="secubox-oidcctl")
+    s = p.add_subparsers(dest="cmd", required=True)
+    s.add_parser("init")
+    ca = s.add_parser("client-add")
+    ca.add_argument("id")
+    ca.add_argument("--redirect", action="append", required=True)
+    ca.add_argument("--app", default="")
+    ca.add_argument("--name", default="")
+    cr = s.add_parser("client-rm")
+    cr.add_argument("id")
+    s.add_parser("client-ls")
+    a = p.parse_args()
+    {"init": lambda _: init(), "client-add": client_add, "client-rm": client_rm,
+     "client-ls": client_ls}[a.cmd](a)
+
+
+if __name__ == "__main__":
+    main()

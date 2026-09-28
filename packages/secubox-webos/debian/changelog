@@ -1,3 +1,9 @@
+secubox-webos (1.0.359-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : location /oidc/ → fournisseur OpenID Connect secubox-oidc (#1589).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 11:24:16 +0200
+
 secubox-webos (1.0.358-1~bookworm1) bookworm; urgency=high
 
   * Routes du Hall sous require_session (#1581) : la couche d'usager reste

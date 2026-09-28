@@ -44,6 +44,11 @@ case "$1" in
       systemctl start  secubox-photoprism.service || true
     fi
     # NOTE: PhotoPrism itself is NOT installed here — run `photoprismctl install`.
+    # Entrée « SecuBox » par OIDC (#1589) : sans effet tant que secubox-oidc ou
+    # PhotoPrism manquent ; rejouée à chaque configure (le secret est renouvelé).
+    if [ -x /usr/sbin/photoprismctl ]; then
+      timeout 120 /usr/sbin/photoprismctl sso || true
+    fi
     if nginx -t 2>/dev/null; then
       systemctl reload nginx 2>/dev/null || true
     fi
