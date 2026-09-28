@@ -50,6 +50,12 @@ if [ "$1" = "configure" ]; then
         fi
     fi
 
+    # WEBMAIL SANS MOT DE PASSE (#1562) : idempotent, chaque etape verifiee avec
+    # retour arriere ; conteneurs absents ou arretes : ne fait rien.
+    if [ -x /usr/sbin/mailctl ] && [ -d /run/systemd/system ]; then
+        /usr/sbin/mailctl webmail-sso >/dev/null 2>&1 || true
+    fi
+
     # Phase 2: on upgrade from < 2.3, provision Rspamd secrets + data dirs.
     if dpkg --compare-versions "${2:-0}" lt-nl 2.3.0; then
         install -d -m 0700 /etc/secubox/secrets

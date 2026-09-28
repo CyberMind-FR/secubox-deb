@@ -1,3 +1,10 @@
+secubox-core (1.5.27-1~bookworm1) bookworm; urgency=medium
+
+  * /auth/verify rend Remote-Sbx-Mail (la boîte liée à la personne) : le
+    webmail l'ouvre sans mot de passe (ref #1562).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:30:45 +0200
+
 secubox-core (1.5.26-1~bookworm1) bookworm; urgency=medium
 
   * secubox_core.coffre : le coffre des accès par PERSONNE (clé p-<user_uuid>),
