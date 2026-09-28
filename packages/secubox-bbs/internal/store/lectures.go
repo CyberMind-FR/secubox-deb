@@ -40,6 +40,15 @@ func (s *Store) MarqueLu(user, thread int64) error {
 // Un fil jamais ouvert est non-lu — c'est ce qu'attend le lecteur d'un fil
 // qu'il n'a jamais vu.
 func (s *Store) FilsNonLus(user int64) (map[int64]bool, error) {
+	return s.FilsNonLusHors(user, nil)
+}
+
+// FilsNonLusHors : FilsNonLus, sans les fils des salons exclus.
+//
+// LE COMPTEUR DIT CE QUE LA PAGE MONTRE. Un total qui compterait les fils d'un
+// salon que le lecteur ne voit pas annoncerait « 12 nouveaux » la ou il n'en
+// trouvera que 10 — et l'ecart dirait qu'il se passe quelque chose ailleurs.
+func (s *Store) FilsNonLusHors(user int64, exclus map[int64]bool) (map[int64]bool, error) {
 	out := map[int64]bool{}
 	if user <= 0 {
 		// Un visiteur non connecte n'a pas d'historique : ne RIEN marquer est
@@ -47,11 +56,13 @@ func (s *Store) FilsNonLus(user int64) (map[int64]bool, error) {
 		// la page entiere sans que le geste « marquer lu » existe pour lui.
 		return out, nil
 	}
+	hors, args := clauseHorsSalons("t", exclus)
 	rows, err := s.db.Query(`
 		SELECT t.id
 		  FROM threads t
 		  LEFT JOIN lectures l ON l.thread_id = t.id AND l.user_id = ?
-		 WHERE l.lu_at IS NULL OR t.last_post_at > l.lu_at`, user)
+		 WHERE (l.lu_at IS NULL OR t.last_post_at > l.lu_at)`+hors,
+		append([]any{user}, args...)...)
 	if err != nil {
 		return nil, err
 	}

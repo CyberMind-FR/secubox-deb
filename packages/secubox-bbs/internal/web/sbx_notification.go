@@ -31,6 +31,8 @@ import (
 	"net/smtp"
 	"strings"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
 // Le relais. Même valeur que `smtp_hote`/`smtp_port` de metrics.toml, où le
@@ -56,21 +58,13 @@ func (s *Server) notifieReponse(threadID, auteurID int64, titre string) {
 			}
 		}()
 
-		qui, err := s.st.ParticipantsFil(threadID, auteurID)
-		if err != nil || len(qui) == 0 {
-			return
-		}
 		auteur := "quelqu'un"
 		if u, err := s.st.UserInfo(auteurID); err == nil && u.Handle != "" {
 			auteur = u.Handle
 		}
 
-		for _, id := range qui {
-			if !s.st.NotifEmailActif(id) {
-				continue
-			}
-			u, err := s.st.UserInfo(id)
-			if err != nil {
+		for _, u := range s.destinatairesReponse(threadID, auteurID) {
+			if !s.st.NotifEmailActif(u.ID) {
 				continue
 			}
 			adresse := s.adresseSbx(u.Handle)
@@ -83,6 +77,36 @@ func (s *Server) notifieReponse(threadID, auteurID int64, titre string) {
 			}
 		}
 	}()
+}
+
+// destinatairesReponse : les participants d'un fil qui peuvent encore le lire.
+//
+// ON NE PREVIENT QUE QUI PEUT LIRE. Avoir ecrit dans un fil ne donne pas un
+// droit perpetuel sur son salon : retire du salon, un membre ne recoit plus le
+// titre du fil par courriel. Toute lecture qui echoue ecarte le destinataire —
+// un courriel en moins vaut mieux qu'un titre envoye a qui ne devait pas le lire.
+func (s *Server) destinatairesReponse(threadID, auteurID int64) []store.UserInfo {
+	qui, err := s.st.ParticipantsFil(threadID, auteurID)
+	if err != nil || len(qui) == 0 {
+		return nil
+	}
+	fil, err := s.st.ThreadByID(threadID)
+	if err != nil {
+		return nil
+	}
+	out := make([]store.UserInfo, 0, len(qui))
+	for _, id := range qui {
+		u, err := s.st.UserInfo(id)
+		if err != nil {
+			continue
+		}
+		voit, err := s.st.PeutVoirSalon(fil.CategoryID, id, u.Role == store.RoleSysop)
+		if err != nil || !voit {
+			continue
+		}
+		out = append(out, u)
+	}
+	return out
 }
 
 func (s *Server) envoie(adresse, titre, auteur string, threadID int64) error {

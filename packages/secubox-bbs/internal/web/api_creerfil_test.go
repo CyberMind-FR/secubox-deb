@@ -12,7 +12,7 @@ import (
 )
 
 // Le POKE de MetaNews : POST /api/v1/bbs/threads ouvre un fil au nom de la
-// passerelle. Exige un jeton ; crée compte passerelle + catégorie si absents.
+// passerelle. Exige un jeton de passerelle ; crée compte passerelle + catégorie si absents.
 func TestAPICreerFilPasserelle(t *testing.T) {
 	srv := bancAPI(t)
 	body := `{"title":"Incendie près de Marseille",
@@ -35,8 +35,13 @@ func TestAPICreerFilPasserelle(t *testing.T) {
 		t.Fatalf("POST sans jeton devrait être 401, got %d", w.Code)
 	}
 
-	// Avec jeton valide → fil créé.
-	w := post(jetonHS256("le-secret-partage", "sysop", time.Hour))
+	// Jeton de session valide mais sans émetteur passerelle → refusé.
+	if w := post(jetonHS256("le-secret-partage", "sysop", time.Hour)); w.Code != http.StatusForbidden {
+		t.Fatalf("POST avec une session devrait être 403, got %d", w.Code)
+	}
+
+	// Jeton de service de MetaNews → fil créé.
+	w := post(jetonService("le-secret-partage", "metanews"))
 	if w.Code != 200 {
 		t.Fatalf("création refusée : %d — %s", w.Code, w.Body.String())
 	}

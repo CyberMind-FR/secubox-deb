@@ -67,9 +67,18 @@ permissions.
 |---|---|---|
 | POST | `/api/v1/zia/v1/chat` | message → texte + objets référencés + actions + délégation |
 | GET | `/api/v1/zia/health` | vivant, modèle chargé ? |
-| GET | `/api/v1/zia/metrics` | tokens/s, RSS, latence, quota |
+| GET | `/api/v1/zia/metrics` | lecture gardée ; compte d'objets selon le rôle du demandeur |
+| GET | `/api/v1/zia/capabilities` | lecture gardée ; registre des capacités |
+| GET/POST | `/api/v1/zia/config` | administrateur réel seulement (401 sans session, 403 sinon) |
+| POST | `/api/v1/zia/llm/test` | administrateur réel seulement |
 
-`/chat` renvoie `{ text, objects[], actions[], delegate?:{to,reason} }`.
+`/chat` renvoie `{ text, objects[], actions[], delegate?:{to,reason}, meta:{role,ms} }`.
+
+**Rôle du demandeur** (dérivé de la session, jamais du corps — `role` ne peut que
+restreindre) : `admin` = administrateur réel seulement (compte utilisateur actif de rôle
+admin, `est_admin_reel`, #1581) ; autre compte = `member` ; appareil admis au profil
+`admin` ou `user` = `member`, autre profil = `registered` — un appareil n'est jamais
+admin ; sans session = `guest`.
 
 ## Runtime & modèle (ARM64)
 

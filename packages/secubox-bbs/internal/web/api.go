@@ -24,7 +24,13 @@ import (
 func (s *Server) routesAPI() {
 	s.mux.HandleFunc("/api/v1/bbs/status", s.jwt(s.apiStatus))
 	s.mux.HandleFunc("/api/v1/bbs/integrity", s.jwt(s.apiIntegrity))
-	s.mux.HandleFunc("/api/v1/bbs/threads", s.jwt(s.apiThreads))
+	// LIRE LA LISTE COMPLETE EST UN GESTE D'ADMINISTRATEUR ; deposer un fil
+	// est celui d'une passerelle. Deux gardes distinctes : un jeton de membre
+	// — celui de l'application companion, par exemple — est valide pour la
+	// board, et ne doit pas pour autant voir les fils de tous les salons, ni
+	// en deposer au nom de la passerelle (voir apiCreerFil).
+	s.mux.HandleFunc("GET /api/v1/bbs/threads", s.admin(s.apiThreads))
+	s.mux.HandleFunc("POST /api/v1/bbs/threads", s.jwt(s.apiCreerFil))
 	// Content spine (#1166) : cf. api_content.go. Motifs Go 1.22 avec
 	// méthode+PathValue — "by-ref" est un segment littéral, donc plus
 	// spécifique que le joker "{id}" pour le même chemin ; l'ordre
@@ -61,7 +67,17 @@ func (e errJeton) Error() string { return string(e) }
 // Claims : ce que le BBS lit d'un jeton. Volontairement etroit.
 type Claims struct {
 	Sub string `json:"sub"`
+	Iss string `json:"iss"`
 	Exp int64  `json:"exp"`
+}
+
+// emetteursPasserelle : les modules qui deposent des fils au nom de la
+// passerelle, reconnus a l'emetteur (`iss`) de leur jeton de service. Une
+// session SecuBox — membre, appareil ou administrateur — n'en porte pas : elle
+// ouvre les portes d'un membre, pas celle-ci.
+var emetteursPasserelle = map[string]bool{
+	"metanews":    true, // « Discuter » (metanews/internal/web/jwt.go)
+	"socialrelay": true, // fils des reseaux suivis (socialrelay/internal/pipeline)
 }
 
 // claimsJeton valide la signature ET rend le sujet.
@@ -166,13 +182,9 @@ func (s *Server) apiIntegrity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) apiThreads(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		s.apiCreerFil(w, r)
-		return
-	}
-	// L'API d'administration voit TOUT : elle n'est atteignable qu'avec un
-	// jeton valide. C'est le seul endroit du programme ou publicOnly vaut faux
-	// sans qu'une session membre soit en jeu.
+	// L'API d'administration voit TOUT : elle n'est atteignable qu'avec la
+	// session d'un administrateur (voir `admin`). C'est le seul endroit du
+	// programme ou publicOnly vaut faux sans qu'une session membre soit en jeu.
 	th, err := s.st.Recent(100, false)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
@@ -185,7 +197,22 @@ func (s *Server) apiThreads(w http.ResponseWriter, r *http.Request) {
 // pour un module externe authentifié — MetaNews « Discuter » en premier. Le
 // corps porte le résumé + les liens sources ; le fil est marqué de son URL
 // source. Au doute, VISIBILITÉ LOCALE (une passerelle ne publie pas d'office).
+//
+// RESERVE AUX PASSERELLES. Le fil est signe « passerelle » et le salon cible
+// est cree s'il manque : deux gestes qui n'appartiennent qu'a un module dont
+// l'administrateur a fixe le salon dans sa configuration. Un autre jeton de la
+// board recoit 403 avant toute lecture du salon — la reponse ne dit donc rien
+// de l'existence d'un salon.
 func (s *Server) apiCreerFil(w http.ResponseWriter, r *http.Request) {
+	c, err := s.claimsJeton(r.Header.Get("Authorization"))
+	if err != nil {
+		jsonErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	if !emetteursPasserelle[c.Iss] {
+		jsonErr(w, http.StatusForbidden, "réservé aux passerelles")
+		return
+	}
 	var in struct {
 		Title      string `json:"title"`
 		Body       string `json:"body"`

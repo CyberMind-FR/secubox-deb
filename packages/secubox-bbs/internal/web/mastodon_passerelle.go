@@ -266,7 +266,9 @@ func (s *Server) republierMastodon(w http.ResponseWriter, r *http.Request, id in
 	}
 
 	t, err := s.st.ThreadByID(id)
-	if err != nil {
+	if err != nil || !s.masqueVisiteur(v).voit(t.CategoryID) {
+		// Pour qui ne voit pas le salon, le fil n'existe pas : 404, avant toute
+		// explication qui en dirait davantage.
 		http.NotFound(w, r)
 		return
 	}

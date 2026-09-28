@@ -36,6 +36,7 @@ from typing import Dict, List
 
 import httpx
 from fastapi import FastAPI, Request, Response
+from fastapi.security import HTTPAuthorizationCredentials
 
 log = logging.getLogger("secubox.aggregator")
 
@@ -44,6 +45,51 @@ CONFIG_FILE = Path("/etc/secubox/aggregator.toml")
 # Path prefix preserved across all sub-app mounts. Matches existing nginx
 # routes : `/api/v1/<module>/...`.
 API_PREFIX = "/api/v1"
+
+# Répertoire des sockets dédiés. Lu à chaque requête, et non figé à la
+# construction de l'app, pour que les tests puissent le déplacer.
+RUN_DIR = "/run/secubox"
+
+# ── Sockets dédiés réservés à l'administration (#1608) ───────────────────────
+# Un module servi sur son propre socket SANS garde propre, et que seule la
+# console d'administration lit par ce chemin, n'est relayé ici qu'à un
+# ADMINISTRATEUR RÉEL (#1581) : session utilisateur de rôle admin, par cookie
+# SSO ou Bearer — jamais une session d'appareil, quel que soit son profil.
+# 401 sans session, 403 pour tout autre porteur ; le socket n'est pas contacté.
+#
+# actor : sbx-actord (Renseignement). Son API ne vérifie aucune session : elle
+# sert la vue complète (services visés, preuves, feedback) à la seule route qui
+# la demande par `X-Sbx-Vue: complete`. Cette route, c'est ce relais, et il ne
+# pose l'en-tête qu'APRÈS la garde.
+_SOCKETS_ADMIN = frozenset({"actor"})
+
+# L'en-tête de vue est une décision de la ROUTE, pas du visiteur : celui que le
+# client envoie n'est jamais recopié, vers aucun module.
+_ENTETE_VUE = "X-Sbx-Vue"
+_VUE_COMPLETE = "complete"
+
+
+def _garde_administration():
+    """`require_jwt` de secubox-core (session valide + administrateur réel).
+
+    Importé à l'usage : si secubox-core est illisible, seuls les sockets
+    réservés tombent (503), le reste de la passerelle continue de servir."""
+    try:
+        from secubox_core.auth import require_jwt
+    except Exception as e:  # noqa: BLE001 — sans garde, on ne relaie pas
+        log.error("[proxy] garde d'administration indisponible : %s", e)
+        return None
+    return require_jwt
+
+
+def _porteur(request: Request) -> HTTPAuthorizationCredentials | None:
+    """Le jeton Bearer de la requête, comme HTTPBearer(auto_error=False)."""
+    schema, _, jeton = request.headers.get("authorization", "").partition(" ")
+    jeton = jeton.strip()
+    if schema.lower() != "bearer" or not jeton:
+        return None
+    return HTTPAuthorizationCredentials(scheme=schema, credentials=jeton)
+
 
 # Track which modules were successfully mounted and which failed.
 _MOUNTED: List[str] = []
@@ -258,8 +304,10 @@ def _build_app() -> FastAPI:
     # route (their Mount matches first). The sub-app serves its routes at the
     # STRIPPED path (root_path is cosmetic), so /api/v1/jellyfin/partners is
     # forwarded to the socket as /partners.
-    _RUN = "/run/secubox"
-
+    #
+    # Un module de _SOCKETS_ADMIN n'est relayé qu'à un administrateur réel
+    # (#1581). La garde passe AVANT la recherche du socket : la réponse ne
+    # dépend pas de ce que le module tourne ou non.
     @app.api_route(
         f"{API_PREFIX}/{{name}}/{{path:path}}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
@@ -267,14 +315,25 @@ def _build_app() -> FastAPI:
     async def _dedicated_socket_proxy(name: str, path: str, request: Request) -> Response:
         if name in _MOUNTED:
             return Response(status_code=404)
-        sock = f"{_RUN}/{name}.sock"
+        reserve = name in _SOCKETS_ADMIN
+        if reserve:
+            garde = _garde_administration()
+            if garde is None:
+                return Response(status_code=503)
+            # 401 sans session, 403 pour un appareil ou un non-admin :
+            # l'HTTPException remonte telle quelle.
+            await garde(request, _porteur(request))
+        sock = f"{RUN_DIR}/{name}.sock"
         if not os.path.exists(sock):
             return Response(status_code=404)
         url = f"http://localhost/{path}"
         if request.url.query:
             url += f"?{request.url.query}"
         body = await request.body()
-        fwd = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")}
+        fwd = {k: v for k, v in request.headers.items()
+               if k.lower() not in ("host", "content-length", _ENTETE_VUE.lower())}
+        if reserve:
+            fwd[_ENTETE_VUE] = _VUE_COMPLETE
         try:
             async with httpx.AsyncClient(
                 transport=httpx.AsyncHTTPTransport(uds=sock), timeout=60.0

@@ -163,10 +163,28 @@ accepte.
 |---------|-------|-------|
 | GET | `/api/v1/bbs/status` | compteurs et modules actifs |
 | GET | `/api/v1/bbs/integrity` | écart disque ↔ index |
-| GET | `/api/v1/bbs/threads` | derniers fils (vue complète) |
+| GET | `/api/v1/bbs/threads` | derniers fils (vue complète) — **administrateur seulement** |
+| POST | `/api/v1/bbs/threads` | dépôt d'un fil par une passerelle (MetaNews, SocialRelay) |
 | POST | `/api/v1/bbs/invite` | émet une invitation |
 | POST | `/api/v1/bbs/backup` | archive transportable |
 | POST | `/api/v1/bbs/reindex` | reconstruit l'index |
+
+### API des membres (`/api/v1/bbs/m/…`)
+
+Utilisée par l'application companion. Le sujet du jeton est résolu vers un
+compte du BBS, et chaque route applique **la même visibilité que les pages** :
+
+| Méthode | Route | Effet |
+|---------|-------|-------|
+| GET | `/api/v1/bbs/m/salons` | salons visibles par ce compte |
+| GET | `/api/v1/bbs/m/fils` | derniers fils des salons visibles |
+| GET | `/api/v1/bbs/m/fils/{id}` | un fil et ses messages |
+| POST | `/api/v1/bbs/m/fils/{id}/reponse` | répondre (local par défaut) |
+
+Un salon privé n'existe que pour ses membres conviés (nommément ou par une
+communauté) et pour le sysop : absent de la liste, ses fils absents de
+`/m/fils`, et `/m/fils/{id}` répond **404** — la même réponse qu'un fil qui
+n'existe pas. Si la liste des accès est illisible, tout salon privé est caché.
 
 ---
 

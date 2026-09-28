@@ -122,12 +122,23 @@ func toWeb(a *graph.Actor) webActor {
 	}
 }
 
-func (s *Server) handleActors(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleActors(w http.ResponseWriter, r *http.Request) {
+	reduite := vueReduite(r)
 	s.mu.Lock()
 	list := s.graph.Actors()
-	out := make([]webActor, 0, len(list))
-	for _, a := range list {
-		out = append(out, toWeb(a))
+	var out any
+	if reduite {
+		red := make([]webActorReduit, 0, len(list))
+		for _, a := range list {
+			red = append(red, toWebReduit(a))
+		}
+		out = red
+	} else {
+		comp := make([]webActor, 0, len(list))
+		for _, a := range list {
+			comp = append(comp, toWeb(a))
+		}
+		out = comp
 	}
 	s.mu.Unlock()
 	writeJSON(w, out)
@@ -135,11 +146,16 @@ func (s *Server) handleActors(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleActor(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	reduite := vueReduite(r)
 	s.mu.Lock()
 	a, ok := s.graph.Get(id)
-	var wa webActor
+	var wa any
 	if ok {
-		wa = toWeb(a)
+		if reduite {
+			wa = toWebReduit(a)
+		} else {
+			wa = toWeb(a)
+		}
 	}
 	s.mu.Unlock()
 	if !ok {
@@ -247,22 +263,42 @@ func (s *Server) signatureActeur(cibles []string) string {
 	return signatureCampagne(cibles)
 }
 
-func (s *Server) handleCampaigns(w http.ResponseWriter, _ *http.Request) {
-	s.mu.Lock()
-	type grp struct {
-		Signature   string   `json:"signature"`
-		Acteurs     []string `json:"acteurs"`
-		NbActeurs   int      `json:"nb_acteurs"`
-		Sources     int      `json:"sources"`
-		Pays        int      `json:"pays"`
-		Cibles      []string `json:"cibles"`
-		Inexistants int      `json:"cibles_inexistantes"`
-		Priorite    int      `json:"priorite"`
-		Continuite  int      `json:"continuite"`
-		Premier     int64    `json:"premier"`
-		Dernier     int64    `json:"dernier"`
+// campagne est un groupe d'acteurs de même mode opératoire, tel que la vue
+// complète le rend. nbCibles compte TOUTES les cibles distinctes, là où Cibles
+// est borné pour l'affichage ; il ne sert qu'à la vue réduite.
+type campagne struct {
+	Signature   string   `json:"signature"`
+	Acteurs     []string `json:"acteurs"`
+	NbActeurs   int      `json:"nb_acteurs"`
+	Sources     int      `json:"sources"`
+	Pays        int      `json:"pays"`
+	Cibles      []string `json:"cibles"`
+	Inexistants int      `json:"cibles_inexistantes"`
+	Priorite    int      `json:"priorite"`
+	Continuite  int      `json:"continuite"`
+	Premier     int64    `json:"premier"`
+	Dernier     int64    `json:"dernier"`
+	nbCibles    int
+}
+
+func (s *Server) handleCampaigns(w http.ResponseWriter, r *http.Request) {
+	out := s.campagnes()
+	if vueReduite(r) {
+		red := make([]campagneReduite, 0, len(out))
+		for _, c := range out {
+			red = append(red, s.campagneReduite(c))
+		}
+		writeJSON(w, red)
+		return
 	}
-	par := map[string]*grp{}
+	writeJSON(w, out)
+}
+
+// campagnes calcule les groupes servis par /campaigns (vue complète).
+func (s *Server) campagnes() []*campagne {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	par := map[string]*campagne{}
 	ips := map[string]map[string]bool{}
 	pays := map[string]map[string]bool{}
 	vues := map[string]map[string]bool{} // cibles déjà comptées, par groupe
@@ -273,7 +309,7 @@ func (s *Server) handleCampaigns(w http.ResponseWriter, _ *http.Request) {
 		sig := s.signatureActeur(a.Targets)
 		g := par[sig]
 		if g == nil {
-			g = &grp{Signature: sig, Premier: a.FirstSeen, Dernier: a.LastSeen}
+			g = &campagne{Signature: sig, Premier: a.FirstSeen, Dernier: a.LastSeen}
 			par[sig] = g
 			ips[sig] = map[string]bool{}
 			pays[sig] = map[string]bool{}
@@ -317,7 +353,7 @@ func (s *Server) handleCampaigns(w http.ResponseWriter, _ *http.Request) {
 			g.Dernier = a.LastSeen
 		}
 	}
-	out := make([]*grp, 0, len(par))
+	out := make([]*campagne, 0, len(par))
 	for sig, g := range par {
 		// UNE CAMPAGNE SUPPOSE UNE PLURALITE : soit plusieurs acteurs, soit un
 		// acteur qui s'est deplace. Un profil isole n'en est pas une.
@@ -326,6 +362,7 @@ func (s *Server) handleCampaigns(w http.ResponseWriter, _ *http.Request) {
 		}
 		g.Sources = len(ips[sig])
 		g.Pays = len(pays[sig])
+		g.nbCibles = len(vues[sig])
 		sort.Strings(g.Acteurs)
 		out = append(out, g)
 	}
@@ -335,8 +372,7 @@ func (s *Server) handleCampaigns(w http.ResponseWriter, _ *http.Request) {
 		}
 		return out[i].Signature < out[j].Signature
 	})
-	s.mu.Unlock()
-	writeJSON(w, out)
+	return out
 }
 
 func (s *Server) handleEvidence(w http.ResponseWriter, r *http.Request) {
