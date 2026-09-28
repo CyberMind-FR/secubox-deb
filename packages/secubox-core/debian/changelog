@@ -1,3 +1,11 @@
+secubox-core (1.5.25-1~bookworm1) bookworm; urgency=medium
+
+  * sbxid.activites_visibles(conn, lecteur) : LA règle de visibilité du flux
+    d'activités (public / node / community membre / private auteur) ;
+    emet_activite(at=…) garde l'heure d'un événement collecté (ref #1560).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:07:55 +0200
+
 secubox-core (1.5.24-1~bookworm1) bookworm; urgency=medium
 
   * secubox_core.reseau : choisit_lan_ip / lan_ip — l'adresse LAN d'une box,

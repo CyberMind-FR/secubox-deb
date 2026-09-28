@@ -1372,6 +1372,8 @@ const FEATURED = [
   {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true, admin:"/nextcloud/"},
   {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264, admin:"/mastodon/"},
   {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264, admin:"/bbs/"},
+  // SBX OS P4 (#1560) : le flux des gestes de la box, filtré pour qui regarde.
+  {id:"activite",   label:"Activité",   icon:"✦", color:"#6a4bb8", carte:"/cardlets/activite.html", h:280},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", micro:"/micro", h:222},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro", h:330},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in", carte:"/cardlets/peertube.html", h:300},
@@ -2232,7 +2234,8 @@ const CARDLETS_INFO=[
   {ic:"✋", nom:"Qui frappe ?", li:"Tentatives d'accès en cours vues par le WAF — donnée de sécurité, session requise."},
   {ic:"☁️", nom:"Délégués", li:"Cloud, Photos, Social, Mail : aperçu authentifié + validation d'accès souveraine."},
   {ic:"📊", nom:"Cumul (groupe)", li:"Carte de groupe : santé et activité d'un ensemble de services (sécurité, contenu, cloud…) d'un coup d'œil."},
-  {ic:"⚡", nom:"Accès rapide", li:"Saut direct vers un service (Dépôt, YTSaS, Torrent) avec son état en direct."}
+  {ic:"⚡", nom:"Accès rapide", li:"Saut direct vers un service (Dépôt, YTSaS, Torrent) avec son état en direct."},
+  {ic:"✦", nom:"Activité", li:"Arrivées, communautés, fils ouverts, fichiers partagés, diffusions — ce que vous avez le droit de voir, selon votre place dans la box."}
 ];
 (function(){
   var z=document.getElementById('aide-cartes'); if(!z) return;

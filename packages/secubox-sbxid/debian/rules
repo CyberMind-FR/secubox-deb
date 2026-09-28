@@ -8,6 +8,9 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -d debian/secubox-sbxid/usr/lib/secubox/sbxid/api
 	install -m 644 api/*.py debian/secubox-sbxid/usr/lib/secubox/sbxid/api/
+	install -D -m 755 sbin/secubox-sbxid-activites debian/secubox-sbxid/usr/sbin/secubox-sbxid-activites
+	install -D -m 644 systemd/secubox-sbxid-activites.service debian/secubox-sbxid/usr/lib/systemd/system/secubox-sbxid-activites.service
+	install -D -m 644 systemd/secubox-sbxid-activites.timer debian/secubox-sbxid/usr/lib/systemd/system/secubox-sbxid-activites.timer
 	install -d debian/secubox-sbxid/usr/share/secubox/www/identite
 	install -m 644 www/identite/index.html debian/secubox-sbxid/usr/share/secubox/www/identite/
 	install -d debian/secubox-sbxid/etc/secubox/nginx-available

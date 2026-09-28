@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox SBX OS — collecte des activités chaque minute (#1560)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

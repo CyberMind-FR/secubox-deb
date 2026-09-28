@@ -154,12 +154,18 @@ function peint(liste){
       a.target = '_blank'; a.rel = 'noopener'; t.append(a);
     }
     else if (m.source === 'bbs') t.append(el('span', 'v', 'BBS'));
+    // ACTIVITÉ SBX OS (#1560, P4) : un geste, pas un message — pas de réponse.
+    else if (m.source === 'activite') t.append(el('span', 'v', m.communaute ? '✦ ' + m.communaute : '✦ activité'));
     else if (m.auteur_type === 'visiteur') t.append(el('span', 'v', 'visiteur'));
     if (m.prive) t.append(el('span', null, '→ ' + (m.de_moi ? (m.dest_pseudo || '?') : 'vous')));
     t.append(el('span', 'd', quand(m.cree_le)));
     b.append(t);
     if (m.parent && index[m.parent]) b.append(el('div', 'cit', '↳ ' + index[m.parent].pseudo + ' : ' + index[m.parent].corps));
     b.append(el('div', 'corps' + (m.supprime ? ' sup' : ''), m.supprime ? 'message retiré' : m.corps));
+    // Lien de l'activité : chemin INTERNE seulement (« / » puis pas « // »).
+    if (m.source === 'activite' && /^\/(?!\/)/.test(m.lien || '')){
+      const a = el('a', 'v', 'ouvrir ↗'); a.href = m.lien; a.target = '_top'; b.append(a);
+    }
     if (!m.supprime){
       const a = el('div', 'a');
       if (!m.de_moi){
@@ -211,7 +217,7 @@ function repondre(m, vis){
   $('rep-t').textContent = 'Réponse à ' + m.pseudo + ' : « ' + m.corps.slice(0, 60) + ' »';
   $('rep-v').value = vis;
   // radio et Billets sont publics : on y répond publiquement, À LA SOURCE
-  $('rep-v').hidden = m.source === 'radio' || m.source === 'billets';
+  $('rep-v').hidden = m.source === 'radio' || m.source === 'billets' || m.source === 'activite';
   $('rep').classList.add('on'); $('l-haut').querySelector('#dest').hidden = true;
   $('corps').focus();
 }

@@ -687,7 +687,7 @@ def capacites_accordees(conn, user_uuid: str) -> set:
 
 def emet_activite(conn, kind: str, *, author: str, visibility: str, origin_node: str,
                   context: Optional[Dict[str, Any]] = None,
-                  community_uuid: Optional[str] = None) -> str:
+                  community_uuid: Optional[str] = None, at: Optional[int] = None) -> str:
     """Inscrit une activité (auteur, contexte, visibilité, horodatage, nœud
     d'origine). Le contexte suit la forme canonique : pas de flottant, pour
     pouvoir voyager signé entre boxes (P7)."""
@@ -705,5 +705,51 @@ def emet_activite(conn, kind: str, *, author: str, visibility: str, origin_node:
     aid = str(uuid.uuid4())
     conn.execute("INSERT INTO sbx_activity (activity_uuid,kind,author,community_uuid,context,"
                  "visibility,at,origin_node) VALUES (?,?,?,?,?,?,?,?)",
-                 (aid, kind, author, community_uuid, ctx, visibility, _horloge(), origin_node))
+                 (aid, kind, author, community_uuid, ctx, visibility,
+                  int(at) if at else _horloge(), origin_node))    # `at` : l'heure de l'événement collecté (#1560)
     return aid
+
+
+def activites_visibles(conn, lecteur: Optional[str], n: int = 50,
+                       depuis: int = 0) -> List[Dict[str, Any]]:
+    """Le flux d'activités que CE lecteur a le droit de voir (#1560, P4).
+
+    UNE règle, pour l'Identity Manager, le mur de la messagerie et le Hall :
+      public    → tout le monde, visiteur compris ;
+      node      → une personne SBX OS active de cette box ;
+      community → les membres de la communauté (non archivée) ;
+      private   → l'auteur seul.
+    `lecteur` : user_uuid, ou None pour un visiteur. L'auteur est résolu en
+    pseudo quand c'est une personne ; « bbs:<handle> » et « diffusion »
+    (auteur anonyme du Hall) restent tels quels."""
+    n = max(1, min(int(n), 200))
+    actif = bool(lecteur) and conn.execute(
+        "SELECT 1 FROM sbx_users WHERE user_uuid=? AND status='active'", (lecteur,)).fetchone() is not None
+    clauses, args = ["a.visibility='public'"], []
+    if actif:
+        clauses.append("a.visibility='node'")
+        clauses.append("(a.visibility='community' AND a.community_uuid IN (SELECT m.community_uuid "
+                       "FROM sbx_community_members m JOIN sbx_communities c USING (community_uuid) "
+                       "WHERE m.user_uuid=? AND c.archived_at IS NULL))")
+        args.append(lecteur)
+        clauses.append("(a.visibility='private' AND a.author=?)")
+        args.append(lecteur)
+    rows = conn.execute(
+        "SELECT a.activity_uuid, a.kind, a.author, a.community_uuid, a.context, a.visibility, a.at, "
+        "a.origin_node, u.pseudo AS author_pseudo, c.name AS community_name "
+        "FROM sbx_activity a LEFT JOIN sbx_users u ON u.user_uuid=a.author "
+        "LEFT JOIN sbx_communities c ON c.community_uuid=a.community_uuid "
+        f"WHERE a.at > ? AND ({' OR '.join(clauses)}) ORDER BY a.at DESC LIMIT ?",
+        [int(depuis)] + args + [n]).fetchall()
+    out = []
+    for r in rows:
+        d = {k: r[k] for k in r.keys()} if hasattr(r, "keys") else dict(zip(
+            ("activity_uuid", "kind", "author", "community_uuid", "context", "visibility", "at",
+             "origin_node", "author_pseudo", "community_name"), r))
+        try:
+            d["context"] = json.loads(d["context"]) if d["context"] else {}
+        except ValueError:
+            d["context"] = {}
+        d["qui"] = d.pop("author_pseudo") or d["author"]
+        out.append(d)
+    return out
