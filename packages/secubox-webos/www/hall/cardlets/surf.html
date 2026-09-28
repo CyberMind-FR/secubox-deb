@@ -265,10 +265,13 @@
   function majDos() {
     var d = $('dos'); if (d) d.hidden = pile.length < 1;
   }
+  // Le Hall nous pose, à sa propre origine : c'est à elle, et à elle seule,
+  // qu'on écrit (#1609).
+  var HALL = location.origin;
   // On previent le Hall de l'hote courant : son entete d'overlay le montre.
   function diHote(h) {
     if (parent === window) return;
-    try { parent.postMessage({ sbx: 'surf-hote', hote: h }, '*'); } catch (e) {}
+    try { parent.postMessage({ sbx: 'surf-hote', hote: h }, HALL); } catch (e) {}
   }
 
   function surfe(saisie, sansEmpiler) {
@@ -323,13 +326,25 @@
       var host = cibleDe(u.hostname) || u.hostname;
       real = 'https://' + host + u.pathname + u.search;
     } catch (e) { return; }
+    // LE SORT RÉEL DE LA DIFFUSION (#1609). La box rend l'état qu'elle a posé :
+    // seul un 2xx qui dit `actif` est une diffusion. 401/403 : la diffusion au
+    // parc est réservée aux personnes connectées.
+    function dit(t) { var el = $('etat'); if (el) { el.hidden = false; el.textContent = t; } }
     fetch('/api/v1/webos/public/broadcast', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: real, titre: (($('surf-ov-h') || {}).textContent || host || '') })
-    }).then(function () {
-      var el = $('etat'); if (el) { el.hidden = false; el.textContent = '📡 diffusé au parc — visible dans « 📡 direct »'; }
-      try { parent.postMessage({ sbx: 'broadcast-on' }, '*'); } catch (e) {}
-    }).catch(function () {});
+    }).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (j) {
+        if (r.ok && j && j.actif === true) {
+          dit('📡 diffusé au parc — visible dans « 📡 direct »');
+          try { parent.postMessage({ sbx: 'broadcast-on' }, HALL); } catch (e) {}
+        } else if (r.status === 401 || r.status === 403) {
+          dit('🔒 Réservé aux personnes connectées — la diffusion au parc demande une session');
+        } else {
+          dit('⚠️ Diffusion impossible (' + (r.ok ? 'adresse refusée' : 'HTTP ' + r.status) + ')');
+        }
+      });
+    }).catch(function () { dit('⚠️ Diffusion impossible (box injoignable)'); });
   });
 
   // 🎬 VOIR SOUVERAIN (#1266b). On remonte au Hall l'adresse REELLE de la page
@@ -340,7 +355,7 @@
     if (!courant) return;
     var real = urlReelle(courant);
     if (!estMediaSurf(real)) return;
-    try { parent.postMessage({ sbx: 'surf-catch', url: real, titre: courant.host }, '*'); } catch (e) {}
+    try { parent.postMessage({ sbx: 'surf-catch', url: real, titre: courant.host }, HALL); } catch (e) {}
     var el = $('etat'); if (el) { el.hidden = false; el.textContent = '🎬 ' + courant.host + ' — rapatrié dans le lecteur souverain'; }
   });
 
@@ -372,7 +387,7 @@
     document.querySelectorAll('.accueil .ex button').forEach(function (b) {
       b.addEventListener('click', function () { surfe(b.dataset.u); });
     });
-    if (parent !== window) { try { parent.postMessage({ sbx: 'surf-hote', hote: 'accueil' }, '*'); } catch (e) {} }
+    if (parent !== window) { try { parent.postMessage({ sbx: 'surf-hote', hote: 'accueil' }, HALL); } catch (e) {} }
   }
   $('home').addEventListener('click', accueil);
 
@@ -388,11 +403,22 @@
   if (CHROME_HALL) {
     var xf = $('fermer'); if (xf) { xf.hidden = false;
       xf.addEventListener('click', function () {
-        try { parent.postMessage({ sbx: 'surf-close' }, '*'); } catch (e) {}
+        try { parent.postMessage({ sbx: 'surf-close' }, HALL); } catch (e) {}
       }); }
   }
+  // LES COMPTEURS DU RELAIS SONT DES NOMBRES (#1609) : la page relayée tourne
+  // dans le cadre même qui les annonce ; on n'en garde que des entiers bornés.
+  function nombres(S) {
+    var o = {};
+    ['trackers', 'pubs', 'tiers', 'cookies', 'notifs', 'popups', 'total'].forEach(function (k) {
+      var n = Math.floor(Number(S && S[k]));
+      o[k] = (isFinite(n) && n > 0) ? Math.min(n, 999999) : 0;
+    });
+    return o;
+  }
   function metricsHTML(S) {
-    var total = S.total || 0, pct = total ? Math.round((S.trackers||0) / total * 100) : 0;
+    S = nombres(S);
+    var total = S.total || 0, pct = total ? Math.min(100, Math.round((S.trackers||0) / total * 100)) : 0;
     function pic(ic, n, l){ return '<span class="s'+((n||0)?'':' z')+'" title="'+l+'">'+ic+' <b>'+(n||0)+'</b></span>'; }
     return pic('🎯', S.trackers, 'traqueurs') + pic('📢', S.pubs, 'pubs')
       + pic('🍪', S.cookies, 'cookies réécrits') + pic('🔔', S.notifs, 'notifications bloquées')
@@ -405,8 +431,9 @@
     // overlay comme en standalone. L'entete du Hall etant masquee, il n'y a
     // plus de doublon. La barre d'adresse (ligne 1) garde le ✕.
     var z = document.getElementById('stats'); if (!z) return;
+    S = nombres(S);
     var total = S.total || 0;
-    var pct = total ? Math.round((S.trackers||0) / total * 100) : 0;
+    var pct = total ? Math.min(100, Math.round((S.trackers||0) / total * 100)) : 0;
     function pic(ic, n, lib){ return '<span class="s'+((n||0)?'':' z')+'" title="'+lib+'">'+ic+' <b>'+(n||0)+'</b></span>'; }
     z.innerHTML =
         pic('🎯', S.trackers, 'traqueurs référencés')
@@ -420,21 +447,39 @@
     z.classList.remove('hidden');
     var e2 = $('etat'); if (e2) e2.hidden = true;
   }
+  // QUI NOUS PARLE (#1609). Compteurs et navigation viennent du cadre du
+  // relais, et d'une origine surf-… de la box ; les ordres, du Hall qui nous
+  // a posés, à notre origine. Tout autre message est ignoré.
+  function estSurf(h) {
+    var suf = SBX_DOMAINE.hote('.gk2.secubox.in');
+    return h.indexOf('surf-') === 0 && h.length > suf.length && h.slice(-suf.length) === suf;
+  }
+  function duRelais(ev) {
+    var f = document.querySelector('#vue iframe');
+    if (!f || ev.source !== f.contentWindow) return false;
+    try { var o = new URL(ev.origin); return o.protocol === 'https:' && estSurf(o.hostname); }
+    catch (e) { return false; }
+  }
+  function duHall(ev) { return parent !== window && ev.source === parent && ev.origin === HALL; }
   addEventListener('message', function (ev) {
     var d = ev.data;
     if (!d) return;
-    if (d.sbx === 'surf-stats') { poseStats(d.stats); return; }
+    if (d.sbx === 'surf-stats') { if (duRelais(ev)) poseStats(d.stats); return; }
     if (d.sbx === 'surf-back') {
+      if (!duHall(ev)) return;
       if (!recule() && parent !== window) {
-        try { parent.postMessage({ sbx: 'surf-vide' }, '*'); } catch (e) {}
+        try { parent.postMessage({ sbx: 'surf-vide' }, HALL); } catch (e) {}
       }
       return;
     }
     // UN LIEN INTERNE A NAVIGUE (annonce par l'injection du relais). On empile
     // la page qu'on quitte et on adopte la nouvelle — « precedent » marchera.
-    if (d.sbx === 'surf-nav' && d.href) {
+    // L'adresse annoncée est elle-même une origine surf-… en https : c'est
+    // elle que ⧉ ouvrira.
+    if (d.sbx === 'surf-nav' && d.href && duRelais(ev)) {
       try {
         var u = new URL(d.href);
+        if (u.protocol !== 'https:' || !estSurf(u.hostname)) return;
         if (!courant || u.href.indexOf(new URL(courant.surf).host) < 0 ||
             u.pathname !== new URL(courant.surf).pathname) {
           var hote = cibleDe(u.hostname) || u.hostname;

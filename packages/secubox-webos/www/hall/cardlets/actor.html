@@ -158,6 +158,7 @@
   "use strict";
   var el=function(id){return document.getElementById(id);};
   function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+  function acteursSiSession(){return jget('/api/v1/acces/session/etat').then(function(s){return s&&s.session?jget('/api/v1/actor/actors'):null;});}
   function jget(u){return fetch(u,{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
 
   var VECLBL={knowledge:["🧠","connaiss."],continuity:["🔗","continuité"],intent:["🎯","intention"],
@@ -209,7 +210,9 @@
 
   function tick(){
     if(document.hidden) return;
-    Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors')]).then(function(r){
+    // La liste des acteurs demande une session ; sans elle, les compteurs
+    // seuls. On ne l'appelle pas à vide : sonde.js fermerait tout « actor ».
+    Promise.all([jget('/api/v1/actor/stats'),acteursSiSession()]).then(function(r){
       if(!r[0]){el('list').innerHTML='<div class="vide">Moteur Actor Intelligence injoignable.</div>';return;}
       rendKPIs(r[0]);ACTS=r[1]||[];
       if(CUR&&!ACTS.some(function(x){return x.id===CUR;}))CUR=null;

@@ -30,6 +30,9 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from . import relais
 
 CHROMIUM = "/usr/bin/chromium"
 _CACHE = Path("/var/lib/secubox/surf/rendu")
@@ -81,6 +84,53 @@ def _classe(medias: list[str]) -> list[str]:
     """Manifestes d'abord : une piste HLS bat un fichier isole, car c'est elle
     qui porte toutes les qualites. L'ordre d'arrivee departage le reste."""
     return [u for u in medias if _manifeste(u)] + [u for u in medias if not _manifeste(u)]
+
+
+# ── LE RENDU NE SORT QUE PAR LE RELAIS (#1609) ──────────────────────────────
+#
+# LA RÈGLE. Le Chromium du rendu tourne SUR la box et exécute le JavaScript
+# d'un site extérieur. Il ne parle donc qu'aux origines surf, en HTTPS sur
+# 443 — c'est-à-dire au relais, dont la sortie est gardée (cf. egress). Tout
+# le reste, adresse littérale, autre service de la box, autre port, WebSocket
+# ou WebRTC direct, n'a aucun chemin.
+#
+# COMMENT ELLE TIENT. Chromium reçoit un mandataire qui ne répond pas, et une
+# SEULE exception : `surf-*.<suffixe>:443`. Sans mandataire joignable, ce qui
+# n'est pas l'exception échoue — et Chromium ne résout même pas le nom
+# localement. `<-loopback>` retire l'exception implicite que Chromium accorde
+# à la boucle locale ; le port fixé ferme les autres ports de la box derrière
+# un nom surf. WebRTC n'a pas d'UDP hors mandataire.
+#
+# Mesuré sur Chromium 147 : sans ces drapeaux, une page rendue atteint
+# 127.0.0.1, ::1, localhost, l'adresse LAN et un autre nom de la box ; avec,
+# seule l'origine surf reçoit des requêtes.
+MANDATAIRE_MUET = "http://127.0.0.1:1"
+
+
+def _exception_surf() -> str:
+    return f"{relais.PREFIXE}-*.{relais.SUFFIXE}:443"
+
+
+def drapeaux_sortie() -> list[str]:
+    """Les drapeaux qui ne laissent sortir Chromium que vers le relais."""
+    return ["--proxy-server=" + MANDATAIRE_MUET,
+            "--proxy-bypass-list=<-loopback>;" + _exception_surf(),
+            "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"]
+
+
+def origine_surf(url: str) -> bool:
+    """L'URL désigne-t-elle une origine surf en HTTPS sur 443 ? Seules
+    celles-là se rendent : les autres n'auraient de toute façon aucun chemin."""
+    try:
+        u = urlsplit(url)
+        port = u.port
+    except ValueError:
+        return False
+    hote = (u.hostname or "").lower().rstrip(".")
+    return (u.scheme == "https" and port in (None, 443)
+            and hote.startswith(relais.PREFIXE + "-")
+            and hote.endswith("." + relais.SUFFIXE)
+            and "." not in hote[: -len(relais.SUFFIXE) - 1])
 
 
 def disponible() -> bool:
@@ -135,7 +185,7 @@ def rends(url: str, budget_ms: int = 9000,
     aussi ce qui rend l'ardoise des medias sans ambiguite.
     """
     global _ouverte
-    if not disponible():
+    if not disponible() or not origine_surf(url):
         return None
     cache = _du_cache(url)
     if cache is not None:
@@ -168,6 +218,8 @@ def rends(url: str, budget_ms: int = 9000,
                  # manifeste, et l'ardoise resterait vide. On l'autorise pour
                  # que le media se declare — personne n'ecoute ce Chromium.
                  "--autoplay-policy=no-user-gesture-required",
+                 # La sortie : le relais, et lui seul (#1609, cf. plus haut).
+                 *drapeaux_sortie(),
                  "--virtual-time-budget=%d" % budget_ms, "--dump-dom", url],
                 capture_output=True, text=True, timeout=timeout)
             dom = p.stdout or ""

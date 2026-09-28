@@ -291,7 +291,12 @@
   // (observe). On dit « continuité de campagne probable », jamais « même personne »
   // (RFC-0007) — l'ASN/pays sont du routage, pas une identité.
   function coucheActeurs(corps) {
-    return Promise.all([jget('/api/v1/actor/stats'), jget('/api/v1/actor/actors')]).then(function (r) {
+    // La liste des acteurs demande une session ; sans elle, les compteurs seuls
+    // (un 401 fermerait tout « actor » dans sonde.js, compteurs compris).
+    var acteurs = jget('/api/v1/acces/session/etat').then(function (e) {
+      return e && e.session ? jget('/api/v1/actor/actors') : null;
+    });
+    return Promise.all([jget('/api/v1/actor/stats'), acteurs]).then(function (r) {
       var s = r[0], acts = r[1] || [];
       if (!s) { corps.innerHTML = '<div class="vide">Renseignement acteurs injoignable.</div>'; return; }
       var top = acts.slice(0, 3).map(function (a) {
@@ -415,6 +420,11 @@
     }
     // Intentions des cartes EMBARQUEES (enfants) -> relayees au Hall : sinon
     // leurs liens/boutons resteraient captifs de la carte cumulative.
+    // Seule la carte embarquée de la couche parle, à l'origine de son cadre ;
+    // on ne relaie qu'au Hall, à notre origine (#1609).
+    var fe = document.querySelector('#corps iframe'), oe = '';
+    try { oe = fe ? new URL(fe.src, location.href).origin : ''; } catch (e) {}
+    if (!fe || ev.source !== fe.contentWindow || !oe || oe === 'null' || ev.origin !== oe) return;
     if (parent !== window && ev.source !== parent) {
       // 'ouvre' porte l'id du service (désormais MASQUÉ dans le Hall) : le
       // contrôle source/id du Hall le rejetterait, et le lien « ne serait plus
@@ -424,12 +434,12 @@
       if (d.sbx === 'ouvre' && d.url) {
         var hote2 = (couches[cur] && couches[cur].host) || '';
         try { var u2 = new URL(d.url); if (u2.host) hote2 = u2.host; } catch (e) {}
-        try { parent.postMessage({ sbx: 'ouvre-hote', hote: hote2, url: d.url }, '*'); } catch (e) {}
+        try { parent.postMessage({ sbx: 'ouvre-hote', hote: hote2, url: d.url }, location.origin); } catch (e) {}
         return;
       }
       if (['ouvre-hote', 'surf', 'surf-close', 'surf-vide', 'surf-hote',
            'voir', 'valider', 'connexion', 'contexte'].indexOf(d.sbx) >= 0) {
-        try { parent.postMessage(d, '*'); } catch (e) {}
+        try { parent.postMessage(d, location.origin); } catch (e) {}
       }
     }
   });
