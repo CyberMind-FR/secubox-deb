@@ -1,0 +1,17 @@
+# SecuBox Media — supports USB montés au démarrage (#1571).
+# Les supports cochés « Monter au démarrage » dans le panneau Média, mémorisés
+# par UUID dans /etc/secubox/media-automount.json, repassent par
+# `mediactl mount` : mêmes gardes qu'un montage à la main.
+[Unit]
+Description=SecuBox Media — montage des supports mémorisés au démarrage
+After=local-fs.target systemd-udevd.service
+ConditionPathExists=/etc/secubox/media-automount.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/mediactl automount
+RemainAfterExit=yes
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

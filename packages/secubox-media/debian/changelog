@@ -1,3 +1,14 @@
+secubox-media (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Monter au démarrage (#1571) : case par support dans le panneau Média
+    (+ « en écriture »), mémorisée par UUID dans
+    /etc/secubox/media-automount.json ; mediactl automount-set / automount ;
+    unité oneshot secubox-media-automount (attend l'énumération USB 30 s au
+    plus) qui repasse par mediactl mount — mêmes gardes, partition système
+    refusée. detect rend automount / automount_rw ; POST /automount.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:14:19 +0200
+
 secubox-media (1.5.2-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

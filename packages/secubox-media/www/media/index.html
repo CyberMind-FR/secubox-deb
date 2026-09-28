@@ -111,6 +111,8 @@ button[disabled] { opacity: 0.4; cursor: not-allowed; }
 .toast.err { border-left-color: var(--red); }
 .toast button { border: none; background: none; color: var(--p31-dim); padding: 0 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.autos { display:flex; flex-wrap:wrap; gap:.3rem .9rem; margin-top:.35rem; font-size:.8rem; }
+.autos .auto { display:inline-flex; align-items:center; gap:.3rem; cursor:pointer; }
 </style>
 </head>
 <body class="crt-light hybrid-dark">
@@ -288,6 +290,19 @@ function devAction(d) {
            `title="Nécessaire pour copier VERS ce support">Monter en écriture</button>`;
 }
 
+// MONTER AU DÉMARRAGE (#1571). Mémorisé par UUID dans le ctl ; lecture seule
+// sauf « en écriture » coché — la même règle que les boutons de montage.
+function devAuto(d) {
+    if (!d.uuid || d.mountable === false) return '';
+    let h = `<label class="auto"><input type="checkbox" data-auto="${esc(d.device)}"` +
+            `${d.automount ? ' checked' : ''}> Monter au démarrage</label>`;
+    if (d.automount) {
+        h += `<label class="auto"><input type="checkbox" data-auto-rw="${esc(d.device)}"` +
+             `${d.automount_rw ? ' checked' : ''}> en écriture</label>`;
+    }
+    return `<div class="autos">${h}</div>`;
+}
+
 function renderDevices(data) {
     st.devices = (data.devices || []).filter(d => !d.system);
     document.getElementById('devcount').textContent = st.devices.length;
@@ -303,6 +318,7 @@ function renderDevices(data) {
             <div class="dev-meta">${esc(d.device)} · ${esc(d.fstype)} · ${esc(d.transport || 'interne')}</div>
             <div class="chips">${devChips(d)}</div>
             ${devAction(d)}
+            ${devAuto(d)}
           </div>`).join('');
     }
     // Les sélecteurs ne proposent que ce qui est MONTÉ : offrir un support non
@@ -423,6 +439,22 @@ async function loadJobs() {
 }
 
 // ── écouteurs délégués (§6 : jamais d'onclick interpolé) ──────────────────
+document.addEventListener('change', async ev => {
+    const a = ev.target.closest('[data-auto], [data-auto-rw]');
+    if (!a) return;
+    const auto = 'auto' in a.dataset;
+    const dev = auto ? a.dataset.auto : a.dataset.autoRw;
+    const on = auto ? a.checked : true;
+    const rw = auto ? false : a.checked;
+    try {
+        const d = await api('/automount', { method: 'POST', headers: hdrs(),
+            body: JSON.stringify({ path: dev, on, rw }) });
+        if (!d.ok) throw new Error(d.error || 'refusé');
+        toast(!d.automount ? 'Ne sera plus monté au démarrage'
+            : (d.rw ? 'Monté au démarrage, en écriture' : 'Monté au démarrage, en lecture seule'));
+        refresh();
+    } catch (e) { a.checked = !a.checked; errorToast('Démarrage : ' + e.message); }
+});
 document.addEventListener('click', async ev => {
     const mnt = ev.target.closest('[data-mount], [data-mount-rw]');
     if (mnt) {
