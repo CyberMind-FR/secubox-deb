@@ -3171,7 +3171,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     });
     E('viewer-share').addEventListener('click',function(){
       if(!courant) return;
-      try{ if(navigator.clipboard) navigator.clipboard.writeText(courant); }catch(e){}
+      // Une URL absolue et publique, jamais le chemin interne du Hall (#1579).
+      var lien = window.SBX_DOMAINE && SBX_DOMAINE.partageable ? SBX_DOMAINE.partageable(courant) : courant;
+      try{ if(navigator.clipboard) navigator.clipboard.writeText(lien); }catch(e){}
       this.classList.add('on'); var b=this; setTimeout(function(){ b.classList.remove('on'); },900);
     });
     E('viewer-cast').addEventListener('click',function(){

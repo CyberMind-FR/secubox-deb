@@ -32,6 +32,21 @@
     return String(s).replace(/\.gk2\.secubox\.in\b/g, '.' + session);
   }
 
+  // LIEN PARTAGEABLE (#1579). Le viewer copiait son adresse telle quelle :
+  // « /api/v1/ytsas/stream/<id> », un chemin du Hall sans hôte, inutilisable
+  // ailleurs. Un service qui sert sa propre API sur son vhost public (le flux
+  // y part en 206 video/mp4) est partagé sur CET hôte ; tout autre chemin
+  // relatif prend l'origine du Hall. Une adresse absolue reste telle quelle.
+  var SERVIS_CHEZ_EUX = { ytsas: 1, podcaster: 1 };
+  function partageable(u) {
+    u = String(u == null ? '' : u).trim();
+    if (!u || /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
+    if (u.charAt(0) !== '/' || u.charAt(1) === '/') return u;
+    var m = /^\/api\/v1\/([a-z0-9-]+)\//.exec(u);
+    if (m && SERVIS_CHEZ_EUX[m[1]]) return 'https://' + hote(m[1] + '.gk2.secubox.in') + u;
+    return location.origin + u;
+  }
+
   w.SBX_DOMAINE = {
     // Domaine du témoin de session, ou null en mode « même origine ».
     session: session,
@@ -47,7 +62,8 @@
       for (var a in ALIAS) if (ALIAS[a] === session) r.push('https://hall.' + a);
       return r;
     })(),
-    hote: hote
+    hote: hote,
+    partageable: partageable
   };
 
   // Le HTML statique (liens de pied de carte, nom d'hôte affiché) suit la
