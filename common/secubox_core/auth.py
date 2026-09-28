@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from . import sessions as _sessions
 from . import appareils, user_store
+from . import origine as _origine
 from .config import get_config
 from .logger import get_logger
 
@@ -64,7 +65,14 @@ _session_validator: Callable[[str], bool] = _sessions.is_valid
 
 
 def _samesite(secure: bool) -> str:
-    """Politique SameSite d'un cookie SecuBox. Voir #1251."""
+    """Politique SameSite d'un cookie SecuBox (commit dfc315826, « Les cookies
+    SecuBox survivent au cadre » ; docs/MODULE-GUIDELINES.md §8bis).
+
+    None sous TLS : un module encadré par le Hall servi sur un AUTRE site
+    (hall.gk2.net) est un contexte tiers, où un cookie Lax n'est pas joint.
+    Le cookie étant alors joint à toute requête vers *.<domaine>, les
+    écritures qui s'authentifient par lui passent par la garde d'origine
+    (secubox_core.origine, #1607)."""
     force = os.environ.get("SECUBOX_COOKIE_SAMESITE", "").strip().lower()
     if force in ("lax", "strict", "none"):
         return force
@@ -143,7 +151,7 @@ def set_session_cookie(response: Response, token: str, expires_in: int = 86400) 
         secure=True,
         # Encadre par le Hall, un service est un contexte TIERS : le
         # navigateur rejette un cookie Lax ou Strict pose la, et le service
-        # ne reconnait plus le visiteur (#1251). None exige Secure ; en clair
+        # ne reconnait plus le visiteur (dfc315826). None exige Secure ; en clair
         # on retombe sur Lax plutot que de poser un cookie que le navigateur
         # jettera. SECUBOX_COOKIE_SAMESITE ferme la porte si l'operateur le
         # veut, au prix de l'affichage encadre.
@@ -153,13 +161,29 @@ def set_session_cookie(response: Response, token: str, expires_in: int = 86400) 
     )
 
 
+#: Revendication qui BORNE le profil d'une session, quelle que soit l'identité
+#: qu'elle porte (#1607). Posée à l'émission par une voie d'entrée moins forte
+#: que la signature : le lien d'entrée à usage unique plafonne à `guest`.
+#: Signée avec le reste du jeton ; qui refrappe un jeton pour la même session
+#: la recopie.
+PLAFOND = "plafond"
+
+#: Profils d'une PERSONNE : ce que `require_personne` admet.
+PROFILS_PERSONNE = ("user", "admin")
+
+
 def create_token(
     username: str,
     expires_in: int = 86400,
     scope: Optional[str] = None,
     jti: Optional[str] = None,
+    plafond: Optional[str] = None,
 ) -> str:
-    """Mint a JWT. `scope` carries a short-lived intent ("set-password", "mfa-challenge", …)."""
+    """Mint a JWT. `scope` carries a short-lived intent ("set-password", "mfa-challenge", …).
+
+    `plafond` ("guest", "user", "admin") borne le profil de la session : une
+    session plafonnée à `guest` n'est jamais une personne, ni un administrateur,
+    quel que soit le profil inscrit du porteur."""
     payload: Dict[str, Any] = {
         "sub": username,
         "iat": int(time.time()),
@@ -168,6 +192,8 @@ def create_token(
     }
     if scope:
         payload["scope"] = scope
+    if plafond:
+        payload[PLAFOND] = plafond
     return jwt.encode(payload, _secret(), algorithm="HS256")
 
 
@@ -268,11 +294,69 @@ def est_admin_reel(payload: Dict[str, Any]) -> bool:
     sub = str((payload or {}).get("sub") or "")
     if not sub or sub.startswith(appareils.PREFIXE):
         return False
+    # Un plafond borne tout : sous `admin`, pas d'administration (#1607).
+    if PLAFOND in (payload or {}) and (payload or {}).get(PLAFOND) != "admin":
+        return False
     try:
         u = user_store.get_user(sub) or {}
         return u.get("role") == "admin" and bool(user_store.is_enabled(sub))
     except Exception:  # noqa: BLE001 — dans le doute, pas d'administration
         return False
+
+
+def est_personne(payload: Dict[str, Any]) -> bool:
+    """Ce porteur est-il une PERSONNE admise, de profil `user` ou plus (#1607) ?
+
+    OUI pour :
+      - un compte utilisateur (users.json) actif, de rôle autre que `guest` —
+        y compris un appareil rattaché, qui entre au nom de son compte ;
+      - un appareil admis (sbx-…) dont le profil est `user` ou `admin`.
+    NON pour :
+      - un appareil au profil `guest`, révoqué ou inconnu ;
+      - une session plafonnée sous `user` (claim `plafond`, lien d'entrée) ;
+      - un jeton à portée restreinte (`scope`, #942) ;
+      - toute erreur de lecture des registres — dans le doute, non."""
+    p = payload or {}
+    sub = str(p.get("sub") or "")
+    if not sub or _is_scope_token(p):
+        return False
+    if PLAFOND in p and p.get(PLAFOND) not in PROFILS_PERSONNE:
+        return False
+    try:
+        if sub.startswith(appareils.PREFIXE):
+            return appareils.est_admis(sub) and appareils.profil_de(sub) in PROFILS_PERSONNE
+        u = user_store.get_user(sub) or {}
+        return bool(u) and u.get("role") != "guest" and bool(user_store.is_enabled(sub))
+    except Exception:  # noqa: BLE001 — dans le doute, pas une personne
+        return False
+
+
+# Garde d'origine ─────────────────────────────────────────────────────────
+def domaine_box() -> str:
+    """Le domaine de la box, sans point initial, en minuscules ; "" si aucun.
+
+    `[global] domain`, sinon le domaine du cookie de session
+    (`[api] sso_cookie_domain`, « .gk2.secubox.in » sur gk2)."""
+    try:
+        dom = get_config("global").get("domain", "")
+    except (OSError, ValueError, AttributeError):
+        dom = ""
+    if not dom:
+        try:
+            dom = _cookie_domain() or ""
+        except (OSError, ValueError, AttributeError):
+            dom = ""
+    return dom.strip().lstrip(".").lower() if isinstance(dom, str) else ""
+
+
+def garde_origine(request: Request, payload: Optional[Dict[str, Any]] = None) -> None:
+    """La garde d'origine pour une session lue dans le COOKIE (#1607).
+
+    `require_session` (donc `require_jwt`, `require_personne`,
+    `require_capability`) l'applique d'elle-même. Un module qui lit le cookie
+    lui-même avant d'ÉCRIRE l'appelle avec la requête et le payload retenu.
+    Règle et modes : secubox_core.origine."""
+    _origine.garde(request, (payload or {}).get("sub"), domaine_box())
 
 
 async def require_session(
@@ -285,10 +369,16 @@ async def require_session(
     gek) ouvrait ainsi toute la webui d'administration et ses API. À poser
     EXPLICITEMENT, et seulement sur une route d'usager (le Hall, ses accès,
     réveiller un module) ; tout le reste passe par `require_jwt`, réservé aux
-    administrateurs réels."""
+    administrateurs réels.
+
+    GARDE D'ORIGINE (#1607) : quand la session retenue vient du COOKIE et que
+    la méthode écrit (ni GET, ni HEAD, ni OPTIONS), la requête doit venir
+    d'une page de la box — voir secubox_core.origine. Un jeton porteur n'y
+    est pas soumis : le navigateur ne le joint jamais de lui-même."""
     # SSO-lite (#400): accept the Bearer token OR the parent-domain session
     # cookie. The cookie lets one SecuBox login cover every module without
-    # re-auth (SameSite=Lax, CSRF-mitigated).
+    # re-auth. It is SameSite=None under TLS (see _samesite): a write
+    # authenticated by it goes through the origin guard below.
     #
     # Shadowing fix: try BOTH sources, Bearer first then cookie, and accept the
     # first that fully validates. Previously a present-but-STALE Bearer (an old
@@ -298,19 +388,21 @@ async def require_session(
     # token must never shadow a live session.
     candidates = []
     if creds is not None and creds.credentials:
-        candidates.append(creds.credentials)
+        candidates.append(("porteur", creds.credentials))
     cookie_tok = request.cookies.get(SESSION_COOKIE)
     if cookie_tok:
-        candidates.append(cookie_tok)
+        candidates.append(("cookie", cookie_tok))
     if not candidates:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token Bearer ou session manquant",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    for token in candidates:
+    for source, token in candidates:
         payload = _validate_token(token)
         if payload is not None:
+            if source == "cookie":
+                garde_origine(request, payload)
             return payload
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -333,6 +425,28 @@ async def require_jwt(
         log.warning("administration refusée à %s (ni compte, ni rôle admin)", payload.get("sub"))
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="Réservé aux administrateurs de la box")
+    return payload
+
+
+async def require_personne(
+    request: Request,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> Dict[str, Any]:
+    """PLANCHER DES USAGERS : la session d'une PERSONNE, profil `user` ou plus
+    (#1607).
+
+    Entre `require_session` (n'importe quelle session, invités compris) et
+    `require_jwt` (administrateurs réels). À poser sur une écriture d'usager
+    visible par d'autres ou coûteuse : diffuser, parler, piloter un appareil.
+    Admet un compte actif (appareil rattaché compris) ou un appareil admis au
+    profil `user`/`admin` ; refuse (403) un appareil `guest`, une session
+    plafonnée sous `user` (lien d'entrée) et tout jeton à portée restreinte.
+    Passe par `require_session`, donc par la garde d'origine."""
+    payload = await require_session(request, creds)
+    if not est_personne(payload):
+        log.warning("plancher personne : refusé à %s", payload.get("sub"))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Réservé aux personnes admises (profil user ou plus)")
     return payload
 
 

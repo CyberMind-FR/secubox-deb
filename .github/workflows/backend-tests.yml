@@ -1,0 +1,164 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Tests backend — pytest et go test des modules serveur (ref #1607).
+#
+# Ces suites existaient mais aucun job ne les lançait : une règle comme
+# « admin = administrateur réel seulement » (#1581) n'était vérifiée que sur le
+# poste de celui qui pensait à lancer pytest. Ce workflow les rend bloquantes.
+#
+# RÈGLES DU FICHIER
+# - Un job par suite (matrice, fail-fast: false) : une suite rouge n'en masque
+#   jamais une autre, et le nom du job dit laquelle.
+# - Aucun continue-on-error : une suite qui échoue fait échouer la vérification.
+#   Si une suite doit un jour être tolérée, c'est une décision consignée dans
+#   une issue, citée ici même, pas un réglage silencieux.
+# - Actions épinglées par SHA complet (le dépôt est public) ; l'étiquette est
+#   rappelée en commentaire pour la relecture des mises à jour.
+# - Python 3.11 = celui de Debian bookworm. Les bibliothèques sont épinglées
+#   sur les versions en service sur la box de référence : un test vert ici
+#   parle du même FastAPI/pydantic/starlette que celui qui répond en production.
+# - Go : version lue dans le go.mod du module ; mêmes réglages que
+#   debian/rules (CGO_ENABLED=0, vendor/ seul, GOPROXY=off) — la CI teste ce
+#   que le paquet construit.
+
+name: Backend Tests
+
+on:
+  pull_request:
+    paths:
+      - 'common/secubox_core/**'
+      - 'packages/secubox-core/**'
+      - 'packages/secubox-webos/**'
+      - 'packages/secubox-sbxid/**'
+      - 'packages/secubox-zia/**'
+      - 'packages/secubox-bbs/**'
+      - 'packages/secubox-toolbox-ng/**'
+      # Fichiers hors de ces paquets que les suites lisent aussi :
+      # manifeste podcaster (zia), annuaire (secubox_core), exemple de
+      # configuration (zia, sbxid), menus de tous les paquets (webos).
+      - 'packages/secubox-podcaster/capabilities.d/**'
+      - 'packages/secubox-annuaire/**'
+      - 'secubox.conf.example'
+      - 'packages/*/menu.d/**'
+      # conftest.py et pytest.ini de la racine pèsent sur la collecte.
+      - 'conftest.py'
+      - 'pytest.ini'
+      - '.github/workflows/backend-tests.yml'
+  # Sur master, passage complet à chaque fusion, sans filtre par chemins :
+  # un fichier lu par une suite et oublié ci-dessus ne peut pas y échapper.
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pytest:
+    name: pytest · ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Bibliothèque partagée : auth, sessions, coffre, appareils.
+          - suite: secubox_core
+            chemin: common/secubox_core/tests
+          # Scripts et unités systemd livrés par le paquet secubox-core.
+          - suite: secubox-core
+            chemin: packages/secubox-core/tests
+          - suite: secubox-webos
+            chemin: packages/secubox-webos/tests
+          - suite: secubox-sbxid
+            chemin: packages/secubox-sbxid/tests
+          - suite: secubox-zia
+            chemin: packages/secubox-zia/tests
+    env:
+      # Versions de la box de référence (bookworm + pip dans /usr/local).
+      # pytest et pytest-asyncio n'y sont pas installés : outillage CI seul.
+      DEPENDANCES: >-
+        pytest==9.1.1
+        pytest-asyncio==1.4.0
+        fastapi==0.141.1
+        starlette==1.0.0
+        pydantic==2.13.5
+        python-multipart==0.0.27
+        httpx==0.23.3
+        pyjwt==2.6.0
+        cryptography==47.0.0
+        argon2-cffi==21.1.0
+        websockets==16.0
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Dépendances
+        run: |
+          # shellcheck disable=SC2086  # DEPENDANCES est une liste, découpage voulu
+          python -m pip install --disable-pip-version-check --no-input $DEPENDANCES
+          python -m pip list --disable-pip-version-check
+
+      - name: pytest ${{ matrix.chemin }}
+        env:
+          # secubox_core se trouve sous common/, comme sur la box où le paquet
+          # secubox-core l'installe à côté de chaque module.
+          PYTHONPATH: ${{ github.workspace }}/common
+          CHEMIN: ${{ matrix.chemin }}
+        # Une suite à la fois, par son chemin : pytest.ini (racine) l'impose,
+        # plusieurs paquets ont un dossier api/ du même nom.
+        run: python -m pytest -q -ra "$CHEMIN"
+
+  gotest:
+    name: go test · ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: secubox-bbs
+            module: packages/secubox-bbs
+          # Tout le module, sbx-actord compris (cmd/sbx-actord et internal/actor).
+          - suite: secubox-toolbox-ng
+            module: packages/secubox-toolbox-ng
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Go (version du go.mod)
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: go test ./...
+        # Même environnement que debian/rules : Go pur, vendor/ seul, pas de
+        # téléchargement de chaîne d'outils.
+        env:
+          CGO_ENABLED: '0'
+          GOFLAGS: -mod=vendor
+          GOPROXY: 'off'
+          GOTOOLCHAIN: local
+        run: |
+          go version
+          go test ./...

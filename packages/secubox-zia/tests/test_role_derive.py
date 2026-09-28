@@ -14,7 +14,8 @@ import secubox_core.config as _conf
 _conf._CONF_PATHS[:] = [p for p in _conf._CONF_PATHS if os.access(p, os.R_OK)] or \
     [Path(__file__).resolve().parents[3] / "secubox.conf.example"]
 
-main = pytest.importorskip("api.main")
+# api.main est livré dans ce paquet : son absence est une erreur, pas un saut.
+import api.main as main  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 from secubox_core import auth, user_store, appareils  # noqa: E402
