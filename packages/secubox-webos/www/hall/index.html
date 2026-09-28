@@ -1426,7 +1426,7 @@ const FEATURED = [
   // clic, dans la carte ou dans le cockpit — et les deux vues se synchronisent
   // par BroadcastChannel, de sorte qu'un seul micro est ouvert à la fois.
   {id:"mood",       label:"Mood",      icon:"🎙", color:"#1f6b7a", url:"mood.gk2.secubox.in",
-   micro:"/micro.html", h:352, micro_audio:true, admin:"/gabriel-mood/"},
+   micro:"/micro.html", h:352, micro_audio:true, admin:"/sbxos-audio-mood/"},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mastodon", h:182},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214, admin:"/droplet/"},
@@ -1829,7 +1829,7 @@ function svcDesc(id){
   return {id:id, label:(f&&f.label)||s.name||id, icon:(f&&f.icon)||icon(s.icon),
           url:(f&&f.url)||host(s),
           // LA CONSOLE ADMIN N'EST PAS TOUJOURS « /<id de la carte>/ » (#1386) :
-          // la carte « mood » vit sous /gabriel-mood/, « forums » sous /bbs/.
+          // la carte « mood » vit sous /sbxos-audio-mood/, « forums » sous /bbs/.
           // Déduite de l'identifiant, elle ouvrait « Module Not Found ».
           // `admin:"/chemin/"` la nomme ; `admin:false` dit qu'il n'y en a pas.
           path:(f&&typeof f.admin==='string')?f.admin:(s.path||('/'+id+'/')),

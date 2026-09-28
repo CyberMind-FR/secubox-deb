@@ -1,9 +1,0 @@
-{
-  "id": "gabriel-mood",
-  "name": "Gabriel Mood",
-  "icon": "🎙",
-  "path": "/gabriel-mood/",
-  "category": "mind",
-  "order": 54,
-  "description": "Indices prosodiques de votre voix, analysés localement. N'affirme aucune émotion."
-}

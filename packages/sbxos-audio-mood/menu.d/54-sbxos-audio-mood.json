@@ -1,0 +1,9 @@
+{
+  "id": "sbxos-audio-mood",
+  "name": "Audio Mood",
+  "icon": "🎙",
+  "path": "/sbxos-audio-mood/",
+  "category": "mind",
+  "order": 54,
+  "description": "Indices prosodiques de votre voix, analysés localement. N'affirme aucune émotion."
+}
