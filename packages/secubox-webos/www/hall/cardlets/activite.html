@@ -89,4 +89,17 @@ async function charge(){
   } catch (e) { document.getElementById("n").textContent = "indisponible"; }
 }
 charge(); setInterval(charge, 60000);
+// LE THÈME DU HALL (#1566) : les jetons sombres ne servaient qu'au thème du
+// système. Le Hall donne le sien par ?theme= au chargement, puis par message
+// quand on bascule — comme pour delegue.html.
+(function(){
+  const t = new URLSearchParams(location.search).get("theme");
+  if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+})();
+addEventListener("message", ev => {
+  const d = ev.data;
+  if (d && d.sbx === "relis") { charge(); return; }
+  if (d && d.sbx === "theme" && (d.theme === "dark" || d.theme === "light"))
+    document.documentElement.setAttribute("data-theme", d.theme);
+});
 </script>
