@@ -1,3 +1,15 @@
+secubox-sbxos (0.6.0~aurora1-1~bookworm1) bookworm; urgency=medium
+
+  * Traceur Aurora (#1611) : application React construite, servie à
+    /sbxos/aurora/ (LAN seulement) à côté du SBX OS classique inchangé.
+    SDK sbx-sdk (jetons, icônes raster <SbxIcon> sur les 120 masters,
+    données : entrée sans mot de passe, pseudo). Art décliné au build
+    (tailles 64/128/256, états alerte/succès calculés).
+  * Construit par scripts/construire-front.sh ; debian/rules vérifie
+    l'empreinte, la version et le canal. Aperçu : jamais publié dans apt.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 19:00:14 +0200
+
 secubox-sbxos (0.5.2-1~bookworm1) bookworm; urgency=medium
 
   * Pont (#1605) : service worker sbxos-v6 limité à /sbxos/ (chemins absolus,

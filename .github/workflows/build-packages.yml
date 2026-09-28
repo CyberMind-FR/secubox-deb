@@ -263,6 +263,18 @@ jobs:
           npm run build
           ls -la dist/
 
+      # Fronts construits (#1611) : tout paquet qui porte un .nvmrc passe par
+      # scripts/construire-front.sh — le même producteur que le poste local.
+      - name: Setup Node.js (fronts .nvmrc)
+        if: hashFiles(format('packages/{0}/.nvmrc', matrix.package)) != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: packages/${{ matrix.package }}/.nvmrc
+
+      - name: Build front (.nvmrc)
+        if: hashFiles(format('packages/{0}/.nvmrc', matrix.package)) != ''
+        run: bash scripts/construire-front.sh packages/${{ matrix.package }}
+
       - name: Setup Go (for daemon)
         if: matrix.package == 'secubox-daemon'
         uses: actions/setup-go@v5
@@ -477,6 +489,8 @@ jobs:
             echo "::notice::DEPLOY_SSH_KEY ou APT_HOST absent — publication APT ignoree"
             exit 0
           fi
+          # Jamais d'aperçu au parc (#1611).
+          rm -f debs/*~aurora*.deb
           n=$(ls debs/*.deb 2>/dev/null | wc -l)
           if [ "$n" -lt 1 ]; then
             echo "::error::aucun .deb a publier"
