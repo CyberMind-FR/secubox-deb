@@ -1,3 +1,10 @@
+secubox-meta (0.1.11-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-magicmirror, secubox-maigret, secubox-spiderfoot décommissionnés
+    (#1599) : retirés de l'arbre ; secubox-service-osint, devenu vide, retiré.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 12:27:11 +0200
+
 secubox-meta (0.1.10-1~bookworm1) bookworm; urgency=medium
 
   * secubox-mastodon retiré de l'arbre (décommissionné, #1592).

@@ -202,10 +202,6 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
         "secubox-ollama",
         "secubox-mcp-server",
     ],
-    "magicmirror": [
-        "secubox-magicmirror",
-        "secubox-mmpm",
-    ],
     "system-hub": [
         "secubox-system",
         "secubox-system-hub",

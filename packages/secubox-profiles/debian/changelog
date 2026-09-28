@@ -1,3 +1,10 @@
+secubox-profiles (0.19.11-1~bookworm1) bookworm; urgency=medium
+
+  * Politique de cycle de vie : magicmirror et spiderfoot retirés
+    (décommissionnés, #1599).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 12:27:11 +0200
+
 secubox-profiles (0.19.10-1~bookworm1) bookworm; urgency=high
 
   * POST /wake sous require_session (#1581) : réveiller est un geste

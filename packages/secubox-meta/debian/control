@@ -152,7 +152,6 @@ Package: secubox-fonction-veille
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-service-actualites
-Suggests: secubox-service-osint
 Description: SecuBox — fonction « Veille »
  Suivre ce qui se dit : actualité, flux, recherche libre.
  .
@@ -447,8 +446,7 @@ Depends: ${misc:Depends}
 Suggests: secubox-c3box,
          secubox-daemon-c3box,
          secubox-eye-remote,
-         secubox-eye-square,
-         secubox-magicmirror
+         secubox-eye-square
 Description: SecuBox — service « Écrans »
  Écrans de situation et déports USB (Eye Remote, C3BOX).
  .
@@ -602,17 +600,6 @@ Suggests: secubox-newsbin,
          secubox-yacy
 Description: SecuBox — service « Actualité »
  Radar d'actualité multi-sources.
- .
- Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
- Recommends = installé par défaut mais retirable, Suggests = optionnel.
-
-Package: secubox-service-osint
-Architecture: all
-Depends: ${misc:Depends}
-Suggests: secubox-spiderfoot,
-         secubox-maigret
-Description: SecuBox — service « OSINT »
- Enquête en sources ouvertes, en bac à sable.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.
