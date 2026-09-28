@@ -1,3 +1,9 @@
+secubox-profils (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-mastodon retiré (décommissionné, #1592).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 12:08:35 +0200
+
 secubox-profils (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées

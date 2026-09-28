@@ -250,7 +250,8 @@ Depends: ${misc:Depends},
          secubox-users,
          secubox-identity
 Recommends: secubox-vault,
-         secubox-avatar
+         secubox-avatar,
+         secubox-oidc
 Suggests: secubox-zkp
 Description: SecuBox — service « Identité »
  Comptes, authentification, identité décentralisée, coffre de secrets.
@@ -482,8 +483,7 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-gotosocial
 Recommends: secubox-socialrelay,
-         secubox-billets,
-         secubox-mastodon
+         secubox-billets
 Description: SecuBox — service « Fédivers »
  Présence fédérée et relais social avec consentement.
  .

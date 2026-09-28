@@ -270,6 +270,7 @@ requiert:
 recommande:
   - secubox-vault
   - secubox-avatar
+  - secubox-oidc              # entrée sans mot de passe dans les services (#1589)
 suggere:
   - secubox-zkp
 
@@ -478,7 +479,6 @@ requiert:
 recommande:
   - secubox-socialrelay
   - secubox-billets
-  - secubox-mastodon            # « Social » du Hall (#1577)
 
 meta: secubox-service-visio
 niveau: service

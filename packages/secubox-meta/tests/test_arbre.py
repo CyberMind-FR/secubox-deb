@@ -81,7 +81,7 @@ PAQUET_DE = {
     "securite": "secubox-waf", "acteurs": "secubox-waf-ng",
     "contenu": "secubox-droplet", "depot": "secubox-droplet",
     "cloud": "secubox-nextcloud", "nextcloud-super": "secubox-nextcloud",
-    "social": "secubox-mastodon", "forums": "secubox-bbs",
+    "forums": "secubox-bbs",
     "activite": "secubox-sbxid", "comptes": "secubox-sbxid", "acces": "secubox-sbxid",
     "sbxos": "secubox-sbxos", "surfviewer": "secubox-webos", "mood": "sbxos-audio-mood",
 }

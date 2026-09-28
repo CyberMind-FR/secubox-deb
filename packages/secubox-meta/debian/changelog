@@ -1,3 +1,10 @@
+secubox-meta (0.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-mastodon retiré de l'arbre (décommissionné, #1592).
+  * secubox-oidc recommandé par secubox-service-identite (#1589).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 12:08:35 +0200
+
 secubox-meta (0.1.9-1~bookworm1) bookworm; urgency=medium
 
   * Mood : gabriel-mood → sbxos-audio-mood (#1587) ; le générateur lit

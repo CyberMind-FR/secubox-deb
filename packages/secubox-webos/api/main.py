@@ -650,12 +650,6 @@ async def acces_apercu(svc: str, user=Depends(require_session)):
     return await acces.apercu(_qui(user), svc)
 
 
-@router.post("/acces/{svc}/echange")
-async def acces_echange(svc: str, corps: dict, user=Depends(require_session)):
-    """Echanger un code d'autorisation OAuth2 contre un jeton (Mastodon)."""
-    return await acces.flux_echange(_qui(user), svc, str(corps.get("code") or ""))
-
-
 @router.post("/acces/{svc}/manuel")
 async def acces_manuel(svc: str, corps: dict, user=Depends(require_session)):
     """Identifiant dedie pour les services sans flux de delegation. Route sous
