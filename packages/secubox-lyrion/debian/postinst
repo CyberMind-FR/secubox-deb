@@ -40,25 +40,32 @@ case "$1" in
     # Releve de version : savoir qu'une mise a jour existe, sans jamais
     # l'appliquer seul (#993).
     systemctl enable --now secubox-lyrion-version-check.timer 2>/dev/null || true 2>/dev/null || true
-        systemctl enable secubox-lyrion.service 2>/dev/null || true
-
-        # The nginx route proxies /api/v1/lyrion/ to our dedicated socket
-        # /run/secubox/lyrion.sock (NOT the aggregator — see nginx/lyrion.conf
-        # invariant, #763), so the admin page is blank/502 unless this service
-        # runs. Preserve runtime state across upgrades, and on a fresh install
-        # start only once the LMS LXC answers (otherwise defer to
-        # `lyrionctl install`, which provisions the LXC then starts us).
-        if systemctl is-active --quiet secubox-lyrion.service 2>/dev/null; then
-            systemctl try-restart secubox-lyrion.service 2>/dev/null || true
-        else
-            lms_ip="$(sed -n 's/^[[:space:]]*ip[[:space:]]*=[[:space:]]*"\([0-9.]*\)".*/\1/p' \
-                /etc/secubox/lyrion.toml 2>/dev/null | head -n1)"
-            lms_ip="${lms_ip:-10.100.0.100}"
-            if command -v curl >/dev/null 2>&1 && \
-               curl -s -m 3 -o /dev/null "http://${lms_ip}:9000/" 2>/dev/null; then
-                systemctl start secubox-lyrion.service 2>/dev/null || true
+        # L'API est servie par l'AGRÉGATEUR (/api/v1/lyrion/ → aggregator.sock) :
+        # secubox-lyrion.service n'existe plus. Le manifeste dérivé par
+        # `profilectl scan` la déclarait pourtant comme unité du module, en
+        # on-demand : le waker attendait un réveil impossible et lyrion.gk2
+        # bouclait sur la page de réveil (#1573). Un serveur de musique ne
+        # dort pas non plus : le sleeper couperait les lecteurs en pleine
+        # écoute. Correction faite UNE fois (témoin), puis le manifeste reste
+        # celui de l'administrateur.
+        temoin=/var/lib/secubox/lyrion/.manifeste-1573
+        man=/etc/secubox/modules.d/lyrion.toml
+        if [ ! -e "$temoin" ] && [ -f "$man" ]; then
+            if grep -q '^units *= *\["secubox-lyrion.service"\]' "$man"; then
+                sed -i 's/^units *= *\["secubox-lyrion.service"\]/units     = []   # API servie par l'"'"'agrégateur (#1573)/' "$man"
             fi
+            if command -v secubox-profilectl >/dev/null 2>&1; then
+                secubox-profilectl set-lifecycle lyrion --lifecycle always-on \
+                    --wake-class normal >/dev/null 2>&1 || true
+            fi
+            touch "$temoin"
         fi
+        # ROUTE SBXWAF posée par le paquet (#1323) : hors on-demand, sans elle
+        # lyrion.gk2 rendrait 421.
+        if command -v secubox-waf-route >/dev/null 2>&1; then
+            secubox-waf-route lyrion.gk2.secubox.in 9080 || true
+        fi
+        systemctl disable secubox-lyrion.service 2>/dev/null || true
         ;;
 esac
 
