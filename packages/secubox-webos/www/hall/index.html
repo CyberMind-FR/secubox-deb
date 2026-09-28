@@ -1477,6 +1477,11 @@ const FEATURED = [
 // #1493 : les url des cartes sont écrites pour gk2 ; sur une autre box on les
 // réécrit vers son domaine (identité sur gk2).
 FEATURED.forEach(f=>{ if(f.url) f.url=SBX_DOMAINE.hote(f.url); if(f.carte) f.carte=SBX_DOMAINE.hote(f.carte); });
+// ENTRÉE SANS MOT DE PASSE (#1562) : un service qui sait ouvrir le compte de
+// la personne d'après sa session SecuBox s'ouvre par son /sbx/entrer ; sans
+// session ni compte lié, cette entrée rend le formulaire habituel.
+const ENTREE_SBX={nc:'/sbx/entrer'};
+function entree(h){ return ENTREE_SBX[String(h||'').split('.')[0]]||'/'; }
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
 // Les autres afficheront un repli « ouvrir dans un onglet » tant que leur cadrage
 // n'autorise pas hall.gk2.secubox.in.
@@ -1643,7 +1648,7 @@ function featCardHTML(f,s){
     +'<span class="state"><i class="led '+st+'"></i>'+STATE_FR[st]+'</span></div>'
     +'<div class="desc">'+esc(s.description||'Service SecuBox souverain.')+'</div>'
     +'<div class="foot"><span class="state mono" style="font-size:.58rem">'+esc(s.category||'')+'</span>'
-    +'<a class="open" href="https://'+esc(h)+'/" target="_blank" rel="noopener">Ouvrir</a></div>'
+    +'<a class="open" href="https://'+esc(h)+entree(h)+'" target="_blank" rel="noopener">Ouvrir</a></div>'
     +'</article>';
 }
 // L'ETOILE DE MISE EN VEDETTE. En `var` et posee AVANT featCardHTML : une
@@ -1696,7 +1701,7 @@ function render(data,src){
     // et la chaine l'etait toujours. On ne le propose plus quand il n'y a pas
     // de vhost — la carte vivante s'ouvre dans le Hall, pas ailleurs.
     rh+=rowHTML({attrs:'data-open="'+esc(f.id)+'"', icon:f.icon, label:f.label, state:st,
-                 admin:(f.admin===false?null:f.id), tab:(f.url?'https://'+f.url+'/':null)});
+                 admin:(f.admin===false?null:f.id), tab:(f.url?'https://'+f.url+entree(f.url):null)});
   });
   rail.innerHTML=rh;
   // featured grid (principal)
@@ -1859,7 +1864,7 @@ function plainURL(){
   if(_mode==='admin') return ADMIN_ORIGINE+_svc.path;
   // Cardlet sans vhost : l'onglet réel ouvre la cardlet elle-même (même origine).
   if(_svc.noVhost && _svc.carte) return location.origin+_svc.carte;
-  return 'https://'+_svc.url+(_sub||'/');
+  return 'https://'+_svc.url+(_sub||entree(_svc.url));
 }
 function frameFor(mode){
   if(_frames[mode]) return _frames[mode];

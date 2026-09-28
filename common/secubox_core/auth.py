@@ -15,6 +15,7 @@ Compared to v1 (plaintext `auth.toml` lookup), this module:
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import time
 from typing import Any, Callable, Dict, Optional
@@ -538,6 +539,12 @@ async def verify(request: Request):
         boite = _cap.compte_lie(payload, "email")
         if boite and "@" in boite:
             headers["Remote-Sbx-Mail"] = boite
+        # COMPTE NEXTCLOUD LIÉ (#1562) : le Cloud l'ouvre sans mot de passe
+        # (nginx /sbx/entrer → user_saml en mode variable d'environnement).
+        # Seuls les caractères d'un uid Nextcloud : l'en-tête devient $_SERVER.
+        nc = _cap.compte_lie(payload, "nextcloud")
+        if nc and re.fullmatch(r"[A-Za-z0-9_.@-]{1,64}", nc):
+            headers["Remote-Sbx-Nextcloud"] = nc
     except Exception:
         pass
     return JSONResponse({"ok": True, "user": sub}, headers=headers)

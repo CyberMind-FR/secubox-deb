@@ -1,3 +1,11 @@
+secubox-core (1.5.28-1~bookworm1) bookworm; urgency=medium
+
+  * /auth/verify rend Remote-Sbx-Nextcloud (le compte Nextcloud lié à la
+    personne, uid validé) : le Cloud l'ouvre sans mot de passe par
+    /sbx/entrer (#1562).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:43:51 +0200
+
 secubox-core (1.5.27-1~bookworm1) bookworm; urgency=medium
 
   * /auth/verify rend Remote-Sbx-Mail (la boîte liée à la personne) : le
@@ -222,4 +230,3 @@ secubox-core (1.5.7-1~bookworm2) bookworm; urgency=medium
     ne possede. Meme sedimentation que les repertoires de #1307 (#1308).
 
  -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 15:44:31 +0200
-
