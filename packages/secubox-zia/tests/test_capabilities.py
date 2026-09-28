@@ -106,8 +106,8 @@ def test_shipped_podcaster_manifest():
     import pathlib
     import pytest
     p = pathlib.Path(__file__).resolve().parents[2] / "secubox-podcaster" / "capabilities.d"
-    if not (p / "podcaster.json").exists():
-        pytest.skip("manifeste podcaster absent")
+    # Manifeste livré dans le dépôt : son absence doit faire échouer le test.
+    assert (p / "podcaster.json").exists(), "manifeste podcaster absent"
     c = Capabilities(str(p))
     for a in ["media.toggle", "media.next", "media.prev", "media.pause",
               "media.stop", "media.mute", "media.volume"]:
