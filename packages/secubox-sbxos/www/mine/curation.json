@@ -31,13 +31,6 @@
    "url": "nc.gk2.secubox.in"
   },
   {
-   "id": "social",
-   "label": "Social",
-   "icon": "🐘",
-   "color": "#2e6da4",
-   "url": "social.gk2.secubox.in"
-  },
-  {
    "id": "forums",
    "label": "Forums",
    "icon": "💬",
@@ -71,6 +64,14 @@
    "icon": "🎚️",
    "color": "#128a6f",
    "url": "lyrion.gk2.secubox.in",
+   "lan": true
+  },
+  {
+   "id": "zigbee",
+   "label": "Zigbee",
+   "icon": "💡",
+   "color": "#c8791f",
+   "url": "zigbee.gk2.secubox.in",
    "lan": true
   },
   {
@@ -109,11 +110,11 @@
    "url": "podcaster.gk2.secubox.in"
   },
   {
-   "id": "mastodon",
-   "label": "Social",
-   "icon": "🐘",
-   "color": "#2e6da4",
-   "url": "social.gk2.secubox.in"
+   "id": "mood",
+   "label": "Mood",
+   "icon": "🎙",
+   "color": "#1f6b7a",
+   "url": "mood.gk2.secubox.in"
   },
   {
    "id": "billets",

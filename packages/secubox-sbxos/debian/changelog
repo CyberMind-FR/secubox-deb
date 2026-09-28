@@ -1,3 +1,14 @@
+secubox-sbxos (0.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * Pont (#1605) : service worker sbxos-v6 limité à /sbxos/ (chemins absolus,
+    purge de ses seuls caches, aucune réponse privée gardée, aperçu Aurora
+    laissé au réseau, interrupteur d'arrêt /sbxos/offline/kill.json).
+  * ?ecran= inconnu → écran Hall.
+  * Curation régénérée (mastodon, social sortent ; mood, zigbee entrent) ;
+    extraire-curation.py : --help, --source, --sortie ; test de dérive.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:52:16 +0200
+
 secubox-sbxos (0.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Encadré dans le Hall (`?embed=1`), SBX OS efface son propre bandeau : la
