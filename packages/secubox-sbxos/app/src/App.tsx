@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 import { SbxIcon } from '@sbx/icons';
-import { entrer, moi, type Entree } from '@sbx/data';
+import { entrer, moi, manifeste, urlSure, radioCourante, type Entree, type Manifeste } from '@sbx/data';
 import hero from '@sbx/art/environments/art/hero.webp';
 import lexie from '@sbx/art/characters/art/lexie.webp';
 import neo from '@sbx/art/characters/art/neo.webp';
@@ -36,6 +36,8 @@ export function App() {
   const [espace, setEspace] = useState<Espace>(espaceInitial);
   const [etat, setEtat] = useState<Entree | null>(null);
   const [pseudo, setPseudo] = useState<string | null>(null);
+  const [man, setMan] = useState<Manifeste | null>(null);
+  const [titre, setTitre] = useState<string | null>(null);
 
   useEffect(() => {
     entrer().then(async (e) => {
@@ -44,8 +46,21 @@ export function App() {
         const r = await moi();
         setPseudo(r?.identite?.pseudo ?? r?.sub ?? null);
       }
+      setMan(await manifeste());        // APRÈS l'entrée : le rôle a pu changer
     });
   }, []);
+
+  useEffect(() => {
+    if (espace !== 'media') return;
+    let fini = false;
+    const lis = async () => {
+      if (document.hidden) return;
+      const r = await radioCourante();
+      if (!fini) setTitre(r ? [r.artiste ?? r.artist, r.titre ?? r.title].filter(Boolean).join(' — ') || null : null);
+    };
+    lis(); const t = setInterval(lis, 20000);
+    return () => { fini = true; clearInterval(t); };
+  }, [espace]);
 
   function aller(e: Espace) {
     setEspace(e);
@@ -84,6 +99,18 @@ export function App() {
                 <p><b>{esp.guide}</b> — {esp.phrase}</p>
               </div>
               <h1>{esp.nom}</h1>
+              {espace === 'media' && titre && <p className="direct">📻 En ce moment : {titre}</p>}
+              <div className="cartes">
+                {(man?.espaces.find(x => x.id === espace)?.modules ?? []).map(md => {
+                  const u = man ? urlSure(md.url, man.domaine) : null;
+                  return u
+                    ? <a key={md.id} className="carte" href={u} target="_blank" rel="noopener">
+                        <SbxIcon id={md.id} taille={56} label="" /><span>{md.label}</span></a>
+                    : <span key={md.id} className="carte"><SbxIcon id={md.id} taille={56} label="" /><span>{md.label}</span></span>;
+                })}
+                {man && !man.espaces.find(x => x.id === espace)?.modules.length &&
+                  <p className="vide">{man.role === 'guest' ? 'Entrez avec votre appareil pour voir cet Espace.' : 'Rien ici pour l’instant.'}</p>}
+              </div>
             </m.section>
           </AnimatePresence>
         </main>

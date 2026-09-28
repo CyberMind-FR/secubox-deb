@@ -1,3 +1,11 @@
+secubox-sbxos (0.6.0~aurora2-1~bookworm1) bookworm; urgency=medium
+
+  * Aurora lit le manifeste de session (#1613) : chaque Espace montre ses
+    vrais modules (icônes du SDK, liens vers le domaine de la box seulement),
+    titre radio en cours dans Média. Garde de forme sur le manifeste.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 19:07:51 +0200
+
 secubox-sbxos (0.6.0~aurora1-1~bookworm1) bookworm; urgency=medium
 
   * Traceur Aurora (#1611) : application React construite, servie à
