@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 # LE HALL EST LA COUCHE D'USAGER (#1581) : ses routes demandent une session,
 # pas l'administration ; ce qu'il relaie à un module, ce module le juge.
-from secubox_core.auth import require_session, create_token
+from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
 from api.models import Service
 from api import registry, flags, cardlets, acces, actions, nc_super
@@ -112,8 +112,9 @@ async def public_services():
 # l'instant), posee par un utilisateur, vue par TOUS dans l'overlay « 📡 direct »
 # du Hall. C'est l'inverse du BiB (un-vers-plusieurs). Etat en memoire + fichier
 # (survit au redemarrage). NO-RETENTION : on ne garde que le POINTEUR, jamais le
-# media. GET public (tout le parc regarde), POST public (le parc propose) — la
-# box est derriere le LAN/mesh ; l'authent fine viendra avec la queue #1224.
+# media. GET public (tout le parc regarde). POSER ou AIMER une diffusion est
+# reserve aux PERSONNES (require_personne, #1608) : pas un visiteur, pas un
+# appareil invite. L'URL passe par une liste blanche et le debit est borne.
 _BROADCAST_FILE = Path("/var/cache/secubox/webos/broadcast.json")
 _broadcast: dict = {"actif": False}
 
@@ -178,6 +179,47 @@ def _hist_ajoute(b: dict) -> None:
     _sauve_hist()
 
 
+# LISTE BLANCHE DES URL DIFFUSABLES (#1608) : chemins de MEME ORIGINE (le flux
+# souverain /api/v1/ytsas/stream/<id>, #1237), noms https du domaine de la box,
+# et les lecteurs YouTube que le BiB sait relayer. Rien d'autre.
+_HOTES_EXTERNES = frozenset({"www.youtube.com", "youtube.com", "m.youtube.com",
+                             "youtu.be", "www.youtube-nocookie.com"})
+
+
+def _url_diffusable(url: str) -> bool:
+    from urllib.parse import urlsplit
+    if url.startswith("/") and not url.startswith("//") and "\\" not in url:
+        return True
+    try:
+        u = urlsplit(url)
+    except ValueError:
+        return False
+    if u.scheme != "https" or not u.hostname or u.username or u.password:
+        return False
+    h = u.hostname.lower().rstrip(".")
+    dom = (domaine_box() or "").lower()
+    return h in _HOTES_EXTERNES or bool(dom) and (h == dom or h.endswith("." + dom))
+
+
+# DEBIT : quelques gestes par minute et par personne suffisent a l'usage.
+_DEBIT: dict = {}
+
+
+def _debit_ok(qui: str, geste: str, maxi: int, fenetre: float = 60.0) -> bool:
+    maint = time.time()
+    cle = (qui, geste)
+    t = [x for x in _DEBIT.get(cle, []) if maint - x < fenetre]
+    if len(t) >= maxi:
+        _DEBIT[cle] = t
+        return False
+    t.append(maint)
+    _DEBIT[cle] = t
+    return True
+
+
+_AIME: dict = {}     # url -> personnes qui l'ont aimee (memoire, un ♥ par personne)
+
+
 @public_router.get("/broadcast")
 async def get_broadcast():
     """Le flux courant du parc, ou {actif:false} si rien ne diffuse."""
@@ -185,17 +227,15 @@ async def get_broadcast():
 
 
 @public_router.post("/broadcast")
-async def set_broadcast(payload: dict):
+async def set_broadcast(payload: dict, qui: dict = Depends(require_personne)):
     """Poser (ou couper) le flux courant. `url` vide = on coupe la diffusion."""
     global _broadcast
     url = str((payload or {}).get("url", "")).strip()
-    # ACCEPTER AUSSI LES CHEMINS RELATIFS (#1237) : le flux SOUVERAIN est
-    # /api/v1/ytsas/stream/<id>, servi en MEME ORIGINE par chaque Hall (pas de
-    # YouTube, pas de contexte tiers). On refuse juste le protocol-relative
-    # (//...) et javascript: — url vide = on coupe.
-    _ok = url.lower().startswith(("http://", "https://")) or (
-        url.startswith("/") and not url.startswith("//"))
-    if not url or not _ok:
+    if not _debit_ok(str(qui.get("sub")), "diffuse", 10):
+        return JSONResponse({"detail": "Trop de diffusions, réessayez dans une minute"}, status_code=429)
+    if url and not _url_diffusable(url):
+        return JSONResponse({"detail": "Adresse non diffusable"}, status_code=422)
+    if not url:
         _broadcast = {"actif": False}
     else:
         # POS + TS (#1237) : position de lecture du broadcaster au moment ou il
@@ -226,11 +266,18 @@ async def get_broadcasts():
 
 
 @public_router.post("/broadcast/like")
-async def like_broadcast(payload: dict):
-    """Un ♥ sur un broadcast de l'historique (par url)."""
+async def like_broadcast(payload: dict, qui: dict = Depends(require_personne)):
+    """Un ♥ sur un broadcast de l'historique (par url), un par personne."""
     url = str((payload or {}).get("url", "")).strip()
+    sub = str(qui.get("sub"))
+    if not _debit_ok(sub, "aime", 30):
+        return JSONResponse({"detail": "Trop de gestes, réessayez dans une minute"}, status_code=429)
     for h in _hist:
         if h.get("url") == url:
+            deja = _AIME.setdefault(url, set())
+            if sub in deja:
+                return {"url": url, "likes": int(h.get("likes", 0))}
+            deja.add(sub)
             h["likes"] = int(h.get("likes", 0)) + 1
             _sauve_hist()
             return {"url": url, "likes": h["likes"]}
@@ -270,8 +317,29 @@ _wc = {"d": None, "t": 0.0}
 
 
 @public_router.get("/cardlets/waf")
-async def cardlet_waf():
+async def cardlet_waf(request: Request):
     """Cardlet WAF (posture) — lue côté serveur via waf.sock, cache 20 s (#1228).
+
+    Les adresses de l'activité récente ne sont rendues qu'à une session
+    reconnue ; un visiteur voit pays, catégorie et action (#1608)."""
+    d = await _cardlet_waf_cache()
+    if _session_reconnue(request):
+        return d
+    return {**d, "recent": [{k: v for k, v in r.items() if k != "ip"}
+                            for r in (d.get("recent") or [])]}
+
+
+def _session_reconnue(request: Request) -> bool:
+    from secubox_core import auth as _a
+    jetons = [request.cookies.get(_a.SESSION_COOKIE) or ""]
+    z = request.headers.get("authorization", "")
+    if z.lower().startswith("bearer "):
+        jetons.append(z[7:].strip())
+    return any(j and _a._validate_token(j) for j in jetons)
+
+
+async def _cardlet_waf_cache():
+    """Posture WAF, cache 20 s.
 
     Cache PLUS LONG que celui de la Radio : un now-playing change de titre en
     trois minutes, une posture de pare-feu bouge en dizaines de minutes.

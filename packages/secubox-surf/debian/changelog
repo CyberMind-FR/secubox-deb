@@ -1,3 +1,9 @@
+secubox-surf (1.0.28-1~bookworm1) bookworm; urgency=high
+
+  * La sortie du relais (et du rendu) ne mène qu'à l'extérieur : adresses internes refusées après résolution, connexion à l'adresse vérifiée (#1609).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:22:22 +0200
+
 secubox-surf (1.0.27-1~bookworm1) bookworm; urgency=medium
 
   * Une copie carbone doit être celle de la page DEMANDÉE (#1323). Le site peut
