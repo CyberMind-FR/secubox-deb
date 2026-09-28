@@ -32,6 +32,7 @@ def isole(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "HOSTS", tmp_path / "hosts")
     monkeypatch.setattr(M, "MAJAUTO_DROPIN", tmp_path / "heure.conf")
     monkeypatch.setattr(M, "_pose_empreinte_admin", lambda e: None)
+    monkeypatch.setattr(M, "_avahi_nouveau_nom", lambda: None)
     return tmp_path
 
 
@@ -173,6 +174,7 @@ def test_maillage_reessaie_le_temps_que_le_reseau_revienne(complet, tmp_path, mo
     monkeypatch.setattr(M, "_pose_empreinte_admin", lambda e: None)
     monkeypatch.setattr(M, "_ecrit_conf", lambda d: None)
     monkeypatch.setattr(M, "_renomme", lambda n: None)
+    monkeypatch.setattr(M, "_avahi_nouveau_nom", lambda: None)
     monkeypatch.setattr(M, "_majauto", lambda a, h: None)
     p = complet
     p["maillage"] = {"mode": "rejoindre", "rejoindre": "192.168.1.200", "jeton": "ab" * 32}

@@ -132,34 +132,30 @@ def get_hostname() -> str:
         return "secubox"
 
 
-# Interfaces qui ne sont PAS le LAN : bouclage, conteneurs, tunnels, maillage.
-_IFACES_HORS_LAN = ("lo", "veth", "docker", "lxcbr", "br-lxc", "wg", "tun", "tap", "virbr", "eye-br")
+# La règle vit dans secubox_core.reseau (#1556) — p2p, l'annonce Bonjour et
+# les noms <box>.lan.<zone> la partagent. Copie locale seulement le temps
+# qu'un secubox-core plus ancien soit encore installé.
+try:
+    from secubox_core.reseau import choisit_lan_ip  # noqa: E402
+except ImportError:  # pragma: no cover — secubox-core < 1.5.24
+    _IFACES_HORS_LAN = ("lo", "veth", "docker", "lxcbr", "br-lxc", "wg", "tun", "tap", "virbr", "eye-br")
 
-
-def choisit_lan_ip(adresses, source_defaut: Optional[str]) -> Optional[str]:
-    """L'adresse qu'une AUTRE machine du LAN peut joindre (#1554).
-
-    `adresses` : [(interface, ip)]. On ignore le bouclage et les interfaces
-    virtuelles — sur gk2, 192.168.255.1 est posée sur lo (préparation d'une
-    bascule passerelle) et l'invitation l'annonçait : injoignable du LAN.
-    Ordre : 192.168.255.x sur une interface RÉELLE (mode routeur : la box est
-    la passerelle du LAN), puis la source de la route par défaut, puis toute
-    adresse privée d'une interface réelle."""
-    reelles = [(i, ip) for i, ip in adresses
-               if not i.startswith(_IFACES_HORS_LAN) and not ip.startswith("127.")]
-    for _, ip in reelles:
-        if ip.startswith("192.168.255."):
-            return ip
-    if source_defaut and any(ip == source_defaut for _, ip in reelles):
-        return source_defaut
-    import ipaddress  # noqa: PLC0415
-    for _, ip in reelles:
-        try:
-            if ipaddress.ip_address(ip).is_private:
+    def choisit_lan_ip(adresses, source_defaut: Optional[str]) -> Optional[str]:
+        import ipaddress  # noqa: PLC0415
+        reelles = [(i, ip) for i, ip in adresses
+                   if not i.startswith(_IFACES_HORS_LAN) and not ip.startswith("127.")]
+        for _, ip in reelles:
+            if ip.startswith("192.168.255."):
                 return ip
-        except ValueError:
-            continue
-    return reelles[0][1] if reelles else source_defaut
+        if source_defaut and any(ip == source_defaut for _, ip in reelles):
+            return source_defaut
+        for _, ip in reelles:
+            try:
+                if ipaddress.ip_address(ip).is_private:
+                    return ip
+            except ValueError:
+                continue
+        return reelles[0][1] if reelles else source_defaut
 
 
 def get_lan_ip() -> Optional[str]:
@@ -434,11 +430,15 @@ async def discover_mdns(timeout: int = 5) -> List[Dict]:
                 hostname = parts[6]
                 address = parts[7]
                 port = int(parts[8]) if parts[8].isdigit() else API_PORT
+                # TXT publié par secubox-annuaire-noms (#1556) : « "boxname=gk3" "node_id=…" »
+                txt = dict(re.findall(r'"([a-z_]+)=([^"]*)"', parts[9])) if len(parts) > 9 else {}
 
-                peer_id = f"sb-{ident(address, n=12)}"
+                peer_id = txt.get("node_id") or f"sb-{ident(address, n=12)}"
                 peers.append({
                     "id": peer_id,
-                    "name": name or hostname,
+                    "boxname": txt.get("boxname"),
+                    "mesh_ip": txt.get("mesh_ip"),
+                    "name": txt.get("boxname") or name or hostname,
                     "address": address,
                     "port": port,
                     "hostname": hostname,
@@ -478,14 +478,38 @@ async def discover_network_scan(subnet: str = None, timeout: int = 5) -> List[Di
         )
         for line in result.stdout.split('\n'):
             match = re.match(r'^(\d+\.\d+\.\d+\.\d+)\s+', line)
-            if match and 'REACHABLE' in line or 'STALE' in line:
+            # Parenthèses : « a and b or c » arrêtait le scan sur une ligne
+            # STALE sans adresse (AttributeError avalé par le except) (#1556).
+            if match and ('REACHABLE' in line or 'STALE' in line):
                 arp_hosts.append(match.group(1))
     except:
         pass
 
     # Probe hosts for SecuBox
+    async def probe_debian(ip: str) -> Optional[Dict]:
+        """Une box SecuBox-Deb : /api/v1/p2p/status répond en JSON — le statut
+        (node_id, hostname) si la lecture est ouverte, sinon le refus
+        « jeton requis » propre à SecuBox. Le /cgi-bin/luci ci-dessous ne
+        trouvait que des OpenWrt (#1556)."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "curl", "-s", "--connect-timeout", "2", "-k", f"https://{ip}/api/v1/p2p/status",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
+            j = json.loads(stdout.decode() or "{}")
+        except Exception:  # noqa: BLE001
+            return None
+        if not (j.get("node_id") or "jeton" in str(j.get("detail", "")).lower()):
+            return None
+        return {"id": j.get("node_id") or f"sb-{ident(ip, n=12)}", "name": j.get("hostname") or "SecuBox",
+                "address": ip, "port": 443, "is_secubox": True, "is_openwrt": False,
+                "discovered_via": "network_scan", "discovered_at": datetime.utcnow().isoformat(), "status": "online"}
+
     async def probe_host(ip: str) -> Optional[Dict]:
         """Probe a single host for SecuBox."""
+        d = await probe_debian(ip)
+        if d:
+            return d
         try:
             proc = await asyncio.create_subprocess_exec(
                 "curl", "-s", "--connect-timeout", "2", "-k",

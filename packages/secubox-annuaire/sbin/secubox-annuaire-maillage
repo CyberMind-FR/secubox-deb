@@ -67,6 +67,40 @@ if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
     fi
 fi
 
+# 3b. DNS du maillage (#1556) : les noms <box>.lan/.mesh.<zone> sont servis
+# par l'Unbound du maître sur son adresse wg-mesh. Même geste, même garde.
+if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
+   && grep -q 'table inet secubox_filter' "$NFT_CONF" \
+   && ! grep -q 'udp dport 53 accept comment "secubox-noms"' "$NFT_CONF"; then
+    awk '/^[[:space:]]*drop[[:space:]]*$/ && !d {print "        iifname \"wg-mesh\" ip saddr 10.10.0.0/24 udp dport 53 accept comment \"secubox-noms\""; print "        iifname \"wg-mesh\" ip saddr 10.10.0.0/24 tcp dport 53 accept comment \"secubox-noms\""; d=1} {print}' \
+        "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
+    if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
+        mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
+        nft -f "$NFT_CONF" >/dev/null 2>&1 || true
+        echo "[maillage] DNS (53) ouvert sur wg-mesh"
+    else
+        rm -f "$NFT_CONF.sbxtmp"
+    fi
+fi
+
+# 3c. Bonjour (#1556) : l'annonce _secubox._tcp et la recherche des autres box
+# passent par mDNS — UDP 5353 vers le groupe 224.0.0.251, sur le LAN. Le
+# drop terminal de secubox_filter le coupait : gk3 n'entendait jamais gk2.
+# Portée minimale : ce port, ce groupe multicast, rien d'autre.
+if [ -f "$NFT_CONF" ] \
+   && grep -q 'table inet secubox_filter' "$NFT_CONF" \
+   && ! grep -q 'comment "secubox-bonjour"' "$NFT_CONF"; then
+    awk '/^[[:space:]]*drop[[:space:]]*$/ && !d {print "        ip daddr 224.0.0.251 udp dport 5353 accept comment \"secubox-bonjour\""; print "        ip6 daddr ff02::fb udp dport 5353 accept comment \"secubox-bonjour\""; d=1} {print}' \
+        "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
+    if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
+        mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
+        nft -f "$NFT_CONF" >/dev/null 2>&1 || true
+        echo "[maillage] Bonjour (mDNS 5353) ouvert"
+    else
+        rm -f "$NFT_CONF.sbxtmp"
+    fi
+fi
+
 # 4. Premier instantané signé tout de suite, sans attendre le minuteur.
 if [ -n "$MESH_IP" ] && [ -s "$KEY" ]; then
     systemctl start --no-block secubox-metrics-publish.service 2>/dev/null || true

@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: secubox-annuaire-noms — la box se fait connaître (#1556)
+CyberMind — https://cybermind.fr
+
+Toutes les 5 minutes (minuterie), en root :
+
+1. ADRESSES : écrit /var/lib/secubox/annuaire/adresses.json — {boxname,
+   node_id, mesh_ip, lan_ip} — que l'écouteur du maillage (:8799) sert aux
+   pairs. Rien de signé n'est touché : le NodeRecord est `extra=forbid`, un
+   champ neuf ferait rejeter nos enregistrements par les box plus anciennes.
+   La confiance vient de WireGuard : seule la box qui détient une adresse du
+   maillage peut répondre sur elle.
+2. BONJOUR : publie _secubox._tcp par Avahi (TXT boxname, node_id, mesh_ip) —
+   le « découvrir » de secubox-p2p le cherchait, personne ne le publiait.
+3. NOMS : sur le MAÎTRE, projette chaque box en <box>.lan.<zone> (son IP LAN)
+   et <box>.mesh.<zone> (son IP de maillage) dans Unbound, et écoute sur son
+   adresse de maillage ; sur les AUTRES box, renvoie ces deux zones vers le
+   maître par le maillage. Zones PRIVÉES (split-horizon) : jamais publiées
+   chez le registraire.
+
+Toute configuration Unbound neuve passe par unbound-checkconf ; refusée, on
+remet l'ancienne. Rien n'est réécrit quand rien n'a changé.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+from typing import Dict, List, Optional
+
+sys.path.insert(0, "/usr/lib/secubox/common")
+
+WG = Path("/var/lib/secubox/p2p/wg_mesh.json")
+NODE_ID = Path("/var/lib/secubox/p2p/node.id")
+ADRESSES = Path("/var/lib/secubox/annuaire/adresses.json")
+AVAHI = Path("/etc/avahi/services/secubox.service")
+UNBOUND = Path("/etc/unbound/unbound.conf.d/60-secubox-noms.conf")
+CONF = Path("/etc/secubox/annuaire.toml")
+PORT_MAILLAGE = 8799
+RE_LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+
+
+# ── Fonctions pures (testées) ──────────────────────────────────────────────
+
+def label(nom: str) -> Optional[str]:
+    """Un nom de box utilisable comme étiquette DNS, ou None."""
+    n = (nom or "").strip().lower()
+    return n if RE_LABEL.match(n) else None
+
+
+def avahi_xml(boxname: str, node_id: str, mesh_ip: str) -> str:
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    txt = "".join(f"\n    <txt-record>{esc(k)}={esc(v)}</txt-record>"
+                  for k, v in (("boxname", boxname), ("node_id", node_id), ("mesh_ip", mesh_ip)) if v)
+    return f"""<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- Écrit par secubox-annuaire-noms (#1556) : ne pas modifier à la main. -->
+<service-group>
+  <name replace-wildcards="yes">SecuBox %h</name>
+  <service>
+    <type>_secubox._tcp</type>
+    <port>443</port>{txt}
+  </service>
+</service-group>
+"""
+
+
+def unbound_maitre(zone: str, soi_mesh: str, noeuds: List[Dict[str, str]]) -> str:
+    """Le maître sert lan.<zone> et mesh.<zone>, sur son adresse de maillage."""
+    lignes = ["# Écrit par secubox-annuaire-noms (#1556) : ne pas modifier à la main.",
+              "# Noms des box du maillage — zones PRIVÉES, jamais publiées.",
+              "server:",
+              # ip-freebind : au démarrage, Unbound peut précéder wg-mesh ; sans
+              # lui, l'adresse absente ferait échouer TOUT Unbound — le DNS du LAN.
+              "    ip-freebind: yes",
+              f"    interface: {soi_mesh}",
+              "    access-control: 10.10.0.0/24 allow",
+              f'    local-zone: "lan.{zone}." static',
+              f'    local-zone: "mesh.{zone}." static']
+    # Doublons : le PREMIER venu garde le nom — soi, puis les pairs dans l'ordre
+    # du maillage. Trier avant de dédoublonner donnait le nom à « GK3 »
+    # (majuscule, triée en tête) au lieu de la vraie gk3.
+    retenus: Dict[str, Dict[str, str]] = {}
+    for n in noeuds:
+        b = label(n.get("boxname", ""))
+        if b and b not in retenus:
+            retenus[b] = n
+    for b in sorted(retenus):
+        n = retenus[b]
+        if n.get("lan_ip"):
+            lignes.append(f'    local-data: "{b}.lan.{zone}. 300 IN A {n["lan_ip"]}"')
+        if n.get("mesh_ip"):
+            lignes.append(f'    local-data: "{b}.mesh.{zone}. 300 IN A {n["mesh_ip"]}"')
+    return "\n".join(lignes) + "\n"
+
+
+def unbound_pair(zone: str, maitre_mesh: str) -> str:
+    """Une box du maillage demande ces deux zones au maître, par le maillage.
+    domain-insecure : zones privées non signées — la validation DNSSEC les
+    rejetterait sinon, secubox.in étant publique."""
+    out = ["# Écrit par secubox-annuaire-noms (#1556) : ne pas modifier à la main.",
+           "server:",
+           f'    domain-insecure: "lan.{zone}."',
+           f'    domain-insecure: "mesh.{zone}."',
+           f'    private-domain: "lan.{zone}."',
+           f'    private-domain: "mesh.{zone}."']
+    for z in ("lan", "mesh"):
+        out += ["stub-zone:", f'    name: "{z}.{zone}."', f"    stub-addr: {maitre_mesh}"]
+    return "\n".join(out) + "\n"
+
+
+def maitre_de(wg: dict) -> Optional[str]:
+    """Le maître d'une box pair : le pair qui porte tout le réseau du maillage."""
+    reseau = wg.get("network") or "10.10.0.0/24"
+    for p in wg.get("peers") or []:
+        if reseau in str(p.get("allowed_ips", "")) and p.get("mesh_ip"):
+            return p["mesh_ip"]
+    return None
+
+
+# ── Système ────────────────────────────────────────────────────────────────
+
+def zone() -> str:
+    try:
+        import tomllib
+        return tomllib.loads(CONF.read_text()).get("noms", {}).get("zone", "secubox.in")
+    except (OSError, ValueError, ImportError):
+        return "secubox.in"
+
+
+def ecrit_si_change(p: Path, contenu: str, mode: int = 0o644) -> bool:
+    try:
+        if p.read_text() == contenu:
+            return False
+    except OSError:
+        pass
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(contenu)
+    os.chmod(tmp, mode)
+    os.replace(tmp, p)
+    return True
+
+
+def adresses_de(mesh_ip: str) -> Optional[dict]:
+    try:
+        with urllib.request.urlopen(f"http://{mesh_ip}:{PORT_MAILLAGE}/api/v1/annuaire/noeud/adresses", timeout=4) as r:
+            return json.loads(r.read(4096))
+    except Exception:  # noqa: BLE001 — pair éteint, ancienne version : il manque, rien de plus
+        return None
+
+
+def applique_unbound(contenu: str) -> str:
+    try:
+        ancien = UNBOUND.read_text()
+    except OSError:
+        ancien = None
+    if ancien == contenu:
+        return "inchangé"
+    ecrit_si_change(UNBOUND, contenu)
+    if subprocess.run(["unbound-checkconf"], capture_output=True).returncode != 0:
+        if ancien is None:
+            UNBOUND.unlink(missing_ok=True)
+        else:
+            UNBOUND.write_text(ancien)
+        return "REFUSÉ par unbound-checkconf — ancienne configuration remise"
+    subprocess.run(["unbound-control", "reload"], capture_output=True)
+    return "appliqué"
+
+
+def ecoute_manquante(contenu: str, ecoutes: str) -> List[str]:
+    """Les adresses `interface:` de notre fichier qu'Unbound n'écoute pas."""
+    voulues = re.findall(r"^\s*interface:\s*(\S+)", contenu, re.M)
+    return [a for a in voulues if f"{a}:53 " not in ecoutes + " "]
+
+
+def ecoute_garantie(contenu: str) -> str:
+    """`unbound-control reload` n'ouvre PAS une adresse nouvelle (vu sur gk2 :
+    zones servies en local, rien sur 10.10.0.1). On vérifie donc à chaque
+    passage, et on redémarre seulement s'il en manque — une fois."""
+    out = subprocess.run(["ss", "-lun"], capture_output=True, text=True).stdout
+    ecoutes = " ".join(l.split()[3] for l in out.splitlines()[1:] if len(l.split()) > 3)
+    manque = ecoute_manquante(contenu, ecoutes)
+    if not manque:
+        return ""
+    subprocess.run(["systemctl", "restart", "unbound"], capture_output=True)
+    return f" ; Unbound redémarré (écoute manquante : {', '.join(manque)})"
+
+
+def main() -> int:
+    try:
+        wg = json.loads(WG.read_text())
+    except (OSError, ValueError):
+        print("secubox-annuaire-noms : pas de maillage — rien à annoncer")
+        return 0
+    from secubox_core.reseau import lan_ip  # noqa: PLC0415
+    soi_mesh = (wg.get("address") or "").split("/")[0]
+    boxname = label(socket.gethostname()) or "secubox"
+    try:
+        node_id = NODE_ID.read_text().strip()
+    except OSError:
+        node_id = ""
+    soi = {"boxname": boxname, "node_id": node_id, "mesh_ip": soi_mesh, "lan_ip": lan_ip() or ""}
+    ecrit_si_change(ADRESSES, json.dumps(soi, ensure_ascii=False) + "\n")
+    if AVAHI.parent.is_dir() and ecrit_si_change(AVAHI, avahi_xml(boxname, node_id, soi_mesh)):
+        print("Bonjour : _secubox._tcp publié")
+    z = zone()
+    if wg.get("role") == "master" and soi_mesh:
+        noeuds = [soi] + [a for a in (adresses_de(p["mesh_ip"]) for p in wg.get("peers") or [] if p.get("mesh_ip")) if a]
+        conf = unbound_maitre(z, soi_mesh, noeuds)
+        etat = applique_unbound(conf)
+        if not etat.startswith("REFUSÉ"):
+            etat += ecoute_garantie(conf)
+        print(f"noms (maître, {len(noeuds)} box) : {etat}")
+    elif (m := maitre_de(wg)):
+        print(f"noms (pair → {m}) : {applique_unbound(unbound_pair(z, m))}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

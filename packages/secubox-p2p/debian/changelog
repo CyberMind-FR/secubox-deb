@@ -1,3 +1,12 @@
+secubox-p2p (1.11.11-1~bookworm1) bookworm; urgency=medium
+
+  * Découverte : la recherche mDNS lit l'annonce _secubox._tcp (TXT boxname,
+    node_id, mesh_ip) ; le scan réseau reconnaît les box Debian
+    (/api/v1/p2p/status) et ne s'arrête plus sur une ligne STALE ;
+    choisit_lan_ip vient de secubox_core.reseau (ref #1556).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 08:42:59 +0200
+
 secubox-p2p (1.11.10-1~bookworm1) bookworm; urgency=medium
 
   * get_lan_ip() ignore le bouclage et les interfaces virtuelles : sur gk2,

@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox — la box se fait connaître : Bonjour + noms <box>.lan/.mesh (#1556)
+After=network-online.target unbound.service avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-annuaire-noms
+Nice=10
