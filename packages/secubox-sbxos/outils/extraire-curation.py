@@ -53,11 +53,16 @@ def extrait(html: str) -> list[dict]:
     return sortie
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    import argparse
     # parents[2] = packages/ — le script vit dans packages/secubox-sbxos/outils/.
     racine = Path(__file__).resolve().parents[2]
-    source = racine / "secubox-webos" / "www" / "hall" / "index.html"
-    cible = Path(__file__).resolve().parents[1] / "www" / "mine" / "curation.json"
+    ap = argparse.ArgumentParser(description="Extrait la curation du Hall (const FEATURED) vers curation.json.")
+    ap.add_argument("--source", type=Path, default=racine / "secubox-webos" / "www" / "hall" / "index.html")
+    ap.add_argument("--sortie", type=Path,
+                    default=Path(__file__).resolve().parents[1] / "www" / "mine" / "curation.json")
+    a = ap.parse_args(argv)
+    source, cible = a.source, a.sortie
 
     if not source.exists():
         print(f"source absente : {source}", file=sys.stderr)

@@ -219,6 +219,8 @@ suitLesApercus(
 // ── Écrans ──────────────────────────────────────────────────────────────────
 
 function montre(nom) {
+  // Un écran inconnu (?ecran=cinema, radio, billets…) retombe sur le Hall.
+  if (!['hall', 'favoris', 'reglages'].includes(nom)) nom = 'hall';
   for (const e of ['hall', 'favoris', 'reglages']) {
     const s = $('ecran-' + e);
     if (s) s.hidden = (e !== nom);

@@ -27,98 +27,111 @@
  * une réponse d'API gardée montrerait l'état d'hier en croyant montrer celui
  * d'aujourd'hui.
  *
+ * PÉRIMÈTRE (v6, #1605). L'origine est PARTAGÉE avec le Hall : ce worker ne
+ * traite que /sbxos/, ne purge que ses propres caches `sbxos-*`, laisse au
+ * réseau l'aperçu Aurora (/sbxos/aurora/, /sbxos/assets/, /sbxos/art/), ne met
+ * jamais en cache une réponse privée, et sait se retirer : /sbxos/offline/
+ * kill.json = {"kill":true} le désinscrit et vide ses caches.
+ *
  * LE NOM DU CACHE PORTE LA VERSION. Changer `VERSION` suffit à repartir propre :
  * l'ancien cache est effacé à l'activation. C'est ce qui évite qu'une coquille
  * d'hier serve un JavaScript d'aujourd'hui.
  */
 
-// v2 : le damier réglable change la coquille (hall.js, sbx-damier.js,
-// sbx-carlette.js, index.html). Sans ce changement de nom, la stratégie
-// « cache d'abord » servirait l'ancienne coquille jusqu'au lancement SUIVANT —
-// et le réglage paraîtrait n'avoir rien fait.
-const VERSION = 'sbxos-v5';
+const VERSION = 'sbxos-v6';
 const CACHE_COQUILLE = `${VERSION}-coquille`;
 const CACHE_MANIFESTE = `${VERSION}-manifeste`;
 const CACHE_MEDIAS = `${VERSION}-medias`;
+const BASE = '/sbxos/';
 
-/** La coquille : tout ce qu'il faut pour ouvrir l'application sans réseau. */
+/** La coquille, en chemins ABSOLUS : la portée ne dépend plus de l'URL du worker. */
 const COQUILLE = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './ui/styles.css',
-  './ui/sbx-carlette.js',
-  './ui/sbx-damier.js',
-  './hall/hall.js',
-  './mine/mine.js',
-  './mine/clone.js',
-  './mine/apercu.js',
+  '/sbxos/', '/sbxos/index.html', '/sbxos/manifest.webmanifest',
+  '/sbxos/ui/styles.css', '/sbxos/ui/sbx-carlette.js', '/sbxos/ui/sbx-damier.js',
+  '/sbxos/hall/hall.js', '/sbxos/mine/mine.js', '/sbxos/mine/clone.js', '/sbxos/mine/apercu.js',
 ];
 
-/** Combien de médias on garde. Au-delà, le plus ancien sort. */
+/** Laissés au réseau même sous /sbxos/ : l'aperçu Aurora et ses fichiers. */
+const HORS_PERIMETRE = ['/sbxos/aurora/', '/sbxos/assets/', '/sbxos/art/', '/sbxos/offline/'];
+
 const MEDIAS_MAX = 40;
+const KILL_URL = '/sbxos/offline/kill.json';
+let dernierKill = 0;
+
+/** Interrupteur d'arrêt : seul un 200 JSON {"kill":true} retire le worker. */
+async function verifieKill(force) {
+  const maint = Date.now();
+  if (!force && maint - dernierKill < 3600e3) return false;
+  dernierKill = maint;
+  try {
+    const r = await fetch(KILL_URL, { cache: 'no-store', credentials: 'omit' });
+    if (r.status !== 200) return false;
+    const j = await r.json();
+    if (!j || j.kill !== true) return false;
+  } catch (e) { return false; }
+  const noms = await caches.keys();
+  await Promise.all(noms.filter(n => n.startsWith('sbxos-')).map(n => caches.delete(n)));
+  await self.registration.unregister();
+  return true;
+}
 
 self.addEventListener('install', (ev) => {
   ev.waitUntil((async () => {
     const c = await caches.open(CACHE_COQUILLE);
-    // `addAll` échoue EN BLOC si un seul fichier manque — et l'installation
-    // entière échouerait avec lui. On ajoute donc un par un : une coquille
-    // incomplète vaut mieux qu'une PWA qui refuse de s'installer.
     await Promise.all(COQUILLE.map(async (u) => {
       try { await c.add(new Request(u, { cache: 'reload' })); }
       catch (e) { console.warn('[sw] coquille, absent :', u); }
     }));
-    // On prend la main tout de suite : sans cela la première visite tourne
-    // sans service worker, et rien n'est mis en cache avant un rechargement.
     await self.skipWaiting();
   })());
 });
 
 self.addEventListener('activate', (ev) => {
   ev.waitUntil((async () => {
+    // SEULEMENT nos propres caches d'une autre version : le Hall partage l'origine.
     const noms = await caches.keys();
     await Promise.all(noms
-      .filter(n => !n.startsWith(VERSION))
+      .filter(n => n.startsWith('sbxos-') && !n.startsWith(VERSION + '-'))
       .map(n => caches.delete(n)));
+    if (await verifieKill(true)) return;
     await self.clients.claim();
   })());
 });
 
-/** Un média ? C'est l'extension qui tranche, pas le chemin. */
 function estMedia(url) {
-  return /\.(?:mp4|webm|m4v|mp3|ogg|oga|opus|webp|png|jpe?g|avif|svg)$/i
-    .test(new URL(url).pathname);
+  return /\.(?:mp4|webm|m4v|mp3|ogg|oga|opus|webp|png|jpe?g|avif|svg)$/i.test(url.pathname);
 }
 
 function estManifeste(url) {
-  // LA CURATION SUIT LA MÊME RÈGLE QUE LE MANIFESTE : réseau d'abord. C'est
-  // elle qui dit ce que le Hall montre ; servie depuis le cache, un service
-  // retiré resterait sur le bureau — ou l'inverse.
-  const p = new URL(url).pathname;
-  return p.endsWith('/manifeste.json') || p.endsWith('/curation.json');
+  return url.pathname.endsWith('/manifeste.json') || url.pathname.endsWith('/curation.json');
 }
 
-/** Borne le cache des médias, du plus ancien au plus récent. */
+/** Une réponse qu'on a le droit de garder : publique, complète, sans cookie posé. */
+function gardable(r) {
+  if (!r || !r.ok || r.status !== 200 || r.type === 'opaque') return false;
+  const cc = (r.headers.get('Cache-Control') || '').toLowerCase();
+  if (/(^|[,\s])(private|no-store)([,\s]|$)/.test(cc)) return false;
+  if (r.headers.has('Set-Cookie')) return false;
+  return true;
+}
+
 async function tailleMedias() {
   const c = await caches.open(CACHE_MEDIAS);
   const clefs = await c.keys();
-  // `keys()` rend l'ordre d'insertion : les premiers sont les plus anciens.
   for (let i = 0; i < clefs.length - MEDIAS_MAX; i++) await c.delete(clefs[i]);
 }
 
-async function cacheDAbord(req, nomCache, { rafraichir = false } = {}) {
+async function cacheDAbord(req, nomCache, { rafraichir = false, clef = req } = {}) {
   const c = await caches.open(nomCache);
-  const garde = await c.match(req);
+  const garde = await c.match(clef);
   if (garde) {
     if (rafraichir) {
-      // Rafraîchissement SILENCIEUX : on a déjà répondu, l'échec réseau ne
-      // regarde personne.
-      fetch(req).then(r => { if (r.ok) c.put(req, r.clone()); }).catch(() => {});
+      fetch(req).then(r => { if (gardable(r)) c.put(clef, r.clone()); }).catch(() => {});
     }
     return garde;
   }
   const r = await fetch(req);
-  if (r.ok) c.put(req, r.clone());
+  if (gardable(r)) c.put(clef, r.clone());
   return r;
 }
 
@@ -126,7 +139,7 @@ async function reseauDAbord(req, nomCache) {
   const c = await caches.open(nomCache);
   try {
     const r = await fetch(req);
-    if (r.ok) c.put(req, r.clone());
+    if (gardable(r)) c.put(req, r.clone());
     return r;
   } catch (e) {
     const garde = await c.match(req);
@@ -135,64 +148,60 @@ async function reseauDAbord(req, nomCache) {
   }
 }
 
+/** Le client est-il une page de l'aperçu Aurora ? Alors on ne s'en mêle pas. */
+async function clientAurora(ev) {
+  const id = ev.clientId || ev.resultingClientId;
+  if (!id) return false;
+  try {
+    const cl = await self.clients.get(id);
+    return !!cl && new URL(cl.url).pathname.startsWith('/sbxos/aurora/');
+  } catch (e) { return false; }
+}
+
 self.addEventListener('fetch', (ev) => {
   const req = ev.request;
-
-  // On ne touche QUE les GET de notre propre origine. Le reste passe droit :
-  // une requête vers un service embarqué (PeerTube, Nextcloud) porte des
-  // cookies de session et n'a rien à faire dans nos caches.
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // PÉRIMÈTRE : /sbxos/ seulement. /api/, /acces/, /domaine.js, /fonts/,
+  // /hls.min.js… et tout le Hall passent droit.
+  if (!url.pathname.startsWith(BASE)) return;
+  if (HORS_PERIMETRE.some(p => url.pathname.startsWith(p))) return;
 
-  if (estManifeste(url)) {
-    ev.respondWith(reseauDAbord(req, CACHE_MANIFESTE));
-    return;
-  }
-  if (estMedia(url)) {
-    ev.respondWith(cacheDAbord(req, CACHE_MEDIAS).then(async (r) => {
-      tailleMedias();                      // sans attendre : la réponse part
+  verifieKill(false);          // au plus une fois par heure, sans attendre
+
+  ev.respondWith((async () => {
+    if (await clientAurora(ev)) return fetch(req);
+    if (estManifeste(url)) return reseauDAbord(req, CACHE_MANIFESTE);
+    if (estMedia(url)) {
+      const r = await cacheDAbord(req, CACHE_MEDIAS);
+      tailleMedias();
       return r;
-    }));
-    return;
-  }
-  // Les appels d'API ne sont PAS mis en cache — voir l'en-tête du fichier.
-  if (url.pathname.startsWith('/api/')) return;
-
-  ev.respondWith(
-    cacheDAbord(req, CACHE_COQUILLE, { rafraichir: true })
-      .catch(async () => {
-        // Hors ligne et rien en cache : pour une navigation, on rend la
-        // coquille plutôt qu'une page d'erreur du navigateur. L'application
-        // s'ouvre, et c'est elle qui dira ce qu'elle sait.
-        if (req.mode === 'navigate') {
-          const c = await caches.open(CACHE_COQUILLE);
-          return (await c.match('./index.html')) || Response.error();
-        }
-        return Response.error();
-      })
-  );
+    }
+    // Navigations : une seule clé, jamais la chaîne de requête (?entree=…).
+    const nav = req.mode === 'navigate';
+    const clef = nav ? '/sbxos/index.html' : req;
+    try {
+      return await cacheDAbord(req, CACHE_COQUILLE, { rafraichir: true, clef });
+    } catch (e) {
+      if (nav) {
+        const c = await caches.open(CACHE_COQUILLE);
+        return (await c.match('/sbxos/index.html')) || Response.error();
+      }
+      return Response.error();
+    }
+  })());
 });
 
 /**
- * REPRISE DE LECTURE — le Hall demande de garder un média sous la main.
- *
- * C'est l'application qui décide, pas le service worker : lui ne sait pas ce
- * qui a été regardé. Le message vient du théâtre au moment où l'on quitte une
- * vidéo.
+ * Messages de la page. `oublie` vide les médias ; `session` (l'état de session
+ * a changé) vide ce qui dépend de la personne. Plus aucun message ne fait
+ * télécharger une URL arbitraire au worker.
  */
 self.addEventListener('message', (ev) => {
   const d = ev.data || {};
-  if (d.sbx === 'garde' && typeof d.url === 'string') {
-    ev.waitUntil((async () => {
-      try {
-        const c = await caches.open(CACHE_MEDIAS);
-        await c.add(new Request(d.url, { mode: 'cors' }));
-        await tailleMedias();
-      } catch (e) { /* média non joignable : on n'insiste pas */ }
-    })());
-  }
-  if (d.sbx === 'oublie') {
-    ev.waitUntil(caches.delete(CACHE_MEDIAS));
+  if (d.sbx === 'oublie') ev.waitUntil(caches.delete(CACHE_MEDIAS));
+  if (d.sbx === 'session') {
+    ev.waitUntil(Promise.all([caches.delete(CACHE_MEDIAS), caches.delete(CACHE_MANIFESTE)]));
   }
 });
