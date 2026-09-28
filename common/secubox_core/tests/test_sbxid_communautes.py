@@ -195,3 +195,32 @@ def test_l_administration_ne_s_accorde_pas(db, cap):
     # Elle vient du rôle sbx_operator seul : node_admin reste vrai (#1519).
     with pytest.raises(S.Refus):
         S.accorde(db, "user", personne(db, "p"), cap, granted_by="x")
+
+
+# ── P4 : ce que chacun voit du flux (#1560) ───────────────────────────────
+
+def test_chacun_ne_voit_que_ce_qui_lui_revient(db):
+    ana, bob, eve = personne(db, "ana"), personne(db, "bob"), personne(db, "eve")
+    parti = personne(db, "parti", status="suspended")
+    k = S.cree_communaute(db, "Atelier", home_node=NOEUD, created_by=ana)
+    S.ajoute_membre(db, k, ana, added_by=ana)
+    S.ajoute_membre(db, k, bob, added_by=ana)
+    db.execute("DELETE FROM sbx_activity")                    # repartir d'un flux vide
+    S.emet_activite(db, "bbs_post", author=ana, visibility="public", origin_node=NOEUD, context={"titre": "ouvert"})
+    S.emet_activite(db, "user_joined", author=eve, visibility="node", origin_node=NOEUD)
+    S.emet_activite(db, "bbs_post", author=ana, visibility="community", community_uuid=k,
+                    origin_node=NOEUD, context={"titre": "entre nous"})
+    S.emet_activite(db, "file_shared", author=bob, visibility="private", origin_node=NOEUD)
+
+    def vus(lecteur):
+        return sorted((a["kind"], a["visibility"]) for a in S.activites_visibles(db, lecteur))
+    assert vus(None) == [("bbs_post", "public")]                                  # visiteur
+    assert vus(parti) == [("bbs_post", "public")]                                 # suspendu = visiteur
+    assert vus(eve) == [("bbs_post", "public"), ("user_joined", "node")]          # hors communauté
+    assert ("bbs_post", "community") in vus(bob) and ("file_shared", "private") in vus(bob)
+    assert ("file_shared", "private") not in vus(ana)                             # privé : l'auteur seul
+    a = [x for x in S.activites_visibles(db, bob) if x["visibility"] == "community"][0]
+    assert a["qui"] == "ana" and a["community_name"] == "Atelier" and a["context"] == {"titre": "entre nous"}
+    # communauté archivée : son flux se ferme
+    db.execute("UPDATE sbx_communities SET archived_at=1 WHERE community_uuid=?", (k,))
+    assert ("bbs_post", "community") not in vus(bob)

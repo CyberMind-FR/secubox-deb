@@ -1,3 +1,10 @@
+secubox-messagerie (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le mur montre les activités SBX OS que le lecteur peut voir (source
+    « activite », lien interne, sans réponse) (ref #1560).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:07:55 +0200
+
 secubox-messagerie (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * La session gk2 signe « gandalf » et non plus « modération » ; les

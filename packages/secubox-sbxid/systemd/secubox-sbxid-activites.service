@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox SBX OS — collecte des activités (BBS, fichiers, diffusions) (#1560)
+After=network.target
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/secubox-sbxid-activites
+Nice=10

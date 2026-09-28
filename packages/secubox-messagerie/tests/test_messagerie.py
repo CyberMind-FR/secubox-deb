@@ -33,6 +33,8 @@ def m(tmp_path, monkeypatch):
     mod.BBS_DB = tmp_path / "bbs.db"
     monkeypatch.setattr(mod, "_liens_bbs", lambda: {"gk2": ("u-gandalf", "gandalf")})
     mod._SURPOSTES = []
+    mod.__dict__["_activites_orig"] = mod._activites
+    monkeypatch.setattr(mod, "_activites", lambda q, n=40: [])
     monkeypatch.setattr(mod, "_surposte_radio", lambda q, p, c: mod._SURPOSTES.append((p, c)) or True)
     return mod
 
@@ -241,3 +243,25 @@ def test_ancien_message_de_compte_rendu_a_sa_personne(m, monkeypatch):
     m._QUI = dict(GANDALF, refs=GANDALF["refs"] + ["sys:gk2"])
     v = [x for x in m.fil(req())["messages"] if x["corps"] == "BIENVENUE"][0]
     assert v["pseudo"] == "gandalf" and v["de_moi"]
+
+
+def test_activites_dans_le_mur_selon_le_lecteur(m, tmp_path, monkeypatch):
+    """#1560 : le mur montre les activités que CE lecteur peut voir."""
+    import sqlite3
+    from secubox_core import sbxid as S
+    p = tmp_path / "sbx.db"
+    c = sqlite3.connect(p, isolation_level=None)
+    S.initialise(c)
+    noeud = "did:plc:" + "c" * 32
+    c.execute("INSERT INTO sbx_users (user_uuid,pseudo,status,home_node,created_at) VALUES ('u-alice','alice','active',?,1)", (noeud,))
+    S.emet_activite(c, "bbs_post", author="u-alice", visibility="public", origin_node=noeud,
+                    context={"titre": "Réunion", "lien": "/bbs/t/9"}, at=5)
+    S.emet_activite(c, "user_joined", author="u-alice", visibility="node", origin_node=noeud, at=6)
+    c.close()
+    monkeypatch.setattr(m._cap, "SBX_DB", p)
+    monkeypatch.setattr(m, "_activites", m._activites_orig)
+    vus = [x for x in m.fil(req())["messages"] if x["source"] == "activite"]
+    assert [x["corps"] for x in vus] == ["a ouvert un fil : « Réunion »"]          # visiteur : public seul
+    assert vus[0]["pseudo"] == "alice" and vus[0]["lien"] == "/bbs/t/9"
+    m._QUI = ALICE
+    assert len([x for x in m.fil(req())["messages"] if x["source"] == "activite"]) == 2

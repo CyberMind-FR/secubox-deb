@@ -204,6 +204,47 @@ def _radio_chat(n: int = 40) -> List[Dict[str, Any]]:
     return out
 
 
+_PHRASES = {
+    "user_joined": "a rejoint la box",
+    "community_joined": "a rejoint la communauté {communaute}",
+    "permission_granted": "a reçu une autorisation",
+    "bbs_post": "a ouvert un fil : « {titre} »",
+    "file_shared": "a partagé un fichier : {nom}",
+    "radio_live": "diffusion en direct : « {titre} »",
+}
+
+
+def _activites(q: Dict[str, Any], n: int = 40) -> List[Dict[str, Any]]:
+    """Le flux d'activités SBX OS (#1560, P4), selon CE QUE LE LECTEUR PEUT VOIR —
+    la règle unique de secubox_core.sbxid.activites_visibles (sbx.db en
+    lecture seule, comme l'annuaire des pseudos ci-dessus)."""
+    from secubox_core import sbxid as S  # noqa: PLC0415
+    try:
+        c = sqlite3.connect(f"file:{_cap.SBX_DB}?mode=ro", uri=True, timeout=2)
+        c.row_factory = sqlite3.Row
+        try:
+            acts = S.activites_visibles(c, q.get("ref") if q.get("type") == "sbx" else None, n)
+        finally:
+            c.close()
+    except (sqlite3.Error, AttributeError):
+        return []
+    out = []
+    for a in acts:
+        ctx = a.get("context") or {}
+        valeurs = {"communaute": a.get("community_name") or "", "titre": ctx.get("titre", ""),
+                   "nom": ctx.get("nom", "")}
+        try:
+            corps = _PHRASES.get(a["kind"], a["kind"]).format(**valeurs)
+        except (KeyError, IndexError):
+            corps = a["kind"]
+        pseudo = "📡 diffusion" if a["author"] == "diffusion" else str(a["qui"]).removeprefix("bbs:")
+        out.append({"id": f"act:{a['activity_uuid']}", "cree_le": a["at"], "auteur_type": "activite",
+                    "pseudo": pseudo, "corps": corps, "prive": 0, "source": "activite",
+                    "lien": ctx.get("lien") or ctx.get("url") or "", "communaute": a.get("community_name"),
+                    "parent": None, "supprime": False})
+    return out
+
+
 def _id_radio(ref: str) -> int:
     """Un identifiant de chat radio stable pour une personne ou un visiteur."""
     return int(hashlib.sha256(ref.encode()).hexdigest()[:12], 16) or 1
@@ -363,7 +404,7 @@ def fil(request: Request, n: int = 80):
     liens = _liens_bbs()
     locaux = [_vue(r, _refs(q), liens) for r in db().execute(
         "SELECT * FROM messages WHERE prive=0 ORDER BY cree_le DESC LIMIT ?", (n,))]
-    tout = locaux + _radio_chat() + _billets(liens=liens)
+    tout = locaux + _radio_chat() + _billets(liens=liens) + _activites(q)
     tout.sort(key=lambda m: m["cree_le"])
     return {"messages": tout[-n:], "moi": {k: q[k] for k in ("type", "pseudo", "moderateur")}}
 

@@ -1,3 +1,10 @@
+secubox-webos (1.0.350-1~bookworm1) bookworm; urgency=medium
+
+  * Carte « Activité » du Hall : le flux des gestes de la box, filtré par
+    /api/v1/sbxid/activite (ref #1560).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:07:55 +0200
+
 secubox-webos (1.0.349-1~bookworm1) bookworm; urgency=medium
 
   * Le postinst crée /etc/secubox/webos.toml (enabled = true) s'il manque :

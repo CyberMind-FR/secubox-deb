@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1560 (SBX OS P4) — CARTE « ACTIVITÉ ».
+
+  Le flux des gestes de la box : arrivées, communautés, fils ouverts au BBS,
+  fichiers partagés, diffusions lancées. Il vient de /api/v1/sbxid/activite,
+  qui applique LA règle de visibilité (secubox_core.sbxid.activites_visibles) :
+  le visiteur ne voit que le public, une personne de la box voit aussi le
+  « node », un membre ce qui concerne sa communauté. La carte n'en décide rien.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activité — vue micro</title>
+<link rel="stylesheet" href="../spicy.css">
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#6a4bb8; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#a98cf0; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#a98cf0; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.4; }
+  .mw { display:flex; flex-direction:column; height:100%; padding:.65rem .75rem; gap:.45rem; }
+  .tete { display:flex; align-items:center; gap:.45rem; }
+  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
+              font-size:.9rem; color:#fff; background:#6a4bb8; flex:0 0 auto; }
+  .tete b { font-size:.88rem; }
+  .tete .m { margin-left:auto; font-size:.66rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+  ol { list-style:none; margin:0; padding:0; overflow-y:auto; flex:1; scrollbar-width:thin; }
+  li { display:grid; grid-template-columns:1.3rem 1fr auto; gap:.1rem .4rem; align-items:baseline;
+       padding:.32rem 0; border-top:1px solid var(--border); font-size:.74rem; }
+  li:first-child { border-top:0; }
+  li .g { text-align:center; }
+  li .qui { font-weight:650; }
+  li .quand { color:var(--muted); font-size:.62rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  li .k { grid-column:2 / 4; color:var(--muted); font-size:.62rem; }
+  li a { color:var(--accent); text-decoration:none; }
+  li a:hover { text-decoration:underline; }
+  .vide { color:var(--muted); font-size:.74rem; margin:auto; text-align:center; }
+</style>
+<div class="mw">
+  <div class="tete"><span class="ic">✦</span><b>Activité</b><span class="m" id="n">…</span></div>
+  <ol id="liste"></ol>
+  <p class="vide" id="vide" hidden>Rien encore — les arrivées, fils et partages apparaîtront ici.</p>
+</div>
+<script>
+const GLYPHES = {user_joined:"👋", community_joined:"🤝", permission_granted:"🔑",
+                 bbs_post:"💬", file_shared:"📎", radio_live:"📡"};
+const PHRASES = {user_joined:"a rejoint la box", community_joined:"a rejoint {c}",
+                 permission_granted:"a reçu une autorisation", bbs_post:"a ouvert « {t} »",
+                 file_shared:"a partagé {f}", radio_live:"diffusion : « {t} »"};
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function depuis(t){
+  const d = Math.max(0, Date.now()/1000 - t);
+  if (d < 90) return "à l'instant";
+  if (d < 3600) return Math.round(d/60) + " min";
+  if (d < 86400) return Math.round(d/3600) + " h";
+  return Math.round(d/86400) + " j";
+}
+function ligne(a){
+  const ctx = a.context || {};
+  const phrase = (PHRASES[a.kind] || a.kind)
+    .replace("{c}", esc(a.community_name || "une communauté"))
+    .replace("{t}", esc(ctx.titre || "")).replace("{f}", esc(ctx.nom || "un fichier"));
+  const qui = a.author === "diffusion" ? "Hall" : String(a.qui || "").replace(/^bbs:/, "");
+  const lien = ctx.lien || ctx.url || "";
+  // Chemin INTERNE seulement : un contexte ne pousse jamais vers ailleurs.
+  const corps = /^\/(?!\/)/.test(lien) ? `<a href="${esc(lien)}" target="_top">${phrase}</a>` : phrase;
+  const k = a.visibility === "community" ? `✦ ${esc(a.community_name || "")}` : a.visibility === "public" ? "public" : "";
+  return `<li><span class="g">${GLYPHES[a.kind] || "•"}</span><span><span class="qui">${esc(qui)}</span> ${corps}</span>`
+       + `<span class="quand">${depuis(a.at)}</span>${k ? `<span class="k">${k}</span>` : ""}</li>`;
+}
+async function charge(){
+  try {
+    const r = await fetch("/api/v1/sbxid/activite?n=30", {credentials:"same-origin"});
+    const j = await r.json();
+    const l = j.activites || [];
+    document.getElementById("liste").innerHTML = l.map(ligne).join("");
+    document.getElementById("vide").hidden = l.length > 0;
+    document.getElementById("n").textContent = l.length ? l.length + " récentes" : "";
+  } catch (e) { document.getElementById("n").textContent = "indisponible"; }
+}
+charge(); setInterval(charge, 60000);
+</script>

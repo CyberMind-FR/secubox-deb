@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""SecuBox-Deb :: secubox-sbxid-activites — un passage de collecte (#1560, P4).
+Lancé chaque minute par secubox-sbxid-activites.timer, sous l'utilisateur
+secubox (seul écrivain de sbx.db). Voir api/activites.py."""
+import sys
+
+sys.path[:0] = ["/usr/lib/secubox/sbxid", "/usr/lib/secubox/common"]
+
+from api import activites as A, store  # noqa: E402
+from api.main import _origine  # noqa: E402  — le nœud d'origine, défini une seule fois
+
+
+def main() -> int:
+    c = store.ouvre()
+    try:
+        emis, cur = A.collecte(c, _origine())
+        A._sauve(cur)
+    finally:
+        c.close()
+    n = sum(emis.values())
+    if n:
+        print("activités collectées : " + ", ".join(f"{k} {v}" for k, v in emis.items() if v))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

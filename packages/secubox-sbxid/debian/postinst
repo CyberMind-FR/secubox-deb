@@ -75,6 +75,9 @@ PY
 
     if [ -d /run/systemd/system ]; then
       systemctl restart secubox-aggregator >/dev/null 2>&1 || true
+      # Collecte des activités chaque minute (#1560, P4).
+      systemctl daemon-reload >/dev/null 2>&1 || true
+      systemctl enable --now secubox-sbxid-activites.timer >/dev/null 2>&1 || true
     fi
     ;;
 esac

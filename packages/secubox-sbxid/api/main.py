@@ -423,6 +423,8 @@ def cree_personne(n: NouvellePersonne, ctx=Depends(exige_admin)):
     for x in roles:
         db().execute("INSERT INTO sbx_user_roles VALUES (?,?,?,?)", (uid, x, _acteur(ctx), int(time.time())))
     store.journal(db(), _acteur(ctx), "user.created", f"{pseudo} · {', '.join(roles)}")
+    S.emet_activite(db(), "user_joined", author=uid, visibility="node", origin_node=_origine(),
+                    context={"via": "administration"})
     return store.personne(db(), uid)
 
 
@@ -582,6 +584,18 @@ def fixe_statut(user_uuid: str, s: Statut, ctx=Depends(exige_admin)):
 # « Allow User » + « Allow Community » : une capacité (qui nomme son module)
 # accordée à une personne ou à une communauté. Les règles vivent dans
 # secubox_core.sbxid ; ici seulement la garde, le journal et les activités.
+
+@app.get("/activite")
+def activite(request: Request, n: int = 50, depuis: int = 0):
+    """Le flux d'activités (#1560, P4), filtré pour CELUI qui regarde —
+    visiteur compris (le public seulement). Règle unique :
+    secubox_core.sbxid.activites_visibles."""
+    try:
+        per = (moi(request).get("user") or {})
+    except HTTPException:
+        per = {}
+    return {"activites": S.activites_visibles(db(), per.get("user_uuid"), n, depuis)}
+
 
 def _origine() -> str:
     n = _noeud()
@@ -870,6 +884,9 @@ async def accepte(did: str, dcn: Decision, request: Request, ctx=Depends(exige_a
         pseudo = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (dev["user_uuid"],)).fetchone()[0]
     store.journal(db(), _acteur(ctx), "invite.validated",
                   f"{pseudo or did} · " + (', '.join(roles) if roles else "rattaché à sa personne"))
+    if dev and dev["user_uuid"] and roles:        # une ARRIVÉE ; un appareil rattaché n'en est pas une
+        S.emet_activite(db(), "user_joined", author=dev["user_uuid"], visibility="node",
+                        origin_node=_origine(), context={"via": "invitation"})
     return {"ok": True, "pseudo": pseudo, "roles": roles, "lien": out.get("lien", "")}
 
 

@@ -1,3 +1,15 @@
+secubox-sbxid (0.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * SBX OS P4 — moteur d'activités : user_joined à la création et à
+    l'invitation validée ; GET /activite filtré pour qui regarde (visiteur
+    compris) ; secubox-sbxid-activites (minuterie 1 min, user secubox)
+    collecte en lecture seule les nouveaux fils et fichiers du BBS
+    (visibilité du salon, communautés comprises) et les diffusions du Hall ;
+    curseurs par source, premier passage borné à 30 jours ; rien d'un compte BBS désactivé
+    (la passerelle d'import n'est pas une personne) (ref #1560).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:07:55 +0200
+
 secubox-sbxid (0.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Communautés : bloc « Salons BBS » dans la carte — ouvrir un salon privé
