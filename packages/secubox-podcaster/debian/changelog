@@ -1,3 +1,13 @@
+secubox-podcaster (1.2.1-1~bookworm1) bookworm; urgency=high
+
+  * Renumérotation (#1583) : une 1.2.0 construite le 7 août sur la branche
+    fix/1027 (jamais fusionnée) restait dans le dépôt apt et passait devant
+    toutes les versions de master (1.0.x) — les box auraient régressé. Son
+    correctif (flux identifié par son URL source, feed_by_site) est déjà
+    dans master. Contenu identique à 1.0.40.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:59:04 +0200
+
 secubox-podcaster (1.0.40-1~bookworm1) bookworm; urgency=high
 
   * Lectures (flux, épisodes, téléchargements, état d'import) ouvertes aux
