@@ -50,6 +50,7 @@
   <ol id="liste"></ol>
   <p class="vide" id="vide" hidden>Rien encore — les arrivées, fils et partages apparaîtront ici.</p>
 </div>
+<script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script>
 const GLYPHES = {user_joined:"👋", community_joined:"🤝", permission_granted:"🔑",
@@ -65,15 +66,28 @@ function depuis(t){
   if (d < 86400) return Math.round(d/3600) + " h";
   return Math.round(d/86400) + " j";
 }
+// OÙ MÈNE UNE ACTIVITÉ (#1569). Le collecteur écrit /bbs/t/<id> et
+// /bbs/f/<id> : ces chemins n'existent pas sur le Hall, le BBS vit sur SON
+// hôte. Un fil ou un fichier s'ouvre donc sur https://bbs.<box>/…, dans le
+// surf du Hall ; une diffusion ouvre son média dans le viewer. Rien d'autre :
+// un contexte ne pousse jamais vers une adresse arbitraire.
+const BBS = (window.SBX_DOMAINE ? SBX_DOMAINE.hote("bbs.gk2.secubox.in") : "bbs.gk2.secubox.in");
+function cible(a){
+  const ctx = a.context || {};
+  const m = /^\/bbs\/(t|f)\/([A-Za-z0-9_-]{1,64})$/.exec(String(ctx.lien || ""));
+  if (m) return { sbx: "surf", url: `https://${BBS}/${m[1]}/${m[2]}` };
+  if (a.kind === "radio_live" && /^https?:\/\/[^\s"<>]+$/i.test(String(ctx.url || "")))
+    return { sbx: "voir", url: String(ctx.url) };
+  return null;
+}
 function ligne(a){
   const ctx = a.context || {};
   const phrase = (PHRASES[a.kind] || a.kind)
     .replace("{c}", esc(a.community_name || "une communauté"))
     .replace("{t}", esc(ctx.titre || "")).replace("{f}", esc(ctx.nom || "un fichier"));
   const qui = a.author === "diffusion" ? "Hall" : String(a.qui || "").replace(/^bbs:/, "");
-  const lien = ctx.lien || ctx.url || "";
-  // Chemin INTERNE seulement : un contexte ne pousse jamais vers ailleurs.
-  const corps = /^\/(?!\/)/.test(lien) ? `<a href="${esc(lien)}" target="_top">${phrase}</a>` : phrase;
+  const c = cible(a);
+  const corps = c ? `<a href="${esc(c.url)}" data-sbx="${c.sbx}" target="_blank" rel="noopener">${phrase}</a>` : phrase;
   const k = a.visibility === "community" ? `✦ ${esc(a.community_name || "")}` : a.visibility === "public" ? "public" : "";
   return `<li><span class="g">${GLYPHES[a.kind] || "•"}</span><span><span class="qui">${esc(qui)}</span> ${corps}</span>`
        + `<span class="quand">${depuis(a.at)}</span>${k ? `<span class="k">${k}</span>` : ""}</li>`;
@@ -89,6 +103,14 @@ async function charge(){
   } catch (e) { document.getElementById("n").textContent = "indisponible"; }
 }
 charge(); setInterval(charge, 60000);
+// DANS LE HALL, le lien s'ouvre CHEZ LUI (surf / viewer) ; seule, la carte
+// laisse le navigateur ouvrir un onglet.
+document.getElementById("liste").addEventListener("click", ev => {
+  const l = ev.target.closest("a[data-sbx]");
+  if (!l || parent === window || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+  ev.preventDefault();
+  try { parent.postMessage({ sbx: l.dataset.sbx, url: l.href, titre: l.textContent }, "*"); } catch (e) {}
+});
 // LE THÈME DU HALL (#1566) : les jetons sombres ne servaient qu'au thème du
 // système. Le Hall donne le sien par ?theme= au chargement, puis par message
 // quand on bascule — comme pour delegue.html.
