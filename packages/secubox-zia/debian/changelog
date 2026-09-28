@@ -1,3 +1,10 @@
+secubox-zia (0.1.17-1~bookworm1) bookworm; urgency=medium
+
+  * menu.d : catégorie « mind » (« systeme » n'existe pas : ZIA n'apparaissait
+    dans aucun groupe du menu Système du Hall) (ref #1552).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 08:22:48 +0200
+
 secubox-zia (0.1.16-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (closes #1411, audit #1405 S3). POST /v1/chat prenait le rôle

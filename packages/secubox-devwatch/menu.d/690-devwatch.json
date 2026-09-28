@@ -3,7 +3,7 @@
   "name": "DevWatch",
   "icon": "🛰️",
   "path": "/devwatch/",
-  "category": "systeme",
+  "category": "root",
   "order": 690,
   "description": "Suivi de développement GitHub temps réel — cadence, coût, carbone, campagne"
 }
