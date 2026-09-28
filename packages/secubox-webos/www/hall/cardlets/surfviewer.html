@@ -88,6 +88,7 @@
   </div>
   <div id="slbar" class="slbar"></div>
 </div>
+<script src="../domaine.js"></script>
 <script src="../sonde.js"></script>
 <script src="../slicebar.js"></script>
 
@@ -280,7 +281,8 @@
     var b=e.target.closest('[data-u]'); if(!b) return;
     var u=b.getAttribute('data-u'), act=b.getAttribute('data-act'), titre=b.getAttribute('data-titre')||'';
     if(act==='share'){
-      try{ if(navigator.clipboard) navigator.clipboard.writeText(u); }catch(x){}
+      var lien = window.SBX_DOMAINE && SBX_DOMAINE.partageable ? SBX_DOMAINE.partageable(u) : u;   // #1579
+      try{ if(navigator.clipboard) navigator.clipboard.writeText(lien); }catch(x){}
       b.textContent='✓ copié'; setTimeout(function(){ b.textContent='⤴'; }, 900);
     } else if(act==='diffuse'){
       post({sbx:'diffuser', url:u, titre:titre});   // le Hall re-diffuse ET cumule

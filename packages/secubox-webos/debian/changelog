@@ -1,3 +1,11 @@
+secubox-webos (1.0.357-1~bookworm1) bookworm; urgency=medium
+
+  * Partager depuis le viewer (et ⤴ de Surf & Viewer) copie une URL
+    ABSOLUE et publique (#1579) : /api/v1/ytsas|podcaster/… → hôte propre
+    du service ; tout autre chemin → origine du Hall. SBX_DOMAINE.partageable.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:42:07 +0200
+
 secubox-webos (1.0.356-1~bookworm1) bookworm; urgency=medium
 
   * Renseignement (Actor) : le mégamenu ouvre actor.gk2.secubox.in, désormais
