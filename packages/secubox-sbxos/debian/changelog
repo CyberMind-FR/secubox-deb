@@ -1,3 +1,13 @@
+secubox-sbxos (0.6.0~aurora5-1~bookworm1) bookworm; urgency=medium
+
+  * Espace Hall jouable (#1614) : un module s'ouvre dans un théâtre plein
+    écran (cadre sandboxé, « Ouvrir dans un onglet », Échap) ; encadrée en
+    mega, Aurora demande au Hall de l'ouvrir. Réglages de l'appareil (rendu,
+    densité), « à propos » (version, rôle, LAN, box), retour au classique.
+    Rail au clavier (flèches). Profil Léger : mouvement réduit, sans décor.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 19:18:50 +0200
+
 secubox-sbxos (0.6.0~aurora4-1~bookworm1) bookworm; urgency=medium
 
   * Protocole sbx côté hôte (#1613) : sbxExecuteAction résout une action par

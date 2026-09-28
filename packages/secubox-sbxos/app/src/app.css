@@ -36,3 +36,22 @@ a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px;
 .lecteur { display: flex; align-items: center; gap: 12px; max-width: 640px; }
 .lecteur iframe { flex: 1; height: 120px; border: 1px solid var(--sbx-trait); border-radius: 14px; background: var(--sbx-surface); }
 .lecteur button { padding: 10px 16px; border-radius: 12px; border: 1px solid var(--sbx-cyan); background: var(--sbx-relief); color: var(--sbx-encre); font-weight: 600; cursor: pointer; }
+.engrenage { background: none; border: 0; cursor: pointer; padding: 4px; border-radius: 10px; }
+.engrenage:focus-visible { outline: 2px solid var(--sbx-cyan); }
+.theatre { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--sbx-fond); }
+.theatre-barre { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--sbx-trait); }
+.theatre-barre a { color: var(--sbx-cyan); margin-left: auto; }
+.theatre-barre button, .panneau button { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--sbx-trait); background: var(--sbx-surface); color: var(--sbx-encre); cursor: pointer; }
+.theatre iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+.panneau { position: fixed; top: 64px; right: 16px; z-index: 15; width: min(360px, calc(100vw - 32px)); display: grid; gap: 14px; padding: 16px; background: var(--sbx-surface); border: 1px solid var(--sbx-trait); border-radius: var(--sbx-rayon); box-shadow: 0 20px 50px #0008; }
+.panneau-t { display: flex; justify-content: space-between; align-items: center; }
+.panneau h2 { margin: 0; font: 700 18px var(--sbx-titre); }
+.panneau fieldset { border: 1px solid var(--sbx-trait); border-radius: 12px; display: grid; gap: 6px; }
+.panneau legend { color: var(--sbx-doux); padding: 0 6px; }
+.panneau a { color: var(--sbx-cyan); }
+.apropos { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; color: var(--sbx-doux); }
+.apropos dt { color: var(--sbx-pale); }
+.apropos dd { margin: 0; font-family: var(--sbx-code); font-size: 13px; }
+:root[data-densite="compacte"] .cartes { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+:root[data-densite="compacte"] .carte { padding: 8px 6px; }
+:root[data-rendu="leger"] .decor { display: none; }
