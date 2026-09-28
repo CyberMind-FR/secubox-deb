@@ -1,3 +1,18 @@
+secubox-peertube (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Entrée SANS MOT DE PASSE par la session SecuBox (#1562) : greffon
+    peertube-plugin-secubox-sso (authentification externe) ; nginx pose
+    X-Sbx-Peertube-User sur sa seule route d'authentification après
+    auth_request et le vide ailleurs ; le greffon ne croit que l'hôte et
+    n'ouvre qu'un compte existant qui lui est rattaché, jamais n'en crée.
+  * peertubectl sso / sso-rattache / sso-detache : installe le greffon
+    (seulement si le vhost actif porte la garde), rattache les comptes liés
+    ORDINAIRES (jamais un administrateur) ; rejoué par le postinst.
+  * Un seul vhost livré : conf/peertube.nginx.conf écrasait
+    nginx/peertube.gk2.conf, le vhost réel de la box.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:02:53 +0200
+
 secubox-peertube (1.4.3-1~bookworm2) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
@@ -19,4 +34,3 @@ secubox-peertube (1.4.2-1~bookworm2) bookworm; urgency=medium
     reseau, AppArmor, espaces de noms non privilegies. (#1308)
 
  -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 23:06:29 +0200
-

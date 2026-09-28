@@ -456,6 +456,24 @@ def _etiquette(compte: str) -> str:
     return compte
 
 
+def _etiquette_porteur(user) -> str:
+    """L'étiquette de la SESSION, jamais celle de la clé du coffre.
+
+    Depuis le coffre par personne (#1562), `qui` vaut « p-<uuid> » : l'afficher
+    montrait cet identifiant dans la barre du Hall au lieu de « gek » — ni
+    perdu ni usurpé, mais illisible et inquiétant. La personne s'affiche par
+    son pseudo ; sans personne, l'appareil par son nom, comme avant."""
+    user = user or {}
+    try:
+        from secubox_core.capacites import personne_du_porteur  # noqa: PLC0415
+        per = personne_du_porteur(user)
+        if per and per.get("pseudo"):
+            return str(per["pseudo"])[:60]
+    except Exception:  # noqa: BLE001 — une étiquette ne tombe jamais en panne
+        pass
+    return _etiquette(acces.qui_sur(user.get("sub")))
+
+
 # ── ACTIONS DES MODULES (#1314) ────────────────────────────────────────────
 #
 # SOUS JETON, ET SOUS LISTE CLOSE. L'API d'administration repond `400` et non
@@ -601,7 +619,7 @@ async def acces_liste(user=Depends(require_jwt)):
                          "compte": d.get("compte") or "", "voie": d.get("voie") or ""})
     return {"qui": qui,
             # L'étiquette est ce qui S'AFFICHE ; `qui` reste ce qui identifie.
-            "etiquette": _etiquette(qui),
+            "etiquette": _etiquette_porteur(user),
             "demandes": [x for x in acces.demandes() if x.get("qui") == qui],
             "accordes": accordes}
 

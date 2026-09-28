@@ -35,9 +35,13 @@ override_dh_auto_install:
 	# n'était jamais livré (hand-managé). On le versionne ici (conffile).
 	install -d debian/secubox-peertube/etc/nginx/sites-available
 	[ -f nginx/peertube.gk2.conf ] && cp nginx/peertube.gk2.conf debian/secubox-peertube/etc/nginx/sites-available/peertube.conf || true
-	# Public vhost template → sites-available (postinst symlinks into sites-enabled)
-	install -d debian/secubox-peertube/etc/nginx/sites-available
-	[ -f conf/peertube.nginx.conf ] && cp conf/peertube.nginx.conf debian/secubox-peertube/etc/nginx/sites-available/peertube.conf || true
+	# (conf/peertube.nginx.conf ÉCRASAIT ici nginx/peertube.gk2.conf, le vhost
+	# réel de la box : un seul fichier livré désormais, #1562.)
+	# Greffon PeerTube « entrée par la session SecuBox » (#1562), posé dans le
+	# conteneur par `peertubectl sso`.
+	install -d debian/secubox-peertube/usr/share/secubox/peertube/peertube-plugin-secubox-sso
+	install -m 644 plugin/peertube-plugin-secubox-sso/package.json plugin/peertube-plugin-secubox-sso/main.js \
+		debian/secubox-peertube/usr/share/secubox/peertube/peertube-plugin-secubox-sso/
 	# Config example
 	install -d debian/secubox-peertube/etc/secubox
 	[ -f conf/peertube.toml.example ] && cp conf/peertube.toml.example debian/secubox-peertube/etc/secubox/peertube.toml.example || true

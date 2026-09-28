@@ -1,3 +1,10 @@
+secubox-core (1.5.29-1~bookworm1) bookworm; urgency=medium
+
+  * /auth/verify rend Remote-Sbx-Peertube (compte PeerTube lié, nom
+    validé) : le greffon secubox-sso l'ouvre sans mot de passe (#1562).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:02:53 +0200
+
 secubox-core (1.5.28-1~bookworm1) bookworm; urgency=medium
 
   * /auth/verify rend Remote-Sbx-Nextcloud (le compte Nextcloud lié à la
