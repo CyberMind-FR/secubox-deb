@@ -24,9 +24,10 @@ personne sans être recréé, et garde SON mot de passe — exclu du mot de pass
 commun, jamais réinitialisé d'ici. Un nom système ne se relie qu'à la
 personne de l'exploitant.
 
-UN SEUL MOT DE PASSE DE SERVICES. Il n'est gardé nulle part : créé ou
-réinitialisé, il est posé dans TOUS les services liés d'un coup et rendu une
-fois à l'administration. Une réinitialisation rend donc l'accès à tout.
+UN SEUL MOT DE PASSE DE SERVICES, TENU PAR LA MACHINE (#1562). La personne ne
+le voit ni ne le tape : créé ou réinitialisé, il est posé dans tous les
+services liés d'un coup, puis dans SON coffre d'accès (secubox_core.coffre),
+d'où la box agit en son nom. Il n'est plus rendu à l'administration.
 Le BBS n'en a pas besoin : il s'ouvre par la session du Hall (Remote-Sbx-Bbs).
 """
 from __future__ import annotations
@@ -189,8 +190,23 @@ def cree(c: sqlite3.Connection, uid: str, svcs: List[str]) -> Dict[str, Any]:
             if svc == "bbs":
                 c.execute("INSERT OR REPLACE INTO sbx_preferences VALUES (?,?,?)", (uid, "ouvert_ici:bbs", "1"))
         resultats[svc] = True if ok else (r.get("erreur") or "échec")
-    return {"mot_de_passe": pw if any(v is True for v in resultats.values()) else None,
+    return {"coffre": remplit_coffre(c, uid, pseudo, pw, resultats),
             "adresse": adresse(pseudo), "services": resultats}
+
+
+def remplit_coffre(c: sqlite3.Connection, uid: str, pseudo: str, pw: str,
+                   resultats: Dict[str, Any]) -> List[str]:
+    """Pose dans le coffre de la personne les accès dont le mot de passe vient
+    d'être posé. Un compte relié à la main (mot de passe propre) n'y est pas :
+    la machine ne le connaît pas."""
+    from secubox_core import coffre  # noqa: PLC0415
+    pr, remplis = propres(c, uid), []
+    for svc, ok in resultats.items():
+        cible = coffre.SERVICE_DU_COMPTE.get(svc)
+        if ok is True and cible and svc not in pr:
+            if coffre.pose_machine(uid, cible, _nom_service(c, uid, svc, pseudo), pw):
+                remplis.append(cible)
+    return remplis
 
 
 def reinitialise(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
@@ -199,7 +215,7 @@ def reinitialise(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
     res = _pose_partout(c, uid, pseudo, pw)
     if not res:
         raise Refus(409, "Aucun compte à mot de passe commun : les comptes reliés gardent le leur")
-    return {"mot_de_passe": pw if any(v is True for v in res.values()) else None, "services": res}
+    return {"coffre": remplit_coffre(c, uid, pseudo, pw, res), "services": res}
 
 
 def handle_bbs(nom: str, bbs_db: Optional[Path] = None) -> Optional[str]:

@@ -1,3 +1,11 @@
+secubox-sbxid (0.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * Sans mot de passe pour la personne : l'Identity Manager pose le secret de
+    services dans SON coffre (mail, cloud) au lieu de l'afficher une fois ;
+    « Renouveler ses accès » (ref #1562).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:20:37 +0200
+
 secubox-sbxid (0.4.3-1~bookworm1) bookworm; urgency=medium
 
   * SBX OS P4 — moteur d'activités : user_joined à la création et à

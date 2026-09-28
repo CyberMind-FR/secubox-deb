@@ -227,8 +227,15 @@
       if (!d.ok) {
         z.hidden = false;
         z.innerHTML = '<span class="msg ko">' + esc(d.detail || 'flux indisponible') + '</span>';
+        // SERVICE ENDORMI (#1562) : le réveil est lancé côté box ; on réessaie
+        // seul, au plus huit fois (deux minutes), sans que la personne reclique.
+        if (d.reveil) {
+          ouvreFlux.essais = (ouvreFlux.essais || 0) + 1;
+          if (ouvreFlux.essais <= 8) setTimeout(function () { ouvreFlux(svc); }, 15000);
+        }
         return;
       }
+      ouvreFlux.essais = 0;
       z.hidden = false;
       // DEUX FAMILLES DE FLUX, ET ELLES NE S'ATTENDENT PAS PAREIL (#1306).
       //

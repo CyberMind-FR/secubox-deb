@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-sbxid
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.5.25), python3, python3-fastapi, python3-uvicorn, python3-cryptography, python3-qrcode,
+Depends: ${misc:Depends}, secubox-core (>= 1.5.26), python3, python3-fastapi, python3-uvicorn, python3-cryptography, python3-qrcode,
          secubox-core (>= 1.5.16), secubox-aggregator
 Replaces: secubox-acces (<< 1.7.0~)
 Breaks: secubox-acces (<< 1.7.0~)

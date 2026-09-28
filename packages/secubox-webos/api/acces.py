@@ -209,7 +209,33 @@ def revoque(qui: str, svc: str) -> dict:
 # l'ouvre, la personne approuve dans Nextcloud, et l'on récupère un mot de
 # passe d'APPLICATION en interrogeant le jeton de scrutation.
 
-async def flux_demarre(qui: str, svc: str) -> dict:
+PROFILS_SOCK = os.environ.get("SECUBOX_PROFILS_SOCK", "/run/secubox/profiles.sock")
+_REVEILS: dict = {}
+
+
+async def _reveille(module: str, jeton: str) -> None:
+    """Réveiller un module endormi (#1562) : Nextcloud dort quand son site est
+    inactif, et « Autoriser » tombait sur la page d'attente (405). La route de
+    réveil de profiles ATTEND la fin du réveil — une minute et plus — or
+    HAProxy coupe une requête muette à 30 s : on la lance À CÔTÉ, sans
+    l'attendre. Un seul réveil à la fois par module."""
+    import asyncio  # noqa: PLC0415
+    t = _REVEILS.get(module)
+    if t and not t.done():
+        return
+
+    async def corps():
+        try:
+            async with httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds=PROFILS_SOCK),
+                                         base_url="http://profiles", timeout=300) as cli:
+                await cli.post("/api/v1/profiles/wake", json={"module": module},
+                               headers={"Authorization": "Bearer " + jeton} if jeton else {})
+        except httpx.HTTPError:
+            pass
+    _REVEILS[module] = asyncio.get_running_loop().create_task(corps())
+
+
+async def flux_demarre(qui: str, svc: str, jeton: str = "") -> dict:
     c = SERVICES.get(svc)
     if not c:
         return {"ok": False, "detail": "service inconnu"}
@@ -224,6 +250,12 @@ async def flux_demarre(qui: str, svc: str) -> dict:
             r.raise_for_status()
             d = r.json()
     except (httpx.HTTPError, ValueError) as e:
+        # Endormi : la page d'attente refuse le POST. On réveille, et la page
+        # réessaie seule — plutôt qu'un « HTTPStatusError » sans suite.
+        if isinstance(e, httpx.HTTPStatusError) and svc == "nextcloud":
+            await _reveille("nextcloud", jeton)
+            return {"ok": False, "reveil": True,
+                    "detail": "Cloud endormi : réveil lancé, nouvel essai automatique…"}
         return {"ok": False, "detail": "flux indisponible : %s" % type(e).__name__}
     # Le jeton de scrutation est un secret de courte vie : il vaut le mot de
     # passe d'application tant que personne ne l'a consommé.

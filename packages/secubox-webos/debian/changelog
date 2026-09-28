@@ -1,3 +1,13 @@
+secubox-webos (1.0.351-1~bookworm1) bookworm; urgency=medium
+
+  * Coffre des accès rangé par PERSONNE (l'ancien coffre d'appareil est
+    repris au premier passage) ; « Autoriser » le Cloud réveille Nextcloud
+    endormi (405 de la page d'attente, « HTTPStatusError ») et la page
+    réessaie seule ; carte Activité : garde des sondes (sonde.js)
+    (ref #1562, #1560).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:20:37 +0200
+
 secubox-webos (1.0.350-1~bookworm1) bookworm; urgency=medium
 
   * Carte « Activité » du Hall : le flux des gestes de la box, filtré par

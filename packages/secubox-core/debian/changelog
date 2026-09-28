@@ -1,3 +1,11 @@
+secubox-core (1.5.26-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_core.coffre : le coffre des accès par PERSONNE (clé p-<user_uuid>),
+    pose_machine (secret tenu par la machine), reprise d'un coffre d'appareil
+    (ref #1562).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:20:37 +0200
+
 secubox-core (1.5.25-1~bookworm1) bookworm; urgency=medium
 
   * sbxid.activites_visibles(conn, lecteur) : LA règle de visibilité du flux
