@@ -20,9 +20,12 @@ export default defineConfig({
       '@sbx/icons': ici('../sbx-sdk/icons/index.tsx'),
       '@sbx/data': ici('../sbx-sdk/data/index.ts'),
       '@sbx/protocol': ici('../sbx-sdk/protocol/enfant.ts'),
+      '@sbx/hote': ici('../sbx-sdk/protocol/hote.ts'),
       '@sbx/art': ici('../sbx-sdk'),
     },
   },
+  server: { fs: { allow: [ici('../..')] } },
+  test: { include: ['sbx-sdk/**/tests/*.test.ts'], root: ici('..') },
   build: {
     outDir: ici('../dist'),
     emptyOutDir: true,

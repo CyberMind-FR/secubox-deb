@@ -12,6 +12,7 @@ import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 import { SbxIcon } from '@sbx/icons';
 import { entrer, moi, manifeste, urlSure, radioCourante, activites, lienLocal, type Entree, type Manifeste, type Activite } from '@sbx/data';
 import { ecoute } from '@sbx/protocol';
+import { enregistreCadre, sbxExecuteAction } from '@sbx/hote';
 import hero from '@sbx/art/environments/art/hero.webp';
 import lexie from '@sbx/art/characters/art/lexie.webp';
 import neo from '@sbx/art/characters/art/neo.webp';
@@ -111,6 +112,18 @@ export function App() {
               </div>
               <h1>{esp.nom}</h1>
               {espace === 'media' && titre && <p className="direct">📻 En ce moment : {titre}</p>}
+              {espace === 'media' && man && (() => {
+                const r = man.espaces.find(x => x.id === 'media')?.modules.find(x => x.id === 'radio');
+                const u = r ? urlSure(r.url, man.domaine) : null;
+                if (!u) return null;
+                const micro = new URL('/micro', u).href;
+                return (<div className="lecteur" data-aide="Radio">
+                  <iframe ref={f => enregistreCadre('radio', f)} src={micro} title="Radio"
+                          sandbox="allow-scripts allow-same-origin" allow="autoplay" />
+                  <button type="button" onClick={() => sbxExecuteAction({ kind: 'sbx-action', service: 'radio', action: 'media.toggle' })}>
+                    Lecture / pause</button>
+                </div>);
+              })()}
               {espace === 'hall' && fil.length > 0 && (
                 <ul className="fil" data-aide="Activité de la box">
                   {fil.map(a => {

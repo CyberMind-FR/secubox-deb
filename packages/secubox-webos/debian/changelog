@@ -1,3 +1,10 @@
+secubox-webos (1.0.366-1~bookworm1) bookworm; urgency=medium
+
+  * /sbxos/aurora/ : frame-src ouvert aux services de la box (lecteur radio
+    /micro encadré par Aurora), comme le SBX OS classique (#1613, #1623).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 19:13:47 +0200
+
 secubox-webos (1.0.365-1~bookworm1) bookworm; urgency=medium
 
   * GET /api/v1/webos/sbxos/manifeste (#1610) : rôle (admin = admin réel),
