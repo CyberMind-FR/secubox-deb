@@ -1,3 +1,12 @@
+secubox-sbxos (0.6.0~aurora4-1~bookworm1) bookworm; urgency=medium
+
+  * Protocole sbx côté hôte (#1613) : sbxExecuteAction résout une action par
+    les capacités déclarées (capabilities.d) et la poste au seul cadre
+    enregistré, à son origine exacte. Lecteur radio dans Média.
+  * Tests de contrat vitest, lancés par construire-front.sh.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 19:13:47 +0200
+
 secubox-sbxos (0.6.0~aurora3-1~bookworm1) bookworm; urgency=medium
 
   * Protocole sbx côté enfant (#1613) : theme, relis, aide? → aide-zones,

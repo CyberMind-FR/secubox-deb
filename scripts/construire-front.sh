@@ -21,6 +21,7 @@ voulu="$(cat .nvmrc)"; eu="$(node -p 'process.versions.node.split(".")[0]')"
 npm ci --no-audit --no-fund
 npm audit signatures >/dev/null 2>&1 || echo "$MODULE : audit signatures indisponible (avertissement)" >&2
 npm run -s types
+npm run -s test
 npm run -s build
 npm run -s art
 
