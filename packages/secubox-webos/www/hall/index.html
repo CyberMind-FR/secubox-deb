@@ -1370,7 +1370,6 @@ const FEATURED = [
   {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"actor.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true, admin:"/actor/"},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214, admin:"/droplet/"},
   {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true, admin:"/nextcloud/"},
-  {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264, admin:"/mastodon/"},
   {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264, admin:"/bbs/"},
   // SBX OS P4 (#1560) : le flux des gestes de la box, filtré pour qui regarde.
   {id:"activite",   label:"Activité",   icon:"✦", color:"#6a4bb8", carte:"/cardlets/activite.html", h:280},
@@ -1427,7 +1426,6 @@ const FEATURED = [
   // par BroadcastChannel, de sorte qu'un seul micro est ouvert à la fois.
   {id:"mood",       label:"Mood",      icon:"🎙", color:"#1f6b7a", url:"mood.gk2.secubox.in",
    micro:"/micro.html", h:352, micro_audio:true, admin:"/sbxos-audio-mood/"},
-  {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mastodon", h:182},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214, admin:"/droplet/"},
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222, admin:false},
@@ -1501,7 +1499,7 @@ function entree(h){ return ENTREE_SBX[String(h||'').split('.')[0]]||'/'; }
 // occupe la place d'une qui aurait servi. Le service existe toujours et reste
 // atteignable par SYSTEME, ou tout le parc est liste.
 const EMBEDDABLE = new Set(["metanews","socialrelay","bbs","radio","billets","depot",
-                            "peertube","nextcloud","photoprism","mastodon","mail",
+                            "peertube","nextcloud","photoprism","mail",
                             "ytsas","torrent"]);
 // ORDRE PAR DEFAUT — LES PLUS ABOUTIES D'ABORD (#1266).
 // Trois degres, et l'ordre les respecte : un service qui SERT sa carte a plus
@@ -1527,7 +1525,7 @@ function rangPref(f){ const i = ORDRE_PREF.indexOf(f.id); return i<0 ? ORDRE_PRE
 // retire donc de la mosaïque — le registre (santé, menu Système) et le menu
 // latéral les gardent, aucun accès n'est perdu. La liste doit suivre les
 // couches définies dans cardlets/cumul.html (GROUPES).
-const _CUMULES = new Set(['bbs','nextcloud','photoprism','mastodon','billets','depot','socialrelay','mail','ytsas','torrent']);
+const _CUMULES = new Set(['bbs','nextcloud','photoprism','billets','depot','socialrelay','mail','ytsas','torrent']);
 const FEATURED_ORDONNE = FEATURED.filter(f=>!_CUMULES.has(f.id)).slice().sort((a,b)=>(rangPref(a)-rangPref(b)) || (degreCarte(a)-degreCarte(b)));
 const FEAT_IDS = FEATURED.map(f=>f.id);
 const CATS = [
@@ -1551,7 +1549,6 @@ const MOCK={services:[
   {id:"nextcloud",name:"Nextcloud",category:"mesh",icon:"☁️",description:"Fichiers & collaboration",health:{state:"online"},installed:true,active:true},
   {id:"photoprism",name:"PhotoPrism",category:"mesh",icon:"📷",description:"Photothèque personnelle",health:{state:"degraded"},installed:true,active:true},
   {id:"metanews",name:"MetaNews",category:"mind",icon:"🗞️",description:"Topics clusterisés & sources",health:{state:"online"},installed:true,active:true},
-  {id:"mastodon",name:"Mastodon",category:"mesh",icon:"🐘",description:"Réseau social fédéré",health:{state:"online"},installed:true,active:true},
   {id:"mail",name:"Mail",category:"mesh",icon:"📧",description:"Messagerie souveraine",health:{state:"online"},installed:true,active:true},
   {id:"toolbox",name:"ToolBoX",category:"wall",icon:"🧰",description:"Boîte à outils réseau",health:{state:"online"},installed:true,active:true},
 ]};
@@ -4763,7 +4760,6 @@ const CARDLET_ICONES = {
       podcaster:"Abonnements et épisodes téléchargés localement ; le lecteur reprend là où vous étiez, même au rafraîchissement.",
       metanews:"Topics clusterisés + leurs sources. Une puce = un cluster (N sources) à ouvrir en profondeur.",
       billets:"Dernières publications ; le média embarqué se joue dans la carte, titre et détails enrichis.",
-      mastodon:"Social fédéré (Mastodon) : aperçu authentifié de votre fil.",
       socialrelay:"Relais de fédération sociale (ActivityPub) entre instances.",
       devwatch:"Le pouls d'un dépôt GitHub en direct : cadence, temps cumulé, coût, carbone, campagnes, versions.",
       dpi:"Trafic vivant (DPI nDPId) : protocoles, applications, talkers, risques — slices qui tournent seules. Agrégé aussi au groupe Sécurité.",
@@ -4784,7 +4780,6 @@ const CARDLET_ICONES = {
       securite:"Groupe Sécurité : pare-feu (WAF), « Qui frappe ? », analyse — plusieurs services en une carte.",
       contenu:"Groupe Contenu : Dépôt, YTSaS, Torrent — plusieurs services en une carte.",
       cloud:"Groupe Cloud : Cloud, Photos, Mail — plusieurs services en une carte.",
-      social:"Groupe Social : Mastodon, Relais et réseaux — plusieurs services en une carte.",
       forums:"Groupe Forums : BBS, Billets — plusieurs services en une carte."
     };
     function specDe(card){

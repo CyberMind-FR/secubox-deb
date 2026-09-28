@@ -1,3 +1,12 @@
+secubox-webos (1.0.360-1~bookworm1) bookworm; urgency=medium
+
+  * Mastodon décommissionné (#1592) : cartes Social/Mastodon, groupe
+    « social » du cumul, carte déléguée, flux OAuth2 de délégation (échange
+    de code, aperçu, RETOUR) retirés. SocialRelay garde sa carte.
+  * /oidc/ transmet le verdict LAN, comme toute route de module (#1589).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 12:08:35 +0200
+
 secubox-webos (1.0.359-1~bookworm1) bookworm; urgency=medium
 
   * Hall : location /oidc/ → fournisseur OpenID Connect secubox-oidc (#1589).

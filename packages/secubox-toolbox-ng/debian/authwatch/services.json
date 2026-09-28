@@ -1,6 +1,5 @@
 {
   "_commentaire": "SecuBox #1223 — filtres d'authentification par service hébergé. Un service = une entrée : où lire, quoi reconnaître, comment le nommer. Ajouter un service ne demande pas une ligne de Go. Chaque motif DOIT capturer (?P<ip>…) ; le groupe facultatif (?P<cible>…) porte le compte visé, ce qui rend les campagnes lisibles. Les motifs sont appliqués APRÈS les motifs universels du binaire (SSH, SMTP, IMAP), pour qu'un service hébergé ne masque pas une ligne postfix mieux classée. Un motif invalide est refusé en le disant, sans condamner les autres.",
-
   "services": [
     {
       "id": "gitea",
@@ -23,7 +22,6 @@
         }
       ]
     },
-
     {
       "id": "nextcloud",
       "nom": "Nextcloud",
@@ -40,22 +38,12 @@
         }
       ]
     },
-
     {
       "id": "peertube",
       "nom": "PeerTube",
       "journal": "/data/lxc/peertube/rootfs/var/log/journal",
       "actif": false,
       "_pourquoi_inactif": "Aucun échec d'authentification trouvé dans son journal sur trois jours, et aucun journal applicatif accessible depuis l'hôte. Écrire un motif ici serait le deviner : il ne correspondrait à rien et donnerait une fausse assurance de couverture. À activer une fois une ligne réelle relevée.",
-      "motifs": []
-    },
-
-    {
-      "id": "mastodon",
-      "nom": "Mastodon",
-      "journal": "/data/lxc/mastodon/rootfs/var/log/journal",
-      "actif": false,
-      "_pourquoi_inactif": "Idem : rien d'exploitable relevé. Mastodon journalise ses échecs de connexion dans Rails ; le format reste à établir sur une ligne réelle avant d'écrire un motif.",
       "motifs": []
     }
   ]

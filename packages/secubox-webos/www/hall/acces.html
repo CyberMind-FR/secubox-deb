@@ -351,29 +351,14 @@
 
   // ── RETOURS ──────────────────────────────────────────────────────────────
   //
-  // Deux façons d'arriver ici autrement que par le menu : le retour
-  // d'autorisation de Mastodon (?code=&state=) et l'ouverture directe du
-  // formulaire de saisie (?saisie=). On les traite après le premier
-  // chargement, pour que la liste soit déjà en place.
+  // Une façon d'arriver ici autrement que par le menu : l'ouverture directe
+  // du formulaire de saisie (?saisie=) — le retour d'autorisation Mastodon a
+  // disparu avec l'instance (#1592). Traitée après le premier chargement,
+  // pour que la liste soit déjà en place.
   (function () {
     var q = new URLSearchParams(location.search);
-    var code = q.get('code'), etat = q.get('state') || '', saisie = q.get('saisie');
+    var saisie = q.get('saisie');
 
-    if (code && etat.indexOf(':') > 0) {
-      var svc = etat.split(':')[0];
-      api('/acces/' + encodeURIComponent(svc) + '/echange', {
-        method: 'POST', body: JSON.stringify({ code: code })
-      }).then(function (r) {
-        var x = r.corps || {};
-        // On efface le code de la barre d'adresse : il est a usage unique,
-        // mais le laisser dans l'historique n'apporte rien et le donne au
-        // prochain qui regarde par-dessus l'epaule.
-        history.replaceState({}, '', '/acces.html');
-        charge();
-        if (!x.ok) alert(x.detail || 'échange refusé');
-      });
-      return;
-    }
     // Ouverte depuis une carte : on met SON service en avant. Une liste où
     // l'on doit chercher ce qu'on vient de demander rate son objet.
     var vise = q.get('svc');

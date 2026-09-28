@@ -1,183 +1,211 @@
-<!--
-  SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
--->
-
 # Catalogue des modules SecuBox
 
 > **Généré** par `scripts/tutorial-audit.py` à partir du dépôt.
 > Ne pas éditer à la main — corriger la source, le plus souvent
 > `packages/<module>/debian/secubox.yaml`, puis relancer le script.
 
-**170 modules** recensés.
+**177 modules** recensés.
 
 `À documenter` signale une donnée **absente du dépôt**. C'est une tâche,
 pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 
 | Module | Catégorie | Tier | Web | API | CLI | systemd | LXC | Tests | Doc |
 |---|---|---|---|---|---|---|---|---|---|
-| `secubox-ad-guard` | misc | lite | oui | 30 | — | 1 | — | — | oui |
+| `secubox-acces` | À documenter | À documenter | — | — | — | — | — | — | — |
+| `secubox-ad-guard` | misc | lite | oui | 34 | 1 | 3 | — | — | oui |
 | `secubox-admin` | system | lite | oui | 15 | — | 1 | — | — | oui |
-| `secubox-aggregator` | À documenter | À documenter | — | — | 2 | — | — | — | — |
+| `secubox-aggregator` | security | lite | — | — | 2 | — | — | — | — |
 | `secubox-ai-gateway` | ai | pro | oui | 17 | — | 1 | — | — | oui |
 | `secubox-ai-insights` | ai | pro | oui | 18 | — | — | — | — | oui |
-| `secubox-annuaire` | mesh | all | oui | 39 | 4 | 1 | — | 42 | — |
+| `secubox-annuaire` | mesh | all | oui | 39 | 5 | 1 | — | 43 | — |
 | `secubox-antirootkit` | wall | pro | oui | 4 | 1 | 1 | — | 15 | oui |
-| `secubox-appstore` | system | all | oui | 8 | 2 | 1 | — | — | — |
-| `secubox-assist` | À documenter | À documenter | oui | 16 | 1 | — | — | 17 | — |
-| `secubox-auth` | security | lite | oui | 28 | — | 1 | — | 3 | oui |
+| `secubox-appstore` | system | all | oui | 12 | 2 | 1 | — | — | — |
+| `secubox-assist` | ai | lite | oui | 16 | 1 | — | — | 17 | — |
+| `secubox-auth` | security | lite | oui | 26 | — | 1 | — | 4 | oui |
 | `secubox-avatar` | misc | lite | oui | 18 | — | 1 | — | — | oui |
 | `secubox-backup` | system | lite | oui | 26 | — | 1 | — | — | oui |
-| `secubox-bbs` | À documenter | À documenter | oui | — | — | 3 | — | 26 | oui |
-| `secubox-billets` | À documenter | À documenter | oui | 8 | — | 1 | — | 18 | oui |
+| `secubox-bbs` | media | lite | oui | — | — | 5 | — | 94 | oui |
+| `secubox-billets` | media | lite | oui | 12 | — | 1 | — | 23 | oui |
 | `secubox-c3box` | dashboard | lite | oui | 12 | — | 1 | — | — | oui |
 | `secubox-cdn` | misc | standard | oui | 40 | — | 1 | — | — | oui |
-| `secubox-certs` | À documenter | À documenter | oui | 9 | 1 | 3 | — | 1 | oui |
+| `secubox-certs` | security | lite | oui | 10 | 1 | 3 | — | 1 | oui |
 | `secubox-cloner` | misc | lite | oui | 12 | — | 1 | — | — | oui |
 | `secubox-config-advisor` | system | lite | oui | 10 | — | 1 | — | — | oui |
 | `secubox-console` | misc | lite | — | — | — | 1 | — | — | oui |
-| `secubox-cookies` | misc | lite | oui | 18 | — | — | — | — | oui |
+| `secubox-cookies` | misc | lite | oui | 25 | — | — | — | 1 | oui |
 | `secubox-core` | system | all | — | — | — | 1 | — | 1 | oui |
 | `secubox-cve-triage` | security | lite | oui | 26 | 1 | 1 | — | 6 | oui |
 | `secubox-cyberfeed` | misc | lite | oui | 17 | — | 1 | — | — | oui |
 | `secubox-daemon` | system | lite | — | — | — | — | — | — | — |
-| `secubox-defaults` | À documenter | À documenter | — | — | — | — | — | — | oui |
+| `secubox-defaults` | system | lite | — | — | — | — | — | — | oui |
 | `secubox-device-intel` | misc | lite | — | 1 | — | 1 | — | 1 | oui |
+| `secubox-devwatch` | system | lite | oui | 10 | — | — | — | 1 | — |
 | `secubox-dns` | network | lite | oui | 23 | — | 1 | — | — | oui |
-| `secubox-dns-guard` | network | lite | oui | 19 | — | 1 | — | — | oui |
+| `secubox-dns-guard` | network | lite | oui | 31 | — | 1 | — | — | oui |
 | `secubox-dns-provider` | network | lite | oui | 20 | — | 1 | — | — | oui |
-| `secubox-dpi` | misc | pro | oui | 58 | 1 | 1 | — | 3 | oui |
-| `secubox-droplet` | misc | lite | oui | 17 | 1 | 1 | — | — | oui |
+| `secubox-dpi` | misc | pro | oui | 62 | 1 | 1 | — | 3 | oui |
+| `secubox-droplet` | misc | lite | oui | 21 | 1 | 1 | — | 3 | oui |
 | `secubox-egress` | À documenter | À documenter | — | — | — | — | — | — | — |
 | `secubox-exposure` | misc | lite | oui | 26 | 1 | 1 | — | 9 | oui |
 | `secubox-eye-remote` | dashboard | lite | oui | 12 | — | 1 | — | 11 | oui |
-| `secubox-eye-square` | À documenter | À documenter | — | — | — | — | — | 22 | — |
+| `secubox-eye-square` | system | lite | — | — | — | — | — | 22 | — |
+| `secubox-federation` | À documenter | À documenter | — | — | — | — | — | 8 | — |
+| `secubox-freeboxtv` | media | lite | — | 4 | — | — | — | 1 | — |
 | `secubox-frigate` | misc | lite | oui | 5 | 2 | 3 | oui | 4 | oui |
 | `secubox-full` | misc | lite | — | — | — | — | — | — | — |
-| `secubox-gitea` | publishing | pro | oui | 31 | 1 | 1 | oui | — | oui |
+| `secubox-gitea` | publishing | pro | oui | 31 | 2 | 1 | oui | — | oui |
 | `secubox-glances` | misc | lite | oui | 15 | — | 1 | — | — | oui |
 | `secubox-gotosocial` | dashboard | lite | oui | 36 | — | — | — | — | oui |
-| `secubox-grafana` | À documenter | À documenter | oui | 5 | 1 | 1 | oui | — | oui |
-| `secubox-haproxy` | network | standard | oui | 56 | 3 | 1 | — | 4 | oui |
+| `secubox-grafana` | media | lite | oui | 5 | 1 | 1 | oui | — | oui |
+| `secubox-groupd` | misc | lite | — | — | 1 | — | — | — | — |
+| `secubox-haproxy` | network | standard | oui | 55 | 3 | 1 | — | 6 | oui |
 | `secubox-hardening` | security | lite | oui | 18 | 1 | 1 | — | — | oui |
-| `secubox-health-doctor` | À documenter | À documenter | — | 5 | 1 | — | — | — | — |
+| `secubox-health` | system | lite | — | — | — | — | — | — | — |
+| `secubox-health-doctor` | security | lite | — | 5 | 1 | — | — | — | — |
 | `secubox-hexo` | misc | lite | oui | 32 | — | 1 | — | — | oui |
-| `secubox-hub` | system | all | oui | 54 | 2 | 5 | — | 7 | oui |
-| `secubox-identity` | misc | lite | oui | 20 | — | 1 | — | — | oui |
+| `secubox-hub` | system | all | oui | 54 | 2 | 5 | — | 10 | oui |
+| `secubox-identity` | misc | lite | oui | 21 | — | 1 | — | 3 | oui |
 | `secubox-interceptor` | misc | lite | oui | 23 | — | — | — | — | oui |
-| `secubox-iot-guard` | iot | lite | — | 1 | — | 1 | — | 1 | oui |
+| `secubox-iot-guard` | iot | lite | — | 21 | — | 1 | — | 1 | oui |
 | `secubox-ipblock` | misc | lite | oui | 22 | — | 1 | — | — | oui |
-| `secubox-jabber` | misc | lite | oui | 16 | — | 1 | — | — | oui |
-| `secubox-jellyfin` | media | pro | oui | 12 | 1 | 4 | oui | 1 | oui |
-| `secubox-jitsi` | misc | lite | oui | 7 | 1 | 1 | oui | 1 | oui |
+| `secubox-isp` | misc | lite | — | — | — | — | — | — | — |
+| `secubox-jabber` | misc | lite | oui | 16 | — | — | — | — | oui |
+| `secubox-jellyfin` | media | pro | oui | 18 | 1 | 4 | oui | 1 | oui |
+| `secubox-jitsi` | misc | lite | oui | 23 | 1 | 1 | oui | 1 | oui |
 | `secubox-ksm` | misc | lite | oui | 8 | — | 1 | — | — | oui |
 | `secubox-led-heartbeat` | misc | lite | — | — | — | — | — | — | — |
 | `secubox-lite` | misc | lite | — | — | — | — | — | — | — |
 | `secubox-localrecall` | misc | lite | oui | 16 | — | 1 | — | — | oui |
-| `secubox-lyrion` | media | lite | oui | 14 | 1 | 3 | oui | 3 | oui |
-| `secubox-mac-guard` | misc | lite | — | 1 | — | — | — | 1 | oui |
-| `secubox-macro` | À documenter | À documenter | — | — | 1 | — | — | 2 | — |
-| `secubox-magicmirror` | misc | lite | oui | 14 | — | 1 | — | — | oui |
-| `secubox-maigret` | À documenter | À documenter | oui | 8 | 1 | — | — | 2 | oui |
-| `secubox-mail` | email | lite | oui | 48 | 5 | 1 | oui | 3 | oui |
+| `secubox-lyrion` | media | lite | oui | 19 | 2 | 3 | oui | 4 | oui |
+| `secubox-mac-guard` | misc | lite | — | 22 | — | — | — | 1 | oui |
+| `secubox-macro` | misc | lite | — | — | 1 | — | — | 2 | — |
+| `secubox-magicmirror` | misc | lite | oui | 14 | — | — | — | — | oui |
+| `secubox-maigret` | misc | lite | oui | 8 | 1 | — | — | 2 | oui |
+| `secubox-mail` | email | lite | oui | 55 | 5 | 3 | oui | 4 | oui |
 | `secubox-mail-lxc` | email | lite | — | — | — | — | — | — | — |
-| `secubox-mastodon` | À documenter | À documenter | oui | 6 | 1 | 1 | oui | — | oui |
-| `secubox-matrix` | communication | pro | oui | 37 | — | 1 | oui | — | oui |
+| `secubox-matrix` | communication | pro | oui | 37 | — | — | oui | — | oui |
 | `secubox-mcp-server` | misc | lite | oui | 12 | — | 1 | — | — | oui |
-| `secubox-media` | À documenter | À documenter | oui | 10 | 1 | 3 | — | 1 | — |
-| `secubox-mediaflow` | media | lite | oui | 29 | 1 | 3 | — | — | oui |
-| `secubox-mesh` | À documenter | À documenter | oui | — | 1 | 1 | — | — | oui |
+| `secubox-media` | media | lite | oui | 11 | 1 | 4 | — | 1 | — |
+| `secubox-mediaflow` | media | lite | oui | 27 | 1 | 3 | — | — | oui |
+| `secubox-mesh` | network | lite | oui | — | 1 | 1 | — | — | oui |
 | `secubox-mesh-bt` | À documenter | À documenter | — | — | — | — | — | — | — |
 | `secubox-meshname` | vpn | lite | oui | 17 | — | 1 | — | — | oui |
-| `secubox-meshtastic` | À documenter | À documenter | oui | — | 2 | 1 | — | 10 | oui |
-| `secubox-metablogizer` | publishing | lite | oui | 24 | 4 | 5 | — | 16 | oui |
+| `secubox-meshtastic` | network | lite | oui | — | 2 | 1 | — | 10 | oui |
+| `secubox-messagerie` | communication | lite | oui | 7 | — | — | — | 1 | oui |
+| `secubox-meta` | À documenter | À documenter | — | — | — | — | — | 1 | — |
+| `secubox-metablogizer` | publishing | lite | oui | 24 | 5 | 7 | — | 29 | oui |
 | `secubox-metacatalog` | misc | lite | oui | 10 | — | 1 | — | — | oui |
-| `secubox-metrics` | monitoring | lite | oui | 19 | — | 1 | — | 5 | oui |
+| `secubox-metanews` | media | lite | — | — | — | — | — | 7 | — |
+| `secubox-metrics` | monitoring | lite | oui | 32 | 1 | 1 | — | 17 | oui |
 | `secubox-mirror` | misc | lite | oui | 15 | — | 1 | — | — | oui |
-| `secubox-mitmproxy` | misc | lite | oui | 1 | — | 4 | — | 2 | oui |
 | `secubox-modem` | misc | lite | oui | 4 | — | 1 | — | — | oui |
-| `secubox-mqtt` | À documenter | À documenter | oui | 4 | 1 | 1 | oui | — | oui |
-| `secubox-nac` | security | lite | oui | 52 | — | 1 | — | 7 | oui |
+| `secubox-mqtt` | network | lite | oui | 4 | 1 | 1 | oui | — | oui |
+| `secubox-nac` | security | lite | oui | 59 | 1 | 3 | — | 18 | oui |
 | `secubox-ndpid` | misc | lite | oui | 29 | — | 1 | — | — | oui |
-| `secubox-netboot` | À documenter | À documenter | oui | 18 | 5 | 2 | — | — | oui |
+| `secubox-ndpid-engine` | network | lite | — | — | — | — | — | — | oui |
+| `secubox-netboot` | network | lite | oui | 18 | 5 | 2 | — | — | oui |
 | `secubox-netdiag` | misc | lite | oui | 16 | — | 1 | — | — | oui |
-| `secubox-netmodes` | network | lite | oui | 32 | — | 1 | — | — | oui |
+| `secubox-netmodes` | network | lite | oui | 32 | 1 | 1 | — | — | oui |
 | `secubox-nettweak` | misc | lite | oui | 12 | — | 1 | — | — | oui |
 | `secubox-network-anomaly` | network | lite | oui | 10 | — | 1 | — | 1 | oui |
-| `secubox-newsbin` | misc | lite | oui | 32 | — | 1 | — | — | oui |
-| `secubox-nextcloud` | misc | pro | oui | 22 | 1 | 1 | oui | 1 | oui |
-| `secubox-ollama` | ai | pro | oui | 15 | — | 1 | — | — | oui |
-| `secubox-p2p` | misc | lite | oui | 57 | 1 | 1 | — | 14 | oui |
+| `secubox-newsbin` | misc | lite | oui | 32 | — | — | — | — | oui |
+| `secubox-nextcloud` | misc | pro | oui | 22 | 1 | 1 | oui | 4 | oui |
+| `secubox-oidc` | À documenter | À documenter | — | 5 | 1 | — | — | 1 | — |
+| `secubox-ollama` | ai | pro | oui | 15 | — | — | — | — | oui |
+| `secubox-p2p` | misc | lite | oui | 57 | 1 | 1 | — | 16 | oui |
 | `secubox-peertube` | misc | lite | oui | 46 | 1 | 9 | oui | 4 | oui |
 | `secubox-photoprism` | misc | lite | oui | 27 | 1 | 1 | oui | — | oui |
 | `secubox-picobrew` | misc | lite | oui | 6 | 1 | 1 | — | 6 | oui |
-| `secubox-podcaster` | À documenter | À documenter | oui | 20 | — | — | — | 3 | oui |
+| `secubox-podcaster` | media | lite | oui | 20 | — | — | — | 5 | oui |
 | `secubox-portal` | system | all | oui | 20 | — | 1 | — | — | oui |
-| `secubox-profiles` | À documenter | À documenter | oui | 13 | 2 | 3 | oui | 25 | oui |
-| `secubox-proxypac` | À documenter | À documenter | oui | 11 | 2 | — | — | 14 | oui |
+| `secubox-premier-pas` | À documenter | À documenter | oui | 15 | 4 | — | — | 4 | — |
+| `secubox-profiles` | misc | lite | oui | 14 | 3 | 8 | oui | 28 | oui |
+| `secubox-profils` | misc | lite | — | — | — | — | — | — | — |
+| `secubox-proxypac` | network | lite | oui | 11 | 2 | — | — | 14 | oui |
 | `secubox-publish` | publishing | lite | oui | 29 | — | 1 | — | — | oui |
 | `secubox-qos` | misc | standard | oui | 74 | — | 1 | — | — | oui |
-| `secubox-rbs-sensor` | À documenter | À documenter | — | 9 | 1 | 1 | — | 1 | — |
-| `secubox-reality` | À documenter | À documenter | — | — | — | 4 | — | — | — |
-| `secubox-redroid` | misc | lite | oui | 15 | — | 1 | — | — | oui |
-| `secubox-release` | À documenter | À documenter | oui | 8 | 2 | — | — | 6 | — |
+| `secubox-radio` | media | lite | oui | — | — | — | — | 20 | — |
+| `secubox-rbs-sensor` | system | lite | — | 9 | 1 | 1 | — | 1 | — |
+| `secubox-reality` | system | lite | — | — | — | 4 | — | — | — |
+| `secubox-redroid` | misc | lite | oui | 15 | — | — | — | — | oui |
+| `secubox-release` | misc | lite | oui | 8 | 2 | — | — | 6 | — |
 | `secubox-repo` | misc | lite | oui | 23 | 1 | 1 | — | — | oui |
 | `secubox-reporter` | misc | lite | oui | 11 | — | 1 | — | — | oui |
-| `secubox-roadmap` | misc | lite | oui | 6 | — | 1 | — | — | oui |
 | `secubox-routes` | misc | lite | oui | 13 | — | 1 | — | — | oui |
-| `secubox-rtty` | misc | lite | oui | 14 | — | 1 | — | — | oui |
-| `secubox-rustdesk` | À documenter | À documenter | oui | 5 | 1 | 1 | oui | — | oui |
+| `secubox-rustdesk` | system | lite | oui | 5 | 1 | 1 | oui | — | oui |
 | `secubox-saas-relay` | misc | lite | oui | 20 | — | 1 | — | — | oui |
-| `secubox-security-posture` | À documenter | À documenter | oui | 8 | — | 2 | — | 3 | oui |
-| `secubox-sentinelle-gsm` | À documenter | À documenter | oui | 34 | 2 | 1 | — | 20 | — |
-| `secubox-simplex` | media | lite | oui | 28 | — | 1 | — | — | oui |
+| `secubox-sbxid` | security | lite | oui | 55 | 1 | — | — | 6 | oui |
+| `secubox-sbxos` | dashboard | lite | oui | — | — | — | — | — | — |
+| `secubox-sbxui` | dashboard | lite | — | — | — | — | — | — | — |
+| `secubox-security-posture` | security | lite | oui | 8 | — | 2 | — | 3 | oui |
+| `secubox-sentinelle-gsm` | security | lite | oui | 34 | 2 | 1 | — | 20 | — |
+| `secubox-simplex` | media | lite | oui | 28 | — | — | — | — | oui |
 | `secubox-smart-strip` | À documenter | À documenter | — | — | — | — | — | — | — |
-| `secubox-smb` | À documenter | À documenter | — | — | 1 | — | — | — | — |
+| `secubox-smb` | network | lite | — | — | 1 | — | — | — | — |
 | `secubox-smtp-relay` | email | lite | oui | 13 | — | 1 | — | — | oui |
 | `secubox-soc` | dashboard | lite | oui | 28 | — | 1 | — | — | oui |
 | `secubox-soc-agent` | dashboard | lite | — | 15 | — | 1 | — | — | — |
 | `secubox-soc-gateway` | dashboard | lite | — | 30 | — | 1 | — | — | — |
 | `secubox-soc-web` | dashboard | lite | — | — | — | — | — | — | — |
-| `secubox-spiderfoot` | À documenter | À documenter | oui | 6 | 1 | — | — | 1 | oui |
+| `secubox-socialrelay` | misc | lite | — | — | — | — | — | 3 | — |
+| `secubox-spiderfoot` | security | lite | oui | 6 | 1 | — | — | 1 | oui |
 | `secubox-streamforge` | media | lite | oui | 17 | 1 | 1 | — | — | oui |
-| `secubox-streamlit` | media | lite | oui | 33 | 2 | 5 | oui | 21 | oui |
+| `secubox-streamlit` | media | lite | oui | 30 | 2 | 5 | — | 23 | oui |
+| `secubox-surf` | network | lite | — | — | — | — | — | 2 | — |
 | `secubox-system` | system | all | oui | 66 | — | 1 | — | 1 | oui |
 | `secubox-system-hub` | system | lite | — | 26 | — | — | — | — | — |
-| `secubox-system-tuning` | À documenter | À documenter | — | — | 1 | — | — | 1 | — |
+| `secubox-system-tuning` | misc | lite | — | — | 1 | — | — | 1 | — |
 | `secubox-threat-analyst` | misc | lite | oui | 14 | — | 1 | — | — | oui |
-| `secubox-threatmesh` | À documenter | À documenter | oui | 7 | 1 | — | — | — | oui |
+| `secubox-threatmesh` | security | lite | oui | 7 | 1 | — | — | — | oui |
 | `secubox-threats` | misc | lite | oui | 25 | — | — | — | — | oui |
-| `secubox-toolbox` | À documenter | À documenter | oui | — | 16 | 4 | — | 72 | oui |
-| `secubox-toolbox-ng` | À documenter | À documenter | — | — | 1 | 4 | — | 70 | oui |
-| `secubox-tor` | misc | lite | oui | 18 | 2 | 1 | — | 5 | oui |
-| `secubox-torrent` | misc | lite | oui | — | 1 | — | oui | 2 | oui |
+| `secubox-toolbox` | security | lite | oui | — | 15 | 1 | — | 72 | oui |
+| `secubox-toolbox-ng` | misc | lite | — | — | 1 | 7 | — | 122 | oui |
+| `secubox-tor` | misc | lite | oui | 18 | 2 | 1 | — | 6 | oui |
+| `secubox-torrent` | misc | lite | oui | 24 | 1 | — | oui | 4 | oui |
 | `secubox-traffic` | misc | lite | oui | 20 | — | 1 | — | — | oui |
 | `secubox-turn` | misc | lite | oui | 20 | — | 1 | — | — | oui |
 | `secubox-ui-manager` | misc | lite | — | — | — | 3 | — | — | oui |
-| `secubox-users` | misc | lite | oui | 38 | 1 | 1 | oui | 16 | oui |
-| `secubox-vault` | misc | lite | oui | 14 | — | 1 | — | — | oui |
-| `secubox-vhost` | misc | lite | oui | 15 | 1 | 1 | — | 3 | oui |
-| `secubox-vm` | misc | lite | oui | 15 | — | 1 | oui | — | oui |
+| `secubox-users` | misc | lite | oui | 42 | 2 | 1 | — | 20 | oui |
+| `secubox-vault` | misc | lite | oui | 14 | — | 1 | — | 1 | oui |
+| `secubox-vhost` | misc | lite | oui | 16 | 1 | 1 | — | 5 | oui |
+| `secubox-vm` | misc | lite | oui | 18 | 1 | 1 | oui | — | oui |
+| `secubox-voice` | misc | lite | — | 5 | — | — | — | 2 | — |
 | `secubox-voip` | misc | lite | oui | 28 | — | — | — | — | oui |
 | `secubox-vortex-dns` | network | lite | oui | 15 | — | 1 | — | — | oui |
 | `secubox-vortex-firewall` | security | lite | oui | 17 | — | 1 | — | — | oui |
-| `secubox-waf` | security | standard | oui | 22 | — | 1 | — | 2 | oui |
-| `secubox-waf-ng` | À documenter | À documenter | — | — | — | — | — | — | oui |
-| `secubox-wan-link-guard` | À documenter | À documenter | — | — | 1 | — | — | — | — |
+| `secubox-waf` | security | standard | oui | 26 | — | 1 | — | 3 | oui |
+| `secubox-waf-ng` | security | lite | oui | — | 1 | — | — | — | oui |
+| `secubox-wan-link-guard` | misc | lite | — | — | 1 | — | — | — | — |
 | `secubox-watchdog` | misc | lite | oui | 17 | — | 1 | — | — | oui |
 | `secubox-webext` | À documenter | À documenter | — | — | — | — | — | — | oui |
 | `secubox-webmail` | email | lite | — | — | — | — | — | — | oui |
-| `secubox-webradio` | misc | lite | oui | 25 | — | 1 | — | — | oui |
+| `secubox-webos` | dashboard | lite | oui | 22 | — | 1 | — | 9 | oui |
 | `secubox-wireguard` | network | lite | oui | 28 | 1 | 1 | — | — | oui |
-| `secubox-yacy` | À documenter | À documenter | oui | 5 | 1 | 1 | oui | — | oui |
+| `secubox-yacy` | network | lite | oui | 5 | 1 | 1 | oui | — | oui |
 | `secubox-yggdrasil` | vpn | lite | oui | 34 | — | 1 | — | — | oui |
-| `secubox-ytsas` | mind | lite | oui | — | 1 | — | oui | 1 | — |
-| `secubox-zigbee` | À documenter | À documenter | oui | 7 | 3 | 1 | oui | — | oui |
+| `secubox-ytsas` | mind | lite | oui | — | 2 | — | oui | 4 | — |
+| `secubox-zia` | ai | lite | oui | 7 | 1 | — | — | 4 | oui |
+| `secubox-zia-llm` | ai | lite | — | — | 1 | — | — | — | — |
+| `secubox-zigbee` | network | lite | oui | 9 | 3 | 1 | oui | 1 | oui |
 | `secubox-zkp` | misc | lite | oui | 7 | — | 1 | — | — | oui |
 
 ## Détail par module
+
+### `secubox-acces`
+
+À documenter
+
+- **Catégorie** : À documenter · **Tier** : À documenter
+- **Dépend de** : À documenter
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-acces/`
 
 ### `secubox-ad-guard`
 
@@ -185,10 +213,10 @@ SecuBox Ad Guard Module
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 30 route(s), socket `/run/secubox/ad-guard.sock`, authentification requise
+- **API** : 34 route(s), socket `/run/secubox/ad-guard.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/ad-guard
-- **CLI** : À documenter
-- **Units systemd** : `secubox-ad-guard.service`
+- **CLI** : `secubox-adblock-sync`
+- **Units systemd** : `secubox-ad-guard.service`, `secubox-adblock-sync.service`, `secubox-adblock-sync.timer`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
@@ -213,10 +241,10 @@ SecuBox System Administration Dashboard
 
 ### `secubox-aggregator`
 
-À documenter
+SecuBox API gateway — master ASGI process
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : `secubox-aggregator-migrate`, `secubox-aggregator-watchdog.sh`
@@ -267,11 +295,11 @@ Annuaire-Miroir — federated self-certifying trust substrate (AUTO-ADD/INVITE/P
 - **Dépend de** : `secubox-core`
 - **API** : 39 route(s), socket `/run/secubox/annuaire.sock`, authentification requise
 - **Interface web** : oui, /annuaire/
-- **CLI** : `annuairectl`, `sbx-centersctl`, `sbx-fleetctl`, `sbx-threatmesh-bridge`
+- **CLI** : `annuairectl`, `sbx-centersctl`, `sbx-fleetctl`, `secubox-annuaire-maillage`, `secubox-annuaire-noms`
 - **Units systemd** : `secubox-annuaire.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 42
+- **Tests** : 43
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-annuaire/`
 
@@ -297,7 +325,7 @@ SecuBox App Store — module catalog, install/enable, profiles
 
 - **Catégorie** : system · **Tier** : all
 - **Dépend de** : `secubox-core`
-- **API** : 8 route(s), socket `/run/secubox/appstore.sock`, authentification À documenter
+- **API** : 12 route(s), socket `/run/secubox/appstore.sock`, authentification requise
 - **Interface web** : oui, /appstore/
 - **CLI** : `sbx-apt-mesh`, `secubox-appstorectl`
 - **Units systemd** : `secubox-appstore.service`
@@ -309,10 +337,10 @@ SecuBox App Store — module catalog, install/enable, profiles
 
 ### `secubox-assist`
 
-À documenter
+SecuBox assistance request — real-time help sessions
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : ai · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 16 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : `secubox-assistctl`
@@ -329,13 +357,13 @@ SecuBox Auth Guardian
 
 - **Catégorie** : security · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 28 route(s), socket `/run/secubox/auth.sock`, authentification requise
+- **API** : 26 route(s), socket `/run/secubox/auth.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/auth
 - **CLI** : À documenter
 - **Units systemd** : `secubox-auth.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 3
+- **Tests** : 4
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-auth/`
 
@@ -373,34 +401,34 @@ SecuBox Backup Module
 
 ### `secubox-bbs`
 
-À documenter
+SecuBox-Deb — BBS auto-heberge (forums, bibliotheque, publication)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : media · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
 - **Vhosts livrés** : `bbs.gk2.secubox.in`
 - **CLI** : À documenter
-- **Units systemd** : `secubox-bbs-ingest.service`, `secubox-bbs-ingest.timer`, `secubox-bbs.service`
+- **Units systemd** : `secubox-bbs-ingest.service`, `secubox-bbs-ingest.timer`, `secubox-bbs-urlshot.service`, `secubox-bbs-urlshot.timer`, `secubox-bbs.service`
 - **Ports** : 9080
 - **Conteneur LXC** : non
-- **Tests** : 26
+- **Tests** : 94
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-bbs/`
 
 ### `secubox-billets`
 
-À documenter
+billets — micro-blog gateway inter-médias sociaux (SecuBox)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 8 route(s), socket `À documenter`, authentification À documenter
+- **Catégorie** : media · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 12 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
 - **CLI** : À documenter
 - **Units systemd** : `secubox-billets.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 18
+- **Tests** : 23
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-billets/`
 
@@ -438,11 +466,11 @@ SecuBox CDN Cache
 
 ### `secubox-certs`
 
-À documenter
+SecuBox ACME / TLS certificate manager
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 9 route(s), socket `À documenter`, authentification requise
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 10 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : `certsctl`
 - **Units systemd** : `secubox-certs-deploy.service`, `secubox-certs-deploy.timer`, `secubox-certs.service`
@@ -458,7 +486,7 @@ SecuBox Cloner - System backup and restore
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 12 route(s), socket `/run/secubox/cloner.sock`, authentification À documenter
+- **API** : 12 route(s), socket `/run/secubox/cloner.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/cloner
 - **CLI** : À documenter
 - **Units systemd** : `secubox-cloner.service`
@@ -506,13 +534,13 @@ SecuBox Cookie Tracker
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 18 route(s), socket `/run/secubox/cookies.sock`, authentification requise
+- **API** : 25 route(s), socket `/run/secubox/cookies.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/cookies
 - **CLI** : À documenter
 - **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : À documenter
+- **Tests** : 1
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-cookies/`
 
@@ -531,17 +559,6 @@ SecuBox-DEB — bibliothèque centrale et infrastructure
 - **Tests** : 1
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-core/`
-
-### `secubox-crowdsec`
-
-SecuBox CrowdSec Dashboard
-
-- **Catégorie** : security · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
 
 ### `secubox-cve-triage`
 
@@ -593,10 +610,10 @@ SecuBox Mesh Daemon - WireGuard mesh with ZKP authentication
 
 ### `secubox-defaults`
 
-À documenter
+SecuBox board identity defaults
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : system · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : À documenter
@@ -623,6 +640,22 @@ SecuBox Device-intel Module
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-device-intel/`
 
+### `secubox-devwatch`
+
+DevWatch — live upstream-GitHub development watch for SecuBox
+
+- **Catégorie** : system · **Tier** : lite
+- **Dépend de** : `secubox-core`, `secubox-sbxui`
+- **API** : 10 route(s), socket `À documenter`, authentification requise
+- **Interface web** : oui, À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 1
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-devwatch/`
+
 ### `secubox-dns`
 
 SecuBox Dns Module
@@ -645,7 +678,7 @@ SecuBox Dns-guard Module
 
 - **Catégorie** : network · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 19 route(s), socket `/run/secubox/dns-guard.sock`, authentification requise
+- **API** : 31 route(s), socket `/run/secubox/dns-guard.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/dns-guard
 - **CLI** : À documenter
 - **Units systemd** : `secubox-dns-guard.service`
@@ -673,11 +706,11 @@ SecuBox DNS Provider Module
 
 ### `secubox-dpi`
 
-SecuBox DPI — netifyd Dashboard
+SecuBox DPI — Deep Packet Inspection Dashboard
 
 - **Catégorie** : misc · **Tier** : pro
 - **Dépend de** : `secubox-core`
-- **API** : 58 route(s), socket `/run/secubox/dpi.sock`, authentification requise
+- **API** : 62 route(s), socket `/run/secubox/dpi.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/dpi
 - **CLI** : `secubox-dpi-flowcap`
 - **Units systemd** : `secubox-dpi.service`
@@ -693,13 +726,14 @@ SecuBox Droplet File Publisher
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 17 route(s), socket `/run/secubox/droplet.sock`, authentification requise
+- **API** : 21 route(s), socket `/run/secubox/droplet.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/droplet
+- **Vhosts livrés** : `depot.gk2.secubox.in`
 - **CLI** : `dropletctl`
 - **Units systemd** : `secubox-droplet.service`
-- **Ports** : À documenter
+- **Ports** : 9080
 - **Conteneur LXC** : non
-- **Tests** : À documenter
+- **Tests** : 3
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-droplet/`
 
@@ -741,7 +775,7 @@ SecuBox Eye Remote USB Gadget Integration
 
 - **Catégorie** : dashboard · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 12 route(s), socket `/run/secubox/eye-remote.sock`, authentification À documenter
+- **API** : 12 route(s), socket `/run/secubox/eye-remote.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/eye-remote
 - **CLI** : À documenter
 - **Units systemd** : `secubox-eye-remote.service`
@@ -753,6 +787,22 @@ SecuBox Eye Remote USB Gadget Integration
 
 ### `secubox-eye-square`
 
+SecuBox Eye Remote — Square variant (Pi 4B / Pi 400 + 7' 800x480)
+
+- **Catégorie** : system · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 22
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-eye-square/`
+
+### `secubox-federation`
+
 À documenter
 
 - **Catégorie** : À documenter · **Tier** : À documenter
@@ -763,9 +813,25 @@ SecuBox Eye Remote USB Gadget Integration
 - **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 22
+- **Tests** : 8
 - **Documentation existante** : À documenter
-- **Source technique** : `packages/secubox-eye-square/`
+- **Source technique** : `packages/secubox-federation/`
+
+### `secubox-freeboxtv`
+
+SecuBox — streamer Freebox TV (RTSP vers HLS, on-demand)
+
+- **Catégorie** : media · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 4 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 1
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-freeboxtv/`
 
 ### `secubox-frigate`
 
@@ -788,7 +854,7 @@ Frigate NVR for SecuBox
 SecuBox Full — All 49 modules
 
 - **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-system`, `secubox-crowdsec`, `secubox-waf`, `secubox-vortex-firewall`, `secubox-auth`, `secubox-nac`, `secubox-wireguard`, `secubox-mesh`, `secubox-p2p`, `secubox-netmodes`, `secubox-dpi`, `secubox-qos`, `secubox-traffic`, `secubox-vhost`, `secubox-haproxy`, `secubox-cdn`, `secubox-dns`, `secubox-vortex-dns`, `secubox-meshname`, `secubox-mediaflow`, `secubox-device-intel`, `secubox-watchdog`, `secubox-metrics`, `secubox-soc`, `secubox-roadmap`, `secubox-mail`, `secubox-mail-lxc`, `secubox-webmail`, `secubox-users`, `secubox-gitea`, `secubox-nextcloud`, `secubox-droplet`, `secubox-streamlit`, `secubox-streamforge`, `secubox-metablogizer`, `secubox-publish`, `secubox-c3box`, `secubox-backup`, `secubox-tor`, `secubox-exposure`, `secubox-zkp`, `secubox-mitmproxy`, `secubox-repo`, `secubox-hardening`
+- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-system`, `secubox-waf`, `secubox-vortex-firewall`, `secubox-auth`, `secubox-nac`, `secubox-wireguard`, `secubox-mesh`, `secubox-p2p`, `secubox-netmodes`, `secubox-dpi`, `secubox-qos`, `secubox-traffic`, `secubox-vhost`, `secubox-haproxy`, `secubox-cdn`, `secubox-dns`, `secubox-vortex-dns`, `secubox-meshname`, `secubox-mediaflow`, `secubox-device-intel`, `secubox-watchdog`, `secubox-metrics`, `secubox-soc`, `secubox-roadmap`, `secubox-mail`, `secubox-mail-lxc`, `secubox-webmail`, `secubox-webmail-lxc`, `secubox-users`, `secubox-gitea`, `secubox-nextcloud`, `secubox-droplet`, `secubox-streamlit`, `secubox-streamforge`, `secubox-metablogizer`, `secubox-publish`, `secubox-c3box`, `secubox-backup`, `secubox-tor`, `secubox-exposure`, `secubox-zkp`, `secubox-mitmproxy`, `secubox-repo`, `secubox-hardening`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : À documenter
@@ -807,7 +873,7 @@ SecuBox Gitea Module
 - **Dépend de** : `secubox-core`
 - **API** : 31 route(s), socket `/run/secubox/gitea.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/gitea
-- **CLI** : `giteactl`
+- **CLI** : `giteactl`, `secubox-gitea-reaper`
 - **Units systemd** : `secubox-gitea.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : oui
@@ -849,10 +915,10 @@ GoToSocial Fediverse server management
 
 ### `secubox-grafana`
 
-À documenter
+SecuBox Grafana — security metrics dashboards
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : media · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 5 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
 - **Vhosts livrés** : `grafana.gk2.secubox.in`
@@ -864,19 +930,35 @@ GoToSocial Fediverse server management
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-grafana/`
 
+### `secubox-groupd`
+
+SecuBox — hote de groupe pour les modules
+
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : `secubox-groupd`
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-groupd/`
+
 ### `secubox-haproxy`
 
 SecuBox HAProxy Dashboard
 
 - **Catégorie** : network · **Tier** : standard
 - **Dépend de** : `secubox-core`
-- **API** : 56 route(s), socket `/run/secubox/haproxy.sock`, authentification requise
+- **API** : 55 route(s), socket `/run/secubox/haproxy.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/haproxy
 - **CLI** : `haproxyctl`, `secubox-haproxy-regen-safe`, `secubox-render-nginx-webui`
 - **Units systemd** : `secubox-haproxy.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 4
+- **Tests** : 6
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-haproxy/`
 
@@ -896,13 +978,29 @@ SecuBox Kernel and System Hardening
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-hardening/`
 
+### `secubox-health`
+
+SecuBox health probers (vhost + module health monitoring)
+
+- **Catégorie** : system · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-health/`
+
 ### `secubox-health-doctor`
 
-À documenter
+SecuBox vital-services health monitor
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 5 route(s), socket `À documenter`, authentification À documenter
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 5 route(s), socket `À documenter`, authentification requise
 - **Interface web** : À documenter
 - **CLI** : `healthctl`
 - **Units systemd** : À documenter
@@ -941,7 +1039,7 @@ SecuBox Hub — Tableau de bord central
 - **Units systemd** : `secubox-hub.service`, `secubox-netstats.service`, `secubox-netstats.timer`, `secubox-nft-cache.service`, `secubox-nft-cache.timer`
 - **Ports** : 9080
 - **Conteneur LXC** : non
-- **Tests** : 7
+- **Tests** : 10
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-hub/`
 
@@ -951,13 +1049,13 @@ SecuBox Identity Module
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 20 route(s), socket `/run/secubox/identity.sock`, authentification requise
+- **API** : 21 route(s), socket `/run/secubox/identity.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/identity
 - **CLI** : À documenter
 - **Units systemd** : `secubox-identity.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : À documenter
+- **Tests** : 3
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-identity/`
 
@@ -983,7 +1081,7 @@ SecuBox Iot-guard Module
 
 - **Catégorie** : iot · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 1 route(s), socket `/run/secubox/iot-guard.sock`, authentification À documenter
+- **API** : 21 route(s), socket `/run/secubox/iot-guard.sock`, authentification requise
 - **Interface web** : À documenter
 - **CLI** : À documenter
 - **Units systemd** : `secubox-iot-guard.service`
@@ -1009,16 +1107,32 @@ SecuBox IP Blocklist Manager
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-ipblock/`
 
+### `secubox-isp`
+
+SecuBox ISP — socle routeur/FAI propre
+
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-isp/`
+
 ### `secubox-jabber`
 
 SecuBox Jabber XMPP Server
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 16 route(s), socket `/run/secubox/jabber.sock`, authentification À documenter
+- **API** : 16 route(s), socket `/run/secubox/jabber.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/jabber
 - **CLI** : À documenter
-- **Units systemd** : `secubox-jabber.service`
+- **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
@@ -1031,7 +1145,7 @@ Jellyfin media server in a Debian LXC (partner library auto-wire)
 
 - **Catégorie** : media · **Tier** : pro
 - **Dépend de** : `secubox-core`
-- **API** : 12 route(s), socket `/run/secubox/jellyfin.sock`, authentification requise
+- **API** : 18 route(s), socket `/run/secubox/jellyfin.sock`, authentification requise
 - **Interface web** : oui, /jellyfin/
 - **Vhosts livrés** : `jellyfin.gk2.secubox.in`
 - **CLI** : `jellyfinctl`
@@ -1048,9 +1162,9 @@ SecuBox Jitsi Meet - Video Conferencing
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 7 route(s), socket `/run/secubox/jitsi.sock`, authentification requise
+- **API** : 23 route(s), socket `/run/secubox/jitsi.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/jitsi
-- **Vhosts livrés** : `meet.gk2.secubox.in`, `meet.maegia.tv`
+- **Vhosts livrés** : `meet.gk2.secubox.in`
 - **CLI** : `jitsictl`
 - **Units systemd** : `secubox-jitsi-provision.service`
 - **Ports** : 9080
@@ -1096,7 +1210,7 @@ SecuBox LED heartbeat status indicator
 SecuBox Lite — Essential modules for low-RAM devices
 
 - **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-crowdsec`, `secubox-wireguard`, `secubox-netmodes`, `secubox-nac`, `secubox-system`, `secubox-hardening`
+- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-portal`, `secubox-wireguard`, `secubox-netmodes`, `secubox-nac`, `secubox-system`, `secubox-hardening`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : À documenter
@@ -1129,14 +1243,14 @@ Lyrion Music Server (LMS / Squeezebox) in a Debian LXC
 
 - **Catégorie** : media · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 14 route(s), socket `/run/secubox/aggregator.sock`, authentification requise
+- **API** : 19 route(s), socket `/run/secubox/aggregator.sock`, authentification requise
 - **Interface web** : oui, /lyrion/
 - **Vhosts livrés** : `192.168.1.200`, `_`, `localhost`, `lyrion.gk2.secubox.in`, `lyrion.local`
-- **CLI** : `lyrionctl`
+- **CLI** : `lyrionctl`, `secubox-lyrion-watchdog`
 - **Units systemd** : `secubox-lyrion-version-check.service`, `secubox-lyrion-version-check.timer`, `secubox-lyrion.service`
 - **Ports** : 9000, 9080
 - **Conteneur LXC** : oui
-- **Tests** : 3
+- **Tests** : 4
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-lyrion/`
 
@@ -1146,7 +1260,7 @@ SecuBox MAC Guard - MAC Address Control
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 1 route(s), socket `/run/secubox/mac-guard.sock`, authentification À documenter
+- **API** : 22 route(s), socket `/run/secubox/mac-guard.sock`, authentification requise
 - **Interface web** : À documenter
 - **CLI** : À documenter
 - **Units systemd** : À documenter
@@ -1158,10 +1272,10 @@ SecuBox MAC Guard - MAC Address Control
 
 ### `secubox-macro`
 
-À documenter
+SecuBox vetted access-macro framework + tor-exit kind
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : `secubox-macroctl`
@@ -1178,10 +1292,10 @@ SecuBox MagicMirror management
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 14 route(s), socket `/run/secubox/magicmirror.sock`, authentification À documenter
+- **API** : 14 route(s), socket `/run/secubox/magicmirror.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/magicmirror
 - **CLI** : À documenter
-- **Units systemd** : `secubox-magicmirror.service`
+- **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
@@ -1190,10 +1304,10 @@ SecuBox MagicMirror management
 
 ### `secubox-maigret`
 
-À documenter
+Maigret identity/username OSINT collector (LXC-sandboxed)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 8 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : `maigretctl`
@@ -1210,13 +1324,13 @@ SecuBox Mail Module
 
 - **Catégorie** : email · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 48 route(s), socket `/run/secubox/mail.sock`, authentification requise
+- **API** : 55 route(s), socket `/run/secubox/mail.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/mail
 - **CLI** : `mail-migrate-to-single-lxc.sh`, `mailctl`, `mailserverctl`, `roundcubectl`, `rspamd-route-sync-patch.sh`
-- **Units systemd** : `secubox-mail.service`
+- **Units systemd** : `secubox-mail-ssl-renew.service`, `secubox-mail-ssl-renew.timer`, `secubox-mail.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : oui
-- **Tests** : 3
+- **Tests** : 4
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-mail/`
 
@@ -1236,22 +1350,6 @@ SecuBox Mail LXC Container (Backend)
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-mail-lxc/`
 
-### `secubox-mastodon`
-
-À documenter
-
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 6 route(s), socket `À documenter`, authentification requise
-- **Interface web** : oui, À documenter
-- **CLI** : `mastodonctl`
-- **Units systemd** : `secubox-mastodon.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : oui
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-mastodon/`
-
 ### `secubox-matrix`
 
 SecuBox Matrix Synapse - Federated Chat Server
@@ -1261,7 +1359,7 @@ SecuBox Matrix Synapse - Federated Chat Server
 - **API** : 37 route(s), socket `/run/secubox/matrix.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/matrix
 - **CLI** : À documenter
-- **Units systemd** : `secubox-matrix.service`
+- **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : oui
 - **Tests** : À documenter
@@ -1286,14 +1384,14 @@ SecuBox Mcp-server Module
 
 ### `secubox-media`
 
-À documenter
+SecuBox External Media Manager
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 10 route(s), socket `À documenter`, authentification requise
+- **Catégorie** : media · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 11 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : `mediactl`
-- **Units systemd** : `secubox-media-drain.service`, `secubox-media-drain.timer`, `secubox-media.service`
+- **Units systemd** : `secubox-media-automount.service`, `secubox-media-drain.service`, `secubox-media-drain.timer`, `secubox-media.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : 1
@@ -1306,7 +1404,7 @@ SecuBox Media Flow
 
 - **Catégorie** : media · **Tier** : lite
 - **Dépend de** : `secubox-core`, `secubox-dpi`
-- **API** : 29 route(s), socket `/run/secubox/mediaflow.sock`, authentification requise
+- **API** : 27 route(s), socket `/run/secubox/mediaflow.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/mediaflow
 - **CLI** : `secubox-yt-dlp-refresh`
 - **Units systemd** : `secubox-mediaflow.secubox-yt-dlp-refresh.service`, `secubox-mediaflow.secubox-yt-dlp-refresh.timer`, `secubox-mediaflow.service`
@@ -1318,10 +1416,10 @@ SecuBox Media Flow
 
 ### `secubox-mesh`
 
-À documenter
+SecuBox-DEB MESH module (802.11s + Passpoint AP, OPAD)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
 - **CLI** : `secubox-mt76x2u-rebind`
@@ -1366,10 +1464,10 @@ SecuBox Meshname Module
 
 ### `secubox-meshtastic`
 
-À documenter
+SecuBox-Deb Meshtastic LoRa node integration
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : `secubox-meshtasticctl`, `secubox-meshtasticd`
@@ -1380,6 +1478,38 @@ SecuBox Meshname Module
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-meshtastic/`
 
+### `secubox-messagerie`
+
+Messagerie de la box — mur public, messages privés, chat radio centralisé
+
+- **Catégorie** : communication · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 7 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : oui, À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 1
+- **Documentation existante** : README.md
+- **Source technique** : `packages/secubox-messagerie/`
+
+### `secubox-meta`
+
+À documenter
+
+- **Catégorie** : À documenter · **Tier** : À documenter
+- **Dépend de** : À documenter
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 1
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-meta/`
+
 ### `secubox-metablogizer`
 
 SecuBox MetaBlogizer - Static Site Publisher
@@ -1388,11 +1518,12 @@ SecuBox MetaBlogizer - Static Site Publisher
 - **Dépend de** : `secubox-core`
 - **API** : 24 route(s), socket `/run/secubox/metablogizer.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/metablogizer
-- **CLI** : `metablog-audit`, `metablog-shotter`, `metablogizerctl`, `secubox-publishctl`
-- **Units systemd** : `metablog-audit.service`, `metablog-audit.timer`, `metablog-shots.service`, `metablog-shots.timer`, `secubox-metablogizer.service`
-- **Ports** : À documenter
+- **Vhosts livrés** : `metablogizer.gk2.secubox.in`
+- **CLI** : `metablog-audit`, `metablog-shotter`, `metablog-sync`, `metablogizerctl`, `secubox-publishctl`
+- **Units systemd** : `metablog-audit.service`, `metablog-audit.timer`, `metablog-shots.service`, `metablog-shots.timer`, `metablog-sync.service`, `metablog-sync.timer`, `secubox-metablogizer.service`
+- **Ports** : 9080
 - **Conteneur LXC** : non
-- **Tests** : 16
+- **Tests** : 29
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-metablogizer/`
 
@@ -1412,19 +1543,36 @@ SecuBox Metacatalog - Service catalog and registry
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-metacatalog/`
 
+### `secubox-metanews`
+
+SecuBox — radar d'actualite multi-sources (MetaNews)
+
+- **Catégorie** : media · **Tier** : lite
+- **Dépend de** : `secubox-sbxui`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **Vhosts livrés** : `metanews.gk2.secubox.in`
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : 9080
+- **Conteneur LXC** : non
+- **Tests** : 7
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-metanews/`
+
 ### `secubox-metrics`
 
 SecuBox Metrics Dashboard
 
 - **Catégorie** : monitoring · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 19 route(s), socket `/run/secubox/metrics.sock`, authentification requise
+- **API** : 32 route(s), socket `/run/secubox/metrics.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/metrics
-- **CLI** : À documenter
+- **CLI** : `secubox-vhost-logs`
 - **Units systemd** : `secubox-metrics.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 5
+- **Tests** : 17
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-metrics/`
 
@@ -1444,22 +1592,6 @@ SecuBox Mirror/CDN Cache
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-mirror/`
 
-### `secubox-mitmproxy`
-
-SecuBox sbxwaf — Web Application Firewall (moteur Go)
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`, `secubox-haproxy`
-- **API** : 1 route(s), socket `/run/secubox/mitmproxy.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/mitmproxy
-- **CLI** : À documenter
-- **Units systemd** : `secubox-mitmproxy.service`, `secubox-waf-ratelimit.service`, `secubox-waf-watchdog.service`, `secubox-waf-watchdog.timer`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : 2
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-mitmproxy/`
-
 ### `secubox-modem`
 
 SecuBox LTE/5G Modem Management
@@ -1478,10 +1610,10 @@ SecuBox LTE/5G Modem Management
 
 ### `secubox-mqtt`
 
-À documenter
+SecuBox MQTT — Mosquitto broker (WALL layer)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 4 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
 - **CLI** : `mqttctl`
@@ -1498,13 +1630,13 @@ SecuBox NAC / Client Guardian
 
 - **Catégorie** : security · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 52 route(s), socket `/run/secubox/nac.sock`, authentification requise
+- **API** : 59 route(s), socket `/run/secubox/nac.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/nac
-- **CLI** : À documenter
-- **Units systemd** : `secubox-nac.service`
+- **CLI** : `secubox-presence-report`
+- **Units systemd** : `secubox-nac.service`, `secubox-presence-report.service`, `secubox-presence-report.timer`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 7
+- **Tests** : 18
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-nac/`
 
@@ -1524,12 +1656,28 @@ SecuBox nDPId Module
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-ndpid/`
 
+### `secubox-ndpid-engine`
+
+SecuBox — moteur DPI nDPId + nDPIsrvd (nDPI 6.x statique)
+
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : README.md
+- **Source technique** : `packages/secubox-ndpid-engine/`
+
 ### `secubox-netboot`
 
-À documenter
+SecuBox provisioning réseau + overlay U-Boot (#737)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 18 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **Vhosts livrés** : `boot.gk2.secubox.in`
@@ -1557,18 +1705,6 @@ SecuBox Network Diagnostics — Troubleshooting Tools
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-netdiag/`
 
-### `secubox-netifyd`
-
-SecuBox Netifyd - Network Intelligence Daemon Dashboard
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **CLI** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-
 ### `secubox-netmodes`
 
 SecuBox Network Modes
@@ -1577,7 +1713,7 @@ SecuBox Network Modes
 - **Dépend de** : `secubox-core`
 - **API** : 32 route(s), socket `/run/secubox/netmodes.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/netmodes
-- **CLI** : À documenter
+- **CLI** : `secubox-net-fallback`
 - **Units systemd** : `secubox-netmodes.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
@@ -1626,7 +1762,7 @@ Usenet downloader management for SecuBox
 - **API** : 32 route(s), socket `/run/secubox/newsbin.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/newsbin
 - **CLI** : À documenter
-- **Units systemd** : `secubox-newsbin.service`
+- **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
@@ -1641,14 +1777,30 @@ SecuBox Nextcloud Module
 - **Dépend de** : `secubox-core`
 - **API** : 22 route(s), socket `/run/secubox/nextcloud.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/nextcloud
-- **Vhosts livrés** : `nc.gk2.secubox.in`
+- **Vhosts livrés** : `nc.gk2.secubox.in`, `nextcloud.gk2.secubox.in`
 - **CLI** : `nextcloudctl`
 - **Units systemd** : `secubox-nextcloud.service`
 - **Ports** : 9080
 - **Conteneur LXC** : oui
-- **Tests** : 1
+- **Tests** : 4
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-nextcloud/`
+
+### `secubox-oidc`
+
+À documenter
+
+- **Catégorie** : À documenter · **Tier** : À documenter
+- **Dépend de** : À documenter
+- **API** : 5 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : `secubox-oidcctl`
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 1
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-oidc/`
 
 ### `secubox-ollama`
 
@@ -1659,7 +1811,7 @@ Local AI inference with Ollama
 - **API** : 15 route(s), socket `/run/secubox/ollama.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/ollama
 - **CLI** : À documenter
-- **Units systemd** : `secubox-ollama.service`
+- **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
@@ -1674,11 +1826,12 @@ SecuBox P2P - Peer-to-Peer Network Hub
 - **Dépend de** : `secubox-core`
 - **API** : 57 route(s), socket `/run/secubox/p2p.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/p2p
+- **Vhosts livrés** : `_`
 - **CLI** : `secubox-p2pctl`
 - **Units systemd** : `secubox-p2p.service`
-- **Ports** : À documenter
+- **Ports** : 7331
 - **Conteneur LXC** : non
-- **Tests** : 14
+- **Tests** : 16
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-p2p/`
 
@@ -1690,9 +1843,10 @@ PeerTube federated video platform management
 - **Dépend de** : `secubox-core`
 - **API** : 46 route(s), socket `/run/secubox/peertube.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/peertube
+- **Vhosts livrés** : `peertube.gk2.secubox.in`
 - **CLI** : `peertubectl`
 - **Units systemd** : `peertube-backlog.service`, `peertube-backlog.timer`, `peertube-cookie-install.path`, `peertube-cookie-install.service`, `peertube-ops.path`, `peertube-ops.service`, `secubox-peertube-version-check.service`, `secubox-peertube-version-check.timer`, `secubox-peertube.service`
-- **Ports** : À documenter
+- **Ports** : 9080
 - **Conteneur LXC** : oui
 - **Tests** : 4
 - **Documentation existante** : README.md
@@ -1706,9 +1860,10 @@ PhotoPrism photo management for SecuBox
 - **Dépend de** : `secubox-core`
 - **API** : 27 route(s), socket `/run/secubox/photoprism.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/photoprism
+- **Vhosts livrés** : `photoprism.gk2.secubox.in`
 - **CLI** : `photoprismctl`
 - **Units systemd** : `secubox-photoprism.service`
-- **Ports** : À documenter
+- **Ports** : 9080
 - **Conteneur LXC** : oui
 - **Tests** : À documenter
 - **Documentation existante** : README.md
@@ -1720,7 +1875,7 @@ Homebrew/Fermentation Controller for SecuBox
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 6 route(s), socket `/run/secubox/picobrew.sock`, authentification À documenter
+- **API** : 6 route(s), socket `/run/secubox/picobrew.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/picobrew
 - **CLI** : `picobrewctl`
 - **Units systemd** : `secubox-picobrew.service`
@@ -1732,17 +1887,18 @@ Homebrew/Fermentation Controller for SecuBox
 
 ### `secubox-podcaster`
 
-À documenter
+Modern podcast manager for SecuBox
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : media · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 20 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
+- **Vhosts livrés** : `podcaster.gk2.secubox.in`
 - **CLI** : À documenter
 - **Units systemd** : À documenter
-- **Ports** : À documenter
+- **Ports** : 9080
 - **Conteneur LXC** : non
-- **Tests** : 3
+- **Tests** : 5
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-podcaster/`
 
@@ -1762,28 +1918,60 @@ SecuBox Portal - Web Authentication
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-portal/`
 
-### `secubox-profiles`
+### `secubox-premier-pas`
 
 À documenter
 
 - **Catégorie** : À documenter · **Tier** : À documenter
 - **Dépend de** : À documenter
-- **API** : 13 route(s), socket `À documenter`, authentification requise
+- **API** : 15 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
-- **CLI** : `secubox-profilectl`, `secubox-wakectl`
-- **Units systemd** : `secubox-profiles.service`, `secubox-sleeper.service`, `secubox-waker.service`
+- **CLI** : `premier-pas-console`, `premier-pas-url`, `premier-pasctl`, `secubox-majauto`
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 4
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-premier-pas/`
+
+### `secubox-profiles`
+
+SecuBox — inventaire et profils de modules (phase 1, lecture seule)
+
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 14 route(s), socket `À documenter`, authentification requise
+- **Interface web** : oui, À documenter
+- **CLI** : `secubox-cache-warm`, `secubox-profilectl`, `secubox-wakectl`
+- **Units systemd** : `secubox-cache-warm@.service`, `secubox-cache-warm@jitsi.timer`, `secubox-cache-warm@metacatalog.timer`, `secubox-pins-apply.service`, `secubox-pins-apply.timer`, `secubox-profiles.service`, `secubox-sleeper.service`, `secubox-waker.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : oui
-- **Tests** : 25
+- **Tests** : 28
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-profiles/`
 
+### `secubox-profils`
+
+SecuBox — profil « socle » : Le noyau indispensable : administration, identite, routage
+
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-profils/`
+
 ### `secubox-proxypac`
 
-À documenter
+SecuBox WPAD/PAC auto-config routing to mesh services
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`, `secubox-hub`, `secubox-tor`
 - **API** : 11 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **Vhosts livrés** : `wpad.gk2.secubox.in`
@@ -1827,13 +2015,30 @@ SecuBox QoS / Bandwidth Manager
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-qos/`
 
+### `secubox-radio`
+
+SecuBox — radio et television collaboratives synchronisees
+
+- **Catégorie** : media · **Tier** : lite
+- **Dépend de** : `secubox-sbxui`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : oui, À documenter
+- **Vhosts livrés** : `radio.gk2.secubox.in`
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : 9080
+- **Conteneur LXC** : non
+- **Tests** : 20
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-radio/`
+
 ### `secubox-rbs-sensor`
 
-À documenter
+SecuBox RBS Sensor — Rogue Base Station sensor (WALL layer)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 9 route(s), socket `À documenter`, authentification À documenter
+- **Catégorie** : system · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 9 route(s), socket `À documenter`, authentification requise
 - **Interface web** : À documenter
 - **CLI** : `rbssensorctl`
 - **Units systemd** : `secubox-rbs-sensor.service`
@@ -1845,10 +2050,10 @@ SecuBox QoS / Bandwidth Manager
 
 ### `secubox-reality`
 
-À documenter
+SecuBox Reality — VLESS+Reality+Vision egress-point manager
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : system · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : À documenter
@@ -1865,10 +2070,10 @@ SecuBox Redroid - Android in container
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 15 route(s), socket `/run/secubox/redroid.sock`, authentification À documenter
+- **API** : 15 route(s), socket `/run/secubox/redroid.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/redroid
 - **CLI** : À documenter
-- **Units systemd** : `secubox-redroid.service`
+- **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
@@ -1877,10 +2082,10 @@ SecuBox Redroid - Android in container
 
 ### `secubox-release`
 
-À documenter
+SecuBox release-rings — reprepro-copy promotion actuator
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 8 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : `secubox-release-repo`, `secubox-releasectl`
@@ -1923,22 +2128,6 @@ SecuBox Reporter - System report generation
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-reporter/`
 
-### `secubox-roadmap`
-
-SecuBox Roadmap - Migration tracking dashboard
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 6 route(s), socket `/run/secubox/roadmap.sock`, authentification À documenter
-- **Interface web** : oui, /srv/secubox/www/roadmap
-- **CLI** : À documenter
-- **Units systemd** : `secubox-roadmap.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-roadmap/`
-
 ### `secubox-routes`
 
 SecuBox Routes - Routing table viewer and manager
@@ -1955,28 +2144,12 @@ SecuBox Routes - Routing table viewer and manager
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-routes/`
 
-### `secubox-rtty`
-
-SecuBox Remote Terminal Access (rtty)
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 14 route(s), socket `/run/secubox/rtty.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/rtty
-- **CLI** : À documenter
-- **Units systemd** : `secubox-rtty.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-rtty/`
-
 ### `secubox-rustdesk`
 
-À documenter
+SecuBox RustDesk — self-hosted remote desktop relay
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : system · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 5 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
 - **Vhosts livrés** : `rustdesk.gk2.secubox.in`
@@ -2004,13 +2177,62 @@ SecuBox SaaS/API Proxy Relay
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-saas-relay/`
 
+### `secubox-sbxid`
+
+SBX Identity Manager — identité SBX OS unifiée, appareils, capacités, certificats
+
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`, `secubox-acces`
+- **API** : 55 route(s), socket `À documenter`, authentification requise
+- **Interface web** : oui, À documenter
+- **Vhosts livrés** : `acces.gk2.secubox.in`, `identity.gk2.secubox.in`
+- **CLI** : `secubox-sbxid-activites`
+- **Units systemd** : À documenter
+- **Ports** : 9080
+- **Conteneur LXC** : non
+- **Tests** : 6
+- **Documentation existante** : README.md
+- **Source technique** : `packages/secubox-sbxid/`
+
+### `secubox-sbxos`
+
+SBX OS — the Hall as an installable PWA
+
+- **Catégorie** : dashboard · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : oui, À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-sbxos/`
+
+### `secubox-sbxui`
+
+SecuBox WebOS — bibliothèque UI partagée (objets sbx)
+
+- **Catégorie** : dashboard · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-sbxui/`
+
 ### `secubox-security-posture`
 
-À documenter
+SecuBox Security Posture - honest board-truthful scorecard
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 8 route(s), socket `À documenter`, authentification À documenter
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 8 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : À documenter
 - **Units systemd** : `secubox-security-posture.service`, `secubox-security-posture.socket`
@@ -2022,10 +2244,10 @@ SecuBox SaaS/API Proxy Relay
 
 ### `secubox-sentinelle-gsm`
 
-À documenter
+SecuBox SENTINELLE-GSM — passive rogue-BTS sensor (MIND layer)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 34 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : `secubox-grgsm-livemon-shim`, `sentinellectl`
@@ -2042,10 +2264,10 @@ SecuBox SimpleX Chat Server
 
 - **Catégorie** : media · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 28 route(s), socket `/run/secubox/simplex.sock`, authentification À documenter
+- **API** : 28 route(s), socket `/run/secubox/simplex.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/simplex
 - **CLI** : À documenter
-- **Units systemd** : `secubox-simplex.service`
+- **Units systemd** : À documenter
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : À documenter
@@ -2070,10 +2292,10 @@ SecuBox SimpleX Chat Server
 
 ### `secubox-smb`
 
-À documenter
+SecuBox — partage SMB servi par le noyau (ksmbd)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : `smbctl`
@@ -2164,12 +2386,29 @@ SecuBox SOC Web Dashboard — Browser-based Fleet Monitoring
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-soc-web/`
 
+### `secubox-socialrelay`
+
+SecuBox — relais de reseaux sociaux (fediverse + consentement)
+
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **Vhosts livrés** : `socialrelay.gk2.secubox.in`
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : 9080
+- **Conteneur LXC** : non
+- **Tests** : 3
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-socialrelay/`
+
 ### `secubox-spiderfoot`
 
-À documenter
+SpiderFoot OSINT automation engine (LXC-sandboxed)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 6 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **Vhosts livrés** : `192.168.1.200`, `_`, `localhost`, `spiderfoot.gk2.secubox.in`, `spiderfoot.local`
@@ -2203,15 +2442,32 @@ SecuBox Streamlit Platform
 
 - **Catégorie** : media · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 33 route(s), socket `/run/secubox/streamlit.sock`, authentification requise
+- **API** : 30 route(s), socket `/run/secubox/streamlit.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/streamlit
 - **CLI** : `streamlit-shotter`, `streamlitctl`
 - **Units systemd** : `secubox-streamlit-idle.service`, `secubox-streamlit-idle.timer`, `secubox-streamlit.service`, `streamlit-audit.service`, `streamlit-audit.timer`
 - **Ports** : À documenter
-- **Conteneur LXC** : oui
-- **Tests** : 21
+- **Conteneur LXC** : non
+- **Tests** : 23
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-streamlit/`
+
+### `secubox-surf`
+
+SecuBox Surf — relais de navigation par-origine (le BiB)
+
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **Vhosts livrés** : `~^surf-.+\.gk2\.secubox\.in$`
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : 9080
+- **Conteneur LXC** : non
+- **Tests** : 2
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-surf/`
 
 ### `secubox-system`
 
@@ -2247,10 +2503,10 @@ SecuBox System Hub Dashboard
 
 ### `secubox-system-tuning`
 
-À documenter
+SecuBox System Tuning — swap + zram + memory/CPU caps for LXC
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : `secubox-tuning-apply`
@@ -2279,10 +2535,10 @@ SecuBox Threat-analyst Module
 
 ### `secubox-threatmesh`
 
-À documenter
+Sovereign threat-intel mesh for SecuBox (central-API replacement)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`, `secubox-vortex-firewall`
 - **API** : 7 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **CLI** : `secubox-threatfeed`
@@ -2311,14 +2567,14 @@ SecuBox Unified Threats Dashboard
 
 ### `secubox-toolbox`
 
-À documenter
+SecuBox-DEB ToolBoX — Gondwana Cabine Numérique (captive AP + MITM analyzer)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
-- **CLI** : `sbxmitm-policyctl`, `secubox-blacklist-attrib`, `secubox-blacklist-sync`, `secubox-escalate`, `secubox-toolbox-autolearn`, `secubox-toolbox-db-tune`, `secubox-toolbox-fetch-apk`, `secubox-toolbox-fetch-xpi`, `secubox-toolbox-lxc-provision`, `secubox-toolbox-mesh-exclusion-publish`, `secubox-toolbox-mesh-exclusion-sync`, `secubox-toolbox-mitm-wg-launch`, `secubox-toolbox-tor-exempt-hosts`, `secubox-toolbox-tor-reconcile`, `secubox-toolbox-wg-provision`, `secubox-toolbox-wg-restore`
-- **Units systemd** : `secubox-toolbox-mitm-wg-dynreload.path`, `secubox-toolbox-mitm-wg-dynreload.service`, `secubox-toolbox-mitm-wg.service`, `secubox-toolbox.service`
+- **CLI** : `sbxmitm-policyctl`, `secubox-blacklist-attrib`, `secubox-blacklist-sync`, `secubox-escalate`, `secubox-toolbox-autolearn`, `secubox-toolbox-ca-rename`, `secubox-toolbox-db-tune`, `secubox-toolbox-fetch-apk`, `secubox-toolbox-fetch-xpi`, `secubox-toolbox-mesh-exclusion-publish`, `secubox-toolbox-mesh-exclusion-sync`, `secubox-toolbox-tor-exempt-hosts`, `secubox-toolbox-tor-reconcile`, `secubox-toolbox-wg-provision`, `secubox-toolbox-wg-restore`
+- **Units systemd** : `secubox-toolbox.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
 - **Tests** : 72
@@ -2327,17 +2583,17 @@ SecuBox Unified Threats Dashboard
 
 ### `secubox-toolbox-ng`
 
-À documenter
+SecuBox-Deb — outils Go du parc (sbxmitm, sbx-sentinel, sbx-authwatch, sbxdpi)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : `secubox-sentinel-feeds`
-- **Units systemd** : `sbx-sentinel.service`, `secubox-sentinel-feeds.service`, `secubox-sentinel-feeds.timer`, `secubox-toolbox-ng-worker@.service`
+- **Units systemd** : `sbx-sentinel.service`, `sbxdpi.service`, `secubox-authwatch.service`, `secubox-sentinel-feeds.service`, `secubox-sentinel-feeds.timer`, `secubox-toolbox-egress-proxy.service`, `secubox-toolbox-ng-worker@.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 70
+- **Tests** : 122
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-toolbox-ng/`
 
@@ -2353,7 +2609,7 @@ SecuBox Tor Module
 - **Units systemd** : `secubox-tor.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 5
+- **Tests** : 6
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-tor/`
 
@@ -2363,14 +2619,14 @@ WebTorrent streaming for SecuBox (LXC-native)
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **API** : 24 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/torrent
 - **Vhosts livrés** : `torrent.gk2.secubox.in`
 - **CLI** : `secubox-torrent-conserve`
 - **Units systemd** : À documenter
 - **Ports** : 9080
 - **Conteneur LXC** : oui
-- **Tests** : 2
+- **Tests** : 4
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-torrent/`
 
@@ -2428,13 +2684,13 @@ SecuBox Users Module
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 38 route(s), socket `/run/secubox/users.sock`, authentification requise
+- **API** : 42 route(s), socket `/run/secubox/users.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/users
-- **CLI** : `usersctl`
+- **CLI** : `secubox-usersctl-services`, `usersctl`
 - **Units systemd** : `secubox-users.service`
 - **Ports** : À documenter
-- **Conteneur LXC** : oui
-- **Tests** : 16
+- **Conteneur LXC** : non
+- **Tests** : 20
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-users/`
 
@@ -2444,13 +2700,13 @@ SecuBox Vault - Secrets management
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 14 route(s), socket `/run/secubox/vault.sock`, authentification À documenter
+- **API** : 14 route(s), socket `/run/secubox/vault.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/vault
 - **CLI** : À documenter
 - **Units systemd** : `secubox-vault.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : À documenter
+- **Tests** : 1
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-vault/`
 
@@ -2460,13 +2716,13 @@ SecuBox Virtual Host Manager
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 15 route(s), socket `/run/secubox/vhost.sock`, authentification requise
+- **API** : 16 route(s), socket `/run/secubox/vhost.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/vhost
 - **CLI** : `vhostctl`
 - **Units systemd** : `secubox-vhost.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : non
-- **Tests** : 3
+- **Tests** : 5
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-vhost/`
 
@@ -2476,15 +2732,31 @@ SecuBox VM Manager - Virtualization management
 
 - **Catégorie** : misc · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 15 route(s), socket `/run/secubox/vm.sock`, authentification À documenter
+- **API** : 18 route(s), socket `/run/secubox/vm.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/vm
-- **CLI** : À documenter
+- **CLI** : `secubox-vm-autostart`
 - **Units systemd** : `secubox-vm.service`
 - **Ports** : À documenter
 - **Conteneur LXC** : oui
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-vm/`
+
+### `secubox-voice`
+
+SecuBox Voice — Lexie: local speech synthesis and recognition
+
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 5 route(s), socket `À documenter`, authentification requise
+- **Interface web** : À documenter
+- **CLI** : À documenter
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 2
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-voice/`
 
 ### `secubox-voip`
 
@@ -2536,31 +2808,33 @@ SecuBox Vortex-firewall Module
 
 ### `secubox-waf`
 
-SecuBox Web Application Firewall (sbxwaf, moteur Go 127.0.0.1:8085)
+SecuBox Web Application Firewall (mitmproxy LXC)
 
 - **Catégorie** : security · **Tier** : standard
 - **Dépend de** : `secubox-core`
-- **API** : 22 route(s), socket `/run/secubox/waf.sock`, authentification requise
+- **API** : 26 route(s), socket `/run/secubox/waf.sock`, authentification requise
 - **Interface web** : oui, /srv/secubox/www/waf
+- **Vhosts livrés** : `waf.gk2.secubox.in`
 - **CLI** : À documenter
 - **Units systemd** : `secubox-waf.service`
-- **Ports** : À documenter
+- **Ports** : 9080
 - **Conteneur LXC** : non
-- **Tests** : 2
+- **Tests** : 3
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-waf/`
 
 ### `secubox-waf-ng`
 
-À documenter
+SecuBox-Deb — MOTEUR du pare-feu applicatif (sbxwaf, Go, natif hote)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : security · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
-- **Interface web** : À documenter
-- **CLI** : À documenter
+- **Interface web** : oui, À documenter
+- **Vhosts livrés** : `actor.gk2.secubox.in`
+- **CLI** : `secubox-actord-ingest-perms`
 - **Units systemd** : À documenter
-- **Ports** : À documenter
+- **Ports** : 9080
 - **Conteneur LXC** : non
 - **Tests** : À documenter
 - **Documentation existante** : README.md
@@ -2568,10 +2842,10 @@ SecuBox Web Application Firewall (sbxwaf, moteur Go 127.0.0.1:8085)
 
 ### `secubox-wan-link-guard`
 
-À documenter
+WAN mvpp2 marginal-link guard for SecuBox (MOCHAbin)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : misc · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : À documenter
 - **CLI** : `secubox-wan-link-guard`
@@ -2597,16 +2871,6 @@ SecuBox Watchdog Module
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-watchdog/`
-
-
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **CLI** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
 
 ### `secubox-webext`
 
@@ -2640,21 +2904,22 @@ SecuBox Webmail Module
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-webmail/`
 
-### `secubox-webradio`
+### `secubox-webos`
 
-Internet Radio Streaming for SecuBox
+SecuBox WebOS — normalized service registry (Hall P1)
 
-- **Catégorie** : misc · **Tier** : lite
+- **Catégorie** : dashboard · **Tier** : lite
 - **Dépend de** : `secubox-core`
-- **API** : 25 route(s), socket `/run/secubox/webradio.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/webradio
+- **API** : 22 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : oui, À documenter
+- **Vhosts livrés** : `hall.gk2.net`, `hall.gk2.secubox.in`
 - **CLI** : À documenter
-- **Units systemd** : `secubox-webradio.service`
-- **Ports** : À documenter
+- **Units systemd** : `secubox-webos.service`
+- **Ports** : 9080
 - **Conteneur LXC** : non
-- **Tests** : À documenter
+- **Tests** : 9
 - **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-webradio/`
+- **Source technique** : `packages/secubox-webos/`
 
 ### `secubox-wireguard`
 
@@ -2674,10 +2939,10 @@ SecuBox WireGuard VPN Dashboard
 
 ### `secubox-yacy`
 
-À documenter
+SecuBox YaCy — peer-to-peer search engine
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
 - **API** : 5 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, À documenter
 - **Vhosts livrés** : `yacy.gk2.secubox.in`
@@ -2714,28 +2979,60 @@ YouTube/web-media SAS for SecuBox (LXC-native)
 - **API** : 0 route(s), socket `À documenter`, authentification À documenter
 - **Interface web** : oui, /srv/secubox/www/ytsas
 - **Vhosts livrés** : `ytsas.gk2.secubox.in`
-- **CLI** : `secubox-ytsas-conserve`
+- **CLI** : `secubox-ytsas-billet`, `secubox-ytsas-conserve`
 - **Units systemd** : À documenter
 - **Ports** : 9080
 - **Conteneur LXC** : oui
-- **Tests** : 1
+- **Tests** : 4
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-ytsas/`
 
+### `secubox-zia`
+
+ZIA Hall — local ARM64 AI, interface to the Hall object bus (POC)
+
+- **Catégorie** : ai · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 7 route(s), socket `À documenter`, authentification requise
+- **Interface web** : oui, À documenter
+- **CLI** : `secubox-zia-bench`
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : 4
+- **Documentation existante** : README.md
+- **Source technique** : `packages/secubox-zia/`
+
+### `secubox-zia-llm`
+
+ZIA Hall — local llama.cpp runtime (prebuilt static arm64)
+
+- **Catégorie** : ai · **Tier** : lite
+- **Dépend de** : `secubox-zia`
+- **API** : 0 route(s), socket `À documenter`, authentification À documenter
+- **Interface web** : À documenter
+- **CLI** : `secubox-zia-getmodel`
+- **Units systemd** : À documenter
+- **Ports** : À documenter
+- **Conteneur LXC** : non
+- **Tests** : À documenter
+- **Documentation existante** : À documenter
+- **Source technique** : `packages/secubox-zia-llm/`
+
 ### `secubox-zigbee`
 
-À documenter
+SecuBox Zigbee — Coordinator RF IoT (MIND layer)
 
-- **Catégorie** : À documenter · **Tier** : À documenter
-- **Dépend de** : À documenter
-- **API** : 7 route(s), socket `À documenter`, authentification À documenter
+- **Catégorie** : network · **Tier** : lite
+- **Dépend de** : `secubox-core`
+- **API** : 9 route(s), socket `À documenter`, authentification requise
 - **Interface web** : oui, À documenter
 - **Vhosts livrés** : `zigbee.gk2.secubox.in`
 - **CLI** : `zigbee-backup`, `zigbee-restore`, `zigbeectl`
 - **Units systemd** : `secubox-zigbee.service`
 - **Ports** : 9080
 - **Conteneur LXC** : oui
-- **Tests** : À documenter
+- **Tests** : 1
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-zigbee/`
 
