@@ -8,11 +8,14 @@
  * maquette) sauf les icônes, qui sont les masters définitifs.
  */
 import { useEffect, useState } from 'react';
-import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
+import { LazyMotion, MotionConfig, domAnimation, m, AnimatePresence } from 'framer-motion';
 import { SbxIcon } from '@sbx/icons';
 import { entrer, moi, manifeste, urlSure, radioCourante, activites, lienLocal, type Entree, type Manifeste, type Activite } from '@sbx/data';
 import { ecoute } from '@sbx/protocol';
 import { enregistreCadre, sbxExecuteAction } from '@sbx/hote';
+import { demandeOuverture, estEncadre } from '@sbx/protocol';
+import { Lieu } from './Lieu';
+import { Reglages, appliquePrefs } from './Reglages';
 import hero from '@sbx/art/environments/art/hero.webp';
 import lexie from '@sbx/art/characters/art/lexie.webp';
 import neo from '@sbx/art/characters/art/neo.webp';
@@ -41,6 +44,27 @@ export function App() {
   const [man, setMan] = useState<Manifeste | null>(null);
   const [titre, setTitre] = useState<string | null>(null);
   const [fil, setFil] = useState<Activite[]>([]);
+  const [lieu, setLieu] = useState<{ titre: string; url: string } | null>(null);
+  const [reglages, setReglages] = useState(false);
+  useEffect(() => appliquePrefs(), []);
+  const mega = new URLSearchParams(location.search).get('mega') === '1';
+
+  function ouvre(ev: React.MouseEvent, id: string, titre: string, url: string) {
+    if (ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;   // onglet : laisser faire
+    ev.preventDefault();
+    if (mega && estEncadre() && demandeOuverture(id)) return;                 // le Hall ouvre
+    setLieu({ titre, url });
+  }
+
+  function clavierRail(ev: React.KeyboardEvent) {
+    const i = ESPACES.findIndex(x => x.id === espace);
+    const j = ev.key === 'ArrowDown' || ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowUp' || ev.key === 'ArrowLeft' ? i - 1 : null;
+    if (j === null) return;
+    ev.preventDefault();
+    const n = ESPACES[(j + ESPACES.length) % ESPACES.length];
+    aller(n.id);
+    (ev.currentTarget.querySelectorAll('button')[ESPACES.indexOf(n)] as HTMLButtonElement)?.focus();
+  }
 
   useEffect(() => ecoute({ relis: () => { activites().then(setFil); manifeste().then(setMan); } }), []);
   useEffect(() => {
@@ -82,7 +106,7 @@ export function App() {
 
   const esp = ESPACES.find(x => x.id === espace)!;
   return (
-    <LazyMotion features={domAnimation}>
+    <LazyMotion features={domAnimation}><MotionConfig reducedMotion={document.documentElement.dataset.rendu === 'leger' ? 'always' : 'user'}>
       <div className="aurora">
         <header className="barre">
           <span className="logo">SBX<em>OS</em></span>
@@ -90,8 +114,10 @@ export function App() {
           <span className="moi">{etat === null ? '…' : etat === 'aucun'
             ? <a href="/acces/">Entrer avec cet appareil</a>
             : (pseudo ?? 'Session ouverte')}</span>
+          <button type="button" className="engrenage" aria-label="Réglages" onClick={() => setReglages(true)}>
+            <SbxIcon id="reglages" taille={28} label="" /></button>
         </header>
-        <nav className="rail" aria-label="Espaces">
+        <nav className="rail" aria-label="Espaces" onKeyDown={clavierRail}>
           {ESPACES.map(x => (
             <button key={x.id} type="button" aria-current={x.id === espace ? 'page' : undefined}
                     onClick={() => aller(x.id)}>
@@ -137,7 +163,8 @@ export function App() {
                 {(man?.espaces.find(x => x.id === espace)?.modules ?? []).map(md => {
                   const u = man ? urlSure(md.url, man.domaine) : null;
                   return u
-                    ? <a key={md.id} className="carte" href={u} target="_blank" rel="noopener">
+                    ? <a key={md.id} className="carte" href={u} target="_blank" rel="noopener"
+                         onClick={ev => ouvre(ev, md.id, md.label, u)}>
                         <SbxIcon id={md.id} taille={56} label="" /><span>{md.label}</span></a>
                     : <span key={md.id} className="carte"><SbxIcon id={md.id} taille={56} label="" /><span>{md.label}</span></span>;
                 })}
@@ -148,6 +175,8 @@ export function App() {
           </AnimatePresence>
         </main>
       </div>
-    </LazyMotion>
+      {lieu && <Lieu titre={lieu.titre} url={lieu.url} ferme={() => setLieu(null)} />}
+      {reglages && <Reglages man={man} ferme={() => setReglages(false)} />}
+    </MotionConfig></LazyMotion>
   );
 }
