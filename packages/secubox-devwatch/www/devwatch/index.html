@@ -356,6 +356,35 @@ a{color:inherit}
 @media (prefers-reduced-motion:reduce){
   .dot,.ring,.infty,.loopbar i::after{animation:none}
 }
+
+/* ── Issues (#1585) ─────────────────────────────────────────────────────── */
+.iss{padding:18px; margin-top:26px}
+.iss .inum{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:12px}
+.iss .n{background:var(--surface-2); border:1px solid var(--line-soft); border-radius:12px; padding:10px 12px; cursor:pointer}
+.iss .n b{display:block; font-family:"IBM Plex Mono",monospace; font-size:1.5rem; font-variant-numeric:tabular-nums; color:var(--ink)}
+.iss .n span{font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.iss .n.o b{color:var(--gold)} .iss .n.p b{color:var(--cyan-ink)} .iss .n.c b{color:var(--up)}
+.iss .n[aria-pressed="true"]{border-color:var(--cyan); box-shadow:0 0 0 1px var(--cyan) inset}
+.iss .isub{font-size:.74rem; color:var(--muted); margin:0 0 12px; font-variant-numeric:tabular-nums}
+.iss .isub b{color:var(--ink-soft)}
+.iss .itabs{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px}
+.iss .itabs button{font:inherit; font-size:.74rem; padding:4px 11px; border-radius:999px; border:1px solid var(--line);
+  background:transparent; color:var(--ink-soft); cursor:pointer}
+.iss .itabs button[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:var(--surface)}
+.iss .ilist{max-height:420px; overflow-y:auto; border-top:1px solid var(--line-soft)}
+.iss .ir{display:grid; grid-template-columns:4.2rem 1fr auto; gap:4px 10px; align-items:baseline;
+  padding:7px 2px; border-bottom:1px solid var(--line-soft); font-size:.8rem}
+.iss .ir .num{font-family:"IBM Plex Mono",monospace; color:var(--faint)}
+.iss .ir a{color:var(--ink); text-decoration:none} .iss .ir a:hover{color:var(--cyan-ink); text-decoration:underline}
+.iss .ir .d{font-size:.68rem; color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums}
+.iss .ir .lb{grid-column:2/4; display:flex; flex-wrap:wrap; gap:4px}
+.iss .lab{font-size:.62rem; padding:1px 7px; border-radius:999px; background:var(--sunk); color:var(--ink-soft)}
+.iss .lab.wip{background:var(--cyan); color:var(--surface)}
+.iss .ibar{display:grid; grid-template-columns:minmax(90px,160px) 1fr 2.5rem; gap:8px; align-items:center; font-size:.76rem; padding:3px 0}
+.iss .ibar i{display:block; height:8px; border-radius:4px; background:var(--violet); opacity:.75}
+.iss .ibar em{font-style:normal; text-align:right; color:var(--muted); font-variant-numeric:tabular-nums}
+.iss .note{font-size:.68rem; color:var(--faint); margin-top:8px}
+.iss .wcount{font-family:"IBM Plex Mono",monospace; font-size:.72rem; color:var(--muted)}
 </style>
 <style>
 /* Suppléments pour le rendu live (états neutres + issues cliquables). */
@@ -448,6 +477,21 @@ a.witem .wt{min-height:2.6em}
     <div class="wgrid" id="wgrid"></div>
   </section>
 
+
+  <section class="card iss" id="iss" hidden>
+    <div class="sec-h"><span class="k">Issues · rapport, ouvertes, en cours, fermées</span><span class="rule"></span>
+      <span class="wcount" id="iss-releve"></span></div>
+    <div class="inum" id="iss-num"></div>
+    <p class="isub" id="iss-sub"></p>
+    <div class="itabs" role="tablist" id="iss-tabs">
+      <button role="tab" data-etat="rapport" aria-selected="true">Rapport complet</button>
+      <button role="tab" data-etat="ouvertes">Ouvertes</button>
+      <button role="tab" data-etat="en_cours">En cours</button>
+      <button role="tab" data-etat="fermees">Fermées</button>
+    </div>
+    <div class="ilist" id="iss-list"></div>
+    <p class="note" id="iss-note"></p>
+  </section>
   <section class="bot">
     <div class="card commits">
       <div class="sec-h"><span class="k">Derniers commits</span><span class="rule"></span></div>
@@ -746,6 +790,71 @@ a.witem .wt{min-height:2.6em}
   }
   charge();
   setInterval(charge, 120000);
+
+  // ── ISSUES (#1585) : rapport complet, ouvertes, en cours, fermées. ────────
+  var ISS = null, issEtat = 'rapport';
+  function jours(s){ var d = Date.parse(s||''); return isNaN(d) ? '' : new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'}); }
+  function issLigne(i, quand){
+    var labs = (i.labels||[]).map(function(l){ return '<span class="lab'+(/^wip$/i.test(l)?' wip':'')+'">'+esc(l)+'</span>'; });
+    if(i.branche) labs.unshift('<span class="lab wip">branche</span>');
+    return '<div class="ir"><span class="num">#'+esc(i.n)+'</span>'
+      + '<a href="'+esc(i.url||'#')+'" target="_blank" rel="noopener">'+esc(i.titre)+'</a>'
+      + '<span class="d">'+esc(quand)+'</span>'
+      + (labs.length ? '<span class="lb">'+labs.join('')+'</span>' : '') + '</div>';
+  }
+  function issRendu(){
+    if(!ISS || !ISS.ok) return;
+    var c = ISS.compte||{}, L = ISS.listes||{}, h = '';
+    [].forEach.call(document.querySelectorAll('#iss-tabs button, #iss-num .n'), function(b){
+      var on = b.getAttribute('data-etat') === issEtat;
+      b.setAttribute(b.tagName === 'BUTTON' ? 'aria-selected' : 'aria-pressed', on ? 'true' : 'false');
+    });
+    if(issEtat === 'rapport'){
+      var e = ISS.par_etiquette||{}, max = 0, k;
+      for(k in e) max = Math.max(max, e[k]);
+      h = '<div style="padding:8px 2px">';
+      for(k in e) h += '<div class="ibar"><span>'+esc(k)+'</span><i style="width:'+Math.max(4, Math.round(100*e[k]/(max||1)))+'%"></i><em>'+e[k]+'</em></div>';
+      h += '</div>';
+    } else {
+      var l = L[issEtat]||[];
+      h = l.length ? l.map(function(i){ return issLigne(i, issEtat==='fermees' ? 'fermée '+jours(i.ferme) : 'maj '+jours(i.maj)); }).join('')
+                   : '<p class="note" style="padding:10px 2px">Aucune.</p>';
+    }
+    el('iss-list').innerHTML = h;
+    el('iss-note').textContent = issEtat === 'en_cours' ? ('« En cours » = '+(ISS.definition_en_cours||''))
+      : issEtat === 'fermees' ? ('Les '+(ISS.echantillon_fermees||0)+' dernières fermées (sur '+(c.fermees||0)+').')
+      : issEtat === 'rapport' ? 'Ouvertes par étiquette.' : '';
+  }
+  function issCharge(){
+    fetch(API+'/issues',{headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(r){
+        if(!r || !r.ok) return;
+        ISS = r; var c = r.compte||{};
+        el('iss').hidden = false;
+        el('iss-num').innerHTML = [
+          ['ouvertes','o','Ouvertes',c.ouvertes],['en_cours','p','En cours',c.en_cours],
+          ['fermees','c','Fermées',c.fermees],['rapport','','Total',c.total]
+        ].map(function(x){ return '<div class="n '+x[1]+'" role="button" tabindex="0" data-etat="'+x[0]+'"><b>'+(x[3]==null?'—':x[3])+'</b><span>'+x[2]+'</span></div>'; }).join('');
+        var med = r.delai_median_heures;
+        el('iss-sub').innerHTML = '<b>'+(c.fermees_30j==null?'—':c.fermees_30j)+'</b> fermées en 30 j · <b>'+(c.ouvertes_7j||0)+'</b> ouvertes en 7 j · clôture médiane <b>'
+          + (med==null ? '—' : med < 1 ? Math.round(med*60)+' min' : med < 48 ? med+' h' : (r.delai_median_jours+' j')) + '</b>'
+          + (r.plus_ancienne_jours!=null ? ' · plus ancienne ouverte : <b>'+r.plus_ancienne_jours+' j</b>' : '');
+        el('iss-releve').textContent = r.releve ? 'relevé '+new Date(r.releve).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
+        issRendu();
+      }).catch(function(){});
+  }
+  document.addEventListener('click', function(ev){
+    var b = ev.target.closest('#iss-tabs button, #iss-num .n');
+    if(!b) return;
+    issEtat = b.getAttribute('data-etat'); issRendu();
+  });
+  document.addEventListener('keydown', function(ev){
+    var b = ev.target.closest && ev.target.closest('#iss-num .n');
+    if(b && (ev.key === 'Enter' || ev.key === ' ')){ ev.preventDefault(); issEtat = b.getAttribute('data-etat'); issRendu(); }
+  });
+  issCharge();
+  setInterval(issCharge, 300000);
 
   // Thème : suit le Hall (?theme= / postMessage), sinon bascule locale.
   var order=['','dark','light'], root=document.documentElement;

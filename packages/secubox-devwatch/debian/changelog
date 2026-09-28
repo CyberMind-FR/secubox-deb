@@ -1,3 +1,15 @@
+secubox-devwatch (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Métriques des issues (#1585) : section « Issues » — compteurs ouvertes /
+    en cours / fermées / total, fermées sur 30 j, ouvertes sur 7 j, délai
+    médian de clôture, plus ancienne ouverte ; onglets rapport complet (par
+    étiquette), ouvertes, en cours, fermées. Recherche GitHub côté serveur
+    (quota à part, anonyme) ; « en cours » = branche de travail vivante
+    feature|fix/<N>-… du miroir local, ou étiquette wip.
+    GET /api/v1/devwatch/issues?etat=rapport|ouvertes|en_cours|fermees.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 11:03:36 +0200
+
 secubox-devwatch (1.0.15-1~bookworm1) bookworm; urgency=medium
 
   * menu.d : catégorie « root » (« systeme » n'existe pas : DevWatch
