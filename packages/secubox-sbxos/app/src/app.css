@@ -29,3 +29,7 @@ a.carte:hover { transform: translateY(-2px); border-color: var(--sbx-cyan); }
 a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px; }
 .vide { color: var(--sbx-pale); margin: 0; }
 .direct { margin: 0; color: var(--sbx-doux); }
+.fil { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 640px; }
+.fil li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; background: var(--sbx-surface); border: 1px solid var(--sbx-trait); border-radius: 12px; color: var(--sbx-doux); }
+.fil a { color: var(--sbx-encre); text-decoration: none; }
+.fil time { color: var(--sbx-pale); font: 12px var(--sbx-code); white-space: nowrap; }

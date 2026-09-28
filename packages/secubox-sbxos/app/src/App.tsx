@@ -10,7 +10,8 @@
 import { useEffect, useState } from 'react';
 import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 import { SbxIcon } from '@sbx/icons';
-import { entrer, moi, manifeste, urlSure, radioCourante, type Entree, type Manifeste } from '@sbx/data';
+import { entrer, moi, manifeste, urlSure, radioCourante, activites, lienLocal, type Entree, type Manifeste, type Activite } from '@sbx/data';
+import { ecoute } from '@sbx/protocol';
 import hero from '@sbx/art/environments/art/hero.webp';
 import lexie from '@sbx/art/characters/art/lexie.webp';
 import neo from '@sbx/art/characters/art/neo.webp';
@@ -38,6 +39,15 @@ export function App() {
   const [pseudo, setPseudo] = useState<string | null>(null);
   const [man, setMan] = useState<Manifeste | null>(null);
   const [titre, setTitre] = useState<string | null>(null);
+  const [fil, setFil] = useState<Activite[]>([]);
+
+  useEffect(() => ecoute({ relis: () => { activites().then(setFil); manifeste().then(setMan); } }), []);
+  useEffect(() => {
+    if (espace !== 'hall') return;
+    const lis = () => { if (!document.hidden) activites().then(setFil); };
+    lis(); const t = setInterval(lis, 60000);
+    return () => clearInterval(t);
+  }, [espace]);
 
   useEffect(() => {
     entrer().then(async (e) => {
@@ -56,7 +66,8 @@ export function App() {
     const lis = async () => {
       if (document.hidden) return;
       const r = await radioCourante();
-      if (!fini) setTitre(r ? [r.artiste ?? r.artist, r.titre ?? r.title].filter(Boolean).join(' — ') || null : null);
+      const p = r?.piste;
+      if (!fini) setTitre(p ? [p.auteur, p.titre].filter(Boolean).join(' — ') || null : null);
     };
     lis(); const t = setInterval(lis, 20000);
     return () => { fini = true; clearInterval(t); };
@@ -100,6 +111,15 @@ export function App() {
               </div>
               <h1>{esp.nom}</h1>
               {espace === 'media' && titre && <p className="direct">📻 En ce moment : {titre}</p>}
+              {espace === 'hall' && fil.length > 0 && (
+                <ul className="fil" data-aide="Activité de la box">
+                  {fil.map(a => {
+                    const l = lienLocal(a.context?.lien);
+                    const txt = `${a.qui ?? 'Quelqu’un'} · ${a.context?.titre ?? a.kind}`;
+                    return <li key={a.activity_uuid}>{l ? <a href={l}>{txt}</a> : txt}
+                      <time>{new Date(a.at * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</time></li>;
+                  })}
+                </ul>)}
               <div className="cartes">
                 {(man?.espaces.find(x => x.id === espace)?.modules ?? []).map(md => {
                   const u = man ? urlSure(md.url, man.domaine) : null;
