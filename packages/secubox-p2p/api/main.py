@@ -132,44 +132,46 @@ def get_hostname() -> str:
         return "secubox"
 
 
+# Interfaces qui ne sont PAS le LAN : bouclage, conteneurs, tunnels, maillage.
+_IFACES_HORS_LAN = ("lo", "veth", "docker", "lxcbr", "br-lxc", "wg", "tun", "tap", "virbr", "eye-br")
+
+
+def choisit_lan_ip(adresses, source_defaut: Optional[str]) -> Optional[str]:
+    """L'adresse qu'une AUTRE machine du LAN peut joindre (#1554).
+
+    `adresses` : [(interface, ip)]. On ignore le bouclage et les interfaces
+    virtuelles — sur gk2, 192.168.255.1 est posée sur lo (préparation d'une
+    bascule passerelle) et l'invitation l'annonçait : injoignable du LAN.
+    Ordre : 192.168.255.x sur une interface RÉELLE (mode routeur : la box est
+    la passerelle du LAN), puis la source de la route par défaut, puis toute
+    adresse privée d'une interface réelle."""
+    reelles = [(i, ip) for i, ip in adresses
+               if not i.startswith(_IFACES_HORS_LAN) and not ip.startswith("127.")]
+    for _, ip in reelles:
+        if ip.startswith("192.168.255."):
+            return ip
+    if source_defaut and any(ip == source_defaut for _, ip in reelles):
+        return source_defaut
+    import ipaddress  # noqa: PLC0415
+    for _, ip in reelles:
+        try:
+            if ipaddress.ip_address(ip).is_private:
+                return ip
+        except ValueError:
+            continue
+    return reelles[0][1] if reelles else source_defaut
+
+
 def get_lan_ip() -> Optional[str]:
-    """Get LAN IP address, preferring 192.168.255.x (mesh) addresses."""
-    candidates = []
+    """Adresse LAN annoncée (invitations, join-script, statut) — voir choisit_lan_ip."""
     try:
-        # Get all IPs from interfaces
-        result = subprocess.run(
-            ["ip", "-4", "addr"],
-            capture_output=True, text=True, timeout=5
-        )
-        all_ips = re.findall(r'inet (\d+\.\d+\.\d+\.\d+)', result.stdout)
-
-        # Priority order: 192.168.255.x > 192.168.x.x > other private > rest
-        mesh_ips = [ip for ip in all_ips if ip.startswith("192.168.255.")]
-        if mesh_ips:
-            return mesh_ips[0]
-
-        private_ips = [ip for ip in all_ips if ip.startswith("192.168.") and not ip.startswith("192.168.255.")]
-        if private_ips:
-            return private_ips[0]
-
-        non_local = [ip for ip in all_ips if not ip.startswith("127.") and not ip.startswith("10.")]
-        if non_local:
-            return non_local[0]
-
-        if all_ips:
-            return all_ips[0]
-
-        # Fallback: get default route interface
-        result = subprocess.run(
-            ["ip", "-4", "route", "get", "1.1.1.1"],
-            capture_output=True, text=True, timeout=5
-        )
-        match = re.search(r'src (\d+\.\d+\.\d+\.\d+)', result.stdout)
-        if match:
-            return match.group(1)
-    except:
-        pass
-    return "127.0.0.1"
+        out = subprocess.run(["ip", "-4", "-o", "addr", "show"], capture_output=True, text=True, timeout=5).stdout
+        adresses = [(m.group(1), m.group(2)) for m in re.finditer(r"^\d+:\s+(\S+)\s+inet\s+(\d+\.\d+\.\d+\.\d+)", out, re.M)]
+        r = subprocess.run(["ip", "-4", "route", "get", "1.1.1.1"], capture_output=True, text=True, timeout=5).stdout
+        m = re.search(r"src (\d+\.\d+\.\d+\.\d+)", r)
+        return choisit_lan_ip(adresses, m.group(1) if m else None) or "127.0.0.1"
+    except Exception:  # noqa: BLE001 — jamais une exception pour une adresse d'affichage
+        return "127.0.0.1"
 
 
 def get_wan_ip() -> Optional[str]:

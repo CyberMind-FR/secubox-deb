@@ -1,3 +1,13 @@
+secubox-p2p (1.11.10-1~bookworm1) bookworm; urgency=medium
+
+  * get_lan_ip() ignore le bouclage et les interfaces virtuelles : sur gk2,
+    192.168.255.1 est posée sur lo et les invitations de maillage
+    l'annonçaient — injoignable du LAN (vu avec Premier Pas sur gk3).
+    192.168.255.x reste préférée sur une interface réelle (mode routeur),
+    sinon la source de la route par défaut (ref #1554).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 08:27:22 +0200
+
 secubox-p2p (1.11.9-1~bookworm1) bookworm; urgency=medium
 
   * sbx-mesh-up appelle secubox-annuaire-maillage : rejoindre le maillage
