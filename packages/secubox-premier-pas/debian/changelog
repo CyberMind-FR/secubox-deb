@@ -1,3 +1,11 @@
+secubox-premier-pas (0.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * Le postinst relance secubox-majauto.timer s'il est activé : la mise à
+    jour du paquet l'arrêtait (--no-start) et les mises à jour nocturnes
+    cessaient jusqu'au redémarrage (vu sur gk3) (ref #1550).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 08:09:30 +0200
+
 secubox-premier-pas (0.4.5-1~bookworm1) bookworm; urgency=medium
 
   * Renommer met aussi à jour /etc/hosts et secubox.conf (hostnamectl n'y
