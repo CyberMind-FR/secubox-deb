@@ -180,7 +180,8 @@ def test_migration_exige_les_deux_noeuds(monde):
 def test_interop_annuaire(monde):
     racine = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(racine / "packages" / "secubox-annuaire"))
-    crypto = pytest.importorskip("annuaire.crypto")
+    # secubox-annuaire est dans le dépôt : l'import doit réussir.
+    import annuaire.crypto as crypto
     noeud, u, k, d = monde
     c = _certifie(noeud, u, k, d)
     assert crypto.canonical_bytes(c.payload) == c.message_user()

@@ -1,3 +1,13 @@
+secubox-core (1.5.31-1~bookworm1) bookworm; urgency=high
+
+  * Garde d'origine sur les écritures authentifiées par cookie (#1607) :
+    mode [securite] garde_origine = journal (défaut) | applique | inactif,
+    relevé JSONL /var/log/secubox/garde-origine.log.
+  * Nouveau plancher auth.require_personne (personne, jamais un appareil
+    invité ni une session plafonnée) ; revendication « plafond » signée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:14:36 +0200
+
 secubox-core (1.5.30-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (#1581) : require_jwt exige désormais un ADMINISTRATEUR RÉEL
