@@ -22,6 +22,9 @@ case "$1" in
     install -d -o root -g root -m 0755 /var/lib/secubox/media
     systemctl daemon-reload
     systemctl enable --now secubox-media-drain.timer 2>/dev/null || true
+    # Supports USB montés au démarrage (#1571) — enable seulement : on ne monte
+    # rien pendant une mise à jour ; sans liste, ConditionPathExists l'éteint.
+    systemctl enable secubox-media-automount.service 2>/dev/null || true
     systemctl enable secubox-media.service
     systemctl start  secubox-media.service || true
     # Reload nginx to pick up new location

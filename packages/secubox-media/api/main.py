@@ -127,6 +127,21 @@ async def mount(body: MountBody, _: Any = Depends(require_jwt)) -> Dict[str, Any
     return await _ctl(*args, timeout=60)
 
 
+class AutomountBody(BaseModel):
+    path: str
+    on: bool
+    # Le mode du montage de démarrage : lecture seule sauf choix explicite.
+    rw: bool = False
+
+
+@app.post("/automount")
+async def automount(body: AutomountBody, _: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    """Monter (ou non) ce support au démarrage (#1571). Mémorisé par UUID dans
+    le ctl, qui refuse une partition système comme pour un montage."""
+    args = ["automount-set", body.path, "on" if body.on else "off"] + (["--rw"] if body.rw and body.on else [])
+    return await _ctl(*args, timeout=30)
+
+
 @app.post("/unmount")
 async def unmount(body: PathBody, _: Any = Depends(require_jwt)) -> Dict[str, Any]:
     return await _ctl("unmount", body.path, timeout=60)
