@@ -106,6 +106,53 @@ class GitHub:
                              "days": w.get("days", [])} for w in data[-30:]]
         return None
 
+    async def issues(self) -> Optional[dict]:
+        """Issues du dépôt par la RECHERCHE GitHub (#1585) — quota à part du
+        cœur de l'API, donc sans rogner les ~60 appels/h de la passe.
+
+        Ouvertes : toutes (jusqu'à 300, par pages de 100). Fermées : les 100
+        dernières mises à jour (échantillon du délai de clôture) + deux totaux
+        (toutes, et sur 30 jours). Aucune pull request : `is:issue`.
+        None si GitHub ne répond pas — le dernier rapport est alors gardé."""
+        q = f"repo:{self.owner}/{self.repo} is:issue"
+        garde = self.rate_left               # le quota affiché reste celui du cœur
+
+        def fiche(i: dict) -> dict:
+            return {"n": i.get("number"), "titre": str(i.get("title") or "")[:160],
+                    "labels": [str(l.get("name")) for l in i.get("labels", []) if l.get("name")],
+                    "cree": i.get("created_at"), "maj": i.get("updated_at"),
+                    "ferme": i.get("closed_at"), "url": i.get("html_url")}
+
+        out: dict[str, Any] = {"open": [], "closed": []}
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as cli:
+            for page in (1, 2, 3):
+                r = await self._get(cli, "/search/issues", q=q + " is:open",
+                                    sort="updated", order="desc", per_page=100, page=page)
+                if r is None or r.status_code != 200:
+                    if page == 1:
+                        self.rate_left = garde
+                        return None
+                    break
+                j = r.json()
+                out["open_total"] = j.get("total_count")
+                items = j.get("items") or []
+                out["open"] += [fiche(i) for i in items]
+                if len(items) < 100 or len(out["open"]) >= (out["open_total"] or 0):
+                    break
+            r = await self._get(cli, "/search/issues", q=q + " is:closed",
+                                sort="updated", order="desc", per_page=100)
+            if r is not None and r.status_code == 200:
+                j = r.json()
+                out["closed_total"] = j.get("total_count")
+                out["closed"] = [fiche(i) for i in j.get("items") or []]
+            depuis = (datetime.now(timezone.utc).date().toordinal() - 30)
+            jour = datetime.fromordinal(depuis).date().isoformat()
+            r = await self._get(cli, "/search/issues", q=q + f" is:closed closed:>={jour}", per_page=1)
+            if r is not None and r.status_code == 200:
+                out["closed_30d"] = r.json().get("total_count")
+        self.rate_left = garde
+        return out
+
     async def collect(self) -> dict:
         """Une passe complète. Rend un dict de FAITS bruts (jamais d'estimation)."""
         base = f"/repos/{self.owner}/{self.repo}"

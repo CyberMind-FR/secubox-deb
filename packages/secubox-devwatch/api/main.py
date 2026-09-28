@@ -40,6 +40,7 @@ from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
 
 from .github import GitHub
+from . import issues as _issues
 from . import metrics
 from . import modules
 
@@ -262,11 +263,48 @@ async def _poll_once() -> None:
     s = metrics.compute(raw, CFG, FLOWS)
     s["_raw"] = raw          # on garde les faits pour recalculer sans réseau
     SUMMARY = s
+    await _poll_issues(gh)
     try:
         _save_json(CACHE_FILE, SUMMARY)
     except Exception as e:
         log.error(f"cache non écrit: {e}")
     log.info(f"passe OK — {raw.get('commits_total')} commits, quota {raw.get('rate_left')}")
+
+
+ISSUES: dict = {}
+ISSUES_FILE = STATE_DIR / "issues.json"
+
+
+def _branches_sync() -> set[int]:
+    """Numéros d'issue portés par les branches VIVANTES du miroir (#1585)."""
+    try:
+        out = subprocess.run(["git", "-C", str(MIRROR), "for-each-ref", "--format=%(refname)",
+                              "refs/heads/feature", "refs/heads/fix"],
+                             capture_output=True, text=True, timeout=30, check=True).stdout
+    except Exception as e:  # noqa: BLE001
+        log.error(f"branches du miroir illisibles: {e}")
+        return set()
+    return _issues.numeros_des_branches(out.splitlines())
+
+
+async def _poll_issues(gh: GitHub) -> None:
+    """Métriques des issues (#1585) : faits de GitHub + branches locales."""
+    global ISSUES
+    try:
+        brut = await gh.issues()
+    except Exception as e:  # noqa: BLE001
+        log.error(f"issues: {e}")
+        brut = None
+    if not brut:
+        return                       # on garde le dernier rapport
+    branches = await asyncio.to_thread(_branches_sync)
+    r = _issues.rapport(brut, branches)
+    r["releve"] = datetime.now(timezone.utc).isoformat()
+    ISSUES = r
+    try:
+        _save_json(ISSUES_FILE, ISSUES)
+    except Exception as e:  # noqa: BLE001
+        log.error(f"issues non écrites: {e}")
 
 
 async def _fill_activity() -> None:
@@ -350,6 +388,24 @@ async def summary() -> JSONResponse:
     out = {k: v for k, v in SUMMARY.items() if k != "_raw"}
     out["modules"] = MODULES
     return JSONResponse(out)
+
+
+@router.get("/issues", dependencies=[Depends(require_lecture)])
+async def get_issues(etat: str = "rapport") -> JSONResponse:
+    """Métriques des issues (#1585). `etat` : rapport (tout), ouvertes,
+    en_cours, fermees — la liste demandée seule, avec les compteurs."""
+    r = ISSUES
+    if not r and ISSUES_FILE.exists():
+        try:
+            r = json.loads(ISSUES_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            r = {}
+    if not r:
+        return JSONResponse({"ok": False, "warming": True})
+    if etat in ("ouvertes", "en_cours", "fermees"):
+        return JSONResponse({k: v for k, v in r.items() if k != "listes"}
+                            | {"etat": etat, "liste": r.get("listes", {}).get(etat, [])})
+    return JSONResponse(r)
 
 
 @router.get("/modules", dependencies=[Depends(require_lecture)])
