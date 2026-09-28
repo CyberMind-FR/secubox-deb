@@ -16,9 +16,9 @@ Recommends: secubox-service-assistant,
          secubox-fonction-nuage,
          secubox-fonction-media,
          secubox-fonction-publication,
-         secubox-fonction-veille
-Suggests: secubox-fonction-maison,
-         secubox-fonction-ia,
+         secubox-fonction-veille,
+         secubox-fonction-maison
+Suggests: secubox-fonction-ia,
          secubox-fonction-provision
 Description: SecuBox — racine « SBX OS »
  Le Hall et tous ses composants, posés sur la box : l'environnement complet.
@@ -129,8 +129,8 @@ Package: secubox-fonction-media
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-service-radio,
-         secubox-service-video
-Suggests: secubox-service-musique
+         secubox-service-video,
+         secubox-service-musique
 Description: SecuBox — fonction « Média »
  Écouter et regarder chez soi : radio, balados, vidéo, musique.
  .
@@ -198,7 +198,8 @@ Depends: ${misc:Depends},
          secubox-portal,
          secubox-sbxid
 Recommends: secubox-surf,
-         secubox-devwatch
+         secubox-devwatch,
+         gabriel-mood
 Suggests: secubox-ui-manager
 Description: SecuBox — service « Hall »
  SBX OS : le Hall, son registre de services, ses objets UI et l'admission des appareils.
@@ -481,8 +482,8 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-gotosocial
 Recommends: secubox-socialrelay,
-         secubox-billets
-Suggests: secubox-mastodon
+         secubox-billets,
+         secubox-mastodon
 Description: SecuBox — service « Fédivers »
  Présence fédérée et relais social avec consentement.
  .
@@ -549,10 +550,10 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-peertube
 Recommends: secubox-jellyfin,
-         secubox-freeboxtv
-Suggests: secubox-torrent,
-         secubox-ytsas,
-         secubox-media
+         secubox-freeboxtv,
+         secubox-torrent,
+         secubox-ytsas
+Suggests: secubox-media
 Description: SecuBox — service « Vidéo »
  PeerTube, Jellyfin, flux Freebox TV, torrent et SAS web.
  .

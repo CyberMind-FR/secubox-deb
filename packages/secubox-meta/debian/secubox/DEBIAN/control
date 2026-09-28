@@ -1,0 +1,16 @@
+Package: secubox
+Source: secubox-meta
+Version: 0.1.8-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 8
+Depends: secubox-fonction-socle, secubox-fonction-reseau, secubox-fonction-bouclier
+Recommends: secubox-fonction-supervision
+Suggests: secubox-fonction-mesh
+Section: metapackages
+Priority: optional
+Description: SecuBox — racine « SecuBox »
+ La box : socle, réseau d'opérateur et bouclier, sans interface grand public.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.

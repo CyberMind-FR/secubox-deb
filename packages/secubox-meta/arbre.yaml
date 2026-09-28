@@ -68,8 +68,8 @@ recommande:
   - secubox-fonction-media
   - secubox-fonction-publication
   - secubox-fonction-veille
+  - secubox-fonction-maison     # Zigbee est une carte du Hall (#1577)
 suggere:
-  - secubox-fonction-maison
   - secubox-fonction-ia
   - secubox-fonction-provision
 
@@ -165,8 +165,7 @@ description: "Écouter et regarder chez soi : radio, balados, vidéo, musique."
 recommande:
   - secubox-service-radio
   - secubox-service-video
-suggere:
-  - secubox-service-musique
+  - secubox-service-musique     # Lyrion est une carte du Hall (#1577)
 
 meta: secubox-fonction-publication
 niveau: fonction
@@ -222,6 +221,7 @@ requiert:
 recommande:
   - secubox-surf
   - secubox-devwatch
+  - gabriel-mood                # « Mood » du Hall (#1577) ; amd64/arm64
 suggere:
   - secubox-ui-manager
 
@@ -477,8 +477,7 @@ requiert:
 recommande:
   - secubox-socialrelay
   - secubox-billets
-suggere:
-  - secubox-mastodon
+  - secubox-mastodon            # « Social » du Hall (#1577)
 
 meta: secubox-service-visio
 niveau: service
@@ -534,9 +533,9 @@ requiert:
 recommande:
   - secubox-jellyfin
   - secubox-freeboxtv
-suggere:
-  - secubox-torrent
+  - secubox-torrent             # cartes du Hall (#1577)
   - secubox-ytsas
+suggere:
   - secubox-media
 
 meta: secubox-service-musique
