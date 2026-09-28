@@ -28,6 +28,10 @@ force=0
 (( $# )) || { echo "usage : $0 [--force] fichier.deb..." >&2; exit 2; }
 
 a_publier=()
+# Un paquet écarté parce qu'une version PLUS HAUTE est déjà publiée signale
+# presque toujours une divergence (#1583 : podcaster/tor 1.2.0 d'une branche
+# jamais fusionnée) : on publie le reste, mais la sortie est en ÉCHEC.
+refuses=()
 for deb in "$@"; do
     [[ -f "$deb" ]] || { echo "introuvable : $deb" >&2; exit 2; }
     p=$(dpkg-deb -f "$deb" Package); v=$(dpkg-deb -f "$deb" Version); a=$(dpkg-deb -f "$deb" Architecture)
@@ -37,14 +41,21 @@ for deb in "$@"; do
         if (( force )); then
             echo "⚠ $p $v ≤ dépôt $dep : publié quand même (--force)"
         else
-            echo "✗ $p $v n'est pas plus récent que le dépôt ($dep) — ignoré (--force pour passer outre)"
+            echo "✗ $p $v n'est pas plus récent que le dépôt ($dep) — ignoré (--force pour passer outre)" >&2
+            refuses+=("$p $v ≤ $dep")
             continue
         fi
     fi
     echo "→ $p ${dep:-absent} → $v [$a]"
     a_publier+=("$deb")
 done
-(( ${#a_publier[@]} )) || { echo "rien à publier"; exit 0; }
+fin() {
+    (( ${#refuses[@]} )) || exit 0
+    echo "ÉCHEC : ${#refuses[@]} paquet(s) NON publiés — une version plus haute occupe le dépôt :" >&2
+    printf '   %s\n' "${refuses[@]}" >&2
+    exit 1
+}
+(( ${#a_publier[@]} )) || { echo "rien à publier"; fin; }
 
 lot="/data/apt-import/publier-$(date +%Y%m%d-%H%M%S)"
 ssh "$HOTE" "mkdir -p $lot"
@@ -62,3 +73,4 @@ for deb in "${a_publier[@]}"; do
     p=$(dpkg-deb -f "$deb" Package); a=$(dpkg-deb -f "$deb" Architecture)
     ssh "$HOTE" "reprepro -b $BASE list $SUITE $p" | sed 's/^/   /'
 done
+fin

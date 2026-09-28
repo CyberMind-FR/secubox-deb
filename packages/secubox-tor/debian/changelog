@@ -1,3 +1,12 @@
+secubox-tor (1.2.1-1~bookworm1) bookworm; urgency=high
+
+  * Renumérotation (#1583) : la 1.2.0 de la branche fix/1027, restée dans le
+    dépôt apt, passait devant master (1.1.5) — une mise à jour aurait retiré
+    le correctif UMask (#1416). Son correctif (route dans secubox-routes.d)
+    est déjà dans master. Contenu identique à 1.1.5.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:59:04 +0200
+
 secubox-tor (1.1.5-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
