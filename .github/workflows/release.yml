@@ -214,8 +214,24 @@ jobs:
       - name: Generate combined checksums
         run: |
           cd release/
-          find . -name "*.deb" -o -name "*.img.gz" -o -name "*.img.xz" -o -name "*.img" | \
-            xargs sha256sum 2>/dev/null | sort > SHA256SUMS || true
+          # EXACTEMENT ce que l'étape d'envoi publie (#1602) : l'ancien `find`
+          # hachait aussi l'image brute .img (jamais publiée, > 2 Go, #1507) et
+          # chaque fichier deux fois (images/ et live-usb/). Noms SANS chemin,
+          # dédoublonnés : `sha256sum -c SHA256SUMS` marche à côté des fichiers
+          # téléchargés depuis la release.
+          # MEME ORDRE que la liste `files:` de l'envoi : à nom égal, c'est le
+          # DERNIER fichier envoyé qui reste sur la release (live-usb/ après
+          # images/). Deux contenus différents sous un même nom (vu sur
+          # secubox-full-rpi-arm64 en alpha.7) sont signalés : la somme suit
+          # alors le fichier publié, pas le premier trouvé.
+          for f in images/*.img.gz images/*.img.xz live-usb/*.img.gz live-usb/*.img.xz \
+                   live-usb/*.sha256 create-qemu-arm64-vm.sh create-vbox-vm.sh; do
+            [ -f "$f" ] || continue
+            ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" )
+          done | awk '{ if (($2 in h) && h[$2] != $1) print "::warning::deux contenus differents publies sous le nom " $2 > "/dev/stderr"; h[$2] = $1 }
+                      END { for (n in h) print h[n] "  " n }' | sort -k2,2 > SHA256SUMS
+          test -s SHA256SUMS || { echo "::error::SHA256SUMS vide"; exit 1; }
+          cat SHA256SUMS
 
       - name: Sign checksums
         env:
