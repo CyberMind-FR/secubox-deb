@@ -774,5 +774,21 @@ async def nc_televerser(chemin: str = Form("/"), fichier: UploadFile = File(...)
     return await nc_super.televerser(_qui(user), chemin, fichier.filename or "sans-nom", fichier)
 
 
+@router.get("/sbxos/manifeste")
+async def sbxos_manifeste(request: Request):
+    """Manifeste de session de SBXOS (#1610) : rôle, LAN, domaine, Espaces,
+    modules et capacités, calculés par la box selon l'appelant."""
+    from api import sbxos_manifeste as sm
+    from secubox_core.auth import domaine_box
+    lan = request.headers.get("X-SecuBox-LAN", "").strip() == "1"
+    dom = domaine_box() or (request.headers.get("host", "").split(":")[0])
+    try:
+        corps = sm.construire(sm.role_de(request), lan, dom)
+    except (OSError, ValueError) as e:
+        return JSONResponse({"detail": f"manifeste indisponible : {e.__class__.__name__}"},
+                            status_code=503, headers={"Cache-Control": "no-store"})
+    return JSONResponse(corps, headers={"Cache-Control": "private, no-store", "Vary": "Cookie"})
+
+
 app.include_router(public_router)
 app.include_router(router)

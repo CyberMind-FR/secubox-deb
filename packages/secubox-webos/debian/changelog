@@ -1,3 +1,13 @@
+secubox-webos (1.0.365-1~bookworm1) bookworm; urgency=medium
+
+  * GET /api/v1/webos/sbxos/manifeste (#1610) : rôle (admin = admin réel),
+    LAN (verdict nginx), domaine de la box, 5 Espaces et leurs modules,
+    capacités ; invité ou hors LAN = modules ouvrables seulement, sans état ;
+    Cache-Control private, no-store ; Vary: Cookie.
+  * Livre /usr/share/secubox/sbxos/espaces.toml.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 19:06:23 +0200
+
 secubox-webos (1.0.364-1~bookworm1) bookworm; urgency=medium
 
   * /sbxos/aurora/ : index du dossier servi (plus de repli SPA qui bouclait

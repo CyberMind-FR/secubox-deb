@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SBXOS :: les 5 Espaces (#1610), livré par secubox-webos. DÉCLARATIF : quels modules de la curation du
+# Hall (secubox-sbxos : www/mine/curation.json, extraite de FEATURED) vivent dans quel Espace.
+# Le manifeste (/api/v1/webos/sbxos/manifeste) le lit et filtre par rôle et LAN.
+
+[espaces.hall]
+nom = "Hall"
+guide = "Lexie"
+modules = ["acces", "zia", "mood", "forums", "bbs", "mail"]
+
+[espaces.atelier]
+nom = "Atelier"
+guide = "Néo"
+modules = ["devwatch", "depot", "contenu", "cloud", "nextcloud", "nextcloud-super", "torrent"]
+
+[espaces.securite]
+nom = "Sécurité"
+guide = "Actor"
+modules = ["securite", "acteurs"]
+
+[espaces.media]
+nom = "Média"
+guide = "Lyrión"
+modules = ["radio", "peertube", "lyrion", "podcaster", "photoprism", "ytsas", "billets", "metanews", "socialrelay"]
+
+[espaces.maison]
+nom = "Maison"
+guide = "Zia"
+modules = ["zigbee"]
+
+# Anciens écrans du SBX OS classique (?ecran=) → Espace.
+[ecrans]
+cinema = "media"
+radio = "media"
+billets = "media"
+cloud = "atelier"
+
+# Modules lisibles sans session (le reste demande au moins une personne).
+[public]
+modules = ["radio", "billets", "peertube", "metanews"]
