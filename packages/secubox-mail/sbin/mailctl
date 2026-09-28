@@ -442,6 +442,81 @@ cmd_antispam_apprentissage() {
     fi
 }
 
+# WEBMAIL SANS MOT DE PASSE (#1562). La personne arrive avec sa session
+# SecuBox : le greffon secubox_sso la fait VERIFIER par la box (/auth/verify,
+# comme le BBS), puis ouvre SA boite par l'identifiant MAITRE Dovecot
+# (autorisation SASL : authcid = maitre, authzid = la boite). Le maitre n'est
+# accepte QUE depuis le conteneur webmail (allow_nets) et QUE pour une boite qui
+# existe (pass=yes). Idempotent ; chaque etape verifiee, retour arriere sinon.
+SSO_MAITRE="sbxwebmail"
+SSO_SECRET_FILE="/etc/secubox/secrets/mail/webmail-sso"
+cmd_webmail_sso() {
+    local wc="$WEBMAIL_CONTAINER" src="/usr/share/secubox/roundcube-sso/secubox_sso"
+    lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
+    lxc_running "$wc" || { error "conteneur webmail '$wc' a l'arret"; return 1; }
+    [ -d "$src" ] || { error "greffon absent : $src"; return 1; }
+
+    # 1. Le secret maitre : genere une fois, garde sur l'hote (0600).
+    install -d -m 0700 "$(dirname "$SSO_SECRET_FILE")"
+    if [ ! -s "$SSO_SECRET_FILE" ]; then
+        (umask 077; head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40 > "$SSO_SECRET_FILE")
+    fi
+    local secret; secret="$(cat "$SSO_SECRET_FILE")"
+    [ ${#secret} -ge 32 ] || { error "secret maitre trop court"; return 1; }
+    local wip; wip="$(lxc-info -n "$wc" -iH 2>/dev/null | grep -m1 -E '^[0-9]+\.' )"
+    [ -n "$wip" ] || { error "adresse du conteneur webmail introuvable"; return 1; }
+
+    # 2. Dovecot (conteneur mail) : l'utilisateur maitre, restreint au webmail.
+    local hash; hash="$(lxc_attach "$CONTAINER" doveadm pw -s SHA512-CRYPT -p "$secret")" \
+        || { error "doveadm pw a echoue"; return 1; }
+    local conf="/etc/dovecot/conf.d/15-secubox-sso.conf"
+    lxc_attach "$CONTAINER" sh -c "cp -a $conf $conf.avant 2>/dev/null; umask 027; \
+        printf '%s\n' '$SSO_MAITRE:$hash::::::allow_nets=$wip/32' > /etc/dovecot/secubox-maitre && \
+        chgrp dovecot /etc/dovecot/secubox-maitre && chmod 0640 /etc/dovecot/secubox-maitre && \
+        printf '%s\n' '# SecuBox #1562 : maitre du webmail (mailctl webmail-sso).' \
+          'passdb {' '  driver = passwd-file' '  args = /etc/dovecot/secubox-maitre' \
+          '  master = yes' '  pass = yes' '}' > $conf && chmod 0644 $conf"
+    # dovecot.conf est MONOLITHIQUE ici (pas de « !include conf.d/*.conf ») :
+    # sans cette ligne, le passdb maitre n'est jamais lu — « Master user login
+    # attempted without master passdbs » (vu sur gk2).
+    lxc_attach "$CONTAINER" sh -c "grep -q '15-secubox-sso.conf' /etc/dovecot/dovecot.conf || \
+        { cp -a /etc/dovecot/dovecot.conf /etc/dovecot/dovecot.conf.avant-sso && \
+          printf '%s\n' '!include_try /etc/dovecot/conf.d/15-secubox-sso.conf' >> /etc/dovecot/dovecot.conf; }"
+    if ! lxc_attach "$CONTAINER" doveconf -n >/dev/null 2>&1 \
+       || ! lxc_attach "$CONTAINER" sh -c "doveconf -n | grep -q secubox-maitre"; then
+        lxc_attach "$CONTAINER" sh -c "if [ -f $conf.avant ]; then mv $conf.avant $conf; else rm -f $conf; fi; \
+            [ -f /etc/dovecot/dovecot.conf.avant-sso ] && cp -a /etc/dovecot/dovecot.conf.avant-sso /etc/dovecot/dovecot.conf"
+        error "doveconf refuse la configuration (ou n'a pas lu le maitre) — retour arriere"; return 1
+    fi
+    lxc_attach "$CONTAINER" doveadm reload
+    log "Dovecot : maitre '$SSO_MAITRE' accepte depuis $wip seulement"
+
+    # 3. Roundcube (conteneur webmail) : le greffon, sa configuration, l'activation.
+    ( cd "$(dirname "$src")" && tar czf - secubox_sso ) | lxc_attach "$wc" sh -c \
+        "cd /usr/share/roundcube/plugins && tar xzf - && chown -R root:root secubox_sso && chmod -R u=rwX,go=rX secubox_sso"
+    lxc_attach "$wc" sh -c "umask 027; cat > /usr/share/roundcube/plugins/secubox_sso/config.inc.php && \
+        chgrp www-data /usr/share/roundcube/plugins/secubox_sso/config.inc.php && \
+        chmod 0640 /usr/share/roundcube/plugins/secubox_sso/config.inc.php" <<EOF
+<?php
+// Ecrit par mailctl webmail-sso (#1562) — ne pas modifier a la main.
+\$config['secubox_sso_verify'] = 'https://$LXC_GATEWAY/api/v1/auth/auth/verify';
+\$config['secubox_sso_maitre'] = '$SSO_MAITRE';
+\$config['secubox_sso_secret'] = '$secret';
+EOF
+    local rc="/etc/roundcube/config.inc.php.local"
+    if ! lxc_attach "$wc" grep -q '"secubox_sso"' "$rc"; then
+        lxc_attach "$wc" cp "$rc" "$rc.avant-sso"
+        lxc_attach "$wc" sed -i 's/^\$config\["plugins"\] = \[/$config["plugins"] = ["secubox_sso", /' "$rc"
+    fi
+    if ! lxc_attach "$wc" php -l "$rc" >/dev/null 2>&1 \
+       || ! lxc_attach "$wc" php -l /usr/share/roundcube/plugins/secubox_sso/secubox_sso.php >/dev/null 2>&1 \
+       || ! lxc_attach "$wc" grep -q '"secubox_sso"' "$rc"; then
+        lxc_attach "$wc" cp "$rc.avant-sso" "$rc" 2>/dev/null
+        error "configuration Roundcube refusee — retour arriere"; return 1
+    fi
+    log "Roundcube : secubox_sso actif — le webmail s'ouvre par la session SecuBox"
+}
+
 cmd_webmail_sieve() {
     # Active l'EDITEUR DE FILTRES SIEVE dans Roundcube (#1181) : le plugin
     # `managesieve` (deja installe) pointe sur le Dovecot ManageSieve :4190 du
@@ -1561,6 +1636,7 @@ case "${1:-}" in
     fix-ports)   cmd_fix_ports ;;
     webmail-config) cmd_webmail_config ;;
     webmail-greffons) cmd_webmail_greffons ;;
+    webmail-sso) cmd_webmail_sso ;;
     webmail-sieve) cmd_webmail_sieve ;;
     antispam-apprentissage) cmd_antispam_apprentissage ;;
     sync)        cmd_sync ;;

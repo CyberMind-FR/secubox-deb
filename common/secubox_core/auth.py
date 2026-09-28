@@ -533,6 +533,11 @@ async def verify(request: Request):
         lie = _cap.compte_lie(payload, "bbs")
         if lie:
             headers["Remote-Sbx-Bbs"] = lie
+        # BOÎTE LIÉE (#1562) : le webmail (greffon secubox_sso) ouvre CETTE boîte
+        # sans mot de passe — seulement si la personne en a une, et une adresse.
+        boite = _cap.compte_lie(payload, "email")
+        if boite and "@" in boite:
+            headers["Remote-Sbx-Mail"] = boite
     except Exception:
         pass
     return JSONResponse({"ok": True, "user": sub}, headers=headers)

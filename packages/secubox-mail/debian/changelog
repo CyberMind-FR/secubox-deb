@@ -1,3 +1,14 @@
+secubox-mail (2.10.8-1~bookworm1) bookworm; urgency=medium
+
+  * mailctl webmail-sso : le webmail s'ouvre par la session SecuBox —
+    greffon Roundcube secubox_sso (session vérifiée par /auth/verify,
+    Remote-User exigé, boîte liée) + utilisateur maître Dovecot accepté
+    seulement depuis le conteneur webmail et pour une boîte existante
+    (autorisation SASL : la session reste au nom de la personne) ; aucun
+    mot de passe de la personne n'est connu ni demandé (ref #1562).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:30:45 +0200
+
 secubox-mail (2.10.7-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
