@@ -7,6 +7,8 @@
 #     replication (#768): peers + config blobs + offers. Every entry is
 #     Ed25519-signed and self-certifying (did_from_pubkey == author), so the
 #     reader verifies without trusting this listener; nothing secret is carried.
+#   * /api/v1/annuaire/noeud/adresses — this node's {boxname, mesh_ip, lan_ip}
+#     (#1556), a static file for the master's <box>.lan/.mesh names.
 #   * /api/v1/annuaire/fleet/self  — this node's own signed MetricSnapshot
 #     (fleet-metrics, Task 5): the same public, no-JWT, self-certifying record
 #     a peer's /fleet view pulls to render the fleet-wide dashboard.
@@ -63,6 +65,16 @@ server {
         # (le lecteur vérifie) ; l'écouteur n'accepte que 10.10.0.0/24.
         proxy_set_header X-SecuBox-Maillage 1;
         proxy_intercept_errors on;
+    }
+
+    # Adresses de CETTE box pour les noms <box>.lan/.mesh.<zone> (#1556) : un
+    # fichier statique écrit par secubox-annuaire-noms ({boxname, node_id,
+    # mesh_ip, lan_ip}). Non signé — la confiance vient de WireGuard : seule la
+    # box qui détient cette adresse du maillage peut répondre sur elle.
+    location = /api/v1/annuaire/noeud/adresses {
+        limit_except GET { deny all; }
+        default_type application/json;
+        alias /var/lib/secubox/annuaire/adresses.json;
     }
 
     location / { return 403; }

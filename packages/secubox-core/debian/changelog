@@ -1,3 +1,11 @@
+secubox-core (1.5.24-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_core.reseau : choisit_lan_ip / lan_ip — l'adresse LAN d'une box,
+    règle UNIQUE partagée par p2p (invitations) et l'annuaire (Bonjour, noms
+    <box>.lan.<zone>) (ref #1556, #1554).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 08:42:59 +0200
+
 secubox-core (1.5.23-1~bookworm1) bookworm; urgency=medium
 
   * Site nginx « secubox » : route générique /api/ vers l'agrégateur

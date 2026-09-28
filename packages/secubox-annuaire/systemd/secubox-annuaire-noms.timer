@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox — rafraîchir l'annonce Bonjour et les noms du maillage (#1556)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

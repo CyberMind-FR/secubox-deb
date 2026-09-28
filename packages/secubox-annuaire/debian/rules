@@ -30,6 +30,7 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/sbin
 	install -m 755 $(CURDIR)/sbin/annuairectl $(CURDIR)/debian/secubox-annuaire/usr/sbin/annuairectl
 	install -m 755 $(CURDIR)/sbin/secubox-annuaire-maillage $(CURDIR)/debian/secubox-annuaire/usr/sbin/secubox-annuaire-maillage
+	install -m 755 $(CURDIR)/sbin/secubox-annuaire-noms $(CURDIR)/debian/secubox-annuaire/usr/sbin/secubox-annuaire-noms
 
 	# Box operator CLI — delegated center grants (Centres & Grants, Task 7)
 	install -m 755 $(CURDIR)/sbin/sbx-centersctl $(CURDIR)/debian/secubox-annuaire/usr/sbin/sbx-centersctl
@@ -72,6 +73,8 @@ override_dh_auto_install:
 	# Fleet metrics publish timer + oneshot (fleet-metrics, Task 5)
 	install -m 644 $(CURDIR)/systemd/secubox-metrics-publish.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/secubox-metrics-publish.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/secubox-annuaire-noms.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/secubox-annuaire-noms.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/secubox
 	install -m 644 $(CURDIR)/conf/annuaire-apply.conf.example $(CURDIR)/debian/secubox-annuaire/etc/secubox/
 

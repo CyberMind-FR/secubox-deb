@@ -112,6 +112,10 @@ def cherche_profil(cmdline: Optional[str] = None) -> Optional[Path]:
 HOSTS = Path("/etc/hosts")
 
 
+def _avahi_nouveau_nom() -> None:
+    subprocess.run(["systemctl", "try-restart", "avahi-daemon.service"], capture_output=True)
+
+
 def _renomme(nouveau: str, ancien: Optional[str] = None) -> None:
     """hostnamectl ne touche ni /etc/hosts ni secubox.conf. Sur gk3, l'ancien
     nom resté dans /etc/hosts faisait échouer toute résolution du nouveau
@@ -210,6 +214,9 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
         # /etc/hosts AVANT hostnamectl : l'ancien nom s'y lit encore (gethostname).
         Action("nom", "/etc/hosts et secubox.conf", fn=lambda: _renomme(nom)),
         Action("nom", f"nommer la box « {nom} »", ["hostnamectl", "set-hostname", nom]),
+        # Avahi garde le nom qu'il avait au démarrage : sans ceci, gk3 s'annonçait
+        # encore « secubox-live.local » (#1556). Absent d'Avahi : rien à faire.
+        Action("nom", "Bonjour : annoncer le nouveau nom", fn=_avahi_nouveau_nom),
         Action("horloge", f"fuseau {box['fuseau']}", ["timedatectl", "set-timezone", str(box["fuseau"])]),
         Action("horloge", "synchronisation NTP", ["timedatectl", "set-ntp", "true"]),
     ]

@@ -1,3 +1,17 @@
+secubox-annuaire (0.10.8-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-annuaire-noms (minuterie 5 min) : adresses.json servi aux pairs
+    sur :8799, annonce Bonjour _secubox._tcp, et noms <box>.lan/.mesh.<zone>
+    — servis par l'Unbound du MAÎTRE (sur son adresse de maillage,
+    ip-freebind), demandés au maître par les autres box (stub-zone,
+    domain-insecure). unbound-checkconf avant tout rechargement, ancienne
+    configuration remise si refusée. DNS (53) ouvert sur wg-mesh pour le
+    pare-feu secubox_filter. Une adresse d'écoute absente (reload ne l'ouvre
+    pas) redémarre Unbound, une fois. mDNS (5353, groupe 224.0.0.251) ouvert
+    pour secubox_filter : gk3 n'entendait pas gk2 (ref #1556).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 08:42:59 +0200
+
 secubox-annuaire (0.10.7-1~bookworm1) bookworm; urgency=medium
 
   * Flotte (#1533) : « en panne » = unité secubox-* en échec (failed)

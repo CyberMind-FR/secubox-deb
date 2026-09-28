@@ -82,6 +82,9 @@ case "$1" in
         # secubox.conf makes sbx-fleetctl publish a documented no-op, so
         # enabling the timer by default is safe.
         systemctl enable --now secubox-metrics-publish.timer 2>/dev/null || true
+        # Bonjour + noms <box>.lan/.mesh.<zone> (#1556) : tout de suite, puis toutes les 5 min.
+        systemctl enable --now secubox-annuaire-noms.timer 2>/dev/null || true
+        systemctl start --no-block secubox-annuaire-noms.service 2>/dev/null || true
         if systemctl is-active --quiet nginx 2>/dev/null; then
             nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
         fi

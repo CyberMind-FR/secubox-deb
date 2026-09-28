@@ -27,3 +27,23 @@ def test_sans_route_par_defaut_une_adresse_privee_reelle():
 
 def test_jamais_le_maillage_ni_un_conteneur():
     assert choisit_lan_ip([("wg-mesh", "10.10.0.5"), ("br-lxc", "10.100.0.1")], None) is None
+
+
+def test_mdns_lit_l_annonce_secubox(monkeypatch):
+    """L'annonce publiée par secubox-annuaire-noms est lue (#1556)."""
+    import asyncio
+    from api import main as m
+    ligne = ('=;eth0;IPv4;SecuBox gk3;_secubox._tcp;local;gk3.local;192.168.1.9;443;'
+             '"mesh_ip=10.10.0.5" "node_id=sbx-38c2ec6a7580" "boxname=gk3"\n')
+
+    class P:
+        async def communicate(self):
+            return ligne.encode(), b""
+
+    async def faux(*a, **k):
+        return P()
+    monkeypatch.setattr(m.asyncio, "create_subprocess_exec", faux)
+    pairs = asyncio.run(m.discover_mdns(1))
+    assert pairs[0]["boxname"] == "gk3" and pairs[0]["name"] == "gk3"
+    assert pairs[0]["id"] == "sbx-38c2ec6a7580" and pairs[0]["mesh_ip"] == "10.10.0.5"
+    assert pairs[0]["address"] == "192.168.1.9"

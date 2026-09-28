@@ -1,3 +1,10 @@
+secubox-premier-pas (0.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * Renommer relance Avahi : il gardait le nom de son démarrage — gk3
+    s'annonçait « secubox-live.local » (ref #1556).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 08:51:17 +0200
+
 secubox-premier-pas (0.4.6-1~bookworm1) bookworm; urgency=medium
 
   * Le postinst relance secubox-majauto.timer s'il est activé : la mise à
