@@ -258,10 +258,34 @@ def _validate_token(token: str) -> Optional[Dict[str, Any]]:
     return payload
 
 
-async def require_jwt(
+def est_admin_reel(payload: Dict[str, Any]) -> bool:
+    """Ce porteur est-il un ADMINISTRATEUR RÉEL (#1581) ?
+
+    Un compte UTILISATEUR de rôle « admin », actif. Jamais une session
+    d'appareil (sbx-…), quel que soit le profil qu'on lui a donné à
+    l'admission : un appareil entre en signant, sans mot de passe ni second
+    facteur — ce n'est pas une preuve suffisante pour administrer la box."""
+    sub = str((payload or {}).get("sub") or "")
+    if not sub or sub.startswith(appareils.PREFIXE):
+        return False
+    try:
+        u = user_store.get_user(sub) or {}
+        return u.get("role") == "admin" and bool(user_store.is_enabled(sub))
+    except Exception:  # noqa: BLE001 — dans le doute, pas d'administration
+        return False
+
+
+async def require_session(
     request: Request,
     creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> Dict[str, Any]:
+    """N'IMPORTE QUELLE session reconnue — utilisateur OU appareil admis.
+
+    C'était `require_jwt` jusqu'à #1581 : une session d'invité (l'appareil de
+    gek) ouvrait ainsi toute la webui d'administration et ses API. À poser
+    EXPLICITEMENT, et seulement sur une route d'usager (le Hall, ses accès,
+    réveiller un module) ; tout le reste passe par `require_jwt`, réservé aux
+    administrateurs réels."""
     # SSO-lite (#400): accept the Bearer token OR the parent-domain session
     # cookie. The cookie lets one SecuBox login cover every module without
     # re-auth (SameSite=Lax, CSRF-mitigated).
@@ -293,6 +317,23 @@ async def require_jwt(
         detail="Token invalide ou expiré",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def require_jwt(
+    request: Request,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> Dict[str, Any]:
+    """ADMINISTRATION : une session valide ET un administrateur réel (#1581).
+
+    SÛR PAR DÉFAUT. 124 modules gardent leurs routes par `require_jwt` ; elles
+    deviennent toutes réservées aux administrateurs d'un seul geste. Une route
+    qu'un usager doit pouvoir appeler le dit en passant à `require_session`."""
+    payload = await require_session(request, creds)
+    if not est_admin_reel(payload):
+        log.warning("administration refusée à %s (ni compte, ni rôle admin)", payload.get("sub"))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Réservé aux administrateurs de la box")
+    return payload
 
 
 # Lecture gardée + mode tableau de bord ─────────────────────────────────

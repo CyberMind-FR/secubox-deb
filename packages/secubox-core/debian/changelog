@@ -1,3 +1,15 @@
+secubox-core (1.5.30-1~bookworm1) bookworm; urgency=high
+
+  * SÉCURITÉ (#1581) : require_jwt exige désormais un ADMINISTRATEUR RÉEL
+    (compte utilisateur role=admin, actif ; jamais une session d'appareil).
+    Une session d'invité (appareil de gek) ouvrait toute la webui
+    d'administration et ses API — 124 modules en sont protégés d'un geste.
+    require_session = l'ancien comportement, posé explicitement sur les
+    routes d'usager ; require_capability s'appuie dessus. Un compte sans rôle
+    n'est plus « admin » par défaut.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:49:21 +0200
+
 secubox-core (1.5.29-1~bookworm1) bookworm; urgency=medium
 
   * /auth/verify rend Remote-Sbx-Peertube (compte PeerTube lié, nom

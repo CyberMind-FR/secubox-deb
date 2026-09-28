@@ -21,11 +21,12 @@ from typing import Optional, List, Dict, Any
 import sys
 sys.path.insert(0, '/usr/lib/python3/dist-packages')
 try:
-    from secubox_core.auth import require_jwt
+    from secubox_core.auth import require_jwt, require_session
     from secubox_core.config import get_config
 except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
+    require_session = require_jwt
     def get_config(name):
         return {}
 
@@ -399,9 +400,12 @@ def require_permission(permission: str, allow_self_for_param: str = ""):
     """FastAPI dependency factory: requires the JWT subject to have `permission`,
     OR — if `allow_self_for_param` is set — the URL path param of that name
     to equal the JWT subject (`sub`)."""
+    # Session seulement : ce contrôle tranche LUI-MÊME (permission, ou le
+    # compte lui-même pour son propre mot de passe) — sinon un opérateur ne
+    # pourrait plus changer le sien (#1581).
     async def _check(
         request: Request,
-        creds=Depends(require_jwt),
+        creds=Depends(require_session),
     ):
         # creds is the decoded JWT payload (dict with 'sub' etc.)
         subject = creds.get("sub", "") if isinstance(creds, dict) else "admin"

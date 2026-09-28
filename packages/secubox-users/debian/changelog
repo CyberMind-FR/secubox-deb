@@ -1,3 +1,10 @@
+secubox-users (1.8.11-1~bookworm1) bookworm; urgency=high
+
+  * require_permission sur require_session (#1581) : il tranche lui-même
+    (droit, ou son propre compte) — un opérateur change encore son mot de passe.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:49:21 +0200
+
 secubox-users (1.8.10-1~bookworm1) bookworm; urgency=medium
 
   * PeerTube : un compte créé par l'Identity Manager est rattaché à

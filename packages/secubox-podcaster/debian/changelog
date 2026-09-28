@@ -1,3 +1,10 @@
+secubox-podcaster (1.0.40-1~bookworm1) bookworm; urgency=high
+
+  * Lectures (flux, épisodes, téléchargements, état d'import) ouvertes aux
+    sessions (#1581) ; s'abonner, régler, téléverser restent administrateur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:49:21 +0200
+
 secubox-podcaster (1.0.39-1~bookworm1) bookworm; urgency=medium
 
   * DÉCLARE `media.volume.relative` (ref #1349) — « monte le son du podcast »

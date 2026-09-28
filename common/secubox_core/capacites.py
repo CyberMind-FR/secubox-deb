@@ -34,7 +34,7 @@ from fastapi import Depends, HTTPException
 
 from . import sbxid as S
 from . import user_store
-from .auth import require_jwt
+from .auth import require_session
 
 SBX_DB = Path("/var/lib/secubox/sbxid/sbx.db")
 DEMANDES = Path("/var/lib/secubox/acces/demandes.json")
@@ -201,7 +201,9 @@ def compte_lie(payload: Dict[str, Any], app: str) -> Optional[str]:
 def require_capability(cap: str):
     """Dépendance FastAPI : session valide ET capacité `cap`."""
     S.valide_capacite(cap)                          # jamais une capacité système
-    async def _garde(creds=Depends(require_jwt)):
+    # Les capacités SONT le modèle de droits des usagers : une session suffit,
+    # la capacité tranche (#1581).
+    async def _garde(creds=Depends(require_session)):
         p = creds if isinstance(creds, dict) else {}
         if cap not in capacites_du_porteur(p):
             raise HTTPException(status_code=403, detail=f"Capacité requise : {cap}")

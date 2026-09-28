@@ -11,7 +11,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Depends, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
-from secubox_core.auth import require_jwt, create_token
+# LE HALL EST LA COUCHE D'USAGER (#1581) : ses routes demandent une session,
+# pas l'administration ; ce qu'il relaie à un module, ce module le juge.
+from secubox_core.auth import require_session, create_token
 from secubox_core.health import systemd_batch
 from api.models import Service
 from api import registry, flags, cardlets, acces, actions, nc_super
@@ -381,7 +383,7 @@ async def menu_bbs():
 
 
 @router.get("/services")
-async def services(user=Depends(require_jwt)):
+async def services(user=Depends(require_session)):
     """Full registry — JWT-gated."""
     if not _enabled():
         return {"services": [], "computed_at": _cache["computed_at"]}
@@ -484,7 +486,7 @@ def _etiquette_porteur(user) -> str:
 def _porteur(request: Request) -> str:
     """Le jeton brut presente par l'appelant, s'il y en a un.
 
-    `require_jwt` rend la CHARGE du jeton, pas le jeton : pour le relayer a un
+    `require_session` rend la CHARGE du jeton, pas le jeton : pour le relayer a un
     module qui protege ses propres routes, il faut la chaine d'origine.
     """
     a = request.headers.get("authorization") or ""
@@ -520,7 +522,7 @@ async def depot_public(request: Request):
 
 @router.get("/actions/{module}/{action}")
 async def action_lecture(module: str, action: str, request: Request,
-                         user=Depends(require_jwt)):
+                         user=Depends(require_session)):
     """Les actions de LECTURE — une liste, un historique, un etat."""
     return await actions.agir(module, action, None, _porteur(request))
 
@@ -543,7 +545,7 @@ async def action_lecture_publique(module: str, action: str, request: Request):
 @router.post("/actions/{module}/{action}")
 async def action_ecriture(module: str, action: str, request: Request,
                           corps: dict | None = None,
-                          user=Depends(require_jwt)):
+                          user=Depends(require_session)):
     """Les actions qui MODIFIENT. Le corps n'est lu que pour les champs que
     l'action declare : ce qui n'est pas nomme n'est pas transmis."""
     return await actions.agir(module, action, corps or {}, _porteur(request))
@@ -571,7 +573,7 @@ DUREE_JETON = 3600
 
 
 @router.post("/jeton")
-async def frappe_jeton(user=Depends(require_jwt)):
+async def frappe_jeton(user=Depends(require_session)):
     """Un jeton court, pour la personne DEJA authentifiee ici.
 
     ON REJOUE LA MEME SESSION, ON N'EN CREE PAS UNE AUTRE (#1306).
@@ -593,12 +595,12 @@ async def frappe_jeton(user=Depends(require_jwt)):
 
 
 @router.get("/acces/{svc}")
-async def acces_etat(svc: str, user=Depends(require_jwt)):
+async def acces_etat(svc: str, user=Depends(require_session)):
     return acces.etat(_qui(user), svc)
 
 
 @router.post("/acces/{svc}/demande")
-async def acces_demande(svc: str, request: Request, user=Depends(require_jwt)):
+async def acces_demande(svc: str, request: Request, user=Depends(require_session)):
     # L'origine est notee pour que l'operateur sache D'OU vient la demande —
     # une file qui ne dit pas qui a demande, ni depuis quelle page, ne se
     # valide pas serieusement.
@@ -606,7 +608,7 @@ async def acces_demande(svc: str, request: Request, user=Depends(require_jwt)):
 
 
 @router.get("/acces")
-async def acces_liste(user=Depends(require_jwt)):
+async def acces_liste(user=Depends(require_session)):
     """Ce que la console montre : les demandes en attente, et les acces
     accordes A CETTE PERSONNE. Jamais les secrets — seulement le nom de compte,
     qui permet de reconnaitre l'identite invoquee sans rien en reveler."""
@@ -625,7 +627,7 @@ async def acces_liste(user=Depends(require_jwt)):
 
 
 @router.post("/acces/{svc}/valider")
-async def acces_valider(svc: str, request: Request, user=Depends(require_jwt)):
+async def acces_valider(svc: str, request: Request, user=Depends(require_session)):
     """Demarre le flux de delegation et rend l'URL a ouvrir. Le mot de passe
     sera tape DANS le service, jamais ici. Le jeton de la personne sert
     seulement a reveiller le service endormi (#1562)."""
@@ -634,12 +636,12 @@ async def acces_valider(svc: str, request: Request, user=Depends(require_jwt)):
 
 
 @router.post("/acces/{svc}/sonde")
-async def acces_sonde(svc: str, user=Depends(require_jwt)):
+async def acces_sonde(svc: str, user=Depends(require_session)):
     return await acces.flux_sonde(_qui(user), svc)
 
 
 @router.get("/acces/{svc}/apercu")
-async def acces_apercu(svc: str, user=Depends(require_jwt)):
+async def acces_apercu(svc: str, user=Depends(require_session)):
     """Ce que la carte affiche, lu AU NOM de la personne.
 
     Le secret ne quitte jamais la box : la carte recoit des titres et des
@@ -649,13 +651,13 @@ async def acces_apercu(svc: str, user=Depends(require_jwt)):
 
 
 @router.post("/acces/{svc}/echange")
-async def acces_echange(svc: str, corps: dict, user=Depends(require_jwt)):
+async def acces_echange(svc: str, corps: dict, user=Depends(require_session)):
     """Echanger un code d'autorisation OAuth2 contre un jeton (Mastodon)."""
     return await acces.flux_echange(_qui(user), svc, str(corps.get("code") or ""))
 
 
 @router.post("/acces/{svc}/manuel")
-async def acces_manuel(svc: str, corps: dict, user=Depends(require_jwt)):
+async def acces_manuel(svc: str, corps: dict, user=Depends(require_session)):
     """Identifiant dedie pour les services sans flux de delegation. Route sous
     jeton : le secret ne transite que vers une page authentifiee."""
     return acces.pose_manuel(_qui(user), svc, str(corps.get("compte") or ""),
@@ -663,7 +665,7 @@ async def acces_manuel(svc: str, corps: dict, user=Depends(require_jwt)):
 
 
 @router.delete("/acces/{svc}")
-async def acces_revoque(svc: str, user=Depends(require_jwt)):
+async def acces_revoque(svc: str, user=Depends(require_session)):
     return acces.revoque(_qui(user), svc)
 
 
@@ -672,38 +674,38 @@ async def acces_revoque(svc: str, user=Depends(require_jwt)):
 # La carte reçoit des titres, des chiffres et le résultat de SES actions.
 
 @router.get("/acces/nextcloud/tableau")
-async def nc_tableau(user=Depends(require_jwt)):
+async def nc_tableau(user=Depends(require_session)):
     return await nc_super.tableau(_qui(user))
 
 
 @router.get("/acces/nextcloud/fichiers")
-async def nc_fichiers(chemin: str = "/", user=Depends(require_jwt)):
+async def nc_fichiers(chemin: str = "/", user=Depends(require_session)):
     return await nc_super.fichiers(_qui(user), chemin)
 
 
 @router.get("/acces/nextcloud/partages")
-async def nc_partages(user=Depends(require_jwt)):
+async def nc_partages(user=Depends(require_session)):
     return await nc_super.partages(_qui(user))
 
 
 @router.get("/acces/nextcloud/agenda")
-async def nc_agenda(user=Depends(require_jwt)):
+async def nc_agenda(user=Depends(require_session)):
     return await nc_super.agenda(_qui(user))
 
 
 @router.post("/acces/nextcloud/partager")
-async def nc_partager(corps: dict, user=Depends(require_jwt)):
+async def nc_partager(corps: dict, user=Depends(require_session)):
     return await nc_super.partager(_qui(user), str(corps.get("chemin") or ""))
 
 
 @router.post("/acces/nextcloud/supprimer")
-async def nc_supprimer(corps: dict, user=Depends(require_jwt)):
+async def nc_supprimer(corps: dict, user=Depends(require_session)):
     return await nc_super.supprimer(_qui(user), str(corps.get("chemin") or ""))
 
 
 @router.post("/acces/nextcloud/televerser")
 async def nc_televerser(chemin: str = Form("/"), fichier: UploadFile = File(...),
-                        user=Depends(require_jwt)):
+                        user=Depends(require_session)):
     # Plus de borne de taille : on ne charge PAS le fichier en mémoire, on le
     # STREAME vers Nextcloud (WebDAV PUT chunké). Le service partagé ne garde
     # ainsi qu'un tampon d'1 Mo à la fois — un envoi de plusieurs Go passe.

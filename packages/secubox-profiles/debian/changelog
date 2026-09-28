@@ -1,3 +1,10 @@
+secubox-profiles (0.19.10-1~bookworm1) bookworm; urgency=high
+
+  * POST /wake sous require_session (#1581) : réveiller est un geste
+    d'usager ; le reste est réservé aux administrateurs.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:49:21 +0200
+
 secubox-profiles (0.19.9-1~bookworm1) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées
@@ -71,4 +78,3 @@ secubox-profiles (0.19.3-1~bookworm2) bookworm; urgency=medium
     ce qui laisse tout eveille. (#1308)
 
  -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 21:43:23 +0200
-

@@ -1,3 +1,10 @@
+secubox-webos (1.0.358-1~bookworm1) bookworm; urgency=high
+
+  * Routes du Hall sous require_session (#1581) : la couche d'usager reste
+    ouverte aux sessions ; ce qu'elle relaie, le module le juge.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:49:21 +0200
+
 secubox-webos (1.0.357-1~bookworm1) bookworm; urgency=medium
 
   * Partager depuis le viewer (et ⤴ de Surf & Viewer) copie une URL
