@@ -30,6 +30,27 @@
 - Leave ~500MB free for data partition and wear leveling
 - U-Boot `gzwrite` requires enough RAM to decompress (~350MB)
 
+## Recommended: boot from uSD, then install to eMMC (#1558)
+
+The image (`secubox-*-espressobin-v7-bookworm.img.gz`, 7 GiB) is an **external
+uSD** image: flash it to an 8 GB (or larger) card and boot from it.
+
+To install onto the **internal eMMC**, from the system running on the card:
+
+```bash
+secubox-install-emmc --essai   # plan and size check — writes nothing
+secubox-install-emmc           # copies the running system (confirm with the device name)
+```
+
+The running system is copied (not the image): the eMMC is partitioned to its
+real size, and the tool refuses up front if the used space does not fit — a
+4 GB eMMC takes the `lite` profile; `isp` may not fit. The eMMC gets its own
+labels (`rootfs-emmc`, `BOOTEMMC`, `data-emmc`) so that whichever medium boots
+mounts only its own partitions; the card stays an untouched rescue system.
+Remove the card and reboot to boot from the eMMC.
+
+The U-Boot/USB procedure below remains for boards without a working card slot.
+
 ## Pre-requisites
 
 1. USB drive formatted with partition 4 as ext4 (persistence partition from Live USB)

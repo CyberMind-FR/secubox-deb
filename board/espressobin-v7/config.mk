@@ -54,6 +54,11 @@ DPI_MODE=passive
 # Swap activé pour ESPRESSObin 1GB
 SWAP_SIZE=512M
 
-# Image size: 3.5G for 4GB eMMC compatibility (some boards have 4GB eMMC)
-# Boards with 8GB eMMC or SD-only can use full 4G
-IMG_SIZE="3584M"
+# IMAGE = CARTE uSD EXTERNE, installable sur l'eMMC interne (#1558).
+# L'image n'est plus plafonnée par l'eMMC : à 3584M (« compatibilité eMMC
+# 4 Go ») le profil ISP ne tenait plus (rootfs > 2816 MiB, CI en échec). Elle
+# vise une carte uSD de 8 Go ; `secubox-install-emmc` recopie ensuite le
+# système EN MARCHE sur l'eMMC, partitionné à SA taille réelle, et refuse
+# clairement si l'espace utilisé n'y tient pas (4 Go : lite oui, isp peut-être
+# non). 7168M < 7,4 Gio utiles d'une carte « 8 Go ».
+IMG_SIZE="7168M"
