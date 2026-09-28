@@ -1,3 +1,11 @@
+secubox-sbxos (0.6.0~aurora3-1~bookworm1) bookworm; urgency=medium
+
+  * Protocole sbx côté enfant (#1613) : theme, relis, aide? → aide-zones,
+    parent de même origine seulement, jamais '*'.
+  * Fil d'activité dans l'Espace Hall ; titre radio (piste.titre/auteur).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 19:10:39 +0200
+
 secubox-sbxos (0.6.0~aurora2-1~bookworm1) bookworm; urgency=medium
 
   * Aurora lit le manifeste de session (#1613) : chaque Espace montre ses

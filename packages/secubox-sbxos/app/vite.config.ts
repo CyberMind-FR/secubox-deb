@@ -19,6 +19,7 @@ export default defineConfig({
       '@sbx/tokens': ici('../sbx-sdk/tokens/index.ts'),
       '@sbx/icons': ici('../sbx-sdk/icons/index.tsx'),
       '@sbx/data': ici('../sbx-sdk/data/index.ts'),
+      '@sbx/protocol': ici('../sbx-sdk/protocol/enfant.ts'),
       '@sbx/art': ici('../sbx-sdk'),
     },
   },

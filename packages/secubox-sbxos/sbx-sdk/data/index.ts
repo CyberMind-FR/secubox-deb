@@ -70,5 +70,16 @@ export function urlSure(url: string | null, domaine: string): string | null {
   } catch { return null; }
 }
 
-export type Titre = { titre?: string; artiste?: string; title?: string; artist?: string };
-export const radioCourante = () => sbxFetch<Titre>('/api/v1/radio/current');
+export type Radio = { piste?: { titre?: string; auteur?: string } | null };
+export const radioCourante = () => sbxFetch<Radio>('/api/v1/radio/current');
+
+// ── Fil d'activité (#1560) : déjà filtré par la box selon la personne ──────
+export type Activite = { activity_uuid: string; kind: string; qui?: string; at: number;
+                         context?: { titre?: string; lien?: string; salon_titre?: string } };
+export async function activites(n = 6): Promise<Activite[]> {
+  const r = await sbxFetch<{ activites?: Activite[] }>(`/api/v1/sbxid/activite?n=${n}`);
+  return Array.isArray(r?.activites) ? r!.activites.filter(a => typeof a.activity_uuid === 'string') : [];
+}
+
+/** Un lien d'activité n'est suivi que s'il reste sur cette origine. */
+export const lienLocal = (l?: string) => (l && l.startsWith('/') && !l.startsWith('//') ? l : null);

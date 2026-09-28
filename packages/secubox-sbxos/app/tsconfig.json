@@ -5,7 +5,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"], "types": ["vite/client"], "noEmit": true,
     "paths": {
       "@sbx/tokens": ["../sbx-sdk/tokens/index.ts"], "@sbx/icons": ["../sbx-sdk/icons/index.tsx"],
-      "@sbx/data": ["../sbx-sdk/data/index.ts"], "@sbx/art/*": ["../sbx-sdk/*"]
+      "@sbx/data": ["../sbx-sdk/data/index.ts"], "@sbx/protocol": ["../sbx-sdk/protocol/enfant.ts"], "@sbx/art/*": ["../sbx-sdk/*"]
     }
   },
   "include": ["src", "../sbx-sdk"]
