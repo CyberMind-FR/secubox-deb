@@ -1,3 +1,13 @@
+secubox-webos (1.0.363-1~bookworm1) bookworm; urgency=medium
+
+  * Location /sbxos/ prête pour une application construite (#1606) :
+    Permissions-Policy et Referrer-Policy redéclarées, CSP complétée,
+    aperçu /sbxos/aurora/ en CSP stricte réservé au LAN, /sbxos/assets/
+    immuable, compression limitée aux fichiers statiques, kill.json et
+    version.json toujours frais, point d'inclusion secubox-sbxos-mode.d.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:54:21 +0200
+
 secubox-webos (1.0.362-1~bookworm1) bookworm; urgency=high
 
   * Carte WAF : les adresses de l'activité récente ne sont rendues qu'à une
