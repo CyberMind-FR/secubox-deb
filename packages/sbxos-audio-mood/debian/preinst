@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+# RENOMMAGE gabriel-mood → sbxos-audio-mood (#1587). L'ancien démon tient sa
+# base SQLite ouverte : on l'arrête avant que le postinst ne la déplace.
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    if systemctl is-active --quiet gabriel-mood.service 2>/dev/null; then
+        systemctl stop gabriel-mood.service || true
+    fi
+    systemctl disable gabriel-mood.service >/dev/null 2>&1 || true
+fi
+#DEBHELPER#
+exit 0

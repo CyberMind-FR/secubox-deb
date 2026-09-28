@@ -42,7 +42,7 @@ PAQUETS = RACINE / "packages"
 def _est_artefact(p: Path) -> bool:
     parts = p.parts
     for i, x in enumerate(parts):
-        if x == "debian" and i + 1 < len(parts) and parts[i + 1].startswith(("secubox-", "gabriel")):
+        if x == "debian" and i + 1 < len(parts) and parts[i + 1].startswith(("secubox-", "sbxos-")):
             return True
     return False
 

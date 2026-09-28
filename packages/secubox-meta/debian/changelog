@@ -1,3 +1,10 @@
+secubox-meta (0.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * Mood : gabriel-mood → sbxos-audio-mood (#1587) ; le générateur lit
+    secubox-* et sbxos-* (les deux seuls préfixes admis), plus gabriel-*.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 11:12:08 +0200
+
 secubox-meta (0.1.8-1~bookworm1) bookworm; urgency=medium
 
   * sbxos pose TOUT le Hall (#1577) : Lyrion (service-musique), Mastodon,

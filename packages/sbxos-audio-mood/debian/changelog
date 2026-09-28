@@ -1,0 +1,517 @@
+sbxos-audio-mood (0.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le paquet transitionnel retire le conffile de l'ancien nom
+    (secubox-routes.d/gabriel-mood.conf, rm_conffile) : sinon /api/mood est
+    déclaré deux fois, nginx -t échoue et le vhost mood.gk2 est désactivé
+    (vu sur gk2 au passage en 0.10.0) (#1587).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 11:10:51 +0200
+
+sbxos-audio-mood (0.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * RENOMMÉ gabriel-mood → sbxos-audio-mood (#1587) : un paquet s'appelle
+    secubox-* (système) ou sbxos-* (interface) — « gabriel » n'était qu'une
+    inspiration. Démon sbxos-audio-moodd, unité, socket, www, doc, module Go ;
+    affichage « Audio Mood ». mood.gk2 et l'API /api/mood inchangés.
+  * Données reprises : /var/lib/secubox/gabriel-mood → sbxos-audio-mood
+    (déplacées, jamais écrasées ; l'ancien démon est arrêté par le preinst).
+    La clé de référence personnelle du navigateur est reprise elle aussi.
+  * /gabriel-mood/ renvoie au panneau /sbxos-audio-mood/.
+  * Paquet transitionnel gabriel-mood (Replaces/Breaks).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 11:08:16 +0200
+
+gabriel-mood (0.9.1-1~bookworm1) bookworm; urgency=medium
+
+  * menu.d aux clés du hub (name/path/category/order) : les clés françaises
+    laissaient l'entrée sans chemin — le Hall l'ouvrait sur « / » ; catégorie
+    « mind » (ref #1552).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 08:22:48 +0200
+
+gabriel-mood (0.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau d'administration (ref #1371) : admin.gk2/gabriel-mood/ servait
+    le cockpit public ré-embarqué. Il sert désormais un panneau hybrid-dark :
+    métriques (sessions, minutes conservées, voix mémorisées, taille, activité
+    24 h, lectures 7 j), réglages persistants (historique, mémoire des voix,
+    rétention 1–90 j), purge, garanties affichées et non réglables. Le
+    cockpit reste sur mood.gk2.secubox.in.
+  * API /api/mood/admin/{etat,reglages,purge}, gardée par /auth/verify
+    (groupe admin) ; fermée sans secubox-auth.
+  * SÉCURITÉ : POST /api/mood/oubli sans paramètre effaçait l'historique et
+    les références de TOUT LE MONDE, sans authentification — c'est ce
+    qu'envoyait le bouton « Oublier » du cockpit. Il faut désormais préciser
+    ?session= ou ?ref= ; le cockpit n'oublie que sa propre session.
+  * Purge relue chaque heure selon les réglages (au lieu de 24 h figées).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Sep 2026 12:05:22 +0200
+
+gabriel-mood (0.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE COCKPIT EST DE NOUVEAU LIVRÉ, et sa construction ne peut plus être
+    oubliée en silence (closes #1335). La 0.8.0 a installé un répertoire web
+    VIDE par-dessus une installation qui marchait : 403 sur « / » faute
+    d'index, et 500 sur « /micro.html » parce que le repli SPA bouclait sur un
+    « /index.html » absent. La carte du Hall était blanche.
+  * LA CAUSE ÉTAIT UN AVERTISSEMENT QUI N'ARRÊTAIT RIEN. `debian/rules`
+    imprimait « ATTENTION : dist/ absent » puis réussissait. Or `dist/` est
+    gitignoré — à juste titre, c'est un produit de construction — donc un
+    worktree neuf ne l'a JAMAIS, et la 0.8.0 est sortie d'un worktree créé
+    pour #1333. Une ligne d'avertissement au milieu de plusieurs centaines
+    n'est pas une garde : c'est une ligne de journal.
+  * LA CONSTRUCTION ÉCHOUE MAINTENANT, et elle dit quoi faire (`npm ci &&
+    npm run build`). Le paquet ANNONCE servir un cockpit — l'option `--www`,
+    la route nginx, la carte du Hall ; le livrer vide n'est pas une
+    dégradation gracieuse, c'est une régression muette qui écrase du bon.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 14:49:09 +0200
+
+gabriel-mood (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA MUSIQUE NE COUVRE PLUS LES ÉMOTIONS (closes #1333). Le symptôme était
+    « le BPM casse les émotions » ; le BPM n'y était pour rien. C'était son
+    jumeau : la même musique produisait le tempo affiché ET la panne.
+  * LA CAUSE ÉTAIT UN ÉCART ENTRE UN COMMENTAIRE ET SON CODE. Le plancher de
+    bruit promettait d'apprendre « pendant les silences, sans se laisser tirer
+    vers le haut par la parole ». Il montait en fait de 0,05 dB à CHAQUE trame
+    dont l'énergie le dépassait, parole comprise — soit deux décibels par
+    seconde à quarante pour cent de parole. Avec une musique au niveau de la
+    voix, le plancher l'atteignait en une dizaine de secondes, la voix ne le
+    dépassait plus de la marge exigée, la détection tombait de 88 % à 30 %, et
+    la lecture passait en « pas assez de voix » pendant que la personne parlait.
+    C'est aussi l'explication du « vers 10-15 secondes, on part dans les
+    indéterminés » rapporté plus tôt.
+  * GELER L'APPRENTISSAGE PENDANT LA PAROLE NE MARCHE PAS, ET JE L'AI ESSAYÉ
+    AVANT DE LE SAVOIR. Le plancher sert à décider ce QU'EST la parole ; l'en
+    faire dépendre ferme une boucle. Mesuré : rappel parfait, et CENT POUR CENT
+    de fausses détections, y compris en pièce calme — le module aurait analysé
+    la musique comme une personne, ce qui est bien pire qu'un indéterminé.
+  * LE PLANCHER EST DÉSORMAIS UN QUANTILE, PAS UN LISSAGE. Vingt pour cent de
+    l'énergie observée sur trois secondes : la parole est intermittente, donc
+    un cinquième de la fenêtre est du bruit tant qu'elle n'occupe pas les
+    quatre cinquièmes. Aucune circularité. Borné par le creux de la fenêtre
+    (+12 dB) pour le seul cas qui échappe au quantile — le monologue, où la
+    distribution devient bimodale : plancher à -19 dB sans ce plafond, -59,8 dB
+    avec, dans une pièce à -70 dB.
+  * MESURÉ CONTRE L'ANCIEN, SUR UN BANC OÙ CHAQUE SOUS-BANDE FLUCTUE
+    INDÉPENDAMMENT — un vrai bruit n'excite pas les six bandes ensemble, et
+    c'est ce que suppose la règle des trois bandes. Fausses détections, selon
+    la fluctuation du bruit : ±2 dB 7,7 % contre 7,7-17,4 % ; ±4 dB 7,7 %
+    contre 14,7-26,6 % ; ±6 dB 17,4 % contre 96,4 %. Rappel de 100 % partout
+    dans les deux cas. Les deux réglages (marge 1 dB, plafond 12 dB) sont
+    tirés de ces tables, pas de la théorie.
+  * QUAND LA PIÈCE COUVRE VRAIMENT LA VOIX, ON LE DIT. Deux sources dans les
+    mêmes bandes à la même énergie ne se séparent pas — c'est de la physique,
+    pas un défaut qu'on corrigera. Le refus reste donc, mais il change de
+    message : « la pièce couvre votre voix (tempo 112 BPM) : baissez ce qui
+    joue, ou approchez le micro » au lieu de « pas assez de voix ». Même
+    verdict, deux gestes opposés ; dire le premier quand c'est le second, c'est
+    demander à quelqu'un de répéter plus fort ce qu'il vient de dire.
+  * LE MOTIF EST ENFIN STOCKÉ. La base savait dire qu'une minute était
+    indéterminée, jamais laquelle des trois gardes avait tranché — il a fallu
+    rejouer des scénarios synthétiques pour retrouver la cause de ce bogue.
+    Colonne relue à l'aune de la promesse de confidentialité, comme son test
+    de garde l'exige : quatre codes fermés, aucun texte libre, rien du signal.
+    Migration explicite — `CREATE TABLE IF NOT EXISTS` ne migre rien.
+  * L'AMORÇAGE SUIT LE PLANCHER au lieu d'un compteur séparé. Les deux avaient
+    divergé : la décision se libérait à cinquante trames quand le plancher
+    n'était calculé qu'à cent, et l'intervalle déclarait « parole » sur tout.
+  * `Ambiance.Dominante` disait « la fenêtre doit être écartée » ; aucun code
+    ne le faisait. Le commentaire dit maintenant ce qui est.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 14:44:29 +0200
+
+gabriel-mood (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA LAMPE PREND LA COULEUR DE L'HUMEUR (ref #1331). La table des teintes
+    vit ici, pas dans le Hall : traduire un état en couleur est du SENS, et le
+    sens appartient au module qui produit l'état. Le Hall n'apporte que ce que
+    nous n'avons pas — la session et le nom de la lampe.
+  * LA RÈGLE DU MODULE VAUT AUSSI POUR LE MUR. « Ne jamais présenter les
+    émotions comme des certitudes » ne s'arrête pas à l'écran : une lampe rouge
+    affirme, et elle affirme à toute la pièce, à quelqu'un qui n'a lu ni la
+    réserve ni le pourcentage. D'où deux règles, pas deux ornements —
+    l'indéterminé n'a PAS de teinte (blanc chaud : la lampe redevient une
+    lampe), et la confiance module la LUMINOSITÉ, si bien qu'une lecture
+    hésitante donne une lumière basse.
+  * RIEN NE S'ALLUME AU CHARGEMENT. Sans le garde, ouvrir le Hall suffirait à
+    changer la lumière d'une pièce — un effet physique déclenché par personne.
+    La première émission exige une écoute réelle, et l'arrêt rend la lampe au
+    blanc chaud : laisser un rouge au mur après la mesure, ce serait une
+    affirmation qui survit à ce qui la justifiait.
+  * UN TEST GO GARDE UNE TABLE TYPESCRIPT. Rien ne relie `Etats` à
+    `couleur.ts` : ajouter une émotion sans sa teinte donnerait une lampe qui
+    reste blanche pour celle-là, sans erreur ni message. C'est la panne qui
+    s'est déjà répétée trois fois ici (routes sbxwaf, frame-src du Hall, test
+    CSP périmé) — une liste tenue à la main dont la divergence est muette. On
+    la relie par un test plutôt que par de la discipline.
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 14:01:07 +0200
+
+gabriel-mood (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE SPECTROGRAMME ENTRE DANS LA CARTE. Elle n'avait que des barres — elles
+    disent l'instant, pas le mouvement, et une voix se reconnaît à son
+    mouvement. On réutilise le composant du cockpit plutôt que d'en réécrire un
+    petit : deux rendus du même signal finissent toujours par ne plus se
+    ressembler, et l'on ne sait alors plus lequel croire.
+  * MESURE INSTANTANÉE, CORRIGÉE ENSUITE. Attendre la fenêtre pleine, c'était
+    attendre deux secondes de voix avant de bouger : l'affichage avançait par
+    PALIERS, et un palier de deux secondes se lit comme un blocage. On rend
+    désormais une estimation tous les quarts de seconde et on la corrige à
+    mesure que la fenêtre se remplit. Mesuré : les indices bougent dès 0,6 s.
+  * SON POIDS EST SA COMPLÉTUDE, et c'est ce qui rend la correction honnête
+    plutôt que cosmétique. Une estimation faite sur un quart de la fenêtre entre
+    pour un quart dans ce qui s'affiche — pas pour un quart arbitraire, pour le
+    quart qu'elle représente vraiment. On ne lisse pas pour que ce soit joli,
+    on pondère par ce qu'on sait, et la fenêtre pleine garde le dernier mot.
+  * UNE ESTIMATION PARTIELLE N'EFFACE JAMAIS RIEN. Première version : pendant
+    une pause, la part voisée de la fenêtre en cours baisse mécaniquement,
+    l'estimation devenait indéterminée, et la carte s'éteignait de nouveau à
+    chaque respiration — le défaut qu'on venait de corriger, rallumé par son
+    propre correctif. Une partielle ne peut plus que corriger, jamais remplacer
+    une lecture par un aveu d'ignorance.
+  * HYSTÉRÉSIS SUR L'ÉTIQUETTE. Près de l'origine, deux indices se croisent
+    pour trois millièmes d'écart ; en mesurant huit fois plus souvent,
+    l'étiquette changeait huit fois plus souvent. Un prétendant doit désormais
+    dépasser l'étiquette en place de trois centièmes. ON NE CACHE RIEN : les
+    barres affichent la distribution exacte et l'on voit le prétendant monter ;
+    seule l'étiquette — qui est une simplification, et qu'on lit comme un
+    verdict — attend d'être départagée franchement.
+  * L'ordinaire ne s'apprend qu'à la fermeture de la fenêtre : observer à
+    chaque estimation partielle compterait huit fois la même voix, et
+    l'ordinaire se figerait sur la seconde en cours au lieu d'apprendre les
+    heures.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 13:23:34 +0200
+
+gabriel-mood (0.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * LE BPM EFFAÇAIT LES ÉMOTIONS, et c'était un défaut de calcul, pas une
+    décision. La « part d'ambiance » rapportait l'énergie de fond à l'énergie
+    TOTALE — or pendant les pauses le fond EST l'énergie, si bien que ces
+    trames comptaient une fois de chaque côté. Quelqu'un qui parle un cinquième
+    du temps, c'est-à-dire tout le monde, dépassait le seuil dès que la pièce
+    atteignait le cinquième de sa voix : un ventilateur suffisait à effacer la
+    lecture.
+  * La question utile n'est pas « quelle fraction de l'énergie est de
+    l'ambiance » mais « la pièce couvre-t-elle la voix ». On compare désormais
+    les deux MOYENNES sur leurs trames respectives : la part vaut un demi quand
+    elles s'égalent, ce qui rend le seuil lisible et interprétable. Une musique
+    de fond plus faible que la voix n'écarte plus rien — elle reste un contexte.
+  * LE SPECTRE AVAIT DISPARU DE LA CARTE. En rendant sa hauteur flexible, elle
+    est devenue indéfinie pour le calcul des pourcentages : les barres, dont la
+    hauteur était en `%`, tombaient toutes à zéro. La carte s'affichait
+    parfaitement, sans son spectre. Les barres sont désormais mises à l'échelle
+    par `transform`, qui ne dépend d'aucun parent — et se compose sur le GPU,
+    ce qui ne gâche rien à vingt images par seconde. Même correction pour les
+    colonnes de l'histogramme, qui avaient le même défaut latent.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 13:17:08 +0200
+
+gabriel-mood (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Les mesures se figeaient et il fallait arrêter puis relancer l'écoute.
+  * LA CAUSE LA PLUS PROBABLE : les navigateurs SUSPENDENT l'AudioContext d'un
+    onglet passé en arrière-plan, et au retour il reste suspendu. Le worklet ne
+    tourne plus, plus un octet ne part, et les derniers chiffres restent à
+    l'écran — parfaitement crédibles. On le réveille désormais dès que la page
+    redevient visible, ce qui rend le geste manuel inutile.
+  * ET UNE VEILLE POUR TOUT LE RESTE. La suspension n'est pas la seule façon de
+    se taire : permission révoquée, machine en veille, périphérique débranché.
+    Plutôt que d'énumérer les causes, on surveille l'EFFET — plus d'images qui
+    arrivent — et on remonte la session. Surveiller un effet couvre les causes
+    qu'on n'a pas prévues.
+  * LE SILENCE D'UN MICRO ET CELUI D'UN TUYAU NE SE RESSEMBLENT PAS, et
+    produisaient pourtant le même écran. La board mesure maintenant depuis
+    combien de temps plus RIEN ne lui parvient (`sans_son_s`) et l'interface le
+    dit en toutes lettres : ce n'est pas quelqu'un qui se tait, c'est le flux
+    qui est rompu.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 13:12:57 +0200
+
+gabriel-mood (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA FENÊTRE SE COMPTE EN VOIX, PAS EN SECONDES. C'était le défaut de fond :
+    elle valait une seconde d'HORLOGE, et personne ne parle cent pour cent du
+    temps. Dès qu'on marquait une pause — respirer, chercher un mot, écouter
+    quelqu'un — elle n'avait plus assez de trames voisées et la lecture
+    disparaissait. Sur une conversation ordinaire, la moitié du temps.
+  * On accumule désormais jusqu'à ~2 s de parole EFFECTIVE, avec un plafond
+    d'horloge de 8 s pour ne pas rendre une lecture vieille comme si elle était
+    fraîche. Mesuré sur 24 s de parole avec pauses : 0 seconde sans lecture,
+    contre la moitié auparavant. Et une fenêtre plus longue rend des indices
+    moins nerveux — une seconde de voix, c'était de toute façon trop court.
+  * LA DERNIÈRE LECTURE EST TENUE PENDANT LE SILENCE, avec son âge. Une humeur
+    ne s'éteint pas parce qu'on respire ; mais afficher indéfiniment la
+    dernière connue serait pire que rien, puisqu'elle se lirait comme une
+    mesure en cours. Au-delà de douze secondes sans voix, elle s'efface.
+  * « BRUIT » ET « AMBIANCE » NE SE MASQUENT JAMAIS derrière une ancienne
+    lecture : ils disent que le signal est mauvais MAINTENANT, et les cacher
+    empêcherait de comprendre qu'il faut approcher le micro.
+  * LISSAGE DES INDICES. Sur une voix rigoureusement constante, le classement
+    basculait entre « calme » et « joie » d'une fenêtre à l'autre : près de
+    l'origine — là où se tient justement une voix ordinaire — trois étiquettes
+    se disputent la tête, et le moindre frémissement de mesure faisait changer
+    la gagnante. Ce n'est pas un changement d'humeur, c'est du bruit de mesure
+    qui en a l'air, ce qui est pire.
+  * On lisse les INDICES, pas l'étiquette : décider puis stabiliser la décision
+    cacherait l'hésitation, tandis que lisser la distribution la montre dans
+    les barres. Et le lissage ne sert pas à gagner de l'assurance — à
+    distribution lissée, on garde la plus PRUDENTE des deux confiances.
+  * L'ambiance sort enfin dans l'image : elle était calculée et servait de
+    garde-fou, mais n'avait jamais été ajoutée au champ JSON, si bien que
+    l'interface ne pouvait rien en montrer.
+  * Cinq tests de plus, sur les promesses qui viennent d'être faites.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:54:56 +0200
+
+gabriel-mood (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * La carte du Hall remplit sa place : histogramme des six indices et bande de
+    métriques, là où il n'y avait que du vide sous la réserve.
+  * L'HISTOGRAMME CHANGE LA NATURE DE LA CARTE. Un emoji seul se lit comme un
+    verdict ; six barres montrent ce qui a été ÉCARTÉ. C'est la même
+    information qu'au cockpit, et c'est justement pour cela qu'elle doit être
+    là — la carte est ce qu'on regarde le plus souvent.
+  * LES MÉTRIQUES S'AFFICHENT MÊME QUAND RIEN N'EST VOISÉ, et c'est ce qui
+    manquait le plus : une carte qui annonce « à l'écoute · 0 mesure ·
+    Indéterminé » sans rien montrer de ce qu'elle entend laisse croire à une
+    panne. Le niveau et l'état du VAD répondent tout de suite à « pourquoi il
+    ne dit rien ».
+  * La colonne de tête se détache dans l'histogramme : six barres voisines se
+    liraient comme une égalité alors qu'il y a un classement.
+  * LA CARTE ÉPOUSE LA HAUTEUR QUE LE HALL LUI DONNE, au lieu qu'on devine un
+    nombre de pixels — deviner laissait soit du vide en bas, soit un
+    débordement, et la bonne valeur change avec ce qui s'affiche (avis
+    d'ambiance, message de reprise). `100dvh` et pas `100%` : `min-height: 100%`
+    se résout contre le parent, dont la hauteur est automatique — la règle ne
+    s'appliquait donc à rien, et il restait quatre-vingts pixels de vide.
+  * La place qui reste se partage entre le spectre et l'histogramme, avec un
+    plafond sur chacun : laisser l'histogramme tout prendre donnait six grandes
+    boîtes vides tant que personne ne parle — correct, mais inquiétant.
+  * Le spectre a un fond même au repos : sans lui, un spectre vide est
+    indiscernable d'un trou dans la mise en page.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:37:45 +0200
+
+gabriel-mood (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * LA RÉFÉRENCE SURVIT AU RECHARGEMENT. Quinze nombres — cinq traits, chacun
+    avec son centre, sa dispersion et son compte — rangés sous une clé que le
+    NAVIGATEUR fabrique et garde. Le serveur ne l'attribue pas : il ne peut
+    donc relier deux visites que par ce que le navigateur lui présente.
+  * Le prix est assumé et dit : deux visites qui présentent la même clé sont
+    reconnues comme la même personne. C'est ce qui évite de tout réapprendre.
+    Révocable des DEUX côtés — « Oublier » efface la ligne sur la board ET la
+    clé dans le navigateur, car n'en effacer qu'une n'oublierait rien.
+  * Les références se purgent comme le reste après la rétention : une
+    référence qui survit des mois à sa dernière visite n'est plus un service,
+    c'est une trace qu'on garde sans raison.
+  * AMBIANCE ET TEMPO. De la musique dans la pièce n'ajoute pas du bruit :
+    elle ajoute du bruit HARMONIQUE ET PÉRIODIQUE, c'est-à-dire exactement ce
+    qu'on cherche quand on cherche une voix. Le VAD la prend pour de la parole,
+    YIN lui trouve une hauteur, et l'on mesure une guitare en l'attribuant à
+    quelqu'un. Le plancher de bruit appris n'y peut rien : il apprend un
+    bourdonnement constant, pas une musique qui module.
+  * On la repère par son TEMPO — une pulsation régulière entre 60 et 180 BPM,
+    cherchée dans l'enveloppe d'énergie HORS parole. Une conversation a un
+    rythme syllabique plus rapide et bien moins régulier : un test vérifie
+    qu'elle n'est jamais prise pour de la musique, ce qui écarterait
+    précisément ce qu'on veut mesurer.
+  * DEUX RÉPONSES SELON LA FORCE : une ambiance discrète devient un CONTEXTE
+    (on parle plus haut quand il y a du fond — le dire évite de lire comme de
+    l'activation ce qui n'est qu'une pièce bruyante) ; une ambiance dominante
+    fait écarter la fenêtre, avec son motif. Ce n'est pas une séparation de
+    sources : on ne retire pas la musique, on refuse de faire semblant de ne
+    pas l'entendre.
+  * RÉSUMÉ D'ÉVOLUTION (`GET /api/mood/evolution?heures=24&session=…`) :
+    agrégats par heure, répartition des états, et une tendance obtenue en
+    comparant les deux moitiés de la période. Grossier, et voulu — une
+    régression sur des indices bruités donnerait une pente à trois décimales
+    dont aucune n'aurait de sens. AUCUNE PRÉDICTION : on décrit ce qui a été
+    mesuré, au passé. Même règle de session que /api/mood.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:32:54 +0200
+
+gabriel-mood (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * PLUS D'ÉTALONNAGE À ATTENDRE : la référence est vivante dès la première
+    mesure et se précise ensuite. Mesuré : réponse dès la 1re mesure (confiance
+    0,20), fiabilité 0,50 à 25 mesures, 0,80 à 100, 0,94 à 400 — jamais 1.
+  * LE DÉFAUT SIGNALÉ — 6 %, 26 %, 27 % qui ne finissent pas — n'était pas un
+    compteur bloqué mais TROIS SESSIONS DIFFÉRENTES. L'étalon vivait dans la
+    session : chaque rechargement de page repartait de zéro. Et il comptait une
+    mesure par fenêtre DE VOIX, pas par seconde : 180 observations font dix
+    bonnes minutes d'usage réel.
+  * PLUS GRAVE QUE LE COMPTEUR : LE SEUIL EXPRIMAIT MAL L'INCERTITUDE. Il
+    n'existe aucun instant où l'on « connaît » une voix — on la connaît de
+    mieux en mieux. Un mur binaire transforme ce continuum en tout-ou-rien, et
+    pendant tout le « rien » on ne peut pas distinguer un module qui travaille
+    d'un module en panne.
+  * L'ESTIMATEUR EST EN LIGNE. Centre par médiane courante (pas de taille
+    décroissante dans la direction du signe : converge vers la médiane et ne se
+    laisse pas emporter par un saut d'octave, ce qu'une moyenne ferait),
+    dispersion suivie de même.
+  * ET L'INCERTITUDE ÉLARGIT LA DISPERSION AU LIEU D'INTERDIRE. C'est le cœur
+    de la révision : diviser par une dispersion plus large rapetisse tous les
+    écarts, donc une référence mal connue produit D'ELLE-MÊME des lectures plus
+    timides, qui penchent vers le repos. Aucune règle à poser, aucun déclic —
+    l'arithmétique s'en charge, progressivement.
+  * LES PRIORS NE TOUCHENT JAMAIS AU CENTRE. À une seule mesure on ne connaît
+    aucune dispersion : on part d'ordres de grandeur de la parole
+    conversationnelle (l'interquartile d'une fondamentale tourne autour de 10 à
+    15 % de sa médiane). Ils servent UNIQUEMENT à dire « on ne sait pas encore
+    à quel point ça varie ». Le centre est celui de CETTE voix dès la première
+    mesure : « tout est relatif à la personne » tient entier.
+  * RÉFÉRENCE MIXTE plutôt que bascule : tant qu'on se connaît mal, l'ordinaire
+    du groupe est PONDÉRÉ avec le vôtre, et sa part fond à mesure. Plus aucun
+    instant où la lecture change de nature sans prévenir.
+  * Les deux tests qui gardaient le mur ont été REMPLACÉS, pas supprimés : ils
+    gardent désormais la promesse qui compte — une référence jeune rend une
+    lecture TIMIDE, pas une lecture absente. Et un test vérifie que le même
+    écart brut pèse moins quand la voix est mal connue.
+  * L'interface ne parle plus d'étalonnage : elle montre la fiabilité et le
+    nombre de mesures, en disant que les lectures affichées sont DÉJÀ réelles,
+    simplement prudentes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 12:12:18 +0200
+
+gabriel-mood (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * MOINS D'INDÉTERMINÉS, ET DES POURCENTAGES QUI SE LISENT.
+  * Le CALME devient le repos statistique. C'était le vrai défaut : « votre
+    voix est dans son ordinaire » et « je n'entends rien d'exploitable »
+    sortaient tous deux en « indéterminé », alors qu'ils n'ont rien à voir.
+    L'étalon apprend l'ordinaire de CETTE voix — une voix à son ordinaire est
+    donc, par construction, au repos de cette personne, et cela a un nom.
+  * L'INDÉTERMINÉ NE DIT PLUS QUE LE DÉFAUT DE MESURE, avec son motif : bruit
+    (spectre plat), voix insuffisante, ou étalonnage. Trois énoncés sur le
+    SIGNAL, qui appellent trois gestes différents — approcher le micro, parler,
+    attendre — là où un mot unique n'en suggérait aucun.
+  * Les affinités étaient trop larges : six gaussiennes généreuses rendaient
+    partout des valeurs voisines, le premier indice dépassait à peine le
+    second, et tout finissait « indéterminé » faute d'écart. Ce n'était pas de
+    la prudence, c'était une distribution qui ne distinguait rien.
+  * FOND INCOMPRESSIBLE de 6 % : aucun indice ne peut plus atteindre 100 %. La
+    première correction rendait 1,00 sur un cas franc, les cinq autres
+    étiquettes exactement à zéro — ce qui affirme qu'aucune autre lecture n'est
+    concevable. Le plafond protégeait la confiance ; il ne protégeait pas les
+    indices, qui sont pourtant ce qu'on lit en premier.
+  * Confiance recalée : elle saturait à 0,72 sur tous les cas nets, donc ne
+    distinguait plus rien. Elle s'étale maintenant de 0,2 à 0,7.
+  * ÉTALON PROVISOIRE à 45 observations au lieu de 180 : trois minutes de
+    silence ressemblent à une panne. On répond plus tôt EN LE DISANT, confiance
+    bridée à 0,40 tant que l'ordinaire n'est pas complet.
+  * TENDANCES : chaque indice porte sa pente sur vingt secondes. Un calme à
+    0,55 qui monte et un calme à 0,55 qui descend ne racontent pas la même
+    chose. Diagramme multi-lignes, émoticônes posées à hauteur de leur courbe.
+    Le trait s'INTERROMPT sur un refus : relier deux mesures séparées par un
+    trou reviendrait à inventer ce qui s'est passé entre.
+  * ENSEMBLE ANONYMISÉ (`GET /api/mood/commun`). Chacun garde sa page et sa
+    lecture ; seule la moyenne est publiée, et seulement à partir de TROIS
+    participants. Ce seuil n'est pas décoratif : à un, la moyenne EST la
+    personne ; à deux, qui connaît la sienne obtient l'autre par soustraction.
+    Valeurs arrondies au vingtième, contre la soustraction dans le temps.
+  * FUITE FERMÉE au passage : `GET /api/mood` rendait « la session la plus
+    récemment active » quand aucune n'était nommée. Sur un LAN à une personne,
+    la commodité ne coûtait rien ; ouvert au WAN, cela livrait à n'importe quel
+    passant la lecture en direct de qui utilisait la page.
+  * BASE CALME PARTAGÉE : les ordinaires personnels mis en commun servent de
+    repère à qui vient d'arriver, le temps que le sien se constitue. Même
+    seuil de trois — une médiane de hauteur identifie assez bien quelqu'un.
+    La lecture DIT qu'elle compare à d'autres voix (`reference: "groupe"`) et
+    sa confiance est bridée à 0,30 : ce qu'on mesure alors est en partie une
+    différence entre personnes, pas seulement un écart à soi-même. L'ordinaire
+    personnel reprend la main dès qu'il existe, et un départ efface la
+    contribution.
+  * Deux nombres par personne et par trait — centre et dispersion — et non un
+    seul : avec trois contributeurs, trois médianes ne permettent pas
+    d'interquartile robuste, et la base commune rendait des écarts nuls partout.
+  * Exposition ouverte au WAN, à la demande de l'opérateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:58:51 +0200
+
+gabriel-mood (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Fiche `debian/secubox.yaml` : le module existe désormais pour l'App Store,
+    dont le catalogue est généré en parcourant les fiches du monorepo.
+  * La description longue dit ce que le module NE FAIT PAS, délibérément : une
+    fiche d'App Store se lit avant d'installer, c'est-à-dire au seul moment où
+    l'on décide. « Détecteur d'humeur » laisserait croire à un diagnostic.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:29:56 +0200
+
+gabriel-mood (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Vhost dédié `mood.gk2.secubox.in`, vue `/micro.html` pour la carte du Hall,
+    et les deux vues SYNCHRONISÉES.
+  * POURQUOI UNE ORIGINE À LUI. Le micro, dans une iframe, exige une chaîne de
+    délégation complète : le parent délègue (`allow` + sa propre
+    `Permissions-Policy`), l'encadré autorise pour SON origine. Servi sous un
+    préfixe de l'admin, ce module partageait l'origine du panneau, dont la
+    politique n'a aucune raison de parler du micro. Et `getUserMedia` n'existe
+    tout simplement pas hors contexte sécurisé — le bouton échouerait sur un
+    « undefined » au lieu d'un refus lisible.
+  * UNE SEULE CAPTURE, PLUSIEURS ÉCRANS. Si la carte et le cockpit ouvraient
+    chacun leur WebSocket, il y aurait deux sessions — donc DEUX ÉTALONS
+    apprenant la même voix chacun de son côté, et deux lectures différentes de
+    la même personne au même instant. Celui où l'on clique tient le micro et
+    rediffuse ; l'autre suit. `BroadcastChannel`, donc même origine, donc le
+    vhost. Si le meneur disparaît sans prévenir — un onglet qu'on ferme
+    n'envoie rien — les suiveurs le disent au bout de deux secondes plutôt que
+    de garder à l'écran une image figée qui passerait pour une mesure en cours.
+  * LA CARTE N'ÉCOUTE JAMAIS D'ELLE-MÊME. Une tuile qui se met à écouter parce
+    qu'on a ouvert le Hall serait une trahison, même techniquement autorisée.
+  * Base de construction RELATIVE : la même sortie est servie à la racine du
+    vhost dédié ET sous `/gabriel-mood/` de l'admin. Le worklet est résolu
+    contre `document.baseURI` pour la même raison — un chemin absolu aurait
+    marché à un endroit sur deux.
+  * La réserve tient en une ligne sur la carte, mais elle y est : c'est
+    justement d'un coup d'œil qu'un emoji se prend pour un diagnostic.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:28:00 +0200
+
+gabriel-mood (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * La route WebSocket n'inclut plus `snippets/secubox-proxy.conf`. Il pose
+    `proxy_http_version 1.1` — d'où le doublon que nginx refusait — mais
+    surtout `proxy_set_header Connection ""`, soit exactement le contraire de
+    ce qu'une WebSocket demande. L'inclure puis « corriger » par-dessus aurait
+    donné une configuration qui se contredit à la lecture. On écrit ce dont on
+    a besoin, en toutes lettres.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:08:47 +0200
+
+gabriel-mood (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'unité passait `--retention 14d`, que Go refuse : `time.ParseDuration` ne
+    connaît pas le jour (ns, µs, ms, s, m, h — un « jour » n'ayant pas de durée
+    fixe). Le service sortait en code 2 au démarrage. Il a eu raison de refuser
+    plutôt que de retomber en silence sur un défaut, mais il valait mieux ne
+    pas l'écrire : c'est `336h`.
+  * L'aide du drapeau le rappelle désormais — l'erreur de flag, elle, ne dit
+    que « invalid value ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:07:40 +0200
+
+gabriel-mood (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Première version. Détecteur d'indices prosodiques, entièrement local.
+  * DSP en Go pur : FFT radix-2 avec correction de gain de fenêtre, YIN par
+    intercorrélation fenêtrée (la forme naïve coûte deux millions d'opérations
+    par trame), banc mel, VAD à plancher de bruit appris, jitter/shimmer.
+  * Le micro est celui du NAVIGATEUR, poussé en PCM par la WebSocket. La board
+    de test n'a d'ailleurs aucune entrée son — ce qui n'a aucune importance,
+    et le module le dit au lieu de planter.
+  * Aucun échantillon audio n'écrit sur le disque, et un test du schéma le
+    vérifie : toute colonne ajoutée qui ressemblerait à du son le fait échouer.
+  * « Ne jamais présenter les émotions comme des certitudes » est tenu dans le
+    CODE : confiance plafonnée à 0,72, refus de répondre sans étalon personnel,
+    réserve attachée à chaque réponse, justifications transmises avec le
+    verdict, et un classifieur explicable plutôt qu'un modèle sur corpus
+    d'acteurs. Un modèle externe peut être branché ; il passe par les mêmes
+    garde-fous.
+  * 60 tests, dont ceux qui gardent ces promesses.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 23 Sep 2026 11:02:45 +0200

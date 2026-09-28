@@ -83,7 +83,7 @@ PAQUET_DE = {
     "cloud": "secubox-nextcloud", "nextcloud-super": "secubox-nextcloud",
     "social": "secubox-mastodon", "forums": "secubox-bbs",
     "activite": "secubox-sbxid", "comptes": "secubox-sbxid", "acces": "secubox-sbxid",
-    "sbxos": "secubox-sbxos", "surfviewer": "secubox-webos", "mood": "gabriel-mood",
+    "sbxos": "secubox-sbxos", "surfviewer": "secubox-webos", "mood": "sbxos-audio-mood",
 }
 
 

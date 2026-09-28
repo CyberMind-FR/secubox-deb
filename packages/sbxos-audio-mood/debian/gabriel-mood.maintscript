@@ -1,0 +1,3 @@
+# Conffile de l'ancien nom (#1587) : sans ce retrait, /api/mood est déclaré deux
+# fois (secubox-routes.d/gabriel-mood.conf + sbxos-audio-mood.conf) et nginx -t échoue.
+rm_conffile /etc/nginx/secubox-routes.d/gabriel-mood.conf 0.10.1~ gabriel-mood
