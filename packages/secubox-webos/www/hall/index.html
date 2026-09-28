@@ -1480,7 +1480,7 @@ FEATURED.forEach(f=>{ if(f.url) f.url=SBX_DOMAINE.hote(f.url); if(f.carte) f.car
 // ENTRÉE SANS MOT DE PASSE (#1562) : un service qui sait ouvrir le compte de
 // la personne d'après sa session SecuBox s'ouvre par son /sbx/entrer ; sans
 // session ni compte lié, cette entrée rend le formulaire habituel.
-const ENTREE_SBX={nc:'/sbx/entrer'};
+const ENTREE_SBX={nc:'/sbx/entrer', peertube:'/sbx/entrer'};
 function entree(h){ return ENTREE_SBX[String(h||'').split('.')[0]]||'/'; }
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
 // Les autres afficheront un repli « ouvrir dans un onglet » tant que leur cadrage

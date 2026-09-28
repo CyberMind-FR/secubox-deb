@@ -545,6 +545,10 @@ async def verify(request: Request):
         nc = _cap.compte_lie(payload, "nextcloud")
         if nc and re.fullmatch(r"[A-Za-z0-9_.@-]{1,64}", nc):
             headers["Remote-Sbx-Nextcloud"] = nc
+        # COMPTE PEERTUBE LIÉ (#1562) : le greffon secubox-sso l'ouvre.
+        pt = _cap.compte_lie(payload, "peertube")
+        if pt and re.fullmatch(r"[a-z0-9._]{1,50}", pt):
+            headers["Remote-Sbx-Peertube"] = pt
     except Exception:
         pass
     return JSONResponse({"ok": True, "user": sub}, headers=headers)

@@ -359,6 +359,13 @@ class PeerTube:
             "email": d["email"], "role": 2, "videoQuota": -1, "videoQuotaDaily": -1}, jeton=j)
         if code not in (200, 201, 204):
             raise Echec(f"PeerTube : création refusée ({code}) {r.get('detail') or r.get('error') or ''}")
+        # Sans mot de passe pour la personne (#1562) : le compte s'ouvre par la
+        # session SecuBox. Sans effet tant que le greffon n'est pas actif.
+        try:
+            subprocess.run(["/usr/sbin/peertubectl", "sso-rattache", d["user"].replace("-", "_")],
+                           timeout=60, capture_output=True, check=False)
+        except (OSError, subprocess.SubprocessError):
+            pass
 
     def _action(self, d, fn):
         j = self._jeton()

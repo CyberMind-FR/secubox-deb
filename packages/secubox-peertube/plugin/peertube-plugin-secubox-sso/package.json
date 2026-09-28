@@ -1,0 +1,16 @@
+{
+  "name": "peertube-plugin-secubox-sso",
+  "version": "0.1.0",
+  "description": "SecuBox : entrer dans son compte PeerTube par sa session SecuBox, sans mot de passe (#1562)",
+  "engine": { "peertube": ">=6.0.0" },
+  "keywords": ["peertube", "plugin", "secubox"],
+  "homepage": "https://secubox.in",
+  "author": "Gerald KERMA <devel@cybermind.fr>",
+  "bugs": "https://github.com/CyberMind-FR/secubox-deb/issues",
+  "license": "LicenseRef-CMSD-1.0",
+  "library": "./main.js",
+  "staticDirs": {},
+  "css": [],
+  "clientScripts": [],
+  "translations": {}
+}

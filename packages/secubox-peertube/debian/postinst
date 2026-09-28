@@ -100,6 +100,13 @@ if [ "$1" = "configure" ]; then
     if nginx -t 2>/dev/null; then
       systemctl reload nginx 2>/dev/null || true
     fi
+
+    # Entrée sans mot de passe par la session SecuBox (#1562) : greffon +
+    # comptes liés ordinaires. N'installe rien sans la garde du vhost actif,
+    # ni conteneur arrêté (on-demand) : rejoué au prochain configure.
+    if [ -x /usr/sbin/peertubectl ]; then
+      timeout 300 /usr/sbin/peertubectl sso || true
+    fi
 fi
 
 #DEBHELPER#

@@ -514,6 +514,83 @@ cmd_transcodage() {
     esac
 }
 
+# ── Entrée sans mot de passe par la session SecuBox (#1562) ─────────────────
+# Le greffon peertube-plugin-secubox-sso ouvre un compte d'après
+# X-Sbx-Peertube-User, que nginx pose après avoir vérifié la session et VIDE
+# partout ailleurs. Sans cette garde nginx, n'importe quel client passerait
+# l'en-tête par l'hôte : on n'installe donc RIEN tant que le vhost actif ne
+# la porte pas (un vhost modifié localement garde l'ancienne version).
+SSO_NPM="peertube-plugin-secubox-sso"
+SSO_SRC="${SECUBOX_PEERTUBE_SSO_SRC:-/usr/share/secubox/peertube/$SSO_NPM}"
+SSO_DANS="/var/www/peertube/sbx-plugins/$SSO_NPM"
+DB_NAME=$(config_get "db_name" "peertube_prod")
+
+pt_sql() {
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- env LC_ALL=C sh -c \
+        'cd / && exec runuser -u postgres -- psql -qAt -v ON_ERROR_STOP=1 -d "$1" -c "$2"' _ "$DB_NAME" "$1"
+}
+
+sso_nom_ok() { printf '%s' "$1" | grep -Eq '^[a-z0-9._]{1,50}$'; }
+
+# Rattache un compte ORDINAIRE (rôle 2) au greffon : il s'ouvre dès lors par la
+# session SecuBox et plus par mot de passe. Jamais un administrateur ni un
+# modérateur, jamais un compte déjà rattaché à un autre greffon.
+cmd_sso_rattache() {
+    local nom="${1:-}"; sso_nom_ok "$nom" || { err "nom invalide"; return 1; }
+    local n
+    # Sans greffon actif, un compte rattaché n'aurait PLUS AUCUNE entrée.
+    n=$(pt_sql "SELECT 1 FROM plugin WHERE name = 'secubox-sso' AND type = 1 AND enabled") || return 1
+    [ "$n" = 1 ] || { warn "greffon secubox-sso inactif — $nom non rattaché"; return 0; }
+    n=$(pt_sql "UPDATE \"user\" SET \"pluginAuth\" = '$SSO_NPM' WHERE username = '$nom' AND role = 2 AND \"pluginAuth\" IS NULL RETURNING username") || return 1
+    [ -n "$n" ] && log "$nom : entrée par la session SecuBox" || log "$nom : inchangé (absent, déjà rattaché, ou pas un compte ordinaire)"
+}
+
+# Retour arrière : le compte redevient un compte à mot de passe.
+cmd_sso_detache() {
+    local nom="${1:-}"; sso_nom_ok "$nom" || { err "nom invalide"; return 1; }
+    pt_sql "UPDATE \"user\" SET \"pluginAuth\" = NULL WHERE username = '$nom' AND \"pluginAuth\" = '$SSO_NPM'" >/dev/null \
+        && log "$nom : de nouveau par mot de passe"
+}
+
+cmd_sso() {
+    lxc_running || { warn "conteneur arrêté — sso reporté"; return 0; }
+    local vh
+    vh=$(readlink -f /etc/nginx/sites-enabled/peertube.conf 2>/dev/null)
+    if ! grep -q 'X-Sbx-Peertube-User ""' "$vh" 2>/dev/null; then
+        warn "vhost sans garde X-Sbx-Peertube-User (voir $vh.dpkg-dist) — sso NON installé"
+        return 0
+    fi
+    [ -f "$SSO_SRC/package.json" ] || { err "greffon absent : $SSO_SRC"; return 1; }
+    local veut a
+    veut=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$SSO_SRC/package.json" | head -1)
+    a=$(pt_sql "SELECT version FROM plugin WHERE name = 'secubox-sso' AND type = 1 AND enabled") || return 1
+    if [ "$a" != "$veut" ]; then
+        tar -C "$SSO_SRC" -cf - . | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c \
+            "rm -rf '$SSO_DANS' && mkdir -p '$SSO_DANS' && tar -C '$SSO_DANS' -xf - && chown -R peertube:peertube /var/www/peertube/sbx-plugins" || return 1
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- env LC_ALL=C NODE_ENV=production \
+            NODE_CONFIG_DIR=/var/www/peertube/config sh -c \
+            "cd /var/www/peertube/peertube-latest && exec runuser -u peertube -- npm run -s plugin:install -- --plugin-path '$SSO_DANS'" \
+            || { err "installation du greffon refusée"; return 1; }
+        svc restart
+        log "greffon $SSO_NPM $veut installé"
+    fi
+    # Les comptes PeerTube liés à une personne par l'Identity Manager.
+    local nom
+    for nom in $(python3 - <<'EOF'
+import sqlite3
+try:
+    c = sqlite3.connect("file:/var/lib/secubox/sbxid/sbx.db?mode=ro", uri=True, timeout=2)
+    for (n,) in c.execute("SELECT DISTINCT app_id FROM sbx_app_links WHERE app='peertube'"):
+        print(n)
+except sqlite3.Error:
+    pass
+EOF
+    ); do
+        sso_nom_ok "$nom" && cmd_sso_rattache "$nom"
+    done
+    return 0
+}
+
 cmd_help() {
     cat <<EOF
 peertubectl $VERSION — SecuBox PeerTube (native-LXC) controller
@@ -537,6 +614,9 @@ Usage: peertubectl <verb> [args]
                                 que la liste des resolutions n'arrete pas
   reload                        Reload host nginx (after vhost changes)
   process-ops                   (root) drain the /run ops spool
+  sso                           Entrée par la session SecuBox (greffon + comptes
+                                liés ordinaires ; rien sans la garde du vhost)
+  sso-rattache|sso-detache <n>  Un compte ordinaire : par la session / par mot de passe
   help                          This message
 
 Config: $CONFIG_FILE  (name/ip/path/http_port/public_hostname)
@@ -558,6 +638,9 @@ main() {
         process-ops) cmd_process_ops "$@" ;;
         reset-admin-password) cmd_reset_admin_password "$@" ;;
         upgrade) cmd_upgrade "$@" ;;
+        sso) cmd_sso ;;
+        sso-rattache) cmd_sso_rattache "$@" ;;
+        sso-detache) cmd_sso_detache "$@" ;;
         help|-h|--help) cmd_help ;;
         *) err "unknown verb: $noun"; cmd_help; exit 1 ;;
     esac

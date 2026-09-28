@@ -127,8 +127,9 @@
   el('ic').style.background = c.couleur;
   el('nom').textContent = c.nom;
   el('hote').textContent = c.hote;
-  // Entrée sans mot de passe (#1562) : le Cloud ouvre le compte de la session.
-  el('pied').href = 'https://' + c.hote + (c.hote.split('.')[0] === 'nc' ? '/sbx/entrer' : '/');
+  // Entrée sans mot de passe (#1562) : le service ouvre le compte de la session.
+  el('pied').href = 'https://' + c.hote
+    + ({ nc: 1, peertube: 1 }[c.hote.split('.')[0]] ? '/sbx/entrer' : '/');
   if (enEmbed) { var _p = document.querySelector('.pied'); if (_p) _p.style.display = 'none'; }
 
   function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
