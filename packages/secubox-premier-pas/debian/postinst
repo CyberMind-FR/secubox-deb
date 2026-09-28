@@ -25,6 +25,15 @@ PY
     systemctl enable --now secubox-premier-pas-appliquer.path >/dev/null 2>&1 || true
     # Face console sur tty1 : ne démarre que sur une box neuve (Condition).
     systemctl enable secubox-premier-pas-console.service >/dev/null 2>&1 || true
+    # LA MINUTERIE DES MISES À JOUR SURVIT À NOTRE PROPRE MISE À JOUR (#1550).
+    # dh_installsystemd --no-start ARRÊTE les unités du paquet pendant la mise à
+    # jour et ne les relance pas : sur gk3, la minuterie est restée « dead »
+    # après l'installation de 0.4.5 — plus aucune mise à jour la nuit, et c'est
+    # majauto lui-même qui installe ce paquet. On la relance si le profil l'a
+    # activée ; on ne l'active jamais d'office.
+    if systemctl is-enabled --quiet secubox-majauto.timer 2>/dev/null; then
+        systemctl start secubox-majauto.timer >/dev/null 2>&1 || true
+    fi
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/premier-pas
     # API servie par l'agrégateur (comme la messagerie) : déclaration unique.
     python3 - <<'TOML' || echo "secubox-premier-pas : déclaration dans aggregator.toml impossible" >&2
