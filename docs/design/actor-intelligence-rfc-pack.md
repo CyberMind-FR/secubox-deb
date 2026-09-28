@@ -143,9 +143,18 @@ Stockage suggéré : bbolt ou SQLite local, **append-only** pour l'evidence ledg
 configurable.
 
 **Interfaces.** Socket Unix `/run/secubox/actor.sock`. Endpoints read-only : `GET /stats`,
-`GET /actors`, `GET /actors/{id}`, `GET /campaigns`, `GET /evidence/{id}`. Décision, authentifié
-localement : `POST /feedback/{actor_id}` avec `label: false_positive|confirmed_campaign|known_scanner|unknown`.
+`GET /actors`, `GET /actors/{id}`, `GET /campaigns`, `GET /evidence/{id}`. Décision, réservée à la
+console d'administration : `POST /feedback/{actor_id}` avec `label: false_positive|confirmed_campaign|known_scanner|unknown`.
 Le feedback humain ajuste les poids mais **ne réécrit jamais** les preuves historiques.
+
+**Deux vues (#1608).** L'API est servie sous deux arbres : `/api/v1/actor/…` (relais de lecture
+qui recopient le chemin, comme le Hall) et la racine (`/actors`…, relais qui retirent le préfixe).
+La vue **réduite** est le défaut : projection sans cibles, sans adresse et sans référence de preuve
+(`nb_cibles` au lieu de `targets` et `cibles`, signature de campagne opaque) ; `/evidence` et
+`/feedback` y répondent 404. La vue **complète** n'est servie qu'à la racine, avec exactement
+`X-Sbx-Vue: complete`, posé par une seule route : l'agrégateur, après sa garde « administrateur réel »
+(#1581). La console `admin.gk2` et le vhost `actor.gk2` (en plus filtré au LAN) passent tous deux par elle. L'arbre préfixé ne
+sert que la vue réduite, quel que soit l'en-tête. `/stats` est identique dans les deux vues.
 
 ## RFC-0007 — Evidence Ledger et attribution prudente
 

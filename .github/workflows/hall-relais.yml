@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+name: Gabarit des relais du Hall
+
+# Le Hall porte la clé de l'appareil : chacun de ses relais nginx suit le même
+# gabarit (verdict LAN et adresse d'origine réécrits par le relais, en-têtes
+# d'identité jamais repris du client, relais de lecture exacts et GET seul).
+# scripts/verifie-relais-hall.py l'impose ; ce job le lance, avec ses tests,
+# et valide la syntaxe du vhost par `nginx -t` sur une copie isolée (#1609).
+
+on:
+  pull_request:
+    paths:
+      - 'packages/secubox-webos/nginx/hall.vhost.conf'
+      - 'common/nginx/secubox-proxy.conf'
+      - 'scripts/verifie-relais-hall.py'
+      - 'scripts/tests/test_verifie_relais_hall.py'
+      - '.github/workflows/hall-relais.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'packages/secubox-webos/nginx/hall.vhost.conf'
+      - 'common/nginx/secubox-proxy.conf'
+      - 'scripts/verifie-relais-hall.py'
+      - 'scripts/tests/test_verifie_relais_hall.py'
+      - '.github/workflows/hall-relais.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  gabarit:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions épinglées par empreinte de commit, étiquette en commentaire.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.11'
+      - name: nginx pour la validation syntaxique
+        run: |
+          command -v nginx >/dev/null 2>&1 || {
+            sudo apt-get update -q
+            sudo apt-get install -y -q --no-install-recommends nginx
+          }
+          nginx -v
+      - name: Gabarit des relais + nginx -t
+        run: python3 scripts/verifie-relais-hall.py --resume --syntaxe --exiger-nginx
+      - name: Tests du vérificateur
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest scripts/tests/test_verifie_relais_hall.py -v

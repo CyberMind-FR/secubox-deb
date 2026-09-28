@@ -1,3 +1,19 @@
+secubox-webos (1.0.362-1~bookworm1) bookworm; urgency=high
+
+  * Carte WAF : les adresses de l'activité récente ne sont rendues qu'à une
+    session reconnue ; un visiteur voit pays, catégorie et action (#1608).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:24:34 +0200
+
+secubox-webos (1.0.361-1~bookworm1) bookworm; urgency=high
+
+  * Relais du Hall au gabarit (verdict LAN réécrit, en-têtes de confiance vidés, relais de lecture exacts en GET), vérifié en CI par scripts/verifie-relais-hall.py (#1609).
+  * Actor par le Hall : compteurs publics, liste des acteurs sous session et en vue réduite ; Freebox TV et Zigbee sous verrou LAN (#1608).
+  * Correctifs ponctuels du Hall : données des messages insérées en texte, messages filtrés par cadre et origine, échec de diffusion affiché (#1609).
+  * Diffusion au parc réservée aux personnes (require_personne), URL en liste blanche, débit borné, un ♥ par personne (#1608).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:22:22 +0200
+
 secubox-webos (1.0.360-1~bookworm1) bookworm; urgency=medium
 
   * Mastodon décommissionné (#1592) : cartes Social/Mastodon, groupe

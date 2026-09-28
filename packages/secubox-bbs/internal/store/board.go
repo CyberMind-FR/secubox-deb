@@ -7,7 +7,11 @@ package store
 // internet, et un fil local qui y apparaitrait divulguerait deja son TITRE —
 // souvent l'essentiel de l'information.
 
-import "database/sql"
+import (
+	"database/sql"
+	"sort"
+	"strings"
+)
 
 type Category struct {
 	ID      int64
@@ -151,7 +155,23 @@ func (s *Store) Threads(catID int64, publicOnly bool) ([]Thread, error) {
 }
 
 // Recent rend les derniers fils, tous salons confondus.
+//
+// SANS FILTRE DE SALON : reserve a l'administration et a l'outil en ligne de
+// commande. Tout ce qui est montre a quelqu'un passe par RecentHors, avec la
+// liste des salons que cette personne ne voit pas.
 func (s *Store) Recent(limit int, publicOnly bool) ([]Thread, error) {
+	return s.RecentHors(limit, publicOnly, nil)
+}
+
+// RecentHors rend les derniers fils en ecartant ceux des salons exclus.
+//
+// LE FILTRE EST DANS LA REQUETE, PAS APRES ELLE. Ecarter apres coup les fils
+// d'un salon cache laisserait la borne `limit` s'appliquer AVANT le filtre :
+// une liste de cinquante fils pourrait revenir a moitie vide, ou vide, selon
+// l'activite d'un salon que le lecteur n'est pas cense connaitre — et ce vide
+// meme serait un indice.
+func (s *Store) RecentHors(limit int, publicOnly bool, exclus map[int64]bool) ([]Thread, error) {
+	hors, args := clauseHorsSalons("t", exclus)
 	q := `SELECT t.id, t.category_id, t.slug, t.title, u.handle, t.visibility,
 	        COALESCE(t.source,''), t.last_post_at,
 	        (SELECT count(*) FROM posts p
@@ -159,9 +179,35 @@ func (s *Store) Recent(limit int, publicOnly bool) ([]Thread, error) {
 	        COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),''),
 	        COALESCE(t.media_url,''), COALESCE(t.media_kind,'')
 	      FROM threads t JOIN users u ON u.id = t.author_id
-	      WHERE 1=1` + visClause(publicOnly, "t") + `
+	      WHERE 1=1` + visClause(publicOnly, "t") + hors + `
 	      ORDER BY t.last_post_at DESC, t.id DESC LIMIT ?`
-	return s.scanThreads(q, limit)
+	return s.scanThreads(q, append(args, limit)...)
+}
+
+// clauseHorsSalons ecrit « et pas dans ces salons », avec ses parametres.
+//
+// Les identifiants passent en PARAMETRES, jamais recopies dans le texte SQL :
+// la liste vient de la base, mais une requete qui s'assemble a partir de
+// valeurs finit toujours par en recevoir une qu'on n'attendait pas. L'ordre est
+// fixe pour que la meme liste donne la meme requete.
+func clauseHorsSalons(alias string, exclus map[int64]bool) (string, []any) {
+	ids := make([]int64, 0, len(exclus))
+	for id, cache := range exclus {
+		if cache {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return "", nil
+	}
+	sort.Slice(ids, func(a, b int) bool { return ids[a] < ids[b] })
+	args := make([]any, len(ids))
+	marques := make([]string, len(ids))
+	for i, id := range ids {
+		args[i] = id
+		marques[i] = "?"
+	}
+	return " AND " + alias + ".category_id NOT IN (" + strings.Join(marques, ",") + ")", args
 }
 
 // visClause : la garde est ECRITE UNE FOIS et reutilisee partout.
@@ -176,8 +222,8 @@ func visClause(publicOnly bool, alias string) string {
 	return " AND " + alias + ".visibility = 'public'"
 }
 
-func (s *Store) scanThreads(q string, arg any) ([]Thread, error) {
-	rows, err := s.db.Query(q, arg)
+func (s *Store) scanThreads(q string, args ...any) ([]Thread, error) {
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}

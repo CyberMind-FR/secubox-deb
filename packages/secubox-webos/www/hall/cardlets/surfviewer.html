@@ -98,7 +98,8 @@
   var el=function(id){return document.getElementById(id);};
   function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
   function lire(k){ try{ return JSON.parse(localStorage.getItem(k)||'[]'); }catch(e){ return []; } }
-  function post(m){ if(parent!==window){ try{ parent.postMessage(m,'*'); }catch(e){} } }
+  // Au Hall qui nous pose, à sa propre origine (#1609).
+  function post(m){ if(parent!==window){ try{ parent.postMessage(m, location.origin); }catch(e){} } }
   function bref(u){ return String(u).replace(/^https?:\/\//,'').replace(/^www\./,''); }
 
   // Un lien média se lit par son NOM, pas par son URL. À défaut de titre (les
@@ -245,7 +246,7 @@
     }).join('');
     // 📡 Propositions : re-proposer (cumule) — badge ×N.
     el('st-diff').innerHTML = diff.map(function(x){
-      var n=x.n||1, badge=n>1?' <span class="cnt">×'+n+'</span>':'';
+      var n=Math.max(1, parseInt(x.n,10)||1), badge=n>1?' <span class="cnt">×'+n+'</span>':'';
       return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×)">'+joli(x.u,x.titre)+badge+'</button></span>';
     }).join('');
     // 🔗 Liens collés : re-vu.
@@ -260,14 +261,39 @@
     var total=fav.length+diff.length+hist.length;
     el('tot').textContent = total? (total+' items') : '';
     el('vide').hidden = total>0;
+    montreVerdict();   // le sort d'une proposition survit au redessin (#1609)
     majTitres();   // retrouve les titres manquants (PeerTube) en tâche de fond
   }
 
-  function flash(b, txt){
+  function flash(b, txt, couleur, ms){
     var old=b.innerHTML, oc=b.style.color;
-    b.textContent=txt; b.style.color='var(--up)';
-    setTimeout(function(){ if(b.innerHTML===''||b.textContent===txt){ b.innerHTML=old; b.style.color=oc; } }, 1100);
+    b.textContent=txt; b.style.color=couleur||'var(--up)';
+    setTimeout(function(){ if(b.innerHTML===''||b.textContent===txt){ b.innerHTML=old; b.style.color=oc; } }, ms||1100);
   }
+  // LE SORT D'UNE PROPOSITION VIENT DE LA BOX (#1609). Le Hall la transmet et
+  // nous renvoie la réponse (diffuser-resultat) ; on n'annonce rien d'avance.
+  // 401/403 : la diffusion au parc est réservée aux personnes connectées.
+  // Le verdict tient sur la puce du lien, même si la bande se redessine (une
+  // proposition acceptée réécrit le journal, donc la bande).
+  var enAttente=null, verdict=null;
+  function montreVerdict(){
+    if(!verdict) return;
+    if(Date.now()>=verdict.fin){ verdict=null; return; }
+    [].forEach.call(document.querySelectorAll('[data-act="diffuse"]'), function(x){
+      if(x.getAttribute('data-u')===verdict.u){ x.textContent=verdict.txt; x.style.color=verdict.c; } });
+  }
+  addEventListener('message', function(ev){
+    var d=ev.data;
+    if(!d || d.sbx!=='diffuser-resultat' || ev.source!==parent || ev.origin!==location.origin) return;
+    if(!enAttente || String(d.url)!==enAttente) return;
+    enAttente=null;
+    verdict={u:String(d.url), fin:Date.now()+2500,
+      txt: d.ok===true ? '✓ proposé au parc'
+         : (d.statut===401 || d.statut===403) ? '🔒 Réservé aux personnes connectées'
+         : '⚠️ Diffusion impossible',
+      c: d.ok===true ? 'var(--up)' : 'var(--gold)'};
+    montreVerdict(); setTimeout(rend, 2600);
+  });
   // Clics délégués sur les trois strips. Un clic donne toujours un RETOUR visible
   // (sinon « le lien ne fait rien »). Les liens LOCAUX (/api/…, /media/…) sont
   // résolus côté Hall par viewerVoir — plus de https://<chemin> mort.
@@ -275,8 +301,14 @@
     // ♥ GLOBAL (#1360) : un like sur un broadcast du parc (historique partagé).
     var lk=e.target.closest('[data-like]');
     if(lk){ var lu=lk.getAttribute('data-like');
+      // Un ♥ refusé par la box se dit, au lieu de passer pour compté (#1609).
       fetch('/api/v1/webos/public/broadcast/like',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:lu})})
-        .then(function(r){return r.ok?r.json():null;}).then(function(){ rendGlobal(); }).catch(function(){});
+        .then(function(r){
+          if(r.ok) return r.json().then(function(){ rendGlobal(); });
+          var bloque=(r.status===401 || r.status===403);
+          lk.title=bloque?'Réservé aux personnes connectées':('Échec (HTTP '+r.status+')');
+          flash(lk, bloque?'🔒':'⚠️', 'var(--gold)', 2500);
+        }).catch(function(){});
       return; }
     var b=e.target.closest('[data-u]'); if(!b) return;
     var u=b.getAttribute('data-u'), act=b.getAttribute('data-act'), titre=b.getAttribute('data-titre')||'';
@@ -285,8 +317,9 @@
       try{ if(navigator.clipboard) navigator.clipboard.writeText(lien); }catch(x){}
       b.textContent='✓ copié'; setTimeout(function(){ b.textContent='⤴'; }, 900);
     } else if(act==='diffuse'){
+      enAttente=u;
       post({sbx:'diffuser', url:u, titre:titre});   // le Hall re-diffuse ET cumule
-      flash(b, '✓ proposé au parc');
+      flash(b, '📡 proposition…', null, 4000);        // le verdict suit, venu de la box
     } else {
       post({sbx:'voir', url:u, titre:titre});        // le Hall ouvre le viewer / surf
       flash(b, '▶ ouverture…');
@@ -331,7 +364,7 @@
         items=items.slice(0,20);
         el('c-global').textContent=g.total||'';
         el('st-global').innerHTML=items.map(function(x){
-          var n=x.likes||0, badge=n?(' <span class="cnt">'+n+'</span>'):'';
+          var n=Math.max(0, parseInt(x.likes,10)||0), badge=n?(' <span class="cnt">'+n+'</span>'):'';   // un compte, donc un entier
           return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.url)+'" data-titre="'+esc(x.titre||'')+'" data-act="view" title="'+esc(x.titre||x.url)+'">'+joli(x.url,x.titre)+'</button>'
             +'<button class="mini" type="button" data-like="'+esc(x.url)+'" title="J\'aime">♥'+badge+'</button></span>';
         }).join('');

@@ -1,3 +1,15 @@
+secubox-bbs (0.37.2-1~bookworm1) bookworm; urgency=high
+
+  * urlshot : même règle de sortie que le relais surf (#1609).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:22:22 +0200
+
+secubox-bbs (0.37.1-1~bookworm1) bookworm; urgency=high
+
+  * API membre et toutes les sorties de fils : visibilité des salons privés appliquée partout (#1608).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:16:33 +0200
+
 secubox-bbs (0.37.0-1~bookworm1) bookworm; urgency=medium
 
   * Webui d'administration, onglet « Salons » : salons et sous-salons,

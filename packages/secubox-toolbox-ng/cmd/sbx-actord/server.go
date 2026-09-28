@@ -42,6 +42,11 @@ type Server struct {
 	ledger      *evidence.Ledger
 	accum       map[string]*actorSignals
 
+	// Clé des identifiants de campagne de la vue réduite (vue.go), tirée au
+	// premier usage et gardée en mémoire seulement.
+	cleVueOnce sync.Once
+	cleVue     []byte
+
 	ingested   atomic.Uint64 // enveloppes persistées
 	correlated atomic.Uint64 // enveloppes passées par le pipeline de corrélation
 	dropped    atomic.Uint64 // rejetées faute de place (backpressure, jamais bloquant)
@@ -174,25 +179,46 @@ func (s *Server) serveAPI(path string) error {
 		return err
 	}
 	_ = os.Chmod(path, 0o660)
+	log.Printf("actord: API sur %s", path)
+	srv := &http.Server{Handler: s.apiMux(), ReadHeaderTimeout: 5 * time.Second}
+	return srv.Serve(ln)
+}
+
+// apiMux construit le routage de l'API, séparé de l'écoute pour que les tests
+// passent par les mêmes routes que le socket.
+func (s *Server) apiMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "schema": envelope.SchemaVersion})
 	})
 	// Routes exposées à DEUX préfixes : le préfixe complet (relais nginx du Hall,
 	// chemin préservé) ET la racine (agrégateur admin.gk2, qui STRIPPE le préfixe
-	// /api/v1/<module>). Le même socket sert ainsi le Hall ET le panneau admin,
-	// sans divergence de chemin.
-	for _, p := range []string{"/api/v1/actor", ""} {
-		mux.HandleFunc("GET "+p+"/stats", s.handleStats)
-		mux.HandleFunc("GET "+p+"/actors", s.handleActors)
-		mux.HandleFunc("GET "+p+"/actors/{id}", s.handleActor)
-		mux.HandleFunc("GET "+p+"/campaigns", s.handleCampaigns)
-		mux.HandleFunc("GET "+p+"/evidence/{id}", s.handleEvidence)
-		mux.HandleFunc("POST "+p+"/feedback/{id}", s.handleFeedback)
+	// /api/v1/<module> ; vhost actor.gk2). Le même socket sert ainsi le Hall ET
+	// le panneau admin.
+	//
+	// VUE RÉDUITE PAR DÉFAUT (#1608, voir vue.go). L'arbre préfixé ne sert que
+	// la projection sans cibles ; la racine ne sert la vue complète qu'avec
+	// `X-Sbx-Vue: complete`. Dans la vue réduite, /evidence et /feedback
+	// n'existent pas.
+	for _, arbre := range []struct {
+		p      string
+		relais bool
+	}{{"/api/v1/actor", true}, {"", false}} {
+		p := arbre.p
+		route := func(h http.HandlerFunc) http.HandlerFunc {
+			if arbre.relais {
+				return arbreRelais(h)
+			}
+			return h
+		}
+		mux.HandleFunc("GET "+p+"/stats", route(s.handleStats))
+		mux.HandleFunc("GET "+p+"/actors", route(s.handleActors))
+		mux.HandleFunc("GET "+p+"/actors/{id}", route(s.handleActor))
+		mux.HandleFunc("GET "+p+"/campaigns", route(s.handleCampaigns))
+		mux.HandleFunc("GET "+p+"/evidence/{id}", route(horsVueReduite(s.handleEvidence)))
+		mux.HandleFunc("POST "+p+"/feedback/{id}", route(horsVueReduite(s.handleFeedback)))
 	}
-	log.Printf("actord: API sur %s", path)
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-	return srv.Serve(ln)
+	return mux
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, _ *http.Request) {

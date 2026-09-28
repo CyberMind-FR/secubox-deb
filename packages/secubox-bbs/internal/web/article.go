@@ -67,7 +67,9 @@ func (s *Server) articleNouveau(w http.ResponseWriter, r *http.Request, v visite
 		if t := r.URL.Query().Get("t"); t != "" {
 			var tid int64
 			fmtSscan(t, &tid)
-			if th, err := s.st.ThreadByID(tid); err == nil {
+			// Le titre d'un dossier ne se recopie que si le dossier est visible :
+			// un salon cache ne se devine pas par le pre-remplissage.
+			if th, err := s.st.ThreadByID(tid); err == nil && p.masque.voit(th.CategoryID) {
 				p.Art = store.Article{ThreadID: tid, Title: th.Title}
 			}
 		}
@@ -82,6 +84,12 @@ func (s *Server) articleNouveau(w http.ResponseWriter, r *http.Request, v visite
 	corps := strings.TrimSpace(r.PostFormValue("body"))
 	var tid int64
 	fmtSscan(r.PostFormValue("thread_id"), &tid)
+	// Un article ne se rattache qu'a un dossier que son auteur voit.
+	if tid != 0 {
+		if th, err := s.st.ThreadByID(tid); err != nil || !p.masque.voit(th.CategoryID) {
+			tid = 0
+		}
+	}
 	if titre == "" || corps == "" {
 		p.Err = "Un titre et une première contribution sont nécessaires."
 		p.Art = store.Article{ThreadID: tid, Title: titre}

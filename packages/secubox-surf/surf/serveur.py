@@ -89,18 +89,11 @@ _clients: dict[str, httpx.AsyncClient] = {}
 
 def _client(mode: str) -> httpx.AsyncClient:
     if mode not in _clients:
-        # POIGNEE DE MAIN DU SYSTEME (#1323) : httpx impose sinon sa propre
-        # liste de suites TLS, dont l'empreinte vaut au relais des reponses
-        # differentes de celles du navigateur qu'il sert. Cf. egress.
-        commun = dict(timeout=25.0, follow_redirects=False,
-                      headers=egress.ENTETES_NAV, verify=egress.contexte_tls())
-        if mode == "tor":
-            try:
-                _clients[mode] = httpx.AsyncClient(proxy=egress.TOR_SOCKS, **commun)
-            except TypeError:
-                _clients[mode] = httpx.AsyncClient(proxies=egress.TOR_SOCKS, **commun)
-        else:
-            _clients[mode] = httpx.AsyncClient(**commun)
+        # UN SEUL ATELIER : egress. Il porte la poignee de main du systeme
+        # (#1323 : httpx imposerait sinon sa propre liste de suites TLS) ET la
+        # sortie gardee (#1609 : ni la box, ni son reseau). Aucun client du
+        # relais ne se fabrique ailleurs.
+        _clients[mode] = egress.client_async(mode)
     return _clients[mode]
 
 
@@ -501,6 +494,15 @@ async def app(scope, receive, send):
         r = await _client(mode).request(methode, cible_url, headers=entetes_req,
                                         content=corps_req)
     except httpx.HTTPError as e:
+        # LA SORTIE NE MENE QU'A L'EXTERIEUR (#1609) : une destination de la
+        # box ou de son reseau est refusee net — pas de saut de portail, pas
+        # de repli, et on le dit comme un refus, pas comme une panne.
+        if egress.refus_de(e):
+            await repond(403, [("content-type", "text/html; charset=utf-8"),
+                               ("cache-control", "no-store")],
+                         _bannette(cible, "Cette adresse mène à la box ou à son "
+                                   "réseau local : le relais ne l'ouvre pas.", 403))
+            return
         # Un portail injoignable (DNS bloque par la box) porte souvent l'URL de
         # retour : on saute le portail plutot que d'echouer.
         dest = _saut_portail()

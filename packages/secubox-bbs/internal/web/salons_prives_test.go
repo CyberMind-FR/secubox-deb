@@ -40,8 +40,14 @@ func TestLAccesDirectRepondIntrouvableEtNonInterdit(t *testing.T) {
 		t.Skipf("source indisponible : %v", err)
 	}
 	src := string(brut)
-	if !strings.Contains(src, "SalonsCachesPour") {
+	// Le filtre est calcule par le masque commun (visibilite_salons.go, #1608),
+	// et `base` doit l'appliquer a la liste des salons.
+	if !strings.Contains(src, "s.masqueVisiteur(v)") || !strings.Contains(src, "masque.voit(c.ID)") {
 		t.Fatal("le filtre n'est pas applique a la construction de page")
+	}
+	if masque, err := os.ReadFile("visibilite_salons.go"); err != nil ||
+		!strings.Contains(string(masque), "SalonsCachesPour") {
+		t.Fatal("le masque commun ne s'appuie plus sur SalonsCachesPour")
 	}
 	// Le handler de salon ne doit jamais rendre un 403 : il cherche dans la
 	// liste deja filtree, et `NotFound` fait le reste.

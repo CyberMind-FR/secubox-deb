@@ -1,3 +1,9 @@
+secubox-zia (0.1.18-1~bookworm1) bookworm; urgency=high
+
+  * Rôle aligné sur #1581 : administrateur réel seulement ; un appareil admis n'est jamais admin (#1608).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:16:33 +0200
+
 secubox-zia (0.1.17-1~bookworm1) bookworm; urgency=medium
 
   * menu.d : catégorie « mind » (« systeme » n'existe pas : ZIA n'apparaissait

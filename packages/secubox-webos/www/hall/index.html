@@ -1770,7 +1770,9 @@ function rowHTML(o){
   // éjecte le lien. Les deux actions sont donc des <button> (ouverture en JS).
   if(o.tab)   act+='<button type="button" class="ra" data-ra="tab" data-href="'+esc(o.tab)+'" title="Nouvel onglet">⧉</button>';
   act+='</span>';
-  return '<a '+o.attrs+'><span class="g">'+(o.icon||'▦')+'</span>'
+  // L'icône vient aussi des menus de service et de la nav poussée par le cadre
+  // embarqué (#1609) : c'est du texte (entité décodée), jamais du balisage.
+  return '<a '+o.attrs+'><span class="g">'+esc(icon(String(o.icon||'')))+'</span>'
     +'<span class="lb">'+esc(o.label)+'</span>'+led+act+'</a>';
 }
 function tile(cls,lbl,big,small,sub){
@@ -1962,6 +1964,70 @@ function loadCtx(id, cur){
     }).catch(()=>{});
 }
 
+// ── QUI PARLE AU HALL (#1609) ────────────────────────────────────────────────
+//
+// Chaque type de message a SES cadres émetteurs, posés par le Hall lui-même,
+// et l'on exige en plus l'ORIGINE EXACTE du document de ce cadre : celle de
+// son src. Un cadre parti ailleurs, un cadre imbriqué dans un cadre, une
+// fenêtre quelconque : rien de tout cela ne parle au nom d'une carte.
+//
+// Aucun cadre du Hall n'est sandboxé sans allow-same-origin : une origine
+// opaque ("null") n'est donc jamais celle d'un émetteur attendu. Elle ne
+// déclenche aucune action, et l'on ne répond jamais à '*'.
+function origineDe(u){
+  try{ const o=new URL(String(u||''), location.href).origin; return o==='null'?'':o; }catch(e){ return ''; }
+}
+function cadreParmi(ev, cadres){
+  if(!ev || !ev.source || !ev.origin || ev.origin==='null') return null;
+  for(let k=0;k<cadres.length;k++){
+    const f=cadres[k];
+    if(f && f.contentWindow===ev.source && origineDe(f.src)===ev.origin) return f;
+  }
+  return null;
+}
+function cadreEmetteur(ev, sel){ return cadreParmi(ev, document.querySelectorAll(sel)); }
+// Les cadres d'où parlent les cartes : la mosaïque, et le service embarqué
+// (vue pleine ou lecteur du viewer). `var` : lue par des écouteurs, jamais en
+// zone morte.
+var CADRES_CARTES='iframe[data-micro], iframe[data-embarque], #eb-frames iframe';
+// Un identifiant de service entre dans des sélecteurs et dans le HTML du dock.
+function idSur(x){ return typeof x==='string' && /^[A-Za-z0-9_-]{1,64}$/.test(x); }
+// UNE ADRESSE REÇUE N'OUVRE QUE DU WEB (#1609). Avant de naviguer, de poser
+// un src de cadre ou d'ouvrir le lecteur : http(s), ou un chemin de la box.
+// Tout autre schéma (javascript:, data:, blob:…) rend '' — rien ne s'ouvre.
+function urlOuvrable(u){
+  const s=String(u==null?'':u).trim();
+  if(/^\/(?![\/\\])/.test(s)) return s;
+  if(!/^https?:\/\//i.test(s)) return '';
+  try{ const x=new URL(s); return (x.protocol==='http:'||x.protocol==='https:') ? s : ''; }catch(e){ return ''; }
+}
+// Un hôte nu (« www.site.fr ») reste une adresse à surfer ; une adresse qui
+// porte un autre schéma que http(s) n'en est pas une.
+function horsWeb(u){
+  const s=String(u==null?'':u).trim();
+  return /^[a-z][a-z0-9+.\-]*:/i.test(s) && !urlOuvrable(s);
+}
+// LE SORT D'UNE DIFFUSION (#1609). La box rend l'état qu'elle a posé : une
+// diffusion n'a eu lieu que si la réponse est 2xx ET dit `actif`. 401/403 :
+// la diffusion au parc est réservée aux personnes connectées.
+function sortDiffusion(r, arret){
+  return r.json().catch(()=>null).then(j=>({statut:r.status,
+    ok:!!(r.ok && j && (arret ? j.actif===false : j.actif===true))}));
+}
+function texteDiffusion(s){
+  if(s.statut===401 || s.statut===403) return 'Réservé aux personnes connectées';
+  return 'Diffusion impossible ('+(s.statut>=300 ? 'HTTP '+s.statut
+    : s.statut ? 'adresse refusée' : 'box injoignable')+')';
+}
+// Un bouton dit un instant le refus, puis reprend son libellé.
+function signaleRefus(b, s, court){
+  if(!b || s.ok) return;
+  const t=b.textContent, ti=b.title, bloque=(s.statut===401 || s.statut===403);
+  b.textContent=court ? (bloque?'🔒':'⚠️') : (bloque?'🔒 ':'⚠️ ')+texteDiffusion(s);
+  b.title=texteDiffusion(s);
+  setTimeout(()=>{ b.textContent=t; b.title=ti; }, 2500);
+}
+
 // ── SOURCES POUSSEES DANS LA MEGABARRE (#1194e / SocialRelay) ───────────────
 //
 // loadCtx() peuple la nav contextuelle depuis un menu SERVEUR (les salons du
@@ -1977,9 +2043,11 @@ addEventListener('message', ev=>{
   const d=ev.data;
   if(!d || d.sbx!=='contexte' || !d.id) return;
   // Seulement du service actuellement embarque : une carte en aperçu ne doit
-  // pas pouvoir peupler la nav d'un autre.
+  // pas pouvoir peupler la nav d'un autre. Le message vient donc de SON cadre
+  // embarqué, à l'origine de ce cadre (#1609).
   if(!_svc || _svc.id!==d.id) return;
-  poseContextePousse(d.id, d.titre, d.items||[]);
+  if(!cadreEmetteur(ev, '#eb-frames iframe')) return;
+  poseContextePousse(d.id, d.titre, Array.isArray(d.items)?d.items:[]);
 });
 
 function poseContextePousse(id, titre, items){
@@ -2071,8 +2139,10 @@ document.addEventListener('click',e=>{
       document.querySelector('iframe[data-apercu="'+_svc.id+'"]')
     ];
     const vus=new Set();
+    // À l'origine du cadre, jamais à '*' (#1609).
     cibles.forEach(f=>{ if(f && f.contentWindow && !vus.has(f)){ vus.add(f);
-      try{ f.contentWindow.postMessage({sbx:'contexte-choix', cle:cp.dataset.ctxpush}, '*'); }catch(err){} }});
+      const o=origineDe(f.src); if(!o) return;
+      try{ f.contentWindow.postMessage({sbx:'contexte-choix', cle:cp.dataset.ctxpush}, o); }catch(err){} }});
     setMenu(false); return; }
   // Point d'entrée unique : menus plats, cartes principales et cartes du parc.
   const op=e.target.closest('[data-open]');
@@ -2683,6 +2753,9 @@ function ouvreSurf(url){
   // box pour au moins produire une URL valide (le viewer intercepte déjà les
   // médias locaux en amont ; ici c'est un filet de sécurité).
   if(url && String(url).charAt(0)==='/') url = location.origin + url;
+  // SEUL LE WEB SE SURFE (#1609) : javascript:, data: et les autres schémas
+  // n'ouvrent rien.
+  if(url && horsWeb(url)) return;
   const th = root.getAttribute('data-theme')
     || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   const f = document.getElementById('surf-ov-f');
@@ -2816,7 +2889,10 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     var zone=E('pastilles-direct'); if(!zone) return;
     var p=zone.querySelector('.fpast[data-direct]'); if(p) p.remove();
   }
-  addEventListener('message', function(ev){ if(ev.data && ev.data.sbx==='broadcast-on') setTimeout(sonde,300); });
+  // Le réveil vient du Hall lui-même ou de la carte Surf qu'il a posée (#1609).
+  addEventListener('message', function(ev){ if(ev.data && ev.data.sbx==='broadcast-on'
+    && ((ev.source===window && ev.origin===location.origin) || cadreEmetteur(ev, '#surf-ov-f')))
+    setTimeout(sonde,300); });
   function sonde(){
     if(document.hidden || navigator.onLine===false) return;   // pas de sonde caché/hors-ligne
     var ov=E('tv-ov'), t=E('tv-ov-t');
@@ -2920,6 +2996,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // garde une URL /videos/embed/ déjà prête), avec reprise (&start). C'est LE play
   // souverain d'une vidéo déjà rapatriée sur notre instance.
   function jouePeertube(u, depart){
+    if(!urlOuvrable(u)) return;   // src de cadre : du web seulement (#1609)
     var pu=u;
     try{
       var U=new URL(u, location.origin);
@@ -2987,6 +3064,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     });
   }
   function ouvre(url, titre, depart){
+    // Le lecteur ne joue que du web ou un chemin de la box (#1609) : l'adresse
+    // peut venir d'une carte, d'une diffusion du parc ou du stockage local.
+    if(!urlOuvrable(url)) return;
     if(!dom()) return;
     courant=url; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
     zoomSource=null;   // une vidéo « attrapée » ne se rend pas à une carte (déplacement)
@@ -3105,6 +3185,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // suivent le même direct serveur). C'est l'intégration « comme le viewer mini »
   // demandée pour le pop-up radio, au lieu d'une fenêtre détachée.
   function ouvreLecteur(id, src, titre){
+    if(!urlOuvrable(src) || !idSur(id)) return;   // src de cadre : du web seulement (#1609)
     if(!dom()) return;
     courant=null; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
     // Un lecteur de service (radio…) porte SA propre pastille : on retire le
@@ -3175,10 +3256,18 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     });
     E('viewer-cast').addEventListener('click',function(){
       if(!courant) return;
+      var b=this;
+      // LE BOUTON SUIT LA RÉPONSE DE LA BOX (#1609), pas l'intention : une
+      // diffusion refusée ne s'allume pas, un arrêt refusé ne s'éteint pas.
       if(diffuse){
         fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({url:''})}).catch(function(){});
-        diffuse=false; this.classList.remove('on'); this.title='Diffuser au parc (📡 direct)';
+          body:JSON.stringify({url:''})})
+          .then(function(r){ return sortDiffusion(r, true); })
+          .catch(function(){ return {ok:false, statut:0}; })
+          .then(function(s){
+            if(!s.ok){ signaleRefus(b, s, true); return; }
+            diffuse=false; b.classList.remove('on'); b.title='Diffuser au parc (📡 direct)';
+          });
       } else {
         // DIFFUSION SOUVERAINE (#1237) : si le sas a rapatrie la video (vid),
         // on diffuse le FLUX YTSAS (cache local, sans pub/Google) plutot que
@@ -3186,13 +3275,19 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
         var burl = vid ? ('/api/v1/ytsas/stream/'+vid) : courant;
         // POSITION pour la resynchro du parc (#1237) : on envoie ou on en est.
         var vel = media.querySelector('video'); var pos = vel ? (vel.currentTime||0) : 0;
+        var tb=titreEl.textContent;
         fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({url:burl,titre:titreEl.textContent,pos:pos})}).catch(function(){});
-        journalDiffusion(burl, titreEl.textContent);   // trace dans la slice 📡
-        diffuse=true; this.classList.add('on'); this.title='Arrêter la diffusion';
-        // Reveil immediat de la pastille sur CE Hall (au lieu d'attendre le
-        // sonde a 5s) : le recepteur broadcast ecoute 'broadcast-on'. (#1237)
-        try{ postMessage({sbx:'broadcast-on'},'*'); }catch(e){}
+          body:JSON.stringify({url:burl,titre:tb,pos:pos})})
+          .then(function(r){ return sortDiffusion(r); })
+          .catch(function(){ return {ok:false, statut:0}; })
+          .then(function(s){
+            if(!s.ok){ signaleRefus(b, s, true); return; }
+            journalDiffusion(burl, tb);   // trace dans la slice 📡
+            diffuse=true; b.classList.add('on'); b.title='Arrêter la diffusion';
+            // Reveil immediat de la pastille sur CE Hall (au lieu d'attendre le
+            // sonde a 5s) : le recepteur broadcast ecoute 'broadcast-on'. (#1237)
+            try{ postMessage({sbx:'broadcast-on'}, location.origin); }catch(e){}
+          });
       }
     });
     E('viewer-full').addEventListener('click',function(){
@@ -3223,7 +3318,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     if(recall) recall.addEventListener('click', function(e){
       var b=e.target.closest('[data-u]'); if(!b) return;
       var u=b.getAttribute('data-u');
-      if(b.getAttribute('data-act')==='diffuse') reDiffuse(u, b.getAttribute('data-titre')||'');
+      if(b.getAttribute('data-act')==='diffuse') reDiffuse(u, b.getAttribute('data-titre')||'', b);
       else voirOuSurfer(u);
     });
     histRend(); favRend(); diffRend();
@@ -3232,6 +3327,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // surfer la page dans le BiB. Le lien vu entre dans l'historique.
   function voirOuSurfer(u){
     u=String(u||'').trim(); if(!u) return;
+    if(horsWeb(u)) return;   // ni javascript:, ni data: — du web ou la box (#1609)
     // LIEN LOCAL (#1266b) : un chemin relatif (/api/…, /media/…, /stream…) est une
     // ressource DE LA BOX, pas une page externe. Le surf le préfixait en
     // 'https://<chemin>' — hôte vide, lien mort. On le garde RELATIF pour le
@@ -3368,17 +3464,23 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     var z=E('vb-diff'); if(!z) return;
     z.innerHTML=diffLire().map(function(x){
       var lbl=(sbxTitres.vrai(x.titre,x.u)||sbxTitres.connu(x.u)||sbxTitres.brut(x.u)).slice(0,40);
-      var n=x.n||1;
+      var n=Math.max(1, parseInt(x.n,10)||1);   // un compteur, donc un entier
       return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×) : '+esc(x.titre||x.u)+'">📡 '+esc(lbl)+(n>1?' <span class="vb-n">×'+n+'</span>':'')+'</button>';
     }).join('');
       sbxTitres.nomme(diffLire().map(function(x){ return x.u; }), diffRend);
   }
-  function reDiffuse(u, titre){
+  function reDiffuse(u, titre, b){
     if(!u) return;
+    // Ne se cumule que ce que la box a accepté (#1609) ; un refus se dit.
     fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url:u,titre:titre||''})}).catch(function(){});
-    journalDiffusion(u, titre);
-    try{ postMessage({sbx:'broadcast-on'},'*'); }catch(e){}
+      body:JSON.stringify({url:u,titre:titre||''})})
+      .then(function(r){ return sortDiffusion(r); })
+      .catch(function(){ return {ok:false, statut:0}; })
+      .then(function(s){
+        if(!s.ok){ signaleRefus(b, s, false); return; }
+        journalDiffusion(u, titre);
+        try{ postMessage({sbx:'broadcast-on'}, location.origin); }catch(e){}
+      });
   }
   window.rendViewerDiffusions=diffRend;
 
@@ -3400,8 +3502,11 @@ function ouvreHote(hote, url){
   fermeSurf && fermeSurf();
   openService(f.id, 'embed');
   // openService remet le cadre a la racine ; on le pointe ensuite sur l'URL
-  // demandee (le fragment porte l'id du sujet MetaNews).
-  if(url){ setTimeout(()=>{ const fr=document.querySelector('#eb-frames iframe'); if(fr) fr.src=url; }, 0); }
+  // demandee (le fragment porte l'id du sujet MetaNews). Cette URL est du web
+  // ET vit sur l'hôte demandé (#1609) : sinon le service reste à sa racine.
+  let cible='';
+  try{ if(/^https?:\/\//i.test(urlOuvrable(url)) && new URL(url).host===hote) cible=url; }catch(e){}
+  if(cible){ setTimeout(()=>{ const fr=document.querySelector('#eb-frames iframe'); if(fr) fr.src=cible; }, 0); }
 }
 // ═══ COUCHE D'ACTIONS ZIA (RFC) ═══════════════════════════════════════════════
 // ZIA n'exécute rien : elle PROPOSE une action déjà validée côté serveur
@@ -3433,11 +3538,11 @@ const SBXCapabilities=(function(){
   }
   return {resolve:resolve, recharge:charge};
 })();
-// Une commande n'est honorée que si elle vient d'un cadre CONNU du Hall (le chat
-// ZIA), pas d'un window quelconque — l'action agit sur un AUTRE service.
-function estCadreConnu(src){
-  if(!src) return false;
-  return [].slice.call(document.querySelectorAll('iframe')).some(f=>f.contentWindow===src);
+// Une commande n'est honorée que si elle vient du chat ZIA — sa carte ou sa vue
+// embarquée, à l'origine exacte de ce cadre (#1609) — pas d'un window
+// quelconque ni d'un autre cadre du Hall : l'action agit sur un AUTRE service.
+function cadreZia(ev){
+  return cadreEmetteur(ev, 'iframe[data-micro="zia"], iframe[data-embarque="zia"]');
 }
 function sbxExecuteAction(req){
   if(!req || req.kind!=='sbx-action' || !req.service || !req.action) return false;
@@ -3515,16 +3620,25 @@ addEventListener('message', ev=>{
     // répondait donc de la même façon qu'elle ait agi ou non. Un échec qui
     // ressemble à un succès est pire qu'une erreur — on cherche le problème
     // partout sauf là où il est.
-    if(estCadreConnu(ev.source)){
+    if(cadreZia(ev)){
       const ok = sbxExecuteAction(d.req);
+      // À l'origine exacte du cadre ZIA, jamais à '*' (#1609).
       try{
         ev.source.postMessage({sbx:'sbx-action-result', id:(d.req&&d.req.id)||null,
           service:(d.req&&d.req.service)||null, action:(d.req&&d.req.action)||null,
-          ok:!!ok}, ev.origin && ev.origin!=='null' ? ev.origin : '*');
+          ok:!!ok}, ev.origin);
       }catch(e){ /* cadre parti entre-temps */ }
     }
     return;
   }
+  // QUI PEUT DIRE QUOI (#1609). Surfer, voir, diffuser, rapatrier, ouvrir un
+  // hôte : c'est une carte de la mosaïque ou le service embarqué qui le
+  // demande. Les messages du surf viennent de la carte Surf posée par le Hall.
+  // Un message qui n'arrive pas de là, à l'origine exacte du cadre, est ignoré.
+  if(['surf','voir','diffuser','souverain','ouvre-hote'].indexOf(d.sbx)>=0
+     && !cadreEmetteur(ev, CADRES_CARTES)) return;
+  if(['surf-catch','surf-vide','surf-close','surf-hote','surf-stats-up'].indexOf(d.sbx)>=0
+     && !cadreEmetteur(ev, '#surf-ov-f')) return;
   if(d.sbx==='surf' && d.url){ ouvreSurf(d.url); return; }
   // VOIR : une cardlet demande d'ouvrir un media dans le VIEWER (peertube,
   // youtube, video directe). #1237 — le lien du bas de la carte peertube.
@@ -3542,13 +3656,22 @@ addEventListener('message', ev=>{
   // parc entier irait taper YouTube, ce qui tue la souveraineté — puis on pousse
   // le broadcast (même endpoint que le 📡 du viewer) et on réveille la pastille.
   if(d.sbx==='diffuser' && d.url){
-    // Trace dans la slice 📡 du viewer (#1266b) : on journalise l'ORIGINE
-    // demandée (ce que l'humain a diffusé), pas l'URL souveraine résolue.
-    if(typeof window.journalDiffusion==='function'){ try{ window.journalDiffusion(d.url, d.titre); }catch(e){} }
+    // LA CARTE APPREND LE SORT DE SA DEMANDE (#1609) : la réponse de la box
+    // repart vers le cadre émetteur, à son origine exacte. Seule une diffusion
+    // acceptée entre dans la slice 📡 du viewer (#1266b), qui journalise
+    // l'ORIGINE demandée (ce que l'humain a diffusé), pas l'URL souveraine.
+    const src=ev.source, org=ev.origin;
     const pousse=(u,t)=>{ fetch('/api/v1/webos/public/broadcast',{method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({url:u,titre:t||d.titre||''})}).catch(()=>{});
-      try{ postMessage({sbx:'broadcast-on'},'*'); }catch(e){} };
+        body:JSON.stringify({url:u,titre:t||d.titre||''})})
+      .then(r=>sortDiffusion(r)).catch(()=>({ok:false, statut:0}))
+      .then(s=>{
+        if(s.ok){
+          if(typeof window.journalDiffusion==='function'){ try{ window.journalDiffusion(d.url, d.titre); }catch(e){} }
+          try{ postMessage({sbx:'broadcast-on'}, location.origin); }catch(e){}
+        }
+        try{ src.postMessage({sbx:'diffuser-resultat', url:String(d.url), ok:s.ok, statut:s.statut}, org); }catch(e){}
+      }); };
     fetch('/api/v1/ytsas/resolve?url='+encodeURIComponent(d.url),{headers:{'Accept':'application/json'}})
       .then(r=>r.ok?r.json():null)
       .then(j=>{
@@ -3587,13 +3710,18 @@ addEventListener('message', ev=>{
   // Le cadre a navigue : on met a jour l'hote affiche dans l'entete.
   if(d.sbx==='surf-hote' && d.hote){ const h=document.getElementById('surf-ov-h'); if(h) h.textContent=d.hote; return; }
   if(d.sbx==='surf-stats-up' && d.stats){
+    // DES NOMBRES, EN TEXTE (#1609) : un compteur est un entier borné, et rien
+    // de ce qui arrive par message n'entre dans le HTML.
     const S=d.stats, z=document.getElementById('surf-ov-stats'); if(!z) return;
-    const total=S.total||0, pct=total?Math.round((S.trackers||0)/total*100):0;
-    const pic=(ic,n,l)=>'<span class="s'+((n||0)?'':' z')+'" title="'+l+'">'+ic+' <b>'+(n||0)+'</b></span>';
-    z.innerHTML=pic('🎯',S.trackers,'traqueurs')+pic('📢',S.pubs,'pubs')
-      +pic('🍪',S.cookies,'cookies réécrits')+pic('🔔',S.notifs,'notifications bloquées')
-      +pic('🚫',S.popups,'popups coupées')
-      +'<span class="cam" title="part de pistage">🛡️ '+pct+'%</span>';
+    const N=v=>{ const n=Math.floor(Number(v)); return (isFinite(n) && n>0) ? Math.min(n,999999) : 0; };
+    const total=N(S.total), pct=total?Math.min(100,Math.round(N(S.trackers)/total*100)):0;
+    const pic=(ic,v,l)=>{ const n=N(v), s=document.createElement('span'), b=document.createElement('b');
+      s.className='s'+(n?'':' z'); s.title=l; b.textContent=String(n); s.append(ic+' ', b); return s; };
+    const cam=document.createElement('span');
+    cam.className='cam'; cam.title='part de pistage'; cam.textContent='🛡️ '+pct+'%';
+    z.replaceChildren(pic('🎯',S.trackers,'traqueurs'), pic('📢',S.pubs,'pubs'),
+      pic('🍪',S.cookies,'cookies réécrits'), pic('🔔',S.notifs,'notifications bloquées'),
+      pic('🚫',S.popups,'popups coupées'), cam);
     return;
   }
   // AUTO-HAUTEUR D'UNE CARTE MICRO (#1238). Une carte doit faire la taille de
@@ -3601,9 +3729,9 @@ addEventListener('message', ev=>{
   // /micro mesure son contenu et l'annonce. Seul le cadre qui EMET peut fixer
   // SA hauteur (contentWindow===source), et on borne pour qu'un contenu casse
   // ne pousse pas une carte a une hauteur absurde.
-  if(d.sbx==='carte-haut' && d.id && d.h){
+  if(d.sbx==='carte-haut' && idSur(d.id) && d.h){
     const c=document.querySelector('iframe[data-micro="'+d.id+'"]');
-    if(c && c.contentWindow===ev.source){
+    if(c && cadreParmi(ev, [c])){
       const px=Math.max(120,Math.min(360,Number(d.h)||0));
       if(px) c.style.height=px+'px';
     }
@@ -3614,26 +3742,27 @@ addEventListener('message', ev=>{
 addEventListener('message', ev=>{
     const d=ev.data;
     if(!d||d.sbx!=='connexion') return;
-    const c=document.querySelector('iframe[data-micro]');
-    if(!c) return;
+    // Ouvrir la fenêtre de session : à la demande d'une carte de la mosaïque,
+    // à l'origine exacte de son cadre (#1609).
+    if(!cadreEmetteur(ev, 'iframe[data-micro]')) return;
     window.open(SBX_DOMAINE.admin+'/login.html',
                 'sbx-session', 'width=520,height=560,noopener');
   });
 
   addEventListener('message', ev=>{
     const d=ev.data;
-    if(!d||d.sbx!=='valider'||!d.id) return;
+    if(!d||d.sbx!=='valider'||!idSur(d.id)) return;
     const c=document.querySelector('iframe[data-micro="'+d.id+'"]');
-    if(!c||c.contentWindow!==ev.source) return;
+    if(!c||!cadreParmi(ev, [c])) return;
     window.open('/acces.html?svc='+encodeURIComponent(d.id),
                 'sbx-acces', 'width=560,height=600,noopener');
   });
 
   addEventListener('message', ev=>{
     const d=ev.data;
-    if(!d||d.sbx!=='ouvre'||!d.id) return;
+    if(!d||d.sbx!=='ouvre'||!idSur(d.id)) return;
     const c=document.querySelector('iframe[data-micro="'+d.id+'"], iframe[data-apercu="'+d.id+'"]');
-    if(!c||c.contentWindow!==ev.source) return;
+    if(!c||!cadreParmi(ev, [c])) return;
     if(typeof openService==='function') openService(d.id,'embed');
     // On embarque le SERVICE, puis on pointe le cadre sur la page demandée :
     // openService ne connaît que la racine, et le lien cliqué désignait un
@@ -3668,8 +3797,9 @@ addEventListener('message', ev=>{
       const d = ev.data;
       if(!d || d.sbx!=='mood-lumiere' || !d.couleur || renonce) return;
       // On ne retient que ce qui vient d'un cadre qu'on a nous-mêmes posé :
-      // n'importe quelle page encadrée pourrait sinon piloter la lumière.
-      if(!cadresDe('mood').some(f=>f.contentWindow===ev.source)) return;
+      // n'importe quelle page encadrée pourrait sinon piloter la lumière. Et à
+      // l'origine exacte de ce cadre (#1609).
+      if(!cadreParmi(ev, cadresDe('mood'))) return;
       const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
       // Sans jeton, l'appel vaudrait 401 vingt fois par minute. On attend
       // plutôt qu'une session s'ouvre — elle ouvrira aussi la lampe.
@@ -3698,10 +3828,11 @@ addEventListener('message', ev=>{
 
   addEventListener('message', ev=>{
     const d=ev.data;
-    if(!d||d.sbx!=='media'||!d.id) return;
+    if(!d||d.sbx!=='media'||!idSur(d.id)) return;
     // On ne retient que ce qui vient d'un cadre qu'on a nous-mêmes posé :
     // n'importe quelle page encadrée pourrait sinon s'inviter dans la barre.
-    const c=cadresDe(d.id).find(f=>f.contentWindow===ev.source);
+    // Et à l'origine exacte de ce cadre (#1609).
+    const c=cadreParmi(ev, cadresDe(d.id));
     if(!c) return;
     // Celle qui joue prend la main ; l'autre se tait. On ne l'arrête pas —
     // elle reprendra si on revient à elle.
@@ -3769,7 +3900,10 @@ addEventListener('message', ev=>{
     // suivi joue (l'instance active reste maîtresse jusqu'à un vrai relais).
     const _cur=flux.get(d.id);
     if(!d.joue && _cur && _cur.cadre && _cur.cadre!==c && _cur.etat && _cur.etat.joue){ return; }
-    flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
+    // LE LECTEUR D'UNE CARTE EST LE SIEN (#1609) : il sera posé en src d'un
+    // cadre du viewer, il vit donc sur l'origine de la carte qui l'annonce.
+    const etat=(d.lecteur && origineDe(d.lecteur)!==ev.origin) ? Object.assign({}, d, {lecteur:''}) : d;
+    flux.set(d.id,{maj:Date.now(), cadre:c, etat:etat});
     dessine();
   });
 
@@ -3777,9 +3911,10 @@ addEventListener('message', ev=>{
   // ne détache plus dans une fenêtre : il demande au Hall de l'agrandir dans le
   // viewer mini. Même chemin que le zoom du dock — source audio unique, synchro.
   addEventListener('message', ev=>{
-    const d=ev.data; if(!d || d.sbx!=='zoom' || !d.id) return;
-    // On ne zoome qu'un flux connu du dock, et depuis un cadre qu'on a posé.
-    if(!cadresDe(d.id).some(f=>f.contentWindow===ev.source)) return;
+    const d=ev.data; if(!d || d.sbx!=='zoom' || !idSur(d.id)) return;
+    // On ne zoome qu'un flux connu du dock, et depuis un cadre qu'on a posé,
+    // à son origine exacte (#1609).
+    if(!cadreParmi(ev, cadresDe(d.id))) return;
     faireZoom(d.id);
   });
 
@@ -4906,8 +5041,10 @@ const CARDLET_ICONES = {
       }, 1300);
     }
     addEventListener('message', function(ev){ var d=ev.data; if(!d) return;
-      if(d.sbx==='aide-ferme' && mode==='pin'){ diagIfr=null; close(); return; }
-      if(d.sbx==='aide-zones' && mode==='pin' && diagIfr && ev.source===diagIfr.contentWindow){
+      // La bulle n'écoute que la carte inspectée, à l'origine de son cadre (#1609).
+      var deLaCarte = !!(diagIfr && cadreParmi(ev, [diagIfr]));
+      if(d.sbx==='aide-ferme' && mode==='pin' && deLaCarte){ diagIfr=null; close(); return; }
+      if(d.sbx==='aide-zones' && mode==='pin' && deLaCarte){
         clearTimeout(diagTimer);
         elType.innerHTML='<b>Reverse-design'+(d.slice?(' · '+esc0(d.slice)):'')+'</b>'; elType.classList.remove('hide');
         elSpec.textContent='Ce que montre chaque zone :';

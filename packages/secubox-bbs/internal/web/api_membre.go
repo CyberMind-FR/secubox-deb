@@ -58,8 +58,14 @@ func (s *Server) apiMSalons(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	// LA MEME REGLE QUE LE RAIL DU SITE : un salon prive auquel ce compte n'a
+	// pas ete convie n'apparait pas, ni son nom ni son volume.
+	m := s.masqueCompte(id)
 	out := make([]map[string]any, 0, len(cats))
 	for _, c := range cats {
+		if !m.voit(c.ID) {
+			continue
+		}
 		out = append(out, map[string]any{
 			"slug": c.Slug, "titre": c.Title, "description": c.Desc, "fils": c.Threads,
 		})
@@ -76,7 +82,7 @@ func (s *Server) apiMFils(w http.ResponseWriter, r *http.Request) {
 	// Un jeton sans membre reconnu ne voit que le public — le meme traitement
 	// qu'un visiteur du site.
 	pub := id == 0
-	fils, err := s.st.Recent(50, pub)
+	fils, err := s.filsRecents(50, pub, s.masqueCompte(id))
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -109,6 +115,12 @@ func (s *Server) apiMFil(w http.ResponseWriter, r *http.Request) {
 	pub := id == 0
 	if pub && t.Visibility != store.VisPublic {
 		// 404 et non 403 : un 403 confirmerait l'existence du fil.
+		jsonErr(w, http.StatusNotFound, "fil inconnu")
+		return
+	}
+	// Un fil d'un salon que ce compte ne voit pas n'existe pas pour lui : meme
+	// reponse, mot pour mot, qu'un identifiant qui ne designe rien.
+	if !s.masqueCompte(id).voit(t.CategoryID) {
 		jsonErr(w, http.StatusNotFound, "fil inconnu")
 		return
 	}
@@ -154,7 +166,9 @@ func (s *Server) apiMReponse(w http.ResponseWriter, r *http.Request, fil, membre
 		return
 	}
 	t, err := s.st.ThreadByID(fil)
-	if err != nil {
+	if err != nil || !s.masqueCompte(membre).voit(t.CategoryID) {
+		// On n'ecrit pas dans un salon qu'on ne voit pas — et on ne dit pas
+		// qu'il existe.
 		jsonErr(w, http.StatusNotFound, "fil inconnu")
 		return
 	}
