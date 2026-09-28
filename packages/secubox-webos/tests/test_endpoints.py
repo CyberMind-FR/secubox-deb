@@ -5,7 +5,7 @@
 """SecuBox-Deb :: WebOS — endpoints /public/services (minimal) et /services (JWT)."""
 from fastapi.testclient import TestClient
 import api.main as m
-from api.main import app, require_jwt
+from api.main import app, require_session as require_jwt
 
 
 def _seed():

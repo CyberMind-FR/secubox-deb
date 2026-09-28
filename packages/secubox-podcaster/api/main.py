@@ -33,7 +33,7 @@ from starlette.requests import ClientDisconnect
 from fastapi.responses import Response, FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core.auth import router as auth_router, require_jwt, require_session
 from secubox_core.logger import get_logger
 
 from . import store
@@ -518,7 +518,7 @@ async def feed_cover(fid: int):
 # ════════════════════════════════════════════════════════════════════
 # Authenticated endpoints (manage)
 # ════════════════════════════════════════════════════════════════════
-@router.get("/feeds", dependencies=[Depends(require_jwt)])
+@router.get("/feeds", dependencies=[Depends(require_session)])  # écoute (#1581)
 async def feeds():
     _ensure_worker()
     return {"feeds": store.list_feeds()}
@@ -596,7 +596,7 @@ async def import_url(body: ImportIn):
     return {"ok": True, "started": url}
 
 
-@router.get("/import/status", dependencies=[Depends(require_jwt)])
+@router.get("/import/status", dependencies=[Depends(require_session)])  # écoute (#1581)
 async def import_status():
     return importer.JOB
 
@@ -745,7 +745,7 @@ def _publish_audiobook_zip(tmp: Path, title: str) -> dict:
         raise
 
 
-@router.get("/episodes", dependencies=[Depends(require_jwt)])
+@router.get("/episodes", dependencies=[Depends(require_session)])  # écoute (#1581)
 async def episodes(feed_id: Optional[int] = None, state: Optional[str] = None):
     _ensure_worker()
     return {"episodes": store.list_episodes(feed_id, state)}
@@ -774,7 +774,7 @@ async def download(ep_id: int):
     return {"ok": True, "queued": ep_id}
 
 
-@router.get("/downloads", dependencies=[Depends(require_jwt)])
+@router.get("/downloads", dependencies=[Depends(require_session)])  # écoute (#1581)
 async def downloads():
     _ensure_worker()
     return {"downloads": store.list_episodes(state="downloading")

@@ -71,7 +71,7 @@ def get_user(username: str) -> Optional[Dict[str, Any]]:
     return {
         "username": username,
         "email": entry.get("email"),
-        "role": entry.get("role", "admin"),
+        "role": entry.get("role", "user"),  # rôle absent ≠ admin (#1581)
         "enabled": True,
         "password_hash": None,           # not used in fallback
         "must_change_password": False,
@@ -203,7 +203,7 @@ def load_with_fallback() -> Dict[str, Any]:
         users.append({
             "username": name,
             "email": entry.get("email"),
-            "role": entry.get("role", "admin"),
+            "role": entry.get("role", "user"),  # rôle absent ≠ admin (#1581)
             "enabled": True,
             "_fallback": True,
         })

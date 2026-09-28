@@ -46,10 +46,11 @@ from pydantic import BaseModel
 # topologie de service : socket dédié, system python3).
 sys.path.insert(0, "/usr/lib/python3/dist-packages")
 try:
-    from secubox_core.auth import require_jwt
+    from secubox_core.auth import require_jwt, require_session
 except ImportError:  # pragma: no cover - dev sans secubox_core installé
     async def require_jwt():
         return {"sub": "admin"}
+    require_session = require_jwt
 
 from . import cli as _cli
 from .diff import ProtectedViolation, plan_changes
@@ -643,8 +644,10 @@ def create_app() -> FastAPI:
             )
         return m
 
+    # Réveiller est un geste d'USAGER : la carte « Autoriser » du Hall le fait
+    # pour un visiteur (#1581). Endormir et le reste restent à l'administration.
     @app.post("/api/v1/profiles/wake")
-    async def wake_module(body: ModuleAction, _claims=Depends(require_jwt)):
+    async def wake_module(body: ModuleAction, _claims=Depends(require_session)):
         root = _root()
         mod_dir, _prof_dir, _pins_file, _active = _cli._paths(root)
         _sleepable_module_or_error(mod_dir, body.module)
