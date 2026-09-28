@@ -165,6 +165,9 @@ type page struct {
 	Medaillons []string
 	// Base : origine publique du site, pour afficher une adresse partageable.
 	Base string
+	// masque : les salons que ce visiteur ne voit pas, calcule UNE FOIS par
+	// `base` et relu par chaque handler qui liste ou ouvre un fil (#1608).
+	masque masqueSalons
 }
 
 type postView struct {
@@ -272,39 +275,30 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	st, _ := s.st.Stats()
 	cats, _ := s.st.Categories(pub)
 
-	// LES SALONS PRIVES DISPARAISSENT ICI, ET NULLE PART AILLEURS (#1044).
+	// LES SALONS PRIVES DISPARAISSENT ICI (#1044), ET LEURS FILS AVEC EUX (#1608).
 	//
 	// `base` alimente TOUTES les pages, et `salon()` cherche sa categorie dans
-	// cette meme liste : filtrer a cet unique endroit ferme donc le rail ET
-	// l'acces direct par adresse. Un salon retire de la liste fait tomber
-	// `salon()` sur son `p.Cat.ID == 0`, donc sur un 404.
+	// cette meme liste : filtrer ici ferme donc le rail ET l'acces direct par
+	// adresse. Un salon retire de la liste fait tomber `salon()` sur son
+	// `p.Cat.ID == 0`, donc sur un 404. Le masque calcule ici voyage dans la
+	// page : l'accueil, le fil ouvert et les compteurs le relisent, sans
+	// recalculer ni pouvoir diverger.
 	//
 	// 404 ET NON 403, ET C'EST LE POINT. Un 403 confirmerait que le salon
 	// existe — c'est precisement ce qu'un salon prive ne doit pas laisser
 	// deviner. Pour qui n'y a pas acces, il n'existe pas.
 	//
 	// SI LA REQUETE ECHOUE, ON CACHE TOUT CE QUI EST PRIVE plutot que rien :
-	// `SalonsCachesPour` rend une liste d'exclusion, et l'erreur ignoree cache
-	// trop, jamais trop peu.
-	if caches, err := s.st.SalonsCachesPour(v.ID, v.Sysop()); err == nil {
-		if len(caches) > 0 {
-			gardes := cats[:0]
-			for _, c := range cats {
-				if !caches[c.ID] {
-					gardes = append(gardes, c)
-				}
-			}
-			cats = gardes
+	// voir construireMasque. Le meme masque sert ensuite aux fils (accueil,
+	// fil ouvert, compteurs) : un salon absent du rail l'est partout.
+	masque := s.masqueVisiteur(v)
+	gardes := cats[:0]
+	for _, c := range cats {
+		if masque.voit(c.ID) {
+			gardes = append(gardes, c)
 		}
-	} else {
-		visibles := cats[:0]
-		for _, c := range cats {
-			if !c.Prive {
-				visibles = append(visibles, c)
-			}
-		}
-		cats = visibles
 	}
+	cats = gardes
 	site := s.opt.Titre
 	ini := "B"
 	if site != "" {
@@ -324,6 +318,7 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 		Online:        online,
 		MembresOnline: membres,
 		RadioBase:     s.opt.RadioBase,
+		masque:        masque,
 	}, pub
 }
 
@@ -404,11 +399,21 @@ func (s *Server) poseNonLus(p *page) {
 	if !p.V.Connecte {
 		return
 	}
-	if nl, err := s.st.FilsNonLus(p.V.ID); err == nil {
+	// LE COMPTEUR NE COMPTE QUE CE QUE LA PAGE MONTRE : un fil d'un salon
+	// cache ne fait pas monter le total, et son salon n'a pas de pastille.
+	if p.masque.tout {
+		return
+	}
+	if nl, err := s.st.FilsNonLusHors(p.V.ID, p.masque.caches); err == nil {
 		p.FilsNonLus = nl
 		p.TotalFilsNonLus = len(nl)
 	}
 	if c, err := s.st.NonLusParSalon(p.V.ID); err == nil {
+		for cat := range c {
+			if !p.masque.voit(cat) {
+				delete(c, cat)
+			}
+		}
 		p.FilsNonLusSalon = c
 	}
 }
@@ -583,7 +588,7 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, pub := s.base(r, "forums")
-	p.Threads, _ = s.st.Recent(30, pub)
+	p.Threads, _ = s.filsRecents(30, pub, p.masque)
 	// #1056 : la rédaction GROUPE le podcaster par FLUX. Un fil « podcaster »
 	// est un épisode ; les montrer tels quels ferait dix dossiers pour un seul
 	// livre audio et noierait le reste. On les écarte du fil des fils et on
@@ -647,7 +652,10 @@ func (s *Server) propagerPiecesPubliques(body string) {
 // sans lui, un média déposé avant le correctif resterait 403 pour un anonyme
 // alors que son message est public. Idempotent, lancé en tâche de fond.
 func (s *Server) backfillPiecesPubliques() {
-	fils, err := s.st.Recent(1000000, true) // fils PUBLICS uniquement
+	// Fils PUBLICS des salons OUVERTS A TOUS uniquement : une piece citee dans
+	// un salon prive ne devient pas lisible hors session, meme depuis un message
+	// marque public.
+	fils, err := s.filsRecents(1000000, true, s.masqueAnonyme())
 	if err != nil {
 		return
 	}
@@ -1091,13 +1099,19 @@ func (s *Server) mediaArchiver(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
-	if s.ytsas == nil {
-		http.Error(w, "raccord ytsas non configuré", http.StatusServiceUnavailable)
-		return
-	}
+	// LE FIL D'ABORD, LA CONFIGURATION ENSUITE : pour qui ne voit pas le salon,
+	// la reponse est celle d'un fil absent, quel que soit l'etat du raccord.
 	id := idDe(r.URL.Path, "/media/archive/")
 	if id == 0 {
 		http.NotFound(w, r)
+		return
+	}
+	if t, err := s.st.ThreadByID(id); err != nil || !s.masqueVisiteur(v).voit(t.CategoryID) {
+		http.NotFound(w, r)
+		return
+	}
+	if s.ytsas == nil {
+		http.Error(w, "raccord ytsas non configuré", http.StatusServiceUnavailable)
 		return
 	}
 	u, err := s.st.SourceMediaFil(id)
@@ -1129,7 +1143,9 @@ func (s *Server) mediaArchiver(w http.ResponseWriter, r *http.Request) {
 // fuite, et le cadre tiers ne transmet de toute facon pas la session.
 func (s *Server) micro(w http.ResponseWriter, r *http.Request) {
 	p, _ := s.base(r, "micro")
-	fils, _ := s.st.Recent(8, true)
+	// Le masque est celui d'un visiteur SANS COMPTE, quel que soit l'appelant :
+	// la carte est la meme pour tous, et un salon prive n'y figure jamais.
+	fils, _ := s.filsRecents(8, true, s.masqueAnonyme())
 	type vue struct {
 		Titre    string `json:"titre"`
 		URL      string `json:"url"`
@@ -1249,6 +1265,12 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// LE SALON COMMANDE, MEME SUR UN FIL PUBLIC : un fil d'un salon que ce
+	// visiteur ne voit pas repond comme un identifiant qui ne designe rien.
+	if !p.masque.voit(t.CategoryID) {
+		http.NotFound(w, r)
+		return
+	}
 
 	// OUVRIR UN FIL LE MARQUE LU (#1020). Pose APRES la garde de visibilite :
 	// marquer avant aurait laisse une trace de lecture sur un fil que le
@@ -1328,7 +1350,9 @@ func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	t, err := s.st.ThreadByID(id)
-	if err != nil {
+	if err != nil || !s.masqueVisiteur(v).voit(t.CategoryID) {
+		// On n'ecrit pas dans un salon qu'on ne voit pas, et le refus ne
+		// distingue pas ce cas d'un fil inexistant.
 		http.NotFound(w, r)
 		return
 	}
@@ -1353,8 +1377,10 @@ func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {
 	// deja. L'envoi part dans une goroutine et son echec ne remonte pas —
 	// quelqu'un qui ecrit dans un forum n'a pas a voir une erreur SMTP.
 	s.notifieReponse(id, v.ID, titreDuFil(s, id))
-	if vis == store.VisPublic {
-		s.propagerPiecesPubliques(body) // #1114 : média public comme le message
+	// #1114 : média public comme le message — SAUF dans un salon prive, dont
+	// rien ne sort hors session.
+	if vis == store.VisPublic && s.salonOuvertATous(t.CategoryID) {
+		s.propagerPiecesPubliques(body)
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
 }
@@ -1386,6 +1412,12 @@ func (s *Server) edition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !store.PeutEditer(v.ID, v.Role, po.AuthorID) {
+		http.NotFound(w, r)
+		return
+	}
+	// Un message d'un salon qu'on ne voit plus ne s'edite plus : la regle est
+	// celle de la lecture, et la reponse la meme.
+	if t, err := s.st.ThreadByID(po.ThreadID); err != nil || !s.masqueVisiteur(v).voit(t.CategoryID) {
 		http.NotFound(w, r)
 		return
 	}
@@ -1880,12 +1912,19 @@ func (s *Server) publier(w http.ResponseWriter, r *http.Request, id int64) {
 	if b, ok := s.st.EstPublie(id); ok {
 		dejaPublie = b.BilletID
 	}
+	// LE LIEN « DISCUTER SUR LE BBS » N'EST POSE QUE SI LE LECTEUR DU BILLET
+	// PEUT LE SUIVRE. Un fil d'un salon prive n'existe pas pour un visiteur
+	// sans compte (404) : le billet reste publiable, sans renvoi vers lui.
+	var retour string
+	if s.salonOuvertATous(t.CategoryID) {
+		retour = "https://" + r.Host + "/t/" + itoa64(id)
+	}
 	f := billets.Fil{ID: id, Titre: t.Title, Public: true, Session: session,
 		BilletID: dejaPublie,
 		// L'attribution nominative est une DECISION, jamais le defaut :
 		// l'autorite de l'operateur est anonymisante.
 		Attribuer: r.PostFormValue("attribuer") == "1",
-		Retour:    "https://" + r.Host + "/t/" + itoa64(id)}
+		Retour:    retour}
 	for _, p := range posts {
 		corps, err := s.st.Body(p)
 		if err != nil {
@@ -1941,6 +1980,10 @@ func (s *Server) basculeVisibilite(w http.ResponseWriter, r *http.Request, id in
 	}
 	if err := s.verifieCSRF(r); err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	if t, err := s.st.ThreadByID(id); err != nil || !s.masqueVisiteur(v).voit(t.CategoryID) {
+		http.NotFound(w, r)
 		return
 	}
 	switch _, err := s.st.BasculeVisibiliteFil(id, v.ID, v.Role); err {
@@ -2033,8 +2076,9 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 		s.rendDef(w, r, "nouveau", "pagenr", p)
 		return
 	}
-	if vis == store.VisPublic {
-		s.propagerPiecesPubliques(corps) // #1114 : média public comme le message
+	// #1114 : média public comme le message — sauf dans un salon prive.
+	if vis == store.VisPublic && s.salonOuvertATous(cat) {
+		s.propagerPiecesPubliques(corps)
 	}
 	if aSource {
 		st := typerSource(src)
@@ -2403,6 +2447,10 @@ func (s *Server) qrFil(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	if !v.Connecte && t.Visibility != store.VisPublic {
+		http.NotFound(w, r)
+		return
+	}
+	if !s.masqueVisiteur(v).voit(t.CategoryID) {
 		http.NotFound(w, r)
 		return
 	}

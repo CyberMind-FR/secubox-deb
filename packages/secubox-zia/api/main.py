@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 import httpx
 
+from secubox_core import auth as _auth, appareils
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
 
@@ -134,37 +135,56 @@ router = APIRouter()
 
 
 # ── RÔLE DÉRIVÉ, JAMAIS DÉCLARÉ (#1411) ────────────────────────────────────
-# Le rôle venait du corps de la requête : « "role":"admin" » suffisait à voir
-# les objets admin et à passer les actions réservées. Il est désormais tiré de
-# la SESSION (Bearer ou cookie, vérifiée par secubox_core : signature, jti,
-# porteur actif). Le corps ne peut plus que RESTREINDRE.
+# Le rôle est tiré de la SESSION (Bearer ou cookie, vérifiée par secubox_core :
+# signature, jti, porteur actif), jamais du corps de la requête. Le corps ne
+# peut que RESTREINDRE.
+#
+# « admin » = L'ADMINISTRATEUR RÉEL, ET LUI SEUL (#1581). Un compte utilisateur
+# actif de rôle admin, jugé par `est_admin_reel` du socle — la règle même de
+# `require_jwt`, pas une copie. UN APPAREIL N'EST JAMAIS ADMIN : il entre en
+# signant, sans mot de passe ni second facteur ; quel que soit le profil reçu à
+# l'admission, il plafonne à « member ».
 _ORDRE = ["guest", "registered", "member", "admin"]
 
+# Profils d'appareil qui valent « member » ; tout autre profil vaut « registered ».
+_PROFILS_MEMBRE = ("admin", "user")
 
-def _role_du_porteur(request: Request) -> str:
-    from secubox_core import auth as _auth, user_store, appareils
+
+def _porteur(request: Request) -> Optional[dict]:
+    """Le payload du premier jeton VALIDE (Bearer d'abord, puis cookie), sinon None.
+
+    Les deux sources sont essayées, comme `require_session` du socle : un
+    Bearer périmé ne masque pas une session vivante."""
     jetons = []
     a = request.headers.get("Authorization", "")
-    if a.startswith("Bearer "):
+    if a[:7].lower() == "bearer ":
         jetons.append(a[7:].strip())
-    c = request.cookies.get("secubox_session")
+    c = request.cookies.get(_auth.SESSION_COOKIE)
     if c:
         jetons.append(c)
     for j in jetons:
         p = _auth._validate_token(j)
-        if not p:
-            continue
-        sub = p.get("sub", "")
-        u = user_store.get_user(sub)
-        if u:
-            return "admin" if u.get("role") == "admin" else "member"
-        profil = appareils.profil_de(sub)
-        return {"admin": "admin", "user": "member"}.get(profil, "registered")
-    return "guest"
+        if p:
+            return p
+    return None
+
+
+def _role_du_porteur(request: Request) -> str:
+    p = _porteur(request)
+    if p is None:
+        return "guest"
+    sub = str(p.get("sub") or "")
+    if sub.startswith(appareils.PREFIXE):
+        # Un appareil n'est jamais admin (#1581) : son meilleur profil vaut « member ».
+        return "member" if appareils.profil_de(sub) in _PROFILS_MEMBRE else "registered"
+    return "admin" if _auth.est_admin_reel(p) else "member"
 
 
 def _role_effectif(request: Request, demande: Optional[str]) -> str:
-    """Le moindre du rôle de la session et du rôle demandé (s'il est connu)."""
+    """Le moindre du rôle de la session et du rôle demandé (s'il est connu).
+
+    La demande ne peut que descendre : un rôle inconnu, égal ou supérieur est
+    ignoré et c'est le rôle de la session qui s'applique."""
     reel = _role_du_porteur(request)
     d = (demande or "").strip().lower()
     if d in _ORDRE and _ORDRE.index(d) < _ORDRE.index(reel):
@@ -172,9 +192,19 @@ def _role_effectif(request: Request, demande: Optional[str]) -> str:
     return reel
 
 
-async def exige_admin(request: Request) -> None:
-    if _role_du_porteur(request) != "admin":
-        raise HTTPException(status_code=403, detail="Réservé aux administrateurs")
+async def exige_admin(request: Request) -> dict:
+    """Garde d'ADMINISTRATION de ZIA : l'administrateur réel seulement (#1581).
+
+    Même règle que `require_jwt` du socle : une session validée, puis
+    `est_admin_reel` sur son payload. Sans session → 401 ; toute autre session,
+    appareil admis compris quel que soit son profil → 403."""
+    p = _porteur(request)
+    if p is None:
+        raise HTTPException(status_code=401, detail="Session requise",
+                            headers={"WWW-Authenticate": "Bearer"})
+    if not _auth.est_admin_reel(p):
+        raise HTTPException(status_code=403, detail="Réservé aux administrateurs de la box")
+    return p
 
 
 class ChatIn(BaseModel):
@@ -223,9 +253,11 @@ async def health() -> dict:
 
 
 @router.get("/metrics", dependencies=[Depends(require_lecture)])
-async def metrics() -> dict:
+async def metrics(request: Request) -> dict:
     n = _M["chats"] or 1
-    objs = await BUS.objets(role="admin")   # compte total (vue admin), pour info
+    # Le compte suit la vue du DEMANDEUR : le bus n'est jamais lu au-dessus de
+    # son rôle, même pour un simple total.
+    objs = await BUS.objets(role=_role_du_porteur(request))
     return {"chats": _M["chats"], "latence_ms_moy": round(_M["ms_total"] / n, 1),
             "objets_bus": len(objs), "engine": "llm" if CFG.get("llm_url") else "heuristique",
             "model": CFG.get("model_name"), "tools": [t["name"] for t in TOOLS.schemas()],
@@ -267,6 +299,8 @@ async def capabilities() -> dict:
     return {"capabilities": BUS.caps.registry()}
 
 
+# ── ADMINISTRATION : /config (lecture et écriture) et /llm/test ─────────────
+# Toutes derrière `exige_admin` : l'administrateur réel seulement (#1581).
 @router.get("/config", dependencies=[Depends(exige_admin)])
 async def get_config() -> dict:
     """Config courante (TOML + surcouche admin). Pas de secret dans ZIA au P1."""

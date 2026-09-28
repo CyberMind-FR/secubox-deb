@@ -1,3 +1,9 @@
+secubox-aggregator (0.3.3-1~bookworm1) bookworm; urgency=high
+
+  * Sockets réservés à l'administration (actor) relayés au seul administrateur réel ; en-tête X-Sbx-Vue jamais recopié depuis le client (#1608).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:16:33 +0200
+
 secubox-aggregator (0.3.2-1~bookworm1) bookworm; urgency=medium
 
   * Le watchdog sondait `/api/v1/hub/public/menu` — un point d'entree qui

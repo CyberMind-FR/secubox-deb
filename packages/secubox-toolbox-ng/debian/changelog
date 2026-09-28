@@ -1,3 +1,9 @@
+secubox-toolbox-ng (0.5.5-1~bookworm1) bookworm; urgency=high
+
+  * sbx-actord : vue réduite par défaut ; vue complète seulement sur la route d'administration (en-tête X-Sbx-Vue posé après la garde) (#1608).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 18:16:33 +0200
+
 secubox-toolbox-ng (0.5.4-1~bookworm1) bookworm; urgency=medium
 
   * Construit aussi pour amd64 (ref #1383) : Architecture: any, GOARCH tiré de

@@ -29,6 +29,11 @@ Depends: ${misc:Depends},
 # « ceci supplante cela », et elle permet a apt de substituer au lieu de
 # refuser la transaction.
 Conflicts: secubox-mitmproxy, secubox-crowdsec
+# VUE RÉDUITE PAR DÉFAUT DE SBX-ACTORD (#1608). actord ne sert la vue complète
+# qu'avec `X-Sbx-Vue: complete`, que seul l'agrégateur pose après sa garde
+# d'administration. Un agrégateur plus ancien ne le pose pas : la console
+# Renseignement recevrait la vue réduite. On exige donc l'agrégateur qui le pose.
+Breaks: secubox-aggregator (<< 0.3.3~)
 Replaces: secubox-mitmproxy, secubox-crowdsec
 Description: SecuBox-Deb — MOTEUR du pare-feu applicatif (sbxwaf, Go, natif hote)
  LE MOTEUR. Il inspecte, decide et bannit ; l'interface qui le montre est
