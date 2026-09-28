@@ -1,3 +1,12 @@
+secubox-webos (1.0.355-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Activité : un fil ou un fichier du BBS s'ouvre sur sa vraie
+    adresse (https://bbs.<box>/t|f/<id> — /bbs/… n'existait pas sur le
+    Hall) dans le surf du Hall ; une diffusion ouvre son média dans le
+    viewer. Seule, la carte ouvre un onglet (#1569).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:11:09 +0200
+
 secubox-webos (1.0.354-1~bookworm1) bookworm; urgency=medium
 
   * « Ouvrir » PeerTube passe par peertube…/sbx/entrer, comme le Cloud
