@@ -166,8 +166,8 @@ def categorize_module(module_id: str) -> str:
         "reporter": "System", "mirror": "System", "cloner": "System",
         "ksm": "System", "avatar": "System", "rtty": "System",
         "vm": "System", "redroid": "System",
-        "picobrew": "System", "saas-relay": "System", "magicmirror": "System",
-        "mmpm": "System", "eye-remote": "System",
+        "picobrew": "System", "saas-relay": "System",
+        "eye-remote": "System",
     }
     return categories.get(module_id, "Other")
 

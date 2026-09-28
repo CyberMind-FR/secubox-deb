@@ -1,6 +1,6 @@
 Package: sbxos
 Source: secubox-meta
-Version: 0.1.10-1~bookworm1
+Version: 0.1.11-1~bookworm1
 Architecture: all
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Installed-Size: 8

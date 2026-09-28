@@ -4,7 +4,7 @@
 > Ne pas éditer à la main — corriger la source, le plus souvent
 > `packages/<module>/debian/secubox.yaml`, puis relancer le script.
 
-**177 modules** recensés.
+**174 modules** recensés.
 
 `À documenter` signale une donnée **absente du dépôt**. C'est une tâche,
 pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
@@ -79,8 +79,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-lyrion` | media | lite | oui | 19 | 2 | 3 | oui | 4 | oui |
 | `secubox-mac-guard` | misc | lite | — | 22 | — | — | — | 1 | oui |
 | `secubox-macro` | misc | lite | — | — | 1 | — | — | 2 | — |
-| `secubox-magicmirror` | misc | lite | oui | 14 | — | — | — | — | oui |
-| `secubox-maigret` | misc | lite | oui | 8 | 1 | — | — | 2 | oui |
 | `secubox-mail` | email | lite | oui | 55 | 5 | 3 | oui | 4 | oui |
 | `secubox-mail-lxc` | email | lite | — | — | — | — | — | — | — |
 | `secubox-matrix` | communication | pro | oui | 37 | — | — | oui | — | oui |
@@ -148,7 +146,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-soc-gateway` | dashboard | lite | — | 30 | — | 1 | — | — | — |
 | `secubox-soc-web` | dashboard | lite | — | — | — | — | — | — | — |
 | `secubox-socialrelay` | misc | lite | — | — | — | — | — | 3 | — |
-| `secubox-spiderfoot` | security | lite | oui | 6 | 1 | — | — | 1 | oui |
 | `secubox-streamforge` | media | lite | oui | 17 | 1 | 1 | — | — | oui |
 | `secubox-streamlit` | media | lite | oui | 30 | 2 | 5 | — | 23 | oui |
 | `secubox-surf` | network | lite | — | — | — | — | — | 2 | — |
@@ -1286,38 +1283,6 @@ SecuBox vetted access-macro framework + tor-exit kind
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-macro/`
 
-### `secubox-magicmirror`
-
-SecuBox MagicMirror management
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 14 route(s), socket `/run/secubox/magicmirror.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/magicmirror
-- **CLI** : À documenter
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-magicmirror/`
-
-### `secubox-maigret`
-
-Maigret identity/username OSINT collector (LXC-sandboxed)
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 8 route(s), socket `À documenter`, authentification requise
-- **Interface web** : oui, À documenter
-- **CLI** : `maigretctl`
-- **Units systemd** : À documenter
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : 2
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-maigret/`
-
 ### `secubox-mail`
 
 SecuBox Mail Module
@@ -2402,23 +2367,6 @@ SecuBox — relais de reseaux sociaux (fediverse + consentement)
 - **Tests** : 3
 - **Documentation existante** : À documenter
 - **Source technique** : `packages/secubox-socialrelay/`
-
-### `secubox-spiderfoot`
-
-SpiderFoot OSINT automation engine (LXC-sandboxed)
-
-- **Catégorie** : security · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 6 route(s), socket `À documenter`, authentification requise
-- **Interface web** : oui, À documenter
-- **Vhosts livrés** : `192.168.1.200`, `_`, `localhost`, `spiderfoot.gk2.secubox.in`, `spiderfoot.local`
-- **CLI** : `spiderfootctl`
-- **Units systemd** : À documenter
-- **Ports** : 9043, 9080
-- **Conteneur LXC** : non
-- **Tests** : 1
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-spiderfoot/`
 
 ### `secubox-streamforge`
 

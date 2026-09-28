@@ -123,7 +123,6 @@
 | 📊 **Grafana** | Monitoring | Sicherheitsmetrik-Dashboards |
 | ❤️ **Hub Health** | Dashboard | Service-Gesundheits- und Statusübersicht |
 | 🧠 **KSM Optimizer** | System | KSM-Speicheroptimierungs-Dashboard (Kernel Same-Page) |
-| 🪞 **MagicMirror** | Apps | MagicMirror-Smart-Display-Verwaltung |
 | 🧪 **Metabolizer** | Monitoring | Log-Prozessor und -Analysator |
 | 📇 **Metacatalog** | Services | Servicekatalog und -registry |
 | 🍺 **PicoBrew** | IoT | Homebrew-/Fermentationssteuerung |
@@ -262,14 +261,6 @@ Identitäts- und Avatar-Manager
 **Funktionen:** Identitätsprofile, Avatar-Generierung, Pro-Benutzer-Assets
 
 ![Avatar Manager](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/avatar.png)
-
-#### 🪞 MagicMirror
-
-MagicMirror-Smart-Display-Verwaltung
-
-**Funktionen:** Modul-Layout, Widgets, Themes, Fernsteuerung
-
-![MagicMirror](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/magicmirror.png)
 
 #### 🤖 ReDroid
 

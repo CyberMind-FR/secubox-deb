@@ -7,7 +7,7 @@
 # `À documenter` signifie que la donnee est absente du depot, jamais
 # qu'elle est inconnue de l'auteur : c'est une tache, pas une lacune de
 # redaction.
-# modules: 177
+# modules: 174
 
 modules:
   - id: secubox-acces
@@ -2903,79 +2903,6 @@ modules:
       nb_routes: 0
     interface_web:
       presente: false
-      chemin: "À documenter"
-      vhosts: []
-  - id: secubox-magicmirror
-    nom: "secubox-magicmirror"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox MagicMirror management"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd: []
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/magicmirror.sock"
-      health: "/api/v1/magicmirror/health"
-      authentifie: true
-      nb_routes: 14
-      routes:
-        - "DELETE /modules/{module_name}"
-        - "GET /config"
-        - "GET /display"
-        - "GET /health"
-        - "GET /logs"
-        - "GET /modules"
-        - "GET /modules/available"
-        - "GET /status"
-        - "POST /display/brightness/{level}"
-        - "POST /display/power/{state}"
-        - "POST /modules/install/{module_name}"
-        - "POST /restart"
-        - "POST /start"
-        - "POST /stop"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/magicmirror"
-      vhosts: []
-  - id: secubox-maigret
-    nom: "secubox-maigret"
-    categorie: "misc"
-    tier: "lite"
-    description: "Maigret identity/username OSINT collector (LXC-sandboxed)"
-    manifeste: true
-    lxc: false
-    tests: 2
-    depends:
-      - "secubox-core"
-    cli:
-      - "maigretctl"
-    systemd: []
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "À documenter"
-      health: "À documenter"
-      authentifie: true
-      nb_routes: 8
-      routes:
-        - "DELETE /lookup/{lookup_id}"
-        - "GET /health"
-        - "GET /lookup/{lookup_id}"
-        - "GET /lookup/{lookup_id}/report.pdf"
-        - "GET /lookups"
-        - "GET /status"
-        - "POST /install"
-        - "POST /lookup"
-    interface_web:
-      presente: true
       chemin: "À documenter"
       vhosts: []
   - id: secubox-mail
@@ -5906,45 +5833,6 @@ modules:
       chemin: "À documenter"
       vhosts:
         - "socialrelay.gk2.secubox.in"
-  - id: secubox-spiderfoot
-    nom: "secubox-spiderfoot"
-    categorie: "security"
-    tier: "lite"
-    description: "SpiderFoot OSINT automation engine (LXC-sandboxed)"
-    manifeste: true
-    lxc: false
-    tests: 1
-    depends:
-      - "secubox-core"
-    cli:
-      - "spiderfootctl"
-    systemd: []
-    ports:
-      - "9043"
-      - "9080"
-    documentation:
-      - "README.md"
-    api:
-      socket: "À documenter"
-      health: "À documenter"
-      authentifie: true
-      nb_routes: 6
-      routes:
-        - "GET /health"
-        - "GET /status"
-        - "POST /install"
-        - "POST /restart-ui"
-        - "POST /start"
-        - "POST /stop"
-    interface_web:
-      presente: true
-      chemin: "À documenter"
-      vhosts:
-        - "192.168.1.200"
-        - "_"
-        - "localhost"
-        - "spiderfoot.gk2.secubox.in"
-        - "spiderfoot.local"
   - id: secubox-streamforge
     nom: "secubox-streamforge"
     categorie: "media"

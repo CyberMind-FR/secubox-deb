@@ -68,7 +68,6 @@ grafana             = "200000 100000"
 horde               = "200000 100000"
 jitsi               = "200000 100000"
 lyrion              = "200000 100000"
-maigret             = "200000 100000"
 mail                = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
 # mitmproxy RETIRE (#1362) : le conteneur a ete supprime avec le
 # decommissionnement du WAF mitmproxy. L'inspection vit dans sbxwaf,
@@ -78,7 +77,6 @@ nextcloud           = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus b
 picobrew            = "200000 100000"
 roundcube           = "200000 100000"
 rustdesk            = "200000 100000"
-spiderfoot          = "200000 100000"
 torrent             = "200000 100000"
 toolbox-mitm        = "200000 100000"
 toolbox-mitm-wg     = "200000 100000"

@@ -56,7 +56,6 @@ localai
 localrecall
 lyrion
 mac-guard
-magicmirror
 mail
 mastodon
 matrix

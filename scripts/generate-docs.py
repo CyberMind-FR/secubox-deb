@@ -1710,21 +1710,6 @@ MODULES = {
             "zh": ["页共享统计", "节省内存", "调优", "按虚拟机视图"]
         }
     },
-    "magicmirror": {
-        "name": "MagicMirror", "icon": "🪞", "category": "Apps",
-        "description": {
-            "en": "MagicMirror smart-display management",
-            "fr": "Gestion de l'affichage intelligent MagicMirror",
-            "de": "MagicMirror-Smart-Display-Verwaltung",
-            "zh": "MagicMirror 智能显示管理"
-        },
-        "features": {
-            "en": ["Module layout", "Widgets", "Themes", "Remote control"],
-            "fr": ["Disposition modules", "Widgets", "Thèmes", "Contrôle distant"],
-            "de": ["Modul-Layout", "Widgets", "Themes", "Fernsteuerung"],
-            "zh": ["模块布局", "小部件", "主题", "远程控制"]
-        }
-    },
     "metabolizer": {
         "name": "Metabolizer", "icon": "🧪", "category": "Monitoring",
         "description": {
@@ -1738,20 +1723,6 @@ MODULES = {
             "fr": ["Parsing de logs", "Analyse de motifs", "Pipelines", "Enrichissement"],
             "de": ["Log-Parsing", "Musteranalyse", "Pipelines", "Anreicherung"],
             "zh": ["日志解析", "模式分析", "管道", "丰富化"]
-        }
-    },
-        "name": "Metoblizer", "icon": "🗄️", "category": "Monitoring",
-        "description": {
-            "en": "Centralized log aggregator",
-            "fr": "Agrégateur de logs centralisé",
-            "de": "Zentralisierter Log-Aggregator",
-            "zh": "集中式日志聚合器"
-        },
-        "features": {
-            "en": ["Log collection", "Central store", "Search", "Retention"],
-            "fr": ["Collecte de logs", "Stockage central", "Recherche", "Rétention"],
-            "de": ["Log-Sammlung", "Zentraler Speicher", "Suche", "Aufbewahrung"],
-            "zh": ["日志收集", "中央存储", "搜索", "保留"]
         }
     },
     "metacatalog": {

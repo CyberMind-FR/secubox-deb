@@ -183,7 +183,6 @@ description: "Suivre ce qui se dit : actualité, flux, recherche libre."
 recommande:
   - secubox-service-actualites
 suggere:
-  - secubox-service-osint
 
 meta: secubox-fonction-maison
 niveau: fonction
@@ -449,7 +448,6 @@ suggere:
   - secubox-daemon-c3box
   - secubox-eye-remote
   - secubox-eye-square
-  - secubox-magicmirror
 
 meta: secubox-service-mail
 niveau: service
@@ -576,14 +574,6 @@ requiert:
 suggere:
   - secubox-newsbin
   - secubox-yacy
-
-meta: secubox-service-osint
-niveau: service
-label: OSINT
-description: "Enquête en sources ouvertes, en bac à sable."
-suggere:
-  - secubox-spiderfoot
-  - secubox-maigret
 
 meta: secubox-service-domotique
 niveau: service

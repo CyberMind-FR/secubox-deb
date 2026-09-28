@@ -123,7 +123,6 @@
 | 📊 **Grafana** | Monitoring | 安全指标仪表板 |
 | ❤️ **Hub Health** | Dashboard | 服务健康与状态面板 |
 | 🧠 **KSM Optimizer** | System | 内核同页内存（KSM）优化仪表板 |
-| 🪞 **MagicMirror** | Apps | MagicMirror 智能显示管理 |
 | 🧪 **Metabolizer** | Monitoring | 日志处理与分析器 |
 | 📇 **Metacatalog** | Services | 服务目录与注册表 |
 | 🍺 **PicoBrew** | IoT | 自酿 / 发酵控制器 |
@@ -262,14 +261,6 @@ APT仓库管理
 **功能:** 身份档案, 头像生成, 按用户资源
 
 ![Avatar Manager](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/avatar.png)
-
-#### 🪞 MagicMirror
-
-MagicMirror 智能显示管理
-
-**功能:** 模块布局, 小部件, 主题, 远程控制
-
-![MagicMirror](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/magicmirror.png)
 
 #### 🤖 ReDroid
 
