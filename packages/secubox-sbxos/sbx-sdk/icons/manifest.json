@@ -1,0 +1,1925 @@
+{
+ "_pourquoi": "Manifeste des icônes du SDK Aurora (#1594, #1612). Masters 512 px webp sans perte avec alpha ; états alerte et succès calculés au build.",
+ "icones": [
+  {
+   "id": "hall",
+   "label": "Hall · Tableau d'accueil",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/hall.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "services",
+   "label": "Services",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/services.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "systeme",
+   "label": "Système · tout le parc",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/systeme.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "sbxos",
+   "label": "SBX OS",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/sbxos.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "recherche",
+   "label": "Recherche",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/recherche.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "profil",
+   "label": "Profil · Invité",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/profil.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "comptes",
+   "label": "Mes comptes",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/comptes.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "reglages",
+   "label": "Réglages",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/reglages.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "aide",
+   "label": "Aide",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/aide.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "deconnexion",
+   "label": "Déconnexion",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/deconnexion.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "devwatch",
+   "label": "DevWatch",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/devwatch.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "esprit",
+   "label": "Esprit",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/esprit.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "maillage",
+   "label": "Maillage",
+   "categorie": "system",
+   "priorite": "hall",
+   "master": "art/maillage.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "console",
+   "label": "Console admin",
+   "categorie": "system",
+   "priorite": "later",
+   "master": "art/console.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "veille",
+   "label": "En veille",
+   "categorie": "system",
+   "priorite": "later",
+   "master": "art/veille.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "charge",
+   "label": "Charge",
+   "categorie": "system",
+   "priorite": "later",
+   "master": "art/charge.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "cpu",
+   "label": "CPU",
+   "categorie": "system",
+   "priorite": "later",
+   "master": "art/cpu.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "ram",
+   "label": "Mémoire",
+   "categorie": "system",
+   "priorite": "later",
+   "master": "art/ram.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "ssd",
+   "label": "Disque",
+   "categorie": "system",
+   "priorite": "later",
+   "master": "art/ssd.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "boot",
+   "label": "Amorce",
+   "categorie": "system",
+   "priorite": "later",
+   "master": "art/boot.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "forums",
+   "label": "Forums",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/forums.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "bbs",
+   "label": "BBS",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/bbs.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "billets",
+   "label": "Billets",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/billets.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "messagerie",
+   "label": "Messagerie",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/messagerie.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "mail",
+   "label": "Mail",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/mail.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "metanews",
+   "label": "MetaNews",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/metanews.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "socialrelay",
+   "label": "SocialRelay",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/socialrelay.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "activite",
+   "label": "Activité",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/activite.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "zia",
+   "label": "ZIA",
+   "categorie": "communication",
+   "priorite": "hall",
+   "master": "art/zia.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "lexie",
+   "label": "Lexie",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/lexie.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "micro",
+   "label": "Micro",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/micro.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "notifications",
+   "label": "Notifications",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/notifications.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "contact",
+   "label": "Contacts",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/contact.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "prive",
+   "label": "Privé",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/prive.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "arrivee",
+   "label": "Arrivée",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/arrivee.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "communaute",
+   "label": "Communauté",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/communaute.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "humeur",
+   "label": "Humeur",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/humeur.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "visio",
+   "label": "Visio",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/visio.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "telephone",
+   "label": "Téléphonie",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/telephone.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "fediverse",
+   "label": "Fédivers",
+   "categorie": "communication",
+   "priorite": "later",
+   "master": "art/fediverse.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "securite",
+   "label": "Sécurité",
+   "categorie": "security",
+   "priorite": "hall",
+   "master": "art/securite.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "acteurs",
+   "label": "Renseignement",
+   "categorie": "security",
+   "priorite": "hall",
+   "master": "art/acteurs.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "dpi",
+   "label": "DPI · Trafic",
+   "categorie": "security",
+   "priorite": "hall",
+   "master": "art/dpi.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "acces",
+   "label": "Accès",
+   "categorie": "security",
+   "priorite": "hall",
+   "master": "art/acces.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "demande-acces",
+   "label": "Demander un accès",
+   "categorie": "security",
+   "priorite": "hall",
+   "master": "art/demande-acces.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "identites",
+   "label": "Mes identités",
+   "categorie": "security",
+   "priorite": "hall",
+   "master": "art/identites.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "sbxid",
+   "label": "Gestion des identités",
+   "categorie": "security",
+   "priorite": "hall",
+   "master": "art/sbxid.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "waf",
+   "label": "Pare-feu",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/waf.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "quifrappe",
+   "label": "Qui frappe ?",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/quifrappe.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "analyse",
+   "label": "Analyse · Corrélation",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/analyse.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "observe",
+   "label": "Observe",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/observe.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "delay",
+   "label": "Délai",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/delay.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "challenge",
+   "label": "Défi",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/challenge.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "tarpit",
+   "label": "Ralentissement",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/tarpit.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "deny",
+   "label": "Blocage",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/deny.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "quarantine",
+   "label": "Quarantaine",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/quarantine.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "menace",
+   "label": "Menace · Alerte",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/menace.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "vpn",
+   "label": "VPN · WireGuard",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/vpn.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "certificat",
+   "label": "Certificat",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/certificat.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "cadenas",
+   "label": "Session requise",
+   "categorie": "security",
+   "priorite": "later",
+   "master": "art/cadenas.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "radio",
+   "label": "Radio",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/radio.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "peertube",
+   "label": "PeerTube",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/peertube.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "podcaster",
+   "label": "Podcaster",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/podcaster.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "lyrion",
+   "label": "Lyrion",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/lyrion.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "freeboxtv",
+   "label": "Freebox TV",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/freeboxtv.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "ytsas",
+   "label": "YTSaS",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/ytsas.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "torrent",
+   "label": "Torrent",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/torrent.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "contenu",
+   "label": "Contenu",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/contenu.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "surfviewer",
+   "label": "Surf & Viewer",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/surfviewer.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "viewer",
+   "label": "Viewer souverain",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/viewer.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "direct",
+   "label": "Direct · Diffusions du parc",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/direct.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "volume",
+   "label": "Volume général",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/volume.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "mood",
+   "label": "Mood",
+   "categorie": "media",
+   "priorite": "hall",
+   "master": "art/mood.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "flux",
+   "label": "Flux",
+   "categorie": "media",
+   "priorite": "later",
+   "master": "art/flux.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "live",
+   "label": "En direct",
+   "categorie": "media",
+   "priorite": "later",
+   "master": "art/live.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "favori",
+   "label": "Favori",
+   "categorie": "media",
+   "priorite": "later",
+   "master": "art/favori.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "lecture",
+   "label": "Lecture",
+   "categorie": "media",
+   "priorite": "later",
+   "master": "art/lecture.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "pause",
+   "label": "Pause",
+   "categorie": "media",
+   "priorite": "later",
+   "master": "art/pause.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "suivant",
+   "label": "Suivant · Précédent",
+   "categorie": "media",
+   "priorite": "later",
+   "master": "art/suivant.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "plein-ecran",
+   "label": "Agrandir · Plein écran",
+   "categorie": "media",
+   "priorite": "later",
+   "master": "art/plein-ecran.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "cloud",
+   "label": "Cloud",
+   "categorie": "cloud",
+   "priorite": "hall",
+   "master": "art/cloud.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "nextcloud",
+   "label": "Nextcloud",
+   "categorie": "cloud",
+   "priorite": "hall",
+   "master": "art/nextcloud.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "nextcloud-super",
+   "label": "Cloud +",
+   "categorie": "cloud",
+   "priorite": "hall",
+   "master": "art/nextcloud-super.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "photoprism",
+   "label": "Photos",
+   "categorie": "cloud",
+   "priorite": "hall",
+   "master": "art/photoprism.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "depot",
+   "label": "Dépôt",
+   "categorie": "cloud",
+   "priorite": "hall",
+   "master": "art/depot.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "metablogizer",
+   "label": "Mes sites",
+   "categorie": "cloud",
+   "priorite": "hall",
+   "master": "art/metablogizer.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "git",
+   "label": "Gitea",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/git.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "agenda",
+   "label": "Agenda",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/agenda.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "partages",
+   "label": "Partages",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/partages.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "dossiers",
+   "label": "Fichiers",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/dossiers.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "lien",
+   "label": "Lien",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/lien.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "telechargement",
+   "label": "Téléchargement",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/telechargement.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "sync",
+   "label": "Synchronisation",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/sync.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "mise-a-jour",
+   "label": "Mise à jour",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/mise-a-jour.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "sauvegarde",
+   "label": "Sauvegarde",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/sauvegarde.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "dns",
+   "label": "DNS",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/dns.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "vhost",
+   "label": "Hôtes virtuels",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/vhost.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "vm",
+   "label": "Machines virtuelles",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/vm.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "appstore",
+   "label": "App Store",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/appstore.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "usb",
+   "label": "Médias externes",
+   "categorie": "cloud",
+   "priorite": "later",
+   "master": "art/usb.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "zigbee",
+   "label": "Zigbee",
+   "categorie": "iot",
+   "priorite": "hall",
+   "master": "art/zigbee.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "toolbox",
+   "label": "ToolBoX",
+   "categorie": "iot",
+   "priorite": "hall",
+   "master": "art/toolbox.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "maison",
+   "label": "Maison",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/maison.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "lumiere",
+   "label": "Lumière",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/lumiere.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "volet",
+   "label": "Volet",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/volet.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "prise",
+   "label": "Prise",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/prise.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "temperature",
+   "label": "Température",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/temperature.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "capteur",
+   "label": "Capteur",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/capteur.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "camera",
+   "label": "Caméra",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/camera.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "serrure",
+   "label": "Serrure",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/serrure.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "marche-arret",
+   "label": "Marche · Arrêt",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/marche-arret.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "mqtt",
+   "label": "MQTT",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/mqtt.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "meshtastic",
+   "label": "Meshtastic",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/meshtastic.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "sentinelle-gsm",
+   "label": "Sentinelle GSM",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/sentinelle-gsm.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "modem",
+   "label": "Modem",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/modem.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "point-acces",
+   "label": "Point d'accès Wi-Fi",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/point-acces.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "box-locale",
+   "label": "Cette box · local",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/box-locale.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "flotte",
+   "label": "Flotte",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/flotte.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "carte",
+   "label": "Carte · NetBoot",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/carte.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  },
+  {
+   "id": "kiosque",
+   "label": "Kiosque",
+   "categorie": "iot",
+   "priorite": "later",
+   "master": "art/kiosque.webp",
+   "taille": 512,
+   "etats": [
+    "repos",
+    "alerte",
+    "succes"
+   ],
+   "licence": "LicenseRef-CMSD-1.0",
+   "provenance": "ChatGPT d'après la planche SDK Icons (Gandalf), découpe outils/decoupe.py",
+   "statut": "definitif"
+  }
+ ]
+}

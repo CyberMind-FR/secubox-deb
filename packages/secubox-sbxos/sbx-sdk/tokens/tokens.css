@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 — SDK Aurora :: jetons (#1597). */
+:root {
+  --sbx-fond: #07111F;
+  --sbx-surface: #0B2036;
+  --sbx-relief: #10263D;
+  --sbx-trait: #1D3A57;
+  --sbx-encre: #E6F3FF;
+  --sbx-doux: #8FB3CF;
+  --sbx-pale: #7FA0BC;          /* ≥ 4,5:1 sur --sbx-fond et --sbx-surface */
+  --sbx-cyan: #38BDF8;
+  --sbx-vert: #22C55E;
+  --sbx-violet: #A855F7;
+  --sbx-ambre: #F59E0B;
+  --sbx-alerte: #F43F5E;
+  --sbx-rayon: 16px;
+  --sbx-duree: 350ms;
+  --sbx-police: Inter, system-ui, sans-serif;
+  --sbx-titre: Orbitron, Inter, sans-serif;
+  --sbx-code: "JetBrains Mono", ui-monospace, monospace;
+}
+:root[data-rendu="leger"] { --sbx-duree: 0ms; }

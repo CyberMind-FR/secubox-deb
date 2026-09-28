@@ -35,6 +35,11 @@ refuses=()
 for deb in "$@"; do
     [[ -f "$deb" ]] || { echo "introuvable : $deb" >&2; exit 2; }
     p=$(dpkg-deb -f "$deb" Package); v=$(dpkg-deb -f "$deb" Version); a=$(dpkg-deb -f "$deb" Architecture)
+    # Un APERÇU (~aurora…) ne part jamais au parc : majauto l'installerait la
+    # nuit sur toutes les box (#1611).
+    if [[ "$v" == *"~aurora"* ]]; then
+        echo "REFUSÉ : $p $v est un aperçu, jamais publié" >&2; refuses+=("$p $v (aperçu)"); continue
+    fi
     arch=$([[ "$a" == all ]] && echo amd64 || echo "$a")
     dep=$(ssh "$HOTE" "reprepro -b $BASE -A $arch list $SUITE $p 2>/dev/null | awk '{print \$3}'" 2>/dev/null | head -1)
     if [[ -n "$dep" ]] && ! dpkg --compare-versions "$v" gt "$dep"; then

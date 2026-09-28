@@ -1,0 +1,32 @@
+{
+  "name": "secubox-sbxos",
+  "private": true,
+  "version": "0.6.0",
+  "type": "module",
+  "description": "SBXOS Aurora \u2014 interface jouable du Hall (SDK sbx-sdk + app). Construit par scripts/construire-front.sh ; jamais par debian/rules.",
+  "scripts": {
+    "types": "tsc -p app/tsconfig.json --noEmit",
+    "build": "vite build --config app/vite.config.ts",
+    "art": "node outils/art.mjs",
+    "dev": "vite --config app/vite.config.ts"
+  },
+  "dependencies": {
+    "@fontsource/orbitron": "^5.2.8",
+    "framer-motion": "12.23.24",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "zustand": "5.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@vitejs/plugin-react": "5.1.0",
+    "sharp": "0.34.4",
+    "typescript": "5.9.3",
+    "vite": "7.1.12"
+  },
+  "overrides": {
+    "motion-dom": "12.23.23",
+    "motion-utils": "12.23.6"
+  }
+}
