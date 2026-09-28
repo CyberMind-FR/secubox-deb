@@ -39,3 +39,36 @@ export function entrer(): Promise<Entree> {
 
 export type Moi = { identite: { pseudo?: string; display_name?: string; user_uuid?: string } | null; sub?: string };
 export const moi = () => sbxFetch<Moi>('/api/v1/sbxid/moi');
+
+// ── Manifeste de session (#1610) : ce que la box déclare pour CET appelant ──
+export type Module = { id: string; label: string; url: string | null; lan: boolean; etat?: string };
+export type EspaceM = { id: string; nom: string; guide: string; modules: Module[] };
+export type Manifeste = {
+  version: number; role: 'guest' | 'user' | 'admin'; lan: boolean; domaine: string;
+  espaces: EspaceM[]; ecrans: Record<string, string>; capacites: Record<string, boolean>;
+};
+
+/** Garde de forme : une charge invalide est ignorée, jamais affichée à moitié. */
+function estManifeste(x: unknown): x is Manifeste {
+  const m = x as Manifeste;
+  return !!m && m.version === 1 && Array.isArray(m.espaces)
+    && m.espaces.every(e => typeof e.id === 'string' && Array.isArray(e.modules));
+}
+
+export async function manifeste(): Promise<Manifeste | null> {
+  const m = await sbxFetch<unknown>('/api/v1/webos/sbxos/manifeste');
+  return estManifeste(m) ? m : null;
+}
+
+/** Une URL sortie du manifeste n'est suivie que si elle vise le domaine de la box. */
+export function urlSure(url: string | null, domaine: string): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url, location.origin);
+    if (u.protocol !== 'https:' || !domaine) return null;
+    return u.hostname === domaine || u.hostname.endsWith('.' + domaine) ? u.href : null;
+  } catch { return null; }
+}
+
+export type Titre = { titre?: string; artiste?: string; title?: string; artist?: string };
+export const radioCourante = () => sbxFetch<Titre>('/api/v1/radio/current');

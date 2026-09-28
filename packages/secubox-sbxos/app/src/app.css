@@ -23,3 +23,9 @@ html, body { margin: 0; height: 100%; background: var(--sbx-fond); color: var(--
 .guide p { margin: 0; color: var(--sbx-doux); }
 .guide b { color: var(--sbx-encre); }
 @media (max-width: 640px) { .aurora { grid-template-columns: 1fr; } .rail { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--sbx-trait); } }
+.cartes { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; max-width: 980px; }
+.carte { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; background: var(--sbx-surface); border: 1px solid var(--sbx-trait); border-radius: var(--sbx-rayon); color: var(--sbx-encre); text-decoration: none; font-weight: 600; font-size: 13px; text-align: center; transition: transform var(--sbx-duree), border-color var(--sbx-duree); }
+a.carte:hover { transform: translateY(-2px); border-color: var(--sbx-cyan); }
+a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px; }
+.vide { color: var(--sbx-pale); margin: 0; }
+.direct { margin: 0; color: var(--sbx-doux); }
