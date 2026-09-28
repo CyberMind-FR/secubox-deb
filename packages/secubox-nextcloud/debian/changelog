@@ -1,3 +1,22 @@
+secubox-nextcloud (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Entrée SANS MOT DE PASSE par la session SecuBox (#1562) : nginx
+    /sbx/entrer vérifie la session (auth_request, comme le BBS) et pose
+    X-Sbx-Nextcloud-User, vidé sur toute autre location ; user_saml en mode
+    variable d'environnement ouvre ce compte. Sans session ou sans compte
+    lié : le formulaire. Garde Apache (en-tête retiré s'il ne vient pas de
+    l'hôte), comptes non provisionnés refusés, back-ends multiples (le
+    formulaire et les mots de passe d'application #394 restent).
+  * nextcloudctl sso (idempotent, configtest + retour arrière), rejoué par le
+    postinst. N'active RIEN si le vhost actif n'a pas la garde /login : en
+    mode variable d'environnement user_saml détourne tout GET /login, que le
+    vhost renvoie donc vers /login?direct=1 (formulaire intact).
+  * La cible de /sbx/entrer est choisie par une map, pas par un `if` : le
+    `if` s'évalue avant auth_request et voyait toujours l'en-tête vide.
+  * vhost : nextcloud.gk2.secubox.in et journal des hôtes, comme sur la box.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:43:51 +0200
+
 secubox-nextcloud (1.7.7-1~bookworm1) bookworm; urgency=high
 
   * PhotoLibrary (stockage externe sur /media/photos, qui contient les

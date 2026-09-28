@@ -28,6 +28,9 @@ if [ "$1" = "configure" ]; then
     # en marche, ne fait rien (le prochain link-photos s'en chargera).
     if [ -x /usr/sbin/nextcloudctl ]; then
       timeout 180 /usr/sbin/nextcloudctl secure-photos || true
+      # Entrée sans mot de passe par la session SecuBox (#1562) : user_saml en
+      # mode variable d'environnement + garde Apache. Conteneur arrêté : reporté.
+      timeout 180 /usr/sbin/nextcloudctl sso || true
     fi
 fi
 #DEBHELPER#

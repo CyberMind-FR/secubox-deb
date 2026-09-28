@@ -1,3 +1,11 @@
+secubox-webos (1.0.352-1~bookworm1) bookworm; urgency=medium
+
+  * « Ouvrir » et l'onglet réel du Cloud passent par nc…/sbx/entrer : la
+    personne arrive dans SES fichiers sans mot de passe (#1562). Sans
+    session ni compte lié, l'entrée rend le formulaire habituel.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:53:22 +0200
+
 secubox-webos (1.0.351-1~bookworm1) bookworm; urgency=medium
 
   * Coffre des accès rangé par PERSONNE (l'ancien coffre d'appareil est

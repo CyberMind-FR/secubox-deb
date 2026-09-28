@@ -392,6 +392,63 @@ occ() {
 }
 
 # ============================================================================
+# Entrée sans mot de passe par la session SecuBox (#1562)
+# ============================================================================
+#
+# nginx (/sbx/entrer) vérifie la session SecuBox et pose X-Sbx-Nextcloud-User ;
+# user_saml, en mode « variable d'environnement », ouvre CE compte. Trois
+# gardes, dont aucune ne suffit seule :
+#   - nginx écrase l'en-tête sur /sbx/entrer et le VIDE partout ailleurs ;
+#   - l'Apache du conteneur le retire s'il ne vient pas de l'hôte (10.100.0.1) ;
+#   - require_provisioned_account : un nom inconnu n'ouvre rien, ne crée rien.
+# Back-ends multiples : le formulaire et les mots de passe d'application des
+# clients mobiles (#394) restent. Idempotent ; rejoué par le postinst.
+SSO_GARDE=/etc/apache2/conf-available/secubox-sso.conf
+
+cmd_sso() {
+    require_root
+    lxc_running || { warn "conteneur arrêté — sso reporté"; return 0; }
+    # En mode variable d'environnement, user_saml détourne tout GET /login vers
+    # son entrée SSO : sans la redirection /login?direct=1 du vhost, plus
+    # PERSONNE ne pourrait saisir son mot de passe. Un vhost modifié localement
+    # garde l'ancienne version à la mise à jour (conffile) : on n'active rien.
+    local vh
+    vh=$(readlink -f /etc/nginx/sites-enabled/nextcloud.conf 2>/dev/null)
+    if ! grep -q 'sbx_nc_login_direct' "$vh" 2>/dev/null; then
+        occ config:app:delete user_saml type >/dev/null 2>&1 || true
+        warn "vhost sans garde /login (voir $vh.dpkg-dist) — sso NON activé"
+        return 0
+    fi
+    lxc_attach "cat > $SSO_GARDE.new <<'EOF'
+# SecuBox #1562 — X-Sbx-Nextcloud-User n'est cru que venant de l'hôte.
+SetEnvIf Remote_Addr \"^10\\.100\\.0\\.1\$\" sbx_hote
+RequestHeader unset X-Sbx-Nextcloud-User env=!sbx_hote
+EOF
+[ -f $SSO_GARDE ] && cp $SSO_GARDE $SSO_GARDE.prec
+mv $SSO_GARDE.new $SSO_GARDE
+a2enmod -q headers setenvif >/dev/null
+a2enconf -q secubox-sso >/dev/null
+if apache2ctl configtest >/dev/null 2>&1; then
+  rm -f $SSO_GARDE.prec; apache2ctl graceful
+else
+  if [ -f $SSO_GARDE.prec ]; then mv $SSO_GARDE.prec $SSO_GARDE; else a2disconf -q secubox-sso; rm -f $SSO_GARDE; fi
+  exit 1
+fi" || { error "garde Apache refusée par configtest — rien activé"; return 1; }
+
+    occ app:enable user_saml >/dev/null || { error "user_saml indisponible"; return 1; }
+    occ config:app:set user_saml type --value=environment-variable >/dev/null
+    occ config:app:set user_saml general-allow_multiple_user_back_ends --value=1 >/dev/null
+    occ config:app:set user_saml general-require_provisioned_account --value=1 >/dev/null
+    local id
+    id=$(occ saml:config:get --output=json 2>/dev/null | jq -r 'keys[0] // empty' 2>/dev/null)
+    [ -n "$id" ] || id=$(occ saml:config:create 2>/dev/null | grep -o '[0-9]\+' | tail -1)
+    [ -n "$id" ] || { error "configuration user_saml non créée"; return 1; }
+    occ saml:config:set "$id" --general-uid_mapping=HTTP_X_SBX_NEXTCLOUD_USER \
+        --general-idp0_display_name=SecuBox >/dev/null
+    log "Entrée par la session SecuBox active (fournisseur $id)"
+}
+
+# ============================================================================
 # Setup wizard
 # ============================================================================
 
@@ -1081,6 +1138,7 @@ case "${1:-}" in
         lxc_running || exit 0
         mid=$(photolibrary_id); [ -n "$mid" ] && restreint_photolibrary "$mid" || true ;;
     user-provision) shift; user_provision "$@" ;;
+    sso) cmd_sso ;;
     occ) shift; occ "$@" ;;
     backup) shift; cmd_backup "$@" ;;
     restore) shift; cmd_restore "$@" ;;
