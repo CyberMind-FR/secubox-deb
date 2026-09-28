@@ -1195,6 +1195,10 @@ fi
 # These are useful regardless of kiosk/X11 availability — flash internal
 # eMMC/disk from a running system, drop into the console TUI, perform a
 # factory reset. See issue #228.
+# L'installeur eMMC par recopie du système en marche (#1558) : ESPRESSObin.
+if [[ "${BOARD}" == "espressobin-v7" && -f "${SCRIPT_DIR}/sbin/secubox-install-emmc" ]]; then
+  install -m 755 "${SCRIPT_DIR}/sbin/secubox-install-emmc" "${ROOTFS}/usr/sbin/secubox-install-emmc"
+fi
 for tool in secubox-flash-disk secubox-flash-emmc secubox-console-tui secubox-factory-reset; do
   if [[ -f "${SCRIPT_DIR}/sbin/${tool}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${tool}" "${ROOTFS}/usr/sbin/"
@@ -1769,6 +1773,17 @@ else
   mkdir -p "${MNT}/boot" "${MNT}/data"
   mount "${LOOP}p1" "${MNT}/boot"
 fi
+
+# LA ROOTFS TIENT-ELLE ? On le dit AVANT de copier (#1558) : sinon rsync meurt
+# sur « No space left on device » après une heure de construction, au milieu
+# d'une page de man, sans dire de combien il manquait.
+BESOIN_MIB=$(du -sxm --exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run --exclude=./tmp --exclude=./boot "${ROOTFS}" | cut -f1)
+PLACE_MIB=$(( $(df --output=size -BM "${MNT}" | tail -1 | tr -dc 0-9) * 95 / 100 ))
+if (( BESOIN_MIB > PLACE_MIB )); then
+  echo "ROOTFS TROP GROSSE : ${BESOIN_MIB} MiB pour ${PLACE_MIB} MiB utilisables sur ROOT (image ${IMG_SIZE}, profil ${PROFILE_TAG}). Agrandir IMG_SIZE de la carte ou alléger le profil." >&2
+  exit 1
+fi
+log "rootfs ${BESOIN_MIB} MiB / ROOT ${PLACE_MIB} MiB utilisables"
 
 rsync -ax --exclude={"/proc/*","/sys/*","/dev/*","/run/*","/tmp/*"} \
   "${ROOTFS}/" "${MNT}/"

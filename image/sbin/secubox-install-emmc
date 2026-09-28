@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-install-emmc — installer sur l'eMMC le système qui
+# tourne depuis la carte uSD (ESPRESSObin v7, #1558).
+#
+# POURQUOI UNE RECOPIE ET PAS L'IMAGE. L'image vise une carte uSD de 8 Go ;
+# l'eMMC d'une ESPRESSObin fait souvent 4 Go. Recopier le système EN MARCHE
+# permet de partitionner l'eMMC à SA taille réelle, et de ne copier que ce qui
+# est utilisé. S'il n'y tient pas, on le dit AVANT d'écrire quoi que ce soit.
+#
+# DEUX SUPPORTS, DEUX JEUX D'ÉTIQUETTES. U-Boot préfère extlinux.conf, qui ne
+# sait pas calculer un PARTUUID au démarrage : avec la même étiquette sur les
+# deux supports, démarrer sur la carte pouvait monter le système de l'eMMC.
+# L'eMMC reçoit donc rootfs-emmc / BOOTEMMC / data-emmc, et l'on réécrit SES
+# extlinux.conf, boot.cmd/boot.scr et fstab — le support qui démarre ne monte
+# jamais que ses propres partitions ; la carte reste un secours intact.
+set -euo pipefail
+readonly MODULE="install-emmc"
+readonly VERSION="1.0.0"
+
+ESSAI=0
+OUI=0
+usage() {
+  cat <<EOF
+Usage : secubox-install-emmc [--essai] [--oui]
+  Recopie le système en marche (carte uSD) sur l'eMMC interne.
+  --essai   montre le plan (tailles, partitions) sans rien écrire
+  --oui     sans confirmation interactive (automatisation)
+EOF
+  exit 0
+}
+for a in "$@"; do
+  case "$a" in
+    --essai) ESSAI=1 ;;
+    --oui) OUI=1 ;;
+    -h|--help) usage ;;
+    *) echo "option inconnue : $a" >&2; exit 2 ;;
+  esac
+done
+
+meurt() { echo "✗ $*" >&2; exit 1; }
+dit() { echo "▸ $*"; }
+
+[[ $EUID -eq 0 ]] || meurt "à lancer en root"
+
+# ── Où tourne-t-on, où est l'eMMC ───────────────────────────────────────────
+RACINE_SRC=$(findmnt -no SOURCE /)
+RACINE_DISQUE="/dev/$(lsblk -no PKNAME "$RACINE_SRC" 2>/dev/null | head -1)"
+EMMC=""
+for d in /dev/mmcblk0 /dev/mmcblk1 /dev/mmcblk2; do
+  # Seule une eMMC a des partitions matérielles boot0/boot1.
+  [[ -b "$d" && -e "${d}boot0" ]] && { EMMC="$d"; break; }
+done
+[[ -n "$EMMC" ]] || meurt "aucune eMMC trouvée (pas de ${EMMC:-/dev/mmcblkXboot0})"
+[[ "$RACINE_DISQUE" != "$EMMC" ]] || meurt "le système tourne DÉJÀ depuis l'eMMC ($EMMC) : démarrer sur la carte uSD d'abord"
+findmnt -rno SOURCE | grep -q "^${EMMC}p" && meurt "une partition de $EMMC est montée : la démonter d'abord"
+
+# ── Tailles : tout vérifier avant d'écrire ──────────────────────────────────
+EMMC_MIB=$(( $(blockdev --getsize64 "$EMMC") / 1048576 ))
+if (( EMMC_MIB >= 7000 )); then BOOT_MIB=1024; DATA_MIB=1536; else BOOT_MIB=512; DATA_MIB=512; fi
+ROOT_MIB=$(( EMMC_MIB - BOOT_MIB - DATA_MIB - 4 ))
+UTILISE_MIB=$(df --output=used -BM / | tail -1 | tr -dc 0-9)
+BOOT_UTILISE_MIB=$(du -sm /boot | cut -f1)
+BESOIN_MIB=$(( UTILISE_MIB * 110 / 100 + 128 ))      # marge ext4 + journal
+echo "SecuBox — installation sur eMMC ($MODULE $VERSION)"
+echo "  source : $RACINE_DISQUE (en marche)   cible : $EMMC ($EMMC_MIB MiB)"
+echo "  plan   : boot ${BOOT_MIB} MiB · rootfs ${ROOT_MIB} MiB · data ${DATA_MIB} MiB"
+echo "  besoin : système ${UTILISE_MIB} MiB (+10 % → ${BESOIN_MIB}) · /boot ${BOOT_UTILISE_MIB} MiB"
+(( BESOIN_MIB <= ROOT_MIB )) || meurt "le système utilisé (${BESOIN_MIB} MiB avec marge) ne tient pas dans ${ROOT_MIB} MiB sur cette eMMC — un profil plus léger (lite) ou une eMMC plus grande"
+(( BOOT_UTILISE_MIB * 2 <= BOOT_MIB )) || meurt "/boot (${BOOT_UTILISE_MIB} MiB) ne laisserait pas la place d'une mise à jour de noyau dans ${BOOT_MIB} MiB"
+if (( ESSAI )); then echo "✓ essai : tout tient, rien n'a été écrit"; exit 0; fi
+
+if (( ! OUI )); then
+  echo
+  echo "⚠ TOUT le contenu de $EMMC sera effacé."
+  read -r -p "Taper le nom du périphérique ($(basename "$EMMC")) pour confirmer : " r
+  [[ "$r" == "$(basename "$EMMC")" ]] || meurt "annulé"
+fi
+
+# ── Partitionner, formater ──────────────────────────────────────────────────
+MNT=$(mktemp -d /tmp/secubox-emmc.XXXXXX)
+nettoie() { sync; umount -R "$MNT" 2>/dev/null || true; rmdir "$MNT" 2>/dev/null || true; }
+trap nettoie EXIT
+dit "partitionnement GPT"
+wipefs -aq "$EMMC"
+parted -s "$EMMC" mklabel gpt \
+  mkpart boot fat32 2MiB $(( BOOT_MIB + 2 ))MiB \
+  mkpart ROOT ext4 $(( BOOT_MIB + 2 ))MiB $(( BOOT_MIB + 2 + ROOT_MIB ))MiB \
+  mkpart DATA ext4 $(( BOOT_MIB + 2 + ROOT_MIB ))MiB 100% \
+  set 1 boot on
+partprobe "$EMMC" 2>/dev/null || true; udevadm settle
+mkfs.fat -F32 -n BOOTEMMC "${EMMC}p1" >/dev/null
+mkfs.ext4 -q -F -L rootfs-emmc "${EMMC}p2"
+mkfs.ext4 -q -F -L data-emmc "${EMMC}p3"
+
+# ── Copier le système en marche ─────────────────────────────────────────────
+dit "copie du système (quelques minutes)"
+mount "${EMMC}p2" "$MNT"
+mkdir -p "$MNT/boot" "$MNT/data"
+mount "${EMMC}p1" "$MNT/boot"
+rsync -aHAXx --numeric-ids \
+  --exclude={"/proc/*","/sys/*","/dev/*","/run/*","/tmp/*","/mnt/*","/media/*","/lost+found","/data/*","/boot/*"} \
+  / "$MNT/"
+rsync -rt --no-owner --no-group /boot/ "$MNT/boot/"          # FAT : ni droits ni propriétaires
+
+# ── Les étiquettes de l'eMMC, et le démarrage qui les nomme ─────────────────
+dit "étiquettes eMMC : rootfs-emmc / BOOTEMMC / data-emmc"
+sed -i -E 's#^LABEL=rootfs([[:space:]])#LABEL=rootfs-emmc\1#; s#^LABEL=data([[:space:]])#LABEL=data-emmc\1#; s#^LABEL=boot([[:space:]])#LABEL=BOOTEMMC\1#' "$MNT/etc/fstab"
+for f in "$MNT/boot/extlinux/extlinux.conf" "$MNT/boot/boot.cmd"; do
+  [[ -f "$f" ]] && sed -i -E 's#LABEL=rootfs([^-]|$)#LABEL=rootfs-emmc\1#g' "$f"
+done
+if [[ -f "$MNT/boot/boot.cmd" ]] && command -v mkimage >/dev/null; then
+  mkimage -C none -A arm64 -T script -d "$MNT/boot/boot.cmd" "$MNT/boot/boot.scr" >/dev/null
+fi
+# Une machine, deux copies : l'eMMC n'emporte pas l'identité de la carte.
+rm -f "$MNT/etc/machine-id" "$MNT/var/lib/dbus/machine-id"
+: > "$MNT/etc/machine-id"
+
+grep -q "LABEL=rootfs-emmc" "$MNT/etc/fstab" || meurt "fstab de l'eMMC non réécrit — installation incomplète"
+echo
+echo "✓ installé sur $EMMC. Retirer la carte uSD et redémarrer pour démarrer sur l'eMMC ;"
+echo "  la carte reste un système de secours intact (ses étiquettes n'ont pas changé)."
