@@ -28,6 +28,7 @@ def _cle():
 
 @pytest.fixture
 def banc(tmp_path, monkeypatch):
+    monkeypatch.setenv("SECUBOX_WEBOS_ACCES", str(tmp_path / "coffre"))     # #1562 : jamais le vrai coffre
     kg, pg = _cle()        # iPhone de Gérald, rattaché à gk2
     ka, pa = _cle()        # appareil d'alice, non rattaché, profil user
     kx, px = _cle()        # appareil révoqué
@@ -242,6 +243,20 @@ def _faux_helper(monkeypatch, existants=()):
     return appels, comptes_
 
 
+def _coffre(r, pseudo):
+    """Le coffre (#1562) de la personne dont on vient d'ouvrir les comptes."""
+    import os
+    from secubox_core import coffre as K
+    uid = main.db().execute("SELECT user_uuid FROM sbx_users WHERE pseudo=?", (pseudo,)).fetchone()[0]
+    d = K.racine() / K.cle_personne(uid)
+    assert oct(os.stat(d).st_mode)[-3:] == "700"
+    out = {}
+    for f in d.glob("*.json"):
+        assert oct(os.stat(f).st_mode)[-3:] == "600"
+        out[f.stem] = json.loads(f.read_text())
+    return out
+
+
 def _fini(lance, uid, ctx):
     """#1458 : la route rend la main ; on relit le travail jusqu'au résultat (remis une fois)."""
     import time as _t
@@ -269,7 +284,11 @@ def test_personne_sans_appareil_et_ses_comptes(banc, monkeypatch):
     assert e.value.status_code == 409
     uid = p["user_uuid"]
     r = _fini(main.ouvre_comptes(uid, main.Services(services=["email", "nextcloud", "peertube"]), ctx), uid, ctx)
-    pw = r["mot_de_passe"]
+    pw = cpt[("email", "cedre83")]
+    assert "mot_de_passe" not in r                                           # #1562 : plus jamais rendu
+    coffre = _coffre(r, "cedre83")
+    assert coffre["mail"]["secret"] == pw and coffre["mail"]["compte"] == "cedre83@secubox.in"
+    assert coffre["nextcloud"]["secret"] == pw and coffre["mail"]["voie"] == "machine"
     assert r["services"]["email"] is True and r["services"]["nextcloud"] is True
     assert "arrêté" in r["services"]["peertube"]
     assert cpt[("email", "cedre83")] == cpt[("nextcloud", "cedre83")] == pw     # UN mot de passe
@@ -279,10 +298,11 @@ def test_personne_sans_appareil_et_ses_comptes(banc, monkeypatch):
                         and d["action"] == "creer" else _h(d))
     r2 = _fini(main.ouvre_comptes(uid, main.Services(services=["peertube"]), ctx), uid, ctx)
     assert r2["services"] == {"email": True, "nextcloud": True, "peertube": True}
-    assert cpt[("email", "cedre83")] == cpt[("nextcloud", "cedre83")] == r2["mot_de_passe"] != pw
+    assert cpt[("email", "cedre83")] == cpt[("nextcloud", "cedre83")] != pw
+    assert _coffre(r2, "cedre83")["mail"]["secret"] == cpt[("email", "cedre83")]     # le coffre suit
     # réinitialiser : un geste, tous les services
     r3 = _fini(main.reinitialise_comptes(uid, ctx), uid, ctx)
-    assert set(r3["services"]) == {"email", "nextcloud", "peertube"} and r3["mot_de_passe"]
+    assert set(r3["services"]) == {"email", "nextcloud", "peertube"} and sorted(r3["coffre"]) == ["mail", "nextcloud"]
     assert all(x["action"] != "retirer" for x in appels)
 
 
@@ -464,10 +484,10 @@ def test_bbs_ouverte_d_un_geste_comme_les_autres_1521(banc, monkeypatch):
     assert "bbs" in CPT.etat(c, gek)["services"]
     r = _fini(main.ouvre_comptes(gek, main.Services(services=["email", "bbs"]), ctx), gek, ctx)
     assert r["services"] == {"email": True, "bbs": True}
-    assert cpt[("bbs", "gek")] == cpt[("email", "gek")] == r["mot_de_passe"]     # le mot de passe commun
+    assert cpt[("bbs", "gek")] == cpt[("email", "gek")]                      # le mot de passe commun
     assert CPT.liens(c, gek)["bbs"] == ["gek"]
     r2 = _fini(main.reinitialise_comptes(gek, ctx), gek, ctx)                   # ouvert d'ici : suit le commun
-    assert r2["services"]["bbs"] is True and cpt[("bbs", "gek")] == r2["mot_de_passe"]
+    assert r2["services"]["bbs"] is True and cpt[("bbs", "gek")] == cpt[("email", "gek")]
     # Relié à la main (via /lier, app=bbs) : jamais réinitialisé d'ici.
     ani = main.cree_personne(main.NouvellePersonne(pseudo="ani.skywalker"), ctx)["user_uuid"]
     c.execute("INSERT INTO sbx_app_links VALUES (?,?,?,?)", (ani, "bbs", "Ani.skywalker", "Ani.skywalker"))

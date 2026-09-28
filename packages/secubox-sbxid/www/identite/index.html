@@ -341,12 +341,13 @@ async function attendsTravail(uid, box){
   suivi.textContent = 'Toujours en cours : rouvrez « Comptes » plus tard.'; return null;
 }
 function montreMdp(box, r, quoi){
-  if (!r.mot_de_passe) return;
-  const d = document.createElement('div'); d.style.marginTop = '10px';
-  d.innerHTML = `<div class="m" style="font-size:12.5px">${esc(quoi)} — <b>à transmettre maintenant</b>, il ne sera plus affiché. Il vaut pour tous ses services.</div>`;
-  const code = document.createElement('span'); code.className = 'pw'; code.textContent = r.mot_de_passe;
-  const cp = btn('Copier'); cp.onclick = () => navigator.clipboard.writeText(r.mot_de_passe).then(()=>toast('Copié'), ()=>toast('Sélectionnez-le pour le copier'));
-  d.append(code, ' ', cp); box.appendChild(d);
+  // SANS MOT DE PASSE (#1562) : plus rien à transmettre. Le secret de services
+  // est tenu par la machine et posé dans le coffre d'accès de la personne.
+  const d = document.createElement('div'); d.className = 'm'; d.style.cssText = 'font-size:12.5px;margin-top:10px';
+  d.textContent = (r.coffre && r.coffre.length)
+    ? `${quoi} : accès posés dans son coffre (${r.coffre.join(', ')}) — rien à lui transmettre, le Hall s'en sert pour elle.`
+    : `${quoi} : fait — rien à lui transmettre.`;
+  box.appendChild(d);
 }
 async function comptes(b, cols){
   const tr = b.closest('tr'), ouvert = tr.nextElementSibling && tr.nextElementSibling.classList.contains('cpt');
@@ -358,7 +359,7 @@ async function comptes(b, cols){
   const uid = b.dataset.c;
   let e;
   try { e = await api('/admin/personnes/'+uid+'/comptes'); } catch(x){ td.textContent = x.message; return; }
-  td.innerHTML = `<div class="m" style="font-size:12.5px;margin-bottom:6px">Adresse : <b style="font-family:var(--mono)">${esc(e.adresse)}</b> · un seul mot de passe pour tous ses services</div>`;
+  td.innerHTML = `<div class="m" style="font-size:12.5px;margin-bottom:6px">Adresse : <b style="font-family:var(--mono)">${esc(e.adresse)}</b> · sans mot de passe à retenir : la box tient ses accès</div>`;
   const choix = [];
   for (const [svc, x] of Object.entries(e.services)){
     const l = document.createElement('div'); l.className = 'svc';
@@ -401,17 +402,17 @@ async function comptes(b, cols){
         const r = await attendsTravail(uid, td); if (!r){ go.disabled = false; return; }
         const ko = Object.entries(r.services).filter(([,v]) => v !== true);
         toast(ko.length ? 'Échec : ' + ko.map(([k,v]) => k+' ('+v+')').join(', ') : 'Comptes ouverts');
-        montreMdp(td, r, 'Mot de passe de services');
+        montreMdp(td, r, 'Comptes ouverts');
       } catch(y){ toast(y.message); }
       go.disabled = false;
     };
     act.appendChild(go);
   }
   if (Object.values(e.services).some(x => x.lie)){
-    const re = btn('Réinitialiser le mot de passe');
-    re.onclick = () => confirme(act, 'Nouveau mot de passe dans TOUS ses services ?', async () => {
+    const re = btn('Renouveler ses accès');
+    re.onclick = () => confirme(act, 'Renouveler ses accès dans TOUS ses services (nouveau secret tenu par la box) ?', async () => {
       try { await api('/admin/personnes/'+uid+'/comptes/reinitialiser', {method:'POST'});
-        const r = await attendsTravail(uid, td); if (r) montreMdp(td, r, 'Nouveau mot de passe'); }
+        const r = await attendsTravail(uid, td); if (r) montreMdp(td, r, 'Accès renouvelés'); }
       catch(y){ toast(y.message); }
     });
     act.appendChild(re);

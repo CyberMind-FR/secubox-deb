@@ -410,7 +410,28 @@ async def services(user=Depends(require_jwt)):
 # rien a demander : la carte affiche « connectez-vous », ce qui est la verite.
 
 def _qui(user) -> str:
-    return acces.qui_sur((user or {}).get("sub"))
+    """La clé du coffre : la PERSONNE (#1562), plus l'appareil.
+
+    Rangé par `sub` (sbx-…, gk2), le coffre d'une personne à deux appareils
+    était deux coffres vides, quand l'Identity Manager crée ses comptes — et
+    y pose désormais ses accès — par personne. Session sans personne
+    (appareil non rattaché, compte système seul) : l'ancienne clé, inchangée.
+    Au premier passage d'un appareil, son ancien coffre est REPRIS dans celui
+    de la personne (déplacé, jamais écrasé)."""
+    user = user or {}
+    ancien = acces.qui_sur(user.get("sub"))
+    try:
+        from secubox_core.capacites import personne_du_porteur  # noqa: PLC0415
+        from secubox_core import coffre  # noqa: PLC0415
+        per = personne_du_porteur(user)
+        cle = coffre.cle_personne(per["user_uuid"]) if per else None
+    except Exception:  # noqa: BLE001 — jamais une panne du coffre pour une clé
+        cle = None
+    if not cle:
+        return ancien
+    if ancien != "_":
+        coffre.reprend(ancien, cle)
+    return cle
 
 
 def _etiquette(compte: str) -> str:
@@ -586,10 +607,12 @@ async def acces_liste(user=Depends(require_jwt)):
 
 
 @router.post("/acces/{svc}/valider")
-async def acces_valider(svc: str, user=Depends(require_jwt)):
+async def acces_valider(svc: str, request: Request, user=Depends(require_jwt)):
     """Demarre le flux de delegation et rend l'URL a ouvrir. Le mot de passe
-    sera tape DANS le service, jamais ici."""
-    return await acces.flux_demarre(_qui(user), svc)
+    sera tape DANS le service, jamais ici. Le jeton de la personne sert
+    seulement a reveiller le service endormi (#1562)."""
+    a = request.headers.get("authorization", "")
+    return await acces.flux_demarre(_qui(user), svc, a[7:] if a.startswith("Bearer ") else "")
 
 
 @router.post("/acces/{svc}/sonde")
