@@ -1365,9 +1365,9 @@ const FEATURED = [
   // #1240 : Actor Intelligence (TPI inverse) — acteurs corrélés au-delà de l'IP,
   // campagnes, ThreatVector. Lit l'API read-only de sbx-actord (shadow). auth:true
   // (donnée de sécurité réservée à la session, comme la carte Sécurité).
-  // SANS `url` (#1466) : actor.gk2 n'est pas servi — l'agrandir ouvrait une
-  // page d'erreur. Carte sans vhost = elle s'agrandit sur elle-même ; ⚙️ → /actor/.
-  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", carte:"/cardlets/actor.html", h:360, auth:true, admin:"/actor/"},
+  // actor.gk2 est servi (#1575) : le mégamenu ouvre la vraie page, plus la
+  // cardlet agrandie (#1466 avait retiré l'url faute de vhost) ; ⚙️ → /actor/.
+  {id:"acteurs",    label:"Renseignement", icon:"🧠", color:"#2e6a5b", url:"actor.gk2.secubox.in", carte:"/cardlets/actor.html", h:360, auth:true, admin:"/actor/"},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214, admin:"/droplet/"},
   {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true, admin:"/nextcloud/"},
   {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264, admin:"/mastodon/"},
