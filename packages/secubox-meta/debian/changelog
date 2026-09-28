@@ -1,3 +1,12 @@
+secubox-meta (0.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * sbxos pose TOUT le Hall (#1577) : Lyrion (service-musique), Mastodon,
+    Torrent, YTSaS, Zigbee (fonction-maison) et Mood (gabriel-mood, désormais
+    lu par le générateur) passent de suggéré à recommandé. Un test refuse
+    qu'une carte du Hall mène à un paquet que sbxos n'installe pas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:27:29 +0200
+
 secubox-meta (0.1.7-1~bookworm1) bookworm; urgency=medium
 
   * secubox-premier-pas recommandé par secubox-service-noyau : toute box

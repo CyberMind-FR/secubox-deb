@@ -1,0 +1,16 @@
+Package: sbxos
+Source: secubox-meta
+Version: 0.1.8-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 8
+Depends: secubox, secubox-service-hall
+Recommends: secubox-service-assistant, secubox-fonction-correspondance, secubox-fonction-nuage, secubox-fonction-media, secubox-fonction-publication, secubox-fonction-veille, secubox-fonction-maison
+Suggests: secubox-fonction-ia, secubox-fonction-provision
+Section: metapackages
+Priority: optional
+Description: SecuBox — racine « SBX OS »
+ Le Hall et tous ses composants, posés sur la box : l'environnement complet.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.

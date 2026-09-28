@@ -64,3 +64,52 @@ def test_refus():
     n4 = copy.deepcopy(noeuds)
     next(n for n in n4 if n["meta"] == "secubox-service-mail")["recommande"].append("secubox-webmail")
     assert any("transitionnel" in e for e in gm.valide(n4, [h for h in hors if h != "secubox-webmail"], depot))
+
+
+# ── LE HALL ENTIER (#1577) ─────────────────────────────────────────────────
+# `apt install sbxos` doit poser tout module qui a une carte dans le Hall :
+# Lyrion, Mastodon, Torrent, YTSaS, Zigbee et Mood n'étaient que suggérés, et
+# une box neuve montrait un Hall troué. Chaque entrée FEATURED du Hall doit
+# mener à un paquet atteint par requiert/recommande depuis sbxos.
+
+import re  # noqa: E402
+
+HALL = os.path.join(RACINE, "..", "secubox-webos", "www", "hall", "index.html")
+
+# Entrée du Hall → paquet qui la sert, quand le nom ne suffit pas.
+PAQUET_DE = {
+    "securite": "secubox-waf", "acteurs": "secubox-waf-ng",
+    "contenu": "secubox-droplet", "depot": "secubox-droplet",
+    "cloud": "secubox-nextcloud", "nextcloud-super": "secubox-nextcloud",
+    "social": "secubox-mastodon", "forums": "secubox-bbs",
+    "activite": "secubox-sbxid", "comptes": "secubox-sbxid", "acces": "secubox-sbxid",
+    "sbxos": "secubox-sbxos", "surfviewer": "secubox-webos", "mood": "gabriel-mood",
+}
+
+
+def _installe_par_sbxos(noeuds):
+    m = {n["meta"]: n for n in noeuds}
+    vus = set()
+
+    def va(x):
+        for lien in ("requiert", "recommande"):
+            for c in m.get(x, {}).get(lien, []):
+                if c not in vus:
+                    vus.add(c)
+                    va(c)
+    va("sbxos")
+    return vus
+
+
+def test_sbxos_pose_tout_le_hall():
+    _, noeuds, _ = _etat()
+    pose = _installe_par_sbxos(noeuds)
+    texte = open(HALL, encoding="utf-8").read()
+    ids = re.findall(r'\{id:"([a-z0-9-]+)",\s*label:"', texte)
+    assert len(ids) >= 25, "liste du Hall introuvable"
+    manquants = []
+    for i in sorted(set(ids)):
+        p = PAQUET_DE.get(i, f"secubox-{i}")
+        if p not in pose:
+            manquants.append(f"{i} → {p}")
+    assert not manquants, "cartes du Hall que sbxos n'installe pas : " + ", ".join(manquants)

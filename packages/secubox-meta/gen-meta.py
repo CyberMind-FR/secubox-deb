@@ -76,7 +76,10 @@ def relations(valeur):
 def paquets_du_depot(exclure_source=None):
     """{binaire: fiche} pour chaque paquet du monorepo (hors copies de build)."""
     out = {}
-    for c in sorted(glob.glob(os.path.join(PAQUETS, "secubox-*", "debian", "control"))):
+    # gabriel-* : modules du Hall publiés sous leur propre nom (#1577).
+    controles = sorted(glob.glob(os.path.join(PAQUETS, "secubox-*", "debian", "control"))
+                       + glob.glob(os.path.join(PAQUETS, "gabriel-*", "debian", "control")))
+    for c in controles:
         if exclure_source and os.path.basename(os.path.dirname(os.path.dirname(c))) == exclure_source:
             continue
         for s in strophes(c):
