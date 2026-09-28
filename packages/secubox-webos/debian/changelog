@@ -1,3 +1,10 @@
+secubox-webos (1.0.356-1~bookworm1) bookworm; urgency=medium
+
+  * Renseignement (Actor) : le mégamenu ouvre actor.gk2.secubox.in, désormais
+    servi, au lieu de la cardlet agrandie (#1575).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:24:29 +0200
+
 secubox-webos (1.0.355-1~bookworm1) bookworm; urgency=medium
 
   * Carte Activité : un fil ou un fichier du BBS s'ouvre sur sa vraie
