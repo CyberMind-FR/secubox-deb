@@ -60,16 +60,28 @@ HTTP_PORT=$(config_get "http_port" "3000")
 PUBLIC_HOSTNAME=$(config_get "public_hostname" "lyrion.gk2.secubox.in")
 
 # ── LXC helpers ───────────────────────────────────────────────────────────────
+# LE PANNEAU INTERROGE SOUS `secubox`, PAS SOUS ROOT (#1573). lxc-info ne voit
+# pas un conteneur privilégié depuis un compte ordinaire, ni ce compte ne lit
+# /data/lxc : le panneau affichait « lxc absent, daemon stopped » pendant que
+# LMS jouait. Hors root, la preuve est que LMS RÉPOND sur son port — ce qui
+# atteste à la fois le conteneur et le démon.
+lms_repond() { curl -s -m 3 -o /dev/null "http://$LXC_IP:$HTTP_PORT/" 2>/dev/null; }
+
 lxc_state() {
+    if [ "$(id -u)" -ne 0 ]; then
+        lms_repond && echo running
+        return 0
+    fi
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
         | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
 }
 
 lxc_running() { [ "$(lxc_state)" = "running" ]; }
-lxc_exists()  { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+lxc_exists()  { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ] || { [ "$(id -u)" -ne 0 ] && lms_repond; }; }
 
 daemon_running() {
     lxc_running || return 1
+    [ "$(id -u)" -ne 0 ] && { lms_repond; return; }
     # The upstream .deb installs unit `lyrionmusicserver.service`; the
     # historic Logitech-era unit `logitechmediaserver.service` is the
     # legacy fallback if someone provisioned an older release.
@@ -78,7 +90,11 @@ daemon_running() {
 }
 
 host_api_running() {
-    systemctl is-active --quiet secubox-lyrion.service 2>/dev/null
+    # L'API est servie par l'agrégateur ; secubox-lyrion.service est un
+    # vestige (#1573). On garde l'unité si une box l'a encore.
+    systemctl is-active --quiet secubox-lyrion.service 2>/dev/null && return 0
+    [ "$(curl -s -m 3 -o /dev/null -w '%{http_code}' --unix-socket /run/secubox/aggregator.sock \
+        http://localhost/api/v1/lyrion/healthz 2>/dev/null)" = 200 ]
 }
 
 # ── Three-fold output (matches docs/MODULE-GUIDELINES.md §7) ──────────────────

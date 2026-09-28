@@ -1,3 +1,18 @@
+secubox-lyrion (1.6.12-1~bookworm1) bookworm; urgency=medium
+
+  * lyrion.gk2 bouclait sur la page de réveil (#1573) : le manifeste
+    modules.d/lyrion.toml déclarait on-demand avec l'unité
+    secubox-lyrion.service, qui n'existe plus (API servie par l'agrégateur).
+    Le postinst la retire, passe Lyrion en always-on (un serveur de musique
+    ne dort pas : les lecteurs seraient coupés) — une seule fois, témoin —
+    et pose la route sbxwaf de lyrion.gk2.
+  * Panneau : « lxc absent, daemon stopped » pendant que LMS jouait —
+    lyrionctl tourne sous secubox et lxc-info ne voit pas le conteneur ;
+    hors root, un LMS qui répond atteste conteneur et démon. host-api suit
+    l'agrégateur, plus l'unité vestige.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 10:22:24 +0200
+
 secubox-lyrion (1.6.11-1~bookworm1) bookworm; urgency=medium
 
   * La route d'admin /api/v1/lyrion/ passe par l'agrégateur au lieu du socket
@@ -61,4 +76,3 @@ secubox-lyrion (1.6.6-1~bookworm1) bookworm; urgency=medium
     pas) et MemoryMax 64M→192M (le lecteur se faisait OOM-killer).
 
  -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 11:40:59 +0200
-
