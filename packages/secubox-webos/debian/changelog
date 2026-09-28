@@ -1,3 +1,11 @@
+secubox-webos (1.0.353-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Activité : suit le thème du Hall (?theme= et message sbx:theme),
+    plus seulement celui du système — elle restait claire dans un Hall
+    sombre (#1566).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 09:56:19 +0200
+
 secubox-webos (1.0.352-1~bookworm1) bookworm; urgency=medium
 
   * « Ouvrir » et l'onglet réel du Cloud passent par nc…/sbx/entrer : la
