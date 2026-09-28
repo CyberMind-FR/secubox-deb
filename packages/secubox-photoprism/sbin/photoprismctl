@@ -122,6 +122,49 @@ cmd_user_provision() {
         podman exec -i photoprism sh -c "read -r PPW; photoprism users $verb -p \"\$PPW\" $opts \"$username\""
 }
 
+# ── Entrée sans mot de passe : OpenID Connect SecuBox (#1589, #1562) ─────────
+# PhotoPrism Plus parle OIDC nativement. Le client est enregistré auprès du
+# fournisseur de la box (secubox-oidc) ; son secret passe du fournisseur à la
+# configuration de PhotoPrism SANS être affiché. Comptes créés à la première
+# entrée (OIDCRegister) d'après preferred_username : le compte lié à la
+# personne, sinon son pseudo. Le formulaire local reste (admin).
+STORAGE=$(config_get "storage" "/data/photoprism/storage")
+
+cmd_sso() {
+    command -v secubox-oidcctl >/dev/null 2>&1 || { warn "secubox-oidc absent — sso non configuré"; return 0; }
+    local issuer
+    issuer=$(python3 -c 'import tomllib;print(tomllib.load(open("/etc/secubox/oidc.toml","rb")).get("issuer",""))' 2>/dev/null)
+    [ -n "$issuer" ] || { err "émetteur OIDC inconnu (/etc/secubox/oidc.toml)"; return 1; }
+    [ -d "$STORAGE/config" ] || { warn "$STORAGE/config absent — PhotoPrism pas encore installé ; sso reporté"; return 0; }
+    local secret
+    secret=$(secubox-oidcctl client-add photoprism --app photoprism --name Photos \
+             --redirect "https://$PUBLIC_HOSTNAME/api/v1/oidc/redirect") || { err "client OIDC refusé"; return 1; }
+    OIDC_SECRET="$secret" OIDC_ISSUER="$issuer" python3 - "$STORAGE/config/options.yml" <<'EOF'
+import os, sys, tempfile, yaml
+chemin = sys.argv[1]
+try:
+    d = yaml.safe_load(open(chemin, encoding="utf-8")) or {}
+except FileNotFoundError:
+    d = {}
+d.update({"OIDCUri": os.environ["OIDC_ISSUER"], "OIDCClient": "photoprism",
+          "OIDCSecret": os.environ["OIDC_SECRET"], "OIDCProvider": "SecuBox",
+          "OIDCRegister": True, "OIDCUsername": "preferred_username", "OIDCRedirect": False,
+          "DisableOIDC": False})
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(chemin), prefix=".options.")
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    f.write("# Géré en partie par photoprismctl sso (#1589) : clés OIDC*.\n")
+    yaml.safe_dump(d, f, sort_keys=True, allow_unicode=True)
+os.chmod(tmp, 0o600)
+os.replace(tmp, chemin)
+EOF
+    # Conteneur NON privilégié : le root de l'hôte y apparaît « nobody », et un
+    # fichier 0600 qui lui appartient y serait illisible — PhotoPrism ignorait
+    # alors ses clés OIDC sans rien dire. Même propriétaire que le répertoire.
+    chown --reference="$STORAGE/config" "$STORAGE/config/options.yml"
+    if lxc_running; then svc restart; fi
+    log "entrée « SecuBox » (OIDC) configurée — émetteur $issuer"
+}
+
 cmd_help() {
     cat <<EOF
 photoprismctl $VERSION — SecuBox PhotoPrism (podman-in-LXC) controller
@@ -133,6 +176,7 @@ Usage: photoprismctl <verb> [args]
   start|stop|restart Control photoprism.service inside the LXC
   index [args]       Run an immediate incremental index now
   user-provision <user> [role]  Create/sync a user (SECUBOX_USER_PASSWORD env)
+  sso                Entrée « SecuBox » par OpenID Connect (secubox-oidc)
   logs [N]           Tail N lines of photoprism journal (default 50)
   reload             Reload host nginx
   help               This message
@@ -147,6 +191,7 @@ main() {
     case "$noun" in
         install|status|start|stop|restart|index|logs|reload) "cmd_${noun}" "$@" ;;
         user-provision) cmd_user_provision "$@" ;;
+        sso) cmd_sso ;;
         help|-h|--help) cmd_help ;;
         *) err "unknown verb: $noun"; cmd_help; exit 1 ;;
     esac

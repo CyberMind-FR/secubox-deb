@@ -1,0 +1,22 @@
+Source: secubox-oidc
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-oidc
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core (>= 1.5.30),
+         secubox-aggregator,
+         python3,
+         python3-jwt,
+         python3-cryptography,
+         python3-fastapi | python3-pip
+Description: SecuBox OIDC — fournisseur OpenID Connect adossé à la session SecuBox
+ Un service de la box (PhotoPrism, Mastodon…) ouvre le compte d'une personne
+ d'après sa session SecuBox, sans mot de passe. Flux code + PKCE, id_token
+ RS256, codes à usage unique ; seule une session qui désigne une personne
+ authentifie. Clients enregistrés par secubox-oidcctl.

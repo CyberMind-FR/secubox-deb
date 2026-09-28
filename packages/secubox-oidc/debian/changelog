@@ -1,0 +1,10 @@
+secubox-oidc (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Fournisseur OpenID Connect adossé à la session SecuBox (#1589, #1562) :
+    découverte, JWKS, authorize (code + PKCE S256), token, userinfo ; codes à
+    usage unique 60 s liés au client, à la redirect_uri exacte et au défi ;
+    id_token RS256 à clé propre ; jetons et secrets hachés ; seule une session
+    qui désigne une personne authentifie. secubox-oidcctl init / client-add /
+    client-rm / client-ls.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 28 Sep 2026 11:23:55 +0200
