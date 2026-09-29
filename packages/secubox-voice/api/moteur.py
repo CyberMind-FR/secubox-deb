@@ -155,7 +155,7 @@ class MoteurDistant(Moteur):
         try:
             async with httpx.AsyncClient(timeout=self.delai_s) as cli:
                 r = await cli.post(self.url + "/v1/audio/transcriptions",
-                                   data={"model": self.modele_asr},
+                                   data={"model": self.modele_asr, "language": "fr"},
                                    files=fichiers, headers=self._entetes())
         except (httpx.HTTPError, OSError) as e:
             raise MoteurIndisponible(
@@ -295,6 +295,36 @@ class MoteurLocal(Moteur):
                 f"Transcription interrompue après {self.delai_s} s.") from e
 
 
+# tiny par défaut (#1646) : sur une box arm64 chargée, base dépassait la coupure
+# de 30 s d'HAProxy (26-42 s mesurés) ; tiny répond en ~10 s.
+MODELE_ASR_DEFAUT = "/usr/share/secubox/voice/modeles/ggml-tiny-q5_1.bin"
+
+
+class MoteurMixte(Moteur):
+    """MIXTE (#1649) : la SYNTHÈSE reste locale (piper, rapide et souveraine),
+    la RECONNAISSANCE part au studio du parc (VoiceStudio, meilleur modèle) —
+    et retombe sur le modèle local s'il ne répond pas à temps."""
+
+    def __init__(self, local: "MoteurLocal", distant: "MoteurDistant") -> None:
+        self.local, self.distant = local, distant
+
+    async def etat(self) -> Etat:
+        l, d = await self.local.etat(), await self.distant.etat()
+        return Etat(genre="mixte", joignable=l.joignable or d.joignable,
+                    detail=f"Synthèse locale ; reconnaissance {'au studio' if d.asr else 'locale (studio injoignable)'}.",
+                    tts=l.tts, asr=d.asr or l.asr)
+
+    async def dire(self, texte: str, voix: str, format_: str) -> bytes:
+        return await self.local.dire(texte, voix, format_)
+
+    async def transcrire(self, audio: bytes, nom: str) -> str:
+        try:
+            return await self.distant.transcrire(audio, nom)
+        except Exception as e:  # noqa: BLE001 — tout échec du studio : repli local
+            log.warning("studio vocal indisponible (%s) — reconnaissance locale", e)
+            return await self.local.transcrire(audio, nom)
+
+
 def construire(cfg: dict) -> Moteur:
     """Choisit l'implémentation d'après la configuration.
 
@@ -312,10 +342,19 @@ def construire(cfg: dict) -> Moteur:
             cle=str(d.get("cle", "")),
             delai_s=int(d.get("delai_s", 60)))
     l = cfg.get("local", {}) or {}
-    return MoteurLocal(
+    local = MoteurLocal(
         piper=str(l.get("piper", "piper")),
         voix_dir=str(l.get("voix_dir", "/usr/share/secubox/voice/voix")),
         whisper=str(l.get("whisper", "whisper-cli")),
-        modele_asr=str(l.get("modele_asr",
-                             "/usr/share/secubox/voice/modeles/ggml-base-q5_1.bin")),
+        modele_asr=str(l.get("modele_asr", MODELE_ASR_DEFAUT)),
         delai_s=int(l.get("delai_s", 120)))
+    if genre == "mixte":
+        d = cfg.get("distant", {}) or {}
+        return MoteurMixte(local, MoteurDistant(
+            url=str(d.get("url", "")),
+            modele_tts=str(d.get("modele_tts", "tts-1")),
+            modele_asr=str(d.get("modele_asr", "whisper-1")),
+            cle=str(d.get("cle", "")),
+            # SOUS la coupure de 30 s d'HAProxy : au-delà, on repasse en local.
+            delai_s=min(int(d.get("delai_s", 25)), 25)))
+    return local

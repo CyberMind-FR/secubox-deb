@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-voicectl — choisir le moteur vocal (#1649).
+
+  mixte URL   synthèse locale, reconnaissance au studio URL (clé lue sur stdin)
+  local       tout en local
+  etat        moteur et modèle retenus
+
+Réécrit /etc/secubox/voice.toml en place (commentaires gardés), puis
+redémarre secubox-voice. La clé n'est jamais passée en argument (ps la verrait)."""
+import re, subprocess, sys, tomllib
+from pathlib import Path
+
+F = Path("/etc/secubox/voice.toml")
+
+
+def pose(t: str, section: str, cle: str, valeur: str) -> str:
+    """Remplace `cle = …` dans [section] (racine si section vide), ou l'ajoute."""
+    v = f'{cle} = "{valeur}"'
+    lignes, sec, fait = t.splitlines(), "", False
+    for i, l in enumerate(lignes):
+        m = re.match(r"^\[([^\]]+)\]", l)
+        if m:
+            if sec == section and not fait:
+                lignes.insert(i, v); fait = True; break
+            sec = m.group(1)
+            continue
+        if sec == section and re.match(rf"^{re.escape(cle)}\s*=", l):
+            lignes[i] = v; fait = True; break
+    if not fait:
+        if section and f"[{section}]" not in t:
+            lignes += ["", f"[{section}]"]
+        lignes.append(v) if section else lignes.insert(0, v)
+    return "\n".join(lignes) + "\n"
+
+
+def main(a: list[str]) -> int:
+    if not a or a[0] not in ("mixte", "local", "etat"):
+        print(__doc__, file=sys.stderr); return 2
+    t = F.read_text(encoding="utf-8") if F.exists() else ""
+    if a[0] == "etat":
+        c = tomllib.loads(t) if t else {}
+        print(c.get("moteur", "local"), (c.get("distant") or {}).get("url", ""),
+              (c.get("local") or {}).get("modele_asr", "(défaut)"))
+        return 0
+    if a[0] == "mixte":
+        if len(a) != 2 or not re.match(r"^https?://[A-Za-z0-9.\-]+(:\d+)?/?$", a[1]):
+            print("usage : secubox-voicectl mixte http://hote:3900  (clé sur stdin)", file=sys.stderr); return 2
+        cle = sys.stdin.readline().strip()
+        if not re.match(r"^[A-Za-z0-9_\-]{16,}$", cle):
+            print("clé absente ou hors format", file=sys.stderr); return 2
+        t = pose(t, "", "moteur", "mixte")
+        t = pose(t, "distant", "url", a[1].rstrip("/"))
+        t = pose(t, "distant", "cle", cle)
+    else:
+        t = pose(t, "", "moteur", "local")
+    tomllib.loads(t)                                   # jamais un fichier cassé
+    F.write_text(t, encoding="utf-8"); F.chmod(0o640)
+    subprocess.run(["systemctl", "restart", "secubox-voice"], check=False)
+    print(f"voix : moteur {a[0]}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
