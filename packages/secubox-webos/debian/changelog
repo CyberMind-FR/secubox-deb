@@ -1,3 +1,11 @@
+secubox-webos (1.0.374-1~bookworm1) bookworm; urgency=medium
+
+  * Lecteur de service (radio) : 📡 diffuse le MORCEAU en cours au parc (résolu
+    ytsas) et ♥ le met en favori + pose le cœur de la radio ; auparavant ces
+    boutons ne faisaient rien en mode lecteur (#1662).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 09:10:14 +0200
+
 secubox-webos (1.0.373-1~bookworm1) bookworm; urgency=medium
 
   * Fiche ZIA : le mode admin ouvre la console (/zia/admin.html) et non le

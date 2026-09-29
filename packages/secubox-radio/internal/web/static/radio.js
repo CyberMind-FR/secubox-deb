@@ -251,6 +251,8 @@
         // de connaître muet/volume et d'éviter une bascule quand l'intention est
         // explicite (RFC §8). Les anciens lecteurs qui ne les lisent pas les ignorent.
         muet: !!ecran.muted, volume: (typeof ecran.volume === 'number') ? ecran.volume : 1,
+        // LA PISTE (#1662) : ce que le Hall diffuse au parc (📡) ou met en favori (♥).
+        piste: pisteAnnonce,
         fin: !!fin
       }, '*');
     } catch (e) {}
@@ -282,6 +284,8 @@
     // lecture reprendra si on revient a cette instance.
     else if (d.action === 'pause') { if (!ecran.paused) ecran.pause(); }
     else if (d.action === 'zoom') { agrandis(); }
+    // ♥ du lecteur du Hall (#1662) : pose le cœur, ne l'enlève jamais.
+    else if (d.action === 'aime') { if (pisteEnCours && !bAime.classList.contains('on')) bAime.click(); }
     // VOLUME ET COUPURE PILOTES PAR LA BARRE (#1267). On passe par les memes
     // fonctions que les commandes locales : deux chemins vers le meme reglage
     // finiraient par diverger, et le curseur de la carte ne dirait plus la
@@ -351,6 +355,8 @@
   });
 
   var pisteEnCours = 0, curseurChat = 0, dernierAppel = Date.now();
+  // La piste courante telle que le Hall peut la diffuser ou la favoriser (#1662).
+  var pisteAnnonce = null;
   // INTENTION lecture/pause RETENUE entre les refresh (#radiofix). Défaut : on
   // joue (une radio qu'on ouvre, on l'écoute) ; si l'auditeur a mis en pause,
   // on RESTE en pause au rechargement au lieu de relancer le son tout seul.
@@ -423,7 +429,7 @@
       ecoule.textContent = '0:00'; duree.textContent = '--:--';
       derive.textContent = '';
       ecran.removeAttribute('src');
-      pisteEnCours = 0;
+      pisteEnCours = 0; pisteAnnonce = null;
       return;
     }
     var p = e.piste;
@@ -432,6 +438,9 @@
 
     if (p.id !== pisteEnCours) {
       pisteEnCours = p.id;
+      var yt = String(p.source || '').indexOf('yt:') === 0 ? String(p.source).slice(3) : '';
+      pisteAnnonce = /^[A-Za-z0-9_-]{6,20}$/.test(yt)
+        ? { id: p.id, url: 'https://www.youtube.com/watch?v=' + yt, titre: p.titre || '' } : null;
       titre.textContent = p.titre || p.source;
       meta.textContent = (p.auteur ? p.auteur + ' · ' : '') +
                          (p.coeurs ? '♥ ' + p.coeurs : 'aucun ♥');
