@@ -1,3 +1,9 @@
+secubox-waf (1.10.36-1~bookworm1) bookworm; urgency=high
+
+  * /bans : verdict « application » (appliquee, table_absente, waf_arrete, desactive) — une table nft effacée ou un sbxwaf arrêté s'affichaient « aucun bannissement actif » (#1693).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:40:58 +0200
+
 secubox-waf (1.10.35-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).

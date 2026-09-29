@@ -180,6 +180,24 @@ case "$1" in
       # before this postinst runs, so `restart` — not `try-restart` — is needed
       # to bring it back). HAProxy srv0 → 127.0.0.1:8085 keeps pointing at it.
       systemctl restart secubox-waf-ng.service 2>/dev/null || true
+      # #1693 : VÉRIFIER qu'il tourne vraiment. Sur gk3, sbxwaf était tué par
+      # seccomp dès le démarrage et bouclait (35 000+ redémarrages) sans que rien
+      # ne le dise : `restart` rend la main avant que le processus ne meure. On
+      # attend l'écoute sur 8085 et, si --nft-ban est actif, la chaîne de drop.
+      # Avertissement seulement : un postinst en échec bloquerait apt et les
+      # mises à jour nocturnes, qui sont justement le moyen de corriger.
+      sbx_ok=""
+      for _i in 1 2 3 4 5 6 7 8 9 10; do
+        if ss -ltn 2>/dev/null | grep -q '127.0.0.1:8085 '; then sbx_ok=1; break; fi
+        sleep 1
+      done
+      if [ -z "$sbx_ok" ]; then
+        echo "secubox-waf-ng: ATTENTION — sbxwaf n'écoute pas sur 127.0.0.1:8085 après redémarrage." >&2
+        echo "  → systemctl status secubox-waf-ng ; systemctl show secubox-waf-ng -p NRestarts -p Result" >&2
+      elif systemctl show secubox-waf-ng.service -p ExecStart --value 2>/dev/null | grep -q -- '--nft-ban' \
+           && ! nft list chain inet secubox waf_drop 2>/dev/null | grep -q '@waf_ban'; then
+        echo "secubox-waf-ng: ATTENTION — sbxwaf tourne mais la chaîne nft inet secubox waf_drop est absente : aucun ban n'est appliqué." >&2
+      fi
       # #1070 D : activer le timer de corrélation des campagnes + une première
       # passe immédiate pour que le tableau de bord ait des données tout de suite.
       systemctl enable --now secubox-waf-campaigns.timer 2>/dev/null || true

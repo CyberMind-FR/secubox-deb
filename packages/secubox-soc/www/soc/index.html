@@ -115,6 +115,9 @@
   .panneau > h3 .c { margin-left:auto; font-family:"JetBrains Mono",monospace;
                      font-size:.66rem; color:var(--faible); font-weight:400; }
   .muet { color:var(--faible); font-size:.76rem; font-style:italic; padding:8px 0; }
+  /* #1693 : des bans décidés mais NON appliqués ne passent plus pour un WAF calme. */
+  .panne { color:var(--braise); border:1px solid var(--braise); border-radius:6px; padding:8px 10px; margin:4px 0 8px; font-size:.78rem; line-height:1.4; list-style:none; }
+  .panne b { display:block; letter-spacing:.04em; text-transform:uppercase; font-size:.7rem; margin-bottom:2px; }
 
   .posture { display:grid; grid-template-columns:minmax(230px,300px) 1fr; gap:18px; }
   .jour { background:var(--surface); border:1px solid var(--bord); border-radius:var(--r);
@@ -586,9 +589,17 @@
     var el = $(cible);
     if (d.__erreur) { el.innerHTML = '<li class="muet">bans illisibles : ' + esc(d.__erreur) + "</li>"; return []; }
     var liste = d.bans || [];
-    if (compteur) { $(compteur).textContent = nb(d.total != null ? d.total : liste.length) + " actifs"; }
-    if (!liste.length) { el.innerHTML = '<li class="muet">aucun bannissement actif</li>'; return []; }
-    el.innerHTML = liste.slice(0, 40).map(function (b, i) {
+    // Les bans sont-ils appliqués ? (#1693) « 0 actif » d'un WAF calme et
+    // « 0 actif » d'une table effacée ou d'un sbxwaf arrêté ne se ressemblent plus.
+    var appl = d.application || {};
+    var panne = appl.ok === false
+      ? '<li class="panne"><b>bans non appliqués</b>' + esc(appl.detail || appl.etat) + "</li>" : "";
+    if (compteur) {
+      $(compteur).textContent = nb(d.total != null ? d.total : liste.length) + " actifs" +
+        (appl.ok === false ? " — NON appliqués" : "");
+    }
+    if (!liste.length) { el.innerHTML = panne + (panne ? "" : '<li class="muet">aucun bannissement actif</li>'); return []; }
+    el.innerHTML = panne + liste.slice(0, 40).map(function (b, i) {
       var s = sev(b.severity_max || b.sev || b.severity);
       var cats = b.categories && typeof b.categories === "object" && !Array.isArray(b.categories)
         ? Object.keys(b.categories).join(", ")

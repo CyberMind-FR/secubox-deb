@@ -57,6 +57,15 @@ try:
     from api.historique import agreger_historique as _agreger_historique, bucket_ip
 except ImportError:  # standalone (WorkingDirectory=…/waf)
     from historique import agreger_historique as _agreger_historique, bucket_ip
+try:
+    from api.application import application as _application, lire_etat as _lire_etat_nft
+except ImportError:  # standalone
+    from application import application as _application, lire_etat as _lire_etat_nft
+
+# État publié par sbxwaf (--nft-etat) à chaque veille de 30 s (#1693).
+NFT_ETAT = Path("/var/cache/secubox/waf/nft-etat.json")
+# Dernière lecture nft : l'ensemble du WAF existait-il ? Écrit par _get_bans.
+_nft_table_absente = False
 
 HISTORY_CACHE = "/var/lib/secubox/waf/waf-history.json"
 _history_lock = threading.Lock()
@@ -375,12 +384,19 @@ def _get_bans() -> List[dict]:
     reader = _get_geoip_reader()
     maintenant = int(time.time())
 
+    global _nft_table_absente
+    absente = False
     for ensemble in ("waf_ban", "waf_ban6"):
         try:
             r = subprocess.run(
                 ["sudo", "-n", "nft", "-j", "list", "set", "inet", WAF_NFT_TABLE, ensemble],
                 capture_output=True, text=True, timeout=10)
             if r.returncode != 0 or not r.stdout:
+                # « No such file or directory » : l'ensemble n'existe pas — un
+                # rechargement du pare-feu a effacé la table (#1693). Ce n'est
+                # PAS « aucun ban » : c'est « rien n'est bloqué ».
+                if "No such file or directory" in (r.stderr or ""):
+                    absente = True
                 continue
             doc = json.loads(r.stdout)
         except Exception:
@@ -416,6 +432,7 @@ def _get_bans() -> List[dict]:
                 })
     bans.sort(key=lambda b: b.get("expires_in") or 0, reverse=True)
     _ = maintenant
+    _nft_table_absente = absente
     return bans
 
 
@@ -1507,7 +1524,10 @@ async def get_bans():
         bans = _warm["bans"]
     if bans is None:
         bans = await asyncio.to_thread(_get_bans)
-    return {"bans": bans, "total": len(bans)}
+    # Les bans sont-ils APPLIQUÉS ? « 0 actif » d'un WAF calme ≠ table effacée
+    # ou sbxwaf arrêté — le tableau de bord doit voir la différence (#1693).
+    appl = _application(_lire_etat_nft(NFT_ETAT), _nft_table_absente, time.time())
+    return {"bans": bans, "total": len(bans), "application": appl}
 
 
 def _aggregate_threats(hours: int, limit: int) -> List[dict]:

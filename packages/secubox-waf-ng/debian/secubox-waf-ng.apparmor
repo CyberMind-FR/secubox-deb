@@ -15,8 +15,11 @@
 #   - r    : /usr/sbin/sbxwaf             (binary)
 #   - r    : /proc/self/maps, /proc/self/status, /sys/kernel/mm/transparent*
 #             (Go runtime internals; read-only, kernel-granted)
-#   - ix   : inherited for Go internal forks (e.g. os.StartProcess self-exec)
+#   - ix   : /usr/sbin/nft (ban natif --nft-ban, #1693)
+#   - rw   : /var/lib/secubox/waf/**      (journal des bans)
+#   - r    : /usr/share/GeoIP/**          (pays d'origine)
 #   - network inet, inet6 : upstream TCP connections + listener
+#   - network netlink raw + capability net_admin : nft (#1693)
 #
 # Everything else is denied by the default-deny profile.
 
@@ -63,12 +66,38 @@
   network inet6 stream,
   network unix  stream,
 
+  # ── Ban nft natif (#1070 B, #1218, #1693) ────────────────────────────────
+  # --nft-ban exécute `nft` pour poser et réparer la table inet secubox. Ajouté
+  # sans ce profil : sur une box où AppArmor est actif (gk3), nft était refusé
+  # (« fork/exec /usr/sbin/nft: permission denied ») et AUCUN ban natif n'était
+  # posé ; gk2, sans AppArmor, ne le voyait pas. nft hérite de ce profil (ix) :
+  # netlink brut + CAP_NET_ADMIN (déjà bornée par l'unité), et les deux tables
+  # de noms d'iproute2 qu'il lit. Relevé en mode complain, pas deviné.
+  /usr/sbin/nft              ix,
+  capability net_admin,
+  network netlink raw,
+  /etc/iproute2/             r,
+  /etc/iproute2/*            r,
+  /usr/share/iproute2/       r,
+  /usr/share/iproute2/*      r,
+  # Journal des bans (persistance + ré-application après un rechargement du
+  # pare-feu) : --ban-store /var/lib/secubox/waf/bans.jsonl.
+  /var/lib/secubox/          r,
+  /var/lib/secubox/waf/      rw,
+  /var/lib/secubox/waf/**    rw,
+
+  # ── Géolocalisation (pays d'origine des menaces) ────────────────────────
+  /usr/share/GeoIP/          r,
+  /usr/share/GeoIP/**        r,
+
   # ── Go runtime ───────────────────────────────────────────────────────────
   /proc/self/maps            r,
   /proc/self/status          r,
   /proc/self/smaps           r,
   /proc/sys/kernel/ngroups_max r,
+  /proc/sys/net/core/somaxconn r,
   /sys/kernel/mm/transparent_hugepage/enabled r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
 
   # Deny everything else (default-deny profile — no explicit deny rules
   # needed; any path not listed above is implicitly denied by AppArmor).
