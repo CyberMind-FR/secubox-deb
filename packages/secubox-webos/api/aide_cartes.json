@@ -1,0 +1,249 @@
+{
+  "_": "SecuBox #1664 — AIDE DES CARTES DU HALL, source unique. Lue par la bulle ❓ du Hall, la vue Aide et ZIA/Lexie (GET /api/v1/webos/public/aide/cartes). Une métrique déclare OÙ lire un chiffre réel (url même origine que le Hall) et COMMENT l'extraire (chemin, compte ou somme) ; rien n'est jamais inventé. 'session': la valeur n'est lisible qu'avec une session (le serveur ne la calcule pas, la bulle la complète avec les droits de la personne). Syntaxe de chemin : a.b ; liste[k=v] filtre ; liste[] = chaque élément ; un filtre suivi d'un champ prend le premier.",
+  "cartes": [
+    {
+      "id": "securite", "ic": "🛡️", "nom": "Sécurité", "service": "waf", "acces": "session",
+      "role": "Carte de groupe de la défense : elle fait tourner quatre couches — Pare-feu (suis-je couvert ?), Qui frappe ? (campagnes d'attaque corrélées), Analyse et Renseignement.",
+      "usage": ["Les puces du bas choisissent la couche ; sans clic, elles tournent seules.", "La pastille d'hôte ouvre la console du pare-feu (WAF)."],
+      "metriques": [
+        {"libelle": "adresses bannies", "url": "/api/v1/webos/public/cardlets/waf", "chemin": "metrics[id=bans].value"},
+        {"libelle": "attaquants caractérisés", "url": "/api/v1/webos/public/waf/qui-frappe", "chemin": "attaquants"},
+        {"libelle": "campagnes corrélées", "url": "/api/v1/webos/public/waf/qui-frappe", "chemin": "campagnes_total"}
+      ]
+    },
+    {
+      "id": "acteurs", "ic": "🧠", "nom": "Renseignement", "service": "actor", "acces": "session",
+      "role": "Les acteurs d'attaque corrélés par sbx-actord : profils, campagnes et défense graduée proposée. Le moteur observe et propose, il n'applique rien ; il parle de « continuité de campagne probable », jamais de « même personne ».",
+      "usage": ["Trois tranches : 🎭 acteurs corrélés, 🕵️ profil, 🛡️ défense graduée.", "Le détail des preuves reste sur la console d'administration."],
+      "metriques": [
+        {"libelle": "acteurs suivis", "url": "/api/v1/actor/stats", "chemin": "actors"},
+        {"libelle": "campagnes", "url": "/api/v1/actor/stats", "chemin": "campaigns"},
+        {"libelle": "posture", "url": "/api/v1/actor/stats", "chemin": "posture", "format": "texte"}
+      ]
+    },
+    {
+      "id": "contenu", "ic": "📦", "nom": "Contenu", "service": "droplet", "acces": "public",
+      "role": "Carte de groupe des services de contenu : Dépôt (paquets apt de la box), YTSaS (médias rapatriés sans pub ni Google) et Torrent, chacun avec son état en direct.",
+      "usage": ["Chaque tranche est la vraie carte du service ; la pastille ouvre le service de la tranche."],
+      "metriques": [
+        {"libelle": "médias rapatriés (YTSaS)", "url": "/api/v1/ytsas/list", "compte": ""}
+      ]
+    },
+    {
+      "id": "cloud", "ic": "☁️", "nom": "Cloud", "service": "nextcloud", "acces": "session",
+      "role": "Carte de groupe du nuage personnel : Mail, Cloud (Nextcloud) et Photos (PhotoPrism). Chaque service s'ouvre avec la session du Hall, sans mot de passe.",
+      "usage": ["Les puces changent de service ; la pastille ouvre le service de la tranche, déjà connecté."],
+      "metriques": []
+    },
+    {
+      "id": "forums", "ic": "💬", "nom": "Forums", "service": "bbs", "acces": "public",
+      "role": "Carte de groupe des lieux d'écriture : le BBS (salons et fils de discussion) et Billets (publications).",
+      "usage": ["Les puces alternent BBS et Billets ; un clic sur un fil l'ouvre en place."],
+      "metriques": [
+        {"libelle": "salons", "url": "/api/v1/webos/public/menu/bbs", "compte": "items"},
+        {"libelle": "fils ouverts", "url": "/api/v1/webos/public/menu/bbs", "somme": "items[].threads"}
+      ]
+    },
+    {
+      "id": "activite", "ic": "✦", "nom": "Activité", "service": "sbxid", "acces": "public",
+      "role": "Le fil des gestes de la box : arrivées, communautés, fils ouverts au BBS, fichiers partagés, diffusions lancées. Chacun n'y voit que ce que sa place autorise : le visiteur le public, une personne de la box aussi le nœud, un membre sa communauté.",
+      "usage": ["Chaque ligne mène à l'objet (le fil, le fichier, la diffusion).", "Se connecter élargit ce que la carte montre."],
+      "metriques": [
+        {"libelle": "événements récents visibles", "url": "/api/v1/sbxid/activite?n=30", "compte": "activites"}
+      ]
+    },
+    {
+      "id": "bbs", "ic": "💬", "nom": "BBS", "service": "bbs", "acces": "public",
+      "role": "Le forum de la box : derniers fils et salons. Un lien média posté devient un objet souverain qu'on peut voir, garder ou diffuser au parc (📡).",
+      "usage": ["Un fil s'ouvre en place ; la vue pleine gère aussi les invitations.", "Avec la session du Hall, le forum s'ouvre sans mot de passe."],
+      "metriques": [
+        {"libelle": "salons", "url": "/api/v1/webos/public/menu/bbs", "compte": "items"},
+        {"libelle": "fils ouverts", "url": "/api/v1/webos/public/menu/bbs", "somme": "items[].threads"}
+      ]
+    },
+    {
+      "id": "radio", "ic": "📻", "nom": "Radio", "service": "radio", "acces": "public",
+      "role": "La webradio souveraine du parc : flux continu, antenne (chat du parc) et propositions de morceaux.",
+      "usage": ["▶ lance le flux ; le volume vit dans la barre média du Hall.", "En grand : ♥ garde le morceau en favori, 📡 le diffuse au parc (session requise)."],
+      "metriques": [
+        {"libelle": "à l'antenne", "url": "/api/v1/webos/public/cardlets/radio", "chemin": "content.title", "format": "texte"},
+        {"libelle": "auditeurs", "url": "/api/v1/webos/public/cardlets/radio", "chemin": "metrics[id=listeners].value"},
+        {"libelle": "morceaux au catalogue", "url": "/api/v1/webos/public/cardlets/radio", "chemin": "metrics[id=tracks].value"}
+      ]
+    },
+    {
+      "id": "peertube", "ic": "📹", "nom": "PeerTube", "service": "peertube", "acces": "public",
+      "role": "Le catalogue vidéo fédéré de la box : la vidéo à la une tourne, les suivantes défilent en bande.",
+      "usage": ["▶ lit la vidéo en place ; « Agrandir » l'ouvre dans le viewer souverain.", "Les puces du bas changent de tri (récentes, catégories)."],
+      "metriques": [
+        {"libelle": "vidéos publiées", "url": "/pt/api/v1/videos?count=1", "chemin": "total"}
+      ]
+    },
+    {
+      "id": "lyrion", "ic": "🎚️", "nom": "Lyrion", "service": "lyrion", "acces": "lan",
+      "role": "Télécommande des lecteurs Squeezebox du foyer (serveur Lyrion) : ce qui joue, et les commandes. Réservée au réseau local.",
+      "usage": ["Choisir le lecteur dans l'en-tête ; ⏮ ⏯ ⏭, allumage et volume.", "📡 envoie la diffusion du parc sur le lecteur."],
+      "metriques": [
+        {"libelle": "lecteurs Squeezebox", "url": "/api/v1/lyrion/players", "chemin": "count", "session": true}
+      ]
+    },
+    {
+      "id": "zigbee", "ic": "💡", "nom": "Zigbee", "service": "zigbee", "acces": "lan",
+      "role": "Les appareils Zigbee de la maison (lampes, prises) : état et bascule marche/arrêt, par le pont zigbee2mqtt. Réservée au réseau local et à une session.",
+      "usage": ["⏻ bascule un appareil ; ⚠️ signale un appareil qui ne répond pas.", "Le pied ouvre la console zigbee2mqtt (appairage, réseau maillé)."],
+      "metriques": [
+        {"libelle": "appareils", "url": "/api/v1/zigbee/devices", "compte": "appareils", "session": true},
+        {"libelle": "joignables", "url": "/api/v1/zigbee/devices", "compte": "appareils[joignable=true]", "session": true}
+      ]
+    },
+    {
+      "id": "nextcloud", "ic": "☁️", "nom": "Cloud", "service": "nextcloud", "acces": "public",
+      "role": "Nextcloud, le nuage de fichiers de la box : aperçu de votre espace, ouvert avec la session du Hall, sans mot de passe.",
+      "usage": ["Le pied ouvre Nextcloud déjà connecté (entrée /sbx/entrer)."],
+      "metriques": []
+    },
+    {
+      "id": "nextcloud-super", "ic": "☁️", "nom": "Cloud +", "service": "nextcloud", "acces": "session",
+      "role": "Super-carte Nextcloud : Fichiers, Agenda, Activité et Partages en onglets, avec la jauge de quota — partager par lien public, téléverser, supprimer sans quitter le Hall.",
+      "usage": ["Les onglets changent de vue ; le pied téléverse ou ouvre le Cloud."],
+      "metriques": []
+    },
+    {
+      "id": "photoprism", "ic": "📷", "nom": "Photos", "service": "photoprism", "acces": "public",
+      "role": "PhotoPrism, la photothèque personnelle de la box : aperçu authentifié de vos albums.",
+      "usage": ["Validez l'accès souverain une fois, puis la carte montre vos photos."],
+      "metriques": []
+    },
+    {
+      "id": "metanews", "ic": "🗞️", "nom": "MetaNews", "service": "metanews", "acces": "public",
+      "role": "L'actualité regroupée par sujets : chaque sujet réunit les articles de plusieurs sources sur un même fait.",
+      "usage": ["Le sujet à la une tourne ; un sujet s'ouvre en profondeur avec toutes ses sources."],
+      "metriques": [
+        {"libelle": "sujets suivis", "hote": "metanews", "url": "/api/v1/metanews/topics", "compte": "topics"}
+      ]
+    },
+    {
+      "id": "podcaster", "ic": "🎙️", "nom": "Podcaster", "service": "podcaster", "acces": "public",
+      "role": "Les podcasts de la box : abonnements, épisodes téléchargés localement, lecteur qui reprend où vous étiez même après un rafraîchissement.",
+      "usage": ["Commandes de lecture, file « à suivre », barre de progression cliquable."],
+      "metriques": [
+        {"libelle": "abonnements", "url": "/api/v1/webos/public/cardlets/podcaster", "chemin": "metrics[id=feeds].value"},
+        {"libelle": "épisodes", "url": "/api/v1/webos/public/cardlets/podcaster", "chemin": "metrics[id=episodes].value"}
+      ]
+    },
+    {
+      "id": "freeboxtv", "ic": "📺", "nom": "Freebox TV", "service": "freeboxtv", "acces": "lan",
+      "role": "La télévision de la Freebox dans le Hall : grille des chaînes et lecteur. La box convertit le flux à la demande ; usage personnel, réseau local seulement.",
+      "usage": ["Choisir une chaîne la lance ; le premier démarrage prend quelques secondes (conversion à la demande)."],
+      "metriques": [
+        {"libelle": "chaînes", "url": "/api/v1/freeboxtv/channels", "compte": "channels", "session": true}
+      ]
+    },
+    {
+      "id": "sbxos", "ic": "▲", "nom": "SBX OS", "service": "", "acces": "public",
+      "role": "La nouvelle interface de la box (Aurora), jouable à côté du Hall : espaces, palette Ctrl K vers ZIA, lecteur et réglages.",
+      "usage": ["Ouvrir la carte lance SBX OS en grand ; le Hall reste tel quel."],
+      "metriques": []
+    },
+    {
+      "id": "metablogizer", "ic": "🌐", "nom": "Mes sites", "service": "metablogizer", "acces": "public",
+      "role": "Les sites publiés par la box : une vignette à la une, les autres en bande. Seuls les sites déjà publics y figurent.",
+      "usage": ["Cliquer visite le site dans le surfer du Hall ; en session, ⚙ ouvre son réglage."],
+      "metriques": [
+        {"libelle": "sites publiés", "url": "/api/v1/metablogizer/public/mosaique", "compte": "sites", "session": true}
+      ]
+    },
+    {
+      "id": "mood", "ic": "🎙", "nom": "Mood", "service": "sbxos-audio-mood", "acces": "public",
+      "role": "L'humeur d'une salle par indices de voix (prosodie) captés par le micro du navigateur : jamais de mots, confiance plafonnée, anonymat dès trois voix.",
+      "usage": ["Autoriser le micro démarre la mesure ; rien n'est enregistré."],
+      "metriques": []
+    },
+    {
+      "id": "billets", "ic": "🎟️", "nom": "Billets", "service": "billets", "acces": "public",
+      "role": "Les dernières publications de la box ; un média embarqué se joue dans la carte, titre et détails enrichis.",
+      "usage": ["Un billet s'ouvre en place ; le média se lit sans quitter la carte."],
+      "metriques": []
+    },
+    {
+      "id": "depot", "ic": "📦", "nom": "Dépôt", "service": "droplet", "acces": "public",
+      "role": "Le dépôt apt signé de la box : les paquets que les box du parc installent et mettent à jour la nuit.",
+      "usage": ["Saut direct vers le dépôt, avec son état en direct."],
+      "metriques": []
+    },
+    {
+      "id": "socialrelay", "ic": "🔄", "nom": "SocialRelay", "service": "", "acces": "public",
+      "role": "Le relais de fédération sociale (ActivityPub) entre instances.",
+      "usage": ["Ouvrir la carte montre les instances relayées."],
+      "metriques": []
+    },
+    {
+      "id": "comptes", "ic": "🗝️", "nom": "Mes comptes", "service": "sbxid", "acces": "session",
+      "role": "Vos comptes dans les services de la box — courriel, Nextcloud, PeerTube, forum — et leur lien. Tous s'ouvrent avec la session du Hall, sans mot de passe.",
+      "usage": ["Chaque ligne ouvre le service déjà connecté ; « Mon identité » gère vos appareils et comptes liés."],
+      "metriques": []
+    },
+    {
+      "id": "messagerie", "ic": "💬", "nom": "Messagerie", "service": "", "acces": "public",
+      "role": "Le mur de la box : écrire à tous ou à une personne, répondre en privé ou publiquement. Le chat de la radio y passe aussi.",
+      "usage": ["Un message à tous est public ; une réponse privée n'est vue que de son destinataire."],
+      "metriques": []
+    },
+    {
+      "id": "mail", "ic": "📧", "nom": "Mail", "service": "mail", "acces": "public",
+      "role": "Le courriel de la box (webmail) : votre boîte, ouverte avec la session du Hall, sans mot de passe.",
+      "usage": ["Le pied ouvre le webmail déjà connecté ; après une déconnexion, il faut fermer le navigateur ou repasser par Mes comptes."],
+      "metriques": []
+    },
+    {
+      "id": "ytsas", "ic": "🎬", "nom": "YTSaS", "service": "ytsas", "acces": "public",
+      "role": "Le rapatriement média souverain : une vidéo collée est téléchargée par la box et relue sans pub ni Google.",
+      "usage": ["Coller un lien dans le Surf & Viewer l'envoie ici ; « garder » le conserve au-delà de l'éphémère."],
+      "metriques": [
+        {"libelle": "médias rapatriés", "url": "/api/v1/ytsas/list", "compte": ""}
+      ]
+    },
+    {
+      "id": "torrent", "ic": "🧲", "nom": "Torrent", "service": "torrent", "acces": "public",
+      "role": "Le client torrent de la box, avec son état en direct.",
+      "usage": ["Saut direct vers l'interface du client."],
+      "metriques": []
+    },
+    {
+      "id": "devwatch", "ic": "🛰️", "nom": "DevWatch", "service": "devwatch", "acces": "public",
+      "role": "Le pouls d'un dépôt GitHub en direct : cadence des commits, flèches d'efficience, temps cumulé, coût, carbone, campagnes et versions.",
+      "usage": ["Les tranches tournent ; ouvrir la carte montre le tableau complet."],
+      "metriques": []
+    },
+    {
+      "id": "dpi", "ic": "🔬", "nom": "DPI · Trafic", "service": "dpi", "acces": "session",
+      "role": "Le trafic réseau vu par l'inspection profonde (nDPI) : protocoles, applications, machines les plus bavardes et risques. Aussi agrégé au groupe Sécurité.",
+      "usage": ["Les tranches tournent seules ; un clic fige, un second reprend."],
+      "metriques": [
+        {"libelle": "flux analysés", "url": "/api/v1/dpi/stats", "chemin": "total_flows", "session": true},
+        {"libelle": "volume", "url": "/api/v1/dpi/stats", "chemin": "total_bytes", "format": "octets", "session": true},
+        {"libelle": "protocole dominant", "url": "/api/v1/dpi/stats", "chemin": "protocols.0.name", "format": "texte", "session": true}
+      ]
+    },
+    {
+      "id": "zia", "ic": "🦊", "nom": "ZIA", "service": "zia", "acces": "public",
+      "role": "L'assistante 100 % locale du Hall : elle cherche et ouvre vos médias, docs et sujets, pilote les lecteurs, et répond à la voix avec Lexie. Elle ne contourne jamais vos droits.",
+      "usage": ["Écrire ou parler (🎙) ; « à quoi sert la carte Radio ? » explique une carte du Hall.", "🔊 lit les réponses à voix haute."],
+      "metriques": []
+    },
+    {
+      "id": "acces", "ic": "🎟️", "nom": "Accès", "service": "acces", "acces": "public",
+      "role": "L'entrée dans la box : admettre cet appareil, ouvrir une session, voir ses appareils et sessions.",
+      "usage": ["« Entrer avec cet appareil » ouvre la session sans mot de passe sur un appareil déjà admis."],
+      "metriques": []
+    },
+    {
+      "id": "surfviewer", "ic": "🧭", "nom": "Surf & Viewer", "service": "", "acces": "public",
+      "role": "Le rappel du viewer en tranches : ⭐ vos favoris, 📡 les diffusions proposées au parc, 🔗 les liens collés. Coller un lien le voit (média) ou le surfe (page).",
+      "usage": ["Coller un lien en haut ; les tranches tournent seules, un clic fige, un second reprend.", "Un ♥ sur une diffusion la fait remonter pour tout le parc."],
+      "metriques": [
+        {"libelle": "diffusions récentes au parc", "url": "/api/v1/webos/public/broadcasts", "compte": "recents"}
+      ]
+    }
+  ]
+}

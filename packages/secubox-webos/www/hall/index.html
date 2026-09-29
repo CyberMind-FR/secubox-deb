@@ -784,6 +784,19 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   background:var(--cyan-s);border:1px solid color-mix(in srgb,var(--cyan) 30%,var(--line));color:var(--ink)}
 .carte-bulle .cb-type b{color:var(--cyan)}
 .carte-bulle .cb-type.hide{display:none}
+/* CHIFFRES VIVANTS (#1664) — lus en direct, jamais inventés ; masqués s'il n'y en a pas */
+.carte-bulle .cb-met{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px}
+.carte-bulle .cb-met:empty{display:none}
+/* Légende des zones : la pastille a la couleur de la zone dans la carte (#1664) */
+.carte-bulle li.cb-lz{padding-left:4px}
+.carte-bulle li.cb-lz::before{content:none}
+.carte-bulle .cb-z{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin:0 6px 0 -16px;
+  border-radius:10px;color:#fff!important;font-size:.66rem;font-weight:800;vertical-align:1px;font-variant-numeric:tabular-nums}
+.carte-bulle .cb-m{display:flex;flex-direction:column;min-width:0;max-width:100%;padding:5px 8px;border-radius:8px;
+  border:1px solid var(--line);background:color-mix(in srgb,var(--cyan) 6%,transparent)}
+.carte-bulle .cb-m b{font-size:.9rem;color:var(--ink);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.carte-bulle .cb-m span{font-size:.66rem;color:var(--dim);line-height:1.25}
+.carte-bulle .cb-m.attente b{color:var(--dim)}
 .carte-bulle ul{margin:0;padding-left:16px;list-style:none}
 .carte-bulle li{position:relative;font-size:.78rem;color:var(--dim);line-height:1.4;margin:4px 0}
 .carte-bulle li::before{content:"›";position:absolute;left:-14px;color:var(--cyan);font-weight:700}
@@ -2297,30 +2310,22 @@ if(q){
   });
 }
 
-// AIDE · catalogue des cartes (#1370b). Une ligne par carte, source unique
-// reprise dans le README et le wiki. Rendu dans la vue Aide au chargement.
-const CARDLETS_INFO=[
-  {ic:"🧭", nom:"Surf & Viewer", li:"Rappel en slices : favoris (se partage/se répète), propositions au parc (se propose/se cumule ×N), liens collés."},
-  {ic:"🛰️", nom:"DevWatch", li:"Pouls d'un dépôt GitHub en temps réel : cadence, flèches d'efficience, temps cumulé, coût, carbone, campagne, évolutions des versions."},
-  {ic:"📹", nom:"PeerTube", li:"Dernières vidéos du catalogue, lecture souveraine en place, agrandissement dans le viewer."},
-  {ic:"🎙️", nom:"Podcaster", li:"Abonnements, épisodes téléchargés localement, lecteur intégré qui reprend au refresh."},
-  {ic:"📻", nom:"Radio", li:"Flux en direct, lecteur souverain qui suit le thème et l'état du Hall."},
-  {ic:"💬", nom:"BBS", li:"Derniers fils et salons ; les liens média deviennent un objet souverain (voir/garder/diffuser)."},
-  {ic:"🎟️", nom:"Billets", li:"Dernières publications ; objet média embarqué, titre et détails enrichis."},
-  {ic:"🗞️", nom:"MetaNews", li:"Topics clusterisés et leurs sources, ouverts en profondeur dans le Hall."},
-  {ic:"🌐", nom:"Surf (BiB)", li:"Navigateur de relais : surfe une adresse à travers la box, pisteurs coupés, 🎬 pour rapatrier un média croisé."},
-  {ic:"✋", nom:"Qui frappe ?", li:"Tentatives d'accès en cours vues par le WAF — donnée de sécurité, session requise."},
-  {ic:"☁️", nom:"Délégués", li:"Cloud, Photos, Social, Mail : aperçu authentifié + validation d'accès souveraine."},
-  {ic:"📊", nom:"Cumul (groupe)", li:"Carte de groupe : santé et activité d'un ensemble de services (sécurité, contenu, cloud…) d'un coup d'œil."},
-  {ic:"⚡", nom:"Accès rapide", li:"Saut direct vers un service (Dépôt, YTSaS, Torrent) avec son état en direct."},
-  {ic:"✦", nom:"Activité", li:"Arrivées, communautés, fils ouverts, fichiers partagés, diffusions — ce que vous avez le droit de voir, selon votre place dans la box."}
-];
+// AIDE · catalogue des cartes (#1370b → #1664). Une ligne par carte, lue dans
+// la SOURCE UNIQUE /api/v1/webos/public/aide/cartes (api/aide_cartes.json) —
+// la même que la bulle ❓ et ZIA ; plus de liste écrite ici.
 (function(){
   var z=document.getElementById('aide-cartes'); if(!z) return;
   var esc=function(t){ return String(t).replace(/[&<>"]/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); };
-  z.innerHTML=CARDLETS_INFO.map(function(c){
-    return '<div class="aide-carte"><span class="ic">'+c.ic+'</span><span class="tx"><b>'+esc(c.nom)+'</b><span>'+esc(c.li)+'</span></span></div>';
-  }).join('');
+  var ACC={session:' · 🔒 session', lan:' · 🏠 réseau local'};
+  fetch('/api/v1/webos/public/aide/cartes',{headers:{'Accept':'application/json'}})
+    .then(function(r){ return r.ok?r.json():Promise.reject(r.status); })
+    .then(function(d){
+      z.innerHTML=(d.cartes||[]).map(function(c){
+        return '<div class="aide-carte"><span class="ic">'+esc(c.ic||'🃏')+'</span><span class="tx"><b>'+esc(c.nom)+'</b>'
+          +'<span>'+esc(c.role||'')+(ACC[c.acces]||'')+'</span></span></div>';
+      }).join('');
+    })
+    .catch(function(){ z.innerHTML='<p class="aide-sub">Le catalogue des cartes n\'a pas pu être lu pour le moment.</p>'; });
 })();
 
 // chargement
@@ -4887,13 +4892,13 @@ const CARDLET_ICONES = {
   pret(function(){
     var bulle=document.createElement('div'); bulle.className='carte-bulle'; bulle.id='carte-bulle';
     bulle.innerHTML='<div class="cb-h"><span class="cb-ic"></span><span class="cb-nom"></span></div>'
-      +'<div class="cb-k">Aide de carte</div><p class="cb-type hide"></p><p class="cb-spec"></p><ul class="cb-gen"></ul>'
+      +'<div class="cb-k">Aide de carte</div><p class="cb-type hide"></p><p class="cb-spec"></p><div class="cb-met" aria-live="polite"></div><ul class="cb-gen"></ul>'
       +'<div class="cb-nav"><span class="cb-dots"></span>'
       +'<button type="button" class="cb-x"></button><button type="button" class="cb-nx"></button></div>';
     document.body.appendChild(bulle);
     var elIc=bulle.querySelector('.cb-ic'), elNom=bulle.querySelector('.cb-nom'),
         elType=bulle.querySelector('.cb-type'), elSpec=bulle.querySelector('.cb-spec'),
-        elGen=bulle.querySelector('.cb-gen'), elNav=bulle.querySelector('.cb-nav'),
+        elGen=bulle.querySelector('.cb-gen'), elNav=bulle.querySelector('.cb-nav'), elMet=bulle.querySelector('.cb-met'),
         elDots=bulle.querySelector('.cb-dots'), btnX=bulle.querySelector('.cb-x'), btnNx=bulle.querySelector('.cb-nx');
 
     var GEN=[
@@ -4925,44 +4930,98 @@ const CARDLET_ICONES = {
     function norm(s){ return String(s||'').toLowerCase(); }
     // Groupes principaux (cartes cumul.html = MULTI-cartes).
     var GROUPES={securite:1,contenu:1,cloud:1,social:1,forums:1};
-    // Conseils RÉELS par carte (clé = data-embed).
-    var SPEC={
-      // services
-      bbs:"Derniers fils et salons. Un lien média y devient souverain : voir, garder, ou diffuser au parc (📡). Invitations gérées dans la vue pleine.",
-      radio:"Flux en direct. Le lecteur porte ses commandes et suit le thème ; le son vit dans la barre média (volume/pli persistants).",
-      peertube:"Dernières vidéos du catalogue. « Lire ici » joue en place, « Agrandir » ouvre le viewer souverain.",
-      podcaster:"Abonnements et épisodes téléchargés localement ; le lecteur reprend là où vous étiez, même au rafraîchissement.",
-      metanews:"Topics clusterisés + leurs sources. Une puce = un cluster (N sources) à ouvrir en profondeur.",
-      billets:"Dernières publications ; le média embarqué se joue dans la carte, titre et détails enrichis.",
-      socialrelay:"Relais de fédération sociale (ActivityPub) entre instances.",
-      devwatch:"Le pouls d'un dépôt GitHub en direct : cadence, temps cumulé, coût, carbone, campagnes, versions.",
-      dpi:"Trafic vivant (DPI nDPId) : protocoles, applications, talkers, risques — slices qui tournent seules. Agrégé aussi au groupe Sécurité.",
-      surfviewer:"Rappel du viewer en slices : ⭐ favoris (partage/répète), 📡 propositions (×N), 🔗 liens collés. Collez un lien pour le voir ou le surfer.",
-      depot:"Dépôt APT — saut direct, état du service en direct.",
-      ytsas:"YTSaS — rapatriement média souverain, sans pub ni Google.",
-      torrent:"Torrent — saut direct, état en direct.",
-      nextcloud:"Cloud souverain : fichiers, activité, partages — aperçu authentifié.",
-      photoprism:"Photos : aperçu authentifié ; validez l'accès souverain d'abord.",
-      mail:"Mail : aperçu authentifié, accès souverain.",
-      zia:"Assistant 100 % local : demande-lui un média, un doc, un sujet — le bus reste la source de vérité.",
-      comptes:"Vos comptes de la box — courriel, cloud, vidéo, forum — et leur lien. Un seul mot de passe pour tous ; le forum s'ouvre d'office.",
-      messagerie:"Le mur de la box : écrivez à tous ou à une personne, répondez en privé ou publiquement. Le chat de la radio y passe aussi.",
-      toolbox:"Boîte à outils du parc — accès direct.",
-      // super-carte
-      "nextcloud-super":"Super-carte Cloud : plusieurs onglets d'un même service — Fichiers (WebDAV), Activité, Partages, jauge de quota ; partager (lien public), téléverser, supprimer, sans quitter le Hall.",
-      // cartes de GROUPE (multi)
-      securite:"Groupe Sécurité : pare-feu (WAF), « Qui frappe ? », analyse — plusieurs services en une carte.",
-      contenu:"Groupe Contenu : Dépôt, YTSaS, Torrent — plusieurs services en une carte.",
-      cloud:"Groupe Cloud : Cloud, Photos, Mail — plusieurs services en une carte.",
-      forums:"Groupe Forums : BBS, Billets — plusieurs services en une carte."
-    };
-    function specDe(card){
-      var id=norm(card.getAttribute('data-embed')); if(SPEC[id]) return SPEC[id];
-      var lab=norm(card.getAttribute('data-label'));
-      for(var k in SPEC){ if(lab.indexOf(k)>=0) return SPEC[k]; }
-      var d=card.querySelector('.desc'); if(d && d.textContent.trim()) return d.textContent.trim();
-      return "Un service souverain du Hall.";
+    // AIDE DES CARTES — SOURCE UNIQUE (#1664) : /api/v1/webos/public/aide/cartes
+    // (api/aide_cartes.json), la même que lit ZIA. Rôle réel, usage, métriques
+    // déclarées ; plus aucun texte d'aide écrit ici.
+    var AIDE_C={}, aideCharge=null;
+    function chargeAide(){
+      if(!aideCharge) aideCharge=fetch('/api/v1/webos/public/aide/cartes',{headers:{Accept:'application/json'}})
+        .then(function(r){ return r.ok?r.json():{cartes:[]}; })
+        .then(function(d){ (d.cartes||[]).forEach(function(c){ AIDE_C[c.id]=c; });
+          if(!(d.cartes||[]).length) aideCharge=null;          // vide : on relira à la prochaine ouverture
+          // Une bulle ouverte AVANT l'arrivée de la source se met à jour d'elle-même.
+          if(courante && bulle.classList.contains('on') && aideDe(courante)){
+            elIc.textContent=icDe(courante); elSpec.textContent=specDe(courante); }
+          return AIDE_C; })
+        .catch(function(){ aideCharge=null; return AIDE_C; });
+      return aideCharge;
     }
+    chargeAide();
+    function aideDe(card){ return AIDE_C[norm(card.getAttribute('data-embed'))]||null; }
+    function specDe(card){
+      var a=aideDe(card); if(a && a.role) return a.role;
+      var d=card.querySelector('.desc'); if(d && d.textContent.trim()) return d.textContent.trim();
+      return "L'aide de cette carte n'a pas pu être lue pour le moment.";
+    }
+    // Chemin de métrique — MÊME syntaxe que api/aide.py (a.b, liste[k=v], liste[]).
+    function pasM(x,j){
+      var m=/^([^\[\]]*)(?:\[([^\]=]*)(?:=([^\]]*))?\])?$/.exec(j); if(!m) return null;
+      var nom=m[1], cle=m[2], val=m[3];
+      if(nom){ if(Array.isArray(x) && /^\d+$/.test(nom)) x=x[+nom]; else if(x && typeof x==='object') x=x[nom]; else return null; }
+      if(cle===undefined) return x==null?null:x;
+      if(!Array.isArray(x)) return null;
+      if(cle==='' && val===undefined) return x;
+      return x.filter(function(e){ var v=e&&e[cle]; return typeof v==='boolean' ? String(v)===String(val||'').toLowerCase() : String(v)===(val||''); });
+    }
+    function extraitM(x,chemin){
+      var J=chemin?chemin.split('.'):[];
+      for(var k=0;k<J.length;k++){
+        x=pasM(x,J[k]); if(x==null) return null;
+        if(k+1<J.length && Array.isArray(x) && !/^\d+$/.test(J[k+1])){
+          if(/\[\]$/.test(J[k])){ var reste=J.slice(k+1).join('.'); return x.map(function(e){ return extraitM(e,reste); }); }
+          x=x[0]; if(x==null) return null;
+        }
+      }
+      return x;
+    }
+    function valeurM(m,d){
+      if('compte' in m){ var c=m.compte?extraitM(d,m.compte):d; return (c && typeof c==='object') ? (Array.isArray(c)?c.length:Object.keys(c).length) : null; }
+      if('somme' in m){ var v=extraitM(d,m.somme); return Array.isArray(v) ? v.reduce(function(a,b){ return a+(typeof b==='number'?b:0); },0) : null; }
+      var x=extraitM(d,m.chemin||'');
+      if(typeof x==='number') return x;
+      if(m.format==='texte' && typeof x==='string' && x.trim()) return x.trim().slice(0,120);
+      return null;
+    }
+    function fmtM(m,v){
+      if(typeof v!=='number') return String(v);
+      if(m.format==='octets'){ var U=['o','Ko','Mo','Go','To'],i=0; while(v>=1024 && i<U.length-1){ v/=1024; i++; }
+        return (i?v.toFixed(1):v.toFixed(0)).replace('.',',')+' '+U[i]; }
+      return v.toLocaleString('fr-FR');
+    }
+    // CHIFFRES VIVANTS : le serveur rend ceux qu'un visiteur peut lire ; ceux
+    // marqués `session` sont lus ICI, avec les droits de la personne (un refus
+    // les laisse simplement absents). Rien n'est affiché qui n'ait été lu.
+    var tourMet=0, metCarte=null;
+    function remplirMetriques(card){
+      var tour=++tourMet; metCarte=card; elMet.innerHTML='';
+      var id=norm(card.getAttribute('data-embed')); if(!id) return;
+      chargeAide().then(function(){
+        var a=aideDe(card); if(!a || !(a.metriques||[]).length || tour!==tourMet) return;
+        elMet.innerHTML=a.metriques.map(function(m){ return '<span class="cb-m attente"><b>…</b><span>'+esc0(m.libelle)+'</span></span>'; }).join('');
+        var cases=elMet.querySelectorAll('.cb-m');
+        function pose(k,m,v){ var c=cases[k]; if(!c || tour!==tourMet) return;
+          if(v==null){ c.remove(); return; }
+          c.classList.remove('attente'); c.querySelector('b').textContent=fmtM(m,v); c.title=m.libelle+' : '+fmtM(m,v);
+          if(courante) place(courante); }
+        fetch('/api/v1/webos/public/aide/cartes/'+encodeURIComponent(id),{headers:{Accept:'application/json'}})
+          .then(function(r){ return r.ok?r.json():null; })
+          .then(function(d){
+            var M=(d&&d.metriques)||a.metriques;
+            M.forEach(function(m,k){
+              if(m.valeur!=null){ pose(k,m,m.valeur); return; }
+              if(!(m.session && m.url && m.url.charAt(0)==='/')){ pose(k,m,null); return; }
+              fetch(m.url,{credentials:'same-origin',headers:{Accept:'application/json'}})
+                .then(function(r){ return r.ok?r.json():null; })
+                .then(function(j){ pose(k,m,j==null?null:valeurM(m,j)); })
+                .catch(function(){ pose(k,m,null); });
+            });
+          })
+          .catch(function(){ elMet.innerHTML=''; });
+      });
+    }
+    // Qui peut voir la carte — dit, pas deviné.
+    var ACCES_NOTE={session:"<b>🔒 Session</b> — son contenu n'apparaît qu'aux personnes connectées.",
+                    lan:"<b>🏠 Réseau local</b> — réservée aux appareils de la maison."};
     // Note de TYPE (super / multi-groupe) — sinon ''.
     function typeDe(card){
       var id=norm(card.getAttribute('data-embed'));
@@ -4972,7 +5031,8 @@ const CARDLET_ICONES = {
     }
     function estFavori(card){ return card.classList.contains('favori') || !!(card.closest && card.closest('.favbande')); }
     function nomDe(card){ return card.getAttribute('data-label') || (card.querySelector('.nm b')||{}).textContent || card.getAttribute('data-embed') || 'Carte'; }
-    function icDe(card){ var i=card.querySelector('.ic, .ap-tete .ic'); var t=i?(i.textContent||'').trim():''; return t||'🃏'; }
+    function icDe(card){ var a=aideDe(card); if(a && a.ic) return a.ic;
+      var i=card.querySelector('.ic, .ap-tete .ic'); var t=i?(i.textContent||'').trim():''; return t||'🃏'; }
 
     var courante=null, mode=null, hideTmr=null, autoTmr=null, enGuide=false, seq=[], qi=0, diagIfr=null, diagTimer=null;
     function place(card){
@@ -4987,10 +5047,13 @@ const CARDLET_ICONES = {
       elIc.textContent=icDe(card); elNom.textContent=nomDe(card);
       var t=typeDe(card); elType.innerHTML=t; elType.classList.toggle('hide', !t);
       elSpec.textContent=specDe(card);
-      var gen=GEN.slice();
+      var a=aideDe(card);
+      var gen=(a && a.usage && a.usage.length) ? a.usage.map(function(u){ return esc0(u); }) : GEN.slice();
+      if(a && ACCES_NOTE[a.acces]) gen.unshift(ACCES_NOTE[a.acces]);
       if(estFavori(card)) gen=gen.concat(["<b>★ En tête (favori)</b> — rangée prioritaire ; retirez d'un clic sur l'étoile."]);
       if(mode==='pin') gen=["<b>🖱️ Inspecter</b> — survolez une zone de la carte pour la détailler."].concat(gen);
       elGen.innerHTML=gen.map(function(g){return '<li>'+g+'</li>';}).join('');
+      if(metCarte!==card) remplirMetriques(card);
     }
     function nettoie(){
       var ph=document.querySelectorAll('.fcard.cl-phare'); Array.prototype.forEach.call(ph,function(c){c.classList.remove('cl-phare');});
@@ -4998,7 +5061,7 @@ const CARDLET_ICONES = {
     }
     function annuleHide(){ if(hideTmr){clearTimeout(hideTmr);hideTmr=null;} }
     function diagOff(){ if(diagIfr){ try{ diagIfr.contentWindow.postMessage({sbx:'aide',on:false},'*'); }catch(e){} diagIfr=null; } }
-    function close(){ bulle.classList.remove('on'); nettoie(); diagOff(); mode=null; courante=null; enGuide=false;
+    function close(){ bulle.classList.remove('on'); nettoie(); diagOff(); mode=null; courante=null; enGuide=false; metCarte=null; tourMet++; elMet.innerHTML='';
       annuleHide(); if(autoTmr){clearTimeout(autoTmr);autoTmr=null;} }
     // Affiche la bulle pour une carte, dans un mode donné : 'hover' (aperçu au
     // survol, se referme quand on sort) ou 'pin' (épinglée au clic, reste).
@@ -5044,7 +5107,9 @@ const CARDLET_ICONES = {
       if(enGuide || mode==='pin') { annuleHide(); return; }
       var card=a.closest('.fcard'); if(!card) return;
       if(mode==='hover' && courante===card){ annuleHide(); return; }
-      affiche(card,'hover');
+      // Même lecture qu'au clic (#1664) : zones colorées dans la carte + légende ;
+      // le survol se referme en quittant le ❓, le clic épingle.
+      if(card.querySelector('iframe')) montreDiag(card,'hover'); else affiche(card,'hover');
     });
     document.addEventListener('mouseout', function(e){
       var a=e.target.closest && e.target.closest('.cl-aide'); if(!a) return;
@@ -5066,28 +5131,40 @@ const CARDLET_ICONES = {
     function esc0(t){ return String(t==null?'':t).replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
     // Reverse-design (#1360) : la carte NE CHANGE PAS ; la bulle dédiée liste les
     // zones que la cardlette rapporte (sbx:aide-zones), rafraîchies par slice.
-    function montreDiag(card){
-      close(); courante=card; mode='pin'; card.classList.add('cl-phare'); diagIfr=card.querySelector('iframe');
+    function montreDiag(card, m){
+      m=m||'pin';
+      close(); courante=card; mode=m; card.classList.add('cl-phare'); diagIfr=card.querySelector('iframe');
       elIc.textContent=icDe(card); elNom.textContent=nomDe(card);
       elType.innerHTML='<b>Reverse-design</b>'; elType.classList.remove('hide');
-      elSpec.textContent='La carte, zone par zone…'; elGen.innerHTML='<li>lecture des zones…</li>';
-      elDots.innerHTML=''; elNav.style.display=''; btnX.style.display=''; btnX.textContent='Fermer'; btnNx.style.display='none';
+      elSpec.textContent=specDe(card); elGen.innerHTML='<li>lecture des zones…</li>';
+      remplirMetriques(card);
+      elDots.innerHTML=''; btnX.textContent='Fermer'; btnNx.style.display='none';
+      elNav.style.display=(m==='pin')?'':'none'; btnX.style.display=(m==='pin')?'':'none';
       bulle.classList.add('on'); place(card);
       if(diagIfr){ try{ diagIfr.contentWindow.postMessage({sbx:'aide',on:true},'*'); diagIfr.contentWindow.postMessage({sbx:'aide?'},'*'); }catch(e){} }
       // Repli : cardlet sans rapporteur → au bout d'un instant, aide générique.
       clearTimeout(diagTimer); diagTimer=setTimeout(function(){
-        if(mode==='pin' && courante===card && /lecture des zones/.test(elGen.innerHTML)) contenu(card);
+        if(mode===m && courante===card && /lecture des zones/.test(elGen.innerHTML)) contenu(card);
       }, 1300);
     }
     addEventListener('message', function(ev){ var d=ev.data; if(!d) return;
       // La bulle n'écoute que la carte inspectée, à l'origine de son cadre (#1609).
       var deLaCarte = !!(diagIfr && cadreParmi(ev, [diagIfr]));
       if(d.sbx==='aide-ferme' && mode==='pin' && deLaCarte){ diagIfr=null; close(); return; }
-      if(d.sbx==='aide-zones' && mode==='pin' && deLaCarte){
+      if(d.sbx==='aide-zones' && (mode==='pin' || mode==='hover') && deLaCarte){
         clearTimeout(diagTimer);
+        var Z=d.zones||[];
+        // Aucune zone visible (carte masquée faute de session, contenu pas
+        // encore peint) : la description réelle plutôt qu'une liste vide.
+        if(!Z.length){ contenu(courante); place(courante); return; }
         elType.innerHTML='<b>Reverse-design'+(d.slice?(' · '+esc0(d.slice)):'')+'</b>'; elType.classList.remove('hide');
-        elSpec.textContent='Ce que montre chaque zone :';
-        var Z=d.zones||[]; elGen.innerHTML = Z.length ? Z.map(function(z){return '<li>'+esc0(z.label)+'</li>';}).join('') : '<li>—</li>';
+        elSpec.textContent=specDe(courante);
+        // La couleur vient de la carte : on n'accepte qu'un #rrggbb, rien d'autre.
+        elGen.innerHTML=Z.map(function(z,k){
+          var c=/^#[0-9a-f]{6}$/i.test(z.couleur||'') ? z.couleur : 'var(--cyan)';
+          var n=(typeof z.n==='number' && z.n>0 && z.n<100) ? z.n : k+1;
+          return '<li class="cb-lz"><span class="cb-z" style="background:'+c+'">'+n+'</span>'+esc0(z.label)+'</li>';
+        }).join('');
         place(courante);
       }
     });

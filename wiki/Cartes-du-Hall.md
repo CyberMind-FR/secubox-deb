@@ -12,10 +12,10 @@ Chaque **carte** (*cardlet*) est un aperçu **vivant** d'un service — elle ne 
 rien qu'elle n'ait lu, toujours de **même origine** que le Hall (aucun tiers
 chargé, aucun secret dans le navigateur).
 
-Ce catalogue est la **source unique** : il est aussi rendu dans la vue **Aide**
-du Hall (`www/hall/index.html`, tableau `CARDLETS_INFO`) et dans le
-[README de secubox-webos](https://github.com/CyberMind-FR/secubox-deb/blob/master/packages/secubox-webos/README.md).
-En ajoutant une carte, mettre à jour les **trois** ensemble.
+La **source unique** de l'aide des cartes est `packages/secubox-webos/api/aide_cartes.json`
+(#1664) : rôle réel, usage et métriques vivantes de chaque carte. La bulle ❓, la vue
+**Aide** du Hall et ZIA/Lexie (« à quoi sert la carte Radio ? ») la lisent par
+`/api/v1/webos/public/aide/…`. Ce catalogue en est un résumé.
 
 ## Catalogue
 

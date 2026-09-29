@@ -277,6 +277,37 @@ async def _intro(cfg: dict, titres: list, defaut: str) -> str:
     return g or defaut
 
 
+# ── AIDE DES CARTES DU HALL (#1664) ─────────────────────────────────────────
+# « À quoi sert la carte Radio ? » : ZIA répond depuis la MÊME source que la
+# bulle ❓ du Hall (webos /public/aide/…), rôle réel et chiffres vivants — lus
+# en VISITEUR (le Hall ne rend à l'aide que ce qu'un visiteur peut lire).
+# Lexie lit la même phrase. ZIA ne décrit pas une carte de mémoire.
+_Q_CARTE = re.compile(
+    r"([àa] quoi (sert|servent)|c'?est quoi|qu'?est[- ]ce que|\bexplique|que montre|\bd[ée]cri[st]"
+    r"|\baide (de|sur) la carte)")
+# Une QUESTION, pas une commande : « mets la carte radio en grand » reste un
+# geste (couche d'actions), jamais une description.
+
+
+async def _carte_du_hall(cfg: dict, msg: str) -> Optional[dict]:
+    try:
+        from secubox_core.auth import domaine_box
+        dom = domaine_box()
+    except Exception:  # noqa: BLE001
+        dom = ""
+    base = str(cfg.get("aide_url", "") or "http://127.0.0.1:9080").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=float(cfg.get("aide_timeout_s", 6))) as cli:
+            r = await cli.get(base + "/api/v1/webos/public/aide/trouver", params={"q": msg[:200]},
+                              headers={"Host": f"hall.{dom}" if dom else "hall",
+                                       "X-Forwarded-For": "192.0.2.1", "Accept": "application/json"})
+            if r.status_code != 200:
+                return None
+            return (r.json() or {}).get("carte")
+    except Exception:  # noqa: BLE001 — l'aide absente ne casse pas la conversation
+        return None
+
+
 async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dict:
     msg = (message or "").strip()
     low = msg.lower()
@@ -290,6 +321,13 @@ async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dic
                 "objects": [], "trace": trace, "delegate": None, "engine": engine}
     if re.search(r"\bmerci\b", low):
         return {"text": "Avec plaisir. ❤", "objects": [], "trace": trace, "delegate": None, "engine": engine}
+    if _Q_CARTE.search(low):
+        carte = await _carte_du_hall(cfg, msg)
+        if carte and carte.get("phrase"):
+            trace.append({"tool": "aide_carte", "id": carte.get("id")})
+            return {"text": carte["phrase"], "objects": [], "trace": trace, "delegate": None,
+                    "engine": engine, "carte": {"id": carte.get("id"), "ic": carte.get("ic"),
+                                                "nom": carte.get("nom")}}
     if re.search(r"\b(aide|help|capacit|que sais-tu|tu peux quoi|comment ça marche)\b", low):
         return {"text": "Je cherche et j'ouvre les objets du Hall — sans jamais contourner "
                         "tes droits. Essaie : « trouve la dernière vidéo sur le WAF », "

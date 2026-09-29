@@ -50,8 +50,10 @@ n'ait lu, de même origine que le Hall. Ce catalogue est aussi rendu dans la vue
 | 📊 **Cumul (groupe)** | Carte de groupe : santé et activité d'un ensemble de services (sécurité, contenu, cloud…) d'un coup d'œil. |
 | ⚡ **Accès rapide** | Saut direct vers un service (Dépôt, YTSaS, Torrent) avec son état en direct. |
 
-> Source unique : la liste vit dans `www/hall/index.html` (`CARDLETS_INFO`), reprise
-> ici et dans le wiki. Mettre à jour les trois ensemble en ajoutant une carte.
+> Source unique (#1664) : `api/aide_cartes.json` — rôle, usage et métriques de chaque
+> carte, servis par `GET /api/v1/webos/public/aide/cartes[/{id}]` (chiffres vivants lus
+> en visiteur) et `/aide/trouver?q=` (ZIA/Lexie). La bulle ❓ et la vue Aide du Hall la
+> lisent ; un test refuse une carte du Hall sans aide. Ce tableau n'en est qu'un résumé.
 
 ## Le BiB — *Browser in Browser*
 
