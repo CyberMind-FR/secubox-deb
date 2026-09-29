@@ -83,3 +83,21 @@ export async function activites(n = 6): Promise<Activite[]> {
 
 /** Un lien d'activité n'est suivi que s'il reste sur cette origine. */
 export const lienLocal = (l?: string) => (l && l.startsWith('/') && !l.startsWith('//') ? l : null);
+
+// ── ZIA (#1615) : le SEUL cerveau. La palette présente, ZIA décide. ────────
+export type ObjetZia = { id: string; type: string; service?: string; title?: string; summary?: string; url?: string };
+export type ActionZia = { kind: 'sbx-action'; service: string; action: string; params?: Record<string, unknown> };
+export type ReponseZia = { text: string; objects: ObjetZia[]; actions: ActionZia[] };
+
+export async function demandeZia(message: string): Promise<ReponseZia | null> {
+  const m = message.trim().slice(0, 500);
+  if (!m) return null;
+  const r = await sbxFetch<ReponseZia>('/api/v1/zia/v1/chat', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: m }) });
+  if (!r || typeof r.text !== 'string') return null;
+  return { text: r.text, objects: Array.isArray(r.objects) ? r.objects : [],
+           actions: Array.isArray(r.actions) ? r.actions.filter(a => a?.kind === 'sbx-action') : [] };
+}
+
+/** Seules les actions MÉDIA s'exécutent sans clic ; le reste demande confirmation. */
+export const sansClic = (a: ActionZia) => a.action.startsWith('media.');

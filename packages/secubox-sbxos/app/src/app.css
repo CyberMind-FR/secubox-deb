@@ -66,3 +66,18 @@ a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px;
 .flux li.alerte { box-shadow: inset 3px 0 0 var(--sbx-alerte); }
 .flux-txt { display: grid; } .flux-txt small { color: var(--sbx-pale); }
 .cartes .vide { grid-column: 1 / -1; }
+.recherche { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; max-width: 420px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--sbx-trait); background: var(--sbx-surface); color: var(--sbx-pale); font: 14px var(--sbx-police); cursor: pointer; text-align: left; }
+.recherche kbd, .palette-pied kbd { margin-left: auto; font: 11px var(--sbx-code); border: 1px solid var(--sbx-trait); border-radius: 6px; padding: 2px 6px; color: var(--sbx-doux); }
+.palette-fond { position: fixed; inset: 0; z-index: 30; background: #030a14cc; display: grid; place-items: start center; padding: 12vh 16px 0; }
+.palette { width: min(640px, 100%); background: var(--sbx-surface); border: 1px solid var(--sbx-trait); border-radius: 18px; box-shadow: 0 30px 80px #000a; overflow: hidden; }
+.palette form { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--sbx-trait); }
+.palette form img { width: 40px; height: 40px; border-radius: 12px; object-fit: cover; }
+.palette input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--sbx-encre); font: 16px var(--sbx-police); }
+.palette-rep { padding: 12px 16px; display: grid; gap: 10px; max-height: 50vh; overflow: auto; }
+.zia-texte { margin: 0; color: var(--sbx-doux); } .zia-texte b { color: var(--sbx-encre); }
+.zia-action { justify-self: start; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--sbx-ambre); background: var(--sbx-relief); color: var(--sbx-encre); cursor: pointer; }
+.zia-fait { margin: 0; font: 12px var(--sbx-code); color: var(--sbx-vert); }
+.zia-objets { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.zia-objets li { display: grid; gap: 2px; } .zia-objets a { color: var(--sbx-cyan); } .zia-objets small { color: var(--sbx-pale); }
+.palette-pied { margin: 0; padding: 8px 16px; border-top: 1px solid var(--sbx-trait); color: var(--sbx-pale); font-size: 12px; display: flex; gap: 8px; }
+@media (max-width: 640px) { .recherche { max-width: none; } .recherche kbd { display: none; } }
