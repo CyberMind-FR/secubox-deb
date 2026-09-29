@@ -434,11 +434,19 @@ determine_url() {
     # les chemins absolus des cartes tombent sur l'administration. Chromium
     # résout *.localhost en boucle locale (contexte sûr) ; on ne le retient que
     # si c'est bien le Hall qui répond.
-    local hall="http://hall.localhost:9080/"
-    if curl -s --connect-timeout 2 --max-time 5 --resolve hall.localhost:9080:127.0.0.1 "$hall" 2>/dev/null \
-         | grep -q 'id="featgrid"'; then
-        url="$hall"
-    fi
+    # LA CONSOLE LOCALE D'ABORD (#1695) : le même Hall sur le port console,
+    # où l'administration s'ouvre sans authentification pour ce seul kiosque
+    # (l'auth vérifie que la connexion appartient à secubox-kiosk). Une box
+    # dont le Hall n'écoute pas encore sur 9078 garde le port ordinaire.
+    local port hall
+    for port in 9078 9080; do
+        hall="http://hall.localhost:$port/"
+        if curl -s --connect-timeout 2 --max-time 5 --resolve "hall.localhost:$port:127.0.0.1" "$hall" 2>/dev/null \
+             | grep -q 'id="featgrid"'; then
+            url="$hall"
+            break
+        fi
+    done
     echo "$url"
 }
 

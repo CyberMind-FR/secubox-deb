@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from api import ntp_health
+from api import console as _console
 
 app = FastAPI(title="secubox-auth", version="2.0.0", root_path="/api/v1/auth")
 
@@ -117,6 +118,10 @@ except PermissionError:
     # Running as non-root in dev/test — caller is responsible for env-overriding to a writable path.
     pass
 __SESSIONS_FILE = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", str(_DATA_DIR / "sessions.json")))
+# Les routes /status, /sessions, /sessions/stats, /redeem_voucher et le
+# nettoyage des sessions échues lisent `_SESSIONS_FILE` — un nom qui n'existait
+# pas : NameError, donc 500, sur le panneau des sessions depuis #120 (#1695).
+_SESSIONS_FILE = __SESSIONS_FILE
 _AUDIT_FILE    = Path(os.environ.get("SECUBOX_AUTH_AUDIT",    str(_DATA_DIR / "audit.log")))
 _TOTP_PENDING_FILE = Path(os.environ.get("SECUBOX_AUTH_TOTP_PENDING", str(_DATA_DIR / "totp-pending.json")))
 _USERS_FILE    = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
@@ -242,6 +247,16 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     ua = request.headers.get("User-Agent", "")[:300]   # #1474 : 100 coupait avant le navigateur
     user = user_store.get_user(req.username)
 
+    # LE COMPTE DE LA CONSOLE N'ENTRE QUE PAR LE KIOSQUE (#1695) — jamais par
+    # mot de passe. Vérifié AVANT la branche de première configuration : un
+    # compte tout juste créé a encore un mot de passe vide à « définir », et
+    # quiconque connaissant son nom en aurait fait un administrateur.
+    if req.username == _console.reglages(get_config("console"))["compte"]:
+        _emit_session_event("login_failed", req.username, {
+            "reason": "console_hors_kiosque", "ip": ip, "user_agent": ua,
+        })
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+
     if not user or not user.get("enabled"):
         _emit_session_event("login_failed", req.username, {
             "reason": "unknown_user" if not user else "disabled",
@@ -283,6 +298,70 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     })
     _users_engine.touch_last_login(req.username)
     return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
+
+
+# ─── Console locale du kiosque (#1695) ─────────────────────────────────
+# Sans authentification, et au seul kiosque : les garanties sont dans
+# api/console.py. Ici : le compte dédié, et une session ordinaire (jti inscrit,
+# journalisée, visible et révocable dans la liste des sessions).
+_console_lock = threading.Lock()
+_console_session: Dict[str, Any] = {"jti": None, "jeton": None, "fin": 0}
+
+
+def _console_compte(nom: str) -> None:
+    """Crée le compte dédié s'il manque ; refuse s'il est désactivé ou n'est
+    pas admin — le désactiver est la façon de couper la console."""
+    u = _users_engine.get_user(nom)
+    if u is None:
+        _users_engine.create_user(nom, None, "admin")
+        # Un mot de passe aléatoire, jeté : `create_user` laisse un mot de
+        # passe vide « à définir », que /login ouvrirait à quiconque.
+        _users_engine.set_password(nom, secrets.token_urlsafe(48))
+        _append_audit("console_compte_cree", nom, {})
+        u = _users_engine.get_user(nom) or {}
+    if not u.get("enabled"):
+        raise HTTPException(status_code=403, detail=f"compte « {nom} » désactivé : console coupée")
+    if u.get("role") != "admin":
+        raise HTTPException(status_code=409, detail=f"le compte « {nom} » n'est pas administrateur")
+
+
+@_login_router.get("/console/jeton")
+def _console_jeton(request: _Request):
+    """Session d'administration de la console locale. Ne répond qu'à nginx, par
+    le port console, pour une connexion du kiosque (voir api/console.py)."""
+    cfg = get_config("console")
+    motif = _console.refus(
+        secret_fourni=request.headers.get("x-secubox-console", ""),
+        paire=request.headers.get("x-secubox-console-paire", ""),
+        # Posé par nginx (l'agrégateur réécrit Host quand il relaie vers auth.sock).
+        hote=request.headers.get("x-secubox-console-hote", ""),
+        origine=request.headers.get("origin"),
+        cfg=cfg,
+        uid=_console.uid_kiosque(),
+    )
+    if motif:
+        _append_audit("console_refusee", "console", {"motif": motif})
+        raise HTTPException(status_code=403, detail=motif)
+    nom = _console.reglages(cfg)["compte"]
+    _console_compte(nom)
+    with _console_lock:
+        s = _console_session
+        maintenant = time.time()
+        # Une session par demi-journée, pas une par page : le Hall et la page
+        # de connexion la demandent tous deux au premier affichage.
+        if (s["jeton"] and s.get("compte") == nom and s["fin"] - maintenant > 3600
+                and _session_validator(s["jti"])):
+            return {"access_token": s["jeton"], "token_type": "bearer",
+                    "expires_in": int(s["fin"] - maintenant), "compte": nom}
+        jti = secrets.token_hex(8)
+        jeton = create_token(nom, expires_in=_console.DUREE, jti=jti)
+        _on_session_event("login_success", nom, {
+            "jti": jti, "expires_in": _console.DUREE, "ip": "127.0.0.1",
+            "user_agent": "console locale (kiosque)", "source": "console",
+        })
+        _users_engine.touch_last_login(nom)
+        _console_session.update(jti=jti, jeton=jeton, fin=maintenant + _console.DUREE, compte=nom)
+    return {"access_token": jeton, "token_type": "bearer", "expires_in": _console.DUREE, "compte": nom}
 
 
 @_login_router.post("/login/mfa")

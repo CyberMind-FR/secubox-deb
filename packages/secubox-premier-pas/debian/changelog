@@ -1,3 +1,9 @@
+secubox-premier-pas (0.4.9-1~bookworm1) bookworm; urgency=medium
+
+  * lanceur du kiosque : ouvre la console locale (hall.localhost:9078) quand le Hall y répond, sinon le port ordinaire (#1695).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 16:27:57 +0200
+
 secubox-premier-pas (0.4.8-1~bookworm1) bookworm; urgency=medium
 
   * Lanceur du kiosque : ouvre le Hall par http://hall.localhost:9080/ (son propre vhost) quand il y répond ; l'assistant Premier Pas garde l'adresse du serveur par défaut (#1668).

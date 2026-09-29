@@ -1,3 +1,9 @@
+secubox-portal (2.3.5-1~bookworm1) bookworm; urgency=medium
+
+  * login.html : sur la console locale, la session s'obtient d'elle-même et renvoie à la page demandée ; garde anti-boucle d'un essai par 15 s (#1695).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 16:27:57 +0200
+
 secubox-portal (2.3.4-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
