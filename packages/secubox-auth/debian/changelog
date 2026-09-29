@@ -1,3 +1,10 @@
+secubox-auth (1.1.11-1~bookworm1) bookworm; urgency=medium
+
+  * second facteur selon le réseau : OTP exigé depuis le WAN (défi, ou enrôlement forcé d'un admin), FACULTATIF sur le LAN — le mot de passe suffit, même pour un compte enrôlé ; LAN = verdict de nginx (X-SecuBox-LAN), absent = WAN ; login_success journalise « otp » (#1699).
+  * GET/POST /settings rétabli (admin) : réglage otp_lan = facultatif (défaut) | obligatoire, dans /var/lib/secubox/auth/reglages.json > [auth] otp_lan ; accepte l'ancien require_admin_totp (#1699).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 17:21:36 +0200
+
 secubox-auth (1.1.10-1~bookworm1) bookworm; urgency=medium
 
   * console locale du kiosque : GET /console/jeton — session d'administration sans authentification, au nom du compte dédié « console », accordée seulement à une connexion du kiosque (secret du port console posé par nginx + connexion vérifiée dans /proc/net/tcp comme appartenant à secubox-kiosk) ; hôte et origine exacts contre le rebond DNS ; [console] actif = false la coupe (#1695).

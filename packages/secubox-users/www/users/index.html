@@ -196,7 +196,7 @@
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="refresh()">↻ Refresh</button>
-                <button class="btn" id="admin2faBtn" onclick="toggleAdminTotp()" title="Require TOTP two-factor for admin logins">🔐 Admin 2FA: …</button>
+                <button class="btn" id="admin2faBtn" onclick="toggleAdminTotp()" title="Second facteur (OTP) : toujours exigé depuis l'extérieur ; ce bouton règle le réseau local">🔐 OTP sur le LAN : …</button>
                 <button class="btn" onclick="showModal('import-modal')">⬆️ Import</button>
                 <button class="btn" onclick="exportUsers()">⬇️ Export</button>
                 <button class="btn primary" onclick="showModal('add-user-modal')">➕ Add User</button>
@@ -839,26 +839,28 @@
                 return data;
             } catch (e) { toast('❌ ' + e.message, true); return null; }
         }
+        // Second facteur selon le réseau (#1699) : toujours exigé depuis le WAN ;
+        // sur le LAN, facultatif (défaut) ou obligatoire — c'est ce que règle ce bouton.
         function renderAdminTotp() {
             const btn = document.getElementById('admin2faBtn');
             if (!btn) return;
-            if (_adminTotpOn === null) { btn.textContent = '🔐 Admin 2FA: …'; return; }
-            btn.textContent = '🔐 Admin 2FA: ' + (_adminTotpOn ? 'ON' : 'OFF');
+            if (_adminTotpOn === null) { btn.textContent = '🔐 OTP sur le LAN : …'; return; }
+            btn.textContent = '🔐 OTP sur le LAN : ' + (_adminTotpOn ? 'obligatoire' : 'facultatif');
             btn.classList.toggle('primary', !!_adminTotpOn);
         }
         async function loadAuthSettings() {
             const data = await authSettings();
-            _adminTotpOn = data ? !!data.require_admin_totp : null;
+            _adminTotpOn = data ? data.otp_lan === 'obligatoire' : null;
             renderAdminTotp();
         }
         async function toggleAdminTotp() {
             const next = !_adminTotpOn;
-            if (next && !confirm('Require TOTP for ALL admin logins?\nAdmins without an enrolled authenticator will be forced to enrol on next login.')) return;
-            const data = await authSettings({ method: 'POST', body: JSON.stringify({ require_admin_totp: next }) });
+            if (next && !confirm("Exiger l'OTP aussi sur le réseau local ?\nDepuis l'extérieur il l'est toujours. Un administrateur sans OTP enrôlé devra l'enrôler à sa prochaine connexion.")) return;
+            const data = await authSettings({ method: 'POST', body: JSON.stringify({ otp_lan: next ? 'obligatoire' : 'facultatif' }) });
             if (data) {
-                _adminTotpOn = !!data.require_admin_totp;
+                _adminTotpOn = data.otp_lan === 'obligatoire';
                 renderAdminTotp();
-                toast(_adminTotpOn ? '🔐 Admin 2FA now required' : '🔓 Admin 2FA now optional');
+                toast(_adminTotpOn ? "🔐 OTP exigé aussi sur le LAN" : "🔓 OTP facultatif sur le LAN (toujours exigé depuis l'extérieur)");
             }
         }
 

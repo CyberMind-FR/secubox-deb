@@ -1,3 +1,9 @@
+secubox-users (1.8.12-1~bookworm1) bookworm; urgency=medium
+
+  * bouton « OTP sur le LAN : facultatif/obligatoire » — l'ancien « Admin 2FA » appelait une route disparue (#1699).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 17:21:36 +0200
+
 secubox-users (1.8.11-1~bookworm1) bookworm; urgency=high
 
   * require_permission sur require_session (#1581) : il tranche lui-même

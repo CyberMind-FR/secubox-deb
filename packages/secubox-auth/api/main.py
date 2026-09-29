@@ -207,6 +207,45 @@ def _verify_totp_ntp_aware(username: str, code: str) -> bool:
     return _users_engine.verify_totp_for_user(username, code, window=window)
 
 
+# ─── Second facteur selon le réseau (#1699) ────────────────────────────
+# Modèle de Gandalf : administration depuis le WAN = OTP obligatoire ; depuis
+# le LAN = OTP FACULTATIF (le mot de passe suffit, même pour un compte
+# enrôlé) ; à la console locale = sans authentification (#1695).
+#
+# « LAN » EST LE VERDICT DE NGINX, jamais le nôtre : derrière HAProxy → sbxwaf
+# → nginx, l'adresse vue d'ici est 127.0.0.1 pour tout le monde. nginx résout
+# l'adresse réelle depuis la DROITE de X-Forwarded-For (real_ip_recursive) puis
+# pose X-SecuBox-LAN avec proxy_set_header, qui ÉCRASE la valeur d'un client.
+# Absent (requête hors nginx) = pas LAN = OTP exigé : l'échec ferme.
+from secubox_core.auth import _requete_lan
+
+OTP_LAN_VALEURS = ("facultatif", "obligatoire")
+_REGLAGES = Path(os.environ.get("SECUBOX_AUTH_REGLAGES", str(_DATA_DIR / "reglages.json")))
+
+
+def _otp_lan() -> str:
+    """Réglage `otp_lan` : reglages.json (panneau Utilisateurs) > [auth] otp_lan
+    (secubox.conf) > « facultatif ». Une valeur inconnue ne compte pas."""
+    try:
+        v = json.loads(_REGLAGES.read_text()).get("otp_lan")
+        if v in OTP_LAN_VALEURS:
+            return v
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        v = (get_config("auth") or {}).get("otp_lan")
+    except Exception:  # noqa: BLE001 — config illisible : le défaut
+        v = None
+    return v if v in OTP_LAN_VALEURS else "facultatif"
+
+
+def _otp_exige(request) -> bool:
+    """Le second facteur est-il exigé pour cette connexion ?"""
+    if not _requete_lan(request):
+        return True
+    return _otp_lan() == "obligatoire"
+
+
 # ─── Branching login router ────────────────────────────────────────────
 from fastapi import APIRouter as _APIRouter, Request as _Request, Response as _Response
 from secubox_core.auth import set_session_cookie as _set_session_cookie
@@ -278,14 +317,16 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials", "ip": ip})
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
+    # Second facteur : exigé depuis le WAN, facultatif sur le LAN (#1699).
+    otp = _otp_exige(request)
     totp_block = user.get("totp") or {}
-    if totp_block.get("enabled"):
+    if otp and totp_block.get("enabled"):
         mfa_tok = create_token(req.username, scope="mfa-challenge", expires_in=300)
         _append_audit("mfa_challenge_issued", req.username, {"ip": ip})
         return {"mfa_required": True, "mfa_token": mfa_tok}
 
-    # Admin without TOTP → force enrollment
-    if user.get("role") == "admin":
+    # Admin without TOTP → force enrollment (depuis le WAN)
+    if otp and user.get("role") == "admin":
         enroll_tok = create_token(req.username, scope="totp-enroll", expires_in=900)
         _append_audit("totp_enrollment_required", req.username, {"ip": ip})
         return {"enrollment_required": True, "enrollment_token": enroll_tok}
@@ -295,6 +336,7 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     _set_session_cookie(response, tok)  # SSO-lite (#400)
     _on_session_event("login_success", req.username, {
         "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
+        "otp": "exigé" if otp else "facultatif (LAN)",
     })
     _users_engine.touch_last_login(req.username)
     return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
@@ -670,6 +712,39 @@ async def shutdown():
 @router.get("/health")
 async def health():
     return {"status": "ok", "module": "auth", "version": "2.0.0"}
+
+
+# Le bouton « 2FA » du panneau Utilisateurs appelle /settings — une route
+# disparue du code (404) depuis juillet. Elle revient pour la seule politique
+# qui reste réglable : l'OTP sur le LAN. Depuis le WAN, il est toujours exigé.
+class _ReglagesIn(BaseModel):
+    otp_lan: Optional[str] = None
+    # Ancien contrat du bouton : vrai = « 2FA des admins exigée ».
+    require_admin_totp: Optional[bool] = None
+
+
+def _reglages_vue() -> Dict[str, Any]:
+    v = _otp_lan()
+    return {"otp_lan": v, "otp_wan": "obligatoire", "require_admin_totp": v == "obligatoire"}
+
+
+@router.get("/settings")
+async def reglages_lire(user=Depends(require_jwt)):
+    return _reglages_vue()
+
+
+@router.post("/settings")
+async def reglages_ecrire(body: _ReglagesIn, user=Depends(require_jwt)):
+    v = body.otp_lan
+    if v is None and body.require_admin_totp is not None:
+        v = "obligatoire" if body.require_admin_totp else "facultatif"
+    if v not in OTP_LAN_VALEURS:
+        raise HTTPException(status_code=400, detail="otp_lan : « facultatif » ou « obligatoire »")
+    tmp = _REGLAGES.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"otp_lan": v}))
+    tmp.replace(_REGLAGES)
+    _append_audit("reglage_otp_lan", user.get("sub", ""), {"otp_lan": v})
+    return _reglages_vue()
 
 
 @router.get("/status")
