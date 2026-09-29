@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 [Unit]
-Description=Refresh the MetaBlogizer site-list cache every 5 minutes
+Description=Refresh the MetaBlogizer site-list cache (backstop, every 30 minutes)
 
 [Timer]
 OnBootSec=150s
-OnUnitActiveSec=5min
+OnUnitActiveSec=30min
 # Measured cost: ~14.6s for 172 sites on a board at load ~160 (see
 # api/sites_scan.py) — comfortably inside a 5-minute window even on a bad
 # day. 5 minutes matches secubox-streamlit's streamlit-audit.timer (same

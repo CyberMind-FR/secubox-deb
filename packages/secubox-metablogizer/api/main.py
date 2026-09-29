@@ -569,6 +569,9 @@ routers.pilotage.NGINX_ENABLED_DIR = NGINX_ENABLED_DIR
 routers.pilotage.NGINX_VHOST_DIR = NGINX_VHOST_DIR
 routers.pilotage.SHOTS_CACHE_DIR = SHOTS_CACHE_DIR
 routers.pilotage.invalider_cache_sites = _invalidate_sites_cache
+# L'assistant de publication aussi (#1687) : sans cela, un site publié par
+# lui restait absent de « Mes sites » jusqu'au prochain rafraîchissement.
+routers.publish.invalider_cache_sites = _invalidate_sites_cache
 
 
 # =============================================================================

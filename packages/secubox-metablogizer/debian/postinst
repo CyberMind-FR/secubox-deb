@@ -54,5 +54,11 @@ fi
 
 systemctl daemon-reload
 systemctl enable secubox-metablogizer 2>/dev/null || true
+# Filet de secours de la liste « Mes sites » (#1687) : installé depuis #974,
+# jamais activé — le cache restait figé dès qu'un chemin d'écriture oubliait de
+# le rafraîchir (six jours sur gk2). Les écritures le rafraîchissent ; le
+# minuteur rattrape le reste toutes les 30 min.
+systemctl enable metablog-audit.timer 2>/dev/null || true
+systemctl start metablog-audit.timer 2>/dev/null || true
 systemctl start secubox-metablogizer 2>/dev/null || true
 exit 0
