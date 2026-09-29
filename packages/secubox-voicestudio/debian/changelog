@@ -1,0 +1,14 @@
+secubox-voicestudio (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Pare-feu : ouvre dans secubox_filter/forward le seul trafic redirigé par
+    podman vers le port 3900 et la sortie du conteneur ; retiré à l'arrêt.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:04:28 +0200
+
+secubox-voicestudio (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * VoiceStudio sous podman comme moteur vocal studio du parc (#1649) :
+    image officielle épinglée, clé d'API, mémoire bornée, port 3900 publié sur
+    le LAN et le maillage seulement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:45:55 +0200
