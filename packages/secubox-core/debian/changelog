@@ -1,3 +1,12 @@
+secubox-core (1.5.32-1~bookworm1) bookworm; urgency=high
+
+  * Cadence des minuteries (#1650) : les 14 surcharges 10-cadence.conf
+    remettent enfin OnUnitActiveSec à zéro ; sans cela systemd ajoutait un
+    2e déclencheur et le plus court (30 s) gagnait. Le postinst retire les
+    copies manuelles de /etc qui masquaient celles du paquet.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:58:46 +0200
+
 secubox-core (1.5.31-1~bookworm1) bookworm; urgency=high
 
   * Garde d'origine sur les écritures authentifiées par cookie (#1607) :

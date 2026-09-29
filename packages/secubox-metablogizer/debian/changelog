@@ -1,3 +1,11 @@
+secubox-metablogizer (1.8.23-1~bookworm1) bookworm; urgency=high
+
+  * metablog-shots : la cadence de 60 min remet enfin l'intervalle à zéro ;
+    les captures (Chromium) tournaient toutes les 2 min (#1650). Le postinst
+    retire la copie manuelle de /etc qui masquait celle du paquet.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:00:03 +0200
+
 secubox-metablogizer (1.8.22-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1438) : toute écriture (créer, modifier, supprimer,
