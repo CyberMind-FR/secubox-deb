@@ -1,3 +1,10 @@
+secubox-webos (1.0.378-1~bookworm1) bookworm; urgency=medium
+
+  * Cartes : services de CETTE box quand elle les sert vraiment, box de référence (gk2) en repli — /api/v1/webos/public/hotes.js (server_name exacts du domaine de la box, joignables par leur chemin public, recalculés toutes les 10 min) chargé avant domaine.js (#1670).
+  * Hall : server_name hall.* — le Hall de la box répond à son propre domaine (hall.gk3.secubox.in relayé par gk2) ; les noms exacts gardent la priorité (#1670).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:24:32 +0200
+
 secubox-webos (1.0.377-1~bookworm1) bookworm; urgency=medium
 
   * Hall : le vhost répond aussi à hall.localhost, l'entrée du kiosque ; domaine.js le traite en même origine. Par localhost/hall/, les chemins absolus des cartes tombaient sur la console d'administration (#1668).

@@ -1,3 +1,9 @@
+secubox-p2p (1.11.12-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-relais-maillage : un nœud sans WAN servi par un nœud qui en a un, à travers wg-mesh. Sur le relais : relayer/retirer/etat (pair vérifié, DNS public vérifié, certificat webroot, vhost HAProxy derrière le WAF, route sbxwaf vers l'IP maillée). Sur le pair : ouvrir/fermer (port ouvert au seul relais, adresse du visiteur transmise crue par nginx) (#1670).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:24:32 +0200
+
 secubox-p2p (1.11.11-1~bookworm1) bookworm; urgency=medium
 
   * Découverte : la recherche mDNS lit l'annonce _secubox._tcp (TXT boxname,
