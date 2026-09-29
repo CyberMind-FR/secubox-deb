@@ -2500,6 +2500,10 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   const dock=document.getElementById('mediadock');
   if(!dock) return;
   const flux=new Map();   // id -> {maj, cadre, etat}
+  // La piste annoncée par une source (#1662) : le viewer en mode lecteur la
+  // diffuse (📡) ou la favorise (♥) — le morceau, pas la page du service.
+  window.SBXPisteDe=function(id){ var e=flux.get(id); var p=e&&e.etat&&e.etat.piste;
+    return (p && typeof p.url==='string' && /^https:\/\//.test(p.url)) ? p : null; };
 
   const mmss=t=>{t=Math.floor(t||0);return Math.floor(t/60)+':'+('0'+(t%60)).slice(-2);};
   // Une pastille sans icône propre retombe sur 🔊 — un haut-parleur pour une
@@ -2933,6 +2937,8 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // et n'exposait JAMAIS window.ouvreViewer/estMediaUrl -> la megabar retombait
   // sur ouvreSurf. C'etait le bug « ca part sur surf ».
   var ov, media, titreEl, courant=null, vid=null, ivSas=null, diffuse=false, cable=false, ivVue=null, departVoulu=0;
+  var lecteurId=null;   // lecteur de service ouvert (radio…), #1662
+  function pisteLecteur(){ return (!courant && lecteurId && window.SBXPisteDe) ? window.SBXPisteDe(lecteurId) : null; }
   // ZOOM D'UN FLUX DE LA BARRE (#1266). Quand on agrandit un flux du dock vers le
   // viewer, on retient l'id de la carte SOURCE : à la fermeture, on lui rend la
   // main (elle reprend là où elle jouait). Le flux ne joue jamais à deux endroits
@@ -3076,7 +3082,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     if(!dom()) return;
     courant=url; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
     zoomSource=null;   // une vidéo « attrapée » ne se rend pas à une carte (déplacement)
-    ov.classList.remove('lecteur');   // fenêtre vidéo 16/9, pas le portrait « lecteur »
+    lecteurId=null; ov.classList.remove('lecteur');   // fenêtre vidéo 16/9, pas le portrait « lecteur »
     depart=Number(depart)||0;
     departVoulu=depart;   // reprise : le sas (YouTube) lira ceci quand il jouera le flux
     // LE TITRE, PAS L'ADRESSE (#1268). Sans titre fourni, la barre affichait
@@ -3205,7 +3211,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     f.src=src; f.setAttribute('allow','autoplay; fullscreen'); f.setAttribute('allowfullscreen','');
     f.setAttribute('scrolling','no'); f.setAttribute('data-embarque', id);
     media.appendChild(f);
-    zoomSource=id;
+    zoomSource=id; lecteurId=id;
     ov.classList.remove('hidden');
     // Radio s'ouvre en MINI (pop-up flottant, Hall navigable derrière), et en
     // mode « lecteur » (fenêtre portrait taillée pour le widget, pas 16/9).
@@ -3244,6 +3250,14 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     E('viewer-x').addEventListener('click',ferme);
     addEventListener('keydown',function(e){ if(e.key==='Escape'&&ov&&!ov.classList.contains('hidden')) ferme(); });
     E('viewer-fav').addEventListener('click',function(){
+      var pl=pisteLecteur();
+      if(pl){   // MORCEAU d'un lecteur de service (#1662) : favori + cœur de la radio
+        try{ var kf='sbx_favoris', lf=JSON.parse(localStorage.getItem(kf)||'[]');
+          if(lf.indexOf(pl.url)<0) lf.push(pl.url); localStorage.setItem(kf,JSON.stringify(lf)); }catch(e){}
+        var fr=media.querySelector('iframe');
+        try{ fr.contentWindow.postMessage({sbx:'cmd', action:'aime'}, new URL(fr.src, location.href).origin); }catch(e){}
+        this.classList.add('on'); favRend(); return;
+      }
       if(!courant) return;
       try{ var k='sbx_favoris', l=JSON.parse(localStorage.getItem(k)||'[]');
         if(l.indexOf(courant)<0) l.push(courant);
@@ -3261,8 +3275,27 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       this.classList.add('on'); var b=this; setTimeout(function(){ b.classList.remove('on'); },900);
     });
     E('viewer-cast').addEventListener('click',function(){
-      if(!courant) return;
-      var b=this;
+      var b=this, pl=pisteLecteur();
+      if(pl && !diffuse){   // MORCEAU d'un lecteur de service (#1662), résolu souverain
+        fetch('/api/v1/ytsas/resolve?url='+encodeURIComponent(pl.url),{headers:{'Accept':'application/json'}})
+          .then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; })
+          .then(function(j){
+            var u = (j && j.state==='mirror' && j.peertube_url) ? j.peertube_url
+                  : (j && j.video_id) ? '/api/v1/ytsas/stream/'+j.video_id : pl.url;
+            var ti = (j && j.title) || pl.titre || titreEl.textContent;
+            return fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({url:u, titre:ti})}).then(function(r){ return sortDiffusion(r); })
+              .then(function(s){ return {s:s, u:u, ti:ti}; });
+          }).catch(function(){ return {s:{ok:false, statut:0}}; })
+          .then(function(x){
+            if(!x.s.ok){ signaleRefus(b, x.s, true); return; }
+            journalDiffusion(x.u, x.ti);
+            diffuse=true; b.classList.add('on'); b.title='Arrêter la diffusion';
+            try{ postMessage({sbx:'broadcast-on'}, location.origin); }catch(e){}
+          });
+        return;
+      }
+      if(!courant && !diffuse) return;
       // LE BOUTON SUIT LA RÉPONSE DE LA BOX (#1609), pas l'intention : une
       // diffusion refusée ne s'allume pas, un arrêt refusé ne s'éteint pas.
       if(diffuse){

@@ -1,3 +1,10 @@
+secubox-radio (0.1.72-1~bookworm1) bookworm; urgency=medium
+
+  * La piste courante (URL de sa source YouTube, titre) est annoncée au Hall ;
+    commande « aime » pour le ♥ du lecteur du Hall (#1662).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 09:10:14 +0200
+
 secubox-radio (0.1.71-1~bookworm1) bookworm; urgency=medium
 
   * capabilities.d : classe d'effet et rôle minimal de chaque action (#1615).
