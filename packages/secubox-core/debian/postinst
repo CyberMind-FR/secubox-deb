@@ -3,6 +3,19 @@ set -e
 
 case "$1" in
   configure)
+    # CADENCE (#1650) : des copies MANUELLES des surcharges de cadence, posées
+    # dans /etc lors de l'incident du 2026-08-12, masquent celles du paquet
+    # (même nom de fichier) — sans la remise à zéro. On ne retire QUE ces
+    # copies-là, reconnaissables à leur marque ; le reste de /etc est à l'opérateur.
+    for f in /etc/systemd/system/*.timer.d/10-cadence.conf; do
+        [ -f "$f" ] || continue
+        u="$(basename "$(dirname "$f")")"
+        if grep -q "incident de charge du 2026-08-12" "$f" \
+           && [ -f "/lib/systemd/system/$u/10-cadence.conf" ]; then
+            rm -f "$f"; rmdir --ignore-fail-on-non-empty "$(dirname "$f")" 2>/dev/null || true
+        fi
+    done
+    systemctl daemon-reload 2>/dev/null || true
     # ── Utilisateur système ──
     if ! id -u secubox >/dev/null 2>&1; then
       adduser --system --group --no-create-home \

@@ -4,6 +4,13 @@ mkdir -p /run/secubox /srv/metablogizer/sites
 # #494: do NOT chown the shared parent /run/secubox (owned by tmpfiles.d at
 # 1777 root root). Only own this module's own data dir.
 chown secubox:secubox /srv/metablogizer/sites 2>/dev/null || true
+# CADENCE (#1650) : une copie MANUELLE de la surcharge, posée dans /etc, masquait
+# celle du paquet sans remettre l'intervalle à zéro (captures toutes les 2 min).
+m=/etc/systemd/system/metablog-shots.timer.d/10-cadence.conf
+if [ -f "$m" ] && grep -q "CHROMIUM TOUTES LES DEUX MINUTES" "$m"; then
+    rm -f "$m"; rmdir --ignore-fail-on-non-empty "$(dirname "$m")" 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+fi
 # ── LE VHOST DÉDIÉ ET SA ROUTE (#1323) ────────────────────────────────────
 #
 # UN SERVICE DÉCLARE SA PROPRE ROUTE, comme il déclare son vhost et son unité.
