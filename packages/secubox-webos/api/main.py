@@ -9,14 +9,14 @@ import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Depends, Request, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 # LE HALL EST LA COUCHE D'USAGER (#1581) : ses routes demandent une session,
 # pas l'administration ; ce qu'il relaie à un module, ce module le juge.
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, acces, actions, nc_super, aide
+from api import registry, flags, cardlets, acces, actions, nc_super, aide, hotes
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
@@ -70,8 +70,10 @@ async def lifespan(app: FastAPI):
     if _broadcast.get("actif"):   # le flux courant entre dans l'historique global
         _hist_ajoute(_broadcast)
     task = asyncio.create_task(_refresh_loop())
+    t_hotes = asyncio.create_task(hotes.boucle(domaine_box))   # #1670
     yield
     task.cancel()
+    t_hotes.cancel()
 
 
 app = FastAPI(title="SecuBox WebOS", root_path="/api/v1/webos", lifespan=lifespan)
@@ -358,6 +360,17 @@ async def aide_carte(cid: str):
     out["etat"] = _etat_service(c.get("service") or "") if c.get("service") else ""
     out["phrase"] = aide.phrase(c, m)
     return out
+
+
+# ── HÔTES LOCAUX (#1670) ────────────────────────────────────────────────────
+# Chargé AVANT domaine.js par le Hall : la liste des noms que cette box sert
+# vraiment. Une carte vise le service local s'il y figure, celui de la box de
+# référence sinon. Script (et non JSON) : la page le lit sans requête bloquante.
+@public_router.get("/hotes.js")
+async def hotes_js():
+    corps = "window.SBX_HOTES_LOCAUX=" + json.dumps(hotes.locaux()) + ";\n"
+    return Response(corps, media_type="application/javascript",
+                    headers={"Cache-Control": "max-age=120"})
 
 
 @public_router.get("/cardlets")

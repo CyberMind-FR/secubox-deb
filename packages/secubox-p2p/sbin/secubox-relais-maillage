@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-relais-maillage — un nœud SANS WAN servi par un nœud
+# qui en a un, à travers le maillage wg-mesh (#1670).
+#
+# Sur le RELAIS (le nœud qui a le WAN, ex. gk2) :
+#   relayer <nom> <ip-maillée-du-pair> [port]   (port par défaut : 9080)
+#   retirer <nom>
+#   etat
+# Sur le PAIR (le nœud sans WAN, ex. gk3) :
+#   ouvrir <ip-maillée-du-relais> [port]        (port par défaut : 9080)
+#   fermer <ip-maillée-du-relais> [port]
+#
+# CHAÎNE D'UN NOM, SUR LE RELAIS. Le TLS se termine ici et le WAF d'ici inspecte
+# (jamais de bypass) ; sbxwaf relaie en HTTP vers le pair, et c'est WireGuard qui
+# chiffre sur le fil. Dans l'ordre, chaque étape vérifiée avant la suivante :
+#   1. le pair est un pair du maillage (allowed-ips /32 sur wg-mesh) et répond ;
+#   2. le DNS PUBLIC du nom pointe vers ce relais — on ne crée rien chez le
+#      registraire ici : on refuse et on dit quoi faire ;
+#   3. un certificat (certbot webroot, renouvelé par le crochet existant) ;
+#   4. le vhost HAProxy, derrière sbxwaf_inspector ;
+#   5. la route sbxwaf vers l'IP MAILLÉE du pair. Pas `secubox-waf-route` : il
+#      recopie l'adresse d'une route voisine du même port, qui serait la nôtre.
+#
+# CÔTÉ PAIR, deux choses et rien de plus : le port n'est ouvert QU'AU relais (pas
+# à tout le maillage), et nginx croit l'adresse de visiteur que le relais lui
+# transmet — sinon chaque visiteur aurait l'adresse du relais. Le maillage n'est
+# PAS un réseau local : le visiteur relayé reste un visiteur WAN.
+set -euo pipefail
+readonly MODULE="relais-maillage"
+
+ROUTES=/etc/secubox/waf/haproxy-routes.json
+CERTS_DIR=/data/haproxy/certs
+WEBROOT=/usr/share/secubox/www
+NFT_CONF=/etc/nftables.conf
+NGINX_CONF=/etc/nginx/conf.d/secubox-relais-maillage.conf
+BACKEND=sbxwaf_inspector
+RESOLVEUR=1.1.1.1
+
+log()  { printf '[%s] %s\n' "$MODULE" "$*"; }
+meurt() { printf '[%s] ERREUR : %s\n' "$MODULE" "$*" >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || meurt "à lancer en root"
+
+nom_valide()  { [[ "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; }
+ip_valide()   { [[ "$1" =~ ^10\.10\.0\.([0-9]{1,3})$ ]] && [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[1]}" -le 254 ]; }
+port_valide() { [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; }
+
+domaine_box() {
+    python3 -c 'from secubox_core.auth import domaine_box; print(domaine_box())' 2>/dev/null || true
+}
+
+# L'IP publique de CE relais : celle que le DNS public donne à son propre Hall.
+ip_publique() {
+    local d; d="$(domaine_box)"
+    [ -n "$d" ] || meurt "domaine de la box inconnu ([global] domain ou [api] sso_cookie_domain)"
+    dig +short "hall.$d" A @"$RESOLVEUR" | grep -E '^[0-9.]+$' | head -1
+}
+
+# Joignable par wg-mesh : l'IP est couverte par les allowed-ips d'un pair — un
+# /32 côté maître, tout le réseau maillé côté satellite (le maître y relaie).
+pair_du_maillage() {
+    wg show wg-mesh allowed-ips 2>/dev/null | awk '{for(i=2;i<=NF;i++) print $i}' \
+        | python3 -c 'import ipaddress,sys; ip=ipaddress.ip_address(sys.argv[1]); sys.exit(0 if any(l.strip() and ip in ipaddress.ip_network(l.strip(), strict=False) for l in sys.stdin) else 1)' "$1"
+}
+
+routes_ecrire() {   # routes_ecrire <nom> [<ip> <port>] — sans ip : retire
+    python3 - "$ROUTES" "$@" <<'PY'
+import json, os, sys, shutil, time
+chemin, nom = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(chemin))
+except FileNotFoundError:
+    d = {}
+shutil.copy2(chemin, f"{chemin}.avant-relais-{int(time.time())}") if os.path.exists(chemin) else None
+if len(sys.argv) > 3:
+    d[nom] = [sys.argv[3], int(sys.argv[4])]
+else:
+    d.pop(nom, None)
+tmp = chemin + ".sbxtmp"
+with open(tmp, "w") as f:
+    json.dump(d, f, indent=2, sort_keys=True)
+    f.write("\n")
+os.chmod(tmp, os.stat(chemin).st_mode & 0o777 if os.path.exists(chemin) else 0o644)
+os.replace(tmp, chemin)
+PY
+}
+
+vhost_present() {
+    python3 - "$1" <<'PY'
+import sys, tomllib
+d = tomllib.load(open("/etc/secubox/haproxy.toml", "rb"))
+v = d.get("vhosts") or {}
+it = v.values() if isinstance(v, dict) else v
+sys.exit(0 if any(x.get("domain") == sys.argv[1] for x in it) else 1)
+PY
+}
+
+cmd_relayer() {
+    local nom="${1:-}" ip="${2:-}" port="${3:-9080}"
+    nom_valide "$nom" || meurt "nom invalide : « $nom »"
+    ip_valide "$ip"   || meurt "IP maillée invalide : « $ip » (attendu 10.10.0.x)"
+    port_valide "$port" || meurt "port invalide : « $port »"
+
+    log "1/5 pair $ip dans le maillage et joignable…"
+    pair_du_maillage "$ip" || meurt "$ip n'est pas un pair de wg-mesh sur ce nœud"
+    local code
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: $nom" "http://$ip:$port/" || true)
+    [ "$code" != "000" ] || meurt "le pair ne répond pas sur $ip:$port — sur le pair : secubox-relais-maillage ouvrir <ip-du-relais> $port"
+    log "    le pair répond (HTTP $code)"
+
+    log "2/5 DNS public de $nom…"
+    local pub vu
+    pub="$(ip_publique)"; [ -n "$pub" ] || meurt "IP publique du relais introuvable"
+    vu="$(dig +short "$nom" A @"$RESOLVEUR" | grep -E '^[0-9.]+$' | head -1)"
+    [ "$vu" = "$pub" ] || meurt "$nom résout vers « ${vu:-rien} », pas vers ce relais ($pub) — créer l'enregistrement A chez le registraire (module DNS) puis relancer"
+    log "    $nom → $pub"
+
+    log "3/5 certificat…"
+    if [ -s "$CERTS_DIR/$nom.pem" ]; then
+        log "    déjà servi par HAProxy"
+    else
+        certbot certonly --webroot -w "$WEBROOT" -d "$nom" --non-interactive --agree-tos \
+            --keep-until-expiring --register-unsafely-without-email >/dev/null \
+            || meurt "certbot a échoué pour $nom"
+        haproxyctl cert sync >/dev/null
+        [ -s "$CERTS_DIR/$nom.pem" ] || meurt "certificat émis mais absent de $CERTS_DIR"
+        log "    émis et installé"
+    fi
+
+    log "4/5 vhost HAProxy (WAF)…"
+    if vhost_present "$nom"; then
+        log "    déjà déclaré"
+    else
+        haproxyctl vhost add "$nom" "$BACKEND" true >/dev/null
+    fi
+
+    log "5/5 route sbxwaf → $ip:$port…"
+    routes_ecrire "$nom" "$ip" "$port"
+    haproxyctl generate >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
+    systemctl reload secubox-waf-ng 2>/dev/null || true
+    sleep 2
+
+    code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$nom:443:127.0.0.1" "https://$nom/" || true)
+    log "vérification : https://$nom/ → HTTP $code"
+    case "$code" in 2??|3??|401|403) log "relais en place : $nom → $ip:$port" ;;
+        *) meurt "la chaîne répond $code — voir journalctl -u secubox-waf-ng" ;; esac
+}
+
+cmd_retirer() {
+    local nom="${1:-}"
+    nom_valide "$nom" || meurt "nom invalide : « $nom »"
+    routes_ecrire "$nom"
+    if vhost_present "$nom"; then
+        local cle; cle="$(printf '%s' "$nom" | tr '.-' '__')"
+        haproxyctl vhost remove "$cle" >/dev/null || true
+    fi
+    haproxyctl generate >/dev/null && haproxyctl reload >/dev/null || true
+    log "relais retiré pour $nom (certificat conservé, DNS inchangé)"
+}
+
+cmd_etat() {
+    python3 - "$ROUTES" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+r = {k: v for k, v in d.items() if isinstance(v, list) and str(v[0]).startswith("10.10.0.")}
+print("\n".join(f"{k} → {v[0]}:{v[1]}" for k, v in sorted(r.items())) or "aucun nom relayé vers le maillage")
+PY
+}
+
+# ── côté PAIR ────────────────────────────────────────────────────────────────
+regle_nft() { printf 'iifname "wg-mesh" ip saddr %s tcp dport %s accept comment "secubox-relais"' "$1" "$2"; }
+
+cmd_ouvrir() {
+    local relais="${1:-}" port="${2:-9080}"
+    ip_valide "$relais" || meurt "IP maillée du relais invalide : « $relais »"
+    port_valide "$port" || meurt "port invalide : « $port »"
+    pair_du_maillage "$relais" || meurt "$relais n'est pas un pair de wg-mesh sur ce nœud"
+    local regle; regle="$(regle_nft "$relais" "$port")"
+    if grep -qF "$regle" "$NFT_CONF"; then
+        log "pare-feu : déjà ouvert à $relais sur $port"
+    else
+        # Avant le `drop` terminal (une règle après lui ne sert à rien), validé
+        # par `nft -c` avant de remplacer quoi que ce soit.
+        python3 - "$NFT_CONF" "$regle" <<'PY'
+import re, sys, shutil, time, subprocess, os
+chemin, regle = sys.argv[1], sys.argv[2]
+t = open(chemin).read()
+out, fait = [], False
+for l in t.splitlines(keepends=True):
+    if not fait and re.match(r"^[ \t]*drop[ \t]*$", l):
+        out.append(l[: len(l) - len(l.lstrip())] + regle + "\n"); fait = True
+    out.append(l)
+if not fait:
+    sys.exit("pas de drop terminal dans " + chemin)
+tmp = chemin + ".sbxtmp"
+open(tmp, "w").write("".join(out))
+if subprocess.run(["nft", "-c", "-f", tmp]).returncode != 0:
+    os.unlink(tmp); sys.exit("nft -c refuse la règle")
+shutil.copy2(chemin, f"{chemin}.avant-relais-{int(time.time())}")
+os.replace(tmp, chemin)
+PY
+        nft -f "$NFT_CONF"
+        log "pare-feu : $port ouvert au seul relais $relais"
+    fi
+    local ligne="set_real_ip_from $relais;"
+    if [ -f "$NGINX_CONF" ] && grep -qxF "$ligne" "$NGINX_CONF"; then
+        log "nginx : le relais $relais est déjà cru"
+    else
+        { [ -f "$NGINX_CONF" ] || printf '# secubox-relais-maillage (#1670) : relais du maillage dont on croit X-Forwarded-For.\n'
+          printf '%s\n' "$ligne"; } >> "$NGINX_CONF"
+        nginx -t 2>/dev/null || { sed -i "\|^$ligne\$|d" "$NGINX_CONF"; meurt "nginx -t refuse $NGINX_CONF"; }
+        systemctl reload nginx
+        log "nginx : adresse de visiteur transmise par $relais crue"
+    fi
+}
+
+cmd_fermer() {
+    local relais="${1:-}" port="${2:-9080}"
+    ip_valide "$relais" || meurt "IP maillée du relais invalide"
+    local regle; regle="$(regle_nft "$relais" "$port")"
+    if grep -qF "$regle" "$NFT_CONF"; then
+        cp -p "$NFT_CONF" "$NFT_CONF.avant-relais-$(date +%s)"
+        grep -vF "$regle" "$NFT_CONF" > "$NFT_CONF.sbxtmp" && nft -c -f "$NFT_CONF.sbxtmp" \
+            && mv "$NFT_CONF.sbxtmp" "$NFT_CONF" && nft -f "$NFT_CONF"
+    fi
+    [ -f "$NGINX_CONF" ] && sed -i "\|^set_real_ip_from $relais;\$|d" "$NGINX_CONF" && nginx -t 2>/dev/null && systemctl reload nginx
+    log "fermé au relais $relais sur $port"
+}
+
+case "${1:-}" in
+    relayer) shift; cmd_relayer "$@" ;;
+    retirer) shift; cmd_retirer "$@" ;;
+    etat)    cmd_etat ;;
+    ouvrir)  shift; cmd_ouvrir "$@" ;;
+    fermer)  shift; cmd_fermer "$@" ;;
+    *) sed -n '8,17p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

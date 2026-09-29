@@ -29,9 +29,17 @@
   if (base === 'localhost') base = null;
   var session = base ? (ALIAS[base] || base) : null;
 
+  // SERVICES DE CETTE BOX, RÉFÉRENCE EN REPLI (#1670). Un service n'est réécrit
+  // vers le domaine de la box que si elle le sert vraiment (hotes.js, chargé
+  // avant ce script) ; sinon la carte garde la box de référence. Liste absente
+  // (webos ancien, échec) : repli partout plutôt que des noms que nul ne sert.
+  var LOCAUX = w.SBX_HOTES_LOCAUX || [];
   function hote(s) {
     if (s == null || !session || session === REFERENCE) return s;
-    return String(s).replace(/\.gk2\.secubox\.in\b/g, '.' + session);
+    return String(s).replace(/([a-z0-9-]+)\.gk2\.secubox\.in\b/g, function (m, svc) {
+      var n = svc + '.' + session;
+      return LOCAUX.indexOf(n) >= 0 ? n : m;
+    });
   }
 
   // LIEN PARTAGEABLE (#1579). Le viewer copiait son adresse telle quelle :

@@ -53,6 +53,7 @@ override_dh_auto_install:
 	# Install ephemeral CLI (root-only surface for wg-ephemeral, Task 2)
 	install -d $(CURDIR)/debian/secubox-p2p/usr/sbin
 	install -m 755 $(CURDIR)/sbin/secubox-p2pctl $(CURDIR)/debian/secubox-p2p/usr/sbin/
+	install -m 755 $(CURDIR)/sbin/secubox-relais-maillage $(CURDIR)/debian/secubox-p2p/usr/sbin/
 
 	# Install ephemeral sweep timer/service (TTL backstop, Task 4)
 	install -d $(CURDIR)/debian/secubox-p2p/lib/systemd/system
