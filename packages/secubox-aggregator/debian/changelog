@@ -1,3 +1,10 @@
+secubox-aggregator (0.3.4-1~bookworm1) bookworm; urgency=medium
+
+  * Chemin Python du serveur isolé des modules : websockets chargé avant les montages et ordre de sys.path rétabli après — huit modules plaçaient le websockets 10.4 de Debian devant celui d'uvicorn, qui mourait au démarrage (gk3 : agrégateur en boucle, registre du Hall vide) (#1680).
+  * Unité : /var/cache/secubox en écriture — le hub monté y écrit menu.json, source du registre du Hall ; sans lui une box installée restait en maquette (gk2 ne marchait que par une surcharge manuelle) (#1624, #1680).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 11:01:15 +0200
+
 secubox-aggregator (0.3.3-1~bookworm1) bookworm; urgency=high
 
   * Sockets réservés à l'administration (actor) relayés au seul administrateur réel ; en-tête X-Sbx-Vue jamais recopié depuis le client (#1608).
