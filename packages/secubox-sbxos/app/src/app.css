@@ -81,3 +81,4 @@ a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px;
 .zia-objets li { display: grid; gap: 2px; } .zia-objets a { color: var(--sbx-cyan); } .zia-objets small { color: var(--sbx-pale); }
 .palette-pied { margin: 0; padding: 8px 16px; border-top: 1px solid var(--sbx-trait); color: var(--sbx-pale); font-size: 12px; display: flex; gap: 8px; }
 @media (max-width: 640px) { .recherche { max-width: none; } .recherche kbd { display: none; } }
+.palette-pied kbd { margin-left: 0; }

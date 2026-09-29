@@ -7,19 +7,25 @@
       "message": {
         "sbx": "cmd",
         "action": "toggle"
-      }
+      },
+      "effet": "media",
+      "role_min": "guest"
     },
     "media.pause": {
       "message": {
         "sbx": "cmd",
         "action": "pause"
-      }
+      },
+      "effet": "media",
+      "role_min": "guest"
     },
     "media.stop": {
       "message": {
         "sbx": "cmd",
         "action": "stop"
-      }
+      },
+      "effet": "media",
+      "role_min": "guest"
     },
     "media.mute": {
       "message": {
@@ -29,7 +35,9 @@
       "value": {
         "field": "v",
         "type": "boolean"
-      }
+      },
+      "effet": "media",
+      "role_min": "guest"
     },
     "media.volume": {
       "message": {
@@ -41,13 +49,17 @@
         "type": "number",
         "min": 0,
         "max": 1
-      }
+      },
+      "effet": "media",
+      "role_min": "guest"
     },
     "ui.zoom": {
       "message": {
         "sbx": "cmd",
         "action": "zoom"
-      }
+      },
+      "effet": "media",
+      "role_min": "guest"
     },
     "media.volume.relative": {
       "message": {
@@ -60,7 +72,9 @@
         "min": -1,
         "max": 1
       },
-      "_note": "Le PAS est applique par le Hall, qui detient le reglage de cette source ; la cardlet ne connait que le volume effectif qu'on lui impose. Le message declare ici est une forme, pas un transport (#1349)."
+      "_note": "Le PAS est applique par le Hall, qui detient le reglage de cette source ; la cardlet ne connait que le volume effectif qu'on lui impose. Le message declare ici est une forme, pas un transport (#1349).",
+      "effet": "media",
+      "role_min": "guest"
     }
   }
 }

@@ -16,7 +16,8 @@ describe('palette', () => {
     expect(espaceDemande('mets la radio en pause', E)).toBeNull();
   });
   it('seules les actions média partent sans clic', () => {
-    expect(sansClic({ kind: 'sbx-action', service: 'radio', action: 'media.pause' })).toBe(true);
-    expect(sansClic({ kind: 'sbx-action', service: 'zigbee', action: 'lumiere.on' })).toBe(false);
+    expect(sansClic({ kind: 'sbx-action', service: 'radio', action: 'media.pause', effet: 'media' })).toBe(true);
+    expect(sansClic({ kind: 'sbx-action', service: 'radio', action: 'media.pause' })).toBe(false);
+    expect(sansClic({ kind: 'sbx-action', service: 'zigbee', action: 'lumiere.on', effet: 'physique' })).toBe(false);
   });
 });

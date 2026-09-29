@@ -46,14 +46,16 @@ def _service_de(target: str) -> str:
 # adapters ci-dessous. Hors ligne, elle le dit — elle n'invente jamais de contenu.
 _SEED: list[dict] = []
 
-# Domaines des services (pour fabriquer une URL ouvrable, `url`, à côté de `sbx://`).
-_DOMAIN = {
-    "metanews": "metanews.gk2.secubox.in",
-    "billets": "billets.gk2.secubox.in",
-    "peertube": "peertube.gk2.secubox.in",
-    "bbs": "bbs.gk2.secubox.in",
-    "radio": "radio.gk2.secubox.in",
-}
+# Domaines des services (pour fabriquer une URL ouvrable, `url`, à côté de
+# `sbx://`) : <service>.<domaine de CETTE box> — [global] domain, sinon
+# [api] sso_cookie_domain (#1615, #1623). Jamais un nom de box écrit en dur.
+def _hote(service: str) -> str:
+    try:
+        from secubox_core.auth import domaine_box
+        dom = domaine_box()
+    except Exception:  # noqa: BLE001 — bibliothèque ancienne : pas d'URL plutôt qu'une fausse
+        dom = ""
+    return f"{service}.{dom}" if dom else ""
 
 
 class Bus:
@@ -106,7 +108,7 @@ class Bus:
                         "id": f"metanews:topic:{tid}", "type": "news.topic", "service": "metanews",
                         "title": t.get("title", ""), "summary": (t.get("summary") or "")[:220],
                         "uri": f"sbx://metanews/topic/{tid}",
-                        "url": f"https://{_DOMAIN['metanews']}/#{tid}", "visibility": "guest",
+                        "url": f"https://{_hote('metanews')}/#{tid}", "visibility": "guest",
                         "actions": ["open", "discuss"],
                         "tags": [str(x).lstrip("#") for x in (t.get("tags") or [])][:8],
                     })
@@ -135,7 +137,7 @@ class Bus:
                         "id": f"billets:post:{slug}", "type": "post", "service": "billets",
                         "title": it.get("title", ""), "summary": txt[:200],
                         "uri": f"sbx://billets/post/{slug}",
-                        "url": f"https://{_DOMAIN['billets']}/b/{slug}", "visibility": "guest",
+                        "url": f"https://{_hote('billets')}/b/{slug}", "visibility": "guest",
                         "actions": ["open", "discuss"], "tags": ["billet"],
                     })
         except Exception:

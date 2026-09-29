@@ -38,7 +38,7 @@ def test_act_mute_ok():
     assert r["ok"]
     assert r["result"] == {"kind": "sbx-action", "target": "service:radio",
                            "service": "radio", "action": "media.mute",
-                           "params": {"value": True}}
+                           "params": {"value": True}, "effet": "media"}
 
 
 def test_act_volume_clamp():

@@ -45,7 +45,8 @@ export function Palette({ espaces, aller, domaine, ferme }:
   }, [ferme]);
 
   function execute(a: ActionZia) {
-    const ok = sbxExecuteAction({ kind: 'sbx-action', service: a.service, action: a.action });
+    const v = (a.params as { value?: unknown } | undefined)?.value;
+    const ok = sbxExecuteAction({ kind: 'sbx-action', service: a.service, action: a.action, v });
     setFait(f => [...f, `${a.service} · ${a.action} : ${ok ? 'fait' : 'service non ouvert ici'}`]);
   }
 
