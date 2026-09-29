@@ -121,7 +121,8 @@ configure_rspamd_controller() {
         return 1
     fi
 
-    install -d -m 0700 /etc/secubox/secrets
+    # Parent partagé (#1689) : un 0700 ici coupait la traversée des autres modules.
+    install -d -o root -g secubox -m 0750 /etc/secubox/secrets
     if [ ! -s "$secret_host" ]; then
         openssl rand -base64 24 > "$secret_host"
         chmod 0600 "$secret_host"

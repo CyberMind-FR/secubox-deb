@@ -27,10 +27,11 @@ case "$1" in
             [ -d "$_d" ] || install -d -m 0755 "$_d"
             chmod 0755 "$_d" 2>/dev/null || true
         done
-        # /etc/secubox/secrets stays 0700 (core-managed, holds ALL modules'
-        # secrets — must NOT be world-traversable). Never re-mode or chown an
-        # existing one; create it (0700) only if wholly absent.
-        [ -d /etc/secubox/secrets ] || install -d -m 0700 /etc/secubox/secrets
+        # /etc/secubox/secrets appartient à secubox-core (root:secubox 0750,
+        # jamais traversable par tous, #1689). Créé dans cet état s'il manque ;
+        # secubox-meshtastic reçoit une ACL de traversée vers son sous-dossier.
+        [ -d /etc/secubox/secrets ] || install -d -o root -g secubox -m 0750 /etc/secubox/secrets
+        command -v setfacl >/dev/null 2>&1 && setfacl -m u:secubox-meshtastic:--x /etc/secubox/secrets 2>/dev/null || true
 
         # Leaf dirs owned by secubox-meshtastic.
         install -d -o secubox-meshtastic -g secubox-meshtastic -m 0700 /etc/secubox/secrets/meshtastic

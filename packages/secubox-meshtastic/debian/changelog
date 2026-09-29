@@ -1,3 +1,9 @@
+secubox-meshtastic (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * /etc/secubox/secrets créé dans l'état de secubox-core s'il manque ; ACL de traversée pour secubox-meshtastic (#1689).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:05:19 +0200
+
 secubox-meshtastic (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Le recensement passif et le journal de paquets ne se remplissaient jamais.

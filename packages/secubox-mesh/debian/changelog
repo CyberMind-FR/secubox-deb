@@ -1,3 +1,9 @@
+secubox-mesh (2.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * /etc/secubox/secrets : plus de secubox-mesh 0700 sur le parent partagé ; ACL de traversée pour secubox-mesh (#1689).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:05:19 +0200
+
 secubox-mesh (2.0.5-1~bookworm2) bookworm; urgency=medium
 
   * Purge des references authelia (SSO decommissionne) : commentaires,
