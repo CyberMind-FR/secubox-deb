@@ -43,6 +43,9 @@ def candidats(textes: Iterable[str], domaine: str) -> list[str]:
         for bloc in _SN.findall(t):
             for n in bloc.split():
                 n = n.strip().lower()
+                # « mood.* » : le service répond à tout domaine ; ici, au nôtre.
+                if re.fullmatch(r"[a-z0-9-]+\.\*", n):
+                    n = n[:-1] + domaine.lower()
                 if n.endswith(fin) and "*" not in n and not n.startswith("~") and re.fullmatch(r"[a-z0-9.-]+", n):
                     vus.add(n)
     return sorted(vus)
@@ -90,3 +93,17 @@ async def boucle(domaine_fn) -> None:
 
 def locaux() -> list[str]:
     return list(_etat["locaux"])
+
+
+def nom_noeud() -> str:
+    """Le nom court de cette box : [global] hostname, sinon le nom d'hôte."""
+    try:
+        from secubox_core.config import get_config
+        n = str(get_config("global").get("hostname", "") or "")
+    except Exception:
+        n = ""
+    if not n:
+        import socket
+        n = socket.gethostname()
+    n = n.split(".")[0].lower()
+    return n if re.fullmatch(r"[a-z0-9-]{1,63}", n) else ""

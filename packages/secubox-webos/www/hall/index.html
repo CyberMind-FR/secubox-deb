@@ -1743,7 +1743,9 @@ function render(data,src){
   const degr=svc.filter(s=>s.health&&s.health.state==='degraded').length;
   // Stats nœud, déplacées dans la barre de statut BAS (#1175).
   var sn=document.getElementById('sb-node');
-  if(sn) sn.innerHTML='nœud <b>gk2</b> · ◆ <b>'+online+'</b> en ligne · ● <b>'+svc.length+'</b> modules';
+  // Le nom du nœud vient de la box (hotes.js, #1680) — plus « gk2 » en dur.
+  var nomNoeud=String(window.SBX_NOEUD||(window.SBX_DOMAINE&&SBX_DOMAINE.session||location.hostname).split('.')[0]).replace(/[^a-z0-9-]/gi,'');
+  if(sn) sn.innerHTML='nœud <b>'+nomNoeud+'</b> · ◆ <b>'+online+'</b> en ligne · ● <b>'+svc.length+'</b> modules';
   // LA BARRE DE CHIFFRES EST RETIREE (#1319). Quatre grands nombres en tete
   // d'accueil, dont trois disaient la meme chose autrement — « 106 / 119 »,
   // « 119 modules », « 6 categories » — et le quatrieme un etat qu'on ne

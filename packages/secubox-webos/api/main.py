@@ -368,7 +368,9 @@ async def aide_carte(cid: str):
 # référence sinon. Script (et non JSON) : la page le lit sans requête bloquante.
 @public_router.get("/hotes.js")
 async def hotes_js():
-    corps = "window.SBX_HOTES_LOCAUX=" + json.dumps(hotes.locaux()) + ";\n"
+    corps = ("window.SBX_HOTES_LOCAUX=" + json.dumps(hotes.locaux()) + ";\n"
+             # Le nom de CE nœud pour la barre d'état (#1680) — jamais « gk2 » en dur.
+             "window.SBX_NOEUD=" + json.dumps(hotes.nom_noeud()) + ";\n")
     return Response(corps, media_type="application/javascript",
                     headers={"Cache-Control": "max-age=120"})
 

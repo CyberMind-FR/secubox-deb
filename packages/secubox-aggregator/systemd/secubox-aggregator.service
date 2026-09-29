@@ -53,7 +53,10 @@ ProtectHome=true
 PrivateTmp=true
 # Phase 7 (#498) : /etc/secubox added for module config reads/writes
 # (toolbox, dpi, etc.).
-ReadWritePaths=/run/secubox /var/lib/secubox /var/log/secubox /etc/secubox
+# /var/cache/secubox : le hub monté ici y écrit menu.json, dont webos tire le
+# registre du Hall. Sans lui, sur une box neuve, le Hall restait en maquette ;
+# gk2 ne marchait que par une surcharge posée à la main (#1624, #1680).
+ReadWritePaths=/run/secubox /var/lib/secubox /var/log/secubox /etc/secubox /var/cache/secubox
 
 [Install]
 WantedBy=multi-user.target

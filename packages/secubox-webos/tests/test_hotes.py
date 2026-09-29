@@ -14,6 +14,8 @@ def test_candidats_exacts_du_domaine():
          "server_name admin.gk2.secubox.in;"]
     assert hotes.candidats(t, "gk3.secubox.in") == ["hall.gk3.secubox.in", "radio.gk3.secubox.in"]
     assert hotes.candidats(t, "") == []
+    # « mood.* » (#1680) : le service de la box sous son propre domaine.
+    assert hotes.candidats(["server_name mood.gk2.secubox.in mood.*;"], "gk3.secubox.in") == ["mood.gk3.secubox.in"]
 
 
 def test_seuls_les_joignables_sont_locaux(monkeypatch):

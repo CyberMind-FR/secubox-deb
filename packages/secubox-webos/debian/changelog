@@ -1,3 +1,9 @@
+secubox-webos (1.0.380-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : micro délégué au mood du domaine du Hall (hall.gk3 → mood.gk3) ; hotes.js reconnaît les server_name « x.* » ; barre d'état : nom du nœud fourni par la box (SBX_NOEUD), plus « gk2 » en dur (#1680).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 11:01:15 +0200
+
 secubox-webos (1.0.379-1~bookworm1) bookworm; urgency=medium
 
   * Visite guidée : même bulle reverse-design que le clic et le survol (zones colorées dans la carte, légende numérotée) ; compteur « n / N » au-delà de 10 cartes ; un chiffre non arrivé en 7 s s'efface au lieu de rester « … » ; source d'aide relue seule si webos redémarre (#1674).

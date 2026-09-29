@@ -259,8 +259,24 @@ def _build_app() -> FastAPI:
         redoc_url=None,
     )
 
+    # LE CHEMIN PYTHON DU SERVEUR NE DOIT PAS DÉPENDRE DES MODULES (#1680).
+    # Huit modules font `sys.path.insert(0, "/usr/lib/python3/dist-packages")`
+    # à leur import : une fois montés ici, le websockets 10.4 de Debian passait
+    # DEVANT celui qu'attend uvicorn (≥ 13, /usr/local), et uvicorn mourait au
+    # démarrage (« cannot import name ServerProtocol ») — agrégateur en boucle,
+    # registre du Hall vide (gk3). On charge d'abord ce dont le serveur a besoin,
+    # puis on rend au chemin son ordre d'origine après les montages.
+    try:
+        import websockets.server  # noqa: F401 — la bonne version, mise en cache
+    except Exception:  # noqa: BLE001 — sans websockets, uvicorn s'en passe
+        pass
+    chemin_origine = list(sys.path)
+
     for name in cfg.get("modules", []):
         _mount_module(app, name)
+
+    ajouts = [p for p in sys.path if p not in chemin_origine]
+    sys.path[:] = chemin_origine + ajouts
 
     @app.on_event("startup")
     async def _raise_threadpool() -> None:

@@ -1,3 +1,9 @@
+sbxos-audio-mood (0.10.3-1~bookworm1) bookworm; urgency=medium
+
+  * vhost : répond à mood.* (le mood de la box sous son propre domaine) et se laisse encadrer par le Hall de ce domaine (#1680).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 11:01:15 +0200
+
 sbxos-audio-mood (0.10.2-1~bookworm1) bookworm; urgency=medium
 
   * frame-ancestors : les Halls des nœuds relayés par cette box (secubox-halls-parc) peuvent encadrer mood ($sbx_halls_parc, secubox-core >= 1.5.33) (#1672).
