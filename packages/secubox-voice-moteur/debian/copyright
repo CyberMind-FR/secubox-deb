@@ -1,0 +1,18 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: secubox-voice-moteur
+
+Files: debian/* outils/*
+Copyright: 2026 CyberMind — Gérald Kerma
+License: LicenseRef-CMSD-1.0
+
+Files: usr/lib/secubox/voice-moteur/piper/*
+Copyright: Michael Hansen (rhasspy/piper), espeak-ng contributors
+License: MIT (piper) ; GPL-3.0-or-later (espeak-ng, via piper-phonemize)
+
+Files: usr/bin/whisper-cli usr/share/secubox/voice/modeles/*
+Copyright: Georgi Gerganov and whisper.cpp contributors ; OpenAI (Whisper weights)
+License: MIT
+
+Files: usr/share/secubox/voice/voix/lexie-fr.onnx*
+Copyright: rhasspy/piper-voices « fr_FR siwis medium » ; SIWIS dataset (University of Edinburgh)
+License: CC-BY-4.0

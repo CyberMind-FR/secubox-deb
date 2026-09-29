@@ -1,0 +1,4 @@
+#!/bin/sh
+# SecuBox-Deb :: piper — lanceur (#1646). piper cherche ses bibliothèques et
+# espeak-ng-data à côté de son exécutable : on l'appelle là où il vit.
+exec /usr/lib/secubox/voice-moteur/piper/piper "$@"

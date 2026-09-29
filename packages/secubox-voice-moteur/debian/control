@@ -1,0 +1,17 @@
+Source: secubox-voice-moteur
+Section: sound
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-voice-moteur
+Architecture: arm64
+Depends: ${misc:Depends}, libc6 (>= 2.34), libstdc++6, libgomp1, ffmpeg
+Recommends: secubox-voice (>= 0.1.4)
+Conflicts: piper
+Description: SecuBox — moteur vocal local de Lexie (piper + whisper.cpp)
+ Synthèse (piper, voix française « lexie-fr » tirée de fr_FR-siwis-medium,
+ CC-BY 4.0) et reconnaissance (whisper.cpp v1.7.6, modèle ggml-base-q5_1)
+ exécutées sur la box, sans réseau, en sous-processus à la demande.
+ Remplace le paquet Debian « piper » homonyme (configurateur de souris).

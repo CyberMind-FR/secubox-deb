@@ -41,6 +41,7 @@ succès : une panne de moteur doit se voir, comme la panne d'API des certificats
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 import subprocess
 import tempfile
@@ -263,11 +264,23 @@ class MoteurLocal(Moteur):
             raise MoteurIndisponible((await self.etat()).detail)
         def _run() -> str:
             with tempfile.TemporaryDirectory() as d:
+                brut = Path(d) / "entree.bin"
+                brut.write_bytes(audio)
+                # LE NAVIGATEUR ENVOIE DU WEBM/OPUS (MediaRecorder), que whisper.cpp
+                # ne lit pas : on le ramène en wav 16 kHz mono, son format natif
+                # (#1646). ffmpeg borne aussi la durée : une commande, pas un film.
                 entree = Path(d) / "entree.wav"
-                entree.write_bytes(audio)
+                c = subprocess.run(
+                    ["ffmpeg", "-nostdin", "-loglevel", "error", "-i", str(brut),
+                     "-t", "30", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(entree)],
+                    capture_output=True, timeout=self.delai_s)
+                if c.returncode != 0 or not entree.is_file():
+                    raise MoteurIndisponible(
+                        "Audio illisible : " + c.stderr.decode("utf-8", "replace")[:200])
                 p = subprocess.run(
                     [self.whisper, "-m", str(self.modele_asr), "-f", str(entree),
-                     "-l", "fr", "-nt", "-otxt", "-of", str(Path(d) / "sortie")],
+                     "-l", "fr", "-nt", "-t", str(os.cpu_count() or 4),
+                     "-otxt", "-of", str(Path(d) / "sortie")],
                     capture_output=True, timeout=self.delai_s)
                 if p.returncode != 0:
                     raise MoteurIndisponible(

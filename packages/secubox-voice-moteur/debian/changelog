@@ -1,0 +1,8 @@
+secubox-voice-moteur (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Moteur vocal local de Lexie (#1646) : piper 2023.11.14-2 (aarch64),
+    whisper.cpp v1.7.6 compilé pour bookworm arm64, voix lexie-fr
+    (fr_FR-siwis-medium, CC-BY 4.0), modèle ggml-base-q5_1. Éléments
+    téléchargés et vérifiés par sha256, jamais versés dans git.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:36:58 +0200

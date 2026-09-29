@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# Les éléments (binaires amont, voix, modèle) sont TÉLÉCHARGÉS et VÉRIFIÉS par
+# outils/recuperer.sh, jamais versés dans git ; whisper-cli est compilé sur un
+# hôte bookworm arm64 par outils/construire-whisper.sh (#1646).
+M := $(CURDIR)/debian/secubox-voice-moteur
+override_dh_auto_build:
+	bash outils/recuperer.sh
+
+override_dh_auto_install:
+	install -d $(M)/usr/lib/secubox/voice-moteur $(M)/usr/bin \
+	  $(M)/usr/share/secubox/voice/voix $(M)/usr/share/secubox/voice/modeles \
+	  $(M)/usr/share/doc/secubox-voice-moteur
+	tar xzf vendor/piper_linux_aarch64.tar.gz -C $(M)/usr/lib/secubox/voice-moteur
+	install -m 0755 outils/piper-lanceur $(M)/usr/bin/piper
+	install -m 0755 vendor/whisper-cli $(M)/usr/bin/whisper-cli
+	install -m 0644 vendor/fr_FR-siwis-medium.onnx $(M)/usr/share/secubox/voice/voix/lexie-fr.onnx
+	install -m 0644 vendor/fr_FR-siwis-medium.onnx.json $(M)/usr/share/secubox/voice/voix/lexie-fr.onnx.json
+	install -m 0644 vendor/ggml-base-q5_1.bin $(M)/usr/share/secubox/voice/modeles/ggml-base-q5_1.bin
+	install -m 0644 vendor/MODEL_CARD $(M)/usr/share/doc/secubox-voice-moteur/MODEL_CARD-lexie-fr
+
+override_dh_strip:
+override_dh_shlibdeps:
+override_dh_dwz:
