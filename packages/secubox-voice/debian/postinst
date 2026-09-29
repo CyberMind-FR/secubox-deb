@@ -9,6 +9,11 @@ case "$1" in
           /usr/share/secubox/voice/voice.toml /etc/secubox/voice.toml
       fi
     fi
+    # tiny par défaut (#1646) : un fichier d'opérateur resté sur l'ANCIEN défaut
+    # EXACT (base) bascule ; une valeur choisie à la main n'est pas touchée.
+    if [ -f /etc/secubox/voice.toml ] && [ -f /usr/share/secubox/voice/modeles/ggml-tiny-q5_1.bin ]; then
+      sed -i 's|^modele_asr = "/usr/share/secubox/voice/modeles/ggml-base-q5_1.bin"$|modele_asr = "/usr/share/secubox/voice/modeles/ggml-tiny-q5_1.bin"|' /etc/secubox/voice.toml
+    fi
     systemctl daemon-reload 2>/dev/null || true
     if [ "$(systemctl is-enabled secubox-voice.service 2>/dev/null)" != "masked" ]; then
       systemctl enable secubox-voice.service 2>/dev/null || true

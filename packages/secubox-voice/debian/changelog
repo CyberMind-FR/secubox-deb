@@ -1,3 +1,13 @@
+secubox-voice (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Moteur « mixte » (#1649) : synthèse locale (piper), reconnaissance au
+    studio du parc (VoiceStudio), repli local si le studio ne répond pas en
+    25 s. secubox-voicectl mixte URL (clé sur stdin) | local | etat.
+  * Reconnaissance locale : tiny par défaut, y compris pour un voice.toml
+    d'opérateur resté sur l'ancien défaut exact (#1646).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:12:52 +0200
+
 secubox-voice (0.1.5-1~bookworm1) bookworm; urgency=medium
 
   * Reconnaissance : modèle tiny par défaut (~11 s au lieu de 26-42 s sur gk2,
