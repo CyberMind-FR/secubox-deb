@@ -15,6 +15,7 @@ import { ecoute } from '@sbx/protocol';
 import { enregistreCadre, sbxExecuteAction } from '@sbx/hote';
 import { demandeOuverture, estEncadre } from '@sbx/protocol';
 import { Lieu } from './Lieu';
+import { FluxHall, type EvenementFlux } from '@sbx/ui/FluxHall';
 import { Reglages, appliquePrefs } from './Reglages';
 import hero from '@sbx/art/environments/art/hero.webp';
 import lexie from '@sbx/art/characters/art/lexie.webp';
@@ -22,6 +23,10 @@ import neo from '@sbx/art/characters/art/neo.webp';
 import actor from '@sbx/art/characters/art/actor.webp';
 import lyrion from '@sbx/art/characters/art/lyrion.webp';
 import zia from '@sbx/art/characters/art/zia.webp';
+
+/** Libellés des activités sans titre propre. */
+const GENRES: Record<string, string> = { file_shared: 'Fichier partagé', bbs_post: 'Message sur le BBS', billet_publie: 'Billet publié',
+  avatar_changed: 'Portrait changé', mood_changed: 'Humeur partagée', node_joined: 'Nœud rejoint' };
 
 type Espace = 'hall' | 'atelier' | 'securite' | 'media' | 'maison';
 const ESPACES: { id: Espace; nom: string; icone: string; guide: string; portrait: string; phrase: string }[] = [
@@ -150,15 +155,11 @@ export function App() {
                     Lecture / pause</button>
                 </div>);
               })()}
-              {espace === 'hall' && fil.length > 0 && (
-                <ul className="fil" data-aide="Activité de la box">
-                  {fil.map(a => {
-                    const l = lienLocal(a.context?.lien);
-                    const txt = `${a.qui ?? 'Quelqu’un'} · ${a.context?.titre ?? a.kind}`;
-                    return <li key={a.activity_uuid}>{l ? <a href={l}>{txt}</a> : txt}
-                      <time>{new Date(a.at * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</time></li>;
-                  })}
-                </ul>)}
+              {espace === 'hall' && <FluxHall apercu evenements={fil.map((a, i): EvenementFlux => ({
+                id: a.activity_uuid, titre: a.context?.titre ?? GENRES[a.kind] ?? 'Nouvelle activité', priorite: 0, at: a.at,
+                sous: `${a.qui ?? 'Quelqu’un'} · ${new Date(a.at * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`,
+                icone: a.kind.startsWith('bbs') ? 'bbs' : a.kind.includes('billet') ? 'billets' : 'activite',
+                lien: lienLocal(a.context?.lien) }))} />}
               <div className="cartes">
                 {(man?.espaces.find(x => x.id === espace)?.modules ?? []).map(md => {
                   const u = man ? urlSure(md.url, man.domaine) : null;

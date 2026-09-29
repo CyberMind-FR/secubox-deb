@@ -55,3 +55,14 @@ a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px;
 :root[data-densite="compacte"] .cartes { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 :root[data-densite="compacte"] .carte { padding: 8px 6px; }
 :root[data-rendu="leger"] .decor { display: none; }
+.flux { max-width: 720px; background: var(--sbx-surface); border: 1px solid var(--sbx-trait); border-radius: var(--sbx-rayon); padding: 14px 16px; display: grid; gap: 10px; }
+.flux-t { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.flux-t h2 { margin: 0; font: 700 17px var(--sbx-titre); }
+.flux-t span { color: var(--sbx-pale); font-size: 13px; }
+.flux .badge { font: 600 10px var(--sbx-code); letter-spacing: .12em; text-transform: uppercase; border: 1px solid var(--sbx-trait); border-radius: 999px; padding: 2px 8px; }
+.flux ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.flux li, .flux li a { display: flex; align-items: center; gap: 12px; color: var(--sbx-encre); text-decoration: none; }
+.flux li { padding: 8px 10px; border-radius: 12px; background: var(--sbx-relief); }
+.flux li.alerte { box-shadow: inset 3px 0 0 var(--sbx-alerte); }
+.flux-txt { display: grid; } .flux-txt small { color: var(--sbx-pale); }
+.cartes .vide { grid-column: 1 / -1; }

@@ -13,9 +13,14 @@ const TAILLES = [64, 128, 256] as const;
 const CONNUS = new Set(manifeste.icones.map(i => i.id));
 export const ICONES = manifeste.icones;
 
+let BASE = '/sbxos/art/icons/';
+let FIXE: number | null = null;
+/** La vitrine sert l'art ailleurs que la box : elle déplace la base (et peut fixer la taille). */
+export function baseArt(b: string, taille: number | null = null) { BASE = b; FIXE = taille; }
+
 export function urlIcone(id: string, px: number, etat: Etat = 'repos'): string {
-  const t = TAILLES.find(x => x >= px * (window.devicePixelRatio || 1)) ?? 256;
-  return `/sbxos/art/icons/${id}-${t}${etat === 'repos' ? '' : '-' + etat}.webp`;
+  const t = FIXE ?? TAILLES.find(x => x >= px * (window.devicePixelRatio || 1)) ?? 256;
+  return `${BASE}${id}-${t}${etat === 'repos' ? '' : '-' + etat}.webp`;
 }
 
 export function SbxIcon({ id, taille = 48, etat = 'repos', label }:

@@ -1,3 +1,19 @@
+secubox-sbxos (0.6.0~aurora7-1~bookworm1) bookworm; urgency=medium
+
+  * Flux Hall : libellés des activités sans titre ; message « vide » sur toute
+    la largeur (#1614).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 06:55:36 +0200
+
+secubox-sbxos (0.6.0~aurora6-1~bookworm1) bookworm; urgency=medium
+
+  * <FluxHall> (#1614) : trois événements au plus, priorité puis récence ;
+    alimenté par les activités, étiqueté « aperçu » jusqu'au flux serveur (P14).
+  * Vitrine du SDK (vitrine/, npm run vitrine) sur fixtures synthétiques,
+    jamais livrée dans le paquet.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 06:54:20 +0200
+
 secubox-sbxos (0.6.0~aurora5-1~bookworm1) bookworm; urgency=medium
 
   * Espace Hall jouable (#1614) : un module s'ouvre dans un théâtre plein

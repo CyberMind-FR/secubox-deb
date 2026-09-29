@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 — vitrine du SDK Aurora. */
+.vitrine { max-width: 1100px; margin: 0 auto; padding: 28px 16px 64px; display: grid; gap: 28px; }
+.vitrine h1 { margin: 6px 0; font: 700 clamp(28px, 4vw, 40px) var(--sbx-titre); }
+.vitrine h2 { margin: 0 0 10px; font: 700 18px var(--sbx-titre); }
+.vitrine p { color: var(--sbx-doux); margin: 0; max-width: 70ch; }
+.kick { font: 600 11px var(--sbx-code); letter-spacing: .16em; text-transform: uppercase; color: var(--sbx-pale); }
+.note { font-size: 13px; margin-bottom: 10px !important; }
+.nuancier { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.nuancier div { display: flex; align-items: center; gap: 8px; }
+.nuancier i { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--sbx-trait); }
+.nuancier code, .carte code { font: 11px var(--sbx-code); color: var(--sbx-pale); }
+.outils { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.outils button { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--sbx-trait); background: var(--sbx-surface); color: var(--sbx-doux); cursor: pointer; font: 600 12px var(--sbx-police); }
+.outils button[aria-pressed="true"] { color: var(--sbx-encre); border-color: var(--sbx-cyan); }
+.outils .sep { width: 12px; }
