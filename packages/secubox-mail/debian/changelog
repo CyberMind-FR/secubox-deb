@@ -1,3 +1,14 @@
+secubox-mail (2.10.9-1~bookworm1) bookworm; urgency=medium
+
+  * Webmail sans mot de passe (#1644) : mailctl webmail-sso crée le lien
+    /var/lib/roundcube/plugins/secubox_sso ; sans lui Roundcube ne charge pas
+    le greffon et redemande l'identification.
+  * mail.toml : les clés racine ajoutées à la mise à jour vont AVANT la
+    première section (et non en fin de fichier) ; les copies accumulées dans
+    la dernière section sont retirées.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:20:34 +0200
+
 secubox-mail (2.10.8-1~bookworm1) bookworm; urgency=medium
 
   * mailctl webmail-sso : le webmail s'ouvre par la session SecuBox —

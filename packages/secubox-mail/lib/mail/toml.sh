@@ -38,8 +38,21 @@ _toml_has_section() {
 # Append `key = default` to the file iff no root-level key of that name
 # already exists. Never touches an existing line.
 _toml_add_root_key() {
-    local file="$1" key="$2" default="$3"
-    _toml_root_has_key "$file" "$key" || echo "${key} = ${default}" >> "$file"
+    local file="$1" key="$2" default="$3" tmp
+    # NETTOYAGE (#1644) : les versions précédentes ajoutaient la clé EN FIN de
+    # fichier, donc dans la dernière section — puis ne la voyaient pas à la
+    # racine et recommençaient à chaque mise à jour. On retire ces copies-là
+    # (exactement « clé = défaut », après le premier en-tête de section).
+    tmp="$(mktemp "${file}.XXXXXX")"
+    awk -v l="${key} = ${default}" '/^\[/ { s=1 } !(s && $0 == l)' "$file" > "$tmp" \
+        && cat "$tmp" > "$file"
+    rm -f "$tmp"
+    _toml_root_has_key "$file" "$key" && return 0
+    # À LA RACINE : avant le premier en-tête de section, jamais en fin de fichier.
+    tmp="$(mktemp "${file}.XXXXXX")"
+    awk -v l="${key} = ${default}" '!d && /^\[/ { print l; d=1 } { print } END { if (!d) print l }' \
+        "$file" > "$tmp" && cat "$tmp" > "$file"
+    rm -f "$tmp"
 }
 
 # Append a whole `[section]` block iff that section header is entirely
