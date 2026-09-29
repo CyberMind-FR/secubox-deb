@@ -1,3 +1,9 @@
+secubox-nextcloud (1.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * vhost : GET /login avec une session SecuBox part sur /sbx/entrer (compte ouvert sans formulaire, même en entrée directe) ; formulaire joignable par ?direct=1 et après déconnexion ; session refusée → formulaire, sans boucle (#1665).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 09:53:37 +0200
+
 secubox-nextcloud (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Entrée SANS MOT DE PASSE par la session SecuBox (#1562) : nginx

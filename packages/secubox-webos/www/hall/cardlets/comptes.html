@@ -8,8 +8,9 @@
   Les comptes de la PERSONNE SBX OS (courriel, Nextcloud, PeerTube, BBS),
   tels que l'Identity Manager les a liés à son user_uuid — lus sur
   /api/v1/sbxid/moi, de même origine. Des noms et des liens, jamais un secret.
-  Le BBS s'ouvre sans mot de passe (session du Hall) ; les autres demandent le
-  mot de passe de services, un seul pour tous.
+  Sans mot de passe (#1562, #1665) : courriel, Nextcloud, PeerTube et BBS
+  s'ouvrent avec la session du Hall, par leur entrée dédiée. Gitea n'a pas
+  encore d'entrée automatique : son identifiant est rappelé.
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -47,7 +48,7 @@
 <div class="mw">
   <div class="h"><span aria-hidden="true">🗝️</span><b>Mes comptes</b><span class="qui" id="qui"></span></div>
   <div class="liste" id="liste"><div class="vide">Lecture…</div></div>
-  <div class="pied">Un seul mot de passe pour vos services · <a href="/identite/" target="_top">Mon identité</a></div>
+  <div class="pied">Ouverts avec votre session du Hall · <a href="/identite/" target="_top">Mon identité</a></div>
 </div>
 <script src="../sonde.js"></script>
 <script>
@@ -60,11 +61,11 @@
   // Les services de la box : hôte dérivé de celui du Hall (hall.X → <svc>.X).
   var dom = location.hostname.replace(/^hall\./, '');
   var SVC = {
-    email:     {ic:'📧', nom:'Courriel',  hote:'webmail', aide:'mot de passe de services'},
-    nextcloud: {ic:'☁️', nom:'Nextcloud', hote:'nc',      aide:'mot de passe de services'},
-    peertube:  {ic:'📹', nom:'PeerTube',  hote:'peertube', chemin:'/login', aide:'mot de passe de services'},
-    bbs:       {ic:'💬', nom:'Forum BBS', hote:'bbs',     chemin:'/sbx/auto', passif:true},
-    gitea:     {ic:'🦊', nom:'Gitea',     hote:'git',     aide:'mot de passe de services'}
+    email:     {ic:'📧', nom:'Courriel',  hote:'webmail',  passif:true},
+    nextcloud: {ic:'☁️', nom:'Nextcloud', hote:'nc',       chemin:'/sbx/entrer', passif:true},
+    peertube:  {ic:'📹', nom:'PeerTube',  hote:'peertube', chemin:'/sbx/entrer', passif:true},
+    bbs:       {ic:'💬', nom:'Forum BBS', hote:'bbs',      chemin:'/sbx/auto', passif:true},
+    gitea:     {ic:'🦊', nom:'Gitea',     hote:'git',      aide:'connexion Gitea'}
   };
   function vide(html){ $('liste').innerHTML = '<div class="vide">' + html + '</div>'; }
   fetch('/api/v1/sbxid/moi', {credentials:'same-origin', headers:{Accept:'application/json'}})
