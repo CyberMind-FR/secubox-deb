@@ -243,6 +243,13 @@ def _verdict(steps: dict) -> bool:
             and bool(steps.get("vhost", {}).get("ok")))
 
 
+# LA LISTE « MES SITES » EST UN CACHE (#974), rafraîchi hors requête. Chaque
+# écriture doit le dire, comme le fait pilotage.py : sans cet appel, un site
+# publié par l'assistant restait absent de la liste (vécu : glyphstep, cache de
+# six jours, #1687). Remplacé par main au chargement ; ne fait rien en test.
+invalider_cache_sites = lambda: None  # noqa: E731
+
+
 @router.post("/publish/wizard")
 async def publish_wizard(
     name: str = Form(...),
@@ -264,6 +271,7 @@ async def publish_wizard(
         # L'état écrit suit le verdict, pas l'intention : un assistant qui a
         # échoué ne marque pas le site publié.
         steps["etat"] = marque_publie(site, ok)
+        invalider_cache_sites()
         return {"ok": ok, "domain": domain, "steps": steps}
 
     # FLUX NDJSON : une ligne par étape, la dernière portant le verdict. On
@@ -320,6 +328,7 @@ async def publish_wizard(
                              default=str) + "\n"
         await tache
         if rate:
+            invalider_cache_sites()          # le contenu a pu être écrit quand même
             # Le flux a déjà commencé : on ne peut plus changer le code HTTP.
             # On dit donc l'échec DANS le flux — sans quoi la page attendrait
             # une suite qui ne viendrait jamais.
@@ -327,6 +336,7 @@ async def publish_wizard(
             return
         ok = _verdict(steps)
         steps["etat"] = marque_publie(site, ok)
+        invalider_cache_sites()
         yield json.dumps({"type": "fin", "ok": ok, "domain": domain,
                           "steps": steps}, default=str) + "\n"
 
@@ -365,6 +375,7 @@ async def publish_route(req: RouteRequest, user=Depends(_ECRIRE)):
     writes /etc/nginx or /etc/haproxy itself (it runs unprivileged)."""
     route = await asyncio.to_thread(apply_route, req.domain, req.port)
     cert = await _cert_step(req.domain)
+    invalider_cache_sites()
     return {"ok": bool(route.get("route_ok")), "route": route, "cert": cert}
 
 
@@ -395,4 +406,5 @@ async def publish_import(file: UploadFile = File(...), user=Depends(_ECRIRE)):
         raise HTTPException(400, f"import failed: {e}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+    invalider_cache_sites()
     return JSONResponse({"ok": True, "manifest": manifest})
