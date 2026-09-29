@@ -494,6 +494,11 @@ cmd_webmail_sso() {
     # 3. Roundcube (conteneur webmail) : le greffon, sa configuration, l'activation.
     ( cd "$(dirname "$src")" && tar czf - secubox_sso ) | lxc_attach "$wc" sh -c \
         "cd /usr/share/roundcube/plugins && tar xzf - && chown -R root:root secubox_sso && chmod -R u=rwX,go=rX secubox_sso"
+    # Roundcube (Debian) charge ses greffons depuis /var/lib/roundcube/plugins,
+    # peuplé de LIENS vers /usr/share : sans le lien, « Failed to load plugin »
+    # et le webmail retombe sur l'identification (#1644).
+    lxc_attach "$wc" sh -c "[ -d /var/lib/roundcube/plugins ] && \
+        ln -sfn /usr/share/roundcube/plugins/secubox_sso /var/lib/roundcube/plugins/secubox_sso || true"
     lxc_attach "$wc" sh -c "umask 027; cat > /usr/share/roundcube/plugins/secubox_sso/config.inc.php && \
         chgrp www-data /usr/share/roundcube/plugins/secubox_sso/config.inc.php && \
         chmod 0640 /usr/share/roundcube/plugins/secubox_sso/config.inc.php" <<EOF
