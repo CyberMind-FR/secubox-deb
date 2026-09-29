@@ -1,0 +1,9 @@
+# SecuBox-Deb :: VoiceStudio (#1649) — moteur vocal « studio » du parc.
+# Image OFFICIELLE (le fork CyberMind-FR/VoiceStudio est identique à l'amont),
+# ÉPINGLÉE par empreinte : une mise à jour est un geste, pas une surprise.
+image    = "ghcr.io/debpalash/voicestudio:stable"
+empreinte = ""          # sha256:… posé par « voicestudioctl epingle »
+# Adresses de l'HÔTE où publier le port 3900 : LAN et maillage, jamais le WAN.
+# Vide = seulement 127.0.0.1.
+publier  = []          # « voicestudioctl publier 192.168.1.9 10.10.0.5 »
+memoire  = "4g"

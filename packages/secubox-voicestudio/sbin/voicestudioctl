@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: voicestudioctl — VoiceStudio sous podman (#1649).
+#   init       clé d'API (une fois) dans /etc/secubox/secrets/voicestudio/api_key
+#   epingle    retient l'empreinte de l'image actuellement tirée
+#   lance      (appelé par systemd) podman run, mémoire bornée, ports LAN/maillage
+#   etat       santé locale + voix disponibles
+#   publier IP… adresses LAN/maillage où publier le port 3900
+#   cle        affiche la clé (à poser dans voice.toml [distant] cle des autres box)
+set -euo pipefail
+readonly MODULE="voicestudio"
+CONF=/etc/secubox/voicestudio.toml
+CLE=/etc/secubox/secrets/voicestudio/api_key
+NOM=secubox-voicestudio
+
+val() { python3 -c "import tomllib,sys;d=tomllib.load(open('$CONF','rb'));v=d.get('$1','');print(' '.join(v) if isinstance(v,list) else v)"; }
+
+cmd_init() {
+  install -d -m 0700 "$(dirname "$CLE")"
+  [ -s "$CLE" ] || { python3 -c 'import secrets;print(secrets.token_urlsafe(32))' > "$CLE"; chmod 0600 "$CLE"; }
+  echo "$MODULE : clé prête ($CLE)"
+}
+
+cmd_epingle() {
+  local img d; img="$(val image)"
+  d="$(podman image inspect --format '{{.Digest}}' "$img")"
+  [ -n "$d" ] || { echo "$MODULE : image $img absente — podman pull $img" >&2; exit 1; }
+  python3 - "$CONF" "$d" <<'PY'
+import re,sys
+p,d=sys.argv[1],sys.argv[2]; t=open(p).read()
+t=re.sub(r'^empreinte\s*=.*$', f'empreinte = "{d}"', t, flags=re.M)
+open(p,'w').write(t)
+PY
+  echo "$MODULE : épinglé sur $d"
+}
+
+cmd_lance() {
+  [ -s "$CLE" ] || cmd_init
+  local img emp ports=() a
+  img="$(val image)"; emp="$(val empreinte)"
+  [ -n "$emp" ] && img="${img%%:*}@${emp}"
+  for a in $(val publier); do ports+=(-p "$a:3900:3900"); done
+  ports+=(-p "127.0.0.1:3900:3900")
+  podman rm -f "$NOM" >/dev/null 2>&1 || true
+  exec podman run --rm --name "$NOM" --memory "$(val memoire)" \
+    -e OMNIVOICE_API_KEY="$(cat "$CLE")" -e OMNIVOICE_BIND_HOST=0.0.0.0 \
+    -e OMNIVOICE_DATA_DIR=/app/omnivoice_data \
+    -v secubox-voicestudio-data:/app/omnivoice_data \
+    -v secubox-voicestudio-hf:/root/.cache/huggingface \
+    "${ports[@]}" "$img"
+}
+
+cmd_publier() {
+  # Adresses de l'hôte seulement : chaque valeur doit être une IPv4 locale.
+  local a
+  for a in "$@"; do
+    ip -4 -o addr show | grep -q " ${a}/" || { echo "$MODULE : $a n'est pas une adresse de cette box" >&2; exit 1; }
+  done
+  python3 - "$CONF" "$@" <<'PY'
+import re,sys
+p=sys.argv[1]; l=", ".join(f'"{a}"' for a in sys.argv[2:]); t=open(p).read()
+t=re.sub(r'^publier\s*=.*$', f'publier  = [{l}]', t, flags=re.M)
+open(p,'w').write(t)
+PY
+  echo "$MODULE : port 3900 publié sur : ${*:-127.0.0.1 seulement}"
+}
+
+# PARE-FEU (#1649). La chaîne forward de secubox_filter refuse tout sauf
+# l'établi : sans ces deux règles, le port publié est injoignable et le
+# conteneur ne peut pas télécharger ses modèles. On n'ouvre QUE le trafic que
+# podman a lui-même redirigé (ct status dnat, donc seulement les adresses
+# publiées) et la sortie du pont podman. Marquées, retirées à l'arrêt.
+MARQUE="secubox-voicestudio"
+cmd_parefeu_ferme() {
+  local h
+  for h in $(nft -a list chain inet secubox_filter forward 2>/dev/null | awk -v m="\"$MARQUE\"" '$0 ~ m {print $NF}'); do
+    nft delete rule inet secubox_filter forward handle "$h" 2>/dev/null || true
+  done
+}
+cmd_parefeu_ouvre() {
+  nft list chain inet secubox_filter forward >/dev/null 2>&1 || return 0
+  cmd_parefeu_ferme
+  nft add rule inet secubox_filter forward ip daddr 10.88.0.0/16 tcp dport 3900 ct status dnat accept comment "\"$MARQUE\""
+  nft add rule inet secubox_filter forward iifname "podman0" accept comment "\"$MARQUE\""
+}
+
+cmd_etat() {
+  curl -fsS -m 5 http://127.0.0.1:3900/health && echo
+  curl -fsS -m 10 http://127.0.0.1:3900/v1/audio/voices | head -c 400; echo
+}
+
+case "${1:-}" in
+  init) cmd_init ;; epingle) cmd_epingle ;; lance) cmd_lance ;; etat) cmd_etat ;;
+  publier) shift; cmd_publier "$@" ;;
+  parefeu-ouvre) cmd_parefeu_ouvre ;; parefeu-ferme) cmd_parefeu_ferme ;;
+  cle) cat "$CLE" ;;
+  *) echo "usage : $0 {init|epingle|lance|etat|cle}" >&2; exit 2 ;;
+esac

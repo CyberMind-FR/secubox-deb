@@ -1,0 +1,16 @@
+Source: secubox-voicestudio
+Section: sound
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-voicestudio
+Architecture: amd64
+Depends: ${misc:Depends}, podman, python3, curl
+Description: SecuBox — VoiceStudio, moteur vocal studio du parc (podman)
+ Fait tourner l'image officielle de VoiceStudio (AGPL-3.0, service séparé),
+ épinglée par empreinte, mémoire bornée, clé d'API obligatoire hors de la
+ machine, port 3900 publié sur le LAN et le maillage seulement. Les autres
+ box l'utilisent comme moteur distant de secubox-voice. amd64 seulement :
+ aucune image arm64 n'existe.

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    /usr/sbin/voicestudioctl init >/dev/null
+    systemctl daemon-reload || true
+    # Pas de démarrage automatique ici : le premier lancement tire une image de
+    # plusieurs Go et télécharge des modèles. « systemctl enable --now
+    # secubox-voicestudio » est un geste explicite de l'opérateur.
+fi
+#DEBHELPER#
+exit 0

@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+M := $(CURDIR)/debian/secubox-voicestudio
+override_dh_auto_install:
+	install -D -m 0755 sbin/voicestudioctl $(M)/usr/sbin/voicestudioctl
+	install -D -m 0644 conf/voicestudio.toml $(M)/etc/secubox/voicestudio.toml
+	install -D -m 0644 systemd/secubox-voicestudio.service $(M)/lib/systemd/system/secubox-voicestudio.service
