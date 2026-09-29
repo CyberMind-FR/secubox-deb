@@ -1,3 +1,9 @@
+secubox-webos (1.0.382-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : frame-src nomme aussi https://*.<domaine du Hall> (map sur $host) — sur hall.gk3, la CSP ne nommait que *.gk2 et refusait radio, podcaster, mood et les webui d'admin de gk3 (#1691).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:13:17 +0200
+
 secubox-webos (1.0.381-1~bookworm1) bookworm; urgency=medium
 
   * GET /api/v1/webos/public/noms : les noms que la box sert pour son domaine (server_name exacts et x.* ramenés au domaine), lus par le relais du maillage pour l'exposer par défaut (#1682).
