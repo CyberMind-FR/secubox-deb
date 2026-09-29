@@ -1,3 +1,10 @@
+secubox-webos (1.0.375-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : relais de vérification de session /api/v1/auth/auth/verify réservé au pont des conteneurs — le webmail (secubox_sso) retrouvait « personne » depuis le 404 des API non relayées (#1665).
+  * Mes comptes : courriel, Nextcloud et PeerTube ouverts par leur entrée sans mot de passe ; plus de « mot de passe de services » (#1665).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 09:53:37 +0200
+
 secubox-webos (1.0.374-1~bookworm1) bookworm; urgency=medium
 
   * Lecteur de service (radio) : 📡 diffuse le MORCEAU en cours au parc (résolu
