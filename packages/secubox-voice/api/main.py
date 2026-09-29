@@ -34,7 +34,10 @@ from fastapi import FastAPI, APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from secubox_core.auth import router as auth_router, require_jwt
+import asyncio
+import time
+
+from secubox_core.auth import router as auth_router, require_jwt, require_personne
 from secubox_core.logger import get_logger
 
 from .moteur import MoteurIndisponible, construire
@@ -118,8 +121,38 @@ async def liste_profils() -> JSONResponse:
     return JSONResponse({"defaut": _profils.defaut, "profils": _profils.liste()})
 
 
-@router.post("/tts", dependencies=[Depends(require_jwt)])
-async def tts(body: DireIn) -> Response:
+# LA VOIX EST OUVERTE AUX PERSONNES (#1615, décision de Gandalf) : dire et
+# écouter demandent une personne connectée (require_personne : jamais un
+# visiteur ni un appareil invité), avec un débit borné par personne. Le moteur
+# charge son modèle à chaque appel et le service n'a qu'un ouvrier : un seul
+# calcul à la fois, les autres attendent un peu puis reçoivent 429.
+# /moteur et /profils restent réservés à l'administration.
+_DEBIT: dict = {}
+_UN_A_LA_FOIS = asyncio.Semaphore(1)
+
+
+def _debit(qui: dict, geste: str, maxi: int) -> Optional[JSONResponse]:
+    cle, maint = (str(qui.get("sub")), geste), time.time()
+    t = [x for x in _DEBIT.get(cle, []) if maint - x < 60]
+    if len(t) >= maxi:
+        _DEBIT[cle] = t
+        return JSONResponse({"detail": "Trop de demandes vocales, réessayez dans une minute."}, status_code=429)
+    _DEBIT[cle] = t + [maint]
+    return None
+
+
+async def _tour():
+    try:
+        await asyncio.wait_for(_UN_A_LA_FOIS.acquire(), timeout=20)
+        return True
+    except asyncio.TimeoutError:
+        return False
+
+
+@router.post("/tts")
+async def tts(body: DireIn, qui: dict = Depends(require_personne)) -> Response:
+    if (r := _debit(qui, "tts", 20)):
+        return r
     texte = body.texte.strip()
     if not texte:
         return JSONResponse({"detail": "Texte vide."}, status_code=400)
@@ -131,12 +164,16 @@ async def tts(body: DireIn) -> Response:
             status_code=413)
 
     voix, avertissement = _profils.resoud(body.profil)
+    if not await _tour():
+        return JSONResponse({"detail": "La voix est occupée, réessayez."}, status_code=429)
     try:
         audio = await _moteur.dire(texte, voix, body.format)
     except MoteurIndisponible as e:
         # 503 et non 500 : ce n'est pas un bogue, c'est un moteur absent — et la
         # distinction compte pour qui lit les journaux.
         return JSONResponse({"detail": str(e)}, status_code=503)
+    finally:
+        _UN_A_LA_FOIS.release()
 
     entetes = {"X-Voix": voix}
     if avertissement:
@@ -149,9 +186,11 @@ async def tts(body: DireIn) -> Response:
     return Response(content=audio, media_type=mime, headers=entetes)
 
 
-@router.post("/asr", dependencies=[Depends(require_jwt)])
-async def asr(fichier: UploadFile = File(...),
-              langue: str = Form("fr")) -> JSONResponse:
+@router.post("/asr")
+async def asr(fichier: UploadFile = File(...), langue: str = Form("fr"),
+              qui: dict = Depends(require_personne)) -> JSONResponse:
+    if (r := _debit(qui, "asr", 12)):
+        return r
     maxi = int(_config.get("audio_max_mo", 10)) * 1024 * 1024
     audio = await fichier.read(maxi + 1)
     if len(audio) > maxi:
@@ -162,10 +201,14 @@ async def asr(fichier: UploadFile = File(...),
     if not audio:
         return JSONResponse({"detail": "Audio vide."}, status_code=400)
 
+    if not await _tour():
+        return JSONResponse({"detail": "La voix est occupée, réessayez."}, status_code=429)
     try:
         texte = await _moteur.transcrire(audio, fichier.filename or "audio.wav")
     except MoteurIndisponible as e:
         return JSONResponse({"detail": str(e)}, status_code=503)
+    finally:
+        _UN_A_LA_FOIS.release()
 
     # Une transcription vide est un RÉSULTAT, pas une erreur : l'utilisateur a
     # peut-être simplement relâché le bouton sans rien dire. On le dit tel quel.

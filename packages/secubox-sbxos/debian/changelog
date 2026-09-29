@@ -1,3 +1,10 @@
+secubox-sbxos (0.6.0~aurora10-1~bookworm1) bookworm; urgency=medium
+
+  * Voix de Lexie (#1615) : bouton micro dans la palette (personnes, Aurora
+    ouverte seule) → transcription → ZIA → réponse lue.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:10:34 +0200
+
 secubox-sbxos (0.6.0~aurora9-1~bookworm1) bookworm; urgency=medium
 
   * Palette : seules les actions DÉCLARÉES effet=media partent sans clic ; valeur

@@ -76,7 +76,7 @@ def construire(role: str, lan: bool, domaine: str,
         "version": 1, "role": role, "lan": lan, "domaine": domaine,
         "espaces": sortie_espaces,
         "ecrans": dict(e.get("ecrans") or {}),
-        "capacites": {"zigbee_commande": False, "voix": False, "diffuser": role != "guest"},
+        "capacites": {"zigbee_commande": False, "voix": role != "guest", "diffuser": role != "guest"},
     }
 
 

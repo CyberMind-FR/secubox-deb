@@ -82,3 +82,5 @@ a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px;
 .palette-pied { margin: 0; padding: 8px 16px; border-top: 1px solid var(--sbx-trait); color: var(--sbx-pale); font-size: 12px; display: flex; gap: 8px; }
 @media (max-width: 640px) { .recherche { max-width: none; } .recherche kbd { display: none; } }
 .palette-pied kbd { margin-left: 0; }
+.micro { background: none; border: 1px solid var(--sbx-trait); border-radius: 12px; padding: 4px; cursor: pointer; }
+.micro.ecoute { border-color: var(--sbx-alerte); box-shadow: 0 0 0 3px #f43f5e44; }
