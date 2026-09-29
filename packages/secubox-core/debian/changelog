@@ -1,3 +1,9 @@
+secubox-core (1.5.33-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-halls-parc (ajouter|retirer|liste) et map nginx $sbx_halls_parc : les Halls des nœuds relayés par cette box, autorisés à encadrer ses services ; origines https strictes, jamais de joker ; régénère HAProxy quand la liste change (#1672).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:37:04 +0200
+
 secubox-core (1.5.32-1~bookworm1) bookworm; urgency=high
 
   * Cadence des minuteries (#1650) : les 14 surcharges 10-cadence.conf

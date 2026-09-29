@@ -1,3 +1,9 @@
+secubox-radio (0.1.73-1~bookworm1) bookworm; urgency=medium
+
+  * frame-ancestors : les Halls des nœuds relayés par cette box (secubox-halls-parc) peuvent encadrer le lecteur (#1672).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:37:04 +0200
+
 secubox-radio (0.1.72-1~bookworm1) bookworm; urgency=medium
 
   * La piste courante (URL de sa source YouTube, titre) est annoncée au Hall ;

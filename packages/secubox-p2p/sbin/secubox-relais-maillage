@@ -148,6 +148,11 @@ cmd_relayer() {
     log "vérification : https://$nom/ → HTTP $code"
     case "$code" in 2??|3??|401|403) log "relais en place : $nom → $ip:$port" ;;
         *) meurt "la chaîne répond $code — voir journalctl -u secubox-waf-ng" ;; esac
+    # Le Hall d'un pair relayé peut encadrer les services d'ici (#1672) : ses
+    # cartes de repli sur ce relais s'affichent au lieu d'être refusées.
+    if [[ "$nom" == hall.* ]] && command -v secubox-halls-parc >/dev/null; then
+        secubox-halls-parc ajouter "https://$nom" >/dev/null && log "Halls du parc : https://$nom peut encadrer les services d'ici"
+    fi
 }
 
 cmd_retirer() {
@@ -159,6 +164,9 @@ cmd_retirer() {
         haproxyctl vhost remove "$cle" >/dev/null || true
     fi
     haproxyctl generate >/dev/null && haproxyctl reload >/dev/null || true
+    if [[ "$nom" == hall.* ]] && command -v secubox-halls-parc >/dev/null; then
+        secubox-halls-parc retirer "https://$nom" >/dev/null || true
+    fi
     log "relais retiré pour $nom (certificat conservé, DNS inchangé)"
 }
 

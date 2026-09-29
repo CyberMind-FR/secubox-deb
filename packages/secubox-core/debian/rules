@@ -47,6 +47,9 @@ override_dh_auto_install:
 	# échouait à nginx -t. Il vit donc dans le paquet toujours installé.
 	install -D -m 0644 ../../common/nginx/secubox-hosts-log.conf \
 	   debian/secubox-core/etc/nginx/conf.d/secubox-hosts-log.conf
+	# HALLS DU PARC (#1672) : $sbx_halls_parc, vide tant que la liste l'est.
+	install -D -m 0644 ../../common/nginx/secubox-halls-parc.conf \
+	   debian/secubox-core/etc/nginx/conf.d/secubox-halls-parc.conf
 
 	# Styled nginx error page (5xx) — served via error_page alias in secubox.conf
 	install -d debian/secubox-core/usr/share/secubox-core/www
@@ -124,6 +127,8 @@ override_dh_auto_install:
 	# UN SERVICE DECLARE SA PROPRE ROUTE (#1323). Livre ici parce que tous les
 	# modules dependent deja de secubox-core : sept postinst n'ont pas a
 	# reimplementer chacun la meme fusion JSON.
+	install -m 755 usr/sbin/secubox-halls-parc \
+	               debian/secubox-core/usr/sbin/secubox-halls-parc
 	install -m 755 usr/sbin/secubox-waf-route \
 	               debian/secubox-core/usr/sbin/secubox-waf-route
 	install -m 644 systemd/secubox-dirs-guard.service \

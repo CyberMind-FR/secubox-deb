@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-halls-parc — les Halls du parc autorisés à encadrer
+# les services de cette box (#1672).
+#
+#   ajouter <https://hall.x>   retirer <https://hall.x>   liste
+#
+# Une origine par ligne dans origines.txt, lue par radio, BBS et billets ; la
+# même liste rendue en map nginx ($sbx_halls_parc) pour les vhosts. Seules des
+# origines https://<nom> strictes : un espace, un `;` ou un guillemet couperait
+# une politique CSP en deux.
+set -euo pipefail
+readonly MODULE="halls-parc"
+DIR=/var/lib/secubox/halls-parc
+LISTE=$DIR/origines.txt
+MAP=$DIR/nginx.map
+
+meurt() { printf '[%s] ERREUR : %s\n' "$MODULE" "$*" >&2; exit 1; }
+valide() { [[ "$1" =~ ^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; }
+
+ecrire() {   # stdin : origines, une par ligne
+    install -d -m 0755 "$DIR"
+    local tmp; tmp="$(mktemp "$DIR/.origines.XXXXXX")"
+    sort -u | grep -E '^https://[a-z0-9.-]+$' > "$tmp" || true
+    chmod 0644 "$tmp"
+    local ancien=""; [ -f "$LISTE" ] && ancien="$(cat "$LISTE")"
+    mv "$tmp" "$LISTE"
+    local val; val="$(paste -sd' ' "$LISTE")"
+    local mtmp; mtmp="$(mktemp "$DIR/.map.XXXXXX")"
+    printf 'default "%s";\n' "$val" > "$mtmp"
+    chmod 0644 "$mtmp"; mv "$mtmp" "$MAP"
+    if command -v nginx >/dev/null; then
+        if nginx -t 2>/dev/null; then
+            systemctl reload nginx 2>/dev/null || true
+            # Les vhosts `cadrable` voient leur frame-ancestors réécrit par
+            # HAProxy : il relit la liste à la génération.
+            if command -v haproxyctl >/dev/null; then
+                haproxyctl generate >/dev/null 2>&1 && haproxyctl reload >/dev/null 2>&1 || true
+            fi
+        else
+            printf '%s\n' "$ancien" | grep -v '^$' > "$LISTE" || true
+            val="$(paste -sd' ' "$LISTE")"
+            printf 'default "%s";\n' "$val" > "$MAP"
+            meurt "nginx -t refuse la liste — restaurée"
+        fi
+    fi
+}
+
+liste() { [ -f "$LISTE" ] && cat "$LISTE" || true; }
+
+[ "$(id -u)" -eq 0 ] || [ "${1:-}" = liste ] || meurt "à lancer en root"
+case "${1:-}" in
+    ajouter) valide "${2:-}" || meurt "origine invalide : « ${2:-} » (attendu https://nom)"
+             { liste; printf '%s\n' "$2"; } | ecrire; liste ;;
+    retirer) valide "${2:-}" || meurt "origine invalide"
+             liste | grep -vxF "$2" | ecrire; liste ;;
+    liste)   liste ;;
+    *) sed -n '7,15p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
