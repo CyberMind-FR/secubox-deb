@@ -41,7 +41,7 @@ PY
 cmd_lance() {
   [ -s "$CLE" ] || cmd_init
   local img emp ports=() a
-  img="$(val image)"; emp="$(val empreinte)"
+  img="$(val image)"; emp="$(val empreinte)"; asr="$(val asr)"
   [ -n "$emp" ] && img="${img%%:*}@${emp}"
   for a in $(val publier); do ports+=(-p "$a:3900:3900"); done
   ports+=(-p "127.0.0.1:3900:3900")
@@ -49,6 +49,7 @@ cmd_lance() {
   exec podman run --rm --name "$NOM" --memory "$(val memoire)" \
     -e OMNIVOICE_API_KEY="$(cat "$CLE")" -e OMNIVOICE_BIND_HOST=0.0.0.0 \
     -e OMNIVOICE_DATA_DIR=/app/omnivoice_data \
+    -e ASR_MODEL_FASTER="${asr:-Systran/faster-whisper-base}" -e OMNIVOICE_ASR_BACKEND=faster-whisper \
     -v secubox-voicestudio-data:/app/omnivoice_data \
     -v secubox-voicestudio-hf:/root/.cache/huggingface \
     "${ports[@]}" "$img"

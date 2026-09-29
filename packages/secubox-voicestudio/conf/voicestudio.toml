@@ -7,3 +7,6 @@ empreinte = ""          # sha256:… posé par « voicestudioctl epingle »
 # Vide = seulement 127.0.0.1.
 publier  = []          # « voicestudioctl publier 192.168.1.9 10.10.0.5 »
 memoire  = "4g"
+# Modèle de reconnaissance (faster-whisper) : base = le meilleur compromis
+# vitesse/précision mesuré sur un Core i3 pour des commandes courtes (#1649).
+asr      = "Systran/faster-whisper-base"
