@@ -79,6 +79,88 @@ _toml_section() {
     ' "$2"
 }
 
+# LES CHAMPS DE TOUS LES VHOSTS, EN UNE LECTURE (#1685).
+#
+# `generate` extrayait chaque champ de chaque vhost par
+# `echo "$section" | grep | cut` : une vingtaine de sous-processus par vhost et
+# par boucle. Sur gk2 (119 vhosts, carte ARM), 27 a 33 s par generation — et
+# `vhost add` en fait une, d'ou ~45 s a l'etape « Service » d'une publication.
+#
+# Ici, UNE passe rend, pour chaque ligne `[vhosts.*]` et dans l'ordre du
+# fichier, les memes valeurs que l'ancienne extraction, bizarreries comprises :
+# nom = la ligne sans son premier « [vhosts. » ni son premier « ] » ; section =
+# l'algorithme de _toml_section (premiere table de ce nom, jusqu'a la prochaine
+# ligne qui commence par « [ ») ; valeur = `grep -E '^cle\s*=' | cut -d'"' -f2`
+# (plusieurs lignes jointes) ; booleen = « true »/« false » cherche dans les
+# lignes de la cle. Critere de la reecriture : haproxy.cfg identique a l'octet.
+#
+# Sortie : un enregistrement par vhost, termine par \x1e, champs separes par
+# \x1f — nom, domain, backend, enabled, waf_bypass, ssl, ssl_redirect,
+# cadrable, cookies_tiers.
+_vhosts_champs() {
+    python3 - "$1" <<'PYCHAMPS'
+import re, sys
+try:
+    brut = open(sys.argv[1], "rb").read().decode("utf-8", "surrogateescape")
+except OSError:
+    sys.exit(0)
+lignes = brut.split("\n")
+if brut.endswith("\n"):
+    lignes.pop()                       # awk ne voit pas d'enregistrement vide final
+ESP = " \t\n\r\x0b\x0c"
+
+def section(want):
+    out, dedans = [], False
+    for l in lignes:
+        ligne = l.rstrip(ESP)
+        if dedans and ligne.startswith("["):
+            break
+        if dedans:
+            out.append(l)
+        if ligne == want:
+            dedans = True
+    while out and out[-1] == "":       # $(...) retire les sauts de ligne finaux
+        out.pop()
+    return out
+
+def lignes_de(sec, cle):
+    r = re.compile("^" + cle + "[ \t\n\r\x0b\x0c]*=")
+    return [l for l in sec if r.search(l)]
+
+def valeur(sec, cle):
+    vals = []
+    for l in lignes_de(sec, cle):
+        morceaux = l.split('"')
+        vals.append(morceaux[1] if len(morceaux) > 1 else l)
+    return "\n".join(vals).rstrip("\n")
+
+def contient(sec, cle, mot):
+    return any(mot in l for l in lignes_de(sec, cle))
+
+sortie = []
+for l in lignes:
+    if not l.startswith("[vhosts."):
+        continue
+    # `while read -r line` rognait les blancs de tete et de fin (IFS par
+    # defaut) avant le sed : un « [vhosts.x]   » donnait bien le nom « x ».
+    nom = l.strip(" \t").replace("[vhosts.", "", 1).replace("]", "", 1)
+    sec = section("[vhosts." + nom + "]")
+    champs = [
+        nom,
+        valeur(sec, "domain"),
+        valeur(sec, "backend"),
+        "0" if contient(sec, "enabled", "false") else "1",
+        "1" if contient(sec, "waf_bypass", "true") else "0",
+        "1" if contient(sec, "ssl", "true") else "0",
+        "1" if contient(sec, "ssl_redirect", "true") else "0",
+        "1" if contient(sec, "cadrable", "true") else "0",
+        "1" if contient(sec, "cookies_tiers", "true") else "0",
+    ]
+    sortie.append("\x1f".join(champs) + "\x1e")
+sys.stdout.buffer.write("".join(sortie).encode("utf-8", "surrogateescape"))
+PYCHAMPS
+}
+
 # Fetch the strict-regex pattern from the secubox-haproxy API.
 # Fallback: read /etc/default/secubox directly if the API socket is unreachable.
 _fetch_webui_regex() {
@@ -960,24 +1042,17 @@ EOF
                 _admin_skip_domain="admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX:-secubox.in}"
             fi
         fi
-        grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
-            local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
-            local section=$(_toml_section "vhosts.$name" "$CONF_PATH")
-            local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
-            local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
-            local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
+        _vhosts_champs "$CONF_PATH" | while IFS=$'\x1f' read -r -d $'\x1e' name domain backend enabled waf_bypass ssl ssl_redirect cadrable cookies_tiers; do
+            # Champs lus en une passe par _vhosts_champs (#1685).
             # Opt-in, per-vhost WAF bypass. Sanctioned exception for services the
             # inspection chain breaks (large uploads / WebDAV / media streaming /
             # federation — nc, photoprism, matrix, torrent). Requires an explicit
             # `waf_bypass = true` AND a real `backend` (nginx_vhosts) in the vhost
             # block, so it is declarative and auditable — never a silent default.
-            local waf_bypass=$(echo "$section" | grep -E '^waf_bypass\s*=' | grep -q 'true' && echo "1" || echo "0")
             # #988 : ssl_redirect etait ecrit par `vhost add` dans chaque bloc et
             # n'etait LU nulle part — 18 vhosts le declaraient, zero redirection
             # etait produite. Un operateur relisant haproxy.toml croyait
             # legitimement que ses vhosts redirigeaient.
-            local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
-            local ssl_redirect=$(echo "$section" | grep -E '^ssl_redirect\s*=' | grep -q 'true' && echo "1" || echo "0")
             # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
             if [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ]; then continue; fi
 
@@ -1064,15 +1139,9 @@ EOF
                 _admin_skip_domain="admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX:-secubox.in}"
             fi
         fi
-        grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
-            local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
-            local section=$(_toml_section "vhosts.$name" "$CONF_PATH")
-            local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
-            local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
-            local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
-            local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
-            # Per-vhost WAF bypass (declarative, opt-in) — see the http-in loop.
-            local waf_bypass=$(echo "$section" | grep -E '^waf_bypass\s*=' | grep -q 'true' && echo "1" || echo "0")
+        _vhosts_champs "$CONF_PATH" | while IFS=$'\x1f' read -r -d $'\x1e' name domain backend enabled waf_bypass ssl ssl_redirect cadrable cookies_tiers; do
+            # Champs lus en une passe par _vhosts_champs (#1685), dont le
+            # WAF bypass par vhost — voir la boucle http-in.
             # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
             if [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ]; then continue; fi
 
@@ -1094,8 +1163,7 @@ EOF
             #
             # ON NOMME, ON N'OUVRE PAS. La liste est explicite : `frame-ancestors
             # *` accepterait n'importe quel site, ce qui est l'attaque meme que la
-            # directive existe pour empecher.
-            local cadrable=$(echo "$section" | grep -E '^cadrable\s*=' | grep -q 'true' && echo "1" || echo "0")
+            # directive existe pour empecher. (`cadrable` : lu par _vhosts_champs.)
 
             # if/then/fi (not `&& { }`) — set -e safe for non-SSL vhosts.
             if [ "$enabled" = "1" ] && [ "$ssl" = "1" ] && [ -n "$domain" ]; then
@@ -1149,8 +1217,7 @@ EOF
                 # chaque ecriture — la protection n'est donc pas levee, elle
                 # repose desormais sur ce seul jeton. D'ou l'opt-in SEPARE de
                 # `cadrable` : on peut encadrer un service sans toucher a ses
-                # cookies, et c'est le defaut.
-                local cookies_tiers=$(echo "$section" | grep -E '^cookies_tiers\s*=' | grep -q 'true' && echo "1" || echo "0")
+                # cookies, et c'est le defaut. (`cookies_tiers` : _vhosts_champs.)
                 if [ "$cookies_tiers" = "1" ]; then
                     # ON NE POSE QUE LA MARQUE (#1316). Les regles de reponse
                     # sont ecrites UNE fois, apres la boucle : les repeter par

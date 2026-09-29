@@ -1,3 +1,9 @@
+secubox-haproxy (1.8.18-1~bookworm1) bookworm; urgency=medium
+
+  * haproxyctl generate : champs de tous les vhosts lus en une passe (_vhosts_champs) au lieu d'une vingtaine de sous-processus par vhost — 35,9 s → 3,0 s sur gk2 (119 vhosts), d'où ~45 s de moins à l'étape Service d'une publication metablogizer. haproxy.cfg généré identique à l'octet (config réelle de gk2 et config piège : doublon, désactivé, bypass, cadrable, cookies tiers, préfixe, blancs, commentaires) (#1685).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 12:56:29 +0200
+
 secubox-haproxy (1.8.17-1~bookworm1) bookworm; urgency=medium
 
   * Vhosts `cadrable` : les Halls du parc (secubox-halls-parc) s'ajoutent aux frame-ancestors réécrits par HAProxy (#1672).
