@@ -1,0 +1,20 @@
+{
+  "_pourquoi": "Commandes vocales COURANTES (#1656) : grammaire fermée reconnue sur la box (Vosk) par /api/v1/voice/asr, et traduite en action par Aurora (sbx-sdk/voix/commandes.ts importe CE fichier). Une seule liste pour les deux.",
+  "media": {
+    "pause": {"action": "media.pause"},
+    "mets en pause": {"action": "media.pause"},
+    "mets la radio en pause": {"action": "media.pause"},
+    "stop": {"action": "media.stop"},
+    "arrête": {"action": "media.stop"},
+    "arrête la radio": {"action": "media.stop"},
+    "lecture": {"action": "media.toggle"},
+    "reprends": {"action": "media.toggle"},
+    "joue la radio": {"action": "media.toggle"},
+    "coupe le son": {"action": "media.mute", "v": true},
+    "silence": {"action": "media.mute", "v": true},
+    "remets le son": {"action": "media.mute", "v": false}
+  },
+  "ferme": ["ferme", "annule"],
+  "espaces": {"hall": "hall", "atelier": "atelier", "sécurité": "securite", "média": "media", "maison": "maison"},
+  "prefixes_espace": ["ouvre", "va dans"]
+}

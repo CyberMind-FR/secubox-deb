@@ -20,6 +20,10 @@ override_dh_auto_install:
 	install -m 0644 vendor/fr_FR-siwis-medium.onnx.json $(M)/usr/share/secubox/voice/voix/lexie-fr.onnx.json
 	install -m 0644 vendor/ggml-base-q5_1.bin $(M)/usr/share/secubox/voice/modeles/ggml-base-q5_1.bin
 	install -m 0644 vendor/ggml-tiny-q5_1.bin $(M)/usr/share/secubox/voice/modeles/ggml-tiny-q5_1.bin
+	# Vosk (commandes courantes, #1656) : la roue arm64 dépliée, le petit modèle français.
+	install -d $(M)/usr/lib/secubox/voice-moteur/python
+	cd $(M)/usr/lib/secubox/voice-moteur/python && python3 -m zipfile -e $(CURDIR)/vendor/vosk-0.3.45-py3-none-manylinux2014_aarch64.whl . && rm -rf vosk-0.3.45.dist-info
+	cd $(M)/usr/share/secubox/voice/modeles && python3 -m zipfile -e $(CURDIR)/vendor/vosk-model-small-fr-0.22.zip . && mv vosk-model-small-fr-0.22 vosk-fr
 	install -m 0644 vendor/MODEL_CARD $(M)/usr/share/doc/secubox-voice-moteur/MODEL_CARD-lexie-fr
 
 override_dh_strip:

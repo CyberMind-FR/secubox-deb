@@ -1,3 +1,11 @@
+secubox-voice-moteur (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Commandes courantes (#1656) : Vosk 0.3.45 (arm64) et le petit modèle
+    français (Apache-2.0) ; secubox-voice reconnaît les commandes d'une
+    grammaire fermée en ~0,7 s avant toute transcription complète.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:39:40 +0200
+
 secubox-voice-moteur (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Ajoute le modèle whisper ggml-tiny-q5_1 (31 Mo), à côté de base (#1646).

@@ -7,7 +7,8 @@ Standards-Version: 4.6.2
 
 Package: secubox-voice-moteur
 Architecture: arm64
-Depends: ${misc:Depends}, libc6 (>= 2.34), libstdc++6, libgomp1, ffmpeg
+Depends: ${misc:Depends}, libc6 (>= 2.34), libstdc++6, libgomp1, ffmpeg,
+         python3-cffi, python3-requests, python3-srt, python3-tqdm, python3-websockets
 Recommends: secubox-voice (>= 0.1.4)
 Conflicts: piper
 Description: SecuBox — moteur vocal local de Lexie (piper + whisper.cpp)

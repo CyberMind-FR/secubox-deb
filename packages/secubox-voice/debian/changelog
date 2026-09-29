@@ -1,3 +1,10 @@
+secubox-voice (0.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * /asr reconnaît d'abord les commandes courantes (grammaire fermée, Vosk,
+    ~0,7 s) avant la transcription complète ; liste partagée commandes.json (#1656).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:40:39 +0200
+
 secubox-voice (0.1.6-1~bookworm1) bookworm; urgency=medium
 
   * Moteur « mixte » (#1649) : synthèse locale (piper), reconnaissance au

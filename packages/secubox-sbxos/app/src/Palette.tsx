@@ -11,6 +11,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { demandeZia, sansClic, urlSure, transcrit, dit, type ReponseZia, type ActionZia } from '@sbx/data';
 import { SbxIcon } from '@sbx/icons';
+import { comprend, type Commande } from '@sbx/voix/commandes';
+import { ecoute as ecouteMicro, arreteEcoute } from '@sbx/voix/ecoute';
 import { sbxExecuteAction } from '@sbx/hote';
 import lexie from '@sbx/art/characters/art/lexie.webp';
 
@@ -37,7 +39,8 @@ export function Palette({ espaces, aller, domaine, ferme, voix = false }:
   const [fait, setFait] = useState<string[]>([]);
   const champ = useRef<HTMLInputElement>(null);
   const [ecoute, setEcoute] = useState(false);
-  const enreg = useRef<MediaRecorder | null>(null);
+  const [etatVoix, setEtatVoix] = useState<string | null>(null);
+  const [niveau, setNiveau] = useState(0);
   const parleVoix = useRef(false);
 
   useEffect(() => {
@@ -54,22 +57,30 @@ export function Palette({ espaces, aller, domaine, ferme, voix = false }:
     setFait(f => [...f, `${a.service} · ${a.action} : ${ok ? 'fait' : 'service non ouvert ici'}`]);
   }
 
+  function executeCommande(c: Commande) {
+    if (c.kind === 'espace') { aller(c.id); ferme(); return; }
+    if (c.kind === 'ferme') { ferme(); return; }
+    const ok = sbxExecuteAction({ kind: 'sbx-action', service: 'radio', action: c.action, v: c.v });
+    setRep({ text: ok ? `Compris : « ${c.dit} ».` : `Compris : « ${c.dit} » — ouvrez l’Espace Média pour piloter la radio.`, objects: [], actions: [] });
+  }
+
   async function micro() {
-    if (ecoute) { enreg.current?.stop(); return; }
+    if (ecoute) { arreteEcoute(); return; }
     let flux: MediaStream;
     try { flux = await navigator.mediaDevices.getUserMedia({ audio: true }); }
     catch { setRep({ text: 'Micro refusé ou absent.', objects: [], actions: [] }); return; }
-    const morceaux: Blob[] = [];
-    const r = new MediaRecorder(flux);
-    r.ondataavailable = e => morceaux.push(e.data);
-    r.onstop = async () => {
-      flux.getTracks().forEach(t => t.stop()); setEcoute(false);
-      const texte = await transcrit(new Blob(morceaux, { type: r.mimeType }));
-      if (!texte) { setRep({ text: 'Je n’ai rien entendu.', objects: [], actions: [] }); return; }
-      setQ(texte); parleVoix.current = true; await demande(texte);
-    };
-    enreg.current = r; r.start(); setEcoute(true);
-    setTimeout(() => { if (r.state === 'recording') r.stop(); }, 8000);   // une commande dure quelques secondes
+    setEcoute(true); setRep(null); setFait([]); setEtatVoix('Lexie écoute…');
+    const audio = await ecouteMicro(flux, setNiveau);
+    setEcoute(false); setNiveau(0);
+    setEtatVoix('Je transcris…');
+    const texte = await transcrit(audio);
+    if (!texte) { setEtatVoix(null); setRep({ text: 'Je n’ai rien entendu.', objects: [], actions: [] }); return; }
+    setQ(texte);
+    // Commande courante (reconnue sur la box par grammaire) : exécutée tout de
+    // suite, sans repasser par ZIA.
+    const c2 = comprend(texte);
+    if (c2) { setEtatVoix(null); executeCommande(c2); return; }
+    parleVoix.current = true; setEtatVoix('Je réfléchis…'); await demande(texte); setEtatVoix(null);
   }
 
   async function envoie(ev: React.FormEvent) {
@@ -100,11 +111,13 @@ export function Palette({ espaces, aller, domaine, ferme, voix = false }:
           <input ref={champ} value={q} onChange={e => setQ(e.target.value)} maxLength={500}
                  placeholder="Demandez à Lexie : « mets la radio en pause », « ouvre atelier »…" aria-label="Demande à Lexie" />
           {voix && <button type="button" className={ecoute ? 'micro ecoute' : 'micro'} onClick={micro}
+                           style={{ ['--niveau' as string]: String(niveau) }}
                            aria-pressed={ecoute} aria-label={ecoute ? 'Arrêter l’écoute' : 'Parler à Lexie'}>
             <SbxIcon id="micro" taille={28} label="" /></button>}
         </form>
         <div className="palette-rep" aria-live="polite">
-          {attente && <p className="zia-texte">Lexie réfléchit…</p>}
+          {etatVoix && <p className="zia-texte etat-voix">{etatVoix}</p>}
+          {attente && !etatVoix && <p className="zia-texte">Lexie réfléchit…</p>}
           {rep && <Texte t={rep.text} />}
           {rep?.actions.filter(a => !sansClic(a)).map((a, i) =>
             <button key={i} type="button" className="zia-action" onClick={() => execute(a)}>

@@ -21,6 +21,7 @@ export default defineConfig({
       '@sbx/data': ici('../sbx-sdk/data/index.ts'),
       '@sbx/protocol': ici('../sbx-sdk/protocol/enfant.ts'),
       '@sbx/hote': ici('../sbx-sdk/protocol/hote.ts'),
+      '@sbx/voix': ici('../sbx-sdk/voix'),
       '@sbx/ui': ici('../sbx-sdk/ui'),
       '@sbx/art': ici('../sbx-sdk'),
     },

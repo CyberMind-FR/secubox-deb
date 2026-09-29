@@ -8,5 +8,7 @@
 # lockfile, configs, sdk, app, outils. Même entrée → même empreinte.
 set -euo pipefail
 cd "${1:?usage : empreinte-front.sh <paquet>}"
-find package.json package-lock.json .nvmrc app sbx-sdk outils -type f -print0 \
+# + les fichiers d'autres paquets qu'Aurora importe au build (#1656).
+find package.json package-lock.json .nvmrc app sbx-sdk outils \
+     ../secubox-voice/conf/commandes.json ../secubox-radio/capabilities.d/radio.json -type f -print0 \
   | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1

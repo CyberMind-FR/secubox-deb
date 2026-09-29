@@ -1,3 +1,20 @@
+secubox-sbxos (0.6.0~aurora14-1~bookworm1) bookworm; urgency=medium
+
+  * Voix réactive (#1656) : coupure 1 s après la parole, états visibles,
+    commandes courantes exécutées sans ZIA ; reconnaissance sur la box (Vosk
+    dans le navigateur écarté : il exige 'unsafe-eval').
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:40:39 +0200
+
+secubox-sbxos (0.6.0~aurora13-1~bookworm1) bookworm; urgency=medium
+
+  * Voix réactive (#1656) : coupure 1 s après la fin de la parole, états
+    visibles (écoute, transcription, réflexion), commandes courantes reconnues
+    dans le navigateur par Vosk et exécutées sans transcription ; micro offert
+    aux visiteurs pour ces commandes locales.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:33:19 +0200
+
 secubox-sbxos (0.6.0~aurora12-1~bookworm1) bookworm; urgency=medium
 
   * Voix de Lexie : la réponse est demandée en WAV (le moteur local ne produit

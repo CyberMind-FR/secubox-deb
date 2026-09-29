@@ -41,6 +41,7 @@ from secubox_core.auth import router as auth_router, require_jwt, require_person
 from secubox_core.logger import get_logger
 
 from .moteur import MoteurIndisponible, construire
+from . import commandes
 from .profils import Profils
 
 log = get_logger("voice")
@@ -200,6 +201,11 @@ async def asr(fichier: UploadFile = File(...), langue: str = Form("fr"),
             status_code=413)
     if not audio:
         return JSONResponse({"detail": "Audio vide."}, status_code=400)
+
+    # COMMANDE COURANTE D'ABORD (#1656) : grammaire fermée sur la box, ~0,7 s.
+    cmd = await asyncio.to_thread(commandes.reconnait, audio)
+    if cmd:
+        return JSONResponse({"texte": cmd, "vide": False, "langue": langue, "commande": True})
 
     if not await _tour():
         return JSONResponse({"detail": "La voix est occupée, réessayez."}, status_code=429)
