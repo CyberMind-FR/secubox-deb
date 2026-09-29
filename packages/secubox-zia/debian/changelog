@@ -1,3 +1,12 @@
+secubox-zia (0.1.20-1~bookworm1) bookworm; urgency=medium
+
+  * Saisie vocale (#1658) : bouton micro dans la page plein écran et la carte
+    (même /api/v1/voice/asr que Lexie : commandes ~1 s, sinon whisper), lecture
+    des réponses (🔊, Web Audio). /zia/ encadrable par le Hall (frame-ancestors
+    'self'), micro limité à la même origine.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:54:03 +0200
+
 secubox-zia (0.1.19-1~bookworm1) bookworm; urgency=medium
 
   * Capacités (#1615) : classe d'effet et rôle minimal déclarés (fermés par

@@ -59,6 +59,8 @@
   .sugg button{font:inherit;font-size:.66rem;color:var(--teal-ink);background:none;border:1px solid var(--line);border-radius:999px;padding:3px 9px;cursor:pointer}
   .sugg button:hover{border-color:var(--teal)}
   form.in{display:flex;align-items:center;gap:7px;padding:9px 11px;border-top:1px solid var(--line-soft);background:var(--surf2)}
+  form.in .zia-micro,form.in .zia-haut{background:var(--fond)!important;color:var(--texte)!important;border:1px solid var(--line)!important}
+  form.in .zia-micro.ecoute{border-color:#f43f5e!important}
   form.in input{flex:1;min-width:0;border:1px solid var(--line);border-radius:11px;padding:8px 12px;background:var(--fond);color:var(--texte);font:inherit;font-size:.85rem}
   form.in input:focus{outline:none;border-color:var(--teal)}
   form.in button{width:34px;height:34px;border-radius:10px;background:var(--teal);color:#04252a;border:0;font-size:1rem;cursor:pointer;flex:0 0 auto}
@@ -76,6 +78,7 @@
   <div class="foot">🦊 100 % local · le <b>bus</b> reste la source de vérité</div>
 </div>
 
+<script src="voix.js"></script>
 <script>
 (function(){
   "use strict";
@@ -141,7 +144,7 @@
       .then(function(res){
         pending.remove();
         if(!res){ addZia('Service ZIA injoignable.'); return; }
-        addTrace(res.trace); render(res);
+        addTrace(res.trace); render(res); if(window.ZIAVoix) ZIAVoix.dit(res.text);
       }).catch(function(){ pending.remove(); addZia('Oups, réseau.'); });
   }
 
@@ -155,6 +158,12 @@
 
   el('form').addEventListener('submit', function(e){ e.preventDefault(); envoie(el('q').value); el('q').value=''; });
 
+  // SAISIE VOCALE (#1658) : même chemin que Lexie ; le texte part comme un message tapé.
+  var noteVoix=null;
+  if(window.ZIAVoix) ZIAVoix.init(document.getElementById('form'), function(t){ envoie(t); }, function(m){
+    if(noteVoix){ noteVoix.remove(); noteVoix=null; }
+    if(m){ noteVoix=addZia('<span style="opacity:.7">'+m.replace(/[&<>"]/g,function(x){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x];})+'</span>'); }
+  });
   var SUG=['la dernière vidéo sur le WAF','les podcasts','les sujets récents','aide'];
   el('sugg').innerHTML=SUG.map(function(s){ return '<button type="button">'+esc(s)+'</button>'; }).join('');
   el('sugg').addEventListener('click', function(e){ var b=e.target.closest('button'); if(b){ envoie(b.textContent); el('sugg').style.display='none'; } });

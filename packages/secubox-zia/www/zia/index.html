@@ -59,6 +59,8 @@
   .sugg button{font:inherit;font-size:.76rem;color:var(--teal-ink);background:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer}
   .sugg button:hover{border-color:var(--teal)}
   form.in{display:flex;align-items:center;gap:9px;padding:12px 14px;border-top:1px solid var(--line-soft);background:var(--surf2)}
+  form.in .zia-micro,form.in .zia-haut{background:var(--fond)!important;color:var(--texte)!important;border:1px solid var(--line)!important}
+  form.in .zia-micro.ecoute{border-color:#f43f5e!important}
   form.in input{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--fond);color:var(--texte);font:inherit;font-size:.92rem}
   form.in input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 18%,transparent)}
   form.in button{width:42px;height:42px;border-radius:12px;background:var(--teal);color:#04252a;border:0;font-size:1.15rem;cursor:pointer;flex:0 0 auto}
@@ -75,7 +77,8 @@
     <span class="live"><span class="dot"></span><span id="eng">local</span></span>
     <a id="adm" href="admin.html" title="Réglages ZIA" style="display:none;margin-left:8px;color:inherit;opacity:.5;text-decoration:none;font-size:.95em">⚙</a>
   </div>
-  <script>/* Roue de réglages : accès direct seulement (jamais dans le Hall embarqué). */
+  <script src="voix.js"></script>
+<script>/* Roue de réglages : accès direct seulement (jamais dans le Hall embarqué). */
   try{ if(window.top===window.self){ var _a=document.getElementById('adm'); if(_a) _a.style.display='inline'; } }catch(e){}</script>
   <div class="panel">
     <div class="stream" id="stream"></div>
@@ -123,13 +126,19 @@
   function envoie(m){ m=(m||'').trim(); if(!m) return; addMe(m);
     var p=addZia('<span style="opacity:.6">…</span>');
     fetch(API+'/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:m})})
-      .then(function(r){return r.ok?r.json():null;}).then(function(res){ p.remove(); if(!res){addZia('Service ZIA injoignable.');return;} addTrace(res.trace); render(res); })
+      .then(function(r){return r.ok?r.json():null;}).then(function(res){ p.remove(); if(!res){addZia('Service ZIA injoignable.');return;} addTrace(res.trace); render(res); if(window.ZIAVoix) ZIAVoix.dit(res.text); })
       .catch(function(){ p.remove(); addZia('Oups, réseau.'); }); }
   stream.addEventListener('click', function(e){ var b=e.target.closest('[data-act]'); if(!b) return;
     ouvreObjet(b.getAttribute('data-svc'), b.getAttribute('data-type'), b.getAttribute('data-url'), b.getAttribute('data-title'));
     var old=b.textContent; b.textContent='✓'; setTimeout(function(){ b.textContent=old; }, 700); });
   el('form').addEventListener('submit', function(e){ e.preventDefault(); envoie(el('q').value); el('q').value=''; });
-  var SUG=['la dernière vidéo sur le WAF','les podcasts','les sujets récents','que sais-tu faire ?'];
+
+  // SAISIE VOCALE (#1658) : même chemin que Lexie ; le texte part comme un message tapé.
+  var noteVoix=null;
+  if(window.ZIAVoix) ZIAVoix.init(document.getElementById('form'), function(t){ envoie(t); }, function(m){
+    if(noteVoix){ noteVoix.remove(); noteVoix=null; }
+    if(m){ noteVoix=addZia('<span style="opacity:.7">'+m.replace(/[&<>"]/g,function(x){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x];})+'</span>'); }
+  });  var SUG=['la dernière vidéo sur le WAF','les podcasts','les sujets récents','que sais-tu faire ?'];
   el('sugg').innerHTML=SUG.map(function(s){return '<button type="button">'+esc(s)+'</button>';}).join('');
   el('sugg').addEventListener('click', function(e){ var b=e.target.closest('button'); if(b){ envoie(b.textContent); } });
   fetch(API+'/health',{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).then(function(h){
