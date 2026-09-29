@@ -26,7 +26,7 @@ export default defineConfig({
     },
   },
   server: { fs: { allow: [ici('../..')] } },
-  test: { include: ['sbx-sdk/**/tests/*.test.ts'], root: ici('..') },
+  test: { include: ['sbx-sdk/**/tests/*.test.{ts,tsx}'], root: ici('..') },
   build: {
     outDir: ici('../dist'),
     emptyOutDir: true,
