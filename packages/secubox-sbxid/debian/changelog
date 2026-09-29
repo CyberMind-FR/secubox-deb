@@ -1,3 +1,11 @@
+secubox-sbxid (0.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * Accès (#1642) : un appareil accepté dont la session a expiré la rouvre en
+    prouvant de nouveau sa clé, sans mot de passe ni OTP (une fois par
+    chargement). Avant, seule la première ouverture était possible.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:17:41 +0200
+
 secubox-sbxid (0.4.4-1~bookworm1) bookworm; urgency=medium
 
   * Sans mot de passe pour la personne : l'Identity Manager pose le secret de
