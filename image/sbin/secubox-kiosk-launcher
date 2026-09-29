@@ -421,9 +421,23 @@ determine_url() {
     done
 
     url="${url:-https://localhost/}"
-    # Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522).
-    if [ -x /usr/sbin/premier-pas-url ]; then
-        url="${url%/}/$(/usr/sbin/premier-pas-url 2>/dev/null)"
+    # Box neuve : l'assistant Premier Pas plutôt que le Hall (#1522). Il est
+    # servi par le serveur par défaut : on garde l'adresse trouvée ci-dessus.
+    local pp=""
+    [ -x /usr/sbin/premier-pas-url ] && pp="$(/usr/sbin/premier-pas-url 2>/dev/null)"
+    if [ -n "$pp" ]; then
+        echo "${url%/}/$pp"
+        return
+    fi
+    # Box configurée : LE HALL PAR SON PROPRE VHOST (#1668). Par localhost, le
+    # serveur par défaut renvoie vers /hall/, copie montée dans la console où
+    # les chemins absolus des cartes tombent sur l'administration. Chromium
+    # résout *.localhost en boucle locale (contexte sûr) ; on ne le retient que
+    # si c'est bien le Hall qui répond.
+    local hall="http://hall.localhost:9080/"
+    if curl -s --connect-timeout 2 --max-time 5 --resolve hall.localhost:9080:127.0.0.1 "$hall" 2>/dev/null \
+         | grep -q 'id="featgrid"'; then
+        url="$hall"
     fi
     echo "$url"
 }

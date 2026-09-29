@@ -1,3 +1,9 @@
+secubox-premier-pas (0.4.8-1~bookworm1) bookworm; urgency=medium
+
+  * Lanceur du kiosque : ouvre le Hall par http://hall.localhost:9080/ (son propre vhost) quand il y répond ; l'assistant Premier Pas garde l'adresse du serveur par défaut (#1668).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:17:04 +0200
+
 secubox-premier-pas (0.4.7-1~bookworm1) bookworm; urgency=medium
 
   * Renommer relance Avahi : il gardait le nom de son démarrage — gk3

@@ -25,6 +25,8 @@
 
   var h = location.hostname.toLowerCase();
   var base = h.indexOf('hall.') === 0 ? h.slice(5) : null;
+  // hall.localhost = le kiosque de la box (#1668) : MÊME ORIGINE, comme localhost.
+  if (base === 'localhost') base = null;
   var session = base ? (ALIAS[base] || base) : null;
 
   function hote(s) {

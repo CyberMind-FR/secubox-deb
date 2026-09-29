@@ -1,3 +1,9 @@
+secubox-webos (1.0.377-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : le vhost répond aussi à hall.localhost, l'entrée du kiosque ; domaine.js le traite en même origine. Par localhost/hall/, les chemins absolus des cartes tombaient sur la console d'administration (#1668).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:17:04 +0200
+
 secubox-webos (1.0.376-1~bookworm1) bookworm; urgency=medium
 
   * Aide des cartes : source unique api/aide_cartes.json (rôle réel, usage, métriques déclarées) pour les 33 cartes ; GET /public/aide/cartes, /public/aide/cartes/{id} (chiffres vivants lus en visiteur, cache 30 s) et /public/aide/trouver (pour ZIA/Lexie) (#1664).
