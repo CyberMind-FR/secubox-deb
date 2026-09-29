@@ -15,3 +15,10 @@ export function renduInitial(): Rendu {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || nav.connection?.saveData) return 'leger';
   return 'complet';
 }
+
+/** États d'une carte SBXOS (#1678) — un jeton `--sbx-etat-*` par état visible. */
+export const ETATS_CARTE = ['vivant', 'direct', 'veille', 'horsligne', 'verrou', 'selection', 'favori'] as const;
+export type EtatCarte = (typeof ETATS_CARTE)[number];
+
+/** La couleur d'un état, à poser en style : `var(--sbx-etat-vivant)`. */
+export const couleurEtat = (e: EtatCarte): string => `var(--sbx-etat-${e})`;
