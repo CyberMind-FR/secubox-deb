@@ -1,3 +1,11 @@
+secubox-voice (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Transcription (#1646) : l'audio du navigateur (webm/opus) est converti en
+    wav 16 kHz mono par ffmpeg avant whisper.cpp ; whisper sur tous les cœurs.
+  * Recommends secubox-voice-moteur (moteur local).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:36:58 +0200
+
 secubox-voice (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * Voix ouverte aux personnes connectées (#1615, décision de Gandalf) :
