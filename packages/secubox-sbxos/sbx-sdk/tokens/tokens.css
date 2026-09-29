@@ -17,5 +17,67 @@
   --sbx-police: Inter, system-ui, sans-serif;
   --sbx-titre: Orbitron, Inter, sans-serif;
   --sbx-code: "JetBrains Mono", ui-monospace, monospace;
+
+  /* ── Design system SBXOS (#1678) — rôles déduits des captures du Hall ──────
+     (docs/sbxos/HALL-SBXOS-AUDIT.md §C). Additifs : les jetons ci-dessus ne
+     changent pas. Un composant lit un RÔLE, jamais une couleur en dur. */
+
+  /* Couleurs lisibles EN TEXTE sur fond, surface et relief (AA, testé) : les
+     teintes vives ci-dessus restent pour les aplats, puces et halos. */
+  --sbx-alerte-texte: #FB7185;
+  --sbx-violet-texte: #C084FC;
+  --sbx-bleu: #60A5FA;            /* bouton primaire (« Suivant ») */
+  --sbx-or: #FACC15;              /* étoile de favori */
+
+  /* États de carte : une couleur par état, partout la même. */
+  --sbx-etat-vivant: var(--sbx-vert);       /* DIRECT, en ligne, tranche active */
+  --sbx-etat-direct: var(--sbx-alerte);     /* LIVE (flux temps réel) */
+  --sbx-etat-veille: var(--sbx-doux);       /* module endormi, se réveille */
+  --sbx-etat-horsligne: var(--sbx-alerte);  /* injoignable */
+  --sbx-etat-verrou: var(--sbx-ambre);      /* session ou réseau local requis */
+  --sbx-etat-selection: var(--sbx-cyan);    /* carte inspectée / aide ouverte */
+  --sbx-etat-favori: var(--sbx-or);
+
+  /* Traits et reliefs. */
+  --sbx-trait-fin: 1px solid var(--sbx-trait);
+  --sbx-halo-selection: 0 0 0 1px var(--sbx-cyan), 0 0 0 4px rgb(56 189 248 / 0.22);
+  --sbx-halo-focus: 0 0 0 2px var(--sbx-fond), 0 0 0 4px var(--sbx-cyan);
+  --sbx-ombre: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 10px 28px -12px rgb(0 0 0 / 0.55);
+  /* Filet sous le titre d'une carte ; une carte peut le teinter à sa couleur. */
+  --sbx-filet: linear-gradient(90deg, var(--sbx-violet), var(--sbx-cyan) 55%, transparent);
+  --sbx-filet-epaisseur: 2px;
+
+  /* Typographie : compacte et technique. */
+  --sbx-t-xs: 0.6875rem;   /* 11 px — métadonnées, pastilles */
+  --sbx-t-s: 0.78125rem;   /* 12,5 px — listes denses */
+  --sbx-t-m: 0.875rem;     /* 14 px — texte courant */
+  --sbx-t-l: 1rem;         /* 16 px — titre de carte */
+  --sbx-t-xl: 1.375rem;    /* 22 px — chiffre clé */
+  --sbx-capitales: 0.12em; /* espacement des libellés en petites capitales */
+  --sbx-interligne: 1.4;
+
+  /* Espacements (échelle 4 px), rayons, icônes. */
+  --sbx-e-1: 4px;
+  --sbx-e-2: 8px;
+  --sbx-e-3: 12px;
+  --sbx-e-4: 16px;
+  --sbx-e-5: 24px;
+  --sbx-rayon-s: 8px;
+  --sbx-rayon-pastille: 999px;
+  --sbx-icone-s: 20px;
+  --sbx-icone-m: 28px;
+  --sbx-icone-l: 48px;
+
+  /* Grille du Hall : une carte occupe des multiples de ces unités (phase 4). */
+  --sbx-grille-colonne: 280px;
+  --sbx-grille-rangee: 116px;
+  --sbx-grille-ecart: 16px;
+  --sbx-carte-tete: 40px;
+  --sbx-carte-pied: 28px;
+
+  /* Mouvement : court, jamais permanent. */
+  --sbx-duree-courte: 150ms;
+  --sbx-courbe: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-:root[data-rendu="leger"] { --sbx-duree: 0ms; }
+:root[data-rendu="leger"] { --sbx-duree: 0ms; --sbx-duree-courte: 0ms; }
+@media (prefers-reduced-motion: reduce) { :root { --sbx-duree-courte: 0ms; } }
