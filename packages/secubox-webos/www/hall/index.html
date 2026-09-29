@@ -802,7 +802,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .carte-bulle li::before{content:"›";position:absolute;left:-14px;color:var(--cyan);font-weight:700}
 .carte-bulle li b{color:var(--ink)}
 .carte-bulle .cb-nav{display:flex;align-items:center;gap:9px;margin-top:12px}
-.carte-bulle .cb-dots{display:flex;gap:5px;margin-right:auto;flex-wrap:wrap;max-width:60%}
+.carte-bulle .cb-dots{display:flex;gap:5px;margin-right:auto;flex-wrap:wrap;max-width:60%;align-items:center}
+.carte-bulle .cb-cpt{font:600 .7rem/1 "JetBrains Mono",monospace;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.carte-bulle .cb-barre{flex:1;min-width:48px;height:3px;border-radius:2px;background:var(--line-2);overflow:hidden}
+.carte-bulle .cb-barre i{display:block;height:100%;background:var(--sky)}
 .carte-bulle .cb-dot{width:6px;height:6px;border-radius:50%;background:var(--line-2)}
 .carte-bulle .cb-dot.on{background:var(--sky);width:15px;border-radius:4px}
 .carte-bulle .cb-x{border:1px solid var(--line-2);background:none;color:var(--dim);border-radius:8px;padding:6px 12px;font-size:.78rem;cursor:pointer}
@@ -4934,17 +4937,21 @@ const CARDLET_ICONES = {
     // AIDE DES CARTES — SOURCE UNIQUE (#1664) : /api/v1/webos/public/aide/cartes
     // (api/aide_cartes.json), la même que lit ZIA. Rôle réel, usage, métriques
     // déclarées ; plus aucun texte d'aide écrit ici.
-    var AIDE_C={}, aideCharge=null;
+    var AIDE_C={}, aideCharge=null, aideEssais=0;
+    // Source injoignable (webos qui redémarre après une mise à jour) : on relit
+    // seul, 6 fois au plus, plutôt que de garder « pas pu être lue » jusqu'au
+    // rechargement de la page.
+    function relireAide(){ if(aideEssais++<6) setTimeout(chargeAide, 5000); }
     function chargeAide(){
       if(!aideCharge) aideCharge=fetch('/api/v1/webos/public/aide/cartes',{headers:{Accept:'application/json'}})
         .then(function(r){ return r.ok?r.json():{cartes:[]}; })
         .then(function(d){ (d.cartes||[]).forEach(function(c){ AIDE_C[c.id]=c; });
-          if(!(d.cartes||[]).length) aideCharge=null;          // vide : on relira à la prochaine ouverture
+          if(!(d.cartes||[]).length){ aideCharge=null; relireAide(); }
           // Une bulle ouverte AVANT l'arrivée de la source se met à jour d'elle-même.
           if(courante && bulle.classList.contains('on') && aideDe(courante)){
             elIc.textContent=icDe(courante); elSpec.textContent=specDe(courante); }
           return AIDE_C; })
-        .catch(function(){ aideCharge=null; return AIDE_C; });
+        .catch(function(){ aideCharge=null; relireAide(); return AIDE_C; });
       return aideCharge;
     }
     chargeAide();
@@ -5018,6 +5025,10 @@ const CARDLET_ICONES = {
             });
           })
           .catch(function(){ elMet.innerHTML=''; });
+        // Un chiffre qui n'est pas arrivé en 7 s (source lente, refus) s'efface :
+        // « … » ne doit pas rester affiché comme s'il allait venir.
+        setTimeout(function(){ if(tour!==tourMet) return;
+          Array.prototype.forEach.call(elMet.querySelectorAll('.cb-m.attente'), function(c){ c.remove(); }); }, 7000);
       });
     }
     // Qui peut voir la carte — dit, pas deviné.
@@ -5082,13 +5093,20 @@ const CARDLET_ICONES = {
     function auto(){ if(autoTmr) clearTimeout(autoTmr); autoTmr=setTimeout(function(){ if(enGuide) montre(qi+1); }, 5200); }
     function montre(i){
       if(i<0||i>=seq.length){ close(); return; }
-      qi=i; nettoie(); mode='guide'; enGuide=true; courante=seq[qi];
+      qi=i; nettoie(); diagOff(); mode='guide'; enGuide=true; courante=seq[qi];
       try{ courante.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
       courante.classList.add('cl-phare');
       var a=courante.querySelector('.cl-aide'); if(a) a.classList.add('phare');
       contenu(courante);
+      // MÊME LECTURE QU'AU CLIC (#1674) : une carte en cadre s'annote elle-même
+      // (zones colorées) et rapporte sa légende, qui remplace les gestes.
+      diagIfr=courante.querySelector('iframe');
+      if(diagIfr){ try{ diagIfr.contentWindow.postMessage({sbx:'aide',on:true},'*'); diagIfr.contentWindow.postMessage({sbx:'aide?'},'*'); }catch(e){} }
       elNav.style.display=''; btnX.style.display=''; btnNx.style.display='';
-      elDots.innerHTML=seq.map(function(_,k){return '<span class="cb-dot'+(k===qi?' on':'')+'"></span>';}).join('');
+      // Au-delà d'une dizaine de cartes, un compteur plutôt que deux lignes de points.
+      elDots.innerHTML = seq.length>10
+        ? '<span class="cb-cpt">'+(qi+1)+' / '+seq.length+'</span><span class="cb-barre"><i style="width:'+Math.round((qi+1)*100/seq.length)+'%"></i></span>'
+        : seq.map(function(_,k){return '<span class="cb-dot'+(k===qi?' on':'')+'"></span>';}).join('');
       btnX.textContent='Passer'; btnNx.textContent=(qi===seq.length-1)?'Terminer':'Suivant';
       bulle.classList.add('on');
       setTimeout(function(){ place(courante); }, 300);
@@ -5152,7 +5170,7 @@ const CARDLET_ICONES = {
       // La bulle n'écoute que la carte inspectée, à l'origine de son cadre (#1609).
       var deLaCarte = !!(diagIfr && cadreParmi(ev, [diagIfr]));
       if(d.sbx==='aide-ferme' && mode==='pin' && deLaCarte){ diagIfr=null; close(); return; }
-      if(d.sbx==='aide-zones' && (mode==='pin' || mode==='hover') && deLaCarte){
+      if(d.sbx==='aide-zones' && (mode==='pin' || mode==='hover' || mode==='guide') && deLaCarte){
         clearTimeout(diagTimer);
         var Z=d.zones||[];
         // Aucune zone visible (carte masquée faute de session, contenu pas
