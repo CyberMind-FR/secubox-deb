@@ -1,3 +1,10 @@
+secubox-zia (0.1.22-1~bookworm1) bookworm; urgency=medium
+
+  * Saisie vocale : pas de bouton micro là où il n'est pas délégué ; message
+    clair si le navigateur refuse le micro (#1658).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:59:57 +0200
+
 secubox-zia (0.1.21-1~bookworm1) bookworm; urgency=high
 
   * zia.conf : retire la CSP posée en 0.1.20 — incluse aussi par le serveur

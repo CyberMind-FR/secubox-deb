@@ -1,3 +1,10 @@
+secubox-webos (1.0.373-1~bookworm1) bookworm; urgency=medium
+
+  * Fiche ZIA : le mode admin ouvre la console (/zia/admin.html) et non le
+    chat sur l'origine admin, où le micro est refusé (#1658).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:59:28 +0200
+
 secubox-webos (1.0.372-1~bookworm1) bookworm; urgency=high
 
   * Fiche ZIA du Hall sur l'origine du Hall : la vue plein écran (mega) ne
