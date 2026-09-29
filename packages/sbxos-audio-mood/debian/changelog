@@ -1,3 +1,9 @@
+sbxos-audio-mood (0.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * frame-ancestors : les Halls des nœuds relayés par cette box (secubox-halls-parc) peuvent encadrer mood ($sbx_halls_parc, secubox-core >= 1.5.33) (#1672).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:37:04 +0200
+
 sbxos-audio-mood (0.10.1-1~bookworm1) bookworm; urgency=medium
 
   * Le paquet transitionnel retire le conffile de l'ancien nom

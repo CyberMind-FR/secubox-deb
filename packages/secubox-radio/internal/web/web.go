@@ -354,7 +354,7 @@ func (s *Serveur) politiqueMini() string {
 	}
 	// /micro peut être encadré en chaîne hall > bbs > radio : frame-ancestors
 	// doit lister TOUTE la chaîne d'ancêtres, donc aussi le Hall (#1175).
-	anc += " https://hall.gk2.secubox.in https://hall.gk2.net"
+	anc += " https://hall.gk2.secubox.in https://hall.gk2.net" + hallsDuParc() // #1672
 	return s.politiqueAvecAncetres(script, style, connect, anc)
 }
 

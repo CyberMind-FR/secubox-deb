@@ -81,6 +81,27 @@ def _frame_src(extra_hosts: tuple[str, ...] = ()) -> str:
     return " ".join(parts)
 
 
+_HALLS = {"t": 0.0, "v": ""}
+
+
+def _halls_parc() -> str:
+    """« ␠origine… » des Halls du parc (secubox-halls-parc), relue toutes les 30 s ;
+    origines https strictes seulement — un espace ou un `;` casserait la CSP."""
+    now = time.monotonic()
+    if _HALLS["t"] and now - _HALLS["t"] < 30:
+        return _HALLS["v"]
+    v = ""
+    try:
+        for l in Path("/var/lib/secubox/halls-parc/origines.txt").read_text().splitlines():
+            l = l.strip()
+            if re.fullmatch(r"https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+", l):
+                v += " " + l
+    except OSError:
+        pass
+    _HALLS.update(t=now, v=v)
+    return v
+
+
 def _ancetres() -> str:
     """Qui a le droit d'encadrer Billets.
 
@@ -95,6 +116,9 @@ def _ancetres() -> str:
     empêcher. SECUBOX_FRAME_ANCESTORS permet d'en ajouter sur une autre box.
     """
     base = "'self' https://hall.gk2.secubox.in https://hall.gk2.net"
+    # Les Halls du parc relayés par cette box (#1672), tenus par
+    # secubox-halls-parc : origines https strictes seulement.
+    base += _halls_parc()
     sup = os.environ.get("SECUBOX_FRAME_ANCESTORS", "").strip()
     # Un `;` ou un guillemet dans la variable clôturerait la directive et
     # laisserait injecter la suite de la politique : on refuse plutôt que de
@@ -140,7 +164,6 @@ _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Cross-Origin-Opener-Policy": "same-origin",
-    "Content-Security-Policy": _csp(_frame_src()),
 }
 
 
@@ -278,6 +301,9 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         resp = await call_next(request)
         for k, v in _SECURITY_HEADERS.items():
             resp.headers.setdefault(k, v)
+        # Calculée à chaque réponse, pas au chargement : la liste des Halls du
+        # parc (#1672) change quand un nœud est relayé.
+        resp.headers.setdefault("Content-Security-Policy", _csp(_frame_src()))
         return resp
 
     @app.get("/healthz")

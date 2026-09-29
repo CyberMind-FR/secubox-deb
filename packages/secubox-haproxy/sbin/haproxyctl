@@ -23,6 +23,13 @@ CONF_PATH="${SECUBOX_HAPROXY_CONF:-/etc/secubox/haproxy.toml}"
 # EXPLICITE et surchargeable : `*` accepterait n'importe quel site, ce qui est
 # l'attaque meme que frame-ancestors existe pour empecher.
 CADRE_ANCETRES="${SECUBOX_FRAME_ANCESTORS:-'self' https://hall.gk2.secubox.in https://hall.gk2.net https://billets.gk2.secubox.in}"
+# + les Halls du parc relayés par cette box (#1672, secubox-halls-parc) :
+# origines https strictes seulement — un espace ou un `;` casserait la CSP.
+if [ -r /var/lib/secubox/halls-parc/origines.txt ]; then
+    while IFS= read -r _o; do
+        [[ "$_o" =~ ^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] && CADRE_ANCETRES+=" $_o"
+    done < /var/lib/secubox/halls-parc/origines.txt
+fi
 CONFIG_DIR="${SECUBOX_HAPROXY_CONFIG_DIR:-/etc/haproxy}"
 CERTS_DIR="$DATA_PATH/certs"
 # Operator-managed extra frontends/backends (webui-lan, gitea-ssh, custom

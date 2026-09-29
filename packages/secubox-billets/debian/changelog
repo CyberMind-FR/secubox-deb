@@ -1,3 +1,9 @@
+secubox-billets (0.8.64-1~bookworm1) bookworm; urgency=medium
+
+  * frame-ancestors : les Halls des nœuds relayés par cette box (secubox-halls-parc) peuvent encadrer Billets (#1672).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:37:04 +0200
+
 secubox-billets (0.8.63-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1438) : /admin/api — créer, modifier, supprimer un billet,
