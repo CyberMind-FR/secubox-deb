@@ -1,3 +1,9 @@
+secubox-waf-ng (1.18.10-1~bookworm1) bookworm; urgency=critical
+
+  * sbxwaf : l'adresse cliente derrière HAProxy se lit depuis la DROITE de X-Forwarded-For, mandataires de confiance sautés (sémantique real_ip_recursive de nginx) — l'entrée de gauche est écrite par le client (#1697).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 17:16:29 +0200
+
 secubox-waf-ng (1.18.9-1~bookworm1) bookworm; urgency=high
 
   * sbxwaf : auto-réparation du blocage nft — la table inet secubox (sets waf_ban + chaîne de drop) ne vivait que dans le noyau et tout rechargement du pare-feu (flush ruleset) l'effaçait ; chaque ban échouait ensuite jusqu'au redémarrage suivant (six trous de 6 à 12 h en une semaine sur gk2). Veille de 30 s, réparation sur échec d'un ban (rejoué), et sur SIGHUP ; bans du journal ré-appliqués (#1693).
