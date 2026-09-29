@@ -9,7 +9,8 @@
     "build": "vite build --config app/vite.config.ts",
     "art": "node outils/art.mjs",
     "dev": "vite --config app/vite.config.ts",
-    "test": "vitest run --config app/vite.config.ts --root ."
+    "test": "vitest run --config app/vite.config.ts --root .",
+    "vitrine": "vite build --config vitrine/vite.config.ts"
   },
   "dependencies": {
     "@fontsource/orbitron": "^5.2.8",

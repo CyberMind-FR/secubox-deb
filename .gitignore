@@ -112,3 +112,4 @@ packages/secubox-ndpid-engine/nDPId-src/
 packages/sbxos-audio-mood/debian/sbxos-audio-mood/
 packages/sbxos-audio-mood/debian/gabriel-mood/
 packages/sbxos-audio-mood/debian/sbxos-audio-moodd
+packages/secubox-sbxos/dist-vitrine/
