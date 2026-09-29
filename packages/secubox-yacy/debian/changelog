@@ -1,3 +1,9 @@
+secubox-yacy (1.0.19-1~bookworm1) bookworm; urgency=high
+
+  * install-lxc.sh : le dossier des secrets reste root:secubox 0750 (état canonique de secubox-core) — `install -d -m 0700 -o root -g root` le rendait à root seul et vidait le masque ACL à chaque provision : auth, radio, socialrelay, bbs… perdaient leurs secrets (#1701).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 17:27:58 +0200
+
 secubox-yacy (1.0.18-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).

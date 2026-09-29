@@ -33,7 +33,11 @@ require_cmds() {
 ensure_dirs() {
     install -d -m 0755 -o root -g root "$LXC_PATH"
     install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
-    install -d -m 0700 -o root -g root "$SECRETS_DIR"
+    # État canonique du dossier des secrets (#1689, #1701) : root:secubox 0750,
+    # comme le tmpfiles de secubox-core. `0700 root:root` le rendait à root
+    # seul ET mettait le masque ACL à « --- » : chaque provision coupait tous
+    # les services qui lisent un secret (auth, radio, socialrelay, bbs…).
+    install -d -m 0750 -o root -g secubox "$SECRETS_DIR"
 }
 
 ensure_bridge() {
