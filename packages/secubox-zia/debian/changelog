@@ -1,3 +1,9 @@
+secubox-zia (0.1.23-1~bookworm1) bookworm; urgency=medium
+
+  * « À quoi sert / c'est quoi / explique la carte X » : réponse depuis l'aide des cartes du Hall (rôle réel + chiffres vivants), lue à voix haute par Lexie ; une commande n'est jamais prise pour une question (#1664).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:04:57 +0200
+
 secubox-zia (0.1.22-1~bookworm1) bookworm; urgency=medium
 
   * Saisie vocale : pas de bouton micro là où il n'est pas délégué ; message

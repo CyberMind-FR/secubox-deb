@@ -10,17 +10,25 @@
     2. RAPPORT : {sbx:'aide-zones'} envoyé au Hall pour la BULLE de légendes
        (mêmes numéros). Rafraîchi périodiquement → suit la slice active.
 
+  ZONES COLORÉES (#1664) : chaque zone a SA couleur (anneau, voile, pastille),
+  rapportée au Hall avec son numéro ; la légende de la bulle reprend la même
+  pastille — on lit la carte et sa légende d'un seul regard.
+
   Déclenché par le Hall au clic sur ❓ (postMessage {sbx:'aide',on:true/false}).
   window.SBXAide(opts) : opts.root, opts.slice(), opts.zones()=[{el,label}].
 */
 (function () {
   "use strict";
   if (window.SBXAide) return;
+  // Teintes assez sombres pour un chiffre blanc (contraste ≥ 4,5:1), assez
+  // distinctes pour six zones voisines ; lisibles sur fond clair comme sombre.
+  var TEINTES = ['#0a7fb0', '#c2610f', '#7c4ddb', '#1a8a4a', '#c2336f', '#8a6d00'];
+  function teinte(k) { return TEINTES[k % TEINTES.length]; }
   var CSS = ''
     + '.sbxaide-ring{position:absolute;border:2px solid var(--cyan,#0a91c8);border-radius:8px;z-index:41;'
     + 'box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan,#0a91c8) 20%,transparent);pointer-events:none;transition:.18s}'
     + '.sbxaide-pin{position:absolute;transform:translate(-50%,-50%);min-width:18px;height:18px;border-radius:10px;z-index:42;'
-    + 'background:var(--cyan,#0a91c8);color:#04202a;font-weight:800;font-size:.66rem;display:grid;place-items:center;'
+    + 'background:var(--cyan,#0a91c8);color:#fff;font-weight:800;font-size:.66rem;display:grid;place-items:center;'
     + 'padding:0 5px;box-shadow:0 2px 6px rgba(0,0,0,.45);pointer-events:none}'
     + '@media(prefers-reduced-motion:reduce){.sbxaide-ring{transition:none}}';
   function injectCSS() { if (document.getElementById('sbxaide-css')) return;
@@ -52,19 +60,25 @@
       clear(); var rr = root.getBoundingClientRect(), Z = zones();
       Z.forEach(function (x, k) {
         if (!x.el) return; var r = x.el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return;
+        var col = teinte(k);
         var ring = document.createElement('div'); ring.className = 'sbxaide-ring';
+        ring.style.borderColor = col;
+        ring.style.background = 'color-mix(in srgb,' + col + ' 9%,transparent)';
+        ring.style.boxShadow = '0 0 0 3px color-mix(in srgb,' + col + ' 22%,transparent)';
         ring.style.left = (r.left - rr.left - 2) + 'px'; ring.style.top = (r.top - rr.top - 2) + 'px';
         ring.style.width = (r.width + 4) + 'px'; ring.style.height = (r.height + 4) + 'px'; root.appendChild(ring); nodes.push(ring);
         var pin = document.createElement('div'); pin.className = 'sbxaide-pin'; pin.textContent = (k + 1);
+        pin.style.background = col;
         pin.style.left = (r.left - rr.left + 10) + 'px'; pin.style.top = (r.top - rr.top) + 'px'; root.appendChild(pin); nodes.push(pin);
       });
       report(rr, Z);
     }
     function report(rr, Z) { rr = rr || root.getBoundingClientRect(); Z = Z || zones();
       post({ sbx: 'aide-zones', slice: sliceName(), vw: rr.width, vh: rr.height,
-        zones: Z.map(function (x) { if (!x.el) return null; var r = x.el.getBoundingClientRect();
+        zones: Z.map(function (x, k) { if (!x.el) return null; var r = x.el.getBoundingClientRect();
           if (r.width < 2 || r.height < 2) return null;
-          return { label: String(x.label || ''), x: r.left - rr.left, y: r.top - rr.top, w: r.width, h: r.height };
+          return { n: k + 1, couleur: teinte(k), label: String(x.label || ''),
+                   x: r.left - rr.left, y: r.top - rr.top, w: r.width, h: r.height };
         }).filter(Boolean) }); }
     function show(v) { on = v; if (v) { draw(); if (tmr) clearInterval(tmr); tmr = setInterval(draw, 500); }
       else { if (tmr) { clearInterval(tmr); tmr = null; } clear(); } }

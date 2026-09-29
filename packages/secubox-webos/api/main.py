@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, acces, actions, nc_super
+from api import registry, flags, cardlets, acces, actions, nc_super, aide
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
@@ -305,6 +305,59 @@ async def cardlet_radio():
 # Il decouvre desormais ce qui existe. Ajouter un cardlet = une entree ici, et
 # l'accueil s'en saisit sans qu'on y touche.
 CARDLETS_DISPONIBLES = ["radio", "waf", "podcaster"]
+
+
+# ── AIDE DES CARTES (#1664) ─────────────────────────────────────────────────
+# Une source (api/aide_cartes.json) pour la bulle ❓, la vue Aide et ZIA/Lexie.
+# Les chiffres sont lus EN VISITEUR (voir api/aide.py) : l'aide ne montre rien
+# qu'un visiteur ne puisse déjà lire ; les métriques `session` sont complétées
+# par le Hall avec les droits de la personne.
+_aide_lecteur: "aide.Lecteur | None" = None
+
+
+def _aide():
+    global _aide_lecteur
+    if _aide_lecteur is None:
+        _aide_lecteur = aide.Lecteur(domaine_box())
+    return _aide_lecteur
+
+
+def _etat_service(sid: str) -> str:
+    for s in _cache["services"]:
+        if s.get("id") == sid:
+            return (s.get("health") or {}).get("state", "unknown")
+    return ""
+
+
+@public_router.get("/aide/cartes")
+async def aide_cartes():
+    """Toutes les cartes : rôle, usage, métriques déclarées (sans valeurs)."""
+    return {"cartes": [aide.publique(c) for c in aide.charger().values()]}
+
+
+@public_router.get("/aide/trouver")
+async def aide_trouver(q: str = ""):
+    """La carte que désigne une phrase (« à quoi sert la carte Radio ? »),
+    avec sa phrase parlée — l'unique logique de reconnaissance, pour ZIA."""
+    c = aide.trouver(aide.charger(), q[:200])
+    if not c:
+        return {"carte": None}
+    return {"carte": await aide_carte(c["id"])}
+
+
+@public_router.get("/aide/cartes/{cid}")
+async def aide_carte(cid: str):
+    """Une carte, ses chiffres vivants (vus d'un visiteur) et sa phrase."""
+    c = aide.charger().get(cid)
+    if not c:
+        return JSONResponse({"detail": "carte inconnue"}, status_code=404)
+    m = await _aide().metriques(c)
+    out = aide.publique(c)
+    for decl, vive in zip(out["metriques"], m):
+        decl["valeur"] = vive["valeur"]
+    out["etat"] = _etat_service(c.get("service") or "") if c.get("service") else ""
+    out["phrase"] = aide.phrase(c, m)
+    return out
 
 
 @public_router.get("/cardlets")

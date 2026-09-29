@@ -1,3 +1,9 @@
+secubox-sbxui (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * aide.js : une couleur par zone (anneau, voile, pastille), rapportée au Hall avec son numéro (#1664).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:04:57 +0200
+
 secubox-sbxui (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * SBXSliceBar : couches de comportement génériques désormais documentées et
