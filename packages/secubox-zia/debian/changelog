@@ -1,3 +1,10 @@
+secubox-zia (0.1.21-1~bookworm1) bookworm; urgency=high
+
+  * zia.conf : retire la CSP posée en 0.1.20 — incluse aussi par le serveur
+    admin, elle interdisait au Hall d'encadrer admin.<domaine>/zia (#1658).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:57:34 +0200
+
 secubox-zia (0.1.20-1~bookworm1) bookworm; urgency=medium
 
   * Saisie vocale (#1658) : bouton micro dans la page plein écran et la carte

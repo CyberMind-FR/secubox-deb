@@ -1,3 +1,10 @@
+secubox-webos (1.0.372-1~bookworm1) bookworm; urgency=high
+
+  * Fiche ZIA du Hall sur l'origine du Hall : la vue plein écran (mega) ne
+    charge plus admin.<domaine>/zia, bloquée par frame-ancestors (#1658).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:57:34 +0200
+
 secubox-webos (1.0.371-1~bookworm1) bookworm; urgency=medium
 
   * Carte ZIA servie par le Hall (/zia/micro.html) avec délégation du micro
