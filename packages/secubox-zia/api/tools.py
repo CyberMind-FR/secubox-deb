@@ -75,12 +75,16 @@ class Tools:
                 allowed = self.bus.action_allowed(service, action, params, role)
                 if not allowed.ok:
                     return {"ok": False, "error": allowed.error}
+                caps = getattr(self.bus, "caps", None)
+                if caps is not None and not caps.autorise(service, action, role):
+                    return {"ok": False, "error": "rôle insuffisant pour cette action"}
                 return {"ok": True, "result": {
                     "kind": "sbx-action",
                     "target": target or f"service:{service}",
                     "service": service,
                     "action": action,
                     "params": allowed.params,
+                    "effet": caps.effet(service, action) if caps is not None else "ecriture",
                 }}
         except Exception as e:  # défensif : un outil qui trébuche ne casse pas le chat
             return {"ok": False, "error": str(e)}

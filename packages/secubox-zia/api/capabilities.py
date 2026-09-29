@@ -86,6 +86,18 @@ _BOOTSTRAP: dict = {
 }
 
 
+EFFETS = ("media", "lecture", "physique", "ecriture")
+
+# Les capacités d'amorçage sont toutes des gestes MÉDIA (volume, sourdine,
+# transport) : elles le déclarent, comme le ferait un manifeste.
+for _spec in _BOOTSTRAP.values():
+    for _n, _a in (_spec.get("actions") or {}).items():
+        if _n.startswith(("media.", "ui.")):
+            _a.setdefault("effet", "media")
+            _a.setdefault("role_min", "guest")
+ORDRE_ROLES = ["guest", "registered", "member", "admin"]
+
+
 class Resolved:
     """Résultat de résolution d'une action → message sbx natif (ou échec explicite)."""
     __slots__ = ("ok", "message", "error", "value")
@@ -174,7 +186,21 @@ class Capabilities:
             if not isinstance(msg, dict) or msg.get("sbx") != "cmd" or not msg.get("action"):
                 continue
             entry: dict = {"message": {"sbx": "cmd", "action": str(msg["action"])}}
+            # CLASSE D'EFFET et RÔLE MINIMAL (#1615) : déclarés par le manifeste,
+            # FERMÉS par défaut — une action non classée est une écriture, réservée
+            # aux membres. Seul effet=media peut s'exécuter sans clic côté client.
+            eff = str(a.get("effet", "ecriture"))
+            entry["effet"] = eff if eff in EFFETS else "ecriture"
+            rm = str(a.get("role_min", "member"))
+            entry["role_min"] = rm if rm in ORDRE_ROLES else "member"
             val = a.get("value")
+            if isinstance(val, dict) and val.get("type") == "string":
+                try:
+                    lg = int(val.get("max_len", 200))
+                except (TypeError, ValueError):
+                    lg = 200
+                entry["value"] = {"field": str(val.get("field", "v")), "type": "string",
+                                  "max_len": max(1, min(lg, 500))}
             if isinstance(val, dict) and val.get("type") in ("boolean", "number"):
                 ve: dict = {"field": str(val.get("field", "v")), "type": val["type"]}
                 if val["type"] == "number":
@@ -197,6 +223,16 @@ class Capabilities:
     def services(self) -> list:
         return sorted(self.reg)
 
+    def autorise(self, service: str, action: str, role: str) -> bool:
+        """Le rôle atteint-il le rôle minimal déclaré de l'action ?"""
+        a = self.reg.get(service, {}).get("actions", {}).get(action)
+        if not a or role not in ORDRE_ROLES:
+            return False
+        return ORDRE_ROLES.index(role) >= ORDRE_ROLES.index(a.get("role_min", "member"))
+
+    def effet(self, service: str, action: str) -> str:
+        return self.reg.get(service, {}).get("actions", {}).get(action, {}).get("effet", "ecriture")
+
     def has(self, service: str, action: str) -> bool:
         return action in (self.reg.get(service, {}).get("actions", {}))
 
@@ -212,8 +248,11 @@ class Capabilities:
                     spec["min"] = v["min"]
                 if "max" in v:
                     spec["max"] = v["max"]
+                if "max_len" in v:
+                    spec["max_len"] = v["max_len"]
                 params["value"] = spec
-            out.append({"name": name, "params": params})
+            out.append({"name": name, "params": params, "effet": a.get("effet", "ecriture"),
+                        "role_min": a.get("role_min", "member")})
         return out
 
     def registry(self) -> dict:
@@ -243,7 +282,10 @@ class Capabilities:
             raw = (params or {}).get("value")
             if raw is None:
                 return Resolved(False, error="valeur requise")
-            if spec["type"] == "boolean":
+            if spec["type"] == "string":
+                cv = str(raw).strip()
+                err = "" if 0 < len(cv) <= spec["max_len"] else "texte vide ou trop long"
+            elif spec["type"] == "boolean":
                 cv, err = _coerce_bool(raw)
             else:
                 cv, err = _coerce_num(raw, spec)

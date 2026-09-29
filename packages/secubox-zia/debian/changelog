@@ -1,3 +1,12 @@
+secubox-zia (0.1.19-1~bookworm1) bookworm; urgency=medium
+
+  * Capacités (#1615) : classe d'effet et rôle minimal déclarés (fermés par
+    défaut : écriture, membre), paramètres texte plafonnés (voice.speak garde
+    son texte), effet renvoyé avec chaque action ; URL des objets sur le domaine
+    de la box (plus de gk2 en dur).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:04:17 +0200
+
 secubox-zia (0.1.18-1~bookworm1) bookworm; urgency=high
 
   * Rôle aligné sur #1581 : administrateur réel seulement ; un appareil admis n'est jamais admin (#1608).

@@ -86,7 +86,8 @@ export const lienLocal = (l?: string) => (l && l.startsWith('/') && !l.startsWit
 
 // ── ZIA (#1615) : le SEUL cerveau. La palette présente, ZIA décide. ────────
 export type ObjetZia = { id: string; type: string; service?: string; title?: string; summary?: string; url?: string };
-export type ActionZia = { kind: 'sbx-action'; service: string; action: string; params?: Record<string, unknown> };
+export type ActionZia = { kind: 'sbx-action'; service: string; action: string; params?: Record<string, unknown>;
+                         effet?: 'media' | 'lecture' | 'physique' | 'ecriture' };
 export type ReponseZia = { text: string; objects: ObjetZia[]; actions: ActionZia[] };
 
 export async function demandeZia(message: string): Promise<ReponseZia | null> {
@@ -99,5 +100,6 @@ export async function demandeZia(message: string): Promise<ReponseZia | null> {
            actions: Array.isArray(r.actions) ? r.actions.filter(a => a?.kind === 'sbx-action') : [] };
 }
 
-/** Seules les actions MÉDIA s'exécutent sans clic ; le reste demande confirmation. */
-export const sansClic = (a: ActionZia) => a.action.startsWith('media.');
+/** Seules les actions dont la capacité DÉCLARE effet=media s'exécutent sans clic (#1615) ;
+ *  une action sans classe est une écriture : elle demande confirmation. */
+export const sansClic = (a: ActionZia) => a.effet === 'media';
