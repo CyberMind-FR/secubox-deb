@@ -121,16 +121,21 @@ func ncBypass(path string) bool {
 
 // clientIP extracts the real client IP from the request.
 //
-// Strategy (mirrors Python get_real_client_ip, secubox_waf.py lines 193-219):
-//  1. Parse the immediate peer from r.RemoteAddr.
-//  2. If the peer is a trusted proxy (trustedProxies), take the LEFTMOST
-//     non-empty entry from X-Forwarded-For as the real client IP.
-//  3. Otherwise, the peer itself is the client (no proxy trust).
+// LA CHAÎNE X-FORWARDED-FOR SE LIT DEPUIS LA DROITE (#1697). Chaque mandataire
+// AJOUTE l'adresse de son pair à la fin de la chaîne ; tout ce qui précède a
+// été écrit par quelqu'un d'autre — au bout du compte, par le client, qui y
+// met ce qu'il veut. HAProxy (`option forwardfor`) ne remplace pas la valeur
+// reçue : il ajoute la sienne derrière. Retenir l'entrée de GAUCHE revenait
+// donc à croire le client sur parole, et ce qu'il déclarait décidait des
+// exemptions réseau privé, des bans, des leurres et des statistiques.
 //
-// Note: the Python version iterates XFF looking for the first non-trusted-proxy
-// IP. We simplify to leftmost XFF when the peer is trusted, which is the common
-// HAProxy → mitmproxy topology where HAProxy appends its own IP last and sets
-// XFF to the original client.
+// Règle, identique à `real_ip_recursive on` de nginx :
+//  1. le pair immédiat (r.RemoteAddr) n'est pas un mandataire de confiance :
+//     c'est lui le client, la chaîne est ignorée ;
+//  2. sinon, parcourir TOUTES les valeurs de X-Forwarded-For (plusieurs lignes
+//     d'en-tête possibles, dans l'ordre reçu) depuis la droite, en sautant les
+//     mandataires de confiance : la première adresse restante est le client ;
+//  3. chaîne vide ou faite uniquement de mandataires : le pair.
 func clientIP(r *http.Request) string {
 	// Parse peer IP (strip port from RemoteAddr).
 	peerHost, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -138,20 +143,22 @@ func clientIP(r *http.Request) string {
 		// RemoteAddr without port (unusual but handle gracefully).
 		peerHost = r.RemoteAddr
 	}
-
-	// Only trust XFF when the immediate peer is a known proxy.
-	if _, trusted := trustedProxies[peerHost]; trusted {
-		xff := r.Header.Get("X-Forwarded-For")
-		if xff != "" {
-			// Take the leftmost entry (original client in a well-behaved chain).
-			parts := strings.SplitN(xff, ",", 2)
-			ip := strings.TrimSpace(parts[0])
-			if ip != "" {
-				return ip
+	if _, trusted := trustedProxies[peerHost]; !trusted {
+		return peerHost
+	}
+	var sauts []string
+	for _, v := range r.Header.Values("X-Forwarded-For") {
+		for _, s := range strings.Split(v, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				sauts = append(sauts, s)
 			}
 		}
 	}
-
+	for i := len(sauts) - 1; i >= 0; i-- {
+		if _, mandataire := trustedProxies[sauts[i]]; !mandataire {
+			return sauts[i]
+		}
+	}
 	return peerHost
 }
 
