@@ -84,3 +84,12 @@ a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px;
 .palette-pied kbd { margin-left: 0; }
 .micro { background: none; border: 1px solid var(--sbx-trait); border-radius: 12px; padding: 4px; cursor: pointer; }
 .micro.ecoute { border-color: var(--sbx-alerte); box-shadow: 0 0 0 3px #f43f5e44; }
+/* Téléphone (#1616) : la barre se replie, rien ne dépasse 360 px. */
+@media (max-width: 640px) {
+  .barre { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .barre .apercu { display: none; }
+  .recherche { order: 3; flex-basis: 100%; }
+  .moi { font-size: 13px; }
+  .scene { padding: 16px 12px; }
+  .decor { border-radius: 14px; }
+}

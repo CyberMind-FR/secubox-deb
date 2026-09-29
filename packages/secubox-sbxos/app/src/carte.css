@@ -1,0 +1,13 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 — carte légère d'Aurora (#1616). */
+html, body { margin: 0; background: var(--sbx-fond); color: var(--sbx-encre); font: 14px/1.45 Inter, system-ui, sans-serif; }
+.carte-legere { padding: 12px 14px; display: grid; gap: 10px; }
+.cl-tete { display: flex; align-items: baseline; gap: 8px; }
+.cl-logo { font: 700 18px Orbitron, Inter, sans-serif; letter-spacing: .04em; }
+.cl-sous { color: var(--sbx-pale); font-size: 12px; }
+.cl-plein { margin-left: auto; color: var(--sbx-cyan); text-decoration: none; }
+.cl-flux { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cl-flux li { padding: 7px 10px; border-radius: 10px; background: var(--sbx-surface); border: 1px solid var(--sbx-trait); color: var(--sbx-doux); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-flux a { color: var(--sbx-encre); text-decoration: none; }
+.cl-espaces { display: flex; flex-wrap: wrap; gap: 6px; }
+.cl-espaces a { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--sbx-trait); color: var(--sbx-doux); text-decoration: none; font-size: 12px; }
+.cl-espaces a:focus-visible, .cl-plein:focus-visible, .cl-flux a:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px; }
