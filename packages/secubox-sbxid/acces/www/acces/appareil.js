@@ -249,8 +249,12 @@ export async function ouvreSiAdmis() {
     return null;   // on ne sait pas : on ne touche à rien
   }
 
+  // UNE SESSION EXPIRÉE SE ROUVRE (#1642). `session_ouverte` dit qu'une session
+  // a DÉJÀ été ouverte un jour, pas qu'elle vit encore : la box vient de dire
+  // qu'il n'y en a pas. Un appareil accepté prouve donc de nouveau sa clé —
+  // sans mot de passe (#1562), une fois par chargement.
   const v = await suivi();
-  if (!v || v.etat !== 'acceptee' || v.session_ouverte) return null;
+  if (!v || v.etat !== 'acceptee') return null;
   _essaiFait = true;
   return ouvreSession();
 }
