@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — relais du maillage : exposition par défaut des nœuds sans WAN (#1682)
+After=network-online.target wg-quick@wg-mesh.service nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-relais-maillage synchroniser
+# Émettre un certificat joker peut prendre quelques minutes (DNS-01).
+TimeoutStartSec=15min

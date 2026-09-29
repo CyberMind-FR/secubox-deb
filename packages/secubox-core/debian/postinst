@@ -3,6 +3,83 @@ set -e
 
 case "$1" in
   configure)
+    # /run/secubox PARTAGÉ (#1022, #1682). L'image « live USB » posait sur ~30
+    # unités une surcharge `RuntimeDirectory=secubox` et un
+    # /etc/tmpfiles.d/secubox.conf en 0775 secubox : chaque démarrage d'unité
+    # réattribuait TOUT le répertoire à son utilisateur, et les sockets 0660
+    # des autres devenaient illisibles pour nginx (502). On ne retire QUE les
+    # fichiers identiques à ce qu'écrivait l'image (sauvegardés), puis on relance
+    # les unités concernées pour qu'elles recréent leurs sockets à leur nom.
+    RT_SAUVE=/var/backups/secubox-runtime-conf
+    RT_UNITES=""
+    for f in /etc/systemd/system/secubox-*.service.d/runtime.conf; do
+      [ -f "$f" ] || continue
+      grep -q "Fix for namespace issues with /run/secubox" "$f" || continue
+      corps="$(grep -vE '^[[:space:]]*(#|$)' "$f" | tr -d ' \t' | LC_ALL=C sort | tr '\n' ';')"
+      [ "$corps" = "RuntimeDirectory=secubox;RuntimeDirectoryMode=0775;RuntimeDirectoryPreserve=yes;[Service];" ] || continue
+      d="$(dirname "$f")"; u="$(basename "$d" .d)"
+      mkdir -p "$RT_SAUVE"
+      cp -p "$f" "$RT_SAUVE/$u.runtime.conf"
+      rm -f "$f"
+      rmdir "$d" 2>/dev/null || true
+      RT_UNITES="$RT_UNITES $u"
+    done
+    if [ -f /etc/tmpfiles.d/secubox.conf ] \
+       && [ "$(grep -vE '^[[:space:]]*(#|$)' /etc/tmpfiles.d/secubox.conf | tr -s ' ')" = "d /run/secubox 0775 secubox secubox -" ]; then
+      mkdir -p "$RT_SAUVE"
+      mv /etc/tmpfiles.d/secubox.conf "$RT_SAUVE/tmpfiles-secubox.conf"
+      RT_UNITES="$RT_UNITES "
+    fi
+    # SOCKETS MAL ATTRIBUÉS (#1682). Dans /run/secubox redevenu 1777, un service
+    # ne peut plus effacer un socket qu'une autre unité s'est vu attribuer : il
+    # échoue à se lier et redémarre en boucle. On retire (a) les sockets sans
+    # processus à l'écoute — morts — et (b) ceux dont le propriétaire n'est pas
+    # le processus qui les écoute, en relançant son unité. Rien d'autre.
+    if [ -d /run/secubox ] && command -v ss >/dev/null && command -v python3 >/dev/null; then
+      RT_SOCK="$(python3 - <<'PY'
+import os, re, subprocess, stat
+out = subprocess.run(["ss", "-xlpn"], capture_output=True, text=True).stdout
+ecoute = {}
+for l in out.splitlines():
+    m = re.search(r"(/run/secubox/[^\s]+\.sock)\s.*?pid=(\d+)", l)
+    if m:
+        ecoute.setdefault(m.group(1), int(m.group(2)))
+unites = set()
+for n in os.listdir("/run/secubox"):
+    p = os.path.join("/run/secubox", n)
+    try:
+        st = os.lstat(p)
+    except OSError:
+        continue
+    if not stat.S_ISSOCK(st.st_mode) or st.st_uid == 0:
+        continue
+    pid = ecoute.get(p)
+    if pid is None:
+        os.unlink(p)                               # mort : personne n'écoute
+        continue
+    try:
+        uid = int(open(f"/proc/{pid}/status").read().split("Uid:")[1].split()[0])
+        cg = open(f"/proc/{pid}/cgroup").read()
+    except (OSError, IndexError, ValueError):
+        continue
+    if uid != 0 and uid != st.st_uid:
+        m = re.search(r"/([^/]+\.service)", cg)
+        if m:
+            os.unlink(p)
+            unites.add(m.group(1))
+print(" ".join(sorted(unites)))
+PY
+)" || RT_SOCK=""
+      RT_UNITES="$RT_UNITES $RT_SOCK"
+    fi
+    if [ -n "${RT_UNITES// /}" ] || [ "$(stat -c %a /run/secubox 2>/dev/null)" != 1777 ]; then
+      systemctl daemon-reload 2>/dev/null || true
+      if [ -d /run/secubox ]; then chown root:root /run/secubox; chmod 1777 /run/secubox; fi
+      # --no-block : la relance ne doit pas suspendre dpkg.
+      # shellcheck disable=SC2086
+      [ -n "${RT_UNITES// /}" ] && systemctl --no-block try-restart $RT_UNITES 2>/dev/null || true
+    fi
+
     # CADENCE (#1650) : des copies MANUELLES des surcharges de cadence, posées
     # dans /etc lors de l'incident du 2026-08-12, masquent celles du paquet
     # (même nom de fichier) — sans la remise à zéro. On ne retire QUE ces

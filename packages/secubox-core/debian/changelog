@@ -1,3 +1,9 @@
+secubox-core (1.5.34-1~bookworm1) bookworm; urgency=medium
+
+  * /run/secubox partagé (#1022, #1682) : retire les surcharges `RuntimeDirectory=secubox` et le tmpfiles 0775 posés par l'image live USB (uniquement les fichiers identiques, sauvegardés dans /var/backups/secubox-runtime-conf), remet /run/secubox en 1777 root et relance les unités concernées ; retire les sockets morts ou mal attribués de /run/secubox (relance de leur unité), qui faisaient boucler radio et socialrelay. Chaque démarrage réattribuait le répertoire entier et rendait les sockets des autres illisibles pour nginx (radio, socialrelay en 502 sur gk3).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 11:47:11 +0200
+
 secubox-core (1.5.33-1~bookworm1) bookworm; urgency=medium
 
   * secubox-halls-parc (ajouter|retirer|liste) et map nginx $sbx_halls_parc : les Halls des nœuds relayés par cette box, autorisés à encadrer ses services ; origines https strictes, jamais de joker ; régénère HAProxy quand la liste change (#1672).

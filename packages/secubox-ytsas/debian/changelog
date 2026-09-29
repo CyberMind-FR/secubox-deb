@@ -1,3 +1,9 @@
+secubox-ytsas (0.2.11-1~bookworm1) bookworm; urgency=medium
+
+  * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 11:16:32 +0200
+
 secubox-ytsas (0.2.10-1~bookworm2) bookworm; urgency=medium
 
   * Le rootfs du conteneur est decale sur l'idmap. La config declare

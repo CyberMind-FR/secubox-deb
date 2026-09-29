@@ -1,3 +1,9 @@
+secubox-p2p (1.11.14-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-relais-maillage synchroniser + minuteur horaire : sur un satellite, port des vhosts ouvert au seul maître ; sur le relais, chaque nom d'un pair est relayé si le même service est exposé ici, s'il n'est pas exclu (wpad, boot), si le domaine n'est pas celui du relais et si son DNS public pointe ici — certificat joker *.<domaine du pair> par DNS-01 (acme.sh + Gandi), WAF devant, un seul rechargement HAProxy (#1682).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 11:16:32 +0200
+
 secubox-p2p (1.11.13-1~bookworm1) bookworm; urgency=medium
 
   * secubox-relais-maillage : un hall.* relayé entre dans les Halls du parc (et en sort au retrait) (#1672).

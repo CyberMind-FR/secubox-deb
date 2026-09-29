@@ -366,6 +366,17 @@ async def aide_carte(cid: str):
 # Chargé AVANT domaine.js par le Hall : la liste des noms que cette box sert
 # vraiment. Une carte vise le service local s'il y figure, celui de la box de
 # référence sinon. Script (et non JSON) : la page le lit sans requête bloquante.
+# LES NOMS QUE CETTE BOX SERT POUR SON DOMAINE (#1682). Lus par le relais du
+# maillage pour exposer le nœud par défaut : server_name exacts du domaine de la
+# box et « x.* » ramenés à ce domaine. Sans vérification de joignabilité (c'est
+# précisément ce que le relais va établir) ; rien d'autre que des noms.
+@public_router.get("/noms")
+async def noms_de_la_box():
+    dom = (domaine_box() or "").lower()
+    return {"domaine": dom, "noeud": hotes.nom_noeud(),
+            "noms": hotes.candidats(hotes.lire_sites(), dom)}
+
+
 @public_router.get("/hotes.js")
 async def hotes_js():
     corps = ("window.SBX_HOTES_LOCAUX=" + json.dumps(hotes.locaux()) + ";\n"

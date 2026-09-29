@@ -1702,36 +1702,14 @@ ln -sf /usr/lib/systemd/system/secubox-hub.service \
 
 ok "Core services fallback complete"
 
-# ── Fix systemd service namespaces for /run/secubox ────────────────
-# Services with ProtectSystem=strict create mount namespaces that prevent
-# socket creation in /run/secubox. Add RuntimeDirectory and tmpfiles.d.
-log "Configuring systemd services for /run/secubox..."
-
-# Create tmpfiles.d entry for /run/secubox
-mkdir -p "${ROOTFS}/etc/tmpfiles.d"
-echo "d /run/secubox 0775 secubox secubox -" > "${ROOTFS}/etc/tmpfiles.d/secubox.conf"
-
-# Create systemd overrides for services that use ProtectSystem with /run/secubox
-for unit in "${ROOTFS}"/usr/lib/systemd/system/secubox-*.service; do
-  [[ -f "$unit" ]] || continue
-  svc=$(basename "$unit" .service)
-
-  # Check if service uses ProtectSystem with ReadWritePaths containing /run/secubox
-  if grep -q "ProtectSystem=" "$unit" && grep -q "ReadWritePaths=.*/run/secubox" "$unit"; then
-    override_dir="${ROOTFS}/etc/systemd/system/${svc}.service.d"
-    mkdir -p "$override_dir"
-    cat > "$override_dir/runtime.conf" << 'EOF'
-[Service]
-# Fix for namespace issues with /run/secubox
-RuntimeDirectory=secubox
-RuntimeDirectoryMode=0775
-RuntimeDirectoryPreserve=yes
-EOF
-    log "Created override for $svc"
-  fi
-done
-
-ok "Systemd service overrides created"
+# ── /run/secubox : RIEN À SURCHARGER (#1022, #1682) ─────────────────
+# Ce bloc posait jadis `RuntimeDirectory=secubox` sur chaque unité confinée
+# et un /etc/tmpfiles.d/secubox.conf en 0775 secubox. Or /run/secubox est
+# PARTAGÉ par ~95 unités : à chaque démarrage, systemd réattribuait tout le
+# répertoire à l'utilisateur de l'unité, et les sockets 0660 des autres
+# devenaient illisibles pour nginx (502 sur radio, socialrelay… vécu sur gk3).
+# secubox-core livre /usr/lib/tmpfiles.d/secubox.conf (1777 root:root), et
+# les unités déclarent déjà /run/secubox dans leurs ReadWritePaths.
 
 # ── Create build metadata ──────────────────────────────────────────
 log "Creating build metadata..."
