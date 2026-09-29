@@ -187,7 +187,7 @@ export function App() {
       {lieu && <Lieu titre={lieu.titre} url={lieu.url} ferme={() => setLieu(null)} />}
       {reglages && <Reglages man={man} ferme={() => setReglages(false)} />}
       {palette && <Palette espaces={ESPACES} aller={id => aller(id as Espace)} domaine={man?.domaine ?? ''}
-                           ferme={() => setPalette(false)} />}
+                           ferme={() => setPalette(false)} voix={!!man?.capacites.voix && !estEncadre()} />}
     </MotionConfig></LazyMotion>
   );
 }

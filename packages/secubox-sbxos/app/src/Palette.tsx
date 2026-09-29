@@ -9,7 +9,8 @@
  * attend un clic, et la garde serveur s'applique de toute façon.
  */
 import { useEffect, useRef, useState } from 'react';
-import { demandeZia, sansClic, urlSure, type ReponseZia, type ActionZia } from '@sbx/data';
+import { demandeZia, sansClic, urlSure, transcrit, dit, type ReponseZia, type ActionZia } from '@sbx/data';
+import { SbxIcon } from '@sbx/icons';
 import { sbxExecuteAction } from '@sbx/hote';
 import lexie from '@sbx/art/characters/art/lexie.webp';
 
@@ -28,13 +29,16 @@ function Texte({ t }: { t: string }) {
     b.startsWith('**') && b.endsWith('**') ? <b key={i}>{b.slice(2, -2)}</b> : <span key={i}>{b}</span>)}</p>;
 }
 
-export function Palette({ espaces, aller, domaine, ferme }:
-  { espaces: EspaceNom[]; aller: (id: string) => void; domaine: string; ferme: () => void }) {
+export function Palette({ espaces, aller, domaine, ferme, voix = false }:
+  { espaces: EspaceNom[]; aller: (id: string) => void; domaine: string; ferme: () => void; voix?: boolean }) {
   const [q, setQ] = useState('');
   const [attente, setAttente] = useState(false);
   const [rep, setRep] = useState<ReponseZia | null>(null);
   const [fait, setFait] = useState<string[]>([]);
   const champ = useRef<HTMLInputElement>(null);
+  const [ecoute, setEcoute] = useState(false);
+  const enreg = useRef<MediaRecorder | null>(null);
+  const parleVoix = useRef(false);
 
   useEffect(() => {
     const avant = document.activeElement as HTMLElement | null;
@@ -50,8 +54,31 @@ export function Palette({ espaces, aller, domaine, ferme }:
     setFait(f => [...f, `${a.service} · ${a.action} : ${ok ? 'fait' : 'service non ouvert ici'}`]);
   }
 
+  async function micro() {
+    if (ecoute) { enreg.current?.stop(); return; }
+    let flux: MediaStream;
+    try { flux = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { setRep({ text: 'Micro refusé ou absent.', objects: [], actions: [] }); return; }
+    const morceaux: Blob[] = [];
+    const r = new MediaRecorder(flux);
+    r.ondataavailable = e => morceaux.push(e.data);
+    r.onstop = async () => {
+      flux.getTracks().forEach(t => t.stop()); setEcoute(false);
+      const texte = await transcrit(new Blob(morceaux, { type: r.mimeType }));
+      if (!texte) { setRep({ text: 'Je n’ai rien entendu.', objects: [], actions: [] }); return; }
+      setQ(texte); parleVoix.current = true; await demande(texte);
+    };
+    enreg.current = r; r.start(); setEcoute(true);
+    setTimeout(() => { if (r.state === 'recording') r.stop(); }, 8000);   // une commande dure quelques secondes
+  }
+
   async function envoie(ev: React.FormEvent) {
     ev.preventDefault();
+    parleVoix.current = false;
+    await demande(q);
+  }
+
+  async function demande(q: string) {
     const id = espaceDemande(q, espaces);
     if (id) { aller(id); ferme(); return; }
     setAttente(true); setRep(null); setFait([]);
@@ -59,6 +86,10 @@ export function Palette({ espaces, aller, domaine, ferme }:
     setAttente(false);
     setRep(r ?? { text: 'ZIA ne répond pas pour le moment.', objects: [], actions: [] });
     r?.actions.filter(sansClic).forEach(execute);
+    if (r && parleVoix.current) {
+      const son = await dit(r.text);
+      if (son) { const a = new Audio(URL.createObjectURL(son)); a.play().catch(() => {}); }
+    }
   }
 
   return (
@@ -68,6 +99,9 @@ export function Palette({ espaces, aller, domaine, ferme }:
           <img src={lexie} alt="" />
           <input ref={champ} value={q} onChange={e => setQ(e.target.value)} maxLength={500}
                  placeholder="Demandez à Lexie : « mets la radio en pause », « ouvre atelier »…" aria-label="Demande à Lexie" />
+          {voix && <button type="button" className={ecoute ? 'micro ecoute' : 'micro'} onClick={micro}
+                           aria-pressed={ecoute} aria-label={ecoute ? 'Arrêter l’écoute' : 'Parler à Lexie'}>
+            <SbxIcon id="micro" taille={28} label="" /></button>}
         </form>
         <div className="palette-rep" aria-live="polite">
           {attente && <p className="zia-texte">Lexie réfléchit…</p>}

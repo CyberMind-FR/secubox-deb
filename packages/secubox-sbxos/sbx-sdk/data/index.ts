@@ -103,3 +103,21 @@ export async function demandeZia(message: string): Promise<ReponseZia | null> {
 /** Seules les actions dont la capacité DÉCLARE effet=media s'exécutent sans clic (#1615) ;
  *  une action sans classe est une écriture : elle demande confirmation. */
 export const sansClic = (a: ActionZia) => a.effet === 'media';
+
+// ── Voix de Lexie (#1615) : personnes connectées seulement, côté box ────────
+export async function transcrit(audio: Blob): Promise<string | null> {
+  const f = new FormData();
+  f.append('fichier', audio, 'lexie.webm');
+  f.append('langue', 'fr');
+  const r = await sbxFetch<{ texte: string }>('/api/v1/voice/asr', { method: 'POST', body: f });
+  return r?.texte?.trim() || null;
+}
+
+export async function dit(texte: string): Promise<Blob | null> {
+  try {
+    const r = await fetch('/api/v1/voice/tts', { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texte: texte.replace(/\*\*/g, '').slice(0, 600), profil: 'lexie', format: 'mp3' }) });
+    return r.ok && (r.headers.get('content-type') || '').startsWith('audio/') ? await r.blob() : null;
+  } catch { return null; }
+}
