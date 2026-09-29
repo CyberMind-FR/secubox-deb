@@ -19,6 +19,7 @@ override_dh_auto_install:
 	install -m 0644 vendor/fr_FR-siwis-medium.onnx $(M)/usr/share/secubox/voice/voix/lexie-fr.onnx
 	install -m 0644 vendor/fr_FR-siwis-medium.onnx.json $(M)/usr/share/secubox/voice/voix/lexie-fr.onnx.json
 	install -m 0644 vendor/ggml-base-q5_1.bin $(M)/usr/share/secubox/voice/modeles/ggml-base-q5_1.bin
+	install -m 0644 vendor/ggml-tiny-q5_1.bin $(M)/usr/share/secubox/voice/modeles/ggml-tiny-q5_1.bin
 	install -m 0644 vendor/MODEL_CARD $(M)/usr/share/doc/secubox-voice-moteur/MODEL_CARD-lexie-fr
 
 override_dh_strip:

@@ -27,7 +27,9 @@ audio_max_mo = 10
 piper      = "piper"
 voix_dir   = "/usr/share/secubox/voice/voix"
 whisper    = "whisper-cli"
-modele_asr = "/usr/share/secubox/voice/modeles/ggml-base-q5_1.bin"
+# tiny par défaut (#1646) : sur une box arm64 chargée, base dépassait la coupure
+# de 30 s d'HAProxy (26-42 s) ; tiny répond en ~11 s. base reste installé.
+modele_asr = "/usr/share/secubox/voice/modeles/ggml-tiny-q5_1.bin"
 delai_s    = 120
 
 [distant]

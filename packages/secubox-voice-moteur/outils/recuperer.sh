@@ -15,6 +15,7 @@ HF=https://huggingface.co
 declare -A URL=(
   [piper_linux_aarch64.tar.gz]=https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz
   [ggml-base-q5_1.bin]=$HF/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin
+  [ggml-tiny-q5_1.bin]=$HF/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin
   [fr_FR-siwis-medium.onnx]=$HF/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx
   [fr_FR-siwis-medium.onnx.json]=$HF/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json
   [MODEL_CARD]=$HF/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/MODEL_CARD
