@@ -14,6 +14,9 @@
 # Sur le PAIR (le nœud sans WAN, ex. gk3) :
 #   ouvrir <ip-maillée-du-relais> [port]        (port par défaut : 9080)
 #   fermer <ip-maillée-du-relais> [port]
+# Partout (minuteur horaire, #1682) :
+#   synchroniser   satellite : ouvre le port au maître ; relais : expose par
+#                  défaut les noms de chaque pair (voir cmd_synchroniser)
 #
 # CHAÎNE D'UN NOM, SUR LE RELAIS. Le TLS se termine ici et le WAF d'ici inspecte
 # (jamais de bypass) ; sbxwaf relaie en HTTP vers le pair, et c'est WireGuard qui
@@ -40,6 +43,10 @@ NFT_CONF=/etc/nftables.conf
 NGINX_CONF=/etc/nginx/conf.d/secubox-relais-maillage.conf
 BACKEND=sbxwaf_inspector
 RESOLVEUR=1.1.1.1
+ACME=/root/.acme.sh
+REGLAGES=/etc/secubox/relais-maillage.toml
+WG_ETAT=/var/lib/secubox/p2p/wg_mesh.json
+PORT_PAIR=9080
 
 log()  { printf '[%s] %s\n' "$MODULE" "$*"; }
 meurt() { printf '[%s] ERREUR : %s\n' "$MODULE" "$*" >&2; exit 1; }
@@ -57,8 +64,12 @@ domaine_box() {
 ip_publique() {
     local d; d="$(domaine_box)"
     [ -n "$d" ] || meurt "domaine de la box inconnu ([global] domain ou [api] sso_cookie_domain)"
-    dig +short "hall.$d" A @"$RESOLVEUR" | grep -E '^[0-9.]+$' | head -1
+    # `|| true` : sous pipefail, un dig vide tuerait le script EN SILENCE.
+    dig +short "hall.$d" A @"$RESOLVEUR" | grep -E '^[0-9.]+$' | head -1 || true
 }
+
+# Le nom résout-il, auprès du DNS public, vers <ip> ?
+resout_vers() { [ "$(dig +short "$1" A @"$RESOLVEUR" | grep -E '^[0-9.]+$' | head -1 || true)" = "$2" ]; }
 
 # Joignable par wg-mesh : l'IP est couverte par les allowed-ips d'un pair — un
 # /32 côté maître, tout le réseau maillé côté satellite (le maître y relaie).
@@ -111,17 +122,24 @@ cmd_relayer() {
     code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: $nom" "http://$ip:$port/" || true)
     [ "$code" != "000" ] || meurt "le pair ne répond pas sur $ip:$port — sur le pair : secubox-relais-maillage ouvrir <ip-du-relais> $port"
     log "    le pair répond (HTTP $code)"
+    # En automatique, on ne publie pas un service arrêté (5xx) : il le sera à
+    # une prochaine synchronisation, s'il répond alors.
+    if [ -n "${RELAIS_EN_LOT:-}" ] && [[ "$code" == 5* ]]; then
+        meurt "le service ne répond pas sur le pair (HTTP $code)"
+    fi
 
     log "2/5 DNS public de $nom…"
     local pub vu
     pub="$(ip_publique)"; [ -n "$pub" ] || meurt "IP publique du relais introuvable"
-    vu="$(dig +short "$nom" A @"$RESOLVEUR" | grep -E '^[0-9.]+$' | head -1)"
+    vu="$(dig +short "$nom" A @"$RESOLVEUR" | grep -E '^[0-9.]+$' | head -1 || true)"
     [ "$vu" = "$pub" ] || meurt "$nom résout vers « ${vu:-rien} », pas vers ce relais ($pub) — créer l'enregistrement A chez le registraire (module DNS) puis relancer"
     log "    $nom → $pub"
 
     log "3/5 certificat…"
     if [ -s "$CERTS_DIR/$nom.pem" ]; then
         log "    déjà servi par HAProxy"
+    elif [ -s "$CERTS_DIR/*.${nom#*.}.pem" ]; then
+        log "    couvert par le joker *.${nom#*.}"
     else
         certbot certonly --webroot -w "$WEBROOT" -d "$nom" --non-interactive --agree-tos \
             --keep-until-expiring --register-unsafely-without-email >/dev/null \
@@ -140,6 +158,12 @@ cmd_relayer() {
 
     log "5/5 route sbxwaf → $ip:$port…"
     routes_ecrire "$nom" "$ip" "$port"
+    if [[ "$nom" == hall.* ]] && command -v secubox-halls-parc >/dev/null; then
+        secubox-halls-parc ajouter "https://$nom" >/dev/null && log "Halls du parc : https://$nom peut encadrer les services d'ici"
+    fi
+    # En lot (synchroniser), le rechargement et la vérification se font une
+    # fois, à la fin.
+    [ -n "${RELAIS_EN_LOT:-}" ] && return 0
     haproxyctl generate >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
     systemctl reload secubox-waf-ng 2>/dev/null || true
     sleep 2
@@ -148,11 +172,141 @@ cmd_relayer() {
     log "vérification : https://$nom/ → HTTP $code"
     case "$code" in 2??|3??|401|403) log "relais en place : $nom → $ip:$port" ;;
         *) meurt "la chaîne répond $code — voir journalctl -u secubox-waf-ng" ;; esac
-    # Le Hall d'un pair relayé peut encadrer les services d'ici (#1672) : ses
-    # cartes de repli sur ce relais s'affichent au lieu d'être refusées.
-    if [[ "$nom" == hall.* ]] && command -v secubox-halls-parc >/dev/null; then
-        secubox-halls-parc ajouter "https://$nom" >/dev/null && log "Halls du parc : https://$nom peut encadrer les services d'ici"
+}
+
+# ── EXPOSITION PAR DÉFAUT (#1682) ────────────────────────────────────────────
+# Certificat JOKER *.<domaine> par DNS-01 (acme.sh + Gandi LiveDNS, comme
+# *.gk2.secubox.in) : un seul certificat pour tous les noms d'un pair, au lieu
+# d'un par nom. Renouvelé par acme.sh --cron, recopié par secubox-certs-deploy.
+joker_assure() {
+    local d="$1" pem="$CERTS_DIR/*.$1.pem"
+    [ -s "$pem" ] && return 0
+    [ -x "$ACME/acme.sh" ] && grep -q '^SAVED_GANDI_LIVEDNS_' "$ACME/account.conf" 2>/dev/null || return 1
+    log "certificat joker *.$d (DNS-01)…"
+    "$ACME/acme.sh" --issue --dns dns_gandi_livedns -d "*.$d" --keylength ec-256 \
+        --home "$ACME" >/dev/null 2>&1 || return 1
+    local rep="$ACME/*.${d}_ecc" tmp
+    [ -s "$rep/fullchain.cer" ] && [ -s "$rep/*.$d.key" ] || return 1
+    tmp="$(mktemp "$CERTS_DIR/.joker.XXXXXX")"
+    cat "$rep/fullchain.cer" "$rep/*.$d.key" > "$tmp"
+    chown haproxy:secubox "$tmp" 2>/dev/null || true
+    chmod 0640 "$tmp"
+    mv "$tmp" "$pem"
+    log "    *.$d installé"
+}
+
+reglage() {   # reglage <clé> <défaut> — lu dans relais-maillage.toml
+    python3 - "$REGLAGES" "$1" "$2" <<'PY'
+import sys, tomllib, json
+chemin, cle, defaut = sys.argv[1:4]
+try:
+    v = tomllib.load(open(chemin, "rb")).get(cle, json.loads(defaut))
+except (OSError, ValueError):
+    v = json.loads(defaut)
+print(" ".join(v) if isinstance(v, list) else json.dumps(v))
+PY
+}
+
+# Ce que le relais expose LUI-MÊME : le premier label de chaque route de son
+# propre domaine. Un pair n'est relayé que pour ces services-là.
+labels_exposes() {
+    python3 - "$ROUTES" "$1" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); dom = "." + sys.argv[2]
+print(" ".join(sorted({k[: -len(dom)] for k in d if k.endswith(dom) and "." not in k[: -len(dom)]})))
+PY
+}
+
+# Pairs à /32 (côté maître) ; maître du satellite (entrée « master » de l'état).
+pairs_32() {
+    wg show wg-mesh allowed-ips 2>/dev/null | awk '{for(i=2;i<=NF;i++) if ($i ~ /\/32$/) {sub(/\/32$/,"",$i); print $i}}'
+}
+maitre_du_satellite() {
+    python3 - "$WG_ETAT" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    sys.exit(0)
+for p in d.get("peers") or []:
+    if p.get("name") == "master" or str(p.get("allowed_ips", "")).endswith("/24"):
+        print(p.get("mesh_ip") or ""); break
+PY
+}
+
+# SYNCHRONISER — sans argument, idempotent, sûr à relancer (minuteur horaire).
+#  • Satellite : le port des vhosts est ouvert au SEUL maître, qui voit donc les
+#    noms de la box ; real_ip lui fait confiance.
+#  • Relais (a des pairs /32) : pour chaque pair, lit /api/v1/webos/public/noms
+#    et relaie un nom <svc>.<domaine-du-pair> si, et seulement si :
+#      1. <svc>.<domaine-du-relais> est exposé ici (même politique qu'ici) ;
+#      2. <svc> n'est pas exclu (défaut : wpad, boot — jamais publics) ;
+#      3. le domaine du pair n'est ni celui du relais ni un de ses parents/enfants
+#         (un pair ne peut pas revendiquer les noms du relais) ;
+#      4. le DNS public du nom pointe vers ce relais (décision du propriétaire du
+#         domaine, vérifiée dans cmd_relayer).
+#    Le WAF d'ici inspecte tout ; un service réservé au LAN sur le pair y voit un
+#    visiteur WAN (real_ip) et reste fermé.
+cmd_synchroniser() {
+    local maitre
+    maitre="$(maitre_du_satellite)"
+    if [ -n "$maitre" ] && ip_valide "$maitre" && pair_du_maillage "$maitre"; then
+        cmd_ouvrir "$maitre" "$PORT_PAIR" | sed 's/^/  /'
     fi
+
+    local pairs; pairs="$(pairs_32)"
+    [ -n "$pairs" ] || { log "aucun pair à relayer (pas de pair /32 sur wg-mesh)"; return 0; }
+    [ "$(reglage auto true)" = "true" ] || { log "exposition automatique désactivée ($REGLAGES : auto = false)"; return 0; }
+    local dom exclus labels
+    dom="$(domaine_box)"; [ -n "$dom" ] || meurt "domaine du relais inconnu"
+    exclus=" $(reglage exclure '["wpad", "boot"]') "
+    labels=" $(labels_exposes "$dom") "
+
+    local ip json dpair nom label ajoutes=0 vus=0 echecs=0
+    for ip in $pairs; do
+        json="$(curl -s --max-time 6 -H 'Host: hall.localhost' "http://$ip:$PORT_PAIR/api/v1/webos/public/noms" || true)"
+        dpair="$(printf '%s' "$json" | python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("domaine",""))
+except Exception: pass' 2>/dev/null)"
+        [ -n "$dpair" ] && nom_valide "$dpair" || continue
+        if [ "$dpair" = "$dom" ] || [[ "$dpair" == *".$dom" ]] || [[ "$dom" == *".$dpair" ]]; then
+            log "pair $ip : domaine $dpair refusé (celui du relais)"; continue
+        fi
+        # ÉMETTRE UN JOKER PEUT MASQUER LE DNS. Si les noms du pair résolvent
+        # par un joker PARENT (*.secubox.in), le défi DNS-01 crée
+        # _acme-challenge.<domaine> : le domaine devient un nœud existant et le
+        # joker parent ne s'y applique plus — tous les noms du pair tombent en
+        # NXDOMAIN. Un enregistrement *.<domaine> propre au pair l'évite (vécu
+        # sur gk3, #1682). On le dit plutôt que de laisser 14 échecs muets.
+        local temoin="hall.$dpair" pub; pub="$(ip_publique)"
+        local avant=0; resout_vers "$temoin" "$pub" && avant=1
+        joker_assure "$dpair" || log "pair $ip : pas de joker *.$dpair — certificats par nom"
+        if [ "$avant" = 1 ] && ! resout_vers "$temoin" "$pub"; then
+            log "pair $ip : $temoin ne résout plus depuis le défi DNS-01 — créer « *.$dpair A $pub » chez le registraire"
+        fi
+        for nom in $(printf '%s' "$json" | python3 -c 'import json,sys
+print(" ".join(json.load(sys.stdin).get("noms") or []))'); do
+            [[ "$nom" == *".$dpair" ]] && nom_valide "$nom" || continue
+            label="${nom%.$dpair}"
+            [[ "$label" =~ ^[a-z0-9-]+$ ]] || continue
+            [[ "$exclus" == *" $label "* ]] && continue
+            [[ "$labels" == *" $label "* ]] || continue
+            vus=$((vus + 1))
+            if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get(sys.argv[2],[None])[0]==sys.argv[3] else 1)' "$ROUTES" "$nom" "$ip"; then
+                continue
+            fi
+            if ( RELAIS_EN_LOT=1 cmd_relayer "$nom" "$ip" "$PORT_PAIR" ) >/dev/null 2>&1; then
+                ajoutes=$((ajoutes + 1)); log "relayé : $nom → $ip"
+            else
+                echecs=$((echecs + 1)); log "non relayé : $nom (voir : secubox-relais-maillage relayer $nom $ip)"
+            fi
+        done
+    done
+    if [ "$ajoutes" -gt 0 ]; then
+        haproxyctl generate >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
+        systemctl reload secubox-waf-ng 2>/dev/null || true
+    fi
+    log "synchronisé : $vus nom(s) éligible(s), $ajoutes ajouté(s), $echecs échec(s)"
 }
 
 cmd_retirer() {
@@ -245,5 +399,6 @@ case "${1:-}" in
     etat)    cmd_etat ;;
     ouvrir)  shift; cmd_ouvrir "$@" ;;
     fermer)  shift; cmd_fermer "$@" ;;
-    *) sed -n '8,17p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    synchroniser) cmd_synchroniser ;;
+    *) sed -n '8,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

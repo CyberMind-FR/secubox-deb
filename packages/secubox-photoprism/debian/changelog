@@ -1,3 +1,9 @@
+secubox-photoprism (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 11:16:32 +0200
+
 secubox-photoprism (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Entrée « SecuBox » par OpenID Connect (#1589, #1562) : photoprismctl sso

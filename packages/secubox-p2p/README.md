@@ -156,6 +156,38 @@ Two security-relevant events are appended to `/var/log/secubox/p2p-audit.log`
 its own reachability record) and `masterlink_promote` (every on-demand
 promotion attempt, successful or not).
 
+## Relais WAN par le maillage (#1670, #1672, #1682)
+
+Un nœud sans accès Internet (ex. gk3) est servi par un nœud qui en a un (ex. gk2), à travers `wg-mesh`. Le TLS se termine sur le relais et son WAF inspecte tout ; le trafic va ensuite au pair en HTTP, chiffré par WireGuard.
+
+| Commande | Où | Effet |
+|---|---|---|
+| `secubox-relais-maillage relayer <nom> <ip-maillée> [port]` | relais | Relaie un nom : pair vérifié, DNS public vérifié, certificat (joker s'il existe), vhost HAProxy derrière le WAF, route sbxwaf |
+| `secubox-relais-maillage retirer <nom>` | relais | Retire le vhost et la route (certificat et DNS inchangés) |
+| `secubox-relais-maillage etat` | relais | Noms relayés vers le maillage |
+| `secubox-relais-maillage ouvrir <ip-relais> [port]` | pair | Port des vhosts ouvert au seul relais ; nginx croit l'adresse de visiteur qu'il transmet |
+| `secubox-relais-maillage synchroniser` | partout | Minuteur horaire `secubox-relais-maillage.timer` (voir ci-dessous) |
+
+**Exposition par défaut (`synchroniser`).**
+- *Sur un satellite* : le port est ouvert au maître maillé.
+- *Sur le relais* : pour chaque pair, lecture de `GET /api/v1/webos/public/noms`. Un nom `<service>.<domaine-du-pair>` est relayé seulement si :
+  1. `<service>.<domaine-du-relais>` est lui-même exposé par le relais (même politique) ;
+  2. le service n'est pas exclu (défaut : `wpad`, `boot`) ;
+  3. le domaine du pair n'est pas celui du relais ;
+  4. le DNS public du nom pointe vers le relais ;
+  5. le service répond sur le pair (pas de 5xx).
+
+Un seul certificat joker `*.<domaine-du-pair>` est émis par DNS-01 (acme.sh + Gandi LiveDNS), renouvelé comme `*.gk2.secubox.in`.
+
+Réglages facultatifs, `/etc/secubox/relais-maillage.toml` :
+
+```toml
+auto = true                  # false : plus d'exposition automatique
+exclure = ["wpad", "boot"]   # services jamais relayés
+```
+
+Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'est ce qui permet à un pair de servir ses services sous son propre domaine.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

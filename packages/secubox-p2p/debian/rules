@@ -64,7 +64,8 @@ override_dh_auto_install:
 
 	# Pont état -> wg-mesh, sans surface sudo supplémentaire (#1360)
 	for u in secubox-p2p-mesh.path secubox-p2p-mesh.service \
-	         secubox-p2p-mesh-liveness.service secubox-p2p-mesh-liveness.timer; do \
+	         secubox-p2p-mesh-liveness.service secubox-p2p-mesh-liveness.timer \
+	         secubox-relais-maillage.service secubox-relais-maillage.timer; do \
 		install -m 644 $(CURDIR)/systemd/$$u $(CURDIR)/debian/secubox-p2p/lib/systemd/system/; \
 	done
 

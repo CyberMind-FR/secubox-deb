@@ -45,6 +45,22 @@ case "$1" in
       ln -s ../sites-available/billets.conf /etc/nginx/sites-enabled/billets.conf 2>/dev/null || true
     fi
 
+    # #1682 : le vhost ACTIF répond aussi à billets.* (le service sous le domaine
+    # de la box). Une copie posée par une ancienne installation n'est jamais
+    # rafraîchie : on n'y migre QUE la ligne server_name, sauvegarde hors de
+    # sites-enabled (nginx charge tout ce qui s'y trouve), retour si nginx -t refuse.
+    f="$(readlink -f /etc/nginx/sites-enabled/billets.conf 2>/dev/null || true)"
+    if [ -n "$f" ] && [ -f "$f" ] && grep -q 'billets\.gk2\.secubox\.in' "$f" && ! grep -q 'billets\.\*' "$f"; then
+      mkdir -p /var/backups/secubox-vhosts
+      cp -p "$f" "/var/backups/secubox-vhosts/$(basename "$f").avant-1682"
+      sed -i 's/^\(\s*server_name\s[^;]*billets\.gk2\.secubox\.in\)\([^;]*\);/\1\2 billets.*;/' "$f"
+      if command -v nginx >/dev/null && ! nginx -t 2>/dev/null; then
+        cp -p "/var/backups/secubox-vhosts/$(basename "$f").avant-1682" "$f"
+      else
+        systemctl reload nginx 2>/dev/null || true
+      fi
+    fi
+
     # ── LE PAQUET DÉCLARE SA PROPRE ROUTE (#1356) ────────────────────────
     #
     # `billets.gk2.secubox.in` n'avait AUCUNE entrée dans la table de sbxwaf.

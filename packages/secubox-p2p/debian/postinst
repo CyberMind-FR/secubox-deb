@@ -48,6 +48,10 @@ case "$1" in
                          secubox-p2p-mesh-liveness.timer >/dev/null 2>&1 || true
         systemctl start secubox-p2p-mesh.path secubox-p2p-mesh-liveness.timer || true
         systemctl start secubox-p2p-mesh-liveness.service || true
+        # Exposition par défaut des nœuds relayés (#1682) : sur un satellite,
+        # ouvre le port au maître ; sur le relais, relaie les noms des pairs.
+        systemctl enable secubox-relais-maillage.timer >/dev/null 2>&1 || true
+        systemctl start secubox-relais-maillage.timer >/dev/null 2>&1 || true
         # Appliquer l'état DÉJÀ présent : l'unité .path ne réagit qu'aux
         # changements, et un pair inscrit avant la mise à jour attendrait le
         # prochain enrôlement pour avoir son tunnel.

@@ -1,3 +1,9 @@
+secubox-webos (1.0.381-1~bookworm1) bookworm; urgency=medium
+
+  * GET /api/v1/webos/public/noms : les noms que la box sert pour son domaine (server_name exacts et x.* ramenés au domaine), lus par le relais du maillage pour l'exposer par défaut (#1682).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 11:16:32 +0200
+
 secubox-webos (1.0.380-1~bookworm1) bookworm; urgency=medium
 
   * Hall : micro délégué au mood du domaine du Hall (hall.gk3 → mood.gk3) ; hotes.js reconnaît les server_name « x.* » ; barre d'état : nom du nœud fourni par la box (SBX_NOEUD), plus « gk2 » en dur (#1680).

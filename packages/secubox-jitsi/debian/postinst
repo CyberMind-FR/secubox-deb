@@ -44,6 +44,22 @@ case "$1" in
        [ ! -e /etc/nginx/sites-enabled/jitsi.conf ]; then
       ln -s ../sites-available/jitsi.conf /etc/nginx/sites-enabled/jitsi.conf
     fi
+
+    # #1682 : le vhost ACTIF répond aussi à meet.* (le service sous le domaine
+    # de la box). Une copie posée par une ancienne installation n'est jamais
+    # rafraîchie : on n'y migre QUE la ligne server_name, sauvegarde hors de
+    # sites-enabled (nginx charge tout ce qui s'y trouve), retour si nginx -t refuse.
+    f="$(readlink -f /etc/nginx/sites-enabled/jitsi.conf 2>/dev/null || true)"
+    if [ -n "$f" ] && [ -f "$f" ] && grep -q 'meet\.gk2\.secubox\.in' "$f" && ! grep -q 'meet\.\*' "$f"; then
+      mkdir -p /var/backups/secubox-vhosts
+      cp -p "$f" "/var/backups/secubox-vhosts/$(basename "$f").avant-1682"
+      sed -i 's/^\(\s*server_name\s[^;]*meet\.gk2\.secubox\.in\)\([^;]*\);/\1\2 meet.*;/' "$f"
+      if command -v nginx >/dev/null && ! nginx -t 2>/dev/null; then
+        cp -p "/var/backups/secubox-vhosts/$(basename "$f").avant-1682" "$f"
+      else
+        systemctl reload nginx 2>/dev/null || true
+      fi
+    fi
     # `nginx -t` AVANT de recharger : une conf invalide poussée dans un reload
     # laisse nginx sur l'ancienne config sans le dire, et le défaut ne se
     # manifeste qu'au prochain redémarrage — c'est-à-dire au pire moment.
