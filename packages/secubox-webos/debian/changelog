@@ -1,3 +1,9 @@
+secubox-webos (1.0.379-1~bookworm1) bookworm; urgency=medium
+
+  * Visite guidée : même bulle reverse-design que le clic et le survol (zones colorées dans la carte, légende numérotée) ; compteur « n / N » au-delà de 10 cartes ; un chiffre non arrivé en 7 s s'efface au lieu de rester « … » ; source d'aide relue seule si webos redémarre (#1674).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 10:49:32 +0200
+
 secubox-webos (1.0.378-1~bookworm1) bookworm; urgency=medium
 
   * Cartes : services de CETTE box quand elle les sert vraiment, box de référence (gk2) en repli — /api/v1/webos/public/hotes.js (server_name exacts du domaine de la box, joignables par leur chemin public, recalculés toutes les 10 min) chargé avant domaine.js (#1670).
