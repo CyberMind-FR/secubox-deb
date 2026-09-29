@@ -1133,6 +1133,8 @@ func main() {
 	banStore := flag.String("ban-store", "/var/lib/secubox/waf/bans.jsonl",
 		"journal JSONL des bans nft (persistance + audit ; rechargé au démarrage)")
 	nftBanDuration := flag.Duration("nft-ban-duration", 4*time.Hour, "durée d'un ban nft")
+	nftEtat := flag.String("nft-etat", "/var/cache/secubox/waf/nft-etat.json",
+		"état du blocage nft (actif, réparations, dernier échec), réécrit à chaque veille — lu par le tableau de bord (#1693)")
 	// #1070 phase D — mode hors-ligne : corréler le journal de menaces en
 	// campagnes (attaquants au même workflow) et sortir la synthèse JSON.
 	correlate := flag.String("correlate", "",
@@ -1338,21 +1340,33 @@ func main() {
 	if *nftBanEnabled {
 		store := NewBanStore(*banStore)
 		nb := NewNftBanner(*nftPath, *nftTable, *nftBanDuration, store)
+		nb.etatFichier = *nftEtat
 		if err := nb.Ensure(); err != nil {
 			log.Printf("sbxwaf: ban nft natif désactivé (nft indisponible : %v) — plus de ban natif", err)
+			nb.noterEchec(err.Error())
+			nb.EcrireEtat() // actif=false : le tableau de bord le dit, au lieu d'afficher « 0 ban »
 		} else {
 			srv.nftBan = nb
 			n := nb.Reload()
 			log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, %d ban(s) rechargé(s))",
 				*nftTable, *nftBanDuration, n)
-			// Balayage : ré-asserte périodiquement les bans actifs du journal dans
-			// nft (au cas où le ruleset est rechargé/flush par un autre outil). Le
-			// retrait à l'échéance reste assuré par le timeout nft du noyau.
+			// Veille (#1693) : la table ne vit que dans le noyau, et tout
+			// rechargement du pare-feu (`flush ruleset`) l'efface. Toutes les 30 s
+			// on vérifie qu'elle bloque encore — sinon recréée et bans du journal
+			// ré-appliqués ; toutes les 2 min les bans actifs sont ré-affirmés
+			// (un `flush set` vide l'ensemble sans toucher la chaîne). Le retrait
+			// à l'échéance reste assuré par le timeout nft du noyau.
+			go nb.Veiller(30*time.Second, 2*time.Minute)
+			// SIGHUP : `systemctl reload secubox-waf-ng`, propagé depuis
+			// nftables.service (ReloadPropagatedFrom) — réparation immédiate au
+			// lieu d'attendre la veille. Revérifié 3 s plus tard : l'ordre entre
+			// le rechargement du pare-feu et celui-ci n'est pas garanti.
+			hup := make(chan os.Signal, 1)
+			signal.Notify(hup, syscall.SIGHUP)
 			go func() {
-				t := time.NewTicker(2 * time.Minute)
-				defer t.Stop()
-				for range t.C {
-					nb.Reload()
+				for range hup {
+					nb.Reparer("rechargement signalé")
+					time.AfterFunc(3*time.Second, func() { nb.Reparer("rechargement signalé") })
 				}
 			}()
 		}

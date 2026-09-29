@@ -1,3 +1,10 @@
+secubox-toolbox-ng (0.5.6-1~bookworm1) bookworm; urgency=high
+
+  * sbx-authwatch : bans retenus et ré-affirmés toutes les 30 s — un rechargement du pare-feu les effaçait sans retour ; au démarrage, attend deux minutes la table du WAF au lieu de boucler en redémarrages (#1693).
+  * sbx-authwatch : au démarrage, bans encore actifs retrouvés dans le journal des menaces (courant + tourné) et ré-appliqués — ils n'étaient persistés nulle part (163 bans en 4 h sur gk2) (#1693).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:40:58 +0200
+
 secubox-toolbox-ng (0.5.5-1~bookworm1) bookworm; urgency=high
 
   * sbx-actord : vue réduite par défaut ; vue complète seulement sur la route d'administration (en-tête X-Sbx-Vue posé après la garde) (#1608).

@@ -28,6 +28,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"os/signal"
@@ -107,7 +108,19 @@ func main() {
 	// consulte l'ensemble : compter des bannissements sans effet est pire que
 	// ne rien faire, parce que ça se voit dans les journaux comme une reussite.
 	if !*simule {
-		if err := banneur.Verifie(ctx); err != nil {
+		// Au démarrage de la machine, sbxwaf peut ne pas avoir encore créé sa
+		// table : on l'attend deux minutes avant de conclure, plutôt que de
+		// boucler en redémarrages (#1693). La garde elle-même ne change pas.
+		err := banneur.Verifie(ctx)
+		for limite := time.Now().Add(2 * time.Minute); err != nil && time.Now().Before(limite); err = banneur.Verifie(ctx) {
+			log.Printf("sbx-authwatch: en attente de la table du WAF — %v", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Second):
+			}
+		}
+		if err != nil {
 			if !*sansGarde {
 				log.Fatalf("sbx-authwatch: %v\n"+
 					"  → corriger, ou lancer avec --simulation pour observer sans bannir,\n"+
@@ -205,6 +218,29 @@ func main() {
 		"liste blanche %d entrée(s), %d leurre(s)%s",
 		*seuil, *fenetre, *campSeuil, *campFen, *duree, lb.Taille(), len(listeLeurres),
 		map[bool]string{true: " — SIMULATION, aucun bannissement", false: ""}[*simule])
+
+	// ── ré-affirmation des bans (#1693) ────────────────────────────────────
+	// Un rechargement du pare-feu efface la table ; sbxwaf la recrée en moins
+	// de 30 s avec ses propres bans. Les nôtres reviennent ici — y compris ceux
+	// posés avant ce démarrage, retrouvés dans le journal des menaces.
+	if !*simule {
+		if n := banneur.RechargeJournal([]string{*menaces, *menaces + ".1"}, time.Now()); n > 0 {
+			log.Printf("sbx-authwatch: %d ban(s) encore actif(s) retrouvé(s) dans le journal — ré-appliqué(s) : %d",
+				n, banneur.Reaffirme(ctx))
+		}
+		go func() {
+			t := time.NewTicker(30 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					banneur.Reaffirme(ctx)
+				}
+			}
+		}()
+	}
 
 	// ── elagage periodique ─────────────────────────────────────────────────
 	go func() {
@@ -305,7 +341,11 @@ func appliquer(ctx context.Context, sig Signal, total int,
 		log.Printf("sbx-authwatch: SIMULATION %s ← %s (%s)", sig.IP, sig.Categorie, sig.Detail)
 		return
 	}
-	if err := banneur.Bannit(ctx, sig.IP); err != nil {
+	if err := banneur.Bannit(ctx, sig.IP); errors.Is(err, ErrTableAbsente) {
+		journal.Inscrit(sig, "banned", total)
+		log.Printf("sbx-authwatch: BAN %s ← %s (%s, total %d) — %v", sig.IP, sig.Categorie, sig.Detail, total, err)
+		return
+	} else if err != nil {
 		log.Printf("sbx-authwatch: bannissement refusé pour %s : %v", sig.IP, err)
 		journal.Inscrit(sig, "warning", total)
 		return

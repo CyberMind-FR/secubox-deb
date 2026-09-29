@@ -1,3 +1,9 @@
+secubox-soc (1.1.7-1~bookworm1) bookworm; urgency=high
+
+  * Derniers bans : alerte « bans non appliqués » quand la table nft manque ou que sbxwaf ne veille plus, au lieu d'un calme trompeur (#1693).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:40:58 +0200
+
 secubox-soc (1.1.6-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

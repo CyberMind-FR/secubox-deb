@@ -6,8 +6,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -193,5 +196,177 @@ func TestNftBanner_JamaisDeBanPrive(t *testing.T) {
 		if act := b.store.ActiveBans(time.Now().Unix()); len(act) != 0 {
 			t.Fatalf("%s ne doit pas être journalisé comme banni", ip)
 		}
+	}
+}
+
+// ── Auto-réparation (#1693) ──────────────────────────────────────────────────
+
+// noyauNft simule l'état du noyau : la table existe ou non, et un
+// `flush ruleset` (rechargement de /etc/nftables.conf) l'efface.
+type noyauNft struct {
+	mu      sync.Mutex
+	table   bool
+	regles  bool
+	elems   map[string]bool
+	creees  int // nombre de `add table`
+	absente []byte
+}
+
+func nouveauNoyau() *noyauNft {
+	return &noyauNft{elems: map[string]bool{},
+		absente: []byte("Error: No such file or directory; did you mean table 'secubox-nat' in family inet?")}
+}
+
+func (k *noyauNft) flushRuleset() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.table, k.regles, k.elems = false, false, map[string]bool{}
+}
+
+func (k *noyauNft) run(_ context.Context, args ...string) ([]byte, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	j := joint(args)
+	switch {
+	case strings.HasPrefix(j, "add table"):
+		k.table = true
+		k.creees++
+	case strings.HasPrefix(j, "flush chain"):
+		k.regles = false
+	case strings.HasPrefix(j, "add rule"):
+		k.regles = true
+	case strings.HasPrefix(j, "list chain"):
+		if !k.table {
+			return k.absente, errors.New("exit status 1")
+		}
+		if k.regles {
+			return []byte("chain waf_drop {\n ip saddr @waf_ban counter drop\n}"), nil
+		}
+		return []byte("chain waf_drop {\n}"), nil
+	case strings.HasPrefix(j, "add element"):
+		if !k.table {
+			return k.absente, errors.New("exit status 1")
+		}
+		k.elems[args[5]] = true
+	}
+	return nil, nil
+}
+
+func banneurNoyau(t *testing.T, k *noyauNft) *NftBanner {
+	t.Helper()
+	store := NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl"))
+	b := NewNftBanner("nft", "secubox", time.Hour, store)
+	b.runner = k.run
+	b.cooldown = time.Hour
+	if err := b.Ensure(); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+	return b
+}
+
+// Le cas vécu : un postinst recharge le pare-feu, la table disparaît, et le ban
+// suivant échouait jusqu'au redémarrage du WAF. Il doit réparer et passer.
+func TestNftBanner_BanApresFlushRepare(t *testing.T) {
+	k := nouveauNoyau()
+	b := banneurNoyau(t, k)
+	k.flushRuleset()
+
+	b.Ban("203.0.113.20", "scanners", "high")
+	if !k.table || !k.regles {
+		t.Fatalf("la table et sa règle de drop devaient être recréées (table=%v règles=%v)", k.table, k.regles)
+	}
+	if len(k.elems) != 1 {
+		t.Fatalf("le ban devait être rejoué après réparation, éléments: %v", k.elems)
+	}
+	if e := b.Etat(); e.Reparations != 1 || e.DernierBan == 0 || e.DernierEchec != "" {
+		t.Fatalf("état inattendu après réparation: %+v", e)
+	}
+}
+
+// Après un flush, les bans ACTIFS du journal doivent revenir, pas seulement les suivants.
+func TestNftBanner_ReparerReappliqueLeJournal(t *testing.T) {
+	k := nouveauNoyau()
+	b := banneurNoyau(t, k)
+	b.Ban("203.0.113.1", "x", "high")
+	b.Ban("203.0.113.2", "x", "high")
+	k.flushRuleset()
+
+	if !b.Reparer("test") {
+		t.Fatal("Reparer devait réparer une table effacée")
+	}
+	if len(k.elems) != 2 {
+		t.Fatalf("2 bans du journal attendus après réparation, obtenu %v", k.elems)
+	}
+	if b.Reparer("test") {
+		t.Fatal("une table présente ne doit pas être réparée une seconde fois")
+	}
+}
+
+// `flush table` garde la chaîne mais retire la règle : l'ensemble n'est plus
+// consulté, rien n'est bloqué. C'est une panne, pas un état sain.
+func TestNftBanner_ChaineSansRegleEstUnePanne(t *testing.T) {
+	k := nouveauNoyau()
+	b := banneurNoyau(t, k)
+	k.mu.Lock()
+	k.regles = false
+	k.mu.Unlock()
+	if !b.Reparer("test") || !k.regles {
+		t.Fatal("une chaîne qui ne consulte plus @waf_ban doit être réparée")
+	}
+}
+
+// Une rafale de bans après un flush ne recrée la table qu'une fois.
+func TestNftBanner_RafaleUneSeuleReparation(t *testing.T) {
+	k := nouveauNoyau()
+	b := banneurNoyau(t, k)
+	k.flushRuleset()
+	avant := k.creees
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			b.Ban("203.0.113."+strconv.Itoa(100+i), "scanners", "high")
+		}(i)
+	}
+	wg.Wait()
+	if got := k.creees - avant; got != 1 {
+		t.Fatalf("une seule recréation attendue, obtenu %d", got)
+	}
+	if len(k.elems) != 20 {
+		t.Fatalf("les 20 bans devaient passer, obtenu %d", len(k.elems))
+	}
+}
+
+// Un banneur jamais prêt (nft indisponible au démarrage) ne tente rien.
+func TestNftBanner_ReparerPasPret(t *testing.T) {
+	k := nouveauNoyau()
+	store := NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl"))
+	b := NewNftBanner("nft", "secubox", time.Hour, store)
+	b.runner = k.run
+	if b.Reparer("test") || k.creees != 0 {
+		t.Fatal("un banneur non prêt ne doit pas créer de table")
+	}
+}
+
+// L'état publié dit la vérité au tableau de bord.
+func TestNftBanner_EcrireEtat(t *testing.T) {
+	k := nouveauNoyau()
+	b := banneurNoyau(t, k)
+	b.etatFichier = filepath.Join(t.TempDir(), "nft-etat.json")
+	k.flushRuleset()
+	b.Reparer("test")
+
+	raw, err := os.ReadFile(b.etatFichier)
+	if err != nil {
+		t.Fatalf("état non écrit: %v", err)
+	}
+	var e EtatNft
+	if err := json.Unmarshal(raw, &e); err != nil {
+		t.Fatalf("état illisible: %v", err)
+	}
+	if !e.Actif || e.Reparations != 1 || e.Verifie == 0 || e.Table != "inet secubox" {
+		t.Fatalf("état publié inattendu: %+v", e)
 	}
 }

@@ -6,9 +6,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -55,6 +57,18 @@ type NftBanner struct {
 	mu       sync.Mutex
 	recent   map[string]time.Time // ip → dernier ban (anti-tempête)
 	ready    bool
+
+	// Auto-réparation (#1693). repMu sérialise les réparations : une rafale de
+	// bans qui échouent en même temps ne doit recréer la table qu'une fois.
+	repMu        sync.Mutex
+	reparations  int
+	derniereRep  time.Time
+	dernierEchec string
+	echecA       time.Time
+	dernierBan   time.Time
+	etatFichier  string // "" = pas d'état écrit (tests)
+	etatMu       sync.Mutex
+	etatEchoue   bool
 }
 
 // NewNftBanner construit le banneur. `store` peut être nil (pas de persistance).
@@ -171,13 +185,26 @@ func (b *NftBanner) Ban(ip, cat, sev string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	elem := fmt.Sprintf("{ %s timeout %ds }", ip, secs)
-	if out, err := b.runner(ctx, "add", "element", "inet", b.table, set, elem); err != nil {
-		log.Printf("sbxwaf: nft ban échec %s (%s): %v: %s", ip, cat, err, strings.TrimSpace(string(out)))
+	out, err := b.runner(ctx, "add", "element", "inet", b.table, set, elem)
+	if err != nil && tableEffacee(out) {
+		// La table venait d'être effacée par un rechargement du ruleset : elle
+		// est recréée (ici, ou par un autre ban de la même rafale qui a pris le
+		// verrou d'abord), et le ban est rejoué une fois plutôt que perdu.
+		b.Reparer("échec d'un ban")
+		out, err = b.runner(ctx, "add", "element", "inet", b.table, set, elem)
+	}
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		log.Printf("sbxwaf: nft ban échec %s (%s): %v: %s", ip, cat, err, msg)
 		b.mu.Lock()
 		delete(b.recent, ip) // laisser le prochain coup réessayer
 		b.mu.Unlock()
+		b.noterEchec(msg)
 		return
 	}
+	b.mu.Lock()
+	b.dernierBan = now
+	b.mu.Unlock()
 	if b.store != nil {
 		_ = b.store.Append(BanRecord{
 			IP: ip, Category: cat, Severity: sev,
@@ -220,4 +247,149 @@ func (b *NftBanner) Reload() int {
 		log.Printf("sbxwaf: nft — %d ban(s) ré-injecté(s) depuis le journal", n)
 	}
 	return n
+}
+
+// ── Auto-réparation (#1693) ──────────────────────────────────────────────────
+//
+// Ensure ne tourne qu'au démarrage, mais la table ne vit que dans le noyau :
+// tout `nft -f /etc/nftables.conf` commence par `flush ruleset` et l'efface
+// (`systemctl reload nftables.service` dans un postinst, un outil qui réécrit
+// nftables.conf, un redémarrage de nftables.service). Le WAF continuait alors
+// à décider des bans que plus rien n'appliquait : chaque `add element`
+// échouait, le SOC lisait un ensemble absent comme « aucun ban actif », et
+// seul le redémarrage suivant (RuntimeMaxSec=12h) remettait la table. Six
+// trous de 6 à 12 h en une semaine sur gk2. Le WAF ne dépend plus de qui
+// recharge le pare-feu : il vérifie et répare lui-même.
+
+// tableEffacee reconnaît la réponse de nft quand la table ou l'ensemble visé
+// n'existe plus.
+func tableEffacee(out []byte) bool {
+	return strings.Contains(string(out), "No such file or directory")
+}
+
+// Presente dit si le blocage est en place : la chaîne existe ET consulte
+// l'ensemble. Tester la seule table ne suffit pas — un `flush table` garde la
+// chaîne mais retire les règles, et un ensemble que rien ne consulte ne bloque
+// rien (#1218).
+func (b *NftBanner) Presente(ctx context.Context) bool {
+	out, err := b.runner(ctx, "list", "chain", "inet", b.table, b.chain)
+	return err == nil && strings.Contains(string(out), "@"+b.set4)
+}
+
+// Reparer recrée la table si elle a disparu et y ré-applique les bans actifs du
+// journal. Renvoie true si une réparation a eu lieu. Sans effet sur un banneur
+// qui n'a jamais été prêt (nft indisponible au démarrage).
+func (b *NftBanner) Reparer(motif string) bool {
+	b.mu.Lock()
+	pret := b.ready
+	b.mu.Unlock()
+	if !pret {
+		return false
+	}
+	b.repMu.Lock()
+	defer b.repMu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if b.Presente(ctx) {
+		return false
+	}
+	if err := b.Ensure(); err != nil {
+		log.Printf("sbxwaf: nft — table inet %s absente (%s) et IMPOSSIBLE à recréer : %v", b.table, motif, err)
+		b.noterEchec(err.Error())
+		b.EcrireEtat()
+		return false
+	}
+	n := b.Reload()
+	b.mu.Lock()
+	b.reparations++
+	b.derniereRep = time.Now()
+	b.mu.Unlock()
+	b.EcrireEtat()
+	log.Printf("sbxwaf: nft — table inet %s effacée (%s, rechargement du pare-feu ?) : recréée, %d ban(s) ré-appliqué(s)",
+		b.table, motif, n)
+	return true
+}
+
+// Veiller vérifie la table toutes les `pas` et ré-affirme les bans du journal
+// toutes les `pasReload` (un `flush set` vide l'ensemble sans toucher la
+// chaîne). Ne rend jamais la main.
+func (b *NftBanner) Veiller(pas, pasReload time.Duration) {
+	t := time.NewTicker(pas)
+	defer t.Stop()
+	dernier := time.Now()
+	b.EcrireEtat()
+	for range t.C {
+		if b.Reparer("veille") {
+			dernier = time.Now()
+		} else if time.Since(dernier) >= pasReload {
+			b.Reload()
+			dernier = time.Now()
+		}
+		b.EcrireEtat()
+	}
+}
+
+// EtatNft est l'état du blocage, pour le tableau de bord : un WAF qui décide
+// des bans que rien n'applique ne doit plus passer pour un WAF calme.
+// Verifie date l'instantané : un fichier qui ne se renouvelle plus veut dire
+// un WAF arrêté — ce que personne n'a vu sur gk3, en boucle de redémarrage.
+type EtatNft struct {
+	Actif        bool   `json:"actif"`
+	Table        string `json:"table"`
+	Verifie      int64  `json:"verifie"`
+	Reparations  int    `json:"reparations"`
+	DerniereRep  int64  `json:"derniere_reparation,omitempty"`
+	DernierBan   int64  `json:"dernier_ban,omitempty"`
+	DernierEchec string `json:"dernier_echec,omitempty"`
+	EchecA       int64  `json:"echec_a,omitempty"`
+}
+
+func unixOuZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}
+
+// Etat renvoie un instantané de l'état du banneur.
+func (b *NftBanner) Etat() EtatNft {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return EtatNft{
+		Actif:        b.ready,
+		Table:        "inet " + b.table,
+		Verifie:      time.Now().Unix(),
+		Reparations:  b.reparations,
+		DerniereRep:  unixOuZero(b.derniereRep),
+		DernierBan:   unixOuZero(b.dernierBan),
+		DernierEchec: b.dernierEchec,
+		EchecA:       unixOuZero(b.echecA),
+	}
+}
+
+func (b *NftBanner) noterEchec(msg string) {
+	b.mu.Lock()
+	b.dernierEchec, b.echecA = msg, time.Now()
+	b.mu.Unlock()
+}
+
+// EcrireEtat publie l'état dans etatFichier (écriture atomique). Une erreur
+// d'écriture est journalisée une fois, sans jamais gêner le blocage.
+func (b *NftBanner) EcrireEtat() {
+	if b.etatFichier == "" {
+		return
+	}
+	b.etatMu.Lock()
+	defer b.etatMu.Unlock()
+	buf, err := json.Marshal(b.Etat())
+	if err == nil {
+		tmp := b.etatFichier + ".tmp"
+		if err = os.WriteFile(tmp, buf, 0o640); err == nil {
+			err = os.Rename(tmp, b.etatFichier)
+		}
+	}
+	if err != nil && !b.etatEchoue {
+		log.Printf("sbxwaf: état nft non publié dans %s : %v", b.etatFichier, err)
+	}
+	b.etatEchoue = err != nil
 }

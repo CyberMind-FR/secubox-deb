@@ -28,7 +28,14 @@
 [Unit]
 Description=SecuBox WAF-NG Go reverse-proxy (single instance, port 8085)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/896
-After=network.target
+After=network.target nftables.service
+# RECHARGEMENT DU PARE-FEU (#1693). `systemctl reload nftables.service` rejoue
+# /etc/nftables.conf, qui commence par `flush ruleset` : la table inet secubox
+# (sets waf_ban + chaîne de drop), qui ne vit que dans le noyau, disparaît. Le
+# rechargement est propagé ici → SIGHUP → sbxwaf la recrée sur-le-champ et y
+# ré-applique les bans du journal. Pour un `nft -f` direct, qui ne passe pas par
+# systemd, la veille de 30 s de sbxwaf fait le même travail.
+ReloadPropagatedFrom=nftables.service
 ConditionPathExists=/usr/sbin/sbxwaf
 
 [Service]
@@ -129,6 +136,9 @@ ExecStart=/usr/sbin/sbxwaf \
 # `inet secubox waf_ban{,6}`, persistant, retrait differe par le timeout nft).
 # Aucune source de blocage externe n'est plus interrogee sur le chemin de ban.
 
+# SIGHUP : réparation immédiate de la table nft (voir ReloadPropagatedFrom).
+# Les routes, elles, se rechargent seules à chaud.
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
 
@@ -172,6 +182,14 @@ RestrictRealtime=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
+# setrlimit ré-autorisé (#1693). Le runtime Go relève sa limite de descripteurs
+# au démarrage ; sur amd64 il le fait par `setrlimit`, que @resources interdit —
+# sbxwaf y était tué par seccomp (SIGSYS) avant d'avoir servi une requête, en
+# boucle de redémarrage (35 000+ sur gk3, aucun WAF depuis l'installation).
+# arm64 passe par un autre appel, d'où une panne invisible sur gk2. La limite
+# elle-même est fixée ci-dessous, pas laissée au runtime.
+SystemCallFilter=setrlimit
+LimitNOFILE=65536
 MemoryDenyWriteExecute=yes
 
 MemoryHigh=256M

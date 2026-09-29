@@ -1,3 +1,12 @@
+secubox-waf-ng (1.18.9-1~bookworm1) bookworm; urgency=high
+
+  * sbxwaf : auto-réparation du blocage nft — la table inet secubox (sets waf_ban + chaîne de drop) ne vivait que dans le noyau et tout rechargement du pare-feu (flush ruleset) l'effaçait ; chaque ban échouait ensuite jusqu'au redémarrage suivant (six trous de 6 à 12 h en une semaine sur gk2). Veille de 30 s, réparation sur échec d'un ban (rejoué), et sur SIGHUP ; bans du journal ré-appliqués (#1693).
+  * unité : setrlimit ré-autorisé — sur amd64 le runtime Go l'appelle au démarrage et @resources le refusait : sbxwaf tué par seccomp en boucle, aucun WAF sur gk3 depuis l'installation ; LimitNOFILE=65536 ; ExecReload + ReloadPropagatedFrom=nftables.service (#1693).
+  * AppArmor : le profil de sbxwaf n'autorisait ni nft, ni netlink, ni net_admin, ni le journal des bans, ni la base GeoIP — sur une box où AppArmor est actif (gk3), aucun ban natif n'était posé ; accès relevés en mode complain (#1693).
+  * état du blocage publié dans /var/cache/secubox/waf/nft-etat.json ; postinst vérifie l'écoute sur 8085 et la chaîne de drop après redémarrage et le dit sinon (#1693).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:40:58 +0200
+
 secubox-waf-ng (1.18.8-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).

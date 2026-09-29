@@ -7,6 +7,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,5 +208,119 @@ func TestCompteVisePorteDansLeJournal(t *testing.T) {
 	}
 	if lignes[0]["host"] != "smtp" {
 		t.Errorf("host doit porter le service, obtenu %v", lignes[0]["host"])
+	}
+}
+
+// ── #1693 : un rechargement du pare-feu ne doit pas effacer nos bans ────────
+
+type noyauAbsent struct {
+	absente bool
+	cmds    []string
+}
+
+func (k *noyauAbsent) run(_ context.Context, args ...string) ([]byte, error) {
+	j := strings.Join(args, " ")
+	k.cmds = append(k.cmds, j)
+	if k.absente && strings.HasPrefix(j, "add element") {
+		return []byte("Error: No such file or directory; did you mean table 'secubox-nat' in family inet?"), errors.New("exit status 1")
+	}
+	return nil, nil
+}
+
+func TestBanRetenuPuisReaffirmeApresRechargement(t *testing.T) {
+	k := &noyauAbsent{absente: true}
+	b := NewBanneur("nft", "secubox", "waf_ban", "waf_ban6", time.Hour, false)
+	b.exec = k.run
+
+	if err := b.Bannit(context.Background(), "203.0.113.50"); !errors.Is(err, ErrTableAbsente) {
+		t.Fatalf("table absente : ErrTableAbsente attendue, obtenu %v", err)
+	}
+	k.absente = false // sbxwaf a recréé la table
+	k.cmds = nil
+	if n := b.Reaffirme(context.Background()); n != 1 {
+		t.Fatalf("le ban retenu devait être ré-appliqué, obtenu %d", n)
+	}
+	if len(k.cmds) != 1 || !strings.Contains(k.cmds[0], "waf_ban { 203.0.113.50 timeout ") {
+		t.Fatalf("commande de ré-affirmation inattendue: %v", k.cmds)
+	}
+}
+
+func TestReaffirmeOublieLesEchusEtGroupeParFamille(t *testing.T) {
+	k := &noyauAbsent{}
+	b := NewBanneur("nft", "secubox", "waf_ban", "waf_ban6", time.Hour, false)
+	b.exec = k.run
+	_ = b.Bannit(context.Background(), "203.0.113.1")
+	_ = b.Bannit(context.Background(), "203.0.113.2")
+	_ = b.Bannit(context.Background(), "2001:db8::7")
+	b.mu.Lock()
+	b.actifs["198.51.100.9"] = time.Now().Add(-time.Second) // échu
+	b.mu.Unlock()
+
+	k.cmds = nil
+	if n := b.Reaffirme(context.Background()); n != 3 {
+		t.Fatalf("3 bans actifs attendus, obtenu %d", n)
+	}
+	if len(k.cmds) != 2 {
+		t.Fatalf("une commande par famille attendue, obtenu %v", k.cmds)
+	}
+	b.mu.Lock()
+	_, reste := b.actifs["198.51.100.9"]
+	b.mu.Unlock()
+	if reste {
+		t.Fatal("un ban échu doit être oublié")
+	}
+}
+
+func TestSimulationNeRetientRien(t *testing.T) {
+	k := &noyauAbsent{}
+	b := NewBanneur("nft", "secubox", "waf_ban", "waf_ban6", time.Hour, true)
+	b.exec = k.run
+	_ = b.Bannit(context.Background(), "203.0.113.3")
+	if n := b.Reaffirme(context.Background()); n != 0 || len(k.cmds) != 0 {
+		t.Fatalf("la simulation ne doit rien retenir ni toucher nft (n=%d, %v)", n, k.cmds)
+	}
+}
+
+// Un redémarrage d'authwatch ne doit pas oublier ses bans : ils sont retrouvés
+// dans le journal des menaces, y compris le tourné (bans d'avant minuit).
+func TestRechargeJournalRetrouveLesBansActifs(t *testing.T) {
+	dir := t.TempDir()
+	courant, tourne := filepath.Join(dir, "waf-threats.log"), filepath.Join(dir, "waf-threats.log.1")
+	now := time.Now()
+	l := func(ip, action, tool string, il time.Duration) string {
+		return fmt.Sprintf(`{"timestamp":%q,"client_ip":%q,"host":"ssh","action":%q,"tool":%q}`+"\n",
+			now.Add(-il).Format(time.RFC3339), ip, action, tool)
+	}
+	_ = os.WriteFile(tourne, []byte(l("203.0.113.10", "banned", "authwatch", 50*time.Minute)), 0o600)
+	_ = os.WriteFile(courant, []byte(
+		l("203.0.113.11", "banned", "authwatch", 10*time.Minute)+
+			l("203.0.113.12", "banned", "authwatch", 2*time.Hour)+ // échu (durée 1 h)
+			l("203.0.113.13", "banned", "", 5*time.Minute)+ // ban du WAF : pas le nôtre
+			l("203.0.113.14", "warning", "authwatch", 5*time.Minute)+ // pas un ban
+			l("local", "banned", "authwatch", 5*time.Minute)+ // interne
+			"pas du json\n"), 0o600)
+
+	b := NewBanneur("nft", "secubox", "waf_ban", "waf_ban6", time.Hour, false)
+	if n := b.RechargeJournal([]string{courant, tourne, filepath.Join(dir, "absent")}, now); n != 2 {
+		t.Fatalf("2 bans actifs attendus (…10 et …11), obtenu %d : %v", n, b.actifs)
+	}
+	for _, ip := range []string{"203.0.113.10", "203.0.113.11"} {
+		if _, ok := b.actifs[ip]; !ok {
+			t.Fatalf("%s devait être retenu", ip)
+		}
+	}
+}
+
+// La queue d'un gros journal : la ligne coupée par le saut est écartée.
+func TestRechargeJournalQueueLigneCoupee(t *testing.T) {
+	chemin := filepath.Join(t.TempDir(), "waf-threats.log")
+	now := time.Now()
+	ban := fmt.Sprintf(`{"timestamp":%q,"client_ip":"203.0.113.20","action":"banned","tool":"authwatch"}`+"\n",
+		now.Add(-time.Minute).Format(time.RFC3339))
+	remplissage := strings.Repeat(`{"timestamp":"x","client_ip":"198.51.100.1","action":"detect"}`+"\n", queueJournal/60+10)
+	_ = os.WriteFile(chemin, []byte(remplissage+ban), 0o600)
+	b := NewBanneur("nft", "secubox", "waf_ban", "waf_ban6", time.Hour, false)
+	if n := b.RechargeJournal([]string{chemin}, now); n != 1 {
+		t.Fatalf("le ban en fin de gros journal devait être retrouvé, obtenu %d", n)
 	}
 }
