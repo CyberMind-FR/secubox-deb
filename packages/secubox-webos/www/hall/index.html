@@ -4211,12 +4211,33 @@ addEventListener('message', ev=>{
   // se connecter pour rien ; on l'amène d'abord sur le bon domaine.
   const SBX_DOM = SBX_DOMAINE.meme;   // #1493
   var _moi = null;
+  // CONSOLE LOCALE DU KIOSQUE (#1695). Sur le port console, la session
+  // d'administration s'obtient sans authentification : le serveur vérifie que
+  // la demande vient du kiosque lui-même (connexion lue dans /proc). Ailleurs,
+  // ce chemin n'existe pas — on ne le demande même pas.
+  const CONSOLE = location.hostname === 'hall.localhost' && location.port === '9078';
+  async function jetonConsole(){
+    if(!CONSOLE) return false;
+    try{
+      const r = await fetch('/__console/jeton', {cache:'no-store', headers:{'Accept':'application/json'}});
+      if(!r.ok) return false;
+      const d = await r.json();
+      if(!d || !d.access_token) return false;
+      localStorage.setItem('sbx_token', d.access_token);
+      return true;
+    }catch(e){ return false; }
+  }
   async function sondeSession(){
     try{
-      const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
-      const r = await fetch('/api/v1/webos/acces', {headers: j
-        ? {'Accept':'application/json','Authorization':'Bearer '+j}
-        : {'Accept':'application/json'}});
+      const lire = function(){
+        const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
+        return fetch('/api/v1/webos/acces', {headers: j
+          ? {'Accept':'application/json','Authorization':'Bearer '+j}
+          : {'Accept':'application/json'}});
+      };
+      let r = await lire();
+      // Pas de session (première ouverture, jeton échu) : la console en reçoit une.
+      if (!r.ok && CONSOLE && await jetonConsole()) r = await lire();
       // L'ÉTIQUETTE D'ABORD, la clé en repli. `qui` est un identifiant
       // assaini pour servir de nom de fichier — l'afficher donnait
       // « sbx-3704f0234ea3 » dans la barre, alors que l'appareil a un nom.

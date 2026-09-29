@@ -66,6 +66,27 @@ if [ "$1" = "configure" ]; then
       secubox-waf-route hall.gk2.secubox.in 9080 || true
       secubox-waf-route hall.gk2.net 9080 || true
     fi
+    # CONSOLE LOCALE DU KIOSQUE (#1695). Un secret partage par nginx, qui le
+    # joint aux seules demandes recues sur le port console (127.0.0.1:9078),
+    # et l'auth, qui le verifie : il prouve qu'une demande est passee par ce
+    # port, et non par le socket de l'agregateur (0666, ouvert a tout compte
+    # local). Cree une fois, jamais affiche. Cote auth : root:secubox 0640.
+    # Cote nginx : 0600 root, lu par le maitre. Sans lui, la console refuse.
+    install -d -o root -g secubox -m 0750 /etc/secubox/secrets
+    if [ ! -s /etc/secubox/secrets/console.key ]; then
+        ( umask 077
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' \
+              > /etc/secubox/secrets/console.key )
+    fi
+    chown root:secubox /etc/secubox/secrets/console.key
+    chmod 0640 /etc/secubox/secrets/console.key
+    install -d -o root -g root -m 0700 /etc/nginx/secubox-console
+    ( umask 077
+      printf 'proxy_set_header X-SecuBox-Console "%s";\n' \
+          "$(cat /etc/secubox/secrets/console.key)" \
+          > /etc/nginx/secubox-console/secret.conf.tmp
+      mv -f /etc/nginx/secubox-console/secret.conf.tmp /etc/nginx/secubox-console/secret.conf )
+
     # Recharge nginx SEULEMENT si la configuration valide — et maintenant que
     # le lien est pose, ce reload sert le vhost depuis son nouvel emplacement.
     if [ -x /usr/sbin/nginx ] && nginx -t 2>/dev/null; then

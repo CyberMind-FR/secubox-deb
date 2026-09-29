@@ -63,7 +63,14 @@
     // Le témoin de session arrive-t-il ici ? Faux seulement sur un alias.
     meme: !base || !ALIAS[base],
     // Origines de la connexion et du relais.
-    admin: session ? 'https://admin.' + session : location.origin,
+    // Le kiosque (hall.localhost) : l'administration n'est PAS servie par le
+    // vhost du Hall (toute adresse y rend l'accueil) mais par admin.localhost,
+    // sur le même port — 9078 pour la console locale sans authentification
+    // (#1695), 9080 sinon.
+    admin: session ? 'https://admin.' + session
+      : (h === 'hall.localhost'
+          ? location.protocol + '//admin.localhost' + (location.port ? ':' + location.port : '')
+          : location.origin),
     hall: session ? 'https://hall.' + session : location.origin,
     // Origines acceptées en retour du relais (liste close).
     retours: (function () {

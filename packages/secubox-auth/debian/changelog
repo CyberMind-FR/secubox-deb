@@ -1,3 +1,11 @@
+secubox-auth (1.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * console locale du kiosque : GET /console/jeton — session d'administration sans authentification, au nom du compte dédié « console », accordée seulement à une connexion du kiosque (secret du port console posé par nginx + connexion vérifiée dans /proc/net/tcp comme appartenant à secubox-kiosk) ; hôte et origine exacts contre le rebond DNS ; [console] actif = false la coupe (#1695).
+  * le compte « console » n'entre jamais par mot de passe : refus vérifié AVANT la branche de première configuration ; créé avec un mot de passe aléatoire jeté (#1695).
+  * _SESSIONS_FILE n'existait pas : /status, /sessions, /sessions/stats, /redeem_voucher et le nettoyage des sessions échues levaient NameError (500) depuis #120 (#1695).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 16:27:57 +0200
+
 secubox-auth (1.1.9-1~bookworm1) bookworm; urgency=medium
 
   * Ne livre plus /usr/share/secubox/www/shared en lien (pendant vers

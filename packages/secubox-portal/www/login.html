@@ -741,6 +741,33 @@ if (new URLSearchParams(window.location.search).has('redirect')) {
   }
 }
 
+// CONSOLE LOCALE DU KIOSQUE (#1695). Sur le port console (admin.localhost:9078,
+// l'administration qu'encadre le Hall de la console hall.localhost:9078),
+// l'administration s'ouvre sans authentification : le serveur n'accorde la
+// session qu'à une connexion du kiosque lui-même. Toute page d'administration
+// sans session arrive ici ; on la renvoie d'où elle vient, session en main.
+// Garde anti-boucle : si un module refuse cette session, il nous renverrait
+// ici aussitôt — au-delà d'un essai par 15 s, on s'arrête et on le dit.
+(function () {
+  if (!/^(hall|admin)\.localhost$/.test(location.hostname) || location.port !== '9078') return;
+  var dernier = 0;
+  try { dernier = +sessionStorage.getItem('sbx_console_essai') || 0; } catch (e) {}
+  if (Date.now() - dernier < 15000) {
+    showMsg('Console locale : cette page a refusé la session de la console.', 'error');
+    return;
+  }
+  try { sessionStorage.setItem('sbx_console_essai', String(Date.now())); } catch (e) {}
+  fetch('/__console/jeton', {cache: 'no-store', headers: {'Accept': 'application/json'}})
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.access_token) return;
+      _username = d.compte || 'console';
+      finalizeToken(d.access_token);
+      window.location.replace(_sbxRedirect());
+    })
+    .catch(function () {});
+})();
+
 loadTheme();
 </script>
 </body>
