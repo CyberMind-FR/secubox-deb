@@ -18,6 +18,8 @@ declare -A URL=(
   [ggml-tiny-q5_1.bin]=$HF/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin
   [fr_FR-siwis-medium.onnx]=$HF/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx
   [fr_FR-siwis-medium.onnx.json]=$HF/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json
+  [vosk-0.3.45-py3-none-manylinux2014_aarch64.whl]=https://files.pythonhosted.org/packages/a4/23/3130a69fa0bf4f5566a52e415c18cd854bf561547bb6505666a6eb1bb625/vosk-0.3.45-py3-none-manylinux2014_aarch64.whl
+  [vosk-model-small-fr-0.22.zip]=https://alphacephei.com/vosk/models/vosk-model-small-fr-0.22.zip
   [MODEL_CARD]=$HF/rhasspy/piper-voices/resolve/v1.0.0/fr/fr_FR/siwis/medium/MODEL_CARD
 )
 for f in "${!URL[@]}"; do

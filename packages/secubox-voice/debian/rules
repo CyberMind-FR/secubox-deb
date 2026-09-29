@@ -21,6 +21,7 @@ override_dh_auto_install:
 	install -d debian/secubox-voice/etc/nginx/secubox.d
 	cp nginx/voice.conf debian/secubox-voice/etc/nginx/secubox-routes.d/
 	cp nginx/voice.conf debian/secubox-voice/etc/nginx/secubox.d/
+	install -D -m 0644 conf/commandes.json debian/secubox-voice/usr/share/secubox/voice/commandes.json
 	install -D -m 0755 sbin/secubox-voicectl debian/secubox-voice/usr/sbin/secubox-voicectl
 	install -d debian/secubox-voice/usr/lib/systemd/system
 	cp systemd/secubox-voice.service debian/secubox-voice/usr/lib/systemd/system/

@@ -93,3 +93,5 @@ a.carte:focus-visible { outline: 2px solid var(--sbx-cyan); outline-offset: 2px;
   .scene { padding: 16px 12px; }
   .decor { border-radius: 14px; }
 }
+.micro.ecoute { box-shadow: 0 0 0 calc(3px + var(--niveau, 0) * 10px) #f43f5e55; transition: box-shadow 80ms; }
+.etat-voix { color: var(--sbx-cyan); }

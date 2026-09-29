@@ -1,3 +1,10 @@
+secubox-webos (1.0.370-1~bookworm1) bookworm; urgency=medium
+
+  * Aucun changement de CSP : les commandes vocales sont reconnues sur la box
+    (#1656) ; 'wasm-unsafe-eval' essayé puis retiré (Vosk WASM exige unsafe-eval).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:33:19 +0200
+
 secubox-webos (1.0.368-1~bookworm1) bookworm; urgency=medium
 
   * Manifeste SBXOS : capacité « voix » accordée aux personnes (#1615).
