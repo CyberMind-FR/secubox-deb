@@ -8,5 +8,5 @@
       "@sbx/data": ["../sbx-sdk/data/index.ts"], "@sbx/protocol": ["../sbx-sdk/protocol/enfant.ts"], "@sbx/hote": ["../sbx-sdk/protocol/hote.ts"], "@sbx/ui/*": ["../sbx-sdk/ui/*"], "@sbx/art/*": ["../sbx-sdk/*"]
     }
   },
-  "include": ["src", "../sbx-sdk", "../vitrine"], "exclude": ["../vitrine/vite.config.ts"]
+  "include": ["src", "../sbx-sdk", "../vitrine"], "exclude": ["../vitrine/vite.config.ts", "../sbx-sdk/**/tests"]
 }

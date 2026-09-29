@@ -15,6 +15,7 @@ import { ecoute } from '@sbx/protocol';
 import { enregistreCadre, sbxExecuteAction } from '@sbx/hote';
 import { demandeOuverture, estEncadre } from '@sbx/protocol';
 import { Lieu } from './Lieu';
+import { Palette } from './Palette';
 import { FluxHall, type EvenementFlux } from '@sbx/ui/FluxHall';
 import { Reglages, appliquePrefs } from './Reglages';
 import hero from '@sbx/art/environments/art/hero.webp';
@@ -51,6 +52,11 @@ export function App() {
   const [fil, setFil] = useState<Activite[]>([]);
   const [lieu, setLieu] = useState<{ titre: string; url: string } | null>(null);
   const [reglages, setReglages] = useState(false);
+  const [palette, setPalette] = useState(false);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette(true); } };
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k);
+  }, []);
   useEffect(() => appliquePrefs(), []);
   const mega = new URLSearchParams(location.search).get('mega') === '1';
 
@@ -116,6 +122,8 @@ export function App() {
         <header className="barre">
           <span className="logo">SBX<em>OS</em></span>
           <span className="apercu">Aperçu Aurora</span>
+          <button type="button" className="recherche" onClick={() => setPalette(true)}>
+            Demander à Lexie… <kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K'}</kbd></button>
           <span className="moi">{etat === null ? '…' : etat === 'aucun'
             ? <a href="/acces/">Entrer avec cet appareil</a>
             : (pseudo ?? 'Session ouverte')}</span>
@@ -178,6 +186,8 @@ export function App() {
       </div>
       {lieu && <Lieu titre={lieu.titre} url={lieu.url} ferme={() => setLieu(null)} />}
       {reglages && <Reglages man={man} ferme={() => setReglages(false)} />}
+      {palette && <Palette espaces={ESPACES} aller={id => aller(id as Espace)} domaine={man?.domaine ?? ''}
+                           ferme={() => setPalette(false)} />}
     </MotionConfig></LazyMotion>
   );
 }

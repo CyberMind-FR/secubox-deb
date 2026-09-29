@@ -1,3 +1,12 @@
+secubox-sbxos (0.6.0~aurora8-1~bookworm1) bookworm; urgency=medium
+
+  * Lexie — palette Ctrl K / ⌘K (#1615) : navigation vers un Espace résolue
+    sur place ; le reste est demandé à ZIA (/api/v1/zia/v1/chat), réponse
+    rendue en texte, objets en liens sûrs. Actions média exécutées ; toute
+    autre action attend une confirmation par clic.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:00:09 +0200
+
 secubox-sbxos (0.6.0~aurora7-1~bookworm1) bookworm; urgency=medium
 
   * Flux Hall : libellés des activités sans titre ; message « vide » sur toute
