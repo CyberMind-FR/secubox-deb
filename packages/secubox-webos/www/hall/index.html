@@ -1457,7 +1457,10 @@ const FEATURED = [
   {id:"zia",        label:"ZIA",       icon:"🦊", color:"#0a93a6", url:"hall.gk2.secubox.in/zia", micro:"/micro.html", h:340,
    // SAISIE VOCALE (#1658) — carte ET vue plein écran servies par le Hall : la carte vient du HALL (même origine, micro=(self))
    // et elle seule reçoit la délégation du micro.
-   carte:"/zia/micro.html", micro_audio:true},
+   carte:"/zia/micro.html", micro_audio:true,
+   // Le mode « admin » ouvrait /zia/ (le CHAT) sur l'origine admin, sans micro :
+   // la console de ZIA est admin.html.
+   admin:"/zia/admin.html"},
   // DEMANDES D'ACCÈS (#1297) : la file d'invitation, dans le Hall. Une file que
   // personne n'ouvre ne sert à rien — le demandeur patiente, l'administrateur
   // ignore qu'on l'attend. Posée ici, elle se voit au même endroit que le reste.

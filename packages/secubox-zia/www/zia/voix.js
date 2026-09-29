@@ -73,6 +73,8 @@
     /** form : le formulaire du chat ; envoie(texte) : la fonction d'envoi de la page ; note(msg) : message système. */
     init: function (form, envoie, note) {
       if (!navigator.mediaDevices || !window.MediaRecorder) return;
+      // Micro non délégué à ce cadre (autre origine) : pas de bouton qui échouera.
+      try { if (document.featurePolicy && !document.featurePolicy.allowsFeature('microphone')) return; } catch (e) { /* API absente */ }
       var micro = document.createElement('button');
       micro.type = 'button'; micro.className = 'zia-micro'; micro.title = 'Parler à ZIA';
       micro.setAttribute('aria-label', 'Parler à ZIA'); micro.textContent = '🎙️';
@@ -99,7 +101,9 @@
           return transcrit(blob).then(function (t) { note(null); if (t) envoie(t); else note('Je n’ai rien entendu.'); });
         }).catch(function (e) {
           ecoute = false; micro.classList.remove('ecoute'); micro.textContent = '🎙️'; micro.style.boxShadow = '';
-          note(e && e.message ? e.message : 'Micro refusé ou absent.');
+          var refus = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+          note(refus ? 'Micro non autorisé ici. Ouvrez ZIA depuis le Hall, ou autorisez le micro pour ce site.'
+                     : (e && e.message ? e.message : 'Micro refusé ou absent.'));
         });
       });
     },
