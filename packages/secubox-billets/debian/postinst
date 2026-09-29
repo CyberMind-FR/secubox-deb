@@ -10,9 +10,10 @@ case "$1" in
 
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 0755 "$DATA" "$DATA/revisions"
-    # Parent 0755 (traversable), secrets dir 0700 secubox.
+    # Parent 0755 (traversable) ; /etc/secubox/secrets est partagé et appartient
+    # à secubox-core (root:secubox 0750, #1689) — on ne lui impose rien d'autre.
     install -d -o secubox -g secubox -m 0755 /etc/secubox
-    install -d -o secubox -g secubox -m 0700 /etc/secubox/secrets
+    install -d -o root -g secubox -m 0750 /etc/secubox/secrets
 
     # Signing secret, once, 0600 secubox.
     if [ ! -s /etc/secubox/secrets/billets ]; then

@@ -1,3 +1,9 @@
+secubox-modem (1.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * /etc/secubox/secrets : plus de chmod 700 / chown secubox sur le parent partagé (#1689).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:05:19 +0200
+
 secubox-modem (1.2.3-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

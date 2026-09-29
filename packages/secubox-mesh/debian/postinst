@@ -12,8 +12,14 @@ case "$1" in
               --gecos "SecuBox-Deb MESH" secubox-mesh
     fi
 
-    # 2. Dossier secrets (mesh-sae) — chmod 0700, owner secubox-mesh
-    install -d -m 0700 -o secubox-mesh -g secubox-mesh /etc/secubox/secrets
+    # 2. Dossier secrets (mesh-sae). Le parent est partagé et appartient à
+    # secubox-core (root:secubox 0750, #1689) : s'en attribuer la propriété
+    # (secubox-mesh 0700) coupait tous les autres modules. mesh reçoit une ACL
+    # de traversée, comme bbs.
+    install -d -o root -g secubox -m 0750 /etc/secubox/secrets
+    if command -v setfacl >/dev/null 2>&1; then
+        setfacl -m u:secubox-mesh:--x /etc/secubox/secrets 2>/dev/null || true
+    fi
 
     # 3. Dossier log dédié au module.
     # /run/secubox PARENT est platform-managed par secubox-core en 1777 root:root.

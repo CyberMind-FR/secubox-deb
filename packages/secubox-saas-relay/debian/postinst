@@ -7,7 +7,16 @@ case "$1" in
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
     install -d -o secubox -g secubox -m 750 /var/lib/secubox/saas-relay
-    install -d -o secubox -g secubox -m 700 /etc/secubox/secrets
+    # Parent partagé, propriété de secubox-core (root:secubox 0750, #1689).
+    install -d -o root -g secubox -m 0750 /etc/secubox/secrets
+    # Le service créait sa clé au premier démarrage, dans ce parent : il n'y
+    # écrit plus (0750 root). On la crée ici, au format de Fernet.generate_key().
+    if [ ! -s /etc/secubox/secrets/saas-relay.key ]; then
+        ( umask 077; python3 -c 'import base64,os,sys; sys.stdout.write(base64.urlsafe_b64encode(os.urandom(32)).decode())' \
+            > /etc/secubox/secrets/saas-relay.key )
+        chown secubox:secubox /etc/secubox/secrets/saas-relay.key
+        chmod 0600 /etc/secubox/secrets/saas-relay.key
+    fi
     install -d -o secubox -g secubox -m 750 /var/cache/secubox/saas-relay
     systemctl daemon-reload
     systemctl enable secubox-saas-relay.service

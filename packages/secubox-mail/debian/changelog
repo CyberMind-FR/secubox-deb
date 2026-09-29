@@ -1,3 +1,9 @@
+secubox-mail (2.10.10-1~bookworm1) bookworm; urgency=medium
+
+  * /etc/secubox/secrets créé dans l'état de secubox-core (root:secubox 0750) par le postinst et rspamd.sh, au lieu de root 0700 qui coupait la traversée des autres modules (#1689).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:05:19 +0200
+
 secubox-mail (2.10.9-1~bookworm1) bookworm; urgency=medium
 
   * Webmail sans mot de passe (#1644) : mailctl webmail-sso crée le lien

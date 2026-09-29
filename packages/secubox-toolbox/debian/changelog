@@ -1,3 +1,9 @@
+secubox-toolbox (2.9.5-1~bookworm1) bookworm; urgency=medium
+
+  * /etc/secubox/secrets : plus de groupe secubox-toolbox imposé au parent (retirait la traversée au groupe secubox) ; ACL de traversée pour le groupe secubox-toolbox ; sel et clé du bocal inchangés (#1689).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 13:05:19 +0200
+
 secubox-toolbox (2.9.4-1~bookworm1) bookworm; urgency=medium
 
   * unbound : la boucle locale est retablie dans 99-secubox-wg.conf.

@@ -58,7 +58,8 @@ if [ "$1" = "configure" ]; then
 
     # Phase 2: on upgrade from < 2.3, provision Rspamd secrets + data dirs.
     if dpkg --compare-versions "${2:-0}" lt-nl 2.3.0; then
-        install -d -m 0700 /etc/secubox/secrets
+        # Parent partagé, propriété de secubox-core (#1689) : on ne lui impose rien d'autre.
+        install -d -o root -g secubox -m 0750 /etc/secubox/secrets
         if [ ! -s /etc/secubox/secrets/rspamd-controller.pw ]; then
             openssl rand -base64 24 > /etc/secubox/secrets/rspamd-controller.pw
             chmod 0600 /etc/secubox/secrets/rspamd-controller.pw

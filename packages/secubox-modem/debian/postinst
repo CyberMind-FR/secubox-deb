@@ -12,10 +12,9 @@ case "$1" in
         chown -R secubox:secubox /var/lib/secubox/modem
         chown -R secubox:secubox /var/cache/secubox/modem
 
-        # Create secrets directory if needed
-        mkdir -p /etc/secubox/secrets
-        chmod 700 /etc/secubox/secrets
-        chown secubox:secubox /etc/secubox/secrets
+        # Parent partagé, propriété de secubox-core (root:secubox 0750, #1689) :
+        # un chmod 700 ici coupait la traversée de tous les autres modules.
+        install -d -o root -g secubox -m 0750 /etc/secubox/secrets
 
         # Add secubox user to dialout group for serial access
         usermod -a -G dialout secubox 2>/dev/null || true

@@ -18,16 +18,21 @@ case "$1" in
       usermod -aG systemd-journal secubox-toolbox 2>/dev/null || true
     fi
 
+    # Traversée du parent partagé pour le groupe secubox-toolbox (#1689) : ses
+    # fichiers (sel, clé du bocal) restent root:secubox-toolbox 0640.
+    command -v setfacl >/dev/null 2>&1 && setfacl -m g:secubox-toolbox:--x /etc/secubox/secrets 2>/dev/null || true
+
     # 2. Sel rotatif MAC anonymisation (généré au premier install)
     if [ ! -f /etc/secubox/secrets/toolbox-mac-salt ]; then
-      install -d -m 0750 -o root -g secubox-toolbox /etc/secubox/secrets
+      install -d -o root -g secubox -m 0750 /etc/secubox/secrets
       head -c 32 /dev/urandom | base64 > /etc/secubox/secrets/toolbox-mac-salt
       chmod 0640 /etc/secubox/secrets/toolbox-mac-salt
       chown root:secubox-toolbox /etc/secubox/secrets/toolbox-mac-salt
     else
-      # Fix perms idempotently (in case upgrade from older install with 0700 root:root)
-      chown root:secubox-toolbox /etc/secubox/secrets /etc/secubox/secrets/toolbox-mac-salt 2>/dev/null || true
-      chmod 0750 /etc/secubox/secrets 2>/dev/null || true
+      # Fix perms idempotently — le SEL seulement : le parent appartient à
+      # secubox-core (root:secubox 0750, #1689) ; lui donner le groupe
+      # secubox-toolbox retirait la traversée au groupe secubox.
+      chown root:secubox-toolbox /etc/secubox/secrets/toolbox-mac-salt 2>/dev/null || true
       chmod 0640 /etc/secubox/secrets/toolbox-mac-salt 2>/dev/null || true
     fi
 
@@ -36,7 +41,7 @@ case "$1" in
     # every client's stable fake identity built by privacy.fake_id).
     JAR_KEY=/etc/secubox/secrets/privacy-jar.key
     if [ ! -s "$JAR_KEY" ]; then
-      install -d -m 0750 -o root -g secubox-toolbox /etc/secubox/secrets 2>/dev/null || true
+      install -d -o root -g secubox -m 0750 /etc/secubox/secrets 2>/dev/null || true
       ( umask 177; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$JAR_KEY" )
       chmod 0640 "$JAR_KEY"
       chown root:secubox-toolbox "$JAR_KEY"
