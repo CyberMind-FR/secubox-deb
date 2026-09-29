@@ -25,10 +25,18 @@ npm run -s test
 npm run -s build
 npm run -s art
 
-# Budgets : JS initial ≤ 190 Ko gzip.
-js=$(ls dist/assets/aurora-*.js | head -1)
-taille=$(gzip -9c "$js" | wc -c)
-[ "$taille" -le 194560 ] || { echo "$MODULE : JS initial $taille o gzip > 190 Ko" >&2; exit 1; }
+# Budgets (#1616) : l'app (aiguillage + racine) ≤ 190 Ko gzip ; la carte
+# légère que le Hall charge à chaque visite (aiguillage + carte + ses
+# dépendances, sans React) ≤ 15 Ko gzip.
+gz() { local n=0; for f in "$@"; do [ -f "$f" ] && n=$((n + $(gzip -9c "$f" | wc -c))); done; echo "$n"; }
+aig=$(ls dist/assets/aurora-*.js | head -1)
+taille=$(gz "$aig" dist/assets/racine-*.js)
+[ "$taille" -le 194560 ] || { echo "$MODULE : app $taille o gzip > 190 Ko" >&2; exit 1; }
+if ls dist/assets/carte-*.js >/dev/null 2>&1; then
+  carte=$(gz "$aig" dist/assets/carte-*.js dist/assets/enfant-*.js)
+  if grep -lq "react" dist/assets/carte-*.js; then echo "$MODULE : la carte légère importe React" >&2; exit 1; fi
+  [ "$carte" -le 15360 ] || { echo "$MODULE : carte légère $carte o gzip > 15 Ko" >&2; exit 1; }
+fi
 
 # Balayage : aucune autre origine, aucun eval, aucun chemin manuel.
 if grep -lE "https?://" dist/aurora/index.html dist/assets/*.css 2>/dev/null | grep -q .; then
@@ -44,4 +52,4 @@ canal=publie; case "$amont" in *~aurora*) canal=apercu ;; esac
 empreinte="$(bash "$ICI/empreinte-front.sh" .)"
 printf '{"version":"%s","canal":"%s","empreinte":"%s"}\n' "$amont" "$canal" "$empreinte" > dist/.construit
 printf '{"version":"%s","canal":"%s"}\n' "$amont" "$canal" > dist/aurora/version.json
-echo "$MODULE : $amont ($canal) ; JS initial $taille o gzip ; empreinte ${empreinte:0:12}"
+echo "$MODULE : $amont ($canal) ; app $taille o gzip ; carte ${carte:-?} o gzip ; empreinte ${empreinte:0:12}"

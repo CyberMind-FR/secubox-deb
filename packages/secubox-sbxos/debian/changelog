@@ -1,3 +1,20 @@
+secubox-sbxos (0.6.0~aurora12-1~bookworm1) bookworm; urgency=medium
+
+  * Voix de Lexie : la réponse est demandée en WAV (le moteur local ne produit
+    que du WAV ; mp3 échouait) (#1615, #1646).
+  * Téléphone : la barre du haut se replie, plus de débordement à 360 px ;
+    profil Léger : le décor n'est plus téléchargé (#1616).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:42:07 +0200
+
+secubox-sbxos (0.6.0~aurora11-1~bookworm1) bookworm; urgency=medium
+
+  * Carte légère (#1616) : encadrée par le Hall sans mega=1, Aurora charge un
+    module sans React (3 activités, raccourcis d'Espaces, protocole enfant),
+    < 4 Ko gzip ; budgets app/carte vérifiés à la construction.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 07:15:21 +0200
+
 secubox-sbxos (0.6.0~aurora10-1~bookworm1) bookworm; urgency=medium
 
   * Voix de Lexie (#1615) : bouton micro dans la palette (personnes, Aurora

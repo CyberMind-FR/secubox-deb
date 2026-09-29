@@ -144,7 +144,7 @@ export function App() {
             <m.section key={espace} className="lieu"
               initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.35 }}>
-              {espace === 'hall' && <img className="decor" src={hero} alt="" />}
+              {espace === 'hall' && document.documentElement.dataset.rendu !== 'leger' && <img className="decor" src={hero} alt="" />}
               <div className="guide">
                 <img src={esp.portrait} alt={esp.guide} />
                 <p><b>{esp.guide}</b> — {esp.phrase}</p>

@@ -117,7 +117,7 @@ export async function dit(texte: string): Promise<Blob | null> {
   try {
     const r = await fetch('/api/v1/voice/tts', { method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texte: texte.replace(/\*\*/g, '').slice(0, 600), profil: 'lexie', format: 'mp3' }) });
+      body: JSON.stringify({ texte: texte.replace(/\*\*/g, '').slice(0, 600), profil: 'lexie', format: 'wav' }) });   // le moteur local ne sait produire que du WAV
     return r.ok && (r.headers.get('content-type') || '').startsWith('audio/') ? await r.blob() : null;
   } catch { return null; }
 }
