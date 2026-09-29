@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.6.0",
   "type": "module",
-  "description": "SBXOS Aurora \u2014 interface jouable du Hall (SDK sbx-sdk + app). Construit par scripts/construire-front.sh ; jamais par debian/rules.",
+  "description": "SBXOS Aurora — interface jouable du Hall (SDK sbx-sdk + app). Construit par scripts/construire-front.sh ; jamais par debian/rules.",
   "scripts": {
     "types": "tsc -p app/tsconfig.json --noEmit",
     "build": "vite build --config app/vite.config.ts",
@@ -23,6 +23,8 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@vitejs/plugin-react": "5.1.0",
+    "axe-core": "^4.10.3",
+    "jsdom": "^26.1.0",
     "sharp": "0.34.4",
     "typescript": "5.9.3",
     "vite": "7.1.12",
