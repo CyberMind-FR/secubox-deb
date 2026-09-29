@@ -1,3 +1,9 @@
+secubox-voice-moteur (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Ajoute le modèle whisper ggml-tiny-q5_1 (31 Mo), à côté de base (#1646).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:06:32 +0200
+
 secubox-voice-moteur (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Moteur vocal local de Lexie (#1646) : piper 2023.11.14-2 (aarch64),

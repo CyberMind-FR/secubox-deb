@@ -1,3 +1,10 @@
+secubox-voice (0.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * Reconnaissance : modèle tiny par défaut (~11 s au lieu de 26-42 s sur gk2,
+    sous la coupure de 30 s d'HAProxy) ; base reste installé (#1646).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 29 Sep 2026 08:06:32 +0200
+
 secubox-voice (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Transcription (#1646) : l'audio du navigateur (webm/opus) est converti en
