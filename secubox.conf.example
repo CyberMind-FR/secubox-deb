@@ -46,9 +46,11 @@ actif = false
 
 # Utilisateurs locaux (fallback si pas d'OAuth)
 [auth]
-# Force TOTP (2FA) enrollment for admin accounts on login. Default: true
-# (secure/CSPN). Set to false to allow password-only admin login on this node.
-require_admin_totp = true
+# Double facteur (#1699) : TOUJOURS exigé depuis le WAN. Depuis le LAN :
+# « facultatif » (défaut — le mot de passe suffit) ou « obligatoire ».
+# Le panneau Utilisateurs (reglages.json) prime sur cette valeur.
+# `require_admin_totp` n'est plus lu depuis #1699 : ne pas s'y fier (#1753).
+otp_lan = "facultatif"
 
 [auth.users.admin]
 password = "secubox"            # À changer impérativement !

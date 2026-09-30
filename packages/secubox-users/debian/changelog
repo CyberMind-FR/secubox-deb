@@ -1,3 +1,11 @@
+secubox-users (1.8.13-1~bookworm1) bookworm; urgency=high
+
+  * Restaure e1d29ab37, effacé par la fusion aff481735 (#1748, #1753) : /export,
+    et désormais PUT /user/{u} et POST /user, passent par redact_user.
+    Tests épinglés (vérifiés par mutation).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:28:11 +0200
+
 secubox-users (1.8.12-1~bookworm1) bookworm; urgency=medium
 
   * bouton « OTP sur le LAN : facultatif/obligatoire » — l'ancien « Admin 2FA » appelait une route disparue (#1699).

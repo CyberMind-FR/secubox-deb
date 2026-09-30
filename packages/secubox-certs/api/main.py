@@ -44,10 +44,12 @@ def require_admin(user=Depends(require_jwt)) -> dict:
     """Émettre, renouveler ou révoquer un certificat change ce que TOUTE la box
     présente au monde : une session ordinaire ne le peut pas (#942).
 
-    Posé par e5f5a7e13 puis effacé par la fusion aff481735 (#1748, #1749) :
-    pendant six semaines, n'importe quel compte connecté pouvait révoquer les
-    certificats de la box. Le rôle vit dans le magasin des comptes (le jeton ne
-    porte que sub/jti) ; un compte désactivé n'est plus admin.
+    Posé par e5f5a7e13 (#942), effacé par la fusion aff481735 (#1748, #1749).
+    Depuis #1581, `require_jwt` n'admet déjà que des administrateurs réels ;
+    cette garde le dit explicitement ici, là où l'action se décide, pour
+    qu'une évolution de `require_jwt` ne rouvre pas ces verbes en silence.
+    Le rôle vit dans le magasin des comptes (le jeton ne porte que sub/jti) ;
+    un compte désactivé n'est plus admin.
     """
     from secubox_core import user_store
     sub = user.get("sub", "") if isinstance(user, dict) else ""

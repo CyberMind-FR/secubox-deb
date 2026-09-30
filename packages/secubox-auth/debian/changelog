@@ -1,3 +1,13 @@
+secubox-auth (1.1.15-1~bookworm1) bookworm; urgency=high
+
+  * Restaure 59bb18392, effacé par la fusion aff481735 (#1748, #1753) :
+    /login/mfa et /totp/confirm tracent de nouveau l'adresse et l'agent
+    (ils écrivaient une adresse vide). Adresse lue depuis la droite de
+    X-Forwarded-For (/login et l'entrée de délégation lisaient la gauche,
+    fournie par le client). Test épinglé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:28:11 +0200
+
 secubox-auth (1.1.14-1~bookworm1) bookworm; urgency=medium
 
   * GET /delegation/entrer : un compte d'un autre nœud administre ENTIÈREMENT cette box, le temps de l'accord qu'elle a signé — compte <aidant>.<centre> créé à la demande (sans mot de passe utilisable), jeton borné à l'échéance, sessions fermées à la révocation ou à l'échéance (veille 30 s), chaque geste tracé (#1720).

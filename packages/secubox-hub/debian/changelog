@@ -1,3 +1,11 @@
+secubox-hub (1.9.23-1~bookworm1) bookworm; urgency=medium
+
+  * webui.conf, location /api/v1/auth/ : nginx ajoute l'adresse qu'il a
+    résolue à X-Forwarded-For (#1753). En frontal, auth ne voyait que la
+    chaîne écrite par le client et la journalisait telle quelle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:31:31 +0200
+
 secubox-hub (1.9.22-1~bookworm1) bookworm; urgency=medium
 
   * route admin déclarée sous le nom de cette box ; verdict LAN transmis sur /__console/jeton (#1723, #1713).

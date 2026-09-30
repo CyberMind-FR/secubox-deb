@@ -262,3 +262,34 @@ def test_totp_widened_window_accepts_drifted_code(client, monkeypatch):
     r5 = c.post("/auth/login/mfa", json={"code": drifted_code},
                 headers={"Authorization": f"Bearer {mfa_tok2}"})
     assert r5.status_code == 401
+
+
+def test_connexions_a_double_facteur_tracent_adresse_et_agent(client):
+    """#1753 : /totp/confirm et /login/mfa écrivaient une adresse VIDE (59bb18392
+    effacé par la fusion aff481735). Depuis #1699, toute connexion WAN d'un
+    compte à double facteur passe par /login/mfa : c'étaient les connexions
+    qu'il importe le plus de tracer. L'adresse retenue est celle qu'HAProxy a
+    ajoutée à DROITE, jamais la gauche fournie par le client."""
+    c, users_path, sessions_path = client
+    from api import main as auth_main
+    auth_main._REGLAGES.write_text(json.dumps({"otp_lan": "obligatoire"}))
+    H = {"X-Forwarded-For": "6.6.6.6, 203.0.113.7, 127.0.0.1", "User-Agent": "Navigateur/1.0"}
+
+    def derniere():
+        return json.loads(sessions_path.read_text())[-1]
+
+    enroll = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"},
+                    headers=H).json()["enrollment_token"]
+    auth = {"Authorization": f"Bearer {enroll}", **H}
+    secret = c.post("/auth/totp/enroll", headers=auth).json()["secret"]
+    r = c.post("/auth/totp/confirm", json={"code": pyotp.TOTP(secret).now()}, headers=auth)
+    assert r.status_code == 200
+    assert (derniere()["ip"], derniere()["user_agent"]) == ("203.0.113.7", "Navigateur/1.0")
+
+    secours = r.json()["backup_codes"][0]
+    mfa = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"},
+                 headers=H).json()["mfa_token"]
+    r = c.post("/auth/login/mfa", json={"code": secours},
+               headers={"Authorization": f"Bearer {mfa}", **H})
+    assert r.status_code == 200
+    assert (derniere()["ip"], derniere()["user_agent"]) == ("203.0.113.7", "Navigateur/1.0")

@@ -584,6 +584,35 @@ async def require_personne(
 ENTETE_LAN = "X-SecuBox-LAN"
 
 
+def adresse_client(request) -> str:
+    """Adresse du client pour la TRACE (sessions, audit, délégation) — #1753.
+
+    Lue depuis la DROITE de X-Forwarded-For, en sautant les sauts locaux
+    (sbxwaf, nginx) : HAProxy AJOUTE l'adresse réelle en fin de chaîne, alors
+    que tout ce qui la précède vient du client. Lire la gauche, comme le
+    faisaient /login et la délégation, laissait un appelant écrire l'adresse de
+    son choix dans le journal d'audit (même piège que sbxwaf, #1697).
+    X-Real-IP n'est PAS consulté : sur les locations qui posent leurs propres
+    `proxy_set_header`, nginx ne le réécrit pas et il arrive tel que le client
+    l'a envoyé. Ne sert jamais à décider du LAN : c'est le rôle d'ENTETE_LAN.
+
+    TOUTES LES LIGNES, PAS LA PREMIÈRE : `option forwardfor` d'HAProxy ajoute
+    une LIGNE X-Forwarded-For à la suite de celle du client au lieu de
+    compléter la sienne, et `headers.get()` ne rend que la première — la
+    forgée. Mesuré sur gk3 : le journal retenait l'adresse fournie par le
+    client. Là où nginx est en frontal, c'est lui qui ajoute l'adresse qu'il a
+    résolue (`$proxy_add_x_forwarded_for` sur les locations d'auth).
+    """
+    h = request.headers
+    lignes = h.getlist("X-Forwarded-For") if hasattr(h, "getlist") else [h.get("X-Forwarded-For", "")]
+    chaine = [a.strip() for ligne in lignes for a in (ligne or "").split(",") if a.strip()]
+    for a in reversed(chaine):
+        if not (a.startswith("127.") or a in ("::1", "localhost")):
+            return a[:64]
+    hote = request.client.host if request.client else ""
+    return hote or ""
+
+
 def mode_tableau_de_bord_actif() -> bool:
     """Le mode est-il arme sur cette board ?
 
@@ -682,9 +711,7 @@ class TokenResponse(BaseModel):
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest, request: Request, response: Response):
     """Plain login endpoint — secubox-auth overrides this with the full branching flow."""
-    client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() \
-        or request.headers.get("X-Real-IP", "") \
-        or (request.client.host if request.client else "")
+    client_ip = adresse_client(request)   # depuis la droite (#1753)
     user_agent = request.headers.get("User-Agent", "")
     if not _check_password(req.username, req.password):
         _emit_session_event("login_failed", req.username, {
