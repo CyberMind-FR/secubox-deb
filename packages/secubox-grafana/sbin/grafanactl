@@ -192,7 +192,7 @@ cmd_install() {
     fi
     log "Running LXC bootstrap from $INSTALL_LIB ..."
     SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
-        bash "$INSTALL_LIB"
+        bash "$INSTALL_LIB" || { echo "[grafana] ERREUR : l'installation a échoué (voir ci-dessus) — rien n'est « fait » (#1729)" >&2; exit 1; }
     log "Starting host-side FastAPI ..."
     systemctl start secubox-grafana.service 2>/dev/null || true
     log "Done. Try 'grafanactl status' to verify."

@@ -48,6 +48,17 @@ require_root() {
 lxc_running() { lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null | grep -q "State:.*RUNNING"; }
 lxc_exists() { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
 
+# Le rootfs vient de debootstrap, en root (0:0) ; le conteneur est NON
+# privilégié (idmap 100000). Sans décalage, son root ne peut rien y écrire et
+# lxc-start avorte sur ses propres points de montage (#1729 : gk3 ; gk2 avait
+# été décalée à la main). Rapide quand c'est déjà fait : le rootfs dit tout.
+decaler_rootfs() {
+    local r="$LXC_PATH/$CONTAINER/rootfs"
+    [ -d "$r" ] && [ "$(stat -c %u "$r")" -lt 100000 ] || return 0
+    log "Décalage du rootfs pour le conteneur non privilégié..."
+    secubox-lxc-decaler "$r" || error "décalage du rootfs impossible"
+}
+
 lxc_attach() {
     local cmd="$1"
     local delai="${LXC_TIMEOUT:-45}"
@@ -768,13 +779,19 @@ cmd_install() {
     log "Installing Nextcloud LXC..."
 
     mkdir -p "$DATA_PATH"/{data,config,backups}
-    chown -R 33:33 "$DATA_PATH"  # www-data UID
+    # www-data DU CONTENEUR, décalé par l'idmap (#1729) : 33 → 100033. `33:33`
+    # désignait www-data de l'HÔTE (illisible dans le conteneur), et le -R sur
+    # tout DATA_PATH aurait aussi repris la base (db/, 100101) à une réinstallation.
+    for _d in data config; do
+        [ "$(stat -c %u "$DATA_PATH/$_d")" = 100033 ] || chown -R 100033:100033 "$DATA_PATH/$_d"
+    done
 
     if ! lxc_exists; then
         bootstrap_debian
     fi
 
     create_lxc_config
+    decaler_rootfs
 
     # Start container
     log "Starting container..."
@@ -820,6 +837,7 @@ cmd_start() {
     fi
 
     log "Starting Nextcloud..."
+    decaler_rootfs
     lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
     sleep 5
 

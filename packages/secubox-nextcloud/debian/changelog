@@ -1,3 +1,10 @@
+secubox-nextcloud (1.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * rootfs décalé (secubox-lxc-decaler) avant chaque démarrage : le conteneur non privilégié avortait sur ses propres points de montage (#1729, #1713).
+  * données : www-data DU CONTENEUR (100033) sur data/ et config/ seulement — `chown -R 33:33` visait www-data de l'hôte et aurait repris la base à une réinstallation (#1729, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 14:51:58 +0200
+
 secubox-nextcloud (1.8.3-1~bookworm1) bookworm; urgency=medium
 
   * domaine par défaut nc.<domaine de la box> (API, nextcloudctl → trusted_domains) ; exemple toml sans nom gk2 ; routes postinst dérivées (#1723, #1713).

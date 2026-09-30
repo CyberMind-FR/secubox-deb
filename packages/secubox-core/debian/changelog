@@ -1,3 +1,9 @@
+secubox-core (1.5.41-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-lxc-decaler : décale un rootfs debootstrappé en root (0:0) pour un conteneur non privilégié (idmap 100000) — uid/gid +100000, setuid/setgid remis, liens non suivis, idempotent ; nextcloud et mail ne démarraient pas sur gk3 (ABORTING), gk2 avait été décalée à la main le 2026-05-03 (#1729, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 14:51:58 +0200
+
 secubox-core (1.5.40-1~bookworm1) bookworm; urgency=medium
 
   * conf nginx des Halls du parc : $sbx_hall_box = https://hall.<domaine du nom demandé> (map), pour que les vhosts se laissent encadrer par le Hall de CETTE box — ils figeaient hall.gk2 (#1725, #1713).

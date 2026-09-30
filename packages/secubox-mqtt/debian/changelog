@@ -1,3 +1,9 @@
+secubox-mqtt (2.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * Le ctl sort en erreur quand le script d'installation échoue : il annonçait « Done » et rendait 0 (gk3 : peertube arrêté à l'étape 7/8 passait pour installé) (#1729, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 14:51:58 +0200
+
 secubox-mqtt (2.4.5-1~bookworm1) bookworm; urgency=high
 
   * install-lxc.sh : le dossier des secrets reste root:secubox 0750 (état canonique de secubox-core) — `install -d -m 0700 -o root -g root` le rendait à root seul et vidait le masque ACL à chaque provision : auth, radio, socialrelay, bbs… perdaient leurs secrets (#1701).

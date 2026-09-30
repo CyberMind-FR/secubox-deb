@@ -64,10 +64,21 @@ lxc.start.auto = 1
 EOF
 }
 
+# Le rootfs vient de debootstrap, en root (0:0) ; le conteneur est NON
+# privilégié (idmap 100000). Sans décalage, lxc-start avorte (« Permission
+# denied … var/vmail ») — gk3 ; gk2 avait été décalée à la main (#1729).
+lxc_decaler() {
+    local r="${LXC_BASE:-/var/lib/lxc}/$1/rootfs"
+    [ -d "$r" ] && [ "$(stat -c %u "$r")" -lt 100000 ] || return 0
+    echo "[lxc] décalage du rootfs de $1 pour le conteneur non privilégié"
+    secubox-lxc-decaler "$r"
+}
+
 # Start a container and wait until it reports RUNNING (max 10s).
 lxc_start_safely() {
-    local name="$1"
-    lxc-start -n "$name" -d
+    local name="$1" base="${LXC_BASE:-/var/lib/lxc}"
+    lxc_decaler "$name"
+    lxc-start -n "$name" -P "$base" -d
     local i
     for i in 1 2 3 4 5 6 7 8 9 10; do
         lxc_running "$name" && return 0

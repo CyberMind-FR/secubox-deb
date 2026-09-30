@@ -203,7 +203,7 @@ cmd_install() {
     SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
         SECUBOX_MQTT_LXC_IP="$MQTT_LXC_IP" SECUBOX_MQTT_PORT="$MQTT_PORT" \
         SECUBOX_Z2M_FRONTEND_PORT="$FRONTEND_PORT" \
-        bash "$INSTALL_LIB"
+        bash "$INSTALL_LIB" || { echo "[zigbee] ERREUR : l'installation a échoué (voir ci-dessus) — rien n'est « fait » (#1729)" >&2; exit 1; }
     log "Starting host-side FastAPI ..."
     systemctl start secubox-zigbee.service 2>/dev/null || true
     log "Done. Try 'zigbeectl status' to verify."

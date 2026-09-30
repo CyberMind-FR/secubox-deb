@@ -1,3 +1,10 @@
+secubox-mail (2.10.12-1~bookworm1) bookworm; urgency=medium
+
+  * rootfs décalé (secubox-lxc-decaler) avant chaque démarrage, cibles de montage au root du conteneur ; lxc-start reçoit -P (#1729, #1713).
+  * mailctl rend le code de la commande au lieu de 0 : `install` en échec passait pour réussi (#1729, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 14:51:58 +0200
+
 secubox-mail (2.10.11-1~bookworm1) bookworm; urgency=medium
 
   * webmail_url, horde_url, web_ui_host rspamd et RSPAMD_FQDN dérivés du domaine de la box, plus *.gk2 (#1723, #1713).
