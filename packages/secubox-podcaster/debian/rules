@@ -31,6 +31,10 @@ override_dh_auto_install:
 	# postinst ; retiré en postrm.
 	install -d debian/secubox-podcaster/etc/nginx/sites-available
 	[ -f nginx/podcaster.gk2.conf ] && cp nginx/podcaster.gk2.conf debian/secubox-podcaster/etc/nginx/sites-available/ || true
+	# Assistant root étroit + sudoers limité à ses deux verbes (#1759)
+	install -D -m 0755 sbin/podcasterctl debian/secubox-podcaster/usr/sbin/podcasterctl
+	install -D -m 0440 debian/secubox-podcaster.sudoers \
+	    debian/secubox-podcaster/etc/sudoers.d/secubox-podcaster
 	# Systemd unit
 	install -d debian/secubox-podcaster/usr/lib/systemd/system
 	cp systemd/secubox-podcaster.service debian/secubox-podcaster/usr/lib/systemd/system/
