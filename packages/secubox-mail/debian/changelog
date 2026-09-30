@@ -1,3 +1,10 @@
+secubox-mail (2.10.13-1~bookworm1) bookworm; urgency=medium
+
+  * debootstrap : + systemd, systemd-sysv, dbus — minbase n'apporte pas /sbin/init et le conteneur ne démarrait pas (« Failed to exec /sbin/init ») ; un rootfs existant sans init est mis de côté (jamais effacé) puis refait (#1729, #1713).
+  * mailctl install appelle bootstrap_debian sans condition (idempotent) : la garde « rootfs présent » l'empêchait de réparer un rootfs sans init.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 15:08:12 +0200
+
 secubox-mail (2.10.12-1~bookworm1) bookworm; urgency=medium
 
   * rootfs décalé (secubox-lxc-decaler) avant chaque démarrage, cibles de montage au root du conteneur ; lxc-start reçoit -P (#1729, #1713).
