@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: sbx-openpgp — la clé OpenPGP de la box (#1736)
+CyberMind — https://cybermind.fr
+
+    sbx-openpgp init                 génère la clé de box si elle manque
+    sbx-openpgp lier                 publie la liaison did ↔ empreinte (node.key)
+    sbx-openpgp etat                 did, clé, liaison, pairs
+    sbx-openpgp pairs                box liées dans l'annuaire
+    sbx-openpgp cle                  notre clé publique (armure)
+    sbx-openpgp envoyer PAIR OBJET [TEXTE|-]
+    sbx-openpgp boite [ID]           messages reçus ; ID : le lire (déchiffré)
+
+Deux comptes, deux secrets, jamais ensemble : le trousseau est à
+secubox-openpgp (toutes les commandes s'y exécutent), node.key à secubox
+(seule la publication de `lier` s'y exécute). Lancé en root, l'outil passe
+de lui-même sous le bon compte.
+"""
+from __future__ import annotations
+
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+
+LIB = os.environ.get("SECUBOX_OPENPGP_LIB", "/usr/lib/secubox/openpgp")
+ANNUAIRE_LIB = os.environ.get("ANNUAIRE_LIB", "/usr/lib/secubox/annuaire")
+COMPTE = "secubox-openpgp"
+for p in (LIB, ANNUAIRE_LIB):
+    if p not in sys.path:
+        sys.path.append(p)
+
+RACINE = os.environ.get("SECUBOX_OPENPGP_RACINE", "/var/lib/secubox/openpgp")
+GNUPGHOME = os.environ.get("GNUPGHOME", os.path.join(RACINE, "node"))
+
+
+def _sous(compte: str, args, entree=None, capture=False):
+    env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "GNUPGHOME": GNUPGHOME,
+           "SECUBOX_OPENPGP_RACINE": RACINE, "PYTHONPATH": f"{LIB}:{ANNUAIRE_LIB}",
+           "LANG": "C.UTF-8"}
+    return subprocess.run(["runuser", "-u", compte, "--", "env", *[f"{k}={v}" for k, v in env.items()],
+                           *args], input=entree, capture_output=capture, text=True)
+
+
+def _box():
+    from secubox_openpgp.gpg import Trousseau  # noqa: PLC0415
+    from secubox_openpgp.service import Box, did_local  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+    return Box(trousseau=Trousseau(GNUPGHOME), did=did_local(), racine=Path(RACINE))
+
+
+def _date(t):
+    return time.strftime("%Y-%m-%d", time.gmtime(t)) if t else "jamais"
+
+
+def cmd_init(_args):
+    b = _box()
+    c = b.ma_cle()
+    if c:
+        print(f"clé de box présente : {c['empreinte']} (expire {_date(c['expire'])})")
+        return 0
+    if not b.did:
+        print("did de la box inconnu (/etc/secubox/annuaire/node.did) — annuaire non initialisé ?",
+              file=sys.stderr)
+        return 2
+    nom = socket.gethostname().split(".")[0]
+    e = b.trousseau.generer(f"SecuBox {nom} ({b.did})", "2y")
+    print(f"clé de box créée : {e} — ed25519 [signer] + cv25519 [chiffrer], 2 ans")
+    print("à lier à l'identité de la box : sbx-openpgp lier")
+    return 0
+
+
+def cmd_cle_json(_args):
+    b = _box()
+    c = b.ma_cle()
+    if not c:
+        return 2
+    print(json.dumps({"empreinte": c["empreinte"], "creee": c["creee"], "expire": c["expire"],
+                      "cle_publique": b.trousseau.exporter_public(c["empreinte"])}))
+    return 0
+
+
+def cmd_lier(_args):
+    if os.geteuid() != 0:
+        print("lier : à lancer en root (il passe par deux comptes)", file=sys.stderr)
+        return 2
+    r = _sous(COMPTE, [sys.executable, os.path.abspath(__file__), "_cle-json"], capture=True)
+    if r.returncode != 0 or not r.stdout.strip():
+        print("pas de clé de box : sbx-openpgp init d'abord", file=sys.stderr)
+        return 2
+    p = _sous("secubox", [sys.executable, "-m", "secubox_openpgp.publier"],
+              entree=r.stdout, capture=True)
+    if p.returncode != 0:
+        print((p.stderr or "publication impossible").strip(), file=sys.stderr)
+        return p.returncode
+    d = json.loads(p.stdout)
+    e = json.loads(r.stdout)["empreinte"]
+    print(("liaison déjà publiée" if d["deja"] else "liaison publiée") +
+          f" : {d['did']} ↔ {e}")
+    if not d["deja"]:
+        print("les pairs la verront à leur prochaine synchronisation de l'annuaire (≤ 5 min)")
+    return 0
+
+
+def cmd_etat(_args):
+    b = _box()
+    c = b.ma_cle()
+    print(f"box       {b.did or '(did inconnu)'}")
+    print(f"clé       {c['empreinte'] + '  expire ' + _date(c['expire']) if c else 'aucune (sbx-openpgp init)'}")
+    try:
+        ps = b.pairs()
+    except Exception as ex:  # noqa: BLE001
+        print(f"annuaire  injoignable ({ex})")
+        return 1
+    moi = ps.get(b.did)
+    lien = "oui" if (c and moi and moi["empreinte"] == c["empreinte"]) else "non (sbx-openpgp lier)"
+    print(f"liée      {lien}")
+    autres = [p for p in ps.values() if not p["soi"]]
+    print(f"pairs     {len(autres)} box liée(s)")
+    return 0
+
+
+def cmd_pairs(_args):
+    for p in sorted(_box().pairs().values(), key=lambda x: x["boxname"]):
+        marque = " (soi)" if p["soi"] else ""
+        print(f"{p['boxname'] or '?':<10} {p['mesh_ip'] or '-':<12} {p['empreinte']}  {p['did']}{marque}")
+    return 0
+
+
+def cmd_cle(_args):
+    b = _box()
+    c = b.ma_cle()
+    if not c:
+        print("aucune clé (sbx-openpgp init)", file=sys.stderr)
+        return 2
+    sys.stdout.write(b.trousseau.exporter_public(c["empreinte"]))
+    return 0
+
+
+def cmd_envoyer(args):
+    if len(args) < 2:
+        print("usage : sbx-openpgp envoyer PAIR OBJET [TEXTE|-]", file=sys.stderr)
+        return 2
+    texte = sys.stdin.read() if len(args) < 3 or args[2] == "-" else args[2]
+    from secubox_openpgp.service import Refus  # noqa: PLC0415
+    b = _box()
+    try:
+        r = b.envoyer(args[0], args[1], texte)
+    except Refus as e:
+        print(f"refusé : {e}", file=sys.stderr)
+        return 1
+    b.journal("envoi_par", qui=f"cli:{os.environ.get('SUDO_USER') or 'root'}", a=r["a"])
+    print(f"déposé chez {r['boxname'] or r['a']} — signé et chiffré")
+    return 0
+
+
+def cmd_boite(args):
+    b = _box()
+    if args:
+        m = b.lire(args[0])
+        b.journal("lecture_par", qui=f"cli:{os.environ.get('SUDO_USER') or 'root'}", id=args[0])
+        print(f"de        {m['boxname'] or '?'}  {m['de']}")
+        print(f"signé par {m['empreinte']} (clé liée vérifiée)")
+        print(f"émis      {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(m['emis']))}")
+        print(f"objet     {m['objet']}\n")
+        print(m["contenu"])
+        return 0
+    ms = b.lister()
+    if not ms:
+        print("boîte vide")
+    for m in ms:
+        print(f"{m['id']}  {m['boxname'] or '?':<8} {time.strftime('%Y-%m-%d %H:%M', time.localtime(m['recu']))}  {m['taille']} o")
+    return 0
+
+
+COMMANDES = {"init": cmd_init, "lier": cmd_lier, "etat": cmd_etat, "pairs": cmd_pairs,
+             "cle": cmd_cle, "envoyer": cmd_envoyer, "boite": cmd_boite, "_cle-json": cmd_cle_json}
+
+
+def main(argv):
+    if len(argv) < 2 or argv[1] not in COMMANDES or argv[1] in ("-h", "--help"):
+        print(__doc__.split("CyberMind")[0].strip().split("\n\n", 1)[-1])
+        return 0 if len(argv) > 1 and argv[1] in ("-h", "--help") else 2
+    cmd = argv[1]
+    # Root : tout, sauf l'orchestration de `lier`, s'exécute sous le compte du trousseau.
+    if os.geteuid() == 0 and cmd != "lier":
+        r = _sous(COMPTE, [sys.executable, os.path.abspath(__file__), *argv[1:]])
+        return r.returncode
+    return COMMANDES[cmd](argv[2:])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

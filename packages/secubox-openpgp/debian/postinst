@@ -1,0 +1,50 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+  configure)
+    # Compte du trousseau : groupe secubox (sockets partagées), sans shell.
+    mkdir -p /var/lib/secubox/openpgp
+    if ! getent passwd secubox-openpgp >/dev/null; then
+        adduser --system --ingroup secubox --home /var/lib/secubox/openpgp \
+                --no-create-home --shell /usr/sbin/nologin secubox-openpgp >/dev/null
+    fi
+    install -d -m 0750 -o secubox-openpgp -g secubox /var/lib/secubox/openpgp
+    install -d -m 0700 -o secubox-openpgp -g secubox /var/lib/secubox/openpgp/node \
+                                                     /var/lib/secubox/openpgp/boite
+
+    # Le did de la box, PUBLIC (0644) : le démon s'identifie sans jamais lire
+    # node.key (même motif que secubox-assist).
+    if [ -r /etc/secubox/secrets/annuaire/node.key ] && [ ! -s /etc/secubox/annuaire/node.did ]; then
+        mkdir -p /etc/secubox/annuaire
+        python3 -c "
+import sys; sys.path.insert(0, '/usr/lib/secubox/annuaire')
+from annuaire.crypto import public_from_private, did_from_pubkey
+raw = bytes.fromhex(open('/etc/secubox/secrets/annuaire/node.key').read().strip())
+print(did_from_pubkey(public_from_private(raw)))
+" > /etc/secubox/annuaire/node.did 2>/dev/null || true
+        chmod 0644 /etc/secubox/annuaire/node.did 2>/dev/null || true
+    fi
+
+    # Clé de box (si elle manque) puis liaison dans l'annuaire (idempotente).
+    # Jamais au prix de l'installation : une box sans annuaire initialisé
+    # s'installe, et `sbx-openpgp init && sbx-openpgp lier` rattrape.
+    if [ -s /etc/secubox/annuaire/node.did ]; then
+        /usr/sbin/sbx-openpgp init || true
+        /usr/sbin/sbx-openpgp lier || true
+    else
+        echo "secubox-openpgp : annuaire non initialisé — plus tard : sbx-openpgp init && sbx-openpgp lier"
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        systemctl enable secubox-openpgp.service >/dev/null 2>&1 || true
+        systemctl restart secubox-openpgp.service >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

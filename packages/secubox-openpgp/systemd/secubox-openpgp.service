@@ -1,0 +1,31 @@
+[Unit]
+Description=SecuBox OpenPGP — clé de box liée, échange inter-box (#1736)
+After=network.target secubox-annuaire.service
+Wants=secubox-annuaire.service
+
+[Service]
+Type=simple
+# Le trousseau est à ce compte, et à lui seul : node.key lui reste
+# inaccessible (la clé qui LIE n'est pas celle qui CHIFFRE).
+User=secubox-openpgp
+Group=secubox
+UMask=0007
+# /run/secubox est partagé (1777) : ne délier que sa propre socket, en root
+# (préfixe +) — jamais de RuntimeDirectory (#1022).
+ExecStartPre=+/bin/rm -f /run/secubox/openpgp.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/openpgp.sock --log-level warning
+WorkingDirectory=/usr/lib/secubox/openpgp
+Environment=PYTHONPATH=/usr/lib/secubox/openpgp:/usr/lib/secubox/annuaire
+Environment=GNUPGHOME=/var/lib/secubox/openpgp/node
+Environment=SECUBOX_OPENPGP_RACINE=/var/lib/secubox/openpgp
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/var/lib/secubox/openpgp /run/secubox
+InaccessiblePaths=-/etc/secubox/secrets
+
+[Install]
+WantedBy=multi-user.target

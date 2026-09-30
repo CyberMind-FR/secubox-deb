@@ -96,6 +96,11 @@ class Op(str, Enum):
     ASSIST_OFFER_REVOKE   = "assist_offer_revoke"
     ASSIST_REQUEST_OPEN   = "assist_request_open"   # open (untargeted) request for help
     ASSIST_MATCH_ACCEPT   = "assist_match_accept"   # one side accepts a proposed match
+    # OpenPGP (#1736) : la clé OpenPGP d'une box, LIÉE à node.key — pas une
+    # identité de plus. Une flotte qui ne connaît pas ces verbes les rejette à
+    # l'import : les livrer partout AVANT la première publication.
+    OPENPGP_BIND   = "openpgp_bind"     # la box déclare SA clé OpenPGP
+    OPENPGP_REVOKE = "openpgp_revoke"   # la box retire une empreinte, pour toujours
 
 
 # ---------------------------------------------------------------------------
@@ -869,6 +874,64 @@ class RingAssign(BaseModel):
 # ---------------------------------------------------------------------------
 # LogEntry — the BLAKE2b-chained journal link
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# OpenPGP (#1736) — la clé OpenPGP d'une box, liée à son identité canonique
+# ---------------------------------------------------------------------------
+#
+# node.key (Ed25519) reste la SEULE identité du nœud (audit #1417, S10). La clé
+# OpenPGP est distincte — POLITIQUE-CRYPTO : deux clés par identité, jamais
+# Ed25519 → X25519 — et c'est cette entrée, SIGNÉE PAR node.key, qui la lie au
+# did. La confiance en l'empreinte d'un pair vient de là, pas d'une toile de
+# confiance OpenPGP.
+#
+# `usage` est DANS la charge signée : l'op d'une entrée n'est pas couvert par
+# la signature (seul canonical_bytes(payload) l'est) ; sans ce champ, une charge
+# signée pour un autre verbe pourrait être rejouée sous celui-ci.
+#
+# RGPD : le journal est public et indélébile. Une clé de BOX y a sa place ; une
+# clé personnelle (phase 2), jamais.
+
+_EMPREINTE_V4 = r"^[0-9A-F]{40}$"
+
+
+class OpenPGPBinding(BaseModel):
+    """La box `did` déclare sa clé OpenPGP. Auteur de l'entrée = did."""
+    model_config = ConfigDict(extra="forbid")
+
+    usage:        Literal["openpgp_bind"] = "openpgp_bind"
+    did:          str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    empreinte:    str = Field(..., pattern=_EMPREINTE_V4, description="empreinte v4, 40 hex MAJUSCULES")
+    cle_publique: str = Field(..., min_length=64, max_length=16384,
+                              description="clé publique OpenPGP armurée (ASCII)")
+    creee:        int = Field(..., ge=0, description="création de la clé, secondes epoch (pas de flottant)")
+    expire:       int = Field(..., ge=0, description="expiration, secondes epoch ; 0 = aucune")
+    created_at:   str = Field(default_factory=now_rfc3339)
+    sig:          Optional[str] = None
+    signer_did:   Optional[str] = None
+
+    @field_validator("cle_publique")
+    @classmethod
+    def _armure(cls, v: str) -> str:
+        if not v.startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----") \
+                or "-----END PGP PUBLIC KEY BLOCK-----" not in v:
+            raise ValueError("clé publique OpenPGP armurée attendue")
+        return v
+
+
+class OpenPGPRevocation(BaseModel):
+    """La box `did` retire l'empreinte — définitivement. Auteur = did."""
+    model_config = ConfigDict(extra="forbid")
+
+    usage:      Literal["openpgp_revoke"] = "openpgp_revoke"
+    did:        str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    empreinte:  str = Field(..., pattern=_EMPREINTE_V4)
+    motif:      str = Field(default="", max_length=200)
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
+    signer_did: Optional[str] = None
+
 
 class LogEntry(BaseModel):
     """One link in the append-only, BLAKE2b-chained journal.

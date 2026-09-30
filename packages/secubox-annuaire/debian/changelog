@@ -1,3 +1,10 @@
+secubox-annuaire (0.10.10-1~bookworm1) bookworm; urgency=medium
+
+  * OpenPGP (#1736) : ops openpgp_bind / openpgp_revoke (modèles extra=forbid, `usage` DANS la charge signée — l'op ne l'est pas), verbes signés par node.key, lecteur annuaire.openpgp lié à l'auteur vérifié (une liaison au nom d'une autre box ne vaut rien ; révocation définitive ; expiration). À livrer sur toute la flotte AVANT la première publication : un op inconnu est rejeté à l'import.
+  * Écoute maillée :8799 : une seule route d'écriture, POST /api/v1/openpgp/boite/depot (256 Kio), vers le démon secubox-openpgp qui vérifie tout ; en-tête du gabarit mis à jour.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 15:44:34 +0200
+
 secubox-annuaire (0.10.9-1~bookworm1) bookworm; urgency=medium
 
   * secubox-annuaire-maillage : `annuairectl init` (idempotent) dès que l'IDENTITÉ du nœud manque au journal, plus seulement quand la clé manque — sur gk3 la clé existait sans fiche Identity : l'export ne joignait pas sa clé publique et tous les pairs rejetaient ses entrées (#1711).
