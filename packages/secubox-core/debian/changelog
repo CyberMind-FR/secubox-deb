@@ -1,3 +1,14 @@
+secubox-core (1.5.43-1~bookworm1) bookworm; urgency=high
+
+  * adresse_client() (#1753) : l'adresse tracée d'une connexion est lue depuis
+    la DROITE de X-Forwarded-For en sautant les sauts locaux, comme sbxwaf
+    depuis #1697 ; la gauche vient du client. Utilisée par le login de
+    secours de la bibliothèque et par secubox-auth.
+    Lit TOUTES les lignes X-Forwarded-For : HAProxy en ajoute une à la suite
+    de celle du client, et seule la première était lue (mesuré sur gk3).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:28:11 +0200
+
 secubox-core (1.5.42-1~bookworm1) bookworm; urgency=medium
 
   * secubox_core.auth : un jeton peut porter une délégation (#1720) ; chaque requête d'une session déléguée est tracée dans /var/log/secubox/delegation.log (qui, depuis quel nœud, quelle session, quelle route), fichier créé par le postinst — les modules ne pouvaient pas le créer.

@@ -278,13 +278,23 @@ def _check_scope(authorization: Optional[str], expected_scope: str) -> dict:
     return payload
 
 
+def _client_meta(request: _Request) -> tuple:
+    """(adresse, agent) pour la trace de TOUTE connexion (59bb18392, #1753).
+
+    Effacé par la fusion aff481735 : /login/mfa et /totp/confirm écrivaient
+    depuis une adresse VIDE et sans agent — or depuis #1699 toute connexion WAN
+    d'un compte à double facteur passe par /login/mfa : les connexions qu'il
+    importe le plus de tracer ne l'étaient pas. Adresse lue depuis la droite
+    (`adresse_client`), agent tronqué à 300 (#1474 : 100 coupait avant le
+    navigateur)."""
+    from secubox_core.auth import adresse_client
+    return adresse_client(request), request.headers.get("User-Agent", "")[:300]
+
+
 @_login_router.post("/login")
 def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
-    ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-          or request.headers.get("X-Real-IP", "")
-          or (request.client.host if request.client else ""))
-    ua = request.headers.get("User-Agent", "")[:300]   # #1474 : 100 coupait avant le navigateur
+    ip, ua = _client_meta(request)
     user = user_store.get_user(req.username)
 
     # LE COMPTE DE LA CONSOLE N'ENTRE QUE PAR LE KIOSQUE (#1695) — jamais par
@@ -463,7 +473,7 @@ def _delegation_entrer(a: str, request: _Request):
     """Entrée d'un compte d'aide d'un autre nœud, sur assertion signée par ce
     nœud, tant que CETTE box a autorisé l'administration à distance."""
     from fastapi.responses import HTMLResponse as _HTML  # noqa: PLC0415
-    ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or ""
+    ip, _ua = _client_meta(request)   # depuis la droite : trace de délégation non forgeable
     try:
         self_did = _deleg.did_du_noeud()
         entries = _deleg.entrees()
@@ -543,7 +553,9 @@ async def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
     _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
-    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
+    ip, ua = _client_meta(request)
+    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400,
+                                                  "ip": ip, "user_agent": ua})
     _users_engine.touch_last_login(username)
     return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
 
@@ -579,7 +591,9 @@ def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
     _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
-    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
+    ip, ua = _client_meta(request)
+    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400,
+                                                  "ip": ip, "user_agent": ua})
     return {
         "access_token": tok, "token_type": "bearer", "expires_in": 86400,
         "backup_codes": backup_plain,

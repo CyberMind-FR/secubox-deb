@@ -1,3 +1,10 @@
+secubox-certs (1.2.5-1~bookworm1) bookworm; urgency=high
+
+  * Docstring de la garde admin corrigée (#1753) ; Depends secubox-core
+    (>= 1.5.30), version qui fait de require_jwt un contrôle d'admin réel.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:28:11 +0200
+
 secubox-certs (1.2.4-1~bookworm1) bookworm; urgency=high
 
   * Restaure un contrôle de #942 effacé par la fusion aff481735 (#1748,

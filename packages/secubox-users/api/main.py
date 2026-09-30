@@ -541,7 +541,8 @@ def create_user(user: UserCreate):
     _engine._save(doc)
     new_user = _engine.get_user(user.username) or new_user
 
-    return {"success": True, "user": new_user, "provision_results": provision_results}
+    # Expurgé : l'enregistrement brut porte l'empreinte et le secret TOTP (#1753).
+    return {"success": True, "user": redact_user(new_user), "provision_results": provision_results}
 
 @app.put("/user/{username}", dependencies=[Depends(require_permission("users.edit"))])
 async def update_user(username: str, update: UserUpdate):
@@ -578,7 +579,9 @@ async def update_user(username: str, update: UserUpdate):
     user_record = _engine.get_user(username)
     if not user_record:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"success": True, "user": user_record}
+    # Expurgé (#1753) : un porteur de `users.edit` recevait l'empreinte argon2
+    # et le SECRET TOTP du compte visé — y compris ceux de l'admin.
+    return {"success": True, "user": redact_user(user_record)}
 
 
 @app.post("/user/{username}/disable", dependencies=[Depends(require_permission("users.edit"))])
@@ -1109,14 +1112,14 @@ async def validate_acl(entries: List[ACLEntry]):
 
 @app.get("/export", dependencies=[Depends(require_permission("system.export"))])
 async def export_users():
-    """Export all users."""
+    """Export all users — expurgé (e1d29ab37, effacé par la fusion aff481735, #1753).
+
+    Le commentaire d'origine promettait « Remove sensitive data » en ne retirant
+    que `provision_results` : l'export portait les empreintes et les secrets
+    TOTP. `/import` refuse d'ailleurs toute ligne portant `password_hash`."""
     data = load_users()
-    # Remove sensitive data
-    export_data = {"users": [], "groups": data.get("groups", [])}
-    for user in data.get("users", []):
-        export_user = {k: v for k, v in user.items() if k != "provision_results"}
-        export_data["users"].append(export_user)
-    return export_data
+    return {"users": [redact_user(u) for u in data.get("users", [])],
+            "groups": data.get("groups", [])}
 
 @app.post("/import", dependencies=[Depends(require_permission("system.import"))])
 async def import_users(file: UploadFile = File(...)):

@@ -76,3 +76,49 @@ def test_revocation_repare_l_ancien_format(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "SESSIONS_FILE", str(f))
     main.revoke_session("c3")
     assert json.loads(f.read_text()) == []
+
+
+FUITES = ("SECRET", "JBSWY3DPEHPK3PXP", "$argon2id$CODE", "password_hash")
+
+
+def _sans_fuite(obj):
+    brut = json.dumps(obj)
+    for fuite in FUITES:
+        assert fuite not in brut, fuite
+    return brut
+
+
+def test_export_expurge(tmp_path, monkeypatch):
+    """#1753 : l'export portait empreintes et secrets TOTP (e1d29ab37 effacé)."""
+    _users(tmp_path, monkeypatch, [dict(SECRET)])
+    brut = _sans_fuite(asyncio.run(main.export_users()))
+    assert '"totp_enabled": true' in brut and '"gk2"' in brut
+
+
+class _MoteurFactice:
+    def __init__(self):
+        self.rec = json.loads(json.dumps(SECRET))
+    def get_user(self, name):
+        return json.loads(json.dumps(self.rec)) if name == self.rec["username"] else None
+    def create_user(self, name, email=None, role=None):
+        self.rec = dict(json.loads(json.dumps(SECRET)), username=name, email=email, role=role)
+        return json.loads(json.dumps(self.rec))
+    def _load(self):
+        return {"version": 2, "users": [self.rec], "groups": []}
+    def _save(self, doc):
+        pass
+
+
+def test_modification_rend_une_fiche_expurgee(monkeypatch):
+    """#1753 : `PUT /user/{u}` rendait l'enregistrement brut à tout porteur
+    de `users.edit` — empreinte et secret TOTP de l'admin compris."""
+    monkeypatch.setattr(main, "_engine", _MoteurFactice())
+    _sans_fuite(asyncio.run(main.update_user("gk2", main.UserUpdate())))
+
+
+def test_creation_rend_une_fiche_expurgee(monkeypatch):
+    monkeypatch.setattr(main, "_engine", _MoteurFactice())
+    r = main.create_user(main.UserCreate(username="nouveau", email="n@exemple.invalid",
+                                         password="x", services=[], forcer=False))
+    _sans_fuite(r)
+    assert r["user"]["username"] == "nouveau"
