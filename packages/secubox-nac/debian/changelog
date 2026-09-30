@@ -1,3 +1,10 @@
+secubox-nac (3.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : crée de nouveau la table inet secubox_nac et ses ensembles
+    de zones (b5add8c629, effacé par la fusion 0c07799fdc ; #1748, #1765).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:25:50 +0200
+
 secubox-nac (3.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Ne livre plus /usr/share/secubox/www/shared en lien (pendant vers

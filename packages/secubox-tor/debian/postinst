@@ -5,10 +5,19 @@ if [ "$1" = "configure" ]; then
     systemctl enable secubox-tor.service || true
     systemctl start secubox-tor.service || true
     sysctl --system || true
-    /usr/sbin/torctl socks-lan ensure || true
+    # La version 1.2.x livrait le GABARIT brut du dropin SOCKS comme conffile ;
+    # dpkg a pu en laisser une copie .dpkg-dist (espace réservé __LAN_IP__).
+    # torctl rend désormais le vrai fichier ; la copie périmée est retirée (#1765).
+    for f in /etc/tor/torrc.d/50-secubox-socks-lan.conf.dpkg-dist \
+             /etc/tor/torrc.d/50-secubox-socks-lan.conf.dpkg-new; do
+        [ -f "$f" ] && rm -f "$f"   # plus aucun conffile à cet emplacement
+    done
     # transparent activé par défaut (aligné proxypac.toml transparent=true) ;
     # idempotent, best-effort, réutilise le TransPort toolbox s'il existe.
+    # AVANT socks-lan : `on` retire d'abord un éventuel doublon d'écouteurs,
+    # puis socks-lan redémarre Tor sur une config saine (#1765).
     /usr/sbin/torctl transparent on || true
+    /usr/sbin/torctl socks-lan ensure || true
 fi
 #DEBHELPER#
 exit 0

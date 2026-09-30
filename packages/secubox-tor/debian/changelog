@@ -1,3 +1,24 @@
+secubox-tor (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Empaquetage restauré (52ffaaae1b, effacé par la fusion bab2f860d0 ;
+    #1748, #1765) : torctl, tor-lan-ip, gabarits torrc/unbound/nft, sysctl
+    route_localnet et route secubox-routes.d (seul répertoire lu, #989).
+    Le postinst appelait un torctl absent, masqué par || true.
+  * Gabarit SOCKS LAN restauré (2af64e417) : `SocksPort __LAN_IP__:9050`, SANS
+    SocksPolicy. La fusion avait remis la version antérieure d'une heure, qui
+    écrivait en dur l'adresse de gk2 (gk3 aurait écouté sur une adresse qu'il
+    n'a pas) et ajoutait `SocksPolicy … reject *` — option GLOBALE qui refuse
+    les pairs du maillage sur le SocksPort de sortie macro. Test contradictoire
+    de la branche retiré (test_socks_lan_dropin couvre le gabarit).
+  * torctl transparent on : notre propre dropin 60- ne compte plus comme
+    « déjà déclaré », et il est retiré quand l'egress toolbox fournit déjà
+    TransPort 9040 / DNSPort 9053. Les deux ensemble, Tor refusait de
+    démarrer (« Address already in use ») : gk2 sans Tor depuis le 09-29.
+  * Le dropin n'est plus livré dans /etc/tor/torrc.d : torctl le rend avec
+    l'adresse de CETTE box ; copie .dpkg-dist périmée retirée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:25:50 +0200
+
 secubox-tor (1.2.1-1~bookworm1) bookworm; urgency=high
 
   * Renumérotation (#1583) : la 1.2.0 de la branche fix/1027, restée dans le
