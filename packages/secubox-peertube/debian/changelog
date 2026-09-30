@@ -1,3 +1,11 @@
+secubox-peertube (1.5.5-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc : plus de `chown -R` de tout /data/peertube à chaque installation — il reprenait la base postgres et redis au root du conteneur, et relancer l'installation cassait PeerTube (pg_filenode.map: Permission denied, redis en échec). Premier niveau seulement, s'il est encore à root ; dans le conteneur, /var/lib/postgresql et /var/lib/redis rendus à leurs comptes avant démarrage (#1729, #1713).
+  * Étape 5 : si l'API GitHub refuse (60 requêtes/h par IP, partagée par le parc — « rate limit exceeded » sur gk3), la version déjà installée suffit ; sinon l'échec est dit.
+  * L'installation n'écrit plus le mot de passe initial de root dans sa sortie (journaux, terminaux) — seulement le fichier secret qui le tient.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 15:06:50 +0200
+
 secubox-peertube (1.5.4-1~bookworm1) bookworm; urgency=medium
 
   * Le ctl sort en erreur quand le script d'installation échoue : il annonçait « Done » et rendait 0 (gk3 : peertube arrêté à l'étape 7/8 passait pour installé) (#1729, #1713).

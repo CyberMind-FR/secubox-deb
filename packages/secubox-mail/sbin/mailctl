@@ -635,10 +635,10 @@ cmd_install() {
     done
     mkdir -p "$LXC_PATH"
 
-    # Bootstrap rootfs + render LXC config
-    if ! lxc_exists "$CONTAINER"; then
-        LXC_BASE="$LXC_PATH" bootstrap_debian "$CONTAINER"
-    fi
+    # Bootstrap rootfs + render LXC config. Toujours appelé : il ne fait rien
+    # sur un rootfs complet, et refait celui qui n'a pas d'init (#1729) — la
+    # garde `lxc_exists` l'empêchait de jamais le voir.
+    LXC_BASE="$LXC_PATH" bootstrap_debian "$CONTAINER" || { error "rootfs impossible"; return 1; }
     LXC_BASE="$LXC_PATH" lxc_create_config "$CONTAINER" "$LXC_IP" "$LXC_BRIDGE" "$LXC_GATEWAY"
 
     # Bring the container up so install steps can chroot/apt

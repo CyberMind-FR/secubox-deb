@@ -59,10 +59,18 @@ ensure_dirs() {
     install -d -m 0750 -o root -g secubox "$SECRETS_DIR"
     # Bind-mount targets, owned by the LXC root UID so the container can chown
     # them to postgres/redis/peertube during install.
-    for d in storage config postgres redis; do
+    #
+    # PREMIER NIVEAU SEULEMENT, ET SEULEMENT S'ILS SONT ENCORE À ROOT (#1729).
+    # Un `chown -R` de tout DATA_DIR à chaque installation reprenait la base
+    # postgres et redis au root du conteneur : relancer l'installation cassait
+    # PeerTube (« pg_filenode.map: Permission denied », redis en échec) — vécu
+    # sur gk3, et promis à gk2 à sa prochaine réinstallation.
+    for d in "" storage config postgres redis; do
         install -d -m 0750 "$DATA_DIR/$d"
+        [ "$(stat -c %u "$DATA_DIR/$d")" -lt "$LXC_ROOT_UID" ] \
+            && chown "$LXC_ROOT_UID:$LXC_ROOT_UID" "$DATA_DIR/$d"
     done
-    chown -R "$LXC_ROOT_UID:$LXC_ROOT_UID" "$DATA_DIR"
+    return 0
 }
 
 ensure_bridge() {
@@ -253,6 +261,11 @@ echo '[3/8] peertube system user'
 id -u peertube >/dev/null 2>&1 || useradd -m -d /var/www/peertube -s /bin/bash peertube
 
 echo '[4/8] postgres + redis + database'
+# Les montages liés de la base et de redis sont à leurs comptes, pas au root du
+# conteneur : c'est ce que ensure_dirs annonce, et ce qui répare une base
+# reprise par l'ancien `chown -R` de l'hôte (#1729).
+chown -R postgres:postgres /var/lib/postgresql
+chown -R redis:redis /var/lib/redis
 service postgresql start || systemctl start postgresql || true
 # Redis must persist with an append-only file (#943). PeerTube keeps its job
 # QUEUE in redis but the "a job is pending" COUNTER in postgres
@@ -288,7 +301,15 @@ sudo -u peertube mkdir -p versions config storage
 # 0750 dans le conteneur : peertube ne pouvait pas y copier sa configuration
 # à l'étape 7 — le chown -R de la fin arrivait trop tard (#1729).
 chown peertube:peertube /var/www/peertube/config /var/www/peertube/storage
-VERSION=$(curl -s https://api.github.com/repos/Chocobozzz/PeerTube/releases/latest | grep tag_name | cut -d '"' -f 4)
+VERSION=$(curl -s https://api.github.com/repos/Chocobozzz/PeerTube/releases/latest | grep tag_name | cut -d '"' -f 4 || true)
+if [ -z "$VERSION" ]; then
+    # L'API GitHub limite à 60 requêtes/h par IP, partagée par tout le parc
+    # (#1729 : « rate limit exceeded » sur gk3). Une version déjà installée
+    # suffit ; sans elle, on s'arrête en le disant.
+    VERSION=$(basename "$(readlink /var/www/peertube/peertube-latest 2>/dev/null)" | sed 's/^peertube-//')
+    [ -n "$VERSION" ] || { echo "version PeerTube introuvable : API GitHub indisponible et rien d'installé" >&2; exit 1; }
+    echo "  API GitHub indisponible — version déjà présente : $VERSION"
+fi
 echo "  installing PeerTube $VERSION"
 cd versions
 if [ ! -d "peertube-$VERSION" ]; then
@@ -428,7 +449,9 @@ capture_admin() {
     if [ -n "$pw" ]; then
         printf '%s\n' "$pw" > "$SECRETS_DIR/peertube-admin"
         chmod 600 "$SECRETS_DIR/peertube-admin"
-        log "Initial admin: root / $pw  (saved to $SECRETS_DIR/peertube-admin — rotate via web UI)"
+        # Jamais le mot de passe lui-même : la sortie de l'installation finit
+        # dans des journaux et des terminaux (#1729). Seulement où il est.
+        log "Initial admin: root — mot de passe dans $SECRETS_DIR/peertube-admin (0600) ; à changer par l'interface web"
     else
         log "WARN: could not capture initial root password from journal; set $SECRETS_DIR/peertube-admin manually for dashboard write ops."
     fi

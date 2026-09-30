@@ -22,8 +22,19 @@ bootstrap_debian() {
 
     mkdir -p "$lxc_path"
     if [ -d "$lxc_path/rootfs/etc" ]; then
-        echo "[install] rootfs already present at $lxc_path/rootfs — skipping debootstrap"
-        return 0
+        # Le binaire DANS le rootfs : /sbin/init est un lien absolu, que `-e`
+        # résoudrait sur l'hôte.
+        if [ -x "$lxc_path/rootfs/lib/systemd/systemd" ]; then
+            echo "[install] rootfs already present at $lxc_path/rootfs — skipping debootstrap"
+            return 0
+        fi
+        # ROOTFS SANS INIT (#1729) : debootstrap d'avant l'ajout de systemd —
+        # lxc-start échouait sur « Failed to exec /sbin/init ». Les données
+        # vivent hors du rootfs (montages liés) : on le met de côté, sans rien
+        # effacer, et on en refait un.
+        local mis="$lxc_path/rootfs.sans-init-$(date +%s)"
+        echo "[install] rootfs sans /sbin/init : mis de côté ($mis), nouveau debootstrap"
+        mv "$lxc_path/rootfs" "$mis"
     fi
 
     if ! command -v debootstrap >/dev/null 2>&1; then
@@ -32,7 +43,9 @@ bootstrap_debian() {
     fi
 
     echo "[install] running debootstrap (a few minutes)..."
-    debootstrap --variant=minbase --include=ca-certificates,curl,gnupg,locales \
+    # systemd, systemd-sysv, dbus : le conteneur démarre sur /sbin/init
+    # (comme nextcloud) ; minbase ne les apporte pas (#1729).
+    debootstrap --variant=minbase --include=systemd,systemd-sysv,dbus,ca-certificates,curl,gnupg,locales \
         bookworm "$lxc_path/rootfs" http://deb.debian.org/debian
 
     echo "$container" > "$lxc_path/rootfs/etc/hostname"
