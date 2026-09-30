@@ -62,6 +62,23 @@ case "$1" in
       fi
     fi
 
+    # #1727 : le relais du maillage joint un nœud sur 9080, le seul port que le
+    # pare-feu de ce nœud ouvre au relais. billets n'écoutait que 8910 :
+    # billets.gk3, relayé par gk2, tombait sur « Wrong Domain ». Même migration
+    # ciblée que ci-dessus : une ligne, sauvegarde hors de sites-enabled, nginx -t.
+    f="$(readlink -f /etc/nginx/sites-enabled/billets.conf 2>/dev/null || true)"
+    if [ -n "$f" ] && [ -f "$f" ] && grep -qE '^[[:space:]]*listen[[:space:]]+8910;' "$f" \
+       && ! grep -qE '^[[:space:]]*listen[[:space:]]+9080;' "$f"; then
+      mkdir -p /var/backups/secubox-vhosts
+      cp -p "$f" "/var/backups/secubox-vhosts/$(basename "$f").avant-1727"
+      sed -i '0,/^\([[:space:]]*\)listen[[:space:]]\+8910;/s//&\n\1listen 9080;/' "$f"
+      if command -v nginx >/dev/null && ! nginx -t 2>/dev/null; then
+        cp -p "/var/backups/secubox-vhosts/$(basename "$f").avant-1727" "$f"
+      else
+        systemctl reload nginx 2>/dev/null || true
+      fi
+    fi
+
     # ── LE PAQUET DÉCLARE SA PROPRE ROUTE (#1356) ────────────────────────
     #
     # `billets.gk2.secubox.in` n'avait AUCUNE entrée dans la table de sbxwaf.

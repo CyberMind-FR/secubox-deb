@@ -110,6 +110,7 @@ func main() {
 		radioBase = flag.String("radio-base", "", "URL publique de la radio ; non vide = widget lecteur incorporé dans le rail (son origine doit aussi être dans --frame-origines)")
 		frameOrig = flag.String("frame-origines", "",
 			"services autorises a fournir un lecteur incorpore, separes par des virgules")
+		parc      = flag.Bool("parc", false, "services consommés non précisés : ceux de CETTE box si leur paquet y est installé, sinon ceux du nœud de référence (#1727)")
 		podDB     = flag.String("podcast-db", "/var/lib/secubox/podcaster/podcaster.db", "base du podcaster, lue en lecture seule")
 		podRacine = flag.String("podcast-racine", "/var/lib/secubox/podcaster/media,/data/secubox/podcaster",
 			"parcs media du podcaster, separes par des virgules — CONFINEMENT : rien hors de la n'est servi")
@@ -147,6 +148,17 @@ func main() {
 	// Trois sources, dans cet ordre : l'environnement (pratique en essai), le
 	// fichier de configuration du core (la source normale sur une board), puis
 	// un fichier dedie.
+	if *parc {
+		donnees := map[string]bool{}
+		flag.Visit(func(f *flag.Flag) { donnees[f.Name] = true })
+		appliquerParc(donnees, map[string]*string{
+			"peertube-origine": ptOrigine, "radio-base": radioBase,
+			"billets-base": bilBase, "metanews-base": mnBase,
+			"media-origines": mediaOrig, "frame-origines": frameOrig,
+		})
+		log.Printf("services du parc : radio %s, billets %s, peertube %s, metanews %s", *radioBase, *bilBase, *ptOrigine, *mnBase)
+	}
+
 	secret := os.Getenv("SECUBOX_JWT_SECRET")
 	if secret == "" {
 		secret = web.SecretDepuisConf(*conf)
@@ -167,7 +179,7 @@ func main() {
 		BilletsSocket: *bilSock, BilletsBase: *bilBase, JWTSecret: secret, BackupDir: *sauveg,
 		MetaNewsSocket: *mnSock, MetaNewsBase: *mnBase,
 		SocialRelaySocket: *srSock,
-		BanniereOrigine: *bannOrig, BanniereHash: *bannHash, BanniereStyle: *bannStyle,
+		BanniereOrigine:   *bannOrig, BanniereHash: *bannHash, BanniereStyle: *bannStyle,
 		PeerTubeOrigine: *ptOrigine, PodcastRacine: *podRacine, PodcastDB: *podDB,
 		MediaOrigines: origines(*mediaOrig),
 		FrameOrigines: origines(*frameOrig),

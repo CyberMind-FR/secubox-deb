@@ -14,4 +14,29 @@ case "$1" in
     ;;
 esac
 #DEBHELPER#
+
+# ── Le vhost public : le PAQUET fait foi (#1727, motif de la radio #1430) ──
+# Il était livré dans nginx-available sans jamais être installé : gk2 servait
+# une copie posée à la main le 2026-08-24 (sans verdict LAN #1354 ni
+# metanews.*), gk3 rendait « Wrong Domain ». Sauvegarde hors de sites-enabled
+# (nginx charge tout ce qui s'y trouve), installation, nginx -t, retour arrière.
+if [ "$1" = configure ] && [ -f /etc/secubox/nginx-available/metanews.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+  ACTIF=/etc/nginx/sites-enabled/metanews.conf
+  SAUVE=/var/backups/secubox-vhosts/metanews.conf.avant-paquet
+  if ! cmp -s /etc/secubox/nginx-available/metanews.conf "$ACTIF"; then
+    mkdir -p /var/backups/secubox-vhosts
+    [ -f "$ACTIF" ] && cp -p "$ACTIF" "$SAUVE" 2>/dev/null || rm -f "$SAUVE"
+    cp -f /etc/secubox/nginx-available/metanews.conf "$ACTIF"
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx >/dev/null 2>&1 || true
+    elif [ -f "$SAUVE" ]; then
+      cp -p "$SAUVE" "$ACTIF"
+      echo "secubox-metanews: vhost refusé par nginx -t, ancien conservé" >&2
+    else
+      rm -f "$ACTIF"
+      echo "secubox-metanews: vhost refusé par nginx -t, non activé" >&2
+    fi
+  fi
+fi
+
 exit 0

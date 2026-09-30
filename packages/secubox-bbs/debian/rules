@@ -52,8 +52,8 @@ override_dh_auto_install:
 	# Route nginx : secubox-routes.d/ est le SEUL repertoire inclus.
 	install -d debian/secubox-bbs/etc/nginx/secubox-routes.d
 	install -m 0644 nginx/bbs.conf debian/secubox-bbs/etc/nginx/secubox-routes.d/
-	# Vhost membre : livre dans sites-available, PAS active. Activer un vhost
-	# demande aussi HAProxy et le DNS — un paquet ne decide pas cela seul.
+	# Vhost membre : livre dans sites-available, active par le postinst (#1727)
+	# — l'exposition des noeuds relayes est la regle depuis #1682.
 	install -d debian/secubox-bbs/etc/nginx/sites-available
 	install -m 0644 nginx/bbs-vhost.conf debian/secubox-bbs/etc/nginx/sites-available/bbs.gk2.conf
 	install -d debian/secubox-bbs/usr/lib/tmpfiles.d

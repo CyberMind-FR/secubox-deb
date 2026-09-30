@@ -1,3 +1,10 @@
+secubox-bbs (0.37.7-1~bookworm1) bookworm; urgency=medium
+
+  * Le vhost est activé par le postinst (lien, nginx -t, retour arrière) : il était livré sans l'être, gk2 l'avait par un lien fait à la main et gk3 rendait « Wrong Domain » ; service arrêté = 502 et le Hall garde son repli. (#1727, #1713).
+  * secubox-bbsd --parc : les services consommés non précisés (radio, billets, peertube, podcaster, socialrelay, metanews) sont ceux de CETTE box si leur paquet y est installé, sinon ceux du nœud de référence ; les listes d'origines gardent la référence. L'unité passe --parc au lieu de cinq noms gk2 (sur gk2 : valeurs identiques). (#1727, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 14:37:28 +0200
+
 secubox-bbs (0.37.6-1~bookworm1) bookworm; urgency=medium
 
   * frame-ancestors : le Hall de CETTE box ([global] domain) s'ajoute à hall.gk2 et aux Halls du parc (#1725, #1713).

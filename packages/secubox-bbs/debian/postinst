@@ -89,6 +89,21 @@ case "$1" in
     # (chroot de build) sans que `dpkg -i` echoue pour autant.
     systemctl enable --now secubox-bbs-urlshot.timer >/dev/null 2>&1 || true
 
+    # LE VHOST EST ACTIVÉ PAR LE PAQUET (#1727). Il était livré dans
+    # sites-available sans être activé (« activer demande HAProxy et le DNS »)
+    # : gk2 l'avait par un lien posé à la main, gk3 rendait « Wrong Domain ».
+    # Depuis #1682, l'exposition des nœuds relayés est la règle (vhosts x.*,
+    # joker DNS-01, relais synchronisé). Service arrêté = 502, et le Hall garde
+    # alors son repli sur le BBS d'un autre nœud. Un lien existant est laissé.
+    if [ -f /etc/nginx/sites-available/bbs.gk2.conf ] && [ -d /etc/nginx/sites-enabled ] \
+       && [ ! -e /etc/nginx/sites-enabled/bbs.gk2.conf ] && command -v nginx >/dev/null 2>&1; then
+        ln -s ../sites-available/bbs.gk2.conf /etc/nginx/sites-enabled/bbs.gk2.conf
+        if ! nginx -t >/dev/null 2>&1; then
+            rm -f /etc/nginx/sites-enabled/bbs.gk2.conf
+            echo "secubox-bbs: vhost refusé par nginx -t, non activé" >&2
+        fi
+    fi
+
     # La route nginx n'est rechargee que si la configuration est valide : un
     # `reload` sur une configuration cassee coupe TOUS les vhosts de la board.
     if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
