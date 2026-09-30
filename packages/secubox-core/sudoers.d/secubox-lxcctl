@@ -1,0 +1,5 @@
+# SecuBox — seul passage sudo des comptes de service vers les commandes lxc
+# (#1785). secubox-lxcctl n'admet, par commande, qu'une liste fermée d'options,
+# un conteneur existant sous un lxcpath connu ; jamais -f, --define, attache
+# ni destruction. Remplace les règles lxc-* à argument libre.
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-lxcctl

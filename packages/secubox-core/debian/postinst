@@ -358,6 +358,22 @@ if [ "$1" = "configure" ]; then
     done
 fi
 
+# RÈGLE SUDO lxc-* POSÉE À LA MAIN (#1785). gk2 portait un
+# /etc/sudoers.d/secubox-lxc hors paquet : lxc-info/-attach/-start/-stop/-ls à
+# argument libre pour le compte secubox (`lxc-start -f` exécute des crochets en
+# root sur l'hôte). secubox-lxcctl le remplace. Retiré SEULEMENT s'il n'est à
+# aucun paquet et ne contient que des règles lxc-* ou streamlitctl ; sauvegardé.
+if [ "$1" = "configure" ] && [ -f /etc/sudoers.d/secubox-lxc ] \
+   && ! dpkg -S /etc/sudoers.d/secubox-lxc >/dev/null 2>&1; then
+    if ! grep -vE '^[[:space:]]*(#|$)' /etc/sudoers.d/secubox-lxc \
+         | grep -vqE '^secubox ALL=\(root\) NOPASSWD: (/usr/bin/lxc-(info|attach|start|stop|ls)(, )?)+$|^secubox ALL=\(root\) NOPASSWD: /usr/sbin/streamlitctl$'; then
+        install -d -m 0700 /var/backups/secubox/sudoers-avant-1785
+        cp -p /etc/sudoers.d/secubox-lxc /var/backups/secubox/sudoers-avant-1785/secubox-lxc
+        rm -f /etc/sudoers.d/secubox-lxc
+        echo "secubox-core : règle sudo lxc-* manuelle retirée (sauvegarde /var/backups/secubox/sudoers-avant-1785)"
+    fi
+fi
+
 # CONTENEURS LÀ OÙ IL Y A LA PLACE (#1716). Mode automatique : n'agit que si
 # /data est une petite partition, / une grande, ET /data/lxc vide — des
 # conteneurs existants ne sont jamais déplacés sans `secubox-lxc-racine --migrer`.

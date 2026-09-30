@@ -1,3 +1,11 @@
+secubox-vm (1.2.4-1~bookworm1) bookworm; urgency=high
+
+  * Commandes lxc par secubox-lxcctl (#1785) ; les règles sudoers
+    `lxc-* *` sont retirées. lxc-destroy reste refusé (aucune règle ne
+    l'accordait).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:40:00 +0200
+
 secubox-vm (1.2.3-1~bookworm1) bookworm; urgency=high
 
   * GARDE JWT SUR TOUTE L'API (#1256, lot P1). MODULE-COMPLIANCE.md impose

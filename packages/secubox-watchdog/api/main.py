@@ -263,7 +263,7 @@ async def trigger_webhooks(event: Dict):
 
 def lxc_running(name: str) -> tuple:
     """Check if LXC container is running, returns (running, pid)"""
-    success, out, _ = run_cmd(SUDO + ["/usr/bin/lxc-info", "-P", str(LXC_PATH), "-n", name, "-s", "-p"])
+    success, out, _ = run_cmd(SUDO + ["/usr/sbin/secubox-lxcctl", "lxc-info", "-P", str(LXC_PATH), "-n", name, "-s", "-p"])
     running = success and "RUNNING" in out
     pid = 0
     if running:
@@ -419,7 +419,7 @@ REVIVE_MAX_ATTEMPTS = 5      # back off after N consecutive failures
 
 def _discover_containers() -> List[dict]:
     """[{name, state, autostart}] for every LXC, via `sudo lxc-ls -f`."""
-    ok, out, _ = run_cmd(SUDO + ["/usr/bin/lxc-ls", "-P", str(LXC_PATH), "-f"], timeout=15)
+    ok, out, _ = run_cmd(SUDO + ["/usr/sbin/secubox-lxcctl", "lxc-ls", "-P", str(LXC_PATH), "-f"], timeout=15)
     rows = []
     if not ok:
         return rows
@@ -457,7 +457,7 @@ def _auto_revive() -> List[str]:
         st["attempts"] += 1
         add_event(EventType.RECOVERY_ATTEMPTED, c["name"],
                   {"action": "auto-revive", "attempt": st["attempts"]})
-        ok, _o, err = run_cmd(SUDO + ["/usr/bin/lxc-start", "-P", str(LXC_PATH),
+        ok, _o, err = run_cmd(SUDO + ["/usr/sbin/secubox-lxcctl", "lxc-start", "-P", str(LXC_PATH),
                                       "-n", c["name"], "-d"], timeout=30)
         if ok:
             add_event(EventType.RECOVERY_SUCCESS, c["name"], {"action": "auto-revive"})
@@ -590,23 +590,21 @@ async def get_containers():
             "critical": c.get("critical", False)
         })
 
-    # Also check for containers not in config
-    if LXC_PATH.exists():
-        for container_dir in LXC_PATH.iterdir():
-            if not container_dir.is_dir():
-                continue
-            if not (container_dir / "config").exists():
-                continue
-            name = container_dir.name
-            if not any(c["name"] == name for c in containers):
-                running, pid = lxc_running(name)
-                containers.append({
-                    "name": name,
-                    "state": "running" if running else "stopped",
-                    "pid": pid,
-                    "enabled": False,
-                    "critical": False
-                })
+    # Also check for containers not in config — enumerated by root (lxc-ls
+    # through secubox-lxcctl), not by walking LXC_PATH as `secubox` : a
+    # container directory it cannot traverse made Path.exists() RAISE
+    # (EACCES), and the whole route answered 500 (#1785).
+    for d in _discover_containers():
+        name = d["name"]
+        if not any(c["name"] == name for c in containers):
+            running, pid = lxc_running(name)
+            containers.append({
+                "name": name,
+                "state": "running" if running else "stopped",
+                "pid": pid,
+                "enabled": False,
+                "critical": False
+            })
 
     return {"containers": containers, "total": len(containers)}
 
@@ -744,7 +742,7 @@ async def restart_container(req: ContainerRestart):
     run_cmd(["lxc-stop", "-P", str(LXC_PATH), "-n", req.name], timeout=30)
     await asyncio.sleep(1)
 
-    success, out, err = run_cmd(SUDO + ["/usr/bin/lxc-start", "-P", str(LXC_PATH), "-n", req.name, "-d"], timeout=30)
+    success, out, err = run_cmd(SUDO + ["/usr/sbin/secubox-lxcctl", "lxc-start", "-P", str(LXC_PATH), "-n", req.name, "-d"], timeout=30)
     await asyncio.sleep(2)
 
     running, pid = lxc_running(req.name)

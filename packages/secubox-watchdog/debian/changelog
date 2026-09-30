@@ -1,3 +1,14 @@
+secubox-watchdog (1.2.4-1~bookworm1) bookworm; urgency=high
+
+  * lxc-info/-ls/-start passent par secubox-lxcctl (#1785) : plus de règle
+    sudo lxc-* à argument libre.
+  * /containers énumère les conteneurs par root (lxc-ls via secubox-lxcctl)
+    au lieu de parcourir /data/lxc en `secubox` : un répertoire de conteneur
+    non traversable faisait LEVER Path.exists() (EACCES) — la route
+    répondait 500 sur gk2.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:40:00 +0200
+
 secubox-watchdog (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées

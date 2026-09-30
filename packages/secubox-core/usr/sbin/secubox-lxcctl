@@ -1,0 +1,97 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""SecuBox-Deb :: secubox-lxcctl — passage root ÉTROIT vers les commandes lxc (#1785).
+
+Les comptes de service recevaient lxc-info/-start/-stop/-attach… en sudo à
+argument libre. `lxc-start -f <configuration>` en exécute les crochets en root
+sur l'HÔTE ; `lxc-attach` donne root dans n'importe quel conteneur. Ce script
+reprend la forme des commandes lxc (l'appelant ajoute seulement son nom
+devant) mais n'admet, par commande, qu'une liste FERMÉE d'options ; le
+conteneur doit EXISTER sous un lxcpath connu ; jamais de fichier de
+configuration, de définition de clé, d'attache ni de destruction.
+
+    sudo -n /usr/sbin/secubox-lxcctl lxc-info -P /data/lxc -n streamlit -s
+"""
+import os
+import re
+import subprocess
+import sys
+
+CHEMINS = ("/data/lxc", "/var/lib/lxc")
+NOM = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", re.ASCII)
+CHAMPS = re.compile(r"[A-Z0-9,]{1,128}", re.ASCII)
+# commande : (options sans valeur admises, options à valeur admises, -n exigé)
+PERMIS = {
+    "lxc-ls":       ({"-f", "--fancy", "-1"}, {"-P", "-F"}, False),
+    "lxc-info":     ({"-s", "-p", "-i", "-S", "-H"}, {"-P", "-n"}, True),
+    "lxc-start":    ({"-d"}, {"-P", "-n"}, True),
+    "lxc-stop":     ({"-k", "--kill", "--nokill"}, {"-P", "-n", "-t"}, True),
+    "lxc-freeze":   (set(), {"-P", "-n"}, True),
+    "lxc-unfreeze": (set(), {"-P", "-n"}, True),
+}
+
+
+def refuser(motif: str) -> None:
+    print(f"secubox-lxcctl : {motif}", file=sys.stderr)
+    sys.exit(64)
+
+
+def lxcpath_defaut() -> str:
+    try:
+        r = subprocess.run(["/usr/bin/lxc-config", "lxc.lxcpath"],
+                           capture_output=True, text=True, timeout=5)
+        return r.stdout.strip() or "/var/lib/lxc"
+    except Exception:  # noqa: BLE001
+        return "/var/lib/lxc"
+
+
+def main(argv: list) -> None:
+    if not argv or argv[0] not in PERMIS:
+        refuser("commande non admise (" + " ".join(sorted(PERMIS)) + ")")
+    cmd, args = argv[0], argv[1:]
+    sans_valeur, a_valeur, nom_exige = PERMIS[cmd]
+    drapeaux, valeurs, i = [], {}, 0
+    while i < len(args):
+        a = args[i]
+        if a in sans_valeur:
+            drapeaux.append(a)
+            i += 1
+        elif a in a_valeur:
+            if i + 1 >= len(args) or a in valeurs:
+                refuser(f"valeur manquante ou répétée : {a}")
+            valeurs[a] = args[i + 1]
+            i += 2
+        else:
+            refuser(f"option non admise : {a!r}")
+
+    chemin = os.path.realpath(valeurs.get("-P") or lxcpath_defaut())
+    if chemin not in {os.path.realpath(c) for c in CHEMINS}:
+        refuser(f"lxcpath non admis : {chemin}")
+    final = [f"/usr/bin/{cmd}", "-P", chemin, *drapeaux]
+
+    nom = valeurs.get("-n")
+    if nom_exige and nom is None:
+        refuser("-n <conteneur> exigé")
+    if nom is not None:
+        if not NOM.fullmatch(nom):
+            refuser(f"nom de conteneur refusé : {nom!r}")
+        if not os.path.isfile(os.path.join(chemin, nom, "config")):
+            refuser(f"conteneur inconnu sous {chemin} : {nom}")
+        final += ["-n", nom]
+    if "-F" in valeurs:
+        if not CHAMPS.fullmatch(valeurs["-F"]):
+            refuser("champs -F refusés")
+        final += ["-F", valeurs["-F"]]
+    if "-t" in valeurs:
+        if not re.fullmatch(r"[0-9]{1,3}", valeurs["-t"], re.ASCII):
+            refuser("délai -t refusé")
+        final += ["-t", valeurs["-t"]]
+    os.execv(final[0], final)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

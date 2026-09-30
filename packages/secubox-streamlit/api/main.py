@@ -224,7 +224,7 @@ def _lxc_running() -> bool:
     Uses sudo -n for non-interactive sudo (requires sudoers config).
     """
     result = subprocess.run(
-        ["sudo", "-n", "lxc-info", "-n", LXC_NAME, "-s"],
+        ["sudo", "-n", "/usr/sbin/secubox-lxcctl", "lxc-info", "-n", LXC_NAME, "-s"],
         capture_output=True, text=True
     )
     return "RUNNING" in result.stdout

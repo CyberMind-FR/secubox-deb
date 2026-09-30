@@ -69,6 +69,10 @@ def run_priv(cmd: list, timeout: int = 60) -> tuple:
     returns nothing, so the dashboard reported 0 containers (#601). The grant
     in /etc/sudoers.d/secubox-vm covers read + lifecycle only.
     """
+    # Les commandes lxc passent par secubox-lxcctl (#1785) : options admises
+    # une à une, conteneur existant, jamais -f/--define/attache/destruction.
+    if cmd and cmd[0].startswith("lxc-"):
+        return run_cmd(["sudo", "-n", "/usr/sbin/secubox-lxcctl"] + cmd, timeout=timeout)
     return run_cmd(["sudo", "-n"] + cmd, timeout=timeout)
 
 
