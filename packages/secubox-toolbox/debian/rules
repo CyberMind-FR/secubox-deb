@@ -160,6 +160,15 @@ execute_after_dh_auto_install:
 	install -d debian/secubox-toolbox/etc/nginx/secubox-routes.d
 	install -m 0644 nginx/toolbox.conf \
 	  debian/secubox-toolbox/etc/nginx/secubox-routes.d/toolbox.conf
+	# #1783 : garde d'administration (snippet inclus par chaque route d'admin)
+	# et copie de référence de la route, que le postinst pose quand une version
+	# locale sans garde a survécu à --force-confold.
+	install -d debian/secubox-toolbox/etc/nginx/snippets
+	install -m 0644 nginx/secubox-toolbox-admin.conf \
+	  debian/secubox-toolbox/etc/nginx/snippets/secubox-toolbox-admin.conf
+	install -d debian/secubox-toolbox/usr/share/secubox/toolbox/nginx
+	install -m 0644 nginx/toolbox.conf \
+	  debian/secubox-toolbox/usr/share/secubox/toolbox/nginx/toolbox.conf
 	install -d debian/secubox-toolbox/etc/nginx/conf.d
 	install -m 0644 nginx/secubox-toolbox-limits.conf \
 	  debian/secubox-toolbox/etc/nginx/conf.d/

@@ -1,3 +1,12 @@
+secubox-core (1.5.45-1~bookworm1) bookworm; urgency=high
+
+  * /auth/verify?exige=admin (#1783) : pour les services qui ne lisent pas le
+    secret JWT (toolbox tourne sous son propre compte), nginx délègue ici la
+    garde d'administration entière — le prédicat de require_jwt
+    (est_admin_reel), 403 sinon. Sans le paramètre, rien ne change.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 21:40:00 +0200
+
 secubox-core (1.5.44-1~bookworm1) bookworm; urgency=medium
 
   * get_cookie_audit_config() : restaure le socle RGPD du classifieur et la

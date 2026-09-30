@@ -789,6 +789,12 @@ async def verify(request: Request):
     # les a fait diverger dès le premier ajout (#1351).
     if not porteur_reconnu(sub):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="compte désactivé")
+    # `?exige=admin` (#1783) : pour les services qui ne peuvent pas lire le
+    # secret JWT eux-mêmes (toolbox tourne sous son propre compte), nginx
+    # délègue ici la garde d'administration entière — le même prédicat que
+    # require_jwt, pas un simple rôle recopié dans un en-tête.
+    if request.query_params.get("exige") == "admin" and not est_admin_reel(payload):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="administrateur requis")
     # LE RÔLE SUIT LE MÊME REGLE QUE LE PORTEUR : deux registres, et celui qui
     # connaît ce nom répond. Sans cela un appareil recevait un `Remote-Groups`
     # VIDE, et tout service qui décide d'après ce champ le traitait comme

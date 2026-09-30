@@ -35,3 +35,25 @@ try:  # noqa: SIM105
     _sbx_tdb()
 except ImportError:
     pass
+
+
+# ── GARDE D'ADMINISTRATION (#1783) ────────────────────────────────────────
+# L'application refuse désormais toute route d'administration sans l'en-tête
+# que nginx pose après auth_request. Les suites existantes testent la LOGIQUE
+# de ces routes, pas leur accès : la garde leur est ouverte par défaut. Un test
+# marqué `garde_reelle` (tests/test_garde_admin_1783.py) la garde fermée.
+import pytest as _pytest
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "garde_reelle: garde d'administration réelle (#1783)")
+
+
+@_pytest.fixture(autouse=True)
+def _garde_admin_ouverte_par_defaut(request, monkeypatch):
+    if request.node.get_closest_marker("garde_reelle"):
+        return
+    mod = _sys.modules.get("secubox_toolbox.app")
+    if mod is not None and hasattr(mod, "_garde_admise"):
+        monkeypatch.setattr(mod, "_garde_admise", lambda req: True)
+

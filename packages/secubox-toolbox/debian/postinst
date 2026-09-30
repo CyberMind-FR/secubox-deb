@@ -297,6 +297,60 @@ fi
       fi
     fi
 
+    # ── GARDE D'ADMINISTRATION (#1783) ─────────────────────────────────────
+    # Les routes d'administration n'acceptent plus que l'en-tête que nginx pose
+    # APRÈS `auth_request` sur /auth/verify?exige=admin. Jeton tiré une fois,
+    # lisible de root et du service seuls ; le snippet nginx qui le porte est
+    # lisible de root seul (le maître nginx lit sa configuration en root).
+    # Jamais d'argument de commande pour le jeton : printf est interne au shell.
+    _jeton=/etc/secubox/toolbox/garde-admin.jeton
+    _garde=/etc/nginx/snippets/secubox-toolbox-garde.conf
+    if [ ! -s "$_jeton" ] || [ "$(wc -c < "$_jeton")" -lt 32 ]; then
+      ( umask 077; od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$_jeton" )
+    fi
+    chown root:secubox-toolbox "$_jeton" 2>/dev/null || true
+    chmod 0640 "$_jeton" 2>/dev/null || true
+    if [ -d /etc/nginx/snippets ]; then
+      ( umask 077; _v=$(cat "$_jeton"); printf 'proxy_set_header X-Sbx-Garde-Admin "%s";\n' "$_v" > "$_garde.sbxtmp" ) \
+        && mv -f "$_garde.sbxtmp" "$_garde"
+      chmod 0600 "$_garde" 2>/dev/null || true
+    fi
+    # Une route toolbox.conf modifiée localement est gardée par --force-confold :
+    # elle resterait SANS garde. Si elle n'inclut pas le snippet d'administration,
+    # on pose la version du paquet (copie de référence), en gardant l'amont de la
+    # box (127.0.0.1 ou 10.99.0.1), sauvegarde et retour si nginx -t refuse.
+    _route=/etc/nginx/secubox-routes.d/toolbox.conf
+    _ref=/usr/share/secubox/toolbox/nginx/toolbox.conf
+    if [ -f "$_route" ] && [ -f "$_ref" ] && ! grep -q "secubox-toolbox-admin.conf" "$_route"; then
+      _amont=$(grep -oE "proxy_pass http://[0-9.]+:8088" "$_route" | head -n1 | sed 's#proxy_pass http://##')
+      mkdir -p /var/backups/secubox-vhosts
+      cp -p "$_route" /var/backups/secubox-vhosts/toolbox.conf.avant-1783
+      cp "$_ref" "$_route"
+      if [ -n "$_amont" ] && [ "$_amont" != "10.99.0.1:8088" ]; then
+        sed -i "s#http://10\.99\.0\.1:8088#http://$_amont#g" "$_route"
+      fi
+      if command -v nginx >/dev/null 2>&1 && ! nginx -t >/dev/null 2>&1; then
+        cp -p /var/backups/secubox-vhosts/toolbox.conf.avant-1783 "$_route"
+        echo "secubox-toolbox: route nginx gardée refusée par nginx -t, ancienne conservée" >&2
+      fi
+    fi
+    if command -v nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx 2>/dev/null; then
+      nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+    fi
+    # `exige=admin` n'est honoré que par un agrégateur qui a CHARGÉ le
+    # secubox-core qui le connaît : celui de la veille laisserait passer
+    # n'importe quelle session à la garde nginx. Relancé seulement s'il a
+    # démarré avant l'installation d'auth.py (ctime = heure d'installation ;
+    # le mtime est celui de la construction du paquet).
+    _auth_py=$(python3 -c 'import secubox_core.auth as a; print(a.__file__)' 2>/dev/null || true)
+    if [ -n "$_auth_py" ] && [ -f "$_auth_py" ] && [ -d /run/systemd/system ] \
+       && systemctl is-active --quiet secubox-aggregator 2>/dev/null; then
+      _debut=$(date -d "$(systemctl show -p ActiveEnterTimestamp --value secubox-aggregator)" +%s 2>/dev/null || echo 0)
+      if [ "${_debut:-0}" -lt "$(stat -c %Z "$_auth_py")" ]; then
+        systemctl --no-block restart secubox-aggregator 2>/dev/null || true
+      fi
+    fi
+
     # Phase 10 (#501 perf) : on UPGRADE ($2 = previous version), bring the
     # long-running daemons back on the new code without operator action.
     # dh_installsystemd ships --no-start --no-enable in debian/rules.
