@@ -3,8 +3,10 @@
 # SecuBox-Deb :: photoprismctl
 # CyberMind — https://cybermind.fr
 #
-# PhotoPrism host-side controller. PhotoPrism runs as a podman container inside
-# a dedicated Debian LXC (default 10.100.0.130 on br-lxc, --network=host).
+# PhotoPrism host-side controller. PhotoPrism runs NATIVELY (official Linux build,
+# systemd unit, user photoprism) inside a dedicated Debian LXC — LXC ONLY, never
+# podman/docker (#1742, #1743). Everything inside goes through `photoprism-cli`.
+# Default LXC address 10.100.0.130 on br-lxc.
 # Photos live on /data/shared/photos (shared with Nextcloud "PhotoLibrary").
 #
 # Conventions: docs/MODULE-GUIDELINES.md §7 (mirror of peertubectl/grafanactl).
@@ -34,6 +36,8 @@ LXC_NAME=$(config_get "name" "photoprism")
 LXC_IP=$(config_get "ip" "10.100.0.130")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "2342")
+AUTO_INDEX=$(config_get "auto_index" "300")
+WORKERS=$(config_get "workers" "")
 PUBLIC_HOSTNAME=$(config_get "public_hostname" "$(secubox-domaine photoprism)")
 
 lxc_state() {
@@ -47,7 +51,8 @@ cmd_install() {
     [ -f "$INSTALL_LIB" ] || { err "install script not found at $INSTALL_LIB"; exit 1; }
     log "Running LXC bootstrap from $INSTALL_LIB ..."
     SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
-    SECUBOX_PHOTOPRISM_HOSTNAME="$PUBLIC_HOSTNAME" \
+    SECUBOX_PHOTOPRISM_HOSTNAME="$PUBLIC_HOSTNAME" SECUBOX_PHOTOPRISM_PORT="$HTTP_PORT" \
+    SECUBOX_PHOTOPRISM_AUTO_INDEX="$AUTO_INDEX" SECUBOX_PHOTOPRISM_WORKERS="$WORKERS" \
         bash "$INSTALL_LIB" || { echo "[photoprism] ERREUR : l'installation a échoué (voir ci-dessus) — rien n'est « fait » (#1729)" >&2; exit 1; }
     log "Done. Try 'photoprismctl status'."
 }
@@ -74,7 +79,19 @@ cmd_logs()    { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- journalctl -u photop
 cmd_index() {
     lxc_running || { err "LXC not running"; exit 1; }
     log "Triggering PhotoPrism index (picks up new Nextcloud-synced photos) ..."
-    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- podman exec photoprism photoprism index "$@"
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- photoprism-cli index "$@"
+}
+
+cmd_import() {
+    lxc_running || { err "LXC not running"; exit 1; }
+    log "Importing from the import folder ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- photoprism-cli import "$@"
+}
+
+# Retélécharge la construction officielle native et redémarre (plus d'image).
+cmd_update() {
+    log "Mise à jour de PhotoPrism (construction officielle native) ..."
+    SECUBOX_PHOTOPRISM_MAJ=1 cmd_install
 }
 
 cmd_reload() {
@@ -103,7 +120,7 @@ cmd_user_provision() {
 
     local pp_role="user"; [ "$role" = "admin" ] && pp_role="admin"
     local verb opts
-    if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- podman exec photoprism photoprism users ls 2>/dev/null | grep -qw "$username"; then
+    if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- photoprism-cli users ls 2>/dev/null | grep -qw "$username"; then
         verb="mod"; opts=""
         log "Resetting PhotoPrism password for $username"
     else
@@ -119,7 +136,7 @@ cmd_user_provision() {
         log "Creating PhotoPrism user $username (role=$pp_role)"
     fi
     printf '%s\n' "$password" | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
-        podman exec -i photoprism sh -c "read -r PPW; photoprism users $verb -p \"\$PPW\" $opts \"$username\""
+        sh -c "read -r PPW; photoprism-cli users $verb -p \"\$PPW\" $opts \"$username\""
 }
 
 # ── Entrée sans mot de passe : OpenID Connect SecuBox (#1589, #1562) ─────────
@@ -134,7 +151,9 @@ cmd_sso() {
     command -v secubox-oidcctl >/dev/null 2>&1 || { warn "secubox-oidc absent — sso non configuré"; return 0; }
     local issuer
     issuer=$(python3 -c 'import tomllib;print(tomllib.load(open("/etc/secubox/oidc.toml","rb")).get("issuer",""))' 2>/dev/null)
-    [ -n "$issuer" ] || { err "émetteur OIDC inconnu (/etc/secubox/oidc.toml)"; return 1; }
+    # Absent du toml = le Hall de CETTE box, comme secubox-oidc lui-même (#1723).
+    [ -n "$issuer" ] || { local hall; hall=$(secubox-domaine hall 2>/dev/null) && [ -n "$hall" ] && issuer="https://$hall/oidc"; }
+    [ -n "$issuer" ] || { err "émetteur OIDC inconnu (/etc/secubox/oidc.toml, secubox-domaine)"; return 1; }
     [ -d "$STORAGE/config" ] || { warn "$STORAGE/config absent — PhotoPrism pas encore installé ; sso reporté"; return 0; }
     local secret
     secret=$(secubox-oidcctl client-add photoprism --app photoprism --name Photos \
@@ -167,14 +186,16 @@ EOF
 
 cmd_help() {
     cat <<EOF
-photoprismctl $VERSION — SecuBox PhotoPrism (podman-in-LXC) controller
+photoprismctl $VERSION — SecuBox PhotoPrism (natif dans LXC) controller
 
 Usage: photoprismctl <verb> [args]
 
-  install            Provision the LXC + podman + PhotoPrism (idempotent)
+  install            Provision the LXC + native PhotoPrism (idempotent)
+  update             Re-download the official native build + restart
   status             LXC + service + HTTP reachability + index timer
   start|stop|restart Control photoprism.service inside the LXC
   index [args]       Run an immediate incremental index now
+  import             Import photos from the import folder
   user-provision <user> [role]  Create/sync a user (SECUBOX_USER_PASSWORD env)
   sso                Entrée « SecuBox » par OpenID Connect (secubox-oidc)
   logs [N]           Tail N lines of photoprism journal (default 50)
@@ -189,7 +210,7 @@ EOF
 main() {
     local noun="${1:-help}"; shift || true
     case "$noun" in
-        install|status|start|stop|restart|index|logs|reload) "cmd_${noun}" "$@" ;;
+        install|status|start|stop|restart|index|import|update|logs|reload) "cmd_${noun}" "$@" ;;
         user-provision) cmd_user_provision "$@" ;;
         sso) cmd_sso ;;
         help|-h|--help) cmd_help ;;

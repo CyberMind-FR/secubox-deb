@@ -13,12 +13,16 @@ debian_suite = "bookworm"
 
 [photoprism]
 http_port            = 2342
-image                = "docker.io/photoprism/photoprism:latest"
+# Construction native officielle (dl.photoprism.app/pkg/linux/<arch>.tar.gz)
+# déployée dans /opt/photoprism du LXC — jamais podman/docker (PATTERNS.md P11).
+# Surcharges ponctuelles : SECUBOX_PHOTOPRISM_URL, et `photoprismctl update`.
 admin_user           = "admin"
 admin_password_file  = "/etc/secubox/secrets/photoprism-admin"
 auto_index           = 300          # delay (s) before re-index after UI change; -1 disables
+# workers            = 1            # indexing workers; absent = auto (1 on a small arm64 box)
 originals            = "/data/shared/photos"   # shared with Nextcloud "PhotoLibrary"
 
 [exposure]
 # public_hostname = ""  # absent = <nom>.<domaine de la box>, jamais gk2 (#1723)
-waf_inspect     = false             # photo/video bypass the WAF (gitea pattern)
+# Exposition inspectée par sbxwaf : le postinst déclare la route
+# photoprism.<domaine> → 9080 (#1739). Aucun contournement par défaut.

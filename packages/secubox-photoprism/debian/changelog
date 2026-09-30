@@ -1,3 +1,30 @@
+secubox-photoprism (1.3.6-1~bookworm1) bookworm; urgency=medium
+
+  * PhotoPrism installé NATIVEMENT dans son LXC : construction officielle
+    dl.photoprism.app (amd64/arm64), utilisateur photoprism, unité systemd,
+    base SQLite. Plus de podman DANS le conteneur — il échouait sur un LXC
+    non privilégié (remontage overlay refusé) et la règle est LXC uniquement
+    (PATTERNS.md P11, #1742, #1743). Une ancienne installation podman est
+    purgée au passage ; les données storage/ et import/ sont conservées.
+  * photoprismctl : index/users passent par photoprism-cli (même compte et
+    environnement que le service) ; nouveaux verbes import et update.
+  * API : plus d'« image » de conteneur. install et update passent par
+    photoprismctl (qui transmet le toml) et sont lancés détachés : une attente
+    de plusieurs minutes serait coupée à 30 s par HAProxy.
+  * La réécriture de la config LXC conserve ce que le paquet ne possède pas :
+    lxc.start.* / lxc.cgroup2.* (cycle de vie on-demand, tuning, lxcstagger)
+    et les montages ajoutés hors paquet (dossiers Photos Nextcloud de gk2).
+  * Réglages du toml enfin transmis : http_port, auto_index, workers (nouveau).
+  * Reliquat podman : overlay démonté avant effacement de /var/lib/containers.
+  * sso : émetteur absent du toml = hall.<domaine de la box>/oidc, comme
+    secubox-oidc depuis #1723 (gk2 : « émetteur OIDC inconnu »).
+  * photoprism-cli se place dans /var/lib/photoprism : lancé depuis /root,
+    le binaire paniquait à l'init (« stat .: permission denied »).
+  * TLS interne désactivé (terminé par HAProxy), proxy de confiance = passerelle
+    du pont. Le mot de passe admin n'est plus jamais affiché.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 16:47:16 +0200
+
 secubox-photoprism (1.3.5-1~bookworm1) bookworm; urgency=high
 
   * postinst : déclare sa route sbxwaf (photoprism.<domaine> → 9080). HAProxy l'envoie à l'inspection mais sbxwaf ne connaissait pas le nom : le chemin public répondait 401 (fourre-tout) au lieu du service, et le relais du maillage n'exposait pas le photoprism des nœuds relayés (#1739, #1713).
