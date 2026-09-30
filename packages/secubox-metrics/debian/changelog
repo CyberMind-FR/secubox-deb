@@ -1,3 +1,23 @@
+secubox-metrics (1.12.12-1~bookworm1) bookworm; urgency=high
+
+  * secubox-vhost-logs 1.1.0 : sur échec de `nginx -t`, la 1.0.0 recopiait
+    TOUTES les sauvegardes jamais prises (90 sur gk2, depuis mai) — six vhosts
+    décommissionnés ressuscités, des vhosts vivants remis à leur contenu
+    d'août, et `cp` sur des liens symboliques écrivait DANS sites-available
+    (nextcloud, peertube, Hall). L'échec déclencheur n'était même pas le
+    sien (#1777). Désormais :
+    - rien n'est touché si `nginx -t` échoue déjà avant la passe ;
+    - chaque passe sauvegarde dans son propre répertoire, et seule elle est
+      restaurée ;
+    - restauration par suppression puis copie : un lien revient lien, jamais
+      d'écriture à travers.
+  * postinst : la route cookie-audit.conf posée à la main est retirée AVANT
+    l'appel à secubox-vhost-logs, pas après.
+  * tests/test_vhost_logs.py : exécute le vrai script (nginx et systemctl
+    doublés) ; les trois tests échouent sur la 1.0.0.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 21:05:00 +0200
+
 secubox-metrics (1.12.11-1~bookworm1) bookworm; urgency=medium
 
   * Restaure ce que la fusion 7ebe27403a (branche health-banner périmée)
@@ -18,6 +38,8 @@ secubox-metrics (1.12.11-1~bookworm1) bookworm; urgency=medium
   * test_routes_appelees.py : chaque route appelée par les pages, le bandeau,
     sbxwaf, le portail et cookie-inventory.js existe, avec sa garde.
   * test_live_hosts.py réécrit : il testait la source HAProxy abandonnée.
+  * postinst : retire la route cookie-audit.conf posée à la main (gk2) quand
+    elle doublonne celle du paquet — nginx -t refusait les deux.
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:12:37 +0200
 

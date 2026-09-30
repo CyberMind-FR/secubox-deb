@@ -8,6 +8,9 @@ secubox-hub (1.9.24-1~bookworm1) bookworm; urgency=medium
     Rejoués par-dessus : purge CrowdSec et garde du lecteur incorporé
     (#1131t). isHubVhost n'est pas ramenée (sans appelant depuis #290, hôtes
     écrits en dur, #1723).
+  * postinst : ne recharge plus nftables (flush ruleset) — la sonde netstats est
+    chargée seule si elle manque. Sur gk3, l'installation faisait tomber les
+    tables posées à chaud, dropins compris (9 → 4) (#1777, #1721).
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:12:37 +0200
 

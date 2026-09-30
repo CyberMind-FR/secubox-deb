@@ -2,6 +2,17 @@
 set -e
 
 if [ "$1" = "configure" ]; then
+    # Route posée À LA MAIN avant d'être paquetée (gk2 : cookie-audit.conf, #156).
+    # Même location que metrics-cookie-audit.conf → `nginx -t` refuse les deux.
+    # On retire l'ancienne SEULEMENT si aucun paquet ne la possède et qu'elle
+    # déclare bien la même location (#1777). EN PREMIER : tant qu'elle est là,
+    # `nginx -t` échoue, et tout ce qui suit le prendrait pour son propre échec.
+    _ancien=/etc/nginx/secubox-routes.d/cookie-audit.conf
+    if [ -f "$_ancien" ] && ! dpkg -S "$_ancien" >/dev/null 2>&1 \
+       && grep -q "location /api/v1/cookie-audit/" "$_ancien"; then
+        mv "$_ancien" "/var/backups/cookie-audit.conf.avant-1777" 2>/dev/null || rm -f "$_ancien"
+    fi
+
     # Le journal commun n'est utile que si TOUS les blocs server y ecrivent.
     # Ceux qui declarent leur propre access_log remplacent celui herite du
     # bloc http ; l'outil leur ajoute la ligne manquante, et se contente d'un
