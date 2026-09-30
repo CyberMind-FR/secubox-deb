@@ -1,3 +1,10 @@
+secubox-nextcloud (1.8.8-1~bookworm1) bookworm; urgency=medium
+
+  * _valid_uid : ni « .. », ni point ou tiret en tête (#1785) ; l'uid
+    compose des chemins (user-provision).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 00:30:00 +0200
+
 secubox-nextcloud (1.8.7-1~bookworm1) bookworm; urgency=high
 
   * nextcloudctl (#1785) : `occ`, `setup` et `logs` passent leurs arguments

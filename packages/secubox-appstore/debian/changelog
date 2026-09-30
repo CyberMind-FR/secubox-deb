@@ -1,3 +1,13 @@
+secubox-appstore (0.4.21-1~bookworm1) bookworm; urgency=medium
+
+  * appstorectl : nom de module vérifié sur le motif ENTIER
+    ^secubox-[a-z0-9][a-z0-9.-]*$ (#1785) ; l'ancien motif admettait ensuite
+    n'importe quoi.
+  * arbre.yaml : secubox-openpgp (#1736) suggéré par le service Maillage ;
+    absent de l'arbre, il faisait échouer la génération du catalogue.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 00:30:00 +0200
+
 secubox-appstore (0.4.20-1~bookworm1) bookworm; urgency=medium
 
   * Catalogue régénéré sans MagicMirror, Maigret ni SpiderFoot (#1599).

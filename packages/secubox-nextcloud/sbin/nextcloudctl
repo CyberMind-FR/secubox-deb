@@ -645,7 +645,9 @@ user_setpass() {
 # `grep ^...$` which anchors per-LINE and lets a value with an embedded
 # newline slip through with -q on any matching line).
 _valid_uid() {
-    [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]
+    # Ni « .. » ni point ou tiret en tête (#1785) : l'uid compose des chemins.
+    local LC_ALL=C
+    [[ "$1" =~ ^[A-Za-z0-9_@][A-Za-z0-9._@-]*$ ]] && [[ "$1" != *..* ]]
 }
 _valid_quota() {
     [[ "$1" =~ ^([Nn][Oo][Nn][Ee]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt]|[0-9]+(\.[0-9]+)?([KMGTkmgt])?[Bb]?)$ ]]

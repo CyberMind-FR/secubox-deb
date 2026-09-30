@@ -6,10 +6,14 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import List
 
 REPREPRO_BASE = os.environ.get("SECUBOX_APT_BASE", "/data/apt")
 RING_DISTS = {"draft": "draft", "internal": "internal", "published": "published"}
+
+
+_NOM_PAQUET = re.compile(r"[a-z0-9][a-z0-9+.-]+", re.ASCII)
 
 
 class RepoError(Exception):
@@ -25,6 +29,12 @@ def copy_argv(from_ring: str, to_ring: str, pkg_names: List[str]) -> List[str]:
         raise RepoError(f"unknown ring {from_ring!r}/{to_ring!r}")
     if not pkg_names:
         raise RepoError("no packages to copy")
+    # Grammaire Debian d'un nom de paquet (#1785) : les noms viennent d'un
+    # journal, et finissent dans l'argv de reprepro lancé en root — un nom
+    # commençant par « - » y devenait une option.
+    for nom in pkg_names:
+        if not isinstance(nom, str) or not _NOM_PAQUET.fullmatch(nom):
+            raise RepoError(f"invalid package name {nom!r}")
     return ["reprepro", "-b", REPREPRO_BASE, "copy", RING_DISTS[to_ring],
              RING_DISTS[from_ring], *pkg_names]
 

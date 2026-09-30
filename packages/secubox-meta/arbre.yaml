@@ -363,6 +363,7 @@ suggere:
   - secubox-mesh
   - secubox-daemon
   - secubox-meshtastic
+  - secubox-openpgp
 
 meta: secubox-service-waf
 niveau: service

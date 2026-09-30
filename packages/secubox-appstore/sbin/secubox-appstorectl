@@ -10,10 +10,11 @@ action="${1:-}"
 module="${2:-}"
 
 # Strict allow-list: module name must be secubox-<slug>, nothing else.
-case "$module" in
-    secubox-[a-z0-9]*) : ;;
-    *) echo "appstorectl: invalid module name" >&2; exit 2 ;;
-esac
+# Motif ENTIER (#1785) : `secubox-[a-z0-9]*` admettait ensuite n'importe
+# quoi (« / », espaces). Grammaire d'un nom de paquet secubox-*.
+if ! LC_ALL=C bash -c '[[ "$1" =~ ^secubox-[a-z0-9][a-z0-9.-]*$ ]]' _ "$module"; then
+    echo "appstorectl: invalid module name" >&2; exit 2
+fi
 unit="${module}.service"
 short="${module#secubox-}"
 
