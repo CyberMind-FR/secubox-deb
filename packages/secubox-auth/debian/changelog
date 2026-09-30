@@ -1,3 +1,9 @@
+secubox-auth (1.1.12-1~bookworm1) bookworm; urgency=critical
+
+  * première configuration d'un compte réservée au réseau local, et seulement pour un compte sans mot de passe ; un compte « à changer » avec mot de passe : changement imposé, jamais de session directe ; depuis le WAN, un compte « à changer » ne s'ouvre pas (#1707).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 11:35:09 +0200
+
 secubox-auth (1.1.11-1~bookworm1) bookworm; urgency=medium
 
   * second facteur selon le réseau : OTP exigé depuis le WAN (défi, ou enrôlement forcé d'un admin), FACULTATIF sur le LAN — le mot de passe suffit, même pour un compte enrôlé ; LAN = verdict de nginx (X-SecuBox-LAN), absent = WAN ; login_success journalise « otp » (#1699).
