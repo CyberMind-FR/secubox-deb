@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: core — décaler un rootfs pour un conteneur non privilégié (#1729)
+CyberMind — https://cybermind.fr
+
+nextcloudctl et mailctl créent leur rootfs par debootstrap, en root (0:0), puis
+le démarrent avec `lxc.idmap = u 0 100000 65536` : le root du conteneur, qui est
+100000 sur l'hôte, ne peut rien y écrire. lxc-start échoue alors sur ses
+propres points de montage (« Permission denied - Failed to create directory
+…/var/www/ », état ABORTING). gk2 tournait parce que ses rootfs avaient été
+décalés à la main le 2026-05-03 ; gk3 n'a jamais démarré ni nextcloud ni mail.
+
+Chaque entrée dont l'uid (ou le gid) est sous la base est décalée de +base ;
+celles déjà décalées ne bougent pas (idempotent, reprenable). Les liens
+symboliques ne sont jamais suivis (lchown). Les bits setuid/setgid, qu'un
+chown efface, sont remis.
+
+    secubox-lxc-decaler <rootfs> [--base 100000] [--etat]
+
+Code 0 : rien à faire ou décalé. Code 2 : usage. Refuse un chemin qui n'a pas
+l'air d'un rootfs (pas de etc/ ni usr/) : on ne décale pas / par erreur.
+"""
+from __future__ import annotations
+
+import os
+import stat
+import sys
+
+TAILLE_PLAGE = 65536
+
+
+def decaler(racine: str, base: int, etat: bool = False) -> int:
+    n = 0
+    for dossier, sous, fichiers in os.walk(racine, followlinks=False):
+        # Le dossier lui-même, ses fichiers, et ses liens vers des dossiers
+        # (que walk ne suit pas) ; les vrais sous-dossiers viennent à leur tour.
+        chemins = [dossier] + [os.path.join(dossier, f) for f in fichiers] \
+            + [os.path.join(dossier, s) for s in sous if os.path.islink(os.path.join(dossier, s))]
+        for p in chemins:
+            try:
+                st = os.lstat(p)
+            except FileNotFoundError:
+                continue
+            uid, gid = st.st_uid, st.st_gid
+            nu = uid + base if uid < TAILLE_PLAGE else uid
+            ng = gid + base if gid < TAILLE_PLAGE else gid
+            if (nu, ng) == (uid, gid):
+                continue
+            n += 1
+            if etat:
+                continue
+            os.lchown(p, nu, ng)
+            if not stat.S_ISLNK(st.st_mode) and st.st_mode & (stat.S_ISUID | stat.S_ISGID):
+                os.chmod(p, stat.S_IMODE(st.st_mode))
+    return n
+
+
+def main(argv: list[str]) -> int:
+    args = [a for a in argv[1:] if not a.startswith("--")]
+    etat = "--etat" in argv
+    base = 100000
+    if "--base" in argv:
+        try:
+            base = int(argv[argv.index("--base") + 1])
+            args.remove(str(base))
+        except (IndexError, ValueError):
+            print("usage: secubox-lxc-decaler <rootfs> [--base N] [--etat]", file=sys.stderr)
+            return 2
+    if len(args) != 1 or base < TAILLE_PLAGE:
+        print("usage: secubox-lxc-decaler <rootfs> [--base N] [--etat]", file=sys.stderr)
+        return 2
+    racine = os.path.realpath(args[0])
+    if racine == "/" or not (os.path.isdir(os.path.join(racine, "etc"))
+                             and os.path.isdir(os.path.join(racine, "usr"))):
+        print(f"secubox-lxc-decaler: {racine} n'a pas l'air d'un rootfs — refusé", file=sys.stderr)
+        return 2
+    n = decaler(racine, base, etat)
+    verbe = "à décaler" if etat else "décalée(s)"
+    print(f"secubox-lxc-decaler: {racine} : {n} entrée(s) {verbe} (+{base})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

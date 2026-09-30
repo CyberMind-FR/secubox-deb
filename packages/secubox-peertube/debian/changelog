@@ -1,3 +1,10 @@
+secubox-peertube (1.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * Le ctl sort en erreur quand le script d'installation échoue : il annonçait « Done » et rendait 0 (gk3 : peertube arrêté à l'étape 7/8 passait pour installé) (#1729, #1713).
+  * install-lxc : config/ et storage/ (montages liés, à root en 0750) donnés à peertube avant la copie de la configuration (#1729, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 14:51:58 +0200
+
 secubox-peertube (1.5.3-1~bookworm1) bookworm; urgency=medium
 
   * public_hostname dérivé partout (install-lxc, ctl, API, modèle de config) ; vide = peertube.<domaine de la box> ; gk3 figeait peertube.gk2 dans PeerTube (#1723, #1713).

@@ -1,3 +1,9 @@
+secubox-lyrion (1.6.16-1~bookworm1) bookworm; urgency=medium
+
+  * Le ctl sort en erreur quand le script d'installation échoue : il annonçait « Done » et rendait 0 (gk3 : peertube arrêté à l'étape 7/8 passait pour installé) (#1729, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 14:51:58 +0200
+
 secubox-lyrion (1.6.15-1~bookworm1) bookworm; urgency=medium
 
   * public_hostname du ctl dérivé ; route postinst déclarée sous le nom de cette box (#1723, #1713).

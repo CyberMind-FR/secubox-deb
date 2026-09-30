@@ -284,6 +284,10 @@ echo '[5/8] download PeerTube release'
 install -d -o peertube -g peertube /var/www/peertube
 cd /var/www/peertube
 sudo -u peertube mkdir -p versions config storage
+# config/ et storage/ sont des MONTAGES LIÉS (données sur l'hôte), à root en
+# 0750 dans le conteneur : peertube ne pouvait pas y copier sa configuration
+# à l'étape 7 — le chown -R de la fin arrivait trop tard (#1729).
+chown peertube:peertube /var/www/peertube/config /var/www/peertube/storage
 VERSION=$(curl -s https://api.github.com/repos/Chocobozzz/PeerTube/releases/latest | grep tag_name | cut -d '"' -f 4)
 echo "  installing PeerTube $VERSION"
 cd versions

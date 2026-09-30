@@ -143,6 +143,9 @@ override_dh_auto_install:
 	# installée par l'image, et routage IPv4 qui survit au durcissement.
 	install -m 755 usr/sbin/secubox-lxc-reseau \
 	               debian/secubox-core/usr/sbin/secubox-lxc-reseau
+	# ROOTFS DÉCALÉ POUR LES CONTENEURS NON PRIVILÉGIÉS (#1729).
+	install -m 755 usr/sbin/secubox-lxc-decaler \
+	               debian/secubox-core/usr/sbin/secubox-lxc-decaler
 	install -d debian/secubox-core/usr/lib/sysctl.d
 	install -m 644 sysctl.d/99-secubox-zz-lxc-forward.conf \
 	               debian/secubox-core/usr/lib/sysctl.d/

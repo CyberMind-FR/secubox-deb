@@ -627,6 +627,12 @@ cmd_install() {
 
     # Persistent data dirs (host-side, bind-mounted into the LXC)
     mkdir -p "$DATA_PATH"/{vmail,config,ssl,backups}
+    # Cibles de montage : au root DU CONTENEUR (100000), qui en cède ensuite la
+    # propriété de l'intérieur (vmail…). En 0:0 il ne peut rien y écrire ; gk2
+    # les avait à 100000, posé à la main (#1729). Premier niveau seulement.
+    for _d in vmail config ssl; do
+        [ "$(stat -c %u "$DATA_PATH/$_d")" -lt 100000 ] && chown 100000:100000 "$DATA_PATH/$_d"
+    done
     mkdir -p "$LXC_PATH"
 
     # Bootstrap rootfs + render LXC config
@@ -692,7 +698,11 @@ cmd_start() {
         error "container '$CONTAINER' not present at $LXC_PATH/$CONTAINER"
         return 1
     fi
-    lxc-start -n "$CONTAINER" -d
+    # Rootfs debootstrappé en root pour un conteneur non privilégié (#1729).
+    if [ "$(stat -c %u "$LXC_PATH/$CONTAINER/rootfs")" -lt 100000 ]; then
+        secubox-lxc-decaler "$LXC_PATH/$CONTAINER/rootfs" || error "décalage du rootfs impossible"
+    fi
+    lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
     # Wait up to 10s for RUNNING state.
     for _ in 1 2 3 4 5 6 7 8 9 10; do
         lxc_running "$CONTAINER" && { log "mail LXC running"; return 0; }
@@ -1650,4 +1660,6 @@ case "${1:-}" in
     *)           error "Unknown command: $1"; show_help >&2; exit 1 ;;
 esac
 
-exit 0
+# Le code de la commande, pas 0 d'office : `install` qui échouait rendait
+# « réussi » (#1729).
+exit $?

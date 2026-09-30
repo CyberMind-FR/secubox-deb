@@ -48,7 +48,7 @@ cmd_install() {
     log "Running LXC bootstrap from $INSTALL_LIB ..."
     SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
     SECUBOX_PHOTOPRISM_HOSTNAME="$PUBLIC_HOSTNAME" \
-        bash "$INSTALL_LIB"
+        bash "$INSTALL_LIB" || { echo "[photoprism] ERREUR : l'installation a échoué (voir ci-dessus) — rien n'est « fait » (#1729)" >&2; exit 1; }
     log "Done. Try 'photoprismctl status'."
 }
 
