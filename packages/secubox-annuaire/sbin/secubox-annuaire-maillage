@@ -58,6 +58,18 @@ if [ "$avant" != "$apres" ]; then
     echo "[maillage] écouteur :8799 ${MESH_IP:-retiré}"
 fi
 
+# Règle posée À CHAUD, sans rejouer le fichier : `nft -f` de nftables.conf
+# commence par `flush ruleset` et efface les tables vivantes — bans sbxwaf,
+# ensembles NAC, sortie tor… (#1721, #1769). Le fichier garde la règle pour
+# le prochain démarrage ; la chaîne vivante la reçoit par `nft insert`, en
+# tête (donc avant le drop terminal). Idempotent, et répare aussi une règle
+# vivante disparue alors que le fichier l'avait déjà.
+_a_chaud() {  # motif-de-présence règle
+    nft list chain inet secubox_filter input >/dev/null 2>&1 || return 0
+    nft list chain inet secubox_filter input 2>/dev/null | grep -qF -- "$1" && return 0
+    nft insert rule inet secubox_filter input "$2" >/dev/null 2>&1 || true
+}
+
 # 3. Règle nft durable, AVANT le drop terminal de inet secubox_filter (règle
 # vive aussi). Les nœuds « inet filter » historiques n'en ont pas besoin.
 if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
@@ -67,12 +79,13 @@ if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
         "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
     if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
         mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
-        nft -f "$NFT_CONF" >/dev/null 2>&1 || true
         echo "[maillage] :8799 ouvert sur wg-mesh"
     else
         rm -f "$NFT_CONF.sbxtmp"
     fi
 fi
+[ -n "$MESH_IP" ] && _a_chaud "tcp dport 8799" \
+    'iifname "wg-mesh" ip saddr 10.10.0.0/24 tcp dport 8799 accept'
 
 # 3b. DNS du maillage (#1556) : les noms <box>.lan/.mesh.<zone> sont servis
 # par l'Unbound du maître sur son adresse wg-mesh. Même geste, même garde.
@@ -83,11 +96,16 @@ if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
         "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
     if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
         mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
-        nft -f "$NFT_CONF" >/dev/null 2>&1 || true
         echo "[maillage] DNS (53) ouvert sur wg-mesh"
     else
         rm -f "$NFT_CONF.sbxtmp"
     fi
+fi
+if [ -n "$MESH_IP" ]; then
+    _a_chaud 'udp dport 53 accept comment "secubox-noms"' \
+        'iifname "wg-mesh" ip saddr 10.10.0.0/24 udp dport 53 accept comment "secubox-noms"'
+    _a_chaud 'tcp dport 53 accept comment "secubox-noms"' \
+        'iifname "wg-mesh" ip saddr 10.10.0.0/24 tcp dport 53 accept comment "secubox-noms"'
 fi
 
 # 3c. Bonjour (#1556) : l'annonce _secubox._tcp et la recherche des autres box
@@ -101,12 +119,15 @@ if [ -f "$NFT_CONF" ] \
         "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
     if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
         mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
-        nft -f "$NFT_CONF" >/dev/null 2>&1 || true
         echo "[maillage] Bonjour (mDNS 5353) ouvert"
     else
         rm -f "$NFT_CONF.sbxtmp"
     fi
 fi
+_a_chaud 'ip daddr 224.0.0.251 udp dport 5353' \
+    'ip daddr 224.0.0.251 udp dport 5353 accept comment "secubox-bonjour"'
+_a_chaud 'ip6 daddr ff02::fb udp dport 5353' \
+    'ip6 daddr ff02::fb udp dport 5353 accept comment "secubox-bonjour"'
 
 # 4. Premier instantané signé tout de suite, sans attendre le minuteur.
 if [ -n "$MESH_IP" ] && [ -s "$KEY" ]; then

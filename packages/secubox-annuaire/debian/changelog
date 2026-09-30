@@ -1,3 +1,14 @@
+secubox-annuaire (0.10.12-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-annuaire-maillage : plus de `nft -f /etc/nftables.conf` (#1769).
+    Rejouer le fichier commence par `flush ruleset` et effaçait les tables
+    vivantes (bans sbxwaf, ensembles NAC, sortie tor). Les règles :8799,
+    DNS 53 et Bonjour 5353 restent persistées dans le fichier (nft -c) et
+    sont posées À CHAUD par `nft insert`, idempotent — ce qui répare aussi
+    une règle vivante disparue.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 22:00:00 +0200
+
 secubox-annuaire (0.10.11-1~bookworm1) bookworm; urgency=medium
 
   * annuaire.delegation : assertion d'entrée déléguée (signée par la clé du nœud centre, 60 s, nonce) ; annuaire.assist : delegation_active / sessions_centre — le pouvoir vient du consentement signé par la BOX (session d'assistance ouverte + accord de console non révoqué, non échu), jamais de l'assertion (#1720).
