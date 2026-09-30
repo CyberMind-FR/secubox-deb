@@ -296,8 +296,13 @@ func TestRunAnalyzerPanicRecovered(t *testing.T) {
 func TestRunPrunesExpiredVerdicts(t *testing.T) {
 	stub := &stubAnalyzer{verdict: sentinel.Verdict{Class: sentinel.ClassMalware, Severity: 90, Confidence: 90, Action: sentinel.ActionBlock}}
 	cfg := newTestConfig(t, stub)
-	cfg.TTL = 10 * time.Millisecond
-	cfg.PruneInterval = 20 * time.Millisecond
+	// Store.Prune raisonne en SECONDES (clés et seuil en temps Unix) : avec
+	// un TTL de 10 ms, le verdict était élagable dès son insertion et ne
+	// vivait qu'un tour d'élagage (~20 ms), l'intervalle même du sondage de
+	// waitForRecent — course perdue sur un exécuteur CI chargé (#1778). Un
+	// TTL au-delà de la seconde laisse le verdict observable, puis élagué.
+	cfg.TTL = 1500 * time.Millisecond
+	cfg.PruneInterval = 50 * time.Millisecond
 
 	store, cancel, wait := startDaemon(t, cfg)
 	defer func() {

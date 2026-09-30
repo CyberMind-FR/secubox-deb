@@ -8,7 +8,8 @@ SCRIPT = PKG / "sbin" / "secubox-toolbox-autolearn"
 def _seed_db(path):
     c = sqlite3.connect(path)
     c.executescript("""
-        CREATE TABLE threat_intel (ioc TEXT, type TEXT);
+        CREATE TABLE threat_intel (ioc TEXT, ioc_type TEXT, source TEXT,
+            weight INTEGER DEFAULT 50);
         CREATE TABLE social_edges (ts INTEGER, client_mac_hash TEXT,
             src_site TEXT, tracker_domain TEXT, cookie_id_hash TEXT,
             ja4_hash TEXT, consent_state TEXT DEFAULT 'none_seen');
@@ -21,7 +22,10 @@ def _seed_db(path):
         c.execute("INSERT INTO social_edges(ts,client_mac_hash,src_site,"
                   "tracker_domain,cookie_id_hash,ja4_hash,consent_state) "
                   "VALUES(1,'m','%s','www.criteo.com','CID','j','pre_consent')" % site)
-    c.execute("INSERT INTO threat_intel VALUES('evil.trk','domain')")
+    # Schéma réel de threat_intel.py (ioc_type + weight) : le script filtre
+    # sur ioc_type='domain' AND weight >= 40 depuis #740.
+    c.execute("INSERT INTO threat_intel(ioc, ioc_type, source, weight) "
+              "VALUES('evil.trk','domain','threatfox',45)")
     c.execute("INSERT INTO social_nodes(client_mac_hash,tracker_domain,hits,"
               "sites_jsonl,pre_consent_hits) VALUES('m','evil.trk',1,?,1)",
               (json.dumps(["a.com", "b.com", "c.com"]),))

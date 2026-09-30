@@ -52,5 +52,13 @@ def test_load_bypass_tagged_missing_source_skipped(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "MITM_BYPASS_SEED_FILE", seed)
     monkeypatch.setattr(api, "MITM_BYPASS_FILE", tmp_path / "nope1.conf")  # missing
     monkeypatch.setattr(api, "MITM_BYPASS_DYNAMIC_FILE", tmp_path / "nope2.conf")  # missing
+    # #803/#806/#809 : la liste lit aussi les fichiers splice, fédérés et
+    # « désactivés » — tous absents ici, pour ne dépendre que de la graine.
+    for name in ("TLS_SPLICE_SEED_FILE", "SPLICE_LEARNED_FILE", "FED_SPLICE_FILE",
+                 "FED_BYPASS_FILE", "FED_DISABLED_FILE", "MITM_FILTER_DISABLED_FILE"):
+        monkeypatch.setattr(api, name, tmp_path / f"absent-{name}")
     tagged = api._load_bypass_tagged()
-    assert tagged == [{"pattern": "only.com", "source": "seed"}]
+    # #809 : chaque ligne porte enabled/editable ; une graine du paquet est
+    # appliquée et non supprimable.
+    assert tagged == [{"pattern": "only.com", "source": "seed",
+                       "enabled": True, "editable": False}]

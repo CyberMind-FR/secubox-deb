@@ -356,6 +356,9 @@ main() {
         set-chosen) cmd_set_chosen "$@" ;;
         set-default) cmd_set_default "$@" ;;
         list) cmd_list "$@" ;;
+        # Rejoue @rlevel_off depuis peer-rlevel.json SANS rien changer : après
+        # un rechargement de la table wg-toolbox, qui vide ses ensembles (#1769).
+        regen) ensure_rlevel_file; regen_nft ;;
         -h|--help) usage ;;
         *) err "unknown command: $cmd"; usage ;;
     esac

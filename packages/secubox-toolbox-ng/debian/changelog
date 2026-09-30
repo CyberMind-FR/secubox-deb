@@ -1,3 +1,17 @@
+secubox-toolbox-ng (0.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * sbx-sentinel : hasStrongSignal restauré (#828) — « rare » seul ne fait plus
+    apprendre un C2, ni au premier battement ni aux fenêtres suivantes ; une
+    liste de navigateurs vide désactive non_browser_ja au lieu de le déclencher
+    sur tout flux (#1778, ref #1748).
+  * sbx-sentinel : rapporteur IOC non-spyware (#829) et capture JA4 opérateur
+    (#830) rebranchés ; browser-ja4.txt redevient un fichier de configuration
+    sous /etc/secubox/sentinel (#831), sentinel.env pointé dessus (#1778).
+  * sbxmitm : la règle cosmétique rend de nouveau le défilement bloqué par les
+    voiles paywall (#756, #1778).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:21:39 +0200
+
 secubox-toolbox-ng (0.5.6-1~bookworm1) bookworm; urgency=high
 
   * sbx-authwatch : bans retenus et ré-affirmés toutes les 30 s — un rechargement du pare-feu les effaçait sans retour ; au démarrage, attend deux minutes la table du WAF au lieu de boucler en redémarrages (#1693).

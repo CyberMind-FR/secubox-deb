@@ -271,3 +271,20 @@ def test_audit_accumulates_multiple_lines(sandbox):
     run(sandbox, "force", PK2, "off")
     lines = sandbox["audit"].read_text().strip().splitlines()
     assert len(lines) == 2
+
+
+# ── regen (#1769) : après un rechargement de la table wg-toolbox ──────────
+
+def test_regen_rejoue_rlevel_off_sans_rien_changer(sandbox):
+    """Recharger la table wg-toolbox vide @rlevel_off ; `regen` le rejoue
+    depuis peer-rlevel.json, sans toucher au fichier ni à l'audit."""
+    assert run(sandbox, "force", PK1, "off").returncode == 0
+    avant = sandbox["rlevel"].read_bytes()
+    audit_avant = sandbox["audit"].read_bytes() if sandbox["audit"].exists() else b""
+    sandbox["nft_out"].unlink()
+    r = run(sandbox, "regen")
+    assert r.returncode == 0, r.stderr
+    txt = nft_text(sandbox)
+    assert "flush set inet" in txt and "10.99.1.5" in txt
+    assert sandbox["rlevel"].read_bytes() == avant
+    assert (sandbox["audit"].read_bytes() if sandbox["audit"].exists() else b"") == audit_avant

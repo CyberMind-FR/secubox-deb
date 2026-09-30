@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import urllib.parse
 import urllib.request
 from collections import Counter
 
@@ -123,6 +124,36 @@ def _is_confirmed_compromise(d: dict) -> bool:
         d.get("action") == "block"
         and _safe_int(d.get("confidence", 0)) >= _HIGH_CONFIDENCE
     )
+
+
+def fetch_c2() -> dict:
+    """Fetch learned + candidate C2 sets from the daemon. Fail-safe → {}."""
+    learned = _get_json("/c2/learned")
+    cands = _get_json("/c2/candidates")
+    if learned is None and cands is None:
+        return {}
+    return {
+        "learned": learned if isinstance(learned, list) else [],
+        "candidates": cands if isinstance(cands, list) else [],
+    }
+
+
+def c2_allow(host: str) -> bool:
+    """POST an allowlist request to the daemon. Fail-safe → False."""
+    if not host:
+        return False
+    base = daemon_base()
+    if not base:
+        return False
+    try:
+        data = urllib.parse.urlencode({"host": host}).encode()
+        req = urllib.request.Request(base + "/c2/allow", data=data,
+                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+            return resp.status == 200
+    except Exception as exc:
+        log.debug("sentinel c2_allow failed: %s", exc)
+        return False
 
 
 def assess(detections: list[dict]) -> dict:

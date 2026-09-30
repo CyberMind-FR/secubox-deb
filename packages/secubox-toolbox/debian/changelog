@@ -1,3 +1,37 @@
+secubox-toolbox (2.9.9-1~bookworm1) bookworm; urgency=medium
+
+  * API restaurée après les fusions du 2026-08-17 (#1778, ref #1748) :
+    /rlevel/peers, /rlevel/peer, /rlevel/me ; /exit_country, /vpn/client(s),
+    /tor/bridge(s) ; /admin/sentinel/c2 (+ /allow) ;
+    /admin/filter-control/{toggle,delete} ; /__toolbox/sw-candidate ;
+    /admin/cookie-crosssite ; palier R4 ; compteurs nft nommés, chutes réseau
+    du hub, blocage DNS et pages nettoyées dans #ads ; entrées fédérées des
+    filtres ; rapport PDF enrichi et rendu hors boucle. Les pages /rlevel,
+    toolbox et secubox-tor appelaient ces routes dans le vide (404).
+  * Gardes : écritures d'administration refusées sur le vhost public kbin ET
+    depuis un pair du tunnel wg-toolbox. La garde « pair » regarde désormais
+    le socket (X-Forwarded-For forgé la contournait) ; /rlevel/me prend
+    l'identité du socket et refuse le vhost kbin (un pair réglait le mode d'un
+    autre) ; la liste blanche C2, sans garde à l'origine, en reçoit (#1778).
+  * /__toolbox/sw-candidate : noms d'hôte validés, corps et fichier bornés (#1778).
+  * Panneau : onglets Tor et C2 appris restaurés ; bascule/suppression des
+    filtres et liste splice passent par /api/v1/toolbox ; panneau Sentinelle
+    en double retiré (#1778).
+  * postinst : fichiers d'état Tor pré-créés, peer-rlevel.json semé,
+    minuteries mesh-exclusion et tor-exempt-hosts activées, cache matplotlib
+    (#1778).
+  * sentinel_link : fetch_c2 / c2_allow restaurés (#1778).
+  * postinst : plus de `systemctl reload nftables` (#1769) — il rejouait
+    `flush ruleset` et effaçait les tables vivantes. Quand un drop-in change :
+    table wg-toolbox rechargée seule, atomiquement (base + fanout), puis
+    @rlevel_off rejoué par `sbxmitm-policyctl regen` (nouveau verbe) ; table
+    secubox_blacklist chargée seule, la synchro remplit ses ensembles.
+  * postinst : la base toolbox.db (et -wal/-shm) rendue au service après le
+    réglage SQLite, qui tourne en root et la créait root:root sur une box
+    neuve — le service ne pouvait plus y écrire (vu sur gk3).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:21:39 +0200
+
 secubox-toolbox (2.9.8-1~bookworm1) bookworm; urgency=high
 
   * postinst : relance l'agrégateur s'il a démarré avant l'installation du

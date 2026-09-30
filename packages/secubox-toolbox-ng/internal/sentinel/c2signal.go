@@ -95,18 +95,39 @@ func (s *C2Signals) Fired(m FlowMeta) []string {
 	if s.hits(m.Host) <= c2RareMaxHits {
 		out = append(out, "rare")
 	}
-	// non-browser: only when a fingerprint is PRESENT and not a known browser.
+	// non-browser: only when a fingerprint is PRESENT, the known-browser set is
+	// CONFIGURED (non-empty), and the fingerprint is not in it. An empty browser
+	// set means we cannot tell browser from non-browser traffic — firing here
+	// would flag every fingerprinted flow (incl. real browser dashboards) as
+	// non-browser, the exact false positive this signal must avoid. So an
+	// unconfigured browser set disables the signal rather than over-firing it.
 	fp := m.JA4
 	if fp == "" {
 		fp = m.JA3
 	}
-	if fp != "" && !s.browser[fp] {
+	if len(s.browser) > 0 && fp != "" && !s.browser[fp] {
 		out = append(out, "non_browser_ja")
 	}
 	if isDGA(m.Host) {
 		out = append(out, "dga")
 	}
 	return out
+}
+
+// hasStrongSignal reports whether fired contains a signal strong enough to
+// qualify a beacon for learning on its own. "rare" (first-seen / low global
+// frequency) is a SUPPORTING signal only — a brand-new legitimate service also
+// looks rare — so it never qualifies alone; a strong signal (DGA-looking host
+// or a confirmed non-browser client fingerprint) must also be present. This is
+// the high-precision guard that keeps a first-seen browser dashboard from being
+// learned on rarity alone.
+func hasStrongSignal(fired []string) bool {
+	for _, s := range fired {
+		if s == "dga" || s == "non_browser_ja" {
+			return true
+		}
+	}
+	return false
 }
 
 // isDGA reports whether host's most-significant label looks algorithmically
