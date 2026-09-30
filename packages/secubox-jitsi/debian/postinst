@@ -39,6 +39,24 @@ case "$1" in
     systemctl disable secubox-jitsi.service 2>/dev/null || true
     rm -f /etc/systemd/system/multi-user.target.wants/secubox-jitsi.service
 
+    # SE DÉCLARER À L'AGRÉGATEUR (#1761). Le texte ci-dessus suppose une
+    # déclaration groupd qu'aucun paquet ne livre (posée à la main sur gk2) :
+    # sur une box neuve (gk3), l'API n'était servie NULLE PART. Même geste que
+    # secubox-messagerie : ajouter « jitsi » à la liste, puis recharger.
+    python3 - <<'TOML' || echo "secubox-jitsi: déclaration dans aggregator.toml impossible" >&2
+import pathlib, re
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+if f.exists():
+    s = f.read_text()
+    if '"jitsi"' not in s:
+        s = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "jitsi",', s, count=1)
+        f.write_text(s)
+        print("secubox-jitsi: déclaré dans aggregator.toml")
+TOML
+    if [ -d /run/systemd/system ]; then
+        systemctl try-restart secubox-aggregator >/dev/null 2>&1 || true
+    fi
+
     # Activer le vhost public (idempotent).
     if [ -f /etc/nginx/sites-available/jitsi.conf ] && \
        [ ! -e /etc/nginx/sites-enabled/jitsi.conf ]; then

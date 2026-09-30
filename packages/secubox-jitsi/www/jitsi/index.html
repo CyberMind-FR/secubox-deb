@@ -313,27 +313,30 @@
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
 
+    <!-- Page réalignée sur l'API native LXC (#1761) : elle ne parle plus qu'aux
+         routes que l'API expose — /status, /stats, /control, /service/restart,
+         /public-ip, /logs. Les onglets Rooms, Recordings, Auth, Settings de
+         l'ère docker appelaient des routes volontairement non reprises (voir
+         la docstring de api/main.py). Valeurs insérées par textContent. -->
     <main class="main">
         <header class="header">
             <h1>Jitsi Meet</h1>
             <div class="header-actions">
-                <a id="openJitsi" href="#" target="_blank" class="btn" style="display: none;">Open Jitsi</a>
+                <a id="openJitsi" href="#" target="_blank" rel="noopener" class="btn" style="display: none;">Open Jitsi</a>
                 <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()" disabled>…</button>
             </div>
         </header>
 
-        <!-- Install Banner -->
         <div id="installBanner" class="install-banner" style="display: none;">
-            <h2>Video Conferencing</h2>
-            <p>Self-hosted, secure video meetings with screen sharing, chat, and recording.</p>
-            <button class="btn btn-primary" onclick="installJitsi()">Install Jitsi Meet</button>
+            <h2>Jitsi Meet is not installed</h2>
+            <p>Provisioning is done by the box, not from this page:
+               <code>systemctl start secubox-jitsi-provision</code> (or <code>jitsictl install</code>).</p>
         </div>
 
-        <!-- Stats Row -->
         <div class="stats-row">
             <div class="stat-card" id="statStatus">
-                <div class="label">Status</div>
+                <div class="label">Container</div>
                 <div class="value">-</div>
             </div>
             <div class="stat-card">
@@ -344,245 +347,65 @@
                 <div class="label">Participants</div>
                 <div class="value" id="statParticipants">0</div>
             </div>
-            <div class="stat-card">
-                <div class="label">Recordings</div>
-                <div class="value" id="statRecordings">0</div>
+            <div class="stat-card" id="statMedia">
+                <div class="label">Media address</div>
+                <div class="value">-</div>
             </div>
         </div>
 
-        <!-- Container Status -->
         <div class="card" id="containerCard">
             <h3>Services</h3>
-            <div class="container-grid" id="containerGrid">
-                <!-- Filled by JS -->
-            </div>
+            <div class="container-grid" id="containerGrid"></div>
         </div>
 
-        <!-- Tabs -->
         <div class="tabs">
-            <div class="tab active" onclick="showTab('dashboard')">Dashboard</div>
-            <div class="tab" onclick="showTab('rooms')">Rooms</div>
-            <div class="tab" onclick="showTab('recordings')">Recordings</div>
-            <div class="tab" onclick="showTab('auth')">Auth</div>
-            <div class="tab" onclick="showTab('settings')">Settings</div>
-            <div class="tab" onclick="showTab('logs')">Logs</div>
+            <div class="tab active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</div>
+            <div class="tab" data-tab="media" onclick="showTab('media')">Media</div>
+            <div class="tab" data-tab="logs" onclick="showTab('logs')">Logs</div>
         </div>
 
-        <!-- Dashboard Tab -->
         <div id="tab-dashboard" class="tab-content active">
             <div class="quick-join">
                 <h3>Quick Join</h3>
                 <input type="text" id="roomName" placeholder="Enter room name...">
                 <button class="btn btn-primary" onclick="joinRoom()" style="width: 100%;">Join Meeting</button>
             </div>
-
             <div class="card">
-                <h3>Server Statistics</h3>
+                <h3>Server</h3>
                 <div class="form-row">
-                    <div>
-                        <strong>Domain:</strong> <span id="infoDomain">-</span>
-                    </div>
-                    <div>
-                        <strong>URL:</strong> <a id="infoUrl" href="#" target="_blank">-</a>
-                    </div>
-                    <div>
-                        <strong>Disk Usage:</strong> <span id="infoDisk">-</span>
-                    </div>
-                    <div>
-                        <strong>Total Created:</strong> <span id="infoTotalConferences">0</span>
-                    </div>
+                    <div><strong>Domain:</strong> <span id="infoDomain">-</span></div>
+                    <div><strong>URL:</strong> <a id="infoUrl" href="#" target="_blank" rel="noopener">-</a></div>
+                    <div><strong>Container IP:</strong> <span id="infoIp">-</span></div>
+                    <div><strong>Web reachable:</strong> <span id="infoWeb">-</span></div>
+                    <div><strong>Media UDP port:</strong> <span id="infoUdp">-</span></div>
+                    <div><strong>Bridge stats:</strong> <span id="infoStats">-</span></div>
                 </div>
             </div>
         </div>
 
-        <!-- Rooms Tab -->
-        <div id="tab-rooms" class="tab-content">
+        <div id="tab-media" class="tab-content">
             <div class="card">
-                <h3>Active Rooms</h3>
-                <p style="color: var(--text-dim); margin-bottom: 1rem;">
-                    Real-time room list requires Prosody admin module. Stats show aggregate data.
-                </p>
-                <div class="form-row">
-                    <div>
-                        <strong>Active Meetings:</strong> <span id="roomsActive">0</span>
-                    </div>
-                    <div>
-                        <strong>Total Participants:</strong> <span id="roomsParticipants">0</span>
-                    </div>
-                    <div>
-                        <strong>Largest Meeting:</strong> <span id="roomsLargest">0</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>Create Room Link</h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Room Name</label>
-                        <input type="text" id="createRoomName" placeholder="team-meeting">
-                    </div>
-                    <div class="form-group" style="display: flex; align-items: flex-end;">
-                        <button class="btn btn-primary" onclick="createRoomLink()">Generate Link</button>
-                    </div>
-                </div>
-                <div id="roomLinkResult" style="margin-top: 1rem; display: none;">
-                    <strong>Meeting Link:</strong><br>
-                    <code id="roomLinkUrl" style="word-break: break-all;"></code>
-                    <button class="btn btn-sm" onclick="copyRoomLink()" style="margin-left: 0.5rem;">Copy</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recordings Tab -->
-        <div id="tab-recordings" class="tab-content">
-            <div class="card">
-                <h3>Jibri Recording Service</h3>
-                <div id="jibriStatus" style="margin-bottom: 1rem;">Loading...</div>
-                <div class="header-actions">
-                    <button class="btn btn-success" id="btnEnableJibri" onclick="enableJibri()">Enable Jibri</button>
-                    <button class="btn btn-danger" id="btnDisableJibri" onclick="disableJibri()" style="display: none;">Disable Jibri</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>Recordings</h3>
-                <div id="recordingsList">Loading...</div>
-            </div>
-        </div>
-
-        <!-- Auth Tab -->
-        <div id="tab-auth" class="tab-content">
-            <div class="card">
-                <h3>Authentication Settings</h3>
-                <p style="color: var(--text-dim); margin-bottom: 1rem;">
-                    Configure authentication to require login for meeting moderators.
-                </p>
-                <form id="authForm" onsubmit="saveAuthConfig(event)">
-                    <div class="form-group">
-                        <label>Authentication Type</label>
-                        <select id="authType">
-                            <option value="none">None (Anonymous)</option>
-                            <option value="internal">Internal (Prosody)</option>
-                            <option value="jwt">JWT Token</option>
-                            <option value="ldap">LDAP</option>
-                        </select>
-                    </div>
-
-                    <div id="jwtConfig" style="display: none;">
-                        <div class="form-group">
-                            <label>JWT App ID</label>
-                            <input type="text" id="jwtAppId" value="secubox">
-                        </div>
-                        <div class="form-group">
-                            <label>JWT Secret</label>
-                            <input type="password" id="jwtSecret" placeholder="Enter secret key">
-                        </div>
-                    </div>
-
-                    <div id="ldapConfig" style="display: none;">
-                        <div class="form-group">
-                            <label>LDAP URL</label>
-                            <input type="text" id="ldapUrl" placeholder="ldap://ldap.example.com">
-                        </div>
-                        <div class="form-group">
-                            <label>LDAP Base DN</label>
-                            <input type="text" id="ldapBase" placeholder="ou=users,dc=example,dc=com">
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary">Save Authentication</button>
+                <h3>Public media address</h3>
+                <p>The address the videobridge advertises to participants. Behind NAT it cannot
+                   discover it alone; a wrong value gives meetings that form but carry no sound
+                   or video.</p>
+                <form onsubmit="savePublicIp(event)" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <input type="text" id="cfgPublicIp" placeholder="203.0.113.10" style="flex: 1; min-width: 12rem;">
+                    <button type="submit" class="btn btn-primary">Save</button>
                 </form>
             </div>
         </div>
 
-        <!-- Settings Tab -->
-        <div id="tab-settings" class="tab-content">
-            <div class="card">
-                <h3>Jitsi Configuration</h3>
-                <form id="settingsForm" onsubmit="saveSettings(event)">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Domain</label>
-                            <input type="text" id="cfgDomain" value="meet.secubox.local">
-                        </div>
-                        <div class="form-group">
-                            <label>Public URL</label>
-                            <input type="text" id="cfgPublicUrl" value="https://meet.secubox.local">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>HTTP Port</label>
-                            <input type="number" id="cfgHttpPort" value="8443">
-                        </div>
-                        <div class="form-group">
-                            <label>HTTPS Port</label>
-                            <input type="number" id="cfgHttpsPort" value="443">
-                        </div>
-                        <div class="form-group">
-                            <label>JVB Port (UDP)</label>
-                            <input type="number" id="cfgJvbPort" value="10000">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Timezone</label>
-                            <select id="cfgTimezone">
-                                <option value="Europe/Paris">Europe/Paris</option>
-                                <option value="Europe/London">Europe/London</option>
-                                <option value="America/New_York">America/New_York</option>
-                                <option value="America/Los_Angeles">America/Los_Angeles</option>
-                                <option value="Asia/Tokyo">Asia/Tokyo</option>
-                                <option value="UTC">UTC</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Max Participants</label>
-                            <input type="number" id="cfgMaxParticipants" value="100" min="2" max="500">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="cfgLobby" checked> Enable Lobby
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="cfgBreakout" checked> Enable Breakout Rooms
-                            </label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Welcome Message</label>
-                        <input type="text" id="cfgWelcome" value="Welcome to SecuBox Meeting">
-                    </div>
-                    <button type="submit" class="btn btn-primary">Save Settings</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <h3>Maintenance</h3>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <button class="btn" onclick="restartJitsi()">Restart All Services</button>
-                    <button class="btn btn-danger" onclick="uninstallJitsi()">Uninstall</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Logs Tab -->
         <div id="tab-logs" class="tab-content">
             <div class="card">
-                <h3>Container Logs</h3>
+                <h3>Service Logs</h3>
                 <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                     <label>Service:</label>
                     <select id="logService">
-                        <option value="web">Web</option>
-                        <option value="prosody">Prosody</option>
+                        <option value="jitsi-videobridge2">Videobridge</option>
                         <option value="jicofo">Jicofo</option>
-                        <option value="jvb">JVB</option>
-                        <option value="jibri">Jibri</option>
+                        <option value="prosody">Prosody</option>
+                        <option value="nginx">Web (nginx)</option>
                     </select>
                     <label>Lines:</label>
                     <select id="logLines">
@@ -599,9 +422,9 @@
 
     <script>
         const API = '/api/v1/jitsi';
-        let isRunning = false;
-        let jitsiDomain = '';
-        let publicUrl = '';
+        // Nom du service dans /status → unité que /service/restart accepte.
+        const UNITES = { prosody: 'prosody', jicofo: 'jicofo', videobridge: 'jitsi-videobridge2', web: 'nginx' };
+        let etat = null;
 
         function getToken() {
             return localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('sbx_token') || '';
@@ -616,19 +439,15 @@
                 if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 throw new Error('Unauthorized');
             }
-            return res.json();
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail || ('HTTP ' + res.status));
+            return data;
         }
 
         function showTab(name) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabs = ['dashboard', 'rooms', 'recordings', 'auth', 'settings', 'logs'];
-            const idx = tabs.indexOf(name);
-            document.querySelector(`.tab:nth-child(${idx + 1})`).classList.add('active');
-            document.getElementById('tab-' + name).classList.add('active');
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
             if (name === 'logs') loadLogs();
-            if (name === 'recordings') loadRecordings();
-            if (name === 'rooms') loadRooms();
         }
 
         function toast(msg, type = 'success') {
@@ -639,349 +458,139 @@
             setTimeout(() => t.remove(), 3000);
         }
 
+        function pose(id, texte) { document.getElementById(id).textContent = texte; }
+
+        function dessineServices(services) {
+            const grid = document.getElementById('containerGrid');
+            grid.replaceChildren();
+            for (const [nom, st] of Object.entries(services || {})) {
+                const b = document.createElement('div');
+                b.className = 'container-badge';
+                const dot = document.createElement('span');
+                dot.className = 'status-dot ' + (st === 'active' ? 'running' : 'stopped');
+                const lib = document.createElement('span');
+                lib.textContent = `${nom} (${st})`;
+                b.append(dot, lib);
+                if (UNITES[nom]) {
+                    const r = document.createElement('button');
+                    r.className = 'btn';
+                    r.textContent = 'Restart';
+                    r.style.marginLeft = 'auto';
+                    r.onclick = () => restartService(UNITES[nom]);
+                    b.append(r);
+                }
+                grid.append(b);
+            }
+        }
+
         async function refresh() {
             try {
-                const status = await api('/status');
-                isRunning = status.running;
-                jitsiDomain = status.domain;
-                publicUrl = status.public_url;
-
-                // Show/hide install banner
-                const notInstalled = Object.values(status.containers || {}).every(c => c.status === 'not_installed');
-                document.getElementById('installBanner').style.display = notInstalled ? 'block' : 'none';
-
-                // Update stats
-                const statEl = document.getElementById('statStatus');
-                statEl.querySelector('.value').textContent = isRunning ? 'Running' : 'Stopped';
-                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
-
-                document.getElementById('statConferences').textContent = status.active_conferences || 0;
-                document.getElementById('statParticipants').textContent = status.active_participants || 0;
-                document.getElementById('statRecordings').textContent = status.recording_count || 0;
-
-                // Update container grid
-                const grid = document.getElementById('containerGrid');
-                const containers = status.containers || {};
-                grid.innerHTML = Object.entries(containers).map(([name, info]) => `
-                    <div class="container-badge">
-                        <span class="status-dot ${info.status}"></span>
-                        <span>${name}</span>
-                    </div>
-                `).join('');
-
-                // Update toggle button
-                const btn = document.getElementById('btnToggle');
-                if (notInstalled) {
-                    btn.textContent = 'Install';
-                    btn.className = 'btn btn-primary';
-                    btn.onclick = installJitsi;
-                } else if (isRunning) {
-                    btn.textContent = 'Stop';
-                    btn.className = 'btn btn-danger';
-                    btn.onclick = () => toggleService();
-                } else {
-                    btn.textContent = 'Start';
-                    btn.className = 'btn btn-success';
-                    btn.onclick = () => toggleService();
-                }
-
-                // Open Jitsi link
-                const openLink = document.getElementById('openJitsi');
-                if (isRunning && publicUrl) {
-                    openLink.style.display = 'inline-flex';
-                    openLink.href = publicUrl;
-                } else {
-                    openLink.style.display = 'none';
-                }
-
-                // Update info
-                document.getElementById('infoDomain').textContent = status.domain || '-';
-                const urlEl = document.getElementById('infoUrl');
-                urlEl.textContent = status.public_url || '-';
-                urlEl.href = status.public_url || '#';
-                document.getElementById('infoDisk').textContent = status.disk_usage || '-';
-                document.getElementById('infoTotalConferences').textContent = status.total_conferences_created || 0;
-
-                // Load settings
-                document.getElementById('cfgDomain').value = status.domain || 'meet.secubox.local';
-                document.getElementById('cfgPublicUrl').value = status.public_url || 'https://meet.secubox.local';
-                document.getElementById('cfgHttpPort').value = status.http_port || 8443;
-                document.getElementById('cfgHttpsPort').value = status.https_port || 443;
-                document.getElementById('cfgJvbPort').value = status.jvb_port || 10000;
-
-                // Load Jibri status
-                loadJibriStatus();
-
+                etat = await api('/status');
             } catch (e) {
-                console.error(e);
-                toast('Failed to load status', 'error');
+                toast('Failed to load status: ' + e.message, 'error');
+                return;
             }
+            const enMarche = etat.container === 'running';
+            document.getElementById('installBanner').style.display = etat.installed ? 'none' : 'block';
+
+            const statEl = document.getElementById('statStatus');
+            statEl.querySelector('.value').textContent = etat.installed ? (etat.container || '-') : 'not installed';
+            statEl.className = 'stat-card ' + (enMarche ? 'running' : 'stopped');
+
+            const media = etat.media || {};
+            document.querySelector('#statMedia .value').textContent = media.public_address_set ? media.public_address : 'not set';
+            document.getElementById('cfgPublicIp').value = media.public_address || '';
+
+            dessineServices(etat.services);
+
+            const url = etat.domain ? `https://${etat.domain}/` : '';
+            pose('infoDomain', etat.domain || '-');
+            const u = document.getElementById('infoUrl');
+            u.textContent = url || '-';
+            u.href = url || '#';
+            pose('infoIp', etat.lxc_ip || '-');
+            pose('infoWeb', etat.web_reachable ? 'yes' : 'no');
+            pose('infoUdp', media.udp_port || '-');
+
+            const open = document.getElementById('openJitsi');
+            open.style.display = enMarche && url ? 'inline-flex' : 'none';
+            open.href = url || '#';
+
+            const btn = document.getElementById('btnToggle');
+            btn.disabled = !etat.installed;
+            btn.textContent = !etat.installed ? 'Not installed' : (enMarche ? 'Stop' : 'Start');
+            btn.className = 'btn ' + (enMarche ? 'btn-danger' : 'btn-success');
+
+            loadStats();
         }
 
-        async function loadRooms() {
+        async function loadStats() {
             try {
-                const data = await api('/rooms');
-                document.getElementById('roomsActive').textContent = data.total_active || 0;
-                document.getElementById('roomsParticipants').textContent = data.total_participants || 0;
-                document.getElementById('roomsLargest').textContent = data.largest_conference || 0;
+                const s = await api('/stats');
+                pose('statConferences', s.conferences || 0);
+                pose('statParticipants', s.participants || 0);
+                pose('infoStats', s.available === false ? 'unavailable' : 'live');
             } catch (e) {
-                console.error(e);
-            }
-        }
-
-        async function loadJibriStatus() {
-            try {
-                const data = await api('/jibri/status');
-                const statusEl = document.getElementById('jibriStatus');
-                const enableBtn = document.getElementById('btnEnableJibri');
-                const disableBtn = document.getElementById('btnDisableJibri');
-
-                if (data.enabled) {
-                    statusEl.innerHTML = `<span class="badge ${data.running ? 'badge-success' : 'badge-error'}">${data.running ? 'Running' : 'Stopped'}</span>`;
-                    enableBtn.style.display = 'none';
-                    disableBtn.style.display = 'inline-block';
-                } else {
-                    statusEl.innerHTML = '<span class="badge badge-warning">Not Enabled</span>';
-                    enableBtn.style.display = 'inline-block';
-                    disableBtn.style.display = 'none';
-                }
-            } catch (e) {
-                document.getElementById('jibriStatus').textContent = 'Error loading status';
-            }
-        }
-
-        async function loadRecordings() {
-            try {
-                const data = await api('/recordings');
-                const list = document.getElementById('recordingsList');
-
-                if (!data.recordings || data.recordings.length === 0) {
-                    list.innerHTML = '<p style="color: var(--text-dim);">No recordings available.</p>';
-                    return;
-                }
-
-                list.innerHTML = data.recordings.map(r => `
-                    <div class="recording-item">
-                        <div class="recording-info">
-                            <div class="recording-name">${r.filename}</div>
-                            <div class="recording-meta">${r.size_human} - ${new Date(r.created).toLocaleString()}</div>
-                        </div>
-                        <div>
-                            <button class="btn btn-sm btn-danger" onclick="deleteRecording('${r.id}')">Delete</button>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) {
-                document.getElementById('recordingsList').innerHTML = '<p style="color: var(--error);">Error loading recordings</p>';
+                pose('infoStats', 'error');
             }
         }
 
         async function toggleService() {
-            const action = isRunning ? 'stop' : 'start';
+            if (!etat || !etat.installed) return;
+            const action = etat.container === 'running' ? 'stop' : 'start';
+            if (action === 'stop' && !confirm('Stop Jitsi? Meetings in progress will end.')) return;
+            toast(action === 'stop' ? 'Stopping…' : 'Starting…');
             try {
-                document.getElementById('btnToggle').disabled = true;
-                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
-                const res = await api('/container/' + action, { method: 'POST' });
-                if (res.success) {
-                    toast(action === 'start' ? 'Jitsi started!' : 'Jitsi stopped!');
-                } else {
-                    toast(res.error || 'Action failed', 'error');
-                }
-                await refresh();
-            } catch (e) {
-                toast('Action failed: ' + e.message, 'error');
-            } finally {
-                document.getElementById('btnToggle').disabled = false;
-            }
-        }
-
-        async function installJitsi() {
-            if (!confirm('Install Jitsi Meet? This will download Docker images (~2GB).')) return;
-            toast('Installing Jitsi... This may take several minutes.');
-            try {
-                const res = await api('/container/install', { method: 'POST' });
-                if (res.success) {
-                    toast('Jitsi installed! Starting...');
-                    await api('/container/start', { method: 'POST' });
-                    await refresh();
-                } else {
-                    toast(res.error || 'Install failed', 'error');
-                }
-            } catch (e) {
-                toast('Install failed: ' + e.message, 'error');
-            }
-        }
-
-        async function restartJitsi() {
-            if (!confirm('Restart all Jitsi services?')) return;
-            toast('Restarting...');
-            try {
-                const res = await api('/container/restart', { method: 'POST' });
-                if (res.success) {
-                    toast('Jitsi restarted');
-                    await refresh();
-                } else {
-                    toast(res.error || 'Restart failed', 'error');
-                }
+                await api('/control', { method: 'POST', body: JSON.stringify({ action }) });
+                toast(action === 'stop' ? 'Stopped' : 'Started');
             } catch (e) {
                 toast('Failed: ' + e.message, 'error');
             }
+            refresh();
         }
 
-        async function uninstallJitsi() {
-            if (!confirm('Uninstall Jitsi? This will remove containers (data is preserved).')) return;
+        async function restartService(unit) {
+            if (!confirm(`Restart ${unit}?`)) return;
             try {
-                const res = await api('/container/uninstall', { method: 'POST' });
-                if (res.success) {
-                    toast('Jitsi uninstalled');
-                    await refresh();
-                } else {
-                    toast(res.error || 'Uninstall failed', 'error');
-                }
+                await api('/service/restart', { method: 'POST', body: JSON.stringify({ unit }) });
+                toast(unit + ' restarted');
             } catch (e) {
                 toast('Failed: ' + e.message, 'error');
             }
+            refresh();
+        }
+
+        async function savePublicIp(ev) {
+            ev.preventDefault();
+            const address = document.getElementById('cfgPublicIp').value.trim();
+            if (!address) return toast('Address required', 'error');
+            try {
+                await api('/public-ip', { method: 'POST', body: JSON.stringify({ address }) });
+                toast('Media address saved');
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+            refresh();
         }
 
         function joinRoom() {
-            const roomName = document.getElementById('roomName').value.trim();
-            if (!roomName) return toast('Enter a room name', 'error');
-            const url = publicUrl ? `${publicUrl}/${roomName}` : `https://${jitsiDomain}/${roomName}`;
-            window.open(url, '_blank');
-        }
-
-        function createRoomLink() {
-            const name = document.getElementById('createRoomName').value.trim();
-            if (!name) return toast('Enter a room name', 'error');
-            const url = publicUrl ? `${publicUrl}/${name}` : `https://${jitsiDomain}/${name}`;
-            document.getElementById('roomLinkUrl').textContent = url;
-            document.getElementById('roomLinkResult').style.display = 'block';
-        }
-
-        function copyRoomLink() {
-            const url = document.getElementById('roomLinkUrl').textContent;
-            navigator.clipboard.writeText(url);
-            toast('Link copied!');
-        }
-
-        async function enableJibri() {
-            if (!confirm('Enable Jibri recording service? This requires additional resources.')) return;
-            try {
-                const res = await api('/jibri/enable', { method: 'POST' });
-                if (res.success) {
-                    toast('Jibri enabled. Restart Jitsi to apply.');
-                } else {
-                    toast(res.error || 'Failed', 'error');
-                }
-                await loadJibriStatus();
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        async function disableJibri() {
-            if (!confirm('Disable Jibri recording service?')) return;
-            try {
-                const res = await api('/jibri/disable', { method: 'POST' });
-                if (res.success) {
-                    toast('Jibri disabled');
-                } else {
-                    toast(res.error || 'Failed', 'error');
-                }
-                await loadJibriStatus();
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        async function deleteRecording(id) {
-            if (!confirm('Delete this recording?')) return;
-            try {
-                const res = await api('/recording/' + id, { method: 'DELETE' });
-                if (res.success) {
-                    toast('Recording deleted');
-                    await loadRecordings();
-                } else {
-                    toast(res.error || 'Delete failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        // Auth type toggle
-        document.getElementById('authType').addEventListener('change', function() {
-            document.getElementById('jwtConfig').style.display = this.value === 'jwt' ? 'block' : 'none';
-            document.getElementById('ldapConfig').style.display = this.value === 'ldap' ? 'block' : 'none';
-        });
-
-        async function saveAuthConfig(e) {
-            e.preventDefault();
-            const authType = document.getElementById('authType').value;
-            const body = { auth_type: authType };
-
-            if (authType === 'jwt') {
-                body.jwt_app_id = document.getElementById('jwtAppId').value;
-                body.jwt_secret = document.getElementById('jwtSecret').value;
-            } else if (authType === 'ldap') {
-                body.ldap_url = document.getElementById('ldapUrl').value;
-                body.ldap_base = document.getElementById('ldapBase').value;
-            }
-
-            try {
-                const res = await api('/auth/config', {
-                    method: 'POST',
-                    body: JSON.stringify(body)
-                });
-                if (res.success) {
-                    toast('Auth config saved. Restart to apply.');
-                } else {
-                    toast('Save failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
-        }
-
-        async function saveSettings(e) {
-            e.preventDefault();
-            try {
-                const res = await api('/config', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        domain: document.getElementById('cfgDomain').value,
-                        public_url: document.getElementById('cfgPublicUrl').value,
-                        http_port: parseInt(document.getElementById('cfgHttpPort').value),
-                        https_port: parseInt(document.getElementById('cfgHttpsPort').value),
-                        timezone: document.getElementById('cfgTimezone').value,
-                        max_participants: parseInt(document.getElementById('cfgMaxParticipants').value),
-                        enable_lobby: document.getElementById('cfgLobby').checked,
-                        enable_breakout_rooms: document.getElementById('cfgBreakout').checked,
-                        welcome_message: document.getElementById('cfgWelcome').value,
-                    })
-                });
-                if (res.success) {
-                    toast('Settings saved! Restart to apply.');
-                } else {
-                    toast('Save failed', 'error');
-                }
-            } catch (e) {
-                toast('Failed: ' + e.message, 'error');
-            }
+            const room = document.getElementById('roomName').value.trim();
+            if (!room || !etat || !etat.domain) return;
+            window.open(`https://${etat.domain}/${encodeURIComponent(room)}`, '_blank', 'noopener');
         }
 
         async function loadLogs() {
-            const service = document.getElementById('logService').value;
+            const unit = document.getElementById('logService').value;
             const lines = document.getElementById('logLines').value;
+            const box = document.getElementById('logsContainer');
             try {
-                const data = await api(`/logs?service=${service}&lines=${lines}`);
-                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+                const data = await api(`/logs?unit=${encodeURIComponent(unit)}&lines=${encodeURIComponent(lines)}`);
+                box.textContent = (data.lines || []).join('\n') || 'No logs available';
             } catch (e) {
-                document.getElementById('logsContainer').textContent = 'Error loading logs';
+                box.textContent = 'Error loading logs: ' + e.message;
             }
         }
 
-        // Initialize
         refresh();
         setInterval(refresh, 30000);
     </script>
