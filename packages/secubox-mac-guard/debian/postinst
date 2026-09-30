@@ -10,7 +10,8 @@ case "$1" in
     install -d -o secubox -g secubox -m 750 /var/lib/secubox/mac-guard
     systemctl daemon-reload
     systemctl enable secubox-mac-guard.service
-    systemctl start  secubox-mac-guard.service || true
+    # restart, pas start : à la mise à jour, l'ancien code resterait en service (#1763).
+    systemctl restart secubox-mac-guard.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
     ;;

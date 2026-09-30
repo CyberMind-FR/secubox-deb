@@ -1,3 +1,12 @@
+secubox-iot-guard (1.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Renvois vers secubox-nac restaurés (#817, effacés par la fusion
+    aff481735 ; #1748, #1763) : l'implémentation complète ressuscitée tenait
+    ses propres listes à côté de NAC, qui réimporte ses magasins.
+  * postinst : restart au lieu de start, sinon l'ancien code restait actif.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:20:22 +0200
+
 secubox-iot-guard (1.1.3-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
