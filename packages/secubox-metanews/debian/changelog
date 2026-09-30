@@ -1,3 +1,9 @@
+secubox-metanews (0.1.44-1~bookworm1) bookworm; urgency=medium
+
+  * Le vhost est installé par le paquet (motif de la radio #1430) : livré dans nginx-available sans jamais l'être, gk2 servait une copie manuelle sans verdict LAN (#1354) ni metanews.*, gk3 rendait « Wrong Domain ». La ligne du journal commun par domaine est redite dans le vhost, qui déclare son propre access_log. (#1727, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 14:37:28 +0200
+
 secubox-metanews (0.1.43-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).

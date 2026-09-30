@@ -35,17 +35,16 @@ Type=exec
 ExecStartPre=+-/bin/rm -f /run/secubox/bbs.sock
 User=secubox-bbs
 Group=secubox
+# --parc (#1727) : radio, billets, peertube, podcaster, socialrelay et metanews
+# de CETTE box quand leur paquet y est installé, sinon ceux du nœud de
+# référence — ils étaient figés sur gk2. Une option explicite ici primerait.
 ExecStart=/usr/sbin/secubox-bbsd \
-    --media-origines https://peertube.gk2.secubox.in,https://radio.gk2.secubox.in,https://podcaster.gk2.secubox.in,https://billets.gk2.secubox.in,https://socialrelay.gk2.secubox.in \
-    --frame-origines https://radio.gk2.secubox.in,https://podcaster.gk2.secubox.in \
-    --radio-base https://radio.gk2.secubox.in \
-    --billets-base https://billets.gk2.secubox.in \
+    --parc \
     --root /var/lib/secubox/bbs \
     --secrets /etc/secubox/secrets/bbs \
     --socket /run/secubox/bbs.sock \
     --backup-dir /var/backups/secubox \
     --auth-socket /run/secubox/auth.sock \
-    --peertube-origine https://peertube.gk2.secubox.in \
     --podcast-racine /var/lib/secubox/podcaster/media,/data/secubox/podcaster
 Restart=on-failure
 RestartSec=5
