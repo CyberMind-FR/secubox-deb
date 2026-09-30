@@ -39,6 +39,9 @@ on:
       - 'packages/secubox-certs/**'
       - 'packages/secubox-metrics/sbin/**'
       - 'packages/secubox-metrics/tests/**'
+      # LXC uniquement (#1743) : toute relation de paquet est relue.
+      - 'packages/*/debian/control'
+      - 'scripts/tests/test_lxc_uniquement.py'
       # Fichiers hors de ces paquets que les suites lisent aussi :
       # manifeste podcaster (zia), annuaire (secubox_core), exemple de
       # configuration (zia, sbxid), menus de tous les paquets (webos).
@@ -94,6 +97,11 @@ jobs:
           # encore en CI (dépendances manquantes).
           - suite: secubox-metrics-vhost-logs
             chemin: packages/secubox-metrics/tests/test_vhost_logs.py
+          # LXC uniquement (PATTERNS.md Pattern 11, #1743) : aucun paquet ne
+          # dépend de docker ni de podman ; la liste des tolérés ne fait que
+          # décroître.
+          - suite: depot-lxc-uniquement
+            chemin: scripts/tests/test_lxc_uniquement.py
     env:
       # Versions de la box de référence (bookworm + pip dans /usr/local).
       # pytest et pytest-asyncio n'y sont pas installés : outillage CI seul.
