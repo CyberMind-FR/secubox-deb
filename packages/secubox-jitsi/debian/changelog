@@ -1,3 +1,10 @@
+secubox-jitsi (2.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc : un Jitsi installé pour un AUTRE domaine est purgé (paquets, debconf, config prosody) puis réinstallé pour le bon — « déjà installé » sautait tout, gk3 restait pour meet.gk2 (#1731, #1713).
+  * Le préréglage fixe aussi jitsi-meet/jvb-hostname, qui nomme la config web.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 15:02:45 +0200
+
 secubox-jitsi (2.1.6-1~bookworm1) bookworm; urgency=medium
 
   * domaine par défaut meet.<domaine de la box> (jitsictl, install-lxc — qui échoue proprement si le domaine est inconnu) ; gk3 s'installait pour meet.gk2 (#1723, #1713).
