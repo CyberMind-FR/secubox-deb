@@ -99,5 +99,14 @@ GITEASSH
     fi
     # --- end Gitea routing install ---
 fi
+# ROUTE SBXWAF — DÉCLARÉE PAR CE PAQUET (#1739), comme son vhost et son unité.
+# HAProxy envoie gitea.<domaine> à l'inspection (waf_bypass = false) ; sans cette
+# route, sbxwaf ne connaît pas le nom et son fourre-tout répondait 401 au lieu
+# du service — et le relais du maillage n'exposait pas le gitea des nœuds relayés.
+# Le nom de CETTE box (#1723) ; le vhost écoute sur 9080.
+if [ "$1" = configure ] && command -v secubox-waf-route >/dev/null 2>&1; then
+    secubox-waf-route "$(secubox-domaine gitea 2>/dev/null || true)" 9080 || true
+fi
+
 #DEBHELPER#
 exit 0
