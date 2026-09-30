@@ -5,6 +5,7 @@
 
 """secubox-streamlit — Streamlit Platform API (Three-Fold Architecture)"""
 import os
+import re
 import json
 import subprocess
 import shutil
@@ -15,12 +16,20 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi.responses import FileResponse
 from secubox_core.auth import require_lecture
 from secubox_core.auth import domaine_box, hote_box
 from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+# secubox_core.screenshots ne fait QUE lire/servir un PNG déjà produit
+# (voir app_screenshot ci-dessous) — jamais de capture in-process : celle-
+# ci vit exclusivement dans le processus détaché `streamlit-shotter`
+# (api/shots.py), lancé via `_spawn_shotter`, jamais importé ici. C'est ce
+# qui garantit qu'un chromium enlisé ne peut jamais affecter la boucle
+# d'événements partagée par l'agrégateur (#958).
+from secubox_core import screenshots as _screenshots
 
 app = FastAPI(title="secubox-streamlit", version="1.0.0", root_path="/api/v1/streamlit")
 
@@ -103,6 +112,54 @@ APPS_DIR = "/srv/streamlit/apps"
 LXC_NAME = "streamlit"
 CTL = "/usr/sbin/streamlitctl"
 
+# Vignettes capturées (#958) — répertoire de cache DÉDIÉ, jamais à
+# l'intérieur de APPS_PATH : la moitié du parc est constituée de scripts
+# .py à plat (#959), qui n'ont aucun répertoire où poser "une image à côté
+# de l'appli", et pour les applis-répertoire ça polluerait potentiellement
+# un dépôt git source. Même schéma de stockage que secubox-metablogizer
+# (secubox_core.screenshots), sous sa propre clé de module.
+SHOTS_CACHE_DIR = Path(os.environ.get("SECUBOX_STREAMLIT_SHOTS_CACHE",
+                                       "/var/cache/secubox/streamlit/shots"))
+# Le binaire qui pilote réellement chromium (api/shots.py). Toujours lancé
+# en process DÉTACHÉ (voir _spawn_shotter) — jamais importé/appelé
+# in-process ici, précisément pour que la capture (jusqu'à ~240s,
+# secubox_core.shotter) ne puisse jamais geler la boucle d'événements
+# partagée par tous les modules quand l'agrégateur les sert en process
+# unique (#958 — incident récurrent de ce projet, cf. mémoire "aggregator
+# wedge SPOF").
+SHOTTER_BIN = os.environ.get("SECUBOX_STREAMLIT_SHOTTER_BIN",
+                              "/usr/sbin/streamlit-shotter")
+
+# Plafond (s) de tout appel à streamlitctl fait DANS une requête de réveil
+# ou de recapture (#1776). HAProxy coupe une connexion inactive à 30 s :
+# la réponse doit partir avant 25 s quoi qu'il arrive sur la board — le
+# réveil lui-même, lui, tourne en tâche de fond sans plafond ici (voir
+# `_do_wake_in_background`).
+WAKE_CHECK_TIMEOUT_S = 15
+
+# Nom d'appli (ou d'instance) admis avant TOUT passage à `sudo streamlitctl`
+# (#1776). streamlitctl tourne en root et range ces noms dans des chemins
+# ($APPS_PATH/<nom>, `rm -rf` compris pour `app remove`), des noms d'unités
+# systemd (streamlit-app@<nom>.service) et des sections TOML : rien ne les
+# validait jusqu'ici. Le jeu de caractères est celui des noms réellement
+# présents sur la board (répertoires et scripts .py à plat : lettres,
+# chiffres, « _ », « - », « . » — ex. yijing-360,
+# yijing.bak.rolledback.20260101) ; jamais de « / », et jamais de « . » ni
+# de « - » en tête : ni « .. », ni fichier caché, ni nom lu comme une option
+# par streamlitctl, systemctl ou pkill.
+_NOM_APPLI_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
+
+
+def _exiger_nom_appli(name: str) -> str:
+    """Refuse (400) un nom d'appli hors de `_NOM_APPLI_RE`.
+
+    Appelée en tête de chaque route qui transmet un nom à streamlitctl — un
+    nom refusé ici n'atteint jamais sudo.
+    """
+    if not isinstance(name, str) or not _NOM_APPLI_RE.fullmatch(name):
+        raise HTTPException(400, "nom d'appli invalide")
+    return name
+
 
 def _cfg():
     cfg = get_config("streamlit")
@@ -114,8 +171,6 @@ def _cfg():
         "auto_pause": power_cfg.get("auto_pause", False),
         "auto_pause_minutes": power_cfg.get("auto_pause_minutes", 30),
         "presence_events": power_cfg.get("presence_events", True),
-        "metoblizer_log": power_cfg.get("metoblizer_log", False),
-        "metoblizer_endpoint": power_cfg.get("metoblizer_endpoint", "http://localhost:9300/api/v1/metoblizer/ingest"),
     }
 
 
@@ -136,6 +191,31 @@ def _run_ctl(*args, timeout: int = 30) -> dict:
         return {"error": "timeout", "success": False}
     except Exception as e:
         return {"error": str(e), "success": False}
+
+
+def _spawn_shotter(name: str, *, force: bool) -> None:
+    """Lance `streamlit-shotter` en tâche DÉTACHÉE et rend la main
+    immédiatement (#958).
+
+    `subprocess.Popen(...)` retourne dès le fork+exec (millisecondes) — il
+    n'attend JAMAIS l'issue du processus fils. Toute la résolution de
+    cible (l'appli tourne-t-elle ? sur quel port ? IP du conteneur ?) et la
+    capture elle-même (jusqu'à ~240s, chromium piloté par CDP) se déroulent
+    dans ce processus fils, entièrement hors de ce service et de sa boucle
+    d'événements : même un chromium qui s'enliserait ne peut affecter que
+    ce processus détaché, jamais l'agrégateur qui sert ce module (et ~110
+    autres) en process unique.
+
+    Ne lève jamais : appelée après un réveil déjà réussi ou un clic
+    "recapturer" déjà validé, un échec de lancement ne doit dégrader ni
+    l'un ni l'autre — seulement finir au journal.
+    """
+    args = [SHOTTER_BIN, name] + (["--force"] if force else [])
+    try:
+        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                          start_new_session=True)
+    except OSError as exc:
+        log.warning("shotter spawn failed for %s: %s", name, exc)
 
 
 def _lxc_running() -> bool:
@@ -185,10 +265,23 @@ def _git_describe_tag(app_name: str) -> str | None:
     return None
 
 
-def _get_apps() -> List[dict]:
-    """Get list of apps from streamlitctl, enriched with current_tag + deployed_at."""
-    result = _run_ctl("app", "list")
+def _get_apps(*, enrichir: bool = True, timeout: int = 30,
+              strict: bool = False) -> List[dict]:
+    """Get list of apps from streamlitctl, enriched with current_tag + deployed_at.
+
+    `enrichir=False` saute le `git describe` par appli (un sous-processus par
+    dépôt, jusqu'à 5 s chacun) — inutile à une simple vérification de
+    vivacité, et c'est lui qui rendrait sa durée imprévisible. `strict=True`
+    lève `RuntimeError` quand streamlitctl n'a pas rendu de liste (délai
+    dépassé, sudo refusé, sortie illisible) au lieu de la confondre avec
+    « aucune appli » : sur le chemin du réveil, ce serait un faux 404.
+    """
+    result = _run_ctl("app", "list", timeout=timeout)
+    if strict and not isinstance(result.get("apps"), list):
+        raise RuntimeError(str(result.get("error") or "streamlitctl app list sans liste"))
     apps = result.get("apps", [])
+    if not enrichir:
+        return apps
     for app in apps:
         name = app.get("name")
         if not name:
@@ -463,6 +556,122 @@ async def list_apps():
     return {"apps": _get_apps()}
 
 
+APPS_AUDIT_CACHE = Path("/var/cache/secubox/streamlit/audit.json")
+
+
+@router.get("/apps/audit", dependencies=[Depends(require_lecture)])
+async def apps_audit():
+    """Inventaire croisé disque / déclarations / processus (lecture seule).
+
+    Lecture GARDÉE (#1256) comme les autres routes d'affichage du module :
+    jeton, cookie de session, ou mode tableau de bord depuis le LAN. C'est
+    elle qui alimente le mur Mosaïque (effacée par une fusion du 2026-08-17,
+    restaurée par #1776).
+
+    Servi depuis le cache écrit par streamlit-audit.timer (root, disque +
+    TOML + lxc-attach ps, ~11s en direct / ~31s à travers l'agrégateur). Le
+    chemin de requête est une lecture de fichier : ne JAMAIS retomber sur
+    `streamlitctl app audit` en direct ici, ce serait réintroduire le délai
+    que ce cache existe pour supprimer (#956).
+    """
+    try:
+        raw = json.loads(APPS_AUDIT_CACHE.read_text())
+        if not isinstance(raw, dict):
+            raise ValueError("cache content is not a JSON object")
+    except FileNotFoundError:
+        return {"available": False, "reason": "cache not written yet",
+                "apps": [], "summary": {}}
+    except (OSError, ValueError) as exc:
+        log.warning("apps audit cache unreadable: %s", exc)
+        return {"available": False, "reason": "cache unreadable",
+                "apps": [], "summary": {}}
+
+    age = None
+    try:
+        age = int(time.time() - APPS_AUDIT_CACHE.stat().st_mtime)
+    except OSError:
+        pass
+
+    return {
+        "available": True,
+        "apps": raw.get("apps", []),
+        "summary": raw.get("summary", {}),
+        "cache_age_seconds": age,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# SCREENSHOTS — Mosaic tile thumbnails (#958)
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/apps/{name}/screenshot", dependencies=[Depends(require_lecture)])
+def app_screenshot(name: str):
+    """Sert la vignette conservée — lecture GARDÉE (#1256, décision #1776).
+
+    Publique à l'origine (#958) au motif qu'un `<img src>` ne porte pas
+    d'en-tête Authorization. Mais une vignette est une photographie de
+    l'appli elle-même — tableaux de bord, photos, données saisies — et le
+    parc est passé en lecture gardée : la route équivalente de
+    secubox-metablogizer, invoquée à l'époque comme précédent, est elle-même
+    sous `require_lecture` depuis. Le `<img>` du mur reste servi : il est
+    émis depuis la même origine et emporte le cookie de session, et le mode
+    tableau de bord depuis le LAN l'ouvre sans jeton. Un visiteur anonyme
+    hors LAN reçoit 401, jamais l'image.
+
+    Route de LECTURE SEULE : ne déclenche jamais de capture, quel que soit
+    le nombre de requêtes reçues — la vignette est déjà là ou elle ne l'est
+    pas (`sync def` : FastAPI la sert depuis le threadpool, un simple accès
+    fichier, jamais de subprocess ici).
+
+    `Cache-Control: private, max-age=604800, immutable` — délibérément PAS
+    `no-cache` : le panneau ajoute déjà `?t=<captured_at>` à l'URL (voir
+    `www/streamlit/index.html`), donc l'URL elle-même change quand le
+    contenu change. Tant que `captured_at` ne bouge pas, c'est
+    STRICTEMENT le même contenu — laisser le navigateur servir sa copie
+    locale sans même revalider est exactement ce qui évite de retélécharger
+    56 PNG à chaque rafraîchissement de 60s (#958 point 5). `private` et non
+    plus `public` : la réponse est désormais soumise à une garde, aucun
+    cache partagé ne doit la resservir à un autre client.
+    """
+    _exiger_nom_appli(name)
+    try:
+        p = _screenshots.png_path(SHOTS_CACHE_DIR, name)
+    except ValueError:
+        raise HTTPException(404, "unknown app")
+    if not p.exists():
+        raise HTTPException(404, "no screenshot yet")
+    meta = _screenshots.read_meta(SHOTS_CACHE_DIR, name)
+    return FileResponse(p, media_type="image/png", headers={
+        "Cache-Control": "private, max-age=604800, immutable",
+        "X-Captured-At": str(meta.get("captured_at", "")),
+    })
+
+
+@router.post("/apps/{name}/recapture")
+def app_recapture(name: str, user=Depends(require_jwt)):
+    """Déclencheur MANUEL (spec §3.1) — le bouton "recapturer" d'une tuile.
+
+    Valide la cible ICI (rapide : entrypoint + port + `lxc-info`, pas de
+    chromium) pour donner un retour immédiat et exact au bouton — 404 si
+    l'appli est inconnue, 409 si elle est endormie ou sans cible
+    exploitable. Ce pré-check n'est PAS fait sur le chemin de réveil (voir
+    `wake_app`) : là, l'appli vient déjà de se réveiller avec succès, le
+    coût d'une seconde résolution serait payé pour rien.
+
+    Rend la main dès le lancement du processus détaché — jamais après la
+    capture elle-même (~240s), voir `_spawn_shotter`. La résolution de cible
+    est bornée à WAKE_CHECK_TIMEOUT_S : la réponse doit partir avant la
+    coupure d'inactivité d'HAProxy (30 s) ; au-delà, 409 plutôt qu'un 504.
+    """
+    _exiger_nom_appli(name)
+    target = _run_ctl("app", "shot-target", name, timeout=WAKE_CHECK_TIMEOUT_S)
+    if not target.get("ok"):
+        reason = str(target.get("error") or "capture impossible")
+        raise HTTPException(404 if "not found" in reason else 409, reason)
+    _spawn_shotter(name, force=True)
+    return {"ok": True, "triggered": True, "name": name}
+
+
 @router.get("/app/{name}")
 async def get_app(name: str, user=Depends(require_jwt)):
     """Get app details."""
@@ -489,6 +698,8 @@ async def deploy(
         if not file.filename:
             raise HTTPException(400, "Filename required")
         name = file.filename.replace(".zip", "").replace(" ", "_").lower()
+    # Le nom finit dans un chemin de /tmp ET dans l'argv de streamlitctl.
+    _exiger_nom_appli(name)
 
     # Save uploaded file
     tmp_path = f"/tmp/streamlit_upload_{name}.zip"
@@ -512,6 +723,7 @@ async def deploy(
 @router.post("/app/{name}/start")
 async def start_app(name: str, port: int = 0, user=Depends(require_jwt)):
     """Start an app."""
+    _exiger_nom_appli(name)
     cfg = _cfg()
     port = port or cfg["default_port"]
 
@@ -527,6 +739,7 @@ async def start_app(name: str, port: int = 0, user=Depends(require_jwt)):
 @router.post("/app/{name}/stop")
 async def stop_app(name: str, user=Depends(require_jwt)):
     """Stop an app."""
+    _exiger_nom_appli(name)
     result = _run_ctl("app", "stop", name)
     log.info("Stopped app: %s", name)
     return {"success": True, "name": name}
@@ -535,6 +748,7 @@ async def stop_app(name: str, user=Depends(require_jwt)):
 @router.delete("/app/{name}")
 async def delete_app(name: str, user=Depends(require_jwt)):
     """Delete an app."""
+    _exiger_nom_appli(name)
     result = _run_ctl("app", "remove", name)
     log.info("Removed app: %s", name)
     return {"success": True, "name": name}
@@ -543,56 +757,230 @@ async def delete_app(name: str, user=Depends(require_jwt)):
 @router.get("/app/{name}/logs")
 async def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
     """Get app logs."""
+    _exiger_nom_appli(name)
     result = _run_ctl("app", "logs", name, str(lines))
     return {"logs": result.get("output", "").splitlines()}
 
 
 # ── WAKE ───────────────────────────────────────────────────────────────
-# Lazy restart an idle-stopped streamlit app (ref #331)
+# Lazy restart an idle-stopped streamlit app (ref #331, budget/blocking
+# fix ref #958, restauré après la fusion du 2026-08-17 par #1776).
 
 class WakeResult(BaseModel):
     name: str
-    status: str  # "running" | "started"
-    duration_ms: int
+    status: str  # "running" (already up) | "waking" (just triggered, or
+                 # already in flight — poll POST .../wake again, or the
+                 # live GET /apps / GET /app/{name} the wall already
+                 # consumes, until "running")
+    duration_ms: int  # cost of resolving THIS response (the fast liveness
+                       # check below) — never the wake itself, which may
+                       # still be running long after this response ships.
+
+
+# Réveils actuellement en vol, par nom d'appli (#958 follow-up). Même
+# motif que le verrou par-module de secubox-waker
+# (packages/secubox-profiles/api/waker.py::_locks/_lock) : dédier UN
+# réveil à la fois par nom, jamais une seconde tentative concurrente tant
+# que la première n'a pas fini — la libération se fait dans le `finally`
+# de `_do_wake_in_background`, jamais par le handler HTTP lui-même (qui
+# rend la main bien avant que le réveil ne se termine). Un vrai
+# `threading.Lock`, pas seulement l'atomicité du GIL sur `set` : la prise
+# se fait sur le thread qui sert la requête, la libération sur celui de la
+# tâche de fond — deux threads différents touchent le même ensemble.
+_wake_claim_mutex = threading.Lock()
+_WAKE_IN_PROGRESS: set = set()
+
+# Issue d'un réveil de fond terminé en ÉCHEC, par nom d'appli (#1776) :
+# (instant monotone, code HTTP, détail). Rendue UNE fois, au sondage
+# suivant du mur — sans elle, le sondage qui suit un échec relancerait
+# aussitôt un nouveau réveil voué au même sort, toutes les 5 s jusqu'à la
+# limite du mur, et un code 2 de `streamlitctl app wake` (appli inconnue)
+# arrivé en fond serait perdu au lieu de devenir le 404 qu'il est. Au-delà
+# de WAKE_ECHEC_TTL_S, l'échec est oublié : un clic ultérieur retente.
+_WAKE_ECHECS: Dict[str, tuple] = {}
+WAKE_ECHEC_TTL_S = 120
+
+
+def _wake_try_claim(name: str) -> bool:
+    """Réclame `name` pour un nouveau réveil en fond, ou refuse si un
+    réveil est déjà en vol pour cette appli."""
+    with _wake_claim_mutex:
+        if name in _WAKE_IN_PROGRESS:
+            return False
+        _WAKE_IN_PROGRESS.add(name)
+        return True
+
+
+def _wake_release(name: str) -> None:
+    with _wake_claim_mutex:
+        _WAKE_IN_PROGRESS.discard(name)
+
+
+def _wake_noter_echec(name: str, code: int, detail: str) -> None:
+    with _wake_claim_mutex:
+        _WAKE_ECHECS[name] = (time.monotonic(), code, detail)
+
+
+def _wake_oublier_echec(name: str) -> None:
+    with _wake_claim_mutex:
+        _WAKE_ECHECS.pop(name, None)
+
+
+def _wake_prendre_echec(name: str) -> Optional[tuple]:
+    """Retire et rend (code, détail) du dernier échec de fond pour `name`
+    s'il date de moins de WAKE_ECHEC_TTL_S, sinon None."""
+    with _wake_claim_mutex:
+        rec = _WAKE_ECHECS.pop(name, None)
+    if rec is None or time.monotonic() - rec[0] > WAKE_ECHEC_TTL_S:
+        return None
+    return rec[1], rec[2]
+
+
+def _do_wake_in_background(name: str) -> None:
+    """Exécute le réveil RÉEL (`streamlitctl app wake <name>`) — jusqu'à
+    [wake].budget_seconds (300s par défaut, /etc/secubox/streamlit.toml,
+    cf. `cmd_app_wake`) sur une board chargée, mesuré 26 à 78s, parfois
+    plus.
+
+    Tourne dans le threadpool que Starlette utilise pour toute
+    `BackgroundTasks.add_task` d'une fonction SYNCHRONE (voir son appel
+    dans `wake_app` ci-dessous) — jamais sur la boucle d'événements que
+    l'agrégateur partage avec ~110 autres modules. C'est la même
+    discipline déjà appliquée à `container_install` ci-dessus (`install`,
+    jusqu'à 600s, même mécanisme) : un `subprocess.run` synchrone est sans
+    risque ICI précisément parce qu'il tourne hors de la boucle
+    d'événements.
+
+    AUCUN argument de secondes n'est passé à `streamlitctl app wake` ici :
+    le budget vit dans un seul endroit, [wake].budget_seconds, résolu par
+    `cmd_app_wake` lui-même. Dupliquer ce nombre ici — même comme timeout
+    Python — recréerait exactement le défaut que ce correctif referme :
+    deux constantes qui finissent par diverger.
+
+    L'existence reste tranchée par streamlitctl (#959) : son code 2
+    (« appli inconnue ») est noté comme un 404, rendu au sondage suivant ;
+    tout autre échec comme un 504. L'échec est noté AVANT la libération du
+    verrou (`finally`), pour qu'aucun sondage ne se glisse entre les deux et
+    ne relance un réveil.
+    """
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", CTL, "app", "wake", name],
+            capture_output=True, check=False,
+        )
+        if result.returncode == 0:
+            log.info("wake: %s woke successfully (background)", name)
+            _wake_oublier_echec(name)
+            # Capture paresseuse (#958, spec §3.1/§3.5) : SI la vignette
+            # est périmée. On n'arrive ici qu'APRÈS un réveil qui vient de
+            # réussir pour sa propre raison — jamais un réveil déclenché
+            # pour photographier. `_spawn_shotter` rend la main tout de
+            # suite : ce thread de fond n'attend jamais les ~240s d'une
+            # capture en plus des ~300s déjà passées à réveiller.
+            _spawn_shotter(name, force=False)
+        elif result.returncode == 2:
+            log.warning("wake: %s unknown to streamlitctl (rc=2)", name)
+            _wake_noter_echec(name, 404, f"app not found: {name}")
+        else:
+            stderr_snippet = (result.stderr or b"").decode(errors="replace")[:200]
+            log.warning("wake: %s failed rc=%d stderr=%s", name, result.returncode, stderr_snippet)
+            _wake_noter_echec(name, 504, f"wake failed: {stderr_snippet}".strip())
+    except OSError as exc:
+        log.warning("wake: %s failed to launch: %s", name, exc)
+        _wake_noter_echec(name, 502, "streamlitctl injoignable")
+    finally:
+        _wake_release(name)
 
 
 @router.post("/apps/{name}/wake", response_model=WakeResult)
-def wake_app(name: str, user=Depends(require_jwt)) -> WakeResult:
-    """Wake an idle-stopped streamlit app.
+def wake_app(name: str, background_tasks: BackgroundTasks, user=Depends(require_jwt)) -> WakeResult:
+    """Wake an idle-stopped streamlit app — never blocks on the wake itself.
 
-    Blocks until the port comes up or 30 s elapse. Idempotent — returns
-    immediately with status="running" if the app is already up.
+    `def`, pas `async def` (#1776) : la vérification de vivacité ci-dessous
+    lance `sudo streamlitctl app list` (un `lxc-attach ps` pour tout le
+    parc). La version perdue le 2026-08-17 l'appelait depuis un handler
+    `async def`, donc SUR la boucle d'événements que l'agrégateur partage
+    avec ~110 modules — le gel même que #738 avait retiré. En `def`,
+    Starlette sert la requête depuis son threadpool.
+
+    The actual wake (`streamlitctl app wake <name>`) can take up to
+    [wake].budget_seconds on a loaded board (300s default, measured 26 to
+    78s, sometimes more) — this handler never awaits it. It only:
+
+      1. Runs a FAST, BOUNDED liveness check (`streamlitctl app list`
+         without the per-app `git describe` enrichment, capped at
+         WAKE_CHECK_TIMEOUT_S so the answer always leaves well before
+         HAProxy's 30 s idle cut). If the app is already running, returns
+         immediately with status="running" — no background task needed.
+      2. Otherwise, claims the per-app in-flight lock (`_wake_try_claim`)
+         and hands the real wake off to `_do_wake_in_background` via
+         `BackgroundTasks` — which Starlette runs in its threadpool, off
+         the shared event loop (see that function's docstring) — and
+         returns status="waking" immediately.
+
+    A caller polling this same route again for an app still waking gets
+    status="waking" again (the lock refuses a second background task);
+    once the wake completes, the very next fast liveness check reports
+    "running" — or, if the background wake failed, the recorded failure
+    is returned once (404 or 504) instead of silently re-triggering.
+
+    Existence is delegated to streamlitctl, never re-derived here (#959 —
+    the old `APPS_PATH/{name}` is_dir check 404'd every flat-script app):
+    synchronously through `app list` (same `_app_entrypoint`/
+    `_scan_running_apps` helpers as `app wake` since #958), and, when that
+    list cannot be obtained in time, through `app wake` itself, whose rc=2
+    becomes the 404 of the next poll.
 
     Status codes:
-      - 200: app is up (status="running" or "started")
-      - 404: app does not exist on disk
-      - 502: streamlitctl binary missing
-      - 504: wake failed or timed out
+      - 200: status="running" (already up) or "waking" (just triggered, or
+        a wake for this app was already in flight)
+      - 400: malformed app name (never reaches sudo)
+      - 404: app does not exist (per `app list`, or rc=2 of a background
+        `app wake`)
+      - 502: streamlitctl binary missing / could not be launched
+      - 504: the previous background wake failed (returned once)
+
+    Concurrency with `secubox-waker`/`secubox-wakectl` (packages/
+    secubox-profiles): that pair wakes a whole MODULE (the secubox-streamlit
+    LXC/service itself) on external vhost access, a coarser granularity
+    than this route (one app process inside an already-running module).
     """
+    _exiger_nom_appli(name)
     if not Path(CTL).exists():
         raise HTTPException(502, "streamlitctl missing")
-    app_dir = Path(APPS_PATH) / name
-    if not app_dir.is_dir():
-        raise HTTPException(404, f"app not found: {name}")
 
     start = time.monotonic()
     try:
-        result = subprocess.run(
-            ["sudo", "-n", CTL, "app", "wake", name, "30"],
-            capture_output=True, timeout=35, check=False,
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(504, "wake exceeded 35s wall-clock")
-
+        apps = _get_apps(enrichir=False, timeout=WAKE_CHECK_TIMEOUT_S, strict=True)
+    except RuntimeError as exc:
+        # Vivacité inconnue (ctl trop lent ou en échec) : ni 404 ni
+        # "running" inventés — l'existence est laissée à `app wake`.
+        apps = None
+        log.warning("wake: %s liveness check unavailable (%s) — delegating to app wake", name, exc)
     duration_ms = int((time.monotonic() - start) * 1000)
-    if result.returncode == 0:
-        status = "running" if b"already running" in result.stderr else "started"
-        log.info("wake: %s status=%s duration_ms=%d", name, status, duration_ms)
-        return WakeResult(name=name, status=status, duration_ms=duration_ms)
 
-    stderr_snippet = result.stderr.decode(errors="replace")[:200]
-    log.warning("wake: %s failed rc=%d stderr=%s", name, result.returncode, stderr_snippet)
-    raise HTTPException(504, f"wake failed: {stderr_snippet}")
+    if apps is not None:
+        app_row = next((a for a in apps if isinstance(a, dict) and a.get("name") == name), None)
+        if app_row is None:
+            _wake_oublier_echec(name)
+            raise HTTPException(404, f"app not found: {name}")
+        if app_row.get("running"):
+            _wake_oublier_echec(name)
+            _spawn_shotter(name, force=False)
+            return WakeResult(name=name, status="running", duration_ms=duration_ms)
+
+    echec = _wake_prendre_echec(name)
+    if echec is not None:
+        code, detail = echec
+        raise HTTPException(code, detail)
+
+    if not _wake_try_claim(name):
+        log.info("wake: %s already in flight, not triggering a second one", name)
+        return WakeResult(name=name, status="waking", duration_ms=duration_ms)
+
+    background_tasks.add_task(_do_wake_in_background, name)
+    log.info("wake: %s triggered in background, duration_ms=%d (liveness check only)", name, duration_ms)
+    return WakeResult(name=name, status="waking", duration_ms=duration_ms)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -608,6 +996,7 @@ async def list_instances(user=Depends(require_jwt)):
 @router.post("/instance/{id}/start")
 async def start_instance(id: str, user=Depends(require_jwt)):
     """Start an instance."""
+    _exiger_nom_appli(id)
     result = _run_ctl("instance", "start", id)
     return {"success": True, "id": id}
 
@@ -615,6 +1004,7 @@ async def start_instance(id: str, user=Depends(require_jwt)):
 @router.post("/instance/{id}/stop")
 async def stop_instance(id: str, user=Depends(require_jwt)):
     """Stop an instance."""
+    _exiger_nom_appli(id)
     result = _run_ctl("instance", "stop", id)
     return {"success": True, "id": id}
 
@@ -699,7 +1089,7 @@ def _get_idle_seconds() -> float:
     return time.time() - last
 
 def _emit_presence_event(event: str, details: Optional[Dict[str, Any]] = None):
-    """Emit presence event for banner injection and metoblizer logging.
+    """Emit presence event for banner injection.
 
     Events: 'wake', 'sleep', 'activity'
     """
@@ -717,24 +1107,6 @@ def _emit_presence_event(event: str, details: Optional[Dict[str, Any]] = None):
         presence_file.parent.mkdir(parents=True, exist_ok=True)
         presence_file.write_text(json.dumps(event_data, indent=2))
         log.info("Presence event: %s", event)
-
-    # Send to metoblizer if configured
-    if cfg.get("metoblizer_log"):
-        try:
-            import urllib.request
-
-            endpoint = cfg.get("metoblizer_endpoint")
-            if endpoint:
-                req = urllib.request.Request(
-                    endpoint,
-                    data=json.dumps(event_data).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="POST"
-                )
-                urllib.request.urlopen(req, timeout=5)
-                log.debug("Metoblizer log sent: %s", event)
-        except Exception as e:
-            log.warning("Metoblizer log failed: %s", e)
 
 
 def _load_streamlit_config() -> dict:
@@ -944,6 +1316,7 @@ async def migrate(req: MigrateRequest, background_tasks: BackgroundTasks, user=D
 @router.post("/gitea/push/{name}")
 async def gitea_push(name: str, user=Depends(require_jwt)):
     """Push app to Gitea repository."""
+    _exiger_nom_appli(name)
     result = _run_ctl("gitea", "push", name, timeout=60)
     return {"success": "error" not in result, "name": name}
 
@@ -955,6 +1328,7 @@ class GiteaCloneRequest(BaseModel):
 @router.post("/gitea/clone/{name}")
 async def gitea_clone(name: str, req: GiteaCloneRequest, user=Depends(require_jwt)):
     """Clone app from Gitea repository."""
+    _exiger_nom_appli(name)
     result = _run_ctl("gitea", "clone", name, req.repo, timeout=120)
     return {"success": "error" not in result, "name": name}
 

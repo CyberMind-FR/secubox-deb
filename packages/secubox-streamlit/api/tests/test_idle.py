@@ -47,6 +47,7 @@ def client(tmp_path, monkeypatch):
     # Wake claims are process-global state (ref #958's dedup lock) — a
     # leftover claim from one test must never leak into the next.
     api_main._WAKE_IN_PROGRESS.clear()
+    api_main._WAKE_ECHECS.clear()
 
     app.dependency_overrides[require_jwt] = lambda: {"sub": "tester"}
     try:
@@ -54,6 +55,7 @@ def client(tmp_path, monkeypatch):
     finally:
         app.dependency_overrides.clear()
         api_main._WAKE_IN_PROGRESS.clear()
+        api_main._WAKE_ECHECS.clear()
 
 
 def test_wake_missing_app_returns_404(client):

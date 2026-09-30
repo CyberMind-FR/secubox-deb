@@ -7,7 +7,8 @@
 hook (#958).
 
 Covers:
-  - GET  /apps/{name}/screenshot   — public read of the conserved PNG
+  - GET  /apps/{name}/screenshot   — guarded read (require_lecture) of the
+                                     conserved PNG
   - POST /apps/{name}/recapture    — manual trigger, JWT-gated
   - POST /apps/{name}/wake         — now also fires a lazy capture on success
 
@@ -47,17 +48,19 @@ def client(tmp_path, monkeypatch):
     # Wake claims are process-global state (ref #958's per-app dedup lock)
     # — never let one test's claim leak into the next.
     api_main._WAKE_IN_PROGRESS.clear()
+    api_main._WAKE_ECHECS.clear()
 
     app.dependency_overrides[require_jwt] = lambda: {"sub": "tester"}
     try:
         yield TestClient(app), shots_dir, spawned
     finally:
         api_main._WAKE_IN_PROGRESS.clear()
+        api_main._WAKE_ECHECS.clear()
         app.dependency_overrides.clear()
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# GET /apps/{name}/screenshot — public, read-only
+# GET /apps/{name}/screenshot — read-only, lecture gardée (#1256, #1776)
 # ─────────────────────────────────────────────────────────────────────────
 
 def test_screenshot_404_when_none_captured_yet(client):
@@ -95,12 +98,13 @@ def test_screenshot_rejects_path_traversal(client):
     assert r.status_code in (404, 400)
 
 
-def test_screenshot_route_requires_no_auth_at_all(tmp_path, monkeypatch):
+def test_screenshot_served_to_an_img_tag_without_authorization_header(tmp_path, monkeypatch):
     """The wall loads this via a plain <img src>, which never carries an
-    Authorization header — this route must be reachable with none. Unlike
-    the `client` fixture above, this test does NOT override require_jwt,
-    to prove the route genuinely has no JWT dependency (a stray
-    Depends(require_jwt) added later would 401 here)."""
+    Authorization header. Unlike the `client` fixture above, this test
+    does NOT override require_jwt: from a LAN dashboard (the position the
+    test harness puts every TestClient in, see secubox_core.testing) the
+    image must be served with no token at all — a stray
+    Depends(require_jwt) added later would 401 here."""
     shots_dir = tmp_path / "shots"
     monkeypatch.setattr(api_main, "SHOTS_CACHE_DIR", shots_dir)
     screenshots.record(shots_dir, "demo", b"\x89PNG" + b"0" * 60000, "fp-1", ok=True)
@@ -109,6 +113,28 @@ def test_screenshot_route_requires_no_auth_at_all(tmp_path, monkeypatch):
     r = raw_client.get("/apps/demo/screenshot")
 
     assert r.status_code == 200
+    # Gated response: no shared cache may hand it to another client.
+    assert r.headers["cache-control"].startswith("private")
+
+
+def test_screenshot_refused_to_an_anonymous_reader_outside_the_lan(tmp_path, monkeypatch):
+    """A thumbnail is a picture of the app itself (dashboards, photos,
+    typed-in data): no longer public (#1776 — same guard as every other
+    display read since #1256, and as metablogizer's own screenshot route).
+    Without a token or session cookie, it is refused both when the
+    dashboard mode is off and when the request is not marked LAN by
+    nginx."""
+    from secubox_core.auth import ENTETE_LAN
+
+    shots_dir = tmp_path / "shots"
+    monkeypatch.setattr(api_main, "SHOTS_CACHE_DIR", shots_dir)
+    screenshots.record(shots_dir, "demo", b"\x89PNG" + b"0" * 60000, "fp-1", ok=True)
+
+    hors_lan = TestClient(app, headers={ENTETE_LAN: "0"})
+    assert hors_lan.get("/apps/demo/screenshot").status_code == 401
+
+    monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
+    assert TestClient(app).get("/apps/demo/screenshot").status_code == 401
 
 
 # ─────────────────────────────────────────────────────────────────────────

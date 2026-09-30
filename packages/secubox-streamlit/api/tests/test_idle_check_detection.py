@@ -58,29 +58,35 @@ exit 1
 
 
 def _mock_lxc_attach(tmp_path: Path, stop_log: Path, established_ports=()) -> None:
-    """Stands in for lxc-attach for the two calls `idle-check` makes once
-    it has resolved a port via `_scan_running_apps`: the `ss -tn state
-    established "sport = :N"` liveness probe (`_port_active_conns`), and
-    the `systemctl stop streamlit-app@<name>.service` that `cmd_app_stop`
-    issues when a candidate is actually stopped. `_ps_lines` itself never
-    reaches this binary — it is short-circuited by
-    SECUBOX_STREAMLIT_PS_SOURCE.
+    """Stands in for lxc-attach for the two kinds of call `idle-check`
+    makes: the single fleet-wide snapshot (`sh -c` printing `ps -eo args`
+    and `ss -tn state established` between @@SBX-PS@@/@@SBX-SS@@ markers,
+    #961 — one container call for the whole loop, never one `ss` per app),
+    and the `systemctl stop streamlit-app@<name>.service` that `cmd_app_stop`
+    issues when a candidate is actually stopped. The process list itself
+    still comes from SECUBOX_STREAMLIT_PS_SOURCE; only the connection half
+    of the snapshot is served here.
+
+    The `ss` half reproduces the REAL output layout of `ss -tn state
+    established`: with a state filter, ss drops the State column, so the
+    local address is the 3rd field and the 4th is the PEER — a parser
+    reading a fixed column would count connections by the client's
+    ephemeral port and see every busy app as idle (#1776).
 
     `established_ports`: ports that must be reported as having a live
     ESTABLISHED connection (the app is "active", never a stop candidate).
     """
-    ports_csv = ",".join(str(p) for p in established_ports)
+    ports = " ".join(str(p) for p in established_ports)
     _write_exec(tmp_path / "lxc-attach", """#!/bin/bash
 shift 2  # drop -n <name>
 shift    # drop --
-if [ "$1" = "ss" ]; then
-    port=$(printf '%s' "$5" | grep -oE '[0-9]+$')
-    printf 'State      Recv-Q Send-Q Local Address:Port   Peer Address:Port\\n'
-    case ",{ports}," in
-        *",$port,"*)
-            printf 'ESTAB      0      0      10.20.30.40:%s      10.20.30.1:54321\\n' "$port"
-            ;;
-    esac
+if [ "$1" = "sh" ]; then
+    echo "@@SBX-PS@@"
+    echo "@@SBX-SS@@"
+    echo "Recv-Q Send-Q Local Address:Port Peer Address:Port Process"
+    for port in {ports}; do
+        printf '0      0      10.20.30.40:%s      10.20.30.1:54321\\n' "$port"
+    done
     exit 0
 fi
 if [ "$1" = "systemctl" ]; then
@@ -88,7 +94,7 @@ if [ "$1" = "systemctl" ]; then
     exit 0
 fi
 exit 0
-""".format(ports=ports_csv, stop_log=stop_log))
+""".format(ports=ports, stop_log=stop_log))
 
 
 def _env(apps_dir, conf, idle_dir, ps_file, extra_path):

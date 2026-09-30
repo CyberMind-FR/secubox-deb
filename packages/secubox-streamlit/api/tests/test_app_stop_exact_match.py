@@ -39,7 +39,9 @@ def _stop_pattern(tmp_path, app_files, target):
     """Runs `streamlitctl app stop <target>` against a faked container
     (lxc-info reports RUNNING; lxc-attach only records its argv, nothing
     is actually executed) and returns the SBX_STOP_PATTERN value it was
-    invoked with ("" if no exact pattern could be built)."""
+    invoked with — None if the pattern fallback was never attempted at all
+    (no resolvable entrypoint: only the app's own systemd unit is stopped,
+    see cmd_app_stop since the per-app units were restored, #1776)."""
     apps = tmp_path / "apps"
     apps.mkdir(exist_ok=True)
     for rel, content in app_files:
@@ -81,7 +83,7 @@ def _stop_pattern(tmp_path, app_files, target):
     for line in call_log.read_text().splitlines():
         if line.startswith("SBX_STOP_PATTERN="):
             return line[len("SBX_STOP_PATTERN="):]
-    raise AssertionError("SBX_STOP_PATTERN was never passed to the container")
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -153,6 +155,26 @@ def test_stopping_yijing_does_not_match_its_three_lookalikes(tmp_path):
 def test_unresolvable_app_gets_no_pattern_fallback(tmp_path):
     """An app absent from disk (never existed, or already removed)
     resolves no entrypoint — cmd_app_stop must not fall back to any
-    approximate pattern in that case, only the PID file is tried."""
+    approximate pattern in that case: the pkill fallback is not even
+    attempted, only the app's own systemd unit is stopped."""
     pattern = _stop_pattern(tmp_path, [], "ghost")
-    assert pattern == ""
+    assert pattern is None
+    calls = (tmp_path / "lxc-attach.args").read_text()
+    assert "pkill" not in calls
+    assert "streamlit-app@ghost.service" in calls
+
+
+def test_stop_always_stops_the_unit_before_the_exact_fallback(tmp_path):
+    """Per-app units (#958) stay the primary stop path; the exact pkill
+    fallback (#961) only mops up a process launched OUTSIDE its unit
+    (legacy `nohup` start, manual launch). Both must be issued, unit
+    first — merged back together after the 2026-08-17 merge kept only
+    the fallback (#1776)."""
+    pattern = _stop_pattern(
+        tmp_path, [("control/app.py", "import streamlit\n")], "control")
+    assert pattern
+    calls = (tmp_path / "lxc-attach.args").read_text().splitlines()
+    unit = calls.index("streamlit-app@control.service")
+    fallback = next(i for i, c in enumerate(calls) if c.startswith("SBX_STOP_PATTERN="))
+    assert calls[unit - 1] == "stop" and calls[unit - 2] == "systemctl"
+    assert unit < fallback
