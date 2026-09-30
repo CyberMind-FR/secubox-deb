@@ -303,8 +303,23 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         })
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
-    # Initial-setup branch (empty password + must_change_password flag)
-    if user.get("must_change_password") and req.password == "":
+    # PREMIÈRE CONFIGURATION : UN ACTE LOCAL (#1707). Un compte « à changer »
+    # sans mot de passe recevait un jeton « set-password » à quiconque donnait
+    # son nom avec un mot de passe vide — depuis n'importe où. Le nom d'un compte
+    # admin est souvent celui du nœud, donc celui du domaine : la prise du compte
+    # tenait en deux requêtes. La première configuration ne se fait désormais
+    # que depuis le réseau local (verdict nginx), et seulement pour un compte qui
+    # n'a encore AUCUN mot de passe ; depuis le WAN, un compte « à changer » ne
+    # s'ouvre pas du tout.
+    lan = _requete_lan(request)
+    a_changer = bool(user.get("must_change_password"))
+    if a_changer and not lan:
+        _emit_session_event("login_failed", req.username, {
+            "reason": "premiere_configuration_hors_lan", "ip": ip, "user_agent": ua,
+        })
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+
+    if a_changer and req.password == "" and not user.get("password_hash"):
         setup_tok = create_token(req.username, scope="set-password", expires_in=900)
         _append_audit("setup_token_issued", req.username, {"ip": ip})
         return {"setup_required": True, "setup_token": setup_tok}
@@ -316,6 +331,13 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     if not user_store.verify_password(req.username, req.password):
         _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials", "ip": ip})
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
+
+    # « À changer » avec un mot de passe (le admin/secubox du premier démarrage) :
+    # le bon mot de passe ouvre le CHANGEMENT, jamais une session directe.
+    if a_changer:
+        setup_tok = create_token(req.username, scope="set-password", expires_in=900)
+        _append_audit("setup_token_issued", req.username, {"ip": ip, "motif": "changement_impose"})
+        return {"setup_required": True, "setup_token": setup_tok}
 
     # Second facteur : exigé depuis le WAN, facultatif sur le LAN (#1699).
     otp = _otp_exige(request)
