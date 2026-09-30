@@ -66,6 +66,11 @@ type Ambiance struct {
 // d'une conversation ordinaire et ne prouve rien.
 const SeuilPulsation = 0.34
 
+// SeuilRessaut : de combien un pic doit remonter au-dessus du creux qui le
+// précède. Une corrélation qui décroît sans jamais remonter n'a pas de période,
+// si haute soit-elle aux petits décalages (#1705).
+const SeuilRessaut = 0.12
+
 // SeuilDominante : au-dessus, la pièce couvre la voix et ce qu'on mesurerait
 // ne serait plus une personne.
 //
@@ -83,7 +88,6 @@ const SeuilDominante = 0.55
 type Ecouteur struct {
 	env      []float64 // enveloppe d'énergie, un point par trame
 	marques  []bool    // cette trame portait-elle de la parole ?
-	fond     []float64 // énergie des trames SANS parole
 	pas      float64   // durée d'une trame, en secondes
 	capacite int
 }
@@ -107,46 +111,53 @@ func (e *Ecouteur) Observe(rms float64, parole bool) {
 		e.env = e.env[1:]
 		e.marques = e.marques[1:]
 	}
-	if !parole {
-		e.fond = append(e.fond, rms)
-	} else {
-		// On garde la place, mais sans valeur : l'énergie de la parole
-		// masquerait celle du fond. Interpoler serait inventer ; on répète le
-		// dernier fond connu, qui est l'hypothèse la plus sobre.
-		v := 0.0
-		if len(e.fond) > 0 {
-			v = e.fond[len(e.fond)-1]
-		}
-		e.fond = append(e.fond, v)
-	}
-	if len(e.fond) > e.capacite {
-		e.fond = e.fond[1:]
-	}
 }
 
-// Analyse cherche une pulsation dans l'enveloppe de FOND.
-func (e *Ecouteur) Analyse() Ambiance {
-	n := len(e.fond)
-	if n < 32 {
-		return Ambiance{}
+// pulsation cherche un tempo sur les trames non masquées : le PIC
+// d'autocorrélation, et non son maximum (voir plus bas).
+func (e *Ecouteur) pulsation(masque []bool) (bpm, score float64, ok bool) {
+	n := len(e.env)
+	nSansParole := 0
+	moy := 0.0
+	for i := 0; i < n; i++ {
+		if !masque[i] {
+			moy += e.env[i]
+			nSansParole++
+		}
+	}
+	if nSansParole < 32 {
+		return 0, 0, false
 	}
 	// Centrer : l'autocorrélation d'un signal non centré est dominée par sa
 	// moyenne, et l'on trouverait une « périodicité » partout.
-	moy := 0.0
-	for _, v := range e.fond {
-		moy += v
-	}
-	moy /= float64(n)
+	moy /= float64(nSansParole)
 	x := make([]float64, n)
 	var energie float64
-	for i, v := range e.fond {
-		x[i] = v - moy
-		energie += x[i] * x[i]
+	for i := 0; i < n; i++ {
+		if !masque[i] {
+			x[i] = e.env[i] - moy
+			energie += x[i] * x[i]
+		}
 	}
 	if energie <= 1e-12 {
-		return Ambiance{}
+		return 0, 0, false
 	}
 
+	// ── UN TEMPO EST UN PIC, PAS UN MAXIMUM (#1705) ──────────────────────
+	//
+	// On retenait le décalage de corrélation MAXIMALE dans la plage. Or un
+	// signal lisse — une ventilation, un fond qui ondule lentement, ou le fond
+	// « tenu » pendant qu'on parle — est toujours le plus corrélé au plus petit
+	// décalage : τ = 31 trames, soit 181,5 BPM, à chaque fenêtre, avec une
+	// « netteté » de 0,8. Le tempo affiché ne bougeait donc jamais hors
+	// musique, et une ambiance imaginaire entrait dans le verdict.
+	//
+	// Une périodicité, c'est une corrélation qui RETOMBE puis REMONTE à la
+	// période. On exige donc un pic local qui ressorte de son creux ; parmi les
+	// pics nets, le plus petit décalage dont la hauteur approche celle du
+	// meilleur (les multiples de la période — le tempo moitié — sont aussi des
+	// pics) ; et une interpolation parabolique, sans quoi le haut de la plage
+	// avance par marches de six BPM.
 	tauMin := int(60.0 / BPMMax / e.pas)
 	tauMax := int(60.0 / BPMMin / e.pas)
 	if tauMin < 2 {
@@ -156,32 +167,137 @@ func (e *Ecouteur) Analyse() Ambiance {
 		tauMax = n/2 - 1
 	}
 	if tauMin >= tauMax {
-		return Ambiance{}
+		return 0, 0, false
 	}
-
-	meilleur, score := 0, 0.0
-	for tau := tauMin; tau <= tauMax; tau++ {
-		var s, norme float64
+	// r[τ] pour τ = 1 … tauMax+1 : les voisins servent au pic et au creux.
+	r := make([]float64, tauMax+2)
+	for tau := 1; tau <= tauMax+1 && tau < n; tau++ {
+		var s, e1, e2 float64
+		paires := 0
 		for i := 0; i+tau < n; i++ {
+			if masque[i] || masque[i+tau] {
+				continue
+			}
 			s += x[i] * x[i+tau]
-			norme += x[i] * x[i]
+			e1 += x[i] * x[i]
+			e2 += x[i+tau] * x[i+tau]
+			paires++
 		}
-		if norme <= 1e-12 {
+		if paires < minPaires {
+			continue // pas assez de fond à ce décalage : on ne sait pas
+		}
+		// Normalisé par les énergies des DEUX segments comparés : sans cela,
+		// les petits décalages gagnent, puisqu'ils comparent plus de points.
+		if e1 > 1e-12 && e2 > 1e-12 {
+			r[tau] = s / math.Sqrt(e1*e2)
+		}
+	}
+	type pic struct {
+		tau     int
+		hauteur float64
+	}
+	var pics []pic
+	creux := r[1]
+	for tau := 2; tau <= tauMax; tau++ {
+		if r[tau] < creux {
+			creux = r[tau]
+		}
+		if tau < tauMin || !(r[tau] > r[tau-1] && r[tau] >= r[tau+1]) {
 			continue
 		}
-		// Normalisé par l'énergie de la portion comparée : sans cela, les
-		// petits décalages gagnent toujours, puisqu'ils comparent plus de
-		// points.
-		r := s / norme
-		if r > score {
-			meilleur, score = tau, r
+		if r[tau] >= SeuilPulsation && r[tau]-creux >= SeuilRessaut {
+			pics = append(pics, pic{tau, r[tau]})
 		}
 	}
-	if meilleur == 0 || score < SeuilPulsation {
+	if len(pics) == 0 {
+		return 0, 0, false
+	}
+	meilleur := pics[0]
+	for _, p := range pics {
+		if p.hauteur > meilleur.hauteur {
+			meilleur = p
+		}
+	}
+	for _, p := range pics {
+		if p.hauteur >= 0.9*meilleur.hauteur {
+			meilleur = p
+			break
+		}
+	}
+	score = meilleur.hauteur
+	tauFin := float64(meilleur.tau)
+	if a, b, c := r[meilleur.tau-1], r[meilleur.tau], r[meilleur.tau+1]; a-2*b+c < 0 {
+		tauFin += 0.5 * (a - c) / (a - 2*b + c)
+	}
+
+	bpm = 60.0 / (tauFin * e.pas)
+	return bpm, score, true
+}
+
+// pauseMin : une pause plus courte (≈ 250 ms) est un creux ENTRE SYLLABES,
+// pas un silence de la pièce. Le VAD découpe une phrase : ces creux ne sont pas
+// marqués « parole », et leur énergie — celle de la voix — imposait au fond le
+// rythme syllabique. Un intervalle entre deux coups de grosse caisse, que le VAD
+// prend parfois pour de la parole, dure davantage et reste (#1705).
+const pauseMin = 24
+
+// masqueParole : vrai pour une trame de parole ou d'une pause trop courte.
+func (e *Ecouteur) masqueParole() []bool {
+	n := len(e.marques)
+	m := make([]bool, n)
+	for i := 0; i < n; {
+		if e.marques[i] {
+			m[i] = true
+			i++
+			continue
+		}
+		j := i
+		for j < n && !e.marques[j] {
+			j++
+		}
+		// Pause [i, j) : courte ET encadrée de parole → creux de syllabe.
+		if j-i < pauseMin && i > 0 && j < n {
+			for k := i; k < j; k++ {
+				m[k] = true
+			}
+		}
+		i = j
+	}
+	return m
+}
+
+// minPaires : en-dessous, un décalage n'a pas assez de paires de trames sans
+// parole pour dire quoi que ce soit (≈ 0,7 s d'écoute).
+const minPaires = 64
+
+// Analyse cherche une pulsation dans l'enveloppe de la pièce.
+//
+// DEUX LECTURES, DANS CET ORDRE (#1705).
+//
+//  1. L'ENVELOPPE COMPLÈTE. Sur la vraie chaîne, le VAD prend chaque coup de
+//     grosse caisse pour de la parole : ne lire que les trames « sans parole »
+//     revenait à ne garder que la traîne de chaque coup, et le pic tombait à
+//     côté (108 BPM pour 128, avec une netteté de 0,9). Une voix réelle, elle,
+//     n'a pas de période nette dans la plage : sur l'enveloppe entière, seule
+//     la musique fait un pic.
+//  2. À DÉFAUT, LES SEULES PAUSES. Quand la parole est un bloc d'énergie qui
+//     écrase la musique, l'enveloppe complète n'a plus de pic ; entre les
+//     phrases, la pulsation reste lisible. Les paires de trames sont alors
+//     toutes deux hors parole — rien n'est plus « tenu » ni inventé — et les
+//     pauses trop courtes, creux entre syllabes, sont écartées.
+func (e *Ecouteur) Analyse() Ambiance {
+	n := len(e.env)
+	if n < 32 {
+		return Ambiance{}
+	}
+	bpm, score, ok := e.pulsation(make([]bool, n))
+	if !ok {
+		bpm, score, ok = e.pulsation(e.masqueParole())
+	}
+	if !ok {
 		return Ambiance{}
 	}
 
-	bpm := 60.0 / (float64(meilleur) * e.pas)
 	// ── LA PART DE L'AMBIANCE, ET J'AI DÛ LA REFAIRE ─────────────────────
 	//
 	// Elle rapportait l'énergie de fond à l'énergie TOTALE. C'était faux, et

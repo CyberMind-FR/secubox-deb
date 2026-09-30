@@ -1,3 +1,9 @@
+sbxos-audio-mood (0.10.4-1~bookworm1) bookworm; urgency=medium
+
+  * ambiance : le tempo valait toujours 181,5 BPM hors musique — le décalage de corrélation MAXIMALE gagnait sur tout signal lisse (ventilation, fond « tenu » pendant la parole). Un tempo est désormais un PIC qui ressort de son creux (plus petit décalage parmi les pics comparables, interpolation parabolique), cherché sur l'enveloppe complète puis, à défaut, sur les seules pauses (paires hors parole, creux de syllabes écartés) — le VAD prenant les coups de grosse caisse pour de la parole, lire les seules pauses donnait 108 pour 128. Vérifié de bout en bout : ventilation et voix seule sans tempo, musique à 95/120/128 retrouvée à ±3 BPM, avec ou sans voix (#1705).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 07:44:28 +0200
+
 sbxos-audio-mood (0.10.3-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond à mood.* (le mood de la box sous son propre domaine) et se laisse encadrer par le Hall de ce domaine (#1680).
