@@ -1,6 +1,6 @@
 #!/bin/bash
 # haproxyctl - HAProxy Manager for SecuBox Debian
-# Control script for HAProxy with LXC/Docker container support
+# Control script for HAProxy (native or LXC — never docker)
 # Three-fold architecture: Components, Status, Access
 set -e
 
@@ -8,7 +8,6 @@ VERSION="1.1.1"
 
 LXC_NAME="haproxy"
 LXC_PATH="/var/lib/lxc/$LXC_NAME"
-DOCKER_NAME="secubox-haproxy"
 # Canonical SecuBox data root is /data (charter §Storage). Older boards used
 # /srv/haproxy; we honour both via auto-detect, with HAPROXY_DATA_PATH as the
 # explicit override. Closes the recurring cert-path bug in #286 where
@@ -47,7 +46,7 @@ EXTRA_CFG_DIR="${HAPROXY_EXTRA_CFG_DIR:-/etc/haproxy/cfg.d}"
 STATS_SOCKET="/run/haproxy/admin.sock"
 LOG_FILE="/var/log/secubox/haproxy.log"
 
-# Mode: native, lxc, or docker
+# Mode: native or lxc (docker retiré — LXC uniquement, #1751)
 MODE="native"
 
 # Logging
@@ -55,11 +54,30 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE" 2>/dev/nul
 error() { log "ERROR: $*" >&2; }
 
 # Load config
+# Valeur d'une clé de [main] (ou d'avant toute section), premiere occurrence.
+# Un grep sur tout le fichier ramassait aussi les `mode = "http"` des
+# sections de vhosts : MODE valait « native\nhttp\nhttp », aucune branche
+# `case` ne correspondait (seul le `*)` sauvait la mise) et `status` rendait
+# un JSON invalide (#1751).
+toml_main() {
+    awk -v k="$1" '
+        /^[[:space:]]*\[/ { sect = $0; gsub(/[[:space:]]/, "", sect); next }
+        (sect == "" || sect == "[main]") && $0 ~ "^[[:space:]]*" k "[[:space:]]*=" {
+            v = $0; sub(/^[^=]*=[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v)
+            gsub(/"/, "", v); print v; exit
+        }' "$CONF_PATH"
+}
+
 load_config() {
     if [ -f "$CONF_PATH" ]; then
-        MODE=$(grep -E '^mode\s*=' "$CONF_PATH" | cut -d'"' -f2 || echo "native")
-        DATA_PATH=$(grep -E '^data_path\s*=' "$CONF_PATH" | cut -d'"' -f2 || echo "$DATA_PATH")
+        MODE=$(toml_main mode); [ -n "$MODE" ] || MODE="native"
+        local dp; dp=$(toml_main data_path); [ -n "$dp" ] && DATA_PATH="$dp"
     fi
+    case "$MODE" in
+        native|lxc) ;;
+        *) echo "haproxyctl: mode « $MODE » non pris en charge (native ou lxc ; docker retiré, #1751) — native" >&2
+           MODE="native" ;;
+    esac
 }
 
 # CORPS D'UNE TABLE TOML, SANS L'EN-TETE DE LA TABLE SUIVANTE.
@@ -197,13 +215,10 @@ _fetch_webui_regex() {
 # Check container status
 lxc_running() { lxc-info -n "$LXC_NAME" -s 2>/dev/null | grep -q "RUNNING"; }
 lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
-docker_running() { docker ps --filter "name=$DOCKER_NAME" --format '{{.Names}}' 2>/dev/null | grep -q "$DOCKER_NAME"; }
-docker_exists() { docker images "$DOCKER_NAME" --format '{{.Repository}}' 2>/dev/null | grep -q "$DOCKER_NAME"; }
 
 # HAProxy native running check
 haproxy_running() {
     case "$MODE" in
-        docker) docker_running ;;
         lxc) lxc_running ;;
         *) pgrep -x haproxy >/dev/null 2>&1 ;;
     esac
@@ -257,22 +272,6 @@ EOF
             '
             ;;
 
-        docker)
-            log "Building HAProxy Docker image..."
-            mkdir -p /tmp/haproxy-build
-            cat > /tmp/haproxy-build/Dockerfile << 'EOF'
-FROM haproxy:2.8-alpine
-RUN apk add --no-cache openssl curl
-COPY haproxy.cfg /usr/local/etc/haproxy/haproxy.cfg
-EOF
-            # Create minimal config
-            cmd_generate > /tmp/haproxy-build/haproxy.cfg 2>/dev/null || \
-                echo "# Minimal HAProxy config" > /tmp/haproxy-build/haproxy.cfg
-
-            docker build -t "$DOCKER_NAME" /tmp/haproxy-build/
-            rm -rf /tmp/haproxy-build
-            ;;
-
         *)
             # Native install - assume haproxy package is installed
             if ! command -v haproxy >/dev/null; then
@@ -296,11 +295,6 @@ cmd_uninstall() {
             lxc_running && lxc-stop -n "$LXC_NAME"
             lxc_exists && lxc-destroy -n "$LXC_NAME"
             ;;
-        docker)
-            docker stop "$DOCKER_NAME" 2>/dev/null || true
-            docker rm "$DOCKER_NAME" 2>/dev/null || true
-            docker rmi "$DOCKER_NAME" 2>/dev/null || true
-            ;;
     esac
 
     log "Container removed (config preserved in $CONFIG_DIR)"
@@ -315,15 +309,6 @@ cmd_start() {
             lxc_running || lxc-start -n "$LXC_NAME"
             sleep 2
             lxc-attach -n "$LXC_NAME" -- haproxy -f /etc/haproxy/haproxy.cfg -D
-            ;;
-        docker)
-            docker run -d --name "$DOCKER_NAME" \
-                -p 80:80 -p 443:443 -p 8404:8404 \
-                -v "$CONFIG_DIR:/usr/local/etc/haproxy:ro" \
-                -v "$CERTS_DIR:/certs:ro" \
-                -v "/run/haproxy:/run/haproxy" \
-                "$DOCKER_NAME" 2>/dev/null || \
-            docker start "$DOCKER_NAME"
             ;;
         *)
             systemctl start haproxy || \
@@ -341,9 +326,6 @@ cmd_stop() {
         lxc)
             lxc_running && lxc-attach -n "$LXC_NAME" -- killall haproxy 2>/dev/null || true
             ;;
-        docker)
-            docker stop "$DOCKER_NAME" 2>/dev/null || true
-            ;;
         *)
             systemctl stop haproxy 2>/dev/null || killall haproxy 2>/dev/null || true
             ;;
@@ -359,10 +341,6 @@ cmd_reload() {
         lxc)
             lxc-attach -n "$LXC_NAME" -- sh -c 'kill -USR2 $(cat /run/haproxy/haproxy.pid 2>/dev/null) 2>/dev/null' || \
             lxc-attach -n "$LXC_NAME" -- haproxy -f /etc/haproxy/haproxy.cfg -sf $(pidof haproxy)
-            ;;
-        docker)
-            docker kill -s HUP "$DOCKER_NAME" 2>/dev/null || \
-            { docker stop "$DOCKER_NAME"; docker start "$DOCKER_NAME"; }
             ;;
         *)
             systemctl reload haproxy 2>/dev/null || \
@@ -1668,7 +1646,7 @@ Information (Three-fold):
   access        Show ports and access info (JSON)
 
 Service:
-  install       Install HAProxy (native/lxc/docker based on config)
+  install       Install HAProxy (native/lxc based on config)
   uninstall     Remove HAProxy container
   start         Start HAProxy
   stop          Stop HAProxy

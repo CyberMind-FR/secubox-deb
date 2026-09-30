@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-frigate
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.5.39~), python3-uvicorn | python3-pip,
- lxc, lxc-templates, podman, nftables, openssl
+ lxc, lxc-templates, nftables, openssl
 Description: Frigate NVR for SecuBox (native LXC, podman)
  SecuBox module for the Frigate NVR (frigate.video) running as the official
  podman container inside a dedicated Debian LXC on the amd64 node. `frigatectl
