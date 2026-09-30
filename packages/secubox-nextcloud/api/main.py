@@ -56,6 +56,13 @@ NC_INTERNAL_PORT = 80
 # container's port for liveness (privilege-free) and route every container op
 # through nextcloudctl (which has an `occ` passthrough and runs as root).
 NCTL = ["sudo", "-n", "/usr/sbin/nextcloudctl"]
+# Journaux des tâches de fond : un dossier que le service (secubox) peut écrire —
+# /var/log/nextcloud-*.log lui était refusé, la route rendait 500 avant même
+# de lancer le helper (#1757).
+JOURNAUX = Path("/var/log/secubox")
+
+# Ce que `run_cmd` rend sur stderr quand il a dû tuer le groupe à l'expiration.
+EXPIRE = "Command timed out"
 
 
 def run_cmd(cmd: list, timeout: int = 30, stdin: Optional[str] = None) -> tuple:
@@ -94,7 +101,7 @@ def run_cmd(cmd: list, timeout: int = 30, stdin: Optional[str] = None) -> tuple:
                 proc.communicate(timeout=5)
         except Exception:
             pass
-        return False, "", "Command timed out"
+        return False, "", EXPIRE
     except Exception as e:
         return False, "", str(e)
 
@@ -126,11 +133,65 @@ def nctl(*args, timeout: int = 60, stdin: Optional[str] = None) -> tuple:
     return run_cmd(NCTL + [str(a) for a in args], timeout, stdin=stdin)
 
 
-# GARDES DE SAISIE (#429, effacées par la fusion aff481735, #1756) : un uid ou
-# un nom de sauvegarde est validé sur un jeu de caractères sûr AVANT d'atteindre
-# argv, un chemin ou le helper root (qui revalide : défense en profondeur).
+def ctl(subcmd: list, timeout: int = 60, stdin: Optional[str] = None) -> tuple:
+    """`nctl` sous forme de liste : le point d'entrée des routes (#1757).
+
+    Même chemin privilégié (`sudo -n nextcloudctl`, groupe tué à
+    l'expiration) ; la forme liste est celle des routes de e2f71a500, et
+    l'unique point que les tests remplacent."""
+    return nctl(*subcmd, timeout=timeout, stdin=stdin)
+
+
+# Une opération de compte tourne sur le chemin de la requête : HAProxy coupe à
+# 30 s d'inactivité, elle doit donc rendre la main avant.
+DELAI_REQUETE = 25
+
+# `occ` est à vol unique dans nextcloudctl (flock, a15b71bf4) : quand le
+# rafraîchisseur de cache en tient un, le helper sort en 75 (EX_TEMPFAIL) avec
+# ce mot sur stderr. C'est « réessayer dans un instant », pas une panne.
+OCC_OCCUPE = "single-flight"
+
+
+def _echec_helper(action: str, err: str, out: str = ""):
+    """Traduit l'échec d'un verbe du helper en réponse HTTP (#1757).
+
+    503 : `occ` occupé par un autre appelant — rien n'a été fait, réessayer.
+    504 : délai dépassé — le groupe est tué, mais `occ` a pu aboutir dans le
+          conteneur : la page recharge la liste pour le savoir.
+    500 : le reste, avec le message du helper."""
+    if OCC_OCCUPE in (err or "") or OCC_OCCUPE in (out or ""):
+        raise HTTPException(503, f"{action}: Nextcloud busy (occ single-flight), retry in a few seconds",
+                            headers={"Retry-After": "10"})
+    if err == EXPIRE:
+        raise HTTPException(504, f"{action}: timed out — it may still complete, reload to check")
+    raise HTTPException(500, f"{action} failed: {err or out}")
+
+
+def _require_running():
+    if not lxc_running():
+        raise HTTPException(409, "Nextcloud container is not running")
+
+
+def _json_de_sortie(out: str):
+    """Le JSON d'une sortie du helper : toute la sortie, sinon sa dernière ligne
+    (un `log` ou un avertissement PHP peut la précéder). None si illisible."""
+    texte = (out or "").strip()
+    lignes = texte.splitlines()
+    for candidat in (texte, lignes[-1] if lignes else ""):
+        try:
+            return json.loads(candidat)
+        except ValueError:
+            continue
+    return None
+
+
+# GARDES DE SAISIE (#429, effacées par la fusion aff481735, #1756, #1757) : un
+# uid, un quota ou un nom de sauvegarde est validé sur un jeu de caractères sûr
+# AVANT d'atteindre argv, un chemin ou le helper root (qui revalide : défense
+# en profondeur, cf. _valid_uid / _valid_quota / _valid_backup_name).
 # `fullmatch` et non `match` : `$` tolère un saut de ligne final.
 _UID_RE = re.compile(r"[A-Za-z0-9._@-]+")
+_QUOTA_RE = re.compile(r"(none|default|[0-9]+(\.[0-9]+)?[KMGT]?B?)", re.I)
 _BACKUP_RE = re.compile(r"[A-Za-z0-9._-]+")
 
 
@@ -140,6 +201,17 @@ def _valid_uid(uid: str) -> bool:
 
 def _valid_backup_name(name: str) -> bool:
     return bool(name) and bool(_BACKUP_RE.fullmatch(name))
+
+
+def _mot_de_passe_valide(pwd: str) -> bool:
+    # une ligne = un mot de passe : le helper en lit une seule (`read -r`)
+    return bool(pwd) and not any(c in pwd for c in "\r\n\0")
+
+
+def _nom_affiche_valide(nom: str) -> bool:
+    # passe dans argv (jamais dans une chaîne de shell) : pas de caractère de
+    # contrôle, qui ferait échouer l'appel ou brouillerait le journal de sudo
+    return not any(ord(c) < 32 or ord(c) == 127 for c in nom)
 
 
 def occ_cmd(command: str, timeout: int = 60) -> tuple:
@@ -158,11 +230,47 @@ def lxc_attach(command: str, timeout: int = 30) -> tuple:
 # occ user:list, container-side du). /status is polled every ~30s by the webui,
 # so it must NOT run these inline (each occ call is ~5s and blocks the loop);
 # it reads this cache, filled every 60s by _refresh_cache() below.
-_nc_cache = {"version": "", "user_count": 0, "disk_used": "0", "ts": 0}
+# `storage` : la dernière mesure servie par /storage (#1757), vide avant la
+# première.
+_nc_cache = {"version": "", "user_count": 0, "disk_used": "0", "storage": {}, "ts": 0}
+
+# Le stockage se mesure par un `du` sur tout le volume de données : lourd, et
+# il bouge lentement. Toutes les 10 min, pas à chaque tour du rafraîchisseur.
+INTERVALLE_STOCKAGE = 600
 
 
-def _compute_nc_cache() -> dict:
-    out_cache = {"version": "", "user_count": 0, "disk_used": "0", "ts": time.time()}
+def _mesurer_stockage() -> Optional[dict]:
+    """/storage, mesuré DANS le conteneur (`nextcloudctl storage --json` : df
+    et du). L'API, non privilégiée, ne voit pas le volume : ses du/df côté
+    hôte rendaient 0 (#429). Appelé par le seul rafraîchisseur de fond —
+    jamais sur le chemin d'une requête (#1757). None si la mesure échoue."""
+    # quatre lxc_attach bornés à 45 s chacun côté conteneur
+    ok, out, _ = ctl(["storage", "--json"], timeout=240)
+    if not ok:
+        return None
+    s = _json_de_sortie(out)
+    if not isinstance(s, dict):
+        return None
+    try:
+        pct = int(float(s.get("used_pct") or 0))
+    except (TypeError, ValueError):
+        pct = 0
+    return {
+        "used": str(s.get("used") or ""),
+        "total": str(s.get("total") or ""),
+        "used_pct": max(0, min(100, pct)),
+        "data": str(s.get("data") or ""),
+        "ts": time.time(),
+    }
+
+
+def _compute_nc_cache(precedent: Optional[dict] = None) -> dict:
+    prec = precedent or {}
+    stockage = prec.get("storage") or {}
+    # Le stockage survit à un tour sans mesure (conteneur arrêté, occ en
+    # échec) : l'espace occupé ne disparaît pas avec le conteneur.
+    out_cache = {"version": "", "user_count": 0, "disk_used": prec.get("disk_used") or "0",
+                 "storage": stockage, "ts": time.time()}
     if not lxc_running():
         return out_cache
     ok, out, _ = occ_cmd("--version", timeout=30)
@@ -176,13 +284,20 @@ def _compute_nc_cache() -> dict:
             out_cache["user_count"] = len(json.loads(out.strip().splitlines()[-1]))
         except Exception:
             pass
-    # Storage: only root (nextcloudctl) can read the data volume; parse the
-    # "Storage: <size>" line from `nextcloudctl status`.
-    ok, out, _ = nctl("status", timeout=30)
-    if ok:
-        m = re.search(r'Storage:\s*(\S+)', out)
-        if m:
-            out_cache["disk_used"] = m.group(1)
+    # Stockage ET disk_used de /status, d'une seule mesure dans le conteneur.
+    # Elle remplace `nextcloudctl status`, qui refaisait un `occ user:list` et
+    # un du côté hôte à chaque tour. Pas de mesure si `occ` vient d'échouer :
+    # le conteneur est engorgé, le disjoncteur vaut aussi pour elle. Un ÉCHEC
+    # compte comme un essai (`essai`) : sinon un du qui expire à 240 s
+    # repartirait à chaque tour.
+    derniere = max(float(stockage.get("ts") or 0), float(stockage.get("essai") or 0))
+    if out_cache["version"] and time.time() - derniere >= INTERVALLE_STOCKAGE:
+        mesure = _mesurer_stockage()
+        if mesure:
+            out_cache["storage"] = mesure
+            out_cache["disk_used"] = mesure["data"] or "0"
+        else:
+            out_cache["storage"] = dict(stockage, essai=time.time())
     return out_cache
 
 
@@ -247,7 +362,7 @@ def _cache_worker():
     while True:
         try:
             if maitre:
-                mesure = _compute_nc_cache()
+                mesure = _compute_nc_cache(_nc_cache)
                 # Une version vide alors que le conteneur repond signale un
                 # `occ` qui n'aboutit pas : c'est un echec, pas une mesure.
                 rate = mesure.get("version") == "" and lxc_running()
@@ -282,16 +397,22 @@ threading.Thread(target=_cache_worker, daemon=True, name="nc-cache").start()
 
 
 # Public endpoints
+#
+# `def` et non `async def` pour tout gestionnaire qui touche une socket, un
+# sous-processus ou le disque (f703692b7, #1757) : FastAPI le passe alors au
+# pool de threads. En `async def`, la sonde de port (jusqu'à 1,5 s) ou un
+# `sudo nextcloudctl` gelait la boucle de l'agrégateur entier, donc tous les
+# modules qu'il sert. Seuls les gestionnaires purs restent `async`.
 @app.get("/status", dependencies=[Depends(require_lecture)])
-async def status():
+def status():
     """Get Nextcloud service status (fast: live port probe + cached occ fields)."""
     running = lxc_running()
     installed = lxc_installed()
 
     c = _nc_cache
-    version = c["version"] if running else ""
-    user_count = c["user_count"] if running else 0
-    disk_used = c["disk_used"]
+    version = c.get("version", "") if running else ""
+    user_count = c.get("user_count", 0) if running else 0
+    disk_used = c.get("disk_used") or "0"
 
     http_port = config.get("http_port", 8080)
     domain = config.get("domain") or hote_box("nc") or "cloud.local"  # #1723
@@ -300,6 +421,11 @@ async def status():
         "module": "nextcloud",
         "enabled": config.get("enabled", True),
         "running": running,
+        # La page n'affiche « running » qu'avec `reachable` ; sans lui, c'était
+        # « running (unreachable) » à vie (#1757). L'API, non privilégiée, juge
+        # la marche du conteneur PAR la réponse de son port : les deux
+        # coïncident.
+        "reachable": running,
         "installed": installed,
         "version": version,
         "http_port": http_port,
@@ -322,7 +448,7 @@ async def health():
 
 # Protected endpoints
 @app.get("/config", dependencies=[Depends(require_jwt)])
-async def get_config_endpoint():
+def get_config_endpoint():
     """Get Nextcloud configuration"""
     return {
         "enabled": config.get("enabled", True),
@@ -354,35 +480,35 @@ async def save_config(update: ConfigUpdate):
 
 
 @app.post("/start", dependencies=[Depends(require_jwt)])
-async def start_service():
+def start_service():
     """Start Nextcloud container"""
     if lxc_running():
         raise HTTPException(400, "Service is already running")
     if not lxc_installed():
         raise HTTPException(400, "Container not installed")
 
-    success, _, err = nctl("start")
+    success, _, err = ctl(["start"])
     if success:
         return {"success": True, "message": "Service started"}
     raise HTTPException(500, f"Failed to start: {err}")
 
 
 @app.post("/stop", dependencies=[Depends(require_jwt)])
-async def stop_service():
+def stop_service():
     """Stop Nextcloud container"""
     if not lxc_running():
         raise HTTPException(400, "Service is not running")
 
-    success, _, err = nctl("stop")
+    success, _, err = ctl(["stop"])
     if success:
         return {"success": True, "message": "Service stopped"}
     raise HTTPException(500, f"Failed to stop: {err}")
 
 
 @app.post("/restart", dependencies=[Depends(require_jwt)])
-async def restart_service():
+def restart_service():
     """Restart Nextcloud container"""
-    success, _, err = nctl("restart")
+    success, _, err = ctl(["restart"])
     if success:
         return {"success": True, "message": "Service restarted"}
     raise HTTPException(500, f"Restart failed: {err}")
@@ -396,13 +522,13 @@ def install():
 
     subprocess.Popen(
         [*NCTL, "install"],
-        stdout=open("/var/log/nextcloud-install.log", "w"),
+        stdout=open(JOURNAUX / "nextcloud-install.log", "w"),
         stderr=subprocess.STDOUT
     )
     return {
         "success": True,
         "message": "Installation started in background",
-        "log_file": "/var/log/nextcloud-install.log"
+        "log_file": str(JOURNAUX / "nextcloud-install.log")
     }
 
 
@@ -411,7 +537,7 @@ def uninstall():
     """Uninstall Nextcloud (preserves data). `nextcloudctl uninstall` demande
     « yes » sur stdin : sans réponse il lisait EOF et abandonnait, et la route
     rendait toujours 500 (2632596b6, #1756)."""
-    success, out, err = run_cmd([*NCTL, "uninstall"], timeout=120, stdin="yes\n")
+    success, out, err = ctl(["uninstall"], timeout=120, stdin="yes\n")
     if success:
         return {"success": True, "message": "Uninstalled (data preserved)"}
     raise HTTPException(500, f"Uninstall failed: {err or out}")
@@ -422,34 +548,88 @@ def update():
     """Update Nextcloud"""
     subprocess.Popen(
         [*NCTL, "update"],
-        stdout=open("/var/log/nextcloud-update.log", "w"),
+        stdout=open(JOURNAUX / "nextcloud-update.log", "w"),
         stderr=subprocess.STDOUT
     )
     return {"success": True, "message": "Update started in background"}
 
 
+# ---------------------------------------------------------------------------
+# Comptes (e2f71a500, 79aac6487 — effacés par la fusion aff481735, #1757)
+# ---------------------------------------------------------------------------
+# Tout passe par `nextcloudctl user …` : jamais d'`occ` construit ici, jamais
+# de mot de passe dans argv (stdin seulement), uid et quota validés avant
+# d'atteindre le helper, 409 si le conteneur est arrêté.
+
+def _normaliser_comptes(data) -> list:
+    """Ramène la sortie de `nextcloudctl user list` aux lignes de la page.
+
+    `occ user:list --info` rend {uid: {display_name, enabled, quota,
+    last_seen, email, …}} ; le repli sans --info rend {uid: nom affiché}."""
+    if isinstance(data, dict):
+        comptes = []
+        for uid, v in data.items():
+            if isinstance(v, dict):
+                comptes.append({
+                    "uid": str(uid),
+                    "displayname": v.get("display_name") or v.get("displayname") or str(uid),
+                    "enabled": bool(v.get("enabled", True)),
+                    "quota": v.get("quota") or "",
+                    "last_seen": v.get("last_seen") or "",
+                    "email": v.get("email") or "",
+                })
+            else:
+                comptes.append({"uid": str(uid), "displayname": v or str(uid),
+                                "enabled": True, "quota": ""})
+        return comptes
+    if isinstance(data, list):
+        return [u for u in data if isinstance(u, dict)]
+    return []
+
+
 @app.get("/users", dependencies=[Depends(require_jwt)])
-async def list_users():
-    """List Nextcloud users"""
+def list_users():
+    """Comptes Nextcloud détaillés : uid, nom affiché, actif, quota (79aac6487)."""
     if not lxc_running():
         return {"users": []}
+    ok, out, err = ctl(["user", "list"], timeout=DELAI_REQUETE)
+    if not ok:
+        _echec_helper("user list", err, out)
+    return {"users": _normaliser_comptes(_json_de_sortie(out))}
 
-    success, out, _ = occ_cmd("user:list --output=json")
-    if success:
-        try:
-            import json
-            data = json.loads(out)
-            users = [{"uid": k, "displayname": v} for k, v in data.items()]
-            return {"users": users}
-        except:
-            pass
 
-    return {"users": []}
+class NewUser(BaseModel):
+    uid: str
+    display_name: str = ""
+    password: str
+
+
+class QuotaReq(BaseModel):
+    quota: str
 
 
 class ResetPassword(BaseModel):
     uid: str
     password: str
+
+
+@app.post("/user", dependencies=[Depends(require_jwt)])
+def create_user(req: NewUser):
+    """Crée un compte. Le mot de passe va sur l'entrée standard de
+    `nextcloudctl user add` — jamais dans argv (visible de `ps`, journalisé
+    par sudo)."""
+    if not _valid_uid(req.uid):
+        raise HTTPException(400, "invalid uid")
+    if not _mot_de_passe_valide(req.password):
+        raise HTTPException(400, "invalid password")
+    if not _nom_affiche_valide(req.display_name):
+        raise HTTPException(400, "invalid display name")
+    _require_running()
+    ok, out, err = ctl(["user", "add", req.uid, req.display_name or req.uid],
+                       stdin=req.password + "\n", timeout=DELAI_REQUETE)
+    if not ok:
+        _echec_helper("create", err, out)
+    return {"success": True, "message": f"User {req.uid} created"}
 
 
 @app.post("/user/password", dependencies=[Depends(require_jwt)])
@@ -466,92 +646,110 @@ def reset_password(req: ResetPassword):
         raise HTTPException(409, "Nextcloud container is not running")
     if not _valid_uid(req.uid):
         raise HTTPException(400, "invalid uid")
-    if not req.password or any(c in req.password for c in "\r\n\0"):
-        # une ligne = un mot de passe : le helper lit une seule ligne
+    if not _mot_de_passe_valide(req.password):
         raise HTTPException(400, "invalid password")
-    ok, out, err = nctl("user", "setpass", req.uid, stdin=req.password + "\n", timeout=60)
+    ok, out, err = ctl(["user", "setpass", req.uid], stdin=req.password + "\n",
+                       timeout=DELAI_REQUETE)
     if not ok:
-        raise HTTPException(500, f"Failed: {err or out}")
+        _echec_helper("password reset", err, out)
     return {"success": True, "message": f"Password reset for {req.uid}"}
 
 
+@app.delete("/user/{uid}", dependencies=[Depends(require_jwt)])
+def delete_user(uid: str):
+    if not _valid_uid(uid):
+        raise HTTPException(400, "invalid uid")
+    _require_running()
+    ok, out, err = ctl(["user", "del", uid], timeout=DELAI_REQUETE)
+    if not ok:
+        _echec_helper("delete", err, out)
+    return {"success": True}
+
+
+def _basculer_compte(uid: str, verbe: str) -> dict:
+    if not _valid_uid(uid):
+        raise HTTPException(400, "invalid uid")
+    _require_running()
+    ok, out, err = ctl(["user", verbe, uid], timeout=DELAI_REQUETE)
+    if not ok:
+        _echec_helper(verbe, err, out)
+    return {"success": True}
+
+
+@app.post("/user/{uid}/enable", dependencies=[Depends(require_jwt)])
+def enable_user(uid: str):
+    return _basculer_compte(uid, "enable")
+
+
+@app.post("/user/{uid}/disable", dependencies=[Depends(require_jwt)])
+def disable_user(uid: str):
+    return _basculer_compte(uid, "disable")
+
+
+@app.post("/user/{uid}/quota", dependencies=[Depends(require_jwt)])
+def set_quota(uid: str, req: QuotaReq):
+    if not _valid_uid(uid):
+        raise HTTPException(400, "invalid uid")
+    if not _QUOTA_RE.fullmatch(req.quota or ""):
+        raise HTTPException(400, "invalid quota")
+    _require_running()
+    ok, out, err = ctl(["user", "quota", uid, req.quota], timeout=DELAI_REQUETE)
+    if not ok:
+        _echec_helper("quota", err, out)
+    return {"success": True}
+
+
 @app.get("/storage", dependencies=[Depends(require_jwt)])
-async def get_storage():
-    """Get storage statistics"""
-    total_size = "0"
-    data_size = "0"
-    backup_size = "0"
-    disk_free = "0"
-    disk_total = "0"
-    disk_used_pct = 0
-
-    if DATA_PATH.exists():
-        success, out, _ = run_cmd(["du", "-sh", str(DATA_PATH)])
-        if success:
-            total_size = out.split()[0]
-
-    data_dir = DATA_PATH / "data"
-    if data_dir.exists():
-        success, out, _ = run_cmd(["du", "-sh", str(data_dir)])
-        if success:
-            data_size = out.split()[0]
-
-    backup_dir = DATA_PATH / "backups"
-    if backup_dir.exists():
-        success, out, _ = run_cmd(["du", "-sh", str(backup_dir)])
-        if success:
-            backup_size = out.split()[0]
-
-    success, out, _ = run_cmd(["df", "-h", str(DATA_PATH)])
-    if success:
-        lines = out.split("\n")
-        if len(lines) > 1:
-            parts = lines[1].split()
-            if len(parts) >= 5:
-                disk_total = parts[1]
-                disk_free = parts[3]
-                disk_used_pct = int(parts[4].rstrip("%"))
-
+def get_storage():
+    """Stockage du conteneur, dans le schéma de la page (used, total,
+    used_pct, data). Sert la DERNIÈRE MESURE du rafraîchisseur de fond
+    (`_mesurer_stockage`, toutes les 10 min) : un du sur le volume à chaque
+    requête, c'était l'orage que le cache a éteint (#1757). `ts` = 0 tant
+    qu'aucune mesure n'a abouti."""
+    s = _nc_cache.get("storage") or {}
     return {
-        "total_size": total_size,
-        "data_size": data_size,
-        "backup_size": backup_size,
-        "disk_free": disk_free,
-        "disk_total": disk_total,
-        "disk_used_percent": disk_used_pct
+        "used": s.get("used", ""),
+        "total": s.get("total", ""),
+        "used_pct": s.get("used_pct", 0),
+        "data": s.get("data", ""),
+        "ts": s.get("ts", 0),
     }
 
 
+# ---------------------------------------------------------------------------
+# Sauvegardes : ce que nextcloudctl écrit, c'est backups/nextcloud_<nom>.tar.gz
+# (cmd_backup). La liste, la suppression et la restauration parlent du même
+# fichier, par son nom (#1757).
+# ---------------------------------------------------------------------------
+PREFIXE_SAUVEGARDE = "nextcloud_"
+SUFFIXE_SAUVEGARDE = ".tar.gz"
+
+
+def _fichier_sauvegarde(name: str) -> Path:
+    return DATA_PATH / "backups" / f"{PREFIXE_SAUVEGARDE}{name}{SUFFIXE_SAUVEGARDE}"
+
+
 @app.get("/backups", dependencies=[Depends(require_jwt)])
-async def list_backups():
+def list_backups():
     """List available backups"""
     backups = []
-    backup_dir = DATA_PATH / "backups"
-
-    if backup_dir.exists():
-        for f in backup_dir.glob("*-db.sql"):
-            name = f.stem.replace("-db", "")
-            data_file = backup_dir / f"{name}-data.tar.gz"
-            size = "N/A"
-            timestamp = 0
-
-            if data_file.exists():
-                try:
-                    stat = data_file.stat()
-                    size = f"{stat.st_size // 1024 // 1024}M"
-                except:
-                    pass
-
-            try:
-                timestamp = int(f.stat().st_mtime)
-            except:
-                pass
-
-            backups.append({
-                "name": name,
-                "size": size,
-                "timestamp": timestamp
-            })
+    try:
+        fichiers = list((DATA_PATH / "backups").glob(f"{PREFIXE_SAUVEGARDE}*{SUFFIXE_SAUVEGARDE}"))
+    except OSError:
+        fichiers = []
+    for f in fichiers:
+        name = f.name[len(PREFIXE_SAUVEGARDE):-len(SUFFIXE_SAUVEGARDE)]
+        if not _valid_backup_name(name):
+            continue  # ni supprimable ni restaurable par l'API : on ne le propose pas
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        backups.append({
+            "name": name,
+            "size": f"{st.st_size // 1024 // 1024}M",
+            "timestamp": int(st.st_mtime),
+        })
 
     return {"backups": sorted(backups, key=lambda x: x["timestamp"], reverse=True)}
 
@@ -561,34 +759,48 @@ class BackupRequest(BaseModel):
 
 
 @app.post("/backup", dependencies=[Depends(require_jwt)])
-def create_backup(req: BackupRequest):
-    """Create a backup"""
-    if req.name and not _valid_backup_name(req.name):
+def create_backup(req: Optional[BackupRequest] = None):
+    """Create a backup. Corps facultatif : la page poste sans corps, et un
+    modèle obligatoire lui rendait 422 (#1757)."""
+    name = req.name if req else None
+    if name and not _valid_backup_name(name):
         raise HTTPException(400, "invalid backup name")
-    cmd = [*NCTL, "backup"]
-    if req.name:
-        cmd.append(req.name)
-
-    success, out, err = run_cmd(cmd, timeout=300)
-    if success:
-        return {"success": True, "message": "Backup created"}
-    raise HTTPException(500, f"Backup failed: {err}")
+    sub = ["backup"]
+    if name:
+        sub.append(name)
+    # EN ARRIÈRE-PLAN (#1757) : une sauvegarde dure des minutes ; HAProxy
+    # coupe la requête à 30 s et la tuer à 300 s laisserait une archive à
+    # moitié écrite. Journal dans /var/log/secubox (inscriptible par le service).
+    try:
+        subprocess.Popen(
+            [*NCTL, *sub],
+            stdout=open(JOURNAUX / "nextcloud-backup.log", "a"),
+            stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as e:
+        raise HTTPException(500, f"Backup failed to start: {e}")
+    return {"success": True, "message": "Backup started in background",
+            "log_file": str(JOURNAUX / "nextcloud-backup.log")}
 
 
 @app.delete("/backup/{name}", dependencies=[Depends(require_jwt)])
 def delete_backup(name: str):
-    """Delete a backup"""
+    """Supprime une sauvegarde par `nextcloudctl backup-delete <nom>` (#1757).
+
+    L'ancienne route déliait `<nom>-db.sql` / `<nom>-data.tar.gz`, que le
+    helper n'écrit pas — et l'API, en `secubox`, ne peut de toute façon rien
+    délier dans le répertoire de root."""
     if not _valid_backup_name(name):
         raise HTTPException(400, "invalid backup name")
-    backup_dir = DATA_PATH / "backups"
-    db_file = backup_dir / f"{name}-db.sql"
-    data_file = backup_dir / f"{name}-data.tar.gz"
-
-    if db_file.exists():
-        db_file.unlink()
-    if data_file.exists():
-        data_file.unlink()
-
+    try:
+        if not _fichier_sauvegarde(name).exists():
+            raise HTTPException(404, f"Backup {name} not found")
+    except PermissionError:
+        pass  # répertoire illisible pour nous : le helper tranchera
+    ok, out, err = ctl(["backup-delete", name], timeout=DELAI_REQUETE)
+    if not ok:
+        _echec_helper("backup delete", err, out)
     return {"success": True, "message": f"Backup {name} deleted"}
 
 
@@ -601,7 +813,7 @@ def restore_backup(name: str):
     proc = subprocess.Popen(
         [*NCTL, "restore", name],
         stdin=subprocess.PIPE,
-        stdout=open("/var/log/nextcloud-restore.log", "w"),
+        stdout=open(JOURNAUX / "nextcloud-restore.log", "w"),
         stderr=subprocess.STDOUT,
         text=True, start_new_session=True,
     )
@@ -614,7 +826,7 @@ def restore_backup(name: str):
 
 
 @app.get("/connections", dependencies=[Depends(require_jwt)])
-async def get_connections():
+def get_connections():
     """Get connection URLs (CalDAV, CardDAV, WebDAV)"""
     http_port = config.get("http_port", 8080)
     domain = config.get("domain") or hote_box("nc") or "cloud.local"  # #1723
@@ -639,7 +851,7 @@ class OccCommand(BaseModel):
 
 
 @app.post("/occ", dependencies=[Depends(require_jwt)])
-async def run_occ(req: OccCommand):
+def run_occ(req: OccCommand):
     """Run OCC command"""
     if not lxc_running():
         raise HTTPException(400, "Container not running")
@@ -651,12 +863,12 @@ async def run_occ(req: OccCommand):
 
 
 @app.get("/logs", dependencies=[Depends(require_jwt)])
-async def get_logs(lines: int = 100):
+def get_logs(lines: int = 100):
     """Get Nextcloud logs"""
     logs = []
 
     # Installation log
-    install_log = Path("/var/log/nextcloud-install.log")
+    install_log = JOURNAUX / "nextcloud-install.log"
     if install_log.exists():
         success, out, _ = run_cmd(["tail", f"-n{lines}", str(install_log)])
         if success:
@@ -670,20 +882,18 @@ class SSLEnable(BaseModel):
 
 
 @app.post("/ssl/enable", dependencies=[Depends(require_jwt)])
-async def ssl_enable(req: SSLEnable):
+def ssl_enable(req: SSLEnable):
     """Enable SSL for domain"""
-    success, _, err = run_cmd(
-        [*NCTL, "ssl-enable", req.domain]
-    )
+    success, _, err = ctl(["ssl-enable", req.domain])
     if success:
         return {"success": True, "message": f"SSL enabled for {req.domain}"}
     raise HTTPException(500, f"SSL enable failed: {err}")
 
 
 @app.post("/ssl/disable", dependencies=[Depends(require_jwt)])
-async def ssl_disable():
+def ssl_disable():
     """Disable SSL"""
-    success, _, err = run_cmd([*NCTL, "ssl-disable"])
+    success, _, err = ctl(["ssl-disable"])
     if success:
         return {"success": True, "message": "SSL disabled"}
     raise HTTPException(500, f"SSL disable failed: {err}")
