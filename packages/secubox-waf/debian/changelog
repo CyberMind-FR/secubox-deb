@@ -1,3 +1,9 @@
+secubox-waf (1.10.38-1~bookworm1) bookworm; urgency=medium
+
+  * vhost waf : frame-ancestors + $sbx_hall_box et $sbx_halls_parc (le Hall de cette box et ceux du parc, plus seulement hall.gk2) (#1725, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 13:31:42 +0200
+
 secubox-waf (1.10.37-1~bookworm1) bookworm; urgency=medium
 
   * route postinst déclarée sous le nom de cette box (#1723, #1713).

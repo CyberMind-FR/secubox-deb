@@ -1,3 +1,9 @@
+secubox-metablogizer (1.8.27-1~bookworm1) bookworm; urgency=medium
+
+  * vhost metablogizer : frame-ancestors + $sbx_hall_box et $sbx_halls_parc (#1725, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 13:31:42 +0200
+
 secubox-metablogizer (1.8.26-1~bookworm1) bookworm; urgency=medium
 
   * postinst : la route sbxwaf se déclare sous le nom de CETTE box (#1723, #1713).

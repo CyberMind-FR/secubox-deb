@@ -423,7 +423,9 @@ func (s *Server) handler() http.Handler {
 					return nil // le widget n'a rien à faire sur un leurre
 				}
 				// #747: inject the SecuBox health/visit widget on first-party HTML.
-				applyWidget(resp, host, s.bannerOrigin, s.widgetHosts, s.widgetExclude)
+				if !amontDuMaillage(ip) { // #1725 : la page d'un autre nœud
+					applyWidget(resp, host, s.bannerOrigin, s.widgetHosts, s.widgetExclude)
+				}
 				return nil
 			}
 			proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
