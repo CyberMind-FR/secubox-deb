@@ -1,3 +1,15 @@
+secubox-jellyfin (2.0.12-1~bookworm1) bookworm; urgency=medium
+
+  * API native LXC restaurée (1d6d99c7d, d16bda6d2 — effacés par la fusion
+    aff481735 ; #1748, #1771) : la page appelait /partners, /control,
+    /library/*, /check-upgrade, que l'API docker ressuscitée n'avait pas
+    (404) ; plus aucun pilotage docker/podman (#1743).
+  * /status en lecture LAN (#1256) ; actions longues (câblage, contrôle,
+    mise à jour) bornées à 25 s.
+  * Test : chaque route appelée par la page existe dans l'API.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:46:46 +0200
+
 secubox-jellyfin (2.0.11-1~bookworm1) bookworm; urgency=high
 
   * postinst : déclare sa route sbxwaf (jellyfin.<domaine> → 9080). HAProxy l'envoie à l'inspection mais sbxwaf ne connaissait pas le nom : le chemin public répondait 401 (fourre-tout) au lieu du service, et le relais du maillage n'exposait pas le jellyfin des nœuds relayés (#1739, #1713).
@@ -41,4 +53,3 @@ secubox-jellyfin (2.0.6-1~bookworm2) bookworm; urgency=medium
     reseau, AppArmor, espaces de noms non privilegies. (#1308)
 
  -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 23:06:29 +0200
-
