@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-lxc-racine — les conteneurs là où il y a la place (#1716)
+#
+# POURQUOI. Tout le parc suppose /data/lxc : scripts install-lxc, API de gitea,
+# du mail, de lyrion, le diagnostic de santé. Sur gk2, /data est un SSD de
+# 900 Go. Sur gk3, c'est une partition de 3,9 Go quand / en a 400 : chaque
+# provision s'arrêtait au système de base, faute de place, sans le dire.
+#
+# Plutôt que de changer un chemin connu de dix paquets, /data/lxc devient un
+# montage lié d'un dossier du grand disque. Rien d'autre ne change.
+#
+#   secubox-lxc-racine            décide seul ; n'agit que si /data/lxc est vide
+#   secubox-lxc-racine --migrer   conteneurs présents : arrêt, copie fidèle,
+#                                 vérification, montage, redémarrage
+#   secubox-lxc-racine --etat     dit ce qu'il ferait, sans rien toucher
+set -euo pipefail
+readonly MODULE="lxc-racine"
+readonly VERSION="1.0.0"
+
+readonly LXC=/data/lxc
+readonly CIBLE="${SECUBOX_LXC_CIBLE:-/srv/secubox/lxc}"
+readonly UNITE=/etc/systemd/system/data-lxc.mount
+readonly MIN_DATA_G="${SECUBOX_LXC_MIN_DATA_G:-30}"
+readonly MIN_RACINE_G="${SECUBOX_LXC_MIN_RACINE_G:-60}"
+
+log() { echo "[lxc-racine] $*"; }
+libre_g() { df -BG --output=avail "$1" 2>/dev/null | tail -1 | tr -dc 0-9; }
+
+mode="${1:-auto}"
+case "$mode" in auto|--migrer|--etat) ;; *) echo "usage: $0 [--migrer|--etat]" >&2; exit 2 ;; esac
+
+if mountpoint -q "$LXC" 2>/dev/null; then
+    log "$LXC est déjà un montage ($(findmnt -no SOURCE "$LXC" 2>/dev/null || echo '?')) — rien à faire"
+    exit 0
+fi
+# /data sur la racine (pas de partition à part) : le déplacer ne gagnerait rien.
+if ! mountpoint -q /data 2>/dev/null; then
+    log "/data n'est pas une partition à part — rien à faire"
+    exit 0
+fi
+data_g="$(libre_g /data)"; racine_g="$(libre_g /)"
+data_g="${data_g:-0}"; racine_g="${racine_g:-0}"
+if [ "$data_g" -ge "$MIN_DATA_G" ]; then
+    log "/data a ${data_g} Go libres (≥ ${MIN_DATA_G}) — les conteneurs y restent"
+    exit 0
+fi
+if [ "$racine_g" -lt "$MIN_RACINE_G" ]; then
+    log "/data n'a que ${data_g} Go libres, mais / n'en a que ${racine_g} (< ${MIN_RACINE_G}) — rien de mieux ailleurs"
+    exit 0
+fi
+
+occupe=""
+[ -n "$(ls -A "$LXC" 2>/dev/null || true)" ] && occupe=1
+
+if [ "$mode" = "--etat" ]; then
+    log "/data : ${data_g} Go libres ; / : ${racine_g} Go libres → ${LXC} irait sur ${CIBLE}"
+    [ -n "$occupe" ] && log "conteneurs présents : il faudrait --migrer"
+    exit 0
+fi
+if [ -n "$occupe" ] && [ "$mode" != "--migrer" ]; then
+    # On ne déplace JAMAIS des conteneurs sans qu'on le demande : ce sont des
+    # données, et un arrêt de service.
+    log "conteneurs présents dans ${LXC} — relancer avec --migrer pour les déplacer"
+    exit 0
+fi
+
+command -v systemctl >/dev/null || { log "systemd absent"; exit 1; }
+install -d -m 0755 "$(dirname "$CIBLE")"
+install -d -m 0755 "$CIBLE"
+
+en_marche=()
+if [ -n "$occupe" ]; then
+    command -v rsync >/dev/null || { log "rsync absent — migration impossible"; exit 1; }
+    mapfile -t en_marche < <(lxc-ls --running -1 -P "$LXC" 2>/dev/null || true)
+    for c in "${en_marche[@]}"; do
+        log "arrêt de ${c}"
+        lxc-stop -P "$LXC" -n "$c" -t 60 || lxc-stop -P "$LXC" -n "$c" -k || true
+    done
+    log "copie de ${LXC} vers ${CIBLE} (propriétaires décalés, ACL et attributs étendus conservés)"
+    rsync -aHAX --numeric-ids --sparse "$LXC"/ "$CIBLE"/
+    # Vérification : même nombre d'entrées, même volume à 1 % près.
+    n_a=$(find "$LXC" -xdev | wc -l); n_b=$(find "$CIBLE" -xdev | wc -l)
+    v_a=$(du -sx --block-size=1M "$LXC" | cut -f1); v_b=$(du -sx --block-size=1M "$CIBLE" | cut -f1)
+    if [ "$n_a" != "$n_b" ] || [ $(( (v_a - v_b) * 100 )) -gt $(( v_a )) ] || [ $(( (v_b - v_a) * 100 )) -gt $(( v_a )) ]; then
+        log "ÉCHEC de vérification (${n_a}/${n_b} entrées, ${v_a}/${v_b} Mo) — rien n'est monté, les conteneurs restent dans ${LXC}"
+        for c in "${en_marche[@]}"; do lxc-start -P "$LXC" -n "$c" || true; done
+        exit 1
+    fi
+    ancien="${LXC}.avant-migration-$(date +%Y%m%d%H%M%S)"
+    mv "$LXC" "$ancien"
+    install -d -m 0755 "$LXC"
+    log "ancienne copie gardée : ${ancien} (à supprimer après vérification)"
+else
+    install -d -m 0755 "$LXC"
+fi
+
+cat > "$UNITE" <<EOF
+# Généré par secubox-lxc-racine (#1716) — /data était trop petit.
+[Unit]
+Description=SecuBox — conteneurs LXC sur le grand disque (#1716)
+RequiresMountsFor=/data $(dirname "$CIBLE")
+Before=lxc.service lxc-net.service
+
+[Mount]
+What=${CIBLE}
+Where=${LXC}
+Type=none
+Options=bind
+
+[Install]
+WantedBy=local-fs.target
+EOF
+systemctl daemon-reload
+systemctl enable --now data-lxc.mount
+mountpoint -q "$LXC" || { log "le montage a échoué"; exit 1; }
+log "${LXC} → ${CIBLE} (${racine_g} Go libres)"
+
+for c in "${en_marche[@]}"; do
+    log "redémarrage de ${c}"
+    lxc-start -P "$LXC" -n "$c" || log "ATTENTION : ${c} ne redémarre pas"
+done

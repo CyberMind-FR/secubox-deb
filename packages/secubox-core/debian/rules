@@ -131,6 +131,10 @@ override_dh_auto_install:
 	               debian/secubox-core/usr/sbin/secubox-halls-parc
 	install -m 755 usr/sbin/secubox-waf-route \
 	               debian/secubox-core/usr/sbin/secubox-waf-route
+	# CONTENEURS LÀ OÙ IL Y A LA PLACE (#1716) : /data/lxc sur le grand disque
+	# quand /data est une petite partition.
+	install -m 755 usr/sbin/secubox-lxc-racine \
+	               debian/secubox-core/usr/sbin/secubox-lxc-racine
 	install -m 644 systemd/secubox-dirs-guard.service \
 	               debian/secubox-core/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-dirs-guard.timer \
