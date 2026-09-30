@@ -1,3 +1,9 @@
+secubox-core (1.5.36-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-lxc-racine : /data/lxc en montage lié sur le grand disque quand /data est une petite partition (gk3 : 1,5 Go libres contre 407 Go sur /) — les provisions LXC s'arrêtaient au système de base. Automatique au postinst si /data/lxc est vide ; `--migrer` pour des conteneurs existants (copie fidèle, vérification, ancienne copie gardée) (#1716, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:14:19 +0200
+
 secubox-core (1.5.35-1~bookworm1) bookworm; urgency=medium
 
   * /etc/secubox/secrets : secubox-core propriétaire unique (root:secubox 0750), rétabli par tmpfiles au démarrage et à l'installation, masque ACL recalculé. Cinq paquets imposaient chacun leur mode (root 0700…) : la clé d'annuaire devenait illisible et la flotte voyait gk3 hors ligne (#1689).

@@ -340,3 +340,10 @@ PY
 esac
 
 #DEBHELPER#
+
+# CONTENEURS LÀ OÙ IL Y A LA PLACE (#1716). Mode automatique : n'agit que si
+# /data est une petite partition, / une grande, ET /data/lxc vide — des
+# conteneurs existants ne sont jamais déplacés sans `secubox-lxc-racine --migrer`.
+if [ "$1" = "configure" ] && [ -x /usr/sbin/secubox-lxc-racine ]; then
+    /usr/sbin/secubox-lxc-racine || true
+fi
