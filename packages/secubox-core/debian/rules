@@ -135,6 +135,13 @@ override_dh_auto_install:
 	# quand /data est une petite partition.
 	install -m 755 usr/sbin/secubox-lxc-racine \
 	               debian/secubox-core/usr/sbin/secubox-lxc-racine
+	# LES CONTENEURS SORTENT (#1721) : forward + NAT de br-lxc sur une box
+	# installée par l'image, et routage IPv4 qui survit au durcissement.
+	install -m 755 usr/sbin/secubox-lxc-reseau \
+	               debian/secubox-core/usr/sbin/secubox-lxc-reseau
+	install -d debian/secubox-core/usr/lib/sysctl.d
+	install -m 644 sysctl.d/99-secubox-zz-lxc-forward.conf \
+	               debian/secubox-core/usr/lib/sysctl.d/
 	install -m 644 systemd/secubox-dirs-guard.service \
 	               debian/secubox-core/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-dirs-guard.timer \
