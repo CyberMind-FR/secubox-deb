@@ -253,3 +253,38 @@ def test_idle_check_makes_exactly_one_container_call_regardless_of_app_count(tmp
     # All 5 apps had an established connection in the snapshot: none idle.
     out = r.stdout + r.stderr
     assert "active=5 idle=0 stopped=0" in out
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Mise en page RÉELLE de `ss -tn state established` (#1776)
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_real_ss_state_filter_layout_keeps_a_busy_app_awake(tmp_path):
+    """With a state filter, `ss` drops the State column: the header is
+    "Recv-Q Send-Q Local Address:Port Peer Address:Port Process" and each
+    line is `0 0 <local> <peer>` — the 4th field is the PEER. The #961
+    parser read `$4`, i.e. the client's ephemeral port, so an app with a
+    live visitor counted zero connections and was put to sleep. The local
+    port must be read from the local address, whatever the layout."""
+    apps = tmp_path / "apps"; apps.mkdir()
+    (apps / "busy.py").write_text("import streamlit\n")
+
+    idle_dir = tmp_path / "idle"; idle_dir.mkdir()
+    _backdate(idle_dir / "busy.state", 7200)  # well past the 30 min default
+
+    ps_source = tmp_path / "ps.txt"
+    ps_source.write_text("streamlit run busy.py --server.port=8501\n")
+    ss_source = tmp_path / "ss.txt"
+    ss_source.write_text(
+        "Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n"
+        "0      0      10.0.3.5:8501      10.0.3.1:40000\n"
+        "0      0      [::ffff:10.0.3.5]:8501 [::ffff:10.0.3.1]:40001\n"
+    )
+
+    env = _base_env(tmp_path, apps, idle=idle_dir, ps_source=ps_source, ss_source=ss_source)
+    r = _run_idle_check(env)
+
+    assert r.returncode == 0, r.stderr
+    out = r.stdout + r.stderr
+    assert "idle-stop: busy" not in out
+    assert "active=1 idle=0 stopped=0" in out

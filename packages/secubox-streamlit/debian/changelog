@@ -1,3 +1,38 @@
+secubox-streamlit (1.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * Restauration (#1776, ref #1748) : trois fusions du 2026-08-17 avaient
+    remplacé api/main.py, sbin/streamlitctl et www/streamlit/index.html par
+    des copies de branche périmées. Le mur Mosaïque appelait des routes qui
+    n'existaient plus.
+  * API : GET /apps/audit (cache de streamlit-audit.timer) revient, sous
+    require_lecture (#1256). Vignettes : GET /apps/{name}/screenshot et
+    POST /apps/{name}/recapture (admin), capture paresseuse au réveil.
+  * Réveil non bloquant (#958) : handler `def` (plus jamais sur la boucle de
+    l'agrégateur), vérification de vivacité bornée à 15 s sans git describe,
+    verrou par appli, statut "waking". L'existence reste tranchée par
+    streamlitctl : le code 2 de `app wake` devient un 404, plus de test
+    is_dir qui renvoyait 404 aux scripts à plat. L'échec d'un réveil de fond
+    est rendu une fois au sondage suivant au lieu d'être relancé en boucle.
+  * SÉCURITÉ : tout nom d'appli ou d'instance transmis à `sudo streamlitctl`
+    est validé ([A-Za-z0-9_][A-Za-z0-9_.-]{0,127}, 400 sinon). La vignette
+    n'est plus publique : lecture gardée, Cache-Control private.
+  * streamlitctl : retour de `app shot-target`, du budget de réveil
+    configurable ([wake].budget_seconds), de la détection unifiée des
+    process, des unités systemd par appli, d'idle-check sur l'apparieur
+    unifié et de `app wake-by-port` (#746). Conservé de #961 : instantané
+    unique ps+ss pour idle-check, applis archivées ignorées, repli pkill
+    exact pour un process lancé hors de son unité.
+  * Corrigé au passage : idle-check lisait le port PAIR dans la sortie de
+    `ss -tn state established` (colonne State absente) et aurait endormi
+    des applis en cours d'usage ; `app list`/idle-check avortaient sans
+    streamlit.toml (`return` nu sous set -e).
+  * Page : boucle de sondage du réveil, vignettes, badges et bouton
+    recapturer restaurés, fusionnés avec « réveiller et ouvrir » (#963).
+  * Purge metoblizer (be25628c7) réappliquée : plus de clés metoblizer_*
+    ni d'urlopen vers localhost:9300.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:21:15 +0200
+
 secubox-streamlit (1.4.4-1~bookworm1) bookworm; urgency=medium
 
   * domaine des instances et vhost_suffix = domaine de la box (#1723, #1713).

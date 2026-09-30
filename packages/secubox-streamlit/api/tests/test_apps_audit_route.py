@@ -95,10 +95,27 @@ def test_apps_audit_serves_cached_payload_with_age(tmp_path):
     assert body["cache_age_seconds"] >= 100
 
 
-def test_apps_audit_is_public_no_auth_required(tmp_path):
+def test_apps_audit_needs_no_token_from_a_lan_dashboard(tmp_path):
+    """No Authorization header: served, because the test harness is a LAN
+    dashboard client (secubox_core.testing) — never because the route is
+    public (see the refusal test just below)."""
     cache = tmp_path / "audit.json"
     cache.write_text(json.dumps({"apps": [], "summary": {}}))
     with patch("api.main.APPS_AUDIT_CACHE", cache):
         client = TestClient(app)
         r = client.get("/apps/audit")
     assert r.status_code == 200, r.text
+
+
+def test_apps_audit_refused_to_an_anonymous_reader_outside_the_lan(tmp_path, monkeypatch):
+    """Restored under the #1256 read guard (#1776): the fleet inventory is
+    reconnaissance material — names, ports, paths — never served to an
+    anonymous WAN reader."""
+    from secubox_core.auth import ENTETE_LAN
+
+    cache = tmp_path / "audit.json"
+    cache.write_text(json.dumps({"apps": [], "summary": {}}))
+    with patch("api.main.APPS_AUDIT_CACHE", cache):
+        assert TestClient(app, headers={ENTETE_LAN: "0"}).get("/apps/audit").status_code == 401
+        monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
+        assert TestClient(app).get("/apps/audit").status_code == 401

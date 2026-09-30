@@ -49,12 +49,14 @@ def client(tmp_path, monkeypatch):
                          lambda name, force: spawned.append((name, force)))
 
     api_main._WAKE_IN_PROGRESS.clear()
+    api_main._WAKE_ECHECS.clear()
     app.dependency_overrides[require_jwt] = lambda: {"sub": "tester"}
     try:
         yield TestClient(app), spawned
     finally:
         app.dependency_overrides.clear()
         api_main._WAKE_IN_PROGRESS.clear()
+        api_main._WAKE_ECHECS.clear()
 
 
 def test_wake_schedules_background_task_instead_of_calling_it_inline(client):
