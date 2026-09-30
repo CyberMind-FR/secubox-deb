@@ -9,6 +9,9 @@ override_dh_auto_install:
 	# Host control plane CLI
 	install -d debian/secubox-photoprism/usr/sbin
 	install -m 755 sbin/photoprismctl debian/secubox-photoprism/usr/sbin/photoprismctl
+	# Seule surface privilégiée : photoprismctl, verbes nommés (#1745).
+	install -D -m 0440 debian/secubox-photoprism.sudoers \
+	    debian/secubox-photoprism/etc/sudoers.d/secubox-photoprism
 	# Native-LXC bootstrap (run on demand by `photoprismctl install`)
 	install -d debian/secubox-photoprism/usr/share/secubox/lib/photoprism
 	[ -d lib/photoprism ] && cp -r lib/photoprism/. debian/secubox-photoprism/usr/share/secubox/lib/photoprism/ || true

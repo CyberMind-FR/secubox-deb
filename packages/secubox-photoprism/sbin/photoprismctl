@@ -47,7 +47,17 @@ lxc_state() {
 lxc_running() { [ "$(lxc_state)" = "running" ]; }
 svc() { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl "$@" photoprism.service; }
 
+# Verrou lu par le sleeper (#1458) : un module on-demand serait rendormi en
+# plein travail (install, mise à jour, index), faute de trafic sur son vhost.
+tenir_eveille() {
+    local h=/run/secubox/sleeper-hold
+    mkdir -p "$h" 2>/dev/null && touch "$h/photoprism" || return 0
+    ( while sleep 300; do touch "$h/photoprism"; done ) & GARDE=$!
+    trap 'kill "$GARDE" 2>/dev/null; rm -f /run/secubox/sleeper-hold/photoprism' EXIT
+}
+
 cmd_install() {
+    tenir_eveille
     [ -f "$INSTALL_LIB" ] || { err "install script not found at $INSTALL_LIB"; exit 1; }
     log "Running LXC bootstrap from $INSTALL_LIB ..."
     SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
@@ -71,19 +81,23 @@ cmd_status() {
     printf 'public URL         : https://%s/\n' "$PUBLIC_HOSTNAME"
 }
 
-cmd_start()   { lxc_running || lxc-start -n "$LXC_NAME" -P "$LXC_PATH"; svc start;   log "started"; }
-cmd_stop()    { lxc_running && svc stop || true;                                     log "stopped"; }
-cmd_restart() { lxc_running || lxc-start -n "$LXC_NAME" -P "$LXC_PATH"; svc restart; log "restarted"; }
+# Conteneur arrêté : lxc-start suffit, l'unité photoprism (enabled) part au
+# démarrage ; un systemctl lancé aussitôt n'aurait pas encore de bus (#1745).
+cmd_start()   { if lxc_running; then svc start;   else lxc-start -n "$LXC_NAME" -P "$LXC_PATH"; fi; log "started"; }
+cmd_stop()    { lxc_running && svc stop || true;                                                     log "stopped"; }
+cmd_restart() { if lxc_running; then svc restart; else lxc-start -n "$LXC_NAME" -P "$LXC_PATH"; fi; log "restarted"; }
 cmd_logs()    { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- journalctl -u photoprism -n "${1:-50}" --no-pager; }
 
 cmd_index() {
     lxc_running || { err "LXC not running"; exit 1; }
+    tenir_eveille
     log "Triggering PhotoPrism index (picks up new Nextcloud-synced photos) ..."
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- photoprism-cli index "$@"
 }
 
 cmd_import() {
     lxc_running || { err "LXC not running"; exit 1; }
+    tenir_eveille
     log "Importing from the import folder ..."
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- photoprism-cli import "$@"
 }

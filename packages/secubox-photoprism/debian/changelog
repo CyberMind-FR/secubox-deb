@@ -1,3 +1,21 @@
+secubox-photoprism (1.3.7-1~bookworm1) bookworm; urgency=medium
+
+  * Chemin privilégié pour l'interface (#1745) : l'API (secubox) appelle
+    photoprismctl par `sudo -n`, limité par /etc/sudoers.d/secubox-photoprism
+    aux verbes nommés sans argument. Unité dédiée en NoNewPrivileges=no
+    (sinon sudo est neutralisé), comme jellyfin et picobrew. Avant, démarrer,
+    arrêter, indexer, installer ou lire les journaux échouait sans bruit.
+  * start/restart d'un conteneur arrêté : lxc-start seul (l'unité part au
+    démarrage) ; plus de « Failed to connect to bus ».
+  * index et import détachés comme install/update (HAProxy coupe à 30 s).
+  * photoprismctl tient le module éveillé (verrou sleeper-hold) pendant
+    install, update, index et import.
+  * Comptes : l'API ne stocke plus jamais de mot de passe. Elle les rangeait
+    EN CLAIR dans <data_path>/users.json, liste que PhotoPrism ne lit pas.
+    Les comptes viennent du SSO SecuBox ou de la synchronisation des comptes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 17:59:40 +0200
+
 secubox-photoprism (1.3.6-1~bookworm1) bookworm; urgency=medium
 
   * PhotoPrism installé NATIVEMENT dans son LXC : construction officielle
