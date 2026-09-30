@@ -155,3 +155,34 @@ func TestStatusRejectsNonGet(t *testing.T) {
 		t.Fatalf("expected 405 for POST, got %d", rec.Code)
 	}
 }
+
+// TestC2Endpoints asserts the #826 /c2/* routes are wired when a C2Learner is
+// passed to newStatusMux: the two read views return 200, and POST /c2/allow
+// accepts a form-encoded host.
+func TestC2Endpoints(t *testing.T) {
+	store := openTestStore(t)
+	dir := t.TempDir()
+	c2 := sentinel.NewC2Learner(sentinel.NewBehavioral(), sentinel.C2Config{
+		AllowFile:   filepath.Join(dir, "allow.txt"),
+		CandFile:    filepath.Join(dir, "cand.json"),
+		LearnedFile: filepath.Join(dir, "learned.json"),
+	})
+	mux := newStatusMux(store, c2)
+
+	for _, path := range []string{"/c2/learned", "/c2/candidates"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status %d", path, rec.Code)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/c2/allow", strings.NewReader("host=fp.example"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("allow status %d", rec.Code)
+	}
+}

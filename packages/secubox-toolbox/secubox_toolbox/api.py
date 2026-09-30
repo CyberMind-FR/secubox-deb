@@ -4,6 +4,7 @@
 """SecuBox-Deb ToolBoX :: FastAPI routes (Phase 1)."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -12,8 +13,58 @@ import time
 from pathlib import Path
 
 import jinja2
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+
+# #785 — PDF rendering (fpdf2 + matplotlib) is CPU-heavy (~9 s on the board) and
+# matplotlib's pyplot API is NOT thread-safe. Three defences, together, keep a
+# slow render — or a 504-page auto-retry storm hammering the PDF URL — from
+# wedging the single uvicorn worker:
+#   1. run the render OFF the event loop (threadpool) so other routes stay live;
+#   2. serialize renders through one lock so pyplot's global state can't race and
+#      concurrent renders can't starve the CPU in parallel;
+#   3. cache the rendered bytes per key for a short TTL, with a double-checked
+#      lock, so a retry storm triggers exactly ONE render, not one per retry.
+_pdf_render_lock = asyncio.Lock()
+_pdf_cache: dict = {}          # key -> (expires_at_epoch, pdf_bytes)
+_PDF_CACHE_TTL = 120           # seconds — a report is a live snapshot; 2 min stale is fine
+
+
+def _pdf_cache_get(key: str):
+    ent = _pdf_cache.get(key)
+    if ent and ent[0] > time.time():
+        return ent[1]
+    return None
+
+
+def _pdf_cache_put(key: str, blob: bytes) -> None:
+    _pdf_cache[key] = (time.time() + _PDF_CACHE_TTL, blob)
+    if len(_pdf_cache) > 64:    # bound memory: drop expired entries
+        now = time.time()
+        for k in [k for k, v in _pdf_cache.items() if v[0] <= now]:
+            _pdf_cache.pop(k, None)
+
+
+async def _render_pdf_offloaded(render_fn, data, cache_key: str | None = None):
+    """Render a PDF off the event loop, one at a time, with a short per-key cache.
+
+    The cache re-check INSIDE the lock is the storm defence: the first request
+    renders and caches; every request queued behind it on the lock then finds the
+    fresh entry and returns instantly instead of re-rendering."""
+    if cache_key:
+        cached = _pdf_cache_get(cache_key)
+        if cached is not None:
+            return cached
+    async with _pdf_render_lock:
+        if cache_key:
+            cached = _pdf_cache_get(cache_key)
+            if cached is not None:
+                return cached
+        blob = await run_in_threadpool(render_fn, data)
+        if cache_key:
+            _pdf_cache_put(cache_key, blob)
+        return blob
 
 from . import (
     avatar_analysis,
@@ -48,6 +99,8 @@ try:
     _HAS_TRANSPARENCY = True
 except ImportError:
     _HAS_TRANSPARENCY = False
+from pathlib import Path as _Path
+NETSTATS_SNAPSHOT = _Path("/var/lib/secubox/hub/netstats.json")
 from .config import load_config, resolve_secret
 from .models import AcceptResp, ClientRow, Config, StatusResp
 
@@ -93,7 +146,7 @@ async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(defa
     if not (mh and all(c in "0123456789abcdef" for c in mh) and 8 <= len(mh) <= 64):
         return JSONResponse({"ok": False, "error": "bad mh"}, status_code=400,
                             headers={"Cache-Control": "no-store"})
-    if level not in ("r0", "r1", "r2", "r3"):
+    if level not in ("r0", "r1", "r2", "r3", "r4"):
         return JSONResponse({"ok": False, "error": "bad level"}, status_code=400,
                             headers={"Cache-Control": "no-store"})
     # honour the same gates as /change-level
@@ -103,7 +156,8 @@ async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(defa
             level = "r1"
     except Exception:
         pass
-    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
+    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
     try:
         store.set_client_level(mh, level)
@@ -166,6 +220,69 @@ async def toolbox_inline(
         media_type="application/javascript",
         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
     )
+
+
+# #753 — SW-neuter auto-learn ingest: sbxmitm records every host it sees
+# fetching a Service Worker that is NOT on the sw-neuter allow-list, and POSTs
+# them here every 30 s. We dedup-append to a candidates file for operator review.
+# The operator promotes wanted hosts to sw-neuter-hosts.txt to activate neuter.
+# UNAUTHENTICATED — same trust perimeter as /__toolbox/ad-event (loopback / WG).
+SW_CANDIDATES_FILE = Path("/var/lib/secubox/toolbox/sw-neuter-candidates.txt")
+# #1778 — bornes d'un canal non authentifié que le vhost public kbin atteint
+# aussi : corps, hôtes par envoi (= swCandMapCap du moteur) et taille du
+# fichier de propositions. Au-delà, on ignore en silence (204, comme ad-event).
+_SW_CAND_BODY_MAX = 256 * 1024
+_SW_CAND_PER_POST = 4096
+_SW_CAND_FILE_MAX = 5000
+
+
+def _append_sw_candidates(hosts: list[str]) -> None:
+    """Append new hosts to the sw-neuter candidates file, deduped against what is
+    already there. Best-effort; never raises into the request path."""
+    try:
+        existing: set[str] = set()
+        if SW_CANDIDATES_FILE.exists():
+            existing = {l.strip() for l in SW_CANDIDATES_FILE.read_text().splitlines() if l.strip()}
+        room = _SW_CAND_FILE_MAX - len(existing)
+        fresh = list(dict.fromkeys(h for h in hosts if h not in existing))[:max(room, 0)]
+        if not fresh:
+            return
+        SW_CANDIDATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with SW_CANDIDATES_FILE.open("a", encoding="utf-8") as fh:
+            for h in fresh:
+                fh.write(h + "\n")
+    except OSError as e:
+        log.debug("sw-candidate append failed: %s", e)
+
+
+@router.post("/__toolbox/sw-candidate")
+async def toolbox_sw_candidate(request: Request) -> Response:
+    """#753 — record SW-PWA hosts proposed for the sw-neuter allow-list. sbxmitm
+    POSTs hosts it saw fetching a Service Worker that are NOT yet allow-listed.
+    Deduped-appends to the candidates file for operator review; the operator
+    promotes wanted hosts to sw-neuter-hosts.txt.
+
+    #1778 — seuls des noms d'hôte DNS nus sont retenus (`_host_ok`) : un
+    « hôte » porteur d'un saut de ligne injectait des lignes arbitraires dans
+    le fichier que l'opérateur relit pour promouvoir."""
+    try:
+        clen = int(request.headers.get("content-length") or 0)
+    except (AttributeError, TypeError, ValueError):
+        clen = 0
+    if clen > _SW_CAND_BODY_MAX:
+        return Response(status_code=204)
+    try:
+        body = await request.json()
+        raw = (body.get("hosts") or []) if isinstance(body, dict) else []
+        if not isinstance(raw, list):
+            raw = []
+        hosts = [h.strip().lower() for h in raw[:_SW_CAND_PER_POST]
+                 if isinstance(h, str) and _host_ok(h)]
+    except Exception:
+        hosts = []
+    if hosts:
+        _append_sw_candidates(hosts)
+    return Response(status_code=204)
 
 
 # #662 — ad-block metrics ingest from the Go MITM engine (sbxmitm). The #662
@@ -245,6 +362,11 @@ async def toolbox_ad_event(request: Request) -> Response:
             store.record_ad_client_blocks(client_rows)
         if cand_rows:
             store.record_ad_candidates(cand_rows)
+        # #755 — cosmetic-pages counter: Go engine reports how many R3 HTML pages
+        # received the cosmetic ad-hide style in this flush window.
+        cp = body.get("cosmetic_pages")
+        if cp:
+            store.record_cosmetic_pages(cp)
         pin_rows = [
             (c["host"], int(c.get("hits", 0)))
             for c in pin_candidates
@@ -517,13 +639,14 @@ async def accept(request: Request):
         level = (form.get("level") or "r1").lower()
     except Exception:
         level = "r1"
-    if level not in ("r0", "r1", "r2", "r3"):
+    if level not in ("r0", "r1", "r2", "r3", "r4"):
         level = "r1"
     # R2 only allowed if config enables it
     if level == "r2" and not cfg.r2.enabled:
         level = "r1"
     # R3 only allowed if WG container provisioned (presence of server.pubkey)
-    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
+    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
 
     # All levels get validated (net access)
@@ -575,11 +698,12 @@ async def change_level(request: Request):
         level = (form.get("level") or "r1").lower()
     except Exception:
         level = "r1"
-    if level not in ("r0", "r1", "r2", "r3"):
+    if level not in ("r0", "r1", "r2", "r3", "r4"):
         level = "r1"
     if level == "r2" and not cfg.r2.enabled:
         level = "r1"
-    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
+    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
 
     # Re-validate (idempotent extend)
@@ -1094,6 +1218,56 @@ MITM_BYPASS_SEED_FILE = Path(os.environ.get(
     "SECUBOX_BYPASS_SEED", "/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf"))
 MITM_BYPASS_DYNAMIC_FILE = Path(os.environ.get(
     "SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"))
+# TLS-splice lists (host SUFFIX, inline # comments) — the OTHER half of the
+# exclusion set: what the R3 engine actually splices. Surfaced in the Filtres
+# MITM list so ALL explicit splicing is displayed + known (#803).
+TLS_SPLICE_SEED_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"))
+SPLICE_LEARNED_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"))
+# #806 — federated (mesh-union) lists the R3 engine also reads; surfaced in the
+# Filtres MITM list tagged mesh-* (edit on the origin node).
+FED_SPLICE_FILE = Path(os.environ.get("SECUBOX_FED_SPLICE", "/var/lib/secubox/toolbox/mitm-exclusion-fed-splice.txt"))
+FED_BYPASS_FILE = Path(os.environ.get("SECUBOX_FED_BYPASS", "/var/lib/secubox/toolbox/mitm-exclusion-fed-bypass.txt"))
+FED_DISABLED_FILE = Path(os.environ.get("SECUBOX_FED_DISABLED", "/var/lib/secubox/toolbox/mitm-exclusion-fed-disabled.txt"))
+# #809 — operator-disabled filter patterns (Filtres MITM uncheck). The R3 engine
+# reads this SAME file and suppresses matching per-pattern, so unchecking has
+# real effect on ALL sources incl. the package seed.
+MITM_FILTER_DISABLED_FILE = Path(os.environ.get(
+    "SECUBOX_FILTER_DISABLED", "/var/lib/secubox/toolbox/mitm-filter-disabled.txt"))
+
+
+def _read_disabled_file(path) -> set:
+    try:
+        return {ln.split("#", 1)[0].strip()
+                for ln in path.read_text().splitlines()
+                if ln.split("#", 1)[0].strip()}
+    except OSError:
+        return set()
+
+
+def _load_disabled() -> set:
+    """Set of operator-disabled patterns (exact strings; # comments stripped).
+
+    #806 fix — union of the LOCAL disabled file with the FEDERATED (mesh-union)
+    disabled file: a pattern disabled elsewhere in the fleet must also show
+    enabled=false here, matching the R3 engine's disabledLocal ∪ disabledFed."""
+    return _read_disabled_file(MITM_FILTER_DISABLED_FILE) | _read_disabled_file(FED_DISABLED_FILE)
+
+
+def _read_splice(path) -> list:
+    """Splice list lines — strips INLINE # comments (the seed uses them)."""
+    try:
+        out = []
+        for ln in path.read_text().splitlines():
+            s = ln.split("#", 1)[0].strip()
+            if s:
+                out.append(s)
+        return out
+    except OSError:
+        return []
+
+
 def _ensure_bypass_file() -> None:
     if not MITM_BYPASS_FILE.exists():
         MITM_BYPASS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -1131,7 +1305,31 @@ def _load_bypass_tagged() -> list:
         for pat in _read_patterns(path):
             if pat not in seen:        # first wins → seed > static > learned
                 seen[pat] = source
-    return [{"pattern": p, "source": s} for p, s in sorted(seen.items())]
+    # ALSO surface the TLS-splice list (the R3 engine's actual passthrough set) so
+    # every explicitly-spliced host is displayed + known (#803). Bypass wins the
+    # tag if a pattern somehow appears in both.
+    for source, path in (("splice-seed", TLS_SPLICE_SEED_FILE),
+                         ("splice-learned", SPLICE_LEARNED_FILE)):
+        for pat in _read_splice(path):
+            if pat not in seen:
+                seen[pat] = source
+    # #806 — surface federated (mesh-union) filter entries from the 3 fed files
+    # that the R3 engine also reads; tagged mesh-* so the operator knows they're
+    # federation-sourced (edit on the origin node, not here).
+    for source, path in (("mesh-splice", FED_SPLICE_FILE),
+                         ("mesh-bypass", FED_BYPASS_FILE),
+                         ("mesh-disabled", FED_DISABLED_FILE)):
+        for pat in _read_splice(path):
+            if pat not in seen:
+                seen[pat] = source
+    # #809 — tag each row: enabled (not operator-disabled) + editable (in a
+    # writable file, so 🗑 delete can remove the line; package seeds can only be
+    # disabled, not deleted).
+    disabled = _load_disabled()
+    editable = {"static", "learned", "splice-learned"}
+    return [{"pattern": p, "source": s, "enabled": p not in disabled,
+             "editable": s in editable}
+            for p, s in sorted(seen.items())]
 
 
 def _is_public_kbin(request: Request) -> bool:
@@ -1415,6 +1613,67 @@ async def admin_filter_remove(request: Request) -> Response:
         new_lines = [ln for ln in lines if ln.strip() != entry]
         MITM_BYPASS_FILE.write_text("\n".join(new_lines) + "\n")
     return RedirectResponse("/admin/filter-control", status_code=303)
+
+
+def _write_disabled(patterns: set) -> None:
+    MITM_FILTER_DISABLED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    MITM_FILTER_DISABLED_FILE.write_text(
+        "# SecuBox ToolBoX :: operator-disabled filter patterns (#809).\n"
+        "# Managed via the Filtres MITM webui checkbox. One pattern per line.\n"
+        "# The R3 engine reads this file and suppresses matching per-pattern.\n"
+        + "".join(sorted(p + "\n" for p in patterns)))
+
+
+@router.post("/admin/filter-control/toggle")
+async def admin_filter_toggle(request: Request) -> dict:
+    """#809 — enable/disable a filter pattern (webui checkbox). Toggling adds/
+    removes it from the disabled file; the engine hot-reloads and suppresses it.
+    Works for ANY source (incl. package seed)."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "filter editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    body = await request.json()
+    pat = (body.get("pattern") or "").strip()
+    if not pat or "\n" in pat:
+        raise HTTPException(400, "invalid pattern")
+    disabled = _load_disabled()
+    if pat in disabled:
+        disabled.discard(pat)
+        enabled = True
+    else:
+        disabled.add(pat)
+        enabled = False
+    _write_disabled(disabled)
+    return {"pattern": pat, "enabled": enabled}
+
+
+@router.post("/admin/filter-control/delete")
+async def admin_filter_delete(request: Request) -> dict:
+    """#809 — delete a filter entry. Removes the line from any EDITABLE file
+    (static/dynamic/splice-learned); a package-seed entry can't be deleted (file
+    is read-only) → it is disabled instead."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "filter editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    body = await request.json()
+    pat = (body.get("pattern") or "").strip()
+    if not pat:
+        raise HTTPException(400, "invalid pattern")
+    removed = False
+    for f in (MITM_BYPASS_FILE, MITM_BYPASS_DYNAMIC_FILE, SPLICE_LEARNED_FILE):
+        try:
+            lines = f.read_text().splitlines()
+        except OSError:
+            continue
+        new = [ln for ln in lines if ln.split("#", 1)[0].strip() != pat]
+        if len(new) != len(lines):
+            f.write_text("\n".join(new) + ("\n" if new else ""))
+            removed = True
+    disabled_fallback = False
+    if not removed:
+        d = _load_disabled()
+        d.add(pat)
+        _write_disabled(d)
+        disabled_fallback = True
+    return {"pattern": pat, "deleted": removed, "disabled": disabled_fallback}
 
 
 @router.get("/admin/filter-control/regex")
@@ -2895,6 +3154,9 @@ def _dpi_stats(mac_hash: str | None) -> dict:
         "categories": cats(me.get("by_category")),
         "protocols": _dpi_donut([{"label": k, "emoji": "📡", "count": v} for k, v in me_protos.items()]),
         "alerts": alerts(me.get("alerts")),
+        # #792 — donut 'alerts' loses the per-alert fields; keep the RAW collector
+        # alerts (kind/service/dst/detail) for the persona Quêtes section.
+        "alerts_raw": me.get("alerts") or [],
         "destinations": _dpi_donut(me_dests),
     }
 
@@ -2915,6 +3177,30 @@ def _dpi_stats(mac_hash: str | None) -> dict:
                                      "count": int(a.get("bytes", 0) or 0)} for a in (st.get("top_apps") or [])]),
     }
     return {"me": me_stats, "all": all_stats}
+
+
+def _media_stats(mac_hash: str | None) -> dict:
+    """#785 — media-type donut data (MIME captured by sbxmitm R4) for THIS
+    device (me) and board-wide (all). Reuses _dpi_donut for pct/start/end so the
+    donuts render identically to the DPI-exfil ones. Fail-empty."""
+    try:
+        from secubox_core import media_catch
+        agg = media_catch.aggregate(path=media_catch.MEDIA_CATCH_PATH, mac_hash=mac_hash)
+    except Exception:  # pragma: no cover — helper is fail-empty, this is belt+braces
+        agg = {"me": {}, "all": {}}
+
+    def _shape(view: dict) -> dict:
+        view = view or {}
+        return {
+            "present": bool(view.get("present")),
+            "flows": view.get("flows", 0),
+            "bytes": view.get("bytes", 0),
+            "kinds": _dpi_donut(list(view.get("kinds") or [])),
+            "ctypes": _dpi_donut(list(view.get("ctypes") or [])),
+            "top_hosts": view.get("top_hosts") or [],
+        }
+
+    return {"me": _shape(agg.get("me")), "all": _shape(agg.get("all"))}
 
 
 def _build_pdf_donuts(mac_hash: str | None, data: dict) -> list:
@@ -3123,6 +3409,7 @@ async def report_me_html(request: Request) -> HTMLResponse:
         graph=graph, graph_stats=gs, exposure_score=exposure_score,
         charts=_build_report_charts(graph),
         dpi_exfil=_dpi_e,
+        media_exfil=_media_stats(mac_hash),
         persona=_persona_sheet(mac_hash, _level, gs, exposure_score, _dpi_e,
                                session.get("device_type", ""),
                                request.headers.get("user-agent", "")),
@@ -3133,6 +3420,35 @@ async def report_me_html(request: Request) -> HTMLResponse:
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
         "Pragma": "no-cache",
     })
+
+
+def _enrich_report_data(mac_hash: str, data: dict, ua: str = "") -> dict:
+    """#790 — attach the live enrichment (DPI, media, persona, charts, carto) to
+    a report `data` dict. Factored out of report_me so /report/{token} and the
+    admin route produce the SAME rich PDF. `ua` drives the persona device class;
+    "" is fine for non-HTTP callers (falls back to a generic Runner class)."""
+    data["dpi_exfil"] = _dpi_stats(mac_hash)          # #701 DPI parity
+    data["media_exfil"] = _media_stats(mac_hash)      # #785 media-type donuts
+    data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 visual donuts
+    try:
+        from . import social as _social
+        _graph = _social.fetch_graph(mac_hash, since_seconds=7 * 86400)
+    except Exception:
+        _graph = {"stats": {}, "nodes": [], "by_country": []}
+    _gs = _graph.get("stats") or {}
+    _exp = min(100, int((_gs.get("total_trackers", 0) or 0) * 1.5
+                        + (_gs.get("opgrade_sites", 0) or 0) * 12
+                        + (_gs.get("antibot_sites", 0) or 0) * 8))
+    _lvl = store.get_client_level(mac_hash) if mac_hash else "r1"
+    data["persona"] = _persona_sheet(mac_hash, _lvl, _gs, _exp, data["dpi_exfil"],
+                                     data.get("device_type", ""), ua)
+    _charts = _build_report_charts(_graph)
+    data["charts"] = _charts                          # #711 "En un coup d'œil"
+    data["graph_stats"] = _gs
+    data["bestiary"] = (_charts.get("trackers") or [])[:5]
+    data["carto_nodes"] = _graph.get("nodes") or []   # #709 carto + tables
+    data["carto_country"] = _graph.get("by_country") or []
+    return data
 
 
 @router.get("/report/me")
@@ -3154,29 +3470,8 @@ async def report_me(request: Request) -> Response:
         mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    data["dpi_exfil"] = _dpi_stats(mac_hash)  # #701 — DPI parity with the HTML report
-    data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 — visual donuts
-    # #707 — Netrunner persona sheet (live graph + DPI + ads + request UA)
-    try:
-        from . import social as _social
-        _graph = _social.fetch_graph(mac_hash, since_seconds=7 * 86400)
-    except Exception:
-        _graph = {"stats": {}, "nodes": [], "by_country": []}
-    _gs = _graph.get("stats") or {}
-    _exp = min(100, int((_gs.get("total_trackers", 0) or 0) * 1.5
-                        + (_gs.get("opgrade_sites", 0) or 0) * 12
-                        + (_gs.get("antibot_sites", 0) or 0) * 8))
-    _lvl = store.get_client_level(mac_hash) if mac_hash else "r1"
-    data["persona"] = _persona_sheet(mac_hash, _lvl, _gs, _exp, data["dpi_exfil"],
-                                     data.get("device_type", ""),
-                                     request.headers.get("user-agent", ""))
-    _charts = _build_report_charts(_graph)
-    data["charts"] = _charts                              # #711 "En un coup d'œil"
-    data["graph_stats"] = _gs
-    data["bestiary"] = (_charts.get("trackers") or [])[:5]
-    data["carto_nodes"] = _graph.get("nodes") or []      # #709 carto + tables
-    data["carto_country"] = _graph.get("by_country") or []
-    pdf_bytes = reports.render_pdf(data)
+    _enrich_report_data(mac_hash, data, ua=request.headers.get("user-agent", ""))
+    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"me:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
     return Response(
         content=pdf_bytes,
@@ -3195,7 +3490,8 @@ async def report(token: str) -> Response:
         raise HTTPException(404, "report not found or expired")
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    pdf_bytes = reports.render_pdf(data)
+    _enrich_report_data(mac_hash, data)  # #790 — same rich content as /report/me
+    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"tok:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}-{int(time.time())}.pdf"
     return Response(
         content=pdf_bytes,
@@ -3272,6 +3568,16 @@ async def admin_social_aggregate(hours: int = 24) -> dict:
     return _s.aggregate(hours=hours)
 
 
+@router.get("/admin/cookie-crosssite")
+async def admin_cookie_crosssite(hours: int = 24, top: int = 50) -> dict:
+    """Operator view : cross-site tracker cookies (a cookie id reused across
+    >= 2 first-party sites) with per-tracker site/client/cookie counts. Read-only
+    over social_edges; same admin gating as the sibling /admin/* routes.
+    """
+    from . import social as _s
+    return _s.cookie_xsite_detail(hours=hours, top_n=top)
+
+
 @router.get("/admin/blacklist")
 async def admin_blacklist() -> dict:
     """Phase 13.A (#521) + 13.B (#522) — enforcement-spine status :
@@ -3290,9 +3596,8 @@ async def admin_blacklist() -> dict:
         "doh_detect_v4": 0,
         "doh_detect_v6": 0,
         "doh_hits": 0,
-        "resolved_domains": 0,
         "doh_block": False,
-        "sources": ["threat-intel", "dns-guard"],
+        "sources": ["threat-intel"],
     }
     try:
         r = _sp.run(
@@ -3314,26 +3619,22 @@ async def admin_blacklist() -> dict:
                         out["doh_detect_v4"] = n
                     elif name == "doh_detect_v6":
                         out["doh_detect_v6"] = n
-                if "rule" in item:
-                    chain = item["rule"].get("chain", "")
-                    for ex in item["rule"].get("expr", []):
-                        c = ex.get("counter")
-                        if not c:
-                            continue
-                        pk = int(c.get("packets", 0) or 0)
-                        if chain == "doh_watch":
-                            out["doh_hits"] += pk
-                        else:
-                            out["drops"] += pk
+                if "counter" in item and isinstance(item["counter"], dict):
+                    cobj = item["counter"]
+                    cname = cobj.get("name", "")
+                    pk = int(cobj.get("packets", 0) or 0)
+                    if cname.startswith("sbx_doh_detect"):
+                        out["doh_hits"] += pk
+                    elif cname.startswith(("sbx_drop_blacklist", "sbx_drop_quarantine")):
+                        out["drops"] += pk
             out["active"] = True
     except Exception as e:  # noqa: BLE001
         log.warning("admin_blacklist nft parse failed: %s", e)
-    # Last-sync state file (resolved-domain count + doh_block flag).
+    # Last-sync state file (doh_block flag).
     try:
         st = _P("/run/secubox/blacklist-sync.json")
         if st.exists():
             j = _json.loads(st.read_text())
-            out["resolved_domains"] = int(j.get("resolved_domains", 0) or 0)
             out["doh_block"] = str(j.get("doh_block", "0")) == "1"
     except Exception:
         pass
@@ -3438,7 +3739,41 @@ async def admin_protective() -> dict:
 async def admin_ad_stats(hours: int = 24) -> dict:
     """Contextual ad-block metrics for the #ads tab (read-only, kbin-safe)."""
     h = max(1, min(int(hours if hours is not None else 24), 168))
-    return store.ad_stats(hours=h)
+    out = store.ad_stats(hours=h)
+    # #758 — real network-layer drops from the hub netstats collector snapshot.
+    # Fall back to the legacy blacklist nft parse when the snapshot is absent.
+    nd = None
+    try:
+        import json as _json
+        snap = _json.loads(NETSTATS_SNAPSHOT.read_text())
+        nd = int(snap.get("network_drops", 0) or 0)
+    except Exception:
+        nd = None
+    if nd is None:
+        try:
+            bl = await admin_blacklist()
+            nd = int(bl.get("drops", 0) or 0)
+        except Exception:
+            nd = 0
+    out["network_drops"] = nd
+    # DNS-layer ad-blocking (secubox-adblock-sync #740): the Unbound sinkhole
+    # kills most ads BEFORE they reach the engine, so total_blocked (204s) reads
+    # low/0. Surface the real DNS blocking so the tab isn't misleading — "0
+    # engine blocks" ≠ "no ad-blocking".
+    try:
+        import json as _json
+        s = _json.loads(Path("/var/lib/secubox/ad-guard/sinkhole-status.json").read_text())
+        comp = s.get("compile", {}) or {}
+        out["dns_sinkhole"] = {
+            "enabled": bool(s.get("enabled")),
+            "domains": int(s.get("blocked", 0) or 0),
+            "net_rules": int(comp.get("net_rules", 0) or 0),
+            "cosmetic_domains": int(comp.get("cosmetic_domains", 0) or 0),
+            "sources": sorted((comp.get("sources") or {}).keys()),
+        }
+    except Exception:
+        out["dns_sinkhole"] = {"enabled": None}
+    return out
 
 
 @router.get("/admin/ad-stats/client/{mac_hash}")
@@ -3679,10 +4014,18 @@ def _tor_exit_ip_cached():
 
 def _require_tor_admin(request: Request) -> None:
     """Tor on/off/newnym/leak-check are operator actions — blocked on the
-    public kbin vhost (defense-in-depth, mirrors /admin/filter-control)."""
+    public kbin vhost (defense-in-depth, mirrors /admin/filter-control).
+
+    #1778 — refusées aussi à un pair du tunnel wg-toolbox (même garde que
+    /rlevel) : le DNAT du tunnel mène droit à uvicorn sans passer par nginx,
+    et ces routes choisissent la sortie Tor/VPN et les ponts obfs4 de toute
+    la cabine — jamais une décision d'usager."""
     if _is_public_kbin(request):
         raise HTTPException(status_code=403,
                             detail="Tor controls are admin-only (use admin.gk2.secubox.in)")
+    if _is_wg_peer_source(request):
+        raise HTTPException(status_code=403,
+                            detail="Tor controls are admin-only (tunnel-peer source refused)")
 
 
 @router.get("/admin/tor/state")
@@ -3774,6 +4117,231 @@ async def admin_tor_check_leaks(request: Request) -> dict:
     return result
 
 
+
+# ── Tor exit-country / VPN-client / obfs4-bridge CRUD (#683 follow-up) ──
+# Validated, audited state files consumed by
+# sbin/secubox-toolbox-tor-reconcile (root, path-triggered). This layer
+# never escalates privilege — it only writes /etc/secubox/toolbox/tor-*.txt
+# and re-triggers the SAME secubox-toolbox-tor.path watcher that
+# admin_tor_on/off use (touch filters.json), so the privileged reconciler
+# picks up the change exactly like a tor_mode flip (#683).
+import ipaddress as _ipaddress
+import re as _re
+
+TOR_EXIT_CC = Path(os.environ.get(
+    "SECUBOX_TOR_EXIT_CC_PATH", "/etc/secubox/toolbox/tor-exit-country.txt"))
+TOR_VPN_CLIENTS = Path(os.environ.get(
+    "SECUBOX_TOR_VPN_CLIENTS_PATH", "/etc/secubox/toolbox/tor-vpn-clients.txt"))
+TOR_BRIDGES = Path(os.environ.get(
+    "SECUBOX_TOR_BRIDGES_PATH", "/etc/secubox/toolbox/tor-bridges.txt"))
+_TOR_AUDIT_LOG = Path("/var/log/secubox/audit.log")
+
+_CC_RE = _re.compile(r"^[A-Za-z]{2}$")
+_MAC_RE = _re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
+_BRIDGE_RE = _re.compile(r"^Bridge obfs4 [][A-Za-z0-9:._=+/, -]+$")
+
+
+def _valid_cc(c: str) -> bool:
+    return bool(_CC_RE.fullmatch(c or ""))
+
+
+def _valid_selector(kind: str, sel: str) -> bool:
+    # IPv4-only: the backend tor_vpn_src nft set is `type ipv4_addr` and
+    # populate_vpn_clients silently skips non-v4, so accepting an IPv6
+    # selector would be a false success (200 + audit, nothing enforced).
+    try:
+        if kind == "ip":
+            return _ipaddress.ip_address(sel).version == 4
+        if kind == "cidr":
+            return _ipaddress.ip_network(sel, strict=False).version == 4
+        if kind == "mac":
+            return bool(_MAC_RE.fullmatch(sel))
+    except ValueError:
+        return False
+    return False
+
+
+def _valid_bridge(line: str) -> bool:
+    return bool(_BRIDGE_RE.fullmatch(line or ""))
+
+
+def _tor_audit(action: str, target: str, request: Request | None = None) -> None:
+    """Append-only CSPN audit trail (mirrors escalate.py's _audit)."""
+    try:
+        _TOR_AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        operator = (request.client.host if request and request.client else "admin")
+        with _TOR_AUDIT_LOG.open("a") as f:
+            f.write(f"{ts} secubox-toolbox operator={operator} action={action} target={target}\n")
+    except Exception as e:  # pragma: no cover
+        log.warning("tor audit write failed: %s", e)
+
+
+def _trigger_reconcile() -> None:
+    """Fire the privileged reconciler the same way tor_mode on/off does
+    (#683): touch filters.json so secubox-toolbox-tor.path re-runs
+    secubox-toolbox-tor-reconcile. The portal itself never escalates."""
+    try:
+        from .filters import set_filters
+        set_filters({})
+    except Exception as e:  # pragma: no cover
+        log.warning("tor reconcile trigger failed: %s", e)
+
+
+def _read_state_lines(path: Path) -> list[str]:
+    try:
+        return [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    except Exception:
+        return []
+
+
+def _write_state_lines(path: Path, lines: list[str]) -> None:
+    """Same atomic-tmp-then-fallback-in-place write as filters.set_filters,
+    since /etc/secubox/toolbox is 0750 and the serving user may not be able
+    to create a tmp file in the parent dir."""
+    data = "\n".join(lines) + ("\n" if lines else "")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    try:
+        tmp = str(path) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except OSError:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(data)
+
+
+@router.get("/exit_country")
+async def get_exit_country(request: Request) -> dict:
+    _require_tor_admin(request)
+    return {"countries": [c.upper() for c in _read_state_lines(TOR_EXIT_CC)]}
+
+
+@router.post("/exit_country")
+async def set_exit_country(request: Request) -> dict:
+    """Replaces the WHOLE exit-country list. One validated ISO cc per line."""
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    countries = (body or {}).get("countries")
+    if not isinstance(countries, list):
+        raise HTTPException(status_code=400, detail="countries: list expected")
+    clean: list[str] = []
+    for c in countries:
+        if not isinstance(c, str) or not _valid_cc(c):
+            raise HTTPException(status_code=400, detail=f"invalid country code: {c!r}")
+        cc = c.upper()
+        if cc not in clean:
+            clean.append(cc)
+    _write_state_lines(TOR_EXIT_CC, clean)
+    _tor_audit("exit_country_set", ",".join(clean) or "(cleared)", request)
+    _trigger_reconcile()
+    return {"countries": clean}
+
+
+@router.get("/vpn/clients")
+async def get_vpn_clients(request: Request) -> dict:
+    _require_tor_admin(request)
+    out = []
+    for ln in _read_state_lines(TOR_VPN_CLIENTS):
+        kind, _, sel = ln.partition(":")
+        out.append({"kind": kind, "selector": sel})
+    return {"clients": out}
+
+
+@router.post("/vpn/client")
+async def add_vpn_client(request: Request) -> dict:
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    kind = (body or {}).get("kind")
+    sel = (body or {}).get("selector")
+    if not isinstance(kind, str) or not isinstance(sel, str) or not _valid_selector(kind, sel):
+        raise HTTPException(status_code=400, detail="invalid kind/selector")
+    entry = f"{kind}:{sel}"
+    lines = _read_state_lines(TOR_VPN_CLIENTS)
+    if entry not in lines:
+        lines.append(entry)
+        _write_state_lines(TOR_VPN_CLIENTS, lines)
+        _tor_audit("vpn_client_add", entry, request)
+        _trigger_reconcile()
+    return {"clients": [{"kind": k, "selector": s} for k, _, s in
+                         (ln.partition(":") for ln in lines)]}
+
+
+@router.delete("/vpn/client")
+async def remove_vpn_client(request: Request) -> dict:
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    kind = (body or {}).get("kind")
+    sel = (body or {}).get("selector")
+    if not isinstance(kind, str) or not isinstance(sel, str) or not _valid_selector(kind, sel):
+        raise HTTPException(status_code=400, detail="invalid kind/selector")
+    entry = f"{kind}:{sel}"
+    lines = _read_state_lines(TOR_VPN_CLIENTS)
+    if entry in lines:
+        lines = [ln for ln in lines if ln != entry]
+        _write_state_lines(TOR_VPN_CLIENTS, lines)
+        _tor_audit("vpn_client_remove", entry, request)
+        _trigger_reconcile()
+    return {"clients": [{"kind": k, "selector": s} for k, _, s in
+                         (ln.partition(":") for ln in lines)]}
+
+
+@router.get("/tor/bridges")
+async def get_tor_bridges(request: Request) -> dict:
+    _require_tor_admin(request)
+    return {"bridges": _read_state_lines(TOR_BRIDGES)}
+
+
+@router.post("/tor/bridge")
+async def add_tor_bridge(request: Request) -> dict:
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    line = (body or {}).get("line")
+    if not isinstance(line, str) or not _valid_bridge(line):
+        raise HTTPException(status_code=400, detail="invalid bridge line")
+    lines = _read_state_lines(TOR_BRIDGES)
+    if line not in lines:
+        lines.append(line)
+        _write_state_lines(TOR_BRIDGES, lines)
+        _tor_audit("tor_bridge_add", line, request)
+        _trigger_reconcile()
+    return {"bridges": lines}
+
+
+@router.delete("/tor/bridge")
+async def remove_tor_bridge(request: Request) -> dict:
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    line = (body or {}).get("line")
+    if not isinstance(line, str) or not _valid_bridge(line):
+        raise HTTPException(status_code=400, detail="invalid bridge line")
+    lines = _read_state_lines(TOR_BRIDGES)
+    if line in lines:
+        lines = [ln for ln in lines if ln != line]
+        _write_state_lines(TOR_BRIDGES, lines)
+        _tor_audit("tor_bridge_remove", line, request)
+        _trigger_reconcile()
+    return {"bridges": lines}
+
+
 @router.get("/admin/sentinel/stats")
 async def admin_sentinel_stats() -> dict:
     """Fleet Sentinel counters for the WebUI tab. Fail-safe: a dark daemon
@@ -3798,6 +4366,393 @@ async def admin_sentinel_verdicts(limit: int = 50) -> dict:
         "assess": sentinel_link.assess(dets),
         "detections": dets,
     }
+
+
+def _c2_signals(s):
+    """Normalize Signals to a list: Go map[string]bool -> JSON object; []string -> JSON array."""
+    if isinstance(s, dict):
+        return sorted(k for k, v in s.items() if v)
+    if isinstance(s, list):
+        return s
+    return []
+
+
+def _c2_norm_learned(h):
+    return {"host": h.get("host", ""), "signals": _c2_signals(h.get("signals")),
+            "interval_s": h.get("interval_s"), "devices": h.get("devices")}
+
+
+def _c2_norm_cand(c):
+    return {"host": c.get("host", ""), "signals": _c2_signals(c.get("signals")),
+            "interval_s": c.get("interval_s"), "windows": c.get("windows")}
+
+
+@router.get("/admin/sentinel/c2")
+async def admin_sentinel_c2() -> dict:
+    """Learned + candidate C2 hosts for the WebUI 'C2 appris' view. Fail-safe."""
+    data = sentinel_link.fetch_c2()
+    if not data:
+        return {"active": False, "learned": [], "candidates": []}
+    return {"active": True,
+            "learned": [_c2_norm_learned(h) for h in data.get("learned", [])],
+            "candidates": [_c2_norm_cand(c) for c in data.get("candidates", [])]}
+
+
+@router.post("/admin/sentinel/c2/allow")
+async def admin_sentinel_c2_allow(request: Request, host: str = Form(...)) -> dict:
+    """Operator 'Ignorer' — allowlist a host so it is never learned as C2.
+
+    #1778 — l'original n'avait AUCUNE garde : un visiteur du vhost public
+    kbin, ou l'appareil compromis lui-même depuis le tunnel, pouvait inscrire
+    son propre serveur C2 en liste blanche et effacer sa détection. Mêmes
+    gardes que les autres écritures d'administration de ce fichier."""
+    if _is_public_kbin(request):
+        raise HTTPException(status_code=403,
+                            detail="sentinel allowlist is admin-only (use admin.gk2.secubox.in/toolbox/)")
+    if _is_wg_peer_source(request):
+        raise HTTPException(status_code=403,
+                            detail="tunnel-peer source cannot edit the sentinel allowlist")
+    return {"ok": sentinel_link.c2_allow(host)}
+
+
+# ───────────────── /rlevel — per-peer wg-toolbox MITM R-level (#rlevel-per-peer, task 6) ─────────────────
+#
+# Modes, increasing intrusion: off(0) < passive(1) < active(2) < reel(3).
+# Effective = forced ?? clamp(chosen, floor, reel) — mirrors cmd/sbxmitm/rlevel.go
+# effective() and sbxmitm-policyctl's bash re-implementation, kept in lockstep
+# here so the admin/self-service list can compute it WITHOUT asking the ctl a
+# second time. No in-process root: every mutation is delegated to
+# `sudo -n /usr/sbin/sbxmitm-policyctl` (mirrors the proxypac API's `_ctl`
+# pattern) — this module only ever READS peer-rlevel.json (via `ctl list`)
+# and wg-peers.json.
+_RLEVEL_MODES = ("off", "passive", "active", "reel")
+_RLEVEL_RANK = {m: i for i, m in enumerate(_RLEVEL_MODES)}
+_RLEVEL_POLICYCTL = "/usr/sbin/sbxmitm-policyctl"
+_RLEVEL_WG_PEERS = Path("/var/lib/secubox/toolbox/wg-peers.json")
+
+
+def _rlevel_valid_mode(mode: str) -> bool:
+    return mode in _RLEVEL_RANK
+
+
+def _rlevel_clamp(value: str, floor: str, ceiling: str = "reel") -> str:
+    r = _RLEVEL_RANK.get(value, _RLEVEL_RANK["passive"])
+    lo = _RLEVEL_RANK.get(floor, _RLEVEL_RANK["passive"])
+    hi = _RLEVEL_RANK.get(ceiling, _RLEVEL_RANK["reel"])
+    r = max(lo, min(hi, r))
+    return _RLEVEL_MODES[r]
+
+
+def _rlevel_effective(chosen: str, forced: str | None, floor: str) -> str:
+    if forced:
+        return forced
+    return _rlevel_clamp(chosen, floor)
+
+
+def _rlevel_ctl(args: list[str], timeout: int = 15):
+    """Run sbxmitm-policyctl DIRECTLY as the portal user (no sudo, no root).
+
+    The ctl's two privileged operations both work with the portal's EXISTING
+    privileges — no escalation, no hardening reduction on this public captive
+    portal: (1) it rewrites /var/lib/secubox/toolbox/peer-rlevel.json, owned by
+    the portal user (secubox-toolbox); (2) it updates the @rlevel_off nft set,
+    which needs only CAP_NET_ADMIN — already granted to the portal for its
+    captive-portal nft management. `sudo` was avoided precisely so the portal
+    can keep NoNewPrivileges=true + its minimal CapabilityBoundingSet.
+    Never raises — returns (rc, stdout, stderr); a failure yields rc=1 so
+    callers fail closed."""
+    import subprocess
+    try:
+        p = subprocess.run(
+            [_RLEVEL_POLICYCTL, *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        return p.returncode, p.stdout.strip(), p.stderr.strip()
+    except (OSError, subprocess.SubprocessError) as e:
+        return 1, "", str(e)[:200]
+
+
+def _rlevel_load_wg_peers() -> dict:
+    """{pubkey: {ip, label, ...}} from wg-peers.json — best-effort, {} on error."""
+    import json as _json
+    try:
+        return (_json.loads(_RLEVEL_WG_PEERS.read_text()).get("peers") or {})
+    except Exception:
+        return {}
+
+
+def _rlevel_load_policy() -> dict:
+    """Whole peer-rlevel.json document via `sbxmitm-policyctl list` (read-only —
+    the ctl owns the file; this module never touches it directly)."""
+    import json as _json
+    rc, out, _err = _rlevel_ctl(["list"])
+    if rc != 0 or not out:
+        return {"defaults": {"mode": "passive", "floor": "passive"}, "peers": {}}
+    try:
+        doc = _json.loads(out)
+    except Exception:
+        return {"defaults": {"mode": "passive", "floor": "passive"}, "peers": {}}
+    doc.setdefault("defaults", {"mode": "passive", "floor": "passive"})
+    doc.setdefault("peers", {})
+    return doc
+
+
+def _rlevel_wg_live(pubkeys: set) -> dict:
+    """Best-effort {pubkey: bool} — True if wg-toolbox reports a handshake in
+    the last 180s for that peer. Never raises; unavailable wg → {} (UI treats
+    missing as unknown, never as a false 'live')."""
+    import subprocess
+    live: dict = {}
+    if not pubkeys:
+        return live
+    try:
+        out = subprocess.run(
+            ["wg", "show", "wg-toolbox", "dump"],
+            capture_output=True, text=True, timeout=2, check=False,
+        ).stdout
+    except Exception:
+        return live
+    now = time.time()
+    for line in out.splitlines()[1:]:  # skip the interface header line
+        cols = line.split("\t")
+        if len(cols) < 5:
+            continue
+        pk = cols[0]
+        if pk not in pubkeys:
+            continue
+        try:
+            hs = int(cols[4])
+        except (ValueError, IndexError):
+            hs = 0
+        live[pk] = bool(hs) and (now - hs) < 180
+    return live
+
+
+def _rlevel_peer_entry(doc: dict, pubkey: str) -> tuple[str, str | None, str]:
+    """(chosen, forced, floor) for pubkey, falling back to doc['defaults']."""
+    defaults = doc.get("defaults") or {}
+    def_mode = defaults.get("mode", "passive")
+    def_floor = defaults.get("floor", "passive")
+    p = (doc.get("peers") or {}).get(pubkey) or {}
+    chosen = p.get("chosen") or def_mode
+    forced = p.get("forced")
+    floor = p.get("floor") or def_floor
+    return chosen, forced, floor
+
+
+def _rlevel_peer_for_ip(ip: str | None) -> str | None:
+    """Resolve a wg-toolbox tunnel source IP to its pubkey — the self-service
+    auth identity. None if the IP is not a known wg-toolbox peer."""
+    if not ip:
+        return None
+    for pk, meta in _rlevel_load_wg_peers().items():
+        if meta.get("ip") == ip:
+            return pk
+    return None
+
+
+# Sous-réseau du tunnel wg-toolbox : les pairs y ont leur adresse, la box y
+# tient la passerelle 10.99.1.1 (cible du DNAT vers :8088, jamais un pair).
+_WG_TOOLBOX_PREFIX = "10.99.1."
+_WG_TOOLBOX_GW = "10.99.1.1"
+
+
+def _is_wg_tunnel_ip(ip: str | None) -> bool:
+    """Vrai pour une adresse de pair du tunnel wg-toolbox (hors passerelle)."""
+    return bool(ip) and ip.startswith(_WG_TOOLBOX_PREFIX) and ip != _WG_TOOLBOX_GW
+
+
+def _raw_source_ip(request: Request) -> str | None:
+    """Adresse du socket TCP, la seule que le client ne choisit pas."""
+    client = getattr(request, "client", None)
+    return client.host if client else None
+
+
+def _is_wg_peer_source(request: Request) -> bool:
+    """True if the request's source IP is itself a known wg-toolbox tunnel
+    peer. uvicorn binds 0.0.0.0:8088 and the wg-toolbox nft DNAT forwards a
+    peer's tunnel traffic straight to it at L3/L4 — bypassing nginx/SSO
+    entirely — so a peer can otherwise reach the ADMIN routes directly with
+    nothing but its own tunnel IP. A peer cannot spoof this source (the DNAT
+    preserves the real 10.99.1.x address), so "source is a known peer" is a
+    sound negative test for "this is NOT an admin call".
+
+    #1778 — la version d'origine ne regardait que `_client_ip`, qui préfère
+    X-R3-Peer puis le X-Forwarded-For le plus à GAUCHE : deux en-têtes que le
+    pair écrit lui-même (plus rien dans la chaîne ne pose X-R3-Peer depuis le
+    retrait de mitm-wg). Un pair en connexion directe envoyait
+    `X-Forwarded-For: 127.0.0.1` et passait la garde. On refuse désormais dès
+    qu'UN indice désigne un pair : le socket brut (infalsifiable, et tout le
+    sous-réseau du tunnel compte, même un pair absent de wg-peers.json),
+    X-R3-Peer, ou n'importe quel maillon de X-Forwarded-For. Un en-tête forgé
+    ne peut que faire refuser son propre auteur, jamais ouvrir la porte."""
+    raw = _raw_source_ip(request)
+    if _is_wg_tunnel_ip(raw):
+        return True
+    known = {str(meta.get("ip")) for meta in _rlevel_load_wg_peers().values()
+             if isinstance(meta, dict) and meta.get("ip")}
+    hints = [raw, request.headers.get("X-R3-Peer")]
+    hints += [h.strip() for h in (request.headers.get("X-Forwarded-For") or "").split(",")]
+    return any(h and h in known for h in hints)
+
+
+def _require_admin_source(request: Request) -> None:
+    """Gate for the admin rlevel routes. Rejects 403 when the caller's source
+    IP is a wg-toolbox tunnel peer: an admin acts through the admin vhost
+    (nginx-proxied, so the source is loopback / a non-peer address), while a
+    tunnel connection IS a peer connection by construction — never an admin
+    one. Keeps the self-service /rlevel/me routes untouched (they require the
+    OPPOSITE : the caller MUST be a tunnel peer)."""
+    if _is_wg_peer_source(request):
+        raise HTTPException(status_code=403, detail="tunnel-peer source cannot call admin rlevel routes")
+
+
+@router.get("/rlevel/peers")
+async def rlevel_peers(request: Request) -> dict:
+    """Admin — every wg-toolbox peer's rlevel status (chosen/forced/floor/
+    effective + best-effort live handshake). Read-only: sourced from
+    wg-peers.json (identity) + `sbxmitm-policyctl list` (policy)."""
+    if _is_public_kbin(request):
+        raise HTTPException(status_code=403, detail="rlevel admin disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    _require_admin_source(request)
+    wg_peers = _rlevel_load_wg_peers()
+    doc = _rlevel_load_policy()
+    live = _rlevel_wg_live(set(wg_peers.keys()))
+    peers = []
+    for pk, meta in wg_peers.items():
+        chosen, forced, floor = _rlevel_peer_entry(doc, pk)
+        peers.append({
+            "pubkey": pk,
+            "label": meta.get("label"),
+            "chosen": chosen,
+            "forced": forced,
+            "floor": floor,
+            "effective": _rlevel_effective(chosen, forced, floor),
+            "live": live.get(pk),
+        })
+    return {"peers": peers, "defaults": doc.get("defaults")}
+
+
+@router.post("/rlevel/peer")
+async def rlevel_peer_set(request: Request) -> dict:
+    """Admin — set a peer's floor and/or forced mode. Body: {"pubkey": str,
+    "floor"?: mode, "forced"?: mode|null}. Every write is delegated to
+    sbxmitm-policyctl (no in-process root).
+
+    The pubkey travels in the JSON body, not the URL path : WireGuard
+    pubkeys are standard base64 and routinely contain '/' (and '+'), which
+    Starlette rejects in a path segment (even %2F-encoded) — a path param
+    made roughly half of real pubkeys unaddressable."""
+    if _is_public_kbin(request):
+        raise HTTPException(status_code=403, detail="rlevel admin disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    _require_admin_source(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    pubkey = body.get("pubkey")
+    if not pubkey or not isinstance(pubkey, str):
+        raise HTTPException(status_code=400, detail="pubkey required")
+    if pubkey not in _rlevel_load_wg_peers():
+        raise HTTPException(status_code=404, detail="unknown wg-toolbox pubkey")
+    floor = body.get("floor")
+    forced_present = "forced" in body
+    forced = body.get("forced")
+
+    if floor is not None and not _rlevel_valid_mode(floor):
+        raise HTTPException(status_code=400, detail=f"invalid floor mode: {floor}")
+    if forced_present and forced is not None and not _rlevel_valid_mode(forced):
+        raise HTTPException(status_code=400, detail=f"invalid forced mode: {forced}")
+
+    results = {}
+    if floor is not None:
+        rc, out, err = _rlevel_ctl(["set-floor", pubkey, floor])
+        if rc != 0:
+            raise HTTPException(status_code=502, detail=err or "set-floor failed")
+        results["floor"] = floor
+    if forced_present:
+        mode = forced if forced is not None else "none"
+        rc, out, err = _rlevel_ctl(["force", pubkey, mode])
+        if rc != 0:
+            raise HTTPException(status_code=502, detail=err or "force failed")
+        results["forced"] = forced
+
+    if not results:
+        raise HTTPException(status_code=400, detail="nothing to set (expected floor and/or forced)")
+    return {"ok": True, "pubkey": pubkey, **results}
+
+
+def _rlevel_self_ip(request: Request) -> str | None:
+    """Adresse tunnel qui sert d'identité au libre-service /rlevel/me (#1778).
+
+    1. Socket brut dans le tunnel wg-toolbox (DNAT direct vers :8088) : c'est
+       l'identité, infalsifiable ; les en-têtes sont ignorés — sinon le pair A
+       envoyait `X-R3-Peer: <IP de B>` et réglait le mode de B.
+    2. Vhost public kbin : aucune identité de tunnel fiable (HAProxy ne
+       transmet que des en-têtes que l'internaute écrit lui-même) → None, 403.
+    3. Sinon (vhost d'administration derrière nginx) : `_client_ip`, comme à
+       l'origine."""
+    raw = _raw_source_ip(request)
+    if _is_wg_tunnel_ip(raw):
+        return raw
+    if _is_public_kbin(request):
+        return None
+    return _client_ip(request)
+
+
+@router.get("/rlevel/me")
+async def rlevel_me(request: Request) -> dict:
+    """Peer self-service — identity is the wg-toolbox tunnel source IP itself
+    (10.99.1.x), resolved to a pubkey via wg-peers.json. 403 if the source IP
+    is not a known wg-toolbox peer (tunnel-auth, no token/JWT involved)."""
+    ip = _rlevel_self_ip(request)
+    pubkey = _rlevel_peer_for_ip(ip)
+    if not pubkey:
+        raise HTTPException(status_code=403, detail="source IP is not a known wg-toolbox peer")
+    doc = _rlevel_load_policy()
+    chosen, forced, floor = _rlevel_peer_entry(doc, pubkey)
+    return {
+        "chosen": chosen,
+        "forced": forced,
+        "floor": floor,
+        "effective": _rlevel_effective(chosen, forced, floor),
+    }
+
+
+@router.post("/rlevel/me")
+async def rlevel_me_set(request: Request) -> dict:
+    """Peer self-service — set own `chosen` mode, bounded: a peer can never
+    descend below its own floor nor lift a `forced` (409 either way). Delegates
+    to `sbxmitm-policyctl set-chosen` (which re-clamps server-side too)."""
+    ip = _rlevel_self_ip(request)
+    pubkey = _rlevel_peer_for_ip(ip)
+    if not pubkey:
+        raise HTTPException(status_code=403, detail="source IP is not a known wg-toolbox peer")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    chosen = body.get("chosen")
+    if not chosen or not _rlevel_valid_mode(chosen):
+        raise HTTPException(status_code=400, detail=f"invalid chosen mode: {chosen}")
+
+    doc = _rlevel_load_policy()
+    _cur_chosen, forced, floor = _rlevel_peer_entry(doc, pubkey)
+    if forced:
+        raise HTTPException(status_code=409, detail=f"mode is forced to '{forced}' by admin")
+    if _RLEVEL_RANK[chosen] < _RLEVEL_RANK[floor]:
+        raise HTTPException(status_code=409, detail=f"below floor '{floor}'")
+
+    rc, out, err = _rlevel_ctl(["set-chosen", pubkey, chosen])
+    if rc != 0:
+        raise HTTPException(status_code=502, detail=err or "set-chosen failed")
+    return {"ok": True, "chosen": chosen, "floor": floor,
+            "effective": _rlevel_effective(chosen, None, floor)}
 
 
 @router.get("/admin/filters/ui", response_class=HTMLResponse)
@@ -3864,7 +4819,7 @@ async def social_report_pdf(token: str) -> Response:
         raise HTTPException(404, "report not found or expired")
     data = _sr.build_social_report(mac_hash, since_seconds=7 * 86400)
     data["generated_at"] = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
-    pdf_bytes = _sr.render_social_pdf(data)
+    pdf_bytes = await _render_pdf_offloaded(_sr.render_social_pdf, data, cache_key=f"soc:{mac_hash}")
     fname = f"village3b-carto-{mac_hash[:8]}-{int(time.time())}.pdf"
     return Response(
         content=pdf_bytes,
@@ -4201,10 +5156,14 @@ async def admin_metrics() -> dict:
         "events_24h_total": 0,
         "mitm": {"connections": 0, "tls_pinned": 0, "unique_hosts": 0},
     }
-    # Per-source event counts (last 24h)
+    # Per-source event counts. The legacy toolbox.db `events` table was fed by the
+    # OLD Python mitmproxy addons; the current R3 path is Go sbxmitm → relay →
+    # sidecars → cumulative stats, so that table is now empty. Read the cumulative
+    # per-source totals (cookies/ja4/…) when the events table has nothing, so the
+    # Live-metrics panel shows real activity instead of zeros.
+    since = int(time.time()) - 86400
     try:
         with _sq3.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=2) as c:
-            since = int(time.time()) - 86400
             rows = c.execute(
                 "SELECT source, COUNT(*) FROM events WHERE ts > ? GROUP BY source",
                 (since,),
@@ -4217,6 +5176,17 @@ async def admin_metrics() -> dict:
             ).fetchone()[0]
     except Exception as e:
         metrics["sqlite_error"] = str(e)
+    if not metrics["events_by_source"]:
+        try:
+            ev = (cumulative.get_cached() or {}).get("events", {}) or {}
+            src = {k: int(v) for k, v in ev.items()
+                   if k != "total_7d" and isinstance(v, (int, float))}
+            if src:
+                metrics["events_by_source"] = src
+                metrics["events_24h_total"] = int(ev.get("total_7d") or sum(src.values()))
+                metrics["events_window"] = "7d"  # cumulative fallback, not strictly 24h
+        except Exception:
+            pass
     # Live MITM activity. NOTE: the old journal-scrape for "server connect"
     # NEVER worked — the workers run at --log-level warning, so those INFO lines
     # are never emitted → the trio was permanently 0. Derive from real data: the
@@ -4225,8 +5195,10 @@ async def admin_metrics() -> dict:
     try:
         cs = cumulative.get_cached() or {}
         ev = cs.get("events", {}) or {}
-        # "connections analysées" — DPI classifies one flow per upstream connection.
-        metrics["mitm"]["connections"] = int(ev.get("dpi", 0) or 0)
+        # "connections analysées" — each JA4 observation is one inspected TLS
+        # handshake/upstream connection. The cumulative stats expose ja4 (and
+        # cookies), not a `dpi` key, so the old ev.get("dpi") was always 0.
+        metrics["mitm"]["connections"] = int(ev.get("ja4") or ev.get("dpi") or 0)
         metrics["mitm"]["unique_hosts"] = len(cs.get("top_hosts_7d", []) or [])
     except Exception:
         pass
@@ -4246,7 +5218,8 @@ async def admin_client_report(mac_hash: str) -> Response:
     """Admin endpoint : download PDF for a specific client by mac_hash."""
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    pdf_bytes = reports.render_pdf(data)
+    _enrich_report_data(mac_hash, data)  # #790 — same rich content as /report/me
+    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"adm:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}-admin.pdf"
     return Response(
         content=pdf_bytes,

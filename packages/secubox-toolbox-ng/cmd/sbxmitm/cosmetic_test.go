@@ -185,3 +185,20 @@ func TestInjectIntoBodyGzipCarriesCosmetic(t *testing.T) {
 		t.Fatalf("inline banner body lost on gzip path: %s", plain)
 	}
 }
+
+// #756 / #1778 — le style injecté rend le défilement que les voiles
+// paywall/consentement bloquent (règle perdue par la fusion du 2026-08-17),
+// que le style vienne de la constante de base ou du chemin EasyList par hôte.
+func TestCosmeticRestoresScroll(t *testing.T) {
+	const rule = `html,body{overflow:auto!important}`
+	if !strings.Contains(cosmeticStyle, rule) {
+		t.Errorf("cosmeticStyle ne rend plus le défilement (%q absent)", rule)
+	}
+	if got := string(cosmeticStyleFor("www.bloomberg.com")); !strings.Contains(got, rule) {
+		t.Errorf("cosmeticStyleFor ne rend plus le défilement : %q", got)
+	}
+	// La règle ne doit pas se glisser dans la liste de sélecteurs masqués.
+	if strings.Contains(cosmeticBaseSelectors, "overflow") {
+		t.Errorf("la règle de défilement a fui dans la liste des sélecteurs masqués")
+	}
+}

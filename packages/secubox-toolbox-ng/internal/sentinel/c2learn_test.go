@@ -193,3 +193,74 @@ func TestC2LearnerWindowAdvanceOwnTiming(t *testing.T) {
 		t.Fatalf("expected sustained own-timing window-advance to promote the host; candidates=%v", l.Candidates())
 	}
 }
+
+// A first-seen (rare), browser-fingerprinted, non-DGA host beaconed steadily
+// over a long span must NOT be learned — rarity alone is not enough. This is
+// the admin-dashboard false positive the strong-signal requirement prevents.
+func TestC2LearnerRareOnlyBrowserHostNotLearned(t *testing.T) {
+	l := c2TestLearner(t)        // browser set = {"t13d1516h2_browserfp"}
+	host := "portal.example.com" // common word → no dga
+	mac := "beefbeefbeef0001"
+	ja4 := "t13d1516h2_browserfp" // a KNOWN browser → no non_browser_ja
+	ts := int64(6_000_000)
+	// 15 contacts (stays < c2RareMaxHits=20, so "rare" fires the whole time),
+	// 600s apart → spans 8400s (> c2MinSpanSec) with many window ticks.
+	for i := 0; i < 15; i++ {
+		l.Analyze(MirrorMsg{Meta: FlowMeta{Host: host, MacHash: mac, JA4: ja4}, TS: ts})
+		ts += 600
+	}
+	if len(l.Learned()) != 0 {
+		t.Errorf("rare-only browser host must not be learned, got %v", l.Learned())
+	}
+	// and it must not even become a promotable candidate carrying only rare
+	for _, c := range l.Candidates() {
+		if c.Host == host {
+			t.Errorf("rare-only browser host should not be a tracked candidate, got %+v", c)
+		}
+	}
+}
+
+// #1778 — le filtre « signal fort » doit tenir AUSSI dans tickWindow, pas
+// seulement au premier battement. Un hôte qui démarre avec une empreinte
+// non-navigateur (candidat légitime) puis n'est plus contacté que par un
+// navigateur connu ne porte plus que « rare » : ses fenêtres suivantes ne
+// doivent pas avancer, sinon la seule rareté le fait apprendre — le faux
+// positif que hasStrongSignal existe pour empêcher.
+func TestC2LearnerWeakOnlyWindowsDoNotAdvance(t *testing.T) {
+	l := c2TestLearner(t)        // navigateurs connus = {"t13d1516h2_browserfp"}
+	host := "portal.example.com" // mots courants → pas de dga
+	mac := "beefbeefbeef0002"
+	ts := int64(7_000_000)
+	hits := 0
+
+	// Phase 1 : empreinte non-navigateur jusqu'au premier battement détecté.
+	fired := false
+	for !fired && hits < 12 {
+		for _, v := range l.Analyze(MirrorMsg{Meta: FlowMeta{Host: host, MacHash: mac, JA4: "botfp01"}, TS: ts}) {
+			if v.Class == ClassBotnetC2 && v.Evidence["pattern"] == "beaconing" {
+				fired = true
+			}
+		}
+		hits++
+		ts += 300
+	}
+	if !fired || len(l.Candidates()) == 0 {
+		t.Fatalf("préalable : le premier battement doit ouvrir un candidat (fired=%v, cands=%v)", fired, l.Candidates())
+	}
+
+	// Phase 2 : navigateur connu seulement → seul « rare » se déclenche
+	// (on reste sous c2RareMaxHits), sur une durée largement > c2MinSpanSec.
+	for hits < c2RareMaxHits {
+		l.Analyze(MirrorMsg{Meta: FlowMeta{Host: host, MacHash: mac, JA4: "t13d1516h2_browserfp"}, TS: ts})
+		hits++
+		ts += 300
+	}
+	if len(l.Learned()) != 0 {
+		t.Errorf("des fenêtres « rare » seules ont fait apprendre l'hôte : %v", l.Learned())
+	}
+	for _, c := range l.Candidates() {
+		if c.Host == host && c.Windows > 1 {
+			t.Errorf("fenêtres avancées sans signal fort : %+v", c)
+		}
+	}
+}

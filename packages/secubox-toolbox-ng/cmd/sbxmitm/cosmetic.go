@@ -46,7 +46,15 @@ const cosmeticGuard = "sbx-ghost-style"
 // CONSERVATISM note above). The rule mirrors the Python _style_for:
 // display:none + visibility:hidden, both !important, collapsing the slot.
 const cosmeticStyle = `<style id="sbx-ghost-style">` + cosmeticBaseSelectors +
-	`{display:none!important;visibility:hidden!important;}</style>`
+	`{display:none!important;visibility:hidden!important;}` + cosmeticScrollRestore + `</style>`
+
+// cosmeticScrollRestore — #756 : rendre le défilement. Quand on masque un
+// voile paywall/consentement, le JS du site a souvent déjà bloqué la page
+// (document.body.style.overflow='hidden', sans !important) ; une feuille de
+// style !important l'emporte et le défilement revient (Bloomberg…). Contrepartie
+// assumée : une modale légitime qui bloque le défilement laisse la page défiler
+// derrière elle. Perdue par la fusion du 2026-08-17 (#1778), restaurée ici.
+const cosmeticScrollRestore = `html,body{overflow:auto!important}`
 
 // cosmeticBaseSelectors is the conservative, hand-curated base list (extracted
 // so the EasyList loader below can re-use it as the always-valid foundation).
@@ -239,6 +247,7 @@ func cosmeticStyleFor(host string) []byte {
 		}
 	}
 	sb.WriteString(`{display:none!important;visibility:hidden!important;}`)
+	sb.WriteString(cosmeticScrollRestore)
 	sb.WriteString(cosmeticProtect)
 	sb.WriteString(`</style>`)
 	return []byte(sb.String())
