@@ -140,7 +140,20 @@ def _center_key() -> bytes:
 
 
 def _journal() -> Journal:
-    return Journal(JOURNAL_PATH)
+    j = Journal(JOURNAL_PATH)
+    # UNE ENTRÉE SANS IDENTITÉ PUBLIÉE EST INVÉRIFIABLE (#1711). L'export joint
+    # la clé publique de l'auteur depuis sa fiche Identity ; sans elle, chaque
+    # pair rejette l'entrée et la demande reste invisible hors de ce nœud.
+    # genesis est idempotent : rien n'est écrit si l'identité existe déjà.
+    if not _dry():
+        try:
+            from annuaire.verbs import genesis  # noqa: PLC0415
+            genesis(j, _key())
+        except SystemExit:
+            raise
+        except Exception as exc:  # noqa: BLE001 — la clé manquante se dira plus loin
+            print(f"assistctl: identité du nœud non garantie : {exc}", file=sys.stderr)
+    return j
 
 
 def _self_did(priv: bytes) -> str:

@@ -1,3 +1,9 @@
+secubox-assist (0.2.7-1~bookworm1) bookworm; urgency=medium
+
+  * assistance entre nœuds : /requests/open indique le nœud d'origine (« de ») et « la mienne » ; POST /request/answer publie une offre aux étiquettes de la demande et accepte l'appariement côté offre ; bouton « Répondre » ; assistctl garantit l'identité du nœud avant toute écriture signée (#1711).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 11:46:48 +0200
+
 secubox-assist (0.2.6-1~bookworm1) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées

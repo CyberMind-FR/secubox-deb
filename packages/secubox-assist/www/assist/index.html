@@ -217,8 +217,10 @@ async function refreshOpenRequests() {
   const list = document.getElementById('reqopen-list');
   if (!r.ok) { list.textContent = 'auth requise'; return; }
   const reqs = await r.json();
+  // #1711 : d'où vient la demande, et un geste pour y répondre (sauf les siennes).
   renderList(list, reqs.map(q => itemEl(
-    [['req', q.req_id], ['tags', fmtTags(q.tags)], ['scope', q.scope || '—'], ['motif', q.reason || '—']], [])));
+    [['de', q.noeud || '—'], ['motif', q.reason || '—'], ['tags', fmtTags(q.tags)], ['scope', q.scope || '—'], ['req', q.req_id]],
+    q.de_moi ? [] : [{label:'Répondre', act:'request-answer', data:{reqId: q.req_id}}])));
 }
 
 async function refreshMatches() {
@@ -296,6 +298,10 @@ document.addEventListener('click', async (ev) => {
       ttl_s: parseInt(document.getElementById('reqopen-ttl').value, 10),
       reason }, 'Demande ouverte publiée.');
     if (d) refreshOpenRequests();
+  } else if (act === 'request-answer') {
+    const d = await postAction('/api/v1/assist/request/answer', { req_id: b.dataset.reqId },
+      'Réponse envoyée — en attente de l\'acceptation du demandeur.');
+    if (d) { refreshOpenRequests(); refreshMatches(); }
   } else if (act === 'match-accept') {
     const d = await postAction('/api/v1/assist/match/accept', {
       offer_id: b.dataset.offerId, req_id: b.dataset.reqId, side: b.dataset.side },
