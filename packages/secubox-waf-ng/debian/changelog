@@ -1,3 +1,10 @@
+secubox-waf-ng (1.18.11-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : pas de bandeau de santé dans une page dont l'amont est un AUTRE nœud du maillage (10.10.0.0/24) — gk2 injectait admin.gk2/shared/health-banner.js dans les pages de gk3 qu'il relaie, que leur CSP bloquait ; vhost actor : + $sbx_hall_box et $sbx_halls_parc (#1725, #1713).
+  * sbxwaf : la page a le dernier mot — pas de bandeau quand une CSP de la réponse interdit le chargeur en ligne ou l'origine du bandeau (SBX OS et messagerie le refusaient, sur gk2 comme sur gk3 : une erreur en console à chaque affichage). L'empreinte du chargeur est celle que la radio déclare, qui continue de le recevoir (#1725).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 13:31:42 +0200
+
 secubox-waf-ng (1.18.10-1~bookworm1) bookworm; urgency=critical
 
   * sbxwaf : l'adresse cliente derrière HAProxy se lit depuis la DROITE de X-Forwarded-For, mandataires de confiance sautés (sémantique real_ip_recursive de nginx) — l'entrée de gauche est écrite par le client (#1697).

@@ -1,3 +1,9 @@
+secubox-core (1.5.40-1~bookworm1) bookworm; urgency=medium
+
+  * conf nginx des Halls du parc : $sbx_hall_box = https://hall.<domaine du nom demandé> (map), pour que les vhosts se laissent encadrer par le Hall de CETTE box — ils figeaient hall.gk2 (#1725, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 13:31:42 +0200
+
 secubox-core (1.5.39-1~bookworm1) bookworm; urgency=medium
 
   * secubox-domaine (le domaine de CETTE box, `secubox-domaine meet` → meet.<domaine>) et secubox_core.auth.hote_box / hote_parc / REFERENCE : un nom de service se dérive, il ne s'écrit pas en gk2. postinst : `secubox-domaine --migrer` réécrit les *.gk2.secubox.in des réglages d'une box qui n'est pas gk2 (copie gardée, commentaires intacts) ; sans effet sur gk2 (#1723, #1713).

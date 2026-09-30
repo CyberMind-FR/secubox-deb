@@ -1,3 +1,10 @@
+secubox-bbs (0.37.6-1~bookworm1) bookworm; urgency=medium
+
+  * frame-ancestors : le Hall de CETTE box ([global] domain) s'ajoute à hall.gk2 et aux Halls du parc (#1725, #1713).
+  * Le domaine de la box suit domaine_box() : [global] domain, sinon [api] sso_cookie_domain (gk2 n'a que celui-ci).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 13:31:42 +0200
+
 secubox-bbs (0.37.5-1~bookworm1) bookworm; urgency=medium
 
   * postinst : la route sbxwaf se déclare sous le nom de CETTE box, plus bbs.gk2 figé (#1723, #1713).

@@ -311,7 +311,7 @@ func (s *Serveur) Handler() http.Handler { return s.mux }
 // politique ouverte par defaut.
 func (s *Serveur) politique() string {
 	script, connect := "'self'", "'self'"
-	if o := strings.TrimSpace(s.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+	if o := s.banniere(); o != "" && !strings.ContainsAny(o, " ;'\"") {
 		script += " " + o
 		connect += " " + o
 	}
@@ -327,7 +327,28 @@ func (s *Serveur) politique() string {
 	// Le Hall souverain (hall.gk2.secubox.in) encadre le vhost réel de la Radio
 	// (#1175) ; tout autre parent reste bloqué. Le lecteur /mini garde en plus
 	// son CadreParent dédié (cf. politiqueMini).
-	return s.politiqueAvecAncetres(script, style, connect, "'self' https://hall.gk2.secubox.in https://hall.gk2.net")
+	// + le Hall de CETTE box (#1725) et ceux du parc (#1672) : radio.gk3 refusait
+	// d'être encadrée par hall.gk3.
+	return s.politiqueAvecAncetres(script, style, connect,
+		"'self' https://hall.gk2.secubox.in https://hall.gk2.net"+hallDeLaBox()+hallsDuParc())
+}
+
+// banniere : l'origine du bandeau de santé que le frontal injecte — celle que
+// l'unité impose, sinon admin.<domaine de la box> (#1725 ; admin.gk2 figé).
+func (s *Serveur) banniere() string {
+	if o := strings.TrimSpace(s.BanniereOrigine); o != "" {
+		return o
+	}
+	return origineBox("admin")
+}
+
+// cadreParent : l'origine qui incorpore le lecteur /mini (le rail BBS) — celle
+// que l'unité impose, sinon bbs.<domaine de la box> (#1725 ; bbs.gk2 figé).
+func (s *Serveur) cadreParent() string {
+	if o := strings.TrimSpace(s.CadreParent); o != "" {
+		return o
+	}
+	return origineBox("bbs")
 }
 
 // politiqueMini : la politique du lecteur compact /mini, incorporable par la
@@ -335,7 +356,7 @@ func (s *Serveur) politique() string {
 // la politique normale — même stricte, mêmes empreintes de bannière.
 func (s *Serveur) politiqueMini() string {
 	script, connect := "'self'", "'self'"
-	if o := strings.TrimSpace(s.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+	if o := s.banniere(); o != "" && !strings.ContainsAny(o, " ;'\"") {
 		script += " " + o
 		connect += " " + o
 	}
@@ -349,12 +370,12 @@ func (s *Serveur) politiqueMini() string {
 	// inopérant (spec CSP), et les styles d'aide resteraient bloqués.
 	style := "'self' 'unsafe-inline'"
 	anc := "'self'"
-	if o := strings.TrimSpace(s.CadreParent); o != "" && !strings.ContainsAny(o, " ;'\"") {
+	if o := s.cadreParent(); o != "" && !strings.ContainsAny(o, " ;'\"") {
 		anc += " " + o
 	}
 	// /micro peut être encadré en chaîne hall > bbs > radio : frame-ancestors
 	// doit lister TOUTE la chaîne d'ancêtres, donc aussi le Hall (#1175).
-	anc += " https://hall.gk2.secubox.in https://hall.gk2.net" + hallsDuParc() // #1672
+	anc += " https://hall.gk2.secubox.in https://hall.gk2.net" + hallDeLaBox() + hallsDuParc() // #1672, #1725
 	return s.politiqueAvecAncetres(script, style, connect, anc)
 }
 

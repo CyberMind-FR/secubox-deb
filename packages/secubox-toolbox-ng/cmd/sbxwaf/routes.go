@@ -197,7 +197,9 @@ func (r *Routes) buildEntries(parsed map[string][2]string) map[string]routeEntry
 				if bare, _, e := net.SplitHostPort(reqHost); e == nil {
 					reqHost = bare
 				}
-				applyWidget(resp, strings.ToLower(reqHost), r.bannerOrigin, r.widgetHosts, r.widgetExclude)
+				if !amontDuMaillage(ip) { // #1725 : la page d'un autre nœud
+					applyWidget(resp, strings.ToLower(reqHost), r.bannerOrigin, r.widgetHosts, r.widgetExclude)
+				}
 				return nil
 			}
 			p.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {

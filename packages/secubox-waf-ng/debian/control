@@ -10,6 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-waf-ng
 Architecture: any
 Depends: ${misc:Depends},
+ secubox-core (>= 1.5.40~),
  adduser,
  apparmor
 # SBXWAF PREND LA PLACE DE DEUX PAQUETS DECOMMISSIONNES (#1319).

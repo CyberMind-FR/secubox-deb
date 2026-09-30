@@ -19,7 +19,10 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -71,6 +74,9 @@ func applyWidget(resp *http.Response, host string, origin string, hosts, exclus 
 	if estVueCarte(resp) {
 		return
 	}
+	if !laCSPPermet(resp.Header, origin) {
+		return
+	}
 	// Don't try to inject into a body we won't fully buffer.
 	if resp.ContentLength > widgetMaxBody {
 		return
@@ -92,6 +98,18 @@ func applyWidget(resp *http.Response, host string, origin string, hosts, exclus 
 	resp.Header.Set("Content-Length", strconv.Itoa(len(out)))
 }
 
+// PAS NOTRE PAGE, PAS NOTRE BANDEAU (#1725). Un amont dans 10.10.0.0/24 est un
+// AUTRE nœud du maillage, que cette box relaie (secubox-relais-maillage : gk2
+// relaie hall.gk3… vers 10.10.0.5:9080). Sa page n'est pas la nôtre : y
+// injecter NOTRE bandeau (admin.gk2) chargeait un script d'une autre origine,
+// que la CSP de ce nœud bloque — erreurs en console sur le Hall de gk3.
+var maillage = func() *net.IPNet { _, n, _ := net.ParseCIDR("10.10.0.0/24"); return n }()
+
+func amontDuMaillage(ip string) bool {
+	a := net.ParseIP(strings.TrimSpace(ip))
+	return a != nil && maillage.Contains(a)
+}
+
 // widgetGuard marks an already-injected document so a re-proxied response is not
 // double-stamped.
 const widgetGuard = "sbxwaf-health-banner-loader"
@@ -103,8 +121,13 @@ const widgetGuard = "sbxwaf-health-banner-loader"
 // self-guards against double-init (window.__SBX_HEALTH_BANNER__); IS_CDN_INJECTED
 // becomes true because window.SECUBOX_HEALTH_API is set.
 func healthBannerSnippet(origin string) string {
+	return `<script id="` + widgetGuard + `">` + chargeurBanniere(origin) + `</script>`
+}
+
+// chargeurBanniere : le TEXTE du script en ligne (ce que hache une CSP).
+func chargeurBanniere(origin string) string {
 	o := strings.TrimRight(origin, "/")
-	return `<script id="` + widgetGuard + `">(function(){` +
+	return `(function(){` +
 		`if(window.__SBX_HEALTH_BANNER__)return;` +
 		`var O=` + jsString(o) + `;` +
 		`window.SECUBOX_HEALTH_API=O+'/api/v1/metrics/health/summary';` +
@@ -113,7 +136,76 @@ func healthBannerSnippet(origin string) string {
 		`window.SECUBOX_CERT_STATUS_API=O+'/api/v1/metrics/cert-status';` +
 		`window.SECUBOX_COOKIE_AUDIT_SUMMARY=O+'/api/v1/cookie-audit/summary';` +
 		`var s=document.createElement('script');s.src=O+'/shared/health-banner.js';s.async=true;` +
-		`document.body.appendChild(s);})();</script>`
+		`document.body.appendChild(s);})();`
+}
+
+// LA PAGE A LE DERNIER MOT (#1725). Injecter un script que la politique de la
+// page interdit ne montre aucun bandeau et laisse une erreur en console à
+// chaque affichage : SBX OS et la messagerie (script-src 'self'
+// 'unsafe-inline') refusaient admin.gk2/shared/health-banner.js, sur gk2 comme
+// sur gk3. On n'injecte donc que si CHAQUE CSP de la réponse laisse passer le
+// chargeur en ligne ('unsafe-inline' sans nonce ni empreinte, ou SON empreinte
+// — ce que fait la radio) ET l'origine du bandeau. Pas de CSP : on injecte.
+func laCSPPermet(h http.Header, origin string) bool {
+	o := strings.TrimRight(origin, "/")
+	somme := sha256.Sum256([]byte(chargeurBanniere(origin)))
+	empreinte := "'sha256-" + base64.StdEncoding.EncodeToString(somme[:]) + "'"
+	for _, pol := range h.Values("Content-Security-Policy") {
+		src, trouve := directiveCSP(pol, "script-src")
+		if !trouve {
+			src, trouve = directiveCSP(pol, "default-src")
+		}
+		if !trouve {
+			continue
+		}
+		enLigne, noncesOuEmpreintes, parEmpreinte := false, false, false
+		for _, t := range src {
+			tl := strings.ToLower(t)
+			switch {
+			case tl == "'unsafe-inline'":
+				enLigne = true
+			case t == empreinte:
+				parEmpreinte = true // SON empreinte : ce chargeur-là est permis
+			case strings.HasPrefix(tl, "'nonce-") || strings.HasPrefix(tl, "'sha"):
+				noncesOuEmpreintes = true
+			}
+		}
+		// Une empreinte ou un nonce rend 'unsafe-inline' inopérant (spec CSP).
+		inlineOK := parEmpreinte || (enLigne && !noncesOuEmpreintes)
+		if !inlineOK || !origineAutorisee(src, o) {
+			return false
+		}
+	}
+	return true
+}
+
+// directiveCSP rend les sources d'une directive d'une politique.
+func directiveCSP(pol, nom string) ([]string, bool) {
+	for _, d := range strings.Split(pol, ";") {
+		f := strings.Fields(strings.TrimSpace(d))
+		if len(f) > 0 && strings.EqualFold(f[0], nom) {
+			return f[1:], true
+		}
+	}
+	return nil, false
+}
+
+// origineAutorisee : une source de la liste couvre-t-elle l'origine o ?
+func origineAutorisee(src []string, o string) bool {
+	schema, hote, _ := strings.Cut(o, "://")
+	for _, t := range src {
+		t = strings.TrimRight(strings.ToLower(t), "/")
+		switch {
+		case t == "*" || t == schema+":" || t == o || t == hote:
+			return true
+		case strings.HasPrefix(t, "*.") || strings.HasPrefix(t, schema+"://*."):
+			suffixe := t[strings.Index(t, "*.")+1:]
+			if strings.HasSuffix(hote, suffixe) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // jsString returns a safe single-quoted JS string literal for s (escapes the few

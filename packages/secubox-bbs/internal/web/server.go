@@ -518,7 +518,8 @@ func politique(style, script, connect, frame, media string) string {
 		// 'none' : le bureau WebOS embarque le vhost réel du BBS (#1175). Reste
 		// clos à tout autre parent (anti-clickjacking maintenu, opt-in unique).
 		// + les Halls du parc relayés par cette box (#1672).
-		"frame-ancestors 'self' https://hall.gk2.secubox.in https://hall.gk2.net" + hallsDuParc() + "; base-uri 'none'; form-action 'self'"
+		// + le Hall de CETTE box (#1725) : hall.gk3 pour le BBS de gk3.
+		"frame-ancestors 'self' https://hall.gk2.secubox.in https://hall.gk2.net" + hallDeLaBox() + hallsDuParc() + "; base-uri 'none'; form-action 'self'"
 }
 
 // OrigineMediaMastodon rejoue la politique en ouvrant les images et les sons
