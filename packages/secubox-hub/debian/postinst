@@ -69,7 +69,7 @@ TOML
     # L'outil vient de secubox-core, dont ce paquet depend deja ; le garde
     # `command -v` couvre l'ordre de configuration a la premiere installation.
     if command -v secubox-waf-route >/dev/null 2>&1; then
-      secubox-waf-route admin.gk2.secubox.in 9080 || true
+      secubox-waf-route "$(secubox-domaine admin)" 9080 || true
     fi
 
     ;;

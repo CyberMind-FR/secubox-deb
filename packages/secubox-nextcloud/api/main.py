@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 from secubox_core.auth import require_lecture
+from secubox_core.auth import hote_box
 
 app = FastAPI(title="SecuBox Nextcloud")
 config = get_config("nextcloud")
@@ -272,7 +273,7 @@ async def status():
     disk_used = c["disk_used"]
 
     http_port = config.get("http_port", 8080)
-    domain = config.get("domain", "cloud.local")
+    domain = config.get("domain") or hote_box("nc") or "cloud.local"  # #1723
 
     return {
         "module": "nextcloud",
@@ -306,7 +307,7 @@ async def get_config_endpoint():
         "enabled": config.get("enabled", True),
         "http_port": config.get("http_port", 8080),
         "data_path": str(DATA_PATH),
-        "domain": config.get("domain", "cloud.local"),
+        "domain": config.get("domain") or hote_box("nc") or "cloud.local",
         "admin_user": config.get("admin_user", "admin"),
         "memory_limit": config.get("memory_limit", "1G"),
         "upload_max": config.get("upload_max", "512M"),
@@ -571,7 +572,7 @@ def restore_backup(name: str):
 async def get_connections():
     """Get connection URLs (CalDAV, CardDAV, WebDAV)"""
     http_port = config.get("http_port", 8080)
-    domain = config.get("domain", "cloud.local")
+    domain = config.get("domain") or hote_box("nc") or "cloud.local"  # #1723
     ssl_domain = config.get("ssl_domain", "")
 
     base_url = _public_base_url(ssl_domain, domain, http_port)

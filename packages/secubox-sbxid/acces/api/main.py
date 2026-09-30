@@ -106,6 +106,8 @@ def _porte_publique() -> str:
             u = str(tomllib.load(f).get("acces", {}).get("url_publique", "") or "").strip()
     except (OSError, ValueError, KeyError):
         u = ""
+    if not u:
+        u = _hall_de_la_box("/acces/")
     if not (u.startswith("https://") or u.startswith("http://")):
         return ""
     return u.rstrip("/") + "/"
@@ -310,7 +312,23 @@ def _url_sbxos() -> str:
             u = str(tomllib.load(f).get("acces", {}).get("url_sbxos", "") or "").strip()
     except (OSError, ValueError, KeyError):
         u = ""
+    if not u:
+        u = _hall_de_la_box("/sbxos/")
     return u if u.startswith("http") else "/sbxos/"
+
+
+def _hall_de_la_box(chemin: str) -> str:
+    """`https://hall.<domaine de CETTE box><chemin>`, "" si domaine inconnu.
+
+    La carlette d'accès et SBX OS vivent dans le Hall de la box qui les sert :
+    la clé d'appareil est rangée PAR ORIGINE. `hall.gk2` codé en dur envoyait
+    les appareils de gk3 s'inscrire chez gk2 (#1723)."""
+    try:
+        from secubox_core.auth import hote_box
+        h = hote_box("hall")
+    except Exception:  # noqa: BLE001
+        h = ""
+    return f"https://{h}{chemin}" if h else ""
 
 
 @app.get("/invitation/url")

@@ -49,7 +49,7 @@ LXC_NAME=$(config_get "name" "grafana")
 LXC_IP=$(config_get "ip" "10.100.0.70")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "3000")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "grafana.gk2.secubox.in")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "$(secubox-domaine grafana)")
 
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 lxc_state() {

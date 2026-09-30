@@ -24,13 +24,15 @@ sanitize_name() {
     printf '%s' "$1" | awk '{print tolower($0)}' | sed 's/[^a-z0-9_-]/_/g'
 }
 
-# Read default_domain from droplet.toml. Falls back to gk2.secubox.in.
+# Read default_domain from droplet.toml. Falls back to THIS box's domain
+# (#1723) — gk2.secubox.in figé publiait les dépôts de gk3 chez gk2.
 default_domain() {
-    [[ -r "$TOML_PATH" ]] || { echo "gk2.secubox.in"; return; }
-    local v
-    v=$(grep -E '^default_domain\s*=' "$TOML_PATH" 2>/dev/null \
-        | head -1 | sed -E 's/^default_domain\s*=\s*"?([^"]*)"?\s*$/\1/')
-    echo "${v:-gk2.secubox.in}"
+    local v=""
+    if [[ -r "$TOML_PATH" ]]; then
+        v=$(grep -E '^default_domain\s*=' "$TOML_PATH" 2>/dev/null \
+            | head -1 | sed -E 's/^default_domain\s*=\s*"?([^"]*)"?\s*$/\1/')
+    fi
+    echo "${v:-$(secubox-domaine 2>/dev/null || true)}"
 }
 
 # Stage <src> into a fresh temp dir. Echoes the staging dir path.

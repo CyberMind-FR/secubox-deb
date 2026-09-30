@@ -1,3 +1,9 @@
+secubox-photoprism (1.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * public_hostname/domain dérivés partout (install-lxc, ctl, API) ; exemple toml sans nom gk2 (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-photoprism (1.3.2-1~bookworm1) bookworm; urgency=high
 
   * install-lxc.sh : le dossier des secrets reste root:secubox 0750 (état canonique de secubox-core) — `install -d -m 0700 -o root -g root` le rendait à root seul et vidait le masque ACL à chaque provision : auth, radio, socialrelay, bbs… perdaient leurs secrets (#1701).

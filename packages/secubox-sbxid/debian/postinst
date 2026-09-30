@@ -3,7 +3,10 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 set -e
 
-DOMAIN="identity.gk2.secubox.in"
+# Le nom de CETTE box (#1723) ; vide si son domaine est inconnu, et alors
+# rien n'est déclaré (ni vhost HAProxy, ni route).
+DOMAIN="$(secubox-domaine identity 2>/dev/null || true)"
+CLE_VHOST="$(printf '%s' "$DOMAIN" | tr '.' '_')"
 NGX_AVAIL="/etc/secubox/nginx-available/identity.conf"
 WAF_ROUTES="/etc/secubox/waf/haproxy-routes.json"
 
@@ -52,14 +55,14 @@ TOML
       fi
       nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true
     fi
-    if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
-      if ! grep -q "identity_gk2_secubox_in" /etc/secubox/haproxy.toml 2>/dev/null; then
+    if [ -n "$DOMAIN" ] && command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
+      if ! grep -q "$CLE_VHOST" /etc/secubox/haproxy.toml 2>/dev/null; then
         haproxyctl vhost add "$DOMAIN" nginx_vhosts true >/dev/null 2>&1 || true
         haproxyctl generate >/dev/null 2>&1 || true
         systemctl reload haproxy >/dev/null 2>&1 || true
       fi
     fi
-    if [ -f "$WAF_ROUTES" ]; then
+    if [ -n "$DOMAIN" ] && [ -f "$WAF_ROUTES" ]; then
       python3 - "$WAF_ROUTES" "$DOMAIN" <<'PY' || true
 import json, sys
 p, dom = sys.argv[1], sys.argv[2]

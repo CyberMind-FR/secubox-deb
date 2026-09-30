@@ -1,3 +1,9 @@
+secubox-mail (2.10.11-1~bookworm1) bookworm; urgency=medium
+
+  * webmail_url, horde_url, web_ui_host rspamd et RSPAMD_FQDN dérivés du domaine de la box, plus *.gk2 (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-mail (2.10.10-1~bookworm1) bookworm; urgency=medium
 
   * /etc/secubox/secrets créé dans l'état de secubox-core (root:secubox 0750) par le postinst et rspamd.sh, au lieu de root 0700 qui coupait la traversée des autres modules (#1689).

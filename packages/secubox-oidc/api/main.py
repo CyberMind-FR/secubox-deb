@@ -43,7 +43,13 @@ def _conf() -> dict:
 
 
 def emetteur() -> str:
-    return str(_conf().get("issuer") or "https://hall.gk2.secubox.in/oidc").rstrip("/")
+    iss = _conf().get("issuer")
+    if not iss:
+        # Le Hall de CETTE box (#1723) : l'émetteur d'une autre box (hall.gk2)
+        # ne correspondrait à rien de ce que cette box signe.
+        from secubox_core.auth import hote_box
+        iss = f"https://{hote_box('hall') or 'hall.localhost'}/oidc"
+    return str(iss).rstrip("/")
 
 
 def _domaine_mail() -> str:

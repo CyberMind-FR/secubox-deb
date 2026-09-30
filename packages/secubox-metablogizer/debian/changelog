@@ -1,3 +1,9 @@
+secubox-metablogizer (1.8.26-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : la route sbxwaf se déclare sous le nom de CETTE box (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-metablogizer (1.8.25-1~bookworm1) bookworm; urgency=medium
 
   * « Mes sites » : l'assistant de publication (wizard direct et en flux, import, route) rafraîchit la liste comme les autres écritures ; metablog-audit.timer enfin activé par le paquet, en filet de secours toutes les 30 min. Un site publié par l'assistant restait absent de la liste (glyphstep, cache de six jours sur gk2) (#1687).

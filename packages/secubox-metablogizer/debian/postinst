@@ -45,7 +45,7 @@ ln -sf ../sites-available/$HOTE.conf /etc/nginx/sites-enabled/$HOTE.conf
 if nginx -t >/dev/null 2>&1; then
     systemctl reload nginx 2>/dev/null || true
     if command -v secubox-waf-route >/dev/null 2>&1; then
-        secubox-waf-route "$HOTE" 9080 || true
+        secubox-waf-route "$(secubox-domaine metablogizer)" 9080 || true
     fi
 else
     echo "secubox-metablogizer : nginx -t a échoué, vhost NON activé" >&2

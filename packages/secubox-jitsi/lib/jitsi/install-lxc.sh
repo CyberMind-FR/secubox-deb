@@ -43,7 +43,8 @@ readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
 readonly LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
 readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
 readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
-readonly JITSI_DOMAIN="${SECUBOX_JITSI_DOMAIN:-meet.gk2.secubox.in}"
+# Nom dérivé du domaine de CETTE box, jamais celui de gk2 (#1723).
+readonly JITSI_DOMAIN="${SECUBOX_JITSI_DOMAIN:-$(secubox-domaine meet 2>/dev/null || true)}"
 readonly JVB_PORT="${SECUBOX_JITSI_JVB_PORT:-10000}"
 readonly WEB_PORT="${SECUBOX_JITSI_WEB_PORT:-80}"
 readonly STATE_DIR="${SECUBOX_STATE_DIR:-/etc/secubox/jitsi}"
@@ -52,6 +53,7 @@ readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
 
 log()  { printf '[jitsi-install] %s\n' "$*"; }
 fail() { printf '[jitsi-install] ERROR: %s\n' "$*" >&2; exit 1; }
+[ -n "$JITSI_DOMAIN" ] || fail "domaine de la box inconnu ([global] domain) — SECUBOX_JITSI_DOMAIN ou secubox-domaine"
 
 require_cmds() {
     for c in lxc-create lxc-info lxc-start lxc-attach nft; do

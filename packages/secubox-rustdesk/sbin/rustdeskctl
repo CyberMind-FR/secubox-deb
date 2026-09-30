@@ -45,7 +45,7 @@ LXC_PATH=$(config_get "path" "/data/lxc")
 SIGNAL_PORT=$(config_get "hbbs_signal_tcp_port" "21116")
 RELAY_PORT=$(config_get "hbbr_relay_port" "21117")
 WEB_PORT=$(config_get "web_admin_port" "21114")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "rustdesk.gk2.secubox.in")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "$(secubox-domaine rustdesk)")
 
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \

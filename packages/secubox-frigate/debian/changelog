@@ -1,3 +1,9 @@
+secubox-frigate (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * public_hostname par défaut dérivé du domaine de la box, plus frigate.gk2 (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-frigate (0.2.2-1~bookworm4) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

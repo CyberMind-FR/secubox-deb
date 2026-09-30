@@ -35,7 +35,19 @@ import urllib.request
 from datetime import datetime, timezone
 
 BILLETS_DB = os.environ.get("BILLETS_DB", "/var/lib/secubox/billets/billets.db")
-YTSAS_BASE = os.environ.get("YTSAS_PUBLIC_URL", "https://ytsas.gk2.secubox.in")
+
+
+def _ytsas_public() -> str:
+    """YTSaS de CETTE box (#1723) — les billets pointaient vers ytsas.gk2."""
+    try:
+        from secubox_core.auth import hote_box
+        h = hote_box("ytsas")
+    except Exception:  # noqa: BLE001 — bibliothèque absente : nom local
+        h = ""
+    return f"https://{h or 'ytsas.localhost'}"
+
+
+YTSAS_BASE = os.environ.get("YTSAS_PUBLIC_URL") or _ytsas_public()
 YTSAS_LIST = os.environ.get("YTSAS_LIST_URL", "http://10.100.0.180:8091/api/v1/ytsas/list")
 
 _B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"

@@ -54,7 +54,7 @@ config_get() {
 
 LXC_NAME="$(config_get lxc_name jitsi)"
 LXC_IP="$(config_get lxc_ip 10.100.0.190)"
-DOMAIN="$(config_get domain meet.gk2.secubox.in)"
+DOMAIN="$(config_get domain "$(secubox-domaine meet)")"
 JVB_PORT="$(config_get jvb_port 10000)"
 WEB_PORT="$(config_get web_port 80)"
 

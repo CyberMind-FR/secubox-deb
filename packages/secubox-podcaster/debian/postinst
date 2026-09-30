@@ -49,9 +49,11 @@ case "$1" in
     # reecriture de la table (272 routes y vivent, posees par d'autres).
     WAF_ROUTES="/etc/secubox/waf/haproxy-routes.json"
     if [ -f "$WAF_ROUTES" ] && command -v python3 >/dev/null 2>&1; then
-      python3 - "$WAF_ROUTES" "podcaster.gk2.secubox.in" 9080 <<'SBXROUTE' || true
+      python3 - "$WAF_ROUTES" "$(secubox-domaine podcaster 2>/dev/null || true)" 9080 <<'SBXROUTE' || true
 import json, os, sys
 chemin, dom, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+if not dom:
+    sys.exit(0)  # domaine de la box inconnu : aucune route plutôt qu'une route vide (#1723)
 try:
     d = json.load(open(chemin))
     if not isinstance(d, dict):

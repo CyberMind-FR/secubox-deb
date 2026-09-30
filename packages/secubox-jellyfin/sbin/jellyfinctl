@@ -87,7 +87,7 @@ LXC_NAME=$(config_get "name" "jellyfin")
 LXC_IP=$(config_get "ip" "10.100.0.170")
 LXC_PATH=$(config_get "path" "/data/lxc")
 PORT=$(config_get "http_port" "8096")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "jellyfin.gk2.secubox.in")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "$(secubox-domaine jellyfin)")
 
 readonly JELLYFIN_URL="http://${LXC_IP}:${PORT}"
 

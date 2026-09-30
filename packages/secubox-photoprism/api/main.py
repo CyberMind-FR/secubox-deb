@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
 from secubox_core.auth import require_lecture
+from secubox_core.auth import hote_box
 
 app = FastAPI(title="secubox-photoprism", version="1.0.0", root_path="/api/v1/photoprism")
 
@@ -58,8 +59,9 @@ DEFAULT_CONFIG = {
     "originals_path": "/data/shared/photos",   # shared with Nextcloud "PhotoLibrary"
     "import_path": "/data/photoprism/import",
     "timezone": "Europe/Paris",
-    "domain": "photoprism.gk2.secubox.in",
-    "public_hostname": "photoprism.gk2.secubox.in",
+    # Dérivés du domaine de CETTE box (#1723) — jamais celui de gk2.
+    "domain": hote_box("photoprism"),
+    "public_hostname": hote_box("photoprism"),
     "haproxy": False,
     "face_recognition": True,
     "experimental": False,
@@ -323,7 +325,7 @@ async def status():
     cfg = get_config()
     container = get_container_status()
     lib_stats = get_library_stats()
-    hostname = cfg.get("public_hostname", cfg.get("domain", "photoprism.gk2.secubox.in"))
+    hostname = cfg.get("public_hostname") or cfg.get("domain") or hote_box("photoprism")  # #1723
 
     return {
         "deployment": "lxc-native",

@@ -196,7 +196,7 @@
         <div class="sub">Hub média LXC-native · centre d'intégration des partenaires</div>
       </div>
       <div class="actions">
-        <a class="btn primary" id="open-jellyfin" href="https://jellyfin.gk2.secubox.in" target="_blank" rel="noopener">Ouvrir Jellyfin ↗</a>
+        <a class="btn primary" id="open-jellyfin" data-svc="jellyfin" href="#" target="_blank" rel="noopener">Ouvrir Jellyfin ↗</a>
         <button class="btn" id="btn-refresh" type="button">↻ Rafraîchir</button>
       </div>
     </header>
@@ -272,7 +272,7 @@
         <p class="note">
           Le montage d'un volume externe brut (disque USB / partage réseau) dédié à
           la musique relève du module <strong>Lyrion</strong> (panneau « Médiathèque
-          externe » de <a href="https://lyrion.gk2.secubox.in" target="_blank" rel="noopener">lyrion.gk2</a>),
+          externe » de <a data-svc="lyrion" href="#" target="_blank" rel="noopener">Lyrion</a>),
           module distinct de celui-ci. Rien à configurer ici pour l'instant.
         </p>
       </article>
@@ -291,6 +291,13 @@
   <div class="toast" id="toast"><span id="toast-msg"></span><span class="x" id="toast-x">✕</span></div>
 
   <script>
+  // LE DOMAINE DE CETTE BOX (#1723). Le panneau vit sur admin.<domaine> :
+  // les liens « .gk2.secubox.in » figés envoyaient gk3 ouvrir le Jellyfin de gk2.
+  var DOM = (function (h) {
+    return (h.indexOf('.') > 0 && !/^[0-9.]+$/.test(h)) ? h.slice(h.indexOf('.') + 1) : 'gk2.secubox.in';
+  })(location.hostname);
+  function hoteDe(n) { return 'https://' + n + '.' + DOM; }
+  document.querySelectorAll('a[data-svc]').forEach(function (a) { a.href = hoteDe(a.getAttribute('data-svc')); });
   (function () {
     "use strict";
     var API = "/api/v1/jellyfin";
@@ -391,7 +398,7 @@
             + '⏳ <b>Configuration initiale requise</b> — Jellyfin est démarré mais son assistant '
             + 'de configuration n\'est pas terminé (l\'API reste en 503, aucun branchement de bibliothèque '
             + 'possible tant que ce n\'est pas fait). '
-            + '<a href="https://jellyfin.gk2.secubox.in" target="_blank" rel="noopener">Compléter la configuration ↗</a> '
+            + '<a href="' + hoteDe('jellyfin') + '" target="_blank" rel="noopener">Compléter la configuration ↗</a> '
             + '(ou sur le LAN : <code>http://10.100.0.170:8096</code>). Crée l\'admin, puis reviens ici.'
             + '</div>';
         }
@@ -497,14 +504,14 @@
 
       var foot = "";
       if (linkOnly) {
-        foot = '<a class="btn primary" href="https://' + esc(name) + '.gk2.secubox.in" target="_blank" rel="noopener">🎬 Ouvrir ↗</a>';
+        foot = '<a class="btn primary" href="' + hoteDe(esc(name)) + '" target="_blank" rel="noopener">🎬 Ouvrir ↗</a>';
       } else {
         if (wired) {
           foot += '<button class="btn danger" data-unwire="' + esc(name) + '">🔌 Débrancher</button>';
         } else {
           foot += '<button class="btn good" data-wire="' + esc(name) + '"' + (present ? "" : " disabled") + '>🔌 Brancher</button>';
         }
-        foot += '<a class="btn" href="https://' + esc(name) + '.gk2.secubox.in" target="_blank" rel="noopener">↗ webui</a>';
+        foot += '<a class="btn" href="' + hoteDe(esc(name)) + '" target="_blank" rel="noopener">↗ webui</a>';
       }
 
       return '<div class="' + cls + '">' +

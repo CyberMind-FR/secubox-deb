@@ -68,6 +68,10 @@ override_dh_auto_install:
 	# SecuBox CLI
 	install -m 755 usr/bin/secubox \
 	               debian/secubox-core/usr/bin/secubox
+	# LE DOMAINE DE CETTE BOX (#1723) : un nom de service se dérive, il ne
+	# s'écrit pas en gk2.
+	install -m 755 usr/bin/secubox-domaine \
+	               debian/secubox-core/usr/bin/secubox-domaine
 
 	# LE CHAUFFE-LED APPARTIENT A SON PROPRE PAQUET (#1362). secubox-core
 	# livrait AUSSI usr/sbin/secubox-led-heartbeat et son unite — deux paquets

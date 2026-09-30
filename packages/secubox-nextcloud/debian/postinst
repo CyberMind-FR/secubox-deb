@@ -16,8 +16,8 @@ if [ "$1" = "configure" ]; then
     # L'outil vient de secubox-core, dont ce paquet depend deja ; le garde
     # `command -v` couvre l'ordre de configuration a la premiere installation.
     if command -v secubox-waf-route >/dev/null 2>&1; then
-      secubox-waf-route nc.gk2.secubox.in 9080 || true
-      secubox-waf-route nextcloud.gk2.secubox.in 9080 || true
+      secubox-waf-route "$(secubox-domaine nc)" 9080 || true
+      secubox-waf-route "$(secubox-domaine nextcloud)" 9080 || true
     fi
     systemctl daemon-reload
     systemctl enable secubox-nextcloud.service || true

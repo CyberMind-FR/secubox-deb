@@ -1,3 +1,9 @@
+secubox-podcaster (1.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * PODCASTER_PUBLIC = cette box ; BILLETS_PUBLIC = billets local s'il est installé, sinon la référence ; route postinst dérivée (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-podcaster (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).

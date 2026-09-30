@@ -29,6 +29,7 @@ from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException
 from secubox_core.auth import require_jwt
 from secubox_core.auth import require_lecture
+from secubox_core.auth import hote_box
 
 from .couleur import charge_pour
 
@@ -42,7 +43,7 @@ SECRETS_DIR = Path(os.environ.get("SECUBOX_SECRETS_DIR", "/etc/secubox/secrets")
 # v2.5.8: the public LAN-gated vhost that nginx fronts (ex-SSO retired) for
 # the zigbee2mqtt UI. Operators reach it from outside the LAN; the
 # /access list now includes it explicitly.
-PUBLIC_URL = os.environ.get("SECUBOX_ZIGBEE_PUBLIC_URL", "https://zigbee.gk2.secubox.in/")
+PUBLIC_URL = os.environ.get("SECUBOX_ZIGBEE_PUBLIC_URL") or f"https://{hote_box('zigbee')}/"  # #1723
 
 # GARDE JWT SUR LES ECRITURES (#1256). Ce module n'importait pas require_jwt.
 # Rien ne rattrapait l'oubli en amont : l'aggregator monte sans middleware, le

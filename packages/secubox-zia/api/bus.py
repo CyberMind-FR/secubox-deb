@@ -193,7 +193,11 @@ class Bus:
         `/w/<id>` est justement ce que le viewer du Hall sait jouer en SOUVERAIN
         (estPeertube). « Trouve une vidéo » ramène donc du réel, lisible d'un clic.
         """
-        base = str(self.cfg.get("peertube_url", "https://peertube.gk2.secubox.in")).rstrip("/")
+        base = str(self.cfg.get("peertube_url") or "").rstrip("/")
+        if not base:
+            # Celui de cette box s'il y est installé, sinon la référence (#1723).
+            from secubox_core.auth import hote_parc
+            base = "https://" + hote_parc("peertube", "secubox-peertube")
         out: list[dict] = []
         try:
             async with httpx.AsyncClient(verify=False, timeout=5.0) as cli:

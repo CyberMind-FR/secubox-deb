@@ -1,3 +1,9 @@
+secubox-hub (1.9.22-1~bookworm1) bookworm; urgency=medium
+
+  * route admin déclarée sous le nom de cette box ; verdict LAN transmis sur /__console/jeton (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-hub (1.9.21-1~bookworm1) bookworm; urgency=medium
 
   * webui.conf : l'administration aussi sur la console locale (admin.localhost:9078) avec son /__console/jeton (#1695).

@@ -36,7 +36,7 @@ fi
 
 RSPAMD_HOST="${RSPAMD_HOST:-10.100.0.10}"
 RSPAMD_CTRL_PORT="${RSPAMD_CTRL_PORT:-11334}"
-RSPAMD_FQDN="${RSPAMD_FQDN:-rspamd.gk2.secubox.in}"
+RSPAMD_FQDN="${RSPAMD_FQDN:-$(secubox-domaine rspamd 2>/dev/null || true)}"  # CETTE box (#1723)
 
 apply_route_python() {
     # stdin: json path

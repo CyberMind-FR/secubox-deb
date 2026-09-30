@@ -34,7 +34,7 @@ LXC_NAME=$(config_get "name" "frigate")
 LXC_IP=$(config_get "ip" "10.100.0.140")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "5000")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "frigate.gk2.secubox.in")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "$(secubox-domaine frigate)")
 
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \

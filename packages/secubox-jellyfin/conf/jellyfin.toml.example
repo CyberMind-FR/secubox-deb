@@ -19,7 +19,7 @@ version = ""    # empty = latest stable at provision, then pinned (ctl upgrade)
 # Public vhost served via HAProxy(TLS1.3) → sbxwaf → nginx → LXC :8096.
 # Empty = LAN only. The public vhost lives in
 # /etc/nginx/sites-available/jellyfin.conf (operator opts in via ln -s).
-public_domain = "jellyfin.gk2.secubox.in"
+# public_domain = ""  # absent = <nom>.<domaine de la box>, jamais gk2 (#1723)
 waf_inspect   = true
 
 [media]

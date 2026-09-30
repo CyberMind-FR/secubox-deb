@@ -63,8 +63,11 @@ if [ "$1" = "configure" ]; then
     # L'outil vient de secubox-core, dont ce paquet depend deja ; le garde
     # `command -v` couvre l'ordre de configuration a la premiere installation.
     if command -v secubox-waf-route >/dev/null 2>&1; then
-      secubox-waf-route hall.gk2.secubox.in 9080 || true
-      secubox-waf-route hall.gk2.net 9080 || true
+      secubox-waf-route "$(secubox-domaine hall)" 9080 || true
+      # Alias public propre à gk2 : aucune autre box ne le revendique (#1723).
+      if [ "$(secubox-domaine 2>/dev/null || true)" = gk2.secubox.in ]; then
+        secubox-waf-route hall.gk2.net 9080 || true
+      fi
     fi
     # CONSOLE LOCALE DU KIOSQUE (#1695). Un secret partage par nginx, qui le
     # joint aux seules demandes recues sur le port console (127.0.0.1:9078),

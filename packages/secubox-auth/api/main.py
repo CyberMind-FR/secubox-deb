@@ -290,7 +290,11 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     # mot de passe. Vérifié AVANT la branche de première configuration : un
     # compte tout juste créé a encore un mot de passe vide à « définir », et
     # quiconque connaissant son nom en aurait fait un administrateur.
-    if req.username == _console.reglages(get_config("console"))["compte"]:
+    try:
+        _cfg_console = get_config("console")
+    except Exception:  # noqa: BLE001 — config illisible : le nom par défaut, refus maintenu
+        _cfg_console = {}
+    if req.username == _console.reglages(_cfg_console)["compte"]:
         _emit_session_event("login_failed", req.username, {
             "reason": "console_hors_kiosque", "ip": ip, "user_agent": ua,
         })
@@ -355,7 +359,7 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
 
     jti = secrets.token_hex(8)
     tok = create_token(req.username, jti=jti)
-    _set_session_cookie(response, tok)  # SSO-lite (#400)
+    _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
     _on_session_event("login_success", req.username, {
         "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
         "otp": "exigé" if otp else "facultatif (LAN)",
@@ -441,7 +445,7 @@ async def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
         raise HTTPException(status_code=401, detail="Code invalide")
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
-    _set_session_cookie(response, tok)  # SSO-lite (#400)
+    _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
     _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
     _users_engine.touch_last_login(username)
     return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
@@ -477,7 +481,7 @@ def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
     _pending.delete(payload["jti"])
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
-    _set_session_cookie(response, tok)  # SSO-lite (#400)
+    _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
     _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
     return {
         "access_token": tok, "token_type": "bearer", "expires_in": 86400,

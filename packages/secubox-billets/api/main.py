@@ -115,7 +115,12 @@ def _ancetres() -> str:
     site, ce qui est précisément l'attaque que cette directive existe pour
     empêcher. SECUBOX_FRAME_ANCESTORS permet d'en ajouter sur une autre box.
     """
-    base = "'self' https://hall.gk2.secubox.in https://hall.gk2.net"
+    # Le Hall de CETTE box (#1723) ; gk2 garde son alias public hall.gk2.net.
+    from secubox_core.auth import domaine_box
+    dom = domaine_box()
+    base = "'self'" + (f" https://hall.{dom}" if dom else "")
+    if dom == "gk2.secubox.in":
+        base += " https://hall.gk2.net"
     # Les Halls du parc relayés par cette box (#1672), tenus par
     # secubox-halls-parc : origines https strictes seulement.
     base += _halls_parc()

@@ -3,7 +3,10 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 set -e
 
-DOMAIN="socialrelay.gk2.secubox.in"
+# Le nom de CETTE box (#1723) ; vide si son domaine est inconnu, et alors
+# rien n'est déclaré (ni vhost HAProxy, ni route).
+DOMAIN="$(secubox-domaine socialrelay 2>/dev/null || true)"
+CLE_VHOST="$(printf '%s' "$DOMAIN" | tr '.' '_')"
 NGX_AVAIL="/etc/secubox/nginx-available/socialrelay.conf"
 WAF_ROUTES="/etc/secubox/waf/haproxy-routes.json"
 BACKPORT=9080   # port nginx partagé des webui secubox
@@ -48,8 +51,8 @@ case "$1" in
 
     # 2. HAProxy : déclarer le vhost public (déclaratif, jamais de hand-edit
     #    du .cfg généré) puis régénérer + recharger.
-    if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
-      if ! grep -q "socialrelay_gk2_secubox_in" /etc/secubox/haproxy.toml 2>/dev/null; then
+    if [ -n "$DOMAIN" ] && command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
+      if ! grep -q "$CLE_VHOST" /etc/secubox/haproxy.toml 2>/dev/null; then
         haproxyctl vhost add "$DOMAIN" nginx_vhosts true >/dev/null 2>&1 || true
       fi
       haproxyctl generate >/dev/null 2>&1 || true
@@ -57,7 +60,7 @@ case "$1" in
     fi
 
     # 3. Route WAF (sbxwaf inspecte puis forwarde vers nginx local) + reload.
-    if [ -f "$WAF_ROUTES" ] && command -v python3 >/dev/null 2>&1; then
+    if [ -n "$DOMAIN" ] && [ -f "$WAF_ROUTES" ] && command -v python3 >/dev/null 2>&1; then
       python3 - "$WAF_ROUTES" "$DOMAIN" "$BACKPORT" <<'PY' || true
 import json, sys
 path, dom, port = sys.argv[1], sys.argv[2], int(sys.argv[3])

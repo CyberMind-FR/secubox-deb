@@ -21,7 +21,7 @@ container_ip = "10.100.0.21"
 # When ssl_enabled = true, the UI shows https://${ssl_domain}/…
 # Otherwise it shows http://localhost:${http_port}/… (dev fallback).
 ssl_enabled = true
-ssl_domain  = "nc.gk2.secubox.in"
+# ssl_domain = ""  # absent = <nom>.<domaine de la box>, jamais gk2 (#1723)
 http_port   = 80
 
 # Real user-facing base URL (the WAF-fronted vhost). Overrides the derived
@@ -29,7 +29,7 @@ http_port   = 80
 # public_url = "https://nc.gk2.secubox.in"
 
 # ── Nextcloud install knobs (used by `nextcloudctl install`) ─────────
-domain     = "nc.gk2.secubox.in"
+# domain = ""  # absent = <nom>.<domaine de la box>, jamais gk2 (#1723)
 admin_user = "ncadmin"
 # Storage backend for Nextcloud's metadata DB. "sqlite" is the simple
 # default; switch to "mariadb" or "pgsql" for multi-user deployments.

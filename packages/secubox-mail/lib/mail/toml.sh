@@ -90,8 +90,10 @@ merge_mail_toml() {
     _toml_add_root_key "$toml" "lxc_gateway"  '"10.100.0.1"'
     _toml_add_root_key "$toml" "lxc_path"     '"/var/lib/lxc"'
     _toml_add_root_key "$toml" "data_path"    '"/data/volumes/mail"'
-    _toml_add_root_key "$toml" "webmail_url"  '"https://webmail.gk2.secubox.in"'
-    _toml_add_root_key "$toml" "horde_url"    '"https://horde.gk2.secubox.in"'
+    # Noms de CETTE box (#1723) ; domaine inconnu → vide, jamais ceux de gk2.
+    local _d; _d="$(secubox-domaine 2>/dev/null || true)"
+    _toml_add_root_key "$toml" "webmail_url"  "\"${_d:+https://webmail.$_d}\""
+    _toml_add_root_key "$toml" "horde_url"    "\"${_d:+https://horde.$_d}\""
     # #1181 : conteneur webmail (LXC roundcube séparé) + backend ManageSieve.
     _toml_add_root_key "$toml" "webmail_container" '"roundcube"'
     _toml_add_root_key "$toml" "managesieve_host"  '""'
@@ -105,7 +107,7 @@ merge_mail_toml() {
         'bayes_autolearn = true' \
         'ratelimit_outbound = "200/h/user"' \
         'web_ui = true' \
-        'web_ui_host = "rspamd.gk2.secubox.in"'
+        "web_ui_host = \"${_d:+rspamd.$_d}\""
 
     _toml_add_section_if_missing "$toml" "mail.antivirus" \
         'enabled = false'

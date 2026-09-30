@@ -1,3 +1,9 @@
+secubox-billets (0.8.67-1~bookworm1) bookworm; urgency=medium
+
+  * snapshot : l'hôte PeerTube autorisé est celui de cette box s'il y est installé, sinon la référence du maillage ; frame-ancestors = le Hall de CETTE box (hall.gk2.net seulement sur gk2) ; panneau : lien billets dérivé du domaine de la page ; route postinst dérivée (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-billets (0.8.66-1~bookworm1) bookworm; urgency=medium
 
   * /etc/secubox/secrets : plus de secubox 0700 imposé au parent partagé (état de secubox-core, #1689).
