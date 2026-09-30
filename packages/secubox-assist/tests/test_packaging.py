@@ -79,18 +79,17 @@ def test_api_unit_keeps_no_new_privileges_true():
     assert "NoNewPrivileges=true" in svc
 
 
-def test_console_buttons_are_disabled_and_labelled_not_yet_available():
-    # console.py (guard + pty + keystroke audit) exists but nothing in the
-    # data-plane opens a pty; nothing consumes the CONSOLE_GRANT/REVOKE ops
-    # these buttons write. Ship the control-plane honestly: the buttons must
-    # not look like a live, working escalation channel.
+def test_console_grant_is_live_bounded_and_revocable():
+    # #1720 : l'accord de console n'est plus « à venir » — il ouvre l'ADMINISTRATION
+    # DÉLÉGUÉE (compte <aidant>.<centre>, admin complet) jusqu'à son échéance.
+    # Il doit donc porter une DURÉE choisie, bornée, et rester RÉVOCABLE.
     html = (ROOT / "www" / "assist" / "index.html").read_text()
     grant_line = next(l for l in html.splitlines() if 'data-act="console-grant"' in l)
     revoke_line = next(l for l in html.splitlines() if 'data-act="console-revoke"' in l)
-    assert "disabled" in grant_line
-    assert "disabled" in revoke_line
-    assert "à venir" in grant_line or "en cours" in grant_line
-    assert "à venir" in revoke_line or "en cours" in revoke_line
+    assert "disabled" not in grant_line and "disabled" not in revoke_line
+    assert 'id="deleg-duree"' in html
+    assert "duration_s" in html            # la durée part avec l'accord
+    assert 'id="delegations-list"' in html  # le centre voit ce qu'il peut administrer
 
 
 def test_postinst_does_not_chown_shared_parents():

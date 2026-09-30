@@ -13,6 +13,8 @@
 # ── Points d'entree d'authentification : ils DELIVRENT le jeton ────────────
 secubox-auth POST /login                # delivre le jeton — ne peut pas en exiger un
 secubox-auth POST /login/mfa            # 2e facteur, porte par le mfa_token du 1er
+secubox-auth GET /console/jeton         # console du kiosque (#1695) : port 9078 en boucle locale, secret nginx 0600, connexion vérifiée comme celle du compte secubox-kiosk (/proc/net/tcp)
+secubox-auth GET /delegation/entrer     # entrée déléguée (#1720) : assertion signée par la clé PUBLIÉE du centre, 60 s, usage unique ; ne vaut que si CETTE box a signé l'accord de console en cours
 secubox-auth POST /totp/enroll          # porte par l'enrollment_token
 secubox-auth POST /totp/confirm         # porte par l'enrollment_token
 secubox-auth POST /set-password         # porte par le setup_token

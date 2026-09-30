@@ -147,16 +147,21 @@ async def offers():
     return assist_match.active_offers(_entries(), _now())
 
 
-def _noeuds(entries) -> dict:
-    """DID → nom de box, d'après les publications de nœuds du journal."""
+def _fiches(entries) -> dict:
+    """DID → dernière publication de nœud (boxname, ddns…) du journal."""
     out = {}
     for e in entries:
         op = getattr(e, "op", None) or (e.get("op") if isinstance(e, dict) else None)
         payload = getattr(e, "payload", None) or (e.get("payload") if isinstance(e, dict) else None)
         if str(getattr(op, "value", op)) == "node_publish" and isinstance(payload, dict):
-            if payload.get("did") and payload.get("boxname"):
-                out[payload["did"]] = payload["boxname"]
+            if payload.get("did"):
+                out[payload["did"]] = payload
     return out
+
+
+def _noeuds(entries) -> dict:
+    """DID → nom de box, d'après les publications de nœuds du journal."""
+    return {d: f.get("boxname") for d, f in _fiches(entries).items() if f.get("boxname")}
 
 
 @app.get("/requests/open", dependencies=[Depends(require_jwt)])
@@ -171,6 +176,66 @@ async def requests_open():
         out.append({**r, "de_moi": de == moi,
                     "noeud": noms.get(de) or (de.split(":")[-1][:8] if de else "?")})
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Délégation web (#1720) — côté CENTRE. Une box qui m'a ouvert une session
+# d'assistance ET accordé la console me laisse administrer son interface, au
+# nom du compte qui clique ici, jusqu'à l'échéance qu'ELLE a signée.
+# --------------------------------------------------------------------------- #
+from annuaire import delegation as _delegation  # noqa: E402
+
+
+def _priv() -> bytes:
+    path = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
+    return bytes.fromhex(open(path).read().strip())
+
+
+@app.get("/delegations")
+async def delegations(user=Depends(require_jwt)):
+    sid = _self_did()
+    if sid is None:
+        return []
+    entries = _entries()
+    fiches = _fiches(entries)
+    out = []
+    for d in assist.sessions_centre(entries, sid, _now()):
+        f = fiches.get(d["box_did"], {})
+        out.append({**d, "noeud": f.get("boxname") or d["box_did"].split(":")[-1][:8],
+                    "domaine": f.get("ddns") or ""})
+    return out
+
+
+class AssertionBody(BaseModel):
+    session_id: str
+
+
+@app.post("/delegation/assertion")
+async def delegation_assertion(b: AssertionBody, user=Depends(require_jwt)):
+    """Adresse d'entrée sur la box aidée, avec une assertion signée par ce nœud
+    (60 s, usage unique) au nom du compte connecté."""
+    sid = _self_did()
+    entries = _entries()
+    d = next((x for x in assist.sessions_centre(entries, sid, _now()) if x["session_id"] == b.session_id), None) if sid else None
+    if d is None:
+        raise HTTPException(status_code=404, detail="aucune délégation active pour cette session")
+    f = _fiches(entries).get(d["box_did"], {})
+    domaine = f.get("ddns") or ""
+    if not domaine:
+        raise HTTPException(status_code=409, detail="domaine de la box inconnu (fiche de nœud non publiée)")
+    compte = str((user or {}).get("sub") or "").lower()
+    try:
+        jeton = _delegation.emettre(_priv(), d["box_did"], compte, b.session_id)
+    except _delegation.Refus as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        from assist import audit  # noqa: PLC0415
+        audit.record("delegation_assertion", b.session_id, compte,
+                     {"box": d["box_did"], "noeud": f.get("boxname"), "fin": d["fin"]})
+    except Exception:  # noqa: BLE001
+        pass
+    return {"url": f"https://admin.{domaine}/api/v1/auth/delegation/entrer?a={jeton}",
+            "noeud": f.get("boxname") or "", "fin": d["fin"]}
 
 
 class AnswerBody(BaseModel):

@@ -1,3 +1,9 @@
+secubox-annuaire (0.10.11-1~bookworm1) bookworm; urgency=medium
+
+  * annuaire.delegation : assertion d'entrée déléguée (signée par la clé du nœud centre, 60 s, nonce) ; annuaire.assist : delegation_active / sessions_centre — le pouvoir vient du consentement signé par la BOX (session d'assistance ouverte + accord de console non révoqué, non échu), jamais de l'assertion (#1720).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 16:12:15 +0200
+
 secubox-annuaire (0.10.10-1~bookworm1) bookworm; urgency=medium
 
   * OpenPGP (#1736) : ops openpgp_bind / openpgp_revoke (modèles extra=forbid, `usage` DANS la charge signée — l'op ne l'est pas), verbes signés par node.key, lecteur annuaire.openpgp lié à l'auteur vérifié (une liaison au nom d'une autre box ne vaut rien ; révocation définitive ; expiration). À livrer sur toute la flotte AVANT la première publication : un op inconnu est rejeté à l'import.

@@ -25,6 +25,8 @@ ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
 ReadWritePaths=/var/lib/secubox/openpgp /run/secubox
+# La trace des sessions DÉLÉGUÉES (#1720), écrite par secubox_core.auth.
+ReadWritePaths=-/var/log/secubox/delegation.log
 InaccessiblePaths=-/etc/secubox/secrets
 
 [Install]

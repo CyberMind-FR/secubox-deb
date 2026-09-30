@@ -1,3 +1,10 @@
+secubox-auth (1.1.14-1~bookworm1) bookworm; urgency=medium
+
+  * GET /delegation/entrer : un compte d'un autre nœud administre ENTIÈREMENT cette box, le temps de l'accord qu'elle a signé — compte <aidant>.<centre> créé à la demande (sans mot de passe utilisable), jeton borné à l'échéance, sessions fermées à la révocation ou à l'échéance (veille 30 s), chaque geste tracé (#1720).
+  * Un compte délégué ne peut pas se connecter par mot de passe.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 16:12:15 +0200
+
 secubox-auth (1.1.13-1~bookworm1) bookworm; urgency=high
 
   * Connexion : le cookie de session reçoit la requête, pour prendre le domaine de la box quand aucun n'est réglé — la connexion sur gk3 ne se propageait pas au Hall (#1723).

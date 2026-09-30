@@ -35,8 +35,18 @@
   <h1 style="color:#00d4ff">🆘 Assistance</h1>
   <div class="card" id="active-card"><h2>Session active</h2><div id="active">—</div>
     <button class="btn danger" data-act="close">Kill session</button>
-    <button class="btn warn" data-act="console-grant" disabled title="canal pty en cours">Escalade console (à venir)</button>
-    <button class="btn" data-act="console-revoke" disabled title="canal pty en cours">Révoquer console (à venir)</button>
+    <!-- #1720 : le second consentement. Tant qu'il vaut, le centre de la session
+         administre l'interface de cette box au nom de son compte d'aide ;
+         chaque appel est tracé ici (/var/log/secubox/delegation.log). -->
+    <select id="deleg-duree" title="durée de l'autorisation">
+      <option value="1800">30 min</option><option value="3600" selected>1 h</option>
+      <option value="14400">4 h</option></select>
+    <button class="btn warn" data-act="console-grant">Autoriser l'administration à distance</button>
+    <button class="btn" data-act="console-revoke">Retirer l'autorisation</button>
+  </div>
+  <div class="card"><h2>🛠️ Administrer à distance</h2>
+    <p class="muted">Les box qui vous ont ouvert une session d'assistance et autorisé l'administration.</p>
+    <div id="delegations-list">—</div>
   </div>
   <div class="card"><h2>Demander de l'assistance (ciblée)</h2>
     <div><input id="center" placeholder="did:plc:…" size="48"></div>
@@ -241,6 +251,18 @@ function refreshActiveMarketTab() {
   if (fn) fn();
 }
 
+// #1720 : les box qui m'ont délégué leur administration (je suis leur centre).
+async function refreshDelegations() {
+  const list = document.getElementById('delegations-list');
+  const r = await fetch('/api/v1/assist/delegations', {headers:H()});
+  if (!r.ok) { list.textContent = 'auth requise'; return; }
+  const ds = await r.json();
+  if (!ds.length) { list.textContent = 'aucune'; return; }
+  renderList(list, ds.map(d => itemEl(
+    [['box', d.noeud], ['jusqu\'à', new Date(d.fin).toLocaleTimeString()], ['session', d.session_id]],
+    [{label: 'Administrer ' + d.noeud, act: 'administrer', data: {sessionId: d.session_id, noeud: d.noeud}}])));
+}
+
 async function refresh() {
   const r = await fetch('/api/v1/assist/sessions', {headers:H()});
   if (!r.ok) { document.getElementById('active').textContent = 'auth requise'; return; }
@@ -249,6 +271,7 @@ async function refresh() {
     d.active_session ? JSON.stringify(d.active_session) : 'aucune';
   renderPending(document.getElementById('log'), d.pending);
   refreshActiveMarketTab();
+  refreshDelegations();
 }
 
 document.getElementById('mtabs').addEventListener('click', (ev) => {
@@ -319,6 +342,11 @@ document.addEventListener('click', async (ev) => {
     f.select();
     try { await navigator.clipboard.writeText(f.value); } catch (e) { /* clipboard optional */ }
     return;
+  } else if (act === 'administrer') {
+    const d = await postAction('/api/v1/assist/delegation/assertion', { session_id: b.dataset.sessionId },
+      'Ouverture de l\'administration de ' + (b.dataset.noeud || 'la box') + '…');
+    if (d && d.url) window.open(d.url, '_blank', 'noopener');
+    return;
   } else if (act === 'join') {
     return; // escalation flow not wired yet — informational tab only
   } else {
@@ -327,7 +355,9 @@ document.addEventListener('click', async (ev) => {
     if (!sid) return;
     const ep = {'close':'/api/v1/assist/close','console-grant':'/api/v1/assist/console/grant',
                 'console-revoke':'/api/v1/assist/console/revoke'}[act];
-    await fetch(ep, {method:'POST', headers:H(), body: JSON.stringify({session_id: sid})});
+    const corps = {session_id: sid};
+    if (act === 'console-grant') corps.duration_s = parseInt(document.getElementById('deleg-duree').value, 10);
+    await fetch(ep, {method:'POST', headers:H(), body: JSON.stringify(corps)});
   }
   refresh();
 });
