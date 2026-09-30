@@ -377,6 +377,20 @@ if [ "$1" = "configure" ]; then
     if [ -x /usr/sbin/secubox-lxc-reseau ]; then /usr/sbin/secubox-lxc-reseau || true; fi
 fi
 
+# TRACE DE L'ADMINISTRATION DÉLÉGUÉE (#1720). Chaque requête d'une session
+# ouverte par délégation (compte <aidant>.<centre>) y est écrite : qui, depuis
+# quel nœud, au titre de quelle session, quelle route. Les modules tournent
+# sous `secubox` et ne peuvent pas créer un fichier dans /var/log/secubox : sans
+# lui, la trace — promise des deux côtés — échouait en silence.
+if [ "$1" = "configure" ]; then
+    install -d -m 0755 /var/log/secubox
+    # 0660 groupe secubox : chaque module trace dans SON processus, et tous ne
+    # tournent pas sous `secubox` (secubox-openpgp…) — en 0640, leurs lignes
+    # se perdaient sans bruit.
+    [ -e /var/log/secubox/delegation.log ] || install -m 0660 -o secubox -g secubox /dev/null /var/log/secubox/delegation.log
+    chgrp secubox /var/log/secubox/delegation.log && chmod 0660 /var/log/secubox/delegation.log || true
+fi
+
 # LE DOMAINE DE CETTE BOX (#1723). Trente paquets prenaient *.gk2.secubox.in
 # pour défaut : une box qui n'est pas gk2 (gk3) a écrit des noms de gk2 dans
 # ses réglages — jitsi pour meet.gk2, la carlette d'accès vers hall.gk2… Sur

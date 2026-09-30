@@ -1,3 +1,9 @@
+secubox-openpgp (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Unité : ReadWritePaths sur /var/log/secubox/delegation.log — sous ProtectSystem=strict, les appels faits par une session DÉLÉGUÉE (#1720) n'y étaient pas tracés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 16:26:35 +0200
+
 secubox-openpgp (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 1 (#1736) : clé OpenPGP de box (ed25519 [signer] + cv25519 [chiffrer]) distincte de node.key et LIÉE à son did par une entrée d'annuaire openpgp_bind signée par node.key — aucune identité de plus (audit #1417, S10) ; échange inter-box d'enveloppes signées et chiffrées sur le maillage (dépôt sur l'écoute :8799) ; à la réception, signataire = clé liée à l'expéditeur, destinataire, fraîcheur ±15 min, nonce inédit ; messages conservés chiffrés ; aucune route ne signe ni ne déchiffre des octets arbitraires (S8). CLI sbx-openpgp.

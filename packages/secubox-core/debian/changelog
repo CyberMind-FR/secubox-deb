@@ -1,3 +1,10 @@
+secubox-core (1.5.42-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_core.auth : un jeton peut porter une délégation (#1720) ; chaque requête d'une session déléguée est tracée dans /var/log/secubox/delegation.log (qui, depuis quel nœud, quelle session, quelle route), fichier créé par le postinst — les modules ne pouvaient pas le créer.
+  * La trace n'est jamais silencieuse : fichier inaccessible (unité durcie ProtectSystem=strict, compte hors du groupe secubox) → journal système (LOG_AUTH). Fichier en 0660 groupe secubox.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 16:12:15 +0200
+
 secubox-core (1.5.41-1~bookworm1) bookworm; urgency=medium
 
   * secubox-lxc-decaler : décale un rootfs debootstrappé en root (0:0) pour un conteneur non privilégié (idmap 100000) — uid/gid +100000, setuid/setgid remis, liens non suivis, idempotent ; nextcloud et mail ne démarraient pas sur gk3 (ABORTING), gk2 avait été décalée à la main le 2026-05-03 (#1729, #1713).

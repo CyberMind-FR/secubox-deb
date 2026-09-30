@@ -158,3 +158,76 @@ def can_open(entries: List[Mapping[str, Any]], req_id: str,
     if active_session(entries, self_did, now_ts) is not None:
         return False, "session-already-active"
     return True, "ok"
+
+
+# ---------------------------------------------------------------------------
+# Délégation web (#1720) : un compte du CENTRE administre la box aidée tant que
+# la box l'a consenti deux fois — session ouverte ET accord de console — et
+# pas une seconde de plus. Tout est signé par la box elle-même ; un pair ne
+# peut ni ouvrir ni prolonger une délégation chez un autre.
+# ---------------------------------------------------------------------------
+
+def _signe_par(entries, op: Op, did: str):
+    """Payloads de `op` signés par `did` ET le déclarant comme émetteur."""
+    for entry in entries:
+        if _op(entry) != op.value:
+            continue
+        p = _payload(entry)
+        if _author(entry) == did and p.get("issued_by") == did:
+            yield p
+
+
+def _fenetre(entries, box_did: str, session_id: str, now_ts: str) -> Optional[str]:
+    """Échéance de la délégation sur `session_id` de `box_did`, ou None.
+
+    Il faut, TOUS signés par la box : la session ouverte, non fermée, non
+    échue ; un accord de console pour elle, non révoqué, non échu. L'échéance
+    est la plus proche des deux."""
+    fermees = {p.get("session_id") for p in _signe_par(entries, Op.ASSIST_SESSION_CLOSE, box_did)}
+    if session_id in fermees:
+        return None
+    session = None
+    for p in _signe_par(entries, Op.ASSIST_SESSION_OPEN, box_did):
+        if p.get("session_id") == session_id and str(now_ts) < str(p.get("expires_ts", "")):
+            session = p
+    if session is None:
+        return None
+    revoquees = {p.get("session_id") for p in _signe_par(entries, Op.ASSIST_CONSOLE_REVOKE, box_did)}
+    if session_id in revoquees:
+        return None
+    fin_console = None
+    for p in _signe_par(entries, Op.ASSIST_CONSOLE_GRANT, box_did):
+        if p.get("session_id") == session_id and str(now_ts) < str(p.get("expires_ts", "")):
+            fin_console = max(fin_console or "", str(p.get("expires_ts")))
+    if fin_console is None:
+        return None
+    return min(fin_console, str(session.get("expires_ts")))
+
+
+def delegation_active(entries: List[Mapping[str, Any]], self_did: str,
+                      center_did: str, session_id: str, now_ts: str) -> Optional[str]:
+    """CÔTÉ BOX AIDÉE : échéance (RFC3339) de la délégation de `center_did` sur
+    `session_id`, ou None. La session doit viser CE centre."""
+    for p in _signe_par(entries, Op.ASSIST_SESSION_OPEN, self_did):
+        if p.get("session_id") == session_id and p.get("center_did") == center_did:
+            return _fenetre(entries, self_did, session_id, now_ts)
+    return None
+
+
+def sessions_centre(entries: List[Mapping[str, Any]], center_did: str,
+                    now_ts: str) -> List[dict]:
+    """CÔTÉ CENTRE : les sessions où `center_did` est l'aidant et que la box a
+    ouvertes à la délégation (accord de console actif) — [{box_did,
+    session_id, fin}]."""
+    out = []
+    for entry in entries:
+        if _op(entry) != Op.ASSIST_SESSION_OPEN.value:
+            continue
+        p = _payload(entry)
+        box = _author(entry)
+        if not box or box != p.get("issued_by") or p.get("center_did") != center_did:
+            continue
+        fin = _fenetre(entries, box, p.get("session_id"), now_ts)
+        if fin:
+            out.append({"box_did": box, "session_id": p.get("session_id"), "fin": fin})
+    return out

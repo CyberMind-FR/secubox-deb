@@ -14,6 +14,7 @@ Compared to v1 (plaintext `auth.toml` lookup), this module:
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -193,6 +194,43 @@ def set_session_cookie(response: Response, token: str, expires_in: int = 86400,
 #: la recopie.
 PLAFOND = "plafond"
 
+#: Revendication d'une session DÉLÉGUÉE par un autre nœud (#1720).
+DELEGATION = "delegation"
+TRACE_DELEGATION_DEFAUT = "/var/log/secubox/delegation.log"
+
+
+def _trace_delegation(request: Request, payload: Dict[str, Any]) -> None:
+    """Une ligne par appel fait sous délégation (#1720) — jamais bloquant (une
+    trace impossible ne doit pas couper l'assistance), JAMAIS SILENCIEUX : si
+    le fichier est inaccessible — unité durcie (ProtectSystem=strict), compte
+    hors du groupe secubox —, la ligne part au journal système (LOG_AUTH).
+    Vécu : en fichier seul, les appels servis par un module durci se perdaient."""
+    d = (payload or {}).get(DELEGATION)
+    if not isinstance(d, dict):
+        return
+    ligne = ""
+    try:
+        ligne = json.dumps({
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "compte": payload.get("sub"), "centre": d.get("centre"),
+            "noeud": d.get("noeud"), "aidant": d.get("compte"),
+            "session": d.get("session"),
+            "methode": request.method, "chemin": request.url.path,
+        }, ensure_ascii=False)
+        chemin = Path(os.environ.get("SECUBOX_TRACE_DELEGATION", TRACE_DELEGATION_DEFAUT))
+        with open(chemin, "a", encoding="utf-8") as f:
+            f.write(ligne + "\n")
+        return
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import syslog  # noqa: PLC0415
+        syslog.openlog("secubox-delegation", 0, syslog.LOG_AUTH)
+        syslog.syslog(syslog.LOG_NOTICE, ligne or "trace de délégation illisible")
+    except Exception:  # noqa: BLE001 — même le journal système refuse : rien de plus à faire
+        pass
+
+
 #: Profils d'une PERSONNE : ce que `require_personne` admet.
 PROFILS_PERSONNE = ("user", "admin")
 
@@ -203,6 +241,7 @@ def create_token(
     scope: Optional[str] = None,
     jti: Optional[str] = None,
     plafond: Optional[str] = None,
+    delegation: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Mint a JWT. `scope` carries a short-lived intent ("set-password", "mfa-challenge", …).
 
@@ -219,6 +258,10 @@ def create_token(
         payload["scope"] = scope
     if plafond:
         payload[PLAFOND] = plafond
+    if delegation:
+        # Session ouverte par délégation d'un autre nœud (#1720) : qui, d'où,
+        # au titre de quelle assistance. Chaque appel l'emporte dans la trace.
+        payload[DELEGATION] = {k: str(v) for k, v in delegation.items()}
     return jwt.encode(payload, _secret(), algorithm="HS256")
 
 
@@ -456,6 +499,7 @@ async def require_session(
         if payload is not None:
             if source == "cookie":
                 garde_origine(request, payload)
+            _trace_delegation(request, payload)
             return payload
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

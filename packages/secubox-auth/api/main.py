@@ -19,11 +19,12 @@ import hashlib
 import hmac
 import httpx
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from api import ntp_health
 from api import console as _console
+from api import delegation as _deleg
 
 app = FastAPI(title="secubox-auth", version="2.0.0", root_path="/api/v1/auth")
 
@@ -290,6 +291,13 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     # mot de passe. Vérifié AVANT la branche de première configuration : un
     # compte tout juste créé a encore un mot de passe vide à « définir », et
     # quiconque connaissant son nom en aurait fait un administrateur.
+    # Un compte DÉLÉGUÉ par un autre nœud (#1720) n'entre que par délégation.
+    if req.username in _deleg.lire_registre(_DELEGUES):
+        _emit_session_event("login_failed", req.username, {
+            "reason": "compte_delegue", "ip": ip, "user_agent": ua,
+        })
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+
     try:
         _cfg_console = get_config("console")
     except Exception:  # noqa: BLE001 — config illisible : le nom par défaut, refus maintenu
@@ -430,6 +438,95 @@ def _console_jeton(request: _Request):
         _users_engine.touch_last_login(nom)
         _console_session.update(jti=jti, jeton=jeton, fin=maintenant + _console.DUREE, compte=nom)
     return {"access_token": jeton, "token_type": "bearer", "expires_in": _console.DUREE, "compte": nom}
+
+
+# ─── Entrée déléguée d'un autre nœud (#1720) ───────────────────────────
+_DELEGUES = Path(os.environ.get("SECUBOX_AUTH_DELEGUES", str(_DATA_DIR / "delegues.json")))
+
+
+def _compte_delegue(nom: str) -> None:
+    u = _users_engine.get_user(nom)
+    if u is None:
+        _users_engine.create_user(nom, None, "admin")
+        # Mot de passe aléatoire jeté : le compte n'entre que par délégation.
+        _users_engine.set_password(nom, secrets.token_urlsafe(48))
+        _append_audit("delegation_compte_cree", nom, {})
+        u = _users_engine.get_user(nom) or {}
+    if not u.get("enabled"):
+        raise HTTPException(status_code=403, detail=f"compte « {nom} » désactivé : délégation refusée")
+    if u.get("role") != "admin":
+        raise HTTPException(status_code=409, detail=f"le compte « {nom} » n'est pas administrateur")
+
+
+@_login_router.get("/delegation/entrer")
+def _delegation_entrer(a: str, request: _Request):
+    """Entrée d'un compte d'aide d'un autre nœud, sur assertion signée par ce
+    nœud, tant que CETTE box a autorisé l'administration à distance."""
+    from fastapi.responses import HTMLResponse as _HTML  # noqa: PLC0415
+    ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or ""
+    try:
+        self_did = _deleg.did_du_noeud()
+        entries = _deleg.entrees()
+        p = _deleg.verifier_entree(a, entries, self_did)
+    except ValueError as exc:
+        _append_audit("delegation_refusee", "?", {"motif": str(exc), "ip": ip})
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 — annuaire absent, clé illisible…
+        _append_audit("delegation_refusee", "?", {"motif": f"indisponible : {exc}", "ip": ip})
+        raise HTTPException(status_code=503, detail="délégation indisponible sur cette box")
+    nom = _deleg.nom_compte(p["compte"], p["noeud"])
+    _compte_delegue(nom)
+    reg = _deleg.lire_registre(_DELEGUES)
+    reg[nom] = {"centre": p["center_did"], "noeud": p["noeud"], "compte": p["compte"],
+                "session": p["session_id"]}
+    _deleg.ecrire_registre(_DELEGUES, reg)
+    fin_ts = datetime.strptime(p["fin"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    duree = max(60, int(fin_ts - time.time()))
+    jti = secrets.token_hex(8)
+    jeton = create_token(nom, expires_in=duree, jti=jti, delegation={
+        "centre": p["center_did"], "noeud": p["noeud"], "compte": p["compte"], "session": p["session_id"]})
+    _on_session_event("login_success", nom, {
+        "jti": jti, "expires_in": duree, "ip": ip,
+        "user_agent": f"délégation {p['compte']}@{p['noeud']}", "source": "delegation",
+        "centre": p["center_did"], "session_assistance": p["session_id"],
+    })
+    rep = _HTML(_deleg.PAGE.format(etiquette=f"{p['compte']}@{p['noeud']}", fin=p["fin"],
+                                   jeton=json.dumps(jeton)))
+    rep.headers["Cache-Control"] = "no-store"
+    return rep
+
+
+def _veille_delegations_une_fois() -> None:
+    """Retire les sessions des comptes délégués dont l'autorisation a cessé."""
+    reg = _deleg.lire_registre(_DELEGUES)
+    if not reg:
+        return
+    try:
+        a_fermer = set(_deleg.fermees(reg, _deleg.entrees(), _deleg.did_du_noeud()))
+    except Exception:  # noqa: BLE001
+        return
+    if not a_fermer:
+        return
+    rows = _read_sessions()
+    garde = [r for r in rows if r.get("username") not in a_fermer]
+    if len(garde) != len(rows):
+        _write_sessions(garde)
+    for nom in a_fermer:
+        _append_audit("delegation_fermee", nom, {"session_assistance": reg[nom].get("session")})
+        reg.pop(nom, None)
+    _deleg.ecrire_registre(_DELEGUES, reg)
+
+
+@app.on_event("startup")
+async def _veille_delegations() -> None:
+    async def boucle():
+        while True:
+            await asyncio.sleep(30)
+            try:
+                await asyncio.to_thread(_veille_delegations_une_fois)
+            except Exception:  # noqa: BLE001
+                pass
+    asyncio.create_task(boucle())
 
 
 @_login_router.post("/login/mfa")
