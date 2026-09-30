@@ -1,3 +1,20 @@
+secubox-podcaster (1.2.5-1~bookworm1) bookworm; urgency=high
+
+  * Le service repasse en secubox (b513ecaf74, perdu dans les fusions du
+    2026-08-17 ; #1748, #1759) : UMask 0002, plus de chown de socket a
+    posteriori. Il tournait en root sur un vhost public.
+  * podcasterctl, assistant root étroit (deux verbes sans argument, sudoers
+    limité) : rend le secret d'import PeerTube et le coffre à cookies
+    YouTube. Le coffre de ytsas est lu sans jamais suivre de lien
+    symbolique (openat + O_NOFOLLOW) : le root du conteneur ne peut pas
+    lui faire livrer un fichier de l'hôte.
+  * Jeton PeerTube demandé sans argv (mot de passe et client_secret dans le
+    corps) ; en-tête d'autorisation de l'envoi passé par stdin.
+  * postinst : reprend la propriété des médias créés en root sur le SSD.
+    Tests épinglés (liens refusés vérifiés par mutation).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:10:38 +0200
+
 secubox-podcaster (1.2.4-1~bookworm1) bookworm; urgency=medium
 
   * PODCASTER_PUBLIC = cette box ; BILLETS_PUBLIC = billets local s'il est installé, sinon la référence ; route postinst dérivée (#1723, #1713).

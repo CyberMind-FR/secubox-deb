@@ -5,28 +5,27 @@ Requires=secubox-runtime.service
 
 [Service]
 Type=simple
-User=root
-Group=root
+# NON PRIVILÉGIÉ (b513ecaf74, perdu dans les fusions du 2026-08-17 ; #1759).
+# Le service a tourné en root six semaines sur un vhost public. UMask 0002 :
+# uvicorn crée la socket secubox:secubox en rw de groupe, nginx (www-data,
+# membre de secubox) s'y connecte — sans chown a posteriori ni fenêtre de course.
+User=secubox
+Group=secubox
+UMask=0002
 WorkingDirectory=/usr/share/secubox/podcaster
-# Remove any stale socket first, so the ExecStartPost poll below waits for the
-# genuinely-new socket uvicorn binds — not a leftover one it would chown before
-# uvicorn re-creates it root:root (the actual cause of the nginx 502s).
-ExecStartPre=-/bin/rm -f /run/secubox/podcaster.sock
 # /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
 # possede. Une socket laissee par un autre utilisateur rendrait le
 # demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
 # root malgre User= — sans lui la ligne echouerait comme le demon.
 ExecStartPre=+/bin/rm -f /run/secubox/podcaster.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/podcaster.sock --workers 1
-# #494: only chmod/chown our OWN socket — never the shared /run/secubox parent.
-# Poll for the socket instead of a fixed `sleep 1`: uvicorn can take several
-# seconds to bind the UDS, and a premature chown silently fails (leaving the
-# socket root:root → nginx 502). Wait up to ~15s, then set ownership.
-ExecStartPost=-/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/podcaster.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/podcaster.sock; chown secubox:secubox /run/secubox/podcaster.sock'
 Restart=on-failure
 RestartSec=5
 
 # Security hardening
+# NoNewPrivileges=no est REQUIS : le service ne lit ses deux secrets root
+# (import PeerTube, cookies YouTube) que par `sudo -n podcasterctl`, limité
+# par /etc/sudoers.d/secubox-podcaster à deux verbes sans argument.
 NoNewPrivileges=no
 ProtectSystem=full
 ProtectHome=read-only

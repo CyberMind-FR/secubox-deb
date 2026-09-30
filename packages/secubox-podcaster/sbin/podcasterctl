@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: podcasterctl — seule surface privilégiée du podcaster (#1759)
+CyberMind — https://cybermind.fr
+
+Le service tourne en `secubox`. Deux lectures lui sont refusées et lui sont
+pourtant nécessaires : le secret d'import PeerTube (root 0600) et le coffre à
+cookies de ytsas, qui vit DANS le rootfs de son conteneur. Ce script les rend
+sur la sortie standard, rien de plus : deux verbes nommés, sans argument
+(le sudoers n'en admet pas d'autre).
+
+LE COFFRE DE YTSAS EST SOUS LA MAIN DU CONTENEUR. Le root du conteneur peut
+remplacer cookies.txt — ou n'importe quel répertoire parent — par un lien
+symbolique vers /etc/shadow ; un `cat` exécuté ici en root le suivrait et
+livrerait les secrets de l'HÔTE au compte secubox. On descend donc le chemin
+composant par composant depuis le rootfs, chaque ouverture en O_NOFOLLOW
+(openat) : pas de lien suivi, pas de course entre vérification et lecture.
+"""
+import os
+import stat
+import sys
+
+PT_SECRET = "/etc/secubox/secrets/peertube-import.json"
+YT_PROPRES = "/etc/secubox/secrets/yt-cookies.txt"
+YTSAS_ROOTFS = os.environ.get("PODCASTERCTL_YTSAS_ROOTFS", "/data/lxc/ytsas/rootfs")
+YTSAS_CHEMIN = ("var", "lib", "secubox", "ytsas", "cookies.txt")
+PLAFOND = 1 << 20          # 1 Mio : un fichier de cookies, pas un disque
+
+
+def lire_sans_lien(base: str, composants) -> bytes:
+    """Lit base/composants… sans jamais suivre de lien symbolique."""
+    fd = os.open(base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for nom in composants[:-1]:
+            suivant = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = suivant
+        f = os.open(composants[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+    finally:
+        os.close(fd)
+    try:
+        st = os.fstat(f)
+        if not stat.S_ISREG(st.st_mode) or st.st_size == 0 or st.st_size > PLAFOND:
+            raise OSError("pas un fichier ordinaire non vide")
+        return os.read(f, PLAFOND)
+    finally:
+        os.close(f)
+
+
+def lire_secret(chemin: str) -> bytes:
+    tete, nom = os.path.split(chemin)
+    return lire_sans_lien(tete, (nom,))
+
+
+def main(argv) -> int:
+    verbe = argv[1] if len(argv) == 2 else ""
+    try:
+        if verbe == "secret-peertube":
+            donnees = lire_secret(PT_SECRET)
+        elif verbe == "cookies-youtube":
+            donnees = b""
+            for essai in (lambda: lire_secret(YT_PROPRES),
+                          lambda: lire_sans_lien(YTSAS_ROOTFS, YTSAS_CHEMIN)):
+                try:
+                    donnees = essai()
+                    break
+                except OSError:
+                    continue
+            if not donnees:
+                return 3
+        else:
+            print("usage: podcasterctl {secret-peertube|cookies-youtube}", file=sys.stderr)
+            return 2
+    except OSError:
+        return 3
+    sys.stdout.buffer.write(donnees)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

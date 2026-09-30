@@ -11,6 +11,13 @@ case "$1" in
     # root:root. It now runs as secubox, so reclaim ownership of any pre-existing
     # data — otherwise the unprivileged service can't read its own library.
     chown -R secubox:secubox /var/lib/secubox/podcaster 2>/dev/null || true
+    # Six semaines en root (#1759) : médias et imports créés root:root sur le
+    # SSD. Le service, repassé en secubox, doit pouvoir les relire et les
+    # remplacer. Chemin résolu (media est un lien vers /data), jamais au-delà.
+    for d in /data/secubox/podcaster "$(readlink -f /var/lib/secubox/podcaster/media 2>/dev/null)"; do
+        case "$d" in /data/secubox/podcaster|/data/secubox/podcaster/*) ;; *) continue ;; esac
+        [ -d "$d" ] && chown -R secubox:secubox "$d" 2>/dev/null || true
+    done
 
     # Config on first install only (preserve operator edits on upgrade).
     if [ ! -f /etc/secubox/podcaster.toml ]; then

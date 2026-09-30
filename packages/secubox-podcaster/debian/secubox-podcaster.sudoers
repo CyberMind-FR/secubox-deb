@@ -1,0 +1,7 @@
+# /etc/sudoers.d/secubox-podcaster — seule surface privilégiée du podcaster (#1759).
+#
+# Le service tourne en `secubox`. Deux verbes nommés, SANS argument : rendre
+# le secret d'import PeerTube et le coffre à cookies YouTube (voir
+# /usr/sbin/podcasterctl, qui refuse tout lien symbolique).
+secubox ALL=(root) NOPASSWD: /usr/sbin/podcasterctl secret-peertube, \
+    /usr/sbin/podcasterctl cookies-youtube

@@ -36,12 +36,16 @@ PT_SECRET = Path("/etc/secubox/secrets/peertube-import.json")
 # Netscape cookies.txt pour vaincre le « confirm you're not a bot » / âge-restreint
 # de YouTube ; passé à chaque appel yt-dlp quand un candidat est présent.
 #
-# MÊMES COOKIES QUE YTSAS (#1100). podcaster tourne en root sur l'hôte : il peut
-# lire le coffre à cookies de ytsas dans le rootfs de sa LXC — coffre unique où
-# l'admin dépose et rafraîchit les cookies via le panneau ytsas. On le réutilise
-# tel quel (lecture directe, toujours à jour, aucune copie à périmer) plutôt que
-# d'entretenir un second exemplaire.
+# MÊMES COOKIES QUE YTSAS (#1100) : le coffre unique où l'admin dépose et
+# rafraîchit les cookies via le panneau ytsas, dans le rootfs de sa LXC. Le
+# service tourne en `secubox` (#1759) et ne peut pas l'ouvrir : l'assistant
+# root `podcasterctl cookies-youtube` le lit (sans suivre de lien) et on en
+# garde une copie privée, réécrite à chaque import.
 YT_COOKIES = Path("/etc/secubox/secrets/yt-cookies.txt")
+# Le service tourne en `secubox` (#1759) : ce qu'il ne peut pas lire lui-même,
+# l'assistant root le lui rend (deux verbes, sudoers limité).
+PODCASTERCTL = "/usr/sbin/podcasterctl"
+COOKIES_PRIVES = Path("/var/lib/secubox/podcaster/.yt-cookies.txt")
 YTSAS_COOKIES_HOST = Path(os.environ.get(
     "YTSAS_COOKIES_HOST",
     "/data/lxc/ytsas/rootfs/var/lib/secubox/ytsas/cookies.txt"))
@@ -59,11 +63,38 @@ def _cookies_file() -> Path | None:
     candidates += [YT_COOKIES, YTSAS_COOKIES_HOST]
     for p in candidates:
         try:
-            if p.is_file() and p.stat().st_size > 0:
+            # LISIBLE aussi : en `secubox`, le secret root 0600 existe mais
+            # yt-dlp ne pourrait pas l'ouvrir (#1759).
+            if p.is_file() and p.stat().st_size > 0 and os.access(p, os.R_OK):
                 return p
         except OSError:
             continue
-    return None
+    return _cookies_par_assistant()
+
+
+def _assistant(verbe: str) -> str | None:
+    """Sortie de `sudo -n podcasterctl <verbe>`, ou None (#1759)."""
+    try:
+        r = subprocess.run(["sudo", "-n", PODCASTERCTL, verbe],
+                           capture_output=True, text=True, timeout=15)
+    except Exception:  # noqa: BLE001 — pas d'assistant, pas de sudo : pas de secret
+        return None
+    return r.stdout if r.returncode == 0 and r.stdout.strip() else None
+
+
+def _cookies_par_assistant() -> Path | None:
+    """Coffre illisible pour le service : copie PRIVÉE (0600) de ce que
+    l'assistant a lu, réécrite à chaque import (yt-dlp y remet ses cookies)."""
+    contenu = _assistant("cookies-youtube")
+    if not contenu:
+        return None
+    try:
+        fd = os.open(COOKIES_PRIVES, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(contenu)
+    except OSError:
+        return None
+    return COOKIES_PRIVES
 BILLETS_DB = "/var/lib/secubox/billets/billets.db"
 # #1723 : billets consommé (local s'il est installé, sinon la référence) ;
 # le podcaster, lui, est celui de CETTE box.
@@ -110,8 +141,8 @@ def is_youtube_url(url: str) -> bool:
     return host.removeprefix("www.") in _YT_HOSTS
 
 
-def _run(cmd, timeout=None):
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+def _run(cmd, timeout=None, input=None):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, input=input)
 
 
 def _ytdlp(args, timeout=None):
@@ -127,20 +158,31 @@ def _ytdlp(args, timeout=None):
 def _pt_conf() -> dict | None:
     try:
         return json.loads(PT_SECRET.read_text())
+    except OSError:
+        brut = _assistant("secret-peertube")      # root 0600 : par l'assistant (#1759)
+        try:
+            return json.loads(brut) if brut else None
+        except ValueError:
+            return None
     except Exception:
         return None
 
 
 def _pt_token(conf: dict) -> str | None:
-    h = f"Host: {conf['host']}"
-    r = _run(["curl", "-s", "--max-time", "20", "-H", h, f"{conf['base']}/api/v1/users/token",
-              "--data-urlencode", f"client_id={conf['client_id']}",
-              "--data-urlencode", f"client_secret={conf['client_secret']}",
-              "--data-urlencode", "grant_type=password",
-              "--data-urlencode", f"username={conf['username']}",
-              "--data-urlencode", f"password={conf['password']}"], timeout=25)
+    """Jeton PeerTube. Le mot de passe et le client_secret voyagent dans le
+    CORPS de la requête, jamais dans argv : l'ancien `curl --data-urlencode
+    password=…` les exposait à `ps` le temps de la requête (#1759)."""
+    import urllib.parse
+    import urllib.request
+    corps = urllib.parse.urlencode({
+        "client_id": conf["client_id"], "client_secret": conf["client_secret"],
+        "grant_type": "password", "username": conf["username"], "password": conf["password"],
+    }).encode()
+    req = urllib.request.Request(f"{conf['base']}/api/v1/users/token", data=corps,
+                                 headers={"Host": conf["host"]})
     try:
-        return json.loads(r.stdout)["access_token"]
+        with urllib.request.urlopen(req, timeout=20) as rep:
+            return json.loads(rep.read())["access_token"]
     except Exception:
         _jlog("peertube auth failed")
         return None
@@ -148,12 +190,14 @@ def _pt_token(conf: dict) -> str | None:
 
 def _pt_upload(conf: dict, token: str, vpath: Path, title: str, desc: str):
     h = f"Host: {conf['host']}"
+    # En-tête d'autorisation par stdin (`-H @-`), pas dans argv (#1759).
     r = _run(["curl", "-s", "--max-time", "3600",
-              "-H", f"Authorization: Bearer {token}", "-H", h,
+              "-H", "@-", "-H", h,
               "-F", f"channelId={conf['channel']}", "-F", f"name={title[:120]}",
               "-F", f"privacy={conf.get('privacy', 2)}", "-F", f"description={desc[:9000]}",
               "-F", "commentsEnabled=false", "-F", "downloadEnabled=true",
-              "-F", f"videofile=@{vpath}", f"{conf['base']}/api/v1/videos/upload"], timeout=3700)
+              "-F", f"videofile=@{vpath}", f"{conf['base']}/api/v1/videos/upload"],
+             timeout=3700, input=f"Authorization: Bearer {token}\n")
     try:
         return json.loads(r.stdout)["video"]["shortUUID"]
     except Exception:
@@ -201,11 +245,7 @@ def _add_billet(title, desc, source_url, pt_watch, pod_audio):
         con.commit()
     finally:
         con.close()
-    # podcaster runs as root; hand the billets DB back to secubox so billets can write.
-    for suf in ("", "-wal", "-shm"):
-        p = BILLETS_DB + suf
-        if os.path.exists(p):
-            _run(["chown", "secubox:secubox", p])
+    # Plus de chown : le service tourne en secubox, comme billets (#1759).
     return slug
 
 
@@ -407,9 +447,6 @@ def run_import(url: str, media_dir: str, mirror_peertube: bool, create_billets: 
             except Exception as ex:  # noqa: BLE001
                 _jlog(f"  ERROR {vid}: {ex}")
                 JOB["errors"].append(f"{title[:40]}: {str(ex)[:120]}")
-        # ownership so podcaster(root) media stays secubox-readable
-        _run(["chown", "-R", "secubox:secubox", media_dir])
-        _run(["chown", "-R", "secubox:secubox", str(workdir)])
         _jlog(f"done: {JOB['done']}/{JOB['total']} imported")
     finally:
         JOB["running"] = False
