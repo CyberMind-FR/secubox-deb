@@ -1,3 +1,29 @@
+secubox-toolbox (2.9.8-1~bookworm1) bookworm; urgency=high
+
+  * postinst : relance l'agrégateur s'il a démarré avant l'installation du
+    secubox-core qui honore /auth/verify?exige=admin — sinon, jusqu'à son
+    prochain redémarrage, la garde nginx accepterait toute session (#1783).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 21:50:00 +0200
+
+secubox-toolbox (2.9.7-1~bookworm1) bookworm; urgency=high
+
+  * Routes d'administration (#1783) : l'application ne les sert plus qu'avec
+    l'en-tête que nginx pose après auth_request sur /auth/verify?exige=admin
+    (administrateur réel) ; jeton tiré au postinst, lisible de root et du
+    service seuls. Les listes publiques en lecture (filtres, domaines
+    épargnés) restent ouvertes. nginx : snippet secubox-toolbox-admin.conf
+    inclus par /api/v1/toolbox/admin/ et par les routes d'administration hors
+    de ce préfixe (correspondance exacte). Une route toolbox.conf locale sans
+    garde, gardée par --force-confold, est remplacée par celle du paquet
+    (amont de la box conservé, sauvegarde, retour si nginx -t refuse).
+  * Dépend de secubox-core >= 1.5.45 (/auth/verify?exige=admin).
+  * tests/test_garde_admin_1783.py : l'application réelle refuse sans l'en-tête
+    (kbin, LAN direct, tunnel, en-tête faux, jeton absent), admet celui de
+    nginx ; chaque route d'administration a sa location gardée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 21:40:00 +0200
+
 secubox-toolbox (2.9.6-1~bookworm1) bookworm; urgency=medium
 
   * Egress Tor kbin et mode transparent de secubox-tor partagent le démon :

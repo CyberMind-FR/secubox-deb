@@ -8,7 +8,11 @@ import asyncio
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+import hmac
+import re
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__, social, store, threat_intel
@@ -27,6 +31,57 @@ app = FastAPI(
     openapi_url=None,
 )
 app.include_router(toolbox_router)
+
+# ── ROUTES D'ADMINISTRATION : SEULEMENT PAR LA GARDE NGINX (#1783) ──────────
+# uvicorn écoute sur 0.0.0.0:8088 : le LAN l'atteint en direct, les pairs du
+# tunnel par le DNAT, kbin par sbxwaf — trois chemins sans nginx, donc sans
+# authentification. Et derrière un mandataire de confiance, uvicorn remplace
+# `request.client` par X-Forwarded-For : l'adresse ne dit pas par où la requête
+# est passée. Seule preuve retenue : l'en-tête que nginx pose APRÈS
+# `auth_request` sur /auth/verify?exige=admin (administrateur réel), porteur
+# d'un jeton tiré à l'installation et lisible de root et de ce service seuls.
+GARDE_EN_TETE = "x-sbx-garde-admin"
+GARDE_JETON = Path("/etc/secubox/toolbox/garde-admin.jeton")
+_PREFIXES_ADMIN = ("/admin/", "/rlevel/peer", "/exit_country", "/vpn/", "/tor/bridge")
+# Vues publiques en lecture seule par conception (Phase 6.J, _is_public_kbin) :
+# listes de filtres et de domaines épargnés, rien sur les clients.
+_LECTURES_PUBLIQUES = frozenset({
+    "/admin/filter-control", "/admin/filter-control/list",
+    "/admin/filter-control/regex", "/admin/splice-whitelist",
+    "/admin/splice-whitelist/list",
+})
+
+
+def _chemin_admin(chemin: str) -> bool:
+    return chemin == "/admin" or chemin.startswith(_PREFIXES_ADMIN)
+
+
+def _jeton_garde() -> bytes:
+    try:
+        return GARDE_JETON.read_bytes().strip()
+    except OSError:
+        return b""
+
+
+def _garde_admise(request: Request) -> bool:
+    attendu = _jeton_garde()
+    recu = (request.headers.get(GARDE_EN_TETE) or "").encode()
+    # Sans jeton sur disque, personne n'entre : jamais « vide == vide ».
+    return len(attendu) >= 32 and hmac.compare_digest(recu, attendu)
+
+
+@app.middleware("http")
+async def _garde_routes_admin(request: Request, call_next):
+    chemin = re.sub(r"/{2,}", "/", request.url.path)
+    if _chemin_admin(chemin):
+        if request.method in ("GET", "HEAD") and chemin in _LECTURES_PUBLIQUES:
+            return await call_next(request)
+        if not _garde_admise(request):
+            return JSONResponse(
+                {"detail": "administration réservée : passer par l'interface d'administration"},
+                status_code=403,
+            )
+    return await call_next(request)
 
 # Phase 11.B (#507) — serve the WebUI assets on the same origin as
 # the FastAPI HTML pages.  Required because the kbin vhost routes
