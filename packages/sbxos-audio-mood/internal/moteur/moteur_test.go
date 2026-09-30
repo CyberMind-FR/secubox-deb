@@ -5,6 +5,7 @@ package moteur
 
 import (
 	"math"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -296,6 +297,75 @@ func TestLeLissageNeGonflePasLaConfiance(t *testing.T) {
 		nourrit(a, voix(130, audio.Echantillonnage, 0.30))
 		if c := a.Derniere().Confiance; c > ser.PlafondConfiance {
 			t.Fatalf("confiance %.3f au-dessus du plafond après lissage", c)
+		}
+	}
+}
+
+// ── #1705 : le tempo de la pièce, de bout en bout ────────────────────────
+//
+// Hors musique, l'ambiance affichait 181,5 BPM à chaque fenêtre. Et par la
+// vraie chaîne, le VAD prend chaque coup de grosse caisse pour de la parole :
+// c'est ici, et pas sur des enveloppes fabriquées, que le tempo doit tenir.
+
+func pieceSonore(sec float64, f func(t float64, r *rand.Rand) float64) []float64 {
+	r := rand.New(rand.NewSource(5))
+	x := make([]float64, int(sec*audio.Echantillonnage))
+	for i := range x {
+		x[i] = f(float64(i)/audio.Echantillonnage, r)
+	}
+	return x
+}
+
+func grosseCaisse(t, bpm float64) float64 {
+	p := math.Mod(t, 60/bpm)
+	return 0.5 * math.Exp(-p*18) * math.Sin(2*math.Pi*55*p)
+}
+
+// Une voix au débit qui dérive (3 à 5,5 syllabes par seconde), par phrases.
+func voixIrreguliere(t, periode, parle float64) float64 {
+	if math.Mod(t, periode) >= parle {
+		return 0
+	}
+	ph := 2 * math.Pi * (4*t + 0.35*math.Sin(2*math.Pi*0.7*t) + 0.2*math.Sin(2*math.Pi*1.9*t))
+	env := 0.5 + 0.5*math.Sin(ph)
+	return 0.25 * env * (math.Sin(2*math.Pi*140*t) + 0.6*math.Sin(2*math.Pi*280*t))
+}
+
+func TestLeTempoDeLaPieceSuitLaMusique(t *testing.T) {
+	cas := []struct {
+		nom string
+		bpm float64 // 0 : aucun tempo attendu
+		f   func(t float64, r *rand.Rand) float64
+	}{
+		{"ventilation lente", 0, func(tt float64, r *rand.Rand) float64 {
+			return (0.02 + 0.01*math.Sin(2*math.Pi*tt/3.7)) * r.NormFloat64()
+		}},
+		{"voix seule", 0, func(tt float64, r *rand.Rand) float64 {
+			return voixIrreguliere(tt, 2.9, 1.8) + 0.002*r.NormFloat64()
+		}},
+		{"musique 120", 120, func(tt float64, r *rand.Rand) float64 {
+			return grosseCaisse(tt, 120) + 0.002*r.NormFloat64()
+		}},
+		{"voix + musique 128", 128, func(tt float64, r *rand.Rand) float64 {
+			return voixIrreguliere(tt, 3.1, 1.2) + grosseCaisse(tt, 128) + 0.002*r.NormFloat64()
+		}},
+		{"voix + musique 95", 95, func(tt float64, r *rand.Rand) float64 {
+			return voixIrreguliere(tt, 2.7, 1.4) + grosseCaisse(tt, 95) + 0.002*r.NormFloat64()
+		}},
+	}
+	for _, c := range cas {
+		a := Nouveau(audio.NouvelleSynthese(false))
+		nourrit(a, make([]float64, audio.Echantillonnage))
+		nourrit(a, pieceSonore(14, c.f))
+		amb := a.ambiant
+		if c.bpm == 0 {
+			if amb.Presente {
+				t.Errorf("%s : tempo inventé %+v", c.nom, amb)
+			}
+			continue
+		}
+		if !amb.Presente || math.Abs(amb.BPM-c.bpm) > 3 {
+			t.Errorf("%s : attendu %.0f BPM, lu %+v", c.nom, c.bpm, amb)
 		}
 	}
 }

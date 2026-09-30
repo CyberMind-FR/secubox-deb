@@ -199,3 +199,86 @@ func TestLaPartVautUnDemiADeuxSourcesEgales(t *testing.T) {
 		t.Fatalf("part %.2f pour deux sources d'égale énergie, attendu ~0,50", a.Part)
 	}
 }
+
+// ── #1705 : « toujours le même BPM » ─────────────────────────────────────
+//
+// Hors musique, le tempo valait 181,5 BPM à chaque fenêtre : le plus petit
+// décalage de la plage gagnait sur tout signal lisse. Un tempo est un PIC.
+
+// Un fond qui ondule lentement (ventilation, climatisation) n'a pas de tempo.
+func TestUnFondLentNAPasDeTempo(t *testing.T) {
+	for graine := int64(1); graine <= 5; graine++ {
+		e := NouvelEcouteur(pasTrame, 12)
+		rng := rand.New(rand.NewSource(graine))
+		nourris(e, 12, false, func(tt float64) float64 {
+			return 0.02 + 0.005*math.Sin(2*math.Pi*tt/3.7) + 0.001*rng.Float64()
+		})
+		if a := e.Analyse(); a.Presente {
+			t.Fatalf("graine %d : tempo inventé dans un fond lent : %+v", graine, a)
+		}
+	}
+}
+
+// Une conversation, avec le fond calme entre les phrases, n'a pas de tempo.
+func TestUneConversationNInventePasDeTempo(t *testing.T) {
+	for graine := int64(1); graine <= 5; graine++ {
+		e := NouvelEcouteur(pasTrame, 12)
+		rng := rand.New(rand.NewSource(graine))
+		n := int(12 / pasTrame)
+		fin := 0.0
+		parle := true
+		for i := 0; i < n; i++ {
+			tt := float64(i) * pasTrame
+			if tt >= fin { // phrases et pauses de durées irrégulières
+				parle = !parle
+				fin = tt + 0.4 + 1.6*rng.Float64()
+			}
+			if parle {
+				e.Observe(0.2+0.1*rng.Float64(), true)
+			} else {
+				e.Observe(0.01+0.004*rng.Float64(), false)
+			}
+		}
+		if a := e.Analyse(); a.Presente {
+			t.Fatalf("graine %d : tempo inventé dans une conversation : %+v", graine, a)
+		}
+	}
+}
+
+// Et le tempo SUIT la musique : chaque tempo de la plage est retrouvé.
+func TestLeTempoSuitLaMusique(t *testing.T) {
+	for _, bpm := range []float64{66, 80, 95, 110, 124, 140, 155, 170} {
+		e := NouvelEcouteur(pasTrame, 12)
+		rng := rand.New(rand.NewSource(int64(bpm)))
+		nourris(e, 12, false, func(tt float64) float64 {
+			p := math.Mod(tt, 60/bpm)
+			return 0.02 + 0.1*math.Exp(-p/0.05) + 0.005*rng.Float64()
+		})
+		a := e.Analyse()
+		if !a.Presente || math.Abs(a.BPM-bpm) > 3 {
+			t.Errorf("musique à %.0f BPM : lu %+v", bpm, a)
+		}
+	}
+}
+
+// De la musique DERRIÈRE une conversation : entendue entre les phrases.
+func TestUneMusiqueDerriereLaConversation(t *testing.T) {
+	e := NouvelEcouteur(pasTrame, 12)
+	rng := rand.New(rand.NewSource(11))
+	const bpm = 128.0
+	n := int(12 / pasTrame)
+	for i := 0; i < n; i++ {
+		tt := float64(i) * pasTrame
+		p := math.Mod(tt, 60/bpm)
+		fond := 0.02 + 0.1*math.Exp(-p/0.05) + 0.005*rng.Float64()
+		if math.Mod(tt, 3.1) < 1.0 {
+			e.Observe(fond+0.15, true)
+		} else {
+			e.Observe(fond, false)
+		}
+	}
+	a := e.Analyse()
+	if !a.Presente || math.Abs(a.BPM-bpm) > 3 {
+		t.Fatalf("musique à 128 BPM derrière la voix : lu %+v", a)
+	}
+}
