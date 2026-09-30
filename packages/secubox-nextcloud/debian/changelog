@@ -1,3 +1,16 @@
+secubox-nextcloud (1.8.5-1~bookworm1) bookworm; urgency=high
+
+  * Restaure ce que la fusion aff481735 avait effacé (#1748, #1756) :
+    - réinitialisation de mot de passe par stdin (nextcloudctl user setpass),
+      jamais dans argv ni dans une chaîne de shell (09e1884fb) ; uid validé,
+      mot de passe multiligne refusé ; 409 si le conteneur est arrêté ;
+    - noms de sauvegarde validés (backup, suppression, restauration) ;
+    - uninstall et restore reçoivent la confirmation « yes » sur stdin
+      (ils abandonnaient sur EOF : 500 systématique / échec muet).
+    Tests épinglés (16, vérifiés contre l'ancien code).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:41:39 +0200
+
 secubox-nextcloud (1.8.4-1~bookworm1) bookworm; urgency=medium
 
   * rootfs décalé (secubox-lxc-decaler) avant chaque démarrage : le conteneur non privilégié avortait sur ses propres points de montage (#1729, #1713).

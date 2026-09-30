@@ -58,7 +58,7 @@ NC_INTERNAL_PORT = 80
 NCTL = ["sudo", "-n", "/usr/sbin/nextcloudctl"]
 
 
-def run_cmd(cmd: list, timeout: int = 30) -> tuple:
+def run_cmd(cmd: list, timeout: int = 30, stdin: Optional[str] = None) -> tuple:
     """Run command and return (success, stdout, stderr).
 
     Le sous-processus tourne dans sa PROPRE session, et l'expiration tue tout
@@ -71,12 +71,17 @@ def run_cmd(cmd: list, timeout: int = 30) -> tuple:
     les 60 s : chaque expiration abandonnait donc deux processus PHP, qui
     ralentissaient le conteneur, ce qui provoquait de nouvelles expirations.
     Il s'en est accumule 460, pour une charge machine de 300.
+
+    `stdin` porte ce qui ne doit JAMAIS passer par argv : un mot de passe
+    (visible de `ps`, journalisé par sudo) ou la confirmation « yes » d'un
+    verbe destructeur (sans elle, le helper lit EOF et abandonne). #1756.
     """
     proc = None
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
                                 text=True, start_new_session=True)
-        out, err = proc.communicate(timeout=timeout)
+        out, err = proc.communicate(input=stdin, timeout=timeout)
         return proc.returncode == 0, out.strip(), err.strip()
     except subprocess.TimeoutExpired:
         if proc is not None:
@@ -116,9 +121,25 @@ def lxc_installed() -> bool:
         return True
 
 
-def nctl(*args, timeout: int = 60) -> tuple:
+def nctl(*args, timeout: int = 60, stdin: Optional[str] = None) -> tuple:
     """Run `sudo nextcloudctl <args>` — the only privileged container surface."""
-    return run_cmd(NCTL + [str(a) for a in args], timeout)
+    return run_cmd(NCTL + [str(a) for a in args], timeout, stdin=stdin)
+
+
+# GARDES DE SAISIE (#429, effacées par la fusion aff481735, #1756) : un uid ou
+# un nom de sauvegarde est validé sur un jeu de caractères sûr AVANT d'atteindre
+# argv, un chemin ou le helper root (qui revalide : défense en profondeur).
+# `fullmatch` et non `match` : `$` tolère un saut de ligne final.
+_UID_RE = re.compile(r"[A-Za-z0-9._@-]+")
+_BACKUP_RE = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def _valid_uid(uid: str) -> bool:
+    return bool(uid) and bool(_UID_RE.fullmatch(uid))
+
+
+def _valid_backup_name(name: str) -> bool:
+    return bool(name) and bool(_BACKUP_RE.fullmatch(name))
 
 
 def occ_cmd(command: str, timeout: int = 60) -> tuple:
@@ -386,12 +407,14 @@ def install():
 
 
 @app.post("/uninstall", dependencies=[Depends(require_jwt)])
-async def uninstall():
-    """Uninstall Nextcloud (preserves data)"""
-    success, _, err = run_cmd([*NCTL, "uninstall"])
+def uninstall():
+    """Uninstall Nextcloud (preserves data). `nextcloudctl uninstall` demande
+    « yes » sur stdin : sans réponse il lisait EOF et abandonnait, et la route
+    rendait toujours 500 (2632596b6, #1756)."""
+    success, out, err = run_cmd([*NCTL, "uninstall"], timeout=120, stdin="yes\n")
     if success:
         return {"success": True, "message": "Uninstalled (data preserved)"}
-    raise HTTPException(500, f"Uninstall failed: {err}")
+    raise HTTPException(500, f"Uninstall failed: {err or out}")
 
 
 @app.post("/update", dependencies=[Depends(require_jwt)])
@@ -430,18 +453,26 @@ class ResetPassword(BaseModel):
 
 
 @app.post("/user/password", dependencies=[Depends(require_jwt)])
-async def reset_password(req: ResetPassword):
-    """Reset user password"""
+def reset_password(req: ResetPassword):
+    """Réinitialise le mot de passe d'un compte Nextcloud (09e1884fb, #1756).
+
+    Le mot de passe ne voyage QUE par stdin (`nextcloudctl user setpass`).
+    La version écrasée par la fusion aff481735 le collait dans
+    `OC_PASS='…'` d'une chaîne passée à `sh -c` root du conteneur : visible de
+    `ps` et du journal de sudo, et une apostrophe dans le mot de passe ou l'uid
+    y faisait exécuter du code. Elle échouait de toute façon (`occ su`
+    n'existe pas) — chaque nouvel essai refuitait le mot de passe."""
     if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    cmd = f"OC_PASS='{req.password}' php /var/www/nextcloud/occ user:resetpassword --password-from-env '{req.uid}'"
-    full_cmd = f"su -s /bin/bash www-data -c \"{cmd}\""
-    success, out, err = lxc_attach(full_cmd)
-
-    if success:
-        return {"success": True, "message": f"Password reset for {req.uid}"}
-    raise HTTPException(500, f"Failed: {err}")
+        raise HTTPException(409, "Nextcloud container is not running")
+    if not _valid_uid(req.uid):
+        raise HTTPException(400, "invalid uid")
+    if not req.password or any(c in req.password for c in "\r\n\0"):
+        # une ligne = un mot de passe : le helper lit une seule ligne
+        raise HTTPException(400, "invalid password")
+    ok, out, err = nctl("user", "setpass", req.uid, stdin=req.password + "\n", timeout=60)
+    if not ok:
+        raise HTTPException(500, f"Failed: {err or out}")
+    return {"success": True, "message": f"Password reset for {req.uid}"}
 
 
 @app.get("/storage", dependencies=[Depends(require_jwt)])
@@ -530,8 +561,10 @@ class BackupRequest(BaseModel):
 
 
 @app.post("/backup", dependencies=[Depends(require_jwt)])
-async def create_backup(req: BackupRequest):
+def create_backup(req: BackupRequest):
     """Create a backup"""
+    if req.name and not _valid_backup_name(req.name):
+        raise HTTPException(400, "invalid backup name")
     cmd = [*NCTL, "backup"]
     if req.name:
         cmd.append(req.name)
@@ -543,8 +576,10 @@ async def create_backup(req: BackupRequest):
 
 
 @app.delete("/backup/{name}", dependencies=[Depends(require_jwt)])
-async def delete_backup(name: str):
+def delete_backup(name: str):
     """Delete a backup"""
+    if not _valid_backup_name(name):
+        raise HTTPException(400, "invalid backup name")
     backup_dir = DATA_PATH / "backups"
     db_file = backup_dir / f"{name}-db.sql"
     data_file = backup_dir / f"{name}-data.tar.gz"
@@ -559,12 +594,22 @@ async def delete_backup(name: str):
 
 @app.post("/restore/{name}", dependencies=[Depends(require_jwt)])
 def restore_backup(name: str):
-    """Restore from backup"""
-    subprocess.Popen(
+    """Restore from backup (en arrière-plan). Nom validé, et le « yes » de
+    confirmation fourni : sans lui le helper abandonnait en silence (#1756)."""
+    if not _valid_backup_name(name):
+        raise HTTPException(400, "invalid backup name")
+    proc = subprocess.Popen(
         [*NCTL, "restore", name],
+        stdin=subprocess.PIPE,
         stdout=open("/var/log/nextcloud-restore.log", "w"),
-        stderr=subprocess.STDOUT
+        stderr=subprocess.STDOUT,
+        text=True, start_new_session=True,
     )
+    try:
+        proc.stdin.write("yes\n")
+        proc.stdin.close()
+    except OSError:
+        pass
     return {"success": True, "message": "Restore started in background"}
 
 
