@@ -1,3 +1,10 @@
+secubox-streamlit (1.4.6-1~bookworm1) bookworm; urgency=high
+
+  * lxc-info passe par secubox-lxcctl (#1785) ; les règles sudoers lxc-* à
+    argument libre sont retirées (streamlitctl, root, fait le reste).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:40:00 +0200
+
 secubox-streamlit (1.4.5-1~bookworm1) bookworm; urgency=medium
 
   * Restauration (#1776, ref #1748) : trois fusions du 2026-08-17 avaient

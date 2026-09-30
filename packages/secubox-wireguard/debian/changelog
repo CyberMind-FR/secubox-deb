@@ -1,3 +1,16 @@
+secubox-wireguard (1.1.6-1~bookworm1) bookworm; urgency=high
+
+  * wgctl valide ses arguments (#1785) : interfaces [A-Za-z0-9_-]{1,15},
+    noms de pair sans chemin, clé publique WireGuard pour `peer remove` ;
+    `migrate` réservé à l'opérateur.
+  * Nouveau verbe `wgctl dump` : `wg show all dump` avec clés privée et
+    partagée masquées ; l'API le lit à la place de `sudo wg show all dump`.
+    La règle sudoers `wg show *` est retirée ; /health liste les
+    interfaces sans sudo.
+  * tests/test_wgctl_arguments.py (10 échouent sur la version d'avant).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:10:00 +0200
+
 secubox-wireguard (1.1.5-1~bookworm1) bookworm; urgency=medium
 
   * Ne livre plus /usr/share/secubox/www/shared en lien (pendant vers

@@ -1,3 +1,18 @@
+secubox-vm (1.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-vm-autostart : ni point ni tiret en tête du nom (#1785) —
+    « .. » remontait d'un niveau.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 00:30:00 +0200
+
+secubox-vm (1.2.4-1~bookworm1) bookworm; urgency=high
+
+  * Commandes lxc par secubox-lxcctl (#1785) ; les règles sudoers
+    `lxc-* *` sont retirées. lxc-destroy reste refusé (aucune règle ne
+    l'accordait).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:40:00 +0200
+
 secubox-vm (1.2.3-1~bookworm1) bookworm; urgency=high
 
   * GARDE JWT SUR TOUTE L'API (#1256, lot P1). MODULE-COMPLIANCE.md impose

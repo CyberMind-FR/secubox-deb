@@ -21,7 +21,8 @@ val="${2:-}"
 # Le nom vient de l'API (donc d'une requete) : il compose un chemin, on le
 # borne strictement a ce qu'un nom de conteneur LXC peut etre.
 case "$name" in
-    ''|*[!A-Za-z0-9._-]*) echo "nom de conteneur invalide" >&2; exit 2 ;;
+    # Ni point ni tiret en tête (#1785) : « .. » remontait d'un niveau.
+    ''|.*|-*|*[!A-Za-z0-9._-]*) echo "nom de conteneur invalide" >&2; exit 2 ;;
 esac
 case "$val" in
     0|1) : ;;

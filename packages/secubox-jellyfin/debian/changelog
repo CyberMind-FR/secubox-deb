@@ -1,3 +1,13 @@
+secubox-jellyfin (2.0.13-1~bookworm1) bookworm; urgency=high
+
+  * jellyfinctl valide ses arguments (#1785) : `partner unwire` n'admet qu'un
+    partenaire connu, et la ligne de montage est retirée par filtre littéral
+    (plus d'interpolation dans un programme sed) ; `apikey-mint` n'admet
+    qu'un nom [A-Za-z0-9_-], grammaire indépendante de la locale.
+  * tests/test_jellyfinctl_arguments.py (8 échouent sur la version d'avant).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:10:00 +0200
+
 secubox-jellyfin (2.0.12-1~bookworm1) bookworm; urgency=medium
 
   * API native LXC restaurée (1d6d99c7d, d16bda6d2 — effacés par la fusion

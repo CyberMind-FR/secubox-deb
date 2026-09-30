@@ -34,6 +34,11 @@ main() {
 	if [[ -z "${ts}" ]]; then
 		die "missing timestamp arg (use one from /data/backup/zigbee/)"
 	fi
+	# Un NOM d'instantané, jamais un chemin (#1785) : ce script tourne en root
+	# par sudo avec tout argument, et `../…` faisait copier par root un
+	# répertoire quelconque dans les données de zigbee2mqtt.
+	local LC_ALL=C
+	[[ "${ts}" =~ ^(pre-restore-)?[0-9]{8}T[0-9]{6}Z$ ]] || die "instantané refusé : ${ts}"
 	local src="${BACKUP_ROOT}/${ts}"
 	[[ -d "${src}" ]] || die "backup ${src} not found"
 	[[ -f "${src}/database.db" ]] || die "backup ${src} is incomplete (no database.db)"

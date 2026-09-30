@@ -59,6 +59,21 @@ decaler_rootfs() {
     secubox-lxc-decaler "$r" || error "décalage du rootfs impossible"
 }
 
+# Même garde que lxc_attach, mais en ARGV (#1785) : jamais une chaîne de shell
+# qui recevrait les arguments de l'appelant. Le timeout reste DANS le conteneur.
+lxc_attach_argv() {
+    lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- timeout -k 5 "${LXC_TIMEOUT:-45}" "$@"
+}
+
+# Verbes d'opérateur : refusés par le chemin sudo d'un compte de service (#1785).
+# SUDO_USER est posé par sudo lui-même — l'appelant ne peut pas le choisir.
+_operateur_seulement() {
+    if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+        error "verbe réservé à l'opérateur (root) : $1"
+        exit 64
+    fi
+}
+
 lxc_attach() {
     local cmd="$1"
     local delai="${LXC_TIMEOUT:-45}"
@@ -398,7 +413,9 @@ occ() {
     # par lxc_attach directement et ne sont pas verrouillées (rares, séquentielles).
     (
         flock -n 9 || { error "occ déjà en cours (single-flight) — cache servi"; exit 75; }
-        lxc_attach "sudo -u www-data php /var/www/nextcloud/occ $*"
+        # ARGV (#1785) : `occ $*` dans une chaîne de shell exécutait tout
+        # argument fabriqué en root dans le conteneur.
+        lxc_attach_argv sudo -u www-data php /var/www/nextcloud/occ "$@"
     ) 9>/run/secubox/nextcloud-occ.lock
 }
 
@@ -464,6 +481,7 @@ fi" || { error "garde Apache refusée par configtest — rien activé"; return 1
 # ============================================================================
 
 cmd_setup() {
+    _operateur_seulement setup
     local admin_pass="${1:-$(openssl rand -base64 12)}"
 
     if ! lxc_running; then
@@ -474,15 +492,15 @@ cmd_setup() {
     log "Running Nextcloud setup..."
 
     # Install with SQLite (simple setup)
-    lxc_attach "sudo -u www-data php /var/www/nextcloud/occ maintenance:install \
+    lxc_attach_argv sudo -u www-data php /var/www/nextcloud/occ maintenance:install \
         --database sqlite \
-        --admin-user '$ADMIN_USER' \
-        --admin-pass '$admin_pass' \
-        --data-dir /var/www/nextcloud/data"
+        --admin-user "$ADMIN_USER" \
+        --admin-pass "$admin_pass" \
+        --data-dir /var/www/nextcloud/data
 
     # Configure trusted domains
-    lxc_attach "sudo -u www-data php /var/www/nextcloud/occ config:system:set trusted_domains 0 --value='localhost'"
-    lxc_attach "sudo -u www-data php /var/www/nextcloud/occ config:system:set trusted_domains 1 --value='$DOMAIN'"
+    lxc_attach_argv sudo -u www-data php /var/www/nextcloud/occ config:system:set trusted_domains 0 --value=localhost
+    lxc_attach_argv sudo -u www-data php /var/www/nextcloud/occ config:system:set trusted_domains 1 "--value=$DOMAIN"
     lxc_attach "sudo -u www-data php /var/www/nextcloud/occ config:system:set trusted_domains 2 --value='127.0.0.1'"
 
     # Configure Redis
@@ -627,7 +645,9 @@ user_setpass() {
 # `grep ^...$` which anchors per-LINE and lets a value with an embedded
 # newline slip through with -q on any matching line).
 _valid_uid() {
-    [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]
+    # Ni « .. » ni point ou tiret en tête (#1785) : l'uid compose des chemins.
+    local LC_ALL=C
+    [[ "$1" =~ ^[A-Za-z0-9_@][A-Za-z0-9._@-]*$ ]] && [[ "$1" != *..* ]]
 }
 _valid_quota() {
     [[ "$1" =~ ^([Nn][Oo][Nn][Ee]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt]|[0-9]+(\.[0-9]+)?([KMGTkmgt])?[Bb]?)$ ]]
@@ -706,6 +726,8 @@ user_provision() {
 app_install() {
     local app="$1"
     [ -z "$app" ] && { echo "Usage: nextcloudctl app install <app_name>"; return 1; }
+    # Identifiant d'application Nextcloud (#1785).
+    [[ "$app" =~ ^[a-z0-9_]{1,64}$ ]] || { error "application refusée : $app"; return 64; }
     log "Installing app: $app"
     occ app:install "$app"
 }
@@ -771,11 +793,16 @@ cmd_backup_delete() {
 cmd_restore() {
     local backup_file="$1"
 
-    # Un NOM (ce que l'API transmet, #1757) désigne le fichier que cmd_backup
-    # a écrit ; un chemin complet reste accepté à la ligne de commande.
-    if [ -n "$backup_file" ] && _valid_backup_name "$backup_file" \
-        && [ -f "$(_fichier_sauvegarde "$backup_file")" ]; then
-        backup_file=$(_fichier_sauvegarde "$backup_file")
+    # Un NOM seulement (#1785) : celui que cmd_backup a écrit, et que l'API
+    # transmet (#1757). Un chemin libre faisait extraire par tar, en root sur
+    # l'hôte, n'importe quelle archive — y compris posée par un compte de service.
+    if [ -n "$backup_file" ]; then
+        if _valid_backup_name "$backup_file" && [ -f "$(_fichier_sauvegarde "$backup_file")" ]; then
+            backup_file=$(_fichier_sauvegarde "$backup_file")
+        else
+            error "sauvegarde inconnue : donner le NOM d'une sauvegarde (nextcloudctl backups)"
+            backup_file=""
+        fi
     fi
 
     if [ -z "$backup_file" ] || [ ! -f "$backup_file" ]; then
@@ -959,8 +986,9 @@ cmd_storage() {
 
 cmd_logs() {
     local lines="${1:-50}"
+    case "$lines" in ''|*[!0-9]*) lines=50 ;; esac   # (#1785) entier, sinon défaut
     if lxc_running; then
-        lxc_attach "tail -n $lines /var/log/nginx/error.log"
+        lxc_attach_argv tail -n "$lines" /var/log/nginx/error.log
     else
         error "Container not running"
     fi

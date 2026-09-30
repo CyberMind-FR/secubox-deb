@@ -1,3 +1,16 @@
+secubox-core (1.5.46-1~bookworm1) bookworm; urgency=high
+
+  * secubox-lxcctl (#1785) : seul passage sudo des comptes de service vers
+    lxc-ls/-info/-start/-stop/-freeze/-unfreeze ; options admises une à une,
+    conteneur existant sous un lxcpath connu, jamais -f, --define, attache ni
+    destruction. Règle sudoers /etc/sudoers.d/secubox-lxcctl.
+  * postinst : une règle sudo lxc-* posée à la main (/etc/sudoers.d/secubox-lxc,
+    hors paquet, uniquement lxc-* et streamlitctl) est retirée, sauvegardée.
+  * tests/test_lxcctl.py : refus (attache, destruction, -f, --define, nom
+    hors grammaire ou inconnu, lxcpath étranger) et argv exact des appelants.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:40:00 +0200
+
 secubox-core (1.5.45-1~bookworm1) bookworm; urgency=high
 
   * /auth/verify?exige=admin (#1783) : pour les services qui ne lisent pas le

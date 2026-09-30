@@ -1,3 +1,22 @@
+secubox-nextcloud (1.8.8-1~bookworm1) bookworm; urgency=medium
+
+  * _valid_uid : ni « .. », ni point ou tiret en tête (#1785) ; l'uid
+    compose des chemins (user-provision).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 00:30:00 +0200
+
+secubox-nextcloud (1.8.7-1~bookworm1) bookworm; urgency=high
+
+  * nextcloudctl (#1785) : `occ`, `setup` et `logs` passent leurs arguments
+    en argv dans le conteneur (lxc_attach_argv, timeout toujours intérieur),
+    plus jamais dans une chaîne de shell ; `restore` n'accepte qu'un NOM de
+    sauvegarde ; `app install` n'admet qu'un identifiant d'application ;
+    `setup` est réservé à l'opérateur (refusé par le chemin sudo d'un compte
+    de service).
+  * tests/test_nextcloudctl_arguments.py.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:10:00 +0200
+
 secubox-nextcloud (1.8.6-1~bookworm1) bookworm; urgency=medium
 
   * Restaure la suite de ce que la fusion aff481735 avait effacé (#1748, #1757) :

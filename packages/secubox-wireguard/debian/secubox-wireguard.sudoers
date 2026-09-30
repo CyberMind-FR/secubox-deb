@@ -1,4 +1,5 @@
 # The aggregator (user secubox) reads/controls WireGuard via wgctl, which needs
-# root for `wg show <iface>` (private-key access) + `wg set` peer/interface ops.
+# root for `wg show` + `wg set` peer/interface ops. wgctl validates its own
+# arguments (#1785). No direct `wg show *` any more: it handed the account the
+# interfaces' private keys — the API reads `wgctl dump`, secrets masked.
 secubox ALL=(root) NOPASSWD: /usr/sbin/wgctl
-secubox ALL=(root) NOPASSWD: /usr/bin/wg show *

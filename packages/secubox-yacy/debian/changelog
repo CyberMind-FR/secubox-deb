@@ -1,3 +1,10 @@
+secubox-yacy (1.0.22-1~bookworm1) bookworm; urgency=high
+
+  * Règles sudoers lxc-* à argument libre retirées (#1785) : aucun appelant
+    ne les utilisait.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 23:40:00 +0200
+
 secubox-yacy (1.0.21-1~bookworm1) bookworm; urgency=medium
 
   * Le ctl sort en erreur quand le script d'installation échoue : il annonçait « Done » et rendait 0 (gk3 : peertube arrêté à l'étape 7/8 passait pour installé) (#1729, #1713).

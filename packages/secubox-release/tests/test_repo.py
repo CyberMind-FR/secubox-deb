@@ -22,3 +22,20 @@ def test_plan_promote_refuses_amd64_only():
     assert repo.plan_promote(evo_ok, "draft", "internal")
     with pytest.raises(repo.RepoError):
         repo.plan_promote(evo_bad, "draft", "internal")
+
+
+# ── #1785 : un nom de paquet ne devient jamais une option de reprepro ──────
+import pytest as _pytest  # noqa: E402
+
+
+@_pytest.mark.parametrize("nom", ["--export=never", "-b/tmp/x", "Paquet", "a", "x y", "x;id", ""])
+def test_copy_argv_refuse_un_nom_hors_grammaire(nom):
+    from release.repo import copy_argv, RepoError
+    with _pytest.raises(RepoError):
+        copy_argv("internal", "published", ["secubox-core", nom])
+
+
+def test_copy_argv_admet_les_noms_debian():
+    from release.repo import copy_argv
+    argv = copy_argv("internal", "published", ["secubox-core", "libfoo2.0+dfsg", "python3-x"])
+    assert argv[-3:] == ["secubox-core", "libfoo2.0+dfsg", "python3-x"]

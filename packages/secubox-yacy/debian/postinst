@@ -37,5 +37,20 @@ case "$1" in
         ;;
 esac
 
+# RÈGLES SUDO lxc-* (#1785) : une version locale ou ancienne de
+# /etc/sudoers.d/secubox-yacy est gardée par --force-confold et garde ses règles
+# lxc-* à argument libre (`lxc-start -f` : crochets exécutés en root sur
+# l'hôte). La version du paquet, validée par visudo, la remplace ; sauvegarde.
+if [ "$1" = "configure" ]; then
+    _f=/etc/sudoers.d/secubox-yacy
+    if [ -f "$_f" ] && grep -qE 'NOPASSWD: /usr/bin/lxc-' "$_f" \
+       && [ -f "$_f.dpkg-dist" ] && visudo -cf "$_f.dpkg-dist" >/dev/null 2>&1; then
+        install -d -m 0700 /var/backups/secubox/sudoers-avant-1785
+        cp -p "$_f" /var/backups/secubox/sudoers-avant-1785/
+        install -m 0440 "$_f.dpkg-dist" "$_f" && rm -f "$_f.dpkg-dist"
+        echo "secubox-yacy : règles sudo lxc-* retirées (sauvegarde /var/backups/secubox/sudoers-avant-1785)"
+    fi
+fi
+
 #DEBHELPER#
 exit 0

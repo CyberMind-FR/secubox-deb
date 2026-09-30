@@ -146,6 +146,13 @@ override_dh_auto_install:
 	# ROOTFS DÉCALÉ POUR LES CONTENEURS NON PRIVILÉGIÉS (#1729).
 	install -m 755 usr/sbin/secubox-lxc-decaler \
 	               debian/secubox-core/usr/sbin/secubox-lxc-decaler
+	# PASSAGE SUDO ÉTROIT VERS LES COMMANDES LXC (#1785) : remplace les
+	# règles lxc-start/lxc-attach… à argument libre des modules.
+	install -m 755 usr/sbin/secubox-lxcctl \
+	               debian/secubox-core/usr/sbin/secubox-lxcctl
+	install -d debian/secubox-core/etc/sudoers.d
+	install -m 440 sudoers.d/secubox-lxcctl \
+	               debian/secubox-core/etc/sudoers.d/secubox-lxcctl
 	install -d debian/secubox-core/usr/lib/sysctl.d
 	install -m 644 sysctl.d/99-secubox-zz-lxc-forward.conf \
 	               debian/secubox-core/usr/lib/sysctl.d/
