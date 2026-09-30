@@ -1,3 +1,17 @@
+secubox-p2p (1.11.15-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : mise en place restaurée (effacée par la fusion 6036886281 ;
+    #1748, #1768) — droits de /var/lib/secubox/p2p et master-link/ (gk3 :
+    root, master-link absent), écouteur macro :8798 et sa règle wg-mesh,
+    prérequis des pairs éphémères (clé, minuterie de balayage, udp/51825).
+  * Règles nft persistées dans nftables.conf ET appliquées à chaud par
+    nft insert — jamais de nft -f complet (#1721). udp/51825 posé dans
+    secubox_filter là où il existe (l'accept d'une autre table ne passe pas
+    son drop).
+  * Rechargement de nginx seulement après nginx -t.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:42:28 +0200
+
 secubox-p2p (1.11.14-1~bookworm1) bookworm; urgency=medium
 
   * secubox-relais-maillage synchroniser + minuteur horaire : sur un satellite, port des vhosts ouvert au seul maître ; sur le relais, chaque nom d'un pair est relayé si le même service est exposé ici, s'il n'est pas exclu (wpad, boot), si le domaine n'est pas celui du relais et si son DNS public pointe ici — certificat joker *.<domaine du pair> par DNS-01 (acme.sh + Gandi), WAF devant, un seul rechargement HAProxy (#1682).

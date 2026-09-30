@@ -35,6 +35,62 @@ case "$1" in
         mkdir -p /var/log/secubox
         install -d -o secubox -g secubox -m 0750 /var/log/secubox/p2p
 
+        # ── RESTAURÉ PAR #1768 : effacé par la fusion 6036886281 (2026-08-17) ──
+        #
+        # State dir: own p2p/ and the master-link store, but NEVER chown the
+        # shared /var/lib/secubox parent (#494/#511). The app's master-link
+        # init mkdir's master-link/ and fails EACCES when p2p/ is root-owned,
+        # 500-ing /api/v1/p2p/status and breaking mesh enrollment. chown too so
+        # pre-existing root-owned installs are repaired on upgrade (gk3 : p2p/
+        # root, master-link/ absent, constaté le 2026-09-30).
+        mkdir -p /var/lib/secubox
+        install -d -o secubox -g secubox -m 0755 /var/lib/secubox/p2p
+        install -d -o secubox -g secubox -m 0755 /var/lib/secubox/p2p/master-link
+        chown secubox:secubox /var/lib/secubox/p2p /var/lib/secubox/p2p/master-link 2>/dev/null || true
+
+        # Règle wg-mesh durable : PERSISTÉE dans nftables.conf (validée par
+        # nft -c) et appliquée À CHAUD par `nft insert`. Jamais de `nft -f`
+        # complet : il rejoue `flush ruleset` et efface bans et tables posées
+        # à chaud (#1721). Sans effet là où inet secubox_filter n'existe pas.
+        _regle_maillage() {  # port proto
+            _conf=/etc/nftables.conf
+            _r="iifname \"wg-mesh\" ip saddr 10.10.0.0/24 $2 dport $1 accept"
+            if [ -f "$_conf" ] && grep -q 'table inet secubox_filter' "$_conf" \
+               && ! grep -q "$2 dport $1" "$_conf"; then
+                awk -v r="        $_r" '/^[[:space:]]*drop[[:space:]]*$/ && !d {print r; d=1} {print}' \
+                    "$_conf" > "$_conf.sbxtmp" 2>/dev/null || true
+                if [ -s "$_conf.sbxtmp" ] && nft -c -f "$_conf.sbxtmp" >/dev/null 2>&1; then
+                    mv "$_conf.sbxtmp" "$_conf"
+                else
+                    rm -f "$_conf.sbxtmp" 2>/dev/null || true
+                fi
+            fi
+            if nft list chain inet secubox_filter input >/dev/null 2>&1 \
+               && ! nft list chain inet secubox_filter input 2>/dev/null | grep -q "$2 dport $1 "; then
+                nft insert rule inet secubox_filter input $_r 2>/dev/null || true
+            fi
+        }
+
+        # Render the Gondwana mesh macro grant listener IFF a wg-mesh exists.
+        # Mirrors the annuaire-mesh.conf.tpl pattern (#766).
+        # Bind only the node's wg-mesh IPv4 — never 0.0.0.0 (minimal surface).
+        # X-Real-IP=$remote_addr is set in the template so macroctl sees the
+        # provider-observed mesh source IP, not a client-supplied value.
+        MACRO_TPL=/usr/share/secubox/p2p/p2p-macro-mesh.conf.tpl
+        MACRO_CONF=/etc/nginx/conf.d/p2p-macro-mesh.conf
+        MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
+        if [ -n "$MESH_IP" ] && [ -f "$MACRO_TPL" ]; then
+            sed "s/__MESH_IP__/$MESH_IP/g" "$MACRO_TPL" > "$MACRO_CONF"
+            # A broken render must NEVER persist on disk — validate now; revert on failure.
+            if ! nginx -t >/dev/null 2>&1; then
+                rm -f "$MACRO_CONF" 2>/dev/null || true
+            fi
+            _regle_maillage 8798 tcp          # écouteur de subvention macro
+        else
+            # No mesh interface (or template missing) → ensure no stale listener.
+            rm -f "$MACRO_CONF" 2>/dev/null || true
+        fi
+
         # Enable and start the service
         systemctl daemon-reload
         systemctl enable secubox-p2p.service
@@ -72,9 +128,40 @@ case "$1" in
             fi
         fi
 
-        # Reload nginx if running
+        # --- ephemeral wg-ephemeral iface prerequisites (restauré, #1768) --- #
+        # Generate the wg-ephemeral private key once if absent. Guarded:
+        # `wg` may be unavailable in a build/CI container, and this must
+        # never fail the package install.
+        install -d -m 700 /etc/secubox/secrets/p2p
+        if [ ! -f /etc/secubox/secrets/p2p/wg-ephemeral.key ]; then
+            (umask 077; wg genkey > /etc/secubox/secrets/p2p/wg-ephemeral.key) 2>/dev/null || true
+        fi
+        chmod 600 /etc/secubox/secrets/p2p/wg-ephemeral.key 2>/dev/null || true
+        # Bring the wg-ephemeral iface up idempotently.
+        /usr/sbin/secubox-p2pctl iface-up 2>/dev/null || true
+        # TTL-backstop sweep timer (removes expired ephemeral peers even if
+        # the assist-side teardown never runs).
+        systemctl enable --now secubox-p2p-ephemeral-sweep.timer 2>/dev/null || true
+        # udp/51825 : là où inet secubox_filter existe, sa politique `drop`
+        # l'emporte sur l'accept d'une autre table — la règle doit y figurer
+        # (même raison que 51822 ci-dessus). Ailleurs, la table dédiée livrée
+        # en conffile, chargée seulement si absente (pas de doublon).
+        if nft list chain inet secubox_filter input >/dev/null 2>&1; then
+            _conf=/etc/nftables.conf
+            if [ -f "$_conf" ] && ! grep -q "udp dport 51825" "$_conf" \
+               && grep -q "udp dport 51820 accept" "$_conf"; then
+                sed -i '0,/^\([[:space:]]*\)udp dport 51820 accept$/s//&\n\1udp dport 51825 accept  # pairs éphémères (secubox-p2p, #1768)/' "$_conf"
+            fi
+            nft list chain inet secubox_filter input 2>/dev/null | grep -q "udp dport 51825 " \
+                || nft insert rule inet secubox_filter input udp dport 51825 accept 2>/dev/null || true
+        elif [ -f /etc/nftables.d/secubox-p2p-ephemeral.nft ] \
+             && ! nft list table inet secubox_p2p_ephemeral >/dev/null 2>&1; then
+            nft -f /etc/nftables.d/secubox-p2p-ephemeral.nft 2>/dev/null || true
+        fi
+
+        # Reload nginx if running — seulement sur une configuration valide.
         if systemctl is-active --quiet nginx; then
-            systemctl reload nginx || true
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
         fi
         ;;
 esac
