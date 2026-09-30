@@ -1,3 +1,14 @@
+secubox-haproxy (1.8.20-1~bookworm1) bookworm; urgency=medium
+
+  * LXC uniquement (#1751, #1743) : haproxyctl perd ses branches
+    mode = "docker" (jamais livrées) ; l'API ne lance plus `docker ps` à
+    chaque rafraîchissement.
+  * haproxyctl lit mode et data_path dans [main] seulement : le grep global
+    ramassait les mode = "http" des vhosts (MODE multi-lignes, JSON de
+    `status` invalide sur gk2) et data_path finissait vide sans défaut.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:19:24 +0200
+
 secubox-haproxy (1.8.19-1~bookworm1) bookworm; urgency=medium
 
   * frame-ancestors par défaut : le Hall et billets de CETTE box (gk3 refusait d'être encadrée par son propre Hall) ; hall.gk2.net seulement sur gk2 (#1723, #1713).

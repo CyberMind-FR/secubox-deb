@@ -1,3 +1,12 @@
+secubox-matrix (1.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * LXC uniquement (#1751, #1743) : retrait du mode docker-compose
+    (/container/* et détection docker/podman, ajoutés en avril, jamais le
+    chemin d'installation réel) et de sa carte dans l'interface. Synapse
+    reste piloté dans son LXC par /start, /stop, /restart.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:19:24 +0200
+
 secubox-matrix (1.1.2-3~bookworm1) bookworm; urgency=medium
 
   * Aligne le numero de version sur la convention du depot : suffixe de

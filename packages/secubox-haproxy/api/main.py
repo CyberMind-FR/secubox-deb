@@ -194,16 +194,7 @@ def _compute_status_sync() -> Dict[str, Any]:
         ["pgrep", "haproxy"], capture_output=True, timeout=2
     ).returncode == 0
 
-    # Check Docker (with short timeout)
-    docker_running = False
-    try:
-        result = subprocess.run(
-            ["docker", "ps", "--filter", "name=haproxy", "--format", "{{.Names}}"],
-            capture_output=True, text=True, timeout=2
-        )
-        docker_running = "haproxy" in result.stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+    # Plus de sonde de runtime de conteneurs : LXC uniquement (#1751).
 
     # WAF availability (fast path check)
     waf_available = Path(WAF_SOCKET).exists()
@@ -213,7 +204,7 @@ def _compute_status_sync() -> Dict[str, Any]:
     backend_cfg = cfg.get("backends", {})
 
     return {
-        "running": running or docker_running,
+        "running": running,
         "http_port": main_cfg.get("http_port", 80),
         "https_port": main_cfg.get("https_port", 443),
         "stats_port": main_cfg.get("stats_port", 8404),
@@ -475,18 +466,6 @@ def _haproxy_running() -> bool:
     return result.returncode == 0
 
 
-def _docker_running() -> bool:
-    """Check if HAProxy Docker container is running."""
-    try:
-        result = subprocess.run(
-            ["docker", "ps", "--filter", "name=haproxy", "--format", "{{.Names}}"],
-            capture_output=True, text=True, timeout=5
-        )
-        return "haproxy" in result.stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
 def _waf_available() -> bool:
     """Check if WAF socket is available."""
     return Path(WAF_SOCKET).exists()
@@ -620,7 +599,7 @@ async def components():
                 "name": "HAProxy Service",
                 "type": "service",
                 "description": "Load balancer and reverse proxy",
-                "running": _haproxy_running() or _docker_running(),
+                "running": _haproxy_running(),
                 "config_path": HAPROXY_CFG
             },
             {
@@ -2116,7 +2095,7 @@ async def test_webhook(webhook_id: str, user=Depends(require_jwt)):
 async def get_haproxy_summary(user=Depends(require_jwt)):
     """Get comprehensive HAProxy summary."""
     cfg = _cfg()
-    running = _haproxy_running() or _docker_running()
+    running = _haproxy_running()
     vhosts = _load_vhosts()
     backends = _load_backends()
 

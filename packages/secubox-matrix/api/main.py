@@ -10,7 +10,7 @@ Author: Gerald Kerma <gandalf@gk2.net>
 License: Proprietary / ANSSI CSPN candidate
 
 Matrix Synapse homeserver management API for SecuBox.
-Supports both LXC containers and Docker/Podman deployments.
+Synapse runs in a dedicated LXC only (never docker/podman — PATTERNS.md Pattern 11).
 """
 from fastapi import FastAPI, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -53,8 +53,6 @@ LXC_NAME = "secubox-matrix"
 CONFIG_DIR = Path("/var/lib/secubox/matrix")
 DATA_DIR = Path("/var/lib/secubox/matrix/data")
 MEDIA_DIR = DATA_DIR / "media_store"
-COMPOSE_DIR = Path("/opt/secubox/matrix")
-COMPOSE_FILE = COMPOSE_DIR / "docker-compose.yml"
 SYNAPSE_PORT = 8008
 FEDERATION_PORT = 8448
 ADMIN_TOKEN_FILE = Path("/etc/secubox/matrix/admin_token")
@@ -80,23 +78,6 @@ def run_cmd(cmd: list, timeout: int = 60) -> dict:
         return {"success": False, "error": str(e)}
 
 
-def get_container_runtime() -> Optional[str]:
-    """Detect available container runtime (Docker or Podman)."""
-    for runtime in ["docker", "podman"]:
-        result = run_cmd(["which", runtime])
-        if result["success"]:
-            return runtime
-    return None
-
-
-def is_container_install() -> bool:
-    """Check if Synapse is running in Docker/Podman container."""
-    if COMPOSE_FILE.exists():
-        runtime = get_container_runtime()
-        if runtime:
-            result = run_cmd([runtime, "compose", "-f", str(COMPOSE_FILE), "ps", "-q"])
-            return result["success"] and bool(result.get("stdout", "").strip())
-    return False
 
 
 def get_admin_token() -> Optional[str]:
@@ -925,166 +906,10 @@ async def server_info(user=Depends(require_jwt)):
     return info
 
 
-# ══════════════════════════════════════════════════════════════════
-# Container Management (Docker/Podman)
-# ══════════════════════════════════════════════════════════════════
-
-@app.get("/container/status")
-async def container_status(user=Depends(require_jwt)):
-    """Get Docker/Podman container status."""
-    runtime = get_container_runtime()
-    if not runtime:
-        return {"available": False, "runtime": None}
-
-    if not COMPOSE_FILE.exists():
-        return {
-            "available": True,
-            "runtime": runtime,
-            "deployed": False
-        }
-
-    result = run_cmd([runtime, "compose", "-f", str(COMPOSE_FILE), "ps", "--format", "json"])
-
-    containers = []
-    if result["success"]:
-        try:
-            data = json.loads(result["stdout"]) if result["stdout"].strip() else []
-            if isinstance(data, list):
-                for c in data:
-                    containers.append({
-                        "name": c.get("Name", ""),
-                        "state": c.get("State", ""),
-                        "health": c.get("Health", ""),
-                        "ports": c.get("Ports", "")
-                    })
-        except json.JSONDecodeError:
-            pass
-
-    return {
-        "available": True,
-        "runtime": runtime,
-        "deployed": COMPOSE_FILE.exists(),
-        "containers": containers
-    }
-
-
-@app.post("/container/install")
-async def container_install(
-    server_name: str = Query(..., description="Matrix server domain"),
-    user=Depends(require_jwt)
-):
-    """Install Matrix Synapse via Docker/Podman container."""
-    runtime = get_container_runtime()
-    if not runtime:
-        raise HTTPException(400, "No container runtime available (install docker or podman)")
-
-    # Create directories
-    COMPOSE_DIR.mkdir(parents=True, exist_ok=True)
-    data_dir = COMPOSE_DIR / "data"
-    data_dir.mkdir(exist_ok=True)
-    postgres_dir = COMPOSE_DIR / "postgres"
-    postgres_dir.mkdir(exist_ok=True)
-
-    # Generate compose file
-    compose_content = f"""version: '3.8'
-services:
-  synapse:
-    image: matrixdotorg/synapse:latest
-    container_name: secubox-matrix-synapse
-    restart: unless-stopped
-    environment:
-      - SYNAPSE_SERVER_NAME={server_name}
-      - SYNAPSE_REPORT_STATS=no
-    volumes:
-      - {data_dir}:/data
-    ports:
-      - "{SYNAPSE_PORT}:8008"
-      - "{FEDERATION_PORT}:8448"
-    healthcheck:
-      test: ["CMD", "curl", "-fSs", "http://localhost:8008/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    depends_on:
-      - postgres
-
-  postgres:
-    image: postgres:15-alpine
-    container_name: secubox-matrix-postgres
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=synapse
-      - POSTGRES_PASSWORD=synapse_secubox_password
-      - POSTGRES_DB=synapse
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
-    volumes:
-      - {postgres_dir}:/var/lib/postgresql/data
-"""
-
-    COMPOSE_FILE.write_text(compose_content)
-
-    # Generate initial config
-    result = run_cmd([
-        runtime, "run", "--rm",
-        "-v", f"{data_dir}:/data",
-        "-e", f"SYNAPSE_SERVER_NAME={server_name}",
-        "-e", "SYNAPSE_REPORT_STATS=no",
-        "matrixdotorg/synapse:latest",
-        "generate"
-    ], timeout=300)
-
-    if not result["success"]:
-        raise HTTPException(500, f"Failed to generate config: {result.get('stderr', result.get('error'))}")
-
-    log.info(f"Matrix Synapse container installed for {server_name}")
-    return {"success": True, "message": f"Matrix container installed for {server_name}"}
-
-
-@app.post("/container/start")
-async def container_start(user=Depends(require_jwt)):
-    """Start Matrix Docker/Podman containers."""
-    runtime = get_container_runtime()
-    if not runtime or not COMPOSE_FILE.exists():
-        raise HTTPException(400, "Container setup not found")
-
-    result = run_cmd([runtime, "compose", "-f", str(COMPOSE_FILE), "up", "-d"], timeout=120)
-
-    if not result["success"]:
-        raise HTTPException(500, result.get("stderr", "Failed to start containers"))
-
-    return {"success": True}
-
-
-@app.post("/container/stop")
-async def container_stop(user=Depends(require_jwt)):
-    """Stop Matrix Docker/Podman containers."""
-    runtime = get_container_runtime()
-    if not runtime or not COMPOSE_FILE.exists():
-        raise HTTPException(400, "Container setup not found")
-
-    result = run_cmd([runtime, "compose", "-f", str(COMPOSE_FILE), "stop"])
-
-    if not result["success"]:
-        raise HTTPException(500, result.get("stderr", "Failed to stop containers"))
-
-    return {"success": True}
-
-
-@app.post("/container/restart")
-async def container_restart(user=Depends(require_jwt)):
-    """Restart Matrix Docker/Podman containers."""
-    runtime = get_container_runtime()
-    if not runtime or not COMPOSE_FILE.exists():
-        raise HTTPException(400, "Container setup not found")
-
-    result = run_cmd([runtime, "compose", "-f", str(COMPOSE_FILE), "restart"])
-
-    if not result["success"]:
-        raise HTTPException(500, result.get("stderr", "Failed to restart containers"))
-
-    return {"success": True}
-
+# LXC UNIQUEMENT (PATTERNS.md Pattern 11, #1743, #1751) : le mode
+# docker-compose ajouté en avril (/container/*) n'a jamais été le chemin
+# d'installation réel ; Synapse vit dans le LXC piloté par /start, /stop,
+# /restart. Retiré plutôt que réparé.
 
 # ══════════════════════════════════════════════════════════════════
 # Federation Management (Enhanced)

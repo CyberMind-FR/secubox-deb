@@ -15,9 +15,12 @@ case "$1" in
     deb-systemd-helper enable secubox-frigate.service >/dev/null 2>&1 || true
     deb-systemd-invoke restart secubox-frigate.service >/dev/null 2>&1 || true
     systemctl enable --now secubox-frigate-diskguard.timer >/dev/null 2>&1 || true
-    # Provision the LXC only where LXC is available (the amd64 host). Never fail install.
-    if command -v lxc-create >/dev/null 2>&1; then
-        /usr/sbin/frigatectl install || echo "frigatectl install deferred — run manually on the frigate host" >&2
+    # Plus d'installation automatique (#1751) : chaque mise à jour du paquet
+    # relançait `frigatectl install`, qui met podman DANS le LXC et tire
+    # l'image officielle — contraire à la règle LXC uniquement (#1743). En
+    # attendant l'arbitrage frigate, l'installation reste un geste manuel.
+    if command -v lxc-create >/dev/null 2>&1 && [ ! -d /data/lxc/frigate ]; then
+        echo "secubox-frigate : LXC non provisionné — installation manuelle (frigatectl install), voir #1743" >&2
     fi
     ;;
 esac

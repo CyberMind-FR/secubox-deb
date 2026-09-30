@@ -310,16 +310,6 @@
                     <button type="submit" class="btn primary">Save Settings</button>
                 </form>
 
-                <h3 style="margin-top: 2rem;">Container Management</h3>
-                <div id="container-status" class="info-card" style="margin-bottom: 1rem;">
-                    <div class="info-label">Docker/Podman Status</div>
-                    <div id="container-info">Checking...</div>
-                </div>
-                <div class="action-bar" id="container-actions">
-                    <button class="btn" onclick="containerStart()">Start Container</button>
-                    <button class="btn" onclick="containerStop()">Stop Container</button>
-                    <button class="btn" onclick="containerRestart()">Restart Container</button>
-                </div>
             </div>
 
             <!-- Users Tab -->
@@ -476,40 +466,12 @@
                     loadUsers();
                     loadRooms();
                     loadConfig();
-                    loadContainerStatus();
                 }
             } catch (e) {
                 console.error('Status load failed:', e);
             }
         }
 
-        // Container Management
-        async function loadContainerStatus() {
-            try {
-                const data = await apiCall('/container/status');
-                const info = document.getElementById('container-info');
-                if (!data.available) {
-                    info.innerHTML = '<span style="color: var(--text-secondary);">Docker/Podman not available</span>';
-                } else if (!data.deployed) {
-                    info.innerHTML = '<span style="color: var(--warning);">Container not deployed</span>';
-                } else {
-                    const running = data.containers?.some(c => c.state === 'running');
-                    info.innerHTML = `<span style="color: ${running ? 'var(--success)' : 'var(--error)'};">${data.runtime}: ${running ? 'Running' : 'Stopped'}</span>`;
-                }
-            } catch (e) {
-                document.getElementById('container-info').textContent = 'Error loading status';
-            }
-        }
-
-        async function containerStart() {
-            try { await apiCall('/container/start', { method: 'POST' }); loadContainerStatus(); } catch (e) { alert('Failed: ' + e.message); }
-        }
-        async function containerStop() {
-            try { await apiCall('/container/stop', { method: 'POST' }); loadContainerStatus(); } catch (e) { alert('Failed: ' + e.message); }
-        }
-        async function containerRestart() {
-            try { await apiCall('/container/restart', { method: 'POST' }); loadContainerStatus(); } catch (e) { alert('Failed: ' + e.message); }
-        }
 
         // Federation
         async function loadFederationStatus() {
@@ -898,7 +860,7 @@
 
                 // Load data for each tab
                 switch(tab.dataset.tab) {
-                    case 'server': loadConfig(); loadContainerStatus(); break;
+                    case 'server': loadConfig(); break;
                     case 'users': loadUsers(); break;
                     case 'rooms': loadRooms(); break;
                     case 'federation': loadFederationStatus(); loadFederationPeers(); break;
