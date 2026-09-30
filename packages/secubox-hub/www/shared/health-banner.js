@@ -20,13 +20,37 @@
 (function() {
     'use strict';
 
-    const VERSION = '1.3.1';
+    // Prevent double-init if the script is loaded twice
+    // (e.g. once by index.html and once injected via nginx sub_filter
+    // or the sbxwaf banner injection).
+    //
+    // 1.4.8 — VERSION RESTAUREE (#1777, ref #1748). La fusion 7ebe27403a avait
+    // remis la 1.3.0 d'une branche perimee : plus de garde de double
+    // initialisation, plus d'opt-out <meta>, des alertes et des cartes de
+    // modules redevenues des liens (#247/#290), plus de garde SPA (#750), plus
+    // de section CookieAudit. On repart de la 1.4.7 de master et l'on rejoue
+    // ce qui est venu depuis : purge CrowdSec, garde du lecteur incorpore
+    // (#1131t).
+    if (window.__SBX_HEALTH_BANNER__) return;
+    window.__SBX_HEALTH_BANNER__ = true;
+
+    // A page can opt out of the operator health banner with
+    // <meta name="sbx-no-health-banner"> in its <head> (e.g. a public-facing
+    // blog where the operator banner is noise). This runs reliably because the
+    // WAF injects the banner loader AFTER the page <head>, so the meta is
+    // already parsed; and it is CSP-safe (no inline script needed on the
+    // opting-out page, unlike a window flag).
+    if (document.querySelector('meta[name="sbx-no-health-banner"]')) return;
+
+    const VERSION = '1.4.8';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
     const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
         || '/api/v1/metrics/live-hosts';
     const CERT_STATUS_API    = window.SECUBOX_CERT_STATUS_API
         || '/api/v1/metrics/cert-status';
+    const COOKIE_AUDIT_API   = window.SECUBOX_COOKIE_AUDIT_SUMMARY
+        || '/api/v1/cookie-audit/summary';
     const LIVE_REFRESH_INTERVAL = 30000; // 30 s
     // Use global config if injected by CDN/WAF, otherwise use relative path
     const HEALTH_API = window.SECUBOX_HEALTH_API || '/api/v1/metrics/health/summary';
@@ -96,21 +120,6 @@
     // ═══════════════════════════════════════════════════════════════════════════
     // SMART DOCTOR ADVISOR
     // ═══════════════════════════════════════════════════════════════════════════
-
-    // Module emoji map for spunky display
-    const MODULE_EMOJIS = {
-        waf: ['🛡️', '⚔️', '🔰'],
-        haproxy: ['🌐', '🔀', '🔄'],
-        nginx: ['🌍', '📡', '🚀'],
-        system: ['💻', '🖥️', '⚙️']
-    };
-
-    const STATUS_EMOJIS = {
-        ok: ['✅', '🟢', '💚', '🌟'],
-        warn: ['⚠️', '🟡', '🔶', '⏳'],
-        error: ['❌', '🔴', '💔', '🆘'],
-        off: ['⬜', '💤', '🔌']
-    };
 
     const DoctorRules = [
         {
@@ -269,7 +278,6 @@
                     <span class="hb-pct">--</span>
                 </div>
                 <div class="hb-ssl-container"></div>
-                <div class="hb-modules"></div>
                 <div class="hb-alerts"></div>
                 <div class="hb-sparkle">✨</div>
                 <div class="hb-details">
@@ -292,8 +300,18 @@
             el = document.createElement('div');
             el.id = id;
             el.className = 'sbx-live-section';
-            const banner = document.getElementById('health-banner');
-            if (banner) banner.appendChild(el);
+            // Append inside .hb-content (the scrollable area) instead of the
+            // outer banner element. Insert before .hb-details so live sections
+            // sit between alerts and the bottom stats grid.
+            const content = document.querySelector('#health-banner .hb-content');
+            if (content) {
+                const details = content.querySelector('.hb-details');
+                if (details) {
+                    content.insertBefore(el, details);
+                } else {
+                    content.appendChild(el);
+                }
+            }
         }
         return el;
     }
@@ -351,6 +369,41 @@
         showSection('sbx-cert-status');
     }
 
+    function renderCookieAudit(data) {
+        // Hidden until aggregator is enabled and has at least one host.
+        if (!data || !data.enabled || !data.summary || !data.summary.host_count) {
+            hideSection('sbx-cookie-audit');
+            return;
+        }
+        const el = sectionContainer('sbx-cookie-audit');
+        const s = data.summary;
+        const byCat = s.by_category || {};
+        const violationClass = s.violation_count > 0 ? 'sbx-rgpd-violation' : 'sbx-rgpd-ok';
+        const violationIcon  = s.violation_count > 0 ? '⚠' : '✓';
+        el.innerHTML =
+            `<div class="sbx-section-title">CookieAudit · ${s.host_count} vhost${s.host_count > 1 ? 's' : ''}</div>` +
+            `<div class="sbx-row ${violationClass}">` +
+                `<span>${violationIcon} RGPD</span>` +
+                `<span class="sbx-count">${s.violation_count} viol · ${s.hosts_with_violations} hosts</span>` +
+            `</div>` +
+            `<div class="sbx-row sbx-cookie-cat">` +
+                `<span>strict</span><span class="sbx-count">${byCat.strictly_necessary || 0}</span>` +
+            `</div>` +
+            `<div class="sbx-row sbx-cookie-cat">` +
+                `<span>func</span><span class="sbx-count">${byCat.functional || 0}</span>` +
+            `</div>` +
+            `<div class="sbx-row sbx-cookie-cat">` +
+                `<span>analytics</span><span class="sbx-count">${byCat.analytics || 0}</span>` +
+            `</div>` +
+            `<div class="sbx-row sbx-cookie-cat">` +
+                `<span>marketing</span><span class="sbx-count">${byCat.marketing || 0}</span>` +
+            `</div>` +
+            ((byCat.unclassified || 0) > 0
+                ? `<div class="sbx-row sbx-cookie-cat"><span>?? unclassified</span><span class="sbx-count">${byCat.unclassified}</span></div>`
+                : '');
+        showSection('sbx-cookie-audit');
+    }
+
     async function pollLivePanel() {
         const fetchSafe = async (url) => {
             try {
@@ -359,14 +412,16 @@
                 return await r.json();
             } catch (e) { return null; }
         };
-        const [vo, lh, cs] = await Promise.all([
+        const [vo, lh, cs, ca] = await Promise.all([
             fetchSafe(VISITOR_ORIGIN_API),
             fetchSafe(LIVE_HOSTS_API),
             fetchSafe(CERT_STATUS_API),
+            fetchSafe(COOKIE_AUDIT_API),
         ]);
         if (vo) renderVisitorOrigin(vo); else hideSection('sbx-visitor-origin');
         if (lh) renderLiveHosts(lh);     else hideSection('sbx-live-hosts');
         if (cs) renderCertStatus(cs);    else hideSection('sbx-cert-status');
+        if (ca) renderCookieAudit(ca);   else hideSection('sbx-cookie-audit');
     }
 
     function injectBannerStyles() {
@@ -524,47 +579,6 @@
             @keyframes ssl-blink { 50% { opacity: 0.6; } }
             .hb-ssl.ssl-unknown { border-color: rgba(107, 107, 122, 0.3); }
             .hb-ssl.ssl-unknown .hb-ssl-days { color: #6b6b7a; }
-
-            /* Modules grid */
-            .hb-modules {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 8px;
-            }
-            .hb-mod {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 4px;
-                padding: 8px;
-                border-radius: 6px;
-                background: rgba(255,255,255,0.05);
-                cursor: pointer;
-                transition: all 0.2s;
-                text-decoration: none;
-                position: relative;
-            }
-            .hb-mod:hover {
-                background: rgba(255,255,255,0.12);
-                transform: translateY(-2px);
-            }
-            .hb-mod.ok { border: 1px solid rgba(34,197,94,0.5); }
-            .hb-mod.warn { border: 1px solid rgba(234,179,8,0.5); }
-            .hb-mod.err { border: 1px solid rgba(239,68,68,0.5); }
-            .hb-mod.off { border: 1px solid rgba(102,102,102,0.5); opacity: 0.6; }
-            .hb-mod-emoji { font-size: 20px; }
-            .hb-mod-name {
-                font-size: 8px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                color: var(--text-muted, #6b6b7a);
-            }
-            .hb-mod-status {
-                font-size: 10px;
-                position: absolute;
-                top: 2px;
-                right: 4px;
-            }
 
             /* Alerts */
             .hb-alerts {
@@ -724,9 +738,6 @@
                 .hb-content {
                     width: 100%;
                 }
-                .hb-modules {
-                    grid-template-columns: repeat(5, 1fr);
-                }
                 .hb-stats-grid {
                     grid-template-columns: repeat(3, 1fr);
                 }
@@ -740,6 +751,12 @@
             .sbx-row { display: flex; justify-content: space-between; gap: 8px; }
             .sbx-row .sbx-count { color: var(--cyber-cyan, #00d4ff); font-variant-numeric: tabular-nums; }
             .sbx-row .sbx-asn { color: var(--matrix-green, #00ff41); }
+            .sbx-rgpd-violation { color: #ef4444; font-weight: 600; }
+            .sbx-rgpd-violation .sbx-count { color: #ef4444; }
+            .sbx-rgpd-ok { color: var(--matrix-green, #00ff41); }
+            .sbx-rgpd-ok .sbx-count { color: var(--matrix-green, #00ff41); }
+            .sbx-cookie-cat { font-size: 10px; color: var(--text-muted, #6b6b7a); padding-left: 8px; }
+            .sbx-cookie-cat .sbx-count { color: var(--text-primary, #e8e6d9); }
         `;
         document.head.appendChild(style);
     }
@@ -785,41 +802,27 @@
             sslContainer.innerHTML = renderSslStatus(health.ssl);
         }
 
-        // Render module cards
-        const modsEl = banner.querySelector('.hb-modules');
-        if (modsEl && health?.modules) {
-            const modules = ['waf', 'haproxy', 'nginx', 'system'];
-            modsEl.innerHTML = modules.map(m => {
-                const mod = health.modules[m] || {};
-                const status = mod.status || 'off';
-                const ledClass = status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : status === 'error' ? 'err' : 'off';
-                const emojis = MODULE_EMOJIS[m] || ['📦'];
-                const statusEmojis = STATUS_EMOJIS[status] || STATUS_EMOJIS.off;
-                const emoji = emojis[0];
-                const statusDot = statusEmojis[1] || statusEmojis[0];
-                return `<a href="/${m}/" class="hb-mod ${ledClass}" title="${m}: ${status}">
-                    <span class="hb-mod-emoji">${emoji}</span>
-                    <span class="hb-mod-name">${m}</span>
-                    <span class="hb-mod-status">${statusDot}</span>
-                </a>`;
-            }).join('');
-        }
-
-        // Render doctor alerts
+        // Alertes du docteur. Leurs actions sont des chemins relatifs au Hub :
+        // injectees sur un vhost d'un autre domaine, elles menaient a un 404
+        // (#247). #247 reservait les liens a une liste d'hotes du Hub
+        // (isHubVhost) ; #290 est alle plus loin — alertes JAMAIS cliquables —
+        // et isHubVhost n'avait plus d'appelant. Elle n'est pas ramenee : sa
+        // liste d'hotes etait ecrite en dur (*.gk2, une IP du LAN), ce que les
+        // noms derives du domaine interdisent desormais (#1723).
         const alertsEl = banner.querySelector('.hb-alerts');
         if (alertsEl) {
             const alerts = diagnose(health);
             const visibleAlerts = alerts.filter(a => a.severity !== 'celebration' || score >= 95).slice(0, 5);
+            // Alerts are always non-clickable (#290). The previous <a href>
+            // branch emitted relative URLs that resolved to whatever host the
+            // banner was embedded on — e.g. https://oracle.ganimed.fr/system/
+            // when loaded cross-origin. Banner stays purely informational;
+            // the dashboard sidebar is the canonical navigation surface.
             alertsEl.innerHTML = visibleAlerts.map(a =>
-                a.action
-                    ? `<a href="${a.action}" class="hb-alert ${a.severity}" title="${a.message}">
-                        <span class="hb-alert-icon">${a.icon}</span>
-                        <span class="hb-alert-text">${a.message}</span>
-                    </a>`
-                    : `<div class="hb-alert ${a.severity}" title="${a.message}">
-                        <span class="hb-alert-icon">${a.icon}</span>
-                        <span class="hb-alert-text">${a.message}</span>
-                    </div>`
+                `<div class="hb-alert ${a.severity}" title="${a.message}">
+                    <span class="hb-alert-icon">${a.icon}</span>
+                    <span class="hb-alert-text">${a.message}</span>
+                </div>`
             ).join('');
         }
 
@@ -918,6 +921,35 @@
         const { banner, trigger } = createBannerElement();
         document.body.appendChild(trigger);
         document.body.appendChild(banner);
+
+        // ── SPA re-inject guard (#750) ─────────────────────────────────────
+        // SPA sites (x.com, Next.js news) rebuild <body> on hydration, wiping
+        // our appended nodes; the one-shot __SBX_HEALTH_BANNER__ guard then
+        // blocks any re-init, so the banner never returns. Re-attach the
+        // already-created nodes — and re-add the styles if <head> was cleared
+        // too — whenever they detach. The closure keeps the refs alive even
+        // after the DOM node is wiped, and re-appending the SAME nodes
+        // preserves their event listeners.
+        function ensureMounted() {
+            injectBannerStyles(); // id-guarded: no-op when the <style> is present
+            const body = document.body;
+            if (!body) return;
+            if (!trigger.isConnected) body.appendChild(trigger);
+            if (!banner.isConnected) {
+                body.appendChild(banner);
+                // Re-sync the layout-shift class: a body wiped while the banner
+                // was expanded loses 'health-banner-open' on the fresh body.
+                body.classList.toggle('health-banner-open', banner.classList.contains('expanded'));
+            }
+        }
+        try {
+            // childList on <html> catches a full <body> element swap (cheap, no subtree).
+            new MutationObserver(ensureMounted)
+                .observe(document.documentElement, { childList: true });
+        } catch (_) { /* MutationObserver unsupported → the interval below covers it */ }
+        // Fallback for body.innerHTML='' (children cleared, body element kept),
+        // which a childList-only observer on <html> does not see.
+        setInterval(ensureMounted, 1500);
 
         // Toggle banner on trigger click
         trigger.addEventListener('click', () => {

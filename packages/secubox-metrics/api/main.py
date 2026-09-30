@@ -13,7 +13,9 @@ Ported from luci-app-metrics-dashboard RPCD backend.
 import asyncio
 import ctypes
 import json
+import logging
 import os
+import re
 import subprocess
 import time
 from contextlib import asynccontextmanager
@@ -26,6 +28,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+
+log = logging.getLogger("secubox.metrics")
 
 # Try to import auth, fallback to no-auth for development
 try:
@@ -139,10 +143,25 @@ async def _rendre_memoire_glibc() -> None:
             pass
 
 
+async def _prechauffer_cache() -> None:
+    """Construit le cache systeme HORS de la boucle au demarrage (#740).
+
+    Sans cela la premiere requete le batissait de facon synchrone (~10 s de
+    sous-processus) : c'etait la fenetre de 502 sur /metrics/* et sur le
+    bandeau de sante apres chaque redemarrage. Restaure apres la fusion
+    7ebe27403a qui l'avait efface (#1777).
+    """
+    try:
+        await asyncio.to_thread(build_cache)
+    except Exception as e:  # noqa: BLE001
+        log.warning("prechauffage du cache echoue : %s", e)
+
+
 @asynccontextmanager
 async def lifespan(_app):
     amorcer_collecte()
     tasks = [
+        asyncio.create_task(_prechauffer_cache()),
         asyncio.create_task(visitor_origin_agg.run_forever()),
         asyncio.create_task(live_hosts_agg.run_forever()),
         asyncio.create_task(cert_status_agg.run_forever()),
@@ -169,22 +188,32 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware for cross-origin health banner requests
+# CORS : bandeau de sante (GET) et ingestion des instantanes de cookies (POST),
+# tous deux appeles depuis les vhosts de l'exploitant, sans identifiants.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Health banner injected on any domain
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-# Cache configuration
-CACHE_DIR = Path("/tmp/secubox")
+# Cache configuration. Etait /tmp/secubox jusqu'a #149 — /tmp est vide au
+# redemarrage, ce qui cassait l'espace de noms systemd (ReadWritePaths) et
+# faisait boucler le service. /var/cache/secubox est persistant et tenu par
+# `CacheDirectory=secubox` dans l'unite. La fusion 7ebe27403a avait remis
+# /tmp/secubox (#1777).
+CACHE_DIR = Path("/var/cache/secubox")
 CACHE_FILE = CACHE_DIR / "metrics-cache.json"
 CACHE_TTL = 30  # seconds
 
-# Ensure cache directory exists
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+# Ensure cache directory exists. Hors du service (tests, poste de dev) le
+# repertoire peut etre inaccessible : write_cache() avale deja l'echec, on ne
+# fait pas tomber l'import pour autant.
+try:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 
 def run_cmd(cmd: list, default: str = "") -> str:
     """Run a command and return output."""
@@ -226,8 +255,62 @@ def write_cache(data: dict):
     except Exception:
         pass
 
+def _cpu_pct() -> float:
+    """Charge CPU depuis /proc/stat (ligne `cpu` : (total - idle) / total).
+
+    Lecture seule de /proc, aucun sous-processus : utilisable depuis une route
+    qui doit repondre vite. Restaure apres 7ebe27403a (939e80b02, #1777).
+    """
+    try:
+        with open('/proc/stat') as f:
+            cpu_line = f.readline()
+        if not cpu_line.startswith('cpu '):
+            return 0
+        # user nice system idle iowait irq softirq steal guest guest_nice
+        parts = cpu_line.split()
+        if len(parts) < 5:
+            return 0
+        total = sum(int(x) for x in parts[1:])
+        idle = int(parts[4])
+        return ((total - idle) / total) * 100 if total > 0 else 0
+    except Exception:
+        return 0
+
+
+def _resume_proc() -> dict:
+    """cpu / mem / load lus dans /proc seul — jamais de sous-processus.
+
+    Sert /api/v1/metrics/summary quand le cache est perime : le widget de la
+    barre laterale ne doit pas attendre la reconstruction complete de
+    l'apercu (lxc-info, systemctl…), qui peut depasser le delai d'inactivite
+    de HAProxy.
+    """
+    try:
+        with open('/proc/loadavg') as f:
+            load = ' '.join(f.read().split()[:3])
+    except Exception:
+        load = "0 0 0"
+    mem_pct = 0
+    try:
+        meminfo = {}
+        with open('/proc/meminfo') as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    meminfo[parts[0].rstrip(':')] = int(parts[1])
+        total = meminfo.get('MemTotal', 0)
+        libre = meminfo.get('MemAvailable', meminfo.get('MemFree', 0))
+        mem_pct = ((total - libre) * 100 // total) if total > 0 else 0
+    except Exception:
+        pass
+    return {"cpu_pct": _cpu_pct(), "mem_pct": mem_pct, "load": load}
+
+
 def build_overview() -> dict:
     """Build system overview metrics."""
+    # CPU usage (939e80b02 — widget de la barre du haut)
+    cpu_pct = _cpu_pct()
+
     # Uptime
     try:
         with open('/proc/uptime') as f:
@@ -329,6 +412,7 @@ def build_overview() -> dict:
     return {
         "uptime": uptime,
         "load": load,
+        "cpu_pct": cpu_pct,
         "mem_total_kb": mem_total,
         "mem_used_kb": mem_used,
         "mem_pct": mem_pct,
@@ -494,6 +578,32 @@ def get_overview(auth: None = Depends(require_jwt)):
     data["_freshness"] = get_freshness()
     return data
 
+
+@app.get("/api/v1/metrics/summary")
+def get_metrics_summary(auth: None = Depends(require_jwt)):
+    """Resume cpu / mem / load pour le widget de la barre laterale (sidebar.js,
+    page /metrics/). Efface par la fusion 7ebe27403a, restaure (#1777).
+
+    ADMIN (`require_jwt`), comme /overview dont il est l'extrait : le widget ne
+    s'affiche que sur la page d'administration /metrics/, qui exige deja une
+    session d'administrateur. `def` : lectures de fichiers, hors de la boucle.
+    Le cache frais sert tel quel ; sinon on lit /proc seul (jamais les
+    sous-processus de build_overview) pour repondre en quelques millisecondes.
+    """
+    data = None
+    cached = read_cache()
+    if cached and cache_is_fresh():
+        data = cached.get("overview")
+    if not data or "cpu_pct" not in data:
+        data = _resume_proc()
+    # sidebar.js attend : cpu, mem, load
+    return {
+        "cpu": data.get("cpu_pct", 0),
+        "mem": data.get("mem_pct", 0),
+        "load": data.get("load", "0 0 0"),
+        "_freshness": get_freshness(),
+    }
+
 WAF_CAMPAIGNS = Path("/var/cache/secubox/waf/campaigns.json")
 
 
@@ -622,6 +732,44 @@ def get_firewall_stats(auth: None = Depends(require_jwt)):
 # For the global health banner with smart doctor advisor
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _count_waf_blocks(window_minutes: int = 60) -> int:
+    """Compte les blocages de sbxwaf sur la fenetre, depuis son journal des
+    menaces (/var/log/secubox/waf/waf-threats.log, JSONL horodate ISO).
+
+    Lecture de queue bornee (3 Mo) : un gros journal ne peut pas bloquer le
+    resume. Restaure apres 7ebe27403a (c15727290, #1777) — la fusion avait
+    remis une estimation `wc -l // 10` sur TOUT le journal, sans fenetre.
+    """
+    from datetime import timedelta
+    p = Path("/var/log/secubox/waf/waf-threats.log")
+    try:
+        size = p.stat().st_size
+    except Exception:
+        return 0
+    if size == 0:
+        return 0
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+    n = 0
+    try:
+        with open(p, "rb") as fh:
+            if size > 3_000_000:
+                fh.seek(size - 3_000_000)
+                fh.readline()
+            for line in fh.read().decode("utf-8", errors="replace").splitlines():
+                try:
+                    e = json.loads(line)
+                    ts = datetime.fromisoformat(e["timestamp"])
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts >= cutoff:
+                        n += 1
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return n
+
+
 def build_health_summary() -> dict:
     """Build aggregated health summary for the health banner."""
 
@@ -705,16 +853,16 @@ def build_health_summary() -> dict:
     except Exception:
         pass
 
-    # Get WAF blocked percentage (estimate from recent logs)
+    # Taux de blocage du WAF sur la derniere heure, rapporte au trafic total
+    # (requetes nginx legitimes de live-hosts + blocages).
     blocked_pct = 0
+    waf_blocks_1h = _count_waf_blocks(60)
     try:
-        waf_log = Path('/var/log/secubox/waf/waf-threats.log')
-        if waf_log.exists():
-            # Count threats in last hour
-            result = run_cmd(['wc', '-l', str(waf_log)])
-            threat_count = int(result.split()[0]) if result else 0
-            # Rough estimate: 1000 requests/hour baseline
-            blocked_pct = min(100, threat_count // 10)
+        lh = live_hosts_agg.current()
+        total_req = int(lh.get("total_requests", 0)) if isinstance(lh, dict) else 0
+        denom = total_req + waf_blocks_1h
+        if denom > 0:
+            blocked_pct = round(waf_blocks_1h / denom * 100, 1)
     except Exception:
         pass
 
@@ -762,6 +910,7 @@ def build_health_summary() -> dict:
         "modules": modules,
         "waf": {
             "blocked_pct": blocked_pct,
+            "blocks_1h": waf_blocks_1h,
             "active": waf_stats.get("mitmproxy_running", False),
             "active_bans": waf_stats.get("active_bans", 0),
             "alerts_today": waf_stats.get("alerts_today", 0)
@@ -926,6 +1075,120 @@ async def cookie_audit_metrics():
     annonce dans le guide produit n'avait aucune route pour se remplir.
     """
     return cookie_audit_agg.current()
+
+
+# ── Audit des cookies (RGPD / ePrivacy, #156 / #159) ─────────────────────────
+# Les trois routes historiques du collecteur, effacees par la fusion
+# 7ebe27403a (branche health-banner perimee) et restaurees ici (#1777, ref
+# #1748). Elles vivent HORS de /api/v1/metrics/ : c'est le chemin qu'appellent
+# le bandeau de sante (SECUBOX_COOKIE_AUDIT_SUMMARY, pose par sbxwaf), le
+# portail et cookie-inventory.js. nginx les relaie par
+# secubox-routes.d/metrics-cookie-audit.conf.
+#
+# GARDES, route par route :
+#  * ingest  — require_lecture. C'est une ECRITURE sur disque : jamais anonyme
+#    depuis Internet. Les navigateurs du LAN (mode tableau de bord) et toute
+#    session valide l'alimentent encore — cookie-inventory.js poste sans
+#    identifiants (credentials:'omit'), un require_jwt l'aurait rendue muette.
+#  * report  — require_jwt (administrateur reel, #1581). Detail par vhost : quels
+#    traceurs, quelles violations. Si des instantanes proviennent d'une
+#    navigation relayee, la liste des hotes EST un historique de navigation.
+#  * summary — require_lecture. Des compteurs seulement ; meme garde que les
+#    autres sources du bandeau (visitor-origin, live-hosts, cert-status).
+from fastapi import Body  # noqa: E402 — garde colle au bloc cookie-audit
+
+INGEST_DIR_FALLBACK = "/var/lib/secubox/cookie-audit/ingest"
+MAX_COOKIES_PER_SNAPSHOT = 200
+MAX_NAME_LEN = 128
+MAX_HASH_LEN = 128
+MAX_UA_LEN = 512
+MAX_REASON_LEN = 32
+# Plafond par fichier d'hote : l'ingestion ajoute sans jamais tronquer, et un
+# client insistant ne doit pas pouvoir remplir le disque de la box.
+MAX_INGEST_FILE_BYTES = 5_000_000
+# Un nom d'hote, rien d'autre : il devient un nom de fichier.
+_HOTE_VALIDE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$")
+
+
+@app.post("/api/v1/cookie-audit/ingest")
+def cookie_audit_ingest(payload: dict = Body(...), _=Depends(require_lecture)):
+    """Recoit un instantane navigateur de document.cookie.
+
+    Empreintes seulement : les valeurs sont hachees (sha256) cote client, la
+    valeur brute ne quitte jamais la page. `def` : ecriture disque, hors de la
+    boucle.
+    """
+    host = (payload.get("host") or "").strip()
+    cookies = payload.get("cookies")
+    if not host or not isinstance(cookies, list):
+        raise HTTPException(status_code=400, detail="host + cookies required")
+    if ".." in host or not _HOTE_VALIDE.match(host):
+        raise HTTPException(status_code=400, detail="invalid host")
+    cfg = get_cookie_audit_config()
+    if not cfg.get("enabled"):
+        raise HTTPException(status_code=403, detail="cookie audit disabled")
+    ingest_dir = Path(cfg.get("ingest_dir", INGEST_DIR_FALLBACK))
+    ingest_dir.mkdir(parents=True, exist_ok=True)
+    out_path = ingest_dir / f"{host}.jsonl"
+    try:
+        if out_path.stat().st_size >= MAX_INGEST_FILE_BYTES:
+            raise HTTPException(status_code=429, detail="ingest quota reached for host")
+    except FileNotFoundError:
+        pass
+    rec = {
+        "ts": str(payload.get("ts") or datetime.now(timezone.utc).isoformat())[:64],
+        "host": host,
+        "path": str(payload.get("path") or "")[:256],
+        "ua": str(payload.get("ua") or "")[:MAX_UA_LEN],
+        "reason": str(payload.get("reason") or "")[:MAX_REASON_LEN],
+        "cookies": [
+            {
+                "name": str(c.get("name", ""))[:MAX_NAME_LEN],
+                "value_hash": str(c.get("value_hash") or "")[:MAX_HASH_LEN],
+            }
+            for c in cookies[:MAX_COOKIES_PER_SNAPSHOT]
+            if isinstance(c, dict)
+        ],
+    }
+    with out_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+    return {"ok": True, "stored": len(rec["cookies"])}
+
+
+@app.get("/api/v1/cookie-audit/report")
+def cookie_audit_report(host: Optional[str] = None, _=Depends(require_jwt)):
+    """Inventaire detaille, tous vhosts ou un seul (`?host=`). ADMIN."""
+    data = cookie_audit_agg.current()
+    if not host:
+        return JSONResponse(
+            content=data,
+            headers={"Cache-Control": "private, max-age=60"},
+        )
+    for h in data.get("hosts", []):
+        if h.get("vhost") == host:
+            return JSONResponse(
+                content={
+                    "enabled": data.get("enabled"),
+                    "generated_at": data.get("generated_at"),
+                    "host": h,
+                },
+                headers={"Cache-Control": "private, max-age=60"},
+            )
+    raise HTTPException(status_code=404, detail="no data for this host")
+
+
+@app.get("/api/v1/cookie-audit/summary")
+def cookie_audit_summary(_=Depends(require_lecture)):
+    """Compteurs de l'audit (bandeau de sante, portail). Aucun nom d'hote."""
+    data = cookie_audit_agg.current()
+    return JSONResponse(
+        content={
+            "enabled": data.get("enabled"),
+            "generated_at": data.get("generated_at"),
+            "summary": data.get("summary", {}),
+        },
+        headers={"Cache-Control": "private, max-age=60"},
+    )
 
 
 @app.get("/api/v1/metrics/cert-status", dependencies=[Depends(require_lecture)])

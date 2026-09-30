@@ -1,3 +1,12 @@
+secubox-core (1.5.44-1~bookworm1) bookworm; urgency=medium
+
+  * get_cookie_audit_config() : restaure le socle RGPD du classifieur et la
+    fusion des motifs de l'exploitant (classifier_override), effacés par la
+    fusion 7ebe27403a (#1777, ref #1748). Sans lui chaque cookie restait
+    « unclassified ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:12:37 +0200
+
 secubox-core (1.5.43-1~bookworm1) bookworm; urgency=high
 
   * adresse_client() (#1753) : l'adresse tracée d'une connexion est lue depuis
