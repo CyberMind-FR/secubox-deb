@@ -231,10 +231,29 @@ Components:
 Signed-By: /etc/apt/keyrings/jitsi.gpg
 SRC
 
+        # UN JITSI INSTALLÉ POUR UN AUTRE DOMAINE (#1731). Le nom est figé à
+        # l'installation (config, certificat, prosody, debconf) ; « déjà
+        # installé » sautait tout, et gk3 restait pour meet.gk2 — le défaut
+        # d'avant #1723. Jitsi ne garde aucune donnée utilisateur et ses
+        # secrets se régénèrent : on purge, puis on réinstalle pour le bon nom.
+        ancien=\$(ls /etc/jitsi/meet/*-config.js 2>/dev/null | head -1 | sed 's|.*/||; s|-config\.js\$||')
+        if [ -n "\$ancien" ] && [ "\$ancien" != "${JITSI_DOMAIN}" ]; then
+            echo "Jitsi configuré pour \$ancien, pas ${JITSI_DOMAIN} : purge puis réinstallation"
+            paquets=\$(dpkg-query -W -f='\${Package} \${db:Status-Abbrev}\n' 'jitsi-*' jicofo prosody 2>/dev/null \
+                | awk '\$2 ~ /^[ih]i/ {print \$1}' | tr '\n' ' ')
+            [ -n "\$paquets" ] && apt-get purge -y \$paquets
+            for p in \$paquets; do echo PURGE | debconf-communicate "\$p" >/dev/null 2>&1 || true; done
+            rm -rf /etc/jitsi "/etc/prosody/conf.d/\$ancien.cfg.lua" "/etc/prosody/conf.avail/\$ancien.cfg.lua" \
+                   /etc/prosody/certs/"\$ancien".* /var/lib/prosody/*
+        fi
+
         # Preseed BEFORE the install: see the block comment above.
+        # jitsi-meet/jvb-hostname aussi : c'est elle qui nomme la config web
+        # (restée à meet.gk2 sur gk3, #1731).
         debconf-set-selections <<SEL
 jitsi-videobridge jitsi-videobridge/jvb-hostname string ${JITSI_DOMAIN}
 jitsi-meet-web-config jitsi-meet/cert-choice select Generate a new self-signed certificate (You will later get a chance to obtain a Let's encrypt certificate)
+jitsi-meet-web-config jitsi-meet/jvb-hostname string ${JITSI_DOMAIN}
 jitsi-meet-prosody jitsi-videobridge/jvb-hostname string ${JITSI_DOMAIN}
 SEL
 
