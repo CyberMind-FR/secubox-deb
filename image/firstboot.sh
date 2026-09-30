@@ -468,10 +468,23 @@ table inet secubox_filter {
     chain forward {
         type filter hook forward priority 0; policy drop;
         ct state established,related accept
+
+        # Conteneurs (br-lxc) vers l'extérieur, et ports explicitement
+        # publiés vers un conteneur (DNAT) — secubox-lxc-reseau (#1721).
+        ct status dnat accept comment "secubox-lxc-dnat"
+        iifname "br-lxc" oifname != "br-lxc" accept comment "secubox-lxc-sortie"
     }
 
     chain output {
         type filter hook output priority 0; policy accept;
+    }
+}
+
+# Sortie des conteneurs — secubox-lxc-reseau (#1721).
+table ip secubox_lxc_nat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 masquerade comment "secubox-lxc"
     }
 }
 NFTEOF

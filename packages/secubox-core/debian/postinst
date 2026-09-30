@@ -364,3 +364,15 @@ fi
 if [ "$1" = "configure" ] && [ -x /usr/sbin/secubox-lxc-racine ]; then
     /usr/sbin/secubox-lxc-racine || true
 fi
+
+# LES CONTENEURS SORTENT (#1721). Une box installée par l'image avait la chaîne
+# forward en drop sans rien pour br-lxc, pas de NAT persistant, et
+# 99-secubox-hardening.conf remettait ip_forward à 0 au démarrage : aucun
+# conteneur n'atteignait un dépôt. Le routage d'abord (fichier livré en
+# /usr/lib/sysctl.d, qui passe après le durcissement), puis le pare-feu —
+# seulement sur un nftables.conf de génération firstboot, validé par nft -c,
+# appliqué règle par règle sans rechargement complet.
+if [ "$1" = "configure" ]; then
+    sysctl -q -p /usr/lib/sysctl.d/99-secubox-zz-lxc-forward.conf 2>/dev/null || true
+    if [ -x /usr/sbin/secubox-lxc-reseau ]; then /usr/sbin/secubox-lxc-reseau || true; fi
+fi

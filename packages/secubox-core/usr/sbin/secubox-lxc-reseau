@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-lxc-reseau — les conteneurs sortent (#1721)
+#
+# POURQUOI. Une box installée par l'image (gk3) reçoit de firstboot un
+# /etc/nftables.conf à table `inet secubox_filter` dont la chaîne forward est
+# en policy drop et n'admet que les connexions établies : rien ne sort de
+# br-lxc. Aucun conteneur n'atteint un dépôt apt, les provisions tournent en
+# boucle sur « Ign deb.debian.org ». Le masquerade que chaque install-lxc pose
+# à la volée (table ip lxc) ne voit jamais un paquet, et disparaît au premier
+# `flush ruleset`. gk2 n'est pas concernée : son fichier est d'une autre
+# génération (forward accept + table ip nat), elle n'est jamais touchée.
+#
+# Ce que l'outil ajoute, et seulement sur un fichier de génération firstboot :
+#   - forward : br-lxc vers l'extérieur ; flux DNATés (ports explicitement
+#     publiés vers un conteneur : jitsi, rtmp de peertube…)
+#   - table ip secubox_lxc_nat : masquerade de 10.100.0.0/24 vers l'extérieur
+# Le fichier est validé par `nft -c` avant d'être remplacé (copie gardée).
+# L'application en direct se fait règle par règle, JAMAIS par rechargement
+# complet : `nft -f /etc/nftables.conf` effacerait les tables tenues à
+# l'exécution (bannissements, liste noire, maillage).
+#
+#   secubox-lxc-reseau            fichier + en direct ; idempotent
+#   secubox-lxc-reseau --fichier  le fichier seul (image, essais)
+#   secubox-lxc-reseau --etat     dit ce qu'il ferait, sans rien toucher
+set -euo pipefail
+readonly MODULE="lxc-reseau"
+readonly VERSION="1.0.0"
+
+readonly CONF="${SECUBOX_NFT_CONF:-/etc/nftables.conf}"
+readonly PONT="br-lxc"
+readonly RESEAU="10.100.0.0/24"
+readonly TABLE="secubox_filter"
+readonly NAT="secubox_lxc_nat"
+readonly R_SORTIE="iifname \"$PONT\" oifname != \"$PONT\" accept comment \"secubox-lxc-sortie\""
+readonly R_DNAT="ct status dnat accept comment \"secubox-lxc-dnat\""
+
+log() { echo "[$MODULE] $*"; }
+
+mode="${1:-auto}"
+case "$mode" in auto|--fichier|--etat) ;; *) echo "usage: $0 [--fichier|--etat]" >&2; exit 2 ;; esac
+
+table_nat() {
+    printf 'table ip %s {\n    chain postrouting {\n        type nat hook postrouting priority srcnat; policy accept;\n        ip saddr %s ip daddr != %s masquerade comment "secubox-lxc"\n    }\n}\n' \
+        "$NAT" "$RESEAU" "$RESEAU"
+}
+
+# ── Le fichier ──────────────────────────────────────────────────────
+fichier() {
+    if [ ! -f "$CONF" ] || ! grep -q "^table inet $TABLE" "$CONF"; then
+        log "$CONF n'est pas de la génération firstboot (table inet $TABLE) — laissé tel quel"
+        return 0
+    fi
+    if grep -q "secubox-lxc-sortie" "$CONF" && grep -q "table ip $NAT" "$CONF"; then
+        log "$CONF : sortie des conteneurs déjà déclarée"
+        return 0
+    fi
+    if [ "$mode" = "--etat" ]; then
+        log "$CONF : ajouterait la sortie de $PONT, les flux DNATés et le masquerade de $RESEAU"
+        return 0
+    fi
+    SBX_SORTIE="$R_SORTIE" SBX_DNAT="$R_DNAT" SBX_NAT="$(table_nat)" python3 - "$CONF" <<'PY'
+import os, re, shutil, subprocess, sys, time
+chemin = sys.argv[1]
+texte = open(chemin).read()
+regles = [os.environ["SBX_DNAT"], os.environ["SBX_SORTIE"]]
+out, dans, fait = [], False, "secubox-lxc-sortie" in texte
+lignes = texte.splitlines(keepends=True)
+for i, l in enumerate(lignes):
+    out.append(l)
+    if fait:
+        continue
+    if re.match(r"^\s*chain\s+forward\s*\{", l):
+        dans = True
+        continue
+    # Après les connexions établies ; à défaut, juste après le hook.
+    if dans and ("ct state established,related accept" in l
+                 or (re.search(r"type filter hook forward", l)
+                     and not any("established,related" in x for x in lignes[i + 1:i + 4]))):
+        retrait = l[: len(l) - len(l.lstrip())]
+        out.append(f"\n{retrait}# Conteneurs (br-lxc) vers l'extérieur, et ports explicitement\n"
+                   f"{retrait}# publiés vers un conteneur (DNAT) — secubox-lxc-reseau (#1721).\n")
+        out.extend(f"{retrait}{r}\n" for r in regles)
+        fait = True
+if not fait:
+    sys.exit("chaîne forward introuvable dans " + chemin)
+nouveau = "".join(out)
+if "table ip secubox_lxc_nat" not in nouveau:
+    nouveau = nouveau.rstrip("\n") + "\n\n# Sortie des conteneurs — secubox-lxc-reseau (#1721).\n" + os.environ["SBX_NAT"] + "\n"
+tmp = chemin + ".sbxtmp"
+open(tmp, "w").write(nouveau)
+if subprocess.run(["nft", "-c", "-f", tmp]).returncode != 0:
+    os.unlink(tmp)
+    sys.exit("nft -c refuse le fichier modifié — rien n'est remplacé")
+shutil.copy2(chemin, f"{chemin}.avant-lxc-reseau-{int(time.time())}")
+os.chmod(tmp, os.stat(chemin).st_mode & 0o7777)
+os.replace(tmp, chemin)
+PY
+    log "$CONF : sortie des conteneurs déclarée (validé par nft -c, copie gardée)"
+}
+
+# ── En direct, sans rechargement complet ────────────────────────────
+direct() {
+    if ! nft list chain inet "$TABLE" forward >/dev/null 2>&1; then
+        log "table inet $TABLE absente du noyau — rien à appliquer en direct"
+        return 0
+    fi
+    local chaine; chaine="$(nft list chain inet "$TABLE" forward)"
+    if [ "$mode" = "--etat" ]; then
+        grep -q "secubox-lxc-sortie" <<<"$chaine" || log "en direct : insérerait la sortie de $PONT"
+        grep -q "secubox-lxc-dnat" <<<"$chaine" || log "en direct : insérerait les flux DNATés"
+        nft list table ip "$NAT" >/dev/null 2>&1 || log "en direct : créerait la table ip $NAT"
+        return 0
+    fi
+    # `insert` = en tête : des accept, l'ordre entre eux est indifférent.
+    grep -q "secubox-lxc-dnat" <<<"$chaine" || nft insert rule inet "$TABLE" forward $R_DNAT
+    grep -q "secubox-lxc-sortie" <<<"$chaine" || nft insert rule inet "$TABLE" forward $R_SORTIE
+    # Remplacement atomique de NOTRE table (création vide puis suppression :
+    # sans erreur qu'elle existe ou non).
+    { printf 'table ip %s {}\ndelete table ip %s\n' "$NAT" "$NAT"; table_nat; } | nft -f -
+    log "en direct : $PONT sort, masquerade de $RESEAU actif"
+}
+
+fichier
+case "$mode" in
+    auto|--etat)
+        # Seulement si le fichier est de génération firstboot : ailleurs (gk2),
+        # le forward et le NAT sont déjà tenus autrement.
+        if [ -f "$CONF" ] && grep -q "^table inet $TABLE" "$CONF"; then direct; fi
+        ;;
+esac
+if [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)" != 1 ]; then
+    log "ATTENTION : net.ipv4.ip_forward = 0 — les conteneurs ne sortiront pas (voir 99-secubox-zz-lxc-forward.conf)"
+fi

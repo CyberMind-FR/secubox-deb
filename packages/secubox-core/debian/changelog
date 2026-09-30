@@ -1,3 +1,10 @@
+secubox-core (1.5.38-1~bookworm1) bookworm; urgency=high
+
+  * secubox-lxc-reseau : sur une box installée par l'image (nftables.conf de génération firstboot, table inet secubox_filter), la chaîne forward était en drop sans rien pour br-lxc et aucun NAT n'était persistant — aucun conteneur n'atteignait un dépôt (gk3 : apt en boucle dans jellyfin). Ajoute la sortie de br-lxc, les flux DNATés et la table ip secubox_lxc_nat ; fichier validé par nft -c avant remplacement (copie gardée), application en direct règle par règle, sans rechargement complet qui effacerait les tables d'exécution. Autres générations (gk2) laissées telles quelles (#1721, #1713).
+  * /usr/lib/sysctl.d/99-secubox-zz-lxc-forward.conf : ip_forward = 1, qui passe après 99-secubox-hardening.conf (ip_forward = 0) ; gk2 ne le tenait que par un fichier posé à la main du même nom (#1721).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 13:05:00 +0200
+
 secubox-core (1.5.37-1~bookworm1) bookworm; urgency=high
 
   * postinst : déclare root:100000:65536 dans /etc/subuid et /etc/subgid — sans elle, newuidmap refuse l'idmap de tous les conteneurs non privilégiés (gk3 : peertube, jellyfin, jitsi, torrent, ytsas ne démarraient pas) ; gk2 l'avait à la main (#1718, #1713).
