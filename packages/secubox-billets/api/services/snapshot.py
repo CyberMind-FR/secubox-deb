@@ -34,6 +34,7 @@ from pathlib import Path
 from urllib.parse import urljoin
 
 import httpx
+from secubox_core.auth import hote_parc
 
 from . import media
 from . import ssrf
@@ -45,7 +46,8 @@ _PT_VIDEO = re.compile(r"//([^/]+)/(?:w|videos/(?:watch|embed))/([0-9A-Za-z-]+)"
 # garde « IP publique » (notre PeerTube résout sur une IP LAN, que le garde SSRF
 # rejetterait). On borne au host EXACT configuré, en https, sans suivre de
 # redirection hors-hôte : un `embed_url` d'auteur ne peut pas détourner le fetch.
-_PT_HOST = os.environ.get("BILLETS_PEERTUBE_HOST", "peertube.gk2.secubox.in").lower()
+# Celui de cette box si PeerTube y est installé, sinon la référence du maillage (#1723).
+_PT_HOST = (os.environ.get("BILLETS_PEERTUBE_HOST") or hote_parc("peertube", "secubox-peertube")).lower()
 
 
 # Miniature YouTube déterministe (i.ytimg est un hôte PUBLIC : le garde SSRF

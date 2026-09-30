@@ -93,7 +93,7 @@ case "$1" in
     if nginx -t >/dev/null 2>&1; then
         systemctl reload nginx 2>/dev/null || true
         if command -v secubox-waf-route >/dev/null 2>&1; then
-            secubox-waf-route "$HOTE" 8910 || true
+            secubox-waf-route "$(secubox-domaine billets)" 8910 || true
         fi
     else
         echo "secubox-billets: nginx -t echoue — route sbxwaf NON posee" >&2

@@ -4,7 +4,7 @@
 # L'ÉMETTEUR est l'adresse publique sous laquelle le Hall sert /oidc/ ; les
 # services (PhotoPrism, Mastodon…) la connaissent et la comparent à l'« iss »
 # de chaque id_token. La changer invalide les connexions en cours.
-issuer = "https://hall.gk2.secubox.in/oidc"
+# issuer = ""  # absent = <nom>.<domaine de la box>, jamais gk2 (#1723)
 
 # Domaine des adresses de courriel synthétiques (personne sans boîte liée) ;
 # vide = dérivé de l'émetteur (hall.<domaine> → <domaine>).

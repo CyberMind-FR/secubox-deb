@@ -87,10 +87,10 @@ def test_admin_password_login_default_off_returns_session(client):
 
 
 def test_admin_enrollment_forced_when_runtime_requires_totp(client):
-    """require_admin_totp=true (webui toggle → runtime file) forces enrollment."""
+    """otp_lan=obligatoire (panneau Utilisateurs → reglages.json) forces enrollment on the LAN."""
     c, users_path, _ = client
     from api import main as auth_main
-    auth_main._AUTH_RUNTIME_FILE.write_text(json.dumps({"require_admin_totp": True}))
+    auth_main._REGLAGES.write_text(json.dumps({"otp_lan": "obligatoire"}))  # #1699 : LAN exigeant
     r = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
     assert r.status_code == 200
     body = r.json()
@@ -140,16 +140,19 @@ def test_settings_endpoint_roundtrip(client):
     ).json()["access_token"]
     h = {"Authorization": f"Bearer {tok}"}
 
-    assert c.get("/settings", headers=h).json() == {"require_admin_totp": False}
+    # #1699 : WAN toujours obligatoire ; seul l'OTP sur le LAN se règle.
+    off = {"otp_lan": "facultatif", "otp_wan": "obligatoire", "require_admin_totp": False}
+    on = {"otp_lan": "obligatoire", "otp_wan": "obligatoire", "require_admin_totp": True}
+    assert c.get("/settings", headers=h).json() == off
 
-    r_on = c.post("/settings", json={"require_admin_totp": True}, headers=h)
+    r_on = c.post("/settings", json={"otp_lan": "obligatoire"}, headers=h)
     assert r_on.status_code == 200
-    assert r_on.json() == {"require_admin_totp": True}
-    assert c.get("/settings", headers=h).json() == {"require_admin_totp": True}
+    assert r_on.json() == on
+    assert c.get("/settings", headers=h).json() == on
 
-    # An admin whose session predates the toggle can still turn it back off.
+    # L'ancien champ reste compris ; une session antérieure peut revenir en arrière.
     r_off = c.post("/settings", json={"require_admin_totp": False}, headers=h)
-    assert r_off.json() == {"require_admin_totp": False}
+    assert r_off.json() == off
 
 
 def test_wrong_password_returns_401(client):
@@ -172,7 +175,7 @@ def test_full_totp_enrollment_then_login(client):
     c, users_path, sessions_path = client
     # Enrollment only triggers when the admin-TOTP requirement is on.
     from api import main as auth_main
-    auth_main._AUTH_RUNTIME_FILE.write_text(json.dumps({"require_admin_totp": True}))
+    auth_main._REGLAGES.write_text(json.dumps({"otp_lan": "obligatoire"}))  # #1699 : LAN exigeant
 
     # 1. Login → enrollment_token
     r1 = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
@@ -230,7 +233,7 @@ def test_totp_widened_window_accepts_drifted_code(client, monkeypatch):
     c, users_path, _ = client
     # Enrollment only triggers when the admin-TOTP requirement is on.
     from api import main as auth_main
-    auth_main._AUTH_RUNTIME_FILE.write_text(json.dumps({"require_admin_totp": True}))
+    auth_main._REGLAGES.write_text(json.dumps({"otp_lan": "obligatoire"}))  # #1699 : LAN exigeant
 
     # Enroll admin
     r1 = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})

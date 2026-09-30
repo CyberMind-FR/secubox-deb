@@ -1,3 +1,9 @@
+secubox-zigbee (2.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * PUBLIC_URL par défaut = zigbee.<domaine de la box> (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-zigbee (2.7.1-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).

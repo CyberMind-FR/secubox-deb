@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 from secubox_core.auth import require_lecture
+from secubox_core.auth import domaine_box
 from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(title="SecuBox Publishing Platform", version="3.0.0")
@@ -852,8 +853,9 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
         infra_status["vhost"] = {"status": "error", "error": str(e)}
         infra_status["certificate"] = {"status": "error", "error": str(e)}
 
-    # 6. DNS - gk2.secubox.in domains use wildcard DNS
-    if domain.endswith(".gk2.secubox.in"):
+    # 6. DNS - le domaine de la box a un joker DNS (celui de CETTE box, #1723)
+    _dom = domaine_box()
+    if _dom and domain.endswith("." + _dom):
         infra_status["dns"] = {"status": "ok", "details": "Wildcard DNS active"}
     else:
         infra_status["dns"] = {"status": "pending", "details": "Manual DNS needed"}

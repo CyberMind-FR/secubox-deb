@@ -59,7 +59,7 @@ if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then
         systemctl reload nginx 2>/dev/null || true
         if command -v secubox-waf-route >/dev/null 2>&1; then
-            secubox-waf-route "$HOTE" 9080 || true
+            secubox-waf-route "$(secubox-domaine mood)" 9080 || true
         fi
     else
         echo "sbxos-audio-mood : nginx -t a échoué, vhost NON activé" >&2

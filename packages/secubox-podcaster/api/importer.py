@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from secubox_core.logger import get_logger
+from secubox_core.auth import REFERENCE, hote_box, hote_parc
 from . import store
 
 log = get_logger("podcaster.importer")
@@ -64,8 +65,10 @@ def _cookies_file() -> Path | None:
             continue
     return None
 BILLETS_DB = "/var/lib/secubox/billets/billets.db"
-BILLETS_PUBLIC = os.environ.get("BILLETS_PUBLIC_URL", "https://billets.gk2.secubox.in")
-PODCASTER_PUBLIC = os.environ.get("PODCASTER_PUBLIC_URL", "https://podcaster.gk2.secubox.in")
+# #1723 : billets consommé (local s'il est installé, sinon la référence) ;
+# le podcaster, lui, est celui de CETTE box.
+BILLETS_PUBLIC = os.environ.get("BILLETS_PUBLIC_URL") or "https://" + hote_parc("billets", "secubox-billets")
+PODCASTER_PUBLIC = os.environ.get("PODCASTER_PUBLIC_URL") or "https://" + (hote_box("podcaster") or "podcaster." + REFERENCE)
 
 _B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 

@@ -34,6 +34,7 @@ from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core import user_store
 from secubox_core.logger import get_logger
 from secubox_core.auth import require_lecture
+from secubox_core.auth import hote_box
 
 app = FastAPI(title="secubox-peertube", version="1.1.0", root_path="/api/v1/peertube")
 
@@ -75,7 +76,8 @@ DEFAULT_CONFIG = {
     "instance_name": "SecuBox PeerTube",
     "short_description": "Federated video platform on SecuBox",
     # Exposure
-    "public_hostname": "peertube.gk2.secubox.in",
+    # Dérivé du domaine de CETTE box (#1723) — jamais celui de gk2.
+    "public_hostname": hote_box("peertube"),
 }
 
 
@@ -85,7 +87,7 @@ DEFAULT_CONFIG = {
 
 class PeerTubeConfig(BaseModel):
     http_port: int = 9000
-    public_hostname: str = "peertube.gk2.secubox.in"
+    public_hostname: str = ""          # vide = peertube.<domaine de la box> (#1723)
     transcoding_enabled: bool = True
     transcoding_threads: int = 2
     hls_enabled: bool = True
@@ -180,6 +182,9 @@ def get_config() -> dict:
                     cfg[k] = v
         except Exception:
             pass
+    # Vide ou absent : le nom de CETTE box (#1723), jamais un Host vide.
+    if not cfg.get("public_hostname"):
+        cfg["public_hostname"] = hote_box("peertube")
     return cfg
 
 
@@ -433,8 +438,8 @@ def status():
         "http_port": cfg.get("http_port", 9000),
         "http_reachable": reachable,
         "data_path": cfg.get("data_path", "/data/peertube"),
-        "domain": cfg.get("public_hostname", "peertube.gk2.secubox.in"),
-        "public_url": f"https://{cfg.get('public_hostname', 'peertube.gk2.secubox.in')}/",
+        "domain": cfg.get("public_hostname") or hote_box("peertube"),
+        "public_url": f"https://{cfg.get('public_hostname') or hote_box('peertube')}/",
         "transcoding_enabled": cfg.get("transcoding_enabled", True),
         "federation_enabled": cfg.get("federation_enabled", True),
         # webui back-compat keys (was Docker; now native-LXC):
@@ -462,7 +467,7 @@ async def get_instance(user=Depends(require_jwt)):
         "terms": cfg.get("terms", ""),
         "signup_enabled": cfg.get("signup_enabled", False),
         "signup_requires_email": cfg.get("signup_requires_email", True),
-        "domain": cfg.get("public_hostname", "peertube.gk2.secubox.in"),
+        "domain": cfg.get("public_hostname") or hote_box("peertube"),
     }
 
 

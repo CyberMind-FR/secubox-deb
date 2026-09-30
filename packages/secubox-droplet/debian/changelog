@@ -1,3 +1,9 @@
+secubox-droplet (1.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * default_domain par défaut = domaine de la box, plus gk2.secubox.in (les dépôts de gk3 se publiaient chez gk2) (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-droplet (1.4.6-1~bookworm1) bookworm; urgency=medium
 
   * vhost : répond aussi à <service>.* — le service de la box sous son propre domaine (gk3.secubox.in…), pour l'exposition par défaut à travers le maillage ; le nom exact de gk2 garde la priorité (#1682, #1623).

@@ -50,7 +50,8 @@ DEFAULT_CONFIG = {
     "metanews_sock": "/run/secubox/metanews.sock",
     "webos_sock": "/run/secubox/webos.sock",
     "billets_sock": "/run/secubox/billets.sock",
-    "peertube_url": "https://peertube.gk2.secubox.in",
+    # Le PeerTube de cette box s'il y est installé, sinon la référence (#1723).
+    "peertube_url": "https://" + _auth.hote_parc("peertube", "secubox-peertube"),
     "bus_cache_s": 45,
     "default_role": "guest",         # rôle du demandeur tant que l'auth n'est pas branchée
     # Niveau 3 (remote) — DÉSACTIVÉ par défaut ; soumis à politique + budget.

@@ -20,5 +20,5 @@ auto_index           = 300          # delay (s) before re-index after UI change;
 originals            = "/data/shared/photos"   # shared with Nextcloud "PhotoLibrary"
 
 [exposure]
-public_hostname = "photoprism.gk2.secubox.in"
+# public_hostname = ""  # absent = <nom>.<domaine de la box>, jamais gk2 (#1723)
 waf_inspect     = false             # photo/video bypass the WAF (gitea pattern)

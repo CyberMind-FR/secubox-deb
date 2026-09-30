@@ -18,6 +18,7 @@ import os
 import re
 import secrets
 import time
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -134,15 +135,39 @@ def _secret() -> str:
 SESSION_COOKIE = "secubox_session"
 
 
-def _cookie_domain() -> Optional[str]:
+def _cookie_domain(request: Optional[Request] = None) -> Optional[str]:
     cfg = get_config("api")
     dom = cfg.get("sso_cookie_domain", "") or os.environ.get("SECUBOX_SSO_COOKIE_DOMAIN", "")
-    return dom or None
+    if request is None:
+        return dom or None
+    # SANS RÉGLAGE, LE DOMAINE DE LA BOX (#1723). gk2 tient `.gk2.secubox.in`
+    # d'une ligne posée à la main ; gk3 ne l'avait pas : la session ouverte sur
+    # admin.gk3 restait à admin.gk3, et le Hall ne voyait personne.
+    if not dom:
+        try:
+            g = str(get_config("global").get("domain", "") or "").strip().lstrip(".").lower()
+        except (OSError, ValueError, AttributeError):
+            g = ""
+        dom = "." + g if g and re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", g) else ""
+    if not dom:
+        return None
+    # Un Domain que l'hôte du navigateur ne couvre pas est REJETÉ par celui-ci :
+    # plus de cookie du tout (kiosque sur hall.localhost, accès par IP). L'hôte
+    # vient de l'Origin — Host est réécrit en « localhost » par l'agrégateur.
+    from . import origine as _o
+    hote = _o.hote_origine(request.headers.get("origin") or "") or \
+        _o.hote_de(request.headers.get("host"))
+    racine = dom.lstrip(".").lower()
+    if hote and hote != "localhost" and not (hote == racine or hote.endswith("." + racine)):
+        return None
+    return dom
 
 
-def set_session_cookie(response: Response, token: str, expires_in: int = 86400) -> None:
+def set_session_cookie(response: Response, token: str, expires_in: int = 86400,
+                       request: Optional[Request] = None) -> None:
     """Public helper so override modules (secubox-auth) emit the same SSO-lite
-    session cookie on their own login-success paths."""
+    session cookie on their own login-success paths. `request` lets the cookie
+    take the box's domain when none is configured (#1723)."""
     response.set_cookie(
         key=SESSION_COOKIE,
         value=token,
@@ -156,7 +181,7 @@ def set_session_cookie(response: Response, token: str, expires_in: int = 86400) 
         # jettera. SECUBOX_COOKIE_SAMESITE ferme la porte si l'operateur le
         # veut, au prix de l'affichage encadre.
         samesite=_samesite(True),   # secure=True juste au-dessus
-        domain=_cookie_domain(),
+        domain=_cookie_domain(request),
         path="/",
     )
 
@@ -347,6 +372,34 @@ def domaine_box() -> str:
         except (OSError, ValueError, AttributeError):
             dom = ""
     return dom.strip().lstrip(".").lower() if isinstance(dom, str) else ""
+
+
+def hote_box(prefixe: str) -> str:
+    """`<prefixe>.<domaine de la box>` ; "" si le domaine est inconnu (#1723).
+
+    Un nom de service se DÉRIVE du domaine de la box, il ne s'écrit pas :
+    `peertube.gk2.secubox.in` codé en dur envoyait gk3 chez gk2."""
+    dom = domaine_box()
+    return f"{prefixe}.{dom}" if dom and prefixe else dom
+
+
+# Le nœud de référence du maillage : celui qui sert un service qu'une box n'a
+# pas elle-même (même valeur que REFERENCE dans webos/www/hall/domaine.js).
+REFERENCE = "gk2.secubox.in"
+_DPKG_INFO = Path("/var/lib/dpkg/info")
+
+
+def hote_parc(prefixe: str, paquet: str) -> str:
+    """Le service `prefixe` qu'on CONSOMME : celui de cette box si `paquet` y
+    est installé, sinon celui du nœud de référence (#1723).
+
+    C'est la règle du Hall — le local s'il existe, le maillage en repli —
+    appliquée côté serveur (zia → peertube, billets → peertube…)."""
+    if (_DPKG_INFO / f"{paquet}.list").exists():
+        local = hote_box(prefixe)
+        if local and local != prefixe:
+            return local
+    return f"{prefixe}.{REFERENCE}"
 
 
 def garde_origine(request: Request, payload: Optional[Dict[str, Any]] = None) -> None:
@@ -623,7 +676,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
     tok = create_token(req.username, jti=jti)
     # SSO-lite: also drop a parent-domain session cookie so nginx auth_request
     # (GET /auth/verify) gates sibling vhosts with this one login.
-    set_session_cookie(response, tok)
+    set_session_cookie(response, tok, request=request)
     _emit_session_event("login_success", req.username, {
         "jti": jti,
         "expires_in": 86400,
@@ -710,7 +763,7 @@ async def verify(request: Request):
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
     """Clear the SSO-lite session cookie."""
-    response.delete_cookie(SESSION_COOKIE, domain=_cookie_domain(), path="/")
+    response.delete_cookie(SESSION_COOKIE, domain=_cookie_domain(request), path="/")
     return {"ok": True}

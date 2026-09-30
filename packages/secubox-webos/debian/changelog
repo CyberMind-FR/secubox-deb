@@ -1,3 +1,9 @@
+secubox-webos (1.0.385-1~bookworm1) bookworm; urgency=medium
+
+  * route hall déclarée sous le nom de cette box, alias hall.gk2.net seulement sur gk2 ; verdict LAN transmis sur /__console/jeton (le test de garde échouait depuis #1695) (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-webos (1.0.384-1~bookworm1) bookworm; urgency=medium
 
   * hôtes locaux : une réponse 421 (nom non routé par le frontal / le relais) n'est plus « joignable » — le Hall de gk3 envoyait peertube, photoprism, jellyfin, gitea, meet et ytsas vers ses propres services à l'arrêt au lieu de leur équivalent sur un autre nœud du maillage (#1714, #1713).

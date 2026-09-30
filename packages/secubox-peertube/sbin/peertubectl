@@ -41,7 +41,7 @@ LXC_NAME=$(config_get "name" "peertube")
 LXC_IP=$(config_get "ip" "10.100.0.120")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "9000")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "peertube.gk2.secubox.in")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "$(secubox-domaine peertube)")
 
 OPS_DIR="${SECUBOX_PEERTUBE_OPS_DIR:-/run/secubox/peertube/ops}"
 # Results go in a SEPARATE dir from requests: the peertube-ops.path unit watches

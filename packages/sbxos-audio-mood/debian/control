@@ -8,7 +8,7 @@ Homepage: https://secubox.in
 
 Package: sbxos-audio-mood
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, secubox-core (>= 1.5.33)
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, secubox-core (>= 1.5.39~)
 Replaces: gabriel-mood (<< 0.10.0~)
 Breaks: gabriel-mood (<< 0.10.0~)
 Recommends: nginx

@@ -114,7 +114,10 @@
 
 <script>
 (function(){
-  var FALLBACK = "https://billets.gk2.secubox.in";
+  // Le billets de CETTE box (#1723) : le panneau vit sur admin.<domaine>.
+  var FALLBACK = (function (h) {
+    return 'https://billets.' + ((h.indexOf('.') > 0 && !/^[0-9.]+$/.test(h)) ? h.slice(h.indexOf('.') + 1) : 'gk2.secubox.in');
+  })(location.hostname);
   var EMOJI_ORDER = ["👍","❤️","😂","😮","😢","🔥"];
   function esc(s){return String(s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});}
   function toast(msg,err){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(err?' error':'');setTimeout(function(){t.className='toast';},2600);}

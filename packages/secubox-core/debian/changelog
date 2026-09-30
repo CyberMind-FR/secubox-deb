@@ -1,3 +1,10 @@
+secubox-core (1.5.39-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-domaine (le domaine de CETTE box, `secubox-domaine meet` → meet.<domaine>) et secubox_core.auth.hote_box / hote_parc / REFERENCE : un nom de service se dérive, il ne s'écrit pas en gk2. postinst : `secubox-domaine --migrer` réécrit les *.gk2.secubox.in des réglages d'une box qui n'est pas gk2 (copie gardée, commentaires intacts) ; sans effet sur gk2 (#1723, #1713).
+  * Cookie de session : sans [api] sso_cookie_domain, il prend le domaine de la box ([global] domain) — gk3 n'avait pas la ligne posée à la main sur gk2 ; la session ouverte sur admin.gk3 n'atteignait jamais hall.gk3. Seulement quand l'hôte du navigateur (Origin) est sous ce domaine : kiosque (hall.localhost) et accès par IP gardent un cookie d'hôte, qu'un Domain étranger ferait rejeter (#1723).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-core (1.5.38-1~bookworm1) bookworm; urgency=high
 
   * secubox-lxc-reseau : sur une box installée par l'image (nftables.conf de génération firstboot, table inet secubox_filter), la chaîne forward était en drop sans rien pour br-lxc et aucun NAT n'était persistant — aucun conteneur n'atteignait un dépôt (gk3 : apt en boucle dans jellyfin). Ajoute la sortie de br-lxc, les flux DNATés et la table ip secubox_lxc_nat ; fichier validé par nft -c avant remplacement (copie gardée), application en direct règle par règle, sans rechargement complet qui effacerait les tables d'exécution. Autres générations (gk2) laissées telles quelles (#1721, #1713).

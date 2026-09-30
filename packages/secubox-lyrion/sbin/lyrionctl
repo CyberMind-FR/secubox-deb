@@ -57,7 +57,7 @@ LXC_NAME=$(config_get "name" "lyrion")
 LXC_IP=$(config_get "ip" "10.100.0.100")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "3000")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "lyrion.gk2.secubox.in")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "$(secubox-domaine lyrion)")
 
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 # LE PANNEAU INTERROGE SOUS `secubox`, PAS SOUS ROOT (#1573). lxc-info ne voit

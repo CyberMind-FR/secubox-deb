@@ -1,3 +1,9 @@
+secubox-oidc (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * émetteur par défaut = le Hall de CETTE box ; oidc.toml ne fige plus hall.gk2 (sur gk2, l'émetteur dérivé est identique) (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-oidc (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Fournisseur OpenID Connect adossé à la session SecuBox (#1589, #1562) :

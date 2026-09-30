@@ -1,3 +1,9 @@
+secubox-streamlit (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * domaine des instances et vhost_suffix = domaine de la box (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-streamlit (1.4.3-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

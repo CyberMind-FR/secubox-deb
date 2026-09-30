@@ -9,7 +9,7 @@ Homepage: https://secubox.in
 Package: secubox-oidc
 Architecture: all
 Depends: ${misc:Depends},
-         secubox-core (>= 1.5.30),
+         secubox-core (>= 1.5.39~),
          secubox-aggregator,
          python3,
          python3-jwt,

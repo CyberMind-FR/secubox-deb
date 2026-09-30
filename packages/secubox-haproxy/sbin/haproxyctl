@@ -22,7 +22,14 @@ CONF_PATH="${SECUBOX_HAPROXY_CONF:-/etc/secubox/haproxy.toml}"
 # Qui a le droit d'encadrer un vhost marque `cadrable = true` (#1257).
 # EXPLICITE et surchargeable : `*` accepterait n'importe quel site, ce qui est
 # l'attaque meme que frame-ancestors existe pour empecher.
-CADRE_ANCETRES="${SECUBOX_FRAME_ANCESTORS:-'self' https://hall.gk2.secubox.in https://hall.gk2.net https://billets.gk2.secubox.in}"
+# Le Hall et billets de CETTE box (#1723) — hall.gk2 figé laissait gk3 refuser
+# d'être encadrée par son propre Hall. gk2 garde son alias public hall.gk2.net.
+_D="$(secubox-domaine 2>/dev/null || true)"
+_CADRE="'self'"
+[ -n "$_D" ] && _CADRE+=" https://hall.$_D"
+[ "$_D" = "gk2.secubox.in" ] && _CADRE+=" https://hall.gk2.net"
+[ -n "$_D" ] && _CADRE+=" https://billets.$_D"
+CADRE_ANCETRES="${SECUBOX_FRAME_ANCESTORS:-$_CADRE}"
 # + les Halls du parc relayés par cette box (#1672, secubox-halls-parc) :
 # origines https strictes seulement — un espace ou un `;` casserait la CSP.
 if [ -r /var/lib/secubox/halls-parc/origines.txt ]; then

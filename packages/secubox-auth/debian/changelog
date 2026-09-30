@@ -1,3 +1,11 @@
+secubox-auth (1.1.13-1~bookworm1) bookworm; urgency=high
+
+  * Connexion : le cookie de session reçoit la requête, pour prendre le domaine de la box quand aucun n'est réglé — la connexion sur gk3 ne se propageait pas au Hall (#1723).
+  * Connexion : une config illisible ne fait plus échouer le login sur la vérification du compte console (refus maintenu, nom par défaut).
+  * tests : test_auth_flows suit le modèle OTP de #1699 (reglages.json, otp_lan) — 5 tests échouaient depuis.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 13:05:08 +0200
+
 secubox-auth (1.1.12-1~bookworm1) bookworm; urgency=critical
 
   * première configuration d'un compte réservée au réseau local, et seulement pour un compte sans mot de passe ; un compte « à changer » avec mot de passe : changement imposé, jamais de session directe ; depuis le WAN, un compte « à changer » ne s'ouvre pas (#1707).

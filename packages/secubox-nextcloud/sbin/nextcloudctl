@@ -37,7 +37,7 @@ config_get() {
 }
 
 HTTP_PORT=$(config_get "http_port" "9080")
-DOMAIN=$(config_get "domain" "cloud.local")
+DOMAIN=$(config_get "domain" "$(secubox-domaine nc 2>/dev/null || echo cloud.local)")  # #1723
 ADMIN_USER=$(config_get "admin_user" "ncadmin")
 DB_TYPE=$(config_get "db_type" "sqlite")
 

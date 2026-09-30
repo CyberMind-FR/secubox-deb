@@ -63,7 +63,7 @@ case "$1" in
         # ROUTE SBXWAF posée par le paquet (#1323) : hors on-demand, sans elle
         # lyrion.gk2 rendrait 421.
         if command -v secubox-waf-route >/dev/null 2>&1; then
-            secubox-waf-route lyrion.gk2.secubox.in 9080 || true
+            secubox-waf-route "$(secubox-domaine lyrion)" 9080 || true
         fi
         systemctl disable secubox-lyrion.service 2>/dev/null || true
         ;;

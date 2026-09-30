@@ -376,3 +376,12 @@ if [ "$1" = "configure" ]; then
     sysctl -q -p /usr/lib/sysctl.d/99-secubox-zz-lxc-forward.conf 2>/dev/null || true
     if [ -x /usr/sbin/secubox-lxc-reseau ]; then /usr/sbin/secubox-lxc-reseau || true; fi
 fi
+
+# LE DOMAINE DE CETTE BOX (#1723). Trente paquets prenaient *.gk2.secubox.in
+# pour défaut : une box qui n'est pas gk2 (gk3) a écrit des noms de gk2 dans
+# ses réglages — jitsi pour meet.gk2, la carlette d'accès vers hall.gk2… Sur
+# une telle box, ces noms deviennent <x>.<son domaine> (copie de chaque
+# fichier, commentaires intacts). Sur gk2 : rien.
+if [ "$1" = "configure" ] && [ -x /usr/bin/secubox-domaine ]; then
+    /usr/bin/secubox-domaine --migrer || true
+fi

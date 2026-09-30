@@ -10,7 +10,7 @@ lxc_ip   = "10.100.0.190"
 # provisionnement (préconfiguration debconf). Le changer ici après coup ne
 # suffit PAS — il faut re-provisionner, sinon prosody, jicofo, le videobridge
 # et nginx ne s'accordent plus et aucune conférence ne se forme.
-domain = "meet.gk2.secubox.in"
+# domain = ""  # absent = <nom>.<domaine de la box>, jamais gk2 (#1723)
 
 # Tier web servi par le nginx interne au conteneur ; HAProxy termine le TLS.
 web_port = 80

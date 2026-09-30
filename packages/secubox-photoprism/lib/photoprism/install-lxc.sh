@@ -25,7 +25,8 @@ readonly SHARED_PHOTOS="${SECUBOX_SHARED_PHOTOS:-/data/shared/photos}"
 readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/photoprism}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
 readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
-readonly PUBLIC_HOSTNAME="${SECUBOX_PHOTOPRISM_HOSTNAME:-photoprism.gk2.secubox.in}"
+# Nom dérivé du domaine de CETTE box, jamais celui de gk2 (#1723).
+readonly PUBLIC_HOSTNAME="${SECUBOX_PHOTOPRISM_HOSTNAME:-$(secubox-domaine photoprism 2>/dev/null || true)}"
 readonly IMAGE="${SECUBOX_PHOTOPRISM_IMAGE:-docker.io/photoprism/photoprism:latest}"
 readonly HTTP_PORT="${SECUBOX_PHOTOPRISM_PORT:-2342}"
 # PhotoPrism's built-in auto-index only fires for its own UI uploads; the
@@ -36,6 +37,7 @@ readonly LXC_ROOT_UID="${SECUBOX_LXC_ROOT_UID:-100000}"
 
 log()  { printf '[photoprism-install] %s\n' "$*"; }
 fail() { printf '[photoprism-install] ERROR: %s\n' "$*" >&2; exit 1; }
+[ -n "$PUBLIC_HOSTNAME" ] || fail "domaine de la box inconnu ([global] domain) — SECUBOX_PHOTOPRISM_HOSTNAME ou secubox-domaine"
 la() { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- "$@"; }
 
 # ── Preflight ────────────────────────────────────────────────────────────────

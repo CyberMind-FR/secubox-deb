@@ -29,13 +29,15 @@ readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/peertube}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
 readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
 # Public hostname baked into PeerTube's webserver config. Override per board.
-readonly PUBLIC_HOSTNAME="${SECUBOX_PEERTUBE_HOSTNAME:-peertube.gk2.secubox.in}"
+# Nom dérivé du domaine de CETTE box, jamais celui de gk2 (#1723).
+readonly PUBLIC_HOSTNAME="${SECUBOX_PEERTUBE_HOSTNAME:-$(secubox-domaine peertube 2>/dev/null || true)}"
 # LXC root's host-side UID (idmap u 0 100000) — bind-mounts must be owned by
 # this so LXC root can chown them to the in-container service UIDs.
 readonly LXC_ROOT_UID="${SECUBOX_LXC_ROOT_UID:-100000}"
 
 log()  { printf '[peertube-install] %s\n' "$*"; }
 fail() { printf '[peertube-install] ERROR: %s\n' "$*" >&2; exit 1; }
+[ -n "$PUBLIC_HOSTNAME" ] || fail "domaine de la box inconnu ([global] domain) — SECUBOX_PEERTUBE_HOSTNAME ou secubox-domaine"
 
 la() { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- "$@"; }
 

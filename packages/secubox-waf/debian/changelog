@@ -1,3 +1,9 @@
+secubox-waf (1.10.37-1~bookworm1) bookworm; urgency=medium
+
+  * route postinst déclarée sous le nom de cette box (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-waf (1.10.36-1~bookworm1) bookworm; urgency=high
 
   * /bans : verdict « application » (appliquee, table_absente, waf_arrete, desactive) — une table nft effacée ou un sbxwaf arrêté s'affichaient « aucun bannissement actif » (#1693).

@@ -1,3 +1,9 @@
+secubox-haproxy (1.8.19-1~bookworm1) bookworm; urgency=medium
+
+  * frame-ancestors par défaut : le Hall et billets de CETTE box (gk3 refusait d'être encadrée par son propre Hall) ; hall.gk2.net seulement sur gk2 (#1723, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:58:03 +0200
+
 secubox-haproxy (1.8.18-1~bookworm1) bookworm; urgency=medium
 
   * haproxyctl generate : champs de tous les vhosts lus en une passe (_vhosts_champs) au lieu d'une vingtaine de sous-processus par vhost — 35,9 s → 3,0 s sur gk2 (119 vhosts), d'où ~45 s de moins à l'étape Service d'une publication metablogizer. haproxy.cfg généré identique à l'octet (config réelle de gk2 et config piège : doublon, désactivé, bypass, cadrable, cookies tiers, préfixe, blancs, commentaires) (#1685).

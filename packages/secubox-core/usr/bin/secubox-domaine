@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: core — le domaine de CETTE box (#1723)
+CyberMind — https://cybermind.fr
+
+Une trentaine de paquets prenaient `*.gk2.secubox.in` pour valeur par défaut :
+sur gk3, jitsi s'installait pour meet.gk2, peertube figeait peertube.gk2 comme
+nom public, la carlette d'accès renvoyait vers hall.gk2. Un nom de service se
+DÉRIVE du domaine de la box (`secubox_core.auth.domaine_box()`), il ne
+s'écrit pas.
+
+    secubox-domaine              gk3.secubox.in
+    secubox-domaine meet         meet.gk3.secubox.in
+    secubox-domaine --migrer     réécrit les noms gk2 de /etc/secubox/**.toml
+    secubox-domaine --etat       dit ce que --migrer ferait
+
+Domaine inconnu : rien sur la sortie, code 1 — l'appelant décide, il ne reçoit
+jamais un nom d'une autre box.
+
+--migrer ne fait rien sur gk2 elle-même. Ailleurs, un `<x>.gk2.secubox.in`
+dans un réglage est un défaut livré ou dérivé à tort, jamais un choix : il
+devient `<x>.<domaine>`. Lignes de commentaire intactes, copie de chaque
+fichier modifié, fichiers *.example ignorés.
+"""
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import sys
+import time
+from pathlib import Path
+
+RACINE = Path(os.environ.get("SECUBOX_DOMAINE_RACINE", "/etc/secubox"))
+GK2 = "gk2.secubox.in"
+PREFIXE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+# `gk2.secubox.in`, `.gk2.secubox.in`, `peertube.gk2.secubox.in`… — pas
+# `xgk2.secubox.in` ni `gk2.secubox.info`.
+NOM_GK2 = re.compile(r"(?<![a-z0-9-])((?:[a-z0-9-]+\.)*)gk2\.secubox\.in(?![a-z0-9-])")
+
+
+def domaine() -> str:
+    forcé = os.environ.get("SECUBOX_DOMAINE", "").strip().lstrip(".").lower()
+    if forcé:
+        return forcé
+    try:
+        from secubox_core.auth import domaine_box
+        return domaine_box()
+    except Exception:  # noqa: BLE001 — bibliothèque absente = domaine inconnu
+        return ""
+
+
+def reecrire(texte: str, dom: str) -> tuple[str, int]:
+    n, out = 0, []
+    for ligne in texte.splitlines(keepends=True):
+        if ligne.lstrip().startswith("#"):
+            out.append(ligne)
+            continue
+        nouvelle, k = NOM_GK2.subn(lambda m: m.group(1) + dom, ligne)
+        n += k
+        out.append(nouvelle)
+    return "".join(out), n
+
+
+def migrer(etat: bool) -> int:
+    dom = domaine()
+    if not dom:
+        print("secubox-domaine: domaine de la box inconnu — rien à migrer", file=sys.stderr)
+        return 0
+    if dom == GK2:
+        return 0
+    horodatage = int(time.time())
+    for chemin in sorted(set(RACINE.glob("*.toml")) | set(RACINE.glob("*/*.toml"))):
+        if not chemin.is_file() or chemin.is_symlink():
+            continue
+        try:
+            texte = chemin.read_text()
+        except (OSError, UnicodeDecodeError):
+            continue
+        nouveau, n = reecrire(texte, dom)
+        if not n:
+            continue
+        if etat:
+            print(f"{chemin} : {n} nom(s) gk2 → {dom}")
+            continue
+        shutil.copy2(chemin, f"{chemin}.avant-domaine-{horodatage}")
+        tmp = chemin.with_name(chemin.name + ".sbxtmp")
+        tmp.write_text(nouveau)
+        st = chemin.stat()
+        os.chmod(tmp, st.st_mode & 0o7777)
+        try:
+            os.chown(tmp, st.st_uid, st.st_gid)
+        except PermissionError:
+            pass
+        os.replace(tmp, chemin)
+        print(f"secubox-domaine: {chemin} : {n} nom(s) gk2 → {dom}")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if argv[1:2] == ["--migrer"]:
+        return migrer(etat=False)
+    if argv[1:2] == ["--etat"]:
+        return migrer(etat=True)
+    if len(argv) > 2 or (len(argv) == 2 and not PREFIXE.match(argv[1])):
+        print("usage: secubox-domaine [préfixe | --migrer | --etat]", file=sys.stderr)
+        return 2
+    dom = domaine()
+    if not dom:
+        return 1
+    print(f"{argv[1]}.{dom}" if len(argv) == 2 else dom)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

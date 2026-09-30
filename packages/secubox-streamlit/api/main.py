@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from secubox_core.auth import require_lecture
+from secubox_core.auth import domaine_box, hote_box
 from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
@@ -882,7 +883,7 @@ async def list_autostart():
     """List instances configured for autostart (public)."""
     cfg = _load_streamlit_config()
     if not cfg:
-        return {"autostart": [], "vhost_suffix": "gk2.secubox.in"}
+        return {"autostart": [], "vhost_suffix": domaine_box()}
 
     autostart_list = []
     instances = cfg.get("instances", {})
@@ -892,14 +893,14 @@ async def list_autostart():
                 "name": name,
                 "app": inst.get("app", name),
                 "port": inst.get("port"),
-                "domain": inst.get("domain", f"{name}.gk2.secubox.in"),
+                "domain": inst.get("domain") or hote_box(name),
                 "emancipated": inst.get("emancipated", False),
             })
 
     return {
         "autostart": autostart_list,
         "count": len(autostart_list),
-        "vhost_suffix": "gk2.secubox.in",
+        "vhost_suffix": domaine_box(),  # celui de CETTE box (#1723)
     }
 
 
