@@ -1,3 +1,11 @@
+secubox-certs (1.2.4-1~bookworm1) bookworm; urgency=high
+
+  * Restaure un contrôle de #942 effacé par la fusion aff481735 (#1748,
+    #1749) : émettre, renouveler (un ou tous) et révoquer un certificat
+    exigent un compte admin actif. Tests épinglés et suite ajoutée à la CI.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 18:11:37 +0200
+
 secubox-certs (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * LA PAGE DES CERTIFICATS N'INVENTE PLUS DE DONNEES. Quand l'API tombait,

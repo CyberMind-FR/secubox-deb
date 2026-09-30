@@ -39,6 +39,26 @@ from secubox_core.auth import require_jwt
 app = FastAPI(title="secubox-certs", version="1.0.0", root_path="/api/v1/certs")
 router = APIRouter()
 
+
+def require_admin(user=Depends(require_jwt)) -> dict:
+    """Émettre, renouveler ou révoquer un certificat change ce que TOUTE la box
+    présente au monde : une session ordinaire ne le peut pas (#942).
+
+    Posé par e5f5a7e13 puis effacé par la fusion aff481735 (#1748, #1749) :
+    pendant six semaines, n'importe quel compte connecté pouvait révoquer les
+    certificats de la box. Le rôle vit dans le magasin des comptes (le jeton ne
+    porte que sub/jti) ; un compte désactivé n'est plus admin.
+    """
+    from secubox_core import user_store
+    sub = user.get("sub", "") if isinstance(user, dict) else ""
+    try:
+        u = user_store.get_user(sub) or {}
+    except Exception:
+        u = {}
+    if u.get("role") != "admin" or not u.get("enabled", True):
+        raise HTTPException(status_code=403, detail="Admin requis")
+    return user
+
 # Configuration
 CERTS_DIR = Path("/data/haproxy/certs")
 ACME_DIR = Path("/etc/letsencrypt")
@@ -486,7 +506,7 @@ def check_domain(req: CertRequest):
     }
 
 
-@router.post("/issue", dependencies=[Depends(require_jwt)])
+@router.post("/issue", dependencies=[Depends(require_admin)])
 def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks):
     """Issue a new certificate via ACME."""
     domain = req.domain
@@ -556,7 +576,7 @@ def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks):
     return {"success": False, "error": "Certificate files not found after issuance"}
 
 
-@router.post("/renew/{domain}", dependencies=[Depends(require_jwt)])
+@router.post("/renew/{domain}", dependencies=[Depends(require_admin)])
 async def renew_certificate(domain: str):
     """Renew a specific certificate."""
     # Find existing cert
@@ -593,7 +613,7 @@ async def renew_certificate(domain: str):
     }
 
 
-@router.post("/renew-all", dependencies=[Depends(require_jwt)])
+@router.post("/renew-all", dependencies=[Depends(require_admin)])
 async def renew_all_expiring():
     """Renew all certificates expiring within 30 days."""
     certs = _certs_cache if _certs_cache else scan_certificates()
@@ -617,7 +637,7 @@ async def renew_all_expiring():
     }
 
 
-@router.delete("/revoke/{domain}", dependencies=[Depends(require_jwt)])
+@router.delete("/revoke/{domain}", dependencies=[Depends(require_admin)])
 def revoke_certificate(domain: str):
     """Revoke and delete a certificate."""
     pem_path = CERTS_DIR / f"{domain}.pem"

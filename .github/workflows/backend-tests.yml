@@ -36,6 +36,7 @@ on:
       - 'packages/secubox-zia/**'
       - 'packages/secubox-bbs/**'
       - 'packages/secubox-toolbox-ng/**'
+      - 'packages/secubox-certs/**'
       # Fichiers hors de ces paquets que les suites lisent aussi :
       # manifeste podcaster (zia), annuaire (secubox_core), exemple de
       # configuration (zia, sbxid), menus de tous les paquets (webos).
@@ -81,6 +82,10 @@ jobs:
             chemin: packages/secubox-sbxid/tests
           - suite: secubox-zia
             chemin: packages/secubox-zia/tests
+          # Garde admin des verbes qui changent les certificats (#1749) :
+          # effacée une fois par une fusion sans qu'aucun test ne proteste.
+          - suite: secubox-certs
+            chemin: packages/secubox-certs/tests
     env:
       # Versions de la box de référence (bookworm + pip dans /usr/local).
       # pytest et pytest-asyncio n'y sont pas installés : outillage CI seul.
