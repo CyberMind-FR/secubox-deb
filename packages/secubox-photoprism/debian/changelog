@@ -1,3 +1,25 @@
+secubox-photoprism (1.3.8-1~bookworm1) bookworm; urgency=medium
+
+  * Routes de l'API reprises (#1747) :
+    - POST /config et /faces/enable|disable ne réécrivent plus
+      /etc/secubox/photoprism.toml À PLAT (les sections [lxc], [photoprism]
+      et [exposure] — adresse du conteneur, fichier du mot de passe, nom
+      public — disparaissaient ; leurs champs n'étaient lus par personne) :
+      ils disent où vivent les réglages, sans rien modifier ;
+    - /restore retiré : il extrayait une archive désignée par un chemin
+      libre du client, et aucune page ne l'appelait ;
+    - /backup passe par le nouveau verbe root `photoprismctl backup`
+      (sudoers : verbe nommé, sans argument), destination fixe
+      /var/backups/secubox/photoprism, instantané SQLite de index.db,
+      sans le cache, cinq archives gardées ; détaché (coupure HAProxy 30 s) ;
+    - /library/stats et /storage servis depuis un cache (10 min, valeur
+      périmée rendue puis rafraîchie en tâche de fond) ; /library/stats ne
+      bloque plus la boucle (rglob dans un `async def`).
+  * api/tests/test_api_1747.py : chaque route de la page existe ; réglages,
+    restauration, sauvegarde et cache vérifiés (6 échecs sur l'API d'avant).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 22:40:00 +0200
+
 secubox-photoprism (1.3.7-1~bookworm1) bookworm; urgency=medium
 
   * Chemin privilégié pour l'interface (#1745) : l'API (secubox) appelle

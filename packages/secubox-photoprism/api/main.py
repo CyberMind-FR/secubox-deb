@@ -11,6 +11,8 @@ face recognition, album management, and storage configuration.
 import asyncio
 import subprocess
 import json
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -75,21 +77,6 @@ DEFAULT_CONFIG = {
 # Models
 # ============================================================================
 
-class PhotoprismConfig(BaseModel):
-    enabled: bool = False
-    port: int = 2342
-    data_path: str = "/srv/photoprism"
-    originals_path: str = "/srv/photoprism/originals"
-    import_path: str = "/srv/photoprism/import"
-    timezone: str = "Europe/Paris"
-    domain: str = "photos.secubox.local"
-    haproxy: bool = False
-    face_recognition: bool = True
-    experimental: bool = False
-    readonly: bool = False
-    public: bool = False
-
-
 class AlbumCreate(BaseModel):
     title: str
     description: str = ""
@@ -99,10 +86,6 @@ class UserCreate(BaseModel):
     username: str
     password: str
     role: str = "viewer"  # admin, viewer
-
-
-class RestoreRequest(BaseModel):
-    path: str
 
 
 # ============================================================================
@@ -127,20 +110,36 @@ def get_config() -> dict:
     return cfg
 
 
-def save_config(config: dict):
-    """Save photoprism configuration."""
-    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["# PhotoPrism configuration"]
-    for k, v in config.items():
-        if isinstance(v, bool):
-            lines.append(f"{k} = {str(v).lower()}")
-        elif isinstance(v, int):
-            lines.append(f"{k} = {v}")
-        elif isinstance(v, list):
-            lines.append(f'{k} = {v}')
-        else:
-            lines.append(f'{k} = "{v}"')
-    CONFIG_FILE.write_text("\n".join(lines) + "\n")
+# Mesures coûteuses (rglob, du) : servies depuis un cache (#1747). Une valeur
+# périmée est rendue aussitôt et recalculée en tâche de fond — jamais un `du`
+# de 30 s par requête derrière la coupure d'HAProxy à 30 s d'inactivité.
+_MESURES_TTL = 600.0
+_mesures: dict = {}
+_mesures_verrou = threading.Lock()
+
+
+def _mesure(cle: str, calcul):
+    with _mesures_verrou:
+        m = _mesures.get(cle)
+        frais = m is not None and time.monotonic() - m["t"] < _MESURES_TTL
+        if m is not None and not frais and not m.get("en_cours"):
+            m["en_cours"] = True
+
+            def _rafraichir():
+                try:
+                    v = calcul()
+                    with _mesures_verrou:
+                        _mesures[cle] = {"t": time.monotonic(), "v": v}
+                except Exception:
+                    with _mesures_verrou:
+                        m["en_cours"] = False
+            threading.Thread(target=_rafraichir, daemon=True).start()
+    if m is not None:
+        return m["v"]
+    v = calcul()
+    with _mesures_verrou:
+        _mesures[cle] = {"t": time.monotonic(), "v": v}
+    return v
 
 
 def http_reachable() -> bool:
@@ -382,13 +381,16 @@ async def get_photoprism_config(user=Depends(require_jwt)):
 
 
 @router.post("/config")
-async def set_photoprism_config(config: PhotoprismConfig, user=Depends(require_jwt)):
-    """Update PhotoPrism configuration."""
-    cfg = get_config()
-    cfg.update(config.dict())
-    save_config(cfg)
-    log.info(f"Config updated by {user.get('sub', 'unknown')}")
-    return {"success": True}
+async def set_photoprism_config(user=Depends(require_jwt)):
+    """Ne réécrit plus /etc/secubox/photoprism.toml (#1747).
+
+    L'ancienne version l'écrivait À PLAT : les sections [lxc], [photoprism] et
+    [exposure] — adresse du conteneur, fichier du mot de passe, nom public —
+    disparaissaient, et photoprismctl repartait sur ses défauts. Ses champs
+    (chemins /srv, domaine, « public »…) n'étaient de toute façon lus par
+    personne. Les réglages vivent dans le fichier, appliqués par photoprismctl.
+    """
+    return _reglage_tenu_par_le_fichier()
 
 
 # ============================================================================
@@ -396,9 +398,10 @@ async def set_photoprism_config(config: PhotoprismConfig, user=Depends(require_j
 # ============================================================================
 
 @router.get("/library/stats")
-async def get_library_statistics(user=Depends(require_jwt)):
-    """Get library statistics."""
-    return get_library_stats()
+def get_library_statistics(user=Depends(require_jwt)):
+    """Library statistics — cached (#1747) : a full rglob of the library per
+    request was the cost of each page load."""
+    return _mesure("stats", get_library_stats)
 
 
 @router.post("/library/index")
@@ -485,24 +488,24 @@ async def get_face_status(user=Depends(require_jwt)):
     }
 
 
+def _reglage_tenu_par_le_fichier() -> dict:
+    return {"success": False,
+            "error": "Réglages tenus par /etc/secubox/photoprism.toml "
+                     "([lxc], [photoprism], [exposure]) et appliqués par "
+                     "photoprismctl — rien n'a été modifié."}
+
+
 @router.post("/faces/enable")
 async def enable_face_recognition(user=Depends(require_jwt)):
-    """Enable face recognition."""
-    cfg = get_config()
-    cfg["face_recognition"] = True
-    save_config(cfg)
-    log.info(f"Face recognition enabled by {user.get('sub', 'unknown')}")
-    return {"success": True, "message": "Restart PhotoPrism to apply"}
+    """Ne réécrit plus la configuration (#1747) : `face_recognition` n'est lu
+    par aucun outil, et l'écriture à plat détruisait les sections du fichier."""
+    return _reglage_tenu_par_le_fichier()
 
 
 @router.post("/faces/disable")
 async def disable_face_recognition(user=Depends(require_jwt)):
-    """Disable face recognition."""
-    cfg = get_config()
-    cfg["face_recognition"] = False
-    save_config(cfg)
-    log.info(f"Face recognition disabled by {user.get('sub', 'unknown')}")
-    return {"success": True, "message": "Restart PhotoPrism to apply"}
+    """Voir /faces/enable (#1747)."""
+    return _reglage_tenu_par_le_fichier()
 
 
 # ============================================================================
@@ -511,7 +514,11 @@ async def disable_face_recognition(user=Depends(require_jwt)):
 
 @router.get("/storage")
 def get_storage_info(user=Depends(require_jwt)):
-    """Get storage information."""
+    """Storage information — cached (#1747) : up to three `du` of 30 s each."""
+    return _mesure("stockage", _mesurer_stockage)
+
+
+def _mesurer_stockage() -> dict:
     cfg = get_config()
     data_path = Path(cfg.get("data_path", "/srv/photoprism"))
     originals_path = Path(cfg.get("originals_path", "/srv/photoprism/originals"))
@@ -696,59 +703,24 @@ def get_logs(lines: int = 50, user=Depends(require_jwt)):
 
 @router.post("/backup")
 def backup_photoprism(user=Depends(require_jwt)):
-    """Backup PhotoPrism configuration and database."""
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/photoprism"))
-    storage_path = data_path / "storage"
+    """Archive storage/ (instantané SQLite, sans le cache) dans
+    /var/backups/secubox/photoprism par `photoprismctl backup` (#1747).
 
-    if not storage_path.exists():
-        return {"success": False, "error": "No data to backup"}
-
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_file = f"/tmp/photoprism-backup-{timestamp}.tar.gz"
-
-    log.info(f"Creating backup by {user.get('sub', 'unknown')}")
-
-    try:
-        result = subprocess.run(
-            ["tar", "-czf", backup_file, "-C", str(data_path), "storage"],
-            capture_output=True, text=True, timeout=600
-        )
-        if result.returncode == 0:
-            return {"success": True, "path": backup_file}
-        else:
-            return {"success": False, "error": result.stderr.strip()}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    Destination fixe, choisie par le verbe root — jamais par l'appelant. Avant :
+    un tar en `secubox` dans /tmp (PrivateTmp : invisible et effacé au
+    redémarrage), qui ne pouvait pas lire la base du conteneur. Détaché : une
+    archive de plusieurs centaines de Mo dépasse la coupure d'HAProxy (30 s).
+    """
+    log.info(f"Backup requested by {user.get('sub', 'unknown')}")
+    r = _photoprismctl_detache("backup")
+    if r.get("success"):
+        r["path"] = "/var/backups/secubox/photoprism/"
+    return r
 
 
-@router.post("/restore")
-async def restore_photoprism(req: RestoreRequest, user=Depends(require_jwt)):
-    """Restore PhotoPrism from backup."""
-    if not Path(req.path).exists():
-        return {"success": False, "error": "Backup file not found"}
-
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/photoprism"))
-
-    log.info(f"Restoring backup {req.path} by {user.get('sub', 'unknown')}")
-
-    # Stop container first
-    if is_running():
-        await stop_photoprism(user)
-        await asyncio.sleep(2)
-
-    try:
-        result = subprocess.run(
-            ["tar", "-xzf", req.path, "-C", str(data_path)],
-            capture_output=True, text=True, timeout=600
-        )
-        if result.returncode == 0:
-            return {"success": True}
-        else:
-            return {"success": False, "error": result.stderr.strip()}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+# /restore retiré (#1747) : il extrayait une archive désignée par un CHEMIN
+# LIBRE du client dans data_path, sans contrôle du contenu, et aucune page ne
+# l'appelait. Une restauration est un geste d'opérateur sur la box.
 
 
 app.include_router(router)
