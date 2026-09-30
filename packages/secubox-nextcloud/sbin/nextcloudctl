@@ -718,9 +718,24 @@ app_list() {
 # Backup / Restore
 # ============================================================================
 
+# Une sauvegarde se désigne par son NOM : $DATA_PATH/backups/nextcloud_<nom>.tar.gz.
+# C'est ce que l'API liste, supprime et restaure (#1757) — elle cherchait
+# <nom>-db.sql / <nom>-data.tar.gz, que ce helper n'a jamais écrits. Le nom
+# est revalidé ici (défense en profondeur) : sans « / », il ne sort pas du
+# répertoire des sauvegardes. `[[ =~ ]]` ancre la chaîne ENTIÈRE, saut de
+# ligne compris (cf. _valid_uid).
+_valid_backup_name() {
+    [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]]
+}
+_fichier_sauvegarde() {
+    printf '%s/backups/nextcloud_%s.tar.gz' "$DATA_PATH" "$1"
+}
+
 cmd_backup() {
     local name="${1:-$(date +%Y%m%d_%H%M%S)}"
-    local backup_file="$DATA_PATH/backups/nextcloud_$name.tar.gz"
+    _valid_backup_name "$name" || { error "nom de sauvegarde invalide"; return 2; }
+    local backup_file
+    backup_file=$(_fichier_sauvegarde "$name")
 
     log "Creating backup: $backup_file"
     mkdir -p "$DATA_PATH/backups"
@@ -740,8 +755,28 @@ cmd_backup() {
     echo "$backup_file"
 }
 
+# Supprime UNE sauvegarde, désignée par son nom (#1757). L'API tourne en
+# `secubox` et le répertoire des sauvegardes appartient à root : elle ne peut
+# pas délier le fichier elle-même, elle passe par ce verbe.
+cmd_backup_delete() {
+    local name="$1"
+    _valid_backup_name "$name" || { error "nom de sauvegarde invalide"; return 2; }
+    local f
+    f=$(_fichier_sauvegarde "$name")
+    [ -f "$f" ] || { error "sauvegarde introuvable : $name"; return 1; }
+    rm -f -- "$f" || return 1
+    log "Sauvegarde supprimée : $f"
+}
+
 cmd_restore() {
     local backup_file="$1"
+
+    # Un NOM (ce que l'API transmet, #1757) désigne le fichier que cmd_backup
+    # a écrit ; un chemin complet reste accepté à la ligne de commande.
+    if [ -n "$backup_file" ] && _valid_backup_name "$backup_file" \
+        && [ -f "$(_fichier_sauvegarde "$backup_file")" ]; then
+        backup_file=$(_fichier_sauvegarde "$backup_file")
+    fi
 
     if [ -z "$backup_file" ] || [ ! -f "$backup_file" ]; then
         echo "Usage: nextcloudctl restore <backup_file>"
@@ -1063,8 +1098,9 @@ Maintenance:
   link-photos          Wire the 'PhotoLibrary' external storage (→ PhotoPrism)
   secure-photos        Restrict an existing PhotoLibrary to Nextcloud admins (#1514)
   occ <command>        Run Nextcloud occ command
-  backup [name]        Create backup
-  restore <file>       Restore from backup
+  backup [name]        Create backup (backups/nextcloud_<name>.tar.gz)
+  backup-delete <name> Delete that backup
+  restore <name|file>  Restore from backup
   logs [lines]         Show error logs
   shell                Open container shell
 
@@ -1159,6 +1195,7 @@ case "${1:-}" in
     sso) cmd_sso ;;
     occ) shift; occ "$@" ;;
     backup) shift; cmd_backup "$@" ;;
+    backup-delete) shift; cmd_backup_delete "$@" ;;
     restore) shift; cmd_restore "$@" ;;
     logs) shift; cmd_logs "$@" ;;
     shell) cmd_shell ;;

@@ -110,9 +110,11 @@ def test_restore_valid_name_uses_sudo_and_confirm_stdin(monkeypatch, tmp_path):
     m = _load(monkeypatch)
     seen = {}
 
+    # la route ouvre le tube en mode texte (text=True, #1756) : elle écrit
+    # une chaîne, pas des octets
     class _FakeStdin:
         def __init__(self):
-            self.written = b""
+            self.written = ""
             self.closed = False
 
         def write(self, data):
@@ -127,7 +129,8 @@ def test_restore_valid_name_uses_sudo_and_confirm_stdin(monkeypatch, tmp_path):
 
     def fake_popen(cmd, **kwargs):
         seen["cmd"] = cmd
-        return _FakeProc()
+        seen["proc"] = _FakeProc()
+        return seen["proc"]
 
     # the endpoint opens a real log file for stdout before Popen() runs;
     # redirect it to a writable tmp path instead of /var/log.
@@ -146,6 +149,7 @@ def test_restore_valid_name_uses_sudo_and_confirm_stdin(monkeypatch, tmp_path):
     assert r.status_code == 200
     assert seen["cmd"][:3] == ["sudo", "-n", "/usr/sbin/nextcloudctl"]
     assert seen["cmd"][3:] == ["restore", "nightly"]
+    assert seen["proc"].stdin.written == "yes\n" and seen["proc"].stdin.closed
 
 
 def test_delete_backup_name_traversal_rejected(monkeypatch):

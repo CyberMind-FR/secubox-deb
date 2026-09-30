@@ -1,3 +1,32 @@
+secubox-nextcloud (1.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * Restaure la suite de ce que la fusion aff481735 avait effacé (#1748, #1757) :
+    - gestion des comptes : création (mot de passe sur stdin de
+      `nextcloudctl user add`, jamais dans argv), suppression, activation,
+      désactivation, quota ; uid, quota et nom affiché validés ; 409 si le
+      conteneur est arrêté ; 503 (à réessayer) quand l'occ à vol unique est
+      tenu, 504 à l'expiration, au lieu d'un 500 nu (e2f71a500) ;
+    - /users détaillé (actif, quota) via `occ user:list --info` (79aac6487) ;
+    - /storage dans le schéma de la page (used, total, used_pct, data),
+      mesuré DANS le conteneur par le rafraîchisseur de fond toutes les
+      10 min, jamais à la requête ; remplace `nextcloudctl status` dans le
+      cache (un occ et un du de moins à chaque tour) ;
+    - /status porte `reachable` : la pastille restait « running
+      (unreachable) » ;
+    - gestionnaires bloquants (socket, sous-processus) en `def`, hors de la
+      boucle de l'agrégateur (f703692b7).
+  * Sauvegardes : la liste, la suppression et la restauration désignent
+    backups/nextcloud_<nom>.tar.gz, le fichier que le helper écrit (la route
+    cherchait <nom>-db.sql). Nouveau verbe validé `nextcloudctl backup-delete
+    <nom>` (l'API, en secubox, ne peut rien délier chez root) ; `restore`
+    accepte un nom ; `backup` revalide le nom ; POST /backup sans corps
+    accepté (la page n'en envoie pas : 422) (#1757).
+  * Opérations de compte bornées à 25 s (HAProxy coupe à 30 s). Suite de
+    tests réalignée sur l'architecture actuelle, garde « chaque route
+    appelée par la page existe » (#1757).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:12:37 +0200
+
 secubox-nextcloud (1.8.5-1~bookworm1) bookworm; urgency=high
 
   * Restaure ce que la fusion aff481735 avait effacé (#1748, #1756) :
