@@ -190,16 +190,23 @@ def is_running() -> bool:
     return http_reachable()
 
 
+def _ctl(verb: str) -> List[str]:
+    """photoprismctl est root (lxc-start, lxc-attach) ; l'API tourne en
+    `secubox`. Le seul passage est `sudo -n`, limité par
+    /etc/sudoers.d/secubox-photoprism aux verbes nommés, sans argument (#1745)."""
+    return ["sudo", "-n", PHOTOPRISMCTL, verb]
+
+
 def _photoprismctl_detache(verb: str) -> dict:
-    """Long verb (install/update: minutes) run detached, logged to a file.
+    """Long verb (install/update/index/import: minutes) run detached, logged.
 
     HAProxy cuts an idle request after 30 s: waiting for it here would only
-    turn a working install into a client-side error.
+    turn a working job into a client-side error.
     """
     journal = f"/var/log/secubox/photoprism-{verb}.log"
     try:
         subprocess.Popen(
-            [PHOTOPRISMCTL, verb],
+            _ctl(verb),
             stdout=open(journal, "a"), stderr=subprocess.STDOUT,
             start_new_session=True,
         )
@@ -210,7 +217,7 @@ def _photoprismctl_detache(verb: str) -> dict:
 
 def _photoprismctl(verb: str, timeout: int = 60) -> dict:
     try:
-        r = subprocess.run([PHOTOPRISMCTL, verb], capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(_ctl(verb), capture_output=True, text=True, timeout=timeout)
         return {"success": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
     except subprocess.TimeoutExpired:
         return {"success": False, "error": "timeout"}
@@ -401,17 +408,9 @@ def start_indexing(user=Depends(require_jwt)):
         return {"success": False, "error": "PhotoPrism is not running"}
 
     log.info(f"Starting index by {user.get('sub', 'unknown')}")
-
-    try:
-        # Via photoprismctl (lxc-attach exige root) → photoprism-cli dans le LXC.
-        r = _photoprismctl("index", timeout=300)
-        if r.get("success"):
-            return {"success": True, "output": "Indexing started"}
-        return {"success": False, "error": (r.get("stderr") or r.get("error") or "Indexing failed").strip()}
-    except subprocess.TimeoutExpired:
-        return {"success": True, "output": "Indexing in progress (background)"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    # Via photoprismctl (lxc-attach exige root) → photoprism-cli dans le LXC ;
+    # détaché : une bibliothèque réelle dépasse les 30 s d'HAProxy.
+    return _photoprismctl_detache("index")
 
 
 @router.post("/library/import")
@@ -421,16 +420,7 @@ def import_photos(user=Depends(require_jwt)):
         return {"success": False, "error": "PhotoPrism is not running"}
 
     log.info(f"Starting import by {user.get('sub', 'unknown')}")
-
-    try:
-        r = _photoprismctl("import", timeout=300)
-        if r.get("success"):
-            return {"success": True, "output": "Import started"}
-        return {"success": False, "error": (r.get("stderr") or r.get("error") or "Import failed").strip()}
-    except subprocess.TimeoutExpired:
-        return {"success": True, "output": "Import in progress (background)"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    return _photoprismctl_detache("import")
 
 
 # ============================================================================
@@ -587,21 +577,15 @@ async def create_user(new_user: UserCreate, user=Depends(require_jwt)):
     """Create a new user."""
     users = get_users()
 
-    # Check for duplicate
-    for u in users:
-        if u["username"].lower() == new_user.username.lower():
-            return {"success": False, "error": "User already exists"}
-
-    users.append({
-        "username": new_user.username,
-        "password": new_user.password,  # In production, hash this
-        "role": new_user.role,
-        "created": datetime.now().isoformat(),
-    })
-    save_users(users)
-
-    log.info(f"User created: {new_user.username} by {user.get('sub', 'unknown')}")
-    return {"success": True}
+    # Jamais de mot de passe écrit par cette API (#1745) : l'ancienne version le
+    # rangeait EN CLAIR dans <data_path>/users.json, une liste que PhotoPrism
+    # ne lit même pas. Les comptes naissent à la première connexion SecuBox
+    # (OIDC, OIDCRegister) ou par secubox-user-sync (photoprismctl
+    # user-provision, mot de passe par stdin).
+    log.info(f"User creation refused (SSO only): {new_user.username} by {user.get('sub', 'unknown')}")
+    return {"success": False,
+            "error": "Comptes PhotoPrism : connexion SecuBox (SSO) ou synchronisation "
+                     "des comptes — l'interface ne crée pas de mot de passe."}
 
 
 @router.delete("/user/{username}")
@@ -696,18 +680,14 @@ def update_photoprism(user=Depends(require_jwt)):
 
 @router.get("/logs")
 def get_logs(lines: int = 50, user=Depends(require_jwt)):
-    """Tail photoprism.service journal inside the LXC."""
-    cfg = get_config()
-    try:
-        result = subprocess.run(
-            ["lxc-attach", "-n", cfg.get("name", "photoprism"),
-             "-P", cfg.get("path", "/data/lxc"), "--",
-             "journalctl", "-u", "photoprism", "-n", str(lines), "--no-pager"],
-            capture_output=True, text=True, timeout=15,
-        )
-        return {"logs": (result.stdout + result.stderr) or "No logs available"}
-    except Exception:
-        return {"logs": "No logs available"}
+    """Tail photoprism.service journal inside the LXC (photoprismctl logs).
+
+    lxc-attach exige root : on passe par le verbe `logs` (50 lignes, sans
+    argument — sudoers n'en admet aucun) et on tronque ici si on en veut moins."""
+    r = _photoprismctl("logs", timeout=15)
+    texte = (r.get("stdout") or "") + (r.get("stderr") or r.get("error") or "")
+    garde = texte.splitlines()[-max(1, min(lines, 50)):]
+    return {"logs": "\n".join(garde) or "No logs available"}
 
 
 # ============================================================================

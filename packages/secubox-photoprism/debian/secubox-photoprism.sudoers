@@ -1,0 +1,10 @@
+# /etc/sudoers.d/secubox-photoprism — seule surface privilégiée du module (#1745).
+#
+# Le démon API tourne en `secubox` et ne fait rien de privilégié lui-même : il
+# délègue à photoprismctl (root) par `sudo -n`. Verbes nommés un à un, SANS
+# argument : sudo refuse toute autre forme (options, chemins, user-provision…).
+secubox ALL=(root) NOPASSWD: /usr/sbin/photoprismctl status, \
+    /usr/sbin/photoprismctl start, /usr/sbin/photoprismctl stop, \
+    /usr/sbin/photoprismctl restart, /usr/sbin/photoprismctl logs, \
+    /usr/sbin/photoprismctl index, /usr/sbin/photoprismctl import, \
+    /usr/sbin/photoprismctl install, /usr/sbin/photoprismctl update
