@@ -7,7 +7,7 @@
 # `À documenter` signifie que la donnee est absente du depot, jamais
 # qu'elle est inconnue de l'auteur : c'est une tache, pas une lacune de
 # redaction.
-# modules: 174
+# modules: 173
 
 modules:
   - id: secubox-acces
@@ -7241,66 +7241,6 @@ modules:
       chemin: "À documenter"
       vhosts:
         - "yacy.gk2.secubox.in"
-  - id: secubox-yggdrasil
-    nom: "secubox-yggdrasil"
-    categorie: "vpn"
-    tier: "lite"
-    description: "SecuBox Mesh DNS - Meshname DNS for mesh networks"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd:
-      - "secubox-yggdrasil.service"
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/mesh.sock"
-      health: "/api/v1/mesh/health"
-      authentifie: true
-      nb_routes: 34
-      routes:
-        - "DELETE /secubox/peer/{ipv6:path}"
-        - "DELETE /webhooks/{webhook_id}"
-        - "GET /discovery/schedule"
-        - "GET /domains"
-        - "GET /export/peers"
-        - "GET /export/services"
-        - "GET /health"
-        - "GET /health/history"
-        - "GET /health/peers"
-        - "GET /peers"
-        - "GET /resolve"
-        - "GET /secubox/peer/{ipv6:path}"
-        - "GET /secubox/peers"
-        - "GET /secubox/self"
-        - "GET /services"
-        - "GET /services/health"
-        - "GET /sessions"
-        - "GET /stats/history"
-        - "GET /stats/traffic"
-        - "GET /status"
-        - "GET /summary"
-        - "GET /webhooks"
-        - "POST /announce"
-        - "POST /discovery/schedule"
-        - "POST /health/check/{ipv6:path}"
-        - "POST /import/peers"
-        - "POST /revoke"
-        - "POST /secubox/discover"
-        - "POST /secubox/register"
-        - "POST /services/{name}/health"
-        - "POST /stats/snapshot"
-        - "POST /sync"
-        - "POST /webhooks"
-        - "POST /webhooks/{webhook_id}/test"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/mesh"
-      vhosts: []
   - id: secubox-ytsas
     nom: "secubox-ytsas"
     categorie: "mind"

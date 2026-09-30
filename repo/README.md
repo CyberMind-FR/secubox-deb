@@ -154,7 +154,7 @@ ssh-keyscan -H apt.secubox.in
 | Package | Description |
 |---------|-------------|
 | `secubox-wireguard` | WireGuard VPN |
-| `secubox-mesh` | Yggdrasil mesh network |
+| `secubox-mesh` | Mesh 802.11s + AP Passpoint |
 | `secubox-p2p` | P2P networking |
 | `secubox-netmodes` | Network modes |
 | `secubox-dpi` | Deep Packet Inspection |

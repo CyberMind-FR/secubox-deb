@@ -39,8 +39,8 @@ ssh_run() { ssh -o StrictHostKeyChecking=no "$HOST" "$@"; }
 # source de verite.
 #
 # Un paquet `secubox-<x>` n'installe PAS dans /usr/lib/secubox/secubox-<x> mais
-# dans /usr/lib/secubox/<x> (et parfois ailleurs : secubox-yggdrasil s'installe
-# dans `mesh`). deploy.sh visait /usr/lib/secubox/$pkg : sur 126 paquets portant
+# dans /usr/lib/secubox/<x> (et parfois ailleurs :
+# le nom du dossier ne suit pas toujours celui du paquet). deploy.sh visait /usr/lib/secubox/$pkg : sur 126 paquets portant
 # un dossier api/, 126 recevaient donc leur code Python dans un repertoire que
 # le service ne lit jamais. Seul www/ arrivait a bon port, ce qui rendait la
 # panne invisible — l'interface changeait, l'API non.

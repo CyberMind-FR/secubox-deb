@@ -817,16 +817,16 @@ Mesh network DNS resolution.
 
 ### Mesh API (`/api/v1/mesh/`)
 
-Yggdrasil mesh network.
+Mesh 802.11s (backhaul) + AP Passpoint — `secubox-mesh`.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/status` | GET | No | Mesh network status |
-| `/peers` | GET | Yes | Connected peers |
-| `/add_peer` | POST | Yes | Add peer |
-| `/remove_peer` | POST | Yes | Remove peer |
-| `/routes` | GET | Yes | Routing table |
-| `/keys` | GET | Yes | Node keys |
+| `/health` | GET | No | Module health |
+| `/mesh/peers` | GET | Yes | 802.11s mesh peers |
+| `/mesh/rf` | GET | Yes | Radio state |
+| `/mesh/key/rotate` | POST | Yes | Rotate the mesh key |
+| `/ap/clients` | GET | Yes | Passpoint AP clients |
+| `/reg/domain` | POST | Yes | Regulatory domain |
 
 ### P2P API (`/api/v1/p2p/`)
 

@@ -569,8 +569,8 @@ var DevStatusWidget = {
             target: '2026-04-01',
             status: 'in-progress',
             progress: 85,
-            features: ['yggdrasil', 'meshname-dns', 'extended-discovery'],
-            highlights: ['Yggdrasil IPv6 overlay', 'Meshname DNS resolution', 'Extended peer discovery']
+            features: ['wg-mesh', 'meshname-dns', 'extended-discovery'],
+            highlights: ['WireGuard mesh (MirrorNet)', 'Meshname DNS resolution', 'Extended peer discovery']
         },
         {
             version: '1.2',

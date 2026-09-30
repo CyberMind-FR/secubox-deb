@@ -1,3 +1,9 @@
+secubox-meta (0.1.12-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-service-mesh : secubox-yggdrasil retiré (décommissionné, #1703) ; secubox-voice-moteur et secubox-voicestudio placés dans l'arbre (service Assistant ZIA) — leur absence bloquait gen-meta.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 07:13:37 +0200
+
 secubox-meta (0.1.11-1~bookworm1) bookworm; urgency=medium
 
   * secubox-magicmirror, secubox-maigret, secubox-spiderfoot décommissionnés
