@@ -1,3 +1,26 @@
+secubox-dpi (1.4.19-1~bookworm2) bookworm; urgency=medium
+
+  * Restauration (#1748, #1775) de ce que la fusion aff481735 (2026-08-17)
+    avait effacé en remettant une version de juin de api/main.py :
+    - /exfil sert de nouveau le cumul (cumulative.json) superposé aux flux
+      actifs de la fenêtre live, avec le bloc `engine` que lit la page ;
+    - GET /media_types (types MIME captés par le media-catcher R4) ;
+    - le tampon média : /media/buffer, /media/replay/{id} (réassemblage HLS
+      compris) et /media/thumb/{id}.
+    Conservé : lecture gardée (#1256), contrôle de service retiré (purge
+    netifyd), usage/clients dérivés du collector, en-têtes SPDX.
+  * Tampon média durci à la restauration : administrateur réel seulement
+    (est_admin_reel, #1581 — plus de rôle cru sur parole dans le payload),
+    une ligne d'audit par relecture AVANT envoi et refus (503) si elle ne
+    peut pas s'écrire, adresse lue depuis la droite de X-Forwarded-For
+    (#1753), Content-Type capturé servi seulement s'il est audio/vidéo/HLS
+    (sinon application/octet-stream) avec nosniff.
+  * /exfil, /history, /realtime, /block_rules, /add_block_rule,
+    /delete_block_rule redeviennent des `def` : leurs lectures de fichiers
+    ne figent plus la boucle partagée de l'agrégateur (#808).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:06:24 +0200
+
 secubox-dpi (1.4.18-1~bookworm2) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait
