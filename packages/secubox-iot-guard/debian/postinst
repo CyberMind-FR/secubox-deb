@@ -3,7 +3,8 @@ set -e
 if [ "$1" = "configure" ]; then
     systemctl daemon-reload
     systemctl enable secubox-iot-guard.service || true
-    systemctl start secubox-iot-guard.service || true
+    # restart, pas start : à la mise à jour, l'ancien code resterait en service (#1763).
+    systemctl restart secubox-iot-guard.service || true
 fi
 #DEBHELPER#
 exit 0
