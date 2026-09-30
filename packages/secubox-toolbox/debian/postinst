@@ -228,6 +228,15 @@ SBXRLEVEL
 if [ -x /usr/sbin/secubox-toolbox-db-tune ]; then
     /usr/sbin/secubox-toolbox-db-tune 2>&1 | head -3 || true
 fi
+# Le réglage tourne en root : sur une box neuve il CRÉE la base, qui
+# appartiendrait alors à root — et le service (secubox-toolbox) ne pourrait
+# plus y écrire. État trouvé sur gk3 (base réduite à threat_intel).
+for _f in /var/lib/secubox/toolbox/toolbox.db /var/lib/secubox/toolbox/toolbox.db-wal \
+          /var/lib/secubox/toolbox/toolbox.db-shm; do
+    [ -e "$_f" ] || continue
+    chown secubox-toolbox:secubox-toolbox "$_f" 2>/dev/null || true
+    chmod 0660 "$_f" 2>/dev/null || true
+done
 
       systemctl daemon-reload || true
       systemctl enable secubox-toolbox.service || true
@@ -283,10 +292,21 @@ fi
         _pose_nft /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg-fanout.nft \
           /etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft
       fi
-      if [ "$_nft_change" = 1 ] && systemctl is-active --quiet nftables.service 2>/dev/null; then
-        systemctl reload nftables.service 2>/dev/null \
-          || /usr/sbin/nft -f /etc/nftables.d/secubox-toolbox-wg.nft 2>/dev/null \
-          || true
+      if [ "$_nft_change" = 1 ] && command -v nft >/dev/null 2>&1; then
+        # CETTE table seule, atomiquement (#1769) : `reload nftables` rejouait
+        # `flush ruleset` et effaçait toutes les tables vivantes. Déclarée
+        # vide, supprimée, redéfinie (base + fanout) en une transaction ; son
+        # ensemble @rlevel_off, vidé par la redéfinition, est rejoué aussitôt.
+        _t=$(mktemp) && {
+          printf 'table inet wg-toolbox {}\ndelete table inet wg-toolbox\n' > "$_t"
+          cat /etc/nftables.d/secubox-toolbox-wg.nft >> "$_t"
+          [ -f /etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft ] \
+            && cat /etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft >> "$_t"
+          /usr/sbin/nft -f "$_t" 2>/dev/null \
+            || echo "secubox-toolbox: table wg-toolbox à recharger à la main" >&2
+          rm -f "$_t"
+        }
+        [ -x /usr/sbin/sbxmitm-policyctl ] && /usr/sbin/sbxmitm-policyctl regen >/dev/null 2>&1 || true
       fi
     fi
 
@@ -298,10 +318,12 @@ fi
       _nft_change=0
       _pose_nft /usr/share/secubox/toolbox/nftables.d/secubox-blacklist.nft \
         /etc/nftables.d/secubox-blacklist.nft
-      if [ "$_nft_change" = 1 ] && systemctl is-active --quiet nftables.service 2>/dev/null; then
-        systemctl reload nftables.service 2>/dev/null \
-          || /usr/sbin/nft -f /etc/nftables.d/secubox-blacklist.nft 2>/dev/null \
-          || true
+      if [ "$_nft_change" = 1 ] && command -v nft >/dev/null 2>&1; then
+        # Fichier autonome (déclare, supprime, redéfinit sa table) : le charger
+        # SEUL suffit, jamais `reload nftables` (#1769) ; la synchro lancée
+        # juste après remplit ses ensembles.
+        /usr/sbin/nft -f /etc/nftables.d/secubox-blacklist.nft 2>/dev/null \
+          || echo "secubox-toolbox: table secubox_blacklist à recharger à la main" >&2
       fi
       if [ -d /run/systemd/system ]; then
         systemctl enable secubox-blacklist-sync.timer 2>/dev/null || true

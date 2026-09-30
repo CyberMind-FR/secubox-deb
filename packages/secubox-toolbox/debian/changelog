@@ -21,6 +21,14 @@ secubox-toolbox (2.9.9-1~bookworm1) bookworm; urgency=medium
     minuteries mesh-exclusion et tor-exempt-hosts activées, cache matplotlib
     (#1778).
   * sentinel_link : fetch_c2 / c2_allow restaurés (#1778).
+  * postinst : plus de `systemctl reload nftables` (#1769) — il rejouait
+    `flush ruleset` et effaçait les tables vivantes. Quand un drop-in change :
+    table wg-toolbox rechargée seule, atomiquement (base + fanout), puis
+    @rlevel_off rejoué par `sbxmitm-policyctl regen` (nouveau verbe) ; table
+    secubox_blacklist chargée seule, la synchro remplit ses ensembles.
+  * postinst : la base toolbox.db (et -wal/-shm) rendue au service après le
+    réglage SQLite, qui tourne en root et la créait root:root sur une box
+    neuve — le service ne pouvait plus y écrire (vu sur gk3).
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:21:39 +0200
 
