@@ -71,25 +71,57 @@ async def health_check():
     return {"status": "ok", "module": "deb"}
 
 
+# Vivacité du moteur R3 : le collector réécrit state.json à chaque fenêtre de
+# capture (~60 s). Au-delà de ce seuil sans fenêtre, le moteur est « idle ».
+ENGINE_ALIVE_S = 180
+
+
 @app.get("/exfil", dependencies=[Depends(require_lecture)])
-async def exfil_state():
-    """#687 Phase 2 — per-device cloud-exfiltration state produced by the Go
-    collector (secubox-dpi-flowcap → secubox-dpi-collector). Fail-empty so the
-    dashboard never errors before the first capture window completes."""
-    import json as _json
-    from pathlib import Path as _P
-    p = _P("/var/lib/secubox/dpi/state.json")
+def exfil_state():
+    """#687 Phase 2 — état d'exfiltration cloud par terminal, produit par le
+    collector Go (secubox-dpi-flowcap → secubox-dpi-collector). Fail-empty :
+    le tableau de bord ne tombe jamais en erreur avant la première fenêtre.
+
+    LA LISTE DES TERMINAUX VIENT DU CUMUL (cumulative.json) — l'ensemble des
+    terminaux observés sur la période — et PAS de state.json, qui n'est que la
+    fenêtre courante et se vide dès que le tunnel wg-toolbox est au repos (la
+    page affichait alors « aucun terminal sur R3 » malgré un historique réel).
+    On superpose les `active_flows` de state.json pour que la vue live bouge,
+    plus un bloc `engine` (vivacité) que lit updateEngine() de la page.
+
+    `def` et non `async def` : lectures de fichiers bloquantes (100–200 Ko),
+    exécutées hors de la boucle partagée de l'agrégateur (ref #808)."""
+    base = {"generated_at": 0, "devices": [], "alerts": [], "alert_count": 0,
+            "top_apps": [], "top_protocols": [], "active_flows": []}
     try:
-        if p.exists():
-            return _json.loads(p.read_text())
-    except Exception as e:  # pragma: no cover
-        return {"generated_at": 0, "devices": [], "alerts": [], "error": str(e)}
-    return {"generated_at": 0, "devices": [], "alerts": [], "alert_count": 0,
-            "note": "no capture window completed yet (or wg-toolbox idle)"}
+        if COLLECTOR_CUMUL.exists():
+            base.update(json.loads(COLLECTOR_CUMUL.read_text()))
+    except Exception as e:  # pragma: no cover — cumul illisible : fail-empty
+        base["error"] = str(e)
+    live_ts = 0
+    try:
+        if COLLECTOR_STATE.exists():
+            st = json.loads(COLLECTOR_STATE.read_text())
+            base["active_flows"] = st.get("active_flows", []) or []
+            live_ts = st.get("generated_at", 0) or 0
+    except Exception:
+        pass
+    if not base.get("devices"):
+        base["note"] = "no devices observed yet (or wg-toolbox idle since first capture)"
+    # Vivacité du moteur R3 déduite de l'âge de la dernière fenêtre : sans
+    # privilège (l'API tourne en `secubox`), sans interroger systemd.
+    age = max(0, int(time.time() - live_ts)) if live_ts else None
+    base["engine"] = {
+        "name": "ndpiReader · R3 exfil",
+        "service": "secubox-dpi-flowcap",
+        "alive": bool(age is not None and age < ENGINE_ALIVE_S),
+        "last_window_s": age,
+    }
+    return base
 
 
 @app.get("/history", dependencies=[Depends(require_lecture)])
-async def exfil_history(device: str = "", days: int = 14):
+def exfil_history(device: str = "", days: int = 14):
     """#720 — per-device DAILY timeline from the collector history.json. Without
     ?device, returns board-wide daily totals. Fail-empty."""
     import json as _json
@@ -115,6 +147,25 @@ async def exfil_history(device: str = "", days: int = 14):
         d["devices"] += 1
     days_sorted = sorted(by_day.values(), key=lambda x: x["day"] or "")
     return {"device": "", "days": days_sorted[-days:]}
+
+
+@app.get("/media_types", dependencies=[Depends(require_lecture)])
+def media_types():
+    """#785 — répartition des types MIME captés par le media-catcher R4 de
+    sbxmitm (/run/secubox/media-catch.jsonl), agrégée pour toute la board.
+    Distinct de la catégorie de service « media » (SNI). Lecture gardée comme
+    /exfil, fail-empty. `def` : lecture bornée du journal, hors boucle (#808)."""
+    try:
+        from secubox_core import media_catch
+        agg = media_catch.aggregate(path=media_catch.MEDIA_CATCH_PATH)
+        view = agg.get("all") or {}
+        return {"present": bool(view.get("present")),
+                "flows": view.get("flows", 0), "bytes": view.get("bytes", 0),
+                "kinds": view.get("kinds", []), "ctypes": view.get("ctypes", []),
+                "top_hosts": view.get("top_hosts", [])}
+    except Exception as e:  # pragma: no cover — fail-empty
+        return {"present": False, "flows": 0, "bytes": 0,
+                "kinds": [], "ctypes": [], "top_hosts": [], "error": str(e)}
 
 
 # ── RÈGLES D'ENRICHISSEMENT DPI (#DPI-sémantique) — écriture JWT ─────────────
@@ -219,6 +270,8 @@ async def _sbxdpi_get(path: str, default):
 # usage/sessions/suggestions de LÀ, en réutilisant les règles rules.json (même
 # logique host→usage que l'enrichisseur Go). Repli quand sbxdpi répond vide.
 COLLECTOR_CUMUL = Path("/var/lib/secubox/dpi/cumulative.json")
+# Fenêtre live du collector (active_flows + generated_at) — lue par /exfil.
+COLLECTOR_STATE = Path("/var/lib/secubox/dpi/state.json")
 # collector category → famille d'usage (vocabulaire des règles)
 _CAT_MAP = {
     "media": "streaming", "game": "gaming", "gaming": "gaming",
@@ -764,6 +817,253 @@ STATS_INTERVAL = 60
 MAX_HISTORY_ENTRIES = 1440  # 24 hours at 1-minute intervals
 
 
+# ============================================================================
+# Tampon média — liste / relecture / vignette (ref #812, #814, #815)
+#
+# Lit le journal de métatags du tampon média de sbxmitm et sert la relecture
+# d'une capture. Chaque handler est un `def` : ce module est monté DANS
+# l'agrégateur, un `async def` bloquant figerait la boucle partagée (ref #808) ;
+# FastAPI exécute les `def` dans un pool de threads. Le chemin de l'objet se
+# DÉDUIT du session_id de l'ENREGISTREMENT sous MEDIA_BUFFER_ROOT, jamais d'une
+# entrée client, et son realpath est vérifié dans la racine (défense en
+# profondeur contre la traversée).
+#
+# CONTRÔLE D'ACCÈS. Une capture, c'est le trafic d'un usager : seul un
+# administrateur réel la relit — ou, plus tard, son propriétaire (phase 3).
+# Chaque relecture est écrite dans audit.log AVANT d'être servie, et si la
+# ligne ne peut pas s'écrire la relecture est refusée : pas de lecture sans
+# trace.
+#
+# LES OCTETS SERVIS VIENNENT DU TRAFIC CAPTURÉ, donc d'un tiers — leur
+# Content-Type aussi. Servis tels quels depuis l'origine d'administration, un
+# « text/html » capturé s'exécuterait avec la session de l'admin qui clique
+# « Play ». Seuls les types audio/vidéo/HLS passent ; le reste part en
+# application/octet-stream, avec nosniff.
+# ============================================================================
+import os  # noqa: E402
+import re  # noqa: E402
+import glob  # noqa: E402
+from datetime import timezone  # noqa: E402
+from fastapi import Request, Response  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+from secubox_core import media_buffer  # noqa: E402
+from secubox_core import hls  # noqa: E402
+from secubox_core.auth import est_admin_reel, adresse_client  # noqa: E402
+
+MEDIA_BUFFER_ROOT = "/data/secubox/media-buffer"
+AUDIT_LOG = "/var/log/secubox/audit.log"
+# \Z (et non $) : $ accepte un « \n » final, qui passerait la garde.
+_REC_ID_RE = re.compile(r"^[0-9a-f]{8,32}\Z")
+# Types servis tels quels : ceux qu'un navigateur ne peut PAS exécuter.
+_CTYPES_MEDIA = ("video/", "audio/")
+_CTYPES_HLS = {"application/vnd.apple.mpegurl", "application/x-mpegurl"}
+_ENTETES_MEDIA = {"X-Content-Type-Options": "nosniff"}
+
+
+def _media_log_path() -> str:
+    """Chemin du JSONL de métatags, dérivé de MEDIA_BUFFER_ROOT (remplacé
+    dans les tests)."""
+    return os.path.join(MEDIA_BUFFER_ROOT, "media-buffer.jsonl")
+
+
+def _user_is_admin(user) -> bool:
+    """Le porteur est-il un ADMINISTRATEUR RÉEL ?
+
+    Délègue à secubox_core.auth.est_admin_reel (#1581), le prédicat même de
+    `require_jwt` : un compte utilisateur actif, de rôle « admin » dans le
+    registre — jamais une session d'appareil (sbx-…), jamais une session
+    plafonnée sous admin. Le rôle se lit dans le REGISTRE, pas dans une
+    revendication `role` portée par le payload : le raccourci d'origine (#812)
+    qui la croyait sur parole est retiré."""
+    if not isinstance(user, dict):
+        return False
+    return est_admin_reel(user)
+
+
+def require_admin_or_owner(user=Depends(require_jwt)):
+    """Garde de relecture/vignette : administrateur — ou, un jour, propriétaire.
+
+    Aucune correspondance session → persona (mac_hash) n'existe encore : un
+    non-admin n'est propriétaire de rien, il est refusé (403). `require_jwt`
+    exige déjà un administrateur réel (#1581) ; ce second contrôle, porté par
+    la garde elle-même, tient même si la dépendance amont s'assouplissait.
+
+    # TODO(phase3) : n'admettre un non-admin que si le mac_hash de
+    # l'enregistrement demandé est celui de sa persona.
+    """
+    if _user_is_admin(user):
+        return user
+    raise HTTPException(status_code=403, detail="Réservé aux administrateurs de la box")
+
+
+def _resolve_object_path(rec: dict) -> Optional[str]:
+    """Objet du tampon sur disque pour un enregistrement, sans traversée.
+
+    L'objet vit en <MEDIA_BUFFER_ROOT>/<session_id>/object-0.* — session_id
+    est validé contre l'expression hexadécimale, et le realpath obtenu doit
+    rester sous MEDIA_BUFFER_ROOT. None si l'id est malformé, si le fichier a
+    disparu ou si la résolution sort de la racine.
+    """
+    session_id = (rec or {}).get("session_id")
+    if not session_id or not _REC_ID_RE.match(str(session_id)):
+        return None
+    root = os.path.realpath(MEDIA_BUFFER_ROOT)
+    session_dir = os.path.realpath(os.path.join(root, session_id))
+    if session_dir != root and not session_dir.startswith(root + os.sep):
+        return None
+    for cand in sorted(glob.glob(os.path.join(session_dir, "object-0.*"))):
+        real = os.path.realpath(cand)
+        if (real == root or real.startswith(root + os.sep)) and os.path.isfile(real):
+            return real
+    return None
+
+
+_CTYPE_RE = re.compile(r"^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*\Z")
+
+
+def _ctype_sur(ctype) -> str:
+    """Content-Type à servir pour une capture : son type principal (sans
+    paramètres) s'il est audio/vidéo/HLS et bien formé, sinon
+    application/octet-stream — le navigateur télécharge, n'exécute rien. Ni
+    paramètre ni caractère libre ne remonte jusqu'à l'en-tête de réponse."""
+    principal = str(ctype or "").split(";", 1)[0].strip().lower()
+    if _CTYPE_RE.match(principal) and (principal.startswith(_CTYPES_MEDIA)
+                                       or principal in _CTYPES_HLS):
+        return principal
+    return "application/octet-stream"
+
+
+_AUDIT_HORS_CHAMP_RE = re.compile(r"[^\x21-\x7e]")
+
+
+def _audit_champ(valeur) -> str:
+    """Un champ de ligne d'audit : ni espace, ni caractère de contrôle, borné.
+    `host` vient du trafic capturé : un « \\n » y forgerait une seconde ligne
+    dans le journal."""
+    s = _AUDIT_HORS_CHAMP_RE.sub("_", "" if valeur is None else str(valeur))
+    return s[:256] or "-"
+
+
+def _audit_replay(sub, rec_id: str, host: str, ip: str) -> bool:
+    """Ajoute UNE ligne d'audit (horodatage RFC 3339) pour une relecture.
+
+    Rend False si la ligne n'a pas pu être écrite : l'appelant refuse alors
+    de servir. `os.open` en O_APPEND, pas de réécriture du journal."""
+    ts = datetime.now(timezone.utc).isoformat()
+    line = (f"{ts} media-replay sub={_audit_champ(sub)} rec_id={_audit_champ(rec_id)} "
+            f"host={_audit_champ(host)} ip={_audit_champ(ip)}\n").encode("utf-8", "replace")
+    try:
+        fd = os.open(AUDIT_LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o640)
+        try:
+            return os.write(fd, line) == len(line)
+        finally:
+            os.close(fd)
+    except OSError as e:
+        log.error("dpi media : audit.log non inscriptible (%s) — relecture %s refusée",
+                  e, rec_id)
+        return False
+
+
+# ============================================================================
+# Phase 2 (#812) — réassemblage des manifestes HLS.
+#
+# Les segments sont des objets ordinaires du tampon (kind="segment"), servis
+# tels quels par GET /media/replay/{id}. Quand l'enregistrement demandé est un
+# manifeste, media_replay() analyse la playlist stockée (secubox_core.hls) et
+# réécrit chaque URI de segment vers l'URL de relecture du segment capturé
+# correspondant — une jointure PURE, à la lecture, par URL absolue ; jamais un
+# état de session partagé entre requêtes.
+# ============================================================================
+MAX_MANIFEST_BYTES = 8 * 1024 * 1024
+MAX_SEGMENT_INDEX = 5000
+MAX_MANIFEST_SEGMENTS = 5000
+
+
+def _segment_index(mac_hash: Optional[str], host: Optional[str]) -> Dict[str, str]:
+    """Associe l'`url` absolue d'un segment capturé à l'`id` de son
+    enregistrement.
+
+    Limité au MÊME mac_hash + host que le manifeste relu (jamais de jointure
+    entre personas ou hôtes) ; seuls les `kind=="segment"` vivants (non
+    expirés) comptent. Borné à MAX_SEGMENT_INDEX entrées pour qu'une session
+    pathologique ne fasse pas exploser la jointure. Fail-empty : {}.
+    """
+    try:
+        records = media_buffer.read_records(mac_hash=mac_hash, path=_media_log_path())
+    except Exception:
+        return {}
+    out: Dict[str, str] = {}
+    try:
+        for rec in records:
+            if not isinstance(rec, dict):
+                continue
+            if rec.get("kind") != "segment":
+                continue
+            if rec.get("expired"):
+                continue
+            if rec.get("host") != host:
+                continue
+            url = rec.get("url")
+            seg_id = rec.get("id")
+            if not url or not seg_id:
+                continue
+            out[url] = seg_id
+            if len(out) >= MAX_SEGMENT_INDEX:
+                log.warning("dpi media : index de segments pour %s plafonné à %d",
+                            host, MAX_SEGMENT_INDEX)
+                break
+    except Exception:
+        return out
+    return out
+
+
+def _replay_manifest(rec: dict, path: str) -> Optional[Response]:
+    """Relecture d'un manifeste : analyse la playlist capturée et réécrit les
+    URI de segments vers les URL de relecture des segments capturés.
+
+    Les playlists maîtres/multivariantes (ABR) et chiffrées (#EXT-X-KEY) sont
+    hors périmètre de la phase 2 : le manifeste brut est rendu inchangé avec
+    l'en-tête `X-SecuBox-Media: unsupported-variant`, plutôt qu'une réécriture
+    cassée.
+
+    Sûr en cas d'échec : toute erreur de lecture/analyse rend None, et
+    l'appelant retombe sur le FileResponse brut de la phase 1 — cette branche
+    ne doit JAMAIS produire un 500.
+    """
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(MAX_MANIFEST_BYTES + 1)
+        if len(raw) > MAX_MANIFEST_BYTES:
+            log.warning("dpi media : manifeste %s tronqué à %d octets",
+                        rec.get("id") or rec.get("url") or "?", MAX_MANIFEST_BYTES)
+            raw = raw[:MAX_MANIFEST_BYTES]
+        text = raw.decode("utf-8", errors="replace")
+
+        if hls.is_master_playlist(text) or hls.is_encrypted(text):
+            return Response(content=text, media_type="application/vnd.apple.mpegurl",
+                            headers={**_ENTETES_MEDIA,
+                                     "X-SecuBox-Media": "unsupported-variant"})
+
+        mapping = {
+            seg_url: f"/api/v1/dpi/media/replay/{seg_id}"
+            for seg_url, seg_id in _segment_index(rec.get("mac_hash"), rec.get("host")).items()
+        }
+        rewritten, matched, total = hls.rewrite(
+            text, mapping, rec.get("url") or "", max_segments=MAX_MANIFEST_SEGMENTS
+        )
+        if total >= MAX_MANIFEST_SEGMENTS:
+            log.warning("dpi media : réécriture plafonnée à %d segments (total=%d matched=%d)",
+                        MAX_MANIFEST_SEGMENTS, total, matched)
+        return Response(
+            content=rewritten,
+            media_type="application/vnd.apple.mpegurl",
+            headers={**_ENTETES_MEDIA,
+                     "X-SecuBox-Media": f"hls-reassembled; matched={matched}; total={total}"},
+        )
+    except Exception:
+        return None
+
+
 class QuotaType(str, Enum):
     DAILY = "daily"
     WEEKLY = "weekly"
@@ -996,8 +1296,12 @@ async def send_webhook(event: str, data: Dict[str, Any]):
         except Exception:
             pass
 
-async def _sbxdpi_get(path: str):
+async def _sbxdpi_live(path: str):
     """Lit un endpoint de sbxdpi (moteur nDPI LIVE) via dpi-live.sock.
+
+    NOM PROPRE (#1775) : elle s'appelait aussi `_sbxdpi_get`, et cette seconde
+    définition écrasait la première (`_sbxdpi_get(path, default)`) — /usage,
+    /suggestions, /sessions, /clients et /countries levaient TypeError (500).
 
     Classification live. Fail-empty si la socket dort (sbxdpi dark avant
     cutover complet)."""
@@ -1042,10 +1346,90 @@ def _setup_mirred(iface: str, mirror_if: str = "ifb0") -> dict:
                         "err": r.stderr.strip()[:100] if r.returncode != 0 else ""})
     return {"steps": results, "interface": iface, "mirror": mirror_if}
 
+
+@router.get("/media/buffer")
+def media_buffer_list(user=Depends(require_jwt)):
+    """Captures du tampon média. L'administrateur les voit toutes ; un
+    non-admin n'en voit aucune tant que la correspondance persona n'existe
+    pas. `def` : lecture bornée, hors boucle (#808). Fail-empty."""
+    if _user_is_admin(user):
+        items = media_buffer.read_records(path=_media_log_path())
+    else:
+        # TODO(phase3) : limiter au mac_hash de la persona de l'appelant.
+        # D'ici là, un non-admin n'est propriétaire de rien.
+        items = []
+    return {"items": items, "count": len(items)}
+
+
+@router.get("/media/replay/{rec_id}")
+def media_replay(rec_id: str, request: Request = None,
+                 user=Depends(require_admin_or_owner)):
+    """Sert les octets d'une capture — administrateur/propriétaire, audité.
+
+    410 dès que le janitor a évincé les octets (métatag seul). Le chemin de
+    l'objet se déduit du session_id de l'ENREGISTREMENT sous
+    MEDIA_BUFFER_ROOT — jamais de `rec_id`, validé en plus contre une
+    expression hexadécimale stricte. 503 si la ligne d'audit ne peut pas
+    s'écrire : aucune relecture ne part sans trace.
+
+    Phase 2 (#812) : pour un manifeste HLS capturé (kind=="manifest"), la
+    réponse est la playlist RÉÉCRITE dont les URI de segments pointent vers
+    les relectures des segments capturés (voir `_replay_manifest`). Tout autre
+    kind (video/audio/file/segment) garde le FileResponse de la phase 1.
+    """
+    if not _REC_ID_RE.match(rec_id or ""):
+        raise HTTPException(status_code=400, detail="invalid record id")
+    rec = media_buffer.record_by_id(rec_id, path=_media_log_path())
+    if not rec or rec.get("expired") or rec.get("buffer_ref") is None:
+        raise HTTPException(status_code=410, detail="media evicted — metatag only")
+    path = _resolve_object_path(rec)
+    if not path:
+        raise HTTPException(status_code=410, detail="media evicted — metatag only")
+    sub = user.get("sub") if isinstance(user, dict) else None
+    ip = ""
+    try:
+        if request is not None:
+            ip = adresse_client(request)   # depuis la droite de XFF (#1753)
+    except Exception:
+        ip = ""
+    # Une seule ligne par relecture, écrite AVANT d'envoyer quoi que ce soit —
+    # quelle que soit la branche (manifeste réécrit ou objet brut).
+    if not _audit_replay(sub, rec_id, rec.get("host") or "", ip):
+        raise HTTPException(status_code=503,
+                            detail="journal d'audit indisponible — relecture refusée")
+
+    if rec.get("kind") == "manifest":
+        manifest_resp = _replay_manifest(rec, path)
+        if manifest_resp is not None:
+            return manifest_resp
+        # Sûr en cas d'échec : une erreur de lecture/analyse du manifeste
+        # retombe sur le FileResponse brut ci-dessous — jamais un 500.
+
+    return FileResponse(path, media_type=_ctype_sur(rec.get("ctype")),
+                        headers=dict(_ENTETES_MEDIA))
+
+
+@router.get("/media/thumb/{rec_id}")
+def media_thumb(rec_id: str, user=Depends(require_admin_or_owner)):
+    """Sert <session>/thumb.jpg d'une capture. Aucune génération de vignette
+    pour l'instant : 404 tant qu'il n'en existe pas. Même validation stricte
+    de l'id et même résolution sans traversée que la relecture."""
+    if not _REC_ID_RE.match(rec_id or ""):
+        raise HTTPException(status_code=400, detail="invalid record id")
+    rec = media_buffer.record_by_id(rec_id, path=_media_log_path())
+    session_id = (rec or {}).get("session_id")
+    if rec and session_id and _REC_ID_RE.match(str(session_id)):
+        root = os.path.realpath(MEDIA_BUFFER_ROOT)
+        thumb = os.path.realpath(os.path.join(root, session_id, "thumb.jpg"))
+        if (thumb == root or thumb.startswith(root + os.sep)) and os.path.isfile(thumb):
+            return FileResponse(thumb, media_type="image/jpeg", headers=dict(_ENTETES_MEDIA))
+    raise HTTPException(status_code=404, detail="no thumbnail (Phase 2)")
+
+
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
     cfg = get_config("dpi")
-    h = await _sbxdpi_get("health")
+    h = await _sbxdpi_live("health")
     connected = bool(isinstance(h, dict) and h.get("connected"))
     return {"running": connected, "mode": cfg.get("mode", "inline"),
             "engine": "ndpi", "interface": cfg.get("interface", "eth2"),
@@ -1059,23 +1443,23 @@ async def status(user=Depends(require_jwt)):
 #   talkers → [{name:"src → dst",flows,bytes,pct}] ; risks → [{name,count,severity}]
 @router.get("/flows")
 async def flows(user=Depends(require_jwt)):
-    return await _sbxdpi_get("stats")
+    return await _sbxdpi_live("stats")
 
 @router.get("/applications")
 async def applications(user=Depends(require_jwt)):
-    return await _sbxdpi_get("top_apps")
+    return await _sbxdpi_live("top_apps")
 
 @router.get("/devices")
 async def devices(user=Depends(require_jwt)):
-    return await _sbxdpi_get("talkers")
+    return await _sbxdpi_live("talkers")
 
 @router.get("/risks")
 async def risks(user=Depends(require_jwt)):
-    return await _sbxdpi_get("risks")
+    return await _sbxdpi_live("risks")
 
 @router.get("/talkers")
 async def talkers(user=Depends(require_jwt)):
-    return await _sbxdpi_get("talkers")
+    return await _sbxdpi_live("talkers")
 
 @router.post("/setup_mirred")
 async def setup_mirred(user=Depends(require_jwt)):
@@ -1178,7 +1562,7 @@ async def device_flows(mac: str, user=Depends(require_jwt)):
 
 
 @router.get("/realtime")
-async def realtime(user=Depends(require_jwt)):
+def realtime(user=Depends(require_jwt)):
     """Statistiques temps réel."""
     cfg = get_config("dpi")
     iface = cfg.get("interface", "eth0")
@@ -1209,7 +1593,7 @@ class BlockRuleRequest(BaseModel):
 
 
 @router.get("/block_rules")
-async def block_rules(user=Depends(require_jwt)):
+def block_rules(user=Depends(require_jwt)):
     """Règles de blocage."""
     rules_file = Path("/etc/secubox/dpi-rules.json")
     if rules_file.exists():
@@ -1218,7 +1602,7 @@ async def block_rules(user=Depends(require_jwt)):
 
 
 @router.post("/add_block_rule")
-async def add_block_rule(req: BlockRuleRequest, user=Depends(require_jwt)):
+def add_block_rule(req: BlockRuleRequest, user=Depends(require_jwt)):
     rules_file = Path("/etc/secubox/dpi-rules.json")
     rules_file.parent.mkdir(parents=True, exist_ok=True)
     rules = json.loads(rules_file.read_text()) if rules_file.exists() else []
@@ -1229,7 +1613,7 @@ async def add_block_rule(req: BlockRuleRequest, user=Depends(require_jwt)):
 
 
 @router.post("/delete_block_rule")
-async def delete_block_rule(app_or_category: str, user=Depends(require_jwt)):
+def delete_block_rule(app_or_category: str, user=Depends(require_jwt)):
     rules_file = Path("/etc/secubox/dpi-rules.json")
     if rules_file.exists():
         rules = json.loads(rules_file.read_text())
