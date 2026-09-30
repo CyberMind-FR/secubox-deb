@@ -198,6 +198,36 @@ EOF
     log "entrée « SecuBox » (OIDC) configurée — émetteur $issuer"
 }
 
+# Sauvegarde (#1747) : destination FIXE, jamais un chemin fourni par
+# l'appelant (la route /restore de l'API, qui extrayait une archive désignée
+# par un chemin libre, est retirée). L'index est pris par l'API de sauvegarde
+# de SQLite — un cp d'une base ouverte n'est pas une sauvegarde — donc sans
+# réveiller ni arrêter PhotoPrism. Le cache (vignettes, régénérables : la
+# majeure partie du volume) n'est pas archivé.
+SAUVEGARDES="${PHOTOPRISM_SAUVEGARDES:-/var/backups/secubox/photoprism}"
+cmd_backup() {
+    [ -d "$STORAGE" ] || { err "$STORAGE absent — rien à sauvegarder"; return 1; }
+    local ts tmp arch
+    ts=$(date +%Y%m%d-%H%M%S)
+    install -d -m 0750 "$SAUVEGARDES" || return 1
+    tmp=$(mktemp -d "$SAUVEGARDES/.en-cours-XXXXXX") || return 1
+    local extra=()
+    if [ -f "$STORAGE/index.db" ]; then
+        sqlite3 "$STORAGE/index.db" ".backup '$tmp/index.db'" \
+            || { rm -rf "$tmp"; err "instantané de index.db échoué"; return 1; }
+        extra=(-C "$tmp" index.db)
+    fi
+    arch="$SAUVEGARDES/photoprism-$ts.tar.gz"
+    if ! tar -czf "$arch.part" -C "$STORAGE" --exclude=./cache --exclude=./index.db \
+            --exclude='./index.db-*' . "${extra[@]}"; then
+        rm -f "$arch.part"; rm -rf "$tmp"; err "archive échouée"; return 1
+    fi
+    mv -f "$arch.part" "$arch"; rm -rf "$tmp"; chmod 0640 "$arch"
+    # Rotation : les cinq dernières.
+    ls -1t "$SAUVEGARDES"/photoprism-*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -f --
+    log "sauvegarde : $arch ($(du -h "$arch" | cut -f1))"
+}
+
 cmd_help() {
     cat <<EOF
 photoprismctl $VERSION — SecuBox PhotoPrism (natif dans LXC) controller
@@ -213,6 +243,8 @@ Usage: photoprismctl <verb> [args]
   user-provision <user> [role]  Create/sync a user (SECUBOX_USER_PASSWORD env)
   sso                Entrée « SecuBox » par OpenID Connect (secubox-oidc)
   logs [N]           Tail N lines of photoprism journal (default 50)
+  backup             Archive storage/ (instantané SQLite, sans le cache) dans
+                     /var/backups/secubox/photoprism — les 5 dernières gardées
   reload             Reload host nginx
   help               This message
 
@@ -224,7 +256,7 @@ EOF
 main() {
     local noun="${1:-help}"; shift || true
     case "$noun" in
-        install|status|start|stop|restart|index|import|update|logs|reload) "cmd_${noun}" "$@" ;;
+        install|status|start|stop|restart|index|import|update|logs|reload|backup) "cmd_${noun}" "$@" ;;
         user-provision) cmd_user_provision "$@" ;;
         sso) cmd_sso ;;
         help|-h|--help) cmd_help ;;
