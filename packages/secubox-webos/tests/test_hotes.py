@@ -26,3 +26,11 @@ def test_seuls_les_joignables_sont_locaux(monkeypatch):
     monkeypatch.setattr(hotes, "_joignable", joignable)
     assert asyncio.run(hotes.recalculer("gk3.secubox.in")) == ["a.gk3.secubox.in"]
     assert hotes.locaux() == ["a.gk3.secubox.in"]
+
+
+# #1714 : un nom que le frontal ne route pas (421) n'est pas un service servi.
+def test_421_n_est_pas_joignable():
+    from api import hotes as h
+    assert h.repond(200) and h.repond(302) and h.repond(401) and h.repond(404)
+    assert not h.repond(421)
+    assert not h.repond(502) and not h.repond(504)

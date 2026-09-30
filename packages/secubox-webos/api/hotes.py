@@ -64,12 +64,23 @@ def lire_sites(dossier: Path = SITES) -> list[str]:
     return out
 
 
+def repond(code: int) -> bool:
+    """Un code HTTP dit-il que le service est servi par son chemin public ?
+
+    421 NE COMPTE PAS (#1714). C'est la réponse d'un frontal qui ne route pas ce
+    nom — le relais de gk2 pour un service de gk3 jamais relayé, parce qu'à
+    l'arrêt. Il était « < 500 », donc compté local : le Hall de gk3 envoyait
+    peertube, photoprism, jellyfin, gitea, meet et ytsas vers des services
+    morts au lieu de leur équivalent sur un autre nœud du maillage."""
+    return code < 500 and code != 421
+
+
 async def _joignable(nom: str) -> bool:
     import httpx
     try:
         async with httpx.AsyncClient(timeout=DELAI_S, verify=False, follow_redirects=False) as cli:
             r = await cli.get(f"https://{nom}/", headers={"User-Agent": "secubox-webos-hotes"})
-            return r.status_code < 500
+            return repond(r.status_code)
     except Exception:
         return False
 

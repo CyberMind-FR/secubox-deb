@@ -1,3 +1,9 @@
+secubox-webos (1.0.384-1~bookworm1) bookworm; urgency=medium
+
+  * hôtes locaux : une réponse 421 (nom non routé par le frontal / le relais) n'est plus « joignable » — le Hall de gk3 envoyait peertube, photoprism, jellyfin, gitea, meet et ytsas vers ses propres services à l'arrêt au lieu de leur équivalent sur un autre nœud du maillage (#1714, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:10:37 +0200
+
 secubox-webos (1.0.383-1~bookworm1) bookworm; urgency=medium
 
   * Hall : port console 127.0.0.1:9078 + /__console/jeton ; sur la console, la session d'administration s'obtient d'elle-même (#1695).
