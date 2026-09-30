@@ -1,3 +1,9 @@
+secubox-portal (2.3.6-1~bookworm1) bookworm; urgency=high
+
+  * login.html : étape « Choisir le mot de passe » pour la première configuration et le changement imposé (set-password puis reconnexion automatique) ; le champ mot de passe n'est plus `required` — un compte sans mot de passe s'ouvre, en local, avec un champ vide (#1709, #1707).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 11:39:29 +0200
+
 secubox-portal (2.3.5-1~bookworm1) bookworm; urgency=medium
 
   * login.html : sur la console locale, la session s'obtient d'elle-même et renvoie à la page demandée ; garde anti-boucle d'un essai par 15 s (#1695).

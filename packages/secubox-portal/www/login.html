@@ -441,9 +441,29 @@ body::after {
       </div>
       <div class="form-group">
         <label class="form-label">Password</label>
-        <input type="password" id="password" class="form-input" placeholder="********" required autocomplete="current-password">
+        <!-- Pas de `required` (#1709) : un compte sans mot de passe s'ouvre, en
+             première configuration, avec un champ vide — c'est le serveur qui
+             tranche (réseau local seulement, #1707). -->
+        <input type="password" id="password" class="form-input" placeholder="********" autocomplete="current-password">
       </div>
       <button type="submit" id="btn-submit" class="btn">Sign In</button>
+    </form>
+
+    <!-- Step 1b: choisir le mot de passe — première configuration ou changement
+         imposé (#1709). Le serveur a vérifié ce qu'il fallait vérifier et remis
+         un jeton limité à ce seul geste. -->
+    <form id="setup-form" class="step" onsubmit="return handleSetup(event)">
+      <p class="step-hint">🔑 Premier accès à ce compte, ou changement imposé.<br>Choisissez son mot de passe.</p>
+      <div class="form-group">
+        <label class="form-label">Nouveau mot de passe</label>
+        <input type="password" id="setup-pw" class="form-input" autocomplete="new-password" minlength="10" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmer</label>
+        <input type="password" id="setup-pw2" class="form-input" autocomplete="new-password" minlength="10" required>
+      </div>
+      <button type="submit" id="btn-setup" class="btn">Définir le mot de passe</button>
+      <button type="button" class="link-btn" onclick="resetToLogin()">← Annuler</button>
     </form>
 
     <!-- Step 2: TOTP challenge (already-enrolled users) -->
@@ -498,6 +518,7 @@ function showMsg(text, type) {
 var _username = '';
 var _mfaToken = '';
 var _enrollToken = '';
+var _setupToken = '';
 
 function showStep(id) {
   var steps = document.querySelectorAll('.step');
@@ -506,7 +527,7 @@ function showStep(id) {
 }
 
 function resetToLogin() {
-  _mfaToken = ''; _enrollToken = '';
+  _mfaToken = ''; _enrollToken = ''; _setupToken = '';
   document.getElementById('msg').className = 'msg';
   var pw = document.getElementById('password'); if (pw) pw.value = '';
   showStep('login-form');
@@ -565,8 +586,11 @@ function handleLogin(e) {
     } else if (data.enrollment_required) {   // admin must set up 2FA now
       _enrollToken = data.enrollment_token;
       startEnrollment();
-    } else if (data.setup_required) {         // must change password first
-      throw new Error('Password change required — please contact an administrator.');
+    } else if (data.setup_required) {         // première configuration / changement imposé (#1709)
+      _setupToken = data.setup_token;
+      document.getElementById('msg').className = 'msg';
+      showStep('setup-form');
+      document.getElementById('setup-pw').focus();
     } else {
       throw new Error(data.detail || 'Login failed');
     }
@@ -574,6 +598,44 @@ function handleLogin(e) {
   .catch(function(err) {
     setBtn('btn-submit', false, 'Sign In');
     showMsg(err.message || 'Authentication failed', 'error');
+  });
+  return false;
+}
+
+// Step 1b — choisir le mot de passe (#1709), puis se reconnecter avec lui : la
+// suite (OTP, session) est celle d'une connexion ordinaire.
+function handleSetup(e) {
+  e.preventDefault();
+  var pw = document.getElementById('setup-pw').value;
+  var pw2 = document.getElementById('setup-pw2').value;
+  if (pw.length < 10) { showMsg('Au moins 10 caractères.', 'error'); return false; }
+  if (pw !== pw2) { showMsg('Les deux saisies diffèrent.', 'error'); return false; }
+  setBtn('btn-setup', true, 'Enregistrement...');
+  fetch('/api/v1/auth/set-password', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _setupToken},
+    body: JSON.stringify({new_password: pw}),
+    credentials: 'include'
+  })
+  .then(function(r) {
+    return r.json().then(function(d) {
+      if (!r.ok) throw new Error(d.detail || 'Échec de l\'enregistrement');
+      return d;
+    });
+  })
+  .then(function() {
+    setBtn('btn-setup', false, 'Définir le mot de passe');
+    _setupToken = '';
+    document.getElementById('setup-pw').value = '';
+    document.getElementById('setup-pw2').value = '';
+    document.getElementById('password').value = pw;
+    showStep('login-form');
+    showMsg('Mot de passe enregistré — connexion…', 'success');
+    handleLogin({preventDefault: function() {}});
+  })
+  .catch(function(err) {
+    setBtn('btn-setup', false, 'Définir le mot de passe');
+    showMsg(err.message || 'Échec', 'error');
   });
   return false;
 }
