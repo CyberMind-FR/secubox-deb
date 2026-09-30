@@ -22,7 +22,7 @@ Développeur : Gérald Kerma (Gandalf) — CyberMind, Notre-Dame-du-Cruet, Savoi
 - **OS** : Debian 12 (Bookworm) ARM64 — pas d'OpenWrt, pas de LuCI
 - **Kernel** : 6.x avec modules netfilter, tc, eBPF
 - **Transport mesh** : Tailscale (WireGuard-based)
-- **Conteneurs** : Docker / Podman sur Debian
+- **Conteneurs** : LXC uniquement — jamais Docker ni Podman, ni sur l'hôte ni dans un LXC (`PATTERNS.md` Pattern 11)
 
 ### Sécurité active
 - **Firewall** : nftables (pas iptables)

@@ -6,9 +6,10 @@
 # Idempotent native-LXC bootstrap for the PhotoPrism module. Safe to re-run.
 # Follows docs/MODULE-GUIDELINES.md §3 (mirror of grafana / secubox-peertube).
 #
-# PhotoPrism runs as a podman container inside a dedicated Debian LXC, with
-# `--network=host` (an unprivileged LXC can't bring up a podman CNI bridge on
-# the Marvell arm64 boards). Photos live on the host at /data/shared/photos,
+# PhotoPrism runs NATIVELY inside a dedicated Debian LXC — the official Linux
+# build (dl.photoprism.app, amd64/arm64, glibc >= 2.35), a systemd unit, a
+# dedicated `photoprism` user. LXC ONLY: no podman, no docker, ever
+# (.claude/PATTERNS.md Pattern 11, #1742, #1743). Photos live on the host at /data/shared/photos,
 # which Nextcloud also mounts (see secubox-nextcloud "PhotoLibrary" external
 # storage) — phone → Nextcloud → /data/shared/photos → PhotoPrism originals.
 
@@ -27,12 +28,16 @@ readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
 readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
 # Nom dérivé du domaine de CETTE box, jamais celui de gk2 (#1723).
 readonly PUBLIC_HOSTNAME="${SECUBOX_PHOTOPRISM_HOSTNAME:-$(secubox-domaine photoprism 2>/dev/null || true)}"
-readonly IMAGE="${SECUBOX_PHOTOPRISM_IMAGE:-docker.io/photoprism/photoprism:latest}"
+# Construction officielle native ; SECUBOX_PHOTOPRISM_MAJ=1 la retélécharge.
+readonly PAQUET_URL="${SECUBOX_PHOTOPRISM_URL:-https://dl.photoprism.app/pkg/linux/$(dpkg --print-architecture).tar.gz}"
+readonly MAJ="${SECUBOX_PHOTOPRISM_MAJ:-0}"
 readonly HTTP_PORT="${SECUBOX_PHOTOPRISM_PORT:-2342}"
 # PhotoPrism's built-in auto-index only fires for its own UI uploads; the
 # index timer below catches Nextcloud-synced files. AUTO_INDEX is the delay
 # (s) before re-indexing after a UI change; -1 disables.
 readonly AUTO_INDEX="${SECUBOX_PHOTOPRISM_AUTO_INDEX:-300}"
+# Vide = PhotoPrism choisit selon les cœurs ; 1 sur une petite box arm64.
+readonly WORKERS="${SECUBOX_PHOTOPRISM_WORKERS:-}"
 readonly LXC_ROOT_UID="${SECUBOX_LXC_ROOT_UID:-100000}"
 
 log()  { printf '[photoprism-install] %s\n' "$*"; }
@@ -60,8 +65,13 @@ ensure_dirs() {
     # 0777 so both LXCs' service UIDs can use it (both map root→100000, but
     # NC writes as www-data 100033). Acceptable on a single-appliance box.
     install -d -m 0777 "$SHARED_PHOTOS"
-    chown -R "$LXC_ROOT_UID:$LXC_ROOT_UID" "$DATA_DIR"
-    chown "$LXC_ROOT_UID:$LXC_ROOT_UID" "$SHARED_PHOTOS"
+    # Premier niveau seulement, et seulement s'il est encore à root : le
+    # conteneur rend storage/ et import/ à l'utilisateur photoprism ; un
+    # `chown -R` de l'hôte à chaque passage le lui reprenait (cf. peertube #1729).
+    for d in "$DATA_DIR" "$DATA_DIR/storage" "$DATA_DIR/import" "$SHARED_PHOTOS"; do
+        [ "$(stat -c %u "$d")" -lt "$LXC_ROOT_UID" ] && chown "$LXC_ROOT_UID:$LXC_ROOT_UID" "$d"
+    done
+    return 0
 }
 
 ensure_bridge() {
@@ -114,8 +124,17 @@ create_lxc() {
 }
 
 write_lxc_config() {
+    local cfg="$LXC_PATH/$LXC_NAME/config" repris=""
+    # Le paquet ne possède que l'identité du conteneur (idmap, rootfs, réseau)
+    # et ses trois montages. Le reste d'une config existante appartient à
+    # d'autres : lxc.start.* et lxc.cgroup2.* sont posés par le cycle de vie
+    # on-demand, secubox-tuning-apply et lxcstagger ; des montages ajoutés hors
+    # paquet (gk2 : dossiers Photos de comptes Nextcloud sous originals/<compte>)
+    # disparaîtraient, et PhotoPrism marquerait leurs photos manquantes.
+    [ -f "$cfg" ] && repris="$(grep -E '^lxc\.(start\.|cgroup2\.|mount\.entry)' "$cfg" \
+        | grep -vE ' var/lib/photoprism/(originals|storage|import) ' || true)"
     log "Pinning LXC network: $LXC_IP/24 on $LXC_BRIDGE; bind mounts"
-    cat > "$LXC_PATH/$LXC_NAME/config" <<EOF
+    cat > "$cfg" <<EOF
 # SecuBox-managed — see secubox-photoprism / install-lxc.sh
 lxc.include = /usr/share/lxc/config/debian.common.conf
 lxc.arch = linux64
@@ -137,6 +156,13 @@ lxc.net.0.name = eth0
 lxc.mount.entry = $SHARED_PHOTOS var/lib/photoprism/originals none bind,create=dir 0 0
 lxc.mount.entry = $DATA_DIR/storage var/lib/photoprism/storage none bind,create=dir 0 0
 lxc.mount.entry = $DATA_DIR/import var/lib/photoprism/import none bind,create=dir 0 0
+EOF
+    if [ -n "$repris" ]; then
+        log "Réglages existants conservés : $(printf '%s\n' "$repris" | wc -l) ligne(s)"
+        printf '\n# Conservé de la config existante (cycle de vie, réglages, montages locaux)\n%s\n' \
+            "$repris" >> "$cfg"
+    else
+        cat >> "$cfg" <<'EOF'
 
 lxc.cgroup2.memory.high = 1500M
 lxc.cgroup2.memory.max = 2G
@@ -144,6 +170,7 @@ lxc.cgroup2.memory.max = 2G
 lxc.start.auto = 1
 lxc.start.delay = 5
 EOF
+    fi
 
     # DECALER LA PROPRIETE DU ROOTFS SUR L'IDMAP.
     #
@@ -188,61 +215,126 @@ wait_for_network() {
     fail "LXC did not reach $LXC_GW within 30s"
 }
 
-# ── PhotoPrism (podman) install inside LXC ───────────────────────────────────
+# ── PhotoPrism NATIF dans le LXC (jamais podman ni docker — #1743) ─────────
 install_photoprism_in_lxc() {
     local admin_pw
     admin_pw="$(cat "$SECRETS_DIR/photoprism-admin" 2>/dev/null || true)"
     if [ -z "$admin_pw" ]; then
         admin_pw="$(openssl rand -hex 16)"
-        echo "$admin_pw" > "$SECRETS_DIR/photoprism-admin"
+        ( umask 077; echo "$admin_pw" > "$SECRETS_DIR/photoprism-admin" )
         chmod 600 "$SECRETS_DIR/photoprism-admin"
     fi
 
-    log "Installing podman + PhotoPrism in '$LXC_NAME' ..."
-    la env \
-        ADMIN_PW="$admin_pw" SITE_URL="https://$PUBLIC_HOSTNAME/" \
-        IMAGE="$IMAGE" HTTP_PORT="$HTTP_PORT" AUTO_INDEX="$AUTO_INDEX" \
+    log "Installing PhotoPrism (native build) in '$LXC_NAME' ..."
+    # Le mot de passe passe par stdin, jamais par argv ni par la sortie.
+    printf '%s\n' "$admin_pw" | la env \
+        SITE_URL="https://$PUBLIC_HOSTNAME/" PAQUET_URL="$PAQUET_URL" MAJ="$MAJ" \
+        HTTP_PORT="$HTTP_PORT" AUTO_INDEX="$AUTO_INDEX" PROXY="$LXC_GW" WORKERS="$WORKERS" \
         DEBIAN_FRONTEND=noninteractive LC_ALL=C LANG=C \
-        bash -e <<'INNER'
+        bash -e -c "$(cat <<'INNER'
 set -euo pipefail
-echo '[1/4] podman'
+read -r ADMIN_PW
+
+echo '[1/5] dépendances natives (libvips42 : seule bibliothèque absente du binaire)'
 apt-get update -q
-apt-get install -y -q --no-install-recommends podman ca-certificates curl
+apt-get install -y -q --no-install-recommends ca-certificates curl libvips42 ffmpeg \
+    libimage-exiftool-perl libheif-examples
+# LXC UNIQUEMENT : l'ancienne installation mettait podman DANS ce conteneur.
+if dpkg -l podman 2>/dev/null | grep -q '^ii'; then
+    echo '  purge de podman (reliquat de l ancienne installation)'
+    systemctl disable --now photoprism.service 2>/dev/null || true
+    podman rm -f photoprism >/dev/null 2>&1 || true
+    apt-get purge -y -q podman buildah crun conmon slirp4netns fuse-overlayfs 2>/dev/null || true
+    apt-get autoremove -y -q >/dev/null 2>&1 || true
+fi
+if [ -d /var/lib/containers ]; then
+    # L'overlay de podman reste monté après la purge : démonter d'abord,
+    # du plus profond au plus haut, sinon « Device or resource busy ».
+    awk '$5 ~ "^/var/lib/containers" { print $5 }' /proc/self/mountinfo \
+        | sort -r | while read -r m; do umount -l "$m" 2>/dev/null || true; done
+    rm -rf /var/lib/containers 2>/dev/null \
+        || echo '  avertissement : /var/lib/containers non effacé (reliquat inerte)'
+fi
 
-echo '[2/4] pull image'
-podman pull "$IMAGE"
+echo '[2/5] construction officielle'
+if [ ! -x /opt/photoprism/bin/photoprism ] || [ "$MAJ" = 1 ]; then
+    rm -rf /opt/photoprism.nouveau && mkdir -p /opt/photoprism.nouveau
+    curl -fsSL "$PAQUET_URL" | tar -xz -C /opt/photoprism.nouveau
+    /opt/photoprism.nouveau/bin/photoprism --version >/dev/null
+    rm -rf /opt/photoprism.ancien
+    [ -d /opt/photoprism ] && mv /opt/photoprism /opt/photoprism.ancien
+    mv /opt/photoprism.nouveau /opt/photoprism
+    rm -rf /opt/photoprism.ancien
+fi
+/opt/photoprism/bin/photoprism --version
 
-echo '[3/4] photoprism.service'
-cat > /etc/systemd/system/photoprism.service <<UNIT
+echo '[3/5] utilisateur, répertoires, configuration'
+id photoprism >/dev/null 2>&1 || adduser --system --group --home /var/lib/photoprism \
+    --no-create-home --shell /usr/sbin/nologin photoprism
+install -d -o photoprism -g photoprism /var/lib/photoprism
+# Montages liés : storage/ et import/ à photoprism (l'ancien conteneur les
+# laissait à root) ; originals/ est partagé avec Nextcloud (0777), on n'y touche pas.
+for d in storage import; do
+    [ "$(stat -c %U /var/lib/photoprism/$d)" = photoprism ] || chown -R photoprism:photoprism /var/lib/photoprism/$d
+done
+install -d -m 0750 -o root -g photoprism /etc/photoprism
+umask 077
+cat > /etc/photoprism/photoprism.env <<ENV
+PHOTOPRISM_ADMIN_USER=admin
+PHOTOPRISM_ADMIN_PASSWORD=$ADMIN_PW
+PHOTOPRISM_ASSETS_PATH=/opt/photoprism/assets
+PHOTOPRISM_STORAGE_PATH=/var/lib/photoprism/storage
+PHOTOPRISM_CONFIG_PATH=/var/lib/photoprism/storage/config
+PHOTOPRISM_ORIGINALS_PATH=/var/lib/photoprism/originals
+PHOTOPRISM_IMPORT_PATH=/var/lib/photoprism/import
+PHOTOPRISM_DATABASE_DRIVER=sqlite
+PHOTOPRISM_HTTP_HOST=0.0.0.0
+PHOTOPRISM_HTTP_PORT=$HTTP_PORT
+PHOTOPRISM_AUTO_INDEX=$AUTO_INDEX
+PHOTOPRISM_SITE_URL=$SITE_URL
+# TLS terminé par HAProxy : le site est en https:// mais nginx parle en clair
+# au conteneur ; sans ceci PhotoPrism tenterait son propre TLS.
+PHOTOPRISM_DISABLE_TLS=true
+# nginx de l'hôte joint le conteneur depuis la passerelle du pont.
+PHOTOPRISM_TRUSTED_PROXY=$PROXY
+ENV
+[ -z "$WORKERS" ] || echo "PHOTOPRISM_WORKERS=$WORKERS" >> /etc/photoprism/photoprism.env
+chown root:photoprism /etc/photoprism/photoprism.env
+chmod 0640 /etc/photoprism/photoprism.env
+umask 022
+
+echo '[4/5] lanceur photoprism-cli (ctl et API passent par lui)'
+cat > /usr/local/bin/photoprism-cli <<'CLI'
+#!/bin/sh
+# PhotoPrism en ligne de commande : même environnement, même compte que le service.
+set -a; . /etc/photoprism/photoprism.env; set +a
+# Répertoire lisible par photoprism : lancé depuis /root, le binaire panique
+# dès son init (« stat .: permission denied »).
+cd /var/lib/photoprism || exit 1
+exec runuser -u photoprism -- /opt/photoprism/bin/photoprism "$@"
+CLI
+chmod 0755 /usr/local/bin/photoprism-cli
+
+echo '[5/5] services'
+cat > /etc/systemd/system/photoprism.service <<'UNIT'
 [Unit]
-Description=PhotoPrism (podman)
+Description=PhotoPrism (natif, LXC)
 After=network.target
 
 [Service]
 Type=simple
-ExecStartPre=-/usr/bin/podman rm -f photoprism
-ExecStart=/usr/bin/podman run --rm --name photoprism \\
-  --network=host \\
-  -v /var/lib/photoprism/originals:/photoprism/originals \\
-  -v /var/lib/photoprism/storage:/photoprism/storage \\
-  -v /var/lib/photoprism/import:/photoprism/import \\
-  -e PHOTOPRISM_ADMIN_USER=admin \\
-  -e PHOTOPRISM_ADMIN_PASSWORD=${ADMIN_PW} \\
-  -e PHOTOPRISM_DATABASE_DRIVER=sqlite \\
-  -e PHOTOPRISM_HTTP_HOST=0.0.0.0 \\
-  -e PHOTOPRISM_HTTP_PORT=${HTTP_PORT} \\
-  -e PHOTOPRISM_AUTO_INDEX=${AUTO_INDEX} \\
-  -e PHOTOPRISM_SITE_URL="${SITE_URL}" \\
-  ${IMAGE}
-ExecStop=/usr/bin/podman stop photoprism
+User=photoprism
+Group=photoprism
+EnvironmentFile=/etc/photoprism/photoprism.env
+WorkingDirectory=/var/lib/photoprism
+ExecStart=/opt/photoprism/bin/photoprism start
 Restart=on-failure
 RestartSec=5
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
 UNIT
-
-echo '[4/4] index timer (catches Nextcloud-synced files)'
 cat > /etc/systemd/system/photoprism-index.service <<'UNIT'
 [Unit]
 Description=PhotoPrism incremental index (picks up Nextcloud-synced photos)
@@ -251,7 +343,10 @@ Requires=photoprism.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/podman exec photoprism photoprism index
+User=photoprism
+Group=photoprism
+EnvironmentFile=/etc/photoprism/photoprism.env
+ExecStart=/opt/photoprism/bin/photoprism index
 UNIT
 cat > /etc/systemd/system/photoprism-index.timer <<'UNIT'
 [Unit]
@@ -267,10 +362,12 @@ WantedBy=timers.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now photoprism.service
-systemctl enable --now photoprism-index.timer
-echo '=== PhotoPrism install complete ==='
+systemctl enable photoprism.service photoprism-index.timer
+systemctl restart photoprism.service
+systemctl start photoprism-index.timer
+echo '=== PhotoPrism (natif) install complete ==='
 INNER
+)"
 }
 
 verify() {
@@ -298,7 +395,8 @@ main() {
     verify
     mark_provisioned
     log "Done — LXC '$LXC_NAME' at $LXC_IP, PhotoPrism running."
-    log "Admin: admin / $(cat "$SECRETS_DIR/photoprism-admin")  (rotate via UI)."
+    # Jamais le mot de passe lui-même dans la sortie (#1729).
+    log "Admin: admin — mot de passe dans $SECRETS_DIR/photoprism-admin (0600) ; à changer par l'interface."
     log "Public (wire HAProxy SNI + nginx vhost): https://$PUBLIC_HOSTNAME/"
     log "Nextcloud side: enable the 'PhotoLibrary' external-storage mount → $SHARED_PHOTOS (secubox-nextcloud)."
 }

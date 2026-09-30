@@ -525,8 +525,8 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Docker Image</label>
-                            <input type="text" id="cfgImage" value="photoprism/photoprism:latest">
+                            <label>Construction</label>
+                            <input type="text" id="cfgImage" value="native — dl.photoprism.app (LXC uniquement)" readonly>
                         </div>
                     </div>
                     <div class="form-row">
@@ -681,7 +681,7 @@
                 document.getElementById('cfgOriginals').value = status.originals_path || '/srv/photoprism/originals';
                 document.getElementById('cfgImport').value = status.import_path || '/srv/photoprism/import';
                 document.getElementById('cfgTimezone').value = status.timezone || 'Europe/Paris';
-                document.getElementById('cfgImage').value = status.image || 'photoprism/photoprism:latest';
+                document.getElementById('cfgImage').value = status.build || 'native — dl.photoprism.app (LXC uniquement)';
                 document.getElementById('cfgDomain').value = status.domain || 'photos.secubox.local';
                 document.getElementById('cfgFaces').checked = status.face_recognition !== false;
                 document.getElementById('cfgExperimental').checked = status.experimental || false;
@@ -714,13 +714,13 @@
         }
 
         async function installPhotoprism() {
-            if (!confirm('Install PhotoPrism? This will download the Docker image.')) return;
+            if (!confirm('Install PhotoPrism? This will download the official native build into its LXC.')) return;
             toast('Installing PhotoPrism... This may take a few minutes.');
             try {
                 const res = await api('/container/install', { method: 'POST' });
                 if (res.success) {
-                    toast('PhotoPrism installed! Starting...');
-                    await api('/container/start', { method: 'POST' });
+                    // L'installation tourne en arrière-plan et démarre le service elle-même.
+                    toast(res.message || 'Install started');
                     await refresh();
                 } else {
                     toast(res.error || 'Install failed', 'error');
@@ -866,7 +866,6 @@
                         originals_path: document.getElementById('cfgOriginals').value,
                         import_path: document.getElementById('cfgImport').value,
                         timezone: document.getElementById('cfgTimezone').value,
-                        image: document.getElementById('cfgImage').value,
                         domain: document.getElementById('cfgDomain').value,
                         face_recognition: document.getElementById('cfgFaces').checked,
                         experimental: document.getElementById('cfgExperimental').checked,
@@ -914,7 +913,8 @@
             try {
                 const res = await api('/container/update', { method: 'POST' });
                 if (res.success) {
-                    toast('Update complete!');
+                    // Détaché côté serveur (plusieurs minutes) : « lancée », pas « finie ».
+                    toast(res.message || 'Update started');
                     await refresh();
                 } else {
                     toast(res.error || 'Update failed', 'error');

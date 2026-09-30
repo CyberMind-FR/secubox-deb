@@ -11,10 +11,11 @@ Depends: ${misc:Depends}, secubox-core (>= 1.5.39~), python3-uvicorn | python3-p
  lxc, lxc-templates, nftables, openssl, python3-yaml
 Recommends: secubox-oidc
 Description: PhotoPrism photo management for SecuBox (native LXC)
- SecuBox module for a PhotoPrism photo server running as a podman container
- inside a dedicated Debian LXC (--network=host). `photoprismctl install`
- provisions the LXC + container on demand; the host dashboard daemon stays
- lightweight and always reachable.
+ SecuBox module for a PhotoPrism photo server installed natively (official
+ build from dl.photoprism.app) inside a dedicated Debian LXC, running as its
+ own unprivileged user. No podman, no docker. `photoprismctl install`
+ provisions the LXC on demand; the host dashboard daemon stays lightweight
+ and always reachable.
  .
  Photos live on /data/shared/photos, also mounted by Nextcloud as the
  "PhotoLibrary" external storage — phone → Nextcloud → /data/shared/photos →
@@ -22,8 +23,8 @@ Description: PhotoPrism photo management for SecuBox (native LXC)
  auto-index only fires for its own UI uploads).
  .
  Features:
-  - LXC lifecycle via photoprismctl (install/status/start/stop/restart/index)
-  - Public nginx vhost (:9080 → LXC :2342) bypassing the WAF (gitea pattern)
+  - LXC lifecycle via photoprismctl (install/update/status/start/stop/restart/index/import)
+  - Public nginx vhost (:9080 → LXC :2342) behind sbxwaf inspection
   - AI-powered face recognition, library indexing, album management
   - Import workflow + Nextcloud photo integration
   - CRT-light P31 phosphor theme

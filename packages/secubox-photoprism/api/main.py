@@ -5,7 +5,7 @@
 
 """secubox-photoprism — FastAPI application for PhotoPrism photo management.
 
-Provides PhotoPrism Docker container management with library indexing,
+Provides native PhotoPrism (LXC) management with library indexing,
 face recognition, album management, and storage configuration.
 """
 import asyncio
@@ -42,8 +42,9 @@ log = get_logger("photoprism")
 CONFIG_FILE = Path("/etc/secubox/photoprism.toml")
 INSTALL_LIB = "/usr/share/secubox/lib/photoprism/install-lxc.sh"
 PHOTOPRISMCTL = "/usr/sbin/photoprismctl"
-# PhotoPrism runs as the `photoprism` podman container INSIDE the photoprism
-# LXC (see lib/photoprism/install-lxc.sh), not on the host.
+# PhotoPrism runs NATIVELY inside the photoprism LXC (official Linux build,
+# systemd unit — lib/photoprism/install-lxc.sh). LXC ONLY: never podman/docker
+# (.claude/PATTERNS.md Pattern 11, #1742, #1743).
 CONTAINER_NAME = "photoprism"
 DEFAULT_CONFIG = {
     # LXC
@@ -52,7 +53,6 @@ DEFAULT_CONFIG = {
     "path": "/data/lxc",
     # PhotoPrism (inside the LXC)
     "enabled": False,
-    "image": "docker.io/photoprism/photoprism:latest",
     "port": 2342,
     "http_port": 2342,
     "data_path": "/data/photoprism",
@@ -77,7 +77,6 @@ DEFAULT_CONFIG = {
 
 class PhotoprismConfig(BaseModel):
     enabled: bool = False
-    image: str = "photoprism/photoprism:latest"
     port: int = 2342
     data_path: str = "/srv/photoprism"
     originals_path: str = "/srv/photoprism/originals"
@@ -191,15 +190,22 @@ def is_running() -> bool:
     return http_reachable()
 
 
-def _pm() -> list:
-    """Command prefix to run podman inside the PhotoPrism LXC.
+def _photoprismctl_detache(verb: str) -> dict:
+    """Long verb (install/update: minutes) run detached, logged to a file.
 
-    NOTE: lxc-attach needs root; the dashboard runs as the unprivileged
-    'secubox' user, so container-lifecycle verbs are best driven via
-    photoprismctl from a root context. Read-only status uses http_reachable()."""
-    cfg = get_config()
-    return ["lxc-attach", "-n", cfg.get("name", "photoprism"),
-            "-P", cfg.get("path", "/data/lxc"), "--", "podman"]
+    HAProxy cuts an idle request after 30 s: waiting for it here would only
+    turn a working install into a client-side error.
+    """
+    journal = f"/var/log/secubox/photoprism-{verb}.log"
+    try:
+        subprocess.Popen(
+            [PHOTOPRISMCTL, verb],
+            stdout=open(journal, "a"), stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        return {"success": True, "message": f"{verb} started (several minutes). Follow {journal}."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 def _photoprismctl(verb: str, timeout: int = 60) -> dict:
@@ -330,7 +336,7 @@ async def status():
     return {
         "deployment": "lxc-native",
         "enabled": cfg.get("enabled", False),
-        "image": cfg.get("image", "docker.io/photoprism/photoprism:latest"),
+        "build": "native — dl.photoprism.app (LXC uniquement)",
         "port": cfg.get("port", 2342),
         "lxc_name": cfg.get("name", "photoprism"),
         "lxc_ip": cfg.get("ip", "10.100.0.130"),
@@ -397,15 +403,11 @@ def start_indexing(user=Depends(require_jwt)):
     log.info(f"Starting index by {user.get('sub', 'unknown')}")
 
     try:
-        # Run photoprism index inside the LXC container.
-        result = subprocess.run(
-            _pm() + ["exec", CONTAINER_NAME, "photoprism", "index"],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode == 0:
+        # Via photoprismctl (lxc-attach exige root) → photoprism-cli dans le LXC.
+        r = _photoprismctl("index", timeout=300)
+        if r.get("success"):
             return {"success": True, "output": "Indexing started"}
-        else:
-            return {"success": False, "error": result.stderr.strip() or "Indexing failed"}
+        return {"success": False, "error": (r.get("stderr") or r.get("error") or "Indexing failed").strip()}
     except subprocess.TimeoutExpired:
         return {"success": True, "output": "Indexing in progress (background)"}
     except Exception as e:
@@ -421,15 +423,10 @@ def import_photos(user=Depends(require_jwt)):
     log.info(f"Starting import by {user.get('sub', 'unknown')}")
 
     try:
-        # Run photoprism import inside the LXC container.
-        result = subprocess.run(
-            _pm() + ["exec", CONTAINER_NAME, "photoprism", "import"],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode == 0:
+        r = _photoprismctl("import", timeout=300)
+        if r.get("success"):
             return {"success": True, "output": "Import started"}
-        else:
-            return {"success": False, "error": result.stderr.strip() or "Import failed"}
+        return {"success": False, "error": (r.get("stderr") or r.get("error") or "Import failed").strip()}
     except subprocess.TimeoutExpired:
         return {"success": True, "output": "Import in progress (background)"}
     except Exception as e:
@@ -645,21 +642,13 @@ async def container_status(user=Depends(require_jwt)):
 
 @router.post("/container/install")
 def install_photoprism(user=Depends(require_jwt)):
-    """Provision the LXC + podman + PhotoPrism. Long-running → detached."""
+    """Provision the LXC + native PhotoPrism. Long-running → detached."""
     if not Path(INSTALL_LIB).exists():
         return {"success": False, "error": f"install script missing at {INSTALL_LIB}"}
     log.info(f"Launching native-LXC PhotoPrism install by {user.get('sub', 'unknown')}")
-    try:
-        subprocess.Popen(
-            ["bash", INSTALL_LIB],
-            stdout=open("/var/log/secubox/photoprism-install.log", "a"),
-            stderr=subprocess.STDOUT, start_new_session=True,
-        )
-        return {"success": True,
-                "message": "Install started (several minutes). Follow "
-                           "/var/log/secubox/photoprism-install.log or 'photoprismctl logs'."}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    # Par photoprismctl, pas install-lxc.sh en direct : c'est lui qui
+    # transmet le toml (nom public, port, auto_index, workers).
+    return _photoprismctl_detache("install")
 
 
 @router.post("/container/start")
@@ -696,18 +685,9 @@ async def uninstall_photoprism(user=Depends(require_jwt)):
 
 @router.post("/container/update")
 def update_photoprism(user=Depends(require_jwt)):
-    """Pull the latest image inside the LXC + restart."""
-    cfg = get_config()
-    image = cfg.get("image", "docker.io/photoprism/photoprism:latest")
-    log.info(f"Updating PhotoPrism image ({image}) by {user.get('sub', 'unknown')}")
-    try:
-        pull = subprocess.run(_pm() + ["pull", image], capture_output=True, text=True, timeout=600)
-        if pull.returncode != 0:
-            return {"success": False, "error": pull.stderr.strip() or "pull failed"}
-        _photoprismctl("restart")
-        return {"success": True, "output": "Update complete"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    """Re-download the official native build inside the LXC + restart."""
+    log.info(f"Updating PhotoPrism (native build) by {user.get('sub', 'unknown')}")
+    return _photoprismctl_detache("update")
 
 
 # ============================================================================
