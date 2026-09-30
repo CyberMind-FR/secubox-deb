@@ -1,3 +1,13 @@
+secubox-metablogizer (1.8.28-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : mise en place restaurée (effacée par la fusion 6036886281 ;
+    #1748, #1768) — tmpfiles des caches, minuteries metablog-shots et
+    metablog-sync (première installation seulement : l'état choisi par
+    l'opérateur prime ensuite), réécriture git vers Gitea interne (domaine
+    de la box, #1723), validation visudo des sudoers livrés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:42:28 +0200
+
 secubox-metablogizer (1.8.27-1~bookworm1) bookworm; urgency=medium
 
   * vhost metablogizer : frame-ancestors + $sbx_hall_box et $sbx_halls_parc (#1725, #1713).

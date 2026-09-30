@@ -60,5 +60,46 @@ systemctl enable secubox-metablogizer 2>/dev/null || true
 # minuteur rattrape le reste toutes les 30 min.
 systemctl enable metablog-audit.timer 2>/dev/null || true
 systemctl start metablog-audit.timer 2>/dev/null || true
+
+# ── RESTAURÉ PAR #1768 : effacé par la fusion 6036886281 du 2026-08-17 ────
+#
+# Arborescence des caches (vignettes #956, liste des sites #974) : le fichier
+# tmpfiles est livré, mais plus personne ne le créait sur une box neuve.
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-metablogizer.conf 2>/dev/null || true
+
+# Minuteries des vignettes (#956) et de la synchro des sites adossés à git
+# (#1029) : activées à la PREMIÈRE installation seulement. Sur une mise à
+# jour, l'état choisi par l'opérateur prime — metablog-sync a pu être coupé
+# exprès (décommission d'une synchro GitHub), metablog-shots après
+# l'incident de cadence (#1650).
+if [ "${1:-}" = configure ] && [ -z "${2:-}" ]; then
+    systemctl enable --now metablog-shots.timer metablog-sync.timer 2>/dev/null || true
+fi
+
+# Versionnement des téléversements dans Gitea (api/webhook.py:git_commit_push).
+# Le dépôt distant vise l'hôte PUBLIC de gitea, qui repasse par la box (NAT en
+# épingle) : la poignée SSH réussit, le transfert cale. On réécrit vers le
+# point d'entrée interne du LXC, pour le compte du service. Nom dérivé du
+# domaine de CETTE box (#1723), jamais gk2 en dur.
+GITEA_HOTE="$(secubox-domaine gitea 2>/dev/null || true)"
+GITEA_PUSH_TARGET="${GITEA_PUSH_TARGET:-ssh://gitea@10.100.0.40:2222/}"
+if [ -n "$GITEA_HOTE" ] && getent passwd secubox >/dev/null 2>&1; then
+    GITEA_PUBLIC_URL="${GITEA_PUBLIC_URL:-ssh://gitea@${GITEA_HOTE}:2222/}"
+    runuser -u secubox -- git config --global "url.${GITEA_PUSH_TARGET}.insteadOf" "$GITEA_PUBLIC_URL" 2>/dev/null || true
+    SECU_HOME="$(getent passwd secubox | cut -d: -f6)"
+    if [ -n "$SECU_HOME" ]; then
+        install -d -o secubox -g secubox -m 700 "$SECU_HOME/.ssh" 2>/dev/null || true
+        runuser -u secubox -- sh -c "ssh-keyscan -T 5 -p 2222 10.100.0.40 2>/dev/null >> '$SECU_HOME/.ssh/known_hosts' && sort -u '$SECU_HOME/.ssh/known_hosts' -o '$SECU_HOME/.ssh/known_hosts'" 2>/dev/null || true
+    fi
+fi
+
+# Assistant de publication et rafraîchissement manuel de la liste (#974) :
+# un fichier sudoers que visudo refuse casserait TOUT sudo — on le valide.
+for f in /etc/sudoers.d/secubox-publish-wizard /etc/sudoers.d/secubox-metablog-audit; do
+    [ -f "$f" ] || continue
+    chmod 0440 "$f"
+    visudo -cf "$f" >/dev/null 2>&1 || rm -f "$f"
+done
+
 systemctl start secubox-metablogizer 2>/dev/null || true
 exit 0
