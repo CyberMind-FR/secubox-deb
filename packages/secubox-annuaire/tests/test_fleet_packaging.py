@@ -150,3 +150,18 @@ def test_changelog_bumped_for_fleet_metrics():
     assert m, f"unparseable changelog head: {head!r}"
     major, minor, patch = (int(x) for x in m.groups())
     assert (major, minor, patch) > (0, 9, 0)
+
+
+def test_mesh_listener_depot_openpgp_borne():
+    """#1736 : la SEULE route d'écriture de l'écoute :8799 — POST seulement,
+    corps borné, vers le démon openpgp, avant le refus final."""
+    tpl = (ROOT / "nginx" / "annuaire-mesh.conf.tpl").read_text()
+    debut = tpl.index("location = /api/v1/openpgp/boite/depot {")
+    bloc = tpl[debut:tpl.index("\n    }\n", debut)]
+    assert "limit_except POST { deny all; }" in bloc
+    assert "client_max_body_size 256k;" in bloc
+    assert "proxy_pass http://unix:/run/secubox/openpgp.sock;" in bloc
+    assert debut < tpl.index("location / { return 403; }")
+    # Aucune autre route n'accepte autre chose que GET.
+    assert tpl.count("limit_except POST") == 1
+

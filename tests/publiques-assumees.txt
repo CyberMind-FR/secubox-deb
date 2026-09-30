@@ -48,6 +48,7 @@ secubox-p2p POST /master-link/join      # jeton valide dans le corps de la reque
 secubox-p2p POST /master-link/invite-local    # restreint a localhost (documente)
 secubox-p2p POST /master-link/cleanup-local   # restreint a localhost (documente)
 secubox-p2p POST /api/v1/p2p-macro/grant/{service_id} # Subscription auto-signee, verifiee
+secubox-openpgp POST /boite/depot      # dépôt maillé (#1736) : message SIGNÉ par la clé liée du pair (annuaire, node.key) et CHIFFRÉ pour cette box, tout vérifié par le démon ; écoute :8799 seulement (10.10.0.0/24)
 secubox-mail POST /autodiscover/autodiscover.xml  # protocole Outlook : le client ne peut pas porter de JWT
 secubox-mail POST /Autodiscover/Autodiscover.xml  # idem, variante de casse imposee par le protocole
 secubox-droplet POST /depot             # documente « PUBLIC — c'est la raison d'etre de cet espace »

@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+# La clé de box (/var/lib/secubox/openpgp/node) n'est JAMAIS effacée par le
+# paquet, même à la purge : c'est une identité liée dans l'annuaire.
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    systemctl disable --now secubox-openpgp.service >/dev/null 2>&1 || true
+fi
+#DEBHELPER#
+exit 0

@@ -62,6 +62,8 @@ from .model import (
     Subscription,
     SubscriptionState,
     now_rfc3339,
+    OpenPGPBinding,
+    OpenPGPRevocation,
 )
 
 
@@ -2414,3 +2416,27 @@ def assist_match_accept(journal: Journal, priv: bytes, offer_id: str, req_id: st
     m_ = AssistMatchAccept(match_id=mid, offer_id=offer_id, req_id=req_id,
                            side=side, issued_by=did)
     return _assist_append(journal, priv, Op.ASSIST_MATCH_ACCEPT, m_, "AssistMatchAccept")
+
+
+# ---------------------------------------------------------------------------
+# OpenPGP (#1736) — la clé OpenPGP de la box, liée par node.key
+# ---------------------------------------------------------------------------
+
+def openpgp_bind(journal: Journal, priv: bytes, empreinte: str, cle_publique: str,
+                 creee: int, expire: int):
+    """OPENPGP_BIND : la box déclare SA clé OpenPGP, signée par node.key.
+
+    `priv` est node.key : c'est lui, et lui seul, qui donne sa valeur à la
+    liaison. La clé OpenPGP ne signe rien ici — elle est l'objet déclaré."""
+    did = did_from_pubkey(public_from_private(priv))
+    m_ = OpenPGPBinding(did=did, empreinte=empreinte.upper(), cle_publique=cle_publique,
+                        creee=int(creee), expire=int(expire))
+    return _assist_append(journal, priv, Op.OPENPGP_BIND, m_, "OpenPGPBinding")
+
+
+def openpgp_revoke(journal: Journal, priv: bytes, empreinte: str, motif: str = ""):
+    """OPENPGP_REVOKE : la box retire une empreinte — définitivement."""
+    did = did_from_pubkey(public_from_private(priv))
+    m_ = OpenPGPRevocation(did=did, empreinte=empreinte.upper(), motif=motif)
+    return _assist_append(journal, priv, Op.OPENPGP_REVOKE, m_, "OpenPGPRevocation")
+

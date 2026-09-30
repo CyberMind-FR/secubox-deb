@@ -15,10 +15,13 @@
 #
 # Exposure is deliberately minimal (CSPN: minimal attack surface):
 #   * binds ONLY the node's wg-mesh address (__MESH_IP__), never 0.0.0.0
-#   * accepts ONLY GET, ONLY the three exact read paths below
+#   * accepts GET on the exact read paths below, and POST on ONE path only
+#     (the OpenPGP drop box, #1736)
 #   * allow 10.10.0.0/24 + deny all — non-mesh sources are refused
-#   * the data it serves is public, signed, self-certifying; no mutating
-#     endpoint is reachable over the mesh.
+#   * the data it serves is public, signed, self-certifying. ONE write path
+#     exists (#1736): the OpenPGP inter-box drop box, POST only, 256 KiB max —
+#     it accepts only a message signed by a peer's BOUND key and encrypted for
+#     this box; the openpgp daemon verifies everything, nginx only bounds it.
 #
 # __MESH_IP__ is substituted by postinst with the detected wg-mesh IPv4. If no
 # wg-mesh interface exists, postinst does NOT install this file (no listener).
@@ -75,6 +78,21 @@ server {
         limit_except GET { deny all; }
         default_type application/json;
         alias /var/lib/secubox/annuaire/adresses.json;
+    }
+
+    # DÉPÔT OPENPGP INTER-BOX (#1736) — la seule route d'écriture de cette
+    # écoute. Un message signé ET chiffré pour cette box ; le démon vérifie
+    # tout (signataire = clé liée à l'expéditeur dans l'annuaire, destinataire,
+    # fraîcheur, rejeu). nginx ne fait que borner : POST, 256 Kio.
+    location = /api/v1/openpgp/boite/depot {
+        limit_except POST { deny all; }
+        client_max_body_size 256k;
+        rewrite ^/api/v1/openpgp/(.*)$ /$1 break;
+        proxy_pass http://unix:/run/secubox/openpgp.sock;
+        include /etc/nginx/snippets/secubox-proxy.conf;
+        proxy_set_header X-SecuBox-Maillage 1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_intercept_errors on;
     }
 
     location / { return 403; }
