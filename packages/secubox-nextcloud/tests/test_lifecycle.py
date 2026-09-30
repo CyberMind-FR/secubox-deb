@@ -71,14 +71,17 @@ def test_uninstall_ctl_failure_is_502_not_generic_500_body(monkeypatch):
     assert "boom" in r.json()["detail"]
 
 
-def test_backup_routes_through_ctl(monkeypatch):
+def test_backup_routes_through_ctl(monkeypatch, tmp_path):
+    """Sauvegarde détachée (#1757) : `sudo -n nextcloudctl backup <nom>` lancé
+    en arrière-plan, journal dans un dossier inscriptible."""
     m = _load(monkeypatch)
+    monkeypatch.setattr(m, "JOURNAUX", tmp_path)
     seen = {}
-    monkeypatch.setattr(m, "ctl", lambda sub, **k: (seen.setdefault("sub", sub), (True, "", ""))[1])
+    monkeypatch.setattr(m.subprocess, "Popen", lambda cmd, **k: seen.setdefault("cmd", cmd))
     c = TestClient(m.app)
     r = c.post("/backup", json={"name": "nightly"})
     assert r.status_code == 200
-    assert seen["sub"] == ["backup", "nightly"]
+    assert seen["cmd"][-2:] == ["backup", "nightly"] and seen["cmd"][:2] == ["sudo", "-n"]
 
 
 def test_backup_name_traversal_rejected(monkeypatch):
@@ -138,7 +141,7 @@ def test_restore_valid_name_uses_sudo_and_confirm_stdin(monkeypatch, tmp_path):
     real_open = builtins.open
 
     def fake_open(path, *a, **k):
-        if path == "/var/log/nextcloud-restore.log":
+        if str(path).endswith("nextcloud-restore.log"):
             path = str(log_file)
         return real_open(path, *a, **k)
 

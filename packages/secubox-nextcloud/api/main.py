@@ -56,6 +56,10 @@ NC_INTERNAL_PORT = 80
 # container's port for liveness (privilege-free) and route every container op
 # through nextcloudctl (which has an `occ` passthrough and runs as root).
 NCTL = ["sudo", "-n", "/usr/sbin/nextcloudctl"]
+# Journaux des tâches de fond : un dossier que le service (secubox) peut écrire —
+# /var/log/nextcloud-*.log lui était refusé, la route rendait 500 avant même
+# de lancer le helper (#1757).
+JOURNAUX = Path("/var/log/secubox")
 
 # Ce que `run_cmd` rend sur stderr quand il a dû tuer le groupe à l'expiration.
 EXPIRE = "Command timed out"
@@ -518,13 +522,13 @@ def install():
 
     subprocess.Popen(
         [*NCTL, "install"],
-        stdout=open("/var/log/nextcloud-install.log", "w"),
+        stdout=open(JOURNAUX / "nextcloud-install.log", "w"),
         stderr=subprocess.STDOUT
     )
     return {
         "success": True,
         "message": "Installation started in background",
-        "log_file": "/var/log/nextcloud-install.log"
+        "log_file": str(JOURNAUX / "nextcloud-install.log")
     }
 
 
@@ -544,7 +548,7 @@ def update():
     """Update Nextcloud"""
     subprocess.Popen(
         [*NCTL, "update"],
-        stdout=open("/var/log/nextcloud-update.log", "w"),
+        stdout=open(JOURNAUX / "nextcloud-update.log", "w"),
         stderr=subprocess.STDOUT
     )
     return {"success": True, "message": "Update started in background"}
@@ -764,11 +768,20 @@ def create_backup(req: Optional[BackupRequest] = None):
     sub = ["backup"]
     if name:
         sub.append(name)
-
-    success, out, err = ctl(sub, timeout=300)
-    if success:
-        return {"success": True, "message": "Backup created"}
-    raise HTTPException(500, f"Backup failed: {err or out}")
+    # EN ARRIÈRE-PLAN (#1757) : une sauvegarde dure des minutes ; HAProxy
+    # coupe la requête à 30 s et la tuer à 300 s laisserait une archive à
+    # moitié écrite. Journal dans /var/log/secubox (inscriptible par le service).
+    try:
+        subprocess.Popen(
+            [*NCTL, *sub],
+            stdout=open(JOURNAUX / "nextcloud-backup.log", "a"),
+            stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as e:
+        raise HTTPException(500, f"Backup failed to start: {e}")
+    return {"success": True, "message": "Backup started in background",
+            "log_file": str(JOURNAUX / "nextcloud-backup.log")}
 
 
 @app.delete("/backup/{name}", dependencies=[Depends(require_jwt)])
@@ -800,7 +813,7 @@ def restore_backup(name: str):
     proc = subprocess.Popen(
         [*NCTL, "restore", name],
         stdin=subprocess.PIPE,
-        stdout=open("/var/log/nextcloud-restore.log", "w"),
+        stdout=open(JOURNAUX / "nextcloud-restore.log", "w"),
         stderr=subprocess.STDOUT,
         text=True, start_new_session=True,
     )
@@ -855,7 +868,7 @@ def get_logs(lines: int = 100):
     logs = []
 
     # Installation log
-    install_log = Path("/var/log/nextcloud-install.log")
+    install_log = JOURNAUX / "nextcloud-install.log"
     if install_log.exists():
         success, out, _ = run_cmd(["tail", f"-n{lines}", str(install_log)])
         if success:

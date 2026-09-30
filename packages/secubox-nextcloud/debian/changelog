@@ -24,6 +24,9 @@ secubox-nextcloud (1.8.6-1~bookworm1) bookworm; urgency=medium
   * Opérations de compte bornées à 25 s (HAProxy coupe à 30 s). Suite de
     tests réalignée sur l'architecture actuelle, garde « chaque route
     appelée par la page existe » (#1757).
+  * Journaux des tâches de fond dans /var/log/secubox (le service ne pouvait
+    pas écrire /var/log/nextcloud-*.log : install, update, restore rendaient
+    500) ; sauvegarde lancée en arrière-plan (HAProxy coupe à 30 s).
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:12:37 +0200
 

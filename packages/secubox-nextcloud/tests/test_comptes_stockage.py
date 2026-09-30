@@ -401,12 +401,16 @@ def test_suppression_sauvegarde_absente_404(monkeypatch, tmp_path):
     assert appels == []
 
 
-def test_sauvegarde_sans_corps(monkeypatch):
-    # la page poste /backup SANS corps : un modèle obligatoire rendait 422
+def test_sauvegarde_sans_corps(monkeypatch, tmp_path):
+    # la page poste /backup SANS corps : un modèle obligatoire rendait 422 ;
+    # la sauvegarde part en arrière-plan (HAProxy coupe à 30 s)
     m, c, appels = _load(monkeypatch)
+    monkeypatch.setattr(m, "JOURNAUX", tmp_path)
+    lances = []
+    monkeypatch.setattr(m.subprocess, "Popen", lambda cmd, **k: lances.append(cmd))
     r = c.post("/backup")
     assert r.status_code == 200, r.text
-    assert appels[0]["cmd"] == NCTL + ["backup"]
+    assert lances == [NCTL + ["backup"]]
 
 
 # ---------------------------------------------------------------------------
