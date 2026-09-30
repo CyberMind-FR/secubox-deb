@@ -49,7 +49,11 @@ def charge_indexeurs(chemin: Path | None = None) -> list[dict]:
     une panne : il rend une liste vide, que l'appelant sait présenter.
     """
     p = chemin or CONFIG
-    if tomllib is None or not p.exists():
+    try:
+        present = p.exists()
+    except OSError:          # dossier des secrets illisible : 500 évité (#1773)
+        return []
+    if tomllib is None or not present:
         return []
     try:
         d = tomllib.loads(p.read_text())

@@ -103,6 +103,38 @@ case "$1" in
       secubox-waf-route "$(secubox-domaine torrent)" 9080 || true
     fi
 
+    # BOX ISSUE DE L'IMAGE (gk3) : son serveur 443 n'inclut que secubox.d/,
+    # pas secubox-routes.d/ — les routes du moteur y tombaient sur le
+    # fourre-tout de l'agrégateur (404). On y pose la même route et `nginx -t`
+    # arbitre : si elle doublonne une location déjà active (un serveur qui lit
+    # les deux dossiers), on la retire (#1773, même geste que l'annuaire #768).
+    if [ -d /etc/nginx/secubox.d ] && [ -f /etc/nginx/secubox-routes.d/torrent-routes.conf ] \
+       && nginx -t >/dev/null 2>&1; then
+      cp /etc/nginx/secubox-routes.d/torrent-routes.conf /etc/nginx/secubox.d/torrent-routes.conf
+      if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+      else
+        rm -f /etc/nginx/secubox.d/torrent-routes.conf
+      fi
+    fi
+
+    # SE DÉCLARER À L'AGRÉGATEUR (#1773) : l'API hôte (état, recherche, Usenet)
+    # n'est servie que par lui. Sur une box neuve (gk3) sa liste ne la portait
+    # pas : /api/v1/torrent/status rendait 404. Même geste que messagerie/jitsi.
+    python3 - <<'TOML' || echo "secubox-torrent: déclaration dans aggregator.toml impossible" >&2
+import pathlib, re
+f = pathlib.Path("/etc/secubox/aggregator.toml")
+if f.exists():
+    s = f.read_text()
+    if '"torrent"' not in s:
+        s = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "torrent",', s, count=1)
+        f.write_text(s)
+        print("secubox-torrent: déclaré dans aggregator.toml")
+TOML
+    if [ -d /run/systemd/system ]; then
+      systemctl try-restart secubox-aggregator >/dev/null 2>&1 || true
+    fi
+
     ;;
 esac
 
