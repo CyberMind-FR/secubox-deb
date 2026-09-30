@@ -147,9 +147,59 @@ async def offers():
     return assist_match.active_offers(_entries(), _now())
 
 
+def _noeuds(entries) -> dict:
+    """DID → nom de box, d'après les publications de nœuds du journal."""
+    out = {}
+    for e in entries:
+        op = getattr(e, "op", None) or (e.get("op") if isinstance(e, dict) else None)
+        payload = getattr(e, "payload", None) or (e.get("payload") if isinstance(e, dict) else None)
+        if str(getattr(op, "value", op)) == "node_publish" and isinstance(payload, dict):
+            if payload.get("did") and payload.get("boxname"):
+                out[payload["did"]] = payload["boxname"]
+    return out
+
+
 @app.get("/requests/open", dependencies=[Depends(require_jwt)])
 async def requests_open():
-    return assist_match.active_open_requests(_entries(), _now())
+    """Demandes ouvertes du maillage, avec leur nœud d'origine et « la mienne »
+    (#1711) : on répond aux demandes des autres, pas aux siennes."""
+    entries = _entries()
+    moi, noms = _self_did(), _noeuds(entries)
+    out = []
+    for r in assist_match.active_open_requests(entries, _now()):
+        de = r.get("issued_by") or ""
+        out.append({**r, "de_moi": de == moi,
+                    "noeud": noms.get(de) or (de.split(":")[-1][:8] if de else "?")})
+    return out
+
+
+class AnswerBody(BaseModel):
+    req_id: str
+    ttl_s: int = 3600
+
+
+@app.post("/request/answer", dependencies=[Depends(require_jwt)])
+async def request_answer(b: AnswerBody):
+    """RÉPONDRE À UNE DEMANDE en un geste (#1711) : publier une offre aux
+    étiquettes (et à la portée) de la demande, puis accepter l'appariement côté
+    offre. Tout reste des écritures signées du journal — traçables — et le
+    demandeur garde le dernier mot : il accepte à son tour, côté demande."""
+    entries = _entries()
+    req = next((r for r in assist_match.active_open_requests(entries, _now())
+                if r.get("req_id") == b.req_id), None)
+    if req is None:
+        raise HTTPException(status_code=404, detail="demande inconnue ou expirée")
+    if req.get("issued_by") == _self_did():
+        raise HTTPException(status_code=409, detail="c'est une demande de ce nœud")
+    offre = _ctl("offer", "--tags", ",".join(req.get("tags") or []),
+                 *(["--scope", req["scope"]] if req.get("scope") else []),
+                 "--ttl", str(b.ttl_s))
+    offer_id = offre.get("offer_id")
+    if not offer_id:
+        raise HTTPException(status_code=502, detail="offre non publiée")
+    acc = _ctl("match-accept", offer_id, b.req_id, "offer")
+    return {"offer_id": offer_id, "match_id": acc.get("match_id"),
+            "noeud": _noeuds(entries).get(req.get("issued_by"), "")}
 
 
 @app.get("/matches", dependencies=[Depends(require_jwt)])

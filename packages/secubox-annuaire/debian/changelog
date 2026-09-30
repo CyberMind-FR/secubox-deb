@@ -1,3 +1,9 @@
+secubox-annuaire (0.10.9-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-annuaire-maillage : `annuairectl init` (idempotent) dès que l'IDENTITÉ du nœud manque au journal, plus seulement quand la clé manque — sur gk3 la clé existait sans fiche Identity : l'export ne joignait pas sa clé publique et tous les pairs rejetaient ses entrées (#1711).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 11:46:48 +0200
+
 secubox-annuaire (0.10.8-1~bookworm1) bookworm; urgency=medium
 
   * secubox-annuaire-noms (minuterie 5 min) : adresses.json servi aux pairs

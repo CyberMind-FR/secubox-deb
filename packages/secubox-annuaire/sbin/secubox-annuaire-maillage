@@ -24,9 +24,16 @@ KEY=/etc/secubox/secrets/annuaire/node.key
 MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
 
 # 1. Identité du nœud (sans elle : aucun instantané signé, Flotte vide).
-if [ -n "$MESH_IP" ] && [ ! -s "$KEY" ] && command -v annuairectl >/dev/null 2>&1; then
+#
+# LA CLÉ NE SUFFIT PAS (#1711). On ne lançait `init` que si node.key manquait.
+# Sur gk3 la clé existait (créée par un autre chemin) mais la fiche Identity
+# n'avait jamais été publiée au journal : l'export ne pouvait pas joindre la clé
+# publique de l'auteur, et TOUS les pairs rejetaient ses entrées — sa demande
+# d'assistance restait invisible depuis gk2. `init` est idempotent (genesis rend
+# l'identité existante sans rien écrire) : on le lance à chaque passage.
+if [ -n "$MESH_IP" ] && command -v annuairectl >/dev/null 2>&1; then
     if runuser -u secubox -- annuairectl init >/dev/null 2>&1 || annuairectl init >/dev/null 2>&1; then
-        echo "[maillage] identité du nœud créée"
+        echo "[maillage] identité du nœud publiée (ou déjà présente)"
     else
         echo "[maillage] annuairectl init a échoué — la Flotte ne verra pas cette box" >&2
     fi
