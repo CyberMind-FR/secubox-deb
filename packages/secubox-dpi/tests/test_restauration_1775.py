@@ -291,3 +291,19 @@ def test_manifeste_audite_une_seule_fois(tmp_path, monkeypatch, admin, registre_
     assert r.status_code == 200
     assert "hls-reassembled" in r.headers["x-secubox-media"]
     assert len(registre_et_audit.read_text().splitlines()) == 1
+
+
+@pytest.mark.parametrize("chemin", ["/usage", "/suggestions", "/sessions", "/clients", "/countries"])
+def test_panneaux_lives_ne_levent_plus(chemin, monkeypatch):
+    """#1775 : une seconde `_sbxdpi_get(path)` écrasait `_sbxdpi_get(path,
+    default)` — ces cinq routes levaient TypeError (500), les panneaux
+    Apprentissage, Sessions et Pays restaient vides sans erreur visible."""
+    from secubox_core.auth import require_jwt, require_lecture
+    m.app.dependency_overrides[require_jwt] = lambda: {"sub": "root"}
+    m.app.dependency_overrides[require_lecture] = lambda: {"sub": "root"}
+    monkeypatch.setattr(m, "DPI_LIVE_SOCK", "/nonexistent/dpi-live.sock")
+    try:
+        r = TestClient(m.app).get(chemin)
+    finally:
+        m.app.dependency_overrides.clear()
+    assert r.status_code != 500, (chemin, r.text[:200])

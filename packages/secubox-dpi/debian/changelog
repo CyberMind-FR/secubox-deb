@@ -18,6 +18,9 @@ secubox-dpi (1.4.19-1~bookworm2) bookworm; urgency=medium
   * /exfil, /history, /realtime, /block_rules, /add_block_rule,
     /delete_block_rule redeviennent des `def` : leurs lectures de fichiers
     ne figent plus la boucle partagée de l'agrégateur (#808).
+  * /usage, /suggestions, /sessions, /clients, /countries ne rendent plus 500 :
+    une seconde `_sbxdpi_get(path)` écrasait `_sbxdpi_get(path, default)`
+    depuis 85a0857d1 ; renommée `_sbxdpi_live`.
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:06:24 +0200
 

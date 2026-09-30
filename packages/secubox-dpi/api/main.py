@@ -1296,8 +1296,12 @@ async def send_webhook(event: str, data: Dict[str, Any]):
         except Exception:
             pass
 
-async def _sbxdpi_get(path: str):
+async def _sbxdpi_live(path: str):
     """Lit un endpoint de sbxdpi (moteur nDPI LIVE) via dpi-live.sock.
+
+    NOM PROPRE (#1775) : elle s'appelait aussi `_sbxdpi_get`, et cette seconde
+    définition écrasait la première (`_sbxdpi_get(path, default)`) — /usage,
+    /suggestions, /sessions, /clients et /countries levaient TypeError (500).
 
     Classification live. Fail-empty si la socket dort (sbxdpi dark avant
     cutover complet)."""
@@ -1425,7 +1429,7 @@ def media_thumb(rec_id: str, user=Depends(require_admin_or_owner)):
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
     cfg = get_config("dpi")
-    h = await _sbxdpi_get("health")
+    h = await _sbxdpi_live("health")
     connected = bool(isinstance(h, dict) and h.get("connected"))
     return {"running": connected, "mode": cfg.get("mode", "inline"),
             "engine": "ndpi", "interface": cfg.get("interface", "eth2"),
@@ -1439,23 +1443,23 @@ async def status(user=Depends(require_jwt)):
 #   talkers → [{name:"src → dst",flows,bytes,pct}] ; risks → [{name,count,severity}]
 @router.get("/flows")
 async def flows(user=Depends(require_jwt)):
-    return await _sbxdpi_get("stats")
+    return await _sbxdpi_live("stats")
 
 @router.get("/applications")
 async def applications(user=Depends(require_jwt)):
-    return await _sbxdpi_get("top_apps")
+    return await _sbxdpi_live("top_apps")
 
 @router.get("/devices")
 async def devices(user=Depends(require_jwt)):
-    return await _sbxdpi_get("talkers")
+    return await _sbxdpi_live("talkers")
 
 @router.get("/risks")
 async def risks(user=Depends(require_jwt)):
-    return await _sbxdpi_get("risks")
+    return await _sbxdpi_live("risks")
 
 @router.get("/talkers")
 async def talkers(user=Depends(require_jwt)):
-    return await _sbxdpi_get("talkers")
+    return await _sbxdpi_live("talkers")
 
 @router.post("/setup_mirred")
 async def setup_mirred(user=Depends(require_jwt)):
