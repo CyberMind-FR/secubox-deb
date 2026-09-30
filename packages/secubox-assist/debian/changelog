@@ -1,3 +1,12 @@
+secubox-assist (0.2.9-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : plus de `systemctl reload nftables` (#1769) — il rejouait
+    `flush ruleset` et effaçait les tables vivantes. La table
+    inet secubox_assist est rechargée SEULE, atomiquement (déclarée vide,
+    supprimée, redéfinie dans une même transaction nft).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 22:00:00 +0200
+
 secubox-assist (0.2.8-1~bookworm1) bookworm; urgency=medium
 
   * Côté box : « Autoriser l'administration à distance » avec une durée (30 min, 1 h, 4 h) et « Retirer l'autorisation » ; côté centre : carte « Administrer à distance » (GET /delegations, POST /delegation/assertion) qui ouvre l'administration de la box au nom de l'aidant (#1720).

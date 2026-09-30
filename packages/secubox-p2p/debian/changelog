@@ -1,3 +1,12 @@
+secubox-p2p (1.11.16-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-relais-maillage : plus de `nft -f /etc/nftables.conf` (#1769).
+    `ouvrir` pose la règle du relais à chaud par `nft insert` (même si le
+    fichier l'avait déjà) ; `fermer` la retire par son handle. Le fichier
+    reste validé par `nft -c` pour le prochain démarrage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 22:00:00 +0200
+
 secubox-p2p (1.11.15-1~bookworm1) bookworm; urgency=medium
 
   * postinst : mise en place restaurée (effacée par la fusion 6036886281 ;

@@ -336,6 +336,32 @@ PY
 # ── côté PAIR ────────────────────────────────────────────────────────────────
 regle_nft() { printf 'iifname "wg-mesh" ip saddr %s tcp dport %s accept comment "secubox-relais"' "$1" "$2"; }
 
+# Chaîne vivante qui porte les règles du relais : celle de nftables.conf.
+# JAMAIS `nft -f "$NFT_CONF"` : le fichier commence par `flush ruleset` et
+# rejouer efface les tables vivantes — bans sbxwaf, ensembles NAC, sortie tor
+# (#1721, #1769). Le fichier sert au prochain démarrage ; la chaîne vivante
+# est modifiée règle par règle.
+chaine_vivante() {
+    local t
+    for t in secubox_filter filter; do
+        nft list chain inet "$t" input >/dev/null 2>&1 && { printf 'inet %s input' "$t"; return 0; }
+    done
+    return 1
+}
+poser_a_chaud() {  # règle
+    local ch; ch="$(chaine_vivante)" || return 0
+    # shellcheck disable=SC2086
+    nft list chain $ch 2>/dev/null | grep -qF -- "$1" && return 0
+    # shellcheck disable=SC2086
+    nft insert rule $ch "$1"
+}
+retirer_a_chaud() {  # règle
+    local ch h; ch="$(chaine_vivante)" || return 0
+    # shellcheck disable=SC2086
+    nft -a list chain $ch 2>/dev/null | grep -F -- "$1" | sed -n 's/.*# handle \([0-9][0-9]*\)$/\1/p' \
+        | while read -r h; do nft delete rule $ch handle "$h"; done || true   # absente : rien à retirer
+}
+
 cmd_ouvrir() {
     local relais="${1:-}" port="${2:-9080}"
     ip_valide "$relais" || meurt "IP maillée du relais invalide : « $relais »"
@@ -365,9 +391,10 @@ if subprocess.run(["nft", "-c", "-f", tmp]).returncode != 0:
 shutil.copy2(chemin, f"{chemin}.avant-relais-{int(time.time())}")
 os.replace(tmp, chemin)
 PY
-        nft -f "$NFT_CONF"
         log "pare-feu : $port ouvert au seul relais $relais"
     fi
+    # Vivante aussi, même si le fichier l'avait déjà (répare une chaîne vidée).
+    poser_a_chaud "$regle"
     local ligne="set_real_ip_from $relais;"
     if [ -f "$NGINX_CONF" ] && grep -qxF "$ligne" "$NGINX_CONF"; then
         log "nginx : le relais $relais est déjà cru"
@@ -387,8 +414,9 @@ cmd_fermer() {
     if grep -qF "$regle" "$NFT_CONF"; then
         cp -p "$NFT_CONF" "$NFT_CONF.avant-relais-$(date +%s)"
         grep -vF "$regle" "$NFT_CONF" > "$NFT_CONF.sbxtmp" && nft -c -f "$NFT_CONF.sbxtmp" \
-            && mv "$NFT_CONF.sbxtmp" "$NFT_CONF" && nft -f "$NFT_CONF"
+            && mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
     fi
+    retirer_a_chaud "$regle"
     [ -f "$NGINX_CONF" ] && sed -i "\|^set_real_ip_from $relais;\$|d" "$NGINX_CONF" && nginx -t 2>/dev/null && systemctl reload nginx
     log "fermé au relais $relais sur $port"
 }
