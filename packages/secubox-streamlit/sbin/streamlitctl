@@ -2863,7 +2863,7 @@ cmd_gitea_clone() {
     [ -d "$app_dir" ] && { error "App already exists: $name"; return 1; }
 
     log "Cloning $repo to $name..."
-    git clone "$repo" "$app_dir"
+    git clone -- "$repo" "$app_dir"
 
     # Install requirements if present
     if [ -f "$app_dir/requirements.txt" ] && lxc_running; then
@@ -2884,6 +2884,45 @@ load_config
 APPS_PATH="${SECUBOX_STREAMLIT_APPS_PATH:-$APPS_PATH}"
 CONF_PATH="${SECUBOX_STREAMLIT_CONF:-$CONF_PATH}"
 IDLE_STATE_DIR="${SECUBOX_STREAMLIT_IDLE_DIR:-$IDLE_STATE_DIR}"
+
+# ── ARGUMENTS ADMIS AVANT TOUT GESTE ───────────────────────────────────────
+# L'API refuse deja les noms malformes avant sudo (_NOM_APPLI_RE), mais la
+# regle sudoers admet TOUT argument : n'importe quel processus du compte
+# `secubox` peut appeler ce script en root sans passer par l'API. Un nom est
+# donc valide ICI aussi, avec la meme grammaire : sans « / » ni point en
+# tete, il designe toujours une entree DANS $APPS_PATH, jamais un chemin
+# (`app remove ../x` finissait en `rm -rf` hors du depot d'applis).
+_nom_admis()    { [[ "${1:-}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; }
+_entier_admis() { [[ "${1:-}" =~ ^[0-9]{1,6}$ ]]; }
+# Depot git : un schema reseau explicite, sans espace. Jamais un argument
+# commencant par « - » (`--upload-pack=...` ferait executer git en root),
+# ni ext::/file:// (transports locaux ou a commande).
+_depot_admis()  { [[ "${1:-}" =~ ^(https?|ssh)://[^[:space:]]+$ || "${1:-}" =~ ^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[^[:space:]-][^[:space:]]*$ ]]; }
+# Hote de migration : nom ou adresse, jamais une option.
+_hote_admis()   { [[ "${1:-}" =~ ^[A-Za-z0-9][A-Za-z0-9.:-]{0,252}$ ]]; }
+_refuser() { error "argument refuse : $(printf '%q' "${1:-}")"; exit 64; }
+_exiger_nom()    { _nom_admis "${1:-}" || _refuser "${1:-}"; }
+_exiger_entier() { _entier_admis "${1:-}" || _refuser "${1:-}"; }
+_si_entier()     { [ -z "${1:-}" ] || _entier_admis "$1" || _refuser "$1"; }
+
+case "${1:-}:${2:-}" in
+    app:archive)
+        [ "${3:-}" = "--undeclared" ] || _exiger_nom "${3:-}" ;;
+    app:unarchive|app:autostart|app:shot-target|app:stop|app:remove|app:info|app:restart)
+        _exiger_nom "${3:-}" ;;
+    app:start|app:wake|app:logs)
+        _exiger_nom "${3:-}"; _si_entier "${4:-}" ;;
+    app:wake-by-port)
+        _exiger_entier "${3:-}"; [ "${4:-}" = "--check" ] || _si_entier "${4:-}" ;;
+    app:deploy)
+        [ -z "${4:-}" ] || _exiger_nom "$4" ;;
+    instance:start|instance:stop|gitea:push)
+        _exiger_nom "${3:-}" ;;
+    gitea:clone)
+        _exiger_nom "${3:-}"; _depot_admis "${4:-}" || _refuser "${4:-}" ;;
+    migrate:*)
+        [ -z "${2:-}" ] || _hote_admis "$2" || _refuser "$2" ;;
+esac
 
 case "${1:-}" in
     # Three-fold architecture

@@ -30,6 +30,13 @@ secubox-streamlit (1.4.5-1~bookworm1) bookworm; urgency=medium
     recapturer restaurés, fusionnés avec « réveiller et ouvrir » (#963).
   * Purge metoblizer (be25628c7) réappliquée : plus de clés metoblizer_*
     ni d'urlopen vers localhost:9300.
+  * streamlitctl valide lui-même ses arguments avant tout geste : la règle
+    sudoers admet tout argument, la validation de l'API ne protège donc que
+    l'API. Noms d'appli/instance à la grammaire de l'API, ports et durées
+    entiers, dépôt git à schéma réseau explicite, hôte de migration sans
+    option ; refus = code 64. `git clone --` sépare les options du dépôt.
+    tests/test_ctl_arguments.py appelle le script directement (18 cas
+    hostiles, tous acceptés par la version précédente).
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:21:15 +0200
 
