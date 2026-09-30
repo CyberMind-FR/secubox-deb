@@ -1,3 +1,9 @@
+secubox-jellyfin (2.0.11-1~bookworm1) bookworm; urgency=high
+
+  * postinst : déclare sa route sbxwaf (jellyfin.<domaine> → 9080). HAProxy l'envoie à l'inspection mais sbxwaf ne connaissait pas le nom : le chemin public répondait 401 (fourre-tout) au lieu du service, et le relais du maillage n'exposait pas le jellyfin des nœuds relayés (#1739, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 15:58:01 +0200
+
 secubox-jellyfin (2.0.10-1~bookworm1) bookworm; urgency=medium
 
   * panneau : liens Jellyfin, Lyrion et partenaires dérivés du domaine de la page (gk3 ouvrait le Jellyfin de gk2) ; public_hostname du ctl dérivé ; exemple toml sans nom gk2 (#1723, #1713).
