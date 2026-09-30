@@ -18,6 +18,7 @@ case "$1" in
         # upgrades on its own, so only remove it by hand here — same
         # remove|deconfigure-only pattern as secubox-hub's hub.conf.
         rm -f /etc/nginx/secubox-routes.d/torrent-routes.conf
+        rm -f /etc/nginx/secubox.d/torrent-routes.conf   # copie posée par le postinst (#1773)
         ;;
     esac
 

@@ -28,16 +28,25 @@ def test_control_is_v2_no_transmission():
     assert "lxc" in c.lower()
 
 
-def test_changelog_is_2_0_0():
-    assert _read("debian/changelog").startswith("secubox-torrent (2.0.0-1~bookworm1)")
+def test_changelog_is_at_least_2_0_0():
+    """Périmé depuis d085371a9 (#1032) : la v2 était la RÉÉCRITURE LXC, pas un
+    numéro figé. On garde l'intention — plus jamais la 1.x Transmission."""
+    import re
+    m = re.match(r"secubox-torrent \((\d+)\.", _read("debian/changelog"))
+    assert m and int(m.group(1)) >= 2
 
 
 def test_postinst_runs_install_lxc():
     assert "install-lxc.sh" in _read("debian/postinst")
 
 
-def test_no_old_fastapi_main():
-    assert not (ROOT / "api" / "main.py").exists()
+def test_api_hote_sans_transmission_ni_docker():
+    """#1032 a réintroduit une petite API hôte (recherche, Usenet, état) ;
+    ce qui ne doit JAMAIS revenir, c'est la 1.x Transmission/docker — que la
+    fusion aff481735 avait remise (#1773)."""
+    main = _read("api/main.py").lower()
+    for interdit in ("transmission-rpc", "docker", "podman", "linuxserver/"):
+        assert interdit not in main, interdit
 
 
 def test_no_old_host_systemd_unit():

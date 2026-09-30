@@ -164,3 +164,13 @@ def test_duplicate_location_in_the_same_server_would_be_caught(tmp_path):
     result = _run_nginx_t(tmp_path, blocks)
     assert result.returncode != 0
     assert "duplicate location" in result.stderr
+
+
+def test_route_scindee_api_hote_vers_agregateur_moteur_vers_lxc():
+    """#1773 : l'API hôte (état, recherche, Usenet) répond même moteur
+    endormi ; le reste va au moteur, avec un JSON 503 plutôt qu'un 502."""
+    conf = _read(ROUTE_FILE)
+    assert "location ~ ^/api/v1/torrent/(health|status|recherche|sources|nzb/)" in conf
+    assert "proxy_pass http://unix:/run/secubox/aggregator.sock;" in conf
+    assert "error_page 502 504 = @torrent_endormi;" in conf
+    assert "return 503" in conf

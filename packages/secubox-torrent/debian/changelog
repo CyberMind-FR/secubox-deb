@@ -1,3 +1,22 @@
+secubox-torrent (2.4.9-1~bookworm1) bookworm; urgency=medium
+
+  * API hôte restaurée (4b17d51c0, d085371a9 — effacés par la fusion
+    aff481735 ; #1748, #1773) : /recherche, /sources, /nzb/* de nouveau
+    servis ; plus de pilotage Transmission en conteneur (#1743).
+  * /status honnête : sonde le moteur (1,5 s) et reprend ses compteurs,
+    « asleep » s'il dort ; lecture LAN (#1256). /nzb/* réservés à l'admin
+    (ils dépensent les clés d'indexeurs de l'opérateur).
+  * Route scindée : API hôte → agrégateur ; moteur WebTorrent → LXC, JSON
+    503 quand il dort au lieu d'un 502 brut. #1322 avait tout envoyé à
+    l'agrégateur : /list, /add, /files… n'aboutissaient plus.
+  * postinst : se déclare dans aggregator.toml (gk3 ne servait pas l'API hôte)
+    et pose la route aussi dans secubox.d/ (serveur 443 des box issues de
+    l'image), arbitré par nginx -t.
+  * nzb : dossier des secrets illisible → liste vide, plus un 500.
+  * Tests de paquet périmés réalignés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:51:24 +0200
+
 secubox-torrent (2.4.8-1~bookworm1) bookworm; urgency=medium
 
   * route postinst dérivée ; torrent.toml sans nom gk2 (#1723, #1713).
@@ -45,4 +64,3 @@ secubox-torrent (2.4.4-1~bookworm2) bookworm; urgency=medium
     reseau, AppArmor, espaces de noms non privilegies. (#1308)
 
  -- Gerald Kerma <devel@cybermind.fr>  Sat, 19 Sep 2026 23:06:29 +0200
-
