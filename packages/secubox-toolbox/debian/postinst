@@ -218,15 +218,25 @@ fi
     # drop-in flushes prerouting and repopulates it with the fanout map.
     # Pre-2.5.2 operators who applied the fanout via runtime nft -f got it
     # silently wiped on every dpkg upgrade — fixed here (idempotent).
+    # RECHARGER SEULEMENT SI UN DROPIN A CHANGÉ (#1765). `reload nftables`
+    # rejoue /etc/nftables.conf, qui commence par `flush ruleset` : toutes les
+    # tables posées à chaud (bans, NAC…) disparaissent. Le faire à CHAQUE mise
+    # à jour du paquet — donc chaque nuit via majauto — effaçait les bans pour
+    # rien quand les dropins étaient identiques.
+    _nft_change=0
+    _pose_nft() {  # source destination
+      cmp -s "$1" "$2" 2>/dev/null && return 0
+      install -m 0644 "$1" "$2" && _nft_change=1
+    }
     if [ -f /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg.nft ]; then
       install -d -m 0755 /etc/nftables.d
-      install -m 0644 /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg.nft \
+      _pose_nft /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg.nft \
         /etc/nftables.d/secubox-toolbox-wg.nft
       if [ -f /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg-fanout.nft ]; then
-        install -m 0644 /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg-fanout.nft \
+        _pose_nft /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg-fanout.nft \
           /etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft
       fi
-      if systemctl is-active --quiet nftables.service 2>/dev/null; then
+      if [ "$_nft_change" = 1 ] && systemctl is-active --quiet nftables.service 2>/dev/null; then
         systemctl reload nftables.service 2>/dev/null \
           || /usr/sbin/nft -f /etc/nftables.d/secubox-toolbox-wg.nft 2>/dev/null \
           || true
@@ -238,9 +248,10 @@ fi
     # unions threat-intel C2 IPs into the sets.
     if [ -f /usr/share/secubox/toolbox/nftables.d/secubox-blacklist.nft ]; then
       install -d -m 0755 /etc/nftables.d
-      install -m 0644 /usr/share/secubox/toolbox/nftables.d/secubox-blacklist.nft \
+      _nft_change=0
+      _pose_nft /usr/share/secubox/toolbox/nftables.d/secubox-blacklist.nft \
         /etc/nftables.d/secubox-blacklist.nft
-      if systemctl is-active --quiet nftables.service 2>/dev/null; then
+      if [ "$_nft_change" = 1 ] && systemctl is-active --quiet nftables.service 2>/dev/null; then
         systemctl reload nftables.service 2>/dev/null \
           || /usr/sbin/nft -f /etc/nftables.d/secubox-blacklist.nft 2>/dev/null \
           || true

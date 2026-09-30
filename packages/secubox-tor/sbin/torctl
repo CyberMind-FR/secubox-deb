@@ -40,13 +40,23 @@ socks_lan_ensure() {
 # si un seul des deux existe (ex: TransPort posé par un autre paquet sans son
 # DNSPort), on pose quand même notre dropin — sinon Unbound forwarderait vers
 # un DNSPort mort.
+# Déclarés par un AUTRE dropin (toolbox egress) ? Notre propre 60- est exclu
+# du balayage : sinon, une fois posé, il se « trouvait » lui-même et restait
+# à côté de celui de toolbox — Tor refusait alors de démarrer (TransPort lié
+# deux fois : « Address already in use »), constaté sur gk2 le 2026-09-29 (#1765).
 transport_already_declared() {
-  grep -rqiE '^[[:space:]]*TransPort[[:space:]]+([0-9.]+:)?9040\b' "$TORRC_D"/*.conf 2>/dev/null \
-    && grep -rqiE '^[[:space:]]*DNSPort[[:space:]]+([0-9.]+:)?9053\b' "$TORRC_D"/*.conf 2>/dev/null
+  local autres=() f
+  for f in "$TORRC_D"/*.conf; do
+    [ -e "$f" ] && [ "$(basename "$f")" != "60-secubox-transparent.conf" ] && autres+=("$f")
+  done
+  [ "${#autres[@]}" -gt 0 ] || return 1
+  grep -qiE '^[[:space:]]*TransPort[[:space:]]+([0-9.]+:)?9040\b' "${autres[@]}" 2>/dev/null \
+    && grep -qiE '^[[:space:]]*DNSPort[[:space:]]+([0-9.]+:)?9053\b' "${autres[@]}" 2>/dev/null
 }
 
 transparent_on() {
   if transport_already_declared; then
+    rm -f "$TORRC_D/60-secubox-transparent.conf"   # doublon éventuel d'avant
     echo "TransPort 9040 + DNSPort 9053 déjà déclarés (toolbox) — réutilisés, pas de dropin dupliqué"
   else
     _install_tpl "$SHARE/60-secubox-transparent.conf" "$TORRC_D/60-secubox-transparent.conf"

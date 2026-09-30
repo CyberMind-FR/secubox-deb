@@ -113,6 +113,11 @@ arm() {
   log "arming kbin Tor egress (TransPort 9040 / DNSPort 9053)"
   mkdir -p /etc/tor/torrc.d
   install -m 0644 "$TORRC_DROPIN_SRC" "$TORRC_DROPIN"
+  # Le mode transparent de secubox-tor déclare les MÊMES écouteurs (TransPort
+  # 9040, DNSPort 9053) : les deux dropins ensemble, Tor refuse de démarrer
+  # (« Address already in use ») — gk2 est resté sans Tor du 09-29 au 09-30,
+  # donc sans sortie kbin (fail-closed). Le nôtre suffit aux deux (#1765).
+  rm -f /etc/tor/torrc.d/60-secubox-transparent.conf
   # Debian's torrc does not %include torrc.d by default — add it idempotently.
   if ! grep -qE '^\s*%include\s+/etc/tor/torrc\.d/' "$TORRC_MAIN" 2>/dev/null; then
     echo '%include /etc/tor/torrc.d/*.conf' >> "$TORRC_MAIN"
@@ -207,7 +212,15 @@ disarm() {
   if [ -f "$UNBOUND_ONION_DST" ]; then rm -f "$UNBOUND_ONION_DST"; systemctl reload unbound 2>/dev/null || true; fi
   # Stop tor to minimise attack surface when not in use (no hidden services
   # are owned by this drop-in; secubox-tor manages those separately).
-  systemctl stop tor 2>/dev/null || true
+  # SAUF si le mode transparent .onion de secubox-tor est en service : il
+  # partage ce démon et s'appuyait peut-être sur nos écouteurs — on les lui
+  # rend (torctl repose son dropin) et on ne l'arrête pas (#1765).
+  if [ -x /usr/sbin/torctl ] && /usr/sbin/torctl transparent status 2>/dev/null | grep -q '"transparent": true'; then
+    /usr/sbin/torctl transparent on >/dev/null 2>&1 || true
+    systemctl restart tor 2>/dev/null || true
+  else
+    systemctl stop tor 2>/dev/null || true
+  fi
   log "DISARMED"
 }
 

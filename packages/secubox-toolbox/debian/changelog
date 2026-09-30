@@ -1,3 +1,16 @@
+secubox-toolbox (2.9.6-1~bookworm1) bookworm; urgency=medium
+
+  * Egress Tor kbin et mode transparent de secubox-tor partagent le démon :
+    armer retire le dropin 60- de secubox-tor (mêmes écouteurs ; ensemble,
+    Tor ne démarrait plus — gk2 sans sortie kbin du 09-29 au 09-30) ;
+    désarmer lui rend ses écouteurs (torctl) au lieu d'arrêter Tor s'il est
+    en service (#1765).
+  * postinst : ne recharge plus nftables que si un dropin a changé. Le
+    rechargement rejoue `flush ruleset` : chaque mise à jour effaçait les
+    tables posées à chaud (bans, NAC) même à dropins identiques (#1765).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 19:33:17 +0200
+
 secubox-toolbox (2.9.5-1~bookworm1) bookworm; urgency=medium
 
   * /etc/secubox/secrets : plus de groupe secubox-toolbox imposé au parent (retirait la traversée au groupe secubox) ; ACL de traversée pour le groupe secubox-toolbox ; sel et clé du bocal inchangés (#1689).

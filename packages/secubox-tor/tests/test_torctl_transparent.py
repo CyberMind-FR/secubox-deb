@@ -84,3 +84,26 @@ def test_detects_transport_bound_without_ip(tmp_path):
     assert r.returncode == 0, r.stderr
     assert not (torrc/"60-secubox-transparent.conf").exists(), \
         "TransPort 9040 sans IP explicite doit aussi être détecté (déjà déclaré)"
+
+
+def test_on_retire_notre_doublon_si_toolbox_declare_deja(tmp_path):
+    """#1765 : gk2 avait NOTRE 60- (07-24) ET l'egress toolbox (armé le
+    09-29) : TransPort lié deux fois, Tor ne démarrait plus. `on` doit
+    retirer notre doublon, pas se trouver lui-même « déjà déclaré »."""
+    share = _make_share(tmp_path)
+    env, torrc = _base_env(tmp_path, share)
+    (torrc/"10-secubox-toolbox-egress.conf").write_text("TransPort 127.0.0.1:9040\nDNSPort 127.0.0.1:9053\n")
+    (torrc/"60-secubox-transparent.conf").write_text("TransPort 127.0.0.1:9040\nDNSPort 127.0.0.1:9053\n")
+    r = _run(env, "transparent", "on")
+    assert r.returncode == 0, r.stderr
+    assert not (torrc/"60-secubox-transparent.conf").exists()
+    assert (torrc/"10-secubox-toolbox-egress.conf").exists()
+
+
+def test_notre_propre_dropin_ne_compte_pas_comme_deja_declare(tmp_path):
+    share = _make_share(tmp_path)
+    env, torrc = _base_env(tmp_path, share)
+    (torrc/"60-secubox-transparent.conf").write_text("TransPort 127.0.0.1:9040\nDNSPort 127.0.0.1:9053\n")
+    r = _run(env, "transparent", "on")
+    assert r.returncode == 0, r.stderr
+    assert (torrc/"60-secubox-transparent.conf").exists()
