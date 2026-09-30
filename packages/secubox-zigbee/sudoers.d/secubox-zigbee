@@ -4,4 +4,6 @@
 # files owned by host-root + invoke lxc-attach inside, so they
 # need root. Sibling pattern: /etc/sudoers.d/secubox-lxc grants
 # lxc-info / lxc-attach / lxc-start / lxc-stop the same way.
-secubox ALL=(root) NOPASSWD: /usr/sbin/zigbee-backup, /usr/sbin/zigbee-restore
+# zigbee-backup : AUCUN argument (""), comme l'appelle l'API ; zigbee-restore
+# valide lui-même son nom d'instantané (#1785).
+secubox ALL=(root) NOPASSWD: /usr/sbin/zigbee-backup "", /usr/sbin/zigbee-restore
