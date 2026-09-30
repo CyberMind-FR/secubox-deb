@@ -37,6 +37,8 @@ on:
       - 'packages/secubox-bbs/**'
       - 'packages/secubox-toolbox-ng/**'
       - 'packages/secubox-certs/**'
+      - 'packages/secubox-metrics/sbin/**'
+      - 'packages/secubox-metrics/tests/**'
       # Fichiers hors de ces paquets que les suites lisent aussi :
       # manifeste podcaster (zia), annuaire (secubox_core), exemple de
       # configuration (zia, sbxid), menus de tous les paquets (webos).
@@ -86,6 +88,12 @@ jobs:
           # effacée une fois par une fusion sans qu'aucun test ne proteste.
           - suite: secubox-certs
             chemin: packages/secubox-certs/tests
+          # secubox-vhost-logs ne restaure que sa propre passe (#1777) : la
+          # 1.0.0 a recopié 90 sauvegardes sur gk2 et écrit dans sites-available.
+          # Ce fichier seul : le reste de la suite metrics ne se collecte pas
+          # encore en CI (dépendances manquantes).
+          - suite: secubox-metrics-vhost-logs
+            chemin: packages/secubox-metrics/tests/test_vhost_logs.py
     env:
       # Versions de la box de référence (bookworm + pip dans /usr/local).
       # pytest et pytest-asyncio n'y sont pas installés : outillage CI seul.

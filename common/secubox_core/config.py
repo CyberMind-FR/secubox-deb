@@ -148,7 +148,55 @@ _COOKIE_AUDIT_DEFAULTS = {
     "enabled": False,
     "ledger_path": "/var/log/secubox/cookie-audit/server.jsonl",
     "ingest_dir": "/var/lib/secubox/cookie-audit/ingest",
-    "classifier": {},
+    "max_ingest_age_hours": 24,
+}
+
+# SOCLE RGPD DU CLASSIFIEUR (#159). Efface par la fusion 7ebe27403a et restaure
+# (#1777, ref #1748) : sans lui, `classifier` restait vide et CHAQUE cookie
+# tombait en « unclassified » — un _ga ou un _fbp n'etait plus reconnu comme
+# traceur, et un jeton CSRF pose en JS passait pour une violation. Surcharge par
+# [cookie_audit.classifier] dans /etc/secubox/secubox.conf. Categories
+# evaluees dans l'ordre (strictly_necessary > functional > analytics >
+# marketing), la premiere qui correspond l'emporte.
+_COOKIE_CLASSIFIER_DEFAULTS = {
+    "strictly_necessary": [
+        r"^PHPSESSID$",
+        r"^sess(ion)?id$",
+        r"^csrftoken$",
+        r"^XSRF-TOKEN$",
+        r"^_csrf$",
+        r"^cart$",
+        r"^remember_token$",
+        r"^secubox_session$",
+    ],
+    "functional": [
+        r"^lang$",
+        r"^locale$",
+        r"^theme$",
+        r"^cookie[_-]?consent$",
+        r"^euconsent",
+    ],
+    "analytics": [
+        r"^_ga",
+        r"^_gid$",
+        r"^_gat",
+        r"^_pk_",
+        r"^_hjid$",
+        r"^_hjSession",
+        r"^_clck$",
+        r"^_clsk$",
+        r"^_matomo",
+    ],
+    "marketing": [
+        r"^_fbp$",
+        r"^_fbc$",
+        r"^__utm",
+        r"^_gcl_",
+        r"^_uet",
+        r"^IDE$",
+        r"^MUID$",
+        r"^NID$",
+    ],
 }
 
 
@@ -181,5 +229,27 @@ def get_cookie_audit_config() -> dict:
     section, aucun code ne l'instanciait, et son agregateur n'etait jamais
     demarre. 170 Mo de registre s'accumulaient sans jamais etre reconcilies,
     alors que c'est la brique RGPD / ePrivacy du produit.
+
+    Chaque categorie du classifieur est l'UNION des motifs de l'exploitant et
+    du socle integre : on peut etendre la base RGPD, jamais la perdre en
+    silence. ``classifier_override = true`` dans ``[cookie_audit]`` desactive
+    la fusion et n'applique que les motifs de l'exploitant.
     """
-    return _merged(_COOKIE_AUDIT_DEFAULTS, "cookie_audit")
+    cfg = _merged(_COOKIE_AUDIT_DEFAULTS, "cookie_audit")
+    operator_cls = (get_config("cookie_audit") or {}).get("classifier") or {}
+    override = bool(cfg.get("classifier_override", False))
+    merged_cls: dict = {}
+    for cat, base in _COOKIE_CLASSIFIER_DEFAULTS.items():
+        op = operator_cls.get(cat, []) or []
+        if override:
+            merged_cls[cat] = list(op)
+        else:
+            seen = set()
+            out = []
+            for pat in list(op) + list(base):
+                if pat not in seen:
+                    out.append(pat)
+                    seen.add(pat)
+            merged_cls[cat] = out
+    cfg["classifier"] = merged_cls
+    return cfg

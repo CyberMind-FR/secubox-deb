@@ -1,3 +1,48 @@
+secubox-metrics (1.12.12-1~bookworm1) bookworm; urgency=high
+
+  * secubox-vhost-logs 1.1.0 : sur échec de `nginx -t`, la 1.0.0 recopiait
+    TOUTES les sauvegardes jamais prises (90 sur gk2, depuis mai) — six vhosts
+    décommissionnés ressuscités, des vhosts vivants remis à leur contenu
+    d'août, et `cp` sur des liens symboliques écrivait DANS sites-available
+    (nextcloud, peertube, Hall). L'échec déclencheur n'était même pas le
+    sien (#1777). Désormais :
+    - rien n'est touché si `nginx -t` échoue déjà avant la passe ;
+    - chaque passe sauvegarde dans son propre répertoire, et seule elle est
+      restaurée ;
+    - restauration par suppression puis copie : un lien revient lien, jamais
+      d'écriture à travers.
+  * postinst : la route cookie-audit.conf posée à la main est retirée AVANT
+    l'appel à secubox-vhost-logs, pas après.
+  * tests/test_vhost_logs.py : exécute le vrai script (nginx et systemctl
+    doublés) ; les trois tests échouent sur la 1.0.0.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 21:05:00 +0200
+
+secubox-metrics (1.12.11-1~bookworm1) bookworm; urgency=medium
+
+  * Restaure ce que la fusion 7ebe27403a (branche health-banner périmée)
+    avait écrasé (#1777, ref #1748) :
+    - routes /api/v1/cookie-audit/ingest, /report, /summary (#159), gardées :
+      ingest et summary par require_lecture, report (détail par vhost) par
+      require_jwt ; ingest borné (nom d'hôte validé, 5 Mo par hôte), `def` ;
+    - route nginx secubox-routes.d/metrics-cookie-audit.conf : sans elle
+      /api/v1/cookie-audit/ tombait sur l'agrégateur ;
+    - GET /api/v1/metrics/summary (widget cpu/mem/load de la barre latérale)
+      et cpu_pct dans l'aperçu ; la route ne lit que /proc ;
+    - live-hosts par journaux nginx, lecture incrémentale (#1045) et
+      total_requests ; taux de blocage du WAF sur l'heure (waf.blocks_1h) ;
+    - cache sous /var/cache/secubox (#149), préchauffage hors boucle et
+      certificats analysés hors boucle (#740) ;
+    - récupérateur ASN avec repli DB-IP et son unité (#194) ; postinst :
+      groupe adm, table nft chargée seule si absente, timer geoipupdate.
+  * test_routes_appelees.py : chaque route appelée par les pages, le bandeau,
+    sbxwaf, le portail et cookie-inventory.js existe, avec sa garde.
+  * test_live_hosts.py réécrit : il testait la source HAProxy abandonnée.
+  * postinst : retire la route cookie-audit.conf posée à la main (gk2) quand
+    elle doublonne celle du paquet — nginx -t refusait les deux.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:12:37 +0200
+
 secubox-metrics (1.12.10-1~bookworm1) bookworm; urgency=medium
 
   * Rapports planifié et WAF : plus de destinataire ni de famille par

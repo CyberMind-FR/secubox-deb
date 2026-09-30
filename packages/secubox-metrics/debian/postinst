@@ -2,6 +2,17 @@
 set -e
 
 if [ "$1" = "configure" ]; then
+    # Route posée À LA MAIN avant d'être paquetée (gk2 : cookie-audit.conf, #156).
+    # Même location que metrics-cookie-audit.conf → `nginx -t` refuse les deux.
+    # On retire l'ancienne SEULEMENT si aucun paquet ne la possède et qu'elle
+    # déclare bien la même location (#1777). EN PREMIER : tant qu'elle est là,
+    # `nginx -t` échoue, et tout ce qui suit le prendrait pour son propre échec.
+    _ancien=/etc/nginx/secubox-routes.d/cookie-audit.conf
+    if [ -f "$_ancien" ] && ! dpkg -S "$_ancien" >/dev/null 2>&1 \
+       && grep -q "location /api/v1/cookie-audit/" "$_ancien"; then
+        mv "$_ancien" "/var/backups/cookie-audit.conf.avant-1777" 2>/dev/null || rm -f "$_ancien"
+    fi
+
     # Le journal commun n'est utile que si TOUS les blocs server y ecrivent.
     # Ceux qui declarent leur propre access_log remplacent celui herite du
     # bloc http ; l'outil leur ajoute la ligne manquante, et se contente d'un
@@ -11,14 +22,47 @@ if [ "$1" = "configure" ]; then
             echo "secubox-metrics: completion des vhosts a rejouer a la main" >&2
     fi
 
+    # ── Restaure apres la fusion 7ebe27403a (#1777, ref #1748) ────────────────
+    # La fusion avait remis un postinst perime, puis sa reecriture en sh a perdu
+    # trois maillons. On les rend, sans les deux gestes devenus dangereux.
+    #
+    # 1. Groupe adm : live-hosts et vhost-stats lisent /var/log/nginx. Sans lui,
+    #    une box neuve compte zero requete sans rien signaler.
+    if getent passwd secubox >/dev/null 2>&1 && getent group adm >/dev/null 2>&1; then
+        usermod -aG adm secubox || true
+    fi
+    # 2. Table nft de VisitorOrigin (#92) : chargee SEULE et seulement si elle
+    #    manque. Jamais `systemctl reload nftables` (flush ruleset : efface les
+    #    tables de bans a chaud, #1721) ; et la recharger quand elle existe
+    #    doublerait la regle du crochet.
+    if command -v nft >/dev/null 2>&1 && [ -f /etc/nftables.d/secubox-metrics.nft ]; then
+        nft list table inet secubox_metrics >/dev/null 2>&1 || \
+            nft -f /etc/nftables.d/secubox-metrics.nft || \
+            echo "secubox-metrics: table nft secubox_metrics a charger a la main" >&2
+    fi
+    # (Non restaure : chown/chmod 0700 de /etc/secubox/secrets — le dossier des
+    # secrets est root:secubox 0750 + ACL, tenu par secubox-core, #1701.)
+
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload || true
+        # 3. Base ASN (#194) : le timer, et le recuperateur avec repli DB-IP.
+        systemctl enable --now secubox-geoipupdate.timer || true
         # #1059 — activer le timer du rapport hebdomadaire (le .service est
         # oneshot, déclenché par le timer : on n'active QUE le timer). enable
         # --now le pose ET l'arme sans attendre un reboot.
         systemctl enable --now secubox-metrics-rapport.timer || true
         systemctl enable --now secubox-metrics-rapport-quotidien.timer || true
         systemctl enable --now secubox-metrics-rapport-waf.timer || true
+    fi
+
+    # Route /api/v1/cookie-audit/ (secubox-routes.d) : recharger nginx, mais
+    # seulement si la configuration complete passe le test.
+    if [ -d /run/systemd/system ] && systemctl is-active --quiet nginx; then
+        if nginx -t >/dev/null 2>&1; then
+            systemctl reload nginx || true
+        else
+            echo "secubox-metrics: nginx -t echoue, rechargement differe" >&2
+        fi
     fi
 fi
 

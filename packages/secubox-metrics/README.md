@@ -40,17 +40,34 @@ Configuration file: `/etc/secubox/metrics.toml`
 
 - `GET /api/v1/metrics/status` - Module status
 - `GET /api/v1/metrics/health` - Health check
+- `GET /api/v1/metrics/summary` - cpu / mem / load du widget de la barre
+  laterale (admin, `require_jwt`) ; ne lance aucun sous-processus
 
 ## Endpoints — live panel (issue #92)
 
-Three public endpoints feed the health-banner live panel. All are
-unauthenticated, CORS-open, and `Cache-Control: public, max-age=300`.
+These endpoints feed the health-banner live panel. They are CORS-open and
+guarded by `require_lecture` since #1256 (a token, or the LAN dashboard mode).
 
 | Method | Path                              | Schema (high-level)                                  |
 |--------|-----------------------------------|------------------------------------------------------|
 | GET    | `/api/v1/metrics/visitor-origin`  | `{enabled, window_minutes, entries:[{asn,org,count}]}`|
-| GET    | `/api/v1/metrics/live-hosts`      | `{enabled, window_minutes, entries:[{host,count}]}`   |
+| GET    | `/api/v1/metrics/live-hosts`      | `{enabled, window_minutes, entries:[{host,count}], total_requests}` |
 | GET    | `/api/v1/metrics/cert-status`     | `{enabled, summary, next_renewal, warnings}`          |
+
+`live-hosts` counts requests per vhost from `/var/log/nginx/<vhost>_access.log`
+(the service user joins the `adm` group). `total_requests` is the denominator of
+the WAF block rate (`waf.blocked_pct`, `waf.blocks_1h` in `/health/summary`).
+
+## Endpoints — audit des cookies (RGPD / ePrivacy, #159)
+
+Relayed by nginx through `/etc/nginx/secubox-routes.d/metrics-cookie-audit.conf`.
+Disabled by default (`[cookie_audit] enabled = false`).
+
+| Method | Path                            | Guard             | Content                                   |
+|--------|---------------------------------|-------------------|-------------------------------------------|
+| POST   | `/api/v1/cookie-audit/ingest`   | `require_lecture` | browser snapshot (hashed values), 5 MB cap per host |
+| GET    | `/api/v1/cookie-audit/report`   | `require_jwt`     | per-vhost detail (`?host=` for one)       |
+| GET    | `/api/v1/cookie-audit/summary`  | `require_lecture` | counters only, no host names              |
 
 Config blocks live in `/etc/secubox/secubox.conf`:
 
@@ -67,14 +84,10 @@ enabled = true
 warn_days = 30
 ```
 
-MaxMind GeoLite2-ASN refresh: install `geoipupdate` (available in Debian
-bookworm's `contrib` repository; `secubox-metrics` lists it as a
-`Recommends`, not `Depends`, so `apt install secubox-metrics` succeeds
-without `contrib` enabled). Drop a license file at
-`/etc/secubox/secrets/maxmind.conf` (mode 0600, owner `secubox`).
-The `secubox-geoipupdate.timer` runs weekly; if either the binary or the
-key is absent, the unit is a silent no-op and the VisitorOrigin banner
-section stays hidden.
+ASN database refresh (#194): `secubox-geoipupdate.timer` runs
+`/usr/bin/secubox-geoipupdate-fetch` weekly. With `geoipupdate` installed and a
+MaxMind licence at `/etc/secubox/secrets/maxmind.conf` it uses MaxMind;
+otherwise it falls back to the free DB-IP ASN lite database (no signup).
 
 ## License
 

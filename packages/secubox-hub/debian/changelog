@@ -1,3 +1,19 @@
+secubox-hub (1.9.24-1~bookworm1) bookworm; urgency=medium
+
+  * health-banner.js 1.4.8 : restaure la 1.4.7 de master que la fusion
+    7ebe27403a avait remplacée par une 1.3.0 périmée (#1777, ref #1748) —
+    garde de double initialisation, opt-out <meta name="sbx-no-health-banner">
+    (#851), alertes jamais cliquables et plus de cartes de modules en liens
+    (#247, #290), garde SPA de ré-attache (#750), section CookieAudit (#159).
+    Rejoués par-dessus : purge CrowdSec et garde du lecteur incorporé
+    (#1131t). isHubVhost n'est pas ramenée (sans appelant depuis #290, hôtes
+    écrits en dur, #1723).
+  * postinst : ne recharge plus nftables (flush ruleset) — la sonde netstats est
+    chargée seule si elle manque. Sur gk3, l'installation faisait tomber les
+    tables posées à chaud, dropins compris (9 → 4) (#1777, #1721).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 20:12:37 +0200
+
 secubox-hub (1.9.23-1~bookworm1) bookworm; urgency=medium
 
   * webui.conf, location /api/v1/auth/ : nginx ajoute l'adresse qu'il a

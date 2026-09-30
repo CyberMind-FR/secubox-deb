@@ -52,9 +52,15 @@ TOML
         install -d -m 0755 /etc/nftables.d
         install -m 0644 /usr/share/secubox/hub/nftables.d/zz-secubox-netstats-tap.nft \
             /etc/nftables.d/zz-secubox-netstats-tap.nft
-        if systemctl is-active --quiet nftables.service; then
-            systemctl reload nftables.service 2>/dev/null \
-              || /usr/sbin/nft -f /etc/nftables.d/zz-secubox-netstats-tap.nft 2>/dev/null || true
+        # La sonde SEULE, et seulement si elle manque. JAMAIS `systemctl reload
+        # nftables` : il rejoue `flush ruleset` et efface toutes les tables
+        # posées à chaud — bans, NAC, et sur les box qui n'incluent pas
+        # nftables.d (issues de l'image) TOUS les dropins. Constaté sur gk3 le
+        # 2026-09-30 : 9 tables → 4 à l'installation du paquet (#1777, #1721).
+        # Sans chaîne `inet filter input` (pare-feu secubox_filter), rien à faire.
+        if nft list chain inet filter input >/dev/null 2>&1 \
+           && ! nft list chain inet filter input 2>/dev/null | grep -q "sbx-netstats-input-policy-tap"; then
+            /usr/sbin/nft -f /etc/nftables.d/zz-secubox-netstats-tap.nft 2>/dev/null || true
         fi
     fi
     # #758 — enable the collector timer (idempotent)
