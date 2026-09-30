@@ -341,6 +341,23 @@ esac
 
 #DEBHELPER#
 
+# PLAGE D'IDENTIFIANTS DES CONTENEURS NON PRIVILÉGIÉS (#1718). Tous les
+# install-lxc du parc mappent root du conteneur sur 100000–165535 de l'hôte
+# (lxc.idmap = u/g 0 100000 65536). newuidmap ne l'accepte que si
+# /etc/subuid et /etc/subgid l'accordent à root. gk2 avait la ligne, posée à la
+# main ; une box neuve (gk3) ne l'avait pas : TOUS ses conteneurs non
+# privilégiés refusaient de démarrer. Idempotent ; les autres lignes ne sont
+# jamais touchées.
+if [ "$1" = "configure" ]; then
+    for _f in /etc/subuid /etc/subgid; do
+        [ -e "$_f" ] || install -m 0644 /dev/null "$_f"
+        if ! grep -qE '^root:100000:65536$' "$_f"; then
+            printf 'root:100000:65536\n' >> "$_f"
+            echo "secubox-core : plage root:100000:65536 déclarée dans $_f"
+        fi
+    done
+fi
+
 # CONTENEURS LÀ OÙ IL Y A LA PLACE (#1716). Mode automatique : n'agit que si
 # /data est une petite partition, / une grande, ET /data/lxc vide — des
 # conteneurs existants ne sont jamais déplacés sans `secubox-lxc-racine --migrer`.

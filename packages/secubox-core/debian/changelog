@@ -1,3 +1,9 @@
+secubox-core (1.5.37-1~bookworm1) bookworm; urgency=high
+
+  * postinst : déclare root:100000:65536 dans /etc/subuid et /etc/subgid — sans elle, newuidmap refuse l'idmap de tous les conteneurs non privilégiés (gk3 : peertube, jellyfin, jitsi, torrent, ytsas ne démarraient pas) ; gk2 l'avait à la main (#1718, #1713).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 12:22:38 +0200
+
 secubox-core (1.5.36-1~bookworm1) bookworm; urgency=medium
 
   * secubox-lxc-racine : /data/lxc en montage lié sur le grand disque quand /data est une petite partition (gk3 : 1,5 Go libres contre 407 Go sur /) — les provisions LXC s'arrêtaient au système de base. Automatique au postinst si /data/lxc est vide ; `--migrer` pour des conteneurs existants (copie fidèle, vérification, ancienne copie gardée) (#1716, #1713).
