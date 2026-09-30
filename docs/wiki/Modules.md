@@ -38,7 +38,7 @@
 | 🛡️ **Vortex DNS** | DNS | DNS firewall with RPZ |
 | 📡 **Mesh DNS** | DNS | Mesh network domain resolution |
 | 🔗 **WireGuard VPN** | VPN | Modern VPN management |
-| 🕸️ **Mesh Network** | VPN | Mesh networking (Yggdrasil) |
+| 🕸️ **Mesh Network** | VPN | Mesh networking (802.11s + Passpoint) |
 | 🔗 **P2P Network** | VPN | Peer-to-peer networking |
 | 🧅 **Tor Network** | Privacy | Tor anonymity and hidden services |
 | 🌐 **Exposure Settings** | Privacy | Unified exposure (Tor, SSL, DNS, Mesh) |
@@ -377,7 +377,7 @@ Modern VPN management
 
 **Category:** VPN
 
-Mesh networking (Yggdrasil)
+Mesh networking (802.11s + Passpoint)
 
 **Features:**
 - Peer discovery

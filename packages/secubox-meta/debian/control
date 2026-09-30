@@ -211,7 +211,9 @@ Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-zia,
          secubox-voice
-Suggests: secubox-zia-llm
+Suggests: secubox-zia-llm,
+         secubox-voice-moteur,
+         secubox-voicestudio
 Description: SecuBox — service « Assistant ZIA »
  ZIA et Lexie : l'IA locale du Hall, sa voix et son oreille.
  .
@@ -346,11 +348,10 @@ Depends: ${misc:Depends},
 Recommends: secubox-federation,
          secubox-meshname
 Suggests: secubox-mesh,
-         secubox-yggdrasil,
          secubox-daemon,
          secubox-meshtastic
 Description: SecuBox — service « Maillage »
- Annuaire-miroir, pair à pair, fédération SBX, overlay Yggdrasil.
+ Annuaire-miroir, pair à pair, fédération SBX.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.

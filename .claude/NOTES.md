@@ -106,7 +106,6 @@ modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_dri
 br-lan:  192.168.255.1/24 (lan0-lan3 bridged)
 br-wan:  DHCP (eth0+eth2 bridged)
 wg0/1/2: WireGuard VPN (10.10.0.1/24)
-yggdrasil: Overlay mesh network
 docker0: Docker bridge (disabled)
 ```
 

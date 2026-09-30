@@ -57,7 +57,7 @@
 | 🌐 **DNS Provider** | DNS | 外部DNS提供商集成 |
 | 🚫 **AdGuard** | DNS | AdGuard Home DNS拦截 |
 | 🔗 **WireGuard VPN** | VPN | 具有内核集成的现代VPN |
-| 🕸️ **Mesh Network** | VPN | 使用Yggdrasil的Mesh网络 |
+| 🕸️ **Mesh Network** | VPN | Mesh网络（802.11s + Passpoint） |
 | 🔗 **P2P Network** | VPN | 点对点网络 |
 | 🔗 **MasterLink** | VPN | SecuBox网格联邦 |
 | 🧅 **Tor Network** | Privacy | Tor匿名和隐藏服务 |
@@ -1150,7 +1150,7 @@ APT镜像管理
 
 #### 🕸️ Mesh Network
 
-使用Yggdrasil的Mesh网络
+Mesh网络（802.11s + Passpoint）
 
 **功能:** 节点发现, 路由, 加密, IPv6覆盖
 

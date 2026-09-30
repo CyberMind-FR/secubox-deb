@@ -57,7 +57,7 @@
 | 🌐 **DNS Provider** | DNS | Intégration fournisseur DNS externe |
 | 🚫 **AdGuard** | DNS | Blocage DNS AdGuard Home |
 | 🔗 **WireGuard VPN** | VPN | VPN moderne avec intégration noyau |
-| 🕸️ **Mesh Network** | VPN | Réseau mesh avec Yggdrasil |
+| 🕸️ **Mesh Network** | VPN | Réseau mesh (802.11s + Passpoint) |
 | 🔗 **P2P Network** | VPN | Réseau pair-à-pair |
 | 🔗 **MasterLink** | VPN | Fédération mesh SecuBox |
 | 🧅 **Tor Network** | Privacy | Anonymat Tor et services cachés |
@@ -1150,7 +1150,7 @@ VPN moderne avec intégration noyau
 
 #### 🕸️ Mesh Network
 
-Réseau mesh avec Yggdrasil
+Réseau mesh (802.11s + Passpoint)
 
 **Fonctionnalités:** Découverte pairs, Routage, Chiffrement, Overlay IPv6
 

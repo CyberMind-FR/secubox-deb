@@ -4,7 +4,7 @@
 > Ne pas éditer à la main — corriger la source, le plus souvent
 > `packages/<module>/debian/secubox.yaml`, puis relancer le script.
 
-**174 modules** recensés.
+**173 modules** recensés.
 
 `À documenter` signale une donnée **absente du dépôt**. C'est une tâche,
 pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
@@ -179,7 +179,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-webos` | dashboard | lite | oui | 22 | — | 1 | — | 9 | oui |
 | `secubox-wireguard` | network | lite | oui | 28 | 1 | 1 | — | — | oui |
 | `secubox-yacy` | network | lite | oui | 5 | 1 | 1 | oui | — | oui |
-| `secubox-yggdrasil` | vpn | lite | oui | 34 | — | 1 | — | — | oui |
 | `secubox-ytsas` | mind | lite | oui | — | 2 | — | oui | 4 | — |
 | `secubox-zia` | ai | lite | oui | 7 | 1 | — | — | 4 | oui |
 | `secubox-zia-llm` | ai | lite | — | — | 1 | — | — | — | — |
@@ -2901,22 +2900,6 @@ SecuBox YaCy — peer-to-peer search engine
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-yacy/`
-
-### `secubox-yggdrasil`
-
-SecuBox Mesh DNS - Meshname DNS for mesh networks
-
-- **Catégorie** : vpn · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 34 route(s), socket `/run/secubox/mesh.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/mesh
-- **CLI** : À documenter
-- **Units systemd** : `secubox-yggdrasil.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-yggdrasil/`
 
 ### `secubox-ytsas`
 

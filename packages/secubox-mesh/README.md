@@ -7,7 +7,7 @@
 
 # 🕸️ Mesh Network
 
-Mesh networking with Yggdrasil
+Mesh networking (802.11s backhaul + Passpoint AP)
 
 **Category:** VPN
 

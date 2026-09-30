@@ -1,3 +1,9 @@
+secubox-mesh (2.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * Breaks + Replaces: secubox-yggdrasil — l'ancien module (même chemins : /usr/lib/secubox/mesh/api, www/mesh, mesh.sock) est décommissionné ; il bloquait chaque nuit la mise à jour de ce paquet sur gk3 (#1703).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Sep 2026 07:13:37 +0200
+
 secubox-mesh (2.0.6-1~bookworm1) bookworm; urgency=medium
 
   * /etc/secubox/secrets : plus de secubox-mesh 0700 sur le parent partagé ; ACL de traversée pour secubox-mesh (#1689).

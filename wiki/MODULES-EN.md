@@ -57,7 +57,7 @@
 | 🌐 **DNS Provider** | DNS | External DNS provider integration |
 | 🚫 **AdGuard** | DNS | AdGuard Home DNS blocking |
 | 🔗 **WireGuard VPN** | VPN | Modern VPN with kernel integration |
-| 🕸️ **Mesh Network** | VPN | Mesh networking with Yggdrasil |
+| 🕸️ **Mesh Network** | VPN | Mesh networking (802.11s + Passpoint) |
 | 🔗 **P2P Network** | VPN | Peer-to-peer networking |
 | 🔗 **MasterLink** | VPN | SecuBox mesh federation |
 | 🧅 **Tor Network** | Privacy | Tor anonymity and hidden services |
@@ -1154,7 +1154,7 @@ Modern VPN with kernel integration
 
 #### 🕸️ Mesh Network
 
-Mesh networking with Yggdrasil
+Mesh networking (802.11s + Passpoint)
 
 **Features:** Peer discovery, Routing, Encryption, IPv6 overlay
 

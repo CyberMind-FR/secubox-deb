@@ -644,10 +644,10 @@ MODULES = {
     "mesh": {
         "name": "Mesh Network", "icon": "🕸️", "category": "VPN",
         "description": {
-            "en": "Mesh networking with Yggdrasil",
-            "fr": "Réseau mesh avec Yggdrasil",
-            "de": "Mesh-Netzwerk mit Yggdrasil",
-            "zh": "使用Yggdrasil的Mesh网络"
+            "en": "Mesh networking (802.11s + Passpoint)",
+            "fr": "Réseau mesh (802.11s + Passpoint)",
+            "de": "Mesh-Netzwerk (802.11s + Passpoint)",
+            "zh": "Mesh网络（802.11s + Passpoint）"
         },
         "features": {
             "en": ["Peer discovery", "Routing", "Encryption", "IPv6 overlay"],

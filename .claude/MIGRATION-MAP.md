@@ -88,7 +88,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-soc** | ✅ | ✅ | ✅ | SOC dashboard, clock, map, tickets | ✅ |
 | **secubox-roadmap** | ✅ | ✅ | ✅ | migration roadmap tracker | ✅ |
 | **secubox-metrics** | ✅ | ✅ | ✅ | real-time metrics dashboard | ✅ |
-| **secubox-mesh** | ✅ | ✅ | ✅ | Yggdrasil mesh network | ✅ |
+| **secubox-mesh** | ✅ | ✅ | ✅ | Mesh 802.11s + AP Passpoint | ✅ |
 | **secubox-p2p** | ✅ | ✅ | ✅ | P2P networking | ✅ |
 | **secubox-zkp** | ✅ | ✅ | ✅ | ZKP Hamiltonian proofs | ✅ |
 | **secubox-hardening** | ✅ | ✅ | ✅ | sysctl + module blacklist | ✅ |

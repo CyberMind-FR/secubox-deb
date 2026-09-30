@@ -68,7 +68,7 @@
 | luci-app-meshname-dns | secubox-meshname | ✅ | Mesh DNS/mDNS |
 | luci-app-dns-master | secubox-dns | ✅ | BIND zones |
 | luci-app-dpi-dual | secubox-dpi | ✅ | Deep packet inspection |
-| luci-app-secubox-mesh | secubox-mesh | ✅ | Yggdrasil mesh |
+| luci-app-secubox-mesh | secubox-mesh | ✅ | Mesh 802.11s + Passpoint |
 | luci-app-secubox-p2p | secubox-p2p | ✅ | P2P networking |
 | luci-app-network-tweaks | — | ⬜ | Network optimization |
 | luci-app-network-anomaly | — | ⬜ | Traffic anomaly |

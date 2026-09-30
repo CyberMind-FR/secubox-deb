@@ -234,6 +234,8 @@ recommande:
   - secubox-voice
 suggere:
   - secubox-zia-llm             # binaire statique arm64 seulement
+  - secubox-voice-moteur        # moteur vocal local de Lexie (piper + whisper.cpp), arm64
+  - secubox-voicestudio         # VoiceStudio du parc (podman), amd64
 
 meta: secubox-service-noyau
 niveau: service
@@ -350,7 +352,7 @@ suggere:
 meta: secubox-service-mesh
 niveau: service
 label: Maillage
-description: "Annuaire-miroir, pair à pair, fédération SBX, overlay Yggdrasil."
+description: "Annuaire-miroir, pair à pair, fédération SBX."
 requiert:
   - secubox-annuaire
   - secubox-p2p
@@ -359,7 +361,6 @@ recommande:
   - secubox-meshname
 suggere:
   - secubox-mesh
-  - secubox-yggdrasil
   - secubox-daemon
   - secubox-meshtastic
 
