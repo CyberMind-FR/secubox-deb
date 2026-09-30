@@ -198,11 +198,17 @@ _add_bind() {
 }
 
 _remove_bind() {
-    local name="${1:-}" cfg
+    local name="${1:-}" cfg tmp
     [ -n "$name" ] || return 0
     cfg=$(_lxc_config)
     [ -f "$cfg" ] || return 0
-    sed -i "\# media/${name} none bind#d" "$cfg" 2>/dev/null || true
+    # Filtre LITTÉRAL (#1785) : le nom était interpolé dans un programme sed —
+    # un nom fabriqué y glissait la commande `e` de GNU sed, exécutée en root.
+    tmp=$(mktemp "$cfg.XXXXXX") || return 0
+    if grep -vF -- " media/${name} none bind" "$cfg" > "$tmp"; then
+        cat "$tmp" > "$cfg"
+    fi
+    rm -f "$tmp"
 }
 
 # _live_mount <host_path> <name> — best-effort RO bind into the running rootfs
@@ -456,6 +462,10 @@ cmd_partner_wire() {
 cmd_partner_unwire() {
     local name="${1:-}"
     [ -n "$name" ] || { err "usage: jellyfinctl partner unwire <name>"; exit 1; }
+    # Seulement un partenaire CONNU (#1785) : ce script tourne en root par sudo
+    # avec tout argument, et le nom finit dans un chemin démonté (umount) et
+    # dans la configuration du conteneur.
+    [ -n "$(_partner_kind "$name")" ] || { err "partenaire inconnu : $name"; exit 64; }
     _remove_bind "$name"
     lxc_running && _live_umount "$name" || true
     _jf_del_library "$name" || true
@@ -627,8 +637,15 @@ cmd_install() {
 # point of a SecuBox module). Jellyfin caches keys in memory, so the service is
 # bounced to pick it up. Used by install-lxc first-run as the robust fallback
 # when the HTTP /Startup/* wizard flow can't mint one (Jellyfin 10.11 quirk).
+# Grammaire indépendante de la locale : sous UTF-8, [A-Za-z] admet aussi les
+# lettres accentuées (sudo transmet LANG/LC_*).
+_nom_cle_admis() { local LC_ALL=C; [[ "${1:-}" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; }
+
 cmd_apikey_mint() {
     local name="${1:-secubox}"
+    # Le nom entre dans une requête SQL exécutée en root (#1785) : lettres,
+    # chiffres, `_` et `-` seulement — ni guillemet, ni `;`.
+    _nom_cle_admis "$name" || { err "nom de clé refusé"; exit 64; }
     local db="$LXC_PATH/$LXC_NAME/rootfs/var/lib/jellyfin/data/jellyfin.db"
     command -v sqlite3 >/dev/null 2>&1 || { err "sqlite3 not found on host"; exit 2; }
     [ -f "$db" ] || { err "jellyfin.db not found ($db) — LXC provisioned?"; exit 2; }

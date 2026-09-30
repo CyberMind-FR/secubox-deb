@@ -733,6 +733,35 @@ EOF
 
 # === Main ===
 
+# ── ARGUMENTS ADMIS (#1785) ─────────────────────────────────────────────
+# Ce script tourne en root par sudo avec TOUT argument : ses gardes sont les
+# seules. Un nom de pair finissait dans un chemin (lecture de la clé privée
+# du serveur par `peer config ../..`, écriture par `peer add`), une interface
+# dans wg-quick (qui prend un CHEMIN de configuration et en exécute PostUp).
+# Grammaires indépendantes de la locale (sudo transmet LANG/LC_*).
+_iface_admise()   { local LC_ALL=C; [[ "${1:-}" =~ ^[A-Za-z0-9_-]{1,15}$ ]]; }
+_nom_pair_admis() { local LC_ALL=C; [[ "${1:-}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$ ]]; }
+_cle_publique()   { local LC_ALL=C; [[ "${1:-}" =~ ^[A-Za-z0-9+/]{43}=$ ]]; }
+_refuser() { error "argument refusé : $(printf '%q' "${1:-}")"; exit 64; }
+# Verbe d'opérateur : refusé par le chemin sudo d'un compte de service.
+# SUDO_USER est posé par sudo lui-même — l'appelant ne le choisit pas.
+_operateur_seulement() {
+    if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+        error "verbe réservé à l'opérateur (root) : $1"; exit 64
+    fi
+}
+
+# `wg show all dump` SANS secret (#1785) : l'API y lit pairs et compteurs ; la
+# règle sudoers `wg show *` qu'elle utilisait lui livrait aussi la clé privée
+# de chaque interface. Clé privée (ligne d'interface, 5 champs) et clé
+# partagée (ligne de pair, 9 champs) masquées ; « (none) » gardé tel quel.
+cmd_dump() {
+    wg show all dump | awk -F'\t' 'BEGIN { OFS = "\t" }
+        NF == 5 && $2 != "(none)" { $2 = "(masquée)" }
+        NF == 9 && $3 != "(none)" { $3 = "(masquée)" }
+        { print }'
+}
+
 main() {
     mkdir -p "$(dirname "$LOG_FILE")" "$PEERS_DIR" 2>/dev/null || true
 
@@ -747,6 +776,7 @@ main() {
         interface)
             local subcmd="${1:-}"
             shift || true
+            _iface_admise "${1:-}" || _refuser "${1:-}"
             case "$subcmd" in
                 up)     cmd_interface_up "$@" ;;
                 down)   cmd_interface_down "$@" ;;
@@ -758,6 +788,13 @@ main() {
             local subcmd="${1:-}"
             shift || true
             case "$subcmd" in
+                remove) _nom_pair_admis "${1:-}" || _cle_publique "${1:-}" || _refuser "${1:-}" ;;
+                add|qr|config) _nom_pair_admis "${1:-}" || _refuser "${1:-}" ;;
+            esac
+            case "$subcmd" in add|remove)
+                [ -z "${2:-}" ] || _iface_admise "$2" || _refuser "$2" ;;
+            esac
+            case "$subcmd" in
                 add)    cmd_peer_add "$@" ;;
                 remove) cmd_peer_remove "$@" ;;
                 qr)     cmd_peer_qr "$@" ;;
@@ -767,7 +804,8 @@ main() {
             ;;
         genkey)         cmd_genkey ;;
         genpsk)         cmd_genpsk ;;
-        migrate)        cmd_migrate "$@" ;;
+        migrate)        _operateur_seulement migrate; cmd_migrate "$@" ;;
+        dump)           cmd_dump ;;
         help|--help|-h) cmd_help ;;
         *)
             error "Unknown command: $cmd"

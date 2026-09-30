@@ -169,7 +169,9 @@ def _parse_wg_show() -> Dict[str, Any]:
     result = {"interfaces": {}}
     try:
         proc = subprocess.run(
-            ["sudo", "-n", "wg", "show", "all", "dump"],
+            # wgctl dump : le même format, clés privée et partagée masquées
+            # (#1785) — plus de `sudo wg show *`, qui livrait la clé privée.
+            ["sudo", "-n", "/usr/sbin/wgctl", "dump"],
             capture_output=True, text=True, timeout=5
         )
         if proc.returncode != 0:
@@ -563,7 +565,8 @@ async def migrate(req: MigrateRequest, user=Depends(require_jwt)):
 def health():
     """Health check endpoint."""
     try:
-        result = subprocess.run(["sudo", "-n", "wg", "show", "interfaces"], capture_output=True, timeout=2)
+        # Sans sudo (#1785) : lister les interfaces ne demande aucun privilège.
+        result = subprocess.run(["wg", "show", "interfaces"], capture_output=True, timeout=2)
         interfaces = result.stdout.decode().strip().split() if result.returncode == 0 else []
         return {
             "status": "ok",
