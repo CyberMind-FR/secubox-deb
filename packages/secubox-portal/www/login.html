@@ -791,7 +791,28 @@ function loadTheme() {
 // ?deconnexion=1 : on termine la session côté serveur (cookie ET jeton), on
 // efface le navigateur, puis on montre le formulaire, sans rebond.
 var _sbxQs = new URLSearchParams(window.location.search);
-if (_sbxQs.has('deconnexion')) {
+// ÉLÉVATION DEPUIS UN APPAREIL DE CONFIANCE (#1827). L'Identity Manager du Hall
+// remet un BON d'une minute, à usage unique, dans le fragment (jamais envoyé au
+// serveur, jamais journalisé) ; on l'échange ici contre la session
+// d'administration, puis on efface le fragment AVANT toute autre chose.
+var _sbxElev = (window.location.hash.match(/^#elevation=([A-Za-z0-9_-]{40,64})$/) || [])[1];
+if (_sbxElev) history.replaceState(null, '', window.location.pathname + window.location.search);
+if (_sbxElev) {
+  showMsg('Ouverture de la session d\'administration…', 'success');
+  fetch('/api/v1/sbxid/elevation/echange', { method: 'POST', credentials: 'omit',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bon: _sbxElev }) })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (x) {
+      if (!x.ok || !x.d.access_token) {
+        showMsg((x.d && x.d.detail) || 'Bon refusé : recommencer depuis le Hall.', 'error');
+        return;
+      }
+      _username = x.d.compte || '';
+      finalizeToken(x.d.access_token);
+      window.location.replace(_sbxRedirect());
+    })
+    .catch(function () { showMsg('Échange impossible : recommencer depuis le Hall.', 'error'); });
+} else if (_sbxQs.has('deconnexion')) {
   var _sbxT = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
   fetch('/api/v1/auth/auth/logout', { method: 'POST', credentials: 'include',
     headers: _sbxT ? { 'Authorization': 'Bearer ' + _sbxT } : {} }).catch(function() {});
