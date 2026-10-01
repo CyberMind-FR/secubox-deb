@@ -113,6 +113,14 @@ class PersoOpenPGP(BaseModel):
     courriel: str = Field(min_length=3, max_length=254)
 
 
+class Detenteurs(BaseModel):
+    detenteurs: list[str] = Field(min_length=2, max_length=5)
+
+
+class Parts(BaseModel):
+    parts: list[str] = Field(min_length=2, max_length=5)
+
+
 class Pose(BaseModel):
     compartiment: str = Field(max_length=40)
     nom: str = Field(max_length=64)
@@ -402,6 +410,31 @@ def serrure_retirer(ident: str):
 @racine.post("/serrures/secours")
 def codes():
     return {"codes": _appel(COFFRE.regenerer_codes)}
+
+
+# Recouvrement par le maillage (P8) : root seulement — les parts ne passent
+# jamais par une session web.
+@racine.post("/recouvrement/preparer")
+def recouvrement_preparer(d: Detenteurs):
+    return _appel(COFFRE.recouvrement_preparer, d.detenteurs)
+
+
+@racine.get("/recouvrement")
+def recouvrement_etat():
+    return {"recouvrement": COFFRE.recouvrement_etat()}
+
+
+@racine.delete("/recouvrement")
+def recouvrement_annuler():
+    _appel(COFFRE.recouvrement_annuler)
+    return {"annule": True}
+
+
+@racine.post("/recouvrement/ouvrir")
+def recouvrement_ouvrir(p: Parts):
+    if not _appel(COFFRE.ouvrir_par_maillage, p.parts, qui="root", origine="console"):
+        raise HTTPException(403, "refusé — deux parts d'un même jeu sont nécessaires")
+    return COFFRE.etat()
 
 
 @racine.post("/compartiments")

@@ -16,6 +16,11 @@ rien. Les codes de secours sont des serrures à usage unique.
 COMPARTIMENTS. `box` pour le système ; `p-<user_uuid>` pour une personne — par
 son identifiant, jamais par un compte système (décision #1405).
 
+RECOUVREMENT PAR LE MAILLAGE (P8). n parts aléatoires, confiées à des box
+pairs (par leur messagerie OpenPGP liée) ou au papier ; chaque PAIRE de parts
+ouvre une serrure `maillage`. Deux détenteurs quelconques rouvrent le Coffre ;
+un seul, rien. Un jeu sert une fois : utilisé, il disparaît.
+
 UNE PERSONNE A SES SERRURES (P5). Sa clé (32 octets aléatoires) n'est emballée
 que par SES serrures — phrase ou clé d'appareil. La clé de son compartiment
 demande la MK ET cette clé : l'admin qui ouvre le Coffre n'y lit rien, la
@@ -37,7 +42,7 @@ import base64
 
 from .crypto import (ARGON2_DEFAUT, TAILLE_CLE, Refus, aad_secret, aad_serrure, aad_serrure_personnelle, chiffrer,
                      cle_compartiment, cle_compartiment_personnel, dechiffrer, derive_kek, derive_kek_appareil,
-                     nouveau_sel, nouvelle_cle)
+                     derive_kek_maillage, nouveau_sel, nouvelle_cle)
 from .journal import Journal
 from .memoire import CleVerrouillee
 
@@ -45,7 +50,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS serrures (
     id TEXT PRIMARY KEY,
-    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours', 'appareil')),
+    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours', 'appareil', 'maillage')),
     libelle TEXT NOT NULL DEFAULT '',
     sel BLOB NOT NULL, params TEXT NOT NULL,
     nonce BLOB NOT NULL, mk BLOB NOT NULL,
@@ -78,12 +83,14 @@ NB_CODES = 5
 PHRASE_MIN = 12
 DELAI_DEFAUT = 900
 VALEUR_MAX = 64 * 1024
-VERSION_SCHEMA = "3"
+VERSION_SCHEMA = "4"
 CRED_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,1024}$")
 NOM_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 COMPARTIMENT_RE = re.compile(
     r"^(box|p-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
 PERSONNE_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+DETENTEUR_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
+DETENTEURS_MAX = 5
 _B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 
 
@@ -150,6 +157,40 @@ CREATE TABLE IF NOT EXISTS serrures_personnelles (
 UPDATE meta SET valeur = '3' WHERE cle = 'version';
 """
 
+_MIGRATION_V4 = """
+CREATE TABLE serrures_v4 (
+    id TEXT PRIMARY KEY,
+    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours', 'appareil', 'maillage')),
+    libelle TEXT NOT NULL DEFAULT '',
+    sel BLOB NOT NULL, params TEXT NOT NULL,
+    nonce BLOB NOT NULL, mk BLOB NOT NULL,
+    creee INTEGER NOT NULL,
+    cred_id TEXT);
+INSERT INTO serrures_v4 SELECT id, genre, libelle, sel, params, nonce, mk, creee, cred_id FROM serrures;
+DROP TABLE serrures;
+ALTER TABLE serrures_v4 RENAME TO serrures;
+UPDATE meta SET valeur = '4' WHERE cle = 'version';
+"""
+
+
+def part_texte(jeu: str, indice: int, part: bytes) -> str:
+    """Une part lisible et recopiable : « jeu.indice.XXXX-XXXX-… » (base32)."""
+    b = base64.b32encode(part).decode().rstrip("=")
+    return f"{jeu}.{indice}." + "-".join(b[k:k + 4] for k in range(0, len(b), 4))
+
+
+def lit_part(texte: str) -> tuple:
+    try:
+        jeu, indice, corps = (texte or "").strip().split(".", 2)
+        b = "".join(c for c in corps.upper() if c in _B32)
+        part = base64.b32decode(b + "=" * (-len(b) % 8))
+        indice = int(indice)
+    except (ValueError, TypeError):
+        raise Interdit("part de recouvrement illisible") from None
+    if len(part) != TAILLE_CLE or not re.match(r"^[0-9a-f]{8}$", jeu):
+        raise Interdit("part de recouvrement illisible")
+    return jeu, indice, part
+
 
 class Coffre:
     def __init__(self, base: Path, journal: Journal, delai_s: int = DELAI_DEFAUT,
@@ -191,6 +232,9 @@ class Coffre:
             v = "2"
         if v == "2":
             cx.executescript("BEGIN;" + _MIGRATION_V3 + "COMMIT;")
+            v = "3"
+        if v == "3":
+            cx.executescript("BEGIN;" + _MIGRATION_V4 + "COMMIT;")
 
     @property
     def initialise(self) -> bool:
@@ -321,6 +365,91 @@ class Coffre:
                     self.journal.ajouter("ouverture", **details)
                     return True
             self.journal.ajouter("ouverture_refusee", genre=genre, **contexte)
+            return False
+
+    # ── recouvrement par le maillage (P8) ───────────────────────────────────
+    def recouvrement_preparer(self, detenteurs: list) -> dict:
+        """Un jeu neuf (l'ancien disparaît). Rend les parts, UNE fois : à
+        confier aussitôt — coffrectl les envoie aux box pairs."""
+        if not isinstance(detenteurs, list) or not 2 <= len(detenteurs) <= DETENTEURS_MAX:
+            raise Interdit(f"de 2 à {DETENTEURS_MAX} détenteurs")
+        if len(set(detenteurs)) != len(detenteurs) or not all(
+                isinstance(d, str) and DETENTEUR_RE.match(d) for d in detenteurs):
+            raise Interdit("détenteurs invalides ou en double")
+        with self._verrou:
+            mk = self._mk_ou_scelle()
+            jeu = secrets.token_hex(4)
+            parts = [nouvelle_cle() for _ in detenteurs]
+            maintenant = int(time.time())
+            with self._cx() as cx:
+                cx.execute("DELETE FROM serrures WHERE genre='maillage'")
+                for i in range(len(parts)):
+                    for j in range(i + 1, len(parts)):
+                        ident = secrets.token_hex(8)
+                        sel = nouveau_sel()
+                        kek = derive_kek_maillage(parts[i], parts[j], sel, jeu, i, j)
+                        nonce, emballee = chiffrer(kek, mk, aad_serrure(ident))
+                        params = {"kdf": "hkdf-sha256", "jeu": jeu, "paire": [i, j], "detenteurs": detenteurs}
+                        cx.execute("INSERT INTO serrures (id, genre, libelle, sel, params, nonce, mk, creee) "
+                                   "VALUES (?,?,?,?,?,?,?,?)",
+                                   (ident, "maillage", f"recouvrement {jeu} : {detenteurs[i]} + {detenteurs[j]}",
+                                    sel, json.dumps(params), nonce, emballee, maintenant))
+            self.journal.ajouter("recouvrement_prepare", jeu=jeu, detenteurs=detenteurs)
+            return {"jeu": jeu, "detenteurs": detenteurs,
+                    "parts": [part_texte(jeu, i, p) for i, p in enumerate(parts)]}
+
+    def recouvrement_etat(self) -> Optional[dict]:
+        if not self.initialise:
+            return None
+        with self._cx() as cx:
+            ligne = cx.execute("SELECT params, creee FROM serrures WHERE genre='maillage' LIMIT 1").fetchone()
+        if not ligne:
+            return None
+        p = json.loads(ligne[0])
+        return {"jeu": p["jeu"], "detenteurs": p["detenteurs"], "cree": ligne[1]}
+
+    def recouvrement_annuler(self) -> None:
+        with self._verrou:
+            self._mk_ou_scelle()
+            with self._cx() as cx:
+                n = cx.execute("DELETE FROM serrures WHERE genre='maillage'").rowcount
+            if n:
+                self.journal.ajouter("recouvrement_annule")
+
+    def ouvrir_par_maillage(self, textes: list, **contexte) -> bool:
+        """Deux parts (ou plus) d'un même jeu rouvrent le Coffre. Le jeu
+        disparaît alors : ses parts ont circulé, il ne resservira pas."""
+        if not self.initialise:
+            raise NonInitialise()
+        lues = {}
+        for t in textes or []:
+            jeu, i, part = lit_part(t)
+            lues[(jeu, i)] = part
+        with self._verrou:
+            self._expire()
+            with self._cx() as cx:
+                lignes = cx.execute("SELECT id, sel, params, nonce, mk FROM serrures WHERE genre='maillage'").fetchall()
+                for ident, sel, params, nonce, emballee in lignes:
+                    p = json.loads(params)
+                    i, j = p["paire"]
+                    a, b = lues.get((p["jeu"], i)), lues.get((p["jeu"], j))
+                    if a is None or b is None:
+                        continue
+                    try:
+                        mk = dechiffrer(derive_kek_maillage(a, b, sel, p["jeu"], i, j), nonce, emballee,
+                                        aad_serrure(ident))
+                    except Refus:
+                        continue
+                    cx.execute("DELETE FROM serrures WHERE genre='maillage'")
+                    if not self._mk:
+                        self._mk = CleVerrouillee(mk)
+                    del mk
+                    self._dernier = self._horloge()
+                    self.journal.ajouter("ouverture", genre="maillage", jeu=p["jeu"],
+                                         detenteurs=[p["detenteurs"][i], p["detenteurs"][j]], **contexte)
+                    self.journal.ajouter("recouvrement_consomme", jeu=p["jeu"])
+                    return True
+            self.journal.ajouter("ouverture_refusee", genre="maillage", parts=len(lues), **contexte)
             return False
 
     def ajouter_serrure_phrase(self, phrase: str, libelle: str = "") -> str:
@@ -732,4 +861,5 @@ class Coffre:
                     {"id": i, "nature": n, "libelle": l, "secrets": s} for i, n, l, s in cx.execute(
                         "SELECT c.id, c.nature, c.libelle, COUNT(s.nom) FROM compartiments c "
                         "LEFT JOIN secrets s ON s.compartiment = c.id GROUP BY c.id ORDER BY c.id")]
+        sortie["recouvrement"] = self.recouvrement_etat()
         return sortie

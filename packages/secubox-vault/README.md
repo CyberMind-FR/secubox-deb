@@ -83,6 +83,20 @@ La personne est calculée **par le Coffre**, depuis le jeton vérifié
 (`capacites.personne_du_porteur`) — aucun en-tête n'en décide. Une serrure
 refusée compte : cinq par heure et par personne, puis 429.
 
+## Recouvrement par le maillage (P8)
+
+Phrase et codes perdus ? Deux **détenteurs** sur n (2 à 5) rouvrent le
+Coffre. `coffrectl recouvrement preparer gk3 c3box papier` tire une part
+aléatoire par détenteur et pose une serrure `maillage` par **paire** de parts
+(HKDF des deux — pas d'arithmétique maison). La part d'une box pair part par
+sa messagerie OpenPGP liée (signée, chiffrée pour sa clé liée au did) ; une
+part `papier` s'affiche une fois, à garder hors ligne.
+
+Pour rouvrir : sur chaque pair qui accepte, son administrateur lance
+`coffrectl recouvrement rendre <cette box>` ; ici, `coffrectl recouvrement
+ouvrir` reprend les parts rendues et demande les parts papier. Le jeu
+disparaît dès qu'il a servi — poser une nouvelle phrase, refaire un jeu.
+
 ## coffrectl (root)
 
 ```
@@ -108,6 +122,13 @@ coffrectl niveau0 etat
 coffrectl niveau0 migrer NOM CHEMIN UNITE.service   # chiffre + drop-in LoadCredentialEncrypted
 coffrectl niveau0 retirer-clair NOM                 # seulement si l'unité tourne AVEC la crédence
 coffrectl niveau0 lire NOM
+
+# P8 — recouvrement par le maillage
+coffrectl recouvrement etat
+coffrectl recouvrement preparer DÉTENTEUR DÉTENTEUR [DÉTENTEUR…]   # box pair ou « papier »
+coffrectl recouvrement annuler
+coffrectl recouvrement rendre ORIGINE     # sur un pair
+coffrectl recouvrement ouvrir
 ```
 
 Phrases, codes et valeurs ne passent jamais par la ligne de commande : invite

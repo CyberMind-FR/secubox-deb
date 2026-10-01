@@ -1,6 +1,6 @@
 # Le Coffre — idée et conception
 
-> Issue #1364 · **P1–P5 livrées** (#1367 : P1 MK, serrures, compartiments, `coffrectl`, journal chaîné ; P2 session de signature apt ; P3 niveau 0 `systemd-creds` ; P4 clés d'appareil, ouverture hors LAN, carte du Hall ; P5 compartiments des personnes, clé OpenPGP personnelle) · maquette : [`maquette.html`](maquette.html)
+> Issue #1364 · **P1–P5 et P8 livrées** (#1367 : P1 MK, serrures, compartiments, `coffrectl`, journal chaîné ; P2 session de signature apt ; P3 niveau 0 `systemd-creds` ; P4 clés d'appareil, ouverture hors LAN, carte du Hall ; P5 compartiments des personnes, clé OpenPGP personnelle ; P8 recouvrement par le maillage) · maquette : [`maquette.html`](maquette.html)
 >
 > Corrections du 2026-10-01 : compartiments **par personne** (`p-<user_uuid>`, décision #1405), clé privée **jamais prêtée** au webmail (#1738), Roundcube dans le LXC `roundcube`, `secubox-identity` retiré (#1840), Argon2id mesuré.
 
@@ -201,12 +201,14 @@ avant d'être conçu plus finement.
 | Moyen | Ce qu'il faut | Quand |
 |---|---|---|
 | Code de secours | un des 5 codes imprimés à la création (chacun est une serrure argon2id) | phrase oubliée |
-| Maillage MirrorNet | TOTP validé sur **2 des 3** nœuds désignés, qui rendent chacun leur part Shamir de KEK₄, chiffrée pour une clé X25519 de la box — à définir : `secubox-identity` est retiré (#1840), l'identité est `node.key` (Ed25519), et POLITIQUE-CRYPTO interdit de la convertir | box isolée de son admin, clé d'appareil perdue |
+| Maillage (**livré, P8**) | **2 des n** détenteurs (box pairs ou papier). Chaque détenteur a une part aléatoire ; chaque PAIRE de parts ouvre une serrure `maillage` (HKDF des deux parts — pas de Shamir fait maison). Une part de pair voyage par la messagerie OpenPGP des box (#1736) : signée par notre clé, chiffrée pour la sous-clé cv25519 **liée au did du pair** par l'annuaire — c'est la « clé X25519 de la box » qui restait à définir. Le pair la rend sur décision de SON administrateur (`coffrectl recouvrement rendre`). Un jeu sert une fois | box isolée de son admin, phrase et codes perdus |
 | Rien | — | tout perdu : le niveau 1 est perdu. C'est le prix d'un coffre réel ; le dire à l'enrôlement |
 
 Le recouvrement par le maillage est la réponse honnête au « recouvrement
-par OTP » : l'OTP autorise un **pair** à rendre sa part ; il ne contient
-jamais la clé.
+par OTP » : c'est l'administrateur d'un **pair** qui décide de rendre sa
+part ; aucune part seule ne contient la clé. Éprouvé le 2026-10-01 entre gk2
+et gk3 (Coffre jetable) : part confiée à gk3, rendue, Coffre rouvert avec la
+part papier, jeu consommé.
 
 ## 7. Journal
 

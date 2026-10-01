@@ -31,12 +31,21 @@ entrée standard.
   coffrectl niveau0 migrer NOM CHEMIN UNITE.service   # chiffre et déclare ; garde le clair
   coffrectl niveau0 retirer-clair NOM      # détruit le clair, si l'unité tourne avec la crédence
   coffrectl niveau0 lire NOM               # root : la valeur, sur la sortie standard
+
+  coffrectl recouvrement etat              # recouvrement par le maillage (P8)
+  coffrectl recouvrement preparer DÉTENTEUR DÉTENTEUR [DÉTENTEUR…]
+                                           # box pair (sbx-openpgp pairs) ou « papier » ;
+                                           # deux détenteurs quelconques rouvriront le Coffre
+  coffrectl recouvrement annuler
+  coffrectl recouvrement rendre ORIGINE    # SUR UN PAIR : renvoie à ORIGINE la part qu'elle nous a confiée
+  coffrectl recouvrement ouvrir            # parts rendues par les pairs + parts papier saisies
 """
 import getpass
 import http.client
 import json
 import os
 import socket
+import subprocess
 import sys
 
 SOCKET = os.environ.get("SECUBOX_COFFRE_SOCKET_RACINE", "/run/secubox-coffre/racine.sock")
@@ -91,6 +100,9 @@ def affiche_etat(e: dict) -> None:
         print(f"  serrure {s['id']}  {s['genre']:8}  {s['libelle']}")
     for c in e.get("compartiments", []):
         print(f"  compartiment {c['id']}  ({c['nature']}) — {c['secrets']} secret(s)")
+    r = e.get("recouvrement")
+    if r:
+        print(f"  recouvrement : jeu {r['jeu']} — {', '.join(r['detenteurs'])}")
 
 
 def depot(args) -> None:
@@ -152,6 +164,134 @@ def niveau0(args) -> None:
         sys.exit(f"coffrectl niveau0 : {e}")
 
 
+# ── recouvrement par le maillage (P8) ──────────────────────────────────────────
+OBJET_PART = "Coffre : part de recouvrement"
+OBJET_RENDUE = "Coffre : part rendue"
+SBX_OPENPGP = os.environ.get("SECUBOX_SBX_OPENPGP", "sbx-openpgp")
+
+
+def _openpgp(*args: str, entree: str = None) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run([SBX_OPENPGP, *args], input=entree, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError:
+        sys.exit("coffrectl : sbx-openpgp absent — le recouvrement passe par la messagerie OpenPGP des box")
+
+
+def _pairs() -> dict:
+    r = _openpgp("_pairs-json")
+    if r.returncode != 0:
+        sys.exit("coffrectl : annuaire des box liées illisible (" + (r.stderr.strip() or "?") + ")")
+    return {p["boxname"]: p for p in json.loads(r.stdout or "[]")}
+
+
+def _boite() -> list:
+    r = _openpgp("_boite-json")
+    if r.returncode != 0:
+        sys.exit("coffrectl : boîte OpenPGP illisible (" + (r.stderr.strip() or "?") + ")")
+    return json.loads(r.stdout or "[]")
+
+
+def _message(ident: str) -> dict:
+    r = _openpgp("_boite-json", ident)
+    return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else {}
+
+
+def corps_part(origine: str, jeu: str, part: str) -> str:
+    return f"coffre-recouvrement/1\norigine: {origine}\njeu: {jeu}\npart: {part}\n"
+
+
+def lit_corps(texte: str) -> dict:
+    lignes = (texte or "").splitlines()
+    if not lignes or lignes[0].strip() != "coffre-recouvrement/1":
+        return {}
+    d = {}
+    for l in lignes[1:]:
+        k, _, v = l.partition(":")
+        if k.strip() in ("origine", "jeu", "part"):
+            d[k.strip()] = v.strip()
+    return d if {"origine", "jeu", "part"} <= set(d) else {}
+
+
+def _soi(pairs: dict) -> str:
+    return next((n for n, p in pairs.items() if p.get("soi")), socket.gethostname().split(".")[0])
+
+
+def recouvrement(args) -> None:
+    sous = args[0] if args else "etat"
+    if sous == "etat":
+        r = appel("GET", "/recouvrement")["recouvrement"]
+        print("aucun jeu de recouvrement" if not r else
+              f"jeu {r['jeu']} — détenteurs : {', '.join(r['detenteurs'])} (deux quelconques rouvrent le Coffre)")
+    elif sous == "preparer" and len(args) >= 3:
+        detenteurs = args[1:]
+        pairs = _pairs()
+        soi = _soi(pairs)
+        for d in detenteurs:
+            if not d.startswith("papier") and (d not in pairs or pairs[d].get("soi")):
+                sys.exit(f"coffrectl : « {d} » n'est ni « papier » ni une box liée (sbx-openpgp pairs)")
+        jeu = appel("POST", "/recouvrement/preparer", {"detenteurs": detenteurs})
+        papier = []
+        for d, part in zip(jeu["detenteurs"], jeu["parts"]):
+            if d.startswith("papier"):
+                papier.append((d, part))
+                continue
+            r = _openpgp("envoyer", d, OBJET_PART, "-", entree=corps_part(soi, jeu["jeu"], part))
+            if r.returncode != 0:
+                appel("DELETE", "/recouvrement")
+                sys.exit(f"coffrectl : {d} n'a pas reçu sa part ({(r.stderr or '').strip()}) — jeu annulé")
+            print(f"part {jeu['detenteurs'].index(d)} confiée à {d} (signée, chiffrée pour sa clé liée)")
+        for d, part in papier:
+            print(f"PART PAPIER ({d}) — à recopier et garder HORS LIGNE, ne s'affichera plus :\n    {part}")
+        print(f"jeu {jeu['jeu']} prêt : deux détenteurs quelconques parmi {len(detenteurs)} rouvrent le Coffre.")
+    elif sous == "annuler":
+        appel("DELETE", "/recouvrement")
+        print("jeu de recouvrement annulé")
+    elif sous == "rendre" and len(args) == 2:
+        origine = args[1]
+        pairs = _pairs()
+        if origine not in pairs or pairs[origine].get("soi"):
+            sys.exit(f"coffrectl : « {origine} » n'est pas une box liée")
+        trouve = None
+        for m in _boite():                              # du plus récent au plus ancien
+            if m.get("boxname") != origine and m.get("de") != pairs[origine]["did"]:
+                continue
+            d = _message(m["id"])
+            if d.get("objet") == OBJET_PART and lit_corps(d.get("contenu", "")):
+                trouve = lit_corps(d["contenu"])
+                break
+        if not trouve:
+            sys.exit(f"coffrectl : aucune part confiée par {origine} dans la boîte OpenPGP")
+        r = _openpgp("envoyer", origine, OBJET_RENDUE, "-",
+                     entree=corps_part(_soi(pairs), trouve["jeu"], trouve["part"]))
+        if r.returncode != 0:
+            sys.exit(f"coffrectl : {origine} n'a pas reçu la part ({(r.stderr or '').strip()})")
+        print(f"part du jeu {trouve['jeu']} rendue à {origine}")
+    elif sous == "ouvrir":
+        r = appel("GET", "/recouvrement")["recouvrement"]
+        if not r:
+            sys.exit("coffrectl : aucun jeu de recouvrement sur cette box")
+        parts, rendues = [], []
+        for m in _boite():
+            d = _message(m["id"])
+            c = lit_corps(d.get("contenu", "")) if d.get("objet") == OBJET_RENDUE else {}
+            if c.get("jeu") == r["jeu"] and c["part"] not in parts:
+                parts.append(c["part"])
+                rendues.append(m["id"])
+                print(f"part rendue par {m.get('boxname') or m.get('de')}")
+        while len(parts) < 2:
+            p = saisie("Part papier (jeu.indice.XXXX-…) : ").strip()
+            if not p:
+                sys.exit("coffrectl : deux parts sont nécessaires")
+            parts.append(p)
+        affiche_etat(appel("POST", "/recouvrement/ouvrir", {"parts": parts}))
+        for ident in rendues:                           # elles ont servi : on ne les garde pas
+            _openpgp("_boite-retirer", ident)
+        print("Coffre rouvert par le maillage. Ce jeu ne vaut plus : posez une nouvelle phrase "
+              "(coffrectl serrure-ajouter), puis refaites un jeu (coffrectl recouvrement preparer …).")
+    else:
+        sys.exit("coffrectl recouvrement : etat | preparer DÉTENTEUR DÉTENTEUR… | annuler | rendre ORIGINE | ouvrir")
+
+
 def principal(argv) -> None:
     if not argv or argv[0] in ("-h", "--help", "aide"):
         print(__doc__)
@@ -206,6 +346,8 @@ def principal(argv) -> None:
         depot(args)
     elif cmd == "niveau0":
         niveau0(args)
+    elif cmd == "recouvrement":
+        recouvrement(args)
     else:
         sys.exit(f"coffrectl : commande inconnue ou incomplète « {' '.join(argv)} » — coffrectl aide")
 

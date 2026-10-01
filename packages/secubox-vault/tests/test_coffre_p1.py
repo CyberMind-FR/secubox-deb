@@ -214,4 +214,5 @@ def test_migration_schema_v1_vers_v2(tmp_path):
     assert c2.ouvrir(PHRASE) and c2.lire("box", "x") == b"valeur"
     c2.ajouter_serrure_appareil("A" * 43, os.urandom(32), os.urandom(32), "clé")
     with sqlite3.connect(base / "coffre.db") as cx:
-        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == "3"
+        from coffre.coffre import VERSION_SCHEMA                # v1 → … → la dernière
+        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == VERSION_SCHEMA

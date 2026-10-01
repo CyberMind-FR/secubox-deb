@@ -1,3 +1,9 @@
+secubox-openpgp (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * sbx-openpgp _pairs-json, _boite-json [ID], _boite-retirer ID : sorties JSON pour les outils de la box (recouvrement du Coffre, #1367 P8) ; lectures et retraits tracés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 22:30:00 +0200
+
 secubox-openpgp (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Unité : ReadWritePaths sur /var/log/secubox/delegation.log — sous ProtectSystem=strict, les appels faits par une session DÉLÉGUÉE (#1720) n'y étaient pas tracés.

@@ -96,3 +96,14 @@ def cle_compartiment_personnel(mk: bytes, compartiment: str, cle_personne: bytes
     return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=None,
                 info=_ESPACE + b"compartiment-personnel/" + compartiment.encode()).derive(
         cle_compartiment(mk, compartiment) + cle_personne)
+
+
+def derive_kek_maillage(part_a: bytes, part_b: bytes, sel: bytes, jeu: str, i: int, j: int) -> bytes:
+    """Recouvrement 2 sur n (P8) SANS arithmétique maison : chaque PAIRE de
+    détenteurs a sa serrure, dont la clé vient de leurs deux parts. Une part
+    seule ne dérive rien ; deux parts quelconques ouvrent la serrure de leur
+    paire. Les indices (i < j) et le jeu sont liés à la dérivation."""
+    if len(part_a) != TAILLE_CLE or len(part_b) != TAILLE_CLE or not i < j:
+        raise ValueError("deux parts de 32 octets, indices croissants")
+    return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=sel,
+                info=_ESPACE + b"recouvrement/" + jeu.encode() + b"/" + f"{i},{j}".encode()).derive(part_a + part_b)
