@@ -98,6 +98,25 @@ def _emit_session_event(event: str, username: str, details: Optional[Dict[str, A
             _session_callback(event, username, details or {})
         except Exception as exc:
             log.warning("session callback error: %s", exc)
+        return
+    # SANS secubox-auth DANS CE PROCESSUS (#1817) : l'agrégateur d'une box
+    # installée par image ne le charge pas toujours. Une session ouverte ici
+    # (signature d'appareil, lien d'entrée) n'était alors JAMAIS enregistrée —
+    # cookie rendu, puis refusé partout. Le cœur tient lui-même le registre,
+    # par l'écrivain verrouillé et atomique (#1803).
+    d = details or {}
+    try:
+        if event == "login_success" and d.get("jti"):
+            from datetime import datetime as _dt
+            ligne = {"id": d["jti"], "username": username, "ip": d.get("ip", ""),
+                     "user_agent": d.get("user_agent", ""), "created": _dt.utcnow().isoformat(),
+                     "expires": int(time.time()) + int(d.get("expires_in", 86400)), "type": "jwt"}
+            _sessions.muter(lambda rows: rows + [ligne])
+        elif event == "sessions_coupees" and d.get("jtis"):
+            cibles = set(d["jtis"])
+            _sessions.muter(lambda rows: [r for r in rows if r.get("id") not in cibles])
+    except OSError as exc:
+        log.warning("registre des sessions : %s", exc)
 
 
 # JWT helpers ────────────────────────────────────────────────────────────

@@ -338,5 +338,16 @@ def active_ouverts(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
 
 
 def retire_ouverts(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
-    """Suppression DEMANDÉE des comptes ouverts ici — données comprises."""
-    return _sur_les_ouverts(c, uid, "retirer")
+    """Suppression DEMANDÉE des comptes ouverts ici — données comprises. Un
+    compte BBS ne se supprime pas (ses messages restent signés) : il est
+    désactivé, et le résultat le dit."""
+    r = c.execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (uid,)).fetchone()
+    if not r:
+        raise Refus(404, "Personne inconnue")
+    out: Dict[str, Any] = {}
+    for svc in _ouverts(c, uid):
+        action = "desactiver" if svc == "bbs" else "retirer"
+        rep = helper(_demande(_nom_service(c, uid, svc, r[0]), svc, action))
+        out[svc] = ("désactivé (un compte BBS ne se supprime pas)" if svc == "bbs" and rep.get("ok")
+                    else bool(rep.get("ok")))
+    return out

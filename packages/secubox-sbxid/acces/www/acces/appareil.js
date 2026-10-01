@@ -335,3 +335,36 @@ export async function ouvreSession() {
     body: JSON.stringify({ did: id.did, jeton, defi, signature }),
   });
 }
+
+
+// ── INVITATIONS (#1816) ─────────────────────────────────────────────────────
+// Une invitation VAUT APPROBATION : l'appareil prouve qu'il détient sa clé en
+// signant le CODE, la box l'admet d'emblée et rend le jeton de suivi ; la
+// session s'ouvre ensuite par signature, comme pour tout appareil admis.
+const API_SBXID = '/api/v1/sbxid';
+
+async function jsonSbx(chemin, options) {
+  const r = await fetch(API_SBXID + chemin, Object.assign({ credentials: 'same-origin' }, options));
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || ('HTTP ' + r.status));
+  return j;
+}
+
+export function apercuInvitation(code) {
+  return jsonSbx('/invitation/apercu?code=' + encodeURIComponent(code));
+}
+
+export async function rejoins(code, champs) {
+  const id = await identite();
+  const signature = await signe(id.paire, hex(new TextEncoder().encode(code)));
+  const j = await jsonSbx('/invitation/rejoindre', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code, did: id.did, cle_publique: id.publique, signature,
+      nom: (champs && champs.nom) || '', appareil: (champs && champs.appareil) || '',
+    }),
+  });
+  if (j.jeton) retiens(j.jeton);
+  return j;
+}
