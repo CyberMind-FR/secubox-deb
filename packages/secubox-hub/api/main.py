@@ -2112,12 +2112,11 @@ def _check_module_active(module_id: str) -> bool:
     if sock.exists():
         return True
 
-    # Check systemd service directly (for TCP port services)
-    result = subprocess.run(
-        ["systemctl", "is-active", svc_name],
-        capture_output=True, text=True
-    )
-    return result.stdout.strip() == "active"
+    # Check systemd service directly (for TCP port services) — through the
+    # last list-units when fresh (#1835): a unit missing from that listing is
+    # not loaded, and `is-active` would answer "inactive" for it anyway. The
+    # menu pass was spawning one is-active per such module, 32 on gk2.
+    return _unite_active(svc_name)
 
 
 @router.get("/menu")

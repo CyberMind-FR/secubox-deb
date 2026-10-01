@@ -1,3 +1,11 @@
+secubox-certs (1.2.7-1~bookworm1) bookworm; urgency=medium
+
+  * Un openssl par certificat MODIFIÉ (#1835). Le scan lançait -enddate puis
+    -issuer pour chacun des 96 certificats de gk2 à chaque passage ; une
+    seule lecture (-enddate -issuer), mémorisée par (mtime, taille).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:45:05 +0200
+
 secubox-certs (1.2.6-1~bookworm1) bookworm; urgency=medium
 
   * secubox-certbot : certbot démarre malgré une dérive pip (cryptography récent dans /usr/local qui casse le pyOpenSSL de Debian) — inchangé quand certbot démarre, sinon relancé sur la pile Debian ; le minuteur certbot passe par lui (#1819).

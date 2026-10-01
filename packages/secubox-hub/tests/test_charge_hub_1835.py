@@ -118,3 +118,13 @@ def test_middleware_marque_la_demande_meme_monte(monkeypatch):
     parent.mount("/api/v1/hub", main.app)
     TestClient(parent).get("/api/v1/hub/inexistant")
     assert time.time() - main._derniere_demande < 5
+
+
+def test_menu_sans_is_active_par_module(lancements, monkeypatch, tmp_path):
+    main._refresh_services_cache()
+    n = len(lancements)
+    monkeypatch.setattr(main, "_cache", {**main._cache, "services": {}})
+    # Ni dans le cache des services, ni socket : avant, un is-active chacun.
+    assert main._check_module_active("gitea-zz-absent") is False
+    assert main._check_module_active("kiosk") is True       # unité chargée et active
+    assert len(lancements) == n

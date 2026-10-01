@@ -191,6 +191,42 @@ def get_cert_issuer(pem_path: Path) -> str | None:
     return None
 
 
+# UN openssl PAR FICHIER MODIFIÉ, PAS DEUX PAR FICHIER ET PAR SCAN (#1835).
+# Le scan lançait `-enddate` puis `-issuer` pour chacun des 96 certificats de
+# gk2, à chaque passage, alors qu'ils changent toutes les quelques semaines.
+# Clé = (mtime_ns, taille) : un renouvellement réécrit le fichier.
+_PEM_MEMO: dict = {}
+
+
+def _infos_pem(pem_path: Path) -> tuple:
+    """(expiry, issuer) d'un certificat, en un appel, mémorisés tant qu'il ne change pas."""
+    try:
+        st = pem_path.stat()
+    except OSError:
+        return None, None
+    cle = (st.st_mtime_ns, st.st_size)
+    memo = _PEM_MEMO.get(str(pem_path))
+    if memo and memo[0] == cle:
+        return memo[1], memo[2]
+    expiry = issuer = None
+    try:
+        result = subprocess.run(
+            ["openssl", "x509", "-enddate", "-issuer", "-noout", "-in", str(pem_path)],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            m = re.search(r"notAfter=(.+)", result.stdout)
+            if m:
+                expiry = datetime.strptime(m.group(1).strip(), "%b %d %H:%M:%S %Y %Z")
+            m = re.search(r"^issuer=.*?CN\s*=\s*([^,/\n]+)", result.stdout, re.M)
+            if m:
+                issuer = m.group(1).strip()
+    except Exception:
+        return None, None
+    _PEM_MEMO[str(pem_path)] = (cle, expiry, issuer)
+    return expiry, issuer
+
+
 def scan_certificates() -> list:
     """Scan all certificates and return status list."""
     certs = []
@@ -205,14 +241,14 @@ def scan_certificates() -> list:
         if domain.startswith("_wildcard_"):
             domain = "*." + domain.replace("_wildcard_.", "")
 
-        expiry = parse_pem_expiry(pem_file)
+        expiry, issuer = _infos_pem(pem_file)
         if expiry:
             days = (expiry - now).days
         else:
             days = -999  # Unknown
 
         origin_emoji, origin_name = detect_origin(domain)
-        issuer = get_cert_issuer(pem_file) or "Unknown"
+        issuer = issuer or "Unknown"
 
         certs.append({
             "domain": domain,
