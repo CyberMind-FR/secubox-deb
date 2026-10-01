@@ -1,3 +1,10 @@
+secubox-sbxid (0.4.8-1~bookworm1) bookworm; urgency=high
+
+  * Demande d'accès : un navigateur RETROUVE sa demande par sa clé (défi signé, /invitation/retrouver), sans jeton de suivi, et la RENOUVELLE en un clic (/invitation/renouveler) — même demande, mêmes renseignements, au plus une fois toutes les 10 min après un refus. Un appareil admis qui a perdu son jeton rentre seul. Un did:sbx: doit désigner la clé présentée (#1805).
+  * gk3 : le cookie de session ouvert par la clé de l'appareil prend le domaine de la box (il restait limité au Hall) ; une base sbx.db ouverte par root revient à secubox, et le postinst répare celle qui appartient à root (vide : retirée, recréée par le service) (#1806).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:55:14 +0200
+
 secubox-sbxid (0.4.7-1~bookworm1) bookworm; urgency=medium
 
   * carlette d'accès et SBX OS : le Hall de CETTE box par défaut (acces.toml ne fige plus hall.gk2 — la clé d'appareil vit par origine) ; identity.* redirige vers le Hall du même domaine ; vhost HAProxy et route déclarés sous le nom de cette box (#1723, #1713).

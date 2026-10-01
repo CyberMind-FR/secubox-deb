@@ -14,6 +14,18 @@ case "$1" in
   configure)
     # Données : sbx.db (personnes, appareils, rôles, certificats, journal).
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/sbxid
+    # Une base créée par root (outil lancé en root) est illisible pour le
+    # service : gk3 en avait une, vide, depuis le 27/09 (#1806). Un fichier
+    # VIDE ne contient rien : on le retire, le service le recrée. Sinon on
+    # rend la propriété à secubox, sans toucher au contenu.
+    for f in /var/lib/secubox/sbxid/sbx.db /var/lib/secubox/sbxid/sbx.db-wal /var/lib/secubox/sbxid/sbx.db-shm; do
+      [ -e "$f" ] || continue
+      if [ "$f" = /var/lib/secubox/sbxid/sbx.db ] && [ ! -s "$f" ] && [ "$(stat -c %u "$f")" = 0 ]; then
+        rm -f "$f"
+      elif [ "$(stat -c %u "$f")" = 0 ]; then
+        chown secubox:secubox "$f"
+      fi
+    done
 
     # ── ACCÈS, ABSORBÉ (#1424) : ce que faisait le postinst de secubox-acces ──
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/acces

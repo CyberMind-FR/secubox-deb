@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import os
 import re
 import sqlite3
 import time
@@ -37,6 +38,25 @@ ROLES_EXPLOITANT = ["sbx_operator", "moderator"]
 PROFIL_VERS_ROLE = {"admin": "sbx_operator", "user": "member", "guest": "guest"}
 
 
+def _rend_a_secubox(chemin: Path) -> None:
+    """Une base ouverte par root (CLI, script d'installation) appartiendrait à
+    root : le service, qui tourne sous `secubox`, ne pourrait plus l'écrire —
+    gk3 a vécu ainsi des jours avec un sbx.db vide et illisible (#1806)."""
+    if os.geteuid() != 0:
+        return
+    try:
+        import pwd
+        pw = pwd.getpwnam("secubox")
+    except (KeyError, ImportError):
+        return
+    for f in (chemin, Path(str(chemin) + "-wal"), Path(str(chemin) + "-shm")):
+        try:
+            if f.exists() and f.stat().st_uid == 0:
+                os.chown(f, pw.pw_uid, pw.pw_gid)
+        except OSError:
+            pass
+
+
 def ouvre(chemin: Optional[Path] = None) -> sqlite3.Connection:
     chemin = chemin or DB          # résolu à l'APPEL (surchargeable)
     chemin.parent.mkdir(parents=True, exist_ok=True)
@@ -44,6 +64,7 @@ def ouvre(chemin: Optional[Path] = None) -> sqlite3.Connection:
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys=ON")
     S.initialise(c)
+    _rend_a_secubox(chemin)
     return c
 
 

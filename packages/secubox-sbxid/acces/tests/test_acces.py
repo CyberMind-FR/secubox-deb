@@ -20,11 +20,30 @@ from api.identite import (CleInvalide, charge_cle, empreinte_courte,  # noqa: E4
 from api.profileur import DemandeInvalide, Profileur  # noqa: E402
 from api.session import Portier, SessionRefusee  # noqa: E402
 
-DID = "did:sbx:appareil-de-test-0001"
+from api.profileur import did_de_la_cle  # noqa: E402
+
+# L'APPAREIL DE TEST a une clé FIXE et son identifiant en DÉRIVE, comme celui
+# d'un navigateur (#1805) : la box refuse désormais un `did:sbx:` qui ne
+# désigne pas la clé présentée. Le premier `paire()` d'un test rend cet
+# appareil ; les suivants, des clés neuves (le « voleur », un « autre »).
+_FIXE = ec.derive_private_key(0x18051805, ec.SECP256R1())
+_FIXE_PUB = _FIXE.public_key().public_bytes(
+    serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint).hex()
+DID = did_de_la_cle(_FIXE_PUB)
+_appels = {"n": 0}
+
+
+@pytest.fixture(autouse=True)
+def _remet_paire():
+    _appels["n"] = 0
+    yield
 
 
 def paire():
     """Une paire P-256, et sa publique au format que rend WebCrypto."""
+    _appels["n"] += 1
+    if _appels["n"] == 1:
+        return _FIXE, _FIXE_PUB
     priv = ec.generate_private_key(ec.SECP256R1())
     pub = priv.public_key().public_bytes(
         serialization.Encoding.X962,
@@ -45,7 +64,11 @@ def prof(tmp_path):
 
 
 def form(cle):
-    return {"did": DID, "cle_publique": cle, "nom": "Gérald",
+    try:
+        did = did_de_la_cle(cle)
+    except ValueError:
+        did = DID          # clé hors format : refusée avant même le DID
+    return {"did": did, "cle_publique": cle, "nom": "Gérald",
             "appareil": "Portable", "message": "bonjour"}
 
 
@@ -233,6 +256,9 @@ def test_le_provisionnement_ne_touche_pas_a_un_compte_existant(prof, monkeypatch
     assert len(ecrits) == 1
 
     # Une seconde admission du MÊME appareil n'écrit pas une seconde fois.
+    # (Le délai entre deux renouvellements, #1805, n'est pas l'objet ici.)
+    from api import profileur as _P
+    monkeypatch.setattr(_P, "RENOUVELLEMENT_DELAI_S", 0)
     p.revoque(DID, par="gerald")
     p.demande(form(pub))
     p.accepte(DID, par="gerald")

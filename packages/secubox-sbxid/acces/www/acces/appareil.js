@@ -170,15 +170,65 @@ export async function demande(champs) {
 }
 
 export async function suivi() {
-  const id = await identite();
   const jeton = jetonGarde();
-  if (!jeton) return null;
+  if (!jeton) return retrouve();
+  const id = await identite();
   try {
     return await json('/invitation/suivi?did=' + encodeURIComponent(id.did)
       + '&jeton=' + encodeURIComponent(jeton));
   } catch (e) {
-    return null;    // demande inconnue ou jeton périmé : on repart du formulaire
+    // Jeton périmé ou d'une autre box : la clé, elle, retrouve la demande.
+    oublie();
+    return retrouve();
   }
+}
+
+/**
+ * RETROUVE LA DEMANDE DE CET APPAREIL PAR SA CLÉ (#1805).
+ *
+ * Le jeton de suivi vit en localStorage et se perd (stockage effacé, onglet
+ * privé, autre page de la même origine). La clé, en IndexedDB, reste : on
+ * signe un défi et la box rend la demande ET son jeton. Sans clé déjà
+ * présente, il n'y a rien à retrouver — et l'on n'en crée pas pour rien.
+ * UN SEUL ESSAI PAR CHARGEMENT.
+ */
+let _retrouvailles = null;
+export function retrouve() {
+  if (_retrouvailles) return _retrouvailles;
+  _retrouvailles = (async () => {
+    const id = await lit(CLE).catch(() => null);
+    if (!id || !id.paire || !id.publique) return null;
+    try {
+      const { defi } = await json('/invitation/retrouver/defi?did=' + encodeURIComponent(id.did));
+      const signature = await signe(id.paire, defi);
+      const v = await json('/invitation/retrouver', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ did: id.did, defi, signature }),
+      });
+      if (v && v.jeton) retiens(v.jeton);
+      return v;
+    } catch (e) {
+      return null;  // aucune demande pour cette clé : le formulaire
+    }
+  })();
+  return _retrouvailles;
+}
+
+/**
+ * RENOUVELER SA DEMANDE refusée ou expirée (#1805) : la MÊME demande, mêmes
+ * renseignements, remise devant l'administrateur — pas une nouvelle.
+ */
+export async function renouvelle() {
+  const id = await identite();
+  let jeton = jetonGarde();
+  if (!jeton) { await retrouve(); jeton = jetonGarde(); }
+  if (!jeton) throw new Error('aucune demande à renouveler sur cet appareil');
+  return json('/invitation/renouveler', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ did: id.did, jeton }),
+  });
 }
 
 /**
@@ -235,7 +285,10 @@ export async function suitLeLien() {
 let _essaiFait = false;
 
 export async function ouvreSiAdmis() {
-  if (_essaiFait || !jetonGarde()) return null;
+  if (_essaiFait) return null;
+  // Jeton de suivi perdu : la clé retrouve la demande (#1805) — un appareil
+  // admis rentre alors seul, sans mot de passe.
+  if (!jetonGarde() && !(await retrouve())) return null;
 
   // UNE SESSION DÉJÀ OUVERTE NE SE REMPLACE PAS. Ouvrir écrase le cookie : un
   // administrateur qui valide sa propre machine serait reconnecté en `user`

@@ -362,7 +362,7 @@
 
 <script type="module">
 import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis, suitLeLien,
-         oublie, jetonGarde } from './appareil.js';
+         oublie, jetonGarde, renouvelle } from './appareil.js';
 
 // LA DESTINATION DU PARCOURS. Ce module n'ouvre pas « un accès à la box » : il
 // fait entrer quelqu'un dans SON SBX OS. La session posée vaut pour tous les
@@ -828,8 +828,7 @@ async function rendMienne(v) {
     c.appendChild(g);
   } else {
     const g = el('div', 'gestes');
-    g.appendChild(bouton('Refaire une demande', 'fort',
-      () => { oublie(); return Promise.resolve(); }));
+    g.appendChild(bouton('Renouveler ma demande', 'fort', () => renouvelle()));
     c.appendChild(g);
   }
 }
