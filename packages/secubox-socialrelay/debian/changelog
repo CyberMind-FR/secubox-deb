@@ -1,3 +1,9 @@
+secubox-socialrelay (0.1.19-1~bookworm1) bookworm; urgency=high
+
+  * API : une signature valide ne suffit plus — un jeton portant un jti doit être une session VIVANTE du registre de secubox-auth (déconnexion et révocation prises en compte), un jeton d'intention (scope) est refusé, un jeton sans session n'est admis que d'un service de la flotte (iss connu, 10 min au plus) (#1814).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:29:55 +0200
+
 secubox-socialrelay (0.1.18-1~bookworm1) bookworm; urgency=medium
 
   * vhost HAProxy et route sbxwaf déclarés sous le nom de CETTE box, plus socialrelay.gk2 (#1723, #1713).

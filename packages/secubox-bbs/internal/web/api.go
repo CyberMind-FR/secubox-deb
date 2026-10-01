@@ -142,6 +142,13 @@ func (s *Server) verifieJeton(entete string) error {
 	if c.Exp == 0 || time.Now().Unix() >= c.Exp {
 		return errJeton("jeton expire")
 	}
+	var cl map[string]any
+	if err := json.Unmarshal(brut, &cl); err != nil {
+		return errJeton("charge illisible")
+	}
+	if err := controleSession(cl, emetteursPasserelle); err != nil {
+		return errJeton(err.Error())
+	}
 	return nil
 }
 

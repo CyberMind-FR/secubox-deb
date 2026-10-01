@@ -1,3 +1,9 @@
+secubox-metanews (0.1.45-1~bookworm1) bookworm; urgency=high
+
+  * API : une signature valide ne suffit plus — un jeton portant un jti doit être une session VIVANTE du registre de secubox-auth (déconnexion et révocation prises en compte), un jeton d'intention (scope) est refusé, un jeton sans session n'est admis que d'un service de la flotte (iss connu, 10 min au plus) (#1814).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:29:55 +0200
+
 secubox-metanews (0.1.44-1~bookworm1) bookworm; urgency=medium
 
   * Le vhost est installé par le paquet (motif de la radio #1430) : livré dans nginx-available sans jamais l'être, gk2 servait une copie manuelle sans verdict LAN (#1354) ni metanews.*, gk3 rendait « Wrong Domain ». La ligne du journal commun par domaine est redite dans le vhost, qui déclare son propre access_log. (#1727, #1713).

@@ -60,8 +60,14 @@ func verifierJeton(tok, secret string) (map[string]any, error) {
 	if int64(exp) < time.Now().Unix() {
 		return nil, errors.New("jeton expiré")
 	}
+	if err := controleSession(claims, emetteursFlotte); err != nil {
+		return nil, err
+	}
 	return claims, nil
 }
+
+// emetteursFlotte : modules dont un jeton de SERVICE (sans session) est admis.
+var emetteursFlotte = map[string]bool{"metanews": true, "socialrelay": true}
 
 // signerJeton fabrique un JWT HS256 de service (pour appeler le BBS).
 func signerJeton(secret, sub string, ttl time.Duration) string {
