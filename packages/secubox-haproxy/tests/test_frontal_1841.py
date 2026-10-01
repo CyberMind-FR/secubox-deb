@@ -196,3 +196,21 @@ def test_aucun_postinst_ne_ferme_run_secubox():
             if re.search(r"\bchmod\b[^;|&]*\b0?7[0-5]5\b[^;|&]*/run/secubox(\s|$|;)", code):
                 fautifs.append(f"{postinst.relative_to(racine)}:{n}: {ligne.strip()}")
     assert not fautifs, "\n".join(fautifs)
+
+
+def test_acces_par_ip_depuis_le_lan_seulement(box):
+    """Une box neuve se configure par https://<IP>/ : derrière HAProxy, un hôte
+    IP (ou secubox.local) venu d'une source privée va à l'administration ; le
+    clair est renvoyé vers https. Le WAN garde le 421 (#1845)."""
+    d, _, lance, _ = box
+    assert lance().returncode == 0
+    cfg = (d["cfg"] / "haproxy.cfg").read_text()
+    http_in = cfg.split("frontend http-in", 1)[1].split("\nfrontend ", 1)[0]
+    https_in = cfg.split("frontend https-in", 1)[1].split("\nfrontend ", 1)[0]
+    for section in (http_in, https_in):
+        assert r"acl hote_ip hdr(host) -m reg ^[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?$" in section
+        assert "acl src_privee src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8" in section
+    assert "redirect scheme https code 301 if src_privee hote_ip !is_acme_challenge" in http_in
+    assert "use_backend webui_direct if src_privee hote_ip or src_privee hote_local" in https_in
+    # La règle précède le défaut vers l'inspection.
+    assert https_in.index("use_backend webui_direct if src_privee") < https_in.index("default_backend")

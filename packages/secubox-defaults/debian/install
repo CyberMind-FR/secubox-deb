@@ -1,1 +1,2 @@
 etc/default/secubox etc/default
+sbin/secubox-defaults-aligner usr/sbin

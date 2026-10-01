@@ -1,3 +1,12 @@
+secubox-haproxy (1.8.23-1~bookworm1) bookworm; urgency=medium
+
+  * generate (#1845) : depuis une source PRIVÉE, un hôte IP ou secubox.local va
+    à l'administration (webui_direct) sur 443 et est renvoyé vers https sur
+    80 ; le WAN garde le 421. Aucun port de plus : remplace le frontal :9443
+    posé à la main sur gk2.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 16:21:45 +0200
+
 secubox-haproxy (1.8.22-1~bookworm1) bookworm; urgency=medium
 
   * postinst : /run/secubox n'est plus passé en 0755 root:root (#1841). Il

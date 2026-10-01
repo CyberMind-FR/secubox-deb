@@ -568,6 +568,28 @@ else
     log "secubox-profilectl absent — pas de dérivation de cycle de vie"
 fi
 
+# ── 16. Frontal HAProxy + sbxwaf (#1845) ─────────────────────────
+#
+# Une box neuve sortait avec nginx seul sur 80/443 : tout accès LAN direct
+# contournait sbxwaf. On la met derrière HAProxy ICI, une fois le nom posé
+# (étape 3), le certificat autosigné écrit (9), nginx actif (10) et le pare-feu
+# en place (12). L'accès par https://<IP>/ depuis le LAN reste l'administration
+# (première configuration) : haproxyctl generate y envoie les hôtes IP d'une
+# source privée. Tout refus laisse la box en nginx autonome — l'état d'avant,
+# pas une panne.
+if command -v haproxyctl >/dev/null 2>&1; then
+  command -v secubox-defaults-aligner >/dev/null 2>&1 && secubox-defaults-aligner || true
+  for _i in $(seq 1 30); do
+    ss -tlnH 2>/dev/null | awk '{print $4}' | grep -qx '127.0.0.1:8085' && break
+    sleep 2
+  done
+  if haproxyctl frontal; then
+    ok "Frontal HAProxy + sbxwaf actif"
+  else
+    log "Frontal HAProxy non activé — nginx autonome conservé (haproxyctl frontal à relancer)"
+  fi
+fi
+
 log "=== First boot terminé ==="
 log "Interface : https://${HOSTNAME}/ ou https://$(hostname -I | awk '{print $1}')/"
 log "Login     : admin / ${ADMIN_PASS}"
