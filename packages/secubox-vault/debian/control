@@ -7,7 +7,7 @@ Standards-Version: 4.6.0
 
 Package: secubox-vault
 Architecture: all
-Depends: ${misc:Depends}, python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, python3-cryptography, python3-argon2, secubox-core (>= 1.5.51)
+Depends: ${misc:Depends}, python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, python3-cryptography, python3-argon2, gpg, gpg-agent, gpgconf, secubox-core (>= 1.5.51)
 Recommends: vault
 Description: SecuBox Vault - Secrets management
  Encrypted secrets storage for SecuBox.

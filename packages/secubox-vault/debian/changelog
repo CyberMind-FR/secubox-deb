@@ -1,3 +1,16 @@
+secubox-vault (2.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Coffre P2 (#1367) : session de signature du dépôt apt. `coffrectl depot
+    proteger` pose sur la clé de signature une phrase ALÉATOIRE, rangée au
+    Coffre avant d'être appliquée, puis vérifiée (signe avec, refuse sans) ;
+    un échec rend la clé d'avant. `depot session [--minutes N]` la confie à
+    gpg-agent (gpg-preset-passphrase) puis la fait oublier à l'échéance
+    (systemd-run, CLEAR_PASSPHRASE) ; `depot fin` ; `depot etat
+    [--porcelaine]`. La seule phrase humaine reste celle du Coffre.
+  * Dépend de gpg-agent (gpg-preset-passphrase).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 17:04:46 +0200
+
 secubox-vault (2.0.2-1~bookworm1) bookworm; urgency=medium
 
   * postinst : met de côté un drop-in qui vide RuntimeDirectory= (posé à la
