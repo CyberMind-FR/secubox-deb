@@ -1,0 +1,18 @@
+# SecuBox gitea — SSH (2222) au LAN et au maillage seulement (#1791).
+# Charge la table nft `inet secubox_gitea_ssh` au démarrage, et la recharge
+# quand nftables est redémarré ou rechargé (ce qui l'efface).
+[Unit]
+Description=SecuBox gitea — garde du SSH 2222 (LAN et maillage)
+After=nftables.service network-online.target
+Wants=network-online.target
+PartOf=nftables.service
+ReloadPropagatedFrom=nftables.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/secubox-gitea-ssh-garde
+ExecReload=/usr/sbin/secubox-gitea-ssh-garde
+
+[Install]
+WantedBy=multi-user.target

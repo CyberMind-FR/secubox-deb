@@ -110,6 +110,9 @@ jobs:
           # passage est secubox-lxcctl.
           - suite: depot-sudoers-lxc
             chemin: scripts/tests/test_sudoers_lxc.py
+          # Le SSH de gitea (2222) n'admet que le LAN et le maillage (#1791).
+          - suite: secubox-gitea-ssh-garde
+            chemin: packages/secubox-gitea/tests/test_ssh_garde_1791.py
     env:
       # Versions de la box de référence (bookworm + pip dans /usr/local).
       # pytest et pytest-asyncio n'y sont pas installés : outillage CI seul.

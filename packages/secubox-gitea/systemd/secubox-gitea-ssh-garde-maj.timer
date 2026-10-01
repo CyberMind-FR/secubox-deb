@@ -1,0 +1,10 @@
+# SecuBox gitea — suit les changements d'adresse de la box (#1791).
+[Unit]
+Description=SecuBox gitea — garde du SSH 2222, mise à jour périodique
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target

@@ -16,6 +16,10 @@ override_dh_auto_install:
 	install -d debian/secubox-gitea/lib/systemd/system
 	install -m 644 systemd/secubox-gitea-reaper.service systemd/secubox-gitea-reaper.timer \
 	        debian/secubox-gitea/lib/systemd/system/
+	# Garde du SSH 2222 : LAN et maillage seulement (#1791). Activée par le postinst.
+	install -m 644 systemd/secubox-gitea-ssh-garde.service \
+	        systemd/secubox-gitea-ssh-garde-maj.service systemd/secubox-gitea-ssh-garde-maj.timer \
+	        debian/secubox-gitea/lib/systemd/system/
 
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox.d
