@@ -1,3 +1,14 @@
+secubox-sbxid (0.4.14-1~bookworm1) bookworm; urgency=medium
+
+  * Accès devient l'écran unique (#1829, étape A1) : onglet « Moi » pour un
+    appareil admis, session ouverte — ses appareils (renommer, révoquer,
+    « Rendre de confiance » : certificat signé par l'appareil), « Ajouter un
+    appareil » (QR de 10 min), ses services, « Administrer la box »
+    (élévation #1827). Module acces/www/acces/moi.js ; données inchangées
+    (API sbxid). Rendu une fois : le tour de 30 s n'efface pas une saisie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 10:52:08 +0200
+
 secubox-sbxid (0.4.13-1~bookworm1) bookworm; urgency=medium
 
   * Élévation d'administration explicite (#1827, étape 5a de #1802) :

@@ -291,6 +291,15 @@
     font:inherit; font-size:.86rem; padding:.5rem .65rem; border-radius:9px;
     border:1px solid var(--line); background:var(--surface); color:var(--ink); }
   .champ textarea { min-height:4.2rem; resize:vertical; }
+  /* L'onglet « Moi » (#1829) : des cartes empilées, une ligne par appareil. */
+  #moi { display:grid; gap:14px; margin-top:14px; }
+  #moi .ligne { grid-template-columns:minmax(0,1fr) auto; }
+  #moi .qui { flex-direction:column; align-items:flex-start; gap:4px; }
+  #moi .qui .nom { font-family:"Chivo"; font-weight:800; font-size:.9rem; }
+  #moi .qui .sous { margin:0; }
+  #moi .liste { display:flex; flex-wrap:wrap; gap:6px; border:0; overflow:visible; }
+  #moi .carte > .liste:first-of-type .ligne:first-child { border-top:0; }
+  #moi section .liste:has(.ligne) { display:block; border:1px solid var(--line); overflow:hidden; }
 </style>
 
 <div class="cadre">
@@ -358,6 +367,10 @@
     <div class="sec-h"><span class="k" id="vk">Cet appareil</span><div class="rule"></div><span>📱</span></div>
     <div id="vue"></div>
   </section>
+
+  <!-- MOI (#1829) : Accès est l'écran unique. Un appareil admis, session
+       ouverte, y retrouve ses appareils, ses services, « Administrer la box ». -->
+  <div id="moi" hidden></div>
 </div>
 
 <script type="module">
@@ -1123,6 +1136,12 @@ async function rafraichis() {
     // visiteur. On montre ce que CET appareil peut faire, et d'abord demander.
     const v = jetonGarde() ? await suivi().catch(() => null) : null;
     if (v) await rendMienne(v); else await rendFormulaire();
+    // « Moi » ne se redessine PAS au tour de 30 s : un code OTP ou un nom en
+    // cours de saisie y serait effacé. Il se redessine après chaque geste.
+    if (v && v.etat === 'acceptee' && !$('moi').dataset.rendu) {
+      const { rendMoi } = await import('./moi.js');
+      if (await rendMoi($('moi'))) { $('moi').dataset.rendu = '1'; $('moi').hidden = false; }
+    }
   }
   $('maj').textContent = 'relevé à ' + new Date().toLocaleTimeString('fr-FR',
     { hour: '2-digit', minute: '2-digit' });
