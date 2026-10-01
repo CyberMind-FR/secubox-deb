@@ -39,6 +39,7 @@ from secubox_core import auth as _auth
 from secubox_core import capacites as _cap
 from secubox_core import sbxid as S
 from secubox_core import user_store
+from secubox_core import second_facteur as _sf
 
 from . import comptes, invitations, store
 
@@ -147,6 +148,9 @@ def _rafraichit() -> None:
     try:
         store.importe_existant(db(), n.did if n else "did:plc:" + "0" * 32)
         store.reconcilie(db())
+        # Qui peut s'élever, et vers quel compte (#1827) : semé depuis les
+        # rattachements vers un compte administrateur, jamais remplacé.
+        store.seme_liens_systeme(db(), _sf.compte_admin_actif)
     except Exception as e:
         log.error("sbxid : rafraîchissement : %s", e)
     acc = _module_acces()
@@ -1324,3 +1328,252 @@ async def rejoint(r: Rejoindre, request: Request):
             pass                                    # un travail déjà en cours : il suffira
     jeton = acc.profileur().demande_de(r.did).jeton
     return {"ok": True, "pseudo": pseudo, "sorte": sorte, "jeton": jeton}
+
+
+
+# ── ÉLÉVATION D'ADMINISTRATION (#1827, étape 5 de #1802) ─────────────────────
+#
+# DÉCISION DU 2026-10-01 : administrer depuis un appareil est un geste
+# EXPLICITE. La clé de l'appareil remplace le mot de passe ; l'appareil doit
+# être DE CONFIANCE (certificat émis) ; hors du réseau local, l'OTP du compte
+# système est exigé (sur le LAN, selon `otp_lan`). La session SBX OS ordinaire
+# n'est jamais une session d'administration : l'élévation ouvre une session
+# À PART, courte, au nom du compte système LIÉ à la personne, inscrite au
+# registre (jti) avec l'appareil qui l'a demandée.
+#
+# LE JETON NE PASSE PAS PAR UNE URL. L'administration vit sur admin.<box> (son
+# jeton dans le localStorage de cette origine) ; le Hall sur hall.<box>. On
+# remet donc un BON à usage unique de 60 s, que la page de connexion
+# d'admin.<box> échange contre le jeton. Le cookie de la session ordinaire
+# n'est pas touché.
+ELEVATION_MAX_S = 8 * 3600
+DEFI_ELEVATION_S = 120
+BON_ELEVATION_S = 60
+ECHECS_OTP_MAX, ECHECS_OTP_FENETRE_S = 5, 900
+_ELEV_MAX = 200                                   # défis / bons en mémoire, bornés
+_DEFIS_ELEV: Dict[str, Dict[str, Any]] = {}
+_BONS_ELEV: Dict[str, Dict[str, Any]] = {}
+_ECHECS_OTP: Dict[str, List[float]] = {}
+_VERROU_ELEV = threading.Lock()
+
+
+def _duree_elevation() -> int:
+    try:
+        from secubox_core.config import get_config
+        v = int((get_config("sbxid") or {}).get("elevation_duree_s", ELEVATION_MAX_S))
+    except Exception:  # noqa: BLE001 — réglage illisible : le maximum, jamais plus
+        v = ELEVATION_MAX_S
+    return max(300, min(v, ELEVATION_MAX_S))
+
+
+def _purge_elev(maintenant: float) -> None:
+    for table in (_DEFIS_ELEV, _BONS_ELEV):
+        for k in [k for k, v in table.items() if v["expire"] < maintenant]:
+            table.pop(k, None)
+        while len(table) > _ELEV_MAX:             # le plus ancien d'abord
+            table.pop(next(iter(table)))
+
+
+def _empreinte_bon(bon: str) -> str:
+    import hashlib
+    return hashlib.sha256(bon.encode()).hexdigest()
+
+
+def _elevation(ctx: Dict[str, Any], p: Dict[str, Any], voulu: Optional[str] = None) -> Dict[str, Any]:
+    """Les conditions de l'élévation, dans l'ordre où l'on peut y remédier.
+    Rend {compte, appareil} ou lève 403/409 avec un motif lisible."""
+    if p.get(_auth.PLAFOND) or p.get(_auth.DELEGATION) or p.get("scope"):
+        raise HTTPException(403, "Cette session est bornée : l'élévation se demande depuis une session ouverte par l'appareil")
+    dev = ctx.get("device")
+    if not dev:
+        raise HTTPException(403, "L'élévation se fait depuis un appareil admis (ouvrez le Hall depuis cet appareil)")
+    if dev["revoked_at"]:
+        raise HTTPException(403, "Appareil révoqué")
+    if dev["trust_level"] != "trusted":
+        raise HTTPException(409, "Appareil sans certificat : émettez son certificat d'abord (Mes appareils)")
+    u = ctx.get("user")
+    if not u or u.get("status") != "active":
+        raise HTTPException(403, "Identité absente ou suspendue")
+    lies = store.comptes_systeme_de(db(), u["user_uuid"])
+    if not lies:
+        raise HTTPException(403, "Aucun compte d'administration n'est lié à votre identité")
+    compte = voulu or lies[0]
+    if compte not in lies:
+        raise HTTPException(403, f"« {compte} » n'est pas lié à votre identité")
+    if not _sf.compte_admin_actif(compte):
+        raise HTTPException(403, f"Le compte « {compte} » n'est pas un compte d'administration ouvert")
+    return {"compte": compte, "appareil": dev, "lies": lies}
+
+
+def _message_elevation(compte: str, defi: str, did: str) -> bytes:
+    n = _noeud()
+    return S.canonical_bytes({"aud": "sbxid/elevation", "compte": compte, "defi": defi,
+                              "device": did, "node": n.did if n else ""})
+
+
+@app.get("/elevation/etat")
+def elevation_etat(request: Request, ctx=Depends(moi)):
+    """Le bouton « Administrer la box » : possible ? sinon pourquoi."""
+    p = _charge_session(request)
+    u = ctx.get("user") or {}
+    out: Dict[str, Any] = {"possible": False, "otp_requis": _sf.otp_exige(request),
+                           "duree_s": _duree_elevation(),
+                           # La carte ne s'affiche qu'à une personne LIÉE à un compte système.
+                           "lie": bool(u.get("user_uuid") and store.comptes_systeme_de(db(), u["user_uuid"]))}
+    try:
+        e = _elevation(ctx, p)
+    except HTTPException as x:
+        out["motif"] = x.detail
+        return out
+    out.update(possible=True, compte=e["compte"], comptes=e["lies"],
+               otp_enrole=_sf.totp_actif(e["compte"]), appareil=e["appareil"]["device_name"])
+    if out["otp_requis"] and not out["otp_enrole"]:
+        out.update(possible=False, motif=f"OTP exigé hors du réseau local, et « {e['compte']} » n'en a pas")
+    return out
+
+
+class DemandeElevation(BaseModel):
+    compte: Optional[str] = Field(default=None, max_length=32, pattern=r"^[a-z0-9._-]+$")
+
+
+@app.post("/elevation/defi")
+def elevation_defi(request: Request, corps: Optional[DemandeElevation] = None, ctx=Depends(moi)):
+    """Un défi à signer par l'appareil. Usage unique, lié à CETTE session et à
+    CET appareil, périmé en deux minutes."""
+    import secrets
+    p = _charge_session(request)
+    e = _elevation(ctx, p, (corps.compte if corps else None))
+    otp = _sf.otp_exige(request)
+    if otp and not _sf.totp_actif(e["compte"]):
+        raise HTTPException(409, f"OTP exigé hors du réseau local, et « {e['compte']} » n'en a pas : "
+                                 "l'enrôler d'abord (connexion par mot de passe)")
+    defi = secrets.token_hex(16)
+    msg = _message_elevation(e["compte"], defi, e["appareil"]["did"])
+    maintenant = time.time()
+    with _VERROU_ELEV:
+        _purge_elev(maintenant)
+        _DEFIS_ELEV[defi] = {"jti": p.get("jti"), "device_uuid": e["appareil"]["device_uuid"],
+                             "compte": e["compte"], "message": msg, "expire": maintenant + DEFI_ELEVATION_S}
+    return {"defi": defi, "message_hex": msg.hex(), "compte": e["compte"], "otp_requis": otp,
+            "expire_dans": DEFI_ELEVATION_S}
+
+
+class Elevation(BaseModel):
+    defi: str = Field(pattern=r"^[0-9a-f]{32}$")
+    signature: str = Field(pattern=r"^[0-9a-fA-F]{128}$")
+    otp: Optional[str] = Field(default=None, pattern=r"^[0-9]{6}$")
+
+
+def _otp_bride(uid: str, maintenant: float) -> bool:
+    recents = [t for t in _ECHECS_OTP.get(uid, []) if t > maintenant - ECHECS_OTP_FENETRE_S]
+    _ECHECS_OTP[uid] = recents
+    return len(recents) >= ECHECS_OTP_MAX
+
+
+@app.post("/elevation")
+def elevation(corps: Elevation, request: Request, ctx=Depends(moi)):
+    """Signature de l'appareil (+ OTP hors LAN) → session d'administration
+    courte, remise par un bon à usage unique."""
+    import secrets
+    p = _charge_session(request)
+    maintenant = time.time()
+    with _VERROU_ELEV:
+        _purge_elev(maintenant)
+        en = _DEFIS_ELEV.pop(corps.defi, None)       # usage unique, même raté
+    dev_session = (ctx.get("device") or {}).get("device_uuid")
+    if not en or en["jti"] != p.get("jti") or en["device_uuid"] != dev_session:
+        raise HTTPException(410, "Défi expiré ou d'une autre session : recommencer")
+    e = _elevation(ctx, p, en["compte"])             # l'état a pu changer depuis le défi
+    dev, uid = e["appareil"], ctx["user"]["user_uuid"]
+    if not S.verifie_appareil(dev["public_key"], en["message"], corps.signature.lower()):
+        store.journal(db(), _acteur(ctx), "admin.elevation.refusee", f"{dev['device_name']} : signature invalide")
+        raise HTTPException(422, "Signature de l'appareil invalide")
+    otp = _sf.otp_exige(request)
+    if otp:
+        with _VERROU_ELEV:
+            if _otp_bride(uid, maintenant):
+                raise HTTPException(429, "Trop d'essais OTP : réessayer dans quelques minutes")
+        if not corps.otp or not _sf.verifie_totp(e["compte"], corps.otp):
+            with _VERROU_ELEV:
+                _ECHECS_OTP.setdefault(uid, []).append(maintenant)
+            store.journal(db(), _acteur(ctx), "admin.elevation.refusee", f"{dev['device_name']} : OTP invalide")
+            raise HTTPException(401, "Code OTP invalide ou déjà utilisé")
+    duree = _duree_elevation()
+    jti = secrets.token_hex(8)
+    jeton = _auth.create_token(e["compte"], expires_in=duree, jti=jti)
+    _auth._emit_session_event("login_success", e["compte"], {
+        "jti": jti, "expires_in": duree, "ip": _auth.adresse_client(request),
+        "user_agent": (request.headers.get("user-agent") or "")[:300],
+        "voie": "elevation", "appareil": dev["did"]})
+    bon = secrets.token_urlsafe(32)
+    with _VERROU_ELEV:
+        _BONS_ELEV[_empreinte_bon(bon)] = {"jeton": jeton, "compte": e["compte"],
+                                           "expire": maintenant + BON_ELEVATION_S, "fin": maintenant + duree}
+    store.journal(db(), _acteur(ctx), "admin.elevation",
+                  f"{e['compte']} depuis {dev['device_name']}{' + OTP' if otp else ' (LAN)'} · {duree // 60} min")
+    hote = _auth.hote_box("admin")
+    return {"ok": True, "bon": bon, "compte": e["compte"], "duree_s": duree, "expire_dans": BON_ELEVATION_S,
+            "url": (f"https://{hote}" if hote else "") + "/login.html#elevation=" + bon}
+
+
+class Bon(BaseModel):
+    bon: str = Field(pattern=r"^[A-Za-z0-9_-]{40,64}$")
+
+
+@app.post("/elevation/echange")
+def elevation_echange(corps: Bon):
+    """Le bon contre le jeton d'administration. Sans session : le bon EST la
+    preuve — 256 bits, une minute, une fois."""
+    maintenant = time.time()
+    with _VERROU_ELEV:
+        _purge_elev(maintenant)
+        en = _BONS_ELEV.pop(_empreinte_bon(corps.bon), None)
+    if not en or en["expire"] < maintenant:
+        raise HTTPException(410, "Bon inconnu, expiré ou déjà utilisé : recommencer depuis le Hall")
+    return {"access_token": en["jeton"], "token_type": "bearer", "compte": en["compte"],
+            "expires_in": max(0, int(en["fin"] - maintenant))}
+
+
+# ── Lien personne ↔ compte système : un administrateur SYSTÈME seulement ────
+def _exige_admin_systeme(request: Request) -> Dict[str, Any]:
+    p = _charge_session(request)
+    if not _auth.est_admin_reel(p):
+        raise HTTPException(403, "Réservé à un administrateur système")
+    return p
+
+
+@app.get("/admin/comptes-systeme")
+def comptes_systeme(request: Request):
+    _exige_admin_systeme(request)
+    liens = [{"compte": c, "user_uuid": u, "pseudo": n} for (c, u, n) in db().execute(
+        "SELECT l.app_id, l.user_uuid, u.pseudo FROM sbx_app_links l JOIN sbx_users u USING (user_uuid)"
+        " WHERE l.app=? ORDER BY l.app_id", (store.APP_SYSTEME,))]
+    return {"liens": liens}
+
+
+class CompteSysteme(BaseModel):
+    compte: str = Field(max_length=32, pattern=r"^[a-z0-9._-]+$")
+
+
+@app.put("/admin/personnes/{user_uuid}/compte-systeme")
+def lie_compte_systeme(user_uuid: str, corps: CompteSysteme, request: Request):
+    p = _exige_admin_systeme(request)
+    if not store.personne(db(), user_uuid):
+        raise HTTPException(404, "Personne inconnue")
+    if not _sf.compte_admin_actif(corps.compte):
+        raise HTTPException(409, f"« {corps.compte} » n'est pas un compte d'administration ouvert")
+    try:
+        store.lie_compte_systeme(db(), user_uuid, corps.compte)
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+    store.journal(db(), str(p.get("sub")), "link.systeme", f"{user_uuid[:8]} ↔ {corps.compte}")
+    return {"ok": True, "comptes": store.comptes_systeme_de(db(), user_uuid)}
+
+
+@app.delete("/admin/personnes/{user_uuid}/compte-systeme/{compte}")
+def delie_compte_systeme(user_uuid: str, compte: str, request: Request):
+    p = _exige_admin_systeme(request)
+    if not store.delie_compte_systeme(db(), user_uuid, compte):
+        raise HTTPException(404, "Lien inconnu")
+    store.journal(db(), str(p.get("sub")), "link.systeme.removed", f"{user_uuid[:8]} ✕ {compte}")
+    return {"ok": True, "comptes": store.comptes_systeme_de(db(), user_uuid)}

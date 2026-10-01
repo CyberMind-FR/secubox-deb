@@ -137,6 +137,7 @@ jobs:
         cryptography==47.0.0
         argon2-cffi==21.1.0
         websockets==16.0
+        pyotp==2.6.0
     steps:
       - name: Récupération du dépôt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

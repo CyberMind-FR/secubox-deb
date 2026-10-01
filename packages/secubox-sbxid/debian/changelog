@@ -1,3 +1,20 @@
+secubox-sbxid (0.4.13-1~bookworm1) bookworm; urgency=medium
+
+  * Élévation d'administration explicite (#1827, étape 5a de #1802) :
+    « Administrer la box » dans l'Identity Manager. Défi à usage unique signé
+    par un appareil DE CONFIANCE (certificat émis) de la personne liée au
+    compte système ; OTP du compte hors du réseau local (otp_lan sur le
+    LAN), plancher anti-rejeu partagé, 5 essais / 15 min ; session
+    d'administration courte (≤ 8 h, [sbxid] elevation_duree_s) inscrite au
+    registre ; remise à admin.<box> par un bon de 60 s à usage unique — le
+    jeton ne passe jamais par une URL, la session ordinaire est intacte.
+  * Lien personne ↔ compte système (sbx_app_links, app « systeme » : une
+    personne par compte), semé depuis les rattachements vers un compte
+    administrateur, posé/retiré par un administrateur système seulement.
+  * Dépend de python3-pyotp et de secubox-core >= 1.5.51.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 10:25:06 +0200
+
 secubox-sbxid (0.4.12-1~bookworm1) bookworm; urgency=medium
 
   * Étape 3 de l'accès sans mot de passe : une nouvelle demande d'accès (ou renouvelée) prévient l'administration par courriel ([acces] alerte_courriel, sinon la boîte de la box ; plafond par heure) ; compteur des demandes en attente dans le menu du Gestionnaire d'identité ; accepter avec un rôle ouvre les services de ce rôle ; le Profileur et la carte d'accès du Hall mènent au Gestionnaire d'identité pour admettre (#1821).

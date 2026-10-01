@@ -1,3 +1,12 @@
+secubox-core (1.5.51-1~bookworm1) bookworm; urgency=medium
+
+  * secubox_core.second_facteur (#1827) : l'OTP hors de secubox-auth, aux
+    mêmes règles — exigé hors LAN (verdict nginx), sur le LAN selon otp_lan
+    (même source que le panneau Utilisateurs) ; vérification TOTP avec le
+    plancher anti-rejeu PARTAGÉ avec le moteur secubox-users, sous verrou.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 10:25:06 +0200
+
 secubox-core (1.5.50-1~bookworm1) bookworm; urgency=medium
 
   * secubox_core.courriel : un message court par le relais de la box (conteneur mail), même réglage que le rapport ([rapport] de metrics.toml, surchargeable par [courriel]), relais local ou soumission authentifiée (#1821).

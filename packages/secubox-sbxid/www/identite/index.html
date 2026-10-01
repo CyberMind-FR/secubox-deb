@@ -108,6 +108,7 @@ td.c,th.c{text-align:center}
   <h1>Mon identité</h1>
   <p class="lead">Une seule identité SBX OS, prouvée par vos appareils. Vos capacités ouvrent des modules et des fonctionnalités, jamais le système : ni SSH, ni sudo, ni root.</p>
   <div id="moi-corps"></div>
+  <div id="elevation" hidden></div>
   <h2>Inviter quelqu'un</h2>
   <p class="m" style="font-size:12.5px;color:var(--muted);margin:0 0 8px">Un lien (ou un QR) à usage unique : la personne invitée l'ouvre et entre aussitôt, sans mot de passe, avec le rôle choisi et ses services ouverts.</p>
   <div class="card" id="inviter"></div>
@@ -219,6 +220,53 @@ function rendConnexions(c){
     <h2>Applications</h2><div class="chips">${liens || '<span style="color:var(--muted)">aucun lien</span>'}</div>
     <h2>Services délégués par le Hall</h2><div class="chips">${svc || '<span style="color:var(--muted)">aucun</span>'}</div>
     <p class="hint">Des noms seulement : aucun secret ne quitte le coffre. Les accès aux services se gèrent dans le Hall (« Gérer les accès… »).</p></div>`;
+}
+
+// ── Administrer la box : élévation explicite (#1827) ─────────────────────
+// La session SBX OS n'est jamais une session d'administration. Ce bouton en
+// ouvre une À PART : l'appareil signe un défi (sa clé ne sort pas), l'OTP du
+// compte s'ajoute hors du réseau local, et la box rend un bon d'une minute que
+// la page de connexion d'admin.<box> échange contre la session.
+async function rendElevation(){
+  const box = $('#elevation');
+  box.hidden = true; box.innerHTML = '';
+  let e;
+  try { e = await api('/elevation/etat'); } catch(_){ return; }
+  if (!e.lie) return;
+  box.hidden = false;
+  if (!e.possible){
+    box.innerHTML = `<h2>Administrer la box</h2><div class="card"><p class="hint" style="margin:0">${esc(e.motif || 'Indisponible depuis cette session.')}</p></div>`;
+    return;
+  }
+  const heures = Math.max(1, Math.round(e.duree_s / 3600));
+  box.innerHTML = `<h2>Administrer la box</h2><div class="card">
+    <p style="margin:0 0 8px">Ouvrir l'administration en tant que <b style="font-family:var(--mono)">${esc(e.compte)}</b>,
+      signée par cet appareil (${esc(e.appareil)}) — session de ${heures} h au plus.</p>
+    <form id="f-elev" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      ${e.otp_requis ? '<input id="elev-otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="code OTP" required style="width:9em">' : ''}
+      <button class="prim">🛡️ Administrer la box</button>
+      <span id="elev-sortie"></span>
+    </form>
+    <p class="hint">${e.otp_requis ? 'Hors du réseau local, le code OTP du compte est exigé.' : 'Sur le réseau local, la clé de cet appareil suffit.'}
+      Votre session SBX OS ordinaire n'est pas modifiée.</p></div>`;
+  $('#f-elev').onsubmit = async ev => {
+    ev.preventDefault();
+    const sortie = $('#elev-sortie'), btn = $('#f-elev button');
+    btn.disabled = true; sortie.textContent = 'Signature…';
+    try {
+      const {identite, signe} = await import('/i/acces/appareil.js');
+      const id = await identite();
+      const d = await api('/elevation/defi', {method:'POST', body:JSON.stringify({compte:e.compte})});
+      const sig = await signe(id.paire, d.message_hex);            // la clé ne quitte pas l'appareil
+      const otp = $('#elev-otp') ? $('#elev-otp').value.trim() : null;
+      const r = await api('/elevation', {method:'POST', body:JSON.stringify({defi:d.defi, signature:sig, otp:otp || null})});
+      // Un lien, pas une fenêtre ouverte d'office : après une attente réseau,
+      // les navigateurs bloquent window.open — et le bon ne sert qu'une fois.
+      sortie.innerHTML = `<a class="chip ok" style="text-decoration:none;font-weight:700" href="${esc(r.url)}" target="_blank" rel="noopener">Ouvrir l'administration ↗</a>
+        <span class="hint">lien valable ${esc(r.expire_dans)} s</span>`;
+    } catch(x){ sortie.textContent = ''; toast(x.message); }
+    btn.disabled = false;
+  };
 }
 
 // ── Mes appareils ────────────────────────────────────────────────────────
@@ -693,7 +741,7 @@ async function charge(){
   const u = ETAT.identite;
   $('#who').innerHTML = u ? `<b>${esc(u.pseudo)}</b><br><span style="font-family:var(--mono);font-size:11px">${esc(u.user_uuid.slice(0,8))}… · ${u.capabilities.length} capacités</span>`
                           : (ETAT.systeme ? 'compte système · administration seulement' : 'sans identité SBX OS');
-  rendMoi(); rendAppareils(); rendAjout(); rendInviter(); await rendAdmin(); rendCommunautes(); rendMesh();
+  rendMoi(); rendElevation(); rendAppareils(); rendAjout(); rendInviter(); await rendAdmin(); rendCommunautes(); rendMesh();
 }
 function vue(){
   let v = (location.hash || '#moi').slice(1); if (!['moi','appareils','admin','communautes','mesh'].includes(v)) v = 'moi';

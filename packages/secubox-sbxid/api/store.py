@@ -379,3 +379,70 @@ def appareils_de(c, uid: str) -> List[Dict[str, Any]]:
 
 def appareil_par_did(c, did: str):
     return c.execute("SELECT * FROM sbx_devices WHERE did=?", (did,)).fetchone()
+
+
+# ── Lien personne ↔ compte système (#1827, étape 5 de #1802) ────────────────
+#
+# QUI PEUT S'ÉLEVER EN ADMINISTRATEUR, ET VERS QUEL COMPTE. Rangé dans
+# sbx_app_links (`app = "systeme"`) : la clé primaire (app, app_id) garantit
+# qu'un compte système n'a qu'UNE personne. Ce lien ne se crée jamais par
+# « relier un compte existant » (réservé aux quatre services) ; seul un
+# administrateur système le pose, ou l'amorçage ci-dessous depuis les
+# rattachements que l'administrateur avait déjà faits.
+APP_SYSTEME = "systeme"
+
+
+def comptes_systeme_de(c, uid: str) -> List[str]:
+    return [r[0] for r in c.execute("SELECT app_id FROM sbx_app_links WHERE user_uuid=? AND app=?"
+                                    " ORDER BY app_id", (uid, APP_SYSTEME))]
+
+
+def personne_du_compte_systeme(c, compte: str) -> Optional[str]:
+    r = c.execute("SELECT user_uuid FROM sbx_app_links WHERE app=? AND app_id=?",
+                  (APP_SYSTEME, compte)).fetchone()
+    return r[0] if r else None
+
+
+def lie_compte_systeme(c, uid: str, compte: str) -> bool:
+    """Lie `compte` à la personne. Refuse (ValueError) s'il l'est à une autre.
+    Rend True si le lien est nouveau."""
+    autre = personne_du_compte_systeme(c, compte)
+    if autre and autre != uid:
+        raise ValueError(f"« {compte} » est déjà lié à une autre personne")
+    return c.execute("INSERT OR IGNORE INTO sbx_app_links VALUES (?,?,?,?)",
+                     (uid, APP_SYSTEME, compte, compte)).rowcount > 0
+
+
+def delie_compte_systeme(c, uid: str, compte: str) -> bool:
+    return c.execute("DELETE FROM sbx_app_links WHERE user_uuid=? AND app=? AND app_id=?",
+                     (uid, APP_SYSTEME, compte)).rowcount > 0
+
+
+def seme_liens_systeme(c, est_admin, demandes: Optional[Path] = None) -> int:
+    """Amorçage idempotent : un appareil ACCEPTÉ, rattaché à un compte
+    administrateur, lie ce compte à la personne qui possède l'appareil.
+
+    Ne remplace JAMAIS un lien existant : un compte déjà lié à quelqu'un le
+    reste (et deux personnes rattachées au même compte n'en font pas deux)."""
+    demandes = demandes or DEMANDES
+    try:
+        brut = json.loads(demandes.read_text())
+    except (OSError, ValueError):
+        return 0
+    n = 0
+    for d in (brut.get("demandes", []) if isinstance(brut, dict) else brut):
+        compte = (d.get("compte") or "").strip().lower()
+        if d.get("etat") != "acceptee" or not compte or not est_admin(compte):
+            continue
+        if personne_du_compte_systeme(c, compte):
+            continue
+        try:
+            dev = appareil_par_did(c, S.did_appareil(d["cle_publique"]))
+        except (S.Refus, KeyError, ValueError, TypeError):
+            continue
+        if not dev or not dev["user_uuid"] or dev["revoked_at"]:
+            continue
+        if lie_compte_systeme(c, dev["user_uuid"], compte):
+            journal(c, "import", "link.systeme", f"{dev['user_uuid'][:8]} ↔ {compte} (rattachement)")
+            n += 1
+    return n

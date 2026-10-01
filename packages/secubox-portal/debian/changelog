@@ -1,3 +1,11 @@
+secubox-portal (2.3.8-1~bookworm1) bookworm; urgency=medium
+
+  * login.html : `#elevation=<bon>` (#1827) — le bon d'une minute remis par
+    l'Identity Manager est échangé contre la session d'administration ; le
+    fragment est effacé avant tout, un bon refusé le dit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 10:25:06 +0200
+
 secubox-portal (2.3.7-1~bookworm1) bookworm; urgency=high
 
   * login.html?deconnexion=1 (ouvert par le Hall) termine la session côté serveur, efface le navigateur et montre le formulaire sans rebond (#1803).
