@@ -36,6 +36,7 @@ on:
       - 'packages/secubox-zia/**'
       - 'packages/secubox-bbs/**'
       - 'packages/secubox-toolbox-ng/**'
+      - 'packages/secubox-metanews/**'
       - 'packages/secubox-certs/**'
       - 'packages/secubox-publish/**'
       - 'packages/secubox-streamlit/**'
@@ -202,6 +203,9 @@ jobs:
           # Tout le module, sbx-actord compris (cmd/sbx-actord et internal/actor).
           - suite: secubox-toolbox-ng
             module: packages/secubox-toolbox-ng
+          # Index des images, candidats lus une fois, Reclasser sans rajeunir (#1835).
+          - suite: secubox-metanews
+            module: packages/secubox-metanews
     defaults:
       run:
         working-directory: ${{ matrix.module }}
