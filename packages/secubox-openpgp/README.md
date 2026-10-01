@@ -82,9 +82,12 @@ de l'annuaire** (public et indélébile — RGPD), retirable à tout moment.
   ses pairs sur leur écoute `:8799` et n'en garde rien sans signature de la
   clé liée au did, notation `annuaire-cles`, auteur et fraîcheur (±1 h)
   vérifiés. Une rotation ou un retrait y figure (`retirees`).
-- **WKD** : le postinst crée `openpgpkey.<domaine>` pour chaque domaine que le
-  conteneur `mail` sert (ou `[wkd] domaines` de `/etc/secubox/openpgp.toml`),
-  par HAProxy → sbxwaf → nginx. Le certificat reste un geste d'exploitation
+- **WKD public : DÉSACTIVÉ par défaut** (décision #1738 — l'annuaire est servi
+  aux box liées, pas au monde). Avec `[wkd] actif = true` dans
+  `/etc/secubox/openpgp.toml`, le postinst crée `openpgpkey.<domaine>` pour
+  chaque domaine **public** que le conteneur `mail` sert (ou `[wkd] domaines`),
+  par HAProxy → sbxwaf → nginx ; éteint, le démon répond 404 et le postinst
+  retire le vhost. Le certificat reste un geste d'exploitation
   (`acme.sh --issue -d openpgpkey.<domaine> -w /usr/share/secubox/www`, puis
   `certsctl deploy --apply`).
 
@@ -93,6 +96,6 @@ de l'annuaire** (public et indélébile — RGPD), retirable à tout moment.
 Par **Mailvelope**, dans le navigateur : `mailctl webmail-openpgp` règle
 Roundcube sur le trousseau principal de Mailvelope et refuse si le greffon
 `enigma` (clés tenues côté serveur) est actif. La personne importe sa clé
-secrète depuis « Mon coffre » dans Mailvelope ; ses correspondants trouvent
-sa clé publique par WKD. Aucune clé privée n'est prêtée au webmail, aucune
+secrète depuis « Mon coffre » dans Mailvelope ; les clés de ses
+correspondants de la box et des box liées se téléchargent depuis l'annuaire. Aucune clé privée n'est prêtée au webmail, aucune
 route ne signe ni ne déchiffre pour lui.

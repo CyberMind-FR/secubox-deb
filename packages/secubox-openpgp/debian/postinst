@@ -49,16 +49,32 @@ print(did_from_pubkey(public_from_private(raw)))
     # [wkd] domaines dans /etc/secubox/openpgp.toml ; aucun → aucun vhost.
     # Idempotent ; le certificat reste un geste d'exploitation (acme.sh,
     # webroot /usr/share/secubox/www, puis certsctl deploy --apply).
+    # DÉSACTIVÉ PAR DÉFAUT (décision #1738 : l'annuaire est servi aux box
+    # liées, pas au monde). Rien n'est déclaré sans `[wkd] actif = true`.
     TPL=/usr/share/secubox/openpgp/openpgpkey.conf.tpl
     DOMAINES=""
-    if [ -r /etc/secubox/openpgp.toml ]; then
+    WKD_ACTIF=$(python3 -c "
+import tomllib
+print('1' if tomllib.load(open('/etc/secubox/openpgp.toml', 'rb')).get('wkd', {}).get('actif') is True else '0')" 2>/dev/null || echo 0)
+    if [ "$WKD_ACTIF" = "1" ]; then
         DOMAINES=$(python3 -c "
 import tomllib
 d = tomllib.load(open('/etc/secubox/openpgp.toml', 'rb')).get('wkd', {}).get('domaines', [])
 print(' '.join(x for x in d if isinstance(x, str)))" 2>/dev/null || true)
     fi
-    if [ -z "$DOMAINES" ] && command -v lxc-attach >/dev/null 2>&1 && lxc-info -n mail -s 2>/dev/null | grep -q RUNNING; then
+    if [ "$WKD_ACTIF" = "1" ] && [ -z "$DOMAINES" ] && command -v lxc-attach >/dev/null 2>&1 && lxc-info -n mail -s 2>/dev/null | grep -q RUNNING; then
         DOMAINES=$(lxc-attach -n mail -- postconf -h virtual_mailbox_domains 2>/dev/null | tr ',' ' ' || true)
+    fi
+    # WKD éteint : retirer le vhost qu'une 0.2.0 aurait posé (nginx seul ; la
+    # déclaration HAProxy restante ne mène plus nulle part).
+    if [ "$WKD_ACTIF" != "1" ]; then
+        for f in /etc/nginx/sites-enabled/openpgpkey.*.conf; do
+            [ -e "$f" ] || continue
+            n=$(basename "$f")
+            rm -f "$f" "/etc/nginx/sites-available/$n" "/etc/secubox/nginx-available/$n"
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true
+            echo "secubox-openpgp : WKD désactivé — vhost $n retiré"
+        done
     fi
     for DOM in $DOMAINES; do
         case "$DOM" in *[!a-z0-9.-]*|"") continue ;; esac

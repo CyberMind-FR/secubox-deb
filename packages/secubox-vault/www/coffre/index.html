@@ -134,8 +134,9 @@
       <p class="note">La clé secrète ne quitte jamais votre navigateur : installez l'extension
         <b>Mailvelope</b> (Firefox, Chrome, Edge), importez-y votre clé secrète (« voir » sur
         <b>openpgp-secrete</b> ci-dessus, puis copier), et autorisez l'adresse de votre webmail dans
-        Mailvelope. Le webmail propose alors de chiffrer et de signer. Vos correspondants trouvent votre
-        clé publique tout seuls (WKD) une fois qu'elle est publiée ici avec une adresse de la box.</p>
+        Mailvelope. Le webmail propose alors de chiffrer et de signer. Les clés publiques de vos
+        correspondants de la box et des box liées se téléchargent ci-dessus (« clé »), à importer
+        dans Mailvelope.</p>
     </details>
   </section>
 
@@ -243,7 +244,7 @@
     const c = moi.cle;
     $('a-moi').innerHTML = c
       ? `Publiée : <span class="v">${txt(blocFpr(c.empreinte))}</span><br>` +
-        (c.verifies.length ? `Vérifiée pour ${c.verifies.map(txt).join(', ')} — servie par WKD.` :
+        (c.verifies.length ? `Vérifiée pour ${c.verifies.map(txt).join(', ')} (boîte que la box vous a confiée).` :
           `Aucune adresse vérifiée : ${moi.adresses_confiees.length ? 'la clé ne porte pas ' + moi.adresses_confiees.map(txt).join(', ') : "la box ne vous a pas encore confié de boîte"}.`)
       : 'Vous n\'avez pas publié de clé.' + (moi.adresses_confiees.length ? ' Boîte confiée : ' + moi.adresses_confiees.map(txt).join(', ') + '.' : '');
     $('b-a-retirer').hidden = !c;

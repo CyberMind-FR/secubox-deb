@@ -27,8 +27,8 @@ ANNUAIRE DES CLÉS PERSONNELLES (#1738, phase 2) — des clés PUBLIQUES :
   GET    /annuaire            personne  clés de cette box et des box liées
   GET    /annuaire/{fpr}.asc  personne  une clé publique
   GET    /annuaire/export     maillage  l'annuaire signé par la clé de box
-  GET    /wkd/{dom}/hu/{h}    public    WKD : adresses VÉRIFIÉES seulement
-  GET    /wkd/{dom}/policy    public
+  GET    /wkd/{dom}/hu/{h}    public    WKD : adresses VÉRIFIÉES seulement —
+  GET    /wkd/{dom}/policy    public    DÉSACTIVÉ par défaut ([wkd] actif = true)
 """
 from __future__ import annotations
 
@@ -157,6 +157,18 @@ async def depot(request: Request):
 
 # ── annuaire des clés personnelles (#1738, phase 2) ───────────────────────────
 RAFRAICHIR_S = 1800
+CONFIG = Path(os.environ.get("SECUBOX_OPENPGP_CONFIG", "/etc/secubox/openpgp.toml"))
+
+
+def wkd_actif() -> bool:
+    """WKD PUBLIC : désactivé par défaut (décision #1738 — l'annuaire est
+    servi aux box liées, pas au monde). `[wkd] actif = true` l'ouvre."""
+    try:
+        import tomllib  # noqa: PLC0415
+        with CONFIG.open("rb") as f:
+            return tomllib.load(f).get("wkd", {}).get("actif") is True
+    except (OSError, ValueError):
+        return False
 DOMAINE_RE = re.compile(r"^[a-z0-9.-]{3,190}$")
 HU_RE = re.compile(r"^[ybndrfg8ejkmcpqxot1uwisza345h769]{32}$")
 
@@ -242,7 +254,7 @@ def annuaire_cle(empreinte: str, user=Depends(require_personne)):
 def wkd(domaine: str, hu: str, l: str = None):
     """Web Key Directory (draft-koch-openpgp-webkey-service) : public par
     nature. Seules les adresses que la box a confiées à leur personne."""
-    if not DOMAINE_RE.match(domaine or "") or not HU_RE.match(hu or ""):
+    if not wkd_actif() or not DOMAINE_RE.match(domaine or "") or not HU_RE.match(hu or ""):
         raise HTTPException(404)
     cle = _box().annuaire_cles().wkd(domaine, hu, l)
     if cle is None:
@@ -253,7 +265,7 @@ def wkd(domaine: str, hu: str, l: str = None):
 
 @app.get("/wkd/{domaine}/policy")
 def wkd_policy(domaine: str):
-    if not DOMAINE_RE.match(domaine or ""):
+    if not wkd_actif() or not DOMAINE_RE.match(domaine or ""):
         raise HTTPException(404)
     return PlainTextResponse("", headers={"Access-Control-Allow-Origin": "*"})
 

@@ -40,6 +40,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(capacites, "personne_du_porteur",
                         lambda p: {"user_uuid": ALICE, "pseudo": "alice"} if p.get("sub") == "alice" else None)
     monkeypatch.setattr(m, "_nom_box", lambda: "gk2")
+    monkeypatch.setattr(m, "wkd_actif", lambda: True)
     m.app.dependency_overrides[require_personne] = lambda: dict(qui)
     yield TestClient(m.app), qui
     m.app.dependency_overrides.clear()
@@ -75,3 +76,24 @@ def test_cle_secrete_refusee_et_personne_requise(client, personnes):
 def test_export_reserve_au_maillage(client):
     c, _ = client
     assert c.get("/annuaire/export").status_code == 403
+
+
+
+def test_wkd_desactive_par_defaut(client, personnes, tmp_path, monkeypatch):
+    """Décision #1738 : l'annuaire va aux box liées, pas au monde."""
+    c, _ = client
+    c.post("/moi/cle", json={"cle_publique": personnes["alice"].publique})
+    monkeypatch.setattr(m, "wkd_actif", lambda: False)
+    assert c.get(f"/wkd/secubox.in/hu/{hash_wkd('alice')}").status_code == 404
+    assert c.get("/wkd/secubox.in/policy").status_code == 404
+
+
+def test_wkd_actif_seulement_si_declare(tmp_path, monkeypatch):
+    monkeypatch.setattr(m, "CONFIG", tmp_path / "absent.toml")
+    assert m.wkd_actif() is False
+    conf = tmp_path / "openpgp.toml"
+    monkeypatch.setattr(m, "CONFIG", conf)
+    conf.write_text('[wkd]\nactif = "oui"\n')
+    assert m.wkd_actif() is False
+    conf.write_text("[wkd]\nactif = true\n")
+    assert m.wkd_actif() is True
