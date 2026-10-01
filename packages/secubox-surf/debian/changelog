@@ -1,3 +1,9 @@
+secubox-surf (1.0.29-1~bookworm1) bookworm; urgency=high
+
+  * Le relais ne transmet à l'amont que les cookies du site relayé : les cookies de la box (secubox*, sbx_*, sbx-*) ne sont ni transmis, ni appris d'une réponse, ni semés à la main (#1798).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:23:57 +0200
+
 secubox-surf (1.0.28-1~bookworm1) bookworm; urgency=high
 
   * La sortie du relais (et du rendu) ne mène qu'à l'extérieur : adresses internes refusées après résolution, connexion à l'adresse vérifiée (#1609).
