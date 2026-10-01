@@ -10,7 +10,10 @@ case "$1" in
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
     install -d -o secubox -g secubox -m 750 /var/lib/secubox/haproxy /var/lib/secubox/haproxy/config_backups
-    chmod 0755 /var/lib/secubox /run/secubox 2>/dev/null || true
+    # /run/secubox reste 1777 (tmpfiles) : le passer en 0755 root:root empêchait
+    # TOUT module non root de recréer sa socket à son redémarrage suivant —
+    # secubox-haproxy lui-même en est resté en boucle sur gk3 (#1841).
+    chmod 0755 /var/lib/secubox 2>/dev/null || true
     # Create /etc/haproxy if not present (haproxy is Recommends, not Depends)
     # Required for systemd namespace setup
     install -d -m 755 /etc/haproxy

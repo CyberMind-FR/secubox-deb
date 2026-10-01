@@ -1,3 +1,11 @@
+secubox-gitea (1.6.8-1~bookworm1) bookworm; urgency=medium
+
+  * Le frontal SSH 2222 est écrit dans /etc/haproxy/cfg.d/20-gitea-ssh.cfg
+    (#1841) : ajouté seulement à haproxy.cfg, il disparaissait au premier
+    `haproxyctl generate`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 15:51:48 +0200
+
 secubox-gitea (1.6.7-1~bookworm1) bookworm; urgency=medium
 
   * SSH de gitea (2222) limité au LAN et au maillage : la table nft `inet secubox_gitea_ssh`, accrochée en prerouting avant toute traduction, jette les paquets vers 2222 d'une source ni locale, ni d'un sous-réseau privé relié, ni du maillage / tunnel d'administration — par le frontal HAProxy comme par une DNAT posée à la main. Sources déduites des adresses de la box (démarrage + toutes les 10 min), échec fermé, rechargée avec nftables ; retirée seulement à la purge (#1791).

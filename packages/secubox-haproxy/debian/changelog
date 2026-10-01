@@ -1,3 +1,26 @@
+secubox-haproxy (1.8.22-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : /run/secubox n'est plus passé en 0755 root:root (#1841). Il
+    doit rester 1777 (tmpfiles) ; fermé, aucun module non root ne pouvait
+    recréer sa socket à son redémarrage suivant — secubox-haproxy lui-même
+    est resté en boucle sur gk3 après l'installation de la 1.8.21. Test de
+    garde sur tous les postinst.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 15:56:29 +0200
+
+secubox-haproxy (1.8.21-1~bookworm1) bookworm; urgency=medium
+
+  * `haproxyctl frontal` (#1841) : met la box derrière HAProxy + sbxwaf en une
+    commande idempotente — cohérence d'identité (/etc/default/secubox =
+    secubox-domaine), sbxwaf à l'écoute, [main] semé, certificat par défaut
+    tiré du certificat autosigné, frontaux posés à la main déplacés dans
+    cfg.d, generate, bascule (le site autonome de nginx rend 80/443 ; le lien
+    sites-enabled/secubox pointe sur un site vide), vérification et retour
+    arrière. `--admin-lan IP[,IP]` : administration par IP sur :9443, sur les
+    seules adresses privées données. `--etat`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 15:51:48 +0200
+
 secubox-haproxy (1.8.20-1~bookworm1) bookworm; urgency=medium
 
   * LXC uniquement (#1751, #1743) : haproxyctl perd ses branches

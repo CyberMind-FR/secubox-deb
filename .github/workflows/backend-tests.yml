@@ -37,6 +37,8 @@ on:
       - 'packages/secubox-bbs/**'
       - 'packages/secubox-toolbox-ng/**'
       - 'packages/secubox-metanews/**'
+      - 'packages/secubox-haproxy/sbin/haproxyctl'
+      - 'packages/secubox-haproxy/tests/test_frontal_1841.py'
       - 'packages/secubox-certs/**'
       - 'packages/secubox-publish/**'
       - 'packages/secubox-streamlit/**'
@@ -125,6 +127,10 @@ jobs:
           # Ce fichier seul : test_cache_warm.py attend encore l'ancien cold-miss.
           - suite: secubox-hub-charge
             chemin: packages/secubox-hub/tests/test_charge_hub_1835.py
+          # haproxyctl frontal : la box derrière HAProxy + sbxwaf (#1841). Ce fichier
+          # seul : les tests de generate veulent créer /run/haproxy (root).
+          - suite: secubox-haproxy-frontal
+            chemin: packages/secubox-haproxy/tests/test_frontal_1841.py
           # secubox-vhost-logs ne restaure que sa propre passe (#1777) : la
           # 1.0.0 a recopié 90 sauvegardes sur gk2 et écrit dans sites-available.
           # Ce fichier seul : le reste de la suite metrics ne se collecte pas

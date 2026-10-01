@@ -10,5 +10,8 @@
 #   /usr/local/bin/secubox-render-nginx-webui
 #   /usr/local/bin/secubox-haproxy-regen-safe
 
-SECUBOX_HOSTNAME="gk2"
+# Vide à la livraison (#1841) : le postinst le dérive de `secubox-domaine`.
+# Livré à "gk2", il faisait de CHAQUE box une gk2 — le frontal HAProxy d'une
+# autre box aurait reçu la règle d'administration de gk2.
+SECUBOX_HOSTNAME=""
 SECUBOX_DOMAIN_SUFFIX="secubox.in"

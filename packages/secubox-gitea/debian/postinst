@@ -72,6 +72,26 @@ if [ "$1" = "configure" ]; then
             ' "$HAPROXY_CFG" > "$HAPROXY_CFG.new"
             mv "$HAPROXY_CFG.new" "$HAPROXY_CFG"
         done
+        # LE FRONTAL SSH VIT DANS cfg.d (#1841). Ajouté seulement à haproxy.cfg,
+        # il disparaissait au premier `haproxyctl generate`, qui ne garde que
+        # cfg.d/*.cfg — gk3 l'aurait perdu à la mise derrière HAProxy.
+        if [ -d /etc/haproxy ] && ! grep -qs "^frontend gitea-ssh" /etc/haproxy/cfg.d/*.cfg; then
+            install -d -m 0755 /etc/haproxy/cfg.d
+            cat > /etc/haproxy/cfg.d/20-gitea-ssh.cfg <<'GITEASSH'
+frontend gitea-ssh
+    bind *:2222
+    mode tcp
+    option tcplog
+    timeout client 1h
+    default_backend gitea_ssh
+
+backend gitea_ssh
+    mode tcp
+    option tcp-check
+    timeout server 1h
+    server gitea_lxc 10.100.0.40:2222 check
+GITEASSH
+        fi
         if ! grep -q "^frontend gitea-ssh" "$HAPROXY_CFG"; then
             cat >> "$HAPROXY_CFG" <<'GITEASSH'
 
