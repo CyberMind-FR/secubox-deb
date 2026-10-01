@@ -186,14 +186,39 @@ cmd_upload() {
     )
 
     [[ -n "$domain" ]] && curl_cmd+=(-F "domain=$domain")
-    [[ -n "$token" ]] && curl_cmd+=(-H "Authorization: Bearer $token")
-
+    # Le jeton passe par l'entrée standard (`-H @-`), jamais par argv (#1823).
     local result
-    result=$("${curl_cmd[@]}")
+    result=$(printf 'Authorization: Bearer %s\n' "$token" | "${curl_cmd[@]}" -H @-)
 
-    # Check result
-    if echo "$result" | jq -e '.error' >/dev/null 2>&1; then
-        echo -e "${RED}❌ Error:${NC} $(echo "$result" | jq -r '.detail // .error')"
+    # Check result — un refus porte `detail` (FastAPI), pas `error` (#1823)
+    if ! echo "$result" | jq -e 'has("name")' >/dev/null 2>&1; then
+        echo -e "${RED}❌ Error:${NC} $(echo "$result" | jq -r '.detail // .error // .' 2>/dev/null || echo "$result")"
+        exit 1
+    fi
+
+    # Contenu statique : la publication se poursuit côté serveur, on la SUIT
+    # jusqu'au verdict au lieu de crier victoire (#1823).
+    local travail etat
+    travail=$(echo "$result" | jq -r '.travail // empty')
+    if [[ -n "$travail" ]]; then
+        echo -e "${CYAN}⏳ Publication en cours…${NC}"
+        local t deja=""
+        while :; do
+            sleep 2
+            t=$(printf 'Authorization: Bearer %s\n' "$token" | curl -s -H @- "${API_BASE}/isp/travail/${travail}")
+            local ligne
+            ligne=$(echo "$t" | jq -r '[.etapes[]? | select(.etat != "attente") | "\(.libelle): \(.etat)"] | join(" · ")' 2>/dev/null)
+            [[ -n "$ligne" && "$ligne" != "$deja" ]] && echo "   $ligne" && deja="$ligne"
+            etat=$(echo "$t" | jq -r '.etat // "inconnu"' 2>/dev/null)
+            [[ "$etat" == "en_cours" ]] || break
+        done
+        if [[ "$etat" != "publie" ]]; then
+            echo -e "${RED}❌ Échec :${NC} $(echo "$t" | jq -r '.detail // "publication refusée"' 2>/dev/null)"
+            exit 1
+        fi
+        result=$(echo "$result" | jq --argjson t "$t" '.url = $t.url | .domain = $t.domain')
+    elif ! echo "$result" | jq -e '.success' >/dev/null 2>&1; then
+        echo -e "${RED}❌ Échec :${NC} $(echo "$result" | jq -r '.message // "publication refusée"')"
         exit 1
     fi
 

@@ -1,3 +1,26 @@
+secubox-publish (2.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Une publication dit ce qui s'est VRAIMENT passé (#1823). Vécu sur gk2 :
+    « Published Successfully! » et trois coches vertes pour guide-bipolarite
+    sur bip.gk2.secubox.in, alors que rien n'existait (421).
+  * Contenu statique confié à l'assistant de metablogizer (/publish/wizard,
+    fichier multipart) : contenu, version, domaine, bloc nginx, route sbxwaf,
+    certificat, verdict serveur. Les quatre appels d'avant ne pouvaient pas
+    aboutir (contenu envoyé en JSON là où un fichier est attendu → 422).
+  * /isp/upload rend la main avec un travail suivi sur /isp/travail/{id} :
+    la chaîne dure plus d'une minute, HAProxy coupe à 30 s d'inactivité.
+  * _call_module : tout statut ≥ 400 est une erreur (un {"detail": …} passait
+    pour un succès).
+  * Page : l'écran de succès n'apparaît qu'après le verdict ; pastilles lues
+    dans la chaîne du site (/site/{nom}/chaine) ; boutons de réparation qui
+    lisent la réponse ; domaine de la box au lieu de .gk2.secubox.in en dur.
+  * publishctl : suit le travail jusqu'au verdict ; jeton par l'entrée
+    standard, plus dans argv.
+  * Entrées : nom et domaine validés ; nom de fichier téléversé réduit à son
+    nom de base ; archive tar refusée si une entrée sort du répertoire.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 09:36:03 +0200
+
 secubox-publish (2.1.5-1~bookworm1) bookworm; urgency=medium
 
   * le joker DNS reconnu est celui du domaine de la box, plus .gk2.secubox.in figé (#1723, #1713).

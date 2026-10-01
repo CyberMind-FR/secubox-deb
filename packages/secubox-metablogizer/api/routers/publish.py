@@ -41,6 +41,23 @@ router = APIRouter()
 # L'importer serait circulaire — main importe ce routeur au chargement. Le
 # crochet reste None dans les tests, qui n'ont pas de nginx à régénérer.
 regenerer_nginx = None
+# Le fichier unifie, depose par main au chargement (#1823). None : pas de
+# verification possible (tests du routeur seul).
+NGINX_METABLOGS_CONF = None
+
+
+def _domaine_a_un_bloc(domaine: str):
+    """True/False selon que le fichier unifie porte un `server_name` pour ce
+    domaine ; None si on ne sait pas le lire."""
+    if NGINX_METABLOGS_CONF is None:
+        return None
+    try:
+        conf = Path(NGINX_METABLOGS_CONF).read_text(errors="replace")
+    except OSError:
+        return None
+    import re as _re
+    return bool(_re.search(rf"^\s*server_name\s[^;]*(?<![\w.-]){_re.escape(domaine)}(?![\w.-])",
+                           conf, _re.M))
 
 
 def enregistre_domaine(site: Path, domaine: str) -> dict:
@@ -126,6 +143,10 @@ def publie_vhost(domaine: str) -> dict:
         return {"ok": False, "detail": f"régénération nginx : {e}"}
     if not ok:
         return {"ok": False, "detail": message}
+    # « Régénéré » ne veut pas dire « servi » (#1823) : le générateur a pu
+    # écarter ce domaine (pris ailleurs, liste périmée). On le VÉRIFIE.
+    if _domaine_a_un_bloc(domaine) is False:
+        return {"ok": False, "detail": f"aucun bloc server pour {domaine} après régénération — {message}"}
     return {"ok": True, "detail": message, "sites": nombre}
 
 
@@ -194,6 +215,12 @@ async def _sequence_publication(name: str, domain: str, data: bytes, nom_fichier
     yield "version", await asyncio.to_thread(git_commit_push, site,
                                              f"publish {name} via wizard")
     yield "domaine", enregistre_domaine(site, domain)
+    # L'INTENTION AVANT LE BLOC (#1823). Le générateur n'émet pas un site marqué
+    # dépublié ; or un essai raté de l'assistant écrit `published: false` — et
+    # chaque nouvel essai était écarté à son tour, sans fin (vécu sur gk2). Le
+    # « Publier » du poste de pilotage pose déjà l'intention d'abord ; l'état
+    # final suit toujours le verdict, en fin de séquence.
+    marque_publie(site, True)
     yield "vhost", await asyncio.to_thread(publie_vhost, domain)
     yield "route", await asyncio.to_thread(apply_route, domain, BASE_PORT)
     yield "cert", await _cert_step(domain)

@@ -9,7 +9,10 @@ set -euo pipefail
 
 WAF_ROUTES_FILE="${SBX_WAF_ROUTES_FILE:-/etc/secubox/waf/haproxy-routes.json}"
 HAPROXY_CERTS_DIR="${SBX_HAPROXY_CERTS_DIR:-/etc/haproxy/certs}"
-BACKEND_IP="192.168.1.200"
+# nginx écoute 0.0.0.0:8900 et sbxwaf tourne sur l'hôte : 127.0.0.1 vaut sur
+# TOUTE box. L'adresse LAN de gk2 en dur envoyait les sites d'une autre box
+# chez gk2 (#1823).
+BACKEND_IP="${SBX_BACKEND_IP:-127.0.0.1}"
 GK2_SUFFIX=".gk2.secubox.in"
 ACME_WEBROOT="${SBX_ACME_WEBROOT:-/usr/share/secubox/www}"
 DOMAIN_RE='^(([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)$'
@@ -75,8 +78,12 @@ data.pop(domain, None)
 tmp = path + ".tmp"; json.dump(data, open(tmp,"w"), indent=2, sort_keys=True); os.replace(tmp, path)
 PY
   } || die "route write failed"
-  local out
-  if out=$(haproxyctl vhost remove "$domain" 2>&1); then
+  local out nom
+  # `haproxyctl vhost remove` attend le NOM de la table, que `vhost add` dérive
+  # du domaine par `tr '.-' '_'`. Lui passer le domaine ne retirait rien — et
+  # répondait « Removed » : chaque dépublication laissait son vhost (#1823).
+  nom=$(printf '%s' "$domain" | tr '.-' '_')
+  if out=$(haproxyctl vhost remove "$nom" 2>&1); then
     reload_sbxwaf
     emit true "removed $domain"
   elif printf '%s' "$out" | grep -qiE 'exist|absent|not found|no such|unknown'; then
@@ -111,6 +118,112 @@ cert() {
   emit true "issued"
 }
 
+# nginx : INSTALLER le fichier des sites, le tester, recharger (#1823).
+#
+# Le générateur de metablogizer tourne sans privilège — et, monté dans
+# l'agrégateur, sous ProtectSystem=full : /etc lui est en lecture seule (vécu
+# sur gk2 : « Read-only file system », aucun site publié n'obtenait de bloc).
+# Il écrit donc le fichier PRÉPARÉ sous /var/lib/secubox, et c'est ici, en root,
+# qu'il est installé.
+#
+# Ce que root installe a été écrit par un compte de service : on le VÉRIFIE.
+# Lu une seule fois (pas de lien, fichier ordinaire, taille bornée), validé en
+# mémoire, puis écrit depuis cette copie — jamais relu entre les deux. Seules
+# passent les directives que le générateur émet : ni `include` (lecture de
+# fichiers par root), ni `access_log`/`error_log` (écriture par root), ni
+# `load_module`. Racines sous les répertoires de données, `proxy_pass` local.
+# Aucun argument, à dessein (#1785). nginx -t refuse : le fichier précédent
+# revient, et la réponse dit pourquoi.
+NGINX_STAGING="${SBX_NGINX_STAGING:-/var/lib/secubox/metablogizer/nginx-sites.conf}"
+NGINX_SITES_FILE="${SBX_NGINX_SITES_FILE:-/etc/nginx/sites-enabled/metablogizer}"
+
+nginx_apply() {
+  python3 - "$NGINX_STAGING" "$NGINX_SITES_FILE" <<'PY'
+import json, os, re, stat, subprocess, sys
+
+JETON = None
+
+def emit(ok, detail):
+    # Le jeton de l'appel revient avec le verdict : le générateur ne prend
+    # jamais pour sien le verdict d'un appel précédent (#1823).
+    print(json.dumps({"ok": ok, "detail": detail, "jeton": JETON}))
+    sys.exit(0 if ok else 1)
+
+src, cible = sys.argv[1], sys.argv[2]
+AUTORISEES = {"server", "listen", "server_name", "root", "index", "location", "try_files",
+              "return", "deny", "add_header", "error_page", "internal", "proxy_pass",
+              "proxy_set_header", "proxy_read_timeout", "proxy_http_version"}
+RACINES = ("/srv/", "/usr/share/secubox/", "/data/", "/var/www/")
+MAX = 16 * 1024 * 1024
+
+try:
+    fd = os.open(src, os.O_RDONLY | os.O_NOFOLLOW)
+except OSError as e:
+    emit(False, f"configuration préparée illisible : {e.strerror}")
+st = os.fstat(fd)
+if not stat.S_ISREG(st.st_mode):
+    emit(False, "configuration préparée : pas un fichier ordinaire")
+if st.st_size > MAX:
+    emit(False, "configuration préparée trop grosse")
+with os.fdopen(fd, "rb") as f:
+    brut = f.read(MAX + 1)
+try:
+    texte = brut.decode("utf-8")
+except UnicodeDecodeError:
+    emit(False, "configuration préparée : pas de l'UTF-8")
+m = re.match(r"# publishctl-jeton: ([0-9a-f]{16})\n", texte)
+JETON = m.group(1) if m else None
+
+code = "\n".join(re.sub(r"(?:^|(?<=\s))#.*$", "", l) for l in texte.splitlines())
+for instr in re.split(r"[;{}]", code):
+    mots = instr.split()
+    if not mots:
+        continue
+    d, args = mots[0], mots[1:]
+    if d not in AUTORISEES:
+        # Le mot refusé n'est cité que s'il a la forme d'une directive : rien
+        # d'autre du fichier ne doit ressortir d'ici.
+        emit(False, "directive refusée : " + (d if re.fullmatch(r"[a-z_]{1,40}", d) else "(illisible)"))
+    if d == "root" and (len(args) != 1 or ".." in args[0] or not args[0].startswith(RACINES)):
+        emit(False, "racine refusée (hors des répertoires de données)")
+    if d == "proxy_pass" and (len(args) != 1 or not re.fullmatch(
+            r"http://(unix:/run/secubox/[\w.-]+\.sock:/[^\s;]*|127\.0\.0\.1(:\d{1,5})?(/[^\s;]*)?)", args[0])):
+        emit(False, "proxy_pass refusé (cible non locale)")
+    if d == "listen" and not all(re.fullmatch(r"((0\.0\.0\.0|127\.0\.0\.1):)?\d{2,5}|default_server", a)
+                                 for a in args):
+        emit(False, "listen refusé")
+
+try:
+    with open(cible, "rb") as f:
+        ancien = f.read()
+except FileNotFoundError:
+    ancien = None
+
+def pose(data):
+    tmp = cible + ".publishctl-tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.chmod(tmp, 0o644)
+    if os.geteuid() == 0:
+        os.chown(tmp, 0, 0)
+    os.replace(tmp, cible)
+
+pose(brut)
+t = subprocess.run(["nginx", "-t"], capture_output=True, text=True)
+if t.returncode != 0:
+    if ancien is not None:
+        pose(ancien)
+    else:
+        os.unlink(cible)
+    sortie = (t.stderr + t.stdout).splitlines()
+    ligne = next((l for l in sortie if "emerg" in l or "[error]" in l), sortie[-1] if sortie else "")
+    emit(False, f"nginx -t : {ligne}"[:300])
+if subprocess.run(["systemctl", "reload", "nginx"], capture_output=True).returncode != 0:
+    emit(False, "systemctl reload nginx a échoué")
+emit(True, "configuration installée, nginx testé et rechargé")
+PY
+}
+
 [[ $# -ge 1 ]] || die "usage: secubox-publishctl <verb> ..."
 verb="$1"; shift
 case "$verb" in
@@ -118,5 +231,6 @@ case "$verb" in
   vhost-add) [[ $# -eq 1 ]] || die "vhost-add <domain>";       vhost_add "$1" ;;
   vhost-del) [[ $# -eq 1 ]] || die "vhost-del <domain>";       vhost_del "$1" ;;
   cert)      [[ $# -eq 1 ]] || die "cert <domain>";            cert "$1" ;;
+  nginx-apply) [[ $# -eq 0 ]] || die "nginx-apply (sans argument)"; nginx_apply ;;
   *) die "unknown verb: $verb" ;;
 esac

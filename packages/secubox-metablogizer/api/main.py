@@ -59,6 +59,16 @@ BASE_PORT = 8900
 DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 # Internal IP where nginx listens for metablogizer sites
 NGINX_BACKEND_IP = "192.168.1.200"
+# Aide root du paquet (regle sudo livree) : seul passage vers /etc/nginx (#1823).
+PUBLISHCTL = "/usr/sbin/secubox-publishctl"
+# Le fichier PREPARE (#1823). Monte dans l'agregateur (ProtectSystem=full), le
+# generateur n'a pas /etc en ecriture : il ecrit ici, l'aide root verifie et
+# installe dans NGINX_METABLOGS_CONF. Meme chemin que SBX_NGINX_STAGING de l'aide.
+NGINX_STAGING = Path("/var/lib/secubox/metablogizer/nginx-sites.conf")
+# L'aide tourne dans une unite systemd, HORS du bac a sable de l'agregateur :
+# un processus lance par sudo y heriterait de /etc en lecture seule (#1823).
+UNITE_NGINX = "metablog-nginx.service"
+NGINX_VERDICT = Path("/run/secubox/metablog-nginx.json")
 # Un nom de domaine, et rien d'autre : voir alias_du_site().
 _NOM_DOMAINE = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+")
 
@@ -361,16 +371,77 @@ def bloc_routes_api(routes: list) -> str:
     return "".join(blocs) + "\n"
 
 
+def _appliquer_nginx(jeton: str) -> tuple:
+    """Fait installer le fichier prepare par l'aide root. (ok, motif)
+
+    L'aide verifie le contenu, l'installe, teste nginx et recharge, ou restaure
+    la version precedente (#1823). Elle tourne dans l'unite `metablog-nginx`
+    (regle sudo exacte), et rend son verdict dans un fichier marque du jeton de
+    CET appel : un verdict d'avant n'est jamais pris pour celui-ci."""
+    ok, _, err = run_cmd(["sudo", "-n", "/usr/bin/systemctl", "start", UNITE_NGINX], timeout=150)
+    try:
+        res = json.loads(NGINX_VERDICT.read_text() or "{}")
+    except (OSError, ValueError):
+        res = {}
+    if res.get("jeton") == jeton:
+        return bool(res.get("ok")), str(res.get("detail") or "")
+    if not ok:
+        return False, f"{UNITE_NGINX} non demarree : {err or 'refus'}"
+    return False, f"{UNITE_NGINX} : verdict absent ou d'un autre appel"
+
+
+def _defaut_deja_declare(port: int) -> bool:
+    """Un fichier actif AUTRE que le fichier unifie tient-il deja le
+    `default_server` de ce port ? (#1823)"""
+    motif = re.compile(rf"^\s*listen\s+(?:\S*:)?{port}\b[^;]*\bdefault_server\b", re.M)
+    try:
+        fichiers = list(NGINX_ENABLED_DIR.iterdir())
+    except OSError:
+        return False
+    for f in fichiers:
+        if f.name == NGINX_METABLOGS_CONF.name:
+            continue
+        try:
+            if motif.search(f.read_text(errors="replace")):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def regenerate_nginx_config() -> tuple:
     """Regenerate the unified nginx config for all metablogizer sites.
 
     Returns (success, sites_count, message)
     """
-    sites = load_sites()
-    if not sites:
-        return True, 0, "No sites to publish"
+    # TOUJOURS LE DISQUE, JAMAIS LE CACHE (#1823). `load_sites` garde 30 s un
+    # instantane en memoire : l'assistant cree le site puis regenere aussitot,
+    # et le generateur travaillait sur la liste d'AVANT — le nouveau site
+    # n'avait pas de bloc, et l'etape se disait reussie. Vecu sur gk3.
+    global _SITES_CACHE
+    _SITES_CACHE = None
+    # Zero site n'est pas « rien a faire » : depublier le dernier doit RETIRER
+    # son bloc. Le fichier est donc ecrit meme vide (en-tete + defaut du port).
+    sites = load_sites() or []
 
     config_lines = ["# Metablogizer nginx config - auto-generated\n"]
+
+    # LE PORT A UN DEFAUT EXPLICITE (#1823). Sans `default_server`, nginx
+    # confie un hote inconnu au PREMIER bloc charge du port — sur gk2, un
+    # fichier de redirection laisse a la main (`lldh.gk2-redirect.conf`, ordre
+    # alphabetique) : tout site sans bloc partait vers un domaine decommissionne.
+    # Un hote sans bloc doit dire 404, pas servir ni rediriger chez un voisin.
+    # Pas de `server_name` : ce bloc n'est le nom de personne. Un autre fichier
+    # qui le revendique deja garde la main : deux `default_server` sur un meme
+    # port, et `nginx -t` refuserait TOUT le fichier unifie.
+    if not _defaut_deja_declare(BASE_PORT):
+        config_lines.append(f"""
+server {{
+    listen 0.0.0.0:{BASE_PORT} default_server;
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    location / {{ return 404; }}
+}}
+""")
 
     # Un domaine n'est emis QU'UNE FOIS, et jamais s'il est deja servi ailleurs
     # (#1016). Sans ces deux gardes, nginx ignorait le doublon EN SILENCE : le
@@ -516,24 +587,28 @@ server {{
 {routes_api}}}
 """)
 
-    # Write config
+    # Write config — dans le fichier PREPARE, installe par l'aide root (#1823)
     try:
-        NGINX_METABLOGS_CONF.parent.mkdir(parents=True, exist_ok=True)
-        NGINX_METABLOGS_CONF.write_text("".join(config_lines))
+        NGINX_STAGING.parent.mkdir(parents=True, exist_ok=True)
+        # UNE REGENERATION A LA FOIS, tous processus confondus : l'agregateur
+        # et le service autonome regenerent tous deux, et l'aide n'installe que
+        # le DERNIER fichier prepare. Le verrou est relache a la fin de l'appel.
+        import fcntl
+        import secrets as _secrets
+        with open(NGINX_STAGING.parent / ".metablog-nginx.verrou", "a") as verrou:
+            fcntl.flock(verrou, fcntl.LOCK_EX)
+            jeton = _secrets.token_hex(8)
+            NGINX_STAGING.write_text(f"# publishctl-jeton: {jeton}\n" + "".join(config_lines))
 
-        # Test nginx config (use sudo if needed)
-        success, _, err = run_cmd(["sudo", "-n", "nginx", "-t"])
-        if not success:
-            # Try without sudo (if running as root)
-            success, _, err = run_cmd(["nginx", "-t"])
-            if not success:
-                # Skip test and just reload - let systemd handle it
-                logger.warning(f"Nginx test skipped: {err}")
-
-        # Reload nginx (use sudo if needed)
-        success, _, _ = run_cmd(["sudo", "-n", "systemctl", "reload", "nginx"])
-        if not success:
-            run_cmd(["systemctl", "reload", "nginx"])
+            # UN FICHIER REFUSE PAR NGINX NE RESTE PAS EN PLACE (#1823). Avant,
+            # un `nginx -t` en echec etait « saute » et le fichier restait : le
+            # rechargement echouait en silence, et le prochain DEMARRAGE de
+            # nginx tombait sur la configuration cassee — tous les sites avec.
+            # L'aide restaure la precedente et dit pourquoi.
+            applique, motif = _appliquer_nginx(jeton)
+        if not applique:
+            logger.error("nginx: configuration non installee — %s", motif)
+            return False, 0, f"nginx : {motif}"
 
         logger.info(f"Published {len(sites)} metablogizer sites")
         # LES ECARTES SONT DITS, PAS AVALES (#1016). Un doublon signale se
@@ -569,6 +644,8 @@ routers.pilotage.NGINX_ENABLED_DIR = NGINX_ENABLED_DIR
 routers.pilotage.NGINX_VHOST_DIR = NGINX_VHOST_DIR
 routers.pilotage.SHOTS_CACHE_DIR = SHOTS_CACHE_DIR
 routers.pilotage.invalider_cache_sites = _invalidate_sites_cache
+# L'assistant verifie que son domaine a bien un bloc apres regeneration (#1823).
+routers.publish.NGINX_METABLOGS_CONF = NGINX_METABLOGS_CONF
 # L'assistant de publication aussi (#1687) : sans cela, un site publié par
 # lui restait absent de « Mes sites » jusqu'au prochain rafraîchissement.
 routers.publish.invalider_cache_sites = _invalidate_sites_cache
@@ -1062,9 +1139,12 @@ async def delete_site(name: str):
     if not site_dir.exists():
         raise HTTPException(404, "Site not found")
 
-    # Unpublish first
-    (NGINX_ENABLED_DIR / f"{name}.conf").unlink(missing_ok=True)
-    (NGINX_VHOST_DIR / f"{name}.conf").unlink(missing_ok=True)
+    # DEPUBLIER D'ABORD, POUR DE VRAI (#1823) : intention, bloc unifie et route
+    # sbxwaf. Avant, seuls les fichiers du vieux modele un-fichier-par-site
+    # etaient retires — un site supprime gardait son bloc (racine disparue) et
+    # sa route. Et ces `unlink` levaient EROFS dans l'agregateur, ou /etc est
+    # en lecture seule meme pour un fichier absent : suppression en 500.
+    await asyncio.to_thread(routers.pilotage.depublier, site_dir)
 
     # Sites cloned from Gitea (sub-B of #49) carry a .git subtree whose pack
     # files are 0444 and whose directories may be 0500 — shutil.rmtree then

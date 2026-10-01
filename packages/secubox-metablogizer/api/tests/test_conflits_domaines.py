@@ -36,10 +36,28 @@ def prepare(monkeypatch, tmp_path, sites, autres_vhosts=None):
 
     monkeypatch.setattr(main, "NGINX_ENABLED_DIR", enabled)
     monkeypatch.setattr(main, "NGINX_METABLOGS_CONF", enabled / "metablogizer")
+    # L'aide root est simulée : le fichier préparé EST le fichier servi (#1823).
+    monkeypatch.setattr(main, "NGINX_STAGING", enabled / "metablogizer")
     monkeypatch.setattr(main, "load_sites", lambda: sites)
     monkeypatch.setattr(main, "_invalidate_sites_cache", lambda: None)
-    monkeypatch.setattr(main, "run_cmd", lambda *a, **k: (True, "", ""))
+    monkeypatch.setattr(main, "NGINX_VERDICT", tmp_path / "verdict.json")
+    monkeypatch.setattr(main, "run_cmd", aide_simulee(main, enabled / "metablogizer"))
     return main, enabled
+
+
+def aide_simulee(main, prepare, ok=True, detail="installé", appels=None):
+    """L'unité metablog-nginx simulée : relit le jeton du fichier préparé et
+    écrit son verdict là où le générateur le cherche (#1823)."""
+    import json as _json
+
+    def run_cmd(cmd, timeout=30):
+        if appels is not None:
+            appels.append(cmd)
+        m = re.match(r"# publishctl-jeton: (\w+)", prepare.read_text())
+        main.NGINX_VERDICT.write_text(_json.dumps(
+            {"ok": ok, "detail": detail, "jeton": m.group(1) if m else None}))
+        return True, "", ""
+    return run_cmd
 
 
 def site(tmp_path, nom, domaine):

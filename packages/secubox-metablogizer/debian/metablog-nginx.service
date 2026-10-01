@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox metablogizer — installe le fichier nginx des sites
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1823
+
+# POURQUOI UNE UNITÉ, ET PAS `sudo secubox-publishctl` (#1823).
+# Le générateur de metablogizer tourne aussi DANS l'agrégateur, sous
+# ProtectSystem=full : /etc y est en lecture seule, et un processus lancé par
+# sudo hérite de cet espace de montage — même root n'y écrit pas /etc/nginx
+# (vécu sur gk2 : « Read-only file system »). Une unité démarrée par systemd
+# tourne dans SON espace : c'est là que l'aide installe le fichier préparé.
+# Le générateur la démarre par une règle sudo exacte (sans argument libre) et
+# lit le verdict ci-dessous, marqué du jeton de son appel.
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-publishctl nginx-apply
+StandardOutput=truncate:/run/secubox/metablog-nginx.json
+StandardError=journal
+SuccessExitStatus=1
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=120

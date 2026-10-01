@@ -200,3 +200,21 @@ def test_une_panne_imprevue_ne_laisse_pas_la_page_en_attente(prepare, monkeypatc
     lignes = _lis_flux(_fichier())
     assert lignes[-1]["type"] == "fin" and lignes[-1]["ok"] is False
     assert "publishctl introuvable" in lignes[-1]["detail"]
+
+
+def test_un_site_reste_depublie_par_un_essai_rate_se_republie(prepare, monkeypatch):
+    """#1823 : `published: false` laissé par un premier essai raté écartait le
+    site du générateur à chaque nouvel essai. L'intention est posée AVANT le bloc."""
+    import json
+    site_json = prepare / "sites" / "zem" / "site.json"
+    site_json.write_text(json.dumps({"name": "zem", "domain": "zem.example.org", "published": False}))
+    vu = {}
+
+    def vhost(domaine):
+        vu["published"] = json.loads(site_json.read_text()).get("published")
+        return {"ok": True, "detail": "1 site"}
+    monkeypatch.setattr(rp, "publie_vhost", vhost)
+    lignes = _lis_flux(_fichier())
+    assert vu["published"] is True, "le générateur aurait encore écarté le site"
+    assert lignes[-1]["type"] == "fin" and lignes[-1]["ok"] is True
+    assert json.loads(site_json.read_text())["published"] is True

@@ -1,3 +1,46 @@
+secubox-metablogizer (1.8.29-1~bookworm1) bookworm; urgency=medium
+
+  * Le port 8900 a un défaut explicite (#1823) : bloc default_server qui
+    répond 404. Sans lui, un hôte sans bloc tombait sur le premier fichier
+    chargé — sur gk2 une redirection laissée à la main vers un domaine
+    décommissionné (lldh.ganimed.fr). Non émis si un autre fichier actif tient
+    déjà le default_server du port.
+  * Le générateur n'écrit plus /etc/nginx (#1823) : monté dans l'agrégateur
+    (ProtectSystem=full), /etc lui est en lecture seule — sur gk2, « Read-only
+    file system », aucun site publié par la page Publish n'obtenait de bloc.
+    Il écrit un fichier préparé (/var/lib/secubox/metablogizer) et démarre
+    l'unité oneshot metablog-nginx.service (règle sudo exacte, nouveau
+    fichier sudoers) : un enfant de sudo hériterait du /etc en lecture seule
+    de l'agrégateur, une unité systemd a son propre espace. Elle lance
+    `secubox-publishctl nginx-apply` (sans argument), qui le lit une fois, n'admet
+    que les directives émises par le générateur (ni include, ni access_log,
+    ni load_module ; racines de données, proxy_pass local), l'installe en
+    root, teste nginx, recharge — ou restaure la version précédente et dit
+    pourquoi ; verdict marqué du jeton de l'appel. Une régénération à la
+    fois (verrou partagé agrégateur / service autonome). Plus de `sudo nginx`
+    direct (règle posée à la main, tout argument accordé).
+  * postinst : répertoire du fichier préparé, et fichier servi créé s'il
+    manque (box neuve).
+  * secubox-publishctl : route sbxwaf vers 127.0.0.1 (surchargeable par
+    SBX_BACKEND_IP) au lieu de l'adresse LAN de gk2 en dur.
+  * Le générateur relit TOUJOURS le disque : l'assistant créait le site puis
+    régénérait sur la liste en cache (30 s) d'avant — aucun bloc, étape dite
+    réussie (vécu sur gk3). Zéro site : le fichier est écrit quand même
+    (dépublier le dernier retire son bloc).
+  * Étape « Service » de l'assistant : vérifie que le domaine a bien un bloc
+    server après régénération, au lieu de croire le générateur sur parole.
+  * L'assistant pose l'intention `published` AVANT l'étape « Service » : un
+    premier essai raté laissait `published: false`, et chaque nouvel essai
+    était écarté par le générateur, sans fin. L'état final suit le verdict.
+  * secubox-publishctl vhost-del : passe à `haproxyctl vhost remove` le NOM de
+    table (tr '.-' '_', comme `vhost add`) et non le domaine — rien n'était
+    retiré, la commande répondait « Removed » : chaque dépublication laissait
+    son vhost HAProxy.
+  * Supprimer un site le dépublie d'abord (intention, bloc, route) ; les
+    `unlink` du vieux modèle levaient EROFS dans l'agrégateur (500).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 09:36:03 +0200
+
 secubox-metablogizer (1.8.28-1~bookworm1) bookworm; urgency=medium
 
   * postinst : mise en place restaurée (effacée par la fusion 6036886281 ;

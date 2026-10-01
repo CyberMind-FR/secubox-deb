@@ -1,0 +1,5 @@
+# Installed to /etc/sudoers.d/secubox-metablog-nginx (mode 0440).
+# Le générateur de metablogizer fait installer son fichier nginx par une unité
+# hors du bac à sable de l'agrégateur (#1823). Commande exacte : aucun argument
+# libre, aucune autre unité.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemctl start metablog-nginx.service
