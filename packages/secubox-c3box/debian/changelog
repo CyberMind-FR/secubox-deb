@@ -1,3 +1,12 @@
+secubox-c3box (1.2.6-1~bookworm1) bookworm; urgency=medium
+
+  * Plus de « critique » à tort (#1835) : un service peut nommer les unités
+    qui le FONT — haproxy.service (secubox-haproxy n'est que son API), unbound
+    ou dnsmasq pour le DNS (secubox-dns est un vestige), secubox-waf-ng pour le
+    WAF. Actif si l'une l'est ; toujours un seul systemctl show.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 16:15:43 +0200
+
 secubox-c3box (1.2.5-1~bookworm1) bookworm; urgency=medium
 
   * Un relevé systemd en un appel (#1835). La surveillance lançait vingt

@@ -45,8 +45,8 @@ on:
       - 'packages/secubox-metacatalog/**'
       - 'packages/secubox-health/**'
       - 'packages/secubox-c3box/**'
-      - 'packages/secubox-hub/api/main.py'
-      - 'packages/secubox-hub/tests/test_charge_hub_1835.py'
+      - 'packages/secubox-hub/**'
+      - 'packages/secubox-zigbee/**'
       - 'packages/secubox-metrics/sbin/**'
       - 'packages/secubox-metrics/tests/**'
       # LXC uniquement (#1743) : toute relation de paquet est relue.
@@ -123,10 +123,13 @@ jobs:
           # Relevé systemd de c3box en un appel, hors de la boucle du groupe (#1835).
           - suite: secubox-c3box
             chemin: packages/secubox-c3box/tests
-          # Hub : un list-units par cycle, boucles au repos sans lecteur (#1835).
-          # Ce fichier seul : test_cache_warm.py attend encore l'ancien cold-miss.
-          - suite: secubox-hub-charge
-            chemin: packages/secubox-hub/tests/test_charge_hub_1835.py
+          # Hub : un list-units par cycle, boucles au repos sans lecteur (#1835) ;
+          # toute la suite depuis que test_cache_warm suit le contrat actuel.
+          - suite: secubox-hub
+            chemin: packages/secubox-hub/tests
+          # zigbee : relevé partagé, plus de mosquitto par lecteur (#1835).
+          - suite: secubox-zigbee
+            chemin: packages/secubox-zigbee/tests
           # haproxyctl frontal : la box derrière HAProxy + sbxwaf (#1841). Ce fichier
           # seul : les tests de generate veulent créer /run/haproxy (root).
           - suite: secubox-haproxy-frontal

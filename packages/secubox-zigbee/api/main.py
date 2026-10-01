@@ -24,6 +24,8 @@ import json
 import os
 import socket
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException
@@ -237,6 +239,39 @@ def _etats(noms: list) -> dict:
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
+# UN RELEVÉ PARTAGÉ, PAS UN PAR LECTEUR (#1835). Chaque lecture de /devices
+# lançait trois mosquitto_sub et un mosquitto_pub par appareil — et le `get`
+# réveille chaque appareil sur la radio. La carte du Hall relit toutes les 10 s,
+# chaque écran ouvert pour son compte : ~1 processus par seconde sur gk2. Le
+# relevé sert désormais tout le monde pendant DEVICES_TTL_S, un seul calcul à la
+# fois ; une commande l'efface, la carte voit donc l'effet aussitôt.
+# L'inventaire (aussi liste blanche des noms pilotables) change bien plus
+# rarement : INVENTAIRE_TTL_S.
+DEVICES_TTL_S = 20.0
+INVENTAIRE_TTL_S = 120.0
+_memo_devices: dict = {"t": 0.0, "val": None}
+_memo_inventaire: dict = {"t": 0.0, "val": None}
+_verrou_devices = threading.Lock()
+_verrou_inventaire = threading.Lock()
+
+
+def _inventaire_memo() -> list:
+    """L'inventaire, relu au plus toutes les INVENTAIRE_TTL_S. Un inventaire vide
+    (pont muet) n'est pas mémorisé : on réessaie à l'appel suivant."""
+    with _verrou_inventaire:
+        m = _memo_inventaire
+        if m["val"] is not None and time.monotonic() - m["t"] < INVENTAIRE_TTL_S:
+            return m["val"]
+        inv = _inventaire()
+        if inv:
+            m.update(t=time.monotonic(), val=inv)
+        return inv
+
+
+def _oublie_releve() -> None:
+    _memo_devices["val"] = None
+
+
 @app.get("/devices", dependencies=[Depends(require_lecture)])
 def devices() -> dict:
     """Les appareils du pont, avec leur état.
@@ -245,7 +280,17 @@ def devices() -> dict:
     du Hall en a besoin : une carte qui ne sait pas dire si une lampe est
     allumée ne vaut pas la peine d'être ouverte.
     """
-    inv = _inventaire()
+    with _verrou_devices:
+        m = _memo_devices
+        if m["val"] is not None and time.monotonic() - m["t"] < DEVICES_TTL_S:
+            return m["val"]
+        val = _releve_devices()
+        m.update(t=time.monotonic(), val=val)
+        return val
+
+
+def _releve_devices() -> dict:
+    inv = _inventaire_memo()
     noms = [d["friendly_name"] for d in inv]
     etats = _etats(noms)
     sortie = []
@@ -284,7 +329,7 @@ def set_device(nom: str, body: dict) -> dict:
     pas tous les trois a la fois.
     """
     body = body or {}
-    dev = next((d for d in _inventaire() if d.get("friendly_name") == nom), None)
+    dev = next((d for d in _inventaire_memo() if d.get("friendly_name") == nom), None)
     if dev is None:
         # Meme message pour « inconnu » et « le pont ne repond pas » : on ne
         # renseigne pas sur l'existence d'un appareil.
@@ -313,6 +358,8 @@ def set_device(nom: str, body: dict) -> dict:
         raise HTTPException(502, "le courtier a refuse la commande")
     # On relit APRES avoir commande : l'appareil, pas notre intention, dit ce
     # qui s'est passe. Un TOGGLE n'a d'ailleurs pas d'autre facon de repondre.
+    # Le releve partage est perime des maintenant : la carte doit voir l'effet.
+    _oublie_releve()
     vu = _etats([nom]).get(nom) or {}
     return {"nom": nom, "etat": vu.get("state"),
             "luminosite": vu.get("brightness"), "commande": charge}

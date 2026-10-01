@@ -103,3 +103,49 @@ func TestReclasserNeRajeunitPasLesSujetsIntacts(t *testing.T) {
 		}
 	}
 }
+
+// RECLASSER NE DÉFAIT PLUS CE QUE REGROUPER VIENT DE FAIRE (#1835). Le sujet
+// T (P et Q : titres proches, entités différentes) porte l'union {a,b,c} ;
+// Z {b,c} la reconnaît par l'union, mais aucun article de T ne lui ressemble.
+// Rattaché par l'union, il était détaché par Reclasser au démarrage suivant,
+// puis rattaché de nouveau — 185, 29, 162 fois sur gk2.
+func TestRegrouperExigeUnArticleFrere(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := int64(1_700_000_000)
+	sid, _ := st.AddSource(store.Source{Slug: "s", Name: "S", URL: "u", Enabled: true})
+	ajoute := func(ref, titre string, ent []string, pub int64) {
+		st.UpsertArticle(store.Article{
+			SourceID: sid, Ref: ref, Title: titre, URL: "http://x/" + ref, Summary: titre,
+			PublishedAt: pub, Fingerprint: linker.Empreinte(titre, ref), Entities: ent,
+		})
+	}
+	ajoute("p", "Grande tempete sur la cote atlantique", []string{"a", "b"}, now+100)
+	ajoute("q", "Grande tempete sur la cote atlantique hier soir", []string{"a", "c"}, now+200)
+	p := New(st, linker.NewRSS(nil), nil)
+	if _, err := p.Regrouper(now + 300); err != nil {
+		t.Fatal(err)
+	}
+	tops, _ := st.SujetsListe("", 100)
+	if len(tops) != 1 {
+		t.Fatalf("P et Q devaient former un seul sujet, got %d", len(tops))
+	}
+	sujetPQ := tops[0].ID
+
+	ajoute("z", "Marche financier europeen en baisse", []string{"b", "c"}, now+250)
+	if _, err := p.Regrouper(now + 400); err != nil {
+		t.Fatal(err)
+	}
+	arts, _ := st.ArticlesDuSujet(sujetPQ)
+	for _, a := range arts {
+		if a.Ref == "z" {
+			t.Fatal("Z rattaché par l'union seule : aucun article du sujet ne lui ressemble")
+		}
+	}
+	if n, err := p.Reclasser(now + 500); err != nil || n != 0 {
+		t.Fatalf("Reclasser défait le travail de Regrouper : %d détachés (err %v)", n, err)
+	}
+}
