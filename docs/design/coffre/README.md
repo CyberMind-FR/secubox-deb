@@ -1,6 +1,8 @@
 # Le Coffre — idée et conception
 
-> Issue #1364 · statut : **conception, pas de code** · maquette : [`maquette.html`](maquette.html)
+> Issue #1364 · **P1 livrée** (#1367 : MK, serrures phrase + codes de secours, compartiments, `coffrectl`, API, journal chaîné) · maquette : [`maquette.html`](maquette.html)
+>
+> Corrections du 2026-10-01 : compartiments **par personne** (`p-<user_uuid>`, décision #1405), clé privée **jamais prêtée** au webmail (#1738), Roundcube dans le LXC `roundcube`, `secubox-identity` retiré (#1840), Argon2id mesuré.
 
 Le Coffre est l'endroit unique où une SecuBox garde ce qui ne doit jamais
 traîner en clair sur un disque : la clé qui signe le dépôt apt, les secrets
@@ -26,7 +28,7 @@ existe déjà, il est inactif et vide sur gk2, et sa conception actuelle
 | Graines TOTP de `admin` et `gk2` | En clair dans `/etc/secubox/users.json` (0640 secubox) ; les codes de secours sont, eux, hachés | élevée |
 | `/etc/secubox/secrets/` | ~35 secrets à plat, en clair, propriétaires variés (smb, jellyfin, mqtt×5, rustdesk, grafana, mastodon, privacy-jar.key…) | moyenne |
 | `/var/lib/secubox/auth/audit.log` | **0666** (modifiable par n'importe qui) | élevée |
-| Webmail (Roundcube, LXC `mail`) | Plugin `enigma` présent, **liste des plugins vide** | manque |
+| Webmail (Roundcube, LXC `roundcube` 10.100.0.12) | Plugin `enigma` présent, **liste des plugins vide** | manque |
 | Nextcloud (LXC `nextcloud`) | Conteneur **arrêté** ; chiffrement non mesurable ; rien dans le paquet | à mesurer |
 
 ## 2. Principes
@@ -69,12 +71,15 @@ existe déjà, il est inactif et vide sur gk2, et sa conception actuelle
 - **MK** : 256 bits aléatoires, tenue en mémoire `mlock`, effacée au
   rescellement (délai d'inactivité, commande, redémarrage).
 - **Serrures** : chaque serrure est une ligne `(type, sel, paramètres
-  argon2, MK emballée)`. Argon2id à 256 Mio / 3 passes — réglé pour ~1 s sur
-  un Cortex-A72 ; à mesurer sur gk2 avant de figer.
-- **Compartiments** : `box` (secrets du système), et un par humain
-  (`gk2`, `admin`, …). Le compartiment d'un humain peut porter une serrure
-  supplémentaire dérivée de **son** mot de passe : il reste lisible par lui
-  seul, même quand l'admin a ouvert le Coffre.
+  argon2, MK emballée)`. Argon2id **64 Mio / 3 passes / 4 voies**, comme le
+  veut POLITIQUE-CRYPTO : mesuré 0,42 s sur gk2 (Cortex-A72), 0,27 s sur gk3
+  (256 Mio : 1,89 s et 0,63 s). Les paramètres sont rangés PAR serrure : on
+  pourra les relever sans rien rechiffrer.
+- **Compartiments** : `box` (secrets du système), et un par **personne**,
+  `p-<user_uuid>` — jamais par compte système (décision #1405 : `gk2`,
+  `admin` sont des comptes, pas des personnes). Le compartiment d'une personne
+  pourra porter une serrure à elle (phrase personnelle ou clé d'appareil,
+  P4/P5) : lisible par elle seule, même quand l'admin a ouvert le Coffre.
 - **Stockage** : SQLite `/var/lib/secubox/coffre/coffre.db` (0600 root).
   Sauvegarde **par `.backup`**, jamais par `cp` (fichier en WAL). Le fichier
   est sans valeur sans une serrure : il peut partir tel quel sur le SSD de
@@ -107,6 +112,12 @@ l'origine du Hall ; elle doit être enrôlée et utilisée depuis le Hall.
 
 La phrase transite dans le canal TLS de la session, n'est jamais journalisée
 ni stockée, et le serveur ne garde que la MK dérivée.
+
+**P1** : l'interface n'ouvre que depuis le LAN, hors politique « second
+facteur obligatoire » ; partout ailleurs, `coffrectl ouvrir` en SSH.
+L'ouverture distante (TOTP frais, alerte) est la phase P4 : le plancher
+anti-rejeu des TOTP n'est inscriptible que par `secubox`, et le Coffre tourne
+sous un utilisateur à lui.
 
 **Rescellement** : inactivité (15 min par défaut), bouton, `coffrectl
 sceller`, redémarrage. Une *session de signature* (§5) garde la MK au plus
@@ -147,7 +158,7 @@ temps de la bascule, on vérifie sur gk2.
 |---|---|---|
 | `root` | système, SSH | aucun : root administre le Coffre, il n'y lit pas le niveau 1 sans serrure |
 | `secubox` | compte de service | niveau 0 uniquement |
-| `gk2`, `admin` | humains du Hall | un compartiment chacun, serrure personnelle possible |
+| `gk2`, `admin` | comptes système des humains du Hall | aucun en propre : le compartiment est celui de la **personne** (`p-<user_uuid>`), serrure personnelle possible |
 | `operator` | humain, rôle restreint | compartiment sans accès au compartiment `box` |
 
 - **Graines TOTP** : chiffrées (niveau 0) dans `users.json`, déchiffrées par
@@ -162,7 +173,7 @@ temps de la bascule, on vérifie sur gk2.
 
 | Brique | Rôle | Où vit la clé privée |
 |---|---|---|
-| Roundcube **enigma** | signer / chiffrer / déchiffrer PGP dans le webmail | compartiment de l'utilisateur ; poussée à enigma le temps de la session webmail |
+| Roundcube (greffon client) | signer / chiffrer / déchiffrer PGP dans le webmail | **ne quitte jamais la box** : le webmail est client du démon `secubox-openpgp` (#1738) ; enigma tel quel garde ses clés dans le LXC, il n'est donc pas retenu |
 | **WKD** (`/.well-known/openpgpkey/`) | publier les clés publiques des adresses `@secubox.in` | — (public) |
 | **Autocrypt** | annoncer la clé dans les en-têtes sortants | — (public) |
 | Dovecot **mail_crypt** | chiffrer la boîte au repos, clé par utilisateur dérivée de son mot de passe | serveur, emballée par le mot de passe |
@@ -187,7 +198,7 @@ avant d'être conçu plus finement.
 | Moyen | Ce qu'il faut | Quand |
 |---|---|---|
 | Code de secours | un des 5 codes imprimés à la création (chacun est une serrure argon2id) | phrase oubliée |
-| Maillage MirrorNet | TOTP validé sur **2 des 3** nœuds désignés, qui rendent chacun leur part Shamir de KEK₄, chiffrée pour la X25519 de la box (secubox-identity) | box isolée de son admin, clé d'appareil perdue |
+| Maillage MirrorNet | TOTP validé sur **2 des 3** nœuds désignés, qui rendent chacun leur part Shamir de KEK₄, chiffrée pour une clé X25519 de la box — à définir : `secubox-identity` est retiré (#1840), l'identité est `node.key` (Ed25519), et POLITIQUE-CRYPTO interdit de la convertir | box isolée de son admin, clé d'appareil perdue |
 | Rien | — | tout perdu : le niveau 1 est perdu. C'est le prix d'un coffre réel ; le dire à l'enrôlement |
 
 Le recouvrement par le maillage est la réponse honnête au « recouvrement

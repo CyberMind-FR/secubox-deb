@@ -1,3 +1,10 @@
+secubox-aggregator (0.3.6-1~bookworm1) bookworm; urgency=medium
+
+  * vault rejoint _SOCKETS_ADMIN (#1367) : le Coffre n'est relayé qu'aux
+    administrateurs réels, et n'est jamais monté en processus.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 16:51:20 +0200
+
 secubox-aggregator (0.3.5-1~bookworm1) bookworm; urgency=high
 
   * Relais vers radio.sock réservé à un administrateur réel, comme actor : la radio sert sa vue sysop aux chemins sans préfixe, que ce relais produit (#1800).

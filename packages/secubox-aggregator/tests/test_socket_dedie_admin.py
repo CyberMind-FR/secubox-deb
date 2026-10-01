@@ -272,3 +272,16 @@ def test_radio_admin_reel_relaye(banc):
     r = client.get("/api/v1/radio/chat", headers=_cookie(jeton(ADMIN)))
     assert r.status_code == 200
     assert modules["radio"].recues[-1]["chemin"] == "/chat"
+
+
+# ── Le Coffre (#1367) ─────────────────────────────────────────────────────────
+
+
+def test_coffre_relaye_aux_seuls_administrateurs(banc):
+    """Le Coffre n'est jamais monté ici ; son relais se ferme sans session
+    d'administrateur réel, quelle que soit la méthode."""
+    client, _, _, _ = banc
+    assert "vault" in agg._SOCKETS_ADMIN
+    for methode, chemin in (("GET", "etat"), ("POST", "ouvrir"), ("POST", "sceller"),
+                            ("GET", "secrets"), ("DELETE", "secrets/box/x"), ("GET", "journal")):
+        assert client.request(methode, f"/api/v1/vault/{chemin}").status_code == 401, chemin

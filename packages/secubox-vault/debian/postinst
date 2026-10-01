@@ -2,11 +2,52 @@
 set -e
 case "$1" in
   configure)
-    install -d -o root -g root -m 700 /var/lib/secubox/vault
+    # Un utilisateur à lui (voir l'unité) : jamais `secubox`, ni root.
+    getent group secubox-coffre >/dev/null || addgroup --system secubox-coffre >/dev/null
+    id -u secubox-coffre >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox-coffre --no-create-home \
+        --home /var/lib/secubox/coffre --shell /usr/sbin/nologin secubox-coffre >/dev/null
+    # Membre de `secubox` : lire les sessions pour vérifier un jeton d'admin.
+    getent group secubox >/dev/null && adduser secubox-coffre secubox >/dev/null 2>&1 || true
+    install -d -o secubox-coffre -g secubox-coffre -m 0700 /var/lib/secubox/coffre
+    install -d -m 0755 /var/log/secubox
+    [ -e /var/log/secubox/coffre.journal ] || \
+      install -o secubox-coffre -g secubox -m 0640 /dev/null /var/log/secubox/coffre.journal
+
+    # 1.x : clé Fernet posée à côté des données — rien n'en est repris.
+    if [ -n "$(ls -A /var/lib/secubox/vault 2>/dev/null)" ]; then
+      echo "secubox-vault : données 1.x laissées dans /var/lib/secubox/vault (non reprises)"
+    fi
+
+    # LE COFFRE NE VIT PAS DANS L'AGRÉGATEUR (#1367). Monté en processus, la MK
+    # serait dans la mémoire de tous les modules. Une entrée "vault" posée à la
+    # main (gk2) est retirée, et l'agrégateur relancé pour le démonter.
+    if [ -f /etc/secubox/aggregator.toml ] && \
+       grep -qE '^[[:space:]]*"vault",?[[:space:]]*$' /etc/secubox/aggregator.toml; then
+      cp -p /etc/secubox/aggregator.toml /etc/secubox/aggregator.toml.avant-coffre
+      sed -i -E '/^[[:space:]]*"vault",?[[:space:]]*$/d' /etc/secubox/aggregator.toml
+      echo "secubox-vault : retiré d'aggregator.toml — relance de l'agrégateur"
+      systemctl try-restart secubox-aggregator.service || true
+    fi
+
+    # UN VIEUX DROP-IN VIDAIT RuntimeDirectory= (posé à la main pour la 1.x,
+    # « laisser secubox-core gérer /run/secubox ») : le répertoire de la socket
+    # racine n'était jamais créé et le démon tournait en boucle (gk2). On le met
+    # de côté.
+    for f in /etc/systemd/system/secubox-vault.service.d/*.conf; do
+      [ -f "$f" ] || continue
+      if grep -qE '^[[:space:]]*RuntimeDirectory=[[:space:]]*$' "$f"; then
+        install -d -m 0700 /var/backups/secubox-vault
+        mv "$f" "/var/backups/secubox-vault/$(basename "$f").avant-2.0"
+        echo "secubox-vault : drop-in $(basename "$f") mis de côté (vidait RuntimeDirectory)"
+      fi
+    done
+
     systemctl daemon-reload
-    systemctl enable secubox-vault.service
-    systemctl start secubox-vault.service || true
+    systemctl enable secubox-vault.service >/dev/null 2>&1 || true
+    systemctl restart secubox-vault.service || true
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac
 #DEBHELPER#
+exit 0
