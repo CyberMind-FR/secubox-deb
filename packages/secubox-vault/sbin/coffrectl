@@ -22,6 +22,16 @@ entrée standard.
   coffrectl codes                          # régénère les 5 codes de secours
   coffrectl compartiment ID [LIBELLE]      # box ou p-<user_uuid>
   coffrectl journal [N] [--verifier]
+
+  coffrectl depot etat                     # clé de signature du dépôt apt (P2)
+  coffrectl depot proteger                 # phrase aléatoire, rangée au Coffre
+  coffrectl depot session [--minutes N]    # signer pendant N min (15 ; 60 au plus)
+  coffrectl depot fin                      # l'agent oublie la phrase tout de suite
+
+  coffrectl niveau0 etat                   # secrets de démarrage (P3, systemd-creds)
+  coffrectl niveau0 migrer NOM CHEMIN UNITE.service   # chiffre et déclare ; garde le clair
+  coffrectl niveau0 retirer-clair NOM      # détruit le clair, si l'unité tourne avec la crédence
+  coffrectl niveau0 lire NOM               # root : la valeur, sur la sortie standard
 """
 import getpass
 import http.client
@@ -31,6 +41,7 @@ import socket
 import sys
 
 SOCKET = os.environ.get("SECUBOX_COFFRE_SOCKET_RACINE", "/run/secubox-coffre/racine.sock")
+sys.path.insert(0, os.environ.get("SECUBOX_COFFRE_LIB", "/usr/lib/secubox/vault"))
 
 
 class _Connexion(http.client.HTTPConnection):
@@ -81,6 +92,65 @@ def affiche_etat(e: dict) -> None:
         print(f"  serrure {s['id']}  {s['genre']:8}  {s['libelle']}")
     for c in e.get("compartiments", []):
         print(f"  compartiment {c['id']}  ({c['nature']}) — {c['secrets']} secret(s)")
+
+
+def depot(args) -> None:
+    """Session de signature du dépôt apt (P2)."""
+    from coffre import depot as d
+    sous = args[0] if args else "etat"
+    try:
+        fpr = d.empreinte_signature()
+        if sous == "etat":
+            e = d.etat(fpr)
+            if "--porcelaine" in args:
+                print(f"protegee={int(e['protegee'])} en_cache={int(e['en_cache'])} empreinte={fpr}")
+                return
+            print(f"clé {fpr[-16:]} : " + ("protégée par le Coffre" if e["protegee"] else "EN CLAIR — coffrectl depot proteger")
+                  + (" ; session ouverte (l'agent tient la phrase)" if e["en_cache"] else ""))
+        elif sous == "proteger":
+            d.proteger(fpr, lambda nom, valeur: appel("POST", "/secrets",
+                                                      {"compartiment": "box", "nom": nom, "valeur": valeur}))
+            print(f"clé {fpr[-16:]} protégée : sa phrase n'existe qu'au Coffre. Signer : coffrectl depot session")
+        elif sous == "session":
+            minutes = 15
+            if "--minutes" in args:
+                minutes = int(args[args.index("--minutes") + 1])
+            phrase = appel("GET", f"/secrets/box/{d.nom_secret(fpr)}/valeur")["valeur"]
+            d.session(fpr, phrase, minutes)
+            del phrase
+            print(f"session de signature ouverte pour {minutes} min (clé {fpr[-16:]})")
+        elif sous == "fin":
+            d.oublier(fpr)
+            print("session de signature close")
+        else:
+            sys.exit("coffrectl depot : etat | proteger | session [--minutes N] | fin")
+    except d.ErreurDepot as e:
+        sys.exit(f"coffrectl depot : {e}")
+
+
+def niveau0(args) -> None:
+    """Secrets de démarrage (P3) : systemd-creds, sans le Coffre ouvert."""
+    from coffre import niveau0 as n
+    sous = args[0] if args else "etat"
+    try:
+        if sous == "etat":
+            lignes = n.etat()
+            if not lignes:
+                print("aucun secret de niveau 0 — coffrectl niveau0 migrer NOM CHEMIN UNITE.service")
+            for e in lignes:
+                unites = ", ".join(f"{u['unite']} ({'chargée' if u['porte'] else 'à redémarrer'})" for u in e["unites"])
+                print(f"{e['nom']:28} clair {'PRÉSENT' if e['clair_present'] else 'retiré'} — {unites}")
+        elif sous == "migrer" and len(args) == 4:
+            n.migrer(args[1], args[2], args[3])
+            print(f"{args[1]} chiffré et déclaré à {args[3]} — redémarrer l'unité, puis : coffrectl niveau0 retirer-clair {args[1]}")
+        elif sous == "retirer-clair" and len(args) == 2:
+            print("détruit :", n.retirer_clair(args[1]))
+        elif sous == "lire" and len(args) == 2:
+            sys.stdout.write(n.dechiffrer(args[1]).decode("utf-8", "replace"))
+        else:
+            sys.exit("coffrectl niveau0 : etat | migrer NOM CHEMIN UNITE.service | retirer-clair NOM | lire NOM")
+    except n.ErreurNiveau0 as e:
+        sys.exit(f"coffrectl niveau0 : {e}")
 
 
 def principal(argv) -> None:
@@ -136,6 +206,10 @@ def principal(argv) -> None:
             print(e["t"], e["evt"], json.dumps(e["details"], ensure_ascii=False))
         if "--verifier" in args or not j["integre"]:
             print("chaîne :", "intègre" if j["integre"] else f"ROMPUE à la ligne {j['ligne_fautive']}")
+    elif cmd == "depot":
+        depot(args)
+    elif cmd == "niveau0":
+        niveau0(args)
     else:
         sys.exit(f"coffrectl : commande inconnue ou incomplète « {' '.join(argv)} » — coffrectl aide")
 

@@ -1,3 +1,11 @@
+secubox-radio (0.1.76-1~bookworm1) bookworm; urgency=medium
+
+  * Le secret du sysop se lit d'abord dans $CREDENTIALS_DIRECTORY (Coffre P3,
+    #1367), sinon dans /etc/secubox/secrets/radio-sysop. Le postinst ne recrée
+    pas de secret en clair quand la crédence chiffrée existe.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 17:09:35 +0200
+
 secubox-radio (0.1.75-1~bookworm1) bookworm; urgency=medium
 
   * frame-ancestors : le Hall de CETTE box ([global] domain) s'ajoute à hall.gk2 et aux Halls du parc, sur la page comme sur /micro et /mini — radio.gk3 refusait d'être encadrée par hall.gk3 ; cadre parent (bbs.<domaine>) et origine du bandeau (admin.<domaine>) dérivés, l'unité ne les impose plus (#1725, #1713).

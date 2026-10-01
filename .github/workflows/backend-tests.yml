@@ -37,6 +37,7 @@ on:
       - 'packages/secubox-bbs/**'
       - 'packages/secubox-toolbox-ng/**'
       - 'packages/secubox-metanews/**'
+      - 'packages/secubox-radio/**'
       - 'packages/secubox-haproxy/sbin/haproxyctl'
       - 'packages/secubox-haproxy/tests/test_frontal_1841.py'
       - 'packages/secubox-defaults/**'
@@ -231,6 +232,9 @@ jobs:
           # Index des images, candidats lus une fois, Reclasser sans rajeunir (#1835).
           - suite: secubox-metanews
             module: packages/secubox-metanews
+          # Le secret du sysop par systemd-creds d'abord (Coffre P3, #1367).
+          - suite: secubox-radio
+            module: packages/secubox-radio
     defaults:
       run:
         working-directory: ${{ matrix.module }}
