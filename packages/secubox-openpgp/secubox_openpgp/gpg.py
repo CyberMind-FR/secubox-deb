@@ -166,6 +166,44 @@ class Trousseau:
         return Dechiffre(texte=r.stdout, signataire=signataire, notations=notations)
 
 
+    # ── documents signés (annuaire des clés, #1738) ──────────────────────
+    def signer_document(self, clair: bytes, par: str, usage: str) -> str:
+        """Signature EN LIGNE d'un document que la box a construit elle-même
+        (l'export de son annuaire des clés), avec sa notation d'usage. Pas un
+        service : aucune route ne fait signer des octets fournis de dehors."""
+        _exige_empreinte(par)
+        if not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", usage):
+            raise ErreurGpg("usage invalide")
+        r = self._gpg("--armor", "--local-user", par + "!",
+                      "--sig-notation", f"{NOTATION_USAGE}={usage}", "--sign", entree=clair)
+        return r.stdout.decode()
+
+    def verifier_signature(self, armure: str) -> Dechiffre:
+        """Un document signé (pas chiffré) : bonne signature exigée. Rend le
+        contenu et l'empreinte primaire du signataire, à comparer à une liaison."""
+        r = self._gpg("--trust-model", "always", "--decrypt", entree=armure.encode(),
+                      statut=True, verifier=False)
+        st = r.stderr.decode(errors="replace").splitlines()
+        jetons = [l.split()[1] for l in st if l.startswith("[GNUPG:] ") and len(l.split()) > 1]
+        if r.returncode != 0 or "GOODSIG" not in jetons or any(
+                j in jetons for j in ("BADSIG", "ERRSIG", "EXPKEYSIG", "REVKEYSIG")):
+            raise ErreurGpg("document non signé ou signature invalide")
+        signataire, notations, nom = "", {}, None
+        for l in st:
+            q = l.split()
+            if len(q) < 2 or q[0] != "[GNUPG:]":
+                continue
+            if q[1] == "VALIDSIG" and len(q) >= 3:
+                signataire = q[-1] if EMPREINTE.match(q[-1]) else q[2]
+            elif q[1] == "NOTATION_NAME" and len(q) >= 3:
+                nom = q[2]
+            elif q[1] == "NOTATION_DATA" and len(q) >= 3 and nom:
+                notations[nom] = notations.get(nom, "") + _pourcent(q[2])
+        if not EMPREINTE.match(signataire):
+            raise ErreurGpg("signataire inconnu")
+        return Dechiffre(texte=r.stdout, signataire=signataire, notations=notations)
+
+
 # ── utilitaires ──────────────────────────────────────────────────────────
 
 def _exige_empreinte(e: str) -> None:

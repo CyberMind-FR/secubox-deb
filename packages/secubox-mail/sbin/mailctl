@@ -350,6 +350,40 @@ cmd_webmail_config() {
     echo "username_domain = $dom"
 }
 
+# ── OpenPGP dans le webmail (#1738, phase 3) ──────────────────────────────
+#
+# PAR MAILVELOPE, DANS LE NAVIGATEUR. Roundcube 1.6 sait déléguer chiffrer,
+# signer et déchiffrer à l'extension Mailvelope : la clé secrète reste chez la
+# personne, le serveur ne voit que du chiffré. C'est la seule voie compatible
+# avec la règle « aucune clé privée prêtée au webmail » — d'où le refus si le
+# greffon enigma (clés tenues côté serveur) est actif.
+#
+# `mailvelope_main_keyring` : le trousseau PRINCIPAL de Mailvelope, celui où la
+# personne a importé sa clé depuis « Mon coffre », plutôt qu'un trousseau
+# propre au webmail qu'elle devrait remplir une seconde fois.
+cmd_webmail_openpgp() {
+    local wc="$WEBMAIL_CONTAINER" f=/etc/roundcube/config.inc.php.local
+    lxc_running "$wc" || { error "conteneur webmail '$wc' a l'arret"; return 1; }
+    if lxc_attach "$wc" sh -c "grep -qE \"^[^/]*plugins.*['\\\"]enigma['\\\"]\" $f"; then
+        error "le greffon enigma est actif : il tient les clés privées côté serveur — retirez-le d'abord"
+        return 1
+    fi
+    lxc_attach "$wc" sh -c "
+        f=$f
+        [ -f \$f ] || exit 1
+        cp \$f \$f.avant-openpgp
+        if grep -q mailvelope_main_keyring \$f; then
+            sed -i \"s|^.*mailvelope_main_keyring.*\$|\\\$config['mailvelope_main_keyring'] = true;|\" \$f
+        else
+            printf '%s\\n' '// OpenPGP par Mailvelope (#1738, mailctl webmail-openpgp) : la clé reste dans le navigateur.' \
+                \"\\\$config['mailvelope_main_keyring'] = true;\" >> \$f
+        fi
+        php -l \$f >/dev/null 2>&1 || { cp \$f.avant-openpgp \$f; exit 2; }
+    " || { error "configuration refusée (php -l) — restaurée"; return 1; }
+    lxc_attach "$wc" systemctl restart php8.2-fpm >/dev/null 2>&1 || true
+    echo "webmail : OpenPGP par Mailvelope (trousseau principal) — enigma absent"
+}
+
 # ── Apprentissage antispam : le geste « indésirable » du webmail ───────────
 #
 # Trois pieces doivent tenir ensemble, et il en manquait DEUX sur la board :
@@ -1663,6 +1697,7 @@ case "${1:-}" in
     webmail-greffons) cmd_webmail_greffons ;;
     webmail-sso) cmd_webmail_sso ;;
     webmail-sieve) cmd_webmail_sieve ;;
+    webmail-openpgp) cmd_webmail_openpgp ;;
     antispam-apprentissage) cmd_antispam_apprentissage ;;
     sync)        cmd_sync ;;
     # Help

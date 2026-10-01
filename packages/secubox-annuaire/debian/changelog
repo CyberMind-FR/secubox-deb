@@ -1,3 +1,9 @@
+secubox-annuaire (0.10.13-1~bookworm1) bookworm; urgency=medium
+
+  * Écoute maillée :8799 : GET /api/v1/openpgp/annuaire/export (annuaire des clés signé, #1738).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 21:30:00 +0200
+
 secubox-annuaire (0.10.12-1~bookworm1) bookworm; urgency=medium
 
   * secubox-annuaire-maillage : plus de `nft -f /etc/nftables.conf` (#1769).

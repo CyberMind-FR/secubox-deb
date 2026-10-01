@@ -34,6 +34,9 @@ from . import enveloppe as env
 from .gpg import ErreurGpg, Trousseau
 
 USAGE_INTERBOX = "interbox"
+USAGE_ANNUAIRE = "annuaire-cles"
+CHEMIN_EXPORT_ANNUAIRE = "/api/v1/openpgp/annuaire/export"
+DERIVE_ANNUAIRE_S = 3600
 PORT_MAILLAGE = 8799
 CHEMIN_DEPOT = "/api/v1/openpgp/boite/depot"
 _ID = re.compile(r"^[0-9]{10}-[0-9a-f]{16}$")
@@ -64,6 +67,20 @@ def export_par_socket(chemin: str = "/run/secubox/annuaire.sock") -> List[dict]:
         c.close()
     d = json.loads(corps)
     return d.get("entries", d) if isinstance(d, dict) else d
+
+
+def _obtenir_maillage(mesh_ip: str) -> str:
+    """GET de l'annuaire signé d'un pair, sur son écoute :8799."""
+    c = http.client.HTTPConnection(mesh_ip, PORT_MAILLAGE, timeout=15)
+    try:
+        c.request("GET", CHEMIN_EXPORT_ANNUAIRE, headers={"Accept": "application/pgp-signature"})
+        r = c.getresponse()
+        corps = r.read(2 * 1024 * 1024 + 1)
+        if r.status != 200 or len(corps) > 2 * 1024 * 1024:
+            raise Refus(f"annuaire du pair injoignable ({r.status})")
+        return corps.decode("ascii")
+    finally:
+        c.close()
 
 
 def _noeuds(entrees: List[dict]) -> Dict[str, dict]:
@@ -193,6 +210,51 @@ class Box:
         tmp.replace(chemin)
         self.journal("depot", de=e["de"], boxname=emetteur["boxname"], id=ident)
         return {"ok": True, "id": ident}
+
+    # ── annuaire des clés personnelles (#1738) ───────────────────────────
+    def annuaire_cles(self):
+        from .personnes import Annuaire  # noqa: PLC0415
+        return Annuaire(self.racine)
+
+    def export_annuaire(self, maintenant: Optional[float] = None) -> str:
+        """L'annuaire des clés de la box, signé par la clé de box (notation
+        `annuaire-cles`) : ce que les box liées viennent chercher."""
+        moi = self.ma_cle()
+        if not moi:
+            raise Refus("cette box n'a pas encore de clé OpenPGP (sbx-openpgp init)")
+        doc = {"v": 1, "de": self.did, "emis": int(time.time() if maintenant is None else maintenant),
+               **self.annuaire_cles().export()}
+        return self.trousseau.signer_document(json.dumps(doc, ensure_ascii=False, sort_keys=True).encode(),
+                                              par=moi["empreinte"], usage=USAGE_ANNUAIRE)
+
+    def lire_annuaire_pair(self, pair: dict, armure: str, maintenant: Optional[float] = None) -> int:
+        """Vérifie l'annuaire d'un pair — signé par SA clé liée, pour cet
+        usage, de lui, frais — puis le range. Rend le nombre de clés gardées."""
+        t = time.time() if maintenant is None else maintenant
+        self.trousseau.importer(pair["cle_publique"], pair["empreinte"])
+        d = self.trousseau.verifier_signature(armure)
+        if d.signataire != pair["empreinte"] or d.notations.get("usage@secubox.in") != USAGE_ANNUAIRE:
+            raise Refus("annuaire signé par une autre clé, ou pour un autre usage")
+        doc = json.loads(d.texte.decode())
+        if doc.get("v") != 1 or doc.get("de") != pair["did"] or abs(t - float(doc.get("emis", 0))) > DERIVE_ANNUAIRE_S:
+            raise Refus("annuaire d'une autre box, ou périmé")
+        return self.annuaire_cles().enregistrer_pair(pair["did"], pair["boxname"], doc, t)
+
+    def rafraichir_annuaires(self, obtenir: Optional[Callable[[str], str]] = None) -> Dict[str, Any]:
+        """Va chercher l'annuaire signé de chaque box liée, par le maillage."""
+        bilan: Dict[str, Any] = {}
+        for p in self.pairs().values():
+            if p["soi"] or not p["mesh_ip"]:
+                continue
+            nom = p["boxname"] or p["did"]
+            try:
+                armure = (obtenir or _obtenir_maillage)(p["mesh_ip"])
+                bilan[nom] = self.lire_annuaire_pair(p, armure)
+                self.journal("annuaire_pair", de=p["did"], boxname=p["boxname"], cles=bilan[nom])
+            except (Refus, ErreurGpg, OSError, ValueError) as e:
+                bilan[nom] = f"refusé : {str(e)[:120]}"
+                self.journal("annuaire_pair_refuse", de=p["did"], motif=str(e)[:120])
+        return bilan
 
     def _importer_pairs(self, pairs: Dict[str, dict]) -> None:
         for p in pairs.values():

@@ -54,6 +54,8 @@ if [ "$1" = "configure" ]; then
     # retour arriere ; conteneurs absents ou arretes : ne fait rien.
     if [ -x /usr/sbin/mailctl ] && [ -d /run/systemd/system ]; then
         /usr/sbin/mailctl webmail-sso >/dev/null 2>&1 || true
+        # OpenPGP par Mailvelope (#1738) : la clé reste dans le navigateur.
+        /usr/sbin/mailctl webmail-openpgp >/dev/null 2>&1 || true
     fi
 
     # Phase 2: on upgrade from < 2.3, provision Rspamd secrets + data dirs.

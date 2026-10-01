@@ -1,3 +1,9 @@
+secubox-mail (2.10.15-1~bookworm1) bookworm; urgency=medium
+
+  * mailctl webmail-openpgp (#1738) : OpenPGP dans le webmail par Mailvelope (trousseau principal), la clé reste dans le navigateur ; refus si le greffon enigma est actif. Appelé par le postinst.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 21:30:00 +0200
+
 secubox-mail (2.10.14-1~bookworm1) bookworm; urgency=medium
 
   * mailctl ssl : certificat obtenu et renouvelé par secubox-certbot quand il est là ; « ssl renew » sans certificat déployé ni lignée ACME (box dont le courriel n'a jamais eu de certificat, gk3) le dit et sort sans échec au lieu d'échouer chaque jour (#1819).

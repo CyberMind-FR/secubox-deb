@@ -105,8 +105,11 @@
       <label for="pgp-courriel">Adresse de courriel</label><input id="pgp-courriel" type="email" maxlength="254">
       <div class="rang"><button id="b-pgp">Créer ma clé</button></div>
     </div>
-    <p class="note" id="pgp-presente" hidden>Votre clé est dans votre coffre : <b>openpgp-publique</b> à
-      partager, <b>openpgp-secrete</b> pour votre client de courriel seulement.</p>
+    <div id="pgp-presente" hidden style="display:flex;flex-direction:column;gap:.45rem">
+      <p class="note">Votre clé est dans votre coffre : <b>openpgp-publique</b> à partager,
+        <b>openpgp-secrete</b> pour votre client de courriel seulement.</p>
+      <div class="rang"><button id="b-pgp-publier">📢 Publier ma clé publique dans l'annuaire de la box</button></div>
+    </div>
 
     <h2>Mes serrures</h2>
     <ul id="serrures"></ul>
@@ -114,6 +117,27 @@
     <input id="s-phrase" type="password" autocomplete="new-password">
     <div class="rang"><button id="b-ajout-phrase">➕ Phrase</button>
       <button id="b-ajout-cle">➕ Clé d'appareil (FIDO, Touch ID, téléphone)</button></div>
+  </section>
+
+  <section id="s-annuaire" hidden>
+    <h2>Annuaire des clés OpenPGP</h2>
+    <p class="note" id="a-moi"></p>
+    <details>
+      <summary class="note">Publier une clé publique que j'ai déjà</summary>
+      <textarea id="a-coller" placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
+      <div class="rang"><button id="b-a-publier">Publier</button></div>
+    </details>
+    <div class="rang"><button class="danger" id="b-a-retirer" hidden>Retirer ma clé de l'annuaire</button></div>
+    <ul id="a-liste"></ul>
+    <details>
+      <summary class="note">Dans le webmail (chiffrer, signer, déchiffrer)</summary>
+      <p class="note">La clé secrète ne quitte jamais votre navigateur : installez l'extension
+        <b>Mailvelope</b> (Firefox, Chrome, Edge), importez-y votre clé secrète (« voir » sur
+        <b>openpgp-secrete</b> ci-dessus, puis copier), et autorisez l'adresse de votre webmail dans
+        Mailvelope. Le webmail propose alors de chiffrer et de signer. Les clés publiques de vos
+        correspondants de la box et des box liées se téléchargent ci-dessus (« clé »), à importer
+        dans Mailvelope.</p>
+    </details>
   </section>
 
   <p class="msg" id="msg" role="status"></p>
@@ -198,10 +222,64 @@
       : '<li class="note">Aucun secret pour l\'instant.</li>';
     const a = l.some(s => s.nom === 'openpgp-secrete');
     $('pgp-absente').hidden = a; $('pgp-absente').style.display = a ? 'none' : 'flex';
-    $('pgp-presente').hidden = !a;
+    $('pgp-presente').hidden = !a; $('pgp-presente').style.display = a ? 'flex' : 'none';
   }
 
+  // ── annuaire des clés OpenPGP de la box (#1738) ─────────────────────────
+  const PGP = '/api/v1/openpgp';
+  async function pgp(chemin, methode, corps) {
+    const r = await fetch(PGP + chemin, { method: methode || 'GET',
+      headers: corps ? { 'Content-Type': 'application/json' } : { 'Accept': 'application/json' },
+      body: corps ? JSON.stringify(corps) : undefined });
+    let j = {};
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) { const e = new Error(j.detail || ('HTTP ' + r.status)); e.code = r.status; throw e; }
+    return j;
+  }
+  const blocFpr = (f) => (f || '').replace(/(.{4})/g, '$1 ').trim();
+  async function chargeAnnuaire() {
+    let moi;
+    try { moi = await pgp('/moi'); } catch (err) { $('s-annuaire').hidden = true; return; }
+    $('s-annuaire').hidden = false;
+    const c = moi.cle;
+    $('a-moi').innerHTML = c
+      ? `Publiée : <span class="v">${txt(blocFpr(c.empreinte))}</span><br>` +
+        (c.verifies.length ? `Vérifiée pour ${c.verifies.map(txt).join(', ')} (boîte que la box vous a confiée).` :
+          `Aucune adresse vérifiée : ${moi.adresses_confiees.length ? 'la clé ne porte pas ' + moi.adresses_confiees.map(txt).join(', ') : "la box ne vous a pas encore confié de boîte"}.`)
+      : 'Vous n\'avez pas publié de clé.' + (moi.adresses_confiees.length ? ' Boîte confiée : ' + moi.adresses_confiees.map(txt).join(', ') + '.' : '');
+    $('b-a-retirer').hidden = !c;
+    try {
+      const l = (await pgp('/annuaire')).cles || [];
+      $('a-liste').innerHTML = l.length ? l.map(e =>
+        `<li><span class="nom">${txt(e.pseudo || '?')} · ${(e.courriels || []).map(a => txt(a) + ((e.verifies || []).includes(a) ? ' ✓' : '')).join(', ')}` +
+        `<br><span class="v">${txt(blocFpr(e.empreinte))} — ${txt(e.origine || '')}</span></span>` +
+        `<a href="${PGP}/annuaire/${encodeURIComponent(e.empreinte)}.asc" target="_blank" rel="noopener">clé</a></li>`).join('')
+        : '<li class="note">Aucune clé publiée pour l\'instant.</li>';
+    } catch (err) { $('a-liste').innerHTML = ''; }
+  }
+  async function publier(cle) {
+    try {
+      const e = await pgp('/moi/cle', 'POST', { cle_publique: cle });
+      msg('Clé publiée' + (e.verifies.length ? ', vérifiée pour ' + e.verifies.join(', ') : ' (aucune adresse vérifiée)') + '.', true);
+    } catch (err) { msg(err.message); }
+    chargeAnnuaire();
+  }
+  $('b-a-publier').addEventListener('click', () => publier($('a-coller').value));
+  $('b-a-retirer').addEventListener('click', async () => {
+    const b = $('b-a-retirer');
+    if (b.dataset.sur !== '1') { b.dataset.sur = '1'; b.textContent = 'vraiment ? (les box liées l\'apprendront)'; return; }
+    b.dataset.sur = ''; b.textContent = "Retirer ma clé de l'annuaire";
+    try { await pgp('/moi/cle', 'DELETE'); msg('Clé retirée de l\'annuaire.', true); } catch (err) { msg(err.message); }
+    chargeAnnuaire();
+  });
+  $('b-pgp-publier').addEventListener('click', async () => {
+    geste();
+    try { await publier((await api('/secrets/openpgp-publique/lire', { ouverture: OUV })).valeur); }
+    catch (err) { msg(err.message); }
+  });
+
   async function charge() {
+    chargeAnnuaire();
     try { ETAT = await api(''); }
     catch (err) {
       ETAT = null; $('etat').textContent = err.code === 403 || err.code === 401 ? 'réservé' : 'injoignable';
