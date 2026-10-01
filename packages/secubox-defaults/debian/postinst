@@ -16,8 +16,25 @@ case "$1" in
         # shellcheck disable=SC1090
         . "$DEFAULTS" 2>/dev/null || true
 
-        if [ -z "${SECUBOX_HOSTNAME:-}" ]; then
-            # Autodetect: hostname -s minus any 'secubox-' prefix
+        # LE NOM DE LA BOX VIENT DE secubox-domaine (#1841), source canonique
+        # (#1723). Le fichier était livré avec "gk2" : l'autodétection, qui ne
+        # jouait que sur une valeur vide, ne jouait jamais — gk3 se croyait
+        # gk2. On aligne donc aussi une valeur EXISTANTE quand elle diffère du
+        # domaine de la box ; gk2 reste gk2.
+        DOMAINE=""
+        if command -v secubox-domaine >/dev/null 2>&1; then
+            DOMAINE=$(secubox-domaine 2>/dev/null || true)
+        fi
+        if printf '%s' "$DOMAINE" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'; then
+            HOTE=${DOMAINE%%.*}
+            SUFFIXE=${DOMAINE#*.}
+            if [ "${SECUBOX_HOSTNAME:-}" != "$HOTE" ] || [ "${SECUBOX_DOMAIN_SUFFIX:-}" != "$SUFFIXE" ]; then
+                echo "secubox-defaults: SECUBOX_HOSTNAME=${SECUBOX_HOSTNAME:-<vide>} → $HOTE, suffixe → $SUFFIXE (secubox-domaine)"
+                sed -i -e "s/^SECUBOX_HOSTNAME=.*/SECUBOX_HOSTNAME=\"$HOTE\"/" \
+                       -e "s/^SECUBOX_DOMAIN_SUFFIX=.*/SECUBOX_DOMAIN_SUFFIX=\"$SUFFIXE\"/" "$DEFAULTS"
+            fi
+        elif [ -z "${SECUBOX_HOSTNAME:-}" ]; then
+            # Sans secubox-domaine : hostname -s, préfixe 'secubox-' retiré.
             DETECTED=$(hostname -s 2>/dev/null | sed 's/^secubox-//')
             if [ -n "$DETECTED" ]; then
                 echo "secubox-defaults: setting SECUBOX_HOSTNAME=$DETECTED (autodetected)"

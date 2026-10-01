@@ -1,3 +1,16 @@
+secubox-haproxy (1.8.21-1~bookworm1) bookworm; urgency=medium
+
+  * `haproxyctl frontal` (#1841) : met la box derrière HAProxy + sbxwaf en une
+    commande idempotente — cohérence d'identité (/etc/default/secubox =
+    secubox-domaine), sbxwaf à l'écoute, [main] semé, certificat par défaut
+    tiré du certificat autosigné, frontaux posés à la main déplacés dans
+    cfg.d, generate, bascule (le site autonome de nginx rend 80/443 ; le lien
+    sites-enabled/secubox pointe sur un site vide), vérification et retour
+    arrière. `--admin-lan IP[,IP]` : administration par IP sur :9443, sur les
+    seules adresses privées données. `--etat`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 15:51:48 +0200
+
 secubox-haproxy (1.8.20-1~bookworm1) bookworm; urgency=medium
 
   * LXC uniquement (#1751, #1743) : haproxyctl perd ses branches

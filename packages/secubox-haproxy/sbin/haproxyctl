@@ -1427,6 +1427,178 @@ EOF
 }
 
 # ─────────────────────────────────────────────────────────────────────
+# FRONTAL (#1841)
+# ─────────────────────────────────────────────────────────────────────
+
+# METTRE LA BOX DERRIERE HAPROXY + SBXWAF, EN UNE COMMANDE IDEMPOTENTE.
+#
+# Une box neuve sortait de l'image avec nginx seul sur 80/443 (site
+# « secubox » de secubox-core, attrape-tout) : un acces direct par le LAN
+# contournait sbxwaf et ne tombait pas sur les vhosts du Hall. gk2 avait ete
+# basculee a la main au fil du temps ; gk3 jamais. Cette commande fait la
+# bascule complete, et revient en arriere si la box ne repond pas apres :
+#   1. coherence : /etc/default/secubox doit nommer la box que nomme
+#      secubox-domaine (sinon generate poserait la regle d'admin d'une autre) ;
+#   2. sbxwaf doit ecouter (sinon tout le trafic tomberait en 503) ;
+#   3. [main] seme dans haproxy.toml s'il manque ;
+#   4. certificat par defaut tire du certificat autosigne de la box si le
+#      repertoire des certificats est vide ;
+#   5. frontaux poses a la main dans haproxy.cfg (gitea-ssh) deplaces dans
+#      cfg.d, sans quoi generate les effacerait ;
+#   6. generate (valide avant d'installer) ;
+#   7. bascule : le site autonome de nginx rend 80/443 — le lien
+#      sites-enabled/secubox pointe sur un site vide, pas supprime : le
+#      postinst de secubox-core le recreerait sinon — puis HAProxy demarre ;
+#   8. verification sur 127.0.0.1:443 ; retour arriere complet sinon.
+#
+# `--admin-lan IP[,IP]` : l'administration PAR ADRESSE IP. Derriere HAProxy, un
+# hote qui est une IP n'a pas de route (421, comme gk2 sur 443) ; gk2 servait
+# l'admin par IP sur :9443 via un frontal pose a la main. On le genere, sur les
+# SEULES adresses donnees (privees) — jamais *:9443, qui l'exposerait au WAN.
+NGINX_DIR="${SECUBOX_NGINX_DIR:-/etc/nginx}"
+TLS_DIR="${SECUBOX_TLS_DIR:-/etc/secubox/tls}"
+DEFAULTS_FILE="${SECUBOX_DEFAULTS_FILE:-/etc/default/secubox}"
+SBXWAF_ECOUTE="${SECUBOX_SBXWAF_ECOUTE:-127.0.0.1:8085}"
+
+_frontal_actif() {
+    grep -q '^frontend https-in' "$CONFIG_DIR/haproxy.cfg" 2>/dev/null \
+        && [ "$(readlink "$NGINX_DIR/sites-enabled/secubox" 2>/dev/null)" != "$NGINX_DIR/sites-available/secubox" ]
+}
+
+# Deplace un bloc `frontend <nom>` (et son `backend <backend>`) de haproxy.cfg
+# vers cfg.d/<fichier>, s'il n'y est pas deja.
+_frontal_vers_cfgd() {
+    local fe="$1" be="$2" fichier="$EXTRA_CFG_DIR/$3"
+    [ -f "$CONFIG_DIR/haproxy.cfg" ] || return 0
+    grep -q "^frontend $fe\$" "$CONFIG_DIR/haproxy.cfg" || return 0
+    grep -qs "^frontend $fe\$" "$EXTRA_CFG_DIR"/*.cfg && return 0
+    mkdir -p "$EXTRA_CFG_DIR"
+    awk -v fe="frontend $fe" -v be="backend $be" '
+        /^(frontend|backend|listen|global|defaults|resolvers|userlist|peers)[ \t]/ || /^(global|defaults)$/ {
+            garde = ($0 == fe || $0 == be)
+        }
+        garde { print }
+    ' "$CONFIG_DIR/haproxy.cfg" > "$fichier.tmp"
+    if [ -s "$fichier.tmp" ]; then
+        mv "$fichier.tmp" "$fichier"
+        log "frontal : $fe deplace dans $(basename "$fichier")"
+    else
+        rm -f "$fichier.tmp"
+    fi
+}
+
+cmd_frontal() {
+    local dom hote suffixe h_def s_def admin_lan="" ip
+    case "${1:-}" in
+        --etat)
+            if _frontal_actif; then echo "frontal : actif"; return 0; fi
+            echo "frontal : inactif"; return 1 ;;
+        --admin-lan)
+            admin_lan="${2:-}"
+            for ip in ${admin_lan//,/ }; do
+                if ! [[ "$ip" =~ ^(10\.([0-9]{1,3}\.){2}[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3})$ ]]; then
+                    error "frontal : --admin-lan attend des IPv4 privees, pas « $ip »"; return 1
+                fi
+            done
+            [ -n "$admin_lan" ] || { error "frontal : --admin-lan sans adresse"; return 1; } ;;
+        "") ;;
+        *) error "frontal : option inconnue « $1 » (--etat | --admin-lan IP[,IP])"; return 1 ;;
+    esac
+
+    # 1. Coherence de l'identite.
+    dom=$(secubox-domaine 2>/dev/null || true)
+    if ! [[ "$dom" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
+        error "frontal : domaine de la box inconnu (secubox-domaine)"; return 1
+    fi
+    hote=${dom%%.*}; suffixe=${dom#*.}
+    h_def=$(sed -n 's/^SECUBOX_HOSTNAME="\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$DEFAULTS_FILE" 2>/dev/null | tail -1)
+    s_def=$(sed -n 's/^SECUBOX_DOMAIN_SUFFIX="\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$DEFAULTS_FILE" 2>/dev/null | tail -1)
+    if [ "$h_def" != "$hote" ] || [ "${s_def:-secubox.in}" != "$suffixe" ]; then
+        error "frontal : $DEFAULTS_FILE nomme ${h_def:-<vide>}.${s_def:-secubox.in}, la box est $dom — mettre secubox-defaults a jour d'abord"
+        return 1
+    fi
+
+    # 2. sbxwaf a l'ecoute.
+    if ! ss -tlnH 2>/dev/null | awk '{print $4}' | grep -qx "$SBXWAF_ECOUTE"; then
+        error "frontal : sbxwaf n'ecoute pas sur $SBXWAF_ECOUTE — rien ne serait inspecte"; return 1
+    fi
+
+    if _frontal_actif; then
+        log "frontal : deja actif — rien a faire"; return 0
+    fi
+
+    # 3. Reglages generaux.
+    mkdir -p "$(dirname "$CONF_PATH")"
+    if ! grep -qE '^https_port[[:space:]]*=' "$CONF_PATH" 2>/dev/null; then
+        local t; t=$(mktemp)
+        {
+            printf '[main]\nmode = "native"\nhttp_port = 80\nhttps_port = 443\nstats_port = 8404\n'
+            printf 'waf_enabled = true\nwaf_backend_ip = "%s"\nwaf_backend_port = %s\n\n' \
+                "${SBXWAF_ECOUTE%:*}" "${SBXWAF_ECOUTE##*:}"
+            cat "$CONF_PATH" 2>/dev/null || true
+        } > "$t"
+        install -m 0644 "$t" "$CONF_PATH"; rm -f "$t"
+        log "frontal : reglages [main] semes dans $CONF_PATH"
+    fi
+
+    # 4. Certificat par defaut.
+    mkdir -p "$CERTS_DIR"
+    if ! compgen -G "$CERTS_DIR/*.pem" >/dev/null; then
+        if [ ! -r "$TLS_DIR/cert.pem" ] || [ ! -r "$TLS_DIR/key.pem" ]; then
+            error "frontal : aucun certificat dans $CERTS_DIR ni dans $TLS_DIR"; return 1
+        fi
+        (umask 077; cat "$TLS_DIR/cert.pem" "$TLS_DIR/key.pem" > "$CERTS_DIR/000-defaut.pem")
+        log "frontal : certificat par defaut tire de $TLS_DIR"
+    fi
+
+    # 5. Frontaux poses a la main.
+    _frontal_vers_cfgd gitea-ssh gitea_ssh 20-gitea-ssh.cfg
+    if [ -n "$admin_lan" ] && ! grep -qs '^frontend webui-lan' "$EXTRA_CFG_DIR"/*.cfg; then
+        mkdir -p "$EXTRA_CFG_DIR"
+        {
+            printf '# Administration par IP, sur le LAN seulement (#1841, genere par haproxyctl frontal)\n'
+            printf 'frontend webui-lan\n'
+            for ip in ${admin_lan//,/ }; do printf '    bind %s:9443 ssl crt %s/\n' "$ip" "$CERTS_DIR"; done
+            printf '    mode http\n    default_backend webui_direct\n'
+        } > "$EXTRA_CFG_DIR/10-webui-lan.cfg"
+        log "frontal : administration par IP sur ${admin_lan//,/, } (:9443)"
+    fi
+
+    # 6. Generation (validee avant installation). Sauvegarde d'abord.
+    local sauve; sauve="$CONFIG_DIR/haproxy.cfg.avant-frontal.$(date +%s)"
+    [ -f "$CONFIG_DIR/haproxy.cfg" ] && cp -p "$CONFIG_DIR/haproxy.cfg" "$sauve"
+    cmd_generate || { error "frontal : generation refusee — rien n'a bascule"; return 1; }
+
+    # 7. Bascule. Le site autonome de nginx rend 80/443.
+    local lien="$NGINX_DIR/sites-enabled/secubox" ancien vide="$NGINX_DIR/sites-available/secubox-frontal"
+    ancien=$(readlink "$lien" 2>/dev/null || true)
+    printf '# Vide (#1841) : HAProxy tient 80/443 ; les vhosts ecoutent sur 9080.\n' > "$vide"
+    ln -sfn "$vide" "$lien"
+    _frontal_retour() {
+        error "frontal : $1 — retour arriere"
+        if [ -n "$ancien" ]; then ln -sfn "$ancien" "$lien"; else rm -f "$lien"; fi
+        if [ -f "$sauve" ]; then cp -p "$sauve" "$CONFIG_DIR/haproxy.cfg"; fi
+        systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
+        systemctl reload haproxy 2>/dev/null || true
+        return 1
+    }
+    nginx -t >/dev/null 2>&1 || { _frontal_retour "nginx -t refuse"; return 1; }
+    systemctl reload nginx || { _frontal_retour "rechargement de nginx"; return 1; }
+    sleep 1
+    systemctl enable haproxy >/dev/null 2>&1 || true
+    systemctl restart haproxy || { _frontal_retour "HAProxy ne demarre pas"; return 1; }
+
+    # 8. Verification : la box repond en TLS par le frontal.
+    local code
+    code=$(curl -sk -m 10 -o /dev/null -w '%{http_code}' --resolve "admin.$dom:443:127.0.0.1" "https://admin.$dom/" 2>/dev/null || true)
+    case "$code" in
+        2??|3??|401|403) log "frontal : actif — admin.$dom repond $code par HAProxy + sbxwaf" ;;
+        *) _frontal_retour "admin.$dom repond « ${code:-rien} » apres bascule"; return 1 ;;
+    esac
+    return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────
 # MIGRATION
 # ─────────────────────────────────────────────────────────────────────
 
@@ -1594,6 +1766,8 @@ case "${1:-}" in
     stats)      cmd_stats ;;
     info)       cmd_info ;;
     generate)   [ "${2:-}" = "--allow-shrink" ] && ALLOW_SHRINK=1; cmd_generate ;;
+    # Box derriere HAProxy + sbxwaf, en une commande idempotente (#1841).
+    frontal)    cmd_frontal "${2:-}" "${3:-}" ;;
     # Verifie (et, avec --write, redresse) un haproxy.toml abime par les
     # anciens `vhost add/remove` — doublons de tables, booleens invalides.
     config-repair) cmd_config_repair "${2:-}" ;;
@@ -1657,6 +1831,8 @@ Service:
 
 Config:
   generate      Generate HAProxy config from TOML
+  frontal       Put the box behind HAProxy + sbxwaf (idempotent; --etat to check,
+                --admin-lan IP[,IP] to keep admin by IP on :9443)
 
 VHosts:
   vhost list              List vhosts
