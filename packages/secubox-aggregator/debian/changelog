@@ -1,3 +1,9 @@
+secubox-aggregator (0.3.5-1~bookworm1) bookworm; urgency=high
+
+  * Relais vers radio.sock réservé à un administrateur réel, comme actor : la radio sert sa vue sysop aux chemins sans préfixe, que ce relais produit (#1800).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:26:05 +0200
+
 secubox-aggregator (0.3.4-1~bookworm1) bookworm; urgency=medium
 
   * Chemin Python du serveur isolé des modules : websockets chargé avant les montages et ordre de sys.path rétabli après — huit modules plaçaient le websockets 10.4 de Debian devant celui d'uvicorn, qui mourait au démarrage (gk3 : agrégateur en boucle, registre du Hall vide) (#1680).

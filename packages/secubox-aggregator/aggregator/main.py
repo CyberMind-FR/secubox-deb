@@ -61,7 +61,11 @@ RUN_DIR = "/run/secubox"
 # sert la vue complète (services visés, preuves, feedback) à la seule route qui
 # la demande par `X-Sbx-Vue: complete`. Cette route, c'est ce relais, et il ne
 # pose l'en-tête qu'APRÈS la garde.
-_SOCKETS_ADMIN = frozenset({"actor"})
+#
+# radio : secubox-radio sert la vue sysop à toute requête SANS le préfixe
+# /api/v1/radio — c'est-à-dire à ce relais, qui le retire. Elle compte sur la
+# porte de l'administration ; cette porte, c'est cette garde (#1800).
+_SOCKETS_ADMIN = frozenset({"actor", "radio"})
 
 # L'en-tête de vue est une décision de la ROUTE, pas du visiteur : celui que le
 # client envoie n'est jamais recopié, vers aucun module.

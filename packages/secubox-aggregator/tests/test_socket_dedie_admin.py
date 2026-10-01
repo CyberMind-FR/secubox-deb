@@ -100,7 +100,7 @@ def banc(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(auth.appareils, "est_admis", lambda s: s == APPAREIL)
 
     modules = {}
-    for nom in ("actor", "demo"):
+    for nom in ("actor", "radio", "demo"):
         m = _FauxModule(str(run / f"{nom}.sock"))
         threading.Thread(target=m.serve_forever, kwargs={"poll_interval": 0.05},
                          daemon=True).start()
@@ -247,3 +247,28 @@ def test_module_libre_ne_recoit_pas_l_entete_de_vue(banc):
 def test_module_absent_404(banc):
     client, _, _, _ = banc
     assert client.get("/api/v1/inexistant/etat").status_code == 404
+
+
+# ── radio (#1800) : la vue sysop ne s'ouvre qu'à un administrateur réel ─────
+def test_radio_sans_session_401_et_module_jamais_contacte(banc):
+    client, modules, _, _ = banc
+    for chemin in ("chat", "current", "propositions", "stats", "suivante"):
+        r = client.get(f"/api/v1/radio/{chemin}",
+                       headers={"X-Forwarded-For": "8.8.8.8"})
+        assert r.status_code == 401, chemin
+    assert client.post("/api/v1/radio/suivante").status_code == 401
+    assert modules["radio"].recues == []
+
+
+def test_radio_session_appareil_403(banc):
+    client, modules, jeton, _ = banc
+    r = client.get("/api/v1/radio/chat", headers=_cookie(jeton(APPAREIL)))
+    assert r.status_code == 403
+    assert modules["radio"].recues == []
+
+
+def test_radio_admin_reel_relaye(banc):
+    client, modules, jeton, _ = banc
+    r = client.get("/api/v1/radio/chat", headers=_cookie(jeton(ADMIN)))
+    assert r.status_code == 200
+    assert modules["radio"].recues[-1]["chemin"] == "/chat"
