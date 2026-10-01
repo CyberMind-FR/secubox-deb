@@ -311,6 +311,7 @@
         if (!tous.length) { panne("aucun site publié pour l'instant."); return; }
         el("etat").hidden = true;
         var avec = tous.filter(function (s) { return s.vignette; }).length;
+        manquantes = tous.length - avec;
         el("n").textContent = tous.length + " sites · " + avec + " illustrés";
         applique(courant);
         tourne();
@@ -330,9 +331,13 @@
     });
   }
 
+  // LA MOSAÏQUE NE REPREND QUE SI DES VIGNETTES MANQUENT (#1835, règle de
+  // l'exploitant). Tant qu'il en manque, on repasse toutes les cinq minutes
+  // (au rythme du shotter) ; toutes présentes, la carte ne sonde plus — le
+  // prochain chargement du Hall suffit.
+  var manquantes = 1;
   charge();
-  // Les vignettes changent au rythme du shotter, pas à la seconde.
-  setInterval(charge, 300000);
+  setInterval(function () { if (manquantes > 0 && !document.hidden) charge(); }, 300000);
 })();
 </script>
 </body>

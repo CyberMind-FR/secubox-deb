@@ -191,6 +191,14 @@
             .deploy-row { grid-template-columns: 5em 1fr auto; }
             .deploy-row .deploy-duration, .deploy-row .deploy-flag { display: none; }
         }
+        /* MOSAÏQUE SEULE (#1835) : « Mes sites » agrandi depuis le Hall n'ouvre
+           que la mosaïque, en lecture — ni onglets, ni chiffres, ni gestes
+           d'administration (publier, détails, rebalayer). ?vue=mosaique */
+        body.vue-mosaique #sidebar, body.vue-mosaique .header .btn-group,
+        body.vue-mosaique .grid, body.vue-mosaique .tabs,
+        body.vue-mosaique .tab-content:not(#tab-mosaic),
+        body.vue-mosaique .tuile-btn, body.vue-mosaique #mosaic-refresh-btn { display: none !important; }
+        body.vue-mosaique .main { margin-left: 0; }
     </style>
 </head>
 <body class="hybrid-dark">
@@ -961,6 +969,10 @@
             else if (name === 'deploys') loadDeploys(true);
         }
 
+        // ?vue=mosaique (#1835) : la vue « Mes sites » du Hall — mosaïque seule.
+        if (new URLSearchParams(location.search).get('vue') === 'mosaique') {
+            document.body.classList.add('vue-mosaique');
+        }
         loadStatus();
         loadMosaic();
 
