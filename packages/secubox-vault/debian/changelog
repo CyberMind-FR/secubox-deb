@@ -1,3 +1,12 @@
+secubox-vault (2.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * Coffre P4 (#1367) : clés d'appareil WebAuthn PRF. Une serrure « appareil » enveloppe la clé maîtresse sous HKDF(sortie PRF, sel) ; le schéma passe en v2 (colonne cred_id), migré en place. Routes /serrures/appareil (lister, préparer un sel, ajouter, retirer).
+  * Ouverture hors du LAN : un code TOTP exigé, vérifié par l'agrégateur (seul à tenir le plancher anti-rejeu), signalé par X-SecuBox-Second-Facteur ; chaque ouverture distante envoie une alerte à la boîte de la box et le note au journal.
+  * Unité : AF_INET permis vers le seul relais courriel (10.100.0.10), tout le reste refusé.
+  * Console : champ TOTP, ouverture et enrôlement par clé d'appareil.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 18:00:00 +0200
+
 secubox-vault (2.0.5-1~bookworm1) bookworm; urgency=medium
 
   * niveau0 : une unité « porte » sa crédence quand son répertoire de

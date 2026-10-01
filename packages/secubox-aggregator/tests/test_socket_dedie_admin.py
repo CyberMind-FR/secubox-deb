@@ -54,6 +54,7 @@ class _FauxModule(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
                     "methode": self.command,
                     "chemin": self.path,
                     "vue": self.headers.get_all("X-Sbx-Vue") or [],
+                    "second_facteur": self.headers.get_all("X-SecuBox-Second-Facteur") or [],
                     "corps": corps.decode("utf-8", "replace"),
                 })
                 sortie = json.dumps({"ok": True, "chemin": self.path}).encode()
@@ -100,7 +101,7 @@ def banc(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(auth.appareils, "est_admis", lambda s: s == APPAREIL)
 
     modules = {}
-    for nom in ("actor", "radio", "demo"):
+    for nom in ("actor", "radio", "demo", "vault"):
         m = _FauxModule(str(run / f"{nom}.sock"))
         threading.Thread(target=m.serve_forever, kwargs={"poll_interval": 0.05},
                          daemon=True).start()
@@ -285,3 +286,46 @@ def test_coffre_relaye_aux_seuls_administrateurs(banc):
     for methode, chemin in (("GET", "etat"), ("POST", "ouvrir"), ("POST", "sceller"),
                             ("GET", "secrets"), ("DELETE", "secrets/box/x"), ("GET", "journal")):
         assert client.request(methode, f"/api/v1/vault/{chemin}").status_code == 401, chemin
+
+
+
+def test_coffre_ouverture_hors_lan_totp_verifie_ici(banc, monkeypatch):
+    """P4 : hors LAN, le TOTP se vérifie dans l'agrégateur (plancher anti-rejeu),
+    qui seul pose X-SecuBox-Second-Facteur ; celui d'un client est retiré."""
+    from secubox_core import second_facteur
+    client, modules, jeton, _ = banc
+    codes = []
+    monkeypatch.setattr(second_facteur, "verifie_totp", lambda qui, code: codes.append((qui, code)) or code == "123456")
+    monkeypatch.setattr(second_facteur, "otp_lan", lambda: "facultatif")
+    h = {"Authorization": f"Bearer {jeton(ADMIN)}", "X-SecuBox-LAN": "0"}
+    r = client.post("/api/v1/vault/ouvrir", json={"secret": "x"}, headers=h)
+    assert r.status_code == 401 and modules["vault"].recues == []
+    r = client.post("/api/v1/vault/ouvrir", json={"secret": "x", "otp": "000000"},
+                    headers={**h, "X-SecuBox-Second-Facteur": "verifie"})
+    assert r.status_code == 401 and modules["vault"].recues == []     # l'en-tête forgé ne suffit pas
+    r = client.post("/api/v1/vault/ouvrir", json={"secret": "x", "otp": "123456"}, headers=h)
+    assert r.status_code == 200 and modules["vault"].recues[-1]["second_facteur"] == ["verifie"]
+    assert codes[-1] == (ADMIN, "123456")
+    # Ailleurs que /ouvrir, et même avec l'en-tête forgé : jamais relayé tel quel.
+    client.get("/api/v1/vault/etat", headers={**h, "X-SecuBox-Second-Facteur": "verifie"})
+    assert modules["vault"].recues[-1]["second_facteur"] == []
+
+
+def test_coffre_lan_sans_second_facteur_si_la_politique_le_permet(banc, monkeypatch):
+    from secubox_core import second_facteur
+    client, modules, jeton, _ = banc
+    monkeypatch.setattr(second_facteur, "otp_lan", lambda: "facultatif")
+    h = {"Authorization": f"Bearer {jeton(ADMIN)}", "X-SecuBox-LAN": "1"}
+    assert client.post("/api/v1/vault/ouvrir", json={"secret": "x"}, headers=h).status_code == 200
+    assert modules["vault"].recues[-1]["second_facteur"] == []
+
+
+def test_coffre_cinq_codes_faux_puis_429(banc, monkeypatch):
+    from secubox_core import second_facteur
+    client, modules, jeton, _ = banc
+    monkeypatch.setattr(agg, "_echecs_otp", {})
+    monkeypatch.setattr(second_facteur, "verifie_totp", lambda qui, code: False)
+    h = {"Authorization": f"Bearer {jeton(ADMIN)}", "X-SecuBox-LAN": "0"}
+    for _ in range(5):
+        assert client.post("/api/v1/vault/ouvrir", json={"secret": "x", "otp": "1"}, headers=h).status_code == 401
+    assert client.post("/api/v1/vault/ouvrir", json={"secret": "x", "otp": "1"}, headers=h).status_code == 429

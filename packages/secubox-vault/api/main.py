@@ -9,10 +9,11 @@ DEUX APPLICATIONS, DEUX SOCKETS, UN SEUL COFFRE.
 - `public` (/run/secubox/vault.sock) : relayée par l'agrégateur aux seuls
   administrateurs réels. Ouvrir, sceller, état, NOMS des secrets, poser,
   retirer, journal. Elle ne rend JAMAIS la valeur d'un secret : pas d'oracle
-  derrière une session web. Elle n'ouvre que depuis le LAN, quand la politique
-  n'y exige pas de second facteur ; l'ouverture DISTANTE (TOTP frais, alerte
-  courriel) est la phase P4 — d'ici là, `coffrectl ouvrir` en SSH. Cinq échecs
-  par heure et par identité, puis 429.
+  derrière une session web. Hors LAN (ou sous politique « second facteur
+  obligatoire »), l'ouverture exige un TOTP frais, vérifié par l'AGRÉGATEUR —
+  lui seul peut tenir le plancher anti-rejeu — qui le signale par l'en-tête
+  X-SecuBox-Second-Facteur (P4) ; chaque ouverture distante envoie une alerte
+  courriel. Cinq échecs par heure et par identité, puis 429.
 - `racine` (/run/secubox-coffre/racine.sock, répertoire 0700) : celle de
   `coffrectl`, pour root. Initialisation, lecture d'une valeur, serrures,
   codes de secours. Le système de fichiers est la garde.
@@ -20,8 +21,12 @@ DEUX APPLICATIONS, DEUX SOCKETS, UN SEUL COFFRE.
 Le Coffre ne vit QUE dans ce processus : jamais monté dans l'agrégateur, dont
 tous les modules partagent la mémoire.
 """
+import base64
 import os
+import secrets as _alea
+import threading
 import time
+from datetime import datetime, timezone
 from collections import defaultdict, deque
 from pathlib import Path
 from typing import Optional
@@ -31,7 +36,7 @@ from pydantic import BaseModel, Field
 from secubox_core import second_facteur
 from secubox_core.auth import require_jwt
 
-from coffre.coffre import Coffre, Interdit, NonInitialise, Scelle
+from coffre.coffre import Coffre, Interdit, NonInitialise, Scelle, b64u, b64u_decode
 from coffre.crypto import Refus
 from coffre.journal import Journal
 
@@ -42,6 +47,7 @@ DELAI_S = int(os.environ.get("SECUBOX_COFFRE_DELAI_S", "900"))
 
 COFFRE = Coffre(BASE, Journal(JOURNAL), delai_s=DELAI_S)
 
+ENTETE_SECOND_FACTEUR = "X-SecuBox-Second-Facteur"   # posé par l'agrégateur, après le TOTP
 ESSAIS_MAX = 5
 FENETRE_S = 3600
 _echecs: dict = defaultdict(deque)
@@ -50,6 +56,15 @@ _echecs: dict = defaultdict(deque)
 class Ouverture(BaseModel):
     secret: str = Field(min_length=1, max_length=1024)
     genre: str = "phrase"
+    cred_id: Optional[str] = Field(default=None, max_length=1024)
+    otp: Optional[str] = Field(default=None, max_length=10)   # lu par l'agrégateur, pas ici
+
+
+class Appareil(BaseModel):
+    cred_id: str = Field(min_length=16, max_length=1024)
+    sel: str = Field(min_length=40, max_length=64)
+    prf: str = Field(min_length=40, max_length=64)
+    libelle: str = Field(default="", max_length=80)
 
 
 class Pose(BaseModel):
@@ -141,17 +156,67 @@ _routes_communes(public, [Depends(require_jwt)])
 def ouvrir_public(o: Ouverture, request: Request, user=Depends(require_jwt)):
     qui = str((user or {}).get("sub") or "?")
     _limite(qui)
-    if second_facteur.otp_exige(request):
-        # Hors LAN, ou LAN sous politique « second facteur obligatoire » : pas
-        # en P1. On le dit, on le journalise, on ne compte pas d'échec.
+    distante = request.headers.get("X-SecuBox-LAN", "").strip() != "1"
+    if second_facteur.otp_exige(request) and request.headers.get(ENTETE_SECOND_FACTEUR) != "verifie":
+        _echecs[qui].append(time.monotonic())
         COFFRE.journal.ajouter("ouverture_refusee", genre=o.genre, qui=qui, motif="second_facteur")
-        raise HTTPException(403, "ouverture avec second facteur : pas encore (phase P4) — coffrectl ouvrir en SSH")
-    ok = _appel(COFFRE.ouvrir, o.secret, o.genre, qui=qui, origine="lan")
+        raise HTTPException(401, "second facteur exigé (code TOTP)")
+    origine = "distante" if distante else "lan"
+    ok = _appel(COFFRE.ouvrir, o.secret, o.genre, o.cred_id, qui=qui, origine=origine)
     if not ok:
         _echecs[qui].append(time.monotonic())
         raise HTTPException(403, "refusé")
     _echecs.pop(qui, None)
+    if distante:
+        threading.Thread(target=_alerte_distante, args=(qui,), daemon=True).start()
     return COFFRE.etat()
+
+
+def _alerte_distante(qui: str) -> None:
+    """Chaque ouverture hors LAN prévient la boîte de la box (§4)."""
+    try:
+        from secubox_core import courriel
+        dest = courriel.adresse_de_la_box()
+        if not dest:
+            COFFRE.journal.ajouter("alerte_non_envoyee", motif="aucune adresse de box")
+            return
+        quand = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        courriel.envoie(dest, "[SecuBox] Coffre ouvert à distance",
+                        f"Le Coffre a été ouvert hors du LAN par « {qui} » le {quand}.\n\n"
+                        "Si ce n'est pas vous : scellez-le (page Coffre, ou coffrectl sceller en SSH)\n"
+                        "et changez sa phrase.\n")
+        COFFRE.journal.ajouter("alerte_envoyee", qui=qui)
+    except Exception as e:  # noqa: BLE001 — l'alerte ne doit jamais faire tomber l'ouverture
+        COFFRE.journal.ajouter("alerte_non_envoyee", motif=type(e).__name__)
+
+
+# ── clés d'appareil (WebAuthn PRF, P4) ────────────────────────────────────────
+@public.get("/serrures/appareil", dependencies=[Depends(require_jwt)])
+def appareils():
+    return {"appareils": COFFRE.serrures_appareil()}
+
+
+@public.post("/serrures/appareil/preparer", dependencies=[Depends(require_jwt)])
+def appareil_preparer():
+    """Un sel neuf : l'authentificateur rendra une sortie PRF propre à ce sel."""
+    return {"sel": b64u(_alea.token_bytes(32))}
+
+
+@public.post("/serrures/appareil", dependencies=[Depends(require_jwt)])
+def appareil_ajouter(a: Appareil):
+    try:
+        sel, prf = b64u_decode(a.sel), b64u_decode(a.prf)
+    except (ValueError, TypeError):
+        raise HTTPException(400, "sel ou sortie PRF illisible") from None
+    return {"id": _appel(COFFRE.ajouter_serrure_appareil, a.cred_id, sel, prf, a.libelle)}
+
+
+@public.delete("/serrures/appareil/{ident}", dependencies=[Depends(require_jwt)])
+def appareil_retirer(ident: str):
+    if not any(x["id"] == ident for x in COFFRE.serrures_appareil()):
+        raise HTTPException(404, "clé d'appareil inconnue")
+    _appel(COFFRE.retirer_serrure, ident)
+    return {"retiree": True}
 
 
 # ── racine : coffrectl, pour root ─────────────────────────────────────────────

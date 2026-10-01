@@ -18,8 +18,11 @@ phase P1 : #1367.
   scellement (commande, 15 min d'inactivité, arrêt du démon). Jamais écrite.
 - **Serrures** : chaque serrure emballe la MK (Argon2id 64 Mio / 3 / 4 →
   AES-256-GCM). Une phrase (12 caractères au moins) et **5 codes de secours à
-  usage unique**. Ajouter ou retirer une serrure ne rechiffre rien ; la
-  dernière phrase ne se retire pas.
+  usage unique**. Une **clé d'appareil** (FIDO, Touch ID, téléphone —
+  extension WebAuthn PRF) peut s'y ajouter : sa sortie PRF, dérivée par
+  HKDF-SHA256 avec un sel propre à la serrure, emballe la MK de la même façon.
+  Ajouter ou retirer une serrure ne rechiffre rien ; la dernière phrase ne se
+  retire pas.
 - **Compartiments** : `box` (système) et `p-<user_uuid>` (une personne —
   jamais un compte système). Clé dérivée de la MK (HKDF-SHA256).
 - **Secrets** : AES-256-GCM, liés à leur compartiment, leur nom et leur
@@ -35,13 +38,24 @@ n'est **jamais monté dans l'agrégateur**. Deux sockets :
 
 | Socket | Qui | Ce qu'elle permet |
 |---|---|---|
-| `/run/secubox/vault.sock` | administrateurs réels, via l'agrégateur | état, ouvrir (LAN), sceller, **noms** des secrets, poser, retirer, journal — jamais une valeur |
+| `/run/secubox/vault.sock` | administrateurs réels, via l'agrégateur | état, ouvrir, sceller, **noms** des secrets, poser, retirer, journal — jamais une valeur |
 | `/run/secubox-coffre/racine.sock` (répertoire 0700) | root, par `coffrectl` | tout, dont initialiser, **lire** une valeur, serrures, codes |
 
 API publique : `GET /api/v1/vault/etat`, `POST /ouvrir`, `POST /sceller`,
 `GET /secrets`, `POST /secrets`, `DELETE /secrets/{compartiment}/{nom}`,
-`GET /journal`. L'ouverture depuis l'extérieur du LAN (TOTP frais, alerte)
-est la phase P4.
+`GET /journal`, et pour les clés d'appareil `GET /serrures/appareil`,
+`POST /serrures/appareil/preparer` (un sel neuf), `POST /serrures/appareil`,
+`DELETE /serrures/appareil/{id}`.
+
+**Hors du LAN**, `POST /ouvrir` exige un code TOTP du compte de la session
+(champ `otp`). C'est l'**agrégateur** qui le vérifie — lui seul tient le
+plancher anti-rejeu — puis pose `X-SecuBox-Second-Facteur: verifie` ; celui
+d'un client est toujours retiré. Cinq échecs par heure, puis 429. Chaque
+ouverture distante envoie une alerte à la boîte de la box (relais du
+conteneur `mail`, seule adresse IP que l'unité peut joindre).
+
+Le Hall montre une carte **Coffre** : l'état seul, relayé par l'agrégateur aux
+administrateurs réels ; agrandie, elle ouvre la console `/vault/`.
 
 ## coffrectl (root)
 
@@ -57,6 +71,18 @@ coffrectl retirer COMPARTIMENT NOM
 coffrectl serrure-ajouter [LIBELLE] | serrure-retirer ID | codes
 coffrectl compartiment ID [LIBELLE]
 coffrectl journal [N] [--verifier]
+
+# P2 — clé qui signe le dépôt apt
+coffrectl depot etat [--porcelaine]     # protégée ? en cache ?
+coffrectl depot proteger                # phrase aléatoire, rangée au Coffre AVANT d'être posée
+coffrectl depot session [--minutes N]   # la donne à gpg-agent, N ≤ 60, oubli planifié
+coffrectl depot fin
+
+# P3 — niveau 0 : secrets de démarrage par systemd-creds
+coffrectl niveau0 etat
+coffrectl niveau0 migrer NOM CHEMIN UNITE.service   # chiffre + drop-in LoadCredentialEncrypted
+coffrectl niveau0 retirer-clair NOM                 # seulement si l'unité tourne AVEC la crédence
+coffrectl niveau0 lire NOM
 ```
 
 Phrases, codes et valeurs ne passent jamais par la ligne de commande : invite

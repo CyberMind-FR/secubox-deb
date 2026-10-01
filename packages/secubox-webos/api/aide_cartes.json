@@ -22,6 +22,15 @@
       ]
     },
     {
+      "id": "coffre", "ic": "🔐", "nom": "Coffre", "service": "vault", "acces": "session",
+      "role": "L'état du Coffre de la box (secubox-vault 2.0) : scellé ou ouvert, combien de secrets et de serrures, journal intègre ou non. Lisible par les seuls administrateurs ; la carte ne montre jamais une valeur.",
+      "usage": ["Agrandie, la carte ouvre la console du Coffre : ouvrir (phrase, code de secours ou clé d'appareil), sceller, enrôler une clé FIDO.", "Hors du LAN, l'ouverture demande un code TOTP et la box envoie une alerte par courriel."],
+      "metriques": [
+        {"libelle": "secrets", "url": "/api/v1/vault/etat", "somme": "compartiments[].secrets", "session": true},
+        {"libelle": "serrures", "url": "/api/v1/vault/etat", "compte": "serrures", "session": true}
+      ]
+    },
+    {
       "id": "contenu", "ic": "📦", "nom": "Contenu", "service": "droplet", "acces": "public",
       "role": "Carte de groupe des services de contenu : Dépôt (paquets apt de la box), YTSaS (médias rapatriés sans pub ni Google) et Torrent, chacun avec son état en direct.",
       "usage": ["Chaque tranche est la vraie carte du service ; la pastille ouvre le service de la tranche."],

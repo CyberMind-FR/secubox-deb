@@ -16,7 +16,7 @@ modules = ["devwatch", "depot", "contenu", "cloud", "nextcloud", "nextcloud-supe
 [espaces.securite]
 nom = "Sécurité"
 guide = "Actor"
-modules = ["securite", "acteurs"]
+modules = ["securite", "acteurs", "coffre"]
 
 [espaces.media]
 nom = "Média"

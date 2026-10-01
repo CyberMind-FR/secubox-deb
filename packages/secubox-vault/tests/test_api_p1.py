@@ -62,20 +62,58 @@ def test_cycle_complet_et_aucune_valeur_cote_public(clients):
     assert j["entrees"][-1]["details"]["origine"] == "lan"
 
 
-def test_hors_lan_pas_avant_p4(clients, monkeypatch):
-    """L'ouverture distante (TOTP frais, alerte) est la phase P4 : en P1, hors LAN
-    ou sous politique « second facteur obligatoire », la face publique refuse."""
+def test_hors_lan_second_facteur_par_l_agregateur(clients, monkeypatch):
+    """P4 : hors LAN, l'ouverture exige le TOTP — vérifié par l'agrégateur, qui
+    le signale par X-SecuBox-Second-Facteur. Chaque ouverture distante alerte."""
     pub, rac = clients
+    alertes = []
+    from secubox_core import courriel
+    monkeypatch.setattr(courriel, "adresse_de_la_box", lambda: "gk2@secubox.in")
+    monkeypatch.setattr(courriel, "envoie", lambda dest, sujet, corps: alertes.append((dest, sujet)) or {"ok": True})
     rac.post("/initialiser", json={"phrase": PHRASE})
     pub.post("/sceller")
     r = pub.post("/ouvrir", json={"secret": PHRASE}, headers=WAN)
-    assert r.status_code == 403 and "P4" in r.json()["detail"]
+    assert r.status_code == 401 and "second facteur" in r.json()["detail"]
+    r = pub.post("/ouvrir", json={"secret": PHRASE}, headers={**WAN, "X-SecuBox-Second-Facteur": "verifie"})
+    assert r.status_code == 200 and r.json()["ouvert"]
+    import time as _t
+    for _ in range(50):
+        if alertes:
+            break
+        _t.sleep(0.02)
+    assert alertes == [("gk2@secubox.in", "[SecuBox] Coffre ouvert à distance")]
+    entrees = [e for e in pub.get("/journal").json()["entrees"] if e["evt"] == "ouverture"]
+    assert entrees[-1]["details"]["origine"] == "distante"
+    # LAN sous politique « obligatoire » : même exigence.
+    pub.post("/sceller")
     monkeypatch.setattr(second_facteur, "otp_lan", lambda: "obligatoire")
-    assert pub.post("/ouvrir", json={"secret": PHRASE}, headers=LAN).status_code == 403
-    assert not pub.get("/etat").json()["ouvert"]
-    assert pub.get("/journal").json()["entrees"][-1]["details"]["motif"] == "second_facteur"
-    # Root, en console, ouvre toujours.
-    assert rac.post("/ouvrir", json={"secret": PHRASE}).json()["ouvert"] is True
+    assert pub.post("/ouvrir", json={"secret": PHRASE}, headers=LAN).status_code == 401
+    assert pub.post("/ouvrir", json={"secret": PHRASE},
+                    headers={**LAN, "X-SecuBox-Second-Facteur": "verifie"}).status_code == 200
+
+
+def test_cle_d_appareil_webauthn_prf(clients):
+    """P4 : une clé d'appareil (sortie PRF) ouvre le Coffre sans phrase."""
+    import base64, os
+    b64u = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")
+    pub, rac = clients
+    rac.post("/initialiser", json={"phrase": PHRASE})
+    sel = pub.post("/serrures/appareil/preparer").json()["sel"]
+    prf = os.urandom(32)
+    cred = b64u(os.urandom(32))
+    r = pub.post("/serrures/appareil", json={"cred_id": cred, "sel": sel, "prf": b64u(prf), "libelle": "clé FIDO"})
+    assert r.status_code == 200
+    ident = r.json()["id"]
+    assert pub.get("/serrures/appareil").json()["appareils"] == [{"id": ident, "cred_id": cred, "sel": sel, "libelle": "clé FIDO"}]
+    assert pub.post("/serrures/appareil", json={"cred_id": cred, "sel": sel, "prf": b64u(prf)}).status_code == 400
+    pub.post("/sceller")
+    assert pub.post("/ouvrir", json={"genre": "appareil", "cred_id": cred, "secret": b64u(os.urandom(32))},
+                    headers=LAN).status_code == 403
+    r = pub.post("/ouvrir", json={"genre": "appareil", "cred_id": cred, "secret": b64u(prf)}, headers=LAN)
+    assert r.status_code == 200 and r.json()["ouvert"]
+    assert pub.delete(f"/serrures/appareil/{ident}").json() == {"retiree": True}
+    phrase_id = next(x["id"] for x in pub.get("/etat").json()["serrures"] if x["genre"] == "phrase")
+    assert pub.delete(f"/serrures/appareil/{phrase_id}").status_code == 404   # jamais une phrase
 
 
 def test_cinq_echecs_puis_429(clients):

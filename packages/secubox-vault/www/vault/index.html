@@ -52,17 +52,27 @@
         <label for="secret">Phrase ou code de secours</label>
         <input id="secret" type="password" autocomplete="off" required>
         <label><input id="secours" type="checkbox" style="width:auto"> c'est un code de secours (usage unique)</label>
+        <label for="otp">Code TOTP — exigé hors du LAN</label>
+        <input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
         <button type="submit">Ouvrir</button>
+        <button type="button" id="b-appareil" hidden>🔑 Ouvrir avec une clé d'appareil</button>
       </form>
       <button id="b-sceller" class="danger" hidden>Sceller maintenant</button>
       <p id="m-etat" class="msg"></p>
       <p class="note" id="note-init" hidden>Le Coffre n'est pas initialisé : en SSH, <span class="mono">coffrectl initialiser</span>.
-        L'ouverture depuis l'extérieur du LAN viendra avec la phase P4 ; d'ici là, <span class="mono">coffrectl ouvrir</span>.</p>
+        Hors du LAN, l'ouverture demande aussi un code TOTP, et la boîte de la box reçoit une alerte.</p>
     </section>
     <section class="carte">
       <h2>Serrures et compartiments</h2>
       <table><tbody id="serrures"></tbody></table>
       <table style="margin-top:.8rem"><tbody id="compartiments"></tbody></table>
+      <h2 style="margin-top:1rem">Clés d'appareil</h2>
+      <p class="note">Une clé FIDO, Touch ID ou un téléphone (extension WebAuthn PRF) ouvre le Coffre sans phrase. Elle reste liée au nom de ce site : enrôler et ouvrir depuis le même nom (pas depuis une adresse IP).</p>
+      <table><tbody id="appareils"></tbody></table>
+      <label for="libelle-app">Nom de la clé</label>
+      <input id="libelle-app" maxlength="80" placeholder="ex. clé FIDO bureau">
+      <button id="b-ajout-app" hidden>➕ Ajouter cette clé d'appareil</button>
+      <p id="m-app" class="msg"></p>
     </section>
     <section class="carte">
       <h2>Secrets</h2>
@@ -94,6 +104,60 @@
     if (!r.ok) throw new Error(corps.detail || ('HTTP ' + r.status));
     return corps;
   }
+  const rnd = (n) => crypto.getRandomValues(new Uint8Array(n));
+  const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const b64uDec = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+  let APPAREILS = [];
+  // WebAuthn refuse une adresse IP comme identifiant de site, et une clé
+  // d'appareil reste liée au NOM sous lequel elle a été enrôlée.
+  function siteWebAuthn() {
+    const h = location.hostname;
+    if (/^[0-9.]+$/.test(h) || h.includes(':'))
+      throw new Error("les clés d'appareil exigent un nom de site (ex. admin.<box>), pas une adresse IP");
+    return h;
+  }
+
+  async function ajouterAppareil() {
+    if (!window.PublicKeyCredential) throw new Error('WebAuthn indisponible dans ce navigateur');
+    const site = siteWebAuthn();
+    const { sel } = await api('/serrures/appareil/preparer', { method: 'POST' });
+    const selB = b64uDec(sel);
+    const cred = await navigator.credentials.create({ publicKey: {
+      rp: { name: 'SecuBox Coffre', id: site },
+      user: { id: rnd(16), name: 'coffre@' + site, displayName: 'Coffre SecuBox' },
+      challenge: rnd(32),
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { userVerification: 'required', residentKey: 'discouraged' },
+      extensions: { prf: { eval: { first: selB } } } } });
+    const ext = cred.getClientExtensionResults().prf || {};
+    if (ext.enabled === false) throw new Error("cette clé ne connaît pas l'extension PRF");
+    let sortie = ext.results && ext.results.first;
+    if (!sortie) {              // certaines clés ne rendent la sortie PRF qu'à l'assertion
+      const a = await navigator.credentials.get({ publicKey: { challenge: rnd(32), rpId: site,
+        allowCredentials: [{ type: 'public-key', id: cred.rawId }], userVerification: 'required',
+        extensions: { prf: { eval: { first: selB } } } } });
+      sortie = ((a.getClientExtensionResults().prf || {}).results || {}).first;
+    }
+    if (!sortie) throw new Error("la clé n'a rendu aucune sortie PRF");
+    await api('/serrures/appareil', { method: 'POST', body: JSON.stringify({
+      cred_id: b64u(cred.rawId), sel, prf: b64u(sortie), libelle: $('libelle-app').value || ("clé d'appareil · " + site) }) });
+  }
+
+  async function ouvrirAppareil() {
+    if (!APPAREILS.length) throw new Error("aucune clé d'appareil enrôlée");
+    const site = siteWebAuthn();
+    const evalParCle = {};
+    APPAREILS.forEach(x => { evalParCle[x.cred_id] = { first: b64uDec(x.sel) }; });
+    const a = await navigator.credentials.get({ publicKey: { challenge: rnd(32), rpId: site,
+      allowCredentials: APPAREILS.map(x => ({ type: 'public-key', id: b64uDec(x.cred_id) })),
+      userVerification: 'required', extensions: { prf: { evalByCredential: evalParCle } } } });
+    const sortie = ((a.getClientExtensionResults().prf || {}).results || {}).first;
+    if (!sortie) throw new Error("la clé n'a rendu aucune sortie PRF");
+    const corps = { genre: 'appareil', cred_id: b64u(a.rawId), secret: b64u(sortie) };
+    if ($('otp').value) corps.otp = $('otp').value;
+    await api('/ouvrir', { method: 'POST', body: JSON.stringify(corps) });
+  }
+
   function msg(id, texte, ok) { const m = $(id); m.textContent = texte || ''; m.className = 'msg ' + (texte ? (ok ? 'ok' : 'err') : ''); }
 
   function rendEtat(e) {
@@ -106,7 +170,8 @@
     $('b-sceller').hidden = !ouvert;
     $('note-init').hidden = !!e.initialise && ouvert;
     $('serrures').innerHTML = (e.serrures || []).map(s =>
-      `<tr><td>${s.genre === 'phrase' ? '🔑' : '🧾'} ${txt(s.libelle)}</td><td class="mono">${txt(s.id)}</td></tr>`).join('');
+      `<tr><td>${s.genre === 'phrase' ? '🔑' : s.genre === 'appareil' ? '📱' : '🧾'} ${txt(s.libelle)}</td><td class="mono">${txt(s.id)}</td></tr>`).join('');
+    $('b-ajout-app').hidden = !ouvert;
     $('compartiments').innerHTML = (e.compartiments || []).map(c =>
       `<tr><td>🗄 ${txt(c.id)}</td><td>${txt(c.libelle)}</td><td>${c.secrets} secret(s)</td></tr>`).join('');
     const j = e.journal || {};
@@ -119,6 +184,11 @@
     let e;
     try { e = await api('/etat'); } catch (err) { msg('m-etat', err.message); return; }
     const ouvert = rendEtat(e);
+    try { APPAREILS = (await api('/serrures/appareil')).appareils || []; } catch (err) { APPAREILS = []; }
+    $('appareils').innerHTML = APPAREILS.length ? APPAREILS.map(x =>
+      `<tr><td>📱 ${txt(x.libelle)}</td><td><button class="danger" data-app="${txt(x.id)}">retirer</button></td></tr>`).join('')
+      : '<tr><td class="note">Aucune.</td></tr>';
+    $('b-appareil').hidden = ouvert || !APPAREILS.length;
     if (ouvert) {
       try {
         const s = (await api('/secrets')).secrets;
@@ -140,10 +210,30 @@
   $('f-ouvrir').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     try {
-      await api('/ouvrir', { method: 'POST', body: JSON.stringify({ secret: $('secret').value, genre: $('secours').checked ? 'secours' : 'phrase' }) });
+      const corps = { secret: $('secret').value, genre: $('secours').checked ? 'secours' : 'phrase' };
+      if ($('otp').value) corps.otp = $('otp').value;
+      await api('/ouvrir', { method: 'POST', body: JSON.stringify(corps) });
       msg('m-etat', 'Coffre ouvert.', true);
     } catch (err) { msg('m-etat', err.message); }
-    $('secret').value = '';
+    $('secret').value = ''; $('otp').value = '';
+    charge();
+  });
+  $('b-appareil').addEventListener('click', async () => {
+    try { await ouvrirAppareil(); msg('m-etat', 'Coffre ouvert par la clé d\'appareil.', true); }
+    catch (err) { msg('m-etat', err.message); }
+    $('otp').value = '';
+    charge();
+  });
+  $('b-ajout-app').addEventListener('click', async () => {
+    try { await ajouterAppareil(); msg('m-app', 'Clé d\'appareil ajoutée.', true); $('libelle-app').value = ''; }
+    catch (err) { msg('m-app', err.message); }
+    charge();
+  });
+  $('appareils').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-app]');
+    if (!b) return;
+    try { await api('/serrures/appareil/' + encodeURIComponent(b.dataset.app), { method: 'DELETE' }); }
+    catch (err) { msg('m-app', err.message); }
     charge();
   });
   $('b-sceller').addEventListener('click', async () => {
