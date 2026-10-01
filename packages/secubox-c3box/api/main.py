@@ -36,10 +36,17 @@ HISTORY_FILE = DATA_DIR / "history.json"
 # Service catalog with metadata
 SERVICES = [
     {"name": "wireguard", "category": "security", "icon": "🔒", "desc": "VPN Server", "port": 51820, "critical": False},
-    {"name": "waf", "category": "security", "icon": "🔥", "desc": "Web Application Firewall", "port": None, "critical": True},
+    # `unites` : les unités qui FONT le service, quand ce n'est pas
+    # secubox-<name> (#1835). Le WAF vivant est sbxwaf (secubox-waf-ng) ;
+    # l'équilibreur est haproxy.service — secubox-haproxy n'est que son API ;
+    # le DNS est unbound (ou dnsmasq), secubox-dns est une unité vestige.
+    # Surveiller les vestiges affichait « critique » sur une box saine.
+    {"name": "waf", "category": "security", "icon": "🔥", "desc": "Web Application Firewall", "port": None, "critical": True,
+     "unites": ["secubox-waf-ng", "secubox-waf"]},
     {"name": "nac", "category": "security", "icon": "👁️", "desc": "Network Access Control", "port": None, "critical": False},
     {"name": "auth", "category": "security", "icon": "🎫", "desc": "OAuth2 & Captive Portal", "port": None, "critical": False},
-    {"name": "haproxy", "category": "network", "icon": "⚡", "desc": "Load Balancer", "port": 443, "critical": True},
+    {"name": "haproxy", "category": "network", "icon": "⚡", "desc": "Load Balancer", "port": 443, "critical": True,
+     "unites": ["haproxy"]},
     {"name": "vhost", "category": "network", "icon": "🌐", "desc": "Virtual Hosts", "port": None, "critical": False},
     {"name": "netmodes", "category": "network", "icon": "🔀", "desc": "Network Modes", "port": None, "critical": False},
     {"name": "dpi", "category": "network", "icon": "🔍", "desc": "Deep Packet Inspection", "port": None, "critical": False},
@@ -49,7 +56,8 @@ SERVICES = [
     {"name": "streamforge", "category": "apps", "icon": "🔨", "desc": "App Manager", "port": None, "critical": False},
     {"name": "metablogizer", "category": "apps", "icon": "📝", "desc": "Static Sites", "port": None, "critical": False},
     {"name": "publish", "category": "apps", "icon": "🚀", "desc": "Publishing Hub", "port": None, "critical": False},
-    {"name": "dns", "category": "comm", "icon": "🌍", "desc": "DNS Server", "port": 53, "critical": True},
+    {"name": "dns", "category": "comm", "icon": "🌍", "desc": "DNS Server", "port": 53, "critical": True,
+     "unites": ["unbound", "dnsmasq"]},
     {"name": "mail", "category": "comm", "icon": "📧", "desc": "Email Server", "port": 25, "critical": False},
     {"name": "webmail", "category": "comm", "icon": "💌", "desc": "Roundcube/SOGo", "port": None, "critical": False},
     {"name": "users", "category": "comm", "icon": "👥", "desc": "Identity Manager", "port": None, "critical": False},
@@ -123,28 +131,44 @@ _PROPRIETES = "Id,ActiveState,ActiveEnterTimestamp,MemoryCurrent"
 _releve: Dict[str, Any] = {"t": 0.0, "etats": {}}
 
 
+def _unites(nom: str) -> List[str]:
+    """Les unités systemd qui font ce service (secubox-<nom> par défaut)."""
+    svc = next((s for s in SERVICES if s["name"] == nom), None)
+    return list((svc or {}).get("unites") or [f"secubox-{nom}"])
+
+
 def _etats_systemd(noms: List[str]) -> Dict[str, Dict[str, str]]:
-    """`{nom: {propriété: valeur}}` pour ces services, en un appel. Vide si échec."""
+    """`{nom: {propriété: valeur}}` pour ces services, en un appel. Vide si échec.
+
+    Un service fait de plusieurs unités prend l'état de la première ACTIVE,
+    sinon celui de la première listée.
+    """
+    par_service = {n: _unites(n) for n in noms}
+    toutes = list(dict.fromkeys(u for us in par_service.values() for u in us))
     try:
         result = subprocess.run(
             ["systemctl", "show", "-p", _PROPRIETES, "--",
-             *[f"secubox-{n}.service" for n in noms]],
+             *[f"{u}.service" for u in toutes]],
             capture_output=True, text=True, timeout=10
         )
         sortie = result.stdout
     except Exception:
         return {}
-    etats: Dict[str, Dict[str, str]] = {}
+    par_unite: Dict[str, Dict[str, str]] = {}
     bloc: Dict[str, str] = {}
     for ligne in sortie.splitlines() + [""]:
         if not ligne.strip():
-            unite = bloc.get("Id", "")
-            if unite.startswith("secubox-"):
-                etats[unite.removeprefix("secubox-").removesuffix(".service")] = bloc
+            if bloc.get("Id"):
+                par_unite[bloc["Id"].removesuffix(".service")] = bloc
             bloc = {}
             continue
         cle, _, valeur = ligne.partition("=")
         bloc[cle] = valeur
+    etats: Dict[str, Dict[str, str]] = {}
+    for n, us in par_service.items():
+        blocs = [par_unite[u] for u in us if u in par_unite]
+        if blocs:
+            etats[n] = next((b for b in blocs if b.get("ActiveState") == "active"), blocs[0])
     return etats
 
 

@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-metanews/internal/cluster"
@@ -105,6 +106,10 @@ func (p *Pipe) Sonder(now int64) (int, error) {
 
 // Regrouper affecte chaque article non regroupé au meilleur sujet récent
 // (score ≥ seuil) ou en ouvre un nouveau, puis met à jour le sujet.
+// RetenusMax : sujets candidats essayés, du meilleur score au moins bon, avant
+// d'ouvrir un sujet neuf (#1835).
+const RetenusMax = 5
+
 func (p *Pipe) Regrouper(now int64) (int, error) {
 	arts, err := p.st.ArticlesSansSujet(500)
 	if err != nil {
@@ -137,26 +142,72 @@ func (p *Pipe) Regrouper(now int64) (int, error) {
 	// Les sujets créés pendant le passage passent AVANT les autres, du plus
 	// récent au plus ancien — l'ordre où une relecture les aurait rendus.
 	var nouveaux []candidat
+	// LE RATTACHEMENT EXIGE UN ARTICLE FRÈRE (#1835). Le score contre le SUJET
+	// (titre + union des entités de tous ses articles) est plus facile à
+	// atteindre que contre l'un de ses articles : Reclasser détachait au
+	// démarrage ce qu'aucun article du sujet ne reconnaissait, et Regrouper le
+	// rattachait aussitôt au même sujet par l'union — 185, 29, 162 articles
+	// détachés puis remis à chaque redémarrage de gk2. Un sujet retenu doit
+	// donc aussi compter un article qui ressemble à celui-ci : la condition
+	// exacte que Reclasser vérifie. Sinon, le suivant (au plus RETENUS_MAX),
+	// sinon un sujet neuf. Les Formes des articles d'un sujet sont lues une
+	// fois par passage.
+	membres := map[string][]cluster.Forme{}
+	confirme := func(fa cluster.Forme, id string) bool {
+		fs, ok := membres[id]
+		if !ok {
+			arts, err := p.st.ArticlesDuSujet(id)
+			if err != nil {
+				return false
+			}
+			for _, b := range arts {
+				fs = append(fs, cluster.Prepare(b.Title, b.Entities, b.PublishedAt))
+			}
+			membres[id] = fs
+		}
+		for _, fb := range fs {
+			if cluster.ScoreFormes(fa, fb) >= cluster.Seuil {
+				return true
+			}
+		}
+		return false
+	}
+	type retenu struct {
+		id string
+		sc float64
+	}
 	touches := map[string]bool{}
 	for _, a := range arts {
 		fa := cluster.Prepare(a.Title, a.Entities, a.PublishedAt)
-		meilleur := ""
-		var meilleurScore float64
-		compare := func(c candidat) {
-			if sc := cluster.ScoreFormes(fa, c.forme); sc > meilleurScore {
-				meilleurScore, meilleur = sc, c.id
+		var retenus []retenu
+		garde := func(c candidat) {
+			if sc := cluster.ScoreFormes(fa, c.forme); sc >= cluster.Seuil {
+				retenus = append(retenus, retenu{c.id, sc})
 			}
 		}
 		for i := len(nouveaux) - 1; i >= 0; i-- {
-			compare(nouveaux[i])
+			garde(nouveaux[i])
 		}
 		for _, c := range candidats {
-			compare(c)
+			garde(c)
 		}
-		if meilleur != "" && meilleurScore >= cluster.Seuil {
+		// Stable : à score égal, le premier rencontré l'emporte, comme avant.
+		sort.SliceStable(retenus, func(i, j int) bool { return retenus[i].sc > retenus[j].sc })
+		meilleur := ""
+		for k, r := range retenus {
+			if k >= RetenusMax {
+				break
+			}
+			if confirme(fa, r.id) {
+				meilleur = r.id
+				break
+			}
+		}
+		if meilleur != "" {
 			_ = p.st.SetArticleSujet(a.ID, meilleur)
 			_ = p.st.AjouterEvenement(meilleur, now, "source", a.URL)
 			touches[meilleur] = true
+			membres[meilleur] = append(membres[meilleur], fa)
 		} else {
 			id := nouvelID(now)
 			t := store.Topic{
@@ -174,6 +225,7 @@ func (p *Pipe) Regrouper(now int64) (int, error) {
 			_ = p.st.AjouterEvenement(id, now, "detected", a.Title)
 			touches[id] = true
 			nouveaux = append(nouveaux, candidat{id, cluster.Prepare(t.Title, t.Entities, t.UpdatedAt)})
+			membres[id] = []cluster.Forme{fa}
 		}
 	}
 	for id := range touches {
