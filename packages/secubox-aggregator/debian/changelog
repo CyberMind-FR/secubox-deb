@@ -1,3 +1,9 @@
+secubox-aggregator (0.3.9-1~bookworm1) bookworm; urgency=medium
+
+  * vault/compte/* n'est jamais relayé au web (#1855) ; le relais marque ce qu'il porte au Coffre (X-SecuBox-Relais), la marque d'un client est retirée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 23:30:00 +0200
+
 secubox-aggregator (0.3.8-1~bookworm1) bookworm; urgency=medium
 
   * Coffre P5 (#1367) : /api/v1/vault/moi… relayé à toute PERSONNE (require_personne) ; le reste du Coffre reste aux administrateurs réels.

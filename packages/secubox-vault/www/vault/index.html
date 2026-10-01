@@ -59,8 +59,13 @@
       </form>
       <button id="b-sceller" class="danger" hidden>Sceller maintenant</button>
       <p id="m-etat" class="msg"></p>
-      <p class="note" id="note-init" hidden>Le Coffre n'est pas initialisé : en SSH, <span class="mono">coffrectl initialiser</span>.
-        Hors du LAN, l'ouverture demande aussi un code TOTP, et la boîte de la box reçoit une alerte.</p>
+      <p class="note" id="note-init" hidden>Le Coffre n'est pas encore né : il le sera à la prochaine
+        connexion d'un administrateur, dont le mot de passe de connexion deviendra la serrure (aucune phrase à
+        part). Pensez ensuite au recouvrement : <span class="mono">coffrectl recouvrement preparer gk3 papier</span>
+        ou <span class="mono">coffrectl codes</span>.</p>
+      <p class="note">Le Coffre s'ouvre à la connexion d'un administrateur — après le second facteur hors du
+        LAN, qui prévient alors la boîte de la box. Le formulaire ci-dessous reste pour une phrase, un code de
+        secours ou une clé d'appareil.</p>
     </section>
     <section class="carte">
       <h2>Serrures et compartiments</h2>
@@ -168,7 +173,7 @@
     $('detail').textContent = ouvert && e.reste_s != null ? `rescellement dans ${Math.ceil(e.reste_s / 60)} min` : '';
     $('f-ouvrir').hidden = !e.initialise || ouvert;
     $('b-sceller').hidden = !ouvert;
-    $('note-init').hidden = !!e.initialise && ouvert;
+    $('note-init').hidden = !!e.initialise;
     $('serrures').innerHTML = (e.serrures || []).map(s =>
       `<tr><td>${s.genre === 'phrase' ? '🔑' : s.genre === 'appareil' ? '📱' : '🧾'} ${txt(s.libelle)}</td><td class="mono">${txt(s.id)}</td></tr>`).join('');
     $('b-ajout-app').hidden = !ouvert;

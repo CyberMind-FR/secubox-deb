@@ -18,6 +18,11 @@ DEUX APPLICATIONS, DEUX SOCKETS, UN SEUL COFFRE.
   lui seul peut tenir le plancher anti-rejeu — qui le signale par l'en-tête
   X-SecuBox-Second-Facteur (P4) ; chaque ouverture distante envoie une alerte
   courriel. Cinq échecs par heure et par identité, puis 429.
+- `/compte/…` sur la même socket (#1855) : la CONNEXION d'un administrateur
+  rejoue son mot de passe — préparer au mot de passe vérifié, confirmer au
+  second facteur réussi. Sans jeton (c'est la connexion elle-même) : le
+  Coffre revérifie le mot de passe dans users.json et le rôle d'admin, et
+  refuse tout ce qui arrive par le relais web de l'agrégateur.
 - `racine` (/run/secubox-coffre/racine.sock, répertoire 0700) : celle de
   `coffrectl`, pour root. Initialisation, lecture d'une valeur, serrures,
   codes de secours. Le système de fichiers est la garde.
@@ -119,6 +124,22 @@ class Detenteurs(BaseModel):
 
 class Parts(BaseModel):
     parts: list[str] = Field(min_length=2, max_length=5)
+
+
+class Compte(BaseModel):
+    utilisateur: str = Field(min_length=1, max_length=64)
+    mot_de_passe: str = Field(min_length=1, max_length=1024)
+
+
+class Ticket(BaseModel):
+    ticket: str = Field(min_length=20, max_length=128)
+    distante: bool = False      # connexion hors LAN : la boîte de la box est prévenue
+
+
+class Changement(BaseModel):
+    utilisateur: str = Field(min_length=1, max_length=64)
+    ancien: str = Field(min_length=1, max_length=1024)
+    nouveau: str = Field(min_length=1, max_length=1024)
 
 
 class Pose(BaseModel):
@@ -371,6 +392,55 @@ def moi_retirer(nom: str, a: PersoAcces, user=Depends(require_personne)):
 def moi_openpgp(p: PersoOpenPGP, user=Depends(require_personne)):
     """Une clé OpenPGP pour la personne, née ici et rangée dans son coffre."""
     return _perso(user, COFFRE.personne_openpgp_creer, _ouv(p.ouverture), p.nom, p.courriel)
+
+
+# ── la connexion de l'administrateur ouvre le Coffre (#1855) ───────────────────
+ENTETE_RELAIS = "X-SecuBox-Relais"          # posé par l'agrégateur sur son relais web
+
+
+def _hors_relais(request: Request) -> None:
+    """Ces routes ne servent que secubox-auth, par la socket : jamais le web."""
+    if request.headers.get(ENTETE_RELAIS):
+        raise HTTPException(404)
+
+
+def _admin_au_mot_de_passe(utilisateur: str, mot_de_passe: str) -> bool:
+    from secubox_core import second_facteur, user_store  # noqa: PLC0415
+    return second_facteur.compte_admin_actif(utilisateur) and user_store.verify_password(utilisateur, mot_de_passe)
+
+
+@public.post("/compte/preparer")
+def compte_preparer(c: Compte, request: Request):
+    _hors_relais(request)
+    cle = "compte:" + c.utilisateur
+    _limite(cle)
+    if not _admin_au_mot_de_passe(c.utilisateur, c.mot_de_passe):
+        _echecs[cle].append(time.monotonic())
+        COFFRE.journal.ajouter("compte_refuse", qui=c.utilisateur)
+        raise HTTPException(403, "refusé")
+    return {"ticket": _appel(COFFRE.compte_preparer, c.utilisateur, c.mot_de_passe)}
+
+
+@public.post("/compte/confirmer")
+def compte_confirmer(t: Ticket, request: Request):
+    _hors_relais(request)
+    etait_ouvert = COFFRE.ouvert
+    ok = COFFRE.compte_confirmer(t.ticket, origine="connexion distante" if t.distante else "connexion lan")
+    if ok and t.distante and not etait_ouvert:
+        threading.Thread(target=_alerte_distante, args=("connexion",), daemon=True).start()
+    return {"ouvert": ok}
+
+
+@public.post("/compte/changer")
+def compte_changer(c: Changement, request: Request):
+    """Appelé APRÈS le changement : le nouveau mot de passe est déjà le bon."""
+    _hors_relais(request)
+    cle = "compte:" + c.utilisateur
+    _limite(cle)
+    if not _admin_au_mot_de_passe(c.utilisateur, c.nouveau):
+        _echecs[cle].append(time.monotonic())
+        raise HTTPException(403, "refusé")
+    return {"renouvelee": COFFRE.compte_changer(c.utilisateur, c.ancien, c.nouveau)}
 
 
 # ── racine : coffrectl, pour root ─────────────────────────────────────────────

@@ -10,7 +10,7 @@ Les phrases, codes et valeurs ne passent JAMAIS par la ligne de commande
 entrée standard.
 
   coffrectl etat
-  coffrectl initialiser                    # phrase, puis 5 codes de secours (une seule fois)
+  coffrectl initialiser                    # facultatif : la connexion d'un admin crée le Coffre (#1855)
   coffrectl ouvrir [--secours]
   coffrectl sceller
   coffrectl secrets [COMPARTIMENT]
@@ -92,7 +92,8 @@ def saisie(invite: str, confirmer: bool = False) -> str:
 
 def affiche_etat(e: dict) -> None:
     if not e.get("initialise"):
-        print("Coffre : non initialisé — coffrectl initialiser")
+        print("Coffre : non initialisé — il naîtra à la prochaine connexion d'un administrateur"
+              " (ou, pour une phrase à part : coffrectl initialiser)")
         return
     print(f"Coffre : {'OUVERT' if e.get('ouvert') else 'scellé'}"
           + (f" (rescellement dans {e['reste_s']} s)" if e.get("ouvert") and "reste_s" in e else ""))

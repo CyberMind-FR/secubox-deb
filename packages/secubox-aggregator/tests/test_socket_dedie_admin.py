@@ -55,6 +55,7 @@ class _FauxModule(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
                     "chemin": self.path,
                     "vue": self.headers.get_all("X-Sbx-Vue") or [],
                     "second_facteur": self.headers.get_all("X-SecuBox-Second-Facteur") or [],
+                    "relais": self.headers.get_all("X-SecuBox-Relais") or [],
                     "corps": corps.decode("utf-8", "replace"),
                 })
                 sortie = json.dumps({"ok": True, "chemin": self.path}).encode()
@@ -358,3 +359,24 @@ def test_coffre_moi_sans_session_401_et_invite_403(banc, monkeypatch):
     monkeypatch.setattr(auth.user_store, "is_enabled", lambda s: True)
     r = client.get("/api/v1/vault/moi", headers={"Authorization": f"Bearer {jeton('invite')}"})
     assert r.status_code == 403 and modules["vault"].recues == []
+
+
+# ── La connexion ouvre le Coffre (#1855) : jamais par le relais web ───────────
+
+
+def test_coffre_compte_jamais_par_le_relais(banc):
+    client, modules, jeton, _ = banc
+    porteur = {"Authorization": f"Bearer {jeton(ADMIN)}"}
+    for chemin in ("compte/preparer", "compte/confirmer", "compte/changer", "compte"):
+        r = client.post(f"/api/v1/vault/{chemin}", json={"utilisateur": "gk2", "mot_de_passe": "x"}, headers=porteur)
+        assert r.status_code == 404, chemin
+    assert modules["vault"].recues == []
+
+
+def test_coffre_relais_marque_et_marque_du_client_remplacee(banc):
+    client, modules, jeton, _ = banc
+    h = {"Authorization": f"Bearer {jeton(ADMIN)}", "X-SecuBox-Relais": "forge"}
+    assert client.get("/api/v1/vault/etat", headers=h).status_code == 200
+    assert modules["vault"].recues[-1]["relais"] == ["agregateur"]     # la marque du relais, pas celle du client
+    client.get("/api/v1/demo/x", headers={"X-SecuBox-Relais": "forge"})
+    assert modules["demo"].recues[-1]["relais"] == []

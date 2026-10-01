@@ -1,3 +1,10 @@
+secubox-vault (2.0.13-1~bookworm1) bookworm; urgency=medium
+
+  * La connexion de l'administrateur ouvre le Coffre, sans phrase à part (#1855) : serrure « compte » (Argon2id du mot de passe de connexion), /compte/preparer (mot de passe et rôle revérifiés ici) puis /compte/confirmer au second facteur réussi ; la première connexion crée le Coffre ; /compte/changer réemballe ; un admin connecté Coffre ouvert reçoit sa serrure. Refus de tout ce qui vient du relais web. Schéma v5.
+  * Console et Mon coffre : textes de l'ouverture par la connexion.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 23:30:00 +0200
+
 secubox-vault (2.0.12-1~bookworm1) bookworm; urgency=medium
 
   * Mon coffre : dit, avant et après publication, si la clé publique est visible des seules box liées ou aussi du monde entier par WKD (#1852).

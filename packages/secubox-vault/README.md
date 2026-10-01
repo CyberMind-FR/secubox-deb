@@ -58,6 +58,20 @@ conteneur `mail`, seule adresse IP que l'unité peut joindre).
 Le Hall montre une carte **Coffre** : l'état seul, relayé par l'agrégateur aux
 administrateurs réels ; agrandie, elle ouvre la console `/vault/`.
 
+## La connexion de l'administrateur ouvre le Coffre (#1855)
+
+Pas de phrase à part : chaque administrateur réel a une serrure **compte**,
+l'Argon2id de son mot de passe de connexion. secubox-auth la rejoue en deux
+temps :
+1. **`POST /compte/preparer`**, au mot de passe vérifié. Le Coffre revérifie lui-même : users.json et rôle d'admin.
+2. **`POST /compte/confirmer`**, au second facteur réussi. Hors LAN, une alerte courriel part.
+
+Un ticket sert une fois, cinq minutes au plus. La première connexion d'un
+administrateur crée le Coffre. `POST /compte/changer` suit les changements de
+mot de passe. Ces routes ne passent jamais par le relais web de l'agrégateur.
+Cinq refus par heure et par compte, puis 429. Penser au recouvrement après la
+création : `coffrectl recouvrement preparer …` ou `coffrectl codes`.
+
 ## Mon coffre — le compartiment d'une personne (P5)
 
 Une personne SBX OS a **ses** serrures (phrase, clé d'appareil WebAuthn PRF),

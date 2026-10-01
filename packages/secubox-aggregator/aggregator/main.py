@@ -80,6 +80,10 @@ _ENTETE_VUE = "X-Sbx-Vue"
 # le Coffre tourne sous un utilisateur à lui. L'en-tête est une décision de la
 # ROUTE, posée après le code valide — celui d'un client est toujours retiré.
 _ENTETE_SECOND_FACTEUR = "X-SecuBox-Second-Facteur"
+# LA CONNEXION OUVRE LE COFFRE (#1855) : `vault/compte/*` ne sert que
+# secubox-auth, par la socket. Le relais web ne le sert JAMAIS, et marque ce
+# qu'il porte au Coffre pour qu'il puisse le refuser lui-même.
+_ENTETE_RELAIS = "X-SecuBox-Relais"
 _ECHECS_OTP_MAX = 5
 _ECHECS_OTP_FENETRE_S = 3600
 _echecs_otp: Dict[str, List[float]] = {}
@@ -387,6 +391,8 @@ def _build_app() -> FastAPI:
     async def _dedicated_socket_proxy(name: str, path: str, request: Request) -> Response:
         if name in _MOUNTED:
             return Response(status_code=404)
+        if name == "vault" and (path == "compte" or path.startswith("compte/")):
+            return Response(status_code=404)
         reserve = name in _SOCKETS_ADMIN
         if reserve:
             garde = _garde_administration(_chemin_personnel(name, path))
@@ -406,9 +412,11 @@ def _build_app() -> FastAPI:
         body = await request.body()
         fwd = {k: v for k, v in request.headers.items()
                if k.lower() not in ("host", "content-length", _ENTETE_VUE.lower(),
-                                    _ENTETE_SECOND_FACTEUR.lower())}
+                                    _ENTETE_SECOND_FACTEUR.lower(), _ENTETE_RELAIS.lower())}
         if reserve:
             fwd[_ENTETE_VUE] = _VUE_COMPLETE
+        if name == "vault":
+            fwd[_ENTETE_RELAIS] = "agregateur"
         if name == "vault" and path == "ouvrir" and request.method == "POST":
             refus = await _second_facteur_coffre(request, body, porteur, fwd)
             if refus is not None:

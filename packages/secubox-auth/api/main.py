@@ -25,6 +25,7 @@ from typing import Dict, Any, List, Optional
 from api import ntp_health
 from api import console as _console
 from api import delegation as _deleg
+from api import coffre_connexion as _coffre
 
 app = FastAPI(title="secubox-auth", version="2.0.0", root_path="/api/v1/auth")
 
@@ -367,20 +368,29 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _append_audit("setup_token_issued", req.username, {"ip": ip, "motif": "changement_impose"})
         return {"setup_required": True, "setup_token": setup_tok}
 
+    # LE COFFRE S'OUVRE À LA CONNEXION (#1855) : mot de passe vérifié, on
+    # PRÉPARE ; l'ouverture n'a lieu qu'une fois le second facteur réussi.
+    ticket_coffre = _coffre.preparer(req.username, req.password)
+
     # Second facteur : exigé depuis le WAN, facultatif sur le LAN (#1699).
     otp = _otp_exige(request)
     totp_block = user.get("totp") or {}
     if otp and totp_block.get("enabled"):
-        mfa_tok = create_token(req.username, scope="mfa-challenge", expires_in=300)
+        mfa_jti = secrets.token_hex(8)
+        mfa_tok = create_token(req.username, scope="mfa-challenge", expires_in=300, jti=mfa_jti)
+        _coffre.garder(mfa_jti, ticket_coffre, not lan, 300)
         _append_audit("mfa_challenge_issued", req.username, {"ip": ip})
         return {"mfa_required": True, "mfa_token": mfa_tok}
 
     # Admin without TOTP → force enrollment (depuis le WAN)
     if otp and user.get("role") == "admin":
-        enroll_tok = create_token(req.username, scope="totp-enroll", expires_in=900)
+        enroll_jti = secrets.token_hex(8)
+        enroll_tok = create_token(req.username, scope="totp-enroll", expires_in=900, jti=enroll_jti)
+        _coffre.garder(enroll_jti, ticket_coffre, not lan, 900)
         _append_audit("totp_enrollment_required", req.username, {"ip": ip})
         return {"enrollment_required": True, "enrollment_token": enroll_tok}
 
+    _coffre.confirmer(ticket_coffre, not lan)
     jti = secrets.token_hex(8)
     tok = create_token(req.username, jti=jti)
     _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
@@ -553,6 +563,7 @@ async def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
     if not ok:
         _append_audit("mfa_failed", username, {})
         raise HTTPException(status_code=401, detail="Code invalide")
+    _coffre.confirmer_garde(payload.get("jti"))       # second facteur réussi : le Coffre s'ouvre (#1855)
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
     _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
@@ -591,6 +602,7 @@ def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
         raise HTTPException(status_code=401, detail="Code invalide")
     backup_plain = _users_engine.enroll_totp(username, secret)
     _pending.delete(payload["jti"])
+    _coffre.confirmer_garde(payload.get("jti"))       # second facteur enrôlé et vérifié (#1855)
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
     _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)
@@ -623,6 +635,7 @@ def _set_password(req: _SetPasswordIn, request: _Request):
         if not user_store.verify_password(username, req.old_password):
             raise HTTPException(status_code=401, detail="Ancien mot de passe incorrect")
         _users_engine.set_password(username, req.new_password)
+        _coffre.changer(username, req.old_password, req.new_password)   # la serrure du Coffre suit (#1855)
         return {"ok": True, "message": "Mot de passe modifié"}
     raise HTTPException(status_code=403, detail="Token hors scope")
 

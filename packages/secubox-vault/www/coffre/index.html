@@ -198,7 +198,7 @@
       $('etat').textContent = 'indisponible'; $('etat').classList.add('ko');
       $('indispo').textContent = !e.initialise
         ? "Le Coffre de la box n'est pas encore initialisé."
-        : "Le Coffre de la box est scellé : votre compartiment attend qu'un administrateur l'ouvre. Rien n'y est lisible d'ici là — pas même par vous.";
+        : "Le Coffre de la box est scellé : votre compartiment attend la connexion d'un administrateur, qui l'ouvre. Rien n'y est lisible d'ici là — pas même par vous.";
       $('s-indispo').hidden = false; return;
     }
     const serrures = e.serrures || [];
