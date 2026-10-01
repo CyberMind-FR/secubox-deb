@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+# Sans ce paquet, plus de règle large : journald reprend l'audit (#1835).
+case "$1" in
+    remove|purge)
+        if [ "$(systemctl is-enabled systemd-journald-audit.socket 2>/dev/null)" = "masked" ]; then
+            systemctl unmask systemd-journald-audit.socket >/dev/null 2>&1 || true
+            systemctl restart systemd-journald >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
 case "$1" in
     purge)
         rm -rf /var/lib/secubox/antirootkit

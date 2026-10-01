@@ -1,3 +1,13 @@
+secubox-antirootkit (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Le flot d'audit reste dans audit.log (#1835) : systemd-journald-audit.socket
+    masquée et journald relancé (il garde sinon son descripteur). journald
+    recopiait chaque enregistrement execve — 99 % du journal sur gk2, rétention
+    tombée à quelques minutes, relu en entier par sbx-authwatch. Le démon lit
+    audit.log par ausearch : rien ne perd la vue. Désinstaller rend la socket.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 11:29:09 +0200
+
 secubox-antirootkit (0.1.5-1~bookworm1) bookworm; urgency=medium
 
   * Règle d'audit execve : sans les échecs ENOENT (#1835). `subprocess` de

@@ -173,3 +173,15 @@ def test_execscan_emits_raw_not_interpreted():
     assert aus, "execscan must invoke ausearch --checkpoint"
     for ln in aus:
         assert " -i" not in ln and not ln.rstrip().endswith("-i")
+
+
+def test_le_flot_d_audit_ne_va_pas_au_journal():
+    """#1835 : la socket d'audit de journald est masquée (et journald relancé,
+    sans quoi il garde son descripteur) ; la désinstallation la rend."""
+    postinst = _read("debian/postinst")
+    assert "systemctl mask systemd-journald-audit.socket" in postinst
+    i = postinst.index("systemctl mask systemd-journald-audit.socket")
+    assert "systemctl restart systemd-journald" in postinst[i:i + 400]
+    postrm = _read("debian/postrm")
+    assert "systemctl unmask systemd-journald-audit.socket" in postrm
+    assert "remove|purge)" in postrm
