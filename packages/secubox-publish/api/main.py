@@ -27,6 +27,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable
 import contextvars
+import os
+import re
+import secrets
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field, field_validator
@@ -63,14 +66,14 @@ async def _capture_caller_token(request: Request, call_next):
         _caller_token.reset(reset)
 
 # Configuration
-DATA_DIR = Path("/var/lib/secubox/publish")
+DATA_DIR = Path(os.environ.get("SECUBOX_PUBLISH_DATA", "/var/lib/secubox/publish"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_FILE = DATA_DIR / "history.json"
 WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
 STATS_FILE = DATA_DIR / "stats.json"
 BUNDLES_DIR = DATA_DIR / "bundles"
 BUNDLES_DIR.mkdir(parents=True, exist_ok=True)
-PLUGINS_DIR = Path("/srv/secubox/modules/publish/plugins")
+PLUGINS_DIR = Path(os.environ.get("SECUBOX_PUBLISH_PLUGINS", "/srv/secubox/modules/publish/plugins"))
 PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Sibling modules are served in-process by the aggregator; we reach them with an
@@ -170,6 +173,11 @@ class ISPPublishResult(BaseModel):
     detected_files: List[str] = []
     infrastructure: Dict[str, Any] = {}
     message: str = ""
+    # Suivi d'une publication qui se poursuit hors de la requête (#1823) :
+    # `etat` = en_cours | publie | echec | televerse ; `travail` = l'identifiant
+    # à interroger sur /isp/travail/{id}.
+    etat: str = ""
+    travail: Optional[str] = None
 
 
 class PluginInfo(BaseModel):
@@ -376,12 +384,35 @@ async def _call_module(module: str, path: str, method: str = "GET", data: dict =
                 resp = await client.delete(url)
             else:
                 return {"error": f"Unsupported method: {method}"}
+            # UN REFUS N'EST PAS UN SUCCÈS (#1823). Rendre le corps tel quel,
+            # c'était faire passer un `{"detail": …}` FastAPI (401, 403, 404,
+            # 422) pour une réussite : aucune clé `error`, donc « ok » partout,
+            # et une page qui affichait « Published Successfully » sur un site
+            # qui n'existait pas.
+            if resp.status_code >= 400:
+                return {"error": _detail_http(resp.content, resp.status_code),
+                        "status": resp.status_code, "module": module}
             try:
                 return resp.json()
             except Exception:
                 return {"error": f"non-json response {resp.status_code}", "status": resp.status_code}
     except Exception as e:
         return {"error": str(e), "module": module}
+
+
+def _detail_http(corps: bytes, statut: int) -> str:
+    """Le `detail` d'une réponse d'erreur FastAPI, sinon le statut."""
+    try:
+        d = json.loads(corps or b"{}")
+    except ValueError:
+        d = None
+    if isinstance(d, dict):
+        det = d.get("detail") or d.get("error")
+        if isinstance(det, list):            # 422 : liste d'erreurs de validation
+            det = "; ".join(str(x.get("msg", x)) if isinstance(x, dict) else str(x) for x in det)
+        if det:
+            return f"HTTP {statut} : {str(det)[:300]}"
+    return f"HTTP {statut}"
 
 
 async def _check_module_health(module: str) -> bool:
@@ -788,6 +819,13 @@ def _extract_archive(file_path: Path, extract_to: Path) -> List[str]:
             extracted_files = zf.namelist()
     elif file_path.suffix in (".tar", ".gz", ".tgz", ".bz2"):
         with tarfile.open(file_path, "r:*") as tf:
+            # Une archive ne sort JAMAIS de son répertoire (#1823) : ni chemin
+            # absolu, ni `..`, ni lien, ni fichier spécial.
+            racine = extract_to.resolve()
+            for m in tf.getmembers():
+                cible = (extract_to / m.name).resolve()
+                if not (m.isfile() or m.isdir()) or (cible != racine and racine not in cible.parents):
+                    raise ValueError(f"entrée d'archive refusée : {m.name}")
             tf.extractall(extract_to)
             extracted_files = tf.getnames()
     else:
@@ -907,6 +945,159 @@ async def _publish_to_module(content_type: str, name: str, source_path: Path, do
         return result
 
 
+# ── Publication d'un contenu statique (#1823) ─────────────────────────────
+#
+# UN SEUL APPEL : L'ASSISTANT DE METABLOGIZER. Ce hub enchaînait quatre appels
+# qui ne pouvaient pas aboutir — le contenu partait en JSON là où metablogizer
+# attend un fichier, et chaque refus passait pour un succès. L'assistant fait
+# tout (contenu, version, domaine, bloc nginx, route sbxwaf, certificat) et
+# TRANCHE lui-même : son verdict fait foi, la page ne le devine plus.
+#
+# LA REQUÊTE NE L'ATTEND PAS. La chaîne réelle dure plus d'une minute et HAProxy
+# coupe à 30 s d'inactivité : /isp/upload rend la main avec un travail, que la
+# page suit sur /isp/travail/{id}, étape par étape, telles que l'assistant les
+# rapporte. Le travail est un fichier : n'importe quel processus le relit.
+
+TRAVAUX_DIR = DATA_DIR / "travaux"
+TRAVAUX_MAX = 50
+TRAVAIL_SILENCE_MAX_S = 300          # plus un battement depuis : le travail est mort
+TYPES_STATIQUES = ("static", "hugo", "jekyll", "hexo")
+_ID_TRAVAIL = re.compile(r"^[0-9a-f]{16}$")
+_NOM_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+_DOMAINE_RE = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+_TACHES: set = set()                 # garde les tâches de fond en vie
+
+
+def _domaine_par_defaut(name: str) -> Optional[str]:
+    """`<nom>.<domaine de CETTE box>` (#1723) ; sinon rien, l'assistant choisit."""
+    dom = domaine_box()
+    return f"{name}.{dom}" if dom else None
+
+
+def _travail_chemin(tid: str) -> Path:
+    return TRAVAUX_DIR / f"{tid}.json"
+
+
+def _travail_ecrit(t: Dict[str, Any]) -> None:
+    TRAVAUX_DIR.mkdir(parents=True, exist_ok=True)
+    p = _travail_chemin(t["id"])
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(t, ensure_ascii=False, default=str))
+    os.replace(tmp, p)
+
+
+def _travail_lit(tid: str) -> Optional[Dict[str, Any]]:
+    if not _ID_TRAVAIL.match(tid or ""):
+        return None
+    try:
+        return json.loads(_travail_chemin(tid).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def _travaux_elague() -> None:
+    try:
+        anciens = sorted(TRAVAUX_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
+    except OSError:
+        return
+    for p in anciens[:-TRAVAUX_MAX]:
+        p.unlink(missing_ok=True)
+
+
+# Les étapes qui FONT le verdict de l'assistant (contenu, service, route) :
+# c'est elles qu'on nomme d'abord — une version git ratée ne bloque rien.
+_ETAPES_DECISIVES = ("content", "vhost", "route")
+
+
+def _premier_echec(t: Dict[str, Any]) -> str:
+    rates = [e for e in t.get("etapes") or [] if e.get("etat") == "echec"]
+    rates.sort(key=lambda e: 0 if e.get("cle") in _ETAPES_DECISIVES else 1)
+    return " ; ".join(f"{e.get('libelle') or e.get('cle')} : {e.get('detail') or 'échec'}"
+                      for e in rates)
+
+
+async def _assistant_metablogizer(name: str, domain: Optional[str], archive: bytes,
+                                  suivi: Callable[[Dict[str, Any]], None]) -> Dict[str, Any]:
+    """Publie par l'assistant de metablogizer, en flux. Rend sa ligne `fin`,
+    ou {"ok": False, "detail": …} s'il refuse ou se tait."""
+    entetes = {}
+    tok = _caller_token.get()
+    if tok:
+        entetes["Authorization"] = f"Bearer {tok}"
+    champs = {"name": name}
+    if domain:
+        champs["domain"] = domain
+    fin: Optional[Dict[str, Any]] = None
+    try:
+        async with httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(uds=AGGREGATOR_SOCK),
+                base_url="http://localhost", headers=entetes,
+                # L'assistant bat toutes les 8 s : 180 s sans un octet = mort.
+                timeout=httpx.Timeout(30.0, read=180.0)) as client:
+            async with client.stream(
+                    "POST", "/api/v1/metablogizer/publish/wizard?flux=1", data=champs,
+                    files={"file": (f"{name}.zip", archive, "application/zip")}) as resp:
+                if resp.status_code >= 400:
+                    return {"ok": False, "detail": _detail_http(await resp.aread(), resp.status_code)}
+                async for ligne in resp.aiter_lines():
+                    if not ligne.strip():
+                        continue
+                    try:
+                        ev = json.loads(ligne)
+                    except ValueError:
+                        continue
+                    suivi(ev)
+                    if ev.get("type") == "fin":
+                        fin = ev
+    except Exception as e:  # noqa: BLE001 — l'appelant doit savoir, pas deviner
+        return {"ok": False, "detail": f"metablogizer injoignable : {type(e).__name__}: {e}"}
+    return fin or {"ok": False, "detail": "l'assistant s'est interrompu sans verdict"}
+
+
+async def _publier_statique(t: Dict[str, Any], archive: bytes) -> None:
+    """Le travail de fond : suit l'assistant et écrit chaque étape."""
+    def suivi(ev: Dict[str, Any]) -> None:
+        genre = ev.get("type")
+        if genre == "debut":
+            t["etapes"] = [{"cle": e.get("cle"), "libelle": e.get("libelle"),
+                            "etat": "attente", "detail": ""} for e in ev.get("etapes") or []]
+            if ev.get("domain"):
+                t["domain"] = ev["domain"]
+        elif genre == "etape":
+            for e in t["etapes"]:
+                if e["cle"] == ev.get("cle"):
+                    e["etat"] = ev.get("etat") or ""
+                    e["detail"] = str(ev.get("detail") or "")[:300]
+        t["battement"] = time.time()
+        _travail_ecrit(t)
+
+    try:
+        fin = await _assistant_metablogizer(t["name"], t.get("domain"), archive, suivi)
+        ok = bool(fin.get("ok"))
+        if fin.get("domain"):
+            t["domain"] = fin["domain"]
+        t["etat"] = "publie" if ok else "echec"
+        t["url"] = f"https://{t['domain']}/" if ok and t.get("domain") else None
+        if not ok:
+            t["detail"] = _premier_echec(t) or str(fin.get("detail") or "publication refusée")
+    except Exception as e:  # noqa: BLE001 — un travail ne reste jamais « en cours » pour rien
+        t["etat"], t["detail"] = "echec", f"{type(e).__name__}: {e}"
+    t["fin"] = time.time()
+    _travail_ecrit(t)
+    _record_event("isp_publish", {"name": t["name"], "domain": t.get("domain"),
+                                  "content_type": t.get("content_type"),
+                                  "etat": t["etat"], "detail": t.get("detail", "")})
+    stats_cache.clear()
+    try:
+        await plugin_manager.run_hook("post_publish", name=t["name"],
+                                      content_type=t.get("content_type"), url=t.get("url"))
+        await _notify_webhooks("publish", {"type": "isp_home", "name": t["name"],
+                                           "content_type": t.get("content_type"),
+                                           "url": t.get("url"), "etat": t["etat"]})
+    except Exception:  # noqa: BLE001 — un crochet tiers ne change pas le verdict
+        pass
+
+
 @app.post("/isp/upload", dependencies=[Depends(require_jwt)])
 async def isp_upload(
     file: UploadFile = File(...),
@@ -917,116 +1108,111 @@ async def isp_upload(
     """
     ISP Home Publish: Upload ZIP/HTML → Auto-detect type → Publish
 
-    This is the main entry point for the "first ISP home publish all" feature.
-    Accepts ZIP, TAR.GZ, or HTML files and automatically:
-    1. Detects content type (Streamlit app, static site, Hugo, Jekyll, etc.)
-    2. Routes to appropriate publishing module (streamlit, metablogizer, droplet)
-    3. Publishes and returns live URL + downloadable bundle URL
+    Un contenu statique est confié à l'assistant de metablogizer dans un
+    travail de fond (#1823) : la réponse porte `etat = en_cours` et `travail`,
+    la suite se lit sur /isp/travail/{id}. Les autres types (streamlit,
+    droplet) restent publiés dans la requête.
     """
-    # Run pre-upload hooks (results used by plugins for validation/logging)
     await plugin_manager.run_hook("pre_upload", file=file, name=name)
 
-    # Generate name if not provided
     if not name:
         name = Path(file.filename).stem if file.filename else f"publish-{int(time.time())}"
-    name = name.lower().replace(" ", "-").replace("_", "-")
+    name = name.strip().lower().replace(" ", "-").replace("_", "-")
+    # Le nom devient un fichier (bundles/<nom>.zip) et un répertoire de site :
+    # jamais de `/` ni de `..`.
+    if not _NOM_RE.match(name):
+        raise HTTPException(400, "Nom invalide : lettres minuscules, chiffres et tirets (63 au plus).")
+    domain = (domain or "").strip().lower().rstrip(".") or None
+    if domain and not _DOMAINE_RE.match(domain):
+        raise HTTPException(400, f"Domaine invalide : {domain}")
+    final_domain = domain or _domaine_par_defaut(name)
 
-    # Save uploaded file
     temp_dir = Path(tempfile.mkdtemp(prefix="isp_publish_"))
-    upload_path = temp_dir / (file.filename or "upload.zip")
+    upload_path = temp_dir / Path(file.filename or "upload.zip").name
 
     try:
         content = await file.read()
         upload_path.write_bytes(content)
 
-        # Extract archive
         extract_dir = temp_dir / "extracted"
         extract_dir.mkdir()
         extracted_files = _extract_archive(upload_path, extract_dir)
 
-        # Run content detection hooks
         hook_detect = await plugin_manager.run_hook("content_detect", path=extract_dir, files=extracted_files)
-
-        # Auto-detect content type
         content_type = hook_detect.get("content_type") or _detect_content_type(extract_dir)
 
-        # Run pre-publish hooks
         await plugin_manager.run_hook("pre_publish", name=name, content_type=content_type, path=extract_dir)
 
-        # Publish if auto_publish is enabled
-        result = {"success": False, "message": "Upload only, not published"}
-        url = None
-        infra_status = {}
-
-        # Determine final domain
-        final_domain = domain or f"{name}.gk2.secubox.in"
-
-        if auto_publish:
-            # Prepare full infrastructure first
-            infra_status = await _prepare_infrastructure(name, final_domain, content_type)
-
-            # Then publish content to module
-            result = await _publish_to_module(content_type, name, extract_dir, final_domain)
-
-            if "error" not in result:
-                # Determine URL based on content type
-                if content_type == "streamlit":
-                    url = f"/apps/{name}/"
-                elif content_type in ("static", "hugo", "jekyll", "hexo"):
-                    url = f"https://{final_domain}/"
-                else:
-                    url = result.get("url")
-
-        # Create downloadable bundle
+        # Le bundle téléchargeable — et ce que l'assistant recevra.
         bundle_path = BUNDLES_DIR / f"{name}.zip"
         with zipfile.ZipFile(bundle_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for file_path in extract_dir.rglob("*"):
                 if file_path.is_file():
                     zf.write(file_path, file_path.relative_to(extract_dir))
 
-        # Record event
-        _record_event("isp_publish", {
-            "name": name,
-            "content_type": content_type,
-            "files_count": len(extracted_files),
-            "auto_publish": auto_publish,
-            "domain": domain,
-        })
+        commun = dict(name=name, content_type=content_type,
+                      download_url=f"/api/v1/publish/bundle/{name}.zip",
+                      files_count=len(extracted_files), detected_files=extracted_files[:20])
 
-        # Run post-publish hooks
+        if not auto_publish:
+            _record_event("isp_publish", {"name": name, "content_type": content_type,
+                                          "etat": "televerse", "domain": final_domain})
+            stats_cache.clear()
+            return ISPPublishResult(success=True, domain=final_domain or "", etat="televerse",
+                                    message="Téléversé, non publié", **commun)
+
+        if content_type in TYPES_STATIQUES:
+            t = {"id": secrets.token_hex(8), "name": name, "domain": final_domain,
+                 "content_type": content_type, "etat": "en_cours", "etapes": [],
+                 "detail": "", "url": None, "debut": time.time(), "battement": time.time()}
+            _travail_ecrit(t)
+            _travaux_elague()
+            tache = asyncio.create_task(_publier_statique(t, bundle_path.read_bytes()))
+            _TACHES.add(tache)
+            tache.add_done_callback(_TACHES.discard)
+            # `success` reste faux tant que l'assistant n'a pas tranché.
+            return ISPPublishResult(success=False, domain=final_domain or "", etat="en_cours",
+                                    travail=t["id"], message="Publication en cours", **commun)
+
+        # Autres types : publiés dans la requête, verdict honnête.
+        infra_status = await _prepare_infrastructure(name, final_domain or "", content_type)
+        result = await _publish_to_module(content_type, name, extract_dir, final_domain)
+        ok = "error" not in result
+        url = (f"/apps/{name}/" if content_type == "streamlit" else result.get("url")) if ok else None
+        _record_event("isp_publish", {"name": name, "content_type": content_type,
+                                      "etat": "publie" if ok else "echec", "domain": final_domain})
         await plugin_manager.run_hook("post_publish", name=name, content_type=content_type, url=url)
-
-        # Notify webhooks
-        await _notify_webhooks("publish", {
-            "type": "isp_home",
-            "name": name,
-            "content_type": content_type,
-            "url": url,
-        })
-
+        await _notify_webhooks("publish", {"type": "isp_home", "name": name,
+                                           "content_type": content_type, "url": url})
         stats_cache.clear()
-
         return ISPPublishResult(
-            success="error" not in result,
-            name=name,
-            domain=final_domain,
-            content_type=content_type,
-            url=url,
-            download_url=f"/api/v1/publish/bundle/{name}.zip",
+            success=ok, domain=final_domain or "", url=url,
             qrcode_url=f"/api/v1/publish/bundle/{name}/qrcode" if url else None,
-            files_count=len(extracted_files),
-            detected_files=extracted_files[:20],
-            infrastructure=infra_status,
-            message=result.get("message", "Published successfully" if "error" not in result else result.get("error", "Unknown error")),
-        )
+            infrastructure=infra_status, etat="publie" if ok else "echec",
+            message=result.get("message", "Publié") if ok else str(result.get("error")),
+            **commun)
 
+    except HTTPException:
+        raise
     except Exception as e:
         _record_event("isp_publish_error", {"name": name, "error": str(e)})
         raise HTTPException(500, f"Publishing failed: {str(e)}")
 
     finally:
-        # Cleanup temp directory (keep bundle)
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.get("/isp/travail/{tid}", dependencies=[Depends(require_jwt)])
+async def isp_travail(tid: str):
+    """L'état d'une publication en cours ou finie (#1823)."""
+    t = _travail_lit(tid)
+    if t is None:
+        raise HTTPException(404, "Travail inconnu")
+    if t.get("etat") == "en_cours" and time.time() - float(t.get("battement") or 0) > TRAVAIL_SILENCE_MAX_S:
+        # Le processus qui le portait a disparu (redémarrage) : le dire.
+        t["etat"] = "echec"
+        t["detail"] = _premier_echec(t) or "travail interrompu (service redémarré ?) — relancer la publication"
+    return t
 
 
 @app.get("/bundle/{name}.zip", dependencies=[Depends(require_lecture)])

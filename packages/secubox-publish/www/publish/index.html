@@ -501,7 +501,12 @@
             .main { margin-left: 0; }
             .drop-zone { padding: 2rem 1rem; }
         }
-    </style>
+            /* Étapes réelles de la publication (#1823) */
+        .publish-steps { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; justify-content: center; margin-top: 0.8rem; font-size: 0.85rem; }
+        .publish-steps .etape { opacity: 0.55; }
+        .publish-steps .etape.ok, .publish-steps .etape.encours { opacity: 1; }
+        .publish-steps .etape.echec { opacity: 1; color: var(--danger, #e63946); }
+</style>
 </head>
 <body class="crt-light hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
@@ -573,7 +578,7 @@
                 </div>
                 <div class="form-group">
                     <label>Domain (optional)</label>
-                    <input type="text" id="ispDomain" placeholder="mysite.gk2.secubox.in">
+                    <input type="text" id="ispDomain" placeholder="mysite.votre-box">
                 </div>
                 <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;">
                     <input type="checkbox" id="ispAutoPublish" checked>
@@ -593,6 +598,7 @@
                     <div class="progress-bar">
                         <div id="progressFill" class="progress-fill"></div>
                     </div>
+                    <div id="publishSteps" class="publish-steps"></div>
                 </div>
             </div>
 
@@ -804,6 +810,11 @@
     <script>
         const API = '/api/v1/publish';
         const METABLOGIZER_API = '/api/v1/metablogizer';
+        // LE DOMAINE DE CETTE BOX, jamais « gk2 » en dur (#1723, #1823) : la page
+        // est servie par admin.<box> ou hall.<box> — on retire le premier label.
+        const DOMAINE_BOX = /^[\d.:\[\]]+$/.test(location.hostname) ? ''
+            : location.hostname.split('.').slice(1).join('.');
+        const domaineDe = n => (n && DOMAINE_BOX) ? `${n}.${DOMAINE_BOX}` : '';
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
@@ -926,7 +937,7 @@
                 // Store sites for health checking
                 window.currentSites = sites;
                 sitesTable.innerHTML = sites.map(s => {
-                    const domain = s.domain || s.name + '.gk2.secubox.in';
+                    const domain = s.domain || domaineDe(s.name);
                     const url = s.url || `https://${domain}`;
                     const displayUrl = s.url || domain || '-';
                     const isPublished = s.published !== undefined ? s.published : true;
@@ -1013,7 +1024,7 @@
             healthStats.gray = 0;
 
             for (const s of sites) {
-                const domain = s.domain || s.name + '.gk2.secubox.in';
+                const domain = s.domain || domaineDe(s.name);
                 const siteId = (s.name || domain).replace(/[^a-z0-9]/gi, '-');
                 await checkSiteHealth(domain, siteId);
 
@@ -1165,7 +1176,7 @@
             // Auto-generate name from filename
             const baseName = file.name.replace(/\.(html?|zip|tar\.gz|tgz)$/i, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
             document.getElementById('ispName').value = baseName;
-            document.getElementById('ispDomain').value = baseName + '.gk2.secubox.in';
+            document.getElementById('ispDomain').value = domaineDe(baseName);
 
             // Switch to step 2
             showWizardStep(2);
@@ -1240,7 +1251,7 @@
                     } catch {
                         // Response is not JSON (probably HTML error page)
                         if (text.includes('wrong-domain') || text.includes('Wrong Domain')) {
-                            errMsg = 'Access denied: Use admin.gk2.secubox.in';
+                            errMsg = 'Accès refusé : passer par admin.' + (DOMAINE_BOX || '<box>');
                         } else if (text.includes('405')) {
                             errMsg = 'Method not allowed - check nginx config';
                         } else {
@@ -1257,19 +1268,70 @@
                 } catch {
                     throw new Error('Invalid response from server');
                 }
-                document.getElementById('publishStatus').textContent = 'Publishing...';
-                document.getElementById('progressFill').style.width = '90%';
-
-                // Success
                 publishedData = result;
-                document.getElementById('progressFill').style.width = '100%';
 
-                setTimeout(() => {
-                    showPublishResult(result);
-                }, 500);
+                // LA PAGE SUIT LE VERDICT DU SERVEUR (#1823). Elle affichait
+                // « Published Successfully » sans jamais lire `success`.
+                if (result.travail) {
+                    await suivreTravail(result);
+                    return;
+                }
+                if (!result.success) {
+                    throw new Error(result.message || 'Publication refusée');
+                }
+                document.getElementById('progressFill').style.width = '100%';
+                showPublishResult(result);
 
             } catch (err) {
                 showWizardError(err.message || 'Publishing failed');
+            }
+        }
+
+        // Une publication statique se poursuit côté serveur (assistant de
+        // metablogizer) ; on lit son état toutes les 2 s, étape par étape.
+        const ICONE_ETAPE = { ok: '✅', echec: '❌', encours: '⏳', attente: '·' };
+
+        function rendEtapes(etapes) {
+            const box = document.getElementById('publishSteps');
+            if (!box) return;
+            box.replaceChildren(...(etapes || []).map(e => {
+                const span = document.createElement('span');
+                span.className = 'etape ' + (e.etat || '');
+                span.textContent = `${ICONE_ETAPE[e.etat] || '·'} ${e.libelle || e.cle}`;
+                if (e.detail) span.title = e.detail;
+                return span;
+            }));
+        }
+
+        async function suivreTravail(result) {
+            const debut = Date.now();
+            document.getElementById('publishStatus').textContent = 'Publication en cours…';
+            while (true) {
+                await new Promise(r => setTimeout(r, 2000));
+                let t;
+                try {
+                    const res = await fetch(`${API}/isp/travail/${result.travail}`, { headers: headers() });
+                    if (res.status === 404) throw new Error('Travail de publication introuvable');
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    t = await res.json();
+                } catch (e) {
+                    // Un hoquet réseau ne tranche rien ; dix minutes sans réponse, si.
+                    if (e.message.startsWith('Travail') || Date.now() - debut > 600000) throw e;
+                    continue;
+                }
+                const etapes = t.etapes || [];
+                rendEtapes(etapes);
+                const faites = etapes.filter(e => e.etat && e.etat !== 'attente').length;
+                document.getElementById('progressFill').style.width =
+                    (etapes.length ? Math.max(10, Math.round(100 * faites / etapes.length)) : 10) + '%';
+                const courante = etapes.find(e => e.etat === 'attente');
+                document.getElementById('publishStatus').textContent =
+                    courante ? `${courante.libelle}…` : 'Publication en cours…';
+                if (t.etat === 'publie') {
+                    showPublishResult({ ...result, domain: t.domain, url: t.url, success: true });
+                    return;
+                }
+                if (t.etat === 'echec') throw new Error(t.detail || 'Publication refusée');
             }
         }
 
@@ -1306,6 +1368,7 @@
             document.getElementById('qrCodeContainer').style.display = 'none';
             document.getElementById('commandsContainer').style.display = 'none';
             document.getElementById('progressFill').style.width = '0%';
+            rendEtapes([]);
             showWizardStep(1);
         }
 
@@ -1314,7 +1377,7 @@
         async function showPublishResult(result) {
             publishedData = result;
             const name = result.name || 'site';
-            const domain = result.domain || name + '.gk2.secubox.in';
+            const domain = result.domain || domaineDe(name);
             const url = result.url || `https://${domain}`;
             const downloadUrl = result.download_url || `/api/v1/publish/bundle/${name}.zip`;
 
@@ -1349,143 +1412,69 @@ metactl unpublish ${name}`;
             showWizardStep(4);
 
             // Check infrastructure status
-            await checkInfrastructure(name, domain);
+            await checkInfrastructure(name);
 
             refresh(); // Refresh overview
         }
 
-        async function checkInfrastructure(name, domain) {
-            // Check VHost
-            const vhostEl = document.getElementById('vhostStatus');
-            const vhostBtn = document.getElementById('createVhostBtn');
-            try {
-                const res = await fetch(`/api/v1/metablogizer/site/${name}`, { headers: headers() });
-                if (res.ok) {
-                    const site = await res.json();
-                    if (site.published) {
-                        vhostEl.textContent = '✅';
-                    } else {
-                        vhostEl.textContent = '⚠️';
-                        vhostBtn.style.display = 'inline';
-                    }
-                } else {
-                    vhostEl.textContent = '❌';
-                    vhostBtn.style.display = 'inline';
-                }
-            } catch (e) {
-                vhostEl.textContent = '❓';
-            }
+        // LES TROIS PASTILLES VIENNENT DE LA CHAÎNE DU SITE (#1823) — les
+        // verdicts de metablogizer (`/site/{nom}/chaine`), jamais d'un bouton
+        // qui se peignait en vert sans lire la réponse.
+        function marque(id, btnId, ok, detail) {
+            const el = document.getElementById(id);
+            el.textContent = ok ? '✅' : '❌';
+            el.title = detail || '';
+            document.getElementById(btnId).style.display = ok ? 'none' : 'inline';
+        }
 
-            // Check Certificate
-            const certEl = document.getElementById('certStatus');
-            const certBtn = document.getElementById('createCertBtn');
+        async function checkInfrastructure(name) {
             try {
-                const res = await fetch(`/api/v1/metablogizer/site/${name}/certificate`, { headers: headers() });
-                if (res.ok) {
-                    const cert = await res.json();
-                    if (cert.exists && !cert.expired) {
-                        certEl.textContent = '✅';
-                    } else if (cert.exists && cert.expired) {
-                        certEl.textContent = '⚠️';
-                        certBtn.textContent = 'Renew';
-                        certBtn.style.display = 'inline';
-                    } else {
-                        certEl.textContent = '❌';
-                        certBtn.style.display = 'inline';
-                    }
-                } else {
-                    certEl.textContent = '❌';
-                    certBtn.style.display = 'inline';
-                }
+                const res = await fetch(`${METABLOGIZER_API}/site/${encodeURIComponent(name)}/chaine`, { headers: headers() });
+                if (!res.ok) throw new Error(res.status === 404 ? 'site absent de metablogizer' : `HTTP ${res.status}`);
+                const m = (await res.json()).maillons || {};
+                marque('vhostStatus', 'createVhostBtn', m.vhost?.ok, m.vhost?.detail);
+                marque('certStatus', 'createCertBtn', m.cert?.ok, m.cert?.detail);
+                marque('wafStatus', 'createWafBtn', m.route?.ok, m.route?.detail);
             } catch (e) {
-                certEl.textContent = '❓';
-            }
-
-            // Check WAF route
-            const wafEl = document.getElementById('wafStatus');
-            const wafBtn = document.getElementById('createWafBtn');
-            try {
-                const res = await fetch(`/api/v1/metablogizer/health/${domain}`, { headers: headers() });
-                if (res.ok) {
-                    const health = await res.json();
-                    if (health.waf === 'inspected') {
-                        wafEl.textContent = '✅';
-                    } else if (health.https === 200) {
-                        wafEl.textContent = '⚠️';
-                        wafBtn.style.display = 'inline';
-                    } else {
-                        wafEl.textContent = '❌';
-                        wafBtn.style.display = 'inline';
-                    }
-                } else {
-                    wafEl.textContent = '❓';
-                }
-            } catch (e) {
-                wafEl.textContent = '❓';
+                marque('vhostStatus', 'createVhostBtn', false, e.message);
+                marque('certStatus', 'createCertBtn', false, e.message);
+                marque('wafStatus', 'createWafBtn', false, e.message);
             }
         }
 
-        async function createVhost() {
+        // Réparer un maillon : la réponse est LUE, puis la chaîne relue.
+        async function repare(btnId, libelle, url, corps) {
             const name = publishedData?.name;
             if (!name) return;
-
-            document.getElementById('createVhostBtn').textContent = '...';
+            const btn = document.getElementById(btnId);
+            btn.textContent = '…';
+            btn.disabled = true;
             try {
-                await fetch(`/api/v1/metablogizer/site/${name}/publish`, {
-                    method: 'POST',
-                    headers: headers()
+                const res = await fetch(url, {
+                    method: 'POST', headers: headers(),
+                    body: corps ? JSON.stringify(corps) : undefined
                 });
-                document.getElementById('vhostStatus').textContent = '✅';
-                document.getElementById('createVhostBtn').style.display = 'none';
+                const r = await res.json().catch(() => ({}));
+                if (!res.ok || r.ok === false) {
+                    alert(`${libelle} : échec — ${r.detail || 'HTTP ' + res.status}`);
+                }
             } catch (e) {
-                alert('Failed to create VHost: ' + e.message);
+                alert(`${libelle} : ${e.message}`);
             }
-            document.getElementById('createVhostBtn').textContent = 'Create';
+            btn.textContent = libelle;
+            btn.disabled = false;
+            await checkInfrastructure(name);
         }
 
-        async function createCert() {
-            const domain = publishedData?.domain || publishedData?.name + '.gk2.secubox.in';
-            if (!domain) return;
-
-            document.getElementById('createCertBtn').textContent = '...';
-            try {
-                // Request certificate via certbot API
-                await fetch('/api/v1/haproxy/cert/request', {
-                    method: 'POST',
-                    headers: headers(),
-                    body: JSON.stringify({ domain: domain })
-                });
-                document.getElementById('certStatus').textContent = '✅';
-                document.getElementById('createCertBtn').style.display = 'none';
-            } catch (e) {
-                alert('Failed to request certificate. Run: certbot certonly -d ' + domain);
-            }
-            document.getElementById('createCertBtn').textContent = 'Request';
-        }
-
-        async function createWafRoute() {
-            const domain = publishedData?.domain || publishedData?.name + '.gk2.secubox.in';
-            if (!domain) return;
-
-            document.getElementById('createWafBtn').textContent = '...';
-            try {
-                // Add vhost to HAProxy
-                await fetch('/api/v1/haproxy/vhost', {
-                    method: 'POST',
-                    headers: headers(),
-                    body: JSON.stringify({ domain: domain })
-                });
-                document.getElementById('wafStatus').textContent = '✅';
-                document.getElementById('createWafBtn').style.display = 'none';
-            } catch (e) {
-                alert('Failed to add WAF route. Run: haproxyctl vhost add ' + domain);
-            }
-            document.getElementById('createWafBtn').textContent = 'Add';
-        }
+        const createVhost = () => repare('createVhostBtn', 'Create',
+            `${METABLOGIZER_API}/site/${encodeURIComponent(publishedData?.name)}/publish`);
+        const createCert = () => repare('createCertBtn', 'Request',
+            `${METABLOGIZER_API}/site/${encodeURIComponent(publishedData?.name)}/cert`);
+        const createWafRoute = () => repare('createWafBtn', 'Add',
+            `${METABLOGIZER_API}/site/${encodeURIComponent(publishedData?.name)}/exposure`, { wan: true });
 
         async function autoSetupAll() {
             const name = publishedData?.name;
-            const domain = publishedData?.domain || name + '.gk2.secubox.in';
             if (!name) return;
 
             // Create VHost
@@ -1504,7 +1493,7 @@ metactl unpublish ${name}`;
             }
 
             // Re-check all
-            await checkInfrastructure(name, domain);
+            await checkInfrastructure(name);
         }
 
         function toggleCommands() {

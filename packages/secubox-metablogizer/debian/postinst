@@ -4,6 +4,16 @@ mkdir -p /run/secubox /srv/metablogizer/sites
 # #494: do NOT chown the shared parent /run/secubox (owned by tmpfiles.d at
 # 1777 root root). Only own this module's own data dir.
 chown secubox:secubox /srv/metablogizer/sites 2>/dev/null || true
+# LE FICHIER UNIFIÉ DES SITES (#1823). Le générateur (compte secubox, et dans
+# l'agrégateur sous ProtectSystem=full) écrit un fichier PRÉPARÉ sous
+# /var/lib/secubox/metablogizer ; `secubox-publishctl nginx-apply` le vérifie et
+# l'installe en root. Sur une box neuve, le fichier servi n'existait pas et
+# aucun site publié n'obtenait de bloc. Vide = rien servi, nginx l'accepte.
+install -d -o secubox -g secubox -m 0750 /var/lib/secubox/metablogizer
+f=/etc/nginx/sites-enabled/metablogizer
+if [ -d /etc/nginx/sites-enabled ] && [ ! -e "$f" ] && [ ! -L "$f" ]; then
+    install -m 0644 /dev/null "$f"
+fi
 # CADENCE (#1650) : une copie MANUELLE de la surcharge, posée dans /etc, masquait
 # celle du paquet sans remettre l'intervalle à zéro (captures toutes les 2 min).
 m=/etc/systemd/system/metablog-shots.timer.d/10-cadence.conf
@@ -95,7 +105,8 @@ fi
 
 # Assistant de publication et rafraîchissement manuel de la liste (#974) :
 # un fichier sudoers que visudo refuse casserait TOUT sudo — on le valide.
-for f in /etc/sudoers.d/secubox-publish-wizard /etc/sudoers.d/secubox-metablog-audit; do
+for f in /etc/sudoers.d/secubox-publish-wizard /etc/sudoers.d/secubox-metablog-audit \
+         /etc/sudoers.d/secubox-metablog-nginx; do
     [ -f "$f" ] || continue
     chmod 0440 "$f"
     visudo -cf "$f" >/dev/null 2>&1 || rm -f "$f"

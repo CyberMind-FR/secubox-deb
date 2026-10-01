@@ -37,6 +37,7 @@ on:
       - 'packages/secubox-bbs/**'
       - 'packages/secubox-toolbox-ng/**'
       - 'packages/secubox-certs/**'
+      - 'packages/secubox-publish/**'
       - 'packages/secubox-metrics/sbin/**'
       - 'packages/secubox-metrics/tests/**'
       # LXC uniquement (#1743) : toute relation de paquet est relue.
@@ -95,6 +96,10 @@ jobs:
           # effacée une fois par une fusion sans qu'aucun test ne proteste.
           - suite: secubox-certs
             chemin: packages/secubox-certs/tests
+          # Une publication dit ce qui s'est VRAIMENT passé (#1823) : la page
+          # affichait « Published Successfully » sur un site inexistant.
+          - suite: secubox-publish
+            chemin: packages/secubox-publish/tests
           # secubox-vhost-logs ne restaure que sa propre passe (#1777) : la
           # 1.0.0 a recopié 90 sauvegardes sur gk2 et écrit dans sites-available.
           # Ce fichier seul : le reste de la suite metrics ne se collecte pas
