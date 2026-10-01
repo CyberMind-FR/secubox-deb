@@ -182,3 +182,17 @@ def test_admin_lan_refuse_une_adresse_publique_ou_douteuse(box, ip):
     p = lance("--admin-lan", ip)
     assert p.returncode != 0
     assert not (d["cfgd"] / "10-webui-lan.cfg").exists() and appels() == []
+
+
+def test_aucun_postinst_ne_ferme_run_secubox():
+    """/run/secubox est 1777 (tmpfiles) ; un postinst qui le passe en 0755
+    root:root empêche tout module non root de recréer sa socket (#1841)."""
+    import re
+    racine = Path(__file__).resolve().parents[3] / "packages"
+    fautifs = []
+    for postinst in racine.glob("*/debian/postinst"):
+        for n, ligne in enumerate(postinst.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            code = ligne.split("#", 1)[0]
+            if re.search(r"\bchmod\b[^;|&]*\b0?7[0-5]5\b[^;|&]*/run/secubox(\s|$|;)", code):
+                fautifs.append(f"{postinst.relative_to(racine)}:{n}: {ligne.strip()}")
+    assert not fautifs, "\n".join(fautifs)

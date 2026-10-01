@@ -1,3 +1,13 @@
+secubox-haproxy (1.8.22-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : /run/secubox n'est plus passé en 0755 root:root (#1841). Il
+    doit rester 1777 (tmpfiles) ; fermé, aucun module non root ne pouvait
+    recréer sa socket à son redémarrage suivant — secubox-haproxy lui-même
+    est resté en boucle sur gk3 après l'installation de la 1.8.21. Test de
+    garde sur tous les postinst.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 15:56:29 +0200
+
 secubox-haproxy (1.8.21-1~bookworm1) bookworm; urgency=medium
 
   * `haproxyctl frontal` (#1841) : met la box derrière HAProxy + sbxwaf en une
