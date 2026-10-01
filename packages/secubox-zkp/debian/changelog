@@ -1,3 +1,9 @@
+secubox-zkp (1.2.2-1~bookworm1) bookworm; urgency=high
+
+  * Chemin Python : les paquets Debian sont ajoutés EN QUEUE s'ils manquent, plus en tête. Devant /usr/local, le websockets 10.4 de Debian masquait celui qu'attend uvicorn ≥ 0.54 (installé par pip) : le service mourait au démarrage (« cannot import name ServerProtocol ») et redémarrait en boucle (#1796).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:06:00 +0200
+
 secubox-zkp (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

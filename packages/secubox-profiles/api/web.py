@@ -44,7 +44,10 @@ from pydantic import BaseModel
 # Miroir du layout runtime (/usr/lib/secubox/profiles) : secubox_core est un
 # paquet Debian dist-packages, jamais un venv (voir secubox-users, même
 # topologie de service : socket dédié, system python3).
-sys.path.insert(0, "/usr/lib/python3/dist-packages")
+# En QUEUE, jamais en tête : devant /usr/local, le websockets 10.4 de Debian
+# masquait celui qu'attend uvicorn ≥ 0.54 → service en boucle (#1796).
+if "/usr/lib/python3/dist-packages" not in sys.path:
+    sys.path.append("/usr/lib/python3/dist-packages")
 try:
     from secubox_core.auth import require_jwt, require_session
 except ImportError:  # pragma: no cover - dev sans secubox_core installé

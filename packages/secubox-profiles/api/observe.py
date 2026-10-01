@@ -8,7 +8,7 @@ SecuBox-Deb :: profiles — sondes d'état réel (LECTURE SEULE)
 CyberMind — https://cybermind.fr
 
 Seul fichier du module qui touche le système. Il n'exécute QUE des commandes de
-lecture (is-enabled, is-active, show, lxc-info). Aucun enable/disable/start/stop
+lecture (is-enabled, is-active, show, lxc-info, /sys/fs/cgroup). Aucun enable/disable/start/stop
 n'a sa place ici : Phase 1 est en lecture seule.
 
 L'état réel est OBSERVÉ, jamais supposé depuis un état stocké — un paquet
@@ -27,6 +27,7 @@ from .manifest import Manifest
 
 PROC = Path("/proc")
 ROUTES_FILE = Path("/etc/secubox/waf/haproxy-routes.json")
+CGROUP_ROOT = Path("/sys/fs/cgroup")
 
 _TIMEOUT = 5
 _BATCH_TIMEOUT = 15
@@ -138,6 +139,8 @@ def observe(m: Manifest, *, run=_run_cmd, routes: set[str] | None = None) -> Act
         # None plutôt que d'affirmer "arrêté" à tort.
         if rc == 0:
             lxc_running = "RUNNING" in out.upper()
+        else:
+            lxc_running = _lxc_running_cgroup(m.lxc)
         rc, out = run(["lxc-info", "-n", m.lxc, "-c", "lxc.start.auto"])
         if rc == 0:
             lxc_autostart = out.strip().endswith("1")
@@ -212,6 +215,30 @@ def _parse_lxc_ls_fancy(output: str) -> dict[str, tuple[bool | None, bool | None
     return out
 
 
+def _lxc_running_cgroup(name: str | None) -> bool | None:
+    """État d'un conteneur LXC SANS privilège (#1795) : en cgroup v2 unifié, un
+    conteneur qui tourne a son groupe `lxc.payload.<nom>` sous /sys/fs/cgroup,
+    lisible par tous ; arrêté, le groupe n'existe pas.
+
+    Pourquoi : l'API web tourne sous le compte `secubox`, où `lxc-ls`/`lxc-info`
+    ne voient AUCUN conteneur (ils sont à root) et où, sous ProtectSystem=strict,
+    même `secubox-lxcctl` échoue (/run/lxc en lecture seule). Sans ce repli,
+    lxc_running restait None → is_on() faux → tout module LXC on-demand annoncé
+    « endormi » au Hall alors qu'il tournait (carte PeerTube qui propose le
+    réveil d'un PeerTube éveillé).
+
+    None (jamais un False fabriqué) si la hiérarchie n'est pas cgroup v2 ou si
+    le nom est suspect : l'absence d'un groupe ne prouve alors rien."""
+    if not name or "/" in name or name.startswith("."):
+        return None
+    try:
+        if not (CGROUP_ROOT / "cgroup.controllers").is_file():
+            return None
+        return (CGROUP_ROOT / f"lxc.payload.{name}").is_dir()
+    except OSError:
+        return None
+
+
 def _run_batch(argv: list[str]) -> tuple[int | None, str]:
     try:
         p = subprocess.run(argv, capture_output=True, text=True, timeout=_BATCH_TIMEOUT)
@@ -281,6 +308,8 @@ def observe_all(manifests: dict[str, Manifest], *, run=_run_batch,
             state = lxc_state.get(m.lxc)
             if state is not None:
                 lxc_running, lxc_autostart = state
+            if lxc_running is None:
+                lxc_running = _lxc_running_cgroup(m.lxc)
 
         portal_routed = None
         if m.portal_domain is not None and resolved_routes is not None:
