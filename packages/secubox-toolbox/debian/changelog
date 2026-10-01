@@ -1,3 +1,9 @@
+secubox-toolbox (2.9.10-1~bookworm1) bookworm; urgency=medium
+
+  * Le proxy d'égress et le tunnel des visiteurs (wg-quick@wg-toolbox) ne démarrent qu'une fois la boîte à outils provisionnée : sur une box qui ne l'est pas, le proxy bouclait au redémarrage faute de la CA (#1819).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:56:13 +0200
+
 secubox-toolbox (2.9.9-1~bookworm1) bookworm; urgency=medium
 
   * API restaurée après les fusions du 2026-08-17 (#1778, ref #1748) :

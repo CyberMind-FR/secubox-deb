@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-certbot — certbot qui démarre malgré la dérive pip (#1819)
+#
+# Un `cryptography` récent posé par pip dans /usr/local casse le pyOpenSSL de
+# Debian (« module 'lib' has no attribute 'GEN_EMAIL' ») : certbot ne démarre
+# plus, et les certificats ne se renouvellent plus (gk3). Une box dont la pile
+# pip est cohérente (gk2 : certbot, acme, pyOpenSSL par pip) garde SA pile :
+# on ne change rien quand certbot démarre. Sinon, on le relance sur la pile
+# Debian, cohérente par construction (certbot, pyOpenSSL, cryptography du dépôt).
+if /usr/bin/certbot --version >/dev/null 2>&1; then
+    exec /usr/bin/certbot "$@"
+fi
+PYTHONPATH=/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH} exec /usr/bin/certbot "$@"
