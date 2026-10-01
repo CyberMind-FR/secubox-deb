@@ -39,7 +39,11 @@ ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
-RestrictAddressFamilies=AF_UNIX
+# AF_INET pour la seule alerte d'ouverture distante (P4) : le relais SMTP du
+# conteneur mail, et rien d'autre.
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=10.100.0.10/32
 RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes

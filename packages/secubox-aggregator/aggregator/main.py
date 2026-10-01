@@ -36,6 +36,7 @@ from typing import Dict, List
 
 import httpx
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 
 log = logging.getLogger("secubox.aggregator")
@@ -74,6 +75,14 @@ _SOCKETS_ADMIN = frozenset({"actor", "radio", "vault"})
 # L'en-tête de vue est une décision de la ROUTE, pas du visiteur : celui que le
 # client envoie n'est jamais recopié, vers aucun module.
 _ENTETE_VUE = "X-Sbx-Vue"
+# OUVRIR LE COFFRE HORS LAN (Coffre P4, #1367). Le second facteur se vérifie
+# ICI : le plancher anti-rejeu des TOTP n'est inscriptible que par `secubox`, et
+# le Coffre tourne sous un utilisateur à lui. L'en-tête est une décision de la
+# ROUTE, posée après le code valide — celui d'un client est toujours retiré.
+_ENTETE_SECOND_FACTEUR = "X-SecuBox-Second-Facteur"
+_ECHECS_OTP_MAX = 5
+_ECHECS_OTP_FENETRE_S = 3600
+_echecs_otp: Dict[str, List[float]] = {}
 _VUE_COMPLETE = "complete"
 
 
@@ -88,6 +97,36 @@ def _garde_administration():
         log.error("[proxy] garde d'administration indisponible : %s", e)
         return None
     return require_jwt
+
+
+async def _second_facteur_coffre(request: Request, body: bytes, porteur, fwd: dict):
+    """Hors LAN (ou politique « obligatoire »), un TOTP valide et inédit du
+    compte de la session, sinon 401. Rend None quand la requête peut passer."""
+    import asyncio
+    import json as _json
+    import time as _time
+    try:
+        from secubox_core import second_facteur
+    except Exception:  # noqa: BLE001 — sans vérificateur, on n'ouvre pas
+        return Response(status_code=503)
+    if not second_facteur.otp_exige(request):
+        return None
+    qui = str((porteur or {}).get("sub") or "")
+    maintenant = _time.monotonic()
+    recents = [t for t in _echecs_otp.get(qui, []) if maintenant - t < _ECHECS_OTP_FENETRE_S]
+    _echecs_otp[qui] = recents
+    if len(recents) >= _ECHECS_OTP_MAX:
+        return JSONResponse({"detail": "trop d'essais — réessayer plus tard"}, status_code=429)
+    try:
+        code = str((_json.loads(body or b"{}") or {}).get("otp") or "").strip()
+    except (ValueError, AttributeError):
+        code = ""
+    if not (code and qui and await asyncio.to_thread(second_facteur.verifie_totp, qui, code)):
+        recents.append(maintenant)
+        return JSONResponse({"detail": "second facteur exigé (code TOTP)"}, status_code=401)
+    _echecs_otp.pop(qui, None)
+    fwd[_ENTETE_SECOND_FACTEUR] = "verifie"
+    return None
 
 
 def _porteur(request: Request) -> HTTPAuthorizationCredentials | None:
@@ -346,7 +385,9 @@ def _build_app() -> FastAPI:
                 return Response(status_code=503)
             # 401 sans session, 403 pour un appareil ou un non-admin :
             # l'HTTPException remonte telle quelle.
-            await garde(request, _porteur(request))
+            porteur = await garde(request, _porteur(request))
+        else:
+            porteur = None
         sock = f"{RUN_DIR}/{name}.sock"
         if not os.path.exists(sock):
             return Response(status_code=404)
@@ -355,9 +396,14 @@ def _build_app() -> FastAPI:
             url += f"?{request.url.query}"
         body = await request.body()
         fwd = {k: v for k, v in request.headers.items()
-               if k.lower() not in ("host", "content-length", _ENTETE_VUE.lower())}
+               if k.lower() not in ("host", "content-length", _ENTETE_VUE.lower(),
+                                    _ENTETE_SECOND_FACTEUR.lower())}
         if reserve:
             fwd[_ENTETE_VUE] = _VUE_COMPLETE
+        if name == "vault" and path == "ouvrir" and request.method == "POST":
+            refus = await _second_facteur_coffre(request, body, porteur, fwd)
+            if refus is not None:
+                return refus
         try:
             async with httpx.AsyncClient(
                 transport=httpx.AsyncHTTPTransport(uds=sock), timeout=60.0

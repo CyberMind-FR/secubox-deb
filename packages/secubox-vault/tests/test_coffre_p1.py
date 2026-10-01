@@ -191,3 +191,25 @@ def test_cle_verrouillee_effacee():
     assert not k
     with pytest.raises(ValueError):
         k.octets()
+
+
+def test_migration_schema_v1_vers_v2(tmp_path):
+    """Un Coffre initialisé en P1 (schéma v1) prend les serrures d'appareil."""
+    import os
+    base = tmp_path / "c"
+    c1 = Coffre(base, Journal(tmp_path / "j"), argon2=LEGER)
+    c1.initialiser(PHRASE)
+    c1.poser("box", "x", b"valeur")
+    with sqlite3.connect(base / "coffre.db") as cx:           # ramène au schéma v1
+        cx.executescript("""
+            CREATE TABLE s1 (id TEXT PRIMARY KEY, genre TEXT NOT NULL CHECK (genre IN ('phrase','secours')),
+              libelle TEXT NOT NULL DEFAULT '', sel BLOB NOT NULL, params TEXT NOT NULL,
+              nonce BLOB NOT NULL, mk BLOB NOT NULL, creee INTEGER NOT NULL);
+            INSERT INTO s1 SELECT id, genre, libelle, sel, params, nonce, mk, creee FROM serrures;
+            DROP TABLE serrures; ALTER TABLE s1 RENAME TO serrures;
+            UPDATE meta SET valeur='1' WHERE cle='version';""")
+    c2 = Coffre(base, Journal(tmp_path / "j"), argon2=LEGER)
+    assert c2.ouvrir(PHRASE) and c2.lire("box", "x") == b"valeur"
+    c2.ajouter_serrure_appareil("A" * 43, os.urandom(32), os.urandom(32), "clé")
+    with sqlite3.connect(base / "coffre.db") as cx:
+        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == "2"

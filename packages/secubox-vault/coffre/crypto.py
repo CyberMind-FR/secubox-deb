@@ -68,3 +68,13 @@ def dechiffrer(cle: bytes, nonce: bytes, chiffre: bytes, aad: bytes) -> bytes:
 def cle_compartiment(mk: bytes, compartiment: str) -> bytes:
     return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=None,
                 info=_ESPACE + b"compartiment/" + compartiment.encode()).derive(mk)
+
+
+def derive_kek_appareil(prf: bytes, sel: bytes) -> bytes:
+    """Clé d'une serrure d'appareil (P4) : la sortie WebAuthn PRF (32 octets
+    d'entropie, rendus par l'authentificateur pour CE sel et CETTE origine)
+    n'a pas besoin d'Argon2 — HKDF suffit."""
+    if len(prf) != TAILLE_CLE:
+        raise ValueError("sortie PRF de 32 octets attendue")
+    return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=sel,
+                info=_ESPACE + b"appareil").derive(prf)

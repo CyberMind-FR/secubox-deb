@@ -26,8 +26,10 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-from .crypto import (ARGON2_DEFAUT, Refus, aad_secret, aad_serrure, chiffrer, cle_compartiment,
-                     dechiffrer, derive_kek, nouveau_sel, nouvelle_cle)
+import base64
+
+from .crypto import (ARGON2_DEFAUT, TAILLE_CLE, Refus, aad_secret, aad_serrure, chiffrer, cle_compartiment,
+                     dechiffrer, derive_kek, derive_kek_appareil, nouveau_sel, nouvelle_cle)
 from .journal import Journal
 from .memoire import CleVerrouillee
 
@@ -35,11 +37,12 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS serrures (
     id TEXT PRIMARY KEY,
-    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours')),
+    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours', 'appareil')),
     libelle TEXT NOT NULL DEFAULT '',
     sel BLOB NOT NULL, params TEXT NOT NULL,
     nonce BLOB NOT NULL, mk BLOB NOT NULL,
-    creee INTEGER NOT NULL);
+    creee INTEGER NOT NULL,
+    cred_id TEXT);
 CREATE TABLE IF NOT EXISTS compartiments (
     id TEXT PRIMARY KEY,
     nature TEXT NOT NULL CHECK (nature IN ('box', 'personne')),
@@ -58,6 +61,8 @@ NB_CODES = 5
 PHRASE_MIN = 12
 DELAI_DEFAUT = 900
 VALEUR_MAX = 64 * 1024
+VERSION_SCHEMA = "2"
+CRED_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,1024}$")
 NOM_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 COMPARTIMENT_RE = re.compile(
     r"^(box|p-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
@@ -86,6 +91,31 @@ def normalise_code(code: str) -> str:
     return "".join(c for c in code.upper() if c in _B32)
 
 
+def b64u_decode(texte: str) -> bytes:
+    return base64.urlsafe_b64decode(texte + "=" * (-len(texte) % 4))
+
+
+def b64u(octets: bytes) -> str:
+    return base64.urlsafe_b64encode(octets).decode().rstrip("=")
+
+
+_MIGRATION_V2 = """
+CREATE TABLE serrures_v2 (
+    id TEXT PRIMARY KEY,
+    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours', 'appareil')),
+    libelle TEXT NOT NULL DEFAULT '',
+    sel BLOB NOT NULL, params TEXT NOT NULL,
+    nonce BLOB NOT NULL, mk BLOB NOT NULL,
+    creee INTEGER NOT NULL,
+    cred_id TEXT);
+INSERT INTO serrures_v2 (id, genre, libelle, sel, params, nonce, mk, creee)
+    SELECT id, genre, libelle, sel, params, nonce, mk, creee FROM serrures;
+DROP TABLE serrures;
+ALTER TABLE serrures_v2 RENAME TO serrures;
+UPDATE meta SET valeur = '2' WHERE cle = 'version';
+"""
+
+
 class Coffre:
     def __init__(self, base: Path, journal: Journal, delai_s: int = DELAI_DEFAUT,
                  horloge: Callable[[], float] = time.monotonic, argon2: Optional[dict] = None):
@@ -108,7 +138,19 @@ class Coffre:
         cx.execute("PRAGMA foreign_keys=ON")
         if neuf:
             os.chmod(self.db, 0o600)
+        else:
+            self._migre(cx)
         return cx
+
+    @staticmethod
+    def _migre(cx) -> None:
+        """Schéma v1 (P1) → v2 (P4 : serrures d'appareil). Une transaction."""
+        try:
+            v = cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()
+        except sqlite3.OperationalError:
+            return
+        if v and v[0] == "1":
+            cx.executescript("BEGIN;" + _MIGRATION_V2 + "COMMIT;")
 
     @property
     def initialise(self) -> bool:
@@ -159,7 +201,7 @@ class Coffre:
         sel = nouveau_sel()
         kek = derive_kek(secret.encode(), sel, self._argon2)
         nonce, emballee = chiffrer(kek, mk, aad_serrure(ident))
-        cx.execute("INSERT INTO serrures VALUES (?,?,?,?,?,?,?,?)",
+        cx.execute("INSERT INTO serrures (id, genre, libelle, sel, params, nonce, mk, creee) VALUES (?,?,?,?,?,?,?,?)",
                    (ident, genre, libelle, sel, json.dumps(self._argon2), nonce, emballee, int(time.time())))
         return ident
 
@@ -181,29 +223,47 @@ class Coffre:
                 self._ajoute_serrure(cx, "phrase", phrase, mk, "phrase initiale")
                 codes = self._codes(cx, mk)
                 cx.execute("INSERT INTO compartiments VALUES ('box', 'box', 'système', ?)", (int(time.time()),))
-                cx.execute("INSERT INTO meta VALUES ('version', '1'), ('cree', ?)", (str(int(time.time())),))
+                cx.execute("INSERT INTO meta VALUES ('version', ?), ('cree', ?)",
+                           (VERSION_SCHEMA, str(int(time.time()))))
             self._mk = CleVerrouillee(mk)
             del mk
             self._dernier = self._horloge()
             self.journal.ajouter("initialisation", serrures=1 + NB_CODES)
             return codes
 
-    def ouvrir(self, secret: str, genre: str = "phrase", **contexte) -> bool:
-        """Essaie les serrures du genre donné. `contexte` (qui, d'où) va au journal."""
-        if genre not in ("phrase", "secours"):
+    def ouvrir(self, secret: str, genre: str = "phrase", cred_id: Optional[str] = None, **contexte) -> bool:
+        """Essaie les serrures du genre donné. `contexte` (qui, d'où) va au journal.
+
+        `appareil` : `secret` est la sortie WebAuthn PRF (base64url), `cred_id`
+        désigne la clé d'appareil qui l'a rendue.
+        """
+        if genre not in ("phrase", "secours", "appareil"):
             raise Interdit("genre de serrure inconnu")
         if not self.initialise:
             raise NonInitialise()
-        candidat = (secret if genre == "phrase" else normalise_code(secret or "")).encode()
+        if genre == "appareil":
+            try:
+                candidat = b64u_decode(secret or "")
+            except (ValueError, TypeError):
+                raise Interdit("sortie PRF illisible") from None
+            if len(candidat) != TAILLE_CLE:
+                raise Interdit("sortie PRF de 32 octets attendue")
+        else:
+            candidat = (secret if genre == "phrase" else normalise_code(secret or "")).encode()
         with self._verrou:
             self._expire()
             with self._cx() as cx:
-                lignes = cx.execute("SELECT id, sel, params, nonce, mk FROM serrures WHERE genre=?",
-                                    (genre,)).fetchall()
+                req = "SELECT id, sel, params, nonce, mk FROM serrures WHERE genre=?"
+                args = [genre]
+                if genre == "appareil" and cred_id:
+                    req += " AND cred_id=?"
+                    args.append(cred_id)
+                lignes = cx.execute(req, args).fetchall()
                 for ident, sel, params, nonce, emballee in lignes:
                     try:
-                        mk = dechiffrer(derive_kek(candidat, sel, json.loads(params)), nonce, emballee,
-                                        aad_serrure(ident))
+                        kek = (derive_kek_appareil(candidat, sel) if genre == "appareil"
+                               else derive_kek(candidat, sel, json.loads(params)))
+                        mk = dechiffrer(kek, nonce, emballee, aad_serrure(ident))
                     except Refus:
                         continue
                     restants = None
@@ -231,6 +291,35 @@ class Coffre:
                 ident = self._ajoute_serrure(cx, "phrase", phrase, mk, libelle[:80])
             self.journal.ajouter("serrure_ajoutee", serrure=ident, genre="phrase")
             return ident
+
+    def ajouter_serrure_appareil(self, cred_id: str, sel: bytes, prf: bytes, libelle: str = "") -> str:
+        """Une clé d'appareil (WebAuthn PRF) emballe la MK. Coffre ouvert exigé."""
+        if not isinstance(cred_id, str) or not CRED_ID_RE.match(cred_id):
+            raise Interdit("identifiant de clé d'appareil invalide")
+        if len(sel) != TAILLE_CLE or len(prf) != TAILLE_CLE:
+            raise Interdit("sel et sortie PRF de 32 octets attendus")
+        with self._verrou:
+            mk = self._mk_ou_scelle()
+            ident = secrets.token_hex(8)
+            nonce, emballee = chiffrer(derive_kek_appareil(prf, sel), mk, aad_serrure(ident))
+            with self._cx() as cx:
+                if cx.execute("SELECT 1 FROM serrures WHERE cred_id=?", (cred_id,)).fetchone():
+                    raise Interdit("cette clé d'appareil est déjà une serrure")
+                cx.execute("INSERT INTO serrures (id, genre, libelle, sel, params, nonce, mk, creee, cred_id) "
+                           "VALUES (?,?,?,?,?,?,?,?,?)",
+                           (ident, "appareil", libelle[:80], sel, json.dumps({"kdf": "hkdf-sha256"}),
+                            nonce, emballee, int(time.time()), cred_id))
+            self.journal.ajouter("serrure_ajoutee", serrure=ident, genre="appareil")
+            return ident
+
+    def serrures_appareil(self) -> list:
+        """Ce qu'il faut au navigateur pour demander la sortie PRF : identifiant
+        de la clé et sel — rien de secret."""
+        if not self.initialise:
+            return []
+        with self._cx() as cx:
+            return [{"id": i, "cred_id": c, "sel": b64u(s), "libelle": l} for i, c, s, l in cx.execute(
+                "SELECT id, cred_id, sel, libelle FROM serrures WHERE genre='appareil' ORDER BY creee")]
 
     def retirer_serrure(self, ident: str) -> None:
         with self._verrou:
