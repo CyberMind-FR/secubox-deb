@@ -33,12 +33,18 @@ case "$1" in
     # cette ligne, le demon lit « aucun secret » et la validation reste fermee
     # en silence, ce qui ressemble a une panne.
     SECRET=/etc/secubox/secrets/radio-sysop
-    if [ ! -f "$SECRET" ]; then
+    # Passé au niveau 0 du Coffre (#1367 P3) : la crédence chiffrée fait foi,
+    # on ne recrée surtout pas un secret en clair différent.
+    if [ -f /etc/secubox/credstore/radio-sysop.cred ]; then
+      SECRET=""
+    elif [ ! -f "$SECRET" ]; then
       mkdir -p /etc/secubox/secrets
       head -c 24 /dev/urandom | base64 | tr -d "=/+" > "$SECRET"
     fi
-    chown secubox-radio:secubox-radio "$SECRET" 2>/dev/null || true
-    chmod 0400 "$SECRET"
+    if [ -n "$SECRET" ]; then
+      chown secubox-radio:secubox-radio "$SECRET" 2>/dev/null || true
+      chmod 0400 "$SECRET"
+    fi
     if command -v setfacl >/dev/null 2>&1; then
       # LE MASQUE, PAS SEULEMENT L'ENTREE (#1255). Une dizaine de paquets
       # font `install -d -m 0700` sur ce dossier PARTAGE, et tout chmod

@@ -63,7 +63,7 @@ func main() {
 		return
 	}
 	log.SetFlags(0)
-	chargeSecret("/etc/secubox/secrets/radio-sysop")
+	chargeSecret(cheminSecret(os.Getenv("CREDENTIALS_DIRECTORY"), "/etc/secubox/secrets/radio-sysop"))
 
 	if err := os.MkdirAll(filepath.Dir(*base), 0o750); err != nil {
 		log.Fatalf("radio: repertoire de base : %v", err)
@@ -156,6 +156,20 @@ func main() {
 // `/etc/secubox/secrets/radio-sysop`. Sans ce fichier, PERSONNE n'est sysop —
 // une installation neuve n'ouvre pas la validation a qui passe.
 var secretSysop string
+
+// LE SECRET VIENT D'ABORD DE SYSTEMD (Coffre P3, #1367) : chiffré sur disque
+// par systemd-creds, déchiffré au démarrage de l'unité dans
+// $CREDENTIALS_DIRECTORY (`coffrectl niveau0 migrer radio-sysop …`). L'ancien
+// fichier reste lu tant que la bascule n'est pas faite.
+func cheminSecret(credentiels, ancien string) string {
+	if credentiels != "" {
+		p := filepath.Join(credentiels, "radio-sysop")
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
+			return p
+		}
+	}
+	return ancien
+}
 
 func chargeSecret(chemin string) {
 	b, err := os.ReadFile(chemin)

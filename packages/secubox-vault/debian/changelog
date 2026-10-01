@@ -1,3 +1,23 @@
+secubox-vault (2.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * niveau0 : une unité « porte » sa crédence quand son répertoire de
+    crédences vivant la contient — systemd 252 affiche
+    LoadCredentialEncrypted=[unprintable], ce que `retirer-clair` ne
+    reconnaissait pas (vécu sur gk3).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 17:11:33 +0200
+
+secubox-vault (2.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * Coffre P3 (#1367) : niveau 0, les secrets de démarrage par systemd-creds.
+    `coffrectl niveau0 migrer NOM CHEMIN UNITE.service` chiffre (clé d'hôte, et
+    TPM2 quand la box en a) dans /etc/secubox/credstore, vérifie le
+    déchiffrement, déclare `LoadCredentialEncrypted=` à l'unité par un drop-in ;
+    le clair est gardé. `retirer-clair NOM` ne le détruit que si chaque unité
+    tourne AVEC la crédence et que les valeurs concordent. `etat`, `lire`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 17:09:35 +0200
+
 secubox-vault (2.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Coffre P2 (#1367) : session de signature du dépôt apt. `coffrectl depot
