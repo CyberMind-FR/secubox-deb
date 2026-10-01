@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from api.profileur import Profileur  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_acces import DID, admis  # noqa: E402
+from test_acces import DID, _remet_paire, admis  # noqa: E402,F401
 
 COMPTES = [
     {"handle": "gk2", "nom": "gk2", "role": "admin", "desactive": False},

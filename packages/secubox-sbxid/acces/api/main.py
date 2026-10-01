@@ -40,7 +40,7 @@ from secubox_core.auth import (_emit_session_event, create_token, require_jwt,
 from .identite import empreinte_courte, nom_de_compte, verifie_signature
 from .lien import LienInvalide, Liens
 from .inventaire import inventaire
-from .profileur import PROFILS, DemandeInvalide, Profileur
+from .profileur import PROFILS, DemandeInvalide, DemandeTropTot, Profileur
 from .session import Portier, SessionRefusee
 
 log = logging.getLogger("secubox.acces")
@@ -262,6 +262,8 @@ async def demander(corps: DemandeIn, req: Request):
         d = profileur().demande(corps.model_dump())
     except DemandeInvalide as e:
         raise HTTPException(400, str(e)) from e
+    except DemandeTropTot as e:
+        raise HTTPException(429, "Demande refusée récemment : réessayez dans quelques minutes.") from e
 
     if d.etat == "acceptee":
         return {"etat": "acceptee", "profil": d.profil, "empreinte": d.empreinte}
@@ -281,6 +283,72 @@ async def suivi(did: str, jeton: str):
     if vue is None:
         # MÊME RÉPONSE pour « inconnu » et « mauvais jeton » : les distinguer
         # ferait de cette route un moyen de savoir quels appareils ont demandé.
+        raise HTTPException(404, "Demande introuvable.")
+    return vue
+
+
+# ── RETROUVER ET RENOUVELER SA DEMANDE (#1805) ──────────────────────────────
+# Un navigateur garde sa clé (IndexedDB) mais peut perdre son jeton de suivi
+# (localStorage effacé, autre onglet privé…). Il RETROUVE alors sa demande en
+# signant un défi avec sa clé, au lieu d'en déposer une nouvelle ; une demande
+# refusée ou expirée se RENOUVELLE en un clic, mêmes renseignements.
+RETROUVAILLES_PAR_IP = 30
+_compteur_retrouvailles: dict[str, list[float]] = {}
+
+
+def _cadence_retrouvailles(req: Request) -> None:
+    ip = _ip(req)
+    maintenant = time.monotonic()
+    essais = [t for t in _compteur_retrouvailles.get(ip, []) if maintenant - t < FENETRE_S]
+    if len(essais) >= RETROUVAILLES_PAR_IP:
+        raise HTTPException(429, "Trop d'essais. Réessayez plus tard.")
+    essais.append(maintenant)
+    _compteur_retrouvailles[ip] = essais
+
+
+class RetrouvaillesIn(BaseModel):
+    did: str = Field(max_length=160)
+    defi: str = Field(max_length=64)
+    signature: str = Field(max_length=200)
+
+
+class RenouvellementIn(BaseModel):
+    did: str = Field(max_length=160)
+    jeton: str = Field(max_length=64)
+
+
+@app.get("/invitation/retrouver/defi")
+async def retrouver_defi(did: str, req: Request):
+    """Un défi pour retrouver SA demande. Rendu pour tout DID bien formé —
+    connu ou non — : la réponse ne trahit pas qui a demandé."""
+    _cadence_retrouvailles(req)
+    if len(did) > 160:
+        raise HTTPException(400, "identifiant hors format")
+    try:
+        return {"defi": portier().defi_retrouvailles(did)}
+    except SessionRefusee as e:
+        raise HTTPException(429, str(e)) from e
+
+
+@app.post("/invitation/retrouver")
+async def retrouver(corps: RetrouvaillesIn, req: Request):
+    """Preuve de la clé → la demande de cet appareil et son jeton de suivi."""
+    _cadence_retrouvailles(req)
+    try:
+        return portier().retrouve(corps.did, corps.defi, corps.signature)
+    except SessionRefusee as e:
+        raise HTTPException(403, str(e)) from e
+
+
+@app.post("/invitation/renouveler")
+async def renouveler(corps: RenouvellementIn):
+    """Remet en attente SA demande refusée ou expirée — même demande, pas une
+    nouvelle (#1805)."""
+    try:
+        vue = profileur().renouvelle(corps.did, corps.jeton)
+    except DemandeTropTot as e:
+        raise HTTPException(429, "Demande refusée récemment : réessayez dans quelques minutes.") from e
+    if vue is None:
         raise HTTPException(404, "Demande introuvable.")
     return vue
 
@@ -414,7 +482,7 @@ async def session_entree(corps: EntreeIn, req: Request, reponse: Response):
     # doit pas pouvoir ouvrir davantage que la porte d'entrée : monter en
     # privilèges se fait depuis une session déjà prouvée par signature.
     jwt = create_token(compte, expires_in=SESSION_LIEN_S, jti=jti)
-    set_session_cookie(reponse, jwt, expires_in=SESSION_LIEN_S)
+    set_session_cookie(reponse, jwt, expires_in=SESSION_LIEN_S, request=req)  # domaine de la box (#1806)
     _emit_session_event("login_success", compte, {
         "jti": jti, "expires_in": SESSION_LIEN_S,
         "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:300],
@@ -503,7 +571,7 @@ async def session_ouvrir(corps: OuvertureIn, req: Request, reponse: Response):
     # ouverte » d'un côté et « non connecté » de l'autre.
     jti = secrets.token_hex(8)
     jwt = create_token(compte, expires_in=d["duree"], jti=jti)
-    set_session_cookie(reponse, jwt, expires_in=d["duree"])
+    set_session_cookie(reponse, jwt, expires_in=d["duree"], request=req)  # domaine de la box (#1806)
     _emit_session_event("login_success", compte, {
         "jti": jti, "expires_in": d["duree"],
         "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:300],

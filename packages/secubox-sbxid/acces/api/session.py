@@ -49,6 +49,10 @@ DEFI_TTL_S = 120
 #: même si quelqu'un en demande en boucle — et la cadence par IP fait le reste.
 DEFIS_MAX = 512
 
+#: Défis de RETROUVAILLES (#1805), dans une table À PART : cette porte s'ouvre à
+#: l'inconnu (pas de jeton), elle ne doit pas pouvoir remplir celle des sessions.
+DEFIS_RETROUVAILLES_MAX = 256
+
 #: Durée de la session ouverte. Un invité revient ; on ne le fait pas
 #: redemander l'accès chaque matin.
 SESSION_S = 7 * 24 * 3600
@@ -85,6 +89,7 @@ class Portier:
         self._profileur = profileur
         self._verifie = verifie_signature
         self._defis: dict[str, Defi] = {}
+        self._retrouvailles: dict[str, Defi] = {}
 
     # — le défi ————————————————————————————————————————————————————
 
@@ -108,9 +113,39 @@ class Portier:
         return d.valeur
 
     def _purge(self) -> None:
-        for v, d in list(self._defis.items()):
-            if d.perime():
-                del self._defis[v]
+        for table in (self._defis, self._retrouvailles):
+            for v, d in list(table.items()):
+                if d.perime():
+                    del table[v]
+
+    # — les retrouvailles (#1805) ——————————————————————————————————————
+
+    def defi_retrouvailles(self, did: str) -> str:
+        """Un défi pour qu'un navigateur RETROUVE sa demande sans jeton de suivi.
+
+        Émis même pour un DID inconnu : répondre autrement dirait quels appareils
+        ont demandé. La preuve, elle, n'aboutit que pour une demande existante."""
+        self._purge()
+        if len(self._retrouvailles) >= DEFIS_RETROUVAILLES_MAX:
+            raise SessionRefusee("trop de demandes en cours")
+        d = Defi(did=did, valeur=secrets.token_hex(32), emis_le=time.monotonic())
+        self._retrouvailles[d.valeur] = d
+        return d.valeur
+
+    def retrouve(self, did: str, defi: str, signature: str) -> dict:
+        """Preuve de possession de la clé → la demande et son jeton de suivi.
+
+        Même discipline que `ouvre` : défi consommé avant d'être jugé, message
+        d'échec unique."""
+        d = self._retrouvailles.pop(defi, None)
+        if d is None or d.perime() or d.did != did:
+            raise SessionRefusee("preuve invalide")
+        demande = self._profileur.retrouve(did)
+        if demande is None:
+            raise SessionRefusee("preuve invalide")
+        if not self._verifie(demande.cle_publique, bytes.fromhex(defi), signature):
+            raise SessionRefusee("preuve invalide")
+        return {**demande.vue_demandeur(), "jeton": demande.jeton}
 
     # — l'ouverture ————————————————————————————————————————————————
 

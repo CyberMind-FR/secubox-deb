@@ -107,7 +107,7 @@
 
 <script type="module">
 import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis, suitLeLien,
-         oublie, jetonGarde } from './appareil.js';
+         oublie, jetonGarde, renouvelle } from './appareil.js';
 
 const $ = (id) => document.getElementById(id);
 function el(t, c, txt) {
@@ -283,7 +283,7 @@ async function rendMienne(v) {
     b.appendChild(g);
   } else {
     const g = el('div', 'gestes');
-    g.appendChild(bouton('Refaire une demande', 'fort', () => { oublie(); return Promise.resolve(); }));
+    g.appendChild(bouton('Renouveler ma demande', 'fort', () => renouvelle()));
     b.appendChild(g);
   }
   c.appendChild(b);

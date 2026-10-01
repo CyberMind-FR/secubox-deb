@@ -31,6 +31,7 @@ comme un geste distinct dans le journal.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import secrets
@@ -51,6 +52,11 @@ JTIS_MAX = 20
 #: cesse d'être lue, et une file qu'on ne lit plus ne sert à rien.
 EXPIRATION_S = 14 * 24 * 3600
 
+#: Délai minimal entre deux renouvellements d'une demande refusée ou expirée
+#: (#1805) : renouveler ramène la demande devant l'administrateur ; sans délai,
+#: un refus se contournerait en cliquant en boucle.
+RENOUVELLEMENT_DELAI_S = 10 * 60
+
 ETATS = ("en_attente", "acceptee", "refusee", "expiree")
 Etat = Literal["en_attente", "acceptee", "refusee", "expiree"]
 
@@ -61,6 +67,16 @@ _RE_DID = re.compile(r"^did:[a-z0-9]+:[A-Za-z0-9._-]{8,128}$")
 #: écrire. Elle écarte seulement ce qui ne peut PAS être une adresse, pour que
 #: le champ ne devienne pas un second champ de texte libre.
 _RE_EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s.]+(\.[^@\s.]+)+$")
+
+
+def did_de_la_cle(point_hex: str) -> str:
+    """L'identifiant qu'un navigateur dérive de sa clé (appareil.js) :
+    `did:sbx:` + les 32 premiers signes hex du SHA-256 du point brut."""
+    return "did:sbx:" + hashlib.sha256(bytes.fromhex(point_hex)).hexdigest()[:32]
+
+
+class DemandeTropTot(Exception):
+    """Renouvellement trop rapproché du précédent (#1805)."""
 
 
 class DemandeInvalide(ValueError):
@@ -103,6 +119,10 @@ class Demande:
     #: le nom d'un humain : révoquer l'appareil ne peut plus se faire par nom
     #: de compte sans déconnecter l'humain partout. On coupe par jti.
     jtis: list = field(default_factory=list)
+    #: Renouvellements de CETTE demande (#1805) : un navigateur retrouve sa
+    #: demande refusée ou expirée et la renouvelle, au lieu d'en créer une autre.
+    renouvellements: int = 0
+    renouvelee_le: Optional[int] = None
 
     @property
     def empreinte(self) -> str:
@@ -165,6 +185,11 @@ def valide_demande(brut: dict) -> Demande:
         charge_cle(cle)
     except CleInvalide as e:
         raise DemandeInvalide(str(e)) from e
+    # L'IDENTIFIANT DÉSIGNE LA CLÉ (#1805). Un `did:sbx:` est dérivé de la clé
+    # par le navigateur ; on le recalcule. Sans ce contrôle, connaître le DID
+    # d'une demande suffisait à en remplacer la clé.
+    if did.startswith("did:sbx:") and did != did_de_la_cle(cle):
+        raise DemandeInvalide("l'identifiant de l'appareil ne correspond pas à sa clé")
 
     nom = str(brut.get("nom", "")).strip()
     if not 1 <= len(nom) <= 60:
@@ -230,10 +255,55 @@ class Profileur:
             # Déjà admis : on ne recrée pas de demande, on le lui dit.
             return ancienne
         if ancienne:
+            if ancienne.expiree():
+                ancienne.etat = "expiree"
             d.jeton = ancienne.jeton      # le suivi reste valable
+            d.renouvellements = ancienne.renouvellements
+            d.renouvelee_le = ancienne.renouvelee_le
+            if ancienne.etat in ("refusee", "expiree"):
+                self._compte_renouvellement(ancienne, d)
         self._demandes[d.did] = d
         self._ecrit()
         return d
+
+    def _compte_renouvellement(self, ancienne: Demande, nouvelle: Demande) -> None:
+        """Une demande refusée ou expirée revient devant l'administrateur — au
+        plus une fois par RENOUVELLEMENT_DELAI_S (#1805)."""
+        maintenant = int(time.time())
+        repere = ancienne.renouvelee_le or ancienne.traitee_le or 0
+        if ancienne.etat == "refusee" and maintenant - repere < RENOUVELLEMENT_DELAI_S:
+            raise DemandeTropTot("renouvellement trop rapproché")
+        nouvelle.renouvellements = ancienne.renouvellements + 1
+        nouvelle.renouvelee_le = maintenant
+
+    def renouvelle(self, did: str, jeton: str) -> Optional[dict]:
+        """« Renouveler ma demande » : MÊME demande, mêmes renseignements, remise
+        en attente si elle était refusée ou expirée (#1805). Rien à faire si elle
+        attend déjà ou si l'appareil est admis. None si inconnue / mauvais jeton."""
+        a = self._demandes.get(did)
+        if not a or not secrets.compare_digest(a.jeton, jeton or ""):
+            return None
+        if a.expiree():
+            a.etat = "expiree"
+        if a.etat in ("refusee", "expiree"):
+            n = Demande(did=a.did, cle_publique=a.cle_publique, nom=a.nom,
+                        message=a.message, appareil=a.appareil, email=a.email,
+                        demandee_le=int(time.time()), jeton=a.jeton,
+                        renouvellements=a.renouvellements, renouvelee_le=a.renouvelee_le)
+            self._compte_renouvellement(a, n)
+            self._demandes[did] = n
+            self._ecrit()
+            return n.vue_demandeur()
+        return a.vue_demandeur()
+
+    def retrouve(self, did: str) -> Optional[Demande]:
+        """La demande d'un appareil qui a PROUVÉ détenir sa clé (#1805) — c'est
+        le portier qui vérifie la preuve, pas cette méthode."""
+        a = self._demandes.get(did)
+        if a and a.expiree():
+            a.etat = "expiree"
+            self._ecrit()
+        return a
 
     def suivi(self, did: str, jeton: str) -> Optional[dict]:
         """État de SA demande. Le jeton évite qu'un tiers sonde l'état d'un DID
