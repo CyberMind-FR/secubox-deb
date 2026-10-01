@@ -1028,10 +1028,20 @@ async def accepte(did: str, dcn: Decision, request: Request, ctx=Depends(exige_a
         pseudo = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (dev["user_uuid"],)).fetchone()[0]
     store.journal(db(), _acteur(ctx), "invite.validated",
                   f"{pseudo or did} · " + (', '.join(roles) if roles else "rattaché à sa personne"))
+    services = []
     if dev and dev["user_uuid"] and roles:        # une ARRIVÉE ; un appareil rattaché n'en est pas une
         S.emet_activite(db(), "user_joined", author=dev["user_uuid"], visibility="node",
                         origin_node=_origine(), context={"via": "invitation"})
-    return {"ok": True, "pseudo": pseudo, "roles": roles, "lien": out.get("lien", "")}
+        # LES SERVICES DU RÔLE S'OUVRENT À L'ARRIVÉE (#1821), comme pour une
+        # invitation : plus de second geste « ouvrir ses comptes ».
+        uid = dev["user_uuid"]
+        services = invitations.services_du_role(dcn.role)
+        try:
+            _travail(uid, lambda c: comptes.cree(c, uid, services), "services.created", _acteur(ctx))
+        except HTTPException:
+            services = []                          # un travail déjà en cours pour elle
+    return {"ok": True, "pseudo": pseudo, "roles": roles, "lien": out.get("lien", ""),
+            "services": services}
 
 
 @app.post("/admin/demandes/{did}/oublier")

@@ -467,11 +467,14 @@ function rendFile(liste) {
     b.appendChild(e);
 
     const g = el('div', 'gestes');
-    // ACCEPTER OUVRE UN ACCÈS `guest`, et rien de plus. Le serveur ignore tout
-    // profil qu'on lui enverrait : l'admission n'a qu'une issue.
+    // UNE SEULE PAGE D'ADMISSION (#1821) : on admet AVEC un rôle et une
+    // personne, dans le Gestionnaire d'identité (servi par le Hall, l'origine
+    // de SBX OS) — ses services s'ouvrent alors d'eux-mêmes.
     g.append(
-      bouton('Accorder un accès', 'oui',
-        () => poste('/file/accepter', { did: d.did }).then(montreLien)),
+      bouton('Admettre (rôle, personne)…', 'oui', () => {
+        location.href = new URL('/identite/#admin', new URL(DESTINATION, location.href)).href;
+        return Promise.resolve();
+      }),
       bouton('Refuser', 'non', () => poste('/file/refuser', { did: d.did, motif: '' })));
     b.appendChild(g);
     c.appendChild(b);

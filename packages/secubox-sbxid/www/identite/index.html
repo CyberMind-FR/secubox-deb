@@ -292,6 +292,9 @@ async function rendAdmin(){
   try { [pers, jour, dem] = await Promise.all([api('/admin/personnes'), api('/admin/journal'), api('/admin/demandes')]); }
   catch(e){ $('#nav-admin').hidden = true; return; }
   $('#nav-admin').hidden = false;
+  // COMPTEUR DES DEMANDES EN ATTENTE (#1821) : visible dès l'ouverture.
+  const n = (dem.en_attente || []).length;
+  $('#nav-admin').textContent = 'Administration SBX OS' + (n ? ` · ${n} demande${n > 1 ? 's' : ''}` : '');
   PERS = pers.personnes;
   rendDemandes(dem.en_attente);
   rendCloses(dem.closes || [], dem.revoques || []);

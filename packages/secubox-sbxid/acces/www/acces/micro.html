@@ -200,7 +200,9 @@ function rendFile(liste) {
     b.appendChild(e);
     const g = el('div', 'gestes');
     g.append(
-      bouton('Accorder', 'oui', () => poste('/file/accepter', { did: d.did })),
+      // UNE SEULE PAGE D'ADMISSION (#1821) : on admet AVEC un rôle et une
+      // personne, dans le Gestionnaire d'identité — plus d'« invité » posé ici.
+      bouton('Admettre…', 'oui', () => { top.location.href = '/identite/#admin'; return Promise.resolve(); }),
       bouton('Refuser', 'non', () => poste('/file/refuser', { did: d.did, motif: '' })));
     b.appendChild(g);
     c.appendChild(b);
