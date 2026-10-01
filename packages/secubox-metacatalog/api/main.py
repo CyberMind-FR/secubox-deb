@@ -21,6 +21,7 @@ from secubox_core.logger import get_logger
 import subprocess
 import json
 import asyncio
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -47,6 +48,17 @@ log = get_logger("metacatalog")
 CACHE_FILE = Path("/var/cache/secubox/metacatalog/catalog.json")
 _cache: Dict[str, Any] = {}
 _last_refresh: Optional[datetime] = None
+
+# LE CATALOGUE EST ÉCRIT PAR LA MINUTERIE, PAS PAR UNE BOUCLE (#1835).
+# `secubox-cache-warm@metacatalog.timer` appelle `_refresh_catalog` toutes les
+# cinq minutes et écrit CACHE_FILE ; le daemon le relit quand il change. La
+# boucle de 60 s qui doublait la minuterie lançait ~290 `systemctl` toutes les
+# cinq minutes sur gk2, sans que personne ne lise le catalogue. Au-delà de
+# PERIME_S, la minuterie ne tourne plus : on sert l'ancien et on recalcule en fond.
+PERIME_S = 900
+_cle_fichier: Optional[int] = None
+_verrou_refresh = asyncio.Lock()
+_en_fond: Optional[asyncio.Task] = None
 
 
 # ======================================================================
@@ -263,13 +275,52 @@ def _run_systemctl(args: List[str], timeout: int = 10) -> Dict[str, Any]:
         return {"success": False, "error": str(e), "stdout": "", "stderr": ""}
 
 
-def _get_service_status(service_name: str) -> Dict[str, Any]:
-    """Get status of a systemd service."""
-    unit_name = f"{service_name}.service"
+# UN SEUL `systemctl show` POUR TOUTES LES UNITÉS (#1835). Unité par unité,
+# c'était `cat` + `is-enabled` + `is-active` + deux `show` : jusqu'à cinq
+# lancements par service, cent pour le catalogue. `show` sur plusieurs unités
+# rend un bloc `clé=valeur` par unité, séparé par une ligne vide — y compris
+# pour une unité absente (LoadState=not-found).
+_PROPRIETES = "Id,LoadState,UnitFileState,ActiveState,ActiveEnterTimestamp,MemoryCurrent"
 
-    # Check if service is installed (unit file exists)
-    result = _run_systemctl(["cat", unit_name])
-    if not result.get("success"):
+
+def _etats_systemd(noms: List[str]) -> Dict[str, Dict[str, str]]:
+    """`{nom: {propriété: valeur}}` pour ces services, en un appel."""
+    if not noms:
+        return {}
+    r = _run_systemctl(["show", "-p", _PROPRIETES, "--", *[f"{n}.service" for n in noms]],
+                       timeout=15)
+    etats: Dict[str, Dict[str, str]] = {}
+    bloc: Dict[str, str] = {}
+    for ligne in (r.get("stdout") or "").splitlines() + [""]:
+        if not ligne.strip():
+            if bloc.get("Id"):
+                etats[bloc["Id"].removesuffix(".service")] = bloc
+            bloc = {}
+            continue
+        cle, _, valeur = ligne.partition("=")
+        bloc[cle] = valeur
+    return etats
+
+
+def _formate_memoire(brut: Optional[str]) -> Optional[str]:
+    if not brut or brut == "[not set]":
+        return None
+    try:
+        mem_val = int(brut)
+    except ValueError:
+        return None
+    if mem_val >= 1024 * 1024 * 1024:
+        return f"{mem_val / (1024*1024*1024):.1f} GB"
+    if mem_val >= 1024 * 1024:
+        return f"{mem_val / (1024*1024):.1f} MB"
+    if mem_val >= 1024:
+        return f"{mem_val / 1024:.1f} KB"
+    return f"{mem_val} B"
+
+
+def _statut_depuis(props: Optional[Dict[str, str]]) -> Dict[str, Any]:
+    """Traduit les propriétés systemd d'une unité en statut de catalogue."""
+    if not props or props.get("LoadState", "not-found") == "not-found":
         return {
             "installed": False,
             "enabled": False,
@@ -277,91 +328,63 @@ def _get_service_status(service_name: str) -> Dict[str, Any]:
             "active_since": None,
             "memory_usage": None
         }
-
-    # Check if enabled
-    result = _run_systemctl(["is-enabled", unit_name])
-    enabled = result.get("stdout") == "enabled"
-
-    # Check if active
-    result = _run_systemctl(["is-active", unit_name])
-    active_state = result.get("stdout", "unknown")
-
-    status = "unknown"
-    if active_state == "active":
-        status = "running"
-    elif active_state == "inactive":
-        status = "stopped"
-    elif active_state == "failed":
-        status = "failed"
-
-    # Get detailed status
-    active_since = None
-    memory_usage = None
-
-    if status == "running":
-        # Get ActiveEnterTimestamp
-        result = _run_systemctl(["show", unit_name, "-p", "ActiveEnterTimestamp", "--value"])
-        if result.get("success") and result.get("stdout"):
-            active_since = result.get("stdout")
-
-        # Get MemoryCurrent
-        result = _run_systemctl(["show", unit_name, "-p", "MemoryCurrent", "--value"])
-        if result.get("success") and result.get("stdout"):
-            mem_bytes = result.get("stdout")
-            if mem_bytes and mem_bytes != "[not set]":
-                try:
-                    mem_val = int(mem_bytes)
-                    if mem_val >= 1024 * 1024 * 1024:
-                        memory_usage = f"{mem_val / (1024*1024*1024):.1f} GB"
-                    elif mem_val >= 1024 * 1024:
-                        memory_usage = f"{mem_val / (1024*1024):.1f} MB"
-                    elif mem_val >= 1024:
-                        memory_usage = f"{mem_val / 1024:.1f} KB"
-                    else:
-                        memory_usage = f"{mem_val} B"
-                except ValueError:
-                    pass
-
+    status = {"active": "running", "inactive": "stopped",
+              "failed": "failed"}.get(props.get("ActiveState", ""), "unknown")
+    running = status == "running"
     return {
         "installed": True,
-        "enabled": enabled,
+        "enabled": props.get("UnitFileState") == "enabled",
         "status": status,
-        "active_since": active_since,
-        "memory_usage": memory_usage
+        "active_since": (props.get("ActiveEnterTimestamp") or None) if running else None,
+        "memory_usage": _formate_memoire(props.get("MemoryCurrent")) if running else None
     }
 
 
-def _load_menu_entry(service_name: str) -> Dict[str, Any]:
-    """Load menu.d entry for a service."""
-    menu_dir = Path("/usr/share/secubox/menu.d")
-    menu_info = {"icon": None, "menu_path": None, "category": "system"}
+def _get_service_status(service_name: str) -> Dict[str, Any]:
+    """Get status of a systemd service."""
+    return _statut_depuis(_etats_systemd([service_name]).get(service_name))
 
+
+def _entrees_menu() -> List[Dict[str, Any]]:
+    """Les entrées de menu.d, lues UNE fois par rafraîchissement (pas par service)."""
+    entrees = []
     try:
-        for menu_file in menu_dir.glob("*.json"):
+        for menu_file in Path("/usr/share/secubox/menu.d").glob("*.json"):
             try:
                 data = json.loads(menu_file.read_text())
-                # Check if this menu entry matches the service
-                menu_id = data.get("id", "")
-                if menu_id and service_name.endswith(menu_id):
-                    menu_info["icon"] = data.get("icon")
-                    menu_info["menu_path"] = data.get("path")
-                    menu_info["category"] = data.get("category", "system")
-                    break
             except (json.JSONDecodeError, IOError):
                 continue
+            if isinstance(data, dict):
+                entrees.append(data)
     except Exception as e:
         log.debug("Error loading menu entries: %s", e)
+    return entrees
 
+
+def _load_menu_entry(service_name: str,
+                     entrees: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Load menu.d entry for a service."""
+    menu_info = {"icon": None, "menu_path": None, "category": "system"}
+    for data in (_entrees_menu() if entrees is None else entrees):
+        # Check if this menu entry matches the service
+        menu_id = data.get("id", "")
+        if menu_id and service_name.endswith(menu_id):
+            menu_info["icon"] = data.get("icon")
+            menu_info["menu_path"] = data.get("path")
+            menu_info["category"] = data.get("category", "system")
+            break
     return menu_info
 
 
 def _discover_services() -> List[ServiceInfo]:
     """Discover all installed SecuBox services."""
     services = []
+    etats = _etats_systemd(list(KNOWN_SERVICES))
+    entrees = _entrees_menu()
 
     for name, meta in KNOWN_SERVICES.items():
-        status_info = _get_service_status(name)
-        menu_info = _load_menu_entry(name)
+        status_info = _statut_depuis(etats.get(name))
+        menu_info = _load_menu_entry(name, entrees)
 
         # Build dependency graph (who depends on this service)
         dependents = []
@@ -414,8 +437,17 @@ def _build_dependency_graph(services: List[ServiceInfo]) -> DependencyGraph:
 
 
 async def _refresh_catalog() -> Dict[str, Any]:
-    """Refresh the service catalog."""
-    global _cache, _last_refresh
+    """Refresh the service catalog.
+
+    Un seul calcul à la fois ; le travail bloquant (systemctl, menu.d) part
+    dans un thread pour ne pas figer la boucle — partagée, dans l'agrégateur.
+    """
+    async with _verrou_refresh:
+        return await asyncio.to_thread(_calcule_catalogue)
+
+
+def _calcule_catalogue() -> Dict[str, Any]:
+    global _cache, _last_refresh, _cle_fichier
 
     try:
         services = _discover_services()
@@ -438,12 +470,16 @@ async def _refresh_catalog() -> Dict[str, Any]:
             "timestamp": datetime.now().isoformat()
         }
 
-        # Write to cache file
-        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        CACHE_FILE.write_text(json.dumps(catalog, indent=2))
-
         _cache = catalog
         _last_refresh = datetime.now()
+
+        # Write to cache file
+        try:
+            CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            CACHE_FILE.write_text(json.dumps(catalog, indent=2))
+            _cle_fichier = CACHE_FILE.stat().st_mtime_ns
+        except OSError as e:
+            log.warning("catalog cache file not written: %s", e)
 
         log.info("Catalog refreshed: %d services discovered", len(services))
         return catalog
@@ -453,21 +489,58 @@ async def _refresh_catalog() -> Dict[str, Any]:
         raise
 
 
-# Background refresh task
-async def _background_refresh():
-    """Background task to refresh catalog periodically."""
-    while True:
-        try:
-            await _refresh_catalog()
-        except Exception as e:
-            log.error("Background refresh failed: %s", e)
-        await asyncio.sleep(60)
+def _relit_fichier() -> None:
+    """Reprend le catalogue écrit par la minuterie, s'il a changé (un stat sinon)."""
+    global _cache, _cle_fichier
+    try:
+        cle = CACHE_FILE.stat().st_mtime_ns
+    except OSError:
+        return
+    if cle == _cle_fichier:
+        return
+    try:
+        data = json.loads(CACHE_FILE.read_text())
+    except (OSError, ValueError):
+        return
+    if isinstance(data, dict) and isinstance(data.get("services"), list):
+        _cache = data
+        _cle_fichier = cle
 
 
-@app.on_event("startup")
-async def startup():
-    """Start background refresh task."""
-    asyncio.create_task(_background_refresh())
+def _age_catalogue() -> float:
+    """Âge du catalogue le plus récent connu : le fichier, ou notre propre calcul."""
+    ages = []
+    try:
+        ages.append(time.time() - CACHE_FILE.stat().st_mtime)
+    except OSError:
+        pass
+    if _last_refresh is not None:
+        ages.append((datetime.now() - _last_refresh).total_seconds())
+    return min(ages) if ages else float("inf")
+
+
+async def _catalogue_frais() -> Dict[str, Any]:
+    """Le catalogue à servir : le fichier de la minuterie s'il est récent.
+
+    Périmé : on le sert tout de même et on recalcule en fond, un seul calcul à
+    la fois. Absent : il faut bien attendre le premier.
+    """
+    global _en_fond
+    _relit_fichier()
+    if _cache and _age_catalogue() < PERIME_S:
+        return _cache
+    if _cache:
+        if _en_fond is None or _en_fond.done():
+            _en_fond = asyncio.create_task(_refresh_en_fond())
+        return _cache
+    return await _refresh_catalog()
+
+
+async def _refresh_en_fond() -> None:
+    try:
+        await _refresh_catalog()
+    except Exception as e:  # déjà journalisé ; le prochain passage réessaiera
+        log.debug("background catalog refresh failed: %s", e)
 
 
 # ======================================================================
@@ -488,8 +561,7 @@ async def health():
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
     """Get module status with catalog stats."""
-    if not _cache:
-        await _refresh_catalog()
+    await _catalogue_frais()
 
     stats = _cache.get("stats", {})
     return {
@@ -511,8 +583,7 @@ async def get_services(
     user=Depends(require_jwt)
 ):
     """Get all services with optional filtering."""
-    if not _cache:
-        await _refresh_catalog()
+    await _catalogue_frais()
 
     services = _cache.get("services", [])
 
@@ -542,8 +613,7 @@ async def get_service(name: str, user=Depends(require_jwt)):
     if not name.startswith("secubox-"):
         name = f"secubox-{name}"
 
-    if not _cache:
-        await _refresh_catalog()
+    await _catalogue_frais()
 
     services = _cache.get("services", [])
     service = next((s for s in services if s.get("name") == name), None)
@@ -552,7 +622,7 @@ async def get_service(name: str, user=Depends(require_jwt)):
         raise HTTPException(status_code=404, detail=f"Service '{name}' not found")
 
     # Get live status (may differ from cached)
-    live_status = _get_service_status(name)
+    live_status = await asyncio.to_thread(_get_service_status, name)
     service["status"] = live_status["status"]
     service["active_since"] = live_status["active_since"]
     service["memory_usage"] = live_status["memory_usage"]
@@ -563,8 +633,7 @@ async def get_service(name: str, user=Depends(require_jwt)):
 @router.get("/dependencies")
 async def get_dependencies(user=Depends(require_jwt)):
     """Get the full dependency graph."""
-    if not _cache:
-        await _refresh_catalog()
+    await _catalogue_frais()
 
     return _cache.get("graph", {"nodes": [], "edges": []})
 
@@ -576,8 +645,7 @@ async def get_service_dependencies(name: str, user=Depends(require_jwt)):
     if not name.startswith("secubox-"):
         name = f"secubox-{name}"
 
-    if not _cache:
-        await _refresh_catalog()
+    await _catalogue_frais()
 
     services = _cache.get("services", [])
     service = next((s for s in services if s.get("name") == name), None)
@@ -611,8 +679,7 @@ async def get_service_dependencies(name: str, user=Depends(require_jwt)):
 @router.get("/endpoints")
 async def get_all_endpoints(user=Depends(require_jwt)):
     """Get API endpoints for all services."""
-    if not _cache:
-        await _refresh_catalog()
+    await _catalogue_frais()
 
     endpoints = []
     services = _cache.get("services", [])
@@ -643,8 +710,7 @@ async def get_service_endpoints(name: str, user=Depends(require_jwt)):
     if not name.startswith("secubox-"):
         name = f"secubox-{name}"
 
-    if not _cache:
-        await _refresh_catalog()
+    await _catalogue_frais()
 
     services = _cache.get("services", [])
     service = next((s for s in services if s.get("name") == name), None)
@@ -734,8 +800,7 @@ async def refresh_catalog(user=Depends(require_jwt)):
 @router.get("/categories")
 async def get_categories(user=Depends(require_jwt)):
     """Get list of service categories with counts."""
-    if not _cache:
-        await _refresh_catalog()
+    await _catalogue_frais()
 
     services = _cache.get("services", [])
     categories = {}

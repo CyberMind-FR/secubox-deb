@@ -24,11 +24,14 @@ type Pipe struct {
 	st  *store.Store
 	rss *linker.RSS
 	jr  *log.Logger
+	// Les sujets candidats au regroupement ; un champ pour que les tests
+	// comptent les lectures (#1835).
+	sujetsRecents func(since int64) ([]store.Topic, error)
 }
 
 // New crée le pipeline.
 func New(st *store.Store, rss *linker.RSS, jr *log.Logger) *Pipe {
-	return &Pipe{st: st, rss: rss, jr: jr}
+	return &Pipe{st: st, rss: rss, jr: jr, sujetsRecents: st.SujetsRecents}
 }
 
 // Tour exécute un sondage puis un regroupement. Retourne (articles neufs,
@@ -107,12 +110,22 @@ func (p *Pipe) Regrouper(now int64) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	if len(arts) == 0 {
+		return 0, nil
+	}
+	// LES CANDIDATS SONT LUS UNE FOIS (#1835). Relus pour CHAQUE article, c'était
+	// la fenêtre entière — ~8 000 sujets sur gk2, entités comprises — jusqu'à
+	// cinq cents fois par passage : vingt minutes de processeur au démarrage
+	// après un Reclasser, et une salve à chaque sondage. Rien dans cette boucle
+	// ne modifie un sujet existant (rattachement = ligne d'article, événement =
+	// topic_event) ; seuls les sujets CRÉÉS ici changent la liste, et on les
+	// ajoute en tête, là où `ORDER BY updated_at DESC` les aurait mis.
+	sujets, err := p.sujetsRecents(now - cluster.FenetreSec)
+	if err != nil {
+		return 0, err
+	}
 	touches := map[string]bool{}
 	for _, a := range arts {
-		sujets, err := p.st.SujetsRecents(now - cluster.FenetreSec)
-		if err != nil {
-			return len(touches), err
-		}
 		meilleur := ""
 		var meilleurScore float64
 		for _, t := range sujets {
@@ -141,6 +154,7 @@ func (p *Pipe) Regrouper(now int64) (int, error) {
 			_ = p.st.SetArticleSujet(a.ID, id)
 			_ = p.st.AjouterEvenement(id, now, "detected", a.Title)
 			touches[id] = true
+			sujets = append([]store.Topic{t}, sujets...)
 		}
 	}
 	for id := range touches {

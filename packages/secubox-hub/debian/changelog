@@ -1,3 +1,16 @@
+secubox-hub (1.9.27-1~bookworm1) bookworm; urgency=medium
+
+  * Charge dans l'agrégateur (#1835). Un list-units par cycle au lieu de deux :
+    le relevé de santé filtre la sortie que le cache des services vient
+    d'obtenir (mêmes lignes que --state=running,failed,inactive). /boot_mode,
+    /auth_mode et /version lisent l'état kiosk/zkp de ce cycle au lieu d'un
+    is-active par requête.
+  * Les boucles (5 s et 30 s) dorment sans lecteur depuis deux minutes ; la
+    requête suivante les réveille. Le middleware marque la demande — il
+    tourne aussi monté dans l'agrégateur (le commentaire disait le contraire).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:35:30 +0200
+
 secubox-hub (1.9.26-1~bookworm1) bookworm; urgency=medium
 
   * L'administration reste l'administration (#1832) : la racine

@@ -4,6 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """SecuBox C3box API - Services Portal with Enhanced Monitoring"""
+import os
 import subprocess
 import threading
 import time
@@ -26,7 +27,7 @@ app = FastAPI(title="SecuBox C3Box Services Portal")
 config = get_config("c3box")
 
 # Configuration
-DATA_DIR = Path("/var/lib/secubox/c3box")
+DATA_DIR = Path(os.environ.get("SECUBOX_C3BOX_DATA", "/var/lib/secubox/c3box"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
 HISTORY_FILE = DATA_DIR / "history.json"
@@ -111,48 +112,79 @@ _previous_states: Dict[str, bool] = {}
 _monitoring_task: Optional[asyncio.Task] = None
 
 
-def check_service(name: str) -> bool:
-    """Check if a secubox service is running."""
+# UN SEUL `systemctl show` POUR TOUS LES SERVICES (#1835). La surveillance
+# lançait un `is-active` par service toutes les 30 s — vingt lancements,
+# BLOQUANTS, sur la boucle que c3box partage avec tout son groupe — et chaque
+# lecture de /services en ajoutait autant de `show`. Un relevé daté sert tout
+# le monde : la surveillance comme les endpoints, tant qu'il a moins de
+# RELEVE_MAX_S.
+RELEVE_MAX_S = 15.0
+_PROPRIETES = "Id,ActiveState,ActiveEnterTimestamp,MemoryCurrent"
+_releve: Dict[str, Any] = {"t": 0.0, "etats": {}}
+
+
+def _etats_systemd(noms: List[str]) -> Dict[str, Dict[str, str]]:
+    """`{nom: {propriété: valeur}}` pour ces services, en un appel. Vide si échec."""
     try:
         result = subprocess.run(
-            ["systemctl", "is-active", f"secubox-{name}"],
-            capture_output=True, text=True, timeout=5
+            ["systemctl", "show", "-p", _PROPRIETES, "--",
+             *[f"secubox-{n}.service" for n in noms]],
+            capture_output=True, text=True, timeout=10
         )
-        return result.stdout.strip() == "active"
+        sortie = result.stdout
     except Exception:
-        return False
+        return {}
+    etats: Dict[str, Dict[str, str]] = {}
+    bloc: Dict[str, str] = {}
+    for ligne in sortie.splitlines() + [""]:
+        if not ligne.strip():
+            unite = bloc.get("Id", "")
+            if unite.startswith("secubox-"):
+                etats[unite.removeprefix("secubox-").removesuffix(".service")] = bloc
+            bloc = {}
+            continue
+        cle, _, valeur = ligne.partition("=")
+        bloc[cle] = valeur
+    return etats
+
+
+def _releve_services(age_max: float = RELEVE_MAX_S) -> Dict[str, Dict[str, str]]:
+    """Le relevé de tous les SERVICES, recalculé s'il a plus de `age_max` s."""
+    if _releve["etats"] and time.monotonic() - _releve["t"] < age_max:
+        return _releve["etats"]
+    etats = _etats_systemd([s["name"] for s in SERVICES])
+    if etats:
+        _releve.update(t=time.monotonic(), etats=etats)
+    return etats
+
+
+def _actif(etat: Optional[Dict[str, str]]) -> bool:
+    return bool(etat) and etat.get("ActiveState") == "active"
+
+
+def _depuis(etat: Optional[Dict[str, str]]) -> Optional[str]:
+    valeur = (etat or {}).get("ActiveEnterTimestamp", "")
+    return valeur if valeur and valeur != "n/a" else None
+
+
+def _memoire(etat: Optional[Dict[str, str]]) -> Optional[int]:
+    valeur = (etat or {}).get("MemoryCurrent", "")
+    return int(valeur) if valeur.isdigit() else None
+
+
+def check_service(name: str) -> bool:
+    """Check if a secubox service is running."""
+    return _actif(_etats_systemd([name]).get(name))
 
 
 def get_service_uptime(name: str) -> Optional[str]:
     """Get service uptime from systemctl."""
-    try:
-        result = subprocess.run(
-            ["systemctl", "show", f"secubox-{name}", "--property=ActiveEnterTimestamp"],
-            capture_output=True, text=True, timeout=5
-        )
-        if "=" in result.stdout:
-            timestamp = result.stdout.strip().split("=", 1)[1]
-            if timestamp and timestamp != "n/a":
-                return timestamp
-    except Exception:
-        pass
-    return None
+    return _depuis(_etats_systemd([name]).get(name))
 
 
 def get_service_memory(name: str) -> Optional[int]:
     """Get service memory usage in bytes."""
-    try:
-        result = subprocess.run(
-            ["systemctl", "show", f"secubox-{name}", "--property=MemoryCurrent"],
-            capture_output=True, text=True, timeout=5
-        )
-        if "=" in result.stdout:
-            value = result.stdout.strip().split("=", 1)[1]
-            if value and value.isdigit():
-                return int(value)
-    except Exception:
-        pass
-    return None
+    return _memoire(_etats_systemd([name]).get(name))
 
 
 def _load_webhooks() -> List[Dict[str, Any]]:
@@ -238,9 +270,12 @@ async def _monitor_services():
 
     while True:
         try:
-            for svc in SERVICES:
+            etats = await asyncio.to_thread(_releve_services, RELEVE_MAX_S / 2)
+            # Relevé impossible (systemctl en échec) : on ne conclut rien. Le
+            # traiter comme « tout arrêté » enverrait vingt alertes fausses.
+            for svc in SERVICES if etats else []:
                 name = svc["name"]
-                running = check_service(name)
+                running = _actif(etats.get(name))
                 prev = _previous_states.get(name)
 
                 if prev is not None and prev != running:
@@ -300,12 +335,14 @@ async def list_services():
     if cached:
         return cached
 
+    etats = await asyncio.to_thread(_releve_services)
     services_with_status = []
     for svc in SERVICES:
         svc_copy = svc.copy()
-        svc_copy["running"] = check_service(svc["name"])
+        etat = etats.get(svc["name"])
+        svc_copy["running"] = _actif(etat)
         svc_copy["url"] = f"/{svc['name']}/"
-        svc_copy["uptime"] = get_service_uptime(svc["name"]) if svc_copy["running"] else None
+        svc_copy["uptime"] = _depuis(etat) if svc_copy["running"] else None
         services_with_status.append(svc_copy)
 
     result = {
@@ -352,12 +389,13 @@ async def get_service(name: str):
     if not svc:
         return {"error": "Service not found"}
 
-    running = check_service(name)
+    etat = (await asyncio.to_thread(_etats_systemd, [name])).get(name)
+    running = _actif(etat)
 
     result = svc.copy()
     result["running"] = running
-    result["uptime"] = get_service_uptime(name) if running else None
-    result["memory_bytes"] = get_service_memory(name) if running else None
+    result["uptime"] = _depuis(etat) if running else None
+    result["memory_bytes"] = _memoire(etat) if running else None
     result["url"] = f"/{name}/"
 
     # Get recent history for this service

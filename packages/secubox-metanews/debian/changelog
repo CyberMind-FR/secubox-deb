@@ -1,3 +1,25 @@
+secubox-metanews (0.1.47-1~bookworm1) bookworm; urgency=medium
+
+  * Regrouper lit les sujets candidats UNE fois par passage (#1835), et plus
+    une fois par article : la fenêtre de 36 h (~8 000 sujets sur gk2,
+    entités comprises) relue jusqu'à 500 fois. Après le Reclasser du
+    démarrage (185 articles détachés), plus de vingt minutes de processeur ;
+    à chaque sondage, une salve. Les sujets créés pendant le passage sont
+    ajoutés en tête de la liste, là où ORDER BY updated_at DESC les mettait.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:40:04 +0200
+
+secubox-metanews (0.1.46-1~bookworm1) bookworm; urgency=medium
+
+  * Index des images (#1835) : le relais d'images vérifie à CHAQUE image que
+    l'URL vient de nos flux (article.image, topic.vignette) — sans index,
+    une lecture complète de la table par image : sur gk2, 54 653 articles,
+    37 440 sujets, plan « SCAN article », 21 Go relus en 2 h 30, metanews
+    jusqu'à ~40 % d'un CPU. Migration 0003 : index complets (un index
+    partiel n'est pas employé avec un paramètre lié). Test du plan.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:08:52 +0200
+
 secubox-metanews (0.1.45-1~bookworm1) bookworm; urgency=high
 
   * API : une signature valide ne suffit plus — un jeton portant un jti doit être une session VIVANTE du registre de secubox-auth (déconnexion et révocation prises en compte), un jeton d'intention (scope) est refusé, un jeton sans session n'est admis que d'un service de la flotte (iss connu, 10 min au plus) (#1814).

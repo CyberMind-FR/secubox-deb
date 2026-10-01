@@ -39,6 +39,11 @@ on:
       - 'packages/secubox-certs/**'
       - 'packages/secubox-publish/**'
       - 'packages/secubox-streamlit/**'
+      - 'packages/secubox-metacatalog/**'
+      - 'packages/secubox-health/**'
+      - 'packages/secubox-c3box/**'
+      - 'packages/secubox-hub/api/main.py'
+      - 'packages/secubox-hub/tests/test_charge_hub_1835.py'
       - 'packages/secubox-metrics/sbin/**'
       - 'packages/secubox-metrics/tests/**'
       # LXC uniquement (#1743) : toute relation de paquet est relue.
@@ -105,6 +110,20 @@ jobs:
           # lancements en dix minutes sur gk2 pour aucune lecture.
           - suite: secubox-streamlit
             chemin: packages/secubox-streamlit/tests
+          # Catalogue écrit par la minuterie, un seul systemctl (#1835) : la
+          # boucle de 60 s lançait ~290 systemctl en cinq minutes sur gk2.
+          - suite: secubox-metacatalog
+            chemin: packages/secubox-metacatalog/tests
+          # Un seul systemctl par passage du prober (#1835) : ~310 en cinq minutes.
+          - suite: secubox-health
+            chemin: packages/secubox-health/tests
+          # Relevé systemd de c3box en un appel, hors de la boucle du groupe (#1835).
+          - suite: secubox-c3box
+            chemin: packages/secubox-c3box/tests
+          # Hub : un list-units par cycle, boucles au repos sans lecteur (#1835).
+          # Ce fichier seul : test_cache_warm.py attend encore l'ancien cold-miss.
+          - suite: secubox-hub-charge
+            chemin: packages/secubox-hub/tests/test_charge_hub_1835.py
           # secubox-vhost-logs ne restaure que sa propre passe (#1777) : la
           # 1.0.0 a recopié 90 sauvegardes sur gk2 et écrit dans sites-available.
           # Ce fichier seul : le reste de la suite metrics ne se collecte pas
