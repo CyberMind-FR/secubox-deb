@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = "purge" ]; then
+    # #1791 : la garde du SSH 2222 ne part qu'à la purge.
+    nft delete table inet secubox_gitea_ssh 2>/dev/null || true
+    rm -f /etc/nftables.d/secubox-gitea-ssh.nft
+fi
+#DEBHELPER#
+exit 0
