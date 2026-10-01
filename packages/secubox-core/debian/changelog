@@ -1,3 +1,9 @@
+secubox-core (1.5.49-1~bookworm1) bookworm; urgency=high
+
+  * Sans secubox-auth dans le processus (agrégateur d'une box installée par image), le cœur enregistre lui-même la session ouverte (signature d'appareil, lien d'entrée) et coupe celles qu'on lui désigne, par l'écrivain verrouillé du registre : sur gk3, la session d'un appareil admis rendait un cookie aussitôt refusé (#1817).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:44:19 +0200
+
 secubox-core (1.5.48-1~bookworm1) bookworm; urgency=high
 
   * Une session plafonnée sous `user` (lien d'entrée à usage unique) n'est jamais une personne : ni capacités, ni entrée sans mot de passe dans ses services. appareils.oublie() efface la ligne d'un appareil déjà révoqué ; coffre.efface_personne() efface le coffre d'une personne supprimée (#1809).

@@ -108,12 +108,20 @@ td.c,th.c{text-align:center}
   <h1>Mon identité</h1>
   <p class="lead">Une seule identité SBX OS, prouvée par vos appareils. Vos capacités ouvrent des modules et des fonctionnalités, jamais le système : ni SSH, ni sudo, ni root.</p>
   <div id="moi-corps"></div>
+  <h2>Inviter quelqu'un</h2>
+  <p class="m" style="font-size:12.5px;color:var(--muted);margin:0 0 8px">Un lien (ou un QR) à usage unique : la personne invitée l'ouvre et entre aussitôt, sans mot de passe, avec le rôle choisi et ses services ouverts.</p>
+  <div class="card" id="inviter"></div>
 </section>
 
 <section id="v-appareils">
   <h1>Mes appareils</h1>
   <p class="lead">Chaque appareil prouve votre identité avec sa propre clé, qui ne quitte jamais l'appareil. Le révoquer coupe ses sessions immédiatement.</p>
   <div class="card"><div id="devs"></div></div>
+  <div class="card" style="margin-top:10px">
+    <button type="button" id="b-ajout" class="prim">Ajouter un appareil</button>
+    <p class="m" style="font-size:12.5px;color:var(--muted);margin:8px 0 0">Un QR de 10 minutes : scannez-le avec le nouvel appareil, il rejoint votre identité aussitôt.</p>
+    <div id="ajout-res" style="margin-top:10px"></div>
+  </div>
 </section>
 
 <section id="v-admin">
@@ -328,7 +336,7 @@ async function rendAdmin(){
     const td = b.parentElement, uid = b.dataset.del;
     td.innerHTML = `<div style="display:grid;gap:6px;max-width:300px">
       <span style="color:var(--bad);font-size:12.5px">Supprimer « ${esc(b.dataset.p)} » : appareils, rôles, liens et coffre effacés.</span>
-      <label style="font-size:12.5px"><input type="checkbox" id="del-svc-${esc(uid)}"> supprimer aussi ses comptes de services (courriel, fichiers, vidéos, BBS) — données comprises</label></div>`;
+      <label style="font-size:12.5px"><input type="checkbox" id="del-svc-${esc(uid)}"> supprimer aussi ses comptes de services (courriel, fichiers, vidéos) — données comprises ; son compte BBS reste désactivé, ses messages gardés</label></div>`;
     const y = btn('Supprimer définitivement', 'danger'), n = btn('Annuler');
     y.onclick = async () => {
       y.disabled = n.disabled = true;
@@ -612,6 +620,65 @@ async function rendMesh(){
 }
 
 // ── Chargement & navigation ─────────────────────────────────────────────
+// ── Invitations (#1816) : une invitation vaut approbation ──────────────────
+function montreInvitation(box, r, titre){
+  box.innerHTML = `<div style="display:grid;gap:8px;justify-items:start">
+    <span class="m" style="font-size:12.5px">${esc(titre)} · valable jusqu'au ${quand(r.expire_le)}</span>
+    ${r.qr ? `<img src="${r.qr}" alt="QR de l'invitation" width="180" height="180" style="background:#fff;padding:6px;border-radius:6px">` : ''}
+    <code style="font-family:var(--mono);font-size:12px;overflow-wrap:anywhere;max-width:520px">${esc(r.lien)}</code></div>`;
+  const cp = btn('Copier le lien');
+  cp.onclick = () => navigator.clipboard.writeText(r.lien).then(() => toast('Lien copié (usage unique)'), () => toast('Sélectionnez le lien pour le copier'));
+  box.firstElementChild.appendChild(cp);
+}
+function rendAjout(){
+  const b = $('#b-ajout'); if (!b) return;
+  b.hidden = !ETAT.identite || !ETAT.appareil_courant;
+  b.onclick = async () => {
+    try { const r = await api('/appareils/inviter', {method:'POST'}); montreInvitation($('#ajout-res'), r, 'Scannez avec le nouvel appareil'); listeInvitations(); }
+    catch(e){ toast(e.message); }
+  };
+}
+function rendInviter(){
+  const box = $('#inviter'); if (!box) return;
+  const u = ETAT.identite, admin = ETAT.systeme || (u && u.capabilities.includes('admin.users'));
+  const membre = u && u.status === 'active' && (u.roles || []).some(r => r !== 'guest');
+  if (!admin && !membre){ box.innerHTML = '<p class="muted" style="margin:0">Inviter est réservé aux membres.</p>'; return; }
+  const roles = admin ? ROLES.roles.filter(r => !r.derive).map(r => r.id) : ['guest'];
+  box.innerHTML = `<form class="form-ligne" id="f-inv" autocomplete="off">
+      <label>Pseudo proposé (facultatif)<input id="inv-pseudo" maxlength="32" placeholder="ana"></label>
+      <label>Rôle<select id="inv-role">${roles.map(r => `<option value="${esc(r)}">${esc(LIB[r]||r)}</option>`).join('')}</select></label>
+      <label style="flex:1;min-width:12rem">Adresse (facultative)<input id="inv-email" type="email" maxlength="200"></label>
+      <button class="prim">Créer l'invitation</button></form>
+    <div id="inv-res" style="margin-top:10px"></div>
+    <h3 style="font-size:13px;margin:14px 0 6px">En cours</h3><div id="inv-liste"></div>`;
+  $('#inv-role').value = roles.includes('member') ? 'member' : roles[0];
+  $('#f-inv').onsubmit = async ev => {
+    ev.preventDefault();
+    try {
+      const r = await api('/invitations', {method:'POST', body:JSON.stringify({pseudo:$('#inv-pseudo').value, role:$('#inv-role').value, email:$('#inv-email').value})});
+      montreInvitation($('#inv-res'), r, 'Invitation à usage unique'); $('#f-inv').reset(); listeInvitations();
+    } catch(e){ toast(e.message); }
+  };
+  listeInvitations();
+}
+async function listeInvitations(){
+  const box = $('#inv-liste'); if (!box) return;
+  let l; try { l = (await api('/invitations')).invitations; } catch(e){ box.innerHTML = ''; return; }
+  if (!l.length){ box.innerHTML = '<p class="muted" style="margin:0">Aucune invitation en cours.</p>'; return; }
+  box.innerHTML = '';
+  l.forEach(i => {
+    const row = document.createElement('div'); row.className = 'dev';
+    row.innerHTML = `<div><div class="n">${i.sorte==='appareil' ? 'Nouvel appareil de '+esc(i.par) : esc(i.pseudo||'—')+' · '+esc(LIB[i.role]||i.role)}</div>
+      <div class="m">par ${esc(i.par)} · jusqu'au ${quand(i.expire_le)}${i.email ? ' · '+esc(i.email) : ''}</div></div><div class="act"></div>`;
+    const a = row.querySelector('.act'), b = btn('Révoquer', 'danger');
+    b.onclick = () => confirme(a, 'Révoquer cette invitation ?', async () => {
+      try { await api('/invitations/'+i.invite_uuid, {method:'DELETE'}); toast('Invitation révoquée'); } catch(e){ toast(e.message); }
+      listeInvitations();
+    });
+    a.append(b); box.appendChild(row);
+  });
+}
+
 async function charge(){
   try {
     [ETAT, ROLES] = await Promise.all([api('/moi'), api('/roles')]);
@@ -623,7 +690,7 @@ async function charge(){
   const u = ETAT.identite;
   $('#who').innerHTML = u ? `<b>${esc(u.pseudo)}</b><br><span style="font-family:var(--mono);font-size:11px">${esc(u.user_uuid.slice(0,8))}… · ${u.capabilities.length} capacités</span>`
                           : (ETAT.systeme ? 'compte système · administration seulement' : 'sans identité SBX OS');
-  rendMoi(); rendAppareils(); await rendAdmin(); rendCommunautes(); rendMesh();
+  rendMoi(); rendAppareils(); rendAjout(); rendInviter(); await rendAdmin(); rendCommunautes(); rendMesh();
 }
 function vue(){
   let v = (location.hash || '#moi').slice(1); if (!['moi','appareils','admin','communautes','mesh'].includes(v)) v = 'moi';

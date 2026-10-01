@@ -143,3 +143,20 @@ def test_muter_chemin_explicite(tmp_path, registre):
     autre = tmp_path / "autre.json"
     sessions.muter(lambda rows: rows + [{"id": "z"}], chemin=autre)
     assert json.loads(autre.read_text()) == [{"id": "z"}] and _lignes(registre) == []
+
+
+# ── sans secubox-auth dans le processus (#1817) ───────────────────────────
+def test_sans_rappel_le_coeur_enregistre_et_coupe(registre, monkeypatch):
+    monkeypatch.setattr(auth, "_session_callback", None)
+    auth._emit_session_event("login_success", "sbx-abc", {"jti": "j1817", "expires_in": 60})
+    assert sessions.is_valid("j1817")
+    auth._emit_session_event("sessions_coupees", "sbx-abc", {"jtis": ["j1817"]})
+    sessions.invalidate_cache()
+    assert not sessions.is_valid("j1817")
+
+
+def test_avec_rappel_le_coeur_ne_double_pas(registre, monkeypatch):
+    vus = []
+    monkeypatch.setattr(auth, "_session_callback", lambda e, u, d: vus.append(e))
+    auth._emit_session_event("login_success", "gk2", {"jti": "j2"})
+    assert vus == ["login_success"] and _lignes(registre) == []

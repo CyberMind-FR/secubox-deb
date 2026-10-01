@@ -40,7 +40,7 @@ from secubox_core import capacites as _cap
 from secubox_core import sbxid as S
 from secubox_core import user_store
 
-from . import comptes, store
+from . import comptes, invitations, store
 
 log = logging.getLogger("secubox.sbxid")
 app = FastAPI(title="SBX Identity Manager", version="0.1.0")
@@ -987,6 +987,21 @@ def _acces_ou_503():
     return acc
 
 
+def _rattache_a(dev, personne: str):
+    """Rattache un appareil à une personne EXISTANTE ; la personne née de sa
+    demande, restée sans rien, ne reste pas en fantôme. Rend l'appareil relu."""
+    if not db().execute("SELECT 1 FROM sbx_users WHERE user_uuid=?", (personne,)).fetchone():
+        raise HTTPException(404, "Personne inconnue")
+    ancien = dev["user_uuid"]
+    db().execute("UPDATE sbx_devices SET user_uuid=? WHERE device_uuid=?", (personne, dev["device_uuid"]))
+    if ancien and ancien != personne and \
+            not db().execute("SELECT 1 FROM sbx_devices WHERE user_uuid=?", (ancien,)).fetchone():
+        for t in ("sbx_user_roles", "sbx_app_links", "sbx_preferences"):
+            db().execute(f"DELETE FROM {t} WHERE user_uuid=?", (ancien,))
+        db().execute("DELETE FROM sbx_users WHERE user_uuid=?", (ancien,))
+    return db().execute("SELECT * FROM sbx_devices WHERE device_uuid=?", (dev["device_uuid"],)).fetchone()
+
+
 @app.post("/admin/demandes/{did}/accepter")
 async def accepte(did: str, dcn: Decision, request: Request, ctx=Depends(exige_admin)):
     """Admettre = 1) ouvrir la porte (acces : l'appareil pourra signer son
@@ -1003,16 +1018,7 @@ async def accepte(did: str, dcn: Decision, request: Request, ctx=Depends(exige_a
     dev = store.appareil_par_did(db(), S.did_appareil(cle)) if cle else None
     pseudo = None
     if dev and dcn.personne and dcn.personne != dev["user_uuid"]:
-        if not db().execute("SELECT 1 FROM sbx_users WHERE user_uuid=?", (dcn.personne,)).fetchone():
-            raise HTTPException(404, "Personne inconnue")
-        ancien = dev["user_uuid"]
-        db().execute("UPDATE sbx_devices SET user_uuid=? WHERE device_uuid=?", (dcn.personne, dev["device_uuid"]))
-        # la personne née de la demande n'a plus rien : on ne laisse pas de fantôme
-        if ancien and not db().execute("SELECT 1 FROM sbx_devices WHERE user_uuid=?", (ancien,)).fetchone():
-            for t in ("sbx_user_roles", "sbx_app_links", "sbx_preferences"):
-                db().execute(f"DELETE FROM {t} WHERE user_uuid=?", (ancien,))
-            db().execute("DELETE FROM sbx_users WHERE user_uuid=?", (ancien,))
-        dev = store.appareil_par_did(db(), S.did_appareil(cle))
+        dev = _rattache_a(dev, dcn.personne)
         roles = []                                    # la personne garde SES rôles
     if dev and dev["user_uuid"] and roles:
         db().execute("DELETE FROM sbx_user_roles WHERE user_uuid=?", (dev["user_uuid"],))
@@ -1061,3 +1067,250 @@ def mesh(ctx=Depends(moi)):
                 "SELECT migration_uuid,user_uuid,from_node,to_node,state,updated_at FROM sbx_migrations"
                 " ORDER BY updated_at DESC LIMIT 50")],
             "etat": "M5 : la demande et le transfert entre nœuds arrivent avec l'API de migration (AUTH v3 §5)"}
+
+
+# ── INVITATIONS (#1816, #1802 étape 4) ──────────────────────────────────────
+# Une invitation VAUT APPROBATION : le lien fait entrer, sans demande à trancher.
+# Les administrateurs invitent avec n'importe quel rôle, un membre seulement
+# comme invité ; une personne ajoute elle-même un appareil (QR de 10 minutes).
+
+_CADENCE_PUBLIQUE: Dict[str, list] = {}
+CADENCE_PUBLIQUE_PAR_IP = 20
+
+
+def _cadence_publique(request: Request) -> None:
+    from secubox_core.auth import adresse_client
+    ip = adresse_client(request) or "?"
+    maintenant = time.monotonic()
+    essais = [t for t in _CADENCE_PUBLIQUE.get(ip, []) if maintenant - t < 3600]
+    if len(essais) >= CADENCE_PUBLIQUE_PAR_IP:
+        raise HTTPException(429, "Trop d'essais. Réessayez plus tard.")
+    essais.append(maintenant)
+    _CADENCE_PUBLIQUE[ip] = essais
+
+
+def _lien_invitation(code: str) -> str:
+    from secubox_core.auth import hote_box
+    hote = hote_box("hall")
+    base = f"https://{hote}" if hote else ""
+    return f"{base}/i/acces/?invitation={code}"
+
+
+def _qr(url: str) -> str:
+    """Le QR du lien, en data: URI — produit côté box, montré une fois."""
+    try:
+        import base64
+        import io
+        import qrcode
+    except ImportError:
+        return ""
+    q = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=6, border=2)
+    q.add_data(url)
+    q.make(fit=True)
+    t = io.BytesIO()
+    q.make_image(fill_color="black", back_color="white").save(t, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(t.getvalue()).decode()
+
+
+def _qui_invite(ctx) -> str:
+    """L'identifiant gardé dans `created_by` : la personne, sinon le compte système."""
+    return (ctx.get("user") or {}).get("user_uuid") or ("compte:" + (ctx.get("sub") or "?"))
+
+
+def _pseudo_de(createur: str) -> str:
+    if createur.startswith("compte:"):
+        return createur.split(":", 1)[1]
+    r = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (createur,)).fetchone()
+    return r[0] if r else "?"
+
+
+def _peut_inviter(ctx, role: str) -> None:
+    caps = (ctx.get("user") or {}).get("capabilities", [])
+    if ctx.get("systeme") or "admin.users" in caps:
+        return                                              # administrateur : tout rôle
+    u = ctx.get("user") or {}
+    roles = set(u.get("roles") or [])
+    if u.get("status") == "active" and roles - {"guest"} and role in invitations.ROLES_D_UN_MEMBRE:
+        return                                              # membre : invité seulement
+    raise HTTPException(403, "Un membre n'invite qu'en tant qu'invité ; inviter avec un autre rôle "
+                             "est réservé à l'administration")
+
+
+class Invitation(BaseModel):
+    role: str = "member"
+    pseudo: str = Field(default="", max_length=32)
+    email: str = Field(default="", max_length=200)
+
+
+@app.post("/invitations")
+def cree_invitation(inv: Invitation, ctx=Depends(moi)):
+    """Inviter quelqu'un : lien + QR à usage unique, ~72 h, révocable."""
+    try:
+        S.roles_effectifs([inv.role])
+    except S.Refus as e:
+        raise HTTPException(400, str(e))
+    _peut_inviter(ctx, inv.role)
+    pseudo = inv.pseudo.strip().lower()
+    if pseudo:
+        if not comptes.RE_NOM.match(pseudo) or pseudo in S.COMPTES_SYSTEME:
+            raise HTTPException(400, "Pseudo : a-z 0-9 . _ - (2 à 32), hors comptes système")
+        if db().execute("SELECT 1 FROM sbx_users WHERE pseudo=?", (pseudo,)).fetchone():
+            raise HTTPException(409, f"« {pseudo} » existe déjà")
+    out = invitations.cree(db(), createur=_qui_invite(ctx), role=inv.role, pseudo=pseudo,
+                           email=inv.email.strip())
+    lien = _lien_invitation(out.pop("code"))
+    store.journal(db(), _acteur(ctx), "invite.created", f"{pseudo or '—'} · {inv.role}")
+    return {**out, "lien": lien, "qr": _qr(lien)}
+
+
+@app.post("/appareils/inviter")
+def invite_un_appareil(ctx=Depends(moi)):
+    """« Ajouter un appareil » : un QR de 10 minutes qui fait entrer un nouvel
+    appareil de LA MÊME personne, sans passer par l'administration."""
+    u = ctx.get("user")
+    if not u or u.get("status") != "active" or ctx.get("device") is None:
+        raise HTTPException(403, "Depuis un appareil déjà admis à votre nom")
+    out = invitations.cree(db(), createur=u["user_uuid"], role=None)
+    lien = _lien_invitation(out.pop("code"))
+    store.journal(db(), _acteur(ctx), "invite.device", u.get("pseudo", ""))
+    return {**out, "lien": lien, "qr": _qr(lien)}
+
+
+@app.get("/invitations")
+def liste_invitations(ctx=Depends(moi)):
+    caps = (ctx.get("user") or {}).get("capabilities", [])
+    tout = ctx.get("systeme") or "admin.users" in caps
+    lst = invitations.en_cours(db(), None if tout else _qui_invite(ctx))
+    for x in lst:
+        x["par"] = _pseudo_de(x["par"] or "")
+    return {"invitations": lst}
+
+
+@app.delete("/invitations/{invite_uuid}")
+def revoque_invitation(invite_uuid: str, ctx=Depends(moi)):
+    caps = (ctx.get("user") or {}).get("capabilities", [])
+    createur = invitations.createur_de(db(), invite_uuid)
+    if createur is None:
+        raise HTTPException(404, "Invitation inconnue")
+    if not (ctx.get("systeme") or "admin.users" in caps or createur == _qui_invite(ctx)):
+        raise HTTPException(403, "Seul qui l'a créée, ou l'administration, la révoque")
+    if not invitations.revoque(db(), invite_uuid, _acteur(ctx)):
+        raise HTTPException(409, "Déjà utilisée ou révoquée")
+    store.journal(db(), _acteur(ctx), "invite.revoked", invite_uuid[:8])
+    return {"ok": True}
+
+
+@app.get("/invitation/apercu")
+def apercu_invitation(code: str, request: Request):
+    """Public : qui invite, en tant que quoi. Même réponse pour un code
+    inconnu, servi, révoqué ou expiré."""
+    _cadence_publique(request)
+    try:
+        return invitations.apercu(db(), code, _pseudo_de)
+    except invitations.Refus as e:
+        raise HTTPException(e.code, str(e))
+
+
+class Rejoindre(BaseModel):
+    code: str = Field(max_length=64)
+    did: str = Field(max_length=160)
+    cle_publique: str = Field(max_length=200)
+    #: Le CODE signé par la clé de l'appareil : preuve qu'il la détient. Sans
+    #: elle, on aurait pu présenter la clé publique d'un AUTRE appareil.
+    signature: str = Field(max_length=200)
+    nom: str = Field(default="", max_length=60)
+    appareil: str = Field(default="", max_length=60)
+
+
+@app.post("/invitation/rejoindre")
+async def rejoint(r: Rejoindre, request: Request):
+    """Public : l'invité REJOINT. Son appareil est admis d'emblée, sa personne
+    créée (ou retrouvée, pour un appareil de plus), les services de son rôle
+    s'ouvrent en arrière-plan ; il repart avec le jeton de suivi qui ouvre sa
+    session par signature."""
+    _cadence_publique(request)
+    try:
+        inv = invitations.valide(db(), r.code)
+    except invitations.Refus as e:
+        raise HTTPException(e.code, str(e))
+    acc = _acces_ou_503()
+    try:
+        prouve = acc.verifie_signature(r.cle_publique, r.code.encode(), r.signature)
+    except Exception:  # noqa: BLE001 — clé ou signature mal formée
+        prouve = False
+    if not prouve:
+        raise HTTPException(403, "Preuve de la clé invalide")
+    # Un appareil DÉJÀ admis ne change pas de personne par un lien — reconnu par
+    # sa CLÉ, pas seulement par son DID (d'anciennes demandes portent un DID qui
+    # ne dérive pas de la clé).
+    cle = (r.cle_publique or "").strip().lower()
+    try:
+        dev_connu = store.appareil_par_did(db(), S.did_appareil(cle))
+    except (S.Refus, ValueError):
+        raise HTTPException(400, "Clé d'appareil invalide")
+    deja = acc.profileur().demande_de(r.did)
+    admise = any(d.etat == "acceptee" and d.cle_publique.lower() == cle
+                 for d in list(acc.profileur()._demandes.values()))
+    if admise or (deja is not None and deja.etat == "acceptee"):
+        raise HTTPException(409, "Cet appareil a déjà un accès : ouvrez le lien depuis le nouvel appareil")
+    if dev_connu is not None:
+        # RÉVOQUÉ MAIS CONNU : il reste attaché à son ancienne personne, qu'un
+        # lien « personne » renommerait. L'administration l'oublie d'abord (#1809).
+        raise HTTPException(409, "Cet appareil a déjà été connu ici : demandez qu'il soit oublié, "
+                                 "ou ouvrez le lien depuis un autre navigateur")
+    sorte = "appareil" if inv["role_propose"] is None else "personne"
+    cible = inv["created_by"] if sorte == "appareil" else None
+    nom = (r.nom or inv["pseudo_propose"] or (_pseudo_de(cible) if cible else "") or "invité").strip()[:60]
+    try:
+        acc.profileur().demande({"did": r.did, "cle_publique": r.cle_publique, "nom": nom,
+                                 "appareil": r.appareil, "message": "invitation",
+                                 "email": inv["email"] or ""})
+    except Exception as e:  # noqa: BLE001 — DemandeInvalide (400), DemandeTropTot (429)
+        raise HTTPException(429 if type(e).__name__ == "DemandeTropTot" else 400, str(e))
+    # Usage UNIQUE, atomiquement, AVANT d'admettre : deux appareils qui
+    # présenteraient le même lien en même temps, un seul passe.
+    if not invitations.consomme(db(), inv["invite_uuid"], device_uuid="(en cours)",
+                                par=_pseudo_de(inv["created_by"])):
+        raise HTTPException(404, "Invitation inconnue, déjà utilisée ou expirée")
+    request.state.user = "invitation:" + _pseudo_de(inv["created_by"])
+    try:
+        await acc.accepter(acc.Verdict(did=r.did), request)
+        _rafraichit()
+        dev = store.appareil_par_did(db(), S.did_appareil(r.cle_publique))
+        if dev is None:
+            raise HTTPException(500, "Appareil admis mais introuvable — réessayez")
+        if sorte == "appareil":
+            dev = _rattache_a(dev, cible)
+    except BaseException:
+        # L'admission a échoué : l'invitation n'est pas perdue pour autant.
+        db().execute("UPDATE sbx_invites SET validated_at=NULL, validated_by=NULL, device_uuid=NULL "
+                     "WHERE invite_uuid=?", (inv["invite_uuid"],))
+        raise
+    uid = dev["user_uuid"]
+    pseudo = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (uid,)).fetchone()[0]
+    if sorte == "personne":
+        souhait = (inv["pseudo_propose"] or "").lower()
+        if souhait and souhait != pseudo and \
+                not db().execute("SELECT 1 FROM sbx_users WHERE pseudo=?", (souhait,)).fetchone():
+            db().execute("UPDATE sbx_users SET pseudo=? WHERE user_uuid=?", (souhait, uid))
+            pseudo = souhait
+        if inv["email"]:
+            db().execute("UPDATE sbx_users SET email=? WHERE user_uuid=?", (inv["email"], uid))
+        db().execute("DELETE FROM sbx_user_roles WHERE user_uuid=?", (uid,))
+        for x in S.roles_effectifs([inv["role_propose"]]):
+            db().execute("INSERT INTO sbx_user_roles VALUES (?,?,?,?)",
+                         (uid, x, request.state.user, int(time.time())))
+    db().execute("UPDATE sbx_invites SET device_uuid=? WHERE invite_uuid=?",
+                 (dev["device_uuid"], inv["invite_uuid"]))
+    store.journal(db(), request.state.user, "invite.joined",
+                  f"{pseudo} · {sorte}" + (f" · {inv['role_propose']}" if sorte == "personne" else ""))
+    if sorte == "personne":
+        S.emet_activite(db(), "user_joined", author=uid, visibility="node",
+                        origin_node=_origine(), context={"via": "invitation"})
+        svcs = invitations.services_du_role(inv["role_propose"])
+        try:
+            _travail(uid, lambda c: comptes.cree(c, uid, svcs), "services.created", request.state.user)
+        except HTTPException:
+            pass                                    # un travail déjà en cours : il suffira
+    jeton = acc.profileur().demande_de(r.did).jeton
+    return {"ok": True, "pseudo": pseudo, "sorte": sorte, "jeton": jeton}

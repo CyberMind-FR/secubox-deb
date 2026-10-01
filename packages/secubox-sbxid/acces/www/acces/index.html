@@ -361,6 +361,7 @@
 </div>
 
 <script type="module">
+import { apercuInvitation, rejoins } from './appareil.js';
 import { API, identite, empreinte, demande, suivi, ouvreSession, ouvreSiAdmis, suitLeLien,
          oublie, jetonGarde, renouvelle } from './appareil.js';
 
@@ -1028,7 +1029,59 @@ function rendAudit(inv) {
   c.appendChild(enveloppe);
 }
 
+// UNE INVITATION DANS L'ADRESSE (#1816) : rien d'autre ne s'affiche — ni le
+// profileur, ni le formulaire de demande. Elle vaut approbation.
+const _invitation = new URLSearchParams(location.search).get('invitation');
+
+async function rendInvitation(code) {
+  $('admin').hidden = true;
+  $('visiteur').hidden = false;
+  const c = $('vue');
+  c.textContent = '';
+  $('vk').textContent = 'Invitation';
+  let a;
+  try {
+    a = await apercuInvitation(code);
+  } catch (e) {
+    c.appendChild(el('p', 'sous', "Cette invitation n'est plus valable : déjà utilisée, révoquée "
+      + "ou expirée. Demandez-en une nouvelle à la personne qui vous l'a envoyée."));
+    return;
+  }
+  const qui = a.de || 'quelqu’un';
+  c.appendChild(el('p', 'sous', a.sorte === 'appareil'
+    ? `Ajouter cet appareil au compte de « ${qui} ». Il entrera aussitôt, sans mot de passe.`
+    : `« ${qui} » vous invite${a.role ? ' (' + rang(a.role) + ')' : ''}. Rejoignez : rien à attendre, `
+      + 'aucun mot de passe — cet appareil devient votre clé.'));
+  const saisies = {};
+  const champs = a.sorte === 'appareil' ? [['appareil', 'Cet appareil']]
+    : [['nom', 'Votre nom'], ['appareil', 'Cet appareil']];
+  for (const [clef, etiq] of champs) {
+    const w = el('div', 'champ');
+    w.appendChild(el('label', null, etiq));
+    const i = document.createElement('input');
+    i.type = 'text'; i.maxLength = 60;
+    saisies[clef] = i;
+    w.appendChild(i);
+    c.appendChild(w);
+  }
+  if (saisies.nom) saisies.nom.value = a.pseudo || '';
+  saisies.appareil.value = navigator.platform || 'appareil';
+  const g = el('div', 'gestes');
+  g.appendChild(bouton('Rejoindre', 'fort', async () => {
+    if (saisies.nom && !saisies.nom.value.trim()) throw new Error('Votre nom est nécessaire.');
+    await rejoins(code, { nom: saisies.nom ? saisies.nom.value.trim() : '',
+                          appareil: saisies.appareil.value.trim() });
+    // Le code a servi : il quitte l'adresse (historique, marque-page, Referer).
+    history.replaceState(null, '', location.pathname);
+    await ouvreSession();
+    await _destinationPrete;
+    location.href = DESTINATION;
+  }));
+  c.appendChild(g);
+}
+
 async function rafraichis() {
+  if (_invitation) return rendInvitation(_invitation);
   // Même règle qu'en carlette : l'ouverture ne dépend pas du visage affiché.
   // LE LIEN PASSE EN PREMIER : il vient d'être cliqué, et il est à usage
   // unique — le consommer plus tard, ou pas du tout, le gaspillerait.
