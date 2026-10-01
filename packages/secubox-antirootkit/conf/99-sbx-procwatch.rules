@@ -16,4 +16,12 @@
 #
 # x86-64 drop-ins on this arm64 host (e.g. #914 notwork) run via binfmt/qemu,
 # whose native aarch64 execve of the interpreter is caught by arch=b64.
--a always,exit -F arch=b64 -S execve -k sbx_exec
+#
+# SANS LES ÉCHECS « FICHIER INEXISTANT » (#1835). `subprocess` de Python essaie
+# chaque répertoire du PATH avant de trouver un programme : chaque essai est un
+# execve en échec ENOENT, et la règle les enregistrait tous — mesuré sur gk2 le
+# 2026-10-01, 1 752 échecs sur 20 000 lignes, recopiés dans le journal et relus
+# par sbx-authwatch. Un ENOENT n'exécute rien et ne désigne aucun fichier : ce
+# n'est pas un signal. Les AUTRES échecs (EACCES, EPERM : un binaire déposé sur
+# un montage noexec, un exec refusé) restent enregistrés — eux en sont un.
+-a always,exit -F arch=b64 -S execve -F exit!=-ENOENT -k sbx_exec
