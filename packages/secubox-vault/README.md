@@ -129,6 +129,10 @@ coffrectl recouvrement preparer DÉTENTEUR DÉTENTEUR [DÉTENTEUR…]   # box pa
 coffrectl recouvrement annuler
 coffrectl recouvrement rendre ORIGINE     # sur un pair
 coffrectl recouvrement ouvrir
+
+# P7 — secrets d'instance de Nextcloud (copie de recouvrement, compartiment box)
+coffrectl nextcloud etat [CONTENEUR]
+coffrectl nextcloud sauvegarder [CONTENEUR]
 ```
 
 Phrases, codes et valeurs ne passent jamais par la ligne de commande : invite

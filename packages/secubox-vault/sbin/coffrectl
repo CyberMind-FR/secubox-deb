@@ -39,6 +39,9 @@ entrée standard.
   coffrectl recouvrement annuler
   coffrectl recouvrement rendre ORIGINE    # SUR UN PAIR : renvoie à ORIGINE la part qu'elle nous a confiée
   coffrectl recouvrement ouvrir            # parts rendues par les pairs + parts papier saisies
+
+  coffrectl nextcloud etat [CONTENEUR]     # secrets d'instance (P7) : copie au Coffre à jour ?
+  coffrectl nextcloud sauvegarder [CONTENEUR]   # copie de recouvrement dans le compartiment box
 """
 import getpass
 import http.client
@@ -292,6 +295,67 @@ def recouvrement(args) -> None:
         sys.exit("coffrectl recouvrement : etat | preparer DÉTENTEUR DÉTENTEUR… | annuler | rendre ORIGINE | ouvrir")
 
 
+# ── Nextcloud : secrets d'instance (P7) ───────────────────────────────────────
+# config.php porte secret, passwordsalt, instanceid, le mot de passe de la base
+# et celui du relais SMTP. PHP les lit dans le conteneur au démarrage : ils ne
+# peuvent pas attendre un humain, ni passer au niveau 0 de l'hôte sans finir
+# en clair dans la configuration LXC. Le Coffre en garde une COPIE DE
+# RECOUVREMENT (conteneur reconstruit, config.php perdu) — elle protège de la
+# perte, pas du vol. Les valeurs vont du conteneur au Coffre par des tubes ;
+# jamais par la ligne de commande, jamais à l'écran.
+NEXTCLOUD_CLES = ("instanceid", "secret", "passwordsalt", "dbpassword", "mail_smtppassword")
+NEXTCLOUD_OCC = os.environ.get("SECUBOX_NEXTCLOUD_OCC", "/var/www/nextcloud/occ")
+
+
+def nom_nextcloud(cle: str) -> str:
+    return "nextcloud-" + cle.replace("_", "-")
+
+
+class LectureImpossible(RuntimeError):
+    pass
+
+
+def _occ_valeur(conteneur: str, cle: str):
+    """La valeur, None si la clé est absente de config.php (occ : code 1,
+    rien sur la sortie) ; LectureImpossible sinon — après un second essai."""
+    for _ in range(2):
+        r = subprocess.run(["lxc-attach", "-n", conteneur, "--", "runuser", "-u", "www-data", "--",
+                            "php", NEXTCLOUD_OCC, "config:system:get", cle],
+                           capture_output=True, text=True, timeout=60)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.rstrip("\n")
+        if r.returncode == 1 and not r.stdout.strip() and not r.stderr.strip():
+            return None
+    raise LectureImpossible(f"occ code {r.returncode} : {(r.stderr.strip().splitlines() or ['?'])[-1][:120]}")
+
+
+def nextcloud(args) -> None:
+    sous = args[0] if args else "etat"
+    conteneur = args[1] if len(args) > 1 else "nextcloud"
+    if sous not in ("etat", "sauvegarder"):
+        sys.exit("coffrectl nextcloud : etat | sauvegarder [CONTENEUR]")
+    gardes = {s["nom"] for s in appel("GET", "/secrets?compartiment=box")["secrets"]}
+    for cle in NEXTCLOUD_CLES:
+        nom = nom_nextcloud(cle)
+        try:
+            vivante = _occ_valeur(conteneur, cle)
+        except LectureImpossible as e:
+            print(f"{cle:18} LECTURE IMPOSSIBLE ({e})")
+            continue
+        if vivante is None:
+            print(f"{cle:18} absent de config.php")
+            continue
+        if sous == "sauvegarder":
+            v = appel("POST", "/secrets", {"compartiment": "box", "nom": nom, "valeur": vivante})["version"]
+            print(f"{cle:18} copié au Coffre (box/{nom}, version {v})")
+        elif nom not in gardes:
+            print(f"{cle:18} PAS de copie au Coffre")
+        else:
+            gardee = appel("GET", f"/secrets/box/{nom}/valeur")["valeur"]
+            print(f"{cle:18} copie au Coffre {'à jour' if gardee == vivante else 'DIFFÉRENTE de config.php'}")
+        del vivante
+
+
 def principal(argv) -> None:
     if not argv or argv[0] in ("-h", "--help", "aide"):
         print(__doc__)
@@ -348,6 +412,8 @@ def principal(argv) -> None:
         niveau0(args)
     elif cmd == "recouvrement":
         recouvrement(args)
+    elif cmd == "nextcloud":
+        nextcloud(args)
     else:
         sys.exit(f"coffrectl : commande inconnue ou incomplète « {' '.join(argv)} » — coffrectl aide")
 

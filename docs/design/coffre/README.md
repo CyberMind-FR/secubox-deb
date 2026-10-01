@@ -1,6 +1,6 @@
 # Le Coffre — idée et conception
 
-> Issue #1364 · **P1–P5 et P8 livrées** (#1367 : P1 MK, serrures, compartiments, `coffrectl`, journal chaîné ; P2 session de signature apt ; P3 niveau 0 `systemd-creds` ; P4 clés d'appareil, ouverture hors LAN, carte du Hall ; P5 compartiments des personnes, clé OpenPGP personnelle ; P8 recouvrement par le maillage) · maquette : [`maquette.html`](maquette.html)
+> Issue #1364 · **P1–P5, P7 et P8 livrées** (P6 attend l'annuaire des clés, #1738) (#1367 : P1 MK, serrures, compartiments, `coffrectl`, journal chaîné ; P2 session de signature apt ; P3 niveau 0 `systemd-creds` ; P4 clés d'appareil, ouverture hors LAN, carte du Hall ; P5 compartiments des personnes, clé OpenPGP personnelle ; P7 Nextcloud mesuré, copie des secrets d'instance ; P8 recouvrement par le maillage) · maquette : [`maquette.html`](maquette.html)
 >
 > Corrections du 2026-10-01 : compartiments **par personne** (`p-<user_uuid>`, décision #1405), clé privée **jamais prêtée** au webmail (#1738), Roundcube dans le LXC `roundcube`, `secubox-identity` retiré (#1840), Argon2id mesuré.
 
@@ -193,8 +193,19 @@ ou la carte Mail. Aucune n'est activée par défaut.
 | App `end_to_end_encryption` | dossiers chiffrés par les clients | hors Coffre (clés chez les clients) ; option documentée |
 | Connexion | deux facteurs | via secubox-auth (OIDC) ou app `twofactor_totp` : à trancher |
 
-Le conteneur est arrêté sur gk2 : tout ce paragraphe est à **mesurer**
-avant d'être conçu plus finement.
+**Mesuré le 2026-10-01 (P7)**, conteneur `nextcloud` de gk2 :
+- **Instance** : Nextcloud 32.0.10, 5 comptes dont 2 administrateurs.
+- **Applications** : `user_saml` (SSO), `files_external`, `bruteforcesettings` et `twofactor_backupcodes`. Ni `twofactor_totp`, ni `encryption`.
+- **Chiffrement côté serveur** : **désactivé**. Il n'y a donc **aucune clé de récupération** à garder.
+- **`config.php`** (www-data, 0640) porte `secret`, `passwordsalt`, `instanceid`, `dbpassword` et `mail_smtppassword`.
+- **Deux facteurs** : aucun sur `admin`.
+
+Ce que P7 en fait :
+- **Pas de niveau 0.** PHP lit ces secrets dans le conteneur au démarrage. Les y faire entrer depuis les crédences de l'hôte les laisserait en clair dans la configuration LXC ou l'environnement : pire qu'aujourd'hui.
+- **Une copie de recouvrement au niveau 1** : `coffrectl nextcloud sauvegarder | etat`, dans le compartiment `box` (`nextcloud-secret`, …). Elle protège de la **perte** (conteneur reconstruit, `config.php` perdu), pas du vol. `etat` dit si la copie est à jour, sans rien afficher.
+- **À trancher par l'exploitant** :
+  - activer le chiffrement côté serveur (coût sur arm64, risque de perte si la clé disparaît) — sa clé de récupération irait alors au niveau 1 ;
+  - les deux facteurs de `admin` (OIDC via secubox-auth ou `twofactor_totp`).
 
 ## 6. Recouvrement
 

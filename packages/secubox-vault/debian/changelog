@@ -1,3 +1,9 @@
+secubox-vault (2.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * Coffre P7 (#1367) : Nextcloud mesuré (32.0.10, chiffrement côté serveur désactivé : aucune clé de récupération). coffrectl nextcloud etat | sauvegarder : copie de recouvrement des secrets d'instance (secret, passwordsalt, instanceid, dbpassword, mail_smtppassword) dans le compartiment box — du conteneur au Coffre par des tubes, jamais à l'écran.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 23:15:00 +0200
+
 secubox-vault (2.0.8-1~bookworm1) bookworm; urgency=medium
 
   * Coffre P8 (#1367) : recouvrement par le maillage. n parts aléatoires (2 à 5), confiées à des box pairs par leur messagerie OpenPGP liée, ou au papier ; chaque paire de parts ouvre une serrure « maillage » (HKDF des deux parts — aucune arithmétique maison). Deux détenteurs quelconques rouvrent le Coffre, un seul rien ; un jeu sert une fois.

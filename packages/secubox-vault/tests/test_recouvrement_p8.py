@@ -126,3 +126,10 @@ def test_message_de_part_aller_retour():
     assert ctl.lit_corps(corps) == {"origine": "gk2", "jeu": "0a1b2c3d", "part": "0a1b2c3d.1.ABCD-EFGH"}
     assert ctl.lit_corps("bonjour\npart: x") == {}
     assert ctl.lit_corps("coffre-recouvrement/1\norigine: gk2\n") == {}
+
+
+def test_nextcloud_noms_dans_le_coffre():
+    ctl = _coffrectl()
+    from coffre.coffre import NOM_RE
+    assert all(NOM_RE.match(ctl.nom_nextcloud(c)) for c in ctl.NEXTCLOUD_CLES)
+    assert ctl.nom_nextcloud("mail_smtppassword") == "nextcloud-mail-smtppassword"
