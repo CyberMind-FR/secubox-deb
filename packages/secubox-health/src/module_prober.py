@@ -18,6 +18,7 @@ installed; no per-deploy maintenance.
 
 import asyncio
 import json
+import re
 import subprocess
 import socket
 from pathlib import Path
@@ -71,6 +72,39 @@ def check_systemd_status(service_name):
         return False
 
 
+# UN SEUL `systemctl show` PAR PASSAGE (#1835). Un `is-active` par socket, c'était
+# une soixantaine de lancements à la minute sur gk2 — le prober était le premier
+# lanceur de systemctl de la board. Un nom qui ne ferait pas une unité valide
+# n'entre pas dans le lot : systemctl refuserait le lot entier pour lui seul.
+_NOM_UNITE = re.compile(r"^[A-Za-z0-9:_.@-]+$")
+
+
+def check_systemd_states(names):
+    """`{nom: actif?}` pour ces modules, en un appel."""
+    valides = [n for n in names if _NOM_UNITE.match(n)]
+    actifs = set()
+    if valides:
+        try:
+            result = subprocess.run(
+                ["systemctl", "show", "-p", "Id,ActiveState", "--",
+                 *[f"secubox-{n}.service" for n in valides]],
+                capture_output=True, text=True, timeout=15
+            )
+            sortie = result.stdout
+        except Exception:
+            sortie = ""
+        bloc = {}
+        for ligne in sortie.splitlines() + [""]:
+            if not ligne.strip():
+                if bloc.get("ActiveState") == "active" and bloc.get("Id"):
+                    actifs.add(bloc["Id"])
+                bloc = {}
+                continue
+            cle, _, valeur = ligne.partition("=")
+            bloc[cle] = valeur
+    return {n: f"secubox-{n}.service" in actifs for n in names}
+
+
 def check_socket_exists(socket_name):
     socket_path = SOCKET_DIR / socket_name
     return socket_path.exists()
@@ -112,11 +146,16 @@ def check_api_health(socket_name, health_endpoint):
         return False, str(e)[:80]
 
 
-def probe_module(name, cfg):
-    """Probe one module's three layers (systemd / socket / API)."""
+def probe_module(name, cfg, systemd_active=None):
+    """Probe one module's three layers (systemd / socket / API).
+
+    `systemd_active` vient du lot de `check_systemd_states` ; absent, on
+    interroge l'unité seule.
+    """
     timestamp = datetime.now(timezone.utc).isoformat()
 
-    systemd_active = check_systemd_status(name)
+    if systemd_active is None:
+        systemd_active = check_systemd_status(name)
     socket_present = check_socket_exists(cfg["socket"])
     api_ok, api_detail = check_api_health(cfg["socket"], cfg["health"])
 
@@ -179,7 +218,9 @@ async def main_loop():
     while True:
         try:
             modules = discover_modules()
-            results = {name: probe_module(name, cfg) for name, cfg in modules.items()}
+            etats = check_systemd_states(list(modules))
+            results = {name: probe_module(name, cfg, etats[name])
+                       for name, cfg in modules.items()}
             write_snapshot(results)
             logger.info("probed %d modules", len(results))
         except Exception as e:

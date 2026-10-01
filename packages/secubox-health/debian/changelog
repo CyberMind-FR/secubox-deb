@@ -1,3 +1,12 @@
+secubox-health (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * module-prober : un seul `systemctl show` par passage (#1835), au lieu d'un
+    `is-active` par socket — ~310 lancements en cinq minutes sur gk2, le
+    premier lanceur de systemctl de la board. Un nom qui ne ferait pas une
+    unité valide reste hors du lot (systemctl refuserait le lot entier).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:26:49 +0200
+
 secubox-health (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * module_prober : retrait de « authelia » de CRITICAL_MODULES. L'IdP SSO

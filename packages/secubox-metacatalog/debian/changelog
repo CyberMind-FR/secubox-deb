@@ -1,3 +1,16 @@
+secubox-metacatalog (1.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * Le catalogue vient de la minuterie, plus d'une boucle (#1835). La boucle
+    de 60 s doublait secubox-cache-warm@metacatalog.timer : ~290 systemctl
+    toutes les cinq minutes sur gk2, sans lecteur. Le daemon relit le
+    fichier écrit par la minuterie quand il change ; périmé (> 15 min), il
+    le sert et recalcule en fond, un seul calcul à la fois.
+  * Un seul `systemctl show` pour toutes les unités, au lieu de cat +
+    is-enabled + is-active + deux show par service ; menu.d lu une fois par
+    passage, plus une fois par service. Travail bloquant hors de la boucle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:24:28 +0200
+
 secubox-metacatalog (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées

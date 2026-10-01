@@ -345,31 +345,66 @@ def _refresh_details_cache():
     })
 
 
-async def _cache_refresh_loop():
-    """Background task to refresh caches."""
-    while True:
+# RAFRAÎCHIR À LA DEMANDE, PAS EN BOUCLE (#1835).
+#
+# Une boucle permanente relançait toutes les 30 s `streamlitctl app list` et
+# `instance list` (~400 processus chacun : le script lit son TOML champ par
+# champ, entrée par entrée), un `git describe` par appli, et sondait le
+# conteneur toutes les 5 s — que quelqu'un regarde ou non. Mesuré sur gk2 le
+# 2026-10-01 : ~14 000 lancements en dix minutes, près de la moitié de la box,
+# pour AUCUNE lecture de ces routes de la journée. Et ces appels synchrones
+# tournaient DANS la boucle d'événements : l'API se figeait le temps de chacun.
+#
+# Désormais une route qui lit une donnée périmée la rafraîchit elle-même, hors
+# de la boucle (thread), une seule fois même si plusieurs requêtes arrivent
+# ensemble. Personne ne regarde : rien ne tourne. C'est la règle de #1028.
+#
+# PÉRIMÉ MAIS PRÉSENT : ON RÉPOND TOUT DE SUITE. Une liste fraîche coûte ~9 s
+# sur gk2 (mesuré) ; la faire attendre au visiteur à chaque expiration serait
+# pire que la boucle. Si une valeur existe, on la rend et le rafraîchissement
+# part en tâche de fond ; on n'attend que lorsqu'il n'y a encore RIEN.
+_VERROU_CACHE: Optional[asyncio.Lock] = None
+_EN_FOND: Dict[str, asyncio.Task] = {}
+
+
+async def _rafraichit(quoi: str, perime) -> None:
+    global _VERROU_CACHE
+    if _VERROU_CACHE is None:
+        _VERROU_CACHE = asyncio.Lock()
+    async with _VERROU_CACHE:
+        if not perime():                       # rafraîchi pendant l'attente
+            return
+        fn = _refresh_instant_cache if quoi == "instant" else _refresh_details_cache
         try:
-            if _cache.instant_stale():
-                _refresh_instant_cache()
-            if _cache.details_stale():
-                _refresh_details_cache()
-        except Exception as e:
-            log.warning("cache refresh error: %s", e)
-        await asyncio.sleep(2)
+            await asyncio.to_thread(fn)
+        except Exception as e:  # noqa: BLE001 — une donnée périmée vaut mieux qu'un 500
+            log.warning("cache refresh error (%s): %s", quoi, e)
+
+
+async def _cache_frais(quoi: str) -> None:
+    perime = _cache.instant_stale if quoi == "instant" else _cache.details_stale
+    if not perime():
+        return
+    present = bool(_cache.get_instant() if quoi == "instant" else _cache.get_details())
+    if not present:
+        await _rafraichit(quoi, perime)
+        return
+    t = _EN_FOND.get(quoi)
+    if t is None or t.done():
+        _EN_FOND[quoi] = asyncio.create_task(_rafraichit(quoi, perime))
 
 
 @app.on_event("startup")
 async def startup_cache():
-    """Start cache refresh loop on startup."""
+    """Un seul pré-remplissage, en tâche de fond : le premier visiteur ne paie
+    pas l'attente, et le démarrage n'est pas retardé. Pas de boucle."""
     global _cache_task
-    _refresh_instant_cache()
-    _refresh_details_cache()
-    _cache_task = asyncio.create_task(_cache_refresh_loop())
+    _cache_task = asyncio.create_task(_cache_frais("details"))
 
 
 @app.on_event("shutdown")
 async def shutdown_cache():
-    """Stop cache refresh loop on shutdown."""
+    """Annule le pré-remplissage s'il court encore."""
     global _cache_task
     if _cache_task:
         _cache_task.cancel()
@@ -422,6 +457,7 @@ async def components():
 @router.get("/instant", dependencies=[Depends(require_lecture)])
 async def instant():
     """Get instant stats from pre-cache (public, fast)."""
+    await _cache_frais("instant")
     data = _cache.get_instant()
     data["cache_age"] = _cache.age()
     return data
@@ -430,6 +466,7 @@ async def instant():
 @router.get("/details", dependencies=[Depends(require_lecture)])
 async def details():
     """Get detailed stats from pre-cache (public)."""
+    await _cache_frais("details")
     data = _cache.get_details()
     data["cache_age"] = _cache.age()
     return data
@@ -439,6 +476,7 @@ async def details():
 async def status():
     """Get platform status from cache (public)."""
     # Use cached details for fast response
+    await _cache_frais("details")
     cached = _cache.get_details()
     if cached and cached.get("app_count") is not None:
         return {

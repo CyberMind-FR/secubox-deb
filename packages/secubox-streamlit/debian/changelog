@@ -1,3 +1,19 @@
+secubox-streamlit (1.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * Cache rafraîchi À LA DEMANDE, plus en boucle (#1835). La boucle relançait
+    toutes les 30 s `streamlitctl app list` + `instance list` (~400 processus
+    chacun), un `git describe` par appli, et sondait le conteneur toutes les
+    5 s — mesuré sur gk2 : ~14 000 lancements en dix minutes, près de la
+    moitié de la box, pour aucune lecture de la journée ; appels synchrones
+    dans la boucle d'événements (API figée). Une route qui lit une donnée
+    périmée la rafraîchit hors de la boucle, une fois pour des requêtes
+    simultanées ; un seul pré-remplissage au démarrage, en tâche de fond.
+  * Périmé mais présent : réponse immédiate, rafraîchissement en tâche de
+    fond (une liste fraîche coûte ~9 s sur gk2) ; on n'attend que s'il n'y a
+    encore rien.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 11:57:31 +0200
+
 secubox-streamlit (1.4.6-1~bookworm1) bookworm; urgency=high
 
   * lxc-info passe par secubox-lxcctl (#1785) ; les règles sudoers lxc-* à

@@ -1,3 +1,17 @@
+secubox-c3box (1.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * Un relevé systemd en un appel (#1835). La surveillance lançait vingt
+    `is-active` toutes les 30 s, BLOQUANTS sur la boucle partagée du groupe
+    g1, et chaque lecture de /services ou /health vingt `show` de plus. Un
+    `systemctl show` pour tous les services, daté et partagé (15 s), lancé
+    hors de la boucle. Relevé en échec : la surveillance ne conclut rien au
+    lieu de déclarer vingt services tombés.
+  * postinst : servi par un groupe actif (groups.d), l'unité autonome reste à
+    l'arrêt — la démarrer effaçait la socket du groupe.
+  * SECUBOX_C3BOX_DATA pour les tests.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:30:47 +0200
+
 secubox-c3box (1.2.4-1~bookworm1) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées

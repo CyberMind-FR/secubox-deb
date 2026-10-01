@@ -2,8 +2,29 @@
 set -e
 if [ "$1" = "configure" ]; then
     systemctl daemon-reload
-    systemctl enable secubox-c3box.service || true
-    systemctl start secubox-c3box.service || true
+    # SERVI PAR UN GROUPE, PAS D'UNITÉ AUTONOME (#1835). Quand un groupe actif
+    # (secubox-groupd, /etc/secubox/groups.d/<g>.conf) porte c3box, démarrer
+    # secubox-c3box.service effacerait la socket du groupe (ExecStartPre rm)
+    # et servirait le module une seconde fois — deux surveillances, deux
+    # salves de systemctl. Le nouveau code sera pris au prochain redémarrage
+    # du groupe : `systemctl restart secubox-group@<g>`.
+    groupe=""
+    for f in /etc/secubox/groups.d/*.conf; do
+        [ -f "$f" ] || continue
+        g=$(basename "$f" .conf)
+        if sed 's/#.*//' "$f" | tr -d ' \t' | grep -qx c3box \
+           && { systemctl is-enabled --quiet "secubox-group@$g.service" 2>/dev/null \
+                || systemctl is-active --quiet "secubox-group@$g.service" 2>/dev/null; }; then
+            groupe=$g
+            break
+        fi
+    done
+    if [ -n "$groupe" ]; then
+        echo "secubox-c3box : servi par secubox-group@$groupe — unité autonome laissée à l'arrêt"
+    else
+        systemctl enable secubox-c3box.service || true
+        systemctl start secubox-c3box.service || true
+    fi
 fi
 #DEBHELPER#
 exit 0

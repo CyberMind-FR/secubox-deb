@@ -1,3 +1,25 @@
+secubox-hub (1.9.28-1~bookworm1) bookworm; urgency=medium
+
+  * Le menu ne lance plus un is-active par module absent du cache des
+    services (#1835) : une unité absente de `list-units --all` n'est pas
+    chargée, is-active la dirait inactive — le cycle répond (32 lancements
+    par passage sur gk2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:45:05 +0200
+
+secubox-hub (1.9.27-1~bookworm1) bookworm; urgency=medium
+
+  * Charge dans l'agrégateur (#1835). Un list-units par cycle au lieu de deux :
+    le relevé de santé filtre la sortie que le cache des services vient
+    d'obtenir (mêmes lignes que --state=running,failed,inactive). /boot_mode,
+    /auth_mode et /version lisent l'état kiosk/zkp de ce cycle au lieu d'un
+    is-active par requête.
+  * Les boucles (5 s et 30 s) dorment sans lecteur depuis deux minutes ; la
+    requête suivante les réveille. Le middleware marque la demande — il
+    tourne aussi monté dans l'agrégateur (le commentaire disait le contraire).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:35:30 +0200
+
 secubox-hub (1.9.26-1~bookworm1) bookworm; urgency=medium
 
   * L'administration reste l'administration (#1832) : la racine

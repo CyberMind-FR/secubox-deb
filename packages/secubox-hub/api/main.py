@@ -179,7 +179,7 @@ async def _refresh_menu_cache():
         except Exception as e:
             log.error("Menu cache refresh failed: %s", e)
 
-        await asyncio.sleep(30)  # Refresh every 30s
+        await _attend_lecteur(30)  # Refresh every 30s while someone reads
 
 
 def _load_menu_cache_from_file() -> dict:
@@ -251,13 +251,8 @@ def public_info():
             pass
 
     # Check for ZKP service
-    try:
-        r = subprocess.run(["systemctl", "is-active", "secubox-zkp"],
-                          capture_output=True, text=True, timeout=2)
-        if r.stdout.strip() == "active":
-            auth_mode = "ZKP"
-    except Exception:
-        pass
+    if _unite_active("secubox-zkp"):
+        auth_mode = "ZKP"
 
     return {
         "version": version,
@@ -461,6 +456,12 @@ def _refresh_services_cache():
             champs = ligne.split()
             if len(champs) >= 3:
                 etats[champs[0].removesuffix(".service")] = champs[2]
+        # Gardés pour le relevé de santé et les endpoints du même cycle : ils
+        # n'ont plus à relancer systemctl pour ce que cet appel vient de dire.
+        if etats:
+            _cache["units_brut"] = r.stdout
+            _cache["etats_units"] = etats
+            _cache["units_ts"] = time.time()
     except Exception as e:
         # On garde les valeurs precedentes : un etat un peu ancien vaut mieux
         # qu'un menu vide.
@@ -507,6 +508,34 @@ def _load_sleepable_modules() -> set:
     return {x for x in data if isinstance(x, str)}
 
 
+# Ce que `systemctl list-units --type=service --state=running,failed,inactive`
+# aurait rendu : `--state` filtre sur l'un des états LOAD, ACTIVE ou SUB.
+_ETATS_BATCH = frozenset(("running", "failed", "inactive"))
+
+
+def _filtre_etats_batch(brut: str) -> str:
+    """Extrait d'une sortie `list-units secubox-* --all` les lignes du relevé de santé."""
+    garde = []
+    for ligne in brut.splitlines():
+        champs = ligne.split()
+        if (len(champs) >= 4 and champs[0].endswith(".service")
+                and _ETATS_BATCH.intersection(champs[1:4])):
+            garde.append(ligne)
+    return "\n".join(garde)
+
+
+def _unite_active(unite: str) -> bool:
+    """`systemctl is-active <unite>`, lu dans le dernier list-units s'il est frais."""
+    if time.time() - _cache.get("units_ts", 0) < CACHE_TTL * 2:
+        return _cache.get("etats_units", {}).get(unite) == "active"
+    try:
+        r = subprocess.run(["systemctl", "is-active", unite],
+                           capture_output=True, text=True, timeout=2)
+        return r.stdout.strip() == "active"
+    except Exception:
+        return False
+
+
 def _refresh_health_batch():
     """Build the sidebar health snapshot in ONE systemctl list-units call.
 
@@ -520,7 +549,14 @@ def _refresh_health_batch():
     they're Hub-specific.
     """
     sleepable = _load_sleepable_modules()
-    modules = systemd_batch(sleepable=sleepable)
+    # UN list-units PAR CYCLE, PAS DEUX (#1835) : la sortie de
+    # _refresh_services_cache (toutes les unités secubox-*) contient déjà ce
+    # que systemd_batch demanderait. Trop vieille ou absente : son propre appel.
+    brut = _cache.get("units_brut")
+    run = None
+    if brut and time.time() - _cache.get("units_ts", 0) < CACHE_TTL:
+        run = lambda: _filtre_etats_batch(brut)  # noqa: E731
+    modules = systemd_batch(sleepable=sleepable, _run=run)
 
     # Le WAF est désormais le Go sbxwaf (secubox-waf-ng) ; le vieux
     # secubox-waf.service (API Python) est débranché depuis le cutover et reste
@@ -550,6 +586,34 @@ def _refresh_system_stats():
 
 _version_refresh_counter = 0
 
+# LES BOUCLES NE TOURNENT QUE SI QUELQU'UN REGARDE (#1835). Toutes les 5 s, deux
+# list-units, psutil et un dpkg-query ; toutes les 30 s le menu — jour et nuit,
+# dans l'agrégateur, qu'un écran soit ouvert ou non. Sans requête depuis
+# REPOS_S, elles s'endorment ; la requête suivante les réveille. Le marquage se
+# fait dans le middleware, qui tourne aussi quand le hub est monté.
+REPOS_S = 120
+_derniere_demande = 0.0
+_reveil: "asyncio.Event | None" = None
+
+
+def _marque_demande() -> None:
+    """Une requête est arrivée : réveille les boucles si elles dormaient."""
+    global _derniere_demande
+    endormies = time.time() - _derniere_demande >= REPOS_S
+    _derniere_demande = time.time()
+    if endormies and _reveil is not None:
+        _reveil.set()
+
+
+async def _attend_lecteur(pause: float) -> None:
+    """Dort `pause` s ; si plus personne ne lit, jusqu'à la prochaine requête."""
+    await asyncio.sleep(pause)
+    while _reveil is not None:
+        _reveil.clear()
+        if time.time() - _derniere_demande < REPOS_S:
+            return
+        await _reveil.wait()
+
 async def _background_cache_refresh():
     """Background task to refresh cache every CACHE_TTL seconds.
 
@@ -570,7 +634,7 @@ async def _background_cache_refresh():
                 await asyncio.to_thread(_refresh_package_versions)
         except Exception as e:
             log.error("Background cache error: %s", e)
-        await asyncio.sleep(CACHE_TTL)
+        await _attend_lecteur(CACHE_TTL)
 
 
 # Whether the background warm-up + refresh loops have been kicked off. Guarded
@@ -582,10 +646,11 @@ _bg_started = False
 
 async def _start_background_once():
     """Idempotently warm the caches and start the periodic refresh tasks."""
-    global _bg_started, _modules_discovered, _menu_cache
+    global _bg_started, _modules_discovered, _menu_cache, _reveil
     if _bg_started:
         return
     _bg_started = True
+    _reveil = asyncio.Event()
     # Discover modules off the event loop.
     try:
         discovered = await asyncio.to_thread(_discover_modules)
@@ -637,9 +702,11 @@ def _ensure_bg() -> None:
         pass
 
 
-# Kept for the standalone-uvicorn path; harmless (no-op) when mounted.
+# Runs for every hub request, standalone or mounted in the aggregator (a
+# Starlette Mount calls the sub-app's full stack, middleware included).
 @app.middleware("http")
 async def _lazy_background_start(request, call_next):
+    _marque_demande()
     _ensure_bg()
     return await call_next(request)
 
@@ -1080,13 +1147,7 @@ async def uptime(user=Depends(require_jwt)):
 def boot_mode(user=Depends(require_jwt)):
     """Get current boot mode (kiosk or console)."""
     kiosk_enabled = Path("/var/lib/secubox/.kiosk-enabled").exists()
-    kiosk_running = False
-    try:
-        import subprocess
-        r = subprocess.run(["systemctl", "is-active", "secubox-kiosk"], capture_output=True, text=True)
-        kiosk_running = r.stdout.strip() == "active"
-    except Exception:
-        pass
+    kiosk_running = _unite_active("secubox-kiosk")
 
     if kiosk_enabled and kiosk_running:
         mode = "kiosk"
@@ -1118,13 +1179,7 @@ def auth_mode(user=Depends(require_jwt)):
             pass
 
     # Also check for ZKP service
-    zkp_running = False
-    try:
-        import subprocess
-        r = subprocess.run(["systemctl", "is-active", "secubox-zkp"], capture_output=True, text=True)
-        zkp_running = r.stdout.strip() == "active"
-    except Exception:
-        pass
+    zkp_running = _unite_active("secubox-zkp")
 
     mode = "ZKP" if (zkp_enabled or zkp_running) else "Standard"
 
@@ -2057,12 +2112,11 @@ def _check_module_active(module_id: str) -> bool:
     if sock.exists():
         return True
 
-    # Check systemd service directly (for TCP port services)
-    result = subprocess.run(
-        ["systemctl", "is-active", svc_name],
-        capture_output=True, text=True
-    )
-    return result.stdout.strip() == "active"
+    # Check systemd service directly (for TCP port services) — through the
+    # last list-units when fresh (#1835): a unit missing from that listing is
+    # not loaded, and `is-active` would answer "inactive" for it anyway. The
+    # menu pass was spawning one is-active per such module, 32 on gk2.
+    return _unite_active(svc_name)
 
 
 @router.get("/menu")
