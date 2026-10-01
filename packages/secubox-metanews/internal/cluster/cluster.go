@@ -177,17 +177,40 @@ func Recence(deltaSec int64) float64 {
 	return 1 - float64(deltaSec)/float64(FenetreSec)
 }
 
+// Forme : ce que Score compare, préparé UNE fois (#1835). Score refaisait,
+// pour CHAQUE paire article × sujet, la découpe des deux titres, leurs
+// trigrammes et les deux ensembles d'entités — Regrouper compare chaque
+// orphelin à ~9 000 sujets sur gk2 : des millions de reconstructions
+// identiques, vingt minutes de démarrage sous le quota de 40 %.
+type Forme struct {
+	mots map[string]bool // ensemble(Tokens(titre))
+	tri  map[string]bool // trigrammes(titre)
+	ent  map[string]bool // ensemble(entités)
+	date int64
+}
+
+// Prepare calcule la Forme d'un titre, de ses entités et de sa date.
+func Prepare(titre string, ent []string, date int64) Forme {
+	return Forme{mots: ensemble(Tokens(titre)), tri: trigrammes(titre), ent: ensemble(ent), date: date}
+}
+
 // Score : proximité d'un article (titre, entités, date) avec un sujet (titre,
 // entités, date de MAJ). Combine titre, entités, tags et fraîcheur.
 func Score(titreA string, entA []string, pubA int64, titreT string, entT []string, majT int64) float64 {
-	sTitre := SimTitres(titreA, titreT)
-	sEnt := Jaccard(ensemble(entA), ensemble(entT))
-	sRec := Recence(pubA - majT)
+	return ScoreFormes(Prepare(titreA, entA, pubA), Prepare(titreT, entT, majT))
+}
+
+// ScoreFormes : Score sur des Formes déjà préparées — mêmes calculs, dans le
+// même ordre, donc le même résultat au bit près.
+func ScoreFormes(a, t Forme) float64 {
+	sRec := Recence(a.date - t.date)
 
 	// HORS FENÊTRE, JAMAIS LE MÊME ÉVÉNEMENT (#1194d).
 	if sRec <= 0 {
 		return 0
 	}
+	sTitre := 0.75*Jaccard(a.mots, t.mots) + 0.25*Jaccard(a.tri, t.tri)
+	sEnt := Jaccard(a.ent, t.ent)
 
 	// GARDE DE CONTENU — la correction du mélange « tornade + préservatif ».
 	//

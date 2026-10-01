@@ -65,7 +65,13 @@ func main() {
 	// articles mal rattaches par les anciennes regles. EN GOROUTINE : synchrone,
 	// il bloquait le demarrage du serveur (socket jamais ouvert, 502 partout).
 	// Idempotent — apres la premiere passe il ne trouve plus rien.
-	go func() {
+	//
+	// AVANT LE PREMIER TOUR, DANS LA MEME GOROUTINE (#1835). Lancees a cote de
+	// la boucle de sondage, ces passes et le premier tour regroupaient les
+	// MEMES orphelins en meme temps : travail double, sujets crees deux fois
+	// (48 sujets vides purges ensuite sur gk2), et vingt-cinq minutes de
+	// demarrage sous le quota. `boucle` les execute d'abord, puis sonde.
+	passes := func() {
 		maintenant := time.Now().Unix()
 		if n, err := pipe.Reclasser(maintenant); err != nil {
 			jr.Printf("reclasser : %v", err)
@@ -102,14 +108,14 @@ func main() {
 		} else if n > 0 {
 			jr.Printf("rafraichir : %d sujets recomposes", n)
 		}
-	}()
+	}
 	srv := web.New(st, pipe, web.Options{JWTSecret: secret, BBSSocket: *bbsSock, BBSCat: *bbsCat}, jr, version)
 
 	// Boucle de sondage en arrière-plan (double-cache : la donnée peut être
 	// périmée de quelques minutes sans impact).
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	go boucle(ctx, pipe, time.Duration(*pollSec)*time.Second, jr)
+	go boucle(ctx, passes, tourDe(pipe, jr), time.Duration(*pollSec)*time.Second)
 
 	_ = os.Remove(*socket)
 	ln, err := net.Listen("unix", *socket)
@@ -132,8 +138,9 @@ func main() {
 	}
 }
 
-func boucle(ctx context.Context, pipe *pipeline.Pipe, every time.Duration, jr *log.Logger) {
-	tour := func() {
+// tourDe : un sondage suivi d'un regroupement, journalisé.
+func tourDe(pipe *pipeline.Pipe, jr *log.Logger) func() {
+	return func() {
 		n, t, err := pipe.Tour(time.Now().Unix())
 		if err != nil {
 			jr.Printf("tour : %v", err)
@@ -143,7 +150,16 @@ func boucle(ctx context.Context, pipe *pipeline.Pipe, every time.Duration, jr *l
 			jr.Printf("tour : %d articles neufs, %d sujets touchés", n, t)
 		}
 	}
-	tour() // un premier tour au démarrage
+}
+
+// boucle : les passes de démarrage d'abord, PUIS les tours — jamais en même
+// temps (#1835).
+func boucle(ctx context.Context, avant func(), tour func(), every time.Duration) {
+	avant()
+	if ctx.Err() != nil {
+		return
+	}
+	tour() // un premier tour, une fois les passes finies
 	tk := time.NewTicker(every)
 	defer tk.Stop()
 	for {
