@@ -1,3 +1,11 @@
+secubox-sbxid (0.4.15-1~bookworm1) bookworm; urgency=medium
+
+  * Accès › Moi : lien transitoire « Personnes et demandes (administration) »
+    pour qui détient admin.users, jusqu'à l'étape A2 de #1829 (le menu du
+    Hall ne mène plus à l'ancienne page).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 10:56:31 +0200
+
 secubox-sbxid (0.4.14-1~bookworm1) bookworm; urgency=medium
 
   * Accès devient l'écran unique (#1829, étape A1) : onglet « Moi » pour un

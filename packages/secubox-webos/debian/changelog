@@ -1,3 +1,12 @@
+secubox-webos (1.0.386-1~bookworm1) bookworm; urgency=medium
+
+  * Menu du Hall (#1829) : « Mes identités » + « Gérer les accès… » +
+    « Gestion des identités… » faisaient doublon. Une entrée : « Mes accès »,
+    « Gérer les accès… » ouvre Accès (onglet Moi : appareils, services,
+    Administrer la box) ; « Gestion des identités… » retirée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 10:56:31 +0200
+
 secubox-webos (1.0.385-1~bookworm1) bookworm; urgency=medium
 
   * route hall déclarée sous le nom de cette box, alias hall.gk2.net seulement sur gk2 ; verdict LAN transmis sur /__console/jeton (le test de garde échouait depuis #1695) (#1723, #1713).

@@ -73,6 +73,16 @@ export async function rendMoi(conteneur) {
   roles.textContent = 'Rôles : ' + ((u.roles || []).map(r => ROLES[r] || r).join(', ') || '—')
     + ' · ' + (u.capabilities || []).length + ' capacité(s). Aucune n’ouvre SSH, sudo ou root.';
   qui.appendChild(roles);
+  // TRANSITOIRE (#1829, jusqu'à l'étape A2) : l'administration des personnes
+  // et des demandes vit encore sur l'ancienne page ; le menu du Hall n'y mène
+  // plus, on en garde donc le chemin ici pour qui l'administre.
+  if ((u.capabilities || []).includes('admin.users')) {
+    const g = el('div', 'gestes');
+    const a = el('a', null, 'Personnes et demandes (administration) →');
+    a.href = '/identite/#admin';
+    g.appendChild(a);
+    qui.appendChild(g);
+  }
 
   // ── Administrer la box (élévation, #1827) ──────────────────────────────
   await rendElevation(conteneur);
