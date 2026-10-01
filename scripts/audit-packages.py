@@ -232,7 +232,6 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
         "secubox-nettweak",
     ],
     "identity-users": [
-        "secubox-identity",
         "secubox-users",
         "secubox-avatar",
         "secubox-auth",

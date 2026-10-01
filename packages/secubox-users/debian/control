@@ -24,7 +24,6 @@ Description: SecuBox Users — local account manager (Argon2id + TOTP + RBAC)
  codes, session management, and role-based access control.
  .
  Distinct from sibling packages in the identity stack:
-  - secubox-identity — decentralized identity (DID) management.
   - secubox-auth — JWT auth guardian / session middleware (consumes
     secubox-users state).
   - secubox-portal — web login portal.

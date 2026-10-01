@@ -1,3 +1,9 @@
+secubox-profils (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-profil-socle ne dépend plus de secubox-identity, retiré (#1840).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 15:37:54 +0200
+
 secubox-profils (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * secubox-magicmirror, secubox-maigret, secubox-spiderfoot retirés

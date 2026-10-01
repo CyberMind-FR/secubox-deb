@@ -7,7 +7,7 @@
 # `À documenter` signifie que la donnee est absente du depot, jamais
 # qu'elle est inconnue de l'auteur : c'est une tache, pas une lacune de
 # redaction.
-# modules: 173
+# modules: 172
 
 modules:
   - id: secubox-acces
@@ -2293,53 +2293,6 @@ modules:
         - "_"
         - "admin.gk2.secubox.in"
         - "localhost"
-  - id: secubox-identity
-    nom: "secubox-identity"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox Identity Module"
-    manifeste: true
-    lxc: false
-    tests: 3
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd:
-      - "secubox-identity.service"
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/identity.sock"
-      health: "/api/v1/identity/health"
-      authentifie: true
-      nb_routes: 21
-      routes:
-        - "DELETE /peers/{did:path}"
-        - "GET /expiry"
-        - "GET /export"
-        - "GET /health"
-        - "GET /identity"
-        - "GET /identity/x25519"
-        - "GET /peers"
-        - "GET /peers/{did:path}"
-        - "GET /status"
-        - "GET /trust/history"
-        - "GET /trust/summary"
-        - "POST /export/encrypted"
-        - "POST /federation/create"
-        - "POST /federation/receive"
-        - "POST /identity/rotate"
-        - "POST /identity/sign"
-        - "POST /identity/verify"
-        - "POST /import"
-        - "POST /peers"
-        - "POST /peers/{did:path}/verify"
-        - "PUT /peers/{did:path}/trust"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/identity"
-      vhosts: []
   - id: secubox-interceptor
     nom: "secubox-interceptor"
     categorie: "misc"

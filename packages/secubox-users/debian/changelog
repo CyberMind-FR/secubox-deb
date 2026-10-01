@@ -1,3 +1,9 @@
+secubox-users (1.8.17-1~bookworm1) bookworm; urgency=medium
+
+  * Description : secubox-identity retiré de la pile d'identité (#1840).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 15:37:54 +0200
+
 secubox-users (1.8.16-1~bookworm1) bookworm; urgency=high
 
   * Une action qui modifie un compte d'ADMINISTRATEUR (mot de passe, second facteur, édition, rôles, services) est réservée à un administrateur ; un appareil, quel que soit son profil, ne reçoit au plus que les permissions « user » du module (#1811).

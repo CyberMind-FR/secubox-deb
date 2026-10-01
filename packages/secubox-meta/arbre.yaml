@@ -267,7 +267,6 @@ description: "Comptes, authentification, identité décentralisée, coffre de se
 requiert:
   - secubox-auth
   - secubox-users
-  - secubox-identity
 recommande:
   - secubox-vault
   - secubox-avatar
