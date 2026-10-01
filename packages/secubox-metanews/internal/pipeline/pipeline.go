@@ -124,15 +124,34 @@ func (p *Pipe) Regrouper(now int64) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// Leurs Formes aussi, une fois : découpe des titres, trigrammes et
+	// ensembles d'entités ne se refont plus pour chaque paire (#1835).
+	type candidat struct {
+		id    string
+		forme cluster.Forme
+	}
+	candidats := make([]candidat, len(sujets))
+	for i, t := range sujets {
+		candidats[i] = candidat{t.ID, cluster.Prepare(t.Title, t.Entities, t.UpdatedAt)}
+	}
+	// Les sujets créés pendant le passage passent AVANT les autres, du plus
+	// récent au plus ancien — l'ordre où une relecture les aurait rendus.
+	var nouveaux []candidat
 	touches := map[string]bool{}
 	for _, a := range arts {
+		fa := cluster.Prepare(a.Title, a.Entities, a.PublishedAt)
 		meilleur := ""
 		var meilleurScore float64
-		for _, t := range sujets {
-			sc := cluster.Score(a.Title, a.Entities, a.PublishedAt, t.Title, t.Entities, t.UpdatedAt)
-			if sc > meilleurScore {
-				meilleurScore, meilleur = sc, t.ID
+		compare := func(c candidat) {
+			if sc := cluster.ScoreFormes(fa, c.forme); sc > meilleurScore {
+				meilleurScore, meilleur = sc, c.id
 			}
+		}
+		for i := len(nouveaux) - 1; i >= 0; i-- {
+			compare(nouveaux[i])
+		}
+		for _, c := range candidats {
+			compare(c)
 		}
 		if meilleur != "" && meilleurScore >= cluster.Seuil {
 			_ = p.st.SetArticleSujet(a.ID, meilleur)
@@ -154,7 +173,7 @@ func (p *Pipe) Regrouper(now int64) (int, error) {
 			_ = p.st.SetArticleSujet(a.ID, id)
 			_ = p.st.AjouterEvenement(id, now, "detected", a.Title)
 			touches[id] = true
-			sujets = append([]store.Topic{t}, sujets...)
+			nouveaux = append(nouveaux, candidat{id, cluster.Prepare(t.Title, t.Entities, t.UpdatedAt)})
 		}
 	}
 	for id := range touches {
@@ -184,15 +203,17 @@ func (p *Pipe) Reclasser(now int64) (int, error) {
 		if err != nil || len(arts) < 2 {
 			continue
 		}
-		for _, a := range arts {
+		formes := make([]cluster.Forme, len(arts))
+		for i, a := range arts {
+			formes[i] = cluster.Prepare(a.Title, a.Entities, a.PublishedAt)
+		}
+		for i, a := range arts {
 			meilleur := 0.0
-			for _, b := range arts {
+			for j, b := range arts {
 				if b.ID == a.ID {
 					continue
 				}
-				sc := cluster.Score(a.Title, a.Entities, a.PublishedAt,
-					b.Title, b.Entities, b.PublishedAt)
-				if sc > meilleur {
+				if sc := cluster.ScoreFormes(formes[i], formes[j]); sc > meilleur {
 					meilleur = sc
 				}
 			}

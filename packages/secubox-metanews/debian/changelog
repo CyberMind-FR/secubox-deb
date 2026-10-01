@@ -1,3 +1,16 @@
+secubox-metanews (0.1.49-1~bookworm1) bookworm; urgency=medium
+
+  * Démarrage (#1835) : les passes de démarrage puis le premier tour, dans la
+    même goroutine. Côte à côte, les deux regroupaient les mêmes orphelins —
+    travail doublé, sujets créés deux fois (48 sujets vides purgés sur gk2),
+    vingt-cinq minutes sous le quota de 40 %.
+  * Score sur des Formes préparées une fois (titre découpé, trigrammes,
+    ensembles d'entités) au lieu d'une reconstruction par paire : 100
+    articles × 9 000 sujets, 29,6 s → 1,55 s (×19), résultats identiques au
+    bit près (test d'équivalence contre l'ancienne formule).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 13:45:01 +0200
+
 secubox-metanews (0.1.48-1~bookworm1) bookworm; urgency=medium
 
   * Reclasser ne recompose que les sujets qui ont perdu un article (#1835).
