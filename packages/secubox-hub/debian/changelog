@@ -1,3 +1,12 @@
+secubox-hub (1.9.26-1~bookworm1) bookworm; urgency=medium
+
+  * L'administration reste l'administration (#1832) : la racine
+    d'admin.<box> sert de nouveau le Control Center au lieu de renvoyer vers
+    /hall/ (#1294). « admin doit rester admin » — et l'élévation (#1827)
+    déposait l'administrateur dans le Hall de l'admin, aux cartes en échec.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 11:06:36 +0200
+
 secubox-hub (1.9.25-1~bookworm1) bookworm; urgency=high
 
   * Bouton de sortie (EXIT) et déconnexion de la console : appellent la vraie déconnexion (session terminée côté serveur) avant d'effacer le navigateur ; l'ancien appel visait le portail, qui gère un autre cookie (#1803).
