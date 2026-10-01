@@ -38,6 +38,7 @@ on:
       - 'packages/secubox-toolbox-ng/**'
       - 'packages/secubox-certs/**'
       - 'packages/secubox-publish/**'
+      - 'packages/secubox-streamlit/**'
       - 'packages/secubox-metrics/sbin/**'
       - 'packages/secubox-metrics/tests/**'
       # LXC uniquement (#1743) : toute relation de paquet est relue.
@@ -100,6 +101,10 @@ jobs:
           # affichait « Published Successfully » sur un site inexistant.
           - suite: secubox-publish
             chemin: packages/secubox-publish/tests
+          # Cache rafraîchi à la demande, plus en boucle (#1835) : ~14 000
+          # lancements en dix minutes sur gk2 pour aucune lecture.
+          - suite: secubox-streamlit
+            chemin: packages/secubox-streamlit/tests
           # secubox-vhost-logs ne restaure que sa propre passe (#1777) : la
           # 1.0.0 a recopié 90 sauvegardes sur gk2 et écrit dans sites-available.
           # Ce fichier seul : le reste de la suite metrics ne se collecte pas
