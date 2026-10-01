@@ -1199,11 +1199,13 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                  page s'ouvre DANS le Hall, consulter/valider ne fait transiter
                  aucun secret ; seule la saisie d'un identifiant dédié repart en
                  pleine page. -->
-            <p class="who-titre">🔑 Mes identités <span id="ident-n"></span><button type="button" role="menuitem" id="who-acces" class="who-gerer">Gérer les accès…</button></p>
+            <p class="who-titre">🔑 Mes accès <span id="ident-n"></span><button type="button" role="menuitem" id="who-acces" class="who-gerer">Gérer les accès…</button></p>
             <!-- LA CONNEXION LIÉE (#1442) : sous quelle identité SBX OS, et à
                  quel compte cet appareil est rattaché — puis la gestion. -->
             <p class="who-note" id="who-sbx">identité SBX OS…</p>
-            <button type="button" role="menuitem" id="who-sbxid">🪪 Gestion des identités…</button>
+            <!-- UN SEUL ÉCRAN, ACCÈS (#1829) : « Gestion des identités » faisait
+                 doublon avec « Gérer les accès » — l'Identity Manager est fondu
+                 dans Accès (Moi : appareils, services, Administrer la box). -->
             <div class="who-ident" id="who-ident">
               <p class="who-note">lecture du registre…</p>
             </div>
@@ -4426,26 +4428,19 @@ addEventListener('message', ev=>{
     addEventListener('focus', ()=>sondeSession(), {once:true});
   });
 
-  document.getElementById('who-sbxid').addEventListener('click', ()=>{
-    const box=document.getElementById('eb-frames');
-    if(box && typeof showView==='function'){
-      box.innerHTML='<iframe src="/identite/" title="Gestion des identités"></iframe>';
-      const n=document.getElementById('eb-name'); if(n) n.textContent='Gestion des identités';
-      const i=document.getElementById('eb-ic'); if(i) i.textContent='🪪';
-      showView('embed');
-    } else { location.href='/identite/'; }
-    ouvre(false);
-  });
   document.getElementById('who-acces').addEventListener('click', ()=>{
     // Cadre du Hall, même origine : la page d'accès n'est pas un service, on
     // la pose donc directement plutôt que de passer par openService().
+    // ACCÈS, L'ÉCRAN UNIQUE (#1829) : « Moi » y regroupe appareils, services
+    // (« Gérer mes accès aux services » mène aux accès délégués) et
+    // « Administrer la box ».
     const box=document.getElementById('eb-frames');
     if(box && typeof showView==='function'){
-      box.innerHTML='<iframe src="/acces.html" title="Accès délégués"></iframe>';
-      const n=document.getElementById('eb-name'); if(n) n.textContent='Accès délégués';
+      box.innerHTML='<iframe src="/i/acces/" title="Accès"></iframe>';
+      const n=document.getElementById('eb-name'); if(n) n.textContent='Accès';
       const i=document.getElementById('eb-ic'); if(i) i.textContent='🔑';
       showView('embed');
-    } else { location.href='/acces.html'; }
+    } else { location.href='/i/acces/'; }
     ouvre(false);
   });
 
