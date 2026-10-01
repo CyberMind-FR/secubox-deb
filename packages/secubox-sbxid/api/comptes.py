@@ -179,16 +179,30 @@ def cree(c: sqlite3.Connection, uid: str, svcs: List[str]) -> Dict[str, Any]:
     for svc in svcs:
         if svc in resultats or svc in deja:
             continue                                   # déjà lié : réinitialisé ci-dessus (ou mot de passe propre)
+        marque = f"tentative:{svc}"
+        tente = bool(c.execute("SELECT 1 FROM sbx_preferences WHERE user_uuid=? AND cle=?",
+                               (uid, marque)).fetchone())
         r = helper(_demande(pseudo, svc, "creer", pw))
         ok = bool(r.get("ok"))
-        if not ok and "exist" in str(r.get("erreur", "")).lower():      # « existe » / « already exists »
-            # déjà là (créé à la main, ou par une tentative précédente) : on
-            # le reprend, avec le mot de passe commun
+        existe = not ok and "exist" in str(r.get("erreur", "")).lower()   # « existe » / « already exists »
+        if existe and not tente:
+            # UN COMPTE HOMONYME QUE CETTE BOX N'A PAS CRÉÉ POUR ELLE (#1812) : on
+            # ne le reprend pas — réinitialiser son mot de passe, c'était
+            # s'approprier le compte de quelqu'un d'autre. À relier s'il est le sien.
+            resultats[svc] = (f"un compte « {pseudo} » existe déjà dans {LIBELLES[svc]} : "
+                              "reliez-le s'il est le sien")
+            continue
+        if existe:
+            # Créé par une tentative PRÉCÉDENTE pour cette personne : on le reprend.
             ok = bool(helper(_demande(pseudo, svc, "reinitialiser", pw)).get("ok"))
+        elif not ok:
+            # Échec ambigu (délai, service endormi) : le compte a pu naître ; la
+            # prochaine tentative pourra le reprendre.
+            c.execute("INSERT OR REPLACE INTO sbx_preferences VALUES (?,?,?)", (uid, marque, "1"))
         if ok:
             _lie(c, uid, svc, adresse(pseudo) if svc == "email" else pseudo)
-            if svc == "bbs":
-                c.execute("INSERT OR REPLACE INTO sbx_preferences VALUES (?,?,?)", (uid, "ouvert_ici:bbs", "1"))
+            c.execute("INSERT OR REPLACE INTO sbx_preferences VALUES (?,?,?)", (uid, f"ouvert_ici:{svc}", "1"))
+            c.execute("DELETE FROM sbx_preferences WHERE user_uuid=? AND cle=?", (uid, marque))
         resultats[svc] = True if ok else (r.get("erreur") or "échec")
     return {"coffre": remplit_coffre(c, uid, pseudo, pw, resultats),
             "adresse": adresse(pseudo), "services": resultats}
@@ -294,7 +308,12 @@ def delie(c: sqlite3.Connection, uid: str, app: str, ident: str) -> None:
 # BBS local adopté) n'est pas le sien à fermer — on se contente de le délier.
 
 def _ouverts(c: sqlite3.Connection, uid: str) -> List[str]:
-    return [svc for svc in SERVICES if ouvert_ici(c, uid, svc)]
+    """Comptes OUVERTS ICI : marqués comme tels, ou — courriel, Nextcloud,
+    PeerTube créés avant la marque — liés sans « mot de passe propre » (la box
+    en tient le mot de passe, c'est elle qui les a ouverts). Correctif #1812."""
+    l, pr = liens(c, uid), propres(c, uid)
+    return [svc for svc in SERVICES
+            if ouvert_ici(c, uid, svc) or (svc != "bbs" and svc in l and svc not in pr)]
 
 
 def _sur_les_ouverts(c: sqlite3.Connection, uid: str, action: str) -> Dict[str, Any]:

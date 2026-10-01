@@ -1,3 +1,9 @@
+secubox-sbxid (0.4.10-1~bookworm1) bookworm; urgency=high
+
+  * Ouvrir les comptes d'une personne ne reprend plus un compte homonyme existant d'autrui (on ne reprend que ce qu'une tentative précédente pour elle a créé ; sinon : à relier). La suspension désactive aussi les comptes courriel, Nextcloud et PeerTube ouverts ici, pas seulement le BBS (#1812).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:21:01 +0200
+
 secubox-sbxid (0.4.9-1~bookworm1) bookworm; urgency=high
 
   * Suspendre une personne coupe ses sessions (tous ses appareils), ferme la porte à ses appareils (la file refuse d'ouvrir une session) et désactive les comptes de services ouverts pour elle ; la réactiver les rouvre. Supprimer une personne suspendue : appareils révoqués et oubliés, rôles, liens, coffre et fiche effacés, comptes de services gardés désactivés ou supprimés sur option. Oublier un appareil révoqué, une demande refusée ou expirée. Lien d'entrée plafonné à guest et suivi. La base suit la file (révocations, ré-admissions) et un appareil admis absent du registre y est réinscrit (#1809).

@@ -1,3 +1,9 @@
+secubox-users (1.8.16-1~bookworm1) bookworm; urgency=high
+
+  * Une action qui modifie un compte d'ADMINISTRATEUR (mot de passe, second facteur, édition, rôles, services) est réservée à un administrateur ; un appareil, quel que soit son profil, ne reçoit au plus que les permissions « user » du module (#1811).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:21:01 +0200
+
 secubox-users (1.8.15-1~bookworm1) bookworm; urgency=high
 
   * « Révoquer les sessions » d'un compte coupe vraiment ses sessions : le moteur reçoit enfin un rappel de révocation (il rendait 0). Révocations unitaires et globales par secubox_core.sessions.muter (#1803).

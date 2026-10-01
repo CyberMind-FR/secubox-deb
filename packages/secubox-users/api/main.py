@@ -382,16 +382,36 @@ def get_user_permissions(username: str) -> List[str]:
                     all_perms.update(role_map[role_id].get("permissions", []))
             return list(all_perms)
     # UN APPAREIL ADMIS (sbx-…) n'est pas dans users.json : son profil vit dans
-    # le registre des appareils. Admin là-bas, admin ici.
+    # le registre des appareils. Mais un appareil N'ADMINISTRE JAMAIS (#1581,
+    # #1811) : profil `admin` ou non, il reçoit au plus les permissions `user`.
     try:
         from secubox_core import appareils
         if appareils.get(username):
             role = appareils.profil_de(username)
+            if role not in ("guest", "user"):
+                role = "user"
             if role in role_map:
                 return list(role_map[role].get("permissions", []))
     except Exception:
         pass
     return []
+
+
+def _est_admin(username: str) -> bool:
+    """Compte de users.json, actif, de rôle administrateur — jamais un appareil."""
+    for user in load_users().get("users", []):
+        if user.get("username") == username:
+            if user.get("enabled") is False:
+                return False
+            return user.get("role") == "admin" or "admin" in (user.get("roles") or [])
+    return False
+
+
+#: Permissions qui MODIFIENT un compte : agir ainsi sur un administrateur est
+#: réservé à un administrateur (#1811) — un opérateur posait le mot de passe ou
+#: retirait le second facteur d'un compte d'administration.
+_MUTANTES = {"users.edit", "users.password", "users.delete", "roles.assign",
+             "services.provision", "services.manage"}
 
 def user_has_permission(username: str, permission: str) -> bool:
     """Check if user has a specific permission."""
@@ -418,6 +438,11 @@ def require_permission(permission: str, allow_self_for_param: str = ""):
             if target and target == subject:
                 return creds
         if user_has_permission(subject, permission):
+            cible = request.path_params.get("username", "")
+            if (permission in _MUTANTES and cible and cible != subject
+                    and _est_admin(cible) and not _est_admin(subject)):
+                raise HTTPException(status_code=403,
+                                    detail="Seul un administrateur agit sur un compte d'administrateur")
             return creds
         raise HTTPException(status_code=403, detail=f"Permission requise : {permission}")
     return _check
@@ -1017,7 +1042,9 @@ async def get_user_roles(username: str):
 
 @app.put("/user/{username}/roles", dependencies=[Depends(require_permission("roles.assign"))])
 async def assign_user_roles(username: str, assignment: UserRoleAssign):
-    """Assign roles to a user."""
+    """Assign roles to a user. (`roles.assign` n'appartient qu'au rôle admin,
+    et `require_permission` refuse déjà d'agir sur un administrateur sans
+    l'être — #1811.)"""
     roles = load_roles()
     valid_role_ids = {r["id"] for r in roles}
 
