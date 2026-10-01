@@ -98,6 +98,18 @@ GITEASSH
         fi
     fi
     # --- end Gitea routing install ---
+
+    # #1791 : le SSH de gitea (2222) au LAN et au maillage seulement. La table
+    # nft `inet secubox_gitea_ssh` jette, AVANT toute traduction, les paquets
+    # vers 2222 d'une source ni locale, ni privée reliée, ni du maillage — que
+    # 2222 passe par le frontal HAProxy ou par une DNAT posée à la main.
+    # restart : une mise à jour recharge la table du nouveau script. Le
+    # service de mise à jour est lancé une fois pour armer son minuteur.
+    systemctl daemon-reload || true
+    systemctl enable secubox-gitea-ssh-garde.service secubox-gitea-ssh-garde-maj.timer >/dev/null 2>&1 || true
+    systemctl restart secubox-gitea-ssh-garde.service \
+        || echo "secubox-gitea: garde du SSH 2222 non chargée — journalctl -u secubox-gitea-ssh-garde" >&2
+    systemctl start secubox-gitea-ssh-garde-maj.timer secubox-gitea-ssh-garde-maj.service || true
 fi
 # ROUTE SBXWAF — DÉCLARÉE PAR CE PAQUET (#1739), comme son vhost et son unité.
 # HAProxy envoie gitea.<domaine> à l'inspection (waf_bypass = false) ; sans cette

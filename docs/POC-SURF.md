@@ -184,6 +184,29 @@ Le montage, pour mémoire :
 Reste : empaqueter `secubox-surf` proprement (service + unit + nginx +
 enregistrement du vhost), aujourd'hui posé à la main sur la box.
 
+### Pourquoi le contournement du WAF est conservé (mesure du 2026-10-01)
+
+Le `waf_bypass = true` de `surf_poc` est l'exception déclarative de la règle
+« tout passe par sbxwaf ». Il a été remis en question puis **mesuré** sur gk2 :
+`surf_poc` renvoyé vers l'inspection, chaque origine `surf-*` répond **421**
+(« requête mal aiguillée »), la page relayée et ses sous-origines comprises.
+
+La cause est structurelle, pas un réglage :
+
+- la table de routes de sbxwaf est une correspondance **exacte** sur l'hôte
+  (`Routes.Lookup`, `cmd/sbxwaf/routes.go` : une clé de carte, ni préfixe ni
+  joker) ;
+- les origines du relais sont **dynamiques** : une par site externe et par
+  sous-domaine rencontré (`surf-www-lemonde-fr`, `surf-img-lemde-fr`, …),
+  connues seulement quand la page les référence. Aucune liste écrite d'avance
+  ne peut les couvrir.
+
+Le contournement reste donc limité à ce seul vhost, déclaré dans
+`haproxy.toml`, routé par le préfixe `surf-` et rien d'autre. Pour le retirer, il
+faudrait que sbxwaf accepte une **entrée préfixe** (une règle `surf-*` → nginx)
+dans sa table de routes ; à ce moment-là, `waf_bypass` repasse à `false` et la
+mesure ci-dessus doit donner 200 au lieu de 421.
+
 ### Ce qui reste à câbler pour l'ouvrir dans un navigateur
 
 Le générateur HAProxy sait désormais router un **domaine préfixe** — un

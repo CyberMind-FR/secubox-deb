@@ -1,0 +1,8 @@
+# SecuBox gitea — régénère la garde du SSH 2222 depuis les adresses actuelles
+# de la box (#1791). Ne recharge la table que si elle change ou a disparu.
+[Unit]
+Description=SecuBox gitea — mise à jour de la garde du SSH 2222
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-gitea-ssh-garde

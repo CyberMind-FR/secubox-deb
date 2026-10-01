@@ -3,6 +3,10 @@ set -e
 if [ "$1" = "remove" ]; then
     systemctl stop secubox-gitea.service || true
     systemctl disable secubox-gitea.service || true
+    # La table de garde du SSH 2222 RESTE (échec fermé : la DNAT ou le frontal
+    # peuvent survivre au paquet) ; seule une purge la retire (#1791).
+    systemctl stop secubox-gitea-ssh-garde-maj.timer || true
+    systemctl disable secubox-gitea-ssh-garde.service secubox-gitea-ssh-garde-maj.timer || true
 fi
 #DEBHELPER#
 exit 0
