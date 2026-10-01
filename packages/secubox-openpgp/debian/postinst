@@ -43,6 +43,63 @@ print(did_from_pubkey(public_from_private(raw)))
         systemctl enable secubox-openpgp.service >/dev/null 2>&1 || true
         systemctl restart secubox-openpgp.service >/dev/null 2>&1 || true
     fi
+
+    # WKD (#1738) : un vhost openpgpkey.<domaine> par domaine de courriel SERVI.
+    # Le domaine vient de ce que le conteneur `mail` sert (postconf), ou de
+    # [wkd] domaines dans /etc/secubox/openpgp.toml ; aucun → aucun vhost.
+    # Idempotent ; le certificat reste un geste d'exploitation (acme.sh,
+    # webroot /usr/share/secubox/www, puis certsctl deploy --apply).
+    TPL=/usr/share/secubox/openpgp/openpgpkey.conf.tpl
+    DOMAINES=""
+    if [ -r /etc/secubox/openpgp.toml ]; then
+        DOMAINES=$(python3 -c "
+import tomllib
+d = tomllib.load(open('/etc/secubox/openpgp.toml', 'rb')).get('wkd', {}).get('domaines', [])
+print(' '.join(x for x in d if isinstance(x, str)))" 2>/dev/null || true)
+    fi
+    if [ -z "$DOMAINES" ] && command -v lxc-attach >/dev/null 2>&1 && lxc-info -n mail -s 2>/dev/null | grep -q RUNNING; then
+        DOMAINES=$(lxc-attach -n mail -- postconf -h virtual_mailbox_domains 2>/dev/null | tr ',' ' ' || true)
+    fi
+    for DOM in $DOMAINES; do
+        case "$DOM" in *[!a-z0-9.-]*|"") continue ;; esac
+        # WKD n'a de sens que pour un domaine PUBLIC : pas de certificat pour
+        # secubox.local, localdomain, .lan… — rien n'est déclaré pour eux.
+        case "$DOM" in *.*) ;; *) continue ;; esac
+        case "$DOM" in *.local|*.lan|*.home|*.internal|*.localdomain|*.test|*.invalid|*.example) continue ;; esac
+        HOTE="openpgpkey.$DOM"
+        if [ -f "$TPL" ] && [ -d /etc/nginx/sites-enabled ]; then
+            mkdir -p /etc/secubox/nginx-available
+            sed "s/@DOMAINE@/$DOM/g" "$TPL" > "/etc/secubox/nginx-available/$HOTE.conf"
+            cp -f "/etc/secubox/nginx-available/$HOTE.conf" "/etc/nginx/sites-available/$HOTE.conf"
+            ln -sf "../sites-available/$HOTE.conf" "/etc/nginx/sites-enabled/$HOTE.conf"
+            if nginx -t >/dev/null 2>&1; then
+                systemctl reload nginx >/dev/null 2>&1 || true
+            else
+                rm -f "/etc/nginx/sites-enabled/$HOTE.conf"
+                echo "secubox-openpgp : vhost $HOTE refusé par nginx -t — non activé" >&2
+            fi
+        fi
+        if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
+            CLE=$(printf '%s' "$HOTE" | tr '.-' '__')
+            if ! grep -q "^\[vhosts\.$CLE\]" /etc/secubox/haproxy.toml 2>/dev/null; then
+                haproxyctl vhost add "$HOTE" nginx_vhosts true >/dev/null 2>&1 || true
+                haproxyctl generate >/dev/null 2>&1 || true
+                systemctl reload haproxy >/dev/null 2>&1 || true
+            fi
+        fi
+        if [ -f /etc/secubox/waf/haproxy-routes.json ]; then
+            python3 - /etc/secubox/waf/haproxy-routes.json "$HOTE" <<'PY' && systemctl is-active --quiet secubox-waf-ng && systemctl reload secubox-waf-ng >/dev/null 2>&1 || true
+import json, sys
+chemin, hote = sys.argv[1], sys.argv[2]
+d = json.load(open(chemin))
+if d.get(hote) == ["127.0.0.1", 9080]:
+    sys.exit(1)
+d[hote] = ["127.0.0.1", 9080]
+json.dump(d, open(chemin, "w"), indent=2)
+PY
+        fi
+        [ -s "/data/haproxy/certs/$HOTE.pem" ] || echo "secubox-openpgp : WKD $HOTE prêt — certificat à émettre (acme.sh --issue -d $HOTE -w /usr/share/secubox/www --keylength ec-256 ; certsctl deploy --apply)"
+    done
     ;;
 esac
 

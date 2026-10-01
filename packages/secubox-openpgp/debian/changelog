@@ -1,3 +1,12 @@
+secubox-openpgp (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2 (#1738) : annuaire des clés PUBLIQUES personnelles de la box, hors du journal de l'annuaire (RGPD). /moi, /moi/cle (publier, retirer), /annuaire, /annuaire/{empreinte}.asc — la personne vient de la session. Seule une clé publique unique, valide et qui chiffre entre, réexportée en export-minimal.
+  * Adresse vérifiée = boîte confiée par la box (sbx_app_links) ; WKD (/wkd/{domaine}/hu/{hash}) ne sert que le vérifié.
+  * Box liées : export signé par la clé de box (notation annuaire-cles), rafraîchi toutes les 30 min sur l'écoute :8799 ; signature, auteur et fraîcheur vérifiés.
+  * Postinst : vhost WKD openpgpkey.<domaine> par domaine servi par le conteneur mail (nginx, HAProxy, route sbxwaf).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 21:30:00 +0200
+
 secubox-openpgp (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * sbx-openpgp _pairs-json, _boite-json [ID], _boite-retirer ID : sorties JSON pour les outils de la box (recouvrement du Coffre, #1367 P8) ; lectures et retraits tracés.

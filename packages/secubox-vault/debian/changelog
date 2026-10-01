@@ -1,3 +1,10 @@
+secubox-vault (2.0.10-1~bookworm1) bookworm; urgency=medium
+
+  * Mon coffre : publier sa clé publique dans l'annuaire de la box (depuis le coffre, ou collée), la retirer, consulter l'annuaire ; marche à suivre du webmail par Mailvelope (#1738).
+  * coffrectl depot : empreinte ENTIÈRE de la clé apt (219B A872 … 78E8 BC7E) — son début et sa fin ne passent plus pour deux clés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 21:30:00 +0200
+
 secubox-vault (2.0.9-1~bookworm1) bookworm; urgency=medium
 
   * Coffre P7 (#1367) : Nextcloud mesuré (32.0.10, chiffrement côté serveur désactivé : aucune clé de récupération). coffrectl nextcloud etat | sauvegarder : copie de recouvrement des secrets d'instance (secret, passwordsalt, instanceid, dbpassword, mail_smtppassword) dans le compartiment box — du conteneur au Coffre par des tubes, jamais à l'écran.

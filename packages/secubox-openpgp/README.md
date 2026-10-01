@@ -54,7 +54,45 @@ sbx-openpgp boite [ID]
 Le postinst fait `init` puis `lier`. Les pairs voient une nouvelle liaison à
 leur prochaine synchronisation de l'annuaire (≤ 5 min).
 
-## Suite
+## Phase 2 — l'annuaire des clés personnelles (#1738)
 
-Phase 2 : clés personnelles (jamais dans le journal public — RGPD). Phase 3 :
-webmail, client de cette même brique.
+La clé **secrète** d'une personne vit dans **son** compartiment du Coffre
+(« Mon coffre », #1367 P5) ; ce démon ne la voit jamais. Il tient l'annuaire
+des clés **publiques** de la box : un fichier par personne, **hors du journal
+de l'annuaire** (public et indélébile — RGPD), retirable à tout moment.
+
+| Route | Garde | Rôle |
+|---|---|---|
+| `GET /moi` | personne | ma clé publiée, les boîtes que la box m'a confiées |
+| `POST /moi/cle`, `DELETE /moi/cle` | personne | publier (ou remplacer) ma clé publique ; la retirer |
+| `GET /annuaire`, `/annuaire/{empreinte}.asc` | personne | clés de cette box et des box liées |
+| `GET /annuaire/export` | maillage | l'annuaire signé par la clé de box (notation `annuaire-cles`) |
+| `GET /wkd/{domaine}/hu/{hash}`, `/wkd/{domaine}/policy` | public | Web Key Directory |
+
+- **La personne vient de la session** (`capacites.personne_du_porteur`), jamais
+  d'un paramètre ni d'un en-tête.
+- **Seule une clé publique, unique, valide et qui chiffre entre.** Elle est
+  réexportée en `export-minimal` dans un trousseau jetable : la box ne sert
+  jamais le texte soumis tel quel.
+- **Adresse vérifiée = boîte confiée par la box** à cette personne
+  (`sbx_app_links`, app `email`). Une autre adresse portée par la clé reste
+  « déclarée ». **WKD ne sert que le vérifié** : personne ne publie une clé au
+  nom de la boîte d'un autre.
+- **Box liées** : toutes les 30 min, chaque box va chercher l'annuaire signé de
+  ses pairs sur leur écoute `:8799` et n'en garde rien sans signature de la
+  clé liée au did, notation `annuaire-cles`, auteur et fraîcheur (±1 h)
+  vérifiés. Une rotation ou un retrait y figure (`retirees`).
+- **WKD** : le postinst crée `openpgpkey.<domaine>` pour chaque domaine que le
+  conteneur `mail` sert (ou `[wkd] domaines` de `/etc/secubox/openpgp.toml`),
+  par HAProxy → sbxwaf → nginx. Le certificat reste un geste d'exploitation
+  (`acme.sh --issue -d openpgpkey.<domaine> -w /usr/share/secubox/www`, puis
+  `certsctl deploy --apply`).
+
+## Phase 3 — le webmail
+
+Par **Mailvelope**, dans le navigateur : `mailctl webmail-openpgp` règle
+Roundcube sur le trousseau principal de Mailvelope et refuse si le greffon
+`enigma` (clés tenues côté serveur) est actif. La personne importe sa clé
+secrète depuis « Mon coffre » dans Mailvelope ; ses correspondants trouvent
+sa clé publique par WKD. Aucune clé privée n'est prêtée au webmail, aucune
+route ne signe ni ne déchiffre pour lui.

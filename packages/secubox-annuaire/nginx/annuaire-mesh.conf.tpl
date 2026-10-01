@@ -95,5 +95,19 @@ server {
         proxy_intercept_errors on;
     }
 
+    # ANNUAIRE DES CLÉS PERSONNELLES (#1738) — lecture seule. Le document est
+    # signé par la clé de box liée au did : le pair qui le lit vérifie la
+    # signature, la notation d'usage et la fraîcheur ; cette écoute ne fait
+    # que borner (GET, maillage 10.10.0.0/24).
+    location = /api/v1/openpgp/annuaire/export {
+        limit_except GET { deny all; }
+        rewrite ^/api/v1/openpgp/(.*)$ /$1 break;
+        proxy_pass http://unix:/run/secubox/openpgp.sock;
+        include /etc/nginx/snippets/secubox-proxy.conf;
+        proxy_set_header X-SecuBox-Maillage 1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_intercept_errors on;
+    }
+
     location / { return 403; }
 }

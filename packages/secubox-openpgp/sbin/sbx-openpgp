@@ -14,6 +14,7 @@ CyberMind — https://cybermind.fr
     sbx-openpgp cle                  notre clé publique (armure)
     sbx-openpgp envoyer PAIR OBJET [TEXTE|-]
     sbx-openpgp boite [ID]           messages reçus ; ID : le lire (déchiffré)
+    sbx-openpgp annuaire [rafraichir]  clés personnelles publiées (cette box + box liées)
 
 Deux comptes, deux secrets, jamais ensemble : le trousseau est à
 secubox-openpgp (toutes les commandes s'y exécutent), node.key à secubox
@@ -179,6 +180,21 @@ def cmd_boite(args):
     return 0
 
 
+def cmd_annuaire(args):
+    b = _box()
+    if args and args[0] == "rafraichir":
+        for nom, r in b.rafraichir_annuaires().items():
+            print(f"{nom:10} {r if isinstance(r, str) else str(r) + ' clé(s) reçue(s)'}")
+        return 0
+    cles = b.annuaire_cles().toutes()
+    if not cles:
+        print("annuaire vide")
+    for e in cles:
+        v = ", ".join(a + (" ✓" if a in e.get("verifies", []) else "") for a in e.get("courriels", []))
+        print(f"{e['empreinte']}  {e.get('pseudo') or '?':12} {e.get('origine', ''):10} {v}")
+    return 0
+
+
 # Sorties pour les outils de la box (coffrectl, recouvrement du Coffre #1367) :
 # du JSON plutôt qu'un affichage à relire. Chaque lecture reste tracée.
 def cmd_pairs_json(_args):
@@ -218,7 +234,7 @@ def cmd_boite_retirer(args):
 
 
 COMMANDES = {"init": cmd_init, "lier": cmd_lier, "etat": cmd_etat, "pairs": cmd_pairs,
-             "cle": cmd_cle, "envoyer": cmd_envoyer, "boite": cmd_boite, "_cle-json": cmd_cle_json,
+             "cle": cmd_cle, "envoyer": cmd_envoyer, "boite": cmd_boite, "annuaire": cmd_annuaire, "_cle-json": cmd_cle_json,
              "_pairs-json": cmd_pairs_json, "_boite-json": cmd_boite_json, "_boite-retirer": cmd_boite_retirer}
 
 

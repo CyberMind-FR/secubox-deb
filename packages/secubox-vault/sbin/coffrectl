@@ -108,6 +108,13 @@ def affiche_etat(e: dict) -> None:
         print(f"  recouvrement : jeu {r['jeu']} — {', '.join(r['detenteurs'])}")
 
 
+def _empreinte_lisible(fpr: str) -> str:
+    """L'empreinte ENTIÈRE, par groupes de quatre : on désigne la clé apt par
+    son début (219BA872…) et gpg par sa fin ; seule l'entière évite de croire
+    à deux clés."""
+    return " ".join(fpr[i:i + 4] for i in range(0, len(fpr), 4))
+
+
 def depot(args) -> None:
     """Session de signature du dépôt apt (P2)."""
     from coffre import depot as d
@@ -119,12 +126,12 @@ def depot(args) -> None:
             if "--porcelaine" in args:
                 print(f"protegee={int(e['protegee'])} en_cache={int(e['en_cache'])} empreinte={fpr}")
                 return
-            print(f"clé {fpr[-16:]} : " + ("protégée par le Coffre" if e["protegee"] else "EN CLAIR — coffrectl depot proteger")
+            print(f"clé {_empreinte_lisible(fpr)} : " + ("protégée par le Coffre" if e["protegee"] else "EN CLAIR — coffrectl depot proteger")
                   + (" ; session ouverte (l'agent tient la phrase)" if e["en_cache"] else ""))
         elif sous == "proteger":
             d.proteger(fpr, lambda nom, valeur: appel("POST", "/secrets",
                                                       {"compartiment": "box", "nom": nom, "valeur": valeur}))
-            print(f"clé {fpr[-16:]} protégée : sa phrase n'existe qu'au Coffre. Signer : coffrectl depot session")
+            print(f"clé {_empreinte_lisible(fpr)} protégée : sa phrase n'existe qu'au Coffre. Signer : coffrectl depot session")
         elif sous == "session":
             minutes = 15
             if "--minutes" in args:
@@ -132,7 +139,7 @@ def depot(args) -> None:
             phrase = appel("GET", f"/secrets/box/{d.nom_secret(fpr)}/valeur")["valeur"]
             d.session(fpr, phrase, minutes)
             del phrase
-            print(f"session de signature ouverte pour {minutes} min (clé {fpr[-16:]})")
+            print(f"session de signature ouverte pour {minutes} min (clé {_empreinte_lisible(fpr)})")
         elif sous == "fin":
             d.oublier(fpr)
             print("session de signature close")

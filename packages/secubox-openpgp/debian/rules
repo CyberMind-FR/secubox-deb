@@ -11,6 +11,8 @@ override_dh_auto_install:
 	install -m 644 api/__init__.py api/main.py debian/secubox-openpgp/usr/lib/secubox/openpgp/api/
 	install -m 644 secubox_openpgp/*.py debian/secubox-openpgp/usr/lib/secubox/openpgp/secubox_openpgp/
 	install -D -m 755 sbin/sbx-openpgp debian/secubox-openpgp/usr/sbin/sbx-openpgp
+	install -D -m 644 nginx/openpgpkey.conf.tpl \
+	        debian/secubox-openpgp/usr/share/secubox/openpgp/openpgpkey.conf.tpl
 	install -D -m 644 systemd/secubox-openpgp.service \
 	        debian/secubox-openpgp/lib/systemd/system/secubox-openpgp.service
 
