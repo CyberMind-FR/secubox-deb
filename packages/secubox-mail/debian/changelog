@@ -1,3 +1,9 @@
+secubox-mail (2.10.14-1~bookworm1) bookworm; urgency=medium
+
+  * mailctl ssl : certificat obtenu et renouvelé par secubox-certbot quand il est là ; « ssl renew » sans certificat déployé ni lignée ACME (box dont le courriel n'a jamais eu de certificat, gk3) le dit et sort sans échec au lieu d'échouer chaque jour (#1819).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:56:13 +0200
+
 secubox-mail (2.10.13-1~bookworm1) bookworm; urgency=medium
 
   * debootstrap : + systemd, systemd-sysv, dbus — minbase n'apporte pas /sbin/init et le conteneur ne démarrait pas (« Failed to exec /sbin/init ») ; un rootfs existant sans init est mis de côté (jamais effacé) puis refait (#1729, #1713).

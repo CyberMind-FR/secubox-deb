@@ -463,5 +463,14 @@ if [ "$1" = "configure" ] && [ -x /usr/sbin/secubox-toolbox-ca-rename ]; then
     /usr/sbin/secubox-toolbox-ca-rename || true
 fi
 
+# #1819 : proxy d'égress et tunnel des visiteurs ne démarrent que provisionnés.
+# Une box qui ne l'est pas (gk3) arrête sa boucle de redémarrage ici.
+if [ "$1" = configure ]; then
+    systemctl daemon-reload 2>/dev/null || true
+    [ -e /etc/secubox/toolbox/ca-wg/sbxmitm-ca-cert.pem ] || \
+        systemctl stop secubox-toolbox-egress-proxy.service 2>/dev/null || true
+    systemctl reset-failed secubox-toolbox-egress-proxy.service wg-quick@wg-toolbox.service 2>/dev/null || true
+fi
+
 #DEBHELPER#
 exit 0

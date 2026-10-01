@@ -1,3 +1,9 @@
+secubox-ad-guard (1.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Domaines EXEMPTÉS du puits DNS : ceux dont la box a besoin (download.db-ip.com, base ASN de secubox-geoipupdate) et ceux d'un fichier d'administration (/var/lib/secubox/ad-guard/domain-allowlist.txt), servis en always_transparent même sous un parent bloqué ; liste régénérée à l'installation (#1819).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:56:13 +0200
+
 secubox-ad-guard (1.1.5-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

@@ -34,3 +34,11 @@ setup() {
     [ "$status" -eq 0 ]
     [ -f "$BATS_TEST_TMPDIR/reload.marker" ]
 }
+
+@test "ssl renew sans certificat ni lignée : rien à renouveler, sans échec (#1819)" {
+    export ACME_HOME="$BATS_TEST_TMPDIR/acme"
+    acme_renew() { echo "NE-DOIT-PAS-ETRE-APPELE" > "$BATS_TEST_TMPDIR/acme.marker"; return 1; }; export -f acme_renew
+    run cmd_ssl renew
+    [ "$status" -eq 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/acme.marker" ]
+}

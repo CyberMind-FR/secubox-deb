@@ -28,6 +28,7 @@ systemd timer and on-demand from the dns-guard WebUI.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import time
@@ -48,6 +49,12 @@ DROPIN = Path("/etc/unbound/unbound.conf.d/95-secubox-adblock.conf")
 UNBOUND_CONF = Path("/etc/unbound/unbound.conf")
 STATUS = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
 IP_ALLOWLIST = Path("/var/lib/secubox/ad-guard/ip-allowlist.txt")
+# DOMAINES EXEMPTÉS (#1819) : ceux dont la BOX ELLE-MÊME a besoin — une liste
+# de blocage qui les contient casse un service de la box (db-ip.com bloqué :
+# secubox-geoipupdate ne pouvait plus rafraîchir la base ASN). Plus ceux qu'un
+# administrateur ajoute, un par ligne.
+DOMAIN_ALLOWLIST = Path("/var/lib/secubox/ad-guard/domain-allowlist.txt")
+DOMAINES_DE_LA_BOX = ("download.db-ip.com",)
 STATE = Path("/var/lib/secubox/ad-guard/sinkhole.enabled")
 
 
@@ -69,6 +76,16 @@ def _ip_allowlist() -> list:
     return out
 
 
+def _domain_allowlist() -> list:
+    out = list(DOMAINES_DE_LA_BOX)
+    if DOMAIN_ALLOWLIST.exists():
+        for line in DOMAIN_ALLOWLIST.read_text().splitlines():
+            d = line.split("#", 1)[0].strip().lower().rstrip(".")
+            if d and re.fullmatch(r"[a-z0-9.-]{1,253}", d) and d not in out:
+                out.append(d)
+    return out
+
+
 def _render(domains: list) -> str:
     """Render the Unbound drop-in. Domains → always_nxdomain. IP allowlist →
     a view with no blocking so those clients bypass the sinkhole."""
@@ -82,8 +99,14 @@ def _render(domains: list) -> str:
         # Tag allowlisted clients onto a permissive view.
         for ip in ips:
             lines.append(f'    access-control-view: {ip} sbx-allow')
+    exemptes = _domain_allowlist()
     for d in domains:
+        if d in exemptes:
+            continue                      # même nom, deux local-zone : unbound refuse
         lines.append(f'    local-zone: "{d}." always_nxdomain')
+    # Le plus précis l'emporte : un exempté reste résolu même sous un parent bloqué.
+    for d in exemptes:
+        lines.append(f'    local-zone: "{d}." always_transparent')
     if ips:
         lines.append("")
         lines.append('view:')
