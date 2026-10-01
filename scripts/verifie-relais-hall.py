@@ -66,6 +66,9 @@ VHOST_HALL = Path("packages/secubox-webos/nginx/hall.vhost.conf")
 # posé ce qu'on ne peut pas lire.
 SNIPPETS_DU_DEPOT: Dict[str, str] = {
     "/etc/nginx/snippets/secubox-proxy.conf": "common/nginx/secubox-proxy.conf",
+    # Le secret du port console (#1695) n'est jamais dans le dépôt : son
+    # modèle, de même forme que le fichier écrit par le postinst, l'est.
+    "/etc/nginx/secubox-console/*.conf": "packages/secubox-webos/nginx/secubox-console.modele.conf",
 }
 
 # ── A + B : ce que TOUT relais du Hall réécrit ──────────────────────────────
