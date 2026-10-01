@@ -50,5 +50,8 @@ func verifierJeton(tok, secret string) error {
 	if !ok || int64(exp) < time.Now().Unix() {
 		return errors.New("exp")
 	}
-	return nil
+	return controleSession(cl, emetteursFlotte)
 }
+
+// emetteursFlotte : modules dont un jeton de SERVICE (sans session) est admis.
+var emetteursFlotte = map[string]bool{"metanews": true, "socialrelay": true}

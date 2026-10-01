@@ -33,7 +33,7 @@ func jetonService(secret, iss string) string {
 	e := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 	now := time.Now().Unix()
 	c := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(
-		`{"sub":"%s","iss":"%s","iat":%d,"exp":%d}`, iss, iss, now, now+3600)))
+		`{"sub":"%s","iss":"%s","iat":%d,"exp":%d}`, iss, iss, now, now+120)))
 	m := hmac.New(sha256.New, []byte(secret))
 	m.Write([]byte(e + "." + c))
 	return e + "." + c + "." + base64.RawURLEncoding.EncodeToString(m.Sum(nil))
@@ -72,8 +72,10 @@ func TestDepotPasserelleRefuseAuJetonMembre(t *testing.T) {
 	} {
 		for _, salon := range []string{"bureau", "place", "salon-absent"} {
 			w := api(b.srv, "POST", "/api/v1/bbs/threads", jeton, corpsDepot(salon))
-			if w.Code != http.StatusForbidden {
-				t.Errorf("depot dans %q : code %d, attendu 403 (%s)", salon, w.Code, w.Body.String())
+			// 403 : session reconnue mais pas une passerelle ; 401 : jeton de
+			// service d'un émetteur inconnu, refusé dès l'authentification (#1814).
+			if w.Code != http.StatusForbidden && w.Code != http.StatusUnauthorized {
+				t.Errorf("depot dans %q : code %d, attendu 403 ou 401 (%s)", salon, w.Code, w.Body.String())
 			}
 		}
 	}

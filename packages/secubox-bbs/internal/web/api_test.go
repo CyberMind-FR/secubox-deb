@@ -14,8 +14,9 @@ import (
 func jetonHS256Sub(secret, sub, role string, expire time.Duration) string {
 	e := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 	now := time.Now().Unix()
+	jti := inscrisSessionTest()
 	c := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(
-		`{"sub":"%s","role":"%s","iat":%d,"exp":%d}`, sub, role, now, now+int64(expire.Seconds()))))
+		`{"sub":"%s","role":"%s","iat":%d,"exp":%d,"jti":"%s"}`, sub, role, now, now+int64(expire.Seconds()), jti)))
 	m := hmac.New(sha256.New, []byte(secret))
 	m.Write([]byte(e + "." + c))
 	return e + "." + c + "." + base64.RawURLEncoding.EncodeToString(m.Sum(nil))
@@ -24,8 +25,9 @@ func jetonHS256Sub(secret, sub, role string, expire time.Duration) string {
 func jetonHS256(secret, role string, expire time.Duration) string {
 	e := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 	now := time.Now().Unix()
+	jti := inscrisSessionTest()
 	c := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(
-		`{"sub":"t","role":"%s","iat":%d,"exp":%d}`, role, now, now+int64(expire.Seconds()))))
+		`{"sub":"t","role":"%s","iat":%d,"exp":%d,"jti":"%s"}`, role, now, now+int64(expire.Seconds()), jti)))
 	m := hmac.New(sha256.New, []byte(secret))
 	m.Write([]byte(e + "." + c))
 	return e + "." + c + "." + base64.RawURLEncoding.EncodeToString(m.Sum(nil))
