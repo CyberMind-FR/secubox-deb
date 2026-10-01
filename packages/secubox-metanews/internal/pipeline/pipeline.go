@@ -200,9 +200,14 @@ func (p *Pipe) Reclasser(now int64) (int, error) {
 			if meilleur < cluster.Seuil {
 				_ = p.st.SetArticleSujet(a.ID, "")
 				detaches++
+				// SEUL UN SUJET QUI A PERDU UN ARTICLE EST RECOMPOSÉ (#1835).
+				// Recomposer date le sujet de `now` : marquer TOUS les sujets
+				// à plusieurs articles rajeunissait, à chaque démarrage, les
+				// douze jours de la fenêtre — des milliers de sujets anciens
+				// rentraient dans les 36 h de Regrouper et n'en sortaient plus.
+				touches[t.ID] = true
 			}
 		}
-		touches[t.ID] = true
 	}
 	for id := range touches {
 		p.recomposer(id, now)

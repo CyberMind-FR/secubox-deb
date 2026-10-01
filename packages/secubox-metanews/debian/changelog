@@ -1,3 +1,15 @@
+secubox-metanews (0.1.48-1~bookworm1) bookworm; urgency=medium
+
+  * Reclasser ne recompose que les sujets qui ont perdu un article (#1835).
+    Il marquait TOUS les sujets à plusieurs articles de sa fenêtre de douze
+    jours ; or recomposer les date de `now` : à chaque démarrage, des
+    milliers de sujets anciens rajeunissaient, rentraient dans les 36 h de
+    Regrouper (9 476 « récents » sur gk2) et n'en sortaient plus — plus un
+    événement « resume » chacun. Rafraichir, lui, passait déjà la date du
+    sujet pour ne pas le rajeunir.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 12:48:19 +0200
+
 secubox-metanews (0.1.47-1~bookworm1) bookworm; urgency=medium
 
   * Regrouper lit les sujets candidats UNE fois par passage (#1835), et plus

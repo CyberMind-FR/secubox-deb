@@ -53,3 +53,53 @@ func TestRegrouperLitLesCandidatsUneFois(t *testing.T) {
 		t.Fatalf("attendu %d sujets, got %d", len(sujets), len(tops))
 	}
 }
+
+// RECLASSER NE RAJEUNIT PAS CE QU'IL NE TOUCHE PAS (#1835). Un sujet cohérent,
+// dont aucun article n'est détaché, garde sa date ; seul celui qui perd un
+// intrus est recomposé.
+func TestReclasserNeRajeunitPasLesSujetsIntacts(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := int64(1_700_000_000)
+	sid, _ := st.AddSource(store.Source{Slug: "s", Name: "S", URL: "u", Enabled: true})
+	ajoute := func(ref, titre, corps string, pub int64) {
+		st.UpsertArticle(store.Article{
+			SourceID: sid, Ref: ref, Title: titre, URL: "http://x/" + ref, Summary: corps,
+			PublishedAt: pub, Fingerprint: linker.Empreinte(titre, corps),
+			Entities: cluster.Entites(titre + " " + corps),
+		})
+	}
+	ajoute("a", "Incendie important près de Marseille", "Des centaines de pompiers près de Marseille.", now)
+	ajoute("b", "Un feu mobilise 300 pompiers près de Marseille", "Des centaines de pompiers près de Marseille.", now+60)
+	ajoute("c", "La BCE relève ses taux directeurs", "La Banque centrale européenne augmente ses taux.", now+120)
+	ajoute("d", "La BCE annonce une hausse de ses taux", "La Banque centrale européenne augmente ses taux.", now+180)
+	p := New(st, linker.NewRSS(nil), nil)
+	if _, err := p.Regrouper(now + 600); err != nil {
+		t.Fatal(err)
+	}
+	avant := map[string]int64{}
+	tops, _ := st.SujetsListe("", 100)
+	for _, s := range tops {
+		avant[s.ID] = s.UpdatedAt
+	}
+	if len(tops) != 2 {
+		t.Fatalf("attendu 2 sujets cohérents, got %d", len(tops))
+	}
+	plusTard := now + 3600
+	n, err := p.Reclasser(plusTard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("rien à détacher, got %d", n)
+	}
+	tops, _ = st.SujetsListe("", 100)
+	for _, s := range tops {
+		if s.UpdatedAt != avant[s.ID] {
+			t.Errorf("sujet %q rajeuni par Reclasser : %d → %d", s.Title, avant[s.ID], s.UpdatedAt)
+		}
+	}
+}
