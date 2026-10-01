@@ -258,6 +258,8 @@ async def health():
 async def demander(corps: DemandeIn, req: Request):
     """Déposer une demande d'accès. **Non authentifié — c'est le but.**"""
     _cadence(req)
+    avant = profileur().demande_de(corps.did)
+    etait_en_attente = avant is not None and avant.etat == "en_attente" and not avant.expiree()
     try:
         d = profileur().demande(corps.model_dump())
     except DemandeInvalide as e:
@@ -269,6 +271,8 @@ async def demander(corps: DemandeIn, req: Request):
         return {"etat": "acceptee", "profil": d.profil, "empreinte": d.empreinte}
 
     log.info("demande d'accès : %s (%s) — empreinte %s", d.nom, d.appareil, d.empreinte)
+    if d.etat == "en_attente" and not etait_en_attente:
+        _alerte_admin(d, renouvelee=avant is not None)
     return {
         # Le jeton de suivi n'est rendu QU'ICI, une fois : c'est avec lui que
         # l'appareil sondera, puis réclamera sa session.
@@ -832,6 +836,60 @@ def reinscris_manquants() -> int:
             _provisionne(d.nom, d.profil or "guest", d.did, d.cle_publique)
             n += 1
     return n
+
+
+# ── ALERTE DE L'ADMINISTRATION (#1821) ──────────────────────────────────────
+# Une demande qui ENTRE dans la file (nouvelle, ou renouvelée après un refus ou
+# une expiration) prévient l'administration par courriel — sans cela, elle
+# attendait qu'on vienne regarder. Destinataire : `[acces] alerte_courriel` de
+# secubox.conf (« non » pour couper), sinon la boîte de la box. Plafond global
+# par heure : la route de demande est publique, elle ne doit pas servir à
+# inonder une boîte.
+ALERTES_PAR_HEURE = 20
+_alertes: list = []
+
+
+def _destinataire_alerte() -> Optional[str]:
+    try:
+        from secubox_core.config import get_config
+        v = str((get_config("acces") or {}).get("alerte_courriel", "") or "").strip()
+    except Exception:  # noqa: BLE001
+        v = ""
+    if v.lower() in ("non", "no", "false", "0", "aucun"):
+        return None
+    if "@" in v:
+        return v
+    from secubox_core import courriel
+    return courriel.adresse_de_la_box()
+
+
+def _alerte_admin(d, renouvelee: bool = False) -> None:
+    maintenant = time.monotonic()
+    _alertes[:] = [t for t in _alertes if maintenant - t < 3600]
+    if len(_alertes) >= ALERTES_PAR_HEURE:
+        return
+    dest = _destinataire_alerte()
+    if not dest:
+        return
+    _alertes.append(maintenant)
+    from secubox_core.auth import hote_box
+    hote = hote_box("hall")
+    lien = f"https://{hote}/identite/#admin" if hote else "/identite/#admin"
+    sujet = f"SecuBox — demande d'accès{' renouvelée' if renouvelee else ''} : {d.nom}"
+    corps = (f"{d.nom} demande l'accès depuis « {d.appareil} ».\n"
+             f"Empreinte à comparer avec l'écran de l'appareil : {d.empreinte}\n"
+             + (f"Message : {d.message}\n" if d.message else "")
+             + (f"Adresse : {d.email}\n" if d.email else "")
+             + f"\nAccepter (avec un rôle) ou refuser : {lien}\n")
+
+    def envoi():
+        try:
+            from secubox_core import courriel
+            courriel.envoie(dest, sujet, corps)
+        except Exception as e:  # noqa: BLE001 — l'alerte ne casse jamais la demande
+            log.warning("alerte de demande d'accès non envoyée : %s", e)
+    import threading
+    threading.Thread(target=envoi, daemon=True, name="alerte-acces").start()
 
 
 def _coupe_sessions(compte: str, jtis: list) -> None:

@@ -1,3 +1,9 @@
+secubox-sbxid (0.4.12-1~bookworm1) bookworm; urgency=medium
+
+  * Étape 3 de l'accès sans mot de passe : une nouvelle demande d'accès (ou renouvelée) prévient l'administration par courriel ([acces] alerte_courriel, sinon la boîte de la box ; plafond par heure) ; compteur des demandes en attente dans le menu du Gestionnaire d'identité ; accepter avec un rôle ouvre les services de ce rôle ; le Profileur et la carte d'accès du Hall mènent au Gestionnaire d'identité pour admettre (#1821).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 09:09:11 +0200
+
 secubox-sbxid (0.4.11-1~bookworm1) bookworm; urgency=medium
 
   * Invitations (priorité n°1 « sans mot de passe + invitation ») : un lien/QR à usage unique (~72 h, révocable) fait entrer une personne — appareil admis d'emblée (l'invitation vaut approbation), pseudo et rôle posés, services du rôle ouverts (membre : BBS, courriel, Nextcloud, PeerTube ; invité : BBS), session par signature, sans mot de passe. Les administrateurs invitent avec tout rôle, un membre seulement comme invité. « Ajouter un appareil » : QR de 10 minutes, le nouvel appareil rejoint la même personne. Preuve de la clé (le code est signé), appareil déjà connu refusé, seule l'empreinte du code est gardée, routes publiques bornées par adresse (#1816).

@@ -172,3 +172,15 @@ def test_un_appareil_revoque_doit_etre_oublie_avant(banc, invit):
         _rejoint(_code(r["lien"]), banc.ka, banc.pa)
     assert e.value.status_code == 409
     assert main.db().execute("SELECT count(*) FROM sbx_users WHERE pseudo='alice'").fetchone()[0] == 1
+
+
+def test_l_admission_ouvre_les_services_du_role(banc, invit):
+    """#1821 : accepter une demande avec un rôle ouvre les services de ce rôle."""
+    k, pub = _paire()
+    did = S.did_appareil(pub)
+    invit.prof.demande({"did": did, "cle_publique": pub, "nom": "Lou", "appareil": "Mac", "message": ""})
+    ctx = main.exige_admin(_req("tok-g"))
+    req = _req("tok-g")
+    out = asyncio.run(main.accepte(did, main.Decision(role="member"), req, ctx))
+    assert out["services"] == invitations.SERVICES_DEFAUT
+    assert invit.travaux and invit.travaux[-1][0] == store.appareil_par_did(main.db(), did)["user_uuid"]
