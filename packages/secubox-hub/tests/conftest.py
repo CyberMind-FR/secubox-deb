@@ -7,9 +7,13 @@
 import sys
 from pathlib import Path
 
-# packages/secubox-hub/
+# packages/secubox-hub/ — la racine du paquet AUSSI : certains tests importent
+# `api.main` (paquet) et d'autres `main` (module). Sans la racine, ils ne
+# passaient que lancés depuis packages/secubox-hub, jamais depuis la racine du
+# dépôt comme en CI (#1835).
 _pkg_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_pkg_root / "api"))
+sys.path.insert(0, str(_pkg_root))
 
 # repo root → common/
 _repo_root = Path(__file__).resolve().parents[3]

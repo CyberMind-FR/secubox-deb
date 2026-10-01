@@ -117,19 +117,25 @@ def test_health_batch_serves_cache_without_subprocess(monkeypatch):
     assert out["modules"]["hub"]["status"] == "ok"
 
 
-def test_health_batch_cold_miss_builds_once(monkeypatch):
+def test_health_batch_cold_miss_serves_placeholder_without_systemctl(monkeypatch):
+    """A froid, le relevé de santé ne se construit PAS sur le chemin de la
+    requête : il rend un témoin « warming » et laisse le rafraîchissement de
+    fond le remplir. L'ancien contrat — un systemctl synchrone à froid — sérialisait
+    les sondes de la barre latérale derrière un appel de 3 s (#1835)."""
     _reset_cache()
-
-    class R:
-        stdout = "secubox-hub.service loaded active running Hub\n"
-
     calls = {"n": 0}
 
     def fake_run(*a, **k):
         calls["n"] += 1
-        return R()
+        raise AssertionError("systemctl lancé sur le chemin de la requête")
 
     monkeypatch.setattr(main.subprocess, "run", fake_run)
+    monkeypatch.setattr(main, "_ensure_bg", lambda: None)
     out = asyncio.run(main.public_health_batch())
-    assert out["count"] >= 1
-    assert calls["n"] == 1
+    assert out == {"modules": {}, "count": 0, "warming": True}
+    assert calls["n"] == 0
+
+    # Une fois le relevé construit en fond, la même lecture le rend tel quel.
+    main._cache["health_batch"] = {"modules": {"hub": {"status": "ok"}}, "count": 1}
+    assert asyncio.run(main.public_health_batch())["count"] == 1
+

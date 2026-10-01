@@ -15,7 +15,10 @@ import pytest
 
 from api import main as m
 
-ACTIFS = {"waf", "haproxy", "dns"}
+# Unités actives (nom sans « secubox- » ni « .service ») : les VRAIES unités
+# du WAF, de l'équilibreur et du DNS ; secubox-haproxy et secubox-dns restent
+# arrêtées, comme sur gk2.
+ACTIFS = {"waf-ng", "haproxy", "unbound"}
 
 
 def _sortie(noms):
@@ -88,3 +91,13 @@ def test_surveillance_hors_boucle_et_sans_fausse_alerte(monkeypatch, lancements)
     asyncio.run(un_tour())
     # systemctl en échec : aucun service déclaré « tombé ».
     assert evenements == []
+
+
+def test_unites_reelles_plus_de_faux_critique(lancements):
+    """secubox-haproxy et secubox-dns arrêtées, haproxy et unbound actifs :
+    la box est saine (#1835) — elle s'affichait « critical »."""
+    h = asyncio.run(m.health_check())
+    assert h["critical_down"] == [] and h["status"] != "critical"
+    unites = lancements[0][lancements[0].index("--") + 1:]
+    assert {"haproxy.service", "unbound.service", "secubox-waf-ng.service"} <= set(unites)
+    assert "secubox-haproxy.service" not in unites and "secubox-dns.service" not in unites

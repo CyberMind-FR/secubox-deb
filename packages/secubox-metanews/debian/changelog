@@ -1,3 +1,13 @@
+secubox-metanews (0.1.50-1~bookworm1) bookworm; urgency=medium
+
+  * Regrouper n'accepte un sujet que s'il compte un article qui ressemble à
+    celui-ci (#1835) — la condition exacte de Reclasser. Rattachés par l'union
+    des entités du sujet, des articles qu'aucun frère ne reconnaissait étaient
+    détachés à chaque démarrage puis remis (185, 29, 162 sur gk2). Sinon le
+    sujet suivant (5 au plus), sinon un sujet neuf.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 16:15:43 +0200
+
 secubox-metanews (0.1.49-1~bookworm1) bookworm; urgency=medium
 
   * Démarrage (#1835) : les passes de démarrage puis le premier tour, dans la
