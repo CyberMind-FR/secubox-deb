@@ -135,8 +135,9 @@ def test_racine_serrures_et_codes(clients):
     rac.post("/sceller")
     assert rac.post("/ouvrir", json={"secret": nouveaux[0], "genre": "secours"}).status_code == 200
     assert rac.post("/compartiments", json={"id": "gk2"}).status_code == 400   # jamais un compte
+    # un compartiment personnel naît de la première serrure de la personne (P5)
     assert rac.post("/compartiments",
-                    json={"id": "p-0b6e3c3a-7d0f-4c1e-9a55-3f2a1b8c9d10"}).status_code == 200
+                    json={"id": "p-0b6e3c3a-7d0f-4c1e-9a55-3f2a1b8c9d10"}).status_code == 400
 
 
 def test_le_coffre_n_est_jamais_monte_dans_l_agregateur():

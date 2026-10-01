@@ -1391,6 +1391,10 @@ const FEATURED = [
   // lu par l'agrégateur qui ne le rend qu'à un administrateur réel. Pas de
   // vhost : agrandie, la carte ouvre la console /vault/ — d'où `mode:"admin"`.
   {id:"coffre",     label:"Coffre",    icon:"🔐", color:"#6b4a2e", carte:"/cardlets/coffre.html", mode:"admin", h:150, auth:true, admin:"/vault/"},
+  // MON COFFRE (#1367 P5) : le compartiment de la personne, ouvert par SA
+  // serrure. Pas de vhost : la carte EST la page /coffre/ (motif SBX OS), que
+  // le Hall agrandit telle quelle.
+  {id:"mon-coffre", label:"Mon coffre", icon:"🗝️", color:"#6b4a2e", carte:"/coffre/", h:380, auth:true, admin:false},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214, admin:"/droplet/"},
   {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true, admin:"/nextcloud/"},
   {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264, admin:"/bbs/"},

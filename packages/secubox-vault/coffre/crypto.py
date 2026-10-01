@@ -78,3 +78,32 @@ def derive_kek_appareil(prf: bytes, sel: bytes) -> bytes:
         raise ValueError("sortie PRF de 32 octets attendue")
     return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=sel,
                 info=_ESPACE + b"appareil").derive(prf)
+
+
+def aad_serrure_personnelle(id_serrure: str, personne: str) -> bytes:
+    """Une serrure personnelle emballe la clé d'UNE personne : déplacée vers
+    une autre, elle ne s'ouvre plus."""
+    return _ESPACE + b"serrure-personnelle/" + personne.encode() + b"\0" + id_serrure.encode()
+
+
+def cle_compartiment_personnel(mk: bytes, compartiment: str, cle_personne: bytes) -> bytes:
+    """Clé d'un compartiment de personne (P5) : il faut la MK (Coffre ouvert)
+    ET la clé de la personne (sa serrure à elle). L'une sans l'autre ne
+    déchiffre rien — ni l'admin qui a ouvert le Coffre, ni la personne quand
+    il est scellé."""
+    if len(cle_personne) != TAILLE_CLE:
+        raise ValueError("clé de personne de 32 octets attendue")
+    return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=None,
+                info=_ESPACE + b"compartiment-personnel/" + compartiment.encode()).derive(
+        cle_compartiment(mk, compartiment) + cle_personne)
+
+
+def derive_kek_maillage(part_a: bytes, part_b: bytes, sel: bytes, jeu: str, i: int, j: int) -> bytes:
+    """Recouvrement 2 sur n (P8) SANS arithmétique maison : chaque PAIRE de
+    détenteurs a sa serrure, dont la clé vient de leurs deux parts. Une part
+    seule ne dérive rien ; deux parts quelconques ouvrent la serrure de leur
+    paire. Les indices (i < j) et le jeu sont liés à la dérivation."""
+    if len(part_a) != TAILLE_CLE or len(part_b) != TAILLE_CLE or not i < j:
+        raise ValueError("deux parts de 32 octets, indices croissants")
+    return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=sel,
+                info=_ESPACE + b"recouvrement/" + jeu.encode() + b"/" + f"{i},{j}".encode()).derive(part_a + part_b)

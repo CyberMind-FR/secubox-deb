@@ -20,7 +20,6 @@ entrée standard.
   coffrectl serrure-ajouter [LIBELLE]
   coffrectl serrure-retirer ID
   coffrectl codes                          # régénère les 5 codes de secours
-  coffrectl compartiment ID [LIBELLE]      # box ou p-<user_uuid>
   coffrectl journal [N] [--verifier]
 
   coffrectl depot etat                     # clé de signature du dépôt apt (P2)
@@ -32,12 +31,24 @@ entrée standard.
   coffrectl niveau0 migrer NOM CHEMIN UNITE.service   # chiffre et déclare ; garde le clair
   coffrectl niveau0 retirer-clair NOM      # détruit le clair, si l'unité tourne avec la crédence
   coffrectl niveau0 lire NOM               # root : la valeur, sur la sortie standard
+
+  coffrectl recouvrement etat              # recouvrement par le maillage (P8)
+  coffrectl recouvrement preparer DÉTENTEUR DÉTENTEUR [DÉTENTEUR…]
+                                           # box pair (sbx-openpgp pairs) ou « papier » ;
+                                           # deux détenteurs quelconques rouvriront le Coffre
+  coffrectl recouvrement annuler
+  coffrectl recouvrement rendre ORIGINE    # SUR UN PAIR : renvoie à ORIGINE la part qu'elle nous a confiée
+  coffrectl recouvrement ouvrir            # parts rendues par les pairs + parts papier saisies
+
+  coffrectl nextcloud etat [CONTENEUR]     # secrets d'instance (P7) : copie au Coffre à jour ?
+  coffrectl nextcloud sauvegarder [CONTENEUR]   # copie de recouvrement dans le compartiment box
 """
 import getpass
 import http.client
 import json
 import os
 import socket
+import subprocess
 import sys
 
 SOCKET = os.environ.get("SECUBOX_COFFRE_SOCKET_RACINE", "/run/secubox-coffre/racine.sock")
@@ -92,6 +103,9 @@ def affiche_etat(e: dict) -> None:
         print(f"  serrure {s['id']}  {s['genre']:8}  {s['libelle']}")
     for c in e.get("compartiments", []):
         print(f"  compartiment {c['id']}  ({c['nature']}) — {c['secrets']} secret(s)")
+    r = e.get("recouvrement")
+    if r:
+        print(f"  recouvrement : jeu {r['jeu']} — {', '.join(r['detenteurs'])}")
 
 
 def depot(args) -> None:
@@ -153,6 +167,195 @@ def niveau0(args) -> None:
         sys.exit(f"coffrectl niveau0 : {e}")
 
 
+# ── recouvrement par le maillage (P8) ──────────────────────────────────────────
+OBJET_PART = "Coffre : part de recouvrement"
+OBJET_RENDUE = "Coffre : part rendue"
+SBX_OPENPGP = os.environ.get("SECUBOX_SBX_OPENPGP", "sbx-openpgp")
+
+
+def _openpgp(*args: str, entree: str = None) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run([SBX_OPENPGP, *args], input=entree, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError:
+        sys.exit("coffrectl : sbx-openpgp absent — le recouvrement passe par la messagerie OpenPGP des box")
+
+
+def _pairs() -> dict:
+    r = _openpgp("_pairs-json")
+    if r.returncode != 0:
+        sys.exit("coffrectl : annuaire des box liées illisible (" + (r.stderr.strip() or "?") + ")")
+    return {p["boxname"]: p for p in json.loads(r.stdout or "[]")}
+
+
+def _boite() -> list:
+    r = _openpgp("_boite-json")
+    if r.returncode != 0:
+        sys.exit("coffrectl : boîte OpenPGP illisible (" + (r.stderr.strip() or "?") + ")")
+    return json.loads(r.stdout or "[]")
+
+
+def _message(ident: str) -> dict:
+    r = _openpgp("_boite-json", ident)
+    return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else {}
+
+
+def corps_part(origine: str, jeu: str, part: str) -> str:
+    return f"coffre-recouvrement/1\norigine: {origine}\njeu: {jeu}\npart: {part}\n"
+
+
+def lit_corps(texte: str) -> dict:
+    lignes = (texte or "").splitlines()
+    if not lignes or lignes[0].strip() != "coffre-recouvrement/1":
+        return {}
+    d = {}
+    for l in lignes[1:]:
+        k, _, v = l.partition(":")
+        if k.strip() in ("origine", "jeu", "part"):
+            d[k.strip()] = v.strip()
+    return d if {"origine", "jeu", "part"} <= set(d) else {}
+
+
+def _soi(pairs: dict) -> str:
+    return next((n for n, p in pairs.items() if p.get("soi")), socket.gethostname().split(".")[0])
+
+
+def recouvrement(args) -> None:
+    sous = args[0] if args else "etat"
+    if sous == "etat":
+        r = appel("GET", "/recouvrement")["recouvrement"]
+        print("aucun jeu de recouvrement" if not r else
+              f"jeu {r['jeu']} — détenteurs : {', '.join(r['detenteurs'])} (deux quelconques rouvrent le Coffre)")
+    elif sous == "preparer" and len(args) >= 3:
+        detenteurs = args[1:]
+        pairs = _pairs()
+        soi = _soi(pairs)
+        for d in detenteurs:
+            if not d.startswith("papier") and (d not in pairs or pairs[d].get("soi")):
+                sys.exit(f"coffrectl : « {d} » n'est ni « papier » ni une box liée (sbx-openpgp pairs)")
+        jeu = appel("POST", "/recouvrement/preparer", {"detenteurs": detenteurs})
+        papier = []
+        for d, part in zip(jeu["detenteurs"], jeu["parts"]):
+            if d.startswith("papier"):
+                papier.append((d, part))
+                continue
+            r = _openpgp("envoyer", d, OBJET_PART, "-", entree=corps_part(soi, jeu["jeu"], part))
+            if r.returncode != 0:
+                appel("DELETE", "/recouvrement")
+                sys.exit(f"coffrectl : {d} n'a pas reçu sa part ({(r.stderr or '').strip()}) — jeu annulé")
+            print(f"part {jeu['detenteurs'].index(d)} confiée à {d} (signée, chiffrée pour sa clé liée)")
+        for d, part in papier:
+            print(f"PART PAPIER ({d}) — à recopier et garder HORS LIGNE, ne s'affichera plus :\n    {part}")
+        print(f"jeu {jeu['jeu']} prêt : deux détenteurs quelconques parmi {len(detenteurs)} rouvrent le Coffre.")
+    elif sous == "annuler":
+        appel("DELETE", "/recouvrement")
+        print("jeu de recouvrement annulé")
+    elif sous == "rendre" and len(args) == 2:
+        origine = args[1]
+        pairs = _pairs()
+        if origine not in pairs or pairs[origine].get("soi"):
+            sys.exit(f"coffrectl : « {origine} » n'est pas une box liée")
+        trouve = None
+        for m in _boite():                              # du plus récent au plus ancien
+            if m.get("boxname") != origine and m.get("de") != pairs[origine]["did"]:
+                continue
+            d = _message(m["id"])
+            if d.get("objet") == OBJET_PART and lit_corps(d.get("contenu", "")):
+                trouve = lit_corps(d["contenu"])
+                break
+        if not trouve:
+            sys.exit(f"coffrectl : aucune part confiée par {origine} dans la boîte OpenPGP")
+        r = _openpgp("envoyer", origine, OBJET_RENDUE, "-",
+                     entree=corps_part(_soi(pairs), trouve["jeu"], trouve["part"]))
+        if r.returncode != 0:
+            sys.exit(f"coffrectl : {origine} n'a pas reçu la part ({(r.stderr or '').strip()})")
+        print(f"part du jeu {trouve['jeu']} rendue à {origine}")
+    elif sous == "ouvrir":
+        r = appel("GET", "/recouvrement")["recouvrement"]
+        if not r:
+            sys.exit("coffrectl : aucun jeu de recouvrement sur cette box")
+        parts, rendues = [], []
+        for m in _boite():
+            d = _message(m["id"])
+            c = lit_corps(d.get("contenu", "")) if d.get("objet") == OBJET_RENDUE else {}
+            if c.get("jeu") == r["jeu"] and c["part"] not in parts:
+                parts.append(c["part"])
+                rendues.append(m["id"])
+                print(f"part rendue par {m.get('boxname') or m.get('de')}")
+        while len(parts) < 2:
+            p = saisie("Part papier (jeu.indice.XXXX-…) : ").strip()
+            if not p:
+                sys.exit("coffrectl : deux parts sont nécessaires")
+            parts.append(p)
+        affiche_etat(appel("POST", "/recouvrement/ouvrir", {"parts": parts}))
+        for ident in rendues:                           # elles ont servi : on ne les garde pas
+            _openpgp("_boite-retirer", ident)
+        print("Coffre rouvert par le maillage. Ce jeu ne vaut plus : posez une nouvelle phrase "
+              "(coffrectl serrure-ajouter), puis refaites un jeu (coffrectl recouvrement preparer …).")
+    else:
+        sys.exit("coffrectl recouvrement : etat | preparer DÉTENTEUR DÉTENTEUR… | annuler | rendre ORIGINE | ouvrir")
+
+
+# ── Nextcloud : secrets d'instance (P7) ───────────────────────────────────────
+# config.php porte secret, passwordsalt, instanceid, le mot de passe de la base
+# et celui du relais SMTP. PHP les lit dans le conteneur au démarrage : ils ne
+# peuvent pas attendre un humain, ni passer au niveau 0 de l'hôte sans finir
+# en clair dans la configuration LXC. Le Coffre en garde une COPIE DE
+# RECOUVREMENT (conteneur reconstruit, config.php perdu) — elle protège de la
+# perte, pas du vol. Les valeurs vont du conteneur au Coffre par des tubes ;
+# jamais par la ligne de commande, jamais à l'écran.
+NEXTCLOUD_CLES = ("instanceid", "secret", "passwordsalt", "dbpassword", "mail_smtppassword")
+NEXTCLOUD_OCC = os.environ.get("SECUBOX_NEXTCLOUD_OCC", "/var/www/nextcloud/occ")
+
+
+def nom_nextcloud(cle: str) -> str:
+    return "nextcloud-" + cle.replace("_", "-")
+
+
+class LectureImpossible(RuntimeError):
+    pass
+
+
+def _occ_valeur(conteneur: str, cle: str):
+    """La valeur, None si la clé est absente de config.php (occ : code 1,
+    rien sur la sortie) ; LectureImpossible sinon — après un second essai."""
+    for _ in range(2):
+        r = subprocess.run(["lxc-attach", "-n", conteneur, "--", "runuser", "-u", "www-data", "--",
+                            "php", NEXTCLOUD_OCC, "config:system:get", cle],
+                           capture_output=True, text=True, timeout=60)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.rstrip("\n")
+        if r.returncode == 1 and not r.stdout.strip() and not r.stderr.strip():
+            return None
+    raise LectureImpossible(f"occ code {r.returncode} : {(r.stderr.strip().splitlines() or ['?'])[-1][:120]}")
+
+
+def nextcloud(args) -> None:
+    sous = args[0] if args else "etat"
+    conteneur = args[1] if len(args) > 1 else "nextcloud"
+    if sous not in ("etat", "sauvegarder"):
+        sys.exit("coffrectl nextcloud : etat | sauvegarder [CONTENEUR]")
+    gardes = {s["nom"] for s in appel("GET", "/secrets?compartiment=box")["secrets"]}
+    for cle in NEXTCLOUD_CLES:
+        nom = nom_nextcloud(cle)
+        try:
+            vivante = _occ_valeur(conteneur, cle)
+        except LectureImpossible as e:
+            print(f"{cle:18} LECTURE IMPOSSIBLE ({e})")
+            continue
+        if vivante is None:
+            print(f"{cle:18} absent de config.php")
+            continue
+        if sous == "sauvegarder":
+            v = appel("POST", "/secrets", {"compartiment": "box", "nom": nom, "valeur": vivante})["version"]
+            print(f"{cle:18} copié au Coffre (box/{nom}, version {v})")
+        elif nom not in gardes:
+            print(f"{cle:18} PAS de copie au Coffre")
+        else:
+            gardee = appel("GET", f"/secrets/box/{nom}/valeur")["valeur"]
+            print(f"{cle:18} copie au Coffre {'à jour' if gardee == vivante else 'DIFFÉRENTE de config.php'}")
+        del vivante
+
+
 def principal(argv) -> None:
     if not argv or argv[0] in ("-h", "--help", "aide"):
         print(__doc__)
@@ -196,9 +399,6 @@ def principal(argv) -> None:
         print("Nouveaux codes de secours (les anciens ne valent plus) :")
         for c in appel("POST", "/serrures/secours")["codes"]:
             print("   ", c)
-    elif cmd == "compartiment" and args:
-        appel("POST", "/compartiments", {"id": args[0], "libelle": " ".join(args[1:])})
-        print("compartiment", args[0])
     elif cmd == "journal":
         n = next((int(a) for a in args if a.isdigit()), 30)
         j = appel("GET", f"/journal?n={n}")
@@ -210,6 +410,10 @@ def principal(argv) -> None:
         depot(args)
     elif cmd == "niveau0":
         niveau0(args)
+    elif cmd == "recouvrement":
+        recouvrement(args)
+    elif cmd == "nextcloud":
+        nextcloud(args)
     else:
         sys.exit(f"coffrectl : commande inconnue ou incomplète « {' '.join(argv)} » — coffrectl aide")
 

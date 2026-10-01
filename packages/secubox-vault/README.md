@@ -24,7 +24,8 @@ phase P1 : #1367.
   Ajouter ou retirer une serrure ne rechiffre rien ; la dernière phrase ne se
   retire pas.
 - **Compartiments** : `box` (système) et `p-<user_uuid>` (une personne —
-  jamais un compte système). Clé dérivée de la MK (HKDF-SHA256).
+  jamais un compte système). Clé de `box` dérivée de la MK (HKDF-SHA256) ;
+  celle d'une personne demande la MK **et** sa clé à elle (voir plus bas).
 - **Secrets** : AES-256-GCM, liés à leur compartiment, leur nom et leur
   version — déplacé, un secret ne se déchiffre plus.
 - **Journal chaîné** : `/var/log/secubox/coffre.journal`, chaque ligne porte
@@ -57,6 +58,45 @@ conteneur `mail`, seule adresse IP que l'unité peut joindre).
 Le Hall montre une carte **Coffre** : l'état seul, relayé par l'agrégateur aux
 administrateurs réels ; agrandie, elle ouvre la console `/vault/`.
 
+## Mon coffre — le compartiment d'une personne (P5)
+
+Une personne SBX OS a **ses** serrures (phrase, clé d'appareil WebAuthn PRF),
+qui emballent **sa** clé (32 octets aléatoires). La clé de son compartiment
+est HKDF(clé de compartiment tirée de la MK ‖ clé de la personne) : il faut le
+Coffre ouvert **et** la serrure de la personne. Un administrateur, même Coffre
+ouvert, n'y lit, n'y pose, n'y retire ni n'y liste rien ; la personne non plus
+tant que le Coffre est scellé.
+
+Rien de personnel n'est tenu en mémoire : chaque requête apporte la serrure.
+La page **Mon coffre** du Hall (`/coffre/`) la garde dans l'onglet et l'oublie
+après cinq minutes sans geste.
+
+| Route (`/api/v1/vault/moi…`, toute personne via l'agrégateur) | Rôle |
+|---|---|
+| `GET /moi` | ses serrures (de quoi demander une sortie PRF), nombre de secrets |
+| `POST /moi/initialiser` | première serrure (phrase) : la clé et le compartiment naissent |
+| `POST /moi/serrures/phrase`, `/moi/serrures/appareil[/preparer]`, `/moi/serrures/{id}/retirer` | serrures — la dernière reste |
+| `POST /moi/secrets/lister`, `/moi/secrets`, `/moi/secrets/{nom}/lire`, `/moi/secrets/{nom}/retirer` | ses secrets |
+| `POST /moi/openpgp` | une clé OpenPGP (ed25519 + cv25519) née dans un trousseau jetable, rangée en `openpgp-secrete` / `openpgp-publique` |
+
+La personne est calculée **par le Coffre**, depuis le jeton vérifié
+(`capacites.personne_du_porteur`) — aucun en-tête n'en décide. Une serrure
+refusée compte : cinq par heure et par personne, puis 429.
+
+## Recouvrement par le maillage (P8)
+
+Phrase et codes perdus ? Deux **détenteurs** sur n (2 à 5) rouvrent le
+Coffre. `coffrectl recouvrement preparer gk3 c3box papier` tire une part
+aléatoire par détenteur et pose une serrure `maillage` par **paire** de parts
+(HKDF des deux — pas d'arithmétique maison). La part d'une box pair part par
+sa messagerie OpenPGP liée (signée, chiffrée pour sa clé liée au did) ; une
+part `papier` s'affiche une fois, à garder hors ligne.
+
+Pour rouvrir : sur chaque pair qui accepte, son administrateur lance
+`coffrectl recouvrement rendre <cette box>` ; ici, `coffrectl recouvrement
+ouvrir` reprend les parts rendues et demande les parts papier. Le jeu
+disparaît dès qu'il a servi — poser une nouvelle phrase, refaire un jeu.
+
 ## coffrectl (root)
 
 ```
@@ -69,7 +109,6 @@ coffrectl poser COMPARTIMENT NOM
 coffrectl lire COMPARTIMENT NOM
 coffrectl retirer COMPARTIMENT NOM
 coffrectl serrure-ajouter [LIBELLE] | serrure-retirer ID | codes
-coffrectl compartiment ID [LIBELLE]
 coffrectl journal [N] [--verifier]
 
 # P2 — clé qui signe le dépôt apt
@@ -83,6 +122,17 @@ coffrectl niveau0 etat
 coffrectl niveau0 migrer NOM CHEMIN UNITE.service   # chiffre + drop-in LoadCredentialEncrypted
 coffrectl niveau0 retirer-clair NOM                 # seulement si l'unité tourne AVEC la crédence
 coffrectl niveau0 lire NOM
+
+# P8 — recouvrement par le maillage
+coffrectl recouvrement etat
+coffrectl recouvrement preparer DÉTENTEUR DÉTENTEUR [DÉTENTEUR…]   # box pair ou « papier »
+coffrectl recouvrement annuler
+coffrectl recouvrement rendre ORIGINE     # sur un pair
+coffrectl recouvrement ouvrir
+
+# P7 — secrets d'instance de Nextcloud (copie de recouvrement, compartiment box)
+coffrectl nextcloud etat [CONTENEUR]
+coffrectl nextcloud sauvegarder [CONTENEUR]
 ```
 
 Phrases, codes et valeurs ne passent jamais par la ligne de commande : invite

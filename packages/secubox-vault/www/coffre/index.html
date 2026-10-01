@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Mon coffre » : le compartiment d'une PERSONNE (Coffre P5, #1367).
+
+  Servi par le Hall (/coffre/) : une clé d'appareil WebAuthn est liée au NOM du
+  site, et c'est le Hall que les personnes ouvrent. Toutes les requêtes vont à
+  /api/v1/vault/moi…, que l'agrégateur ne relaie qu'à une personne SBX OS ; le
+  Coffre la reconnaît lui-même depuis la session.
+
+  LA SERRURE N'EST TENUE QUE PAR CET ONGLET, en mémoire, et jointe à chaque
+  requête : rien n'est gardé côté serveur entre deux gestes. « Verrouiller »,
+  cinq minutes sans geste, ou fermer l'onglet l'oublient.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon coffre</title>
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
+         --soft:#f5f7fc; --cyan:#0784a8; --up:#0f9d54; --hot:#d64545; --warn:#c87832; --grape:#6e40c9; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ color-scheme:dark;
+    --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --soft:#10151f; --cyan:#28d6ff; --up:#35d07f; --hot:#ff6a6a; --warn:#e0b46a; --grape:#a88bff; } }
+  :root[data-theme="dark"]{ color-scheme:dark; --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6;
+    --faint:#5e6779; --line:#232b3b; --soft:#10151f; --cyan:#28d6ff; --up:#35d07f; --hot:#ff6a6a;
+    --warn:#e0b46a; --grape:#a88bff; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;
+    font-size:14px;line-height:1.45}
+  main{max-width:640px;margin:0 auto;padding:.7rem 16px 1.2rem;display:flex;flex-direction:column;gap:.8rem}
+  .h{display:flex;align-items:center;gap:8px;position:relative;padding-bottom:6px}
+  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+    background:linear-gradient(90deg,var(--warn),var(--grape),var(--cyan))}
+  .h b{font-size:.95rem;letter-spacing:.02em}
+  .etat{margin-left:auto;font-size:.56rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    border:1px solid var(--line);border-radius:20px;padding:2px 9px;color:var(--muted)}
+  .etat.ok{color:var(--up)} .etat.ko{color:var(--warn)}
+  section{display:flex;flex-direction:column;gap:.45rem}
+  h2{margin:.2rem 0 0;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);
+    font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:600}
+  p{margin:0} .note{font-size:.78rem;color:var(--muted)}
+  label{font-size:.72rem;color:var(--muted)}
+  input,textarea{width:100%;font:inherit;color:var(--texte);background:var(--soft);border:1px solid var(--line);
+    border-radius:8px;padding:.45rem .55rem}
+  textarea{min-height:5.5rem;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.78rem}
+  .rang{display:flex;gap:.45rem;flex-wrap:wrap;align-items:center}
+  button{font:inherit;font-size:.8rem;border:1px solid var(--line);background:var(--soft);color:var(--texte);
+    border-radius:8px;padding:.38rem .7rem;cursor:pointer}
+  button.pr{background:var(--cyan);border-color:var(--cyan);color:var(--fond);font-weight:600}
+  button.danger{color:var(--hot)}
+  button:disabled{opacity:.5;cursor:default}
+  ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+  li{display:flex;align-items:center;gap:.5rem;padding:.4rem 0;border-bottom:1px dashed var(--line);flex-wrap:wrap}
+  li:last-child{border-bottom:none}
+  li .nom{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.8rem;flex:1;min-width:8rem;
+    overflow-wrap:anywhere}
+  li .v{font-size:.68rem;color:var(--faint);font-variant-numeric:tabular-nums}
+  pre{margin:0;width:100%;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);border:1px solid var(--line);
+    border-radius:8px;padding:.5rem;font-size:.75rem;max-height:14rem;overflow:auto}
+  .msg{font-size:.78rem;min-height:1.1em} .msg.ok{color:var(--up)} .msg.ko{color:var(--hot)}
+</style>
+<main>
+  <div class="h"><span>🔐</span><b>Mon coffre</b><span class="etat" id="etat">…</span></div>
+  <p class="note" id="intro">Votre compartiment dans le Coffre de la box. Il s'ouvre avec <b>votre</b> serrure
+    (une phrase, ou une clé d'appareil) — pas même un administrateur n'y lit.</p>
+
+  <section id="s-indispo" hidden><p class="note" id="indispo"></p></section>
+
+  <section id="s-creer" hidden>
+    <h2>Créer ma serrure</h2>
+    <p class="note">Une phrase d'au moins 12 caractères. Personne ne pourra la retrouver pour vous : sans
+      elle (ni une clé d'appareil ajoutée ensuite), le contenu de votre compartiment est perdu.</p>
+    <label for="c-phrase">Phrase</label><input id="c-phrase" type="password" autocomplete="new-password">
+    <label for="c-phrase2">La même, encore</label><input id="c-phrase2" type="password" autocomplete="new-password">
+    <div class="rang"><button class="pr" id="b-creer">Créer</button></div>
+  </section>
+
+  <section id="s-ouvrir" hidden>
+    <h2>Ouvrir mon compartiment</h2>
+    <form id="f-ouvrir" class="rang" style="flex-direction:column;align-items:stretch">
+      <label for="o-phrase">Ma phrase</label>
+      <input id="o-phrase" type="password" autocomplete="current-password">
+      <div class="rang"><button class="pr" type="submit">Ouvrir</button>
+        <button type="button" id="b-cle" hidden>🔑 Avec ma clé d'appareil</button></div>
+    </form>
+  </section>
+
+  <section id="s-dedans" hidden>
+    <div class="rang"><h2 style="flex:1">Mes secrets</h2><button id="b-verrouiller">🔒 Verrouiller</button></div>
+    <ul id="secrets"></ul>
+    <label for="n-nom">Nom (minuscules, chiffres, . _ -)</label>
+    <input id="n-nom" maxlength="64" pattern="[a-z0-9][a-z0-9._\-]{0,63}" placeholder="ex. gpg-cle-privee">
+    <label for="n-val">Valeur</label><textarea id="n-val" maxlength="65536"></textarea>
+    <div class="rang"><button class="pr" id="b-ranger">Ranger</button></div>
+
+    <h2>Ma clé OpenPGP</h2>
+    <div id="pgp-absente" style="display:flex;flex-direction:column;gap:.45rem">
+      <p class="note">Une paire de clés pour signer et chiffrer vos courriels, née sur la box et rangée ici.
+        Relisez la clé secrète (« voir ») pour l'importer dans votre client, qui lui posera une phrase.</p>
+      <label for="pgp-nom">Nom affiché</label><input id="pgp-nom" maxlength="64">
+      <label for="pgp-courriel">Adresse de courriel</label><input id="pgp-courriel" type="email" maxlength="254">
+      <div class="rang"><button id="b-pgp">Créer ma clé</button></div>
+    </div>
+    <p class="note" id="pgp-presente" hidden>Votre clé est dans votre coffre : <b>openpgp-publique</b> à
+      partager, <b>openpgp-secrete</b> pour votre client de courriel seulement.</p>
+
+    <h2>Mes serrures</h2>
+    <ul id="serrures"></ul>
+    <label for="s-phrase">Ajouter une phrase</label>
+    <input id="s-phrase" type="password" autocomplete="new-password">
+    <div class="rang"><button id="b-ajout-phrase">➕ Phrase</button>
+      <button id="b-ajout-cle">➕ Clé d'appareil (FIDO, Touch ID, téléphone)</button></div>
+  </section>
+
+  <p class="msg" id="msg" role="status"></p>
+</main>
+<script>
+(function () {
+  'use strict';
+  const API = '/api/v1/vault/moi';
+  const OUBLI_MS = 5 * 60 * 1000;
+  const $ = (id) => document.getElementById(id);
+  const txt = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+  const rnd = (n) => crypto.getRandomValues(new Uint8Array(n));
+  const b64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const b64uDec = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+
+  let ETAT = null;          // GET /moi
+  let OUV = null;           // la serrure, en mémoire de cet onglet seulement
+  let minuteur = 0;
+
+  function msg(t, ok) { $('msg').textContent = t || ''; $('msg').className = 'msg ' + (ok ? 'ok' : 'ko'); }
+  async function api(chemin, corps) {
+    const r = await fetch(API + chemin, corps === undefined ? { headers: { 'Accept': 'application/json' } }
+      : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
+    let j = {};
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) {
+      const e = new Error(r.status === 429 ? "trop d'essais — réessayer dans une heure"
+        : r.status === 423 ? 'le Coffre de la box vient d\'être scellé' : (j.detail || ('HTTP ' + r.status)));
+      e.code = r.status; throw e;
+    }
+    return j;
+  }
+  function geste() { clearTimeout(minuteur); minuteur = setTimeout(verrouiller, OUBLI_MS); }
+  function verrouiller() { OUV = null; clearTimeout(minuteur); $('o-phrase').value = ''; rend(); }
+
+  function site() {
+    const h = location.hostname;
+    if (/^[0-9.]+$/.test(h) || h.includes(':')) throw new Error("les clés d'appareil exigent le nom du Hall, pas une adresse IP");
+    return h;
+  }
+  async function sortiePrf(appareils) {
+    const evalPar = {};
+    appareils.forEach(a => { evalPar[a.cred_id] = { first: b64uDec(a.sel) }; });
+    const a = await navigator.credentials.get({ publicKey: { challenge: rnd(32), rpId: site(),
+      allowCredentials: appareils.map(x => ({ type: 'public-key', id: b64uDec(x.cred_id) })),
+      userVerification: 'required', extensions: { prf: { evalByCredential: evalPar } } } });
+    const s = ((a.getClientExtensionResults().prf || {}).results || {}).first;
+    if (!s) throw new Error("la clé n'a rendu aucune sortie PRF");
+    return { secret: b64u(s), genre: 'appareil', cred_id: b64u(a.rawId) };
+  }
+
+  function rend() {
+    const e = ETAT || {};
+    ['s-indispo', 's-creer', 's-ouvrir', 's-dedans'].forEach(id => { $(id).hidden = true; });
+    $('etat').className = 'etat';
+    if (!e.initialise || !e.ouvert) {
+      $('etat').textContent = 'indisponible'; $('etat').classList.add('ko');
+      $('indispo').textContent = !e.initialise
+        ? "Le Coffre de la box n'est pas encore initialisé."
+        : "Le Coffre de la box est scellé : votre compartiment attend qu'un administrateur l'ouvre. Rien n'y est lisible d'ici là — pas même par vous.";
+      $('s-indispo').hidden = false; return;
+    }
+    const serrures = e.serrures || [];
+    if (!serrures.length) { $('etat').textContent = 'à créer'; $('s-creer').hidden = false; return; }
+    if (!OUV) {
+      $('etat').textContent = 'verrouillé';
+      $('b-cle').hidden = !serrures.some(s => s.genre === 'appareil');
+      $('s-ouvrir').hidden = false; return;
+    }
+    $('etat').textContent = 'ouvert'; $('etat').classList.add('ok');
+    $('serrures').innerHTML = serrures.map(s =>
+      `<li><span>${s.genre === 'appareil' ? '📱' : '🔑'}</span><span class="nom">${txt(s.libelle || s.genre)}</span>` +
+      (serrures.length > 1 ? `<button class="danger" data-serrure="${txt(s.id)}">retirer</button>` : '') + '</li>').join('');
+    $('s-dedans').hidden = false;
+  }
+
+  async function chargeSecrets() {
+    const l = (await api('/secrets/lister', { ouverture: OUV })).secrets || [];
+    $('secrets').innerHTML = l.length ? l.map(s =>
+      `<li data-nom="${txt(s.nom)}"><span class="nom">${txt(s.nom)}</span><span class="v">v${s.version}</span>` +
+      `<button data-voir>voir</button><button class="danger" data-retirer>retirer</button></li>`).join('')
+      : '<li class="note">Aucun secret pour l\'instant.</li>';
+    const a = l.some(s => s.nom === 'openpgp-secrete');
+    $('pgp-absente').hidden = a; $('pgp-absente').style.display = a ? 'none' : 'flex';
+    $('pgp-presente').hidden = !a;
+  }
+
+  async function charge() {
+    try { ETAT = await api(''); }
+    catch (err) {
+      ETAT = null; $('etat').textContent = err.code === 403 || err.code === 401 ? 'réservé' : 'injoignable';
+      $('indispo').textContent = err.code === 401 ? 'Connectez-vous au Hall pour ouvrir votre coffre.'
+        : err.code === 403 ? "Votre session n'est rattachée à aucune personne SBX OS." : 'Le Coffre ne répond pas.';
+      ['s-creer', 's-ouvrir', 's-dedans'].forEach(id => { $(id).hidden = true; });
+      $('s-indispo').hidden = false; return;
+    }
+    rend();
+    if (OUV && ETAT.ouvert) { try { await chargeSecrets(); } catch (err) { msg(err.message); if (err.code === 403) verrouiller(); } }
+  }
+
+  async function ouvreAvec(ouv) {
+    OUV = ouv;
+    try { await chargeSecrets(); geste(); msg('Compartiment ouvert.', true); }
+    catch (err) { OUV = null; msg(err.message); }
+    rend();
+  }
+
+  $('b-creer').addEventListener('click', async () => {
+    const p = $('c-phrase').value;
+    if (p !== $('c-phrase2').value) return msg('les deux phrases diffèrent');
+    try { ETAT = await api('/initialiser', { phrase: p }); $('c-phrase').value = $('c-phrase2').value = '';
+      await ouvreAvec({ secret: p, genre: 'phrase' }); }
+    catch (err) { msg(err.message); }
+  });
+  $('f-ouvrir').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    ouvreAvec({ secret: $('o-phrase').value, genre: 'phrase' });
+    $('o-phrase').value = '';
+  });
+  $('b-cle').addEventListener('click', async () => {
+    try { await ouvreAvec(await sortiePrf((ETAT.serrures || []).filter(s => s.genre === 'appareil'))); }
+    catch (err) { msg(err.message); }
+  });
+  $('b-verrouiller').addEventListener('click', () => { verrouiller(); msg('Verrouillé.', true); });
+
+  $('b-ranger').addEventListener('click', async () => {
+    geste();
+    try {
+      const r = await api('/secrets', { ouverture: OUV, nom: $('n-nom').value.trim(), valeur: $('n-val').value });
+      msg('Rangé (version ' + r.version + ').', true); $('n-nom').value = ''; $('n-val').value = '';
+      await charge();
+    } catch (err) { msg(err.message); }
+  });
+  $('secrets').addEventListener('click', async (ev) => {
+    const li = ev.target.closest('li[data-nom]');
+    if (!li) return;
+    geste();
+    const nom = li.dataset.nom;
+    if (ev.target.matches('[data-voir]')) {
+      const deja = li.querySelector('pre');
+      if (deja) { deja.remove(); ev.target.textContent = 'voir'; return; }
+      try {
+        const v = (await api('/secrets/' + encodeURIComponent(nom) + '/lire', { ouverture: OUV })).valeur;
+        const pre = document.createElement('pre'); pre.textContent = v; li.appendChild(pre);
+        ev.target.textContent = 'cacher';
+      } catch (err) { msg(err.message); }
+    } else if (ev.target.matches('[data-retirer]')) {
+      if (ev.target.dataset.sur !== '1') { ev.target.dataset.sur = '1'; ev.target.textContent = 'vraiment ?'; return; }
+      try { await api('/secrets/' + encodeURIComponent(nom) + '/retirer', { ouverture: OUV }); msg('Retiré.', true); await charge(); }
+      catch (err) { msg(err.message); }
+    }
+  });
+
+  $('b-pgp').addEventListener('click', async () => {
+    geste();
+    $('b-pgp').disabled = true; msg('Création de la clé…', true);
+    try {
+      const k = await api('/openpgp', { ouverture: OUV, nom: $('pgp-nom').value, courriel: $('pgp-courriel').value });
+      msg('Clé créée — empreinte ' + k.empreinte.replace(/(.{4})/g, '$1 ').trim(), true);
+      await chargeSecrets();
+    } catch (err) { msg(err.message); }
+    $('b-pgp').disabled = false;
+  });
+  $('b-ajout-phrase').addEventListener('click', async () => {
+    geste();
+    try { await api('/serrures/phrase', { ouverture: OUV, phrase: $('s-phrase').value, libelle: 'phrase' });
+      $('s-phrase').value = ''; msg('Phrase ajoutée.', true); await charge(); }
+    catch (err) { msg(err.message); }
+  });
+  $('b-ajout-cle').addEventListener('click', async () => {
+    geste();
+    try {
+      if (!window.PublicKeyCredential) throw new Error('WebAuthn indisponible dans ce navigateur');
+      const h = site();
+      const { sel } = await api('/serrures/appareil/preparer', {});
+      const selB = b64uDec(sel);
+      const cred = await navigator.credentials.create({ publicKey: {
+        rp: { name: 'SecuBox — mon coffre', id: h },
+        user: { id: rnd(16), name: 'moi@' + h, displayName: 'Mon coffre' },
+        challenge: rnd(32),
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { userVerification: 'required', residentKey: 'discouraged' },
+        extensions: { prf: { eval: { first: selB } } } } });
+      const ext = cred.getClientExtensionResults().prf || {};
+      if (ext.enabled === false) throw new Error("cette clé ne connaît pas l'extension PRF");
+      let s = ext.results && ext.results.first;
+      if (!s) {
+        const a = await navigator.credentials.get({ publicKey: { challenge: rnd(32), rpId: h,
+          allowCredentials: [{ type: 'public-key', id: cred.rawId }], userVerification: 'required',
+          extensions: { prf: { eval: { first: selB } } } } });
+        s = ((a.getClientExtensionResults().prf || {}).results || {}).first;
+      }
+      if (!s) throw new Error("la clé n'a rendu aucune sortie PRF");
+      await api('/serrures/appareil', { ouverture: OUV, cred_id: b64u(cred.rawId), sel, prf: b64u(s),
+        libelle: "clé d'appareil · " + h });
+      msg("Clé d'appareil ajoutée.", true); await charge();
+    } catch (err) { msg(err.message); }
+  });
+  $('serrures').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-serrure]');
+    if (!b) return;
+    geste();
+    if (b.dataset.sur !== '1') { b.dataset.sur = '1'; b.textContent = 'vraiment ?'; return; }
+    try { await api('/serrures/' + encodeURIComponent(b.dataset.serrure) + '/retirer', { ouverture: OUV });
+      msg('Serrure retirée.', true); await charge(); }
+    catch (err) { msg(err.message); }
+  });
+
+  charge();
+})();
+</script>

@@ -179,8 +179,47 @@ def cmd_boite(args):
     return 0
 
 
+# Sorties pour les outils de la box (coffrectl, recouvrement du Coffre #1367) :
+# du JSON plutôt qu'un affichage à relire. Chaque lecture reste tracée.
+def cmd_pairs_json(_args):
+    print(json.dumps([{k: p[k] for k in ("did", "boxname", "empreinte", "soi")} for p in _box().pairs().values()]))
+    return 0
+
+
+def cmd_boite_json(args):
+    b = _box()
+    from secubox_openpgp.service import Refus  # noqa: PLC0415
+    if not args:
+        print(json.dumps(b.lister()))
+        return 0
+    try:
+        m = b.lire(args[0])
+    except Refus as e:
+        print(f"refusé : {e}", file=sys.stderr)
+        return 1
+    b.journal("lecture_par", qui=f"cli:{os.environ.get('SUDO_USER') or 'root'}", id=args[0])
+    print(json.dumps(m, ensure_ascii=False))
+    return 0
+
+
+def cmd_boite_retirer(args):
+    if len(args) != 1:
+        return 2
+    b = _box()
+    from secubox_openpgp.service import _ID  # noqa: PLC0415
+    if not _ID.match(args[0]):
+        return 2
+    f = b.boite / f"{args[0]}.json"
+    if not f.exists():
+        return 1
+    f.unlink()
+    b.journal("retrait", qui=f"cli:{os.environ.get('SUDO_USER') or 'root'}", id=args[0])
+    return 0
+
+
 COMMANDES = {"init": cmd_init, "lier": cmd_lier, "etat": cmd_etat, "pairs": cmd_pairs,
-             "cle": cmd_cle, "envoyer": cmd_envoyer, "boite": cmd_boite, "_cle-json": cmd_cle_json}
+             "cle": cmd_cle, "envoyer": cmd_envoyer, "boite": cmd_boite, "_cle-json": cmd_cle_json,
+             "_pairs-json": cmd_pairs_json, "_boite-json": cmd_boite_json, "_boite-retirer": cmd_boite_retirer}
 
 
 def main(argv):
