@@ -192,6 +192,7 @@ def moi(user=Depends(require_personne)):
     a = _box().annuaire_cles()
     e = a.mienne(p["user_uuid"])
     return {"pseudo": p.get("pseudo"), "adresses_confiees": sorted(a.adresses_de(p["user_uuid"])),
+            "wkd_public": wkd_actif(),
             "cle": {k: v for k, v in e.items() if k != "personne"} if e else None}
 
 

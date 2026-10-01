@@ -1,3 +1,9 @@
+secubox-vault (2.0.12-1~bookworm1) bookworm; urgency=medium
+
+  * Mon coffre : dit, avant et après publication, si la clé publique est visible des seules box liées ou aussi du monde entier par WKD (#1852).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 22:30:00 +0200
+
 secubox-vault (2.0.11-1~bookworm1) bookworm; urgency=medium
 
   * Mon coffre : ne promet plus WKD (désactivé par défaut, décision #1738) ; les clés des correspondants se téléchargent depuis l'annuaire de la box pour Mailvelope.

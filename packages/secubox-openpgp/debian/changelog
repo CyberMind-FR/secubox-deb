@@ -1,3 +1,9 @@
+secubox-openpgp (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Conffile /etc/secubox/openpgp.toml livré ([wkd] actif = false) ; /moi dit si WKD public est ouvert (wkd_public), pour que la personne sache que sa clé devient publique (#1852).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 22:30:00 +0200
+
 secubox-openpgp (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * WKD public DÉSACTIVÉ par défaut, conformément à la décision #1738 (annuaire servi aux box liées, pas au monde) : le démon répond 404 et le postinst ne déclare rien sans `[wkd] actif = true` (/etc/secubox/openpgp.toml) ; éteint, il retire le vhost qu'une 0.2.0 aurait posé.

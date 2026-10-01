@@ -52,6 +52,7 @@ def test_publier_lister_et_wkd(client, personnes):
     r = c.post("/moi/cle", json={"cle_publique": personnes["alice"].publique})
     assert r.status_code == 200 and r.json()["verifies"] == ["alice@secubox.in"]
     assert c.get("/moi").json()["adresses_confiees"] == ["alice@secubox.in"]
+    assert c.get("/moi").json()["wkd_public"] is True            # la personne sait que c'est public
     [e] = c.get("/annuaire").json()["cles"]
     assert e["empreinte"] == personnes["alice"].fpr and "cle_publique" not in e and "personne" not in e
     assert "PUBLIC KEY BLOCK" in c.get(f"/annuaire/{personnes['alice'].fpr}.asc").text
