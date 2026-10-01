@@ -1,3 +1,11 @@
+secubox-hub (1.9.29-1~bookworm1) bookworm; urgency=medium
+
+  * webui.conf : le bloc d'administration répond aux hôtes IPv4 littéraux et à
+    secubox.local (#1845) — première configuration d'une box neuve par
+    https://<IP>/, derrière HAProxy. Le motif remplace l'IP de gk2 en dur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 16:21:45 +0200
+
 secubox-hub (1.9.28-1~bookworm1) bookworm; urgency=medium
 
   * Le menu ne lance plus un is-active par module absent du cache des

@@ -1016,6 +1016,17 @@ EOF
 EOF
     fi
 
+    # ACCES PAR ADRESSE IP DEPUIS LE LAN (#1845). La premiere configuration d'une
+    # box neuve se fait par http(s)://<IP>/ ; derriere HAProxy un hote IP n'a
+    # pas de route. Source PRIVEE seulement : depuis le WAN, rien ne change.
+    # En clair, on renvoie vers https (le defi ACME garde sa route).
+    cat >> "$out" << 'EOF'
+    acl hote_ip hdr(host) -m reg ^[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?$
+    acl hote_local hdr(host) -i secubox.local
+    acl src_privee src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8
+    redirect scheme https code 301 if src_privee hote_ip !is_acme_challenge or src_privee hote_local !is_acme_challenge
+EOF
+
     # Add ACLs and use_backend rules for vhosts
     if [ -f "$CONF_PATH" ]; then
         # Hoisted: source /etc/default/secubox once before the http-in loop
@@ -1112,6 +1123,15 @@ EOF
     use_backend webui_direct if is_webui_admin
 EOF
     fi
+
+    # ACCES PAR ADRESSE IP DEPUIS LE LAN (#1845) — vers l'administration, comme
+    # le frontal :9443 de gk2, mais sur 443 : aucun port de plus a ouvrir.
+    cat >> "$out" << 'EOF'
+    acl hote_ip hdr(host) -m reg ^[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?$
+    acl hote_local hdr(host) -i secubox.local
+    acl src_privee src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8
+    use_backend webui_direct if src_privee hote_ip or src_privee hote_local
+EOF
 
     # HTTPS vhost rules (same pattern)
     if [ -f "$CONF_PATH" ]; then

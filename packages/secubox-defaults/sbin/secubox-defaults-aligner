@@ -1,0 +1,42 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-defaults-aligner — /etc/default/secubox nomme CETTE box
+#
+# Le nom vient de secubox-domaine, source canonique (#1723, #1841). Appelé par
+# le postinst ET par firstboot (#1845) : à la construction de l'image, le nom de
+# la box n'est pas encore posé ; au premier démarrage il l'est (étape 3), et
+# `haproxyctl frontal` refuse une identité incohérente.
+set -eu
+DEFAULTS="${SECUBOX_DEFAULTS_FILE:-/etc/default/secubox}"
+[ -f "$DEFAULTS" ] || { echo "secubox-defaults-aligner: $DEFAULTS absent" >&2; exit 1; }
+
+SECUBOX_HOSTNAME=""; SECUBOX_DOMAIN_SUFFIX=""
+# shellcheck disable=SC1090
+. "$DEFAULTS" 2>/dev/null || true
+
+DOMAINE=""
+if command -v secubox-domaine >/dev/null 2>&1; then
+    DOMAINE=$(secubox-domaine 2>/dev/null || true)
+fi
+if printf '%s' "$DOMAINE" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'; then
+    HOTE=${DOMAINE%%.*}
+    SUFFIXE=${DOMAINE#*.}
+    if [ "${SECUBOX_HOSTNAME:-}" != "$HOTE" ] || [ "${SECUBOX_DOMAIN_SUFFIX:-}" != "$SUFFIXE" ]; then
+        echo "secubox-defaults: SECUBOX_HOSTNAME=${SECUBOX_HOSTNAME:-<vide>} → $HOTE, suffixe → $SUFFIXE (secubox-domaine)"
+        sed -i -e "s/^SECUBOX_HOSTNAME=.*/SECUBOX_HOSTNAME=\"$HOTE\"/" \
+               -e "s/^SECUBOX_DOMAIN_SUFFIX=.*/SECUBOX_DOMAIN_SUFFIX=\"$SUFFIXE\"/" "$DEFAULTS"
+    fi
+elif [ -z "${SECUBOX_HOSTNAME:-}" ]; then
+    # Sans secubox-domaine : hostname -s, préfixe 'secubox-' retiré.
+    DETECTED=$(hostname -s 2>/dev/null | sed 's/^secubox-//')
+    if [ -n "$DETECTED" ]; then
+        echo "secubox-defaults: setting SECUBOX_HOSTNAME=$DETECTED (autodetected)"
+        sed -i "s/^SECUBOX_HOSTNAME=.*/SECUBOX_HOSTNAME=\"$DETECTED\"/" "$DEFAULTS"
+    else
+        echo "secubox-defaults: WARNING — SECUBOX_HOSTNAME unset and could not autodetect" >&2
+    fi
+fi
