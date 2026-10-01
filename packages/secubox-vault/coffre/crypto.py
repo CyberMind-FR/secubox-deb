@@ -78,3 +78,21 @@ def derive_kek_appareil(prf: bytes, sel: bytes) -> bytes:
         raise ValueError("sortie PRF de 32 octets attendue")
     return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=sel,
                 info=_ESPACE + b"appareil").derive(prf)
+
+
+def aad_serrure_personnelle(id_serrure: str, personne: str) -> bytes:
+    """Une serrure personnelle emballe la clé d'UNE personne : déplacée vers
+    une autre, elle ne s'ouvre plus."""
+    return _ESPACE + b"serrure-personnelle/" + personne.encode() + b"\0" + id_serrure.encode()
+
+
+def cle_compartiment_personnel(mk: bytes, compartiment: str, cle_personne: bytes) -> bytes:
+    """Clé d'un compartiment de personne (P5) : il faut la MK (Coffre ouvert)
+    ET la clé de la personne (sa serrure à elle). L'une sans l'autre ne
+    déchiffre rien — ni l'admin qui a ouvert le Coffre, ni la personne quand
+    il est scellé."""
+    if len(cle_personne) != TAILLE_CLE:
+        raise ValueError("clé de personne de 32 octets attendue")
+    return HKDF(algorithm=hashes.SHA256(), length=TAILLE_CLE, salt=None,
+                info=_ESPACE + b"compartiment-personnel/" + compartiment.encode()).derive(
+        cle_compartiment(mk, compartiment) + cle_personne)

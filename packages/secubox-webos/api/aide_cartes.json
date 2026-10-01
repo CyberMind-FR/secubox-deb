@@ -31,6 +31,14 @@
       ]
     },
     {
+      "id": "mon-coffre", "ic": "🗝️", "nom": "Mon coffre", "service": "vault", "acces": "session",
+      "role": "Votre compartiment dans le Coffre de la box : des secrets à vous (clé OpenPGP, codes, notes), ouverts par VOTRE serrure — une phrase ou une clé d'appareil. Un administrateur, même Coffre ouvert, n'y lit rien.",
+      "usage": ["La première fois : créer sa serrure. Ensuite : l'ouvrir, ranger, voir, retirer ; la serrure n'est tenue que par l'onglet et s'oublie après cinq minutes sans geste.", "Le compartiment n'est lisible que lorsque le Coffre de la box est ouvert par un administrateur."],
+      "metriques": [
+        {"libelle": "mes secrets", "url": "/api/v1/vault/moi", "chemin": "secrets", "session": true}
+      ]
+    },
+    {
       "id": "contenu", "ic": "📦", "nom": "Contenu", "service": "droplet", "acces": "public",
       "role": "Carte de groupe des services de contenu : Dépôt (paquets apt de la box), YTSaS (médias rapatriés sans pub ni Google) et Torrent, chacun avec son état en direct.",
       "usage": ["Chaque tranche est la vraie carte du service ; la pastille ouvre le service de la tranche."],

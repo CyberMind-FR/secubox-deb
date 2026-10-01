@@ -1,3 +1,10 @@
+secubox-webos (1.0.389-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : carte « Mon coffre » (#1367 P5) — la page /coffre/ (livrée par secubox-vault), le relais /api/v1/vault/moi… par l'agrégateur, aide et espace Sécurité.
+  * Relais /__console/jeton (#1695) : pose X-Real-IP et X-Forwarded-For comme tout relais du Hall ; le contrôle du gabarit des relais repasse au vert.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 21:00:00 +0200
+
 secubox-webos (1.0.388-1~bookworm1) bookworm; urgency=medium
 
   * Hall : carte « Coffre » (#1367 P4) — état seul (scellé/ouvert, secrets, serrures, clés d'appareil, journal), lu par l'agrégateur qui ne le rend qu'aux administrateurs réels. Relais GET /api/v1/vault/etat ; aide de carte ; espace Sécurité de SBX OS.

@@ -177,7 +177,7 @@ def test_actor_garde_avant_recherche_du_socket(banc):
 
 def test_actor_garde_indisponible_503(banc, monkeypatch):
     client, modules, jeton, _ = banc
-    monkeypatch.setattr(agg, "_garde_administration", lambda: None)
+    monkeypatch.setattr(agg, "_garde_administration", lambda personnelle=False: None)
     r = client.get("/api/v1/actor/actors", headers=_cookie(jeton(ADMIN)))
     assert r.status_code == 503
     assert modules["actor"].recues == []
@@ -329,3 +329,32 @@ def test_coffre_cinq_codes_faux_puis_429(banc, monkeypatch):
     for _ in range(5):
         assert client.post("/api/v1/vault/ouvrir", json={"secret": "x", "otp": "1"}, headers=h).status_code == 401
     assert client.post("/api/v1/vault/ouvrir", json={"secret": "x", "otp": "1"}, headers=h).status_code == 429
+
+
+# ── Le compartiment d'une personne (Coffre P5) ────────────────────────────────
+
+
+def test_coffre_moi_relaye_a_une_personne_le_reste_aux_administrateurs(banc):
+    """`vault/moi…` s'ouvre à une PERSONNE (le Coffre exige ensuite sa
+    serrure) ; tout le reste du Coffre reste aux administrateurs réels."""
+    client, modules, jeton, _ = banc
+    porteur = {"Authorization": f"Bearer {jeton(MEMBRE)}"}
+    assert client.get("/api/v1/vault/moi", headers=porteur).status_code == 200
+    r = client.post("/api/v1/vault/moi/secrets/lister", json={"ouverture": {"secret": "x"}}, headers=porteur)
+    assert r.status_code == 200 and modules["vault"].recues[-1]["chemin"] == "/moi/secrets/lister"
+    n = len(modules["vault"].recues)
+    for methode, chemin in (("GET", "etat"), ("POST", "ouvrir"), ("GET", "secrets"),
+                            ("GET", "moitie"), ("GET", "journal")):
+        assert client.request(methode, f"/api/v1/vault/{chemin}", headers=porteur).status_code == 403, chemin
+    assert len(modules["vault"].recues) == n          # jamais contacté
+
+
+def test_coffre_moi_sans_session_401_et_invite_403(banc, monkeypatch):
+    client, modules, jeton, _ = banc
+    assert client.get("/api/v1/vault/moi").status_code == 401
+    avant = auth.user_store.get_user
+    monkeypatch.setattr(auth.user_store, "get_user",
+                        lambda s: {"role": "guest", "enabled": True} if s == "invite" else avant(s))
+    monkeypatch.setattr(auth.user_store, "is_enabled", lambda s: True)
+    r = client.get("/api/v1/vault/moi", headers={"Authorization": f"Bearer {jeton('invite')}"})
+    assert r.status_code == 403 and modules["vault"].recues == []

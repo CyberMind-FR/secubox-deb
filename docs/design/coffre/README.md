@@ -1,6 +1,6 @@
 # Le Coffre — idée et conception
 
-> Issue #1364 · **P1 livrée** (#1367 : MK, serrures phrase + codes de secours, compartiments, `coffrectl`, API, journal chaîné) · maquette : [`maquette.html`](maquette.html)
+> Issue #1364 · **P1–P5 livrées** (#1367 : P1 MK, serrures, compartiments, `coffrectl`, journal chaîné ; P2 session de signature apt ; P3 niveau 0 `systemd-creds` ; P4 clés d'appareil, ouverture hors LAN, carte du Hall ; P5 compartiments des personnes, clé OpenPGP personnelle) · maquette : [`maquette.html`](maquette.html)
 >
 > Corrections du 2026-10-01 : compartiments **par personne** (`p-<user_uuid>`, décision #1405), clé privée **jamais prêtée** au webmail (#1738), Roundcube dans le LXC `roundcube`, `secubox-identity` retiré (#1840), Argon2id mesuré.
 
@@ -164,10 +164,13 @@ temps de la bascule, on vérifie sur gk2.
 - **Graines TOTP** : chiffrées (niveau 0) dans `users.json`, déchiffrées par
   `secubox-auth` au moment de vérifier.
 - **Cookies** : le secret qui signe les sessions (JWT) passe au niveau 0 avec
-  rotation. Les **jarres de cookies** du relais de navigation (BiB,
-  `privacy-jar.key`) passent au compartiment de l'humain concerné : une
-  jarre ne se lit qu'avec le Coffre ouvert *et* la session de son
-  propriétaire.
+  rotation. **Correction du 2026-10-01 (P5)** : `privacy-jar.key` ne chiffre
+  aucune jarre — c'est UNE graine HMAC par box, qui fabrique des valeurs
+  stables de faux cookies de pisteurs (anti-pistage #633) ; elle relève du
+  niveau 0. La jarre du relais de navigation n'a, elle, aucune notion de
+  personne (clé : le domaine). La ranger « au compartiment de son
+  propriétaire » suppose d'abord de l'attacher à une personne : sujet du
+  relais, pas du Coffre. Le compartiment personnel est prêt à la recevoir.
 
 ### 5.4 Courriel chiffré — optionnel, par boîte
 

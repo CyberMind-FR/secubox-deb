@@ -116,9 +116,11 @@ def test_ajouter_une_serrure_ne_rechiffre_rien(coffre, tmp_path):
 
 def test_un_secret_deplace_ne_se_dechiffre_pas(coffre, tmp_path):
     coffre.initialiser(PHRASE)
-    coffre.creer_compartiment(UUID, "Gandalf")
+    perso = UUID[2:]
+    cle = {"secret": "la phrase à moi, assez longue", "genre": "phrase"}
+    coffre.personne_initialiser(perso, cle["secret"])
     coffre.poser("box", "a", b"valeur-a")
-    coffre.poser(UUID, "b", b"valeur-b")
+    coffre.personne_poser(perso, cle, "b", b"valeur-b")
     db = tmp_path / "coffre" / "coffre.db"
     with sqlite3.connect(db) as cx:          # on échange les chiffrés des deux places
         a = cx.execute("SELECT nonce, valeur FROM secrets WHERE nom='a'").fetchone()
@@ -128,14 +130,14 @@ def test_un_secret_deplace_ne_se_dechiffre_pas(coffre, tmp_path):
     with pytest.raises(Refus):
         coffre.lire("box", "a")
     with pytest.raises(Refus):
-        coffre.lire(UUID, "b")
+        coffre.personne_lire(perso, cle, "b")
     with sqlite3.connect(db) as cx:          # même place, autre version : refusé aussi
         cx.execute("UPDATE secrets SET nonce=?, valeur=?, version=7 WHERE nom='a'", a)
     with pytest.raises(Refus):
         coffre.lire("box", "a")
 
 
-@pytest.mark.parametrize("comp", ["gk2", "admin", "p-pas-un-uuid", "../box", ""])
+@pytest.mark.parametrize("comp", ["gk2", "admin", "p-pas-un-uuid", "../box", "", UUID])
 def test_compartiment_par_personne_jamais_par_compte(coffre, comp):
     coffre.initialiser(PHRASE)
     with pytest.raises(Interdit):
@@ -212,4 +214,4 @@ def test_migration_schema_v1_vers_v2(tmp_path):
     assert c2.ouvrir(PHRASE) and c2.lire("box", "x") == b"valeur"
     c2.ajouter_serrure_appareil("A" * 43, os.urandom(32), os.urandom(32), "clé")
     with sqlite3.connect(base / "coffre.db") as cx:
-        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == "2"
+        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == "3"

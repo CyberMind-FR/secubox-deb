@@ -1,3 +1,12 @@
+secubox-vault (2.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * Coffre P5 (#1367) : compartiments des personnes. Une personne a SES serrures (phrase, clé d'appareil) qui emballent SA clé ; la clé du compartiment demande la MK ET cette clé. L'administration ne lit, ne pose, ne retire ni ne liste plus rien dans un compartiment de personne. Schéma v3 (serrures_personnelles), migré en place.
+  * API /moi… pour toute personne SBX OS : la personne est calculée par le Coffre depuis le jeton, la serrure voyage dans chaque requête, cinq refus par heure puis 429.
+  * Clé OpenPGP personnelle (ed25519 + cv25519) née dans un trousseau jetable, rangée en openpgp-secrete / openpgp-publique.
+  * Page « Mon coffre » (/coffre/, servie par le Hall). coffrectl compartiment retiré : un compartiment de personne naît de sa première serrure.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 21:00:00 +0200
+
 secubox-vault (2.0.6-1~bookworm1) bookworm; urgency=medium
 
   * Coffre P4 (#1367) : clés d'appareil WebAuthn PRF. Une serrure « appareil » enveloppe la clé maîtresse sous HKDF(sortie PRF, sel) ; le schéma passe en v2 (colonne cred_id), migré en place. Routes /serrures/appareil (lister, préparer un sel, ajouter, retirer).

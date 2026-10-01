@@ -86,17 +86,26 @@ _echecs_otp: Dict[str, List[float]] = {}
 _VUE_COMPLETE = "complete"
 
 
-def _garde_administration():
-    """`require_jwt` de secubox-core (session valide + administrateur réel).
+def _garde_administration(personnelle: bool = False):
+    """`require_jwt` de secubox-core (session valide + administrateur réel) ;
+    `require_personne` pour le compartiment d'une personne (`vault/moi…`, P5).
 
     Importé à l'usage : si secubox-core est illisible, seuls les sockets
     réservés tombent (503), le reste de la passerelle continue de servir."""
     try:
-        from secubox_core.auth import require_jwt
+        from secubox_core.auth import require_jwt, require_personne
     except Exception as e:  # noqa: BLE001 — sans garde, on ne relaie pas
         log.error("[proxy] garde d'administration indisponible : %s", e)
         return None
-    return require_jwt
+    return require_personne if personnelle else require_jwt
+
+
+def _chemin_personnel(name: str, path: str) -> bool:
+    """`/api/v1/vault/moi…` : le compartiment de la personne de la session (P5).
+    Le Coffre la reconnaît lui-même depuis le jeton et exige SA serrure à
+    chaque valeur ; ici, on n'admet qu'une personne — ni invité, ni appareil
+    sans profil, ni jeton à portée."""
+    return name == "vault" and (path == "moi" or path.startswith("moi/"))
 
 
 async def _second_facteur_coffre(request: Request, body: bytes, porteur, fwd: dict):
@@ -380,7 +389,7 @@ def _build_app() -> FastAPI:
             return Response(status_code=404)
         reserve = name in _SOCKETS_ADMIN
         if reserve:
-            garde = _garde_administration()
+            garde = _garde_administration(_chemin_personnel(name, path))
             if garde is None:
                 return Response(status_code=503)
             # 401 sans session, 403 pour un appareil ou un non-admin :

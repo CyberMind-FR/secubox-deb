@@ -20,7 +20,6 @@ entrée standard.
   coffrectl serrure-ajouter [LIBELLE]
   coffrectl serrure-retirer ID
   coffrectl codes                          # régénère les 5 codes de secours
-  coffrectl compartiment ID [LIBELLE]      # box ou p-<user_uuid>
   coffrectl journal [N] [--verifier]
 
   coffrectl depot etat                     # clé de signature du dépôt apt (P2)
@@ -196,9 +195,6 @@ def principal(argv) -> None:
         print("Nouveaux codes de secours (les anciens ne valent plus) :")
         for c in appel("POST", "/serrures/secours")["codes"]:
             print("   ", c)
-    elif cmd == "compartiment" and args:
-        appel("POST", "/compartiments", {"id": args[0], "libelle": " ".join(args[1:])})
-        print("compartiment", args[0])
     elif cmd == "journal":
         n = next((int(a) for a in args if a.isdigit()), 30)
         j = appel("GET", f"/journal?n={n}")
