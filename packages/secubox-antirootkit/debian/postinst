@@ -44,6 +44,21 @@ case "$1" in
             systemctl try-restart auditd 2>/dev/null || true
         fi
 
+        # LE FLOT D'AUDIT RESTE DANS audit.log (#1835). La règle execve, large à
+        # dessein, produit des centaines d'enregistrements par seconde ; journald
+        # les recopiait par systemd-journald-audit.socket (99 % du journal sur
+        # gk2, mesuré le 2026-10-01) : sa rétention tombait à quelques minutes
+        # et sbx-authwatch relisait tout. Le démon de ce paquet lit audit.log
+        # par ausearch, rien ne lit l'audit dans le journal. Masquer la socket
+        # ne suffit pas : journald garde son descripteur jusqu'à son redémarrage
+        # (les flux des services survivent : il les garde dans son fdstore).
+        if systemctl cat systemd-journald-audit.socket >/dev/null 2>&1 \
+           && [ "$(systemctl is-enabled systemd-journald-audit.socket 2>/dev/null)" != "masked" ]; then
+            systemctl mask systemd-journald-audit.socket >/dev/null 2>&1 || true
+            systemctl stop systemd-journald-audit.socket >/dev/null 2>&1 || true
+            systemctl restart systemd-journald >/dev/null 2>&1 || true
+        fi
+
         systemctl daemon-reload || true
 
         # sbx-untrusted.slice MUST live at the cgroup root (top-level slice,

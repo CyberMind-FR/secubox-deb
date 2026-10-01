@@ -1,3 +1,14 @@
+secubox-webos (1.0.387-1~bookworm1) bookworm; urgency=medium
+
+  * « Mes sites » agrandi n'ouvre que la mosaïque (#1835, exploitant) :
+    admin:"/metablogizer/?vue=mosaique" — la console complète reste dans
+    l'administration.
+  * Carte Metablog : ne resonde la mosaïque (toutes les cinq minutes) que tant
+    que des vignettes manquent — règle de l'exploitant ; toutes présentes, le
+    prochain chargement du Hall suffit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 11:46:41 +0200
+
 secubox-webos (1.0.386-1~bookworm1) bookworm; urgency=medium
 
   * Menu du Hall (#1829) : « Mes identités » + « Gérer les accès… » +

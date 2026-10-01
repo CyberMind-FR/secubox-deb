@@ -1437,8 +1437,11 @@ const FEATURED = [
   // le Hall retombait sur le motif « cardlet sans vhost » et agrandissait la
   // carte elle-même, ce qui donnait une pseudo-mega sans intérêt là où l'on
   // attend la mosaïque du service.
+  // Agrandie, la carte n'ouvre QUE la mosaïque (#1835, exploitant : « mes
+  // sites, vers mosaïque seulement ») — la console complète reste dans
+  // l'administration.
   {id:"metablogizer", label:"Mes sites", icon:"🌐", color:"#3d6b4a",
-   carte:"/cardlets/metablog.html", mode:"admin", h:300, auth:true},
+   carte:"/cardlets/metablog.html", mode:"admin", admin:"/metablogizer/?vue=mosaique", h:300, auth:true},
   // GABRIEL MOOD (#1323). `micro_audio` délègue la permission du micro à CETTE
   // carte et à aucune autre. La carte n'écoute JAMAIS d'elle-même : il faut un
   // clic, dans la carte ou dans le cockpit — et les deux vues se synchronisent

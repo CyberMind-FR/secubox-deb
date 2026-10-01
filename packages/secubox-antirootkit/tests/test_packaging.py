@@ -118,6 +118,16 @@ def test_audit_rule_is_broad_execve_syscall():
     assert not any(ln.lstrip().startswith("-w ") or "-p x" in ln for ln in active)
 
 
+def test_audit_rule_skips_enoent_path_probes_only():
+    """#1835 : les essais du PATH (ENOENT) ne sont plus enregistrés ; les
+    autres échecs d'exec (EACCES, EPERM) le restent — ce sont des signaux."""
+    rules = _read("conf/99-sbx-procwatch.rules")
+    active = [ln for ln in rules.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    regle = next(ln for ln in active if "sbx_exec" in ln)
+    assert "-F exit!=-ENOENT" in regle
+    assert "success=" not in regle, "filtrer TOUS les échecs perdrait les exec refusés"
+
+
 def test_compat_level_13():
     compat = _read("debian/compat").strip()
     assert compat == "13"
@@ -126,8 +136,12 @@ def test_compat_level_13():
 def test_service_units_present_and_wired():
     api_service = _read("debian/secubox-antirootkit.service")
     assert "User=secubox-antirootkit" in api_service
-    assert "RuntimeDirectory=secubox" in api_service
-    assert "RuntimeDirectoryPreserve=yes" in api_service
+    # /run/secubox est PARTAGÉ par une centaine de modules (#1022, 0.1.3) : une
+    # unité qui le déclare RuntimeDirectory l'efface au redémarrage, sockets
+    # des autres comprises. On retire seulement SA socket périmée.
+    actives = [l for l in api_service.splitlines() if not l.lstrip().startswith("#")]
+    assert not any(l.startswith("RuntimeDirectory=secubox") for l in actives)
+    assert "ExecStartPre=+/bin/rm -f /run/secubox/antirootkit.sock" in api_service
     assert "/run/secubox/antirootkit.sock" in api_service
 
     watcher_service = _read("systemd/sbx-antirootkitd.service")
@@ -143,7 +157,8 @@ def test_slice_is_top_level_not_nested():
 
 def test_changelog_version_and_distribution():
     changelog = _read("debian/changelog")
-    assert changelog.startswith("secubox-antirootkit (0.1.0-1~bookworm1) bookworm;")
+    import re
+    assert re.match(r"secubox-antirootkit \(\d+\.\d+\.\d+-1~bookworm1\) bookworm;", changelog)
     assert "Gérald Kerma <devel@cybermind.fr>" in changelog
 
 
@@ -158,3 +173,15 @@ def test_execscan_emits_raw_not_interpreted():
     assert aus, "execscan must invoke ausearch --checkpoint"
     for ln in aus:
         assert " -i" not in ln and not ln.rstrip().endswith("-i")
+
+
+def test_le_flot_d_audit_ne_va_pas_au_journal():
+    """#1835 : la socket d'audit de journald est masquée (et journald relancé,
+    sans quoi il garde son descripteur) ; la désinstallation la rend."""
+    postinst = _read("debian/postinst")
+    assert "systemctl mask systemd-journald-audit.socket" in postinst
+    i = postinst.index("systemctl mask systemd-journald-audit.socket")
+    assert "systemctl restart systemd-journald" in postinst[i:i + 400]
+    postrm = _read("debian/postrm")
+    assert "systemctl unmask systemd-journald-audit.socket" in postrm
+    assert "remove|purge)" in postrm

@@ -177,6 +177,21 @@ def _invalidate_sites_cache() -> None:
     _trigger_sites_cache_refresh()
 
 
+def sites_affiches() -> List[dict]:
+    """La liste des sites pour une route d'AFFICHAGE : le cache hors-requête
+    (sites.json, écrit par metablog-audit.timer), JAMAIS un balayage (#974).
+
+    #1835 : /public/mosaique, /access et /access/detailed appelaient
+    load_sites() — un `git` + `du` par site, ~170 sites, ~20 s à chaque
+    expiration du cache de 30 s. La cardlet Metablog du Hall le sonde toutes
+    les cinq minutes : mesuré sur gk2, ~650 `git` par passage. Cache absent :
+    on en demande un, sans jamais balayer ici."""
+    c = sites_scan.read_cache(SITES_CACHE_PATH)
+    if not c["available"]:
+        _trigger_sites_cache_refresh()
+    return c["sites"]
+
+
 def load_sites() -> List[dict]:
     """Live, synchronous full scan (cached in-process, 30s TTL).
 
@@ -758,7 +773,7 @@ async def check_site_health(domain: str):
 @app.get("/access", dependencies=[Depends(require_lecture)])
 async def get_access():
     """Get all sites with their access URLs (public)"""
-    sites = load_sites()
+    sites = sites_affiches()
     return {
         "sites": [
             {
@@ -779,7 +794,7 @@ def get_access_detailed():
     import subprocess
     from datetime import datetime
 
-    sites = load_sites()
+    sites = sites_affiches()
     detailed = []
 
     for s in sites:
@@ -790,18 +805,9 @@ def get_access_detailed():
         name = s["name"]
         site_dir = SITES_ROOT / name
 
-        # Get size
-        size = "-"
-        if site_dir.exists():
-            try:
-                result = subprocess.run(
-                    ["du", "-sh", str(site_dir)],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0:
-                    size = result.stdout.split()[0]
-            except:
-                pass
+        # La taille vient du cache (#1835) : un `du` par site à chaque appel
+        # refaisait le balayage que le cache existe pour éviter.
+        size = s.get("size") or "-"
 
         # Check certificate
         cert_info = {"exists": False}
@@ -856,23 +862,58 @@ async def public_mosaique():
     plutôt qu'une image cassée quand le shotter n'est pas encore passé — 162
     sites ne se photographient pas en un tour.
     """
-    sites = await asyncio.to_thread(load_sites)
+    return await asyncio.to_thread(_mosaique)
+
+
+# LA MOSAÏQUE NE SE RECALCULE QUE SI CE QU'ELLE MONTRE A CHANGÉ (#1835).
+# Règle de l'exploitant : « ne reprendre que si les caches d'image sont
+# manquants ». Même liste de sites (sites.json inchangé) et aucune des vignettes
+# MANQUANTES apparue depuis → même réponse ; seules les manquantes sont
+# revérifiées à chaque appel. Et pour la calculer, on lit site.json TEL QUEL :
+# read_site_config l'« enrichit » par `git` — ~210 `git` par appel de la carte,
+# alors que la date est déjà dans le cache.
+_MOSAIQUE: Dict[str, Any] = {"cle": None, "rendu": None, "manquantes": []}
+
+
+def _cle_mosaique() -> float:
+    try:
+        return SITES_CACHE_PATH.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _site_json_brut(nom: str) -> dict:
+    try:
+        d = json.loads((SITES_ROOT / nom / "site.json").read_text())
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _mosaique() -> dict:
+    cle = _cle_mosaique()
+    if (_MOSAIQUE["cle"] == cle and _MOSAIQUE["rendu"] is not None
+            and not any(_screenshots.png_path(SHOTS_CACHE_DIR, n).exists() for n in _MOSAIQUE["manquantes"])):
+        return _MOSAIQUE["rendu"]
     out = []
-    for s in sites:
+    for s in sites_affiches():
         if not s.get("published"):
             continue
         nom = s["name"]
-        cfg = _load_site_json(SITES_ROOT / nom)
+        cfg = _site_json_brut(nom)
         out.append({
             "name": nom,
             "domain": s.get("domain"),
             "title": cfg.get("title") or nom,
             "category": cfg.get("category"),
             "vignette": _screenshots.png_path(SHOTS_CACHE_DIR, nom).exists(),
-            "last_updated": cfg.get("last_updated"),
+            "last_updated": s.get("last_updated") or cfg.get("last_updated"),
         })
     out.sort(key=lambda x: ((x["vignette"] is False), x["name"]))
-    return {"sites": out, "total": len(out)}
+    rendu = {"sites": out, "total": len(out),
+             "vignettes_manquantes": sum(1 for x in out if not x["vignette"])}
+    _MOSAIQUE.update(cle=cle, rendu=rendu, manquantes=[x["name"] for x in out if not x["vignette"]])
+    return rendu
 
 
 @app.get("/site/{name}/screenshot", dependencies=[Depends(require_lecture)])
