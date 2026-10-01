@@ -56,6 +56,19 @@ _etat: dict[str, dict] = {}
 _charge = False
 
 
+# LES COOKIES DE LA BOX NE REGARDENT PAS L'AMONT (#1798). Une origine surf-*
+# est un sous-domaine de la box : le navigateur y présente aussi les cookies
+# posés pour tout le domaine (session de la box, services). Seuls ceux du site
+# relayé partent vers lui ; ceux de la box ne sont ni transmis, ni appris, ni
+# semés.
+_PREFIXES_BOX = ("secubox", "sbx_", "sbx-")
+
+
+def cookie_de_la_box(nom: str) -> bool:
+    n = (nom or "").strip().lower()
+    return n.startswith(_PREFIXES_BOX)
+
+
 def _domaine(hote: str) -> str:
     """Le domaine ENREGISTRABLE (les deux derniers labels).
 
@@ -121,6 +134,8 @@ def apprend(hote: str, set_cookies: list[str]):
                 c = SimpleCookie()
                 c.load(brut)
                 for nom, morceau in c.items():
+                    if cookie_de_la_box(nom):
+                        continue
                     v = morceau.value
                     # Une valeur vidée = suppression demandée par l'amont.
                     if v in ("", "deleted"):
@@ -151,7 +166,7 @@ def entete(hote: str, cookie_navigateur: str = "") -> str:
                 boc[nom] = morceau.value
         except Exception:  # noqa: BLE001
             pass
-    return "; ".join("%s=%s" % (n, v) for n, v in boc.items())
+    return "; ".join("%s=%s" % (n, v) for n, v in boc.items() if not cookie_de_la_box(n))
 
 
 def pose_manuel(hote: str, cookies: dict[str, str]) -> int:
@@ -160,7 +175,8 @@ def pose_manuel(hote: str, cookies: dict[str, str]) -> int:
         _assure()
         boc = _jarre.setdefault(_domaine(hote), {})
         for n, v in cookies.items():
-            boc[str(n)] = str(v)
+            if not cookie_de_la_box(str(n)):
+                boc[str(n)] = str(v)
         _sauve()
         return len(boc)
 
