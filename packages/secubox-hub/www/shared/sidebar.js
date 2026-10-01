@@ -2477,7 +2477,7 @@
                 '<div class="sidebar-nav">' + menuHTML + '</div>' +
                 '<div class="sidebar-footer">' +
                 '<div class="sidebar-clock" id="sidebar-clock">00:00:00</div>' +
-                '<div class="sidebar-user"><span class="sidebar-user-avatar">👤</span><div class="sidebar-user-info"><div class="sidebar-user-name">' + user + '</div><div class="sidebar-user-role">OPERATOR</div></div><button class="sidebar-logout" onclick="localStorage.removeItem(\'sbx_token\');window.location.href=\'/login.html\';">EXIT</button></div>' +
+                '<div class="sidebar-user"><span class="sidebar-user-avatar">👤</span><div class="sidebar-user-info"><div class="sidebar-user-name">' + user + '</div><div class="sidebar-user-role">OPERATOR</div></div><button class="sidebar-logout" onclick="window.SecuBoxSidebar.logout();">EXIT</button></div>' +
                 '</div>';
 
             // v2.39.0: persist this fully-rendered HTML so the next
@@ -2529,9 +2529,15 @@
         build: buildSidebar,
         toggleTheme: function() { /* Dark theme only */ },
         logout: function() {
-            localStorage.removeItem('sbx_token');
-            localStorage.removeItem('secubox_token');
-            window.location.href = '/login.html';
+            // Termine la session CÔTÉ SERVEUR avant d'effacer le navigateur (#1803).
+            var t = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+            var fin = function() {
+                localStorage.removeItem('sbx_token');
+                localStorage.removeItem('secubox_token');
+                window.location.href = '/login.html';
+            };
+            fetch('/api/v1/auth/auth/logout', { method: 'POST', credentials: 'include',
+                headers: t ? { 'Authorization': 'Bearer ' + t } : {} }).then(fin, fin);
         },
         // Resilience functions
         forceReinject: function() {

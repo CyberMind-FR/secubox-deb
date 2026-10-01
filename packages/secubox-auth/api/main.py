@@ -140,8 +140,12 @@ def _read_sessions() -> list:
         return []
 
 
-def _write_sessions(rows: list) -> None:
-    __SESSIONS_FILE.write_text(json.dumps(rows))
+def _muter_sessions(transforme) -> list:
+    """Toute écriture du registre passe par le verrou et le renommage atomique
+    de secubox_core (#1803) : deux processus auth l'écrivent (socket propre et
+    agrégateur), plus users et system."""
+    from secubox_core import sessions as _reg
+    return _reg.muter(transforme)
 
 
 def _append_audit(event: str, username: str, details: dict) -> None:
@@ -170,11 +174,10 @@ def _on_session_event(event: str, username: str, details: dict) -> None:
         # siennes, pas gk2 sur tous ses autres appareils.
         cibles = set(details.get("jtis") or [])
         if cibles:
-            _write_sessions([r for r in _read_sessions() if r.get("id") not in cibles])
+            _muter_sessions(lambda rows: [r for r in rows if r.get("id") not in cibles])
         return
     if event == "login_success":
-        rows = _read_sessions()
-        rows.append({
+        ligne = {
             "id": details.get("jti", secrets.token_hex(8)),
             "username": username,
             "ip": details.get("ip", ""),
@@ -182,17 +185,20 @@ def _on_session_event(event: str, username: str, details: dict) -> None:
             "created": datetime.utcnow().isoformat(),
             "expires": int(time.time()) + details.get("expires_in", 86400),
             "type": "jwt",
-        })
-        _write_sessions(rows)
+        }
+        _muter_sessions(lambda rows: rows + [ligne])
 
 
 def _revoke_sessions(username: str) -> int:
-    rows = _read_sessions()
-    keep = [r for r in rows if r.get("username") != username]
-    n = len(rows) - len(keep)
-    _write_sessions(keep)
-    _append_audit("sessions_revoked", username, {"count": n})
-    return n
+    compte = {"n": 0}
+
+    def _sans_le_compte(rows):
+        keep = [r for r in rows if r.get("username") != username]
+        compte["n"] = len(rows) - len(keep)
+        return keep
+    _muter_sessions(_sans_le_compte)
+    _append_audit("sessions_revoked", username, {"count": compte["n"]})
+    return compte["n"]
 
 
 set_session_validator(_session_validator)
@@ -517,10 +523,7 @@ def _veille_delegations_une_fois() -> None:
         return
     if not a_fermer:
         return
-    rows = _read_sessions()
-    garde = [r for r in rows if r.get("username") not in a_fermer]
-    if len(garde) != len(rows):
-        _write_sessions(garde)
+    _muter_sessions(lambda rows: [r for r in rows if r.get("username") not in a_fermer])
     for nom in a_fermer:
         _append_audit("delegation_fermee", nom, {"session_assistance": reg[nom].get("session")})
         reg.pop(nom, None)

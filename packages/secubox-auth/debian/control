@@ -17,7 +17,7 @@ Depends: ${misc:Depends},
  python3-argon2,
  python3-pyotp,
  python3-jwt,
- secubox-core (>= 1.5.43~), secubox-annuaire (>= 0.10.11~),
+ secubox-core (>= 1.5.47~), secubox-annuaire (>= 0.10.11~),
  secubox-users (>= 1.4)
 Description: SecuBox Auth Guardian
  Authentification avancée : OAuth2 (Google/GitHub), vouchers, sessions, portail splash.

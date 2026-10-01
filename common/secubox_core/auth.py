@@ -840,7 +840,27 @@ async def verify(request: Request):
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response):
-    """Clear the SSO-lite session cookie."""
+async def logout(request: Request, response: Response,
+                 creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer)):
+    """Termine la session côté serveur, puis efface le cookie (#1803).
+
+    Effacer le cookie seul laissait le jti vivant (24 h après un mot de passe,
+    7 jours pour un appareil) : un jeton copié ailleurs restait valable. Le jti
+    du cookie ET celui du Bearer sont retirés du registre — par l'événement que
+    secubox-auth applique déjà pour couper des sessions précises. Un jeton
+    illisible ou expiré n'empêche pas d'effacer le cookie."""
+    jetons = [request.cookies.get(SESSION_COOKIE)]
+    if creds is not None:
+        jetons.append(creds.credentials)
+    for jeton in filter(None, jetons):
+        try:
+            payload = jwt.decode(jeton, _secret(), algorithms=["HS256"])
+        except (JWTError, ValueError, RuntimeError):
+            continue
+        jti, sub = payload.get("jti"), payload.get("sub")
+        if jti and sub and not _is_scope_token(payload):
+            _emit_session_event("sessions_coupees", str(sub),
+                                {"jtis": [jti], "motif": "deconnexion"})
     response.delete_cookie(SESSION_COOKIE, domain=_cookie_domain(request), path="/")
+    response.delete_cookie(SESSION_COOKIE, path="/")   # variante limitée à l'hôte
     return {"ok": True}

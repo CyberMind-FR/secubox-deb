@@ -1,3 +1,9 @@
+secubox-users (1.8.15-1~bookworm1) bookworm; urgency=high
+
+  * « Révoquer les sessions » d'un compte coupe vraiment ses sessions : le moteur reçoit enfin un rappel de révocation (il rendait 0). Révocations unitaires et globales par secubox_core.sessions.muter (#1803).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:37:55 +0200
+
 secubox-users (1.8.14-1~bookworm1) bookworm; urgency=high
 
   * Chemin Python : les paquets Debian sont ajoutés EN QUEUE s'ils manquent, plus en tête. Devant /usr/local, le websockets 10.4 de Debian masquait celui qu'attend uvicorn ≥ 0.54 (installé par pip) : le service mourait au démarrage (« cannot import name ServerProtocol ») et redémarrait en boucle (#1796).

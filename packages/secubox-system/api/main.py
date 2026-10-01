@@ -1479,15 +1479,13 @@ async def revoke_session(session_id: str, user=Depends(require_jwt)):
     if role not in ("sysadmin", "admin"):
         raise HTTPException(403, "Only admins can revoke sessions")
 
-    sessions = _load_sessions()
-    original_count = len(sessions)
-    sessions = [s for s in sessions if s.get("id") != session_id]
-
-    if len(sessions) == original_count:
+    if not any(s.get("id") == session_id for s in _load_sessions()):
         raise HTTPException(404, "Session not found")
 
     try:
-        SESSIONS_FILE.write_text(json.dumps(sessions, indent=2))
+        # Verrou + renommage atomique partagés avec secubox-auth (#1803).
+        from secubox_core import sessions as _reg
+        _reg.muter(lambda rows: [r for r in rows if r.get("id") != session_id])
         log.info("Session %s revoked by %s", session_id, user.get("sub"))
         return {"success": True, "revoked": session_id}
     except Exception as e:
@@ -1503,7 +1501,8 @@ async def revoke_all_sessions(user=Depends(require_jwt)):
         raise HTTPException(403, "Only sysadmin can revoke all sessions")
 
     try:
-        SESSIONS_FILE.write_text("[]")
+        from secubox_core import sessions as _reg
+        _reg.muter(lambda rows: [])
         log.warning("All sessions revoked by %s", user.get("sub"))
         return {"success": True, "message": "All sessions revoked"}
     except Exception as e:

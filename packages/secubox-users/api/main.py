@@ -1241,11 +1241,15 @@ def revoke_session(session_id: str):
     appelait (DELETE /session/{id}) n'existe pas — la révocation ne faisait
     rien. Le format est celui qu'auth lit : une LISTE de lignes {id=jti,…}.
     """
-    rows = _lire_sessions()
-    reste = [r for r in rows if str(r.get("id", r.get("jti", ""))) != session_id]
-    if len(reste) == len(rows):
+    trouve = {"n": 0}
+
+    def _sans(rows):
+        reste = [r for r in rows if str(r.get("id", r.get("jti", ""))) != session_id]
+        trouve["n"] = len(rows) - len(reste)
+        return reste
+    _ecrire_sessions(_sans)
+    if not trouve["n"]:
         raise HTTPException(status_code=404, detail="Session inconnue")
-    _ecrire_sessions(reste)
     return {"success": True, "session_id": session_id}
 
 
@@ -1260,16 +1264,27 @@ def _lire_sessions() -> list:
     return list(data.get("sessions", [])) if isinstance(data, dict) else []
 
 
-def _ecrire_sessions(rows: list) -> None:
-    """Écriture atomique, TOUJOURS une liste — un dict cassait le login."""
-    tmp = Path(SESSIONS_FILE + ".tmp")
-    tmp.write_text(json.dumps(rows))
-    try:
-        st = os.stat(SESSIONS_FILE)
-        os.chmod(tmp, st.st_mode & 0o777)
-    except OSError:
-        pass
-    os.replace(tmp, SESSIONS_FILE)
+def _ecrire_sessions(transforme) -> list:
+    """TOUJOURS une liste — un dict cassait le login. Sous le verrou et par
+    renommage atomique de secubox_core (#1803) : auth écrit le même fichier."""
+    from secubox_core import sessions as _reg
+    return _reg.muter(transforme, chemin=SESSIONS_FILE)
+
+
+def _revoque_compte(username: str) -> int:
+    """« Révoquer les sessions » d'un compte (#1803). Le moteur n'avait pas de
+    rappel ici — seul secubox-auth en câble un — : le bouton rendait 0."""
+    compte = {"n": 0}
+
+    def _sans(rows):
+        reste = [r for r in rows if r.get("username") != username]
+        compte["n"] = len(rows) - len(reste)
+        return reste
+    _ecrire_sessions(_sans)
+    return compte["n"]
+
+
+_engine.set_revoke_callback(_revoque_compte)
 
 
 @app.post("/sessions/revoke-all", dependencies=[Depends(require_permission("users.edit"))])
@@ -1282,7 +1297,7 @@ def revoke_all_sessions():
     panique cassait le login au lieu de déconnecter.
     """
     revoked = len(_lire_sessions())
-    _ecrire_sessions([])
+    _ecrire_sessions(lambda rows: [])
     _engine._audit("sessions_revoke_all", "*", {"revoked": revoked})
     return {"success": True, "revoked": revoked, "errors": []}
 

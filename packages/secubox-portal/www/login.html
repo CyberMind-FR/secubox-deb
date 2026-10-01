@@ -787,7 +787,21 @@ function loadTheme() {
 // current token, so auto-redirecting back on a lenient hub/status check creates
 // an infinite login<->module loop where the form never shows. In that case,
 // drop the stale token(s) and show the form so the user can actually re-auth.
-if (new URLSearchParams(window.location.search).has('redirect')) {
+// DÉCONNEXION DEMANDÉE (#1803) — le Hall ouvre cette page avec
+// ?deconnexion=1 : on termine la session côté serveur (cookie ET jeton), on
+// efface le navigateur, puis on montre le formulaire, sans rebond.
+var _sbxQs = new URLSearchParams(window.location.search);
+if (_sbxQs.has('deconnexion')) {
+  var _sbxT = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+  fetch('/api/v1/auth/auth/logout', { method: 'POST', credentials: 'include',
+    headers: _sbxT ? { 'Authorization': 'Bearer ' + _sbxT } : {} }).catch(function() {});
+  localStorage.removeItem('sbx_token');
+  localStorage.removeItem('secubox_token');
+  localStorage.removeItem('secubox_user');
+  localStorage.removeItem('secubox_role');
+  _sbxQs.delete('deconnexion');
+  history.replaceState(null, '', window.location.pathname + (_sbxQs.toString() ? '?' + _sbxQs : ''));
+} else if (_sbxQs.has('redirect')) {
   localStorage.removeItem('sbx_token');
   localStorage.removeItem('secubox_token');
 } else {
