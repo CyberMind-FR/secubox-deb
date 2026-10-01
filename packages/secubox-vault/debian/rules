@@ -6,6 +6,11 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/api
 	install -m 644 api/main.py $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/api/
 	touch $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/api/__init__.py
+	# Le Coffre (#1367 P1) : bibliothèque, démon, outil root.
+	install -d $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/coffre
+	install -m 644 coffre/*.py $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/coffre/
+	install -d $(CURDIR)/debian/secubox-vault/usr/sbin
+	install -m 755 sbin/coffrectl $(CURDIR)/debian/secubox-vault/usr/sbin/
 	install -d $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/vault
 	install -m 644 www/vault/index.html $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/vault/
 	install -d $(CURDIR)/debian/secubox-vault/etc/nginx/secubox.d

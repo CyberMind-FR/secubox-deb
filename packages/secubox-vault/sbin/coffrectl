@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""coffrectl — le Coffre de la box, pour root (#1367 P1).
+
+Les phrases, codes et valeurs ne passent JAMAIS par la ligne de commande
+(visible dans `ps` et l'historique) : invite masquée sur un terminal, sinon
+entrée standard.
+
+  coffrectl etat
+  coffrectl initialiser                    # phrase, puis 5 codes de secours (une seule fois)
+  coffrectl ouvrir [--secours]
+  coffrectl sceller
+  coffrectl secrets [COMPARTIMENT]
+  coffrectl poser COMPARTIMENT NOM         # valeur : invite ou stdin
+  coffrectl lire COMPARTIMENT NOM
+  coffrectl retirer COMPARTIMENT NOM
+  coffrectl serrure-ajouter [LIBELLE]
+  coffrectl serrure-retirer ID
+  coffrectl codes                          # régénère les 5 codes de secours
+  coffrectl compartiment ID [LIBELLE]      # box ou p-<user_uuid>
+  coffrectl journal [N] [--verifier]
+"""
+import getpass
+import http.client
+import json
+import os
+import socket
+import sys
+
+SOCKET = os.environ.get("SECUBOX_COFFRE_SOCKET_RACINE", "/run/secubox-coffre/racine.sock")
+
+
+class _Connexion(http.client.HTTPConnection):
+    def __init__(self):
+        super().__init__("coffre", timeout=60)
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(60)
+        self.sock.connect(SOCKET)
+
+
+def appel(methode: str, chemin: str, corps=None):
+    try:
+        c = _Connexion()
+        c.request(methode, chemin, body=None if corps is None else json.dumps(corps),
+                  headers={"Content-Type": "application/json"})
+        r = c.getresponse()
+        donnees = json.loads(r.read() or b"{}")
+    except (FileNotFoundError, ConnectionRefusedError):
+        sys.exit("coffrectl : le démon ne répond pas (systemctl status secubox-vault)")
+    except PermissionError:
+        sys.exit("coffrectl : réservé à root")
+    if r.status >= 400:
+        sys.exit(f"coffrectl : {donnees.get('detail', r.status)}")
+    return donnees
+
+
+def saisie(invite: str, confirmer: bool = False) -> str:
+    if not sys.stdin.isatty():
+        return sys.stdin.readline().rstrip("\n")
+    v = getpass.getpass(invite)
+    if confirmer and getpass.getpass("Confirmer : ") != v:
+        sys.exit("coffrectl : les deux saisies diffèrent")
+    return v
+
+
+def affiche_etat(e: dict) -> None:
+    if not e.get("initialise"):
+        print("Coffre : non initialisé — coffrectl initialiser")
+        return
+    print(f"Coffre : {'OUVERT' if e.get('ouvert') else 'scellé'}"
+          + (f" (rescellement dans {e['reste_s']} s)" if e.get("ouvert") and "reste_s" in e else ""))
+    j = e.get("journal", {})
+    print(f"Journal : {j.get('lignes', 0)} lignes, " + ("intègre" if j.get("integre") else
+          f"CHAÎNE ROMPUE à la ligne {j.get('ligne_fautive')}"))
+    for s in e.get("serrures", []):
+        print(f"  serrure {s['id']}  {s['genre']:8}  {s['libelle']}")
+    for c in e.get("compartiments", []):
+        print(f"  compartiment {c['id']}  ({c['nature']}) — {c['secrets']} secret(s)")
+
+
+def principal(argv) -> None:
+    if not argv or argv[0] in ("-h", "--help", "aide"):
+        print(__doc__)
+        return
+    cmd, args = argv[0], argv[1:]
+    if cmd == "etat":
+        affiche_etat(appel("GET", "/etat"))
+    elif cmd == "initialiser":
+        phrase = saisie("Phrase du Coffre (12 caractères au moins) : ", confirmer=True)
+        codes = appel("POST", "/initialiser", {"phrase": phrase})["codes"]
+        print("Coffre initialisé et ouvert. CODES DE SECOURS — à imprimer, ne s'afficheront plus :")
+        for c in codes:
+            print("   ", c)
+    elif cmd == "ouvrir":
+        genre = "secours" if "--secours" in args else "phrase"
+        secret = saisie("Code de secours : " if genre == "secours" else "Phrase : ")
+        affiche_etat(appel("POST", "/ouvrir", {"secret": secret, "genre": genre}))
+    elif cmd == "sceller":
+        affiche_etat(appel("POST", "/sceller"))
+    elif cmd == "secrets":
+        q = f"?compartiment={args[0]}" if args else ""
+        for s in appel("GET", "/secrets" + q)["secrets"]:
+            print(f"{s['compartiment']}/{s['nom']}  v{s['version']}")
+    elif cmd == "poser" and len(args) == 2:
+        v = appel("POST", "/secrets", {"compartiment": args[0], "nom": args[1],
+                                       "valeur": saisie("Valeur : ")})["version"]
+        print(f"{args[0]}/{args[1]} : version {v}")
+    elif cmd == "lire" and len(args) == 2:
+        sys.stdout.write(appel("GET", f"/secrets/{args[0]}/{args[1]}/valeur")["valeur"] + "\n")
+    elif cmd == "retirer" and len(args) == 2:
+        appel("DELETE", f"/secrets/{args[0]}/{args[1]}")
+        print("retiré")
+    elif cmd == "serrure-ajouter":
+        phrase = saisie("Nouvelle phrase : ", confirmer=True)
+        print("serrure", appel("POST", "/serrures/phrase",
+                               {"phrase": phrase, "libelle": " ".join(args)})["id"])
+    elif cmd == "serrure-retirer" and len(args) == 1:
+        appel("DELETE", f"/serrures/{args[0]}")
+        print("retirée")
+    elif cmd == "codes":
+        print("Nouveaux codes de secours (les anciens ne valent plus) :")
+        for c in appel("POST", "/serrures/secours")["codes"]:
+            print("   ", c)
+    elif cmd == "compartiment" and args:
+        appel("POST", "/compartiments", {"id": args[0], "libelle": " ".join(args[1:])})
+        print("compartiment", args[0])
+    elif cmd == "journal":
+        n = next((int(a) for a in args if a.isdigit()), 30)
+        j = appel("GET", f"/journal?n={n}")
+        for e in j["entrees"]:
+            print(e["t"], e["evt"], json.dumps(e["details"], ensure_ascii=False))
+        if "--verifier" in args or not j["integre"]:
+            print("chaîne :", "intègre" if j["integre"] else f"ROMPUE à la ligne {j['ligne_fautive']}")
+    else:
+        sys.exit(f"coffrectl : commande inconnue ou incomplète « {' '.join(argv)} » — coffrectl aide")
+
+
+if __name__ == "__main__":
+    principal(sys.argv[1:])

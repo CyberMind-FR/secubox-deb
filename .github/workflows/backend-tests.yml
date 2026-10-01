@@ -40,6 +40,8 @@ on:
       - 'packages/secubox-haproxy/sbin/haproxyctl'
       - 'packages/secubox-haproxy/tests/test_frontal_1841.py'
       - 'packages/secubox-defaults/**'
+      - 'packages/secubox-vault/**'
+      - 'packages/secubox-aggregator/**'
       - 'image/firstboot.sh'
       - 'scripts/tests/test_firstboot_frontal_1845.py'
       - 'packages/secubox-certs/**'
@@ -140,6 +142,12 @@ jobs:
           # Box neuve derrière HAProxy dès le premier démarrage (#1845).
           - suite: secubox-defaults
             chemin: packages/secubox-defaults/tests
+          # Le Coffre P1 (#1367) : MK, serrures, compartiments, journal chaîné, API.
+          - suite: secubox-vault
+            chemin: packages/secubox-vault/tests
+          # Relais de l'agrégateur réservé aux admins réels (actor, radio, vault).
+          - suite: secubox-aggregator-relais
+            chemin: packages/secubox-aggregator/tests/test_socket_dedie_admin.py
           - suite: depot-firstboot-frontal
             chemin: scripts/tests/test_firstboot_frontal_1845.py
           # secubox-vhost-logs ne restaure que sa propre passe (#1777) : la

@@ -2,434 +2,202 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-vault 2.0 — API du Coffre (#1367 P1).
 
-"""SecuBox Vault API - Secrets management."""
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-import subprocess
-import json
+DEUX APPLICATIONS, DEUX SOCKETS, UN SEUL COFFRE.
+
+- `public` (/run/secubox/vault.sock) : relayée par l'agrégateur aux seuls
+  administrateurs réels. Ouvrir, sceller, état, NOMS des secrets, poser,
+  retirer, journal. Elle ne rend JAMAIS la valeur d'un secret : pas d'oracle
+  derrière une session web. Elle n'ouvre que depuis le LAN, quand la politique
+  n'y exige pas de second facteur ; l'ouverture DISTANTE (TOTP frais, alerte
+  courriel) est la phase P4 — d'ici là, `coffrectl ouvrir` en SSH. Cinq échecs
+  par heure et par identité, puis 429.
+- `racine` (/run/secubox-coffre/racine.sock, répertoire 0700) : celle de
+  `coffrectl`, pour root. Initialisation, lecture d'une valeur, serrures,
+  codes de secours. Le système de fichiers est la garde.
+
+Le Coffre ne vit QUE dans ce processus : jamais monté dans l'agrégateur, dont
+tous les modules partagent la mémoire.
+"""
 import os
-import hashlib
-import base64
-from datetime import datetime
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import time
+from collections import defaultdict, deque
+from pathlib import Path
+from typing import Optional
+
+from fastapi import Depends, FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
+from secubox_core import second_facteur
 from secubox_core.auth import require_jwt
-from fastapi import HTTPException as _HTTPException
+
+from coffre.coffre import Coffre, Interdit, NonInitialise, Scelle
+from coffre.crypto import Refus
+from coffre.journal import Journal
+
+VERSION = "2.0.0"
+BASE = Path(os.environ.get("SECUBOX_COFFRE_DIR", "/var/lib/secubox/coffre"))
+JOURNAL = Path(os.environ.get("SECUBOX_COFFRE_JOURNAL", "/var/log/secubox/coffre.journal"))
+DELAI_S = int(os.environ.get("SECUBOX_COFFRE_DELAI_S", "900"))
+
+COFFRE = Coffre(BASE, Journal(JOURNAL), delai_s=DELAI_S)
+
+ESSAIS_MAX = 5
+FENETRE_S = 3600
+_echecs: dict = defaultdict(deque)
 
 
-# LE COFFRE RELÈVE DE SECUBOX SYSTEM (#1414, AUTH v2 §1). Toutes ses routes
-# n'exigeaient qu'un JWT : un appareil guest pouvait lire, exporter AVEC
-# valeurs, importer. Désormais : un compte système admin de users.json, et
-# RIEN d'autre — ni appareil (sbx-…), ni utilisateur SBX OS.
-async def require_admin_systeme(creds=Depends(require_jwt)):
-    from secubox_core import user_store
-    sub = creds.get("sub", "") if isinstance(creds, dict) else ""
-    u = user_store.get_user(sub) or {}
-    if u.get("role") != "admin" or not u.get("enabled", True):
-        raise _HTTPException(status_code=403,
-                             detail="Coffre réservé aux administrateurs système")
-    return creds
+class Ouverture(BaseModel):
+    secret: str = Field(min_length=1, max_length=1024)
+    genre: str = "phrase"
 
 
-# GARDE JWT SUR TOUTE L'API (#1256).
-#
-# `.claude/MODULE-COMPLIANCE.md` §Authentication : « All endpoints (except
-# /health) MUST use JWT authentication ». Ce module ne l'appliquait NULLE PART
-# — il importait meme `Depends` sans jamais s'en servir.
-#
-# ET IL N'Y AVAIT AUCUN RATTRAPAGE EN AMONT, c'est ce qui rend l'oubli grave :
-# l'aggregator se contente de `app.mount()` sans middleware, le snippet nginx
-# `secubox-proxy.conf` TRANSMET l'en-tete `Authorization` (`proxy_set_header`)
-# sans jamais le verifier, et `auth_request /__sbx_auth_verify` n'est cable que
-# sur une poignee de vhosts — ou il teste l'appartenance au LAN, pas un jeton.
-# La seule barriere restante etait l'obfuscation du nom d'hote admin.
-#
-# `dependencies=[...]` PLUTOT QU'UN PARAMETRE `user=Depends(...)` : la garde
-# porte sur la route, pas sur la signature. Aucun corps de fonction n'est
-# touche, donc aucun risque d'en changer le comportement en la posant — et une
-# route ajoutee plus tard sans garde se voit d'un coup d'oeil.
-app = FastAPI(title="SecuBox Vault API", version="1.0.0")
-
-VAULT_DIR = "/var/lib/secubox/vault"
-SECRETS_FILE = f"{VAULT_DIR}/secrets.enc"
-KEY_FILE = f"{VAULT_DIR}/.key"
-AUDIT_LOG = f"{VAULT_DIR}/audit.log"
-HASHICORP_ADDR = os.environ.get("VAULT_ADDR", "http://127.0.0.1:8200")
+class Pose(BaseModel):
+    compartiment: str = Field(max_length=40)
+    nom: str = Field(max_length=64)
+    valeur: str = Field(min_length=1, max_length=65536)
 
 
-class Secret(BaseModel):
-    key: str
-    value: str
-    description: str = ""
-    tags: list = []
+class Phrase(BaseModel):
+    phrase: str = Field(min_length=1, max_length=1024)
+    libelle: str = Field(default="", max_length=80)
 
 
-class SecretUpdate(BaseModel):
-    value: str
-    description: str = None
+class Compartiment(BaseModel):
+    id: str = Field(max_length=40)
+    libelle: str = Field(default="", max_length=80)
 
 
-def get_or_create_key() -> bytes:
-    """Get or create encryption key."""
-    os.makedirs(VAULT_DIR, exist_ok=True)
-
-    if os.path.exists(KEY_FILE):
-        with open(KEY_FILE, 'rb') as f:
-            return f.read()
-
-    # Generate new key
-    key = Fernet.generate_key()
-    with open(KEY_FILE, 'wb') as f:
-        f.write(key)
-    os.chmod(KEY_FILE, 0o600)
-
-    return key
+def _traduit(e: Exception) -> HTTPException:
+    if isinstance(e, Scelle):
+        return HTTPException(423, "Coffre scellé")
+    if isinstance(e, NonInitialise):
+        return HTTPException(409, "Coffre non initialisé")
+    if isinstance(e, Interdit):
+        return HTTPException(400, str(e))
+    if isinstance(e, KeyError):
+        return HTTPException(404, "secret inconnu")
+    if isinstance(e, Refus):
+        COFFRE.journal.ajouter("integrite", detail="déchiffrement refusé")
+        return HTTPException(500, "intégrité : secret illisible")
+    raise e
 
 
-def get_fernet() -> Fernet:
-    """Get Fernet cipher instance."""
-    return Fernet(get_or_create_key())
-
-
-def load_secrets() -> dict:
-    """Load and decrypt secrets store."""
-    if not os.path.exists(SECRETS_FILE):
-        return {}
-
+def _appel(fn, *a, **k):
     try:
-        with open(SECRETS_FILE, 'rb') as f:
-            encrypted = f.read()
-
-        fernet = get_fernet()
-        decrypted = fernet.decrypt(encrypted)
-        return json.loads(decrypted.decode())
-    except Exception:
-        return {}
-
-
-def save_secrets(secrets: dict):
-    """Encrypt and save secrets store."""
-    os.makedirs(VAULT_DIR, exist_ok=True)
-
-    fernet = get_fernet()
-    data = json.dumps(secrets).encode()
-    encrypted = fernet.encrypt(data)
-
-    with open(SECRETS_FILE, 'wb') as f:
-        f.write(encrypted)
-    os.chmod(SECRETS_FILE, 0o600)
-
-
-def audit_log(action: str, key: str, details: str = ""):
-    """Write to audit log."""
-    os.makedirs(VAULT_DIR, exist_ok=True)
-
-    timestamp = datetime.utcnow().isoformat()
-    entry = f"{timestamp} | {action} | {key} | {details}\n"
-
-    with open(AUDIT_LOG, 'a') as f:
-        f.write(entry)
-
-
-def is_hashicorp_vault_running() -> bool:
-    """Check if HashiCorp Vault is running."""
-    try:
-        result = subprocess.run(
-            ["vault", "status", "-format=json"],
-            capture_output=True, text=True, timeout=5,
-            env={**os.environ, "VAULT_ADDR": HASHICORP_ADDR}
-        )
-        return result.returncode in [0, 2]  # 0=unsealed, 2=sealed
-    except Exception:
-        return False
-
-
-def get_hashicorp_status() -> dict:
-    """Get HashiCorp Vault status."""
-    try:
-        result = subprocess.run(
-            ["vault", "status", "-format=json"],
-            capture_output=True, text=True, timeout=5,
-            env={**os.environ, "VAULT_ADDR": HASHICORP_ADDR}
-        )
-        if result.returncode in [0, 2]:
-            return json.loads(result.stdout)
-    except Exception:
-        pass
-    return {}
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "vault"}
-
-
-@app.get("/status", dependencies=[Depends(require_admin_systeme)])
-def get_status():
-    """Get vault status."""
-    secrets = load_secrets()
-    hc_running = is_hashicorp_vault_running()
-    hc_status = get_hashicorp_status() if hc_running else {}
-
-    return {
-        "local_secrets_count": len(secrets),
-        "vault_dir": VAULT_DIR,
-        "hashicorp_vault": {
-            "available": hc_running,
-            "sealed": hc_status.get("sealed", True) if hc_status else None,
-            "version": hc_status.get("version"),
-            "address": HASHICORP_ADDR
-        },
-        "encryption": "Fernet (AES-128-CBC)"
-    }
+        return fn(*a, **k)
+    except (Scelle, NonInitialise, Interdit, KeyError, Refus) as e:
+        raise _traduit(e) from None
 
 
-@app.get("/secrets", dependencies=[Depends(require_admin_systeme)])
-def list_secrets():
-    """List all secret keys (without values)."""
-    secrets = load_secrets()
+def _limite(qui: str) -> None:
+    q = _echecs[qui]
+    while q and time.monotonic() - q[0] > FENETRE_S:
+        q.popleft()
+    if len(q) >= ESSAIS_MAX:
+        raise HTTPException(429, "trop d'essais — réessayer plus tard")
 
-    items = []
-    for key, data in secrets.items():
-        items.append({
-            "key": key,
-            "description": data.get("description", ""),
-            "tags": data.get("tags", []),
-            "created": data.get("created"),
-            "updated": data.get("updated")
-        })
 
-    return {"secrets": items}
+def _routes_communes(app: FastAPI, garde: list) -> None:
+    @app.get("/health")
+    def health():
+        return {"status": "ok", "module": "vault", "version": VERSION}
 
+    @app.get("/etat", dependencies=garde)
+    def etat():
+        return COFFRE.etat()
 
-@app.get("/secrets/{key}", dependencies=[Depends(require_admin_systeme)])
-def get_secret(key: str):
-    """Get a specific secret."""
-    secrets = load_secrets()
+    @app.post("/sceller", dependencies=garde)
+    def sceller():
+        COFFRE.sceller("commande")
+        return COFFRE.etat()
 
-    if key not in secrets:
-        raise HTTPException(status_code=404, detail="Secret not found")
+    @app.get("/secrets", dependencies=garde)
+    def secrets(compartiment: Optional[str] = None):
+        return {"secrets": _appel(COFFRE.lister, compartiment)}
 
-    audit_log("READ", key)
+    @app.post("/secrets", dependencies=garde)
+    def poser(p: Pose):
+        return {"version": _appel(COFFRE.poser, p.compartiment, p.nom, p.valeur.encode())}
 
-    data = secrets[key]
-    return {
-        "key": key,
-        "value": data["value"],
-        "description": data.get("description", ""),
-        "tags": data.get("tags", []),
-        "created": data.get("created"),
-        "updated": data.get("updated")
-    }
+    @app.delete("/secrets/{compartiment}/{nom}", dependencies=garde)
+    def retirer(compartiment: str, nom: str):
+        _appel(COFFRE.retirer, compartiment, nom)
+        return {"retire": True}
 
+    @app.get("/journal", dependencies=garde)
+    def journal(n: int = 50):
+        integre, fautive, lignes = COFFRE.journal.verifier()
+        return {"integre": integre, "ligne_fautive": fautive, "lignes": lignes,
+                "entrees": COFFRE.journal.derniers(max(1, min(n, 500)))}
 
-@app.post("/secrets", dependencies=[Depends(require_admin_systeme)])
-def create_secret(secret: Secret):
-    """Create a new secret."""
-    secrets = load_secrets()
 
-    if secret.key in secrets:
-        raise HTTPException(status_code=409, detail="Secret already exists")
+# ── public : administrateurs réels, via l'agrégateur ──────────────────────────
+public = FastAPI(title="SecuBox Coffre", version=VERSION, docs_url=None, redoc_url=None, openapi_url=None)
+_routes_communes(public, [Depends(require_jwt)])
 
-    now = datetime.utcnow().isoformat()
-    secrets[secret.key] = {
-        "value": secret.value,
-        "description": secret.description,
-        "tags": secret.tags,
-        "created": now,
-        "updated": now
-    }
 
-    save_secrets(secrets)
-    audit_log("CREATE", secret.key)
+@public.post("/ouvrir")
+def ouvrir_public(o: Ouverture, request: Request, user=Depends(require_jwt)):
+    qui = str((user or {}).get("sub") or "?")
+    _limite(qui)
+    if second_facteur.otp_exige(request):
+        # Hors LAN, ou LAN sous politique « second facteur obligatoire » : pas
+        # en P1. On le dit, on le journalise, on ne compte pas d'échec.
+        COFFRE.journal.ajouter("ouverture_refusee", genre=o.genre, qui=qui, motif="second_facteur")
+        raise HTTPException(403, "ouverture avec second facteur : pas encore (phase P4) — coffrectl ouvrir en SSH")
+    ok = _appel(COFFRE.ouvrir, o.secret, o.genre, qui=qui, origine="lan")
+    if not ok:
+        _echecs[qui].append(time.monotonic())
+        raise HTTPException(403, "refusé")
+    _echecs.pop(qui, None)
+    return COFFRE.etat()
 
-    return {"status": "created", "key": secret.key}
 
+# ── racine : coffrectl, pour root ─────────────────────────────────────────────
+racine = FastAPI(title="SecuBox Coffre (racine)", version=VERSION, docs_url=None, redoc_url=None,
+                 openapi_url=None)
+_routes_communes(racine, [])
 
-@app.put("/secrets/{key}", dependencies=[Depends(require_admin_systeme)])
-def update_secret(key: str, update: SecretUpdate):
-    """Update an existing secret."""
-    secrets = load_secrets()
 
-    if key not in secrets:
-        raise HTTPException(status_code=404, detail="Secret not found")
+@racine.post("/initialiser")
+def initialiser(p: Phrase):
+    return {"codes": _appel(COFFRE.initialiser, p.phrase)}
 
-    secrets[key]["value"] = update.value
-    secrets[key]["updated"] = datetime.utcnow().isoformat()
 
-    if update.description is not None:
-        secrets[key]["description"] = update.description
+@racine.post("/ouvrir")
+def ouvrir_racine(o: Ouverture):
+    if not _appel(COFFRE.ouvrir, o.secret, o.genre, qui="root", origine="console"):
+        raise HTTPException(403, "refusé")
+    return COFFRE.etat()
 
-    save_secrets(secrets)
-    audit_log("UPDATE", key)
 
-    return {"status": "updated", "key": key}
+@racine.get("/secrets/{compartiment}/{nom}/valeur")
+def lire(compartiment: str, nom: str):
+    return {"valeur": _appel(COFFRE.lire, compartiment, nom).decode("utf-8", "replace")}
 
 
-@app.delete("/secrets/{key}", dependencies=[Depends(require_admin_systeme)])
-def delete_secret(key: str):
-    """Delete a secret."""
-    secrets = load_secrets()
+@racine.post("/serrures/phrase")
+def serrure_phrase(p: Phrase):
+    return {"id": _appel(COFFRE.ajouter_serrure_phrase, p.phrase, p.libelle)}
 
-    if key not in secrets:
-        raise HTTPException(status_code=404, detail="Secret not found")
 
-    del secrets[key]
-    save_secrets(secrets)
-    audit_log("DELETE", key)
+@racine.delete("/serrures/{ident}")
+def serrure_retirer(ident: str):
+    _appel(COFFRE.retirer_serrure, ident)
+    return {"retiree": True}
 
-    return {"status": "deleted", "key": key}
 
+@racine.post("/serrures/secours")
+def codes():
+    return {"codes": _appel(COFFRE.regenerer_codes)}
 
-@app.post("/secrets/{key}/rotate", dependencies=[Depends(require_admin_systeme)])
-def rotate_secret(key: str):
-    """Rotate (regenerate) a secret value."""
-    secrets = load_secrets()
 
-    if key not in secrets:
-        raise HTTPException(status_code=404, detail="Secret not found")
+@racine.post("/compartiments")
+def compartiment(c: Compartiment):
+    _appel(COFFRE.creer_compartiment, c.id, c.libelle)
+    return {"cree": True}
 
-    # Generate new random value
-    import secrets as py_secrets
-    new_value = py_secrets.token_urlsafe(32)
 
-    old_value = secrets[key]["value"]
-    secrets[key]["value"] = new_value
-    secrets[key]["updated"] = datetime.utcnow().isoformat()
-
-    save_secrets(secrets)
-    audit_log("ROTATE", key, f"old_hash={hashlib.sha256(old_value.encode()).hexdigest()[:8]}")
-
-    return {"status": "rotated", "key": key, "new_value": new_value}
-
-
-@app.get("/secrets/search/{query}", dependencies=[Depends(require_admin_systeme)])
-def search_secrets(query: str):
-    """Search secrets by key or description."""
-    secrets = load_secrets()
-    query_lower = query.lower()
-
-    results = []
-    for key, data in secrets.items():
-        if query_lower in key.lower() or query_lower in data.get("description", "").lower():
-            results.append({
-                "key": key,
-                "description": data.get("description", ""),
-                "tags": data.get("tags", [])
-            })
-
-    return {"query": query, "results": results}
-
-
-@app.get("/secrets/tag/{tag}", dependencies=[Depends(require_admin_systeme)])
-def get_secrets_by_tag(tag: str):
-    """Get secrets by tag."""
-    secrets = load_secrets()
-
-    results = []
-    for key, data in secrets.items():
-        if tag in data.get("tags", []):
-            results.append({
-                "key": key,
-                "description": data.get("description", ""),
-                "tags": data.get("tags", [])
-            })
-
-    return {"tag": tag, "secrets": results}
-
-
-@app.get("/audit", dependencies=[Depends(require_admin_systeme)])
-def get_audit_log(lines: int = 50):
-    """Get recent audit log entries."""
-    if not os.path.exists(AUDIT_LOG):
-        return {"entries": []}
-
-    with open(AUDIT_LOG, 'r') as f:
-        all_lines = f.readlines()
-
-    entries = []
-    for line in all_lines[-lines:]:
-        parts = line.strip().split(" | ")
-        if len(parts) >= 3:
-            entries.append({
-                "timestamp": parts[0],
-                "action": parts[1],
-                "key": parts[2],
-                "details": parts[3] if len(parts) > 3 else ""
-            })
-
-    return {"entries": entries}
-
-
-@app.post("/generate", dependencies=[Depends(require_admin_systeme)])
-def generate_secret(length: int = 32, type: str = "urlsafe"):
-    """Generate a random secret value."""
-    import secrets as py_secrets
-
-    if type == "urlsafe":
-        value = py_secrets.token_urlsafe(length)
-    elif type == "hex":
-        value = py_secrets.token_hex(length)
-    elif type == "bytes":
-        value = base64.b64encode(py_secrets.token_bytes(length)).decode()
-    else:
-        raise HTTPException(status_code=400, detail="Type must be urlsafe, hex, or bytes")
-
-    return {"value": value, "type": type, "length": len(value)}
-
-
-@app.post("/export", dependencies=[Depends(require_admin_systeme)])
-def export_secrets(include_values: bool = False):
-    """Export secrets (optionally with values)."""
-    secrets = load_secrets()
-
-    export_data = []
-    for key, data in secrets.items():
-        item = {
-            "key": key,
-            "description": data.get("description", ""),
-            "tags": data.get("tags", []),
-            "created": data.get("created"),
-            "updated": data.get("updated")
-        }
-        if include_values:
-            item["value"] = data["value"]
-        export_data.append(item)
-
-    audit_log("EXPORT", "*", f"include_values={include_values}")
-
-    return {"secrets": export_data, "count": len(export_data)}
-
-
-@app.post("/import", dependencies=[Depends(require_admin_systeme)])
-def import_secrets(secrets_data: list, overwrite: bool = False):
-    """Import secrets from export data."""
-    secrets = load_secrets()
-    imported = 0
-    skipped = 0
-
-    for item in secrets_data:
-        key = item.get("key")
-        if not key or "value" not in item:
-            continue
-
-        if key in secrets and not overwrite:
-            skipped += 1
-            continue
-
-        now = datetime.utcnow().isoformat()
-        secrets[key] = {
-            "value": item["value"],
-            "description": item.get("description", ""),
-            "tags": item.get("tags", []),
-            "created": item.get("created", now),
-            "updated": now
-        }
-        imported += 1
-
-    save_secrets(secrets)
-    audit_log("IMPORT", "*", f"imported={imported} skipped={skipped}")
-
-    return {"imported": imported, "skipped": skipped}
+# Compatibilité : `api.main:app` désigne la face publique.
+app = public

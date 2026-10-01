@@ -1,19 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: le Coffre (secubox-vault 2.0, #1367 P1)
+#
+# Un utilisateur À LUI (secubox-coffre) : les modules tournent tous sous
+# `secubox` ; s'il était l'un d'eux, n'importe lequel traverserait le
+# répertoire de la socket racine et lirait les valeurs. La MK ne vit qu'en
+# mémoire : ni vidage (LimitCORE=0), ni swap (mlock).
 [Unit]
-Description=SecuBox Vault API
+Description=SecuBox Coffre — clé maîtresse en mémoire, scellé par défaut
 After=network.target secubox-core.service
 
 [Service]
 Type=simple
-User=root
+User=secubox-coffre
+Group=secubox-coffre
+SupplementaryGroups=secubox
 WorkingDirectory=/usr/lib/secubox/vault
-# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
-# possede. Une socket laissee par un autre utilisateur rendrait le
-# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
-# root malgre User= — sans lui la ligne echouerait comme le demon.
+Environment=PYTHONDONTWRITEBYTECODE=1
+# En root (« + ») : une socket périmée laissée par un autre utilisateur dans
+# /run/secubox (sticky) ne se retire pas autrement — vécu sur gk3, elle
+# appartenait à secubox-waf et le démon tournait en boucle.
 ExecStartPre=+/bin/rm -f /run/secubox/vault.sock
-ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/vault.sock --log-level warning
-UMask=0117
+ExecStart=/usr/bin/python3 -m coffre.daemon
+RuntimeDirectory=secubox-coffre
+RuntimeDirectoryMode=0700
+UMask=0077
 Restart=on-failure
+RestartSec=5
+LimitCORE=0
+LimitMEMLOCK=16M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/secubox/coffre /run/secubox /var/log/secubox/coffre.journal
 
 [Install]
 WantedBy=multi-user.target

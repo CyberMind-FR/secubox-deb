@@ -65,7 +65,11 @@ RUN_DIR = "/run/secubox"
 # radio : secubox-radio sert la vue sysop à toute requête SANS le préfixe
 # /api/v1/radio — c'est-à-dire à ce relais, qui le retire. Elle compte sur la
 # porte de l'administration ; cette porte, c'est cette garde (#1800).
-_SOCKETS_ADMIN = frozenset({"actor", "radio"})
+#
+# vault : le Coffre (#1367) vit dans son propre processus, jamais monté ici ;
+# son API vérifie elle-même le jeton, ce relais la ferme d'abord à tout autre
+# qu'un administrateur réel.
+_SOCKETS_ADMIN = frozenset({"actor", "radio", "vault"})
 
 # L'en-tête de vue est une décision de la ROUTE, pas du visiteur : celui que le
 # client envoie n'est jamais recopié, vers aucun module.

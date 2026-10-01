@@ -1,3 +1,38 @@
+secubox-vault (2.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * postinst : met de côté un drop-in qui vide RuntimeDirectory= (posé à la
+    main pour la 1.x sur gk2) — le répertoire de la socket racine n'était
+    jamais créé, le démon tournait en boucle. Message clair sinon.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 16:54:55 +0200
+
+secubox-vault (2.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'unité retire en root une socket /run/secubox/vault.sock périmée laissée
+    par un autre utilisateur (sticky) — sur gk3, elle appartenait à
+    secubox-waf et le démon tournait en boucle. Message clair sinon.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 16:52:31 +0200
+
+secubox-vault (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Le Coffre, phase P1 (#1367) — réécriture complète de secubox-vault.
+    Clé maîtresse aléatoire en mémoire verrouillée, jamais écrite, effacée au
+    scellement (commande, 15 min d'inactivité, arrêt) ; serrures Argon2id
+    (64 Mio/3/4, POLITIQUE-CRYPTO) + AES-256-GCM : une phrase et 5 codes de
+    secours à usage unique ; compartiments box et p-<user_uuid> (HKDF) ;
+    secrets AES-256-GCM liés à leur place ; journal chaîné SHA-256.
+  * Démon sous l'utilisateur secubox-coffre (ni root, ni secubox), sans
+    vidage mémoire ; deux sockets : publique (admins réels via l'agrégateur,
+    jamais une valeur, ouverture LAN seulement en P1) et racine (coffrectl).
+  * coffrectl : etat, initialiser, ouvrir, sceller, secrets, poser, lire,
+    retirer, serrures, codes, compartiment, journal.
+  * postinst : retire "vault" d'aggregator.toml (monté en processus, la MK
+    serait dans la mémoire de tous les modules) ; l'ancien coffre Fernet
+    n'est pas repris.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 16:51:20 +0200
+
 secubox-vault (1.1.2-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (closes #1414, audit #1405 S5). Les 13 routes du coffre

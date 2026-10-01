@@ -1,9 +1,9 @@
 {
   "id": "vault",
-  "name": "Vault",
+  "name": "Coffre",
   "icon": "🔐",
   "path": "/vault/",
   "category": "root",
   "order": 901,
-  "description": "Secrets management"
+  "description": "Coffre : secrets scellés, clé maîtresse en mémoire"
 }
