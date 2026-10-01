@@ -342,6 +342,25 @@ class Profileur:
         return [d.vue_admin() for d in self._demandes.values()
                 if d.etat == "en_attente"]
 
+    def acceptees(self) -> list[Demande]:
+        """Les demandes acceptées, complètes (clé comprise) — pour le serveur."""
+        return [d for d in self._demandes.values() if d.etat == "acceptee"]
+
+    def oublie(self, did: str, *, force: bool = False) -> bool:
+        """EFFACE une demande refusée ou expirée (#1809) : sans ce geste, la file
+        ne fait que grossir. `force` : la suppression d'une personne emporte
+        aussi ses demandes acceptées (révoquées juste avant)."""
+        d = self._demandes.get(did)
+        if d is None:
+            return False
+        if d.expiree():
+            d.etat = "expiree"
+        if not force and d.etat not in ("refusee", "expiree"):
+            return False
+        del self._demandes[did]
+        self._ecrit()
+        return True
+
     def admis(self) -> list[dict]:
         """Les appareils qui ONT un accès. C'est la matière du profileur : on ne
         promeut pas une demande, on promeut un accès existant."""

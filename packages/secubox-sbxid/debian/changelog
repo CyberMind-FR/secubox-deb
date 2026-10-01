@@ -1,3 +1,9 @@
+secubox-sbxid (0.4.9-1~bookworm1) bookworm; urgency=high
+
+  * Suspendre une personne coupe ses sessions (tous ses appareils), ferme la porte à ses appareils (la file refuse d'ouvrir une session) et désactive les comptes de services ouverts pour elle ; la réactiver les rouvre. Supprimer une personne suspendue : appareils révoqués et oubliés, rôles, liens, coffre et fiche effacés, comptes de services gardés désactivés ou supprimés sur option. Oublier un appareil révoqué, une demande refusée ou expirée. Lien d'entrée plafonné à guest et suivi. La base suit la file (révocations, ré-admissions) et un appareil admis absent du registre y est réinscrit (#1809).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:10:43 +0200
+
 secubox-sbxid (0.4.8-1~bookworm1) bookworm; urgency=high
 
   * Demande d'accès : un navigateur RETROUVE sa demande par sa clé (défi signé, /invitation/retrouver), sans jeton de suivi, et la RENOUVELLE en un clic (/invitation/renouveler) — même demande, mêmes renseignements, au plus une fois toutes les 10 min après un refus. Un appareil admis qui a perdu son jeton rentre seul. Un did:sbx: doit désigner la clé présentée (#1805).

@@ -286,3 +286,38 @@ def delie(c: sqlite3.Connection, uid: str, app: str, ident: str) -> None:
     c.execute("DELETE FROM sbx_app_links WHERE user_uuid=? AND app=? AND app_id=?", (uid, app, ident))
     if not c.execute("SELECT 1 FROM sbx_app_links WHERE user_uuid=? AND app=?", (uid, app)).fetchone():
         c.execute("DELETE FROM sbx_preferences WHERE user_uuid=? AND cle=?", (uid, f"mdp_propre:{app}"))
+
+
+# ── SUSPENSION, RÉACTIVATION, SUPPRESSION (#1809) ───────────────────────────
+# On n'agit QUE sur les comptes OUVERTS ICI pour la personne (`ouvert_ici`) :
+# un compte relié qui existait avant elle (boîte d'un compte système, compte
+# BBS local adopté) n'est pas le sien à fermer — on se contente de le délier.
+
+def _ouverts(c: sqlite3.Connection, uid: str) -> List[str]:
+    return [svc for svc in SERVICES if ouvert_ici(c, uid, svc)]
+
+
+def _sur_les_ouverts(c: sqlite3.Connection, uid: str, action: str) -> Dict[str, Any]:
+    r = c.execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (uid,)).fetchone()
+    if not r:
+        raise Refus(404, "Personne inconnue")
+    out: Dict[str, Any] = {}
+    for svc in _ouverts(c, uid):
+        rep = helper(_demande(_nom_service(c, uid, svc, r[0]), svc, action))
+        out[svc] = bool(rep.get("ok"))
+    return out
+
+
+def desactive_ouverts(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
+    """Suspension : les comptes ouverts ici sont DÉSACTIVÉS, données gardées."""
+    return _sur_les_ouverts(c, uid, "desactiver")
+
+
+def active_ouverts(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
+    """Réactivation : on rouvre ce que la suspension avait fermé."""
+    return _sur_les_ouverts(c, uid, "activer")
+
+
+def retire_ouverts(c: sqlite3.Connection, uid: str) -> Dict[str, Any]:
+    """Suppression DEMANDÉE des comptes ouverts ici — données comprises."""
+    return _sur_les_ouverts(c, uid, "retirer")

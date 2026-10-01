@@ -156,7 +156,7 @@ def test_admission_par_l_identity_manager(banc, tmp_path, monkeypatch):
     f = store.DEMANDES
     brut = json.loads(f.read_text())
     brut["demandes"].append({"did": "did:sbx:nouveau", "cle_publique": pn, "nom": "Chloé", "appareil": "iPad",
-                             "etat": "en_attente", "demandee_le": 9, "jtis": []})
+                             "etat": "en_attente", "demandee_le": int(__import__("time").time()), "jtis": []})
     f.write_text(json.dumps(brut))
     faux = types.ModuleType("faux_acces_main")
 
@@ -337,7 +337,7 @@ def test_admission_rattachee_a_une_personne_existante(banc, monkeypatch):
     f = store.DEMANDES
     brut = json.loads(f.read_text())
     brut["demandes"].append({"did": "did:sbx:tel", "cle_publique": pn, "nom": "Cèdre", "appareil": "Android",
-                             "etat": "en_attente", "demandee_le": 9, "jtis": []})
+                             "etat": "en_attente", "demandee_le": int(__import__("time").time()), "jtis": []})
     f.write_text(json.dumps(brut))
     faux = types.ModuleType("faux_acces_main")
 

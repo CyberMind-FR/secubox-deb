@@ -140,12 +140,21 @@ def _systeme_admin(sub: str) -> bool:
 
 
 def _rafraichit() -> None:
-    """Un appareil admis entre-temps devient une personne (import idempotent)."""
+    """Un appareil admis entre-temps devient une personne (import idempotent) ;
+    la base suit la file pour les appareils connus, et un appareil admis absent
+    du registre y est réinscrit (#1809)."""
     n = _noeud()
     try:
         store.importe_existant(db(), n.did if n else "did:plc:" + "0" * 32)
+        store.reconcilie(db())
     except Exception as e:
         log.error("sbxid : rafraîchissement : %s", e)
+    acc = _module_acces()
+    if acc is not None and hasattr(acc, "reinscris_manquants"):
+        try:
+            acc.reinscris_manquants()
+        except Exception as e:  # noqa: BLE001
+            log.error("sbxid : réinscription des appareils : %s", e)
 
 
 def moi(request: Request) -> Dict[str, Any]:
@@ -263,27 +272,64 @@ def _module_acces():
     return None
 
 
+def _did_acces(d) -> str:
+    """Le DID sous lequel la FILE D'ACCÈS range cet appareil (did:sbx: dérivé de
+    la clé par le navigateur) — pas forcément celui de la base."""
+    acc = _module_acces()
+    if acc is None:
+        return d["did"]
+    for dem in list(acc.profileur()._demandes.values()):
+        if dem.cle_publique.lower() == (d["public_key"] or "").lower():
+            return dem.did
+    return d["did"]
+
+
+def _coupe_appareil(d, acteur: str, revoquer: bool) -> int:
+    """Coupe les sessions d'un appareil ; le révoque aussi si demandé (#1809).
+    Une seule voie pour la révocation, la suspension et la suppression."""
+    acc = _module_acces()
+    compte_app = "sbx-" + S.empreinte_cle(d["public_key"])[:12]
+    if acc is None:
+        if revoquer:
+            raise HTTPException(503, "secubox-acces indisponible : révocation impossible sans lui")
+        # Suspension sans la file : on coupe au moins les sessions du compte
+        # d'appareil, directement dans le registre.
+        from secubox_core import sessions as _reg
+        cibles = set(_reg.jtis_du_compte(compte_app))
+        if cibles:
+            _reg.muter(lambda rows: [r for r in rows if r.get("id") not in cibles])
+        return len(cibles)
+    from secubox_core import appareils as _app
+    did_a = _did_acces(d)
+    avant = acc.profileur().demande_de(did_a)
+    jtis = list(avant.jtis) if avant else []
+    compte = (avant.compte or compte_app) if avant else compte_app
+    if revoquer:
+        if avant and avant.etat == "acceptee":
+            acc.profileur().revoque(did_a, par=acteur)
+        _app.revoque(compte_app)
+        now = int(time.time())
+        db().execute("UPDATE sbx_devices SET revoked_at=? WHERE device_uuid=? AND revoked_at IS NULL",
+                     (now, d["device_uuid"]))
+        db().execute("UPDATE sbx_certificates SET revoked_at=? WHERE device_uuid=? AND revoked_at IS NULL",
+                     (now, d["device_uuid"]))
+    # Les jti suivis, ET toutes les sessions du compte d'appareil (un compte
+    # rattaché est celui d'un humain : on ne coupe alors que les jti suivis).
+    from secubox_core import sessions as _reg
+    if compte == compte_app:
+        jtis = sorted(set(jtis) | set(_reg.jtis_du_compte(compte_app)))
+    acc._coupe_sessions(compte, jtis)
+    return len(jtis)
+
+
 @app.post("/appareils/{device_uuid}/revoquer")
 def revoque(device_uuid: str, ctx=Depends(moi)):
     d = _mon_appareil(ctx, device_uuid)
     if d["revoked_at"]:
         return {"ok": True, "deja": True}
-    acc = _module_acces()
-    if acc is None:
-        raise HTTPException(503, "secubox-acces indisponible : révocation impossible sans lui")
-    from secubox_core import appareils as _app
-    avant = acc.profileur().demande_de(d["did"])
-    jtis = list(avant.jtis) if avant else []
-    compte = (avant.compte or ("sbx-" + S.empreinte_cle(d["public_key"])[:12])) if avant else ""
-    if avant:
-        acc.profileur().revoque(d["did"], par=_acteur(ctx))
-    _app.revoque("sbx-" + S.empreinte_cle(d["public_key"])[:12])
-    acc._coupe_sessions(compte, jtis)
-    now = int(time.time())
-    db().execute("UPDATE sbx_devices SET revoked_at=? WHERE device_uuid=?", (now, device_uuid))
-    db().execute("UPDATE sbx_certificates SET revoked_at=? WHERE device_uuid=? AND revoked_at IS NULL", (now, device_uuid))
-    store.journal(db(), _acteur(ctx), "device.revoked", f"{d['device_name']} · {len(jtis)} session(s) coupée(s)")
-    return {"ok": True, "sessions_coupees": len(jtis)}
+    n = _coupe_appareil(d, _acteur(ctx), revoquer=True)
+    store.journal(db(), _acteur(ctx), "device.revoked", f"{d['device_name']} · {n} session(s) coupée(s)")
+    return {"ok": True, "sessions_coupees": n}
 
 
 # ── Certificat à double signature ──────────────────────────────────────────
@@ -576,8 +622,83 @@ def fixe_statut(user_uuid: str, s: Statut, ctx=Depends(exige_admin)):
     if not r.rowcount:
         raise HTTPException(404, "Personne inconnue")
     pseudo = db().execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (user_uuid,)).fetchone()[0]
-    store.journal(db(), _acteur(ctx), "user." + s.status, pseudo)
-    return store.personne(db(), user_uuid)
+    # SUSPENDRE COUPE (#1809) : avant, seul le drapeau changeait — sessions,
+    # appareils et comptes de services continuaient de servir. Les appareils
+    # ne sont PAS révoqués (la réactivation les rend) : la file d'accès refuse
+    # d'ouvrir une session tant que la personne est suspendue.
+    devs = db().execute("SELECT * FROM sbx_devices WHERE user_uuid=? AND revoked_at IS NULL",
+                        (user_uuid,)).fetchall()
+    coupees = 0
+    if s.status == "suspended":
+        for d in devs:
+            coupees += _coupe_appareil(d, _acteur(ctx), revoquer=False)
+        services = comptes.desactive_ouverts(db(), user_uuid)
+    else:
+        services = comptes.active_ouverts(db(), user_uuid)
+    store.journal(db(), _acteur(ctx), "user." + s.status,
+                  f"{pseudo} · {coupees} session(s) coupée(s) · services {sorted(services)}")
+    return {**store.personne(db(), user_uuid), "sessions_coupees": coupees, "services": services}
+
+
+@app.delete("/admin/personnes/{user_uuid}")
+def supprime_personne(user_uuid: str, comptes_services: str = "garder", ctx=Depends(exige_admin)):
+    """SUPPRIMER une personne (#1809) — seulement une fois SUSPENDUE : la
+    suspension est la révocation ; la suppression, l'étape suivante, demandée.
+    Appareils révoqués puis oubliés, rôles, liens, coffre et fiche effacés ;
+    le journal garde une ligne. Les comptes de services ouverts pour elle
+    restent DÉSACTIVÉS, sauf `comptes_services=supprimer` (données comprises)."""
+    if comptes_services not in ("garder", "supprimer"):
+        raise HTTPException(400, "comptes_services : garder | supprimer")
+    if user_uuid == (ctx["user"] or {}).get("user_uuid"):
+        raise HTTPException(409, "Vous ne pouvez pas vous supprimer vous-même")
+    r = db().execute("SELECT pseudo, status FROM sbx_users WHERE user_uuid=?", (user_uuid,)).fetchone()
+    if not r:
+        raise HTTPException(404, "Personne inconnue")
+    if r[1] != "suspended":
+        raise HTTPException(409, "Suspendez d'abord cette personne : la suppression suit la révocation")
+    acteur = _acteur(ctx)
+    acc = _module_acces()
+    devs = db().execute("SELECT * FROM sbx_devices WHERE user_uuid=?", (user_uuid,)).fetchall()
+    coupees = 0
+    for d in devs:
+        coupees += _coupe_appareil(d, acteur, revoquer=True)
+        if acc is not None:
+            acc.profileur().oublie(_did_acces(d), force=True)
+        from secubox_core import appareils as _app
+        _app.oublie("sbx-" + S.empreinte_cle(d["public_key"])[:12])
+    services = comptes.retire_ouverts(db(), user_uuid) if comptes_services == "supprimer" else {}
+    from secubox_core import coffre as _coffre
+    try:
+        _coffre.efface_personne(user_uuid)
+    except OSError as e:
+        log.error("sbxid : coffre de %s : %s", user_uuid, e)
+    pseudo = store.supprime_personne(db(), user_uuid)
+    store.journal(db(), acteur, "user.deleted",
+                  f"{pseudo} · {len(devs)} appareil(s) · {coupees} session(s) coupée(s) · "
+                  f"comptes {comptes_services}{(' ' + str(sorted(services))) if services else ''}")
+    return {"ok": True, "pseudo": pseudo, "appareils": len(devs), "sessions_coupees": coupees,
+            "comptes_services": comptes_services, "services": services}
+
+
+@app.post("/admin/appareils/{device_uuid}/oublier")
+def oublie_appareil(device_uuid: str, ctx=Depends(exige_admin)):
+    """Efface un appareil DÉJÀ RÉVOQUÉ (#1809) : sa ligne, ses certificats, sa
+    demande dans la file et son entrée au registre."""
+    d = db().execute("SELECT * FROM sbx_devices WHERE device_uuid=?", (device_uuid,)).fetchone()
+    if not d:
+        raise HTTPException(404, "Appareil inconnu")
+    if not d["revoked_at"]:
+        raise HTTPException(409, "Révoquez d'abord cet appareil")
+    acc = _module_acces()
+    if acc is not None:
+        acc.profileur().oublie(_did_acces(d), force=True)
+    from secubox_core import appareils as _app
+    _app.oublie("sbx-" + S.empreinte_cle(d["public_key"])[:12])
+    db().execute("DELETE FROM sbx_sessions WHERE device_uuid=?", (device_uuid,))
+    db().execute("DELETE FROM sbx_certificates WHERE device_uuid=?", (device_uuid,))
+    db().execute("DELETE FROM sbx_devices WHERE device_uuid=?", (device_uuid,))
+    store.journal(db(), _acteur(ctx), "device.forgotten", d["device_name"])
+    return {"ok": True}
 
 
 # ── Communautés et autorisations (#1519, Community Refactor P2) ──────────────
@@ -828,10 +949,27 @@ def demandes(ctx=Depends(exige_admin)):
     def emp(cle):
         h = S.empreinte_cle(cle)[:24]
         return " ".join(h[i:i + 4] for i in range(0, 24, 4))
+    # Une demande en attente depuis plus de 14 jours a EXPIRÉ (même règle que la
+    # file) : elle passe dans les closes, qu'on peut oublier (#1809).
+    limite = int(time.time()) - 14 * 24 * 3600
+    def etat(d):
+        e = d.get("etat")
+        return "expiree" if e == "en_attente" and int(d.get("demandee_le") or 0) < limite else e
+    lignes = [d for d in _demandes() if d.get("cle_publique")]
+    revoques = [{"device_uuid": r["device_uuid"], "nom": r["device_name"], "pseudo": r["pseudo"],
+                 "revoque_le": r["revoked_at"]}
+                for r in db().execute("SELECT d.device_uuid, d.device_name, d.revoked_at, u.pseudo"
+                                      " FROM sbx_devices d LEFT JOIN sbx_users u ON u.user_uuid=d.user_uuid"
+                                      " WHERE d.revoked_at IS NOT NULL ORDER BY d.revoked_at DESC")]
     return {"en_attente": [{"did": d.get("did"), "nom": d.get("nom"), "appareil": d.get("appareil"),
                             "message": d.get("message") or "", "email": d.get("email") or "",
                             "demandee_le": d.get("demandee_le"), "empreinte": emp(d["cle_publique"])}
-                           for d in _demandes() if d.get("etat") == "en_attente" and d.get("cle_publique")]}
+                           for d in lignes if etat(d) == "en_attente"],
+            "closes": [{"did": d.get("did"), "nom": d.get("nom"), "appareil": d.get("appareil"),
+                        "etat": etat(d), "le": d.get("traitee_le") or d.get("demandee_le"),
+                        "renouvellements": d.get("renouvellements") or 0}
+                       for d in lignes if etat(d) in ("refusee", "expiree")],
+            "revoques": revoques}
 
 
 class Decision(BaseModel):
@@ -888,6 +1026,18 @@ async def accepte(did: str, dcn: Decision, request: Request, ctx=Depends(exige_a
         S.emet_activite(db(), "user_joined", author=dev["user_uuid"], visibility="node",
                         origin_node=_origine(), context={"via": "invitation"})
     return {"ok": True, "pseudo": pseudo, "roles": roles, "lien": out.get("lien", "")}
+
+
+@app.post("/admin/demandes/{did}/oublier")
+def oublie_demande(did: str, ctx=Depends(exige_admin)):
+    """Efface une demande REFUSÉE ou EXPIRÉE de la file (#1809)."""
+    acc = _module_acces()
+    if acc is None:
+        raise HTTPException(503, "secubox-acces indisponible")
+    if not acc.profileur().oublie(did):
+        raise HTTPException(409, "Seule une demande refusée ou expirée s'oublie")
+    store.journal(db(), _acteur(ctx), "request.forgotten", did[:24])
+    return {"ok": True}
 
 
 @app.post("/admin/demandes/{did}/refuser")

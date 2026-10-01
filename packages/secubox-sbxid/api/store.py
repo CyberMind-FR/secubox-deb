@@ -154,6 +154,66 @@ def importe_existant(c: sqlite3.Connection, home_node: str, demandes: Optional[P
     return {"personnes": apres - avant, "appareils": n_app}
 
 
+def reconcilie(c: sqlite3.Connection, demandes: Optional[Path] = None) -> Dict[str, int]:
+    """La base suit la file d'accès pour les appareils DÉJÀ connus (#1809).
+
+    L'import n'ajoutait que des lignes : refusé ou révoqué dans la file, un
+    appareil restait actif ici ; ré-admis, il gardait son `revoked_at` et
+    entrait sans identité. On aligne l'état de révocation, rien d'autre."""
+    demandes = demandes or DEMANDES
+    try:
+        brut = json.loads(demandes.read_text())
+    except (OSError, ValueError):
+        return {"revoques": 0, "retablis": 0}
+    lignes = brut.get("demandes", []) if isinstance(brut, dict) else brut
+    etat = {}
+    for d in lignes:
+        try:
+            etat[S.did_appareil(d["cle_publique"])] = d.get("etat")
+        except (S.Refus, KeyError, ValueError, TypeError):
+            continue
+    n_rev = n_ret = 0
+    maintenant = int(time.time())
+    for did, revoque in c.execute("SELECT did, revoked_at FROM sbx_devices").fetchall():
+        e = etat.get(did)
+        if e in ("refusee", "expiree") and not revoque:
+            c.execute("UPDATE sbx_devices SET revoked_at=? WHERE did=?", (maintenant, did))
+            n_rev += 1
+        elif e == "acceptee" and revoque:
+            c.execute("UPDATE sbx_devices SET revoked_at=NULL WHERE did=?", (did,))
+            n_ret += 1
+    if n_rev or n_ret:
+        journal(c, "import", "import.reconcilie", f"{n_rev} révoqué(s), {n_ret} rétabli(s)")
+    return {"revoques": n_rev, "retablis": n_ret}
+
+
+def supprime_personne(c: sqlite3.Connection, uid: str) -> str:
+    """Efface une personne et tout ce qui dépend d'elle (#1809). Le journal
+    garde une ligne ; la base, rien d'autre. Rend le pseudo."""
+    r = c.execute("SELECT pseudo FROM sbx_users WHERE user_uuid=?", (uid,)).fetchone()
+    if not r:
+        return ""
+    devs = [x[0] for x in c.execute("SELECT device_uuid FROM sbx_devices WHERE user_uuid=?", (uid,))]
+    ph = ",".join("?" * len(devs))
+    if devs:
+        sess = [x[0] for x in c.execute(f"SELECT session_uuid FROM sbx_sessions WHERE device_uuid IN ({ph})", devs)]
+        if sess:
+            c.execute(f"DELETE FROM sbx_replay WHERE session_uuid IN ({','.join('?' * len(sess))})", sess)
+    c.execute("DELETE FROM sbx_replay WHERE session_uuid IN (SELECT session_uuid FROM sbx_sessions WHERE user_uuid=?)", (uid,))
+    c.execute("DELETE FROM sbx_sessions WHERE user_uuid=?", (uid,))
+    if devs:
+        c.execute(f"DELETE FROM sbx_sessions WHERE device_uuid IN ({ph})", devs)
+        c.execute(f"DELETE FROM sbx_certificates WHERE device_uuid IN ({ph})", devs)
+    c.execute("DELETE FROM sbx_certificates WHERE user_uuid=?", (uid,))
+    c.execute("DELETE FROM sbx_devices WHERE user_uuid=?", (uid,))
+    for t in ("sbx_user_roles", "sbx_preferences", "sbx_app_links", "sbx_subscriptions",
+              "sbx_community_members"):
+        c.execute(f"DELETE FROM {t} WHERE user_uuid=?", (uid,))
+    c.execute("DELETE FROM sbx_grants WHERE subject_kind='user' AND subject_id=?", (uid,))
+    c.execute("DELETE FROM sbx_users WHERE user_uuid=?", (uid,))
+    return r[0]
+
+
 def _handles_bbs(bbs_db: Optional[Path] = None) -> set:
     try:
         b = sqlite3.connect(f"file:{bbs_db or BBS_DB}?mode=ro", uri=True, timeout=2)
