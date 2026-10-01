@@ -497,7 +497,7 @@ var DevStatusWidget = {
         'p2p-core': { name: 'P2P Core', type: 'backend', status: 'beta', packages: ['secubox-p2p', 'luci-app-secubox-p2p'] },
         'gossip': { name: 'Gossip Protocol', type: 'backend', status: 'beta', packages: [] },
         'mesh-dns': { name: 'Mesh DNS', type: 'backend', status: 'beta', packages: ['secubox-app-meshname-dns', 'luci-app-meshname-dns'] },
-        'identity-did': { name: 'Identity DID', type: 'backend', status: 'alpha', packages: ['secubox-identity'] },
+        'identity-did': { name: 'Identity DID', type: 'backend', status: 'alpha', packages: ['secubox-annuaire'] },
         'reputation': { name: 'Reputation System', type: 'backend', status: 'alpha', packages: [] },
         'master-link': { name: 'Master Link', type: 'backend', status: 'production', packages: ['secubox-master-link', 'luci-app-master-link'] },
         'p2p-intel-core': { name: 'P2P Intel Core', type: 'backend', status: 'alpha', packages: ['secubox-p2p-intel'] },

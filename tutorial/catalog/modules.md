@@ -4,7 +4,7 @@
 > Ne pas éditer à la main — corriger la source, le plus souvent
 > `packages/<module>/debian/secubox.yaml`, puis relancer le script.
 
-**173 modules** recensés.
+**172 modules** recensés.
 
 `À documenter` signale une donnée **absente du dépôt**. C'est une tâche,
 pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
@@ -64,7 +64,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-health-doctor` | security | lite | — | 5 | 1 | — | — | — | — |
 | `secubox-hexo` | misc | lite | oui | 32 | — | 1 | — | — | oui |
 | `secubox-hub` | system | all | oui | 54 | 2 | 5 | — | 10 | oui |
-| `secubox-identity` | misc | lite | oui | 21 | — | 1 | — | 3 | oui |
 | `secubox-interceptor` | misc | lite | oui | 23 | — | — | — | — | oui |
 | `secubox-iot-guard` | iot | lite | — | 21 | — | 1 | — | 1 | oui |
 | `secubox-ipblock` | misc | lite | oui | 22 | — | 1 | — | — | oui |
@@ -1038,22 +1037,6 @@ SecuBox Hub — Tableau de bord central
 - **Tests** : 10
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-hub/`
-
-### `secubox-identity`
-
-SecuBox Identity Module
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 21 route(s), socket `/run/secubox/identity.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/identity
-- **CLI** : À documenter
-- **Units systemd** : `secubox-identity.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : 3
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-identity/`
 
 ### `secubox-interceptor`
 

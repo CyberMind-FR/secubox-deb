@@ -57,7 +57,6 @@ MODULE_SOCKETS = {
     "mcp-server": "/run/secubox/mcp-server.sock",
     "dns-guard": "/run/secubox/dns-guard.sock",
     "network-anomaly": "/run/secubox/network-anomaly.sock",
-    "identity": "/run/secubox/identity.sock",
     "system-hub": "/run/secubox/system-hub.sock",
 }
 

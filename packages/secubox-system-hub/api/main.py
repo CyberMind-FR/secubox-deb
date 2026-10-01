@@ -136,7 +136,6 @@ class SystemHub:
         self.secubox_services = [
             "secubox-ai-gateway",
             "secubox-localrecall",
-            "secubox-identity",
             "secubox-master-link",
             "secubox-threat-analyst",
             "secubox-network-anomaly",

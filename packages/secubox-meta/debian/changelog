@@ -1,3 +1,11 @@
+secubox-meta (0.1.13-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-service-identite ne requiert plus secubox-identity, retiré (#1840).
+    Control régénéré depuis arbre.yaml (secubox-openpgp suggéré par le maillage,
+    déjà dans l'arbre).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 15:37:54 +0200
+
 secubox-meta (0.1.12-1~bookworm1) bookworm; urgency=medium
 
   * secubox-service-mesh : secubox-yggdrasil retiré (décommissionné, #1703) ; secubox-voice-moteur et secubox-voicestudio placés dans l'arbre (service Assistant ZIA) — leur absence bloquait gen-meta.
