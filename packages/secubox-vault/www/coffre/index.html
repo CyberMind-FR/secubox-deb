@@ -122,6 +122,7 @@
   <section id="s-annuaire" hidden>
     <h2>Annuaire des clés OpenPGP</h2>
     <p class="note" id="a-moi"></p>
+    <p class="note" id="a-portee"></p>
     <details>
       <summary class="note">Publier une clé publique que j'ai déjà</summary>
       <textarea id="a-coller" placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
@@ -244,10 +245,14 @@
     const c = moi.cle;
     $('a-moi').innerHTML = c
       ? `Publiée : <span class="v">${txt(blocFpr(c.empreinte))}</span><br>` +
-        (c.verifies.length ? `Vérifiée pour ${c.verifies.map(txt).join(', ')} (boîte que la box vous a confiée).` :
+        (c.verifies.length ? `Vérifiée pour ${c.verifies.map(txt).join(', ')} (boîte que la box vous a confiée)` +
+          (moi.wkd_public ? ' — <b>visible publiquement</b> : tout correspondant la trouve par WKD.' : '.') :
           `Aucune adresse vérifiée : ${moi.adresses_confiees.length ? 'la clé ne porte pas ' + moi.adresses_confiees.map(txt).join(', ') : "la box ne vous a pas encore confié de boîte"}.`)
       : 'Vous n\'avez pas publié de clé.' + (moi.adresses_confiees.length ? ' Boîte confiée : ' + moi.adresses_confiees.map(txt).join(', ') + '.' : '');
     $('b-a-retirer').hidden = !c;
+    $('a-portee').textContent = moi.wkd_public
+      ? "Publier rend votre clé publique visible des box liées ET du monde entier (WKD) pour l'adresse que la box vous a confiée. La retirer la retire partout."
+      : "Publier rend votre clé publique visible des personnes de cette box et des box liées. La retirer la retire partout.";
     try {
       const l = (await pgp('/annuaire')).cles || [];
       $('a-liste').innerHTML = l.length ? l.map(e =>

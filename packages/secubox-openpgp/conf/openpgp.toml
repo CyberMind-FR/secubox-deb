@@ -1,0 +1,13 @@
+# SecuBox — OpenPGP de la box (secubox-openpgp)
+#
+# WKD PUBLIC (#1738, #1852). Éteint : l'annuaire des clés personnelles n'est
+# servi qu'aux box liées. Allumé : https://openpgpkey.<domaine>/.well-known/
+# openpgpkey/… sert AU MONDE la clé publique des personnes, pour les seules
+# adresses que la box leur a confiées. Après changement :
+#   dpkg-reconfigure secubox-openpgp   (vhost, route, déclaration HAProxy)
+#   puis le certificat : acme.sh --issue -d openpgpkey.<domaine> -w /usr/share/secubox/www
+#   --keylength ec-256, et le premier PEM dans /data/haproxy/certs (certsctl
+#   le renouvelle ensuite).
+[wkd]
+actif = false
+# domaines = ["exemple.org"]   # sinon : ceux que sert le conteneur `mail`

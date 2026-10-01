@@ -82,7 +82,7 @@ de l'annuaire** (public et indélébile — RGPD), retirable à tout moment.
   ses pairs sur leur écoute `:8799` et n'en garde rien sans signature de la
   clé liée au did, notation `annuaire-cles`, auteur et fraîcheur (±1 h)
   vérifiés. Une rotation ou un retrait y figure (`retirees`).
-- **WKD public : DÉSACTIVÉ par défaut** (décision #1738 — l'annuaire est servi
+- **WKD public : DÉSACTIVÉ par défaut** (conffile `/etc/secubox/openpgp.toml` livré éteint ; gk2 l'a allumé le 2026-10-01 à la demande de l'exploitant ; « Mon coffre » dit à la personne si sa clé devient publique) (décision #1738 — l'annuaire est servi
   aux box liées, pas au monde). Avec `[wkd] actif = true` dans
   `/etc/secubox/openpgp.toml`, le postinst crée `openpgpkey.<domaine>` pour
   chaque domaine **public** que le conteneur `mail` sert (ou `[wkd] domaines`),
