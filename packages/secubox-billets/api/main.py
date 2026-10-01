@@ -14,7 +14,7 @@ from pathlib import Path
 
 import aiosqlite
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -210,8 +210,15 @@ def _poster_for(d: dict) -> str | None:
             continue
         m = _YT_ID.search(u)
         if m:
-            return f"https://i.ytimg.com/vi/{m.group(1)}/hqdefault.jpg"
+            # RELAYÉE PAR LA BOX (#1792), même origine : le navigateur ne
+            # contacte jamais i.ytimg. Chargée en direct, la miniature
+            # disparaissait dès qu'un filtre (protection anti-pistage, liste de
+            # blocage, CSP d'une page hôte) refusait ce domaine de Google.
+            return f"/yt-vignette?v={m.group(1)}"
     return None
+
+
+_YT_VID = re.compile(r"[A-Za-z0-9_-]{11}", re.ASCII)
 
 
 # Auto-catégorisation (fil immersif #1268) : 6 catégories souveraines, assignées
@@ -422,6 +429,36 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         resp.headers["Cache-Control"] = "no-cache"
         return resp
 
+    @app.get("/yt-vignette")
+    async def yt_vignette(v: str = ""):
+        """Miniature YouTube relayée et mise en cache par la box (#1792).
+
+        Seulement pour une vidéo qu'un billet référence : sans cette garde,
+        chaque identifiant inventé ferait télécharger et stocker une image —
+        un moyen de remplir le disque depuis l'extérieur."""
+        if not _YT_VID.fullmatch(v or ""):
+            raise HTTPException(status_code=404)
+        dest = media.media_dir() / "yt" / f"{v}.jpg"
+        if not dest.is_file():
+            async with app.state.conn.execute(
+                    "SELECT 1 FROM billet WHERE instr(coalesce(ref_url, ''), ?) > 0 "
+                    "OR instr(coalesce(embed_url, ''), ?) > 0 LIMIT 1", (v, v)) as cur:
+                if await cur.fetchone() is None:
+                    raise HTTPException(status_code=404)
+            import asyncio
+            from .services import snapshot
+            data = await asyncio.to_thread(
+                snapshot._youtube_thumb_bytes, f"https://youtu.be/{v}",
+                client=None, resolver=app.state.resolver)
+            if not data:
+                raise HTTPException(status_code=404)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_suffix(".part")
+            tmp.write_bytes(data)
+            os.replace(tmp, dest)
+        return FileResponse(dest, media_type="image/jpeg",
+                            headers={"Cache-Control": "public, max-age=604800"})
+
     @app.get("/micro", response_class=HTMLResponse)
     async def micro(request: Request):
         """La carte que Billets sert au Hall (#1261).
@@ -454,6 +491,12 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             # C'est `thumb` qu'on veut, pas `filename` : une carte de 300 px n'a
             # que faire d'un original de 1 024 × 1 536.
             v["vignette"] = f"{base}/media/{img['thumb']}" if (img or {}).get("thumb") else None
+            # Sans image jointe, l'affiche de la carte média (capture locale ou
+            # miniature relayée, #1792) : un billet qui n'est qu'un clip ne
+            # retombe plus sur le dégradé de repli.
+            if not v["vignette"] and v.get("poster"):
+                p = v["poster"]
+                v["vignette"] = f"{base}{p}" if p.startswith("/") else p
         import json as _json
         resp = templates.TemplateResponse(request, "micro.html", {
             "dernier": vues[0] if vues else None,

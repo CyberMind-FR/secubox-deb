@@ -1,3 +1,12 @@
+secubox-bbs (0.37.8-1~bookworm1) bookworm; urgency=medium
+
+  * « À la une » : la carte d'un fil passerelle (clip YouTube…) sans image ni
+    vidéo jointe porte la miniature de son URL, relayée par la box
+    (/yt-vignette, même origine), comme dans le fil principal — elle tombait
+    sur le glyphe de repli (#1792). Test TestCarrouselVignetteDuMediaIntegre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:00:00 +0200
+
 secubox-bbs (0.37.7-1~bookworm1) bookworm; urgency=medium
 
   * Le vhost est activé par le postinst (lien, nginx -t, retour arrière) : il était livré sans l'être, gk2 l'avait par un lien fait à la main et gk3 rendait « Wrong Domain » ; service arrêté = 502 et le Hall garde son repli. (#1727, #1713).

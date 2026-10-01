@@ -253,3 +253,45 @@ func TestNewsroomTamponsTroisEtats(t *testing.T) {
 		t.Errorf("attendu ≥2 tampons « public » (médiathèque + fil public), obtenu %d", n)
 	}
 }
+
+// #1792 : la carte « À la une » d'un fil passerelle (clip YouTube, sans image ni
+// vidéo jointe) porte la miniature relayée de son URL — pas le glyphe de repli.
+func TestCarrouselVignetteDuMediaIntegre(t *testing.T) {
+	fn := template.FuncMap{
+		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets, "glypheSalon": func(string, int) string { return "◆" },
+		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
+		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s },
+		"vignetteVideo": vignetteMediaVideo, "objetMediaURL": func(string) string { return "" },
+	}
+	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html", "templates/dock.html")
+	if err != nil {
+		t.Fatalf("parse : %v", err)
+	}
+	clip := store.Thread{ID: 1126, Title: "Suprême NTM - That's My People", Author: "passerelle", MediaKind: "audio",
+		MediaURL: "https://www.youtube.com/watch?v=zKFqbyDR6M4", Visibility: store.VisPublic, LastPostAt: 1700000000}
+	sans := store.Thread{ID: 7, Title: "Discussion sans média", Author: "gandalf", Visibility: store.VisPublic, LastPostAt: 1700000000}
+	p := page{Titre: "AletheiaVox", Site: "SecuBox", Hote: "gk2", Initiale: "S",
+		News: []NewsItem{{Fil: &clip, Date: clip.LastPostAt}, {Fil: &sans, Date: sans.LastPostAt}}}
+	var buf bytes.Buffer
+	if err := tpl.ExecuteTemplate(&buf, "newsroom", p); err != nil {
+		t.Fatalf("exécution : %v", err)
+	}
+	out := buf.String()
+	i := strings.Index(out, `class="ccard" role="listitem" data-k="podcast" href="/t/1126"`)
+	if i < 0 {
+		t.Fatal("carte du clip absente du carrousel")
+	}
+	carte := out[i : i+400]
+	if !strings.Contains(carte, `<span class="cccover"><img src="/yt-vignette?v=zKFqbyDR6M4"`) {
+		t.Errorf("carte du clip sans miniature relayée :\n%s", carte)
+	}
+	if strings.Contains(carte, "cccover ph") {
+		t.Error("carte du clip retombée sur le glyphe de repli")
+	}
+	// Un fil SANS média garde sa mosaïque : la nouvelle branche ne l'attrape pas.
+	j := strings.Index(out, `href="/t/7"`)
+	if j < 0 || !strings.Contains(out[j:j+200], "cccover ph") {
+		t.Error("fil sans média : mosaïque de repli perdue")
+	}
+}
+

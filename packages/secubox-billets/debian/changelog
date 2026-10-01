@@ -1,3 +1,9 @@
+secubox-billets (0.8.69-1~bookworm1) bookworm; urgency=medium
+
+  * Miniatures YouTube relayées par la box : /yt-vignette?v=<id> sert depuis l'origine de billets (cache média/yt), seulement pour une vidéo qu'un billet référence. Les cartes et l'affiche ne pointent plus vers i.ytimg, que bloquaient anti-pistage et listes de blocage ; la carte du Hall (/micro) reprend l'affiche à défaut de capture (#1792).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 06:43:56 +0200
+
 secubox-billets (0.8.68-1~bookworm1) bookworm; urgency=medium
 
   * Le vhost écoute aussi 9080, le port par lequel le relais du maillage joint un nœud : billets.gk3, relayé par gk2, tombait sur « Wrong Domain ». Le vhost actif (copie) reçoit la ligne par migration ciblée, sauvegarde et nginx -t. (#1727, #1713).
