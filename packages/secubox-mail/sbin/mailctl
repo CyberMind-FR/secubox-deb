@@ -1177,7 +1177,8 @@ acme_renew() {
     local fqdn="$1"
 
     if command -v certbot >/dev/null 2>&1; then
-        certbot renew --cert-name "$fqdn" --quiet || return 1
+        # secubox-certbot (#1819) démarre certbot même quand une dérive pip casse sa pile.
+        $(command -v secubox-certbot || echo certbot) renew --cert-name "$fqdn" --quiet || return 1
         if [ -d "/etc/letsencrypt/live/$fqdn" ]; then
             cp "/etc/letsencrypt/live/$fqdn/fullchain.pem" "$DATA_PATH/ssl/fullchain.pem" \
                 && cp "/etc/letsencrypt/live/$fqdn/privkey.pem" "$DATA_PATH/ssl/privkey.pem"
@@ -1237,7 +1238,7 @@ cmd_ssl() {
             log "Setting up SSL for $fqdn..."
 
             if command -v certbot >/dev/null 2>&1; then
-                certbot certonly --standalone -d "$fqdn" \
+                $(command -v secubox-certbot || echo certbot) certonly --standalone -d "$fqdn" \
                     --cert-path "$DATA_PATH/ssl/fullchain.pem" \
                     --key-path "$DATA_PATH/ssl/privkey.pem"
             elif command -v acme.sh >/dev/null 2>&1; then
@@ -1259,6 +1260,15 @@ cmd_ssl() {
             fqdn="$(mail_ssl_fqdn)"
             local ssl_dir="$DATA_PATH/ssl"
             mkdir -p "$ssl_dir"
+
+            # RIEN À RENOUVELER (#1819) : ni certificat déployé, ni lignée ACME
+            # pour ce nom ici — une box dont le courriel n'a jamais eu de
+            # certificat (gk3) échouait chaque jour. On le dit, sans échec.
+            if [ ! -f "$ssl_dir/fullchain.pem" ] && [ ! -d "/etc/letsencrypt/live/$fqdn" ] \
+                    && [ ! -d "${ACME_HOME:-/root/.acme.sh}/$fqdn" ]; then
+                log "Aucun certificat à renouveler pour $fqdn — l'obtenir : mailctl ssl setup"
+                return 0
+            fi
 
             # Rollback safety: keep a timestamped copy of the CURRENT cert
             # before touching anything, so a failed renewal never leaves us

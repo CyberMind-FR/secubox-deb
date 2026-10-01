@@ -22,6 +22,10 @@ override_dh_auto_install:
 	# manquait entre acme.sh et les pem servis.
 	install -d debian/secubox-certs/usr/sbin
 	install -m 0755 sbin/certsctl debian/secubox-certs/usr/sbin/certsctl
+	# #1819 : certbot qui démarre malgré la dérive pip, et le minuteur qui l'emploie.
+	install -m 0755 sbin/secubox-certbot debian/secubox-certs/usr/sbin/secubox-certbot
+	install -d debian/secubox-certs/usr/lib/systemd/system/certbot.service.d
+	install -m 0644 systemd/certbot-secubox.conf debian/secubox-certs/usr/lib/systemd/system/certbot.service.d/secubox.conf
 	install -d debian/secubox-certs/usr/lib/systemd/system
 	install -m 0644 debian/secubox-certs-deploy.service debian/secubox-certs/usr/lib/systemd/system/
 	install -m 0644 debian/secubox-certs-deploy.timer debian/secubox-certs/usr/lib/systemd/system/

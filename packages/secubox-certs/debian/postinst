@@ -10,5 +10,12 @@ if [ "$1" = "configure" ]; then
     # tout ce qu'acme.sh a deja renouvele sans avoir jamais pu le livrer.
     systemctl enable --now secubox-certs-deploy.timer || true
 fi
+# #1819 : le renouvellement passe par secubox-certbot ; un échec passé
+# (dérive pip) n'a plus à rester affiché.
+if [ "$1" = configure ]; then
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl reset-failed certbot.service 2>/dev/null || true
+fi
+
 #DEBHELPER#
 exit 0

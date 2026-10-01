@@ -49,6 +49,11 @@ override_dh_auto_install:
 override_dh_installsystemd:
 	# Install the secondary unit manually (dh_installsystemd expects 1 unit/pkg).
 	install -d debian/secubox-toolbox/lib/systemd/system
+	# #1819 : proxy d'égress et tunnel des visiteurs, seulement une fois provisionnés.
+	install -d debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-egress-proxy.service.d
+	install -m 0644 systemd/dropins/egress-provisionne.conf debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-egress-proxy.service.d/secubox-provisionne.conf
+	install -d debian/secubox-toolbox/lib/systemd/system/wg-quick@wg-toolbox.service.d
+	install -m 0644 systemd/dropins/wg-toolbox-provisionne.conf debian/secubox-toolbox/lib/systemd/system/wg-quick@wg-toolbox.service.d/secubox-provisionne.conf
 	# #589 : autolearn bad-tracker learner + hourly timer
 	install -m 0755 sbin/secubox-toolbox-autolearn debian/secubox-toolbox/usr/sbin/
 	install -m 0644 systemd/secubox-toolbox-autolearn.service debian/secubox-toolbox/lib/systemd/system/

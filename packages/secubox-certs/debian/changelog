@@ -1,3 +1,9 @@
+secubox-certs (1.2.6-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-certbot : certbot démarre malgré une dérive pip (cryptography récent dans /usr/local qui casse le pyOpenSSL de Debian) — inchangé quand certbot démarre, sinon relancé sur la pile Debian ; le minuteur certbot passe par lui (#1819).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 08:56:13 +0200
+
 secubox-certs (1.2.5-1~bookworm1) bookworm; urgency=high
 
   * Docstring de la garde admin corrigée (#1753) ; Depends secubox-core

@@ -14,5 +14,13 @@ if [ "$1" = "configure" ]; then
     # L'unite debian/secubox-ad-guard.service subsiste comme reference du
     # mode autonome ; elle n'est deliberement pas installee (#1362).
 fi
+# #1819 : les domaines dont la box elle-même a besoin (db-ip.com pour la base
+# ASN…) restent résolus — la liste est régénérée en arrière-plan, sans bloquer
+# dpkg, seulement si le puits DNS est actif.
+if [ "$1" = configure ] && [ "$(cat /var/lib/secubox/ad-guard/sinkhole.enabled 2>/dev/null)" = 1 ] \
+        && [ -x /usr/sbin/secubox-adblock-sync ] && command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --no-block --collect --quiet /usr/sbin/secubox-adblock-sync sync >/dev/null 2>&1 || true
+fi
+
 #DEBHELPER#
 exit 0
