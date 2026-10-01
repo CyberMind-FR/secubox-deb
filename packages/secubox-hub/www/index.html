@@ -944,7 +944,13 @@
         function exportConfig() { alert('Export started'); }
 
         async function logout() {
-            await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
+            // Termine la session CÔTÉ SERVEUR (#1803) : l'ancien appel visait le
+            // portail, qui gère un autre cookie — la session restait valable.
+            const t = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+            try {
+                await fetch('/api/v1/auth/auth/logout', { method: 'POST', credentials: 'include',
+                    headers: t ? { 'Authorization': 'Bearer ' + t } : {} });
+            } catch (e) { /* hors ligne : on efface quand même côté navigateur */ }
             localStorage.removeItem('secubox_token');
             localStorage.removeItem('sbx_token');
             window.location.href = '/login.html';

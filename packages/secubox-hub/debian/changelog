@@ -1,3 +1,9 @@
+secubox-hub (1.9.25-1~bookworm1) bookworm; urgency=high
+
+  * Bouton de sortie (EXIT) et déconnexion de la console : appellent la vraie déconnexion (session terminée côté serveur) avant d'effacer le navigateur ; l'ancien appel visait le portail, qui gère un autre cookie (#1803).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:37:55 +0200
+
 secubox-hub (1.9.24-1~bookworm1) bookworm; urgency=medium
 
   * health-banner.js 1.4.8 : restaure la 1.4.7 de master que la fusion

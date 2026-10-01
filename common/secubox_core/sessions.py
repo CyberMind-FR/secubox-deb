@@ -26,14 +26,20 @@ Design constraints:
   invalid. The recovery path stays open because `secubox-auth` installs its
   own validator and *creates* sessions: logging in still works even when this
   store cannot be read, and a successful login rewrites the file.
-- **No write path.** This module never touches the file. Exactly one writer.
+- **One write path** (#1803). Several processes rewrite the store (secubox-auth
+  twice — its own socket and the aggregator —, users, system). They all go
+  through `muter()`: read-modify-write under an exclusive lock, written to a
+  temporary file and renamed, so a reader never sees a half-written list and
+  two writers never lose each other's change.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
+import tempfile
 from pathlib import Path
-from typing import Optional, Set, Tuple
+from typing import Callable, List, Optional, Set, Tuple
 
 from .logger import get_logger
 
@@ -119,3 +125,67 @@ def is_valid(jti: Optional[str]) -> bool:
 def count() -> int:
     """Number of live sessions — for status endpoints, never for decisions."""
     return len(_live_ids())
+
+
+def muter(transforme: Callable[[List[dict]], List[dict]],
+          chemin: Optional[os.PathLike] = None) -> List[dict]:
+    """Lecture-modification-écriture VERROUILLÉE et ATOMIQUE du registre (#1803).
+
+    `transforme` reçoit la liste courante et rend la nouvelle. Le verrou est un
+    flock sur un fichier voisin (ouvert en lecture : pas besoin d'y écrire) ;
+    l'écriture passe par un fichier temporaire renommé, avec le mode et le
+    propriétaire de l'ancien. Un registre illisible est traité comme vide —
+    comme le faisaient les écrivains d'avant ; l'ancien format fautif
+    `{"sessions": [...]}` (#1409) est relu, puis réécrit en liste.
+    `chemin` : le registre d'un appelant qui tient le sien (tests, modules).
+    """
+    p = Path(chemin) if chemin is not None else _path()
+    verrou = os.open(str(p) + ".verrou", os.O_RDONLY | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(verrou, fcntl.LOCK_EX)
+        try:
+            rows = json.loads(p.read_text())
+        except (OSError, ValueError):
+            rows = []
+        if isinstance(rows, dict):
+            rows = rows.get("sessions", [])
+        rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+        nouveaux = list(transforme(list(rows)))
+        try:
+            st = p.stat()
+            mode, uid, gid = st.st_mode & 0o777, st.st_uid, st.st_gid
+        except OSError:
+            mode, uid, gid = 0o644, -1, -1
+        fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=".sessions.")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(nouveaux, f)
+            os.chmod(tmp, mode)
+            if uid >= 0:
+                try:
+                    os.chown(tmp, uid, gid)
+                except OSError:
+                    pass
+            os.replace(tmp, p)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    finally:
+        os.close(verrou)
+    invalidate_cache()
+    return nouveaux
+
+
+def jtis_du_compte(username: str) -> List[str]:
+    """Les jti vivants d'un compte — pour couper ses sessions (#1803)."""
+    try:
+        rows = json.loads(_path().read_text())
+    except (OSError, ValueError):
+        return []
+    if not isinstance(rows, list):
+        return []
+    return [str(r.get("id")) for r in rows
+            if isinstance(r, dict) and r.get("username") == username and r.get("id")]

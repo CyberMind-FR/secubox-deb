@@ -1,3 +1,9 @@
+secubox-core (1.5.47-1~bookworm1) bookworm; urgency=high
+
+  * Déconnexion : /auth/logout retire le jti du registre (cookie comme Bearer), plus seulement le cookie du navigateur. sessions.muter() : toute écriture du registre des sessions passe par un verrou et un renommage atomique (deux processus auth, users et system l'écrivent) ; relit l'ancien format {"sessions": [...]} (#1803).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:37:55 +0200
+
 secubox-core (1.5.46-1~bookworm1) bookworm; urgency=high
 
   * secubox-lxcctl (#1785) : seul passage sudo des comptes de service vers
