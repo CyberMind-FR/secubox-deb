@@ -33,7 +33,10 @@ import httpx
 
 import sys
 from secubox_core.auth import require_lecture
-sys.path.insert(0, '/usr/lib/python3/dist-packages')
+# En QUEUE, jamais en tête : devant /usr/local, le websockets 10.4 de Debian
+# masquait celui qu'attend uvicorn ≥ 0.54 → service en boucle (#1796).
+if "/usr/lib/python3/dist-packages" not in sys.path:
+    sys.path.append("/usr/lib/python3/dist-packages")
 try:
     from secubox_core.auth import require_jwt
 except ImportError:

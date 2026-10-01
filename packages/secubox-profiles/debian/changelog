@@ -1,3 +1,15 @@
+secubox-profiles (0.19.13-1~bookworm1) bookworm; urgency=high
+
+  * Chemin Python : les paquets Debian sont ajoutés EN QUEUE s'ils manquent, plus en tête. Devant /usr/local, le websockets 10.4 de Debian masquait celui qu'attend uvicorn ≥ 0.54 (installé par pip) : le service mourait au démarrage (« cannot import name ServerProtocol ») et redémarrait en boucle (#1796).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:06:00 +0200
+
+secubox-profiles (0.19.12-1~bookworm1) bookworm; urgency=medium
+
+  * observe : repli sans privilège sur /sys/fs/cgroup/lxc.payload.<nom> pour l'état d'un conteneur. L'API tourne sous `secubox`, où lxc-ls ne voit aucun conteneur (et échoue sous ProtectSystem=strict) : tout module LXC on-demand était annoncé « asleep » — la carte PeerTube du Hall proposait le réveil d'un PeerTube éveillé. lxc-ls reste la source quand il répond (root) ; hors cgroup v2, rien n'est fabriqué (#1795).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 01 Oct 2026 07:02:13 +0200
+
 secubox-profiles (0.19.11-1~bookworm1) bookworm; urgency=medium
 
   * Politique de cycle de vie : magicmirror et spiderfoot retirés

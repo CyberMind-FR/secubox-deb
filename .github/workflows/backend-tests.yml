@@ -110,6 +110,10 @@ jobs:
           # passage est secubox-lxcctl.
           - suite: depot-sudoers-lxc
             chemin: scripts/tests/test_sudoers_lxc.py
+          # Aucun module ne place les paquets Debian en tête du chemin Python :
+          # uvicorn ≥ 0.54 y trouvait un websockets trop vieux et bouclait (#1796).
+          - suite: depot-syspath-dist-packages
+            chemin: scripts/tests/test_syspath_dist_packages.py
     env:
       # Versions de la box de référence (bookworm + pip dans /usr/local).
       # pytest et pytest-asyncio n'y sont pas installés : outillage CI seul.

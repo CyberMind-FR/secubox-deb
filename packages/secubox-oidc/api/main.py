@@ -26,7 +26,10 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 
-sys.path.insert(0, "/usr/lib/python3/dist-packages")
+# En QUEUE, jamais en tête : devant /usr/local, le websockets 10.4 de Debian
+# masquait celui qu'attend uvicorn ≥ 0.54 → service en boucle (#1796).
+if "/usr/lib/python3/dist-packages" not in sys.path:
+    sys.path.append("/usr/lib/python3/dist-packages")
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
