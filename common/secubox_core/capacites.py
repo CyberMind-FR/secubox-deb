@@ -141,6 +141,12 @@ def personne_du_porteur(payload: Dict[str, Any]) -> Optional[Dict[str, str]]:
     appareil ne retombe jamais sur son compte : un appareil refusé ou révoqué
     reste sans identité."""
     sub = payload.get("sub", "")
+    # UNE SESSION PLAFONNÉE SOUS `user` N'EST JAMAIS UNE PERSONNE (#1809) — le
+    # lien d'entrée à usage unique, un porteur : ni ses capacités, ni l'entrée
+    # sans mot de passe dans ses services.
+    plafond = payload.get("plafond")
+    if plafond and plafond not in ("user", "admin"):
+        return None
     d = _demande_de(sub, payload.get("jti", ""))
     if not SBX_DB.exists():
         return None

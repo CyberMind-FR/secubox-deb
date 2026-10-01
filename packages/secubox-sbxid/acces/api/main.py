@@ -481,14 +481,18 @@ async def session_entree(corps: EntreeIn, req: Request, reponse: Response):
     # LE LIEN PLAFONNE À `guest`, quel que soit le profil inscrit. Un porteur ne
     # doit pas pouvoir ouvrir davantage que la porte d'entrée : monter en
     # privilèges se fait depuis une session déjà prouvée par signature.
-    jwt = create_token(compte, expires_in=SESSION_LIEN_S, jti=jti)
+    # Le plafond est SIGNÉ dans le jeton (#1809) : la promesse « guest » du
+    # commentaire n'était pas tenue — sans lui, le porteur recevait les
+    # capacités et l'entrée sans mot de passe de la personne.
+    jwt = create_token(compte, expires_in=SESSION_LIEN_S, jti=jti, plafond="guest")
     set_session_cookie(reponse, jwt, expires_in=SESSION_LIEN_S, request=req)  # domaine de la box (#1806)
     _emit_session_event("login_success", compte, {
         "jti": jti, "expires_in": SESSION_LIEN_S,
         "ip": _ip(req), "user_agent": (req.headers.get("user-agent") or "")[:300],
         "voie": "acces-lien-unique",
     })
-    profileur().note_session(did)
+    # SUIVIE comme une session signée (#1809) : révoquer l'appareil la coupe.
+    profileur().note_session(did, jti)
     log.info("session ouverte par lien unique : %s (« %s »)", compte, d.nom)
     return {"ok": True, "nom": d.nom, "compte": compte, "profil": "guest"}
 
@@ -532,6 +536,8 @@ async def session_defi(did: str, jeton: str, req: Request):
     d'énumérer, ni de créer quoi que ce soit, et la table de défis est bornée
     par ailleurs.
     """
+    if _bloque_par_sbx(did):
+        raise HTTPException(403, "accès non accordé")
     try:
         return {"defi": portier().defi(did, jeton)}
     except SessionRefusee as e:
@@ -546,6 +552,8 @@ async def session_ouvrir(corps: OuvertureIn, req: Request, reponse: Response):
     le Hall continuait de le voir comme un visiteur : la file savait dire oui,
     personne n'ouvrait la porte.
     """
+    if _bloque_par_sbx(corps.did):
+        raise HTTPException(403, "accès non accordé")
     try:
         d = portier().ouvre(corps.did, corps.jeton, corps.defi, corps.signature)
     except SessionRefusee as e:
@@ -778,6 +786,52 @@ def _profil_du_role(role: str) -> str:
     # Le profil d'un appareil rattaché EST le rôle du compte : le jeton porte
     # le nom du compte, et c'est ce rôle que la box lira partout.
     return "admin" if role == "admin" else "user"
+
+
+SBX_DB = Path("/var/lib/secubox/sbxid/sbx.db")
+
+
+def _bloque_par_sbx(did: str) -> bool:
+    """L'appareil appartient-il à une personne SUSPENDUE, ou a-t-il été révoqué
+    dans le Gestionnaire d'identité ? (#1809) Alors il n'ouvre plus de session,
+    même si la file d'accès le dit admis. Appareil inconnu de la base : rien ne
+    le bloque ici (il n'est pas encore une personne)."""
+    d = profileur().demande_de(did)
+    if not d or not SBX_DB.exists():
+        return False
+    try:
+        from secubox_core import sbxid as _S
+        did_sbx = _S.did_appareil(d.cle_publique)
+    except Exception:  # noqa: BLE001
+        return False
+    import sqlite3
+    try:
+        c = sqlite3.connect(f"file:{SBX_DB}?mode=ro", uri=True, timeout=2)
+    except sqlite3.Error:
+        return False
+    try:
+        r = c.execute("SELECT d.revoked_at, u.status FROM sbx_devices d LEFT JOIN sbx_users u"
+                      " ON u.user_uuid=d.user_uuid WHERE d.did=?", (did_sbx,)).fetchone()
+    except sqlite3.Error:
+        return False
+    finally:
+        c.close()
+    return bool(r and (r[0] or (r[1] and r[1] != "active")))
+
+
+def reinscris_manquants() -> int:
+    """Un appareil ADMIS absent du registre des appareils n'ouvre que des
+    sessions refusées partout (vécu sur gk2) : on le réinscrit (#1809)."""
+    n = 0
+    for d in profileur().acceptees():
+        try:
+            compte = nom_de_compte(d.cle_publique)
+        except Exception:  # noqa: BLE001
+            continue
+        if appareils.get(compte) is None:
+            _provisionne(d.nom, d.profil or "guest", d.did, d.cle_publique)
+            n += 1
+    return n
 
 
 def _coupe_sessions(compte: str, jtis: list) -> None:

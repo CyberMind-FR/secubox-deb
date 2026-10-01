@@ -120,6 +120,7 @@ td.c,th.c{text-align:center}
   <h1>Administration SBX OS</h1>
   <p class="lead">Séparée de l'administration système. Les comptes système n'apparaissent pas ici.</p>
   <h2>Demandes d'accès</h2><div class="card" id="adm-demandes"></div>
+  <h2>Révoqués et refusés</h2><div class="card" id="adm-closes"></div>
   <h2>Personnes</h2>
   <div class="card" style="margin-bottom:10px">
     <form class="form-ligne" id="f-personne" autocomplete="off">
@@ -285,6 +286,7 @@ async function rendAdmin(){
   $('#nav-admin').hidden = false;
   PERS = pers.personnes;
   rendDemandes(dem.en_attente);
+  rendCloses(dem.closes || [], dem.revoques || []);
   const npr = $('#np-role');
   if (!npr.options.length){
     ROLES.roles.filter(r => !r.derive).forEach(r => { const o = document.createElement('option'); o.value = r.id; o.textContent = LIB[r.id]||r.id; npr.appendChild(o); });
@@ -306,7 +308,8 @@ async function rendAdmin(){
       <td style="font-family:var(--mono)">${esc(p.tier)}</td><td class="c">${p.appareils}</td>
       <td><button type="button" data-c="${esc(p.user_uuid)}" aria-expanded="false">Comptes</button></td>
       <td>${ETAT.identite && p.user_uuid===ETAT.identite.user_uuid ? '<span class="chip ok">vous</span>' :
-        `<button type="button" data-s="${esc(p.user_uuid)}" data-v="${p.status==='suspended'?'active':'suspended'}" class="${p.status==='suspended'?'':'danger'}">${p.status==='suspended'?'Réactiver':'Suspendre'}</button>`}</td></tr>`).join('') + '</tbody>';
+        `<button type="button" data-s="${esc(p.user_uuid)}" data-v="${p.status==='suspended'?'active':'suspended'}" class="${p.status==='suspended'?'':'danger'}">${p.status==='suspended'?'Réactiver':'Suspendre'}</button>` +
+        (p.status==='suspended' ? ` <button type="button" class="danger" data-del="${esc(p.user_uuid)}" data-p="${esc(p.pseudo)}">Supprimer…</button>` : '')}</td></tr>`).join('') + '</tbody>';
   t.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = async () => {
     const roles = [...t.querySelectorAll(`input[data-u="${cb.dataset.u}"]:checked`)].map(x => x.dataset.r);
     try { await api('/admin/personnes/'+cb.dataset.u+'/roles', {method:'PUT', body:JSON.stringify({roles})}); toast('Rôles enregistrés'); }
@@ -314,8 +317,29 @@ async function rendAdmin(){
   });
   t.querySelectorAll('[data-c]').forEach(b => b.onclick = () => comptes(b, assign.length + 5));
   t.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => {
-    try { await api('/admin/personnes/'+b.dataset.s+'/statut', {method:'POST', body:JSON.stringify({status:b.dataset.v})}); toast(b.dataset.v==='suspended'?'Personne suspendue':'Personne réactivée'); }
-    catch(e){ toast(e.message); } charge();
+    try {
+      const r = await api('/admin/personnes/'+b.dataset.s+'/statut', {method:'POST', body:JSON.stringify({status:b.dataset.v})});
+      toast(b.dataset.v==='suspended' ? `Personne suspendue · ${r.sessions_coupees||0} session(s) coupée(s)` : 'Personne réactivée');
+    } catch(e){ toast(e.message); } charge();
+  });
+  // SUPPRIMER (#1809) : seulement une personne déjà suspendue. Ses comptes de
+  // services restent désactivés, sauf si l'on coche — et c'est irréversible.
+  t.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    const td = b.parentElement, uid = b.dataset.del;
+    td.innerHTML = `<div style="display:grid;gap:6px;max-width:300px">
+      <span style="color:var(--bad);font-size:12.5px">Supprimer « ${esc(b.dataset.p)} » : appareils, rôles, liens et coffre effacés.</span>
+      <label style="font-size:12.5px"><input type="checkbox" id="del-svc-${esc(uid)}"> supprimer aussi ses comptes de services (courriel, fichiers, vidéos, BBS) — données comprises</label></div>`;
+    const y = btn('Supprimer définitivement', 'danger'), n = btn('Annuler');
+    y.onclick = async () => {
+      y.disabled = n.disabled = true;
+      const svc = td.querySelector('input[type=checkbox]').checked ? 'supprimer' : 'garder';
+      try {
+        const r = await api('/admin/personnes/'+uid+'?comptes_services='+svc, {method:'DELETE'});
+        toast(`${r.pseudo} supprimé·e · ${r.appareils} appareil(s) · comptes ${svc==='supprimer'?'supprimés':'gardés, désactivés'}`);
+      } catch(e){ toast(e.message); }
+      charge();
+    };
+    n.onclick = charge; td.append(y, n);
   });
   $('#audit').innerHTML = jour.evenements.map(e => `<li><time>${quand(e.at)}</time><span class="ev">${esc(e.event)}</span><span>${esc(e.actor)} · ${esc(e.detail||'')}</span></li>`).join('') || '<li>Journal vide.</li>';
   const all = ROLES.capacites, rs = ROLES.roles;
@@ -459,6 +483,29 @@ function rendDemandes(liste){
     });
     a.append(qui, sel, ok, non); box.appendChild(row);
   });
+}
+
+// ── Révoqués et refusés (#1809) : la file ne grossit plus sans fin ──────────
+function rendCloses(closes, revoques){
+  const box = $('#adm-closes'); box.innerHTML = '';
+  if (!closes.length && !revoques.length){ box.innerHTML = '<p style="margin:0;color:var(--muted)">Rien à oublier.</p>'; return; }
+  const ligne = (titre, meta, oublier) => {
+    const row = document.createElement('div'); row.className = 'dev rev';
+    row.innerHTML = `<div><div class="n">${titre}</div><div class="m">${meta}</div></div><div class="act"></div>`;
+    const a = row.querySelector('.act'), b = btn('Oublier');
+    b.onclick = () => confirme(a, 'Oublier définitivement ?', async () => {
+      try { await oublier(); toast('Oublié'); } catch(e){ toast(e.message); }
+      charge();
+    });
+    a.append(b); box.appendChild(row);
+  };
+  revoques.forEach(d => ligne(`${esc(d.nom)} <span class="m">· appareil${d.pseudo ? ' de '+esc(d.pseudo) : ''}</span>`,
+    'révoqué le ' + quand(d.revoque_le),
+    () => api('/admin/appareils/'+d.device_uuid+'/oublier', {method:'POST'})));
+  closes.forEach(d => ligne(`${esc(d.nom)} <span class="m">· ${esc(d.appareil||'')}</span>`,
+    (d.etat==='expiree' ? 'demande expirée' : 'demande refusée') + ' · ' + quand(d.le) +
+    (d.renouvellements ? ` · renouvelée ${d.renouvellements} fois` : ''),
+    () => api('/admin/demandes/'+encodeURIComponent(d.did)+'/oublier', {method:'POST'})));
 }
 
 // ── Nœud & Mesh ──────────────────────────────────────────────────────────

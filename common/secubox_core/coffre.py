@@ -46,6 +46,20 @@ def cle_personne(user_uuid: str) -> Optional[str]:
     return f"p-{u}" if _UUID.match(u) else None
 
 
+def efface_personne(user_uuid: str) -> bool:
+    """Supprime le coffre d'une personne SUPPRIMÉE (#1809) : ses secrets de
+    services n'ont plus de porteur. Rien si le coffre n'existe pas."""
+    import shutil
+    cle = cle_personne(user_uuid)
+    if not cle:
+        return False
+    d = racine() / cle
+    if not d.is_dir() or d.is_symlink():
+        return False
+    shutil.rmtree(d)
+    return True
+
+
 def pose_machine(user_uuid: str, svc: str, compte: str, secret: str) -> bool:
     """Pose l'accès d'une personne à un service, avec le secret tenu par la
     machine. Même format que les accès délégués (svc, qui, compte, secret,

@@ -128,6 +128,20 @@ def revoque(compte: str) -> bool:
     return trouve
 
 
+def oublie(compte: str) -> bool:
+    """EFFACE la ligne d'un appareil (#1809). Geste explicite de
+    l'administrateur, réservé à un appareil DÉJÀ révoqué : `revoque` garde la
+    trace ; « oublier » est l'étape suivante, demandée."""
+    d = _lit()
+    avant = d.get("appareils", [])
+    reste = [a for a in avant if a.get("compte") != compte or a.get("actif")]
+    if len(reste) == len(avant):
+        return False
+    d["appareils"] = reste
+    _ecrit(d)
+    return True
+
+
 def _ecrit(d: Dict[str, Any]) -> None:
     FICHIER.parent.mkdir(parents=True, exist_ok=True)
     # Temporaire DANS le même répertoire : `os.replace` n'est atomique qu'au
