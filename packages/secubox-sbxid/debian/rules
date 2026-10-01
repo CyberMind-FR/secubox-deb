@@ -19,7 +19,7 @@ override_dh_auto_install:
 	install -d debian/secubox-sbxid/usr/lib/secubox/acces/api
 	install -m 644 acces/api/*.py debian/secubox-sbxid/usr/lib/secubox/acces/api/
 	install -d debian/secubox-sbxid/usr/share/secubox/www/acces
-	install -m 644 acces/www/acces/index.html acces/www/acces/micro.html acces/www/acces/appareil.js \
+	install -m 644 acces/www/acces/index.html acces/www/acces/micro.html acces/www/acces/appareil.js acces/www/acces/moi.js \
 		acces/www/acces/maquette.html debian/secubox-sbxid/usr/share/secubox/www/acces/
 	install -d debian/secubox-sbxid/usr/share/secubox/menu.d
 	install -m 644 acces/menu.d/26-acces.json debian/secubox-sbxid/usr/share/secubox/menu.d/
