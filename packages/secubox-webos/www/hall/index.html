@@ -2975,6 +2975,34 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // main (elle reprend là où elle jouait). Le flux ne joue jamais à deux endroits
   // — le viewer devient l'instance unique le temps du zoom.
   var zoomSource=null;
+  // LIEN À PARTAGER (#1836). Quand le viewer montre un LECTEUR de service (radio, #1662),
+  // `courant` est vide : le bouton sortait aussitôt, sans rien copier ni dire. On partage,
+  // dans l'ordre, le MORCEAU annoncé par le lecteur, le média courant, puis l'adresse du
+  // lecteur lui-même (la page publique de la radio). Toujours une URL absolue et
+  // publique, jamais un chemin interne du Hall (#1579).
+  function lienAPartager(){
+    var pl=pisteLecteur();
+    var brut = pl ? pl.url : (courant || '');
+    if(!brut && lecteurId){ var fr=media && media.querySelector && media.querySelector('iframe'); if(fr) brut=fr.src||''; }
+    if(!brut) return '';
+    return (window.SBX_DOMAINE && SBX_DOMAINE.partageable) ? SBX_DOMAINE.partageable(brut) : brut;
+  }
+  // Copie et DIT si elle a eu lieu : un refus (permission, contexte encadré) était avalé et le
+  // bouton s'allumait quand même. Repli : sélection d'un champ temporaire + execCommand.
+  function copierLien(lien){
+    function repli(){
+      try{
+        var t=document.createElement('textarea'); t.value=lien; t.setAttribute('readonly','');
+        t.style.cssText='position:fixed;left:-9999px;top:0'; document.body.appendChild(t); t.select();
+        var ok=document.execCommand && document.execCommand('copy'); document.body.removeChild(t); return !!ok;
+      }catch(e){ return false; }
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(lien).then(function(){ return true; },
+        function(){ return repli(); });
+    }
+    return Promise.resolve(repli());
+  }
   function E(id){ return document.getElementById(id); }
   function dom(){
     if(!ov){ ov=E('viewer-ov'); media=E('viewer-media'); titreEl=E('viewer-titre');
@@ -3299,11 +3327,12 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       favRend();   // le favori rejoint la slice ⭐ aussitot
     });
     E('viewer-share').addEventListener('click',function(){
-      if(!courant) return;
-      // Une URL absolue et publique, jamais le chemin interne du Hall (#1579).
-      var lien = window.SBX_DOMAINE && SBX_DOMAINE.partageable ? SBX_DOMAINE.partageable(courant) : courant;
-      try{ if(navigator.clipboard) navigator.clipboard.writeText(lien); }catch(e){}
-      this.classList.add('on'); var b=this; setTimeout(function(){ b.classList.remove('on'); },900);
+      var b=this, lien=lienAPartager();
+      if(!lien){ b.title='Rien à partager pour le moment'; return; }   // plus de « fait » sans lien (#1836)
+      copierLien(lien).then(function(ok){
+        if(ok){ b.title='Lien copié'; b.classList.add('on'); setTimeout(function(){ b.classList.remove('on'); },900); }
+        else { b.title='Copie refusée — lien affiché'; try{ prompt('Copiez ce lien :', lien); }catch(e){} }
+      });
     });
     E('viewer-cast').addEventListener('click',function(){
       var b=this, pl=pisteLecteur();

@@ -1,3 +1,9 @@
+secubox-webos (1.0.397-1~bookworm1) bookworm; urgency=low
+
+  * Hall, viewer : le bouton Partager du lecteur radio copie enfin un lien (#1836). Avec un lecteur de service, `courant` est vide et le bouton sortait aussitôt, sans rien copier ni dire : il partage désormais le morceau annoncé, sinon le média courant, sinon l'adresse du lecteur (toujours une URL absolue et publique, #1579). Le résultat de la copie est lu : un refus passe par un repli, puis par une boîte affichant le lien ; le bouton ne s'allume plus sans copie. 7 tests (Node, navigateur simulé).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 07:00:00 +0200
+
 secubox-webos (1.0.396-1~bookworm1) bookworm; urgency=low
 
   * Hall : /robots.txt explicite (#1871). Il rendait la page HTML du Hall en 200,
