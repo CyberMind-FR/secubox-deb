@@ -31,9 +31,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Accès</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
   /* ═══════════════════════════════════════════════════════════════════════
      PALETTE À TROIS ÉTATS. Clair par défaut — une réception est un lieu
@@ -111,12 +108,12 @@
                   transform: rotate(25deg); opacity:.5; }
   .brand { display: flex; align-items: center; gap: 12px; }
   .wm { display: flex; flex-direction: column; line-height: 1.05; }
-  .wm b { font-family:"Chivo"; font-weight:900; font-size:1.42rem; letter-spacing:-.02em; }
+  .wm b { font-family:"Chivo", system-ui, sans-serif; font-weight:900; font-size:1.42rem; letter-spacing:-.02em; }
   .wm b i { font-style: normal; color: var(--laiton-ink); }
   .wm span { font-size:.66rem; letter-spacing:.24em; text-transform:uppercase;
              color: var(--faint); font-weight:600; }
   .espace { flex: 1 1 40px; }
-  .maj { font-size:.7rem; color: var(--faint); font-family:"IBM Plex Mono"; }
+  .maj { font-size:.7rem; color: var(--faint); font-family:"IBM Plex Mono", ui-monospace, monospace; }
   .lede { color: var(--muted); font-size:.94rem; max-width: 66ch; margin: 0; text-wrap: pretty; }
   .lede b { color: var(--ink-soft); font-weight: 600; }
 
@@ -129,7 +126,7 @@
   .tuile.k-vert::before  { background:var(--vert); }
   .tuile.k-violet::before{ background:var(--violet); }
   .tuile .lib { font-size:.72rem; color:var(--muted); font-weight:600; }
-  .tuile .val { font-family:"Chivo"; font-size:2.05rem; font-weight:800; line-height:1;
+  .tuile .val { font-family:"Chivo", system-ui, sans-serif; font-size:2.05rem; font-weight:800; line-height:1;
                 letter-spacing:-.03em; font-variant-numeric:tabular-nums; margin-top:10px; }
   .tuile .note { font-size:.68rem; color:var(--faint); margin-top:8px; }
 
@@ -156,8 +153,8 @@
   .inviter img { width:104px; height:104px; flex:0 0 auto; border-radius:8px;
                  background:#fff; padding:5px; image-rendering:pixelated; }
   .inviter .t { display:flex; flex-direction:column; gap:.3rem; min-width:0; }
-  .inviter .h { font-size:.8rem; font-weight:800; font-family:"Chivo"; }
-  .inviter .u { font-size:.72rem; font-family:"IBM Plex Mono"; color:var(--laiton-ink);
+  .inviter .h { font-size:.8rem; font-weight:800; font-family:"Chivo", system-ui, sans-serif; }
+  .inviter .u { font-size:.72rem; font-family:"IBM Plex Mono", ui-monospace, monospace; color:var(--laiton-ink);
                 text-decoration:none; overflow-wrap:anywhere; }
   .inviter .u:hover { text-decoration:underline; }
   .inviter .p { font-size:.68rem; color:var(--faint); margin:0; }
@@ -167,14 +164,14 @@
           background:var(--surface-2); margin-bottom:10px; }
   .bloc:last-child { margin-bottom:0; }
   .qui { display:flex; align-items:baseline; gap:.5rem; flex-wrap:wrap; }
-  .qui .nom { font-family:"Chivo"; font-weight:800; font-size:.95rem; }
+  .qui .nom { font-family:"Chivo", system-ui, sans-serif; font-weight:800; font-size:.95rem; }
   .qui .app { font-size:.72rem; color:var(--muted); }
   .mot { font-size:.8rem; color:var(--ink-soft); font-style:italic; margin:.4rem 0 0; }
 
   /* L'EMPREINTE EST BORNÉE EN LARGEUR, et c'est une correction, pas un détail :
      étirée sur toute la page elle finissait alignée à droite, illisible au
      moment précis où il faut la comparer signe à signe. */
-  .empreinte { font-family:"IBM Plex Mono"; font-variant-numeric:tabular-nums;
+  .empreinte { font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums;
                font-size:.86rem; font-weight:500; letter-spacing:.06em;
                display:block; width:max-content; max-width:100%;
                margin:.6rem auto; padding:.5rem .8rem; border-radius:9px;
@@ -209,7 +206,7 @@
   .compte .lab { font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
   .compte select { font:inherit; font-size:.78rem; padding:.3rem .5rem; border-radius:8px;
     border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:100%; }
-  .compte .lie { font-family:"IBM Plex Mono"; font-size:.76rem; font-weight:600; }
+  .compte .lie { font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.76rem; font-weight:600; }
   .bbs { display:inline-flex; align-items:center; gap:.35rem; font-size:.7rem; font-weight:600;
     border-radius:999px; padding:.15rem .6rem; border:1px solid currentColor; }
   .bbs.ok { color:var(--vert); } .bbs.att { color:var(--ambre); } .bbs.ko { color:var(--rouge); }
@@ -241,9 +238,9 @@
   .ligne:hover { background:var(--surface-2); }
   .ligne .choix { width:1rem; height:1rem; accent-color:var(--laiton); margin:0; }
   .ident { min-width:0; }
-  .ident .nom { font-family:"Chivo"; font-weight:800; font-size:.9rem; }
+  .ident .nom { font-family:"Chivo", system-ui, sans-serif; font-weight:800; font-size:.9rem; }
   .ident .app { font-size:.72rem; color:var(--muted); margin-left:.35rem; }
-  .ident .emp { display:block; font-family:"IBM Plex Mono"; font-size:.66rem; color:var(--faint);
+  .ident .emp { display:block; font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.66rem; color:var(--faint);
                 letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cpt { display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0; }
   .badge { display:inline-flex; align-items:center; gap:.25rem; font-size:.72rem; font-weight:700;
@@ -259,7 +256,7 @@
   .vu { display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
   .vu .quand { font-variant-numeric:tabular-nums; }
   .vu .quand.jamais { color:var(--ambre); font-weight:700; }
-  .vu .ou { display:block; font-family:"IBM Plex Mono"; font-size:.64rem; color:var(--faint); }
+  .vu .ou { display:block; font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.64rem; color:var(--faint); }
   .vu .bbs { font-size:.62rem; padding:.05rem .45rem; }
   .act { display:flex; gap:6px; justify-content:flex-end; }
   .act button { font-size:.7rem; padding:.28rem .6rem; }
@@ -295,7 +292,7 @@
   #moi { display:grid; gap:14px; margin-top:14px; }
   #moi .ligne { grid-template-columns:minmax(0,1fr) auto; }
   #moi .qui { flex-direction:column; align-items:flex-start; gap:4px; }
-  #moi .qui .nom { font-family:"Chivo"; font-weight:800; font-size:.9rem; }
+  #moi .qui .nom { font-family:"Chivo", system-ui, sans-serif; font-weight:800; font-size:.9rem; }
   #moi .qui .sous { margin:0; }
   #moi .liste { display:flex; flex-wrap:wrap; gap:6px; border:0; overflow:visible; }
   #moi .carte > .liste:first-of-type .ligne:first-child { border-top:0; }
@@ -429,7 +426,6 @@ async function api(chemin, options) {
     const j = await r.json().catch(() => ({}));
     throw new Error(j.detail || ('HTTP ' + r.status));
   }
-  return r.json();
   // UNE RÉPONSE QUI N'EST PAS DU JSON N'EST PAS UNE RÉPONSE. Sur le Hall, la
   // surface d'administration n'est délibérément PAS montée : /file y rend 200
   // avec l'index du Hall. On s'en remettait à l'échec de `r.json()` — ça
@@ -735,7 +731,7 @@ function montreLien(r) {
   champ.type = 'text';
   champ.readOnly = true;
   champ.value = r.lien;
-  champ.style.cssText = 'width:100%;font-family:"IBM Plex Mono";font-size:.72rem;'
+  champ.style.cssText = 'width:100%;font-family:"IBM Plex Mono", ui-monospace, monospace;font-size:.72rem;'
     + 'padding:.5rem .65rem;border-radius:9px;border:1px solid var(--line);'
     + 'background:var(--surface-2);color:var(--ink)';
   champ.onclick = () => champ.select();
