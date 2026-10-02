@@ -55,6 +55,12 @@ override_dh_auto_install:
 	install -d debian/secubox-hub/etc/systemd/system/timers.target.wants
 	ln -sf /lib/systemd/system/secubox-nft-cache.timer \
 	       debian/secubox-hub/etc/systemd/system/timers.target.wants/secubox-nft-cache.timer
+	# #1754 — relais de confiance de nginx : adresses propres de la box, engendrées
+	install -m 0755 sbin/secubox-realip debian/secubox-hub/usr/sbin/secubox-realip
+	install -m 0644 debian/secubox-realip.service debian/secubox-hub/lib/systemd/system/
+	install -m 0644 debian/secubox-realip.timer   debian/secubox-hub/lib/systemd/system/
+	ln -sf /lib/systemd/system/secubox-realip.timer \
+	       debian/secubox-hub/etc/systemd/system/timers.target.wants/secubox-realip.timer
 	# #758 — network-stats collector + timer
 	install -m 0755 sbin/secubox-netstats-collect debian/secubox-hub/usr/sbin/secubox-netstats-collect
 	install -m 0644 debian/secubox-netstats.service debian/secubox-hub/lib/systemd/system/

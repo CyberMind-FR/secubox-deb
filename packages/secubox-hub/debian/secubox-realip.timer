@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox — relais de confiance de nginx, relecture des adresses (1 min)
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=secubox-realip.service
+
+[Install]
+WantedBy=timers.target

@@ -39,6 +39,12 @@ TOML
        [ ! -e /etc/nginx/sites-enabled/webui.conf ]; then
       ln -s ../sites-available/webui.conf /etc/nginx/sites-enabled/webui.conf
     fi
+    # #1754 : fichier des relais de confiance AVANT le rechargement ci-dessous, sinon
+    # nginx ne ferait plus confiance à personne (adresse de la box pour tous) jusqu'au
+    # prochain passage du minuteur. Ne recharge pas lui-même ici : le reload qui suit s'en charge.
+    if [ -x /usr/sbin/secubox-realip ]; then
+      SECUBOX_REALIP_NORELOAD=1 /usr/sbin/secubox-realip || true
+    fi
     # `nginx -t` AVANT tout rechargement : une configuration invalide passée à
     # un reload laisse nginx sur l'ancienne sans le dire, et le défaut ne
     # surgit qu'au redémarrage suivant — c'est-à-dire au pire moment.
