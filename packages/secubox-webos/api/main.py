@@ -8,7 +8,7 @@ import json
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter, Depends, Request, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 
 # LE HALL EST LA COUCHE D'USAGER (#1581) : ses routes demandent une session,
@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, Response
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, acces, actions, nc_super, aide, hotes
+from api import registry, flags, cardlets, actions, aide, hotes
 from secubox_core.auth import require_lecture
 
 _cache: dict = {"services": [], "computed_at": None}
@@ -558,6 +558,16 @@ async def services(user=Depends(require_session)):
 # endroit ou elle est prouvee. Sans jeton, pas d'identite, donc rien a voir et
 # rien a demander : la carte affiche « connectez-vous », ce qui est la verite.
 
+_QUI_OK = "abcdefghijklmnopqrstuvwxyz0123456789._-"
+
+
+def _qui_sur(sub: str) -> str:
+    """Un `sub` assaini : il sert de nom de dossier dans le coffre, et un
+    identifiant venu d'un jeton reste un identifiant venu du réseau."""
+    q = "".join(c for c in str(sub or "").lower() if c in _QUI_OK)[:64]
+    return q or "_"
+
+
 def _qui(user) -> str:
     """La clé du coffre : la PERSONNE (#1562), plus l'appareil.
 
@@ -568,7 +578,7 @@ def _qui(user) -> str:
     Au premier passage d'un appareil, son ancien coffre est REPRIS dans celui
     de la personne (déplacé, jamais écrasé)."""
     user = user or {}
-    ancien = acces.qui_sur(user.get("sub"))
+    ancien = _qui_sur(user.get("sub"))
     try:
         from secubox_core.capacites import personne_du_porteur  # noqa: PLC0415
         from secubox_core import coffre  # noqa: PLC0415
@@ -620,7 +630,7 @@ def _etiquette_porteur(user) -> str:
             return str(per["pseudo"])[:60]
     except Exception:  # noqa: BLE001 — une étiquette ne tombe jamais en panne
         pass
-    return _etiquette(acces.qui_sur(user.get("sub")))
+    return _etiquette(_qui_sur(user.get("sub")))
 
 
 # ── ACTIONS DES MODULES (#1314) ────────────────────────────────────────────
@@ -741,116 +751,15 @@ async def frappe_jeton(user=Depends(require_session)):
             "expire_dans": DUREE_JETON}
 
 
-@router.get("/acces/{svc}")
-async def acces_etat(svc: str, user=Depends(require_session)):
-    return acces.etat(_qui(user), svc)
+@router.get("/session")
+async def session_courante(user=Depends(require_session)):
+    """Qui est connecté, et sous quel nom on l'affiche.
 
-
-@router.post("/acces/{svc}/demande")
-async def acces_demande(svc: str, request: Request, user=Depends(require_session)):
-    # L'origine est notee pour que l'operateur sache D'OU vient la demande —
-    # une file qui ne dit pas qui a demande, ni depuis quelle page, ne se
-    # valide pas serieusement.
-    return acces.depose(_qui(user), svc, request.headers.get("referer", ""))
-
-
-@router.get("/acces")
-async def acces_liste(user=Depends(require_session)):
-    """Ce que la console montre : les demandes en attente, et les acces
-    accordes A CETTE PERSONNE. Jamais les secrets — seulement le nom de compte,
-    qui permet de reconnaitre l'identite invoquee sans rien en reveler."""
-    qui = _qui(user)
-    accordes = []
-    for k, v in acces.SERVICES.items():
-        d = acces.secret_de(qui, k) or {}
-        accordes.append({"svc": k, "nom": v["nom"], "hote": v["hote"],
-                         "flux": v["flux"], "acces": bool(d.get("secret")),
-                         "compte": d.get("compte") or "", "voie": d.get("voie") or ""})
-    return {"qui": qui,
-            # L'étiquette est ce qui S'AFFICHE ; `qui` reste ce qui identifie.
-            "etiquette": _etiquette_porteur(user),
-            "demandes": [x for x in acces.demandes() if x.get("qui") == qui],
-            "accordes": accordes}
-
-
-@router.post("/acces/{svc}/valider")
-async def acces_valider(svc: str, request: Request, user=Depends(require_session)):
-    """Demarre le flux de delegation et rend l'URL a ouvrir. Le mot de passe
-    sera tape DANS le service, jamais ici. Le jeton de la personne sert
-    seulement a reveiller le service endormi (#1562)."""
-    a = request.headers.get("authorization", "")
-    return await acces.flux_demarre(_qui(user), svc, a[7:] if a.startswith("Bearer ") else "")
-
-
-@router.post("/acces/{svc}/sonde")
-async def acces_sonde(svc: str, user=Depends(require_session)):
-    return await acces.flux_sonde(_qui(user), svc)
-
-
-@router.get("/acces/{svc}/apercu")
-async def acces_apercu(svc: str, user=Depends(require_session)):
-    """Ce que la carte affiche, lu AU NOM de la personne.
-
-    Le secret ne quitte jamais la box : la carte recoit des titres et des
-    chiffres, jamais la cle qui a permis de les obtenir.
-    """
-    return await acces.apercu(_qui(user), svc)
-
-
-@router.post("/acces/{svc}/manuel")
-async def acces_manuel(svc: str, corps: dict, user=Depends(require_session)):
-    """Identifiant dedie pour les services sans flux de delegation. Route sous
-    jeton : le secret ne transite que vers une page authentifiee."""
-    return acces.pose_manuel(_qui(user), svc, str(corps.get("compte") or ""),
-                             str(corps.get("secret") or ""))
-
-
-@router.delete("/acces/{svc}")
-async def acces_revoque(svc: str, user=Depends(require_session)):
-    return acces.revoque(_qui(user), svc)
-
-
-# ── Nextcloud « Super Cardlet » : lecture + actions AU NOM de la personne ─────
-# Le secret ne quitte jamais la box (nc_super lit acces.secret_de côté serveur).
-# La carte reçoit des titres, des chiffres et le résultat de SES actions.
-
-@router.get("/acces/nextcloud/tableau")
-async def nc_tableau(user=Depends(require_session)):
-    return await nc_super.tableau(_qui(user))
-
-
-@router.get("/acces/nextcloud/fichiers")
-async def nc_fichiers(chemin: str = "/", user=Depends(require_session)):
-    return await nc_super.fichiers(_qui(user), chemin)
-
-
-@router.get("/acces/nextcloud/partages")
-async def nc_partages(user=Depends(require_session)):
-    return await nc_super.partages(_qui(user))
-
-
-@router.get("/acces/nextcloud/agenda")
-async def nc_agenda(user=Depends(require_session)):
-    return await nc_super.agenda(_qui(user))
-
-
-@router.post("/acces/nextcloud/partager")
-async def nc_partager(corps: dict, user=Depends(require_session)):
-    return await nc_super.partager(_qui(user), str(corps.get("chemin") or ""))
-
-
-@router.post("/acces/nextcloud/supprimer")
-async def nc_supprimer(corps: dict, user=Depends(require_session)):
-    return await nc_super.supprimer(_qui(user), str(corps.get("chemin") or ""))
-
-
-@router.post("/acces/nextcloud/televerser")
-async def nc_televerser(chemin: str = Form("/"), fichier: UploadFile = File(...),
-                        user=Depends(require_session)):
-    # Plus de borne de taille : on ne charge PAS le fichier en mémoire, on le
-    # STREAME vers Nextcloud (WebDAV PUT chunké). Le service partagé ne garde
-    # ainsi qu'un tampon d'1 Mo à la fois — un envoi de plusieurs Go passe.
-    return await nc_super.televerser(_qui(user), chemin, fichier.filename or "sans-nom", fichier)
+    Le Hall SONDE sa session ici : une route protégée qui répond 200 est la
+    seule preuve qui vaille. Elle remplace `GET /acces`, qui rendait aussi les
+    accès délégués (retirés, #1857) — l'identité est celle de l'Identity
+    Manager (secubox-sbxid)."""
+    return {"qui": _qui(user), "etiquette": _etiquette_porteur(user)}
 
 
 @router.get("/sbxos/manifeste")

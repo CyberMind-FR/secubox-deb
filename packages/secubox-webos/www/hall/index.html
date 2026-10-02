@@ -1396,7 +1396,7 @@ const FEATURED = [
   // le Hall agrandit telle quelle.
   {id:"mon-coffre", label:"Mon coffre", icon:"🗝️", color:"#6b4a2e", carte:"/coffre/", h:380, auth:true, admin:false},
   {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214, admin:"/droplet/"},
-  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true, admin:"/nextcloud/"},
+  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", auth:true, admin:"/nextcloud/"},
   {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264, admin:"/bbs/"},
   // SBX OS P4 (#1560) : le flux des gestes de la box, filtré pour qui regarde.
   {id:"activite",   label:"Activité",   icon:"✦", color:"#6a4bb8", carte:"/cardlets/activite.html", h:280},
@@ -1418,13 +1418,8 @@ const FEATURED = [
   // montrer à un invité reviendrait à lui présenter une carte vide dont il ne
   // peut rien faire.
   {id:"zigbee",     label:"Zigbee",    icon:"💡", color:"#c8791f", url:"zigbee.gk2.secubox.in", carte:"/cardlets/zigbee.html", h:250, lan:true, auth:true},
-  {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=nextcloud", h:182},
-  // SUPER CARDLET (#1245) : la carte PERSONNELLE du Cloud — fichiers (WebDAV),
-  // quota, activité, partages ET actions (partager/supprimer/envoyer), au nom de
-  // la personne via le broker (le secret ne quitte jamais la box). auth:true —
-  // n'a de sens qu'une fois la session ouverte.
-  {id:"nextcloud-super", label:"Cloud +", icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/nextcloud-super.html", h:340, auth:true, admin:"/nextcloud/"},
-  {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=photoprism", h:182},
+  {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", auth:true},
+  {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in", auth:true},
   {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in", micro:"/micro", h:300, admin:false},
   {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:236},
   // Freebox TV (#1238) : grille des chaînes + lecteur HLS (sas ffmpeg RTSP→HLS
@@ -1466,7 +1461,7 @@ const FEATURED = [
   // origine : la session SBX OS signe ; sinon pseudo de visiteur). Pas de vhost :
   // /mega = la même page agrandie. Le chat de la radio y est centralisé.
   {id:"messagerie", label:"Messagerie", icon:"💬", color:"#0784a8", carte:"/messagerie/", h:340, admin:false},
-  {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mail", h:182},
+  {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", auth:true},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:174},
   // DevWatch (#1370) : suivi de dev GitHub amont. Pas de vhost dédié — le service
@@ -1589,7 +1584,10 @@ const MOCK={services:[
   {id:"toolbox",name:"ToolBoX",category:"wall",icon:"🧰",description:"Boîte à outils réseau",health:{state:"online"},installed:true,active:true},
 ]};
 
-function host(s){ return (s.urls&&(s.urls.wan||s.urls.lan)) || SBX_DOMAINE.hote(s.id+".gk2.secubox.in"); }
+// UN SERVICE SANS ENTRÉE AU REGISTRE (le Coffre) n'a pas de vhost : `s.id` est
+// alors indéfini, et l'on fabriquait « undefined.gk2.secubox.in » — un hôte que
+// sbxwaf refuse en 421. Sans identité de service, l'hôte est celui du Hall.
+function host(s){ return (s.urls&&(s.urls.wan||s.urls.lan)) || (s.id ? SBX_DOMAINE.hote(s.id+".gk2.secubox.in") : location.host); }
 
 function featCardHTML(f,s){
   s=s||{}; const st=(s.health&&s.health.state)||"unknown";
@@ -1623,12 +1621,12 @@ function featCardHTML(f,s){
     // Le chemin peut deja porter une requete (le widget generique prend son
     // service en parametre) : le separateur en depend.
     const sep = u.indexOf('?')>=0 ? '&' : '?';
-    // AUTH RÉELLE (#1237) : les cartes deleguees (Cloud/Photos/Social/Mail)
+    // AUTH RÉELLE (#1237) : les tuiles Cloud/Photos/Mail (auth:true)
     // exigent la session de la box. Marquees data-auth -> masquees pour un
     // invite non connecte (inutile de montrer « Récupérer ma session »).
     // #1240 : une carte peut aussi se declarer `auth:true` (ex. « Qui frappe ? »,
     // donnee de securite reservee a la session).
-    const auth = (f.auth || (f.carte && f.carte.indexOf('delegue')>=0)) ? ' data-auth="1"' : '';
+    const auth = f.auth ? ' data-auth="1"' : '';
     // LAN-only (#1247) : data-lan -> .non-lan la cache pour les clients WAN.
     const lanOnly = f.lan ? ' data-lan="1"' : '';
     return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'" data-host="'+esc(h)+'" data-label="'+esc(f.label)+'"'+auth+lanOnly+'>'
@@ -1871,7 +1869,9 @@ function svcDesc(id){
           // `admin:"/chemin/"` la nomme ; `admin:false` dit qu'il n'y en a pas.
           path:(f&&typeof f.admin==='string')?f.admin:(s.path||('/'+id+'/')),
           sansAdmin:!!(f&&f.admin===false),
-          carte:(f&&f.carte)||null, noVhost:noVhost, mode:(f&&f.mode)||null};
+          carte:(f&&f.carte)||null, noVhost:noVhost, mode:(f&&f.mode)||null,
+          // Vrai vhost : déclaré par l'entrée, ou connu du registre.
+          vhostReel:!!((f&&f.url)||(s.urls&&(s.urls.wan||s.urls.lan)))};
 }
 function modeURL(mode){
   if(!_svc) return 'about:blank';
@@ -1891,7 +1891,10 @@ function modeURL(mode){
   if(mode==='admin') return ADMIN_ORIGINE+_svc.path
     + (_svc.path.indexOf('?')>=0?'&':'?') + 'theme=' + thAdmin;
   const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-  return 'https://'+_svc.url+(_sub||'/')+'?embed=1&theme='+th;
+  // L'ENTRÉE SANS MOT DE PASSE vaut aussi dans le cadre (#1562, #1665) : Nextcloud
+  // et PeerTube ouvrent le compte de la session par /sbx/entrer ; `/` rendait leur
+  // formulaire de connexion.
+  return 'https://'+_svc.url+(_sub||entree(_svc.url))+'?embed=1&theme='+th;
 }
 // L'onglet réel suit le MODE AFFICHÉ. Depuis la console admin d'un module,
 // ⧉ ouvrait https://<module>.gk2… — le vhost public du service — au lieu de
@@ -1920,6 +1923,11 @@ function setMode(mode){
   if(mode==='tab'){ window.open(plainURL(),'_blank','noopener'); return; }
   // Sans console admin, ⚙ n'a rien à ouvrir : on reste sur le service.
   if(mode==='admin' && _svc && _svc.sansAdmin) mode='embed';
+  // UNE ENTRÉE QUI DÉCLARE `mode:"admin"` ET N'A PAS DE VHOST (le Coffre) n'a
+  // rien à embarquer côté service : « embarqué » veut dire sa page d'admin. Sans
+  // cela, le clic de la carte (mode 'embed' explicite) ouvrait https://undefined…
+  // → 421.
+  if(mode==='embed' && _svc && (_svc.mode==='admin' || !_svc.noVhost) && !_svc.vhostReel && !_svc.sansAdmin) mode='admin';
   _mode=mode;
   const f=frameFor(mode), box=document.getElementById('eb-frames');
   [].forEach.call(box.children, c=>{ c.style.display = (c===f)?'block':'none'; });
@@ -2417,7 +2425,6 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
       if(f.dataset.pret!=='1') return;
       try{ f.contentWindow.postMessage({sbx:'relis'}, new URL(f.src).origin); }catch(e){}
     });
-    if(typeof sondeAttentes==='function') sondeAttentes();
   });
 
   // On MARQUE le cadre au chargement, puis on diffuse : c'est le seul moment
@@ -3814,15 +3821,6 @@ addEventListener('message', ev=>{
 
   addEventListener('message', ev=>{
     const d=ev.data;
-    if(!d||d.sbx!=='valider'||!idSur(d.id)) return;
-    const c=document.querySelector('iframe[data-micro="'+d.id+'"]');
-    if(!c||!cadreParmi(ev, [c])) return;
-    window.open('/acces.html?svc='+encodeURIComponent(d.id),
-                'sbx-acces', 'width=560,height=600,noopener');
-  });
-
-  addEventListener('message', ev=>{
-    const d=ev.data;
     if(!d||d.sbx!=='ouvre'||!idSur(d.id)) return;
     const c=document.querySelector('iframe[data-micro="'+d.id+'"], iframe[data-apercu="'+d.id+'"]');
     if(!c||!cadreParmi(ev, [c])) return;
@@ -4194,22 +4192,6 @@ addEventListener('message', ev=>{
       const r = await fetch('/api/v1/waf/cookies', {headers:{'Accept':'application/json'}});
       liste = r.ok ? ((await r.json()).services || []) : [];
     }catch(e){ liste = []; }
-    // LE REGISTRE DIT « OU », LA DELEGATION DIT « SOUS QUEL NOM ». Le pare-feu
-    // voit passer des témoins mais ignore à qui ils appartiennent ; les accès
-    // délégués, eux, connaissent le compte. On croise les deux par l'hôte —
-    // c'est la seule clé que les deux partagent.
-    try{
-      const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
-      const r2 = await fetch('/api/v1/webos/acces', {headers: j
-        ? {'Accept':'application/json','Authorization':'Bearer '+j}
-        : {'Accept':'application/json'}});
-      if(r2.ok){
-        const d = await r2.json();
-        const par = {};
-        (d.accordes||[]).forEach(a=>{ if(a.acces && a.compte) par[a.hote]=a.compte; });
-        liste.forEach(s=>{ if(par[s.vhost]) s.compte = par[s.vhost]; });
-      }
-    }catch(e){ /* pas connecte : on garde ce que le registre sait */ }
     _identVues = liste;
     rendIdentites(_identVues);
   }
@@ -4244,7 +4226,7 @@ addEventListener('message', ev=>{
     try{
       const lire = function(){
         const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
-        return fetch('/api/v1/webos/acces', {headers: j
+        return fetch('/api/v1/webos/session', {headers: j
           ? {'Accept':'application/json','Authorization':'Bearer '+j}
           : {'Accept':'application/json'}});
       };
@@ -4383,34 +4365,7 @@ addEventListener('message', ev=>{
     window.majReveils=majReveils;   // rappelable après un (re)rendu de la grille
   })();
 
-  // UNE VALIDATION QUI ATTEND DOIT SE VOIR (#1297). Sans marque, la demande
-  // deposee par une carte dort dans une file que personne n'ouvre. La pastille
-  // se pose sur l'avatar — le seul endroit toujours visible — et ne dit qu'une
-  // chose : il y a quelque chose a decider.
-  async function sondeAttentes(){
-    let n = 0;
-    try{
-      const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
-      const r = await fetch('/api/v1/webos/acces', {headers: j
-        ? {'Accept':'application/json','Authorization':'Bearer '+j}
-        : {'Accept':'application/json'}});
-      if(r.ok) n = ((await r.json()).demandes || []).length;
-    }catch(e){ n = 0; }
-    const w = document.getElementById('who');
-    if(!w) return;
-    let p = w.querySelector('.who-att');
-    if(!n){ if(p) p.remove(); return; }
-    if(!p){
-      p = document.createElement('span');
-      p.className = 'who-att';
-      p.title = 'Des accès attendent votre validation';
-      w.appendChild(p);
-    }
-    p.textContent = n;
-  }
-  sondeAttentes();
   // Une demande vient d'une carte, donc d'un geste : inutile de sonder souvent.
-  setInterval(sondeAttentes, 120000);
 
   document.getElementById('who-session').addEventListener('click', ()=>{
     if(!SBX_DOM){
@@ -4443,7 +4398,7 @@ addEventListener('message', ev=>{
     // Cadre du Hall, même origine : la page d'accès n'est pas un service, on
     // la pose donc directement plutôt que de passer par openService().
     // ACCÈS, L'ÉCRAN UNIQUE (#1829) : « Moi » y regroupe appareils, services
-    // (« Gérer mes accès aux services » mène aux accès délégués) et
+    // (les comptes liés) et
     // « Administrer la box ».
     const box=document.getElementById('eb-frames');
     if(box && typeof showView==='function'){

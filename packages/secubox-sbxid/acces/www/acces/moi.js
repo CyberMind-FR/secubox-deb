@@ -124,11 +124,6 @@ export async function rendMoi(conteneur) {
   for (const s of c.services || []) chips.appendChild(el('span', 'badge', s));
   if (!chips.childNodes.length) chips.appendChild(el('p', 'vide', 'Aucun service relié pour l’instant.'));
   sv.appendChild(chips);
-  const gs = el('div', 'gestes');
-  const lien = el('a', null, 'Gérer mes accès aux services');
-  lien.href = '/acces.html';
-  gs.appendChild(lien);
-  sv.appendChild(gs);
   return true;
 }
 

@@ -18,10 +18,10 @@
   c'est-à-dire ceux que n'importe qui peut déjà ouvrir. Ni chemin sur disque,
   ni brouillon, ni dépôt d'origine.
 
-  CLIQUER OUVRE DANS LE SURFER, PAS DANS UN ONGLET. Le Hall relaie
-  `{sbx:'surf', url}` vers son overlay, mégabarre gardée : on visite ses
-  propres sites sans sortir de chez soi. En session, un ⚙ par vignette mène
-  à la vue détail en mode édition.
+  CLIQUER OUVRE LE SITE DANS UN ONGLET (lien direct). Il passait par le Surfer
+  (`{sbx:'surf', url}`), dont le relais refuse justement les adresses de la box :
+  « Cette adresse mène à la box ou à son réseau local ». En session, un ⚙ par
+  vignette mène à la vue détail en mode édition.
 -->
 <html lang="fr">
 <head>
@@ -199,17 +199,18 @@
   var tous = [], liste = [], i = 0, pause = false, battement = null;
   var SUIVANTES = MEGA ? 400 : 10;
 
+  // LIEN DIRECT, PAS LE SURFER. Le relais de Surf refuse les adresses de la box
+  // (« cette adresse mène à la box ou à son réseau local ») — or un site publié ici
+  // est justement servi par la box. On l'ouvre donc dans un onglet, comme n'importe
+  // quel lien.
   function ouvrir(s) {
-    var url = "https://" + s.domain + "/";
-    try { parent.postMessage({ sbx: "surf", url: url }, "*"); }
-    catch (e) { window.open(url, "_blank", "noopener"); }
+    window.open("https://" + s.domain + "/", "_blank", "noopener");
   }
   function reglages(s) {
     // La vue détail EN ÉDITION : `edit=1` déplie le formulaire et y pose le
     // curseur, au lieu de laisser chercher en bas de page.
-    var url = ADMIN + "/metablogizer/site.html?name=" + encodeURIComponent(s.name) + "&edit=1";
-    try { parent.postMessage({ sbx: "surf", url: url }, "*"); }
-    catch (e) { window.open(url, "_blank", "noopener"); }
+    window.open(ADMIN + "/metablogizer/site.html?name=" + encodeURIComponent(s.name) + "&edit=1",
+      "_blank", "noopener");
   }
 
   function pose(n) {

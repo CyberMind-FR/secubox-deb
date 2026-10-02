@@ -1,3 +1,21 @@
+secubox-sbxid (0.4.17-1~bookworm1) bookworm; urgency=medium
+
+  * Accès : plus d'appel à Google Fonts. La CSP du Hall bloquait déjà la
+    feuille de style (style-src), et une box souveraine n'a pas à prévenir un
+    tiers à chaque ouverture ; les familles nues reçoivent un repli générique.
+  * Accès : `api()` contrôlait le type de contenu APRÈS un `return` — code
+    mort, le message « route indisponible sur cet hôte » ne sortait jamais.
+    Le contrôle précède maintenant le `return`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 14:00:00 +0200
+
+secubox-sbxid (0.4.16-1~bookworm1) bookworm; urgency=medium
+
+  * Accès › Moi : le lien « Gérer mes accès aux services » est retiré, l'écran
+    des accès délégués n'existe plus (#1857).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 12:00:00 +0200
+
 secubox-sbxid (0.4.15-1~bookworm1) bookworm; urgency=medium
 
   * Accès › Moi : lien transitoire « Personnes et demandes (administration) »

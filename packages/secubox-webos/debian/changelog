@@ -1,3 +1,47 @@
+secubox-webos (1.0.395-1~bookworm1) bookworm; urgency=low
+
+  * Hall : un service sans vhost réel (servi depuis l'origine du Hall, comme le
+    Coffre) s'« embarque » par sa page d'administration, pas par un nom
+    fabriqué (421).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 17:30:00 +0200
+
+secubox-webos (1.0.394-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : « Mes sites » ouvre un site dans un onglet (lien direct), plus dans
+    le Surfer — dont le relais refuse les adresses de la box (« Cette adresse
+    mène à la box ou à son réseau local »). Même chose pour le ⚙ de réglages.
+  * Hall : le cadre embarqué d'un service passe par son entrée sans mot de
+    passe (/sbx/entrer pour Nextcloud et PeerTube) : `/` rendait le formulaire
+    de connexion de Nextcloud (SSO KO depuis la tuile).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 17:00:00 +0200
+
+secubox-webos (1.0.393-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : la carte Coffre n'ouvre plus « https://undefined.gk2.secubox.in »
+    (421). Une entrée sans entrée au registre n'a pas d'identité de service :
+    `host()` fabriquait « undefined.gk2… », et le clic de la carte (mode
+    « embed » explicite) l'emportait sur le `mode:"admin"` déclaré. Sans vhost
+    réel, « embarqué » ouvre la page d'administration (/vault/), et l'hôte
+    retombe sur celui du Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 13:30:00 +0200
+
+secubox-webos (1.0.392-1~bookworm1) bookworm; urgency=medium
+
+  * Retrait de l'ancienne gestion des accès délégués (#1857) : l'identité
+    SBX OS (secubox-sbxid) porte désormais les liens. Supprimés : /acces.html,
+    les cardlets delegue et nextcloud-super, les routes /api/v1/webos/acces/*,
+    api/acces.py et api/nc_super.py, le groupe « Cloud » du cumul, la pastille
+    des demandes. Les tuiles Cloud, Photos et Mail restent, sans carte.
+  * Nouvelle route GET /api/v1/webos/session : la sonde de session du Hall
+    (elle passait par GET /acces, qui rendait aussi les accès délégués).
+  * Le dossier /etc/secubox/secrets/webos-acces N'EST PAS supprimé : c'est le
+    coffre par personne de l'Identity Manager (secubox_core.coffre).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 12:00:00 +0200
+
 secubox-webos (1.0.391-1~bookworm1) bookworm; urgency=medium
 
   * Carte Coffre : il naît et s'ouvre à la connexion d'un administrateur (#1855).

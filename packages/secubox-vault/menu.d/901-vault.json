@@ -5,5 +5,6 @@
   "path": "/vault/",
   "category": "root",
   "order": 901,
-  "description": "Coffre : secrets scellés, clé maîtresse en mémoire"
+  "description": "Coffre : secrets scellés, clé maîtresse en mémoire",
+  "same_origin": true
 }
