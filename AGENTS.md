@@ -65,10 +65,10 @@ Code partagé : `common/secubox_core/`. Suivi de projet : `.claude/`.
   `gh issue create`, puis `scripts/agent-worktree.sh start --issue <N>` ; commits `type: message (ref #N)` ;
   `scripts/agent-worktree.sh finish`. Le checkout principal reste réservé à `master` et au travail humain.
   Pas de worktree pour une édition triviale d'un fichier de suivi. Détail : `.claude/reference/WORKTREES.md`.
-- **Fermeture d'issue** : règle PROVISOIRE (arbitrage de l'exploitant en attente, #1863) — une issue
-  ne se ferme qu'une fois terminée **et** déployée, par marqueur machine-lisible (`closes #N` dans
-  `HISTORY.md`/`WIP.md`) puis `scripts/sync-issues.sh` ; jamais de fermeture sur texte libre.
-  Détail et divergence : `.claude/reference/WORKFLOW-ISSUES.md`, `.claude/reference/DIVERGENCES-CLAUDE-AGENTS.md`.
+- **Fermeture d'issue** (arbitrée le 2026-10-02) : une issue ne se ferme qu'une fois terminée **et**
+  déployée, par marqueur machine-lisible (`closes #N` dans `HISTORY.md`/`WIP.md`) puis
+  `scripts/sync-issues.sh` ; jamais sur texte libre. Commits : `(ref #N)` en cours, `closes #N`
+  seulement une fois déployé. Détail : `.claude/reference/WORKFLOW-ISSUES.md`.
 - **Suivi** après chaque livraison : entrée datée dans `.claude/HISTORY.md`, `.claude/WIP.md`
   (déplacer le fait, pointer le suivant), `.claude/MIGRATION-MAP.md` si module terminé, README du
   paquet si l'API, un modèle Pydantic, le TOML ou `debian/control` changent.

@@ -26,4 +26,4 @@ Détail extrait **à l'identique** de l'ancien `CLAUDE.md` racine et de l'ancien
 | `COMMANDES.md` | Commandes usuelles (build, déploiement) |
 | `PROJET-STRUCTURE.md` | Ce qu'est le projet, arborescence, priorités de migration |
 | `PROJET-CONNAISSANCES.md` | Ancien `.claude/CLAUDE.md` : stack, conventions, ANSSI, palette, ZKP |
-| `DIVERGENCES-CLAUDE-AGENTS.md` | Contradictions entre les deux anciens fichiers racine (arbitrage en attente) |
+| `DIVERGENCES-CLAUDE-AGENTS.md` | Contradictions entre les deux anciens fichiers racine, arbitrées le 2026-10-02 |
