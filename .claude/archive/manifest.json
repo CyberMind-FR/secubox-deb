@@ -1,0 +1,4519 @@
+{
+ "ref": "8af868a51a9a5aefa577ef047d0fdd104450e122",
+ "fichiers": {
+  "WIP": {
+   "original_sha256": "b188d3d9e5a8734c766171d41eb778c4c45212106adac7f75869f4d51eb4f532",
+   "original_lignes": 9904,
+   "original_octets": 484849,
+   "entete_lignes": 12,
+   "entete_sha256": "a939a01cf2600a075a15709b59870d1c1c33939cc3ba42e6fd296fac0fcb1b19",
+   "archives": {
+    "2026-04": {
+     "sections": [
+      224,
+      225,
+      226,
+      227,
+      228,
+      229,
+      230,
+      231,
+      232
+     ],
+     "lignes": 247,
+     "sha256": "6dd7b67b799f1226cd66fcbb604727233b2515a5c16594292bbfcd432a54afd1"
+    },
+    "2026-05": {
+     "sections": [
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      90,
+      91,
+      233
+     ],
+     "lignes": 973,
+     "sha256": "fc01224ad5f2f34c857d4a1d2c1059d69865a6b920207ab1a33ba1d59c3b596f"
+    },
+    "2026-06": {
+     "sections": [
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63
+     ],
+     "lignes": 1107,
+     "sha256": "f3befbf466ecca5232daa65b285ca6259c5f4c2c97b5989b8fd812c5ba749b3b"
+    },
+    "2026-07": {
+     "sections": [
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      234,
+      235,
+      236,
+      237,
+      238,
+      239,
+      240,
+      241,
+      242,
+      243,
+      244
+     ],
+     "lignes": 444,
+     "sha256": "bb73224a48d84d8563964a2b711477991ac2669e853ea5848e855d1fbdd5ddd3"
+    },
+    "2026-08": {
+     "sections": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      245,
+      246,
+      247,
+      248,
+      249,
+      250,
+      251,
+      252,
+      253,
+      254,
+      255,
+      256,
+      257,
+      258
+     ],
+     "lignes": 872,
+     "sha256": "1dfd6240e8c55aa2aeda6079b5875f0df84ab35219a2416302838b86d14b6997"
+    },
+    "2026-09": {
+     "sections": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      265,
+      266,
+      267,
+      268,
+      269,
+      270,
+      271,
+      272,
+      273,
+      274,
+      275,
+      276,
+      277,
+      278,
+      279,
+      280,
+      281,
+      282
+     ],
+     "lignes": 510,
+     "sha256": "e1fb7261a1f97cd4004e3b33419b67e8794bde7594ea669831793c4e95f1718a"
+    },
+    "sans-date": {
+     "sections": [
+      89,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+      99,
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110,
+      111,
+      112,
+      113,
+      114,
+      115,
+      116,
+      117,
+      118,
+      119,
+      120,
+      121,
+      122,
+      123,
+      124,
+      125,
+      126,
+      127,
+      128,
+      129,
+      130,
+      131,
+      132,
+      133,
+      134,
+      135,
+      136,
+      137,
+      138,
+      139,
+      140,
+      141,
+      142,
+      143,
+      144,
+      145,
+      146,
+      147,
+      148,
+      149,
+      150,
+      151,
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      170,
+      171,
+      172,
+      173,
+      174,
+      175,
+      176,
+      177,
+      178,
+      179,
+      180,
+      181,
+      182,
+      183,
+      184,
+      185,
+      186,
+      187,
+      188,
+      189,
+      190,
+      191,
+      192,
+      193,
+      194,
+      195,
+      196,
+      197,
+      198,
+      199,
+      200,
+      201,
+      202,
+      203,
+      204,
+      205,
+      206,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212,
+      213,
+      214,
+      215,
+      216,
+      217,
+      218,
+      219,
+      220,
+      221,
+      222,
+      223
+     ],
+     "lignes": 5739,
+     "sha256": "1bc975fbb8720ce69aa3c3e1faa470c0f90471c025ed352a4ebc1915b3e601e7"
+    }
+   },
+   "sections": [
+    {
+     "idx": 0,
+     "titre": "## 2026-09-25 — Identité SBX OS : personnes, appareils, comptes liés (#1405)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 24,
+     "sha256": "70d034e3589ae72f3660c26377dd39dd9fe0a1d025a04690b8aa7ffecac59a5b"
+    },
+    {
+     "idx": 1,
+     "titre": "## 2026-09-23 — Relais surf, gabriel-mood, routes déclaratives (#1323, #1328, #1329)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 71,
+     "sha256": "cc6c9d34d104d1aca6d3a8612d3e3f3bbbfc33d7212bec0c7a37715636ccf443"
+    },
+    {
+     "idx": 2,
+     "titre": "## 2026-09-16 — Zigbee dans le Hall, file d'accès, décommissionnements",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 37,
+     "sha256": "6b001466b732497f4dbdb62fb4d6f6a42c594fbf18269c88025c4d78acaeb174"
+    },
+    {
+     "idx": 3,
+     "titre": "## 2026-09-14 — Leurre intuitif, filigrane, crypto normalisée, Lexie",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "7e81f9919a417ac4f55447ee75f1a756bceabe96c8a4ef3862dc66f2c00a9cc4"
+    },
+    {
+     "idx": 4,
+     "titre": "## 2026-09-11 — Mur infini #1268 : 1re tranche (défilement infini billets)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 19,
+     "sha256": "b7911056444b5c451bf40112c3f6e6060150d60b21bb88d8bc0854a4ad35201b"
+    },
+    {
+     "idx": 5,
+     "titre": "## 2026-09-11 — Crypto souveraine : cœur Hermes intégré + audité + benchmarké (#1263, #1272)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 43,
+     "sha256": "36b48203c5bcf419476511b99e3a2cebff451178ddd4620a39944f5b4692a81e"
+    },
+    {
+     "idx": 6,
+     "titre": "## 2026-09-10 — Audit sécurité + garde JWT P0 (#1256, #1257, #1258)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 57,
+     "sha256": "7263d43c080536e8855e0bc032351c0bbc99486c475b3ee97e3937b8689ae250"
+    },
+    {
+     "idx": 7,
+     "titre": "## 2026-09-10 — `haproxyctl generate` réparé (#1254)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 24,
+     "sha256": "6c78f96381c0d968a26e15efd7c57e16106118df8a664354e3231961e6586025"
+    },
+    {
+     "idx": 8,
+     "titre": "## 2026-09-08 — Fuite metrics, incident login, purge authelia, migration mitmproxy→sbxwaf",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 37,
+     "sha256": "2b2477bea5f514401ad164a27a0acfb751ea29242ec678f5a67c6bde0912009b"
+    },
+    {
+     "idx": 9,
+     "titre": "## 2026-09-07 — Freebox TV, ZIA Action Layer, fixes média/CSP (déployé gk2)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 19,
+     "sha256": "ab4ea2f872e042c2eaaecc7061ca134ad4241177f3b464eff0ec2f09b6483e78"
+    },
+    {
+     "idx": 10,
+     "titre": "## 2026-08-31 — DPI vivant, sweep spicy, Lyrion, Agenda NC (déployé gk2)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "8ed605f703a311a50c18038ae376c1c2cf9e48b0418085a826593f2051fe2984"
+    },
+    {
+     "idx": 11,
+     "titre": "## 2026-08-30 — ZIA Hall : préparation de la grosse session d'implémentation (#1245)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 61,
+     "sha256": "5438a7b3f680bf6a2ac4444685c87e45555031d068fb94b951d579cc65b95538"
+    },
+    {
+     "idx": 12,
+     "titre": "## 2026-08-28 — WAF anti-FP, routes, unification média viewer/barre, polish Hall",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 61,
+     "sha256": "6765e8ecbcf45a95f8486ce00f792dcb13e4a47b989f05c2a7340fad11ea6bdc"
+    },
+    {
+     "idx": 13,
+     "titre": "## 2026-08-26 (nuit) — SBXOS : le BiB (Browser-in-Browser) et la matrice surf",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 60,
+     "sha256": "b9115405ba5795163f4096bc82e3a0816e5a03fd0e9ff5d3adb9617b20ca5618"
+    },
+    {
+     "idx": 14,
+     "titre": "## 2026-08-26 (soir) — SBXOS : les cartes AGISSENT, et le guide qui en sort",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 104,
+     "sha256": "e2a8d8ba9684298a64344a22dbe5cdfde180b272300cab14682fb02ba5de0d2d"
+    },
+    {
+     "idx": 15,
+     "titre": "## 2026-08-26 (après-midi) — SBXOS : les services habitent le Hall",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 104,
+     "sha256": "57f450910fd7910601e6c66289c3388f981f8a462f97cf82543196f8fdfc5eaa"
+    },
+    {
+     "idx": 16,
+     "titre": "## 2026-08-22 → 26 — Sortie de CrowdSec, WAF autonome, hors-HTTP, WebOS",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 164,
+     "sha256": "6a8e419a39df77bcdaa558a0bf52b633faf75bd0b1b26c06c9495dbd966b3b38"
+    },
+    {
+     "idx": 17,
+     "titre": "## 2026-08-21 (soir) — #1120 vignettes-snapshot d'URL FERMÉ (e2e), alias domaines",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 19,
+     "sha256": "ee4ddfd79126fd7287a38651d89ce263b9cd92e8023e1aa2c68fc2f0179a1aaf"
+    },
+    {
+     "idx": 18,
+     "titre": "## 2026-08-21 — BBS médias publics + newsroom, carrousel, kbin, nextcloud",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "e74dc3e9b1a6ff7f93bbe6a179c0dc19ae92ea2fa21dbbf5251fca3f6f050145"
+    },
+    {
+     "idx": 19,
+     "titre": "## 2026-08-19 — Réparation, dé-Python, WAF, rapports",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 28,
+     "sha256": "bf31c3f8c6fec50e66da72b96521e432e430221fb5949d4e99c2d0affb320365"
+    },
+    {
+     "idx": 20,
+     "titre": "## 2026-08-16 — Radio, cache du WAF, emulation",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 64,
+     "sha256": "40b1275e3787175b00e3f66aab82ee246047daa1ed3c236988cfade375a302ea"
+    },
+    {
+     "idx": 21,
+     "titre": "## 2026-08-03 → 08-05 — Marathon perf & fiabilité : mur mosaïque, certificats, châssis, playlists",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 62,
+     "sha256": "0060fc329961a692bed96fd6311c2e9a2c5bfca9430d986ad8a4a2193af400fd"
+    },
+    {
+     "idx": 22,
+     "titre": "## 2026-07-30 → 07-31 — Marathon média/perf (release v2.16.0)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 21,
+     "sha256": "113107c2d5c3f89f075d116d062d0c38874f9814f8dcef722fddf902d8dae811"
+    },
+    {
+     "idx": 23,
+     "titre": "## 🚨 2026-07-28 : Incident gk2 — malware C2 + WAN injoignable (bug driver mvpp2 Linux, prouvé par U-Boot)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 21,
+     "sha256": "3dc3e156ae72068a2e8ebbac7a2363adb0a52d462d5362b828e688735a147d4b"
+    },
+    {
+     "idx": 24,
+     "titre": "## ✅ 2026-07-26/27 : Trilogie « auto-centre » — release-rings + assist (fixes) + p2p-ephemeral (déployés gk2)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 22,
+     "sha256": "b77adb174276e264a3ae17d820cc45ba04dda8d56ce493f5e0bcc291b320912e"
+    },
+    {
+     "idx": 25,
+     "titre": "## ✅ 2026-07-25 : R-level MITM par peer wg-toolbox — off/passive/active/reel (PR #901, déployé gk2)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "dfd4e889f5025d48b2213cabcc6a08fb2555f8fc9f94dd976a1b07061a6baca6"
+    },
+    {
+     "idx": 26,
+     "titre": "## ✅ 2026-07-24 : Transparent `.onion` (wg-toolbox+LAN) + WPAD/DHCP autodetect (PR #900, déployé gk2)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "298b6e37189cb7ab209323b9e7e34be8949f79a65f9a778adb6ad6af7260d58a"
+    },
+    {
+     "idx": 27,
+     "titre": "## ✅ 2026-07-23 : Image rpi400 — deps auth, `--kiosk` en CI, postinst mediaflow (branche fix/rpi400-auth-deps-and-kiosk → master)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 17,
+     "sha256": "43e9b119be791d4b2af77237e77f5239bc91de0c38912cdb3ea1f50700767444"
+    },
+    {
+     "idx": 28,
+     "titre": "## ✅ 2026-07-22 : secubox-meshtastic — nœud LoRa multi-grilles + écoute passive (#897, PR #898, v2.15.0)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "55932e0e78b508059fb152d2564f23b2b47f0a990cc342e06c9b6499efaf3a52"
+    },
+    {
+     "idx": 29,
+     "titre": "## ✅ 2026-07-21 : Scale-to-zero services publics (#896) + UX de réveil 2-phases (branche feat/scale-to-zero-public-services → master)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 14,
+     "sha256": "9501b732ee1db1861fd2473a60325a9e6276e8dc82f0291275f30290e5f65c4d"
+    },
+    {
+     "idx": 30,
+     "titre": "## ✅ 2026-07-19 : Profils Phase 2 — `Requires=secubox-core` → `Wants=` (branche feat/profiles-phase2-core-wants)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "9abbbfbfb772937f27d6ebac761142debf74b49d9b0a4d498e24c78aa99715ac"
+    },
+    {
+     "idx": 31,
+     "titre": "## ✅ 2026-07-17 : Sessions auditables + Companion auth/system/metrics + billets hashtags emoji (branche feat/sessions-companion-emoji)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 19,
+     "sha256": "0a593cae2121eaa5833fde97830f33c969fe5f2ff8f67091259d6fc86180b0e8"
+    },
+    {
+     "idx": 32,
+     "titre": "## ✅ 2026-07-17 : Billets — API admin JWT + authoring/upload Companion (branche fix/companion-billets-feed)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 14,
+     "sha256": "83a62ae2576f2c4d8f3d5bca82cf620dd6d301d0e1a2819a1feefe8d10ed48fd"
+    },
+    {
+     "idx": 33,
+     "titre": "## ✅ 2026-07-17 : WAF (webui + autoban→firewall + analyse) + Nextcloud rework (PR #866, #867 mergées)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "349fbf5ad50e4fb831aa8c42f6b1ba1ceb740eff0ee7f1e766f0ea4f9be0a114"
+    },
+    {
+     "idx": 34,
+     "titre": "## ✅ 2026-07-16 : Mail overhaul + fix auth systémique + DPI exfil/regen (PR #865 mergée, #862–#864)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "74d98cb26a11d5f9e8194c802389b592b69216143beb17ae6059b405e8cea9fa"
+    },
+    {
+     "idx": 35,
+     "titre": "## ✅ 2026-07-12 : metalogue — suite OSINT Maltego-style en modules LXC (#845)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 17,
+     "sha256": "63cb003aaa6e6986f0fd85e60cd77930bf55d8d9268b07a476ea57059eccd200"
+    },
+    {
+     "idx": 36,
+     "titre": "## ✅ 2026-07-10 : WireGuard — refonte WebUI + fix avalanche perf + purge peers (secubox-wireguard 1.0.3)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 17,
+     "sha256": "592a5893bd300f49ab96a05459a2e5198b73261dbba07ed731ea06a0198a6bec"
+    },
+    {
+     "idx": 37,
+     "titre": "## ✅ 2026-07-06 → 07-07 : Sentinel — moteur de menaces, activation, 3 surfaces + C2 auto-learn (#821 #823–#828)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "228c6066b0db674c3291e56f9056fb411b4f099db0e5968bd8f8f2fb4783433f"
+    },
+    {
+     "idx": 38,
+     "titre": "## ✅ 2026-07-03 → 07-04 : ToolBox — rapport vie privée fidèle + media types + fiche de personnage (#785 #790 #792)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "1e25d344c2c6ccf265a62284494fc05b12779b6cec5604f746de3df3746beb54"
+    },
+    {
+     "idx": 39,
+     "titre": "## ✅ 2026-07-04 : Zigbee WebSocket (#796 · PR #805) + PeerTube admin ops (#798 · PR #800/#804)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 34,
+     "sha256": "1348224f3f50267dacfa6d004d42f5bf113c49ec861cc56f47b2ff3dedfcd5e0"
+    },
+    {
+     "idx": 40,
+     "titre": "## ✅ 2026-07-02 : P2P évolutions — DHT + Federation + Master-link LIVE sur le mesh 3 nœuds (#774 · PR #775)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 39,
+     "sha256": "bc09eca18a113262a6409a3bea90104931bad84aa034e418d566e34d02b509b5"
+    },
+    {
+     "idx": 41,
+     "titre": "## ✅ 2026-06-30 → 07-01 : Substrat de confiance Gondwana — fédération + registry + macros (#766 #769 #771)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 37,
+     "sha256": "00f581759b6aed433e7a63d0cd7b8c4daeb11f35b5ed68115999166ee8a6dbb3"
+    },
+    {
+     "idx": 42,
+     "titre": "## ✅ 2026-06-27 : c3box → SecuBox Debian — première install réussie · netboot prouvé (#748 #737)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "8434078119a78cece111f33024c23f7bd308256dd3dac7a41699e794a369a8e9"
+    },
+    {
+     "idx": 43,
+     "titre": "## 🗂️ 2026-06-22 : triage issues (30 ouvertes → revue obsolètes)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 53,
+     "sha256": "ad3428d2e01dac494d7945c2bad9876a50ec278560fd6c7dce2a701c75536a75"
+    },
+    {
+     "idx": 44,
+     "titre": "## ✅ 2026-06-22 : DPI exfil + Netrunner report + sbxmitm fixes (tous mergés, live gk2)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "d4d6d6017e70ec3a2c30eb175fc467fda475bcf50c2575ddcf02204c64f007b5"
+    },
+    {
+     "idx": 45,
+     "titre": "## 🔄 2026-06-19 : kbin Tor egress (#683) — ToolBoX 2.7.1, implémenté DARK",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 7,
+     "sha256": "16c0edabf9c976ef378f1573c19ca6ed6352c3dd49c33572585938bedd3dfb94"
+    },
+    {
+     "idx": 46,
+     "titre": "## 🔄 2026-06-19 : kbin milestone — ToolBoX 2.7.0 + chapitre Tor (plan)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 41,
+     "sha256": "13e75de287490efb8d2b5ed876c68064d3155c335ac8a091d6616ca4c1949c4c"
+    },
+    {
+     "idx": 47,
+     "titre": "## 🔄 2026-06-17/18 : Anti-Track v2 + perf/ops sprint (gk2 live)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 59,
+     "sha256": "77cfc0d17dd4d9191a46384a66f3e324b998fb768cb5f26b102aab40f4853c1b"
+    },
+    {
+     "idx": 48,
+     "titre": "## 🔄 2026-06-14 : ToolBoX privacy/perf sprint — 2.6.36 live (see HISTORY)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "e1ebeaa411c4125e7d3bcc7b45da2f0a337c5e336e9033bc66f1f64ee1ef36a7"
+    },
+    {
+     "idx": 49,
+     "titre": "## 🔄 2026-06-13 : Browser extension — emancipate cartographie live (#532)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 33,
+     "sha256": "a94f855631ead1e257a0bc1da1b419d3647b5ec289869de0c54e80df4f8c1ef2"
+    },
+    {
+     "idx": 50,
+     "titre": "## 🔄 2026-06-13 : Android ToolBox app — serve + root-mode silent onboarding (#531/#536/#538)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "d0a7012742c3f82dc34523a143f2406dd309eb6a6040cb97c5630f10f73bab80"
+    },
+    {
+     "idx": 51,
+     "titre": "## 🔄 2026-06-12 : Admin WireGuard tunnel + SSH hardening (ref #529)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "02b0bc080cc62fabe0091c38347761f9ca6020ce722c25d3933d77953b40e20a"
+    },
+    {
+     "idx": 52,
+     "titre": "## 🔄 2026-06-11 : Phase 12.C + Phase 13 COMPLETE (protection enforcement plane) — v2.13.16→19 (ref #518-#528)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 47,
+     "sha256": "d1340d18b944f5209cc7f8eb461a2ee5838bd0b08b0b5b3895aef8fb4d54eeb8"
+    },
+    {
+     "idx": 53,
+     "titre": "## 🔄 2026-06-10 (soir) : Phase 11 COMPLETE + Phase 12.A/B + toolbox tabs — merged v2.13.15 (ref #502-#516)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 61,
+     "sha256": "8966815aa4af8fe7a9693afedae5bfd5e93cf58f60d9a3380155690fe7ff6d16"
+    },
+    {
+     "idx": 54,
+     "titre": "## 🔄 2026-06-10 : Phase 11 social mapping (A+B) + system triage round (ref #502-#509)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 67,
+     "sha256": "88220484eae353ca6b7451fb5cfe3b0a7cde46add72a24d3f665e9a4202f85f9"
+    },
+    {
+     "idx": 55,
+     "titre": "## 🔄 2026-06-09 : Phase 10 — Banner injection perf quick wins + postinst regression fix (ref #501)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 98,
+     "sha256": "c20166efc4c281086ae68e8062293d4191143a28b44ce8e4be70ebf589970af6"
+    },
+    {
+     "idx": 56,
+     "titre": "## 🔄 2026-06-08 : Phase 7.E.x — LXC hygiene + auth recovery + Phase 8 plan (ref #498, #500)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 81,
+     "sha256": "b09a5c2e5dccc6067e5bffa7fc552c909f5edc4217eef50bab44646f5dbd231b"
+    },
+    {
+     "idx": 57,
+     "titre": "## 🔄 2026-06-07 : Phase 7 reboot follow-up sprint SHIPPED (ref #498)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 96,
+     "sha256": "627beb5ac16335cf062cd805d7688616d8de5422fcd0287815369ce0879a9355"
+    },
+    {
+     "idx": 58,
+     "titre": "## 🔄 2026-06-06 : Phase 7.D ASGI consolidation SHIPPED (ref #498)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 60,
+     "sha256": "87d72858a2a03a1139733561b13dddb40a56de83a2fe2480efc97812669e7f30"
+    },
+    {
+     "idx": 59,
+     "titre": "## 🔄 2026-06-05 : Phase 7.A.2 + 7.B WAF dashboard + rate-limit + honeypot SHIPPED (ref #498)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 37,
+     "sha256": "e0e1a06cf5188c7bb4c2243458462b5bc1ecc3067c4cf7cf37dfba087522d6a1"
+    },
+    {
+     "idx": 60,
+     "titre": "## 🔄 2026-06-05 : Phase 7.A WAF active enforcement SHIPPED (ref #498)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "554a7f7958b46286536d1093a83763ad6f8909105716a5bc311c86d801961cd6"
+    },
+    {
+     "idx": 61,
+     "titre": "## 🔄 2026-06-05 : Phase 6 R3 WireGuard — MAJOR RELEASE shipped (ref #496)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 57,
+     "sha256": "e0933e97ec03d4b26b3bfcf1b6327294f7930cd404e4149ab9b5291fe6ee5bb5"
+    },
+    {
+     "idx": 62,
+     "titre": "## 🔄 2026-06-02 : Pi 400 boot to kiosk + login working",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 56,
+     "sha256": "5fab4d1523f9a326d94993f13a64fcdfef08da89edb9afab7047e5cc243c08f3"
+    },
+    {
+     "idx": 63,
+     "titre": "## 🔄 2026-06-01 : kiosk-on-rpi400 actually ships (#436 closed)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 44,
+     "sha256": "ca962fc756ff8d9397b221eede6aa2a0f5a4af38245992e7d1bdb458d677021a"
+    },
+    {
+     "idx": 64,
+     "titre": "## 🔄 2026-05-31 : v2.13.3 → v2.13.4 cross-build green + media + 4 issues filées",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 61,
+     "sha256": "46381b110ae97cf7bbb6c7ba5b506d6799b815c4a2518b5c3e620f0611bc1073"
+    },
+    {
+     "idx": 65,
+     "titre": "## 🔄 2026-05-30 : release polish (v2.13.1 → v2.13.2) + media livré",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 46,
+     "sha256": "500bc2b83fde30244da6c6e2a29117609b4ea241192a1682566183c3151c61cd"
+    },
+    {
+     "idx": 66,
+     "titre": "## 🔄 2026-05-29: live ops + backlog sweep + v2.13.0 release",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "2b63a4c1719757b765679f078727b42e1000a222854c9b95815337bb48ce8b83"
+    },
+    {
+     "idx": 67,
+     "titre": "## 🔄 2026-05-27 (evening): peertube + photoprism + mail + WAF unblocking",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 59,
+     "sha256": "9a46b800db2a9d17e0322e90d20f76e96f0a16aa8461dfb548eee9ba7deb86f6"
+    },
+    {
+     "idx": 68,
+     "titre": "## 🔄 2026-05-27 (morning): Consolidation pass — audit + 2 real merges + 5 naming sweeps + gk2 deploy",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 55,
+     "sha256": "0513746c84699e1268519a7901dbdaa5208495d880ed1e540c44ea5535a5a830"
+    },
+    {
+     "idx": 69,
+     "titre": "## 🔄 2026-05-26: SOC dashboard fixes — firewall_summary + WAF backend warm cache",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 108,
+     "sha256": "0893073d7be0b7bb1a769a10548030d2afabb4d1cbaa83f2f365fbd742758009"
+    },
+    {
+     "idx": 70,
+     "titre": "## ✅ 2026-05-24: Module dual-vhost MUST pattern + Lyrion/Zigbee/ex-SSO alignment (master 54da8a7c, b1718788, d4adc1a3)",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 39,
+     "sha256": "7fca6a7860633ad399fdd0f6a0614fbceccdadabaf8cd595e8e7563eea8422b0"
+    },
+    {
+     "idx": 71,
+     "titre": "## ✅ 2026-05-21: Ex-SSO IdP loop fix end-to-end — multi-cookie + access_control + X-Original-URL + named-location refactor (Issues #272 #273",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "c51205f6cd9fd76503c33ad50556c87b43e9f10ec3b0c3abe8cf04112698c094"
+    },
+    {
+     "idx": 72,
+     "titre": "## 🔄 2026-05-20: deploy grafana/yacy/rustdesk LXC modules on gk2 (192.168.1.200) — install-lxc.sh iterating bug-fixes",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 22,
+     "sha256": "01f1136f80f32f702f55ee159c14db288356e69d8eae421e463a71895e47ae78"
+    },
+    {
+     "idx": 73,
+     "titre": "## 🔄 2026-05-19: bare-metal x86_64 polish — Pi services + X11 drivers (Issue [#226](https://github.com/CyberMind-FR/secubox-deb/issues/226),",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "d8500652489828e8d8591efa145357f2478180cf509afd99c7d034f98357ee0c"
+    },
+    {
+     "idx": 74,
+     "titre": "## ✅ 2026-05-19: v2.10.0 + v2.10.1 — firstboot → image build → web URL → kiosk chain, end-to-end validated",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "f4cdf4c3a032bca0d92cb2ddaa694e492a75f4e6d58e08784d9973daa3d53aec"
+    },
+    {
+     "idx": 75,
+     "titre": "## 🔄 2026-05-18/19: dropletctl static-publisher CLI — port from OpenWrt (Issue [#196](https://github.com/CyberMind-FR/secubox-deb/issues/196",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 44,
+     "sha256": "7738d23e221a73021bc2f6d3b4055d463020816e9d222f83bc6076f21ca9df90"
+    },
+    {
+     "idx": 76,
+     "titre": "## ✅ 2026-05-17: Release v2.9.0 + matrix-cap fix + amd64 VBox tester bundle + README frontend",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "cbbdcfb1347e673578903b04b6a9d176d293797c0ed839593f9a4955b83eef6e"
+    },
+    {
+     "idx": 77,
+     "titre": "## ✅ 2026-05-16/17: eye-remote multi-gadget L3 DHCP — Phase 1 (Issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158), PR [#16",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "8d8de231e590d9ea758f9fbe814c3fe6decf8470a9ce585d6d7aff0c30f2ca40"
+    },
+    {
+     "idx": 78,
+     "titre": "## ✅ 2026-05-16: eye-remote — link-rename collision fix for multi-gadget MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 20,
+     "sha256": "94b044cb10495573a5e0952ff1b22c2014edc8c3a6fb94fffbb1010f9b961077"
+    },
+    {
+     "idx": 79,
+     "titre": "## ✅ 2026-05-17: Cookie audit pipeline DEPLOYED + banner UX cleanup (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156) cl",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 39,
+     "sha256": "330a5b3d50ca21959ade0fb842ecc45a5bac3accc89a80e6f958cf3018017fd3"
+    },
+    {
+     "idx": 80,
+     "titre": "## ✅ 2026-05-15: Mail stack Phase 1 — LXC consolidation (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](htt",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "491393a04d5bd3288ac3787c7a57edf75c8b9c6d675b1534514ffc7ac37fd275"
+    },
+    {
+     "idx": 81,
+     "titre": "## 🔄 2026-05-16: Mail stack Phase 2 — Rspamd migration (Issue [#153](https://github.com/CyberMind-FR/secubox-deb/issues/153), PR [#160](http",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 33,
+     "sha256": "b8f6cabe79a4692b27b2b26d65d77d862a0f698de3e5fe366addeaba12f5176b"
+    },
+    {
+     "idx": 82,
+     "titre": "## ✅ 2026-05-15: remote-ui converged dashboard (Issue [#135](https://github.com/CyberMind-FR/secubox-deb/issues/135), PR [#140](https://gith",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 21,
+     "sha256": "f1e0c348780e14a9281f11029bdf6a28067af144b8f86f85f053d6e8bef2893c"
+    },
+    {
+     "idx": 83,
+     "titre": "## ✅ 2026-05-15: Port `radar_concentric` into `secubox_common` (Issue [#138](https://github.com/CyberMind-FR/secubox-deb/issues/138), PR [#1",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 14,
+     "sha256": "5baff23a9d62bb95c34765e39b10aade2e9368a66e677839c69ba62f49ca7444"
+    },
+    {
+     "idx": 84,
+     "titre": "## ✅ 2026-05-15: Round image cleanup — dead ifupdown + secubox sudo + OTG comment (Issue [#139](https://github.com/CyberMind-FR/secubox-deb/",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "8e53d39b3aa41764135f17f71df15b56eeeee59dbeb1138884104db8aef179ae"
+    },
+    {
+     "idx": 85,
+     "titre": "## 🔄 2026-05-15: CMSD SPDX header rollout (Issue [#81](https://github.com/CyberMind-FR/secubox-deb/issues/81))",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 8,
+     "sha256": "04763547c1c4cd03677fe5b9045be6b7f322039a19eaa8f1efcc8586bea2c871"
+    },
+    {
+     "idx": 86,
+     "titre": "## 🧹 2026-05-15: worktree + local-state housekeeping",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 69,
+     "sha256": "af7b00bb9aa553830115d95665bb4ac7288eb14bb5a8bc905cc48c11883ebccb"
+    },
+    {
+     "idx": 87,
+     "titre": "## ✅ 2026-05-14: remote-ui Phase 3 — Pillow+framebuffer kiosk for Pi 4B/400 (Issue #127, PR #132 MERGED)",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 38,
+     "sha256": "8d3ac22fb5793d969f25b483c860862ba4b825a13c712fb8faabf307ab70a968"
+    },
+    {
+     "idx": 88,
+     "titre": "## ✅ 2026-05-14: remote-ui Phase 1 — extract common/ shared core (Issue #127, PR #130 MERGED)",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 24,
+     "sha256": "a00c85deb0123c822c7173d5be7cc9cc56d366e62d533436efac8303128b22c1"
+    },
+    {
+     "idx": 89,
+     "titre": "## ✅ Session 167: Auth rework — secubox-users + TOTP 2FA (Issue #120, PR TBD)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 20,
+     "sha256": "2dbe841a5b31f3ec8710c036df30fc03e7dd9e7eeea92807fc4785ea2b77fe49"
+    },
+    {
+     "idx": 90,
+     "titre": "## ✅ 2026-05-13: MetaBlogizer deploy webhook (Issue #113, sub-E of #49)",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 20,
+     "sha256": "5fe96cbb049fea17d2099f31e5bab69da6f9f4163f2351d5e6d23faaa30b6c9f"
+    },
+    {
+     "idx": 91,
+     "titre": "## ✅ 2026-05-13: Hub sidebar mobile-mode auto-detect fix (Issue #114, PR #115)",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "bc8f717b30543f7951530461e524d5738bdd0e41a0e68b1a2f3afadb4fe50bb9"
+    },
+    {
+     "idx": 92,
+     "titre": "## ✅ Session 165: MetaBlogizer version dashboard (Issue #103, sub-D of #49)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 20,
+     "sha256": "8387cab5e7e1dac493cfd2aadfff7351a44584ed7ad905db21b6b302b7a1887a"
+    },
+    {
+     "idx": 93,
+     "titre": "## ✅ Session 164: MetaBlogizer site.json schema + version metadata (Issue #101, sub-C of #49)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "f6c6ec5b17503dedc50935f0f515402de3a3383ccab7f4dbf0365f9009cd54a2"
+    },
+    {
+     "idx": 94,
+     "titre": "## ✅ Session 163: Streamlit Gitea version pinning (Issue #95, sub-F of #49)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "02b76d8175efcf00cd2afccc738634da535dafa141b2144f302305bfa6903a58"
+    },
+    {
+     "idx": 95,
+     "titre": "## ✅ Session 160: Health Banner Live Panel (Issue #92)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "0ce84683c826f481163633d6412ac35b8b3d4f4fd9a454bd6bb9a22191a1bc41"
+    },
+    {
+     "idx": 96,
+     "titre": "## ✅ Session 160: secubox apt + clone — validate implementation (Issue #89)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "4ae947f2d6a4a8c4702c8519b731d8033e22ea78b700f13376fe10e3f9f206ea"
+    },
+    {
+     "idx": 97,
+     "titre": "## ✅ Session 159: CMSD-1.0 License Headers — Phase A merged, B/C in review (Issue #81)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 40,
+     "sha256": "c1792f7f6421b70f464ef689097866f8ad04842ccdb9c7bc1c8d43a80b4712b1"
+    },
+    {
+     "idx": 98,
+     "titre": "## ✅ Session 152: APT Public Repo Staging Pipeline (Issue #80)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "0566d7ccaeaf461b2c7e1035f5e2f44b4cc4d01540384b4beddeb6c283ac8077"
+    },
+    {
+     "idx": 99,
+     "titre": "## ✅ Session 149: Mode Control API & Dashboard Integration",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 53,
+     "sha256": "38b0656e045d2a40d6d0c4f6effc9da7c9b5e55f92c4a100bf7ad243088b0992"
+    },
+    {
+     "idx": 100,
+     "titre": "## ✅ Session 148: Eye Remote Auto-Mode Stability",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "846bff6dbda8cf7e03d39c29e9facdfe08b670f017a28bb218fefa316a8a09c6"
+    },
+    {
+     "idx": 101,
+     "titre": "## ✅ Session 147: Fix Eye Agent Import Errors (#78)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 42,
+     "sha256": "f2b27f025ad1782ff718cae2719581e4067091dd9823758b17a4e1c9009bc9f8"
+    },
+    {
+     "idx": 102,
+     "titre": "## ✅ Session 146: Eye Remote v2.2.1 Build & Validation",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "8960e4bb2069133c8726935d93f964b229b76bbb465374a001ee6788d1e906a4"
+    },
+    {
+     "idx": 103,
+     "titre": "## ✅ Session 145: Eye Remote Dashboard Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "9cf4f70cc28fb0104925cffa282b8d2dcaa511381fce59e72ca35f35bdf06ff7"
+    },
+    {
+     "idx": 104,
+     "titre": "## ✅ Session 143: Health Banner System + CDN Injection",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "2bb09c5b429913e1b583ac648989d6e3b19ef9e0a9ff094340f73bcd41fda0ba"
+    },
+    {
+     "idx": 105,
+     "titre": "## ✅ Session 142: SOC Triple Eyemotes Migration",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "eb9dd867850015891d7e5050429710d6f4bba15f95f7b08f563f10f85614f24b"
+    },
+    {
+     "idx": 106,
+     "titre": "## ✅ Session 141: WAF Eyemotes + Quick Actions",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 10,
+     "sha256": "ba165c86cdf7ed7bab61a03a783bd93845518bd858eca0987bcb121807d687c5"
+    },
+    {
+     "idx": 107,
+     "titre": "## ✅ Session 140: Route Sync + Export Package",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "f86a5a17b63a369fa4e27654577d8a6417279302a6e653cb5592fd0408072a7c"
+    },
+    {
+     "idx": 108,
+     "titre": "## ✅ Session 137: Module Screenshots Wiki Multilangue",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 75,
+     "sha256": "abfce32d364e353a5f3a4da745ddcf580029aae83368a1db451ffd78548aefda"
+    },
+    {
+     "idx": 109,
+     "titre": "## ✅ Session 136: API Routes + Unified NAC + Metablogizer Publish",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 45,
+     "sha256": "09ca0217e959e9c1ae8f84b43019e06440565d127f6b8daed5e8603cf1679dc3"
+    },
+    {
+     "idx": 110,
+     "titre": "## ✅ Session 135: Error Pages + WAF Rework + Geomap Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 42,
+     "sha256": "e0a123454f6da3d8c1f6a78dda9c66fb6500af62b2436276f4c28be3edcfeaf4"
+    },
+    {
+     "idx": 111,
+     "titre": "## ✅ Session 134: CrowdSec Bans Fix + Auth Parser + CPU Optimization",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 34,
+     "sha256": "4f2c9156be056b38378f563e513abd60ab43c8991617f78f78b780ba7586d41f"
+    },
+    {
+     "idx": 112,
+     "titre": "## ✅ Session 133: WAF Categories + NFTables Donuts + Mini Histograms",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "22937e4e6da282bf0c4b907853b6ef3ab1ad3d16bf6870148853883354dad75d"
+    },
+    {
+     "idx": 113,
+     "titre": "## ✅ Session 130: Eyeremote Style Visualizations + SOC/WAF Improvements",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 38,
+     "sha256": "71a9e2a0ef96a2c722efff7e1f9565ee4134d9ebb4e1045c43e0fcf2cc94dba7"
+    },
+    {
+     "idx": 114,
+     "titre": "## ✅ Session 129: Eye Remote Radar Animation + SOC Fixes",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 5,
+     "sha256": "59f86f1c424b970ffe6d2084ca09bb3bd57cdd3b197cc6c239daacf258fd2764"
+    },
+    {
+     "idx": 115,
+     "titre": "## 🔄 Session 128: LED Tooltips + Kernel NFTables Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 28,
+     "sha256": "a880c105067f5040920959b9adc8007984b61de1fda73614fae03cddcdf26f77"
+    },
+    {
+     "idx": 116,
+     "titre": "## ✅ Session 127: Smart Strip + LED Pulsing + Round UI Virtual",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "2d5324cbecf7356241078f64a4fc0f708ef0b2a8c8d6698ffcb9f54c63756ac5"
+    },
+    {
+     "idx": 117,
+     "titre": "## ⬜ Backlog — Deferred Items",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "32befb2fe56d008f367278a37340c0a0abde2f2fdbf068e57d8641e148bff33d"
+    },
+    {
+     "idx": 118,
+     "titre": "## ✅ Session 126: Hybrid Skin License & Centralized Injection",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 21,
+     "sha256": "84a17610f5d284ee9ace03d01a9e53945eecc2442d33e48c48a7911c3c217616"
+    },
+    {
+     "idx": 119,
+     "titre": "## 🔄 Session 125: Socket Repair & Health API Standardization",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 28,
+     "sha256": "ef4b009dae6c6aa243636c150c73f30b87ae95fa9a528568f3e25c7c2cf7f19f"
+    },
+    {
+     "idx": 120,
+     "titre": "## 🔄 Session 124: Multi-Layer Health & Auto-Repair System",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 28,
+     "sha256": "9ba3abd0526096e4338733b1acb0c08f9664d1792f9b41ee9e09619cf8308868"
+    },
+    {
+     "idx": 121,
+     "titre": "## ✅ Session 122: WAF GeoIP Country Lookup & Stats Enhancement",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "4125bd214acb5a221629797c1399807f36e6ad63632f3d5fc629c1b1a040905a"
+    },
+    {
+     "idx": 122,
+     "titre": "## ✅ Session 121: HealthBump v2.1 with Activity Detection & K2000",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "e3ebbcc3ee220a4749283c0a5c3d259b9834e582543c6ed1464cc62e9f8a0269"
+    },
+    {
+     "idx": 123,
+     "titre": "## ✅ Session 120: LED System Complete & Kernel 6.6.137 Validation",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 10,
+     "sha256": "5a3b15e70acae68ba274353052954121fa575ea6066029f314dce705c1774d06"
+    },
+    {
+     "idx": 124,
+     "titre": "## ✅ Session 118: Kernel LED Driver + USB Network + Documentation",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "4f0cc217b5eeb94d5aa55b2ad65ca0582cacb621c34458e7de57e343775891bb"
+    },
+    {
+     "idx": 125,
+     "titre": "## ✅ Session 117: OpenWrt-style Kernel with DSA Built-in",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 28,
+     "sha256": "dd1fbb8b5d8c41c2ca01b02070427410aeb8d7ecd8af5520a64ebf9083d1ce8d"
+    },
+    {
+     "idx": 126,
+     "titre": "## ✅ Session 116: Kernel 6.12.85 Boot Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "01eb405671c7535a52062a30b973a23fb5873f167b09e616a960d77675240c92"
+    },
+    {
+     "idx": 127,
+     "titre": "## 🔄 Session 113: WAF Ban Page Styling + Autoban Debug",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 51,
+     "sha256": "abb8fa5d1156a43216dfae60fb315df72a98b7d83ee7c1bddbe6bcb97534d9f5"
+    },
+    {
+     "idx": 128,
+     "titre": "## 🔄 Session 112: WAF Autoban + eMMC Rootfs Expansion",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "d75d3643d522aa24a18e6bfe8e5f07b28d34f7fd6897265100e01f1d694ebc2e"
+    },
+    {
+     "idx": 129,
+     "titre": "## ✅ Session 111: LED Kernel + CrowdSec GeoIP + 503 Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "6291130b522f131006bfb7da3a1960dbb80394c26d9a1783337b710d3bfeb60f"
+    },
+    {
+     "idx": 130,
+     "titre": "## ✅ Session 110: System Optimization + Eye Remote Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 37,
+     "sha256": "53cccf1dceb0ab4c5c38e6922fb10b7ba3cd94d6500fd07046b0a73a93bc744c"
+    },
+    {
+     "idx": 131,
+     "titre": "## ✅ Session 109: Metablogizer Full Config + Health Prober Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "df2ba6f0412e98abad094b1eca6eb8e0b694c26692107781fa3170572edf98f5"
+    },
+    {
+     "idx": 132,
+     "titre": "## ✅ Session 108 (Continued): VHost Health Fixes + Services Restore",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "15d262759004be2e8297e24e5a8ab7cb3ad08d9eeabee88c4f8b6993391d2c67"
+    },
+    {
+     "idx": 133,
+     "titre": "## 🔄 Session 108: Dashboard Health Widgets + HAProxy Workflow",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 34,
+     "sha256": "2d64894c136114c245e5b2b17a4a29fd560b569e1810329da214020dbd9b02ab"
+    },
+    {
+     "idx": 134,
+     "titre": "## ✅ Session 107: Module Health Monitor + Placeholder Detection",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 38,
+     "sha256": "44361917a143bd799d74b4c4934f0c889dc806b595ecef07be415ec75b7b91f2"
+    },
+    {
+     "idx": 135,
+     "titre": "## ✅ Session 106: Double Pre-Cache + Adaptive Navbar + DNS Migration",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 143,
+     "sha256": "67867903bd80777e2fb1a2300dd5ead6861a049095d9e24caa31bc0f278d0e14"
+    },
+    {
+     "idx": 136,
+     "titre": "## ✅ Session 105: Wiki License Links + Issue #35 Update",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "016eb85c95058072096531536bd138019bdf1782768f48aa3f68e3c8c2f5be51"
+    },
+    {
+     "idx": 137,
+     "titre": "## ✅ Session 104: ACME SSL Renewal + SecuBox CLI v2.0.0",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "891dedfb8c3ab329f773d2a7859c1c6465467f316edd4169f44d1434c2732c19"
+    },
+    {
+     "idx": 138,
+     "titre": "## 🎯 Plan v2.5.0 — WAF Fixing & Full Health",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 62,
+     "sha256": "17c0c11667d943edb45e9b87efaf40e2673e9865797bff34acf69b6c0c198d7a"
+    },
+    {
+     "idx": 139,
+     "titre": "## ✅ Session 103: CrowdSec + WAF Dashboard Fixes",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 40,
+     "sha256": "8b064301c0a4438ec11ce64aae83ed9ffe748fd72f9124f75196c5141011ebe9"
+    },
+    {
+     "idx": 140,
+     "titre": "## ✅ Session 102: CMSD-1.0 License + WAF Phase 2 + Gitea",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 30,
+     "sha256": "8356210f108e27c00d0ca3bf6c751fbb3d47b91d7f5ca0e8fa11be9636bcfea1"
+    },
+    {
+     "idx": 141,
+     "titre": "## ✅ Released v2.4.0 — Source Package Sync",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 4,
+     "sha256": "d61ab95c85fc93a017066cc901ca139b8b974b3c69bcf6827667e87d0f039b7f"
+    },
+    {
+     "idx": 142,
+     "titre": "## 🔄 Previous — Session 101: MOCHAbin Migration COMPLETE",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "1bbd67932c7d54ab747da51f1c7d33e43c62f2861b8c59b78fdc703a002eeae7"
+    },
+    {
+     "idx": 143,
+     "titre": "## 📋 Guidelines de développement (Session 101)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "17973244517af5acf9a72b458d5d9ae3099cbab5d5b51d35761059fc51daf128"
+    },
+    {
+     "idx": 144,
+     "titre": "## 📦 Plan: Bundle System pour archivage/distribution",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 17,
+     "sha256": "c68a3d393c56547318768bf97c8b93d2e84dd18564325e6d35720f9283f1ccb4"
+    },
+    {
+     "idx": 145,
+     "titre": "## 🔄 Previous — MOCHAbin Full Migration (HAProxy/WAF/Services)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 209,
+     "sha256": "2ea0d3ddd1f00c9cea323f141613b36a86a1dce7c9306410e5c0c10fcf804087"
+    },
+    {
+     "idx": 146,
+     "titre": "## ✅ Complété (Session 90) — Mitmproxy WAF Module Migration",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "bad7b6660e194f780b11e34b7295b990f7e821d3a72d11e12a2732e6c50ead90"
+    },
+    {
+     "idx": 147,
+     "titre": "## ✅ Complété (Session 85) — VirtualBox VM Network Detection Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 24,
+     "sha256": "5fd367a7f52c6c7cb31d998b15844fe72f8155b1478c0c7cafb80e45ec3c6a94"
+    },
+    {
+     "idx": 148,
+     "titre": "## ✅ Complété (Session 84) — AMD64 Real Hardware Network Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "567c0b863cefac81bd7bddcda1ef76c33bbd65f44ffa66f221610ec32bfdd8aa"
+    },
+    {
+     "idx": 149,
+     "titre": "## ✅ Complété (Session 74) — Migration Data Saver v1.0.0",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 62,
+     "sha256": "810253b9bce4837e59401fbab48954ace2b9a4baa049a4a4ea05c6cafe9cb92e"
+    },
+    {
+     "idx": 150,
+     "titre": "## ✅ Complété (Session 73) — Eye Remote Interactive v1.9.0",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 50,
+     "sha256": "4e204b5cafa9003dd326d09e6b1c9a7dc8c817a2946cb977eca291a90fa41e3c"
+    },
+    {
+     "idx": 151,
+     "titre": "## ✅ Complété (Session 71) — Eye Remote Display System v2.3.0",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 39,
+     "sha256": "e8880bb8453403695a3c8ab29acf35b3e3acd11c721be68bd77d0843f67915a7"
+    },
+    {
+     "idx": 152,
+     "titre": "## ⬜ Next Up — Eye Remote Recovery Boot System v1.0.0",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 59,
+     "sha256": "d5f3c1d384f6d3b2cd14942e51e3b5e29c9fcc84e1577be49969f30a77e9cf78"
+    },
+    {
+     "idx": 153,
+     "titre": "## 🔨 En préparation / Élaboration — Smart-Strip USB Module (SBX-STR-01)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 61,
+     "sha256": "ae503c5c202c9052ec92286367406aab0f77dacad7afb630a43c0fc8bc9d76cc"
+    },
+    {
+     "idx": 154,
+     "titre": "## ✅ Complété (Session 65) — Multi-Boot Storage System v2.2.2",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "044d322063c3bf6ce1629a33954ea3d7f8fa42a91547f3624f278805c7f71dab"
+    },
+    {
+     "idx": 155,
+     "titre": "## ✅ Complété (Session 65) — Eye Remote USB Boot Fix v2.2.1",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 42,
+     "sha256": "4ac49eb81c061f7f5cf1c761b84fb0051c8f11c727311fca24a86cdfadbce82e"
+    },
+    {
+     "idx": 156,
+     "titre": "## ✅ Complété (Session 65) — HAProxy Service Restart Loop Fix",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 33,
+     "sha256": "5e3a50f39d3d558e08e4dcbf80013bdced5983c101b8fea53269bad3e922827e"
+    },
+    {
+     "idx": 157,
+     "titre": "## ✅ Complété (Session 64) — USB OTG Network Fix v2.1.1",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 20,
+     "sha256": "526b7775548da10a73365eec480da854c44c58a3f40e4adbeef379c0aecdd902"
+    },
+    {
+     "idx": 158,
+     "titre": "## 🔄 En cours — Eye Remote Full Integration v2.0.0",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 53,
+     "sha256": "ed347fe6b2e01a752bdf281e47a70f59256895c412314e8baf47c7edb44ac9b2"
+    },
+    {
+     "idx": 159,
+     "titre": "## ✅ Complété (Session 63) — Framebuffer Dashboard v1.11.0",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 44,
+     "sha256": "14b7ee40c17f8119ec092a10968c3a503a37fee035bbf97ac9501f965a89f62b"
+    },
+    {
+     "idx": 160,
+     "titre": "## ✅ Complété (Session 63) — HyperPixel Display Fix v1.10.0",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 63,
+     "sha256": "4d1cf3a3dbe8c25184ba91ca022646f3ca8e23053491d2096156a2fcef0f661d"
+    },
+    {
+     "idx": 161,
+     "titre": "## ✅ Complété (Session 62) — Eye Remote OFFLINE Image Builder",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 75,
+     "sha256": "7cce437f2e38ded393a5315c27760912e239ba20dab5260419491a85329a4ef3"
+    },
+    {
+     "idx": 162,
+     "titre": "## ✅ Completed (Session 61) — Eye Remote Documentation & Modes",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 45,
+     "sha256": "62655fa9267b9a913435cc652416e190c5108da9a088e4e82a367dd5ae700bbc"
+    },
+    {
+     "idx": 163,
+     "titre": "## ✅ Completed (Session 60) — EspressoBin eMMC Boot Fixes",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 83,
+     "sha256": "73bdbdc7dd3c76bbb1fb28e703809de3a3365447967fe4c9b9498e57b0063c3b"
+    },
+    {
+     "idx": 164,
+     "titre": "## ✅ Completed (Session 59) — v1.7.0 Image Builds & Fixes",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 247,
+     "sha256": "bc811271d2285eb908c3e2da20672598bfb07c0040a9f2e140b41f34d6e9c4e8"
+    },
+    {
+     "idx": 165,
+     "titre": "## ⬜ Next Up",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 9,
+     "sha256": "f67dc75ff676ad024325036318bd913d309a71e88e9fcd93dd4496375748a988"
+    },
+    {
+     "idx": 166,
+     "titre": "## ✅ Fait (Session 58) — v1.7.0 Phase 11",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 188,
+     "sha256": "0b5cfba3c69229fc80a4829fbaf0f0354edf431e2a8e45133f1c01b5667ff335"
+    },
+    {
+     "idx": 167,
+     "titre": "## ✅ Terminé (Session 57)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 66,
+     "sha256": "8f2356cd6c7a7a432752e9685e7a6361790bce68990da3efa554c2eb4140e0d9"
+    },
+    {
+     "idx": 168,
+     "titre": "## ✅ Terminé (Session 56)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "5c4457e76e85827633e2c27df6075d0390eed160458e7c916e3850e8c8f1d6f2"
+    },
+    {
+     "idx": 169,
+     "titre": "## ✅ Terminé (Session 55)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 33,
+     "sha256": "6b06931de9b1e3e2c917ed6d5501a1682d6f70a206c83b9817e35439dc4f1491"
+    },
+    {
+     "idx": 170,
+     "titre": "## ✅ Terminé (Session 54-55)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 12,
+     "sha256": "d07efa4a83dcbfbfdf87eb19dafbbb38ba925dcaf2c528bdb17f46472527a01d"
+    },
+    {
+     "idx": 171,
+     "titre": "## ✅ Terminé cette session (Session 53)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "9ccfdacf3c6a265ed36b0f81a7c099aa0449da7ed9f7b719cd83de456ee62a45"
+    },
+    {
+     "idx": 172,
+     "titre": "## ✅ Terminé cette session (Session 52)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 43,
+     "sha256": "43655e17753063a74713edcd4d839c60218eb89e4d87a7481566643115c9dfd7"
+    },
+    {
+     "idx": 173,
+     "titre": "## ✅ Terminé cette session (Session 51)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 102,
+     "sha256": "85402b16bc4e248882902da912ede5cd3fac40d40625bfaf8c709e955fdfaca4"
+    },
+    {
+     "idx": 174,
+     "titre": "## ✅ Terminé session précédente (Session 50)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 38,
+     "sha256": "bd03f16be42cfcb479b95ec6cb9bcf80840b887b0317951c27463b79a779a1fd"
+    },
+    {
+     "idx": 175,
+     "titre": "## ✅ Terminé session précédente (Session 49)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 30,
+     "sha256": "7a10fd37bc874136219aed6d4aed590ecd051e4d02a9e4247727f82a5deb64d6"
+    },
+    {
+     "idx": 176,
+     "titre": "## ✅ Terminé session précédente (Session 48)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "08dc0dc0cfd9ab89531d562b61a8013f1e531734d0e81916bf8a65f3b6160305"
+    },
+    {
+     "idx": 177,
+     "titre": "## ⬜ Next Up",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 9,
+     "sha256": "d3f000e56af9604f4e07977571c47289bf497a6893f826ae172c253decfc5a19"
+    },
+    {
+     "idx": 178,
+     "titre": "## ✅ Terminé session précédente (Session 47)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "18d6e0bc7bef5846a04e22ecbed685f0acbc1528f4cadc6fb43dbff8d4c2eadc"
+    },
+    {
+     "idx": 179,
+     "titre": "## ⬜ Next Up",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 9,
+     "sha256": "3f7216a93f9c9899b8cfea7733f546af595f1846e2c7afd152a6dc2ddfe8f188"
+    },
+    {
+     "idx": 180,
+     "titre": "## ✅ Terminé session précédente (Session 46)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 33,
+     "sha256": "ea9d25aa32fe049595726b7fc2ee6e49472448563d74235cc117361f3bfebf0d"
+    },
+    {
+     "idx": 181,
+     "titre": "## ✅ Terminé session précédente (Session 45)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 41,
+     "sha256": "97801afc314e0ce99729685e5283396f2c6b8da4d23e3ab0fa183bf5b75630ee"
+    },
+    {
+     "idx": 182,
+     "titre": "## ✅ Also Completed This Session",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 33,
+     "sha256": "753ecc95d14a3e27d213f545b55fd1cd3004100710046c97d25d0776a693672c"
+    },
+    {
+     "idx": 183,
+     "titre": "## ✅ Terminé session précédente (Session 44)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "1f3b62fa475503e5c7ca8e7372d01f56cc81c89e1792892d24eb092f0f246a0e"
+    },
+    {
+     "idx": 184,
+     "titre": "## ✅ Terminé session précédente (Session 43)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 69,
+     "sha256": "75e29835b71f92e636f0e2fe0c3ce7402b4697580c457245357e08de8409db95"
+    },
+    {
+     "idx": 185,
+     "titre": "## ✅ Terminé session précédente (Session 42)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 68,
+     "sha256": "2bfbd74e3fbe2b8e91bd303eaa6c2bf678614984ca76d1ef00ad8b1376bded1b"
+    },
+    {
+     "idx": 186,
+     "titre": "## ✅ Terminé session précédente (Session 41)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "07229bb4f09d00f2eb206796e15fee015bb7428d5bad30748f162e793cda68d0"
+    },
+    {
+     "idx": 187,
+     "titre": "## ✅ Terminé session précédente (Session 40)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 86,
+     "sha256": "3688b5c83993e769dc464e85a1a32ba6415a2f3568d8f23860e18dff6925bcaf"
+    },
+    {
+     "idx": 188,
+     "titre": "## ✅ Terminé session précédente (Session 39)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 62,
+     "sha256": "88699423cb3a7171555a4002a75b8e6c1408e63ec2ba4cd630a9b8fcb7b43fbd"
+    },
+    {
+     "idx": 189,
+     "titre": "## ✅ Terminé session précédente (Session 38)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 17,
+     "sha256": "a6bbe278eb9fee709aa59f468b77501d0345058ca2185c3d503ce6de21195840"
+    },
+    {
+     "idx": 190,
+     "titre": "## ✅ Terminé session précédente (Session 37)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 46,
+     "sha256": "a2440ccf781096844f577b90e59356f2a95e012adfef0b8c80da97df41ee04a7"
+    },
+    {
+     "idx": 191,
+     "titre": "## ✅ Terminé session précédente (Session 36)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 30,
+     "sha256": "daa7d43d7fc7a9477d13c5f390229b0bd07554a2f6f1bfdd5ddcd8a9a890db66"
+    },
+    {
+     "idx": 192,
+     "titre": "## ✅ Terminé session précédente (Session 35)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 47,
+     "sha256": "343b3c28d11e526a946783803561bed9e469c7dfecedadec4a9d8fee619088d0"
+    },
+    {
+     "idx": 193,
+     "titre": "## ✅ Terminé session précédente (Session 34)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "aa9c0cd0df5c5b80fd59ffbd6bcff846492524fabfa39b326d52d0cd88b7a71d"
+    },
+    {
+     "idx": 194,
+     "titre": "## ✅ Terminé session précédente (Session 33)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 65,
+     "sha256": "6a39fda1b303d8af97d1422633ef15223ac368490f8f73f1bfcbea5e11be5e36"
+    },
+    {
+     "idx": 195,
+     "titre": "## ✅ Terminé session précédente (Session 32)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 38,
+     "sha256": "f7c538bf6410b915279d192a11c073b2ed0706fd3edc8c61144cdd968de7b2b2"
+    },
+    {
+     "idx": 196,
+     "titre": "## ✅ Terminé cette session (Session 31)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "cb3ea1b47875a93e5a9b3391a751f44643fe258cb789ab751164bf579eef52b9"
+    },
+    {
+     "idx": 197,
+     "titre": "## ✅ Terminé cette session (Session 30)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 62,
+     "sha256": "9e15e7ec128df21bc9d2342f69150d2a69760a075ab0aa274f8f20c10eba8da6"
+    },
+    {
+     "idx": 198,
+     "titre": "## ✅ Terminé cette session (Session 29)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "1660a6a633f4e92b2468a2f461886a992d08bbeac4bb0f840be22f7c8ff3f09d"
+    },
+    {
+     "idx": 199,
+     "titre": "## ✅ Terminé cette session (Session 28)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 19,
+     "sha256": "e624f359327805e9c0e041c083739eec4b7122c54d0a0f8a9bedb595c5998285"
+    },
+    {
+     "idx": 200,
+     "titre": "## ✅ Terminé cette session (Session 27)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "305d0ccc42dbc5a12536db6e0d3ec9bd574ebd1251f6c0c241b364e908baf0ed"
+    },
+    {
+     "idx": 201,
+     "titre": "## ✅ Terminé session précédente (Session 26)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 28,
+     "sha256": "22bf4bf6ddb334ea122beb68598acd578fda45db5907c9679d7389b15f4750eb"
+    },
+    {
+     "idx": 202,
+     "titre": "## ✅ Terminé session précédente (Session 25)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 34,
+     "sha256": "5434ca7d334f12fc7203ab86a484c82ffcf2d3bf324deb9d884786c77e3b629b"
+    },
+    {
+     "idx": 203,
+     "titre": "## ✅ Terminé session précédente (Session 24)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 45,
+     "sha256": "ac15a54e9929992b8b3496a51b0d317322c577479d0ef2f1202e9b7edc271012"
+    },
+    {
+     "idx": 204,
+     "titre": "## ✅ Terminé session précédente (Session 23)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 80,
+     "sha256": "62425a86c52502270247edc4dbc8072edf1ded1d6c6a5aa21755b21f441febfe"
+    },
+    {
+     "idx": 205,
+     "titre": "## ✅ Terminé session précédente (Session 21)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "e9905a17c7896d27013d68410df458544599d62e57999db0d9cbbb111a9790e3"
+    },
+    {
+     "idx": 206,
+     "titre": "## ✅ Terminé session précédente (Session 20)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 50,
+     "sha256": "5131f2698044fed37b2194736c0ff73b0b86a995bea5c2ad4eaef5b7082797e7"
+    },
+    {
+     "idx": 207,
+     "titre": "## ✅ Terminé session précédente (Session 19)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 55,
+     "sha256": "93b55a8b91a3c632ac465abaa87d4d848ad35e39bbd915bb0208c6ce13fffad4"
+    },
+    {
+     "idx": 208,
+     "titre": "## ✅ Terminé session précédente (Session 18)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 88,
+     "sha256": "97259735cf87d3bdfd51950c971f48587062a83123be922cd30f00489028b7ed"
+    },
+    {
+     "idx": 209,
+     "titre": "## ✅ Terminé session précédente (Session 17)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 41,
+     "sha256": "4d8175dbb5825d5f70c14380ae6e3c631927c2679b3c05ad5abad84dec5f3f2d"
+    },
+    {
+     "idx": 210,
+     "titre": "## ✅ Terminé cette session (Session 16)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 80,
+     "sha256": "0abc8f2f5c82d5ca601143707eb8ae4d055e5ee9b6a4e48fc7a7d50a4bfe1ddc"
+    },
+    {
+     "idx": 211,
+     "titre": "## ✅ Terminé session précédente (Session 14)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "e06dc6b9b80747b31067826e819ad7f325f10a4496a563987124005a97fafb33"
+    },
+    {
+     "idx": 212,
+     "titre": "## ✅ Terminé session précédente (Session 13)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 13,
+     "sha256": "5c8fafb7f293bfeca9807eb37d76ad7e8e865172976fe3cbb60c252be5a87968"
+    },
+    {
+     "idx": 213,
+     "titre": "## ✅ Terminé session précédente (Session 12)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 124,
+     "sha256": "ed3aa4d73d277209e13dc63c7a7394523a71091ed40b3d3eafced6da54e57334"
+    },
+    {
+     "idx": 214,
+     "titre": "## ✅ Previously Done (Session 8)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 34,
+     "sha256": "06ff732bec616e2aa7dde5624c845769d09e7e83fa8d13eaee5dfe9dee5cdbf4"
+    },
+    {
+     "idx": 215,
+     "titre": "## ✅ Previously Done (Session 7)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 124,
+     "sha256": "94959ea4d6e889a820decd112ecb930f6c30c5422f3e53509e8d1902ed9d1bae"
+    },
+    {
+     "idx": 216,
+     "titre": "## ⚠️ Known Issues",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 9,
+     "sha256": "d5ead2b46697b51f1c1dea1c03b4118e14190b742ef1990420c6fd57b75c8ad9"
+    },
+    {
+     "idx": 217,
+     "titre": "## ⬜ Next Up",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 111,
+     "sha256": "b945220241aea0e25e0f19ba73dba7ee5acb69767a838fa835fcd3df369b28f0"
+    },
+    {
+     "idx": 218,
+     "titre": "## ✅ Précédemment terminé",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 41,
+     "sha256": "4685643377f59b841eddc1d83e55a3b1d89c220710b13f5d93324971e3fa5057"
+    },
+    {
+     "idx": 219,
+     "titre": "## ✅ Précédemment terminé",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 49,
+     "sha256": "5175170ef54d7444c53ef18ba31b64413a2557cd84d2c71215c1ec0cf051c44c"
+    },
+    {
+     "idx": 220,
+     "titre": "## ✅ Completed this session",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 13,
+     "sha256": "3add7945466c201b20caff0d1195a403b8d033ca76ae05a5f35bcd6ebb48c595"
+    },
+    {
+     "idx": 221,
+     "titre": "## ⬜ Next Up",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 8,
+     "sha256": "53a1dae86f1b0c2f1d052f9286f425ac5b74539f85853b7b3e18ee83b2de8b66"
+    },
+    {
+     "idx": 222,
+     "titre": "## 🛠️ Quick Commands",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 21,
+     "sha256": "3184acea535f7649aa09ca6f46bbebddf96dfde43883749859dba243d42b7294"
+    },
+    {
+     "idx": 223,
+     "titre": "## 🗓️ Historique récent",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 69,
+     "sha256": "92f4a01c82da3b0e14bc167526c22b8534bb445ab540ab8ca208c0c27a65ee8b"
+    },
+    {
+     "idx": 224,
+     "titre": "## VirtualBox Kiosk Fix (2026-04-08)",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "dd5d29bd4869b6edb0a9019c94285db89e467b570ee58d943c7053bcf835f7f3"
+    },
+    {
+     "idx": 225,
+     "titre": "## Dashboard Real Data Fix (2026-04-14)",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "b85d5a54be704abd9b27b5a59c9f12a653b40a99ba7ab47aa23f2aa0c79bd5f2"
+    },
+    {
+     "idx": 226,
+     "titre": "## EspressoBin Slipstream Consistency (2026-04-14)",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 13,
+     "sha256": "44d52f92b8104d166af0791eaff38c8eaa481ae0afbb0e4ec464e9be1624b880"
+    },
+    {
+     "idx": 227,
+     "titre": "## EspressoBin Build Fix - $HOME Issue (2026-04-14)",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "5b037d581b3deb816a6ce03c6145e2b33187c34738d62c7a4254bcf0ed75cfd0"
+    },
+    {
+     "idx": 228,
+     "titre": "## Build Status (2026-04-14 18:20)",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 10,
+     "sha256": "3afc4655b97e32d2a4667c376eedb6f97047886941d27343011eeab10c7e0c42"
+    },
+    {
+     "idx": 229,
+     "titre": "## Build Complete (2026-04-14 22:45)",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "01b9c493a71fe208955cc900ba3f5f549b78d87f37050929c5a25c4134f13c0f"
+    },
+    {
+     "idx": 230,
+     "titre": "## 2026-04-20: Remote UI Enhanced Architecture",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 55,
+     "sha256": "4c2c6b843b3f453ef33cf2b8c3cd35aa33d1e81fb4c87fbf6950dcbd85cec641"
+    },
+    {
+     "idx": 231,
+     "titre": "## 2026-04-22: HyperPixel DPI / I2C Pin Conflict (RESOLVED)",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "a5ed14433a3870a0c316e1612269084ac6f4df17e265fdbc4b3de4cc7d565c43"
+    },
+    {
+     "idx": 232,
+     "titre": "## 2026-04-22: Pi Zero W requires explicit DPI timings (INVESTIGATING)",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "560cffcd69d027bf7631ef3c610687bd6f48d6cba6ada6d5fae56598a571135a"
+    },
+    {
+     "idx": 233,
+     "titre": "## 2026-05-06: Session 106 - Heartbeat, LEDs, GitHub Issues Workflow",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 48,
+     "sha256": "1872d4d3c4e4d2d46201c7bfe7d0e4ba8dca290e09eebea257c4c31fd211e395"
+    },
+    {
+     "idx": 234,
+     "titre": "## CI Sync 2026-07-21",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "52d3bd668e8ae8b3f1d76025f69360b3c2d607c7d0d6352631032fd9366c2d7f"
+    },
+    {
+     "idx": 235,
+     "titre": "## CI Sync 2026-07-22",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "b45bd4a98de49311b5f15f84fd3ce2aac2c2fda896aa1091ba9d5da8fd36e371"
+    },
+    {
+     "idx": 236,
+     "titre": "## CI Sync 2026-07-23",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "751b08025daaf3f441e6c45a808b9926ced6cf7c92e2e3e1fd6c1fec130c759b"
+    },
+    {
+     "idx": 237,
+     "titre": "## CI Sync 2026-07-24",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "384056a44c1188617aa9c561fe213b3a1e439896abc0ac6ed1a23bc0a85cd2eb"
+    },
+    {
+     "idx": 238,
+     "titre": "## CI Sync 2026-07-25",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "c2932946d12b9625bbea60176259d9ed9b500c00d7cb5473bf1b08a50f67eb7b"
+    },
+    {
+     "idx": 239,
+     "titre": "## CI Sync 2026-07-26",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "c42e1181c05f76c4b07d0bca79bf472d20653b90b20687c5bc295c11e9b21e67"
+    },
+    {
+     "idx": 240,
+     "titre": "## CI Sync 2026-07-27",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "1e4cef4be7fc65b81498d739a7720a43e5967e63606fb3da1d919702dfa25500"
+    },
+    {
+     "idx": 241,
+     "titre": "## CI Sync 2026-07-28",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "398b6f34d7b7d3a4d3090326533b5a9b9cfa44119101e4f91288157e849621b2"
+    },
+    {
+     "idx": 242,
+     "titre": "## CI Sync 2026-07-29",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "54c9b77dd1e2a2886b8a64d8dd006662a9c1859597eafd21a75838e3021a85fe"
+    },
+    {
+     "idx": 243,
+     "titre": "## CI Sync 2026-07-30",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "5b8881a92cd733195ac269554156b2526cffc369bd26ba428d48bf390ca635dd"
+    },
+    {
+     "idx": 244,
+     "titre": "## CI Sync 2026-07-31",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "cd8c98f64e2505c26b3e755f0ea0fa19a398f6c1ab2bb167cb67853a797f3bf2"
+    },
+    {
+     "idx": 245,
+     "titre": "## CI Sync 2026-08-01",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "3d5c7cd24d0ac65bdec4535fc5759011ee7d245561f88ab38cf641a15b3bec5f"
+    },
+    {
+     "idx": 246,
+     "titre": "## CI Sync 2026-08-02",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "a39d7a27a12331e8fd715dc2dc613ee3de55413b972a6f1520492a1fd0fba1d6"
+    },
+    {
+     "idx": 247,
+     "titre": "## CI Sync 2026-08-03",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "4798320159797d9f9b5aa4b5f2d7e6e3dfe283e46d9319756337cb098e036bac"
+    },
+    {
+     "idx": 248,
+     "titre": "## CI Sync 2026-08-17",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "5adeb43e5c88b9fdae5b4f18366d5a64c4b407636e36edb600c56af78f5d2afa"
+    },
+    {
+     "idx": 249,
+     "titre": "## CI Sync 2026-08-18",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "5f89aff47a9124cc7e99d1b0878be52f81c3a63a87363a2ed71a70ae6f4080df"
+    },
+    {
+     "idx": 250,
+     "titre": "## CI Sync 2026-08-20",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "8f4f80611816ddb981892c8906cb1217b523257905a2c923578fc0bf2bbd2d51"
+    },
+    {
+     "idx": 251,
+     "titre": "## CI Sync 2026-08-21",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "9e25a83946e4ba67562108c2b6ddc44bf311e02950c14f9120a9217fd10e94c3"
+    },
+    {
+     "idx": 252,
+     "titre": "## CI Sync 2026-08-23",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "e2195caa3fbe90f3e17e90fa3e87febf6d2dab2c33d5e8f90d1fd2be46837fa3"
+    },
+    {
+     "idx": 253,
+     "titre": "## CI Sync 2026-08-24",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "b04e8fc9fdb3c91fb8f5d31dea35abbce205408c7db27d8661b4e00bb47d6aee"
+    },
+    {
+     "idx": 254,
+     "titre": "## CI Sync 2026-08-25",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "023f1d543ccbd19275753a2debd48161cdb23806e08d8a359156ebe203e96c4e"
+    },
+    {
+     "idx": 255,
+     "titre": "## CI Sync 2026-08-26",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "c69917b40e0eccb77e46ef843a1a8a0445618add79bae9c145f9dc7881a78c63"
+    },
+    {
+     "idx": 256,
+     "titre": "## CI Sync 2026-08-28",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "52f36024ceb77f40f184224384805f049f0426e5e2c74cca64e624e131cf628e"
+    },
+    {
+     "idx": 257,
+     "titre": "## CI Sync 2026-08-29",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "4988d91777b0b01cb842ac4c8440d8f7e2b6bf575da9ef57fa2ab461251efd76"
+    },
+    {
+     "idx": 258,
+     "titre": "## CI Sync 2026-08-30",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "9abe7bd0719a5f3c8d405c0cabfd6f5dfcc1242fe4bfa0540a6c113fb7c49821"
+    },
+    {
+     "idx": 259,
+     "titre": "## CI Sync 2026-09-02",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "ecfd4c9ed0f7d4fd8e868632971d5930368e9fdefb8e0bf802b0361dd80bcc20"
+    },
+    {
+     "idx": 260,
+     "titre": "## CI Sync 2026-09-03",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "3340c46a3e558c243129c26f737c43d7709eabd41052229e28dfe717b49904d8"
+    },
+    {
+     "idx": 261,
+     "titre": "## CI Sync 2026-09-04",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "fb9d64e7a7dc34c0206b35c5d5dd56b15a7ecdac81e13a6918f404c8b2fc65c7"
+    },
+    {
+     "idx": 262,
+     "titre": "## CI Sync 2026-09-05",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "7b2bca08267e02f90821cd836e537930a23d90b2cc92b1083c257d03bfbf0d55"
+    },
+    {
+     "idx": 263,
+     "titre": "## CI Sync 2026-09-06",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "5e884145e180e166b0d3aa463cea44931056969e8ec66c703e8bd1d73c6cfd1f"
+    },
+    {
+     "idx": 264,
+     "titre": "## CI Sync 2026-09-07",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "6cd76d854f6db4750f1fdf87bfb3bd746cadb753a8ac7b1aac5193a8741248c8"
+    },
+    {
+     "idx": 265,
+     "titre": "## CI Sync 2026-09-08",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "46cbd19ecc43af88ac309f7c8ab67d1dd3f9470f29e4d1da7d229e409e1901b8"
+    },
+    {
+     "idx": 266,
+     "titre": "## CI Sync 2026-09-09",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "877470713cca01ebfa5c99686617e5aab36ab043699d9bab23419aa24acf99dc"
+    },
+    {
+     "idx": 267,
+     "titre": "## CI Sync 2026-09-10",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "3beb4581dd4b64c7adbf0ad5b8a4817ea2d9afabc03b3b348c24bb7b21699082"
+    },
+    {
+     "idx": 268,
+     "titre": "## CI Sync 2026-09-11",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "90689bc5cf79fb8258d0e0c02a026e0b6659ed0ca9ec06872ceff2d30365be38"
+    },
+    {
+     "idx": 269,
+     "titre": "## CI Sync 2026-09-12",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "90062c851d030a60635fae75c1206d6fcfb0c1f59764b40c0f4a3f782f239c73"
+    },
+    {
+     "idx": 270,
+     "titre": "## CI Sync 2026-09-13",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "ab5f081bf6619ded561aa9d0d98a409a87b327994e03d919d5c58e04622e21b3"
+    },
+    {
+     "idx": 271,
+     "titre": "## CI Sync 2026-09-14",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "d7498dbae059e0227abf4fb218c070252cf04c11f88df0f1048552dd2460c0b1"
+    },
+    {
+     "idx": 272,
+     "titre": "## CI Sync 2026-09-15",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "20258fddfeaddc6c604f991ef7e3cec6828d7bb3482af7ec0075e9a5cbe08a2b"
+    },
+    {
+     "idx": 273,
+     "titre": "## CI Sync 2026-09-17",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "d1dce00d6b558d47c68cf917c2a670fa6dd001c4d2ae5da6def8a40cb0572575"
+    },
+    {
+     "idx": 274,
+     "titre": "## CI Sync 2026-09-18",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "37a1897c11173f39d0562deabe71f9b7fcb6352800fb62cc6c38c6f7bbae9fab"
+    },
+    {
+     "idx": 275,
+     "titre": "## CI Sync 2026-09-19",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "b3ba70e3b523770bc6a6e29fe3840882063bd3fa87cec0783937b73bd33a2444"
+    },
+    {
+     "idx": 276,
+     "titre": "## CI Sync 2026-09-20",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "0cddc70f652176d5b52bc699558a0ee04af944e19a15e9448032856a8f1f6dc8"
+    },
+    {
+     "idx": 277,
+     "titre": "## CI Sync 2026-09-21",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "3c7d4a53d0e493dfc0d5d0b50150a03ab1dfc0b64f22d60b4a46ecd4c7f822dc"
+    },
+    {
+     "idx": 278,
+     "titre": "## CI Sync 2026-09-22",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "7c85683bce27578e45ef7d1041cd9518f38285f382e48bb2a5e47146eafada99"
+    },
+    {
+     "idx": 279,
+     "titre": "## CI Sync 2026-09-24",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "f7ab5cc5888ab8d060df46a49a7b3d2c5ea229e256b48177a1bbf1c8a3c2f554"
+    },
+    {
+     "idx": 280,
+     "titre": "## CI Sync 2026-09-25",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "b60958064bfa3ca17e8f5e74eee1471611cd30c5ff83449c236639a9b0cce998"
+    },
+    {
+     "idx": 281,
+     "titre": "## CI Sync 2026-09-26",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "2b1706d73b79b9b84d0d83bbccc1bac1c38aa87c168341b32a6001ffc8dd6f8c"
+    },
+    {
+     "idx": 282,
+     "titre": "## CI Sync 2026-09-28",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 5,
+     "sha256": "1d0b0f341cd28b2c82b8a9a133e02b1edce62e4de6c279a0551db18e7a8898a4"
+    }
+   ]
+  },
+  "HISTORY": {
+   "original_sha256": "a80fe78c1661d4b71bbb31ae40141eea97c27b708ca58f2c2fe4917eb420d56f",
+   "original_lignes": 9179,
+   "original_octets": 516468,
+   "entete_lignes": 7,
+   "entete_sha256": "40c6e54a81cec98db035954563579b67d4eb4d265c01650149daa3e66df9dd92",
+   "archives": {
+    "2026-03": {
+     "sections": [
+      144,
+      145,
+      146,
+      147,
+      148,
+      149,
+      150,
+      151,
+      152
+     ],
+     "lignes": 209,
+     "sha256": "45dd2c2788d5b48910be3c6799e3f09cbc397773014cd80bb125f269e271c41e"
+    },
+    "2026-04": {
+     "sections": [
+      136,
+      137,
+      138,
+      139,
+      140,
+      141,
+      142,
+      143
+     ],
+     "lignes": 868,
+     "sha256": "6c5078af8d517a0bcc0eb6727ce04ec97054318a5aabe96811886e7ca400de6e"
+    },
+    "2026-05": {
+     "sections": [
+      108,
+      109,
+      110,
+      111,
+      112,
+      113,
+      114,
+      115,
+      116,
+      117,
+      118,
+      119,
+      120,
+      121,
+      122,
+      123,
+      124,
+      125,
+      126,
+      127,
+      128,
+      129,
+      130,
+      131,
+      132,
+      133,
+      134,
+      135,
+      154
+     ],
+     "lignes": 3971,
+     "sha256": "ae7448d370486a345ecf3ac13b44072d5efa15cb807067d5f8f83cfb092f500a"
+    },
+    "2026-06": {
+     "sections": [
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+      99,
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      155
+     ],
+     "lignes": 1790,
+     "sha256": "36195550ff2934d84b3d85d9d6630b1b26e1893362e7e07c2d708ad0c001793a"
+    },
+    "2026-07": {
+     "sections": [
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      156,
+      157
+     ],
+     "lignes": 524,
+     "sha256": "fddbf9158db24e739ec7a7bf555e3d425f0063ae475706a8555ab1deb49f396c"
+    },
+    "2026-08": {
+     "sections": [
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+     ],
+     "lignes": 517,
+     "sha256": "e7c7db23516763b04944c5541a3838e8e0c4a590cc630c79ddf7e9ce3bc44991"
+    },
+    "2026-09": {
+     "sections": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22
+     ],
+     "lignes": 1221,
+     "sha256": "ccdca6c10e867895e2db999e0a45566d0b0e59cc4b90281e25c1187e4bfa4369"
+    },
+    "sans-date": {
+     "sections": [
+      153
+     ],
+     "lignes": 72,
+     "sha256": "de8bbdf6e117d0556ceea7696da64b91e7fa812d234a668d18154a806fb16972"
+    }
+   },
+   "sections": [
+    {
+     "idx": 0,
+     "titre": "## 2026-09-25 — UNE PERSONNE, SES APPAREILS, SES COMPTES (ref #1405)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 58,
+     "sha256": "b8da662d1fa9fe89f0c2cf7e97836b6d1c4f72198bf66251c5669fa0cd054e14"
+    },
+    {
+     "idx": 1,
+     "titre": "## 2026-09-23 — CE QUE PERSONNE NE TIENT, ET CE QU'ON N'A PAS MESURÉ (ref #1323, #1328, #1329)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 83,
+     "sha256": "9186c88a626f9b929cf31f8f16302712727edb65a9d4e3837f4f3ada2e6f72e0"
+    },
+    {
+     "idx": 2,
+     "titre": "## 2026-09-21 — LE DOSSIER ANSSI CONFRONTÉ AU CODE (ref #1313, #1317)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 56,
+     "sha256": "80355ccf3e720af3e2cd87bbc78f0139ee4093b575ec2ae5a0b9591bed9d7676"
+    },
+    {
+     "idx": 3,
+     "titre": "## 2026-09-20 — LE WAF, ET UNE ERREUR DE MESURE QUE J'AI DÛ DÉFAIRE (ref #1310, #1311)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 114,
+     "sha256": "26b9faa8a653c3da1699de88393111f587093578170c40978b9b7c599c9a1dd0"
+    },
+    {
+     "idx": 4,
+     "titre": "## 2026-09-18 — TRIXIE DÉMARRE, ET CE QU'IL A RÉVÉLÉ (ref #1294, #1362, #1027, #1049)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 59,
+     "sha256": "7f8ff0d44f79fbf09cfdf48db91b98ad4b1fb740530607a30f74435e55e1d17a"
+    },
+    {
+     "idx": 5,
+     "titre": "## 2026-09-16 — CARTE ZIGBEE, ET LA FILE D'ACCÈS ENFIN VISIBLE (ref #1365, #1366)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 93,
+     "sha256": "f12af3a2eda416f3ecb71a38b0a5e7bc8b7ec66096c421f4230868b6858b5178"
+    },
+    {
+     "idx": 6,
+     "titre": "## 2026-09-16 — anibal-amiot N'EST PLUS HÉBERGÉ ICI (ref #1364)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 53,
+     "sha256": "e9328de50d9296f08abe5a4ae27574ad2f058aaf7c4e0bb55d432e3734538a28"
+    },
+    {
+     "idx": 7,
+     "titre": "## 2026-09-16 — LE TABLEAU WAF NE POUVAIT PAS SE CONNECTER (ref #1363)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "4c685580a3019a0df8f9049a83b673252156d5283ef7d3bd6266b70feef43ff2"
+    },
+    {
+     "idx": 8,
+     "titre": "## 2026-09-15 — LES UNITÉS VESTIGES ET LES COQUILLES (ref #1362)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 78,
+     "sha256": "19b108fed64cea994fbb59e8ecfc61076af6804592843dd8e247f15b734d82ec"
+    },
+    {
+     "idx": 9,
+     "titre": "## 2026-09-14 — LEURRE HTTP, FILIGRANE, ET LE DICTIONNAIRE QUI SE REGROUPE (ref #1290)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 79,
+     "sha256": "38ca40719584ed218db297345f06170431ea217674ad34a09c7c71388dda7eb9"
+    },
+    {
+     "idx": 10,
+     "titre": "## 2026-09-14 — CRYPTO : ALGORITHMES NORMALISÉS UNIQUEMENT, HERMES SUPPRIMÉ (ref #1288)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "3623911e12ee967d7c20d6881e819391d5ce6e0fd452f221aadd88aa63392fee"
+    },
+    {
+     "idx": 11,
+     "titre": "## 2026-09-14 — LEXIE : LA BOUCLE VOCALE LOCALE DU HALL (ref #1287)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "1219daddcfe8e73efc6479ade1f8e9b559f834ae02b3b3bc1e9f953f3d788a7d"
+    },
+    {
+     "idx": 12,
+     "titre": "## 2026-09-11 — CRYPTO SOUVERAINE : CŒUR HERMES INTÉGRÉ, AUDITÉ, BENCHMARKÉ (ref #1263, #1272)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 46,
+     "sha256": "0c04396cc3da5b601a781b2cbf9a44aebe6d180c5df2cbaed03ef6fe368ec9b0"
+    },
+    {
+     "idx": 13,
+     "titre": "## 2026-09-10 — LE PARC PASSE EN LECTURE GARDÉE (ref #1256)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 83,
+     "sha256": "f35c7a8ca787a827618db98b0fb18ca89fe14e46f53b77bebeb25d05e23b3bde"
+    },
+    {
+     "idx": 14,
+     "titre": "## 2026-09-10 — Lectures : plus AUCUNE écriture nue, et la fuite du domaine admin (ref #1256, #1261)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 57,
+     "sha256": "424481d62309c7657361133d1690afddd569fc56dea6b041a9ea1534686607b9"
+    },
+    {
+     "idx": 15,
+     "titre": "## 2026-09-10 — Garde JWT : les 58 écritures des modules partiels triées (ref #1256)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 53,
+     "sha256": "98549b3f550fd8084efde5ea7885b40522852a4756f1ba0c0fb7201c654f32cc"
+    },
+    {
+     "idx": 16,
+     "titre": "## 2026-09-10 — Garde JWT P1 : 8 modules fermés, dette 667 → 526 (ref #1256)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "19bc6b2dbf4ec4599642884cff982f5770dbfc6e11bdcbc5152cffcd122bfdbd"
+    },
+    {
+     "idx": 17,
+     "titre": "## 2026-09-10 — Garde JWT : P0 fermé + cliquet de conformité (ref #1256)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "3e55557d937524d0875a94ddeec4e851705cbba4401e1c0e5d9467bc04d7e6ff"
+    },
+    {
+     "idx": 18,
+     "titre": "## 2026-09-10 — `haproxyctl generate` réparé (ref #1254)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 34,
+     "sha256": "07641e31e3aaca48a2d588ccb4a544cb85a56439fbf7fe267514a6900e4eabed"
+    },
+    {
+     "idx": 19,
+     "titre": "## 2026-09-08 — Fuite metrics (glibc), incident login, purge authelia, migration mitmproxy→sbxwaf",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "9013ad201b5c99a15c9eeceb736eabf2b38a511a6ed03c43e1bb29a8faee2071"
+    },
+    {
+     "idx": 20,
+     "titre": "## 2026-09-07 — Freebox TV streamer, ZIA Action Layer, fixes média/CSP (déployé gk2)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "158baaa446c8ca05a7ccd2d1cf36635e386b4a9b33a9d45061b4aa565feeefb5"
+    },
+    {
+     "idx": 21,
+     "titre": "## 2026-09-01 — Lyrion : cardlet RESTAURÉE mais LAN-only (correction, ref #1247)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "fdd922bc0265d321c88ea9d68775eb9b7d3ddbf4cc6fbf565771a942d9d47b16"
+    },
+    {
+     "idx": 22,
+     "titre": "## 2026-09-01 — Lyrion : cardlet retirée du Hall + lecteur web décommissionné (ref #1247)",
+     "mois": "2026-09",
+     "actif": false,
+     "lignes": 28,
+     "sha256": "bfc08fb25158f5bf6a234e2ddab5416f8e4c37b66449bc3139c384d4d4149480"
+    },
+    {
+     "idx": 23,
+     "titre": "## 2026-08-31 — DPI vivant (sbxdpi), sweep « spicy », Lyrion, Agenda NC, notifs profil",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 61,
+     "sha256": "40be430d30ef17d74ae9b369e9eb19bc4a36aff1ac944f92a603f7ee213b359b"
+    },
+    {
+     "idx": 24,
+     "titre": "## 2026-08-31 — Hall : bienvenue, libellés média, « double bullet » (webos)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 9,
+     "sha256": "b5c5ff44e9595bfb7be4eccfa42fa7cab59e23ebc9600325f825c95eca333bae"
+    },
+    {
+     "idx": 25,
+     "titre": "## 2026-08-30 — Nextcloud Super Cardlet + mégabarre invité (webos 1.0.207)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 6,
+     "sha256": "a8883bb813fafd220b434559369721654c1f578c26abe8ecab2c0ffb6fc5933d"
+    },
+    {
+     "idx": 26,
+     "titre": "## 2026-08-30 — ZIA webui admin + fix génération + adapters réels",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 20,
+     "sha256": "c03f11f87d541ff3a4a5b800b37e0fe118d83367d441abf020ff5c9ffed52884"
+    },
+    {
+     "idx": 27,
+     "titre": "## 2026-08-30 — Cluster Hall/DevWatch + design ZIA (préparation)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "e6b254191af9c2f6ff5a1ef8e7d4ce5131e8d9fe6a94d9ae9084176e5e372e79"
+    },
+    {
+     "idx": 28,
+     "titre": "## 2026-08-28 — WAF anti-FP + routes, unification média, polish Hall",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "c5e9249f8af82dc11d5bffb73f1c21bc4fb01fd47208a78d14797158719204ef"
+    },
+    {
+     "idx": 29,
+     "titre": "## 2026-08-26 (nuit) — Le BiB (Browser-in-Browser) + matrice SBXOS",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "b0f7203e792086c3ad6a1893510c2d1dfc5274ca85cc30798858a8cc3ed6e958"
+    },
+    {
+     "idx": 30,
+     "titre": "## 2026-08-21 (soir) — BBS vignettes-snapshot d'URL (#1120), skin newsroom complété, alias de domaines",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "d779cb3c7ef1f93e75e1f5735cd1e8f50fe57e9c120b5f50130d4d6674959da1"
+    },
+    {
+     "idx": 31,
+     "titre": "## 2026-08-21 — BBS médias publics + skin newsroom généralisé, carrousel réparé, kbin & nextcloud ressuscités",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "e0f1bd3f29ffa3d7439e7ec26ec617cac5de0fae0fd82af04be42cf4b9be6ae9"
+    },
+    {
+     "idx": 32,
+     "titre": "## 2026-08-19 — Grand ménage : toolbox-ng réparé, mitmproxy Python éradiqué, orage occ dompté, WAF ressuscité",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 38,
+     "sha256": "df4c95ba7d3bb596009213ad83608f7404da4e5b535078c2fbac41c3d6c3aab2"
+    },
+    {
+     "idx": 33,
+     "titre": "## 2026-08-17 — Rassemblement des modules, et deux faux positifs de nous",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "fad8fa5ecf3ac9712b2fb01419d70c39d017ca3399ef8b96d591d2b84a2644c4"
+    },
+    {
+     "idx": 34,
+     "titre": "## 2026-08-16 (fin) — BBS : deux volets qui glissent",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "f94318dc7002dce0feddaa3c1db47a650217e029e9277b32ce57ad68e065119f"
+    },
+    {
+     "idx": 35,
+     "titre": "## 2026-08-16 (suite) — Securite, socket partagee, BBS mobile",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "876550626fc3fdf7b46027a94d89e24e8ef66dfc466f8e6996866251f156bbdb"
+    },
+    {
+     "idx": 36,
+     "titre": "## 2026-08-16 — Radio 0.1.2, sbxwaf 0.1.40 : trois symptomes, trois causes (#1047, #1031)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 34,
+     "sha256": "056312cc3657cfc9c072166c476d72c992efe2f6c2acc39a40d1ff7c1328556a"
+    },
+    {
+     "idx": 37,
+     "titre": "## 2026-08-15 — BBS 0.16.0 : note vocale et note video (#1044)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "829bf2d2842a05fbac24aa1a2bf4b643840f230f796aa25a9fdd64ec8b5c4662"
+    },
+    {
+     "idx": 38,
+     "titre": "## 2026-08-12 — PeerTube : le transcodage n'avait aucun plafond CPU (#1010)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "f58bab7724a84de05f2aeb68c251e993ab7142d8c5974a9d91d4b2c16ace1d64"
+    },
+    {
+     "idx": 39,
+     "titre": "## 2026-08-03 → 08-05 — Perf & fiabilité : mosaïques, certificats, châssis, playlists",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 39,
+     "sha256": "9ed8594d6644ff865e3c6975da61696e767403827346fbd3072d9c44f9bcb01e"
+    },
+    {
+     "idx": 40,
+     "titre": "## 2026-07-30 → 07-31 — Marathon : Jellyfin LXC-native + torrent réparé + mitm nettoyé + concentrateur agrégateur + YouTube SAS  (release v2",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 14,
+     "sha256": "415337d397e1e8ed283a67ec674567f21ff21faee276e5ea66e2485193d7b512"
+    },
+    {
+     "idx": 41,
+     "titre": "## 2026-07-30 — Companion : métriques live sur les cardlets + module Torrent + détection upgrades",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 10,
+     "sha256": "812744b1a66fa6a71d0122e31b9469701e5aeed9e1d714fa3ee5415965f4802a"
+    },
+    {
+     "idx": 42,
+     "titre": "## 2026-07-28 (suite) — WAN guard 3-couches + 503 sbxwaf résolu + anti-rootkit #915 déployé & fonctionnel",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 8,
+     "sha256": "16249605d0081ff8fed32a8077a564c8f66c127edcfa24971acfdb5fdeca83a3"
+    },
+    {
+     "idx": 43,
+     "titre": "## 2026-07-28 — Malware C2 backdoor found + WAN-unreachable saga (U-Boot proves HW OK → Linux mvpp2 driver)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 7,
+     "sha256": "4790d89b1d07c14f9dc1e1d7958ae0a64ccc49401db5f3d13ff0ca69703dd294"
+    },
+    {
+     "idx": 44,
+     "titre": "## 2026-07-27 — fleet-metrics: centralized+meshed node snapshots (trilogy 3/3, #912, deployed gk2)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 8,
+     "sha256": "7abf3ed9bd161bc3e9c4ae527da43af91d4c97804b7b7dfbacbfc53dec5c2226"
+    },
+    {
+     "idx": 45,
+     "titre": "## 2026-07-27 — Trilogy sub-projects 1-2 finalized + p2p-ephemeral foundation (deployed gk2)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 9,
+     "sha256": "ec06c2f7bb09975aea9d109d4a09a9524963929ebb0b2466d803cfaf1ab91b52"
+    },
+    {
+     "idx": 46,
+     "titre": "## 2026-07-25 — R-level: per-peer MITM inspection level (off/passive/active/reel) (PR #901, deployed gk2)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "373da68d97313d6d7a842f3c9a29952cb1420cfecec5a371e73f0d85a543b5dc"
+    },
+    {
+     "idx": 47,
+     "titre": "## 2026-07-24 — Transparent `.onion` routing (wg-toolbox+LAN) + WPAD/DHCP autodetect (PR #900, deployed gk2)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "52deb2ead7afa4c1947ad2c5e488d09034aa90269b541f98a45089ef017a3983"
+    },
+    {
+     "idx": 48,
+     "titre": "## 2026-07-23 — rpi400 image: auth runtime deps, `--kiosk` in CI, and a postinst bug that broke every install (branch fix/rpi400-auth-deps-a",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "3421492a6c94d8738cb06a3fc9d69bc5bd782ca92652a199a7a1b78022e4c08f"
+    },
+    {
+     "idx": 49,
+     "titre": "## 2026-07-22 — secubox-meshtastic: multi-grid LoRa node + passive listener (#897, PR #898, v2.15.0)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "3d82606ca266841ce907a23b29f7157cfceab549ad2d173b1a71d816ec7ea025"
+    },
+    {
+     "idx": 50,
+     "titre": "## 2026-07-22 — Wiki Support: Revolut payment link + trimmed donation channels",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 4,
+     "sha256": "a9f1d7407ed7674912986671adba719b7c9cd049de08aed96e2bdbb988f50f48"
+    },
+    {
+     "idx": 51,
+     "titre": "## 2026-07-21 — Scale-to-zero for public services (#896) + two-phase wake UX (branch feat/scale-to-zero-public-services)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 14,
+     "sha256": "80b13fcd4018bd405ad430850cdafb5bc9f38bf6606c2b96d44edf3b588709fb"
+    },
+    {
+     "idx": 52,
+     "titre": "## 2026-07-19 — Profiles Phase 2: Requires=secubox-core → Wants= (branch feat/profiles-phase2-core-wants)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 10,
+     "sha256": "1be31a58cde1948818991ed9eacc174bcd5e4a1967f0e651f800daf30b7799a7"
+    },
+    {
+     "idx": 53,
+     "titre": "## 2026-07-17 — Session auditing + Companion auth/system/metrics + billets emoji hashtags (branch feat/sessions-companion-emoji)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "98de554f005716837e605c1412b9dd6d600cfe957af1e436f47062f47c05dd07"
+    },
+    {
+     "idx": 54,
+     "titre": "## 2026-07-17 — Billets JWT admin surface + Companion authoring & image upload (branch fix/companion-billets-feed)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 13,
+     "sha256": "dbd423ec1a8968cae3e26617cf68091300de77b1c472e685a18596be22ec3700"
+    },
+    {
+     "idx": 55,
+     "titre": "## 2026-07-17 — WAF webui + autoban-to-firewall fix + efficiency analysis + Nextcloud rework (PR #866, #867)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 13,
+     "sha256": "273adf64bee851172eb54bdff3a94843b5a02088195e4a891337086609a28684"
+    },
+    {
+     "idx": 56,
+     "titre": "## 2026-07-16 — Mail stack overhaul + systemic auth fix + DPI exfil/regen (PR #865, #862–#864)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 14,
+     "sha256": "5051c8af37cbb97dfe94a5290412bdf4ee28d9a70f31b87c4643c92d1ad93503"
+    },
+    {
+     "idx": 57,
+     "titre": "## 2026-07-12 — metalogue: Maltego-style OSINT suite as LXC modules (#845)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 38,
+     "sha256": "c5a696d2a0b82bb06bffe933e9bcd1fac165f040f1cad16a6c2df864a6580323"
+    },
+    {
+     "idx": 58,
+     "titre": "## 2026-07-11 — MetaBlogizer Publisher Wizard (#832): publish is fixed end-to-end",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "09b47c6d448b66e10a8866c5395337ffa9fb9243e40dd975f02038f93524d6b3"
+    },
+    {
+     "idx": 59,
+     "titre": "## 2026-07-11 — Admin-TOTP toggle from webui + per-user 2FA reset (default OFF)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "079068ea52cf4fcbbd16dd6f2b4e9f4f418f148e41f4f456fac7bd599c282fe3"
+    },
+    {
+     "idx": 60,
+     "titre": "## 2026-07-10 — wg-toolbox VPN surf blackhole after reboot (nft drop-in aborted every boot)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "f02037e0434a3cd795ec29a7a94c863a8bf99010a36368940a6eb5e6f9840dfc"
+    },
+    {
+     "idx": 61,
+     "titre": "## 2026-07-10 — WireGuard webui full rewrite + status/peers perf avalanche fix (`secubox-wireguard` 1.0.2)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 42,
+     "sha256": "16c5b5abc519ec6465f3959fc5eb89c8ab6356cdc187a9375cddc7cb00e2062d"
+    },
+    {
+     "idx": 62,
+     "titre": "## 2026-07-09 — OpenClaw OSINT scanner: LXC module live end-to-end on gk2 (branch `feature/openclaw-lxc-scanner`)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 17,
+     "sha256": "7e4530c45ee7ef9ba651ce60f05b2758bdb193b13d78942ca62021470e009301"
+    },
+    {
+     "idx": 63,
+     "titre": "## 2026-07-06/07 — Sentinel threat engine + activation + 3 surfaces + C2 auto-learning (#821 #823–#828)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 14,
+     "sha256": "e14f697468f2628e454fbbae3b328fbb0f31e8019293db1f523bef7d62334bd2"
+    },
+    {
+     "idx": 64,
+     "titre": "## 2026-07-04 — ToolBox privacy report (#785 #790 #792), Zigbee WS fix (#796), PeerTube admin ops (#798)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "5e1b904d458b8e9fdd3004f1823149cc005006d1133b14208d4cf23663af5d56"
+    },
+    {
+     "idx": 65,
+     "titre": "## 2026-07-02 — P2P DHT + Federation + Master-link, LIVE on the 3-node mesh (#774 · PR #775)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "21e380f3347f73fbed1aec3271bb0f7d47add371985ec184a2e305fc6b05fded"
+    },
+    {
+     "idx": 66,
+     "titre": "## 2026-07-01 — Macro subsystem (M2) + tor-exit reference kind (#771)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 30,
+     "sha256": "00a37eb2d6f3165b379746a5f878f9653aa9c1527cb0b9ef1c22316ecb7e1eaa"
+    },
+    {
+     "idx": 67,
+     "titre": "## 2026-06-30 — secubox-p2p 1.8.0 : Service Registry = live view of annuaire catalog (#769)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 24,
+     "sha256": "8fd312f1222010cdc4c1ad37cfb684f5670aead3c7223e54ab57a5a74a955b7a"
+    },
+    {
+     "idx": 68,
+     "titre": "## 2026-06-30 — secubox-annuaire 0.2.0 : trustless cross-node service federation (#766)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 37,
+     "sha256": "4e5e01069be3c18e22db9245ba2adc2540bf43200e31d5d779a935fdcf6cdc25"
+    },
+    {
+     "idx": 69,
+     "titre": "## 2026-06-30 — secubox-yacy 1.0.12 : repair webui embed + navbar integration",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 45,
+     "sha256": "f7f1a094f02a00951b790f1a47554ffcea85ae50b0b150c33422633fad711f44"
+    },
+    {
+     "idx": 70,
+     "titre": "## 2026-06-30 — Lyrion admin 404 → dedicated-socket extraction (#763)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "3ee1f00a6d75bbb48aa31698197a0de4d9ef646676cd9b5bb809e485d83e28b7"
+    },
+    {
+     "idx": 71,
+     "titre": "## 2026-06-27 — LAN standardisé 192.168.10.0/24 + c3box/gk2 live Freebox + bump 1.10.0 (#760)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 33,
+     "sha256": "48a76e8e1d3e19e87f551b8b50214be827a9e3b864fe89705ed83bfd2b26ee9d"
+    },
+    {
+     "idx": 72,
+     "titre": "## 2026-06-27 — Netboot live PROUVÉ + première install SecuBox Debian sur c3box (second MOCHAbin) (#748 #737)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 57,
+     "sha256": "ade82d8221b660fcae6b0b87140a2db13ed5cc74d1789282feea7483997e6a16"
+    },
+    {
+     "idx": 73,
+     "titre": "## 2026-06-24 (cont.) — R4 analyst mode: MITM-everything + media reverse-catcher + clone (#736)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "a3c427b1c832d224bf1e073ac1bebdfdc84c939ea8ff387dfc43cf66baa5c744"
+    },
+    {
+     "idx": 74,
+     "titre": "## 2026-06-24 (cont.) — Banner on nonce-CSP sites + Claude API splice + YouTube unblock (#728)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "9255f356d998a5888013350422a79be45b35284493c2f7dd658daac45e72ef78"
+    },
+    {
+     "idx": 75,
+     "titre": "## 2026-06-24 — DPI YouTube bannering: strip Trusted Types CSP (#728)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "e55d26ad9881a9714c5255ff67f1d302fbf3390a9102e940324a5de9a2a49942"
+    },
+    {
+     "idx": 76,
+     "titre": "## 2026-06-22 — DPI exfil engine + Netrunner report (HTML+PDF) + sbxmitm fixes",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 49,
+     "sha256": "83620e9051c3654e2b42383a6e1ef0b3120f2b8260154498116044dd5a46a7b8"
+    },
+    {
+     "idx": 77,
+     "titre": "## 2026-06-20 — kbin Tor shipped + client releases + ad-block/mitm hardening",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 19,
+     "sha256": "173de000879b0ca9c0f3b5b5f1b40ea4d1f65ef965cb4934390e7e0eb1f87b12"
+    },
+    {
+     "idx": 78,
+     "titre": "## 2026-06-19 — kbin Tor egress quick-switch implemented DARK (#683, ToolBoX 2.7.1)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "84f738cfabe8225b9474e76d1906d8fa9737e2b931790e89c9e990c0db541ac8"
+    },
+    {
+     "idx": 79,
+     "titre": "## 2026-06-19 — kbin milestone: ToolBoX 2.7.0 (middle release) + Tor chapter staged (#683)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 21,
+     "sha256": "e3bb051372925b7c5e6f1bc49f53a73a9ccd32a345906b8187296ddcdb6b530e"
+    },
+    {
+     "idx": 80,
+     "titre": "## 2026-06-19 — #662 anti-bot: Chrome TLS fingerprint (uTLS) — defeat DataDome without splice (PR #674)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "2c2dcf5d6191652c56d826a3d71e17d437ab5062b86639a6ceddb319f67fa066"
+    },
+    {
+     "idx": 81,
+     "titre": "## 2026-06-19 — #662 post-cutover restore: ad-block metrics + popup CSS (PR #673)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "b12b5b320b4a88ede440a98fdc76fb6222d97ee5fe9b59f1c08a7e6fd3197741"
+    },
+    {
+     "idx": 82,
+     "titre": "## 2026-06-18 — #662 Phase 7: Python R3 engine DECOMMISSIONED + nft persistence",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 19,
+     "sha256": "05ea88b5e64688c31e571ed06e3d0116d9eb29803a462c6196931e2cc69526d0"
+    },
+    {
+     "idx": 83,
+     "titre": "## 2026-06-18 — #662 R3 CUTOVER to the Go MITM engine (PR #670) — LIVE + banner ported",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "f8c3c03ce8e872a3803060da6165e9d3b20f60b3d54a1bcab3a45f472345447a"
+    },
+    {
+     "idx": 84,
+     "titre": "## 2026-06-18 — #662 MITM engine migration: P5-prep + P6-prep (PRs #668, #669, all DARK)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 22,
+     "sha256": "7d85e8f3844ee6c740886b972319e692d79738bf59894d18c2a793dc2ee59300"
+    },
+    {
+     "idx": 85,
+     "titre": "## 2026-06-18 — #656 Ad Intelligence (PR #657, toolbox 2.6.56) + splice reverted",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "9d30259975b9cc952694794e9a76fd6d18a57ae4037e030a5d1e11e56be1644d"
+    },
+    {
+     "idx": 86,
+     "titre": "## 2026-06-18 — #649 selective SNI-splice (Lever A) shipped dark (PR #650, toolbox 2.6.54)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 22,
+     "sha256": "feab845244cfa81c683f93c9f33484e2262f9a377693c1cdc286ed71f65b47a7"
+    },
+    {
+     "idx": 87,
+     "titre": "## 2026-06-18 — #623 systemic shared-parent clobber resolved at source (PR #648)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "241bb0764f2180d265bbd0fc5b97c0125a69aeecda7c6206479903d3ecdfa1b1"
+    },
+    {
+     "idx": 88,
+     "titre": "## 2026-06-18 — perf sprint (hub latency, R3 tunnel encoding) + crowdsec unblock",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "ffaa833393a66dcc3ef7afad1f5a921fd02d8c7ce1f8b7ef03b31235ed37152f"
+    },
+    {
+     "idx": 89,
+     "titre": "## 2026-06-15 — gitea mis-route fix + robust WAF route propagation",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "14f31c4477f4f7e3635c145d8e1311a0add3fe92387611dd476109b37ce512f7"
+    },
+    {
+     "idx": 90,
+     "titre": "## 2026-06-15 — WAF hardening + perf: close open-proxy, behind-WAF media cache",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "7377b05aa473b96d3b7ac712c75c87fee502a7abed523bc67cbdf1a1b5795a9d"
+    },
+    {
+     "idx": 91,
+     "titre": "## 2026-06-15 — APT repo: all packages published + signed (apt.secubox.in)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 49,
+     "sha256": "c755b240f3ae7fc2810c055048f8403bc92eb426e399c49bfcb5efee390af171"
+    },
+    {
+     "idx": 92,
+     "titre": "## 2026-06-15 — threat-analyst: global security overview (1.4.3, live on gk2)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 67,
+     "sha256": "2e499c0c82d36e2679c013fa6ec0037051d4407ad7e4eef733e43b3a6bd47721"
+    },
+    {
+     "idx": 93,
+     "titre": "## 2026-06-14 — ToolBoX privacy/perf sprint : 2.6.23 → 2.6.36, all live on gk2",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 43,
+     "sha256": "01d564f2715a2c16c1a1dd2072bac81dddf5d3aa4617082c513fbe0750512e13"
+    },
+    {
+     "idx": 94,
+     "titre": "## 2026-06-13 — Browser extension : emancipate cartographie live (ref #532)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 17,
+     "sha256": "b0848f9f6f9774feb61e2c0d87057fed12d989913eef7486406d90a7cb947755"
+    },
+    {
+     "idx": 95,
+     "titre": "## 2026-06-13 — Android ToolBox app : serve + root-mode silent onboarding (ref #531/#536/#538)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "fd2ed2df21f6b426a7caba5ecd5c71ce2359cfebe3df51d51d062bda9e94870b"
+    },
+    {
+     "idx": 96,
+     "titre": "## 2026-06-11 — Phase 12.C + Phase 13 protection enforcement plane COMPLETE (ref #518-#528)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 46,
+     "sha256": "39b73dc28118895a870b70c49cb75d8e17a659a2fb5a481192db60a5ea806c87"
+    },
+    {
+     "idx": 97,
+     "titre": "## 2026-06-10 (soir) — Phase 11 COMPLETE + Phase 12.A/B + toolbox tabs — v2.13.15 (ref #502-#516)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 54,
+     "sha256": "8ead5c3e606645ea80dac2707dba0759e10505a66a08123cff6620685019600f"
+    },
+    {
+     "idx": 98,
+     "titre": "## 2026-06-10 — Phase 11 social mapping (A+B) + system triage + v2.13.14 (ref #502-#509)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 73,
+     "sha256": "6095067f5963c62bb1c244007457b4c785e3401506d3bd49b91ccaa94a81d305"
+    },
+    {
+     "idx": 99,
+     "titre": "## 2026-06-09 — Phase 10 banner injection perf quick wins + postinst regression fix (ref #501)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 94,
+     "sha256": "0af30e79bf6b73b17de891c87084d9f8686e48f95ff32fe5e4870fbccc01d587"
+    },
+    {
+     "idx": 100,
+     "titre": "## 2026-06-08 — Phase 7.E.x LXC hygiene + auth recovery + Phase 8 opening (ref #498, #500)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 76,
+     "sha256": "0f7dcb2d9cc5a9e5a8e6e69ef1a65ae715089218cb4a5a84c268efdc3c4c0c20"
+    },
+    {
+     "idx": 101,
+     "titre": "## 2026-06-07 — Phase 7 reboot follow-up sprint SHIPPED (ref #498)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 136,
+     "sha256": "64aa83867c694fb42fedaa83b6d4f8cb51b168685e1be023b0fad1166d49177d"
+    },
+    {
+     "idx": 102,
+     "titre": "## 2026-06-06 — Phase 7.D ASGI consolidation SHIPPED (ref #498)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 101,
+     "sha256": "b967afcbb64d2852e374d383d40917b9f3130fe09357d4729aafa7b6bf803699"
+    },
+    {
+     "idx": 103,
+     "titre": "## 2026-06-05 — Phase 7.A.2 + 7.B WAF dashboard + rate-limit + honeypot SHIPPED (ref #498)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 73,
+     "sha256": "a14368b384d4237481e3475dcad11b8825aeef0604041308bb1cc63a3d411a80"
+    },
+    {
+     "idx": 104,
+     "titre": "## 2026-06-05 — Phase 7.A WAF active enforcement SHIPPED (ref #498)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 48,
+     "sha256": "9f220d325db06c163dfea976fa6dd43a761bf6e5da7d6795c25715bd305d463d"
+    },
+    {
+     "idx": 105,
+     "titre": "## 2026-06-05 — Phase 6 R3 WIREGUARD : MAJOR RELEASE shipped (ref #496) + WAF leak FIXED",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 93,
+     "sha256": "3ea003de29a0e7af8c532823769d89074ddb1274f1cde1101f49aed564d934ea"
+    },
+    {
+     "idx": 106,
+     "titre": "## 2026-06-02 — Pi 400 BOOTS TO KIOSK + login works (live patches + #442 closed)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 76,
+     "sha256": "4c03d310f54fd44da8f8574a0afe73fdb2a1796a277f6824500156caae41dec0"
+    },
+    {
+     "idx": 107,
+     "titre": "## 2026-06-01 — kiosk-on-rpi400 actually ships : the #436 chain (PRs #437–#441)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 64,
+     "sha256": "a7047127987fc0fab80bbe7b30001b8c7e80f944b2f78fb5b6371a501a8b5e90"
+    },
+    {
+     "idx": 108,
+     "titre": "## 2026-05-31 — v2.13.3 → v2.13.4 cross-build finally green + media + kiosk regressions",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 108,
+     "sha256": "abab62aa369b2eeecf651ead2ee4e5b98f9875ccbfa184b87fc58d30e2dce2d7"
+    },
+    {
+     "idx": 109,
+     "titre": "## 2026-05-30 — v2.13.1 + v2.13.2 release polish + media flash + 4 issues filed",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 46,
+     "sha256": "bb39a5546aa87059cff3eefceb69bcda84be04449e8e8d8d7baedf9e205c0738"
+    },
+    {
+     "idx": 110,
+     "titre": "## 2026-05-29 (cont.) — backlog sweep + v2.13.0 release",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 32,
+     "sha256": "5020c04fb6be48e76ff901b36458bda44aef5404c75475fe4ebd6d51266f74b9"
+    },
+    {
+     "idx": 111,
+     "titre": "## 2026-05-29 — WAF unban + NC 32 upgrade + user provisioning (#410) + Companion personas (#409)",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 50,
+     "sha256": "91a4218ecae70547f532a3a60e02411cd7facf7719bbda66afb3f2a89a752ad9"
+    },
+    {
+     "idx": 112,
+     "titre": "## 2026-05-28 — PeerTube LIVE end-to-end (upload confirmed)",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "f379cdf318e7e0d009c24e05ff62589b0e55ff50db7edb1b70a899b8a23d658f"
+    },
+    {
+     "idx": 113,
+     "titre": "## 2026-05-27 (afternoon/evening session — peertube + photoprism + mail + WAF)",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 139,
+     "sha256": "194b8097ba5c449aa266705f55dca27a600d746b4c1eae36b4d71460c7f9e181"
+    },
+    {
+     "idx": 114,
+     "titre": "## 2026-05-27",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 64,
+     "sha256": "e92cb19a951ca394d7e85bd4072dcdcea7bea91b3becb1ae1409af1d29ba56f0"
+    },
+    {
+     "idx": 115,
+     "titre": "## 2026-05-26",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 108,
+     "sha256": "e202c714f001463f768bdc559cf768ef8aa03fdc2aa32ab960434feddf39aabe"
+    },
+    {
+     "idx": 116,
+     "titre": "## 2026-05-24",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "4bffd9dda3f46a54855bc8808d6cc7a86e762e48966b996a8d71e2623ab4b49e"
+    },
+    {
+     "idx": 117,
+     "titre": "## 2026-05-22",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 50,
+     "sha256": "155bcfc3c47fc9ddff787c605c61e0526c0226edf2d4a4eb60bda0eec1125b5d"
+    },
+    {
+     "idx": 118,
+     "titre": "## 2026-05-21",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 24,
+     "sha256": "577e582a209d152e539ef9dd125be1a9fbd3142a09affe68ed0069e36399a710"
+    },
+    {
+     "idx": 119,
+     "titre": "## 2026-05-19",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 66,
+     "sha256": "524ffd610d76624c75fd81a7a23516e4988f7dd9c3ae628bd6934c0926be6d12"
+    },
+    {
+     "idx": 120,
+     "titre": "## 2026-05-17",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "9526815ae5e27f70eb0ea42db60b5ef53d836d6093c1c8659c641020eabe198b"
+    },
+    {
+     "idx": 121,
+     "titre": "## 2026-05-16",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 120,
+     "sha256": "9f53ec4707291659e9cc392694b0a81a91f2b17e6dcdfecab4a98ef27032d548"
+    },
+    {
+     "idx": 122,
+     "titre": "## 2026-05-14",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "e13615fc3aa825791762da5957e6423affb3d52a96e5b04acdc750db3d589e19"
+    },
+    {
+     "idx": 123,
+     "titre": "## 2026-05-13",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 67,
+     "sha256": "445654ac29935cd40bae13d61b444c7ec8eac67e8eccedf7489f5eb048210fa0"
+    },
+    {
+     "idx": 124,
+     "titre": "## 2026-05-12",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 563,
+     "sha256": "c720f12206ab67c797bd0ac4f1656dc99dd490b059a87e9761f087af6a1a9c82"
+    },
+    {
+     "idx": 125,
+     "titre": "## 2026-05-11",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 115,
+     "sha256": "148b9d71f5aa2eb2716816e8748bc17a76f9858091c1b641c22582bd0aa300d1"
+    },
+    {
+     "idx": 126,
+     "titre": "## 2026-05-09",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 183,
+     "sha256": "ea16fd81d1c6e0d32374a0e13179e47b0fa4edb4ada4bc80fc2f41d595176e66"
+    },
+    {
+     "idx": 127,
+     "titre": "## 2026-05-08",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 547,
+     "sha256": "62c11755cfb359d97bc400e6998a17e80666ad62efc6edde34efdda864405cfe"
+    },
+    {
+     "idx": 128,
+     "titre": "## 2026-05-07",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 124,
+     "sha256": "be18a0c73f16445f83e6b96a5e3b09e1ecb8de178c60448c7c6c474d506637ab"
+    },
+    {
+     "idx": 129,
+     "titre": "## 2026-05-06",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 175,
+     "sha256": "154a8485ead45b6d8e5ae4b4714444f4017b0bdc4936587be6fe361fb5eb68b0"
+    },
+    {
+     "idx": 130,
+     "titre": "## 2026-05-05",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 359,
+     "sha256": "48d0d59e82cf73c0542a53f974266d9958e9f3d15b4340a6b97b9c5aba564dd4"
+    },
+    {
+     "idx": 131,
+     "titre": "## 2026-05-04",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 314,
+     "sha256": "6918cd65b5615b8948249f1d903780a70a0ed0fc23d463ec66e65b39b0f3a71c"
+    },
+    {
+     "idx": 132,
+     "titre": "## 2026-05-05",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 84,
+     "sha256": "b2e0dc9f4d50df3201d14433d699e9044703f101b30a812cfb37c5780aa17e40"
+    },
+    {
+     "idx": 133,
+     "titre": "## 2026-05-03",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 216,
+     "sha256": "6d3afc5a70f654d4e99697996277698f8e423e1cda4517535576faeb393a286b"
+    },
+    {
+     "idx": 134,
+     "titre": "## 2026-05-02",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 124,
+     "sha256": "ff37bad6de517c1a774e26659979fc328ee6e40a5855c2ac433590cd5ae765f3"
+    },
+    {
+     "idx": 135,
+     "titre": "## 2026-05-01",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 89,
+     "sha256": "73e5a341e12782203366ef019c67ef0a98ad8c2b7cbaa44891ed966c2f340b92"
+    },
+    {
+     "idx": 136,
+     "titre": "## 2026-04-30",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 197,
+     "sha256": "6d1591dfb55916efef10568e93d82b4b61527fdccfa927a6149e588be1496431"
+    },
+    {
+     "idx": 137,
+     "titre": "## 2026-04-29",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 189,
+     "sha256": "bd2687e67e98ce4982d66bd703ce164d1c2e96df7572d058d48cb5d24a9a59f2"
+    },
+    {
+     "idx": 138,
+     "titre": "## 2026-04-28",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 148,
+     "sha256": "2766482fb3a5e1e49091447057c815b8b97b68ddd6b11eefd2c9d0e72672bd41"
+    },
+    {
+     "idx": 139,
+     "titre": "## 2026-04-27",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 198,
+     "sha256": "9a285aa19cf1f750005757bca78c0f73063eac14b6dc1feccdc984d6286c5c6a"
+    },
+    {
+     "idx": 140,
+     "titre": "## 2026-04-23",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 36,
+     "sha256": "f0c12524633cbad6322d41b02a99045c9365aef35b3505f6b529a587a9efa9bc"
+    },
+    {
+     "idx": 141,
+     "titre": "## 2026-04-15",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "19251cba44497baa27a45b041bf22b115e6b4a0aee13848d3dc7feada0de4fba"
+    },
+    {
+     "idx": 142,
+     "titre": "## 2026-04-14",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 39,
+     "sha256": "31ac3a77d53e7c49d664a9f593722d9637293c2fa779fb40a54264530c7d57e5"
+    },
+    {
+     "idx": 143,
+     "titre": "## 2026-04-03",
+     "mois": "2026-04",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "ed073ac638b26dda6d41db8f2025d8cd8dceea50f623aa27e93076785917c884"
+    },
+    {
+     "idx": 144,
+     "titre": "## 2026-03-30",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 23,
+     "sha256": "e2c4e68154eb1a7ee04d5ff544987438b1997e37ae21278e6fdf7e0d0fd1a33d"
+    },
+    {
+     "idx": 145,
+     "titre": "## 2026-03-29",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 12,
+     "sha256": "2bd482071978d85b22244dd03fb89f137369b5022b7d81321881b186951a9d88"
+    },
+    {
+     "idx": 146,
+     "titre": "## 2026-03-28",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 87,
+     "sha256": "ed864dcbb31f1cc123f135f58b70fdbc1e4b693158e78f7445185df7902d78e0"
+    },
+    {
+     "idx": 147,
+     "titre": "## 2026-03-27",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "6f1aa1a87d1adf3d9bfa552447e318f0df524ab207d68b4d434931d04636d442"
+    },
+    {
+     "idx": 148,
+     "titre": "## 2026-03-26",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "085d952eb7e67401944d49f5d2e55ffc02195ea552d53e64caaad3302e0f71c6"
+    },
+    {
+     "idx": 149,
+     "titre": "## 2026-03-25",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "964313e2fbf3e65ff9bd72bcedb765b62654a62608b0563fe817be72fedcd30c"
+    },
+    {
+     "idx": 150,
+     "titre": "## 2026-03-22",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "fc56b57ad0de583a60acd6428f4ce1a26c29505c8d4f1ac7d24fad3660ca2702"
+    },
+    {
+     "idx": 151,
+     "titre": "## 2026-03-21",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "15c4125825a4e224f6a3a56711b81d1416cb48e676e72247f5da43be8f7cf6a4"
+    },
+    {
+     "idx": 152,
+     "titre": "## 2026-03-20",
+     "mois": "2026-03",
+     "actif": false,
+     "lignes": 14,
+     "sha256": "49fb83302ed3b0d715df6ac8f3f441e63438500a6ee9126aef6b6b271dc25fa9"
+    },
+    {
+     "idx": 153,
+     "titre": "## Project Statistics",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 72,
+     "sha256": "de8bbdf6e117d0556ceea7696da64b91e7fa812d234a668d18154a806fb16972"
+    },
+    {
+     "idx": 154,
+     "titre": "## Session 118 — 2026-05-08",
+     "mois": "2026-05",
+     "actif": false,
+     "lignes": 88,
+     "sha256": "6f0c687200ed938129c837d74dda89a99ca73fd36fadc0dfa00c69718dc22bec"
+    },
+    {
+     "idx": 155,
+     "titre": "## 2026-06-24 — build+deploy T0 fixes (#494/#519/#53/#421) + dirs-guard /run self-heal",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "97d309f75750b78bc4df062462b006af0f742e0bb6485146da8183d9dc2f2900"
+    },
+    {
+     "idx": 156,
+     "titre": "## 2026-07-02 — secubox-p2p: DHT + federation health-checks + master-link (#774, docs)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "57b3724d995f104428ea42cbf23c41d56b066f624aa2bcaf14f9bf55a4ce4577"
+    },
+    {
+     "idx": 157,
+     "titre": "## 2026-07-03 → 07-04 — ToolBox privacy report: fidelity, media types, character sheet (#785 #790 #792 · +incident)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 35,
+     "sha256": "fc9dd66de6daf2947ee0e47c6cf2a030866fcb2ef99e749f1586f5ad9ea0e49b"
+    }
+   ]
+  },
+  "TODO": {
+   "original_sha256": "86646eabdf211b24f1ce8b986e8296d8ed4c9f9d3c6ecdea362095e0308c6ea4",
+   "original_lignes": 1643,
+   "original_octets": 88952,
+   "entete_lignes": 12,
+   "entete_sha256": "764ad0ca429e10cbaf6bbd9d2a46f19416cfdff5a450aee7c77cd58c5649dfd0",
+   "archives": {
+    "2026-06": {
+     "sections": [
+      26,
+      27,
+      28
+     ],
+     "lignes": 157,
+     "sha256": "96ea2937e3a1d9d0162891b6c027d06d5b5c7f7b7d536f92d67e1cc5ba71f4e7"
+    },
+    "2026-07": {
+     "sections": [
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24
+     ],
+     "lignes": 168,
+     "sha256": "237b05c0f503b639168b5a8f33769f6eef19472f84c7f2956b71636556898dc7"
+    },
+    "2026-08": {
+     "sections": [
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "lignes": 220,
+     "sha256": "cb381fbfb7f8f01c9a2ff45ea7d7c9e117921c9ca20b0311b53ca1185f5eff9b"
+    },
+    "sans-date": {
+     "sections": [
+      25,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44
+     ],
+     "lignes": 966,
+     "sha256": "b911e734485ab8a3b43022848bc823d36ec666cf4aca5ecf5ffaec30e54315be"
+    }
+   },
+   "sections": [
+    {
+     "idx": 0,
+     "titre": "## 2026-09-25 — suites identité SBX OS (#1405)",
+     "mois": "2026-09",
+     "actif": true,
+     "lignes": 19,
+     "sha256": "c25c3a5adc279cbf23e80288b31df53c4b2eb25caeb8404b0a4cb49efc1a3e1b"
+    },
+    {
+     "idx": 1,
+     "titre": "## 2026-09-16 — suites Zigbee & accès (#1365, #1366 livrés)",
+     "mois": "2026-09",
+     "actif": true,
+     "lignes": 21,
+     "sha256": "08f7d4bf86d3f752ea5ab16f7806b7c3390b0b8f91ad60f7210bb3b8644d1b11"
+    },
+    {
+     "idx": 2,
+     "titre": "## 2026-09-14 — suites leurre & renseignement (#1290 livré)",
+     "mois": "2026-09",
+     "actif": true,
+     "lignes": 15,
+     "sha256": "e5a817ab21b7e7d95edf2a65d53ab2b63b7fc5d8cddf250d1e57617d7dd8cbbe"
+    },
+    {
+     "idx": 3,
+     "titre": "## 2026-09-14 — suites crypto (#1288 livré)",
+     "mois": "2026-09",
+     "actif": true,
+     "lignes": 10,
+     "sha256": "7de90d713a6bd7e896ff39d7919eab033bb1609c978cc973e3cb0579971a8f9e"
+    },
+    {
+     "idx": 4,
+     "titre": "## 2026-09-14 — suites Lexie (#1287 livré)",
+     "mois": "2026-09",
+     "actif": true,
+     "lignes": 9,
+     "sha256": "d4f5d99dba1d7fff0e9013c5e8d1c80f996a69192f7cc417d282cffa61695ddc"
+    },
+    {
+     "idx": 5,
+     "titre": "## 2026-09-11 — suites crypto souveraine (#1263, #1272 fusionnés)",
+     "mois": "2026-09",
+     "actif": true,
+     "lignes": 23,
+     "sha256": "f4f49764f1056856b8e9791af24610d2c096863c6a70c23b4cfca43cc93ccf2a"
+    },
+    {
+     "idx": 6,
+     "titre": "## 2026-09-07 — suites Freebox TV / réveils / capacité gk2",
+     "mois": "2026-09",
+     "actif": true,
+     "lignes": 23,
+     "sha256": "0d5f8eaab3b8f6370ab651e6f128e48aa9e07e34bbb239e90b6b170cafe22210"
+    },
+    {
+     "idx": 7,
+     "titre": "## 2026-08-30 — ZIA Hall — POC IA locale, interface du bus d'objets (#1245)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 44,
+     "sha256": "03d3ce87b79cba573c4181aab3b354bdec994d211d53f9e6c776a7a997ff8933"
+    },
+    {
+     "idx": 8,
+     "titre": "## 2026-08-28 — WAF anti-FP + routes, unification média, polish Hall (#1266)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "06f5fe1c339e4dace8d955a13092529fd269080b1a81bcbe5faa2171b5c10e51"
+    },
+    {
+     "idx": 9,
+     "titre": "## 2026-08-26 (soir) — file SBXOS, par ordre décidé",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 89,
+     "sha256": "02df181d01e142adaa47b502f98ed4882a04e58c02c990026c2d67b4dfff5fe8"
+    },
+    {
+     "idx": 10,
+     "titre": "## 2026-08-21 (soir)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 8,
+     "sha256": "154813e0e68ed3625338141c0ee98afccf095b484307ff5ec87a2a040b4d88db"
+    },
+    {
+     "idx": 11,
+     "titre": "## 2026-08-21",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "32ea240e734ac10dd4ac13ab46a08e8116aad32e24770bfaef1bdec0d571aeb8"
+    },
+    {
+     "idx": 12,
+     "titre": "## 2026-08-19",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "540068b4fb71e749cfb1f9bfc27381e0b60c885e1cadf939539242d3541405e8"
+    },
+    {
+     "idx": 13,
+     "titre": "## 2026-08-17",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 9,
+     "sha256": "a8b197497c939cb427b9576fd69466ba57a4be1de708e9d998abcf5028547cca"
+    },
+    {
+     "idx": 14,
+     "titre": "## 2026-08-16 (suite)",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 8,
+     "sha256": "039d371da82a513c91e36d2674a14137a70ba563d4dae71e7256ed077386d87e"
+    },
+    {
+     "idx": 15,
+     "titre": "## 2026-08-16 — ajoute",
+     "mois": "2026-08",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "df3cacb8c86afba4a37db44be4c297aa90a28289494abc973e1452e7f51fb103"
+    },
+    {
+     "idx": 16,
+     "titre": "## 🎬 Média/perf — suite marathon v2.16.0 (2026-07-31)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 13,
+     "sha256": "2c489c868d7de9a16894577e5f12d942fc118a04d8478cdeab933ad81a5dd863"
+    },
+    {
+     "idx": 17,
+     "titre": "## 🚨 Incident 2026-07-28 — malware C2 + WAN mvpp2 (URGENT)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 8,
+     "sha256": "4cceb852220235655cd371fa6e60f3425da41236b661b3afcf3288c9194c5a89"
+    },
+    {
+     "idx": 18,
+     "titre": "## 🧅 Transparent .onion / proxypac — follow-ups fallback WPAD/PAC (2026-07-25, non-bloquant)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 19,
+     "sha256": "58762a86face42994e2bde1e040d5d1670d9ce9672b7eea28442ea9c4f10004f"
+    },
+    {
+     "idx": 19,
+     "titre": "## 🎚️ R-level par peer — follow-ups (2026-07-25, non-bloquant)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "28961525d61e22a652ac58fbbefad172030517c7e4194b09b8ab4d1e2842cdba"
+    },
+    {
+     "idx": 20,
+     "titre": "## 📺 Intégration webui LXC — frigate + hexo (2026-07-24)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 27,
+     "sha256": "352f80b2b8ef066491d78f7d7028f76ae9a2605ca8b6418c9b605c48d5456255"
+    },
+    {
+     "idx": 21,
+     "titre": "## 📧 Vie privée mail & traceurs (en pause, 2026-07-23)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 17,
+     "sha256": "c7a11dd57ff004e184dcf164cc7dae78520f0c5891b7840a45c218fc885d6158"
+    },
+    {
+     "idx": 22,
+     "titre": "## 🖥️ Afficheurs & appliances (en pause, 2026-07-23)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 31,
+     "sha256": "c4e385206b4e6f641be189b56e7d88b0d457154149e4672030056192d0d009b1"
+    },
+    {
+     "idx": 23,
+     "titre": "## 🕸️ MIND — metalogue OSINT suite (#845, suivis 2026-07-12)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 22,
+     "sha256": "a673d90e5e318e5e47a263f74d5aa8b5c162dc586526c63f7c19805c8fc55c20"
+    },
+    {
+     "idx": 24,
+     "titre": "## 🟣 MIND — ToolBox rapport vie privée (suivis #785/#790, ajouts 2026-07-04)",
+     "mois": "2026-07",
+     "actif": false,
+     "lignes": 20,
+     "sha256": "02b84ae3ee73f0ac7e58dd42305363b8f3e8939282b3059a1e0900ea622276fc"
+    },
+    {
+     "idx": 25,
+     "titre": "## 🟢 P2P — Roadmap post-DHT/Federation/Master-link (#774 · PR #775)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 37,
+     "sha256": "ba27c303af403209be1800ebdb6514cf36361abf7a5135f02fc14349d6d1a6cf"
+    },
+    {
+     "idx": 26,
+     "titre": "## ⚪ T5 — Images / OS variants / Hardware (ajouts 2026-06-27)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 48,
+     "sha256": "eb32f247a028ba99d0744004a7939bf46b347ae6d20407f32d3b54dea2c7e3de"
+    },
+    {
+     "idx": 27,
+     "titre": "## ✅ Clos 2026-06-22 — DPI exfil + report Netrunner + sbxmitm",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 39,
+     "sha256": "d91ba066c284e837739c26eca0dd9adc05da94bd515a682de3cd6e70ab1452df"
+    },
+    {
+     "idx": 28,
+     "titre": "## 🎯 Backlog priorisé — revue 2026-06-24 (64 issues ouvertes)",
+     "mois": "2026-06",
+     "actif": false,
+     "lignes": 70,
+     "sha256": "0309c520ed4213c76faaf00cbe62fad76a986a9787cc1aacc3e962cec0b6463c"
+    },
+    {
+     "idx": 29,
+     "titre": "## 🔥 P0 — Immediate (in flight)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 480,
+     "sha256": "d81d874a1e3cd925a59c5713b9ae874a803c4d9db5903a4d5503c07ee68d51fb"
+    },
+    {
+     "idx": 30,
+     "titre": "## 🟡 P1 — Next release (v2.12.0 target)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 10,
+     "sha256": "13da81cf2f73fb6217d2fc9757939a14d29a96bca1b14875989f1932e51b749c"
+    },
+    {
+     "idx": 31,
+     "titre": "## 🟣 P2 — Sensor stack (WALL/MIND alignment)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 13,
+     "sha256": "05f0ba01a0ca41b4c561845b915b17a9a8488b1b5df31f5eb24e598df20a5002"
+    },
+    {
+     "idx": 32,
+     "titre": "## ✅ PHASE 1 — Bootstrap HW + OS (S01–S03) — TERMINÉ",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 11,
+     "sha256": "f6994a3dbb9d84df4ff4278113cab1e75e07c983c5dd49c8766fa128db59f609"
+    },
+    {
+     "idx": 33,
+     "titre": "## ✅ PHASE 2 — API Gateway + secubox-core + secubox-hub (S04–S07) — TERMINÉ",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 25,
+     "sha256": "33892c37cb91fa198603a1e6c32d739b93806d3faeb02300b946b4c100ec9dfb"
+    },
+    {
+     "idx": 34,
+     "titre": "## ✅ PHASE 3 — Modules (S07–S12) — TERMINÉ (33 modules)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "bae7e0da2882f2a1cf7cc6c209256baa9942de58265b4661a0a75b4153492460"
+    },
+    {
+     "idx": 35,
+     "titre": "## ✅ PHASE 4 — APT Repo + Packaging (S13–S14) — TERMINÉ",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 10,
+     "sha256": "901c45ace35721be517ba1e958fc1c2ab6a96c1e6cdcbd3b8962ac6e126bebc9"
+    },
+    {
+     "idx": 36,
+     "titre": "## ✅ PHASE 5 — CSPN Hardening (S15–S18) — TERMINÉ",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 26,
+     "sha256": "ff6e3fa27090b83bababff65f9fe4b2d8f5dfe51571c8ac1d26901b95beaea2c"
+    },
+    {
+     "idx": 37,
+     "titre": "## ✅ PHASE 6 — CI/CD Image Factory (S19–S21)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "f7c201d41b86061a24b18dd882abcc13258477e1c0d66d51b90dc6c24cfb4291"
+    },
+    {
+     "idx": 38,
+     "titre": "## ✅ PHASE 7 — Documentation (S22–S24) — TERMINÉ",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 16,
+     "sha256": "f39b869107c1020a38380f3d395180158987844e5e7b53fe2c49a57ade989652"
+    },
+    {
+     "idx": 39,
+     "titre": "## ✅ COMPLÉTÉ",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 18,
+     "sha256": "178bb8193977238b1641d6c29c71f1b58fcfdb45017918fe78b9b277ca2ae92a"
+    },
+    {
+     "idx": 40,
+     "titre": "## ✅ PHASE 8 — Applications (21 modules) — COMPLETE",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 28,
+     "sha256": "5629cc5d5ddbdac22d6c9316b8880ced3859c3e878be1bb5319e4e149d24b3ef"
+    },
+    {
+     "idx": 41,
+     "titre": "## ✅ PHASE 9 — System Tools (22 modules) — COMPLETE",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 29,
+     "sha256": "54f25038aa1243849758014938e17006a1165131db6fe7022c1c8c968fced143"
+    },
+    {
+     "idx": 42,
+     "titre": "## ✅ PHASE 10 — Security Extensions (10 modules) — COMPLETE",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 15,
+     "sha256": "72fa69abfe03ea84f9ddc250c88847259fac09d77472acc3942fdf93c777aa93"
+    },
+    {
+     "idx": 43,
+     "titre": "## 🔄 PHASE 11 — Live USB Enhancements (v1.7.0)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 71,
+     "sha256": "e3b54b2330f47697bb07942d1855b194e09da8ab70f24e314641de36013a3ce2"
+    },
+    {
+     "idx": 44,
+     "titre": "## 🔄 PHASE 12 — Meta-Script Generator (v2.0.0)",
+     "mois": "sans-date",
+     "actif": false,
+     "lignes": 130,
+     "sha256": "42aeb3d2f560235712b5045541007cbba8f54e0b9db4435dcb539c43ca91547b"
+    }
+   ]
+  }
+ }
+}
