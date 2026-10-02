@@ -1,3 +1,15 @@
+secubox-backup (2.1.1-1~bookworm1) bookworm; urgency=high
+
+  * Correctif de 2.1.0 (#1903) : le déchiffrement écrivait au nom de l'archive d'origine, donc `backupctl restaurer` supprimait ensuite l'archive en clair qui portait ce nom, et la vérification de `chiffrer-existantes --supprimer-clair` comparait un fichier à lui-même. Le déchiffré va désormais dans un dossier temporaire privé (0700) détruit après usage, et la vérification compare l'original au déchiffré, deux fichiers distincts. Test de régression avec un vrai gpg.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 08:30:00 +0200
+
+secubox-backup (2.1.0-1~bookworm1) bookworm; urgency=high
+
+  * Sauvegardes chiffrées par défaut (#1903). Les archives de configuration embarquaient /etc/secubox (secrets compris) EN CLAIR, certaines en 0666 dans des dossiers en 0777. Désormais : chiffrement activé par défaut avec la clé publique de la box (age, ou GPG) lue dans /etc/secubox/backup-encryption.json ; sans destinataire, ou si le chiffrement échoue, la sauvegarde ÉCHOUE et l'archive en clair est détruite ; désactiver est un choix explicite, journalisé ; dossiers 0750, fichiers 0640. Nouvel outil root backupctl : etat, init-key (paire age, privée 0600 root à copier HORS de la box), chiffrer-existantes [--supprimer-clair] (clair supprimé seulement après un déchiffrement vérifié), restaurer. La restauration d'une archive chiffrée passe par backupctl (la clé privée est à root). La postinst génère la paire si besoin et liste les archives encore en clair. Depends: age.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 08:00:00 +0200
+
 secubox-backup (1.2.2-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

@@ -31,6 +31,7 @@ import json
 import hashlib
 import asyncio
 import threading
+import logging
 
 # Import shared auth
 import sys
@@ -41,7 +42,16 @@ except ImportError:
     async def require_jwt():
         return {"sub": "dev"}
 
+log = logging.getLogger("secubox.backup")
+
 app = FastAPI(title="SecuBox Backup API", version="2.0.0")
+
+# Chiffrement par défaut (#1903). Chargé par chemin : l'agrégateur importe ce main.py sous un
+# autre nom de paquet, un import relatif y échouerait.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("secubox_backup_chiffrement", Path(__file__).with_name("chiffrement.py"))
+chiffrement = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(chiffrement)
 
 # Configuration
 BACKUP_PATH = Path("/srv/backups")
@@ -93,7 +103,7 @@ class RemoteType(str, Enum):
 # Models
 class BackupCreate(BaseModel):
     type: BackupType = BackupType.FULL
-    encrypt: bool = False
+    encrypt: bool = True    # par défaut (#1903) ; False = choix explicite, journalisé
     encrypt_recipient: Optional[str] = None  # GPG key ID or age public key
     upload_remote: Optional[str] = None  # Remote target name
     comment: Optional[str] = None
@@ -107,7 +117,7 @@ class RestoreRequest(BaseModel):
 
 class ContainerBackup(BaseModel):
     name: str
-    encrypt: bool = False
+    encrypt: bool = True
 
 
 class ContainerRestore(BaseModel):
@@ -134,7 +144,7 @@ class ScheduleConfig(BaseModel):
     enabled: bool = False
     type: BackupType = BackupType.CONFIG
     interval_hours: int = Field(ge=1, le=168, default=24)  # 1h to 7 days
-    encrypt: bool = False
+    encrypt: bool = True
     upload_remote: Optional[str] = None
     last_run: Optional[str] = None
     next_run: Optional[str] = None
@@ -349,38 +359,8 @@ async def upload_to_remote(file_path: Path, remote_name: str) -> tuple:
 # Encryption Support
 # ============================================================================
 
-def encrypt_file(file_path: Path, recipient: str) -> tuple:
-    """Encrypt a file using age or GPG."""
-    encrypted_path = Path(str(file_path) + ".age")
-
-    # Try age first (modern, simpler)
-    if recipient.startswith("age1"):
-        cmd = ["age", "-r", recipient, "-o", str(encrypted_path), str(file_path)]
-    else:
-        # Fall back to GPG
-        cmd = ["gpg", "--encrypt", "--recipient", recipient, "--output", str(encrypted_path), str(file_path)]
-
-    success, out, err = run_cmd(cmd, timeout=300)
-    if success:
-        file_path.unlink()  # Remove unencrypted file
-        return True, encrypted_path
-    return False, err
-
-
-def decrypt_file(file_path: Path, key_path: str = None) -> tuple:
-    """Decrypt a file."""
-    if str(file_path).endswith(".age"):
-        decrypted_path = Path(str(file_path)[:-4])
-        cmd = ["age", "-d"]
-        if key_path:
-            cmd.extend(["-i", key_path])
-        cmd.extend(["-o", str(decrypted_path), str(file_path)])
-    else:
-        decrypted_path = Path(str(file_path).replace(".gpg", ""))
-        cmd = ["gpg", "--decrypt", "--output", str(decrypted_path), str(file_path)]
-
-    success, out, err = run_cmd(cmd, timeout=300)
-    return success, decrypted_path if success else err
+# Le chiffrement et le déchiffrement vivent dans api/chiffrement.py (#1903) :
+# chiffrement.chiffrer / chiffrement.dechiffrer.
 
 
 # ============================================================================
@@ -480,6 +460,10 @@ def ensure_backup_dirs():
     """Ensure backup directories exist"""
     for subdir in ["config", "containers", "services"]:
         (BACKUP_PATH / subdir).mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(BACKUP_PATH / subdir, chiffrement.MODE_DOSSIER)   # 0750 : plus de 0777 (#1903)
+        except OSError:
+            pass
 
 
 # Public endpoints
@@ -653,6 +637,13 @@ async def restore_backup(req: RestoreRequest, user: dict = Depends(require_jwt))
 
     if not backup_file:
         raise HTTPException(status_code=404, detail="Backup file not found")
+
+    if backup_file.name.endswith(".age"):
+        # La clé privée de restauration est à root (et HORS de la box de préférence) : l'API,
+        # qui tourne sans privilège, ne la lit pas. Restauration : `backupctl restaurer FICHIER`.
+        raise HTTPException(status_code=409, detail=(
+            "Archive chiffrée : restaurer avec « backupctl restaurer %s » (root, clé privée de "
+            "sauvegarde)." % backup_file.name))
 
     if req.dry_run:
         # List contents
@@ -1154,14 +1145,19 @@ async def run_backup_async(backup_id: str, req: BackupCreate, schedule_name: str
                     outputs.append(f"Services: {archive.name}")
                     created_files.append(archive)
 
-        # Encryption
-        if req.encrypt and req.encrypt_recipient and created_files:
+        # Chiffrement (#1903) : par défaut, avec la clé publique de la box. Échec = la sauvegarde
+        # ÉCHOUE et l'archive en clair est détruite (levée ErreurChiffrement, traitée plus bas).
+        if req.encrypt and created_files:
             set_progress(backup_id, "running", 85, "Encrypting backups...")
-            for archive in created_files:
-                success, result = encrypt_file(archive, req.encrypt_recipient)
-                if success:
-                    # Update file reference
-                    created_files[created_files.index(archive)] = result
+            created_files[:] = [chiffrement.chiffrer(a, req.encrypt_recipient) for a in list(created_files)]
+        elif created_files:
+            log.warning("sauvegarde %s SANS chiffrement (choix explicite de %s)", backup_id, "l'appelant")
+            outputs.append("ATTENTION : archive non chiffrée (choix explicite)")
+            for a in created_files:
+                try:
+                    os.chmod(a, chiffrement.MODE_FICHIER)
+                except OSError:
+                    pass
 
         # Upload to remote
         if req.upload_remote and created_files:

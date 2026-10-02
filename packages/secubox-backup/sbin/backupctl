@@ -1,0 +1,154 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: backupctl — chiffrement des sauvegardes (#1903), outil ROOT
+CyberMind — https://cybermind.fr
+
+  backupctl etat                         destinataire, clé privée, archives en clair
+  backupctl init-key                     génère une paire age ; publique dans la config, privée
+                                         dans /etc/secubox/secrets (root) — à COPIER HORS de la box
+  backupctl chiffrer-existantes [--supprimer-clair]
+                                         chiffre les archives en clair ; le clair n'est supprimé
+                                         qu'après un déchiffrement vérifié, et seulement si demandé
+  backupctl restaurer FICHIER.age [-C /] déchiffre puis extrait (tar), avec la clé privée
+"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, os.environ.get("SECUBOX_BACKUP_LIB", "/usr/lib/secubox/backup/api"))
+import chiffrement as c   # noqa: E402
+
+RACINE = Path(os.environ.get("SECUBOX_BACKUP_PATH", "/srv/backups"))
+SOUS = ("config", "containers", "services")
+
+
+def etat() -> int:
+    rec = c.destinataire()
+    print(f"destinataire : {rec or 'AUCUN — backupctl init-key'}")
+    print(f"clé privée   : {c.CLE_PRIVEE} ({'présente' if c.existe(c.CLE_PRIVEE) else 'absente'})")
+    n = 0
+    for s in SOUS:
+        for f in c.en_clair(RACINE / s):
+            n += 1
+            print(f"  EN CLAIR : {f}")
+    print(f"archives en clair : {n}")
+    return 0
+
+
+def init_key() -> int:
+    if c.destinataire() and c.existe(c.CLE_PRIVEE):
+        print("une clé existe déjà — rien à faire (supprimer les deux fichiers pour en régénérer une)")
+        return 0
+    sortie = subprocess.run(["age-keygen"], capture_output=True, text=True)
+    if sortie.returncode != 0:
+        sys.exit("age-keygen indisponible : apt install age")
+    privee = "".join(l + "\n" for l in sortie.stdout.splitlines() if not l.startswith("#") and l.strip())
+    pub = next((l.split(": ", 1)[1].strip() for l in (sortie.stdout + sortie.stderr).splitlines()
+                if "public key:" in l), None)
+    if not pub:
+        sys.exit("clé publique introuvable dans la sortie d'age-keygen")
+    c.CLE_PRIVEE.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(c.CLE_PRIVEE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as h:
+        h.write(privee)
+    c.CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    c.CONFIG.write_text(json.dumps({"recipient": pub}, indent=1))
+    os.chmod(c.CONFIG, 0o644)          # la clé publique n'est pas un secret : l'API sans privilège la lit
+    print(f"destinataire : {pub}")
+    print(f"clé privée   : {c.CLE_PRIVEE} (root, 0600)")
+    print("→ COPIEZ cette clé privée HORS de cette box (clé USB, gestionnaire de secrets) : sans elle une"
+          "\n  sauvegarde chiffrée n'est pas restaurable, et gardée ici elle ne protège que les copies qui sortent.")
+    return 0
+
+
+def chiffrer_existantes(supprimer: bool) -> int:
+    rec = c.destinataire()
+    if not rec:
+        sys.exit("aucun destinataire : backupctl init-key")
+    fait = 0
+    for s in SOUS:
+        for f in c.en_clair(RACINE / s):
+            dest = Path(str(f) + ".age")
+            r = subprocess.run(c.commande_chiffrer(f, dest, rec), capture_output=True, text=True)
+            if r.returncode != 0 or not dest.exists() or dest.stat().st_size == 0:
+                print(f"ÉCHEC {f}: {r.stderr[:120]}"); dest.unlink(missing_ok=True); continue
+            os.chmod(dest, c.MODE_FICHIER)
+            if supprimer:
+                # Le clair ne part qu'après un déchiffrement qui rend EXACTEMENT les mêmes octets
+                # (vers un fichier temporaire distinct : on compare l'original au déchiffré).
+                try:
+                    verif = c.dechiffrer(dest)
+                except c.ErreurChiffrement as e:
+                    print(f"CLAIR CONSERVÉ {f} : {e}"); continue
+                try:
+                    identique = verif.stat().st_size == f.stat().st_size and _memes_octets(verif, f)
+                finally:
+                    c.detruire_clair(verif)
+                if identique:
+                    f.unlink()
+                    print(f"chiffrée, clair supprimé : {f.name}")
+                else:
+                    print(f"CLAIR CONSERVÉ {f} : la vérification diffère")
+            else:
+                print(f"chiffrée (clair conservé) : {f.name}")
+            fait += 1
+    print(f"{fait} archive(s) chiffrée(s)")
+    return 0
+
+
+def _memes_octets(a: Path, b: Path) -> bool:
+    with open(a, "rb") as x, open(b, "rb") as y:
+        while True:
+            u, v = x.read(1 << 20), y.read(1 << 20)
+            if u != v:
+                return False
+            if not u:
+                return True
+
+
+def restaurer(args) -> int:
+    if not args:
+        sys.exit("usage : backupctl restaurer FICHIER.age [-C RACINE]")
+    f = Path(args[0])
+    racine = args[args.index("-C") + 1] if "-C" in args else "/"
+    if not f.exists():
+        for s in SOUS:
+            if (RACINE / s / f.name).exists():
+                f = RACINE / s / f.name
+                break
+    if not f.exists():
+        sys.exit(f"introuvable : {args[0]}")
+    try:
+        clair = c.dechiffrer(f)
+    except c.ErreurChiffrement as e:
+        sys.exit(str(e))
+    try:
+        r = subprocess.run(["tar", "-xzf", str(clair), "-C", racine])
+    finally:
+        c.detruire_clair(clair)             # le temporaire, jamais une archive d'origine
+    return r.returncode
+
+
+def main() -> int:
+    a = sys.argv[1:]
+    if not a or a[0] == "etat":
+        return etat()
+    if a[0] == "init-key":
+        return init_key()
+    if a[0] == "chiffrer-existantes":
+        return chiffrer_existantes("--supprimer-clair" in a)
+    if a[0] == "restaurer":
+        return restaurer(a[1:])
+    sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
