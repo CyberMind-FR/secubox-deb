@@ -31,14 +31,13 @@ y dorment, par mois) — ne le lire que sur demande.
 - [ ] **#1826 / #1623** noms gk2 en dur ; écritures `/etc/haproxy` hors bac à sable.
 - [ ] **#1735 / #1734** installation LXC non reprenable ; conteneur gitea privilégié.
 
-### 🟡 En vol (branches poussées, PR à ouvrir ou à fusionner)
-- [ ] **#1858 / #1859** WAF : PR #1860 (règles `cred-004`, `api-001`, `waf-rules-sync`) et PR #1861 (sbxwaf, bruit `localhost`) — déployées gk2.
-- [ ] **#1857** accès délégués retirés (webos 1.0.395, sbxid 0.4.17, vault 2.0.15) — déployé gk2 ; PR à ouvrir (branche `feature/1857-…`). À valider au navigateur : SSO Nextcloud, « Mes sites » en lien direct, tuiles Cloud/Photos/Mail, Accès › Moi.
-- [ ] **#1862** RustDesk décommissionné — gk2 fait (archives `/var/backups/decommission-rustdesk-*`), dépôt poussé ; PR à ouvrir. Reste : secubox-hub 1.9.30 (sidebar) non déployé (risque login.html).
+### 🟡 À finir
 - [ ] **#1748** déployer gk3 ; garde-fou CI contre les fusions qui écrasent master (`scripts/check-merge-overwrite.sh` est sur la branche `backup/suivi-2026-10-02`).
 - [ ] **#1743** retirer podman/docker des paquets (Pattern 11) ; **#1418 / #1506** paquets en chevauchement.
-- [ ] WAF : bruit `host_anomaly` sur `Host: localhost` corrigé dans le code (#1861) ; reste la voie de mise à jour des règles (`waf-rules-sync` livré).
-- [ ] Coffre : le redémarrage scelle ; gk2 est scellé depuis 11:45 — rouvrir par la connexion admin.
+- [ ] secubox-hub 1.9.30 (sidebar sans RustDesk) publié, non déployé (risque login.html) ; secubox-meta et secubox-profils republiés.
+- [ ] Coffre : gk2 scellé depuis le dernier redémarrage — rouvrir par la connexion admin ; tester la connexion d'un non-admin et d'un invité de bout en bout.
+- [ ] À valider au navigateur : SSO Nextcloud (cadre `/sbx/entrer`), « Mes sites » en lien direct.
+- [x] #1855, #1857, #1858, #1859, #1862, #1863 — fusionnés, déployés gk2, issues fermées (2026-10-02).
 
 ### 🟢 Chantiers (hors correctifs)
 - SBXOS/Aurora P1–P18 + SDK phases 1–5 (#1594–#1622) ; Hall v4 (#1590).

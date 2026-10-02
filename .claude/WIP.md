@@ -6,25 +6,17 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-10-02 (#1863).* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-10-02.* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
-## 🔄 Chantier en cours — #1863 : sessions Claude Code sobres en contexte
+## ✅ Fusionné et nettoyé le 2026-10-02
 
-Branche `docs/1863-sessions-claude-code-sobres-en-contexte`. Livrables : archives par mois avec
-preuve de zéro perte, une seule source d'instructions (`AGENTS.md`), `RULES-CODE.md`, permissions,
-hooks PostToolUse, subagents, skills. Périmètre : `.claude/`, `AGENTS.md`, `CLAUDE.md`,
-`.gitignore` — rien sous `packages/`, `common/`, `image/`, `scripts/`, ni en CI.
+PR #1856 (Coffre), #1860 (WAF règles), #1861 (sbxwaf), #1864 (accès délégués retirés), #1865
+(RustDesk), #1866 (sessions Claude Code sobres) : fusionnées, issues fermées (#1855, #1857, #1858,
+#1859, #1862, #1863, #1581, #1808, #1684), worktrees et branches supprimés. Reste ouvert :
+**#1748** (déployer gk3, garde-fou CI contre les fusions qui écrasent master).
 
-## 🟡 En vol — poussé, à ouvrir ou fusionner (voir détail dans `TODO.md`)
-
-- **#1858 / #1859** WAF : PR #1860 et PR #1861 ouvertes, déployées gk2 (secubox-waf 1.10.42,
-  secubox-waf-ng 1.18.12).
-- **#1857** accès délégués retirés : déployé gk2 (webos 1.0.395, sbxid 0.4.17, vault 2.0.15) ;
-  PR à ouvrir ; à valider au navigateur (SSO Nextcloud, « Mes sites », tuiles).
-- **#1862** RustDesk décommissionné : gk2 fait, dépôt poussé, PR à ouvrir.
-- **#1855** Coffre : fusionné (PR #1856), déployé gk2. gk2 est **scellé** depuis le dernier
-  redémarrage du Coffre — rouvrir par la connexion admin.
+## 🔄 Chantier en cours — aucun
 
 ## ⬜ Next Up (dans l'ordre)
 
