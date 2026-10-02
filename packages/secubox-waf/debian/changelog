@@ -1,3 +1,12 @@
+secubox-waf (1.10.40-1~bookworm1) bookworm; urgency=medium
+
+  * waf-rules.json cred-004 (#1858) : `\?.*token=` prenait le `requesttoken=`
+    de la connexion Nextcloud pour un jeton en URL — l'iPhone était compté en
+    credential_harvest (2/3 avant bannissement). Nom de paramètre ancré :
+    `[?&](?:[A-Za-z]+_)?token=`. token, access_token, id_token restent vus.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 10:00:00 +0200
+
 secubox-waf (1.10.39-1~bookworm1) bookworm; urgency=medium
 
   * waf-vhost.conf, location /api/v1/auth/ : même ajout d'adresse résolue

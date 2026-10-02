@@ -920,7 +920,7 @@
         },
         {
           "id": "cred-004",
-          "pattern": "\\?.*token=[A-Za-z0-9._-]{20,}",
+          "pattern": "[?&](?:[A-Za-z]+_)?token=[A-Za-z0-9._-]{20,}",
           "desc": "JWT/token in URL"
         },
         {
