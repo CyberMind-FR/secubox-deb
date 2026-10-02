@@ -14,6 +14,13 @@ case "$1" in
             cp /etc/secubox/hardening/blacklist-modules.conf /etc/modprobe.d/secubox-blacklist.conf
         fi
 
+        # Garde des ports de backend (#1306) : chargee tout de suite ; au boot
+        # elle l'est par l'include de /etc/nftables.conf (nftables.d/*.nft).
+        if command -v nft >/dev/null 2>&1 && [ -f /etc/nftables.d/secubox-wan-guard.nft ]; then
+            nft -c -f /etc/nftables.d/secubox-wan-guard.nft 2>/dev/null \
+                && nft -f /etc/nftables.d/secubox-wan-guard.nft || true
+        fi
+
         # Enable and start service
         systemctl daemon-reload
         systemctl enable secubox-hardening.service
