@@ -19,6 +19,8 @@ def test_regle_livree_lue():
     iface, ports = wg.ports_gardes(LIVREE.read_text())
     assert iface == "eth2"
     assert {8088, 8900, 9080, 8910} <= set(ports)
+    assert {23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017} <= set(ports)   # leurres
+    assert 445 not in ports                       # vrai SMB, cantonné par secubox-smb
     assert not set(ports) & wg.FRONTAUX          # jamais couper SSH / HAProxy
 
 

@@ -1,3 +1,9 @@
+secubox-hardening (1.4.2-1~bookworm1) bookworm; urgency=low
+
+  * Garde eth2 : ferme aussi les écoutes de leurre de sbx-authwatch (23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017). 445 reste ouvert (SMB réel, cantonné au LAN par secubox-smb) (#1306).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 17:10:00 +0200
+
 secubox-hardening (1.4.1-1~bookworm1) bookworm; urgency=low
 
   * Garde des ports de backend : les écoutes sur adresses de tunnel (10.x, 192.168.255.x) ne sont plus signalées comme exposées côté LAN (#1306).
