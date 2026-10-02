@@ -32,6 +32,12 @@ override_dh_auto_install:
 	  debian/secubox-presence-report.service debian/secubox-nac/lib/systemd/system/ || true
 	[ -f debian/secubox-presence-report.timer ] && install -m 0644 \
 	  debian/secubox-presence-report.timer debian/secubox-nac/lib/systemd/system/ || true
+	# #1766 : application du blocage / de la quarantaine / des zones (service root étroit)
+	install -m 0755 sbin/secubox-nac-apply debian/secubox-nac/usr/sbin/secubox-nac-apply
+	install -m 0644 debian/secubox-nac-apply.service debian/secubox-nac/lib/systemd/system/
+	install -m 0644 debian/secubox-nac-apply.path    debian/secubox-nac/lib/systemd/system/
+	install -d debian/secubox-nac/etc/nftables.d
+	install -m 0644 nft/secubox-nac.nft debian/secubox-nac/etc/nftables.d/secubox-nac.nft
 	install -d debian/secubox-nac/usr/share/secubox/nac
 	[ -f debian/presence-alerts.toml.example ] && install -m 0644 \
 	  debian/presence-alerts.toml.example \

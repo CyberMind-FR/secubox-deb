@@ -42,32 +42,16 @@ case "$1" in
     systemctl enable secubox-presence-report.timer 2>/dev/null || true
     systemctl start  secubox-presence-report.timer 2>/dev/null || true
 
-    # Ensure nac's own nft table + zone sets exist so operator "move to zone"
-    # works on a fresh install — including `lxc_zone` for the LXC Containers
-    # zone — and so the mac-guard element migration below has its destination
-    # sets present. Set names mirror `ZONES[*].nft_set` in api/main.py plus the
-    # `blocked` deny set. Every `nft add` is idempotent (a no-op if the object
-    # already exists) and best-effort: a missing `nft` or a pre-existing table
-    # must never abort configure.
-    # (b5add8c629, effacé par la fusion 0c07799fdc — restauré par #1765.)
-    if command -v nft >/dev/null 2>&1; then
-      nft add table inet secubox_nac 2>/dev/null || true
-      for _set in blocked lan_allowed lxc_zone iot_zone guest_zone quarantine_zone; do
-        nft add set inet secubox_nac "$_set" '{ type ether_addr; }' 2>/dev/null || true
-      done
-    fi
-
-    # #817 Task 9: one-shot, idempotent, best-effort nft element migration.
-    # mac-guard's separate `inet secubox_mac_guard` table is being retired
-    # (Task 7 reduced its API to redirect stubs); fold its allow/deny
-    # elements into nac's own `inet secubox_nac` sets so existing
-    # block/allow decisions survive the cutover:
-    #   mac_blacklist -> blocked      (deny)
-    #   mac_whitelist -> lan_allowed  (allow)
-    # Adding an already-present nft element is a no-op, so this is safe
-    # to run on every upgrade. If mac-guard was never installed (table/
-    # set missing) or `nft` is unavailable, every step degrades to a
-    # silent no-op — this must never abort the package configure step.
+    # #1766 : la table `inet secubox_nac`, ses règles et ses éléments sont portés par
+    # /etc/nftables.d/secubox-nac.nft et appliqués par secubox-nac-apply (root, étroit) à
+    # partir de /var/lib/secubox/nac/nft-desired.json. Avant : table créée à chaud ici,
+    # sans aucune règle qui la référence, effacée au premier `flush ruleset`.
+    #
+    # #817 Task 9 — migration unique et idempotente : les éléments de la table
+    # `inet secubox_mac_guard` (retirée) rejoignent l'état voulu :
+    #   mac_blacklist -> blocked      mac_whitelist -> lan_allowed
+    # Silencieuse si mac-guard n'a jamais été installé : ne doit jamais faire échouer configure.
+    install -d -m 0775 -o secubox -g secubox /var/lib/secubox/nac 2>/dev/null || true
     if command -v nft >/dev/null 2>&1; then
       for _pair in "mac_blacklist:blocked" "mac_whitelist:lan_allowed"; do
         _src_set="${_pair%%:*}"
@@ -75,10 +59,19 @@ case "$1" in
         nft list set inet secubox_mac_guard "$_src_set" 2>/dev/null \
           | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' \
           | while IFS= read -r _mac; do
-              nft add element inet secubox_nac "$_dst_set" "{ $_mac }" 2>/dev/null || true
+              NAC_NFT_DESIRED=/var/lib/secubox/nac/nft-desired.json \
+              python3 -c "import sys,importlib.util as u
+s=u.spec_from_file_location('d','/usr/lib/secubox/nac/api/nft_desired.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+m.add(sys.argv[1],sys.argv[2])" "$_dst_set" "$_mac" 2>/dev/null || true
             done
       done
     fi
+
+    # Application : unité .path (réagit aux changements) + un premier passage maintenant.
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable secubox-nac-apply.path 2>/dev/null || true
+    systemctl start  secubox-nac-apply.path 2>/dev/null || true
+    systemctl start  secubox-nac-apply.service 2>/dev/null || true
     ;;
 esac
 #DEBHELPER#
