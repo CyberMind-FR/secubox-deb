@@ -1,3 +1,8 @@
+---
+name: multigadget
+description: Référence et guide de développement du système multi-gadget USB de SecuBox Eye Remote (autorun, stockage, interface ronde, outillage). À utiliser pour toute question sur les modes gadget USB d'Eye Remote.
+argument-hint: "[autorun|storage|roundui|tooling|all]"
+---
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>

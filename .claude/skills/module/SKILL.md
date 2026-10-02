@@ -1,3 +1,9 @@
+---
+name: module
+description: Crée le squelette d'un nouveau module SecuBox (paquet Debian, API FastAPI sur socket Unix, frontend, menu.d). À lancer explicitement avec /module <nom> [description].
+argument-hint: "<nom-du-module> [description]"
+disable-model-invocation: true
+---
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
