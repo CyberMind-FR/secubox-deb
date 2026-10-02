@@ -1,3 +1,9 @@
+secubox-core (1.5.54-1~bookworm1) bookworm; urgency=high
+
+  * SSO Nextcloud (#1907) : une session ouverte par mot de passe sur un compte dont les appareils appartiennent à plusieurs personnes (gk2 : 6 de gandalf, 2 de gek) était ambiguë, aucune personne n'était désignée, donc pas d'en-tête Remote-Sbx-Nextcloud (Nextcloud n'a pas de repli sur Remote-User, contrairement à mail, BBS et PeerTube). Le lien explicite compte système → personne (sbx_app_links, app=systeme) départage ; jamais pour une session d'appareil, et sans effet quand les appareils désignent déjà une seule personne.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 06:00:00 +0200
+
 secubox-core (1.5.53-1~bookworm1) bookworm; urgency=low
 
   * Santé (#1887) : le relevé interroge les unités par leur nom (un motif n'atteint pas les unités déchargées), reconnaît les tâches déclenchées par un timer ou un path (TriggeredBy) et écarte les unités inexistantes ou masquées (not-found/masked), qui s'affichaient « dégradées ».

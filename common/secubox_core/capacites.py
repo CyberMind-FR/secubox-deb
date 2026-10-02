@@ -165,18 +165,31 @@ def personne_du_porteur(payload: Dict[str, Any]) -> Optional[Dict[str, str]]:
             return None
     else:
         return None
-    if not dids:
-        return None
+    compte_sans_appareil = d is None
     try:
         c = sqlite3.connect(f"file:{SBX_DB}?mode=ro", uri=True, timeout=2)
     except sqlite3.Error:
         return None
     try:
-        ph = ",".join("?" * len(dids))
-        rows = c.execute("SELECT DISTINCT u.user_uuid, u.pseudo FROM sbx_devices d JOIN sbx_users u"
-                         f" ON u.user_uuid=d.user_uuid WHERE d.did IN ({ph}) AND d.revoked_at IS NULL"
-                         " AND u.status='active'", dids).fetchall()
-        return {"user_uuid": rows[0][0], "pseudo": rows[0][1]} if len(rows) == 1 else None
+        if dids:
+            ph = ",".join("?" * len(dids))
+            rows = c.execute("SELECT DISTINCT u.user_uuid, u.pseudo FROM sbx_devices d JOIN sbx_users u"
+                             f" ON u.user_uuid=d.user_uuid WHERE d.did IN ({ph}) AND d.revoked_at IS NULL"
+                             " AND u.status='active'", dids).fetchall()
+            if len(rows) == 1:
+                return {"user_uuid": rows[0][0], "pseudo": rows[0][1]}
+        # SESSION DE COMPTE AMBIGUË (#1893) : des appareils de plusieurs personnes peuvent être
+        # acceptés sous un même compte (gk2 : 6 appareils de gandalf, 2 de gek) — « une seule
+        # personne » échoue alors, et plus aucun compte lié n'est désigné : Nextcloud, qui n'a
+        # pas de repli sur Remote-User, n'ouvrait plus. Le lien explicite compte système →
+        # personne (`sbx_app_links`, app=systeme) départage. Jamais pour une session d'appareil.
+        if compte_sans_appareil and sub:
+            liens = c.execute("SELECT DISTINCT u.user_uuid, u.pseudo FROM sbx_app_links l JOIN sbx_users u"
+                              " ON u.user_uuid=l.user_uuid WHERE l.app='systeme' AND l.app_id=?"
+                              " AND u.status='active'", (sub,)).fetchall()
+            if len(liens) == 1:
+                return {"user_uuid": liens[0][0], "pseudo": liens[0][1]}
+        return None
     except sqlite3.Error:
         return None
     finally:

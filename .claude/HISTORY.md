@@ -98,3 +98,8 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - toolbox `api.py`/`bundle.py` (2c15f1448, 1356a04e0, 6a68f3b25) : déjà restauré par bb527ddb7 (#1778) ; aucune fonction ni route manquante.
 - ytsas `main.py` (f8e38edda) : rien.
 - Garde-fou en place (PR #1901). Les 12 paquets d'aff481735 avaient été restaurés auparavant.
+
+## 2026-10-03 — SSO Nextcloud : session de compte ambiguë départagée (ref #1907)
+- Cause mesurée : le compte `gk2` porte 8 appareils acceptés (6 de gandalf, 2 de gek) ; `personne_du_porteur` exige UNE personne pour une session de compte → None → pas de `Remote-Sbx-Nextcloud` → formulaire de connexion (200, 11,6 Ko dans le journal nginx). Mail, BBS et PeerTube retombent sur `Remote-User` (comptes homonymes) ; user_saml ne lit que HTTP_X_SBX_NEXTCLOUD_USER. Côté Nextcloud, l'en-tête posé à la main ouvre la session (303 /apps/files/).
+- core 1.5.54 : le lien `sbx_app_links` (app=systeme) départage ; jamais pour une session d'appareil ; inchangé quand les appareils désignent déjà une seule personne. 271 tests core verts (2 nouveaux). gk2 vérifié : personne = gandalf, nextcloud=gk2, bbs=gk2, email=gk2@secubox.in, peertube=gk2 ; `admin` reste « non personne ». À confirmer en navigateur par l'exploitant.
+- Autres issues vérifiées résolues : #1289 et #1418 (seul secubox-nac livre www/nac/index.html, nac 3.1.8 s'installe sur gk2 et gk3), #1419 (cache meshtastic écrit, 0 erreur).
