@@ -93,3 +93,29 @@ Chercher le vrai coupable dans `waf-threats.log` par UA navigateur/appli, pas pa
 IP. Voir aussi : notre domaine non route = **route WAF manquante**, pas une
 attaque — comparer `grep 'hdr(host) -i' /etc/haproxy/haproxy.cfg` aux cles de
 `/etc/secubox/waf/haproxy-routes.json` (l'autorite, hot-reload).
+
+## `pip freeze` d'une image conda : des contraintes qui n'en sont pas
+
+Dans une image conda, `pip freeze` écrit `nom @ file:///home/conda/…` pour les paquets installés par conda.
+Un filtre « garder les lignes `==` » les **jette** : le fichier de contraintes paraît complet (111 lignes) mais
+laisse numpy, scipy… flotter (numpy 2.4.6 au lieu de 2.3.2, vu pendant l'installation d'essai de VoiceStudio).
+Parade : `pip list --format=freeze` (toujours `nom==version`), puis retirer `nvidia-*`, `triton`, `pip`, `wheel`
+et le suffixe `+cu128`. Vérifier : `grep -c '^numpy' contraintes.txt`.
+
+## Un moteur répond 200 sans clé en essai local, 401 depuis le LAN
+
+VoiceStudio exempte le **loopback** de la clé d'API : un `curl 127.0.0.1` sans clé donne 200 et fait croire que la
+clé n'est pas appliquée. Tester depuis une adresse non-loopback (lier le moteur à l'IP du LAN et l'appeler par
+celle-ci). Dans le LXC, les clients arrivent de `10.100.0.1` : la clé est exigée.
+
+## Un test d'API répond 200 sans session sur une route en `require_lecture`
+
+Le `conftest.py` racine arme le mode tableau de bord et l'en-tête LAN pour toutes les suites : une lecture
+gardée par `require_lecture` répond donc 200 en test. Tester la **garde** (`route.dependant.dependencies`),
+pas le code de retour ; les routes `require_jwt` / `require_personne` refusent toujours (401/403).
+
+## Installer le paquet d'un moteur lourd ne doit pas bloquer dpkg ni couper l'ancien service
+
+Le provisionnement (LXC + pip, 10 à 25 min) part en `--no-block` dans une unité `oneshot` gardée par un marqueur ;
+l'ancien service continue de servir, et c'est la commande de bascule (`voicestudioctl basculer`) qui l'arrête, **LXC
+prêt**. Le mandataire n'est pas démarré par la postinst tant que l'ancien moteur tient le port.

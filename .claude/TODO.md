@@ -33,7 +33,9 @@ y dorment, par mois) — ne le lire que sur demande.
 
 ### 🟡 À finir
 - [ ] **#1748** déployer gk3 ; garde-fou CI contre les fusions qui écrasent master (`scripts/check-merge-overwrite.sh` est sur la branche `backup/suivi-2026-10-02`).
-- [ ] **#1743** retirer podman/docker des paquets (Pattern 11) ; **#1418 / #1506** paquets en chevauchement.
+- [ ] **#1743** reste : purge de podman/buildah/crun de gk2 et gk3 (après validation de la bascule voicestudio) ; ligne `podman rm` de photoprism ; **#1418 / #1506** paquets en chevauchement.
+- [ ] **#1917** voicestudio : valider la bascule gk3, puis dettes nommées dans son README — profil AppArmor (complain → enforce), utilisateur dédié `secubox-voicestudio`, `--require-hashes` sur les dépendances Python, `--apply`/dry-run du ctl, interface native (`frontend/dist`) non embarquée.
+- [ ] `tests/test_conformite_jwt.py::test_aucune_route_non_gardee_nouvelle` échoue sur master (72 routes hors inventaire : billets, webos…, aucune de voicestudio) : inventaire à mettre à jour ou routes à garder.
 - [ ] secubox-hub 1.9.30 (sidebar sans RustDesk) publié, non déployé (risque login.html) ; secubox-meta et secubox-profils republiés.
 - [ ] Coffre : gk2 scellé depuis le dernier redémarrage — rouvrir par la connexion admin ; tester la connexion d'un non-admin et d'un invité de bout en bout.
 - [ ] À valider au navigateur : SSO Nextcloud (cadre `/sbx/entrer`), « Mes sites » en lien direct.

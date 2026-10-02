@@ -16,7 +16,8 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - Mesuré hors box (poste amd64, python 3.11, torch CPU) : installation complète OK, moteur prêt en 9 s, `/health` 200, clé exigée pour tout client non-loopback (401 sans clé ou mauvaise), `/v1/audio/voices` (`voice_id`), dictée 200. Les deux pages essayées dans Chromium (Playwright), 231 tests.
 - Relecture de sécurité : 0 bloquant, 10 importants dont deux défauts réels corrigés (moteur jamais démarré à la première installation ; clé renouvelée non relue après un sommeil), migration podman atomique, `flock` sur les commandes mutantes, verrous usager/admin séparés, cache des échecs du ctl. Dettes nommées dans le README (pas d'AppArmor, LAN en clair, pas de `--require-hashes`).
 - Constaté sur gk3 avant déploiement : le moteur podman ne répondait plus (aucune réponse en 90 s, swap saturé) ; le vrai consommateur est gk2 (`voice.toml` en `mixte`, `http://10.10.0.5:3900`).
-- Reste #1743 : déploiement et bascule sur gk3, purge de podman/buildah/crun des boxes, ligne photoprism.
+- Déployé : fusionné (PR #1918), publié dans le dépôt apt, installé sur gk3 (config reprise avec ses adresses publiées) ; provisionnement du LXC en cours, bascule automatique ensuite. **Ne pas fermer #1917 avant la validation de bout en bout.**
+- Reste #1743 : validation de la bascule sur gk3, purge de podman/buildah/crun des boxes, ligne photoprism.
 
 ## 2026-10-02 — SESSIONS SOBRES, WAF SANS FAUX POSITIFS, COFFRE POUR TOUS (ref #1863, #1858, #1859, #1857, #1855, #1862)
 

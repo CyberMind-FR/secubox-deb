@@ -17,7 +17,17 @@ real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à 
 (veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
 apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
-## 🔄 Chantier en cours — aucun
+## 🔄 Chantier en cours — #1917 VoiceStudio en LXC natif (déploiement gk3)
+
+- Fait : `secubox-voicestudio` 0.2.0 fusionné (PR #1918), publié sur apt.secubox.in, installé sur gk3 ; config reprise
+  (adresses publiées conservées). L'ancien moteur podman tient encore le port 3900 (voulu jusqu'à la bascule).
+- En cours : provisionnement du LXC sur gk3 (`secubox-voicestudio-provision`, 10 à 25 min ; marqueur
+  `/var/lib/secubox/voicestudio/.lxc-provisioned`). Il lance ensuite **tout seul** `voicestudioctl basculer`
+  (arrête l'ancien moteur, reprend le volume podman sans le supprimer, démarre le LXC, vérifie `/health`).
+- À faire ensuite : vérifier de bout en bout (gk2 `voice.toml` mixte → `http://10.10.0.5:3900`, clé inchangée),
+  essayer les deux pages (`/voicestudio/`, `/voicestudio/usager.html`) dans un navigateur, puis `closes #1917` dans
+  `HISTORY.md` + `scripts/sync-issues.sh --apply`. Ensuite seulement : purge de podman/buildah/crun sur gk2 et gk3
+  (volume podman à garder jusqu'à validation), ligne `podman rm` de photoprism, AppArmor du module.
 
 ## ⏸️ Suspendu
 
@@ -33,7 +43,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 3. **#1366** gestes humains : export hors ligne sur clé USB puis effacement du poste ; sort de
    `publish-packages.yml` ; clé de mise en scène 31848880.
 4. **#1766** à valider (NAC) ; gk3 : dpi, mediaflow, sentinelle-gsm absents de son jeu de paquets.
-5. **#1743** podman/docker hors des paquets ; **#1418 / #1506** paquets en chevauchement.
+5. **#1743** reste : purge de podman des boxes (après la bascule voicestudio, #1917) ; **#1418 / #1506** paquets en chevauchement.
 6. Suites identité #1405 : demandes côté utilisateur, certificat client, SSO par rejeu.
 
 ## Règles de tenue de ce fichier
