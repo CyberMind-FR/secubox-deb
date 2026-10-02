@@ -254,6 +254,8 @@
             <div class="loading">Loading security checks</div>
         </div>
 
+        <div class="check-list" id="wan-guard"></div>
+
         <div class="action-section">
             <button class="btn btn-primary" onclick="applyHardening()">Apply Hardening</button>
             <button class="btn" onclick="runBenchmark()">Run Benchmark</button>
@@ -314,6 +316,40 @@
             }
         }
 
+        function ligne(titre, detail, ok) {
+            const item = document.createElement('div');
+            item.className = 'check-item';
+            const ic = document.createElement('div');
+            ic.className = 'check-icon ' + (ok ? 'pass' : 'fail');
+            ic.textContent = ok ? '✓' : '✗';
+            const d = document.createElement('div');
+            d.className = 'check-details';
+            const h = document.createElement('h4');
+            h.textContent = titre;
+            const st = document.createElement('div');
+            st.className = 'status';
+            st.textContent = detail;
+            d.append(h, st);
+            item.append(ic, d);
+            return item;
+        }
+
+        async function loadWanGuard() {
+            const el = document.getElementById('wan-guard');
+            el.replaceChildren();
+            try {
+                const g = await fetchAPI('/wan-guard');
+                el.append(ligne('Garde des ports de backend (' + (g.interface || '—') + ')',
+                    g.livree ? 'Ports coupés : ' + g.ports_gardes.join(', ') : 'Règle non livrée', g.livree));
+                const n = g.ports_non_gardes.length;
+                el.append(ligne('Ports en écoute non gardés',
+                    n ? g.ports_non_gardes.map(x => x.port + ' (' + x.adresse + ')').join(', ')
+                      : 'Aucun hors frontaux 22, 80, 443, 9443', n === 0));
+            } catch (e) {
+                el.append(ligne('Garde des ports de backend', 'Indisponible', false));
+            }
+        }
+
         async function applyHardening() {
             try {
                 await fetchAPI('/apply', { method: 'POST' });
@@ -340,7 +376,7 @@
             loadStatus();
         }
 
-        document.addEventListener('DOMContentLoaded', loadStatus);
+        document.addEventListener('DOMContentLoaded', () => { loadStatus(); loadWanGuard(); });
     </script>
 </body>
 </html>

@@ -307,6 +307,18 @@ async def get_access():
     """Get access information."""
     return run_ctl("access", parse_json=True)
 
+@app.get("/wan-guard", dependencies=[Depends(require_lecture)])
+async def get_wan_guard():
+    """Garde des ports de backend côté eth2 (#1306) : règle livrée, ports encore exposés."""
+    # Chargé par chemin : l'agrégateur importe ce main.py sous un autre nom de
+    # paquet, un import relatif y échouerait.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "hardening_wan_guard", Path(__file__).with_name("wan_guard.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return await asyncio.to_thread(mod.etat)
+
 @app.post("/benchmark")
 async def run_benchmark(user: dict = Depends(require_jwt)):
     """Run security benchmark."""

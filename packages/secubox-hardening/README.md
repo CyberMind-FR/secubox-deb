@@ -21,6 +21,7 @@ Kernel and system hardening for ANSSI CSPN compliance
 - Module blacklist
 - Security score
 - AppArmor
+- Garde des ports de backend côté eth2 (`/etc/nftables.d/secubox-wan-guard.nft`, #1306)
 
 ## Installation
 
@@ -40,6 +41,7 @@ Configuration file: `/etc/secubox/hardening.toml`
 
 - `GET /api/v1/hardening/status` - Module status
 - `GET /api/v1/hardening/health` - Health check
+- `GET /api/v1/hardening/wan-guard` - Ports gardés côté eth2 et ports de backend encore en écoute (lecture ; la table chargée : `hardeningctl wan-guard`, root)
 
 ## License
 

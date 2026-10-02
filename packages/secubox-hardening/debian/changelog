@@ -1,3 +1,15 @@
+secubox-hardening (1.4.1-1~bookworm1) bookworm; urgency=low
+
+  * Garde des ports de backend : les écoutes sur adresses de tunnel (10.x, 192.168.255.x) ne sont plus signalées comme exposées côté LAN (#1306).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 16:45:00 +0200
+
+secubox-hardening (1.4.0-1~bookworm1) bookworm; urgency=low
+
+  * Garde des ports de backend intégrée au module (#1306) : GET /wan-guard (règle livrée, ports gardés, ports encore en écoute hors frontaux), carte dans le tableau de bord, `hardeningctl wan-guard` (table chargée, root).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 16:30:00 +0200
+
 secubox-hardening (1.3.0-1~bookworm1) bookworm; urgency=high
 
   * Garde des ports de backend côté eth2 (#1306) : /etc/nftables.d/secubox-wan-guard.nft coupe 7331, 8088, 8404, 8880, 8900, 8910 et 9080 pour le trafic entrant par eth2, avant la règle `iif "eth2" accept` du fichier de base. HAProxy (80/443), SSH, SMB et mDNS restent ouverts.
