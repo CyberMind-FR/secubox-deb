@@ -13,7 +13,7 @@ from secubox_core.kiosk import (
     detect_board_type, get_board_profile, get_board_capabilities,
     get_interface_classification,
 )
-from secubox_core.health import systemd_batch
+from secubox_core.health import systemd_batch, unites_au_repos
 import subprocess
 import json
 import asyncio
@@ -536,6 +536,24 @@ def _unite_active(unite: str) -> bool:
         return False
 
 
+_AU_REPOS_TTL = 60
+_au_repos: dict = {"ts": 0.0, "repos": frozenset(), "absents": frozenset()}
+
+
+def _unites_au_repos_cache() -> tuple:
+    """(au_repos, absents) (#1893) : un systemctl show, relu toutes les 60 s.
+
+    Ces états changent à l'échelle de la minute, pas des 5 s du relevé de santé.
+    """
+    if time.time() - _au_repos["ts"] >= _AU_REPOS_TTL:
+        try:
+            _au_repos["repos"], _au_repos["absents"] = unites_au_repos()
+        except Exception as e:  # noqa: BLE001 — garder la valeur précédente
+            log.warning("unités au repos indisponibles : %s", e)
+        _au_repos["ts"] = time.time()
+    return _au_repos["repos"], _au_repos["absents"]
+
+
 def _refresh_health_batch():
     """Build the sidebar health snapshot in ONE systemctl list-units call.
 
@@ -556,7 +574,8 @@ def _refresh_health_batch():
     run = None
     if brut and time.time() - _cache.get("units_ts", 0) < CACHE_TTL:
         run = lambda: _filtre_etats_batch(brut)  # noqa: E731
-    modules = systemd_batch(sleepable=sleepable, _run=run)
+    repos, absents = _unites_au_repos_cache()
+    modules = systemd_batch(sleepable=sleepable, _run=run, au_repos=repos, absents=absents)
 
     # Le WAF est désormais le Go sbxwaf (secubox-waf-ng) ; le vieux
     # secubox-waf.service (API Python) est débranché depuis le cutover et reste
