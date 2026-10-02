@@ -45,7 +45,10 @@ DEFAULT_WAKE_CLASS = "normal"
 # shipper un manifeste avec `protected = false` et désactiver silencieusement
 # la protection du cœur. On refuse de laisser la donnée décider de ça :
 # load_manifest() force protected=True pour ces id, quoi que dise le fichier.
-PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles"})
+# « vault » (le Coffre, #1367) : un pin `off` hérité de l'ancien module (13/08) le
+# gardait arrêté et désactivé — carte « injoignable » dans le Hall, ouverture par
+# la connexion impossible. Le moteur de profils ne coupe pas le Coffre.
+PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles", "vault"})
 
 
 class ManifestError(Exception):
