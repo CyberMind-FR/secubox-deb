@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Fichiers qui mentionnent encore docker/podman (#1743). LXC UNIQUEMENT (PATTERNS.md, Pattern 11).
+# test_pas_de_docker_1743.py : aucun NOUVEAU fichier ne peut s'y ajouter, et une ligne qui n'a plus
+# de raison d'être doit être retirée d'ici (la liste ne peut que rétrécir).
+# format : <chemin> | <raison>
+packages/secubox-jitsi/api/main.py | commentaire historique (l'ancienne API 1.0.0) — aucun appel
+packages/secubox-jitsi/debian/control | description : « remplace le module 1.0.0 qui générait un docker-compose » — aucun appel
+packages/secubox-jitsi/lib/jitsi/install-lxc.sh | commentaire historique — aucun appel
+packages/secubox-jitsi/sbin/jitsictl | commentaires historiques — aucun appel
+packages/secubox-matrix/api/main.py | commentaire historique (/container/* abandonné) — aucun appel
+packages/secubox-photoprism/lib/photoprism/install-lxc.sh | nettoyage d'un ancien conteneur podman lors de la migration vers le natif — à retirer quand plus aucune box ne l'a
+packages/secubox-voicestudio/debian/control | DETTE #1743 : Depends: podman — à convertir en LXC natif
+packages/secubox-voicestudio/sbin/voicestudioctl | DETTE #1743 : pilote podman sur l'hôte — à convertir en LXC natif
+packages/secubox-voicestudio/systemd/secubox-voicestudio.service | DETTE #1743 : ExecStart podman — à convertir en LXC natif
+scripts/migration-export.sh | outil de migration DEPUIS un autre système : copie des docker-compose.yml d'origine, ne pilote rien
+scripts/migration-import.sh | outil de migration DEPUIS un autre système : copie des docker-compose.yml d'origine, ne pilote rien

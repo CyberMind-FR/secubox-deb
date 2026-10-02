@@ -16,5 +16,4 @@ Description: SecuBox AI Gateway — data-sovereignty router for AI requests
  .
  Distinct from sibling packages in the AI cluster:
   - secubox-ai-insights — ML-based threat detection.
-  - secubox-ollama — Ollama LLM runtime wrapper.
   - secubox-mcp-server — Model Context Protocol server.

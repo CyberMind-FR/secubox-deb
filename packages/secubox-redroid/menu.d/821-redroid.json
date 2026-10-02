@@ -1,9 +1,0 @@
-{
-  "id": "redroid",
-  "name": "Redroid",
-  "icon": "🤖",
-  "path": "/redroid/",
-  "category": "mesh",
-  "order": 821,
-  "description": "Android in container"
-}

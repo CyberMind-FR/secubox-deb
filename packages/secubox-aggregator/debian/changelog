@@ -1,3 +1,9 @@
+secubox-aggregator (0.3.11-1~bookworm1) bookworm; urgency=low
+
+  * Modules retirés ignorés sans erreur de chargement (hexo, ollama, gotosocial, redroid, simplex, newsbin, voip et frigate), encore cités dans /etc/secubox/aggregator.toml d'une box mise à jour (#1743).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 14:00:00 +0200
+
 secubox-aggregator (0.3.10-1~bookworm1) bookworm; urgency=medium
 
   * Coffre (#1855) : `vault/personne/*` jamais relayé au web (comme `vault/compte/*`) ;

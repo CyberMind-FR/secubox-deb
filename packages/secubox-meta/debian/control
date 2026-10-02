@@ -458,6 +458,7 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-mail
 Recommends: secubox-smtp-relay
+Suggests: secubox-clamav
 Description: SecuBox — service « Courrier »
  Serveur de courrier complet (conteneur mail, webmail) ; absorbe mail-lxc, webmail et webmail-lxc.
  .
@@ -468,18 +469,16 @@ Package: secubox-service-messagerie
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-matrix
-Suggests: secubox-jabber,
-         secubox-simplex
+Suggests: secubox-jabber
 Description: SecuBox — service « Messageries »
- Matrix, XMPP, SimpleX : des messageries qu'on héberge.
+ Matrix, XMPP : des messageries qu'on héberge.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.
 
 Package: secubox-service-fediverse
 Architecture: all
-Depends: ${misc:Depends},
-         secubox-gotosocial
+Depends: ${misc:Depends}
 Recommends: secubox-socialrelay,
          secubox-billets
 Description: SecuBox — service « Fédivers »
@@ -493,7 +492,6 @@ Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-jitsi,
          secubox-turn
-Suggests: secubox-voip
 Description: SecuBox — service « Visio et téléphonie »
  Jitsi, TURN/STUN, PBX.
  .
@@ -574,7 +572,6 @@ Depends: ${misc:Depends},
          secubox-metablogizer,
          secubox-publish
 Recommends: secubox-metacatalog
-Suggests: secubox-hexo
 Description: SecuBox — service « Sites »
  Métablogs, plateforme de publication, catalogue.
  .
@@ -596,8 +593,7 @@ Package: secubox-service-actualites
 Architecture: all
 Depends: ${misc:Depends},
          secubox-metanews
-Suggests: secubox-newsbin,
-         secubox-yacy
+Suggests: secubox-yacy
 Description: SecuBox — service « Actualité »
  Radar d'actualité multi-sources.
  .
@@ -610,8 +606,7 @@ Depends: ${misc:Depends},
          secubox-mqtt
 Recommends: secubox-zigbee,
          secubox-iot-guard
-Suggests: secubox-frigate,
-         secubox-picobrew
+Suggests: secubox-picobrew
 Description: SecuBox — service « Domotique »
  Courtier MQTT, coordinateur Zigbee, garde IoT, NVR.
  .
@@ -622,8 +617,7 @@ Package: secubox-service-ia
 Architecture: all
 Depends: ${misc:Depends},
          secubox-ai-gateway
-Recommends: secubox-ollama,
-         secubox-localrecall
+Recommends: secubox-localrecall
 Suggests: secubox-mcp-server,
          secubox-streamlit,
          secubox-streamforge
@@ -639,8 +633,7 @@ Depends: ${misc:Depends}
 Recommends: secubox-cloner,
          secubox-netboot
 Suggests: secubox-release,
-         secubox-vm,
-         secubox-redroid
+         secubox-vm
 Description: SecuBox — service « Provision »
  Clonage, amorçage réseau, déploiement, anneaux de release, VM.
  .

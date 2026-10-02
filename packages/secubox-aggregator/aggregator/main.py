@@ -157,6 +157,14 @@ _MOUNTED: List[str] = []
 _LOAD_ERRORS: Dict[str, str] = {}
 
 
+# Modules RETIRÉS du dépôt : encore cités dans /etc/secubox/aggregator.toml d'une box mise à jour
+# (hexo, ollama, gotosocial, redroid, simplex, newsbin, voip, frigate : docker/podman, #1743).
+# Les ignorer en silence évite une erreur de chargement par module disparu dans la santé.
+RETIRED_MODULES = frozenset({
+    "hexo", "ollama", "gotosocial", "redroid", "simplex", "newsbin", "voip", "frigate",
+})
+
+
 def _load_config() -> dict:
     """Read the TOML config. Returns a dict with at least 'modules' key.
 
@@ -168,7 +176,10 @@ def _load_config() -> dict:
         if CONFIG_FILE.exists():
             with CONFIG_FILE.open("rb") as f:
                 data = tomllib.load(f)
-            cfg["modules"] = list(data.get("modules", []))
+            cfg["modules"] = [m for m in data.get("modules", []) if m not in RETIRED_MODULES]
+            ignores = [m for m in data.get("modules", []) if m in RETIRED_MODULES]
+            if ignores:
+                log.info("modules retirés ignorés : %s", ", ".join(ignores))
             log.info("loaded %d modules from %s", len(cfg["modules"]), CONFIG_FILE)
         else:
             log.warning("no config at %s — aggregator runs with no mounts", CONFIG_FILE)

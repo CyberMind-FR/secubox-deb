@@ -1,3 +1,9 @@
+secubox-peertube (1.5.7-1~bookworm1) bookworm; urgency=low
+
+  * Description : secubox-gotosocial et secubox-simplex retirés (docker/podman, #1743).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 14:00:00 +0200
+
 secubox-peertube (1.5.6-1~bookworm1) bookworm; urgency=high
 
   * postinst : déclare sa route sbxwaf (peertube.<domaine> → 9080). HAProxy l'envoie à l'inspection mais sbxwaf ne connaissait pas le nom : le chemin public répondait 401 (fourre-tout) au lieu du service, et le relais du maillage n'exposait pas le peertube des nœuds relayés (#1739, #1713).

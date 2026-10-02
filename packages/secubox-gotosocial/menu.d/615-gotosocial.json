@@ -1,9 +1,0 @@
-{
-  "name": "GoToSocial",
-  "path": "/gotosocial/",
-  "icon": "🦋",
-  "category": "mesh",
-  "order": 615,
-  "description": "Fediverse/ActivityPub server",
-  "id": "gotosocial"
-}
