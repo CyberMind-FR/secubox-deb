@@ -1,0 +1,18 @@
+[Unit]
+Description=SecuBox — déverrouille la clé de signature du dépôt apt (niveau 0, #1366)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1366
+After=local-fs.target
+# Sans crédence de niveau 0 (clé non protégée, ou protégée par le Coffre) : rien à faire.
+ConditionPathExistsGlob=/etc/secubox/credstore/depot-*.cred
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=PYTHONPATH=/usr/lib/secubox/vault
+ExecStart=/usr/sbin/coffrectl depot deverrouiller --si-present
+# La phrase de niveau 0 est lue par systemd-creds (clé d'hôte) : root, sans réseau.
+PrivateNetwork=yes
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -45,6 +45,9 @@ case "$1" in
 
     systemctl daemon-reload
     systemctl enable secubox-vault.service >/dev/null 2>&1 || true
+    # Clé de signature apt protégée au niveau 0 (#1366) : déverrouillée au démarrage. La
+    # condition de l'unité (crédence présente) la rend sans effet tant que rien n'est protégé.
+    systemctl enable secubox-depot-deverrouille.service >/dev/null 2>&1 || true
     systemctl restart secubox-vault.service || true
     systemctl reload nginx 2>/dev/null || true
     ;;

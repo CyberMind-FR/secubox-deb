@@ -150,7 +150,13 @@ Pas de nouvelle clé : `219BA872` est déjà celle qu'approuvent les clients.
    révocation (imprimés / clé USB), puis **phrase de passe** sur la clé
    (`gpg --passwd`), puis retrait de la copie en double dans
    `/root/.gnupg`. `conf/options` a déjà `ask-passphrase`.
-2. **Coffre (P2)** : la phrase de la clé GPG entre au Coffre (niveau 1).
+2. **Niveau 0 — sans humain, déverrouillée au démarrage (#1366)** : `coffrectl depot proteger --demarrage`
+   pose une phrase aléatoire rangée au niveau 0 (`systemd-creds`, relue à l'identique avant d'être
+   appliquée) ; `secubox-depot-deverrouille.service` la redonne à `gpg-agent` à chaque démarrage
+   (TTL d'un an), `coffrectl depot deverrouiller` à la demande. Le fichier de clé reste chiffré sur
+   disque (une copie du disque ne signe pas) ; root sur la box signe à tout moment. C'est le mode
+   retenu pour gk2 (2026-10-03).
+   **Coffre (P2)**, variante plus stricte : la phrase de la clé GPG entre au Coffre (niveau 1).
    `secubox-releasectl` demande une **session de signature** : le Coffre
    ouvert pousse la phrase dans `gpg-agent` via `gpg-preset-passphrase` pour
    15 min, puis l'oublie (`--forget`). Le fichier de clé sur disque reste
