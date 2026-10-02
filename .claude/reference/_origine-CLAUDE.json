@@ -1,0 +1,69 @@
+{
+ "source": "CLAUDE.md @ 8af868a51",
+ "sha256": "33c6d53fd8114f1de88b7ee96295d0b135adff338e891d1824d9e07b365a55d1",
+ "octets": 25121,
+ "entete_sha256": "6b249249129f68e6ae3bc49a63ee5509844e5d2ee4097a452a377ecd93befb6e",
+ "entete": "<!--\n  SPDX-License-Identifier: LicenseRef-CMSD-1.0\n  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>\n  Source-Disclosed License — All rights reserved except as expressly granted.\n  See LICENCE-CMSD-1.0.md for terms.\n-->\n\n# CLAUDE.md — SecuBox-DEB\n## Migration OpenWrt → Debian · GlobalScale Marvell Armada\n### Instructions pour Claude Code dans VSCode\n\n---\n\n",
+ "ordre": [
+  {
+   "titre": "## 🧭 Session Startup — Lire d'abord",
+   "fichier": "WORKFLOW-ISSUES.md"
+  },
+  {
+   "titre": "## 🏗️ Ce qu'est ce projet",
+   "fichier": "PROJET-STRUCTURE.md"
+  },
+  {
+   "titre": "## 📁 Structure du repo",
+   "fichier": "PROJET-STRUCTURE.md"
+  },
+  {
+   "titre": "## 🔑 Règles impératives",
+   "fichier": "REGLES-IMPERATIVES.md"
+  },
+  {
+   "titre": "## 🌿 Multi-Agent Worktree Workflow — Obligatoire",
+   "fichier": "WORKTREES.md"
+  },
+  {
+   "titre": "## 🔒 Security Policies — Héritées de secubox-openwrt, adaptées Debian",
+   "fichier": "SECURITE-WAF.md"
+  },
+  {
+   "titre": "## 🐧 Debian Shell Scripting Guidelines",
+   "fichier": "SHELL-DEBIAN.md"
+  },
+  {
+   "titre": "## ⚡ Performance Patterns — Double Caching (porté depuis OpenWrt)",
+   "fichier": "PERF-CACHE.md"
+  },
+  {
+   "titre": "## 🚀 Punk Exposure Engine — Directive Architecturale",
+   "fichier": "EXPOSITION-PUNK.md"
+  },
+  {
+   "titre": "## 📝 Documentation Update Workflow (identique OpenWrt)",
+   "fichier": "DOC-UPDATE.md"
+  },
+  {
+   "titre": "## 🛡️ Règles CSPN / Sécurité formelle",
+   "fichier": "CSPN.md"
+  },
+  {
+   "titre": "## 📡 API Reference — Eye-Remote Boot Media (v2.1.0+)",
+   "fichier": "API-EYE-REMOTE.md"
+  },
+  {
+   "titre": "## 🛠️ Commandes usuelles",
+   "fichier": "COMMANDES.md"
+  },
+  {
+   "titre": "## 🎯 Priorité de migration",
+   "fichier": "PROJET-STRUCTURE.md"
+  },
+  {
+   "titre": "## 📡 Auteur",
+   "fichier": "PROJET-STRUCTURE.md"
+  }
+ ]
+}
