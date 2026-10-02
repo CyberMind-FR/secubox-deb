@@ -91,7 +91,6 @@ def test_phrase_et_trouver():
     assert "absent" not in p
     assert aide.trouver(cartes, "à quoi sert la carte radio ?")["id"] == "radio"
     assert aide.trouver(cartes, "c'est quoi Zigbee")["id"] == "zigbee"
-    assert aide.trouver(cartes, "explique moi cloud +")["id"] == "nextcloud-super"
     assert aide.trouver(cartes, "bonjour") is None
 
 

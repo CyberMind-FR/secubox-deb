@@ -120,12 +120,6 @@
       "metriques": []
     },
     {
-      "id": "nextcloud-super", "ic": "☁️", "nom": "Cloud +", "service": "nextcloud", "acces": "session",
-      "role": "Super-carte Nextcloud : Fichiers, Agenda, Activité et Partages en onglets, avec la jauge de quota — partager par lien public, téléverser, supprimer sans quitter le Hall.",
-      "usage": ["Les onglets changent de vue ; le pied téléverse ou ouvre le Cloud."],
-      "metriques": []
-    },
-    {
       "id": "photoprism", "ic": "📷", "nom": "Photos", "service": "photoprism", "acces": "public",
       "role": "PhotoPrism, la photothèque personnelle de la box : aperçu authentifié de vos albums.",
       "usage": ["Validez l'accès souverain une fois, puis la carte montre vos photos."],

@@ -265,7 +265,7 @@
   }
 
   // ── COUCHE QUI EMBARQUE UNE CARTE DE SERVICE EXISTANTE ────────────────────
-  // Pour les services qui ONT déjà une carte (delegue même-origine, ou /micro),
+  // Pour les services qui ONT déjà une carte (même origine, ou /micro),
   // on l'imbrique telle quelle : la couche EST la carte du service, aucune
   // logique dupliquée. Le thème est transmis.
   // crop = hauteur (px) de l'en-tete de la carte embarquee a INGERER (recouvrir
@@ -338,14 +338,6 @@
         { nom: 'Dépôt', host: SBX_DOMAINE.hote('depot.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=depot') },
         { nom: 'YTSaS', host: SBX_DOMAINE.hote('ytsas.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=ytsas') },
         { nom: 'Torrent', host: SBX_DOMAINE.hote('torrent.gk2.secubox.in'), charge: coucheEmbed('/cardlets/quick.html?svc=torrent') }
-      ]
-    },
-    cloud: {
-      titre: 'Cloud', icon: '☁️', embed: true,
-      couches: [
-        { nom: 'Mail', host: SBX_DOMAINE.hote('webmail.gk2.secubox.in'), charge: coucheEmbed('/cardlets/delegue.html?svc=mail') },
-        { nom: 'Cloud', host: SBX_DOMAINE.hote('nc.gk2.secubox.in'), charge: coucheEmbed('/cardlets/delegue.html?svc=nextcloud') },
-        { nom: 'Photos', host: SBX_DOMAINE.hote('photoprism.gk2.secubox.in'), charge: coucheEmbed('/cardlets/delegue.html?svc=photoprism') }
       ]
     },
     forums: {

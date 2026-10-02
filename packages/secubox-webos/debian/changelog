@@ -1,3 +1,17 @@
+secubox-webos (1.0.392-1~bookworm1) bookworm; urgency=medium
+
+  * Retrait de l'ancienne gestion des accès délégués (#1857) : l'identité
+    SBX OS (secubox-sbxid) porte désormais les liens. Supprimés : /acces.html,
+    les cardlets delegue et nextcloud-super, les routes /api/v1/webos/acces/*,
+    api/acces.py et api/nc_super.py, le groupe « Cloud » du cumul, la pastille
+    des demandes. Les tuiles Cloud, Photos et Mail restent, sans carte.
+  * Nouvelle route GET /api/v1/webos/session : la sonde de session du Hall
+    (elle passait par GET /acces, qui rendait aussi les accès délégués).
+  * Le dossier /etc/secubox/secrets/webos-acces N'EST PAS supprimé : c'est le
+    coffre par personne de l'Identity Manager (secubox_core.coffre).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 12:00:00 +0200
+
 secubox-webos (1.0.391-1~bookworm1) bookworm; urgency=medium
 
   * Carte Coffre : il naît et s'ouvre à la connexion d'un administrateur (#1855).
