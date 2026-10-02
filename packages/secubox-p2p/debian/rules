@@ -26,8 +26,8 @@ override_dh_auto_install:
 		$(CURDIR)/debian/secubox-p2p/usr/share/secubox/p2p/
 
 	# Install menu entry
-	install -d $(CURDIR)/debian/secubox-p2p/etc/secubox/menu.d
-	install -m 644 $(CURDIR)/menu.d/590-p2p.json $(CURDIR)/debian/secubox-p2p/etc/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-p2p/usr/share/secubox/menu.d
+	install -m 644 $(CURDIR)/menu.d/590-p2p.json $(CURDIR)/debian/secubox-p2p/usr/share/secubox/menu.d/
 
 	# Install systemd service
 	install -d $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system

@@ -22,8 +22,8 @@ override_dh_auto_install:
 	install -m 644 nginx/zkp.conf $(CURDIR)/debian/secubox-zkp/etc/nginx/secubox-routes.d/zkp.conf
 
 	# Install menu entry
-	install -d $(CURDIR)/debian/secubox-zkp/etc/secubox/menu.d
-	install -m 644 menu.d/570-zkp.json $(CURDIR)/debian/secubox-zkp/etc/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-zkp/usr/share/secubox/menu.d
+	install -m 644 menu.d/570-zkp.json $(CURDIR)/debian/secubox-zkp/usr/share/secubox/menu.d/
 
 	# Install systemd service
 	install -d $(CURDIR)/debian/secubox-zkp/usr/lib/systemd/system

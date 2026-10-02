@@ -48,3 +48,6 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 ## 2026-10-02 — Test dynamique du WAF dans la page Santé (ref #1883)
 - health-doctor 1.1.1 : contrôle `waf-selftest` (sbxwaf à l'écoute, témoin non bloqué, canaris XSS/SQLi/LFI/RCE en 403 depuis 198.51.100.77, vhost public hall.*), au plus toutes les 5 min, `POST /waf-selftest/run` pour le rejouer. hub 1.9.32 : section « WAF — test dynamique » dans /health/. Vérifié gk2 + Chromium. Constat : sbxwaf n'inspecte pas admin.* ni git.* (liste en dur du binaire).
+
+## 2026-10-02 — Menu admin : entrées p2p/zkp ignorées sur une box neuve (ref #1888)
+- Cause : secubox-p2p et secubox-zkp livraient leur entrée en /etc/secubox/menu.d, que le hub ne lisait pas ; gk2 les avait par copie manuelle (21/05), gk3 non. hub 1.9.33 lit aussi /etc/secubox/menu.d (locale prioritaire, dédoublonnée) ; p2p 1.11.18 et zkp 1.2.3 livrent en /usr/share/secubox/menu.d. 3 tests. gk2 : p2p inchangé (déjà présent), zkp non affiché faute de www/zkp. Écarts de gk3 restants : pas de dpi, mediaflow, sentinelle-gsm (jeu de paquets), hub/health-doctor/hardening en retard sur gk2.

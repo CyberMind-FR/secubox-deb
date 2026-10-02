@@ -1,3 +1,9 @@
+secubox-hub (1.9.33-1~bookworm1) bookworm; urgency=medium
+
+  * Menu : lit aussi /etc/secubox/menu.d (surcharge locale, dédoublonnée par id) ; les entrées livrées là (p2p, zkp) étaient ignorées, une box neuve comme gk3 ne les proposait pas (#1888).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 20:00:00 +0200
+
 secubox-hub (1.9.32-1~bookworm1) bookworm; urgency=low
 
   * Page Santé : section « WAF — test dynamique » (détail par test, âge du résultat, bouton Rejouer) alimentée par health-doctor (#1883).
