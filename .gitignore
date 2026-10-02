@@ -114,3 +114,8 @@ packages/sbxos-audio-mood/debian/gabriel-mood/
 packages/sbxos-audio-mood/debian/sbxos-audio-moodd
 packages/secubox-sbxos/dist-vitrine/
 packages/secubox-voice-moteur/vendor/
+
+# Réglages Claude Code propres à une machine (#1863)
+.claude/settings.local.json
+.claude/settings.local.json.avant-*
+CLAUDE.local.md

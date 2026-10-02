@@ -1,21 +1,52 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
-      "Bash(awk '/^const SIM=/{flag=1} flag{print; if\\(flag && /^function simStep/\\){in_func=1} if\\(in_func && /^}$/\\){exit}}' remote-ui/round/index.html)",
-      "Bash(awk '/^const SIM=/{flag=1} flag{print; if\\(flag && /^function simStep/\\){in_func=1} if\\(in_func && /^}$/\\){exit}}' remote-ui/common/js/sim.js)",
-      "Bash(sh -n packages/secubox-users/debian/postinst)",
-      "Bash(lintian -I packages/secubox-users/debian/control)",
-      "Bash(sh -n /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so/packages/secubox-users/debian/postinst)",
-      "Bash(sh -n /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so/tests/scripts/test-users-auth-live.sh)",
-      "Bash(awk '/96/ {print NR\": \"$0}' remote-ui/common/js/icons.js)",
-      "Bash(git -C /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so status)",
-      "Bash(git -C /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so log --oneline -5)",
-      "Bash(git -C /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so log --oneline -2 -- packages/secubox-hub/www/login.html)",
-      "Bash(git -C /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so diff HEAD -- packages/secubox-hub/www/login.html)",
-      "Bash(pip show *)"
+      "Bash(pytest *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(python -m pytest *)",
+      "Bash(.venv/bin/pytest *)",
+      "Bash(.venv/bin/python -m pytest *)",
+      "Bash(ruff check *)",
+      "Bash(ruff format --check *)",
+      "Bash(.venv/bin/ruff check *)",
+      "Bash(.venv/bin/ruff format --check *)",
+      "Bash(shellcheck *)",
+      "Bash(sh -n *)",
+      "Bash(bash -n *)",
+      "Bash(lintian *)",
+      "Bash(go test -mod=vendor *)",
+      "Bash(go vet -mod=vendor *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(gh issue comment *)",
+      "Bash(gh issue create *)"
     ],
-    "additionalDirectories": [
-      "/home/reepost/CyberMindStudio/secubox-deb-worktrees/127-add-remote-ui-square-variant-for-pi-4b-7/remote-ui/common/shell"
+    "ask": [
+      "Bash(git push *)",
+      "Bash(gh issue close *)",
+      "Bash(gh pr merge *)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(sshpass *)",
+      "Read(//etc/secubox/**)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*.key)",
+      "Read(**/*.pem)",
+      "Read(**/id_rsa*)",
+      "Read(**/id_ed25519*)",
+      "Read(//etc/secubox/secrets/**)",
+      "Read(~/.ssh/**)"
     ]
   }
 }
