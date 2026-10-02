@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: waf-rules-sync — met à jour les règles du WAF sans perdre ce que
+la box a appris (#1858, #1859).
+
+Le fichier lu par sbxwaf, /etc/secubox/waf/waf-rules.json, n'est pas un conffile :
+dpkg n'y touche pas, et chaque correction de règle passait donc par une édition
+à la main sur la box. Il ne peut pas non plus être simplement écrasé : les
+catégories `generated: true` (product_absent_probes…) sont tenues à chaud par
+wafgen et n'existent que là.
+
+Règle : les catégories LIVRÉES remplacent celles de la box ; les catégories
+GÉNÉRÉES de la box sont gardées telles quelles (et celle du paquet n'est posée que
+si la box n'en a aucune). Une sauvegarde `.avant-<version>` précède toute
+écriture ; un JSON invalide n'écrit rien.
+
+Usage : waf-rules-sync [--dry-run] [--version V] [--livre FICHIER] [--vivant FICHIER]
+Code de sortie : 0 rien à faire ou fait, 10 modifié (le moteur doit redémarrer).
+"""
+import argparse
+import json
+import shutil
+import sys
+from pathlib import Path
+
+LIVRE = Path("/usr/share/secubox/waf/waf-rules.json")
+VIVANT = Path("/etc/secubox/waf/waf-rules.json")
+
+
+def fusionne(livre: dict, vivant: dict) -> dict:
+    """Règles de la box après mise à jour : livrées d'abord, générées conservées."""
+    out = {k: v for k, v in vivant.items() if k != "categories"}
+    out.update({k: v for k, v in livre.items() if k not in ("categories",) and k not in out})
+    cats_v = vivant.get("categories", {})
+    cats = {}
+    for nom, cat in livre.get("categories", {}).items():
+        if isinstance(cat, dict) and cat.get("generated") and nom in cats_v:
+            cats[nom] = cats_v[nom]          # tenue à chaud par wafgen
+        else:
+            cats[nom] = cat
+    for nom, cat in cats_v.items():
+        if nom not in cats and isinstance(cat, dict) and cat.get("generated"):
+            cats[nom] = cat                  # générée, absente du paquet
+    out["categories"] = cats
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--version", default="maj")
+    ap.add_argument("--livre", type=Path, default=LIVRE)
+    ap.add_argument("--vivant", type=Path, default=VIVANT)
+    a = ap.parse_args()
+
+    if not a.livre.is_file():
+        print(f"waf-rules-sync: {a.livre} absent — rien à faire", file=sys.stderr)
+        return 0
+    livre = json.loads(a.livre.read_text(encoding="utf-8"))
+    if not a.vivant.is_file():
+        if not a.dry_run:
+            a.vivant.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(a.livre, a.vivant)
+        print("waf-rules-sync: première pose des règles")
+        return 10
+    vivant = json.loads(a.vivant.read_text(encoding="utf-8"))
+    neuf = fusionne(livre, vivant)
+
+    def ids(d):
+        return {p["id"] for c in d.get("categories", {}).values() if isinstance(c, dict)
+                for p in c.get("patterns", []) if isinstance(p, dict) and "id" in p}
+
+    if neuf == vivant:
+        print("waf-rules-sync: règles à jour")
+        return 0
+    ajoutees, retirees = sorted(ids(neuf) - ids(vivant)), sorted(ids(vivant) - ids(neuf))
+    print(f"waf-rules-sync: +{len(ajoutees)} règle(s) {ajoutees} / -{len(retirees)} {retirees}")
+    if a.dry_run:
+        return 10
+    texte = json.dumps(neuf, ensure_ascii=False, indent=2) + "\n"
+    json.loads(texte)                                   # jamais d'écriture invalide
+    shutil.copy2(a.vivant, a.vivant.with_name(a.vivant.name + ".avant-" + a.version))
+    tmp = a.vivant.with_name(a.vivant.name + ".tmp")
+    tmp.write_text(texte, encoding="utf-8")
+    shutil.copymode(a.vivant, tmp)
+    tmp.replace(a.vivant)
+    return 10
+
+
+if __name__ == "__main__":
+    sys.exit(main())

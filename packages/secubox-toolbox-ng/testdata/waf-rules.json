@@ -288,11 +288,6 @@
       "enabled": true,
       "patterns": [
         {
-          "id": "api-001",
-          "pattern": "/api/.*/admin",
-          "desc": "Admin API access"
-        },
-        {
           "id": "api-002",
           "pattern": "graphql.*(__schema|introspection)",
           "desc": "GraphQL introspection"
@@ -893,7 +888,7 @@
         },
         {
           "id": "cred-004",
-          "pattern": "\\?.*token=[A-Za-z0-9._-]{20,}",
+          "pattern": "[?&](?:[A-Za-z]+_)?token=[A-Za-z0-9._-]{20,}",
           "desc": "JWT/token in URL"
         },
         {
