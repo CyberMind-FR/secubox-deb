@@ -248,6 +248,16 @@ cmd_components() {
 EOF
 }
 
+cmd_wan_guard() {
+    # Root : lit la table chargée (#1306). L'API en lecture seule ne le peut pas.
+    if nft list table inet secubox_wan_guard 2>/dev/null; then
+        ok "garde WAN chargée"
+    else
+        warn "garde WAN absente du noyau (nft -f /etc/nftables.d/secubox-wan-guard.nft)"
+        return 1
+    fi
+}
+
 cmd_access() {
     cat <<EOF
 {
@@ -305,6 +315,7 @@ case "$CMD" in
     benchmark)  cmd_benchmark ;;
     components) cmd_components ;;
     access)     cmd_access ;;
+    wan-guard)  cmd_wan_guard ;;
     help|--help|-h) cmd_help ;;
     version|--version|-v) echo "hardeningctl v${VERSION}" ;;
     *)          err "Unknown command: $CMD. Use '${SCRIPT_NAME} help' for usage." ;;
