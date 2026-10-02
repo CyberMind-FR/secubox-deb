@@ -100,8 +100,8 @@ Index de `.claude/reference/` : `.claude/reference/README.md`.
 
 ## Garde-fous automatiques (Claude Code)
 
-`.claude/settings.json` : permissions (lecture, `push`/PR/`merge`/fermeture d'issue/`ssh` autorisés
-d'office — autorisation durable du 2026-10-02 ; `rm -rf` et `sudo` sur confirmation ; secrets refusés) ; `.claude/hooks/` : lint du seul fichier touché après chaque édition ;
+`.claude/settings.json` : permissions (Bash autorisé d'office — autorisation durable du 2026-10-02 : push,
+PR, merge, fermeture d'issue, ssh, sudo ; refusés : suppressions catastrophiques `rm -rf /`, `~`, `$HOME`, et lecture de secrets) ; `.claude/hooks/` : lint du seul fichier touché après chaque édition ;
 `.claude/agents/` : `relecteur-securite` (lecture seule), `correcteur-lint`. Réglages propres à une
 machine : `.claude/settings.local.json` (ignoré par git).
 

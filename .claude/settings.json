@@ -29,12 +29,10 @@
       "Bash(gh pr merge *)",
       "Bash(gh issue close *)",
       "Bash(ssh *)",
-      "Bash(scp *)"
-    ],
-    "ask": [
+      "Bash(scp *)",
       "Bash(rm -rf *)",
       "Bash(sudo *)",
-      "Read(//etc/secubox/**)"
+      "Bash(*)"
     ],
     "deny": [
       "Read(./.env)",
@@ -46,7 +44,13 @@
       "Read(**/id_rsa*)",
       "Read(**/id_ed25519*)",
       "Read(//etc/secubox/secrets/**)",
-      "Read(~/.ssh/**)"
+      "Read(~/.ssh/**)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/*)",
+      "Bash(rm -rf $HOME)",
+      "Bash(rm -rf $HOME/*)"
     ]
   },
   "hooks": {
