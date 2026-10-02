@@ -1,9 +1,0 @@
-{
-  "name": "VoIP/PBX",
-  "path": "/voip/",
-  "icon": "📞",
-  "category": "mesh",
-  "order": 622,
-  "description": "Asterisk/FreePBX PBX management",
-  "id": "voip"
-}

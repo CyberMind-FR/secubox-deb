@@ -17,4 +17,3 @@ Description: SecuBox MCP Server — Model Context Protocol server for AI tools
  Distinct from sibling packages in the AI cluster:
   - secubox-ai-gateway — request router with sovereignty policy.
   - secubox-ai-insights — ML-based threat detection.
-  - secubox-ollama — Ollama LLM runtime wrapper.

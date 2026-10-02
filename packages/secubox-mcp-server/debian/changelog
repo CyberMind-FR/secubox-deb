@@ -1,3 +1,9 @@
+secubox-mcp-server (1.1.6-1~bookworm1) bookworm; urgency=low
+
+  * Description : secubox-ollama retiré (docker/podman, #1743).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 14:00:00 +0200
+
 secubox-mcp-server (1.1.5-1~bookworm1) bookworm; urgency=medium
 
   * Socket identity retirée de la table des modules (#1840).

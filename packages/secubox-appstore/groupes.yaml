@@ -105,5 +105,4 @@ description: "Piloter le domicile : passerelle Zigbee, courtier MQTT et vidéosu
 modules:
   - secubox-zigbee
   - secubox-mqtt
-  - secubox-frigate
 

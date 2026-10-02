@@ -11,7 +11,7 @@ on = [
   "cloner", "config-advisor", "cookies", "core", "cs-bridge",
   "cve-triage", "cyberfeed", "dns", "dns-guard", "dns-provider", "dpi",
   "dpi-flowcap", "droplet", "exposure", "eye-remote", "eye-remote-dhcp",
-  "frigate", "gitea", "glances", "grafana", "haproxy", "hardening",
+  "gitea", "glances", "grafana", "haproxy", "hardening",
   "health-doctor", "health-prober", "hub", "identity", "interceptor", "ipblock",
   "ksm", "led-heartbeat", "led-trigger", "leds", "localrecall", "lyrion",
   "mail", "mcp-server", "mesh", "meshname", "metablogizer", "metabolizer",

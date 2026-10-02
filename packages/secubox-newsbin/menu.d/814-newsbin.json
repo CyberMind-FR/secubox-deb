@@ -1,9 +1,0 @@
-{
-  "name": "Newsbin",
-  "path": "/newsbin/",
-  "icon": "📥",
-  "category": "mesh",
-  "order": 814,
-  "description": "Usenet downloader management",
-  "id": "newsbin"
-}

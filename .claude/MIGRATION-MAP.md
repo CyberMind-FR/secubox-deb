@@ -96,7 +96,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-daemon** | — | Go | ✅ | Mesh daemon (secuboxd, secuboxctl) | ✅ |
 | **secubox-c3box** | ✅ | Go | ✅ | C3BOX situational awareness dashboard | ✅ |
 
-| **secubox-ollama** | ✅ | ✅ | ✅ | models, chat, generate, system | ✅ |
+| **secubox-ollama** | ✅ | ✅ | ✅ | models, chat, generate, system | ✅ | **🗑️ retiré (#1743 : docker/podman)**
 | **secubox-jellyfin** | ✅ | ✅ | ✅ | **LXC-native 2.0.x** — auto-wire biblios (photoprism/nextcloud/torrent/lyrion/peertube), self-mint API key, mode léger | ✅ |
 | **secubox-lyrion** | ✅ | ✅ | ✅ | players, library, backup, LMS JSON-RPC | ✅ |
 | **secubox-console** | — | ✅ | ✅ | Textual TUI dashboard (no www) v1.1.0 | ✅ |
@@ -104,19 +104,19 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-soc-gateway** | — | ✅ | ✅ | SOC aggregation gateway v1.0.0 | ✅ |
 | **secubox-soc-web** | ✅ | — | ✅ | React SOC dashboard v1.0.0 | ✅ |
 
-| **secubox-hexo** | ✅ | ✅ | ✅ | blogs, posts, themes, deploy | ✅ |
+| **secubox-hexo** | ✅ | ✅ | ✅ | blogs, posts, themes, deploy | ✅ | **🗑️ retiré (#1743 : docker/podman)**
 | **secubox-webradio** | ✅ | ✅ | ✅ | stations, streaming, recording | ✅ |
 | **secubox-torrent** | ✅ | ✅ | ✅ | LXC-native WebTorrent SAS 2.2.x — kept/éphémère, conserve→peertube, no-seedbox | ✅ |
 | **secubox-ytsas** | ✅ | ✅ | ✅ | **NOUVEAU** — YouTube/web SAS LXC (yt-dlp+deno+EJS), cookies, conserve→peertube 0.1.2 | ✅ |
 | **secubox-aggregator** | — | ✅ | ✅ | gateway 0.3.0 — **concentrateur sélectif** (forward /api/v1/&lt;mod&gt;/→socket dédié) | ✅ |
-| **secubox-newsbin** | ✅ | ✅ | ✅ | NZB queue, history, servers | ✅ |
-| **secubox-gotosocial** | ✅ | ✅ | ✅ | accounts, federation, moderation | ✅ |
-| **secubox-simplex** | ✅ | ✅ | ✅ | SMP relay, queues, TLS | ✅ |
+| **secubox-newsbin** | ✅ | ✅ | ✅ | NZB queue, history, servers | ✅ | **🗑️ retiré (#1743 : docker/podman)**
+| **secubox-gotosocial** | ✅ | ✅ | ✅ | accounts, federation, moderation | ✅ | **🗑️ retiré (#1743 : docker/podman)**
+| **secubox-simplex** | ✅ | ✅ | ✅ | SMP relay, queues, TLS | ✅ | **🗑️ retiré (#1743 : docker/podman)**
 | **secubox-photoprism** | ✅ | ✅ | ✅ | library, albums, faces, storage | ✅ |
 | **secubox-matrix** | ✅ | ✅ | ✅ | users, rooms, federation, media | ✅ |
 | **secubox-jitsi** | ✅ | ✅ | ✅ | rooms, recordings, auth, prosody | ✅ |
 | **secubox-peertube** | ✅ | ✅ | ✅ | videos, channels, federation, transcoding | ✅ |
-| **secubox-voip** | ✅ | ✅ | ✅ | extensions, trunks, routes, IVR, CDR | ✅ |
+| **secubox-voip** | ✅ | ✅ | ✅ | extensions, trunks, routes, IVR, CDR | ✅ | **🗑️ retiré (#1743 : docker/podman)**
 
 | **secubox-ossec** | — | ✅ | ✅ | Host IDS | ✅ |
 | **secubox-ai-insights** | ✅ | ✅ | ✅ | ML threat detection, anomalies | ✅ |

@@ -37,8 +37,6 @@ Description: SecuBox PeerTube — federated video platform (native LXC)
   - secubox-matrix — Matrix Synapse (chat federation, not video).
   - secubox-jitsi — Jitsi Meet (real-time conferencing, not VOD).
   - secubox-jellyfin — Jellyfin (local media library, not federated).
-  - secubox-gotosocial — GoToSocial (microblog ActivityPub, not video).
-  - secubox-simplex — SimpleX Chat (decentralized chat).
  .
  Reachable at /peertube/ (frontend) and /api/v1/peertube/* (API)
  via Unix socket /run/secubox/peertube.sock.

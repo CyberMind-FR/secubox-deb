@@ -457,23 +457,23 @@ requiert:
   - secubox-mail
 recommande:
   - secubox-smtp-relay
+suggere:
+  - secubox-clamav          # antivirus dans un LXC dédié éveillé à la demande (#1912) ; ~600 Mo + base, jamais sans le demander
 
 meta: secubox-service-messagerie
 niveau: service
 label: Messageries
-description: "Matrix, XMPP, SimpleX : des messageries qu'on héberge."
+description: "Matrix, XMPP : des messageries qu'on héberge."
 recommande:
   - secubox-matrix
 suggere:
   - secubox-jabber
-  - secubox-simplex
 
 meta: secubox-service-fediverse
 niveau: service
 label: Fédivers
 description: "Présence fédérée et relais social avec consentement."
 requiert:
-  - secubox-gotosocial
 recommande:
   - secubox-socialrelay
   - secubox-billets
@@ -486,7 +486,6 @@ recommande:
   - secubox-jitsi
   - secubox-turn
 suggere:
-  - secubox-voip
 
 meta: secubox-service-fichiers
 niveau: service
@@ -554,7 +553,6 @@ requiert:
 recommande:
   - secubox-metacatalog
 suggere:
-  - secubox-hexo
 
 meta: secubox-service-bbs
 niveau: service
@@ -572,7 +570,6 @@ description: "Radar d'actualité multi-sources."
 requiert:
   - secubox-metanews
 suggere:
-  - secubox-newsbin
   - secubox-yacy
 
 meta: secubox-service-domotique
@@ -585,7 +582,6 @@ recommande:
   - secubox-zigbee
   - secubox-iot-guard
 suggere:
-  - secubox-frigate
   - secubox-picobrew
 
 meta: secubox-service-ia
@@ -595,7 +591,6 @@ description: "Passerelle souveraine, inférence locale, mémoire, MCP."
 requiert:
   - secubox-ai-gateway
 recommande:
-  - secubox-ollama
   - secubox-localrecall
 suggere:
   - secubox-mcp-server
@@ -612,4 +607,3 @@ recommande:
 suggere:
   - secubox-release
   - secubox-vm
-  - secubox-redroid

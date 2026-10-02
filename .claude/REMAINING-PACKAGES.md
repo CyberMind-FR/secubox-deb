@@ -59,23 +59,23 @@ These OpenWrt packages exist in Debian with renamed equivalents:
 
 | OpenWrt Package | Target Debian | Complexity | Notes |
 |-----------------|---------------|------------|-------|
-| ~~**ollama**~~ | secubox-ollama | ~~Medium~~ | ~~LLM inference, API proxy~~ ✅ |
+| ~~**ollama**~~ | secubox-ollama | ~~Medium~~ | ~~LLM inference, API proxy~~ ✅ | **🗑️ retiré (#1743 : docker/podman)**
 | ~~**jellyfin**~~ | secubox-jellyfin | ~~Medium~~ | ~~Media server, LXC~~ ✅ |
 | **photoprism** | secubox-photoprism | Complex | Photo management, Go |
 | ~~**zigbee2mqtt**~~ | secubox-zigbee | ~~Medium~~ | ~~Zigbee gateway~~ ✅ |
 | **matrix** | secubox-matrix | Complex | Chat server, Synapse |
 | **jitsi** | secubox-jitsi | Complex | Video conferencing |
-| **gotosocial** | secubox-gotosocial | Medium | Fediverse server |
+| **gotosocial** | secubox-gotosocial | Medium | Fediverse server | **🗑️ retiré (#1743 : docker/podman)**
 | **peertube** | secubox-peertube | Complex | Video platform |
-| **hexojs** | secubox-hexo | Easy | Static blog generator |
+| **hexojs** | secubox-hexo | Easy | Static blog generator | **🗑️ retiré (#1743 : docker/podman)**
 | **magicmirror2** | secubox-magicmirror | Medium | Smart display |
 | ~~**lyrion**~~ | secubox-lyrion | ~~Medium~~ | ~~Music server~~ ✅ |
 | **webradio** | secubox-webradio | Easy | Internet radio |
-| **voip** | secubox-voip | Complex | VoIP/PBX |
+| **voip** | secubox-voip | Complex | VoIP/PBX | **🗑️ retiré (#1743 : docker/podman)**
 | **jabber** | secubox-jabber | Medium | XMPP server |
-| **simplex** | secubox-simplex | Medium | Secure messaging |
+| **simplex** | secubox-simplex | Medium | Secure messaging | **🗑️ retiré (#1743 : docker/podman)**
 | **torrent** | secubox-torrent | Easy | BitTorrent client |
-| **newsbin** | secubox-newsbin | Easy | Usenet client |
+| **newsbin** | secubox-newsbin | Easy | Usenet client | **🗑️ retiré (#1743 : docker/podman)**
 
 ---
 
