@@ -1,3 +1,9 @@
+secubox-nac (3.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * Restaure ce que la fusion 0c07799fd avait écrasé (#1748) : _parse_arp consigne de nouveau l'interface de chaque voisin, discover() la conserve quand un bail de rang supérieur possède l'enregistrement, et br-lxc est de nouveau une interface LAN (les conteneurs sont découverts et se classent dans la zone lxc), en gardant eth2 ajouté depuis. Les deux tests de test_discovery qui échouaient sur master repassent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 05:00:00 +0200
+
 secubox-nac (3.1.7-1~bookworm1) bookworm; urgency=low
 
   * secubox-nac-apply : Group=secubox pour pouvoir écrire son statut dans /var/lib/secubox/nac sans CAP_DAC_OVERRIDE (#1766).
