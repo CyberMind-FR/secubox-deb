@@ -2842,16 +2842,11 @@ INCOMPLETE_MODULES=(
   secubox-cipher
   secubox-lyrion
   secubox-peertube
-  secubox-ollama
-  secubox-gotosocial
-  secubox-hexo
   secubox-mealie
   secubox-webradio
   secubox-piobeer
   secubox-picobrew
-  secubox-voip
   secubox-zigbee
-  secubox-newsbin
   secubox-ui-manager
   secubox-ui-health
   # Hardware-gated modules — restart-storm on live USB without the

@@ -128,6 +128,7 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - Agrégateur 0.3.11 : `RETIRED_MODULES` — les modules retirés encore cités dans `/etc/secubox/aggregator.toml` d'une box sont ignorés sans erreur de chargement. 3 tests.
 - Test de dépôt `tests/test_pas_de_docker_1743.py` : aucun nouveau fichier ne peut tirer ni piloter docker/podman ; liste `tests/docker-podman-assumes.txt` qui ne peut que rétrécir (dettes nommées : voicestudio ; commentaires historiques jitsi/matrix ; nettoyage photoprism ; outils de migration). 4 tests.
 - Déployé : gk2 (dpkg, 54 paquets du lot) et gk3 (apt dist-upgrade) ; 8 paquets purgés sur les deux ; résidus `__pycache__` nettoyés ; LXC `frigate` détruit (gk2 3,6 Go, gk3 750 Mo) après archive des données (/root/archives-1743/*-frigate-donnees.tar.gz) ; paquets retirés du dépôt apt (bookworm, trixie) et dépôt re-signé. Les 60 paquets du lot publiés.
+- Pas de paquet « retraits » (proposé puis abandonné sur décision de l'exploitant : liste sans fin, `Conflicts` éternel ; les modules n'étaient que des essais). Derniers restes des 8 modules ôtés de l'image live (liste de masquage), de `audit-packages.py` et de `generate-secubox-yaml.py`.
 - Reste #1743 : voicestudio (podman sur l'hôte, conteneur ACTIF sur gk3 : reconnaissance vocale de Lexie) à convertir en LXC natif ; purge de podman/buildah/crun des boxes une fois voicestudio converti ; ligne photoprism (`podman rm` de nettoyage) à retirer quand plus aucune box n'a l'ancien conteneur.
 
 ## 2026-10-03 — Test des méta-paquets : cartes Coffre (ref #1743)

@@ -52,7 +52,6 @@ CATEGORY_MAP = {
 TIER_EXCLUSIVE = {
     'pro': [
         'secubox-dpi',
-        'secubox-ollama',
         'secubox-jellyfin',
         'secubox-matrix',
         'secubox-nextcloud',
