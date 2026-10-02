@@ -1,3 +1,13 @@
+secubox-waf (1.10.42-1~bookworm1) bookworm; urgency=medium
+
+  * waf-rules-sync (#1858) : voie de mise à jour des règles du WAF. Les
+    catégories livrées remplacent celles de la box, les catégories
+    `generated: true` (wafgen) sont gardées, sauvegarde `.avant-<version>`,
+    redémarrage du moteur seulement si le fichier a changé. Appelé par le
+    postinst : plus d'édition à la main pour livrer une règle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 11:20:00 +0200
+
 secubox-waf (1.10.41-1~bookworm1) bookworm; urgency=medium
 
   * waf-rules.json api-001 retirée (#1859) : `/api/.*/admin` comptait comme

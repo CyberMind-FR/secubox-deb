@@ -27,6 +27,8 @@ override_dh_auto_install:
 	# wafctl control script
 	install -d debian/secubox-waf/usr/sbin
 	[ -f scripts/wafctl ] && install -m 755 scripts/wafctl debian/secubox-waf/usr/sbin/ || true
+	# Mise à jour des règles livrées sans perdre les générées (#1858)
+	install -m 755 scripts/waf-rules-sync debian/secubox-waf/usr/sbin/waf-rules-sync
 	# Sudoers : `secubox` peut purger le cache média du WAF (wafctl purge-cache).
 	# Conffile /etc/sudoers.d (0440) — permet aux tâches de contenu tournant sous
 	# `secubox` (metablog-sync) de rafraîchir le cache après une synchro git.
