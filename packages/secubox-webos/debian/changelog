@@ -1,3 +1,14 @@
+secubox-webos (1.0.394-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : « Mes sites » ouvre un site dans un onglet (lien direct), plus dans
+    le Surfer — dont le relais refuse les adresses de la box (« Cette adresse
+    mène à la box ou à son réseau local »). Même chose pour le ⚙ de réglages.
+  * Hall : le cadre embarqué d'un service passe par son entrée sans mot de
+    passe (/sbx/entrer pour Nextcloud et PeerTube) : `/` rendait le formulaire
+    de connexion de Nextcloud (SSO KO depuis la tuile).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 17:00:00 +0200
+
 secubox-webos (1.0.393-1~bookworm1) bookworm; urgency=medium
 
   * Hall : la carte Coffre n'ouvre plus « https://undefined.gk2.secubox.in »

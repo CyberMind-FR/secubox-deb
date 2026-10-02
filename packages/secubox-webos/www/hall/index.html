@@ -1891,7 +1891,10 @@ function modeURL(mode){
   if(mode==='admin') return ADMIN_ORIGINE+_svc.path
     + (_svc.path.indexOf('?')>=0?'&':'?') + 'theme=' + thAdmin;
   const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-  return 'https://'+_svc.url+(_sub||'/')+'?embed=1&theme='+th;
+  // L'ENTRÉE SANS MOT DE PASSE vaut aussi dans le cadre (#1562, #1665) : Nextcloud
+  // et PeerTube ouvrent le compte de la session par /sbx/entrer ; `/` rendait leur
+  // formulaire de connexion.
+  return 'https://'+_svc.url+(_sub||entree(_svc.url))+'?embed=1&theme='+th;
 }
 // L'onglet réel suit le MODE AFFICHÉ. Depuis la console admin d'un module,
 // ⧉ ouvrait https://<module>.gk2… — le vhost public du service — au lieu de
