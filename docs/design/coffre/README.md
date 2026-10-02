@@ -96,6 +96,23 @@ existe déjà, il est inactif et vide sur gk2, et sa conception actuelle
 
 ## 4. Ouvrir le Coffre
 
+**Depuis #1855 (décision de l'exploitant, 2026-10-01) : la connexion de
+l'administrateur ouvre le Coffre, sans phrase à part.** Chaque administrateur
+réel a une serrure « compte », l'Argon2id de SON mot de passe de connexion.
+- **À la connexion**
+  - `/login`, mot de passe vérifié : secubox-auth demande au Coffre de *préparer*. Le Coffre revérifie le mot de passe dans users.json et le rôle, déballe la MK et la garde en attente ; il rend un ticket.
+  - Le second facteur réussit (ou n'est pas exigé sur le LAN) : auth *confirme*, le Coffre s'ouvre. Hors LAN, la boîte de la box est prévenue.
+  - Un mot de passe sans second facteur n'ouvre rien.
+- **Création** : la première connexion d'un administrateur crée le Coffre, avec ce mot de passe. Pas de codes de secours à ce moment-là : préparer le recouvrement ensuite (`coffrectl recouvrement preparer`, `coffrectl codes`).
+- **Changements**
+  - Un changement de mot de passe (ancien → nouveau) réemballe la serrure.
+  - Une remise par root, sans l'ancien, la rend caduque ; la connexion suivante, Coffre ouvert, la refait.
+  - Un administrateur qui se connecte pendant que le Coffre est ouvert reçoit sa serrure.
+- **Fermé au web** : `vault/compte/*` ne passe jamais par le relais de l'agrégateur, et le Coffre refuse ce qui porte la marque de ce relais.
+- **Compromis assumé** : le Coffre est aussi fort que le mot de passe admin plus le TOTP.
+
+Les autres chemins restent, pour le secours :
+
 | Chemin | Authentification | Secret d'ouverture | Remarque |
 |---|---|---|---|
 | Hall, LAN | session + TOTP | phrase **ou** clé d'appareil | cas quotidien |
@@ -265,3 +282,14 @@ du Hall dans ses trois états :
   quotidien ?
 - **Nœuds de recouvrement** : lesquels, sachant que c3box est éteint et la
   VM de test éphémère ?
+
+
+## La connexion de toute personne ouvre son compartiment (#1855)
+
+Décision de l'exploitant : la connexion d'un utilisateur — invité compris — ouvre
+**son** compartiment, comme celle de l'administrateur ouvre le Coffre. Le mot de
+passe de connexion est une serrure `compte` de la personne ; la clé de la personne
+est tenue en mémoire le temps de sa session. La clé maîtresse reste réservée à
+l'administrateur : un compartiment de personne demande toujours la MK **et** la
+personne. Un appareil entré sans mot de passe (lien/QR) garde sa clé d'appareil ou
+sa phrase.

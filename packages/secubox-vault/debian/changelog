@@ -1,3 +1,25 @@
+secubox-vault (2.0.14-1~bookworm1) bookworm; urgency=medium
+
+  * La connexion d'une PERSONNE ouvre son compartiment (#1855), invités compris :
+    serrure personnelle de genre « compte » (mot de passe de connexion), clé
+    tenue le temps de la session (`ouverture: {"genre": "session"}`), oubliée à
+    l'inactivité, au scellement et à « Verrouiller » (/moi/fermer). La clé
+    maîtresse reste exigée et réservée à l'administrateur.
+  * Routes socket-only /personne/preparer et /personne/changer ; /moi/serrures/compte
+    pour relier la connexion ; /moi accepte toute session (la personne vient du
+    jeton, 403 sans personne SBX OS).
+  * Schéma v6 (serrures personnelles : genre « compte »), migration v5 → v6.
+  * Mon coffre : s'ouvre seul quand la connexion l'a ouvert ; « Relier ma connexion ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 16:00:00 +0200
+
+secubox-vault (2.0.13-1~bookworm1) bookworm; urgency=medium
+
+  * La connexion de l'administrateur ouvre le Coffre, sans phrase à part (#1855) : serrure « compte » (Argon2id du mot de passe de connexion), /compte/preparer (mot de passe et rôle revérifiés ici) puis /compte/confirmer au second facteur réussi ; la première connexion crée le Coffre ; /compte/changer réemballe ; un admin connecté Coffre ouvert reçoit sa serrure. Refus de tout ce qui vient du relais web. Schéma v5.
+  * Console et Mon coffre : textes de l'ouverture par la connexion.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 23:30:00 +0200
+
 secubox-vault (2.0.12-1~bookworm1) bookworm; urgency=medium
 
   * Mon coffre : dit, avant et après publication, si la clé publique est visible des seules box liées ou aussi du monde entier par WKD (#1852).

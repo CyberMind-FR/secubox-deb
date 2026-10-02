@@ -103,13 +103,14 @@ def test_migration_v3_vers_v4(tmp_path):
               genre TEXT NOT NULL CHECK (genre IN ('phrase','secours','appareil')),
               libelle TEXT NOT NULL DEFAULT '', sel BLOB NOT NULL, params TEXT NOT NULL,
               nonce BLOB NOT NULL, mk BLOB NOT NULL, creee INTEGER NOT NULL, cred_id TEXT);
-            INSERT INTO s3 SELECT * FROM serrures; DROP TABLE serrures; ALTER TABLE s3 RENAME TO serrures;
+            INSERT INTO s3 SELECT id, genre, libelle, sel, params, nonce, mk, creee, cred_id FROM serrures; DROP TABLE serrures; ALTER TABLE s3 RENAME TO serrures;
             UPDATE meta SET valeur='3' WHERE cle='version';""")
     c2 = Coffre(base, Journal(tmp_path / "j"), argon2=LEGER)
     assert c2.ouvrir(PHRASE)
     c2.recouvrement_preparer(["gk3", "papier"])
     with sqlite3.connect(base / "coffre.db") as cx:
-        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == "4"
+        from coffre.coffre import VERSION_SCHEMA                # v3 → … → la dernière
+        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == VERSION_SCHEMA
 
 
 def _coffrectl():

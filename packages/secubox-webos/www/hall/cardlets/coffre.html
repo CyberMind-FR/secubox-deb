@@ -74,7 +74,7 @@
     var j = e.journal || {};
     if (!e.initialise){
       pastille('', 'non initialisé'); $('kpis').hidden = true;
-      $('note').innerHTML = "Le Coffre attend sa phrase. En SSH sur la box : <b>coffrectl initialiser</b>.";
+      $('note').innerHTML = "Il naîtra à la prochaine connexion d'un administrateur : son mot de passe de connexion en sera la serrure.";
       return;
     }
     if (j.integre === false) pastille('alerte', 'journal altéré');
@@ -89,7 +89,7 @@
     $('kpis').hidden = false;
     $('note').innerHTML = e.ouvert
       ? "Ouvert : il se scelle seul après <b>" + mmss(e.reste_s) + "</b> sans usage."
-      : "Scellé : aucun secret n'est lisible. Ouvrir depuis la console ⚙️ (code TOTP hors du LAN).";
+      : "Scellé : aucun secret n'est lisible. Il s'ouvre à la connexion d'un administrateur (second facteur hors du LAN).";
   }
 
   function charge(){

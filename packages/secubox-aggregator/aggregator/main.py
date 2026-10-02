@@ -80,6 +80,10 @@ _ENTETE_VUE = "X-Sbx-Vue"
 # le Coffre tourne sous un utilisateur à lui. L'en-tête est une décision de la
 # ROUTE, posée après le code valide — celui d'un client est toujours retiré.
 _ENTETE_SECOND_FACTEUR = "X-SecuBox-Second-Facteur"
+# LA CONNEXION OUVRE LE COFFRE (#1855) : `vault/compte/*` et `vault/personne/*` ne servent que
+# secubox-auth, par la socket. Le relais web ne le sert JAMAIS, et marque ce
+# qu'il porte au Coffre pour qu'il puisse le refuser lui-même.
+_ENTETE_RELAIS = "X-SecuBox-Relais"
 _ECHECS_OTP_MAX = 5
 _ECHECS_OTP_FENETRE_S = 3600
 _echecs_otp: Dict[str, List[float]] = {}
@@ -88,23 +92,24 @@ _VUE_COMPLETE = "complete"
 
 def _garde_administration(personnelle: bool = False):
     """`require_jwt` de secubox-core (session valide + administrateur réel) ;
-    `require_personne` pour le compartiment d'une personne (`vault/moi…`, P5).
+    `require_session` pour le compartiment d'une personne (`vault/moi…`, P5) : une
+    session reconnue, invités compris (#1855) — la personne vient du jeton.
 
     Importé à l'usage : si secubox-core est illisible, seuls les sockets
     réservés tombent (503), le reste de la passerelle continue de servir."""
     try:
-        from secubox_core.auth import require_jwt, require_personne
+        from secubox_core.auth import require_jwt, require_session
     except Exception as e:  # noqa: BLE001 — sans garde, on ne relaie pas
         log.error("[proxy] garde d'administration indisponible : %s", e)
         return None
-    return require_personne if personnelle else require_jwt
+    return require_session if personnelle else require_jwt
 
 
 def _chemin_personnel(name: str, path: str) -> bool:
     """`/api/v1/vault/moi…` : le compartiment de la personne de la session (P5).
     Le Coffre la reconnaît lui-même depuis le jeton et exige SA serrure à
-    chaque valeur ; ici, on n'admet qu'une personne — ni invité, ni appareil
-    sans profil, ni jeton à portée."""
+    chaque valeur ; ici, on n'admet qu'une session reconnue, invités compris
+    (#1855) : sans personne SBX OS derrière elle, le Coffre répond 403."""
     return name == "vault" and (path == "moi" or path.startswith("moi/"))
 
 
@@ -387,6 +392,8 @@ def _build_app() -> FastAPI:
     async def _dedicated_socket_proxy(name: str, path: str, request: Request) -> Response:
         if name in _MOUNTED:
             return Response(status_code=404)
+        if name == "vault" and path.split("/", 1)[0] in ("compte", "personne"):
+            return Response(status_code=404)
         reserve = name in _SOCKETS_ADMIN
         if reserve:
             garde = _garde_administration(_chemin_personnel(name, path))
@@ -406,9 +413,11 @@ def _build_app() -> FastAPI:
         body = await request.body()
         fwd = {k: v for k, v in request.headers.items()
                if k.lower() not in ("host", "content-length", _ENTETE_VUE.lower(),
-                                    _ENTETE_SECOND_FACTEUR.lower())}
+                                    _ENTETE_SECOND_FACTEUR.lower(), _ENTETE_RELAIS.lower())}
         if reserve:
             fwd[_ENTETE_VUE] = _VUE_COMPLETE
+        if name == "vault":
+            fwd[_ENTETE_RELAIS] = "agregateur"
         if name == "vault" and path == "ouvrir" and request.method == "POST":
             refus = await _second_facteur_coffre(request, body, porteur, fwd)
             if refus is not None:

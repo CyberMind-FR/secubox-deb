@@ -16,6 +16,12 @@ rien. Les codes de secours sont des serrures à usage unique.
 COMPARTIMENTS. `box` pour le système ; `p-<user_uuid>` pour une personne — par
 son identifiant, jamais par un compte système (décision #1405).
 
+LE MOT DE PASSE DE CONNEXION EST UNE SERRURE (#1855). Pas de phrase à part :
+une serrure « compte » par administrateur réel, l'Argon2id de son mot de passe
+de connexion. La connexion la rejoue en deux temps — préparer (mot de passe
+vérifié ICI dans users.json, MK déballée et mise en attente), puis confirmer
+quand le second facteur a réussi. Un mot de passe seul n'ouvre rien.
+
 RECOUVREMENT PAR LE MAILLAGE (P8). n parts aléatoires, confiées à des box
 pairs (par leur messagerie OpenPGP liée) ou au papier ; chaque PAIRE de parts
 ouvre une serrure `maillage`. Deux détenteurs quelconques rouvrent le Coffre ;
@@ -25,8 +31,10 @@ UNE PERSONNE A SES SERRURES (P5). Sa clé (32 octets aléatoires) n'est emballé
 que par SES serrures — phrase ou clé d'appareil. La clé de son compartiment
 demande la MK ET cette clé : l'admin qui ouvre le Coffre n'y lit rien, la
 personne non plus tant que le Coffre est scellé. Rien de personnel n'est tenu
-en mémoire : chaque requête apporte la serrure, la clé est dérivée, servie,
-oubliée.
+en mémoire — SAUF, depuis #1855, la clé d'une personne CONNECTÉE (sa serrure
+« compte » = son mot de passe de connexion), tenue le temps de sa session et
+oubliée à la déconnexion, à l'inactivité ou au scellement. Sinon chaque requête
+apporte la serrure, la clé est dérivée, servie, oubliée.
 """
 import json
 import os
@@ -50,12 +58,13 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS serrures (
     id TEXT PRIMARY KEY,
-    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours', 'appareil', 'maillage')),
+    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours', 'appareil', 'maillage', 'compte')),
     libelle TEXT NOT NULL DEFAULT '',
     sel BLOB NOT NULL, params TEXT NOT NULL,
     nonce BLOB NOT NULL, mk BLOB NOT NULL,
     creee INTEGER NOT NULL,
-    cred_id TEXT);
+    cred_id TEXT,
+    compte TEXT);
 CREATE TABLE IF NOT EXISTS compartiments (
     id TEXT PRIMARY KEY,
     nature TEXT NOT NULL CHECK (nature IN ('box', 'personne')),
@@ -71,7 +80,7 @@ CREATE TABLE IF NOT EXISTS secrets (
 CREATE TABLE IF NOT EXISTS serrures_personnelles (
     id TEXT PRIMARY KEY,
     personne TEXT NOT NULL,
-    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'appareil')),
+    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'appareil', 'compte')),
     libelle TEXT NOT NULL DEFAULT '',
     sel BLOB NOT NULL, params TEXT NOT NULL,
     nonce BLOB NOT NULL, cle BLOB NOT NULL,
@@ -83,7 +92,7 @@ NB_CODES = 5
 PHRASE_MIN = 12
 DELAI_DEFAUT = 900
 VALEUR_MAX = 64 * 1024
-VERSION_SCHEMA = "4"
+VERSION_SCHEMA = "6"
 CRED_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,1024}$")
 NOM_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 COMPARTIMENT_RE = re.compile(
@@ -173,6 +182,45 @@ UPDATE meta SET valeur = '4' WHERE cle = 'version';
 """
 
 
+_MIGRATION_V5 = """
+CREATE TABLE serrures_v5 (
+    id TEXT PRIMARY KEY,
+    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'secours', 'appareil', 'maillage', 'compte')),
+    libelle TEXT NOT NULL DEFAULT '',
+    sel BLOB NOT NULL, params TEXT NOT NULL,
+    nonce BLOB NOT NULL, mk BLOB NOT NULL,
+    creee INTEGER NOT NULL,
+    cred_id TEXT,
+    compte TEXT);
+INSERT INTO serrures_v5 (id, genre, libelle, sel, params, nonce, mk, creee, cred_id)
+    SELECT id, genre, libelle, sel, params, nonce, mk, creee, cred_id FROM serrures;
+DROP TABLE serrures;
+ALTER TABLE serrures_v5 RENAME TO serrures;
+UPDATE meta SET valeur = '5' WHERE cle = 'version';
+"""
+
+
+_MIGRATION_V6 = """
+CREATE TABLE serrures_perso_v6 (
+    id TEXT PRIMARY KEY,
+    personne TEXT NOT NULL,
+    genre TEXT NOT NULL CHECK (genre IN ('phrase', 'appareil', 'compte')),
+    libelle TEXT NOT NULL DEFAULT '',
+    sel BLOB NOT NULL, params TEXT NOT NULL,
+    nonce BLOB NOT NULL, cle BLOB NOT NULL,
+    creee INTEGER NOT NULL,
+    cred_id TEXT);
+INSERT INTO serrures_perso_v6 SELECT id, personne, genre, libelle, sel, params, nonce, cle, creee, cred_id
+    FROM serrures_personnelles;
+DROP TABLE serrures_personnelles;
+ALTER TABLE serrures_perso_v6 RENAME TO serrures_personnelles;
+UPDATE meta SET valeur = '6' WHERE cle = 'version';
+"""
+
+COMPTE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$")
+ATTENTE_S = 300          # un ticket vit le temps d'un second facteur
+
+
 def part_texte(jeu: str, indice: int, part: bytes) -> str:
     """Une part lisible et recopiable : « jeu.indice.XXXX-XXXX-… » (base32)."""
     b = base64.b32encode(part).decode().rstrip("=")
@@ -204,6 +252,8 @@ class Coffre:
         self._mk: Optional[CleVerrouillee] = None
         self._dernier = 0.0
         self._verrou = threading.RLock()
+        self._attente: dict = {}          # ticket → ouverture préparée, le temps d'un second facteur
+        self._perso_ouvertes: dict = {}   # personne → {pk, dernier} : sa clé, tenue le temps de sa session (#1855)
 
     # ── base ────────────────────────────────────────────────────────────────
     def _cx(self) -> sqlite3.Connection:
@@ -235,6 +285,12 @@ class Coffre:
             v = "3"
         if v == "3":
             cx.executescript("BEGIN;" + _MIGRATION_V4 + "COMMIT;")
+            v = "4"
+        if v == "4":
+            cx.executescript("BEGIN;" + _MIGRATION_V5 + "COMMIT;")
+            v = "5"
+        if v == "5":
+            cx.executescript("BEGIN;" + _MIGRATION_V6 + "COMMIT;")   # serrures personnelles « compte » (#1855)
 
     @property
     def initialise(self) -> bool:
@@ -265,6 +321,9 @@ class Coffre:
             return bool(self._mk)
 
     def _sceller(self, raison: str) -> None:
+        for v in self._perso_ouvertes.values():      # une session de personne ne survit pas au scellement
+            v["pk"].effacer()
+        self._perso_ouvertes.clear()
         if self._mk:
             self._mk.effacer()
             self._mk = None
@@ -365,6 +424,131 @@ class Coffre:
                     self.journal.ajouter("ouverture", **details)
                     return True
             self.journal.ajouter("ouverture_refusee", genre=genre, **contexte)
+            return False
+
+    # ── serrures « compte » : le mot de passe de connexion (#1855) ──────────
+    def _ligne_compte(self, utilisateur: str, mot_de_passe: str, mk: bytes) -> tuple:
+        ident = secrets.token_hex(8)
+        sel = nouveau_sel()
+        kek = derive_kek(mot_de_passe.encode(), sel, self._argon2)
+        nonce, emballee = chiffrer(kek, mk, aad_serrure(ident))
+        return (ident, "compte", f"connexion de {utilisateur}", sel, json.dumps(self._argon2), nonce, emballee,
+                int(time.time()), None, utilisateur)
+
+    @staticmethod
+    def _pose_compte(cx, ligne: tuple) -> None:
+        cx.execute("DELETE FROM serrures WHERE genre='compte' AND compte=?", (ligne[-1],))
+        cx.execute("INSERT INTO serrures (id, genre, libelle, sel, params, nonce, mk, creee, cred_id, compte) "
+                   "VALUES (?,?,?,?,?,?,?,?,?,?)", ligne)
+
+    def _purge_attente(self) -> None:
+        t = self._horloge()
+        for k in [k for k, v in self._attente.items() if v["fin"] < t]:
+            v = self._attente.pop(k)
+            if v.get("mk"):
+                v["mk"].effacer()
+            if v.get("perso"):
+                v["perso"]["pk"].effacer()
+
+    def compte_preparer(self, utilisateur: str, mot_de_passe: str, personne: Optional[str] = None) -> Optional[str]:
+        """Le mot de passe de connexion VÉRIFIÉ (l'appelant l'a contrôlé dans
+        users.json, l'API aussi) : prépare l'ouverture, rend un ticket — ou
+        None si ce compte n'a pas de quoi ouvrir. Rien n'est ouvert ici."""
+        if not isinstance(utilisateur, str) or not COMPTE_RE.match(utilisateur) or not mot_de_passe:
+            raise Interdit("compte invalide")
+        with self._verrou:
+            self._purge_attente()
+            self._expire()
+            attente = {"utilisateur": utilisateur, "fin": self._horloge() + ATTENTE_S, "mk": None, "ligne": None}
+            if not self.initialise:
+                # PREMIÈRE CONNEXION D'UN ADMIN : le Coffre naît scellé, sa MK attend le second facteur.
+                mk = nouvelle_cle()
+                ligne = self._ligne_compte(utilisateur, mot_de_passe, mk)
+                with self._cx() as cx:
+                    cx.executescript(SCHEMA)
+                    self._pose_compte(cx, ligne)
+                    cx.execute("INSERT INTO compartiments VALUES ('box', 'box', 'système', ?)", (int(time.time()),))
+                    cx.execute("INSERT INTO meta VALUES ('version', ?), ('cree', ?)",
+                               (VERSION_SCHEMA, str(int(time.time()))))
+                attente["mk"] = CleVerrouillee(mk)
+                del mk
+                self.journal.ajouter("initialisation", par="compte", qui=utilisateur)
+            else:
+                with self._cx() as cx:
+                    lignes = cx.execute("SELECT id, sel, params, nonce, mk FROM serrures "
+                                        "WHERE genre='compte' AND compte=?", (utilisateur,)).fetchall()
+                for ident, sel, params, nonce, emballee in lignes:
+                    try:
+                        mk = dechiffrer(derive_kek(mot_de_passe.encode(), sel, json.loads(params)), nonce, emballee,
+                                        aad_serrure(ident))
+                    except Refus:
+                        continue
+                    attente["mk"] = CleVerrouillee(mk)
+                    del mk
+                    break
+                if attente["mk"] is None:
+                    if not self._mk:
+                        self.journal.ajouter("compte_sans_serrure", qui=utilisateur)
+                        return None
+                    # Coffre ouvert par un autre : ce compte reçoit (ou renouvelle) SA serrure.
+                    attente["ligne"] = self._ligne_compte(utilisateur, mot_de_passe, self._mk.octets())
+            if personne:
+                attente["perso"] = self._perso_preparer(personne, mot_de_passe)
+            ticket = secrets.token_urlsafe(32)
+            self._attente[ticket] = attente
+            return ticket
+
+    def compte_confirmer(self, ticket: str, **contexte) -> bool:
+        """Le second facteur a réussi : l'ouverture préparée s'accomplit."""
+        with self._verrou:
+            self._purge_attente()
+            a = self._attente.pop(ticket or "", None)
+            if not a:
+                return False
+            if a.get("seulement_perso"):
+                self._perso_installer(a["perso"], origine=contexte.get("origine", ""))
+                return True
+            if a["ligne"]:
+                if not self._mk:
+                    return False                  # rescellé entre-temps : la serrure attendra une autre fois
+                with self._cx() as cx:
+                    self._pose_compte(cx, a["ligne"])
+                self._dernier = self._horloge()
+                self.journal.ajouter("serrure_ajoutee", genre="compte", qui=a["utilisateur"])
+                if a.get("perso"):
+                    self._perso_installer(a["perso"], origine=contexte.get("origine", ""))
+                return True
+            if not self._mk:
+                self._mk = CleVerrouillee(a["mk"].octets())
+            a["mk"].effacer()
+            self._dernier = self._horloge()
+            self.journal.ajouter("ouverture", genre="compte", qui=a["utilisateur"], **contexte)
+            if a.get("perso"):
+                self._perso_installer(a["perso"], origine=contexte.get("origine", ""))
+            return True
+
+    def compte_changer(self, utilisateur: str, ancien: str, nouveau: str) -> bool:
+        """Le mot de passe change : la serrure du compte est réemballée. Sans
+        l'ancien (réinitialisation), elle devient caduque — une connexion,
+        Coffre ouvert, la refera."""
+        if not COMPTE_RE.match(utilisateur or "") or not ancien or not nouveau:
+            return False
+        with self._verrou:
+            if not self.initialise:
+                return False
+            with self._cx() as cx:
+                for ident, sel, params, nonce, emballee in cx.execute(
+                        "SELECT id, sel, params, nonce, mk FROM serrures WHERE genre='compte' AND compte=?",
+                        (utilisateur,)).fetchall():
+                    try:
+                        mk = dechiffrer(derive_kek(ancien.encode(), sel, json.loads(params)), nonce, emballee,
+                                        aad_serrure(ident))
+                    except Refus:
+                        continue
+                    self._pose_compte(cx, self._ligne_compte(utilisateur, nouveau, mk))
+                    del mk
+                    self.journal.ajouter("serrure_renouvelee", genre="compte", qui=utilisateur)
+                    return True
             return False
 
     # ── recouvrement par le maillage (P8) ───────────────────────────────────
@@ -497,9 +681,9 @@ class Coffre:
                 ligne = cx.execute("SELECT genre FROM serrures WHERE id=?", (ident,)).fetchone()
                 if not ligne:
                     raise Interdit("serrure inconnue")
-                if ligne[0] == "phrase" and cx.execute(
-                        "SELECT COUNT(*) FROM serrures WHERE genre='phrase'").fetchone()[0] <= 1:
-                    raise Interdit("dernière phrase : le Coffre ne s'ouvrirait plus que par les codes")
+                if ligne[0] in ("phrase", "compte") and cx.execute(
+                        "SELECT COUNT(*) FROM serrures WHERE genre IN ('phrase', 'compte')").fetchone()[0] <= 1:
+                    raise Interdit("dernière serrure humaine (phrase ou compte) : le Coffre ne s'ouvrirait plus")
                 cx.execute("DELETE FROM serrures WHERE id=?", (ident,))
             self.journal.ajouter("serrure_retiree", serrure=ident, genre=ligne[0])
 
@@ -621,7 +805,7 @@ class Coffre:
             if len(m) != TAILLE_CLE:
                 raise Interdit("sortie PRF de 32 octets attendue")
             return m
-        if genre != "phrase":
+        if genre not in ("phrase", "compte"):
             raise Interdit("genre de serrure personnelle inconnu")
         if not isinstance(secret, str) or not secret:
             raise Interdit("phrase absente")
@@ -630,7 +814,7 @@ class Coffre:
     def _emballe_personne(self, cx, personne: str, genre: str, materiau: bytes, pk: bytes, libelle: str,
                           sel: Optional[bytes] = None, cred_id: Optional[str] = None) -> str:
         ident = secrets.token_hex(8)
-        if genre == "phrase":
+        if genre in ("phrase", "compte"):
             sel = nouveau_sel()
             params = json.dumps(self._argon2)
             kek = derive_kek(materiau, sel, self._argon2)
@@ -646,6 +830,13 @@ class Coffre:
     def _cle_personne(self, cx, personne: str, ouverture: dict, action: str) -> bytes:
         """La clé de la personne, rendue par une de SES serrures — ou refus."""
         genre = (ouverture or {}).get("genre") or "phrase"
+        if genre == "session":
+            # La clé tenue depuis la CONNEXION de la personne (#1855) : rien à retaper.
+            pk = self._pk_session(personne)
+            if pk is None:
+                self.journal.ajouter("personne_refusee", personne=personne, action=action, genre=genre)
+                raise RefusPersonnel()
+            return pk
         materiau = self._materiau(genre, (ouverture or {}).get("secret"))
         req = "SELECT id, sel, params, nonce, cle FROM serrures_personnelles WHERE personne=? AND genre=?"
         args = [personne, genre]
@@ -666,7 +857,8 @@ class Coffre:
         """Ce que la personne peut savoir sans serrure : ses serrures (rien de
         secret — de quoi demander une sortie PRF) et le nombre de ses secrets."""
         comp = self._verifie_personne(personne)
-        sortie = {"initialise": self.initialise, "ouvert": self.ouvert, "serrures": [], "secrets": 0}
+        sortie = {"initialise": self.initialise, "ouvert": self.ouvert, "serrures": [], "secrets": 0,
+                  "session": self._pk_session(personne, toucher=False) is not None}
         if not sortie["initialise"]:
             return sortie
         with self._cx() as cx:
@@ -680,12 +872,13 @@ class Coffre:
                                            (comp,)).fetchone()[0]
         return sortie
 
-    def personne_initialiser(self, personne: str, phrase: str, libelle: str = "") -> None:
+    def personne_initialiser(self, personne: str, phrase: str, libelle: str = "", genre: str = "phrase") -> None:
         """Première serrure de la personne : sa clé naît, son compartiment aussi.
         Coffre ouvert exigé. Un secret posé dans ce compartiment sous l'ancien
         régime (clé tirée de la MK seule, P1) est rechiffré sous la nouvelle."""
         comp = self._verifie_personne(personne)
-        self._verifie_phrase(phrase)
+        if genre == "phrase":
+            self._verifie_phrase(phrase)           # un mot de passe de connexion a ses propres règles
         with self._verrou:
             mk = self._mk_ou_scelle()
             with self._cx() as cx:
@@ -701,10 +894,138 @@ class Coffre:
                     n2, c2 = chiffrer(nouvelle, dechiffrer(cle_compartiment(mk, comp), nonce, chiffre, aad), aad)
                     cx.execute("UPDATE secrets SET nonce=?, valeur=? WHERE compartiment=? AND nom=?",
                                (n2, c2, comp, nom))
-                ident = self._emballe_personne(cx, personne, "phrase", phrase.encode(), pk,
-                                               libelle or "phrase personnelle")
+                ident = self._emballe_personne(cx, personne, genre, phrase.encode(), pk,
+                                               libelle or ("phrase personnelle" if genre == "phrase" else "connexion"))
             del pk, nouvelle
             self.journal.ajouter("personne_initialisee", personne=personne, serrure=ident)
+
+    # ── la connexion de la PERSONNE ouvre son compartiment (#1855) ──────────
+    # Le mot de passe de connexion est une serrure de plus de la personne (genre
+    # « compte »). À la connexion (second facteur compris), sa clé est TENUE en
+    # mémoire le temps de la session : « Mon coffre » ne demande plus de phrase.
+    # La MK reste exigée : un compartiment de personne demande la box ouverte ET
+    # la personne. Un invité n'ouvre jamais la clé maîtresse.
+    def _perso_preparer(self, personne: str, mot_de_passe: str) -> Optional[dict]:
+        """La clé de la personne, déballée par SA serrure « compte » — ou None.
+        Coffre ouvert et personne sans aucune serrure : son compartiment naît."""
+        self._verifie_personne(personne)
+        if not mot_de_passe:
+            return None
+        with self._verrou:
+            if not self.initialise:
+                return None
+            for essai in (0, 1):
+                with self._cx() as cx:
+                    lignes = cx.execute("SELECT id, sel, params, nonce, cle FROM serrures_personnelles "
+                                        "WHERE personne=? AND genre='compte'", (personne,)).fetchall()
+                    aucune = not cx.execute("SELECT 1 FROM serrures_personnelles WHERE personne=?",
+                                            (personne,)).fetchone()
+                for ident, sel, params, nonce, emballee in lignes:
+                    try:
+                        pk = dechiffrer(derive_kek(mot_de_passe.encode(), sel, json.loads(params)), nonce, emballee,
+                                        aad_serrure_personnelle(ident, personne))
+                    except Refus:
+                        continue
+                    cle = CleVerrouillee(pk)
+                    del pk
+                    return {"personne": personne, "pk": cle}
+                if essai == 0 and aucune and self._mk:
+                    self.personne_initialiser(personne, mot_de_passe, "connexion", genre="compte")
+                    continue
+                return None
+        return None
+
+    def personne_compte_preparer(self, personne: str, utilisateur: str, mot_de_passe: str) -> Optional[str]:
+        """Connexion d'un utilisateur ordinaire (ou invité avec compte) : rend un
+        ticket, ou None si rien à ouvrir pour lui. Rien n'est ouvert ici."""
+        if not isinstance(utilisateur, str) or not COMPTE_RE.match(utilisateur):
+            raise Interdit("compte invalide")
+        with self._verrou:
+            self._purge_attente()
+            self._expire()
+            pend = self._perso_preparer(personne, mot_de_passe)
+            if pend is None:
+                self.journal.ajouter("personne_sans_serrure_compte", qui=utilisateur)
+                return None
+            ticket = "p." + secrets.token_urlsafe(32)
+            self._attente[ticket] = {"utilisateur": utilisateur, "fin": self._horloge() + ATTENTE_S,
+                                     "mk": None, "ligne": None, "perso": pend, "seulement_perso": True}
+            return ticket
+
+    def _perso_installer(self, pend: dict, origine: str = "") -> None:
+        with self._verrou:
+            ancien = self._perso_ouvertes.pop(pend["personne"], None)
+            if ancien:
+                ancien["pk"].effacer()
+            self._perso_ouvertes[pend["personne"]] = {"pk": pend["pk"], "dernier": self._horloge()}
+            self.journal.ajouter("personne_ouverte", personne=pend["personne"], genre="compte", origine=origine)
+
+    def _pk_session(self, personne: str, toucher: bool = True) -> Optional[bytes]:
+        """La clé tenue pour cette personne, ou None (jamais ouverte, expirée,
+        Coffre scellé). Inactive plus longtemps que le Coffre : oubliée."""
+        with self._verrou:
+            v = self._perso_ouvertes.get(personne)
+            if not v:
+                return None
+            if self._horloge() - v["dernier"] > self.delai_s or not self._mk:
+                v["pk"].effacer()
+                del self._perso_ouvertes[personne]
+                self.journal.ajouter("personne_fermee", personne=personne, raison="inactivite")
+                return None
+            if toucher:
+                v["dernier"] = self._horloge()
+                return v["pk"].octets()
+            return b""
+
+    def personne_fermer(self, personne: str) -> None:
+        """Déconnexion : la clé de la personne est oubliée."""
+        with self._verrou:
+            v = self._perso_ouvertes.pop(personne, None)
+            if v:
+                v["pk"].effacer()
+                self.journal.ajouter("personne_fermee", personne=personne, raison="deconnexion")
+
+    def personne_ajouter_compte(self, personne: str, ouverture: dict, mot_de_passe: str, libelle: str = "") -> str:
+        """Relier le mot de passe de connexion à la personne (remplace le précédent).
+        L'appelant a vérifié ce mot de passe contre le compte de la session."""
+        self._verifie_personne(personne)
+        if not isinstance(mot_de_passe, str) or not mot_de_passe:
+            raise Interdit("mot de passe absent")
+        with self._verrou:
+            self._mk_ou_scelle()
+            with self._cx() as cx:
+                pk = self._cle_personne(cx, personne, ouverture, "serrure_ajoutee")
+                cx.execute("DELETE FROM serrures_personnelles WHERE personne=? AND genre='compte'", (personne,))
+                ident = self._emballe_personne(cx, personne, "compte", mot_de_passe.encode(), pk,
+                                               libelle or "connexion")
+            del pk
+            self.journal.ajouter("personne_serrure_ajoutee", personne=personne, serrure=ident, genre="compte")
+            return ident
+
+    def personne_compte_changer(self, personne: str, ancien: str, nouveau: str) -> bool:
+        """Le mot de passe de connexion change : la serrure « compte » est
+        réemballée. Sans l'ancien (réinitialisation), elle devient caduque."""
+        self._verifie_personne(personne)
+        if not ancien or not nouveau:
+            return False
+        with self._verrou:
+            if not self.initialise:
+                return False
+            with self._cx() as cx:
+                for ident, sel, params, nonce, emballee in cx.execute(
+                        "SELECT id, sel, params, nonce, cle FROM serrures_personnelles "
+                        "WHERE personne=? AND genre='compte'", (personne,)).fetchall():
+                    try:
+                        pk = dechiffrer(derive_kek(ancien.encode(), sel, json.loads(params)), nonce, emballee,
+                                        aad_serrure_personnelle(ident, personne))
+                    except Refus:
+                        continue
+                    cx.execute("DELETE FROM serrures_personnelles WHERE id=?", (ident,))
+                    self._emballe_personne(cx, personne, "compte", nouveau.encode(), pk, "connexion")
+                    del pk
+                    self.journal.ajouter("personne_serrure_renouvelee", personne=personne, genre="compte")
+                    return True
+            return False
 
     def personne_ajouter_phrase(self, personne: str, ouverture: dict, phrase: str, libelle: str = "") -> str:
         self._verifie_personne(personne)
@@ -855,8 +1176,9 @@ class Coffre:
             if self._mk:
                 sortie["reste_s"] = max(0, int(self.delai_s - (self._horloge() - self._dernier)))
             with self._cx() as cx:
-                sortie["serrures"] = [{"id": i, "genre": g, "libelle": l, "creee": c} for i, g, l, c in
-                                      cx.execute("SELECT id, genre, libelle, creee FROM serrures ORDER BY creee, id")]
+                sortie["serrures"] = [{"id": i, "genre": g, "libelle": l, "creee": c, **({"compte": u} if u else {})}
+                                      for i, g, l, c, u in cx.execute(
+                                          "SELECT id, genre, libelle, creee, compte FROM serrures ORDER BY creee, id")]
                 sortie["compartiments"] = [
                     {"id": i, "nature": n, "libelle": l, "secrets": s} for i, n, l, s in cx.execute(
                         "SELECT c.id, c.nature, c.libelle, COUNT(s.nom) FROM compartiments c "

@@ -42,6 +42,7 @@ on:
       - 'packages/secubox-haproxy/tests/test_frontal_1841.py'
       - 'packages/secubox-defaults/**'
       - 'packages/secubox-vault/**'
+      - 'packages/secubox-auth/**'
       - 'packages/secubox-openpgp/**'
       - 'packages/secubox-aggregator/**'
       - 'image/firstboot.sh'
@@ -147,6 +148,10 @@ jobs:
           # Le Coffre P1 (#1367) : MK, serrures, compartiments, journal chaîné, API.
           - suite: secubox-vault
             chemin: packages/secubox-vault/tests
+          # Connexion (#1699, #1707, #1855) : second facteur selon le réseau,
+          # première configuration locale, la connexion admin ouvre le Coffre.
+          - suite: secubox-auth
+            chemin: packages/secubox-auth/tests
           # OpenPGP de box (#1736) et annuaire des clés personnelles (#1738), vrai GnuPG.
           - suite: secubox-openpgp
             chemin: packages/secubox-openpgp/tests
@@ -193,6 +198,8 @@ jobs:
         argon2-cffi==21.1.0
         websockets==16.0
         pyotp==2.6.0
+        qrcode==8.2
+        pillow==12.3.0
     steps:
       - name: Récupération du dépôt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

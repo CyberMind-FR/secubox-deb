@@ -1,3 +1,9 @@
+secubox-webos (1.0.391-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Coffre : il naît et s'ouvre à la connexion d'un administrateur (#1855).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 23:30:00 +0200
+
 secubox-webos (1.0.390-1~bookworm1) bookworm; urgency=medium
 
   * Hall : relais /api/v1/openpgp/(moi|moi/cle|annuaire|annuaire/<empreinte>.asc) par l'agrégateur (#1738) ; l'export du maillage n'est pas relayé, sa marque est vidée.

@@ -1,3 +1,19 @@
+secubox-auth (1.1.18-1~bookworm1) bookworm; urgency=medium
+
+  * Coffre (#1855) : un compte ordinaire ou invité prépare l'ouverture de SON
+    compartiment (/personne/preparer), jamais la clé maîtresse ; l'administrateur
+    prépare le Coffre et sa personne. Confirmé au second facteur réussi ; hors
+    LAN, un compte sans second facteur n'ouvre rien. Le changement de mot de
+    passe réemballe aussi la serrure de la personne.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 16:00:00 +0200
+
+secubox-auth (1.1.17-1~bookworm1) bookworm; urgency=medium
+
+  * La connexion d'un administrateur ouvre le Coffre (#1855) : préparer au mot de passe vérifié, confirmer au second facteur réussi (/login/mfa, /totp/confirm, ou LAN sans second facteur exigé) ; un changement de mot de passe réemballe la serrure. Tout échec est muet, le mot de passe ne va qu'au Coffre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 01 Oct 2026 23:30:00 +0200
+
 secubox-auth (1.1.16-1~bookworm1) bookworm; urgency=high
 
   * Écritures du registre des sessions par secubox_core.sessions.muter (verrou + renommage atomique) : connexion, coupures ciblées, révocation d'un compte, fermeture des délégations (#1803).
