@@ -23,17 +23,17 @@
       "Bash(gh issue view *)",
       "Bash(gh issue list *)",
       "Bash(gh issue comment *)",
-      "Bash(gh issue create *)"
+      "Bash(gh issue create *)",
+      "Bash(git push *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh issue close *)",
+      "Bash(ssh *)",
+      "Bash(scp *)"
     ],
     "ask": [
-      "Bash(git push *)",
-      "Bash(gh issue close *)",
-      "Bash(gh pr merge *)",
       "Bash(rm -rf *)",
       "Bash(sudo *)",
-      "Bash(ssh *)",
-      "Bash(scp *)",
-      "Bash(sshpass *)",
       "Read(//etc/secubox/**)"
     ],
     "deny": [
