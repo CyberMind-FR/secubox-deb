@@ -1,3 +1,9 @@
+secubox-appstore (0.4.22-1~bookworm1) bookworm; urgency=low
+
+  * Catalogue régénéré sans secubox-rustdesk (décommissionné, #1862).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 15:00:00 +0200
+
 secubox-appstore (0.4.21-1~bookworm1) bookworm; urgency=medium
 
   * appstorectl : nom de module vérifié sur le motif ENTIER

@@ -1,3 +1,9 @@
+secubox-lyrion (1.6.17-1~bookworm1) bookworm; urgency=low
+
+  * Décommissionnement de RustDesk (#1862) : Description et commentaire : RustDesk-web n'est plus cité.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 13:00:00 +0200
+
 secubox-lyrion (1.6.16-1~bookworm1) bookworm; urgency=medium
 
   * Le ctl sort en erreur quand le script d'installation échoue : il annonçait « Done » et rendait 0 (gk3 : peertube arrêté à l'étape 7/8 passait pour installé) (#1729, #1713).

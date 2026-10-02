@@ -181,3 +181,8 @@ def test_invalid_lifecycle_raises(tmp_path):
 def test_invalid_wake_class_raises(tmp_path):
     with pytest.raises(ManifestError):
         load_manifest(_write(tmp_path, 'wake_class="asap"\n'))
+
+
+def test_le_coffre_est_protege():
+    """Un pin `off` périmé ne doit plus pouvoir éteindre le Coffre (#1367)."""
+    assert "vault" in PROTECTED_IDS

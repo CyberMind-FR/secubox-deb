@@ -19,7 +19,7 @@ on = [
   "netdiag", "netmodes", "nettweak", "network-anomaly", "network-ready",
   "nextcloud", "p2p", "peertube", "photoprism", "podcaster", "portal",
   "proxypac", "publish", "qos", "reality", "repo", "reporter",
-  "roadmap", "routes", "rtty", "runtime", "rustdesk",
+  "roadmap", "routes", "rtty", "runtime",
   "saas-relay", "security-posture", "soc", "streamforge", "streamlit", "streamlit-routes",
   "system", "threat-analyst", "threatmesh", "threats", "toolbox", "toolbox-mitm",
   "tor", "traffic", "turn", "users", "vault", "vhost",

@@ -76,7 +76,6 @@ mqtt                = "200000 100000"
 nextcloud           = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
 picobrew            = "200000 100000"
 roundcube           = "200000 100000"
-rustdesk            = "200000 100000"
 torrent             = "200000 100000"
 toolbox-mitm        = "200000 100000"
 toolbox-mitm-wg     = "200000 100000"

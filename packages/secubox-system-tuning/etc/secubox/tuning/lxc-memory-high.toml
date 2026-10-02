@@ -29,6 +29,5 @@ lyrion     = "500M"   # Logitech Media Server
 grafana    = "400M"   # grafana-server
 horde      = "300M"   # horde webmail
 mqtt       = "150M"   # mosquitto
-rustdesk   = "200M"   # rustdesk relay
 roundcube  = "200M"   # roundcube webmail (separate from horde)
 zigbee     = "200M"   # zigbee2mqtt

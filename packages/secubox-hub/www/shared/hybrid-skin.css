@@ -1785,7 +1785,7 @@ body.hybrid-skin .map {
  * --gmb-h is the bar's actual height (defined once, top of file);
  * the +8px is breathing room, not part of the clearance itself.
  * `.layout > .container` covers the handful of iframe-shell modules
- * (grafana, mqtt, rustdesk) that don't use a .main/.main-content
+ * (grafana, mqtt) that don't use a .main/.main-content
  * wrapper — the child combinator keeps this from also matching the
  * unrelated nested `.container` cards used elsewhere as a panel style. */
 .hybrid-skin .main,

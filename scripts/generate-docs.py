@@ -1785,21 +1785,6 @@ MODULES = {
             "zh": ["Android 容器", "ADB", "应用安装", "屏幕查看"]
         }
     },
-    "rustdesk": {
-        "name": "RustDesk", "icon": "🖥️", "category": "Access",
-        "description": {
-            "en": "Self-hosted remote desktop relay",
-            "fr": "Relais de bureau distant auto-hébergé",
-            "de": "Selbstgehostetes Remote-Desktop-Relay",
-            "zh": "自托管远程桌面中继"
-        },
-        "features": {
-            "en": ["Relay server", "ID server", "Sessions", "Self-hosted"],
-            "fr": ["Serveur relais", "Serveur d'ID", "Sessions", "Auto-hébergé"],
-            "de": ["Relay-Server", "ID-Server", "Sitzungen", "Selbstgehostet"],
-            "zh": ["中继服务器", "ID 服务器", "会话", "自托管"]
-        }
-    },
     "saas-relay": {
         "name": "SaaS Relay", "icon": "🔌", "category": "Network",
         "description": {

@@ -20,7 +20,7 @@ on = [
   "network-ready", "nextcloud", "p2p", "peertube", "photoprism", "podcaster",
   "portal", "proxypac", "publish", "qos", "reality", "repo",
   "reporter", "roadmap", "routes", "rtty", "runtime",
-  "rustdesk", "saas-relay", "streamforge", "streamlit", "streamlit-routes", "system",
+  "saas-relay", "streamforge", "streamlit", "streamlit-routes", "system",
   "threats", "tor", "traffic", "turn", "users", "vault",
   "vhost", "vm", "vortex-dns", "vortex-firewall", "waf", "waf-ng",
   "waf-ratelimit", "watchdog", "wireguard", "yacy", "zigbee", "zkp",

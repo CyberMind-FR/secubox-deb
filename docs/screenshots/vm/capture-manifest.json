@@ -1038,18 +1038,6 @@
       "timestamp": "2026-06-26T10:02:27.609925"
     },
     {
-      "module_id": "rustdesk",
-      "module_name": "Rustdesk",
-      "category": "Other",
-      "path": "/rustdesk/",
-      "screenshot_path": "docs/screenshots/vm/rustdesk.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/rustdesk-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-06-26T10:02:32.013815"
-    },
-    {
       "module_id": "saas-relay",
       "module_name": "Saas Relay",
       "category": "System",

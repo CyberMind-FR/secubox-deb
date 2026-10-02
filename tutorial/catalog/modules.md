@@ -129,7 +129,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-repo` | misc | lite | oui | 23 | 1 | 1 | — | — | oui |
 | `secubox-reporter` | misc | lite | oui | 11 | — | 1 | — | — | oui |
 | `secubox-routes` | misc | lite | oui | 13 | — | 1 | — | — | oui |
-| `secubox-rustdesk` | system | lite | oui | 5 | 1 | 1 | oui | — | oui |
 | `secubox-saas-relay` | misc | lite | oui | 20 | — | 1 | — | — | oui |
 | `secubox-sbxid` | security | lite | oui | 55 | 1 | — | — | 6 | oui |
 | `secubox-sbxos` | dashboard | lite | oui | — | — | — | — | — | — |
@@ -2090,23 +2089,6 @@ SecuBox Routes - Routing table viewer and manager
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-routes/`
-
-### `secubox-rustdesk`
-
-SecuBox RustDesk — self-hosted remote desktop relay
-
-- **Catégorie** : system · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 5 route(s), socket `À documenter`, authentification À documenter
-- **Interface web** : oui, À documenter
-- **Vhosts livrés** : `rustdesk.gk2.secubox.in`
-- **CLI** : `rustdeskctl`
-- **Units systemd** : `secubox-rustdesk.service`
-- **Ports** : 9080
-- **Conteneur LXC** : oui
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-rustdesk/`
 
 ### `secubox-saas-relay`
 
