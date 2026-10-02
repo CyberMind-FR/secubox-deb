@@ -130,7 +130,10 @@ cmd_user_provision() {
     lxc_running || { err "LXC not running"; return 1; }
 
     local shared; shared=$(config_get "shared_photos" "/data/shared/photos")
-    mkdir -p "$shared/$username" && chmod 0777 "$shared/$username"
+    # 2750 100033:100995 (#1516) : Nextcloud (www-data) écrit, PhotoPrism (uid 995 → 100995) lit.
+    mkdir -p "$shared/$username" \
+        && chown 100033:100995 "$shared/$username" 2>/dev/null \
+        && chmod 2750 "$shared/$username"
 
     local pp_role="user"; [ "$role" = "admin" ] && pp_role="admin"
     local verb opts

@@ -1,3 +1,15 @@
+secubox-nextcloud (1.8.10-1~bookworm1) bookworm; urgency=medium
+
+  * Dossiers photo : le groupe des dossiers d'usagers devient 100995 (utilisateur photoprism du conteneur, uid 995) et non 100000 : sans cela PhotoPrism ne les aurait pas lus (#1516). Mode 2750 100033:100995.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 03:30:00 +0200
+
+secubox-nextcloud (1.8.9-1~bookworm1) bookworm; urgency=medium
+
+  * Dossiers photo partagés : plus de 0777 (#1516). UID mesurés sur gk2 (Nextcloud www-data = 100033, seul écrivain ; PhotoPrism = root du LXC 100000, lecture) : racine 0755 100000:100000, dossiers d'usagers 2750 100033:100000. Nouvelle commande `nextcloudctl fix-photos-perms` (racine + sous-dossiers directs, jamais récursive), appelée par la postinst.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 03:00:00 +0200
+
 secubox-nextcloud (1.8.8-1~bookworm1) bookworm; urgency=medium
 
   * _valid_uid : ni « .. », ni point ou tiret en tête (#1785) ; l'uid

@@ -24,7 +24,10 @@ case "$1" in
     # Data + shared photo dirs. The bind-mount subdirs are created/chown'd by
     # install-lxc.sh; /data/shared/photos is shared with Nextcloud.
     install -d -m 0755 /data/photoprism /data/photoprism/storage /data/photoprism/import
-    install -d -m 0777 /data/shared/photos
+    # Racine partagée : 0755 100000:100000, plus de 0777 (#1516) ; les dossiers d'usagers sont
+    # resserrés par `nextcloudctl fix-photos-perms` et par provision.
+    install -d -m 0755 -o 100000 -g 100000 /data/shared/photos
+    chmod 0755 /data/shared/photos
 
     # Ship a default photoprism.toml from the example if absent.
     if [ ! -e /etc/secubox/photoprism.toml ] && [ -e /etc/secubox/photoprism.toml.example ]; then
