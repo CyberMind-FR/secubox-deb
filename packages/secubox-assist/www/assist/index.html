@@ -269,6 +269,11 @@ async function refresh() {
   const d = await r.json();
   document.getElementById('active').textContent =
     d.active_session ? JSON.stringify(d.active_session) : 'aucune';
+  // Sans session active, ces boutons n'ont rien à viser : on le dit, on ne les laisse pas muets.
+  document.querySelectorAll('#active-card [data-act]').forEach(b => {
+    b.disabled = !d.active_session;
+    b.title = d.active_session ? '' : "Aucune session d'assistance active : rien à fermer ni à autoriser.";
+  });
   renderPending(document.getElementById('log'), d.pending);
   refreshActiveMarketTab();
   refreshDelegations();
@@ -350,14 +355,16 @@ document.addEventListener('click', async (ev) => {
   } else if (act === 'join') {
     return; // escalation flow not wired yet — informational tab only
   } else {
-    const sid = (await (await fetch('/api/v1/assist/sessions', {headers:H()})).json())
-      .active_session?.session_id;
-    if (!sid) return;
+    const r0 = await fetch('/api/v1/assist/sessions', {headers:H()});
+    const sid = r0.ok ? (await r0.json()).active_session?.session_id : null;
+    if (!sid) { notify("Aucune session d'assistance active : rien à fermer ni à autoriser.", true); return; }
     const ep = {'close':'/api/v1/assist/close','console-grant':'/api/v1/assist/console/grant',
                 'console-revoke':'/api/v1/assist/console/revoke'}[act];
+    const ok = {'close':'Session fermée.','console-grant':"Administration à distance autorisée.",
+                'console-revoke':"Autorisation retirée."}[act];
     const corps = {session_id: sid};
     if (act === 'console-grant') corps.duration_s = parseInt(document.getElementById('deleg-duree').value, 10);
-    await fetch(ep, {method:'POST', headers:H(), body: JSON.stringify(corps)});
+    await postAction(ep, corps, ok);       // succès ET échec visibles (avant : réponse jamais lue)
   }
   refresh();
 });

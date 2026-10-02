@@ -1,3 +1,9 @@
+secubox-assist (0.2.10-1~bookworm1) bookworm; urgency=low
+
+  * Page Assistance : Kill session, Autoriser et Retirer ne sont plus muets (#1888). Désactivés sans session active, avec l'explication ; la réponse du POST est lue, succès comme échec (401/403/409 visibles).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 21:30:00 +0200
+
 secubox-assist (0.2.9-1~bookworm1) bookworm; urgency=medium
 
   * postinst : plus de `systemctl reload nftables` (#1769) — il rejouait
