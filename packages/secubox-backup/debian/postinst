@@ -1,6 +1,20 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
+    # Sauvegardes chiffrées par défaut (#1903) : une paire age est générée si aucun destinataire
+    # n'existe (idempotent). Dossiers 0750 et fichiers 0640 (ils étaient en 0777 / 0666). Les
+    # archives déjà en clair sont LISTÉES, jamais supprimées d'office : backupctl chiffrer-existantes.
+    if [ -x /usr/sbin/backupctl ]; then
+      /usr/sbin/backupctl init-key >/dev/null 2>&1 || true
+      for d in /srv/backups/config /srv/backups/containers /srv/backups/services; do
+        [ -d "$d" ] || continue
+        chmod 0750 "$d" 2>/dev/null || true
+        find "$d" -maxdepth 1 -type f -exec chmod 0640 {} + 2>/dev/null || true
+      done
+      _n=$(/usr/sbin/backupctl etat 2>/dev/null | sed -n 's/^archives en clair : //p')
+      [ "${_n:-0}" != "0" ] && echo "secubox-backup : ${_n} archive(s) en clair — backupctl chiffrer-existantes [--supprimer-clair]" >&2
+    fi
+
     systemctl daemon-reload
     systemctl enable secubox-backup.service || true
     systemctl start secubox-backup.service || true
