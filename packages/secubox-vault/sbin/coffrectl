@@ -24,6 +24,8 @@ entrée standard.
 
   coffrectl depot etat                     # clé de signature du dépôt apt (P2)
   coffrectl depot proteger                 # phrase aléatoire, rangée au Coffre
+  coffrectl depot proteger --demarrage     # phrase aléatoire au niveau 0 : sans humain, déverrouillée au boot
+  coffrectl depot deverrouiller            # redonne la phrase de niveau 0 à gpg-agent (démarrage, reprise)
   coffrectl depot session [--minutes N]    # signer pendant N min (15 ; 60 au plus)
   coffrectl depot fin                      # l'agent oublie la phrase tout de suite
 
@@ -127,8 +129,21 @@ def depot(args) -> None:
             if "--porcelaine" in args:
                 print(f"protegee={int(e['protegee'])} en_cache={int(e['en_cache'])} empreinte={fpr}")
                 return
-            print(f"clé {_empreinte_lisible(fpr)} : " + ("protégée par le Coffre" if e["protegee"] else "EN CLAIR — coffrectl depot proteger")
+            from coffre import niveau0
+            niv0 = niveau0.chemin_cred(d.nom_secret(fpr)).exists()
+            print(f"clé {_empreinte_lisible(fpr)} : " + (("protégée au niveau 0 (déverrouillée au démarrage)" if niv0 else "protégée par le Coffre") if e["protegee"] else "EN CLAIR — coffrectl depot proteger --demarrage")
                   + (" ; session ouverte (l'agent tient la phrase)" if e["en_cache"] else ""))
+        elif sous == "proteger" and "--demarrage" in args:
+            d.proteger_demarrage(fpr)
+            print(f"clé {_empreinte_lisible(fpr)} protégée : phrase aléatoire au niveau 0 (systemd-creds), "
+                  "déverrouillée maintenant et à chaque démarrage. Aucune phrase humaine.")
+        elif sous == "deverrouiller":
+            if "--si-present" in args:                  # démarrage : rien à faire sans crédence
+                from coffre import niveau0
+                if not niveau0.chemin_cred(d.nom_secret(fpr)).exists():
+                    return
+            d.deverrouiller(fpr)
+            print(f"clé {_empreinte_lisible(fpr)} déverrouillée pour la signature")
         elif sous == "proteger":
             d.proteger(fpr, lambda nom, valeur: appel("POST", "/secrets",
                                                       {"compartiment": "box", "nom": nom, "valeur": valeur}))
@@ -145,7 +160,7 @@ def depot(args) -> None:
             d.oublier(fpr)
             print("session de signature close")
         else:
-            sys.exit("coffrectl depot : etat | proteger | session [--minutes N] | fin")
+            sys.exit("coffrectl depot : etat | proteger [--demarrage] | deverrouiller [--si-present] | session [--minutes N] | fin")
     except d.ErreurDepot as e:
         sys.exit(f"coffrectl depot : {e}")
 

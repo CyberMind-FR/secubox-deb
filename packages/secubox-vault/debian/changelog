@@ -1,3 +1,9 @@
+secubox-vault (2.0.16-1~bookworm1) bookworm; urgency=medium
+
+  * Clé de signature apt sans phrase humaine, déverrouillée au démarrage (#1366). `coffrectl depot proteger --demarrage` pose une phrase aléatoire au NIVEAU 0 (systemd-creds, chiffrée par la clé d'hôte), relue à l'identique avant d'être appliquée, puis déverrouille ; `coffrectl depot deverrouiller` la redonne à gpg-agent sans échéance (TTL d'un an) ; secubox-depot-deverrouille.service le fait à chaque démarrage (condition : crédence présente). Le fichier de clé reste chiffré sur disque : une copie du disque ne signe pas. En contrepartie, root sur la box signe à tout moment.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 04:00:00 +0200
+
 secubox-vault (2.0.15-1~bookworm1) bookworm; urgency=low
 
   * menu.d : le Coffre est servi depuis l'origine du Hall (`same_origin`) — le

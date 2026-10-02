@@ -71,3 +71,81 @@ def test_session_bornee(cle):
     for m in (0, 61):
         with pytest.raises(d.ErreurDepot):
             d.session(fpr, "x", m, planifier=lambda m, q: None, gnupghome=home)
+
+
+# ── Niveau 0 : sans phrase humaine, déverrouillée au démarrage (#1366) ─────────
+
+class _Niveau0Faux:
+    """systemd-creds est root et lié à la clé d'hôte : on le remplace par un dictionnaire."""
+    class ErreurNiveau0(RuntimeError):
+        pass
+
+    def __init__(self):
+        self.creds = {}
+
+    def chiffrer(self, nom, valeur):
+        self.creds[nom] = valeur
+
+    def dechiffrer(self, nom):
+        if nom not in self.creds:
+            raise self.ErreurNiveau0("absente")
+        return self.creds[nom]
+
+
+@pytest.fixture
+def niv0(monkeypatch):
+    import coffre.niveau0 as n
+    faux = _Niveau0Faux()
+    monkeypatch.setattr(n, "chiffrer", faux.chiffrer)
+    monkeypatch.setattr(n, "dechiffrer", faux.dechiffrer)
+    monkeypatch.setattr(n, "ErreurNiveau0", _Niveau0Faux.ErreurNiveau0)
+    return faux
+
+
+def test_proteger_demarrage_sans_humain_ni_coffre(cle, niv0):
+    fpr, home = cle
+    assert d.etat(fpr, home)["protegee"] is False and d._signe_essai(fpr, home)
+    d.proteger_demarrage(fpr, gnupghome=home)                 # aucun Coffre, aucune phrase saisie
+    assert list(niv0.creds) == [d.nom_secret(fpr)] and len(niv0.creds[d.nom_secret(fpr)]) >= 40
+    e = d.etat(fpr, home)
+    assert e["protegee"] is True                              # le fichier de clé est chiffré sur disque
+    assert e["en_cache"] is True and d._signe_essai(fpr, home)    # et déverrouillée : reprepro signe
+
+
+def test_apres_un_redemarrage_de_l_agent_deverrouiller_rend_la_signature(cle, niv0):
+    fpr, home = cle
+    d.proteger_demarrage(fpr, gnupghome=home)
+    subprocess.run(["gpgconf", "--kill", "gpg-agent"], env=d._env(home), capture_output=True)   # « reboot »
+    assert not d._signe_essai(fpr, home)                      # l'agent a tout oublié : la clé est fermée
+    d.deverrouiller(fpr, gnupghome=home)                      # ce que fait l'unité au démarrage
+    assert d._signe_essai(fpr, home) and d.etat(fpr, home)["en_cache"]
+
+
+def test_une_copie_du_disque_ne_signe_pas(cle, niv0):
+    fpr, home = cle
+    d.proteger_demarrage(fpr, gnupghome=home)
+    import os
+    import shutil as sh
+    copie = tempfile.mkdtemp(prefix="g", dir="/tmp")
+    try:
+        sh.copytree(home, copie, dirs_exist_ok=True, ignore=sh.ignore_patterns("S.*", "*.lock"))
+        os.chmod(copie, 0o700)
+        assert not d._signe_essai(fpr, copie)                 # le disque seul ne suffit pas
+    finally:
+        subprocess.run(["gpgconf", "--kill", "gpg-agent"], env=d._env(copie), capture_output=True)
+        sh.rmtree(copie, ignore_errors=True)
+
+
+def test_deverrouiller_sans_credence_refuse(cle, niv0):
+    fpr, home = cle
+    with pytest.raises(d.ErreurDepot):
+        d.deverrouiller(fpr, gnupghome=home)
+
+
+def test_credence_illisible_ne_modifie_pas_la_cle(cle, niv0, monkeypatch):
+    fpr, home = cle
+    import coffre.niveau0 as n
+    monkeypatch.setattr(n, "dechiffrer", lambda nom: b"autre chose")        # ne se relit pas à l'identique
+    with pytest.raises(d.ErreurDepot):
+        d.proteger_demarrage(fpr, gnupghome=home)
+    assert d.etat(fpr, home)["protegee"] is False and d._signe_essai(fpr, home)   # clé intacte

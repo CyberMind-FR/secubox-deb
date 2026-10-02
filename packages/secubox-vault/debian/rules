@@ -26,3 +26,4 @@ override_dh_auto_install:
 	install -m 644 menu.d/901-vault.json $(CURDIR)/debian/secubox-vault/usr/share/secubox/menu.d/
 	install -d $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system
 	install -m 644 debian/secubox-vault.service $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system/
+	install -m 644 debian/secubox-depot-deverrouille.service $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system/
