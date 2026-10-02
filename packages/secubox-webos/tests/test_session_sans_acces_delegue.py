@@ -21,5 +21,8 @@ def test_session_exige_une_session_et_rend_qui_et_etiquette():
 
 
 def test_les_routes_d_acces_delegues_n_existent_plus():
-    chemins = {r.path for r in app.routes}
+    # openapi() plutôt que app.routes : selon la version de Starlette, un routeur inclus
+    # n'expose pas `.path` (échec vu en CI).
+    chemins = set(app.openapi().get("paths", {}))
+    assert "/session" in chemins
     assert not [p for p in chemins if p.startswith("/acces")]
