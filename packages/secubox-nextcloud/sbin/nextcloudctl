@@ -8,6 +8,41 @@ CONFIG_FILE="/etc/secubox/nextcloud.toml"
 # Shared photo library — also mounted by secubox-photoprism as its originals.
 # Phone → Nextcloud "PhotoLibrary" external storage → here → PhotoPrism (#397).
 SHARED_PHOTOS="${SECUBOX_SHARED_PHOTOS:-/data/shared/photos}"
+
+# Permissions de la bibliothèque photo partagée (#1516). UID MESURÉS sur gk2 : Nextcloud
+# (www-data du conteneur, uid 33) = 100033 sur l'hôte, seul écrivain des 30 derniers jours ;
+# PhotoPrism = utilisateur `photoprism` du conteneur (uid 995 → 100995), en lecture.
+#   racine        0755 100000:100000  (les autres comptes de l'hôte n'y écrivent plus)
+#   <usager>/     2750 100033:100995  (Nextcloud écrit, PhotoPrism lit, personne d'autre)
+# Jamais récursif : le contenu des dossiers (photos des usagers) n'est pas touché.
+SBX_UID_NC=100033
+SBX_UID_LXC=100000
+SBX_GID_PP=100995
+photos_perms_racine() {
+    install -d -m 0755 "$SHARED_PHOTOS" 2>/dev/null || true
+    chown "$SBX_UID_LXC:$SBX_UID_LXC" "$SHARED_PHOTOS" 2>/dev/null || true
+    chmod 0755 "$SHARED_PHOTOS" 2>/dev/null || true
+}
+photos_perms_dossier() {
+    local d="$1"
+    mkdir -p "$d" || return 1
+    chown "$SBX_UID_NC:$SBX_GID_PP" "$d" 2>/dev/null || true
+    chmod 2750 "$d" 2>/dev/null || true
+}
+# Resserre l'existant : la racine et ses sous-dossiers directs, rien de plus profond.
+photos_perms_reparer() {
+    [ -d "$SHARED_PHOTOS" ] || return 0
+    photos_perms_racine
+    local d
+    for d in "$SHARED_PHOTOS"/*/; do
+        [ -d "$d" ] || continue
+        photos_perms_dossier "${d%/}"
+    done
+    # Originaux de PhotoPrism : même hôte, propriétaire LXC, pas besoin d'être ouvert à tous.
+    if [ -d /data/photoprism/originals ] && [ "$(stat -c %u /data/photoprism/originals)" = "$SBX_UID_LXC" ]; then
+        chmod 0755 /data/photoprism/originals 2>/dev/null || true
+    fi
+}
 # v2.11.1 modernization: /data/lxc is the canonical LXC path on SecuBox
 # boards (matches grafana/lyrion/etc). Override via SECUBOX_LXC_PATH for tests.
 LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
@@ -166,10 +201,9 @@ lxc.mount.entry = ${DATA_PATH}/config var/www/nextcloud/config none bind,create=
 # secubox-photoprism originals (#397/#398).
 lxc.mount.entry = ${SHARED_PHOTOS} media/photos none bind,create=dir 0 0
 EOF
-    # The shared dir must be writable by www-data (uid 33 → 100033) and
-    # readable by PhotoPrism; 0777 owned by the LXC root uid on a single box.
-    install -d -m 0777 "$SHARED_PHOTOS" 2>/dev/null || true
-    chown 100000:100000 "$SHARED_PHOTOS" 2>/dev/null || true
+    # Racine partagée : traversable par www-data (100033) et lisible par PhotoPrism ;
+    # seul l'uid racine du LXC (100000) y crée. Plus de 0777 (#1516).
+    photos_perms_racine
     log "LXC config created (veth on ${LXC_BRIDGE:-br-lxc}, ip ${LXC_IP:-10.100.0.21})"
 }
 
@@ -701,7 +735,7 @@ user_provision() {
     fi
 
     # Per-user photo folder: /data/shared/photos/<user> (host) = /media/photos/<user> (container).
-    mkdir -p "$SHARED_PHOTOS/$username" && chmod 0777 "$SHARED_PHOTOS/$username"
+    photos_perms_dossier "$SHARED_PHOTOS/$username"
     lxc_attach "sudo -u www-data php /var/www/nextcloud/occ app:enable files_external" >/dev/null 2>&1 || true
     if occ files_external:list 2>/dev/null | grep -q "Photos-$username"; then
         log "Per-user Photos storage already present for $username"
@@ -1123,6 +1157,7 @@ Apps:
   app list             List apps (JSON)
 
 Maintenance:
+  fix-photos-perms     Tighten /data/shared/photos permissions (not world-writable, not recursive)
   link-photos          Wire the 'PhotoLibrary' external storage (→ PhotoPrism)
   secure-photos        Restrict an existing PhotoLibrary to Nextcloud admins (#1514)
   occ <command>        Run Nextcloud occ command
@@ -1214,6 +1249,7 @@ case "${1:-}" in
             *) echo "Usage: nextcloudctl app {install|list}"; exit 1 ;;
         esac
         ;;
+    fix-photos-perms) photos_perms_reparer ;;
     link-photos) link_photos ;;
     secure-photos)
         # Répare un PhotoLibrary existant sans jamais en créer (#1514).

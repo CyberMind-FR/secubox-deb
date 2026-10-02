@@ -62,9 +62,9 @@ ensure_dirs() {
     install -d -m 0750 -o root -g secubox "$SECRETS_DIR"
     install -d -m 0750 "$DATA_DIR/storage" "$DATA_DIR/import"
     # Shared photo library — Nextcloud (www-data) writes, PhotoPrism reads.
-    # 0777 so both LXCs' service UIDs can use it (both map root→100000, but
-    # NC writes as www-data 100033). Acceptable on a single-appliance box.
-    install -d -m 0777 "$SHARED_PHOTOS"
+    # Racine 0755 100000:100000 (#1516) : Nextcloud (www-data 100033) y écrit par ses
+    # dossiers d'usagers (2750 100033:100995), PhotoPrism (uid 995 → 100995) lit.
+    install -d -m 0755 -o 100000 -g 100000 "$SHARED_PHOTOS"
     # Premier niveau seulement, et seulement s'il est encore à root : le
     # conteneur rend storage/ et import/ à l'utilisateur photoprism ; un
     # `chown -R` de l'hôte à chaque passage le lui reprenait (cf. peertube #1729).
@@ -273,7 +273,7 @@ id photoprism >/dev/null 2>&1 || adduser --system --group --home /var/lib/photop
     --no-create-home --shell /usr/sbin/nologin photoprism
 install -d -o photoprism -g photoprism /var/lib/photoprism
 # Montages liés : storage/ et import/ à photoprism (l'ancien conteneur les
-# laissait à root) ; originals/ est partagé avec Nextcloud (0777), on n'y touche pas.
+# laissait à root) ; originals/ est partagé avec Nextcloud (racine 0755, dossiers d'usagers 2750), on n'y touche pas.
 for d in storage import; do
     [ "$(stat -c %U /var/lib/photoprism/$d)" = photoprism ] || chown -R photoprism:photoprism /var/lib/photoprism/$d
 done

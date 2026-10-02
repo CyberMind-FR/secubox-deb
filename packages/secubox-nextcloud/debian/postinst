@@ -23,6 +23,11 @@ if [ "$1" = "configure" ]; then
     systemctl enable secubox-nextcloud.service || true
     systemctl start secubox-nextcloud.service || true
 
+    # Dossiers photo partagés : fini les 0777 (#1516). Non récursif, idempotent.
+    if [ -x /usr/sbin/nextcloudctl ]; then
+      /usr/sbin/nextcloudctl fix-photos-perms || true
+    fi
+
     # PhotoLibrary visible de TOUS les comptes (#1514) : on restreint un montage
     # existant aux administrateurs Nextcloud. N'en crée jamais ; sans conteneur
     # en marche, ne fait rien (le prochain link-photos s'en chargera).
