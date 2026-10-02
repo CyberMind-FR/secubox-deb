@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-realip — relais de confiance de nginx (#1754)
+#
+# POURQUOI. secubox-lan-geo.conf faisait confiance à des PLAGES entières
+# (192.168.1.0/24, 10.100.0.0/24…) pour `real_ip_header X-Forwarded-For` : tout
+# poste de ces plages dictait son adresse à nginx par un simple en-tête, donc
+# son verdict $lan_client. Le seul relais réel est la chaîne locale
+# HAProxy → sbxwaf → nginx, qui se présente avec une adresse DE LA BOX (127.0.0.1
+# ou son IP LAN, jamais celle d'un autre poste).
+#
+# CE QUE FAIT L'OUTIL. Écrit /etc/nginx/conf.d/secubox-real-ip-local.conf : un
+# `set_real_ip_from` par adresse propre de la box. L'adresse LAN change d'une
+# box à l'autre (gk2 .200, gk3 .9) : d'où un fichier engendré, relu par minuteur.
+# Une adresse qui change sans relecture ne rend pas nginx permissif : il
+# journalise l'adresse de la box pour tous (symptôme #1060, sans risque).
+#
+#   secubox-realip           écrit, recharge nginx si le contenu change
+#   secubox-realip --etat    affiche ce qui serait écrit
+#
+# SECUBOX_REALIP_ADDRS="a b c" remplace la lecture des interfaces (essais).
+set -euo pipefail
+readonly CIBLE="${SECUBOX_REALIP_CIBLE:-/etc/nginx/conf.d/secubox-real-ip-local.conf}"
+
+adresses() {
+    if [ -n "${SECUBOX_REALIP_ADDRS:-}" ]; then
+        printf '%s\n' $SECUBOX_REALIP_ADDRS
+    else
+        ip -o -4 addr show scope global 2>/dev/null | awk '{sub("/.*","",$4); print $4}'
+        echo 127.0.0.1
+    fi | sort -uV
+}
+
+contenu() {
+    echo "# SecuBox-managed: secubox-realip (#1754) — NE PAS ÉDITER, engendré à chaque minute"
+    echo "# Adresses propres de cette box : seuls relais dont l'en-tête X-Forwarded-For est cru."
+    adresses | while read -r a; do
+        # `if`, pas `&&` : sous set -e, une dernière adresse invalide ferait échouer le script.
+        if [[ "$a" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then echo "set_real_ip_from $a;"; fi
+    done
+}
+
+if [ "${1:-}" = "--etat" ]; then contenu; exit 0; fi
+
+nouveau="$(contenu)"
+if [ -f "$CIBLE" ] && [ "$(cat "$CIBLE")" = "$nouveau" ]; then exit 0; fi
+tmp="$(mktemp "${CIBLE}.XXXXXX")"
+printf '%s\n' "$nouveau" > "$tmp"
+chmod 0644 "$tmp"
+mv "$tmp" "$CIBLE"
+# Rechargement seulement si la configuration reste valide (un reload sur une
+# configuration cassée laisse nginx sur l'ancienne sans le dire).
+if [ -z "${SECUBOX_REALIP_NORELOAD:-}" ] && command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+    systemctl reload nginx 2>/dev/null || true
+fi

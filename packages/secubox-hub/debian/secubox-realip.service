@@ -1,0 +1,7 @@
+[Unit]
+Description=SecuBox — relais de confiance de nginx (real_ip, #1754)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-realip
