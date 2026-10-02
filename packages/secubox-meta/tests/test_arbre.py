@@ -84,6 +84,9 @@ PAQUET_DE = {
     "forums": "secubox-bbs",
     "activite": "secubox-sbxid", "comptes": "secubox-sbxid", "acces": "secubox-sbxid",
     "sbxos": "secubox-sbxos", "surfviewer": "secubox-webos", "mood": "sbxos-audio-mood",
+    # Le Coffre : la carte d'admin (/vault/) et « Mon coffre » (/coffre/) sont deux pages du MÊME
+    # paquet, secubox-vault ; le défaut « secubox-<id> » désignait des paquets qui n'existent pas.
+    "coffre": "secubox-vault", "mon-coffre": "secubox-vault",
 }
 
 
