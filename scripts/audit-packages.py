@@ -199,7 +199,6 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
         "secubox-ai-gateway",
         "secubox-ai-insights",
         "secubox-localai",
-        "secubox-ollama",
         "secubox-mcp-server",
     ],
     "system-hub": [
