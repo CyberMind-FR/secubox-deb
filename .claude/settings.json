@@ -48,5 +48,19 @@
       "Read(//etc/secubox/secrets/**)",
       "Read(~/.ssh/**)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/lint-apres-edition.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
