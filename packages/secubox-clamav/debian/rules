@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# Les unités sont activées à la main dans la postinst (le LXC se provisionne à part).
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
+
+override_dh_auto_install:
+	install -d debian/secubox-clamav/usr/sbin debian/secubox-clamav/usr/lib/secubox/clamav
+	install -m 0755 sbin/clamavctl debian/secubox-clamav/usr/sbin/clamavctl
+	install -m 0755 lxc/install-lxc.sh debian/secubox-clamav/usr/lib/secubox/clamav/install-lxc.sh
+	install -d debian/secubox-clamav/lib/systemd/system
+	install -m 0644 systemd/secubox-clamav-proxy.socket debian/secubox-clamav/lib/systemd/system/
+	install -m 0644 systemd/secubox-clamav-proxy.service debian/secubox-clamav/lib/systemd/system/
+	install -m 0644 systemd/secubox-clamav-update.service debian/secubox-clamav/lib/systemd/system/
+	install -m 0644 systemd/secubox-clamav-update.timer debian/secubox-clamav/lib/systemd/system/
+	install -d debian/secubox-clamav/var/lib/secubox/clamav

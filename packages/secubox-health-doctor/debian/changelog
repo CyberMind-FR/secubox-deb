@@ -1,3 +1,9 @@
+secubox-health-doctor (1.2.0-1~bookworm1) bookworm; urgency=low
+
+  * Contrôle « clamav » (#1912) : l'antivirus tourne dans un LXC éveillé à la demande, dont le sommeil est NORMAL ; l'alerte porte sur l'âge de la base de signatures (clamavctl status --json). Sans le paquet secubox-clamav, rien à surveiller.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 12:30:00 +0200
+
 secubox-health-doctor (1.1.1-1~bookworm1) bookworm; urgency=low
 
   * Test WAF : vise un vhost public (hall.* de préférence), jamais admin.* ni git.*, que sbxwaf n'inspecte pas (#1883).

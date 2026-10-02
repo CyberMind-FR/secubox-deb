@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    install -d -m 0755 /var/lib/secubox/clamav
+    systemctl daemon-reload || true
+    # Le socket ne réveille le LXC qu'à la première connexion ; la minuterie met la base à jour.
+    systemctl enable --now secubox-clamav-proxy.socket >/dev/null 2>&1 || true
+    systemctl enable --now secubox-clamav-update.timer >/dev/null 2>&1 || true
+    # Provisionnement du conteneur (long : modèle Debian + base de signatures) : en arrière-plan,
+    # pour ne pas bloquer dpkg. Idempotent ; sans effet s'il est déjà fait.
+    if [ ! -f /var/lib/secubox/clamav/.lxc-provisioned ] && [ -z "${SECUBOX_CLAMAV_SANS_LXC:-}" ]; then
+        systemd-run --no-block --unit=secubox-clamav-install --description="SecuBox ClamAV : création du LXC" \
+            /usr/sbin/clamavctl install >/dev/null 2>&1 || true
+        echo "secubox-clamav : création du conteneur en arrière-plan (journalctl -u secubox-clamav-install)" >&2
+    fi
+fi
+#DEBHELPER#
+exit 0

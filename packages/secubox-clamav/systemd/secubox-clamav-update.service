@@ -1,0 +1,8 @@
+[Unit]
+Description=SecuBox — mise à jour de la base ClamAV (réveille le LXC si besoin) (#1912)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/clamavctl update
+TimeoutStartSec=1800

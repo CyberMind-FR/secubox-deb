@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox — clamd éveillé à la demande : socket côté hôte (#1912)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1912
+
+[Socket]
+# L'adresse du pont des conteneurs : le conteneur mail (Rspamd) s'y connecte, la LAN non.
+ListenStream=10.100.0.1:3310
+# br-lxc peut ne pas exister au moment où le socket est ouvert au démarrage.
+FreeBind=true
+Backlog=64
+
+[Install]
+WantedBy=sockets.target

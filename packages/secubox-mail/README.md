@@ -53,7 +53,7 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 |----------|-------|
 | `mailctl maildir-reconcile` | Bascule idempotente mbox→Maildir (backup préalable obligatoire, no-op si déjà Maildir) |
 | `mailctl sieve enable\|status` | Active Pigeonhole/ManageSieve (:4190) ; sieve par défaut spam→Junk |
-| `mailctl antivirus on\|off\|status` | ClamAV optionnel (off par défaut, câblé mais dormant) |
+| `mailctl antivirus on\|off\|status` | ClamAV dans le LXC dédié `clamav` (paquet `secubox-clamav`, éveillé à la demande, #1912) ; off par défaut |
 | `mailctl ssl renew` | Renouvelle le cert LE mail + redéploie + reload (timer hebdo auto) |
 | `mailctl backup` / `restore <archive>` | Filet de sûreté (tar horodaté de vmail+config+dovecot.conf) |
 
@@ -61,7 +61,7 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 
 ```toml
 [mail.antivirus]
-enabled = false   # true → clamav-daemon + freshclam + module antivirus Rspamd
+enabled = false   # true → module antivirus Rspamd vers le LXC clamav (secubox-clamav, #1912)
 ```
 
 Le paquet livre aussi l'autoconfig RFC 6186 (`config-v1.1.xml`) et les

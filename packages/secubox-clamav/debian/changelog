@@ -1,0 +1,17 @@
+secubox-clamav (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * État sans privilège (#1912) : le contrôle de santé tourne sous « secubox », qui ne voit pas le conteneur (lxc-info rend « ABSENT », rootfs illisible) et aurait levé une fausse alerte. La partie root mémorise le dernier état et l'âge de la base (au réveil, au sommeil, à la mise à jour) ; la lecture sans privilège rend ce cache, vieilli du temps écoulé, avec source=cache. README du paquet.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 13:00:00 +0200
+
+secubox-clamav (0.1.1-1~bookworm1) bookworm; urgency=high
+
+  * Correctif (#1912) : sur Debian clamd est démarré par activation de socket et IGNORE TCPSocket de clamd.conf ; rien n'écoutait donc sur 3310 et le premier client attendait jusqu'à l'expiration. L'écoute TCP est déclarée sur l'unité clamav-daemon.socket (drop-in, FreeBind). Mesuré sur gk2 : EICAR détecté par le mandataire, démarrage à froid ~62 s, message propre en 0,06 s une fois éveillé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 11:00:00 +0200
+
+secubox-clamav (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier jet (#1912) : ClamAV dans un LXC dédié « clamav » (10.100.0.220), éveillé à la demande. Mandataire à activation par socket 10.100.0.1:3310 (systemd-socket-proxyd, 10 min d'inactivité) qui réveille puis rendort le conteneur ; mise à jour hebdomadaire de la base ; clamavctl (install, wake, sleep, update, status). clamd ne tient pas dans le budget de 384 Mo du conteneur mail (#496) : le budget propre (1,4/1,8 Go) n'est alloué que pendant l'éveil.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 10:00:00 +0200

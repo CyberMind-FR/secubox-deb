@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+    systemctl disable --now secubox-clamav-proxy.socket secubox-clamav-update.timer >/dev/null 2>&1 || true
+    systemctl stop secubox-clamav-proxy.service >/dev/null 2>&1 || true
+    /usr/sbin/clamavctl sleep >/dev/null 2>&1 || true      # le conteneur et sa base restent sur le disque
+fi
+#DEBHELPER#
+exit 0
