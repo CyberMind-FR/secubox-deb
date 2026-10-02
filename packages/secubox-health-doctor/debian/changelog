@@ -1,3 +1,15 @@
+secubox-health-doctor (1.1.1-1~bookworm1) bookworm; urgency=low
+
+  * Test WAF : vise un vhost public (hall.* de préférence), jamais admin.* ni git.*, que sbxwaf n'inspecte pas (#1883).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 19:20:00 +0200
+
+secubox-health-doctor (1.1.0-1~bookworm1) bookworm; urgency=low
+
+  * Test dynamique du WAF (#1883) : contrôle waf-selftest (sbxwaf à l'écoute, requête témoin non bloquée, charges canari XSS/SQLi/LFI/RCE refusées en 403 depuis une IP TEST-NET-2), rejoué au plus toutes les 5 min, transitions journalisées ; POST /waf-selftest/run pour le rejouer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 19:00:00 +0200
+
 secubox-health-doctor (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * Retire la sonde mitmproxy-lxc : le conteneur a ete supprime avec le

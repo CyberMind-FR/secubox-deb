@@ -66,6 +66,17 @@ def run():
     return runner.run_once()
 
 
+@app.post("/waf-selftest/run", dependencies=[Depends(require_jwt)])
+def waf_selftest_run():
+    """Rejoue le test WAF tout de suite (ignore le cache de 5 min)."""
+    from pathlib import Path as _P
+    try:
+        _P("/var/cache/secubox/health-doctor-waf-selftest.json").unlink()
+    except OSError:
+        pass
+    return runner.run_once().get("checks", {}).get("waf-selftest", {})
+
+
 @app.get("/registered", dependencies=[Depends(require_lecture)])
 def registered():
     """List all registered check names (for discovery)."""

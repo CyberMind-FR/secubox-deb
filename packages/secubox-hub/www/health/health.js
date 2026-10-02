@@ -67,12 +67,61 @@
         $('commonCount').textContent = '(' + common.length + ')';
     }
 
+    // Test dynamique du WAF (health-doctor, #1883) : charges canari attendues en
+    // 403 + témoin non bloqué. Section masquée si l'API n'est pas lisible.
+    const DOCTOR = '/api/v1/health-doctor';
+
+    function renderWaf(entry) {
+        const d = (entry && entry.details) || {};
+        const tests = d.tests || [];
+        const tout = entry && entry.ok;
+        const lignes = tests.map((t) => {
+            const msg = (t.attendu || '') + ' · ' + (t.code == null ? (t.erreur || 'pas de réponse') : 'HTTP ' + t.code);
+            return chip(t.libelle || t.id, { status: t.ok ? 'ok' : 'error', msg });
+        });
+        if (!tests.length) {
+            lignes.push(chip('sbxwaf', { status: 'error', msg: d.erreur || 'test non exécuté' }));
+        }
+        const bilan = chip('WAF', { status: tout ? 'ok' : 'error',
+            msg: tout ? 'bloque les attaques, laisse passer le trafic sain' : 'défaillant — voir le détail' });
+        $('waf').innerHTML = bilan + lignes.join('');
+        $('wafAge').textContent = d.age_s != null ? '(il y a ' + d.age_s + ' s)' : '';
+        $('wafSection').hidden = false;
+    }
+
+    async function loadWaf() {
+        try {
+            const state = await getJSON(DOCTOR + '/checks');
+            const e = state && state.checks && state.checks['waf-selftest'];
+            if (e) renderWaf(e);
+        } catch (e) { /* API non lisible : la section reste masquée */ }
+    }
+
+    async function rejouerWaf() {
+        const b = $('wafRun');
+        b.disabled = true;
+        try {
+            const token = localStorage.getItem('sbx_token');
+            const r = await fetch(DOCTOR + '/waf-selftest/run', {
+                method: 'POST',
+                headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            renderWaf(await r.json());
+        } catch (e) {
+            $('wafAge').textContent = '(échec : ' + e.message + ')';
+        } finally {
+            b.disabled = false;
+        }
+    }
+
     async function load() {
         try {
             const batch = await getJSON(BATCH);
             // health-batch returns {modules: {id: {status,msg}}, count: N}
             const modules = (batch && batch.modules) || batch || {};
             render(modules);
+            loadWaf();
             $('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
             $('loading').hidden = true; $('error').hidden = true; $('content').hidden = false;
             getJSON(INFO).then((i) => {
@@ -87,6 +136,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         $('refresh').addEventListener('click', load);
+        $('wafRun').addEventListener('click', rejouerWaf);
         load();
         setInterval(load, REFRESH_MS);
     });
