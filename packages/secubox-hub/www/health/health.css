@@ -32,6 +32,7 @@ h2 { font-size: 16px; font-weight: 600; margin: var(--sp-xl) 0 var(--sp-m); }
     border-radius: var(--r-card); padding: var(--sp-m); text-align: center; }
 .sum b { display: block; font-size: 2rem; font-weight: 700; font-family: var(--font-mono, monospace); line-height: 1; }
 .sum span { font-size: 12px; color: var(--mut); }
+.sum.veille b { color: #7aa7ff; } .svc.veille { opacity: .75; }
 .sum.ok b { color: #2ecc8f; } .sum.warn b { color: #f0b94c; } .sum.err b { color: #ff7a6b; } .sum.total b { color: var(--tx); }
 .sum.ok { border-left: 3px solid #0A5840; } .sum.warn { border-left: 3px solid #9A6010; } .sum.err { border-left: 3px solid #803018; }
 

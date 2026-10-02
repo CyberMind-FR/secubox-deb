@@ -194,7 +194,9 @@ def get_module_metadata(module: str) -> Dict[str, Any]:
 # aliasing (e.g. the Hub's waf→waf-ng overlay) stay in the caller.
 # ══════════════════════════════════════════════════════════════════
 
-def parse_units(text: str, sleepable: FrozenSet[str] = frozenset()) -> Dict[str, dict]:
+def parse_units(text: str, sleepable: FrozenSet[str] = frozenset(),
+                au_repos: FrozenSet[str] = frozenset(),
+                absents: FrozenSet[str] = frozenset()) -> Dict[str, dict]:
     """Parse `systemctl list-units --type=service ... --no-legend --plain
     secubox-*` plain-text output into `{mod_id: {"status", "msg"}}`.
 
@@ -207,8 +209,12 @@ def parse_units(text: str, sleepable: FrozenSet[str] = frozenset()) -> Dict[str,
       - active=="failed"                    -> error / "Failed"
         (a crash is a real alarm even for a sleepable module — intentional
         sleep goes through disable+stop i.e. inactive/dead, never failed)
-      - mod_id in sleepable                 -> ok / "Asleep (on-demand)"
+      - mod_id in sleepable                 -> ok / "Asleep (on-demand)" + veille
+      - mod_id in au_repos                  -> ok / "Au repos (tâche planifiée)" + veille
       - else                                -> warn / "<active>/<sub>"
+
+    `veille: True` marque un état attendu, ni sain ni dégradé : la page Santé le
+    compte à part et le score le pondère (#1893).
     """
     modules: Dict[str, dict] = {}
     for line in text.strip().split("\n"):
@@ -221,6 +227,8 @@ def parse_units(text: str, sleepable: FrozenSet[str] = frozenset()) -> Dict[str,
         if not (unit.startswith("secubox-") and unit.endswith(".service")):
             continue
         mod_id = unit[8:-8]
+        if mod_id in absents and active != "active":
+            continue                      # unité inexistante ou masquée : rien à surveiller
         if active == "active" and sub == "running":
             modules[mod_id] = {"status": "ok", "msg": "Running"}
         elif active == "active":
@@ -228,16 +236,81 @@ def parse_units(text: str, sleepable: FrozenSet[str] = frozenset()) -> Dict[str,
         elif active == "failed":
             modules[mod_id] = {"status": "error", "msg": "Failed"}
         elif mod_id in sleepable:
-            modules[mod_id] = {"status": "ok", "msg": "Asleep (on-demand)"}
+            modules[mod_id] = {"status": "ok", "msg": "Asleep (on-demand)", "veille": True}
+        elif mod_id in au_repos:
+            modules[mod_id] = {"status": "ok", "msg": "Au repos (tâche planifiée)", "veille": True}
         else:
             modules[mod_id] = {"status": "warn", "msg": f"{active}/{sub}"}
     return modules
+
+
+def _blocs_show(show_text: str):
+    for bloc in show_text.strip().split("\n\n"):
+        props = dict(l.split("=", 1) for l in bloc.splitlines() if "=" in l)
+        unite = props.get("Id", "")
+        if unite.startswith("secubox-") and unite.endswith(".service"):
+            yield unite[8:-8], props
+
+
+def parse_au_repos(show_text: str) -> FrozenSet[str]:
+    """Ids des unités « au repos » : arrêtées par conception, dernier passage réussi.
+
+    `show_text` : `systemctl show <unités> -p Id,Type,Result,ActiveState,LoadState,TriggeredBy`
+    (blocs séparés par une ligne vide). Une tâche planifiée — oneshot, ou déclenchée par un
+    timer/path (TriggeredBy) — qui n'est pas en cours est NORMALEMENT inactive/dead ; seul un
+    Result différent de « success » est une alerte.
+    """
+    repos = set()
+    for mod, p in _blocs_show(show_text):
+        if p.get("LoadState") != "loaded":
+            continue
+        if p.get("ActiveState") != "inactive" or p.get("Result", "success") != "success":
+            continue
+        if p.get("Type") == "oneshot" or p.get("TriggeredBy"):
+            repos.add(mod)
+    return frozenset(repos)
+
+
+def parse_absents(show_text: str) -> FrozenSet[str]:
+    """Ids des unités qui n'existent pas (not-found) ou sont masquées : rien à surveiller.
+
+    systemd les garde dans `list-units --all` tant qu'une dépendance les cite ; elles
+    s'affichaient « inactive/dead », donc dégradées, alors qu'aucun service n'est censé tourner.
+    """
+    return frozenset(mod for mod, p in _blocs_show(show_text)
+                     if p.get("LoadState") in ("not-found", "masked"))
+
+
+def unites_au_repos(noms=None) -> tuple:
+    """Relevé réel : (au_repos, absents), un seul `systemctl show` sur des unités nommées.
+
+    `noms` : ids de modules à interroger (par défaut, ceux de `list-units secubox-* --all`).
+    Nommer les unités est nécessaire : un motif `secubox-*` n'atteint pas les unités arrêtées
+    et déchargées de la mémoire. Jamais d'exception.
+    """
+    def _sortie(args):
+        try:
+            return subprocess.run(args, capture_output=True, text=True, timeout=10).stdout
+        except Exception:
+            return ""
+    if noms is None:
+        brut = _sortie(["systemctl", "list-units", "secubox-*", "--all", "--full",
+                        "--no-legend", "--plain", "--no-pager"])
+        noms = [l.split()[0][8:-8] for l in brut.splitlines()
+                if l.split() and l.split()[0].startswith("secubox-") and l.split()[0].endswith(".service")]
+    if not noms:
+        return frozenset(), frozenset()
+    show = _sortie(["systemctl", "show", "--no-pager", "-p", "Id,Type,Result,ActiveState,LoadState,TriggeredBy",
+                    *[f"secubox-{n}.service" for n in noms]])
+    return parse_au_repos(show), parse_absents(show)
 
 
 def systemd_batch(
     sock_dir: str = "/run/secubox",
     sleepable: FrozenSet[str] = frozenset(),
     _run: Optional[Callable[[], str]] = None,
+    au_repos: FrozenSet[str] = frozenset(),
+    absents: FrozenSet[str] = frozenset(),
 ) -> Dict[str, dict]:
     """Build the `{mod_id: {"status", "msg"}}` health-batch snapshot in one
     systemctl call plus a socket-directory scan.
@@ -268,7 +341,7 @@ def systemd_batch(
         except Exception:
             text = ""
 
-    modules = parse_units(text, sleepable)
+    modules = parse_units(text, sleepable, au_repos, absents)
 
     for sock in glob.glob(os.path.join(sock_dir, "*.sock")):
         mod_id = os.path.basename(sock)[:-len(".sock")]

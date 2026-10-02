@@ -40,7 +40,7 @@ def test_parse_units_warn_inactive_not_sleepable():
 
 def test_parse_units_sleepable_inactive_is_ok():
     d = parse_units(SAMPLE, sleepable={"foo"})
-    assert d["foo"] == {"status": "ok", "msg": "Asleep (on-demand)"}
+    assert d["foo"] == {"status": "ok", "msg": "Asleep (on-demand)", "veille": True}
 
 
 def test_parse_units_sleepable_failed_still_error():
@@ -75,4 +75,81 @@ def test_systemd_batch_socket_does_not_override_known_module(tmp_path: Path):
 
 def test_systemd_batch_sleepable_passthrough(tmp_path: Path):
     batch = systemd_batch(sock_dir=str(tmp_path), sleepable={"foo"}, _run=lambda: SAMPLE)
-    assert batch["foo"] == {"status": "ok", "msg": "Asleep (on-demand)"}
+    assert batch["foo"] == {"status": "ok", "msg": "Asleep (on-demand)", "veille": True}
+
+
+# ── Veille pondérée (#1893) : au repos / endormi ≠ dégradé ───────────
+
+SHOW = """Id=secubox-heartbeat.service
+Type=oneshot
+Result=success
+ActiveState=inactive
+LoadState=loaded
+TriggeredBy=
+
+Id=secubox-rapport.service
+Type=simple
+Result=success
+ActiveState=inactive
+LoadState=loaded
+TriggeredBy=secubox-rapport.timer
+
+Id=secubox-casse.service
+Type=oneshot
+Result=exit-code
+ActiveState=inactive
+LoadState=loaded
+TriggeredBy=
+
+Id=secubox-hub.service
+Type=simple
+Result=success
+ActiveState=active
+LoadState=loaded
+TriggeredBy=
+
+Id=secubox-fantome.service
+Type=
+Result=success
+ActiveState=inactive
+LoadState=not-found
+TriggeredBy=
+
+Id=secubox-demon-arrete.service
+Type=simple
+Result=success
+ActiveState=inactive
+LoadState=loaded
+TriggeredBy=
+"""
+
+
+def test_au_repos_oneshot_et_declenchees():
+    from secubox_core.health import parse_au_repos
+    # ni casse (échec), ni hub (actif), ni fantome (absent), ni un démon simple arrêté sans déclencheur
+    assert parse_au_repos(SHOW) == frozenset({"heartbeat", "rapport"})
+
+
+def test_absents_not_found_ou_masques():
+    from secubox_core.health import parse_absents
+    assert parse_absents(SHOW) == frozenset({"fantome"})
+
+
+def test_veille_pas_degrade():
+    from secubox_core.health import parse_units
+    texte = ("secubox-heartbeat.service loaded inactive dead Heartbeat\n"
+             "secubox-nc.service loaded inactive dead Nextcloud\n"
+             "secubox-casse.service loaded inactive dead Casse\n"
+             "secubox-fantome.service not-found inactive dead Fantome\n")
+    m = parse_units(texte, sleepable=frozenset({"nc"}), au_repos=frozenset({"heartbeat"}),
+                    absents=frozenset({"fantome"}))
+    assert m["heartbeat"] == {"status": "ok", "msg": "Au repos (tâche planifiée)", "veille": True}
+    assert m["nc"]["status"] == "ok" and m["nc"]["veille"] is True
+    assert m["casse"]["status"] == "warn" and "veille" not in m["casse"]   # inconnu : reste dégradé
+    assert "fantome" not in m                                              # absent : ni sain ni dégradé
+
+
+def test_echec_reste_une_alerte_meme_au_repos():
+    from secubox_core.health import parse_units
+    m = parse_units("secubox-heartbeat.service loaded failed failed X\n", au_repos=frozenset({"heartbeat"}))
+    assert m["heartbeat"]["status"] == "error"

@@ -27,7 +27,7 @@ from .health import (
     WorkingStatus, EnabledStatus, DevStage,
     HealthResponse, make_health_response, health_from_checks,
     MODULE_METADATA, get_module_metadata,
-    parse_units, systemd_batch,
+    parse_units, systemd_batch, parse_au_repos, unites_au_repos,
 )
 
 __all__ = [
@@ -49,5 +49,5 @@ __all__ = [
     "WorkingStatus", "EnabledStatus", "DevStage",
     "HealthResponse", "make_health_response", "health_from_checks",
     "MODULE_METADATA", "get_module_metadata",
-    "parse_units", "systemd_batch",
+    "parse_units", "systemd_batch", "parse_au_repos", "unites_au_repos",
 ]

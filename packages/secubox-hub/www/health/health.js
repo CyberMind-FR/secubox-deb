@@ -27,13 +27,14 @@
 
     // Status → emoji indicator (replaces the CSS LED dot).
     const EMOJI = { ok: '🟢', warn: '🟡', error: '🔴', unknown: '⚪' };
-    const emo = (status) => EMOJI[status] || EMOJI.unknown;
+    const emo = (status, veille) => veille ? '💤' : (EMOJI[status] || EMOJI.unknown);
 
     function chip(id, st) {
         const status = (st && st.status) || 'unknown';
         const msg = (st && st.msg) || '';
-        return `<div class="svc ${status}" title="${esc(id)}: ${esc(msg)}">
-            <span class="led">${emo(status)}</span>
+        const veille = !!(st && st.veille);       // endormi ou au repos : attendu, pas dégradé
+        return `<div class="svc ${status}${veille ? ' veille' : ''}" title="${esc(id)}: ${esc(msg)}">
+            <span class="led">${emo(status, veille)}</span>
             <span class="svc-name">${esc(id)}</span>
             <span class="svc-msg">${esc(msg)}</span>
         </div>`;
@@ -41,17 +42,23 @@
 
     function render(modules) {
         const ids = Object.keys(modules).sort();
-        let ok = 0, warn = 0, err = 0;
+        let ok = 0, warn = 0, err = 0, veille = 0;
         ids.forEach((id) => {
-            const s = (modules[id] || {}).status;
-            if (s === 'ok') ok++; else if (s === 'error') err++; else warn++;
+            const m = modules[id] || {};
+            if (m.status === 'ok' && m.veille) veille++;
+            else if (m.status === 'ok') ok++;
+            else if (m.status === 'error') err++;
+            else warn++;
         });
+        // Score pondéré : sain = 1, en veille = 1 (état attendu), dégradé = 0,5, en panne = 0.
+        const score = ids.length ? Math.round(((ok + veille + warn * 0.5) / ids.length) * 100) : 0;
 
         $('summary').innerHTML =
             `<div class="sum ok"><b>${ok}</b><span>🟢 healthy</span></div>` +
+            `<div class="sum veille"><b>${veille}</b><span>💤 en veille</span></div>` +
             `<div class="sum warn"><b>${warn}</b><span>🟡 degraded</span></div>` +
             `<div class="sum err"><b>${err}</b><span>🔴 down</span></div>` +
-            `<div class="sum total"><b>${ids.length}</b><span>📊 services</span></div>`;
+            `<div class="sum total"><b>${ids.length}</b><span>📊 services · santé ${score} %</span></div>`;
 
         const vital = ids.filter((id) => VITAL_SET.has(id));
         const common = ids.filter((id) => !VITAL_SET.has(id));

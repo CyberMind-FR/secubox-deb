@@ -1,3 +1,15 @@
+secubox-core (1.5.53-1~bookworm1) bookworm; urgency=low
+
+  * Santé (#1887) : le relevé interroge les unités par leur nom (un motif n'atteint pas les unités déchargées), reconnaît les tâches déclenchées par un timer ou un path (TriggeredBy) et écarte les unités inexistantes ou masquées (not-found/masked), qui s'affichaient « dégradées ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 22:00:00 +0200
+
+secubox-core (1.5.52-1~bookworm1) bookworm; urgency=low
+
+  * Santé : veille pondérée (#1893). parse_units(au_repos=…) et unites_au_repos() : une tâche planifiée (oneshot ou activée par un timer) arrêtée après un passage réussi, comme un module endormi, est « ok » avec veille=true au lieu de « warn » ; un échec reste une alerte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 21:00:00 +0200
+
 secubox-core (1.5.51-1~bookworm1) bookworm; urgency=medium
 
   * secubox_core.second_facteur (#1827) : l'OTP hors de secubox-auth, aux

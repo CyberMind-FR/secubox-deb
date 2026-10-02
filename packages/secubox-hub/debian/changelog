@@ -1,3 +1,120 @@
+secubox-hub (1.9.35-1~bookworm1) bookworm; urgency=low
+
+  * Santé : relevé des unités au repos et absentes par Version=255.4-1ubuntu8.15pop0~1778766128~24.04~85b5073
+Features=+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified
+Architecture=x86-64
+FirmwareTimestampMonotonic=9137950
+LoaderTimestampMonotonic=1375824
+KernelTimestamp=Fri 2026-10-02 09:20:07 CEST
+KernelTimestampMonotonic=0
+InitRDTimestampMonotonic=0
+UserspaceTimestamp=Fri 2026-10-02 09:20:10 CEST
+UserspaceTimestampMonotonic=2461361
+FinishTimestamp=Fri 2026-10-02 09:20:21 CEST
+FinishTimestampMonotonic=13376701
+SecurityStartTimestamp=Fri 2026-10-02 09:20:10 CEST
+SecurityStartTimestampMonotonic=2463364
+SecurityFinishTimestamp=Fri 2026-10-02 09:20:10 CEST
+SecurityFinishTimestampMonotonic=2464238
+GeneratorsStartTimestamp=Fri 2026-10-02 09:20:10 CEST
+GeneratorsStartTimestampMonotonic=2511213
+GeneratorsFinishTimestamp=Fri 2026-10-02 09:20:10 CEST
+GeneratorsFinishTimestampMonotonic=2599997
+UnitsLoadStartTimestamp=Fri 2026-10-02 09:20:10 CEST
+UnitsLoadStartTimestampMonotonic=2600028
+UnitsLoadFinishTimestamp=Fri 2026-10-02 09:20:10 CEST
+UnitsLoadFinishTimestampMonotonic=2678411
+UnitsLoadTimestamp=Fri 2026-10-02 09:20:12 CEST
+UnitsLoadTimestampMonotonic=4511683
+InitRDSecurityStartTimestampMonotonic=0
+InitRDSecurityFinishTimestampMonotonic=0
+InitRDGeneratorsStartTimestampMonotonic=0
+InitRDGeneratorsFinishTimestampMonotonic=0
+InitRDUnitsLoadStartTimestampMonotonic=0
+InitRDUnitsLoadFinishTimestampMonotonic=0
+LogLevel=info
+LogTarget=journal-or-kmsg
+NNames=554
+NFailedUnits=0
+NJobs=0
+NInstalledJobs=1964
+NFailedJobs=0
+Progress=1
+Environment=LANG=fr_FR.UTF-8 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin XDG_DATA_DIRS=/var/lib/flatpak/exports/share:/usr/local/share/:/usr/share/
+ConfirmSpawn=no
+ShowStatus=no
+UnitPath=/etc/systemd/system.control /run/systemd/system.control /run/systemd/transient /run/systemd/generator.early /etc/systemd/system /etc/systemd/system.attached /run/systemd/system /run/systemd/system.attached /run/systemd/generator /usr/local/lib/systemd/system /usr/lib/systemd/system /run/systemd/generator.late
+DefaultStandardOutput=journal
+DefaultStandardError=inherit
+WatchdogLastPingTimestampMonotonic=18446744073709551615
+RuntimeWatchdogUSec=0
+RuntimeWatchdogPreUSec=0
+RebootWatchdogUSec=10min
+KExecWatchdogUSec=0
+ServiceWatchdogs=yes
+SystemState=running
+DefaultTimerAccuracyUSec=1min
+DefaultTimeoutStartUSec=1min 30s
+DefaultTimeoutStopUSec=1min 30s
+DefaultTimeoutAbortUSec=1min 30s
+DefaultDeviceTimeoutUSec=1min 30s
+DefaultRestartUSec=100ms
+DefaultStartLimitIntervalUSec=10s
+DefaultStartLimitBurst=5
+DefaultCPUAccounting=yes
+DefaultBlockIOAccounting=no
+DefaultIOAccounting=no
+DefaultIPAccounting=no
+DefaultMemoryAccounting=yes
+DefaultTasksAccounting=yes
+DefaultLimitCPU=infinity
+DefaultLimitCPUSoft=infinity
+DefaultLimitFSIZE=infinity
+DefaultLimitFSIZESoft=infinity
+DefaultLimitDATA=infinity
+DefaultLimitDATASoft=infinity
+DefaultLimitSTACK=infinity
+DefaultLimitSTACKSoft=8388608
+DefaultLimitCORE=infinity
+DefaultLimitCORESoft=0
+DefaultLimitRSS=infinity
+DefaultLimitRSSSoft=infinity
+DefaultLimitNOFILE=524288
+DefaultLimitNOFILESoft=1024
+DefaultLimitAS=infinity
+DefaultLimitASSoft=infinity
+DefaultLimitNPROC=114828
+DefaultLimitNPROCSoft=114828
+DefaultLimitMEMLOCK=8388608
+DefaultLimitMEMLOCKSoft=8388608
+DefaultLimitLOCKS=infinity
+DefaultLimitLOCKSSoft=infinity
+DefaultLimitSIGPENDING=114828
+DefaultLimitSIGPENDINGSoft=114828
+DefaultLimitMSGQUEUE=819200
+DefaultLimitMSGQUEUESoft=819200
+DefaultLimitNICE=0
+DefaultLimitNICESoft=0
+DefaultLimitRTPRIO=0
+DefaultLimitRTPRIOSoft=0
+DefaultLimitRTTIME=infinity
+DefaultLimitRTTIMESoft=infinity
+DefaultTasksMax=34448
+DefaultMemoryPressureThresholdUSec=200ms
+DefaultMemoryPressureWatch=auto
+TimerSlackNSec=50000
+DefaultOOMPolicy=stop
+DefaultOOMScoreAdjust=0
+CtrlAltDelBurstAction=reboot-force sur unités nommées, relu toutes les 60 s (#1887).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 22:00:00 +0200
+
+secubox-hub (1.9.34-1~bookworm1) bookworm; urgency=low
+
+  * Page Santé : carte « en veille » et pastille 💤 pour les services endormis ou au repos, score pondéré (sain 1, veille 1, dégradé 0,5, panne 0) ; le relevé lit les unités au repos toutes les 60 s (#1893).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 21:00:00 +0200
+
 secubox-hub (1.9.33-1~bookworm1) bookworm; urgency=medium
 
   * Menu : lit aussi /etc/secubox/menu.d (surcharge locale, dédoublonnée par id) ; les entrées livrées là (p2p, zkp) étaient ignorées, une box neuve comme gk3 ne les proposait pas (#1888).
