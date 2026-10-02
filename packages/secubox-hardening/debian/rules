@@ -36,5 +36,8 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-hardening/etc/nginx/secubox-routes.d
 	install -m 644 nginx/hardening.conf $(CURDIR)/debian/secubox-hardening/etc/nginx/secubox-routes.d/hardening.conf
 
+	install -d $(CURDIR)/debian/secubox-hardening/etc/nftables.d
+	install -m 644 nft/secubox-wan-guard.nft $(CURDIR)/debian/secubox-hardening/etc/nftables.d/secubox-wan-guard.nft
+
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-hardening

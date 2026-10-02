@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Ports de BACKEND fermés côté WAN/LAN (#1306).
+#
+# /etc/nftables.conf porte `iif "eth2" accept` : tout ce qui arrive par eth2
+# passe, quel que soit le port, et les backends que seul HAProxy doit joindre
+# (chaîne HAProxy → sbxwaf → nginx) étaient atteignables en direct.
+# Le fichier de base n'appartient à aucun paquet ; plutôt que de le réécrire
+# (verrouillage possible, eth2 porte aussi l'administration), cette chaîne
+# s'exécute AVANT lui (priorité filter - 10) et ne coupe que les backends
+# identifiés. SSH, 80/443 (HAProxy), SMB, mDNS et le reste ne sont pas touchés.
+#
+# Chargement idempotent : créer, vider, redéfinir.
+table inet secubox_wan_guard { }
+delete table inet secubox_wan_guard
+
+table inet secubox_wan_guard {
+	chain input {
+		type filter hook input priority filter - 10; policy accept;
+		iifname "eth2" tcp dport { 7331, 8088, 8404, 8880, 8900, 8910, 9080 } counter drop \
+			comment "backends : HAProxy seul y accede (#1306)"
+	}
+}
