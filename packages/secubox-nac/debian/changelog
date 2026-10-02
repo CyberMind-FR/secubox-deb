@@ -1,3 +1,15 @@
+secubox-nac (3.1.7-1~bookworm1) bookworm; urgency=low
+
+  * secubox-nac-apply : Group=secubox pour pouvoir écrire son statut dans /var/lib/secubox/nac sans CAP_DAC_OVERRIDE (#1766).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 02:10:00 +0200
+
+secubox-nac (3.1.6-1~bookworm1) bookworm; urgency=high
+
+  * Blocage, quarantaine et zones ont enfin un effet réseau (#1766). L'API (NoNewPrivileges, sans capacité) ne pouvait appeler nft : chaque ajout/retrait échouait ; et aucune règle ne référençait les ensembles de inet secubox_nac. Désormais : l'API écrit l'état voulu (nft-desired.json) ; secubox-nac-apply (service root étroit, unité .path, CAP_NET_ADMIN seul) valide chaque MAC et nom d'ensemble puis charge en UNE transaction les règles (/etc/nftables.d/secubox-nac.nft : blocked, quarantine, iot/guest isolés du LAN) et les éléments, au démarrage de nftables aussi. Le statut réel d'application remplace « nft list tables ». Migration mac_guard vers l'état voulu.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 02:00:00 +0200
+
 secubox-nac (3.1.5-1~bookworm1) bookworm; urgency=medium
 
   * postinst : crée de nouveau la table inet secubox_nac et ses ensembles

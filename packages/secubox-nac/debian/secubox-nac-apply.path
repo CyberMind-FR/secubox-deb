@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox NAC — surveille l'état voulu (#1766)
+
+[Path]
+PathChanged=/var/lib/secubox/nac/nft-desired.json
+Unit=secubox-nac-apply.service
+
+[Install]
+WantedBy=multi-user.target

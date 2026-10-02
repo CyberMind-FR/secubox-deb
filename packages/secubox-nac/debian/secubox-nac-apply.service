@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox NAC — applique blocage, quarantaine et zones à nftables (#1766)
+After=nftables.service
+# Un redémarrage de nftables (flush ruleset) efface la table : on la reconstruit.
+PartOf=nftables.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-nac-apply
+# Groupe secubox : écrire le statut dans /var/lib/secubox/nac (0775 secubox:secubox) sans
+# CAP_DAC_OVERRIDE, que la borne de capacités ci-dessous refuse.
+Group=secubox
+# Étroit : root pour parler à nftables, rien d'autre.
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox/nac
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_NETLINK AF_UNIX
+
+[Install]
+WantedBy=multi-user.target nftables.service

@@ -63,6 +63,14 @@ router = APIRouter()
 log = get_logger("nac")
 
 # Configuration
+# État voulu des ensembles nftables (#1766) : l'API n'a pas de privilège réseau ; elle écrit
+# ici, le service root secubox-nac-apply applique. Chargé par chemin : l'agrégateur importe
+# ce main.py sous un autre nom de paquet, un import relatif y échouerait.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("secubox_nac_nft_desired", Path(__file__).with_name("nft_desired.py"))
+_nft_desired = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_nft_desired)
+
 DATA_DIR = Path("/var/lib/secubox/nac")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LEASES_FILE = Path("/var/lib/misc/dnsmasq.leases")
@@ -465,25 +473,20 @@ def _discover_clients() -> list[dict]:
     return unique_clients
 
 
-def _nft_list_set(set_name: str) -> list[str]:
-    """Return elements from an nftables set."""
+NFT_STATUT = DATA_DIR / "nft-applied.json"
+
+
+def _nft_applique() -> bool:
+    """Le dernier passage de secubox-nac-apply a-t-il réussi ? (écrit par le service root)."""
     try:
-        r = subprocess.run(
-            ["nft", "-j", "list", "set", "inet", "secubox_nac", set_name],
-            capture_output=True, text=True, timeout=5
-        )
-        data = json.loads(r.stdout)
-        elements = []
-        for item in data.get("nftables", []):
-            if "set" in item:
-                for e in item["set"].get("elem", []):
-                    if isinstance(e, str):
-                        elements.append(e.lower())
-                    elif isinstance(e, dict):
-                        elements.append(str(e.get("val", e)).lower())
-        return elements
-    except Exception:
-        return []
+        return bool(json.loads(NFT_STATUT.read_text()).get("ok"))
+    except (OSError, ValueError):
+        return False
+
+
+def _nft_list_set(set_name: str) -> list[str]:
+    """Membres d'un ensemble (état voulu). Plus de `nft list` : l'API n'en a pas le droit (#1766)."""
+    return _nft_desired.members(set_name)
 
 
 # Zone assignments file (fallback when nftables not available)
@@ -501,27 +504,13 @@ def _save_zone_assignments(assignments: Dict[str, str]):
 
 
 def _nft_add_element(set_name: str, element: str) -> bool:
-    """Add element to nft set. Returns True if successful."""
-    try:
-        result = subprocess.run(
-            ["nft", "add", "element", "inet", "secubox_nac", set_name, "{", element, "}"],
-            capture_output=True, timeout=5
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
+    """Ajoute une MAC à l'état voulu ; secubox-nac-apply (root) l'applique à nftables."""
+    return _nft_desired.add(set_name, element)
 
 
 def _nft_delete_element(set_name: str, element: str) -> bool:
-    """Delete element from nft set. Returns True if successful."""
-    try:
-        result = subprocess.run(
-            ["nft", "delete", "element", "inet", "secubox_nac", set_name, "{", element, "}"],
-            capture_output=True, timeout=5
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
+    """Retire une MAC de l'état voulu ; secubox-nac-apply (root) l'applique à nftables."""
+    return _nft_desired.remove(set_name, element)
 
 
 def _get_client_zone(mac: str, iface: str = "") -> str:
@@ -775,13 +764,7 @@ def status(user=Depends(require_jwt)):
     devices = store.list(limit=5000) if store else []
     online_macs = {d["mac"] for d in (collector.snapshot() if collector else [])}
 
-    try:
-        nft_ok = subprocess.run(
-            ["nft", "list", "tables"],
-            capture_output=True, timeout=5
-        ).returncode == 0
-    except Exception:
-        nft_ok = False
+    nft_ok = _nft_applique()
 
     try:
         dnsmasq_ok = subprocess.run(
@@ -1050,13 +1033,7 @@ def ban_client(mac: str, user=Depends(require_jwt)):
     for info in ZONES.values():
         _nft_delete_element(info["nft_set"], mac_lower)
 
-    try:
-        subprocess.run(
-            ["nft", "add", "element", "inet", "secubox_nac", "blocked", "{", mac_lower, "}"],
-            capture_output=True, timeout=5
-        )
-    except Exception:
-        pass
+    _nft_add_element("blocked", mac_lower)
 
     log.info("Client banned: %s", mac_lower)
     _record_event("client_banned", {"mac": mac_lower, "by": user.get("sub", "unknown")})
@@ -1071,13 +1048,7 @@ def unban_client(mac: str, user=Depends(require_jwt)):
     """Unban a client."""
     mac_lower = mac.lower()
 
-    try:
-        subprocess.run(
-            ["nft", "delete", "element", "inet", "secubox_nac", "blocked", "{", mac_lower, "}"],
-            capture_output=True, timeout=5
-        )
-    except Exception:
-        pass
+    _nft_delete_element("blocked", mac_lower)
 
     _nft_add_element(ZONES["quarantine"]["nft_set"], mac_lower)
     _record_event("client_unbanned", {"mac": mac_lower, "by": user.get("sub", "unknown")})
@@ -1447,13 +1418,9 @@ async def set_parental_rule_compat(req: ParentalRule, user=Depends(require_jwt))
 
 @router.get("/sync_zones")
 def sync_zones(user=Depends(require_jwt)):
-    for zone_id, info in ZONES.items():
-        subprocess.run(
-            ["nft", "add", "set", "inet", "secubox_nac", info["nft_set"],
-             "{ type ether_addr; }"],
-            capture_output=True
-        )
-    return {"success": True, "zones": list(ZONES.keys())}
+    """Redemande l'application : réécrit l'état voulu, le service root le recharge (#1766)."""
+    _nft_desired.resync()
+    return {"success": True, "zones": list(ZONES.keys()), "applique": _nft_applique()}
 
 
 @router.get("/list_profiles")

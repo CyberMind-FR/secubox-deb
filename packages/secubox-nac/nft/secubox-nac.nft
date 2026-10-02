@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# NAC — application du blocage, de la quarantaine et des zones (#1766).
+#
+# Table `inet secubox_nac` : six ensembles de MAC (remplis par secubox-nac-apply depuis
+# /var/lib/secubox/nac/nft-desired.json) et les règles qui les APPLIQUENT. Avant, rien ne
+# les référençait : remplis, ils ne filtraient rien.
+#
+# Les chaînes tournent à priority filter - 5, AVANT les bases à priorité 0 : un `drop` ici
+# est final, et un oubli de règle ne rend rien accessible (les bases restent en drop).
+#   blocked        : plus rien n'entre ni ne sort (ni vers la box, ni à travers elle)
+#   quarantine     : rien à travers la box ; vers la box, seulement DHCP et DNS
+#   iot / guest    : internet, mais plus de poste du LAN ni de conteneur (RFC 1918)
+#   lan_allowed, lxc_zone : aucune restriction (zones d'appartenance)
+# `ether saddr/daddr` ne correspond qu'aux trames Ethernet : les tunnels (wg-*) ne sont pas touchés.
+#
+# Chargement idempotent et ATOMIQUE (une seule transaction nft -f) : créer, supprimer, redéfinir.
+table inet secubox_nac { }
+delete table inet secubox_nac
+
+table inet secubox_nac {
+	set blocked         { type ether_addr; }
+	set lan_allowed     { type ether_addr; }
+	set lxc_zone        { type ether_addr; }
+	set iot_zone        { type ether_addr; }
+	set guest_zone      { type ether_addr; }
+	set quarantine_zone { type ether_addr; }
+
+	chain input {
+		type filter hook input priority filter - 5; policy accept;
+		ether saddr @blocked counter drop comment "nac : appareil bloque"
+		ether saddr @quarantine_zone udp dport { 53, 67, 68 } return
+		ether saddr @quarantine_zone counter drop comment "nac : quarantaine"
+	}
+
+	chain forward {
+		type filter hook forward priority filter - 5; policy accept;
+		ether saddr @blocked counter drop comment "nac : appareil bloque (sortie)"
+		ether daddr @blocked counter drop comment "nac : appareil bloque (entree)"
+		ether saddr @quarantine_zone counter drop comment "nac : quarantaine"
+		ether saddr @iot_zone ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } counter drop comment "nac : zone IoT isolee du LAN"
+		ether saddr @guest_zone ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } counter drop comment "nac : zone invites isolee du LAN"
+	}
+}
