@@ -81,15 +81,39 @@ Coffre ouvert **et** la serrure de la personne. Un administrateur, même Coffre
 ouvert, n'y lit, n'y pose, n'y retire ni n'y liste rien ; la personne non plus
 tant que le Coffre est scellé.
 
-Rien de personnel n'est tenu en mémoire : chaque requête apporte la serrure.
-La page **Mon coffre** du Hall (`/coffre/`) la garde dans l'onglet et l'oublie
-après cinq minutes sans geste.
+**La connexion ouvre le compartiment (#1855).** Le mot de passe de connexion est
+une serrure de plus de la personne (genre `compte`, Argon2id). À la connexion — et
+une fois le second facteur réussi, comme pour l'administrateur — le Coffre déballe
+la clé de la personne et la **tient en mémoire le temps de sa session** : « Mon
+coffre » ne demande plus de phrase (`ouverture: {"genre": "session"}`). Elle est
+oubliée à l'inactivité (même délai que le Coffre), au scellement et à
+« Verrouiller » (`POST /moi/fermer`). Valable pour tout compte, **invités compris** ;
+jamais pour la clé maîtresse : un invité n'ouvre que **son** compartiment, et la MK
+reste exigée (un administrateur doit avoir ouvert le Coffre).
+
+- Première connexion d'une personne sans aucune serrure, Coffre ouvert : son
+  compartiment naît, avec ce mot de passe. Coffre scellé : rien n'est créé.
+- Une personne qui n'a qu'une phrase ou une clé d'appareil relie sa connexion une fois :
+  `POST /moi/serrures/compte` (la serrure ouverte + le mot de passe, vérifié contre le
+  compte de la session).
+- Changement de mot de passe : la serrure `compte` est réemballée
+  (`POST /personne/changer`, appelé par secubox-auth).
+- Hors LAN, sans second facteur pour ce compte : le mot de passe seul n'ouvre rien.
+- `POST /personne/preparer` (+ `/compte/confirmer`, même ticket) ne sert que
+  secubox-auth, par la socket : jamais le relais web (404).
+- Un appareil entré par lien/QR (sans mot de passe) n'a pas de serrure `compte` : sa
+  clé d'appareil (WebAuthn PRF) ou sa phrase.
+
+Sans cela — phrase ou clé d'appareil — chaque requête apporte la serrure ; la page
+**Mon coffre** du Hall (`/coffre/`) la garde dans l'onglet et l'oublie après cinq
+minutes sans geste.
 
 | Route (`/api/v1/vault/moi…`, toute personne via l'agrégateur) | Rôle |
 |---|---|
 | `GET /moi` | ses serrures (de quoi demander une sortie PRF), nombre de secrets |
 | `POST /moi/initialiser` | première serrure (phrase) : la clé et le compartiment naissent |
-| `POST /moi/serrures/phrase`, `/moi/serrures/appareil[/preparer]`, `/moi/serrures/{id}/retirer` | serrures — la dernière reste |
+| `POST /moi/serrures/phrase`, `/moi/serrures/compte`, `/moi/serrures/appareil[/preparer]`, `/moi/serrures/{id}/retirer` | serrures — la dernière reste |
+| `POST /moi/fermer` | « Verrouiller » : la clé tenue depuis la connexion est oubliée |
 | `POST /moi/secrets/lister`, `/moi/secrets`, `/moi/secrets/{nom}/lire`, `/moi/secrets/{nom}/retirer` | ses secrets |
 | `POST /moi/openpgp` | une clé OpenPGP (ed25519 + cv25519) née dans un trousseau jetable, rangée en `openpgp-secrete` / `openpgp-publique` |
 

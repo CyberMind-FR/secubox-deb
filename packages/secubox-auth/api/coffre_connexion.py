@@ -3,7 +3,8 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """
-SecuBox-Deb :: auth — la connexion de l'administrateur ouvre le Coffre (#1855)
+SecuBox-Deb :: auth — la connexion ouvre le Coffre de l'administrateur, et le
+compartiment de toute personne (#1855)
 CyberMind — https://cybermind.fr
 
 Pas de phrase propre au Coffre : sa serrure, c'est le mot de passe de
@@ -61,14 +62,18 @@ def _appel(chemin: str, corps: dict, delai: float = 10.0) -> Optional[dict]:
 
 
 def preparer(utilisateur: str, mot_de_passe: str) -> Optional[str]:
-    """Rend un ticket, ou None (pas un admin, Coffre absent, rien à ouvrir)."""
+    """Rend un ticket, ou None (Coffre absent, rien à ouvrir).
+
+    Un administrateur prépare l'ouverture du Coffre ET, s'il en a une, celle de
+    sa personne. Tout autre compte — utilisateur, invité avec compte — ne
+    prépare que SON compartiment : jamais la clé maîtresse (#1855)."""
     try:
         from secubox_core import second_facteur  # noqa: PLC0415
-        if not second_facteur.compte_admin_actif(utilisateur):
-            return None
+        admin = second_facteur.compte_admin_actif(utilisateur)
     except Exception:  # noqa: BLE001
         return None
-    r = _appel("/compte/preparer", {"utilisateur": utilisateur, "mot_de_passe": mot_de_passe})
+    chemin = "/compte/preparer" if admin else "/personne/preparer"
+    r = _appel(chemin, {"utilisateur": utilisateur, "mot_de_passe": mot_de_passe})
     return (r or {}).get("ticket")
 
 
@@ -100,5 +105,7 @@ def confirmer_garde(jti: str) -> bool:
 def changer(utilisateur: str, ancien: str, nouveau: str) -> None:
     """Après un changement de mot de passe : réemballer la serrure du compte."""
     def _travail():
-        _appel("/compte/changer", {"utilisateur": utilisateur, "ancien": ancien, "nouveau": nouveau})
+        corps = {"utilisateur": utilisateur, "ancien": ancien, "nouveau": nouveau}
+        _appel("/compte/changer", corps)        # la serrure d'administrateur, s'il en a une
+        _appel("/personne/changer", corps)      # la serrure « compte » de sa personne
     threading.Thread(target=_travail, daemon=True).start()

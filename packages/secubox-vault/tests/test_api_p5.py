@@ -14,7 +14,7 @@ from api import main as m
 from coffre.coffre import Coffre
 from coffre.journal import Journal
 from secubox_core import capacites
-from secubox_core.auth import require_personne
+from secubox_core.auth import require_session
 
 PHRASE = "une phrase assez longue pour le coffre"
 ALICE = "0b6e3c3a-7d0f-4c1e-9a55-3f2a1b8c9d10"
@@ -37,7 +37,7 @@ def moi(monkeypatch, tmp_path):
     monkeypatch.setattr(capacites, "personne_du_porteur",
                         lambda p: {"user_uuid": PERSONNES[p["sub"]], "pseudo": p["sub"]}
                         if p.get("sub") in PERSONNES else None)
-    m.public.dependency_overrides[require_personne] = lambda: dict(qui)
+    m.public.dependency_overrides[require_session] = lambda: dict(qui)
     yield TestClient(m.public), qui
     m.public.dependency_overrides.clear()
 

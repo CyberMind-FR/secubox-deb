@@ -138,7 +138,7 @@ def test_migration_v4_vers_v5(tmp_path):
     assert c2.ouvrir("une phrase assez longue pour le coffre")
     assert c2.compte_confirmer(c2.compte_preparer("gk2", MDP))
     with sqlite3.connect(base / "coffre.db") as cx:
-        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == "5"
+        assert cx.execute("SELECT valeur FROM meta WHERE cle='version'").fetchone()[0] == __import__("coffre.coffre", fromlist=["VERSION_SCHEMA"]).VERSION_SCHEMA
 
 
 # ── API ────────────────────────────────────────────────────────────────────

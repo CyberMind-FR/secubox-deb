@@ -390,7 +390,9 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _append_audit("totp_enrollment_required", req.username, {"ip": ip})
         return {"enrollment_required": True, "enrollment_token": enroll_tok}
 
-    _coffre.confirmer(ticket_coffre, not lan)
+    # Second facteur exigé (WAN) mais absent pour ce compte (un utilisateur sans
+    # TOTP) : un mot de passe seul n'ouvre rien — le ticket expirera de lui-même.
+    _coffre.confirmer(None if otp else ticket_coffre, not lan)
     jti = secrets.token_hex(8)
     tok = create_token(req.username, jti=jti)
     _set_session_cookie(response, tok, request=request)  # SSO-lite (#400, #1723)

@@ -282,3 +282,14 @@ du Hall dans ses trois états :
   quotidien ?
 - **Nœuds de recouvrement** : lesquels, sachant que c3box est éteint et la
   VM de test éphémère ?
+
+
+## La connexion de toute personne ouvre son compartiment (#1855)
+
+Décision de l'exploitant : la connexion d'un utilisateur — invité compris — ouvre
+**son** compartiment, comme celle de l'administrateur ouvre le Coffre. Le mot de
+passe de connexion est une serrure `compte` de la personne ; la clé de la personne
+est tenue en mémoire le temps de sa session. La clé maîtresse reste réservée à
+l'administrateur : un compartiment de personne demande toujours la MK **et** la
+personne. Un appareil entré sans mot de passe (lien/QR) garde sa clé d'appareil ou
+sa phrase.

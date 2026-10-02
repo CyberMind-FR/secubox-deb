@@ -1,3 +1,11 @@
+secubox-aggregator (0.3.10-1~bookworm1) bookworm; urgency=medium
+
+  * Coffre (#1855) : `vault/personne/*` jamais relayé au web (comme `vault/compte/*`) ;
+    `vault/moi…` admet toute session reconnue, invités compris — la personne vient
+    du jeton, le Coffre répond 403 sans personne SBX OS.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 16:00:00 +0200
+
 secubox-aggregator (0.3.9-1~bookworm1) bookworm; urgency=medium
 
   * vault/compte/* n'est jamais relayé au web (#1855) ; le relais marque ce qu'il porte au Coffre (X-SecuBox-Relais), la marque d'un client est retirée.

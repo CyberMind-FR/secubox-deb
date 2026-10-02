@@ -66,14 +66,16 @@
 <main>
   <div class="h"><span>🔐</span><b>Mon coffre</b><span class="etat" id="etat">…</span></div>
   <p class="note" id="intro">Votre compartiment dans le Coffre de la box. Il s'ouvre avec <b>votre</b> serrure
-    (une phrase, ou une clé d'appareil) — pas même un administrateur n'y lit.</p>
+    (votre connexion, une phrase, ou une clé d'appareil) — pas même un administrateur n'y lit.</p>
 
   <section id="s-indispo" hidden><p class="note" id="indispo"></p></section>
 
   <section id="s-creer" hidden>
     <h2>Créer ma serrure</h2>
     <p class="note">Une phrase d'au moins 12 caractères. Personne ne pourra la retrouver pour vous : sans
-      elle (ni une clé d'appareil ajoutée ensuite), le contenu de votre compartiment est perdu.</p>
+      elle (ni une clé d'appareil ajoutée ensuite), le contenu de votre compartiment est perdu.<br>
+      Plus simple : <b>reconnectez-vous</b> pendant que le Coffre de la box est ouvert — votre mot de passe de
+      connexion crée et ouvre alors votre compartiment, sans phrase de plus.</p>
     <label for="c-phrase">Phrase</label><input id="c-phrase" type="password" autocomplete="new-password">
     <label for="c-phrase2">La même, encore</label><input id="c-phrase2" type="password" autocomplete="new-password">
     <div class="rang"><button class="pr" id="b-creer">Créer</button></div>
@@ -117,6 +119,13 @@
     <input id="s-phrase" type="password" autocomplete="new-password">
     <div class="rang"><button id="b-ajout-phrase">➕ Phrase</button>
       <button id="b-ajout-cle">➕ Clé d'appareil (FIDO, Touch ID, téléphone)</button></div>
+    <div id="relier" hidden style="display:none;flex-direction:column;gap:.45rem">
+      <label for="s-mdp">Relier mon mot de passe de connexion</label>
+      <p class="note">Une fois relié, votre connexion ouvre ce compartiment sans phrase (le Coffre de la box doit
+        aussi être ouvert). Le mot de passe est vérifié, puis oublié : seule une serrure en reste.</p>
+      <input id="s-mdp" type="password" autocomplete="current-password">
+      <div class="rang"><button id="b-relier">🔗 Relier ma connexion</button></div>
+    </div>
   </section>
 
   <section id="s-annuaire" hidden>
@@ -171,8 +180,15 @@
     }
     return j;
   }
-  function geste() { clearTimeout(minuteur); minuteur = setTimeout(verrouiller, OUBLI_MS); }
-  function verrouiller() { OUV = null; clearTimeout(minuteur); $('o-phrase').value = ''; rend(); }
+  // Ouvert PAR LA CONNEXION (genre « session ») : c'est le Coffre qui tient la clé et
+  // l'oublie (inactivité, scellement, « Verrouiller ») — pas ce minuteur d'onglet.
+  function geste() { clearTimeout(minuteur); if (OUV && OUV.genre === 'session') return; minuteur = setTimeout(verrouiller, OUBLI_MS); }
+  function verrouiller() {
+    const parConnexion = !!(OUV && OUV.genre === 'session');
+    OUV = null; clearTimeout(minuteur); $('o-phrase').value = '';
+    if (parConnexion) api('/fermer', {}).catch(() => {});      // le Coffre oublie la clé tenue
+    rend();
+  }
 
   function site() {
     const h = location.hostname;
@@ -210,9 +226,11 @@
     }
     $('etat').textContent = 'ouvert'; $('etat').classList.add('ok');
     $('serrures').innerHTML = serrures.map(s =>
-      `<li><span>${s.genre === 'appareil' ? '📱' : '🔑'}</span><span class="nom">${txt(s.libelle || s.genre)}</span>` +
+      `<li><span>${s.genre === 'appareil' ? '📱' : s.genre === 'compte' ? '🔗' : '🔑'}</span><span class="nom">${txt(s.libelle || s.genre)}</span>` +
       (serrures.length > 1 ? `<button class="danger" data-serrure="${txt(s.id)}">retirer</button>` : '') + '</li>').join('');
     $('s-dedans').hidden = false;
+    const relie = serrures.some(s => s.genre === 'compte');
+    $('relier').hidden = relie; $('relier').style.display = relie ? 'none' : 'flex';
   }
 
   async function chargeSecrets() {
@@ -293,6 +311,8 @@
       ['s-creer', 's-ouvrir', 's-dedans'].forEach(id => { $(id).hidden = true; });
       $('s-indispo').hidden = false; return;
     }
+    // La CONNEXION a ouvert ce compartiment : rien à retaper, la requête dit « session ».
+    if (!OUV && ETAT.session && ETAT.ouvert) OUV = { genre: 'session', secret: '' };
     rend();
     if (OUV && ETAT.ouvert) { try { await chargeSecrets(); } catch (err) { msg(err.message); if (err.code === 403) verrouiller(); } }
   }
@@ -359,6 +379,12 @@
       await chargeSecrets();
     } catch (err) { msg(err.message); }
     $('b-pgp').disabled = false;
+  });
+  $('b-relier').addEventListener('click', async () => {
+    geste();
+    try { await api('/serrures/compte', { ouverture: OUV, mot_de_passe: $('s-mdp').value, libelle: 'connexion' });
+      $('s-mdp').value = ''; msg('Connexion reliée : la prochaine ouvrira ce compartiment.', true); await charge(); }
+    catch (err) { msg(err.message); }
   });
   $('b-ajout-phrase').addEventListener('click', async () => {
     geste();

@@ -350,7 +350,9 @@ def test_coffre_moi_relaye_a_une_personne_le_reste_aux_administrateurs(banc):
     assert len(modules["vault"].recues) == n          # jamais contacté
 
 
-def test_coffre_moi_sans_session_401_et_invite_403(banc, monkeypatch):
+def test_coffre_moi_sans_session_401_et_invite_admis_jusqu_au_coffre(banc, monkeypatch):
+    """#1855 : un invité (session reconnue) atteint `/moi` ; c'est le Coffre qui
+    répond 403 s'il n'y a pas de personne SBX OS derrière la session."""
     client, modules, jeton, _ = banc
     assert client.get("/api/v1/vault/moi").status_code == 401
     avant = auth.user_store.get_user
@@ -358,7 +360,7 @@ def test_coffre_moi_sans_session_401_et_invite_403(banc, monkeypatch):
                         lambda s: {"role": "guest", "enabled": True} if s == "invite" else avant(s))
     monkeypatch.setattr(auth.user_store, "is_enabled", lambda s: True)
     r = client.get("/api/v1/vault/moi", headers={"Authorization": f"Bearer {jeton('invite')}"})
-    assert r.status_code == 403 and modules["vault"].recues == []
+    assert r.status_code != 403 and len(modules["vault"].recues) == 1
 
 
 # ── La connexion ouvre le Coffre (#1855) : jamais par le relais web ───────────
@@ -367,7 +369,8 @@ def test_coffre_moi_sans_session_401_et_invite_403(banc, monkeypatch):
 def test_coffre_compte_jamais_par_le_relais(banc):
     client, modules, jeton, _ = banc
     porteur = {"Authorization": f"Bearer {jeton(ADMIN)}"}
-    for chemin in ("compte/preparer", "compte/confirmer", "compte/changer", "compte"):
+    for chemin in ("compte/preparer", "compte/confirmer", "compte/changer", "compte",
+                   "personne/preparer", "personne/changer", "personne"):
         r = client.post(f"/api/v1/vault/{chemin}", json={"utilisateur": "gk2", "mot_de_passe": "x"}, headers=porteur)
         assert r.status_code == 404, chemin
     assert modules["vault"].recues == []

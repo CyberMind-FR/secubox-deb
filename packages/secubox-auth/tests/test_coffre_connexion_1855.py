@@ -24,6 +24,8 @@ def coffre(env, monkeypatch):
         appels.append((chemin, dict(corps)))
         if chemin == "/compte/preparer":
             return {"ticket": "T" * 40}
+        if chemin == "/personne/preparer":
+            return {"ticket": "p." + "P" * 40}
         if chemin == "/compte/confirmer":
             return {"ouvert": True}
         return {"renouvelee": True}
@@ -56,11 +58,32 @@ def test_wan_rien_avant_le_second_facteur(coffre):
     assert appels[-1][1] == {"ticket": "T" * 40, "distante": True}
 
 
-def test_non_admin_et_mauvais_mot_de_passe_rien(coffre):
+def test_mauvais_mot_de_passe_rien(coffre):
     (c, _), appels = coffre
-    _login(c, "lecteur", lan="1")
     c.post("/login", json={"username": "gandalf", "password": "faux"}, headers={"X-SecuBox-LAN": "1"})
     assert appels == []
+
+
+def test_non_admin_ouvre_sa_personne_pas_le_coffre(coffre):
+    """#1855 : un utilisateur ordinaire prépare SON compartiment (/personne/…),
+    jamais la clé maîtresse (/compte/preparer)."""
+    (c, _), appels = coffre
+    assert _login(c, "lecteur", lan="1").get("access_token")
+    assert _chemins(appels) == ["/personne/preparer", "/compte/confirmer"]
+    assert appels[1][1]["ticket"].startswith("p.")
+
+
+def test_non_admin_wan_sans_second_facteur_n_ouvre_rien(coffre, monkeypatch):
+    (c, _), appels = coffre
+    from api import main as m
+    monkeypatch.setattr(m, "_otp_exige", lambda request: True)
+    # un lecteur SANS TOTP, depuis le WAN : session accordée par la politique, mais le Coffre ne s'ouvre pas
+    from secubox_core import user_store
+    avant = user_store.get_user
+    monkeypatch.setattr(user_store, "get_user",
+                        lambda u: {**(avant(u) or {}), "totp": {"enabled": False}} if u == "lecteur" else avant(u))
+    _login(c, "lecteur")
+    assert "/compte/confirmer" not in _chemins(appels)
 
 
 def test_changement_de_mot_de_passe_reemballe(coffre):
@@ -74,8 +97,12 @@ def test_changement_de_mot_de_passe_reemballe(coffre):
         if appels:
             break
         time.sleep(0.02)
-    assert appels == [("/compte/changer", {"utilisateur": "gandalf", "ancien": MDP,
-                                           "nouveau": "Un-Nouveau-Mot-De-Passe-42!"})]
+    corps = {"utilisateur": "gandalf", "ancien": MDP, "nouveau": "Un-Nouveau-Mot-De-Passe-42!"}
+    for _ in range(50):
+        if len(appels) >= 2:
+            break
+        time.sleep(0.02)
+    assert appels == [("/compte/changer", corps), ("/personne/changer", corps)]
 
 
 def test_le_mot_de_passe_ne_va_pas_au_journal(coffre):
