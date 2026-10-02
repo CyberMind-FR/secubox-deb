@@ -450,7 +450,8 @@ def list_backups(backup_type: str = "all") -> List[dict]:
                     "file": f.name,
                     "type": btype,
                     "size": get_file_size(f),
-                    "timestamp": int(stat.st_mtime)
+                    "timestamp": int(stat.st_mtime),
+                    "encrypted": f.name.endswith(".age"),
                 })
 
     return sorted(backups, key=lambda x: x["timestamp"], reverse=True)
@@ -464,6 +465,25 @@ def ensure_backup_dirs():
             os.chmod(BACKUP_PATH / subdir, chiffrement.MODE_DOSSIER)   # 0750 : plus de 0777 (#1903)
         except OSError:
             pass
+
+
+def finaliser_archive(archive: Path, encrypt: bool, recipient: Optional[str] = None) -> tuple:
+    """Dernière étape COMMUNE à tous les chemins de sauvegarde (#1903) : chiffre (par défaut) ou,
+    sur choix explicite, restreint les droits. Rend (ok, nom_ou_erreur). Avant, `/create` et
+    `/container/backup` — ceux de l'interface — écrivaient des archives en clair sans y passer."""
+    if not archive.exists():
+        return False, "archive absente"
+    if encrypt:
+        try:
+            return True, chiffrement.chiffrer(archive, recipient).name
+        except chiffrement.ErreurChiffrement as e:
+            return False, str(e)
+    log.warning("archive %s laissée SANS chiffrement (choix explicite)", archive.name)
+    try:
+        os.chmod(archive, chiffrement.MODE_FICHIER)
+    except OSError:
+        pass
+    return True, archive.name + " (NON CHIFFRÉE, choix explicite)"
 
 
 # Public endpoints
@@ -508,6 +528,23 @@ async def get_status():
 async def list_all_backups(type: str = Query("all", description="Backup type: all, config, containers, services")):
     """List backup files"""
     return {"backups": list_backups(type)}
+
+
+@app.get("/encryption", dependencies=[Depends(require_lecture)])
+async def encryption_status():
+    """État du chiffrement des sauvegardes (#1903) : destinataire, archives encore en clair."""
+    rec = chiffrement.destinataire()
+    en_clair = [f.name for t in ("config", "containers", "services")
+                for f in chiffrement.en_clair(BACKUP_PATH / t)]
+    return {
+        "default_encrypt": True,
+        "recipient_configured": bool(rec),
+        "recipient": (rec[:12] + "…" + rec[-6:]) if rec else None,     # clé PUBLIQUE, abrégée
+        "clear_archives": len(en_clair),
+        "clear_names": en_clair[:20],
+        "restore_command": "backupctl restaurer <fichier>.age",
+        "key_note": "La clé privée (root, /etc/secubox/secrets/backup-age.key) doit être copiée HORS de la box.",
+    }
 
 
 @app.get("/containers", dependencies=[Depends(require_lecture)])
@@ -564,7 +601,8 @@ async def create_backup(req: BackupCreate, user: dict = Depends(require_jwt)):
                 timeout=300
             )
             if success:
-                outputs.append(f"Config backup: {archive.name}")
+                ok, nom = finaliser_archive(archive, req.encrypt, req.encrypt_recipient)
+                outputs.append(f"Config backup: {nom}" if ok else f"Config backup NON créée (chiffrement) : {nom}")
             else:
                 outputs.append(f"Config backup failed: {err}")
 
@@ -594,7 +632,8 @@ async def create_backup(req: BackupCreate, user: dict = Depends(require_jwt)):
                     run_cmd(["lxc-start", "-P", str(LXC_PATH), "-n", name])
 
                 if success:
-                    outputs.append(f"Container backup: {name}")
+                    ok, nom = finaliser_archive(archive, req.encrypt, req.encrypt_recipient)
+                    outputs.append(f"Container backup: {nom}" if ok else f"Container {name} NON sauvegardé (chiffrement) : {nom}")
                 else:
                     outputs.append(f"Container {name} failed: {err}")
 
@@ -614,12 +653,15 @@ async def create_backup(req: BackupCreate, user: dict = Depends(require_jwt)):
                 timeout=600
             )
             if success:
-                outputs.append(f"Services backup: {archive.name}")
+                ok, nom = finaliser_archive(archive, req.encrypt, req.encrypt_recipient)
+                outputs.append(f"Services backup: {nom}" if ok else f"Services backup NON créée (chiffrement) : {nom}")
             else:
                 outputs.append(f"Services backup failed: {err}")
 
+    # Un échec de chiffrement est un ÉCHEC : jamais « code 0 » pour une sauvegarde qui n'existe pas.
+    echec = any("NON créée" in o or "NON sauvegardé" in o for o in outputs)
     return {
-        "code": 0 if outputs else 1,
+        "code": 0 if outputs and not echec else 1,
         "output": "\n".join(outputs) if outputs else "No backups created"
     }
 
@@ -641,9 +683,11 @@ async def restore_backup(req: RestoreRequest, user: dict = Depends(require_jwt))
     if backup_file.name.endswith(".age"):
         # La clé privée de restauration est à root (et HORS de la box de préférence) : l'API,
         # qui tourne sans privilège, ne la lit pas. Restauration : `backupctl restaurer FICHIER`.
-        raise HTTPException(status_code=409, detail=(
-            "Archive chiffrée : restaurer avec « backupctl restaurer %s » (root, clé privée de "
-            "sauvegarde)." % backup_file.name))
+        raise HTTPException(status_code=409, detail={
+            "message": "Archive chiffrée : la restauration se fait en root avec la clé privée de sauvegarde.",
+            "commande": "backupctl restaurer %s" % backup_file.name,
+            "liste": "backupctl restaurer --liste %s" % backup_file.name,
+        })
 
     if req.dry_run:
         # List contents
@@ -729,9 +773,13 @@ async def backup_container(req: ContainerBackup, user: dict = Depends(require_jw
     if was_running:
         run_cmd(["lxc-start", "-P", str(LXC_PATH), "-n", req.name])
 
+    if not success:
+        return {"code": 1, "output": err}
+    ok, nom = finaliser_archive(archive, req.encrypt)
     return {
-        "code": 0 if success else 1,
-        "output": f"Backup created: {archive.name}" if success else err
+        "code": 0 if ok else 1,
+        "output": f"Backup created: {nom}" if ok else f"Sauvegarde NON créée (chiffrement) : {nom}",
+        "chiffree": ok and nom.endswith(".age"),
     }
 
 

@@ -15,6 +15,7 @@ CyberMind — https://cybermind.fr
                                          chiffre les archives en clair ; le clair n'est supprimé
                                          qu'après un déchiffrement vérifié, et seulement si demandé
   backupctl restaurer FICHIER.age [-C /] déchiffre puis extrait (tar), avec la clé privée
+  backupctl restaurer --liste FICHIER.age  liste le contenu, sans rien extraire
 """
 import json
 import os
@@ -115,8 +116,10 @@ def _memes_octets(a: Path, b: Path) -> bool:
 
 
 def restaurer(args) -> int:
+    liste = "--liste" in args
+    args = [a for a in args if a != "--liste"]
     if not args:
-        sys.exit("usage : backupctl restaurer FICHIER.age [-C RACINE]")
+        sys.exit("usage : backupctl restaurer [--liste] FICHIER.age [-C RACINE]")
     f = Path(args[0])
     racine = args[args.index("-C") + 1] if "-C" in args else "/"
     if not f.exists():
@@ -131,7 +134,7 @@ def restaurer(args) -> int:
     except c.ErreurChiffrement as e:
         sys.exit(str(e))
     try:
-        r = subprocess.run(["tar", "-xzf", str(clair), "-C", racine])
+        r = subprocess.run(["tar", "-tzf" if liste else "-xzf", str(clair)] + ([] if liste else ["-C", racine]))
     finally:
         c.detruire_clair(clair)             # le temporaire, jamais une archive d'origine
     return r.returncode
