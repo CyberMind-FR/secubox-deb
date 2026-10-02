@@ -1,0 +1,205 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: clamavctl — ClamAV dans un LXC dédié, éveillé à la demande (#1912)
+CyberMind — https://cybermind.fr
+
+clamd (1,2–1,5 Go) ne tient pas dans le budget du conteneur mail (384 Mo, #496). Il vit donc
+dans son propre LXC `clamav`, endormi tant que personne n'a besoin de lui :
+
+  Rspamd (conteneur mail) ──► 10.100.0.1:3310 (mandataire, activé par socket)
+        └─ ExecStartPre : clamavctl wake      (démarre le LXC, attend PONG)
+        └─ systemd-socket-proxyd --exit-idle-time=600s ─► 10.100.0.220:3310 (clamd)
+        └─ ExecStopPost : clamavctl sleep     (arrête le LXC : la mémoire est rendue)
+
+  clamavctl install          crée le LXC et télécharge la base (long : plusieurs minutes)
+  clamavctl wake             démarre le LXC et attend que clamd réponde
+  clamavctl sleep            arrête le LXC
+  clamavctl update           réveille, freshclam, rendort (s'il l'a réveillé)
+  clamavctl status [--json]  état du LXC, de clamd, âge de la base
+"""
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+NOM = os.environ.get("SECUBOX_CLAMAV_NOM", "clamav")
+CHEMIN = os.environ.get("SECUBOX_CLAMAV_PATH", "/data/lxc")
+IP = os.environ.get("SECUBOX_CLAMAV_IP", "10.100.0.220")
+PORT = int(os.environ.get("SECUBOX_CLAMAV_PORT", "3310"))
+ETAT = Path(os.environ.get("SECUBOX_CLAMAV_ETAT", "/var/lib/secubox/clamav/etat.json"))
+INSTALL = os.environ.get("SECUBOX_CLAMAV_INSTALL", "/usr/lib/secubox/clamav/install-lxc.sh")
+DELAI_REVEIL = int(os.environ.get("SECUBOX_CLAMAV_DELAI", "240"))      # démarrage à froid, base comprise
+BASE_PERIMEE_JOURS = 10
+
+
+def etat_lxc(run=subprocess.run) -> str:
+    """RUNNING, STOPPED, ABSENT… (`lxc-info -sH`)."""
+    r = run(["lxc-info", "-P", CHEMIN, "-n", NOM, "-sH"], capture_output=True, text=True)
+    sortie = (r.stdout or "").strip()
+    return sortie if r.returncode == 0 and sortie else "ABSENT"
+
+
+def ping(hote: str = IP, port: int = PORT, delai: float = 2.0) -> bool:
+    """clamd répond-il PONG ? (commande PING du protocole clamd)."""
+    try:
+        with socket.create_connection((hote, port), timeout=delai) as s:
+            s.sendall(b"zPING\0")
+            s.settimeout(delai)
+            return s.recv(16).strip(b"\0\n ") == b"PONG"
+    except OSError:
+        return False
+
+
+def _ecrit(cle: str, valeur) -> None:
+    try:
+        ETAT.parent.mkdir(parents=True, exist_ok=True)
+        d = json.loads(ETAT.read_text()) if ETAT.exists() else {}
+        d[cle] = valeur
+        tmp = ETAT.with_name(ETAT.name + ".tmp")
+        tmp.write_text(json.dumps(d))
+        os.replace(tmp, ETAT)
+    except (OSError, ValueError):
+        pass
+
+
+def reveiller(delai: int = DELAI_REVEIL, run=subprocess.run, ping_fn=None, dormir=time.sleep,
+              maintenant=time.monotonic) -> bool:
+    """Démarre le LXC s'il dort et attend que clamd réponde. Rend True si clamd répond."""
+    ping_fn = ping_fn or ping
+    if ping_fn():
+        return True
+    if etat_lxc(run) == "ABSENT":
+        print("clamavctl : LXC absent — clamavctl install", file=sys.stderr)
+        return False
+    if etat_lxc(run) != "RUNNING":
+        r = run(["lxc-start", "-P", CHEMIN, "-n", NOM, "-d"], capture_output=True, text=True)
+        if r.returncode != 0:
+            print("clamavctl : lxc-start a échoué : " + (r.stderr or "")[:200], file=sys.stderr)
+            return False
+        _ecrit("reveil", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        _ecrit("dernier_etat", "RUNNING")
+    debut = maintenant()
+    while maintenant() - debut < delai:
+        if ping_fn():
+            _ecrit("pret_en_s", round(maintenant() - debut, 1))
+            return True
+        dormir(2)
+    print(f"clamavctl : clamd ne répond pas après {delai} s", file=sys.stderr)
+    return False
+
+
+def memoriser_base() -> None:
+    """Âge de la base, lu EN ROOT et gardé dans l'état : l'état sans privilège (health-doctor, qui tourne
+    sous `secubox`) ne peut pas lire le rootfs du conteneur et ne verrait « ABSENT » à tort."""
+    ages = age_base_jours()
+    if ages:
+        _ecrit("base", {"ages": ages, "ts": time.time()})
+
+
+def endormir(run=subprocess.run) -> bool:
+    """Arrête le LXC (la mémoire est rendue à l'hôte). Sans effet s'il dort déjà."""
+    if etat_lxc(run) != "RUNNING":
+        return True
+    r = run(["lxc-stop", "-P", CHEMIN, "-n", NOM, "-t", "30"], capture_output=True, text=True)
+    if r.returncode == 0:
+        _ecrit("sommeil", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        _ecrit("dernier_etat", "STOPPED")
+        memoriser_base()
+    return r.returncode == 0
+
+
+def age_base_jours(chemin: str = CHEMIN, nom: str = NOM, maintenant=time.time) -> dict:
+    """Âge (jours) de daily et main, lus sur le disque : fonctionne LXC endormi."""
+    base = Path(chemin) / nom / "rootfs" / "var" / "lib" / "clamav"
+    out = {}
+    for n in ("daily", "main"):
+        for ext in ("cld", "cvd"):
+            f = base / f"{n}.{ext}"
+            try:
+                out[n] = round((maintenant() - f.stat().st_mtime) / 86400, 1)
+                break
+            except OSError:
+                continue
+    return out
+
+
+def etat_complet(run=subprocess.run, ping_fn=None, maintenant=time.time) -> dict:
+    ping_fn = ping_fn or ping
+    cache = {}
+    try:
+        cache = json.loads(ETAT.read_text())
+    except (OSError, ValueError):
+        pass
+    lxc_s = etat_lxc(run)
+    source = "direct"
+    if lxc_s == "ABSENT" and cache.get("dernier_etat"):
+        # Sans privilège, lxc-info ne voit pas le conteneur : on ne conclut pas « absent », on rend
+        # le dernier état connu (écrit par la partie root) et on le dit.
+        lxc_s, source = cache["dernier_etat"], "cache"
+    ages = age_base_jours()
+    if not ages and isinstance(cache.get("base"), dict):
+        vieux = (maintenant() - cache["base"].get("ts", maintenant())) / 86400
+        ages = {k: round(v + vieux, 1) for k, v in (cache["base"].get("ages") or {}).items()}
+        source = "cache"
+    base_ok = bool(ages) and all(a <= BASE_PERIMEE_JOURS for a in ages.values()) and len(ages) == 2
+    return {"lxc": lxc_s, "ip": IP, "port": PORT,
+            "clamd": bool(lxc_s == "RUNNING" and ping_fn()),
+            "base_age_jours": ages, "base_a_jour": base_ok, "source": source,
+            "dernier_reveil": cache.get("reveil"), "dernier_sommeil": cache.get("sommeil"),
+            "dernier_demarrage_s": cache.get("pret_en_s")}
+
+
+def mettre_a_jour(run=subprocess.run, ping_fn=None) -> int:
+    ete_endormi = etat_lxc(run) != "RUNNING"
+    if not reveiller(run=run, ping_fn=ping_fn):
+        return 1
+    r = run(["lxc-attach", "-P", CHEMIN, "-n", NOM, "--", "freshclam", "--quiet"], capture_output=True, text=True)
+    if r.returncode != 0:
+        print("freshclam : " + (r.stderr or r.stdout or "")[:300], file=sys.stderr)
+    else:
+        # clamd relit la base : SELFCHECK / RELOAD
+        try:
+            with socket.create_connection((IP, PORT), timeout=5) as s:
+                s.sendall(b"zRELOAD\0")
+        except OSError:
+            pass
+    memoriser_base()
+    if ete_endormi:
+        endormir(run)
+    return 0 if r.returncode == 0 else 1
+
+
+def main() -> int:
+    a = sys.argv[1:]
+    cmd = a[0] if a else "status"
+    if cmd == "status":
+        e = etat_complet()
+        if "--json" in a:
+            print(json.dumps(e))
+        else:
+            print(f"LXC {e['lxc']} — clamd {'répond' if e['clamd'] else 'endormi/arrêté'} ({e['ip']}:{e['port']})")
+            print(f"base : {e['base_age_jours'] or 'absente'} ({'à jour' if e['base_a_jour'] else 'PÉRIMÉE ou absente'})")
+            if e["dernier_demarrage_s"] is not None:
+                print(f"dernier réveil : {e['dernier_reveil']} (prêt en {e['dernier_demarrage_s']} s)")
+        return 0
+    if cmd == "wake":
+        return 0 if reveiller() else 1
+    if cmd == "sleep":
+        return 0 if endormir() else 1
+    if cmd == "update":
+        return mettre_a_jour()
+    if cmd == "install":
+        os.execv("/bin/bash", ["bash", INSTALL])
+    sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

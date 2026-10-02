@@ -1,0 +1,15 @@
+[Unit]
+Description=SecuBox — mandataire vers clamd (réveille le LXC clamav, le rendort au repos) (#1912)
+Requires=secubox-clamav-proxy.socket
+After=secubox-clamav-proxy.socket network.target
+
+[Service]
+# Le premier client attend ici le démarrage à froid du conteneur (base comprise).
+TimeoutStartSec=300
+ExecStartPre=/usr/sbin/clamavctl wake
+ExecStart=/lib/systemd/systemd-socket-proxyd --exit-idle-time=600s 10.100.0.220:3310
+# Le mandataire se termine après 10 min sans connexion : le LXC est alors arrêté et sa mémoire
+# rendue à l'hôte. La connexion suivante relance tout (activation par socket).
+ExecStopPost=/usr/sbin/clamavctl sleep
+PrivateTmp=true
+NoNewPrivileges=true

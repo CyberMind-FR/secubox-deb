@@ -1,0 +1,16 @@
+Source: secubox-clamav
+Section: mail
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-clamav
+Architecture: all
+Depends: ${misc:Depends}, lxc, python3, secubox-core (>= 1.4.0)
+Description: SecuBox ClamAV — antivirus dans un LXC dédié, éveillé à la demande
+ clamd (1,2-1,5 Go) ne tient pas dans le budget mémoire du conteneur mail. Il vit
+ dans un LXC « clamav », endormi tant que personne n'en a besoin : un mandataire
+ à activation par socket (10.100.0.1:3310) le réveille à la première connexion de
+ Rspamd et le rendort après dix minutes d'inactivité ; la base est mise à jour
+ chaque semaine. Outil : clamavctl.

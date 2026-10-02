@@ -1370,31 +1370,42 @@ cmd_dkim() {
 
 # ============================================================================
 # Antivirus (ClamAV, optionnel — drapeau [mail.antivirus].enabled, off par
-# défaut : ~1 Go de signatures, coûteux sur ARM). `on` installe clamav-daemon
-# + clamav-freshclam dans le LXC et dépose le module antivirus Rspamd ; `off`
-# (défaut) retire le module Rspamd et n'installe rien.
+# défaut). clamd ne tient PAS dans le budget mémoire du conteneur mail (384 Mo, #496) :
+# depuis #1912 il vit dans le LXC dédié `clamav` (paquet secubox-clamav), éveillé à la
+# demande. `on` ne pose donc que le module Rspamd, qui pointe sur le mandataire de l'hôte
+# (10.100.0.1:3310) ; rien n'est installé dans le conteneur mail. `off` retire le module.
 # ============================================================================
 
 cmd_antivirus() {
     case "${1:-status}" in
         on)
-            lxc_attach "$CONTAINER" apt-get install -y clamav-daemon clamav-freshclam
-
-            # Même mécanique que configure_rspamd_milter (lib/mail/rspamd.sh) :
-            # le gabarit packagé est poussé dans le LXC via `lxc-attach -- tee`,
-            # jamais supposé déjà présent à l'intérieur (leçon Task 6).
-            local templates="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd/local.d"
-            if [ -f "$templates/antivirus.conf" ]; then
-                lxc_attach "$CONTAINER" install -d -m 0755 /etc/rspamd/local.d
-                lxc_attach "$CONTAINER" tee /etc/rspamd/local.d/antivirus.conf \
-                    < "$templates/antivirus.conf" >/dev/null
-                lxc_attach "$CONTAINER" chmod 0644 /etc/rspamd/local.d/antivirus.conf
-            else
-                warn "gabarit antivirus.conf introuvable ($templates) — module Rspamd non déposé"
+            if ! command -v clamavctl >/dev/null 2>&1; then
+                error "paquet secubox-clamav absent : apt install secubox-clamav (ClamAV tourne dans un LXC dédié)"
+                return 1
             fi
-
-            lxc_attach "$CONTAINER" systemctl restart clamav-daemon rspamd
-            log "antivirus activé"
+            local templates="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd/local.d"
+            if [ ! -f "$templates/antivirus.conf" ]; then
+                error "gabarit antivirus.conf introuvable ($templates) — module Rspamd non déposé"
+                return 1
+            fi
+            # Même mécanique que configure_rspamd_milter (lib/mail/rspamd.sh) : le gabarit
+            # packagé est poussé dans le LXC via `lxc-attach -- tee`.
+            lxc_attach "$CONTAINER" install -d -m 0755 /etc/rspamd/local.d
+            lxc_attach "$CONTAINER" tee /etc/rspamd/local.d/antivirus.conf < "$templates/antivirus.conf" >/dev/null
+            lxc_attach "$CONTAINER" chmod 0644 /etc/rspamd/local.d/antivirus.conf
+            # task_timeout (8 s par défaut) coupait le scan pendant le démarrage à froid du LXC clamav :
+            # le message passait SANS verdict. Porté à 150 s (idempotent). ÉCRIT CÔTÉ HÔTE, dans le
+            # rootfs : options.inc appartient à l'uid 0 de l'HÔTE (« nobody » dans le conteneur), root
+            # du conteneur ne peut pas le modifier — l'ajout par lxc-attach échouait en silence.
+            local opt="${LXC_PATH:-/data/lxc}/$CONTAINER/rootfs/etc/rspamd/local.d/options.inc"
+            if [ -f "$opt" ]; then
+                grep -q '^task_timeout' "$opt" || echo 'task_timeout = 150s;' >> "$opt"
+            else
+                warn "options.inc introuvable ($opt) — task_timeout non posé : un démarrage à froid du scanner serait coupé à 8 s"
+            fi
+            lxc_attach "$CONTAINER" sh -c 'rspamadm configtest >/dev/null' \
+                && lxc_attach "$CONTAINER" systemctl restart rspamd
+            log "antivirus activé (clamd : LXC clamav, éveillé à la demande)"
             ;;
         off)
             lxc_attach "$CONTAINER" rm -f /etc/rspamd/local.d/antivirus.conf 2>/dev/null || true
@@ -1402,7 +1413,12 @@ cmd_antivirus() {
             log "antivirus désactivé (défaut)"
             ;;
         status)
-            lxc_attach "$CONTAINER" systemctl is-active clamav-daemon 2>/dev/null || echo inactive
+            if command -v clamavctl >/dev/null 2>&1; then
+                clamavctl status
+            else
+                echo "secubox-clamav absent (apt install secubox-clamav)"
+            fi
+            lxc_attach "$CONTAINER" sh -c 'test -f /etc/rspamd/local.d/antivirus.conf && echo "module Rspamd : déposé" || echo "module Rspamd : absent"'
             ;;
         *)
             error "usage: mailctl antivirus on|off|status"
@@ -1475,9 +1491,9 @@ SSL & DNS:
   dns-setup            Show DNS records to configure
 
 Antivirus (optionnel, off par défaut) :
-  antivirus on          Installer ClamAV + activer le module Rspamd
+  antivirus on          Activer le module Rspamd vers le LXC clamav (secubox-clamav)
   antivirus off         Désactiver le module Rspamd (n'installe rien)
-  antivirus status      État de clamav-daemon
+  antivirus status      État du LXC clamav et du module Rspamd
 
 Diagnostics:
   logs [lines]         View mail logs

@@ -171,6 +171,23 @@ def check_waf_selftest() -> tuple[bool, dict]:
     return mod.verifier()
 
 
+def check_clamav() -> tuple[bool, dict]:
+    """Antivirus à la demande (#1912) : le LXC `clamav` peut DORMIR (c'est son état normal) ; ce qui
+    compte est la base de signatures. Sans le paquet, rien à surveiller."""
+    import json
+    if not Path("/usr/sbin/clamavctl").exists():
+        return True, {"present": False, "skipped": True}
+    try:
+        r = _run(["/usr/sbin/clamavctl", "status", "--json"], timeout=8)
+        d = json.loads(r.stdout)
+    except Exception as e:                                   # noqa: BLE001
+        return False, {"error": f"{type(e).__name__}: {e}"}
+    ok = bool(d.get("base_a_jour"))
+    return ok, {"lxc": d.get("lxc"), "clamd": d.get("clamd"), "veille_normale": d.get("lxc") == "STOPPED",
+                "base_age_jours": d.get("base_age_jours"), "base_a_jour": ok,
+                "dernier_demarrage_s": d.get("dernier_demarrage_s")}
+
+
 # ── Registry ──────────────────────────────────────────────────────────────
 
 # Vital — every entry here counts toward the "failing" tally in the doctor
@@ -194,6 +211,8 @@ REGISTRY: Dict[str, CheckFn] = {
     # Preuve dynamique que sbxwaf BLOQUE (et ne bloque pas le trafic sain), pas
     # seulement que l'unite tourne : charges canari + temoin, toutes les 5 min.
     "waf-selftest":        check_waf_selftest,
+    # Base de signatures de l'antivirus à la demande ; le LXC endormi est NORMAL, une base périmée non.
+    "clamav":              check_clamav,
 }
 # check_act_runner_arm64 kept as a module-level function (cheap) so a
 # future REGISTRY_INFORMATIONAL tier can reuse it without duplication.
