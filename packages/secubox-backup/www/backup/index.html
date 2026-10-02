@@ -343,7 +343,11 @@
                 <button class="btn btn-blue" onclick="createBackup('config')">⚙️ Config Only</button>
                 <button class="btn" onclick="createBackup('containers')">🐳 Containers Only</button>
                 <button class="btn btn-red" onclick="cleanupBackups()">🗑️ Cleanup Old</button>
+                <label class="btn" style="cursor:pointer;" title="Chiffré avec la clé publique de la box (recommandé). Décochée : archive en clair, y compris les secrets de /etc/secubox.">
+                    <input type="checkbox" id="chiffrer" checked> 🔒 Chiffrer
+                </label>
             </div>
+            <div id="encryption-state" style="margin-top:12px; font-size:13px; color: var(--text-dim);"></div>
         </div>
 
         <!-- Two Column Layout -->
@@ -423,6 +427,33 @@
             document.getElementById('stat-containers').textContent = statusData.container_count || 0;
         }
 
+        // État du chiffrement (#1903) : destinataire, archives encore en clair, rappel de la clé privée.
+        async function loadEncryption() {
+            const e = await api('/encryption');
+            const el = document.getElementById('encryption-state');
+            if (!e) { el.textContent = ''; return; }
+            const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const lignes = [];
+            lignes.push(e.recipient_configured
+                ? '🔒 Chiffrement actif — destinataire <span class="mono">' + esc(e.recipient) + '</span>'
+                : '⚠️ <b>Aucun destinataire de chiffrement</b> : les sauvegardes échoueront. En root : <span class="mono">backupctl init-key</span>');
+            if (e.clear_archives > 0) {
+                lignes.push('⚠️ ' + e.clear_archives + ' archive(s) encore <b>en clair</b> (secrets compris). En root : <span class="mono">backupctl chiffrer-existantes --supprimer-clair</span>');
+            }
+            lignes.push('🔑 ' + esc(e.key_note));
+            el.innerHTML = lignes.join('<br>');
+        }
+
+        function restaurerInfo(file) {
+            const cmd = 'backupctl restaurer ' + file;
+            showModal('Restaurer ' + file, `
+                <p>Une archive chiffrée se restaure <b>en root</b>, avec la clé privée de sauvegarde (jamais lisible par ce panneau).</p>
+                <p>Contenu, sans rien extraire :<br><span class="mono">backupctl restaurer --liste ${file}</span></p>
+                <p>Restauration :<br><span class="mono">${cmd}</span></p>
+                <p><button class="btn btn-blue" onclick="navigator.clipboard.writeText('${cmd}').then(()=>showToast('Commande copiée'))">Copier la commande</button>
+                   <button class="btn" onclick="hideModal()">Fermer</button></p>`);
+        }
+
         async function loadBackups() {
             const data = await api('/list?type=all') || {};
             backupsData = data.backups || [];
@@ -439,16 +470,17 @@
             const typeColors = { config: 'blue', containers: 'cyan', services: 'purple' };
             const rows = backupsData.slice(0, 15).map(b => `
                 <tr>
-                    <td class="mono">${b.file}</td>
+                    <td class="mono">${b.encrypted ? '🔒' : '⚠️'} ${b.file}</td>
                     <td><span class="badge badge-${typeColors[b.type] || 'blue'}">${b.type}</span></td>
                     <td style="color: var(--text-dim);">${b.size}</td>
                     <td style="color: var(--text-dim);">${formatDate(b.timestamp)}</td>
+                    <td>${b.encrypted ? `<button class="btn btn-sm" onclick="restaurerInfo('${b.file}')">Restaurer</button>` : ''}</td>
                 </tr>
             `).join('');
 
             document.getElementById('backups-table').innerHTML = `
                 <table>
-                    <thead><tr><th>File</th><th>Type</th><th>Size</th><th>Date</th></tr></thead>
+                    <thead><tr><th>File</th><th>Type</th><th>Size</th><th>Date</th><th></th></tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
             `;
@@ -485,12 +517,21 @@
             `;
         }
 
+        function veutChiffrer() {
+            const c = document.getElementById('chiffrer');
+            const oui = !c || c.checked;
+            if (!oui && !confirm("Sauvegarde EN CLAIR : elle contiendra /etc/secubox (secrets compris). Continuer ?")) return null;
+            return oui;
+        }
+
         async function createBackup(type) {
+            const encrypt = veutChiffrer();
+            if (encrypt === null) return;
             showModal('Creating Backup', `<p><span class="spinner"></span> Creating ${type} backup...</p>`);
 
             const res = await api('/create', {
                 method: 'POST',
-                body: JSON.stringify({ type })
+                body: JSON.stringify({ type, encrypt })
             });
 
             hideModal();
@@ -504,11 +545,13 @@
         }
 
         async function backupContainer(name) {
+            const encrypt = veutChiffrer();
+            if (encrypt === null) return;
             showModal('Backing Up Container', `<p><span class="spinner"></span> Backing up ${name}...</p>`);
 
             const res = await api('/container/backup', {
                 method: 'POST',
-                body: JSON.stringify({ name })
+                body: JSON.stringify({ name, encrypt })
             });
 
             hideModal();
@@ -535,7 +578,7 @@
         }
 
         async function refresh() {
-            await Promise.all([loadStatus(), loadBackups(), loadContainers()]);
+            await Promise.all([loadStatus(), loadBackups(), loadContainers(), loadEncryption()]);
         }
 
         // Close modal on click outside

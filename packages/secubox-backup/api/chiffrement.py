@@ -65,10 +65,11 @@ def commande_chiffrer(src: Path, dest: Path, rec: str) -> list:
             "--recipient", rec, "--output", str(dest), str(src)]
 
 
-def chiffrer(fichier: Path, rec: Optional[str] = None, run=subprocess.run) -> Path:
+def chiffrer(fichier: Path, rec: Optional[str] = None, run=None) -> Path:
     """Chiffre `fichier` vers `<fichier>.age` ; l'archive en clair est détruite SEULEMENT si le
     chiffré existe et n'est pas vide. En cas d'échec, rien de clair ne reste. Lève
     ErreurChiffrement."""
+    run = run or subprocess.run              # résolu à l'appel (substituable en test)
     rec = rec or destinataire()
     if not rec:
         fichier.unlink(missing_ok=True)          # jamais d'archive en clair par omission
@@ -84,12 +85,13 @@ def chiffrer(fichier: Path, rec: Optional[str] = None, run=subprocess.run) -> Pa
     return dest
 
 
-def dechiffrer(fichier: Path, cle: Optional[str] = None, run=subprocess.run) -> Path:
+def dechiffrer(fichier: Path, cle: Optional[str] = None, run=None) -> Path:
     """Déchiffre un `.age` (age ou GPG) vers un fichier TEMPORAIRE privé (dossier 0700) ; root et
     la clé privée sont requis. L'appelant détruit le résultat avec `detruire_clair`.
 
     Jamais vers le nom d'origine : ce chemin peut désigner l'archive en clair d'avant le
     chiffrement, que la restauration puis le nettoyage auraient écrasée puis supprimée."""
+    run = run or subprocess.run
     nom = str(fichier)
     rep = Path(tempfile.mkdtemp(prefix="sbx-restore-"))
     os.chmod(rep, 0o700)

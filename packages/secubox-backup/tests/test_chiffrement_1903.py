@@ -146,3 +146,87 @@ def test_la_verification_compare_deux_fichiers_distincts():
     ctl = (API.parent / "sbin" / "backupctl").read_text()
     assert "c.detruire_clair(verif)" in ctl and "_memes_octets(verif, f)" in ctl
     assert "verif.read_bytes() == f.read_bytes()" not in ctl      # l'ancienne comparaison d'un fichier à lui-même
+
+
+# ── Chemins de l'interface : /create et /container/backup (#1903, 2e passe) ────────
+
+def _charge_api(tmp_path, monkeypatch):
+    """main.py importé, sauvegardes redirigées vers tmp_path, tar et chiffrement simulés."""
+    import sys
+    sys.path.insert(0, str(API.parent))
+    for nom in ("secubox_core.auth",):
+        pass
+    spec2 = importlib.util.spec_from_file_location("backup_main_t", API / "main.py")
+    m = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(m)
+    monkeypatch.setattr(m, "BACKUP_PATH", tmp_path / "srv")
+    return m
+
+
+def test_create_chiffre_par_defaut_et_ne_laisse_aucun_clair(tmp_path, monkeypatch):
+    import asyncio
+    m = _charge_api(tmp_path, monkeypatch)
+    monkeypatch.setattr(m, "CONFIG_PATHS", [str(tmp_path)])
+    (tmp_path / "secret").write_text("motdepasse-secret")
+
+    def faux_tar(cmd, timeout=300):
+        Path(cmd[2]).write_bytes(b"CLAIR motdepasse-secret")
+        return True, "", ""
+    monkeypatch.setattr(m, "run_cmd", faux_tar)
+    monkeypatch.setattr(m.chiffrement, "destinataire", lambda: "age1abc")
+
+    class R:
+        returncode, stderr = 0, ""
+
+    def faux_run(cmd, **k):
+        dest = Path(cmd[cmd.index("-o") + 1])
+        dest.write_bytes(b"CHIFFRE")
+        return R()
+    monkeypatch.setattr(m.chiffrement.subprocess, "run", faux_run)
+    req = m.BackupCreate(type="config")            # aucun champ encrypt : le défaut s'applique
+    assert req.encrypt is True
+    res = asyncio.run(m.create_backup(req, user={"sub": "t"}))
+    assert res["code"] == 0 and ".age" in res["output"]
+    restes = list((tmp_path / "srv" / "config").iterdir())
+    assert [f.suffix for f in restes] == [".age"]  # plus aucune archive en clair
+    assert b"CLAIR" not in restes[0].read_bytes()
+
+
+def test_create_sans_destinataire_est_un_echec_pas_un_succes_en_clair(tmp_path, monkeypatch):
+    import asyncio
+    m = _charge_api(tmp_path, monkeypatch)
+    monkeypatch.setattr(m, "CONFIG_PATHS", [str(tmp_path)])
+    monkeypatch.setattr(m, "run_cmd", lambda cmd, timeout=300: (Path(cmd[2]).write_bytes(b"CLAIR") or True, "", ""))
+    monkeypatch.setattr(m.chiffrement, "destinataire", lambda: None)
+    res = asyncio.run(m.create_backup(m.BackupCreate(type="config"), user={"sub": "t"}))
+    assert res["code"] == 1                         # jamais « code 0 » pour une sauvegarde qui n'existe pas
+    assert list((tmp_path / "srv" / "config").iterdir()) == []      # et rien en clair ne reste
+
+
+def test_choix_explicite_de_ne_pas_chiffrer_est_signale(tmp_path, monkeypatch):
+    import asyncio
+    m = _charge_api(tmp_path, monkeypatch)
+    monkeypatch.setattr(m, "CONFIG_PATHS", [str(tmp_path)])
+    monkeypatch.setattr(m, "run_cmd", lambda cmd, timeout=300: (Path(cmd[2]).write_bytes(b"CLAIR") or True, "", ""))
+    res = asyncio.run(m.create_backup(m.BackupCreate(type="config", encrypt=False), user={"sub": "t"}))
+    assert res["code"] == 0 and "NON CHIFFRÉE" in res["output"]
+    f = next((tmp_path / "srv" / "config").iterdir())
+    assert stat.S_IMODE(f.stat().st_mode) == 0o640  # même en clair : jamais 0666
+
+
+def test_liste_marque_les_archives_chiffrees(tmp_path, monkeypatch):
+    m = _charge_api(tmp_path, monkeypatch)
+    d = tmp_path / "srv" / "config"
+    d.mkdir(parents=True)
+    (d / "a.tar.gz").write_text("x")
+    (d / "b.tar.gz.age").write_text("x")
+    etat = {b["file"]: b["encrypted"] for b in m.list_backups("config")}
+    assert etat == {"a.tar.gz": False, "b.tar.gz.age": True}
+
+
+def test_interface_a_la_case_et_l_etat_du_chiffrement():
+    html = (API.parent / "www" / "backup" / "index.html").read_text()
+    assert 'id="chiffrer" checked' in html                       # cochée par défaut
+    assert "JSON.stringify({ type, encrypt })" in html and "JSON.stringify({ name, encrypt })" in html
+    assert "loadEncryption()" in html and "backupctl restaurer" in html
+    assert "SANS" not in html or "EN CLAIR" in html              # l'opt-out demande une confirmation explicite

@@ -1,3 +1,9 @@
+secubox-backup (2.1.2-1~bookworm1) bookworm; urgency=high
+
+  * Chiffrement par défaut aussi pour les chemins de l'INTERFACE (#1903) : /create et /container/backup écrivaient des archives en clair sans passer par le chiffrement de 2.1.0/2.1.1 (seules les sauvegardes planifiées étaient protégées). Tous les chemins passent par finaliser_archive : chiffrement par défaut, échec = code 1 et aucune archive en clair, opt-out explicite signalé. Interface : case « Chiffrer » cochée par défaut (confirmation si décochée), état du chiffrement (destinataire, archives en clair, rappel de la clé privée), 🔒/⚠️ par archive, bouton Restaurer qui donne la commande root. GET /encryption ; la restauration d'une archive chiffrée par l'API répond 409 avec la commande et la commande de liste ; backupctl restaurer --liste.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 09:00:00 +0200
+
 secubox-backup (2.1.1-1~bookworm1) bookworm; urgency=high
 
   * Correctif de 2.1.0 (#1903) : le déchiffrement écrivait au nom de l'archive d'origine, donc `backupctl restaurer` supprimait ensuite l'archive en clair qui portait ce nom, et la vérification de `chiffrer-existantes --supprimer-clair` comparait un fichier à lui-même. Le déchiffré va désormais dans un dossier temporaire privé (0700) détruit après usage, et la vérification compare l'original au déchiffré, deux fichiers distincts. Test de régression avec un vrai gpg.
