@@ -584,12 +584,35 @@
             }
         }
 
+        // Déclenche un téléchargement par un lien ordinaire. Firefox traite une navigation
+        // vers un blob: dans une iframe (Reporter est embarqué dans le Hall) comme un
+        // chargement de cadre, que frame-src du Hall refuse : le PDF était servi (200) et
+        // le téléchargement échouait. Un lien http(s) en pièce jointe n'a pas ce défaut.
+        function lanceTelechargement(href, nom) {
+            const a = document.createElement('a');
+            a.href = href;
+            if (nom) a.download = nom;
+            document.body.appendChild(a);      // Firefox : l'ancre doit être dans le document
+            a.click();
+            return a;
+        }
+
         async function downloadReport(id) {
             const token = localStorage.getItem('sbx_token');
             const url = `${API}/reports/${id}/download`;
 
-            // Use fetch with auth header then trigger download
             try {
+                // 1. Le cookie de session suffit-il ? (l'API accepte cookie ou jeton Bearer)
+                //    Oui : lien direct, aucune URL blob.
+                const sonde = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+                if (sonde.ok) {
+                    lanceTelechargement(url).remove();
+                    return;
+                }
+
+                // 2. Repli : jeton Bearer seul (pas de cookie). Téléchargement par blob, ancre
+                //    dans le document et révocation différée (révoquer tout de suite coupait
+                //    le téléchargement avant qu'il ne démarre).
                 const res = await fetch(url, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
@@ -599,15 +622,12 @@
                 const contentDisp = res.headers.get('Content-Disposition');
                 let filename = 'report';
                 if (contentDisp) {
-                    const match = contentDisp.match(/filename="?(.+)"?/);
+                    const match = contentDisp.match(/filename="?([^";]+)"?/);
                     if (match) filename = match[1];
                 }
-
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = filename;
-                a.click();
-                URL.revokeObjectURL(a.href);
+                const href = URL.createObjectURL(blob);
+                const a = lanceTelechargement(href, filename);
+                setTimeout(() => { URL.revokeObjectURL(href); a.remove(); }, 60000);
             } catch (e) {
                 showToast('Download failed', 'error');
             }

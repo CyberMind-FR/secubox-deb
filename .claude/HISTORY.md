@@ -62,3 +62,6 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 ## 2026-10-02 — Accès : erreur « Votre nom est nécessaire » rattrapée (ref #1893)
 - sbxid 0.4.18 : bouton() des pages d'accès exécute l'action dans la chaîne de promesses ; le throw synchrone n'est plus une erreur non rattrapée avec bouton figé. Non traité : iframes blob:https://admin.gk2… bloquées par la CSP du Hall (origine non identifiée, aucun createObjectURL d'iframe dans les sources) ; bruit Firefox Feature Policy autoplay/encrypted-media et Layout forced sans effet.
+
+## 2026-10-03 — Reporter : téléchargement du PDF dans Firefox (ref #1895)
+- Cause : le PDF était servi (200, 21014 o) mais Reporter, embarqué dans le Hall, téléchargeait par blob: ; Firefox traite la navigation vers le blob comme un chargement de cadre refusé par frame-src du Hall (les trois iframes blob bloquées de la console = les trois clics). Chromium télécharge dans tous les cas (reproduit). reporter 1.2.3 : lien direct (cookie de session) sinon blob en repli avec ancre dans le DOM et révocation différée ; guillemet final du nom de fichier retiré. Non vérifié dans Firefox (absent ici). Clôt aussi l'iframe blob: laissée « origine inconnue » dans #1893.
