@@ -88,3 +88,13 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 ## 2026-10-03 — Niveau 0 réévalué, #1851 suspendue (ref #1851, #1902)
 - Évaluation sur gk2/gk3 : gk2 sans TPM, clé d'hôte `/var/lib/systemd/credential.secret` sur le même disque ; sauvegardes = /etc/secubox + /var/lib/secubox sans cette clé. Le niveau 0 ne protège que les copies partielles ; disque volé, root ou service compromis : aucun gain. gk3 : liaison TPM2 **implicite** (défaut `auto` de systemd, aucun `--with-key` dans niveau0.py) — différence de menace entre boxes jamais décidée.
 - Décision de l'exploitant : #1851 suspendue ; liaison TPM explicite et optionnelle (défaut identique partout) ouverte en #1902 et mise de côté. Pistes à plus fort rendement ouvertes : #1903 (sauvegardes chiffrées par défaut), #1904 (un groupe par secret ; 70 processus sous `secubox`, 11 secrets en 0640 root:secubox). La clé apt de gk2 (#1366) garde sa phrase de niveau 0 : gain limité aux copies sans la clé d'hôte, root signe toujours.
+
+## 2026-10-03 — Audit des fusions écrasantes terminé (closes #1748)
+- Méthode : pour chaque fusion signalée par `check-merge-overwrite.sh` depuis juin, lignes de master retirées puis comparaison des fonctions et routes (avant fusion / aujourd'hui).
+- **nac `discovery.py` (0c07799fd) : PERTE RÉELLE**, restaurée dans nac 3.1.8 — `_parse_arp` ne consignait plus l'interface, `discover()` ne la gardait plus face à un bail de rang supérieur, `br-lxc` n'était plus une interface LAN (conteneurs non découverts, zone lxc jamais auto-attribuée). Les 2 tests `test_discovery` qui échouaient sur master repassent (206 verts). Déployé gk2 et gk3 (paquet ; effet au prochain redémarrage de l'agrégateur).
+- core `config.py` (7ebe27403) : le bloc cookie-audit réécrit depuis par #1311 (`get_cookie_audit_config`) — rien de perdu.
+- metrics `main.py` (7ebe27403) : 27 routes présentes ; le préchauffage #740 réécrit (`_prechauffer_cache`) — rien de perdu.
+- nextcloud `main.py` (c43ffe9b0) : 22 routes avant → 27 aujourd'hui, aucune fonction manquante, correctif d'URL publique (2e061afd7) présent — rien de perdu.
+- toolbox `api.py`/`bundle.py` (2c15f1448, 1356a04e0, 6a68f3b25) : déjà restauré par bb527ddb7 (#1778) ; aucune fonction ni route manquante.
+- ytsas `main.py` (f8e38edda) : rien.
+- Garde-fou en place (PR #1901). Les 12 paquets d'aff481735 avaient été restaurés auparavant.
