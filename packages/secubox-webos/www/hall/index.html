@@ -1584,7 +1584,10 @@ const MOCK={services:[
   {id:"toolbox",name:"ToolBoX",category:"wall",icon:"🧰",description:"Boîte à outils réseau",health:{state:"online"},installed:true,active:true},
 ]};
 
-function host(s){ return (s.urls&&(s.urls.wan||s.urls.lan)) || SBX_DOMAINE.hote(s.id+".gk2.secubox.in"); }
+// UN SERVICE SANS ENTRÉE AU REGISTRE (le Coffre) n'a pas de vhost : `s.id` est
+// alors indéfini, et l'on fabriquait « undefined.gk2.secubox.in » — un hôte que
+// sbxwaf refuse en 421. Sans identité de service, l'hôte est celui du Hall.
+function host(s){ return (s.urls&&(s.urls.wan||s.urls.lan)) || (s.id ? SBX_DOMAINE.hote(s.id+".gk2.secubox.in") : location.host); }
 
 function featCardHTML(f,s){
   s=s||{}; const st=(s.health&&s.health.state)||"unknown";
@@ -1866,7 +1869,9 @@ function svcDesc(id){
           // `admin:"/chemin/"` la nomme ; `admin:false` dit qu'il n'y en a pas.
           path:(f&&typeof f.admin==='string')?f.admin:(s.path||('/'+id+'/')),
           sansAdmin:!!(f&&f.admin===false),
-          carte:(f&&f.carte)||null, noVhost:noVhost, mode:(f&&f.mode)||null};
+          carte:(f&&f.carte)||null, noVhost:noVhost, mode:(f&&f.mode)||null,
+          // Vrai vhost : déclaré par l'entrée, ou connu du registre.
+          vhostReel:!!((f&&f.url)||(s.urls&&(s.urls.wan||s.urls.lan)))};
 }
 function modeURL(mode){
   if(!_svc) return 'about:blank';
@@ -1915,6 +1920,11 @@ function setMode(mode){
   if(mode==='tab'){ window.open(plainURL(),'_blank','noopener'); return; }
   // Sans console admin, ⚙ n'a rien à ouvrir : on reste sur le service.
   if(mode==='admin' && _svc && _svc.sansAdmin) mode='embed';
+  // UNE ENTRÉE QUI DÉCLARE `mode:"admin"` ET N'A PAS DE VHOST (le Coffre) n'a
+  // rien à embarquer côté service : « embarqué » veut dire sa page d'admin. Sans
+  // cela, le clic de la carte (mode 'embed' explicite) ouvrait https://undefined…
+  // → 421.
+  if(mode==='embed' && _svc && _svc.mode==='admin' && !_svc.vhostReel && !_svc.sansAdmin) mode='admin';
   _mode=mode;
   const f=frameFor(mode), box=document.getElementById('eb-frames');
   [].forEach.call(box.children, c=>{ c.style.display = (c===f)?'block':'none'; });
