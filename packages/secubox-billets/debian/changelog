@@ -1,3 +1,9 @@
+secubox-billets (0.8.70-1~bookworm1) bookworm; urgency=low
+
+  * Polices via le cache de la box (/cdn/fonts/) : liens et CSP sans hôte Google, vhost inclut snippets/secubox-fonts*.conf (#1875).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 15:00:00 +0200
+
 secubox-billets (0.8.69-1~bookworm1) bookworm; urgency=medium
 
   * Miniatures YouTube relayées par la box : /yt-vignette?v=<id> sert depuis l'origine de billets (cache média/yt), seulement pour une vidéo qu'un billet référence. Les cartes et l'affiche ne pointent plus vers i.ytimg, que bloquaient anti-pistage et listes de blocage ; la carte du Hall (/micro) reprend l'affiche à défaut de capture (#1792).
