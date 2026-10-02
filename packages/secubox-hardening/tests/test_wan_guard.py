@@ -39,3 +39,20 @@ def test_ecoutes_hors_boucle_locale():
 def test_tunnels_non_signales():
     assert wg.joignable_depuis_lan("0.0.0.0") and wg.joignable_depuis_lan("192.168.1.200")
     assert not wg.joignable_depuis_lan("10.99.1.1") and not wg.joignable_depuis_lan("192.168.255.1")
+
+
+BASE = Path(__file__).parent.parent / "nft" / "nftables.conf"
+
+
+def test_base_geree_sans_interface_en_dur():
+    texte = BASE.read_text()
+    assert "SecuBox-managed: secubox-hardening" in texte     # marqueur de la postinst
+    assert "table inet filter" in texte                      # les fragments nftables.d y ajoutent des règles
+    assert "policy drop" in texte
+    # Aucune interface de confiance en dur : elles viennent de nft-input-trust.d.
+    assert not [l for l in texte.splitlines() if l.strip().startswith('iif "')]
+    assert 'nft-site.d' in texte                              # NAT propre à la box
+    for port in ('51820', '51822', '8799', 'udp dport 68', 'ipv6-icmp'):   # héritage firstboot / gk3
+        assert port in texte
+    assert "nft-input-trust.d" in texte
+    assert 'include "/etc/nftables.d/*.nft"' in texte

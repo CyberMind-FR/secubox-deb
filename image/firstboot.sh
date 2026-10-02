@@ -417,77 +417,14 @@ fi
 touch /var/lib/secubox/.net-configured
 
 # ── 12. nftables — règles de base ────────────────────────────────
-cat > /etc/nftables.conf <<'NFTEOF'
-#!/usr/sbin/nft -f
-# SecuBox nftables — généré par firstboot
-# DEFAULT DROP — ouvrir explicitement ce qui est nécessaire
-
-flush ruleset
-
-table inet secubox_filter {
-    chain input {
-        type filter hook input priority 0; policy drop;
-
-        # Loopback toujours accepté
-        iif lo accept
-
-        # Connexions établies
-        ct state established,related accept
-
-        # ICMP/ICMPv6
-        ip  protocol icmp   accept
-        ip6 nexthdr  icmpv6 accept
-
-        # SSH (port 22)
-        tcp dport 22 accept
-
-        # HTTP/HTTPS (SecuBox UI)
-        tcp dport { 80, 443 } accept
-
-        # DHCP client — accept DHCPOFFER / DHCPACK on UDP 68. The
-        # conntrack `established,related` clause above doesn't help
-        # for DHCP because the request goes out from 0.0.0.0:68 and
-        # the reply comes back broadcast (or unicast direct to the
-        # offered IP before it's actually bound), neither of which
-        # match the original 5-tuple. Without this rule networkd's
-        # DHCP times out and secubox-net-fallback's ARP-probe takes
-        # over — operator ends up on a random fallback subnet.
-        udp dport 68 accept
-
-        # WireGuard
-        udp dport 51820 accept
-
-        # MirrorNet (secubox-p2p, wg-mesh) — sans lui la box ne peut que
-        # JOINDRE le mesh, jamais etre jointe (relais, maitre) (#1499).
-        udp dport 51822 accept
-
-        # Drop silencieux
-        drop
-    }
-
-    chain forward {
-        type filter hook forward priority 0; policy drop;
-        ct state established,related accept
-
-        # Conteneurs (br-lxc) vers l'extérieur, et ports explicitement
-        # publiés vers un conteneur (DNAT) — secubox-lxc-reseau (#1721).
-        ct status dnat accept comment "secubox-lxc-dnat"
-        iifname "br-lxc" oifname != "br-lxc" accept comment "secubox-lxc-sortie"
-    }
-
-    chain output {
-        type filter hook output priority 0; policy accept;
-    }
-}
-
-# Sortie des conteneurs — secubox-lxc-reseau (#1721).
-table ip secubox_lxc_nat {
-    chain postrouting {
-        type nat hook postrouting priority srcnat; policy accept;
-        ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 masquerade comment "secubox-lxc"
-    }
-}
-NFTEOF
+# UNE base pour toutes les SecuBox, livrée par secubox-hardening (#1306) :
+# plus de génération propre à firstboot, qui divergeait de gk2.
+if [ -f /usr/share/secubox/hardening/nftables.conf ]; then
+  install -d -m 755 /etc/secubox/hardening/nft-input-trust.d /etc/secubox/hardening/nft-site.d
+  install -m 755 /usr/share/secubox/hardening/nftables.conf /etc/nftables.conf
+else
+  log "ERREUR : secubox-hardening absent, base nftables non installée (paquet requis, #1306)"
+fi
 
 systemctl enable nftables
 systemctl restart nftables 2>/dev/null || true

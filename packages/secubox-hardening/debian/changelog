@@ -1,3 +1,15 @@
+secubox-hardening (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Une seule base de pare-feu pour toutes les SecuBox (#1306) : /etc/nftables.conf est livré par ce paquet (/usr/share/secubox/hardening/nftables.conf) et remplace la base écrite à la main (gk2) comme celle de firstboot (gk3, images). Elle reprend les deux : ICMP/ICMPv6, DHCP, WireGuard 51820-51825, maillage (53, 8798, 8799, relais 9080, mDNS), ports 80/443/9443/9000/8888/9043/3483, masquerade LXC. Propre à la box : interfaces de confiance dans /etc/secubox/hardening/nft-input-trust.d/, tables NAT dans nft-site.d/ (reprises de l'ancienne base à la montée de version), services dans /etc/nftables.d/. Validation par nft -c, ancien fichier sauvé en /etc/nftables.conf.avant-hardening, aucun nft -f à l'installation (effet au prochain démarrage de nftables).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 18:00:00 +0200
+
+secubox-hardening (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Le pare-feu de base /etc/nftables.conf devient livré par le paquet (#1306) : copié depuis /usr/share/secubox/hardening/nftables.conf par la postinst, seulement s'il est déjà géré ici ou s'il s'agit de l'ancienne base écrite à la main (table inet filter) ; la base de firstboot n'est jamais touchée. Les interfaces acceptées en bloc (iif "eth1"/"eth2" accept) deviennent des fichiers explicites dans /etc/secubox/hardening/nft-input-trust.d/ : comportement identique, désormais visible. Validation par nft -c, ancien fichier sauvé en /etc/nftables.conf.avant-hardening, aucun nft -f à l'installation (effet au prochain démarrage de nftables).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 17:40:00 +0200
+
 secubox-hardening (1.4.2-1~bookworm1) bookworm; urgency=low
 
   * Garde eth2 : ferme aussi les écoutes de leurre de sbx-authwatch (23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017). 445 reste ouvert (SMB réel, cantonné au LAN par secubox-smb) (#1306).

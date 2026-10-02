@@ -39,5 +39,8 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-hardening/etc/nftables.d
 	install -m 644 nft/secubox-wan-guard.nft $(CURDIR)/debian/secubox-hardening/etc/nftables.d/secubox-wan-guard.nft
 
+	install -d $(CURDIR)/debian/secubox-hardening/usr/share/secubox/hardening
+	install -m 644 nft/nftables.conf $(CURDIR)/debian/secubox-hardening/usr/share/secubox/hardening/nftables.conf
+
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-hardening

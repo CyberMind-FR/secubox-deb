@@ -21,6 +21,47 @@ case "$1" in
                 && nft -f /etc/nftables.d/secubox-wan-guard.nft || true
         fi
 
+        # Base du pare-feu (#1306) : UNE base pour toutes les SecuBox, livrée
+        # par ce paquet. Remplacés : un fichier déjà géré ici, l'ancienne base
+        # écrite à la main (table `inet filter`) et celle de firstboot
+        # (`inet secubox_filter`). Ce qui est propre à la box est conservé :
+        # interfaces acceptées en bloc -> nft-input-trust.d, tables NAT ->
+        # nft-site.d. Jamais de `nft -f` ici : `flush ruleset` effacerait les
+        # tables tenues par d'autres services ; la base prend effet au
+        # prochain démarrage de nftables.
+        BASE_SRC=/usr/share/secubox/hardening/nftables.conf
+        BASE=/etc/nftables.conf
+        TRUST=/etc/secubox/hardening/nft-input-trust.d
+        SITE=/etc/secubox/hardening/nft-site.d
+        if [ -f "$BASE_SRC" ] && command -v nft >/dev/null 2>&1 && [ -f "$BASE" ] \
+           && ! cmp -s "$BASE_SRC" "$BASE"; then
+            install -d -m 755 "$TRUST" "$SITE"
+            if ! grep -q "nft-site.d" "$BASE"; then   # pas encore la base unifiée
+                for ifc in $(grep -oP '^\s*iif "\K[^"]+(?=" accept)' "$BASE"); do
+                    [ -f "$TRUST/$ifc.nft" ] || printf 'iif "%s" accept\n' "$ifc" > "$TRUST/$ifc.nft"
+                done
+                # Tables NAT de l'ancienne base, reprises telles quelles.
+                python3 - "$BASE" "$SITE/10-nat-box.nft" <<'PY' || true
+import re, sys
+texte = open(sys.argv[1]).read()
+blocs = re.findall(r'(?ms)^table (?:inet|ip|ip6) nat \{.*?^\}', texte)
+if blocs:
+    import os
+    if not os.path.exists(sys.argv[2]):
+        open(sys.argv[2], "w").write("# Repris de l'ancienne base /etc/nftables.conf (#1306)\n" + "\n\n".join(blocs) + "\n")
+PY
+                [ -f "$BASE.avant-hardening" ] || cp -a "$BASE" "$BASE.avant-hardening"
+            fi
+            tmp=$(mktemp)
+            cp "$BASE_SRC" "$tmp"
+            if nft -c -f "$tmp" 2>/dev/null; then
+                install -m 755 "$tmp" "$BASE"
+            else
+                echo "secubox-hardening: nouvelle base nftables refusee par nft -c, ancienne conservee" >&2
+            fi
+            rm -f "$tmp"
+        fi
+
         # Enable and start service
         systemctl daemon-reload
         systemctl enable secubox-hardening.service
