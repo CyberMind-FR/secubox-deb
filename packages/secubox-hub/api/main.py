@@ -2044,21 +2044,36 @@ CATEGORY_META = {
 }
 
 
-def _load_menu_definitions() -> list:
-    """Load menu definitions from menu.d directory or use defaults."""
-    import json
-    menu_items = []
+# Surcharge locale : une entrée posée ici (ou livrée là par un paquet, comme
+# secubox-p2p / secubox-zkp avant #1888) est lue comme celles de MENU_DIR ; à
+# identifiant égal, la locale l'emporte. Avant, ces entrées étaient ignorées : une
+# box neuve n'offrait pas p2p ni zkp, alors que gk2 les avait par copie manuelle.
+MENU_DIR_LOCAL = Path("/etc/secubox/menu.d")
 
-    if MENU_DIR.exists():
-        for f in sorted(MENU_DIR.glob("*.json")):
+
+def _load_menu_definitions() -> list:
+    """Load menu definitions from menu.d directories or use defaults."""
+    import json
+    par_id: dict = {}
+    sans_id: list = []
+
+    for dossier in (MENU_DIR, MENU_DIR_LOCAL):
+        if not dossier.exists():
+            continue
+        for f in sorted(dossier.glob("*.json")):
             try:
                 data = json.loads(f.read_text())
-                if isinstance(data, list):
-                    menu_items.extend(data)
-                elif isinstance(data, dict):
-                    menu_items.append(data)
             except Exception as e:
                 log.warning("Failed to load menu %s: %s", f.name, e)
+                continue
+            for entree in (data if isinstance(data, list) else [data] if isinstance(data, dict) else []):
+                ident = entree.get("id") if isinstance(entree, dict) else None
+                if ident:
+                    par_id[ident] = entree          # la locale (lue après) remplace
+                else:
+                    sans_id.append(entree)
+
+    menu_items = list(par_id.values()) + sans_id
 
     # If no menu files found, use defaults
     if not menu_items:
