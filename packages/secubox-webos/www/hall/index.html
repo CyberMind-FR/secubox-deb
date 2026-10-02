@@ -1927,7 +1927,7 @@ function setMode(mode){
   // rien à embarquer côté service : « embarqué » veut dire sa page d'admin. Sans
   // cela, le clic de la carte (mode 'embed' explicite) ouvrait https://undefined…
   // → 421.
-  if(mode==='embed' && _svc && _svc.mode==='admin' && !_svc.vhostReel && !_svc.sansAdmin) mode='admin';
+  if(mode==='embed' && _svc && (_svc.mode==='admin' || !_svc.noVhost) && !_svc.vhostReel && !_svc.sansAdmin) mode='admin';
   _mode=mode;
   const f=frameFor(mode), box=document.getElementById('eb-frames');
   [].forEach.call(box.children, c=>{ c.style.display = (c===f)?'block':'none'; });

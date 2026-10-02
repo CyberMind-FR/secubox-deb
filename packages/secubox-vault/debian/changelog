@@ -1,3 +1,11 @@
+secubox-vault (2.0.15-1~bookworm1) bookworm; urgency=low
+
+  * menu.d : le Coffre est servi depuis l'origine du Hall (`same_origin`) — le
+    registre fabriquait « vault.gk2.secubox.in » par convention, un nom que
+    personne ne sert (421).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 17:30:00 +0200
+
 secubox-vault (2.0.14-1~bookworm1) bookworm; urgency=medium
 
   * La connexion d'une PERSONNE ouvre son compartiment (#1855), invités compris :

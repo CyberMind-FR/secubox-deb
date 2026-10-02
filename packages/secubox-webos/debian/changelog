@@ -1,3 +1,11 @@
+secubox-webos (1.0.395-1~bookworm1) bookworm; urgency=low
+
+  * Hall : un service sans vhost réel (servi depuis l'origine du Hall, comme le
+    Coffre) s'« embarque » par sa page d'administration, pas par un nom
+    fabriqué (421).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 17:30:00 +0200
+
 secubox-webos (1.0.394-1~bookworm1) bookworm; urgency=medium
 
   * Hall : « Mes sites » ouvre un site dans un onglet (lien direct), plus dans
