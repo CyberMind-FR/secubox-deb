@@ -288,11 +288,6 @@
       "enabled": true,
       "patterns": [
         {
-          "id": "api-001",
-          "pattern": "/api/.*/admin",
-          "desc": "Admin API access"
-        },
-        {
           "id": "api-002",
           "pattern": "graphql.*(__schema|introspection)",
           "desc": "GraphQL introspection"

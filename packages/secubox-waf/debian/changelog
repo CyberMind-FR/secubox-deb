@@ -1,3 +1,13 @@
+secubox-waf (1.10.41-1~bookworm1) bookworm; urgency=medium
+
+  * waf-rules.json api-001 retirée (#1859) : `/api/.*/admin` comptait comme
+    abus tout appel d'une route d'administration, y compris par
+    l'administrateur authentifié — l'écran d'administration du Hall (4 appels
+    à l'ouverture) faisait bannir son propre administrateur. Les routes admin
+    sont fermées par require_jwt (administrateur réel, #1581).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 10:30:00 +0200
+
 secubox-waf (1.10.40-1~bookworm1) bookworm; urgency=medium
 
   * waf-rules.json cred-004 (#1858) : `\?.*token=` prenait le `requesttoken=`

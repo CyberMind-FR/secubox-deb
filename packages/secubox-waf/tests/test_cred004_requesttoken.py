@@ -43,3 +43,9 @@ def test_vrais_jetons_en_url_restent_vus():
     assert m.search(f"/x?token={JETON}")
     assert m.search(f"/x?a=1&access_token={JETON}")
     assert m.search(f"/x?id_token={JETON}")
+
+
+def test_api_001_retiree_l_admin_legitime_n_est_pas_un_abus():
+    """#1859 : « /api/.*/admin » bannissait l'administrateur (4 appels = ban)."""
+    regles = (RACINE / "config" / "waf-rules.json").read_text(encoding="utf-8")
+    assert '"api-001"' not in regles
