@@ -19,7 +19,7 @@ y dorment, par mois) — ne le lire que sur demande.
 - [ ] **#1754** nginx `set_real_ip_from` à restreindre aux relais réels.
 - [ ] **#1366** Coffre P0 : clé apt 219BA872 en clair en deux copies.
 - [ ] **#1516** `/data/shared/photos` et dossiers `<user>/` en 0777.
-- [ ] **#1851** Coffre P3 : JWT, graines TOTP, ~49 secrets en niveau 0, un par un (jamais en masse).
+- [⏸️] **#1851** Coffre P3 niveau 0 : SUSPENDU 2026-10-03 (voir WIP) ; liaison TPM : #1902 ; à la place #1903 (sauvegardes chiffrées) et #1904 (un groupe par secret).
 - [ ] **#1852** Coffre P6 : Autocrypt, `mail_crypt` à mesurer.
 - [x] **#1581** `require_jwt` = administrateur réel — livré et déployé.
 - [x] **#1855** Coffre : la connexion ouvre le Coffre (admin) et le compartiment de toute personne, invités compris — fusionné (PR #1856), déployé gk2 (vault 2.0.15, auth 1.1.18, aggregator 0.3.10).
