@@ -3,7 +3,34 @@
 	dh $@
 
 M := $(CURDIR)/debian/secubox-voicestudio
+S := $(M)/usr/share/secubox
+
+# Les unités sont activées à la main dans la postinst (le LXC se provisionne à part, et la prise
+# du port 3900 attend que l'ancien moteur, s'il existe, ait été basculé).
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
+
 override_dh_auto_install:
 	install -D -m 0755 sbin/voicestudioctl $(M)/usr/sbin/voicestudioctl
-	install -D -m 0644 conf/voicestudio.toml $(M)/etc/secubox/voicestudio.toml
-	install -D -m 0644 systemd/secubox-voicestudio.service $(M)/lib/systemd/system/secubox-voicestudio.service
+	install -D -m 0755 lxc/install-lxc.sh $(M)/usr/lib/secubox/voicestudio/install-lxc.sh
+	# Défauts du paquet : le TOML de la box (/etc/secubox/voicestudio.toml) est créé ou converti par
+	# `voicestudioctl migrer-conf` — il n'est PAS un conffile, pour que la mise à jour depuis le
+	# schéma podman ne déclenche aucune question dpkg et ne perde pas les adresses publiées.
+	install -D -m 0644 conf/voicestudio.toml $(S)/voicestudio/voicestudio.toml
+	install -D -m 0644 conf/contraintes.txt $(S)/voicestudio/contraintes.txt
+	install -d $(S)/voicestudio
+	cp -r api $(S)/voicestudio/
+	find $(S)/voicestudio/api -name __pycache__ -prune -exec rm -rf {} +
+	install -d $(S)/www
+	cp -r www/voicestudio $(S)/www/
+	install -D -m 0644 menu.d/614-voicestudio.json $(S)/menu.d/614-voicestudio.json
+	install -D -m 0644 menu.d/615-voicestudio-usager.json $(S)/menu.d/615-voicestudio-usager.json
+	install -D -m 0644 nginx/voicestudio.conf $(M)/etc/nginx/secubox-routes.d/voicestudio.conf
+	install -D -m 0644 nginx/voicestudio.conf $(M)/etc/nginx/secubox.d/voicestudio.conf
+	install -d $(M)/lib/systemd/system
+	install -m 0644 systemd/secubox-voicestudio-api.service $(M)/lib/systemd/system/
+	install -m 0644 systemd/secubox-voicestudio-pub.socket $(M)/lib/systemd/system/
+	install -m 0644 systemd/secubox-voicestudio-pub.service $(M)/lib/systemd/system/
+	install -m 0644 systemd/secubox-voicestudio-provision.service $(M)/lib/systemd/system/
+	install -D -m 0440 debian/secubox-voicestudio.sudoers $(M)/etc/sudoers.d/secubox-voicestudio
+	install -d $(M)/var/lib/secubox/voicestudio

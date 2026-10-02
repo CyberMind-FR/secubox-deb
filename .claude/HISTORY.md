@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-02 — VoiceStudio en LXC natif, interface administrateur et usager (ref #1917, #1743)
+- `secubox-voicestudio` 0.2.0 : plus aucun podman. LXC Debian non privilégié `voicestudio` (10.100.0.230), sources amont épinglées par commit **et** sha256 (vérifié avant extraction), versions Python tirées de l'image validée (`pip list`, 268 contraintes, sans CUDA), torch CPU depuis l'index PyTorch seul, `pip check` en fin d'installation. Même disposition que l'image (`/app`, `/app/omnivoice_data`) : la base SQLite garde ses chemins absolus.
+- Mandataire d'hôte à activation par socket (`systemd-socket-proxyd`, utilisateur `nobody`) : port 3900 sur les adresses `[reseau] publier` (LAN, maillage — adresses publiques refusées) et le loopback ; mode `permanent` (défaut) ou `demande`.
+- Interface : API `/api/v1/voicestudio` (socket Unix ; `require_jwt` pour l'administration, `require_personne` pour l'usager, `/status` minimal en lecture, `/detail` réservé), panneau d'administration (état, démarrer/arrêter, mode, mémoire, CPU, modèle ASR, adresses, clé, essai, journal, sauvegarde) et page d'usager (dire, dicter). Une seule porte privilégiée : `voicestudioctl api` (JSON sur stdin, actions en liste blanche, sudoers à argv exact, audit).
+- Mesuré hors box (poste amd64, python 3.11, torch CPU) : installation complète OK, moteur prêt en 9 s, `/health` 200, clé exigée pour tout client non-loopback (401 sans clé ou mauvaise), `/v1/audio/voices` (`voice_id`), dictée 200. Les deux pages essayées dans Chromium (Playwright), 231 tests.
+- Relecture de sécurité : 0 bloquant, 10 importants dont deux défauts réels corrigés (moteur jamais démarré à la première installation ; clé renouvelée non relue après un sommeil), migration podman atomique, `flock` sur les commandes mutantes, verrous usager/admin séparés, cache des échecs du ctl. Dettes nommées dans le README (pas d'AppArmor, LAN en clair, pas de `--require-hashes`).
+- Constaté sur gk3 avant déploiement : le moteur podman ne répondait plus (aucune réponse en 90 s, swap saturé) ; le vrai consommateur est gk2 (`voice.toml` en `mixte`, `http://10.10.0.5:3900`).
+- Reste #1743 : déploiement et bascule sur gk3, purge de podman/buildah/crun des boxes, ligne photoprism.
+
 ## 2026-10-02 — SESSIONS SOBRES, WAF SANS FAUX POSITIFS, COFFRE POUR TOUS (ref #1863, #1858, #1859, #1857, #1855, #1862)
 
 - **Contexte (#1863)** : WIP.md 485 Ko, HISTORY.md 516 Ko et TODO.md 89 Ko lus « en premier » ;

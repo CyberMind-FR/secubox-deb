@@ -1,0 +1,231 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""Paquet VoiceStudio : ce que debian/rules installe existe, unités durcies, route nginx sûre, pages propres (#1917)."""
+import json
+import re
+import subprocess
+import tomllib
+from pathlib import Path
+
+import pytest
+
+PKG = Path(__file__).resolve().parents[1]
+
+
+def lire(chemin: str) -> str:
+    return (PKG / chemin).read_text()
+
+
+def test_tout_ce_que_les_regles_installent_existe():
+    rules = lire("debian/rules")
+    sources = re.findall(r"install -(?:D )?-m \d+ (?:-D )?([\w./-]+) \$\(", rules)
+    sources += re.findall(r"install -m \d+ ([\w./-]+) \$\(M\)", rules)
+    sources += re.findall(r"cp -r ([\w./-]+) \$\(S\)", rules)
+    assert len(sources) >= 10
+    for s in sources:
+        assert (PKG / s).exists(), f"debian/rules installe {s}, absent de l'arbre"
+
+
+def test_les_scripts_de_maintenance_sont_posix_et_sans_podman():
+    for f in ("postinst", "prerm", "postrm"):
+        assert subprocess.run(["sh", "-n", str(PKG / "debian" / f)]).returncode == 0
+        code = "\n".join(ligne for ligne in lire(f"debian/{f}").splitlines() if not ligne.lstrip().startswith("#"))
+        assert not re.search(r"\b(podman|docker|buildah)\b", code), f"{f} pilote un runtime de conteneurs OCI"
+
+
+def test_le_controle_ne_depend_ni_de_podman_ni_de_docker():
+    ctl = lire("debian/control")
+    assert not re.search(r"^\s*(Depends|Recommends|Suggests):.*\b(podman|docker|buildah|crun)\b", ctl, re.M)
+    assert "lxc" in ctl and "Architecture: amd64" in ctl
+
+
+def test_la_configuration_n_est_pas_un_conffile():
+    """Livrée sous /usr/share : la mise à jour depuis l'ancien schéma ne pose aucune question dpkg."""
+    rules = lire("debian/rules")
+    assert "/etc/secubox/voicestudio.toml" not in re.sub(r"#.*", "", rules)
+    assert "usr/share/secubox/voicestudio/voicestudio.toml" in rules.replace("$(S)/voicestudio/", "usr/share/secubox/voicestudio/")
+
+
+@pytest.mark.parametrize("unite", ["api", "pub", "provision"])
+def test_les_unites_systemd_existent_et_sont_installees(unite):
+    f = PKG / "systemd" / f"secubox-voicestudio-{unite}.service"
+    assert f.exists() and f"secubox-voicestudio-{unite}.service" in lire("debian/rules")
+
+
+def test_l_unite_api_suit_les_regles_de_durcissement():
+    u = lire("systemd/secubox-voicestudio-api.service")
+    sans_commentaires = "\n".join(ligne for ligne in u.splitlines() if not ligne.lstrip().startswith("#"))
+    assert "User=secubox" in u and "User=root" not in u
+    assert "ExecStartPre=+/bin/rm -f /run/secubox/voicestudio.sock" in u          # socket périmée (§ Socket)
+    assert "RuntimeDirectory=secubox" not in sans_commentaires                    # proscrit : efface les voisines
+    assert "chmod 660 /run/secubox/voicestudio.sock" in u
+    for ligne in ("ProtectSystem=strict", "ProtectHome=true", "PrivateTmp=true", "ProtectKernelTunables=true",
+                  "ProtectControlGroups=true", "RestrictSUIDSGID=true", "LockPersonality=true", "UMask=0027"):
+        assert ligne in u, ligne
+    # NoNewPrivileges=no est la seule dérogation, et elle est justifiée par le sudoers du module.
+    assert "NoNewPrivileges=no" in u and "sudoers" in u
+    assert "--uds /run/secubox/voicestudio.sock" in u
+
+
+def test_le_mandataire_n_ecoute_que_le_loopback_par_defaut_et_jamais_le_wan():
+    s = lire("systemd/secubox-voicestudio-pub.socket")
+    ecoutes = re.findall(r"^ListenStream=(.+)$", s, re.M)
+    assert ecoutes == ["127.0.0.1:3900"]
+    assert "0.0.0.0" not in s and "[::]" not in s
+    assert "FreeBind=true" in s
+
+
+def test_le_mandataire_reveille_le_lxc_avant_d_ecouter():
+    p = lire("systemd/secubox-voicestudio-pub.service")
+    assert "ExecStartPre=+/usr/sbin/voicestudioctl wake" in p
+    assert "systemd-socket-proxyd 10.100.0.230:3900" in p
+    assert "NoNewPrivileges=true" in p
+
+
+def test_le_provisionnement_est_une_fois_et_hors_dpkg():
+    u = lire("systemd/secubox-voicestudio-provision.service")
+    assert "ConditionPathExists=!/var/lib/secubox/voicestudio/.lxc-provisioned" in u
+    assert "Type=oneshot" in u and "TimeoutStartSec=3600" in u
+    post = lire("debian/postinst")
+    assert "start --no-block secubox-voicestudio-provision.service" in post
+
+
+def test_la_postinst_ne_prend_pas_le_port_tant_que_l_ancien_moteur_le_tient():
+    post = lire("debian/postinst")
+    actif = "\n".join(ligne for ligne in post.splitlines() if not ligne.lstrip().startswith("#"))
+    assert "restart secubox-voicestudio-pub.socket" not in actif
+    assert "enable secubox-voicestudio-pub.socket" in actif
+    # Le démarrage n'a lieu que si le LXC existe ET que l'ancien moteur ne tient plus le port.
+    m = re.search(r"if \[ -f /var/lib/secubox/voicestudio/.lxc-provisioned \]\s*\\?\s*&& ! systemctl is-active --quiet "
+                  r"secubox-voicestudio.service[^\n]*\n\s*systemctl start secubox-voicestudio-pub.socket", actif)
+    assert m, "démarrage du mandataire non conditionné"
+    assert actif.count("start secubox-voicestudio-pub.socket") == 1
+
+
+def test_le_marqueur_du_provisionnement_est_celui_du_ctl_et_du_script():
+    assert "/var/lib/secubox/voicestudio/.lxc-provisioned" in lire("systemd/secubox-voicestudio-provision.service")
+    assert '".lxc-provisioned"' in lire("lxc/install-lxc.sh") or ".lxc-provisioned" in lire("lxc/install-lxc.sh")
+    assert ".lxc-provisioned" in lire("sbin/voicestudioctl")
+
+
+def test_la_route_nginx_n_ajoute_pas_de_timeout_en_double_et_borne_l_audio():
+    n = re.sub(r"#.*", "", lire("nginx/voicestudio.conf"))
+    assert "proxy_pass http://unix:/run/secubox/voicestudio.sock:/;" in n
+    assert "proxy_read_timeout" not in n and "error_page" not in n and "alias" not in n
+    assert re.search(r"client_max_body_size\s+12m;", n)
+    assert "include /etc/nginx/snippets/secubox-proxy.conf;" in n
+    rules = lire("debian/rules")
+    assert "secubox-routes.d/voicestudio.conf" in rules and "secubox.d/voicestudio.conf" in rules
+
+
+def test_les_entrees_de_menu_sont_valides_et_distinctes():
+    menus = [json.loads(f.read_text()) for f in sorted((PKG / "menu.d").glob("*.json"))]
+    assert len(menus) == 2
+    assert len({m["id"] for m in menus}) == 2 and len({m["order"] for m in menus}) == 2
+    assert {m["path"] for m in menus} == {"/voicestudio/", "/voicestudio/usager.html"}
+    for m in menus:
+        assert {"id", "name", "icon", "path", "category", "order", "description"} <= set(m)
+
+
+def test_les_sources_sont_epinglees_par_commit_et_par_empreinte():
+    d = tomllib.loads(lire("conf/voicestudio.toml"))
+    assert re.fullmatch(r"[0-9a-f]{40}", d["source"]["commit"]) and re.fullmatch(r"[0-9a-f]{64}", d["source"]["sha256"])
+    script = lire("lxc/install-lxc.sh")
+    assert "sha256sum -c" in script and script.index("sha256sum -c") < script.index("tar xzf")   # vérifié AVANT d'extraire
+    assert "(^/|(^|/)\\.\\.(/|$))" in script                                                     # chemins sortants refusés
+    assert "--no-same-owner" in script
+
+
+def test_les_contraintes_viennent_de_l_image_validee_sans_cuda():
+    lignes = [ligne for ligne in lire("conf/contraintes.txt").splitlines() if ligne.strip()]
+    assert len(lignes) > 150
+    assert not any(re.match(r"(nvidia|triton)", ligne, re.I) for ligne in lignes)
+    assert not any("+cu" in ligne or " @ " in ligne for ligne in lignes)
+    assert "torch==2.8.0" in lignes and "faster-whisper==1.2.1" in lignes
+
+
+def test_le_conteneur_est_non_privilegie_sans_ecoute_sur_toutes_les_interfaces():
+    script = lire("lxc/install-lxc.sh")
+    assert "lxc.idmap = u 0" in script and "OMNIVOICE_BIND_HOST=$LXC_IP" in script
+    assert "--host $LXC_IP" in script and "0.0.0.0" not in script.replace("#", "")
+    assert "lxc.mount.entry = $DONNEES app/omnivoice_data" in script         # même chemin que l'image : base SQLite
+    assert "chmod 0750" in script
+
+
+def test_la_cle_n_est_jamais_ecrite_par_le_script_d_installation():
+    script = lire("lxc/install-lxc.sh")
+    assert "OMNIVOICE_API_KEY" not in re.sub(r"#.*", "", script)
+
+
+@pytest.mark.parametrize("page", ["index.html", "usager.html"])
+def test_les_pages_respectent_la_charte(page):
+    h = lire(f"www/voicestudio/{page}")
+    assert h.lstrip().startswith("<!DOCTYPE html>") and "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in h
+    assert "onclick" not in h.lower()                                      # actions par data-* et un écouteur délégué
+    assert "sbx_token" in h and "function esc(" in h or page == "usager.html"
+    assert "errorToast" in h and "'✕'" in h                                # erreurs persistantes, fermables
+    assert "Courier Prime" in h and "#00d4ff" in h
+    assert "verify=False" not in h and "eval(" not in h
+    assert "@media" in h or "max-width" in h                               # adaptatif
+
+
+def test_la_page_d_administration_est_dans_le_chassis_et_masque_sa_coquille_encadree():
+    h = lire("www/voicestudio/index.html")
+    assert '<nav class="sidebar" id="sidebar"></nav>' in h and "/shared/sidebar.js" in h
+    assert "window.top !== window.self" in h and "sbx-embed" in h
+
+
+def test_la_page_d_usager_est_autonome_et_ne_porte_aucune_action_d_administration():
+    h = lire("www/voicestudio/usager.html")
+    assert "/shared/sidebar.js" not in h
+    for interdit in ("/start", "/stop", "/restart", "/config", "/publier", "/cle", "/sauvegarde", "/journal", "/installer"):
+        assert f"'{interdit}'" not in h, interdit
+    assert "/api/v1/voicestudio/usager" in h
+
+
+def test_les_deux_facettes_offrent_les_memes_fonctions_utiles():
+    """Parité (§ 7) : ce que la webui sait faire de non destructif, la page d'usager le sait aussi."""
+    admin, usager = lire("www/voicestudio/index.html"), lire("www/voicestudio/usager.html")
+    for fonction in ("dire", "transcrire", "voix"):
+        assert f"/{fonction}" in admin or fonction in admin
+    assert "/dire" in usager and "/transcrire" in usager and "/voix" in usager
+
+
+def test_le_mandataire_ne_tourne_pas_en_root_mais_reveille_en_root():
+    p = lire("systemd/secubox-voicestudio-pub.service")
+    assert "User=nobody" in p and "ExecStartPre=+/usr/sbin/voicestudioctl wake" in p
+    for ligne in ("ProtectSystem=strict", "ProtectHome=true", "PrivateDevices=true", "RestrictSUIDSGID=true", "UMask=0027"):
+        assert ligne in p, ligne
+
+
+def test_le_provisionnement_est_confine_sans_casser_newuidmap():
+    u = lire("systemd/secubox-voicestudio-provision.service")
+    assert "ProtectHome=true" in u and "LockPersonality=true" in u
+    assert "RestrictSUIDSGID=true" not in re.sub(r"#.*", "", u)          # newuidmap est setuid
+
+
+def test_pip_installe_torch_depuis_l_index_pytorch_seul():
+    """Pas de --extra-index-url : un nom présent sur les deux index ne peut pas être « confondu »."""
+    sh = re.sub(r"#.*", "", lire("lxc/install-lxc.sh"))
+    assert "--extra-index-url" not in sh
+    assert "--index-url https://download.pytorch.org/whl/cpu" in sh and "--no-deps" in sh
+    assert "pip check" in sh
+
+
+def test_les_valeurs_du_toml_ne_sont_pas_interpolees_dans_les_commandes_du_conteneur():
+    sh = lire("lxc/install-lxc.sh")
+    assert '_ "$DEPOT" "$COMMIT"' in sh and '_ "$SHA256"' in sh
+    assert "$DEPOT/archive/$COMMIT" not in re.sub(r"#.*", "", sh).replace('"$1/archive/$2', "")
+
+
+def test_la_page_d_usager_ne_charge_aucune_ressource_tierce():
+    h = lire("www/voicestudio/usager.html")
+    assert not re.search(r"""(src|href)=["']https?://""", re.sub(r"<!--.*?-->", "", h, flags=re.S))
+
+
+def test_le_panneau_lit_le_detail_reserve_a_l_administrateur():
+    h = lire("www/voicestudio/index.html")
+    assert "api('/detail')" in h and "api('/status')" not in h

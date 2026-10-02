@@ -1,0 +1,26 @@
+[Unit]
+Description=SecuBox VoiceStudio — installation initiale du LXC (idempotente, une fois) [#1917]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1917
+After=network-online.target
+Wants=network-online.target
+# install-lxc.sh écrit ce marqueur à la toute fin, en cas de succès complet : le service est
+# donc un no-op après une installation réussie (relance sûre au démarrage ou à la mise à jour).
+ConditionPathExists=!/var/lib/secubox/voicestudio/.lxc-provisioned
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/voicestudioctl install
+# torch + ~200 dépendances : 10 à 25 minutes, réseau obligatoire.
+TimeoutStartSec=3600
+# Root (lxc-create, pip, montages) : confiné au possible sans casser lxc-create (newuidmap est setuid :
+# RestrictSUIDSGID est donc exclu — c'est l'exception § 10 « unités qui pilotent LXC »).
+ProtectHome=true
+PrivateTmp=true
+LockPersonality=true
+ProtectKernelModules=true
+Restart=on-failure
+RestartSec=15min
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+name: secubox-voicestudio
+category: apps
+tier: pro
+description: "VoiceStudio — moteur vocal studio du parc, dans un LXC natif"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/voicestudio.sock
+  health: /api/v1/voicestudio/health
+
+ui:
+  path: /usr/share/secubox/www/voicestudio

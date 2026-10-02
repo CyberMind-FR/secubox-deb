@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox-Deb :: secubox-voicestudio :: page d'USAGER (#1917)
+  Facette webapp (vitrine) de index.html : mêmes fonctions utiles — dire un texte, dicter —,
+  sans aucune action destructive ni d'administration (WEBUI-PANEL-GUIDELINES § 7). Autonome :
+  pas de sidebar (page ouverte à toute personne connectée, pas au châssis d'administration).
+  Les routes appelées exigent une PERSONNE (require_personne) : un visiteur ou un appareil
+  invité reçoit 401/403 et la page le dit au lieu de feindre.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Voix</title>
+    <!-- Aucune ressource tierce : cette page annonce « rien ne part dans le nuage » (pas de polices distantes). -->
+    <style>
+        :root {
+            --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8); --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2); --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
+            --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', 'Courier New', monospace; background: var(--bg-dark); color: var(--text); min-height: 100vh;
+               background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92)); }
+        a { color: var(--cyan); }
+        .main { max-width: 46rem; margin: 0 auto; padding: 1.2rem 1rem 4rem; }
+        .header { margin-bottom: 1rem; padding-bottom: .8rem; border-bottom: 1px solid var(--border); }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; margin-top: .25rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h2 { color: var(--cyan); font-size: .95rem; margin-bottom: .7rem; }
+        label { display: block; margin-bottom: .2rem; font-size: .68rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: .05em; }
+        textarea, select, input[type=text], input[type=file] { width: 100%; padding: .55rem; background: rgba(20,30,45,.8); border: 1px solid var(--border);
+               border-radius: 4px; font-family: inherit; font-size: .9rem; color: var(--text); }
+        textarea { resize: vertical; min-height: 6rem; }
+        textarea:focus, select:focus, input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,.3); }
+        .champ { margin-bottom: .8rem; }
+        .rang { display: flex; gap: .7rem; flex-wrap: wrap; } .rang .champ { flex: 1; min-width: 9rem; }
+        .btn { font-family: inherit; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text); background: var(--bg-row);
+               border: 1px solid var(--border); border-radius: 6px; padding: .65rem 1.1rem; cursor: pointer; min-height: 2.6rem; transition: border-color .15s, box-shadow .15s; }
+        .btn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.3); }
+        .btn.primary { background: rgba(0,212,255,.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+        .compteur { font-size: .68rem; color: var(--p31-dim); text-align: right; margin-top: .2rem; }
+        .compteur.trop { color: var(--red); }
+        audio { width: 100%; margin-top: .8rem; }
+        .etat { display: flex; align-items: center; gap: .6rem; padding: .55rem .8rem; border-radius: 6px; border-left: 3px solid var(--border);
+                background: var(--bg-row); font-size: .8rem; margin-bottom: 1rem; }
+        .etat.ok { border-left-color: var(--green); } .etat.dort { border-left-color: var(--orange); } .etat.ko { border-left-color: var(--red); }
+        .resultat { background: rgba(0,0,0,.4); border: 1px solid var(--border); border-radius: 6px; padding: .7rem; margin-top: .8rem; font-size: .9rem; white-space: pre-wrap; word-break: break-word; }
+        .resultat[hidden] { display: none; }
+        .toast { position: fixed; bottom: 18px; left: 50%; transform: translate(-50%, 20px); max-width: 90vw; padding: .75rem 1rem; background: var(--cyan); color: #000;
+                 border-radius: 6px; font-size: .85rem; z-index: 2000; opacity: 0; transition: all .3s; display: flex; gap: .7rem; align-items: flex-start; }
+        .toast.show { opacity: 1; transform: translate(-50%, 0); }
+        .toast.error { background: var(--red); color: #fff; }
+        .toast button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; }
+        .connexion { text-align: center; padding: 1.2rem; }
+        .connexion[hidden] { display: none; }
+        .mic { display: inline-flex; align-items: center; gap: .4rem; }
+        .mic.enreg { border-color: var(--red); color: var(--red); animation: pulse 1.2s infinite; }
+        @keyframes pulse { 50% { box-shadow: 0 0 12px rgba(255,68,102,.6); } }
+    </style>
+</head>
+<body>
+    <main class="main">
+        <header class="header">
+            <h1>🗣️ La voix de la box</h1>
+            <div class="sub">Dire un texte à voix haute, ou dicter : traité sur votre SecuBox, rien ne part dans le nuage.</div>
+        </header>
+
+        <div class="card connexion" id="connexion" hidden>
+            <p>🔒 Cette page est réservée aux personnes connectées.</p>
+            <p style="margin-top:.8rem"><a class="btn primary" style="text-decoration:none;display:inline-block" href="/login.html">Se connecter</a></p>
+        </div>
+
+        <div id="contenu">
+            <div class="etat" id="etat" role="status"><span id="etatIc">⏳</span><span id="etatTxt">Vérification du moteur…</span></div>
+
+            <section class="card">
+                <h2>🗣️ Dire un texte</h2>
+                <div class="champ"><label for="texte">Texte</label><textarea id="texte" placeholder="Écrivez ce que la box doit dire…"></textarea>
+                    <div class="compteur" id="compteur">0</div></div>
+                <div class="rang">
+                    <div class="champ"><label for="voix">Voix</label><select id="voix"><option value="">(voix par défaut)</option></select></div>
+                    <div class="champ"><label for="fmt">Format</label><select id="fmt"><option value="mp3">mp3</option><option value="wav">wav</option><option value="opus">opus</option></select></div>
+                </div>
+                <button class="btn primary" id="bDire">▶ Dire</button>
+                <audio id="audio" controls hidden></audio>
+            </section>
+
+            <section class="card">
+                <h2>🎤 Dicter</h2>
+                <div class="rang">
+                    <div class="champ"><label for="langue">Langue</label><input type="text" id="langue" value="fr" maxlength="8" placeholder="fr (vide : détection)"></div>
+                    <div class="champ"><label for="fichier">…ou un fichier audio</label><input type="file" id="fichier" accept="audio/*"></div>
+                </div>
+                <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+                    <button class="btn mic" id="bMic">🎤 Enregistrer</button>
+                    <button class="btn primary" id="bTranscrire">▶ Transcrire le fichier</button>
+                </div>
+                <div class="resultat" id="resultat" hidden></div>
+            </section>
+        </div>
+    </main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script>
+    (function () {
+        'use strict';
+        var API = '/api/v1/voicestudio/usager';
+        var limites = { texte_max: 2000, audio_max_mo: 10 };
+        var enregistreur = null, morceaux = [], timer = null;
+
+        function $(id) { return document.getElementById(id); }
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        var tToast = null;
+        function toast(m) { var t = $('toast'); clearTimeout(tToast); t.className = 'toast show'; t.textContent = m; tToast = setTimeout(function () { t.className = 'toast'; }, 3000); }
+        function errorToast(m) {
+            var t = $('toast'); clearTimeout(tToast); t.className = 'toast error show'; t.textContent = '';
+            var s = document.createElement('span'); s.textContent = '⚠️ ' + m;
+            var b = document.createElement('button'); b.textContent = '✕'; b.setAttribute('aria-label', 'Fermer'); b.addEventListener('click', function () { t.className = 'toast'; });
+            t.appendChild(s); t.appendChild(b);
+        }
+        function connexionRequise() { $('connexion').hidden = false; $('contenu').hidden = true; }
+
+        async function api(chemin, opts) {
+            opts = opts || {}; var h = {}; var j = jeton();
+            if (j) h['Authorization'] = 'Bearer ' + j;
+            if (opts.json !== undefined) { h['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+            var r = await fetch(API + chemin, { method: opts.method || 'GET', headers: h, body: opts.body, credentials: 'same-origin' });
+            if (r.status === 401 || r.status === 403) { connexionRequise(); throw new Error('session'); }
+            return r;
+        }
+        async function erreurDe(r) { try { var d = await r.json(); return d.detail || ('HTTP ' + r.status); } catch (e) { return 'HTTP ' + r.status; } }
+
+        function etat(classe, ic, txt) { $('etat').className = 'etat ' + classe; $('etatIc').textContent = ic; $('etatTxt').textContent = txt; }
+
+        /* Honnête : un moteur endormi n'est pas une panne, mais le premier appel sera lent — on le dit. */
+        async function sonder() {
+            try {
+                var r = await api('/etat'); if (!r.ok) throw new Error('HTTP ' + r.status);
+                var d = await r.json();
+                if (d.limites) { limites.texte_max = d.limites.texte_max || limites.texte_max; limites.audio_max_mo = d.limites.audio_max_mo || limites.audio_max_mo; majCompteur(); }
+                if (d.demarrage) etat('dort', '⏳', 'Le moteur démarre… quelques secondes.');
+                else if (d.reveil_necessaire && d.disponible) etat('dort', '💤', 'Le moteur dort : le premier appel prend 30 à 60 secondes (il se réveille).');
+                else if (d.disponible) etat('ok', '🟢', 'Le moteur répond.');
+                else etat('ko', '🔴', 'Le moteur est indisponible pour le moment. Demandez à l\'administrateur de le démarrer.');
+            } catch (e) { if (e.message !== 'session') etat('ko', '🔴', 'Le service de voix ne répond pas.'); }
+            clearTimeout(timer); timer = setTimeout(sonder, 30000);
+        }
+
+        async function chargerVoix() {
+            try {
+                var r = await api('/voix'); if (!r.ok) return;
+                var d = await r.json(), s = $('voix'), cur = s.value;
+                s.textContent = ''; var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '(voix par défaut)'; s.appendChild(o0);
+                (d.voix || []).forEach(function (v) { var o = document.createElement('option'); o.value = v.id; o.textContent = v.nom + (v.langue ? ' (' + v.langue + ')' : ''); s.appendChild(o); });
+                s.value = cur;
+            } catch (e) { /* le moteur dort : la liste viendra au prochain essai */ }
+        }
+
+        function majCompteur() {
+            var n = $('texte').value.length, c = $('compteur');
+            c.textContent = n + ' / ' + limites.texte_max; c.className = 'compteur' + (n > limites.texte_max ? ' trop' : '');
+            $('bDire').disabled = n === 0 || n > limites.texte_max;
+        }
+
+        async function dire() {
+            var texte = $('texte').value.trim(); if (!texte) return;
+            $('bDire').disabled = true; toast('⏳ Synthèse…');
+            try {
+                var r = await api('/dire', { method: 'POST', json: { texte: texte, voix: $('voix').value, format: $('fmt').value } });
+                if (!r.ok) { errorToast(await erreurDe(r)); return; }
+                var blob = await r.blob(), a = $('audio');
+                if (a.dataset.url) URL.revokeObjectURL(a.dataset.url);
+                a.dataset.url = URL.createObjectURL(blob); a.src = a.dataset.url; a.hidden = false; a.play().catch(function () {});
+                chargerVoix();
+            } catch (e) { if (e.message !== 'session') errorToast('Synthèse impossible : ' + e.message); }
+            finally { majCompteur(); }
+        }
+
+        async function envoyer(fichier, nom) {
+            if (fichier.size > limites.audio_max_mo * 1048576) { errorToast('Audio trop volumineux (maximum ' + limites.audio_max_mo + ' Mo).'); return; }
+            var fd = new FormData(); fd.append('fichier', fichier, nom); fd.append('langue', $('langue').value.trim());
+            toast('⏳ Transcription…');
+            try {
+                var r = await api('/transcrire', { method: 'POST', body: fd });
+                if (!r.ok) { errorToast(await erreurDe(r)); return; }
+                var d = await r.json(), z = $('resultat'); z.hidden = false; z.textContent = d.vide ? '(aucune parole détectée)' : d.texte;
+            } catch (e) { if (e.message !== 'session') errorToast('Transcription impossible : ' + e.message); }
+        }
+
+        async function micro() {
+            var b = $('bMic');
+            if (enregistreur) { enregistreur.stop(); return; }
+            if (!navigator.mediaDevices || !window.MediaRecorder) { errorToast('Ce navigateur ne permet pas d\'enregistrer (ou la page n\'est pas en HTTPS). Utilisez un fichier audio.'); return; }
+            try {
+                var flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+                morceaux = []; enregistreur = new MediaRecorder(flux);
+                enregistreur.ondataavailable = function (e) { if (e.data.size) morceaux.push(e.data); };
+                enregistreur.onstop = function () {
+                    flux.getTracks().forEach(function (t) { t.stop(); });
+                    var type = enregistreur.mimeType || 'audio/webm'; enregistreur = null;
+                    b.classList.remove('enreg'); b.textContent = '🎤 Enregistrer';
+                    envoyer(new Blob(morceaux, { type: type }), 'dictee.' + (type.indexOf('ogg') >= 0 ? 'ogg' : 'webm'));
+                };
+                enregistreur.start(); b.classList.add('enreg'); b.textContent = '⏹ Arrêter';
+            } catch (e) { errorToast('Micro refusé ou indisponible.'); }
+        }
+
+        $('texte').addEventListener('input', majCompteur);
+        $('bDire').addEventListener('click', dire);
+        $('bMic').addEventListener('click', micro);
+        $('bTranscrire').addEventListener('click', function () {
+            var f = $('fichier').files[0]; if (!f) { errorToast('Choisissez un fichier audio, ou enregistrez-vous.'); return; }
+            envoyer(f, f.name);
+        });
+        majCompteur(); sonder(); chargerVoix();
+    })();
+    </script>
+</body>
+</html>

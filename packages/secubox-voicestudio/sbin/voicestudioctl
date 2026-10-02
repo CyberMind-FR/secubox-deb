@@ -1,103 +1,1046 @@
-#!/usr/bin/env bash
+#!/usr/bin/python3
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
-# SecuBox-Deb :: voicestudioctl — VoiceStudio sous podman (#1649).
-#   init       clé d'API (une fois) dans /etc/secubox/secrets/voicestudio/api_key
-#   epingle    retient l'empreinte de l'image actuellement tirée
-#   lance      (appelé par systemd) podman run, mémoire bornée, ports LAN/maillage
-#   etat       santé locale + voix disponibles
-#   publier IP… adresses LAN/maillage où publier le port 3900
-#   cle        affiche la clé (à poser dans voice.toml [distant] cle des autres box)
-set -euo pipefail
-readonly MODULE="voicestudio"
-CONF=/etc/secubox/voicestudio.toml
-CLE=/etc/secubox/secrets/voicestudio/api_key
-NOM=secubox-voicestudio
+"""
+SecuBox-Deb :: voicestudioctl — VoiceStudio dans un LXC natif (#1917, ex-#1649)
+CyberMind — https://cybermind.fr
 
-val() { python3 -c "import tomllib,sys;d=tomllib.load(open('$CONF','rb'));v=d.get('$1','');print(' '.join(v) if isinstance(v,list) else v)"; }
+Seule surface privilégiée du module : le panneau (utilisateur `secubox`) l'appelle par
+`sudo -n` ; chaque changement d'état est écrit dans /var/log/secubox/audit.log.
 
-cmd_init() {
-  install -d -m 0700 "$(dirname "$CLE")"
-  [ -s "$CLE" ] || { python3 -c 'import secrets;print(secrets.token_urlsafe(32))' > "$CLE"; chmod 0600 "$CLE"; }
-  echo "$MODULE : clé prête ($CLE)"
-}
+  client ──► <adresse publiée>:3900 (mandataire, activé par socket)
+        └─ ExecStartPre : voicestudioctl wake   (démarre le LXC, attend /health)
+        └─ systemd-socket-proxyd ─► 10.100.0.230:3900 (moteur, dans le LXC)
+        └─ ExecStopPost : voicestudioctl sleep  (mode « demande » seulement)
 
-cmd_epingle() {
-  local img d; img="$(val image)"
-  d="$(podman image inspect --format '{{.Digest}}' "$img")"
-  [ -n "$d" ] || { echo "$MODULE : image $img absente — podman pull $img" >&2; exit 1; }
-  python3 - "$CONF" "$d" <<'PY'
-import re,sys
-p,d=sys.argv[1],sys.argv[2]; t=open(p).read()
-t=re.sub(r'^empreinte\s*=.*$', f'empreinte = "{d}"', t, flags=re.M)
-open(p,'w').write(t)
-PY
-  echo "$MODULE : épinglé sur $d"
-}
+  install            crée le LXC, installe le moteur (long : 10 à 25 min), pousse la clé
+  reinstaller        rejoue l'installation du moteur (après changement de [source])
+  migrer-conf        dépose le TOML par défaut ; convertit l'ancien schéma (podman)
+  migrer-podman      reprend les données d'un ancien conteneur podman (une fois)
+  basculer           arrête l'ancien podman, reprend ses données, démarre le LXC (une fois)
+  status [--json]    état du LXC, du moteur, de la configuration
+  start | stop | restart
+  wake | sleep       appelés par le mandataire (ne touchent pas à la socket)
+  logs [N]           journal du moteur (dans le LXC)
+  cle | init         affiche / crée la clé d'API
+  cle-renouveler     nouvelle clé, poussée dans le LXC ; l'affiche UNE fois
+  config <clé> <v>   asr | memoire | cpu_poids | mode | inactivite_s
+  publier IP…        adresses de l'hôte où publier le port 3900
+  appliquer          réécrit LXC + mandataire depuis le TOML (idempotent)
+  sauvegarde         archive des données (sans les modèles téléchargeables)
+  api                entrée du panneau : JSON sur stdin, JSON sur stdout (actions en liste blanche)
+"""
+from __future__ import annotations
 
-cmd_lance() {
-  [ -s "$CLE" ] || cmd_init
-  local img emp ports=() a
-  img="$(val image)"; emp="$(val empreinte)"; asr="$(val asr)"
-  [ -n "$emp" ] && img="${img%%:*}@${emp}"
-  for a in $(val publier); do ports+=(-p "$a:3900:3900"); done
-  ports+=(-p "127.0.0.1:3900:3900")
-  podman rm -f "$NOM" >/dev/null 2>&1 || true
-  exec podman run --rm --name "$NOM" --memory "$(val memoire)" \
-    -e OMNIVOICE_API_KEY="$(cat "$CLE")" -e OMNIVOICE_BIND_HOST=0.0.0.0 \
-    -e OMNIVOICE_DATA_DIR=/app/omnivoice_data \
-    -e ASR_MODEL_FASTER="${asr:-Systran/faster-whisper-base}" -e OMNIVOICE_ASR_BACKEND=faster-whisper \
-    -v secubox-voicestudio-data:/app/omnivoice_data \
-    -v secubox-voicestudio-hf:/root/.cache/huggingface \
-    "${ports[@]}" "$img"
-}
+import contextlib
+import fcntl
+import functools
+import io
+import ipaddress
+import json
+import os
+import re
+import secrets
+import shutil
+import socket
+import sqlite3
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import tomllib
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
 
-cmd_publier() {
-  # Adresses de l'hôte seulement : chaque valeur doit être une IPv4 locale.
-  local a
-  for a in "$@"; do
-    ip -4 -o addr show | grep -q " ${a}/" || { echo "$MODULE : $a n'est pas une adresse de cette box" >&2; exit 1; }
-  done
-  python3 - "$CONF" "$@" <<'PY'
-import re,sys
-p=sys.argv[1]; l=", ".join(f'"{a}"' for a in sys.argv[2:]); t=open(p).read()
-t=re.sub(r'^publier\s*=.*$', f'publier  = [{l}]', t, flags=re.M)
-open(p,'w').write(t)
-PY
-  echo "$MODULE : port 3900 publié sur : ${*:-127.0.0.1 seulement}"
-}
+CONF = Path(os.environ.get("SECUBOX_VS_CONF", "/etc/secubox/voicestudio.toml"))
+CONF_DEFAUT = Path(os.environ.get("SECUBOX_VS_CONF_DEFAUT", "/usr/share/secubox/voicestudio/voicestudio.toml"))
+CLE = Path(os.environ.get("SECUBOX_VS_CLE", "/etc/secubox/secrets/voicestudio/api_key"))
+ETAT = Path(os.environ.get("SECUBOX_VS_ETAT", "/var/lib/secubox/voicestudio/etat.json"))
+MARQUE_INSTALLE = Path(os.environ.get("SECUBOX_VS_MARQUE", "/var/lib/secubox/voicestudio/.lxc-provisioned"))
+AUDIT = Path(os.environ.get("SECUBOX_VS_AUDIT", "/var/log/secubox/audit.log"))
+INSTALL = os.environ.get("SECUBOX_VS_INSTALL", "/usr/lib/secubox/voicestudio/install-lxc.sh")
+SAUVEGARDES = Path(os.environ.get("SECUBOX_VS_SAUVEGARDES", "/var/backups/secubox/voicestudio"))
+DROPIN_DIR = Path(os.environ.get("SECUBOX_VS_DROPIN", "/etc/systemd/system"))
+VOLUME_PODMAN = Path("/var/lib/containers/storage/volumes/secubox-voicestudio-data/_data")
+PORT = 3900
+UID_BASE = int(os.environ.get("SECUBOX_LXC_ROOT_UID", "100000"))
+DELAI_REVEIL = int(os.environ.get("SECUBOX_VS_DELAI", "240"))
+SAUVEGARDES_GARDEES = 3
+VERROU = Path(os.environ.get("SECUBOX_VS_VERROU", "/run/lock/voicestudioctl.lock"))
+UNITE_PROVISION = "secubox-voicestudio-provision.service"
+CACHE_TAILLE_S = 300
 
-# PARE-FEU (#1649). La chaîne forward de secubox_filter refuse tout sauf
-# l'établi : sans ces deux règles, le port publié est injoignable et le
-# conteneur ne peut pas télécharger ses modèles. On n'ouvre QUE le trafic que
-# podman a lui-même redirigé (ct status dnat, donc seulement les adresses
-# publiées) et la sortie du pont podman. Marquées, retirées à l'arrêt.
-MARQUE="secubox-voicestudio"
-cmd_parefeu_ferme() {
-  local h
-  for h in $(nft -a list chain inet secubox_filter forward 2>/dev/null | awk -v m="\"$MARQUE\"" '$0 ~ m {print $NF}'); do
-    nft delete rule inet secubox_filter forward handle "$h" 2>/dev/null || true
-  done
-}
-cmd_parefeu_ouvre() {
-  nft list chain inet secubox_filter forward >/dev/null 2>&1 || return 0
-  cmd_parefeu_ferme
-  nft add rule inet secubox_filter forward ip daddr 10.88.0.0/16 tcp dport 3900 ct status dnat accept comment "\"$MARQUE\""
-  nft add rule inet secubox_filter forward iifname "podman0" accept comment "\"$MARQUE\""
-}
+# Modèles de reconnaissance admis : liste blanche (la valeur finit dans un fichier
+# d'environnement lu par systemd — jamais une chaîne libre).
+ASR_ADMIS = frozenset({
+    "Systran/faster-whisper-tiny", "Systran/faster-whisper-tiny.en",
+    "Systran/faster-whisper-base", "Systran/faster-whisper-base.en",
+    "Systran/faster-whisper-small", "Systran/faster-whisper-small.en",
+    "Systran/faster-whisper-medium", "Systran/faster-whisper-large-v3",
+})
+MODES = ("permanent", "demande")
+MARQUE_DEBUT = "# >>> secubox-voicestudio"
+MARQUE_FIN = "# <<< secubox-voicestudio"
+SOCKET_PUB = "secubox-voicestudio-pub.socket"
+SERVICE_PUB = "secubox-voicestudio-pub.service"
+ANCIENNE_UNITE = "secubox-voicestudio.service"      # l'exécuteur podman d'avant 0.2.0
 
-cmd_etat() {
-  curl -fsS -m 5 http://127.0.0.1:3900/health && echo
-  curl -fsS -m 10 http://127.0.0.1:3900/v1/audio/voices | head -c 400; echo
-}
 
-case "${1:-}" in
-  init) cmd_init ;; epingle) cmd_epingle ;; lance) cmd_lance ;; etat) cmd_etat ;;
-  publier) shift; cmd_publier "$@" ;;
-  parefeu-ouvre) cmd_parefeu_ouvre ;; parefeu-ferme) cmd_parefeu_ferme ;;
-  cle) cat "$CLE" ;;
-  *) echo "usage : $0 {init|epingle|lance|etat|cle}" >&2; exit 2 ;;
-esac
+def _run(*args, **kw):
+    """subprocess.run résolu À L'APPEL (et non figé en valeur par défaut) : un test, ou un
+    appelant, peut substituer subprocess.run sans toucher aux signatures."""
+    return subprocess.run(*args, **kw)
+
+
+class Erreur(Exception):
+    """Erreur d'usage ou d'état : message pour l'opérateur, code de sortie 1."""
+
+
+# ── exclusion mutuelle ───────────────────────────────────────────────────────
+_PROFONDEUR = 0
+
+
+def sous_verrou(bloquant: bool = False):
+    """Une seule commande qui MODIFIE l'état à la fois (install, config, bascule, démarrage…).
+
+    Sans cela, le bouton « Installer » (ou deux administrateurs) lançait un second `install-lxc.sh`
+    pendant les 10 à 25 min du premier, et le TOML était réécrit par deux commandes à la fois.
+    Non bloquant : la seconde commande échoue tout de suite en le disant. `wake` / `sleep` (appelés
+    par le mandataire) attendent leur tour. Ré-entrant : install → basculer → start ne se bloquent
+    pas eux-mêmes."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def enveloppe(*a, **kw):
+            global _PROFONDEUR
+            if _PROFONDEUR:
+                return fn(*a, **kw)
+            VERROU.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(VERROU, os.O_RDWR | os.O_CREAT, 0o600)
+            try:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | (0 if bloquant else fcntl.LOCK_NB))
+                except BlockingIOError as e:
+                    raise Erreur("une autre opération voicestudioctl est en cours — réessayez plus tard") from e
+                _PROFONDEUR = 1
+                try:
+                    return fn(*a, **kw)
+                finally:
+                    _PROFONDEUR = 0
+            finally:
+                os.close(fd)
+        return enveloppe
+    return deco
+
+
+# ── configuration ────────────────────────────────────────────────────────────
+def adresse_publiable(a: str) -> str:
+    """Une adresse de publication est une IPv4 NON publique (LAN, maillage, CGNAT) : « jamais le WAN »
+    se vérifie ici, pas seulement dans la documentation. Le trafic y circule en HTTP clair (clé en
+    Bearer) : réseau de confiance seulement."""
+    try:
+        ip = ipaddress.IPv4Address(a)
+    except ValueError as e:
+        raise Erreur(f"{a[:40]} n'est pas une adresse IPv4") from e
+    if ip.is_global or ip.is_unspecified or ip.is_multicast:
+        raise Erreur(f"{a} n'est pas une adresse privée (LAN, maillage) : jamais publiée sur le WAN")
+    return str(ip)
+
+
+def charger() -> dict:
+    """TOML de la box par-dessus celui du paquet : une clé absente retombe sur le défaut."""
+    base: dict = {}
+    for f in (CONF_DEFAUT, CONF):
+        try:
+            with open(f, "rb") as h:
+                for sec, vals in tomllib.load(h).items():
+                    base.setdefault(sec, {}).update(vals)
+        except FileNotFoundError:
+            continue
+        except OSError as e:
+            raise Erreur(f"{f} illisible : {e.strerror}") from e
+        except tomllib.TOMLDecodeError as e:
+            # Retomber en silence sur les défauts effacerait les adresses publiées au prochain
+            # `appliquer` — donc l'accès des autres box au moteur. On s'arrête et on le dit.
+            raise Erreur(f"{f} invalide : {e}") from e
+    return base
+
+
+def lxc_nom(c: dict) -> str:
+    return str(c.get("lxc", {}).get("nom", "voicestudio"))
+
+
+def lxc_chemin(c: dict) -> str:
+    return str(c.get("lxc", {}).get("chemin", "/data/lxc"))
+
+
+def lxc_ip(c: dict) -> str:
+    return str(c.get("lxc", {}).get("ip", "10.100.0.230"))
+
+
+def donnees(c: dict) -> Path:
+    return Path(str(c.get("lxc", {}).get("donnees", "/srv/secubox/voicestudio")))
+
+
+def ecrire_toml(section: str, cle: str, valeur, chemin: Path | None = None) -> None:
+    """Remplace `cle` dans `[section]` ; l'ajoute (ou crée la section) si absente. On ne réécrit
+    que la ligne concernée : commentaires et ordre du fichier préservés."""
+    chemin = chemin or CONF
+    texte = chemin.read_text() if chemin.exists() else ""
+    if isinstance(valeur, list):
+        rendu = "[" + ", ".join(json.dumps(v) for v in valeur) + "]"
+    elif isinstance(valeur, int):
+        rendu = str(valeur)
+    else:
+        rendu = json.dumps(valeur)
+    nouvelle = f"{cle} = {rendu}"
+    lignes = texte.split("\n") if texte else []
+
+    def entete(i: int) -> str | None:
+        m = re.match(r"\s*\[([^\]]+)\]\s*$", lignes[i])
+        return m.group(1) if m else None
+
+    debut_s = next((i for i in range(len(lignes)) if entete(i) == section), None)
+    if debut_s is None:
+        lignes += ["", f"[{section}]", nouvelle]
+    else:
+        fin_s = next((i for i in range(debut_s + 1, len(lignes)) if entete(i) is not None), len(lignes))
+        cible = next((i for i in range(debut_s + 1, fin_s)
+                      if re.match(rf"\s*{re.escape(cle)}\s*=", lignes[i])), None)
+        if cible is not None:
+            lignes[cible] = nouvelle
+        else:
+            fin_utile = fin_s
+            while fin_utile > debut_s + 1 and not lignes[fin_utile - 1].strip():
+                fin_utile -= 1
+            lignes.insert(fin_utile, nouvelle)
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    tmp = chemin.with_name(chemin.name + ".tmp")
+    tmp.write_text("\n".join(lignes).rstrip("\n") + "\n")
+    os.chmod(tmp, 0o640)
+    os.replace(tmp, chemin)
+    if chemin == CONF:
+        _groupe_secubox(chemin)
+
+
+# ── audit ────────────────────────────────────────────────────────────────────
+def audit(action: str, detail: str = "") -> None:
+    """Une décision de sécurité = une ligne (append-only). Un échec d'écriture ne bloque pas
+    l'action mais le dit : un journal muet serait un trou de preuve."""
+    qui = os.environ.get("SUDO_USER") or os.environ.get("USER") or "root"
+    ligne = f"{datetime.now(timezone.utc).isoformat()} voicestudio {action} {detail} by={qui}\n"
+    try:
+        AUDIT.parent.mkdir(parents=True, exist_ok=True)
+        with open(AUDIT, "a") as f:
+            f.write(ligne)
+    except OSError as e:
+        print(f"voicestudioctl : audit non écrit ({e})", file=sys.stderr)
+
+
+# ── LXC ──────────────────────────────────────────────────────────────────────
+def lxc(run, c: dict, *args: str, **kw):
+    return run(["lxc-" + args[0], "-P", lxc_chemin(c), "-n", lxc_nom(c), *args[1:]],
+               capture_output=True, text=True, timeout=kw.get("timeout", 60))
+
+
+def etat_lxc(c: dict, run=_run) -> str:
+    r = lxc(run, c, "info", "-sH")
+    s = (r.stdout or "").strip()
+    return s if r.returncode == 0 and s else "ABSENT"
+
+
+def sante(c: dict, delai: float = 3.0, opener=urllib.request.urlopen) -> dict:
+    """/health du moteur. 503 pendant le chargement initial est un état, pas une panne."""
+    url = f"http://{lxc_ip(c)}:{PORT}/health"
+    try:
+        with opener(url, timeout=delai) as r:
+            return {"ok": r.status == 200, "http": r.status}
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "http": e.code, "demarrage": e.code == 503}
+    except (OSError, ValueError):
+        return {"ok": False, "http": 0}
+
+
+def assurer_moteur(c: dict, run=_run, dormir=time.sleep) -> bool:
+    """Dans le LXC : écrit la clé d'API si elle a changé (et redémarre le moteur), ou démarre le
+    moteur s'il est arrêté. Un seul passage couvre : première mise en service, réveil d'un LXC qui
+    dormait pendant un renouvellement de clé, moteur tombé. La clé voyage par stdin (jamais en
+    argument : `ps` la montrerait). Rend True si le LXC a répondu."""
+    creer_cle()
+    cle = lire_cle()
+    script = ("umask 077; cat > /etc/voicestudio.env.new; "
+              "if ! cmp -s /etc/voicestudio.env.new /etc/voicestudio.env; then "
+              "mv /etc/voicestudio.env.new /etc/voicestudio.env; systemctl restart voicestudio.service; "
+              "else rm -f /etc/voicestudio.env.new; "
+              "systemctl is-active -q voicestudio.service || systemctl start voicestudio.service; fi")
+    for _ in range(10):                  # lxc-attach peut échouer quelques secondes après lxc-start
+        r = run(["lxc-attach", "-P", lxc_chemin(c), "-n", lxc_nom(c), "--", "sh", "-c", script],
+                input=f"OMNIVOICE_API_KEY={cle}\n", capture_output=True, text=True, timeout=60)
+        if r.returncode == 0:
+            return True
+        dormir(2)
+    print("voicestudioctl : le LXC ne répond pas à lxc-attach — clé et moteur non vérifiés", file=sys.stderr)
+    return False
+
+
+def reveiller(c: dict, run=_run, sante_fn=None, dormir=time.sleep,
+              maintenant=time.monotonic, delai: int | None = None, preparer=None) -> bool:
+    sante_fn = sante_fn or sante
+    preparer = preparer or assurer_moteur
+    delai = DELAI_REVEIL if delai is None else delai
+    if sante_fn(c)["ok"]:
+        return True
+    etat = etat_lxc(c, run)
+    if etat == "ABSENT":
+        print("voicestudioctl : LXC absent — voicestudioctl install", file=sys.stderr)
+        return False
+    if etat != "RUNNING":
+        r = lxc(run, c, "start", "-d")
+        if r.returncode != 0:
+            print("voicestudioctl : lxc-start a échoué : " + (r.stderr or "")[:200], file=sys.stderr)
+            return False
+    # Le LXC tourne, mais le moteur n'est pas forcément lancé (première installation) ni à jour de
+    # la clé (renouvelée pendant le sommeil) : on s'en assure AVANT d'attendre /health.
+    preparer(c, run, dormir)
+    debut = maintenant()
+    while maintenant() - debut < delai:
+        # /health répond 503 pendant le chargement, puis 200.
+        if sante_fn(c)["ok"]:
+            return True
+        dormir(2)
+    print(f"voicestudioctl : le moteur ne répond pas après {delai} s", file=sys.stderr)
+    return False
+
+
+def endormir(c: dict, run=_run) -> bool:
+    if etat_lxc(c, run) != "RUNNING":
+        return True
+    return lxc(run, c, "stop", "-t", "30", timeout=60).returncode == 0
+
+
+# ── clé d'API ────────────────────────────────────────────────────────────────
+def lire_cle() -> str:
+    try:
+        return CLE.read_text().strip()
+    except OSError:
+        return ""
+
+
+def creer_cle() -> bool:
+    if lire_cle():
+        return False
+    CLE.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(CLE.parent, 0o700)
+    ecrire_cle(secrets.token_urlsafe(32))
+    return True
+
+
+def ecrire_cle(valeur: str) -> None:
+    tmp = CLE.with_name(CLE.name + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(valeur + "\n")
+    os.replace(tmp, CLE)
+
+
+def pousser_cle(c: dict, run=_run) -> bool:
+    """Pousse la clé dans le LXC et relance le moteur si elle a changé. LXC arrêté : remis à plus
+    tard (le réveil suivant passe par assurer_moteur). Rend True si poussée."""
+    if etat_lxc(c, run) != "RUNNING":
+        return False
+    if not lire_cle():
+        raise Erreur("aucune clé d'API — voicestudioctl init")
+    return assurer_moteur(c, run)
+
+
+# ── appliquer la configuration ───────────────────────────────────────────────
+def bloc_lxc(c: dict) -> str:
+    sec = c.get("lxc", {})
+    auto = 1 if sec.get("mode", "permanent") == "permanent" else 0
+    return (f"{MARQUE_DEBUT}\nlxc.start.auto = {auto}\n"
+            f"lxc.cgroup2.memory.max = {sec.get('memoire', '4G')}\n"
+            f"lxc.cgroup2.cpu.weight = {int(sec.get('cpu_poids', 50))}\n{MARQUE_FIN}\n")
+
+
+def appliquer_lxc(c: dict) -> bool:
+    f = Path(lxc_chemin(c)) / lxc_nom(c) / "config"
+    if not f.exists():
+        return False
+    t = f.read_text()
+    bloc = bloc_lxc(c)
+    if MARQUE_DEBUT in t and MARQUE_FIN in t:
+        avant, reste = t.split(MARQUE_DEBUT, 1)
+        _, apres = reste.split(MARQUE_FIN, 1)
+        t = avant + bloc.rstrip("\n") + apres
+    else:
+        t = t.rstrip("\n") + "\n\n" + bloc
+    f.write_text(t)
+    return True
+
+
+def contenu_socket(c: dict) -> str:
+    hotes = []
+    for h in c.get("reseau", {}).get("publier", []):
+        try:
+            hotes.append(adresse_publiable(str(h)))
+        except Erreur as e:
+            print(f"voicestudioctl : adresse publiée ignorée — {e}", file=sys.stderr)
+    hotes.append("127.0.0.1")
+    lignes = "".join(f"ListenStream={h}:{PORT}\n" for h in dict.fromkeys(hotes))
+    return f"[Socket]\nListenStream=\n{lignes}FreeBind=true\n"
+
+
+def contenu_service(c: dict) -> str:
+    """Drop-in du mandataire : en « demande », il s'arrête au repos et rendort le LXC ; en
+    « permanent », il tourne sans délai et ne touche jamais au LXC."""
+    cible = f"{lxc_ip(c)}:{PORT}"
+    proxy = "/lib/systemd/systemd-socket-proxyd"
+    if c.get("lxc", {}).get("mode", "permanent") == "demande":
+        idle = int(c["lxc"].get("inactivite_s", 900))
+        return ("[Service]\nExecStart=\n"
+                f"ExecStart={proxy} --exit-idle-time={idle}s {cible}\n"
+                "ExecStopPost=\nExecStopPost=+/usr/sbin/voicestudioctl sleep\n")
+    return f"[Service]\nExecStart=\nExecStart={proxy} {cible}\nExecStopPost=\n"
+
+
+def ecrire_dropin(unite: str, nom: str, contenu: str) -> bool:
+    d = DROPIN_DIR / f"{unite}.d"
+    f = d / nom
+    if f.exists() and f.read_text() == contenu:
+        return False
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_name(f.name + ".tmp")
+    tmp.write_text(contenu)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, f)
+    return True
+
+
+def systemctl(run, *args: str):
+    return run(["systemctl", *args], capture_output=True, text=True, timeout=60)
+
+
+def appliquer(run=_run) -> dict:
+    """Réécrit les réglages du LXC et les drop-ins du mandataire depuis le TOML (idempotent).
+
+    Le socket n'est relancé que s'il est DÉJÀ actif : l'installer ouvrirait le port 3900 sans moteur
+    derrière, ou échouerait tant que l'ancien moteur (podman) tient le port. Le mandataire, lui,
+    est relancé quand le mode change : sans délai d'inactivité (permanent) il ne s'arrête jamais
+    de lui-même, et garderait l'ancien réglage."""
+    c = charger()
+    res = {"lxc": appliquer_lxc(c)}
+    adresses = ecrire_dropin(SOCKET_PUB, "adresses.conf", contenu_socket(c))
+    mode = ecrire_dropin(SERVICE_PUB, "mode.conf", contenu_service(c))
+    res["mandataire"] = adresses or mode
+    if adresses or mode:
+        systemctl(run, "daemon-reload")
+        if adresses and systemctl(run, "is-active", SOCKET_PUB).stdout.strip() == "active":
+            r = systemctl(run, "restart", SOCKET_PUB)
+            if r.returncode != 0:
+                print("voicestudioctl : le mandataire n'a pas pu être relancé — port 3900 tenu par un autre "
+                      "processus ? " + (r.stderr or "")[:160], file=sys.stderr)
+                res["mandataire_ok"] = False
+        if mode:
+            systemctl(run, "try-restart", SERVICE_PUB)
+    return res
+
+
+# ── état ─────────────────────────────────────────────────────────────────────
+def taille_mo(chemin: Path) -> float:
+    total = 0
+    try:
+        for racine, _, fichiers in os.walk(chemin):
+            for f in fichiers:
+                try:
+                    total += os.lstat(os.path.join(racine, f)).st_size
+                except OSError:
+                    continue
+    except OSError:
+        return 0.0
+    return round(total / 1048576, 1)
+
+
+def etat_complet(run=_run, sante_fn=None) -> dict:
+    sante_fn = sante_fn or sante
+    c = charger()
+    cache = {}
+    try:
+        cache = json.loads(ETAT.read_text())
+    except (OSError, ValueError):
+        pass
+    lxc_s = etat_lxc(c, run)
+    source = "direct"
+    if lxc_s == "ABSENT" and cache.get("dernier_etat"):
+        lxc_s, source = cache["dernier_etat"], "cache"
+    sante_r = sante_fn(c) if lxc_s == "RUNNING" else {"ok": False, "http": 0}
+    src = c.get("source", {})
+    e = {
+        "installe": MARQUE_INSTALLE.exists(),
+        "lxc": lxc_s,
+        "ip": lxc_ip(c),
+        "port": PORT,
+        "moteur": sante_r["ok"],
+        "http": sante_r.get("http", 0),
+        "demarrage": bool(sante_r.get("demarrage")),
+        "version": src.get("version", ""),
+        "commit": str(src.get("commit", ""))[:12],
+        "mode": c.get("lxc", {}).get("mode", "permanent"),
+        "inactivite_s": int(c.get("lxc", {}).get("inactivite_s", 900)),
+        "memoire": c.get("lxc", {}).get("memoire", "4G"),
+        "cpu_poids": int(c.get("lxc", {}).get("cpu_poids", 50)),
+        "asr": c.get("moteur", {}).get("asr", ""),
+        "publier": list(c.get("reseau", {}).get("publier", [])),
+        "donnees_mo": taille_en_cache(c, cache),
+        "cle_presente": bool(lire_cle()),
+        "mandataire": systemctl(run, "is-active", SOCKET_PUB).stdout.strip() or "inactive",
+        "provisionnement": systemctl(run, "is-active", UNITE_PROVISION).stdout.strip() or "inactive",
+        "source": source,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    sauv = sorted(SAUVEGARDES.glob("voicestudio-*.tar.gz")) if SAUVEGARDES.exists() else []
+    e["sauvegarde"] = sauv[-1].name if sauv else None
+    return e
+
+
+def _ecrit(cles: dict) -> None:
+    """Fusionne dans l'état (lu sans privilège par le panneau). Un échec est dit, jamais fatal."""
+    try:
+        ETAT.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            d = json.loads(ETAT.read_text())
+        except (OSError, ValueError):
+            d = {}
+        d.update(cles)
+        tmp = ETAT.with_name(ETAT.name + ".tmp")
+        tmp.write_text(json.dumps(d))
+        os.replace(tmp, ETAT)
+    except OSError as e:
+        print(f"voicestudioctl : état non mémorisé ({e.strerror})", file=sys.stderr)
+
+
+def memoriser_etat(etat_lxc_valeur: str) -> None:
+    _ecrit({"dernier_etat": etat_lxc_valeur, "ts": datetime.now(timezone.utc).isoformat()})
+
+
+def taille_en_cache(c: dict, cache: dict) -> float:
+    """Taille des données : un os.walk de plusieurs centaines de Mo ne se refait pas à chaque
+    affichage du panneau. Recalculée au plus toutes les CACHE_TAILLE_S secondes."""
+    vu = cache.get("taille")
+    if isinstance(vu, dict) and time.time() - vu.get("ts", 0) < CACHE_TAILLE_S:
+        return float(vu.get("mo", 0.0))
+    mo = taille_mo(donnees(c))
+    _ecrit({"taille": {"mo": mo, "ts": time.time()}})
+    return mo
+
+
+# ── commandes ────────────────────────────────────────────────────────────────
+@sous_verrou()
+def cmd_install(run=_run) -> int:
+    creer_cle()
+    r = run(["bash", INSTALL], timeout=5400)
+    if r.returncode != 0:
+        return r.returncode
+    c = charger()
+    appliquer(run)
+    audit("install", f"commit={str(c.get('source', {}).get('commit', ''))[:12]}")
+    if VOLUME_PODMAN.is_dir():
+        return cmd_basculer(run)
+    return cmd_start(run)
+
+
+@sous_verrou()
+def cmd_reinstaller(run=_run) -> int:
+    try:
+        MARQUE_INSTALLE.unlink()
+    except OSError:
+        pass
+    audit("reinstaller")
+    return cmd_install(run)
+
+
+@sous_verrou()
+def cmd_start(run=_run) -> int:
+    c = charger()
+    creer_cle()
+    systemctl(run, "start", SOCKET_PUB)
+    if etat_lxc(c, run) == "ABSENT":
+        raise Erreur("LXC absent — voicestudioctl install")
+    appliquer_lxc(c)
+    if not reveiller(c, run):
+        return 1
+    memoriser_etat("RUNNING")
+    audit("start")
+    return 0
+
+
+@sous_verrou()
+def cmd_stop(run=_run) -> int:
+    c = charger()
+    systemctl(run, "stop", SERVICE_PUB)
+    systemctl(run, "stop", SOCKET_PUB)
+    ok = endormir(c, run)
+    memoriser_etat("STOPPED")
+    audit("stop")
+    return 0 if ok else 1
+
+
+@sous_verrou()
+def cmd_restart(run=_run) -> int:
+    c = charger()
+    if etat_lxc(c, run) == "RUNNING":
+        r = run(["lxc-attach", "-P", lxc_chemin(c), "-n", lxc_nom(c), "--",
+                 "systemctl", "restart", "voicestudio.service"],
+                capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            print("voicestudioctl : redémarrage du moteur refusé : " + (r.stderr or "")[:200], file=sys.stderr)
+            return 1
+        audit("restart")
+        return 0 if reveiller(c, run) else 1
+    return cmd_start(run)
+
+
+@sous_verrou(bloquant=True)
+def cmd_wake(run=_run) -> int:
+    c = charger()
+    if not reveiller(c, run):
+        return 1
+    memoriser_etat("RUNNING")
+    return 0
+
+
+@sous_verrou(bloquant=True)
+def cmd_sleep(run=_run) -> int:
+    c = charger()
+    ok = endormir(c, run)
+    memoriser_etat("STOPPED")
+    return 0 if ok else 1
+
+
+def cmd_logs(n: int, run=_run) -> int:
+    c = charger()
+    n = max(1, min(n, 500))
+    if etat_lxc(c, run) != "RUNNING":
+        print("voicestudioctl : LXC arrêté — pas de journal vivant", file=sys.stderr)
+        return 2
+    r = run(["lxc-attach", "-P", lxc_chemin(c), "-n", lxc_nom(c), "--",
+             "journalctl", "-u", "voicestudio.service", "-n", str(n), "--no-pager", "-o", "short-iso"],
+            capture_output=True, text=True, timeout=30)
+    sys.stdout.write(r.stdout)
+    return r.returncode
+
+
+@sous_verrou()
+def cmd_cle_renouveler(run=_run) -> int:
+    c = charger()
+    nouvelle = secrets.token_urlsafe(32)
+    ecrire_cle(nouvelle)
+    poussee = pousser_cle(c, run)         # relance le moteur si la clé a changé ; sinon au réveil
+    audit("cle-renouvelee", f"poussee={'oui' if poussee else 'au-prochain-demarrage'}")
+    print(nouvelle)
+    return 0
+
+
+def valider_config(cle: str, valeur: str) -> tuple[str, str | int]:
+    """(section, valeur typée). Toute valeur est validée par liste blanche ou motif ENTIER."""
+    if cle == "asr":
+        if valeur not in ASR_ADMIS:
+            raise Erreur("modèle inconnu : " + ", ".join(sorted(ASR_ADMIS)))
+        return "moteur", valeur
+    if cle == "memoire":
+        m = re.fullmatch(r"([1-9][0-9]{0,4})([GM])", valeur)
+        if not m or (m.group(2) == "G" and not 1 <= int(m.group(1)) <= 32) \
+                or (m.group(2) == "M" and not 1024 <= int(m.group(1)) <= 32768):
+            raise Erreur("memoire : de 1G à 32G (ex. 4G)")
+        return "lxc", valeur
+    if cle == "cpu_poids":
+        if not re.fullmatch(r"[0-9]{1,5}", valeur) or not 1 <= int(valeur) <= 10000:
+            raise Erreur("cpu_poids : entier de 1 à 10000")
+        return "lxc", int(valeur)
+    if cle == "mode":
+        if valeur not in MODES:
+            raise Erreur("mode : " + " | ".join(MODES))
+        return "lxc", valeur
+    if cle == "inactivite_s":
+        if not re.fullmatch(r"[0-9]{2,5}", valeur) or not 60 <= int(valeur) <= 86400:
+            raise Erreur("inactivite_s : entier de 60 à 86400")
+        return "lxc", int(valeur)
+    raise Erreur("clé inconnue : asr | memoire | cpu_poids | mode | inactivite_s")
+
+
+@sous_verrou()
+def cmd_config(cle: str, valeur: str, run=_run) -> int:
+    section, typee = valider_config(cle, valeur)
+    ecrire_toml(section, cle, typee)
+    c = charger()
+    appliquer(run)
+    if etat_lxc(c, run) == "RUNNING":
+        if cle == "asr":
+            run(["lxc-attach", "-P", lxc_chemin(c), "-n", lxc_nom(c), "--", "sh", "-c",
+                 "sed -i '/^ASR_MODEL_FASTER=/d' /etc/voicestudio.env.base && "
+                 f"echo ASR_MODEL_FASTER={typee} >> /etc/voicestudio.env.base && "
+                 "systemctl restart voicestudio.service"],
+                capture_output=True, text=True, timeout=60)
+        elif cle == "memoire":
+            lxc(run, c, "cgroup", "memory.max", str(typee))
+        elif cle == "cpu_poids":
+            lxc(run, c, "cgroup", "cpu.weight", str(typee))
+    audit("config", f"{cle}={typee}")
+    print(f"voicestudioctl : {cle} = {typee}")
+    return 0
+
+
+@sous_verrou()
+def cmd_publier(adresses: list[str], run=_run) -> int:
+    """Chaque valeur doit être une IPv4 de CETTE box : jamais une adresse arbitraire (le
+    mandataire écouterait ailleurs ou ne démarrerait pas)."""
+    locales = run(["ip", "-4", "-o", "addr", "show"], capture_output=True, text=True, timeout=10).stdout
+    adresses = [adresse_publiable(a) for a in adresses]
+    for a in adresses:
+        if not re.search(rf" {re.escape(a)}/", locales):
+            raise Erreur(f"{a} n'est pas une adresse de cette box")
+    ecrire_toml("reseau", "publier", adresses)
+    appliquer(run)
+    audit("publier", ",".join(adresses) or "127.0.0.1-seulement")
+    print("voicestudioctl : port 3900 publié sur : " + (" ".join(adresses) or "127.0.0.1 seulement"))
+    return 0
+
+
+LEGACY = {"publier": ("reseau", "publier"), "memoire": ("lxc", "memoire"), "asr": ("moteur", "asr")}
+
+
+def _groupe_secubox(chemin: Path) -> None:
+    """Le panneau (secubox) lit les limites dans ce fichier : root:secubox 0640. Sans secret dedans."""
+    try:
+        shutil.chown(chemin, group="secubox")
+    except (LookupError, OSError):
+        pass
+    os.chmod(chemin, 0o640)
+
+
+@sous_verrou()
+def cmd_migrer_conf() -> int:
+    """Dépose le TOML par défaut s'il manque ; convertit l'ANCIEN schéma (podman : image, empreinte,
+    publier/memoire/asr à plat) vers les sections. Les adresses publiées sont reprises telles
+    quelles : gk2 joint le moteur de gk3 par l'une d'elles, les perdre couperait Lexie."""
+    if not CONF.exists():
+        if not CONF_DEFAUT.exists():
+            raise Erreur(f"ni {CONF} ni le défaut du paquet ({CONF_DEFAUT})")
+        CONF.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(CONF_DEFAUT, CONF)
+        _groupe_secubox(CONF)
+        print("voicestudioctl : configuration créée")
+        return 0
+    with open(CONF, "rb") as h:
+        ancien = tomllib.load(h)
+    if not any(k in ancien for k in ("image", "empreinte", *LEGACY)):
+        _groupe_secubox(CONF)
+        return 0
+    sauvegarde = CONF.with_name(CONF.name + ".avant-lxc")
+    if not sauvegarde.exists():
+        shutil.copyfile(CONF, sauvegarde)
+    shutil.copyfile(CONF_DEFAUT, CONF)
+    for cle, (section, nom) in LEGACY.items():
+        if cle not in ancien:
+            continue
+        valeur = ancien[cle]
+        if cle == "memoire":        # podman acceptait « 4g » ; le plafond cgroup attend « 4G »
+            try:
+                _, valeur = valider_config("memoire", str(valeur).upper())
+            except Erreur:
+                continue            # valeur inexploitable : le défaut du paquet reste
+        elif cle == "asr" and valeur not in ASR_ADMIS:
+            continue
+        elif cle == "publier" and not (isinstance(valeur, list) and all(isinstance(a, str) for a in valeur)):
+            continue
+        ecrire_toml(section, nom, valeur)
+    _groupe_secubox(CONF)
+    audit("migrer-conf", f"publier={','.join(ancien.get('publier', [])) or '-'}")
+    print(f"voicestudioctl : ancienne configuration reprise (copie : {sauvegarde.name})")
+    return 0
+
+
+@sous_verrou()
+def cmd_sauvegarde() -> int:
+    c = charger()
+    src = donnees(c)
+    if not src.is_dir():
+        raise Erreur(f"pas de données à sauvegarder ({src})")
+    SAUVEGARDES.mkdir(parents=True, exist_ok=True)
+    os.chmod(SAUVEGARDES, 0o700)
+    horodatage = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    cible = SAUVEGARDES / f"voicestudio-{horodatage}-{secrets.token_hex(2)}.tar.gz"
+
+    def sans_modeles(ti: tarfile.TarInfo):
+        # Les modèles se re-téléchargent (plusieurs Go) ; voix, historique et base ne se retrouvent pas.
+        # La base vivante est exclue : on archive une COPIE cohérente (API de sauvegarde SQLite).
+        parties = ti.name.split("/")[1:2]
+        if parties == ["huggingface"] or ti.name.split("/")[-1] in ("omnivoice.db", "omnivoice.db-wal", "omnivoice.db-shm") \
+                and len(ti.name.split("/")) == 2:
+            return None
+        return ti
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="vs-sauv-") as tmp:
+            base = src / "omnivoice.db"
+            copie = Path(tmp) / "omnivoice.db"
+            if base.exists():
+                with contextlib.closing(sqlite3.connect(f"file:{base}?mode=ro", uri=True, timeout=30)) as origine, \
+                        contextlib.closing(sqlite3.connect(copie)) as dest:
+                    origine.backup(dest)
+            fd = os.open(cible, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as brut, tarfile.open(fileobj=brut, mode="w:gz") as t:
+                t.add(src, arcname="omnivoice_data", filter=sans_modeles)
+                if copie.exists():
+                    t.add(copie, arcname="omnivoice_data/omnivoice.db")
+    except (OSError, sqlite3.Error) as e:
+        cible.unlink(missing_ok=True)
+        raise Erreur(f"sauvegarde impossible : {e}") from e
+    for vieille in sorted(SAUVEGARDES.glob("voicestudio-*.tar.gz"))[:-SAUVEGARDES_GARDEES]:
+        vieille.unlink()
+    audit("sauvegarde", f"{cible.name} {cible.stat().st_size}o")
+    print(cible)
+    return 0
+
+
+MARQUE_MIGRATION = ".migre-de-podman"
+
+
+def _decaler_proprietes(racine: Path) -> None:
+    """uid ET gid décalés sur l'idmap du LXC non privilégié (uid 0 du conteneur = UID_BASE sur l'hôte),
+    chacun pour son compte : un uid déjà décalé ne dispense pas son gid."""
+    for dossier, dirs, fichiers in os.walk(racine):
+        for nom in [*dirs, *fichiers, "."]:
+            p = os.path.join(dossier, nom)
+            st = os.lstat(p)
+            u = st.st_uid + UID_BASE if st.st_uid < UID_BASE else st.st_uid
+            g = st.st_gid + UID_BASE if st.st_gid < UID_BASE else st.st_gid
+            if (u, g) != (st.st_uid, st.st_gid):
+                os.lchown(p, u, g)
+
+
+@sous_verrou()
+def cmd_migrer_podman(run=_run) -> int:
+    """Reprend les données de l'ancien conteneur podman, UNE fois, de façon ATOMIQUE : copie vers un
+    répertoire voisin, propriétés décalées, puis renommage — une copie interrompue ne laisse jamais
+    un `omnivoice.db` à moitié là qui ferait croire à une migration faite. Un marqueur de fin la fige.
+    Le volume d'origine n'est jamais supprimé : on ne détruit rien tant que le LXC n'a pas servi."""
+    c = charger()
+    cible = donnees(c)
+    if not VOLUME_PODMAN.is_dir():
+        print("voicestudioctl : pas de volume podman à migrer")
+        return 0
+    if (cible / MARQUE_MIGRATION).exists():
+        print("voicestudioctl : données déjà migrées — migration ignorée")
+        return 0
+    actif = run(["systemctl", "is-active", ANCIENNE_UNITE], capture_output=True, text=True, timeout=30)
+    if (actif.stdout or "").strip() == "active":
+        raise Erreur("l'ancien moteur tourne encore : voicestudioctl basculer l'arrête avant de copier")
+    if etat_lxc(c, run) == "RUNNING":
+        raise Erreur("le LXC tourne : arrêtez-le avant de lui remplacer ses données")
+    temp = cible.with_name(cible.name + ".migration")
+    shutil.rmtree(temp, ignore_errors=True)
+    r = run(["cp", "-a", "--no-target-directory", str(VOLUME_PODMAN), str(temp)],
+            capture_output=True, text=True, timeout=1800)
+    if r.returncode != 0:
+        shutil.rmtree(temp, ignore_errors=True)
+        raise Erreur("copie du volume échouée : " + (r.stderr or "")[:200])
+    _decaler_proprietes(temp)
+    (temp / MARQUE_MIGRATION).write_text(datetime.now(timezone.utc).isoformat() + "\n")
+    # La cible existe déjà si le LXC a démarré une fois (base vierge) : on la met de côté, on ne l'écrase pas.
+    ecartee = None
+    if cible.exists():
+        ecartee = cible.with_name(cible.name + ".avant-migration")
+        shutil.rmtree(ecartee, ignore_errors=True)
+        os.replace(cible, ecartee)
+    os.replace(temp, cible)
+    audit("migrer-podman", f"{taille_mo(cible)}Mo" + (" ancienne-cible-gardee" if ecartee else ""))
+    print(f"voicestudioctl : {taille_mo(cible)} Mo repris de {VOLUME_PODMAN} (volume conservé)")
+    return 0
+
+
+def _port_libre(port: int = PORT) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            return False
+    except OSError:
+        return True
+
+
+@sous_verrou()
+def cmd_basculer(run=_run) -> int:
+    """Passage de l'ancien conteneur podman au LXC, UNE fois. L'ancien moteur a servi pendant toute
+    l'installation du LXC (10 à 25 min) ; il n'est arrêté qu'ICI, LXC prêt, pour que la coupure se
+    réduise à la copie des données et au démarrage du moteur. Rien n'est supprimé : le volume podman
+    reste intact. En cas d'échec, on tente de relancer l'ancienne unité (si son fichier existe encore)."""
+    c = charger()
+    if etat_lxc(c, run) == "ABSENT":
+        raise Erreur("LXC absent — voicestudioctl install d'abord ; l'ancien moteur n'a pas été touché")
+    if not VOLUME_PODMAN.is_dir():
+        print("voicestudioctl : pas d'ancien moteur podman à basculer")
+        return cmd_start(run)
+    audit("basculer", "debut")
+    run(["systemctl", "stop", ANCIENNE_UNITE], capture_output=True, text=True, timeout=90)
+    if not _port_libre():
+        audit("basculer", "echec-port-tenu")
+        raise Erreur("l'ancien moteur tient encore le port 3900 (unité introuvable ?) — arrêtez-le à la main ; "
+                     "rien n'a été copié ni démarré")
+    endormir(c, run)                      # le moteur du LXC ne doit pas tourner pendant la copie
+    try:
+        cmd_migrer_podman(run)
+        rc = cmd_start(run)
+    except Erreur:
+        rc = 1
+        print("voicestudioctl : migration des données échouée (voir ci-dessus).", file=sys.stderr)
+    if rc != 0:
+        run(["systemctl", "start", ANCIENNE_UNITE], capture_output=True, text=True, timeout=60)
+        print("voicestudioctl : bascule en échec. L'ancien volume est INTACT "
+              f"({VOLUME_PODMAN}) ; l'ancienne unité a été relancée si elle existe encore.", file=sys.stderr)
+        audit("basculer", "echec")
+        return rc
+    audit("basculer", "ok")
+    print("voicestudioctl : bascule faite — le moteur sert depuis le LXC")
+    return 0
+
+
+def cmd_etat(json_sortie: bool, run=_run) -> int:
+    e = etat_complet(run)
+    if json_sortie:
+        print(json.dumps(e))
+        return 0
+    print(f"LXC {e['lxc']} — moteur {'répond' if e['moteur'] else ('démarre' if e['demarrage'] else 'ne répond pas')}"
+          f" ({e['ip']}:{e['port']}) — mode {e['mode']}")
+    print(f"VoiceStudio {e['version']} ({e['commit']}) — ASR {e['asr']} — mémoire {e['memoire']}")
+    print("publié sur : " + (", ".join(e["publier"]) or "127.0.0.1 seulement") + f" — mandataire {e['mandataire']}")
+    return 0
+
+
+ACTIONS_API = ("status", "start", "stop", "restart", "logs", "config", "publier",
+               "cle-apercu", "cle-renouveler", "cle-interne", "sauvegarde", "installer")
+
+
+def _capter(fn, *args, **kw) -> tuple[int, str]:
+    """Exécute une commande en capturant sa sortie standard : le panneau reçoit du JSON, pas du texte."""
+    sortie = io.StringIO()
+    with contextlib.redirect_stdout(sortie):
+        rc = fn(*args, **kw)
+    return rc, sortie.getvalue().strip()
+
+
+def cmd_api(entree: str) -> int:
+    """Seule porte du panneau (sudoers : un argv exact, sans joker). La requête arrive en JSON sur
+    stdin ; l'action est vérifiée contre une liste blanche et chaque valeur par motif entier."""
+    try:
+        req = json.loads(entree)
+        act = req["action"]
+    except (ValueError, KeyError, TypeError):
+        print(json.dumps({"ok": False, "erreur": "requête illisible"}))
+        return 1
+    par = str(req.get("par", ""))
+    if re.fullmatch(r"[A-Za-z0-9_.@-]{1,64}", par):
+        os.environ["SUDO_USER"] = par          # l'audit nomme l'administrateur, pas « secubox »
+    if act not in ACTIONS_API:
+        print(json.dumps({"ok": False, "erreur": "action inconnue"}))
+        return 1
+    try:
+        if act == "status":
+            print(json.dumps(etat_complet()))
+            return 0
+        if act == "cle-apercu":
+            k = lire_cle()
+            print(json.dumps({"presente": bool(k), "apercu": (k[:4] + "…" + k[-4:]) if len(k) > 12 else ""}))
+            return 0
+        if act == "cle-interne":
+            print(json.dumps({"cle": lire_cle()}))
+            return 0
+        if act == "logs":
+            n = req.get("n", 100)
+            rc, txt = _capter(cmd_logs, n if isinstance(n, int) else 100)
+            print(json.dumps({"ok": rc == 0, "lignes": txt.splitlines()[-500:]}))
+            return 0
+        if act == "config":
+            rc, txt = _capter(cmd_config, str(req.get("cle", "")), str(req.get("valeur", "")))
+        elif act == "publier":
+            adresses = req.get("adresses", [])
+            if not isinstance(adresses, list) or not all(isinstance(a, str) for a in adresses):
+                raise Erreur("adresses : liste de chaînes")
+            rc, txt = _capter(cmd_publier, adresses)
+        elif act == "cle-renouveler":
+            rc, nouvelle = _capter(cmd_cle_renouveler)
+            print(json.dumps({"ok": rc == 0, "cle": nouvelle}))
+            return 0
+        elif act == "sauvegarde":
+            rc, txt = _capter(cmd_sauvegarde)
+        elif act == "installer":
+            rc, txt = _capter(cmd_install)
+        else:
+            rc, txt = _capter({"start": cmd_start, "stop": cmd_stop, "restart": cmd_restart}[act])
+    except Erreur as e:
+        print(json.dumps({"ok": False, "erreur": str(e)}))
+        return 1
+    print(json.dumps({"ok": rc == 0, "detail": txt}))
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    cmd = argv[0] if argv else "status"
+    a = argv[1:]
+    try:
+        if cmd in ("status", "etat"):
+            return cmd_etat("--json" in a)
+        if cmd == "install":
+            return cmd_install()
+        if cmd == "reinstaller":
+            return cmd_reinstaller()
+        if cmd == "migrer-podman":
+            return cmd_migrer_podman()
+        if cmd == "start":
+            return cmd_start()
+        if cmd == "stop":
+            return cmd_stop()
+        if cmd == "restart":
+            return cmd_restart()
+        if cmd == "wake":
+            return cmd_wake()
+        if cmd == "sleep":
+            return cmd_sleep()
+        if cmd == "logs":
+            return cmd_logs(int(a[0]) if a and a[0].isdigit() else 100)
+        if cmd == "init":
+            print("clé créée" if creer_cle() else "clé déjà présente")
+            return 0
+        if cmd == "cle":
+            print(lire_cle())
+            return 0
+        if cmd == "cle-renouveler":
+            return cmd_cle_renouveler()
+        if cmd == "config":
+            if len(a) != 2:
+                raise Erreur("usage : config <clé> <valeur>")
+            return cmd_config(a[0], a[1])
+        if cmd == "publier":
+            return cmd_publier(a)
+        if cmd == "appliquer":
+            print(json.dumps(appliquer()))
+            return 0
+        if cmd == "sauvegarde":
+            return cmd_sauvegarde()
+        if cmd == "basculer":
+            return cmd_basculer()
+        if cmd == "migrer-conf":
+            return cmd_migrer_conf()
+        if cmd == "api":
+            return cmd_api(sys.stdin.read(65536))
+    except Erreur as e:
+        print(f"voicestudioctl : {e}", file=sys.stderr)
+        return 1
+    sys.stderr.write(__doc__ or "")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
