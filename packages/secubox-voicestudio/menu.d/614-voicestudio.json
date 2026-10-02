@@ -1,0 +1,9 @@
+{
+  "id": "voicestudio",
+  "name": "VoiceStudio",
+  "icon": "🎙️",
+  "path": "/voicestudio/",
+  "category": "apps",
+  "order": 614,
+  "description": "Moteur vocal studio : synthèse et reconnaissance, administration du LXC"
+}

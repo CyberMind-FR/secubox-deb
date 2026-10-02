@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+case "$1" in
+  remove|purge)
+    rm -f /etc/nginx/secubox-routes.d/voicestudio.conf /etc/nginx/secubox.d/voicestudio.conf
+    rm -rf /etc/systemd/system/secubox-voicestudio-pub.socket.d /etc/systemd/system/secubox-voicestudio-pub.service.d
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

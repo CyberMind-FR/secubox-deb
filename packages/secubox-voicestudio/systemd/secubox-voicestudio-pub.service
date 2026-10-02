@@ -1,0 +1,26 @@
+[Unit]
+Description=SecuBox VoiceStudio — mandataire vers le moteur (réveille le LXC si besoin) [#1917]
+Requires=secubox-voicestudio-pub.socket
+After=secubox-voicestudio-pub.socket network.target
+
+[Service]
+# Le mandataire lui-même n'a besoin d'AUCUN privilège : il relaie des octets. Seuls le réveil et
+# l'endormissement du LXC sont root, d'où le préfixe « + » (exécuté en root, hors du bac à sable).
+User=nobody
+Group=nogroup
+# Le premier client attend ici le démarrage à froid du conteneur (torch + modèle).
+TimeoutStartSec=300
+ExecStartPre=+/usr/sbin/voicestudioctl wake
+# Le drop-in mode.conf (écrit par voicestudioctl) fixe la cible et, en mode « demande »,
+# le délai d'inactivité et l'endormissement du LXC. En « permanent » : jamais d'arrêt.
+ExecStart=/lib/systemd/systemd-socket-proxyd 10.100.0.230:3900
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0027

@@ -1,0 +1,39 @@
+[Unit]
+Description=SecuBox VoiceStudio — API du module (panneaux admin et usager) [#1917]
+After=network.target
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1917
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/share/secubox/voicestudio
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="PYTHONUNBUFFERED=1"
+
+# /run/secubox est PARTAGE et colle (1777) : on n'y délie que ce qu'on possède.
+# Le préfixe `+` exécute en root malgré User= (sans lui la ligne échouerait comme le démon).
+ExecStartPre=+/bin/rm -f /run/secubox/voicestudio.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/voicestudio.sock --workers 1 --log-level warning
+# nginx (www-data, groupe secubox) doit joindre la socket.
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/voicestudio.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/voicestudio.sock'
+Restart=on-failure
+RestartSec=5
+
+# Durcissement. NoNewPrivileges=no est requis ICI : le sudoers du module accorde à `secubox`
+# UN argv exact (systemd-run … voicestudioctl api) ; avec NoNewPrivileges=yes, sudo serait
+# neutralisé et la seule surface privilégiée du module cesserait de fonctionner. L'API n'écrit
+# rien d'elle-même : tout passe par le ctl, qui s'exécute hors de ce bac à sable (systemd-run).
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0027
+ReadWritePaths=/run/secubox /var/lib/secubox
+
+[Install]
+WantedBy=multi-user.target

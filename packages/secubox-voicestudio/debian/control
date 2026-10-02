@@ -4,13 +4,21 @@ Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
 
 Package: secubox-voicestudio
 Architecture: amd64
-Depends: ${misc:Depends}, podman, python3, curl
-Description: SecuBox — VoiceStudio, moteur vocal studio du parc (podman)
- Fait tourner l'image officielle de VoiceStudio (AGPL-3.0, service séparé),
- épinglée par empreinte, mémoire bornée, clé d'API obligatoire hors de la
- machine, port 3900 publié sur le LAN et le maillage seulement. Les autres
- box l'utilisent comme moteur distant de secubox-voice. amd64 seulement :
- aucune image arm64 n'existe.
+Depends: ${misc:Depends}, secubox-core (>= 1.4.0), lxc, python3,
+ python3-uvicorn | python3-pip, python3-httpx | python3-pip,
+ python3-multipart | python3-pip, sudo
+Description: SecuBox — VoiceStudio, moteur vocal studio du parc (LXC natif)
+ Fait tourner VoiceStudio (AGPL-3.0, poids CC-BY-NC : service SÉPARÉ, joint par
+ le réseau) dans un LXC Debian dédié, sans podman ni docker. Sources amont
+ épinglées par commit et par empreinte sha256, versions Python tirées de l'image
+ validée, mémoire bornée. Port 3900 publié par un mandataire d'hôte sur le LAN
+ et le maillage seulement, clé d'API obligatoire ; mode permanent ou éveillé à
+ la demande. Deux interfaces : administration (état, démarrage, mode, modèle de
+ reconnaissance, clé, journal, sauvegarde) et usager (dire un texte, dicter).
+ Les autres box l'utilisent comme moteur distant de secubox-voice. amd64
+ seulement : aucune roue torch CPU arm64 n'est validée ici. Outil : voicestudioctl.

@@ -1,0 +1,6 @@
+# SecuBox VoiceStudio — le panneau (utilisateur secubox) pilote le LXC par voicestudioctl.
+# UNE SEULE porte, un argv EXACT, sans joker : la requête (action + valeurs) arrive en JSON sur
+# stdin, et le ctl la revalide (liste blanche d'actions, valeurs par motif entier) avant d'agir.
+# systemd-run exécute le ctl dans le contexte de PID 1 : un sudo direct hériterait du bac à sable
+# de l'unité (ProtectSystem) et verrait /etc en lecture seule.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/voicestudioctl api

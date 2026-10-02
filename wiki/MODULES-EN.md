@@ -128,6 +128,7 @@
 | 📇 **Metacatalog** | Services | Service catalog and registry |
 | 🍺 **PicoBrew** | IoT | Homebrew / fermentation controller |
 | 🎙️ **Podcaster** | Media | Modern podcast manager |
+| 🗣️ **VoiceStudio** | Media | Studio voice engine (text-to-speech, dictation) in a native LXC |
 | 🤖 **ReDroid** | Apps | Android-in-container runtime |
 | 🔌 **SaaS Relay** | Network | SaaS / API proxy relay |
 | 🎯 **Security Posture** | Security | Honest board-truthful security scorecard |
@@ -495,6 +496,12 @@ Media server
 **Features:** Video streaming, Live TV, Transcoding, Mobile apps
 
 ![Jellyfin](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/jellyfin.png)
+
+#### 🗣️ VoiceStudio
+
+Studio voice engine in a native LXC (no podman, no docker): text-to-speech and dictation, with an administration panel and a user page
+
+**Features:** Pinned upstream source (commit + sha256), permanent or on-demand mode, key rotation, published on LAN/mesh only, backup, voice test
 
 #### 🎵 Lyrion Music
 

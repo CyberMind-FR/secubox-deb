@@ -1,0 +1,9 @@
+{
+  "id": "voicestudio-usager",
+  "name": "Voix",
+  "icon": "🗣️",
+  "path": "/voicestudio/usager.html",
+  "category": "apps",
+  "order": 615,
+  "description": "Dire un texte, dicter : la voix de la box"
+}

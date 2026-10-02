@@ -1,0 +1,14 @@
+[Unit]
+Description=SecuBox VoiceStudio — port 3900 publié par l'hôte (activation par socket) [#1917]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1917
+
+[Socket]
+# Les adresses publiées (LAN, maillage) viennent du drop-in adresses.conf, écrit par
+# `voicestudioctl publier` / `appliquer`. Sans lui : le loopback seulement, jamais le WAN.
+ListenStream=127.0.0.1:3900
+# Le maillage et les adresses peuvent précéder leur interface au démarrage.
+FreeBind=true
+Backlog=64
+
+[Install]
+WantedBy=sockets.target

@@ -1,11 +1,39 @@
 #!/bin/sh
 set -e
-if [ "$1" = "configure" ]; then
-    /usr/sbin/voicestudioctl init >/dev/null
-    systemctl daemon-reload || true
-    # Pas de démarrage automatique ici : le premier lancement tire une image de
-    # plusieurs Go et télécharge des modèles. « systemctl enable --now
-    # secubox-voicestudio » est un geste explicite de l'opérateur.
-fi
+case "$1" in
+  configure)
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/voicestudio
+    # Configuration : créée si absente ; ANCIEN schéma (podman) converti en gardant les adresses
+    # publiées — gk2 joint le moteur de gk3 par l'une d'elles. Le TOML n'est pas un conffile.
+    /usr/sbin/voicestudioctl migrer-conf || true
+    /usr/sbin/voicestudioctl init >/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+    # Mandataire et mode : drop-ins déduits du TOML (idempotent).
+    /usr/sbin/voicestudioctl appliquer >/dev/null 2>&1 || true
+    systemctl unmask secubox-voicestudio-api.service 2>/dev/null || true
+    systemctl enable secubox-voicestudio-api.service 2>/dev/null || true
+    systemctl restart secubox-voicestudio-api.service 2>/dev/null || true
+    # Le mandataire n'est PAS démarré ici : tant que l'ancien moteur (podman, avant 0.2.0) tient le
+    # port 3900, la prise échouerait. `voicestudioctl install` le démarre une fois le LXC prêt.
+    systemctl enable secubox-voicestudio-pub.socket 2>/dev/null || true
+    # Mise à jour d'une box DÉJÀ installée : le LXC existe et l'ancien moteur ne tient plus le port,
+    # donc le mandataire (arrêté par dpkg pendant la mise à jour) est relancé ici. Sans cela, le port
+    # 3900 resterait fermé jusqu'à un `voicestudioctl start` et les autres box perdraient le moteur.
+    if [ -f /var/lib/secubox/voicestudio/.lxc-provisioned ] \
+       && ! systemctl is-active --quiet secubox-voicestudio.service 2>/dev/null; then
+      systemctl start secubox-voicestudio-pub.socket 2>/dev/null || true
+    fi
+    # « Installer le paquet » active l'appareil : le provisionnement du LXC (torch + ~200
+    # dépendances, 10 à 25 min, réseau) tourne EN ARRIÈRE-PLAN pour ne pas bloquer dpkg. Gardé par
+    # un marqueur : no-op après une installation réussie.
+    systemctl enable secubox-voicestudio-provision.service 2>/dev/null || true
+    systemctl start --no-block secubox-voicestudio-provision.service 2>/dev/null || true
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+    ;;
+esac
 #DEBHELPER#
 exit 0

@@ -235,7 +235,7 @@ recommande:
 suggere:
   - secubox-zia-llm             # binaire statique arm64 seulement
   - secubox-voice-moteur        # moteur vocal local de Lexie (piper + whisper.cpp), arm64
-  - secubox-voicestudio         # VoiceStudio du parc (podman), amd64
+  - secubox-voicestudio         # VoiceStudio du parc (LXC natif), amd64
 
 meta: secubox-service-noyau
 niveau: service

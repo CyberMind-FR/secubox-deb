@@ -1,3 +1,21 @@
+secubox-voicestudio (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * LXC natif Debian à la place de podman (#1917, ref #1743) : plus aucune dépendance ni
+    commande podman. Sources amont épinglées par commit ET par empreinte sha256 (vérifiée
+    avant toute extraction), versions Python tirées de l'image validée, torch CPU.
+  * Mandataire d'hôte à activation par socket (systemd-socket-proxyd) : port 3900 sur le LAN
+    et le maillage seulement, jamais le WAN ; mode « permanent » (défaut, comportement
+    historique) ou « demande » (le LXC dort, se réveille au premier appel).
+  * Interface complète : API /api/v1/voicestudio (socket Unix, gardes require_jwt pour
+    l'administration, require_personne pour l'usager), panneau d'administration et page
+    d'usager, une seule porte privilégiée (voicestudioctl api, sudoers à argv exact).
+  * Bascule depuis podman sans couper le service : l'ancien moteur sert pendant
+    l'installation du LXC ; données reprises (volume conservé), adresses publiées reprises.
+  * La configuration /etc/secubox/voicestudio.toml n'est plus un conffile ; l'ancien schéma
+    est converti par « voicestudioctl migrer-conf ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 20:00:00 +0200
+
 secubox-voicestudio (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * Reconnaissance : modèle faster-whisper choisi par la clé « asr »

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox-Deb :: secubox-voicestudio :: panneau d'ADMINISTRATION (#1917)
+  Facette webui (portail). Sa jumelle d'usager est usager.html. Charte : hybrid-dark
+  (WEBUI-PANEL-GUIDELINES) — cyan #00d4ff, Courier Prime, emoji fonctionnels.
+  Toute action privilégiée passe par l'API, qui délègue à voicestudioctl (audité).
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — VoiceStudio</title>
+    <script>
+        /* Encadré par le Hall : on masque NOTRE coquille, jamais le contenu (§ 9). */
+        (function () {
+            var embarque = true;
+            try { embarque = window.top !== window.self; } catch (e) { embarque = true; }
+            if (embarque) document.documentElement.classList.add('sbx-embed');
+        })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <style>
+        :root {
+            --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6); --border: rgba(100, 150, 200, 0.2); --text: #e8e6d9;
+            --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944; --yellow: #ffcc00;
+            --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
+        }
+        :root.sbx-embed .sidebar, :root.sbx-embed .global-menu-bar, :root.sbx-embed .global-status-bar { display: none !important; }
+        :root.sbx-embed .main { margin-left: 0 !important; padding-top: 1rem !important; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; min-height: 100vh;
+                background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-width: 0; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; margin-top: .2rem; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);
+               cursor: pointer; font-size: 0.8rem; font-family: inherit; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.good { background: rgba(0,221,68,0.12); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h3 { color: var(--cyan); font-size: .9rem; margin-bottom: .7rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; }
+        .stat-card .value { font-size: 1.2rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; word-break: break-word; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); } .stat-card.green .value { color: var(--green); }
+        .stat-card.orange .value { color: var(--orange); } .stat-card.red .value { color: var(--red); }
+        .stat-card.blue .value { color: var(--blue); } .stat-card.purple .value { color: var(--purple); }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
+        .tab { padding: 0.5rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.7rem; text-transform: uppercase; background: none; border-top: 0; border-left: 0; border-right: 0; font-family: inherit; }
+        .tab:hover { color: var(--cyan); } .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+        .tab-content { display: none; } .tab-content.active { display: block; }
+        .rows { display: flex; flex-direction: column; gap: .25rem; }
+        .row { display: flex; justify-content: space-between; gap: 1rem; padding: .4rem .6rem; background: var(--bg-row); border-radius: 4px;
+               border-left: 3px solid var(--border); font-size: .78rem; flex-wrap: wrap; }
+        .row .k { color: var(--p31-dim); text-transform: uppercase; font-size: .68rem; letter-spacing: .05em; }
+        .row .v { color: var(--cyan); text-align: right; word-break: break-all; }
+        .row.ok { border-left-color: var(--green); } .row.warn { border-left-color: var(--orange); } .row.bad { border-left-color: var(--red); }
+        .form-group { margin-bottom: .7rem; }
+        .form-group label { display: block; margin-bottom: .2rem; font-size: .68rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: .05em; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: .45rem; background: rgba(20,30,45,.8); border: 1px solid var(--border);
+               border-radius: 4px; font-family: inherit; font-size: .8rem; color: var(--text); }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,.3); }
+        .form-group .aide { font-size: .65rem; color: var(--p31-dim); margin-top: .2rem; }
+        .form-row { display: flex; gap: .7rem; flex-wrap: wrap; } .form-row .form-group { flex: 1; min-width: 150px; }
+        pre.journal { background: rgba(0,0,0,.45); border: 1px solid var(--border); border-radius: 6px; padding: .6rem; font-size: .7rem;
+               max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word; color: #b8c4d0; }
+        .banniere { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 10px 14px; border-radius: 8px; font-size: .85rem; }
+        .banniere[hidden] { display: none; }
+        .banniere.panne { border: 1px solid #b4553a; border-left: 4px solid #e8734f; background: rgba(232,115,79,.10); color: #f2ded7; }
+        .banniere.progres { border: 1px solid var(--blue); border-left: 4px solid var(--blue); background: rgba(68,136,255,.10); }
+        .banniere .txt { flex: 1; min-width: 0; }
+        .barre { height: 4px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 6px; }
+        .barre > i { display: block; height: 100%; width: 40%; background: var(--blue); animation: va-et-vient 1.4s ease-in-out infinite; }
+        @keyframes va-et-vient { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+        .toast { position: fixed; bottom: 70px; right: 20px; padding: .75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: .8rem;
+                 z-index: 2000; opacity: 0; transform: translateY(20px); transition: all .3s; box-shadow: 0 0 20px rgba(0,212,255,.4); max-width: 80vw; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; display: flex; gap: .7rem; align-items: flex-start; }
+        .toast.error button { background: none; border: 0; color: #fff; cursor: pointer; font-size: 1rem; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: rgba(20,30,45,.97); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 560px; max-width: 92vw; max-height: 85vh; overflow-y: auto; }
+        .modal-content h3 { color: var(--cyan); margin-bottom: .8rem; }
+        .cle { background: rgba(0,0,0,.5); border: 1px dashed var(--orange); border-radius: 6px; padding: .7rem; word-break: break-all; color: var(--orange); font-size: .85rem; margin: .8rem 0; user-select: all; }
+        audio { width: 100%; margin-top: .6rem; }
+        ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: rgba(20,30,45,.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) { .main { margin-left: 0; padding-top: 60px; } .row .v { text-align: left; } }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>🎙️ VoiceStudio</h1>
+                <div class="sub" id="subline">Moteur vocal studio du parc — LXC natif</div>
+            </div>
+            <div class="btn-group">
+                <a class="btn" href="usager.html" title="La facette usager">🗣️ Page usager</a>
+                <button class="btn" data-action="rafraichir">↻ Actualiser</button>
+            </div>
+        </header>
+
+        <div id="panne" class="banniere panne" hidden role="alert"><span>⚠️</span><div class="txt"><b id="panneQuoi"></b> <span id="panneDetail"></span></div></div>
+        <div id="progres" class="banniere progres" hidden role="status"><span>⏳</span><div class="txt"><b id="progresTitre"></b><div class="barre"><i></i></div></div></div>
+
+        <div class="grid">
+            <div class="stat-card" id="cLxc"><div class="value" id="vLxc">-</div><div class="label">🧱 LXC</div></div>
+            <div class="stat-card" id="cMoteur"><div class="value" id="vMoteur">-</div><div class="label">🎙️ Moteur</div></div>
+            <div class="stat-card blue"><div class="value" id="vMode">-</div><div class="label">⚙️ Mode</div></div>
+            <div class="stat-card cyan"><div class="value" id="vMemoire">-</div><div class="label">🧠 Mémoire max</div></div>
+            <div class="stat-card purple"><div class="value" id="vDonnees">-</div><div class="label">📁 Données</div></div>
+            <div class="stat-card cyan"><div class="value" id="vVersion">-</div><div class="label">🏷️ Version</div></div>
+        </div>
+
+        <div class="card">
+            <div class="tabs" role="tablist">
+                <button class="tab active" data-tab="etat">📊 État</button>
+                <button class="tab" data-tab="reglages">⚙️ Réglages</button>
+                <button class="tab" data-tab="cle">🔑 Clé d'API</button>
+                <button class="tab" data-tab="essai">🧪 Essai</button>
+                <button class="tab" data-tab="journal">📜 Journal</button>
+                <button class="tab" data-tab="sauvegarde">💾 Sauvegarde</button>
+            </div>
+
+            <section class="tab-content active" id="tab-etat">
+                <div class="btn-group" style="margin-bottom:1rem">
+                    <button class="btn good" data-action="start" id="bStart">▶ Démarrer</button>
+                    <button class="btn" data-action="restart" id="bRestart">🔄 Redémarrer le moteur</button>
+                    <button class="btn danger" data-action="stop" id="bStop">⏹ Arrêter</button>
+                    <button class="btn primary" data-action="installer" id="bInstaller" hidden>🛠 Installer le moteur</button>
+                </div>
+                <div class="rows" id="detailEtat"></div>
+            </section>
+
+            <section class="tab-content" id="tab-reglages">
+                <div class="form-row">
+                    <div class="form-group"><label for="fMode">Mode</label>
+                        <select id="fMode">
+                            <option value="permanent">♾️ Permanent — répond sans délai</option>
+                            <option value="demande">💤 À la demande — dort, se réveille au 1er appel</option>
+                        </select>
+                        <div class="aide">À la demande rend la mémoire quand personne ne parle ; le premier appel attend le démarrage à froid (30 à 60 s).</div></div>
+                    <div class="form-group"><label for="fInact">Inactivité avant sommeil (s)</label><input type="number" id="fInact" min="60" max="86400" step="60">
+                        <div class="aide">Mode « à la demande » seulement.</div></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label for="fMem">Mémoire maximale du LXC</label><input type="text" id="fMem" placeholder="4G" pattern="[1-9][0-9]{0,4}[GM]">
+                        <div class="aide">Ex. 4G. Appliquée à chaud.</div></div>
+                    <div class="form-group"><label for="fCpu">Poids CPU (1–10000)</label><input type="number" id="fCpu" min="1" max="10000">
+                        <div class="aide">100 = poids par défaut ; plus bas, le moteur cède le pas aux autres services.</div></div>
+                </div>
+                <div class="form-group"><label for="fAsr">Modèle de reconnaissance (faster-whisper)</label>
+                    <select id="fAsr">
+                        <option>Systran/faster-whisper-tiny</option><option>Systran/faster-whisper-tiny.en</option>
+                        <option>Systran/faster-whisper-base</option><option>Systran/faster-whisper-base.en</option>
+                        <option>Systran/faster-whisper-small</option><option>Systran/faster-whisper-small.en</option>
+                        <option>Systran/faster-whisper-medium</option><option>Systran/faster-whisper-large-v3</option>
+                    </select>
+                    <div class="aide">Un modèle plus grand comprend mieux mais pèse plus (RAM, latence). Le moteur redémarre.</div></div>
+                <button class="btn primary" data-action="appliquer-reglages">✓ Appliquer</button>
+
+                <h3 style="margin-top:1.4rem">🌐 Adresses publiées</h3>
+                <div class="form-group"><label for="fPub">Adresses de la box où écoute le port 3900 (une par ligne)</label>
+                    <textarea id="fPub" rows="3" placeholder="192.168.1.9&#10;10.10.0.5"></textarea>
+                    <div class="aide">LAN et maillage seulement, jamais le WAN. Vide : le loopback (127.0.0.1) seulement. Chaque adresse doit être une IPv4 de cette box.</div></div>
+                <button class="btn primary" data-action="publier">🌐 Publier</button>
+            </section>
+
+            <section class="tab-content" id="tab-cle">
+                <div class="rows" id="detailCle"></div>
+                <p class="sub" style="margin:.8rem 0">La clé n'est jamais affichée en entier. Les autres box qui utilisent ce moteur (<code>voice.toml</code>, <code>[distant] cle</code>) en ont une copie.</p>
+                <button class="btn danger" data-action="renouveler">🔄 Renouveler la clé</button>
+            </section>
+
+            <section class="tab-content" id="tab-essai">
+                <h3>🗣️ Dire un texte</h3>
+                <div class="form-row">
+                    <div class="form-group" style="flex:3"><label for="eTexte">Texte</label><textarea id="eTexte" rows="3" maxlength="2000">Bonjour, ici la voix de votre SecuBox.</textarea></div>
+                    <div class="form-group"><label for="eVoix">Voix</label><select id="eVoix"><option value="">(défaut du moteur)</option></select></div>
+                    <div class="form-group"><label for="eFmt">Format</label><select id="eFmt"><option>mp3</option><option>wav</option><option>opus</option></select></div>
+                </div>
+                <div class="btn-group"><button class="btn primary" data-action="dire">▶ Dire</button><button class="btn" data-action="voix">↻ Voix</button></div>
+                <audio id="eAudio" controls hidden></audio>
+
+                <h3 style="margin-top:1.4rem">🎤 Transcrire un enregistrement</h3>
+                <div class="form-row">
+                    <div class="form-group" style="flex:3"><label for="eFichier">Fichier audio</label><input type="file" id="eFichier" accept="audio/*"></div>
+                    <div class="form-group"><label for="eLangue">Langue</label><input type="text" id="eLangue" placeholder="fr (vide : détection)" maxlength="8"></div>
+                </div>
+                <button class="btn primary" data-action="transcrire">▶ Transcrire</button>
+                <pre class="journal" id="eResultat" style="margin-top:.7rem" hidden></pre>
+            </section>
+
+            <section class="tab-content" id="tab-journal">
+                <div class="btn-group" style="margin-bottom:.7rem">
+                    <button class="btn" data-action="journal">↻ Charger</button>
+                    <select id="jN" class="btn"><option>100</option><option>250</option><option>500</option></select>
+                </div>
+                <pre class="journal" id="jTexte">(non chargé)</pre>
+            </section>
+
+            <section class="tab-content" id="tab-sauvegarde">
+                <p class="sub" style="margin-bottom:.8rem">Archive des données du moteur (voix clonées, historique, base) <b>sans</b> les modèles, qui se retéléchargent. Conservation : les 3 dernières, en 0600 dans <code>/var/backups/secubox/voicestudio/</code>.</p>
+                <div class="rows" id="detailSauv" style="margin-bottom:.8rem"></div>
+                <button class="btn primary" data-action="sauvegarde">💾 Sauvegarder maintenant</button>
+            </section>
+        </div>
+    </main>
+
+    <div class="toast" id="toast" role="status"></div>
+    <div class="modal" id="modalCle"><div class="modal-content">
+        <h3>🔑 Nouvelle clé d'API</h3>
+        <p>Elle n'est affichée <b>qu'une fois</b>. L'ancienne clé ne fonctionne plus.</p>
+        <div class="cle" id="cleValeur"></div>
+        <p class="sub">À reporter dans <code>/etc/secubox/voice.toml</code> → <code>[distant] cle</code> de chaque box qui utilise ce moteur (gk2…).</p>
+        <div class="btn-group" style="margin-top:1rem"><button class="btn primary" data-action="copier-cle">📋 Copier</button><button class="btn" data-action="fermer-cle">J'ai noté la clé</button></div>
+    </div></div>
+
+    <script>
+    (function () {
+        'use strict';
+        var API = '/api/v1/voicestudio';
+        var etat = null, timer = null, derniereOperation = null;
+
+        function $(id) { return document.getElementById(id); }
+        function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+
+        /* Message transitoire (succès, progrès) : ~3 s. Erreur : reste jusqu'à ✕. */
+        var tToast = null;
+        function toast(m) {
+            var t = $('toast'); t.className = 'toast show'; t.textContent = m;
+            clearTimeout(tToast); tToast = setTimeout(function () { t.className = 'toast'; }, 3000);
+        }
+        function errorToast(m) {
+            var t = $('toast'); clearTimeout(tToast); t.className = 'toast error show'; t.textContent = '';
+            var s = document.createElement('span'); s.textContent = '⚠️ ' + m;
+            var b = document.createElement('button'); b.textContent = '✕'; b.setAttribute('aria-label', 'Fermer');
+            b.addEventListener('click', function () { t.className = 'toast'; });
+            t.appendChild(s); t.appendChild(b);
+        }
+
+        async function api(chemin, opts) {
+            opts = opts || {}; var h = opts.headers || {}; var j = jeton();
+            if (j) h['Authorization'] = 'Bearer ' + j;
+            if (opts.json !== undefined) { h['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+            var r = await fetch(API + chemin, { method: opts.method || 'GET', headers: h, body: opts.body, credentials: 'same-origin' });
+            if (r.status === 401) { errorToast('🔒 Connexion requise'); throw new Error('401'); }
+            if (r.status === 403) { errorToast('🔒 Réservé aux administrateurs'); throw new Error('403'); }
+            return r;
+        }
+        async function erreurDe(r) { try { var d = await r.json(); return d.detail || ('HTTP ' + r.status); } catch (e) { return 'HTTP ' + r.status; } }
+
+        /* Double cache : la dernière réponse est réaffichée aussitôt, pendant que la suivante charge. */
+        function cacheLire() { try { return JSON.parse(localStorage.getItem('vs_statut') || 'null'); } catch (e) { return null; } }
+        function cacheEcrire(v) { try { localStorage.setItem('vs_statut', JSON.stringify(v)); } catch (e) { /* stockage indisponible : sans effet */ } }
+
+        function annoncePanne(quoi, detail) { $('panneQuoi').textContent = quoi; $('panneDetail').textContent = detail || ''; $('panne').hidden = false; }
+        function effacePanne() { $('panne').hidden = true; }
+
+        function pastille(carte, classe, texte, id) { $(carte).className = 'stat-card ' + classe; $(id).textContent = texte; }
+        function ligne(k, v, classe) { return '<div class="row ' + (classe || '') + '"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'; }
+
+        function rendre(s) {
+            etat = s;
+            var lxc = s.lxc || '?', moteur = !!s.moteur;
+            pastille('cLxc', lxc === 'RUNNING' ? 'green' : (lxc === 'STOPPED' ? 'orange' : 'red'),
+                     lxc === 'RUNNING' ? '🟢 actif' : (lxc === 'STOPPED' ? '💤 endormi' : '🔴 ' + lxc.toLowerCase()), 'vLxc');
+            pastille('cMoteur', moteur ? 'green' : (s.demarrage ? 'orange' : (lxc === 'STOPPED' ? 'orange' : 'red')),
+                     moteur ? '● répond' : (s.demarrage ? '⏳ démarre' : '○ muet'), 'vMoteur');
+            $('vMode').textContent = s.mode === 'demande' ? '💤 demande' : '♾️ permanent';
+            $('vMemoire').textContent = s.memoire || '-';
+            $('vDonnees').textContent = (s.donnees_mo != null ? Math.round(s.donnees_mo) + ' Mo' : '-');
+            $('vVersion').textContent = s.version || '-';
+            $('subline').textContent = 'Moteur vocal studio du parc — LXC natif' + (s.commit ? ' · ' + s.commit : '') + (s.source === 'cache' ? ' · état en cache' : '');
+
+            var op = s.operation || {}, prov = s.provisionnement === 'activating' || s.provisionnement === 'active';
+            var enCours = op.etat === 'en-cours' || prov;
+            if (prov && op.etat !== 'en-cours') op = { action: 'installer', etat: 'en-cours' };
+            $('progres').hidden = !enCours;
+            if (enCours) $('progresTitre').textContent = ({start: 'Démarrage', stop: 'Arrêt', restart: 'Redémarrage', installer: 'Installation du moteur (10 à 25 min)'}[op.action] || op.action) + '…';
+            if (op.etat === 'termine' && op.debut !== derniereOperation) {
+                derniereOperation = op.debut;
+                if (op.ok) toast('✓ Opération « ' + op.action + ' » terminée');
+                else errorToast('Opération « ' + op.action + ' » en échec : ' + (op.detail || 'voir le journal'));
+            }
+            ['bStart', 'bRestart', 'bStop', 'bInstaller'].forEach(function (b) { $(b).disabled = enCours; });
+            $('bInstaller').hidden = !!s.installed;
+            $('bStart').hidden = !s.installed; $('bRestart').hidden = !s.installed; $('bStop').hidden = !s.installed;
+
+            var d = '';
+            d += ligne('Installé', s.installed ? 'oui' : (prov ? 'installation en cours…' : 'non — « Installer le moteur »'), s.installed ? 'ok' : 'warn');
+            d += ligne('Conteneur', lxc + ' (' + (s.ip || '?') + ':' + (s.port || 3900) + ')', lxc === 'RUNNING' ? 'ok' : 'warn');
+            d += ligne('Moteur (/health)', moteur ? 'répond' : (s.demarrage ? 'démarre (HTTP 503)' : 'ne répond pas'), moteur ? 'ok' : (s.demarrage ? 'warn' : 'bad'));
+            d += ligne('Mandataire du port 3900', s.mandataire || '?', s.mandataire === 'active' ? 'ok' : 'warn');
+            d += ligne('Publié sur', (s.publier && s.publier.length ? s.publier.join(', ') + ', ' : '') + '127.0.0.1');
+            d += ligne('Mode', s.mode === 'demande' ? 'à la demande (sommeil après ' + (s.inactivite_s || '?') + ' s)' : 'permanent');
+            d += ligne('Reconnaissance', s.asr || '?'); d += ligne('Poids CPU', s.cpu_poids);
+            d += ligne('Version amont', (s.version || '?') + ' · commit ' + (s.commit || '?'));
+            $('detailEtat').innerHTML = d;
+
+            /* Les champs ne sont réécrits que s'ils n'ont pas le focus : on ne vole pas une saisie en cours. */
+            var champs = {fMode: s.mode, fInact: s.inactivite_s, fMem: s.memoire, fCpu: s.cpu_poids, fAsr: s.asr, fPub: (s.publier || []).join('\n')};
+            Object.keys(champs).forEach(function (id) {
+                var e = $(id); if (document.activeElement !== e && champs[id] != null && e.dataset.sale !== '1') e.value = champs[id];
+            });
+            $('detailSauv').innerHTML = ligne('Dernière archive', s.sauvegarde || 'aucune', s.sauvegarde ? 'ok' : 'warn');
+        }
+
+        async function rafraichir() {
+            try {
+                var r = await api('/detail');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                var s = await r.json();
+                if (s.error) { annoncePanne('Module indisponible', ' — ' + s.error + '. Rien n\'est affiché de faux.'); return; }
+                effacePanne(); cacheEcrire(s); rendre(s);
+                clearTimeout(timer); timer = setTimeout(rafraichir, (s.operation && s.operation.etat === 'en-cours') ? 4000 : 15000);
+            } catch (e) {
+                annoncePanne('API VoiceStudio injoignable', ' — les valeurs affichées sont les dernières connues, pas des mesures.');
+                clearTimeout(timer); timer = setTimeout(rafraichir, 30000);
+            }
+        }
+
+        async function action(chemin, titre, corps) {
+            try {
+                var r = await api(chemin, { method: 'POST', json: corps });
+                if (r.status === 202) { toast('⏳ ' + titre + '…'); rafraichir(); return null; }
+                if (!r.ok) { errorToast(titre + ' : ' + await erreurDe(r)); return null; }
+                return await r.json();
+            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast(titre + ' : ' + e.message); return null; }
+        }
+
+        async function appliquerReglages() {
+            if (!etat) return;
+            var v = {}, n = function (x) { return parseInt(x, 10); };
+            if ($('fMode').value !== etat.mode) v.mode = $('fMode').value;
+            if (n($('fInact').value) !== etat.inactivite_s && $('fInact').value) v.inactivite_s = n($('fInact').value);
+            if ($('fMem').value && $('fMem').value !== etat.memoire) v.memoire = $('fMem').value.trim();
+            if (n($('fCpu').value) !== etat.cpu_poids && $('fCpu').value) v.cpu_poids = n($('fCpu').value);
+            if ($('fAsr').value !== etat.asr) v.asr = $('fAsr').value;
+            if (!Object.keys(v).length) { toast('Rien à changer'); return; }
+            if (v.asr && !confirm('Changer le modèle de reconnaissance redémarre le moteur (quelques secondes sans service). Continuer ?')) return;
+            if (v.mode && !confirm('Changer de mode relance le mandataire du port 3900 (les connexions en cours sont coupées). Continuer ?')) return;
+            toast('⏳ Application…');
+            var r = await action('/config', 'Réglages', v);
+            if (r && r.ok) { ['fMode', 'fInact', 'fMem', 'fCpu', 'fAsr'].forEach(function (id) { $(id).dataset.sale = ''; }); toast('✓ Réglages appliqués'); rafraichir(); }
+        }
+
+        async function publier() {
+            var liste = $('fPub').value.split(/\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+            for (var i = 0; i < liste.length; i++) if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(liste[i])) { errorToast('Adresse invalide : ' + liste[i]); return; }
+            var coupe = etat && etat.publier && etat.publier.some(function (a) { return liste.indexOf(a) < 0; });
+            if (coupe && !confirm('Une adresse actuellement publiée sera retirée : les box qui joignent le moteur par elle (gk2 → maillage) perdront le moteur. Continuer ?')) return;
+            var r = await action('/publier', 'Publication', { adresses: liste });
+            if (r && r.ok) { $('fPub').dataset.sale = ''; toast('✓ Publié sur : ' + (liste.join(', ') || '127.0.0.1')); rafraichir(); }
+        }
+
+        async function chargerCle() {
+            try {
+                var r = await api('/cle'); if (!r.ok) return;
+                var d = await r.json();
+                $('detailCle').innerHTML = ligne('Clé du moteur', d.presente ? d.apercu : 'absente', d.presente ? 'ok' : 'warn');
+            } catch (e) { /* 401/403 déjà annoncés */ }
+        }
+
+        async function renouveler() {
+            if (!confirm('Renouveler la clé ? L\'ancienne cesse de fonctionner immédiatement : les box qui utilisent ce moteur devront recevoir la nouvelle.')) return;
+            var r = await action('/cle/renouveler', 'Renouvellement de la clé');
+            if (r && r.cle) { $('cleValeur').textContent = r.cle; $('modalCle').classList.add('show'); chargerCle(); }
+        }
+
+        async function voix() {
+            try {
+                var r = await api('/voix');
+                if (!r.ok) { errorToast('Voix : ' + await erreurDe(r)); return; }
+                var d = await r.json(), s = $('eVoix'), cur = s.value;
+                s.innerHTML = '<option value="">(défaut du moteur)</option>' + (d.voix || []).map(function (x) {
+                    return '<option value="' + esc(x.id) + '">' + esc(x.nom + (x.langue ? ' (' + x.langue + ')' : '')) + '</option>'; }).join('');
+                s.value = cur; toast('✓ ' + (d.voix || []).length + ' voix');
+            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast('Voix : ' + e.message); }
+        }
+
+        async function dire() {
+            var texte = $('eTexte').value.trim(); if (!texte) { errorToast('Texte vide'); return; }
+            toast('⏳ Synthèse…');
+            try {
+                var r = await api('/essai/dire', { method: 'POST', json: { texte: texte, voix: $('eVoix').value, format: $('eFmt').value } });
+                if (!r.ok) { errorToast('Synthèse : ' + await erreurDe(r)); return; }
+                var blob = await r.blob(), a = $('eAudio');
+                if (a.dataset.url) URL.revokeObjectURL(a.dataset.url);
+                a.dataset.url = URL.createObjectURL(blob); a.src = a.dataset.url; a.hidden = false; a.play().catch(function () {});
+            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast('Synthèse : ' + e.message); }
+        }
+
+        async function transcrire() {
+            var f = $('eFichier').files[0]; if (!f) { errorToast('Choisissez un fichier audio'); return; }
+            var fd = new FormData(); fd.append('fichier', f); fd.append('langue', $('eLangue').value.trim());
+            toast('⏳ Transcription…');
+            try {
+                var r = await api('/essai/transcrire', { method: 'POST', body: fd });
+                if (!r.ok) { errorToast('Transcription : ' + await erreurDe(r)); return; }
+                var d = await r.json(), z = $('eResultat'); z.hidden = false; z.textContent = d.vide ? '(aucune parole détectée)' : d.texte;
+            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast('Transcription : ' + e.message); }
+        }
+
+        async function journal() {
+            try {
+                var r = await api('/journal?n=' + encodeURIComponent($('jN').value));
+                if (!r.ok) { errorToast('Journal : ' + await erreurDe(r)); return; }
+                var d = await r.json(); $('jTexte').textContent = (d.lignes && d.lignes.length) ? d.lignes.join('\n') : '(journal vide — le LXC est-il arrêté ?)';
+                $('jTexte').scrollTop = $('jTexte').scrollHeight;
+            } catch (e) { if (['401', '403'].indexOf(e.message) < 0) errorToast('Journal : ' + e.message); }
+        }
+
+        async function sauvegarde() {
+            toast('⏳ Archive en cours…');
+            var r = await action('/sauvegarde', 'Sauvegarde');
+            if (r && r.ok) { toast('✓ ' + r.fichier); rafraichir(); }
+        }
+
+        function onglet(nom) {
+            document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === nom); });
+            document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.toggle('active', c.id === 'tab-' + nom); });
+            if (nom === 'cle') chargerCle();
+            if (nom === 'essai' && $('eVoix').options.length < 2) voix();
+        }
+
+        var ACTIONS = {
+            'rafraichir': rafraichir,
+            'start': function () { action('/start', 'Démarrage'); },
+            'stop': function () { if (confirm('Arrêter le moteur ? Lexie et les box qui l\'utilisent perdent la voix « studio » (repli local pour les box en mode mixte).')) action('/stop', 'Arrêt'); },
+            'restart': function () { if (confirm('Redémarrer le moteur (quelques secondes sans service) ?')) action('/restart', 'Redémarrage'); },
+            'installer': function () { if (confirm('Installer le moteur dans le LXC ? 10 à 25 minutes, réseau nécessaire. Si un ancien moteur podman tourne, il continue de servir jusqu\'à la bascule.')) action('/installer', 'Installation'); },
+            'appliquer-reglages': appliquerReglages, 'publier': publier, 'renouveler': renouveler,
+            'dire': dire, 'voix': voix, 'transcrire': transcrire, 'journal': journal, 'sauvegarde': sauvegarde,
+            'fermer-cle': function () { $('modalCle').classList.remove('show'); $('cleValeur').textContent = ''; },
+            'copier-cle': function () {
+                var v = $('cleValeur').textContent;
+                (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function () { toast('✓ Copiée'); },
+                    function () { var r = document.createRange(); r.selectNodeContents($('cleValeur')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Sélectionnée : Ctrl+C'); });
+            }
+        };
+        document.addEventListener('click', function (ev) {
+            var el = ev.target.closest('[data-action],[data-tab]'); if (!el) return;
+            if (el.dataset.tab) { onglet(el.dataset.tab); return; }
+            var f = ACTIONS[el.dataset.action]; if (f) f();
+        });
+        $('modalCle').addEventListener('click', function (ev) { if (ev.target === $('modalCle')) ACTIONS['fermer-cle'](); });
+        ['fMode', 'fInact', 'fMem', 'fCpu', 'fAsr', 'fPub'].forEach(function (id) { $(id).addEventListener('input', function () { $(id).dataset.sale = '1'; }); });
+
+        var c = cacheLire(); if (c) rendre(c);
+        rafraichir();
+    })();
+    </script>
+</body>
+</html>

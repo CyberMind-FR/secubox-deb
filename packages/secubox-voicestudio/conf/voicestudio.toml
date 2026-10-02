@@ -1,12 +1,44 @@
-# SecuBox-Deb :: VoiceStudio (#1649) — moteur vocal « studio » du parc.
-# Image OFFICIELLE (le fork CyberMind-FR/VoiceStudio est identique à l'amont),
-# ÉPINGLÉE par empreinte : une mise à jour est un geste, pas une surprise.
-image    = "ghcr.io/debpalash/voicestudio:stable"
-empreinte = ""          # sha256:… posé par « voicestudioctl epingle »
+# SecuBox-Deb :: VoiceStudio (#1649, #1917) — moteur vocal « studio » du parc.
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Le moteur vit dans un LXC natif Debian (jamais podman ni docker). Les
+# sources amont sont ÉPINGLÉES par commit ET par empreinte d'archive : une
+# mise à jour est un geste (`voicestudioctl mettre-a-jour`), pas une surprise.
+
+[source]
+depot    = "https://github.com/debpalash/VoiceStudio"
+version  = "0.5.6"
+commit   = "3915a62cb482bb43117aaebab57d22745bd1cc21"
+sha256   = "111c0df4cd7cddd79864564ea9633b0d12a6e207fd0f7e0db587e963db4d0807"
+
+[lxc]
+nom      = "voicestudio"
+chemin   = "/data/lxc"
+ip       = "10.100.0.230"
+memoire  = "4G"        # plafond cgroup du conteneur
+cpu_poids = 50         # 1–10000 ; 100 = poids par défaut, bas = cède le pas aux autres services
+
+# « permanent » : le LXC démarre avec la box (comportement historique, Lexie
+# répond sans délai). « demande » : endormi tant que personne n'appelle ; le
+# premier client attend le démarrage à froid (30–60 s), le conteneur se rendort
+# après `inactivite_s` sans connexion et rend sa mémoire à l'hôte.
+mode     = "permanent"
+inactivite_s = 900
+
+[reseau]
 # Adresses de l'HÔTE où publier le port 3900 : LAN et maillage, jamais le WAN.
-# Vide = seulement 127.0.0.1.
-publier  = []          # « voicestudioctl publier 192.168.1.9 10.10.0.5 »
-memoire  = "4g"
-# Modèle de reconnaissance (faster-whisper) : base = le meilleur compromis
-# vitesse/précision mesuré sur un Core i3 pour des commandes courtes (#1649).
+# Vide = seulement 127.0.0.1. « voicestudioctl publier 192.168.1.9 10.10.0.5 »
+publier  = []
+
+[moteur]
+# Reconnaissance (faster-whisper) : base = le meilleur compromis vitesse /
+# précision mesuré sur un Core i3 pour des commandes courtes (#1649).
 asr      = "Systran/faster-whisper-base"
+
+[limites]
+# Garde-fous des routes d'USAGER : une synthèse n'est pas un moyen de faire lire
+# un livre entier à la box, ni un envoi audio un moyen d'y téléverser un film.
+texte_max    = 2000
+audio_max_mo = 10
+delai_s      = 120
