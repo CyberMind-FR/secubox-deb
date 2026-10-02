@@ -129,7 +129,6 @@
 | 🍺 **PicoBrew** | IoT | Homebrew-/Fermentationssteuerung |
 | 🎙️ **Podcaster** | Media | Moderner Podcast-Manager |
 | 🤖 **ReDroid** | Apps | Android-im-Container-Laufzeit |
-| 🖥️ **RustDesk** | Access | Selbstgehostetes Remote-Desktop-Relay |
 | 🔌 **SaaS Relay** | Network | SaaS-/API-Proxy-Relay |
 | 🎯 **Security Posture** | Security | Ehrliche, board-wahrheitsgemäße Sicherheits-Scorecard |
 | 📡 **SENTINELLE-GSM** | Security | Passiver Rogue-BTS-Sensor (MIND-Schicht) |
@@ -220,13 +219,6 @@ SAML/OIDC-Identitätsanbieter
 
 ![Identity Provider](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/identity.png)
 
-#### 🖥️ RustDesk
-
-Selbstgehostetes Remote-Desktop-Relay
-
-**Funktionen:** Relay-Server, ID-Server, Sitzungen, Selbstgehostet
-
-![RustDesk](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/rustdesk.png)
 
 ---
 

@@ -269,8 +269,7 @@ Depends: ${misc:Depends},
 Recommends: secubox-repo,
          secubox-backup,
          secubox-config-advisor
-Suggests: secubox-rustdesk,
-         secubox-assist
+Suggests: secubox-assist
 Description: SecuBox — service « Administration »
  Tableau d'administration, App Store, profils, dépôt, certificats.
  .

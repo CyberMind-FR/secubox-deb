@@ -126,7 +126,6 @@ eye-network_at_              = "eager"
 # Manuels — ne démarrent que sur décision explicite d'un opérateur.
 "frigate"                    = "manual"
 "picobrew"                   = "manual"
-"rustdesk"                   = "manual"
 xray_at_                     = "manual"
 "yacy"                       = "manual"
 

@@ -2868,7 +2868,6 @@ INCOMPLETE_MODULES=(
   # enable <name>` to lift the mask.
   secubox-grafana
   secubox-yacy
-  secubox-rustdesk
   secubox-lyrion
   secubox-mail
   secubox-gitea

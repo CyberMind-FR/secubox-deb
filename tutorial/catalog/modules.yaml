@@ -5145,40 +5145,6 @@ modules:
       presente: true
       chemin: "/srv/secubox/www/routes"
       vhosts: []
-  - id: secubox-rustdesk
-    nom: "secubox-rustdesk"
-    categorie: "system"
-    tier: "lite"
-    description: "SecuBox RustDesk — self-hosted remote desktop relay"
-    manifeste: true
-    lxc: true
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli:
-      - "rustdeskctl"
-    systemd:
-      - "secubox-rustdesk.service"
-    ports:
-      - "9080"
-    documentation:
-      - "README.md"
-    api:
-      socket: "À documenter"
-      health: "À documenter"
-      authentifie: false
-      nb_routes: 5
-      routes:
-        - "GET /access"
-        - "GET /components"
-        - "GET /healthz"
-        - "GET /status"
-        - "GET /version"
-    interface_web:
-      presente: true
-      chemin: "À documenter"
-      vhosts:
-        - "rustdesk.gk2.secubox.in"
   - id: secubox-saas-relay
     nom: "secubox-saas-relay"
     categorie: "misc"

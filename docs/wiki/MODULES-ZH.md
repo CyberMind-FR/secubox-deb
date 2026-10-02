@@ -128,7 +128,6 @@
 | 🍺 **PicoBrew** | IoT | 自酿 / 发酵控制器 |
 | 🎙️ **Podcaster** | Media | 现代播客管理器 |
 | 🤖 **ReDroid** | Apps | 容器中的 Android 运行时 |
-| 🖥️ **RustDesk** | Access | 自托管远程桌面中继 |
 | 🔌 **SaaS Relay** | Network | SaaS / API 代理中继 |
 | 🎯 **Security Posture** | Security | 诚实的、基于真实状态的安全评分卡 |
 | 📡 **SENTINELLE-GSM** | Security | 被动式伪基站传感器（MIND 层） |
@@ -218,13 +217,6 @@ SAML/OIDC身份提供者
 
 ![Identity Provider](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/identity.png)
 
-#### 🖥️ RustDesk
-
-自托管远程桌面中继
-
-**功能:** 中继服务器, ID 服务器, 会话, 自托管
-
-![RustDesk](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/rustdesk.png)
 
 ---
 

@@ -1,3 +1,9 @@
+secubox-system (1.3.10-1~bookworm1) bookworm; urgency=low
+
+  * Décommissionnement de RustDesk (#1862) : Tableau d'état du développement : RustDesk retiré.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 13:00:00 +0200
+
 secubox-system (1.3.9-1~bookworm1) bookworm; urgency=medium
 
   * Widget d'état : « Identity DID » renvoie à secubox-annuaire (did:plc),

@@ -504,7 +504,7 @@
         '/auth/': '🔑', '/cdn/': '💾', '/mediaflow/': '🎬', '/portal/': '🚪',
         '/metrics/': '📈', '/certs/': '📜', '/vortex-dns/': '🌀', '/eye-remote/': '👁️',
         '/sentinelle/': '📡', '/lyrion/': '🎵', '/grafana/': '📈',
-        '/zigbee/': '🐝', '/yacy/': '🔍', '/rustdesk/': '🖥️', '/mqtt/': '📡'
+        '/zigbee/': '🐝', '/yacy/': '🔍', '/mqtt/': '📡'
     };
 
     // window._menuDataCache is populated by buildMenu() after the

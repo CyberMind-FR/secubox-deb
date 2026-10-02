@@ -247,7 +247,7 @@ var DevStatusWidget = {
             progress: 80,
             icon: '🖥️',
             description: 'Terminal web, RDP, TURN/STUN',
-            components: ['rtty-remote', 'turn-server', 'rustdesk'],
+            components: ['rtty-remote', 'turn-server'],
             dependsOn: ['reverse-proxy'],
             usedBy: ['master-link']
         },
@@ -480,7 +480,6 @@ var DevStatusWidget = {
         'gitea': { name: 'Gitea', type: 'backend', status: 'production', packages: ['secubox-app-gitea', 'luci-app-gitea'] },
         'rtty-remote': { name: 'RTTY Remote', type: 'backend', status: 'production', packages: ['secubox-app-rtty-remote', 'luci-app-rtty-remote'] },
         'turn-server': { name: 'TURN Server', type: 'backend', status: 'production', packages: ['secubox-app-turn', 'luci-app-turn'] },
-        'rustdesk': { name: 'RustDesk', type: 'backend', status: 'beta', packages: ['secubox-app-rustdesk'] },
 
         // AI components
         'localai': { name: 'LocalAI', type: 'backend', status: 'production', packages: ['secubox-app-localai', 'luci-app-localai'] },
