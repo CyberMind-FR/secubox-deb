@@ -59,3 +59,6 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 ## 2026-10-02 — Assistance : demandes reçues visibles (ref #1895)
 - secubox-assist 0.2.11 : la carte « Demandes en attente » liste aussi les demandes ouvertes reçues des autres box (bouton Répondre). La demande de gk3 (motif sbx, req 4e68e4cb…) était active dans le journal de gk2 mais ne s'affichait que dans l'onglet « Demandes ouvertes ». Déployé gk2 (page seule, sans redémarrage). 4 tests.
+
+## 2026-10-02 — Accès : erreur « Votre nom est nécessaire » rattrapée (ref #1893)
+- sbxid 0.4.18 : bouton() des pages d'accès exécute l'action dans la chaîne de promesses ; le throw synchrone n'est plus une erreur non rattrapée avec bouton figé. Non traité : iframes blob:https://admin.gk2… bloquées par la CSP du Hall (origine non identifiée, aucun createObjectURL d'iframe dans les sources) ; bruit Firefox Feature Policy autoplay/encrypted-media et Layout forced sans effet.

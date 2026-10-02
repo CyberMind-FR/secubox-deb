@@ -408,7 +408,9 @@ function bouton(txt, cls, action) {
   const b = el('button', cls, txt);
   b.onclick = () => {
     b.disabled = true;
-    Promise.resolve(action()).then(rafraichis)
+    // action() DANS la chaîne : un throw synchrone (« Votre nom est nécessaire ») doit finir
+    // dans le .catch, pas échapper au onclick et laisser le bouton figé (#1893).
+    Promise.resolve().then(action).then(rafraichis)
       .catch(e => { b.disabled = false; alerte(e.message); });
   };
   return b;
