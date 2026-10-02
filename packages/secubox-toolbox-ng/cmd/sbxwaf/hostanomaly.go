@@ -123,3 +123,26 @@ func estDGA(host string) bool {
 		return false
 	}
 }
+
+// traficInterne dit si une requête est la boîte qui se parle à elle-même : un
+// Host de bouclage (localhost, 127.x, ::1) ET un pair de bouclage. Les deux
+// ensemble, jamais l'un sans l'autre : `Host: localhost` venu du WAN est une
+// sonde, et un client loopback qui vise un vrai vhost reste observable.
+func traficInterne(host, ip string) bool {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if sansPort, _, err := net.SplitHostPort(h); err == nil {
+		h = sansPort // « localhost:9080 », « [::1]:8085 »
+	}
+	h = strings.Trim(h, "[]")
+	hoteLocal := h == "localhost"
+	if !hoteLocal {
+		if a := net.ParseIP(h); a != nil {
+			hoteLocal = a.IsLoopback()
+		}
+	}
+	if !hoteLocal {
+		return false
+	}
+	a := net.ParseIP(ip)
+	return a != nil && a.IsLoopback()
+}
