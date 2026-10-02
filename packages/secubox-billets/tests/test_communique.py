@@ -73,7 +73,8 @@ async def test_permalink_renders_communique_template(client):
     assert "data-load-embed" in r.text                     # click-to-load hook
     # communiqué CSP relaxes fonts only (no script widening)
     csp = r.headers["Content-Security-Policy"]
-    assert "fonts.googleapis.com" in csp and "fonts.gstatic.com" in csp
+    assert "font-src 'self'" in csp
+    assert "fonts.googleapis.com" not in csp and "fonts.gstatic.com" not in csp
 
 
 async def test_communique_without_snapshot_renders_live_embed(client):

@@ -138,9 +138,11 @@ def _csp(frame_src: str, *, fonts: bool = False) -> str:
     # the WAF (sbxmitm sub_filter) and self-styles via a dynamic <style> element;
     # a strict style-src blocked it, so the banner fell to the page bottom
     # unstyled. script-src stays 'self' (the real XSS lever); user content is
-    # nh3-sanitized. `fonts` also adds Google Fonts for the communiqué permalink.
-    style_src = "style-src 'self' 'unsafe-inline'" + (" https://fonts.googleapis.com" if fonts else "")
-    font_src = " font-src https://fonts.gstatic.com;" if fonts else ""
+    # nh3-sanitized. `fonts` adds font-src 'self' (cache de polices de la box).
+    # Les polices passent par le cache de la box (/cdn/fonts/, #1875) : même
+    # origine, plus aucun hôte Google dans la CSP.
+    style_src = "style-src 'self' 'unsafe-inline'"
+    font_src = " font-src 'self';" if fonts else ""
     # Bandeau santé injecté par le WAF (sbxwaf sub_filter) : un <script> inline
     # que `script-src 'self'` bloquait (erreur console). On l'autorise par son
     # EMPREINTE exacte — pas d'ouverture générale de l'inline.
