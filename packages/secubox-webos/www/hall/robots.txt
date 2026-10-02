@@ -1,0 +1,12 @@
+# SecuBox Hall — politique d'exploration (#1871)
+# Le Hall est public en mode invité : le parcours public se lit, le privé reste fermé.
+# L'authentification et le WAF, eux, ne dépendent PAS de ce fichier.
+User-agent: *
+Allow: /
+Allow: /api/v1/webos/public/
+Disallow: /api/
+Disallow: /i/
+Disallow: /vault/
+Disallow: /coffre/
+Disallow: /__console/
+Disallow: /login.html
