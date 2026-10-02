@@ -1,3 +1,13 @@
+secubox-waf-ng (1.18.12-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf (#1859) : la boîte qui s'appelle elle-même n'est plus une anomalie
+    d'hôte — Host de bouclage (localhost, 127.x, ::1) depuis un pair de
+    bouclage : ~12 700 lignes par jour (hub/status, /portal/) qui noyaient les
+    vraies sondes. Les deux conditions ensemble : `Host: localhost` venu de
+    l'extérieur ou du LAN reste journalisé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 11:00:00 +0200
+
 secubox-waf-ng (1.18.11-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : pas de bandeau de santé dans une page dont l'amont est un AUTRE nœud du maillage (10.10.0.0/24) — gk2 injectait admin.gk2/shared/health-banner.js dans les pages de gk3 qu'il relaie, que leur CSP bloquait ; vhost actor : + $sbx_hall_box et $sbx_halls_parc (#1725, #1713).

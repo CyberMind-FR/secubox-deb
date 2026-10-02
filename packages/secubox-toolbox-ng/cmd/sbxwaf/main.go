@@ -933,6 +933,14 @@ func (s *Server) recordHostAnomalyAvecLeurre(r *http.Request, host, leurre, fili
 	rejouees ...[]string) {
 	cls := classifyHost(host)
 	ip := clientIP(r)
+	// LE TRAFIC DE LA BOÎTE AVEC ELLE-MÊME N'EST PAS UNE ANOMALIE (#1859). Les
+	// modules s'appellent en `Host: localhost` depuis 127.0.0.1 (hub/status,
+	// /portal/…) : ~12 700 lignes par jour qui noyaient les vraies sondes. Il faut
+	// les DEUX conditions — un client venu de l'extérieur qui annonce `localhost`
+	// reste une anomalie, et reste journalisé.
+	if traficInterne(host, ip) {
+		return
+	}
 	lan := privateCIDR(ip)
 	// NOTRE PROPRE DOMAINE N'EST JAMAIS UN SCANNER (#1266). Un hôte de première
 	// partie non routé est un alias/lien qu'on n'a pas câblé (l'appli Nextcloud
