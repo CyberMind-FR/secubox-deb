@@ -38,3 +38,12 @@ def env_files(tmp_path: Path, monkeypatch) -> dict:
     monkeypatch.setenv("SECUBOX_AUTH_DATA_DIR", str(tmp_path / "auth"))
     (tmp_path / "auth").mkdir(exist_ok=True)
     return {"users": users, "data_dir": tmp_path / "auth"}
+
+
+@pytest.fixture(autouse=True)
+def _plancher_totp_jetable(tmp_path, monkeypatch):
+    """Le plancher anti-rejeu des TOTP (secubox_core.second_facteur) vit dans
+    /var/lib/secubox sur une box ; un banc n'y écrit jamais — le runner de CI
+    n'a pas ce répertoire, et un poste de dev ne doit pas voir son vrai
+    plancher modifié par les tests."""
+    monkeypatch.setenv("SECUBOX_TOTP_REPLAY_PATH", str(tmp_path / "totp-replay.json"))
