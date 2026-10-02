@@ -161,6 +161,16 @@ def check_act_runner_arm64() -> tuple[bool, dict]:
     return running, {"present": True, "lxc_state": "RUNNING" if running else "STOPPED"}
 
 
+def check_waf_selftest() -> tuple[bool, dict]:
+    """sbxwaf ecoute, laisse passer un temoin sain et refuse les charges canari."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "health_doctor_waf_selftest", Path(__file__).with_name("waf_selftest.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.verifier()
+
+
 # ── Registry ──────────────────────────────────────────────────────────────
 
 # Vital — every entry here counts toward the "failing" tally in the doctor
@@ -181,6 +191,9 @@ REGISTRY: Dict[str, CheckFn] = {
     "mail-lxc":            check_mail_lxc,
     "cookie-audit-ledger": check_cookie_audit_ledger,
     "filesystems":         check_filesystems,
+    # Preuve dynamique que sbxwaf BLOQUE (et ne bloque pas le trafic sain), pas
+    # seulement que l'unite tourne : charges canari + temoin, toutes les 5 min.
+    "waf-selftest":        check_waf_selftest,
 }
 # check_act_runner_arm64 kept as a module-level function (cheap) so a
 # future REGISTRY_INFORMATIONAL tier can reuse it without duplication.

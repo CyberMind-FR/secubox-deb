@@ -1,3 +1,9 @@
+secubox-hub (1.9.32-1~bookworm1) bookworm; urgency=low
+
+  * Page Santé : section « WAF — test dynamique » (détail par test, âge du résultat, bouton Rejouer) alimentée par health-doctor (#1883).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 02 Oct 2026 19:00:00 +0200
+
 secubox-hub (1.9.31-1~bookworm1) bookworm; urgency=low
 
   * Cache de polices Google servi par la box (#1875) : zone nginx conf.d/secubox-fonts-zone.conf et snippet snippets/secubox-fonts.conf (/cdn/fonts/css/ et /cdn/fonts/s/), plus aucun appel navigateur vers Google.

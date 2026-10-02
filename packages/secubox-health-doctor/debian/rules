@@ -4,7 +4,7 @@
 
 override_dh_auto_install:
 	install -d debian/secubox-health-doctor/usr/lib/secubox/health-doctor/api
-	cp api/__init__.py api/checks.py api/runner.py api/main.py \
+	cp api/__init__.py api/checks.py api/runner.py api/main.py api/waf_selftest.py \
 	    debian/secubox-health-doctor/usr/lib/secubox/health-doctor/api/
 	# healthctl CLI (8th verb)
 	install -D -m 0755 sbin/healthctl \
