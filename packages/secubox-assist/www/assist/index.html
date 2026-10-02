@@ -198,18 +198,25 @@ function renderList(el, items) {
   items.forEach(item => el.appendChild(item));
 }
 
-function renderPending(el, pending) {
+function renderPending(el, pending, recues) {
+  // #1895 : « en attente » = mes demandes (journal) ET celles reçues des autres box
+  // (demandes ouvertes du maillage). Avant, seules les premières s'affichaient : la
+  // demande de gk3 n'apparaissait que dans l'onglet « Demandes ouvertes ».
   el.textContent = '';
-  if (!pending || !pending.length) {
+  const mes = pending || [], autres = recues || [];
+  if (!mes.length && !autres.length) {
     const p = document.createElement('p');
     p.className = 'note';
     p.textContent = 'Aucune demande en attente.';
     el.appendChild(p);
     return;
   }
-  pending.forEach(q => el.appendChild(itemEl(
+  mes.forEach(q => el.appendChild(itemEl(
     [['req', q.req_id], ['DID', q.center_did], ['mode', q.mode], ['scope', q.scope || '—'], ['motif', q.reason || '—']],
     [])));
+  autres.forEach(q => el.appendChild(itemEl(
+    [['reçue de', q.noeud || '—'], ['motif', q.reason || '—'], ['tags', fmtTags(q.tags)], ['scope', q.scope || '—'], ['req', q.req_id]],
+    [{label: 'Répondre', act: 'request-answer', data: {reqId: q.req_id}}])));
 }
 
 async function refreshOffers() {
@@ -274,7 +281,12 @@ async function refresh() {
     b.disabled = !d.active_session;
     b.title = d.active_session ? '' : "Aucune session d'assistance active : rien à fermer ni à autoriser.";
   });
-  renderPending(document.getElementById('log'), d.pending);
+  let recues = [];
+  try {
+    const ro = await fetch('/api/v1/assist/requests/open', {headers:H()});
+    if (ro.ok) recues = (await ro.json()).filter(q => !q.de_moi);
+  } catch (_) { /* le journal des demandes ouvertes est facultatif ici */ }
+  renderPending(document.getElementById('log'), d.pending, recues);
   refreshActiveMarketTab();
   refreshDelegations();
 }
