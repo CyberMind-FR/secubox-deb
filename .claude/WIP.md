@@ -9,24 +9,32 @@
 *Mis à jour : 2026-10-02.* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
-## ✅ Fusionné et nettoyé le 2026-10-02
+## ✅ Fusionné et nettoyé le 2026-10-02 et 03
 
-PR #1856 (Coffre), #1860 (WAF règles), #1861 (sbxwaf), #1864 (accès délégués retirés), #1865
-(RustDesk), #1866 (sessions Claude Code sobres) : fusionnées, issues fermées (#1855, #1857, #1858,
-#1859, #1862, #1863, #1581, #1808, #1684), worktrees et branches supprimés. Reste ouvert :
-**#1748** (déployer gk3, garde-fou CI contre les fusions qui écrasent master).
+PR #1856 (Coffre), #1860/#1861 (WAF), #1864 (accès délégués retirés), #1865 (RustDesk), #1866
+(Claude Code), puis le 03/10 : pare-feu #1306 (fermée) et base unique livrée par secubox-hardening,
+real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à nftables #1766, santé
+(veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
+apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## 🔄 Chantier en cours — aucun
 
+## ⏸️ Suspendu
+
+- **#1851** Coffre P3, secrets au niveau 0 : suspendu le 03/10 (clé d'hôte sur le même disque sur gk2,
+  gain limité aux copies partielles ; liaison TPM2 implicite sur gk3). Rien de plus n'est migré.
+- **#1902** liaison au TPM2 explicite et optionnelle (défaut identique partout) : mise de côté.
+
 ## ⬜ Next Up (dans l'ordre)
 
-1. **#1851** Coffre P3 — secrets de démarrage en niveau 0 : JWT, graines TOTP, ~49 secrets,
-   un par un, redémarrage unitaire, `retirer-clair` seulement après vérification.
-2. **#1766** nac : blocage / quarantaine sans effet réseau. **#1754** `set_real_ip_from`.
-   **#1366** clé apt en clair. **#1516** dossiers en 0777.
-3. **#1743** podman/docker hors des paquets ; **#1418 / #1506** paquets en chevauchement.
-4. gk3 : `secubox-hardening` inactif, `hall.gk3` 421 — à expliquer.
-5. Suites identité #1405 : demandes côté utilisateur, certificat client, SSO par rejeu.
+1. **#1748** audit des autres fusions suspectes (nextcloud c43ffe9b0, metrics/core 7ebe27403, toolbox,
+   nac discovery) : lignes de master retirées toujours absentes, à examiner une à une.
+2. **#1903** sauvegardes chiffrées par défaut ; **#1904** un groupe par secret (issus de l'évaluation #1851).
+3. **#1366** gestes humains : export hors ligne sur clé USB puis effacement du poste ; sort de
+   `publish-packages.yml` ; clé de mise en scène 31848880.
+4. **#1766** à valider (NAC) ; gk3 : dpi, mediaflow, sentinelle-gsm absents de son jeu de paquets.
+5. **#1743** podman/docker hors des paquets ; **#1418 / #1506** paquets en chevauchement.
+6. Suites identité #1405 : demandes côté utilisateur, certificat client, SSO par rejeu.
 
 ## Règles de tenue de ce fichier
 
