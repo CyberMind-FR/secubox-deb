@@ -1,3 +1,9 @@
+secubox-voicestudio (0.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * Compatibilité Debian 13 (ref #1294) : python3-python-multipart (voir secubox-core 1.5.55).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 23:00:00 +0200
+
 secubox-voicestudio (0.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Interface native RÉSERVÉE AU RÉSEAU LOCAL. Servie par le chemin public (HAProxy de gk2 → WAF → relais), elle était coupée à

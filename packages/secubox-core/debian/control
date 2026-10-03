@@ -22,6 +22,10 @@ Depends: ${misc:Depends}, ${python3:Depends},
  python3-jwt,
  python3-cryptography,
  python3-httpx | python3-pip,
+ # Formulaires FastAPI (login, envois) : « python-multipart ». Debian 12 le nomme python3-multipart ; Debian 13 donne ce nom à une
+ # AUTRE bibliothèque (multipart 1.2) et nomme la bonne python3-python-multipart (qui « Provides » python3-multipart, mais apt
+ # préfère le vrai paquet de ce nom : on aurait installé la mauvaise, et chaque route à formulaire échouerait à l'exécution).
+ python3-python-multipart | python3-multipart | python3-pip,
  nginx,
  systemd-timesyncd | time-daemon,
  nftables,

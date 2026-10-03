@@ -1,3 +1,11 @@
+secubox-billets (0.8.71-1~bookworm1) bookworm; urgency=low
+
+  * `from argon2.exceptions import InvalidHashError` échouait avec le python3-argon2 d'apt (21.1.0, Debian 12 comme Debian 13), où
+    InvalidHashError n'existe pas (apparue en 21.2). L'import est devenu tolérant ; la vérification attrape déjà toute exception.
+    Trouvé en exécutant les suites de test dans un chroot Debian 13 (ref #1294).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 23:30:00 +0200
+
 secubox-billets (0.8.70-1~bookworm1) bookworm; urgency=low
 
   * Polices via le cache de la box (/cdn/fonts/) : liens et CSP sans hôte Google, vhost inclut snippets/secubox-fonts*.conf (#1875).

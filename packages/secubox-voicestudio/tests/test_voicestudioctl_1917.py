@@ -792,8 +792,9 @@ def test_la_migration_decale_uid_et_gid_chacun_pour_son_compte(bac_a_sable, monk
 
         def __getattr__(self, nom):
             return getattr(self._st, nom)
-    monkeypatch.setattr(c.os, "lstat", lambda p: St(reel_lstat(p), 0, 100999) if str(p).endswith("omnivoice.db")
-                        else St(reel_lstat(p), 0, 0))
+    # **kw : Python 3.13 (shutil.rmtree) appelle os.lstat(nom, dir_fd=…) ; un lambda à un seul argument y échouait (Debian 13).
+    monkeypatch.setattr(c.os, "lstat", lambda p, **kw: St(reel_lstat(p, **kw), 0, 100999) if str(p).endswith("omnivoice.db")
+                        else St(reel_lstat(p, **kw), 0, 0))
     run = LxcFaux()
     reel = c.subprocess.run
     c.cmd_migrer_podman(lambda cmd, **k: reel(cmd, **k) if cmd[0] == "cp" else run(cmd, **k))
