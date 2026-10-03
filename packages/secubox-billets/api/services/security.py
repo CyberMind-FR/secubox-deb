@@ -17,7 +17,11 @@ from dataclasses import dataclass, field
 
 import pyotp
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerifyMismatchError
+try:
+    from argon2.exceptions import InvalidHashError, VerifyMismatchError
+except ImportError:                       # argon2-cffi < 21.2 (python3-argon2 d'apt : Debian 12 ET 13 en 21.1.0)
+    from argon2.exceptions import VerifyMismatchError
+    InvalidHashError = ValueError
 from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
 
 _ph = PasswordHasher()  # argon2id defaults

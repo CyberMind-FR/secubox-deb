@@ -1,3 +1,12 @@
+secubox-core (1.5.55-1~bookworm1) bookworm; urgency=medium
+
+  * Compatibilité Debian 13 (ref #1294) : Depends `python3-python-multipart | python3-multipart | python3-pip`. Sous Debian 13,
+    `python3-multipart` est une AUTRE bibliothèque (multipart 1.2) ; la bonne s'appelle python3-python-multipart. Sans cela apt
+    installe la mauvaise et toute route FastAPI à formulaire (connexion, envois) échoue à l'exécution (« Form data requires
+    python-multipart »). Mesuré dans un chroot Debian 13 : 4 suites de tests (toolbox, users, voice, …) tombaient là-dessus.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 23:00:00 +0200
+
 secubox-core (1.5.54-1~bookworm1) bookworm; urgency=high
 
   * SSO Nextcloud (#1907) : une session ouverte par mot de passe sur un compte dont les appareils appartiennent à plusieurs personnes (gk2 : 6 de gandalf, 2 de gek) était ambiguë, aucune personne n'était désignée, donc pas d'en-tête Remote-Sbx-Nextcloud (Nextcloud n'a pas de repli sur Remote-User, contrairement à mail, BBS et PeerTube). Le lien explicite compte système → personne (sbx_app_links, app=systeme) départage ; jamais pour une session d'appareil, et sans effet quand les appareils désignent déjà une seule personne.
