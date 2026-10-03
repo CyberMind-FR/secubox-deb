@@ -51,7 +51,7 @@ Une règle appartient à **un appareil** (périmètre par adresse MAC, adresses 
 
 Le DNS ne voit pas l'écran. Les signaux sont donc **indirects** et seront mesurés avant d'être crus :
 
-1. **Rafale** : > N refus par minute vers le même domaine pendant plus de M minutes (la TV réessaie, ce que l'on a vu : 20 à 24 requêtes).
+1. **Rafale** : refus très supérieurs à l'étalon mesuré. Mesuré le 2026-10-03, en lecture NORMALE, la TV redemande un domaine refusé ~10 fois par minute (20 à 24 en 2,5 min) : ce n'est PAS un signe de casse. Seuil initial : > 60 refus/min pendant 5 min consécutives (à calibrer).
 2. **Disparition du contenu** : après l'ajout de la règle, un domaine de la base saine (cible vidéo) n'est plus demandé alors que l'appareil reste actif.
 3. **Retour manuel** : un bouton « ça ne marche plus » (administrateur) retire d'un coup **toutes les règles en essai** de l'appareil.
 
