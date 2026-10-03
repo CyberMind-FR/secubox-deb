@@ -6,6 +6,8 @@ case "$1" in
     systemctl stop secubox-voicestudio-pub.service >/dev/null 2>&1 || true
     # Le conteneur et ses données restent sur le disque : on le rendort, on ne le détruit pas.
     /usr/sbin/voicestudioctl sleep >/dev/null 2>&1 || true
+    # Plus d'ouverture du port 3900 une fois le module retiré (règle vivante + fichier chargé au démarrage).
+    /usr/sbin/voicestudioctl pare-feu-ferme >/dev/null 2>&1 || true
     ;;
 esac
 #DEBHELPER#

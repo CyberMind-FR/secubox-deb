@@ -20,6 +20,7 @@ Seule surface privilégiée du module : le panneau (utilisateur `secubox`) l'app
   reinstaller        rejoue l'installation du moteur (après changement de [source])
   migrer-conf        dépose le TOML par défaut ; convertit l'ancien schéma (podman)
   migrer-podman      reprend les données d'un ancien conteneur podman (une fois)
+  pare-feu-ferme     retire la règle d'entrée du port 3900 (désinstallation)
   basculer           arrête l'ancien podman, reprend ses données, démarre le LXC (une fois)
   status [--json]    état du LXC, du moteur, de la configuration
   start | stop | restart
@@ -44,6 +45,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import socket
 import sqlite3
@@ -67,6 +69,11 @@ AUDIT = Path(os.environ.get("SECUBOX_VS_AUDIT", "/var/log/secubox/audit.log"))
 INSTALL = os.environ.get("SECUBOX_VS_INSTALL", "/usr/lib/secubox/voicestudio/install-lxc.sh")
 SAUVEGARDES = Path(os.environ.get("SECUBOX_VS_SAUVEGARDES", "/var/backups/secubox/voicestudio"))
 DROPIN_DIR = Path(os.environ.get("SECUBOX_VS_DROPIN", "/etc/systemd/system"))
+NFT_DIR = Path(os.environ.get("SECUBOX_VS_NFT_DIR", "/etc/nftables.d"))
+NFT_FICHIER = "zz-secubox-voicestudio.nft"
+NFT_ETIQUETTE = "secubox-voicestudio"
+NFT_TABLES = ("filter", "secubox_filter")     # base unifiée (#1306) ; ancien nom encore chargé sur les box non redémarrées
+SOURCES_ADMISES = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }"
 VOLUME_PODMAN = Path("/var/lib/containers/storage/volumes/secubox-voicestudio-data/_data")
 PORT = 3900
 UID_BASE = int(os.environ.get("SECUBOX_LXC_ROOT_UID", "100000"))
@@ -425,6 +432,110 @@ def systemctl(run, *args: str):
     return run(["systemctl", *args], capture_output=True, text=True, timeout=60)
 
 
+# ── pare-feu ─────────────────────────────────────────────────────────────────
+# La chaîne d'entrée de la base est en DROP. L'ancien moteur passait par la redirection de podman
+# (forward), qui CONTOURNE `input` ; le mandataire, lui, écoute sur l'hôte : sans règle explicite,
+# les paquets du LAN et du maillage sont jetés (vu sur gk3 : gk2 n'atteignait plus le moteur).
+def regle_nft(c: dict) -> str | None:
+    """Une règle : seulement les adresses PUBLIÉES, seulement des sources privées (LAN, maillage,
+    CGNAT exclu à dessein). Rien de publié = aucune règle (le loopback est déjà accepté)."""
+    hotes = []
+    for h in c.get("reseau", {}).get("publier", []):
+        try:
+            hotes.append(adresse_publiable(str(h)))
+        except Erreur:
+            continue                      # déjà signalée par contenu_socket
+    if not hotes:
+        return None
+    return (f"ip daddr {{ {', '.join(sorted(set(hotes)))} }} ip saddr {SOURCES_ADMISES} "
+            f'tcp dport {PORT} accept comment "{NFT_ETIQUETTE}"')
+
+
+def contenu_nft(c: dict) -> str:
+    """Fichier chargé au démarrage par /etc/nftables.conf (include /etc/nftables.d/*.nft, APRÈS la
+    base). La table et la chaîne sont déclarées d'abord, de façon additive : le fichier ne peut pas
+    faire échouer le chargement de tout le jeu de règles si la base n'est pas encore là."""
+    regle = regle_nft(c)
+    entete = ("# SecuBox VoiceStudio — GÉNÉRÉ par voicestudioctl (ne pas éditer : réécrit à chaque `appliquer`).\n"
+              "# Ouvre le port 3900 aux seules adresses publiées, depuis le LAN et le maillage (jamais le WAN).\n")
+    if regle is None:
+        return entete + "# Aucune adresse publiée : rien à ouvrir.\n"
+    return (entete + "table inet filter {\n  chain input {\n  }\n}\n"
+            f"insert rule inet filter input {regle}\n")
+
+
+def _table_entree(run) -> str | None:
+    for t in NFT_TABLES:
+        r = run(["nft", "list", "chain", "inet", t, "input"], capture_output=True, text=True, timeout=15)
+        if r.returncode == 0:
+            return t
+    return None
+
+
+def supprimer_regles_etiquetees(table: str, chaine: str, run=_run, etiquette: str = NFT_ETIQUETTE) -> int:
+    """Retire les règles portant notre commentaire, par poignée (jamais un `flush` : la chaîne appartient
+    à tout le monde). Rend le nombre de règles retirées."""
+    r = run(["nft", "-a", "list", "chain", "inet", table, chaine], capture_output=True, text=True, timeout=15)
+    if r.returncode != 0:
+        return 0
+    n = 0
+    for ligne in (r.stdout or "").splitlines():
+        m = re.search(rf'comment "{re.escape(etiquette)}".*# handle (\d+)\s*$', ligne)
+        if m:
+            run(["nft", "delete", "rule", "inet", table, chaine, "handle", m.group(1)],
+                capture_output=True, text=True, timeout=15)
+            n += 1
+    return n
+
+
+def appliquer_nft(c: dict, run=_run) -> dict:
+    """Fichier persistant + règle vivante, idempotents : l'ancienne règle est retirée avant la nouvelle,
+    donc changer `publier` ne laisse jamais d'adresse ouverte derrière soi."""
+    res = {"fichier": ecrire_fichier(NFT_DIR / NFT_FICHIER, contenu_nft(c)), "vivante": False}
+    try:
+        table = _table_entree(run)
+        if table is None:
+            print("voicestudioctl : pas de chaîne d'entrée nft trouvée — règle vivante non posée "
+                  "(le fichier sera chargé au prochain démarrage du pare-feu)", file=sys.stderr)
+            return res
+        supprimer_regles_etiquetees(table, "input", run)
+        regle = regle_nft(c)
+        if regle:
+            # shlex : le commentaire garde ses guillemets d'un seul tenant ; jamais de shell.
+            r = run(["nft", "insert", "rule", "inet", table, "input", *shlex.split(regle)],
+                    capture_output=True, text=True, timeout=15)
+            if r.returncode != 0:
+                print("voicestudioctl : règle nft refusée : " + (r.stderr or "")[:200], file=sys.stderr)
+                return res
+        res["vivante"] = True
+    except OSError as e:
+        print(f"voicestudioctl : nft indisponible ({e.strerror}) — règle vivante non posée", file=sys.stderr)
+    return res
+
+
+def ecrire_fichier(chemin: Path, contenu: str) -> bool:
+    if chemin.exists() and chemin.read_text() == contenu:
+        return False
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    tmp = chemin.with_name(chemin.name + ".tmp")
+    tmp.write_text(contenu)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, chemin)
+    return True
+
+
+@sous_verrou()
+def cmd_pare_feu_ferme(run=_run) -> int:
+    """Retire règle vivante et fichier (désinstallation) : plus aucune ouverture du port 3900."""
+    n = 0
+    for t in NFT_TABLES:
+        n += supprimer_regles_etiquetees(t, "input", run)
+    (NFT_DIR / NFT_FICHIER).unlink(missing_ok=True)
+    audit("pare-feu-ferme", f"{n}-regle(s)")
+    print(f"voicestudioctl : {n} règle(s) retirée(s)")
+    return 0
+
+
 def appliquer(run=_run) -> dict:
     """Réécrit les réglages du LXC et les drop-ins du mandataire depuis le TOML (idempotent).
 
@@ -437,6 +548,7 @@ def appliquer(run=_run) -> dict:
     adresses = ecrire_dropin(SOCKET_PUB, "adresses.conf", contenu_socket(c))
     mode = ecrire_dropin(SERVICE_PUB, "mode.conf", contenu_service(c))
     res["mandataire"] = adresses or mode
+    res["pare_feu"] = appliquer_nft(c, run)
     if adresses or mode:
         systemctl(run, "daemon-reload")
         if adresses and systemctl(run, "is-active", SOCKET_PUB).stdout.strip() == "active":
@@ -858,6 +970,7 @@ def cmd_migrer_podman(run=_run) -> int:
         shutil.rmtree(ecartee, ignore_errors=True)
         os.replace(cible, ecartee)
     os.replace(temp, cible)
+    os.chmod(cible, 0o750)               # voix clonées et historique : pas lisibles de tout l'hôte
     audit("migrer-podman", f"{taille_mo(cible)}Mo" + (" ancienne-cible-gardee" if ecartee else ""))
     print(f"voicestudioctl : {taille_mo(cible)} Mo repris de {VOLUME_PODMAN} (volume conservé)")
     return 0
@@ -902,6 +1015,8 @@ def cmd_basculer(run=_run) -> int:
               f"({VOLUME_PODMAN}) ; l'ancienne unité a été relancée si elle existe encore.", file=sys.stderr)
         audit("basculer", "echec")
         return rc
+    for t in NFT_TABLES:                  # règles de transfert de l'ancien exécuteur podman (même étiquette)
+        supprimer_regles_etiquetees(t, "forward", run)
     audit("basculer", "ok")
     print("voicestudioctl : bascule faite — le moteur sert depuis le LXC")
     return 0
@@ -1029,6 +1144,8 @@ def main(argv: list[str]) -> int:
             return 0
         if cmd == "sauvegarde":
             return cmd_sauvegarde()
+        if cmd == "pare-feu-ferme":
+            return cmd_pare_feu_ferme()
         if cmd == "basculer":
             return cmd_basculer()
         if cmd == "migrer-conf":

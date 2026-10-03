@@ -1,3 +1,15 @@
+secubox-voicestudio (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Pare-feu : le mandataire écoute sur l'hôte, donc sous la chaîne d'entrée en DROP ; l'ancien moteur
+    passait par la redirection de podman (forward) qui la contourne. Sans règle, gk2 n'atteignait plus
+    le moteur de gk3. voicestudioctl pose (idempotent, par poignée, jamais de flush) une règle limitée aux
+    adresses PUBLIÉES et aux sources privées (LAN, maillage), plus le fichier persistant
+    /etc/nftables.d/zz-secubox-voicestudio.nft (déclaration additive de la table avant l'insertion).
+    Retirées à la désinstallation ; règles de transfert de l'ancien exécuteur nettoyées à la bascule.
+  * Données reprises de podman en 0750 (voix clonées et historique : pas lisibles de tout l'hôte).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 06:30:00 +0200
+
 secubox-voicestudio (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * LXC natif Debian à la place de podman (#1917, ref #1743) : plus aucune dépendance ni

@@ -229,3 +229,15 @@ def test_la_page_d_usager_ne_charge_aucune_ressource_tierce():
 def test_le_panneau_lit_le_detail_reserve_a_l_administrateur():
     h = lire("www/voicestudio/index.html")
     assert "api('/detail')" in h and "api('/status')" not in h
+
+
+def test_le_port_est_ferme_a_la_desinstallation():
+    assert "voicestudioctl pare-feu-ferme" in lire("debian/prerm")
+    assert "/etc/nftables.d/zz-secubox-voicestudio.nft" in lire("debian/postrm")
+
+
+def test_le_fichier_nft_est_charge_apres_la_base_et_n_est_pas_un_conffile():
+    """zz- : trié APRÈS les fichiers qui créent les tables (leçon des fanouts) ; généré, donc hors dpkg."""
+    ctl = lire("sbin/voicestudioctl")
+    assert 'NFT_FICHIER = "zz-secubox-voicestudio.nft"' in ctl
+    assert "nftables.d" not in re.sub(r"#.*", "", lire("debian/rules"))

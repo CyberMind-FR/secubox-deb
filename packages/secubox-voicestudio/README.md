@@ -25,6 +25,7 @@ navigateur ─► nginx ─► /run/secubox/voicestudio.sock   (API du module : 
 | Python | versions tirées de l'image validée (`conf/contraintes.txt`, sans CUDA) |
 | Disposition | sources dans `/app`, données dans `/app/omnivoice_data` (montage de `/srv/secubox/voicestudio`) — **même chemin que l'image**, la base SQLite garde des chemins absolus |
 | Écoute | moteur sur `10.100.0.230:3900` seulement ; hôte sur `127.0.0.1` + adresses de `[reseau] publier` (LAN, maillage), **jamais le WAN** |
+| Pare-feu | la chaîne d'entrée est en DROP : `voicestudioctl appliquer` pose une règle (adresses publiées × sources privées, par poignée, jamais de `flush`) et le fichier `/etc/nftables.d/zz-secubox-voicestudio.nft` ; retirés à la désinstallation (`pare-feu-ferme`) |
 | Mémoire | plafond cgroup `[lxc] memoire` (4G), poids CPU `cpu_poids` (50 : cède le pas aux autres services) |
 | Mode | `permanent` (défaut : réponse sans délai) ou `demande` (le LXC dort, se réveille au premier appel, 30–60 s à froid) |
 | Architecture | **amd64 seulement** (aucune roue torch CPU arm64 validée ici) |
