@@ -17,16 +17,17 @@ real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à 
 (veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
 apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
-## 🔄 Chantier en cours — #1917 VoiceStudio en LXC natif : déployé gk3, à valider
+## 🔄 Chantier en cours — #1917 VoiceStudio : livré, reste la validation par une personne connectée
 
-- Déployé et vérifié sur gk3 : `secubox-voicestudio` 0.2.4 (PR #1918–#1922). Bascule faite le 02/10 20:21 (605,5 Mo reprises,
-  volume podman conservé) ; gk2 atteint le moteur par le maillage avec sa clé inchangée ; pare-feu d'entrée posé
-  par le ctl ; API sous bac à sable vérifiée (statut, clé, journal, liste blanche) ; pages servies par nginx.
-- **Reste à valider par une personne connectée** (je n'ai pas d'identifiants web) : `/voicestudio/` (administration)
-  et `/voicestudio/usager.html` (dire, dicter) dans un navigateur, puis fermer #1917 (`closes #1917` dans `HISTORY.md`
-  + `scripts/sync-issues.sh --apply`).
-- Ensuite (#1743) : purge de podman — gk3 garde 12 Go (image VoiceStudio 11 Go + 2 volumes) qu'on supprime après
-  quelques jours de service ; gk2 n'a que les paquets (80 Ko). Dettes du module : TODO.
+- Livré et vérifié : `secubox-voicestudio` 0.2.4 sur gk3 (LXC natif, bascule faite, gk2 le consomme par le maillage,
+  pare-feu, API sous bac à sable) ; **webui d'administration** `/voicestudio/` et **page d'usager**
+  `/voicestudio/usager.html` ; **carte « Voix » du Hall** (`secubox-webos` 1.0.398, déployé gk2 et gk3 : le Hall ne
+  relaie que `/usager/`, aucune route d'administration à son origine ; sur gk2 la carte dit « pas installé »).
+- **#1743 : podman purgé** sur gk2 et gk3 (gk3 : 11 Go rendus) ; plus aucun runtime OCI nulle part, dettes de la liste
+  retirées. Il ne reste de #1743 que le test de dépôt qui l'empêche de revenir.
+- **Reste à valider par une personne connectée** (je n'ai pas d'identifiants web) : les deux pages et la carte du Hall
+  au navigateur (dire, dicter au micro), puis fermer #1917 (`closes #1917` dans `HISTORY.md` +
+  `scripts/sync-issues.sh --apply`) et #1743.
 
 ## ⏸️ Suspendu
 
@@ -42,7 +43,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 3. **#1366** gestes humains : export hors ligne sur clé USB puis effacement du poste ; sort de
    `publish-packages.yml` ; clé de mise en scène 31848880.
 4. **#1766** à valider (NAC) ; gk3 : dpi, mediaflow, sentinelle-gsm absents de son jeu de paquets.
-5. **#1743** reste : purge de podman des boxes (après la bascule voicestudio, #1917) ; **#1418 / #1506** paquets en chevauchement.
+5. **#1418 / #1506** paquets en chevauchement (#1743 : fait, à fermer après validation de #1917).
 6. Suites identité #1405 : demandes côté utilisateur, certificat client, SSO par rejeu.
 
 ## Règles de tenue de ce fichier
