@@ -6,6 +6,7 @@
 from dataclasses import dataclass
 from typing import Callable, Dict, List
 import time
+from pathlib import Path
 
 try:
     from . import dnstv, dnstv_detect, dnstv_regles, dnstv_signaux
@@ -22,6 +23,28 @@ class Reglage:
     seuil_refus_min: int = dnstv_signaux.SEUIL_REFUS_MIN
     duree_rafale_min: int = dnstv_signaux.DUREE_RAFALE_MIN
     min_requetes_actif: int = dnstv_signaux.MIN_REQUETES_ACTIF
+
+
+TOML = Path("/etc/secubox/ad-guard.toml")
+
+
+def reglage_depuis(etat: dict, toml: Path = TOML) -> Reglage:
+    """Seuils de DÉPART (à calibrer) depuis la configuration ; `auto_essai` vient de l'état, sous le contrôle de l'administrateur."""
+    r = Reglage(auto_essai=bool(etat.get("auto_essai", False)))
+    try:
+        import tomllib
+        with open(toml, "rb") as h:
+            c = tomllib.load(h).get("adblock_tv_auto", {})
+    except (OSError, ValueError, ImportError):
+        return r
+    decl = c.get("declencheurs")
+    if isinstance(decl, list) and decl and all(isinstance(d, str) and dnstv.valider_domaine(d) == d for d in decl):
+        r.declencheurs = tuple(decl)
+    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif"):
+        v = c.get(k)
+        if isinstance(v, int) and not isinstance(v, bool) and v > 0:
+            setattr(r, k, v)
+    return r
 
 
 def appareils(etat: dict) -> Dict[str, List[str]]:

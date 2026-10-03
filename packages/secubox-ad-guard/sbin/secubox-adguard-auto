@@ -22,26 +22,6 @@ for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])
 from api import dnstv, dnstv_auto, dnstv_regles  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
-TOML = Path("/etc/secubox/ad-guard.toml")
-
-
-def reglage(etat: dict, toml: Path = TOML) -> dnstv_auto.Reglage:
-    """Seuils de départ (à calibrer) depuis la configuration ; `auto_essai` vient de l'état, sous le contrôle de l'administrateur."""
-    r = dnstv_auto.Reglage(auto_essai=bool(etat.get("auto_essai", False)))
-    try:
-        import tomllib
-        with open(toml, "rb") as h:
-            c = tomllib.load(h).get("adblock_tv_auto", {})
-    except (OSError, ValueError, ImportError):
-        return r
-    decl = c.get("declencheurs")
-    if isinstance(decl, list) and decl and all(isinstance(d, str) and dnstv.valider_domaine(d) == d for d in decl):
-        r.declencheurs = tuple(decl)
-    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif"):
-        v = c.get(k)
-        if isinstance(v, int) and not isinstance(v, bool) and v > 0:
-            setattr(r, k, v)
-    return r
 
 
 def classeur() -> dnstv.Classifieur:
@@ -63,7 +43,7 @@ def main(sudo=None, maintenant=None) -> int:
         return 1
     cl = classeur()
     res = dnstv_auto.tick(etat, regles, dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"), lambda d: cl.classer(d)[0] or "",
-                          reglage(etat), maintenant or int(time.time()))
+                          dnstv_auto.reglage_depuis(etat), maintenant or int(time.time()))
     if res["changements"]:
         dnstv_regles.ecrire(regles)
         for c in res["changements"]:

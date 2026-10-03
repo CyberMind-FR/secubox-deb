@@ -37,7 +37,7 @@ CATEGORIES = ("advertising", "tracking", "telemetry", "social", "custom")
 MODES = ("off", "observe", "block", "auto")
 DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 
-ETAT_DEFAUT = {"actif": False, "clients": []}
+ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False}
 DOSSIER_ETAT = Path(os.environ.get("SECUBOX_ADGUARD_TV_ETAT", "/var/lib/secubox/ad-guard/dnstv"))
 DOSSIER_LISTES = Path(os.environ.get("SECUBOX_ADGUARD_TV_LISTES", "/usr/share/secubox/ad-guard/lists"))
 CONF_UNBOUND = Path(os.environ.get("SECUBOX_ADGUARD_TV_UNBOUND", "/etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf"))
@@ -175,7 +175,10 @@ def valider_etat(brut) -> dict:
         clients.append({"ip": ip, "nom": nom, "mode": mode})
     if len(clients) > 32:
         raise ErreurTV("32 appareils au plus")
-    return {"actif": bool(brut.get("actif", False)), "clients": clients}
+    auto_essai = brut.get("auto_essai", False)
+    if not isinstance(auto_essai, bool):
+        raise ErreurTV("auto_essai : booléen attendu")
+    return {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai}
 
 
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
