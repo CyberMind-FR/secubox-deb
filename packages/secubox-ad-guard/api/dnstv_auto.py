@@ -4,9 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """SecuBox-Deb :: ad-guard :: moteur du mode « auto » (#1954) — pur : aucune entrée/sortie hors Magasin et Regles."""
 from dataclasses import dataclass
-from typing import Callable, Dict, List
-import time
 from pathlib import Path
+from typing import Dict, List
 
 try:
     from . import dnstv, dnstv_detect, dnstv_regles, dnstv_signaux
@@ -65,7 +64,9 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
     avant = {r["id"]: r["etat"] for r in regles.liste()}
     for r in regles.expirer(maintenant):
         note(r, avant[r["id"]], r["etat"], r["motif"])
-    declencheur = lambda d: any(d == s or d.endswith("." + s) for s in reglage.declencheurs)
+    def declencheur(d: str) -> bool:
+        return any(d == s or d.endswith("." + s) for s in reglage.declencheurs)
+
     for appareil, adresses in appareils(etat).items():
         evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
         exclus = {r["domaine"] for r in regles.liste() if r["appareil"] == appareil}
