@@ -176,3 +176,10 @@ def test_les_compteurs_de_plusieurs_adresses_du_meme_appareil_s_additionnent():
     v6 = [{"domaine": "cloudreplay.example", "categorie": "", "decision": "ALLOWED", "hits": 5},
           {"domaine": "track.example", "categorie": "tracking", "decision": "BLOCKED", "hits": 2}]
     assert m.releve_vers_dict(v4 + v6) == {("cloudreplay.example", "ALLOWED"): ("", 8), ("track.example", "BLOCKED"): ("tracking", 2)}
+
+
+def test_le_mode_local_pose_son_chemin_avant_d_importer_la_bibliotheque():
+    """Régression du premier usage sur gk2 : `from api import dnstv` ne doit jamais précéder l'ajout du chemin."""
+    src = (OUTIL.parent / "tv-before-after.py").read_text()
+    debut = src[src.index("def main("):]
+    assert debut.index("chemin_local()") < debut.index("from api import dnstv")

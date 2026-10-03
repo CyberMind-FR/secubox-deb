@@ -35,11 +35,16 @@ ETAT = Path(os.environ.get("SBX_TV_PHASES", "reports/.tv-phases.json"))
 MODES = {"B": "observe", "C": "block", "E": "observe", "P": "observe"}
 
 
-def api_local(chemin: str, methode: str = "GET", corps=None) -> dict:
-    """Même opérations que l'API, appelées directement sur la box (bibliothèque dnstv) : utile sans jeton administrateur."""
+def chemin_local() -> None:
+    """Rend la bibliothèque du POC importable (paquet installé : /usr/lib ; arbre de sources : le dossier du module)."""
     for p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
         if p not in sys.path:
             sys.path.append(p)
+
+
+def api_local(chemin: str, methode: str = "GET", corps=None) -> dict:
+    """Même opérations que l'API, appelées directement sur la box (bibliothèque dnstv) : utile sans jeton administrateur."""
+    chemin_local()
     from api import dnstv
     if chemin.startswith("/adblock-tv/export"):
         ip = chemin.split("client=", 1)[1]
@@ -210,8 +215,8 @@ def main(argv=None) -> int:
                 ap.error("--ip requis")
             ips = [x.strip() for x in a.ip.split(",") if x.strip()]
             if os.environ.get("SBX_LOCAL"):
-                from api import dnstv                                   # noqa: PLC0415 — chemin posé par api_local
-                api_local("/adblock-tv/export?client=" + ips[0])          # (charge la bibliothèque et son chemin)
+                chemin_local()
+                from api import dnstv                                   # noqa: PLC0415 — après l'ajout du chemin
                 avant_etat, _ = dnstv.lire_etat()
             for ip in ips:
                 api("/adblock-tv/clients", "POST", {"ip": ip, "nom": "TV banc", "mode": MODES[a.phase]})

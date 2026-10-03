@@ -1,3 +1,10 @@
+secubox-ad-guard (1.2.3-1~bookworm1) bookworm; urgency=low
+
+  * tools/tv-before-after.py : le mode local (1.2.2) importait la bibliothèque du POC AVANT d'avoir ajouté son chemin (ModuleNotFoundError) —
+    trouvé au premier usage sur gk2. Le chemin est posé d'abord.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 01:20:00 +0200
+
 secubox-ad-guard (1.2.2-1~bookworm1) bookworm; urgency=low
 
   * POC DNS AdBlock TV (ref #1943) : tools/tv-before-after.py gagne un MODE LOCAL (SBX_LOCAL=1, sans jeton, directement sur la box) et accepte
