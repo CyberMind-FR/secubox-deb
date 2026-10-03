@@ -508,6 +508,14 @@ class Magasin:
                 "SELECT domaine, COUNT(DISTINCT jour) FROM dnstv_counts WHERE decision='ALLOWED' AND jour<? AND jour>=? AND client IN (%s) GROUP BY domaine" % ",".join("?" * len(clients)),
                 [avant_jour, depuis_jour, *clients]).fetchall())
 
+    def compteurs_clients(self, depuis_jour: str) -> Dict[str, Dict[str, int]]:
+        """client -> domaine -> requêtes (toutes décisions) depuis `depuis_jour` : la matière de la détection des TV et streamers (#1959)."""
+        out: Dict[str, Dict[str, int]] = {}
+        with self._cx() as cx:
+            for client, domaine, n in cx.execute("SELECT client, domaine, SUM(hits) FROM dnstv_counts WHERE jour>=? GROUP BY client, domaine", (depuis_jour,)):
+                out.setdefault(client, {})[domaine] = int(n)
+        return out
+
     def par_client(self) -> List[dict]:
         with self._cx() as cx:
             return [{"client": c, "premiere_vue": p, "derniere_vue": d, "requetes": t}
