@@ -1,3 +1,23 @@
+secubox-ad-guard (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * POC DNS AdBlock TV (ref #1954) : MODE AUTO par appareil. La box apprend, par comparaison coupure/lecture, les domaines publicitaires d'un appareil ;
+    chaque domaine suit candidat → essai (24 h) → confirmé, avec sorties rejeté / retiré. RIEN n'est bloqué sans l'administrateur : « Essayer » bloque,
+    « Confirmer » garde, et un essai non confirmé est RETIRÉ au bout de 24 h. Une liste noire de domaines génériques (googleapis.com, apple.com…)
+    n'est jamais proposée. Les noms à partie variable sont regroupés sous leur parent après trois variantes.
+  * Retour arrière : bouton « Ça ne marche plus » (retire d'un geste toutes les règles à l'essai de l'appareil) et signaux automatiques indirects
+    (rafale de refus soutenue, contenu habituel qui n'est plus demandé alors que l'appareil reste actif). Un appareil inactif ne déclenche jamais rien.
+    SEUILS DE DÉPART, mesurés sur UNE TV et UNE application, à calibrer (section [adblock_tv_auto] de ad-guard.toml) : la rafale est réglée à 60 refus/min
+    pendant 5 min car la lecture NORMALE de la TV redemande déjà un domaine refusé ~10 fois par minute.
+  * Application À CHAUD : les règles sont ajoutées/retirées par `unbound-control view_local_zone` (vérifié sur Unbound 1.17.1) : aucune coupure du DNS.
+    Tout autre changement, ou tout échec à chaud, se replie sur le rechargement complet. Contrôleur root : nouvelle commande `regles-appliquer`
+    (argument exact dans sudoers), règles relues sans suivre les liens symboliques et revalidées, audit de chaque application.
+  * Moteur : `secubox-adguard-auto` lancé chaque minute par `secubox-ad-guard-auto.timer` (sort aussitôt sans appareil en mode auto).
+  * Interface : carte « Mode automatique » (à valider, à l'essai, confirmées, journal, rejetées) ; mode `auto` dans la liste des appareils.
+  * Routes /adblock-tv/auto/{regles,regles/{id}/{action},appareils/{appareil}/ca-ne-marche-plus,reglage,reglage/auto-essai}.
+  * État : champ booléen `auto_essai` (faux par défaut, sous le contrôle de l'administrateur) ; `mode` accepte `auto`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 17:00:00 +0200
+
 secubox-ad-guard (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * POC DNS AdBlock TV (ref #1943) : VISUALISATION des flux DNS, au niveau des noms (l'équivalent DNS d'un DPI) : flux en direct (rafraîchi toutes
