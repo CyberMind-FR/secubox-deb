@@ -168,3 +168,11 @@ def test_apprentissage_publicite_sur_le_meme_domaine_que_la_video_ne_donne_rien(
 def test_les_phases_e_et_p_sont_en_observe_jamais_en_block():
     m = _avant_apres()
     assert m.MODES["E"] == "observe" and m.MODES["P"] == "observe"
+
+
+def test_les_compteurs_de_plusieurs_adresses_du_meme_appareil_s_additionnent():
+    m = _avant_apres()
+    v4 = [{"domaine": "cloudreplay.example", "categorie": "", "decision": "ALLOWED", "hits": 3}]
+    v6 = [{"domaine": "cloudreplay.example", "categorie": "", "decision": "ALLOWED", "hits": 5},
+          {"domaine": "track.example", "categorie": "tracking", "decision": "BLOCKED", "hits": 2}]
+    assert m.releve_vers_dict(v4 + v6) == {("cloudreplay.example", "ALLOWED"): ("", 8), ("track.example", "BLOCKED"): ("tracking", 2)}

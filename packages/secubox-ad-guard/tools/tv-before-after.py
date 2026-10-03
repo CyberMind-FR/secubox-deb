@@ -13,6 +13,8 @@ Chaque phase est mesurée par la DIFFÉRENCE de deux relevés des compteurs de l
   C  BLOCK     : mêmes usages, les domaines des listes reçoivent NXDOMAIN ; on note ce qui ne marche plus (--note).
 
 Déroulement (jeton administrateur dans SBX_TOKEN, adresse de la box dans SBX_URL, défaut http://127.0.0.1) :
+  MODE LOCAL (sur la box, sans jeton) : SBX_LOCAL=1 — l'outil lit la base de compteurs et écrit l'état directement (comme l'API, même validation) ;
+  --ip accepte PLUSIEURS adresses séparées par des virgules : une TV a souvent une adresse IPv4 ET des adresses IPv6 (de confidentialité, qui changent).
   tv-before-after.py debut B --ip 192.168.1.50      pose le mode, prend le relevé de départ
   ... on utilise la TV : zapper, lancer l'application, regarder, 5 à 10 minutes par phase ...
   tv-before-after.py fin B --note "tout fonctionne"  relevé d'arrivée, calcule la phase
@@ -23,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.request
@@ -32,7 +35,45 @@ ETAT = Path(os.environ.get("SBX_TV_PHASES", "reports/.tv-phases.json"))
 MODES = {"B": "observe", "C": "block", "E": "observe", "P": "observe"}
 
 
+def api_local(chemin: str, methode: str = "GET", corps=None) -> dict:
+    """Même opérations que l'API, appelées directement sur la box (bibliothèque dnstv) : utile sans jeton administrateur."""
+    for p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
+        if p not in sys.path:
+            sys.path.append(p)
+    from api import dnstv
+    if chemin.startswith("/adblock-tv/export"):
+        ip = chemin.split("client=", 1)[1]
+        return {"lignes": dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db").lignes(ip)}
+    if chemin == "/adblock-tv/clients" and methode == "POST":
+        etat, _ = dnstv.lire_etat()
+        etat["clients"] = [c for c in etat["clients"] if c["ip"] != dnstv._ip(corps["ip"])] + [
+            {"ip": dnstv._ip(corps["ip"]), "nom": corps.get("nom") or corps["ip"], "mode": corps["mode"]}]
+        dnstv.ecrire_etat(etat)
+        return {}
+    if chemin == "/adblock-tv/etat" and methode == "POST":
+        etat, _ = dnstv.lire_etat()
+        etat["actif"] = bool(corps["actif"])
+        dnstv.ecrire_etat(etat)
+        return {}
+    if chemin == "/adblock-tv/custom" and methode == "POST":
+        dom = dnstv.valider_domaine(corps["domaine"])
+        if not dom:
+            raise SystemExit("domaine invalide : " + str(corps["domaine"])[:60])
+        f = dnstv.DOSSIER_ETAT / "custom.txt"
+        courants = set(dnstv.lire_liste(f)[0]) if f.is_file() else set()
+        courants.add(dom)
+        f.write_text("# liste personnalisée (POC DNS AdBlock TV)\n" + "".join(x + "\n" for x in sorted(courants)), encoding="utf-8")
+        return {}
+    raise SystemExit("opération locale inconnue : " + chemin)
+
+
+def appliquer_local() -> None:
+    subprocess.run(["sudo", "-n", "/usr/sbin/secubox-adguard-tv", "apply"] if os.geteuid() != 0 else ["/usr/sbin/secubox-adguard-tv", "apply"], check=True)
+
+
 def api(chemin: str, methode: str = "GET", corps=None) -> dict:
+    if os.environ.get("SBX_LOCAL"):
+        return api_local(chemin, methode, corps)
     url = os.environ.get("SBX_URL", "http://127.0.0.1").rstrip("/") + "/api/v1/ad-guard" + chemin
     req = urllib.request.Request(url, method=methode, data=json.dumps(corps).encode() if corps is not None else None,
                                  headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ.get("SBX_TOKEN", "")})
@@ -41,7 +82,12 @@ def api(chemin: str, methode: str = "GET", corps=None) -> dict:
 
 
 def releve_vers_dict(lignes) -> dict:
-    return {(x["domaine"], x["decision"]): (x["categorie"], x["hits"]) for x in lignes}
+    """Relevé -> {(domaine, décision): (catégorie, hits)}. Les compteurs de plusieurs adresses d'un MÊME appareil (IPv4 + IPv6) s'additionnent."""
+    out: dict = {}
+    for x in lignes:
+        cle = (x["domaine"], x["decision"])
+        out[cle] = (x["categorie"] or out.get(cle, ("", 0))[0], out.get(cle, ("", 0))[1] + x["hits"])
+    return out
 
 
 def difference(avant: dict, apres: dict) -> list:
@@ -162,10 +208,20 @@ def main(argv=None) -> int:
         else:
             if not a.ip:
                 ap.error("--ip requis")
-            api("/adblock-tv/clients", "POST", {"ip": a.ip, "nom": "TV banc", "mode": MODES[a.phase]})
+            ips = [x.strip() for x in a.ip.split(",") if x.strip()]
+            if os.environ.get("SBX_LOCAL"):
+                from api import dnstv                                   # noqa: PLC0415 — chemin posé par api_local
+                api_local("/adblock-tv/export?client=" + ips[0])          # (charge la bibliothèque et son chemin)
+                avant_etat, _ = dnstv.lire_etat()
+            for ip in ips:
+                api("/adblock-tv/clients", "POST", {"ip": ip, "nom": "TV banc", "mode": MODES[a.phase]})
             api("/adblock-tv/etat", "POST", {"actif": True})
-            ph.update(ip=a.ip, debut=int(time.time()), mode=MODES[a.phase].upper(),
-                      avant=api(f"/adblock-tv/export?client={a.ip}")["lignes"])
+            if os.environ.get("SBX_LOCAL"):
+                apres_etat, _ = dnstv.lire_etat()
+                if apres_etat != avant_etat:                              # un changement de mode recharge Unbound (≈ 10 s) : seulement s'il a lieu
+                    appliquer_local()
+            avant = [x for ip in ips for x in api(f"/adblock-tv/export?client={ip}")["lignes"]]
+            ph.update(ip=a.ip, debut=int(time.time()), mode=MODES[a.phase].upper(), avant=avant)
         sauver(d)
         print(f"phase {a.phase} commencée ({ph['mode']})")
         return 0
@@ -173,7 +229,7 @@ def main(argv=None) -> int:
         sys.exit(f"phase {a.phase} non commencée")
     ph.update(fin=int(time.time()), duree_s=int(time.time()) - ph["debut"], note=a.note)
     if a.phase != "A":
-        apres = api(f"/adblock-tv/export?client={ph['ip']}")["lignes"]
+        apres = [x for ip in ph["ip"].split(",") for x in api(f"/adblock-tv/export?client={ip.strip()}")["lignes"]]
         ph["lignes"] = difference(releve_vers_dict(ph.pop("avant")), releve_vers_dict(apres))
         ph["resume"] = resumer(ph["lignes"])
     sauver(d)
