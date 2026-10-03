@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-03 — Sonde DHCP en lecture seule (ref #1935)
+- `secubox-netdiag` 1.3.0 : `secubox-dhcp-probe` (un DISCOVER, aucun bail, socket brute). Mesuré sur gk2 : UN seul serveur DHCP (la Freebox, 192.168.1.254), passerelle 192.168.1.254, **DNS annoncé 192.168.1.200 (gk2) déjà configuré** dans Freebox OS 4.12 (« Serveur DNS 1 »). Le DHCP IPv4 n'a donc PAS besoin d'être remplacé.
+- Cause réelle du 421 de voicestudio.gk3 sur un poste : le DNS **IPv6** annoncé par la Freebox (`fd0f:ee:b0::1`, via annonce de routeur) passait avant celui de gk2 et répondait l'IP publique. Poste corrigé (NetworkManager : gk2 seul DNS, IPv6 DNS ignoré). Autres postes : à traiter côté IPv6 (désactiver l'IPv6 du LAN dans Freebox OS ou annoncer gk2 par RA).
+
 ## 2026-10-03 — Studio natif de VoiceStudio réservé au réseau local (ref #1917)
 - **Cause des « 504 »** du studio natif (`/generate`, `/transcribe`, `/archetypes/…/preview`) : `sbxwaf` de gk2 coupe à 120 s (`--upstream-timeout 120s`, journal `timeout awaiting response headers`) ; le grand modèle met 110 à 140 s et davantage sous contrainte mémoire. Décision de l'exploitant : « voicestudio limité au LAN ».
 - `secubox-voicestudio` 0.5.1 : le vhost du studio répond 403 à tout client que `$lan_client` ne tient pas pour local (avant la garde administrateur). `secubox-haproxy` 1.8.25 : le backend `nginx_vhosts` (accès direct, sans WAF) porte le délai de 1 h du domaine `voicestudio.*`.

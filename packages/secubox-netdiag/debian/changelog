@@ -1,3 +1,12 @@
+secubox-netdiag (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Nouvel outil secubox-dhcp-probe (ref #1935) : sonde DHCP EN LECTURE SEULE. Un DHCPDISCOVER en diffusion (MAC aléatoire),
+    écoute des DHCPOFFER, aucun DHCPREQUEST donc aucun bail pris ; socket brute AF_PACKET, ne se lie pas au port 68 (ne gêne pas
+    systemd-networkd). Dit quels serveurs DHCP répondent, avec quelle passerelle et quels DNS ; --attendu IP vérifie que les
+    clients recevront le DNS voulu ; sortie 2 s'il y a plusieurs serveurs (course) ou un DNS inattendu.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 18:00:00 +0200
+
 secubox-netdiag (1.2.1-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

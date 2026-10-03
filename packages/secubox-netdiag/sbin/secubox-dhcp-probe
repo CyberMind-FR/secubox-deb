@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-dhcp-probe — qui sert le DHCP de ce réseau, et que promet-il aux clients ? (#1935)
+
+LECTURE SEULE. Envoie UN `DHCPDISCOVER` en diffusion, écoute les `DHCPOFFER`, puis s'arrête : jamais de `DHCPREQUEST`, donc
+aucun bail n'est pris ni confirmé. Il ne répond à personne, ne prend la place de personne, ne redirige aucun trafic. C'est
+l'étape qui précède tout remplacement du DHCP d'une box (Freebox) par un serveur du réseau : savoir ce qui sert, avec quelle
+passerelle et quels DNS, et s'il y a UN serveur ou plusieurs (un second serveur DHCP inattendu est un signal d'alerte).
+
+Une adresse MAC aléatoire, administrée localement, est utilisée : les serveurs qui répondent peuvent réserver quelques
+secondes l'adresse proposée, mais aucun bail n'est conclu, et la vraie MAC de la machine n'apparaît dans aucune table.
+
+Raw AF_PACKET (root) : ne se lie PAS au port UDP 68, donc ne gêne pas systemd-networkd / dhclient de la machine.
+
+Usage : secubox-dhcp-probe -i eth2 [--attente 5] [--attendu 192.168.1.200] [--json]
+Sortie : 0 = au moins un serveur, DNS conformes à --attendu (ou sans --attendu) ; 1 = aucune réponse ;
+         2 = plusieurs serveurs OU DNS différents de --attendu ; 3 = erreur d'usage / de droits.
+"""
+from __future__ import annotations
+
+import argparse
+import ipaddress
+import json
+import os
+import select
+import socket
+import struct
+import sys
+import time
+
+MAGIC = b"\x63\x82\x53\x63"
+ETH_P_IP = 0x0800
+BROADCAST = b"\xff" * 6
+OPTIONS_NOMS = {1: "masque", 3: "passerelles", 6: "dns", 15: "domaine", 28: "diffusion", 51: "bail_s", 53: "type",
+                54: "serveur", 58: "t1_s", 59: "t2_s", 42: "ntp"}
+
+
+def mac_aleatoire() -> bytes:
+    """Administrée localement (bit 1 de l'octet 0), unicast (bit 0 à 0)."""
+    b = bytearray(os.urandom(6))
+    b[0] = (b[0] | 0x02) & 0xFE
+    return bytes(b)
+
+
+def checksum(data: bytes) -> int:
+    if len(data) % 2:
+        data += b"\0"
+    s = sum(struct.unpack("!%dH" % (len(data) // 2), data))
+    while s >> 16:
+        s = (s & 0xFFFF) + (s >> 16)
+    return ~s & 0xFFFF
+
+
+def construire_discover(xid: int, mac: bytes) -> bytes:
+    """Charge UDP d'un DHCPDISCOVER (sans en-têtes Ethernet/IP/UDP)."""
+    bootp = struct.pack("!BBBBIHH4s4s4s4s16s64s128s", 1, 1, 6, 0, xid, 0, 0x8000,   # drapeau broadcast : réponse diffusée
+                        b"\0" * 4, b"\0" * 4, b"\0" * 4, b"\0" * 4, mac + b"\0" * 10, b"\0" * 64, b"\0" * 128)
+    opts = (b"\x35\x01\x01"                                    # type = DISCOVER
+            b"\x37\x07\x01\x03\x06\x0f\x1c\x33\x2a"          # demande : masque, routeurs, DNS, domaine, diffusion, bail, NTP
+            b"\xff")
+    return bootp + MAGIC + opts
+
+
+def trame(mac_src: bytes, charge: bytes) -> bytes:
+    """Ethernet + IPv4 (0.0.0.0 → 255.255.255.255) + UDP 68 → 67."""
+    udp_len = 8 + len(charge)
+    udp = struct.pack("!HHHH", 68, 67, udp_len, 0) + charge            # somme UDP à 0 : permise en IPv4
+    ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + udp_len, 0, 0, 64, 17, 0, b"\0" * 4, b"\xff" * 4)
+    ip = ip[:10] + struct.pack("!H", checksum(ip)) + ip[12:]
+    return BROADCAST + mac_src + struct.pack("!H", ETH_P_IP) + ip + udp
+
+
+def _ip(b: bytes) -> str:
+    return str(ipaddress.IPv4Address(b))
+
+
+def analyser_options(blob: bytes) -> dict:
+    o: dict = {}
+    i = 0
+    while i < len(blob):
+        c = blob[i]
+        if c == 255:
+            break
+        if c == 0:
+            i += 1
+            continue
+        if i + 1 >= len(blob):
+            break
+        n = blob[i + 1]
+        v = blob[i + 2:i + 2 + n]
+        if len(v) < n:
+            break
+        i += 2 + n
+        nom = OPTIONS_NOMS.get(c)
+        if nom is None:
+            continue
+        if c in (1, 28, 54):
+            o[nom] = _ip(v[:4]) if len(v) >= 4 else None
+        elif c in (3, 6, 42):
+            o[nom] = [_ip(v[j:j + 4]) for j in range(0, len(v) - len(v) % 4, 4)]
+        elif c in (51, 58, 59):
+            o[nom] = struct.unpack("!I", v[:4])[0] if len(v) >= 4 else None
+        elif c == 53:
+            o[nom] = v[0] if v else None
+        elif c == 15:
+            o[nom] = v.decode("ascii", "replace").rstrip("\0")
+    return o
+
+
+def analyser_offre(charge: bytes, xid: int, mac: bytes) -> dict | None:
+    """Charge UDP → description de l'offre, ou None si ce n'est pas une réponse à NOTRE discover."""
+    if len(charge) < 240 or charge[236:240] != MAGIC or charge[0] != 2:
+        return None
+    if struct.unpack("!I", charge[4:8])[0] != xid or charge[28:34] != mac:
+        return None
+    o = analyser_options(charge[240:])
+    if o.get("type") != 2:                                        # 2 = OFFER (5 = ACK, 6 = NAK : pas pour un discover)
+        return None
+    o["adresse_offerte"] = _ip(charge[16:20])
+    return o
+
+
+def ecouter(iface: str, attente: float, xid: int, mac: bytes, envoyer=None) -> list[dict]:
+    s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_IP))
+    s.bind((iface, 0))
+    try:
+        mac_iface = s.getsockname()[4]
+        s.send(trame(mac_aleatoire() if envoyer is None else envoyer, construire_discover(xid, mac)))
+        fin = time.monotonic() + attente
+        offres: dict = {}
+        while time.monotonic() < fin:
+            r, _, _ = select.select([s], [], [], max(0.0, fin - time.monotonic()))
+            if not r:
+                break
+            p = s.recv(2048)
+            if len(p) < 14 + 20 + 8 or p[12:14] != b"\x08\x00":
+                continue
+            ihl = (p[14] & 0x0F) * 4
+            if p[14 + 9] != 17 or struct.unpack("!H", p[14 + ihl + 2:14 + ihl + 4])[0] != 68:
+                continue
+            offre = analyser_offre(p[14 + ihl + 8:], xid, mac)
+            if offre is None:
+                continue
+            offre["mac_serveur"] = ":".join("%02x" % x for x in p[6:12])
+            offre["ip_source"] = _ip(p[14 + 12:14 + 16])
+            offres.setdefault((offre["mac_serveur"], offre.get("serveur")), offre)
+        del mac_iface
+        return list(offres.values())
+    finally:
+        s.close()
+
+
+def verdict(offres: list[dict], attendu: str | None) -> tuple[int, list[str]]:
+    msgs: list[str] = []
+    if not offres:
+        return 1, ["aucun serveur DHCP n'a répondu (réseau sans DHCP, mauvaise interface, ou filtrage)"]
+    code = 0
+    if len(offres) > 1:
+        code = 2
+        msgs.append(f"ATTENTION : {len(offres)} serveurs DHCP répondent — deux serveurs se disputent les clients (course) ; "
+                    "à moins d'un basculement voulu, c'est un signal d'alerte")
+    if attendu:
+        for o in offres:
+            if attendu not in o.get("dns", []):
+                code = 2
+                msgs.append(f"le serveur {o.get('serveur')} ({o['mac_serveur']}) n'annonce PAS {attendu} comme DNS : "
+                            f"ses clients utilisent {', '.join(o.get('dns', [])) or 'aucun DNS'}")
+    return code, msgs
+
+
+def rendre(offres: list[dict], code: int, msgs: list[str], iface: str) -> str:
+    L = [f"Sonde DHCP sur {iface} (lecture seule : un DISCOVER, aucune demande de bail)"]
+    for k, o in enumerate(offres, 1):
+        L += [f"\nServeur {k} : {o.get('serveur', '?')}  (MAC {o['mac_serveur']}, émis depuis {o['ip_source']})",
+              f"  adresse proposée : {o['adresse_offerte']}   masque : {o.get('masque', '?')}",
+              f"  passerelle(s)    : {', '.join(o.get('passerelles', [])) or 'aucune'}",
+              f"  DNS annoncés     : {', '.join(o.get('dns', [])) or 'aucun'}",
+              f"  domaine : {o.get('domaine', '—')}   bail : {o.get('bail_s', '?')} s"]
+    if msgs:
+        L.append("")
+        L += ["• " + m for m in msgs]
+    L.append("\nRésultat : " + {0: "conforme", 1: "aucune réponse", 2: "à examiner"}[code])
+    return "\n".join(L)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Sonde DHCP en lecture seule (un DISCOVER, aucun bail).")
+    ap.add_argument("-i", "--interface", required=True)
+    ap.add_argument("--attente", type=float, default=5.0, help="secondes d'écoute (défaut 5)")
+    ap.add_argument("--attendu", help="DNS que les clients DOIVENT recevoir (ex. 192.168.1.200)")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    if not 0.5 <= a.attente <= 30:
+        print("--attente : entre 0,5 et 30 s", file=sys.stderr)
+        return 3
+    if a.attendu:
+        try:
+            ipaddress.IPv4Address(a.attendu)
+        except ValueError:
+            print("--attendu : adresse IPv4 attendue", file=sys.stderr)
+            return 3
+    if os.geteuid() != 0:
+        print("droits root requis (socket brute)", file=sys.stderr)
+        return 3
+    mac = mac_aleatoire()
+    xid = struct.unpack("!I", os.urandom(4))[0]
+    try:
+        offres = ecouter(a.interface, a.attente, xid, mac, envoyer=mac)
+    except OSError as e:
+        print(f"interface {a.interface} inutilisable : {e}", file=sys.stderr)
+        return 3
+    code, msgs = verdict(offres, a.attendu)
+    if a.json:
+        print(json.dumps({"interface": a.interface, "serveurs": offres, "code": code, "constats": msgs}, ensure_ascii=False, indent=2))
+    else:
+        print(rendre(offres, code, msgs, a.interface))
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

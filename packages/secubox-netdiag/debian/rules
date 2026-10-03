@@ -3,6 +3,7 @@
 	dh $@
 
 override_dh_auto_install:
+	install -D -m 0755 sbin/secubox-dhcp-probe debian/secubox-netdiag/usr/sbin/secubox-dhcp-probe
 	install -d debian/secubox-netdiag/usr/lib/secubox/netdiag/
 	cp -r api debian/secubox-netdiag/usr/lib/secubox/netdiag/
 	install -d debian/secubox-netdiag/usr/share/secubox/www
