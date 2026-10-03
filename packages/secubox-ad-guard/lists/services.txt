@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# POC « DNS AdBlock TV » (#1943) — « à qui » et « pour quoi » est un nom de domaine : l'équivalent DNS d'une classification DPI.
+# Format : suffixe  organisation  type      (`_` dans l'organisation = espace ; le plus long suffixe gagne)
+# Types : contenu, publicite, mesure_audience, analytique, qualite_video, cdn, connectivite, systeme.
+# Un nom absent d'ici s'affiche « inconnu » : on n'invente jamais une organisation. Le DNS ne donne PAS de volumes ni de contenu.
+# version: 2026.10.04-poc2
+ftven.fr                 France_Télévisions               contenu
+francetelevisions.fr     France_Télévisions               contenu
+france.tv                France_Télévisions               contenu
+ftv-publicite.fr         France_Télévisions_Publicité     publicite
+fwmrm.net                FreeWheel                        publicite
+xiti.com                 AT_Internet                      analytique
+npaw.com                 NPAW_(Youbora)                   qualite_video
+youboranqs01.com         NPAW_(Youbora)                   qualite_video
+quanteec.com             Quanteec                         qualite_video
+nmrodam.com              nmrodam_(mesure_d'audience)      mesure_audience
+radiofrance.fr           Radio_France                     contenu
+doubleclick.net          Google_(DoubleClick)             publicite
+googlesyndication.com    Google_(AdSense)                 publicite
+google-analytics.com     Google_(Analytics)               analytique
+adnxs.com                Xandr                            publicite
+taboola.com              Taboola                          publicite
+outbrain.com             Outbrain                         publicite
+criteo.com               Criteo                           publicite
+criteo.net               Criteo                           publicite
+gstatic.com              Google                           systeme
+googleapis.com           Google                           systeme
+google.com               Google                           systeme
+proxad.net               Free                             systeme
+free.fr                  Free                             systeme
+apple.com                Apple                            systeme
+icloud.com               Apple                            systeme
+miwifi.com               Xiaomi                           systeme

@@ -295,6 +295,25 @@
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><input type="text" id="tv-new-domaine" placeholder="domaine.example"><button class="btn" onclick="tvAddDomaine()">Ajouter</button></div>
                 <div id="tv-custom" style="margin-top:.5rem;font-family:monospace;font-size:.8rem;color:var(--text-dim);"></div>
             </div>
+
+            <div class="card" style="margin-top:1rem;">
+                <div class="card-header"><h2>👁️ Visualisation des flux DNS <small style="font-weight:400;color:var(--text-dim);">— équivalent DPI, au niveau des noms</small></h2></div>
+                <p style="color:var(--text-dim);font-size:.82rem;margin:.1rem 0 .6rem;">Le DNS montre <b>quels noms</b> chaque appareil demande, pas les volumes ni le contenu. Un appareil
+                qui n'interroge pas cette box n'apparaît pas.</p>
+                <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
+                    <label>Source : <select id="tv-source" onchange="tvVue()"><option value="">Toutes</option></select></label>
+                    <label>Période : <select id="tv-heures" onchange="tvVue()"><option value="1">1 h</option><option value="6" selected>6 h</option><option value="24">24 h</option></select></label>
+                    <label><input type="checkbox" id="tv-auto" checked> actualisation 3 s</label>
+                </div>
+                <h3 style="font-size:.9rem;margin:.9rem 0 .3rem;">📈 Requêtes et blocages dans le temps</h3>
+                <div id="tv-serie" style="overflow-x:auto;"></div>
+                <h3 style="font-size:.9rem;margin:.9rem 0 .3rem;">📡 Par source (appareil)</h3>
+                <table><thead><tr><th>Source</th><th>Requêtes</th><th>Bloquées</th><th>Taux</th><th>Domaines</th><th>Répartition par type</th></tr></thead><tbody id="tv-sources"></tbody></table>
+                <h3 style="font-size:.9rem;margin:.9rem 0 .3rem;">🏷️ Par service</h3>
+                <table><thead><tr><th>Service</th><th>Type</th><th>Requêtes</th><th>Bloquées</th><th>Domaines</th></tr></thead><tbody id="tv-services"></tbody></table>
+                <h3 style="font-size:.9rem;margin:.9rem 0 .3rem;">⚡ Flux en cours</h3>
+                <div style="max-height:22rem;overflow:auto;"><table><thead><tr><th>Heure</th><th>Source</th><th>Domaine</th><th>Service</th><th>Type</th><th>Catégorie</th><th>Décision</th></tr></thead><tbody id="tv-live"></tbody></table></div>
+            </div>
             <div class="card" style="margin-top:1rem;">
                 <div class="card-header"><h2>🧭 DNS PATH TEST</h2></div>
                 <p style="color:var(--text-dim);font-size:.85rem;">La box reçoit-elle les requêtes de l'appareil ? Obtenez un nom de sonde, interrogez-le depuis l'appareil, puis vérifiez.</p>
@@ -516,6 +535,71 @@
         async function learnSave(k, v) { await api('/learn/thresholds', 'POST', { [k]: parseInt(v, 10) }); }
 
 
+
+        // ── visualisation (flux en direct, sources, série, services) — tout texte venu de l'API passe par textContent ──
+        function tvEl(tag, texte, classe, style) { const e = document.createElement(tag); if (texte != null) e.textContent = String(texte); if (classe) e.className = classe; if (style) e.style.cssText = style; return e; }
+        function tvLigne(tbody, cellules) { const tr = document.createElement('tr'); cellules.forEach(c => tr.appendChild(c instanceof Node ? c : tvEl('td', c))); tbody.appendChild(tr); }
+        const TV_COULEUR = { BLOCKED: '#d64545', ALLOWED: '#3aa56a', UPSTREAM_ERROR: '#c87832' };
+        function tvBadge(decision) { const td = document.createElement('td'); td.appendChild(tvEl('span', decision, null, 'padding:1px 7px;border-radius:9px;font-size:.72rem;color:#fff;background:' + (TV_COULEUR[decision] || '#667'))); return td; }
+        function tvHeure(ts) { return new Date(ts * 1000).toLocaleTimeString('fr-FR'); }
+        function tvSrcCourt(ip) { return ip.length > 22 ? ip.slice(0, 11) + '…' + ip.slice(-8) : ip; }
+        function tvQuery() { const s = document.getElementById('tv-source').value; return s ? 'source=' + encodeURIComponent(s) + '&' : ''; }
+        async function tvSources() {
+            const r = await api('/adblock-tv/sources?heures=' + document.getElementById('tv-heures').value);
+            if (!r) return;
+            r.sources = r.sources || [];
+            const sel = document.getElementById('tv-source'), cur = sel.value;
+            if ([...sel.options].length - 1 !== r.sources.length || ![...sel.options].some(o => o.value === cur)) {
+                sel.textContent = '';
+                sel.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: 'Toutes' }));
+                r.sources.forEach(x => sel.appendChild(Object.assign(document.createElement('option'), { value: x.source, textContent: (x.nom || x.source) + ' — ' + tvSrcCourt(x.adresses[0]) })));
+                sel.value = [...sel.options].some(o => o.value === cur) ? cur : '';
+            }
+            const tb = document.getElementById('tv-sources'); tb.textContent = '';
+            r.sources.forEach(x => {
+                const barre = tvEl('td'); barre.appendChild(tvEl('div', null, null, 'height:8px;border-radius:4px;background:#8883;width:90px;overflow:hidden;'));
+                barre.firstChild.appendChild(tvEl('div', null, null, 'height:100%;background:#d64545;width:' + Math.round(x.taux_blocage * 100) + '%;'));
+                barre.appendChild(tvEl('small', Math.round(x.taux_blocage * 100) + ' %'));
+                tvLigne(tb, [tvEl('td', (x.nom || '(sans nom)') + ' · ' + x.source), x.requetes, x.bloquees, barre, x.domaines_uniques,
+                             Object.entries(x.par_type).sort((a, b) => b[1] - a[1]).map(([t, n]) => t + ' ' + n).join(' · ')]);
+            });
+            if (!r.sources.length) tvLigne(tb, [tvEl('td', 'Aucune source sur cette période', null, 'color:var(--text-dim)')]);
+        }
+        async function tvSerie() {
+            const r = await api('/adblock-tv/serie?' + tvQuery() + 'heures=' + document.getElementById('tv-heures').value + '&pas=' + (document.getElementById('tv-heures').value > 6 ? 900 : 300));
+            const z = document.getElementById('tv-serie'); z.textContent = '';
+            if (!r || !(r.points || []).length) { z.appendChild(tvEl('div', 'Pas de requête sur cette période.', null, 'color:var(--text-dim)')); return; }
+            const W = Math.max(480, r.points.length * 12), H = 90, max = Math.max(...r.points.map(p => p.requetes), 1);
+            const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+            svg.setAttribute('width', W); svg.setAttribute('height', H + 16); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + (H + 16));
+            r.points.forEach((p, i) => {
+                [['requetes', '#4a90d9'], ['bloquees', '#d64545']].forEach(([k, c]) => {
+                    const h = Math.round((p[k] || 0) / max * H), rect = document.createElementNS(ns, 'rect');
+                    rect.setAttribute('x', i * 12 + (k === 'bloquees' ? 3 : 0)); rect.setAttribute('width', k === 'bloquees' ? 6 : 9); rect.setAttribute('y', H - h); rect.setAttribute('height', h); rect.setAttribute('fill', c);
+                    const t = document.createElementNS(ns, 'title'); t.textContent = tvHeure(p.ts) + ' — ' + p.requetes + ' requêtes, ' + (p.bloquees || 0) + ' bloquées'; rect.appendChild(t); svg.appendChild(rect);
+                });
+            });
+            z.appendChild(svg); z.appendChild(tvEl('div', 'bleu : requêtes · rouge : bloquées · max ' + max + ' par tranche de ' + Math.round(r.pas_s / 60) + ' min', null, 'font-size:.75rem;color:var(--text-dim);'));
+        }
+        async function tvServices() {
+            const r = await api('/adblock-tv/flux?' + tvQuery() + 'heures=' + document.getElementById('tv-heures').value);
+            const tb = document.getElementById('tv-services'); tb.textContent = '';
+            if (!r) return;
+            r.services = r.services || [];
+            r.services.forEach(x => tvLigne(tb, [x.service, x.type, x.requetes, x.bloquees, x.domaines]));
+            if (!r.services.length) tvLigne(tb, [tvEl('td', 'Rien à afficher', null, 'color:var(--text-dim)')]);
+        }
+        async function tvLive() {
+            const r = await api('/adblock-tv/live?' + tvQuery() + 'secondes=900&limite=60');
+            const tb = document.getElementById('tv-live'); tb.textContent = '';
+            if (!r) return;
+            r.evenements = r.evenements || [];
+            r.evenements.forEach(e => tvLigne(tb, [tvHeure(e.ts), tvSrcCourt(e.client), e.domaine, e.service || '—', e.type, e.categorie || '—', tvBadge(e.decision)]));
+            if (!r.evenements.length) tvLigne(tb, [tvEl('td', 'Aucune requête dans les 15 dernières minutes', null, 'color:var(--text-dim)')]);
+        }
+        async function tvVue() { await Promise.all([tvSources(), tvSerie(), tvServices(), tvLive()]); }
+        setInterval(() => { if (document.getElementById('adblocktv').classList.contains('active') && document.getElementById('tv-auto').checked) { tvLive(); tvSources(); } }, 3000);
+
         // ── DNS AdBlock TV (POC #1943) ───────────────────────────────────────────────
         let tvSondeNom = '';
         function tvEsc(t) { const d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML; }
@@ -568,7 +652,7 @@
             z.textContent = (r.recue ? '✅ ' : '❌ ') + r.lecture + (r.recue ? ' — client ' + r.evenements[0].client + ', décision ' + r.evenements[0].decision : '');
         }
 
-        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender();
+        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue();
         setInterval(fetchStats, 30000);
     </script>
     <script src="/shared/crt-engine.js"></script>

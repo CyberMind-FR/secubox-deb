@@ -94,17 +94,17 @@ def verifier_manifeste(dossier: Path) -> List[str]:
         attendu = json.loads(man.read_text())
     except ValueError:
         return ["MANIFEST.json illisible"]
-    for cat in CATEGORIES:
-        f = dossier / f"{cat}.txt"
-        if cat == "custom":
-            continue                                               # la liste perso est celle de l'exploitant, jamais figée
+    fichiers = [f"{c}.txt" for c in CATEGORIES if c != "custom"] + [k for k in attendu if k not in [f"{c}.txt" for c in CATEGORIES]]
+    for nom in fichiers:
+        f = dossier / nom
         if not f.is_file():
-            problemes.append(f"{cat}.txt absent")
+            problemes.append(f"{nom} absent")
             continue
-        if attendu.get(f.name) != sha256_fichier(f):
-            problemes.append(f"{f.name}: empreinte différente du manifeste (modifiée sans mise à jour du manifeste)")
-        _, mauvaises, _ = lire_liste(f)
-        problemes += [f"ligne invalide {m}" for m in mauvaises]
+        if attendu.get(nom) != sha256_fichier(f):
+            problemes.append(f"{nom}: empreinte différente du manifeste (modifiée sans mise à jour du manifeste)")
+        if nom != "services.txt":                                       # services.txt a trois colonnes ; il a sa propre validation
+            _, mauvaises, _ = lire_liste(f)
+            problemes += [f"ligne invalide {m}" for m in mauvaises]
     return problemes
 
 
@@ -284,7 +284,15 @@ CREATE TABLE IF NOT EXISTS dnstv_clients (
     client TEXT PRIMARY KEY, premiere_vue INTEGER NOT NULL, derniere_vue INTEGER NOT NULL, total INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS dnstv_counts_jour ON dnstv_counts(jour);
+CREATE TABLE IF NOT EXISTS dnstv_recents (
+    ts INTEGER NOT NULL, client TEXT NOT NULL, domaine TEXT NOT NULL, qtype TEXT NOT NULL DEFAULT '',
+    decision TEXT NOT NULL, categorie TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS dnstv_recents_ts ON dnstv_recents(ts);
+CREATE INDEX IF NOT EXISTS dnstv_recents_client ON dnstv_recents(client, ts);
 """
+RECENTS_MAX = 20000                      # lignes gardées pour la vue « en direct » et les séries ; au-delà, les plus anciennes partent
+RECENTS_HEURES = 48
 
 
 def _jour(ts: int) -> str:
@@ -313,7 +321,11 @@ class Magasin:
                 cx.execute("INSERT INTO dnstv_clients(client,premiere_vue,derniere_vue,total) VALUES (?,?,?,1) "
                            "ON CONFLICT(client) DO UPDATE SET derniere_vue=max(derniere_vue,excluded.derniere_vue), total=total+1",
                            (e.client, e.ts, e.ts))
+                cx.execute("INSERT INTO dnstv_recents(ts,client,domaine,qtype,decision,categorie) VALUES (?,?,?,?,?,?)",
+                           (e.ts, e.client, e.qname, e.qtype, e.decision, cat or ""))
                 n += 1
+            cx.execute("DELETE FROM dnstv_recents WHERE ts < ? OR rowid <= (SELECT COALESCE(MAX(rowid),0) FROM dnstv_recents) - ?",
+                       (int(time.time()) - RECENTS_HEURES * 3600, RECENTS_MAX))
         return n
 
     def statistiques(self, client: Optional[str] = None, depuis_jour: Optional[str] = None) -> dict:
@@ -361,6 +373,39 @@ class Magasin:
             return [{"domaine": d, "categorie": c, "decision": dec, "hits": h} for d, c, dec, h in cx.execute(
                 f"SELECT domaine, categorie, decision, SUM(hits) FROM dnstv_counts WHERE {' AND '.join(w)} GROUP BY domaine, categorie, decision", a)]
 
+    def recents(self, clients: Optional[List[str]] = None, depuis: int = 0, limite: int = 100) -> List[dict]:
+        """Les dernières requêtes (la vue « flux en cours »), la plus récente d'abord. `clients` : adresses d'UNE source (IPv4 + IPv6)."""
+        w, a = ["ts>=?"], [int(depuis)]
+        if clients:
+            w.append("client IN (%s)" % ",".join("?" * len(clients)))
+            a += list(clients)
+        with self._cx() as cx:
+            return [{"ts": t, "client": c, "domaine": d, "qtype": q, "decision": dec, "categorie": cat} for t, c, d, q, dec, cat in cx.execute(
+                f"SELECT ts, client, domaine, qtype, decision, categorie FROM dnstv_recents WHERE {' AND '.join(w)} ORDER BY ts DESC, rowid DESC LIMIT ?",
+                a + [max(1, min(int(limite), 1000))])]
+
+    def serie(self, clients: Optional[List[str]] = None, depuis: int = 0, pas_s: int = 300) -> List[dict]:
+        """Requêtes et blocages par tranche de `pas_s` secondes (histogramme)."""
+        pas_s = max(10, min(int(pas_s), 86400))
+        w, a = ["ts>=?"], [int(depuis)]
+        if clients:
+            w.append("client IN (%s)" % ",".join("?" * len(clients)))
+            a += list(clients)
+        with self._cx() as cx:
+            return [{"ts": b * pas_s, "requetes": n, "bloquees": bl, "classees": cl} for b, n, bl, cl in cx.execute(
+                f"SELECT ts/{pas_s}, COUNT(*), SUM(decision='BLOCKED'), SUM(categorie!='') FROM dnstv_recents WHERE {' AND '.join(w)} GROUP BY ts/{pas_s} ORDER BY 1", a)]
+
+    def flux(self, clients: Optional[List[str]] = None, depuis: int = 0) -> List[dict]:
+        """Par nom de domaine : requêtes, décisions, dernière vue (le tableau « équivalent DPI », sans volumes : le DNS n'en a pas)."""
+        w, a = ["ts>=?"], [int(depuis)]
+        if clients:
+            w.append("client IN (%s)" % ",".join("?" * len(clients)))
+            a += list(clients)
+        with self._cx() as cx:
+            return [{"domaine": d, "categorie": c, "requetes": n, "bloquees": b, "derniere": t} for d, c, n, b, t in cx.execute(
+                f"SELECT domaine, MAX(categorie), COUNT(*), SUM(decision='BLOCKED'), MAX(ts) FROM dnstv_recents WHERE {' AND '.join(w)} "
+                "GROUP BY domaine ORDER BY COUNT(*) DESC LIMIT 500", a)]
+
     def par_client(self) -> List[dict]:
         with self._cx() as cx:
             return [{"client": c, "premiere_vue": p, "derniere_vue": d, "requetes": t}
@@ -377,3 +422,53 @@ class Magasin:
         limite = _jour((maintenant or int(time.time())) - max(1, int(retention_jours)) * 86400)
         with self._cx() as cx:
             return cx.execute("DELETE FROM dnstv_counts WHERE jour<?", (limite,)).rowcount
+
+
+# ── services : « à qui » et « pour quoi » est un nom (l'équivalent DNS d'une classification DPI) ───────────────────────────
+TYPES_SERVICE = ("contenu", "publicite", "mesure_audience", "analytique", "qualite_video", "cdn", "connectivite", "systeme", "inconnu")
+
+
+def charger_services(chemin: Path) -> List[Tuple[str, str, str]]:
+    """Lignes `suffixe  organisation  type` (organisation : libellé court, sans espace superflu ; `_` = espace). Plus long suffixe d'abord."""
+    out = []
+    for ligne in chemin.read_text(encoding="utf-8").splitlines():
+        brut = ligne.split("#", 1)[0].split()
+        if len(brut) == 3 and brut[2] in TYPES_SERVICE and valider_domaine(brut[0]):
+            out.append((brut[0].lower(), brut[1].replace("_", " "), brut[2]))
+    return sorted(out, key=lambda x: -len(x[0]))
+
+
+class ClasseurServices:
+    def __init__(self, regles: List[Tuple[str, str, str]]):
+        self.regles = regles
+
+    def classer(self, qname: str) -> Tuple[str, str]:
+        d = (qname or "").lower().rstrip(".")
+        for suffixe, org, typ in self.regles:
+            if d == suffixe or d.endswith("." + suffixe):
+                return org, typ
+        return "", "inconnu"
+
+
+def lire_voisins(executer=None) -> Dict[str, str]:
+    """adresse IP -> adresse MAC, d'après la table des voisins (IPv4 ET IPv6) : regroupe les adresses d'un même appareil — l'IPv6 « de
+    confidentialité » d'une TV change, sa MAC non."""
+    import subprocess
+    out: Dict[str, str] = {}
+    for fam in ("-4", "-6"):
+        try:
+            r = (executer or subprocess.run)(["ip", "-j", fam, "neigh"], capture_output=True, text=True, timeout=10)
+            for n in json.loads(r.stdout or "[]"):
+                if n.get("dst") and n.get("lladdr"):
+                    out[n["dst"]] = n["lladdr"].lower()
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            continue
+    return out
+
+
+def regrouper_sources(clients: Iterable[str], voisins: Dict[str, str]) -> Dict[str, List[str]]:
+    """clé de source (MAC si connue, sinon l'adresse) -> adresses."""
+    g: Dict[str, List[str]] = {}
+    for c in clients:
+        g.setdefault(voisins.get(c, c), []).append(c)
+    return g
