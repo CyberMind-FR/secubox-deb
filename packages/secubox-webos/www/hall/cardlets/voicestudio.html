@@ -88,13 +88,20 @@
 
   /* Les trois états distingués (§ 6.4) + le 502 propre au Hall : la socket du module n'existe pas = module
      absent de CETTE box, ce qui n'est ni une panne ni un droit manquant. */
-  function dire_erreur(r){
+  function dire_erreur(r, detail){
     if (r.status === 401 || r.status === 403){ pastille('', 'connexion'); return 'Réservé aux personnes connectées.'; }
     if (r.status === 502 || r.status === 404){ pastille('', 'absent'); return "VoiceStudio n'est pas installé sur cette box."; }
-    if (r.status === 503){ pastille('ko', 'indisponible'); return 'Le moteur est indisponible pour le moment.'; }
-    if (r.status === 429){ return 'Trop de demandes, réessayez dans une minute.'; }
-    if (r.status === 413){ return 'Trop long ou trop volumineux.'; }
+    /* 503 / 429 / 413 : le module dit POURQUOI (« Mémoire insuffisante pour la synthèse : il faut ≈ 3,7 Go libres, il en reste… ») ;
+       un message générique cacherait une cause que l'usager peut comprendre. Le texte du module est inséré en textContent. */
+    if (r.status === 503){ pastille('ko', 'indisponible'); return detail || 'Le moteur est indisponible pour le moment.'; }
+    if (r.status === 429){ return detail || 'Trop de demandes, réessayez dans une minute.'; }
+    if (r.status === 413){ return detail || 'Trop long ou trop volumineux.'; }
     return 'Erreur ' + r.status + '.';
+  }
+  /* Le message de l'API (JSON {detail}), sans jamais faire échouer l'affichage d'une erreur. */
+  function avec_detail(r){
+    return r.json().then(function(d){ return dire_erreur(r, d && typeof d.detail === 'string' ? d.detail.slice(0, 300) : ''); },
+                         function(){ return dire_erreur(r, ''); });
   }
   function api(chemin, opts){
     opts = opts || {}; opts.credentials = 'same-origin';
@@ -126,7 +133,7 @@
     $('b-dire').disabled = true; note('Synthèse…');
     api('/dire', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({texte:t, format:'mp3'})})
       .then(function(r){
-        if (!r.ok){ note(dire_erreur(r)); return null; }
+        if (!r.ok){ return avec_detail(r).then(function(m){ note(m); return null; }); }
         return r.blob();
       }).then(function(b){
         if (!b) return;

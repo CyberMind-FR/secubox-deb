@@ -42,6 +42,8 @@ class CtlFaux:
             raise r
         if r is not None:
             return r
+        if requete["action"] == "faire-de-la-place":
+            return {"ok": True, "suffisante": True, "besoin_mo": 3800, "disponible_mo": 5000, "swap_libre_mo": 6000, "endormis": []}
         return self.statut if requete["action"] == "status" else {"ok": True, "detail": ""}
 
     def actions(self):
@@ -563,3 +565,65 @@ def test_la_garde_est_require_jwt_et_non_une_garde_d_usager():
     [route] = [r for r in m.app.routes if getattr(r, "path", "") == "/gate"]
     appels = {d.call for d in route.dependant.dependencies}
     assert core_auth.require_jwt in appels and core_auth.require_personne not in appels
+
+
+# ── mémoire : la synthèse ne se tente jamais à l'aveugle ─────────────────────────────────────────────────────────
+def test_la_synthese_demande_la_place_au_ctl_avant_d_appeler_le_moteur(client, ctl, monkeypatch):
+    personne()
+    faux = MoteurFaux()
+    monkeypatch.setattr(m, "_moteur", lambda: faux)
+    assert client.post("/usager/dire", json={"texte": "bonjour"}).status_code == 200
+    assert ctl.actions() == ["faire-de-la-place"] and faux.appels[0][0] == "dire"
+    assert ctl.requetes[0]["par"] == "alice"
+
+
+def test_memoire_insuffisante_est_refusee_avec_les_chiffres_et_le_moteur_n_est_pas_appele(client, ctl, monkeypatch):
+    personne()
+    faux = MoteurFaux()
+    monkeypatch.setattr(m, "_moteur", lambda: faux)
+    ctl.reponses["faire-de-la-place"] = {"ok": True, "suffisante": False, "besoin_mo": 3800, "disponible_mo": 1700,
+                                         "swap_libre_mo": 0, "endormis": [{"id": "peertube", "mo": 203}]}
+    r = client.post("/usager/dire", json={"texte": "bonjour"})
+    assert r.status_code == 503 and faux.appels == []
+    d = r.json()["detail"]
+    assert "3,7 Go" in d and "1,7 Go" in d and "peertube" in d and "La dictée reste disponible" in d
+
+
+def test_aucun_conteneur_endormable_est_dit(client, ctl, monkeypatch):
+    personne()
+    monkeypatch.setattr(m, "_moteur", lambda: MoteurFaux())
+    ctl.reponses["faire-de-la-place"] = {"ok": True, "suffisante": False, "besoin_mo": 3800, "disponible_mo": 900, "swap_libre_mo": 10, "endormis": []}
+    assert "Aucun autre conteneur n'a pu être endormi" in client.post("/usager/dire", json={"texte": "x"}).json()["detail"]
+
+
+def test_verification_impossible_la_synthese_n_est_pas_tentee_par_prudence(client, ctl, monkeypatch):
+    personne()
+    faux = MoteurFaux()
+    monkeypatch.setattr(m, "_moteur", lambda: faux)
+    ctl.reponses["faire-de-la-place"] = HTTPException(400, "une autre opération voicestudioctl est en cours")
+    r = client.post("/usager/dire", json={"texte": "bonjour"})
+    assert r.status_code == 503 and "par prudence" in r.json()["detail"] and faux.appels == []
+
+
+def test_la_dictee_ne_demande_pas_de_place(client, ctl, monkeypatch):
+    """≈ 0,7 Go : elle ne déclenche aucun endormissement."""
+    personne()
+    monkeypatch.setattr(m, "_moteur", lambda: MoteurFaux())
+    assert client.post("/usager/transcrire", files={"fichier": ("a.wav", b"RIFF" + b"0" * 50)}).status_code == 200
+    assert "faire-de-la-place" not in ctl.actions()
+
+
+def test_l_essai_de_l_administrateur_passe_aussi_par_la_verification(client, ctl, monkeypatch):
+    admin()
+    monkeypatch.setattr(m, "_moteur", lambda: MoteurFaux())
+    ctl.reponses["faire-de-la-place"] = {"ok": True, "suffisante": False, "besoin_mo": 3800, "disponible_mo": 100, "swap_libre_mo": 0, "endormis": []}
+    assert client.post("/essai/dire", json={"texte": "x"}).status_code == 503
+
+
+def test_le_refus_de_memoire_rend_le_verrou_du_moteur(client, ctl, monkeypatch):
+    personne()
+    monkeypatch.setattr(m, "_moteur", lambda: MoteurFaux())
+    ctl.reponses["faire-de-la-place"] = {"ok": True, "suffisante": False, "besoin_mo": 3800, "disponible_mo": 100, "swap_libre_mo": 0, "endormis": []}
+    for _ in range(3):
+        client.post("/usager/dire", json={"texte": "x"})
+    assert m._UN_A_LA_FOIS._value == 1

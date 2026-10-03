@@ -5,6 +5,12 @@ case "$1" in
     id -u secubox >/dev/null 2>&1 || \
       adduser --system --group --no-create-home --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/voicestudio
+    # SWAP DISQUE. Une synthèse vocale veut ≈ 4 Go de RAM ; le zram (RAM comprimée) ne suffit pas, et sans swap disque le
+    # tueur de mémoire global abat le moteur (vu sur gk3 : swap plein à 3,9/3,9 Go). Idempotent : sans effet si un swap
+    # disque existe déjà ; choisit /data puis /srv/secubox, jamais une carte eMMC/SD (secubox-system-tuning >= 1.2.5).
+    if [ -x /usr/sbin/secubox-tuning-apply ]; then
+      /usr/sbin/secubox-tuning-apply swap >/dev/null 2>&1 || true
+    fi
     # Configuration : créée si absente ; ANCIEN schéma (podman) converti en gardant les adresses
     # publiées — gk2 joint le moteur de gk3 par l'une d'elles. Le TOML n'est pas un conffile.
     /usr/sbin/voicestudioctl migrer-conf || true

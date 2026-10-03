@@ -71,6 +71,25 @@ Garde-fous d'usager : un seul calcul à la fois (le suivant attend 20 s puis re�
 personne (20 synthèses / 12 dictées par minute), limites lues dans `[limites]`. Un moteur absent est dit
 **503**, jamais masqué par une voix de secours.
 
+## Mémoire — pourquoi la synthèse peut être refusée
+
+Le modèle de **synthèse** (OmniVoice) pèse ≈ 2,3 Go sur disque et **≈ 3,6 Go en mémoire** ; la **dictée** (faster-whisper base) ≈ 0,7 Go.
+Sur une box de 8 Go chargée (gk3), le zram (RAM comprimée) se remplit et plus rien ne peut être évincé : le tueur de mémoire GLOBAL
+abattait le moteur — et la requête sortait en « HTTP 504 ». Ce que fait le module :
+
+1. **Avant chaque synthèse**, `voicestudioctl faire-de-la-place` lit `MemAvailable`. Si le moteur a déjà son modèle (mémoire du LXC ≥ 2,5 Go)
+   ou si la box a ≥ 3,8 Go disponibles : rien à faire.
+2. Sinon il **met en sommeil** les *autres* conteneurs endormables, du plus gros au plus petit (au plus 4 par salve, une salve / 2 min) par
+   `secubox-profilectl apply --only <id>` — la voie officielle du sleeper (liste `/etc/secubox/health/sleepable-modules.json` : manifestes
+   `on-demand` / `eager` seulement ; audit, snapshot 4R, **réveil au premier accès**). Jamais `lxc-stop`.
+3. Mémoire toujours insuffisante, ou vérification impossible : la synthèse est **refusée (503)** avec les chiffres, jamais tentée à l'aveugle.
+   La dictée reste disponible.
+4. Le moteur **rend son modèle** après 60 s d'inactivité (`[moteur] liberation_modele_s`) et ne précharge ni la dictée ni le filigrane.
+5. Un **swap disque** est créé à l'installation (`secubox-tuning-apply swap` : `/data` puis `/srv/secubox`, 8 Go, jamais une carte eMMC/SD).
+
+Chaîne publique : le frontal HAProxy coupe à 30 s par défaut ; les routes vocales (`/api/v1/voicestudio/essai/`, `/usager/dire`, `/usager/transcrire`)
+ont 10 min et le domaine `voicestudio.*` 1 h (`secubox-haproxy`).
+
 ## Limites connues (dettes nommées)
 
 - **LAN en clair** : le port 3900 publié sert du HTTP avec la clé en `Bearer` ; il n'est donc publié que sur des

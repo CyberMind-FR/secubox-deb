@@ -20,6 +20,7 @@ Seule surface privilégiée du module : le panneau (utilisateur `secubox`) l'app
   reinstaller        rejoue l'installation du moteur (après changement de [source])
   migrer-conf        dépose le TOML par défaut ; convertit l'ancien schéma (podman)
   migrer-podman      reprend les données d'un ancien conteneur podman (une fois)
+  faire-de-la-place  endort les autres conteneurs endormables si la mémoire manque pour une synthèse (JSON)
   interface          construit l'interface native dans le LXC et pose son vhost (administrateurs)
   pare-feu-ferme     retire la règle d'entrée du port 3900 (désinstallation)
   basculer           arrête l'ancien podman, reprend ses données, démarre le LXC (une fois)
@@ -78,6 +79,12 @@ SNIPPET_CLE = Path(os.environ.get("SECUBOX_VS_SNIPPET_CLE", "/etc/nginx/snippets
 VHOST_FICHIER = "secubox-voicestudio.conf"
 RE_DOMAINE = re.compile(r"^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$")
 RE_CLE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+MEMINFO = Path(os.environ.get("SECUBOX_VS_MEMINFO", "/proc/meminfo"))
+CGROUP_LXC = Path(os.environ.get("SECUBOX_VS_CGROUP", "/sys/fs/cgroup"))
+SOMMEILLEUX = Path(os.environ.get("SECUBOX_VS_SOMMEILLEUX", "/etc/secubox/health/sleepable-modules.json"))
+PLACE_ETAT = Path(os.environ.get("SECUBOX_VS_PLACE", "/var/lib/secubox/voicestudio/place.json"))
+PROFILECTL = "/usr/sbin/secubox-profilectl"
+MAX_ENDORMIS = 4                      # au plus 4 conteneurs par salve : la requête de l'usager attend
 NFT_FICHIER = "zz-secubox-voicestudio.nft"
 NFT_ETIQUETTE = "secubox-voicestudio"
 NFT_TABLES = ("filter", "secubox_filter")     # base unifiée (#1306) ; ancien nom encore chargé sur les box non redémarrées
@@ -283,13 +290,29 @@ def sante(c: dict, delai: float = 3.0, opener=urllib.request.urlopen) -> dict:
         return {"ok": False, "http": 0}
 
 
+def contenu_env_moteur(c: dict) -> str:
+    """Fichier d'environnement du moteur dans le LXC : la clé d'API ET les réglages mémoire (tous validés — ils finissent
+    dans un EnvironmentFile systemd). Changer l'un d'eux relance le moteur (assurer_moteur compare le contenu)."""
+    m = c.get("moteur", {})
+    try:
+        liberation = int(m.get("liberation_modele_s", 60))
+    except (TypeError, ValueError):
+        liberation = 60
+    liberation = min(max(liberation, 10), 86400)
+    dictee = "1" if m.get("precharger_dictee", False) is True else "0"
+    filigrane = "1" if m.get("precharger_filigrane", False) is True else "0"
+    return (f"OMNIVOICE_API_KEY={lire_cle()}\n"
+            f"OMNIVOICE_IDLE_TIMEOUT_S={liberation}\n"
+            f"OMNIVOICE_PRELOAD_CAPTURE_ASR={dictee}\n"
+            f"OMNIVOICE_PRELOAD_WATERMARK={filigrane}\n")
+
+
 def assurer_moteur(c: dict, run=_run, dormir=time.sleep) -> bool:
     """Dans le LXC : écrit la clé d'API si elle a changé (et redémarre le moteur), ou démarre le
     moteur s'il est arrêté. Un seul passage couvre : première mise en service, réveil d'un LXC qui
     dormait pendant un renouvellement de clé, moteur tombé. La clé voyage par stdin (jamais en
     argument : `ps` la montrerait). Rend True si le LXC a répondu."""
     creer_cle()
-    cle = lire_cle()
     script = ("umask 077; cat > /etc/voicestudio.env.new; "
               "if ! cmp -s /etc/voicestudio.env.new /etc/voicestudio.env; then "
               "mv /etc/voicestudio.env.new /etc/voicestudio.env; systemctl restart voicestudio.service; "
@@ -297,7 +320,7 @@ def assurer_moteur(c: dict, run=_run, dormir=time.sleep) -> bool:
               "systemctl is-active -q voicestudio.service || systemctl start voicestudio.service; fi")
     for _ in range(10):                  # lxc-attach peut échouer quelques secondes après lxc-start
         r = run(["lxc-attach", "-P", lxc_chemin(c), "-n", lxc_nom(c), "--", "sh", "-c", script],
-                input=f"OMNIVOICE_API_KEY={cle}\n", capture_output=True, text=True, timeout=60)
+                input=contenu_env_moteur(c), capture_output=True, text=True, timeout=60)
         if r.returncode == 0:
             return True
         dormir(2)
@@ -761,6 +784,109 @@ def taille_mo(chemin: Path) -> float:
     return round(total / 1048576, 1)
 
 
+# ── mémoire de la box : faire de la place avant une synthèse ─────────────────────────────────────────────────────────
+def lire_meminfo() -> dict:
+    """MemAvailable / SwapFree / SwapTotal en Mo, lus dans /proc/meminfo (lecture seule, sans privilège)."""
+    out: dict = {}
+    try:
+        for ligne in MEMINFO.read_text().splitlines():
+            cle, _, reste = ligne.partition(":")
+            if cle in ("MemAvailable", "SwapFree", "SwapTotal", "MemTotal"):
+                out[cle] = int(reste.split()[0]) // 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return out
+
+
+def memoire_cgroup_mo(nom: str) -> int:
+    """Mémoire courante d'un conteneur LXC (cgroup v2), en Mo ; 0 si illisible."""
+    try:
+        return int((CGROUP_LXC / f"lxc.payload.{nom}" / "memory.current").read_text()) // 1048576
+    except (OSError, ValueError):
+        return 0
+
+
+def conteneurs_endormables(c: dict, run=_run) -> list[tuple[str, int]]:
+    """Les AUTRES conteneurs en marche que le sleeper a le droit d'endormir, du plus gros au plus petit.
+
+    La liste vient de /etc/secubox/health/sleepable-modules.json (écrite par secubox-wakectl health-sync : seuls les
+    manifestes lifecycle on-demand / eager y figurent, jamais un module protégé ni always-on) croisée avec les
+    conteneurs réellement en marche. Aucune liste à nous : si le parc change, ceci suit."""
+    try:
+        sommeilleux = set(json.loads(SOMMEILLEUX.read_text()))
+    except (OSError, ValueError, TypeError):
+        return []
+    r = run(["lxc-ls", "-P", lxc_chemin(c), "--running"], capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        return []
+    en_marche = {n for n in (r.stdout or "").split() if re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", n)}
+    soi = lxc_nom(c)
+    cands = [(n, memoire_cgroup_mo(n)) for n in en_marche if n in sommeilleux and n != soi]
+    return sorted(cands, key=lambda t: t[1], reverse=True)
+
+
+def etat_memoire(c: dict) -> dict:
+    mi = lire_meminfo()
+    return {"disponible_mo": mi.get("MemAvailable", 0), "swap_libre_mo": mi.get("SwapFree", 0),
+            "swap_total_mo": mi.get("SwapTotal", 0), "moteur_mo": memoire_cgroup_mo(lxc_nom(c))}
+
+
+@sous_verrou(bloquant=True)      # deux synthèses simultanées font la queue au lieu de s'échouer l'une l'autre
+def cmd_faire_de_la_place(run=_run, dormir=time.sleep, maintenant=time.time) -> int:
+    """Rend la mémoire de la box suffisante pour UNE synthèse, ou dit pourquoi elle ne l'est pas.
+
+    1. Le moteur a déjà son modèle (mémoire du LXC au-dessus de `modele_residente_mo`) → rien de plus à demander.
+    2. Assez de MemAvailable → rien à faire.
+    3. Sinon : endormir un à un les autres conteneurs endormables (secubox-profilectl apply --only <id> --yes --json,
+       la voie officielle : snapshot 4R, audit, réveil automatique au premier accès), le plus gros d'abord, en
+       revérifiant la mémoire après chacun ; s'arrêter dès que c'est suffisant.
+    Au plus une salve toutes les `delai_repetition_s` : une rafale de demandes n'endort pas le parc en boucle."""
+    c = charger()
+    m = c.get("memoire", {})
+    besoin = int(m.get("besoin_synthese_mo", 3800))
+    residente = int(m.get("modele_residente_mo", 2500))
+    delai = int(m.get("delai_repetition_s", 120))
+    etat = etat_memoire(c)
+    res = {"ok": True, "suffisante": True, "besoin_mo": besoin, "endormis": [], **etat}
+    if etat["moteur_mo"] >= residente or etat["disponible_mo"] >= besoin:
+        print(json.dumps(res))
+        return 0
+    try:
+        dernier = json.loads(PLACE_ETAT.read_text())
+    except (OSError, ValueError):
+        dernier = {}
+    if maintenant() - float(dernier.get("ts", 0)) < delai:
+        res["suffisante"] = False
+        res["raison"] = "tentative récente : les conteneurs endormis n'ont pas encore rendu leur mémoire ou n'y suffisent pas"
+        res["endormis"] = dernier.get("endormis", [])
+        print(json.dumps(res))
+        return 0
+    endormis = []
+    for nom, mo in conteneurs_endormables(c, run)[:MAX_ENDORMIS]:
+        r = run([PROFILECTL, "apply", "--only", nom, "--yes", "--json"], capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            print(f"voicestudioctl : {nom} non endormi (rc={r.returncode}) : " + (r.stderr or r.stdout or "")[:160], file=sys.stderr)
+            continue
+        endormis.append({"id": nom, "mo": mo})
+        dormir(3)                                   # le noyau rend la mémoire de façon asynchrone
+        if lire_meminfo().get("MemAvailable", 0) >= besoin:
+            break
+    etat = etat_memoire(c)
+    res.update(etat, endormis=endormis, suffisante=etat["disponible_mo"] >= besoin)
+    if not res["suffisante"]:
+        res["raison"] = ("mémoire insuffisante même après avoir endormi les conteneurs endormables"
+                         if endormis else "aucun conteneur endormable en marche")
+    try:
+        PLACE_ETAT.parent.mkdir(parents=True, exist_ok=True)
+        PLACE_ETAT.write_text(json.dumps({"ts": maintenant(), "endormis": endormis}))
+    except OSError as e:
+        print(f"voicestudioctl : état de libération non mémorisé ({e.strerror})", file=sys.stderr)
+    audit("faire-de-la-place", f"suffisante={res['suffisante']} disponible={etat['disponible_mo']}Mo endormis=" +
+          (",".join(e["id"] for e in endormis) or "aucun"))
+    print(json.dumps(res))
+    return 0
+
+
 def etat_complet(run=_run, sante_fn=None) -> dict:
     sante_fn = sante_fn or sante
     c = charger()
@@ -795,6 +921,7 @@ def etat_complet(run=_run, sante_fn=None) -> dict:
         "cle_presente": bool(lire_cle()),
         "mandataire": systemctl(run, "is-active", SOCKET_PUB).stdout.strip() or "inactive",
         "provisionnement": systemctl(run, "is-active", UNITE_PROVISION).stdout.strip() or "inactive",
+        "memoire_hote": etat_memoire(c),
         "interface_native": MARQUE_INTERFACE.exists(),
         "interface_vhost": (NGINX_ACTIF / VHOST_FICHIER).exists(),
         "source": source,
@@ -1109,7 +1236,9 @@ def cmd_migrer_conf() -> int:
         return 0
     with open(CONF, "rb") as h:
         ancien = tomllib.load(h)
-    if not any(k in ancien for k in ("image", "empreinte", *LEGACY)):
+    # L'ancien schéma (podman) a des clés À PLAT (`memoire = "4g"`) ; le nouveau a des SECTIONS (`[memoire]`) qui portent
+    # parfois le même nom : seule une valeur qui n'est PAS une table est un reste de l'ancien schéma.
+    if not any(k in ancien and not isinstance(ancien[k], dict) for k in ("image", "empreinte", *LEGACY)):
         _completer_depuis_les_defauts(ancien)
         _groupe_secubox(CONF)
         return 0
@@ -1118,7 +1247,7 @@ def cmd_migrer_conf() -> int:
         shutil.copyfile(CONF, sauvegarde)
     shutil.copyfile(CONF_DEFAUT, CONF)
     for cle, (section, nom) in LEGACY.items():
-        if cle not in ancien:
+        if cle not in ancien or isinstance(ancien[cle], dict):
             continue
         valeur = ancien[cle]
         if cle == "memoire":        # podman acceptait « 4g » ; le plafond cgroup attend « 4G »
@@ -1301,7 +1430,7 @@ def cmd_etat(json_sortie: bool, run=_run) -> int:
 
 
 ACTIONS_API = ("status", "start", "stop", "restart", "logs", "config", "publier",
-               "cle-apercu", "cle-renouveler", "cle-interne", "sauvegarde", "installer")
+               "cle-apercu", "cle-renouveler", "cle-interne", "sauvegarde", "installer", "faire-de-la-place")
 
 
 def _capter(fn, *args, **kw) -> tuple[int, str]:
@@ -1335,6 +1464,10 @@ def cmd_api(entree: str) -> int:
             k = lire_cle()
             print(json.dumps({"presente": bool(k), "apercu": (k[:4] + "…" + k[-4:]) if len(k) > 12 else ""}))
             return 0
+        if act == "faire-de-la-place":
+            rc, txt = _capter(cmd_faire_de_la_place)
+            print(txt if txt.startswith("{") else json.dumps({"ok": False, "raison": txt[:200]}))
+            return 0 if rc == 0 else 1
         if act == "cle-interne":
             print(json.dumps({"cle": lire_cle()}))
             return 0
@@ -1410,6 +1543,8 @@ def main(argv: list[str]) -> int:
             return 0
         if cmd == "sauvegarde":
             return cmd_sauvegarde()
+        if cmd == "faire-de-la-place":
+            return cmd_faire_de_la_place()
         if cmd == "interface-ferme":
             return cmd_interface_ferme()
         if cmd == "interface":

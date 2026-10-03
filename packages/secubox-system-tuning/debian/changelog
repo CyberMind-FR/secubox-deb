@@ -1,3 +1,13 @@
+secubox-system-tuning (1.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * Swap disque : le ZRAM n'est pas un swap disque. `secubox-tuning-apply swap` concluait « swap déjà actif » dès que le zram existait
+    (toute box avec zram-generator) : le fichier disque n'était JAMAIS créé, alors que le zram se remplit (gk3 : 3,9/3,9 Go, plus rien à
+    évincer, le tueur de mémoire global abattait le moteur vocal). Seul un swap non-zram compte désormais.
+  * Emplacement : le chemin configuré (/data), sinon `swap.fallback_path` (/srv/secubox : sur gk3 le SSD est sous /, /data n'a que 4 Go) ;
+    jamais une carte eMMC/SD (usure). Défauts : 8 Go (gk2 en a deux de 4), 20 Go libres requis. 8 tests, commandes simulées en --dry-run.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 13:00:00 +0200
+
 secubox-system-tuning (1.2.4-1~bookworm1) bookworm; urgency=low
 
   * Décommissionnement de RustDesk (#1862) : lxc-cpu et lxc-memory-high : plus d'entrée rustdesk.
