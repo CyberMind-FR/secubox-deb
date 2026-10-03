@@ -40,3 +40,13 @@ unbound_blocklist = "/var/lib/unbound/blocklist.conf"
 # vit dans /var/lib/secubox/ad-guard/dnstv/etat.json, géré par l'API et l'interface — pas ici.
 # Les compteurs de plus de `retention_jours` jours sont purgés chaque jour.
 retention_jours = 30
+
+[adblock_tv_auto]
+# Mode « auto » (#1954) : seuils de DÉPART, mesurés sur UNE TV et UNE application — à calibrer sur plusieurs jours réels.
+# declencheurs : domaines d'insertion publicitaire dont la requête ouvre une « coupure » (fenêtre de 60 s) pour la détection.
+declencheurs = ["fwmrm.net"]
+# Rafale : refus par minute vers un même domaine, pendant `duree_rafale_min` minutes consécutives. Étalon mesuré en lecture NORMALE : ~10/min.
+seuil_refus_min = 60
+duree_rafale_min = 5
+# Requêtes depuis le début de l'essai pour juger l'appareil « actif » (un appareil éteint ne déclenche jamais de retrait).
+min_requetes_actif = 100

@@ -38,7 +38,8 @@ def monde(tmp_path, monkeypatch):
     conf = tmp_path / "unbound.d" / "94-secubox-adguard-tv.conf"
     for k, v in {"SECUBOX_ADGUARD_TV_ETAT": etat, "SECUBOX_ADGUARD_TV_LISTES": LISTES, "SECUBOX_ADGUARD_TV_UNBOUND": conf,
                  "SECUBOX_ADGUARD_TV_CHECKCONF": checkconf, "SECUBOX_ADGUARD_TV_CONTROL": control,
-                 "SECUBOX_ADGUARD_TV_AUDIT": tmp_path / "audit.log", "SECUBOX_ADGUARD_TV_SANS_ROOT": "1"}.items():
+                 "SECUBOX_ADGUARD_TV_AUDIT": tmp_path / "audit.log", "SECUBOX_ADGUARD_TV_SANS_ROOT": "1",
+                 "SECUBOX_ADGUARD_TV_APPLIQUE": tmp_path / "racine" / "applique.json"}.items():
         monkeypatch.setenv(k, str(v))
     monkeypatch.setattr(dnstv, "DOSSIER_ETAT", etat)
     monkeypatch.setattr(dnstv, "DOSSIER_LISTES", LISTES)

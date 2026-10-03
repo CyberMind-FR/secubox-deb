@@ -12,7 +12,8 @@ décision et une heure.
 Trois modes par appareil (une « vue » Unbound par appareil, voir `rendre_unbound`) :
   off      l'appareil est RETIRÉ du périmètre du POC : il est traité comme tout le LAN (puits de production) ;
   observe  AUCUN blocage : les requêtes sont journalisées et classées (ce qui AURAIT été bloqué) ;
-  block    les domaines des listes du POC répondent NXDOMAIN.
+  block    les domaines des listes du POC répondent NXDOMAIN ;
+  auto     vue propre à l'appareil : seules les règles apprises, en essai ou confirmées, répondent NXDOMAIN (#1954).
 
 Ce module est une bibliothèque : analyseur du journal d'Unbound, classeur de domaines, état, magasin SQLite, génération de la
 configuration Unbound. Il est utilisé par le contrôleur root (`secubox-adguard-tv`), le démon d'alimentation
@@ -33,10 +34,10 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 CATEGORIES = ("advertising", "tracking", "telemetry", "social", "custom")
-MODES = ("off", "observe", "block")
+MODES = ("off", "observe", "block", "auto")
 DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 
-ETAT_DEFAUT = {"actif": False, "clients": []}
+ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False}
 DOSSIER_ETAT = Path(os.environ.get("SECUBOX_ADGUARD_TV_ETAT", "/var/lib/secubox/ad-guard/dnstv"))
 DOSSIER_LISTES = Path(os.environ.get("SECUBOX_ADGUARD_TV_LISTES", "/usr/share/secubox/ad-guard/lists"))
 CONF_UNBOUND = Path(os.environ.get("SECUBOX_ADGUARD_TV_UNBOUND", "/etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf"))
@@ -139,6 +140,11 @@ class Classifieur:
 
 # ── état (périmètre du POC) ──────────────────────────────────────────────────
 
+def _slug(nom: str) -> str:
+    """Identifiant de vue Unbound d'un appareil : minuscules, tirets ; jamais autre chose que [a-z0-9-]."""
+    return re.sub(r"[^a-z0-9]+", "-", str(nom).lower()).strip("-")[:40] or "appareil"
+
+
 def _ip(valeur: str) -> str:
     try:
         return str(ipaddress.ip_address(str(valeur).strip()))
@@ -160,7 +166,7 @@ def valider_etat(brut) -> dict:
         mode = c.get("mode", "observe")
         nom = str(c.get("nom", ip))
         if mode not in MODES:
-            raise ErreurTV("mode inconnu (off, observe, block)")
+            raise ErreurTV("mode inconnu (off, observe, block, auto)")
         if not NOM_RE.match(nom):
             raise ErreurTV("nom d'appareil invalide (lettres, chiffres, espace . _ -, 40 caractères au plus)")
         if ip in vus:
@@ -169,7 +175,16 @@ def valider_etat(brut) -> dict:
         clients.append({"ip": ip, "nom": nom, "mode": mode})
     if len(clients) > 32:
         raise ErreurTV("32 appareils au plus")
-    return {"actif": bool(brut.get("actif", False)), "clients": clients}
+    noms_par_vue: Dict[str, set] = {}
+    for c in clients:
+        if c["mode"] == "auto":
+            noms_par_vue.setdefault(_slug(c["nom"]), set()).add(c["nom"])
+    if any(len(n) > 1 for n in noms_par_vue.values()):
+        raise ErreurTV("deux appareils en mode auto donnent la même vue : leurs noms doivent différer par plus que la casse ou la ponctuation")
+    auto_essai = brut.get("auto_essai", False)
+    if not isinstance(auto_essai, bool):
+        raise ErreurTV("auto_essai : booléen attendu")
+    return {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai}
 
 
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
@@ -196,7 +211,7 @@ def ecrire_etat(etat: dict, dossier: Path = None) -> dict:
 
 # ── configuration Unbound ────────────────────────────────────────────────────
 
-def rendre_unbound(etat: dict, table: Dict[str, str]) -> str:
+def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[Dict[str, List[str]]] = None) -> str:
     """Drop-in Unbound du POC. Journalisation par requête + UNE VUE PAR MODE pour les appareils du périmètre.
 
     Pourquoi des vues et pas des listes globales : (1) les autres clients ne sont pas touchés ; (2) l'appareil en OBSERVE échappe au puits
@@ -213,7 +228,8 @@ def rendre_unbound(etat: dict, table: Dict[str, str]) -> str:
     if etat["actif"]:
         for c in suivis:
             hote = "/128" if ":" in c["ip"] else "/32"
-            L.append(f"    access-control-view: {c['ip']}{hote} sbx-tv-{c['mode']}")
+            vue = f"sbx-tv-auto-{_slug(c['nom'])}" if c["mode"] == "auto" else f"sbx-tv-{c['mode']}"
+            L.append(f"    access-control-view: {c['ip']}{hote} {vue}")
         # NB : les tampons de vue sont déclarés APRÈS « server: ».
         L.append("view:")
         L.append('    name: "sbx-tv-observe"')
@@ -223,6 +239,15 @@ def rendre_unbound(etat: dict, table: Dict[str, str]) -> str:
         for d in sorted(table):
             L.append(f'    local-zone: "{d}." always_nxdomain')
         L.append('    local-zone: "." transparent')
+        # Mode auto : UNE vue par appareil, avec ses seules règles actives (essai ou confirmées).
+        for nom in sorted({_slug(c["nom"]) for c in suivis if c["mode"] == "auto"}):
+            L.append("view:")
+            L.append(f'    name: "sbx-tv-auto-{nom}"')
+            for d in sorted(set((regles_actives or {}).get(nom, []))):
+                if valider_domaine(d) != d:
+                    raise ErreurTV("domaine de règle invalide")
+                L.append(f'    local-zone: "{d}." always_nxdomain')
+            L.append('    local-zone: "." transparent')
     return "\n".join(L) + "\n"
 
 
@@ -405,6 +430,25 @@ class Magasin:
             return [{"domaine": d, "categorie": c, "requetes": n, "bloquees": b, "derniere": t} for d, c, n, b, t in cx.execute(
                 f"SELECT domaine, MAX(categorie), COUNT(*), SUM(decision='BLOCKED'), MAX(ts) FROM dnstv_recents WHERE {' AND '.join(w)} "
                 "GROUP BY domaine ORDER BY COUNT(*) DESC LIMIT 500", a)]
+
+    def evenements(self, clients: List[str], depuis: int, limite: int = 20000) -> List[dict]:
+        """Événements d'UNE source (toutes ses adresses), du plus ancien au plus récent : sert à la détection des coupures (#1954)."""
+        if not clients:
+            return []
+        with self._cx() as cx:
+            lignes = cx.execute(
+                "SELECT ts, domaine, decision FROM dnstv_recents WHERE ts>=? AND client IN (%s) ORDER BY ts, rowid LIMIT ?" % ",".join("?" * len(clients)),
+                [int(depuis), *clients, max(1, min(int(limite), 50000))]).fetchall()
+        return [{"ts": t, "domaine": d, "decision": dec} for t, d, dec in lignes]
+
+    def jours_vus(self, clients: List[str], avant_jour: str, depuis_jour: str = "0000-00-00") -> Dict[str, int]:
+        """Domaines réellement servis et nombre de JOURS distincts dans [depuis_jour, avant_jour[ : définit le « contenu habituel » (#1954)."""
+        if not clients:
+            return {}
+        with self._cx() as cx:
+            return dict(cx.execute(
+                "SELECT domaine, COUNT(DISTINCT jour) FROM dnstv_counts WHERE decision='ALLOWED' AND jour<? AND jour>=? AND client IN (%s) GROUP BY domaine" % ",".join("?" * len(clients)),
+                [avant_jour, depuis_jour, *clients]).fetchall())
 
     def par_client(self) -> List[dict]:
         with self._cx() as cx:

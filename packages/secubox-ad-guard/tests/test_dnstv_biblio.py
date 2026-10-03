@@ -66,14 +66,14 @@ def test_l_etat_est_conserve_apres_redemarrage(tmp_path):
     e = {"actif": True, "clients": [{"ip": "192.168.1.50", "nom": "Freebox TV salon", "mode": "block"}]}
     dnstv.ecrire_etat(e, tmp_path)
     relu, erreur = dnstv.lire_etat(tmp_path)                       # « redémarrage » : on relit depuis le disque
-    assert erreur is None and relu == e
+    assert erreur is None and relu == dict(e, auto_essai=False)    # #1954 : champ ajouté, faux par défaut
 
 
 def test_un_etat_absent_est_inactif_et_un_etat_corrompu_aussi_avec_son_erreur(tmp_path):
-    assert dnstv.lire_etat(tmp_path) == ({"actif": False, "clients": []}, None)
+    assert dnstv.lire_etat(tmp_path) == ({"actif": False, "clients": [], "auto_essai": False}, None)
     (tmp_path / "etat.json").write_text('{"actif": true, "clients": [{"ip": "pas une ip"}]}')
     etat, erreur = dnstv.lire_etat(tmp_path)
-    assert etat == {"actif": False, "clients": []} and "inactif" in erreur
+    assert etat == {"actif": False, "clients": [], "auto_essai": False} and "inactif" in erreur
     (tmp_path / "etat.json").write_text("{ pas du json")
     assert dnstv.lire_etat(tmp_path)[1] is not None
 

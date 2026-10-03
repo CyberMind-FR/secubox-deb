@@ -6,6 +6,7 @@
 """SecuBox-Deb :: secubox-adguard-tv — la seule porte privilégiée du POC « DNS AdBlock TV » (#1943).
 
   secubox-adguard-tv apply      lit l'état (périmètre + modes), écrit le drop-in Unbound, le VÉRIFIE, recharge Unbound
+  secubox-adguard-tv regles-appliquer   applique À CHAUD les seules différences de règles du mode auto (#1954) ; sinon rechargement complet
   secubox-adguard-tv disable    retire le drop-in et recharge Unbound : tout est remis en l'état
   secubox-adguard-tv status     JSON : drop-in présent, état, configuration valide
 
@@ -18,9 +19,14 @@ remise et la commande échoue : le DNS du réseau n'est jamais laissé avec une 
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
+import re
+import stat
 import subprocess
+import tempfile
 import sys
 import time
 from pathlib import Path
@@ -28,10 +34,13 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv  # noqa: E402
+from api import dnstv, dnstv_regles  # noqa: E402
 
 CHECKCONF = os.environ.get("SECUBOX_ADGUARD_TV_CHECKCONF", "unbound-checkconf")
 CONTROL = os.environ.get("SECUBOX_ADGUARD_TV_CONTROL", "unbound-control")
+# Dossier de ROOT, hors de l'arbre de `secubox` (le postinst fait `chown -R secubox /var/lib/secubox/ad-guard`) : tout ce que root y écrit
+# (instantané, marque « désactivé », verrou) ne peut pas être détourné par un lien symbolique posé par un compte non privilégié.
+APPLIQUE = Path(os.environ.get("SECUBOX_ADGUARD_TV_APPLIQUE", "/var/lib/secubox-adguard-tv/applique.json"))
 AUDIT = Path(os.environ.get("SECUBOX_ADGUARD_TV_AUDIT", "/var/log/secubox/audit.log"))
 
 
@@ -40,7 +49,7 @@ def audit(action: str, detail: str = "") -> None:
         AUDIT.parent.mkdir(parents=True, exist_ok=True)
         with open(AUDIT, "a", encoding="utf-8") as h:
             h.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "ad-guard-tv",
-                                "action": action, "detail": detail[:200]}) + "\n")
+                                "action": action, "detail": detail[:200]}, ensure_ascii=False) + "\n")
     except OSError:
         pass                                                           # le journal d'audit ne doit jamais bloquer l'opération
 
@@ -84,15 +93,95 @@ def charger() -> tuple[dict, dict]:
     return etat, table
 
 
-def recharger() -> None:
-    r = subprocess.run([CONTROL, "reload"], capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:
-        raise SystemExit("unbound-control reload a échoué : " + (r.stderr or r.stdout).strip()[:200])
-
-
-def appliquer() -> int:
+def charger_avec_regles() -> tuple[dict, dict, dict]:
+    """État + table + règles actives par appareil. Les règles ne sont lues QUE si un appareil est en mode auto : un fichier de règles
+    absent ou corrompu ne doit pas empêcher d'appliquer ou de retirer les modes observe/block."""
     etat, table = charger()
-    contenu = dnstv.rendre_unbound(etat, table)
+    if not any(c["mode"] == "auto" for c in etat["clients"]):
+        return etat, table, {}
+    try:
+        actives = dnstv_regles.charger(dnstv.DOSSIER_ETAT).par_appareil()
+    except dnstv_regles.ErreurRegle as e:
+        raise SystemExit(f"règles refusées ({e}) — rien n'est changé")
+    return etat, table, actives
+
+
+def dossier_root() -> Path:
+    """Le dossier de root, créé en 0700 au besoin ; refusé s'il est un lien, n'appartient pas à root ou est ouvert en écriture à d'autres."""
+    d = APPLIQUE.parent
+    try:
+        d.mkdir(mode=0o700, parents=True, exist_ok=True)
+        st = os.lstat(d)
+    except OSError as e:
+        raise SystemExit(f"dossier du contrôleur inutilisable ({type(e).__name__})")
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
+        raise SystemExit("dossier du contrôleur refusé (lien symbolique, propriétaire ou droits inattendus) — rien n'est changé")
+    return d
+
+
+@contextlib.contextmanager
+def verrou_controleur():
+    """Un seul contrôleur à la fois (minuterie et API) : même drop-in, même instantané."""
+    fd = os.open(dossier_root() / "verrou", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def _control(*args: str) -> None:
+    """Une commande unbound-control, sans shell ; un code ≠ 0 est une erreur (le repli est décidé par l'appelant)."""
+    r = subprocess.run([CONTROL, *args], capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        raise RuntimeError("unbound-control " + args[0] + " a échoué : " + (r.stderr or r.stdout).strip()[:120])
+
+
+def instantane(etat: dict, actives: dict, regles: dict | None = None) -> dict:
+    """Ce que le DNS a RÉELLEMENT chargé : modes + domaines de chaque vue auto + état de chaque règle (pour l'audit)."""
+    vues = {f"sbx-tv-auto-{dnstv._slug(c['nom'])}": sorted(set(actives.get(dnstv._slug(c["nom"]), [])))
+            for c in etat["clients"] if c["mode"] == "auto"}
+    return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")),
+            "modes": sorted([c["ip"], c["mode"], c["nom"]] for c in etat["clients"]), "vues": vues, "etats": regles or {}}
+
+
+def ecrire_instantane(inst: dict) -> None:
+    """Écriture atomique dans le dossier de root : nom aléatoire créé en O_EXCL (jamais un nom prévisible qu'un lien pourrait occuper)."""
+    d = dossier_root()
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".applique.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), 0o600)
+            h.write(json.dumps(inst))
+        os.replace(tmp, d / APPLIQUE.name)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def lire_instantane() -> dict | None:
+    """L'instantané précédent, REVALIDÉ : toute structure inattendue vaut « inconnu » (rechargement complet), jamais un argument d'unbound-control."""
+    try:
+        brut = json.loads(lire_sans_suivre(dossier_root() / APPLIQUE.name))
+    except (OSError, ValueError):
+        return None
+    try:
+        if not isinstance(brut, dict) or not isinstance(brut.get("vues"), dict) or not isinstance(brut.get("modes"), list):
+            return None
+        for vue, doms in brut["vues"].items():
+            if not re.fullmatch(r"sbx-tv-auto-[a-z0-9-]{1,40}", str(vue)) or not isinstance(doms, list) \
+                    or any(dnstv.valider_domaine(d) != d for d in doms):
+                return None
+        if not isinstance(brut.get("etats", {}), dict):
+            return None
+    except (TypeError, AttributeError):
+        return None
+    return brut
+
+
+def ecrire_verifier(contenu: str) -> None:
+    """Écrit le drop-in puis le VÉRIFIE ; en cas de refus, remet l'ancien et s'arrête (comportement du POC conservé)."""
     cible = dnstv.CONF_UNBOUND
     ancien = cible.read_bytes() if cible.is_file() else None
     cible.parent.mkdir(parents=True, exist_ok=True)
@@ -101,22 +190,112 @@ def appliquer() -> int:
     os.chmod(tmp, 0o644)
     os.replace(tmp, cible)
     r = subprocess.run([CHECKCONF], capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:                                              # configuration refusée : on remet l'ancienne, rien n'est rechargé
+    if r.returncode != 0:
         if ancien is None:
             cible.unlink(missing_ok=True)
         else:
             cible.write_bytes(ancien)
         audit("apply-refuse", (r.stdout + r.stderr).strip()[:200])
         raise SystemExit("unbound-checkconf refuse la configuration — version précédente remise")
+
+
+def recharger() -> None:
+    r = subprocess.run([CONTROL, "reload"], capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        raise SystemExit("unbound-control reload a échoué : " + (r.stderr or r.stdout).strip()[:200])
+
+
+def etats_regles() -> dict:
+    """{ "appareil|domaine": état } de TOUTES les règles : l'audit compare deux instantanés pour tracer chaque transition effective."""
+    try:
+        return {f"{r['appareil']}|{r['domaine']}": r["etat"] for r in dnstv_regles.charger(dnstv.DOSSIER_ETAT).liste()}
+    except dnstv_regles.ErreurRegle:
+        return {}
+
+
+def appliquer() -> int:
+    etat, table, actives = charger_avec_regles()
+    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))
     recharger()
+    ecrire_instantane(instantane(etat, actives, etats_regles()))
     audit("apply", f"actif={etat['actif']} appareils={len(etat['clients'])} domaines={len(table)}")
     print(json.dumps({"ok": True, "actif": etat["actif"], "appareils": len(etat["clients"]), "domaines": len(table)}))
     return 0
 
 
+def audit_transitions(avant: dict, voulu: dict) -> None:
+    """Une ligne d'audit par transition EFFECTIVE (essai, confirmation, retrait, rejet) et par changement d'« essai automatique »."""
+    regles = {}
+    try:
+        regles = {f"{r['appareil']}|{r['domaine']}": r for r in dnstv_regles.charger(dnstv.DOSSIER_ETAT).liste()}
+    except dnstv_regles.ErreurRegle:
+        pass
+    ancien = avant.get("etats", {}) if avant else {}
+    n = 0
+    for cle, nouvel in sorted(voulu["etats"].items()):
+        vieux = ancien.get(cle, "")
+        if vieux == nouvel or (nouvel == "candidat" and not vieux):
+            continue
+        r = regles.get(cle, {})
+        derniere = (r.get("historique") or [{}])[-1]                       # l'origine de la TRANSITION, pas celle de la création de la règle
+        audit("regle", f"{cle.replace('|', ' ')} {vieux or '-'}→{nouvel} origine={derniere.get('origine', r.get('origine', '?'))} motif={r.get('motif', '')}"[:200])
+        n += 1
+        if n >= 50:
+            break
+    if avant is not None and bool(avant.get("auto_essai")) != voulu["auto_essai"]:
+        audit("auto_essai", f"actif={voulu['auto_essai']}")
+
+
+def regles_appliquer() -> int:
+    """Applique les seules différences de règles À CHAUD (unbound-control view_local_zone) : aucune coupure du DNS.
+    Ordre : (1) drop-in écrit et VÉRIFIÉ — s'il est refusé, RIEN n'est appliqué ; (2) zones ajoutées/retirées en mémoire ; (3) instantané.
+    Tout autre changement (appareils, modes, vues) ou tout échec à chaud → rechargement complet depuis le drop-in déjà vérifié."""
+    if (dossier_root() / "desactive").exists():
+        print(json.dumps({"ok": True, "mode": "desactive"}))                # `disable` est durable : seule une demande `apply` explicite réactive
+        return 0
+    etat, table, actives = charger_avec_regles()
+    voulu = instantane(etat, actives, etats_regles())
+    avant = lire_instantane()
+    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))
+    if (avant is None or avant.get("actif") != voulu["actif"] or avant.get("modes") != voulu["modes"]
+            or set(avant.get("vues", {})) != set(voulu["vues"])):
+        recharger()
+        ecrire_instantane(voulu)
+        audit_transitions(avant or {}, voulu)
+        audit("regles-appliquer", "mode=rechargement")
+        print(json.dumps({"ok": True, "ajoutes": 0, "retires": 0, "mode": "rechargement"}))
+        return 0
+    ajoutes = retires = 0
+    try:
+        for vue, doms in voulu["vues"].items():
+            anciens = set(avant["vues"].get(vue, []))
+            for d in sorted(set(doms) - anciens):
+                _control("view_local_zone", vue, d + ".", "always_nxdomain")
+                ajoutes += 1
+            for d in sorted(anciens - set(doms)):
+                _control("view_local_zone_remove", vue, d + ".")
+                retires += 1
+    except (OSError, subprocess.SubprocessError, RuntimeError) as e:
+        audit("regles-chaud-echec", str(e)[:150])
+        recharger()                                                          # repli : le drop-in est déjà à jour et vérifié
+        ecrire_instantane(voulu)
+        audit_transitions(avant, voulu)
+        print(json.dumps({"ok": True, "ajoutes": 0, "retires": 0, "mode": "rechargement"}))
+        return 0
+    ecrire_instantane(voulu)
+    audit_transitions(avant, voulu)
+    audit("regles-appliquer", f"ajoutes={ajoutes} retires={retires} mode=chaud")
+    print(json.dumps({"ok": True, "ajoutes": ajoutes, "retires": retires, "mode": "chaud"}))
+    return 0
+
+
 def desactiver() -> int:
+    """Retire le drop-in ET l'instantané, et pose la marque « désactivé » : la minuterie ne le réactive pas (seul `apply` le fait)."""
     existait = dnstv.CONF_UNBOUND.is_file()
     dnstv.CONF_UNBOUND.unlink(missing_ok=True)
+    racine = dossier_root()
+    (racine / APPLIQUE.name).unlink(missing_ok=True)
+    (racine / "desactive").touch(mode=0o600)
     if existait:
         recharger()
     audit("disable", "drop-in retiré" if existait else "rien à retirer")
@@ -132,13 +311,18 @@ def etat_courant() -> int:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status"):
+    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
         print("secubox-adguard-tv : root requis (sudo)", file=sys.stderr)
         return 3
-    return {"apply": appliquer, "disable": desactiver, "status": etat_courant}[argv[1]]()
+    if argv[1] == "status":
+        return etat_courant()
+    with verrou_controleur():
+        if argv[1] == "apply":
+            (dossier_root() / "desactive").unlink(missing_ok=True)         # une demande explicite lève la désactivation
+        return {"apply": appliquer, "disable": desactiver, "regles-appliquer": regles_appliquer}[argv[1]]()
 
 
 if __name__ == "__main__":

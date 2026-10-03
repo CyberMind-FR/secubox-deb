@@ -4,8 +4,12 @@ if [ "$1" = "configure" ]; then
     # Ensure data directories exist
     mkdir -p /var/lib/secubox/ad-guard/blocklists /var/lib/secubox/ad-guard/dnstv
     chown -R secubox:secubox /var/lib/secubox/ad-guard
+    # Dossier de ROOT du contrôleur du mode auto (#1954) : hors de l'arbre de `secubox`, jamais touché par le chown ci-dessus.
+    install -d -m 0700 -o root -g root /var/lib/secubox-adguard-tv
     # POC « DNS AdBlock TV » (#1943) : inactif tant qu'on ne l'active pas ; une mise à jour relance son démon s'il tourne déjà.
     systemctl try-restart secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
+    # Mode auto (#1954) : la minuterie ne fait rien tant qu'aucun appareil n'est en mode auto ; l'activer ne touche pas le DNS.
+    systemctl enable --now secubox-ad-guard-auto.timer >/dev/null 2>&1 || true
 
     systemctl daemon-reload
     # PAS d'enable de secubox-ad-guard.service : le module est servi par

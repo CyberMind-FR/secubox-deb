@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Ad Guard — moteur du mode auto du POC DNS AdBlock TV (#1954), un passage
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1954
+After=unbound.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+# Sort aussitôt si aucun appareil n'est en mode auto. L'application passe par `sudo -n secubox-adguard-tv regles-appliquer` (argument exact,
+# sudoers.d/secubox-adguard-tv) : sudo exige NoNewPrivileges=no (exception écrite dans .claude/RULES-CODE.md). Le contrôleur ROOT lancé par sudo
+# hérite de l'espace de montage de l'unité : ProtectSystem=strict le rendrait muet (EROFS) ; il lui faut donc écrire, et seulement là :
+#   /etc/unbound/unbound.conf.d (drop-in), /var/log/secubox (audit), /var/lib/secubox-adguard-tv (instantané), /var/lib/secubox/ad-guard (règles).
+# RestrictSUIDSGID est volontairement absent : il neutraliserait sudo.
+ExecStart=/usr/sbin/secubox-adguard-auto
+UMask=0027
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/secubox/ad-guard /var/lib/secubox-adguard-tv /etc/unbound/unbound.conf.d /var/log/secubox

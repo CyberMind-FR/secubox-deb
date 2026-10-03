@@ -44,6 +44,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
+0. **#1954** mode auto ad-guard TV : livré et déployé (1.4.0) ; reste l'**essai réel** sur la TV (passer 192.168.1.95 en `auto`, valider un candidat, tester « Ça ne marche plus »), à décider avec le propriétaire : en `auto` la vue de l'appareil ne contient QUE les règles apprises (les blocages actuels du mode `block` disparaissent tant qu'ils ne sont pas réappris ou importés). **#1938** : adresse IPv6 statique pour le DNS de la Freebox (proposition dans l'issue).
 1. **#1748** audit des autres fusions suspectes (nextcloud c43ffe9b0, metrics/core 7ebe27403, toolbox,
    nac discovery) : lignes de master retirées toujours absentes, à examiner une à une.
 2. **#1903** sauvegardes chiffrées par défaut ; **#1904** un groupe par secret (issus de l'évaluation #1851).

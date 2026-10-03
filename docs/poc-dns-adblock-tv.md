@@ -97,3 +97,9 @@ Onglet « DNS AdBlock TV » → « Visualisation des flux DNS » : flux en cours
 requêtes/blocages, synthèse par **service** et **type** (`lists/services.txt`). API : `/adblock-tv/live`, `/sources`, `/serie`, `/flux`.
 **Limites** : le DNS ne donne ni volumes (octets) ni contenu ; seul un DPI sur le trafic réel les donnerait, et il ne verrait la TV que si son trafic traversait la box
 (la box n'est pas la passerelle). Un nom absent de `services.txt` est affiché « inconnu ».
+
+## 10. Mode auto (1.4.0, #1954)
+
+Voir `docs/superpowers/specs/2026-10-03-adguard-tv-auto-design.md` (conception) et le plan du même dossier. Un appareil en mode `auto` : candidats appris →
+essai 24 h → confirmation, retour arrière manuel et automatique, application à chaud sans coupure du DNS. Heuristiques et seuils tirés d'**un** cas réel
+(replay France TV sur une TV Android) : à calibrer avant toute généralisation. Le DNS ne voit pas l'écran : les signaux de casse sont indirects.
