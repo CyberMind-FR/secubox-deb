@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — page OpenPGP du Coffre, à ORIGINE SÉPARÉE (#1852, P5).
+
+  Cette page n'a pas d'interface : le webmail l'insère dans un cadre invisible et lui parle par postMessage. Elle tient la
+  clé secrète de la personne EN MÉMOIRE seulement (lue depuis son compartiment par la session de connexion) et signe,
+  chiffre, déchiffre ici, dans le navigateur. Le JavaScript du webmail, d'une AUTRE origine, ne voit jamais la clé.
+  Aucun script en ligne : la politique de sécurité du serveur interdit tout sauf ce dossier.
+-->
+<meta charset="utf-8">
+<title>OpenPGP — Coffre</title>
+<meta name="robots" content="noindex">
+<p id="etat" hidden>Page de service OpenPGP : elle n'a pas d'interface. Elle répond au webmail.</p>
+<script src="openpgp.min.js"></script>
+<script src="pgp.js"></script>

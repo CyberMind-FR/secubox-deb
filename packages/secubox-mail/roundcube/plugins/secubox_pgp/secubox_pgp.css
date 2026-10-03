@@ -1,0 +1,7 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 */
+.secubox-pgp-bandeau { margin: 0 0 .6rem; padding: .45rem .7rem; border-radius: 6px; border: 1px solid #8884; font-size: .85rem; }
+.secubox-pgp-bandeau.ok { border-color: #1a9a5a; color: #1a9a5a; }
+.secubox-pgp-bandeau.ko { border-color: #d64545; color: #d64545; font-weight: 600; }
+.secubox-pgp-bandeau.neutre { border-color: #8886; }
+.secubox-pgp-texte { white-space: pre-wrap; word-wrap: break-word; margin: 0; font-family: inherit; }
+a.secubox-pgp.active .inner, a.secubox-pgp.on .inner { color: #1a9a5a; font-weight: 700; }

@@ -11,6 +11,9 @@ override_dh_auto_install:
 	install -m 644 coffre/*.py $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/coffre/
 	install -d $(CURDIR)/debian/secubox-vault/usr/sbin
 	install -m 755 sbin/coffrectl $(CURDIR)/debian/secubox-vault/usr/sbin/
+	install -m 755 sbin/coffre-pgp-vhost $(CURDIR)/debian/secubox-vault/usr/sbin/
+	install -d $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/pgp
+	install -m 644 www/pgp/index.html www/pgp/pgp.js www/pgp/openpgp.min.js www/pgp/LICENSE-openpgpjs.txt $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/pgp/
 	install -d $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/vault
 	install -m 644 www/vault/index.html $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/vault/
 	install -d $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/coffre

@@ -1,0 +1,113 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-vault :: coffre-pgp-vhost (#1852, P5)
+#
+# Écrit le vhost nginx de la page OpenPGP du Coffre, à ORIGINE SÉPARÉE : pgp.<domaine de la box>. Séparée du webmail ET du
+# Hall, pour que le JavaScript d'un autre site ne voie jamais la clé que cette page tient en mémoire. Idempotent ; sans nom
+# de domaine (secubox-domaine) il ne fait rien.
+#
+#   coffre-pgp-vhost            écrit le vhost, l'active, recharge nginx
+#   coffre-pgp-vhost --retire   le retire (désinstallation)
+#   coffre-pgp-vhost --imprime  l'affiche (tests)
+set -euo pipefail
+
+DISPO="${SECUBOX_NGINX_DISPO:-/etc/nginx/sites-available}"
+ACTIF="${SECUBOX_NGINX_ACTIF:-/etc/nginx/sites-enabled}"
+FICHIER="secubox-coffre-pgp.conf"
+RE_DOM='^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'
+
+domaine() { secubox-domaine "$1" 2>/dev/null | tr 'A-Z' 'a-z' | head -1; }
+
+contenu() {
+    local dom="$1" web="$2"
+    cat <<CONF
+# GÉNÉRÉ par coffre-pgp-vhost (secubox-vault) — ne pas éditer. Page OpenPGP du Coffre, à origine séparée (#1852, P5).
+# nginx: 9080, derrière HAProxy puis le WAF. Elle n'a pas d'interface : le webmail l'insère dans un cadre invisible.
+server {
+    listen 9080;
+    server_name ${dom};
+
+    location ^~ /.well-known/acme-challenge/ { root /usr/share/secubox/www; try_files \$uri =404; }
+
+    location = / { return 404; }
+
+    # LA PAGE. Aucun script en ligne, rien d'extérieur ; ELLE SEULE parle à /api/v1/ ; et seul le webmail peut l'encadrer.
+    location /pgp/ {
+        alias /usr/share/secubox/www/pgp/;
+        index index.html;
+        add_header Cache-Control "no-cache" always;
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; frame-ancestors https://${web}; base-uri 'none'; form-action 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "no-referrer" always;
+        try_files \$uri \$uri/ =404;
+    }
+    # Les seules origines qui peuvent lui parler (postMessage) : le webmail de cette box.
+    location = /pgp/origines.json {
+        default_type application/json;
+        add_header Cache-Control "no-cache" always;
+        return 200 '{"origines":["https://${web}"]}';
+    }
+
+    # COFFRE : seulement l'ouverture de SES secrets (la serrure est la session de connexion) — jamais l'administration.
+    location ~ "^/api/v1/vault/moi/secrets(/[a-z0-9._-]{1,64}/lire)?\$" {
+        limit_except POST { deny all; }
+        rewrite ^ \$uri break;
+        proxy_pass http://unix:/run/secubox/aggregator.sock;
+        proxy_set_header X-SecuBox-LAN   \$lan_client;
+        proxy_set_header X-Real-IP       \$remote_addr;
+        proxy_set_header X-Forwarded-For \$remote_addr;
+        proxy_set_header Host \$host;
+        client_max_body_size 96k;
+        proxy_read_timeout 15s;
+    }
+    # ANNUAIRE DES CLÉS PUBLIQUES, en lecture seule.
+    location ~ "^/api/v1/openpgp/(annuaire|annuaire/[0-9A-F]{40}\\.asc)\$" {
+        limit_except GET { deny all; }
+        rewrite ^ \$uri break;
+        proxy_pass http://unix:/run/secubox/aggregator.sock;
+        proxy_set_header X-SecuBox-LAN   \$lan_client;
+        proxy_set_header X-Real-IP       \$remote_addr;
+        proxy_set_header X-Forwarded-For \$remote_addr;
+        proxy_set_header X-SecuBox-Maillage "";
+        proxy_set_header Host \$host;
+        proxy_read_timeout 20s;
+    }
+
+    access_log /var/log/nginx/coffre_pgp_access.log;
+    error_log  /var/log/nginx/coffre_pgp_error.log;
+}
+CONF
+}
+
+case "${1:-}" in
+    --retire)
+        rm -f "$ACTIF/$FICHIER" "$DISPO/$FICHIER"
+        if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+        echo "coffre-pgp-vhost : retiré"
+        exit 0 ;;
+    ""|--imprime) ;;
+    *) echo "usage : coffre-pgp-vhost [--retire|--imprime]" >&2; exit 2 ;;
+esac
+
+DOM="$(domaine pgp)"; WEB="$(domaine webmail)"
+if ! [[ "$DOM" =~ $RE_DOM && "$WEB" =~ $RE_DOM ]]; then
+    echo "coffre-pgp-vhost : nom de domaine inconnu (secubox-domaine pgp / webmail) — rien n'est écrit" >&2
+    exit 0
+fi
+if [ "${1:-}" = "--imprime" ]; then contenu "$DOM" "$WEB"; exit 0; fi
+
+install -d "$DISPO" "$ACTIF"
+tmp="$(mktemp "$DISPO/.coffre-pgp.XXXXXX")"
+contenu "$DOM" "$WEB" > "$tmp"
+chmod 0644 "$tmp"
+mv "$tmp" "$DISPO/$FICHIER"
+ln -sfn "$DISPO/$FICHIER" "$ACTIF/$FICHIER"
+if command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true
+    else rm -f "$ACTIF/$FICHIER"; echo "coffre-pgp-vhost : nginx -t refuse la configuration — vhost retiré" >&2; exit 1; fi
+fi
+echo "coffre-pgp-vhost : https://${DOM}/pgp/ (encadrable par https://${WEB} seulement)"

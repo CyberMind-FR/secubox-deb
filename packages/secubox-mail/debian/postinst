@@ -56,6 +56,8 @@ if [ "$1" = "configure" ]; then
         /usr/sbin/mailctl webmail-sso >/dev/null 2>&1 || true
         # OpenPGP par Mailvelope (#1738) : la clé reste dans le navigateur.
         /usr/sbin/mailctl webmail-openpgp >/dev/null 2>&1 || true
+        # OpenPGP par la page du Coffre (#1852) : sans effet tant que secubox-vault n'a pas posé pgp.<domaine>.
+        /usr/sbin/mailctl webmail-pgp >/dev/null 2>&1 || true
     fi
 
     # Phase 2: on upgrade from < 2.3, provision Rspamd secrets + data dirs.

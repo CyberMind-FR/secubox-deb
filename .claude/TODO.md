@@ -173,3 +173,5 @@ y dorment, par mois) — ne le lire que sur demande.
 
 
 - [ ] VoiceStudio LAN : l'override DNS Unbound et `relais-maillage.toml` de gk2 sont posés à la main (aucun paquet ne les porte). Les packager (candidat : secubox-annuaire-noms ou un drop-in `secubox-split-horizon`) ; sans eux, le nom résout vers l'IP publique et le studio redevient inatteignable.
+
+- [ ] #1852 : valider avec une session réelle la page `pgp.<domaine>` + greffon `secubox_pgp` (bouton Chiffrer/Signer dans Elastic, affichage d'un message chiffré, pastille, Autocrypt entrant) ; PGP/MIME (multipart/encrypted) non géré ; brouillons en clair (autosave) ; journal du Coffre : une lecture de clé par chargement de page (à espacer si le bruit gêne).
