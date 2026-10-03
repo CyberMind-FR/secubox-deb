@@ -336,10 +336,13 @@ class Magasin:
         cx.execute("PRAGMA journal_mode=WAL")
         return cx
 
-    def ajouter(self, evts: Iterable[Tuple[Evenement, Optional[str]]]) -> int:
+    def ajouter(self, evts: Iterable[Tuple[Evenement, Optional[str]]], exclus: Optional[set] = None) -> int:
+        """`exclus` : adresses dont les requêtes ne sont pas journalisées (la box elle-même)."""
         n = 0
         with self._cx() as cx:
             for e, cat in evts:
+                if exclus and e.client in exclus:
+                    continue
                 cx.execute("INSERT INTO dnstv_counts(jour,client,domaine,categorie,decision,hits) VALUES (?,?,?,?,?,1) "
                            "ON CONFLICT(jour,client,domaine,decision) DO UPDATE SET hits=hits+1, categorie=excluded.categorie",
                            (_jour(e.ts), e.client, e.qname, cat or "", e.decision))
@@ -492,6 +495,23 @@ class ClasseurServices:
             if d == suffixe or d.endswith("." + suffixe):
                 return org, typ
         return "", "inconnu"
+
+
+def adresses_locales(executer=None) -> set:
+    """Toutes les adresses de la box : ses propres requêtes DNS (≈ 11 000 en 20 min) saturaient dnstv_recents (plafond de 20 000 lignes).
+    Toujours au moins le bouclage, même si `ip` manque ou échoue."""
+    import subprocess
+    out = {"127.0.0.1", "::1"}
+    try:
+        r = (executer or subprocess.run)(["ip", "-j", "addr"], capture_output=True, text=True, timeout=10)
+        for itf in json.loads(r.stdout or "[]"):
+            for a in itf.get("addr_info", []):
+                v = a.get("local")
+                if v:
+                    out.add(str(ipaddress.ip_address(v)))
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+    return out
 
 
 def lire_voisins(executer=None) -> Dict[str, str]:

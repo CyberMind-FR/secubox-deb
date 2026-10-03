@@ -47,9 +47,10 @@ def retention() -> int:
         return RETENTION_PAR_DEFAUT
 
 
-def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=classeur) -> int:
+def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=classeur, locales=dnstv.adresses_locales) -> int:
     """Consomme `lignes` ; rend le nombre d'événements enregistrés. Sépare la logique du processus : testable sans Unbound."""
     an = dnstv.Analyseur()
+    exclus = locales()                                                 # la box ne journalise pas ses propres requêtes (#1959)
     lot, total = [], 0
     dernier, derniere_purge, derniere_recharge = time.monotonic(), 0.0, time.monotonic()
     for ligne in lignes:
@@ -59,9 +60,10 @@ def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=clas
             lot.append((e, cat))
         maintenant = time.monotonic()
         if lot and (len(lot) >= LOT or maintenant - dernier >= PERIODE_S):
-            total += magasin.ajouter(lot)
+            total += magasin.ajouter(lot, exclus)
             lot, dernier = [], maintenant
         if maintenant - derniere_recharge >= RECHARGE_S:
+            exclus = locales()
             try:
                 cl = recharger()
             except OSError:
@@ -71,7 +73,7 @@ def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=clas
             magasin.purger(retention())
             derniere_purge = maintenant
     if lot:
-        total += magasin.ajouter(lot)
+        total += magasin.ajouter(lot, exclus)
     return total
 
 
