@@ -114,6 +114,12 @@
       ]
     },
     {
+      "id": "voicestudio", "ic": "🗣️", "nom": "Voix", "service": "voicestudio", "acces": "session",
+      "role": "La voix de la box, traitée chez vous : la carte dit un texte à voix haute et dicte ce que vous prononcez, avec VoiceStudio tournant dans un conteneur de la box. Rien ne part dans le nuage.",
+      "usage": ["Écrivez un texte puis ▶ Dire : la box le lit.", "🎤 Dicter enregistre sur clic seulement ; le texte transcrit s'affiche dans la carte.", "Le moteur peut dormir pour économiser la mémoire : le premier appel est alors plus long. ⚙️ ouvre la console d'administration."],
+      "metriques": []
+    },
+    {
       "id": "nextcloud", "ic": "☁️", "nom": "Cloud", "service": "nextcloud", "acces": "public",
       "role": "Nextcloud, le nuage de fichiers de la box : aperçu de votre espace, ouvert avec la session du Hall, sans mot de passe.",
       "usage": ["Le pied ouvre Nextcloud déjà connecté (entrée /sbx/entrer)."],
