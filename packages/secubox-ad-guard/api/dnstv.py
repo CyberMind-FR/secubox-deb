@@ -175,6 +175,12 @@ def valider_etat(brut) -> dict:
         clients.append({"ip": ip, "nom": nom, "mode": mode})
     if len(clients) > 32:
         raise ErreurTV("32 appareils au plus")
+    noms_par_vue: Dict[str, set] = {}
+    for c in clients:
+        if c["mode"] == "auto":
+            noms_par_vue.setdefault(_slug(c["nom"]), set()).add(c["nom"])
+    if any(len(n) > 1 for n in noms_par_vue.values()):
+        raise ErreurTV("deux appareils en mode auto donnent la même vue : leurs noms doivent différer par plus que la casse ou la ponctuation")
     auto_essai = brut.get("auto_essai", False)
     if not isinstance(auto_essai, bool):
         raise ErreurTV("auto_essai : booléen attendu")
@@ -435,14 +441,14 @@ class Magasin:
                 [int(depuis), *clients, max(1, min(int(limite), 50000))]).fetchall()
         return [{"ts": t, "domaine": d, "decision": dec} for t, d, dec in lignes]
 
-    def jours_vus(self, clients: List[str], avant_jour: str) -> Dict[str, int]:
-        """Domaines réellement servis et nombre de JOURS distincts avant `avant_jour` : définit le « contenu habituel » (#1954)."""
+    def jours_vus(self, clients: List[str], avant_jour: str, depuis_jour: str = "0000-00-00") -> Dict[str, int]:
+        """Domaines réellement servis et nombre de JOURS distincts dans [depuis_jour, avant_jour[ : définit le « contenu habituel » (#1954)."""
         if not clients:
             return {}
         with self._cx() as cx:
             return dict(cx.execute(
-                "SELECT domaine, COUNT(DISTINCT jour) FROM dnstv_counts WHERE decision='ALLOWED' AND jour<? AND client IN (%s) GROUP BY domaine" % ",".join("?" * len(clients)),
-                [avant_jour, *clients]).fetchall())
+                "SELECT domaine, COUNT(DISTINCT jour) FROM dnstv_counts WHERE decision='ALLOWED' AND jour<? AND jour>=? AND client IN (%s) GROUP BY domaine" % ",".join("?" * len(clients)),
+                [avant_jour, depuis_jour, *clients]).fetchall())
 
     def par_client(self) -> List[dict]:
         with self._cx() as cx:

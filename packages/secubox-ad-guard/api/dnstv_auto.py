@@ -70,12 +70,15 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
         evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
         exclus = {r["domaine"] for r in regles.liste() if r["appareil"] == appareil}
         for c in dnstv_detect.detecter(evts, declencheur, classer, exclus):
-            n = regles.proposer(appareil, c.domaine, c.score, c.risque, maintenant)
+            try:
+                n = regles.proposer(appareil, c.domaine, c.score, c.risque, maintenant)
+            except dnstv_regles.ErreurRegle:
+                break                                        # plafond atteint : on cesse de proposer, mais l'expiration et les signaux continuent
             if n is None:
                 continue
             candidats += 1
             changements.append({"appareil": appareil, "domaine": c.domaine, "de": "", "vers": "candidat", "motif": c.motif})
-            if reglage.auto_essai:
+            if reglage.auto_essai and c.risque == "faible":     # un candidat « partagé » ou « variable » reste à valider par un humain
                 r = regles.transiter(n["id"], "essai", "auto", "essai automatique", maintenant)
                 note(r, "candidat", "essai", "essai automatique")
         en_essai = [r for r in regles.liste() if r["appareil"] == appareil and r["etat"] == "essai"]
@@ -87,10 +90,11 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
         restantes = [r for r in en_essai if regles.get(r["id"])["etat"] == "essai"]
         if restantes:
             debut = min(r["maj"] for r in restantes)
-            depuis = [e for e in evts if e["ts"] >= debut]
-            vus = {e["domaine"] for e in depuis if e["decision"] != "BLOCKED"}
-            jours = magasin.jours_vus(adresses, dnstv._jour(debut))
-            if dnstv_signaux.contenu_disparu(jours, vus, len(depuis), min_requetes=reglage.min_requetes_actif):
+            depuis = [e for e in evts if e["ts"] >= debut and e["decision"] != "BLOCKED"]   # les relances d'un domaine refusé ne sont pas de l'activité
+            vus = {e["domaine"] for e in depuis}
+            jours = magasin.jours_vus(adresses, dnstv._jour(debut), dnstv._jour(debut - 7 * 86400))
+            if (maintenant - debut >= dnstv_signaux.DUREE_MIN_S
+                    and dnstv_signaux.contenu_disparu(jours, vus, len(depuis), min_requetes=reglage.min_requetes_actif)):
                 for r in restantes:
                     note(regles.transiter(r["id"], "retire", "auto", "contenu habituel plus demandé", maintenant), "essai", "retire", "contenu habituel plus demandé")
     return {"changements": changements, "candidats": candidats, "applique": applique}

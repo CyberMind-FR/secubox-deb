@@ -50,9 +50,9 @@ def test_essayer_un_candidat_applique_a_chaud(api, monde, regles):
     assert 'local-zone: "ad.example.com." always_nxdomain' in monde["conf"].read_text()
 
 
-def test_confirmer_ne_change_pas_l_effet_dns(api, monde, regles):
+def test_confirmer_ne_change_pas_l_effet_dns_mais_est_transmis_au_controleur_pour_l_audit(api, monde, regles):
     r = api.post(f"/adblock-tv/auto/regles/{regles['essai']}/confirmer")
-    assert r.status_code == 200 and r.json()["regle"]["etat"] == "confirme" and r.json()["application"] is None
+    assert r.status_code == 200 and r.json()["regle"]["etat"] == "confirme" and r.json()["application"]["ok"] is True
 
 
 def test_confirmer_sans_essai_refuse(api, regles):

@@ -15,6 +15,7 @@ from typing import Dict, List, Set
 SEUIL_REFUS_MIN = 60          # refus/minute vers un même domaine (≈ 6× l'étalon mesuré) — à calibrer
 DUREE_RAFALE_MIN = 5          # minutes consécutives
 MIN_REQUETES_ACTIF = 100      # requêtes depuis la règle pour considérer l'appareil « actif » — à calibrer
+DUREE_MIN_S = 1800            # pas de jugement « contenu disparu » avant 30 min d'essai — à calibrer
 MIN_JOURS_CONTENU = 3         # un domaine de contenu : vu au moins 3 jours distincts avant la règle
 
 

@@ -11,10 +11,11 @@ les liens symboliques sont refusés.
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
 import json
 import os
-import re
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -34,8 +35,10 @@ TRANSITIONS = {
 }
 ESSAI_S = 24 * 3600                                    # durée de l'essai
 CANDIDAT_S = 14 * 86400                                # un candidat ignoré 14 jours disparaît
-HISTORIQUE_MAX = 20
+HISTORIQUE_MAX = 10
 REGLES_MAX = 2000
+LECTURE_MAX = 8 * 1024 * 1024       # 2000 règles × (10 entrées d'historique) restent sous ce plafond
+PURGE_RETIRE_S = 30 * 86400        # une règle retirée depuis plus de 30 jours est oubliée (les rejetées sont gardées : jamais reproposées)
 RISQUES = ("faible", "partage", "variable")
 ORIGINES = ("auto", "admin")
 FICHIER = "regles.json"
@@ -149,9 +152,12 @@ class Regles:
         return dict(r)
 
     def expirer(self, maintenant: int) -> List[dict]:
-        """Essais non confirmés → retirés ; candidats trop anciens → retirés. Rend les règles changées."""
+        """Essais non confirmés → retirés ; candidats trop anciens → retirés ; règles retirées depuis longtemps → oubliées. Rend les règles changées."""
         out = []
         for rid, r in list(self._r.items()):
+            if r["etat"] == "retire" and maintenant - r["maj"] > PURGE_RETIRE_S:
+                del self._r[rid]
+                continue
             if r["etat"] == "essai" and maintenant > r["fin_essai"]:
                 out.append(self.transiter(rid, "retire", "auto", "essai expiré sans confirmation", maintenant))
             elif r["etat"] == "candidat" and maintenant - r["cree"] > CANDIDAT_S:
@@ -179,7 +185,7 @@ def charger(dossier: Optional[Path] = None) -> Regles:
         raise ErreurRegle(f"fichier de règles refusé ({type(e).__name__})") from e
     try:
         with os.fdopen(fd, "r", encoding="utf-8") as h:
-            return Regles.depuis_dict(json.loads(h.read(2 * 1024 * 1024)))
+            return Regles.depuis_dict(json.loads(h.read(LECTURE_MAX)))
     except (ValueError, OSError) as e:
         if isinstance(e, ErreurRegle):
             raise
@@ -194,3 +200,19 @@ def ecrire(regles: Regles, dossier: Optional[Path] = None) -> None:
         json.dump(regles.vers_dict(), h, indent=2, ensure_ascii=False)
     os.chmod(tmp, 0o644)
     os.replace(tmp, d / FICHIER)
+
+
+@contextlib.contextmanager
+def verrou(dossier: Optional[Path] = None, bloquant: bool = True):
+    """Verrou exclusif commun à l'API et au moteur : lecture-modification-écriture de `regles.json` sans écrasement mutuel."""
+    d = dossier or dnstv.DOSSIER_ETAT
+    d.mkdir(parents=True, exist_ok=True)
+    fd = os.open(d / ".regles.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | (0 if bloquant else fcntl.LOCK_NB))
+        except BlockingIOError as e:
+            raise ErreurRegle("règles verrouillées par un autre traitement") from e
+        yield
+    finally:
+        os.close(fd)

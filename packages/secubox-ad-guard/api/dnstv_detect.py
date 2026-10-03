@@ -88,7 +88,8 @@ def detecter(evts: List[dict], est_declencheur: Callable[[str], bool], classer: 
         if p.count(".") >= 1 and p not in exclus and not est_liste_noire(p):
             parents[p].append(d)
     for p, enfants in parents.items():
-        if len(enfants) >= min_variantes and p.count(".") >= 2 and p not in hors:
+        sous_arbre_vu_hors = any(h == p or h.endswith("." + p) for h in hors)
+        if len(enfants) >= min_variantes and p.count(".") >= 2 and not sous_arbre_vu_hors:
             tete = max(bruts[e].score for e in enfants)
             n = max(bruts[e].coupures for e in enfants)
             for e in enfants:

@@ -445,6 +445,13 @@ class AutoEssaiIn(BaseModel):
     actif: bool
 
 
+def _verrou():
+    try:
+        return dnstv_regles.verrou()
+    except OSError as e:
+        raise HTTPException(503, f"verrou des règles indisponible ({type(e).__name__})") from e
+
+
 def _regles() -> "dnstv_regles.Regles":
     try:
         return dnstv_regles.charger()
@@ -453,7 +460,7 @@ def _regles() -> "dnstv_regles.Regles":
 
 
 @router.get("/auto/regles", dependencies=[Depends(require_lecture)])
-async def regles_liste(etat: Optional[str] = None, appareil: Optional[str] = None):
+def regles_liste(etat: Optional[str] = None, appareil: Optional[str] = None):
     toutes = _regles().liste()
     compteurs: dict = {}
     for r in toutes:
@@ -462,43 +469,55 @@ async def regles_liste(etat: Optional[str] = None, appareil: Optional[str] = Non
     return {"regles": sel, "compteurs": compteurs}
 
 
+def _appliquer_ou_annuler(ancien: "dnstv_regles.Regles") -> dict:
+    """Demande l'application au contrôleur root ; s'il échoue, `regles.json` revient à son état précédent : l'interface ne ment pas."""
+    try:
+        return _ctl("regles-appliquer")
+    except HTTPException:
+        dnstv_regles.ecrire(ancien)
+        raise
+
+
+# Les routes qui appellent le contrôleur sont SYNCHRONES (`def`) : FastAPI les exécute dans un fil, la boucle du groupe n'est pas gelée
+# pendant un sudo ou un éventuel rechargement complet d'Unbound.
 @router.post("/auto/regles/{rid}/{action}", dependencies=[Depends(require_jwt)])
-async def regle_action(rid: str, action: str):
+def regle_action(rid: str, action: str):
     if action not in ACTIONS_REGLE or not re.fullmatch(r"[0-9a-f]{12}", rid):
         raise HTTPException(404, "action ou règle inconnue")
     vers, depuis = ACTIONS_REGLE[action]
-    regles = _regles()
-    try:
-        avant = regles.get(rid)["etat"]
-    except dnstv_regles.ErreurRegle:
-        raise HTTPException(404, "règle inconnue") from None
-    if avant not in depuis:
-        raise HTTPException(422, f"action impossible depuis l'état « {avant} »")
-    try:
-        r = regles.transiter(rid, vers, "admin", f"action {action}", int(time.time()))
-    except dnstv_regles.ErreurRegle as e:
-        raise HTTPException(422, str(e)) from e
-    dnstv_regles.ecrire(regles)
-    effet = (avant in ("essai", "confirme")) != (vers in ("essai", "confirme"))
-    return {"regle": r, "application": _ctl("regles-appliquer") if effet else None}
+    with _verrou():
+        regles, ancien = _regles(), _regles()
+        try:
+            avant = regles.get(rid)["etat"]
+        except dnstv_regles.ErreurRegle:
+            raise HTTPException(404, "règle inconnue") from None
+        if avant not in depuis:
+            raise HTTPException(422, f"action impossible depuis l'état « {avant} »")
+        try:
+            r = regles.transiter(rid, vers, "admin", f"action {action}", int(time.time()))
+        except dnstv_regles.ErreurRegle as e:
+            raise HTTPException(422, str(e)) from e
+        dnstv_regles.ecrire(regles)
+        return {"regle": r, "application": _appliquer_ou_annuler(ancien)}     # toujours : le contrôleur audite chaque transition effective
 
 
 @router.post("/auto/appareils/{appareil}/ca-ne-marche-plus", dependencies=[Depends(require_jwt)])
-async def ca_ne_marche_plus(appareil: str):
+def ca_ne_marche_plus(appareil: str):
     """Retour arrière d'un geste : retire TOUTES les règles en essai de cet appareil (les confirmées restent)."""
-    regles = _regles()
-    touches = [r for r in regles.liste() if r["appareil"] == appareil and r["etat"] == "essai"]
-    maintenant = int(time.time())
-    for r in touches:
-        regles.transiter(r["id"], "retire", "admin", "« ça ne marche plus »", maintenant)
-    if not touches:
-        return {"retirees": 0, "application": None}
-    dnstv_regles.ecrire(regles)
-    return {"retirees": len(touches), "application": _ctl("regles-appliquer")}
+    with _verrou():
+        regles, ancien = _regles(), _regles()
+        touches = [r for r in regles.liste() if r["appareil"] == appareil and r["etat"] == "essai"]
+        maintenant = int(time.time())
+        for r in touches:
+            regles.transiter(r["id"], "retire", "admin", "« ça ne marche plus »", maintenant)
+        if not touches:
+            return {"retirees": 0, "application": None}
+        dnstv_regles.ecrire(regles)
+        return {"retirees": len(touches), "application": _appliquer_ou_annuler(ancien)}
 
 
 @router.get("/auto/reglage", dependencies=[Depends(require_lecture)])
-async def auto_reglage():
+def auto_reglage():
     etat = _etat()
     r = dnstv_auto.reglage_depuis(etat)
     return {"auto_essai": r.auto_essai, "declencheurs": list(r.declencheurs), "seuil_refus_min": r.seuil_refus_min,
@@ -507,8 +526,15 @@ async def auto_reglage():
 
 
 @router.post("/auto/reglage/auto-essai", dependencies=[Depends(require_jwt)])
-async def auto_essai(corps: AutoEssaiIn):
+def auto_essai(corps: AutoEssaiIn):
     etat = _etat()
+    avant = etat.get("auto_essai", False)
     etat["auto_essai"] = corps.actif
     dnstv.ecrire_etat(etat)
-    return {"auto_essai": corps.actif}
+    try:
+        application = _ctl("regles-appliquer")                                 # le contrôleur audite ce changement (décision de sécurité)
+    except HTTPException:
+        etat["auto_essai"] = avant
+        dnstv.ecrire_etat(etat)
+        raise
+    return {"auto_essai": corps.actif, "application": application}

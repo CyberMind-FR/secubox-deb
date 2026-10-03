@@ -36,19 +36,21 @@ def main(sudo=None, maintenant=None) -> int:
         return 1
     if not etat["actif"] or not dnstv_auto.appareils(etat):
         return 0
+    cl = classeur()
     try:
-        regles = dnstv_regles.charger()
+        with dnstv_regles.verrou():                           # lecture-modification-écriture exclusives avec l'API
+            regles = dnstv_regles.charger()
+            res = dnstv_auto.tick(etat, regles, dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"), lambda d: cl.classer(d)[0] or "",
+                                  dnstv_auto.reglage_depuis(etat), maintenant or int(time.time()))
+            if res["changements"]:
+                dnstv_regles.ecrire(regles)
     except dnstv_regles.ErreurRegle as e:
         print(f"règles illisibles, rien n'est changé : {e}", file=sys.stderr)
         return 1
-    cl = classeur()
-    res = dnstv_auto.tick(etat, regles, dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"), lambda d: cl.classer(d)[0] or "",
-                          dnstv_auto.reglage_depuis(etat), maintenant or int(time.time()))
-    if res["changements"]:
-        dnstv_regles.ecrire(regles)
-        for c in res["changements"]:
-            print(f"{c['appareil']} {c['domaine']} {c['de'] or '-'}→{c['vers']} ({c['motif']})")
-    if res["applique"]:
+    for c in res["changements"]:
+        print(f"{c['appareil']} {c['domaine']} {c['de'] or '-'}→{c['vers']} ({c['motif']})")
+    # Le contrôleur est appelé dès qu'une règle change d'état autrement que par sa simple proposition : il applique ET audite.
+    if res["applique"] or any(c["de"] for c in res["changements"]):
         r = (sudo or (lambda: subprocess.run(["sudo", "-n", CTL, "regles-appliquer"], capture_output=True, text=True, timeout=180)))()
         if r.returncode != 0:
             print("application refusée : " + (r.stderr or r.stdout).strip()[:200], file=sys.stderr)
