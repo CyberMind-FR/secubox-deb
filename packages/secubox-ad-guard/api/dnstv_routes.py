@@ -23,9 +23,9 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_auto, dnstv_regles
+    from . import dnstv, dnstv_auto, dnstv_dnsbox, dnstv_regles
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_auto, dnstv_regles
+    from api import dnstv, dnstv_auto, dnstv_dnsbox, dnstv_regles
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 CTL = os.environ.get("SECUBOX_ADGUARD_TV_CTL", "/usr/sbin/secubox-adguard-tv")
@@ -538,3 +538,19 @@ def auto_essai(corps: AutoEssaiIn):
         dnstv.ecrire_etat(etat)
         raise
     return {"auto_essai": corps.actif, "application": application}
+
+
+# ── fiche « DNS de la box » (#1938) : ce que la box offre aux appareils, en lecture seule ─────────────────────────────────────
+def _sortie(argv: List[str]) -> str:
+    """Sortie d'une commande de LECTURE (ip, ss), sans privilège ; vide si la commande manque ou échoue (la fiche le dit, elle ne plante pas)."""
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return r.stdout if r.returncode == 0 else ""
+
+
+@router.get("/dns-box", dependencies=[Depends(require_lecture)])
+def dns_box():
+    return dnstv_dnsbox.dns_box(_sortie(["ip", "-6", "-o", "addr", "show", "scope", "global"]), _sortie(["ip", "-4", "-o", "addr", "show", "scope", "global"]),
+                                _sortie(["ip", "-4", "route", "show", "default"]), _sortie(["ss", "-H", "-lnu"]))
