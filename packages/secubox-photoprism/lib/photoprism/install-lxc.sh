@@ -239,22 +239,6 @@ echo '[1/5] dépendances natives (libvips42 : seule bibliothèque absente du bin
 apt-get update -q
 apt-get install -y -q --no-install-recommends ca-certificates curl libvips42 ffmpeg \
     libimage-exiftool-perl libheif-examples
-# LXC UNIQUEMENT : l'ancienne installation mettait podman DANS ce conteneur.
-if dpkg -l podman 2>/dev/null | grep -q '^ii'; then
-    echo '  purge de podman (reliquat de l ancienne installation)'
-    systemctl disable --now photoprism.service 2>/dev/null || true
-    podman rm -f photoprism >/dev/null 2>&1 || true
-    apt-get purge -y -q podman buildah crun conmon slirp4netns fuse-overlayfs 2>/dev/null || true
-    apt-get autoremove -y -q >/dev/null 2>&1 || true
-fi
-if [ -d /var/lib/containers ]; then
-    # L'overlay de podman reste monté après la purge : démonter d'abord,
-    # du plus profond au plus haut, sinon « Device or resource busy ».
-    awk '$5 ~ "^/var/lib/containers" { print $5 }' /proc/self/mountinfo \
-        | sort -r | while read -r m; do umount -l "$m" 2>/dev/null || true; done
-    rm -rf /var/lib/containers 2>/dev/null \
-        || echo '  avertissement : /var/lib/containers non effacé (reliquat inerte)'
-fi
 
 echo '[2/5] construction officielle'
 if [ ! -x /opt/photoprism/bin/photoprism ] || [ "$MAJ" = 1 ]; then

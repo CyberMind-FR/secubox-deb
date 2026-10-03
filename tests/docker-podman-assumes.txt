@@ -12,6 +12,5 @@ packages/secubox-jitsi/debian/control | description : « remplace le module 1.0.
 packages/secubox-jitsi/lib/jitsi/install-lxc.sh | commentaire historique — aucun appel
 packages/secubox-jitsi/sbin/jitsictl | commentaires historiques — aucun appel
 packages/secubox-matrix/api/main.py | commentaire historique (/container/* abandonné) — aucun appel
-packages/secubox-photoprism/lib/photoprism/install-lxc.sh | nettoyage d'un ancien conteneur podman lors de la migration vers le natif — à retirer quand plus aucune box ne l'a
 scripts/migration-export.sh | outil de migration DEPUIS un autre système : copie des docker-compose.yml d'origine, ne pilote rien
 scripts/migration-import.sh | outil de migration DEPUIS un autre système : copie des docker-compose.yml d'origine, ne pilote rien
