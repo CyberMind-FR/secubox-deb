@@ -10,6 +10,9 @@ secubox-ad-guard (1.5.0-1~bookworm1) bookworm; urgency=medium
     `auto` (« TV banc ») : ils passent de leurs seules règles à puits complet + règles. Les modes observe et block ne changent pas : ils sortent toujours du puits.
   * AGRÉGATION : un domaine confirmé PAR L'ADMINISTRATEUR sur au moins 2 appareils entre dans le profil agrégé ; les autres appareils le reçoivent comme CANDIDAT (jamais actif),
     un nouvel appareil le reçoit en règle confirmée. Les règles issues du profil lui-même ne comptent jamais (pas d'auto-renforcement).
+  * Relecture de sécurité (2026-10-03) : les adresses IP n'admettent plus d'identifiant de portée (`fe80::1%…` aurait été recopié dans la configuration Unbound) ; le moteur lit l'état
+    sous le verrou et les routes qui écrivent l'état le prennent aussi ; `mode_defaut` limité à `auto`|`off` (observe/block sortent du puits) ; seuls les voisins de l'interface du LAN sont pris
+    en compte ; une adresse n'est rattachée que si le DNS l'a vue, 4 au plus par appareil ; le plafond de règles ne bloque plus l'expiration ; l'audit trace appareils, puits, ignorés et `apply`.
   * Le journal ne contient plus les requêtes de la box elle-même (≈ 11 000 en 20 min, elles saturaient `dnstv_recents`).
   * Routes /adblock-tv/auto/{detection,detection/reglage,appareils/{nom}/ignorer,appareils/{nom}/puits,profil} ; panneau : ajout automatique, mode par défaut, puits, profil agrégé.
   * État : `mode_defaut`, `ajout_auto`, `ignores` ; appareil : `mac`, `origine`, `ajoute`, `preuve`, `puits` (écrits seulement hors valeur par défaut). TOML : `min_declencheurs`, `min_services`,
