@@ -1,3 +1,12 @@
+secubox-voicestudio (0.3.2-1~bookworm1) bookworm; urgency=high
+
+  * `voicestudioctl interface` se fiait au code de sortie du script : celui-ci sort en 0 aussi quand il conclut
+    « interface désactivée » (configuration mal lue, corrigée en 0.3.1). Le marqueur était alors posé sans rien
+    construire, et l'unité ne retentait plus jamais. Le contrôleur vérifie maintenant que frontend/dist existe dans le
+    LXC avant de poser le marqueur (code 5 sinon).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 11:45:00 +0200
+
 secubox-voicestudio (0.3.1-1~bookworm1) bookworm; urgency=high
 
   * Montée de version : le script d'installation ne lisait QUE la configuration de la box, qui date d'avant la section
