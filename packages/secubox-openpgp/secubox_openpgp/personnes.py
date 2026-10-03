@@ -43,6 +43,7 @@ PERSONNE_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 COURRIEL_RE = re.compile(r"^[^@\s<>\"]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$")
 DID_RE = re.compile(r"^did:[a-z0-9]+:[A-Za-z0-9._:-]{3,128}$")
 MAX_CLE = 64 * 1024
+MAX_KEYDATA = 6 * 1024              # octets binaires d'une clé publique minimale servie en en-tête Autocrypt
 ZBASE32 = "ybndrfg8ejkmcpqxot1uwisza345h769"
 
 
@@ -229,6 +230,30 @@ class Annuaire:
                 if e and EMPREINTE.match(e.get("empreinte", "")):
                     out.append(e)
         return out
+
+    def autocrypt(self, maintenant: Optional[float] = None) -> Dict[str, str]:
+        """Table adresse → `keydata` Autocrypt (clé PUBLIQUE minimale, base64 d'une seule ligne) pour l'en-tête
+        `Autocrypt:` des courriels SORTANTS de cette box (#1852, P2).
+
+        Seules les adresses VÉRIFIÉES (confiées à la personne par la box) y figurent : une clé déclarée au nom de la boîte
+        d'un autre ne doit jamais partir en en-tête. Une clé expirée est omise. Une clé trop grosse est omise aussi : un
+        en-tête de plusieurs dizaines de Ko ferait refuser le courriel par des relais. Aucune clé secrète n'est lue."""
+        t = time.time() if maintenant is None else maintenant
+        table: Dict[str, str] = {}
+        for e in self.locales():
+            if e.get("expire") and e["expire"] < t:
+                continue
+            try:
+                binaire = armure_vers_binaire(e.get("cle_publique", ""))
+            except RefusCle:
+                continue
+            if not 0 < len(binaire) <= MAX_KEYDATA:
+                continue
+            keydata = base64.b64encode(binaire).decode()
+            for adresse in e.get("verifies", []):
+                if COURRIEL_RE.match(adresse):
+                    table[adresse.lower()] = keydata
+        return table
 
     # ── les box liées ───────────────────────────────────────────────────
     def export(self) -> dict:

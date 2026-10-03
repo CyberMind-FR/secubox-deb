@@ -88,3 +88,5 @@ override_dh_auto_install:
 	install -d debian/secubox-mail/usr/lib/systemd/system
 	install -m 644 debian/secubox-mail-ssl-renew.service debian/secubox-mail/usr/lib/systemd/system/
 	install -m 644 debian/secubox-mail-ssl-renew.timer debian/secubox-mail/usr/lib/systemd/system/
+	install -m 644 debian/secubox-mail-autocrypt.service debian/secubox-mail/usr/lib/systemd/system/
+	install -m 644 debian/secubox-mail-autocrypt.timer debian/secubox-mail/usr/lib/systemd/system/

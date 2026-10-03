@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox Mail — synchronisation horaire de la table Autocrypt [#1852]
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

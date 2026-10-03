@@ -15,6 +15,7 @@ CyberMind — https://cybermind.fr
     sbx-openpgp envoyer PAIR OBJET [TEXTE|-]
     sbx-openpgp boite [ID]           messages reçus ; ID : le lire (déchiffré)
     sbx-openpgp annuaire [rafraichir]  clés personnelles publiées (cette box + box liées)
+    sbx-openpgp autocrypt            JSON {adresse: keydata} des clés publiques à mettre en en-tête Autocrypt (#1852)
 
 Deux comptes, deux secrets, jamais ensemble : le trousseau est à
 secubox-openpgp (toutes les commandes s'y exécutent), node.key à secubox
@@ -180,6 +181,12 @@ def cmd_boite(args):
     return 0
 
 
+def cmd_autocrypt(_args):
+    """Table adresse → keydata Autocrypt, pour `mailctl autocrypt-sync`. Clés publiques et adresses vérifiées seulement."""
+    print(json.dumps(_box().annuaire_cles().autocrypt(), sort_keys=True))
+    return 0
+
+
 def cmd_annuaire(args):
     b = _box()
     if args and args[0] == "rafraichir":
@@ -234,7 +241,7 @@ def cmd_boite_retirer(args):
 
 
 COMMANDES = {"init": cmd_init, "lier": cmd_lier, "etat": cmd_etat, "pairs": cmd_pairs,
-             "cle": cmd_cle, "envoyer": cmd_envoyer, "boite": cmd_boite, "annuaire": cmd_annuaire, "_cle-json": cmd_cle_json,
+             "cle": cmd_cle, "envoyer": cmd_envoyer, "boite": cmd_boite, "annuaire": cmd_annuaire, "autocrypt": cmd_autocrypt, "_cle-json": cmd_cle_json,
              "_pairs-json": cmd_pairs_json, "_boite-json": cmd_boite_json, "_boite-retirer": cmd_boite_retirer}
 
 

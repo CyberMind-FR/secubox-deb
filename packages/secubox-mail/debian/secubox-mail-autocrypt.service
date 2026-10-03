@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox Mail — synchronise la table Autocrypt (clés publiques de l'annuaire) vers rspamd [#1852]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1852
+After=secubox-mail.service secubox-openpgp.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/mailctl autocrypt-sync
+ProtectHome=true
+PrivateTmp=true

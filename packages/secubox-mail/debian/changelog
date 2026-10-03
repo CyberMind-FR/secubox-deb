@@ -1,3 +1,13 @@
+secubox-mail (2.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Autocrypt sortant (ref #1852, P2) : règle rspamd `autocrypt.lua` qui ajoute `Autocrypt: addr=…; keydata=…` aux courriels
+    ENVOYÉS (session authentifiée) par une personne dont la clé publique est dans l'annuaire de la box. Jamais au nom d'un
+    autre (From = adresse de la session), jamais sur du courrier entrant, jamais par-dessus un en-tête Autocrypt du client.
+    `mailctl autocrypt-sync` pousse la table (clés PUBLIQUES, adresses vérifiées) et la règle dans le LXC, vérifie
+    `rspamadm configtest` avant de recharger rspamd ; minuteur horaire `secubox-mail-autocrypt.timer`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 19:00:00 +0200
+
 secubox-mail (2.10.18-1~bookworm1) bookworm; urgency=high
 
   * Antivirus (#1912) : le gabarit local.d/antivirus.conf enveloppait sa configuration dans `antivirus { clamav { … } }` ; local.d/<module>.conf est déjà fusionné DANS la section du module, d'où `antivirus { antivirus { … } }` : Rspamd répondait « unknown antivirus type: antivirus / cannot add rule » et désactivait le module en silence. Le module antivirus de Rspamd n'a donc jamais fonctionné, clamd ou non. Gabarit corrigé ; test qui interdit l'enveloppe.
