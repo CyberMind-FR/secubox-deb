@@ -1,3 +1,10 @@
+secubox-webos (1.0.401-1~bookworm1) bookworm; urgency=low
+
+  * Hall : le relais de /api/v1/voicestudio/usager/ attend 330 s (180 s avant). Une synthèse à froid prend ≈ 110 s sur gk3 ; le module
+    attend 300 s et le frontal public 10 min : le relais ne doit pas être le maillon le plus court.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 14:30:00 +0200
+
 secubox-webos (1.0.400-1~bookworm1) bookworm; urgency=low
 
   * Hall : la carte « Voix » montre la RAISON donnée par le module pour un refus 503 / 429 / 413 (ex. « Mémoire insuffisante pour la

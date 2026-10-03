@@ -75,4 +75,5 @@ domaine     = "voicestudio"
 # un livre entier à la box, ni un envoi audio un moyen d'y téléverser un film.
 texte_max    = 2000
 audio_max_mo = 10
-delai_s      = 120
+# Délai d'attente du moteur par le module. Mesuré sur gk3 : une synthèse À FROID (chargement du modèle puis calcul sur CPU) prend ≈ 110 s.
+delai_s      = 300

@@ -65,7 +65,7 @@ def _limites() -> dict:
     Relu au plus toutes les 10 s (appelé depuis des routes async : pas de lecture de fichier à chaque appel)."""
     if _LIMITES["v"] is not None and time.monotonic() - _LIMITES["t"] < 10:
         return _LIMITES["v"]
-    out = {"texte_max": 2000, "audio_max_mo": 10, "delai_s": 120}
+    out = {"texte_max": 2000, "audio_max_mo": 10, "delai_s": 300}
     for f in (CONF_DEFAUT, CONF):
         try:
             with open(f, "rb") as h:

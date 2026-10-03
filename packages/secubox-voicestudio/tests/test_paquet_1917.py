@@ -351,3 +351,8 @@ def test_la_configuration_livre_les_reglages_memoire():
     assert d["moteur"]["liberation_modele_s"] == 60 and d["moteur"]["precharger_dictee"] is False
     assert d["memoire"]["besoin_synthese_mo"] == 3800 and d["memoire"]["modele_residente_mo"] == 2500
     assert d["memoire"]["delai_repetition_s"] == 120
+
+
+def test_le_delai_du_moteur_couvre_une_synthese_a_froid():
+    """Mesuré sur gk3 : 109 s à froid (chargement du modèle + calcul CPU). Un délai de 120 s était trop juste."""
+    assert tomllib.loads(lire("conf/voicestudio.toml"))["limites"]["delai_s"] >= 300

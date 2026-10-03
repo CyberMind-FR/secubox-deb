@@ -1625,3 +1625,13 @@ def test_sans_swap_disque_la_meme_box_doit_endormir_ou_refuser(bac_a_sable, tmp_
 def test_proc_swaps_illisible_on_ne_compte_rien(bac_a_sable, tmp_path, monkeypatch):
     monkeypatch.setattr(c, "SWAPS", tmp_path / "absent")
     assert c.swap_disque_libre_mo() == 0
+
+
+def test_l_ancien_delai_par_defaut_est_releve_mais_pas_un_choix_de_l_operateur(bac_a_sable):
+    c.CONF.write_text('[limites]\ndelai_s = 120\ntexte_max = 500\n')
+    c.cmd_migrer_conf()
+    d = tomllib.loads(c.CONF.read_text())
+    assert d["limites"]["delai_s"] == 300 and d["limites"]["texte_max"] == 500
+    c.CONF.write_text('[limites]\ndelai_s = 45\n')
+    c.cmd_migrer_conf()
+    assert tomllib.loads(c.CONF.read_text())["limites"]["delai_s"] == 45             # choix de l'opérateur : jamais touché

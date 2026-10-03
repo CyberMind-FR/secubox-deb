@@ -32,7 +32,7 @@ def test_le_hall_ne_relaie_que_l_usager_et_l_etat_minimal_du_module():
     assert any("^~ /api/v1/voicestudio/usager/" in r for r in relais) and any("= /api/v1/voicestudio/status" in r for r in relais)
     corps = bloc("location ^~ /api/v1/voicestudio/usager/")
     assert "proxy_pass http://unix:/run/secubox/voicestudio.sock:/usager/;" in corps
-    assert "client_max_body_size 12m;" in corps and "proxy_read_timeout 180s;" in corps
+    assert "client_max_body_size 12m;" in corps and "proxy_read_timeout 330s;" in corps
     assert "X-SecuBox-LAN" in corps                      # le verdict LAN du Hall, comme les autres relais
     etat = bloc("location = /api/v1/voicestudio/status")
     assert "proxy_pass http://unix:/run/secubox/voicestudio.sock:/status;" in etat and "X-SecuBox-LAN" in etat
