@@ -1397,7 +1397,10 @@ def test_l_ancienne_cle_memoire_a_plat_est_toujours_convertie(bac_a_sable):
 # ── mémoire : réglages du moteur et libération de place ──────────────────────────────────────────────────────────
 class BancMemoire:
     """Une box fictive : /proc/meminfo, cgroups des conteneurs, liste des endormables, secubox-profilectl simulé."""
-    def __init__(self, tmp_path, monkeypatch, disponible=1500, conteneurs=None, sommeilleux=None, moteur_mo=600):
+    def __init__(self, tmp_path, monkeypatch, disponible=1500, conteneurs=None, sommeilleux=None, moteur_mo=600, swap_disque_mo=0):
+        self.swaps = tmp_path / "swaps"
+        self.swaps.write_text("Filename Type Size Used Priority\n/dev/zram0 partition 3989500 3989500 100\n"
+                              + (f"/srv/secubox/swapfile file {8388604} {8388604 - swap_disque_mo * 1024} -2\n" if swap_disque_mo else ""))
         self.meminfo = tmp_path / "meminfo"
         self.cgroup = tmp_path / "cgroup"
         self.sommeilleux = tmp_path / "sommeilleux.json"
@@ -1409,7 +1412,7 @@ class BancMemoire:
             (d / "memory.current").write_text(str(mo * 1048576))
         self.sommeilleux.write_text(__import__("json").dumps(sommeilleux if sommeilleux is not None else ["peertube", "jitsi", "jellyfin"]))
         self.ecrire()
-        for nom, val in {"MEMINFO": self.meminfo, "CGROUP_LXC": self.cgroup, "SOMMEILLEUX": self.sommeilleux,
+        for nom, val in {"MEMINFO": self.meminfo, "SWAPS": self.swaps, "CGROUP_LXC": self.cgroup, "SOMMEILLEUX": self.sommeilleux,
                          "PLACE_ETAT": tmp_path / "place.json"}.items():
             monkeypatch.setattr(c, nom, val)
 
@@ -1568,7 +1571,7 @@ def test_la_cle_reste_hors_des_arguments_avec_les_reglages_memoire(bac_a_sable):
 def test_lire_meminfo_et_etat_memoire(bac_a_sable, tmp_path, monkeypatch):
     BancMemoire(tmp_path, monkeypatch, disponible=1234, moteur_mo=777)
     e = c.etat_memoire(c.charger())
-    assert e == {"disponible_mo": 1234, "swap_libre_mo": 5859, "swap_total_mo": 7812, "moteur_mo": 777}
+    assert e == {"disponible_mo": 1234, "swap_libre_mo": 5859, "swap_total_mo": 7812, "swap_disque_mo": 0, "effective_mo": 1234, "moteur_mo": 777}
 
 
 def test_l_etat_complet_porte_la_memoire_de_la_box(bac_a_sable, tmp_path, monkeypatch):
@@ -1590,3 +1593,35 @@ def test_appliquer_ne_touche_pas_au_moteur_arrete(bac_a_sable):
     run = DomaineFaux(etat="STOPPED")
     c.appliquer(run)
     assert not any(a[0] == "lxc-attach" for a in run.appels)
+
+
+# ── le swap DISQUE compte (pour moitié, plafonné) ; le zram jamais ─────────────────────────────────────────────────
+def test_le_zram_seul_ne_compte_pas_comme_du_swap(bac_a_sable, tmp_path, monkeypatch):
+    BancMemoire(tmp_path, monkeypatch, disponible=2900, swap_disque_mo=0)
+    e = c.etat_memoire(c.charger())
+    assert e["swap_disque_mo"] == 0 and e["effective_mo"] == 2900
+
+
+def test_un_swap_disque_libre_ajoute_la_moitie_de_son_libre_plafonnee(bac_a_sable, tmp_path, monkeypatch):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=2900, swap_disque_mo=2000)
+    assert c.etat_memoire(c.charger())["effective_mo"] == 2900 + 1000                  # moitié de 2000
+    b.swaps.write_text("Filename Type Size Used Priority\n/srv/secubox/swapfile file 8388604 0 -2\n")
+    assert c.etat_memoire(c.charger())["effective_mo"] == 2900 + 2048                  # plafonné par swap_compte_mo
+
+
+def test_avec_le_swap_disque_gk3_peut_synthetiser_sans_rien_endormir(bac_a_sable, tmp_path, monkeypatch, capsys):
+    """Le cas réel : 2,9 Go disponibles après libération du modèle, 8 Go de swap disque libres → 3,9 Go effectifs ≥ 3,8 Go."""
+    b = BancMemoire(tmp_path, monkeypatch, disponible=2880, swap_disque_mo=8100)
+    rc, r = place(b, capsys)
+    assert r["suffisante"] is True and b.endormis == [] and r["effective_mo"] >= 3800
+
+
+def test_sans_swap_disque_la_meme_box_doit_endormir_ou_refuser(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=2880, swap_disque_mo=0)
+    rc, r = place(b, capsys)
+    assert b.endormis and r["suffisante"] is False                                      # 2880 + 463 < 3800 : refusé, chiffres à l'appui
+
+
+def test_proc_swaps_illisible_on_ne_compte_rien(bac_a_sable, tmp_path, monkeypatch):
+    monkeypatch.setattr(c, "SWAPS", tmp_path / "absent")
+    assert c.swap_disque_libre_mo() == 0
