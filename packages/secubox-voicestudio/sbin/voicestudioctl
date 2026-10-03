@@ -756,6 +756,11 @@ def appliquer(run=_run) -> dict:
     res["mandataire"] = adresses or mode
     res["pare_feu"] = appliquer_nft(c, run)
     res["interface"] = appliquer_vhost(c, run)
+    # Moteur déjà en marche : ses réglages (clé, libération du modèle, préchargements) sont poussés MAINTENANT — assurer_moteur
+    # compare le contenu et ne relance le moteur que s'il a changé. Sans cela une montée de version laissait l'ancien
+    # environnement jusqu'au prochain démarrage.
+    if etat_lxc(c, run) == "RUNNING" and lire_cle():
+        res["moteur_a_jour"] = assurer_moteur(c, run)
     if adresses or mode:
         systemctl(run, "daemon-reload")
         if adresses and systemctl(run, "is-active", SOCKET_PUB).stdout.strip() == "active":
