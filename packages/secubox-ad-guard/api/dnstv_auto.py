@@ -22,6 +22,13 @@ class Reglage:
     seuil_refus_min: int = dnstv_signaux.SEUIL_REFUS_MIN
     duree_rafale_min: int = dnstv_signaux.DUREE_RAFALE_MIN
     min_requetes_actif: int = dnstv_signaux.MIN_REQUETES_ACTIF
+    # Ajout automatique et agrégation (#1959) — seuils de départ, à calibrer
+    max_par_jour: int = 3
+    delai_s: int = 3600
+    retrait_jours: int = 7
+    min_declencheurs: int = 5
+    min_services: int = 2
+    min_appareils_agreg: int = 2
 
 
 TOML = Path("/etc/secubox/ad-guard.toml")
@@ -39,7 +46,7 @@ def reglage_depuis(etat: dict, toml: Path = TOML) -> Reglage:
     decl = c.get("declencheurs")
     if isinstance(decl, list) and decl and all(isinstance(d, str) and dnstv.valider_domaine(d) == d for d in decl):
         r.declencheurs = tuple(decl)
-    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif"):
+    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif", "max_par_jour", "delai_s", "retrait_jours", "min_declencheurs", "min_services", "min_appareils_agreg"):
         v = c.get(k)
         if isinstance(v, int) and not isinstance(v, bool) and v > 0:
             setattr(r, k, v)
