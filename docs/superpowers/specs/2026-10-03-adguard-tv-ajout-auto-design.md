@@ -24,8 +24,9 @@ Suite de #1954 (mode `auto`, en service sur « TV banc » depuis le 2026-10-03, 
 sans action de l'administrateur. Les adresses IPv4 et IPv6 d'un même appareil restent regroupées, y compris quand l'IPv6 de confidentialité change.
 
 **Hors périmètre.**
-- Un appareil dont le DNS ne passe pas par gk2 n'est pas visible : la TV `192.168.1.128` utilise le DNS de la Freebox (aucune requête vers gk2 en 20 minutes
-  le 2026-10-03). Cela dépend des réglages de la Freebox, pas de ce module.
+- Un appareil dont le DNS ne passe pas par gk2 (ni en IPv4 ni en IPv6) n'est pas visible : c'est un réglage de la Freebox, pas de ce module. NB : la seconde TV
+  (MAC `38:07:16:94:fb:5b`, `192.168.1.128`) **est** vue, en IPv6 : 991 requêtes vers gk2 sur la seule adresse `2a01:e0a:dec:c4e0:4951:…` (relevé du 2026-10-03), alors que son adresse IPv4
+  n'apparaît pas. C'est la preuve qu'il faut regrouper par MAC, jamais par adresse. Elle est aujourd'hui sous le puits complet seul, hors périmètre.
 - Aucune inspection HTTPS, aucun nom d'appareil lu chez la Freebox, aucune écoute DHCP.
 - Pas de classification fine (TV, streamer, console, téléphone) : une seule étiquette « TV/streamer probable », avec sa preuve affichée.
 
