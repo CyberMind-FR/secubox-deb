@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-03 — Webmail OpenPGP : Autocrypt sortant (ref #1852, P2)
+- `secubox-openpgp` 0.3.0 + `secubox-mail` 2.11.0 (gk2, dépôt apt à jour). `sbx-openpgp autocrypt` : table {adresse: keydata} des clés PUBLIQUES minimales de l'annuaire, adresses VÉRIFIÉES seulement, clé expirée ou > 6 Ko omise. Règle rspamd `autocrypt.lua` (postfilter) : ajoute `Autocrypt: addr=…; keydata=…` aux envois authentifiés dont le From est l'adresse de la session (`*maître` du SSO du webmail toléré) ; jamais au nom d'un autre, jamais sans session, jamais par-dessus un en-tête du client. `mailctl autocrypt-sync` (+ minuteur horaire) pousse table et règle, `rspamadm configtest` avant rechargement.
+- Mesuré sur le rspamd de gk2 (`rspamc -u`) : session = From → en-tête ajouté (replié) ; autre session, sans session, en-tête déjà posé → rien ; login `…*master` → ajouté. **La table de production est vide** (aucune personne n'a publié de clé) : la règle n'agit sur rien tant qu'une clé n'est pas publiée dans « Mon coffre ».
+- Correction de l'étude #1852 : Mailvelope est dans le CŒUR de Roundcube 1.6.5, aucun greffon à livrer. Le bouton « chiffrer » n'apparaît que si l'extension Mailvelope est installée et le domaine autorisé.
+
 ## 2026-10-03 — Sonde DHCP en lecture seule (ref #1935)
 - `secubox-netdiag` 1.3.0 : `secubox-dhcp-probe` (un DISCOVER, aucun bail, socket brute). Mesuré sur gk2 : UN seul serveur DHCP (la Freebox, 192.168.1.254), passerelle 192.168.1.254, **DNS annoncé 192.168.1.200 (gk2) déjà configuré** dans Freebox OS 4.12 (« Serveur DNS 1 »). Le DHCP IPv4 n'a donc PAS besoin d'être remplacé.
 - Cause réelle du 421 de voicestudio.gk3 sur un poste : le DNS **IPv6** annoncé par la Freebox (`fd0f:ee:b0::1`, via annonce de routeur) passait avant celui de gk2 et répondait l'IP publique. Poste corrigé (NetworkManager : gk2 seul DNS, IPv6 DNS ignoré). Autres postes : à traiter côté IPv6 (désactiver l'IPv6 du LAN dans Freebox OS ou annoncer gk2 par RA).

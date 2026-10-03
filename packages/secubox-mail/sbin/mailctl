@@ -384,6 +384,30 @@ cmd_webmail_openpgp() {
     echo "webmail : OpenPGP par Mailvelope (trousseau principal) — enigma absent"
 }
 
+# ── Autocrypt sortant (#1852, P2) ───────────────────────────────────────────
+#
+# L'en-tête `Autocrypt:` des courriels ENVOYÉS par une personne qui a publié sa clé PUBLIQUE dans l'annuaire de la box
+# (secubox-openpgp). La table adresse → clé est lue dans l'annuaire (adresses VÉRIFIÉES seulement), poussée dans le LXC
+# mail avec la règle rspamd `autocrypt.lua`. Aucune clé privée n'est lue : `sbx-openpgp autocrypt` ne sort que du public.
+# Idempotent ; sans clé publiée la table est vide et la règle n'ajoute rien.
+cmd_autocrypt_sync() {
+    local ct="$CONTAINER" tpl="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd" table rc=0
+    command -v sbx-openpgp >/dev/null 2>&1 || { error "secubox-openpgp absent : pas d'annuaire de clés"; return 1; }
+    [ -f "$tpl/autocrypt.lua" ] || { error "gabarit autocrypt.lua introuvable ($tpl)"; return 1; }
+    lxc_running "$ct" || { error "conteneur '$ct' a l'arret"; return 1; }
+    table="$(sbx-openpgp autocrypt)" || { error "annuaire illisible"; return 1; }
+    printf '%s' "$table" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d,dict)' 2>/dev/null \
+        || { error "table Autocrypt invalide — rien n'est poussé"; return 1; }
+    lxc_attach "$ct" tee /etc/rspamd/autocrypt.lua < "$tpl/autocrypt.lua" >/dev/null || return 1
+    printf '%s\n' "$table" | lxc_attach "$ct" sh -c 'cat > /etc/rspamd/autocrypt.json.new && chmod 0644 /etc/rspamd/autocrypt.json.new && mv /etc/rspamd/autocrypt.json.new /etc/rspamd/autocrypt.json' || return 1
+    # rspamd charge /etc/rspamd/rspamd.local.lua ; on n'y ajoute qu'UNE ligne, sans toucher au reste.
+    lxc_attach "$ct" sh -c "touch /etc/rspamd/rspamd.local.lua; grep -q 'autocrypt.lua' /etc/rspamd/rspamd.local.lua || printf '%s\n' \"dofile('/etc/rspamd/autocrypt.lua')  -- SecuBox #1852\" >> /etc/rspamd/rspamd.local.lua"
+    lxc_attach "$ct" sh -c 'rspamadm configtest >/dev/null 2>&1' || { error "rspamadm configtest refuse la configuration — rspamd NON rechargé"; return 1; }
+    lxc_attach "$ct" systemctl reload rspamd >/dev/null 2>&1 || lxc_attach "$ct" systemctl restart rspamd >/dev/null 2>&1 || rc=1
+    echo "autocrypt : $(printf '%s' "$table" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))') adresse(s) avec clé publique"
+    return "$rc"
+}
+
 # ── Apprentissage antispam : le geste « indésirable » du webmail ───────────
 #
 # Trois pieces doivent tenir ensemble, et il en manquait DEUX sur la board :
@@ -1714,6 +1738,7 @@ case "${1:-}" in
     webmail-sso) cmd_webmail_sso ;;
     webmail-sieve) cmd_webmail_sieve ;;
     webmail-openpgp) cmd_webmail_openpgp ;;
+    autocrypt-sync) cmd_autocrypt_sync ;;
     antispam-apprentissage) cmd_antispam_apprentissage ;;
     sync)        cmd_sync ;;
     # Help

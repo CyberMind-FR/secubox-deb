@@ -164,3 +164,31 @@ def test_rafraichir_par_le_maillage(parc, sbx_db, personnes):
     par_ip = {noeuds[n].ip: boxes[n] for n in boxes}
     bilan = boxes["gk3"].rafraichir_annuaires(obtenir=lambda ip: par_ip[ip].export_annuaire())
     assert bilan.get("gk2") == 1
+
+
+# ── Autocrypt sortant (#1852, P2) : la table adresse → clé publique ──────────────────────────────────────────────────
+def test_autocrypt_ne_sert_que_les_adresses_verifiees_et_des_cles_publiques(tmp_path, sbx_db, personnes):
+    import base64
+    a = Annuaire(tmp_path / "pgp", sbx_db=sbx_db)
+    a.publier(ALICE, "alice", personnes["alice"].publique)
+    usurpation = _Personne("Faux <alice@secubox.in>")
+    try:
+        a.publier(BOB, "bob", usurpation.publique)              # déclarée au nom d'Alice, jamais vérifiée
+    finally:
+        usurpation.fin()
+    table = a.autocrypt()
+    assert list(table) == ["alice@secubox.in"]
+    binaire = base64.b64decode(table["alice@secubox.in"])
+    r = subprocess.run(["gpg", "--show-keys", "--with-colons"], input=binaire, capture_output=True)
+    sortie = r.stdout.decode()
+    assert personnes["alice"].fpr in sortie and "\nsec:" not in "\n" + sortie and "\nssb:" not in "\n" + sortie
+    assert "\n" not in table["alice@secubox.in"] and len(binaire) <= 6 * 1024
+
+
+def test_autocrypt_omet_une_cle_expiree_et_vide_apres_retrait(tmp_path, sbx_db, personnes):
+    a = Annuaire(tmp_path / "pgp", sbx_db=sbx_db)
+    e = a.publier(ALICE, "alice", personnes["alice"].publique)
+    assert a.autocrypt(maintenant=e["expire"] + 10) == {}
+    assert a.autocrypt() != {}
+    a.retirer(ALICE)
+    assert a.autocrypt() == {}
