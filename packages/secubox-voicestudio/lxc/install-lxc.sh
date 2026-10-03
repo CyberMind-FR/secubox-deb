@@ -23,6 +23,7 @@
 set -euo pipefail
 
 readonly CONF="${SECUBOX_VS_CONF:-/etc/secubox/voicestudio.toml}"
+readonly VOIX_RAPIDE_PY="${SECUBOX_VS_VOIX_RAPIDE:-/usr/lib/secubox/voicestudio/voix-rapide.py}"
 readonly CONTRAINTES="${SECUBOX_VS_CONTRAINTES:-/usr/share/secubox/voicestudio/contraintes.txt}"
 readonly STATE_DIR="${SECUBOX_VS_ETAT_DIR:-/var/lib/secubox/voicestudio}"
 readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
@@ -66,8 +67,14 @@ ACTIVER_INTERFACE="$(cfg interface activer true)"
 BUN_URL="$(cfg interface bun_url)"
 BUN_SHA256="$(cfg interface bun_sha256)"
 BUN_VERSION="$(cfg interface bun_version)"
+ACTIVER_RAPIDE="$(cfg rapide activer true)"
+RAPIDE_URL="$(cfg rapide modele_url)"
+RAPIDE_SHA256="$(cfg rapide modele_sha256)"
+RAPIDE_PORT="$(cfg rapide port 3901)"
 MODE_INTERFACE=0
 [ "${1:-}" = "--interface" ] && MODE_INTERFACE=1
+MODE_RAPIDE=0
+[ "${1:-}" = "--voix-rapide" ] && MODE_RAPIDE=1
 readonly VETH="veth-vstudio0"
 readonly LXC_NAME LXC_PATH LXC_IP MEMOIRE CPU_POIDS DONNEES COMMIT SHA256 DEPOT ASR
 
@@ -187,10 +194,76 @@ construire_interface() {
 }
 
 
+# VOIX RAPIDE (#1917). Le grand modèle de synthèse met 110 à 140 s à parler sur le processeur de la box (mesuré sur gk3,
+# 4 cœurs, sans carte graphique) ; une voix Piper française par sherpa-onnx — déjà installé pour le moteur — parle en
+# moins d'une seconde. Un petit serveur à côté du moteur (voix-rapide.py), même contrat, même clé. Le modèle (≈ 67 Mo)
+# est téléchargé sur l'hôte, VÉRIFIÉ par sha256, puis poussé dans le LXC sans jamais y être exécuté avant vérification.
+installer_voix_rapide() {
+  if [ "$ACTIVER_RAPIDE" != "true" ]; then
+    log "voix rapide désactivée ([rapide] activer = false)"
+    return 0
+  fi
+  if [ -z "$RAPIDE_URL" ] || [ -z "$RAPIDE_SHA256" ]; then
+    log "[rapide] modele_url / modele_sha256 absents de $CONF"
+    return 1
+  fi
+  local tmp rc=0
+  tmp="$(mktemp -d)"
+  # shellcheck disable=SC2064  # $tmp doit être figé ici
+  trap "rm -rf '$tmp'" RETURN
+  if la test -f /opt/voix-rapide/modele/tokens.txt; then
+    log "modèle de la voix rapide déjà en place"
+  else
+    log "téléchargement du modèle de la voix rapide"
+    curl -fsSL --max-time 900 -o "$tmp/m.tar.bz2" "$RAPIDE_URL" || return 1
+    echo "$RAPIDE_SHA256  $tmp/m.tar.bz2" | sha256sum -c --quiet - || { log "empreinte sha256 du modèle INCORRECTE — abandon"; return 1; }
+    mkdir -p "$tmp/x"
+    tar -xjf "$tmp/m.tar.bz2" -C "$tmp/x" --strip-components=1
+    la mkdir -p /opt/voix-rapide/modele
+    tar -C "$tmp/x" -c . | la tar -x -C /opt/voix-rapide/modele
+  fi
+  lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c 'cat > /opt/voix-rapide/serveur.py' < "$VOIX_RAPIDE_PY"
+  la sh -c 'cat > /etc/systemd/system/voicestudio-rapide.service' <<UNIT
+[Unit]
+Description=VoiceStudio — voix rapide (Piper français) — SecuBox
+After=network.target
+
+[Service]
+Type=simple
+Environment=VOIX_RAPIDE_HOTE=$LXC_IP
+Environment=VOIX_RAPIDE_PORT=$RAPIDE_PORT
+# La clé d'API du moteur (poussée par voicestudioctl) ; absente, le serveur refuse tout (401).
+EnvironmentFile=-/etc/voicestudio.env
+ExecStart=/opt/venv/bin/python /opt/voix-rapide/serveur.py
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  la systemctl daemon-reload
+  la systemctl enable voicestudio-rapide.service
+  # Redémarrage : un serveur déjà lancé avec l'ancienne version du script doit prendre la nouvelle.
+  la systemctl restart voicestudio-rapide.service || rc=$?
+  log "voix rapide installée sur $LXC_IP:$RAPIDE_PORT (rc=$rc)"
+  return "$rc"
+}
+
 if [ "$MODE_INTERFACE" = 1 ]; then
   [ -d "$LXC_PATH/$LXC_NAME" ] || { log "LXC absent — voicestudioctl install d'abord"; exit 1; }
   demarrer
   construire_interface
+  exit $?
+fi
+
+if [ "$MODE_RAPIDE" = 1 ]; then
+  [ -d "$LXC_PATH/$LXC_NAME" ] || { log "LXC absent — voicestudioctl install d'abord"; exit 1; }
+  demarrer
+  installer_voix_rapide
   exit $?
 fi
 
@@ -235,6 +308,7 @@ if [ ! -f "$SENTINEL" ]; then
   la /opt/venv/bin/pip install --no-cache-dir -c /root/contraintes.txt /app
   la /opt/venv/bin/pip check
   construire_interface
+  installer_voix_rapide || log "voix rapide NON installée (voicestudioctl voix-rapide pour réessayer)"
   echo "$COMMIT" > "$STATE_DIR/commit-installe"
 fi
 

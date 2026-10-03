@@ -66,7 +66,7 @@ def bac_a_sable(tmp_path, monkeypatch):
         "CLE": tmp_path / "secrets" / "api_key", "ETAT": tmp_path / "etat.json",
         "MARQUE_INSTALLE": tmp_path / ".prov", "AUDIT": tmp_path / "audit.log",
         "SAUVEGARDES": tmp_path / "sauv", "DROPIN_DIR": tmp_path / "systemd",
-        "VOLUME_PODMAN": tmp_path / "volume-podman", "VERROU": tmp_path / "verrou.lock", "NFT_DIR": tmp_path / "nft", "MARQUE_INTERFACE": tmp_path / ".interface-native",
+        "VOLUME_PODMAN": tmp_path / "volume-podman", "VERROU": tmp_path / "verrou.lock", "NFT_DIR": tmp_path / "nft", "MARQUE_INTERFACE": tmp_path / ".interface-native", "MARQUE_RAPIDE": tmp_path / ".voix-rapide",
         "NGINX_DISPO": tmp_path / "ngx-dispo", "NGINX_ACTIF": tmp_path / "ngx-actif", "SNIPPET_CLE": tmp_path / "snip" / "cle.conf",
     }.items():
         monkeypatch.setattr(c, nom, valeur)
@@ -1635,3 +1635,46 @@ def test_l_ancien_delai_par_defaut_est_releve_mais_pas_un_choix_de_l_operateur(b
     c.CONF.write_text('[limites]\ndelai_s = 45\n')
     c.cmd_migrer_conf()
     assert tomllib.loads(c.CONF.read_text())["limites"]["delai_s"] == 45             # choix de l'opérateur : jamais touché
+
+
+# ── WebSocket derrière HAProxy : l'Origin https du vhost ramenée à http (le moteur compare à SON schéma) ─────────────
+def test_le_vhost_ramene_l_origine_exacte_a_http_et_laisse_passer_toute_autre(bac_a_sable):
+    v = c.contenu_vhost(c.charger(), "voicestudio.gk3.secubox.in", "")
+    assert 'map $http_origin $sbx_vs_origine { default $http_origin; "https://voicestudio.gk3.secubox.in" "http://voicestudio.gk3.secubox.in"; }' in v
+    assert "proxy_set_header Origin $sbx_vs_origine;" in v
+    assert "proxy_set_header Origin $http_origin;" not in v and 'Origin "' not in v      # jamais d'Origin inventée
+
+
+# ── voix rapide ───────────────────────────────────────────────────────────────────────────────────────────────────────
+def test_cmd_voix_rapide_pose_le_marqueur_seulement_si_le_serveur_repond(bac_a_sable, monkeypatch):
+    c.creer_cle()
+    run = DomaineFaux(etat="RUNNING")
+
+    def sans_serveur(cmd, **k):
+        if cmd[:2] == ["bash", c.INSTALL]:
+            assert cmd[2] == "--voix-rapide"
+            return Rep(0)
+        if cmd[0] == "curl":
+            return Rep(7)
+        return run(cmd, **k)
+    monkeypatch.setattr(c.time, "sleep", lambda *_: None)
+    assert c.cmd_voix_rapide(sans_serveur) == 5 and not c.MARQUE_RAPIDE.exists()
+    assert "voix-rapide echec-ne-repond-pas" in c.AUDIT.read_text()
+
+    def avec_serveur(cmd, **k):
+        if cmd[:2] == ["bash", c.INSTALL] or cmd[0] == "curl":
+            return Rep(0)
+        return run(cmd, **k)
+    assert c.cmd_voix_rapide(avec_serveur) == 0 and c.MARQUE_RAPIDE.exists()
+
+
+def test_cmd_voix_rapide_en_echec_du_script_ne_pose_rien(bac_a_sable):
+    c.creer_cle()
+    run = DomaineFaux(etat="RUNNING")
+    rc = c.cmd_voix_rapide(lambda cmd, **k: Rep(1) if cmd[:2] == ["bash", c.INSTALL] else run(cmd, **k))
+    assert rc == 1 and not c.MARQUE_RAPIDE.exists()
+
+
+def test_le_script_du_moteur_pousse_aussi_la_voix_rapide():
+    src = Path(c.__file__).read_text()
+    assert "voicestudio-rapide.service" in src and "try-restart voicestudio-rapide.service" in src

@@ -13,6 +13,7 @@ override_dh_installsystemd:
 override_dh_auto_install:
 	install -D -m 0755 sbin/voicestudioctl $(M)/usr/sbin/voicestudioctl
 	install -D -m 0755 lxc/install-lxc.sh $(M)/usr/lib/secubox/voicestudio/install-lxc.sh
+	install -D -m 0644 lxc/voix-rapide.py $(M)/usr/lib/secubox/voicestudio/voix-rapide.py
 	# Défauts du paquet : le TOML de la box (/etc/secubox/voicestudio.toml) est créé ou converti par
 	# `voicestudioctl migrer-conf` — il n'est PAS un conffile, pour que la mise à jour depuis le
 	# schéma podman ne déclenche aucune question dpkg et ne perde pas les adresses publiées.
@@ -33,5 +34,6 @@ override_dh_auto_install:
 	install -m 0644 systemd/secubox-voicestudio-pub.service $(M)/lib/systemd/system/
 	install -m 0644 systemd/secubox-voicestudio-provision.service $(M)/lib/systemd/system/
 	install -m 0644 systemd/secubox-voicestudio-interface.service $(M)/lib/systemd/system/
+	install -m 0644 systemd/secubox-voicestudio-rapide.service $(M)/lib/systemd/system/
 	install -D -m 0440 debian/secubox-voicestudio.sudoers $(M)/etc/sudoers.d/secubox-voicestudio
 	install -d $(M)/var/lib/secubox/voicestudio

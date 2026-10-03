@@ -1,3 +1,18 @@
+secubox-voicestudio (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * VOIX RAPIDE. Le grand modèle de synthèse met 110 à 140 s à dire une phrase sur le processeur de gk3 (mesuré) : « Dire »
+    paraissait ne rien faire. Une voix Piper française servie par sherpa-onnx (déjà dans le moteur) dit la même phrase en
+    moins d'une seconde (4,6 s d'audio en 0,9 s). Petit serveur dans le LXC (voix-rapide.py : Bearer, texte borné, rien
+    d'écrit), modèle de ≈ 67 Mo téléchargé puis VÉRIFIÉ par sha256, unité d'installation idempotente avec marqueur posé
+    seulement quand le serveur répond. « Dire » sans voix nommée (ou voix « rapide ») l'utilise, sans demander de mémoire ;
+    une voix nommée, ou une voix rapide absente, reste sur le grand modèle. Configuration : [rapide] (activer = false pour
+    la couper).
+  * Interface native : les WebSocket (dictée, événements) étaient refusés en 403. Le moteur compare l'Origin du navigateur
+    (https) à son propre schéma (http, derrière HAProxy). nginx ramène à http l'Origin EXACTE du vhost et laisse passer toute
+    autre : une page tierce reste refusée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 16:00:00 +0200
+
 secubox-voicestudio (0.4.3-1~bookworm1) bookworm; urgency=medium
 
   * Délai du moteur : 120 s → 300 s. Mesuré sur gk3 : une synthèse à froid (chargement du modèle de 3 Go puis calcul sur CPU) prend

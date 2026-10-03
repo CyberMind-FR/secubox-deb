@@ -61,6 +61,12 @@ def ctl(monkeypatch):
     return faux
 
 
+@pytest.fixture(autouse=True)
+def sans_voix_rapide(monkeypatch):
+    """Par défaut la voix rapide est désactivée : les tests historiques exercent le grand modèle."""
+    monkeypatch.setattr(m, "_rapide", lambda: "")
+
+
 @pytest.fixture
 def client(ctl):
     m.app.dependency_overrides.clear()
@@ -77,6 +83,9 @@ def personne():
     m.app.dependency_overrides[core_auth.require_personne] = lambda: PERSONNE
 
 
+_RAPIDE_REELLE = m._rapide        # l'autouse ci-dessous la remplace pour les autres tests
+
+
 class MoteurFaux:
     def __init__(self, voix=None, audio=b"RIFFaudio", texte="bonjour", panne=None):
         self._voix, self._audio, self._texte, self._panne, self.appels = voix, audio, texte, panne, []
@@ -91,6 +100,12 @@ class MoteurFaux:
         if self._panne:
             raise self._panne
         return self._audio
+
+    async def dire_rapide(self, texte, format_):
+        self.appels.append(("rapide", texte, format_))
+        if getattr(self, "panne_rapide", None):
+            raise self.panne_rapide
+        return b"RAPIDE"
 
     async def transcrire(self, audio, nom, langue=""):
         self.appels.append(("transcrire", len(audio), nom, langue))
@@ -627,3 +642,67 @@ def test_le_refus_de_memoire_rend_le_verrou_du_moteur(client, ctl, monkeypatch):
     for _ in range(3):
         client.post("/usager/dire", json={"texte": "x"})
     assert m._UN_A_LA_FOIS._value == 1
+
+
+# ── voix rapide : « Dire » sans voix précise ne passe plus par le grand modèle de 110 s ───────────────────────────
+def test_dire_sans_voix_prend_la_voix_rapide_sans_toucher_a_la_memoire(client, monkeypatch, ctl):
+    personne()
+    monkeypatch.setattr(m, "_rapide", lambda: "http://10.100.0.230:3901")
+    faux = MoteurFaux()
+    monkeypatch.setattr(m, "_moteur", lambda: faux)
+    r = client.post("/usager/dire", json={"texte": "Bonjour", "format": "mp3"})
+    assert r.status_code == 200 and r.content == b"RAPIDE"
+    assert faux.appels == [("rapide", "Bonjour", "mp3")]
+    assert "faire-de-la-place" not in ctl.actions()          # ≈ 70 Mo : aucun conteneur à endormir
+
+
+def test_dire_voix_nommee_reste_sur_le_grand_modele(client, monkeypatch, ctl):
+    personne()
+    monkeypatch.setattr(m, "_rapide", lambda: "http://10.100.0.230:3901")
+    faux = MoteurFaux()
+    monkeypatch.setattr(m, "_moteur", lambda: faux)
+    r = client.post("/usager/dire", json={"texte": "Bonjour", "voix": "lexie", "format": "mp3"})
+    assert r.status_code == 200 and r.content == b"RIFFaudio"
+    assert faux.appels == [("dire", "Bonjour", "lexie", "mp3")] and "faire-de-la-place" in ctl.actions()
+
+
+def test_voix_rapide_en_panne_retombe_sur_le_grand_modele_sans_voix_nommee(client, monkeypatch):
+    personne()
+    monkeypatch.setattr(m, "_rapide", lambda: "http://10.100.0.230:3901")
+    faux = MoteurFaux()
+    faux.panne_rapide = MoteurIndisponible("voix rapide injoignable")
+    monkeypatch.setattr(m, "_moteur", lambda: faux)
+    r = client.post("/usager/dire", json={"texte": "Bonjour"})
+    assert r.status_code == 200 and r.content == b"RIFFaudio"
+    assert [a[0] for a in faux.appels] == ["rapide", "dire"]
+
+
+def test_voix_rapide_demandee_et_en_panne_est_dite_503(client, monkeypatch):
+    personne()
+    monkeypatch.setattr(m, "_rapide", lambda: "http://10.100.0.230:3901")
+    faux = MoteurFaux()
+    faux.panne_rapide = MoteurIndisponible("voix rapide injoignable")
+    monkeypatch.setattr(m, "_moteur", lambda: faux)
+    r = client.post("/usager/dire", json={"texte": "Bonjour", "voix": "rapide"})
+    assert r.status_code == 503 and [a[0] for a in faux.appels] == ["rapide"]
+
+
+def test_la_liste_des_voix_met_la_voix_rapide_en_tete(client, monkeypatch):
+    personne()
+    monkeypatch.setattr(m, "_rapide", lambda: "http://10.100.0.230:3901")
+    monkeypatch.setattr(m, "_moteur", lambda: MoteurFaux())
+    v = client.get("/usager/voix").json()["voix"]
+    assert v[0]["id"] == "rapide" and v[1]["id"] == "lexie"
+
+
+def test_rapide_lit_le_toml_et_se_desactive(tmp_path, monkeypatch):
+    f = tmp_path / "v.toml"
+    monkeypatch.setattr(m, "CONF_DEFAUT", tmp_path / "absent.toml")
+    monkeypatch.setattr(m, "CONF", f)
+    f.write_text('[lxc]\nip = "10.100.0.231"\n[rapide]\nport = 3999\n')
+    m._RAPIDE.update(t=0.0, v=None)
+    assert _RAPIDE_REELLE() == "http://10.100.0.231:3999"
+    f.write_text('[rapide]\nactiver = false\n')
+    m._RAPIDE.update(t=0.0, v=None)
+    assert _RAPIDE_REELLE() == ""
+    m._RAPIDE.update(t=0.0, v=None)

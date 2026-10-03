@@ -57,6 +57,15 @@ modele_residente_mo  = 2500
 # Une tentative de libération au plus toutes les N secondes (une salve de synthèses ne rendort pas tout le parc en boucle).
 delai_repetition_s   = 120
 
+[rapide]
+# VOIX RAPIDE : une voix française légère (Piper, par sherpa-onnx — déjà dans le moteur) qui parle en moins d'une seconde
+# là où le grand modèle prend 110 à 140 s sur le processeur. Elle sert « Dire » quand aucune voix précise n'est choisie ;
+# le grand modèle (600 langues, clonage) reste pour les voix nommées et le studio. Modèle vérifié par sha256.
+activer       = true
+port          = 3901
+modele_url    = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-siwis-medium.tar.bz2"
+modele_sha256 = "375909aa30842b3a4efa10b1beb1d761af792960ae6873b4d53889f96c66195b"
+
 [interface]
 # Interface NATIVE de VoiceStudio (le studio complet : clonage, doublage, bibliothèque de voix…), servie par le moteur
 # lui-même une fois construite. Construite DANS le LXC avec bun, comme le fait le Dockerfile amont :

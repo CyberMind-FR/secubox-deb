@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-03 — VoiceStudio : voix rapide et WebSocket de l'interface native (ref #1917)
+- `secubox-voicestudio` 0.5.0 (gk3 ; dépôt apt à jour). **Cause du « je n'ai pas de résultat »** : le grand modèle de synthèse met 110 à 140 s par phrase sur le CPU de gk3 (mesuré, y compris pendant des installations de modèles lancées depuis le catalogue du studio) ; l'écran restait muet. Le chargement du modèle ne compte que pour 4 s : garder le modèle chargé n'aurait rien changé, c'est le calcul qui est lent.
+- **Solution** : voix rapide = Piper français (`vits-piper-fr_FR-siwis-medium`, 67 Mo, sha256 épinglé) par sherpa-onnx, déjà dans le moteur ; serveur `voix-rapide.py` dans le LXC (:3901, même clé), 0,9 s pour 4,6 s d'audio. « Dire » sans voix nommée l'utilise, sans demander de mémoire ; voix nommée ou voix rapide absente → grand modèle. `voicestudioctl voix-rapide` + unité d'installation (marqueur posé seulement si le serveur répond).
+- **Interface native** : WebSocket `/ws/transcribe` refusé en 403 — le moteur compare l'Origin (https) à son schéma (http derrière HAProxy). nginx ramène à http l'Origin exacte du vhost ; toute autre reste refusée (mesuré : `https://evil.example` → 403).
+- Le 504 « Stories chained preview » de l'interface native venait du même calcul trop long.
+
 ## 2026-10-02 — VoiceStudio en LXC natif, interface administrateur et usager (ref #1917, #1743)
 - `secubox-voicestudio` 0.2.0 : plus aucun podman. LXC Debian non privilégié `voicestudio` (10.100.0.230), sources amont épinglées par commit **et** sha256 (vérifié avant extraction), versions Python tirées de l'image validée (`pip list`, 268 contraintes, sans CUDA), torch CPU depuis l'index PyTorch seul, `pip check` en fin d'installation. Même disposition que l'image (`/app`, `/app/omnivoice_data`) : la base SQLite garde ses chemins absolus.
 - Mandataire d'hôte à activation par socket (`systemd-socket-proxyd`, utilisateur `nobody`) : port 3900 sur les adresses `[reseau] publier` (LAN, maillage — adresses publiques refusées) et le loopback ; mode `permanent` (défaut) ou `demande`.

@@ -41,6 +41,8 @@ case "$1" in
     # idempotentes et sans effet si l'infra manque (même motif que secubox-socialrelay).
     systemctl enable secubox-voicestudio-interface.service 2>/dev/null || true
     systemctl start --no-block secubox-voicestudio-interface.service 2>/dev/null || true
+    systemctl enable secubox-voicestudio-rapide.service 2>/dev/null || true
+    systemctl start --no-block secubox-voicestudio-rapide.service 2>/dev/null || true
     DOMAINE="$(secubox-domaine voicestudio 2>/dev/null || true)"
     CLE_VHOST="$(printf '%s' "$DOMAINE" | tr '.' '_')"
     if [ -n "$DOMAINE" ] && command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
