@@ -1298,6 +1298,15 @@ backend sbxwaf_inspector
     # seul a besoin.
     acl est_depot_long path_beg /api/v1/droplet/depot
     http-request set-timeout server 1h if est_depot_long
+    # VOIX ET STUDIO (VoiceStudio, #1917) : meme probleme, meme remede, et pour les memes raisons. Une synthese vocale
+    # sur CPU charge un modele de plus de 2 Go puis calcule : bien plus de 30 s a froid. HAProxy coupait, l'utilisateur
+    # voyait « HTTP 504 » pendant que le moteur continuait de travailler. 10 minutes pour dire et dicter ; 1 heure pour
+    # le domaine du studio natif (doublage, clonage, bibliotheque). Chemins et prefixe de domaine EXACTS : le reste du
+    # parc garde les 30 s.
+    acl est_voix_longue path_beg /api/v1/voicestudio/essai/ /api/v1/voicestudio/usager/dire /api/v1/voicestudio/usager/transcrire
+    acl est_studio_natif hdr_beg(host) -i voicestudio.
+    http-request set-timeout server 10m if est_voix_longue
+    http-request set-timeout server 1h if est_studio_natif
     option forwardfor
     http-request set-header X-Real-IP %[src]
     # %[query] rend la chaine de requete SANS le « ? » qui l'introduit : une

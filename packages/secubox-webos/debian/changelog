@@ -1,3 +1,10 @@
+secubox-webos (1.0.400-1~bookworm1) bookworm; urgency=low
+
+  * Hall : la carte « Voix » montre la RAISON donnée par le module pour un refus 503 / 429 / 413 (ex. « Mémoire insuffisante pour la
+    synthèse : il faut environ 3,7 Go libres, il en reste 1,7 Go… ») au lieu d'un message générique. Texte inséré en textContent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 12:45:00 +0200
+
 secubox-webos (1.0.399-1~bookworm1) bookworm; urgency=low
 
   * Hall : VoiceStudio en DEUX entrées, comme Coffre / Mon coffre (#1917). « VoiceStudio » (administrateur) : carte d'état

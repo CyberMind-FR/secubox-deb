@@ -1,3 +1,13 @@
+secubox-haproxy (1.8.24-1~bookworm1) bookworm; urgency=medium
+
+  * Délais serveur LONGS pour VoiceStudio (#1917), sur le modèle des dépôts de fichiers (#1030) : « Synthèse : HTTP 504 » — une
+    synthèse vocale sur CPU charge un modèle de plus de 2 Go puis calcule, bien plus de 30 s ; HAProxy abandonnait, l'utilisateur
+    voyait un 504 pendant que le moteur continuait de travailler. 10 min pour /api/v1/voicestudio/essai/, /usager/dire et
+    /usager/transcrire ; 1 h pour le domaine voicestudio.* (studio natif : doublage, clonage). Exceptions EXACTES : le reste du
+    parc garde `timeout server 30s`. 4 tests (la fixture de génération exige un /run/haproxy inscriptible : root, ou un espace de noms).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 13:00:00 +0200
+
 secubox-haproxy (1.8.23-1~bookworm1) bookworm; urgency=medium
 
   * generate (#1845) : depuis une source PRIVÉE, un hôte IP ou secubox.local va

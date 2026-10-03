@@ -129,3 +129,11 @@ def test_la_carte_d_administration_ne_montre_ni_adresse_ni_cle():
     for secret in ("api_key", "Bearer", "10.100.", "commit"):
         assert secret not in re.sub(r"<!--.*?-->", "", CARTE_ADMIN, flags=re.S), secret
     assert 'type="password"' not in CARTE_ADMIN
+
+
+def test_la_carte_d_usager_montre_la_raison_donnee_par_le_module_pour_503_429_413():
+    """« Mémoire insuffisante pour la synthèse : il faut ≈ 3,7 Go libres… » est une cause qu'un usager comprend : un message
+    générique la cacherait. Le texte est inséré en textContent (jamais en HTML)."""
+    assert "function avec_detail(r)" in CARTE and "d.detail.slice(0, 300)" in CARTE
+    assert "return avec_detail(r).then(function(m){ note(m); return null; });" in CARTE
+    assert "$('note').textContent = t" in CARTE and "innerHTML" not in CARTE

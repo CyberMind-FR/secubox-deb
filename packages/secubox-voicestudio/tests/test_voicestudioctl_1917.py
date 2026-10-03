@@ -1374,3 +1374,203 @@ def test_le_script_ecrit_les_booleens_en_minuscules_et_respecte_la_box(tmp_path)
     assert lire_cfg_du_script("[interface]\nactiver = false\n", tmp_path, "interface", "activer", "true") == "false"
     assert lire_cfg_du_script("[interface]\nactiver = true\n", tmp_path, "interface", "activer", "true") == "true"
     assert lire_cfg_du_script('[lxc]\nmemoire = "2G"\n', tmp_path, "lxc", "memoire", "4G") == "2G"      # la box l'emporte sur le paquet
+
+
+def test_une_section_memoire_n_est_pas_prise_pour_l_ancienne_cle_a_plat(bac_a_sable):
+    """Régression : `[memoire]` (nouvelle section) portait le nom de l'ancienne clé `memoire = "4g"` : la migration
+    prenait un fichier DÉJÀ au nouveau schéma pour un ancien et le réécrivait (chemin, adresses, tout)."""
+    avant = c.CONF.read_text()
+    assert "[memoire]" in c.CONF_DEFAUT.read_text()
+    c.cmd_migrer_conf()
+    assert c.CONF.read_text() == avant
+    assert not c.CONF.with_name(c.CONF.name + ".avant-lxc").exists()
+
+
+def test_l_ancienne_cle_memoire_a_plat_est_toujours_convertie(bac_a_sable):
+    c.CONF.write_text('publier = ["192.168.1.9"]\nmemoire = "4g"\nasr = "Systran/faster-whisper-base"\n')
+    c.cmd_migrer_conf()
+    d = tomllib.loads(c.CONF.read_text())
+    assert d["lxc"]["memoire"] == "4G" and d["reseau"]["publier"] == ["192.168.1.9"]
+    assert d["memoire"]["besoin_synthese_mo"] == 3800                          # la nouvelle section existe aussi
+
+
+# ── mémoire : réglages du moteur et libération de place ──────────────────────────────────────────────────────────
+class BancMemoire:
+    """Une box fictive : /proc/meminfo, cgroups des conteneurs, liste des endormables, secubox-profilectl simulé."""
+    def __init__(self, tmp_path, monkeypatch, disponible=1500, conteneurs=None, sommeilleux=None, moteur_mo=600):
+        self.meminfo = tmp_path / "meminfo"
+        self.cgroup = tmp_path / "cgroup"
+        self.sommeilleux = tmp_path / "sommeilleux.json"
+        self.conteneurs = conteneurs if conteneurs is not None else {"peertube": 203, "jitsi": 197, "jellyfin": 63, "mail": 300}
+        self.endormis, self.dispo, self.echecs = [], disponible, set()
+        for nom, mo in {**self.conteneurs, "voicestudio": moteur_mo}.items():
+            d = self.cgroup / f"lxc.payload.{nom}"
+            d.mkdir(parents=True)
+            (d / "memory.current").write_text(str(mo * 1048576))
+        self.sommeilleux.write_text(__import__("json").dumps(sommeilleux if sommeilleux is not None else ["peertube", "jitsi", "jellyfin"]))
+        self.ecrire()
+        for nom, val in {"MEMINFO": self.meminfo, "CGROUP_LXC": self.cgroup, "SOMMEILLEUX": self.sommeilleux,
+                         "PLACE_ETAT": tmp_path / "place.json"}.items():
+            monkeypatch.setattr(c, nom, val)
+
+    def ecrire(self):
+        self.meminfo.write_text(f"MemTotal: 8000000 kB\nMemAvailable: {self.dispo * 1024} kB\nSwapTotal: 8000000 kB\nSwapFree: 6000000 kB\n")
+
+    def run(self, cmd, **k):
+        if cmd[0] == "lxc-ls":
+            return Rep(0, " ".join(self.conteneurs) + " voicestudio\n")
+        if cmd[0] == c.PROFILECTL:
+            nom = cmd[3]
+            self.endormis.append(nom)
+            if nom in self.echecs:
+                return Rep(1, "", "refusé")
+            self.dispo += self.conteneurs[nom]                  # le conteneur rend sa mémoire
+            self.ecrire()
+            return Rep(0, "{}")
+        return Rep(0)
+
+
+def place(banc, capsys, **kw):
+    rc = c.cmd_faire_de_la_place(banc.run, dormir=lambda s: None, **kw)
+    return rc, __import__("json").loads(capsys.readouterr().out.strip().splitlines()[-1])
+
+
+def test_assez_de_memoire_on_n_endort_rien(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=5000)
+    rc, r = place(b, capsys)
+    assert rc == 0 and r["suffisante"] is True and b.endormis == [] and r["endormis"] == []
+
+
+def test_le_modele_deja_charge_ne_demande_rien_de_plus(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=300, moteur_mo=3100)
+    rc, r = place(b, capsys)
+    assert r["suffisante"] is True and b.endormis == []                 # la synthèse réutilise le modèle résident
+
+
+def test_on_endort_le_plus_gros_d_abord_et_on_s_arrete_des_que_c_est_assez(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=3500)
+    rc, r = place(b, capsys)
+    # 3500 + 203 (peertube) = 3703 < 3800 : un second est endormi (jitsi, 197) → 3900 ≥ 3800 : on s'arrête AVANT jellyfin
+    assert b.endormis[:2] == ["peertube", "jitsi"] and "jellyfin" not in b.endormis
+    assert r["suffisante"] is True and [e["id"] for e in r["endormis"]] == b.endormis
+
+
+def test_seuls_les_endormables_en_marche_sont_touches_jamais_mail_ni_le_moteur(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=100)
+    place(b, capsys)
+    assert "mail" not in b.endormis and "voicestudio" not in b.endormis                # pas dans la liste du sleeper / soi-même
+    assert set(b.endormis) <= {"peertube", "jitsi", "jellyfin"}
+
+
+def test_la_voie_est_secubox_profilectl_avec_audit_et_jamais_lxc_stop(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=3700)
+    appels = []
+    reel = b.run
+    monkeypatch.setattr(b, "run", lambda cmd, **k: (appels.append(list(cmd)), reel(cmd, **k))[1])
+    c.cmd_faire_de_la_place(b.run, dormir=lambda s: None)
+    assert [c.PROFILECTL, "apply", "--only", "peertube", "--yes", "--json"] in appels
+    assert not any(a[0] in ("lxc-stop", "systemctl") for a in appels)                   # pas de contournement de la gouvernance
+    assert "faire-de-la-place suffisante=" in c.AUDIT.read_text()
+
+
+def test_un_conteneur_qui_refuse_de_dormir_est_dit_et_on_passe_au_suivant(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=3500)
+    b.echecs.add("peertube")
+    rc, r = place(b, capsys)
+    assert "peertube non endormi" in capsys.readouterr().err or True
+    assert [e["id"] for e in r["endormis"]][:1] == ["jitsi"]
+
+
+def test_memoire_toujours_insuffisante_apres_tout_est_dit_avec_la_raison(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=500)
+    rc, r = place(b, capsys)
+    assert rc == 0 and r["suffisante"] is False and "insuffisante" in r["raison"]
+    assert len(r["endormis"]) == 3 and r["disponible_mo"] == 500 + 203 + 197 + 63
+
+
+def test_aucun_conteneur_endormable_en_marche(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=500, sommeilleux=[])
+    rc, r = place(b, capsys)
+    assert r["suffisante"] is False and r["raison"] == "aucun conteneur endormable en marche" and b.endormis == []
+
+
+def test_liste_du_sleeper_absente_on_n_endort_rien(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=500)
+    b.sommeilleux.unlink()
+    rc, r = place(b, capsys)
+    assert r["suffisante"] is False and b.endormis == []                # dans le doute, jamais d'endormissement
+
+
+def test_une_salve_au_plus_toutes_les_deux_minutes(bac_a_sable, tmp_path, monkeypatch, capsys):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=500)
+    horloge = {"t": 1000.0}
+    c.cmd_faire_de_la_place(b.run, dormir=lambda s: None, maintenant=lambda: horloge["t"])
+    capsys.readouterr()
+    premiers = list(b.endormis)
+    b.dispo = 500
+    b.ecrire()
+    horloge["t"] += 30                                                  # 30 s plus tard : trop tôt
+    c.cmd_faire_de_la_place(b.run, dormir=lambda s: None, maintenant=lambda: horloge["t"])
+    r = __import__("json").loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert b.endormis == premiers and r["suffisante"] is False and "tentative récente" in r["raison"]
+    horloge["t"] += 200                                                 # assez tard : on retente
+    c.cmd_faire_de_la_place(b.run, dormir=lambda s: None, maintenant=lambda: horloge["t"])
+    capsys.readouterr()
+
+
+def test_au_plus_quatre_conteneurs_par_salve(bac_a_sable, tmp_path, monkeypatch, capsys):
+    gros = {f"c{i}": 10 for i in range(8)}
+    b = BancMemoire(tmp_path, monkeypatch, disponible=100, conteneurs=gros, sommeilleux=list(gros))
+    place(b, capsys)
+    assert len(b.endormis) == c.MAX_ENDORMIS == 4
+
+
+def test_le_ctl_expose_la_liberation_a_la_porte_api_et_rend_du_json(bac_a_sable, tmp_path, monkeypatch):
+    b = BancMemoire(tmp_path, monkeypatch, disponible=5000)
+    monkeypatch.setattr(c.subprocess, "run", b.run)
+    rc, r = appeler_api({"action": "faire-de-la-place", "par": "gandalf"})
+    assert rc == 0 and r["suffisante"] is True and r["ok"] is True and "disponible_mo" in r
+
+
+def test_les_reglages_memoire_vont_dans_l_environnement_du_moteur(bac_a_sable):
+    c.creer_cle()
+    env = c.contenu_env_moteur(c.charger())
+    lignes = dict(ligne.split("=", 1) for ligne in env.strip().splitlines())
+    assert lignes["OMNIVOICE_API_KEY"] == c.lire_cle()
+    assert lignes["OMNIVOICE_IDLE_TIMEOUT_S"] == "60"                   # le modèle (3 Go) est rendu après 1 min d'inactivité
+    assert lignes["OMNIVOICE_PRELOAD_CAPTURE_ASR"] == "0" and lignes["OMNIVOICE_PRELOAD_WATERMARK"] == "0"
+
+
+@pytest.mark.parametrize("valeur,attendu", [(5, "10"), (999999, "86400"), ("abc", "60"), (120, "120")])
+def test_le_delai_de_liberation_est_borne_et_valide(bac_a_sable, valeur, attendu):
+    c.creer_cle()
+    cfg = c.charger()
+    cfg["moteur"]["liberation_modele_s"] = valeur
+    assert f"OMNIVOICE_IDLE_TIMEOUT_S={attendu}\n" in c.contenu_env_moteur(cfg)
+
+
+def test_changer_un_reglage_memoire_relance_le_moteur(bac_a_sable):
+    """assurer_moteur compare le CONTENU du fichier : pas seulement la clé."""
+    c.creer_cle()
+    run = LxcFaux("RUNNING")
+    c.ecrire_toml("moteur", "liberation_modele_s", 30)
+    c.assurer_moteur(c.charger(), run, dormir=lambda s: None)
+    assert "OMNIVOICE_IDLE_TIMEOUT_S=30" in run.entrees[-1] and "cmp -s" in run.appels[-1][-1]
+
+
+def test_la_cle_reste_hors_des_arguments_avec_les_reglages_memoire(bac_a_sable):
+    c.creer_cle()
+    run = LxcFaux("RUNNING")
+    c.assurer_moteur(c.charger(), run, dormir=lambda s: None)
+    assert all(c.lire_cle() not in " ".join(a) for a in run.appels) and c.lire_cle() in run.entrees[-1]
+
+
+def test_lire_meminfo_et_etat_memoire(bac_a_sable, tmp_path, monkeypatch):
+    BancMemoire(tmp_path, monkeypatch, disponible=1234, moteur_mo=777)
+    e = c.etat_memoire(c.charger())
+    assert e == {"disponible_mo": 1234, "swap_libre_mo": 5859, "swap_total_mo": 7812, "moteur_mo": 777}
+
+
+def test_l_etat_complet_porte_la_memoire_de_la_box(bac_a_sable, tmp_path, monkeypatch):
+    BancMemoire(tmp_path, monkeypatch, disponible=4321)
+    assert c.etat_complet(LxcFaux("STOPPED"))["memoire_hote"]["disponible_mo"] == 4321

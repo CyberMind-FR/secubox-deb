@@ -12,13 +12,17 @@
 path = "/data/swapfile"
 
 # Swap size. Use 'G' or 'M' suffix (passed to fallocate -l).
-# Default 4G is sized for 8 GB boards with heavy LXC load (gk2 baseline).
-size = "4G"
+# 8G: gk2 en a deux de 4G ; une synthèse vocale seule veut ~4 Go de RAM, le zram (RAM comprimée) ne suffit pas.
+size = "8G"
 
 # Minimum free space on /data before secubox-tuning-apply will allocate
 # the swap file. Safety: avoid filling up /data on a board with limited
 # storage.
-minimum_data_free_gb = 8
+minimum_data_free_gb = 20
+
+# Repli quand le chemin ci-dessus n'a pas la place : sur gk3 le SSD est sous / (/data n'a que 4 Go) et les données du parc
+# vivent sous /srv/secubox. Jamais une carte eMMC/SD (usure).
+fallback_path = "/srv/secubox/swapfile"
 
 [zram]
 # Compressed RAM swap. Compresses swapped-out pages in memory (lzo-rle

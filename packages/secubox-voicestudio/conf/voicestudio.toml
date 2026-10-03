@@ -32,9 +32,27 @@ inactivite_s = 900
 publier  = []
 
 [moteur]
+# MÉMOIRE (gk3 : 8 Go, dont le moteur de synthèse seul veut ≈ 3,6 Go). Le modèle de synthèse est RENDU après `liberation_modele_s`
+# secondes sans usage (le moteur le garde sinon 15 min) ; la dictée et le filigrane ne sont pas préchargés au démarrage.
+# Poussé dans le LXC par voicestudioctl (fichier d'environnement du moteur) ; modifier = le moteur redémarre.
+liberation_modele_s = 60
+precharger_dictee   = false
+precharger_filigrane = false
 # Reconnaissance (faster-whisper) : base = le meilleur compromis vitesse /
 # précision mesuré sur un Core i3 pour des commandes courtes (#1649).
 asr      = "Systran/faster-whisper-base"
+
+[memoire]
+# Avant une SYNTHÈSE (la seule opération qui charge le grand modèle), voicestudioctl vérifie la mémoire de la BOX :
+# si `MemAvailable` est sous `besoin_synthese_mo`, il met en sommeil, un par un et du plus gros au plus petit, les AUTRES
+# conteneurs endormables (manifeste lifecycle on-demand/eager, par secubox-profilectl : audité, réversible, réveil au
+# premier accès) jusqu'à en avoir assez ; s'il n'y arrive pas, la synthèse est REFUSÉE avec les chiffres, jamais tentée
+# à l'aveugle (le tueur de mémoire global abattrait le moteur, voire un autre service).
+besoin_synthese_mo   = 3800
+# Au-dessus de cette taille, le moteur a déjà son modèle en mémoire : la synthèse ne demande rien de plus.
+modele_residente_mo  = 2500
+# Une tentative de libération au plus toutes les N secondes (une salve de synthèses ne rendort pas tout le parc en boucle).
+delai_repetition_s   = 120
 
 [interface]
 # Interface NATIVE de VoiceStudio (le studio complet : clonage, doublage, bibliothèque de voix…), servie par le moteur

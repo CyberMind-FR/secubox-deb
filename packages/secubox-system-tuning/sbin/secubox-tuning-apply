@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-CONFIG_FILE="/etc/secubox/tuning/config.toml"
+CONFIG_FILE="${SECUBOX_TUNING_CONFIG:-/etc/secubox/tuning/config.toml}"
 LXC_CAPS_FILE="/etc/secubox/tuning/lxc-memory-high.toml"
 LXC_CPU_FILE="/etc/secubox/tuning/lxc-cpu.toml"
 
@@ -137,27 +137,39 @@ persiste_cle() {
 
 apply_swap() {
   log "swap phase"
-  local swap_path size min_free_gb
+  local swap_path size min_free_gb repli
   swap_path=$(toml_get "$CONFIG_FILE" swap.path /data/swapfile)
-  size=$(toml_get "$CONFIG_FILE" swap.size 4G)
-  min_free_gb=$(toml_get "$CONFIG_FILE" swap.minimum_data_free_gb 8)
+  size=$(toml_get "$CONFIG_FILE" swap.size 8G)
+  min_free_gb=$(toml_get "$CONFIG_FILE" swap.minimum_data_free_gb 20)
+  repli=$(toml_get "$CONFIG_FILE" swap.fallback_path /srv/secubox/swapfile)
 
-  if swapon --show=NAME --noheadings | grep -q '.'; then
-    ok "swap already active: $(swapon --show=NAME --noheadings | tr '\n' ' ')"
+  # LE ZRAM N'EST PAS UN SWAP DISQUE. Il est actif sur toute box qui a zram-generator ; le tester ici faisait
+  # conclure « swap déjà actif » et le fichier disque n'était JAMAIS créé — alors que le zram est de la RAM comprimée
+  # et se remplit (gk3 : 3,8 Go de zram pleins, plus rien à évincer, le tueur de mémoire global abat le moteur vocal).
+  if swapon --show=NAME --noheadings | grep -vq '^/dev/zram'; then
+    ok "disk swap already active: $(swapon --show=NAME --noheadings | grep -v '^/dev/zram' | tr '\n' ' ')"
     return 0
   fi
 
-  if [[ ! -d "$(dirname "$swap_path")" ]]; then
-    warn "swap parent dir $(dirname "$swap_path") missing, skipping"
+  # Où placer le fichier : le chemin configuré (/data : le gros disque des boards à eMMC), sinon le repli
+  # /srv/secubox (gk3 : le SSD est sous /, /data n'a que 4 Go). Jamais une carte eMMC/SD : l'usure d'un swap la tuerait.
+  local candidat dir source free_gb choisi=""
+  for candidat in "$swap_path" "$repli"; do
+    [[ -n "$candidat" ]] || continue
+    dir="$(dirname "$candidat")"
+    if [[ ! -d "$dir" ]]; then log "$dir absent, essai suivant"; continue; fi
+    source="$(findmnt -no SOURCE -T "$dir" 2>/dev/null || true)"
+    if [[ "$source" == /dev/mmcblk* ]]; then log "$dir sur $source (eMMC/SD) : refusé pour un swap"; continue; fi
+    free_gb=$(df --output=avail -BG "$dir" | tail -1 | tr -d 'G ')
+    if [[ "$free_gb" -lt "$min_free_gb" ]]; then log "$dir : ${free_gb}G libres < ${min_free_gb}G requis, essai suivant"; continue; fi
+    choisi="$candidat"
+    break
+  done
+  if [[ -z "$choisi" ]]; then
+    warn "aucun emplacement de swap disque convenable ($swap_path, $repli) : swap disque non créé"
     return 0
   fi
-
-  local free_gb
-  free_gb=$(df --output=avail -BG "$(dirname "$swap_path")" | tail -1 | tr -d 'G ')
-  if [[ "$free_gb" -lt "$min_free_gb" ]]; then
-    warn "/data free space ${free_gb}G < required ${min_free_gb}G; skipping swap creation"
-    return 0
-  fi
+  swap_path="$choisi"
 
   if [[ -f "$swap_path" ]]; then
     log "$swap_path exists, activating"

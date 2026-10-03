@@ -127,3 +127,39 @@ def test_le_vhost_est_route_vers_l_inspection(generation):
     """Garde-fou de charte : waf_enabled sans waf_bypass ⇒ sbxwaf_inspector."""
     cfg, _, _ = generation
     assert "use_backend sbxwaf_inspector if host_hall" in cfg
+
+
+# ── VoiceStudio (#1917) : des délais LONGS, et seulement pour lui ─────────────────────────────────────────────────
+def _backend_inspecteur(cfg: str) -> str:
+    debut = cfg.index("\nbackend sbxwaf_inspector")        # en début de ligne : « use_backend sbxwaf_inspector » en contient aussi
+    return cfg[debut:cfg.index("\nbackend ", debut + 10)]
+
+
+def test_la_synthese_vocale_n_est_plus_coupee_a_30_secondes(generation):
+    """Vu en production : « Synthèse : HTTP 504 » — HAProxy abandonnait à 30 s, le moteur continuait de travailler."""
+    bloc = _backend_inspecteur(generation[0])
+    assert "acl est_voix_longue path_beg /api/v1/voicestudio/essai/ /api/v1/voicestudio/usager/dire /api/v1/voicestudio/usager/transcrire" in bloc
+    assert "http-request set-timeout server 10m if est_voix_longue" in bloc
+
+
+def test_le_domaine_du_studio_natif_a_un_delai_d_une_heure(generation):
+    bloc = _backend_inspecteur(generation[0])
+    assert "acl est_studio_natif hdr_beg(host) -i voicestudio." in bloc
+    assert "http-request set-timeout server 1h if est_studio_natif" in bloc
+
+
+def test_les_delais_longs_restent_des_exceptions_les_30_secondes_protegent_le_reste(generation):
+    cfg, _, _ = generation
+    assert "timeout server 30s" in cfg                                           # la protection générale est intacte
+    bloc = _backend_inspecteur(cfg)
+    # exactement trois exceptions : dépôts de fichiers, voix, studio — rien de plus
+    assert bloc.count("set-timeout server") == 3
+    for interdit in ("path_beg /api/v1/ ", "path_beg / ", "hdr_beg(host) -i hall", "hdr_beg(host) -i admin"):
+        assert interdit not in bloc
+
+
+def test_les_commentaires_voicestudio_n_ont_pas_ete_executes_par_bash(generation):
+    """Les commentaires du générateur sont dans un heredoc non quoté : un accent grave y deviendrait une commande."""
+    cfg, _, err = generation
+    assert "command not found" not in err
+    assert "VOIX ET STUDIO (VoiceStudio, #1917)" in cfg and "Chemins et prefixe de domaine EXACTS" in cfg

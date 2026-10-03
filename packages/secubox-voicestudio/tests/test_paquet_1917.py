@@ -334,3 +334,20 @@ def test_la_cle_nginx_n_est_ecrite_que_par_le_ctl_et_en_0600():
     ctl = lire("sbin/voicestudioctl")
     assert "os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600" in ctl[ctl.index("def appliquer_vhost"):]
     assert "secubox-voicestudio-cle.conf" in ctl and "secubox-voicestudio-cle" not in lire("debian/rules")   # pas livrée par dpkg
+
+
+def test_la_console_montre_la_memoire_de_la_box_et_dit_ce_que_la_synthese_demande():
+    h = lire("www/voicestudio/index.html")
+    assert "memoire_hote" in h and "Mémoire de la box" in h and "Synthèse vocale" in h and "3800" in h
+
+
+def test_le_paquet_cree_le_swap_disque_et_recommande_son_paquet():
+    assert "secubox-tuning-apply swap" in lire("debian/postinst")
+    assert "secubox-system-tuning (>= 1.2.5)" in lire("debian/control") and "secubox-profiles" in lire("debian/control")
+
+
+def test_la_configuration_livre_les_reglages_memoire():
+    d = tomllib.loads(lire("conf/voicestudio.toml"))
+    assert d["moteur"]["liberation_modele_s"] == 60 and d["moteur"]["precharger_dictee"] is False
+    assert d["memoire"]["besoin_synthese_mo"] == 3800 and d["memoire"]["modele_residente_mo"] == 2500
+    assert d["memoire"]["delai_repetition_s"] == 120

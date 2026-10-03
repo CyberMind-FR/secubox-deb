@@ -369,6 +369,25 @@ async def _liste_voix() -> dict:
         raise _indisponible(e) from e
 
 
+async def _place_pour_synthese(qui: dict) -> None:
+    """Avant une SYNTHÈSE (seule opération qui charge le grand modèle, ≈ 3,6 Go), s'assure que la box a la mémoire : le ctl
+    endort au besoin les AUTRES conteneurs endormables. Mémoire insuffisante → refus clair avec les chiffres ; vérification
+    impossible → refus aussi (par prudence : tenter à l'aveugle fait abattre le moteur, voire un autre service, par le tueur
+    de mémoire global). La dictée, elle, ne passe pas par ici (≈ 0,7 Go)."""
+    try:
+        r = await asyncio.to_thread(_ctl, "faire-de-la-place", _par(qui), 600)
+    except HTTPException as e:
+        raise HTTPException(503, "Vérification de la mémoire impossible (" + str(e.detail)[:120] + ") : synthèse non tentée par prudence.") from e
+    if r.get("suffisante", False):
+        return
+    go = lambda mo: f"{mo / 1024:.1f}".replace(".", ",")          # noqa: E731
+    endormis = ", ".join(e.get("id", "?") for e in r.get("endormis", []))
+    raise HTTPException(503, f"Mémoire insuffisante pour la synthèse : il faut environ {go(r.get('besoin_mo', 0))} Go libres, il en reste "
+                             f"{go(r.get('disponible_mo', 0))} Go (swap libre {go(r.get('swap_libre_mo', 0))} Go)."
+                             + (f" Conteneurs mis en sommeil : {endormis}." if endormis else " Aucun autre conteneur n'a pu être endormi.")
+                             + " La dictée reste disponible.")
+
+
 async def _dire(corps: DireIn, qui: dict, sem: asyncio.Semaphore) -> Response:
     _debit(qui, "dire", 20)
     texte = corps.texte.strip()
@@ -380,6 +399,8 @@ async def _dire(corps: DireIn, qui: dict, sem: asyncio.Semaphore) -> Response:
                                  "Découpez-le : une voix se pilote par phrases.")
     await _tour(sem)
     try:
+        # Sous le verrou « un calcul à la fois » : deux synthèses ne se disputent pas la libération de mémoire.
+        await _place_pour_synthese(qui)
         audio = await _moteur().dire(texte, corps.voix, corps.format)
     except MoteurIndisponible as e:
         raise _indisponible(e) from e

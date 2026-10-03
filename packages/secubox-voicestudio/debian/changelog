@@ -1,3 +1,20 @@
+secubox-voicestudio (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * MÉMOIRE (gk3, 8 Go) : une synthèse vocale charge un modèle de ≈ 3,6 Go ; le tueur de mémoire global a abattu le moteur
+    (swap plein à 3,9/3,9 Go, zram saturé) et la requête sortait en « HTTP 504 ».
+    - Avant chaque SYNTHÈSE, `voicestudioctl faire-de-la-place` met en sommeil, du plus gros au plus petit, les AUTRES
+      conteneurs endormables (liste du sleeper, par secubox-profilectl : audité, 4R, réveil au premier accès ; jamais lxc-stop)
+      jusqu'à avoir assez de mémoire ; sinon la synthèse est REFUSÉE avec les chiffres (jamais tentée à l'aveugle). Au plus
+      4 conteneurs par salve, une salve toutes les 2 minutes. La dictée (≈ 0,7 Go) n'est pas concernée.
+    - Réglages du moteur poussés dans le LXC : le modèle de synthèse est rendu après 60 s d'inactivité (15 min par défaut),
+      dictée et filigrane non préchargés. Changer l'un d'eux relance le moteur.
+    - Swap disque créé à l'installation (secubox-system-tuning >= 1.2.5).
+    - La console montre la mémoire de la box, le swap et la mémoire du moteur.
+  * Migration de configuration : la nouvelle section [memoire] portait le nom de l'ancienne clé à plat `memoire = "4g"` ; un
+    fichier déjà au nouveau schéma était pris pour un ancien et réécrit. Seule une valeur qui n'est pas une table compte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 12:30:00 +0200
+
 secubox-voicestudio (0.3.2-1~bookworm1) bookworm; urgency=high
 
   * `voicestudioctl interface` se fiait au code de sortie du script : celui-ci sort en 0 aussi quand il conclut
