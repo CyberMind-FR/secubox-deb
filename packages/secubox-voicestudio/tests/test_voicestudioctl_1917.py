@@ -1056,3 +1056,34 @@ def test_la_migration_laisse_les_donnees_en_0750(bac_a_sable, monkeypatch):
     reel = c.subprocess.run
     c.cmd_migrer_podman(lambda cmd, **k: reel(cmd, **k) if cmd[0] == "cp" else run(cmd, **k))
     assert stat.S_IMODE(c.donnees(c.charger()).stat().st_mode) == 0o750
+
+
+# ── journal : le fichier du moteur, pas journald (qui échoue dans le LXC non privilégié) ─────────
+def test_le_journal_vient_du_fichier_du_moteur_lxc_arrete_compris(bac_a_sable, capsys):
+    d = Path(c.donnees(c.charger()))
+    d.mkdir()
+    (d / "omnivoice.log").write_text("\n".join(f"2026-10-02 INFO ligne {i}" for i in range(1, 11)) + "\n")
+    run = LxcFaux("STOPPED")
+    assert c.cmd_logs(3, run) == 0
+    assert capsys.readouterr().out.splitlines() == ["2026-10-02 INFO ligne 8", "2026-10-02 INFO ligne 9", "2026-10-02 INFO ligne 10"]
+    assert not any(a[0] == "lxc-attach" for a in run.appels)
+
+
+def test_le_journal_est_borne_et_ne_lit_que_la_fin_du_fichier(bac_a_sable, capsys):
+    d = Path(c.donnees(c.charger()))
+    d.mkdir()
+    (d / "omnivoice.log").write_text("x" * 5_000_000 + "\nderniere ligne\n")      # gros fichier : on ne le charge pas en entier
+    c.cmd_logs(10_000, LxcFaux("STOPPED"))
+    sortie = capsys.readouterr().out
+    assert sortie.rstrip().endswith("derniere ligne") and len(sortie) < 300_000
+
+
+def test_le_journal_sans_fichier_ni_conteneur_le_dit(bac_a_sable, capsys):
+    assert c.cmd_logs(10, LxcFaux("STOPPED")) == 2
+    assert "jamais démarré" in capsys.readouterr().err
+
+
+def test_le_journal_retombe_sur_le_journal_du_lxc_si_le_fichier_manque(bac_a_sable):
+    run = LxcFaux("RUNNING")
+    c.cmd_logs(5, run)
+    assert any(a[0] == "lxc-attach" and "journalctl" in a for a in run.appels)

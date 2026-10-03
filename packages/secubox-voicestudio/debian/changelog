@@ -1,3 +1,11 @@
+secubox-voicestudio (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * Journal : lu dans omnivoice.log (dossier de données, côté hôte) et non plus par journalctl dans le LXC,
+    où systemd-journald échoue (seccomp, LXC non privilégié) : l'onglet Journal du panneau était toujours
+    vide. Fonctionne LXC arrêté ; repli sur le journal du LXC si le fichier n'existe pas encore.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 07:30:00 +0200
+
 secubox-voicestudio (0.2.2-1~bookworm1) bookworm; urgency=high
 
   * L'API ne pouvait pas appeler voicestudioctl : ProtectKernelTunables, RestrictSUIDSGID et LockPersonality

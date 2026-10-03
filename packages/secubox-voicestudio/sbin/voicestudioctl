@@ -734,10 +734,25 @@ def cmd_sleep(run=_run) -> int:
 
 
 def cmd_logs(n: int, run=_run) -> int:
+    """Journal du moteur. SOURCE : `omnivoice.log` dans le dossier de données (lisible côté hôte, LXC
+    arrêté compris). `journalctl` dans le LXC ne sert à rien : systemd-journald y échoue (seccomp, LXC non
+    privilégié) et n'a donc jamais d'entrée. Repli sur le journal si le fichier n'existe pas encore."""
     c = charger()
     n = max(1, min(n, 500))
+    f = donnees(c) / "omnivoice.log"
+    try:
+        with open(f, "rb") as h:
+            h.seek(0, os.SEEK_END)
+            h.seek(max(0, h.tell() - 262144))        # les 256 derniers Kio suffisent à 500 lignes
+            fin = h.read().decode("utf-8", "replace").splitlines()
+        sys.stdout.write("\n".join(fin[-n:]) + "\n")
+        return 0
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        raise Erreur(f"journal illisible ({e.strerror})") from e
     if etat_lxc(c, run) != "RUNNING":
-        print("voicestudioctl : LXC arrêté — pas de journal vivant", file=sys.stderr)
+        print("voicestudioctl : pas encore de journal (le moteur n'a jamais démarré)", file=sys.stderr)
         return 2
     r = run(["lxc-attach", "-P", lxc_chemin(c), "-n", lxc_nom(c), "--",
              "journalctl", "-u", "voicestudio.service", "-n", str(n), "--no-pager", "-o", "short-iso"],
