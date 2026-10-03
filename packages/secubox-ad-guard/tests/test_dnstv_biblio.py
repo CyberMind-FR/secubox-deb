@@ -222,3 +222,85 @@ def test_le_resultat_est_serialisable_en_json(tmp_path):
     m = dnstv.Magasin(tmp_path / "t.db")
     _alimente(m, {"192.168.1.50": BLOQUE})
     json.dumps(m.statistiques())
+
+
+# ── visualisation : flux récents, séries, services, regroupement par appareil ───────────────────────────────────────────
+def _evt(client, nom, decision="ALLOWED", ts=None, rcode="NOERROR"):
+    return dnstv.Evenement(ts or int(time.time()), client, nom, "A", rcode, decision)
+
+
+def test_les_flux_recents_sont_ordonnes_filtres_par_source_et_bornes(tmp_path):
+    m = dnstv.Magasin(tmp_path / "t.db")
+    now = int(time.time())
+    m.ajouter([(_evt("10.0.0.2", "a.example", ts=now - 30), None), (_evt("10.0.0.2", "b.example", "BLOCKED", ts=now - 10), "advertising"),
+               (_evt("2a01::5", "c.example", ts=now - 5), None), (_evt("10.0.0.9", "autre.example", ts=now - 1), None)])
+    r = m.recents(["10.0.0.2", "2a01::5"], now - 60, 10)                  # une SOURCE = ses deux adresses
+    assert [x["domaine"] for x in r] == ["c.example", "b.example", "a.example"]
+    assert r[1]["decision"] == "BLOCKED" and r[1]["categorie"] == "advertising"
+    assert m.recents(["10.0.0.2"], now - 20, 10)[0]["domaine"] == "b.example"
+    assert len(m.recents(None, now - 60, 2)) == 2
+
+
+def test_la_serie_regroupe_par_tranche_et_compte_les_blocages(tmp_path):
+    m = dnstv.Magasin(tmp_path / "t.db")
+    base = (int(time.time()) // 300) * 300 - 600
+    m.ajouter([(_evt("10.0.0.2", "a.example", ts=base + 10), None), (_evt("10.0.0.2", "b.example", "BLOCKED", ts=base + 20), "tracking"),
+               (_evt("10.0.0.2", "c.example", ts=base + 310), None)])
+    s = m.serie(["10.0.0.2"], base - 1, 300)
+    assert [(p["ts"], p["requetes"], p["bloquees"], p["classees"]) for p in s] == [(base, 2, 1, 1), (base + 300, 1, 0, 0)]
+
+
+def test_le_flux_par_domaine_donne_requetes_blocages_et_derniere_vue(tmp_path):
+    m = dnstv.Magasin(tmp_path / "t.db")
+    now = int(time.time())
+    m.ajouter([(_evt("10.0.0.2", "x.example", ts=now - 9), None)] * 3 + [(_evt("10.0.0.2", "x.example", "BLOCKED", ts=now - 2), "advertising"),
+                                                                           (_evt("10.0.0.2", "y.example", ts=now - 1), None)])
+    f = {x["domaine"]: x for x in m.flux(["10.0.0.2"], now - 60)}
+    assert f["x.example"]["requetes"] == 4 and f["x.example"]["bloquees"] == 1 and f["x.example"]["categorie"] == "advertising"
+    assert f["y.example"]["requetes"] == 1 and f["x.example"]["derniere"] == now - 2
+
+
+def test_les_flux_recents_sont_bornes_et_purges(tmp_path, monkeypatch):
+    monkeypatch.setattr(dnstv, "RECENTS_MAX", 50)
+    m = dnstv.Magasin(tmp_path / "t.db")
+    now = int(time.time())
+    m.ajouter([(_evt("10.0.0.2", f"n{i}.example", ts=now), None) for i in range(120)])
+    assert len(m.recents(None, 0, 1000)) <= 50
+    m.ajouter([(_evt("10.0.0.2", "vieux.example", ts=now - 3 * 86400), None)])         # plus vieux que la fenêtre : purgé dès l'écriture
+    assert all(x["domaine"] != "vieux.example" for x in m.recents(None, 0, 1000))
+
+
+def test_les_services_donnent_organisation_et_type_sans_rien_inventer():
+    cl = dnstv.ClasseurServices(dnstv.charger_services(LISTES / "services.txt"))
+    assert cl.classer("7cd77.v.fwmrm.net") == ("FreeWheel", "publicite")
+    assert cl.classer("cloudreplay.ftven.fr") == ("France Télévisions", "contenu")
+    assert cl.classer("videos-pub.ftv-publicite.fr")[1] == "publicite"             # le plus long suffixe gagne : pas « ftven.fr » pour ftv-publicite
+    assert cl.classer("domaine-jamais-vu.example") == ("", "inconnu")
+    assert cl.classer("notfwmrm.net") == ("", "inconnu")                           # un suffixe ne s'applique qu'à une frontière de nom
+
+
+def test_un_fichier_de_services_invalide_est_ignore_ligne_par_ligne(tmp_path):
+    f = tmp_path / "s.txt"
+    f.write_text("ok.example Orga contenu\nmauvais type_inexistant\nx.example Orga typeinconnu\n!!.example Orga contenu\n")
+    assert dnstv.charger_services(f) == [("ok.example", "Orga", "contenu")]
+
+
+def test_une_source_regroupe_l_ipv4_et_les_ipv6_d_un_meme_appareil():
+    voisins = {"192.168.1.95": "38:07:16:93:4e:95", "2a01:e0a::1": "38:07:16:93:4e:95", "fe80::1": "38:07:16:93:4e:95", "192.168.1.3": "d4:93:90:27:a7:dd"}
+    g = dnstv.regrouper_sources(["192.168.1.95", "2a01:e0a::1", "192.168.1.3", "10.9.9.9"], voisins)
+    assert g == {"38:07:16:93:4e:95": ["192.168.1.95", "2a01:e0a::1"], "d4:93:90:27:a7:dd": ["192.168.1.3"], "10.9.9.9": ["10.9.9.9"]}
+
+
+def test_la_table_des_voisins_est_lue_en_json_ipv4_et_ipv6():
+    class R:
+        def __init__(self, s):
+            self.stdout = s
+    def faux(cmd, **k):
+        return R(json.dumps([{"dst": "192.168.1.95", "lladdr": "38:07:16:93:4E:95", "state": ["REACHABLE"]}, {"dst": "192.168.1.9", "state": ["FAILED"]}])
+                 if cmd[2] == "-4" else json.dumps([{"dst": "2a01::7", "lladdr": "38:07:16:93:4e:95"}]))
+    assert dnstv.lire_voisins(faux) == {"192.168.1.95": "38:07:16:93:4e:95", "2a01::7": "38:07:16:93:4e:95"}
+
+
+def test_le_manifeste_couvre_aussi_les_services():
+    assert dnstv.verifier_manifeste(LISTES) == []
+    assert "services.txt" in json.loads((LISTES / "MANIFEST.json").read_text())

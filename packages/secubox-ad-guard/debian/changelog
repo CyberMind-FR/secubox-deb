@@ -1,3 +1,15 @@
+secubox-ad-guard (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * POC DNS AdBlock TV (ref #1943) : VISUALISATION des flux DNS, au niveau des noms (l'équivalent DNS d'un DPI) : flux en direct (rafraîchi toutes
+    les 3 s), statistiques par SOURCE (les adresses IPv4 et IPv6 d'un même appareil sont regroupées par adresse MAC — l'IPv6 de confidentialité
+    d'une TV change, sa MAC non), taux de blocage, histogramme requêtes/blocages, synthèse par SERVICE et par TYPE (contenu, publicité, mesure
+    d'audience, analytique, qualité vidéo…) d'après lists/services.txt (un nom inconnu reste « inconnu » : aucune organisation inventée).
+    Routes /adblock-tv/{live,sources,serie,flux}. Table dnstv_recents (48 h, 20 000 lignes au plus). Le DNS ne donne ni volumes ni contenu : dit
+    dans l'interface et dans chaque réponse. Un vrai DPI ne verrait ces flux que s'ils traversaient la box.
+  * L'interface tolère une réponse d'API incomplète (champ absent) au lieu de s'arrêter.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 01:40:00 +0200
+
 secubox-ad-guard (1.2.3-1~bookworm1) bookworm; urgency=low
 
   * tools/tv-before-after.py : le mode local (1.2.2) importait la bibliothèque du POC AVANT d'avoir ajouté son chemin (ModuleNotFoundError) —

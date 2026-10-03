@@ -98,3 +98,52 @@ def test_dns_path_test_depuis_l_interface(navigateur):
     p.wait_for_function("document.getElementById('tv-path').textContent.includes('✅')")
     assert "192.168.1.50" in p.inner_text("#tv-path")
     ctx.close()
+
+
+def test_visualisation_flux_sources_services_et_serie_sans_executer_de_html(navigateur):
+    appels = []
+    ctx = navigateur.new_context()
+    p = ctx.new_page()
+    erreurs = []
+    p.on("pageerror", lambda e: erreurs.append(str(e)))
+    piege = "<img src=x onerror=window.__pwn=1>.example"
+
+    def api(route):
+        chemin = re.sub(r"^.*?/api/v1/ad-guard", "", route.request.url).split("?")[0]
+        appels.append(route.request.url)
+        r = {}
+        if chemin == "/adblock-tv/status":
+            r = {"actif": True, "clients": [], "erreur": None, "listes": {"domaines": 32}, "compteurs": {}}
+        elif chemin == "/adblock-tv/stats":
+            r = {"requetes": 0, "domaines_uniques": 0, "classes_resolus": {}, "classes_bloques": {}, "par_decision": {}, "top_bloques": []}
+        elif chemin == "/adblock-tv/sources":
+            r = {"sources": [{"source": "38:07:16:93:4e:95", "nom": "Freebox TV <b>salon</b>", "adresses": ["192.168.1.95", "2a01:e0a:dec:c4e0:c147:c3cf:6dd7:3429"],
+                              "requetes": 288, "bloquees": 222, "taux_blocage": 0.771, "domaines_uniques": 26, "par_type": {"publicite": 200, "contenu": 88}, "derniere": 1}]}
+        elif chemin == "/adblock-tv/live":
+            r = {"evenements": [{"ts": 1791030000, "client": "192.168.1.95", "domaine": piege, "qtype": "A", "decision": "BLOCKED", "categorie": "advertising",
+                                 "service": "FreeWheel", "type": "publicite"}]}
+        elif chemin == "/adblock-tv/serie":
+            r = {"pas_s": 300, "points": [{"ts": 1791029700, "requetes": 40, "bloquees": 30, "classees": 30}, {"ts": 1791030000, "requetes": 10, "bloquees": 2, "classees": 2}]}
+        elif chemin == "/adblock-tv/flux":
+            r = {"domaines": [], "services": [{"service": "FreeWheel", "type": "publicite", "requetes": 200, "bloquees": 200, "domaines": 3}]}
+        elif chemin == "/adblock-tv/custom":
+            r = {"domaines": []}
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(r))
+    p.route("http://sbx.test/api/v1/ad-guard/**", api)
+    p.route("http://sbx.test/shared/**", lambda r: r.fulfill(status=200, content_type="application/javascript", body=""))
+    p.route("http://sbx.test/", lambda r: r.fulfill(status=200, content_type="text/html", body=PAGE.read_text(encoding="utf-8")))
+    p.goto("http://sbx.test/")
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_selector("#tv-live tr td")
+    assert "FreeWheel" in p.inner_text("#tv-live") and "BLOCKED" in p.inner_text("#tv-live") and "publicite" in p.inner_text("#tv-live")
+    assert p.evaluate("window.__pwn === undefined") and p.evaluate("document.querySelectorAll('#tv-live img, #tv-sources b').length") == 0     # texte, jamais du HTML
+    assert "77 %" in p.inner_text("#tv-sources") and "publicite 200" in p.inner_text("#tv-sources")
+    assert p.evaluate("document.querySelectorAll('#tv-serie svg rect').length") == 4
+    assert "FreeWheel" in p.inner_text("#tv-services")
+    assert any("serie?" in u for u in appels) and any("live?" in u for u in appels)
+    p.select_option("#tv-source", "38:07:16:93:4e:95")
+    p.wait_for_timeout(400)
+    assert any("source=38%3A07%3A16%3A93%3A4e%3A95" in u for u in appels)               # le filtre par source est transmis
+    assert "pas les volumes" in p.inner_text("#adblocktv")
+    assert not erreurs
+    ctx.close()

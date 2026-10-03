@@ -282,3 +282,51 @@ def test_export_donne_les_compteurs_d_un_appareil_pour_comparer_deux_instants(ap
     assert r["client"] == "192.168.1.50" and r["lignes"] == [{"domaine": "ads.example", "categorie": "advertising", "decision": "ALLOWED", "hits": 1}]
     assert len(api.get("/adblock-tv/export").json()["lignes"]) == 2
     assert api.get("/adblock-tv/export?client=pas-une-ip").status_code == 422
+
+
+# ── visualisation : /live /sources /serie /flux ──────────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def vue(api, monde, monkeypatch):
+    from api import dnstv_routes as r
+    monkeypatch.setattr(r, "_voisins", lambda: {"192.168.1.95": "38:07:16:93:4e:95", "2a01:e0a::7": "38:07:16:93:4e:95", "192.168.1.3": "d4:93:90:27:a7:dd"})
+    monkeypatch.setattr(r, "_passerelle", lambda: None)
+    r._CACHE["services"] = (0.0, None)
+    m = dnstv.Magasin(monde["etat"] / "dnstv.db")
+    now = int(time.time())
+
+    def e(client, nom, dec="ALLOWED", dt=5):
+        return dnstv.Evenement(now - dt, client, nom, "A", "NXDOMAIN" if dec == "BLOCKED" else "NOERROR", dec)
+    m.ajouter([(e("192.168.1.95", "cloudreplay.ftven.fr"), None), (e("2a01:e0a::7", "7cd77.v.fwmrm.net", "BLOCKED"), "advertising"),
+               (e("2a01:e0a::7", "7cd77.v.fwmrm.net", "BLOCKED"), "advertising"), (e("192.168.1.3", "example.com"), None)])
+    dnstv.ecrire_etat({"actif": True, "clients": [{"ip": "192.168.1.95", "nom": "Freebox TV salon", "mode": "observe"}]}, monde["etat"])
+    return api
+
+
+def test_sources_regroupe_ipv4_et_ipv6_d_une_tv_et_donne_les_taux(vue):
+    r = vue.get("/adblock-tv/sources").json()
+    tv = next(s for s in r["sources"] if s["source"] == "38:07:16:93:4e:95")
+    assert sorted(tv["adresses"]) == ["192.168.1.95", "2a01:e0a::7"] and tv["nom"] == "Freebox TV salon"
+    assert tv["requetes"] == 3 and tv["bloquees"] == 2 and tv["taux_blocage"] == 0.667 and tv["domaines_uniques"] == 2
+    assert tv["par_type"] == {"contenu": 1, "publicite": 2}
+    assert "limite" in r and len(r["sources"]) == 2
+
+
+def test_live_filtre_par_source_mac_ou_adresse_et_etiquette_les_services(vue):
+    for source in ("38:07:16:93:4e:95", "192.168.1.95", "2a01:e0a::7"):                # la MAC, l'IPv4 ou l'IPv6 : la MÊME source
+        ev = vue.get(f"/adblock-tv/live?source={source}").json()["evenements"]
+        assert {x["domaine"] for x in ev} == {"cloudreplay.ftven.fr", "7cd77.v.fwmrm.net"}
+    ev = {x["domaine"]: x for x in vue.get("/adblock-tv/live").json()["evenements"]}
+    assert ev["7cd77.v.fwmrm.net"]["service"] == "FreeWheel" and ev["7cd77.v.fwmrm.net"]["type"] == "publicite" and ev["7cd77.v.fwmrm.net"]["decision"] == "BLOCKED"
+    assert vue.get("/adblock-tv/live?source=pas-une-source").status_code == 422
+
+
+def test_flux_donne_la_synthese_par_service_et_dit_ses_limites(vue):
+    r = vue.get("/adblock-tv/flux?source=38:07:16:93:4e:95").json()
+    svc = {s["service"]: s for s in r["services"]}
+    assert svc["FreeWheel"]["requetes"] == 2 and svc["FreeWheel"]["bloquees"] == 2 and svc["France Télévisions"]["type"] == "contenu"
+    assert "pas de volumes" in r["limite"]
+
+
+def test_serie_rend_des_tranches(vue):
+    p = vue.get("/adblock-tv/serie?source=38:07:16:93:4e:95&heures=1&pas=300").json()
+    assert p["pas_s"] == 300 and sum(x["requetes"] for x in p["points"]) == 3 and sum(x["bloquees"] for x in p["points"]) == 2

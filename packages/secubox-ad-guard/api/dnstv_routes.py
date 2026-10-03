@@ -278,6 +278,146 @@ async def contournement(minutes: int = 60):
             "limite": "un appareil silencieux peut simplement ne rien résoudre ; un DNS externe n'est visible que s'il passe par la box"}
 
 
+# ── visualisation : flux en direct, sources, séries, services ────────────────────────────────────────────────────────────
+_CACHE: dict = {"voisins": (0.0, {}), "noms": {}, "services": (0.0, None)}
+
+
+def _voisins() -> dict:
+    t, v = _CACHE["voisins"]
+    if time.time() - t > 20:
+        v = dnstv.lire_voisins()
+        _CACHE["voisins"] = (time.time(), v)
+    return v
+
+
+def _services() -> dnstv.ClasseurServices:
+    t, c = _CACHE["services"]
+    if c is None or time.time() - t > 300:
+        f = dnstv.DOSSIER_LISTES / "services.txt"
+        c = dnstv.ClasseurServices(dnstv.charger_services(f) if f.is_file() else [])
+        _CACHE["services"] = (time.time(), c)
+    return c
+
+
+def _passerelle() -> Optional[str]:
+    try:
+        r = subprocess.run(["ip", "-j", "route", "show", "default"], capture_output=True, text=True, timeout=5)
+        return json.loads(r.stdout or "[]")[0].get("gateway")
+    except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+        return None
+
+
+def _nom_pour(ips: List[str], declares: dict) -> str:
+    """Nom lisible d'une source : celui déclaré dans le POC, sinon le nom que le routeur du réseau lui donne (DNS inverse, mis en cache 1 h)."""
+    for ip in ips:
+        if ip in declares:
+            return declares[ip]
+    gw = _passerelle()
+    for ip in ips:
+        if ":" in ip or not gw or not ip.startswith(("192.168.", "10.", "172.")):
+            continue
+        t, n = _CACHE["noms"].get(ip, (0.0, None))
+        if n is None or time.time() - t > 3600:
+            try:
+                r = subprocess.run(["dig", "+short", "+time=2", "+tries=1", "-x", ip, f"@{gw}"], capture_output=True, text=True, timeout=5)
+                n = (r.stdout.split("\n")[0] or "").rstrip(".")
+            except (OSError, subprocess.TimeoutExpired):
+                n = ""
+            _CACHE["noms"][ip] = (time.time(), n)
+        if n:
+            return n
+    return ""
+
+
+def _sources() -> dict:
+    """clé (MAC ou adresse) -> {ips, nom}. Les adresses IPv4 et IPv6 d'un même appareil forment UNE source."""
+    declares = {c["ip"]: c["nom"] for c in dnstv.lire_etat()[0]["clients"]}
+    groupes = dnstv.regrouper_sources([c["client"] for c in _magasin().par_client()], _voisins())
+    return {k: {"ips": ips, "nom": _nom_pour(ips, declares)} for k, ips in groupes.items()}
+
+
+def _ips_de(source: Optional[str]) -> Optional[List[str]]:
+    if not source:
+        return None
+    src = _sources()
+    cle = source.lower()
+    if cle in src:
+        return src[cle]["ips"]
+    try:
+        ip = dnstv._ip(source)
+    except dnstv.ErreurTV as e:
+        raise HTTPException(422, "source inconnue (adresse MAC ou IP attendue)") from e
+    for v in src.values():                                               # une adresse : toute sa source
+        if ip in v["ips"]:
+            return v["ips"]
+    return [ip]
+
+
+def _etiqueter(lignes: List[dict]) -> List[dict]:
+    cl = _services()
+    for x in lignes:
+        x["service"], x["type"] = cl.classer(x["domaine"])
+    return lignes
+
+
+@router.get("/sources", dependencies=[Depends(require_lecture)])
+async def sources(heures: int = 24):
+    """Une ligne par APPAREIL : requêtes, blocages, taux, domaines uniques, répartition par type de service."""
+    depuis = int(time.time()) - max(1, min(heures, 48)) * 3600
+    m = _magasin()
+    out = []
+    for cle, v in _sources().items():
+        fl = _etiqueter(m.flux(v["ips"], depuis))
+        if not fl:
+            continue
+        req = sum(x["requetes"] for x in fl)
+        blq = sum(x["bloquees"] or 0 for x in fl)
+        par_type: dict = {}
+        for x in fl:
+            par_type[x["type"]] = par_type.get(x["type"], 0) + x["requetes"]
+        out.append({"source": cle, "nom": v["nom"], "adresses": v["ips"], "requetes": req, "bloquees": blq,
+                    "taux_blocage": round(blq / req, 3) if req else 0.0, "domaines_uniques": len(fl), "par_type": par_type,
+                    "derniere": max(x["derniere"] for x in fl)})
+    out.sort(key=lambda x: -x["requetes"])
+    return {"heures": heures, "sources": out,
+            "limite": "le DNS montre les NOMS demandés, pas les volumes ni le contenu ; un appareil qui n'interroge pas cette box n'apparaît pas"}
+
+
+@router.get("/live", dependencies=[Depends(require_lecture)])
+async def en_direct(source: Optional[str] = None, secondes: int = 120, limite: int = 60):
+    """Les dernières requêtes (flux en cours), la plus récente d'abord, avec le service et le type de chaque nom."""
+    depuis = int(time.time()) - max(5, min(secondes, 3600))
+    ips = _ips_de(source)
+    lignes = _magasin().recents(ips, depuis, limite)
+    cl = _services()
+    for x in lignes:
+        x["service"], x["type"] = cl.classer(x["domaine"])
+    return {"maintenant": int(time.time()), "source": source, "evenements": lignes}
+
+
+@router.get("/serie", dependencies=[Depends(require_lecture)])
+async def serie(source: Optional[str] = None, heures: int = 6, pas: int = 300):
+    depuis = int(time.time()) - max(1, min(heures, 48)) * 3600
+    return {"pas_s": pas, "points": _magasin().serie(_ips_de(source), depuis, pas)}
+
+
+@router.get("/flux", dependencies=[Depends(require_lecture)])
+async def flux(source: Optional[str] = None, heures: int = 6):
+    """L'« équivalent DPI » : par nom de domaine, avec service, type et décisions ; plus la synthèse par service."""
+    depuis = int(time.time()) - max(1, min(heures, 48)) * 3600
+    lignes = _etiqueter(_magasin().flux(_ips_de(source), depuis))
+    par_service: dict = {}
+    for x in lignes:
+        k = (x["service"] or "(inconnu)", x["type"])
+        d = par_service.setdefault(k, {"service": k[0], "type": k[1], "requetes": 0, "bloquees": 0, "domaines": 0})
+        d["requetes"] += x["requetes"]
+        d["bloquees"] += x["bloquees"] or 0
+        d["domaines"] += 1
+    return {"heures": heures, "source": source, "domaines": lignes,
+            "services": sorted(par_service.values(), key=lambda d: -d["requetes"]),
+            "limite": "pas de volumes (octets) : le DNS ne les voit pas ; un vrai DPI ne verrait ces flux que s'ils traversaient la box"}
+
+
 @router.get("/limites", dependencies=[Depends(require_lecture)])
 async def limites():
     return {"limites": LIMITES}

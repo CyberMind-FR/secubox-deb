@@ -91,3 +91,9 @@ tv-before-after.py apprendre E P --appliquer     # → liste personnalisée ; pu
 - mettre en liste blanche « seul le flux par défaut passe » (refus par défaut de tout le reste) est une **étape ultérieure**, plus risquée (elle peut couper les mises à jour,
   l'heure, les services de la Freebox) ; elle n'est pas implémentée : elle suppose d'abord un apprentissage complet de ce qui est nécessaire.
 Pistes ensuite : une catégorie `consent` dans les listes (bandeaux cookies/consentement), et l'apprentissage continu par appareil.
+
+## 9. Visualisation (équivalent DPI au niveau des noms) — 1.3.0
+Onglet « DNS AdBlock TV » → « Visualisation des flux DNS » : flux en cours, par **source** (appareil, IPv4 + IPv6 regroupées par adresse MAC), taux de blocage, histogramme
+requêtes/blocages, synthèse par **service** et **type** (`lists/services.txt`). API : `/adblock-tv/live`, `/sources`, `/serie`, `/flux`.
+**Limites** : le DNS ne donne ni volumes (octets) ni contenu ; seul un DPI sur le trafic réel les donnerait, et il ne verrait la TV que si son trafic traversait la box
+(la box n'est pas la passerelle). Un nom absent de `services.txt` est affiché « inconnu ».
