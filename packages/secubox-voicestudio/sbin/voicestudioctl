@@ -1068,6 +1068,27 @@ def _groupe_secubox(chemin: Path) -> None:
 
 
 @sous_verrou()
+def _completer_depuis_les_defauts(actuel: dict) -> int:
+    """Ajoute à la configuration de la box les sections et clés NOUVELLES du paquet (une montée de version qui apporte
+    `[interface]` ne doit pas laisser les scripts sans valeur). Ne touche jamais à une clé existante : le choix de
+    l'opérateur l'emporte. Rend le nombre de clés ajoutées."""
+    try:
+        with open(CONF_DEFAUT, "rb") as h:
+            defauts = tomllib.load(h)
+    except (OSError, tomllib.TOMLDecodeError):
+        return 0
+    n = 0
+    for section, valeurs in defauts.items():
+        for cle, valeur in valeurs.items():
+            if cle not in actuel.get(section, {}):
+                ecrire_toml(section, cle, valeur)
+                n += 1
+    if n:
+        audit("migrer-conf", f"cles-ajoutees={n}")
+        print(f"voicestudioctl : {n} clé(s) nouvelle(s) ajoutée(s) à la configuration")
+    return n
+
+
 def cmd_migrer_conf() -> int:
     """Dépose le TOML par défaut s'il manque ; convertit l'ANCIEN schéma (podman : image, empreinte,
     publier/memoire/asr à plat) vers les sections. Les adresses publiées sont reprises telles
@@ -1083,6 +1104,7 @@ def cmd_migrer_conf() -> int:
     with open(CONF, "rb") as h:
         ancien = tomllib.load(h)
     if not any(k in ancien for k in ("image", "empreinte", *LEGACY)):
+        _completer_depuis_les_defauts(ancien)
         _groupe_secubox(CONF)
         return 0
     sauvegarde = CONF.with_name(CONF.name + ".avant-lxc")
