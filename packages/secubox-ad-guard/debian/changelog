@@ -1,3 +1,11 @@
+secubox-ad-guard (1.2.1-1~bookworm1) bookworm; urgency=low
+
+  * POC DNS AdBlock TV (ref #1943) : apprentissage DIFFÉRENTIEL dans tools/tv-before-after.py. Deux phases OBSERVE, E (flux vidéo par défaut seul)
+    et P (avec coupures publicitaires et bandeaux de consentement) ; `apprendre E P` propose les domaines vus en P et JAMAIS en E, `--appliquer`
+    les ajoute à la liste personnalisée. Aucun candidat inventé quand la publicité partage le domaine de la vidéo (limite C du banc).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 00:30:00 +0200
+
 secubox-ad-guard (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * POC « DNS AdBlock TV » (ref #1943) : MESURER ce que le filtrage DNS bloque réellement, par appareil (Freebox TV), en OBSERVE (rien n'est

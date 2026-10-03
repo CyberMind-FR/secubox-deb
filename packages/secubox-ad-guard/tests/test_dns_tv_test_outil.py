@@ -143,3 +143,28 @@ def test_le_rapport_ne_prete_aucun_chiffre_a_la_phase_non_mesurable_ni_sans_mesu
     md = m.rapport_markdown({"phases": {"A": {"ip": "192.168.1.50", "mode": "DNS habituel", "note": "tout marche", "duree_s": 300}}})
     assert "non mesurable côté box" in md and "tout marche" in md
     assert "réduction des domaines publicitaires/tracking résolus par DNS" in md
+
+
+def test_apprentissage_differentiel_propose_ce_qui_n_apparait_qu_avec_les_pubs():
+    m = _avant_apres()
+    essentiel = [{"domaine": "video.cdn.example", "categorie": "", "decision": "ALLOWED", "hits": 40},
+                 {"domaine": "api.chaine.example", "categorie": "", "decision": "ALLOWED", "hits": 5}]
+    pubs = essentiel + [{"domaine": "ads.reseau-pub.example", "categorie": "advertising", "decision": "ALLOWED", "hits": 9},
+                        {"domaine": "cmp.consent.example", "categorie": "", "decision": "ALLOWED", "hits": 3},
+                        {"domaine": "ads.reseau-pub.example", "categorie": "advertising", "decision": "ALLOWED", "hits": 2}]
+    c = m.candidats(essentiel, pubs, {"cmp.consent.example": "custom"})
+    assert [x["domaine"] for x in c] == ["ads.reseau-pub.example", "cmp.consent.example"]
+    assert c[0]["hits"] == 11 and c[0]["connu_des_listes"] == "advertising" and c[1]["connu_des_listes"] == "custom"
+    assert all(x["domaine"] not in ("video.cdn.example", "api.chaine.example") for x in c)         # le flux par défaut n'est JAMAIS proposé
+
+
+def test_apprentissage_publicite_sur_le_meme_domaine_que_la_video_ne_donne_rien():
+    """Cas C : la limite du DNS reste visible — aucun candidat n'est inventé."""
+    m = _avant_apres()
+    meme = [{"domaine": "video.studio.example", "categorie": "", "decision": "ALLOWED", "hits": 50}]
+    assert m.candidats(meme, meme + [{"domaine": "video.studio.example", "categorie": "", "decision": "ALLOWED", "hits": 20}]) == []
+
+
+def test_les_phases_e_et_p_sont_en_observe_jamais_en_block():
+    m = _avant_apres()
+    assert m.MODES["E"] == "observe" and m.MODES["P"] == "observe"

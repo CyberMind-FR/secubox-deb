@@ -73,3 +73,21 @@ tv-before-after.py debut C --ip 192.168.1.50 ;  …  ;  tv-before-after.py fin C
 tv-before-after.py rapport          # écrit reports/tv-before-after.md
 ```
 La phase A n'est pas mesurable côté box (la TV n'utilise pas son DNS) : c'est volontaire, elle sert de **référence fonctionnelle**.
+
+## 8. Apprentissage différentiel des domaines publicitaires / pistage / consentement (ajout du 2026-10-03)
+Idée de l'exploitant : ne garder que le **flux vidéo par défaut** et bloquer le reste autour. Mise en œuvre mesurée, en deux phases OBSERVE :
+- **E (essentiel)** : la TV lit seulement son flux vidéo par défaut, sans coupure publicitaire ni bandeau cookies.
+- **P (pubs)** : mêmes usages, en laissant passer les coupures publicitaires et les bandeaux de consentement.
+```
+tv-before-after.py debut E --ip 192.168.1.50 ;  … ;  tv-before-after.py fin E --note "flux par défaut seul"
+tv-before-after.py debut P --ip 192.168.1.50 ;  … ;  tv-before-after.py fin P --note "avec coupures pub et bandeaux"
+tv-before-after.py apprendre E P                 # domaines vus en P et JAMAIS en E
+tv-before-after.py apprendre E P --appliquer     # → liste personnalisée ; puis phase C (BLOCK) et contrôle sur la TV
+```
+**Ce que cela peut et ne peut pas faire** — c'est exactement la frontière des cas A–G du banc :
+- une publicité servie par un **domaine distinct** du flux (A, B) apparaît dans la différence : bloquable ;
+- une publicité servie par le **même domaine** que la vidéo (C) ou **insérée dans le flux** (D) n'apparaît **pas** : aucun candidat n'est inventé ;
+- un domaine **partagé** entre contenu et publicité (G) apparaît s'il n'est pas dans le flux de base, mais peut casser un service : à vérifier phase C ;
+- mettre en liste blanche « seul le flux par défaut passe » (refus par défaut de tout le reste) est une **étape ultérieure**, plus risquée (elle peut couper les mises à jour,
+  l'heure, les services de la Freebox) ; elle n'est pas implémentée : elle suppose d'abord un apprentissage complet de ce qui est nécessaire.
+Pistes ensuite : une catégorie `consent` dans les listes (bandeaux cookies/consentement), et l'apprentissage continu par appareil.

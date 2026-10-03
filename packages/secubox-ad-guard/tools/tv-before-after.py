@@ -29,7 +29,7 @@ import urllib.request
 from pathlib import Path
 
 ETAT = Path(os.environ.get("SBX_TV_PHASES", "reports/.tv-phases.json"))
-MODES = {"B": "observe", "C": "block"}
+MODES = {"B": "observe", "C": "block", "E": "observe", "P": "observe"}
 
 
 def api(chemin: str, methode: str = "GET", corps=None) -> dict:
@@ -64,6 +64,23 @@ def resumer(lignes) -> dict:
         r["domaines_" + c] = len({x["domaine"] for x in lignes if x["categorie"] == c})
         r["resolus_" + c] = sum(x["hits"] for x in lignes if x["categorie"] == c and x["decision"] == "ALLOWED")
     return r
+
+
+def candidats(base: list, avec: list, connus: dict = None) -> list:
+    """Domaines vus pendant la phase « avec pubs » et JAMAIS pendant la phase « essentiel » (différence d'ensembles de NOMS).
+
+    `connus` : domaine -> catégorie des listes du POC (un candidat déjà classé est marqué, jamais écarté)."""
+    vus_base = {x["domaine"] for x in base}
+    out: dict = {}
+    for x in avec:
+        if x["domaine"] in vus_base:
+            continue
+        c = out.setdefault(x["domaine"], {"domaine": x["domaine"], "hits": 0, "categorie": x.get("categorie") or ""})
+        c["hits"] += x["hits"]
+    res = sorted(out.values(), key=lambda c: (-c["hits"], c["domaine"]))
+    for c in res:
+        c["connu_des_listes"] = (connus or {}).get(c["domaine"], "") or c["categorie"]
+    return res
 
 
 def charger() -> dict:
@@ -107,8 +124,10 @@ def rapport_markdown(d: dict) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=["debut", "fin", "rapport"])
-    ap.add_argument("phase", nargs="?", choices=["A", "B", "C"])
+    ap.add_argument("action", choices=["debut", "fin", "rapport", "apprendre"])
+    ap.add_argument("phase", nargs="?", choices=["A", "B", "C", "E", "P"])
+    ap.add_argument("phase_pubs", nargs="?", choices=["B", "C", "E", "P"], help="(apprendre) la phase « avec pubs »")
+    ap.add_argument("--appliquer", action="store_true", help="(apprendre) ajoute les candidats à la liste personnalisée")
     ap.add_argument("--ip")
     ap.add_argument("--note", default="")
     ap.add_argument("--sortie", default="reports/tv-before-after.md")
@@ -119,8 +138,23 @@ def main(argv=None) -> int:
         Path(a.sortie).write_text(rapport_markdown(d), encoding="utf-8")
         print("rapport :", a.sortie)
         return 0
+    if a.action == "apprendre":
+        if not (a.phase and a.phase_pubs):
+            ap.error("apprendre <phase essentiel> <phase avec pubs>, ex. : apprendre E P")
+        base, avec = d["phases"].get(a.phase, {}), d["phases"].get(a.phase_pubs, {})
+        if "lignes" not in base or "lignes" not in avec:
+            sys.exit("les deux phases doivent être terminées et mesurées (debut puis fin)")
+        cands = candidats(base["lignes"], avec["lignes"])
+        print(f"{len(cands)} domaine(s) vus en {a.phase_pubs} et jamais en {a.phase} :")
+        for c in cands:
+            print(f"  {c['domaine']:45} {c['hits']:5} requêtes  {c['connu_des_listes'] or '(inconnu des listes)'}")
+        if a.appliquer:
+            for c in cands:
+                api("/adblock-tv/custom", "POST", {"domaine": c["domaine"]})
+            print(f"{len(cands)} domaine(s) ajouté(s) à la liste personnalisée. Passez la TV en BLOCK et vérifiez ce qui ne marche plus.")
+        return 0
     if not a.phase:
-        ap.error("phase A, B ou C requise")
+        ap.error("phase A, B, C, E ou P requise")
     ph = d["phases"].setdefault(a.phase, {})
     if a.action == "debut":
         if a.phase == "A":
