@@ -38,7 +38,7 @@ MODES = ("off", "observe", "block", "auto")
 DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 
 ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": []}
-MODES_DEFAUT = ("off", "observe", "auto", "block")
+MODES_DEFAUT = ("off", "auto")      # observe/block sortent un appareil du puits de production : réservés à la déclaration manuelle (revue #1959)
 MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
 DOSSIER_ETAT = Path(os.environ.get("SECUBOX_ADGUARD_TV_ETAT", "/var/lib/secubox/ad-guard/dnstv"))
 DOSSIER_LISTES = Path(os.environ.get("SECUBOX_ADGUARD_TV_LISTES", "/usr/share/secubox/ad-guard/lists"))
@@ -147,9 +147,17 @@ def _slug(nom: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(nom).lower()).strip("-")[:40] or "appareil"
 
 
+IP_SURE_RE = re.compile(r"[0-9a-fA-F:.]+")
+
+
 def _ip(valeur: str) -> str:
+    """Une adresse IP SANS identifiant de portée : `ipaddress` accepte `fe80::1%<n'importe quoi>` (revue #1959) et la valeur finit dans la configuration
+    d'Unbound écrite par root. Seuls [0-9a-fA-F:.] sont admis, jamais `%`, espace, saut de ligne ni `#`."""
+    brut = str(valeur).strip()
+    if not IP_SURE_RE.fullmatch(brut):
+        raise ErreurTV("adresse IP invalide")
     try:
-        return str(ipaddress.ip_address(str(valeur).strip()))
+        return str(ipaddress.ip_address(brut))
     except ValueError:
         raise ErreurTV("adresse IP invalide") from None
 
@@ -278,6 +286,8 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
     suivis = [c for c in etat["clients"] if c["mode"] != "off"]
     if etat["actif"]:
         for c in suivis:
+            if not IP_SURE_RE.fullmatch(c["ip"]):
+                raise ErreurTV("adresse IP invalide")             # défense en profondeur : jamais autre chose que [0-9a-fA-F:.] dans la configuration
             hote = "/128" if ":" in c["ip"] else "/32"
             vue = f"sbx-tv-auto-{_slug(c['nom'])}" if c["mode"] == "auto" else f"sbx-tv-{c['mode']}"
             L.append(f"    access-control-view: {c['ip']}{hote} {vue}")
@@ -592,7 +602,20 @@ def passerelles(executer=None) -> set:
     return out
 
 
-def lire_voisins(executer=None) -> Dict[str, str]:
+def interface_lan(executer=None) -> Optional[str]:
+    """Interface de la route par défaut (le LAN), ou None si elle est inconnue."""
+    import subprocess
+    try:
+        r = (executer or subprocess.run)(["ip", "-j", "route", "show", "default"], capture_output=True, text=True, timeout=10)
+        for route in json.loads(r.stdout or "[]"):
+            if route.get("dev"):
+                return str(route["dev"])
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
+def lire_voisins(executer=None, interface: Optional[str] = None) -> Dict[str, str]:
     """adresse IP -> adresse MAC, d'après la table des voisins (IPv4 ET IPv6) : regroupe les adresses d'un même appareil — l'IPv6 « de
     confidentialité » d'une TV change, sa MAC non."""
     import subprocess
@@ -601,6 +624,8 @@ def lire_voisins(executer=None) -> Dict[str, str]:
         try:
             r = (executer or subprocess.run)(["ip", "-j", fam, "neigh"], capture_output=True, text=True, timeout=10)
             for n in json.loads(r.stdout or "[]"):
+                if interface and n.get("dev") != interface:
+                    continue                                       # seulement l'interface du LAN : pas br-lxc ni wg* (revue #1959)
                 if n.get("dst") and n.get("lladdr"):
                     out[n["dst"]] = n["lladdr"].lower()
         except (OSError, ValueError, subprocess.TimeoutExpired):

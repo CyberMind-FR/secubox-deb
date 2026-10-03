@@ -20,13 +20,14 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 try:
-    from . import dnstv, dnstv_profil
+    from . import dnstv, dnstv_profil, dnstv_regles
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_profil
+    from api import dnstv, dnstv_profil, dnstv_regles
 
 FICHIER_SUIVI = "suivi-ajout.json"
 SUIVI_VIERGE = {"ajouts": [], "dernier_changement": 0}
 AJOUTS_MAX = 50
+ADRESSES_MAX_PAR_APPAREIL = 4          # une TV a une IPv4 et quelques IPv6 ; au-delà ce sont des entrées mortes du noyau ou une forgerie (revue #1959)
 
 
 def nom_appareil(mac: str, existants: set) -> str:
@@ -79,7 +80,7 @@ def _adresse_utilisable(brut) -> Optional[str]:
 
 
 def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vues: Dict[str, int], profil: List[Tuple[str, str]],
-              suivi: dict, reglage, maintenant: int) -> dict:
+              suivi: dict, reglage, maintenant: int, exclus=frozenset()) -> dict:
     """Modifie `etat`, `regles` et `suivi` EN PLACE et rend {"changements": [...], "etat_modifie": bool}. Rien si `ajout_auto` est faux."""
     rien = {"changements": [], "etat_modifie": False}
     if not etat.get("ajout_auto"):
@@ -97,15 +98,24 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
     for c in clients:
         if c.get("origine") == "auto" and c.get("mac"):
             auto.setdefault(c["mac"], c)
-    for ip, mac in sorted(voisins.items()):
+    fenetre = maintenant - reglage.retrait_jours * 86400
+    candidates = []
+    for ip, mac in voisins.items():
         modele = auto.get(mac)
         a = _adresse_utilisable(ip) if modele else None
-        if a and a not in ips and len(clients) < 32:
-            entree = {k: v for k, v in modele.items() if k not in ("ip", "ajoute", "preuve")}
-            entree.update(ip=a, ajoute=maintenant)
-            clients.append(entree)
-            ips.add(a)
-            changements.append({"type": "adresse+", "nom": modele["nom"], "detail": a})
+        # Une adresse n'est rattachée que si le DNS de la box l'a VUE récemment : la table des voisins du noyau garde des entrées mortes (STALE) et
+        # peut être alimentée par des paquets forgés. Jamais une adresse exclue (box, passerelle), jamais plus de ADRESSES_MAX_PAR_APPAREIL.
+        if a and a not in ips and a not in exclus and vues.get(a, 0) >= fenetre:
+            candidates.append((vues[a], a, mac))
+    for _, a, mac in sorted(candidates, reverse=True):
+        modele = auto[mac]
+        if len(clients) >= 32 or len([c for c in clients if c.get("mac") == mac]) >= ADRESSES_MAX_PAR_APPAREIL:
+            continue
+        entree = {k: v for k, v in modele.items() if k not in ("ip", "ajoute", "preuve")}
+        entree.update(ip=a, ajoute=maintenant)
+        clients.append(entree)
+        ips.add(a)
+        changements.append({"type": "adresse+", "nom": modele["nom"], "detail": a})
     for mac, modele in auto.items():
         adr = [c for c in clients if c.get("mac") == mac and c.get("origine") == "auto"]
         vue = {c["ip"]: max(vues.get(c["ip"], 0), c.get("ajoute", 0)) for c in adr}
@@ -122,13 +132,17 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
         mac = d.mac
         if not isinstance(mac, str) or not dnstv.MAC_RE.match(mac) or mac == "00:00:00:00:00:00" or mac in ignores or mac in connues:
             continue
-        adresses = [a for a in (_adresse_utilisable(x) for x in d.adresses) if a and a not in ips]
+        adresses = [a for a in (_adresse_utilisable(x) for x in d.adresses) if a and a not in ips and a not in exclus]
+        adresses = sorted(adresses, key=lambda a: -vues.get(a, 0))[:ADRESSES_MAX_PAR_APPAREIL]
         if not adresses:
             continue
         if ajouts_24h >= reglage.max_par_jour:
             continue
         if len(clients) + len(adresses) > 32:
             changements.append({"type": "refus", "nom": mac, "detail": "plafond de 32 adresses atteint"})
+            continue
+        if etat.get("mode_defaut", "auto") == "auto" and len(regles.liste()) + len(profil) > dnstv_regles.REGLES_MAX:
+            changements.append({"type": "refus", "nom": mac, "detail": "plafond de règles atteint : le profil de base n'entre pas"})
             continue
         nom = nom_appareil(mac, slugs)
         slugs.add(dnstv._slug(nom))

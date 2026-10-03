@@ -104,60 +104,69 @@ async def statut():
                           "bloques": stats["par_decision"].get("BLOCKED", 0)}}
 
 
+# Les routes qui écrivent l'état sont SYNCHRONES et prennent le verrou commun avec le moteur (revue #1959) : une action de l'administrateur n'est jamais
+# écrasée par un passage de la minuterie qui aurait lu l'état avant elle, et le sudo du contrôleur ne gèle pas la boucle du groupe.
 @router.post("/etat", dependencies=[Depends(require_jwt)])
-async def activer(corps: EtatIn):
-    etat = _etat()
-    etat["actif"] = corps.actif
-    dnstv.ecrire_etat(etat)
-    return {"etat": etat, "application": _ctl("apply")}
+def activer(corps: EtatIn):
+    with _verrou():
+        etat = _etat()
+        etat["actif"] = corps.actif
+        dnstv.ecrire_etat(etat)
+        return {"etat": etat, "application": _ctl("apply")}
 
 
 @router.post("/clients", dependencies=[Depends(require_jwt)])
-async def declarer_client(c: ClientIn):
-    etat = _etat()
-    try:
-        ip = dnstv._ip(c.ip)
-        etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [{"ip": ip, "nom": c.nom or ip, "mode": c.mode}]
-        dnstv.ecrire_etat(etat)
-    except dnstv.ErreurTV as e:
-        _refuse(e)
-    return {"etat": etat, "application": _ctl("apply")}
+def declarer_client(c: ClientIn):
+    with _verrou():
+        etat = _etat()
+        try:
+            ip = dnstv._ip(c.ip)
+            etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [{"ip": ip, "nom": c.nom or ip, "mode": c.mode}]
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        return {"etat": etat, "application": _ctl("apply")}
 
 
 @router.delete("/clients/{ip}", dependencies=[Depends(require_jwt)])
-async def retirer_client(ip: str):
-    etat = _etat()
-    try:
-        cible = dnstv._ip(ip)
-    except dnstv.ErreurTV as e:
-        _refuse(e)
-    avant = len(etat["clients"])
-    etat["clients"] = [x for x in etat["clients"] if x["ip"] != cible]
-    if len(etat["clients"]) == avant:
-        raise HTTPException(404, "appareil inconnu")
-    dnstv.ecrire_etat(etat)
-    return {"etat": etat, "application": _ctl("apply")}
+def retirer_client(ip: str):
+    with _verrou():
+        etat = _etat()
+        try:
+            cible = dnstv._ip(ip)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        avant = len(etat["clients"])
+        etat["clients"] = [x for x in etat["clients"] if x["ip"] != cible]
+        if len(etat["clients"]) == avant:
+            raise HTTPException(404, "appareil inconnu")
+        dnstv.ecrire_etat(etat)
+        return {"etat": etat, "application": _ctl("apply")}
 
 
 @router.post("/mode", dependencies=[Depends(require_jwt)])
-async def changer_mode(m: ModeIn):
+def changer_mode(m: ModeIn):
     """Bascule dynamique OBSERVE / BLOCK (ou off) : un appareil, ou tous ceux du périmètre."""
     if m.mode not in dnstv.MODES:
-        raise HTTPException(422, "mode inconnu (off, observe, block)")
-    etat = _etat()
-    try:
-        cible = dnstv._ip(m.ip) if m.ip else None
-    except dnstv.ErreurTV as e:
-        _refuse(e)
-    touches = 0
-    for c in etat["clients"]:
-        if cible is None or c["ip"] == cible:
-            c["mode"] = m.mode
-            touches += 1
-    if not touches:
-        raise HTTPException(404, "aucun appareil concerné")
-    dnstv.ecrire_etat(etat)
-    return {"etat": etat, "application": _ctl("apply")}
+        raise HTTPException(422, "mode inconnu (off, observe, block, auto)")
+    with _verrou():
+        etat = _etat()
+        try:
+            cible = dnstv._ip(m.ip) if m.ip else None
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        touches = 0
+        for c in etat["clients"]:
+            if cible is None or c["ip"] == cible:
+                c["mode"] = m.mode
+                touches += 1
+        if not touches:
+            raise HTTPException(404, "aucun appareil concerné")
+        try:
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        return {"etat": etat, "application": _ctl("apply")}
 
 
 @router.get("/stats", dependencies=[Depends(require_lecture)])

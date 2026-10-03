@@ -1,3 +1,22 @@
+secubox-ad-guard (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Ajout AUTOMATIQUE des TV et streamers (ref #1959). Un appareil est reconnu à son comportement DNS (requêtes d'insertion publicitaire + au moins deux services de contenu ou de
+    qualité vidéo, sur les 2 derniers jours), regroupé par adresse MAC (IPv4 et IPv6 ensemble, l'IPv6 de confidentialité qui change est suivie), puis ajouté en mode par défaut
+    (`auto`) avec le profil de base : les 35 domaines validés sur deux TV réelles, en règles CONFIRMÉES. DÉSACTIVÉ PAR DÉFAUT (`ajout_auto`, faux) : l'administrateur l'active dans le
+    panneau. Garde-fous : 3 nouveaux appareils par jour au plus, un changement du périmètre par heure au plus (chacun coûte un rechargement d'Unbound, ≈ 10 s sans DNS), 32
+    adresses au plus, jamais la box, la passerelle, une adresse de lien local ni un appareil sans MAC, liste `ignores` (« Retirer et ne plus ajouter »), audit de chaque ajout.
+  * PUITS COMPLET : en mode `auto`, la vue Unbound de l'appareil porte `view-first: yes` et PAS de zone transparente : l'appareil garde le puits de production (~656 000 domaines) ET reçoit
+    ses règles propres (mesuré sur l'Unbound 1.17.1 de gk2). Réglage `puits` par appareil (faux = ancien comportement transparent). CHANGEMENT DE COMPORTEMENT pour les appareils déjà en
+    `auto` (« TV banc ») : ils passent de leurs seules règles à puits complet + règles. Les modes observe et block ne changent pas : ils sortent toujours du puits.
+  * AGRÉGATION : un domaine confirmé PAR L'ADMINISTRATEUR sur au moins 2 appareils entre dans le profil agrégé ; les autres appareils le reçoivent comme CANDIDAT (jamais actif),
+    un nouvel appareil le reçoit en règle confirmée. Les règles issues du profil lui-même ne comptent jamais (pas d'auto-renforcement).
+  * Le journal ne contient plus les requêtes de la box elle-même (≈ 11 000 en 20 min, elles saturaient `dnstv_recents`).
+  * Routes /adblock-tv/auto/{detection,detection/reglage,appareils/{nom}/ignorer,appareils/{nom}/puits,profil} ; panneau : ajout automatique, mode par défaut, puits, profil agrégé.
+  * État : `mode_defaut`, `ajout_auto`, `ignores` ; appareil : `mac`, `origine`, `ajoute`, `preuve`, `puits` (écrits seulement hors valeur par défaut). TOML : `min_declencheurs`, `min_services`,
+    `max_par_jour`, `delai_s`, `retrait_jours`, `min_appareils_agreg` (valeurs de départ, à calibrer). NOTE DE DÉPLOIEMENT : redémarrer `secubox-aggregator` (il sert ce module dans son processus).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 21:00:00 +0200
+
 secubox-ad-guard (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * Fiche « DNS de la box » (ref #1938) en tête de l'onglet DNS AdBlock TV : adresses de gk2 sur le LAN (IPv4, IPv6 STABLE, IPv6 SLAAC), type, et si Unbound écoute

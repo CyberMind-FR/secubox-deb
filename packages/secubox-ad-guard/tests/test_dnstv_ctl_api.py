@@ -126,7 +126,7 @@ def test_les_decisions_sont_auditees_sans_secret(monde):
     ctl(monde, "apply")
     ctl(monde, "disable")
     lignes = [json.loads(ligne) for ligne in (monde["tmp"] / "audit.log").read_text().splitlines()]
-    assert [x["action"] for x in lignes] == ["apply", "disable"] and all(x["module"] == "ad-guard-tv" for x in lignes)
+    assert [x["action"] for x in lignes] == ["appareil", "apply", "disable"] and all(x["module"] == "ad-guard-tv" for x in lignes)    # #1959 : apply trace le périmètre
 
 
 def test_le_controleur_exige_root_et_une_seule_action(monde, monkeypatch):

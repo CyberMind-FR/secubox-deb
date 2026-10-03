@@ -311,7 +311,7 @@
                     <div style="display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap;">
                         <label><input type="checkbox" id="det-ajout" onchange="detAjout(this.checked)"> <b>Ajouter automatiquement</b> les appareils détectés</label>
                         <label>Mode par défaut :
-                            <select id="det-mode" onchange="detMode(this.value)"><option value="auto">auto (profil de base)</option><option value="observe">observe</option><option value="block">block</option><option value="off">off</option></select></label>
+                            <select id="det-mode" onchange="detMode(this.value)"><option value="auto">auto (profil de base)</option><option value="off">off (listé seulement)</option></select></label>
                         <span id="det-plafond" style="color:var(--text-dim);font-size:.85rem;"></span>
                     </div>
                     <p id="det-aide" style="color:var(--text-dim);font-size:.8rem;margin:.4rem 0;">Un appareil est reconnu à son comportement DNS (insertion publicitaire + services de contenu), regroupé par adresse MAC. Un appareil en observe ou en block
@@ -690,7 +690,7 @@
             etat.textContent = ''; tb.textContent = ''; tp.textContent = '';
             if (!d || !Array.isArray(d.appareils)) { etat.textContent = '⚠ Détection indisponible (API DNS AdBlock TV non joignable)'; return; }
             document.getElementById('det-ajout').checked = !!d.ajout_auto;
-            document.getElementById('det-mode').value = ['auto', 'observe', 'block', 'off'].includes(d.mode_defaut) ? d.mode_defaut : 'auto';
+            document.getElementById('det-mode').value = ['auto', 'off'].includes(d.mode_defaut) ? d.mode_defaut : 'auto';
             const pl = d.plafond || {};
             document.getElementById('det-plafond').textContent = 'ajouts sur 24 h : ' + (pl.ajouts_24h || 0) + ' / ' + (pl.max_par_jour || 0);
             d.appareils.forEach(a => {
@@ -769,7 +769,7 @@
 
         // ── DNS AdBlock TV (POC #1943) ───────────────────────────────────────────────
         let tvSondeNom = '';
-        function tvEsc(t) { const d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML; }
+        function tvEsc(t) { const d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML.replace(/'/g, '&#39;').replace(/"/g, '&quot;'); }
         async function tvRender() {
             const st = await api('/adblock-tv/status');
             if (!st || !st.clients || !st.listes) {            // API absente ou ancien code servi par l'agrégateur : on le dit, on ne plante pas

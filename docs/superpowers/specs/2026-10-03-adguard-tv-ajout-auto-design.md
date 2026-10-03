@@ -126,7 +126,7 @@ Limite : l'agrégation généralise à partir de peu d'appareils ; un domaine co
 
 ## 8. Données et API
 
-`etat.json` gagne : `mode_defaut` (`off|observe|auto|block`, défaut `auto`), `ajout_auto` (booléen, défaut faux), `ignores` (liste de MAC) ; chaque client gagne
+`etat.json` gagne : `mode_defaut` (`off|auto`, défaut `auto` ; `observe` et `block` sortent un appareil du puits de production et restent réservés à la déclaration manuelle — revue de sécurité du 2026-10-03), `ajout_auto` (booléen, défaut faux), `ignores` (liste de MAC) ; chaque client gagne
 `mac` (optionnel), `origine` (`admin|auto`), `ajoute` (horodatage), `preuve` (texte court), `puits` (booléen, défaut vrai en `auto` : puits de production complet, §3). Tout est revalidé par `valider_etat` (comme pour #1954).
 
 Routes (`require_lecture` en lecture, `require_jwt` en écriture) : `GET /auto/profil` (profil agrégé et provenance), `POST /auto/appareils/{nom}/puits` (`puits` vrai/faux), `GET /auto/detection` (appareils détectés, preuve, ajoutés ou non), `POST /auto/detection/reglage`
@@ -163,3 +163,5 @@ agrégateur redémarré (il sert le module dans son processus), vérifié **par 
 - Seuils non calibrés (un cas réel) et détection sur compteurs par jour (sans heure). À ajuster après quelques jours.
 - Un appareil dont l'IPv6 de confidentialité change plus vite que le passage de la minuterie reste suivi avec un retard d'au plus une minute, plus un éventuel rechargement
   (≤ 1 par heure) : pendant ce délai, la nouvelle adresse est traitée comme un appareil inconnu (puits de production).
+- **Usurpation d'adresse source (risque résiduel, revue du 2026-10-03)** : un appareil du LAN peut forger des requêtes DNS avec l'adresse source d'un autre ; Unbound journalise la victime, et la table des voisins la rattache à sa MAC. Le signal de détection peut donc être produit pour un voisin. Conséquences bornées : 3 ajouts par jour, un changement du périmètre par heure, profil de base seulement (`mode_defaut` limité à `auto|off`), retrait en un clic et audit de chaque ajout. Les voisins pris en compte sont ceux de l'interface du LAN seulement (ni `br-lxc` ni `wg*`), une adresse n'est rattachée que si le DNS de la box l'a vue, et un appareil n'a jamais plus de 4 adresses.
+

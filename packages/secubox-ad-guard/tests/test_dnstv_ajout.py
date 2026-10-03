@@ -40,9 +40,9 @@ def test_ajout_complet_nom_mode_regles_confirmees_et_champs():
 
 
 def test_mode_par_defaut_respecte_et_regles_de_base_seulement_en_auto():
-    etat, regles, suivi = monde(mode_defaut="observe")
+    etat, regles, suivi = monde(mode_defaut="off")
     lancer(etat, regles, suivi)
-    assert {c["mode"] for c in etat["clients"]} == {"observe"} and regles.liste() == []
+    assert {c["mode"] for c in etat["clients"]} == {"off"} and regles.liste() == []
 
 
 def test_desactive_par_defaut_ne_change_rien():

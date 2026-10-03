@@ -164,7 +164,7 @@ def test_le_controleur_audite_l_activation_de_l_ajout_automatique_et_le_mode_par
     base = {"actif": True, "clients": [{"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto"}]}
     dnstv.ecrire_etat(base, tmp_path)
     mod.appliquer()
-    dnstv.ecrire_etat(dict(base, ajout_auto=True, mode_defaut="observe"), tmp_path)
+    dnstv.ecrire_etat(dict(base, ajout_auto=True, mode_defaut="off"), tmp_path)
     mod.regles_appliquer()
     audit = (tmp_path / "audit.log").read_text()
-    assert '"action": "ajout_auto"' in audit and "actif=True" in audit and "mode_defaut=observe" in audit
+    assert '"action": "ajout_auto"' in audit and "actif=True" in audit and "mode_defaut=off" in audit

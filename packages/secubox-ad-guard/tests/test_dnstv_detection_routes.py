@@ -69,15 +69,15 @@ def test_detection_regroupe_les_adresses_par_appareil_avec_preuve_et_plafond(api
 
 
 def test_reglage_valide_ecrit_l_etat_et_applique(api, donnees):
-    r = api.post("/adblock-tv/auto/detection/reglage", json={"ajout_auto": False, "mode_defaut": "observe"})
+    r = api.post("/adblock-tv/auto/detection/reglage", json={"ajout_auto": False, "mode_defaut": "off"})
     assert r.status_code == 200 and r.json()["application"]["ok"] is True
     e = etat_disque(donnees)
-    assert e["ajout_auto"] is False and e["mode_defaut"] == "observe"
-    assert api.post("/adblock-tv/auto/detection/reglage", json={"ajout_auto": True}).status_code == 200 and etat_disque(donnees)["mode_defaut"] == "observe"
+    assert e["ajout_auto"] is False and e["mode_defaut"] == "off"
+    assert api.post("/adblock-tv/auto/detection/reglage", json={"ajout_auto": True}).status_code == 200 and etat_disque(donnees)["mode_defaut"] == "off"
 
 
 def test_reglage_invalide_refuse(api, donnees):
-    for corps in ({"mode_defaut": "detruire"}, {"ajout_auto": "peut-etre"}, {}):
+    for corps in ({"mode_defaut": "detruire"}, {"mode_defaut": "observe"}, {"mode_defaut": "block"}, {"ajout_auto": "peut-etre"}, {}):
         assert api.post("/adblock-tv/auto/detection/reglage", json=corps).status_code == 422
 
 
