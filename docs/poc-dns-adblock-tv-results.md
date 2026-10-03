@@ -7,9 +7,9 @@
 
 # POC « DNS AdBlock TV » — rapport final (#1943)
 
-> **POC non validé sur flux Freebox réel.** Les deux Freebox TV sont disponibles pour la procédure du §5 ; elle n'a **pas encore été jouée**. Ce
-> rapport ne contient donc que ce qui a été mesuré sur le **banc local** (Unbound réel sur 127.0.0.x, sans Internet) et par les tests automatiques.
-> Rien n'est extrapolé à la Freebox.
+> **Validation partielle sur une Freebox TV réelle (2026-10-03).** Une seule TV (Android TV, 192.168.1.95), une seule application (replay France TV),
+> une session d'environ 40 minutes. Les mesures du §6 viennent du banc local ; celles des §7 à §12 viennent de cette session. Rien n'est extrapolé
+> à d'autres applications, d'autres chaînes ou la seconde TV, qui n'ont pas été testées.
 
 ## 1. Objectif
 Mesurer ce que le filtrage DNS d'une SecuBox bloque réellement, pour des appareils choisis, en mode OBSERVE (aucun blocage) et BLOCK. Formulation retenue :
@@ -53,13 +53,19 @@ Journal réel d'Unbound lu par l'analyseur : 13 événements, décisions {'ALLOW
 Données brutes : `packages/secubox-ad-guard/reports/dns-limits.json`, `…/dns-test.json`.
 
 ## 7. Domaines bloqués
-Aucun domaine n'a été bloqué sur un appareil réel. Le jeu de test (`lists/`, 32 domaines, version `2026.10.03-poc1`) est volontairement court et **non exhaustif**.
+Phase C (blocage, TV seule) : 144 requêtes, 79 refusées (NXDOMAIN), 4 domaines, 0 erreur amont. Bloqués : `videos-pub.ftv-publicite.fr` (liste personnalisée,
+appris par comparaison des phases E et P), `aes.eu-central.3px.axp.amazon-adsystem.com`, `aax-events-cell02-cf.eu-central.3px.axp.amazon-adsystem.com`,
+`ad.doubleclick.net`. Le motif `c.2mdn.net` (vidéos de pub Google) était aussi actif mais n'a reçu aucune requête pendant la phase C. Le jeu de listes
+reste court et non exhaustif.
 
 ## 8. Domaines nécessaires
-**Non mesuré** (exige un vrai appareil). Le banc montre seulement le mécanisme (cas C et G : un nom partagé ne se bloque pas sans casser le contenu).
+Autorisés et nécessaires à la lecture (lecture démarrée, vidéo vue) : `cloudreplay.ftven.fr`, `k7.ftven.fr`, `hdfauth.ftven.fr`, `geo-info.ftven.fr`,
+`medias.france.tv`, `proxy-mediation.yatta.francetv.fr`, `assets.webservices.francetelevisions.fr`. `7cd77.v.fwmrm.net` (FreeWheel) est demandé avant et pendant les coupures :
+il n'a **pas** été bloqué, donc on ne sait pas s'il est nécessaire. `gcdn.2mdn.net`, vu sans pub en phase E, est bloqué par la liste générale d'ad-guard pour les autres appareils :
+non testé sur la TV.
 
 ## 9. Faux positifs
-Mécanisme démontré (cas G). Aucun faux positif réel observé, **faute d'appareil réel**. La catégorie `telemetry` est signalée dans la liste comme « souvent nécessaire à certaines applications ».
+Aucun faux positif constaté : la lecture a démarré normalement en blocage et aucune erreur n'est apparue. Un seul scénario a été essayé (nouvelle série, pré-roll).
 
 ## 10. Limites
 Voir §6 (C, D, E, F, G) et `/adblock-tv/limites`. De plus : la box ne voit **que** les requêtes qui lui parviennent ; un appareil qui utilise l'IPv6 de la Freebox, DoH ou DoT lui échappe (constaté sur ce réseau pour l'IPv6, #1938).
@@ -68,7 +74,9 @@ Voir §6 (C, D, E, F, G) et `/adblock-tv/limites`. De plus : la box ne voit **qu
 Détection **sans inspection HTTPS** : appareils visibles (ARP/NDP) mais **silencieux** côté DNS de la box (`/adblock-tv/bypass`), et DNS PATH TEST. La box ne peut **pas** voir un DNS externe qui ne passe pas par elle : limite documentée, pas contournée.
 
 ## 12. Impact sur la TV
-**Non mesuré** — POC non validé sur flux Freebox réel.
+Constaté par l'opérateur : lors d'un pré-roll de 6 secondes en phase C, **écran noir d'environ 6 s, sans pub, puis lecture normale**, sans message d'erreur.
+Le DNS supprime donc le contenu de la pub mais pas le créneau : le serveur d'insertion (FreeWheel) répond encore et la TV attend la durée prévue. Non mesuré :
+la durée du noir avec une pub plus longue, les coupures en milieu de programme, les autres applications.
 
 ## 13. Ce que le DNS permet
 Bloquer un **nom** publicitaire ou de pistage distinct (A, B), observer ce qu'un appareil résout (liste de domaines, volume, catégories), mesurer l'effet d'un filtrage appareil par appareil, sans MITM.
