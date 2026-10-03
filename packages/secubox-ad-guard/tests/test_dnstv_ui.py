@@ -41,6 +41,8 @@ def _page(navigateur, appels, etat):
             r = {"requetes": 10, "domaines_uniques": 4, "classes_resolus": {"tracking": 2}, "classes_bloques": {"advertising": 3},
                  "par_decision": {"BLOCKED": 3, "ALLOWED": 7},
                  "top_bloques": [{"domaine": "<img src=x onerror=window.__pwn=1>.example", "categorie": "advertising", "hits": 3}]}
+        elif chemin == "/adblock-tv/dns-box":
+            r = etat.get("dns_box", {})
         elif chemin == "/adblock-tv/auto/regles":
             r = etat.get("auto_regles", {"regles": [], "compteurs": {}})
         elif chemin == "/adblock-tv/auto/reglage":
@@ -259,4 +261,47 @@ def test_onglet_ne_leve_aucune_exception_quand_l_api_rend_du_html(navigateur):
     p.wait_for_timeout(600)
     assert "indisponible" in p.inner_text("#tv-etat").lower()
     assert not erreurs, erreurs
+    ctx.close()
+
+
+# ── fiche « DNS de la box » (#1938) ────────────────────────────────────────────────────────────────────────────────────────────
+FICHE = {"interface": "eth2", "alertes": [], "adresses": [
+    {"adresse": "192.168.1.200", "famille": 4, "type": "ipv4", "ecoute": True},
+    {"adresse": "2a01:e0a:dec:c4e0::200", "famille": 6, "type": "stable", "ecoute": True},
+    {"adresse": "2a01:e0a:dec:c4e0:f2ad:4eff:fe27:889b", "famille": 6, "type": "slaac", "ecoute": True}]}
+
+
+def test_fiche_dns_box_affiche_l_adresse_stable_a_saisir_dans_la_freebox(navigateur):
+    ctx, p, erreurs = _page(navigateur, [], {"actif": True, "clients": [], "dns_box": FICHE})
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_selector("#dnsbox-adresses tr")
+    texte = p.inner_text("#dnsbox-adresses")
+    assert "2a01:e0a:dec:c4e0::200" in texte and "À renseigner dans Freebox OS" in texte
+    ligne = p.locator("#dnsbox-adresses tr", has_text="2a01:e0a:dec:c4e0::200")
+    assert "stable" in ligne.inner_text().lower() and "oui" in ligne.inner_text().lower()
+    assert "expire" in p.locator("#dnsbox-adresses tr", has_text="889b").inner_text().lower()      # SLAAC : à éviter
+    assert p.inner_text("#dnsbox-alertes").strip() == ""
+    assert not erreurs
+    ctx.close()
+
+
+def test_fiche_dns_box_alerte_et_texte_piege_inoffensif(navigateur):
+    fiche = {"interface": "eth2<img src=x onerror=window.__pwn=1>", "alertes": ["<img src=x onerror=window.__pwn=1> n'écoute pas"],
+             "adresses": [{"adresse": "2a01::200<img src=x onerror=window.__pwn=1>", "famille": 6, "type": "stable", "ecoute": False}]}
+    ctx, p, erreurs = _page(navigateur, [], {"actif": True, "clients": [], "dns_box": fiche})
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_selector("#dnsbox-alertes *")
+    assert "n'écoute pas" in p.inner_text("#dnsbox-alertes")
+    assert "non" in p.locator("#dnsbox-adresses tr").first.inner_text().lower()
+    assert p.evaluate("window.__pwn === undefined") and p.evaluate("document.querySelectorAll('#dnsbox-carte img').length") == 0
+    assert not erreurs
+    ctx.close()
+
+
+def test_fiche_dns_box_api_absente_ne_plante_pas(navigateur):
+    ctx, p, erreurs = _page(navigateur, [], {"actif": True, "clients": [], "html_502": True})
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_timeout(500)
+    assert "indisponible" in p.inner_text("#dnsbox-alertes").lower()
+    assert not erreurs
     ctx.close()

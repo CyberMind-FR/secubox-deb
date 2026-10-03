@@ -273,6 +273,13 @@
                     <label style="margin-left:.6rem;"><input type="radio" name="tv-mode" value="block" onchange="tvMode(this.value)"> BLOCK</label>
                 </div>
             </div>
+            <!-- DNS de la box (#1938) : quelle adresse donner aux appareils, et Unbound l'écoute-t-il ? Lecture seule ; rendu par textContent -->
+            <div class="card" style="margin-top:1rem;" id="dnsbox-carte">
+                <div class="card-header"><h2>🌐 DNS de la box <small style="font-weight:400;color:var(--text-dim);">— ce que gk2 offre aux appareils du LAN <span id="dnsbox-interface"></span></small></h2></div>
+                <table><thead><tr><th>Adresse</th><th>Type</th><th>Unbound écoute</th><th>Usage</th></tr></thead><tbody id="dnsbox-adresses"></tbody></table>
+                <div id="dnsbox-alertes" style="margin-top:.5rem;"></div>
+                <p style="color:var(--text-dim);font-size:.8rem;margin:.5rem 0 0;">La box ne peut pas lire les réglages de la Freebox : cette fiche montre ce que gk2 propose, pas ce que la Freebox annonce.</p>
+            </div>
             <div class="card" style="margin-top:1rem;">
                 <div class="card-header"><h2>📊 Statistiques (7 jours)</h2></div>
                 <div class="stats-grid" id="tv-stats"></div>
@@ -620,6 +627,28 @@
         setInterval(() => { if (document.getElementById('adblocktv').classList.contains('active') && document.getElementById('tv-auto').checked) { tvLive(); tvSources(); } }, 3000);
 
 
+
+        // ── DNS de la box (#1938) : tout texte venu de l'API passe par textContent ──
+        const DNSBOX_TYPE = { ipv4: 'IPv4', stable: 'IPv6 stable', slaac: 'IPv6 SLAAC', temporaire: 'IPv6 temporaire' };
+        const DNSBOX_USAGE = { ipv4: 'DNS IPv4 des appareils (annoncé par le DHCP de la Freebox)', stable: 'À renseigner dans Freebox OS (« DNS IPv6 personnalisé »)',
+                               slaac: 'Dynamique : expire avec le préfixe, à éviter', temporaire: 'Temporaire : ne pas utiliser' };       // libellés locaux, jamais ceux de l'API
+        async function dnsBoxRender() {
+            const r = await api('/adblock-tv/dns-box');
+            const tb = document.getElementById('dnsbox-adresses'), al = document.getElementById('dnsbox-alertes');
+            tb.textContent = ''; al.textContent = '';
+            if (!r || !Array.isArray(r.adresses)) { al.appendChild(tvEl('div', '⚠ Fiche indisponible (API DNS AdBlock TV non joignable)', null, 'color:#d64545;')); return; }
+            document.getElementById('dnsbox-interface').textContent = r.interface ? '(' + r.interface + ')' : '';
+            r.adresses.forEach(a => {
+                const ligne = [a.adresse, DNSBOX_TYPE[a.type] || 'autre', a.ecoute ? 'oui' : 'non', DNSBOX_USAGE[a.type] || '—'];
+                const tr = document.createElement('tr');
+                ligne.forEach((v, i) => tr.appendChild(tvEl('td', v, null, i === 2 ? 'font-weight:600;color:' + (a.ecoute ? '#3aa56a' : '#d64545') : (i === 0 ? 'font-family:monospace;' : ''))));
+                tb.appendChild(tr);
+            });
+            if (!r.adresses.length) tvLigne(tb, [Object.assign(tvEl('td', 'Aucune adresse détectée sur le LAN', null, 'color:var(--text-dim);text-align:center;'), { colSpan: 4 })]);
+            (r.alertes || []).forEach(x => al.appendChild(tvEl('div', '⚠ ' + x, null, 'color:#d64545;margin:.2rem 0;')));
+        }
+        setInterval(() => { if (document.getElementById('adblocktv').classList.contains('active')) dnsBoxRender(); }, 15000);
+
         // ── mode automatique (#1954) : règles apprises, essai, confirmation, retour arrière ──────────────────────────────────────
         const AUTO_RISQUE = { faible: 'faible', partage: 'peut servir aussi le contenu', variable: 'noms variables regroupés' };   // libellés locaux, jamais ceux de l'API
         const AUTO_ETAT = { rejete: 'rejetée', retire: 'retirée', candidat: 'candidat', essai: 'essai', confirme: 'confirmée' };
@@ -728,7 +757,7 @@
             z.textContent = (r.recue ? '✅ ' : '❌ ') + r.lecture + (r.recue ? ' — client ' + r.evenements[0].client + ', décision ' + r.evenements[0].decision : '');
         }
 
-        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue(); autoRender();
+        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue(); autoRender(); dnsBoxRender();
         setInterval(fetchStats, 30000);
     </script>
     <script src="/shared/crt-engine.js"></script>

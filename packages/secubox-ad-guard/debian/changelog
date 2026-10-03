@@ -1,3 +1,12 @@
+secubox-ad-guard (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Fiche « DNS de la box » (ref #1938) en tête de l'onglet DNS AdBlock TV : adresses de gk2 sur le LAN (IPv4, IPv6 STABLE, IPv6 SLAAC), type, et si Unbound écoute
+    dessus, avec alertes (aucune IPv6 stable ; adresse présente mais non écoutée — le cas vécu le 2026-10-03). Route de lecture `GET /adblock-tv/dns-box`
+    (require_lecture, `ip` et `ss` sans privilège, jamais sudo). Elle montre ce que la box OFFRE ; elle ne lit pas les réglages de la Freebox.
+    NOTE DE DÉPLOIEMENT : redémarrer `secubox-aggregator` (il sert ce module dans son processus).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 19:30:00 +0200
+
 secubox-ad-guard (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Mode auto (ref #1954) : l'unité de la minuterie portait encore `ProtectKernelTunables=yes`, lui aussi basé sur seccomp : NoNewPrivileges implicite, sudo refusé.

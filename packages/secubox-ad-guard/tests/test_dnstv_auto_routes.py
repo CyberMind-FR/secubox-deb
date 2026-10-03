@@ -107,3 +107,35 @@ def test_les_gardes_d_acces(monde, regles, monkeypatch):
     assert c.get("/adblock-tv/auto/regles").status_code == 200
     assert c.post(f"/adblock-tv/auto/regles/{regles['cand']}/essayer").status_code in (401, 403)
     assert c.post("/adblock-tv/auto/appareils/tv-banc/ca-ne-marche-plus").status_code in (401, 403)
+
+
+# ── fiche « DNS de la box » (#1938) ────────────────────────────────────────────────────────────────────────────────────────────
+def test_route_dns_box_lit_les_commandes_sans_privilege(api, monkeypatch):
+    from api import dnstv_routes as r
+    from test_dnstv_dnsbox import IP4, IP6, ROUTE, SS
+    appels = []
+
+    def sortie(argv):
+        appels.append(argv)
+        if argv[0] == "ss":
+            return SS
+        return ROUTE if "route" in argv else (IP6 if argv[1] == "-6" else IP4)
+    monkeypatch.setattr(r, "_sortie", sortie)
+    j = api.get("/adblock-tv/dns-box").json()
+    assert j["interface"] == "eth2" and {a["type"] for a in j["adresses"]} == {"ipv4", "stable", "slaac"} and j["alertes"] == []
+    assert all(a[0] in ("ip", "ss") and "sudo" not in a for a in appels)                  # lecture seule : jamais sudo
+
+
+def test_route_dns_box_commande_absente_donne_une_fiche_vide_pas_une_erreur(api, monkeypatch):
+    from api import dnstv_routes as r
+    monkeypatch.setattr(r, "_sortie", lambda argv: "")
+    j = api.get("/adblock-tv/dns-box").json()
+    assert j["adresses"] == [] and j["alertes"]
+
+
+def test_route_dns_box_est_synchrone_et_gardee():
+    import inspect
+    from api import dnstv_routes as r
+    assert not inspect.iscoroutinefunction(r.dns_box)
+    route = next(x for x in r.router.routes if getattr(x, "path", "") == "/adblock-tv/dns-box")
+    assert any("require_lecture" in repr(d.call) for d in route.dependant.dependencies)
