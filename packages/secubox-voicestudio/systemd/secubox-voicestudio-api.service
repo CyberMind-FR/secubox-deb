@@ -28,11 +28,12 @@ NoNewPrivileges=no
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ProtectKernelTunables=true
 ProtectControlGroups=true
-RestrictSUIDSGID=true
-LockPersonality=true
 UMask=0027
+# ATTENTION — NE PAS AJOUTER ProtectKernelTunables, RestrictSUIDSGID, LockPersonality (ni RestrictNamespaces,
+# SystemCallFilter, MemoryDenyWriteExecute…) : chacun IMPOSE implicitement NoNewPrivileges=yes via seccomp, ce
+# qui neutralise sudo malgré la ligne ci-dessus (« The "no new privileges" flag is set »). Mesuré sur gk3 en
+# les ajoutant un par un : ces trois-là suffisent à fermer la porte du ctl. tests/test_paquet_1917.py le fige.
 ReadWritePaths=/run/secubox /var/lib/secubox
 
 [Install]

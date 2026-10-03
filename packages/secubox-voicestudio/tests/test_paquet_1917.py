@@ -62,8 +62,7 @@ def test_l_unite_api_suit_les_regles_de_durcissement():
     assert "ExecStartPre=+/bin/rm -f /run/secubox/voicestudio.sock" in u          # socket périmée (§ Socket)
     assert "RuntimeDirectory=secubox" not in sans_commentaires                    # proscrit : efface les voisines
     assert "chmod 660 /run/secubox/voicestudio.sock" in u
-    for ligne in ("ProtectSystem=strict", "ProtectHome=true", "PrivateTmp=true", "ProtectKernelTunables=true",
-                  "ProtectControlGroups=true", "RestrictSUIDSGID=true", "LockPersonality=true", "UMask=0027"):
+    for ligne in ("ProtectSystem=strict", "ProtectHome=true", "PrivateTmp=true", "ProtectControlGroups=true", "UMask=0027"):
         assert ligne in u, ligne
     # NoNewPrivileges=no est la seule dérogation, et elle est justifiée par le sudoers du module.
     assert "NoNewPrivileges=no" in u and "sudoers" in u
@@ -241,3 +240,17 @@ def test_le_fichier_nft_est_charge_apres_la_base_et_n_est_pas_un_conffile():
     ctl = lire("sbin/voicestudioctl")
     assert 'NFT_FICHIER = "zz-secubox-voicestudio.nft"' in ctl
     assert "nftables.d" not in re.sub(r"#.*", "", lire("debian/rules"))
+
+
+IMPLIQUENT_NNP = ("ProtectKernelTunables", "RestrictSUIDSGID", "LockPersonality", "RestrictNamespaces", "SystemCallFilter",
+                  "MemoryDenyWriteExecute", "RestrictRealtime", "RestrictAddressFamilies", "ProtectKernelModules",
+                  "ProtectKernelLogs", "ProtectClock", "ProtectHostname", "SystemCallArchitectures")
+
+
+def test_l_unite_api_n_a_aucun_reglage_qui_impose_no_new_privileges():
+    """Régression (vue sur gk3) : ces réglages posent NoNewPrivileges=yes en douce et sudo — donc la seule porte
+    privilégiée du module — répond « The "no new privileges" flag is set », quoi que dise NoNewPrivileges=no."""
+    u = re.sub(r"#.*", "", lire("systemd/secubox-voicestudio-api.service"))
+    for reglage in IMPLIQUENT_NNP:
+        assert not re.search(rf"^\s*{reglage}\s*=", u, re.M), f"{reglage} neutralise sudo"
+    assert "NoNewPrivileges=no" in u

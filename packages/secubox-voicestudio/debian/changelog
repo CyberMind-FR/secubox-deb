@@ -1,3 +1,13 @@
+secubox-voicestudio (0.2.2-1~bookworm1) bookworm; urgency=high
+
+  * L'API ne pouvait pas appeler voicestudioctl : ProtectKernelTunables, RestrictSUIDSGID et LockPersonality
+    imposent implicitement NoNewPrivileges=yes (seccomp), ce qui neutralise sudo malgré NoNewPrivileges=no
+    (« The "no new privileges" flag is set »). Tous les boutons du panneau échouaient (HTTP 400). Retirés de
+    l'unité de l'API, avec un test et un commentaire qui le figent. Trouvé en rejouant le code de l'API dans une
+    unité transitoire aux réglages identiques — les tests unitaires ne pouvaient pas le voir.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 07:00:00 +0200
+
 secubox-voicestudio (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Pare-feu : le mandataire écoute sur l'hôte, donc sous la chaîne d'entrée en DROP ; l'ancien moteur
