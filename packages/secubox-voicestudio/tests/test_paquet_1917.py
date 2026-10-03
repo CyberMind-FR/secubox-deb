@@ -254,3 +254,8 @@ def test_l_unite_api_n_a_aucun_reglage_qui_impose_no_new_privileges():
     for reglage in IMPLIQUENT_NNP:
         assert not re.search(rf"^\s*{reglage}\s*=", u, re.M), f"{reglage} neutralise sudo"
     assert "NoNewPrivileges=no" in u
+
+
+def test_une_session_absente_n_est_pas_annoncee_comme_une_panne_d_api():
+    h = lire("www/voicestudio/index.html")
+    assert "e.message === '401'" in h and "Connexion requise" in h and "Réservé aux administrateurs" in h

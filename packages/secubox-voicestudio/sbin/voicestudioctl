@@ -985,6 +985,11 @@ def cmd_migrer_podman(run=_run) -> int:
         shutil.rmtree(ecartee, ignore_errors=True)
         os.replace(cible, ecartee)
     os.replace(temp, cible)
+    if ecartee is not None:                # le point de montage vide laissé par le LXC : inutile de le garder
+        try:
+            ecartee.rmdir()
+        except OSError:
+            pass                           # non vide (base vierge, voix) : on la garde, rien n'est perdu
     os.chmod(cible, 0o750)               # voix clonées et historique : pas lisibles de tout l'hôte
     audit("migrer-podman", f"{taille_mo(cible)}Mo" + (" ancienne-cible-gardee" if ecartee else ""))
     print(f"voicestudioctl : {taille_mo(cible)} Mo repris de {VOLUME_PODMAN} (volume conservé)")
