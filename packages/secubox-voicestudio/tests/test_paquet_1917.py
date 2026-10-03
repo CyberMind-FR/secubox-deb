@@ -271,3 +271,12 @@ def test_les_entrees_de_menu_sont_dans_l_une_des_six_categories_standard():
         cat = json.loads(f.read_text())["category"]
         assert cat in CATEGORIES_STANDARD, f"{f.name} : catégorie « {cat} » inconnue du Hall"
         assert cat == "mind", f.name
+
+
+def test_les_entrees_de_menu_sont_servies_par_la_console_pas_par_un_domaine_devine():
+    """Sans `same_origin`, le registre invente `<id>.gk2.secubox.in` (vu dans le Hall : voicestudio.gk2.secubox.in,
+    qui n'existe pas). Le module est servi sur le domaine de la console, sous /voicestudio/ : même origine."""
+    for f in sorted((PKG / "menu.d").glob("*.json")):
+        d = json.loads(f.read_text())
+        assert d.get("same_origin") is True, f.name
+        assert "domain" not in d and d["path"].startswith("/voicestudio/"), f.name

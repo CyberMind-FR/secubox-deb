@@ -5,5 +5,6 @@
   "path": "/voicestudio/",
   "category": "mind",
   "order": 614,
-  "description": "Moteur vocal studio : synthèse et reconnaissance, administration du LXC"
+  "description": "Moteur vocal studio : synthèse et reconnaissance, administration du LXC",
+  "same_origin": true
 }

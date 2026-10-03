@@ -1,3 +1,11 @@
+secubox-voicestudio (0.2.6-1~bookworm1) bookworm; urgency=low
+
+  * Menu : `same_origin: true` sur les deux entrées. Sans lui, le registre du Hall devinait l'hôte
+    « voicestudio.gk2.secubox.in » (un vhost qui n'existe pas) ; le module est servi sur le domaine de la console,
+    sous /voicestudio/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 10:30:00 +0200
+
 secubox-voicestudio (0.2.5-1~bookworm1) bookworm; urgency=medium
 
   * Menu : les deux entrées (administration, usager) passent de la catégorie « apps » à « mind » (Esprit). Le Hall
