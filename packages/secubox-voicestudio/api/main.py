@@ -7,7 +7,7 @@ CyberMind — https://cybermind.fr
 
 DEUX FACETTES, UNE SEULE API (cf. WEBUI-PANEL-GUIDELINES § 7) :
 
-  administration   require_jwt     /detail /start /stop /restart /installer /config /publier
+  administration   require_jwt     /gate /detail /start /stop /restart /installer /config /publier
                                    /cle /cle/renouveler /journal /sauvegarde /voix /essai/*
   usager           require_personne /usager/etat /usager/voix /usager/dire /usager/transcrire
 
@@ -245,6 +245,15 @@ def detail() -> dict:
     return {**s, "module": "voicestudio", "version": app.version, "installed": s.get("installe", False),
             "running": bool(s.get("moteur")), "asleep": s.get("lxc") == "STOPPED",
             "operation": op, "limites": _limites()}
+
+
+# ── garde de l'interface native ──────────────────────────────────────────────
+@app.get("/gate", status_code=204, dependencies=[Depends(require_jwt)])
+def garde() -> Response:
+    """Sous-requête `auth_request` de nginx pour voicestudio.<domaine> (l'interface native, réservée aux
+    administrateurs). 204 = administrateur réel ; 401/403 sinon (require_jwt) : nginx refuse alors la requête et le
+    moteur n'est jamais atteint. Aucun corps, aucune information."""
+    return Response(status_code=204)
 
 
 # ── administration (require_jwt) ─────────────────────────────────────────────

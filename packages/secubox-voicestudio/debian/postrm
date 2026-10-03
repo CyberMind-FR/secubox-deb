@@ -2,7 +2,7 @@
 set -e
 case "$1" in
   remove|purge)
-    rm -f /etc/nginx/secubox-routes.d/voicestudio.conf /etc/nginx/secubox.d/voicestudio.conf /etc/nftables.d/zz-secubox-voicestudio.nft
+    rm -f /etc/nginx/secubox-routes.d/voicestudio.conf /etc/nginx/secubox.d/voicestudio.conf /etc/nftables.d/zz-secubox-voicestudio.nft /etc/nginx/sites-enabled/secubox-voicestudio.conf /etc/nginx/sites-available/secubox-voicestudio.conf /etc/nginx/snippets/secubox-voicestudio-cle.conf
     rm -rf /etc/systemd/system/secubox-voicestudio-pub.socket.d /etc/systemd/system/secubox-voicestudio-pub.service.d
     systemctl daemon-reload 2>/dev/null || true
     systemctl reload nginx 2>/dev/null || true

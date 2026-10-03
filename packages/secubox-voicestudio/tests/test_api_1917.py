@@ -549,3 +549,17 @@ def test_les_limites_ne_relisent_pas_les_fichiers_a_chaque_appel(monkeypatch):
     m._limites()
     m._limites()
     assert len(ouverts) == n
+
+
+# ── garde de l'interface native ──────────────────────────────────────────────────────────────────────────────────
+def test_la_garde_exige_un_administrateur_et_ne_rend_qu_un_204_vide(client):
+    assert client.get("/gate").status_code in (401, 403)                      # sans session : refusé
+    admin()
+    r = client.get("/gate")
+    assert r.status_code == 204 and r.content == b"" and not r.headers.get("content-type")
+
+
+def test_la_garde_est_require_jwt_et_non_une_garde_d_usager():
+    [route] = [r for r in m.app.routes if getattr(r, "path", "") == "/gate"]
+    appels = {d.call for d in route.dependant.dependencies}
+    assert core_auth.require_jwt in appels and core_auth.require_personne not in appels

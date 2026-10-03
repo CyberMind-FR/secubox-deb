@@ -20,6 +20,7 @@ Seule surface privilégiée du module : le panneau (utilisateur `secubox`) l'app
   reinstaller        rejoue l'installation du moteur (après changement de [source])
   migrer-conf        dépose le TOML par défaut ; convertit l'ancien schéma (podman)
   migrer-podman      reprend les données d'un ancien conteneur podman (une fois)
+  interface          construit l'interface native dans le LXC et pose son vhost (administrateurs)
   pare-feu-ferme     retire la règle d'entrée du port 3900 (désinstallation)
   basculer           arrête l'ancien podman, reprend ses données, démarre le LXC (une fois)
   status [--json]    état du LXC, du moteur, de la configuration
@@ -70,6 +71,13 @@ INSTALL = os.environ.get("SECUBOX_VS_INSTALL", "/usr/lib/secubox/voicestudio/ins
 SAUVEGARDES = Path(os.environ.get("SECUBOX_VS_SAUVEGARDES", "/var/backups/secubox/voicestudio"))
 DROPIN_DIR = Path(os.environ.get("SECUBOX_VS_DROPIN", "/etc/systemd/system"))
 NFT_DIR = Path(os.environ.get("SECUBOX_VS_NFT_DIR", "/etc/nftables.d"))
+MARQUE_INTERFACE = Path(os.environ.get("SECUBOX_VS_MARQUE_INTERFACE", "/var/lib/secubox/voicestudio/.interface-native"))
+NGINX_DISPO = Path(os.environ.get("SECUBOX_VS_NGINX_DISPO", "/etc/nginx/sites-available"))
+NGINX_ACTIF = Path(os.environ.get("SECUBOX_VS_NGINX_ACTIF", "/etc/nginx/sites-enabled"))
+SNIPPET_CLE = Path(os.environ.get("SECUBOX_VS_SNIPPET_CLE", "/etc/nginx/snippets/secubox-voicestudio-cle.conf"))
+VHOST_FICHIER = "secubox-voicestudio.conf"
+RE_DOMAINE = re.compile(r"^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$")
+RE_CLE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 NFT_FICHIER = "zz-secubox-voicestudio.nft"
 NFT_ETIQUETTE = "secubox-voicestudio"
 NFT_TABLES = ("filter", "secubox_filter")     # base unifiée (#1306) ; ancien nom encore chargé sur les box non redémarrées
@@ -199,7 +207,9 @@ def ecrire_toml(section: str, cle: str, valeur, chemin: Path | None = None) -> N
     que la ligne concernée : commentaires et ordre du fichier préservés."""
     chemin = chemin or CONF
     texte = chemin.read_text() if chemin.exists() else ""
-    if isinstance(valeur, list):
+    if isinstance(valeur, bool):             # AVANT int : bool en est un, et « False » n'est pas du TOML
+        rendu = "true" if valeur else "false"
+    elif isinstance(valeur, list):
         rendu = "[" + ", ".join(json.dumps(v) for v in valeur) + "]"
     elif isinstance(valeur, int):
         rendu = str(valeur)
@@ -525,6 +535,16 @@ def ecrire_fichier(chemin: Path, contenu: str) -> bool:
 
 
 @sous_verrou()
+def cmd_interface_ferme(run=_run) -> int:
+    """Retire le vhost de l'interface native, la clé nginx et le lien (désinstallation)."""
+    existait = retirer_vhost(run)
+    MARQUE_INTERFACE.unlink(missing_ok=True)
+    audit("interface-ferme", "vhost-retire" if existait else "rien-a-retirer")
+    print("voicestudioctl : interface native retirée du frontal")
+    return 0
+
+
+@sous_verrou()
 def cmd_pare_feu_ferme(run=_run) -> int:
     """Retire règle vivante et fichier (désinstallation) : plus aucune ouverture du port 3900."""
     n = 0
@@ -534,6 +554,169 @@ def cmd_pare_feu_ferme(run=_run) -> int:
     audit("pare-feu-ferme", f"{n}-regle(s)")
     print(f"voicestudioctl : {n} règle(s) retirée(s)")
     return 0
+
+
+# ── interface native : vhost, clé posée par nginx, garde administrateur ───────────────────────────────────────────
+# L'interface native (le studio complet) est servie par le moteur à la RACINE d'un domaine : elle suppose `/` et des
+# chemins absolus (/assets, /v1, /ws). Elle a donc SON domaine : voicestudio.<domaine de la box>. nginx y pose :
+#   1. une GARDE : auth_request vers /gate du module (require_jwt) — seul un administrateur réel passe ;
+#   2. la CLÉ du moteur (Authorization: Bearer …), lue dans un snippet root 0600 : le navigateur ne la voit jamais,
+#      et toute clé qu'il enverrait est écrasée ;
+#   3. aucun cookie vers le moteur : celui de SecuBox ne doit jamais atteindre un processus tiers (un moteur compromis
+#      ne pourrait pas rejouer une session d'administrateur).
+def domaine_box(c: dict, run=_run) -> str:
+    """Le nom de CETTE box pour ce service (`secubox-domaine`) ; vide si inconnu — alors rien n'est déclaré."""
+    prefixe = str(c.get("interface", {}).get("domaine", "voicestudio"))
+    try:
+        r = run(["secubox-domaine", prefixe], capture_output=True, text=True, timeout=15)
+    except OSError:
+        return ""
+    d = (r.stdout or "").strip().lower()
+    return d if r.returncode == 0 and RE_DOMAINE.fullmatch(d) else ""
+
+
+def contenu_snippet_cle() -> str | None:
+    cle = lire_cle()
+    if not RE_CLE.fullmatch(cle):
+        return None                       # jamais une valeur inattendue dans un fichier nginx
+    return ("# GÉNÉRÉ par voicestudioctl (root 0600) : la clé du moteur, posée par nginx. Ne jamais l'afficher ni la copier.\n"
+            f'proxy_set_header Authorization "Bearer {cle}";\n')
+
+
+def contenu_vhost(c: dict, domaine: str, domaine_admin: str) -> str:
+    ip = lxc_ip(c)
+    if not re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", ip):
+        raise Erreur(f"[lxc] ip invalide : {ip[:40]}")
+    connexion = f"https://{domaine_admin}/login.html" if domaine_admin else "la page de connexion de l'administration"
+    return f"""# GÉNÉRÉ par voicestudioctl — ne pas éditer (réécrit à chaque `appliquer`). Voir packages/secubox-voicestudio.
+# Interface native de VoiceStudio, réservée aux administrateurs. nginx: 9080, derrière HAProxy puis le WAF.
+map $http_upgrade $sbx_vs_connexion {{ default upgrade; '' close; }}
+
+server {{
+    listen 9080;
+    server_name {domaine};
+
+    location ^~ /.well-known/acme-challenge/ {{ root /usr/share/secubox/www; try_files $uri =404; }}
+
+    # GARDE : le module répond 204 à un administrateur réel (require_jwt), 401/403 sinon. Les en-têtes de la requête
+    # d'origine (cookie de session, Authorization) sont transmis à CE sous-appel, pas au moteur.
+    location = /__sbx_voicestudio_garde {{
+        internal;
+        proxy_pass http://unix:/run/secubox/voicestudio.sock:/gate;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Host $host;
+        proxy_set_header X-SecuBox-LAN $lan_client;
+        proxy_set_header X-Original-URI $request_uri;
+    }}
+
+    location @voicestudio_refus {{
+        default_type text/plain;
+        return 401 "Connexion administrateur requise : {connexion}\n";
+    }}
+
+    location / {{
+        auth_request /__sbx_voicestudio_garde;
+        error_page 401 403 = @voicestudio_refus;
+
+        # La clé du moteur : posée ICI, après la garde. Écrase tout en-tête Authorization du navigateur.
+        include {SNIPPET_CLE};
+        # Aucun cookie vers le moteur (celui de SecuBox ne sort pas de la box ni n'atteint un processus tiers).
+        proxy_set_header Cookie "";
+
+        proxy_pass http://{ip}:{PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $sbx_vs_connexion;
+
+        # Doublage, clonage, bibliothèque : envois audio/vidéo volumineux, traitements longs, flux d'événements.
+        client_max_body_size 2g;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }}
+
+    access_log /var/log/nginx/voicestudio_access.log;
+    error_log  /var/log/nginx/voicestudio_error.log;
+}}
+"""
+
+
+def recharger_nginx(run=_run) -> bool:
+    """`nginx -t` AVANT de recharger : une configuration fautive ne doit jamais être chargée (ni laisser le frontal en panne)."""
+    try:
+        t = run(["nginx", "-t"], capture_output=True, text=True, timeout=30)
+        if t.returncode != 0:
+            print("voicestudioctl : nginx -t échoue, configuration NON rechargée : " + (t.stderr or "")[-300:], file=sys.stderr)
+            return False
+        return run(["systemctl", "reload", "nginx"], capture_output=True, text=True, timeout=30).returncode == 0
+    except OSError as e:
+        print(f"voicestudioctl : nginx indisponible ({e.strerror})", file=sys.stderr)
+        return False
+
+
+def retirer_vhost(run=_run) -> bool:
+    lien = NGINX_ACTIF / VHOST_FICHIER
+    existait = lien.is_symlink() or lien.exists()
+    lien.unlink(missing_ok=True)
+    (NGINX_DISPO / VHOST_FICHIER).unlink(missing_ok=True)
+    SNIPPET_CLE.unlink(missing_ok=True)
+    if existait:
+        recharger_nginx(run)
+    return existait
+
+
+def appliquer_vhost(c: dict, run=_run) -> dict:
+    """Pose (ou retire) le vhost de l'interface native. Idempotent ; n'écrit rien tant que l'interface n'est pas
+    construite, que le domaine de la box est inconnu, ou que la clé n'a pas la forme attendue."""
+    res = {"actif": False, "domaine": ""}
+    if not c.get("interface", {}).get("activer", True) or not MARQUE_INTERFACE.exists():
+        retirer_vhost(run)
+        return res
+    domaine = domaine_box(c, run)
+    if not domaine:
+        print("voicestudioctl : domaine de la box inconnu (secubox-domaine) — vhost de l'interface native non posé",
+              file=sys.stderr)
+        return res
+    snippet = contenu_snippet_cle()
+    if snippet is None:
+        print("voicestudioctl : clé du moteur absente ou de forme inattendue — vhost non posé (voicestudioctl init)", file=sys.stderr)
+        return res
+    admin = ""
+    try:
+        r = run(["secubox-domaine", "admin"], capture_output=True, text=True, timeout=15)
+        admin = (r.stdout or "").strip().lower() if r.returncode == 0 else ""
+        admin = admin if RE_DOMAINE.fullmatch(admin) else ""
+    except OSError:
+        pass
+    SNIPPET_CLE.parent.mkdir(parents=True, exist_ok=True)
+    cle_changee = not (SNIPPET_CLE.exists() and SNIPPET_CLE.read_text() == snippet)
+    if cle_changee:
+        tmp = SNIPPET_CLE.with_name(SNIPPET_CLE.name + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(snippet)
+        os.replace(tmp, SNIPPET_CLE)
+    vhost_change = ecrire_fichier(NGINX_DISPO / VHOST_FICHIER, contenu_vhost(c, domaine, admin))
+    lien = NGINX_ACTIF / VHOST_FICHIER
+    NGINX_ACTIF.mkdir(parents=True, exist_ok=True)
+    if not lien.is_symlink():
+        lien.unlink(missing_ok=True)
+        lien.symlink_to(os.path.relpath(NGINX_DISPO / VHOST_FICHIER, NGINX_ACTIF))
+        vhost_change = True
+    if cle_changee or vhost_change:
+        if not recharger_nginx(run):
+            # Jamais de vhost fautif laissé en place : on le retire, le frontal reste sain.
+            lien.unlink(missing_ok=True)
+            res["erreur"] = "nginx a refusé la configuration"
+            return res
+    res.update(actif=True, domaine=domaine)
+    return res
 
 
 def appliquer(run=_run) -> dict:
@@ -549,6 +732,7 @@ def appliquer(run=_run) -> dict:
     mode = ecrire_dropin(SERVICE_PUB, "mode.conf", contenu_service(c))
     res["mandataire"] = adresses or mode
     res["pare_feu"] = appliquer_nft(c, run)
+    res["interface"] = appliquer_vhost(c, run)
     if adresses or mode:
         systemctl(run, "daemon-reload")
         if adresses and systemctl(run, "is-active", SOCKET_PUB).stdout.strip() == "active":
@@ -611,6 +795,8 @@ def etat_complet(run=_run, sante_fn=None) -> dict:
         "cle_presente": bool(lire_cle()),
         "mandataire": systemctl(run, "is-active", SOCKET_PUB).stdout.strip() or "inactive",
         "provisionnement": systemctl(run, "is-active", UNITE_PROVISION).stdout.strip() or "inactive",
+        "interface_native": MARQUE_INTERFACE.exists(),
+        "interface_vhost": (NGINX_ACTIF / VHOST_FICHIER).exists(),
         "source": source,
         "ts": datetime.now(timezone.utc).isoformat(),
     }
@@ -660,9 +846,40 @@ def cmd_install(run=_run) -> int:
     c = charger()
     appliquer(run)
     audit("install", f"commit={str(c.get('source', {}).get('commit', ''))[:12]}")
+    if c.get("interface", {}).get("activer", True) and interface_construite(c, run):
+        MARQUE_INTERFACE.parent.mkdir(parents=True, exist_ok=True)
+        MARQUE_INTERFACE.write_text(datetime.now(timezone.utc).isoformat() + "\n")
+        appliquer(run)
     if VOLUME_PODMAN.is_dir():
         return cmd_basculer(run)
     return cmd_start(run)
+
+
+def interface_construite(c: dict, run=_run) -> bool:
+    r = run(["lxc-attach", "-P", lxc_chemin(c), "-n", lxc_nom(c), "--", "test", "-s", "/app/frontend/dist/index.html"],
+            capture_output=True, text=True, timeout=30)
+    return r.returncode == 0
+
+
+@sous_verrou()
+def cmd_interface(run=_run) -> int:
+    """Construit l'interface native dans le LXC (bun épinglé, installation figée) puis pose son vhost. Idempotent."""
+    c = charger()
+    if not c.get("interface", {}).get("activer", True):
+        print("voicestudioctl : interface native désactivée ([interface] activer = false)")
+        appliquer(run)
+        return 0
+    if etat_lxc(c, run) == "ABSENT":
+        raise Erreur("LXC absent — voicestudioctl install d'abord")
+    r = run(["bash", INSTALL, "--interface"], timeout=3600)
+    if r.returncode != 0:
+        audit("interface", f"echec-rc{r.returncode}")
+        return r.returncode
+    MARQUE_INTERFACE.parent.mkdir(parents=True, exist_ok=True)
+    MARQUE_INTERFACE.write_text(datetime.now(timezone.utc).isoformat() + "\n")
+    audit("interface", "construite")
+    appliquer(run)
+    return 0
 
 
 @sous_verrou()
@@ -767,6 +984,7 @@ def cmd_cle_renouveler(run=_run) -> int:
     nouvelle = secrets.token_urlsafe(32)
     ecrire_cle(nouvelle)
     poussee = pousser_cle(c, run)         # relance le moteur si la clé a changé ; sinon au réveil
+    appliquer_vhost(c, run)               # nginx pose la clé du moteur : elle doit suivre (sinon 401 sur l'interface native)
     audit("cle-renouvelee", f"poussee={'oui' if poussee else 'au-prochain-demarrage'}")
     print(nouvelle)
     return 0
@@ -1164,6 +1382,10 @@ def main(argv: list[str]) -> int:
             return 0
         if cmd == "sauvegarde":
             return cmd_sauvegarde()
+        if cmd == "interface-ferme":
+            return cmd_interface_ferme()
+        if cmd == "interface":
+            return cmd_interface()
         if cmd == "pare-feu-ferme":
             return cmd_pare_feu_ferme()
         if cmd == "basculer":

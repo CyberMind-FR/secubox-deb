@@ -66,7 +66,8 @@ def bac_a_sable(tmp_path, monkeypatch):
         "CLE": tmp_path / "secrets" / "api_key", "ETAT": tmp_path / "etat.json",
         "MARQUE_INSTALLE": tmp_path / ".prov", "AUDIT": tmp_path / "audit.log",
         "SAUVEGARDES": tmp_path / "sauv", "DROPIN_DIR": tmp_path / "systemd",
-        "VOLUME_PODMAN": tmp_path / "volume-podman", "VERROU": tmp_path / "verrou.lock", "NFT_DIR": tmp_path / "nft",
+        "VOLUME_PODMAN": tmp_path / "volume-podman", "VERROU": tmp_path / "verrou.lock", "NFT_DIR": tmp_path / "nft", "MARQUE_INTERFACE": tmp_path / ".interface-native",
+        "NGINX_DISPO": tmp_path / "ngx-dispo", "NGINX_ACTIF": tmp_path / "ngx-actif", "SNIPPET_CLE": tmp_path / "snip" / "cle.conf",
     }.items():
         monkeypatch.setattr(c, nom, valeur)
     (tmp_path / "lxc").mkdir()
@@ -1112,3 +1113,192 @@ def test_une_ancienne_cible_non_vide_est_gardee(bac_a_sable, monkeypatch):
     reel = c.subprocess.run
     c.cmd_migrer_podman(lambda cmd, **k: reel(cmd, **k) if cmd[0] == "cp" else run(cmd, **k))
     assert (Path(str(cible) + ".avant-migration") / "voix.wav").read_bytes() == b"precieuse"
+
+
+# ── interface native : vhost, garde, clé posée par nginx ─────────────────────────────────────────────────────────
+class DomaineFaux(NftFaux):
+    """secubox-domaine + nginx -t / reload."""
+    def __init__(self, domaine="voicestudio.gk3.secubox.in", admin="admin.gk3.secubox.in", nginx_ok=True, **kw):
+        super().__init__(**kw)
+        self.domaine, self.admin, self.nginx_ok = domaine, admin, nginx_ok
+
+    def __call__(self, cmd, **k):
+        if cmd[0] == "secubox-domaine":
+            self.appels.append(list(cmd))
+            return Rep(0, (self.domaine if cmd[1] == "voicestudio" else self.admin) + "\n")
+        if cmd[0] == "nginx":
+            self.appels.append(list(cmd))
+            return Rep(0 if self.nginx_ok else 1, "", "" if self.nginx_ok else "nginx: [emerg] unexpected }")
+        return super().__call__(cmd, **k)
+
+    def recharges(self):
+        return [a for a in self.appels if a[:3] == ["systemctl", "reload", "nginx"]]
+
+
+def interface_prete(bac):
+    c.MARQUE_INTERFACE.write_text("ok")
+    c.creer_cle()
+
+
+def test_le_vhost_garde_par_un_administrateur_et_pose_la_cle_apres_la_garde(bac_a_sable):
+    v = c.contenu_vhost(c.charger(), "voicestudio.gk3.secubox.in", "admin.gk3.secubox.in")
+    assert "server_name voicestudio.gk3.secubox.in;" in v and "listen 9080;" in v
+    assert "auth_request /__sbx_voicestudio_garde;" in v and "error_page 401 403 = @voicestudio_refus;" in v
+    assert "proxy_pass http://unix:/run/secubox/voicestudio.sock:/gate;" in v          # la garde = require_jwt du module
+    assert "internal;" in v                                                             # la garde n'est pas joignable de l'extérieur
+    assert v.index("auth_request") < v.index(f"include {c.SNIPPET_CLE};")               # la clé n'est posée QU'APRÈS la garde
+    assert "https://admin.gk3.secubox.in/login.html" in v
+
+
+def test_le_vhost_ne_laisse_passer_ni_cookie_ni_authorization_du_navigateur(bac_a_sable):
+    v = c.contenu_vhost(c.charger(), "voicestudio.gk3.secubox.in", "")
+    assert 'proxy_set_header Cookie "";' in v                                           # le cookie de session SecuBox ne sort pas
+    assert "$http_authorization" not in v and "$http_cookie" not in v
+    garde = v[v.index("location = /__sbx_voicestudio_garde"):v.index("location @voicestudio_refus")]
+    assert "proxy_pass_request_body off;" in garde and 'Content-Length ""' in garde
+
+
+def test_le_vhost_porte_les_websockets_et_les_envois_volumineux(bac_a_sable):
+    v = c.contenu_vhost(c.charger(), "voicestudio.gk3.secubox.in", "")
+    assert "proxy_set_header Upgrade $http_upgrade;" in v and "Connection $sbx_vs_connexion;" in v
+    assert "map $http_upgrade $sbx_vs_connexion" in v and "proxy_http_version 1.1;" in v
+    assert "client_max_body_size 2g;" in v and "proxy_request_buffering off;" in v and "proxy_read_timeout 3600s;" in v
+    assert "proxy_pass http://10.100.0.230:3900;" in v
+
+
+def test_le_vhost_refuse_une_ip_de_conteneur_suspecte(bac_a_sable):
+    cfg = c.charger()
+    cfg["lxc"]["ip"] = "10.100.0.230; return 200"
+    with pytest.raises(c.Erreur):
+        c.contenu_vhost(cfg, "voicestudio.gk3.secubox.in", "")
+
+
+def test_le_snippet_de_cle_n_accepte_qu_une_cle_de_forme_connue(bac_a_sable):
+    c.creer_cle()
+    s = c.contenu_snippet_cle()
+    assert s.splitlines()[-1] == f'proxy_set_header Authorization "Bearer {c.lire_cle()}";'
+    c.CLE.write_text('abc"; return 200; #\n')                       # une clé piégée ne doit JAMAIS entrer dans un fichier nginx
+    assert c.contenu_snippet_cle() is None
+    c.CLE.write_text("court\n")
+    assert c.contenu_snippet_cle() is None
+
+
+def test_pas_de_vhost_tant_que_l_interface_n_est_pas_construite(bac_a_sable):
+    run = DomaineFaux()
+    c.creer_cle()
+    r = c.appliquer_vhost(c.charger(), run)
+    assert r["actif"] is False and not (c.NGINX_DISPO / c.VHOST_FICHIER).exists() and not c.SNIPPET_CLE.exists()
+
+
+def test_le_vhost_est_pose_active_et_nginx_recharge_une_fois(bac_a_sable):
+    interface_prete(bac_a_sable)
+    run = DomaineFaux()
+    r = c.appliquer_vhost(c.charger(), run)
+    assert r == {"actif": True, "domaine": "voicestudio.gk3.secubox.in"}
+    assert (c.NGINX_DISPO / c.VHOST_FICHIER).exists() and (c.NGINX_ACTIF / c.VHOST_FICHIER).is_symlink()
+    assert stat.S_IMODE(c.SNIPPET_CLE.stat().st_mode) == 0o600                          # la clé n'est lisible que de root
+    assert len(run.recharges()) == 1
+    c.appliquer_vhost(c.charger(), run)                                                  # idempotent : rien de changé, pas de rechargement
+    assert len(run.recharges()) == 1
+
+
+def test_une_configuration_nginx_refusee_n_est_pas_laissee_en_place(bac_a_sable, capsys):
+    interface_prete(bac_a_sable)
+    run = DomaineFaux(nginx_ok=False)
+    r = c.appliquer_vhost(c.charger(), run)
+    assert r["actif"] is False and "refusé" in r["erreur"]
+    assert not (c.NGINX_ACTIF / c.VHOST_FICHIER).exists()                                # le frontal reste sain
+    assert not run.recharges() and "nginx -t échoue" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("domaine", ["", "evil.com; rm -rf /", "a b", "UPPER_case", "x" * 300])
+def test_un_domaine_suspect_ne_pose_aucun_vhost(bac_a_sable, domaine):
+    interface_prete(bac_a_sable)
+    r = c.appliquer_vhost(c.charger(), DomaineFaux(domaine=domaine))
+    assert r["actif"] is False and not (c.NGINX_DISPO / c.VHOST_FICHIER).exists()
+
+
+def test_renouveler_la_cle_met_a_jour_nginx(bac_a_sable):
+    """Sinon l'interface native répondrait 401 : nginx poserait l'ANCIENNE clé."""
+    interface_prete(bac_a_sable)
+    run = DomaineFaux(etat="RUNNING")
+    c.appliquer_vhost(c.charger(), run)
+    avant = c.SNIPPET_CLE.read_text()
+    c.cmd_cle_renouveler(run)
+    assert c.SNIPPET_CLE.read_text() != avant and c.lire_cle() in c.SNIPPET_CLE.read_text()
+    assert len(run.recharges()) == 2
+
+
+def test_interface_desactivee_retire_le_vhost(bac_a_sable):
+    interface_prete(bac_a_sable)
+    run = DomaineFaux()
+    c.appliquer_vhost(c.charger(), run)
+    c.ecrire_toml("interface", "activer", False)
+    r = c.appliquer_vhost(c.charger(), run)
+    assert r["actif"] is False and not (c.NGINX_ACTIF / c.VHOST_FICHIER).exists() and not c.SNIPPET_CLE.exists()
+
+
+def test_cmd_interface_construit_puis_pose_le_vhost(bac_a_sable):
+    c.creer_cle()
+    run = DomaineFaux(etat="RUNNING")
+    reel = c.subprocess.run
+    vus = []
+
+    def suivi(cmd, **k):
+        if cmd[:2] == ["bash", c.INSTALL]:
+            vus.append(cmd)
+            return Rep(0)
+        return run(cmd, **k)
+    assert c.cmd_interface(suivi) == 0
+    assert vus == [["bash", c.INSTALL, "--interface"]] and c.MARQUE_INTERFACE.exists()
+    assert (c.NGINX_ACTIF / c.VHOST_FICHIER).is_symlink() and "interface construite" in c.AUDIT.read_text()
+    del reel
+
+
+def test_cmd_interface_en_echec_ne_pose_ni_marqueur_ni_vhost(bac_a_sable):
+    c.creer_cle()
+    run = DomaineFaux(etat="RUNNING")
+    rc = c.cmd_interface(lambda cmd, **k: Rep(4) if cmd[:2] == ["bash", c.INSTALL] else run(cmd, **k))
+    assert rc == 4 and not c.MARQUE_INTERFACE.exists() and not (c.NGINX_ACTIF / c.VHOST_FICHIER).exists()
+    assert "interface echec-rc4" in c.AUDIT.read_text()
+
+
+def test_cmd_interface_sans_lxc_dit_quoi_faire(bac_a_sable):
+    with pytest.raises(c.Erreur, match="voicestudioctl install"):
+        c.cmd_interface(DomaineFaux(etat="ABSENT"))
+
+
+def test_cmd_interface_desactivee_ne_construit_rien(bac_a_sable):
+    c.ecrire_toml("interface", "activer", False)
+    run = DomaineFaux(etat="RUNNING")
+    assert c.cmd_interface(run) == 0 and not any(a[0] == "bash" for a in run.appels)
+
+
+def test_interface_ferme_retire_vhost_cle_et_marqueur(bac_a_sable):
+    interface_prete(bac_a_sable)
+    run = DomaineFaux()
+    c.appliquer_vhost(c.charger(), run)
+    assert c.cmd_interface_ferme(run) == 0
+    assert not c.MARQUE_INTERFACE.exists() and not c.SNIPPET_CLE.exists() and not (c.NGINX_ACTIF / c.VHOST_FICHIER).exists()
+
+
+def test_la_construction_n_est_pas_offerte_au_panneau():
+    """`interface` modifie le LXC et nginx : ni la porte `api` ni le panneau ne l'exposent."""
+    assert "interface" not in c.ACTIONS_API and "interface-ferme" not in c.ACTIONS_API
+
+
+def test_l_etat_dit_si_l_interface_native_est_prete(bac_a_sable):
+    assert c.etat_complet(LxcFaux("STOPPED"))["interface_native"] is False
+    interface_prete(bac_a_sable)
+    run = DomaineFaux(etat="STOPPED")
+    c.appliquer_vhost(c.charger(), run)
+    e = c.etat_complet(run)
+    assert e["interface_native"] is True and e["interface_vhost"] is True
+
+
+def test_les_booleens_s_ecrivent_en_toml_valide(bac_a_sable):
+    c.ecrire_toml("interface", "activer", False)
+    assert "activer = false" in c.CONF.read_text()
+    assert tomllib.loads(c.CONF.read_text())["interface"]["activer"] is False
+    c.ecrire_toml("interface", "activer", True)
+    assert tomllib.loads(c.CONF.read_text())["interface"]["activer"] is True

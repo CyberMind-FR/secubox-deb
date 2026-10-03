@@ -1,3 +1,12 @@
+secubox-webos (1.0.399-1~bookworm1) bookworm; urgency=low
+
+  * Hall : VoiceStudio en DEUX entrées, comme Coffre / Mon coffre (#1917). « VoiceStudio » (administrateur) : carte d'état
+    (lecture de /api/v1/voicestudio/status, minimal), agrandie elle ouvre l'interface native du studio sur son domaine,
+    ⚙️ ouvre la console SecuBox du module. « Voix » (usager, id `voix`) : dire, dicter. Le Hall ne relaie que /usager/ et
+    la route /status ; aucune autre route d'administration à son origine. Aides des deux cartes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 11:00:00 +0200
+
 secubox-webos (1.0.398-1~bookworm1) bookworm; urgency=low
 
   * Hall : carte « Voix » (VoiceStudio, #1917) — la facette d'usager embarquée : dire un texte, dicter. Carte locale

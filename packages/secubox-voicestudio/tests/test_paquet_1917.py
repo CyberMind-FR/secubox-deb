@@ -280,3 +280,57 @@ def test_les_entrees_de_menu_sont_servies_par_la_console_pas_par_un_domaine_devi
         d = json.loads(f.read_text())
         assert d.get("same_origin") is True, f.name
         assert "domain" not in d and d["path"].startswith("/voicestudio/"), f.name
+
+
+# ── interface native ─────────────────────────────────────────────────────────────────────────────────────────────
+def test_la_configuration_epingle_bun_par_version_et_empreinte():
+    d = tomllib.loads(lire("conf/voicestudio.toml"))["interface"]
+    assert d["activer"] is True and re.fullmatch(r"[0-9a-f]{64}", d["bun_sha256"])
+    assert d["bun_version"] in d["bun_url"] and d["bun_url"].startswith("https://github.com/oven-sh/bun/releases/download/")
+    assert d["domaine"] == "voicestudio"
+
+
+def test_la_construction_verifie_bun_avant_de_l_executer_et_ne_laisse_que_dist():
+    sh = lire("lxc/install-lxc.sh")
+    corps = sh[sh.index("construire_interface_dans_le_lxc() {"):sh.index("construire_interface() {")]
+    assert corps.index("sha256sum -c") < corps.index("unzip -q")                  # empreinte AVANT de déplier
+    assert corps.index("unzip -q") < corps.index('"$B" install --frozen-lockfile')
+    assert '"$B" install --frozen-lockfile' in corps and '"$B" run --cwd frontend build' in corps     # recette du Dockerfile amont
+    assert "rm -rf /tmp/fb /opt/bun /tmp/bun.zip /root/.bun" in corps             # il ne reste que dist
+    assert not re.search(r"\|\s*(sh|bash)\b", corps)                                   # jamais « curl | sh »
+    assert '_ "$BUN_URL"' in corps and '_ "$BUN_SHA256"' in corps                  # valeurs en arguments, pas interpolées
+
+
+def test_le_moteur_est_arrete_pendant_la_construction_et_toujours_relance():
+    sh = lire("lxc/install-lxc.sh")
+    corps = sh[sh.index("construire_interface() {"):]
+    assert corps.index("systemctl stop voicestudio.service") < corps.index("construire_interface_dans_le_lxc || rc=$?")
+    assert corps.index("construire_interface_dans_le_lxc || rc=$?") < corps.index("systemctl start voicestudio.service")
+    assert 'if [ "$etait_actif" = 1 ]; then la systemctl start' in corps          # relancé même si la construction a échoué
+
+
+def test_l_unite_de_construction_ne_tourne_qu_une_fois_apres_le_provisionnement():
+    u = lire("systemd/secubox-voicestudio-interface.service")
+    assert "ConditionPathExists=/var/lib/secubox/voicestudio/.lxc-provisioned" in u
+    assert "ConditionPathExists=!/var/lib/secubox/voicestudio/.interface-native" in u
+    assert "ExecStart=/usr/sbin/voicestudioctl interface" in u and "secubox-voicestudio-interface.service" in lire("debian/rules")
+    assert "start --no-block secubox-voicestudio-interface.service" in lire("debian/postinst")
+
+
+def test_la_postinst_expose_le_domaine_comme_les_modules_a_domaine_propre():
+    post = lire("debian/postinst")
+    assert 'secubox-domaine voicestudio' in post and "haproxyctl vhost add" in post and "haproxy-routes.json" in post
+    assert '["127.0.0.1", 9080]' in post and "restart secubox-waf-ng" in post
+    assert "kill -HUP" not in post and "SIGHUP" not in re.sub(r"#.*", "", post)       # un SIGHUP tue sbxwaf
+
+
+def test_la_desinstallation_retire_le_vhost_et_la_cle_nginx():
+    assert "voicestudioctl interface-ferme" in lire("debian/prerm")
+    postrm = lire("debian/postrm")
+    assert "secubox-voicestudio.conf" in postrm and "secubox-voicestudio-cle.conf" in postrm
+
+
+def test_la_cle_nginx_n_est_ecrite_que_par_le_ctl_et_en_0600():
+    ctl = lire("sbin/voicestudioctl")
+    assert "os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600" in ctl[ctl.index("def appliquer_vhost"):]
+    assert "secubox-voicestudio-cle.conf" in ctl and "secubox-voicestudio-cle" not in lire("debian/rules")   # pas livrée par dpkg
