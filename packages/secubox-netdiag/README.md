@@ -45,3 +45,10 @@ Configuration file: `/etc/secubox/netdiag.toml`
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+
+## secubox-dhcp-probe — qui sert le DHCP, et que promet-il ?
+
+`secubox-dhcp-probe -i eth2 --attendu 192.168.1.200` (root). Lecture seule : un DISCOVER en diffusion, écoute des OFFER, jamais de
+REQUEST (aucun bail). Affiche serveur, passerelle, DNS, bail ; code de sortie 0 conforme, 1 aucune réponse, 2 plusieurs serveurs
+ou DNS inattendu, 3 erreur. N'agit sur aucun réseau : il sert à décider d'un changement de DHCP, pas à le faire.
