@@ -142,3 +142,23 @@ risque dans un espace de noms jetable : `ip netns add t; ip netns exec t nft -f 
 
 `systemd-journald` y échoue (`status=228/SECCOMP`) : aucune entrée, jamais. Lire le fichier de log de l'application
 depuis l'hôte (le rootfs et les montages y sont lisibles) plutôt que `lxc-attach … journalctl`.
+
+## `swapon --show` voit du swap mais la box manque de mémoire : le zram n'est pas un swap disque
+
+Le zram est de la RAM comprimée : il se remplit (gk3 : 3,9/3,9 Go) et il faut alors un vrai swap **disque** pour que le noyau puisse évincer
+les pages froides. Tester « un swap est actif » sans exclure `/dev/zram*` fait croire que le swap disque existe et ne le crée jamais
+(`secubox-tuning-apply` avant 1.2.5). Lire `/proc/swaps` et ne compter que les périphériques hors zram. Sur une box à eMMC/SD le swap va sur le
+gros disque (`/data`) ; sur gk3 le SSD est sous `/` et `/data` n'a que 4 Go : repli `/srv/secubox`, jamais une carte (usure).
+
+## « HTTP 504 » alors que le service a bien travaillé : le frontal coupe à 30 s
+
+`timeout server 30s` dans les `defaults` de HAProxy protège tout le parc ; une opération légitimement longue (téléversement de 22 Mo, synthèse
+vocale à froid de 110 s) est abandonnée côté client pendant que le serveur continue — et l'usager recommence. Remède propre : une exception
+`http-request set-timeout server <durée> if <acl>` **dans le backend** (`set-timeout` n'existe pas ailleurs) pour les chemins exacts concernés,
+générée par `haproxyctl` (jamais éditée à la main : `haproxyctl generate` puis `haproxy -c` puis `reload`). Et empiler les délais dans le bon
+ordre : module < relais nginx < frontal public (300 s < 330 s < 10 min).
+
+## Une nouvelle section TOML qui porte le nom d'une ancienne clé à plat
+
+Migrer « ancien schéma → nouveau » en testant `if "memoire" in conf` prend la nouvelle SECTION `[memoire]` pour l'ancienne clé `memoire = "4g"` et
+réécrit un fichier déjà à jour. Distinguer par le TYPE de la valeur (`isinstance(v, dict)`), et tester la migration sur un fichier déjà migré.

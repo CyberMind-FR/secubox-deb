@@ -26,6 +26,10 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   deux entrées « VoiceStudio » (état ; agrandie = interface native ; ⚙️ = console) et « Voix » (dire, dicter).
 - **Relais du maillage** : gk2 relaie `voicestudio.gk3.secubox.in` → `10.10.0.5:9080` (outil officiel
   `secubox-relais-maillage relayer …`, posé à la main car le minuteur horaire n'avait pas encore pris le nom).
+- **Mémoire (2026-10-03)** : la synthèse vocale chargeait un modèle de ≈ 3,6 Go ; le tueur de mémoire global abattait le moteur (swap plein) et le
+  frontal public coupait à 30 s (« HTTP 504 »). Corrigé et DÉPLOYÉ : swap disque 8 Go sur /srv/secubox (system-tuning 1.2.5), mise en sommeil des
+  autres conteneurs endormables avant une synthèse (voicestudio 0.4.3), modèle rendu après 60 s, délais 300 s / 330 s / 10 min (HAProxy 1.8.24 sur
+  gk2, webos 1.0.401). Essai réel : 109 s à froid, 0 OOM. **À savoir** : la première synthèse après inactivité prend ≈ 110 s sur gk3.
 - **Reste à valider par une personne connectée en administrateur** (je n'ai pas d'identifiants web) : (1) `/voicestudio/` ;
   (2) `https://voicestudio.gk3.secubox.in/` — l'interface native chargée avec la session (assistant de première
   utilisation, voix, doublage ; le moteur migré a peut-être déjà ses préférences) ; (3) la carte « Voix » du Hall (dire, dicter
