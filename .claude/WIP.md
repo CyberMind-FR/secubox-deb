@@ -17,17 +17,20 @@ real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à 
 (veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
 apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
-## 🔄 Chantier en cours — #1917 VoiceStudio : livré, reste la validation par une personne connectée
+## 🔄 Chantier en cours — #1917 VoiceStudio : livré et déployé sur gk3, reste la validation connectée
 
-- Livré et vérifié : `secubox-voicestudio` 0.2.4 sur gk3 (LXC natif, bascule faite, gk2 le consomme par le maillage,
-  pare-feu, API sous bac à sable) ; **webui d'administration** `/voicestudio/` et **page d'usager**
-  `/voicestudio/usager.html` ; **carte « Voix » du Hall** (`secubox-webos` 1.0.398, déployé gk2 et gk3 : le Hall ne
-  relaie que `/usager/`, aucune route d'administration à son origine ; sur gk2 la carte dit « pas installé »).
-- **#1743 : podman purgé** sur gk2 et gk3 (gk3 : 11 Go rendus) ; plus aucun runtime OCI nulle part, dettes de la liste
-  retirées. Il ne reste de #1743 que le test de dépôt qui l'empêche de revenir.
-- **Reste à valider par une personne connectée** (je n'ai pas d'identifiants web) : les deux pages et la carte du Hall
-  au navigateur (dire, dicter au micro), puis fermer #1917 (`closes #1917` dans `HISTORY.md` +
-  `scripts/sync-issues.sh --apply`) et #1743.
+- **Livré et vérifié (hors session connectée)** : `secubox-voicestudio` 0.3.2 sur gk3 — LXC natif, API, console d'administration
+  `/voicestudio/`, page d'usager `/voicestudio/usager.html`, **interface native du studio** sur
+  `https://voicestudio.gk3.secubox.in/` (construite dans le LXC avec bun épinglé ; administrateurs seulement : `auth_request` →
+  `/gate`, clé posée par nginx ; 401 sur tous les chemins sans administrateur). Hall (`secubox-webos` 1.0.399, gk2 + gk3) :
+  deux entrées « VoiceStudio » (état ; agrandie = interface native ; ⚙️ = console) et « Voix » (dire, dicter).
+- **Relais du maillage** : gk2 relaie `voicestudio.gk3.secubox.in` → `10.10.0.5:9080` (outil officiel
+  `secubox-relais-maillage relayer …`, posé à la main car le minuteur horaire n'avait pas encore pris le nom).
+- **Reste à valider par une personne connectée en administrateur** (je n'ai pas d'identifiants web) : (1) `/voicestudio/` ;
+  (2) `https://voicestudio.gk3.secubox.in/` — l'interface native chargée avec la session (assistant de première
+  utilisation, voix, doublage ; le moteur migré a peut-être déjà ses préférences) ; (3) la carte « Voix » du Hall (dire, dicter
+  au micro) ; (4) l'agrandissement de la carte « VoiceStudio » dans le Hall (cadre sur le domaine du studio). Puis fermer
+  #1917 et #1743 (`closes #…` dans `HISTORY.md` + `scripts/sync-issues.sh --apply`).
 
 ## ⏸️ Suspendu
 
