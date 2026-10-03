@@ -22,11 +22,33 @@ RE_DOM='^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'
 
 domaine() { secubox-domaine "$1" 2>/dev/null | tr 'A-Z' 'a-z' | head -1; }
 
+# Qui peut encadrer la page. Le navigateur vérifie TOUTE la chaîne des cadres parents : le webmail est lui-même affiché dans le Hall,
+# donc le Hall doit figurer (constaté sur gk2 : « frame-ancestors https://webmail… » bloquait la page). On reprend EXACTEMENT la liste
+# que le webmail annonce (celle qu'ajoute HAProxy pour les services cadrables), « 'self' » devenant l'origine du webmail ; sinon, le
+# webmail et le Hall de cette box. Chaque origine est validée : rien d'autre ne finit dans l'en-tête.
+ancetres() {
+    local web="$1" hall ent liste t out="https://${web}"
+    hall="$(domaine hall)"
+    [[ "$hall" =~ $RE_DOM ]] && out="$out https://${hall}"
+    ent="${SECUBOX_PGP_ANCETRES_ENT:-}"
+    if [ -z "$ent" ] && [ -z "${SECUBOX_PGP_SANS_RESEAU:-}" ]; then
+        ent="$(curl -sk -m 5 -I --resolve "${web}:443:127.0.0.1" "https://${web}/" 2>/dev/null | tr -d '\r' | grep -i '^content-security-policy:' | head -1 || true)"
+    fi
+    liste="$(printf '%s' "$ent" | sed -n 's/.*frame-ancestors \([^;]*\).*/\1/p')"
+    for t in $liste; do
+        case "$t" in "'self'") t="https://${web}" ;; esac
+        [[ "$t" =~ ^https://[a-z0-9.-]+(:[0-9]{1,5})?$ ]] && out="$out $t"
+    done
+    printf '%s\n' $out | awk '!v[$0]++' | tr '\n' ' ' | sed 's/ $//'
+}
+
 contenu() {
-    local dom="$1" web="$2"
+    local dom="$1" web="$2" anc
+    anc="$(ancetres "$web")"
     cat <<CONF
 # GÉNÉRÉ par coffre-pgp-vhost (secubox-vault) — ne pas éditer. Page OpenPGP du Coffre, à origine séparée (#1852, P5).
 # nginx: 9080, derrière HAProxy puis le WAF. Elle n'a pas d'interface : le webmail l'insère dans un cadre invisible.
+# Encadrable par : ${anc}
 server {
     listen 9080;
     server_name ${dom};
@@ -40,7 +62,7 @@ server {
         alias /usr/share/secubox/www/pgp/;
         index index.html;
         add_header Cache-Control "no-cache" always;
-        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; frame-ancestors https://${web}; base-uri 'none'; form-action 'none'" always;
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; frame-ancestors ${anc}; base-uri 'none'; form-action 'none'" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "no-referrer" always;
         try_files \$uri \$uri/ =404;
@@ -110,4 +132,4 @@ if command -v nginx >/dev/null 2>&1; then
     if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true
     else rm -f "$ACTIF/$FICHIER"; echo "coffre-pgp-vhost : nginx -t refuse la configuration — vhost retiré" >&2; exit 1; fi
 fi
-echo "coffre-pgp-vhost : https://${DOM}/pgp/ (encadrable par https://${WEB} seulement)"
+echo "coffre-pgp-vhost : https://${DOM}/pgp/ (encadrable par : $(ancetres "$WEB"))"
