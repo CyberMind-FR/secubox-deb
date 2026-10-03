@@ -31,6 +31,15 @@ navigateur ─► nginx ─► /run/secubox/voicestudio.sock   (API du module : 
 | Architecture | **amd64 seulement** (aucune roue torch CPU arm64 validée ici) |
 | Interface native | **le studio complet de VoiceStudio**, construit dans le LXC (bun épinglé version + sha256, `bun install --frozen-lockfile` puis `bun run --cwd frontend build`, comme le Dockerfile amont ; bun supprimé ensuite), servie sur `voicestudio.<domaine de la box>` **aux administrateurs seulement** : garde `auth_request` → `/gate` (require_jwt), clé du moteur posée par nginx (snippet root 0600, jamais vue du navigateur), aucun cookie vers le moteur |
 
+## Exposer l'interface native d'une box SANS WAN (gk3)
+
+`voicestudio.<domaine de la box>` est servi par nginx (9080) derrière HAProxy et le WAF **de la box** ; le postinst déclare
+le vhost HAProxy et la route WAF comme pour les autres modules à domaine propre. Une box sans WAN (gk3) est atteinte
+depuis l'extérieur par le **relais du maillage** (gk2 termine le TLS avec le joker `*.gk3.secubox.in`, son WAF inspecte, puis
+relaie vers `10.10.0.5:9080`). Le minuteur horaire de `secubox-relais-maillage` expose les noms des pairs ; pour ne pas
+attendre : sur le relais, `secubox-relais-maillage relayer voicestudio.gk3.secubox.in 10.10.0.5`. Vérifié : sans
+administrateur, tout chemin répond 401 (même avec une fausse clé ou un faux cookie), aucun contenu du moteur ne fuit.
+
 ## Deux interfaces, une API
 
 | Facette | Page | Garde | Contenu |

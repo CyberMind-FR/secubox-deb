@@ -1238,6 +1238,23 @@ def test_interface_desactivee_retire_le_vhost(bac_a_sable):
     assert r["actif"] is False and not (c.NGINX_ACTIF / c.VHOST_FICHIER).exists() and not c.SNIPPET_CLE.exists()
 
 
+def test_cmd_interface_ne_croit_pas_un_code_0_sans_dist(bac_a_sable, capsys):
+    """Régression gk3 : le script sortait en 0 (« désactivée ») sans rien construire ; le marqueur posé empêchait toute reprise."""
+    c.creer_cle()
+    run = DomaineFaux(etat="RUNNING")
+    base = run.__call__
+
+    def sans_dist(cmd, **k):
+        if cmd[:2] == ["bash", c.INSTALL]:
+            return Rep(0)
+        if cmd[0] == "lxc-attach" and cmd[-3:] == ["test", "-s", "/app/frontend/dist/index.html"]:
+            return Rep(1)                                                     # dist absent
+        return base(cmd, **k)
+    assert c.cmd_interface(sans_dist) == 5
+    assert not c.MARQUE_INTERFACE.exists() and not (c.NGINX_ACTIF / c.VHOST_FICHIER).exists()
+    assert "echec-dist-absent" in c.AUDIT.read_text() and "frontend/dist est absent" in capsys.readouterr().err
+
+
 def test_cmd_interface_construit_puis_pose_le_vhost(bac_a_sable):
     c.creer_cle()
     run = DomaineFaux(etat="RUNNING")

@@ -875,6 +875,12 @@ def cmd_interface(run=_run) -> int:
     if r.returncode != 0:
         audit("interface", f"echec-rc{r.returncode}")
         return r.returncode
+    # Un code de sortie 0 ne prouve PAS que l'interface existe : le script sort aussi en 0 quand il conclut « désactivée »
+    # (vu sur gk3 : configuration mal lue → marqueur posé, rien construit, et l'unité ne retentait plus jamais).
+    if not interface_construite(c, run):
+        audit("interface", "echec-dist-absent")
+        print("voicestudioctl : le script a rendu 0 mais frontend/dist est absent du LXC — marqueur NON posé", file=sys.stderr)
+        return 5
     MARQUE_INTERFACE.parent.mkdir(parents=True, exist_ok=True)
     MARQUE_INTERFACE.write_text(datetime.now(timezone.utc).isoformat() + "\n")
     audit("interface", "construite")
