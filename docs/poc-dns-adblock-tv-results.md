@@ -61,7 +61,7 @@ reste court et non exhaustif.
 ## 8. Domaines nécessaires
 Autorisés et nécessaires à la lecture (lecture démarrée, vidéo vue) : `cloudreplay.ftven.fr`, `k7.ftven.fr`, `hdfauth.ftven.fr`, `geo-info.ftven.fr`,
 `medias.france.tv`, `proxy-mediation.yatta.francetv.fr`, `assets.webservices.francetelevisions.fr`. `7cd77.v.fwmrm.net` (FreeWheel) est demandé avant et pendant les coupures :
-il n'a **pas** été bloqué, donc on ne sait pas s'il est nécessaire. `gcdn.2mdn.net`, vu sans pub en phase E, est bloqué par la liste générale d'ad-guard pour les autres appareils :
+il n'est **pas** nécessaire à la lecture : bloqué en phase D, la vidéo démarre normalement (voir §12). `gcdn.2mdn.net`, vu sans pub en phase E, est bloqué par la liste générale d'ad-guard pour les autres appareils :
 non testé sur la TV.
 
 ## 9. Faux positifs
@@ -77,6 +77,10 @@ Détection **sans inspection HTTPS** : appareils visibles (ARP/NDP) mais **silen
 Constaté par l'opérateur : lors d'un pré-roll de 6 secondes en phase C, **écran noir d'environ 6 s, sans pub, puis lecture normale**, sans message d'erreur.
 Le DNS supprime donc le contenu de la pub mais pas le créneau : le serveur d'insertion (FreeWheel) répond encore et la TV attend la durée prévue. Non mesuré :
 la durée du noir avec une pub plus longue, les coupures en milieu de programme, les autres applications.
+
+Phase D (en plus, `7cd77.v.fwmrm.net` bloqué) : l'opérateur constate **plus de pub et lecture en direct normale**, sans écran noir signalé. Le serveur d'insertion ne répond plus, la TV
+ne planifie donc pas de coupure. Limites : quelques lancements seulement, coupures en milieu de programme non vérifiées, une seule application, une seule TV (la seconde n'a pas été testée) ;
+une mise à jour de l'application peut changer les noms. La TV réessaie en boucle les domaines refusés (20 à 24 requêtes en 2,5 min), ce qui reste du trafic DNS inutile.
 
 ## 13. Ce que le DNS permet
 Bloquer un **nom** publicitaire ou de pistage distinct (A, B), observer ce qu'un appareil résout (liste de domaines, volume, catégories), mesurer l'effet d'un filtrage appareil par appareil, sans MITM.
