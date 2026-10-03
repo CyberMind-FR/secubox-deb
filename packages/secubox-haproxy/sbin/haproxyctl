@@ -1385,6 +1385,10 @@ EOF
 backend nginx_vhosts
     mode http
     balance roundrobin
+    # STUDIO NATIF de VoiceStudio (#1917), servi SANS passer par le WAF (acces LAN direct) : memes delais longs que
+    # dans sbxwaf_inspector (30 s par defaut coupent une synthese qui dure 2 minutes). Prefixe de domaine exact.
+    acl est_studio_natif hdr_beg(host) -i voicestudio.
+    http-request set-timeout server 1h if est_studio_natif
     server srv0 127.0.0.1:9080 check
 EOF
     grep -q '^backend webui_direct$' "$out" || cat >> "$out" << EOF

@@ -163,3 +163,12 @@ def test_les_commentaires_voicestudio_n_ont_pas_ete_executes_par_bash(generation
     cfg, _, err = generation
     assert "command not found" not in err
     assert "VOIX ET STUDIO (VoiceStudio, #1917)" in cfg and "Chemins et prefixe de domaine EXACTS" in cfg
+
+
+def test_le_backend_nginx_direct_porte_aussi_le_delai_du_studio_natif(generation):
+    """Acces LAN direct a la box (sans WAF) : meme heure de delai, sinon le studio reste coupe a 30 s."""
+    cfg = generation[0]
+    debut = cfg.index("\nbackend nginx_vhosts")
+    bloc = cfg[debut:cfg.index("\nbackend ", debut + 10) if "\nbackend " in cfg[debut + 10:] else len(cfg)]
+    assert "acl est_studio_natif hdr_beg(host) -i voicestudio." in bloc and "set-timeout server 1h if est_studio_natif" in bloc
+    assert bloc.count("set-timeout server") == 1

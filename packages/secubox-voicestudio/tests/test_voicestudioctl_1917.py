@@ -1678,3 +1678,10 @@ def test_cmd_voix_rapide_en_echec_du_script_ne_pose_rien(bac_a_sable):
 def test_le_script_du_moteur_pousse_aussi_la_voix_rapide():
     src = Path(c.__file__).read_text()
     assert "voicestudio-rapide.service" in src and "try-restart voicestudio-rapide.service" in src
+
+
+def test_le_studio_natif_est_reserve_au_reseau_local(bac_a_sable):
+    v = c.contenu_vhost(c.charger(), "voicestudio.gk3.secubox.in", "")
+    assert "set $sbx_vs_lan $lan_client;" in v and "if ($sbx_vs_lan != 1)" in v and "return 403" in v
+    assert v.index("if ($sbx_vs_lan != 1)") < v.index("auth_request /__sbx_voicestudio_garde;")     # avant la garde
+    assert "$http_x_forwarded_for" not in v                           # jamais un en-tête du client

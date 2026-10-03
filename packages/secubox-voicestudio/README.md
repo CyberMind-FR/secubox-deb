@@ -31,14 +31,18 @@ navigateur ─► nginx ─► /run/secubox/voicestudio.sock   (API du module : 
 | Architecture | **amd64 seulement** (aucune roue torch CPU arm64 validée ici) |
 | Interface native | **le studio complet de VoiceStudio**, construit dans le LXC (bun épinglé version + sha256, `bun install --frozen-lockfile` puis `bun run --cwd frontend build`, comme le Dockerfile amont ; bun supprimé ensuite), servie sur `voicestudio.<domaine de la box>` **aux administrateurs seulement** : garde `auth_request` → `/gate` (require_jwt), clé du moteur posée par nginx (snippet root 0600, jamais vue du navigateur), aucun cookie vers le moteur |
 
-## Exposer l'interface native d'une box SANS WAN (gk3)
+## Interface native : réseau local seulement
 
-`voicestudio.<domaine de la box>` est servi par nginx (9080) derrière HAProxy et le WAF **de la box** ; le postinst déclare
-le vhost HAProxy et la route WAF comme pour les autres modules à domaine propre. Une box sans WAN (gk3) est atteinte
-depuis l'extérieur par le **relais du maillage** (gk2 termine le TLS avec le joker `*.gk3.secubox.in`, son WAF inspecte, puis
-relaie vers `10.10.0.5:9080`). Le minuteur horaire de `secubox-relais-maillage` expose les noms des pairs ; pour ne pas
-attendre : sur le relais, `secubox-relais-maillage relayer voicestudio.gk3.secubox.in 10.10.0.5`. Vérifié : sans
-administrateur, tout chemin répond 401 (même avec une fausse clé ou un faux cookie), aucun contenu du moteur ne fuit.
+`voicestudio.<domaine de la box>` est servi par nginx (9080) derrière le HAProxy **de la box**, et **uniquement au réseau local** :
+le vhost répond 403 à tout client que `$lan_client` (secubox-hub, adresse réelle du client) ne tient pas pour local — Internet,
+maillage, relais de gk2 compris. Pourquoi : ses traitements durent plusieurs minutes (le WAF public coupe à 120 s : « 504 » sur
+`/generate`, `/transcribe`), ses envois sont volumineux, et un studio de doublage/clonage n'a rien à faire sur Internet. La garde
+administrateur (`/gate`, `require_jwt`) s'applique en plus ; la clé du moteur reste posée par nginx.
+
+Pour qu'un poste local y arrive **sans passer par la box de bordure** (gk2, son WAF et ses 120 s), le DNS local doit répondre
+l'adresse LAN de la box : sur gk2 (résolveur du réseau), `local-data: "voicestudio.gk3.secubox.in. A 192.168.1.9"` dans
+`/etc/unbound/unbound.conf.d/` (zone `transparent`). Sans cela le nom résout vers l'IP publique et le client local est
+renvoyé par la box de bordure — donc 403, car relayé.
 
 ## Deux interfaces, une API
 

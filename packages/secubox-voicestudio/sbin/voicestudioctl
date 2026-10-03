@@ -631,6 +631,13 @@ server {{
 
     location ^~ /.well-known/acme-challenge/ {{ root /usr/share/secubox/www; try_files $uri =404; }}
 
+    # RÉSEAU LOCAL SEULEMENT. Le studio natif fait des traitements de plusieurs minutes (le WAF public coupe à 120 s)
+    # et ses envois sont volumineux : il n'a rien à faire sur Internet. $lan_client (secubox-hub) se fie à l'adresse
+    # réelle du client — jamais à un en-tête que le client peut écrire — et vaut 0 pour tout ce qui vient du maillage
+    # ou d'Internet (donc du relais de gk2). La garde administrateur ci-dessous s'applique EN PLUS.
+    set $sbx_vs_lan $lan_client;
+    if ($sbx_vs_lan != 1) {{ return 403 "Interface réservée au réseau local.\n"; }}
+
     # GARDE : le module répond 204 à un administrateur réel (require_jwt), 401/403 sinon. Les en-têtes de la requête
     # d'origine (cookie de session, Authorization) sont transmis à CE sous-appel, pas au moteur.
     location = /__sbx_voicestudio_garde {{

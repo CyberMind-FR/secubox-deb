@@ -171,3 +171,5 @@ y dorment, par mois) — ne le lire que sur demande.
 - [ ] SBXAide impose `style-src 'unsafe-inline'` aux services stricts (radio/bbs faits) —
       à terme, externaliser sa CSS + positionner sans style inline pour garder strict.
 
+
+- [ ] VoiceStudio LAN : l'override DNS Unbound et `relais-maillage.toml` de gk2 sont posés à la main (aucun paquet ne les porte). Les packager (candidat : secubox-annuaire-noms ou un drop-in `secubox-split-horizon`) ; sans eux, le nom résout vers l'IP publique et le studio redevient inatteignable.
