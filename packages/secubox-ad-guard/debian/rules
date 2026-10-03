@@ -19,5 +19,18 @@ override_dh_auto_install:
 	install -d debian/secubox-ad-guard/etc/secubox/toolbox
 	[ -f config/filter-sources.json ] && install -m 644 config/filter-sources.json debian/secubox-ad-guard/etc/secubox/toolbox/ || true
 
+	# POC « DNS AdBlock TV » (#1943) : listes de test versionnées, contrôleur root, démon d'alimentation, outils de banc.
+	install -d debian/secubox-ad-guard/usr/share/secubox/ad-guard/lists debian/secubox-ad-guard/usr/share/secubox/ad-guard/tools
+	install -m 644 lists/*.txt lists/MANIFEST.json debian/secubox-ad-guard/usr/share/secubox/ad-guard/lists/
+	install -m 755 tools/dns-tv-test.py tools/dns-limits-lab.py tools/tv-before-after.py tools/maj-manifeste.py debian/secubox-ad-guard/usr/share/secubox/ad-guard/tools/
+	install -m 644 tools/test-domains.txt debian/secubox-ad-guard/usr/share/secubox/ad-guard/tools/
+	install -m 755 sbin/secubox-adguard-tv sbin/secubox-adguard-dnsfeed debian/secubox-ad-guard/usr/sbin/
+	install -d debian/secubox-ad-guard/etc/sudoers.d
+	install -m 440 sudoers.d/secubox-adguard-tv debian/secubox-ad-guard/etc/sudoers.d/
+	install -d debian/secubox-ad-guard/lib/systemd/system
+	install -m 644 debian/secubox-ad-guard-dnsfeed.service debian/secubox-ad-guard/lib/systemd/system/
+
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-adblock-sync secubox-adblock-sync.timer
+	# Le démon d'alimentation du POC (unité installée à la main plus haut) n'est ni activé ni démarré à l'installation : POC isolé,
+	# inactif par défaut. Aucun dh_installsystemd pour lui, donc aucun snippet d'activation dans les scripts du paquet.

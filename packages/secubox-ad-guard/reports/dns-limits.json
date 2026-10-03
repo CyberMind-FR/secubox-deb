@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-03T12:04:37Z",
+  "environnement": "banc local 127.0.0.x, Unbound réel, sans Internet",
+  "non_valide_sur": "flux Freebox réel",
+  "cas": {
+    "A": {
+      "nom": "ads.cdn-pub.sbxlab",
+      "observe": "NOERROR",
+      "block": "NXDOMAIN",
+      "verdict": "bloquable"
+    },
+    "B": {
+      "nom": "metrics.tracker.sbxlab",
+      "observe": "NOERROR",
+      "block": "NXDOMAIN",
+      "verdict": "bloquable"
+    },
+    "C": {
+      "nom": "video.studio.sbxlab",
+      "observe": "NOERROR",
+      "block": "NXDOMAIN",
+      "verdict": "insuffisant : bloquer le nom supprime AUSSI la vidéo"
+    },
+    "D": {
+      "nom": "stream.studio.sbxlab",
+      "block": "NOERROR",
+      "classe": null,
+      "verdict": "insuffisant : le nom du flux est résolu même en BLOCK (aucun nom publicitaire distinct)"
+    },
+    "G": {
+      "nom": "cdn.sharedcloud.sbxlab",
+      "observe": "NOERROR",
+      "block": "NXDOMAIN",
+      "verdict": "faux positif : le contenu légitime du même domaine est bloqué"
+    },
+    "isolement": {
+      "nom": "prod.sbxlab",
+      "client_hors_perimetre": "NXDOMAIN",
+      "tv_observe": "NOERROR",
+      "verdict": "le POC n'altère pas le puits de production pour les autres clients ; l'appareil observé en est exempté"
+    },
+    "ordinaire": {
+      "nom": "news.sbxlab",
+      "block": "NOERROR"
+    },
+    "E": {
+      "adresse": "7.1.1.1",
+      "requetes_dns_emises": 0,
+      "lignes_journal_ajoutees": 0,
+      "verdict": "contourné : sans requête DNS, la box ne voit ni ne bloque rien"
+    },
+    "F": {
+      "nom": "ads.cdn-pub.sbxlab",
+      "resolu_par_externe": "NOERROR",
+      "requetes_vues_par_la_boite": 0,
+      "verdict": "contourné : la box ne voit aucune requête de cet appareil"
+    },
+    "journal_reel": {
+      "evenements": 13,
+      "decisions": {
+        "ALLOWED": 8,
+        "BLOCKED": 5,
+        "UPSTREAM_ERROR": 0
+      },
+      "clients": [
+        "127.0.0.1",
+        "127.0.0.2",
+        "127.0.0.3",
+        "127.0.0.4"
+      ]
+    }
+  }
+}

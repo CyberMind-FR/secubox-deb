@@ -1,0 +1,24 @@
+[Unit]
+Description=SecuBox Ad Guard — compteurs DNS par appareil depuis le journal d'Unbound (POC DNS AdBlock TV, #1943)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1943
+After=unbound.service
+Wants=unbound.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+# Le POC n'est PAS activé à l'installation : `systemctl enable --now secubox-ad-guard-dnsfeed` après `secubox-adguard-tv apply`.
+ExecStart=/usr/sbin/secubox-adguard-dnsfeed
+Restart=on-failure
+RestartSec=10
+UMask=0027
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/secubox/ad-guard
+# `secubox` appartient au groupe systemd-journal : il lit le journal d'Unbound sans privilège.
+
+[Install]
+WantedBy=multi-user.target

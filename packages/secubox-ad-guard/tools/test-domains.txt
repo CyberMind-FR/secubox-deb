@@ -1,0 +1,13 @@
+# Domaines de test du POC « DNS AdBlock TV » (#1943). Mélange volontaire : publicité, pistage, télémétrie, domaines ordinaires.
+# Les domaines « ordinaires » servent à vérifier qu'on ne casse rien.
+doubleclick.net
+googlesyndication.com
+adnxs.com
+google-analytics.com
+scorecardresearch.com
+app-measurement.com
+connect.facebook.net
+# ordinaires (doivent rester résolus)
+example.com
+debian.org
+wikipedia.org

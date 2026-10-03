@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-adguard-dnsfeed — alimente les compteurs du POC « DNS AdBlock TV » (#1943) depuis le journal d'Unbound.
+
+Lit les lignes d'Unbound (`journalctl -u unbound -f`, ou l'entrée standard avec --stdin), les transforme en événements
+(client, nom de domaine, décision ALLOWED / BLOCKED / UPSTREAM_ERROR), les classe (advertising, tracking, telemetry, social, custom)
+et incrémente des COMPTEURS par jour, client, domaine et décision. Rien d'autre n'est gardé : ni contenu applicatif, ni cookie,
+ni URL — un nom de domaine, une adresse, un compteur.
+
+  secubox-adguard-dnsfeed            suit le journal d'Unbound (service systemd)
+  secubox-adguard-dnsfeed --stdin    lit des lignes sur l'entrée standard, puis s'arrête (essais, banc de test)
+"""
+from __future__ import annotations
+
+import argparse
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+from api import dnstv  # noqa: E402
+
+LOT = 200                   # événements par écriture
+PERIODE_S = 2.0             # ou toutes les 2 secondes
+RECHARGE_S = 60.0           # les listes (dont la liste personnalisée) sont relues chaque minute
+RETENTION_PAR_DEFAUT = 30
+
+
+def classeur() -> dnstv.Classifieur:
+    perso = dnstv.DOSSIER_ETAT / "custom.txt"
+    return dnstv.Classifieur(dnstv.charger_listes(dnstv.DOSSIER_LISTES, perso if perso.is_file() and not perso.is_symlink() else None))
+
+
+def retention() -> int:
+    try:
+        import tomllib
+        with open("/etc/secubox/ad-guard.toml", "rb") as h:
+            return max(1, int(tomllib.load(h).get("adblock_tv", {}).get("retention_jours", RETENTION_PAR_DEFAUT)))
+    except (OSError, ValueError, ImportError):
+        return RETENTION_PAR_DEFAUT
+
+
+def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=classeur) -> int:
+    """Consomme `lignes` ; rend le nombre d'événements enregistrés. Sépare la logique du processus : testable sans Unbound."""
+    an = dnstv.Analyseur()
+    lot, total = [], 0
+    dernier, derniere_purge, derniere_recharge = time.monotonic(), 0.0, time.monotonic()
+    for ligne in lignes:
+        e = an.ligne(ligne)
+        if e is not None:
+            cat, _ = cl.classer(e.qname)
+            lot.append((e, cat))
+        maintenant = time.monotonic()
+        if lot and (len(lot) >= LOT or maintenant - dernier >= PERIODE_S):
+            total += magasin.ajouter(lot)
+            lot, dernier = [], maintenant
+        if maintenant - derniere_recharge >= RECHARGE_S:
+            try:
+                cl = recharger()
+            except OSError:
+                pass                                                   # on garde les listes déjà chargées
+            derniere_recharge = maintenant
+        if maintenant - derniere_purge >= 86400:                       # purge quotidienne selon la rétention
+            magasin.purger(retention())
+            derniere_purge = maintenant
+    if lot:
+        total += magasin.ajouter(lot)
+    return total
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--stdin", action="store_true")
+    a = ap.parse_args()
+    magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
+    cl = classeur()
+    if a.stdin:
+        suivre(sys.stdin, magasin, cl)
+        return 0
+    proc = subprocess.Popen(["journalctl", "-u", "unbound", "-f", "-n", "0", "-o", "cat"], stdout=subprocess.PIPE, text=True, bufsize=1)
+    signal.signal(signal.SIGTERM, lambda *_: proc.terminate())
+    suivre(proc.stdout, magasin, cl)
+    return proc.wait()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
