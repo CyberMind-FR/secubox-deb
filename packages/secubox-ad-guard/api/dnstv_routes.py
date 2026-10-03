@@ -9,6 +9,7 @@ dans Unbound : elle écrit l'état (fichier JSON validé) puis demande au contr�
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -23,9 +24,9 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_auto, dnstv_dnsbox, dnstv_regles
+    from . import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_auto, dnstv_dnsbox, dnstv_regles
+    from api import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 CTL = os.environ.get("SECUBOX_ADGUARD_TV_CTL", "/usr/sbin/secubox-adguard-tv")
@@ -554,3 +555,137 @@ def _sortie(argv: List[str]) -> str:
 def dns_box():
     return dnstv_dnsbox.dns_box(_sortie(["ip", "-6", "-o", "addr", "show", "scope", "global"]), _sortie(["ip", "-4", "-o", "addr", "show", "scope", "global"]),
                                 _sortie(["ip", "-4", "route", "show", "default"]), _sortie(["ss", "-H", "-lnu"]))
+
+
+# ── ajout automatique des TV et streamers, puits complet, profil agrégé (#1959) ───────────────────────────────────────────────
+class ReglageDetectionIn(BaseModel):
+    ajout_auto: Optional[bool] = None
+    mode_defaut: Optional[str] = Field(default=None, max_length=10)
+
+
+class PuitsIn(BaseModel):
+    actif: bool
+
+
+def _etat_et_copie():
+    etat = _etat()
+    return etat, copy.deepcopy(etat)
+
+
+def _appliquer_ou_annuler_tout(ancien_etat: dict, ancien_regles: "dnstv_regles.Regles") -> dict:
+    """Demande l'application au contrôleur ; s'il échoue, état ET règles reviennent à leur version précédente : l'interface ne ment pas."""
+    try:
+        return _ctl("regles-appliquer")
+    except HTTPException:
+        dnstv.ecrire_etat(ancien_etat)
+        dnstv_regles.ecrire(ancien_regles)
+        raise
+
+
+def _clients_du_nom(etat: dict, nom: str) -> list:
+    if not isinstance(nom, str) or not dnstv.NOM_RE.match(nom):
+        raise HTTPException(404, "appareil inconnu")
+    cs = [c for c in etat["clients"] if c["nom"] == nom]
+    if not cs:
+        raise HTTPException(404, "appareil inconnu")
+    return cs
+
+
+@router.get("/auto/detection", dependencies=[Depends(require_lecture)])
+def detection():
+    etat = _etat()
+    par: dict = {}
+    for c in etat["clients"]:
+        a = par.setdefault(c["nom"], {"nom": c["nom"], "mode": c["mode"], "mac": c.get("mac", ""), "origine": c.get("origine", "admin"), "ajoute": c.get("ajoute", 0),
+                                       "preuve": c.get("preuve", ""), "puits": c.get("puits", True), "adresses": []})
+        a["adresses"].append(c["ip"])
+    suivi = dnstv_ajout.charger_suivi()
+    reglage = dnstv_auto.reglage_depuis(etat)
+    return {"ajout_auto": etat["ajout_auto"], "mode_defaut": etat["mode_defaut"], "ignores": etat["ignores"],
+            "appareils": sorted(par.values(), key=lambda a: a["nom"]),
+            "plafond": {"max_par_jour": reglage.max_par_jour, "ajouts_24h": len([x for x in suivi["ajouts"] if x > time.time() - 86400])}}
+
+
+@router.post("/auto/detection/reglage", dependencies=[Depends(require_jwt)])
+def detection_reglage(corps: ReglageDetectionIn):
+    if corps.ajout_auto is None and corps.mode_defaut is None:
+        raise HTTPException(422, "rien à régler (ajout_auto ou mode_defaut)")
+    if corps.mode_defaut is not None and corps.mode_defaut not in dnstv.MODES_DEFAUT:
+        raise HTTPException(422, "mode_defaut inconnu (off, observe, auto, block)")
+    with _verrou():
+        etat, ancien = _etat_et_copie()
+        if corps.ajout_auto is not None:
+            etat["ajout_auto"] = corps.ajout_auto
+        if corps.mode_defaut is not None:
+            etat["mode_defaut"] = corps.mode_defaut
+        try:
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        try:
+            application = _ctl("regles-appliquer")                        # le contrôleur audite ce changement (décision de sécurité)
+        except HTTPException:
+            dnstv.ecrire_etat(ancien)
+            raise
+        return {"ajout_auto": etat["ajout_auto"], "mode_defaut": etat["mode_defaut"], "application": application}
+
+
+@router.post("/auto/appareils/{nom}/ignorer", dependencies=[Depends(require_jwt)])
+def ignorer_appareil(nom: str):
+    """Retire l'appareil du périmètre (retour au puits de production), ignore sa MAC et retire ses règles : plus jamais ajouté automatiquement."""
+    with _verrou():
+        etat, ancien_etat = _etat_et_copie()
+        regles, ancien_regles = _regles(), _regles()
+        cs = _clients_du_nom(etat, nom)
+        macs = sorted({c["mac"] for c in cs if c.get("mac")})
+        etat["clients"] = [c for c in etat["clients"] if c["nom"] != nom]
+        for m in macs:
+            if m not in etat["ignores"]:
+                etat["ignores"].append(m)
+        retirees = 0
+        maintenant = int(time.time())
+        for r in regles.liste():
+            if r["appareil"] == dnstv_regles.slug(nom) and r["etat"] in ("candidat", "essai", "confirme"):
+                regles.transiter(r["id"], "retire", "admin", "appareil retiré et ignoré", maintenant)
+                retirees += 1
+        try:
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        dnstv_regles.ecrire(regles)
+        return {"retire": len(cs), "regles_retirees": retirees, "ignores": etat["ignores"], "application": _appliquer_ou_annuler_tout(ancien_etat, ancien_regles)}
+
+
+@router.post("/auto/appareils/{nom}/puits", dependencies=[Depends(require_jwt)])
+def puits_appareil(nom: str, corps: PuitsIn):
+    """Puits de production complet (vrai, défaut) ou ancien comportement transparent (faux) pour un appareil en mode auto."""
+    with _verrou():
+        etat, ancien_etat = _etat_et_copie()
+        cs = _clients_du_nom(etat, nom)
+        if any(c["mode"] != "auto" for c in cs):
+            raise HTTPException(422, "le réglage « puits » ne concerne que les appareils en mode auto")
+        for c in cs:
+            if corps.actif:
+                c.pop("puits", None)
+            else:
+                c["puits"] = False
+        try:
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        try:
+            application = _ctl("regles-appliquer")
+        except HTTPException:
+            dnstv.ecrire_etat(ancien_etat)
+            raise
+        return {"nom": nom, "puits": corps.actif, "application": application}
+
+
+@router.get("/auto/profil", dependencies=[Depends(require_lecture)])
+def profil():
+    reglage = dnstv_auto.reglage_depuis(_etat())
+    graine = dnstv_profil.graine()
+    agrege = dnstv_profil.charger_agrege()
+    return {"min_appareils": reglage.min_appareils_agreg, "graine": graine, "agrege": agrege,
+            "effectif": [{"domaine": d, "motif": m} for d, m in dnstv_profil.profil_effectif(graine, agrege)]}
+

@@ -141,7 +141,7 @@ def instantane(etat: dict, actives: dict, regles: dict | None = None) -> dict:
     """Ce que le DNS a RÉELLEMENT chargé : modes + domaines de chaque vue auto + état de chaque règle (pour l'audit)."""
     vues = {f"sbx-tv-auto-{dnstv._slug(c['nom'])}": sorted(set(actives.get(dnstv._slug(c["nom"]), [])))
             for c in etat["clients"] if c["mode"] == "auto"}
-    return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")),
+    return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")), "ajout_auto": bool(etat.get("ajout_auto")), "mode_defaut": etat.get("mode_defaut", "auto"),
             "modes": sorted([c["ip"], c["mode"], c["nom"], c.get("puits", True)] for c in etat["clients"]), "vues": vues, "etats": regles or {}}
 
 
@@ -261,6 +261,8 @@ def audit_transitions(avant: dict, voulu: dict) -> None:
             break
     if avant is not None and bool(avant.get("auto_essai")) != voulu["auto_essai"]:
         audit("auto_essai", f"actif={voulu['auto_essai']}")
+    if avant is not None and (bool(avant.get("ajout_auto")) != voulu["ajout_auto"] or avant.get("mode_defaut", "auto") != voulu["mode_defaut"]):
+        audit("ajout_auto", f"actif={voulu['ajout_auto']} mode_defaut={voulu['mode_defaut']}")      # décision de sécurité : ajoute des appareils sans clic
 
 
 def regles_appliquer() -> int:

@@ -156,3 +156,15 @@ def test_le_controleur_audite_les_appareils_ajoutes_et_retires(monkeypatch, tmp_
     dnstv.ecrire_etat({"actif": True, "clients": [{"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto"}]}, tmp_path)
     mod.regles_appliquer()
     assert "- 192.168.1.128 retiré du périmètre" in (tmp_path / "audit.log").read_text()
+
+
+def test_le_controleur_audite_l_activation_de_l_ajout_automatique_et_le_mode_par_defaut(monkeypatch, tmp_path):
+    faux(tmp_path, "checkconf")
+    mod = charger_ctl(monkeypatch, tmp_path, faux(tmp_path, "unbound-control"))
+    base = {"actif": True, "clients": [{"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto"}]}
+    dnstv.ecrire_etat(base, tmp_path)
+    mod.appliquer()
+    dnstv.ecrire_etat(dict(base, ajout_auto=True, mode_defaut="observe"), tmp_path)
+    mod.regles_appliquer()
+    audit = (tmp_path / "audit.log").read_text()
+    assert '"action": "ajout_auto"' in audit and "actif=True" in audit and "mode_defaut=observe" in audit
