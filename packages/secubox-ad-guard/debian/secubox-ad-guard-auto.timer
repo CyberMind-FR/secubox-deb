@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox Ad Guard — mode auto du POC DNS AdBlock TV, chaque minute (#1954)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

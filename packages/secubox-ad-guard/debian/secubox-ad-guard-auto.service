@@ -1,0 +1,18 @@
+[Unit]
+Description=SecuBox Ad Guard — moteur du mode auto du POC DNS AdBlock TV (#1954), un passage
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1954
+After=unbound.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+# Sort aussitôt si aucun appareil n'est en mode auto. L'application passe par `sudo -n secubox-adguard-tv regles-appliquer` (argument exact,
+# sudoers.d/secubox-adguard-tv) : sudo exige donc NoNewPrivileges=no ; le reste du durcissement est conservé.
+ExecStart=/usr/sbin/secubox-adguard-auto
+UMask=0027
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/secubox/ad-guard

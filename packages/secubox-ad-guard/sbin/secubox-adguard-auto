@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-adguard-auto — un passage du moteur du mode « auto » du POC DNS AdBlock TV (#1954).
+
+Lancé chaque minute par `secubox-ad-guard-auto.timer`, sous l'utilisateur `secubox`. Sort aussitôt, sans rien faire, si aucun appareil n'est en mode
+`auto` : la minuterie ne coûte rien tant que le mode n'est pas utilisé. Il ne touche JAMAIS Unbound : il met à jour `regles.json` puis demande au seul
+contrôleur privilégié (`sudo -n secubox-adguard-tv regles-appliquer`, argument exact) d'appliquer la différence.
+"""
+from __future__ import annotations
+
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+from api import dnstv, dnstv_auto, dnstv_regles  # noqa: E402
+
+CTL = "/usr/sbin/secubox-adguard-tv"
+TOML = Path("/etc/secubox/ad-guard.toml")
+
+
+def reglage(etat: dict, toml: Path = TOML) -> dnstv_auto.Reglage:
+    """Seuils de départ (à calibrer) depuis la configuration ; `auto_essai` vient de l'état, sous le contrôle de l'administrateur."""
+    r = dnstv_auto.Reglage(auto_essai=bool(etat.get("auto_essai", False)))
+    try:
+        import tomllib
+        with open(toml, "rb") as h:
+            c = tomllib.load(h).get("adblock_tv_auto", {})
+    except (OSError, ValueError, ImportError):
+        return r
+    decl = c.get("declencheurs")
+    if isinstance(decl, list) and decl and all(isinstance(d, str) and dnstv.valider_domaine(d) == d for d in decl):
+        r.declencheurs = tuple(decl)
+    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif"):
+        v = c.get(k)
+        if isinstance(v, int) and not isinstance(v, bool) and v > 0:
+            setattr(r, k, v)
+    return r
+
+
+def classeur() -> dnstv.Classifieur:
+    perso = dnstv.DOSSIER_ETAT / "custom.txt"
+    return dnstv.Classifieur(dnstv.charger_listes(dnstv.DOSSIER_LISTES, perso if perso.is_file() and not perso.is_symlink() else None))
+
+
+def main(sudo=None, maintenant=None) -> int:
+    etat, erreur = dnstv.lire_etat()
+    if erreur:
+        print(erreur, file=sys.stderr)
+        return 1
+    if not etat["actif"] or not dnstv_auto.appareils(etat):
+        return 0
+    try:
+        regles = dnstv_regles.charger()
+    except dnstv_regles.ErreurRegle as e:
+        print(f"règles illisibles, rien n'est changé : {e}", file=sys.stderr)
+        return 1
+    cl = classeur()
+    res = dnstv_auto.tick(etat, regles, dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"), lambda d: cl.classer(d)[0] or "",
+                          reglage(etat), maintenant or int(time.time()))
+    if res["changements"]:
+        dnstv_regles.ecrire(regles)
+        for c in res["changements"]:
+            print(f"{c['appareil']} {c['domaine']} {c['de'] or '-'}→{c['vers']} ({c['motif']})")
+    if res["applique"]:
+        r = (sudo or (lambda: subprocess.run(["sudo", "-n", CTL, "regles-appliquer"], capture_output=True, text=True, timeout=180)))()
+        if r.returncode != 0:
+            print("application refusée : " + (r.stderr or r.stdout).strip()[:200], file=sys.stderr)
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
