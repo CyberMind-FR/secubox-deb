@@ -50,11 +50,16 @@ def main(sudo=None, maintenant=None) -> int:
     for c in res["changements"]:
         print(f"{c['appareil']} {c['domaine']} {c['de'] or '-'}→{c['vers']} ({c['motif']})")
     # Le contrôleur est appelé dès qu'une règle change d'état autrement que par sa simple proposition : il applique ET audite.
-    if res["applique"] or any(c["de"] for c in res["changements"]):
+    # Une application qui a échoué reste DUE (marque `.a-appliquer`) et est relancée au passage suivant : regles.json est déjà à jour,
+    # sans relance le DNS resterait périmé jusqu'à la prochaine transition.
+    due = (dnstv.DOSSIER_ETAT / ".a-appliquer")
+    if res["applique"] or any(c["de"] for c in res["changements"]) or due.exists():
         r = (sudo or (lambda: subprocess.run(["sudo", "-n", CTL, "regles-appliquer"], capture_output=True, text=True, timeout=180)))()
         if r.returncode != 0:
+            due.touch()
             print("application refusée : " + (r.stderr or r.stdout).strip()[:200], file=sys.stderr)
             return 1
+        due.unlink(missing_ok=True)
     return 0
 
 

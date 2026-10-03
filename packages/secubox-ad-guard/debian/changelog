@@ -1,3 +1,15 @@
+secubox-ad-guard (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Mode auto (ref #1954) : l'unité de la minuterie ne portait pas son rôle : `LockPersonality=yes` (ajouté lors de la relecture de sécurité) repose sur
+    seccomp, donc systemd activait NoNewPrivileges d'office malgré `NoNewPrivileges=no`, et sudo répondait « no new privileges flag is set ». MESURÉ sur gk2 par
+    un essai réel du moteur depuis son unité. Retiré ; un test interdit désormais toute option seccomp dans cette unité.
+  * Le moteur relance l'application au passage suivant si elle a échoué (marque `.a-appliquer`) : regles.json était déjà à jour, le DNS serait resté périmé.
+  * Interface : si l'API répond une erreur (ex. 404 quand l'agrégateur sert l'ancien code du module), l'onglet affiche « API indisponible » au lieu de lever
+    « st.listes is undefined ». NOTE DE DÉPLOIEMENT : `secubox-aggregator` sert ce module DANS SON PROCESSUS (il importe api/main.py au démarrage) : après
+    toute mise à jour il faut le redémarrer, sinon l'adresse publique garde l'ancien code (constaté : routes /adblock-tv/* en 404 par admin.gk2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 18:40:00 +0200
+
 secubox-ad-guard (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * POC DNS AdBlock TV (ref #1954) : MODE AUTO par appareil. La box apprend, par comparaison coupure/lecture, les domaines publicitaires d'un appareil ;

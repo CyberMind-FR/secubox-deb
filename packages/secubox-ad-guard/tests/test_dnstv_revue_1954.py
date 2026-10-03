@@ -87,8 +87,14 @@ def test_c2_unite_autorise_les_chemins_du_controleur_et_porte_son_exception():
     for chemin in ("/etc/unbound/unbound.conf.d", "/var/log/secubox", "/var/lib/secubox-adguard-tv", "/var/lib/secubox/ad-guard"):
         assert chemin in rw
     assert "NoNewPrivileges=no" in u and "ProtectSystem=strict" in u
-    for durcissement in ("ProtectKernelTunables=yes", "ProtectControlGroups=yes", "LockPersonality=yes"):
+    for durcissement in ("ProtectKernelTunables=yes", "ProtectControlGroups=yes"):
         assert durcissement in u
+    # MESURÉ sur gk2 : LockPersonality (comme SystemCallFilter, RestrictNamespaces…) repose sur seccomp, et systemd active alors
+    # NoNewPrivileges d'office malgré « no » : sudo répond « no new privileges flag is set ». Aucune option seccomp dans cette unité.
+    actives = [ligne.split("=")[0] for ligne in u.splitlines() if "=" in ligne and not ligne.startswith("#")]
+    for seccomp in ("LockPersonality", "SystemCallFilter", "RestrictNamespaces", "RestrictAddressFamilies", "MemoryDenyWriteExecute",
+                    "RestrictRealtime", "SystemCallArchitectures", "ProtectKernelModules", "ProtectClock", "RestrictSUIDSGID"):
+        assert seccomp not in actives, seccomp
     assert u.startswith("# SPDX-License-Identifier") and (ICI / "debian" / "secubox-ad-guard-auto.timer").read_text().startswith("# SPDX-License-Identifier")
     regles = (ICI.parents[1] / ".claude" / "RULES-CODE.md").read_text()
     assert "secubox-ad-guard-auto" in regles                                                       # l'exception est écrite

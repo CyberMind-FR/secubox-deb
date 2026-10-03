@@ -15,7 +15,8 @@ Group=secubox
 # sudoers.d/secubox-adguard-tv) : sudo exige NoNewPrivileges=no (exception écrite dans .claude/RULES-CODE.md). Le contrôleur ROOT lancé par sudo
 # hérite de l'espace de montage de l'unité : ProtectSystem=strict le rendrait muet (EROFS) ; il lui faut donc écrire, et seulement là :
 #   /etc/unbound/unbound.conf.d (drop-in), /var/log/secubox (audit), /var/lib/secubox-adguard-tv (instantané), /var/lib/secubox/ad-guard (règles).
-# RestrictSUIDSGID est volontairement absent : il neutraliserait sudo.
+# AUCUNE option reposant sur seccomp (LockPersonality, SystemCallFilter, RestrictNamespaces…) : systemd active alors NoNewPrivileges d'office
+# et sudo répond « no new privileges flag is set » (mesuré sur gk2). RestrictSUIDSGID est absent pour la même raison.
 ExecStart=/usr/sbin/secubox-adguard-auto
 UMask=0027
 NoNewPrivileges=no
@@ -24,5 +25,4 @@ ProtectHome=true
 PrivateTmp=true
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
-LockPersonality=yes
 ReadWritePaths=/var/lib/secubox/ad-guard /var/lib/secubox-adguard-tv /etc/unbound/unbound.conf.d /var/log/secubox

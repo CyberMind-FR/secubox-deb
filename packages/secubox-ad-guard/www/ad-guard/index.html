@@ -678,7 +678,10 @@
         function tvEsc(t) { const d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML; }
         async function tvRender() {
             const st = await api('/adblock-tv/status');
-            if (!st) return;
+            if (!st || !st.clients || !st.listes) {            // API absente ou ancien code servi par l'agrégateur : on le dit, on ne plante pas
+                document.getElementById('tv-etat').textContent = '⚠ API DNS AdBlock TV indisponible (l\u2019agrégateur sert peut-être une ancienne version du module)';
+                return;
+            }
             document.getElementById('tv-actif').checked = !!st.actif;
             document.getElementById('tv-etat').textContent = st.erreur ? '⚠ ' + st.erreur
                 : (st.actif ? 'actif — ' + st.clients.length + ' appareil(s)' : 'inactif — rien n\u2019est modifié dans Unbound') + ' · listes : ' + st.listes.domaines + ' domaines';

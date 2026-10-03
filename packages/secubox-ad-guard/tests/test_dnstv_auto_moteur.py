@@ -169,6 +169,22 @@ def test_script_refus_du_controleur_remonte_l_echec(monkeypatch, tmp_path):
     assert mod.main(sudo=lambda: Rep(1), maintenant=t) == 1
 
 
+def test_script_relance_l_application_apres_un_echec_du_controleur(monkeypatch, tmp_path):
+    """Mesuré sur gk2 : sudo refusé par l'unité. La règle est déjà retirée dans regles.json : sans relance, le DNS resterait périmé."""
+    mod = charger_script(monkeypatch, tmp_path, {"actif": True, "clients": [{"ip": IP, "nom": "TV banc", "mode": "auto"}]})
+    t = int(time.time())
+    r = R.Regles()
+    regle_en_essai(r, "ad.example.com", t - R.ESSAI_S - 10)
+    R.ecrire(r, tmp_path)
+    assert mod.main(sudo=lambda: Rep(1), maintenant=t) == 1                 # échec : la tâche reste due
+    assert (tmp_path / ".a-appliquer").exists()
+    appels = []
+    assert mod.main(sudo=lambda: appels.append(1) or Rep(), maintenant=t + 60) == 0     # aucune nouvelle transition, mais la relance a lieu
+    assert appels == [1] and not (tmp_path / ".a-appliquer").exists()
+    assert mod.main(sudo=lambda: appels.append(1) or Rep(), maintenant=t + 120) == 0
+    assert appels == [1]                                                    # rien d'en attente : plus d'appel
+
+
 def test_script_regles_corrompues_ne_change_rien(monkeypatch, tmp_path):
     mod = charger_script(monkeypatch, tmp_path, {"actif": True, "clients": [{"ip": IP, "nom": "TV banc", "mode": "auto"}]})
     (tmp_path / "regles.json").write_text("{pas du json")
