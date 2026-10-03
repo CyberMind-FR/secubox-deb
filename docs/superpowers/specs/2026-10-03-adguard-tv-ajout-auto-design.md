@@ -49,9 +49,11 @@ vue (essai ou confirmées) s'y ajoutent.
 L'ajout et le retrait de règles **à chaud** (`view_local_zone`) fonctionnent aussi dans une vue `view-first: yes`.
 
 **Conséquences.**
-- C'est un **changement de comportement** pour « TV banc » validée : elle passerait du blocage par 35 règles seules au puits complet + 35 règles. Les listes publiques
-  peuvent bloquer un nom dont la TV a besoin (faux positif) : c'est le risque principal, voir §12. Réglage **par appareil** `puits` (booléen, défaut `true` en `auto`) : `false`
-  rend l'ancien comportement (vue transparente), en un clic, pour revenir en arrière.
+- **Pourquoi c'est sûr (raisonnement du propriétaire, 2026-10-03)** : avant le POC, le DNS bloquait déjà la liste complète pour la TV (le puits est actif sur gk2 : 656 516 zones,
+  `sinkhole.enabled = 1`) et la lecture fonctionnait ; avec les 35 règles seules, la lecture fonctionne aussi. Si les deux ensembles n'ont chacun aucun domaine nécessaire à la lecture,
+  leur **réunion** n'en a pas non plus. Le comportement « liste complète + règles » est donc la réunion de deux états déjà validés. Hypothèse à garder : le contenu regardé est le même
+  (même application) ; un autre service pourrait avoir un domaine nécessaire dans l'une des listes.
+- Réglage **par appareil** `puits` (booléen, défaut `true` en `auto`) conservé : `false` rend l'ancien comportement (vue transparente), en un clic, pour revenir en arrière.
 - Les 32 domaines des listes de test sont pour la plupart déjà dans le puits : le **profil de base** n'a plus besoin de les répéter ; il garde ce que le puits ne couvre pas
   (le moteur marque « déjà couvert par les listes » quand il le sait). Pour les appareils en `puits=false`, le profil complet reste appliqué.
 - Les modes `observe` et `block` ne changent pas (ils restent transparents : on y mesure ce qu'un appareil résout SANS filtre).
@@ -61,10 +63,15 @@ L'ajout et le retrait de règles **à chaud** (`view_local_zone`) fonctionnent a
 Entrée : pour chaque source (adresse regroupée par MAC), ses requêtes des dernières 24 h (`dnstv_counts`, `dnstv_recents`) classées par `ClasseurServices`
 (`lists/services.txt`). Sortie : une liste de `Detection(mac, adresses, score, preuve)`.
 
-**Signal.** Une source est « TV/streamer probable » si, sur 24 h :
-- elle a interrogé au moins `min_declencheurs` fois (départ : 5) un domaine d'insertion publicitaire (`[adblock_tv_auto] declencheurs`, aujourd'hui `fwmrm.net`),
-- **et** au moins `min_services` (départ : 2) services distincts de type `contenu` ou `qualite_video`,
-- **et** dans au moins `min_fenetres` (départ : 2) fenêtres distinctes de 10 minutes (un pic isolé, par exemple un lien suivi une fois, ne suffit pas).
+**Signal.** Une source est « TV/streamer probable » si, sur les 2 derniers jours (compteurs par jour de `dnstv_counts`, qui conservent tout, contrairement à `dnstv_recents`) :
+- elle a interrogé au moins `min_declencheurs` fois (départ : 5) un domaine d'insertion publicitaire (`[adblock_tv_auto] declencheurs`, aujourd'hui `fwmrm.net`) — un pic isolé,
+  par exemple un lien suivi une fois, ne suffit pas,
+- **et** au moins `min_services` (départ : 2) services distincts de type `contenu` ou `qualite_video`.
+
+Les compteurs par jour n'ont pas d'heure : on ne vérifie donc pas « plusieurs fenêtres de 10 minutes ». Le seuil de requêtes tient ce rôle.
+
+**Les requêtes de la box elle-même sont exclues du journal** (`dnstv_recents` et compteurs) : gk2 s'interroge lui-même ≈ 11 000 fois en 20 minutes, ce qui saturait la table des requêtes récentes
+(plafond de 20 000 lignes, soit ≈ 35 minutes d'historique) et limitait déjà la détection des coupures de #1954. Le démon d'alimentation ignore les adresses locales de la box.
 
 La preuve (nombre de requêtes, services vus) est enregistrée et affichée.
 
@@ -150,8 +157,8 @@ agrégateur redémarré (il sert le module dans son processus), vérifié **par 
 ## 12. Risques assumés
 
 - Faux positifs de détection (téléphone, ordinateur) : atténués par les garde-fous, pas supprimés ; le coût est qu'un appareil reçoive le profil de base et la surveillance.
-- **Faux positifs des listes** : avec le puits complet, une liste publique peut bloquer un nom dont la TV a besoin (non mesuré sur « TV banc » : elle n'a jamais eu le puits complet avec ses règles). Mitigation : réglage `puits` par appareil, essai sur la TV **avec le propriétaire présent** avant de généraliser, et le retour arrière en un clic.
+- **Faux positifs des listes** : avec le puits complet, une liste publique peut bloquer un nom nécessaire à un AUTRE service que celui validé. Mitigation : réglage `puits` par appareil, retour arrière en un clic, et un premier essai sur « TV banc » avec le propriétaire (la réunion de deux états validés est attendue sûre, mais la combinaison n'a pas été jouée telle quelle).
 - **Mémoire/performance** : `view-first` n'ajoute pas de copie de la liste (les zones globales sont partagées) ; à vérifier par la mesure du temps de rechargement et de la mémoire d'Unbound sur gk2.
-- Seuils non calibrés (un cas réel). À ajuster après quelques jours.
+- Seuils non calibrés (un cas réel) et détection sur compteurs par jour (sans heure). À ajuster après quelques jours.
 - Un appareil dont l'IPv6 de confidentialité change plus vite que le passage de la minuterie reste suivi avec un retard d'au plus une minute, plus un éventuel rechargement
   (≤ 1 par heure) : pendant ce délai, la nouvelle adresse est traitée comme un appareil inconnu (puits de production).
