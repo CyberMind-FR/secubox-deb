@@ -1,3 +1,13 @@
+secubox-ad-guard (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Mode auto (ref #1954) : l'unité de la minuterie portait encore `ProtectKernelTunables=yes`, lui aussi basé sur seccomp : NoNewPrivileges implicite, sudo refusé.
+    MESURÉ sur gk2 avec des unités transitoires (`systemd-run`) : seule cette option (avec LockPersonality, retiré en 1.4.1) bloque sudo ; ProtectSystem=strict,
+    ProtectHome, PrivateTmp et ProtectControlGroups le laissent passer. Retirée ; le test interdit toute option seccomp connue.
+  * Interface : `return res.json()` sans await échappait au try/catch de l'assistant d'appel : une page HTML (502 pendant le redémarrage de l'agrégateur) levait
+    « Uncaught (in promise) SyntaxError: JSON.parse ». Corrigé (await) ; l'onglet affiche « API indisponible ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 18:55:00 +0200
+
 secubox-ad-guard (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Mode auto (ref #1954) : l'unité de la minuterie ne portait pas son rôle : `LockPersonality=yes` (ajouté lors de la relecture de sécurité) repose sur

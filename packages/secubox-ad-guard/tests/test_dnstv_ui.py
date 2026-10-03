@@ -53,6 +53,8 @@ def _page(navigateur, appels, etat):
             r = {"recue": True, "lecture": "la box a reçu cette requête", "evenements": [{"client": "192.168.1.50", "decision": "ALLOWED"}]}
         else:
             r = {}
+        if etat.get("html_502"):                                                    # redémarrage de l'agrégateur : nginx rend une page HTML
+            return route.fulfill(status=502, content_type="text/html", body="<html><body>502 Bad Gateway</body></html>")
         route.fulfill(status=200, content_type="application/json", body=json.dumps(r))
     # Playwright n'intercepte pas file:// : la page est servie, par interception, sous un nom http fictif.
     p.route("http://sbx.test/api/v1/ad-guard/**", api)
@@ -246,4 +248,15 @@ def test_onglet_ne_plante_pas_quand_l_api_repond_une_erreur(navigateur):
     p.wait_for_timeout(500)
     assert "indisponible" in p.inner_text("#tv-etat").lower()
     assert not erreurs
+    ctx.close()
+
+
+def test_onglet_ne_leve_aucune_exception_quand_l_api_rend_du_html(navigateur):
+    """Constaté pendant le redémarrage de l'agrégateur : « Uncaught (in promise) SyntaxError: JSON.parse » — `return res.json()` sans await
+    échappait au try/catch de l'assistant d'appel."""
+    ctx, p, erreurs = _page(navigateur, [], {"actif": True, "clients": [], "html_502": True})
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_timeout(600)
+    assert "indisponible" in p.inner_text("#tv-etat").lower()
+    assert not erreurs, erreurs
     ctx.close()
