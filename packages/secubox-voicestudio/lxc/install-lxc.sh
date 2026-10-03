@@ -32,16 +32,23 @@ readonly LXC_ROOT_UID="${SECUBOX_LXC_ROOT_UID:-100000}"
 readonly PORT=3900
 log() { printf '[voicestudio-install] %s\n' "$*"; }
 
-cfg() {  # cfg <section> <clé> [défaut]
-  python3 - "$CONF" "$1" "$2" "${3:-}" <<'PY'
+cfg() {  # cfg <section> <clé> [défaut] — le TOML de la box, puis les défauts du paquet (une box d'avant une section n'en a pas)
+  python3 - "$CONF" "${SECUBOX_VS_CONF_DEFAUT:-/usr/share/secubox/voicestudio/voicestudio.toml}" "$1" "$2" "${3:-}" <<'PY'
 import sys, tomllib
-p, sec, cle, defaut = sys.argv[1:5]
-try:
-    with open(p, "rb") as f:
-        v = tomllib.load(f).get(sec, {}).get(cle, defaut)
-except OSError:
-    v = defaut
-print(v)
+box, defaut, sec, cle, repli = sys.argv[1:6]
+valeur = None
+for chemin in (box, defaut):
+    try:
+        with open(chemin, "rb") as f:
+            v = tomllib.load(f).get(sec, {}).get(cle)
+    except (OSError, tomllib.TOMLDecodeError):
+        continue
+    if v is not None:
+        valeur = v
+        break
+if valeur is None:
+    valeur = repli
+print(str(valeur).lower() if isinstance(valeur, bool) else valeur)
 PY
 }
 
@@ -149,7 +156,7 @@ construire_interface_dans_le_lxc() {
 }
 
 construire_interface() {
-  if [ "$ACTIVER_INTERFACE" != "True" ]; then
+  if [ "$ACTIVER_INTERFACE" != "true" ]; then
     log "interface native désactivée ([interface] activer = false)"
     return 0
   fi

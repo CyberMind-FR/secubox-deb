@@ -1302,3 +1302,58 @@ def test_les_booleens_s_ecrivent_en_toml_valide(bac_a_sable):
     assert tomllib.loads(c.CONF.read_text())["interface"]["activer"] is False
     c.ecrire_toml("interface", "activer", True)
     assert tomllib.loads(c.CONF.read_text())["interface"]["activer"] is True
+
+
+# ── montée de version : une configuration d'avant [interface] ne doit pas laisser les scripts sans valeur ───────
+def test_migrer_conf_ajoute_les_cles_nouvelles_sans_toucher_aux_existantes(bac_a_sable):
+    c.CONF.write_text('[lxc]\nnom = "voicestudio"\nmemoire = "6G"\nmode = "demande"\n\n[reseau]\npublier = ["192.168.1.9", "10.10.0.5"]\n')
+    assert c.cmd_migrer_conf() == 0
+    d = tomllib.loads(c.CONF.read_text())
+    assert d["lxc"]["memoire"] == "6G" and d["lxc"]["mode"] == "demande"                  # le choix de l'opérateur l'emporte
+    assert d["reseau"]["publier"] == ["192.168.1.9", "10.10.0.5"]
+    assert d["interface"]["activer"] is True and d["interface"]["bun_url"].startswith("https://github.com/oven-sh/bun/")
+    assert re.fullmatch(r"[0-9a-f]{64}", d["interface"]["bun_sha256"]) and d["interface"]["domaine"] == "voicestudio"
+    assert "cles-ajoutees=" in c.AUDIT.read_text()
+
+
+def test_migrer_conf_est_idempotent_apres_completion(bac_a_sable):
+    c.CONF.write_text('[lxc]\nnom = "voicestudio"\n')
+    c.cmd_migrer_conf()
+    apres = c.CONF.read_text()
+    c.cmd_migrer_conf()
+    assert c.CONF.read_text() == apres
+
+
+def test_migrer_conf_respecte_une_interface_desactivee_par_l_operateur(bac_a_sable):
+    c.CONF.write_text('[interface]\nactiver = false\n')
+    c.cmd_migrer_conf()
+    assert tomllib.loads(c.CONF.read_text())["interface"]["activer"] is False
+
+
+def lire_cfg_du_script(toml_box: str, tmp_path, section: str, cle: str, repli: str = "") -> str:
+    """Exécute la fonction cfg() de install-lxc.sh telle quelle (bash + python), sur une configuration donnée."""
+    import subprocess
+    sh = (PKG / "lxc" / "install-lxc.sh").read_text()
+    fonction = sh[sh.index("cfg() {"):sh.index("\n}\n", sh.index("cfg() {")) + 3]
+    conf = tmp_path / "box.toml"
+    conf.write_text(toml_box)
+    out = subprocess.run(["bash", "-c", f'CONF="{conf}"\n{fonction}\ncfg {section} {cle} {repli}'],
+                         capture_output=True, text=True, timeout=20,
+                         env={"SECUBOX_VS_CONF_DEFAUT": str(PKG / "conf" / "voicestudio.toml"), "PATH": "/usr/bin:/bin"})
+    assert out.returncode == 0, out.stderr
+    return out.stdout.strip()
+
+
+def test_le_script_lit_les_defauts_du_paquet_quand_la_box_n_a_pas_la_section(tmp_path):
+    """Régression vue sur gk3 : le script concluait « interface désactivée » parce que la configuration de la box
+    d'avant la section [interface] n'avait ni `activer` ni l'adresse de bun."""
+    box = '[lxc]\nnom = "voicestudio"\n'
+    assert lire_cfg_du_script(box, tmp_path, "interface", "activer", "true") == "true"
+    assert lire_cfg_du_script(box, tmp_path, "interface", "bun_url").startswith("https://github.com/oven-sh/bun/")
+    assert re.fullmatch(r"[0-9a-f]{64}", lire_cfg_du_script(box, tmp_path, "interface", "bun_sha256"))
+
+
+def test_le_script_ecrit_les_booleens_en_minuscules_et_respecte_la_box(tmp_path):
+    assert lire_cfg_du_script("[interface]\nactiver = false\n", tmp_path, "interface", "activer", "true") == "false"
+    assert lire_cfg_du_script("[interface]\nactiver = true\n", tmp_path, "interface", "activer", "true") == "true"
+    assert lire_cfg_du_script('[lxc]\nmemoire = "2G"\n', tmp_path, "lxc", "memoire", "4G") == "2G"      # la box l'emporte sur le paquet

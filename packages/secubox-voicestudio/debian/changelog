@@ -1,3 +1,13 @@
+secubox-voicestudio (0.3.1-1~bookworm1) bookworm; urgency=high
+
+  * Montée de version : le script d'installation ne lisait QUE la configuration de la box, qui date d'avant la section
+    [interface] ; il concluait « interface native désactivée » et ne construisait rien (vu sur gk3 au déploiement de
+    0.3.0). Il retombe maintenant sur les défauts du paquet (comme voicestudioctl), et `migrer-conf` ajoute à la
+    configuration de la box les sections et clés nouvelles sans jamais toucher à une valeur existante. Booléens
+    normalisés en minuscules.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 11:30:00 +0200
+
 secubox-voicestudio (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Interface NATIVE de VoiceStudio (le studio complet : clonage, doublage, bibliothèque de voix…). L'archive amont n'a
