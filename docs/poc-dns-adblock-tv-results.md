@@ -79,7 +79,7 @@ Le DNS supprime donc le contenu de la pub mais pas le créneau : le serveur d'in
 la durée du noir avec une pub plus longue, les coupures en milieu de programme, les autres applications.
 
 Phase D (en plus, `7cd77.v.fwmrm.net` bloqué) : l'opérateur constate **plus de pub et lecture en direct normale**, sans écran noir signalé. Le serveur d'insertion ne répond plus, la TV
-ne planifie donc pas de coupure. Limites : quelques lancements seulement, coupures en milieu de programme non vérifiées, une seule application, une seule TV (la seconde n'a pas été testée) ;
+ne planifie donc pas de coupure. Coupures en cours de programme (constat opérateur, ~15:24) : « tentatives de pubs supprimées sans attente » ; côté DNS, `7cd77.v.fwmrm.net` refusé 8 fois en 5 min, les domaines de la vidéo répondent. Limites : peu de lancements et de coupures observés, une seule application, une seule TV (la seconde n'a pas été testée) ;
 une mise à jour de l'application peut changer les noms. La TV réessaie en boucle les domaines refusés (20 à 24 requêtes en 2,5 min), ce qui reste du trafic DNS inutile.
 
 ## 13. Ce que le DNS permet
