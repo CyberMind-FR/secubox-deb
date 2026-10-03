@@ -577,6 +577,21 @@ def adresses_locales(executer=None) -> set:
     return out
 
 
+def passerelles(executer=None) -> set:
+    """Adresses de la passerelle (route par défaut) : jamais détectée ni ajoutée comme appareil (#1959)."""
+    import subprocess
+    out: set = set()
+    try:
+        r = (executer or subprocess.run)(["ip", "-j", "route", "show", "default"], capture_output=True, text=True, timeout=10)
+        for route in json.loads(r.stdout or "[]"):
+            g = route.get("gateway")
+            if g:
+                out.add(str(ipaddress.ip_address(g)))
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+    return out
+
+
 def lire_voisins(executer=None) -> Dict[str, str]:
     """adresse IP -> adresse MAC, d'après la table des voisins (IPv4 ET IPv6) : regroupe les adresses d'un même appareil — l'IPv6 « de
     confidentialité » d'une TV change, sa MAC non."""

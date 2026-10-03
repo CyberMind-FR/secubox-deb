@@ -50,3 +50,13 @@ seuil_refus_min = 60
 duree_rafale_min = 5
 # Requêtes depuis le début de l'essai pour juger l'appareil « actif » (un appareil éteint ne déclenche jamais de retrait).
 min_requetes_actif = 100
+
+# Ajout automatique des TV et streamers (#1959) : seuils de DÉPART, mesurés sur deux TV et une application — à calibrer.
+# L'ajout est activé par l'administrateur dans le panneau (`ajout_auto`, faux par défaut) ; ces valeurs ne font que le cadrer.
+min_declencheurs = 5        # requêtes vers un serveur d'insertion publicitaire sur 2 jours
+min_services = 2            # services de contenu ou de qualité vidéo distincts
+max_par_jour = 3            # nouveaux appareils par 24 h
+delai_s = 3600              # un changement du périmètre au plus par heure (chacun coûte un rechargement d'Unbound, ≈ 10 s sans DNS)
+retrait_jours = 7           # une adresse d'un appareil ajouté automatiquement, non vue depuis, est retirée (une reste toujours)
+min_appareils_agreg = 2     # appareils où un domaine est confirmé par l'administrateur pour entrer dans le profil agrégé
+

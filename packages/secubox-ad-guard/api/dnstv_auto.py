@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Dict, List
 
 try:
-    from . import dnstv, dnstv_detect, dnstv_regles, dnstv_signaux
+    from . import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux
 except ImportError:
-    from api import dnstv, dnstv_detect, dnstv_regles, dnstv_signaux
+    from api import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux
 
 HISTORIQUE_H = 48
 
@@ -105,4 +105,14 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
                     and dnstv_signaux.contenu_disparu(jours, vus, len(depuis), min_requetes=reglage.min_requetes_actif)):
                 for r in restantes:
                     note(regles.transiter(r["id"], "retire", "auto", "contenu habituel plus demandé", maintenant), "essai", "retire", "contenu habituel plus demandé")
-    return {"changements": changements, "candidats": candidats, "applique": applique}
+    # Agrégation (#1959) : ce que l'administrateur a confirmé sur plusieurs appareils est PROPOSÉ (candidat, jamais actif) aux autres
+    agrege = dnstv_profil.agreger(regles, reglage.min_appareils_agreg)
+    avant_ids = {r["id"] for r in regles.liste()}
+    try:
+        candidats += dnstv_profil.candidats_agreges(regles, agrege, sorted(appareils(etat)), maintenant)
+    except dnstv_regles.ErreurRegle:
+        pass                                                 # plafond de règles atteint : on ne propose plus, le reste du passage est déjà fait
+    for r in regles.liste():
+        if r["id"] not in avant_ids:
+            changements.append({"appareil": r["appareil"], "domaine": r["domaine"], "de": "", "vers": "candidat", "motif": r["motif"]})
+    return {"changements": changements, "candidats": candidats, "applique": applique, "agrege": agrege}

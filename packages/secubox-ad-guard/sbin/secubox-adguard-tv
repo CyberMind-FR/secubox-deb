@@ -223,6 +223,23 @@ def appliquer() -> int:
     return 0
 
 
+def audit_appareils(avant: dict | None, etat: dict) -> None:
+    """Une ligne d'audit par appareil (adresse) ajouté ou retiré entre deux instantanés, avec son origine et sa preuve (#1959)."""
+    if avant is None:
+        return
+    anciennes = {m[0] for m in avant.get("modes", []) if isinstance(m, list) and m}
+    courants = {c["ip"]: c for c in etat["clients"]}
+    n = 0
+    for ip, c in sorted(courants.items()):
+        if ip not in anciennes and n < 50:
+            audit("appareil", f"+ {c['nom']} {ip} mode={c['mode']} origine={c.get('origine', 'admin')} mac={c.get('mac', '-')} preuve={c.get('preuve', '')}"[:200])
+            n += 1
+    for ip in sorted(anciennes - set(courants)):
+        if n < 50:
+            audit("appareil", f"- {ip} retiré du périmètre")
+            n += 1
+
+
 def audit_transitions(avant: dict, voulu: dict) -> None:
     """Une ligne d'audit par transition EFFECTIVE (essai, confirmation, retrait, rejet) et par changement d'« essai automatique »."""
     regles = {}
@@ -261,6 +278,7 @@ def regles_appliquer() -> int:
             or set(avant.get("vues", {})) != set(voulu["vues"])):
         recharger()
         ecrire_instantane(voulu)
+        audit_appareils(avant, etat)
         audit_transitions(avant or {}, voulu)
         audit("regles-appliquer", "mode=rechargement")
         print(json.dumps({"ok": True, "ajoutes": 0, "retires": 0, "mode": "rechargement"}))
