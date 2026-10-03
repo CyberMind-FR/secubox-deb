@@ -290,6 +290,25 @@
                     <button class="btn" onclick="tvAddClient()">Ajouter l'appareil</button>
                 </div>
             </div>
+            <!-- Mode automatique (#1954) : apprentissage, essai, confirmation, retour arrière — tout texte venu de l'API passe par textContent -->
+            <div class="card" style="margin-top:1rem;" id="auto-carte">
+                <div class="card-header"><h2>🤖 Mode automatique <small style="font-weight:400;color:var(--text-dim);">— apprentissage, essai, confirmation, retour arrière</small></h2></div>
+                <p style="color:var(--text-dim);font-size:.85rem;margin:.2rem 0 .8rem;">Pour un appareil en mode <b>auto</b> (liste « Appareils » ci-dessus), la box propose des domaines
+                publicitaires appris pendant les coupures. <b>Rien n'est bloqué sans vous</b> : « Essayer » bloque pendant <span id="auto-essai-h">24</span> h, puis il faut « Confirmer » ;
+                sans confirmation, la règle est retirée toute seule. Les seuils de détection sont des valeurs de départ, mesurées sur un seul appareil.</p>
+                <label><input type="checkbox" id="auto-essai-auto" onchange="autoEssai(this.checked)"> Essai automatique : les candidats passent seuls à l'essai (la confirmation reste la vôtre)</label>
+                <div id="auto-appareils" style="margin:.7rem 0;"></div>
+                <h3 style="margin:.8rem 0 .3rem;">À valider</h3>
+                <table><thead><tr><th>Appareil</th><th>Domaine</th><th>Score</th><th>Risque</th><th>Pourquoi</th><th></th></tr></thead><tbody id="auto-candidats"></tbody></table>
+                <h3 style="margin:.8rem 0 .3rem;">À l'essai</h3>
+                <table><thead><tr><th>Appareil</th><th>Domaine</th><th>Reste</th><th></th></tr></thead><tbody id="auto-essai"></tbody></table>
+                <h3 style="margin:.8rem 0 .3rem;">Confirmées</h3>
+                <table><thead><tr><th>Appareil</th><th>Domaine</th><th></th></tr></thead><tbody id="auto-confirmees"></tbody></table>
+                <h3 style="margin:.8rem 0 .3rem;">Journal</h3>
+                <div style="max-height:14rem;overflow:auto;"><table><thead><tr><th>Heure</th><th>Appareil</th><th>Domaine</th><th>Changement</th><th>Origine</th><th>Motif</th></tr></thead><tbody id="auto-journal"></tbody></table></div>
+                <details style="margin-top:.6rem;"><summary>Rejetées et retirées</summary>
+                    <table><thead><tr><th>Appareil</th><th>Domaine</th><th>État</th><th>Motif</th><th></th></tr></thead><tbody id="auto-ecartees"></tbody></table></details>
+            </div>
             <div class="card" style="margin-top:1rem;">
                 <div class="card-header"><h2>➕ Ajouter un domaine</h2></div>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><input type="text" id="tv-new-domaine" placeholder="domaine.example"><button class="btn" onclick="tvAddDomaine()">Ajouter</button></div>
@@ -600,6 +619,60 @@
         async function tvVue() { await Promise.all([tvSources(), tvSerie(), tvServices(), tvLive()]); }
         setInterval(() => { if (document.getElementById('adblocktv').classList.contains('active') && document.getElementById('tv-auto').checked) { tvLive(); tvSources(); } }, 3000);
 
+
+        // ── mode automatique (#1954) : règles apprises, essai, confirmation, retour arrière ──────────────────────────────────────
+        const AUTO_RISQUE = { faible: 'faible', partage: 'peut servir aussi le contenu', variable: 'noms variables regroupés' };   // libellés locaux, jamais ceux de l'API
+        const AUTO_ETAT = { rejete: 'rejetée', retire: 'retirée', candidat: 'candidat', essai: 'essai', confirme: 'confirmée' };
+        function autoBtn(texte, classe, fn) { const b = tvEl('button', texte, 'btn ' + (classe || '')); b.onclick = fn; return b; }
+        function autoCell(...noeuds) { const td = document.createElement('td'); noeuds.forEach(n => td.appendChild(n)); return td; }
+        function autoReste(fin) {
+            const s = fin - Math.floor(Date.now() / 1000);
+            if (!(s > 0)) return 'expiré';
+            return Math.floor(s / 3600) + ' h ' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + ' min';
+        }
+        async function autoAction(rid, action) { await api('/adblock-tv/auto/regles/' + encodeURIComponent(rid) + '/' + action, 'POST'); autoRender(); }
+        async function autoCaNeMarchePlus(app) {
+            if (!confirm('Retirer TOUTES les règles à l\u2019essai de cet appareil ? Les règles confirmées restent.')) return;
+            await api('/adblock-tv/auto/appareils/' + encodeURIComponent(app) + '/ca-ne-marche-plus', 'POST'); autoRender();
+        }
+        async function autoEssai(v) { await api('/adblock-tv/auto/reglage/auto-essai', 'POST', { actif: v }); autoRender(); }
+        function autoVide(tb, cols, texte) { tvLigne(tb, [Object.assign(tvEl('td', texte, null, 'color:var(--text-dim);text-align:center;'), { colSpan: cols })]); }
+        async function autoRender() {
+            const [rg, rl] = await Promise.all([api('/adblock-tv/auto/regles'), api('/adblock-tv/auto/reglage')]);
+            if (!rg || !rl) return;
+            const regles = rg.regles || [], par = e => regles.filter(r => r.etat === e);
+            document.getElementById('auto-essai-auto').checked = !!rl.auto_essai;
+            document.getElementById('auto-essai-h').textContent = rl.essai_h || 24;
+            const zone = document.getElementById('auto-appareils'); zone.textContent = '';
+            (rl.appareils_auto || []).forEach(app => {
+                const n = par('essai').filter(r => r.appareil === app).length, ligne = tvEl('div', null, null, 'display:flex;gap:.8rem;align-items:center;margin:.2rem 0;');
+                ligne.appendChild(tvEl('b', app)); ligne.appendChild(tvEl('span', n + ' règle(s) à l\u2019essai', null, 'color:var(--text-dim);font-size:.85rem;'));
+                if (n) ligne.appendChild(autoBtn('Ça ne marche plus', 'ca-ne-marche-plus', () => autoCaNeMarchePlus(app)));
+                zone.appendChild(ligne);
+            });
+            if (!(rl.appareils_auto || []).length) zone.appendChild(tvEl('div', 'Aucun appareil en mode auto : choisissez « auto » dans la liste des appareils.', null, 'color:var(--text-dim);'));
+            let tb = document.getElementById('auto-candidats'); tb.textContent = '';
+            par('candidat').sort((a, b) => b.score - a.score).forEach(r => tvLigne(tb, [r.appareil, r.domaine, r.score, AUTO_RISQUE[r.risque] || 'inconnu', r.motif || '—',
+                autoCell(autoBtn('Essayer', '', () => autoAction(r.id, 'essayer')), autoBtn('Rejeter', '', () => autoAction(r.id, 'rejeter')))]));
+            if (!par('candidat').length) autoVide(tb, 6, 'Aucun candidat à valider');
+            tb = document.getElementById('auto-essai'); tb.textContent = '';
+            par('essai').forEach(r => tvLigne(tb, [r.appareil, r.domaine, autoReste(r.fin_essai),
+                autoCell(autoBtn('Confirmer', '', () => autoAction(r.id, 'confirmer')), autoBtn('Retirer', '', () => autoAction(r.id, 'retirer')))]));
+            if (!par('essai').length) autoVide(tb, 4, 'Aucune règle à l\u2019essai');
+            tb = document.getElementById('auto-confirmees'); tb.textContent = '';
+            par('confirme').forEach(r => tvLigne(tb, [r.appareil, r.domaine, autoCell(autoBtn('Retirer', '', () => autoAction(r.id, 'retirer')))]));
+            if (!par('confirme').length) autoVide(tb, 3, 'Aucune règle confirmée');
+            tb = document.getElementById('auto-ecartees'); tb.textContent = '';
+            regles.filter(r => r.etat === 'rejete' || r.etat === 'retire').forEach(r => tvLigne(tb, [r.appareil, r.domaine, AUTO_ETAT[r.etat], r.motif || '—',
+                autoCell(autoBtn(r.etat === 'rejete' ? 'Rouvrir' : 'Réessayer', '', () => autoAction(r.id, r.etat === 'rejete' ? 'rouvrir' : 'essayer')))]));
+            tb = document.getElementById('auto-journal'); tb.textContent = '';
+            const jr = [];
+            regles.forEach(r => (r.historique || []).forEach(h => jr.push({ ...h, appareil: r.appareil, domaine: r.domaine })));
+            jr.sort((a, b) => b.ts - a.ts).slice(0, 20).forEach(h => tvLigne(tb, [tvHeure(h.ts), h.appareil, h.domaine, (AUTO_ETAT[h.de] || '·') + ' → ' + (AUTO_ETAT[h.vers] || h.vers), h.origine === 'admin' ? 'vous' : 'auto', h.motif || '—']));
+            if (!jr.length) autoVide(tb, 6, 'Aucun événement');
+        }
+        setInterval(() => { if (document.getElementById('adblocktv').classList.contains('active')) autoRender(); }, 10000);
+
         // ── DNS AdBlock TV (POC #1943) ───────────────────────────────────────────────
         let tvSondeNom = '';
         function tvEsc(t) { const d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML; }
@@ -625,7 +698,7 @@
             }
             document.getElementById('tv-clients').innerHTML = st.clients.map(c =>
                 '<tr><td>' + tvEsc(c.nom) + '</td><td>' + tvEsc(c.ip) + '</td><td><select onchange="tvModeClient(\'' + tvEsc(c.ip) + '\', this.value)">'
-                + ['off', 'observe', 'block'].map(m => '<option' + (m === c.mode ? ' selected' : '') + '>' + m + '</option>').join('') + '</select></td>'
+                + ['off', 'observe', 'block', 'auto'].map(m => '<option' + (m === c.mode ? ' selected' : '') + '>' + m + '</option>').join('') + '</select></td>'
                 + '<td><button class="btn" onclick="tvRetirer(\'' + tvEsc(c.ip) + '\')">Retirer</button></td></tr>').join('')
                 || '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);">Aucun appareil : ajoutez la Freebox TV (son adresse IP)</td></tr>';
             const cu = await api('/adblock-tv/custom');
@@ -633,7 +706,7 @@
         }
         async function tvActif(v) { await api('/adblock-tv/etat', 'POST', { actif: v }); tvRender(); }
         async function tvMode(m) { await api('/adblock-tv/mode', 'POST', { mode: m }); tvRender(); }
-        async function tvModeClient(ip, m) { await api('/adblock-tv/mode', 'POST', { mode: m, ip: ip }); tvRender(); }
+        async function tvModeClient(ip, m) { if (m === 'auto' && !confirm('Le mode auto applique, à l\u2019essai et avec votre accord, des règles apprises sur cet appareil. Continuer ?')) { tvRender(); return; } await api('/adblock-tv/mode', 'POST', { mode: m, ip: ip }); tvRender(); }
         async function tvRetirer(ip) { await api('/adblock-tv/clients/' + encodeURIComponent(ip), 'DELETE'); tvRender(); }
         async function tvAddClient() {
             const ip = document.getElementById('tv-new-ip').value.trim(), nom = document.getElementById('tv-new-nom').value.trim();
@@ -652,7 +725,7 @@
             z.textContent = (r.recue ? '✅ ' : '❌ ') + r.lecture + (r.recue ? ' — client ' + r.evenements[0].client + ', décision ' + r.evenements[0].decision : '');
         }
 
-        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue();
+        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue(); autoRender();
         setInterval(fetchStats, 30000);
     </script>
     <script src="/shared/crt-engine.js"></script>

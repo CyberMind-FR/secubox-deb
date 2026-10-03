@@ -39,6 +39,10 @@ def _page(navigateur, appels, etat):
             r = {"requetes": 10, "domaines_uniques": 4, "classes_resolus": {"tracking": 2}, "classes_bloques": {"advertising": 3},
                  "par_decision": {"BLOCKED": 3, "ALLOWED": 7},
                  "top_bloques": [{"domaine": "<img src=x onerror=window.__pwn=1>.example", "categorie": "advertising", "hits": 3}]}
+        elif chemin == "/adblock-tv/auto/regles":
+            r = etat.get("auto_regles", {"regles": [], "compteurs": {}})
+        elif chemin == "/adblock-tv/auto/reglage":
+            r = etat.get("auto_reglage", {})
         elif chemin == "/adblock-tv/custom":
             r = {"domaines": ["mon-tracker.example"]}
         elif chemin == "/adblock-tv/sonde":
@@ -146,4 +150,87 @@ def test_visualisation_flux_sources_services_et_serie_sans_executer_de_html(navi
     assert any("source=38%3A07%3A16%3A93%3A4e%3A95" in u for u in appels)               # le filtre par source est transmis
     assert "pas les volumes" in p.inner_text("#adblocktv")
     assert not erreurs
+    ctx.close()
+
+
+# ── mode automatique (#1954) ───────────────────────────────────────────────────────────────────────────────────────────────
+PIEGE = "<img src=x onerror=window.__pwn=1>.example"
+
+
+def _regle(rid, etat, domaine="ad.example.com", risque="faible", fin=0, hist=()):
+    return {"id": rid, "appareil": "tv-banc", "domaine": domaine, "etat": etat, "score": 70, "risque": risque, "motif": "vu dans 2 coupures",
+            "fin_essai": fin, "historique": list(hist), "origine": "auto"}
+
+
+def _etat_auto():
+    import time
+    t = int(time.time())
+    return {"actif": True, "clients": [{"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto"}],
+            "auto_reglage": {"auto_essai": False, "appareils_auto": ["tv-banc"], "essai_h": 24},
+            "auto_regles": {"regles": [
+                _regle("aaaaaaaaaaaa", "candidat", PIEGE, "partage"),
+                _regle("bbbbbbbbbbbb", "essai", "pub.example.com", fin=t + 7200, hist=[{"ts": t - 60, "de": "candidat", "vers": "essai", "origine": "admin", "motif": "action essayer"}]),
+                _regle("cccccccccccc", "confirme", "ok.example.com"),
+                _regle("dddddddddddd", "rejete", "non.example.com")], "compteurs": {}}}
+
+
+def test_panneau_auto_rendu_sans_executer_de_html_et_boutons_selon_l_etat(navigateur):
+    ctx, p, erreurs = _page(navigateur, [], _etat_auto())
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_selector("#auto-candidats tr")
+    p.evaluate("document.querySelector('#auto-carte details').open = true")             # section repliée par défaut
+    assert PIEGE in p.inner_text("#auto-candidats")                                    # affiché en TEXTE
+    assert p.evaluate("window.__pwn === undefined") and p.evaluate("document.querySelectorAll('#auto-carte img').length") == 0
+    assert "peut servir aussi le contenu" in p.inner_text("#auto-candidats")           # libellé local du risque « partagé »
+    assert p.inner_text("#auto-candidats").count("Essayer") == 1 and "Confirmer" not in p.inner_text("#auto-candidats")
+    assert "Confirmer" in p.inner_text("#auto-essai") and "Retirer" in p.inner_text("#auto-essai") and "Essayer" not in p.inner_text("#auto-essai")
+    assert "Confirmer" not in p.inner_text("#auto-confirmees") and "ok.example.com" in p.inner_text("#auto-confirmees")
+    assert "non.example.com" in p.inner_text("#auto-ecartees") and "Rouvrir" in p.inner_text("#auto-ecartees")
+    assert "action essayer" in p.inner_text("#auto-journal") and "vous" in p.inner_text("#auto-journal")
+    assert p.locator("button.ca-ne-marche-plus").count() == 1
+    assert not erreurs
+    ctx.close()
+
+
+def test_panneau_auto_reponse_vide_ne_leve_aucune_exception(navigateur):
+    ctx, p, erreurs = _page(navigateur, [], {"actif": True, "clients": []})            # l'API ne renvoie que {} pour les routes auto
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_selector("#auto-candidats tr")
+    assert "Aucun candidat" in p.inner_text("#auto-candidats") and "Aucun appareil en mode auto" in p.inner_text("#auto-appareils")
+    assert p.locator("button.ca-ne-marche-plus").count() == 0                           # rien à retirer : pas de bouton
+    assert not erreurs
+    ctx.close()
+
+
+def test_actions_du_panneau_appellent_les_bonnes_routes(navigateur):
+    appels = []
+    ctx, p, _ = _page(navigateur, appels, _etat_auto())
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_selector("#auto-essai tr")
+    p.evaluate("document.querySelector('#auto-carte details').open = true")
+    p.once("dialog", lambda d: d.accept())
+    p.click("#auto-candidats button:has-text('Essayer')")
+    p.click("#auto-essai button:has-text('Confirmer')")
+    p.click("#auto-essai button:has-text('Retirer')")
+    p.click("#auto-ecartees button:has-text('Rouvrir')")
+    p.wait_for_timeout(300)
+    posts = [c for (m, c, _) in appels if m == "POST"]
+    assert "/adblock-tv/auto/regles/aaaaaaaaaaaa/essayer" in posts and "/adblock-tv/auto/regles/bbbbbbbbbbbb/confirmer" in posts
+    assert "/adblock-tv/auto/regles/bbbbbbbbbbbb/retirer" in posts and "/adblock-tv/auto/regles/dddddddddddd/rouvrir" in posts
+    ctx.close()
+
+
+def test_ca_ne_marche_plus_demande_confirmation_puis_appelle_la_route(navigateur):
+    appels = []
+    ctx, p, _ = _page(navigateur, appels, _etat_auto())
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_selector("button.ca-ne-marche-plus")
+    p.once("dialog", lambda d: d.dismiss())                                             # refus : rien n'est envoyé
+    p.click("button.ca-ne-marche-plus")
+    p.wait_for_timeout(200)
+    assert not [c for (m, c, _) in appels if m == "POST" and c.endswith("/ca-ne-marche-plus")]
+    p.once("dialog", lambda d: d.accept())
+    p.click("button.ca-ne-marche-plus")
+    p.wait_for_timeout(300)
+    assert [c for (m, c, _) in appels if m == "POST" and c == "/adblock-tv/auto/appareils/tv-banc/ca-ne-marche-plus"]
     ctx.close()
