@@ -119,3 +119,26 @@ pas le code de retour ; les routes `require_jwt` / `require_personne` refusent t
 Le provisionnement (LXC + pip, 10 à 25 min) part en `--no-block` dans une unité `oneshot` gardée par un marqueur ;
 l'ancien service continue de servir, et c'est la commande de bascule (`voicestudioctl basculer`) qui l'arrête, **LXC
 prêt**. Le mandataire n'est pas démarré par la postinst tant que l'ancien moteur tient le port.
+
+## `sudo` répond « no new privileges flag is set » alors que l'unité dit `NoNewPrivileges=no`
+
+Certains réglages de durcissement **imposent implicitement** `NoNewPrivileges=yes` (filtres seccomp) : mesuré en les
+ajoutant un par un à une unité transitoire (`systemd-run -p …`), `ProtectKernelTunables`, `RestrictSUIDSGID` et
+`LockPersonality` suffisent à neutraliser sudo ; `RestrictNamespaces`, `SystemCallFilter`, `MemoryDenyWriteExecute`…
+font de même. `ProtectSystem`, `ProtectHome`, `PrivateTmp`, `ProtectControlGroups` et `UMask` sont sans effet.
+Les tests unitaires ne peuvent pas le voir : **rejouer le code du module dans une unité transitoire aux réglages
+identiques** (`systemd-run --wait --pipe -p User=… -p … python3 -`). Vérifier le service vivant :
+`grep NoNewPrivs /proc/$(systemctl show -p MainPID --value <unité>)/status` doit donner `0`.
+
+## Un service sur l'hôte est injoignable alors que son ancienne version (podman) l'était
+
+La chaîne `input` de la base est en `DROP`. Un port publié par podman passe par la redirection (forward) et
+**contourne** `input` ; un démon qui écoute sur l'hôte, lui, tombe dessous. Il faut une règle explicite :
+`insert rule inet filter input … comment "<module>"` (idempotente, retirée par poignée — jamais de `flush`), et un
+fichier `/etc/nftables.d/zz-<module>.nft` qui déclare la table de façon additive avant l'insertion. Vérifier sans
+risque dans un espace de noms jetable : `ip netns add t; ip netns exec t nft -f base+fichier`.
+
+## Dans un LXC non privilégié, `journalctl` est vide
+
+`systemd-journald` y échoue (`status=228/SECCOMP`) : aucune entrée, jamais. Lire le fichier de log de l'application
+depuis l'hôte (le rootfs et les montages y sont lisibles) plutôt que `lxc-attach … journalctl`.

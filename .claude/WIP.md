@@ -17,17 +17,16 @@ real_ip nginx #1754 (fermée), dossiers photo #1516 (fermée), NAC appliqué à 
 (veille pondérée, test dynamique du WAF), assistance, Reporter, menu p2p, garde-fou CI #1748, clé
 apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
-## 🔄 Chantier en cours — #1917 VoiceStudio en LXC natif (déploiement gk3)
+## 🔄 Chantier en cours — #1917 VoiceStudio en LXC natif : déployé gk3, à valider
 
-- Fait : `secubox-voicestudio` 0.2.0 fusionné (PR #1918), publié sur apt.secubox.in, installé sur gk3 ; config reprise
-  (adresses publiées conservées). L'ancien moteur podman tient encore le port 3900 (voulu jusqu'à la bascule).
-- En cours : provisionnement du LXC sur gk3 (`secubox-voicestudio-provision`, 10 à 25 min ; marqueur
-  `/var/lib/secubox/voicestudio/.lxc-provisioned`). Il lance ensuite **tout seul** `voicestudioctl basculer`
-  (arrête l'ancien moteur, reprend le volume podman sans le supprimer, démarre le LXC, vérifie `/health`).
-- À faire ensuite : vérifier de bout en bout (gk2 `voice.toml` mixte → `http://10.10.0.5:3900`, clé inchangée),
-  essayer les deux pages (`/voicestudio/`, `/voicestudio/usager.html`) dans un navigateur, puis `closes #1917` dans
-  `HISTORY.md` + `scripts/sync-issues.sh --apply`. Ensuite seulement : purge de podman/buildah/crun sur gk2 et gk3
-  (volume podman à garder jusqu'à validation), ligne `podman rm` de photoprism, AppArmor du module.
+- Déployé et vérifié sur gk3 : `secubox-voicestudio` 0.2.4 (PR #1918–#1922). Bascule faite le 02/10 20:21 (605,5 Mo reprises,
+  volume podman conservé) ; gk2 atteint le moteur par le maillage avec sa clé inchangée ; pare-feu d'entrée posé
+  par le ctl ; API sous bac à sable vérifiée (statut, clé, journal, liste blanche) ; pages servies par nginx.
+- **Reste à valider par une personne connectée** (je n'ai pas d'identifiants web) : `/voicestudio/` (administration)
+  et `/voicestudio/usager.html` (dire, dicter) dans un navigateur, puis fermer #1917 (`closes #1917` dans `HISTORY.md`
+  + `scripts/sync-issues.sh --apply`).
+- Ensuite (#1743) : purge de podman — gk3 garde 12 Go (image VoiceStudio 11 Go + 2 volumes) qu'on supprime après
+  quelques jours de service ; gk2 n'a que les paquets (80 Ko). Dettes du module : TODO.
 
 ## ⏸️ Suspendu
 
