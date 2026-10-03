@@ -71,6 +71,15 @@ Garde-fous d'usager : un seul calcul à la fois (le suivant attend 20 s puis re�
 personne (20 synthèses / 12 dictées par minute), limites lues dans `[limites]`. Un moteur absent est dit
 **503**, jamais masqué par une voix de secours.
 
+## Voix rapide — pourquoi « Dire » répond en une seconde
+
+Le grand modèle (OmniVoice, 600 langues, clonage) calcule sur le processeur : 110 à 140 s par phrase sur gk3. Pour « Dire »,
+le module utilise d'abord une **voix rapide** : Piper français (`vits-piper-fr_FR-siwis-medium`) servi par sherpa-onnx dans le
+LXC, port 3901, même clé que le moteur. Sans voix nommée (ou avec la voix `rapide`), la phrase part là ; avec une voix nommée,
+ou si la voix rapide est absente, elle part au grand modèle (lent, avec vérification de la mémoire). `[rapide] activer = false`
+la coupe. Installation : `voicestudioctl voix-rapide` (idempotent, modèle vérifié par sha256, marqueur posé seulement quand
+le serveur répond).
+
 ## Mémoire — pourquoi la synthèse peut être refusée
 
 Le modèle de **synthèse** (OmniVoice) pèse ≈ 2,3 Go sur disque et **≈ 3,6 Go en mémoire** ; la **dictée** (faster-whisper base) ≈ 0,7 Go.

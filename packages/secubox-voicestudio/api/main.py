@@ -78,6 +78,32 @@ def _limites() -> dict:
     return out
 
 
+_RAPIDE: dict = {"t": 0.0, "v": None}
+
+
+def _rapide() -> str:
+    """URL de la voix rapide (dans le LXC), ou « » si elle est désactivée. TOML de la box puis défauts du paquet ;
+    relu au plus toutes les 10 s comme les limites."""
+    if _RAPIDE["v"] is not None and time.monotonic() - _RAPIDE["t"] < 10:
+        return _RAPIDE["v"]
+    ip, rap = "10.100.0.230", {"activer": True, "port": 3901}
+    for f in (CONF_DEFAUT, CONF):
+        try:
+            with open(f, "rb") as h:
+                d = tomllib.load(h)
+        except FileNotFoundError:
+            continue
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if isinstance(d.get("lxc"), dict):
+            ip = str(d["lxc"].get("ip", ip))
+        if isinstance(d.get("rapide"), dict):
+            rap.update(d["rapide"])
+    url = f"http://{ip}:{int(rap.get('port', 3901))}" if rap.get("activer", True) is True else ""
+    _RAPIDE.update(t=time.monotonic(), v=url)
+    return url
+
+
 # ── porte du ctl ─────────────────────────────────────────────────────────────
 def _executer(requete: dict, delai: int) -> dict:
     """Appelle voicestudioctl api. Ne lève que HTTPException : l'état doit toujours rendre."""
@@ -182,7 +208,7 @@ def _oublier_cle() -> None:
 
 
 def _moteur() -> Moteur:
-    return Moteur(MOTEUR_URL, _cle, int(_limites()["delai_s"]))
+    return Moteur(MOTEUR_URL, _cle, int(_limites()["delai_s"]), url_rapide=_rapide())
 
 
 # ── schémas ──────────────────────────────────────────────────────────────────
@@ -362,9 +388,14 @@ def _indisponible(e: MoteurIndisponible) -> HTTPException:
     return HTTPException(503, f"VoiceStudio indisponible : {e}")
 
 
+VOIX_RAPIDE = {"id": "rapide", "nom": "Rapide — français (instantané)", "langue": "fr"}
+
+
 async def _liste_voix() -> dict:
     try:
-        return {"voix": await _moteur().voix()}
+        voix = await _moteur().voix()
+        # La voix rapide en tête quand elle est active : c'est celle de « Dire » sans choix.
+        return {"voix": ([VOIX_RAPIDE] if _rapide() else []) + voix}
     except MoteurIndisponible as e:
         raise _indisponible(e) from e
 
@@ -399,9 +430,21 @@ async def _dire(corps: DireIn, qui: dict, sem: asyncio.Semaphore) -> Response:
                                  "Découpez-le : une voix se pilote par phrases.")
     await _tour(sem)
     try:
-        # Sous le verrou « un calcul à la fois » : deux synthèses ne se disputent pas la libération de mémoire.
-        await _place_pour_synthese(qui)
-        audio = await _moteur().dire(texte, corps.voix, corps.format)
+        audio = None
+        if corps.voix in ("", "rapide") and _rapide():
+            # Voix rapide : ≈ 70 Mo, aucune libération de mémoire à prévoir. Si elle est absente ou défaillante, on
+            # retombe sur le grand modèle (lent, mais c'était le comportement d'avant) — sauf si on l'a nommée.
+            try:
+                audio = await _moteur().dire_rapide(texte, corps.format)
+            except MoteurIndisponible as e:
+                if corps.voix == "rapide":
+                    raise
+                log.warning("voix rapide indisponible (%s) : repli sur le grand modèle", e)
+        if audio is None:
+            # Sous le verrou « un calcul à la fois » : deux synthèses ne se disputent pas la libération de mémoire.
+            await _place_pour_synthese(qui)
+            voix = "" if corps.voix == "rapide" else corps.voix
+            audio = await _moteur().dire(texte, voix, corps.format)
     except MoteurIndisponible as e:
         raise _indisponible(e) from e
     finally:

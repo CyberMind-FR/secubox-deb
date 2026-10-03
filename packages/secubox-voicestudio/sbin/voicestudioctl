@@ -72,6 +72,7 @@ INSTALL = os.environ.get("SECUBOX_VS_INSTALL", "/usr/lib/secubox/voicestudio/ins
 SAUVEGARDES = Path(os.environ.get("SECUBOX_VS_SAUVEGARDES", "/var/backups/secubox/voicestudio"))
 DROPIN_DIR = Path(os.environ.get("SECUBOX_VS_DROPIN", "/etc/systemd/system"))
 NFT_DIR = Path(os.environ.get("SECUBOX_VS_NFT_DIR", "/etc/nftables.d"))
+MARQUE_RAPIDE = Path(os.environ.get("SECUBOX_VS_MARQUE_RAPIDE", "/var/lib/secubox/voicestudio/.voix-rapide"))
 MARQUE_INTERFACE = Path(os.environ.get("SECUBOX_VS_MARQUE_INTERFACE", "/var/lib/secubox/voicestudio/.interface-native"))
 NGINX_DISPO = Path(os.environ.get("SECUBOX_VS_NGINX_DISPO", "/etc/nginx/sites-available"))
 NGINX_ACTIF = Path(os.environ.get("SECUBOX_VS_NGINX_ACTIF", "/etc/nginx/sites-enabled"))
@@ -317,8 +318,12 @@ def assurer_moteur(c: dict, run=_run, dormir=time.sleep) -> bool:
     script = ("umask 077; cat > /etc/voicestudio.env.new; "
               "if ! cmp -s /etc/voicestudio.env.new /etc/voicestudio.env; then "
               "mv /etc/voicestudio.env.new /etc/voicestudio.env; systemctl restart voicestudio.service; "
+              "systemctl try-restart voicestudio-rapide.service; "
               "else rm -f /etc/voicestudio.env.new; "
-              "systemctl is-active -q voicestudio.service || systemctl start voicestudio.service; fi")
+              "systemctl is-active -q voicestudio.service || systemctl start voicestudio.service; fi; "
+              # La voix rapide est un second service du même LXC : s'il est installé, il tourne (jamais d'erreur s'il ne l'est pas).
+              "if [ -f /etc/systemd/system/voicestudio-rapide.service ]; then "
+              "systemctl is-active -q voicestudio-rapide.service || systemctl start voicestudio-rapide.service; fi")
     for _ in range(10):                  # lxc-attach peut échouer quelques secondes après lxc-start
         r = run(["lxc-attach", "-P", lxc_chemin(c), "-n", lxc_nom(c), "--", "sh", "-c", script],
                 input=contenu_env_moteur(c), capture_output=True, text=True, timeout=60)
@@ -615,6 +620,10 @@ def contenu_vhost(c: dict, domaine: str, domaine_admin: str) -> str:
     return f"""# GÉNÉRÉ par voicestudioctl — ne pas éditer (réécrit à chaque `appliquer`). Voir packages/secubox-voicestudio.
 # Interface native de VoiceStudio, réservée aux administrateurs. nginx: 9080, derrière HAProxy puis le WAF.
 map $http_upgrade $sbx_vs_connexion {{ default upgrade; '' close; }}
+# Le moteur compare l'Origin du navigateur à SON schéma (http, derrière HAProxy) : sans cela, les WebSocket (dictée,
+# événements) sont refusés en 403. Seule l'origine EXACTE de ce vhost est ramenée à http ; toute autre reste telle quelle
+# (donc refusée) : la protection contre une page tierce qui utiliserait la session de l'administrateur est conservée.
+map $http_origin $sbx_vs_origine {{ default $http_origin; "https://{domaine}" "http://{domaine}"; }}
 
 server {{
     listen 9080;
@@ -655,6 +664,7 @@ server {{
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Origin $sbx_vs_origine;
         proxy_set_header Connection $sbx_vs_connexion;
 
         # Doublage, clonage, bibliothèque : envois audio/vidéo volumineux, traitements longs, flux d'événements.
@@ -1038,6 +1048,38 @@ def cmd_interface(run=_run) -> int:
     MARQUE_INTERFACE.write_text(datetime.now(timezone.utc).isoformat() + "\n")
     audit("interface", "construite")
     appliquer(run)
+    return 0
+
+
+@sous_verrou()
+def cmd_voix_rapide(run=_run) -> int:
+    """Installe (ou réinstalle) la voix rapide dans le LXC : modèle vérifié par sha256, serveur, unité. Idempotent."""
+    c = charger()
+    if not c.get("rapide", {}).get("activer", True):
+        print("voicestudioctl : voix rapide désactivée ([rapide] activer = false)")
+        return 0
+    if etat_lxc(c, run) == "ABSENT":
+        raise Erreur("LXC absent — voicestudioctl install d'abord")
+    r = run(["bash", INSTALL, "--voix-rapide"], timeout=1800)
+    if r.returncode != 0:
+        audit("voix-rapide", f"echec-rc{r.returncode}")
+        return r.returncode
+    # Comme pour l'interface : un code 0 ne prouve rien. On exige que le serveur réponde AVANT de poser le marqueur.
+    port = int(c.get("rapide", {}).get("port", 3901))
+    ok = False
+    for _ in range(15):
+        v = run(["curl", "-fsS", "-m", "4", f"http://{lxc_ip(c)}:{port}/health"], capture_output=True, text=True, timeout=10)
+        if v.returncode == 0:
+            ok = True
+            break
+        time.sleep(2)
+    if not ok:
+        audit("voix-rapide", "echec-ne-repond-pas")
+        print("voicestudioctl : la voix rapide ne répond pas après installation — marqueur NON posé", file=sys.stderr)
+        return 5
+    MARQUE_RAPIDE.parent.mkdir(parents=True, exist_ok=True)
+    MARQUE_RAPIDE.write_text(datetime.now(timezone.utc).isoformat() + "\n")
+    audit("voix-rapide", "installee")
     return 0
 
 
@@ -1580,6 +1622,8 @@ def main(argv: list[str]) -> int:
             return cmd_interface_ferme()
         if cmd == "interface":
             return cmd_interface()
+        if cmd == "voix-rapide":
+            return cmd_voix_rapide()
         if cmd == "pare-feu-ferme":
             return cmd_pare_feu_ferme()
         if cmd == "basculer":

@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox VoiceStudio — installation de la voix rapide dans le LXC (idempotente, une fois) [#1917]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1917
+After=network-online.target secubox-voicestudio-provision.service secubox-voicestudio-interface.service
+Wants=network-online.target
+# Seulement quand le LXC existe ET que la voix rapide n'est pas déjà installée et vérifiée.
+ConditionPathExists=/var/lib/secubox/voicestudio/.lxc-provisioned
+ConditionPathExists=!/var/lib/secubox/voicestudio/.voix-rapide
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/voicestudioctl voix-rapide
+# Téléchargement d'un modèle de ≈ 67 Mo, vérifié par sha256.
+TimeoutStartSec=1800
+Restart=on-failure
+RestartSec=15min
+ProtectHome=true
+PrivateTmp=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

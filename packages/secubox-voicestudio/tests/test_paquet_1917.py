@@ -356,3 +356,42 @@ def test_la_configuration_livre_les_reglages_memoire():
 def test_le_delai_du_moteur_couvre_une_synthese_a_froid():
     """Mesuré sur gk3 : 109 s à froid (chargement du modèle + calcul CPU). Un délai de 120 s était trop juste."""
     assert tomllib.loads(lire("conf/voicestudio.toml"))["limites"]["delai_s"] >= 300
+
+
+# ── voix rapide (#1917) ──────────────────────────────────────────────────────────────────────────────────────────────
+def test_la_voix_rapide_est_livree_verifiee_et_activee_par_le_paquet():
+    assert "lxc/voix-rapide.py" in lire("debian/rules") and "secubox-voicestudio-rapide.service" in lire("debian/rules")
+    assert "secubox-voicestudio-rapide.service" in lire("debian/postinst") and "secubox-voicestudio-rapide.service" in lire("debian/prerm")
+    r = tomllib.loads(lire("conf/voicestudio.toml"))["rapide"]
+    assert r["activer"] is True and r["modele_url"].startswith("https://") and re.fullmatch(r"[0-9a-f]{64}", r["modele_sha256"])
+    inst = lire("lxc/install-lxc.sh")
+    assert "sha256sum -c" in inst and "installer_voix_rapide" in inst and "--voix-rapide" in inst
+    assert subprocess.run(["bash", "-n", str(PKG / "lxc/install-lxc.sh")]).returncode == 0
+    assert subprocess.run(["python3", "-m", "py_compile", str(PKG / "lxc/voix-rapide.py")]).returncode == 0
+
+
+def test_le_serveur_de_la_voix_rapide_exige_la_cle_et_borne_l_entree(monkeypatch):
+    import http.client
+    import importlib.util
+    import threading
+    monkeypatch.setenv("VOIX_RAPIDE_HOTE", "127.0.0.1")
+    monkeypatch.setenv("OMNIVOICE_API_KEY", "cle-de-test")
+    spec = importlib.util.spec_from_file_location("voix_rapide", PKG / "lxc/voix-rapide.py")
+    vr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vr)
+    monkeypatch.setattr(vr, "synthetiser", lambda t, f: b"AUDIO:" + t.encode())
+    srv = vr.ThreadingHTTPServer(("127.0.0.1", 0), vr.Poignee)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    def post(corps, cle="cle-de-test"):
+        h = http.client.HTTPConnection("127.0.0.1", srv.server_port, timeout=5)
+        h.request("POST", "/v1/audio/speech", body=json.dumps(corps), headers={"Authorization": f"Bearer {cle}"} if cle else {})
+        r = h.getresponse()
+        return r.status, r.read()
+    try:
+        assert post({"input": "Bonjour"}) == (200, b"AUDIO:Bonjour")
+        assert post({"input": "Bonjour"}, cle="autre")[0] == 401 and post({"input": "Bonjour"}, cle="")[0] == 401
+        assert post({"input": ""})[0] == 422 and post({"input": "x" * 4001})[0] == 422
+        assert post({"input": "a", "response_format": "exe"})[0] == 422
+    finally:
+        srv.shutdown()

@@ -162,3 +162,9 @@ ordre : module < relais nginx < frontal public (300 s < 330 s < 10 min).
 
 Migrer « ancien schéma → nouveau » en testant `if "memoire" in conf` prend la nouvelle SECTION `[memoire]` pour l'ancienne clé `memoire = "4g"` et
 réécrit un fichier déjà à jour. Distinguer par le TYPE de la valeur (`isinstance(v, dict)`), et tester la migration sur un fichier déjà migré.
+
+## Pourquoi « Dire » ne rend rien dans VoiceStudio (grand modèle de 110 à 140 s) ?
+Le modèle OmniVoice calcule sur CPU : 110 à 140 s par phrase sur gk3, pour 4 s de chargement seulement — garder le modèle en mémoire ne change rien. Une voix Piper française via sherpa-onnx (déjà installé dans le moteur) dit 4,6 s d'audio en 0,9 s. Mesurer AVANT de choisir : `lxc-attach -n voicestudio -P /data/lxc -- /opt/venv/bin/python` avec `sherpa_onnx.OfflineTts`. Le moteur n'a qu'un backend TTS global ; le module garde donc les deux (voix rapide dans un petit serveur à côté, grand modèle pour les voix nommées).
+
+## WebSocket du studio natif refusé en 403 derrière HAProxy
+Le moteur (`core/csrf.py: origin_allowed`) compare l'Origin du navigateur (`https://hôte`) à son origine de destination (`http://hôte`, car HAProxy termine le TLS). Sans correction, tout WebSocket échoue en 403 (dictée) alors que l'événement `/ws/events` peut passer. Parade : `map $http_origin` dans nginx qui ramène à http la seule origine exacte du vhost ; ne jamais supprimer ni forcer l'Origin (c'est la protection contre une page tierce qui profiterait du cookie de session).

@@ -50,8 +50,9 @@ def _normaliser_voix(brut) -> list[dict]:
 
 class Moteur:
     def __init__(self, url: str, cle: Callable[[], Awaitable[str]], delai_s: int = 120,
-                 transport: httpx.AsyncBaseTransport | None = None) -> None:
+                 transport: httpx.AsyncBaseTransport | None = None, url_rapide: str = "") -> None:
         self.url = url.rstrip("/")
+        self.url_rapide = url_rapide.rstrip("/")
         self._cle = cle
         self.delai_s = delai_s
         self._transport = transport          # tests seulement
@@ -85,6 +86,24 @@ class Moteur:
         if voix:
             charge["voice"] = voix
         return (await self._appel("POST", "/v1/audio/speech", json=charge)).content
+
+    async def dire_rapide(self, texte: str, format_: str = "mp3") -> bytes:
+        """La voix rapide (Piper français, dans le LXC) : moins d'une seconde. Contrat identique au moteur.
+        Le moteur principal est d'abord sondé par le mandataire : en mode « à la demande » c'est lui qui réveille le
+        conteneur, et la voix rapide vit dedans. Toute défaillance lève MoteurIndisponible — l'appelant retombe alors
+        sur le grand modèle, il ne fabrique rien."""
+        if not self.url_rapide:
+            raise MoteurIndisponible("voix rapide non configurée")
+        await self._appel("GET", "/health", delai=60)
+        charge = {"input": texte, "response_format": format_}
+        try:
+            async with httpx.AsyncClient(timeout=30, transport=self._transport) as cli:
+                r = await cli.post(self.url_rapide + "/v1/audio/speech", json=charge, headers=await self._entetes())
+        except (httpx.HTTPError, OSError) as e:
+            raise MoteurIndisponible(f"voix rapide injoignable ({type(e).__name__})") from e
+        if r.status_code >= 400:
+            raise MoteurIndisponible(f"la voix rapide a répondu HTTP {r.status_code}")
+        return r.content
 
     async def transcrire(self, audio: bytes, nom: str, langue: str = "") -> str:
         data = {"model": "whisper-1"}
