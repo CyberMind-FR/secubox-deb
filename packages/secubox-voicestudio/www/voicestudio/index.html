@@ -335,8 +335,11 @@
                 effacePanne(); cacheEcrire(s); rendre(s);
                 clearTimeout(timer); timer = setTimeout(rafraichir, (s.operation && s.operation.etat === 'en-cours') ? 4000 : 15000);
             } catch (e) {
-                annoncePanne('API VoiceStudio injoignable', ' — les valeurs affichées sont les dernières connues, pas des mesures.');
-                clearTimeout(timer); timer = setTimeout(rafraichir, 30000);
+                /* 401/403 : l'API répond, c'est la SESSION qui manque — ne pas dire « injoignable ». */
+                if (e.message === '401') annoncePanne('Connexion requise', ' — ouvrez une session administrateur pour piloter VoiceStudio.');
+                else if (e.message === '403') annoncePanne('Réservé aux administrateurs', ' — cette page pilote le moteur et sa clé.');
+                else annoncePanne('API VoiceStudio injoignable', ' — les valeurs affichées sont les dernières connues, pas des mesures.');
+                clearTimeout(timer); timer = setTimeout(rafraichir, e.message === '401' || e.message === '403' ? 60000 : 30000);
             }
         }
 

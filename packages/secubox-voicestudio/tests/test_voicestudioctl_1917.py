@@ -1087,3 +1087,28 @@ def test_le_journal_retombe_sur_le_journal_du_lxc_si_le_fichier_manque(bac_a_sab
     run = LxcFaux("RUNNING")
     c.cmd_logs(5, run)
     assert any(a[0] == "lxc-attach" and "journalctl" in a for a in run.appels)
+
+
+def test_le_point_de_montage_vide_laisse_par_le_lxc_est_retire_apres_migration(bac_a_sable, monkeypatch):
+    c.VOLUME_PODMAN.mkdir()
+    (c.VOLUME_PODMAN / "omnivoice.db").write_bytes(b"x")
+    cible = c.donnees(c.charger())
+    cible.mkdir()                                              # point de montage vide
+    monkeypatch.setattr(c.os, "lchown", lambda *a: None)
+    run = LxcFaux()
+    reel = c.subprocess.run
+    c.cmd_migrer_podman(lambda cmd, **k: reel(cmd, **k) if cmd[0] == "cp" else run(cmd, **k))
+    assert not Path(str(cible) + ".avant-migration").exists()
+
+
+def test_une_ancienne_cible_non_vide_est_gardee(bac_a_sable, monkeypatch):
+    c.VOLUME_PODMAN.mkdir()
+    (c.VOLUME_PODMAN / "omnivoice.db").write_bytes(b"x")
+    cible = c.donnees(c.charger())
+    cible.mkdir()
+    (cible / "voix.wav").write_bytes(b"precieuse")
+    monkeypatch.setattr(c.os, "lchown", lambda *a: None)
+    run = LxcFaux()
+    reel = c.subprocess.run
+    c.cmd_migrer_podman(lambda cmd, **k: reel(cmd, **k) if cmd[0] == "cp" else run(cmd, **k))
+    assert (Path(str(cible) + ".avant-migration") / "voix.wav").read_bytes() == b"precieuse"
