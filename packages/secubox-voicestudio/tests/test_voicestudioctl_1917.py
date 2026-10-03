@@ -8,6 +8,7 @@ import importlib.machinery
 import importlib.util
 import io
 import json
+import re
 import stat
 import tarfile
 import tomllib
@@ -65,7 +66,7 @@ def bac_a_sable(tmp_path, monkeypatch):
         "CLE": tmp_path / "secrets" / "api_key", "ETAT": tmp_path / "etat.json",
         "MARQUE_INSTALLE": tmp_path / ".prov", "AUDIT": tmp_path / "audit.log",
         "SAUVEGARDES": tmp_path / "sauv", "DROPIN_DIR": tmp_path / "systemd",
-        "VOLUME_PODMAN": tmp_path / "volume-podman", "VERROU": tmp_path / "verrou.lock",
+        "VOLUME_PODMAN": tmp_path / "volume-podman", "VERROU": tmp_path / "verrou.lock", "NFT_DIR": tmp_path / "nft",
     }.items():
         monkeypatch.setattr(c, nom, valeur)
     (tmp_path / "lxc").mkdir()
@@ -203,9 +204,10 @@ def test_appliquer_n_ecrit_les_dropins_qu_une_fois(bac_a_sable):
     run = LxcFaux()
     r1 = c.appliquer(run)
     assert r1["mandataire"] is True
-    appels = len(run.appels)
+    systemd = lambda: [a for a in run.appels if a[0] == "systemctl"]          # noqa: E731
+    appels = len(systemd())
     r2 = c.appliquer(run)
-    assert r2["mandataire"] is False and len(run.appels) == appels   # idempotent : pas de rechargement
+    assert r2["mandataire"] is False and len(systemd()) == appels    # idempotent : pas de rechargement systemd
 
 
 def test_reveil_demarre_le_lxc_endormi_et_attend_la_sante():
@@ -878,3 +880,179 @@ def test_le_mandataire_rendort_en_root_et_le_service_n_a_pas_besoin_de_root():
     cfg = c.charger()
     cfg["lxc"]["mode"] = "demande"
     assert "ExecStopPost=+/usr/sbin/voicestudioctl sleep" in c.contenu_service(cfg)
+
+
+# ── pare-feu : le mandataire écoute sur l'hôte, donc sous la chaîne d'entrée en DROP ──────────────
+class NftFaux(LxcFaux):
+    """nft list / insert / delete : une chaîne d'entrée qui garde les règles comme le ferait nftables."""
+    def __init__(self, table="filter", **kw):
+        super().__init__(**kw)
+        self.table, self.regles = table, []
+
+    def __call__(self, cmd, **k):
+        if cmd[0] != "nft":
+            return super().__call__(cmd, **k)
+        self.appels.append(list(cmd))
+        if cmd[1] in ("list", "-a") and cmd[-3] == "inet":
+            if cmd[-2] != self.table:
+                return Rep(1, "", "No such file or directory")
+            return Rep(0, "\n".join(f"{r} # handle {i + 10}" for i, r in enumerate(self.regles)))
+        if cmd[1] == "list":
+            return Rep(0 if cmd[4] == self.table else 1, "chain input {}")
+        if cmd[1] == "insert":
+            # nftables ré-affiche le commentaire entre guillemets : on restitue ce format réel.
+            self.regles.insert(0, " ".join(cmd[6:-1]) + ' "' + cmd[-1] + '"')
+            return Rep(0)
+        if cmd[1] == "delete":
+            h = int(cmd[-1]) - 10
+            self.regles.pop(h)
+            return Rep(0)
+        return Rep(0)
+
+
+def test_la_regle_ne_vise_que_les_adresses_publiees_depuis_des_sources_privees():
+    cfg = c.charger()
+    cfg["reseau"]["publier"] = ["192.168.1.9", "10.10.0.5"]
+    r = c.regle_nft(cfg)
+    assert "ip daddr { 10.10.0.5, 192.168.1.9 }" in r and "tcp dport 3900 accept" in r
+    assert "ip saddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }" in r
+    assert 'comment "secubox-voicestudio"' in r
+    assert not re.search(r"(?<![\d.])0\.0\.0\.0(?![\d.])", r) and "iifname" not in r
+
+
+def test_rien_de_publie_rien_d_ouvert():
+    cfg = c.charger()
+    assert c.regle_nft(cfg) is None and "insert rule" not in c.contenu_nft(cfg)
+
+
+def test_une_adresse_publique_heritee_n_ouvre_aucune_regle():
+    cfg = c.charger()
+    cfg["reseau"]["publier"] = ["82.67.100.75"]
+    assert c.regle_nft(cfg) is None
+
+
+def test_le_fichier_charge_au_demarrage_declare_la_table_avant_d_y_inserer():
+    cfg = c.charger()
+    cfg["reseau"]["publier"] = ["192.168.1.9"]
+    f = c.contenu_nft(cfg)
+    assert f.index("table inet filter") < f.index("insert rule inet filter input")     # additif : ne peut pas faire échouer le chargement
+    assert "flush" not in f and "policy" not in f and "hook" not in f
+
+
+def test_appliquer_pose_la_regle_vivante_et_ecrit_le_fichier(bac_a_sable):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9", "10.10.0.5"])
+    run = NftFaux()
+    res = c.appliquer(run)
+    assert res["pare_feu"]["vivante"] is True and len(run.regles) == 1
+    assert "tcp dport 3900 accept" in run.regles[0] and "secubox-voicestudio" in run.regles[0]
+    assert "insert rule inet filter input" in (c.NFT_DIR / c.NFT_FICHIER).read_text()
+
+
+def test_changer_publier_retire_l_ancienne_regle_avant_la_nouvelle(bac_a_sable):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9", "10.10.0.5"])
+    run = NftFaux()
+    c.appliquer(run)
+    c.ecrire_toml("reseau", "publier", ["10.10.0.5"])
+    c.appliquer(run)
+    assert len(run.regles) == 1 and "192.168.1.9" not in run.regles[0]       # aucune adresse ouverte derrière soi
+
+
+def test_appliquer_deux_fois_ne_duplique_pas_la_regle(bac_a_sable):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9"])
+    run = NftFaux()
+    c.appliquer(run)
+    c.appliquer(run)
+    c.appliquer(run)
+    assert len(run.regles) == 1
+
+
+def test_la_regle_ne_touche_pas_aux_regles_des_autres(bac_a_sable):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9"])
+    run = NftFaux()
+    run.regles = ['tcp dport 22 accept', 'iifname "wg-mesh" tcp dport 53 accept comment "secubox-noms"']
+    c.appliquer(run)
+    assert len(run.regles) == 3 and 'tcp dport 22 accept' in run.regles
+    assert not any(a[:3] == ["nft", "flush", "chain"] or "flush" in a for a in run.appels if a[0] == "nft")
+
+
+def test_sur_une_box_non_redemarree_la_table_est_l_ancienne(bac_a_sable):
+    """gk3 chargeait encore `secubox_filter` : la règle vivante doit y aller, le fichier visant la base unifiée."""
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9"])
+    run = NftFaux(table="secubox_filter")
+    c.appliquer(run)
+    assert len(run.regles) == 1
+    assert ["nft", "insert", "rule", "inet", "secubox_filter", "input"] == [a for a in run.appels if a[:2] == ["nft", "insert"]][0][:6]
+
+
+def test_sans_chaine_d_entree_on_le_dit_et_on_ecrit_quand_meme_le_fichier(bac_a_sable, capsys):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9"])
+    run = NftFaux(table="autre")
+    res = c.appliquer(run)
+    assert res["pare_feu"]["vivante"] is False and "chaîne d'entrée" in capsys.readouterr().err
+    assert (c.NFT_DIR / c.NFT_FICHIER).exists()
+
+
+def test_nft_absent_ne_fait_pas_tomber_appliquer(bac_a_sable, capsys):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9"])
+    base = LxcFaux()
+
+    def sans_nft(cmd, **k):
+        if cmd[0] == "nft":
+            raise FileNotFoundError(2, "No such file or directory")
+        return base(cmd, **k)
+    res = c.appliquer(sans_nft)
+    assert res["pare_feu"]["vivante"] is False and "nft indisponible" in capsys.readouterr().err
+
+
+def test_une_regle_refusee_par_nft_est_dite(bac_a_sable, capsys):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9"])
+    run = NftFaux()
+    base = run.__call__
+
+    def refuse(cmd, **k):
+        if cmd[:2] == ["nft", "insert"]:
+            run.appels.append(list(cmd))
+            return Rep(1, "", "Error: syntax")
+        return base(cmd, **k)
+    res = c.appliquer(refuse)
+    assert res["pare_feu"]["vivante"] is False and "refusée" in capsys.readouterr().err
+
+
+def test_pare_feu_ferme_retire_la_regle_et_le_fichier(bac_a_sable):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9"])
+    run = NftFaux()
+    c.appliquer(run)
+    assert c.cmd_pare_feu_ferme(run) == 0
+    assert run.regles == [] and not (c.NFT_DIR / c.NFT_FICHIER).exists()
+
+
+def test_la_regle_est_passee_a_nft_sans_shell(bac_a_sable):
+    c.ecrire_toml("reseau", "publier", ["192.168.1.9"])
+    run = NftFaux()
+    c.appliquer(run)
+    [ins] = [a for a in run.appels if a[:2] == ["nft", "insert"]]
+    assert ins[-1] == "secubox-voicestudio" and "accept" in ins and '"' not in " ".join(ins)
+
+
+def test_la_bascule_retire_les_regles_de_transfert_de_l_ancien_executeur(bac_a_sable, monkeypatch):
+    c.VOLUME_PODMAN.mkdir()
+    (c.VOLUME_PODMAN / "omnivoice.db").write_bytes(b"x")
+    monkeypatch.setattr(c.os, "lchown", lambda *a: None)
+    monkeypatch.setattr(c, "_port_libre", lambda *a: True)
+    monkeypatch.setattr(c, "sante", lambda cfg, *a, **k: {"ok": True, "http": 200})
+    c.creer_cle()
+    run = NftFaux("secubox_filter", etat="RUNNING")
+    reel = c.subprocess.run
+    run.regles = ['ip daddr 10.88.0.0/16 tcp dport 3900 ct status dnat accept comment "secubox-voicestudio"', "tcp dport 22 accept"]
+    c.cmd_basculer(lambda cmd, **k: reel(cmd, **k) if cmd[0] == "cp" else run(cmd, **k))
+    assert not any("10.88.0.0/16" in r for r in run.regles) and "tcp dport 22 accept" in run.regles
+
+
+def test_la_migration_laisse_les_donnees_en_0750(bac_a_sable, monkeypatch):
+    c.VOLUME_PODMAN.mkdir()
+    (c.VOLUME_PODMAN / "omnivoice.db").write_bytes(b"x")
+    monkeypatch.setattr(c.os, "lchown", lambda *a: None)
+    run = LxcFaux()
+    reel = c.subprocess.run
+    c.cmd_migrer_podman(lambda cmd, **k: reel(cmd, **k) if cmd[0] == "cp" else run(cmd, **k))
+    assert stat.S_IMODE(c.donnees(c.charger()).stat().st_mode) == 0o750
