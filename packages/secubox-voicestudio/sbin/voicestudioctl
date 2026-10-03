@@ -1237,6 +1237,11 @@ def _completer_depuis_les_defauts(actuel: dict) -> int:
     except (OSError, tomllib.TOMLDecodeError):
         return 0
     n = 0
+    # Ancienne valeur PAR DÉFAUT (120 s) de `[limites] delai_s` : trop juste pour une synthèse à froid (≈ 110 s mesurés). On ne
+    # remplace QUE cette valeur exacte — un délai choisi par l'opérateur n'est jamais touché.
+    if actuel.get("limites", {}).get("delai_s") == 120:
+        ecrire_toml("limites", "delai_s", 300)
+        n += 1
     for section, valeurs in defauts.items():
         for cle, valeur in valeurs.items():
             if cle not in actuel.get(section, {}):

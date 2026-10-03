@@ -1,3 +1,11 @@
+secubox-voicestudio (0.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Délai du moteur : 120 s → 300 s. Mesuré sur gk3 : une synthèse à froid (chargement du modèle de 3 Go puis calcul sur CPU) prend
+    109 s, soit 91 % du délai précédent. Une box dont la configuration porte encore l'ancien défaut exact (120) est relevée ; un délai
+    choisi par l'opérateur n'est jamais touché.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 14:30:00 +0200
+
 secubox-voicestudio (0.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Mémoire : le swap DISQUE libre compte pour moitié (plafonné à 2 Go, `[memoire] swap_compte_mo`) dans la mémoire effective d'une
