@@ -1574,3 +1574,19 @@ def test_lire_meminfo_et_etat_memoire(bac_a_sable, tmp_path, monkeypatch):
 def test_l_etat_complet_porte_la_memoire_de_la_box(bac_a_sable, tmp_path, monkeypatch):
     BancMemoire(tmp_path, monkeypatch, disponible=4321)
     assert c.etat_complet(LxcFaux("STOPPED"))["memoire_hote"]["disponible_mo"] == 4321
+
+
+def test_appliquer_pousse_les_reglages_du_moteur_quand_il_tourne(bac_a_sable):
+    """Une montée de version qui change l'environnement du moteur ne doit pas attendre son prochain démarrage."""
+    c.creer_cle()
+    run = DomaineFaux(etat="RUNNING")
+    c.appliquer(run)
+    attaches = [a for a in run.appels if a[0] == "lxc-attach" and "cmp -s" in a[-1]]
+    assert attaches and any("OMNIVOICE_IDLE_TIMEOUT_S=60" in (e or "") for e in run.entrees)
+
+
+def test_appliquer_ne_touche_pas_au_moteur_arrete(bac_a_sable):
+    c.creer_cle()
+    run = DomaineFaux(etat="STOPPED")
+    c.appliquer(run)
+    assert not any(a[0] == "lxc-attach" for a in run.appels)

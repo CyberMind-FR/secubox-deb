@@ -1,3 +1,11 @@
+secubox-voicestudio (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * `appliquer` (donc la postinst) pousse l'environnement du moteur — clé, libération du modèle, préchargements — quand il tourne ;
+    le moteur n'est relancé que si le contenu a changé. Avant, une montée de version gardait l'ancien environnement jusqu'au
+    prochain démarrage du moteur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 13:30:00 +0200
+
 secubox-voicestudio (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * MÉMOIRE (gk3, 8 Go) : une synthèse vocale charge un modèle de ≈ 3,6 Go ; le tueur de mémoire global a abattu le moteur
