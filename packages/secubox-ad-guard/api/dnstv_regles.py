@@ -125,7 +125,7 @@ class Regles:
             raise ErreurRegle("règle inconnue")
         return dict(self._r[rid])
 
-    def proposer(self, appareil: str, domaine: str, score: int, risque: str, maintenant: int, origine: str = "auto") -> Optional[dict]:
+    def proposer(self, appareil: str, domaine: str, score: int, risque: str, maintenant: int, origine: str = "auto", motif: str = "proposé") -> Optional[dict]:
         appareil, domaine = _appareil(appareil), _domaine(domaine)
         rid = identifiant(appareil, domaine)
         if rid in self._r:
@@ -134,7 +134,7 @@ class Regles:
             raise ErreurRegle("trop de règles")
         regle = valider_regle({"appareil": appareil, "domaine": domaine, "etat": "candidat", "origine": origine, "risque": risque,
                                "score": max(0, int(score)), "cree": maintenant, "maj": maintenant, "fin_essai": 0,
-                               "historique": [{"ts": maintenant, "de": "", "vers": "candidat", "origine": origine, "motif": "proposé"}]})
+                               "motif": motif, "historique": [{"ts": maintenant, "de": "", "vers": "candidat", "origine": origine, "motif": motif}]})
         self._r[rid] = regle
         return dict(regle)
 

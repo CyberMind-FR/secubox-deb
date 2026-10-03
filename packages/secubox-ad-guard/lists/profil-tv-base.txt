@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil de base du mode « auto » (#1959) : les domaines VALIDÉS sur deux Freebox TV réelles (#1943/#1954, 2026-10-03), appliqués comme règles
+# CONFIRMÉES à un appareil ajouté automatiquement. Un domaine par ligne ; « # » commence un commentaire. Changer ce fichier ne modifie pas les
+# appareils déjà ajoutés. Le profil effectif est cette graine PLUS le profil agrégé (domaines confirmés par l'administrateur sur plusieurs appareils).
+# version: 2026.10.03-1
+# catégorie : profil
+7cd77.v.fwmrm.net
+adnxs.com
+adservice.google.com
+adsrvr.org
+amazon-adsystem.com
+analytics.twitter.com
+app-measurement.com
+bluekai.com
+c.2mdn.net
+casalemedia.com
+chartbeat.com
+connect.facebook.net
+crashlytics.com
+criteo.com
+criteo.net
+demdex.net
+doubleclick.net
+firebase-settings.crashlytics.com
+google-analytics.com
+googleadservices.com
+googlesyndication.com
+hotjar.com
+krxd.net
+mixpanel.com
+openx.net
+outbrain.com
+platform.twitter.com
+pubmatic.com
+quantserve.com
+rubiconproject.com
+scorecardresearch.com
+segment.io
+smartadserver.com
+taboola.com
+videos-pub.ftv-publicite.fr
