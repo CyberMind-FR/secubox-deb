@@ -2,8 +2,10 @@
 set -e
 if [ "$1" = "configure" ]; then
     # Ensure data directories exist
-    mkdir -p /var/lib/secubox/ad-guard/blocklists
+    mkdir -p /var/lib/secubox/ad-guard/blocklists /var/lib/secubox/ad-guard/dnstv
     chown -R secubox:secubox /var/lib/secubox/ad-guard
+    # POC « DNS AdBlock TV » (#1943) : inactif tant qu'on ne l'active pas ; une mise à jour relance son démon s'il tourne déjà.
+    systemctl try-restart secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
 
     systemctl daemon-reload
     # PAS d'enable de secubox-ad-guard.service : le module est servi par

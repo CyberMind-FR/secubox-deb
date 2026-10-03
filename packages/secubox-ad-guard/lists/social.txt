@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# POC « DNS AdBlock TV » (#1943) — JEU DE TEST, pas une liste de production.
+# Un domaine par ligne ; « # » commence un commentaire. Noms publics notoirement associés à la catégorie ;
+# la liste est volontairement COURTE et n'est pas exhaustive. Elle peut contenir des faux positifs :
+# un domaine partagé entre contenu légitime et publicité est un risque documenté (docs/poc-dns-adblock-tv.md).
+# Les listes publiques reconnues viendront ensuite, avec versionnement et validation (MANIFEST.json).
+# version: 2026.10.03-poc1
+# catégorie : social
+
+connect.facebook.net
+platform.twitter.com
+analytics.twitter.com

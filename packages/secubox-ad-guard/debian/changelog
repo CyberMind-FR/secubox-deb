@@ -1,3 +1,22 @@
+secubox-ad-guard (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * POC « DNS AdBlock TV » (ref #1943) : MESURER ce que le filtrage DNS bloque réellement, par appareil (Freebox TV), en OBSERVE (rien n'est
+    bloqué, on journalise ce qui l'aurait été) ou BLOCK. Une VUE Unbound par appareil : les autres clients et le puits de production
+    (658 316 domaines) ne sont pas touchés ; retirer le drop-in remet tout en l'état. Inactif par défaut.
+    - api/dnstv.py (bibliothèque), api/dnstv_routes.py (routes /adblock-tv/* : état, appareils, mode, statistiques, export, liste
+      personnalisée, DNS PATH TEST, contournement, limites), onglet « DNS AdBlock TV » dans l'interface.
+    - secubox-adguard-tv (root, via sudo à arguments exacts) : relit et revalide l'état écrit par l'API, refuse les liens symboliques,
+      contrôle la configuration par unbound-checkconf AVANT de la garder et la remet si elle est refusée.
+    - secubox-adguard-dnsfeed (démon, utilisateur secubox) : compteurs par jour, appareil, domaine et décision (ALLOWED / BLOCKED /
+      UPSTREAM_ERROR) depuis le journal d'Unbound ; ni contenu, ni cookie, ni URL. Rétention 30 jours.
+    - lists/ (jeu de test versionné + MANIFEST.json) et tools/ (dns-tv-test.py côté client, dns-limits-lab.py : banc local démontrant les
+      limites A–G avec un vrai Unbound, tv-before-after.py : procédure A/B/C sur un vrai appareil).
+  * Constat : l'exemption d'un client par une vue Unbound VIDE (utilisée par secubox-adblock-sync pour l'allowlist IP) ne marche pas — mesuré
+    avec Unbound 1.22, le client reste bloqué ; une vue doit contenir une zone transparente. Non corrigé ici (comportement de production) :
+    voir l'issue dédiée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 23:50:00 +0200
+
 secubox-ad-guard (1.1.6-1~bookworm1) bookworm; urgency=medium
 
   * Domaines EXEMPTÉS du puits DNS : ceux dont la box a besoin (download.db-ip.com, base ASN de secubox-geoipupdate) et ceux d'un fichier d'administration (/var/lib/secubox/ad-guard/domain-allowlist.txt), servis en always_transparent même sous un parent bloqué ; liste régénérée à l'installation (#1819).

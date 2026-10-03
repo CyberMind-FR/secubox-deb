@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-03T12:04:37Z",
+  "serveur": "127.0.0.1#5399",
+  "reference": "127.0.0.1#5397",
+  "type": "A",
+  "resume": {
+    "ALLOWED": 2,
+    "BLOCKED": 4,
+    "NXDOMAIN": 0,
+    "ERROR": 0
+  },
+  "resultats": [
+    {
+      "domaine": "ads.cdn-pub.sbxlab",
+      "statut": "BLOCKED",
+      "rcode": "NXDOMAIN",
+      "reponses": [],
+      "ms": 0.4,
+      "reference": {
+        "rcode": "NOERROR",
+        "reponses": [
+          "7.1.1.1"
+        ]
+      }
+    },
+    {
+      "domaine": "metrics.tracker.sbxlab",
+      "statut": "BLOCKED",
+      "rcode": "NXDOMAIN",
+      "reponses": [],
+      "ms": 0.1,
+      "reference": {
+        "rcode": "NOERROR",
+        "reponses": [
+          "7.1.1.2"
+        ]
+      }
+    },
+    {
+      "domaine": "video.studio.sbxlab",
+      "statut": "BLOCKED",
+      "rcode": "NXDOMAIN",
+      "reponses": [],
+      "ms": 0.1,
+      "reference": {
+        "rcode": "NOERROR",
+        "reponses": [
+          "7.2.2.2"
+        ]
+      }
+    },
+    {
+      "domaine": "stream.studio.sbxlab",
+      "statut": "ALLOWED",
+      "rcode": "NOERROR",
+      "reponses": [
+        "7.3.3.3"
+      ],
+      "ms": 0.2,
+      "reference": {
+        "rcode": "NOERROR",
+        "reponses": [
+          "7.3.3.3"
+        ]
+      }
+    },
+    {
+      "domaine": "cdn.sharedcloud.sbxlab",
+      "statut": "BLOCKED",
+      "rcode": "NXDOMAIN",
+      "reponses": [],
+      "ms": 0.1,
+      "reference": {
+        "rcode": "NOERROR",
+        "reponses": [
+          "7.4.4.4"
+        ]
+      }
+    },
+    {
+      "domaine": "news.sbxlab",
+      "statut": "ALLOWED",
+      "rcode": "NOERROR",
+      "reponses": [
+        "7.5.5.5"
+      ],
+      "ms": 0.1,
+      "reference": {
+        "rcode": "NOERROR",
+        "reponses": [
+          "7.5.5.5"
+        ]
+      }
+    }
+  ],
+  "avertissement": "BLOCKED n'est affirmé qu'avec un résolveur de référence ; sans lui, NXDOMAIN reste « non tranché »."
+}

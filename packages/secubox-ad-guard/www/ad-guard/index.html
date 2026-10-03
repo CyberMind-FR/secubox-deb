@@ -115,7 +115,7 @@
     <div class="main">
         <div class="header">
             <h1>🛡️ Ad Guard</h1>
-            <span class="badge version">v1.0.0</span>
+            <span class="badge version">v1.2.0</span>
         </div>
 
         <div class="stats-grid">
@@ -146,6 +146,7 @@
             <button class="tab" data-tab="devices">Devices</button>
             <button class="tab" data-tab="blocklist">Blocklist</button>
             <button class="tab" data-tab="delayed">Delayed</button>
+            <button class="tab" data-tab="adblocktv">DNS AdBlock TV</button>
         </div>
 
         <!-- Overview Tab -->
@@ -255,6 +256,54 @@
             <div id="learn-thresholds"></div>
             <div class="card-header" style="margin-top:1rem;"><h2 style="font-size:1rem;">📃 Trackers appris</h2></div>
             <div id="learn-trackers"><div class="loading">Loading…</div></div>
+        </div>
+
+        <!-- DNS AdBlock TV (POC #1943) : mesurer ce que le filtrage DNS bloque pour des appareils choisis -->
+        <div id="adblocktv" class="tab-content">
+            <div class="card">
+                <div class="card-header"><h2>📺 DNS AdBlock TV <small style="font-weight:400;color:var(--text-dim);">— POC de mesure</small></h2></div>
+                <p style="color:var(--text-dim);font-size:.85rem;margin:.2rem 0 .8rem;">Mesure la <b>réduction des domaines publicitaires/tracking résolus par DNS</b>
+                pour les appareils déclarés. Ce n'est pas une suppression de publicités : une pub intégrée au flux vidéo n'est pas visible du DNS.</p>
+                <div style="display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap;">
+                    <label><input type="checkbox" id="tv-actif" onchange="tvActif(this.checked)"> <b>Activé</b> (ON/OFF)</label>
+                    <span id="tv-etat" style="color:var(--text-dim);font-size:.85rem;"></span>
+                </div>
+                <div style="margin-top:.8rem;"><b>Mode</b> (tous les appareils déclarés) :
+                    <label style="margin-left:.6rem;"><input type="radio" name="tv-mode" value="observe" onchange="tvMode(this.value)"> OBSERVE (aucun blocage)</label>
+                    <label style="margin-left:.6rem;"><input type="radio" name="tv-mode" value="block" onchange="tvMode(this.value)"> BLOCK</label>
+                </div>
+            </div>
+            <div class="card" style="margin-top:1rem;">
+                <div class="card-header"><h2>📊 Statistiques (7 jours)</h2></div>
+                <div class="stats-grid" id="tv-stats"></div>
+            </div>
+            <div class="card" style="margin-top:1rem;">
+                <div class="card-header"><h2>🚫 Top domaines bloqués</h2></div>
+                <table><thead><tr><th>Domaine</th><th>Catégorie</th><th>Requêtes</th></tr></thead><tbody id="tv-top"></tbody></table>
+            </div>
+            <div class="card" style="margin-top:1rem;">
+                <div class="card-header"><h2>📡 Appareils</h2></div>
+                <table><thead><tr><th>Nom</th><th>Adresse</th><th>Mode</th><th></th></tr></thead><tbody id="tv-clients"></tbody></table>
+                <div style="margin-top:.6rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+                    <input type="text" id="tv-new-ip" placeholder="Adresse IP (ex. 192.168.1.50)">
+                    <input type="text" id="tv-new-nom" placeholder="Nom (ex. Freebox TV salon)">
+                    <button class="btn" onclick="tvAddClient()">Ajouter l'appareil</button>
+                </div>
+            </div>
+            <div class="card" style="margin-top:1rem;">
+                <div class="card-header"><h2>➕ Ajouter un domaine</h2></div>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><input type="text" id="tv-new-domaine" placeholder="domaine.example"><button class="btn" onclick="tvAddDomaine()">Ajouter</button></div>
+                <div id="tv-custom" style="margin-top:.5rem;font-family:monospace;font-size:.8rem;color:var(--text-dim);"></div>
+            </div>
+            <div class="card" style="margin-top:1rem;">
+                <div class="card-header"><h2>🧭 DNS PATH TEST</h2></div>
+                <p style="color:var(--text-dim);font-size:.85rem;">La box reçoit-elle les requêtes de l'appareil ? Obtenez un nom de sonde, interrogez-le depuis l'appareil, puis vérifiez.</p>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+                    <button class="btn" onclick="tvSonde()">Nouvelle sonde</button><code id="tv-sonde-nom"></code>
+                    <button class="btn" onclick="tvVerifier()">La box l'a-t-elle reçue ?</button>
+                </div>
+                <div id="tv-path" style="margin-top:.6rem;"></div>
+            </div>
         </div>
     </div>
 
@@ -466,7 +515,60 @@
         async function learnRun() { document.getElementById('learn-status').innerHTML = '⏳ Cycle lancé…'; await api('/learn/run', 'POST'); setTimeout(learnRender, 6000); }
         async function learnSave(k, v) { await api('/learn/thresholds', 'POST', { [k]: parseInt(v, 10) }); }
 
-        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender();
+
+        // ── DNS AdBlock TV (POC #1943) ───────────────────────────────────────────────
+        let tvSondeNom = '';
+        function tvEsc(t) { const d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML; }
+        async function tvRender() {
+            const st = await api('/adblock-tv/status');
+            if (!st) return;
+            document.getElementById('tv-actif').checked = !!st.actif;
+            document.getElementById('tv-etat').textContent = st.erreur ? '⚠ ' + st.erreur
+                : (st.actif ? 'actif — ' + st.clients.length + ' appareil(s)' : 'inactif — rien n\u2019est modifié dans Unbound') + ' · listes : ' + st.listes.domaines + ' domaines';
+            const modes = [...new Set(st.clients.map(c => c.mode))];
+            document.querySelectorAll('input[name=tv-mode]').forEach(r => { r.checked = modes.length === 1 && r.value === modes[0]; });
+            const stats = await api('/adblock-tv/stats?jours=7');
+            if (stats) {
+                const cell = (v, l) => '<div class="stat-card"><div class="stat-value">' + tvEsc(v) + '</div><div class="stat-label">' + l + '</div></div>';
+                const rs = stats.classes_resolus || {}, bl = stats.classes_bloques || {};
+                document.getElementById('tv-stats').innerHTML =
+                    cell(stats.requetes || 0, 'Requêtes DNS') + cell(stats.domaines_uniques || 0, 'Domaines uniques')
+                    + cell((rs.advertising || 0) + (bl.advertising || 0), 'Advertising') + cell((rs.tracking || 0) + (bl.tracking || 0), 'Tracking')
+                    + cell((stats.par_decision || {}).BLOCKED || 0, 'Bloqués') + cell((stats.par_decision || {}).UPSTREAM_ERROR || 0, 'Erreurs amont');
+                document.getElementById('tv-top').innerHTML = (stats.top_bloques || []).map(t =>
+                    '<tr><td>' + tvEsc(t.domaine) + '</td><td>' + tvEsc(t.categorie) + '</td><td>' + tvEsc(t.hits) + '</td></tr>').join('')
+                    || '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);">Aucun domaine bloqué (mode OBSERVE, ou rien reçu)</td></tr>';
+            }
+            document.getElementById('tv-clients').innerHTML = st.clients.map(c =>
+                '<tr><td>' + tvEsc(c.nom) + '</td><td>' + tvEsc(c.ip) + '</td><td><select onchange="tvModeClient(\'' + tvEsc(c.ip) + '\', this.value)">'
+                + ['off', 'observe', 'block'].map(m => '<option' + (m === c.mode ? ' selected' : '') + '>' + m + '</option>').join('') + '</select></td>'
+                + '<td><button class="btn" onclick="tvRetirer(\'' + tvEsc(c.ip) + '\')">Retirer</button></td></tr>').join('')
+                || '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);">Aucun appareil : ajoutez la Freebox TV (son adresse IP)</td></tr>';
+            const cu = await api('/adblock-tv/custom');
+            document.getElementById('tv-custom').textContent = (cu && cu.domaines || []).join('  ') || 'liste personnalisée vide';
+        }
+        async function tvActif(v) { await api('/adblock-tv/etat', 'POST', { actif: v }); tvRender(); }
+        async function tvMode(m) { await api('/adblock-tv/mode', 'POST', { mode: m }); tvRender(); }
+        async function tvModeClient(ip, m) { await api('/adblock-tv/mode', 'POST', { mode: m, ip: ip }); tvRender(); }
+        async function tvRetirer(ip) { await api('/adblock-tv/clients/' + encodeURIComponent(ip), 'DELETE'); tvRender(); }
+        async function tvAddClient() {
+            const ip = document.getElementById('tv-new-ip').value.trim(), nom = document.getElementById('tv-new-nom').value.trim();
+            if (ip) { await api('/adblock-tv/clients', 'POST', { ip: ip, nom: nom, mode: 'observe' }); document.getElementById('tv-new-ip').value = ''; tvRender(); }
+        }
+        async function tvAddDomaine() {
+            const d = document.getElementById('tv-new-domaine').value.trim();
+            if (d) { await api('/adblock-tv/custom', 'POST', { domaine: d }); document.getElementById('tv-new-domaine').value = ''; tvRender(); }
+        }
+        async function tvSonde() { const r = await api('/adblock-tv/sonde', 'POST'); if (r) { tvSondeNom = r.nom; document.getElementById('tv-sonde-nom').textContent = r.nom; } }
+        async function tvVerifier() {
+            if (!tvSondeNom) { document.getElementById('tv-path').textContent = 'Créez d\u2019abord une sonde.'; return; }
+            const r = await api('/adblock-tv/path-test?nom=' + encodeURIComponent(tvSondeNom));
+            const z = document.getElementById('tv-path');
+            if (!r) { z.textContent = 'Réponse illisible.'; return; }
+            z.textContent = (r.recue ? '✅ ' : '❌ ') + r.lecture + (r.recue ? ' — client ' + r.evenements[0].client + ', décision ' + r.evenements[0].decision : '');
+        }
+
+        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender();
         setInterval(fetchStats, 30000);
     </script>
     <script src="/shared/crt-engine.js"></script>

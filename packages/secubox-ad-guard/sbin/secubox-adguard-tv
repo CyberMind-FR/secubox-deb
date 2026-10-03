@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-adguard-tv — la seule porte privilégiée du POC « DNS AdBlock TV » (#1943).
+
+  secubox-adguard-tv apply      lit l'état (périmètre + modes), écrit le drop-in Unbound, le VÉRIFIE, recharge Unbound
+  secubox-adguard-tv disable    retire le drop-in et recharge Unbound : tout est remis en l'état
+  secubox-adguard-tv status     JSON : drop-in présent, état, configuration valide
+
+Lancé en root par sudo depuis l'API (utilisateur `secubox`) : l'état et la liste personnalisée sont donc écrits par un compte NON privilégié.
+Le contrôleur ne leur fait aucune confiance : il les relit en refusant les liens symboliques, valide chaque champ (adresse IP, mode, nom
+de domaine) et n'écrit dans Unbound que des valeurs qu'il a lui-même reconstruites. Un état invalide ne change RIEN.
+
+La configuration écrite est contrôlée par `unbound-checkconf` AVANT d'être gardée ; si le contrôle échoue, la version précédente est
+remise et la commande échoue : le DNS du réseau n'est jamais laissé avec une configuration cassée.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+from api import dnstv  # noqa: E402
+
+CHECKCONF = os.environ.get("SECUBOX_ADGUARD_TV_CHECKCONF", "unbound-checkconf")
+CONTROL = os.environ.get("SECUBOX_ADGUARD_TV_CONTROL", "unbound-control")
+AUDIT = Path(os.environ.get("SECUBOX_ADGUARD_TV_AUDIT", "/var/log/secubox/audit.log"))
+
+
+def audit(action: str, detail: str = "") -> None:
+    try:
+        AUDIT.parent.mkdir(parents=True, exist_ok=True)
+        with open(AUDIT, "a", encoding="utf-8") as h:
+            h.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "ad-guard-tv",
+                                "action": action, "detail": detail[:200]}) + "\n")
+    except OSError:
+        pass                                                           # le journal d'audit ne doit jamais bloquer l'opération
+
+
+def lire_sans_suivre(chemin: Path) -> str:
+    """Lecture d'un fichier écrit par un compte non privilégié : jamais à travers un lien symbolique."""
+    fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        with os.fdopen(fd, "r", encoding="utf-8") as h:
+            return h.read(1024 * 1024)
+    except Exception:
+        raise
+
+
+def charger() -> tuple[dict, dict]:
+    f = dnstv.DOSSIER_ETAT / "etat.json"
+    try:
+        etat = dnstv.valider_etat(json.loads(lire_sans_suivre(f)))
+    except FileNotFoundError:
+        etat = dict(dnstv.ETAT_DEFAUT, clients=[])
+    except (OSError, ValueError, dnstv.ErreurTV) as e:
+        raise SystemExit(f"état refusé ({type(e).__name__}) — rien n'est changé")
+    table: dict = {}
+    for cat in dnstv.CATEGORIES:
+        if cat == "custom":
+            continue
+        p = dnstv.DOSSIER_LISTES / f"{cat}.txt"
+        if p.is_file():
+            for d in dnstv.lire_liste(p)[0]:
+                table[d] = cat
+    perso = dnstv.DOSSIER_ETAT / "custom.txt"
+    if perso.exists() or perso.is_symlink():
+        try:
+            texte = lire_sans_suivre(perso)
+        except OSError:
+            raise SystemExit("liste personnalisée refusée (lien symbolique ou illisible) — rien n'est changé")
+        for ligne in texte.splitlines():
+            d = dnstv.valider_domaine(ligne.split("#", 1)[0])
+            if d:
+                table[d] = "custom"                                    # une ligne invalide est ignorée, jamais recopiée
+    return etat, table
+
+
+def recharger() -> None:
+    r = subprocess.run([CONTROL, "reload"], capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        raise SystemExit("unbound-control reload a échoué : " + (r.stderr or r.stdout).strip()[:200])
+
+
+def appliquer() -> int:
+    etat, table = charger()
+    contenu = dnstv.rendre_unbound(etat, table)
+    cible = dnstv.CONF_UNBOUND
+    ancien = cible.read_bytes() if cible.is_file() else None
+    cible.parent.mkdir(parents=True, exist_ok=True)
+    tmp = cible.with_suffix(".tmp")
+    tmp.write_text(contenu, encoding="utf-8")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, cible)
+    r = subprocess.run([CHECKCONF], capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:                                              # configuration refusée : on remet l'ancienne, rien n'est rechargé
+        if ancien is None:
+            cible.unlink(missing_ok=True)
+        else:
+            cible.write_bytes(ancien)
+        audit("apply-refuse", (r.stdout + r.stderr).strip()[:200])
+        raise SystemExit("unbound-checkconf refuse la configuration — version précédente remise")
+    recharger()
+    audit("apply", f"actif={etat['actif']} appareils={len(etat['clients'])} domaines={len(table)}")
+    print(json.dumps({"ok": True, "actif": etat["actif"], "appareils": len(etat["clients"]), "domaines": len(table)}))
+    return 0
+
+
+def desactiver() -> int:
+    existait = dnstv.CONF_UNBOUND.is_file()
+    dnstv.CONF_UNBOUND.unlink(missing_ok=True)
+    if existait:
+        recharger()
+    audit("disable", "drop-in retiré" if existait else "rien à retirer")
+    print(json.dumps({"ok": True, "retire": existait}))
+    return 0
+
+
+def etat_courant() -> int:
+    ok = subprocess.run([CHECKCONF], capture_output=True, text=True, timeout=120).returncode == 0
+    etat, erreur = dnstv.lire_etat()
+    print(json.dumps({"dropin": dnstv.CONF_UNBOUND.is_file(), "config_valide": ok, "etat": etat, "erreur": erreur}))
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status"):
+        print(__doc__.split("\n\n")[0], file=sys.stderr)
+        return 2
+    if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
+        print("secubox-adguard-tv : root requis (sudo)", file=sys.stderr)
+        return 3
+    return {"apply": appliquer, "disable": desactiver, "status": etat_courant}[argv[1]]()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

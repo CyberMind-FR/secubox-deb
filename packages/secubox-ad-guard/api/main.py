@@ -64,8 +64,16 @@ BLOCKLIST_SOURCES = {
 STATS_CACHE_TTL = 60  # seconds
 DETECTION_RETENTION_DAYS = 30  # days to keep detection history
 
-app = FastAPI(title="SecuBox Ad Guard", version="1.0.0")
+app = FastAPI(title="SecuBox Ad Guard", version="1.2.0")
 logger = logging.getLogger("secubox.ad-guard")
+
+# POC « DNS AdBlock TV » (#1943) : mesure du filtrage DNS par appareil (OBSERVE / BLOCK). Isolé : ses routes sont sous /adblock-tv,
+# son état dans /var/lib/secubox/ad-guard/dnstv, et il ne fait RIEN tant qu'on ne l'active pas.
+try:
+    from .dnstv_routes import router as _tv_router
+except ImportError:                                  # lancé hors paquet (tests, uvicorn api.main) : import absolu
+    from api.dnstv_routes import router as _tv_router
+app.include_router(_tv_router)
 
 
 class DeviceType(str, Enum):
