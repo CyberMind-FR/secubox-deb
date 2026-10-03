@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+case "$1" in
+  remove|purge)
+    # Plus de page OpenPGP exposée une fois le Coffre retiré (#1852).
+    /usr/sbin/coffre-pgp-vhost --retire >/dev/null 2>&1 || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

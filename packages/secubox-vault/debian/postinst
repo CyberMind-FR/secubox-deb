@@ -14,6 +14,43 @@ case "$1" in
     [ -e /var/log/secubox/coffre.journal ] || \
       install -o secubox-coffre -g secubox -m 0640 /dev/null /var/log/secubox/coffre.journal
 
+    # PAGE OPENPGP DU COFFRE, à origine séparée (#1852, P5) : pgp.<domaine>. Vhost nginx, puis exposition (HAProxy + WAF)
+    # comme les autres modules à domaine propre. Idempotent ; sans nom de domaine, rien n'est écrit.
+    if [ -x /usr/sbin/coffre-pgp-vhost ] && [ -d /run/systemd/system ]; then
+      /usr/sbin/coffre-pgp-vhost >/dev/null 2>&1 || true
+      DOM_PGP="$(secubox-domaine pgp 2>/dev/null || true)"
+      CLE_PGP="$(printf '%s' "$DOM_PGP" | tr '.' '_')"
+      if [ -n "$DOM_PGP" ] && command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
+        if ! grep -q "$CLE_PGP" /etc/secubox/haproxy.toml 2>/dev/null; then
+          haproxyctl vhost add "$DOM_PGP" nginx_vhosts true >/dev/null 2>&1 || true
+          haproxyctl generate >/dev/null 2>&1 || true
+          systemctl reload haproxy >/dev/null 2>&1 || true
+        fi
+      fi
+      WAF_ROUTES=/etc/secubox/waf/haproxy-routes.json
+      if [ -n "$DOM_PGP" ] && [ -f "$WAF_ROUTES" ] && command -v python3 >/dev/null 2>&1; then
+        CHANGE="$(python3 - "$WAF_ROUTES" "$DOM_PGP" <<'PY' || true
+import json, sys
+chemin, dom = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(chemin))
+except (OSError, ValueError):
+    d = {}
+if d.get(dom) != ["127.0.0.1", 9080]:
+    d[dom] = ["127.0.0.1", 9080]
+    json.dump(d, open(chemin, "w"), indent=2)
+    print("oui")
+PY
+)"
+        # sbxwaf : redémarrage (jamais SIGHUP, qui le tue), seulement si la route vient d'être ajoutée.
+        if [ "$CHANGE" = "oui" ] && systemctl is-active --quiet secubox-waf-ng 2>/dev/null; then
+          systemctl restart secubox-waf-ng >/dev/null 2>&1 || true
+        fi
+      fi
+      # Le webmail (secubox-mail) pose son greffon quand cette origine existe.
+      if [ -x /usr/sbin/mailctl ]; then /usr/sbin/mailctl webmail-pgp >/dev/null 2>&1 || true; fi
+    fi
+
     # 1.x : clé Fernet posée à côté des données — rien n'en est repris.
     if [ -n "$(ls -A /var/lib/secubox/vault 2>/dev/null)" ]; then
       echo "secubox-vault : données 1.x laissées dans /var/lib/secubox/vault (non reprises)"

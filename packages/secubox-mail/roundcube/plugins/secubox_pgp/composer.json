@@ -1,0 +1,7 @@
+{
+  "name": "secubox/secubox_pgp",
+  "type": "roundcube-plugin",
+  "description": "OpenPGP dans le navigateur par la page du Coffre (origine separee) : chiffrer, signer, dechiffrer, verifier, Autocrypt entrant",
+  "license": "LicenseRef-CMSD-1.0",
+  "require": { "roundcube/plugin-installer": ">=0.1.6" }
+}

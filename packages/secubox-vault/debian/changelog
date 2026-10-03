@@ -1,3 +1,24 @@
+secubox-vault (2.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * coffre-pgp-vhost : l'expression régulière de la route des secrets contient une accolade ({1,64}) et doit être entre guillemets
+    pour nginx (« missing closing parenthesis ») — trouvé au déploiement sur gk2, `nginx -t` refusait le vhost (retiré, rien cassé).
+    Test ajouté : toute expression à accolade du vhost est entre guillemets.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 21:30:00 +0200
+
+secubox-vault (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Page OpenPGP du Coffre à ORIGINE SÉPARÉE (ref #1852, P5) : pgp.<domaine>/pgp/. Elle tient la clé secrète de la personne en
+    MÉMOIRE seulement (lue depuis son compartiment par la session de connexion : aucune phrase) et chiffre, signe, déchiffre,
+    vérifie dans le navigateur (OpenPGP.js 6.3.2, sha256 e19bf4f0…, LGPL, livrée). Le webmail, d'une autre origine, lui parle par
+    postMessage et ne voit jamais la clé ; la page n'obéit qu'au cadre parent dont l'origine figure dans origines.json. Un
+    destinataire sans clé est REFUSÉ (jamais chiffré à blanc). Autocrypt ENTRANT : une clé annoncée n'est retenue que si elle est
+    publique, valide, porte l'adresse annoncée, et ne supplante jamais celle de l'annuaire ; les contacts vivent dans le
+    compartiment de la personne (secret openpgp-contacts). `coffre-pgp-vhost` écrit le vhost (CSP sans script en ligne,
+    frame-ancestors = le webmail, deux routes d'API seulement). 16 tests en vrai navigateur, relus par GnuPG.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 21:00:00 +0200
+
 secubox-vault (2.0.16-1~bookworm1) bookworm; urgency=medium
 
   * Clé de signature apt sans phrase humaine, déverrouillée au démarrage (#1366). `coffrectl depot proteger --demarrage` pose une phrase aléatoire au NIVEAU 0 (systemd-creds, chiffrée par la clé d'hôte), relue à l'identique avant d'être appliquée, puis déverrouille ; `coffrectl depot deverrouiller` la redonne à gpg-agent sans échéance (TTL d'un an) ; secubox-depot-deverrouille.service le fait à chaque démarrage (condition : crédence présente). Le fichier de clé reste chiffré sur disque : une copie du disque ne signe pas. En contrepartie, root sur la box signe à tout moment.

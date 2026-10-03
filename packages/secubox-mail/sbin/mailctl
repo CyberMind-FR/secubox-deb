@@ -384,6 +384,43 @@ cmd_webmail_openpgp() {
     echo "webmail : OpenPGP par Mailvelope (trousseau principal) — enigma absent"
 }
 
+# ── OpenPGP dans le webmail par la page du Coffre (#1852, P5) ─────────────
+#
+# Pose le greffon `secubox_pgp` DANS le conteneur webmail et l'active, avec l'origine de la page OpenPGP du Coffre
+# (pgp.<domaine>, posée par secubox-vault). Le greffon n'a aucune cryptographie : tout se fait dans cette page, d'une
+# autre origine, avec la clé de la personne ouverte par sa connexion. Idempotent ; sans origine, il ne fait rien.
+# `enigma` (clés côté serveur) reste exclu (#1738).
+cmd_webmail_pgp() {
+    local wc="$WEBMAIL_CONTAINER" src="/usr/share/secubox/roundcube-plugins/secubox_pgp" f=/etc/roundcube/config.inc.php.local dom
+    [ -d "$src" ] || { echo "greffon secubox_pgp absent ($src)"; return 0; }
+    command -v secubox-domaine >/dev/null 2>&1 || { echo "secubox-domaine absent — greffon non pose"; return 0; }
+    dom="$(secubox-domaine pgp 2>/dev/null | tr 'A-Z' 'a-z' | head -1)"
+    [[ "$dom" =~ ^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$ ]] || { echo "domaine de la page OpenPGP inconnu — greffon non pose"; return 0; }
+    lxc_running "$wc" || { error "conteneur webmail '$wc' a l'arret"; return 1; }
+    if lxc_attach "$wc" sh -c "grep -qE \"^[^/]*plugins.*['\\\"]enigma['\\\"]\" $f"; then
+        error "le greffon enigma est actif : il tient les clés privées côté serveur — retirez-le d'abord"
+        return 1
+    fi
+    # Par l'intérieur (conteneur non privilégié) : une archive poussée dans lxc-attach, déballée avec les droits du conteneur.
+    ( cd "$(dirname "$src")" && tar czf - secubox_pgp ) | lxc_attach "$wc" sh -c \
+        "cd /usr/share/roundcube/plugins && rm -rf secubox_pgp && tar xzf - && chown -R root:root secubox_pgp && chmod -R u=rwX,go=rX secubox_pgp" || return 1
+    # Roundcube (Debian) charge ses greffons depuis /var/lib/roundcube/plugins, des LIENS vers /usr/share : sans le lien, « Failed to
+    # load plugin file » dans les journaux du webmail (vu sur gk2, comme pour secubox_sso).
+    lxc_attach "$wc" sh -c "[ -d /var/lib/roundcube/plugins ] && ln -sfn /usr/share/roundcube/plugins/secubox_pgp /var/lib/roundcube/plugins/secubox_pgp || true"
+    lxc_attach "$wc" sh -c "
+        f=$f
+        [ -f \$f ] || exit 1
+        cp \$f \$f.avant-secubox-pgp
+        grep -q \"'secubox_pgp'\" \$f || printf '%s\\n' \"\\\$config['plugins'][] = 'secubox_pgp';  // #1852\" >> \$f
+        sed -i '/secubox_pgp_origine/d' \$f
+        printf '%s\\n' \"\\\$config['secubox_pgp_origine'] = 'https://$dom';  // #1852\" >> \$f
+        php -l \$f >/dev/null 2>&1 || { cp \$f.avant-secubox-pgp \$f; exit 2; }
+        php -l /usr/share/roundcube/plugins/secubox_pgp/secubox_pgp.php >/dev/null 2>&1 || { cp \$f.avant-secubox-pgp \$f; exit 3; }
+    " || { error "greffon secubox_pgp refusé (php -l) — configuration restaurée"; return 1; }
+    lxc_attach "$wc" systemctl restart php8.2-fpm >/dev/null 2>&1 || true
+    echo "webmail : OpenPGP par la page du Coffre (https://$dom) — enigma absent"
+}
+
 # ── Autocrypt sortant (#1852, P2) ───────────────────────────────────────────
 #
 # L'en-tête `Autocrypt:` des courriels ENVOYÉS par une personne qui a publié sa clé PUBLIQUE dans l'annuaire de la box
@@ -1739,6 +1776,7 @@ case "${1:-}" in
     webmail-sieve) cmd_webmail_sieve ;;
     webmail-openpgp) cmd_webmail_openpgp ;;
     autocrypt-sync) cmd_autocrypt_sync ;;
+    webmail-pgp) cmd_webmail_pgp ;;
     antispam-apprentissage) cmd_antispam_apprentissage ;;
     sync)        cmd_sync ;;
     # Help

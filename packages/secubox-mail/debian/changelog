@@ -1,3 +1,20 @@
+secubox-mail (2.12.1-1~bookworm1) bookworm; urgency=medium
+
+  * `mailctl webmail-pgp` : pose le lien /var/lib/roundcube/plugins/secubox_pgp -> /usr/share/roundcube/plugins/secubox_pgp (Roundcube
+    Debian charge ses greffons depuis /var/lib) ; sans lui, « Failed to load plugin file » (trouvé au déploiement sur gk2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 22:00:00 +0200
+
+secubox-mail (2.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * Greffon Roundcube `secubox_pgp` (ref #1852, P5) : boutons Chiffrer / Signer dans la rédaction, déchiffrement et vérification
+    à l'affichage (pastille de signature : valide / invalide / clé inconnue / non signé), Autocrypt entrant. AUCUNE cryptographie dans
+    le greffon : tout passe par la page OpenPGP du Coffre (autre origine, cadre invisible). Un envoi chiffré qui échoue (clé manquante,
+    Coffre scellé, page muette) est ANNULÉ : jamais en clair par erreur ; le texte revient dans la fenêtre. Texte affiché par
+    textContent seulement. `mailctl webmail-pgp` pose et active le greffon (php -l, retour arrière) ; `enigma` reste exclu.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 21:00:00 +0200
+
 secubox-mail (2.11.0-1~bookworm1) bookworm; urgency=medium
 
   * Autocrypt sortant (ref #1852, P2) : règle rspamd `autocrypt.lua` qui ajoute `Autocrypt: addr=…; keydata=…` aux courriels

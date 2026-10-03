@@ -13,6 +13,8 @@ override_dh_auto_install:
 	install -d debian/secubox-mail/usr/share/secubox/roundcube-plugins
 	cp -r roundcube/plugins/zipjointes \
 	  debian/secubox-mail/usr/share/secubox/roundcube-plugins/
+	cp -r roundcube/plugins/secubox_pgp \
+	  debian/secubox-mail/usr/share/secubox/roundcube-plugins/
 	# Webmail sans mot de passe (#1562) : pose par `mailctl webmail-sso`.
 	install -d debian/secubox-mail/usr/share/secubox/roundcube-sso
 	cp -r roundcube/sso/secubox_sso debian/secubox-mail/usr/share/secubox/roundcube-sso/
