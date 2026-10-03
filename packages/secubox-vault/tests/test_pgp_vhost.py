@@ -14,20 +14,24 @@ PKG = Path(__file__).resolve().parents[1]
 SCRIPT = PKG / "sbin" / "coffre-pgp-vhost"
 
 
-def imprime(tmp_path, pgp="pgp.gk2.secubox.in", web="webmail.gk2.secubox.in"):
+def imprime(tmp_path, pgp="pgp.gk2.secubox.in", web="webmail.gk2.secubox.in", ent=None):
     bin_ = tmp_path / "bin"
     bin_.mkdir(exist_ok=True)
     stub = bin_ / "secubox-domaine"
     stub.write_text(f'#!/bin/sh\ncase "$1" in pgp) echo "{pgp}";; webmail) echo "{web}";; esac\n')
     stub.chmod(0o755)
-    return subprocess.run(["bash", str(SCRIPT), "--imprime"], capture_output=True, text=True,
-                          env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"})
+    stub2 = bin_ / "curl"                                         # jamais le réseau dans les tests
+    stub2.write_text("#!/bin/sh\nexit 0\n")
+    stub2.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "SECUBOX_PGP_ANCETRES_ENT": ent or ""}
+    stub.write_text(f'#!/bin/sh\ncase "$1" in pgp) echo "{pgp}";; webmail) echo "{web}";; hall) echo "hall.gk2.secubox.in";; esac\n')
+    return subprocess.run(["bash", str(SCRIPT), "--imprime"], capture_output=True, text=True, env=env)
 
 
 def test_le_vhost_est_a_origine_separee_et_n_est_encadrable_que_par_le_webmail(tmp_path):
     r = imprime(tmp_path)
     assert r.returncode == 0 and "server_name pgp.gk2.secubox.in;" in r.stdout
-    assert "frame-ancestors https://webmail.gk2.secubox.in;" in r.stdout
+    assert "frame-ancestors https://webmail.gk2.secubox.in https://hall.gk2.secubox.in;" in r.stdout
     assert '{"origines":["https://webmail.gk2.secubox.in"]}' in r.stdout
 
 
@@ -79,3 +83,18 @@ def test_le_vhost_genere_passe_nginx_t(tmp_path):
         f"  include {tmp_path}/vhost.conf;\n}}\n")
     r = subprocess.run([nginx, "-t", "-c", str(tmp_path / "nginx.conf"), "-p", str(tmp_path)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_la_page_est_encadrable_par_toute_la_chaine_que_le_webmail_accepte(tmp_path):
+    """Régression gk2 : le webmail est affiché DANS le Hall ; avec le seul webmail comme ancêtre, le navigateur bloquait la page."""
+    ent = "content-security-policy: frame-ancestors 'self' https://hall.gk2.secubox.in https://hall.gk2.net https://billets.gk2.secubox.in"
+    csp = re.search(r'Content-Security-Policy "([^"]+)"', imprime(tmp_path, ent=ent).stdout).group(1)
+    anc = re.search(r"frame-ancestors ([^;]+);", csp).group(1).split()
+    assert anc == ["https://webmail.gk2.secubox.in", "https://hall.gk2.secubox.in", "https://hall.gk2.net", "https://billets.gk2.secubox.in"]
+
+
+def test_un_ancetre_mal_forme_ou_joker_n_entre_jamais_dans_l_en_tete(tmp_path):
+    ent = "content-security-policy: frame-ancestors 'self' * http://clair.example https://ok.example https://x.example;evil https://a b"
+    csp = re.search(r'Content-Security-Policy "([^"]+)"', imprime(tmp_path, ent=ent).stdout).group(1)
+    anc = re.search(r"frame-ancestors ([^;]+);", csp).group(1).split()
+    assert "*" not in anc and "http://clair.example" not in anc and "https://ok.example" in anc and "https://x.example" in anc

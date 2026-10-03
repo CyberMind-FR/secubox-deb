@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-03 — Page OpenPGP : chaîne d'ancêtres du cadre (ref #1852)
+- `secubox-vault` 2.1.2. Premier essai avec une vraie session (capture et console de l'exploitant) : les boutons « Chiffrer » / « Signer » apparaissent dans la rédaction d'Elastic (greffon chargé) ; la page `pgp.<domaine>` était bloquée par sa CSP `frame-ancestors https://webmail…` car le webmail est lui-même dans le Hall et le navigateur vérifie TOUTE la chaîne. `coffre-pgp-vhost` reprend la liste que le webmail annonce (HAProxy, services cadrables) + le Hall ; origines validées (https, pas de joker). Sur gk2 : `frame-ancestors https://webmail.gk2.secubox.in https://hall.gk2.secubox.in https://hall.gk2.net https://billets.gk2.secubox.in https://hall.gk3.secubox.in`.
+- Leçon : un test dans un cadre unique ne voit pas une CSP de chaîne ; seul un test avec le Hall autour du webmail (ou une vraie session) la révèle.
+- Le redéploiement du paquet a de nouveau SCELLÉ le Coffre (redémarrage du démon).
+
 ## 2026-10-03 — Webmail OpenPGP : page du Coffre à origine séparée, greffon Roundcube, Autocrypt entrant, pastille (ref #1852, P5)
 - `secubox-vault` 2.1.1 + `secubox-mail` 2.12.1 (gk2, dépôt apt à jour). Page `pgp.<domaine>/pgp/` : clé secrète de la personne lue depuis son compartiment par la session de connexion (aucune phrase), tenue EN MÉMOIRE ; OpenPGP.js 6.3.2 livré (sha256 e19bf4f0…, LGPL). Le webmail (autre origine) lui parle par postMessage ; la page n'obéit qu'au cadre parent dont l'origine est dans `origines.json`. Chiffrer / signer / déchiffrer / vérifier ; destinataire sans clé = REFUS (jamais en clair). Autocrypt ENTRANT : clé publique valide portant l'adresse annoncée, jamais supplantant l'annuaire, rangée dans le compartiment (secret `openpgp-contacts`). Pastille de signature : valide / invalide / clé inconnue / non signée.
 - Greffon Roundcube `secubox_pgp` (aucune cryptographie ; texte affiché par `textContent`) ; `mailctl webmail-pgp` le pose et l'active (php -l, retour arrière). `coffre-pgp-vhost` écrit le vhost (CSP sans script en ligne, `frame-ancestors` = le webmail, 2 routes d'API relayées seulement) + exposition HAProxy/WAF.

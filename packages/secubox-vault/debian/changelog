@@ -1,3 +1,13 @@
+secubox-vault (2.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Page OpenPGP : `frame-ancestors` suit TOUTE la chaîne des cadres parents (ref #1852). Le webmail est lui-même affiché dans le Hall ;
+    avec le seul webmail comme ancêtre, le navigateur bloquait la page (« frame-ancestors https://webmail… », constaté sur gk2 avec
+    une vraie session). `coffre-pgp-vhost` reprend la liste que le webmail annonce (celle de HAProxy pour les services cadrables,
+    « 'self' » devenant le webmail) et y ajoute le Hall de la box ; chaque origine est validée (https, pas de joker). L'obéissance
+    de la page ne change pas : elle ne répond qu'au cadre PARENT dont l'origine est dans origines.json (le webmail).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 22:30:00 +0200
+
 secubox-vault (2.1.1-1~bookworm1) bookworm; urgency=medium
 
   * coffre-pgp-vhost : l'expression régulière de la route des secrets contient une accolade ({1,64}) et doit être entre guillemets
