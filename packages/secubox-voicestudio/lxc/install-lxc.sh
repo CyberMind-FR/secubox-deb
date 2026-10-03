@@ -55,6 +55,12 @@ COMMIT="$(cfg source commit)"
 SHA256="$(cfg source sha256)"
 DEPOT="$(cfg source depot https://github.com/debpalash/VoiceStudio)"
 ASR="$(cfg moteur asr Systran/faster-whisper-base)"
+ACTIVER_INTERFACE="$(cfg interface activer true)"
+BUN_URL="$(cfg interface bun_url)"
+BUN_SHA256="$(cfg interface bun_sha256)"
+BUN_VERSION="$(cfg interface bun_version)"
+MODE_INTERFACE=0
+[ "${1:-}" = "--interface" ] && MODE_INTERFACE=1
 readonly VETH="veth-vstudio0"
 readonly LXC_NAME LXC_PATH LXC_IP MEMOIRE CPU_POIDS DONNEES COMMIT SHA256 DEPOT ASR
 
@@ -116,6 +122,71 @@ demarrer() {
   done
 }
 
+# INTERFACE NATIVE. L'archive amont ne contient pas `frontend/dist` : c'est un build React/Vite, que le Dockerfile
+# amont produit avec bun (`bun install --frozen-lockfile` puis `bun run --cwd frontend build`, lockfile à la racine du
+# monorepo). On refait EXACTEMENT cela dans le LXC, avec un bun épinglé (version + sha256), puis on le supprime : il
+# n'en reste que `dist` (12 Mo). Pic de mémoire mesuré : 2 Go pendant 2 s (plafond du LXC : 4G). Idempotent : un dist
+# présent n'est pas reconstruit (`--interface` après une mise à jour d'amont : supprimer /app/frontend/dist avant).
+# Le travail proprement dit, dans le LXC : bun épinglé et vérifié, installation figée, construction, nettoyage.
+construire_interface_dans_le_lxc() {
+  la env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unzip ca-certificates curl
+  la sh -c 'curl -fsSL --retry 3 -o /tmp/bun.zip "$1"' _ "$BUN_URL"
+  # L'empreinte AVANT de déplier : un binaire qui ne correspond pas à celui relu n'est jamais exécuté.
+  la sh -c 'echo "$1  /tmp/bun.zip" | sha256sum -c -' _ "$BUN_SHA256" \
+    || { log "empreinte sha256 de bun INVALIDE — abandon"; return 4; }
+  la sh -c 'set -e
+    rm -rf /tmp/fb /opt/bun && mkdir -p /tmp/fb/frontend /opt/bun
+    unzip -q -o /tmp/bun.zip -d /opt/bun
+    B="$(find /opt/bun -name bun -type f | head -1)"
+    cp /app/package.json /app/bun.lock /tmp/fb/
+    cp -r /app/frontend/. /tmp/fb/frontend/
+    cd /tmp/fb
+    "$B" install --frozen-lockfile
+    "$B" run --cwd frontend build
+    test -s frontend/dist/index.html
+    rm -rf /app/frontend/dist && cp -r frontend/dist /app/frontend/dist
+    rm -rf /tmp/fb /opt/bun /tmp/bun.zip /root/.bun /root/.cache'
+}
+
+construire_interface() {
+  if [ "$ACTIVER_INTERFACE" != "True" ]; then
+    log "interface native désactivée ([interface] activer = false)"
+    return 0
+  fi
+  if la test -s /app/frontend/dist/index.html; then
+    log "interface native déjà construite"
+    return 0
+  fi
+  if [ -z "$BUN_URL" ] || [ -z "$BUN_SHA256" ]; then
+    log "[interface] bun_url / bun_sha256 absents de $CONF"
+    return 1
+  fi
+  log "construction de l'interface native (bun $BUN_VERSION)…"
+  # Mémoire : le moteur (≈ 600 Mo) est arrêté PENDANT la construction (pic ≈ 2 Go) puis relancé quoi qu'il arrive — gk3 n'a
+  # pas de quoi tenir les deux sans swap.
+  etait_actif=0
+  if la systemctl is-active -q voicestudio.service; then
+    etait_actif=1
+    la systemctl stop voicestudio.service || true
+  fi
+  rc=0
+  construire_interface_dans_le_lxc || rc=$?
+  if [ "$etait_actif" = 1 ]; then la systemctl start voicestudio.service || true; fi
+  if [ "$rc" != 0 ]; then
+    log "construction de l'interface native EN ÉCHEC (rc=$rc) ; le moteur est relancé sans elle"
+    return "$rc"
+  fi
+  log "interface native construite"
+}
+
+
+if [ "$MODE_INTERFACE" = 1 ]; then
+  [ -d "$LXC_PATH/$LXC_NAME" ] || { log "LXC absent — voicestudioctl install d'abord"; exit 1; }
+  demarrer
+  construire_interface
+  exit $?
+fi
+
 if [ ! -f "$SENTINEL" ]; then
   [ -d "$LXC_PATH/$LXC_NAME" ] || creer_conteneur
   demarrer
@@ -156,6 +227,7 @@ if [ ! -f "$SENTINEL" ]; then
     torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0
   la /opt/venv/bin/pip install --no-cache-dir -c /root/contraintes.txt /app
   la /opt/venv/bin/pip check
+  construire_interface
   echo "$COMMIT" > "$STATE_DIR/commit-installe"
 fi
 

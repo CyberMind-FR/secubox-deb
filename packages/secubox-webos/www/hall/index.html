@@ -1426,12 +1426,17 @@ const FEATURED = [
   // on-demand, secubox-freeboxtv). Cardlet locale (pas de vhost). Visible comme
   // les autres cartes média (radio/podcaster) ; la restriction LAN (souveraineté)
   // se fait CÔTÉ SERVEUR sur le relais, pas en masquant la carte.
-  // VOIX — VoiceStudio (#1917). Carte locale (pas de vhost) : la facette d'USAGER du module (dire, dicter),
-  // servie par le Hall à /cardlets/voicestudio.html ; le Hall ne relaie QUE /api/v1/voicestudio/usager/. `auth:true`
-  // car les routes exigent une personne (une carte d'invité serait une carte vide) ; `micro_audio:true` délègue le
-  // micro à CETTE carte pour la dictée (jamais d'écoute d'elle-même : il faut un clic). La console d'administration
-  // (état, mode, clé, journal) s'ouvre par ⚙️ : `admin`. Absente d'une box sans le module : la carte le DIT (502).
-  {id:"voicestudio", label:"Voix", icon:"🗣️", color:"#c87832", carte:"/cardlets/voicestudio.html", h:300, auth:true, micro_audio:true, admin:"/voicestudio/"},
+  // VOICESTUDIO (#1917) — DEUX entrées, comme Coffre / Mon coffre :
+  //  · « VoiceStudio » (administrateur) : la carte lit l'ÉTAT du moteur (/api/v1/voicestudio/status, minimal) ; agrandie,
+  //    elle ouvre l'INTERFACE NATIVE du studio (clonage, doublage, bibliothèque de voix…) sur son domaine voicestudio.<domaine>
+  //    — réservée aux administrateurs (garde auth_request côté nginx, clé du moteur posée par nginx) ; ⚙️ ouvre la console
+  //    SecuBox du module (/voicestudio/ : démarrer, mode, mémoire, clé, journal, sauvegarde).
+  //  · « Voix » (usager) : dire un texte, dicter. Carte locale (pas de vhost) servie par le Hall ; il ne relaie QUE
+  //    /api/v1/voicestudio/usager/. `auth:true` (les routes exigent une personne) ; `micro_audio:true` (la dictée ; jamais
+  //    d'écoute d'elle-même : il faut un clic) ; `admin:false` : pas de ⚙️ pour un usager. Absente d'une box sans le module :
+  //    les cartes le DISENT (502 → « pas installé sur cette box »).
+  {id:"voicestudio", label:"VoiceStudio", icon:"🎙️", color:"#c87832", url:"voicestudio.gk2.secubox.in", carte:"/cardlets/voicestudio-admin.html", h:160, auth:true, admin:"/voicestudio/"},
+  {id:"voix",        label:"Voix",        icon:"🗣️", color:"#c87832", carte:"/cardlets/voicestudio.html", h:300, auth:true, micro_audio:true, admin:false},
   {id:"freeboxtv",  label:"Freebox TV", icon:"📺", color:"#2b6cb0", carte:"/cardlets/freeboxtv.html", h:360, admin:false},
   // SBX OS (#1293) : pas une cardlet mais la COQUILLE, servie par le Hall a
   // `/sbxos/`. Entree `carte` sans `url` — le meme motif que Freebox TV

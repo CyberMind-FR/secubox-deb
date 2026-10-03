@@ -114,9 +114,15 @@
       ]
     },
     {
-      "id": "voicestudio", "ic": "🗣️", "nom": "Voix", "service": "voicestudio", "acces": "session",
+      "id": "voicestudio", "ic": "🎙️", "nom": "VoiceStudio", "service": "voicestudio", "acces": "session",
+      "role": "Le moteur vocal de la box, côté administration : la carte dit si le moteur répond, dort ou n'est pas installé ; agrandie, elle ouvre le studio complet (clonage de voix, doublage, bibliothèque).",
+      "usage": ["La carte ne montre que l'état ; elle n'agit sur rien.", "Agrandir ouvre l'interface native du studio, réservée aux administrateurs.", "⚙️ ouvre la console SecuBox du module : démarrer, mode, mémoire, clé, journal, sauvegarde."],
+      "metriques": []
+    },
+    {
+      "id": "voix", "ic": "🗣️", "nom": "Voix", "service": "voicestudio", "acces": "session",
       "role": "La voix de la box, traitée chez vous : la carte dit un texte à voix haute et dicte ce que vous prononcez, avec VoiceStudio tournant dans un conteneur de la box. Rien ne part dans le nuage.",
-      "usage": ["Écrivez un texte puis ▶ Dire : la box le lit.", "🎤 Dicter enregistre sur clic seulement ; le texte transcrit s'affiche dans la carte.", "Le moteur peut dormir pour économiser la mémoire : le premier appel est alors plus long. ⚙️ ouvre la console d'administration."],
+      "usage": ["Écrivez un texte puis ▶ Dire : la box le lit.", "🎤 Dicter enregistre sur clic seulement ; le texte transcrit s'affiche dans la carte.", "Le moteur peut dormir pour économiser la mémoire : le premier appel est alors plus long."],
       "metriques": []
     },
     {

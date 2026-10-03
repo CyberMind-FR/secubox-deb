@@ -2,12 +2,14 @@
 set -e
 case "$1" in
   remove|deconfigure)
-    systemctl disable --now secubox-voicestudio-pub.socket secubox-voicestudio-api.service secubox-voicestudio-provision.service >/dev/null 2>&1 || true
+    systemctl disable --now secubox-voicestudio-pub.socket secubox-voicestudio-api.service secubox-voicestudio-provision.service secubox-voicestudio-interface.service >/dev/null 2>&1 || true
     systemctl stop secubox-voicestudio-pub.service >/dev/null 2>&1 || true
     # Le conteneur et ses données restent sur le disque : on le rendort, on ne le détruit pas.
     /usr/sbin/voicestudioctl sleep >/dev/null 2>&1 || true
     # Plus d'ouverture du port 3900 une fois le module retiré (règle vivante + fichier chargé au démarrage).
     /usr/sbin/voicestudioctl pare-feu-ferme >/dev/null 2>&1 || true
+    # Plus de vhost de l'interface native (ni de clé nginx) une fois le module retiré.
+    /usr/sbin/voicestudioctl interface-ferme >/dev/null 2>&1 || true
     ;;
 esac
 #DEBHELPER#

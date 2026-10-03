@@ -29,7 +29,7 @@ navigateur ─► nginx ─► /run/secubox/voicestudio.sock   (API du module : 
 | Mémoire | plafond cgroup `[lxc] memoire` (4G), poids CPU `cpu_poids` (50 : cède le pas aux autres services) |
 | Mode | `permanent` (défaut : réponse sans délai) ou `demande` (le LXC dort, se réveille au premier appel, 30–60 s à froid) |
 | Architecture | **amd64 seulement** (aucune roue torch CPU arm64 validée ici) |
-| Interface native | non embarquée : `frontend/dist` est produit par un build Node absent de l'archive amont. Les panneaux SecuBox la remplacent |
+| Interface native | **le studio complet de VoiceStudio**, construit dans le LXC (bun épinglé version + sha256, `bun install --frozen-lockfile` puis `bun run --cwd frontend build`, comme le Dockerfile amont ; bun supprimé ensuite), servie sur `voicestudio.<domaine de la box>` **aux administrateurs seulement** : garde `auth_request` → `/gate` (require_jwt), clé du moteur posée par nginx (snippet root 0600, jamais vue du navigateur), aucun cookie vers le moteur |
 
 ## Deux interfaces, une API
 
@@ -46,6 +46,7 @@ asymétrie permise dans le seul sens du destructif — `WEBUI-PANEL-GUIDELINES` 
 | Route | Garde | Rôle |
 |---|---|---|
 | `GET /health` | publique (sonde) | `{"status":"ok"}` |
+| `GET /gate` | `require_jwt` | sous-requête `auth_request` de nginx pour l'interface native : 204 pour un administrateur réel, 401/403 sinon |
 | `GET /status` | `require_lecture` | état MINIMAL (installé, actif, endormi, opération) — ni adresses ni IP du conteneur (cache 4 s, échecs compris) |
 | `GET /detail` | `require_jwt` | état complet pour le panneau d'administration, sans secret |
 | `POST /start` `/stop` `/restart` `/installer` | `require_jwt` | **202** + suivi dans `/status` → `operation` (hors requête : un démarrage à froid dure) |

@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox VoiceStudio — construction de l'interface native dans le LXC (idempotente, une fois) [#1917]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1917
+After=network-online.target secubox-voicestudio-provision.service
+Wants=network-online.target
+# Seulement quand le LXC existe (le provisionnement a posé son marqueur) ET que l'interface n'est pas déjà construite.
+ConditionPathExists=/var/lib/secubox/voicestudio/.lxc-provisioned
+ConditionPathExists=!/var/lib/secubox/voicestudio/.interface-native
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/voicestudioctl interface
+# bun install (≈ 750 paquets) + vite build : quelques minutes ; pic de mémoire ≈ 2 Go (le moteur est arrêté pendant).
+TimeoutStartSec=3600
+Restart=on-failure
+RestartSec=15min
+ProtectHome=true
+PrivateTmp=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

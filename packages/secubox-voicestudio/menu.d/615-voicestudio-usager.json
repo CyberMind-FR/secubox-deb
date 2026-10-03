@@ -5,5 +5,6 @@
   "path": "/voicestudio/usager.html",
   "category": "mind",
   "order": 615,
-  "description": "Dire un texte, dicter : la voix de la box"
+  "description": "Dire un texte, dicter : la voix de la box",
+  "same_origin": true
 }

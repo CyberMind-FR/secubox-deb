@@ -32,5 +32,6 @@ override_dh_auto_install:
 	install -m 0644 systemd/secubox-voicestudio-pub.socket $(M)/lib/systemd/system/
 	install -m 0644 systemd/secubox-voicestudio-pub.service $(M)/lib/systemd/system/
 	install -m 0644 systemd/secubox-voicestudio-provision.service $(M)/lib/systemd/system/
+	install -m 0644 systemd/secubox-voicestudio-interface.service $(M)/lib/systemd/system/
 	install -D -m 0440 debian/secubox-voicestudio.sudoers $(M)/etc/sudoers.d/secubox-voicestudio
 	install -d $(M)/var/lib/secubox/voicestudio

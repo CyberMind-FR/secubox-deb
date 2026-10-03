@@ -1,3 +1,29 @@
+secubox-voicestudio (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Interface NATIVE de VoiceStudio (le studio complet : clonage, doublage, bibliothèque de voix…). L'archive amont n'a
+    pas `frontend/dist` (build React/Vite) : il est construit DANS le LXC comme le fait le Dockerfile amont — bun épinglé
+    (version + sha256, vérifié avant d'être exécuté), `bun install --frozen-lockfile` puis `bun run --cwd frontend build`,
+    puis bun est supprimé (il reste `dist`, 12 Mo). Moteur arrêté pendant la construction (pic ≈ 2 Go), toujours relancé.
+    Pas de Node, pas de changement de Debian : la pile Python validée (3.11, 268 versions) n'est pas touchée.
+  * Servie sur voicestudio.<domaine de la box> (HAProxy, WAF, nginx : même motif que les modules à domaine propre) :
+    réservée aux ADMINISTRATEURS (auth_request vers la nouvelle route /gate, require_jwt) ; la clé du moteur est posée par
+    nginx (snippet root 0600) — le navigateur ne la voit jamais et toute clé qu'il enverrait est écrasée ; aucun cookie
+    n'atteint le moteur (celui de SecuBox ne sort pas). WebSockets, envois jusqu'à 2 Go, traitements longs.
+    Renouveler la clé met nginx à jour ; une configuration nginx refusée n'est jamais laissée en place.
+  * `voicestudioctl interface` / `interface-ferme` ; unité oneshot secubox-voicestudio-interface (une fois, après le
+    provisionnement). Menu : `same_origin`, catégorie Esprit (0.2.5, 0.2.6).
+  * ecrire_toml écrivait les booléens en `False` (TOML invalide) : corrigé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 11:00:00 +0200
+
+secubox-voicestudio (0.2.6-1~bookworm1) bookworm; urgency=low
+
+  * Menu : `same_origin: true` sur les deux entrées. Sans lui, le registre du Hall devinait l'hôte
+    « voicestudio.gk2.secubox.in » (un vhost qui n'existe pas) ; le module est servi sur le domaine de la console,
+    sous /voicestudio/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 10:30:00 +0200
+
 secubox-voicestudio (0.2.5-1~bookworm1) bookworm; urgency=medium
 
   * Menu : les deux entrées (administration, usager) passent de la catégorie « apps » à « mind » (Esprit). Le Hall

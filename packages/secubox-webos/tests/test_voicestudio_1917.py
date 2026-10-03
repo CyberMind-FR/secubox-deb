@@ -11,6 +11,7 @@ PKG = Path(__file__).resolve().parents[1]
 VHOST = (PKG / "nginx" / "hall.vhost.conf").read_text(encoding="utf-8")
 HALL = (PKG / "www" / "hall" / "index.html").read_text(encoding="utf-8")
 CARTE = (PKG / "www" / "hall" / "cardlets" / "voicestudio.html").read_text(encoding="utf-8")
+CARTE_ADMIN = (PKG / "www" / "hall" / "cardlets" / "voicestudio-admin.html").read_text(encoding="utf-8")
 
 
 def bloc(debut: str) -> str:
@@ -24,19 +25,22 @@ def bloc(debut: str) -> str:
     return VHOST[j:k]
 
 
-def test_le_hall_ne_relaie_que_le_prefixe_usager_du_module():
-    """Le Hall n'inclut pas secubox-routes.d : seules les routes d'USAGER sont joignables à son origine."""
-    relais = re.findall(r"location\s+[^\n{]*?/api/v1/voicestudio[^\n{]*\{", VHOST)
-    assert len(relais) == 1 and "^~ /api/v1/voicestudio/usager/" in relais[0], relais
+def test_le_hall_ne_relaie_que_l_usager_et_l_etat_minimal_du_module():
+    """Le Hall n'inclut pas secubox-routes.d : seules DEUX choses du module sont joignables à son origine."""
+    relais = sorted(re.findall(r"location\s+[^\n{]*?/api/v1/voicestudio[^\n{]*\{", VHOST))
+    assert len(relais) == 2, relais
+    assert any("^~ /api/v1/voicestudio/usager/" in r for r in relais) and any("= /api/v1/voicestudio/status" in r for r in relais)
     corps = bloc("location ^~ /api/v1/voicestudio/usager/")
     assert "proxy_pass http://unix:/run/secubox/voicestudio.sock:/usager/;" in corps
     assert "client_max_body_size 12m;" in corps and "proxy_read_timeout 180s;" in corps
     assert "X-SecuBox-LAN" in corps                      # le verdict LAN du Hall, comme les autres relais
+    etat = bloc("location = /api/v1/voicestudio/status")
+    assert "proxy_pass http://unix:/run/secubox/voicestudio.sock:/status;" in etat and "X-SecuBox-LAN" in etat
 
 
-def test_aucune_route_d_administration_n_est_exposee_par_le_hall():
+def test_aucune_autre_route_d_administration_n_est_exposee_par_le_hall():
     for interdit in ("/detail", "/cle", "/journal", "/start", "/stop", "/restart", "/config", "/publier",
-                     "/installer", "/sauvegarde", "/essai", "/voix"):
+                     "/installer", "/sauvegarde", "/essai", "/voix", "/gate", "/health"):
         assert f"/api/v1/voicestudio{interdit}" not in VHOST, interdit
     assert "voicestudio.sock:/;" not in VHOST            # jamais la racine du module
 
@@ -49,21 +53,27 @@ def test_la_csp_de_la_carte_autorise_le_blob_audio_et_rien_d_etranger():
     assert VHOST.index("location = /cardlets/voicestudio.html") < VHOST.index("location /cardlets/ {")   # AVANT la CSP générique
 
 
-def test_la_carte_est_declaree_dans_le_hall_avec_les_bons_drapeaux():
-    m = re.search(r'\{id:"voicestudio",[^\n]*\}', HALL)
-    assert m, "entrée FEATURED absente"
-    e = m.group(0)
-    assert 'carte:"/cardlets/voicestudio.html"' in e
-    assert "auth:true" in e                              # une carte d'invité serait une carte vide
-    assert "micro_audio:true" in e                       # dictée : micro délégué à CETTE carte
-    assert 'admin:"/voicestudio/"' in e                  # la console d'administration par ⚙️
-    assert "url:" not in e                               # carte locale : pas de vhost
+def entree(identifiant: str) -> str:
+    m = re.search(r'\{id:"' + identifiant + r'",[^\n]*\}', HALL)
+    assert m, f"entrée FEATURED « {identifiant} » absente"
+    return m.group(0)
 
 
-def test_la_carte_a_son_aide():
+def test_les_deux_entrees_du_hall_suivent_le_motif_coffre_mon_coffre():
+    adm, usager = entree("voicestudio"), entree("voix")
+    # administrateur : la carte d'état, l'interface native agrandie (vhost), la console par ⚙️
+    assert 'carte:"/cardlets/voicestudio-admin.html"' in adm and 'url:"voicestudio.gk2.secubox.in"' in adm
+    assert 'admin:"/voicestudio/"' in adm and "auth:true" in adm and "micro_audio" not in adm
+    # usager : carte locale, pas de vhost, micro délégué à elle seule, pas de ⚙️
+    assert 'carte:"/cardlets/voicestudio.html"' in usager and "url:" not in usager
+    assert "auth:true" in usager and "micro_audio:true" in usager and "admin:false" in usager
+
+
+def test_chaque_entree_a_son_aide():
     d = json.loads((PKG / "api" / "aide_cartes.json").read_text(encoding="utf-8"))
-    [c] = [c for c in d["cartes"] if c["id"] == "voicestudio"]
-    assert c["acces"] == "session" and len(c["role"]) > 30 and c["usage"]
+    for ident in ("voicestudio", "voix"):
+        [c] = [c for c in d["cartes"] if c["id"] == ident]
+        assert c["acces"] == "session" and len(c["role"]) > 30 and c["usage"], ident
 
 
 def test_la_carte_ne_parle_qu_a_l_api_d_usager_de_son_origine():
@@ -97,3 +107,25 @@ def test_la_carte_suit_le_theme_du_hall_et_ne_depend_pas_de_load():
 
 def test_la_carte_ne_nettoie_pas_ses_urls_audio_a_la_legere():
     assert CARTE.count("revokeObjectURL") == 1 and "createObjectURL" in CARTE
+
+
+# ── carte d'administration ───────────────────────────────────────────────────────────────────────────────────────
+def test_la_carte_d_administration_ne_lit_que_l_etat_minimal():
+    assert set(re.findall(r"fetch\('(/api/v1/voicestudio/[a-z/]+)'", CARTE_ADMIN)) == {"/api/v1/voicestudio/status"}
+    for interdit in ("/detail", "/cle", "/journal", "/start", "/stop", "/restart", "/config", "/usager"):
+        assert f"voicestudio{interdit}" not in CARTE_ADMIN, interdit
+    assert "method:" not in CARTE_ADMIN and "POST" not in CARTE_ADMIN       # lecture seule : tout geste passe par la console
+
+
+def test_la_carte_d_administration_distingue_les_etats_et_dit_absent():
+    assert "n'est pas installé sur cette box" in CARTE_ADMIN and "r.status === 502" in CARTE_ADMIN
+    assert "Réservé aux administrateurs" in CARTE_ADMIN and "r.status === 401" in CARTE_ADMIN
+    for etat in ("répond", "dort", "muet", "à installer", "injoignable"):
+        assert etat in CARTE_ADMIN, etat
+
+
+def test_la_carte_d_administration_ne_montre_ni_adresse_ni_cle():
+    assert not re.search(r"https?://", re.sub(r"<!--.*?-->", "", CARTE_ADMIN, flags=re.S))
+    for secret in ("api_key", "Bearer", "10.100.", "commit"):
+        assert secret not in re.sub(r"<!--.*?-->", "", CARTE_ADMIN, flags=re.S), secret
+    assert 'type="password"' not in CARTE_ADMIN

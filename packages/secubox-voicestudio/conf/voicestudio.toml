@@ -36,6 +36,19 @@ publier  = []
 # précision mesuré sur un Core i3 pour des commandes courtes (#1649).
 asr      = "Systran/faster-whisper-base"
 
+[interface]
+# Interface NATIVE de VoiceStudio (le studio complet : clonage, doublage, bibliothèque de voix…), servie par le moteur
+# lui-même une fois construite. Construite DANS le LXC avec bun, comme le fait le Dockerfile amont :
+#   bun install --frozen-lockfile   puis   bun run --cwd frontend build        (bun.lock = versions figées)
+# bun est téléchargé à l'installation, VÉRIFIÉ par sha256, utilisé, puis supprimé. Aucun Node.
+activer     = true
+bun_version = "1.4.2"
+bun_url     = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-baseline.zip"
+bun_sha256  = "c678040f14fe0440eb839d37cbd0ce4c051a32da72806ac97de6a6aab6bf728f"
+# Préfixe du domaine de CETTE box (`secubox-domaine voicestudio` → voicestudio.<domaine>), derrière HAProxy puis le WAF.
+# L'accès est réservé aux administrateurs (auth_request vers le module) ; la clé du moteur est posée par nginx.
+domaine     = "voicestudio"
+
 [limites]
 # Garde-fous des routes d'USAGER : une synthèse n'est pas un moyen de faire lire
 # un livre entier à la box, ni un envoi audio un moyen d'y téléverser un film.

@@ -30,6 +30,38 @@ case "$1" in
     # un marqueur : no-op après une installation réussie.
     systemctl enable secubox-voicestudio-provision.service 2>/dev/null || true
     systemctl start --no-block secubox-voicestudio-provision.service 2>/dev/null || true
+    # INTERFACE NATIVE (le studio complet). Construite dans le LXC une fois qu'il existe ; son vhost est posé par
+    # `voicestudioctl appliquer` quand elle l'est. Ici : l'unité de construction, puis l'exposition (HAProxy + WAF),
+    # idempotentes et sans effet si l'infra manque (même motif que secubox-socialrelay).
+    systemctl enable secubox-voicestudio-interface.service 2>/dev/null || true
+    systemctl start --no-block secubox-voicestudio-interface.service 2>/dev/null || true
+    DOMAINE="$(secubox-domaine voicestudio 2>/dev/null || true)"
+    CLE_VHOST="$(printf '%s' "$DOMAINE" | tr '.' '_')"
+    if [ -n "$DOMAINE" ] && command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
+      if ! grep -q "$CLE_VHOST" /etc/secubox/haproxy.toml 2>/dev/null; then
+        haproxyctl vhost add "$DOMAINE" nginx_vhosts true >/dev/null 2>&1 || true
+      fi
+      haproxyctl generate >/dev/null 2>&1 || true
+      systemctl reload haproxy >/dev/null 2>&1 || true
+    fi
+    WAF_ROUTES=/etc/secubox/waf/haproxy-routes.json
+    if [ -n "$DOMAINE" ] && [ -f "$WAF_ROUTES" ] && command -v python3 >/dev/null 2>&1; then
+      python3 - "$WAF_ROUTES" "$DOMAINE" <<'PY' || true
+import json, sys
+chemin, dom = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(chemin))
+except (OSError, ValueError):
+    d = {}
+if d.get(dom) != ["127.0.0.1", 9080]:
+    d[dom] = ["127.0.0.1", 9080]
+    json.dump(d, open(chemin, "w"), indent=2)
+PY
+      # sbxwaf : redémarrage (jamais SIGHUP, qui le tue), seulement s'il tourne.
+      if systemctl is-active --quiet secubox-waf-ng 2>/dev/null; then
+        systemctl restart secubox-waf-ng >/dev/null 2>&1 || true
+      fi
+    fi
     if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
       systemctl reload nginx 2>/dev/null || true
     fi
