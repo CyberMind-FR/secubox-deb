@@ -6,6 +6,7 @@
 """SecuBox-Deb :: secubox-adguard-tv — la seule porte privilégiée du POC « DNS AdBlock TV » (#1943).
 
   secubox-adguard-tv apply      lit l'état (périmètre + modes), écrit le drop-in Unbound, le VÉRIFIE, recharge Unbound
+  secubox-adguard-tv regles-appliquer   applique À CHAUD les seules différences de règles du mode auto (#1954) ; sinon rechargement complet
   secubox-adguard-tv disable    retire le drop-in et recharge Unbound : tout est remis en l'état
   secubox-adguard-tv status     JSON : drop-in présent, état, configuration valide
 
@@ -28,10 +29,11 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv  # noqa: E402
+from api import dnstv, dnstv_regles  # noqa: E402
 
 CHECKCONF = os.environ.get("SECUBOX_ADGUARD_TV_CHECKCONF", "unbound-checkconf")
 CONTROL = os.environ.get("SECUBOX_ADGUARD_TV_CONTROL", "unbound-control")
+APPLIQUE = Path(os.environ.get("SECUBOX_ADGUARD_TV_APPLIQUE", "/var/lib/secubox/ad-guard/dnstv-root/applique.json"))
 AUDIT = Path(os.environ.get("SECUBOX_ADGUARD_TV_AUDIT", "/var/log/secubox/audit.log"))
 
 
@@ -84,15 +86,40 @@ def charger() -> tuple[dict, dict]:
     return etat, table
 
 
-def recharger() -> None:
-    r = subprocess.run([CONTROL, "reload"], capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:
-        raise SystemExit("unbound-control reload a échoué : " + (r.stderr or r.stdout).strip()[:200])
-
-
-def appliquer() -> int:
+def charger_avec_regles() -> tuple[dict, dict, dict]:
+    """État + table + règles actives par appareil. Un fichier de règles refusé (lien symbolique, corrompu) ne change RIEN."""
     etat, table = charger()
-    contenu = dnstv.rendre_unbound(etat, table)
+    try:
+        actives = dnstv_regles.charger(dnstv.DOSSIER_ETAT).par_appareil()
+    except dnstv_regles.ErreurRegle as e:
+        raise SystemExit(f"règles refusées ({e}) — rien n'est changé")
+    return etat, table, actives
+
+
+def _control(*args: str) -> None:
+    """Une commande unbound-control, sans shell ; un code ≠ 0 est une erreur (le repli est décidé par l'appelant)."""
+    r = subprocess.run([CONTROL, *args], capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        raise RuntimeError("unbound-control " + args[0] + " a échoué : " + (r.stderr or r.stdout).strip()[:120])
+
+
+def instantane(etat: dict, actives: dict) -> dict:
+    """Ce que le DNS a RÉELLEMENT chargé : modes + domaines de chaque vue auto. Sert à décider « à chaud » ou « rechargement »."""
+    vues = {f"sbx-tv-auto-{dnstv._slug(c['nom'])}": sorted(set(actives.get(dnstv._slug(c["nom"]), [])))
+            for c in etat["clients"] if c["mode"] == "auto"}
+    return {"actif": etat["actif"], "modes": sorted([c["ip"], c["mode"], c["nom"]] for c in etat["clients"]), "vues": vues}
+
+
+def ecrire_instantane(inst: dict) -> None:
+    APPLIQUE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = APPLIQUE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(inst), encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, APPLIQUE)
+
+
+def ecrire_verifier(contenu: str) -> None:
+    """Écrit le drop-in puis le VÉRIFIE ; en cas de refus, remet l'ancien et s'arrête (comportement du POC conservé)."""
     cible = dnstv.CONF_UNBOUND
     ancien = cible.read_bytes() if cible.is_file() else None
     cible.parent.mkdir(parents=True, exist_ok=True)
@@ -101,16 +128,62 @@ def appliquer() -> int:
     os.chmod(tmp, 0o644)
     os.replace(tmp, cible)
     r = subprocess.run([CHECKCONF], capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:                                              # configuration refusée : on remet l'ancienne, rien n'est rechargé
+    if r.returncode != 0:
         if ancien is None:
             cible.unlink(missing_ok=True)
         else:
             cible.write_bytes(ancien)
         audit("apply-refuse", (r.stdout + r.stderr).strip()[:200])
         raise SystemExit("unbound-checkconf refuse la configuration — version précédente remise")
+
+
+def recharger() -> None:
+    r = subprocess.run([CONTROL, "reload"], capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        raise SystemExit("unbound-control reload a échoué : " + (r.stderr or r.stdout).strip()[:200])
+
+
+def appliquer() -> int:
+    etat, table, actives = charger_avec_regles()
+    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))
     recharger()
+    ecrire_instantane(instantane(etat, actives))
     audit("apply", f"actif={etat['actif']} appareils={len(etat['clients'])} domaines={len(table)}")
     print(json.dumps({"ok": True, "actif": etat["actif"], "appareils": len(etat["clients"]), "domaines": len(table)}))
+    return 0
+
+
+def regles_appliquer() -> int:
+    """Applique les seules différences de règles À CHAUD (unbound-control view_local_zone) : aucune coupure du DNS.
+    Tout autre changement (appareils, modes, vues) ou tout échec à chaud → rechargement complet, jamais d'état intermédiaire silencieux."""
+    etat, table, actives = charger_avec_regles()
+    voulu = instantane(etat, actives)
+    try:
+        avant = json.loads(lire_sans_suivre(APPLIQUE))
+    except (OSError, ValueError):
+        avant = None
+    if (avant is None or avant.get("actif") != voulu["actif"] or avant.get("modes") != voulu["modes"]
+            or set(avant.get("vues", {})) != set(voulu["vues"])):
+        return appliquer()
+    ajoutes = retires = 0
+    try:
+        for vue, doms in voulu["vues"].items():
+            anciens = set(avant["vues"].get(vue, []))
+            for d in sorted(set(doms) - anciens):
+                if dnstv.valider_domaine(d) != d:
+                    raise RuntimeError("domaine invalide")
+                _control("view_local_zone", vue, d + ".", "always_nxdomain")
+                ajoutes += 1
+            for d in sorted(anciens - set(doms)):
+                _control("view_local_zone_remove", vue, d + ".")
+                retires += 1
+    except (OSError, subprocess.SubprocessError, RuntimeError) as e:
+        audit("regles-chaud-echec", str(e)[:150])
+        return appliquer()                                             # repli : rechargement complet depuis le drop-in
+    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))        # persisté : le prochain démarrage d'Unbound retrouve les mêmes règles
+    ecrire_instantane(voulu)
+    audit("regles-appliquer", f"ajoutes={ajoutes} retires={retires} mode=chaud")
+    print(json.dumps({"ok": True, "ajoutes": ajoutes, "retires": retires, "mode": "chaud"}))
     return 0
 
 
@@ -132,13 +205,13 @@ def etat_courant() -> int:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status"):
+    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
         print("secubox-adguard-tv : root requis (sudo)", file=sys.stderr)
         return 3
-    return {"apply": appliquer, "disable": desactiver, "status": etat_courant}[argv[1]]()
+    return {"apply": appliquer, "disable": desactiver, "status": etat_courant, "regles-appliquer": regles_appliquer}[argv[1]]()
 
 
 if __name__ == "__main__":

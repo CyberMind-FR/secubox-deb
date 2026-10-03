@@ -160,3 +160,57 @@ def test_l_outil_client_voit_le_blocage_avec_une_reference():
         assert outil.statut(outil.interroger(box, "news.sbxlab"), outil.interroger(ref, "news.sbxlab")) == "ALLOWED"
     finally:
         banc.arreter()
+
+
+# ── #1954 : application des règles du mode auto À CHAUD, sur un vrai Unbound jetable ───────────────────────────────────────
+import shutil
+import socket
+import subprocess as _sp
+import time as _t
+
+
+@pytest.mark.skipif(not (shutil.which("unbound") and shutil.which("unbound-control") and shutil.which("dig")), reason="unbound/dig absents")
+def test_ajout_retrait_a_chaud(tmp_path):
+    """Mesuré sur Unbound 1.17.1 (gk2) : view_local_zone prend effet tout de suite, et le retrait rend la main à la zone parente."""
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    d = tmp_path
+    (d / "u.conf").write_text(f'''server:
+    interface: 127.0.0.1@{port}
+    access-control: 127.0.0.0/8 allow
+    access-control-view: 127.0.0.2/32 sbx-t
+    pidfile: {d}/u.pid
+    directory: {d}
+    use-syslog: no
+    logfile: {d}/u.log
+view:
+    name: "sbx-t"
+    local-zone: "." transparent
+    local-zone: "sbx." transparent
+    local-data: "hote.sbx. 60 IN A 192.0.2.1"
+remote-control:
+    control-enable: yes
+    control-interface: {d}/ctl.sock
+    control-use-cert: no
+''')
+    ctl = ["unbound-control", "-c", str(d / "u.conf"), "-s", str(d / "ctl.sock")]
+
+    def etat():
+        r = _sp.run(["dig", "+time=2", "+tries=1", "-b", "127.0.0.2", "-p", str(port), "@127.0.0.1", "hote.sbx"], capture_output=True, text=True)
+        return "NXDOMAIN" if "NXDOMAIN" in r.stdout else ("NOERROR" if "192.0.2.1" in r.stdout else r.stdout[-200:])
+
+    _sp.run(["unbound", "-c", str(d / "u.conf")], check=True)
+    try:
+        for _ in range(20):
+            if (d / "ctl.sock").exists():
+                break
+            _t.sleep(0.2)
+        assert etat() == "NOERROR"
+        _sp.run([*ctl, "view_local_zone", "sbx-t", "hote.sbx.", "always_nxdomain"], check=True, capture_output=True)
+        assert etat() == "NXDOMAIN"
+        _sp.run([*ctl, "view_local_zone_remove", "sbx-t", "hote.sbx."], check=True, capture_output=True)
+        assert etat() == "NOERROR"
+    finally:
+        _sp.run([*ctl, "stop"], capture_output=True)

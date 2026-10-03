@@ -47,8 +47,7 @@ class ErreurRegle(ValueError):
 
 def slug(nom: str) -> str:
     """Identifiant de vue Unbound pour un appareil : minuscules, tirets ; jamais autre chose que [a-z0-9-]."""
-    s = re.sub(r"[^a-z0-9]+", "-", str(nom).lower()).strip("-")
-    return s[:40] or "appareil"
+    return dnstv._slug(nom)
 
 
 def identifiant(appareil: str, domaine: str) -> str:
