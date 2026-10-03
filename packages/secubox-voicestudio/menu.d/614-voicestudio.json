@@ -3,7 +3,7 @@
   "name": "VoiceStudio",
   "icon": "🎙️",
   "path": "/voicestudio/",
-  "category": "apps",
+  "category": "mind",
   "order": 614,
   "description": "Moteur vocal studio : synthèse et reconnaissance, administration du LXC"
 }

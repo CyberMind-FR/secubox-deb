@@ -1,3 +1,11 @@
+secubox-voicestudio (0.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * Menu : les deux entrées (administration, usager) passent de la catégorie « apps » à « mind » (Esprit). Le Hall
+    ne connaît que six catégories (Muraille, Esprit, Maillage, Accès, Racine, Amorce) : une entrée « apps » était
+    absente de sa liste « Système — tous les modules » (vu sur gk3). Un test impose l'une des six.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 10:00:00 +0200
+
 secubox-voicestudio (0.2.4-1~bookworm1) bookworm; urgency=low
 
   * Panneau : sans session, il annonce « Connexion requise » (401) ou « Réservé aux administrateurs » (403) au

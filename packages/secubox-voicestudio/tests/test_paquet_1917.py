@@ -259,3 +259,15 @@ def test_l_unite_api_n_a_aucun_reglage_qui_impose_no_new_privileges():
 def test_une_session_absente_n_est_pas_annoncee_comme_une_panne_d_api():
     h = lire("www/voicestudio/index.html")
     assert "e.message === '401'" in h and "Connexion requise" in h and "Réservé aux administrateurs" in h
+
+
+CATEGORIES_STANDARD = ("wall", "mind", "mesh", "auth", "root", "boot")      # Muraille, Esprit, Maillage, Accès, Racine, Amorce
+
+
+def test_les_entrees_de_menu_sont_dans_l_une_des_six_categories_standard():
+    """Le Hall (liste « Système ») ne connaît que six catégories : une entrée dans « apps » ou « services » est
+    INVISIBLE (vu sur gk3 : voicestudio absent des 121 modules). VoiceStudio va dans Esprit, avec zia et mood."""
+    for f in sorted((PKG / "menu.d").glob("*.json")):
+        cat = json.loads(f.read_text())["category"]
+        assert cat in CATEGORIES_STANDARD, f"{f.name} : catégorie « {cat} » inconnue du Hall"
+        assert cat == "mind", f.name
