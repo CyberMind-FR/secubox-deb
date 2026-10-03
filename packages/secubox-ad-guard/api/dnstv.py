@@ -37,7 +37,9 @@ CATEGORIES = ("advertising", "tracking", "telemetry", "social", "custom")
 MODES = ("off", "observe", "block", "auto")
 DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 
-ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False}
+ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": []}
+MODES_DEFAUT = ("off", "observe", "auto", "block")
+MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
 DOSSIER_ETAT = Path(os.environ.get("SECUBOX_ADGUARD_TV_ETAT", "/var/lib/secubox/ad-guard/dnstv"))
 DOSSIER_LISTES = Path(os.environ.get("SECUBOX_ADGUARD_TV_LISTES", "/usr/share/secubox/ad-guard/lists"))
 CONF_UNBOUND = Path(os.environ.get("SECUBOX_ADGUARD_TV_UNBOUND", "/etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf"))
@@ -172,19 +174,68 @@ def valider_etat(brut) -> dict:
         if ip in vus:
             raise ErreurTV("adresse déjà déclarée")
         vus.add(ip)
-        clients.append({"ip": ip, "nom": nom, "mode": mode})
+        entree = {"ip": ip, "nom": nom, "mode": mode}
+        mac = c.get("mac", "")
+        if mac and (not isinstance(mac, str) or not MAC_RE.match(mac) or mac == "00:00:00:00:00:00"):
+            raise ErreurTV("adresse MAC invalide (minuscules, a:b:c:d:e:f)")
+        if mac == "" and "mac" in c and not isinstance(c["mac"], str):
+            raise ErreurTV("adresse MAC invalide")
+        origine = c.get("origine", "admin")
+        if origine not in ("admin", "auto"):
+            raise ErreurTV("origine inconnue (admin, auto)")
+        ajoute = c.get("ajoute", 0)
+        if not isinstance(ajoute, int) or isinstance(ajoute, bool) or ajoute < 0:
+            raise ErreurTV("date d'ajout invalide")
+        preuve = c.get("preuve", "")
+        if not isinstance(preuve, str) or len(preuve) > 120:
+            raise ErreurTV("preuve trop longue (120 caractères au plus)")
+        puits = c.get("puits", True)
+        if not isinstance(puits, bool):
+            raise ErreurTV("puits : booléen attendu")
+        # Un champ n'est écrit que s'il n'est pas à sa valeur par défaut : les anciens états gardent exactement le même format.
+        if mac:
+            entree["mac"] = mac
+        if origine == "auto":
+            entree["origine"] = "auto"
+        if ajoute:
+            entree["ajoute"] = ajoute
+        if preuve:
+            entree["preuve"] = preuve
+        if not puits:
+            entree["puits"] = False
+        clients.append(entree)
     if len(clients) > 32:
         raise ErreurTV("32 appareils au plus")
     noms_par_vue: Dict[str, set] = {}
+    puits_par_nom: Dict[str, set] = {}
     for c in clients:
         if c["mode"] == "auto":
             noms_par_vue.setdefault(_slug(c["nom"]), set()).add(c["nom"])
+            puits_par_nom.setdefault(c["nom"], set()).add(c.get("puits", True))
     if any(len(n) > 1 for n in noms_par_vue.values()):
         raise ErreurTV("deux appareils en mode auto donnent la même vue : leurs noms doivent différer par plus que la casse ou la ponctuation")
+    if any(len(p) > 1 for p in puits_par_nom.values()):
+        raise ErreurTV("les adresses d'un même appareil doivent avoir le même réglage « puits »")
     auto_essai = brut.get("auto_essai", False)
     if not isinstance(auto_essai, bool):
         raise ErreurTV("auto_essai : booléen attendu")
-    return {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai}
+    ajout_auto = brut.get("ajout_auto", False)
+    if not isinstance(ajout_auto, bool):
+        raise ErreurTV("ajout_auto : booléen attendu")
+    mode_defaut = brut.get("mode_defaut", "auto")
+    if mode_defaut not in MODES_DEFAUT:
+        raise ErreurTV("mode_defaut inconnu (off, observe, auto, block)")
+    ignores_brut = brut.get("ignores", [])
+    if not isinstance(ignores_brut, list) or len(ignores_brut) > 64:
+        raise ErreurTV("ignores : liste de 64 adresses MAC au plus")
+    ignores: List[str] = []
+    for m in ignores_brut:
+        if not isinstance(m, str) or not MAC_RE.match(m):
+            raise ErreurTV("ignores : adresse MAC invalide")
+        if m not in ignores:
+            ignores.append(m)
+    return {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai,
+            "mode_defaut": mode_defaut, "ajout_auto": ajout_auto, "ignores": ignores}
 
 
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
@@ -243,11 +294,15 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
         for nom in sorted({_slug(c["nom"]) for c in suivis if c["mode"] == "auto"}):
             L.append("view:")
             L.append(f'    name: "sbx-tv-auto-{nom}"')
+            puits = all(c.get("puits", True) for c in suivis if c["mode"] == "auto" and _slug(c["nom"]) == nom)
+            if puits:
+                L.append("    view-first: yes")                  # le puits de production s'applique ET les règles de la vue s'y ajoutent (mesuré, Unbound 1.17.1)
             for d in sorted(set((regles_actives or {}).get(nom, []))):
                 if valider_domaine(d) != d:
                     raise ErreurTV("domaine de règle invalide")
                 L.append(f'    local-zone: "{d}." always_nxdomain')
-            L.append('    local-zone: "." transparent')
+            if not puits:
+                L.append('    local-zone: "." transparent')           # puits=faux : l'ancien comportement (appareil hors du puits de production)
     return "\n".join(L) + "\n"
 
 

@@ -142,7 +142,7 @@ def instantane(etat: dict, actives: dict, regles: dict | None = None) -> dict:
     vues = {f"sbx-tv-auto-{dnstv._slug(c['nom'])}": sorted(set(actives.get(dnstv._slug(c["nom"]), [])))
             for c in etat["clients"] if c["mode"] == "auto"}
     return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")),
-            "modes": sorted([c["ip"], c["mode"], c["nom"]] for c in etat["clients"]), "vues": vues, "etats": regles or {}}
+            "modes": sorted([c["ip"], c["mode"], c["nom"], c.get("puits", True)] for c in etat["clients"]), "vues": vues, "etats": regles or {}}
 
 
 def ecrire_instantane(inst: dict) -> None:

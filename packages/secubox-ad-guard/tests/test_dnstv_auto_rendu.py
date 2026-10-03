@@ -30,14 +30,14 @@ def test_rendu_une_vue_par_appareil_auto_avec_ses_seules_regles():
     bloc = out.split('name: "sbx-tv-auto-tv-banc"')[1].split("view:")[0]
     assert 'local-zone: "videos-pub.ftv-publicite.fr." always_nxdomain' in bloc
     assert 'local-zone: "c.2mdn.net." always_nxdomain' in bloc
-    assert 'local-zone: "." transparent' in bloc
+    assert "view-first: yes" in bloc and 'local-zone: "." transparent' not in bloc     # #1959 : le puits de production reste actif
     assert "ads.example.com" not in bloc                      # en auto, la table du mode block ne s'applique pas
 
 
-def test_rendu_sans_regle_la_vue_auto_est_transparente():
+def test_rendu_sans_regle_la_vue_auto_garde_le_puits_et_ne_bloque_rien_de_plus():
     out = dnstv.rendre_unbound(ETAT, {}, None)
     bloc = out.split('name: "sbx-tv-auto-tv-banc"')[1]
-    assert "always_nxdomain" not in bloc.split("view:")[0] and 'local-zone: "." transparent' in bloc
+    assert "always_nxdomain" not in bloc.split("view:")[0] and "view-first: yes" in bloc
 
 
 def test_domaine_hostile_dans_les_regles_refuse_au_rendu():
