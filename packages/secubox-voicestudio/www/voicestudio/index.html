@@ -316,8 +316,8 @@
             d += ligne('Mode', s.mode === 'demande' ? 'à la demande (sommeil après ' + (s.inactivite_s || '?') + ' s)' : 'permanent');
             var mh = s.memoire_hote || {}, go = function (mo) { return (mo / 1024).toFixed(1).replace('.', ',') + ' Go'; };
             if (mh.disponible_mo != null) {
-                var assez = mh.disponible_mo >= 3800 || (mh.moteur_mo || 0) >= 2500;
-                d += ligne('Mémoire de la box', go(mh.disponible_mo) + ' disponibles · swap libre ' + go(mh.swap_libre_mo || 0) + ' · moteur ' + go(mh.moteur_mo || 0),
+                var assez = (mh.effective_mo != null ? mh.effective_mo : mh.disponible_mo) >= 3800 || (mh.moteur_mo || 0) >= 2500;
+                d += ligne('Mémoire de la box', go(mh.disponible_mo) + ' disponibles · swap disque libre ' + go(mh.swap_disque_mo || 0) + ' · moteur ' + go(mh.moteur_mo || 0),
                            assez ? 'ok' : 'warn');
                 d += ligne('Synthèse vocale', assez ? 'mémoire suffisante' : 'il faut ≈ 3,7 Go libres : les autres conteneurs endormables seront mis en sommeil à la demande',
                            assez ? 'ok' : 'warn');

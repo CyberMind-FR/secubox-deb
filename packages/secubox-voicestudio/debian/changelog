@@ -1,3 +1,12 @@
+secubox-voicestudio (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Mémoire : le swap DISQUE libre compte pour moitié (plafonné à 2 Go, `[memoire] swap_compte_mo`) dans la mémoire effective d'une
+    synthèse ; le zram (RAM comprimée) jamais — lu dans /proc/swaps. Mesuré sur gk3 : le modèle chargé (3,1 Go) est rendu 90 s après
+    la dernière utilisation, la box retrouve 2,9 Go disponibles + 8 Go de swap disque : 3,9 Go effectifs, la synthèse est permise sans
+    endormir personne ; sans swap disque la même box endort ou refuse. La console montre la mémoire effective.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 14:00:00 +0200
+
 secubox-voicestudio (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * `appliquer` (donc la postinst) pousse l'environnement du moteur — clé, libération du modèle, préchargements — quand il tourne ;

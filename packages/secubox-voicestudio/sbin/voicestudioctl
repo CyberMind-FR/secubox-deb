@@ -80,6 +80,7 @@ VHOST_FICHIER = "secubox-voicestudio.conf"
 RE_DOMAINE = re.compile(r"^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$")
 RE_CLE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 MEMINFO = Path(os.environ.get("SECUBOX_VS_MEMINFO", "/proc/meminfo"))
+SWAPS = Path(os.environ.get("SECUBOX_VS_SWAPS", "/proc/swaps"))
 CGROUP_LXC = Path(os.environ.get("SECUBOX_VS_CGROUP", "/sys/fs/cgroup"))
 SOMMEILLEUX = Path(os.environ.get("SECUBOX_VS_SOMMEILLEUX", "/etc/secubox/health/sleepable-modules.json"))
 PLACE_ETAT = Path(os.environ.get("SECUBOX_VS_PLACE", "/var/lib/secubox/voicestudio/place.json"))
@@ -830,10 +831,30 @@ def conteneurs_endormables(c: dict, run=_run) -> list[tuple[str, int]]:
     return sorted(cands, key=lambda t: t[1], reverse=True)
 
 
+def swap_disque_libre_mo() -> int:
+    """Swap libre HORS zram, en Mo (/proc/swaps : Filename Type Size Used Priority, en Kio). Le zram est de la RAM comprimée : il se
+    remplit et ne rend rien — le compter comme du swap disque était exactement l'erreur qui laissait gk3 sans filet."""
+    libre = 0
+    try:
+        for ligne in SWAPS.read_text().splitlines()[1:]:
+            champs = ligne.split()
+            if len(champs) >= 4 and not champs[0].startswith("/dev/zram"):
+                libre += (int(champs[2]) - int(champs[3])) // 1024
+    except (OSError, ValueError):
+        return 0
+    return max(0, libre)
+
+
 def etat_memoire(c: dict) -> dict:
+    """Mémoire de la box. `effective_mo` = MemAvailable + la moitié du swap DISQUE libre (plafonnée par `swap_compte_mo`) : le noyau
+    y range les pages froides des autres services pour faire de la place au modèle. Sans swap disque (zram seul, plein), rien
+    n'est ajouté."""
     mi = lire_meminfo()
-    return {"disponible_mo": mi.get("MemAvailable", 0), "swap_libre_mo": mi.get("SwapFree", 0),
-            "swap_total_mo": mi.get("SwapTotal", 0), "moteur_mo": memoire_cgroup_mo(lxc_nom(c))}
+    plafond = int(c.get("memoire", {}).get("swap_compte_mo", 2048))
+    disque = swap_disque_libre_mo()
+    return {"disponible_mo": mi.get("MemAvailable", 0), "swap_libre_mo": mi.get("SwapFree", 0), "swap_total_mo": mi.get("SwapTotal", 0),
+            "swap_disque_mo": disque, "effective_mo": mi.get("MemAvailable", 0) + min(disque // 2, plafond),
+            "moteur_mo": memoire_cgroup_mo(lxc_nom(c))}
 
 
 @sous_verrou(bloquant=True)      # deux synthèses simultanées font la queue au lieu de s'échouer l'une l'autre
@@ -853,7 +874,7 @@ def cmd_faire_de_la_place(run=_run, dormir=time.sleep, maintenant=time.time) -> 
     delai = int(m.get("delai_repetition_s", 120))
     etat = etat_memoire(c)
     res = {"ok": True, "suffisante": True, "besoin_mo": besoin, "endormis": [], **etat}
-    if etat["moteur_mo"] >= residente or etat["disponible_mo"] >= besoin:
+    if etat["moteur_mo"] >= residente or etat["effective_mo"] >= besoin:
         print(json.dumps(res))
         return 0
     try:
@@ -874,10 +895,10 @@ def cmd_faire_de_la_place(run=_run, dormir=time.sleep, maintenant=time.time) -> 
             continue
         endormis.append({"id": nom, "mo": mo})
         dormir(3)                                   # le noyau rend la mémoire de façon asynchrone
-        if lire_meminfo().get("MemAvailable", 0) >= besoin:
+        if etat_memoire(c)["effective_mo"] >= besoin:
             break
     etat = etat_memoire(c)
-    res.update(etat, endormis=endormis, suffisante=etat["disponible_mo"] >= besoin)
+    res.update(etat, endormis=endormis, suffisante=etat["effective_mo"] >= besoin)
     if not res["suffisante"]:
         res["raison"] = ("mémoire insuffisante même après avoir endormi les conteneurs endormables"
                          if endormis else "aucun conteneur endormable en marche")

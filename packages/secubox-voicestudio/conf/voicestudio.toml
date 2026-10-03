@@ -49,6 +49,9 @@ asr      = "Systran/faster-whisper-base"
 # premier accès) jusqu'à en avoir assez ; s'il n'y arrive pas, la synthèse est REFUSÉE avec les chiffres, jamais tentée
 # à l'aveugle (le tueur de mémoire global abattrait le moteur, voire un autre service).
 besoin_synthese_mo   = 3800
+# Le SWAP DISQUE libre compte pour moitié de ce qu'il offre, jusqu'à `swap_compte_mo` : le noyau y range les pages froides des autres
+# services pour faire de la place au modèle. Sans swap disque (zram seul, plein), rien n'est compté — c'est le cas qui tuait gk3.
+swap_compte_mo       = 2048
 # Au-dessus de cette taille, le moteur a déjà son modèle en mémoire : la synthèse ne demande rien de plus.
 modele_residente_mo  = 2500
 # Une tentative de libération au plus toutes les N secondes (une salve de synthèses ne rendort pas tout le parc en boucle).

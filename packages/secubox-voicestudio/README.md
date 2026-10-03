@@ -77,8 +77,8 @@ Le modèle de **synthèse** (OmniVoice) pèse ≈ 2,3 Go sur disque et **≈ 3,6
 Sur une box de 8 Go chargée (gk3), le zram (RAM comprimée) se remplit et plus rien ne peut être évincé : le tueur de mémoire GLOBAL
 abattait le moteur — et la requête sortait en « HTTP 504 ». Ce que fait le module :
 
-1. **Avant chaque synthèse**, `voicestudioctl faire-de-la-place` lit `MemAvailable`. Si le moteur a déjà son modèle (mémoire du LXC ≥ 2,5 Go)
-   ou si la box a ≥ 3,8 Go disponibles : rien à faire.
+1. **Avant chaque synthèse**, `voicestudioctl faire-de-la-place` lit `MemAvailable` et y ajoute la **moitié du swap DISQUE libre** (plafonné à 2 Go ; le zram,
+   RAM comprimée, ne compte pas). Si le moteur a déjà son modèle (mémoire du LXC ≥ 2,5 Go) ou si ce total atteint 3,8 Go : rien à faire.
 2. Sinon il **met en sommeil** les *autres* conteneurs endormables, du plus gros au plus petit (au plus 4 par salve, une salve / 2 min) par
    `secubox-profilectl apply --only <id>` — la voie officielle du sleeper (liste `/etc/secubox/health/sleepable-modules.json` : manifestes
    `on-demand` / `eager` seulement ; audit, snapshot 4R, **réveil au premier accès**). Jamais `lxc-stop`.
