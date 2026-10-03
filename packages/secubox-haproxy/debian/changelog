@@ -1,3 +1,10 @@
+secubox-haproxy (1.8.25-1~bookworm1) bookworm; urgency=medium
+
+  * Le backend nginx_vhosts (accès direct à la box, sans WAF) porte lui aussi le délai de 1 h du domaine voicestudio.* : le
+    studio natif de VoiceStudio, désormais réservé au réseau local, y est servi directement et restait coupé à 30 s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 17:00:00 +0200
+
 secubox-haproxy (1.8.24-1~bookworm1) bookworm; urgency=medium
 
   * Délais serveur LONGS pour VoiceStudio (#1917), sur le modèle des dépôts de fichiers (#1030) : « Synthèse : HTTP 504 » — une

@@ -1,3 +1,12 @@
+secubox-voicestudio (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Interface native RÉSERVÉE AU RÉSEAU LOCAL. Servie par le chemin public (HAProxy de gk2 → WAF → relais), elle était coupée à
+    120 s par le WAF (« 504 » sur /generate, /transcribe) : ses traitements durent plusieurs minutes. Le vhost refuse (403)
+    tout client que $lan_client ne tient pas pour local — adresse réelle du client, jamais un en-tête — avant même la garde
+    administrateur. L'accès local passe par la box directement (résolution locale du nom), sans WAF ni délai de 120 s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 17:00:00 +0200
+
 secubox-voicestudio (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * VOIX RAPIDE. Le grand modèle de synthèse met 110 à 140 s à dire une phrase sur le processeur de gk3 (mesuré) : « Dire »
