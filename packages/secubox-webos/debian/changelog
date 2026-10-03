@@ -1,3 +1,14 @@
+secubox-webos (1.0.398-1~bookworm1) bookworm; urgency=low
+
+  * Hall : carte « Voix » (VoiceStudio, #1917) — la facette d'usager embarquée : dire un texte, dicter. Carte locale
+    (pas de vhost), `auth:true`, `micro_audio:true` (le micro n'est demandé qu'à un clic), console d'administration
+    par ⚙️. Le Hall ne relaie QUE /api/v1/voicestudio/usager/ vers le module : aucune route d'administration n'est
+    joignable à l'origine du Hall. CSP dédiée (`media-src blob:`) avant la CSP générique des cartes. La carte
+    distingue moteur endormi, indisponible, non connecté et module absent de la box (502). Aide de la carte ajoutée.
+    11 tests.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 03 Oct 2026 09:00:00 +0200
+
 secubox-webos (1.0.397-1~bookworm1) bookworm; urgency=low
 
   * Hall, viewer : le bouton Partager du lecteur radio copie enfin un lien (#1836). Avec un lecteur de service, `courant` est vide et le bouton sortait aussitôt, sans rien copier ni dire : il partage désormais le morceau annoncé, sinon le média courant, sinon l'adresse du lecteur (toujours une URL absolue et publique, #1579). Le résultat de la copie est lu : un refus passe par un repli, puis par une boîte affichant le lien ; le bouton ne s'allume plus sans copie. 7 tests (Node, navigateur simulé).

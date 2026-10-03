@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — carte « Voix » (secubox-voicestudio, #1917).
+
+  La FACETTE D'USAGER de VoiceStudio, embarquée dans le Hall : dire un texte, dicter. Même contrat que la
+  page /voicestudio/usager.html du module (parité des fonctions utiles) ; l'administration (démarrer, mode,
+  clé, journal) reste dans la console du module, ouverte par ⚙️ (`admin:"/voicestudio/"`).
+
+  Le Hall n'expose QUE /api/v1/voicestudio/usager/ à cette origine (nginx/hall.vhost.conf) : aucune route
+  d'administration n'y est joignable, même à la main. Ces routes exigent une PERSONNE connectée.
+
+  HONNÊTETÉ (§ 6.4 du guide des cartes) : la carte distingue « le moteur dort », « indisponible » et « pas
+  installé sur cette box » (502 : la socket du module n'existe pas) — jamais un blanc muet.
+  Le micro : demandé par un CLIC, jamais d'écoute d'elle-même (`micro_audio:true` côté Hall).
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voix</title>
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
+         --soft:#f5f7fc; --cyan:#0784a8; --up:#0f9d54; --hot:#d64545; --warn:#c87832; --grape:#6e40c9; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ color-scheme:dark;
+    --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --soft:#10151f; --cyan:#28d6ff; --up:#35d07f; --hot:#ff6a6a; --warn:#e0b46a; --grape:#a88bff; } }
+  :root[data-theme="dark"]{ color-scheme:dark; --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6;
+    --faint:#5e6779; --line:#232b3b; --soft:#10151f; --cyan:#28d6ff; --up:#35d07f; --hot:#ff6a6a;
+    --warn:#e0b46a; --grape:#a88bff; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.45rem}
+  .h{display:flex;align-items:center;gap:8px;position:relative;padding-bottom:6px}
+  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+    background:linear-gradient(90deg,var(--warn),var(--grape),var(--cyan))}
+  .h .ic{font-size:1.05rem} .h b{font-size:.9rem;letter-spacing:.02em}
+  .etat{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:.56rem;font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line);border-radius:20px;padding:2px 9px;
+    color:var(--muted)}
+  .etat i{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .etat.ok{color:var(--up)} .etat.dort{color:var(--warn)} .etat.ko{color:var(--hot)}
+  textarea{width:100%;flex:1;min-height:3.2rem;resize:none;padding:.45rem .55rem;border:1px solid var(--line);
+    border-radius:8px;background:var(--soft);color:var(--texte);font:inherit;font-size:.85rem}
+  textarea:focus{outline:none;border-color:var(--cyan)}
+  .rang{display:flex;gap:6px;align-items:center}
+  button{font:inherit;font-size:.72rem;font-weight:600;letter-spacing:.04em;padding:.42rem .8rem;border-radius:8px;
+    border:1px solid var(--line);background:var(--soft);color:var(--texte);cursor:pointer;min-height:2.1rem}
+  button:hover:not(:disabled){border-color:var(--cyan);color:var(--cyan)}
+  button.p{border-color:var(--cyan);color:var(--cyan)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.enreg{border-color:var(--hot);color:var(--hot)}
+  .cpt{margin-left:auto;font-size:.6rem;color:var(--faint);font-variant-numeric:tabular-nums}
+  .cpt.trop{color:var(--hot)}
+  audio{width:100%;height:30px}
+  audio[hidden]{display:none}
+  .note{font-size:.7rem;color:var(--muted);line-height:1.4;margin:0}
+  .res{font-size:.8rem;line-height:1.4;border:1px solid var(--line);border-radius:8px;background:var(--soft);
+    padding:.4rem .55rem;max-height:4.4rem;overflow:auto;word-break:break-word}
+  .res[hidden]{display:none}
+</style>
+<div class="mw">
+  <div class="h"><span class="ic">🗣️</span><b>Voix</b>
+    <span class="etat" id="etat"><i></i><span id="etat-t">…</span></span></div>
+  <textarea id="texte" placeholder="Ce que la box doit dire…" maxlength="2000"></textarea>
+  <div class="rang">
+    <button class="p" id="b-dire" disabled>▶ Dire</button>
+    <button id="b-mic">🎤 Dicter</button>
+    <span class="cpt" id="cpt">0</span>
+  </div>
+  <audio id="audio" controls hidden></audio>
+  <div class="res" id="res" hidden></div>
+  <p class="note" id="note">Traité sur votre box : rien ne part dans le nuage.</p>
+</div>
+<script src="../sonde.js"></script>
+<script>
+(function(){
+  'use strict';
+  var API = '/api/v1/voicestudio/usager';
+  var $ = function(id){ return document.getElementById(id); };
+  var lim = {texte_max: 2000, audio_max_mo: 10}, rec = null, morceaux = [];
+
+  function pastille(classe, texte){ $('etat').className = 'etat ' + classe; $('etat-t').textContent = texte; }
+  function note(t){ $('note').textContent = t; }
+
+  /* Les trois états distingués (§ 6.4) + le 502 propre au Hall : la socket du module n'existe pas = module
+     absent de CETTE box, ce qui n'est ni une panne ni un droit manquant. */
+  function dire_erreur(r){
+    if (r.status === 401 || r.status === 403){ pastille('', 'connexion'); return 'Réservé aux personnes connectées.'; }
+    if (r.status === 502 || r.status === 404){ pastille('', 'absent'); return "VoiceStudio n'est pas installé sur cette box."; }
+    if (r.status === 503){ pastille('ko', 'indisponible'); return 'Le moteur est indisponible pour le moment.'; }
+    if (r.status === 429){ return 'Trop de demandes, réessayez dans une minute.'; }
+    if (r.status === 413){ return 'Trop long ou trop volumineux.'; }
+    return 'Erreur ' + r.status + '.';
+  }
+  function api(chemin, opts){
+    opts = opts || {}; opts.credentials = 'same-origin';
+    return fetch(API + chemin, opts);
+  }
+
+  function compteur(){
+    var n = $('texte').value.length, c = $('cpt');
+    c.textContent = n + ' / ' + lim.texte_max; c.className = 'cpt' + (n > lim.texte_max ? ' trop' : '');
+    $('b-dire').disabled = n === 0 || n > lim.texte_max;
+  }
+
+  function sonde(){
+    api('/etat', {headers:{'Accept':'application/json'}}).then(function(r){
+      if (!r.ok){ note(dire_erreur(r)); return null; }
+      return r.json();
+    }).then(function(d){
+      if (!d) return;
+      if (d.limites){ lim.texte_max = d.limites.texte_max || lim.texte_max; lim.audio_max_mo = d.limites.audio_max_mo || lim.audio_max_mo; compteur(); }
+      if (d.demarrage){ pastille('dort', 'démarre'); note('Le moteur démarre… quelques secondes.'); }
+      else if (d.reveil_necessaire && d.disponible){ pastille('dort', 'dort'); note('Le moteur dort : le premier appel prend 30 à 60 s.'); }
+      else if (d.disponible){ pastille('ok', 'répond'); note('Traité sur votre box : rien ne part dans le nuage.'); }
+      else { pastille('ko', 'indisponible'); note('Le moteur est indisponible pour le moment.'); }
+    }).catch(function(){ pastille('ko', 'injoignable'); note('Le service de voix ne répond pas.'); });
+  }
+
+  function dire(){
+    var t = $('texte').value.trim(); if (!t) return;
+    $('b-dire').disabled = true; note('Synthèse…');
+    api('/dire', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({texte:t, format:'mp3'})})
+      .then(function(r){
+        if (!r.ok){ note(dire_erreur(r)); return null; }
+        return r.blob();
+      }).then(function(b){
+        if (!b) return;
+        var a = $('audio'); if (a.dataset.url) URL.revokeObjectURL(a.dataset.url);
+        a.dataset.url = URL.createObjectURL(b); a.src = a.dataset.url; a.hidden = false;
+        a.play().catch(function(){}); note('Traité sur votre box : rien ne part dans le nuage.');
+      }).catch(function(){ note('Synthèse impossible.'); })
+      .then(compteur);
+  }
+
+  function envoie(blob, nom){
+    if (blob.size > lim.audio_max_mo * 1048576){ note('Audio trop volumineux (max ' + lim.audio_max_mo + ' Mo).'); return; }
+    var fd = new FormData(); fd.append('fichier', blob, nom); fd.append('langue', 'fr');
+    note('Transcription…');
+    api('/transcrire', {method:'POST', body: fd}).then(function(r){
+      if (!r.ok){ note(dire_erreur(r)); return null; }
+      return r.json();
+    }).then(function(d){
+      if (!d) return;
+      var z = $('res'); z.hidden = false; z.textContent = d.vide ? '(aucune parole détectée)' : d.texte;
+      note('Traité sur votre box : rien ne part dans le nuage.');
+    }).catch(function(){ note('Transcription impossible.'); });
+  }
+
+  function micro(){
+    var b = $('b-mic');
+    if (rec){ rec.stop(); return; }
+    if (!navigator.mediaDevices || !window.MediaRecorder){ note("Enregistrement indisponible ici (HTTPS requis)."); return; }
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(flux){
+      morceaux = []; rec = new MediaRecorder(flux);
+      rec.ondataavailable = function(e){ if (e.data.size) morceaux.push(e.data); };
+      rec.onstop = function(){
+        flux.getTracks().forEach(function(t){ t.stop(); });
+        var type = rec.mimeType || 'audio/webm'; rec = null;
+        b.classList.remove('enreg'); b.textContent = '🎤 Dicter';
+        envoie(new Blob(morceaux, {type:type}), 'dictee.' + (type.indexOf('ogg') >= 0 ? 'ogg' : 'webm'));
+      };
+      rec.start(); b.classList.add('enreg'); b.textContent = '⏹ Arrêter';
+    }).catch(function(){ note('Micro refusé ou indisponible.'); });
+  }
+
+  $('texte').addEventListener('input', compteur);
+  $('b-dire').addEventListener('click', dire);
+  $('b-mic').addEventListener('click', micro);
+  compteur(); sonde(); setInterval(sonde, 30000);
+})();
+</script>
