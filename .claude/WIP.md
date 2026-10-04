@@ -44,7 +44,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-0b. **#1962** secubox-webfilter : **P1 et P2 livrées et déployées** (0.2.0, gk2). Reste : **essai réel de blocage sur un appareil** (accord du propriétaire pour 3 à 4 coupures DNS de 10 s ; renseigner `[reseau] lan` dans `/etc/secubox/webfilter.toml`), puis P3 (apprentissage, parking), P4 (association DPI). Mineurs différés dans le registre de relecture. **#1973** DPI : étiquetage des destinations vues par IP seule. **#1974** export des compteurs du toolbox vers ad-guard. **#1938** : paquetage fait (`secubox-dns-lan` 0.1.0, déployé) ; reste le réglage Freebox (DNS IPv6), le certificat de gk3 et la plage DHCP. Règles RTL9 à l'essai jusqu'au 2026-10-05 matin.
+0b. **#1962** secubox-webfilter : **P1 et P2 livrées et déployées** (0.2.1, gk2 ; essai réel de blocage fait et validé). Reste P3 (apprentissage, parking), P4 (association DPI). Mineurs différés dans le registre de relecture. **#1973** DPI : étiquetage des destinations vues par IP seule. **#1974** export des compteurs du toolbox vers ad-guard. **#1938** : paquetage fait (`secubox-dns-lan` 0.1.0, déployé) ; reste le réglage Freebox (DNS IPv6), le certificat de gk3 et la plage DHCP. Règles RTL9 à l'essai jusqu'au 2026-10-05 matin.
 1. **#1748** audit des autres fusions suspectes (nextcloud c43ffe9b0, metrics/core 7ebe27403, toolbox,
    nac discovery) : lignes de master retirées toujours absentes, à examiner une à une.
 2. **#1903** sauvegardes chiffrées par défaut ; **#1904** un groupe par secret (issus de l'évaluation #1851).
