@@ -41,6 +41,8 @@ def _page(navigateur, appels, etat):
             r = {"requetes": 10, "domaines_uniques": 4, "classes_resolus": {"tracking": 2}, "classes_bloques": {"advertising": 3},
                  "par_decision": {"BLOCKED": 3, "ALLOWED": 7},
                  "top_bloques": [{"domaine": "<img src=x onerror=window.__pwn=1>.example", "categorie": "advertising", "hits": 3}]}
+        elif chemin.endswith("/refus"):
+            r = etat.get("refus", {})
         elif chemin == "/adblock-tv/auto/detection":
             r = etat.get("detection", {})
         elif chemin == "/adblock-tv/auto/profil":
@@ -402,4 +404,63 @@ def test_panneau_detection_actions_avec_confirmation(navigateur):
     p.locator("#det-appareils tr", has_text="TV fb5b").locator("button.det-ignorer").click()
     p.wait_for_timeout(300)
     assert ("/adblock-tv/auto/appareils/TV%20fb5b/ignorer", None) in posts()
+    ctx.close()
+
+
+# ── autorisations par appareil (#1965) ─────────────────────────────────────────────────────────────────────────────────────────
+def _autorisations(**kw):
+    d = _detection()
+    d["detection"]["appareils"][0]["autorisations"] = ["deja.example.com"]
+    d["refus"] = {"nom": "TV banc", "minutes": 60, "refus": [
+        {"domaine": "licensing.bitmovin.com", "requetes": 8, "categorie": "advertising", "autorise": False},
+        {"domaine": "deja.example.com", "requetes": 2, "categorie": "", "autorise": True},
+        {"domaine": "imasdk.googleapis.com", "requetes": 4, "categorie": "", "autorise": False}]}
+    d.update(kw)
+    return d
+
+
+def test_autorisations_refus_recents_et_actions_avec_confirmation(navigateur):
+    appels = []
+    ctx, p, erreurs = _page_detection(navigateur, appels, _autorisations())
+    p.wait_for_selector("#det-appareils tr")
+    ligne = p.locator("#det-appareils tr", has_text="TV banc").first
+    ligne.locator("button.det-autorisations").click()
+    p.wait_for_selector("#det-appareils .det-detail")
+    t = p.inner_text("#det-appareils .det-detail")
+    assert "licensing.bitmovin.com" in t and "8" in t and "imasdk.googleapis.com" in t and "deja.example.com" in t
+    posts = lambda: [(c, b) for (m, c, b) in appels if m == "POST"]          # noqa: E731
+    p.once("dialog", lambda d: d.dismiss())
+    p.locator(".det-detail tr", has_text="licensing.bitmovin.com").locator("button.det-autoriser").click()
+    p.wait_for_timeout(300)
+    assert not [x for x in posts() if x[0].endswith("/autoriser")]            # refus de la confirmation : rien n'est envoyé
+    p.once("dialog", lambda d: d.accept())
+    p.locator(".det-detail tr", has_text="licensing.bitmovin.com").locator("button.det-autoriser").click()
+    p.wait_for_timeout(300)
+    assert ("/adblock-tv/auto/appareils/TV%20banc/autoriser", {"domaine": "licensing.bitmovin.com", "actif": True}) in posts()
+    p.locator("#det-appareils tr", has_text="TV banc").first.locator("button.det-autorisations").click()
+    p.wait_for_selector("#det-appareils .det-detail")
+    p.once("dialog", lambda d: d.accept())
+    p.locator(".det-detail tr", has_text="deja.example.com").locator("button.det-retirer-autorisation").click()
+    p.wait_for_timeout(300)
+    assert ("/adblock-tv/auto/appareils/TV%20banc/autoriser", {"domaine": "deja.example.com", "actif": False}) in posts()
+    ctx.close()
+
+
+def test_autorisations_texte_piege_inoffensif_et_api_en_erreur(navigateur):
+    piege = "<img src=x onerror=window.__pwn=1>"
+    d = _autorisations()
+    d["refus"]["refus"] = [{"domaine": piege, "requetes": 1, "categorie": piege, "autorise": False}]
+    d["detection"]["appareils"][0]["autorisations"] = [piege]
+    ctx, p, erreurs = _page_detection(navigateur, [], d)
+    p.wait_for_selector("#det-appareils tr")
+    p.locator("#det-appareils tr", has_text="TV banc").first.locator("button.det-autorisations").click()
+    p.wait_for_selector("#det-appareils .det-detail")
+    assert piege in p.inner_text("#det-appareils .det-detail") and p.evaluate("window.__pwn === undefined")
+    assert p.evaluate("document.querySelectorAll('#det-appareils img').length") == 0 and not erreurs
+    ctx.close()
+    ctx, p, erreurs = _page_detection(navigateur, [], dict(_autorisations(), refus={}))
+    p.wait_for_selector("#det-appareils tr")
+    p.locator("#det-appareils tr", has_text="TV banc").first.locator("button.det-autorisations").click()
+    p.wait_for_selector("#det-appareils .det-detail")
+    assert "aucun refus" in p.inner_text("#det-appareils .det-detail").lower() and not erreurs                  # réponse vide : message, pas d'exception
     ctx.close()

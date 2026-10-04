@@ -1,3 +1,18 @@
+secubox-ad-guard (1.6.2-1~bookworm1) bookworm; urgency=medium
+
+  * Autorisations par appareil (ref #1965) : exceptions au puits complet. Cas réel du 2026-10-04 : le replay RMC restait sur une roue, sans vidéo ni pub, parce que le puits refusait
+    `licensing.bitmovin.com` (vérification de licence du lecteur Bitmovin) ; une bissection avec le propriétaire a montré que cette seule exception suffit. Une zone « transparent » dans la
+    vue `view-first` ne suffit PAS (Unbound retombe sur les zones globales quand la vue ne répond pas) ; `local-zone-override <zone> <adresse> transparent` fonctionne, y compris dans
+    une vue `view-first` (mesuré sur Unbound 1.17.1 de gk2, test sur Unbound réel).
+  * État : `autorisations` {identifiant de l'appareil -> domaines} (50 par appareil, 500 au total, tout revalidé ; absent s'il est vide). Rendu : un `local-zone-override` par adresse de
+    l'appareil, dans la clause `server`, seulement pour un appareil en mode auto avec puits ; une autorisation l'emporte sur une règle de blocage du même nom. Changement d'autorisation :
+    rechargement d'Unbound (non applicable à chaud), audité (`autorisation + appareil domaine`).
+  * Routes : `POST /adblock-tv/auto/appareils/{nom}/autoriser` (domaine, actif ; retour arrière si le contrôleur échoue) et `GET /adblock-tv/auto/appareils/{nom}/refus?minutes=` (noms refusés
+    récemment, pour savoir quoi autoriser). Panneau : bouton « Autorisations » par appareil (refus de la dernière heure avec « Autoriser » et confirmation, autorisations en place avec « Retirer »).
+    NOTE DE DÉPLOIEMENT : redémarrer `secubox-aggregator`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 14:00:00 +0200
+
 secubox-ad-guard (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Partie standard du panneau (ref #1963) : plus de zéros trompeurs. Causes relevées sur gk2 : (1) `/var/lib/secubox/toolbox` est passé en `secubox-toolbox:secubox-toolbox` 0750 et `toolbox.db`

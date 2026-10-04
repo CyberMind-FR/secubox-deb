@@ -162,6 +162,35 @@ def _ip(valeur: str) -> str:
         raise ErreurTV("adresse IP invalide") from None
 
 
+AUTORISATIONS_PAR_APPAREIL = 50
+AUTORISATIONS_MAX = 500
+
+
+def _valider_autorisations(brut) -> Dict[str, List[str]]:
+    """Exceptions au puits, par appareil (identifiant de vue -> domaines) : `local-zone-override` pour chaque adresse de l'appareil. Tout est revalidé ici (#1965)."""
+    if not isinstance(brut, dict) or len(brut) > 32:
+        raise ErreurTV("autorisations : table d'appareils de 32 entrées au plus attendue")
+    out: Dict[str, List[str]] = {}
+    total = 0
+    for k, v in brut.items():
+        if not isinstance(k, str) or not k or _slug(k) != k:
+            raise ErreurTV("autorisations : identifiant d'appareil invalide")
+        if not isinstance(v, list) or len(v) > AUTORISATIONS_PAR_APPAREIL:
+            raise ErreurTV(f"autorisations : {AUTORISATIONS_PAR_APPAREIL} domaines au plus par appareil")
+        doms: List[str] = []
+        for d in v:
+            if not isinstance(d, str) or valider_domaine(d) != d:
+                raise ErreurTV("autorisations : nom de domaine invalide")
+            if d not in doms:
+                doms.append(d)
+        total += len(doms)
+        if total > AUTORISATIONS_MAX:
+            raise ErreurTV(f"autorisations : {AUTORISATIONS_MAX} domaines au plus au total")
+        if doms:
+            out[k] = sorted(doms)
+    return out
+
+
 def valider_etat(brut) -> dict:
     """État du POC validé en profondeur. Le contrôleur root ne se fie à RIEN d'autre que ce qui passe ici."""
     if not isinstance(brut, dict):
@@ -242,8 +271,12 @@ def valider_etat(brut) -> dict:
             raise ErreurTV("ignores : adresse MAC invalide")
         if m not in ignores:
             ignores.append(m)
-    return {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai,
-            "mode_defaut": mode_defaut, "ajout_auto": ajout_auto, "ignores": ignores}
+    etat_valide = {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai,
+                   "mode_defaut": mode_defaut, "ajout_auto": ajout_auto, "ignores": ignores}
+    aut = _valider_autorisations(brut.get("autorisations", {}))
+    if aut:                                                       # écrit seulement s'il y en a : les anciens états gardent exactement leur format
+        etat_valide["autorisations"] = aut
+    return etat_valide
 
 
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
@@ -291,6 +324,15 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
             hote = "/128" if ":" in c["ip"] else "/32"
             vue = f"sbx-tv-auto-{_slug(c['nom'])}" if c["mode"] == "auto" else f"sbx-tv-{c['mode']}"
             L.append(f"    access-control-view: {c['ip']}{hote} {vue}")
+        # Autorisations (#1965) : un appareil en mode auto avec puits voit le puits global ; `local-zone-override` l'exempte d'un nom, SANS toucher aux autres clients
+        # (mesuré sur Unbound 1.17.1 : fonctionne même dans une vue view-first, ce qu'une zone « transparent » de la vue ne fait pas).
+        for c in suivis:
+            if c["mode"] == "auto" and c.get("puits", True):
+                hote = "/128" if ":" in c["ip"] else "/32"
+                for d in etat.get("autorisations", {}).get(_slug(c["nom"]), []):
+                    if valider_domaine(d) != d:
+                        raise ErreurTV("domaine d'autorisation invalide")
+                    L.append(f'    local-zone-override: "{d}." {c["ip"]}{hote} transparent')
         # NB : les tampons de vue sont déclarés APRÈS « server: ».
         L.append("view:")
         L.append('    name: "sbx-tv-observe"')
@@ -307,9 +349,12 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
             puits = all(c.get("puits", True) for c in suivis if c["mode"] == "auto" and _slug(c["nom"]) == nom)
             if puits:
                 L.append("    view-first: yes")                  # le puits de production s'applique ET les règles de la vue s'y ajoutent (mesuré, Unbound 1.17.1)
+            exemptes = set(etat.get("autorisations", {}).get(nom, []))
             for d in sorted(set((regles_actives or {}).get(nom, []))):
                 if valider_domaine(d) != d:
                     raise ErreurTV("domaine de règle invalide")
+                if d in exemptes:
+                    continue                                       # l'autorisation de l'administrateur l'emporte sur une règle de blocage du même nom
                 L.append(f'    local-zone: "{d}." always_nxdomain')
             if not puits:
                 L.append('    local-zone: "." transparent')           # puits=faux : l'ancien comportement (appareil hors du puits de production)
