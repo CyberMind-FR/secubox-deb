@@ -10,11 +10,12 @@ from typing import Iterable
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS wf_counts (
-  jour TEXT NOT NULL, client TEXT NOT NULL, categorie TEXT NOT NULL, domaine TEXT NOT NULL, n INTEGER NOT NULL,
-  PRIMARY KEY (jour, client, categorie, domaine));
+  jour TEXT NOT NULL, client TEXT NOT NULL, categorie TEXT NOT NULL, domaine TEXT NOT NULL, decision TEXT NOT NULL DEFAULT 'observe', n INTEGER NOT NULL,
+  PRIMARY KEY (jour, client, categorie, domaine, decision));
 CREATE INDEX IF NOT EXISTS wf_counts_jour ON wf_counts (jour);
 CREATE TABLE IF NOT EXISTS wf_meta (cle TEXT PRIMARY KEY, valeur INTEGER NOT NULL);
 """
+DECISIONS = ("observe", "bloque")                      # « aurait bloqué » ou « bloqué »
 MAX_LIGNES = 500_000                                   # plafond de clés (jour, appareil, catégorie, entrée) : la base ne peut pas remplir le disque
 
 
@@ -29,6 +30,13 @@ class Magasin:
         self._averti = False
         self.chemin.parent.mkdir(parents=True, exist_ok=True)
         with self._cx() as cx:
+            colonnes = [r[1] for r in cx.execute("PRAGMA table_info(wf_counts)")]
+            if colonnes and "decision" not in colonnes:                 # base de la phase 1 : les lignes existantes restent « observe »
+                cx.executescript("""ALTER TABLE wf_counts RENAME TO wf_counts_p1;
+                    CREATE TABLE wf_counts (jour TEXT NOT NULL, client TEXT NOT NULL, categorie TEXT NOT NULL, domaine TEXT NOT NULL,
+                      decision TEXT NOT NULL DEFAULT 'observe', n INTEGER NOT NULL, PRIMARY KEY (jour, client, categorie, domaine, decision));
+                    INSERT INTO wf_counts (jour, client, categorie, domaine, decision, n) SELECT jour, client, categorie, domaine, 'observe', n FROM wf_counts_p1;
+                    DROP TABLE wf_counts_p1;""")
             cx.executescript(SCHEMA)
         os.chmod(self.chemin, 0o640)
 
@@ -49,11 +57,13 @@ class Magasin:
         n, dernier = 0, 0
         with self._cx() as cx:
             lignes = cx.execute("SELECT COUNT(*) FROM wf_counts").fetchone()[0]
-            for e, cat in lot:
+            for item in lot:
+                e, cat = item[0], item[1]
+                dec = item[2] if len(item) > 2 and item[2] in DECISIONS else "observe"
                 if e.client in exclus:
                     continue
-                cle = (_jour(e.ts), e.client, cat, e.qname)
-                existe = cx.execute("SELECT 1 FROM wf_counts WHERE jour=? AND client=? AND categorie=? AND domaine=?", cle).fetchone()
+                cle = (_jour(e.ts), e.client, cat, e.qname, dec)
+                existe = cx.execute("SELECT 1 FROM wf_counts WHERE jour=? AND client=? AND categorie=? AND domaine=? AND decision=?", cle).fetchone()
                 if not existe:
                     if lignes >= self.max_lignes:
                         if not self._averti:
@@ -61,8 +71,8 @@ class Magasin:
                             self._averti = True
                         continue
                     lignes += 1
-                cx.execute("INSERT INTO wf_counts (jour, client, categorie, domaine, n) VALUES (?, ?, ?, ?, 1) "
-                           "ON CONFLICT (jour, client, categorie, domaine) DO UPDATE SET n = n + 1", cle)
+                cx.execute("INSERT INTO wf_counts (jour, client, categorie, domaine, decision, n) VALUES (?, ?, ?, ?, ?, 1) "
+                           "ON CONFLICT (jour, client, categorie, domaine, decision) DO UPDATE SET n = n + 1", cle)
                 n += 1
                 dernier = max(dernier, e.ts)
             if dernier:
@@ -86,6 +96,21 @@ class Magasin:
             for cl, cat, s in cx.execute(
                     "SELECT client, categorie, SUM(n) FROM wf_counts WHERE jour >= ? GROUP BY client, categorie", (depuis_jour,)):
                 sortie.setdefault(cl, {})[cat] = int(s)
+        return sortie
+
+    def par_categorie_decision(self, depuis_jour: str) -> dict:
+        sortie: dict = {}
+        with self._cx() as cx:
+            for cat, dec, s in cx.execute("SELECT categorie, decision, SUM(n) FROM wf_counts WHERE jour >= ? GROUP BY categorie, decision", (depuis_jour,)):
+                sortie.setdefault(cat, {})[dec] = int(s)
+        return sortie
+
+    def par_client_decision(self, depuis_jour: str) -> dict:
+        sortie: dict = {}
+        with self._cx() as cx:
+            for cl, cat, dec, s in cx.execute(
+                    "SELECT client, categorie, decision, SUM(n) FROM wf_counts WHERE jour >= ? GROUP BY client, categorie, decision", (depuis_jour,)):
+                sortie.setdefault(cl, {}).setdefault(cat, {})[dec] = int(s)
         return sortie
 
     def top_domaines(self, categorie: str, depuis_jour: str, n: int = 50) -> list:
