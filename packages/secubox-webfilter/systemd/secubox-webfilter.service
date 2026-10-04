@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox WebFilter — API d'observation du filtrage de contenus (#1962)
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-webfilter
+Group=secubox
+# /run/secubox est PARTAGE et colle (1777) : on n'y délie que ce qu'on possède. Le préfixe `+` exécute en root malgré User=.
+ExecStartPre=+/bin/rm -f /run/secubox/webfilter.sock
+ExecStart=/usr/sbin/secubox-webfilter-api
+Restart=on-failure
+RestartSec=5
+# RuntimeDirectory NON déclaré : /run/secubox est partagé par ~95 unités (#1022).
+UMask=0002
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# Aucun accès réseau sortant : l'API ne télécharge rien (elle dépose une demande de synchronisation).
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/run/secubox /var/lib/secubox/webfilter
+ReadOnlyPaths=/etc/secubox
+
+[Install]
+WantedBy=multi-user.target

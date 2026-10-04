@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Catalogue de secubox-webfilter : catégories et sources de listes publiques (#1962).
+# AUCUNE liste n'est livrée avec le paquet : elles sont téléchargées par `secubox-webfilter-sync` (https seulement, taille plafonnée).
+# Chaque licence est affichée dans le panneau. Phase 1 : seul le mode « observe » existe (rien n'est bloqué).
+
+[[categorie]]
+id = "adulte"
+libelle = "Contenu adulte"
+mode = "observe"
+  [[categorie.source]]
+  nom = "hagezi-nsfw"
+  url = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/nsfw-onlydomains.txt"
+  format = "domaines"
+  licence = "GPL-3.0"
+  taille_max = 5000000
+
+[[categorie]]
+id = "jeux"
+libelle = "Jeux d'argent"
+mode = "observe"
+  [[categorie.source]]
+  nom = "hagezi-gambling-medium"
+  url = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling.medium-onlydomains.txt"
+  format = "domaines"
+  licence = "GPL-3.0"
+  taille_max = 12000000
+
+[[categorie]]
+id = "phishing"
+libelle = "Phishing et malware"
+mode = "observe"
+  [[categorie.source]]
+  nom = "blp-phishing"
+  url = "https://blocklistproject.github.io/Lists/phishing.txt"
+  format = "hosts"
+  licence = "MIT"
+  taille_max = 15000000
+  [[categorie.source]]
+  nom = "urlhaus"
+  url = "https://urlhaus.abuse.ch/downloads/hostfile/"
+  format = "hosts"
+  licence = "conditions abuse.ch"
+  taille_max = 1000000

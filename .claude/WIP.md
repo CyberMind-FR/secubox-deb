@@ -44,7 +44,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-0b. **#1962** secubox-webfilter : spec validée (défaut « observe », §7 à mettre à jour) ; reste le plan, puis l'essai technique d'Unbound (précédence des étiquettes, vues d'ad-guard, type de zone `inform`, mémoire) sur un Unbound jetable, puis P1. **#1973** DPI : étiquetage des destinations vues par IP seule. **#1974** export des compteurs du toolbox vers ad-guard. **#1938** : paquetage fait (`secubox-dns-lan` 0.1.0, déployé) ; reste le réglage Freebox (DNS IPv6), le certificat de gk3 et la plage DHCP. Règles RTL9 à l'essai jusqu'au 2026-10-05 matin.
+0b. **#1962** secubox-webfilter : **P1 « observe » livrée et déployée** (0.1.0, gk2) ; reste P2 (profils, appareils par MAC, exceptions, blocage par vue d'ad-guard, option B), P3 (apprentissage, parking), P4 (association DPI). Mineurs de la relecture différés (registre). À valider par le propriétaire : défaut « observe », les listes (UT1 à confirmer), l'absence d'AppArmor sur gk2. **#1973** DPI : étiquetage des destinations vues par IP seule. **#1974** export des compteurs du toolbox vers ad-guard. **#1938** : paquetage fait (`secubox-dns-lan` 0.1.0, déployé) ; reste le réglage Freebox (DNS IPv6), le certificat de gk3 et la plage DHCP. Règles RTL9 à l'essai jusqu'au 2026-10-05 matin.
 1. **#1748** audit des autres fusions suspectes (nextcloud c43ffe9b0, metrics/core 7ebe27403, toolbox,
    nac discovery) : lignes de master retirées toujours absentes, à examiner une à une.
 2. **#1903** sauvegardes chiffrées par défaut ; **#1904** un groupe par secret (issus de l'évaluation #1851).

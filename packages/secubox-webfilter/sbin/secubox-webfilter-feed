@@ -1,0 +1,53 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-webfilter-feed — classe les requêtes DNS par catégorie depuis le journal d'Unbound (mode observe) (#1962).
+
+  secubox-webfilter-feed            suit le journal d'Unbound (service systemd)
+  secubox-webfilter-feed --stdin    lit des lignes sur l'entrée standard, puis s'arrête (essais)
+Rien n'est bloqué ni écrit dans Unbound : un nom de domaine, une adresse, un compteur.
+"""
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+for _p in ("/usr/lib/secubox/webfilter", str(Path(__file__).resolve().parents[1])):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+from webfilter import catalogue, feed, magasin  # noqa: E402
+
+RETENTION_JOURS = 30
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="secubox-webfilter-feed")
+    ap.add_argument("--stdin", action="store_true")
+    ap.add_argument("--catalogue", default="/etc/secubox/webfilter.toml")
+    ap.add_argument("--etat", default="/var/lib/secubox/webfilter")
+    ap.add_argument("--sans-adresses-locales", action="store_true", help="essais : n'exclut aucune adresse")
+    a = ap.parse_args()
+    try:
+        cats = catalogue.charger(a.catalogue)
+    except catalogue.ErreurCatalogue as e:
+        print(f"secubox-webfilter : {e}", file=sys.stderr)
+        return 2
+    mag = magasin.Magasin(Path(a.etat) / "webfilter.db")
+    exclus = (lambda: set()) if a.sans_adresses_locales else feed.adresses_locales
+    indexes = lambda: feed.charger_indexes(Path(a.etat) / "listes", cats)  # noqa: E731
+    if a.stdin:
+        feed.suivre(sys.stdin, mag, indexes, exclus, retention_jours=RETENTION_JOURS)
+        return 0
+    p = subprocess.Popen(["/usr/bin/journalctl", "-u", "unbound", "-f", "-n", "0", "-o", "short-unix"], stdout=subprocess.PIPE, text=True,
+                         errors="replace")
+    try:
+        feed.suivre(p.stdout, mag, indexes, exclus, retention_jours=RETENTION_JOURS)
+    finally:
+        p.terminate()
+    return 1                                                      # le journal s'est fermé : systemd relance
+
+
+if __name__ == "__main__":
+    sys.exit(main())

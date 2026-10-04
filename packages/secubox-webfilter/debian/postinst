@@ -1,0 +1,43 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+  configure)
+    # --- Compte de service dédié (séparation de privilèges CSPN) ---
+    if ! getent passwd secubox-webfilter >/dev/null; then
+      adduser --system --group --no-create-home --home /var/lib/secubox/webfilter --shell /usr/sbin/nologin secubox-webfilter >/dev/null
+    fi
+    adduser secubox-webfilter secubox >/dev/null 2>&1 || true
+    # Le groupe systemd-journal n'est accordé qu'au démon d'alimentation (SupplementaryGroups de son unité), jamais au compte entier :
+    # sinon l'API et la synchronisation liraient tout le journal. Retiré aussi des installations faites avant ce correctif.
+    deluser secubox-webfilter systemd-journal >/dev/null 2>&1 || true
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-webfilter.conf >/dev/null 2>&1 || true
+
+    # --- Confinement AppArmor (enforce) : un échec de chargement ne bloque pas l'installation, il est affiché ---
+    if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+      apparmor_parser -r /etc/apparmor.d/secubox-webfilter >/dev/null 2>&1 \
+        || echo "secubox-webfilter : profil AppArmor non chargé (le service tourne sous le seul bac à sable systemd)" >&2
+    fi
+
+    # --- Route nginx du module (la configuration est contrôlée avant tout rechargement) ---
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+
+    systemctl daemon-reload || true
+    # Une mise à jour ne doit pas laisser un service arrêté (dpkg le termine) : on active, puis on relance seulement ce qui tourne.
+    systemctl enable --now secubox-webfilter.service secubox-webfilter-feed.service secubox-webfilter-sync.path \
+      secubox-webfilter-sync.timer >/dev/null 2>&1 || true
+    systemctl try-restart secubox-webfilter.service secubox-webfilter-feed.service >/dev/null 2>&1 || true
+    # Première synchronisation des listes, en arrière-plan : une demande suffit, l'unité .path s'en charge.
+    if [ ! -e /var/lib/secubox/webfilter/listes/adulte ]; then
+      runuser -u secubox-webfilter -- /usr/bin/touch /var/lib/secubox/webfilter/sync.demande >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

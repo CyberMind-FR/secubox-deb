@@ -1,0 +1,23 @@
+Source: secubox-webfilter
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/gkerma/secubox-deb
+
+Package: secubox-webfilter
+Architecture: all
+Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core (>= 1.4.0),
+ python3-fastapi | python3-pip,
+ python3-uvicorn | python3-pip,
+ systemd, adduser, iproute2
+Recommends: unbound, apparmor
+Description: SecuBox WebFilter : filtrage de contenus par catégories (phase 1, observe)
+ Classe les requêtes DNS de chaque appareil par catégorie (contenu adulte, jeux d'argent,
+ phishing et malware) à partir du journal d'Unbound et des listes publiques, et montre ce
+ que le filtrage AURAIT bloqué. Mode « observe » : rien n'est bloqué et aucune zone n'est
+ écrite dans Unbound. Les listes sont téléchargées à l'exécution (https, taille plafonnée),
+ jamais livrées dans le paquet ; les compteurs sont conservés 30 jours, réservés à
+ l'administrateur.

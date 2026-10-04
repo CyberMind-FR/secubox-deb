@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+name: secubox-webfilter
+category: wall
+tier: lite
+description: "SecuBox WebFilter — filtrage de contenus par catégories (phase 1 : observe)"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/webfilter.sock
+  health: /api/v1/webfilter/health
+
+ui:
+  path: /srv/secubox/www/webfilter

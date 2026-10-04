@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox WebFilter — classement des requêtes DNS depuis le journal d'Unbound (mode observe, #1962)
+After=unbound.service
+# Pas de Wants=unbound : un module d'observation ne doit jamais démarrer le DNS.
+
+[Service]
+Type=simple
+User=secubox-webfilter
+Group=secubox
+# `journalctl -u unbound` est lisible par le groupe systemd-journal, sans privilège.
+SupplementaryGroups=systemd-journal
+ExecStart=/usr/sbin/secubox-webfilter-feed
+Restart=on-failure
+RestartSec=10
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# AF_NETLINK : `ip -j addr` (adresses de la box, exclues du comptage). Aucun réseau sortant.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+ReadWritePaths=/var/lib/secubox/webfilter
+ReadOnlyPaths=/etc/secubox
+
+[Install]
+WantedBy=multi-user.target
