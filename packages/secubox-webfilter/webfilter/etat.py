@@ -21,7 +21,7 @@ def lire_json(chemin, maxi: int = MAX_JSON):
         if len(brut) > maxi:
             return None
         return json.loads(brut.decode("utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):                       # un JSON très imbriqué n'est pas une exception brute
         return None
 
 

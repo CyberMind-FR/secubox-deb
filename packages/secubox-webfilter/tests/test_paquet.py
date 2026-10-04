@@ -82,11 +82,15 @@ def test_service_du_controleur_est_root_deplenche_par_fichier_et_bac_a_sable():
     u = lire("systemd/secubox-webfilter-apply.service")
     assert not re.search(r"^User=", u, re.M) and "Type=oneshot" in u                       # root : écrit dans /etc/unbound
     assert "ExecStart=/usr/sbin/secubox-webfilter-ctl apply" in u
-    assert "ExecStopPost=/bin/rm -f /var/lib/secubox/webfilter/appliquer.demande" in u
+    assert "ExecStopPost" not in u                                                           # la demande est consommée PAR LE CONTRÔLEUR, au début
+    assert re.search(r"^StartLimitIntervalSec=\d+", u, re.M) and re.search(r"^StartLimitBurst=\d+", u, re.M)
+    for d in ("CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE", "ProtectKernelTunables=true", "RestrictSUIDSGID=true", "ProtectKernelLogs=true"):
+        assert d in u, d
+    assert re.search(r"^MemoryMax=\d+[MG]$", u, re.M)
     assert "NoNewPrivileges=true" in u and "ProtectSystem=strict" in u and "PrivateTmp=true" in u
     assert "Wants=unbound" not in u and "Requires=unbound" not in u
-    rw = re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()
-    assert set(rw) == {"/etc/unbound/unbound.conf.d", "/var/lib/secubox/webfilter", "/var/lib/secubox-webfilter-ctl", "/var/log/secubox"}
+    rw = [x.lstrip("-") for x in re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()]
+    assert set(rw) == {"/etc/unbound/unbound.conf.d", "/var/lib/secubox/webfilter", "/var/lib/secubox-webfilter-ctl", "/var/log/secubox/audit.log"}
     assert "AF_INET" in u and "IPAddressDeny=any" in u and "IPAddressAllow=localhost" in u        # unbound-control : boucle locale seulement
 
 
@@ -139,3 +143,28 @@ def test_le_readme_decrit_la_phase_2():
     r = lire("README.md")
     for mot in ("profils", "appliquer.demande", "93-secubox-webfilter.conf", "04:00", "ad-guard"):
         assert mot in r, mot
+
+
+def test_exception_root_ecrite_dans_les_regles():
+    r = (RACINE.parents[1] / ".claude" / "RULES-CODE.md").read_text(encoding="utf-8")
+    assert "secubox-webfilter-apply.service" in r and "test_paquet.py" in r
+
+
+def test_retrait_du_paquet_retire_le_blocage_et_purge_l_etat_racine():
+    pre, post = lire("debian/prerm"), lire("debian/postrm")
+    assert "secubox-webfilter-apply.service" in pre                                          # l'application en cours est arrêtée
+    assert "rm -f /etc/unbound/unbound.conf.d/93-secubox-webfilter.conf" in pre and "unbound-checkconf" in pre and "unbound-control reload" in pre
+    assert re.search(r"remove\)", pre) and "upgrade" not in pre.split("remove)")[0].split("case")[-1]       # jamais lors d'une simple mise à jour
+    assert "rm -rf /var/lib/secubox-webfilter-ctl" in post
+
+
+def test_textes_a_jour_phase_2():
+    c = lire("debian/control")
+    assert "aucune zone" not in c.lower() and "phase 1" not in c.lower() and "profils" in c.lower()
+    r = lire("README.md")
+    assert "Phase 1 : observe seulement" not in r
+    assert "surestimation" in r.lower() or "surévalu" in r.lower()                           # limite du comptage « bloqué », dite
+
+
+def test_unite_de_l_api_inchangee_sans_capacites_elargies():
+    assert "CapabilityBoundingSet" not in lire("systemd/secubox-webfilter.service") or "CAP_" not in lire("systemd/secubox-webfilter.service")

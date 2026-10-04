@@ -307,6 +307,8 @@
             else if (nom === 'appliquer') chargerAppliquer();
         }
 
+        function modesEffectifs(prof, nom, exceptions) { return Object.assign({}, ((prof || {})[nom] || {}).categories || {}, exceptions || {}); }
+        function nouveauxBlocages(avant, apres) { return Object.keys(apres).filter(c => apres[c] === 'block' && avant[c] !== 'block').sort(); }
         function enregistrerOk(msg) { toast(msg + ' — à appliquer (onglet Appliquer).'); }
         function echec(r, defaut) { errorToast(defaut + ' : ' + ((r.data && r.data.detail) || r.status)); }
 
@@ -388,15 +390,25 @@
             if (!ra.ok || !rp.ok) { echec(ra.ok ? rp : ra, 'Appareils indisponibles'); return; }
             const noms = Object.keys(rp.data.profils || {});
             const cats = Object.keys(((rp.data.profils || {}).defaut || {}).categories || {}).sort();
-            for (const a of ra.data.assignes || []) zA.append(ligneAppareil(a, noms, cats));
-            for (const c of ra.data.connus || []) zC.append(ligneConnu(c, noms));
+            const prof = rp.data.profils || {};
+            for (const a of ra.data.assignes || []) zA.append(ligneAppareil(a, noms, cats, prof));
+            for (const c of ra.data.connus || []) zC.append(ligneConnu(c, noms, prof));
             if (!(ra.data.assignes || []).length) zA.append(el('div', 'note', 'Aucun appareil assigné : tous suivent le profil « defaut ».'));
         }
 
-        function ligneAppareil(a, noms, cats) {
+        function ligneAppareil(a, noms, cats, prof) {
             const ligne = el('div', 'rangee'); ligne.dataset.mac = a.mac;
             ligne.append(el('span', 'nom', a.nom || a.mac), el('span', 'meta', a.mac), el('span', 'meta', (a.adresses || []).join(', ') || 'adresse inconnue'));
-            if (a.exclu) { ligne.append(el('span', 'exclu', '⚠️ gérée par ad-guard : filtrage propre, non assignable ici')); return ligne; }
+            const geree = a.exclu === 'geree par ad-guard';
+            if (a.exclu) ligne.append(el('span', 'exclu', geree ? '⚠️ gérée par ad-guard : filtrage propre, non assignable ici'
+                                                              : '⚠️ ' + a.exclu + ' : non filtré tant que son adresse n\'est pas connue'));
+            const ret = el('button', 'btn', 'Retirer'); ret.dataset.action = 'retirer-appareil'; ret.dataset.mac = a.mac;
+            ret.addEventListener('click', async () => {
+                if (!confirm('Retirer cet appareil ? Il reprendra le profil « defaut ».')) return;
+                const r = await api('/appareils/' + encodeURIComponent(a.mac), 'DELETE');
+                if (r.ok) { enregistrerOk('Appareil retiré'); chargerAppareils(); } else echec(r, 'Retrait refusé');
+            });
+            if (geree) { ligne.append(ret); return ligne; }                       // ad-guard garde l'appareil : aucune assignation, mais « Retirer » reste possible
             const nom = el('input'); nom.type = 'text'; nom.value = a.nom || ''; nom.maxLength = 64;
             const sp = el('select'); sp.dataset.mac = a.mac; sp.dataset.champ = 'profil';
             for (const n of noms) sp.append(option(n, n)); sp.value = a.profil;
@@ -410,20 +422,16 @@
             enr.addEventListener('click', async () => {
                 const exceptions = {};
                 ligne.querySelectorAll('select[data-exc]').forEach(s => { if (s.value) exceptions[s.dataset.exc] = s.value; });
+                const nouveaux = nouveauxBlocages(modesEffectifs(prof, a.profil, a.exceptions), modesEffectifs(prof, sp.value, exceptions));
+                if (nouveaux.length && !confirm('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour « ' + (nom.value.trim() || a.mac) + ' » ? Cet appareil ne pourra plus joindre ces sites après l\'application.')) return;
                 const r = await api('/appareils/' + encodeURIComponent(a.mac), 'POST', { nom: nom.value.trim(), profil: sp.value, exceptions });
                 if (r.ok) { enregistrerOk('Appareil enregistré'); chargerAppareils(); } else echec(r, 'Appareil refusé');
-            });
-            const ret = el('button', 'btn', 'Retirer'); ret.dataset.action = 'retirer-appareil'; ret.dataset.mac = a.mac;
-            ret.addEventListener('click', async () => {
-                if (!confirm('Retirer cet appareil ? Il reprendra le profil « defaut ».')) return;
-                const r = await api('/appareils/' + encodeURIComponent(a.mac), 'DELETE');
-                if (r.ok) { enregistrerOk('Appareil retiré'); chargerAppareils(); } else echec(r, 'Retrait refusé');
             });
             ligne.append(enr, ret);
             return ligne;
         }
 
-        function ligneConnu(c, noms) {
+        function ligneConnu(c, noms, prof) {
             const ligne = el('div', 'rangee'); ligne.dataset.connu = c.mac;
             ligne.append(el('span', 'nom', c.mac), el('span', 'meta', (c.adresses || []).join(', ')));
             if (c.exclu) { ligne.append(el('span', 'exclu', '⚠️ gérée par ad-guard : non assignable ici')); return ligne; }
@@ -431,6 +439,8 @@
             const sp = el('select'); for (const n of noms) sp.append(option(n, n));
             const b = el('button', 'btn primary', 'Assigner'); b.dataset.action = 'assigner'; b.dataset.mac = c.mac;
             b.addEventListener('click', async () => {
+                const nouveaux = nouveauxBlocages({}, modesEffectifs(prof, sp.value, {}));
+                if (nouveaux.length && !confirm('Assigner cet appareil au profil « ' + sp.value + ' » le mettra en BLOCAGE pour ' + nouveaux.join(', ') + ' après l\'application. Continuer ?')) return;
                 const r = await api('/appareils/' + encodeURIComponent(c.mac), 'POST', { nom: nom.value.trim(), profil: sp.value, exceptions: {} });
                 if (r.ok) { enregistrerOk('Appareil assigné'); chargerAppareils(); } else echec(r, 'Assignation refusée');
             });

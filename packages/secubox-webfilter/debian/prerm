@@ -3,9 +3,20 @@
 set -e
 
 case "$1" in
-  remove|deconfigure)
-    systemctl stop secubox-webfilter-apply.path secubox-webfilter-apply.timer secubox-webfilter-sync.path secubox-webfilter-sync.timer secubox-webfilter-sync.service \
-      secubox-webfilter-feed.service secubox-webfilter.service >/dev/null 2>&1 || true
+  remove)
+    systemctl stop secubox-webfilter-apply.path secubox-webfilter-apply.timer secubox-webfilter-apply.service secubox-webfilter-sync.path \
+      secubox-webfilter-sync.timer secubox-webfilter-sync.service secubox-webfilter-feed.service secubox-webfilter.service >/dev/null 2>&1 || true
+    # Le blocage ne survit pas au paquet : sans lui, plus aucun moyen de l'annuler depuis l'interface. Le fichier est retiré, la configuration d'Unbound
+    # contrôlée, puis rechargée (jamais lors d'une simple mise à jour : seul « remove » arrive ici).
+    DROPIN=/etc/unbound/unbound.conf.d/93-secubox-webfilter.conf
+    if [ -f "$DROPIN" ]; then
+      rm -f /etc/unbound/unbound.conf.d/93-secubox-webfilter.conf
+      if command -v unbound-checkconf >/dev/null 2>&1 && unbound-checkconf >/dev/null 2>&1; then
+        unbound-control reload >/dev/null 2>&1 || true
+      fi
+      printf '{"ts": "%s", "module": "webfilter-ctl", "action": "retrait", "detail": "paquet retiré : drop-in supprimé, Unbound rechargé"}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /var/log/secubox/audit.log 2>/dev/null || true
+    fi
     ;;
 esac
 

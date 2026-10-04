@@ -2,15 +2,21 @@
 [Unit]
 Description=SecuBox WebFilter — application des profils à Unbound (contrôleur root, #1962)
 After=unbound.service
+# Des refus en rafale (configuration invalide) ne doivent pas désactiver l'unité .path : limite de démarrages large.
+StartLimitIntervalSec=300
+StartLimitBurst=20
 # Aucune dépendance forte envers Unbound : le contrôleur ne démarre jamais le DNS ; s'il est absent, l'application est refusée avec un message.
 
 [Service]
 Type=oneshot
 # Root : le contrôleur écrit le drop-in d'Unbound et recharge Unbound. Déclenché par FICHIER (apply.path) et à 4 h (apply.timer), jamais par sudo.
 ExecStart=/usr/sbin/secubox-webfilter-ctl apply
-# La demande déposée par l'API est consommée, que l'application réussisse ou non.
-ExecStopPost=/bin/rm -f /var/lib/secubox/webfilter/appliquer.demande
+# La demande déposée par l'API est consommée PAR LE CONTRÔLEUR, dès le début de l'exécution : une demande qui arrive pendant l'exécution n'est pas perdue,
+# l'unité .path la reprend.
 TimeoutStartSec=5min
+MemoryMax=512M
+# Root, mais sans autre pouvoir que changer le propriétaire des résultats et lire les clés d'unbound-control (voir RULES-CODE, exceptions).
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE
 UMask=0027
 NoNewPrivileges=true
 PrivateTmp=true
@@ -18,6 +24,9 @@ PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
 ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
 ProtectControlGroups=true
 RestrictNamespaces=true
 RestrictRealtime=true
@@ -27,5 +36,5 @@ SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
 IPAddressDeny=any
 IPAddressAllow=localhost
-ReadWritePaths=/etc/unbound/unbound.conf.d /var/lib/secubox/webfilter /var/lib/secubox-webfilter-ctl /var/log/secubox
+ReadWritePaths=/etc/unbound/unbound.conf.d /var/lib/secubox/webfilter /var/lib/secubox-webfilter-ctl -/var/log/secubox/audit.log
 ReadOnlyPaths=/etc/secubox

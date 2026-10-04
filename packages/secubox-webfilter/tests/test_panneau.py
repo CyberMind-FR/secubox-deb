@@ -240,6 +240,7 @@ def test_enregistrer_un_appareil_envoie_profil_et_exceptions(navigateur):
 
 def test_assigner_un_appareil_connu(navigateur):
     ctx, p, _, _ = _page(navigateur)
+    p.on("dialog", lambda d: d.accept())
     onglet(p, "appareils")
     p.wait_for_selector("[data-connu='aa:bb:cc:dd:ee:09']")
     p.fill("[data-connu='aa:bb:cc:dd:ee:09'] input", "Console")
@@ -314,4 +315,66 @@ def test_sans_jeton_les_nouveaux_onglets_demandent_la_connexion(navigateur):
         p.wait_for_selector(f"#note-admin-{o}")
         assert "administrateur" in p.inner_text(f"#note-admin-{o}").lower()
     assert p.locator("[data-mac]").count() == 0 and p.locator("[data-profil]").count() == 0 and not erreurs
+    ctx.close()
+
+
+def test_motif_d_exclusion_reel_et_retirer_toujours_possible(navigateur):
+    apps = json.loads(json.dumps(APPAREILS))
+    apps["assignes"].append({"mac": "aa:bb:cc:dd:ee:03", "nom": "Tel", "profil": "enfants", "exceptions": {}, "adresses": [], "exclu": "adresse inconnue"})
+    ctx, p, _, requetes = _page(navigateur, rep={("GET", "/appareils"): (200, apps), ("DELETE", "/appareils/aa:bb:cc:dd:ee:03"): (200, {"version": 11})})
+    p.on("dialog", lambda d: d.accept())
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:03']")
+    ligne = p.text_content("[data-mac='aa:bb:cc:dd:ee:03']")
+    assert "adresse inconnue" in ligne and "ad-guard" not in ligne                           # le motif RÉEL, pas « gérée par ad-guard »
+    assert p.locator("[data-action='retirer-appareil'][data-mac='aa:bb:cc:dd:ee:03']").count() == 1
+    assert p.locator("select[data-mac='aa:bb:cc:dd:ee:03']").count() == 0 or p.locator("[data-action='retirer-appareil'][data-mac='aa:bb:cc:dd:ee:03']").count() == 1
+    p.click("[data-action='retirer-appareil'][data-mac='aa:bb:cc:dd:ee:03']")
+    p.wait_for_selector("#toast.show")
+    assert ("DELETE", "/appareils/aa:bb:cc:dd:ee:03", "Bearer jeton-admin") in requetes
+    tv = p.text_content("[data-mac='aa:bb:cc:dd:ee:02']")
+    assert "ad-guard" in tv                                                                  # l'exclusion d'ad-guard garde son message
+    ctx.close()
+
+
+def test_exception_en_block_demande_confirmation(navigateur):
+    ctx, p, _, requetes = _page(navigateur)
+    messages = []
+    p.on("dialog", lambda d: (messages.append(d.message), d.dismiss()))
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
+    p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='adulte']", "block")        # le profil « enfants » bloque déjà adulte : pas nouveau
+    p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-champ='profil']", "defaut")       # defaut observe : jeux (exception block) reste block
+    p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='adulte']", "observe")
+    p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='jeux']", "block")
+    p.click("[data-action='enregistrer-appareil'][data-mac='aa:bb:cc:dd:ee:01']")
+    p.wait_for_timeout(300)
+    assert messages == []                                                                    # jeux est DÉJÀ en block pour cet appareil (exception actuelle) : rien de nouveau
+    ctx.close()
+    apps = json.loads(json.dumps(APPAREILS))
+    apps["assignes"][0].update({"profil": "defaut", "exceptions": {}})                          # aucun blocage actuellement
+    ctx, p, _, requetes = _page(navigateur, rep={("GET", "/appareils"): (200, apps)})
+    messages.clear()
+    p.on("dialog", lambda d: (messages.append(d.message), d.dismiss()))
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
+    p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='adulte']", "block")          # NOUVEAU blocage
+    p.click("[data-action='enregistrer-appareil'][data-mac='aa:bb:cc:dd:ee:01']")
+    p.wait_for_timeout(300)
+    assert messages and "BLOCAGE" in messages[0] and "adulte" in messages[0].lower()
+    assert not [r for r in requetes if r[0] == "POST" and r[1].startswith("/appareils/")]       # refusé : rien envoyé
+    ctx.close()
+
+
+def test_assigner_a_un_profil_qui_bloque_demande_confirmation(navigateur):
+    ctx, p, _, requetes = _page(navigateur)
+    messages = []
+    p.on("dialog", lambda d: (messages.append(d.message), d.dismiss()))
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-connu='aa:bb:cc:dd:ee:09']")
+    p.select_option("[data-connu='aa:bb:cc:dd:ee:09'] select", "enfants")
+    p.click("[data-action='assigner'][data-mac='aa:bb:cc:dd:ee:09']")
+    p.wait_for_timeout(300)
+    assert messages and "BLOCAGE" in messages[0] and "adulte" in messages[0].lower()
+    assert not [r for r in requetes if r[0] == "POST" and r[1].startswith("/appareils/")]
     ctx.close()

@@ -8,14 +8,14 @@ import contextlib
 import fcntl
 import json
 import os
-import stat
+import pwd
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 
-from . import catalogue, feed, generation, profils, voisins, zones
+from . import catalogue, etatsur, feed, generation, profils, voisins, zones
 
 ETAT = "/var/lib/secubox/webfilter"
 RACINE = "/var/lib/secubox-webfilter-ctl"
@@ -26,6 +26,7 @@ ADGUARD = Path("/etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf")
 CHECKCONF = "/usr/sbin/unbound-checkconf"
 CONTROL = "/usr/sbin/unbound-control"
 MAX_CONFIG = 1024 * 1024
+BUDGET_OCTETS = 256 * 1024 * 1024                                  # total des listes lues pour UNE application
 
 
 class ErreurCtl(RuntimeError):
@@ -52,6 +53,13 @@ class Systeme:
         ok, sortie = _commande([CONTROL, "reload"], 120)
         if not ok:
             raise ErreurCtl("unbound-control reload a échoué : " + sortie)
+
+    def uid_service(self):
+        """UID du compte du service : le dossier d'état doit lui appartenir (jamais un autre compte du groupe partagé). None s'il n'existe pas."""
+        try:
+            return pwd.getpwnam("secubox-webfilter").pw_uid
+        except KeyError:
+            return None
 
     def adguard_texte(self) -> str:
         try:
@@ -87,44 +95,6 @@ def _ecrire_atomique(chemin: Path, texte: str, mode: int = 0o644) -> None:
         with contextlib.suppress(OSError):
             os.unlink(tmp)
         raise
-
-
-def _ecrire_json_etat(chemin: Path, objet, etat: Path) -> None:
-    """Fichier lisible par le compte du service : propriétaire du dossier d'état, 0640, remplacement atomique (jamais de suivi de lien)."""
-    st = os.stat(etat)
-    fd, tmp = tempfile.mkstemp(dir=etat, prefix=".wf-")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(objet, f, ensure_ascii=False)
-            f.flush()
-            with contextlib.suppress(PermissionError):
-                os.fchown(f.fileno(), st.st_uid, st.st_gid)
-            os.fchmod(f.fileno(), 0o640)
-            os.fsync(f.fileno())
-        os.replace(tmp, chemin)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
-        raise
-
-
-def _lire_config(chemin: Path):
-    try:
-        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
-        raise ErreurCtl("configuration absente ou illisible") from None
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise ErreurCtl("configuration : fichier non régulier")
-        brut = os.read(fd, MAX_CONFIG + 1)
-    finally:
-        os.close(fd)
-    if len(brut) > MAX_CONFIG:
-        raise ErreurCtl("configuration trop volumineuse")
-    try:
-        return json.loads(brut.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError):
-        raise ErreurCtl("configuration : JSON invalide") from None
 
 
 def _restaurer(dropin: Path, actuel) -> list:
@@ -176,54 +146,99 @@ def appliquer(etat, racine_ctl, dropin, catalogue_chemin, systeme=None, verrou=N
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return {"statut": "refuse", "message": "une application est déjà en cours", "zones": 0, "vues": 0, "version": 0, "duree_s": 0.0}
-        return _appliquer(s, etat, racine_ctl, dropin, Path(catalogue_chemin), maintenant)
+        t0 = maintenant()
+        try:
+            es = etatsur.EtatSur(etat, s.uid_service())
+        except etatsur.ErreurEtat as e:                                  # pas de dossier sûr : impossible d'écrire un résultat, on audite et on refuse
+            s.audit("refuse", str(e)[:200])
+            return {"statut": "refuse", "message": str(e)[:300], "zones": 0, "vues": 0, "version": 0, "duree_s": round(maintenant() - t0, 2)}
+        try:
+            return _appliquer(s, es, racine_ctl, dropin, Path(catalogue_chemin), maintenant, t0)
+        finally:
+            es.fermer()
     finally:
         os.close(fd)
 
 
-def _fin(s, etat, statut, message, t0, maintenant, zones_n=0, vues=0, version=0, exclus=None, audit=None) -> dict:
+def _ecrire_etat(es, nom: str, objet) -> None:
+    try:
+        es.ecrire(nom, json.dumps(objet, ensure_ascii=False).encode("utf-8"), 0o640)
+    except (OSError, etatsur.ErreurEtat) as e:
+        print(f"secubox-webfilter-ctl : {nom} non écrit : {e}", file=sys.stderr)
+
+
+def _fin(s, es, statut, message, t0, maintenant, zones_n=0, vues=0, version=0, exclus=None, audit=None) -> dict:
     res = {"statut": statut, "message": message, "zones": zones_n, "vues": vues, "version": version, "duree_s": round(maintenant() - t0, 2),
            "ts": int(maintenant()), "exclus": exclus or {}}
-    with contextlib.suppress(OSError):
-        _ecrire_json_etat(etat / "resultat.json", res, etat)
+    _ecrire_etat(es, "resultat.json", res)
     if audit:
         s.audit(*audit)
     return res
 
 
-def _appliquer(s, etat: Path, racine: Path, dropin: Path, cat_chemin: Path, maintenant) -> dict:
-    t0 = maintenant()
+def _bloque_quelque_chose(cfg: dict) -> bool:
+    return (any(m == "block" for p in cfg["profils"].values() for m in p["categories"].values())
+            or any(m == "block" for a in cfg["appareils"].values() for m in a["exceptions"].values()))
+
+
+def _appliquer(s, es, racine: Path, dropin: Path, cat_chemin: Path, maintenant, t0) -> dict:
+    es.supprimer("appliquer.demande")                                   # consommée DÈS LE DÉBUT : une demande qui arrive pendant l'exécution n'est pas perdue
     try:
         conf = catalogue.charger_config(cat_chemin)
-        cfg = profils.valider(_lire_config(etat / "config.json"), {c.id for c in conf.categories})
-    except (ErreurCtl, profils.ErreurProfils, catalogue.ErreurCatalogue) as e:
-        msg = str(e).replace(str(etat), "…").replace(str(cat_chemin), "…")
-        return _fin(s, etat, "refuse", f"configuration refusée : {msg}"[:300], t0, maintenant, audit=("refuse", f"configuration refusée : {msg}"[:200]))
-    try:
-        res = generation.generer(cfg, conf.reseaux, s.voisins(), generation.adresses_adguard(s.adguard_texte()),
-                                 lambda cat: zones.charger(etat / "listes", cat), conf.zones_max, frozenset(s.adresses_box()))
-    except generation.ErreurGeneration as e:
-        return _fin(s, etat, "refuse", str(e)[:300], t0, maintenant, version=cfg["version"], audit=("refuse", str(e)[:200]))
+        ids = {c.id for c in conf.categories}
+        brut = es.lire("config.json", MAX_CONFIG)
+        if brut is None:
+            return _fin(s, es, "inchange", "aucune configuration : rien à appliquer", t0, maintenant)
+        try:
+            obj = json.loads(brut.decode("utf-8"))
+        except (ValueError, RecursionError):
+            raise ErreurCtl("configuration : JSON invalide") from None
+        cfg = profils.valider(obj, ids)
+    except (ErreurCtl, etatsur.ErreurEtat, profils.ErreurProfils, catalogue.ErreurCatalogue) as e:
+        msg = str(e).replace(str(cat_chemin), "…")
+        return _fin(s, es, "refuse", f"configuration refusée : {msg}"[:300], t0, maintenant, audit=("refuse", f"configuration refusée : {msg}"[:200]))
+    bloque = _bloque_quelque_chose(cfg)
+    res = None
+    if bloque:
+        sources = {c.id: [x.nom for x in c.sources] for c in conf.categories}
+        budget = etatsur.Budget(BUDGET_OCTETS)
+        try:
+            res = generation.generer(cfg, conf.reseaux, s.voisins(), generation.adresses_adguard(s.adguard_texte()),
+                                     lambda cat: zones.charger_sur(es, cat, sources.get(cat, []), budget), conf.zones_max, frozenset(s.adresses_box()))
+        except (generation.ErreurGeneration, etatsur.ErreurEtat) as e:
+            return _fin(s, es, "refuse", str(e)[:300], t0, maintenant, version=cfg["version"], audit=("refuse", str(e)[:200]))
+    voulu = res.texte if res else None                                  # aucun blocage : AUCUN drop-in (rien à écrire, rien à recharger)
     try:
         actuel = dropin.read_text(encoding="utf-8")
     except FileNotFoundError:
         actuel = None
-    if actuel == res.texte:
-        return _fin(s, etat, "inchange", "aucun changement : Unbound n'est pas rechargé", t0, maintenant, res.zones, len(res.vues), cfg["version"], res.exclus)
+    eff_def = profils.effective(cfg, "")
+    carte = {"version": cfg["version"],
+             "adresses": ({a: {"mac": i["mac"], "profil": cfg["appareils"][i["mac"]]["profil"], "vue": i["vue"], "modes": profils.effective(cfg, i["mac"])["modes"]}
+                           for a, i in sorted(res.liens.items())} if res else {}),
+             "defaut": {"reseaux": list(conf.reseaux), "modes": eff_def["modes"]}}
+    zones_n, vues_n, exclus = (res.zones, len(res.vues), res.exclus) if res else (0, 0, {})
+    if voulu == actuel:
+        _ecrire_etat(es, "carte.json", carte)
+        msg = "aucun changement : Unbound n'est pas rechargé" if bloque else "aucun blocage configuré : Unbound n'est pas touché"
+        return _fin(s, es, "inchange", msg, t0, maintenant, zones_n, vues_n, cfg["version"], exclus)
     precedent = racine / "precedent.conf"
     if actuel is None:
         precedent.unlink(missing_ok=True)
     else:
         _ecrire_atomique(precedent, actuel, 0o600)
-    _ecrire_atomique(dropin, res.texte)
+    if voulu is None:
+        dropin.unlink(missing_ok=True)
+    else:
+        _ecrire_atomique(dropin, voulu)
     ok, sortie = s.verifier_unbound()
     if not ok:
         echecs = _restaurer(dropin, actuel)
         msg = "unbound-checkconf refuse la configuration : " + sortie
         if echecs:
             msg += " ; restauration INCOMPLÈTE : " + "; ".join(echecs)
-            return _fin(s, etat, "erreur", msg[:300], t0, maintenant, version=cfg["version"], audit=("restauration-echouee", msg[:200]))
-        return _fin(s, etat, "refuse", msg[:300], t0, maintenant, version=cfg["version"], audit=("refuse", msg[:200]))
+            return _fin(s, es, "erreur", msg[:300], t0, maintenant, version=cfg["version"], audit=("restauration-echouee", msg[:200]))
+        return _fin(s, es, "refuse", msg[:300], t0, maintenant, version=cfg["version"], audit=("refuse", msg[:200]))
     try:
         s.recharger_unbound()
     except ErreurCtl as e:
@@ -235,22 +250,19 @@ def _appliquer(s, etat: Path, racine: Path, dropin: Path, cat_chemin: Path, main
             except ErreurCtl as e2:
                 retour = f" ; second rechargement : {e2}"
         msg = f"{e}{retour}" + (" ; restauration INCOMPLÈTE : " + "; ".join(echecs) if echecs else "")
-        return _fin(s, etat, "erreur", msg[:300], t0, maintenant, version=cfg["version"], audit=("rechargement-echoue", msg[:200]))
+        return _fin(s, es, "erreur", msg[:300], t0, maintenant, version=cfg["version"], audit=("rechargement-echoue", msg[:200]))
     try:
-        ancienne = profils.valider(json.loads((racine / "applique.json").read_text(encoding="utf-8")), {c.id for c in conf.categories})
+        ancienne = profils.valider(json.loads((racine / "applique.json").read_text(encoding="utf-8")), ids)
     except (OSError, ValueError, profils.ErreurProfils):
-        ancienne = profils.vide({c.id for c in conf.categories})
+        ancienne = profils.vide(ids)
     for ligne in _changements(ancienne, cfg):
         s.audit("changement", ligne)
     _ecrire_atomique(racine / "applique.json", json.dumps(cfg, sort_keys=True), 0o600)
-    eff_def = profils.effective(cfg, "")
-    carte = {"version": cfg["version"],
-             "adresses": {a: {"mac": i["mac"], "profil": cfg["appareils"][i["mac"]]["profil"], "vue": i["vue"], "modes": profils.effective(cfg, i["mac"])["modes"]}
-                          for a, i in sorted(res.liens.items())},
-             "defaut": {"reseaux": list(conf.reseaux), "modes": eff_def["modes"]}}
-    with contextlib.suppress(OSError):
-        _ecrire_json_etat(etat / "carte.json", carte, etat)
-    return _fin(s, etat, "applique", f"{res.zones} zones dans {len(res.vues)} vues", t0, maintenant, res.zones, len(res.vues), cfg["version"], res.exclus,
+    _ecrire_etat(es, "carte.json", carte)
+    if res is None:
+        return _fin(s, es, "applique", "plus aucun blocage : drop-in retiré", t0, maintenant, 0, 0, cfg["version"], {},
+                    audit=("application", f"zones=0 vues=0 entrees=0 version={cfg['version']}"))
+    return _fin(s, es, "applique", f"{res.zones} zones dans {len(res.vues)} vues", t0, maintenant, res.zones, len(res.vues), cfg["version"], res.exclus,
                 audit=("application", f"zones={res.zones} vues={len(res.vues)} entrees={res.entrees} version={cfg['version']}"))
 
 
@@ -264,11 +276,18 @@ def principal(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.commande == "status":
         try:
-            print((Path(a.etat) / "resultat.json").read_text(encoding="utf-8"))
-            return 0
-        except OSError:
+            es = etatsur.EtatSur(a.etat)
+            try:
+                brut = es.lire("resultat.json", MAX_CONFIG)
+            finally:
+                es.fermer()
+        except etatsur.ErreurEtat:
+            brut = None
+        if brut is None:
             print("secubox-webfilter-ctl : aucun résultat", file=sys.stderr)
             return 1
+        print(brut.decode("utf-8", "replace"))
+        return 0
     r = appliquer(a.etat, a.racine, a.dropin, a.catalogue)
     print(json.dumps(r, ensure_ascii=False))
     return 0 if r["statut"] in ("applique", "inchange") else 1

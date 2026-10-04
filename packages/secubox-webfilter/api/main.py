@@ -34,7 +34,7 @@ DEMANDE_PERIMEE_S = 600
 _MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 _VERROU_CONFIG = threading.Lock()                                      # lecture-modification-écriture de config.json
 
-app = FastAPI(title="SecuBox WebFilter", version="0.1.0")
+app = FastAPI(title="SecuBox WebFilter", version="0.2.0")
 
 
 def _categories() -> list:
@@ -248,32 +248,34 @@ def retirer_appareil(mac: str):
     return {"version": valide["version"]}
 
 
-def _taille_categorie(cat: str) -> int:
+def _taille_categorie(cat) -> int:
+    """Nombre de domaines listés d'une catégorie d'après les SEULES sources du catalogue (une source retirée ne compte plus, et ne bloque plus)."""
     n = 0
-    for f in sorted((ETAT / "listes" / cat).glob("*.json")) if (ETAT / "listes" / cat).is_dir() else []:
-        m = fichiers.lire_json(f)
+    for s in cat.sources:
+        m = fichiers.lire_json(ETAT / "listes" / cat.id / f"{s.nom}.json")
         if isinstance(m, dict) and isinstance(m.get("n"), int) and not isinstance(m.get("n"), bool):
             n += m["n"]
     return n
 
 
-def _estimation(cfg: dict) -> dict:
+def _estimation(cfg: dict, cats: dict) -> dict:
     """Zones, mémoire et durée de rechargement estimées (mesures du 2026-10-04) : UNE vue par configuration effective distincte."""
     vues = set()
     for mac in [""] + sorted(cfg["appareils"]):
         e = profils.effective(cfg, mac)
         vues.add((tuple(profils.bloquees(e)), tuple(sorted(e["autorise"]))))
-    zones_n = sum(sum(_taille_categorie(c) for c in b) + len(a) for b, a in vues)
+    zones_n = sum(sum(_taille_categorie(cats[c]) for c in b if c in cats) + len(a) for b, a in vues)
     return {"zones": zones_n, "memoire_mo": round(zones_n * 0.35 / 1024), "rechargement_s": round(6.9 + 2.5 * zones_n / 312000, 1)}
 
 
 @app.get("/appliquer", dependencies=[Depends(require_jwt)])
 def etat_application():
-    cfg = _config(_ids())
+    cats = {c.id: c for c in _categories()}
+    cfg = _config(set(cats))
     res = fichiers.lire_json(ETAT / "resultat.json")
     res = res if isinstance(res, dict) else None
     appliquee = res["version"] if res and res.get("statut") in ("applique", "inchange") and isinstance(res.get("version"), int) else 0
-    return {"en_attente": cfg["version"] > appliquee, "version": cfg["version"], "appliquee": appliquee, "dernier": res, "estimation": _estimation(cfg)}
+    return {"en_attente": cfg["version"] > appliquee, "version": cfg["version"], "appliquee": appliquee, "dernier": res, "estimation": _estimation(cfg, cats)}
 
 
 @app.post("/appliquer", status_code=202, dependencies=[Depends(require_jwt)])

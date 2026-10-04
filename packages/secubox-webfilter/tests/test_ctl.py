@@ -54,9 +54,10 @@ def config(modes_enfants=None, appareils=None):
 @pytest.fixture
 def banc(tmp_path):
     (tmp_path / "etat" / "listes" / "jeux").mkdir(parents=True)
-    (tmp_path / "etat" / "listes" / "jeux" / "s1.lst").write_text("bet.example.org\ncasino.example.net\n")
+    (tmp_path / "etat" / "listes" / "jeux" / "hagezi-gambling-medium.lst").write_text("bet.example.org\ncasino.example.net\n")
     (tmp_path / "racine").mkdir()
     (tmp_path / "u").mkdir()
+    os.chmod(tmp_path / "etat", 0o700)                                  # comme en production (tmpfiles) : le contrôleur refuse un dossier ouvert au groupe
     toml = tmp_path / "w.toml"
     toml.write_text(CONF.replace("lan = []", 'lan = ["192.168.1.0/24", "2a01:db8::/64"]')
                     .replace("zones_max = 1500000", "zones_max = 1000"))
@@ -113,7 +114,7 @@ def test_appareil_reassigne_est_audite(banc):
 
 
 def test_controle_refuse_restaure_l_ancien_fichier(banc):
-    ecrire_config(banc, config({"adulte": "observe", "jeux": "observe", "phishing": "observe"}))
+    ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
     lancer(banc, Faux())
     avant = dropin(banc).read_bytes()
     ecrire_config(banc, config())
@@ -129,7 +130,7 @@ def test_premiere_application_refusee_ne_laisse_rien(banc):
 
 
 def test_rechargement_en_echec_restaure_et_recharge_l_ancien_etat(banc):
-    ecrire_config(banc, config({"adulte": "observe", "jeux": "observe", "phishing": "observe"}))
+    ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
     lancer(banc, Faux())
     avant = dropin(banc).read_bytes()
     ecrire_config(banc, config())
@@ -140,7 +141,7 @@ def test_rechargement_en_echec_restaure_et_recharge_l_ancien_etat(banc):
 
 
 def test_restauration_incomplete_est_dite(banc, monkeypatch):
-    ecrire_config(banc, config({"adulte": "observe", "jeux": "observe", "phishing": "observe"}))
+    ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
     lancer(banc, Faux())
     ecrire_config(banc, config())
     reel = ctl._ecrire_atomique
@@ -161,7 +162,7 @@ def test_restauration_incomplete_est_dite(banc, monkeypatch):
 @pytest.mark.parametrize("contenu", ["pas du json", "[1, 2]", "null", '{"inconnu": 1}', json.dumps({"profils": {"defaut": {"categories": {"x": "block"}}}}),
                                      "x" * (1024 * 1024 + 10)])
 def test_config_hostile_refusee_sans_toucher_au_dropin(banc, contenu):
-    ecrire_config(banc, config({"adulte": "observe", "jeux": "observe", "phishing": "observe"}))
+    ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
     lancer(banc, Faux())
     avant = dropin(banc).read_bytes()
     (banc / "etat" / "config.json").write_text(contenu)
@@ -169,8 +170,13 @@ def test_config_hostile_refusee_sans_toucher_au_dropin(banc, contenu):
     assert r["statut"] == "refuse" and dropin(banc).read_bytes() == avant and str(banc) not in r["message"]
 
 
-def test_config_absente_ou_lien_symbolique_ou_non_regulier(banc):
-    assert lancer(banc, Faux())["statut"] == "refuse"
+def test_config_absente_n_est_pas_une_erreur_et_ne_fait_aucun_bruit(banc):
+    s = Faux()
+    r = lancer(banc, s)
+    assert r["statut"] == "inchange" and s.appels == [] and s.audits == [] and not dropin(banc).exists()
+
+
+def test_config_lien_symbolique_ou_non_regulier_refusee(banc):
     cible = banc / "secret.txt"
     cible.write_text(json.dumps(config()))
     (banc / "etat" / "config.json").symlink_to(cible)
@@ -181,7 +187,7 @@ def test_config_absente_ou_lien_symbolique_ou_non_regulier(banc):
 
 
 def test_budget_de_zones_refuse(banc):
-    (banc / "etat" / "listes" / "jeux" / "s1.lst").write_text("".join(f"d{i}.example.org\n" for i in range(1500)))      # 1 500 zones > zones_max = 1 000
+    (banc / "etat" / "listes" / "jeux" / "hagezi-gambling-medium.lst").write_text("".join(f"d{i}.example.org\n" for i in range(1500)))      # 1 500 zones > zones_max = 1 000
     ecrire_config(banc, config())
     r = lancer(banc, Faux())
     assert r["statut"] == "refuse" and "budget" in r["message"] and not dropin(banc).exists()

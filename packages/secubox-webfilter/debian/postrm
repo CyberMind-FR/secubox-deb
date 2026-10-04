@@ -14,6 +14,8 @@ case "$1" in
   purge)
     # L'historique de navigation par appareil ne survit pas au paquet (rétention 30 jours, jamais exporté).
     rm -rf /var/lib/secubox/webfilter
+    # État du contrôleur root : la dernière configuration appliquée porte des adresses MAC et des noms d'appareils.
+    rm -rf /var/lib/secubox-webfilter-ctl
     ;;
 esac
 

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 import json
+from pathlib import Path
 import time
 
 import pytest
@@ -342,3 +343,24 @@ def test_mode_global_block_pour_une_exception_qui_bloque(banc2):
     c.post(f"/appareils/{MAC1}", json={"nom": "T", "profil": "defaut", "exceptions": {"jeux": "block"}})
     lecteur()
     assert c.get("/etat").json()["mode_global"] == "block"
+
+
+def test_estimation_ignore_les_sources_hors_catalogue(banc2):
+    admin()
+    (banc2 / "listes" / "adulte" / "ancienne.json").write_text(json.dumps({"n": 1_000_000}))        # source retirée du catalogue
+    c = TestClient(main.app)
+    c.post("/profils", json={"nom": "enfants", "categories": {"adulte": "block"}, "autorise": []})
+    c.post(f"/appareils/{MAC1}", json={"nom": "A", "profil": "enfants", "exceptions": {}})
+    assert c.get("/appliquer").json()["estimation"]["zones"] == 84000
+
+
+def test_health_annonce_la_version_du_paquet():
+    d = TestClient(main.app).get("/health").json()
+    ligne = (Path(__file__).resolve().parent.parent / "debian" / "changelog").read_text().splitlines()[0]
+    assert d["version"] == ligne.split("(")[1].split("-")[0] == "0.2.0"
+
+
+def test_json_tres_imbrique_dans_config_donne_503_sans_plantage(banc2):
+    admin()
+    (banc2 / "config.json").write_text("[" * 200000)
+    assert TestClient(main.app).get("/profils").status_code == 503

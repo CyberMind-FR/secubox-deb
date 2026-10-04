@@ -84,3 +84,12 @@ domaines) ne fait qu'ajouter un faux classement en mode observe. Le parking n'a 
 `/etat` (`require_lecture`) dit `mode_global: "block"` dès qu'un profil bloque, sans nom de profil ni d'appareil.
 
 **Configuration** : renseigner `[reseau] lan` dans `/etc/secubox/webfilter.toml` (vide par défaut : le paquet n'applique jamais les réseaux d'un autre site).
+
+## Limites de la phase 2
+
+- **Le décompte « bloqué » peut subir une surestimation** : il ne tient pas compte des autorisations par domaine ni des adresses exclues (ad-guard, adresse en
+  double) qui se trouvent dans le réseau par défaut. Jamais l'inverse : un blocage n'est jamais compté s'il n'a pas eu lieu pour la catégorie du profil.
+- **Une adresse inconnue du dernier `apply`** (appareil éteint, adresse IPv6 temporaire qui change) repasse au profil `defaut` jusqu'au prochain `apply`.
+- **L'usurpation d'une adresse MAC** sur le réseau local fait hériter du profil de l'appareil usurpé : un filtre DNS n'est pas un contrôle d'accès.
+- **AppArmor** n'existe pas dans le noyau de gk2 : les profils livrés ne protègent rien sur cette box.
+- Sans `config.json`, le contrôleur ne fait rien (« inchangé ») ; sans catégorie en `block`, il n'écrit aucun drop-in et retire celui qui existe.
