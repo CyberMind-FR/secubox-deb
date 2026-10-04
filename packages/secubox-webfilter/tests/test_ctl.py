@@ -55,6 +55,9 @@ def config(modes_enfants=None, appareils=None):
 def banc(tmp_path):
     (tmp_path / "etat" / "listes" / "jeux").mkdir(parents=True)
     (tmp_path / "etat" / "listes" / "jeux" / "hagezi-gambling-medium.lst").write_text("bet.example.org\ncasino.example.net\n")
+    for cat, source, nom in (("adulte", "hagezi-nsfw", "porn.example.com"), ("phishing", "blp-phishing", "evil.example.io"), ("phishing", "urlhaus", "malware.example.net")):
+        (tmp_path / "etat" / "listes" / cat).mkdir(exist_ok=True)                     # une liste par source du catalogue : n'importe quelle catégorie peut passer en block
+        (tmp_path / "etat" / "listes" / cat / f"{source}.lst").write_text(nom + "\n")
     (tmp_path / "racine").mkdir()
     (tmp_path / "u").mkdir()
     os.chmod(tmp_path / "etat", 0o700)                                  # comme en production (tmpfiles) : le contrôleur refuse un dossier ouvert au groupe

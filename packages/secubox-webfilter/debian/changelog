@@ -1,3 +1,12 @@
+secubox-webfilter (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Essai réel sur gk2 (#1962) : une catégorie en block sans aucune liste brute est REFUSÉE par le contrôleur (« lancer une synchronisation »), au lieu d'être
+    appliquée avec 0 zone. Après une mise à jour depuis 0.1.0 les listes brutes manquent jusqu'à la prochaine synchronisation : le postinst en demande une.
+  * Le démon d'alimentation relit carte.json dès que le fichier change (vérification toutes les 5 s), sans attendre les 60 s du rechargement général :
+    les requêtes qui suivent une application sont comptées « bloqué » sans décalage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 22:00:00 +0200
+
 secubox-webfilter (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2 (#1962) : profils (observe ou block par catégorie), appareils rattachés par adresse MAC avec exceptions, blocage par vues

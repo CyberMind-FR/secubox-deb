@@ -177,3 +177,29 @@ def test_publier_connus_seulement_les_adresses_vues_et_borne(tmp_path):
     gros = {f"aa:bb:cc:dd:{i // 256:02x}:{i % 256:02x}": [f"10.0.{i // 256}.{i % 256}"] for i in range(600)}
     feed.publier_connus(f, gros, {a for v in gros.values() for a in v}, maintenant=lambda: 1)
     assert len(json.loads(f.read_text())) == 512
+
+
+def test_la_carte_est_relue_des_que_son_fichier_change(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    etat = {"v": "block", "sig": 1}
+
+    def carte():
+        return {"adresses": {"192.168.1.95": {"modes": {"adulte": etat["v"]}}}}
+
+    def lignes():
+        yield ligne_unbound("192.168.1.95", "a.evil.example.com")      # carte « block »
+        etat["v"], etat["sig"] = "observe", 2                           # le contrôleur réécrit carte.json
+        yield ligne_unbound("192.168.1.95", "b.evil.example.com")      # relue avant le prochain recharge_s de 60 s
+    t = iter(range(0, 10_000, 10))
+    feed.suivre(lignes(), m, indexes_fixes(adulte=["evil.example.com"]), lambda: set(), carte_fn=carte, carte_sig_fn=lambda: etat["sig"],
+                recharge_s=600.0, verif_carte_s=5.0, horloge=lambda: next(t))
+    assert m.par_categorie_decision("2026-10-01") == {"adulte": {"bloque": 1, "observe": 1}}
+
+
+def test_signature_du_fichier_carte(tmp_path):
+    f = tmp_path / "carte.json"
+    assert feed.signature(f) is None
+    f.write_text("{}")
+    s1 = feed.signature(f)
+    f.write_text('{"a": 1}')
+    assert s1 is not None and feed.signature(f) != s1

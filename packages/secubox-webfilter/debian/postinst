@@ -33,8 +33,9 @@ case "$1" in
     systemctl enable --now secubox-webfilter.service secubox-webfilter-feed.service secubox-webfilter-sync.path \
       secubox-webfilter-sync.timer secubox-webfilter-apply.path secubox-webfilter-apply.timer >/dev/null 2>&1 || true
     systemctl try-restart secubox-webfilter.service secubox-webfilter-feed.service >/dev/null 2>&1 || true
-    # Première synchronisation des listes, en arrière-plan : une demande suffit, l'unité .path s'en charge.
-    if [ ! -e /var/lib/secubox/webfilter/listes/adulte ]; then
+    # Synchronisation des listes en arrière-plan quand les listes BRUTES (.lst) manquent : première installation, ou mise à jour depuis 0.1.0 qui ne les
+    # écrivait pas (sans elles, une catégorie en block bloquerait 0 domaine). Une demande suffit, l'unité .path s'en charge.
+    if ! ls /var/lib/secubox/webfilter/listes/*/*.lst >/dev/null 2>&1; then
       runuser -u secubox-webfilter -- /usr/bin/touch /var/lib/secubox/webfilter/sync.demande >/dev/null 2>&1 || true
     fi
     ;;

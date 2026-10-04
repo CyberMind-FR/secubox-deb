@@ -46,7 +46,8 @@ def main() -> int:
     p = subprocess.Popen(["/usr/bin/journalctl", "-u", "unbound", "-f", "-n", "0", "-o", "short-unix"], stdout=subprocess.PIPE, text=True,
                          errors="replace")
     try:
-        feed.suivre(p.stdout, mag, indexes, exclus, retention_jours=RETENTION_JOURS, carte_fn=carte, connus_fn=connus)
+        feed.suivre(p.stdout, mag, indexes, exclus, retention_jours=RETENTION_JOURS, carte_fn=carte, connus_fn=connus,
+                    carte_sig_fn=lambda: feed.signature(etat / "carte.json"))
     finally:
         p.terminate()
     return 1                                                      # le journal s'est fermé : systemd relance
