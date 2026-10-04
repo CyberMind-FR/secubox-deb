@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
 [Unit]
 Description=SecuBox WebFilter — demande de synchronisation déposée par l'API
 

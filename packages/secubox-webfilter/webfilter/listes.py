@@ -56,12 +56,18 @@ class Index:
         i = bisect.bisect_left(self._a, h)
         return i < len(self._a) and self._a[i] == h
 
-    def contient(self, nom: str) -> bool:
+    def correspondance(self, nom: str) -> str | None:
+        """L'ENTRÉE de liste (le nom ou l'un de ses parents) qui correspond, ou None. Compter cette entrée, et non le nom interrogé, borne la
+        cardinalité des compteurs par la taille de la liste : des sous-domaines aléatoires d'un domaine listé ne créent qu'une ligne."""
         etiquettes = nom.lower().rstrip(".").split(".")
         for k in range(len(etiquettes) - 1):                      # ne teste jamais le seul TLD
-            if self._present(".".join(etiquettes[k:])):
-                return True
-        return False
+            candidat = ".".join(etiquettes[k:])
+            if self._present(candidat):
+                return candidat
+        return None
+
+    def contient(self, nom: str) -> bool:
+        return self.correspondance(nom) is not None
 
     def ecrire(self, chemin: Path) -> None:
         if not len(self._a):

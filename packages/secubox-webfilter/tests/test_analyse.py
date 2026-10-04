@@ -32,8 +32,18 @@ def test_prefixe_journalctl_accepte():
     assert analyse.ligne("oct. 04 08:00:00 gk2 unbound[1234]: " + L).qname == "evil.example.com"
 
 
-def test_classer_premiere_categorie_en_ordre():
+def test_classer_rend_la_categorie_et_l_entree_de_liste():
     idx = {"adulte": listes.Index.depuis(["example.com"]), "jeux": listes.Index.depuis(["example.com", "bet.example.org"])}
-    assert analyse.classer("x.example.com", idx) == "adulte"
-    assert analyse.classer("bet.example.org", idx) == "jeux"
+    assert analyse.classer("x.example.com", idx) == ("adulte", "example.com")
+    assert analyse.classer("bet.example.org", idx) == ("jeux", "bet.example.org")
     assert analyse.classer("sain.example.net", idx) is None
+
+
+def test_format_short_unix_de_journalctl():
+    e = analyse.ligne("1791096961.220283 gk2 unbound[1222657]: [1222657:0] reply: 192.168.1.3 hall.gk3.secubox.in. AAAA IN NOERROR 0.026784 0 97")
+    assert (e.ts, e.client, e.qname, e.qtype) == (1791096961, "192.168.1.3", "hall.gk3.secubox.in", "AAAA")
+
+
+def test_format_cat_sans_horodatage_utilise_l_heure_fournie():
+    e = analyse.ligne("[1222657:0] reply: 192.168.1.3 hall.gk3.secubox.in. A IN NOERROR 0.02 0 97", maintenant=lambda: 1791100000)
+    assert e is not None and e.ts == 1791100000

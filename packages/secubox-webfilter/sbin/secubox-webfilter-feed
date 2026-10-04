@@ -40,7 +40,7 @@ def main() -> int:
     if a.stdin:
         feed.suivre(sys.stdin, mag, indexes, exclus, retention_jours=RETENTION_JOURS)
         return 0
-    p = subprocess.Popen(["/usr/bin/journalctl", "-u", "unbound", "-f", "-n", "0", "-o", "cat"], stdout=subprocess.PIPE, text=True,
+    p = subprocess.Popen(["/usr/bin/journalctl", "-u", "unbound", "-f", "-n", "0", "-o", "short-unix"], stdout=subprocess.PIPE, text=True,
                          errors="replace")
     try:
         feed.suivre(p.stdout, mag, indexes, exclus, retention_jours=RETENTION_JOURS)

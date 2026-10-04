@@ -20,9 +20,19 @@
   /usr/lib/python3.*/** r,
   /usr/local/lib/python3*/** r,
 
+  # Configuration et authentification : fichiers nommés, jamais /etc/secubox/** (le dossier des secrets reste interdit).
   /etc/secubox/ r,
-  /etc/secubox/** r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/webfilter.toml r,
+  /etc/secubox/users.json r,
+  /etc/secubox/appareils.json r,
+  /etc/secubox/auth.toml r,
+  deny /etc/secubox/secrets/** r,
   /etc/nsswitch.conf r,
+  # Registre des sessions : sans lui, toute garde d'API voit un registre vide et refuse (401 partout, #942) ; trace de délégation.
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/sessions.json r,
+  /var/log/secubox/delegation.log w,
 
   /var/lib/secubox/webfilter/ r,
   /var/lib/secubox/webfilter/** rwk,
@@ -32,6 +42,7 @@
   /run/secubox/webfilter.sock.lock rwk,
 
   network unix stream,
+  network unix dgram,
   /proc/sys/net/core/somaxconn r,
 }
 
@@ -84,7 +95,6 @@
   /usr/lib/python3.*/** r,
 
   /etc/secubox/webfilter.toml r,
-  /etc/ssl/** r,
 
   /var/lib/secubox/webfilter/ r,
   /var/lib/secubox/webfilter/** rwk,

@@ -43,3 +43,30 @@ def test_depuis_jour_filtre(tmp_path):
     m = magasin.Magasin(tmp_path / "w.db")
     m.ajouter([(ev(1791090000, "192.168.1.95", "a.example.com"), "adulte")], exclus=set())      # 2026-10-04
     assert m.par_categorie("2026-10-05") == {} and m.par_categorie("2026-10-04") == {"adulte": 1}
+
+
+def test_plafond_de_lignes_refuse_les_nouvelles_cles_mais_compte_les_existantes(tmp_path, capsys):
+    m = magasin.Magasin(tmp_path / "w.db", max_lignes=5)
+    m.ajouter([(ev(1791090000, "192.168.1.95", f"d{i}.example.com"), "adulte") for i in range(100)], exclus=set())
+    with m._cx() as cx:
+        assert cx.execute("SELECT COUNT(*) FROM wf_counts").fetchone()[0] == 5
+    n = m.ajouter([(ev(1791090001, "192.168.1.95", "d0.example.com"), "adulte")], exclus=set())     # clé déjà connue : comptée
+    assert n == 1 and ("d0.example.com", 2) in m.top_domaines("adulte", "2026-10-01")
+    assert "plafond" in capsys.readouterr().err.lower()
+
+
+def test_suppression_securisee_apres_purge(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    secret = "zzunique-historique.example.com"
+    m.ajouter([(ev(1_000_000_000, "192.168.1.95", secret), "adulte")] * 3, exclus=set())
+    m.purger(30)
+    for f in tmp_path.iterdir():
+        assert secret.encode() not in f.read_bytes(), f.name
+
+
+def test_dernier_evenement_vu(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    assert m.dernier_evenement() is None
+    m.ajouter([(ev(1791090000, "192.168.1.95", "a.example.com"), "adulte"), (ev(1791090500, "192.168.1.95", "b.example.com"), "adulte")], exclus=set())
+    m.ajouter([(ev(1791090100, "192.168.1.95", "c.example.com"), "adulte")], exclus=set())
+    assert m.dernier_evenement() == 1791090500                          # le plus récent, jamais un recul

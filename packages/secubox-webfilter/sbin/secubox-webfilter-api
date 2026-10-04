@@ -6,15 +6,16 @@
 """SecuBox-Deb :: secubox-webfilter-api — l'API d'observation sur la socket Unix du module (#1962).
 
 Lanceur dédié (et non `python3 -m uvicorn`) pour que le profil AppArmor s'attache à CE binaire."""
-import os
 import sys
 
 sys.path.insert(0, "/usr/lib/secubox/webfilter")
 
 import uvicorn  # noqa: E402
 
+from webfilter.serveur import creer_socket  # noqa: E402
+
 SOCKET = "/run/secubox/webfilter.sock"
 
 if __name__ == "__main__":
-    os.umask(0o002)                                   # socket joignable par le groupe `secubox` (nginx), jamais par « autres »
-    uvicorn.run("api.main:app", uds=SOCKET, log_level="warning")
+    s = creer_socket(SOCKET)                          # 0660 : groupe `secubox` (nginx), jamais « autres » (uvicorn lierait en 0666)
+    uvicorn.run("api.main:app", fd=s.fileno(), log_level="warning")

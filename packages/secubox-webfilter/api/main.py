@@ -53,11 +53,14 @@ def health():
     return {"status": "ok", "module": "webfilter", "version": app.version}
 
 
+@app.get("/status", dependencies=[Depends(require_lecture)])
 @app.get("/etat", dependencies=[Depends(require_lecture)])
 def etat():
     """Catalogue, mode et ancienneté des listes ; nombre de requêtes classées sur 7 jours, sans aucun nom d'appareil ni chemin."""
     cats = _categories()
-    comptes = magasin.Magasin(ETAT / "webfilter.db").par_categorie(_depuis(7))
+    mag = magasin.Magasin(ETAT / "webfilter.db")
+    comptes = mag.par_categorie(_depuis(7))
+    dernier = mag.dernier_evenement()
     sortie = []
     for c in cats:
         srcs = []
@@ -65,7 +68,8 @@ def etat():
             m = _meta(c.id, s.nom)
             srcs.append({"nom": s.nom, "licence": s.licence, "n": m.get("n"), "ts": m.get("ts")})
         sortie.append({"id": c.id, "libelle": c.libelle, "mode": c.mode, "requetes_7j": comptes.get(c.id, 0), "sources": srcs})
-    return {"mode_global": "observe", "categories": sortie}
+    return {"mode_global": "observe", "categories": sortie,
+            "dernier_evenement": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(dernier)) if dernier else None}
 
 
 @app.get("/stats", dependencies=[Depends(require_jwt)])

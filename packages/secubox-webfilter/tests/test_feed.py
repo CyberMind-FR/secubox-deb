@@ -46,7 +46,7 @@ def test_un_index_remplace_est_pris_en_compte(tmp_path):
         yield ligne_unbound("192.168.1.95", "a.autre.example.org")     # l'est désormais
     t = iter(range(0, 10_000, 100))
     n = feed.suivre(lignes(), m, indexes, lambda: set(), recharge_s=1.0, horloge=lambda: next(t))
-    assert n == 2 and m.top_domaines("adulte", "2026-10-01") == [("a.autre.example.org", 1), ("a.evil.example.com", 1)]
+    assert n == 2 and m.top_domaines("adulte", "2026-10-01") == [("autre.example.org", 1), ("evil.example.com", 1)]
 
 
 def test_charger_indexes_reunit_les_sources_et_ignore_un_fichier_corrompu(tmp_path, capsys):
@@ -104,3 +104,10 @@ def test_la_retention_purge_au_demarrage(tmp_path):
     m.ajouter([(feed.analyse.Evenement(1_000_000_000, "192.168.1.95", "vieux.evil.example.com", "A", "NOERROR"), "adulte")], exclus=set())
     feed.suivre(iter([]), m, indexes_fixes(adulte=["evil.example.com"]), lambda: set(), retention_jours=30)
     assert m.par_categorie("2000-01-01") == {}
+
+
+def test_cardinalite_bornee_par_la_liste_meme_avec_des_sous_domaines_aleatoires(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    lignes = [ligne_unbound("192.168.1.95", f"alea{i}.evil.example.com") for i in range(300)]
+    n = feed.suivre(iter(lignes), m, indexes_fixes(adulte=["evil.example.com"]), lambda: set())
+    assert n == 300 and m.top_domaines("adulte", "2026-10-01") == [("evil.example.com", 300)]

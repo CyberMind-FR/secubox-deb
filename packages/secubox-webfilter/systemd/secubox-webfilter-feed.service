@@ -1,7 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
 [Unit]
 Description=SecuBox WebFilter — classement des requêtes DNS depuis le journal d'Unbound (mode observe, #1962)
 After=unbound.service
-Wants=unbound.service
+# Pas de Wants=unbound : un module d'observation ne doit jamais démarrer le DNS.
 
 [Service]
 Type=simple

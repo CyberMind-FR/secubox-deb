@@ -12,7 +12,7 @@ Architecture: all
 Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core (>= 1.4.0),
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip,
- systemd
+ systemd, adduser, iproute2
 Recommends: unbound, apparmor
 Description: SecuBox WebFilter : filtrage de contenus par catégories (phase 1, observe)
  Classe les requêtes DNS de chaque appareil par catégorie (contenu adulte, jeux d'argent,

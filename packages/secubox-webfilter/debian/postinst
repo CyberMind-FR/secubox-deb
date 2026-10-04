@@ -10,7 +10,9 @@ case "$1" in
       adduser --system --group --no-create-home --home /var/lib/secubox/webfilter --shell /usr/sbin/nologin secubox-webfilter >/dev/null
     fi
     adduser secubox-webfilter secubox >/dev/null 2>&1 || true
-    adduser secubox-webfilter systemd-journal >/dev/null 2>&1 || true       # lecture du journal d'Unbound, sans privilège
+    # Le groupe systemd-journal n'est accordé qu'au démon d'alimentation (SupplementaryGroups de son unité), jamais au compte entier :
+    # sinon l'API et la synchronisation liraient tout le journal. Retiré aussi des installations faites avant ce correctif.
+    deluser secubox-webfilter systemd-journal >/dev/null 2>&1 || true
     systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-webfilter.conf >/dev/null 2>&1 || true
 
     # --- Confinement AppArmor (enforce) : un échec de chargement ne bloque pas l'installation, il est affiché ---
@@ -24,7 +26,7 @@ case "$1" in
       systemctl reload nginx >/dev/null 2>&1 || true
     fi
 
-    systemctl daemon-reload
+    systemctl daemon-reload || true
     # Une mise à jour ne doit pas laisser un service arrêté (dpkg le termine) : on active, puis on relance seulement ce qui tourne.
     systemctl enable --now secubox-webfilter.service secubox-webfilter-feed.service secubox-webfilter-sync.path \
       secubox-webfilter-sync.timer >/dev/null 2>&1 || true

@@ -54,3 +54,11 @@ def test_charger_refuse_un_fichier_corrompu(tmp_path):
 def test_index_vide_refuse_a_l_ecriture(tmp_path):
     with pytest.raises(ValueError):
         listes.Index.depuis([]).ecrire(tmp_path / "x.idx")
+
+
+def test_correspondance_rend_l_entree_de_liste_et_non_le_nom_interroge():
+    i = listes.Index.depuis(["example.com", "sub.other.org"])
+    assert i.correspondance("a.b.example.com") == "example.com"
+    assert i.correspondance("x.sub.other.org") == "sub.other.org"
+    assert i.correspondance("notexample.com") is None and i.correspondance("other.org") is None
+    assert i.contient("a.b.example.com") is True

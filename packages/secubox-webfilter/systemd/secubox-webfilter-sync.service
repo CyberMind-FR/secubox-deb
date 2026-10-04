@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
 [Unit]
 Description=SecuBox WebFilter — synchronisation des listes publiques (https, taille plafonnée, #1962)
 After=network-online.target

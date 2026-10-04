@@ -63,6 +63,13 @@ def test_etat_lisible_sans_nom_d_appareil_ni_chemin(banc):
     assert "192.168" not in r.text and "/var/lib" not in r.text and str(banc) not in r.text
 
 
+def test_status_alias_de_etat_et_dernier_evenement(banc):
+    lecteur()
+    c = TestClient(main.app)
+    assert c.get("/status").json() == c.get("/etat").json()
+    assert isinstance(c.get("/etat").json()["dernier_evenement"], str)           # horodatage ISO : le comptage est-il vivant ?
+
+
 def test_detail_par_appareil_refuse_sans_jeton_administrateur(banc):
     lecteur()                                                      # lecture seule : pas d'administrateur
     c = TestClient(main.app)

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 """Boucle d'alimentation : lignes du journal d'Unbound → événements classés → compteurs. Testable sans Unbound (itérateur de lignes)."""
+import dataclasses
 import json
 import sqlite3
 import subprocess
@@ -16,8 +17,15 @@ class Reunion:
     def __init__(self, indexes):
         self._i = list(indexes)
 
+    def correspondance(self, nom: str) -> str | None:
+        for i in self._i:
+            e = i.correspondance(nom)
+            if e:
+                return e
+        return None
+
     def contient(self, nom: str) -> bool:
-        return any(i.contient(nom) for i in self._i)
+        return self.correspondance(nom) is not None
 
 
 def charger_indexes(dossier, categories) -> dict:
@@ -74,9 +82,10 @@ def suivre(lignes, mag, indexes_fn, exclus_fn, periode_s: float = 2.0, lot: int 
         if now - t_recharge >= recharge_s:
             indexes, exclus, t_recharge = indexes_fn(), exclus_fn(), now
         if e is not None:
-            cat = analyse.classer(e.qname, indexes)
-            if cat:
-                attente.append((e, cat))
+            r = analyse.classer(e.qname, indexes)
+            if r:
+                cat, entree = r
+                attente.append((dataclasses.replace(e, qname=entree), cat))       # on compte l'ENTRÉE de liste, pas le nom interrogé
         if len(attente) >= lot or (attente and now - t_flush >= periode_s):
             vider()
             t_flush = now
