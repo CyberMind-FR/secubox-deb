@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox WebFilter — demande de synchronisation déposée par l'API
+
+[Path]
+PathExists=/var/lib/secubox/webfilter/sync.demande
+Unit=secubox-webfilter-sync.service
+
+[Install]
+WantedBy=multi-user.target

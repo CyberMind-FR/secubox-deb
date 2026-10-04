@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/secubox-webfilter/usr/sbin debian/secubox-webfilter/usr/lib/secubox/webfilter/webfilter \
+	  debian/secubox-webfilter/usr/lib/secubox/webfilter/api debian/secubox-webfilter/usr/share/secubox/www/webfilter \
+	  debian/secubox-webfilter/usr/share/secubox/menu.d debian/secubox-webfilter/etc/secubox debian/secubox-webfilter/etc/nginx/secubox.d \
+	  debian/secubox-webfilter/lib/systemd/system debian/secubox-webfilter/usr/lib/tmpfiles.d debian/secubox-webfilter/etc/apparmor.d
+	install -m 755 sbin/secubox-webfilter-api sbin/secubox-webfilter-feed sbin/secubox-webfilter-sync debian/secubox-webfilter/usr/sbin/
+	install -m 644 webfilter/*.py debian/secubox-webfilter/usr/lib/secubox/webfilter/webfilter/
+	install -m 644 api/*.py debian/secubox-webfilter/usr/lib/secubox/webfilter/api/
+	install -m 644 www/webfilter/index.html debian/secubox-webfilter/usr/share/secubox/www/webfilter/
+	install -m 644 menu.d/*.json debian/secubox-webfilter/usr/share/secubox/menu.d/
+	install -m 644 conf/webfilter.toml debian/secubox-webfilter/etc/secubox/webfilter.toml
+	install -m 644 nginx/webfilter.conf debian/secubox-webfilter/etc/nginx/secubox.d/webfilter.conf
+	install -m 644 systemd/* debian/secubox-webfilter/lib/systemd/system/
+	install -m 644 tmpfiles/secubox-webfilter.conf debian/secubox-webfilter/usr/lib/tmpfiles.d/
+	install -m 644 apparmor/secubox-webfilter debian/secubox-webfilter/etc/apparmor.d/secubox-webfilter
+
+override_dh_installsystemd:
+	# Activation faite par le postinst (démarrage conditionné à la présence du compte de service et du dossier d'état).
+	dh_installsystemd --no-enable --no-start

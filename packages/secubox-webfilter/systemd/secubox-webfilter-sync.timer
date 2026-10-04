@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox WebFilter — synchronisation périodique des listes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+RandomizedDelaySec=15min
+Persistent=true
+Unit=secubox-webfilter-sync.service
+
+[Install]
+WantedBy=timers.target

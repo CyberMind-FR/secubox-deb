@@ -1,0 +1,31 @@
+[Unit]
+Description=SecuBox WebFilter — synchronisation des listes publiques (https, taille plafonnée, #1962)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=secubox-webfilter
+Group=secubox
+ExecStart=/usr/sbin/secubox-webfilter-sync
+# La demande déposée par l'API (ou la minuterie) est consommée, que la synchronisation réussisse ou non.
+ExecStopPost=/bin/rm -f /var/lib/secubox/webfilter/sync.demande
+UMask=0027
+TimeoutStartSec=15min
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# Sortie réseau : seulement pour télécharger les listes (https).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/secubox/webfilter /var/log/secubox
+ReadOnlyPaths=/etc/secubox

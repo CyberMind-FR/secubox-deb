@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+set -e
+
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-webfilter-sync.path secubox-webfilter-sync.timer secubox-webfilter-sync.service \
+      secubox-webfilter-feed.service secubox-webfilter.service >/dev/null 2>&1 || true
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0
