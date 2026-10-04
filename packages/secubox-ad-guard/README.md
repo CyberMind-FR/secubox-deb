@@ -76,6 +76,11 @@ python3 tools/dns-tv-test.py --serveur 192.168.1.200 --reference 1.1.1.1 --list 
 sudo secubox-adguard-tv disable && sudo systemctl disable --now secubox-ad-guard-dnsfeed
 ```
 
+### Fichier d'échange pour le DPI (1.6.0, #1960)
+
+`dpi-feed.json` (`0640`) : un résumé par appareil du LAN (MAC) pour le jour courant — requêtes, blocages, noms, **top 10 des services** (organisation + type) et types. Recalculé au plus
+toutes les 5 minutes par `secubox-adguard-auto`. Aucun nom de domaine demandé n'y figure ; pas de volumes. Lu par `secubox-dpi` (`GET /api/v1/dpi/lan_dns`).
+
 ### Mode auto (1.4.0, #1954)
 
 Un appareil en mode `auto` voit ses domaines publicitaires **appris** (comparaison des requêtes pendant les coupures et en lecture normale), proposés comme
