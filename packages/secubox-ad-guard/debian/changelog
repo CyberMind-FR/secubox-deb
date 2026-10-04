@@ -1,3 +1,18 @@
+secubox-ad-guard (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Partie standard du panneau (ref #1963) : plus de zéros trompeurs. Causes relevées sur gk2 : (1) `/var/lib/secubox/toolbox` est passé en `secubox-toolbox:secubox-toolbox` 0750 et `toolbox.db`
+    en 0660 : l'utilisateur `secubox` ne peut plus les lire, et le code avalait l'erreur en rendant 0 (88 appareils, 76 425 blocages et 140 Ko de pisteurs appris existent pourtant) ;
+    (2) la carte « Blocked (24h) » lisait `detections_24h`, que `/stats` ne remplissait pas ; (3) `learn_status` retombait sur des pastilles VERTES par défaut quand le toolbox est illisible.
+  * `/stats` : chiffres tirés des compteurs DNS d'ad-guard (jour courant UTC, MAC regroupées, box et passerelle exclues) : `dns_requetes_jour`, `dns_bloquees_jour`, `dns_taux_blocage`,
+    `dns_appareils_jour`, et les champs que lit la page (`detections_24h`, `monitored_devices`). Données du toolbox (blocages du MITM, appareils R3) : présentes seulement si lisibles
+    (`toolbox_lisible`), JAMAIS inventées à 0. Défaut corrigé au passage : `get_stats` écrivait dans le dictionnaire mis en cache du module (valeurs d'un appel qui survivaient au suivant).
+  * `/learn/status` : `null` et `lisible: false` quand les fichiers du toolbox sont illisibles ; `autolearn` et `ad_learn` lus dans `/etc/secubox/toolbox/filters.json` (lisible), `null` si inconnus.
+  * Page : cartes « Appareils vus (DNS, aujourd'hui) » et « Bloqués aujourd'hui (DNS) », ligne de source, « — » quand un chiffre manque, pastille neutre quand un statut est inconnu, message
+    explicite pour les compteurs d'apprentissage. NOTE DE DÉPLOIEMENT : redémarrer `secubox-aggregator`. DÉCISION OUVERTE : les compteurs d'apprentissage (données du toolbox) nécessitent
+    que le toolbox publie un export lisible (ou autre) : ne pas élargir les droits sur sa base.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 12:00:00 +0200
+
 secubox-ad-guard (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Fichier d'échange pour le DPI (ref #1960) : `/var/lib/secubox/ad-guard/dnstv/dpi-feed.json` (`0600`, écriture atomique), recalculé au plus toutes les 5 minutes par le moteur
