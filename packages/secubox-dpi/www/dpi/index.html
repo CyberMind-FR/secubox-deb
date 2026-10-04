@@ -209,8 +209,24 @@
         </div>
 
         <div class="card">
-            <div class="card-header"><h2>🧭 Sessions d'usage <span class="sub">— flux corrélés par terminal + usage (sbxdpi)</span></h2></div>
+            <div class="card-header"><h2>🧭 Sessions d'usage <span class="sub">— flux corrélés par terminal + usage (sbxdpi) · mesuré par le DPI</span></h2></div>
             <div id="dpi-sessions"><p class="empty">Loading…</p></div>
+        </div>
+
+        <!-- Données d'ad-guard (#1960) : étiquettes des destinations non classées et vue DNS des appareils du LAN. Tout texte venu de l'API passe par textContent. -->
+        <div class="card" id="adg-unknown-card">
+            <div class="card-header"><h2>🏷️ Destinations non classées <span class="sub">— étiquetées d'après ad-guard · volumes mesurés par le DPI</span></h2></div>
+            <div id="adg-unknown"><p class="empty">Loading…</p></div>
+            <p id="adg-unknown-foot" style="color:var(--text-dim);font-size:0.7rem;margin-top:0.5rem;"></p>
+        </div>
+
+        <div class="card" id="adg-lan-card">
+            <div class="card-header">
+                <h2>🏠 Appareils du LAN <span class="sub">— vue DNS (ad-guard) : noms demandés, pas de volumes</span></h2>
+                <span class="badge" id="adg-lan-badge">—</span>
+            </div>
+            <div id="adg-lan"><p class="empty">Loading…</p></div>
+            <p id="adg-lan-foot" style="color:var(--text-dim);font-size:0.7rem;margin-top:0.5rem;"></p>
         </div>
 
         <div class="card">
@@ -663,7 +679,66 @@
             }, 'Aucune destination géolocalisée (base GeoLite2 absente ?).', 5);
         }
 
+
+        // ── données d'ad-guard (#1960) : destinations non classées étiquetées, appareils du LAN vus au DNS ──────────────
+        function adgEl(tag, texte, classe, style) { const e = document.createElement(tag); if (texte != null) e.textContent = String(texte); if (classe) e.className = classe; if (style) e.style.cssText = style; return e; }
+        const ADG_TYPE = { publicite: 'publicité', contenu: 'contenu', mesure_audience: 'mesure d\u2019audience', analytique: 'analytique', qualite_video: 'qualité vidéo', cdn: 'CDN', connectivite: 'connectivité', systeme: 'système', inconnu: 'inconnu' };
+        const ADG_CAT = { advertising: 'publicité', tracking: 'pistage', telemetry: 'télémétrie', social: 'réseaux sociaux' };           // libellés locaux, jamais ceux de l'API
+        async function loadAdgUnknown() {
+            const box = document.getElementById('adg-unknown'), foot = document.getElementById('adg-unknown-foot'); if (!box) return;
+            const u = await apiAuthed(API + '/usage');
+            box.textContent = ''; foot.textContent = '';
+            if (!u || typeof u !== 'object') { box.appendChild(adgEl('p', 'Données DPI indisponibles.', 'empty')); return; }
+            const inc = Array.isArray(u.unknown) ? u.unknown.filter(x => x && typeof x.name === 'string') : [];
+            if (!inc.length) { box.appendChild(adgEl('p', 'Aucune destination non classée.', 'empty')); return; }
+            inc.slice().sort((a, b) => (b.etiquette ? 1 : 0) - (a.etiquette ? 1 : 0) || (b.bytes || 0) - (a.bytes || 0)).slice(0, 20).forEach(x => {
+                const et = x.etiquette && typeof x.etiquette === 'object' ? x.etiquette : null;
+                const ligne = adgEl('div', null, 'app-item', 'align-items:center;gap:10px;');
+                ligne.appendChild(adgEl('span', x.name, null, 'flex:1;min-width:0;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'));
+                const lab = adgEl('span', null, null, 'flex:0 0 auto;font-size:.78rem;');
+                if (et) {
+                    lab.appendChild(adgEl('b', et.organisation || '—'));
+                    lab.appendChild(adgEl('span', ' ' + (ADG_TYPE[et.type] || (et.type ? 'autre' : '')), null, 'color:var(--text-dim);'));
+                    if (ADG_CAT[et.categorie]) lab.appendChild(adgEl('span', ADG_CAT[et.categorie], 'badge badge-red', 'margin-left:.4rem;'));
+                    lab.appendChild(adgEl('span', ' d\u2019après ad-guard', null, 'color:var(--text-dim);font-size:.68rem;'));
+                } else { lab.appendChild(adgEl('span', 'non étiquetée', null, 'color:var(--text-dim);')); }
+                ligne.appendChild(lab);
+                ligne.appendChild(adgEl('span', formatBytes(x.bytes || 0), null, 'flex:0 0 auto;font-family:monospace;color:var(--cyber-cyan);'));
+                box.appendChild(ligne);
+            });
+            const ag = u.adguard && typeof u.adguard === 'object' ? u.adguard : null;
+            foot.textContent = inc.length + ' destination(s) non classée(s) par le DPI' + (ag ? ' · ' + (ag.etiquetes || 0) + ' étiquetée(s) d\u2019après ad-guard' : ' · données ad-guard absentes') + ' · les octets sont mesurés par le DPI.';
+        }
+        async function loadAdgLan() {
+            const box = document.getElementById('adg-lan'), foot = document.getElementById('adg-lan-foot'), badge = document.getElementById('adg-lan-badge'); if (!box) return;
+            const d = await apiAuthed(API + '/lan_dns');
+            box.textContent = ''; foot.textContent = '';
+            if (!d || d.disponible !== true || !Array.isArray(d.appareils)) {
+                badge.textContent = '○ indisponible'; badge.className = 'badge badge-amber';
+                box.appendChild(adgEl('p', 'Données ad-guard absentes ou périmées' + (d && d.raison ? ' (' + d.raison + ')' : '') + '.', 'empty'));
+                return;
+            }
+            badge.textContent = '● vu au DNS'; badge.className = 'badge badge-green';
+            if (!d.appareils.length) box.appendChild(adgEl('p', 'Aucun appareil du LAN sur la période.', 'empty'));
+            d.appareils.slice(0, 30).forEach(a => {
+                const bloc = adgEl('div', null, 'app-item', 'display:block;padding:.5rem 0;border-bottom:1px solid var(--border);');
+                const tete = adgEl('div', null, null, 'display:flex;gap:.8rem;align-items:baseline;flex-wrap:wrap;');
+                tete.appendChild(adgEl('b', a.nom));
+                tete.appendChild(adgEl('span', (a.adresses || []).join(', '), null, 'font-family:monospace;font-size:.72rem;color:var(--text-dim);'));
+                tete.appendChild(adgEl('span', a.mode || '—', 'badge'));
+                bloc.appendChild(tete);
+                const taux = a.requetes ? Math.round(100 * (a.bloquees || 0) / a.requetes) : 0;
+                bloc.appendChild(adgEl('div', (a.requetes || 0) + ' requêtes · ' + (a.bloquees || 0) + ' bloquées (' + taux + ' %) · ' + (a.domaines || 0) + ' noms', null, 'font-size:.8rem;'));
+                const svc = (a.services || []).slice(0, 5).map(s => (s.organisation || '—') + ' (' + (ADG_TYPE[s.type] || 'autre') + ') ' + (s.requetes || 0)).join(' · ');
+                if (svc) bloc.appendChild(adgEl('div', svc, null, 'font-size:.74rem;color:var(--text-dim);'));
+                box.appendChild(bloc);
+            });
+            foot.textContent = 'Vu au DNS (ad-guard), ' + (d.fenetre || '') + ' · données de ' + Math.round((d.age_s || 0) / 60) + ' min · aucun volume : le DNS n\u2019en donne pas.';
+        }
+
         function refreshAll() {
+            loadAdgUnknown();  // #1960 : étiquettes d'ad-guard
+            loadAdgLan();      // #1960 : appareils du LAN vus au DNS
             loadExfil();       // engine status + devices + stats + top apps/protocols/bw/flows + service cats
             loadMediaTypes();
             loadMediaBuffer();
@@ -676,6 +751,7 @@
         setInterval(() => { loadExfil(); loadMediaTypes(); loadTimeline(); loadSessions(); loadCountries(); }, 10000);
         setInterval(loadMediaBuffer, 15000);
         setInterval(loadLearning, 30000);
+        setInterval(() => { loadAdgUnknown(); loadAdgLan(); }, 30000);
     </script>
 </body>
 </html>
