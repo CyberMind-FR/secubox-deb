@@ -700,6 +700,48 @@
             if (!confirm('Retirer cet appareil du périmètre (retour au puits de production), retirer ses règles et ne plus jamais l\u2019ajouter automatiquement ?')) return;
             await api('/adblock-tv/auto/appareils/' + detNom(nom) + '/ignorer', 'POST'); detRender(); autoRender(); tvRender();
         }
+
+        // ── autorisations par appareil (#1965) : ce qui a été refusé, et les exceptions au puits complet ──────────────────
+        async function detAutoriser(nom, domaine, actif) {
+            const verbe = actif ? 'Autoriser' : 'Retirer l\u2019autorisation de';
+            if (!confirm(verbe + ' « ' + domaine + ' » pour « ' + nom + ' » ? Le DNS est rechargé (quelques secondes) ; cela n\u2019affecte que cet appareil.')) return;
+            await api('/adblock-tv/auto/appareils/' + detNom(nom) + '/autoriser', 'POST', { domaine: domaine, actif: actif });
+            detRender();
+        }
+        async function detAutorisations(a, tr) {
+            if (tr._detail && tr._detail.isConnected) { tr._detail.remove(); return; }
+            const r = await api('/adblock-tv/auto/appareils/' + detNom(a.nom) + '/refus?minutes=60');
+            const ligne = document.createElement('tr'), cell = document.createElement('td');
+            ligne.className = 'det-detail'; cell.colSpan = 6;
+            const refus = r && Array.isArray(r.refus) ? r.refus.filter(x => x && typeof x.domaine === 'string') : [];
+            cell.appendChild(tvEl('div', 'Refusés à cet appareil dans la dernière heure — si un service ne démarre plus, autorisez le nom dont il a besoin.', null, 'color:var(--text-muted);font-size:.78rem;margin:.3rem 0;'));
+            const tab = document.createElement('table'), corps = document.createElement('tbody');
+            refus.forEach(x => {
+                const t = document.createElement('tr');
+                t.appendChild(tvEl('td', x.domaine, null, 'font-family:monospace;'));
+                t.appendChild(tvEl('td', (x.requetes || 0) + ' requête(s)'));
+                t.appendChild(tvEl('td', x.categorie || '—', null, 'color:var(--text-muted);'));
+                const act = document.createElement('td');
+                if (x.autorise) act.appendChild(tvEl('span', 'autorisé ✓', null, 'color:#3aa56a;'));
+                else { const b = tvEl('button', 'Autoriser', 'btn det-autoriser'); b.onclick = () => detAutoriser(a.nom, x.domaine, true); act.appendChild(b); }
+                t.appendChild(act); corps.appendChild(t);
+            });
+            if (!refus.length) { const t = document.createElement('tr'); t.appendChild(Object.assign(tvEl('td', 'Aucun refus récent pour cet appareil.', null, 'color:var(--text-muted);'), { colSpan: 4 })); corps.appendChild(t); }
+            tab.appendChild(corps); cell.appendChild(tab);
+            const deja = Array.isArray(a.autorisations) ? a.autorisations.filter(d => typeof d === 'string') : [];
+            if (deja.length) {
+                cell.appendChild(tvEl('div', 'Autorisations en place', null, 'margin:.6rem 0 .2rem;font-weight:600;font-size:.82rem;'));
+                const t2 = document.createElement('table'), c2 = document.createElement('tbody');
+                deja.forEach(d => {
+                    const t = document.createElement('tr'); t.appendChild(tvEl('td', d, null, 'font-family:monospace;'));
+                    const act = document.createElement('td'), b = tvEl('button', 'Retirer', 'btn det-retirer-autorisation'); b.onclick = () => detAutoriser(a.nom, d, false);
+                    act.appendChild(b); t.appendChild(act); c2.appendChild(t);
+                });
+                t2.appendChild(c2); cell.appendChild(t2);
+            }
+            ligne.appendChild(cell); tr.after(ligne); tr._detail = ligne;
+        }
+
         async function detRender() {
             const [d, pr] = await Promise.all([api('/adblock-tv/auto/detection'), api('/adblock-tv/auto/profil')]);
             const etat = document.getElementById('det-etat'), tb = document.getElementById('det-appareils'), tp = document.getElementById('det-profil');
@@ -719,6 +761,7 @@
                 const action = document.createElement('td'), bouton = tvEl('button', 'Retirer et ne plus ajouter', 'btn det-ignorer');
                 bouton.onclick = () => detIgnorer(a.nom);
                 action.appendChild(bouton);
+                if (a.mode === 'auto') { const ba = tvEl('button', 'Autorisations', 'btn det-autorisations', 'margin-right:.4rem;'); ba.onclick = () => detAutorisations(a, tr); action.insertBefore(ba, bouton); }
                 [tvEl('td', a.nom), tvEl('td', (a.adresses || []).join(', '), null, 'font-family:monospace;font-size:.78rem;'), tvEl('td', a.mac || '—', null, 'font-family:monospace;'),
                  tvEl('td', origine), puits, action].forEach(c => tr.appendChild(c));
                 tb.appendChild(tr);

@@ -143,6 +143,7 @@ def instantane(etat: dict, actives: dict, regles: dict | None = None) -> dict:
             for c in etat["clients"] if c["mode"] == "auto"}
     return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")), "ajout_auto": bool(etat.get("ajout_auto")), "mode_defaut": etat.get("mode_defaut", "auto"),
             "modes": sorted([c["ip"], c["mode"], c["nom"], c.get("puits", True)] for c in etat["clients"]), "vues": vues, "etats": regles or {},
+            "autorisations": etat.get("autorisations", {}),
             "ignores": sorted(etat.get("ignores", []))}
 
 
@@ -174,7 +175,7 @@ def lire_instantane() -> dict | None:
             if not re.fullmatch(r"sbx-tv-auto-[a-z0-9-]{1,40}", str(vue)) or not isinstance(doms, list) \
                     or any(dnstv.valider_domaine(d) != d for d in doms):
                 return None
-        if not isinstance(brut.get("etats", {}), dict):
+        if not isinstance(brut.get("etats", {}), dict) or not isinstance(brut.get("autorisations", {}), dict):
             return None
     except (TypeError, AttributeError):
         return None
@@ -274,6 +275,12 @@ def audit_transitions(avant: dict, voulu: dict) -> None:
     ancien_aa, ancien_md = (bool(avant.get("ajout_auto")), avant.get("mode_defaut", "auto")) if avant else (False, "auto")
     if ancien_aa != voulu["ajout_auto"] or ancien_md != voulu["mode_defaut"]:
         audit("ajout_auto", f"actif={voulu['ajout_auto']} mode_defaut={voulu['mode_defaut']}")      # décision de sécurité : ajoute des appareils sans clic
+    ancien_aut = {(s, d) for s, ds in (avant or {}).get("autorisations", {}).items() for d in ds}
+    nouveau_aut = {(s, d) for s, ds in voulu.get("autorisations", {}).items() for d in ds}
+    for s, d in sorted(nouveau_aut - ancien_aut)[:50]:
+        audit("autorisation", f"+ {s} {d} : exempté du puits global pour cet appareil")
+    for s, d in sorted(ancien_aut - nouveau_aut)[:50]:
+        audit("autorisation", f"- {s} {d} : autorisation retirée")
     nouveaux_ignores = sorted(set(voulu.get("ignores", [])) - set((avant or {}).get("ignores", [])))
     retires_ignores = sorted(set((avant or {}).get("ignores", [])) - set(voulu.get("ignores", [])))
     for mac in nouveaux_ignores[:20]:
@@ -294,7 +301,7 @@ def regles_appliquer() -> int:
     avant = lire_instantane()
     ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))
     if (avant is None or avant.get("actif") != voulu["actif"] or avant.get("modes") != voulu["modes"]
-            or set(avant.get("vues", {})) != set(voulu["vues"])):
+            or set(avant.get("vues", {})) != set(voulu["vues"]) or avant.get("autorisations", {}) != voulu["autorisations"]):
         recharger()
         ecrire_instantane(voulu)
         audit_appareils(avant, etat)

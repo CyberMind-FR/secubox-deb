@@ -608,6 +608,8 @@ def detection():
         a = par.setdefault(c["nom"], {"nom": c["nom"], "mode": c["mode"], "mac": c.get("mac", ""), "origine": c.get("origine", "admin"), "ajoute": c.get("ajoute", 0),
                                        "preuve": c.get("preuve", ""), "puits": c.get("puits", True), "adresses": []})
         a["adresses"].append(c["ip"])
+    for a in par.values():
+        a["autorisations"] = etat.get("autorisations", {}).get(dnstv_regles.slug(a["nom"]), [])
     suivi = dnstv_ajout.charger_suivi()
     reglage = dnstv_auto.reglage_depuis(etat)
     return {"ajout_auto": etat["ajout_auto"], "mode_defaut": etat["mode_defaut"], "ignores": etat["ignores"],
@@ -697,4 +699,70 @@ def profil():
     agrege = dnstv_profil.charger_agrege()
     return {"min_appareils": reglage.min_appareils_agreg, "graine": graine, "agrege": agrege,
             "effectif": [{"domaine": d, "motif": m} for d, m in dnstv_profil.profil_effectif(graine, agrege)]}
+
+
+# ── autorisations par appareil (#1965) : exceptions au puits complet ─────────────────────────────────────────────────────────
+class AutoriserIn(BaseModel):
+    domaine: str = Field(min_length=3, max_length=253)
+    actif: bool = True
+
+
+@router.post("/auto/appareils/{nom}/autoriser", dependencies=[Depends(require_jwt)])
+def autoriser_domaine(nom: str, corps: AutoriserIn):
+    """Exempte (actif) ou ré-expose (inactif) UN domaine du puits global pour cet appareil seulement. Rechargement d'Unbound (l'override n'est pas applicable à chaud)."""
+    d = dnstv.valider_domaine(corps.domaine)
+    if not d:
+        raise HTTPException(422, "nom de domaine invalide")
+    with _verrou():
+        etat, ancien = _etat_et_copie()
+        cs = _clients_du_nom(etat, nom)
+        if any(c["mode"] != "auto" or not c.get("puits", True) for c in cs):
+            raise HTTPException(422, "une autorisation n'a de sens que pour un appareil en mode auto avec puits complet (les autres ne voient pas le puits global)")
+        cle = dnstv_regles.slug(nom)
+        aut = {k: list(v) for k, v in etat.get("autorisations", {}).items()}
+        liste = set(aut.get(cle, []))
+        if corps.actif:
+            if len(liste) >= dnstv.AUTORISATIONS_PAR_APPAREIL and d not in liste:
+                raise HTTPException(422, f"{dnstv.AUTORISATIONS_PAR_APPAREIL} autorisations au plus par appareil")
+            liste.add(d)
+        else:
+            liste.discard(d)
+        if liste:
+            aut[cle] = sorted(liste)
+        else:
+            aut.pop(cle, None)
+        if aut:
+            etat["autorisations"] = aut
+        else:
+            etat.pop("autorisations", None)
+        try:
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        try:
+            application = _ctl("regles-appliquer")
+        except HTTPException:
+            dnstv.ecrire_etat(ancien)
+            raise
+        return {"nom": nom, "autorisations": sorted(liste), "application": application}
+
+
+@router.get("/auto/appareils/{nom}/refus", dependencies=[Depends(require_lecture)])
+def refus_appareil(nom: str, minutes: int = 60):
+    """Les noms REFUSÉS à cet appareil récemment (puits ou règle) : de quoi repérer ce qu'il faut autoriser quand un service ne démarre plus."""
+    if not 1 <= minutes <= 1440:
+        raise HTTPException(422, "minutes : entre 1 et 1440")
+    etat = _etat()
+    cs = _clients_du_nom(etat, nom)
+    autorises = set(etat.get("autorisations", {}).get(dnstv_regles.slug(nom), []))
+    evts = _magasin().recents([c["ip"] for c in cs], int(time.time()) - minutes * 60, 1000)
+    par: dict = {}
+    for e in evts:
+        if e["decision"] == "BLOCKED":
+            x = par.setdefault(e["domaine"], {"domaine": e["domaine"], "requetes": 0, "categorie": e["categorie"] or ""})
+            x["requetes"] += 1
+    refus = sorted(par.values(), key=lambda x: (-x["requetes"], x["domaine"]))[:30]
+    for x in refus:
+        x["autorise"] = x["domaine"] in autorises
+    return {"nom": nom, "minutes": minutes, "refus": refus}
 
