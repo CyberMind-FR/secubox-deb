@@ -107,3 +107,76 @@ def test_compteurs_detail_requetes_et_bloquees(tmp_path):
                (dnstv.Evenement(t, "192.168.1.128", "k7.ftven.fr", "A", "NXDOMAIN", "BLOCKED"), ""),
                (dnstv.Evenement(t - 5 * 86400, "192.168.1.128", "vieux.example.org", "A", "NOERROR", "ALLOWED"), "")])
     assert m.compteurs_detail(dnstv._jour(t - 86400)) == {"192.168.1.128": {"k7.ftven.fr": (2, 1)}}
+
+
+# ── Tâche 2 : le moteur rafraîchit le fichier toutes les 5 minutes ──────────────────────────────────────────────────────────────
+import importlib.machinery
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+
+def charger_script(monkeypatch, tmp_path, etat):
+    listes = tmp_path / "listes"
+    listes.mkdir(exist_ok=True)
+    (listes / "services.txt").write_text("ftven.fr France_Télévisions contenu\nfwmrm.net FreeWheel publicite\n")
+    monkeypatch.setattr(dnstv, "DOSSIER_ETAT", tmp_path)
+    monkeypatch.setattr(dnstv, "DOSSIER_LISTES", listes)
+    dnstv.ecrire_etat(etat, tmp_path)
+    chemin = Path(__file__).resolve().parents[1] / "sbin" / "secubox-adguard-auto"
+    loader = importlib.machinery.SourceFileLoader("sbx_tv_auto_dpifeed", str(chemin))
+    spec = importlib.util.spec_from_loader("sbx_tv_auto_dpifeed", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def donnees(tmp_path):
+    t = int(time.time())
+    dnstv.Magasin(tmp_path / "dnstv.db").ajouter([(dnstv.Evenement(t, "192.168.1.128", "k7.ftven.fr", "A", "NOERROR", "ALLOWED"), ""),
+                                                  (dnstv.Evenement(t, "192.168.1.200", "box.example.org", "A", "NOERROR", "ALLOWED"), "")])
+    return t
+
+
+def rafraichir(mod, now, **kw):
+    return mod.rafraichir_feed(now, voisins=lambda: {"192.168.1.128": MAC}, locales=lambda: {"192.168.1.200"}, passerelles=lambda: set(), **kw)
+
+
+def test_le_feed_est_ecrit_meme_sans_appareil_auto_et_exclut_la_box(monkeypatch, tmp_path):
+    mod = charger_script(monkeypatch, tmp_path, {"actif": True, "clients": []})
+    t = donnees(tmp_path)
+    assert rafraichir(mod, t) is True
+    f = F.charger_feed(tmp_path)
+    assert [a["nom"] for a in f["appareils"]] == ["appareil fb:5b"] and f["genere"] == t
+
+
+def test_deux_passages_a_moins_de_cinq_minutes_une_seule_ecriture(monkeypatch, tmp_path):
+    mod = charger_script(monkeypatch, tmp_path, {"actif": True, "clients": []})
+    t = donnees(tmp_path)
+    assert rafraichir(mod, t) is True
+    assert rafraichir(mod, t + 120) is False and F.charger_feed(tmp_path)["genere"] == t
+    assert rafraichir(mod, t + 301) is True and F.charger_feed(tmp_path)["genere"] == t + 301
+
+
+def test_poc_inactif_n_ecrit_rien(monkeypatch, tmp_path):
+    mod = charger_script(monkeypatch, tmp_path, {"actif": False, "clients": []})
+    t = donnees(tmp_path)
+    assert rafraichir(mod, t) is False and not (tmp_path / "dpi-feed.json").exists()
+
+
+def test_une_erreur_de_base_ne_fait_pas_echouer_le_script(monkeypatch, tmp_path, capsys):
+    mod = charger_script(monkeypatch, tmp_path, {"actif": True, "clients": []})
+    (tmp_path / "dnstv.db").write_text("pas une base sqlite")
+    assert rafraichir(mod, int(time.time())) is False
+    assert "dpi-feed non écrit" in capsys.readouterr().err
+
+
+def test_le_passage_normal_du_moteur_ecrit_le_feed_avant_la_sortie_anticipee(monkeypatch, tmp_path):
+    mod = charger_script(monkeypatch, tmp_path, {"actif": True, "clients": [{"ip": "192.168.1.9", "nom": "Autre", "mode": "observe"}]})    # aucun appareil en mode auto
+    t = donnees(tmp_path)
+    monkeypatch.setattr(mod, "voisins_du_lan", lambda: {"192.168.1.128": MAC})
+    monkeypatch.setattr(dnstv, "adresses_locales", lambda executer=None: {"192.168.1.200"})
+    monkeypatch.setattr(dnstv, "passerelles", lambda executer=None: set())
+    assert mod.main(maintenant=t) == 0
+    assert (tmp_path / "dpi-feed.json").exists()
