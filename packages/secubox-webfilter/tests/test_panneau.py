@@ -255,7 +255,7 @@ def test_onglet_appliquer_montre_l_attente_l_estimation_et_demande(navigateur):
     messages = []
     p.on("dialog", lambda d: (messages.append(d.message), d.accept()))
     onglet(p, "appliquer")
-    p.wait_for_selector("#appli-etat")
+    p.wait_for_function("document.getElementById('appli-estimation').textContent.includes('106')")          # les données de l'API sont arrivées
     assert "en attente" in p.text_content("#appli-etat").lower() and "106" in p.text_content("#appli-estimation") and "9,4" in p.text_content("#appli-estimation").replace(".", ",")
     p.click("#btn-appliquer")
     p.wait_for_selector("#toast.show")

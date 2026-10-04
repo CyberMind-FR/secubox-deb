@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox WebFilter — application des profils à Unbound (contrôleur root, #1962)
+After=unbound.service
+# Aucune dépendance forte envers Unbound : le contrôleur ne démarre jamais le DNS ; s'il est absent, l'application est refusée avec un message.
+
+[Service]
+Type=oneshot
+# Root : le contrôleur écrit le drop-in d'Unbound et recharge Unbound. Déclenché par FICHIER (apply.path) et à 4 h (apply.timer), jamais par sudo.
+ExecStart=/usr/sbin/secubox-webfilter-ctl apply
+# La demande déposée par l'API est consommée, que l'application réussisse ou non.
+ExecStopPost=/bin/rm -f /var/lib/secubox/webfilter/appliquer.demande
+TimeoutStartSec=5min
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+# AF_NETLINK : `ip -j neigh` et `ip -j addr`. AF_INET/AF_INET6 : `unbound-control` parle à Unbound sur la boucle locale, et rien d'autre.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+ReadWritePaths=/etc/unbound/unbound.conf.d /var/lib/secubox/webfilter /var/lib/secubox-webfilter-ctl /var/log/secubox
+ReadOnlyPaths=/etc/secubox

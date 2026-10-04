@@ -1,3 +1,15 @@
+secubox-webfilter (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2 (#1962) : profils (observe ou block par catégorie), appareils rattachés par adresse MAC avec exceptions, blocage par vues
+    d'Unbound partagées (une vue par configuration effective distincte ; le réseau entier vers `wf-defaut`, des adresses plus précises
+    pour les appareils assignés ; les appareils d'ad-guard gardent leur vue et sont exclus).
+  * Contrôleur root `secubox-webfilter-ctl` déclenché par fichier (`appliquer.demande`) et à 04:00, jamais par sudo : validation stricte de
+    config.json, budget de zones, instantané, contrôle unbound-checkconf, rechargement, retour arrière, audit, résultat et carte.
+  * Comptage « bloqué » et « aurait bloqué » distincts ; appareils connus publiés pour le panneau ; onglets Profils, Appareils, Appliquer.
+  * webfilter.toml : sections [reseau] et [limites] (aucun réseau de site livré).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 20:00:00 +0200
+
 secubox-webfilter (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Premier paquet (#1962), phase 1 « socle et observe » : catalogue de catégories (adulte, jeux d'argent, phishing et malware),

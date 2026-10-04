@@ -4,7 +4,7 @@ set -e
 
 case "$1" in
   remove|deconfigure)
-    systemctl stop secubox-webfilter-sync.path secubox-webfilter-sync.timer secubox-webfilter-sync.service \
+    systemctl stop secubox-webfilter-apply.path secubox-webfilter-apply.timer secubox-webfilter-sync.path secubox-webfilter-sync.timer secubox-webfilter-sync.service \
       secubox-webfilter-feed.service secubox-webfilter.service >/dev/null 2>&1 || true
     ;;
 esac

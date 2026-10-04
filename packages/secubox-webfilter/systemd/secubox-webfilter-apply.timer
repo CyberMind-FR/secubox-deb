@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox WebFilter — application nocturne (changements de listes et changements en attente)
+
+[Timer]
+# Un rechargement d'Unbound coupe le DNS 7 à 10 s : les changements de listes sont groupés ici, une fois par nuit.
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+Unit=secubox-webfilter-apply.service
+
+[Install]
+WantedBy=timers.target

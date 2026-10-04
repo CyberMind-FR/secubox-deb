@@ -58,7 +58,7 @@ def banc(tmp_path):
     (tmp_path / "racine").mkdir()
     (tmp_path / "u").mkdir()
     toml = tmp_path / "w.toml"
-    toml.write_text(CONF.replace('lan = ["192.168.1.0/24", "2a01:e0a:dec:c4e0::/64"]', 'lan = ["192.168.1.0/24", "2a01:db8::/64"]')
+    toml.write_text(CONF.replace("lan = []", 'lan = ["192.168.1.0/24", "2a01:db8::/64"]')
                     .replace("zones_max = 1500000", "zones_max = 1000"))
     return tmp_path
 

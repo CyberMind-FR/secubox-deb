@@ -80,6 +80,6 @@ def test_config_reseau_et_limites_invalides(tmp_path, suite):
         catalogue.charger_config(ecrire(tmp_path, BON + "\n" + suite + "\n"))
 
 
-def test_toml_livre_porte_reseau_et_limites():
+def test_toml_livre_n_a_aucun_reseau_de_site_et_un_plafond():
     c = catalogue.charger_config(Path(__file__).resolve().parent.parent / "conf" / "webfilter.toml")
-    assert c.reseaux and c.zones_max >= 100000
+    assert c.reseaux == [] and c.zones_max >= 100000

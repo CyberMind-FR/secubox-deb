@@ -1,9 +1,10 @@
 <!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
 # secubox-webfilter
 
-Filtrage de contenus par catégories (#1962). **Phase 1 : observe seulement.** Le module classe les requêtes DNS de chaque appareil
-par catégorie (contenu adulte, jeux d'argent, phishing et malware) et montre ce que le filtrage **aurait** bloqué. Rien n'est bloqué
-et aucune zone n'est écrite dans Unbound : ni rechargement, ni coupure du DNS.
+Filtrage de contenus par catégories (#1962). Le module classe les requêtes DNS de chaque appareil par catégorie (contenu adulte, jeux
+d'argent, phishing et malware). **Phase 1 : observe** (ce que le filtrage *aurait* bloqué). **Phase 2 : profils et blocage** : un profil met chaque
+catégorie en `observe` ou `block` ; un appareil est rattaché à un profil par adresse MAC, avec des exceptions. Tant qu'aucun profil ne bloque, rien
+n'est écrit dans Unbound : ni rechargement, ni coupure du DNS.
 
 ## Fonctionnement
 
@@ -53,3 +54,33 @@ domaines) ne fait qu'ajouter un faux classement en mode observe. Le parking n'a 
 ## Tests
 
 `python -m pytest tests` (99 tests, dont un banc navigateur Playwright pour le panneau, ignoré si Playwright est absent).
+
+
+## Phase 2 : profils, appareils, blocage
+
+- **Profils** (`/var/lib/secubox/webfilter/config.json`, écrit par l'API) : mode `observe` ou `block` par catégorie, autorisations par domaine. `defaut`
+  s'applique à tout appareil non assigné et ne se supprime pas. Modèles `enfants` et `adultes` proposés, jamais appliqués d'office.
+- **Appareils** : clé = adresse MAC (IPv4 et IPv6 ensemble, d'après `ip neigh`), profil et exceptions par catégorie. Les appareils gérés par **ad-guard**
+  (TV, streamers) gardent leur filtrage propre et ne sont pas assignables ici : leur vue est plus précise que celle du réseau entier.
+- **Blocage** : une vue d'Unbound **par configuration effective distincte** (deux appareils de même configuration partagent la même vue : la mémoire dépend
+  du nombre de configurations, pas d'appareils). Le réseau entier (`[reseau] lan` de `/etc/secubox/webfilter.toml`) pointe vers `wf-defaut` ; chaque appareil
+  assigné a une entrée `/32` ou `/128` plus précise. Zones `always_nxdomain` ; les autorisations sont des zones `transparent` plus précises.
+- **Application** : `POST /api/v1/webfilter/appliquer` dépose `appliquer.demande` ; l'unité root `secubox-webfilter-apply` (déclenchée par
+  `secubox-webfilter-apply.path`, jamais par sudo) lance `secubox-webfilter-ctl apply`, qui valide `config.json` comme une entrée hostile, génère
+  `/etc/unbound/unbound.conf.d/93-secubox-webfilter.conf`, vérifie le budget de zones (`[limites] zones_max`), contrôle avec `unbound-checkconf`, recharge
+  Unbound et **restaure l'ancien fichier octet pour octet** en cas d'échec. Un fichier généré identique ne déclenche **aucun rechargement**.
+- **Nuit** : `secubox-webfilter-apply.timer` applique les changements en attente à 04:00. Un rechargement coupe le DNS 7 à 10 s (mesuré : 6,9 s avec le
+  puits d'ad-guard seul, 9,4 s avec 312 000 zones de catégories en plus). La synchronisation des listes ne recharge jamais Unbound.
+- **Audit** : chaque changement effectif (profil, mode d'une catégorie, appareil, application, refus, échec) est écrit dans `/var/log/secubox/audit.log`
+  par le contrôleur root (module `webfilter-ctl`).
+- **Comptage** : « bloqué » et « aurait bloqué » sont comptés à part d'après `carte.json` (adresse → profil et modes), publiée par le contrôleur.
+
+| Route (`/api/v1/webfilter/`, `require_jwt`) | Rôle |
+|---|---|
+| `GET/POST /profils`, `DELETE /profils/{nom}` | profils (modèles inclus) |
+| `GET /appareils`, `POST/DELETE /appareils/{mac}` | appareils assignés et vus récemment |
+| `GET /appliquer`, `POST /appliquer` | en attente, estimation (zones, mémoire, durée), dernier résultat ; demande d'application |
+
+`/etat` (`require_lecture`) dit `mode_global: "block"` dès qu'un profil bloque, sans nom de profil ni d'appareil.
+
+**Configuration** : renseigner `[reseau] lan` dans `/etc/secubox/webfilter.toml` (vide par défaut : le paquet n'applique jamais les réseaux d'un autre site).
