@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Le paquet n'applique JAMAIS de valeurs par défaut : un autre réseau recevrait les adresses de gk2. La génération
+        # n'a lieu que si l'exploitant a posé /etc/secubox/dns-lan.toml (modèle : /usr/share/secubox/dns-lan/dns-lan.toml.exemple).
+        # Un échec ne bloque pas l'installation : la configuration précédente reste en place.
+        if [ -f /etc/secubox/dns-lan.toml ]; then
+            /usr/sbin/secubox-dns-lan generate || echo "secubox-dns-lan : génération refusée, configuration précédente conservée" >&2
+        else
+            echo "secubox-dns-lan : copier /usr/share/secubox/dns-lan/dns-lan.toml.exemple vers /etc/secubox/dns-lan.toml puis lancer « secubox-dns-lan generate »" >&2
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

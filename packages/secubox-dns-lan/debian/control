@@ -1,0 +1,17 @@
+Source: secubox-dns-lan
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/gkerma/secubox-deb
+
+Package: secubox-dns-lan
+Architecture: all
+Depends: ${misc:Depends}, python3 (>= 3.11), unbound, secubox-core (>= 1.4.0)
+Description: SecuBox DNS du LAN : drop-ins Unbound et adresse IPv6 stable générés
+ Le DNS du réseau local d'une SecuBox : écoute et accès d'Unbound sur le LAN, résolveur
+ IPv6, vue locale du sous-domaine de la box, noms redirigés vers des machines du LAN, et
+ l'adresse IPv6 stable de la box. Les valeurs du site vivent dans /etc/secubox/dns-lan.toml ;
+ la commande secubox-dns-lan génère les fichiers, les valide avec unbound-checkconf (retour
+ arrière si le contrôle échoue) et ne recharge Unbound que si la configuration effective change.
