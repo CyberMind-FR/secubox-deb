@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# DNS du LAN (#1938) : les valeurs du site. `secubox-dns-lan generate` en tire les drop-ins Unbound et l'adresse IPv6 stable.
+# Fichier de configuration : jamais écrasé par une mise à jour du paquet. Mettre les adresses de VOTRE réseau.
+
+[unbound]
+dossier = "/etc/unbound/unbound.conf.d"
+
+# Unbound sert le DNS des clients du LAN (le DHCP annonce cette adresse).
+[lan]
+interface = "192.168.1.200"
+acces = ["192.168.0.0/16"]
+
+# Le DNS IPv6 : la Freebox annonce son propre résolveur, qui répond l'IP publique pour les noms internes.
+# `stable` = adresse sans durée de vie, à désigner dans « DNS IPv6 personnalisé » de Freebox OS ; à revoir si Free change le préfixe.
+[ipv6]
+stable = "2a01:e0a:dec:c4e0::200/64"
+interfaces = ["2a01:e0a:dec:c4e0:f2ad:4eff:fe27:889b", "2a01:e0a:dec:c4e0::200"]
+acces = ["2a01:e0a:dec:c4e0::/64", "fd0f:ee:b0::/64"]
+dropin_reseau = "/etc/systemd/network/10-netplan-eth2.network.d/50-secubox-ipv6-stable.conf"
+
+# Vue locale : tout le sous-domaine de la box résout vers son adresse du LAN (pas de retour en épingle sur l'IP publique).
+[vue_locale]
+zone = "gk2.secubox.in"
+adresse = "192.168.1.200"
+
+# Noms redirigés vers une machine du LAN (les noms voisins gardent leur résolution publique).
+[[hote]]
+nom = "voicestudio.gk3.secubox.in"
+adresse = "192.168.1.9"
+ttl = 300

@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-04 — secubox-dns-lan : le DNS du LAN et l'IPv6 stable dans un paquet (ref #1938)
+Livré et déployé sur gk2 : `secubox-dns-lan` 0.1.0 (arch:all, dépôt apt à jour). Quatre drop-ins Unbound (`96-secubox-lan`, `96-secubox-lan-ipv6`,
+`96-secubox-gk2-local`, `98-secubox-voicestudio-lan`) et le fichier networkd de l'IPv6 `…::200`, jusque-là posés à la main, sont générés depuis
+`/etc/secubox/dns-lan.toml` (modèle fourni, jamais appliqué d'office). `generate` pose, valide par `unbound-checkconf`, restaure si le contrôle
+ou le rechargement échoue, et ne recharge Unbound que si la configuration effective change (redémarrage si une écoute nouvelle apparaît).
+Relecture de sécurité faite (1 bloquant : identifiant de zone IPv6 permettant l'injection de directives ; 8 importants), tout corrigé avec test.
+Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni redémarré, DNS IPv4 et IPv6 inchangés, audit écrit. Reste de #1938
+(réglage Freebox, certificat de gk3, plage DHCP) : non traité ici, l'issue reste ouverte. Hors périmètre, à ranger plus tard : `97-secubox-split-horizon.conf`
+(redirection de `mail.secubox.in`) relève du paquet mail.
+
 ## 2026-10-03 — Page OpenPGP : chaîne d'ancêtres du cadre (ref #1852)
 - `secubox-vault` 2.1.2. Premier essai avec une vraie session (capture et console de l'exploitant) : les boutons « Chiffrer » / « Signer » apparaissent dans la rédaction d'Elastic (greffon chargé) ; la page `pgp.<domaine>` était bloquée par sa CSP `frame-ancestors https://webmail…` car le webmail est lui-même dans le Hall et le navigateur vérifie TOUTE la chaîne. `coffre-pgp-vhost` reprend la liste que le webmail annonce (HAProxy, services cadrables) + le Hall ; origines validées (https, pas de joker). Sur gk2 : `frame-ancestors https://webmail.gk2.secubox.in https://hall.gk2.secubox.in https://hall.gk2.net https://billets.gk2.secubox.in https://hall.gk3.secubox.in`.
 - Leçon : un test dans un cadre unique ne voit pas une CSP de chaîne ; seul un test avec le Hall autour du webmail (ou une vraie session) la révèle.

@@ -1,0 +1,7 @@
+secubox-dns-lan (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier paquet (#1938) : le DNS du LAN de gk2, jusque-là posé à la main, devient reproductible.
+  * secubox-dns-lan generate | check | status, depuis /etc/secubox/dns-lan.toml (exemple fourni, jamais appliqué d'office).
+  * Contrôle par unbound-checkconf avant de garder, retour arrière, rechargement seulement si la configuration effective change.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 12:00:00 +0200

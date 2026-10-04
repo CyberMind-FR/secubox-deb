@@ -1,0 +1,14 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-dns-lan — le DNS du réseau local, généré depuis /etc/secubox/dns-lan.toml (#1938)."""
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/dns-lan")
+
+from dns_lan.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())
