@@ -12,6 +12,18 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 ## 2026-10-04 — Validation par le propriétaire : closes #1959, closes #1960, closes #1963, closes #1965
 Validés et déployés (ad-guard 1.6.2, dpi 1.5.0 arm64, dépôt apt à jour). Restes sortis en issues de suite pour ne rien perdre : #1973 (DPI : destinations vues par IP seule, table IP→nom d'après le cache d'Unbound, catalogue élargi) et #1974 (export des compteurs du toolbox vers ad-guard, dossier 0750 illisible). Essais du jour consignés : réponse `0.0.0.0` à la place de NXDOMAIN sans gain mesuré, NXDOMAIN conservé (#1969, fermée) ; autorisations de la seconde TV (imasdk.googleapis.com, licensing.bitmovin.com) ; règles RTL9 (ads-canalplus.akamaized.net, vizchoice.viznet.tv) à l'essai de 24 h sur les deux TV.
 
+## 2026-10-04 — secubox-webfilter 0.2.0, phase 2 : profils, appareils, blocage par vues d'Unbound (ref #1962)
+Livré et déployé sur gk2 (0.2.0, dépôt apt à jour). Profils (observe ou block par catégorie, autorisations), appareils rattachés par adresse MAC avec exceptions, blocage par des vues
+d'Unbound **partagées** (une vue par configuration effective distincte : mesure du jour, 227 000 zones = 90 Mo et 3 copies = 184 Mo, d'où l'abandon de l'option B ; un rechargement passe de
+6,9 s à 9,4 s avec 312 000 zones de catégories en plus). Le réseau entier pointe vers `wf-defaut`, des `/32` et `/128` plus précis vers les vues des appareils assignés (vérifié sur Unbound
+1.17.1) ; **les TV d'ad-guard gardent leur vue et sont exclues**. Contrôleur root `secubox-webfilter-ctl` déclenché par fichier (`appliquer.demande` + `.path`) et à 04:00, jamais par sudo :
+dossier d'état ouvert sans suivre de lien et propriétaire vérifié, `config.json` plafonné et validé comme entrée hostile, budget de zones et d'octets, contrôle `unbound-checkconf`, rechargement,
+retour arrière, audit dans `audit.log`. Aucun blocage configuré : aucun drop-in, aucun rechargement. Panneau : onglets Profils, Appareils, Appliquer, confirmations avant tout nouveau blocage.
+Essai complet sur un Unbound jetable de gk2 (vrai contrôleur, vrai `unbound-checkconf`, vraies requêtes) : tablette bloquée, poste libre non, adresse d'ad-guard sans entrée, application identique sans
+rechargement, contrôle refusé = ancien fichier conservé, plus aucun blocage = drop-in retiré. Relecture de sécurité finale (0 bloquant, 6 importants, 13 mineurs) : importants et promus corrigés avec test.
+Déploiement : première application sans configuration = « inchange », Unbound intact (même PID), base migrée, routes publiques en 401 sans jeton. **Essai réel de blocage sur un appareil de gk2 : non fait**
+(en attente de l'accord du propriétaire pour 3 à 4 coupures du DNS de 10 s). Restent : P3 (apprentissage, parking), P4 (association au DPI), mineurs différés du registre de relecture.
+
 ## 2026-10-04 — secubox-webfilter 0.1.0, phase 1 « observe » livrée et déployée sur gk2 (ref #1962)
 Nouveau paquet `secubox-webfilter` (arch:all, dépôt apt à jour) : classement des requêtes DNS par catégorie (adulte, jeux d'argent, phishing/malware) à partir du
 journal d'Unbound et de 4 listes publiques téléchargées à l'exécution (HaGeZi NSFW et gambling medium, Block List Project phishing, URLhaus), index compact (8 octets par
