@@ -1,0 +1,14 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-webfilter-sync — synchronise les listes publiques (https seulement, taille plafonnée) (#1962)."""
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/webfilter")
+
+from webfilter.sync import principal  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(principal())
