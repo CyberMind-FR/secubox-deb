@@ -46,6 +46,30 @@ Réalisé avec de vrais noms résolvables (`example.com` étiqueté `enfants`, `
 
 **Conséquence sur l'architecture (à décider, §4)** : le profil par étiquettes demande un rechargement pour chaque changement (≈ 6,6 s sans DNS) et n'est pas démontré fiable ; le profil **par vue** (une vue par profil, ajout et retrait à chaud avec `unbound-control view_local_zone`) est le mécanisme déjà éprouvé en production par ad-guard, se combine avec le puits global (`view-first`) et ne coupe jamais le DNS. Sa contrainte : un client n'a **qu'une vue**, donc les règles d'un profil webfilter doivent être composées avec la vue d'ad-guard du même appareil.
 
+### Listes publiques candidates (vérifiées le 2026-10-04 : téléchargées, comptées, licence lue)
+
+Les listes sont **téléchargées à l'exécution, jamais livrées dans le paquet** : aucune redistribution, seule leur utilisation compte pour la licence (attribution affichée dans le panneau).
+
+| Catégorie | Liste | Domaines | Taille | Licence | Mise à jour | Décision |
+|---|---|---|---|---|---|---|
+| Adulte | HaGeZi NSFW | 84 284 | 1,3 Mo | GPL-3.0 | 03/10/2026 | **retenue P1** (compacte, fraîche) |
+| Adulte | Block List Project « porn » | 953 393 | 26 Mo | MIT | 18/07/2026 | en réserve (couverture large) |
+| Adulte | StevenBlack porn-only | 76 804 | 2 Mo | MIT | — | en réserve |
+| Adulte | UT1 (Toulouse Capitole) « adult » | 4 599 281 | 124 Mo | Creative Commons (variante à confirmer) | 03/10/2026 | trop grosse pour Unbound ; possible en observe (index compact de 37 Mo) |
+| Jeux d'argent | HaGeZi gambling medium | 227 576 | 4,2 Mo | GPL-3.0 | 03/10/2026 | **retenue P1** |
+| Jeux d'argent | UT1 gambling / Block List Project | 39 369 / 342 624 | — | CC / MIT | — | en réserve |
+| Phishing | Block List Project phishing | 190 216 | 5,7 Mo | MIT | — | **retenue P1** |
+| Phishing | UT1 phishing | 245 376 | 1,9 Mo | CC | 03/10/2026 | en réserve |
+| Malware | URLhaus (abuse.ch) hostfile | 388 | 12 Ko | conditions abuse.ch | 04/10/2026 | **retenue P1** (petite, très fraîche) |
+| Malware | Block List Project malware | 2 656 394 | 72 Mo | MIT | — | écartée (trop grosse) |
+| Phishing | Phishing Army | ~100 000 | 3 Mo | **CC BY-NC** | 04/10/2026 | **écartée** : usage non commercial seulement |
+| Drogues | UT1 drogue / Block List Project drugs | 603 / 26 030 | — | CC / MIT | — | P2 |
+| Violence, haine | UT1 agressif | 360 | 3 Ko | CC | — | P2 (très petite) |
+| Armes | aucune liste vérifiée | — | — | — | — | à chercher (P2) |
+| Parking | **aucune liste publique** | — | — | — | — | apprentissage seulement (P3) |
+
+**Conséquences** : la phase 1 couvre **adulte, jeux d'argent, phishing/malware** (le parking, sans liste publique, passe en P3). Le mode « observe » compare chaque requête à un **index compact** (empreinte de 64 bits par domaine, tableau trié, 8 octets par domaine : 4,6 millions de domaines tiennent dans 37 Mo) et **n'écrit aucune zone dans Unbound** : il n'y a donc ni rechargement ni coupure du DNS tant qu'on observe. Seul le blocage (P2) écrit des zones, et seulement pour les domaines retenus.
+
 ## 3. Objectifs
 
 - **Catalogue de catégories** (identifiant, libellé, listes sources, mode par défaut) extensible : adulte (porno/xxx), jeux d'argent, violence, drogues, armes, haine, phishing/malware, parking, publicité audio ; la publicité et le pistage restent à **ad-guard**.
@@ -76,9 +100,9 @@ Module indépendant `secubox-webfilter` (utilisateur dédié `secubox-webfilter`
 
 ## 6. Phases
 
-- **P1 — Socle et observe.** Spike Unbound (précédence, vues, `inform`, mémoire) ; catalogue ; 2–3 catégories (adulte, phishing/malware, parking) avec une liste publique chacune ; profil unique ; mode `observe` ; comptage ; panneau minimal.
+- **P1 — Socle et observe.** (Spike Unbound fait.) Catalogue ; 3 catégories (adulte, jeux d'argent, phishing/malware) avec une liste publique chacune ; profil unique ; mode `observe` par analyse du journal d'Unbound (aucune zone écrite) ; comptage ; panneau minimal. Aucun contrôleur root.
 - **P2 — Profils et appareils.** Profils multiples, assignation par MAC, exceptions, bascule observe → block par catégorie, audit.
-- **P3 — Apprentissage.** Candidats (lexique/TLD, parking, DPI), cycle essai/confirmation, agrégation.
+- **P3 — Apprentissage.** Candidats (lexique/TLD, parking : sans liste publique, DPI), cycle essai/confirmation, agrégation.
 - **P4 — Association.** Catégories publiées au DPI ; flux d'ad-guard ; publicité audio (§7).
 
 ## 7. Publicité audio des radios en flux (décision du propriétaire, 2026-10-04)
