@@ -4,7 +4,7 @@ des adresses plus précises vers les vues des appareils assignés. Déterministe
 Aucune valeur libre n'y entre : noms revalidés, adresses et réseaux par `ipaddress`."""
 import ipaddress
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from . import domaines, profils, zones
 
@@ -24,6 +24,7 @@ class Resultat:
     zones: int
     exclus: dict
     entrees: int
+    liens: dict = field(default_factory=dict)             # {adresse: {"mac", "vue"}} : la carte du démon d'alimentation
 
 
 def _reseau(v) -> str:
@@ -79,7 +80,7 @@ def generer(cfg, reseaux, voisins, adguard, charger, zones_max: int, adresses_bo
     eff_defaut = profils.effective(cfg, "")
     cle_defaut = profils.cle_vue(eff_defaut)
     configs = {VUE_DEFAUT: eff_defaut}
-    liens, deja, exclus = [], set(), {}
+    liens, deja, exclus, infos = [], set(), {}, {}
     for mac in sorted(cfg["appareils"]):
         eff = profils.effective(cfg, mac)
         cle = profils.cle_vue(eff)
@@ -96,6 +97,7 @@ def generer(cfg, reseaux, voisins, adguard, charger, zones_max: int, adresses_bo
         for a in libres:
             deja.add(a)
             liens.append((a, vue))
+            infos[a] = {"mac": mac, "vue": vue}
         configs.setdefault(vue, eff)
     contenu = {nom: _zones_vue(eff, charger) for nom, eff in configs.items()}
     vues = {nom: len(b) + len(a) for nom, (b, a) in contenu.items()}
@@ -110,4 +112,4 @@ def generer(cfg, reseaux, voisins, adguard, charger, zones_max: int, adresses_bo
         lignes.append(f'view:\n    name: "{nom}"\n    view-first: yes\n')
         lignes += [f'    local-zone: "{z}." always_nxdomain\n' for z in b]
         lignes += [f'    local-zone: "{z}." transparent\n' for z in a]
-    return Resultat("".join(lignes), vues, sum(vues.values()), exclus, len(nets) + len(liens))
+    return Resultat("".join(lignes), vues, sum(vues.values()), exclus, len(nets) + len(liens), infos)

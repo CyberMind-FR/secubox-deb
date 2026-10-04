@@ -60,3 +60,26 @@ def test_toml_livre_est_valide():
     cats = catalogue.charger(Path(__file__).resolve().parent.parent / "conf" / "webfilter.toml")
     assert {c.id for c in cats} == {"adulte", "jeux", "phishing"} and all(c.mode == "observe" for c in cats)
     assert all(s.url.startswith("https://") for c in cats for s in c.sources)
+
+
+def test_config_reseau_et_limites_par_defaut(tmp_path):
+    c = catalogue.charger_config(ecrire(tmp_path, BON))
+    assert [x.id for x in c.categories] == ["adulte"] and c.reseaux == [] and c.zones_max == 1_500_000
+
+
+def test_config_reseau_et_limites(tmp_path):
+    c = catalogue.charger_config(ecrire(tmp_path, BON + '\n[reseau]\nlan = ["192.168.1.0/24", "2a01:db8::/64"]\n[limites]\nzones_max = 900000\n'))
+    assert c.reseaux == ["192.168.1.0/24", "2a01:db8::/64"] and c.zones_max == 900000
+
+
+@pytest.mark.parametrize("suite", ['[reseau]\nlan = ["pas-un-reseau"]', '[reseau]\nlan = "192.168.1.0/24"', '[reseau]\nlan = ["0.0.0.0/0"]',
+                                   '[reseau]\nlan = ["10.0.0.0/8\\nserver:"]', '[limites]\nzones_max = 10', '[limites]\nzones_max = 99999999999',
+                                   '[limites]\nzones_max = "beaucoup"', '[reseau]\nautre = 1', '[inconnu]\na = 1'])
+def test_config_reseau_et_limites_invalides(tmp_path, suite):
+    with pytest.raises(catalogue.ErreurCatalogue):
+        catalogue.charger_config(ecrire(tmp_path, BON + "\n" + suite + "\n"))
+
+
+def test_toml_livre_porte_reseau_et_limites():
+    c = catalogue.charger_config(Path(__file__).resolve().parent.parent / "conf" / "webfilter.toml")
+    assert c.reseaux and c.zones_max >= 100000

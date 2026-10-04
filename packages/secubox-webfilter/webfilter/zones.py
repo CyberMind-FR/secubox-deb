@@ -7,6 +7,7 @@ from typing import Iterable
 from . import domaines
 
 _CAT = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+MAX_LST_OCTETS = 100_000_000                       # un fichier plus gros est ignoré (écrit par un compte non root, lu par root)
 
 
 def dedoublonner(noms: Iterable) -> list:
@@ -29,6 +30,8 @@ def charger(dossier, cat: str) -> list:
     noms = []
     if rep.is_dir():
         for f in sorted(rep.glob("*.lst")):
+            if f.is_symlink() or not f.is_file() or f.stat().st_size > MAX_LST_OCTETS:
+                continue
             for ligne in f.read_text(encoding="utf-8", errors="replace").splitlines():
                 n = domaines.valider(ligne)
                 if n:

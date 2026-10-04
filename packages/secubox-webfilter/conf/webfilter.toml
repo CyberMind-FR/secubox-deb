@@ -3,6 +3,15 @@
 # AUCUNE liste n'est livrée avec le paquet : elles sont téléchargées par `secubox-webfilter-sync` (https seulement, taille plafonnée).
 # Chaque licence est affichée dans le panneau. Phase 1 : seul le mode « observe » existe (rien n'est bloqué).
 
+# Réseaux locaux auxquels s'applique le profil « defaut » (une vue d'Unbound pour tout le réseau ; les appareils assignés ont des entrées plus
+# précises, et les appareils d'ad-guard gardent leur vue). Mettre les réseaux de VOTRE box.
+[reseau]
+lan = ["192.168.1.0/24", "2a01:e0a:dec:c4e0::/64"]
+
+# Plafond de zones ajoutées à Unbound par webfilter (mémoire : environ 0,35 Ko par zone ; le puits d'ad-guard en porte déjà 656 704).
+[limites]
+zones_max = 1500000
+
 [[categorie]]
 id = "adulte"
 libelle = "Contenu adulte"

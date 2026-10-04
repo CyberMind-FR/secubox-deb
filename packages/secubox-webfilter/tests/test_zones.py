@@ -32,3 +32,15 @@ def test_charger_revalide_chaque_ligne(tmp_path):
 
 def test_charger_refuse_un_identifiant_de_categorie_hostile(tmp_path):
     assert zones.charger(tmp_path, "../etc") == [] and zones.charger(tmp_path, "") == []
+
+
+def test_charger_ignore_les_liens_symboliques_et_les_fichiers_enormes(tmp_path, monkeypatch):
+    d = tmp_path / "jeux"
+    d.mkdir()
+    (d / "ok.lst").write_text("ok.example.com\n")
+    cible = tmp_path / "ailleurs.txt"
+    cible.write_text("lien.example.com\n")
+    (d / "lien.lst").symlink_to(cible)
+    (d / "gros.lst").write_text("gros.example.com\n" * 10)
+    monkeypatch.setattr(zones, "MAX_LST_OCTETS", 50)
+    assert zones.charger(tmp_path, "jeux") == ["ok.example.com"]
