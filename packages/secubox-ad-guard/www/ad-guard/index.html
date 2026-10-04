@@ -127,12 +127,12 @@
             <div class="stat-card">
                 <div class="stat-icon">📱</div>
                 <div class="stat-value" id="devices-count">-</div>
-                <div class="stat-label">Tracked Devices</div>
+                <div class="stat-label">Appareils vus (DNS, aujourd'hui)</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">🚫</div>
                 <div class="stat-value danger" id="blocked-24h">-</div>
-                <div class="stat-label">Blocked (24h)</div>
+                <div class="stat-label">Bloqués aujourd'hui (DNS)</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">⏳</div>
@@ -140,6 +140,7 @@
                 <div class="stat-label">Pending Approvals</div>
             </div>
         </div>
+        <p id="stats-note" style="color:var(--text-muted);font-size:.78rem;margin:.4rem 0 1rem;"></p>
 
         <div class="tabs">
             <button class="tab active" data-tab="overview">Overview</button>
@@ -395,13 +396,20 @@
             } catch (e) { return null; }
         }
 
+        function statTexte(v, locale) { return (v === undefined || v === null) ? '—' : (locale ? Number(v).toLocaleString() : String(v)); }
         async function fetchStats() {
             const data = await api('/stats');
             if (!data) return;
-            document.getElementById('blocklist-count').textContent = (data.blocklist_domains || 0).toLocaleString();
-            document.getElementById('devices-count').textContent = data.monitored_devices || 0;
-            document.getElementById('blocked-24h').textContent = (data.detections_24h || 0).toLocaleString();
-            document.getElementById('pending-count').textContent = data.pending_delayed_blocks || 0;
+            // « — » quand le chiffre est ABSENT (source illisible) : jamais un zéro qui laisserait croire qu'il n'y a rien (#1963)
+            document.getElementById('blocklist-count').textContent = statTexte(data.blocklist_domains, true);
+            document.getElementById('devices-count').textContent = statTexte(data.monitored_devices);
+            document.getElementById('blocked-24h').textContent = statTexte(data.detections_24h, true);
+            document.getElementById('pending-count').textContent = statTexte(data.pending_delayed_blocks);
+            const notes = [];
+            if (data.dns_lisible === true) notes.push('Compteurs DNS ' + (data.dns_fenetre || '') + ' : ' + Number(data.dns_requetes_jour || 0).toLocaleString() + ' requêtes, ' + (data.dns_taux_blocage || 0) + ' % bloquées');
+            else notes.push('Compteurs DNS illisibles : appareils vus et blocages non disponibles');
+            if (data.toolbox_lisible === false) notes.push('blocages du MITM et appareils du toolbox : illisibles (droits du dossier du toolbox)');
+            document.getElementById('stats-note').textContent = notes.join(' · ');
         }
 
         async function fetchTopDomains() {
@@ -554,14 +562,22 @@
         async function learnRender() {
             const st = await api('/learn/status');
             if (st) {
+                const nb = v => (v === null || v === undefined) ? '—' : Number(v).toLocaleString();                 // illisible : « — », jamais 0
+                const pastille = b => b === true ? '🟢' : (b === false ? '🔴' : '⚪');                               // inconnu : neutre, jamais vert par défaut
                 document.getElementById('learn-status').innerHTML =
                     `<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
-                        <div><b style="font-size:1.4rem;">${(st.learned||0).toLocaleString()}</b><br><small>trackers appris</small></div>
-                        <div><b style="font-size:1.4rem;">${(st.pure||0).toLocaleString()}</b><br><small>pure-trackers</small></div>
-                        <div><b style="font-size:1.4rem;">${(st.allowlist||0).toLocaleString()}</b><br><small>allowlist</small></div>
-                        <div><b>${st.autolearn?'🟢':'🔴'}</b><br><small>autolearn</small></div>
-                        <div><b>${st.ad_learn?'🟢':'🔴'}</b><br><small>ad-learn</small></div>
+                        <div><b style="font-size:1.4rem;">${nb(st.learned)}</b><br><small>trackers appris</small></div>
+                        <div><b style="font-size:1.4rem;">${nb(st.pure)}</b><br><small>pure-trackers</small></div>
+                        <div><b style="font-size:1.4rem;">${nb(st.allowlist)}</b><br><small>allowlist</small></div>
+                        <div><b>${pastille(st.autolearn)}</b><br><small>autolearn</small></div>
+                        <div><b>${pastille(st.ad_learn)}</b><br><small>ad-learn</small></div>
                     </div>`;
+                if (st.lisible === false) {
+                    const m = document.createElement('p');
+                    m.style.cssText = 'color:var(--text-muted);font-size:.8rem;margin:.5rem 0 0;';
+                    m.textContent = 'Compteurs d\u2019apprentissage illisibles : le toolbox ne laisse plus ce module lire ses données (permissions du dossier du toolbox).';
+                    document.getElementById('learn-status').appendChild(m);
+                }
                 const thr = st.thresholds || {};
                 document.getElementById('learn-thresholds').innerHTML = Object.keys(thr).map(k =>
                     `<label style="display:inline-flex;align-items:center;gap:.4rem;margin:.3rem .8rem .3rem 0;">

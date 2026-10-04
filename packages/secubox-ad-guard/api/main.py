@@ -70,8 +70,10 @@ logger = logging.getLogger("secubox.ad-guard")
 # POC « DNS AdBlock TV » (#1943) : mesure du filtrage DNS par appareil (OBSERVE / BLOCK). Isolé : ses routes sont sous /adblock-tv,
 # son état dans /var/lib/secubox/ad-guard/dnstv, et il ne fait RIEN tant qu'on ne l'active pas.
 try:
+    from . import dnstv, stats_standard
     from .dnstv_routes import router as _tv_router
 except ImportError:                                  # lancé hors paquet (tests, uvicorn api.main) : import absolu
+    from api import dnstv, stats_standard
     from api.dnstv_routes import router as _tv_router
 app.include_router(_tv_router)
 
@@ -1125,6 +1127,23 @@ async def health():
     return {"status": "healthy"}
 
 
+_TOOLBOX_DB = "/var/lib/secubox/toolbox/toolbox.db"
+
+
+def _stats_toolbox():
+    """Blocages du MITM et appareils R3 d'après la base du toolbox, EN LECTURE SEULE ; None si elle n'est pas lisible (le toolbox est passé sous son propre
+    utilisateur, dossier en 0750 : ce module ne peut plus l'ouvrir). Jamais un zéro inventé (#1963)."""
+    try:
+        c = sqlite3.connect(f"file:{_TOOLBOX_DB}?mode=ro", uri=True, timeout=5)
+        try:
+            return {"mitm_blocks_total": int(c.execute("SELECT COALESCE(SUM(hits),0) FROM ad_block_stats").fetchone()[0]),
+                    "toolbox_clients": int(c.execute("SELECT COUNT(*) FROM clients").fetchone()[0])}
+        finally:
+            c.close()
+    except Exception:
+        return None
+
+
 @app.get("/stats", dependencies=[Depends(require_jwt)])
 async def get_stats():
     """Ad-guard statistics — AUGMENTED with the REAL board-wide blocking (#740).
@@ -1134,7 +1153,7 @@ async def get_stats():
     read all-zeros. Reflect reality: blocklist = sinkhole NXDOMAIN domains +
     auto-learned trackers; devices + MITM block tally from the toolbox store.
     """
-    s = guard.get_stats() or {}
+    s = dict(guard.get_stats() or {})              # COPIE : le dictionnaire du module est mis en cache, y écrire fausserait les appels suivants (#1963)
     # DNS sinkhole universe.
     sink = 0
     try:
@@ -1144,22 +1163,33 @@ async def get_stats():
                             .read_text()).get("blocked", 0))
     except Exception:
         pass
-    learned = _learn_count(_LEARNED_F)
+    learned = _learn_count(_LEARNED_F) or 0
     s["sinkhole_domains"] = sink
     s["learned_trackers"] = learned
     s["blocklist_domains"] = sink + learned
-    # Real MITM block tally + monitored devices from the toolbox store.
+    # Le blocage réel est celui du puits DNS : ses compteurs (dnsfeed) donnent les chiffres de la partie standard (#1963). Source illisible : « dns_lisible: false ».
     try:
-        import sqlite3 as _sq
-        c = _sq.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=5)
-        s["mitm_blocks_total"] = int(c.execute(
-            "SELECT COALESCE(SUM(hits),0) FROM ad_block_stats").fetchone()[0])
-        s["blocked_24h"] = s.get("mitm_blocks_total", 0)
-        s["monitored_devices"] = int(c.execute(
-            "SELECT COUNT(*) FROM clients").fetchone()[0])
-        c.close()
+        magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
+        itf = dnstv.interface_lan()
+        voisins = dnstv.lire_voisins(interface=itf) if itf else {}
+        exclus = dnstv.adresses_locales() | dnstv.passerelles()
+        jour = dnstv._jour(int(time.time()))
+        debut = time.mktime(time.strptime(jour, "%Y-%m-%d")) - time.timezone              # minuit UTC du jour courant
+        actifs = [c["client"] for c in magasin.par_client() if c["derniere_vue"] >= debut]
+        dns = stats_standard.stats_dns(magasin.statistiques(depuis_jour=jour), actifs, voisins, exclus)
+        s.update(dns)
+        s["detections_24h"] = dns["dns_bloquees_jour"]                    # le champ que lit la carte « Bloqués »
+        s["monitored_devices"] = dns["dns_appareils_jour"]
     except Exception:
-        pass
+        s["dns_lisible"] = False
+        s.pop("detections_24h", None)                             # ces deux champs viennent de la base propre du module (inutilisée) : un 0 serait trompeur
+        s.pop("monitored_devices", None)
+    # Données du toolbox (blocages du MITM, appareils R3) : lisibles seulement si les droits le permettent. Sinon : absentes, jamais 0.
+    tb = _stats_toolbox()
+    s["toolbox_lisible"] = tb is not None
+    if tb is not None:
+        s.update(tb)
+        s["blocked_24h"] = tb["mitm_blocks_total"]
     return s
 
 
@@ -1367,12 +1397,13 @@ _LEARN_DEFAULTS = {
 }
 
 
-def _learn_count(p: _P) -> int:
+def _learn_count(p: _P):
+    """Nombre de lignes utiles d'un fichier du toolbox, ou None s'il est ILLISIBLE (droits, absence) : jamais un zéro qui laisse croire qu'il n'y a rien (#1963)."""
     try:
         return sum(1 for ln in p.read_text().splitlines()
                    if ln.strip() and not ln.startswith("#"))
     except Exception:
-        return 0
+        return None
 
 
 @app.get("/learn/status", dependencies=[Depends(require_jwt)])
@@ -1380,17 +1411,18 @@ async def learn_status():
     """Auto-learning state: learned/pure/allowlist counts + tunable thresholds."""
     f = {}
     try:
-        from secubox_toolbox.filters import get_filters
-        f = get_filters() or {}
+        import json as _jf
+        brut = _jf.loads(_FILTERS_F.read_text())              # le fichier de réglages du toolbox est lisible ; l'import du paquet toolbox ne l'est pas toujours
+        f = brut if isinstance(brut, dict) else {}
     except Exception:
-        pass
+        f = {}
     thr = {k: f.get(k, d) for k, d in _LEARN_DEFAULTS.items()}
+    compteurs = {"learned": _learn_count(_LEARNED_F), "pure": _learn_count(_PURE_F), "allowlist": _learn_count(_ADALLOW_F)}
     return {
-        "learned": _learn_count(_LEARNED_F),
-        "pure": _learn_count(_PURE_F),
-        "allowlist": _learn_count(_ADALLOW_F),
-        "ad_learn": f.get("ad_learn", True),
-        "autolearn": f.get("autolearn", True),
+        **compteurs,
+        "lisible": all(v is not None for v in compteurs.values()),   # faux : les données d'apprentissage du toolbox ne sont pas lisibles par ce module
+        "ad_learn": f["ad_learn"] if isinstance(f.get("ad_learn"), bool) else None,      # None = inconnu (jamais un « vert » par défaut)
+        "autolearn": f["autolearn"] if isinstance(f.get("autolearn"), bool) else None,
         "thresholds": thr,
     }
 
