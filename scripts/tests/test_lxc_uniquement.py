@@ -22,15 +22,9 @@ INTERDITS = re.compile(
     r"(docker(\.io|-ce|-ce-cli|-compose(-plugin)?)?|podman(-[a-z-]+)?|buildah"
     r"|crun|containerd(\.io)?|runc|skopeo)"
 )
-# Contrevenants connus (#1743) — à porter en LXC ou à retirer, jamais à allonger.
-TOLERES = {
-    # Portage LXC en cours : la reconnaissance vocale de Lexie en dépend.
-    "secubox-voicestudio",
-    # Modules livrés comme images docker, décision de portage ou de retrait
-    # attendue.
-    "secubox-gotosocial", "secubox-hexo", "secubox-newsbin", "secubox-ollama",
-    "secubox-redroid", "secubox-simplex", "secubox-voip",
-}
+# Contrevenants connus (#1743) : plus aucun. La liste reste (vide) pour qu'un futur paquet en attente de portage y soit consigné, jamais allongée
+# sans décision ; un nouveau contrevenant fait échouer la CI.
+TOLERES: set[str] = set()
 
 
 def _relations(texte):
