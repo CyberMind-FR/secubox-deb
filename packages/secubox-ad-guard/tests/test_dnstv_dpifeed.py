@@ -83,7 +83,7 @@ def test_ecriture_atomique_permissions_et_relecture(tmp_path):
     f = build({"192.168.1.128": {"a.ftven.fr": (4, 1)}})
     F.ecrire_feed(f, tmp_path)
     p = tmp_path / "dpi-feed.json"
-    assert stat.S_IMODE(os.stat(p).st_mode) == 0o640 and not list(tmp_path.glob(".dpifeed.*"))
+    assert stat.S_IMODE(os.stat(p).st_mode) == 0o600 and not list(tmp_path.glob(".dpifeed.*"))
     g = F.charger_feed(tmp_path)
     assert g["version"] == 1 and g["genere"] == T0 and g["appareils"][0]["requetes"] == 4
 
@@ -180,3 +180,49 @@ def test_le_passage_normal_du_moteur_ecrit_le_feed_avant_la_sortie_anticipee(mon
     monkeypatch.setattr(dnstv, "passerelles", lambda executer=None: set())
     assert mod.main(maintenant=t) == 0
     assert (tmp_path / "dpi-feed.json").exists()
+
+
+# ── passe de correction après la relecture de sécurité (#1960) ───────────────────────────────────────────────────────────────
+import threading  # noqa: E402
+
+
+def test_i2_un_tube_nomme_ne_bloque_pas_la_lecture(tmp_path):
+    os.mkfifo(tmp_path / "dpi-feed.json")
+    r = {}
+    th = threading.Thread(target=lambda: r.update(v=F.charger_feed(tmp_path)), daemon=True)
+    th.start()
+    th.join(5)
+    assert not th.is_alive() and r["v"] is None
+
+
+def test_i2_json_tres_imbrique_est_refuse_sans_exception(tmp_path):
+    (tmp_path / "dpi-feed.json").write_text("[" * 200_000)
+    assert F.charger_feed(tmp_path) is None
+
+
+def test_i2_une_erreur_quelconque_du_feed_ne_fait_pas_echouer_le_moteur(monkeypatch, tmp_path):
+    t = int(time.time())
+    mod = charger_script(monkeypatch, tmp_path, {"actif": True, "clients": [{"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto"}]})
+    from api import dnstv_regles as R
+    regles = R.Regles()
+    rid = regles.proposer("tv-banc", "ad.example.com", 50, "faible", t - R.ESSAI_S - 10, origine="admin")["id"]
+    regles.transiter(rid, "essai", "admin", "", t - R.ESSAI_S - 10)
+    R.ecrire(regles, tmp_path)
+    donnees(tmp_path)
+    monkeypatch.setattr(F, "construire", lambda *a, **k: (_ for _ in ()).throw(TypeError("bug du feed")))
+    monkeypatch.setattr(mod, "voisins_du_lan", lambda: {})
+
+    class Rep:
+        returncode, stdout, stderr = 0, "", ""
+    assert mod.main(sudo=lambda: Rep(), maintenant=t, locales=lambda: set(), passerelles=lambda: set()) == 0
+    assert R.charger(tmp_path).get(rid)["etat"] == "retire"                     # le passage de #1954 a eu lieu malgré le feed en erreur
+
+
+def test_mineur_fichier_en_0600_et_pas_de_temporaire_orphelin_si_l_ecriture_echoue(tmp_path, monkeypatch):
+    f = build({"192.168.1.128": {"a.ftven.fr": (4, 1)}})
+    F.ecrire_feed(f, tmp_path)
+    assert stat.S_IMODE(os.stat(tmp_path / "dpi-feed.json").st_mode) == 0o600                # lu par le seul utilisateur du module
+    monkeypatch.setattr(F.json, "dump", lambda *a, **k: (_ for _ in ()).throw(OSError("disque plein")))
+    with pytest.raises(OSError):
+        F.ecrire_feed(f, tmp_path)
+    assert not list(tmp_path.glob(".dpifeed.*"))

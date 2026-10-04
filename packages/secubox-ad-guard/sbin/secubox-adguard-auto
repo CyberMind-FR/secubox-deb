@@ -11,7 +11,6 @@ contrôleur privilégié (`sudo -n secubox-adguard-tv regles-appliquer`, argumen
 """
 from __future__ import annotations
 
-import sqlite3
 import subprocess
 import sys
 import time
@@ -50,23 +49,29 @@ def rafraichir_feed(now: int, voisins=None, locales=None, passerelles=None) -> b
     etat, erreur = dnstv.lire_etat()
     if erreur or not etat["actif"]:
         return False
-    actuel = dnstv_dpifeed.charger_feed()
-    if actuel is not None and 0 <= now - actuel["genere"] < PERIODE_FEED_S:
-        return False
+    try:
+        actuel = dnstv_dpifeed.charger_feed()
+        if actuel is not None and 0 <= now - actuel["genere"] < PERIODE_FEED_S:
+            return False
+    except Exception as e:                                   # noqa: BLE001
+        print(f"fichier d'échange dpi-feed illisible : {type(e).__name__}: {e}", file=sys.stderr)
     try:
         magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
         exclus = (locales or dnstv.adresses_locales)() | (passerelles or dnstv.passerelles)()
         feed = dnstv_dpifeed.construire(magasin.compteurs_detail(dnstv._jour(now)), (voisins or voisins_du_lan)(), etat, services(), exclus, now)
         dnstv_dpifeed.ecrire_feed(feed)
-    except (OSError, sqlite3.Error, ValueError) as e:
-        print(f"fichier d'échange dpi-feed non écrit : {type(e).__name__}", file=sys.stderr)
+    except Exception as e:                                   # noqa: BLE001 — le moteur de #1954 ne doit JAMAIS échouer à cause du fichier d'échange (revue #1960)
+        print(f"fichier d'échange dpi-feed non écrit : {type(e).__name__}: {e}", file=sys.stderr)
         return False
     return True
 
 
 def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None) -> int:
     now = maintenant or int(time.time())
-    rafraichir_feed(now, voisins, locales, passerelles)                   # avant toute sortie anticipée : utile même sans appareil en mode auto
+    try:
+        rafraichir_feed(now, voisins, locales, passerelles)               # avant toute sortie anticipée : utile même sans appareil en mode auto
+    except Exception as e:                                           # noqa: BLE001 — ceinture et bretelles : jamais de panne du moteur par le fichier d'échange
+        print(f"fichier d'échange dpi-feed : {type(e).__name__}: {e}", file=sys.stderr)
     cl = classeur()
     magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
     etat_modifie, ajouts, res = False, [], {"changements": [], "applique": False}

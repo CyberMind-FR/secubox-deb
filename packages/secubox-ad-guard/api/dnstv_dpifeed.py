@@ -11,8 +11,10 @@ lecture sans suivre les liens symboliques. Module sans entrée/sortie réseau.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import stat
 import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Set
@@ -72,19 +74,32 @@ def ecrire_feed(feed: dict, dossier: Optional[Path] = None) -> None:
     d = dossier or dnstv.DOSSIER_ETAT
     d.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".dpifeed.")
-    with os.fdopen(fd, "w", encoding="utf-8") as h:
-        os.fchmod(h.fileno(), 0o640)
-        json.dump(feed, h, ensure_ascii=False)
-    os.replace(tmp, d / FICHIER)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), 0o600)                      # lu par le seul utilisateur du module (propriétaire) ; l'API du DPI tourne sous le même
+            json.dump(feed, h, ensure_ascii=False)
+        os.replace(tmp, d / FICHIER)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)                                    # pas de temporaire orphelin si l'écriture échoue (disque plein)
+        raise
 
 
 def charger_feed(dossier: Optional[Path] = None) -> Optional[dict]:
     f = (dossier or dnstv.DOSSIER_ETAT) / FICHIER
     try:
-        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(fd, "r", encoding="utf-8") as h:
-            brut = json.loads(h.read(LECTURE_MAX))
-    except (OSError, ValueError):
+        # O_NONBLOCK + S_ISREG : un tube nommé posé à la place du fichier ne doit pas bloquer le moteur (revue #1960)
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                return None
+            with os.fdopen(fd, "r", encoding="utf-8") as h:
+                fd = -1
+                brut = json.loads(h.read(LECTURE_MAX))
+        finally:
+            if fd >= 0:
+                os.close(fd)
+    except (OSError, ValueError, RecursionError):
         return None
     if not isinstance(brut, dict) or brut.get("version") != 1 or not isinstance(brut.get("appareils"), list) or not isinstance(brut.get("genere"), int):
         return None

@@ -38,7 +38,7 @@ découplé, tolérant à l'absence (`fail-empty`) et sans chemin d'authentificat
 
 1. **Classification (A)** : le DPI lit **directement** les fichiers de données d'ad-guard livrés par son paquet (`/usr/share/secubox/ad-guard/lists/services.txt`, `lists/*.txt`), lecture seule,
    sans jamais exécuter de code d'ad-guard. Le DPI applique ces données **après** ses propres règles : une règle du DPI gagne toujours (l'opérateur a raison).
-2. **Résumé des appareils du LAN (B′)** : ad-guard écrit `/var/lib/secubox/ad-guard/dnstv/dpi-feed.json` (écriture atomique, `0640 secubox:secubox`), recalculé par le moteur existant
+2. **Résumé des appareils du LAN (B′)** : ad-guard écrit `/var/lib/secubox/ad-guard/dnstv/dpi-feed.json` (écriture atomique, `0600` (propriétaire `secubox`, qui est aussi l'utilisateur de l'API du DPI)), recalculé par le moteur existant
    (minuterie d'une minute) au plus toutes les 5 minutes : par appareil — nom, MAC, adresses, mode, requêtes et blocages sur 24 h, **top 10 services**, répartition par type. Rien de plus que
    ce que `/adblock-tv/sources` et `/flux` exposent déjà à l'administrateur ; pas d'historique requête par requête ; fenêtre fixe de 24 h.
 3. **API du DPI** (admin, `require_jwt` comme le reste) : l'enrichissement A est appliqué dans la réponse de `/usage` (liste « inconnu » → étiquetée) ; nouvelle route `GET /lan_dns` lit le
@@ -47,7 +47,7 @@ découplé, tolérant à l'absence (`fail-empty`) et sans chemin d'authentificat
 
 ## 4. Sécurité et vie privée
 
-- Les noms demandés par appareil sont des métadonnées de navigation : déjà visibles de l'administrateur dans ad-guard ; le fichier d'échange est `0640` et n'est lu que par l'API admin du DPI.
+- Les noms demandés par appareil sont des métadonnées de navigation : déjà visibles de l'administrateur dans ad-guard ; le fichier d'échange est `0600` et n'est lu que par l'API admin du DPI.
 - Aucun nom n'est interprété : tout nom passe par `valider_domaine` (côté ad-guard) puis par `textContent` (côté page) ; une valeur hostile n'est jamais recopiée dans une règle.
 - Aucune écriture dans `rules.json` ni dans la configuration d'un service : v1 est **lecture seule** côté DPI.
 - Le fichier d'échange ne contient ni secret, ni cookie, ni URL, ni contenu.
