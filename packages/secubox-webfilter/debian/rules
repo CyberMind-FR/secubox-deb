@@ -11,7 +11,7 @@ override_dh_auto_install:
 	  debian/secubox-webfilter/usr/lib/secubox/webfilter/api debian/secubox-webfilter/usr/share/secubox/www/webfilter \
 	  debian/secubox-webfilter/usr/share/secubox/menu.d debian/secubox-webfilter/etc/secubox debian/secubox-webfilter/etc/nginx/secubox-routes.d \
 	  debian/secubox-webfilter/lib/systemd/system debian/secubox-webfilter/usr/lib/tmpfiles.d debian/secubox-webfilter/etc/apparmor.d
-	install -m 755 sbin/secubox-webfilter-api sbin/secubox-webfilter-feed sbin/secubox-webfilter-sync debian/secubox-webfilter/usr/sbin/
+	install -m 755 sbin/secubox-webfilter-api sbin/secubox-webfilter-feed sbin/secubox-webfilter-sync sbin/secubox-webfilter-ctl debian/secubox-webfilter/usr/sbin/
 	install -m 644 webfilter/*.py debian/secubox-webfilter/usr/lib/secubox/webfilter/webfilter/
 	install -m 644 api/*.py debian/secubox-webfilter/usr/lib/secubox/webfilter/api/
 	install -m 644 www/webfilter/index.html debian/secubox-webfilter/usr/share/secubox/www/webfilter/

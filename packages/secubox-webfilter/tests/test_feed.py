@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -111,3 +112,68 @@ def test_cardinalite_bornee_par_la_liste_meme_avec_des_sous_domaines_aleatoires(
     lignes = [ligne_unbound("192.168.1.95", f"alea{i}.evil.example.com") for i in range(300)]
     n = feed.suivre(iter(lignes), m, indexes_fixes(adulte=["evil.example.com"]), lambda: set())
     assert n == 300 and m.top_domaines("adulte", "2026-10-01") == [("evil.example.com", 300)]
+
+
+CARTE = {"version": 3, "adresses": {"192.168.1.95": {"mac": "aa:bb:cc:dd:ee:01", "profil": "enfants", "vue": "wf-1a2b3c4d", "modes": {"adulte": "block", "jeux": "observe"}}},
+         "defaut": {"reseaux": ["192.168.1.0/24"], "modes": {"adulte": "observe", "jeux": "block"}}}
+
+
+def test_decision_selon_la_carte():
+    assert feed.decision(CARTE, "192.168.1.95", "adulte") == "bloque" and feed.decision(CARTE, "192.168.1.95", "jeux") == "observe"
+    assert feed.decision(CARTE, "192.168.1.7", "jeux") == "bloque"                      # non assigné, dans le réseau : profil par défaut
+    assert feed.decision(CARTE, "10.9.9.9", "jeux") == "observe"                       # hors réseau par défaut : jamais « bloqué »
+    for mauvaise in (None, {}, [], "x", {"adresses": 3}, {"adresses": {"192.168.1.95": {"modes": 5}}}, {"defaut": {"reseaux": ["pas-un-reseau"], "modes": {}}}):
+        assert feed.decision(mauvaise, "192.168.1.95", "adulte") == "observe"
+
+
+def test_le_demon_note_bloque_ou_observe(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    lignes = [ligne_unbound("192.168.1.95", "x.evil.example.com"), ligne_unbound("192.168.1.5", "y.evil.example.com")]
+    carte = {"adresses": {"192.168.1.95": {"modes": {"adulte": "block"}}}, "defaut": {"reseaux": ["192.168.1.0/24"], "modes": {"adulte": "observe"}}}
+    feed.suivre(iter(lignes), m, indexes_fixes(adulte=["evil.example.com"]), lambda: set(), carte_fn=lambda: carte)
+    assert m.par_client_decision("2026-10-01") == {"192.168.1.95": {"adulte": {"bloque": 1}}, "192.168.1.5": {"adulte": {"observe": 1}}}
+
+
+def test_carte_illisible_donne_observe_sans_exception(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    feed.suivre(iter([ligne_unbound("192.168.1.95", "x.evil.example.com")]), m, indexes_fixes(adulte=["evil.example.com"]), lambda: set(), carte_fn=lambda: "n'importe quoi")
+    assert m.par_categorie_decision("2026-10-01") == {"adulte": {"observe": 1}}
+
+
+def test_la_carte_est_relue_toutes_les_60_secondes(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    etat = {"v": "block"}
+
+    def carte():
+        return {"adresses": {"192.168.1.95": {"modes": {"adulte": etat["v"]}}}}
+
+    def lignes():
+        yield ligne_unbound("192.168.1.95", "a.evil.example.com")
+        etat["v"] = "observe"
+        yield ligne_unbound("192.168.1.95", "b.evil.example.com")
+    t = iter(range(0, 10_000, 100))
+    feed.suivre(lignes(), m, indexes_fixes(adulte=["evil.example.com"]), lambda: set(), carte_fn=carte, recharge_s=1.0, horloge=lambda: next(t))
+    assert m.par_categorie_decision("2026-10-01") == {"adulte": {"bloque": 1, "observe": 1}}
+
+
+def test_lire_carte_tolerant(tmp_path):
+    f = tmp_path / "carte.json"
+    assert feed.lire_carte(f) == {}
+    f.write_text("pas du json")
+    assert feed.lire_carte(f) == {}
+    f.write_text("x" * (2 * 1024 * 1024))
+    assert feed.lire_carte(f) == {}
+    f.write_text('{"adresses": {}}')
+    assert feed.lire_carte(f) == {"adresses": {}}
+
+
+def test_publier_connus_seulement_les_adresses_vues_et_borne(tmp_path):
+    f = tmp_path / "connus.json"
+    voisins = {"aa:bb:cc:dd:ee:01": ["192.168.1.50", "2a01:db8::50"], "aa:bb:cc:dd:ee:02": ["192.168.1.51"]}
+    feed.publier_connus(f, voisins, {"192.168.1.50", "10.9.9.9"}, maintenant=lambda: 1791090000)
+    d = json.loads(f.read_text())
+    assert d == {"aa:bb:cc:dd:ee:01": {"adresses": ["192.168.1.50"], "vu": 1791090000}}
+    assert oct(f.stat().st_mode & 0o777) == "0o640" and [p.name for p in tmp_path.iterdir()] == ["connus.json"]
+    gros = {f"aa:bb:cc:dd:{i // 256:02x}:{i % 256:02x}": [f"10.0.{i // 256}.{i % 256}"] for i in range(600)}
+    feed.publier_connus(f, gros, {a for v in gros.values() for a in v}, maintenant=lambda: 1)
+    assert len(json.loads(f.read_text())) == 512

@@ -14,10 +14,12 @@ Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core (>= 1.4.0),
  python3-uvicorn | python3-pip,
  systemd, adduser, iproute2
 Recommends: unbound, apparmor
-Description: SecuBox WebFilter : filtrage de contenus par catégories (phase 1, observe)
+Description: SecuBox WebFilter : filtrage de contenus par catégories, profils et appareils
  Classe les requêtes DNS de chaque appareil par catégorie (contenu adulte, jeux d'argent,
- phishing et malware) à partir du journal d'Unbound et des listes publiques, et montre ce
- que le filtrage AURAIT bloqué. Mode « observe » : rien n'est bloqué et aucune zone n'est
- écrite dans Unbound. Les listes sont téléchargées à l'exécution (https, taille plafonnée),
- jamais livrées dans le paquet ; les compteurs sont conservés 30 jours, réservés à
- l'administrateur.
+ phishing et malware) à partir du journal d'Unbound et de listes publiques téléchargées à
+ l'exécution. Mode « observe » (ce que le filtrage aurait bloqué) ou blocage : des
+ profils mettent chaque catégorie en observe ou en block ; un appareil est rattaché à un profil
+ par adresse MAC ; le blocage passe par des vues d'Unbound partagées, appliquées par un
+ contrôleur root déclenché par fichier (contrôle, rechargement, retour arrière, audit). Tant
+ qu'aucun profil ne bloque, rien n'est écrit dans Unbound. Compteurs conservés 30 jours,
+ réservés à l'administrateur.

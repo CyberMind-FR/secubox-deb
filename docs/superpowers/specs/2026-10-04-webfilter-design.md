@@ -120,3 +120,30 @@ Tests purs (catalogue, profils, assignation, génération du drop-in, validation
 - **Qualité et licence des listes publiques** variables : chaque source est vérifiée (licence, taille, fraîcheur) avant d'être retenue.
 - **Charge** : un rechargement d'Unbound par changement d'étiquettes (≈ 10 s sans DNS) ; les changements sont **regroupés** (au plus un par heure) ; la mémoire est **mesurée** à chaque ajout de liste importante.
 - Le parking est un signal **faible** et trompeur : il ne bloque jamais sans confirmation.
+
+## 10. Phase 2 — profils, appareils, exceptions et blocage (conception validée le 2026-10-04)
+
+**Décisions du propriétaire** : architecture **B′** (webfilter possède ses vues d'Unbound ; l'option B de §4, qui plaçait les domaines dans les vues d'ad-guard, est abandonnée) ; **TV et streamers d'ad-guard exclus** de webfilter en v1 ; **rechargement d'Unbound une fois par nuit vers 4 h** pour les changements de listes. Les changements demandés par l'administrateur (profil, mode d'une catégorie, appareil) s'appliquent par un geste explicite « Appliquer maintenant » (coupure DNS d'environ 10 s annoncée) ou, à défaut, à 4 h.
+
+**Pourquoi B′ (mesures du 2026-10-04, Unbound 1.17.1, gk2)** : 227 000 zones coûtent 90 Mo (globales ou dans une vue) ; trois copies dans trois vues coûtent 184 Mo ; des étiquettes coûtent 126 Mo. Dix appareils à vue propre avec 500 000 domaines coûteraient 1 à 2 Go sur 7,9 Go (2,4 Go disponibles). Le puits de production seul démarre en 6,9 s (295 Mo) ; avec une vue de 312 000 zones (adulte + jeux d'argent) : 9,4 s (396 Mo). Une vue partagée coûte donc +100 Mo et +2,5 s de rechargement, quel que soit le nombre d'appareils qui s'y rattachent.
+
+**Mécanisme mesuré** : `access-control-view` sur le réseau entier (`/24`, `/64`) vers la vue `wf-defaut`, et sur des `/32` ou `/128` vers d'autres vues : **l'adresse la plus précise l'emporte** ; les zones globales (le puits d'ad-guard) restent vues de tous grâce à `view-first: yes`. Les appareils d'ad-guard gardent leur vue (plus précise que le réseau entier) : **ils sont exclus naturellement**, et le contrôleur n'écrit jamais d'entrée pour une adresse qu'ad-guard a déjà liée à une vue.
+
+**Modèle** (état `config.json`, écrit par l'API sous `secubox-webfilter`, lu comme **entrée non fiable** par le contrôleur root) :
+- **Profils** : nom (`[a-z][a-z0-9-]{0,31}`), mode par catégorie (`observe` ou `block`), liste d'autorisations (noms de domaine). `defaut` existe toujours, ne se supprime pas, s'applique à tout le réseau non assigné. Modèles proposés, non appliqués d'office : `enfants` (adulte, jeux, phishing en `block`), `adultes` (phishing en `block`).
+- **Appareils** : clé = adresse MAC ; nom, profil, exceptions (`catégorie → observe|block` en plus du profil). Les adresses IPv4 et IPv6 d'un appareil viennent de la table de voisinage, comme ad-guard.
+- **Configuration effective** d'un appareil = catégories du profil modifiées par ses exceptions, plus les autorisations du profil. **Une vue par configuration effective distincte** (nom `wf-<8 hex>` d'après l'empreinte de la configuration) : deux appareils de même configuration partagent la même vue, donc la mémoire dépend du nombre de configurations, jamais du nombre d'appareils.
+- **Autorisations** : émises comme zones `transparent` plus précises que la zone listée dans la même vue (la plus longue correspondance l'emporte), ajoutables à chaud.
+- **Zones** : `always_nxdomain` (même décision qu'ad-guard), tirées des listes brutes `.lst` que la synchronisation écrit désormais à côté des index, **dédoublonnées** (un sous-domaine d'une entrée déjà listée est omis).
+
+**Contrôleur root** `secubox-webfilter-ctl apply|status` : lance par une **unité systemd root déclenchée par fichier** (`appliquer.demande` + `.path`), pas par `sudo` (le service de l'API garde `NoNewPrivileges` ; `sudo` y serait inopérant). Étapes : valider strictement `config.json` → table de voisinage → exclure les adresses d'ad-guard → générer `/etc/unbound/unbound.conf.d/93-secubox-webfilter.conf` → **budget de zones** (refus au-delà de `zones_max`) → instantané de l'ancien fichier → `unbound-checkconf` → rechargement → **retour arrière** si le contrôle ou le rechargement échoue → écrire `resultat.json` (statut, nombre de zones, durée) et `carte.json` (adresse → profil et modes) → audit dans `/var/log/secubox/audit.log` (une ligne par changement effectif : profil, mode d'une catégorie, appareil, application). Fichier généré identique à l'existant : **aucun rechargement**.
+
+**Nuit** : `secubox-webfilter-apply.timer` à 4 h lance `apply` ; la synchronisation des listes (toutes les 6 h) ne recharge jamais Unbound. **Observe → block** : bascule explicite par catégorie et par profil, avec confirmation.
+
+**Comptage** : le démon d'alimentation lit `carte.json` (rechargée chaque minute) et note, par ligne, `decision` = `bloque` si la catégorie est en `block` pour cette adresse, sinon `observe` (« aurait bloqué »). Il publie aussi `connus.json` (adresses et MAC vus, d'après `ip neigh`) pour que le panneau liste les appareils à assigner.
+
+**API** (`require_jwt` pour tout ce qui détaille un appareil ou écrit) : `GET/POST /profils`, `DELETE /profils/{nom}`, `GET /appareils`, `POST /appareils/{mac}` (profil, nom, exceptions), `GET/POST /appliquer` (en attente, état, demande), estimation mémoire et temps de rechargement affichée avant d'appliquer.
+
+**Hors périmètre de la phase 2** : appareils gérés par ad-guard, blocage global par défaut (le profil `defaut` peut passer des catégories en `block` : zones dans sa vue, jamais globales), apprentissage (P3), association DPI (P4), interface usager.
+
+**Risques** : un rechargement dure 7 à 10 s (annoncé, groupé) ; une erreur de profil peut couper un appareil légitime (observe d'abord, retour arrière du contrôleur, bascule en un clic) ; `config.json` écrit par un compte non root est validé comme entrée hostile ; le `zones_max` protège la mémoire de la box.

@@ -50,6 +50,19 @@
         .errtoast { background: var(--red); color: #fff; bottom: 4.5rem; }
         .toast.show, .errtoast.show { display: block; }
         .errtoast .fermer { margin-left: .75rem; background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; }
+        .tabs { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { font-family: inherit; text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; background: none; border: 0; border-bottom: 2px solid transparent;
+               color: var(--p31-dim); padding: .6rem .9rem; cursor: pointer; }
+        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+        .onglet[hidden] { display: none; }
+        .bloque { color: var(--orange); }
+        .ligne-champ { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin: .35rem 0; font-size: .8rem; }
+        .ligne-champ label { min-width: 7rem; color: var(--p31-dim); }
+        input[type=text] { font-family: inherit; background: var(--bg-row); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .35rem .5rem; }
+        .puce { display: inline-flex; gap: .35rem; align-items: center; background: var(--bg-row); border: 1px solid var(--border); border-radius: 12px; padding: .1rem .55rem; margin: .15rem; font-size: .75rem; }
+        .puce button { background: none; border: 0; color: var(--red); cursor: pointer; font-size: .8rem; }
+        .attente { border: 1px solid var(--cyan); border-left: 4px solid var(--cyan); background: rgba(0, 212, 255, .06); border-radius: 8px; padding: .75rem 1rem; margin-bottom: .75rem; }
+        .exclu { color: var(--yellow); }
         @media (max-width: 768px) { .main { margin-left: 0; } }
     </style>
 </head>
@@ -71,6 +84,14 @@
             directe contournent un filtre DNS, et les requêtes de la box elle-même ne sont pas comptées.
         </div>
 
+        <div class="tabs" id="onglets">
+            <button class="tab active" data-onglet="observation">Observation</button>
+            <button class="tab" data-onglet="profils">Profils</button>
+            <button class="tab" data-onglet="appareils">Appareils</button>
+            <button class="tab" data-onglet="appliquer">Appliquer</button>
+        </div>
+
+        <section class="onglet" id="onglet-observation">
         <div class="grid" id="cartes"></div>
 
         <div class="card">
@@ -93,6 +114,40 @@
             <label class="note" for="cat-select">Catégorie </label><select id="cat-select"></select>
             <ul class="top" id="top-domaines"></ul>
         </div>
+        </section>
+
+        <section class="onglet" id="onglet-profils" hidden>
+            <div class="note" id="note-admin-profils" style="display:none">🔒 Connexion administrateur requise pour gérer les profils.</div>
+            <div id="profils-liste"></div>
+            <div class="card" id="nouveau-profil">
+                <h3>➕ Nouveau profil</h3>
+                <div class="ligne-champ">
+                    <label for="nouveau-nom">Nom</label><input type="text" id="nouveau-nom" maxlength="32" placeholder="ex. enfants">
+                    <label for="nouveau-modele">Modèle</label><select id="nouveau-modele"><option value="">(vide : tout en observe)</option></select>
+                    <button class="btn primary" id="btn-creer-profil">Créer</button>
+                </div>
+                <div class="note">Un profil n'agit qu'après « Appliquer » (onglet Appliquer). « defaut » s'applique à tout appareil non assigné.</div>
+            </div>
+        </section>
+
+        <section class="onglet" id="onglet-appareils" hidden>
+            <div class="note" id="note-admin-appareils" style="display:none">🔒 Connexion administrateur requise pour gérer les appareils.</div>
+            <div class="card"><h3>📱 Appareils assignés</h3><div id="appareils-assignes"></div></div>
+            <div class="card"><h3>🔎 Appareils vus récemment, non assignés</h3><div id="appareils-connus"></div>
+                <div class="note">Les appareils gérés par ad-guard (TV, streamers) gardent leur propre filtrage : webfilter ne s'y applique pas.</div></div>
+        </section>
+
+        <section class="onglet" id="onglet-appliquer" hidden>
+            <div class="note" id="note-admin-appliquer" style="display:none">🔒 Connexion administrateur requise pour appliquer les profils.</div>
+            <div class="attente" id="appli-etat"></div>
+            <div class="card">
+                <h3>⚙️ Application</h3>
+                <div id="appli-estimation" class="note"></div>
+                <div id="appli-dernier" class="note"></div>
+                <div class="ligne-champ"><button class="btn primary" id="btn-appliquer">▶ Appliquer maintenant</button>
+                    <span class="note">Sinon, les changements sont appliqués automatiquement à 4 h. Les changements de listes ne sont jamais appliqués avant.</span></div>
+            </div>
+        </section>
     </main>
     <div class="toast" id="toast"></div>
     <div class="errtoast" id="errtoast"><span class="texte"></span><button class="fermer" aria-label="Fermer">✕</button></div>
@@ -121,19 +176,35 @@
         }
         document.querySelector('#errtoast .fermer').addEventListener('click', () => document.getElementById('errtoast').classList.remove('show'));
 
-        async function api(endpoint, methode = 'GET') {
+        const $ = id => document.getElementById(id);
+        async function api(endpoint, methode = 'GET', corps = null) {
             const h = {};
             const jeton = localStorage.getItem('sbx_token');
             if (jeton) h['Authorization'] = 'Bearer ' + jeton;
+            if (corps !== null) h['Content-Type'] = 'application/json';
             let r;
             try {
-                r = await fetch(API_BASE + endpoint, { method: methode, headers: h });
+                r = await fetch(API_BASE + endpoint, { method: methode, headers: h, body: corps !== null ? JSON.stringify(corps) : undefined });
             } catch (e) {
                 return { ok: false, status: 0, data: { detail: 'réseau injoignable' } };
             }
             let data = {};
             try { data = await r.json(); } catch (e) { data = {}; }
             return { ok: r.ok, status: r.status, data };
+        }
+
+        function rendreBandeau(mode) {
+            const b = $('bandeau-observe');
+            b.replaceChildren();
+            if (mode === 'block') {
+                b.append(el('strong', '', '🛡️ Blocage actif sur certains profils.'),
+                         ' Les appareils assignés à un profil qui bloque une catégorie ne joignent plus ces sites ; les autres restent en observation (« aurait bloqué »). ' +
+                         'Limites connues : un résolveur DoH, un VPN ou une adresse IP directe contournent un filtre DNS, et les requêtes de la box ne sont pas comptées.');
+            } else {
+                b.append(el('strong', '', "👁️ Mode observe : rien n'est bloqué."),
+                         " Ce panneau montre ce que le filtrage de contenus aurait bloqué. Limites connues : un résolveur DoH, un VPN ou une adresse IP " +
+                         "directe contournent un filtre DNS, et les requêtes de la box elle-même ne sont pas comptées.");
+            }
         }
 
         function rendreEtat(etat) {
@@ -143,7 +214,7 @@
             sel.replaceChildren();
             for (const c of etat.categories || []) {
                 const carte = el('div', 'stat-card'); carte.dataset.cat = c.id;
-                carte.append(el('div', 'value', fmt(c.requetes_7j)), el('div', 'label', c.libelle));
+                carte.append(el('div', 'value', fmt(c.requetes_7j)), el('div', 'label', c.libelle), el('div', 'label bloque', 'bloqué : ' + fmt(c.bloque_7j)));
                 cartes.append(carte);
                 const o = el('option', '', c.libelle); o.value = c.id; sel.append(o);
                 for (const s of c.sources || []) {
@@ -167,7 +238,12 @@
             for (const [client, cats] of Object.entries(stats.par_client || {})) {
                 const tr = el('tr'); tr.dataset.client = client;
                 tr.append(el('td', '', client));
-                for (const id of ids) tr.append(el('td', '', fmt((cats || {})[id] || 0)));
+                for (const id of ids) {
+                    const td = el('td', '', fmt((cats || {})[id] || 0));
+                    const bl = (((stats.par_client_decision || {})[client] || {})[id] || {}).bloque;
+                    if (bl) td.append(' ', el('span', 'bloque', '(' + fmt(bl) + ' bloqués)'));
+                    tr.append(td);
+                }
                 corps.append(tr);
             }
         }
@@ -195,6 +271,7 @@
         async function refresh() {
             const e = await api('/etat');
             if (!e.ok) { errorToast('État indisponible : ' + (e.data.detail || e.status)); return; }
+            rendreBandeau(e.data.mode_global);
             const ids = rendreEtat(e.data);
             const s = await api('/stats?jours=7');
             if (s.status === 401 || s.status === 403) { masquerAdmin(); return; }
@@ -213,6 +290,201 @@
                 else { toast('Synchronisation demandée : les listes se mettent à jour en arrière-plan.'); setTimeout(refresh, 15000); }
             } finally { b.disabled = false; }
         }
+
+
+        // ── phase 2 : onglets Profils, Appareils, Appliquer ────────────────────────────────────────────────────────────────────────
+        const ADMIN = r => r.status === 401 || r.status === 403;
+        function noteAdmin(onglet, afficher) { const n = $('note-admin-' + onglet); if (n) n.style.display = afficher ? '' : 'none'; }
+        function option(valeur, texte) { const o = el('option', '', texte); o.value = valeur; return o; }
+        function selectMode(valeur) { const s = el('select'); s.append(option('observe', 'observe'), option('block', 'block')); s.value = valeur; return s; }
+
+        function montrer(nom) {
+            document.querySelectorAll('.onglet').forEach(s => { s.hidden = s.id !== 'onglet-' + nom; });
+            document.querySelectorAll('#onglets .tab').forEach(b => b.classList.toggle('active', b.dataset.onglet === nom));
+            if (nom === 'observation') refresh();
+            else if (nom === 'profils') chargerProfils();
+            else if (nom === 'appareils') chargerAppareils();
+            else if (nom === 'appliquer') chargerAppliquer();
+        }
+
+        function modesEffectifs(prof, nom, exceptions) { return Object.assign({}, ((prof || {})[nom] || {}).categories || {}, exceptions || {}); }
+        function nouveauxBlocages(avant, apres) { return Object.keys(apres).filter(c => apres[c] === 'block' && avant[c] !== 'block').sort(); }
+        function enregistrerOk(msg) { toast(msg + ' — à appliquer (onglet Appliquer).'); }
+        function echec(r, defaut) { errorToast(defaut + ' : ' + ((r.data && r.data.detail) || r.status)); }
+
+        let modeles = {};
+        async function chargerProfils() {
+            const r = await api('/profils');
+            const zone = $('profils-liste'); zone.replaceChildren();
+            if (ADMIN(r)) { noteAdmin('profils', true); $('nouveau-profil').style.display = 'none'; return; }
+            noteAdmin('profils', false); $('nouveau-profil').style.display = '';
+            if (!r.ok) { echec(r, 'Profils indisponibles'); return; }
+            modeles = r.data.modeles || {};
+            const sel = $('nouveau-modele'); sel.replaceChildren(option('', '(vide : tout en observe)'));
+            for (const m of Object.keys(modeles)) sel.append(option(m, m));
+            for (const [nom, prof] of Object.entries(r.data.profils || {})) zone.append(carteProfil(nom, prof));
+        }
+
+        function carteProfil(nom, prof) {
+            const carte = el('div', 'card'); carte.dataset.profil = nom;
+            carte.append(el('h3', '', '🗂️ ' + nom + (nom === 'defaut' ? ' (tout appareil non assigné)' : '')));
+            const initial = Object.assign({}, prof.categories);
+            for (const cat of Object.keys(prof.categories).sort()) {
+                const ligne = el('div', 'ligne-champ'); const s = selectMode(prof.categories[cat]);
+                s.dataset.profil = nom; s.dataset.cat = cat;
+                ligne.append(el('label', '', cat), s); carte.append(ligne);
+            }
+            let autorise = (prof.autorise || []).slice();
+            const zoneAut = el('div'); const saisie = el('input'); saisie.type = 'text'; saisie.placeholder = 'domaine à autoriser';
+            const dessiner = () => {
+                zoneAut.replaceChildren();
+                autorise.forEach((d, i) => {
+                    const puce = el('span', 'puce', d); const x = el('button', '', '✕'); x.title = 'Retirer';
+                    x.addEventListener('click', () => { autorise.splice(i, 1); dessiner(); });
+                    puce.append(x); zoneAut.append(puce);
+                });
+            };
+            dessiner();
+            const ajout = el('button', 'btn', '+ Autoriser'); ajout.addEventListener('click', () => { const v = saisie.value.trim().toLowerCase(); if (v) { autorise.push(v); saisie.value = ''; dessiner(); } });
+            const lAut = el('div', 'ligne-champ'); lAut.append(el('label', '', 'Autorisés'), zoneAut); carte.append(lAut);
+            const lSaisie = el('div', 'ligne-champ'); lSaisie.append(el('label', '', ''), saisie, ajout); carte.append(lSaisie);
+            const actions = el('div', 'ligne-champ');
+            const enr = el('button', 'btn primary', 'Enregistrer'); enr.dataset.action = 'enregistrer-profil'; enr.dataset.profil = nom;
+            enr.addEventListener('click', async () => {
+                const categories = {};
+                carte.querySelectorAll('select[data-cat]').forEach(s => { categories[s.dataset.cat] = s.value; });
+                const nouveaux = Object.keys(categories).filter(c => categories[c] === 'block' && initial[c] !== 'block');
+                if (nouveaux.length && !confirm('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour le profil « ' + nom + ' » ? Les appareils de ce profil ne pourront plus joindre ces sites après l\'application.')) return;
+                const rr = await api('/profils', 'POST', { nom, categories, autorise });
+                if (rr.ok) { enregistrerOk('Profil « ' + nom + ' » enregistré'); chargerProfils(); } else echec(rr, 'Profil refusé');
+            });
+            actions.append(enr);
+            if (nom !== 'defaut') {
+                const sup = el('button', 'btn', 'Supprimer'); sup.dataset.action = 'supprimer-profil'; sup.dataset.profil = nom;
+                sup.addEventListener('click', async () => {
+                    if (!confirm('Supprimer le profil « ' + nom + ' » ?')) return;
+                    const rr = await api('/profils/' + encodeURIComponent(nom), 'DELETE');
+                    if (rr.ok) { enregistrerOk('Profil supprimé'); chargerProfils(); } else echec(rr, 'Suppression refusée');
+                });
+                actions.append(sup);
+            }
+            carte.append(actions);
+            return carte;
+        }
+
+        async function creerProfil() {
+            const nom = $('nouveau-nom').value.trim(), m = $('nouveau-modele').value;
+            if (!nom) { errorToast('Donnez un nom au profil.'); return; }
+            const base = m && modeles[m] ? modeles[m] : { categories: {}, autorise: [] };
+            const bloque = Object.keys(base.categories).filter(c => base.categories[c] === 'block');
+            if (bloque.length && !confirm('Ce profil bloquera ' + bloque.join(', ') + ' (BLOCAGE) une fois appliqué. Continuer ?')) return;
+            const r = await api('/profils', 'POST', { nom, categories: base.categories, autorise: base.autorise });
+            if (r.ok) { $('nouveau-nom').value = ''; enregistrerOk('Profil « ' + nom + ' » créé'); chargerProfils(); } else echec(r, 'Création refusée');
+        }
+
+        async function chargerAppareils() {
+            const [ra, rp] = await Promise.all([api('/appareils'), api('/profils')]);
+            const zA = $('appareils-assignes'), zC = $('appareils-connus'); zA.replaceChildren(); zC.replaceChildren();
+            if (ADMIN(ra) || ADMIN(rp)) { noteAdmin('appareils', true); return; }
+            noteAdmin('appareils', false);
+            if (!ra.ok || !rp.ok) { echec(ra.ok ? rp : ra, 'Appareils indisponibles'); return; }
+            const noms = Object.keys(rp.data.profils || {});
+            const cats = Object.keys(((rp.data.profils || {}).defaut || {}).categories || {}).sort();
+            const prof = rp.data.profils || {};
+            for (const a of ra.data.assignes || []) zA.append(ligneAppareil(a, noms, cats, prof));
+            for (const c of ra.data.connus || []) zC.append(ligneConnu(c, noms, prof));
+            if (!(ra.data.assignes || []).length) zA.append(el('div', 'note', 'Aucun appareil assigné : tous suivent le profil « defaut ».'));
+        }
+
+        function ligneAppareil(a, noms, cats, prof) {
+            const ligne = el('div', 'rangee'); ligne.dataset.mac = a.mac;
+            ligne.append(el('span', 'nom', a.nom || a.mac), el('span', 'meta', a.mac), el('span', 'meta', (a.adresses || []).join(', ') || 'adresse inconnue'));
+            const geree = a.exclu === 'geree par ad-guard';
+            if (a.exclu) ligne.append(el('span', 'exclu', geree ? '⚠️ gérée par ad-guard : filtrage propre, non assignable ici'
+                                                              : '⚠️ ' + a.exclu + ' : non filtré tant que son adresse n\'est pas connue'));
+            const ret = el('button', 'btn', 'Retirer'); ret.dataset.action = 'retirer-appareil'; ret.dataset.mac = a.mac;
+            ret.addEventListener('click', async () => {
+                if (!confirm('Retirer cet appareil ? Il reprendra le profil « defaut ».')) return;
+                const r = await api('/appareils/' + encodeURIComponent(a.mac), 'DELETE');
+                if (r.ok) { enregistrerOk('Appareil retiré'); chargerAppareils(); } else echec(r, 'Retrait refusé');
+            });
+            if (geree) { ligne.append(ret); return ligne; }                       // ad-guard garde l'appareil : aucune assignation, mais « Retirer » reste possible
+            const nom = el('input'); nom.type = 'text'; nom.value = a.nom || ''; nom.maxLength = 64;
+            const sp = el('select'); sp.dataset.mac = a.mac; sp.dataset.champ = 'profil';
+            for (const n of noms) sp.append(option(n, n)); sp.value = a.profil;
+            ligne.append(nom, sp);
+            for (const c of cats) {
+                const s = el('select'); s.dataset.mac = a.mac; s.dataset.exc = c;
+                s.append(option('', c + ' : (profil)'), option('observe', c + ' : observe'), option('block', c + ' : block')); s.value = (a.exceptions || {})[c] || '';
+                ligne.append(s);
+            }
+            const enr = el('button', 'btn primary', 'Enregistrer'); enr.dataset.action = 'enregistrer-appareil'; enr.dataset.mac = a.mac;
+            enr.addEventListener('click', async () => {
+                const exceptions = {};
+                ligne.querySelectorAll('select[data-exc]').forEach(s => { if (s.value) exceptions[s.dataset.exc] = s.value; });
+                const nouveaux = nouveauxBlocages(modesEffectifs(prof, a.profil, a.exceptions), modesEffectifs(prof, sp.value, exceptions));
+                if (nouveaux.length && !confirm('Passer ' + nouveaux.join(', ') + ' en BLOCAGE pour « ' + (nom.value.trim() || a.mac) + ' » ? Cet appareil ne pourra plus joindre ces sites après l\'application.')) return;
+                const r = await api('/appareils/' + encodeURIComponent(a.mac), 'POST', { nom: nom.value.trim(), profil: sp.value, exceptions });
+                if (r.ok) { enregistrerOk('Appareil enregistré'); chargerAppareils(); } else echec(r, 'Appareil refusé');
+            });
+            ligne.append(enr, ret);
+            return ligne;
+        }
+
+        function ligneConnu(c, noms, prof) {
+            const ligne = el('div', 'rangee'); ligne.dataset.connu = c.mac;
+            ligne.append(el('span', 'nom', c.mac), el('span', 'meta', (c.adresses || []).join(', ')));
+            if (c.exclu) { ligne.append(el('span', 'exclu', '⚠️ gérée par ad-guard : non assignable ici')); return ligne; }
+            const nom = el('input'); nom.type = 'text'; nom.placeholder = 'nom de l\'appareil'; nom.maxLength = 64;
+            const sp = el('select'); for (const n of noms) sp.append(option(n, n));
+            const b = el('button', 'btn primary', 'Assigner'); b.dataset.action = 'assigner'; b.dataset.mac = c.mac;
+            b.addEventListener('click', async () => {
+                const nouveaux = nouveauxBlocages({}, modesEffectifs(prof, sp.value, {}));
+                if (nouveaux.length && !confirm('Assigner cet appareil au profil « ' + sp.value + ' » le mettra en BLOCAGE pour ' + nouveaux.join(', ') + ' après l\'application. Continuer ?')) return;
+                const r = await api('/appareils/' + encodeURIComponent(c.mac), 'POST', { nom: nom.value.trim(), profil: sp.value, exceptions: {} });
+                if (r.ok) { enregistrerOk('Appareil assigné'); chargerAppareils(); } else echec(r, 'Assignation refusée');
+            });
+            ligne.append(nom, sp, b);
+            return ligne;
+        }
+
+        let rechargementEstime = 10, minuterie = null;
+        async function chargerAppliquer() {
+            const r = await api('/appliquer');
+            const etat = $('appli-etat');
+            if (ADMIN(r)) { noteAdmin('appliquer', true); etat.style.display = 'none'; $('btn-appliquer').disabled = true; return; }
+            noteAdmin('appliquer', false); etat.style.display = ''; $('btn-appliquer').disabled = false;
+            if (!r.ok) { echec(r, 'État de l\'application indisponible'); return; }
+            const d = r.data, e = d.estimation || {};
+            rechargementEstime = e.rechargement_s || 10;
+            etat.textContent = d.en_attente ? '⏳ Changements en attente (version ' + d.version + ', appliquée : ' + d.appliquee + ').'
+                                            : '✅ Tout est appliqué (version ' + d.appliquee + ').';
+            $('appli-estimation').textContent = 'Estimation : ' + fmt(e.zones) + ' zones, ≈ ' + fmt(e.memoire_mo) + ' Mo, rechargement d\'Unbound ≈ ' +
+                String(e.rechargement_s === undefined ? TIRET : e.rechargement_s).replace('.', ',') + ' s (coupure du DNS).';
+            const dn = d.dernier;
+            $('appli-dernier').textContent = dn ? 'Dernier résultat : ' + dn.statut + (dn.message ? ' — ' + dn.message : '') + (dn.duree_s !== undefined ? ' (' + String(dn.duree_s).replace('.', ',') + ' s)' : '') : 'Aucune application encore.';
+            return d;
+        }
+
+        async function appliquer() {
+            if (!confirm('Appliquer maintenant ? Le DNS sera coupé environ ' + String(rechargementEstime).replace('.', ',') + ' s pendant le rechargement d\'Unbound.')) return;
+            const b = $('btn-appliquer'); b.disabled = true;
+            try {
+                const r = await api('/appliquer', 'POST');
+                if (ADMIN(r)) errorToast('🔒 Connexion administrateur requise pour appliquer.');
+                else if (!r.ok) echec(r, 'Application refusée');
+                else {
+                    toast('Application demandée : Unbound sera rechargé dans quelques secondes.');
+                    let essais = 0;
+                    clearInterval(minuterie);
+                    minuterie = setInterval(async () => { essais++; const d = await chargerAppliquer(); if ((d && !d.en_attente) || essais >= 20) clearInterval(minuterie); }, 3000);
+                }
+            } finally { b.disabled = false; }
+        }
+
+        document.querySelectorAll('#onglets .tab').forEach(b => b.addEventListener('click', () => montrer(b.dataset.onglet)));
+        $('btn-creer-profil').addEventListener('click', creerProfil);
+        $('btn-appliquer').addEventListener('click', appliquer);
 
         document.getElementById('btn-refresh').addEventListener('click', refresh);
         document.getElementById('btn-sync').addEventListener('click', synchroniser);

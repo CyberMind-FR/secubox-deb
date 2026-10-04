@@ -104,3 +104,49 @@
   network inet6 stream,
   network unix stream,
 }
+
+/usr/sbin/secubox-webfilter-ctl {
+  #include <abstractions/base>
+  #include <abstractions/python>
+
+  /usr/sbin/secubox-webfilter-ctl r,
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/webfilter/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+
+  # Lecture : configuration, état du service (config.json, listes, connus), drop-in d'ad-guard (adresses déjà liées à une vue)
+  /etc/secubox/webfilter.toml r,
+  /var/lib/secubox/webfilter/ r,
+  /var/lib/secubox/webfilter/config.json r,
+  /var/lib/secubox/webfilter/listes/ r,
+  /var/lib/secubox/webfilter/listes/** r,
+  /etc/unbound/unbound.conf.d/ r,
+  /etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf r,
+
+  # Écriture : le SEUL drop-in d'Unbound de webfilter, ses résultats, son état racine et l'audit
+  /etc/unbound/unbound.conf.d/93-secubox-webfilter.conf rw,
+  /etc/unbound/unbound.conf.d/.wf-* rw,
+  /var/lib/secubox/webfilter/resultat.json rw,
+  /var/lib/secubox/webfilter/carte.json rw,
+  /var/lib/secubox/webfilter/.wf-* rw,
+  /var/lib/secubox-webfilter-ctl/ r,
+  /var/lib/secubox-webfilter-ctl/** rwk,
+  /var/log/secubox/audit.log w,
+
+  # Unbound : contrôle de la configuration puis rechargement (jamais de redémarrage), table de voisinage
+  /usr/sbin/unbound-checkconf rix,
+  /usr/sbin/unbound-control rix,
+  /usr/sbin/ip rix,
+  /usr/bin/ip rix,
+  /etc/unbound/** r,
+  /var/lib/unbound/** r,
+
+  capability chown,
+  capability dac_override,
+  capability fowner,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+  network unix stream,
+}

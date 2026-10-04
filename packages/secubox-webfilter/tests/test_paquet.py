@@ -75,3 +75,96 @@ def test_l_alimentation_lit_le_journal_avec_horodatage():
 def test_le_lanceur_de_l_api_utilise_une_socket_en_0660():
     s = lire("sbin/secubox-webfilter-api")
     assert "creer_socket" in s and "fd=" in s
+
+
+# ── phase 2 : contrôleur root et unités d'application (#1962) ────────────────────────────────────────────────────────────────────
+def test_service_du_controleur_est_root_deplenche_par_fichier_et_bac_a_sable():
+    u = lire("systemd/secubox-webfilter-apply.service")
+    assert not re.search(r"^User=", u, re.M) and "Type=oneshot" in u                       # root : écrit dans /etc/unbound
+    assert "ExecStart=/usr/sbin/secubox-webfilter-ctl apply" in u
+    assert "ExecStopPost" not in u                                                           # la demande est consommée PAR LE CONTRÔLEUR, au début
+    assert re.search(r"^StartLimitIntervalSec=\d+", u, re.M) and re.search(r"^StartLimitBurst=\d+", u, re.M)
+    for d in ("CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE", "ProtectKernelTunables=true", "RestrictSUIDSGID=true", "ProtectKernelLogs=true"):
+        assert d in u, d
+    assert re.search(r"^MemoryMax=\d+[MG]$", u, re.M)
+    assert "NoNewPrivileges=true" in u and "ProtectSystem=strict" in u and "PrivateTmp=true" in u
+    assert "Wants=unbound" not in u and "Requires=unbound" not in u
+    rw = [x.lstrip("-") for x in re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()]
+    assert set(rw) == {"/etc/unbound/unbound.conf.d", "/var/lib/secubox/webfilter", "/var/lib/secubox-webfilter-ctl", "/var/log/secubox/audit.log"}
+    assert "AF_INET" in u and "IPAddressDeny=any" in u and "IPAddressAllow=localhost" in u        # unbound-control : boucle locale seulement
+
+
+def test_la_demande_et_la_minuterie_de_4_heures():
+    p = lire("systemd/secubox-webfilter-apply.path")
+    assert "PathExists=/var/lib/secubox/webfilter/appliquer.demande" in p and "Unit=secubox-webfilter-apply.service" in p
+    t = lire("systemd/secubox-webfilter-apply.timer")
+    assert "OnCalendar=*-*-* 04:00:00" in t and "Persistent=true" in t and "Unit=secubox-webfilter-apply.service" in t
+
+
+def test_la_synchronisation_ne_recharge_jamais_unbound():
+    assert "unbound-control" not in lire("systemd/secubox-webfilter-sync.service") and "unbound-control" not in lire("webfilter/sync.py")
+    assert "unbound-control" not in lire("webfilter/sources.py")
+
+
+def test_le_controleur_ne_redemarre_jamais_unbound():
+    src = lire("webfilter/ctl.py")
+    assert '"restart"' not in src and "systemctl" not in src and '"reload"' in src
+
+
+def test_l_api_n_utilise_ni_sudo_ni_la_levee_de_no_new_privileges():
+    u = lire("systemd/secubox-webfilter.service")
+    assert "NoNewPrivileges=true" in u and "NoNewPrivileges=false" not in u
+    for f in ("api/main.py", "webfilter/etat.py"):                                           # l'API ne lance AUCUN sous-processus : elle dépose des fichiers
+        assert "subprocess" not in lire(f) and "os.system" not in lire(f), f
+
+
+def test_postinst_cree_le_dossier_racine_et_active_la_minuterie_et_la_demande():
+    s = lire("debian/postinst")
+    assert "install -d -m 0700 -o root -g root /var/lib/secubox-webfilter-ctl" in s
+    assert "secubox-webfilter-apply.path" in s and "secubox-webfilter-apply.timer" in s
+
+
+def test_regles_installent_le_controleur_et_la_version_est_0_2_0():
+    assert "sbin/secubox-webfilter-ctl" in lire("debian/rules")
+    assert lire("debian/changelog").startswith("secubox-webfilter (0.2.0-1~bookworm1) bookworm;")
+    assert "secubox-webfilter (0.1.0-1~bookworm1)" in lire("debian/changelog")                   # l'historique est conservé
+
+
+def test_profil_du_controleur_n_ecrit_que_son_fichier_dans_unbound():
+    p = lire("apparmor/secubox-webfilter")
+    assert "/usr/sbin/secubox-webfilter-ctl {" in p
+    ctl = p[p.index("/usr/sbin/secubox-webfilter-ctl {"):]
+    assert "/etc/unbound/unbound.conf.d/93-secubox-webfilter.conf rw," in ctl
+    assert not re.search(r"/etc/unbound/\*\*?\s+\S*w", ctl) and "/etc/unbound/unbound.conf.d/** w" not in ctl
+    assert "/usr/sbin/unbound-checkconf" in ctl and "/usr/sbin/unbound-control" in ctl and "/var/lib/secubox-webfilter-ctl/" in ctl
+
+
+def test_le_readme_decrit_la_phase_2():
+    r = lire("README.md")
+    for mot in ("profils", "appliquer.demande", "93-secubox-webfilter.conf", "04:00", "ad-guard"):
+        assert mot in r, mot
+
+
+def test_exception_root_ecrite_dans_les_regles():
+    r = (RACINE.parents[1] / ".claude" / "RULES-CODE.md").read_text(encoding="utf-8")
+    assert "secubox-webfilter-apply.service" in r and "test_paquet.py" in r
+
+
+def test_retrait_du_paquet_retire_le_blocage_et_purge_l_etat_racine():
+    pre, post = lire("debian/prerm"), lire("debian/postrm")
+    assert "secubox-webfilter-apply.service" in pre                                          # l'application en cours est arrêtée
+    assert "rm -f /etc/unbound/unbound.conf.d/93-secubox-webfilter.conf" in pre and "unbound-checkconf" in pre and "unbound-control reload" in pre
+    assert re.search(r"remove\)", pre) and "upgrade" not in pre.split("remove)")[0].split("case")[-1]       # jamais lors d'une simple mise à jour
+    assert "rm -rf /var/lib/secubox-webfilter-ctl" in post
+
+
+def test_textes_a_jour_phase_2():
+    c = lire("debian/control")
+    assert "aucune zone" not in c.lower() and "phase 1" not in c.lower() and "profils" in c.lower()
+    r = lire("README.md")
+    assert "Phase 1 : observe seulement" not in r
+    assert "surestimation" in r.lower() or "surévalu" in r.lower()                           # limite du comptage « bloqué », dite
+
+
+def test_unite_de_l_api_inchangee_sans_capacites_elargies():
+    assert "CapabilityBoundingSet" not in lire("systemd/secubox-webfilter.service") or "CAP_" not in lire("systemd/secubox-webfilter.service")

@@ -17,7 +17,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/webfilter", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from webfilter import catalogue, feed, magasin  # noqa: E402
+from webfilter import catalogue, feed, magasin, voisins  # noqa: E402
 
 RETENTION_JOURS = 30
 
@@ -37,13 +37,16 @@ def main() -> int:
     mag = magasin.Magasin(Path(a.etat) / "webfilter.db")
     exclus = (lambda: set()) if a.sans_adresses_locales else feed.adresses_locales
     indexes = lambda: feed.charger_indexes(Path(a.etat) / "listes", cats)  # noqa: E731
+    etat = Path(a.etat)
+    carte = lambda: feed.lire_carte(etat / "carte.json")  # noqa: E731
+    connus = lambda vus: feed.publier_connus(etat / "connus.json", voisins.depuis_systeme(), vus)  # noqa: E731
     if a.stdin:
-        feed.suivre(sys.stdin, mag, indexes, exclus, retention_jours=RETENTION_JOURS)
+        feed.suivre(sys.stdin, mag, indexes, exclus, retention_jours=RETENTION_JOURS, carte_fn=carte)
         return 0
     p = subprocess.Popen(["/usr/bin/journalctl", "-u", "unbound", "-f", "-n", "0", "-o", "short-unix"], stdout=subprocess.PIPE, text=True,
                          errors="replace")
     try:
-        feed.suivre(p.stdout, mag, indexes, exclus, retention_jours=RETENTION_JOURS)
+        feed.suivre(p.stdout, mag, indexes, exclus, retention_jours=RETENTION_JOURS, carte_fn=carte, connus_fn=connus)
     finally:
         p.terminate()
     return 1                                                      # le journal s'est fermé : systemd relance

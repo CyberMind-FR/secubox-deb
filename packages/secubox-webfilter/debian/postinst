@@ -14,6 +14,8 @@ case "$1" in
     # sinon l'API et la synchronisation liraient tout le journal. Retiré aussi des installations faites avant ce correctif.
     deluser secubox-webfilter systemd-journal >/dev/null 2>&1 || true
     systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-webfilter.conf >/dev/null 2>&1 || true
+    # État du contrôleur root (instantané du drop-in précédent, dernière configuration appliquée) : hors de l'arbre du compte du service.
+    install -d -m 0700 -o root -g root /var/lib/secubox-webfilter-ctl
 
     # --- Confinement AppArmor (enforce) : un échec de chargement ne bloque pas l'installation, il est affiché ---
     if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
@@ -29,7 +31,7 @@ case "$1" in
     systemctl daemon-reload || true
     # Une mise à jour ne doit pas laisser un service arrêté (dpkg le termine) : on active, puis on relance seulement ce qui tourne.
     systemctl enable --now secubox-webfilter.service secubox-webfilter-feed.service secubox-webfilter-sync.path \
-      secubox-webfilter-sync.timer >/dev/null 2>&1 || true
+      secubox-webfilter-sync.timer secubox-webfilter-apply.path secubox-webfilter-apply.timer >/dev/null 2>&1 || true
     systemctl try-restart secubox-webfilter.service secubox-webfilter-feed.service >/dev/null 2>&1 || true
     # Première synchronisation des listes, en arrière-plan : une demande suffit, l'unité .path s'en charge.
     if [ ! -e /var/lib/secubox/webfilter/listes/adulte ]; then

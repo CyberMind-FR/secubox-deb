@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox WebFilter — demande d'application déposée par l'API
+
+[Path]
+PathExists=/var/lib/secubox/webfilter/appliquer.demande
+Unit=secubox-webfilter-apply.service
+
+[Install]
+WantedBy=multi-user.target

@@ -70,3 +70,41 @@ def test_dernier_evenement_vu(tmp_path):
     m.ajouter([(ev(1791090000, "192.168.1.95", "a.example.com"), "adulte"), (ev(1791090500, "192.168.1.95", "b.example.com"), "adulte")], exclus=set())
     m.ajouter([(ev(1791090100, "192.168.1.95", "c.example.com"), "adulte")], exclus=set())
     assert m.dernier_evenement() == 1791090500                          # le plus récent, jamais un recul
+
+
+def test_decision_comptee_a_part(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    m.ajouter([(ev(1791090000, "192.168.1.95", "a.example.com"), "adulte", "bloque"), (ev(1791090001, "192.168.1.95", "a.example.com"), "adulte", "bloque"),
+               (ev(1791090002, "192.168.1.95", "a.example.com"), "adulte", "observe"), (ev(1791090003, "192.168.1.5", "b.example.org"), "jeux")], exclus=set())
+    assert m.par_categorie_decision("2026-10-01") == {"adulte": {"observe": 1, "bloque": 2}, "jeux": {"observe": 1}}
+    assert m.par_client_decision("2026-10-01")["192.168.1.95"] == {"adulte": {"observe": 1, "bloque": 2}}
+    assert m.par_categorie("2026-10-01") == {"adulte": 3, "jeux": 1}                 # les totaux de la phase 1 sont inchangés
+    assert m.top_domaines("adulte", "2026-10-01") == [("a.example.com", 3)]
+
+
+def test_decision_inconnue_comptee_en_observe(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db")
+    m.ajouter([(ev(1791090000, "192.168.1.95", "a.example.com"), "adulte", "n'importe quoi")], exclus=set())
+    assert m.par_categorie_decision("2026-10-01") == {"adulte": {"observe": 1}}
+
+
+def test_migration_d_une_base_de_la_phase_1(tmp_path):
+    import sqlite3
+    cx = sqlite3.connect(tmp_path / "w.db")
+    cx.executescript("""CREATE TABLE wf_counts (jour TEXT NOT NULL, client TEXT NOT NULL, categorie TEXT NOT NULL, domaine TEXT NOT NULL, n INTEGER NOT NULL,
+                        PRIMARY KEY (jour, client, categorie, domaine));
+                        INSERT INTO wf_counts VALUES ('2026-10-04', '192.168.1.95', 'adulte', 'a.example.com', 7);""")
+    cx.commit()
+    cx.close()
+    m = magasin.Magasin(tmp_path / "w.db")
+    assert m.par_categorie_decision("2026-10-01") == {"adulte": {"observe": 7}}
+    m.ajouter([(ev(1791090000, "192.168.1.95", "a.example.com"), "adulte", "bloque")], exclus=set())
+    assert m.par_categorie_decision("2026-10-01") == {"adulte": {"observe": 7, "bloque": 1}}
+
+
+def test_plafond_compte_la_decision_dans_la_cle(tmp_path):
+    m = magasin.Magasin(tmp_path / "w.db", max_lignes=2)
+    m.ajouter([(ev(1791090000, "192.168.1.95", "a.example.com"), "adulte", "observe"), (ev(1791090000, "192.168.1.95", "a.example.com"), "adulte", "bloque"),
+               (ev(1791090000, "192.168.1.95", "c.example.com"), "adulte", "observe")], exclus=set())
+    with m._cx() as cx:
+        assert cx.execute("SELECT COUNT(*) FROM wf_counts").fetchone()[0] == 2
