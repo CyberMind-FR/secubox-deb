@@ -44,8 +44,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-0b. **#1960** DPI enrichi : déployé (ad-guard 1.6.0, dpi 1.5.0 arm64), carte « Appareils du LAN » validée sur données réelles ; reste la validation visuelle par le propriétaire, et l'étiquetage des IP seules (table IP→nom d'après le cache d'Unbound) + un catalogue de services plus large. **#1962** secubox-webfilter : spec écrite (étiquettes Unbound mesurées), à valider. **#1963** métriques de la partie standard d'ad-guard : correction prête (chiffres DNS, « — » si illisible), à déployer en 1.6.1.
-0. **#1959** ajout automatique des TV/streamers + puits complet + agrégation : déployé (ad-guard 1.5.0), puits complet validé sur M6. Reste l'**essai réel de l'ajout automatique** (activer `ajout_auto`, vérifier que la seconde TV est détectée, ajoutée, auditée, retirable) puis `closes #1959`. **#1960** DPI enrichi par ad-guard : spec + plan écrits, code à faire. **#1938** : paquetage fait (`secubox-dns-lan` 0.1.0, déployé) ; reste le réglage Freebox (DNS IPv6), le certificat de gk3 et la plage DHCP.
+0b. **#1962** secubox-webfilter : spec validée (défaut « observe », §7 à mettre à jour) ; reste le plan, puis l'essai technique d'Unbound (précédence des étiquettes, vues d'ad-guard, type de zone `inform`, mémoire) sur un Unbound jetable, puis P1. **#1973** DPI : étiquetage des destinations vues par IP seule. **#1974** export des compteurs du toolbox vers ad-guard. **#1938** : paquetage fait (`secubox-dns-lan` 0.1.0, déployé) ; reste le réglage Freebox (DNS IPv6), le certificat de gk3 et la plage DHCP. Règles RTL9 à l'essai jusqu'au 2026-10-05 matin.
 1. **#1748** audit des autres fusions suspectes (nextcloud c43ffe9b0, metrics/core 7ebe27403, toolbox,
    nac discovery) : lignes de master retirées toujours absentes, à examiner une à une.
 2. **#1903** sauvegardes chiffrées par défaut ; **#1904** un groupe par secret (issus de l'évaluation #1851).

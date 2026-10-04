@@ -9,6 +9,9 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-10-04 — Validation par le propriétaire : closes #1959, closes #1960, closes #1963, closes #1965
+Validés et déployés (ad-guard 1.6.2, dpi 1.5.0 arm64, dépôt apt à jour). Restes sortis en issues de suite pour ne rien perdre : #1973 (DPI : destinations vues par IP seule, table IP→nom d'après le cache d'Unbound, catalogue élargi) et #1974 (export des compteurs du toolbox vers ad-guard, dossier 0750 illisible). Essais du jour consignés : réponse `0.0.0.0` à la place de NXDOMAIN sans gain mesuré, NXDOMAIN conservé (#1969, fermée) ; autorisations de la seconde TV (imasdk.googleapis.com, licensing.bitmovin.com) ; règles RTL9 (ads-canalplus.akamaized.net, vizchoice.viznet.tv) à l'essai de 24 h sur les deux TV.
+
 ## 2026-10-04 — secubox-dns-lan : le DNS du LAN et l'IPv6 stable dans un paquet (ref #1938)
 Livré et déployé sur gk2 : `secubox-dns-lan` 0.1.0 (arch:all, dépôt apt à jour). Quatre drop-ins Unbound (`96-secubox-lan`, `96-secubox-lan-ipv6`,
 `96-secubox-gk2-local`, `98-secubox-voicestudio-lan`) et le fichier networkd de l'IPv6 `…::200`, jusque-là posés à la main, sont générés depuis
