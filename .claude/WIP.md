@@ -44,7 +44,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-0. **#1954** mode auto ad-guard TV : EN SERVICE sur la TV (1.4.2, règles importées, TV en `auto`). Reste : observer quelques jours (candidats proposés, seuils à calibrer), seconde TV (android-22) non traitée, mineurs reportés (HISTORY). **#1938** : packager l'adresse IPv6 `…::200`, les fichiers DNS manuels et le drop-in Unbound.
+0. **#1959** ajout automatique des TV/streamers + puits complet + agrégation : déployé (ad-guard 1.5.0), puits complet validé sur M6. Reste l'**essai réel de l'ajout automatique** (activer `ajout_auto`, vérifier que la seconde TV est détectée, ajoutée, auditée, retirable) puis `closes #1959`. **#1960** DPI enrichi par ad-guard : spec + plan écrits, code à faire. **#1938** : packager l'IPv6 `…::200` et les fichiers DNS manuels.
 1. **#1748** audit des autres fusions suspectes (nextcloud c43ffe9b0, metrics/core 7ebe27403, toolbox,
    nac discovery) : lignes de master retirées toujours absentes, à examiner une à une.
 2. **#1903** sauvegardes chiffrées par défaut ; **#1904** un groupe par secret (issus de l'évaluation #1851).
