@@ -12,6 +12,19 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 ## 2026-10-04 — Validation par le propriétaire : closes #1959, closes #1960, closes #1963, closes #1965
 Validés et déployés (ad-guard 1.6.2, dpi 1.5.0 arm64, dépôt apt à jour). Restes sortis en issues de suite pour ne rien perdre : #1973 (DPI : destinations vues par IP seule, table IP→nom d'après le cache d'Unbound, catalogue élargi) et #1974 (export des compteurs du toolbox vers ad-guard, dossier 0750 illisible). Essais du jour consignés : réponse `0.0.0.0` à la place de NXDOMAIN sans gain mesuré, NXDOMAIN conservé (#1969, fermée) ; autorisations de la seconde TV (imasdk.googleapis.com, licensing.bitmovin.com) ; règles RTL9 (ads-canalplus.akamaized.net, vizchoice.viznet.tv) à l'essai de 24 h sur les deux TV.
 
+## 2026-10-04 — secubox-webfilter 0.1.0, phase 1 « observe » livrée et déployée sur gk2 (ref #1962)
+Nouveau paquet `secubox-webfilter` (arch:all, dépôt apt à jour) : classement des requêtes DNS par catégorie (adulte, jeux d'argent, phishing/malware) à partir du
+journal d'Unbound et de 4 listes publiques téléchargées à l'exécution (HaGeZi NSFW et gambling medium, Block List Project phishing, URLhaus), index compact (8 octets par
+domaine), compteurs par jour/appareil/catégorie/entrée de liste sur 30 jours, API (`/etat` agrégé, `/stats` et domaines réservés à l'administrateur, `/sync`), panneau
+`/webfilter/`. **Observe seulement : rien n'est bloqué, aucune zone écrite dans Unbound** (vérifié : même PID et même horodatage d'Unbound avant et après).
+Essai technique d'Unbound fait avant d'écrire du code : les étiquettes ne se combinent pas avec les vues d'ad-guard et ne sont pas démontrées fiables ; option B retenue (profils par vue
+d'ad-guard, phases suivantes). Relecture de sécurité finale (2 bloquants, 9 importants) : tout corrigé avec test (profil AppArmor sans registre des sessions, cardinalité non bornée des
+compteurs, socket en 0666, base lisible par le groupe secubox, motif du journal incompatible avec `journalctl -o cat`, groupe systemd-journal donné à tout le compte, route nginx dans un dossier non lu, postrm absent…).
+Vérifié sur gk2 : services actifs, socket en 0660, dossier d'état 0700, comptage réel (6 requêtes de test vers bet365.com = une ligne « jeux / bet365.com »), détail par appareil refusé sans jeton y compris par l'adresse publique.
+**À savoir** : AppArmor n'existe pas dans le noyau de gk2 (seul `capability` est actif) : les profils sont livrés mais inertes sur cette box ; l'audit de synchronisation va au journal systemd
+(`audit.log` est `secubox:secubox 0640`, un compte dédié n'y écrit pas ; arrivera en P2 avec un contrôleur root) ; `systemd-tmpfiles` signale un « unsafe path transition » bénin sous `/var/lib/secubox/webfilter` (le sous-dossier `listes` est créé par la synchronisation).
+Restent (phases 2 à 4) : profils et appareils par MAC, exceptions, blocage par vue d'ad-guard, apprentissage, association au DPI. Mineurs différés : voir le registre de la relecture.
+
 ## 2026-10-04 — secubox-dns-lan : le DNS du LAN et l'IPv6 stable dans un paquet (ref #1938)
 Livré et déployé sur gk2 : `secubox-dns-lan` 0.1.0 (arch:all, dépôt apt à jour). Quatre drop-ins Unbound (`96-secubox-lan`, `96-secubox-lan-ipv6`,
 `96-secubox-gk2-local`, `98-secubox-voicestudio-lan`) et le fichier networkd de l'IPv6 `…::200`, jusque-là posés à la main, sont générés depuis
