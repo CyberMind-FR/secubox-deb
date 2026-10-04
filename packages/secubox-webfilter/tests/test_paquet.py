@@ -126,7 +126,8 @@ def test_postinst_cree_le_dossier_racine_et_active_la_minuterie_et_la_demande():
 
 def test_regles_installent_le_controleur_et_la_version_est_0_2_0():
     assert "sbin/secubox-webfilter-ctl" in lire("debian/rules")
-    assert lire("debian/changelog").startswith("secubox-webfilter (0.2.0-1~bookworm1) bookworm;")
+    assert lire("debian/changelog").startswith("secubox-webfilter (0.2.1-1~bookworm1) bookworm;")
+    assert "secubox-webfilter (0.2.0-1~bookworm1)" in lire("debian/changelog")
     assert "secubox-webfilter (0.1.0-1~bookworm1)" in lire("debian/changelog")                   # l'historique est conservé
 
 
@@ -168,3 +169,9 @@ def test_textes_a_jour_phase_2():
 
 def test_unite_de_l_api_inchangee_sans_capacites_elargies():
     assert "CapabilityBoundingSet" not in lire("systemd/secubox-webfilter.service") or "CAP_" not in lire("systemd/secubox-webfilter.service")
+
+
+def test_postinst_demande_une_synchronisation_quand_les_listes_brutes_manquent():
+    s = lire("debian/postinst")
+    assert "*.lst" in s and "sync.demande" in s                              # après une mise à jour 0.1.0 → 0.2.0 : aucune .lst avant la prochaine synchronisation
+    assert 'listes/adulte' not in s                                          # l'ancien critère (le dossier existe) ne suffit plus

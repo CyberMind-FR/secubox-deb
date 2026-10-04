@@ -79,6 +79,15 @@ def lire_carte(chemin) -> dict:
     return d if isinstance(d, dict) else {}
 
 
+def signature(chemin):
+    """(date, taille, inode) d'un fichier, ou None s'il n'existe pas : de quoi savoir qu'il a été réécrit."""
+    try:
+        st = os.stat(chemin)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size, st.st_ino)
+
+
 def decision(carte, client: str, cat: str) -> str:
     """« bloque » si, pour cette adresse, la catégorie est en mode block (appareil assigné, sinon profil par défaut du réseau) ; « observe » sinon,
     et dans tous les cas douteux : une carte illisible ne fait jamais compter « bloqué »."""
@@ -119,13 +128,14 @@ def publier_connus(chemin, voisins: dict, vus: set, maintenant=time.time) -> Non
 
 def suivre(lignes, mag, indexes_fn, exclus_fn, periode_s: float = 2.0, lot: int = 200, recharge_s: float = 60.0,
            retention_jours: int | None = None, purge_s: float = 3600.0, horloge=time.monotonic, carte_fn=None, connus_fn=None,
-           connus_s: float = 300.0) -> int:
+           connus_s: float = 300.0, carte_sig_fn=None, verif_carte_s: float = 5.0) -> int:
     """Consomme `lignes` ; rend le nombre d'événements classés et enregistrés. Une ligne hostile est ignorée ; une erreur d'écriture est
     signalée et le lot perdu, jamais le démon."""
     indexes, exclus = indexes_fn(), exclus_fn()
     carte = carte_fn() if carte_fn else {}
+    sig = carte_sig_fn() if carte_sig_fn else None
     vus: set = set()
-    t_flush = t_recharge = t_purge = t_connus = horloge()
+    t_flush = t_recharge = t_purge = t_connus = t_sig = horloge()
     if retention_jours:
         mag.purger(retention_jours)
     attente, total = [], 0
@@ -146,6 +156,11 @@ def suivre(lignes, mag, indexes_fn, exclus_fn, periode_s: float = 2.0, lot: int 
             indexes, exclus, t_recharge = indexes_fn(), exclus_fn(), now
             if carte_fn:
                 carte = carte_fn()
+        if carte_sig_fn and now - t_sig >= verif_carte_s:               # le contrôleur a réécrit carte.json : relue SANS attendre les 60 s du rechargement général
+            t_sig = now
+            nouvelle = carte_sig_fn()
+            if nouvelle != sig:
+                sig, carte = nouvelle, carte_fn()
         if e is not None:
             if len(vus) < MAX_VUS:
                 vus.add(e.client)

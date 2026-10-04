@@ -99,3 +99,28 @@ def test_retrait_refuse_par_le_controle_restaure_le_dropin(banc):
     ecrire_config(banc, config(TOUT_OBSERVE))
     r = lancer(banc, Faux(checkconf_ok=False))
     assert r["statut"] == "refuse" and dropin(banc).read_bytes() == avant
+
+
+# ── 0.2.1 : essai réel du 2026-10-04 ─────────────────────────────────────────────────────────────────────────────────────────────
+def test_categorie_en_block_sans_aucune_liste_est_refusee(banc):
+    for f in (banc / "etat" / "listes" / "jeux").glob("*.lst"):
+        f.unlink()                                                      # comme après une mise à jour 0.1.0 → 0.2.0 : aucune liste brute avant la prochaine synchronisation
+    ecrire_config(banc, config())
+    s = Faux()
+    r = lancer(banc, s)
+    assert r["statut"] == "refuse" and "jeux" in r["message"] and "synchronisation" in r["message"].lower()
+    assert not dropin(banc).exists() and s.appels == []                 # rien n'est écrit, rien n'est rechargé : jamais « appliqué » avec 0 zone
+
+
+def test_categorie_en_block_avec_liste_vide_est_refusee(banc):
+    (banc / "etat" / "listes" / "jeux" / "hagezi-gambling-medium.lst").write_text("# rien de valide\n")
+    ecrire_config(banc, config())
+    assert lancer(banc, Faux())["statut"] == "refuse"
+
+
+def test_une_categorie_observe_sans_liste_n_empeche_rien(banc):
+    for f in (banc / "etat" / "listes" / "jeux").glob("*.lst"):
+        f.unlink()
+    ecrire_config(banc, config({"adulte": "block", "jeux": "observe", "phishing": "observe"}))
+    r = lancer(banc, Faux())
+    assert r["statut"] == "applique"                                     # seule une catégorie en BLOCK exige une liste

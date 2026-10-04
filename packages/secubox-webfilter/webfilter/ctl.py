@@ -202,11 +202,21 @@ def _appliquer(s, es, racine: Path, dropin: Path, cat_chemin: Path, maintenant, 
     if bloque:
         sources = {c.id: [x.nom for x in c.sources] for c in conf.categories}
         budget = etatsur.Budget(BUDGET_OCTETS)
+        comptes: dict = {}
+
+        def charger(cat):
+            noms = zones.charger_sur(es, cat, sources.get(cat, []), budget)
+            comptes[cat] = len(noms)
+            return noms
         try:
-            res = generation.generer(cfg, conf.reseaux, s.voisins(), generation.adresses_adguard(s.adguard_texte()),
-                                     lambda cat: zones.charger_sur(es, cat, sources.get(cat, []), budget), conf.zones_max, frozenset(s.adresses_box()))
+            res = generation.generer(cfg, conf.reseaux, s.voisins(), generation.adresses_adguard(s.adguard_texte()), charger, conf.zones_max,
+                                     frozenset(s.adresses_box()))
         except (generation.ErreurGeneration, etatsur.ErreurEtat) as e:
             return _fin(s, es, "refuse", str(e)[:300], t0, maintenant, version=cfg["version"], audit=("refuse", str(e)[:200]))
+        vides = sorted(c for c, n in comptes.items() if n == 0)
+        if vides:                                                       # après une mise à jour, les listes brutes manquent jusqu'à la prochaine synchronisation
+            msg = f"catégorie {', '.join(vides)} en block mais aucune liste disponible : lancer une synchronisation des listes"
+            return _fin(s, es, "refuse", msg[:300], t0, maintenant, version=cfg["version"], audit=("refuse", msg[:200]))
     voulu = res.texte if res else None                                  # aucun blocage : AUCUN drop-in (rien à écrire, rien à recharger)
     try:
         actuel = dropin.read_text(encoding="utf-8")
