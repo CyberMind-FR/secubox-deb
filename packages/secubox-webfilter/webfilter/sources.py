@@ -54,6 +54,17 @@ def telecharger(url: str, taille_max: int) -> bytes:
     return b"".join(morceaux)
 
 
+def _ecrire_liste(chemin: Path, noms) -> None:
+    """La liste brute (un domaine par ligne, triée) lue par le contrôleur pour écrire les zones des catégories bloquées."""
+    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".lst-")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write("\n".join(sorted(set(noms))) + "\n")
+        f.flush()
+        os.fchmod(f.fileno(), 0o640)
+        os.fsync(f.fileno())
+    os.replace(tmp, chemin)
+
+
 def _ecrire_meta(chemin: Path, meta: dict) -> None:
     fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".meta-")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -67,7 +78,7 @@ def synchroniser(cat, dossier: Path, fetch=telecharger, maintenant=time.time) ->
     rep = Path(dossier) / cat.id
     rep.mkdir(parents=True, exist_ok=True)
     for s in cat.sources:
-        idx_f, meta_f = rep / f"{s.nom}.idx", rep / f"{s.nom}.json"
+        idx_f, meta_f, lst_f = rep / f"{s.nom}.idx", rep / f"{s.nom}.json", rep / f"{s.nom}.lst"
         try:
             brut = fetch(s.url, s.taille_max)
             noms = list(listes.lire(brut.decode("utf-8", "replace"), s.format))
@@ -79,6 +90,7 @@ def synchroniser(cat, dossier: Path, fetch=telecharger, maintenant=time.time) ->
                 if len(index) < ancien * FRACTION_MIN:
                     raise ErreurSource(f"liste tronquée ({len(index)} contre {ancien}) : ancienne version gardée")
             index.ecrire(idx_f)
+            _ecrire_liste(lst_f, noms)
             _ecrire_meta(meta_f, {"n": len(index), "ts": int(maintenant()), "sha256": hashlib.sha256(brut).hexdigest(),
                                   "licence": s.licence, "url": s.url})
             sortie[s.nom] = {"n": len(index), "ok": True, "erreur": None}

@@ -101,3 +101,28 @@ def test_audit_a_chaque_synchronisation(tmp_path, monkeypatch):
     vus.clear()
     sources.synchroniser(CAT, tmp_path, fetch=lambda u, m: b"")
     assert vus and vus[0][0] == "sync-echec"
+
+
+def test_ecrit_aussi_la_liste_brute_triee_en_0640(tmp_path):
+    sources.synchroniser(CAT, tmp_path, fetch=fetch_ok)
+    f = tmp_path / "adulte" / "s1.lst"
+    assert f.read_text() == "evil.example.com\nporn.example.org\n"
+    assert oct(f.stat().st_mode & 0o777) == "0o640"
+
+
+def test_un_echec_garde_l_ancienne_liste_brute(tmp_path):
+    sources.synchroniser(CAT, tmp_path, fetch=fetch_ok)
+    sources.synchroniser(CAT, tmp_path, fetch=lambda u, m: b"")
+    assert (tmp_path / "adulte" / "s1.lst").read_text() == "evil.example.com\nporn.example.org\n"
+
+
+def test_une_liste_tronquee_ne_remplace_pas_la_liste_brute(tmp_path):
+    gros = "\n".join(f"d{i}.example.com" for i in range(100)).encode()
+    sources.synchroniser(CAT, tmp_path, fetch=lambda u, m: gros)
+    sources.synchroniser(CAT, tmp_path, fetch=lambda u, m: b"seul.example.com\n")
+    assert (tmp_path / "adulte" / "s1.lst").read_text().count("\n") == 100
+
+
+def test_aucun_residu_temporaire(tmp_path):
+    sources.synchroniser(CAT, tmp_path, fetch=fetch_ok)
+    assert sorted(p.name for p in (tmp_path / "adulte").iterdir()) == ["s1.idx", "s1.json", "s1.lst"]
