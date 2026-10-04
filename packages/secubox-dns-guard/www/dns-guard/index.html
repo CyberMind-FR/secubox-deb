@@ -86,6 +86,7 @@
                 <div class="stat-label">Blocklist Size</div>
             </div>
         </div>
+        <div id="stats-note" style="color:var(--text-muted);font-size:.85rem;margin:-.5rem 0 1rem;"></div>
 
         <div class="card">
             <div class="card-header">
@@ -165,14 +166,26 @@
             } catch { return null; }
         }
 
+        const fmt = (v) => (v === null || v === undefined) ? '—' : Number(v).toLocaleString('fr-FR');
+        function ligne(...cellules) {                       // jamais d'innerHTML : tout ce qui vient de l'API est du TEXTE
+            const tr = document.createElement('tr');
+            for (const c of cellules) { const td = document.createElement('td'); if (c instanceof Node) td.append(c); else td.textContent = c; tr.append(td); }
+            return tr;
+        }
+
         async function loadStatus() {
             const data = await api('/status');
             if (!data) return;
-            document.getElementById('queries-24h').textContent = (data.queries_24h || 0).toLocaleString();
-            document.getElementById('blocked-24h').textContent = (data.blocked_24h || 0).toLocaleString();
-            document.getElementById('malware-blocked').textContent = data.malware_blocked || 0;
-            document.getElementById('phishing-blocked').textContent = data.phishing_blocked || 0;
-            document.getElementById('blocklist-size').textContent = (data.blocklist_size || 0).toLocaleString();
+            const set = (id, v) => { document.getElementById(id).textContent = fmt(v); };
+            set('queries-24h', data.queries_24h);
+            set('blocked-24h', data.blocked_24h);
+            set('malware-blocked', data.malware_blocked);
+            set('phishing-blocked', data.phishing_blocked);
+            set('blocklist-size', data.blocklist_size);
+            const dns = data.sources && data.sources.dns;
+            document.getElementById('stats-note').textContent =
+                'Requêtes et blocages : ' + (data.fenetre || 'aujourd\'hui (UTC)') + ', d\'après les compteurs DNS d\'ad-guard' + (dns ? '' : ' (indisponibles : « — »)') +
+                '. Malware et phishing : le puits ne distingue pas ces catégories (« — »), ce n\'est pas un zéro.';
         }
 
         async function checkDomain() {
@@ -200,40 +213,38 @@
         async function loadThreats() {
             const data = await api('/threats?limit=20');
             const tbody = document.getElementById('threats-table');
-            if (!data?.threats?.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No threats detected</td></tr>';
+            tbody.replaceChildren();
+            if (!data || !data.threats || !data.threats.length) {
+                const tr = ligne('No threats detected'); tr.firstChild.colSpan = 5; tr.firstChild.className = 'empty-state'; tbody.append(tr);
                 return;
             }
-            tbody.innerHTML = data.threats.map(t => `
-                <tr>
-                    <td>${new Date(t.timestamp).toLocaleString()}</td>
-                    <td><code>${t.domain}</code></td>
-                    <td><span class="threat-type ${t.type?.toLowerCase()}">${t.type}</span></td>
-                    <td>${t.client_ip || '-'}</td>
-                    <td><button class="btn btn-sm" onclick="allowDomain('${t.domain}')">Allow</button></td>
-                </tr>
-            `).join('');
+            for (const t of data.threats) {
+                const type = document.createElement('span'); type.className = 'threat-type ' + String(t.type || '').toLowerCase().replace(/[^a-z_]/g, ''); type.textContent = t.type;
+                const code = document.createElement('code'); code.textContent = t.domain;
+                const b = document.createElement('button'); b.className = 'btn btn-sm'; b.textContent = 'Allow'; b.dataset.domaine = t.domain;
+                b.addEventListener('click', () => allowDomain(t.domain));
+                tbody.append(ligne(new Date(t.timestamp).toLocaleString(), code, type, t.client_ip || '-', b));
+            }
         }
 
         async function loadTopBlocked() {
             const data = await api('/top-blocked?limit=10');
             const tbody = document.getElementById('top-blocked-table');
-            if (!data?.domains?.length) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No data</td></tr>';
+            tbody.replaceChildren();
+            if (!data || !data.domains || !data.domains.length) {
+                const tr = ligne('Aucune donnée'); tr.firstChild.colSpan = 3; tr.firstChild.className = 'empty-state'; tbody.append(tr);
                 return;
             }
-            tbody.innerHTML = data.domains.map(d => `
-                <tr>
-                    <td><code>${d.domain}</code></td>
-                    <td><span class="threat-type ${d.category?.toLowerCase()}">${d.category}</span></td>
-                    <td>${d.hits.toLocaleString()}</td>
-                </tr>
-            `).join('');
+            for (const d of data.domains) {
+                const code = document.createElement('code'); code.textContent = d.domain;
+                const cat = document.createElement('span'); cat.className = 'threat-type ' + String(d.category || '').toLowerCase().replace(/[^a-z_]/g, ''); cat.textContent = d.category;
+                tbody.append(ligne(code, cat, fmt(d.hits)));
+            }
         }
 
         async function allowDomain(domain) {
             if (!confirm(`Allow ${domain}?`)) return;
-            await api('/allowlist', 'POST', { domain });
+            await api('/whitelist?domain=' + encodeURIComponent(domain), 'POST');
             loadThreats();
         }
 
