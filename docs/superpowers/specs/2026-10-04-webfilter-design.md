@@ -35,6 +35,17 @@ Piste voisine : la **publicité des radios en flux**, à tester sur une enceinte
 - **Mesuré** : l'ajout d'une zone à chaud (`unbound-control local_zone`) marche, mais **sans étiquette** : tout changement d'étiquettes (zones ou clients) demande un rechargement d'Unbound (≈ 10 s, coupure du DNS ≈ 6,6 s, mémoire inchangée avec 656 704 zones). Les règles apprises qui doivent s'appliquer à chaud passeront par une vue de profil (mécanisme d'ad-guard).
 - **À vérifier avant d'écrire du code** (spike de la tâche 1) : la **précédence** de `access-control-tag` (un `/32` d'appareil l'emporte-t-il sur `0.0.0.0/0` ?) ; l'interaction **étiquettes + vues** d'ad-guard sur un même client ; le type de zone `inform` pour la phase « observe » (voir §4) ; la mémoire et le temps de rechargement avec plusieurs centaines de milliers de domaines étiquetés en plus.
 
+### Résultats de l'essai technique (2026-10-04, Unbound 1.17.1 jetable sur gk2, port 5399, rien touché en production)
+
+Réalisé avec de vrais noms résolvables (`example.com` étiqueté `enfants`, `example.org` étiqueté `enfants adultes`, `example.net` en `inform`, `iana.org` sans étiquette), un client `adultes` par défaut (`127.0.0.0/8`) et une exception `enfants` en `/32`.
+
+- **Précédence d'`access-control-tag` : le `/32` l'emporte sur le `/8`** (le client `enfants` est bloqué sur `example.com`, que le client `adultes` résout).
+- **Zone `inform` : confirmée** pour la phase « observe ». La réponse est normale et le journal porte `info: example.net. inform <client>@<port> …` (avec `log-local-actions: yes`), donc un comptage « aurait bloqué » est possible sans rien bloquer.
+- **Étiquettes et vues d'ad-guard : un client qui a une vue (`view-first: yes`) n'est PAS bloqué par les zones globales étiquetées**, alors qu'il porte l'étiquette `adultes` par son adresse (`example.org` résolu pour le client à vue, bloqué pour le même profil sans vue). Les étiquettes ne se combinent donc pas avec les vues d'ad-guard sur un même appareil.
+- **Anomalie non expliquée (2 essais sur 3)** : dans un ordre donné de requêtes (client `adultes` d'abord, `enfants` ensuite), le client `enfants` n'est pas bloqué sur la zone étiquetée `enfants adultes`, alors qu'il l'est quand il est interrogé en premier. Le comportement dépend de l'ordre, donc **les étiquettes ne sont pas démontrées fiables** pour la phase de blocage. Le premier essai après redémarrage de l'instance ne bloquait rien du tout.
+
+**Conséquence sur l'architecture (à décider, §4)** : le profil par étiquettes demande un rechargement pour chaque changement (≈ 6,6 s sans DNS) et n'est pas démontré fiable ; le profil **par vue** (une vue par profil, ajout et retrait à chaud avec `unbound-control view_local_zone`) est le mécanisme déjà éprouvé en production par ad-guard, se combine avec le puits global (`view-first`) et ne coupe jamais le DNS. Sa contrainte : un client n'a **qu'une vue**, donc les règles d'un profil webfilter doivent être composées avec la vue d'ad-guard du même appareil.
+
 ## 3. Objectifs
 
 - **Catalogue de catégories** (identifiant, libellé, listes sources, mode par défaut) extensible : adulte (porno/xxx), jeux d'argent, violence, drogues, armes, haine, phishing/malware, parking, publicité audio ; la publicité et le pistage restent à **ad-guard**.
