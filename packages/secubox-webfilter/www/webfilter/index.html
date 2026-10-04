@@ -210,7 +210,7 @@
                 const r = await api('/sync', 'POST');
                 if (r.status === 401 || r.status === 403) errorToast('🔒 Connexion administrateur requise pour synchroniser les listes.');
                 else if (!r.ok) errorToast('Synchronisation refusée : ' + (r.data.detail || r.status));
-                else { toast('Synchronisation lancée : les listes se mettent à jour en arrière-plan.'); setTimeout(refresh, 15000); }
+                else { toast('Synchronisation demandée : les listes se mettent à jour en arrière-plan.'); setTimeout(refresh, 15000); }
             } finally { b.disabled = false; }
         }
 

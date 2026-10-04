@@ -26,7 +26,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="secubox-webfilter-feed")
     ap.add_argument("--stdin", action="store_true")
     ap.add_argument("--catalogue", default="/etc/secubox/webfilter.toml")
-    ap.add_argument("--etat", default="/var/lib/secubox-webfilter")
+    ap.add_argument("--etat", default="/var/lib/secubox/webfilter")
     ap.add_argument("--sans-adresses-locales", action="store_true", help="essais : n'exclut aucune adresse")
     a = ap.parse_args()
     try:

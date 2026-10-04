@@ -8,25 +8,26 @@ Mode « observe » : ce que le filtrage de contenus AURAIT bloqué, par catégor
 Lecture agrégée (`require_lecture`) ; tout ce qui détaille un appareil ou lance une action exige un administrateur (`require_jwt`).
 """
 import json
+import os
 import sys
-import threading
 import time
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from secubox_core.auth import require_jwt, require_lecture
 
 for _p in ("/usr/lib/secubox/webfilter", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from webfilter import catalogue, magasin, sources  # noqa: E402
+from webfilter import catalogue, magasin  # noqa: E402
 
 CATALOGUE = Path("/etc/secubox/webfilter.toml")
-ETAT = Path("/var/lib/secubox-webfilter")
+ETAT = Path("/var/lib/secubox/webfilter")
 JOURS_MAX = 30
+DEMANDE = "sync.demande"                                               # surveillé par secubox-webfilter-sync.path
+DEMANDE_PERIMEE_S = 600
 
 app = FastAPI(title="SecuBox WebFilter", version="0.1.0")
-_SYNC = threading.Lock()                                               # une seule synchronisation à la fois
 
 
 def _categories() -> list:
@@ -82,18 +83,20 @@ def domaines(cat_id: str, jours: int = Query(7, ge=1, le=JOURS_MAX), n: int = Qu
     return {"categorie": cat_id, "jours": jours, "domaines": [{"domaine": d, "n": c} for d, c in top]}
 
 
-def _synchroniser_en_fond(cats: list) -> None:
-    try:
-        for c in cats:
-            sources.synchroniser(c, ETAT / "listes")
-    finally:
-        _SYNC.release()
-
-
 @app.post("/sync", status_code=202, dependencies=[Depends(require_jwt)])
-def sync(taches: BackgroundTasks):
-    cats = _categories()
-    if not _SYNC.acquire(blocking=False):
-        raise HTTPException(409, "une synchronisation est déjà en cours")
-    taches.add_task(_synchroniser_en_fond, cats)                       # le verrou est relâché par la tâche, même en cas d'erreur
-    return {"statut": "lancee"}
+def sync():
+    """Dépose une DEMANDE de synchronisation ; le téléchargement est fait par l'unité systemd secubox-webfilter-sync (jamais dans ce processus,
+    qui sert d'autres modules). Création exclusive : une demande déjà là, et récente, donne 409."""
+    _categories()                                                       # 503 si le catalogue est illisible
+    f = ETAT / DEMANDE
+    ETAT.mkdir(parents=True, exist_ok=True)
+    try:
+        if time.time() - f.stat().st_mtime > DEMANDE_PERIMEE_S:         # demande oubliée (unité tombée) : on la remplace
+            f.unlink(missing_ok=True)
+    except FileNotFoundError:
+        pass
+    try:
+        os.close(os.open(f, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o640))
+    except FileExistsError:
+        raise HTTPException(409, "une synchronisation est déjà demandée ou en cours") from None
+    return {"statut": "demandee"}

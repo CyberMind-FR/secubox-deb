@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 import json
-import threading
 import time
 
 import pytest
@@ -102,39 +101,41 @@ def test_catalogue_illisible_donne_503(banc, monkeypatch):
     assert r.status_code == 503 and "catalogue" in r.json()["detail"]
 
 
-def test_sync_repond_202_et_lance_la_synchronisation(banc, monkeypatch):
+def test_sync_depose_une_demande_sans_telecharger(banc, monkeypatch):
     admin()
-    vus = []
-    monkeypatch.setattr(main.sources, "synchroniser", lambda cat, dossier, **k: vus.append((cat.id, str(dossier))) or {})
+    appels = []
+    monkeypatch.setattr("webfilter.sources.synchroniser", lambda *a, **k: appels.append(1))
     r = TestClient(main.app).post("/sync")
-    assert r.status_code == 202 and r.json() == {"statut": "lancee"}
-    assert vus == [("adulte", str(banc / "listes"))]
+    assert r.status_code == 202 and r.json() == {"statut": "demandee"}
+    assert (banc / "sync.demande").is_file() and appels == []               # le téléchargement est l'affaire de l'unité systemd
+    assert oct((banc / "sync.demande").stat().st_mode & 0o777) == "0o640"
 
 
-def test_sync_deja_en_cours_donne_409(banc):
+def test_sync_deja_demandee_donne_409(banc):
     admin()
-    assert main._SYNC.acquire(blocking=False)
-    try:
-        assert TestClient(main.app).post("/sync").status_code == 409
-    finally:
-        main._SYNC.release()
+    c = TestClient(main.app)
+    assert c.post("/sync").status_code == 202
+    r = c.post("/sync")
+    assert r.status_code == 409 and "déjà" in r.json()["detail"]
 
 
-def test_sync_libere_le_verrou_meme_en_cas_d_erreur(banc, monkeypatch):
+def test_demande_perimee_est_remplacee(banc):
     admin()
+    import os
+    (banc / "sync.demande").write_text("x")
+    vieux = time.time() - 11 * 60
+    os.utime(banc / "sync.demande", (vieux, vieux))
+    assert TestClient(main.app).post("/sync").status_code == 202
+    assert time.time() - (banc / "sync.demande").stat().st_mtime < 60
 
-    def boum(cat, dossier, **k):
-        raise RuntimeError("panne")
-    monkeypatch.setattr(main.sources, "synchroniser", boum)
-    c = TestClient(main.app, raise_server_exceptions=False)
-    c.post("/sync")
-    assert main._SYNC.acquire(blocking=False)
-    main._SYNC.release()
+
+def test_demande_refusee_si_le_catalogue_est_illisible(banc):
+    admin()
+    (banc / "w.toml").write_text("[[categorie\n")
+    assert TestClient(main.app).post("/sync").status_code == 503
+    assert not (banc / "sync.demande").exists()
 
 
 def test_health_sans_authentification():
     assert TestClient(main.app).get("/health").json()["status"] == "ok"
 
-
-def test_verrou_est_un_verrou_de_thread():
-    assert isinstance(main._SYNC, type(threading.Lock()))

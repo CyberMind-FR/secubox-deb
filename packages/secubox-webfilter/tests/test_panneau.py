@@ -29,7 +29,7 @@ def navigateur():
 def _page(navigateur, rep=None, token="jeton-admin"):
     """`rep` : {(méthode, chemin): (statut, corps)} ; défaut = tout répond normalement."""
     rep = {("GET", "/etat"): (200, ETAT), ("GET", "/stats"): (200, STATS), ("GET", "/categories/adulte/domaines"): (200, DOMAINES),
-           ("GET", "/categories/jeux/domaines"): (200, {"categorie": "jeux", "jours": 7, "domaines": []}), ("POST", "/sync"): (202, {"statut": "lancee"}),
+           ("GET", "/categories/jeux/domaines"): (200, {"categorie": "jeux", "jours": 7, "domaines": []}), ("POST", "/sync"): (202, {"statut": "demandee"}),
            **(rep or {})}
     ctx = navigateur.new_context()
     if token:
@@ -118,7 +118,7 @@ def test_synchroniser_succes_transitoire_et_conflit_persistant(navigateur):
     p.wait_for_selector("[data-cat='adulte']")
     p.click("#btn-sync")
     p.wait_for_selector("#toast.show")
-    assert "Synchronisation lancée" in p.inner_text("#toast")
+    assert "Synchronisation demandée" in p.inner_text("#toast")
     assert any(m == "POST" and c == "/sync" and a == "Bearer jeton-admin" for m, c, a in requetes)
     ctx.close()
     ctx, p, _, _ = _page(navigateur, rep={("POST", "/sync"): (409, {"detail": "une synchronisation est déjà en cours"})})

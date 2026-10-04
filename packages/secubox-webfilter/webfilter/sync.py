@@ -7,7 +7,7 @@ from pathlib import Path
 from . import catalogue, sources
 
 CATALOGUE = "/etc/secubox/webfilter.toml"
-ETAT = "/var/lib/secubox-webfilter"
+ETAT = "/var/lib/secubox/webfilter"
 
 
 def principal(argv=None, fetch=sources.telecharger) -> int:
