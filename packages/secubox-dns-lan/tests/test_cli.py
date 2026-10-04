@@ -26,7 +26,7 @@ def conf(tmp_path):
 
 def lancer(args, systeme=None):
     out = io.StringIO()
-    code = cli.main(args, systeme=systeme, sortie=out)
+    code = cli.main(args, systeme=systeme, sortie=out, confiner=False)
     return code, out.getvalue()
 
 

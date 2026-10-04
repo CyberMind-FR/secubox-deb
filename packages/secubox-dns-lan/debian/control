@@ -4,11 +4,13 @@ Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Rules-Requires-Root: no
 Homepage: https://github.com/gkerma/secubox-deb
 
 Package: secubox-dns-lan
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11), unbound, secubox-core (>= 1.4.0)
+Depends: ${misc:Depends}, python3 (>= 3.11), unbound
+Recommends: systemd
 Description: SecuBox DNS du LAN : drop-ins Unbound et adresse IPv6 stable générés
  Le DNS du réseau local d'une SecuBox : écoute et accès d'Unbound sur le LAN, résolveur
  IPv6, vue locale du sous-domaine de la box, noms redirigés vers des machines du LAN, et

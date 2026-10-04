@@ -24,6 +24,11 @@ class Faux:
 
     def recharger_unbound(self):
         self.appels.append("reload-unbound")
+        if getattr(self, "reload_echoue", False):
+            raise appliquer.ErreurApplication("unbound-control reload a échoué : simulé")
+
+    def redemarrer_unbound(self):
+        self.appels.append("redemarrer-unbound")
 
     def recharger_reseau(self):
         self.appels.append("reload-reseau")
@@ -39,7 +44,9 @@ def cfg(tmp_path):
     brut["ipv6"]["dropin_reseau"] = str(tmp_path / "reseau" / "50-secubox-ipv6-stable.conf")
     (tmp_path / "unbound.conf.d").mkdir()
     (tmp_path / "reseau").mkdir()
-    return config.valider(brut)
+    c = config.valider(brut, confiner=False)
+    c["_verrou"] = tmp_path / "dns-lan.lock"
+    return c
 
 
 def poser_etat_gk2(cfg):
@@ -52,9 +59,9 @@ def poser_etat_gk2(cfg):
 
 def test_premiere_pose_ecrit_valide_recharge(cfg):
     s = Faux()
-    r = appliquer.generer(cfg, s)
+    r = appliquer.generer(cfg, s, verrou=cfg["_verrou"])
     assert len(r["ecrits"]) == 5 and r["recharge_unbound"] and r["recharge_reseau"]
-    assert s.appels == ["checkconf", "reload-unbound", "reload-reseau"]
+    assert s.appels == ["checkconf", "redemarrer-unbound", "reload-reseau"]      # première pose : écoutes nouvelles, donc redémarrage
     assert (Path(cfg["dossier"]) / "96-secubox-lan.conf").read_text().startswith("# SPDX-License-Identifier")
 
 
@@ -110,7 +117,7 @@ def test_audit_une_ligne_par_application_effective(cfg):
     s = Faux()
     appliquer.generer(cfg, s)
     assert [a for a, _ in s.audits] == ["generate"]
-    assert "ecrits=5" in s.audits[0][1] and "unbound=recharge" in s.audits[0][1]
+    assert "ecrits=5" in s.audits[0][1] and "unbound=redémarre" in s.audits[0][1]
 
 
 def test_fichier_ecrit_avec_droits_644_sans_residu(cfg):
@@ -127,3 +134,137 @@ def test_derive_signale_ecart_effectif_seulement(cfg):
     assert [Path(p).name for p in appliquer.deriver(cfg)] == ["96-secubox-lan.conf"]
     Path(cfg["ipv6"]["dropin_reseau"]).unlink()
     assert {Path(p).name for p in appliquer.deriver(cfg)} == {"96-secubox-lan.conf", "50-secubox-ipv6-stable.conf"}
+
+
+# ── relecture de sécurité #1938 ───────────────────────────────────────────────────────────────────────────────────────────────────
+def gen(cfg, s):
+    return appliquer.generer(cfg, s, verrou=cfg["_verrou"])
+
+
+def test_checkconf_timeout_restaure(cfg, monkeypatch):
+    poser_etat_gk2(cfg)
+    avant = {p.name: p.read_text() for p in Path(cfg["dossier"]).iterdir()}
+    import subprocess
+
+    def boum(*a, **k):
+        raise subprocess.TimeoutExpired("unbound-checkconf", 60)
+    monkeypatch.setattr(appliquer.subprocess, "run", boum)
+    cfg2 = dict(cfg, lan={"interface": "192.168.1.201", "acces": ["192.168.0.0/16"]})
+    s = appliquer.Systeme()
+    s.audit = lambda a, d="": None
+    with pytest.raises(appliquer.ErreurApplication):
+        gen(cfg2, s)
+    assert {p.name: p.read_text() for p in Path(cfg["dossier"]).iterdir()} == avant
+
+
+def test_restauration_qui_echoue_continue_et_le_dit(cfg, monkeypatch):
+    poser_etat_gk2(cfg)
+    cfg2 = dict(cfg, lan={"interface": "192.168.1.201", "acces": ["192.168.0.0/16"]}, hote=[{"nom": "voicestudio.gk3.secubox.in", "adresse": "192.168.1.10", "ttl": 300}])
+    s = Faux(checkconf_ok=False)
+    reel = appliquer._ecrire_atomique
+    etat = {"restauration": False}
+
+    def capricieux(chemin, texte):
+        if etat["restauration"] and chemin.name == "96-secubox-lan.conf":
+            raise OSError("disque plein")
+        reel(chemin, texte)
+    ancien_verifier = s.verifier_unbound
+
+    def verifier():
+        etat["restauration"] = True                              # tout ce qui suit la validation est une restauration
+        return ancien_verifier()
+    s.verifier_unbound = verifier
+    monkeypatch.setattr(appliquer, "_ecrire_atomique", capricieux)
+    with pytest.raises(appliquer.ErreurApplication) as e:
+        gen(cfg2, s)
+    assert "96-secubox-lan.conf" in str(e.value)
+    assert s.audits[-1][0] == "generate-echec-restauration" and "96-secubox-lan.conf" in s.audits[-1][1]
+    # les autres fichiers ont quand même été restaurés
+    assert (Path(cfg["dossier"]) / "98-secubox-voicestudio-lan.conf").read_text() == (FIXTURES / "98-secubox-voicestudio-lan.conf").read_text()
+
+
+def test_echec_du_rechargement_restaure_et_audite(cfg):
+    poser_etat_gk2(cfg)
+    avant = (Path(cfg["dossier"]) / "96-secubox-lan.conf").read_text()
+    cfg2 = dict(cfg, lan={"interface": "192.168.1.200", "acces": ["192.168.0.0/16", "10.0.0.0/8"]})
+    s = Faux()
+    s.reload_echoue = True
+    with pytest.raises(appliquer.ErreurApplication):
+        gen(cfg2, s)
+    assert (Path(cfg["dossier"]) / "96-secubox-lan.conf").read_text() == avant
+    assert s.audits[-1][0] == "generate-rechargement-echoue"
+
+
+def test_nouvelle_ecoute_redemarre_au_lieu_de_recharger(cfg):
+    """`unbound-control reload` ne rouvre pas les sockets d'écoute : une nouvelle ligne `interface:` exige un redémarrage."""
+    gen(cfg, Faux())
+    s = Faux()
+    r = gen(dict(cfg, lan={"interface": "192.168.1.201", "acces": ["192.168.0.0/16"]}), s)
+    assert r["recharge_unbound"] and s.appels == ["checkconf", "redemarrer-unbound"]
+    s2 = Faux()
+    gen(dict(cfg, lan={"interface": "192.168.1.201", "acces": ["192.168.0.0/16", "10.0.0.0/8"]}), s2)
+    assert s2.appels == ["checkconf", "reload-unbound"]                 # contrôle d'accès seul : le rechargement suffit
+
+
+def test_section_retiree_supprime_le_fichier_genere_seulement(cfg):
+    gen(cfg, Faux())
+    d = Path(cfg["dossier"])
+    (d / "99-a-la-main.conf").write_text("server:\n")
+    sans_hote = {k: v for k, v in cfg.items() if k != "hote"}
+    assert [Path(x).name for x in appliquer.deriver(sans_hote)] == ["98-secubox-voicestudio-lan.conf"]
+    s = Faux()
+    r = gen(sans_hote, s)
+    assert not (d / "98-secubox-voicestudio-lan.conf").exists() and (d / "99-a-la-main.conf").exists()
+    assert r["recharge_unbound"] and "reload-unbound" in s.appels
+    assert appliquer.deriver(sans_hote) == []
+
+
+def test_fichier_pose_a_la_main_jamais_supprime(cfg):
+    d = Path(cfg["dossier"])
+    (d / "98-secubox-voicestudio-lan.conf").write_text("server:\n    local-zone: \"x.\" static\n")      # sans la marque générée
+    sans_hote = {k: v for k, v in cfg.items() if k != "hote"}
+    gen(sans_hote, Faux())
+    assert (d / "98-secubox-voicestudio-lan.conf").exists()
+
+
+def test_verrou_exclusif(tmp_path):
+    chemin = tmp_path / "v.lock"
+    with appliquer.verrou_exclusif(chemin):
+        with pytest.raises(appliquer.ErreurApplication):
+            with appliquer.verrou_exclusif(chemin, attendre=False):
+                pass
+    with appliquer.verrou_exclusif(chemin, attendre=False):          # libéré à la sortie
+        pass
+
+
+def test_cible_lien_symbolique_refusee(cfg, tmp_path):
+    cible = tmp_path / "ailleurs.conf"
+    cible.write_text("server:\n")
+    (Path(cfg["dossier"]) / "96-secubox-lan.conf").symlink_to(cible)
+    with pytest.raises(appliquer.ErreurApplication):
+        gen(cfg, Faux())
+    assert cible.read_text() == "server:\n"
+
+
+def test_audit_inaccessible_previent_sur_stderr(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(appliquer, "AUDIT", tmp_path / "absent" / "audit.log")
+    appliquer.Systeme().audit("generate", "x")
+    assert "audit" in capsys.readouterr().err.lower()
+
+
+def test_binaires_en_chemin_absolu_sans_variable_d_environnement():
+    for c in (appliquer.CHECKCONF, appliquer.CONTROL, appliquer.NETWORKCTL, appliquer.SYSTEMCTL):
+        assert c.startswith("/")
+    import inspect
+    assert "os.environ" not in inspect.getsource(appliquer)
+
+
+def test_dossiers_crees_en_0755_et_tous_retires_au_retour_arriere(cfg, tmp_path):
+    profond = tmp_path / "a" / "b" / "c.network.d"
+    cfg2 = dict(cfg, ipv6=dict(cfg["ipv6"], dropin_reseau=str(profond / "50.conf")))
+    s = Faux(checkconf_ok=False)
+    with pytest.raises(appliquer.ErreurApplication):
+        gen(cfg2, s)
+    assert not (tmp_path / "a").exists()
+    gen(cfg2, Faux())
+    assert oct((tmp_path / "a" / "b").stat().st_mode & 0o777) == "0o755"

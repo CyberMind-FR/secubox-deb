@@ -1,53 +1,92 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 """Pose les fichiers générés : sauvegarde, écriture atomique, validation par unbound-checkconf, retour arrière si elle échoue.
 Unbound n'est rechargé que si la configuration EFFECTIVE (lignes hors commentaires) change : une mise à jour qui ne touche que les
-commentaires ne coupe jamais le DNS."""
+commentaires ne coupe jamais le DNS. Un seul `generate` à la fois (verrou), et jamais de fichier laissé à moitié posé."""
+import contextlib
+import fcntl
 import json
 import os
 import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
 from . import rendu
 
-AUDIT = Path(os.environ.get("SECUBOX_DNS_LAN_AUDIT", "/var/log/secubox/audit.log"))
-CHECKCONF = os.environ.get("SECUBOX_DNS_LAN_CHECKCONF", "unbound-checkconf")
-CONTROL = os.environ.get("SECUBOX_DNS_LAN_CONTROL", "unbound-control")
-NETWORKCTL = os.environ.get("SECUBOX_DNS_LAN_NETWORKCTL", "networkctl")
+AUDIT = Path("/var/log/secubox/audit.log")
+VERROU = Path("/run/lock/secubox-dns-lan.lock")
+CHECKCONF = "/usr/sbin/unbound-checkconf"                    # chemins absolus : outil root, jamais de PATH ni de variable d'environnement
+CONTROL = "/usr/sbin/unbound-control"
+NETWORKCTL = "/usr/bin/networkctl"
+SYSTEMCTL = "/usr/bin/systemctl"
+NOMS_UNBOUND_GERES = (rendu.F_LAN, rendu.F_IPV6, rendu.F_VUE, rendu.F_HOTES)
 
 
 class ErreurApplication(RuntimeError):
-    """La configuration n'a pas pu être appliquée ; l'état précédent est remis."""
+    """La configuration n'a pas pu être appliquée ; l'état précédent est remis (ou la liste de ce qui n'a pu l'être est donnée)."""
 
 
 def effectives(texte: str) -> list[str]:
     return [x.strip() for x in texte.splitlines() if x.strip() and not x.strip().startswith("#")]
 
 
+def _lignes(texte: str | None, debut: str) -> set[str]:
+    return {x for x in effectives(texte or "") if x.startswith(debut)}
+
+
+def _commande(args: list[str], delai: int) -> tuple[bool, str]:
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=delai, check=False)
+    except subprocess.TimeoutExpired:
+        return False, f"{Path(args[0]).name} : délai de {delai} s dépassé"
+    except OSError as e:
+        return False, f"{Path(args[0]).name} : {e}"
+    return r.returncode == 0, (r.stdout + r.stderr).strip()[-300:]
+
+
 class Systeme:
     """Les effets de bord réels ; les tests injectent un faux."""
 
     def verifier_unbound(self) -> tuple[bool, str]:
-        r = subprocess.run([CHECKCONF], capture_output=True, text=True, timeout=60)
-        return r.returncode == 0, (r.stdout + r.stderr).strip()[-300:]
+        return _commande([CHECKCONF], 60)
 
     def recharger_unbound(self) -> None:
-        r = subprocess.run([CONTROL, "reload"], capture_output=True, text=True, timeout=120)
-        if r.returncode != 0:
-            raise ErreurApplication("unbound-control reload a échoué : " + (r.stdout + r.stderr).strip()[-200:])
+        ok, sortie = _commande([CONTROL, "reload"], 120)
+        if not ok:
+            raise ErreurApplication("unbound-control reload a échoué : " + sortie)
+
+    def redemarrer_unbound(self) -> None:
+        ok, sortie = _commande([SYSTEMCTL, "restart", "unbound"], 120)
+        if not ok:
+            raise ErreurApplication("redémarrage d'unbound refusé : " + sortie)
 
     def recharger_reseau(self) -> None:
-        r = subprocess.run([NETWORKCTL, "reload"], capture_output=True, text=True, timeout=60)
-        if r.returncode != 0:
-            raise ErreurApplication("networkctl reload a échoué : " + (r.stdout + r.stderr).strip()[-200:])
+        ok, sortie = _commande([NETWORKCTL, "reload"], 60)
+        if not ok:
+            raise ErreurApplication("networkctl reload a échoué : " + sortie)
 
     def audit(self, action: str, detail: str = "") -> None:
         try:
-            with open(AUDIT, "a", encoding="utf-8") as f:                       # ajout seul ; le journal ne doit jamais bloquer l'opération
+            with open(AUDIT, "a", encoding="utf-8") as f:                       # ajout seul
                 f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "dns-lan",
-                                    "action": action, "detail": detail[:200]}, ensure_ascii=False) + "\n")
-        except OSError:
-            pass
+                                    "action": action, "detail": detail[:300]}, ensure_ascii=False) + "\n")
+        except OSError as e:                                                    # ne bloque pas l'opération, mais ne se tait pas
+            print(f"secubox-dns-lan : audit non écrit ({action}) : {e}", file=sys.stderr)
+
+
+@contextlib.contextmanager
+def verrou_exclusif(chemin: Path = VERROU, attendre: bool = True):
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(chemin, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | (0 if attendre else fcntl.LOCK_NB))
+        except BlockingIOError:
+            raise ErreurApplication("un autre secubox-dns-lan est en cours") from None
+        yield
+    finally:
+        os.close(fd)
 
 
 def _lire(chemin: Path) -> str | None:
@@ -57,67 +96,151 @@ def _lire(chemin: Path) -> str | None:
         return None
 
 
+def _fsync_dossier(d: Path) -> None:
+    try:
+        fd = os.open(d, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
 def _ecrire_atomique(chemin: Path, texte: str) -> None:
-    chemin.parent.mkdir(parents=True, exist_ok=True)
-    tmp = chemin.with_name("." + chemin.name + ".nouveau")
-    tmp.write_text(texte, encoding="utf-8")
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, chemin)
+    if chemin.is_symlink():
+        raise ErreurApplication(f"{chemin} est un lien symbolique : refusé")
+    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".dns-lan-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(texte)
+            f.flush()
+            os.fchmod(f.fileno(), 0o644)
+            os.fsync(f.fileno())
+        os.replace(tmp, chemin)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+    _fsync_dossier(chemin.parent)
 
 
 def _est_unbound(chemin: str, cfg: dict) -> bool:
     return Path(chemin).parent == Path(cfg["dossier"])
 
 
+def _orphelins(cfg: dict, voulu: dict) -> list[str]:
+    """Fichiers Unbound que CE paquet a générés (marque présente) et que le TOML ne produit plus : une section retirée doit
+    arrêter la redirection. Un fichier posé à la main (sans marque) n'est jamais touché."""
+    d = Path(cfg["dossier"])
+    sortie = []
+    for nom in NOMS_UNBOUND_GERES:
+        c = str(d / nom)
+        if c in voulu:
+            continue
+        t = _lire(d / nom)
+        if t is not None and rendu.MARQUE in t:
+            sortie.append(c)
+    return sortie
+
+
 def deriver(cfg: dict) -> list[str]:
-    """Chemins dont le contenu effectif sur disque diffère de ce que le TOML produirait."""
+    """Chemins dont le contenu effectif sur disque diffère de ce que le TOML produirait (y compris un fichier généré devenu orphelin)."""
+    voulu = rendu.rendre(cfg)
     ecart = []
-    for chemin, texte in rendu.rendre(cfg).items():
+    for chemin, texte in voulu.items():
         actuel = _lire(Path(chemin))
         if actuel is None or effectives(actuel) != effectives(texte):
             ecart.append(chemin)
-    return ecart
+    return ecart + _orphelins(cfg, voulu)
 
 
-def generer(cfg: dict, systeme: Systeme | None = None) -> dict:
-    s = systeme or Systeme()
+def _ancetres_manquants(p: Path) -> list[Path]:
+    manquants = []
+    d = p.parent
+    while not d.exists() and d != d.parent:
+        manquants.append(d)
+        d = d.parent
+    return manquants
+
+
+def _restaurer(avant: dict, crees_dossiers: list[Path]) -> list[str]:
+    """Remet l'état précédent octet pour octet ; chaque fichier est traité même si un autre échoue. Renvoie ce qui n'a pu l'être."""
+    echecs = []
+    for c, ancien in avant.items():
+        p = Path(c)
+        try:
+            if ancien is None:
+                p.unlink(missing_ok=True)
+            elif _lire(p) != ancien:
+                _ecrire_atomique(p, ancien)
+        except (OSError, ErreurApplication) as e:
+            echecs.append(f"{p.name} ({e})")
+    for d in crees_dossiers:
+        with contextlib.suppress(OSError):
+            d.rmdir()
+    return echecs
+
+
+def generer(cfg: dict, systeme: Systeme | None = None, verrou: Path = VERROU) -> dict:
+    with verrou_exclusif(verrou):
+        return _generer(cfg, systeme or Systeme())
+
+
+def _generer(cfg: dict, s: Systeme) -> dict:
     voulu = rendu.rendre(cfg)
-    avant = {c: _lire(Path(c)) for c in voulu}
+    orphelins = _orphelins(cfg, voulu)
+    avant = {c: _lire(Path(c)) for c in list(voulu) + orphelins}
     ecrits = [c for c, t in voulu.items() if avant[c] != t]
-    if not ecrits:
-        return {"ecrits": [], "recharge_unbound": False, "recharge_reseau": False}
-    effectif = {c for c in ecrits if avant[c] is None or effectives(avant[c]) != effectives(voulu[c])}
+    if not ecrits and not orphelins:
+        return {"ecrits": [], "supprimes": [], "recharge_unbound": False, "recharge_reseau": False}
+    apres = {c: voulu.get(c) for c in avant}                                     # None = supprimé
+    effectif = [c for c in avant if (avant[c] is None) != (apres[c] is None)
+                or (avant[c] is not None and effectives(avant[c]) != effectives(apres[c] or ""))]
     recharge_unbound = any(_est_unbound(c, cfg) for c in effectif)
     recharge_reseau = any(not _est_unbound(c, cfg) for c in effectif)
-    crees_dossiers: list[Path] = []
+    # `unbound-control reload` ne rouvre pas les sockets : une écoute nouvelle (interface:) ou ip-freebind exige un redémarrage.
+    ecoutes_avant = _lignes("\n".join(avant[c] or "" for c in avant if _est_unbound(c, cfg)), "interface:")
+    ecoutes_apres = _lignes("\n".join(apres[c] or "" for c in apres if _est_unbound(c, cfg)), "interface:")
+    redemarrer = bool(ecoutes_apres - ecoutes_avant) or (
+        "ip-freebind: yes" in _lignes("\n".join(apres[c] or "" for c in apres if _est_unbound(c, cfg)), "ip-freebind")
+        and "ip-freebind: yes" not in _lignes("\n".join(avant[c] or "" for c in avant if _est_unbound(c, cfg)), "ip-freebind"))
+    crees: list[Path] = []
     try:
         for c in ecrits:
             p = Path(c)
-            if not p.parent.exists():
-                crees_dossiers.append(p.parent)
+            for d in _ancetres_manquants(p):
+                if d not in crees:
+                    crees.append(d)
+            p.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+            for d in crees:
+                if d.exists():
+                    os.chmod(d, 0o755)
             _ecrire_atomique(p, voulu[c])
-        if any(_est_unbound(c, cfg) for c in ecrits):
+        for c in orphelins:
+            Path(c).unlink(missing_ok=True)
+        if any(_est_unbound(c, cfg) for c in list(ecrits) + orphelins):
             ok, sortie = s.verifier_unbound()
             if not ok:
                 raise ErreurApplication("unbound-checkconf refuse la configuration : " + sortie)
     except (ErreurApplication, OSError) as e:
-        for c in ecrits:                                                        # retour arrière : l'état précédent, octet pour octet
-            p = Path(c)
-            if avant[c] is None:
-                p.unlink(missing_ok=True)
-            else:
-                _ecrire_atomique(p, avant[c])
-        for d in crees_dossiers:
-            try:
-                d.rmdir()
-            except OSError:
-                pass
-        s.audit("generate-refuse", str(e)[:180])
+        echecs = _restaurer(avant, crees)
+        if echecs:
+            s.audit("generate-echec-restauration", f"{e} ; non restaurés : {', '.join(echecs)}"[:290])
+            raise ErreurApplication(f"{e} ; restauration INCOMPLÈTE : {', '.join(echecs)}") from e
+        s.audit("generate-refuse", str(e)[:290])
         raise e if isinstance(e, ErreurApplication) else ErreurApplication(f"écriture impossible : {e}") from e
-    if recharge_unbound:
-        s.recharger_unbound()
-    if recharge_reseau:
-        s.recharger_reseau()
-    s.audit("generate", f"ecrits={len(ecrits)} unbound={'recharge' if recharge_unbound else 'inchange'} "
-                        f"reseau={'recharge' if recharge_reseau else 'inchange'}")
-    return {"ecrits": ecrits, "recharge_unbound": recharge_unbound, "recharge_reseau": recharge_reseau}
+    try:
+        if recharge_unbound:
+            s.redemarrer_unbound() if redemarrer else s.recharger_unbound()
+        if recharge_reseau:
+            s.recharger_reseau()
+    except (ErreurApplication, OSError) as e:
+        echecs = _restaurer(avant, crees)                                        # les fichiers repartent avec ce qui tourne encore
+        s.audit("generate-rechargement-echoue", f"{e}" + (f" ; non restaurés : {', '.join(echecs)}" if echecs else ""))
+        raise e if isinstance(e, ErreurApplication) else ErreurApplication(str(e)) from e
+    action = "redémarre" if recharge_unbound and redemarrer else ("recharge" if recharge_unbound else "inchange")
+    s.audit("generate", f"ecrits={len(ecrits)} supprimes={len(orphelins)} unbound={action} reseau={'recharge' if recharge_reseau else 'inchange'}")
+    return {"ecrits": ecrits, "supprimes": orphelins, "recharge_unbound": recharge_unbound, "recharge_reseau": recharge_reseau}

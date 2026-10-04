@@ -2,6 +2,7 @@
 """Configuration normalisée → {chemin: texte}. Les commentaires reprennent l'explication des fichiers posés à la main sur gk2."""
 import ipaddress
 
+MARQUE = "GÉNÉRÉ par secubox-dns-lan"
 ENTETE = ("# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
           "# GÉNÉRÉ par secubox-dns-lan — ne pas éditer à la main : modifier /etc/secubox/dns-lan.toml puis `secubox-dns-lan generate` (#1938).\n")
 

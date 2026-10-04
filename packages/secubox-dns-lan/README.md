@@ -26,6 +26,18 @@ Le paquet n'applique jamais de valeurs par défaut : sans `/etc/secubox/dns-lan.
 Les autres drop-ins Unbound (`97-mail-srv`, `98-secubox-lxc`, `99-secubox-wg`) restent à leurs paquets.
 Chaque application effective est consignée dans `/var/log/secubox/audit.log` (module `dns-lan`).
 
+## Garanties
+
+- **Validation stricte** : adresses sans identifiant de zone (`%eth0`), sans adresse non spécifiée ; aucun réseau plus large que /8 (IPv4)
+  ou /32 (IPv6) ; fichiers écrits confinés à `/etc/unbound/unbound.conf.d` et `/etc/systemd/network/<x>.network.d/`.
+- **Un seul `generate` à la fois** (verrou `/run/lock/secubox-dns-lan.lock`), écriture atomique avec `fsync`, lien symbolique refusé.
+- **Retour arrière** si le contrôle, l'écriture ou le rechargement échoue ; si une restauration échoue, la liste des fichiers non
+  restaurés est donnée et auditée (`generate-echec-restauration`).
+- **Rechargement ou redémarrage** : `unbound-control reload` ne rouvre pas les sockets, donc une écoute nouvelle (`interface:`)
+  provoque un redémarrage d'Unbound ; un simple changement de contrôle d'accès ou de données se contente d'un rechargement.
+- **Section retirée du TOML** : le fichier correspondant, s'il porte la marque « GÉNÉRÉ par secubox-dns-lan », est supprimé ; un
+  fichier posé à la main n'est jamais touché.
+
 ## Limites
 
 L'adresse EUI-64 de la box reste listée comme `interface:` ; elle change si le préfixe de l'opérateur change.

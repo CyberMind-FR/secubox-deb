@@ -35,6 +35,13 @@ partir de ce TOML.
 - Le postinst lance `generate` seulement si `/etc/secubox/dns-lan.toml` existe ; sinon il affiche la marche à suivre. Il ne bloque jamais l'installation : un échec est affiché et la
   configuration précédente est conservée.
 
+## Ajouts issus de la relecture de sécurité
+
+Adresses sans identifiant de zone ni valeur non spécifiée, réseaux trop larges refusés, chemins confinés, verrou unique,
+retour arrière robuste (restauration fichier par fichier, échec audité), échec de rechargement = restauration, redémarrage
+(et non rechargement) quand une écoute nouvelle apparaît, suppression des fichiers générés devenus orphelins, binaires en
+chemin absolu, avertissement sur stderr si l'audit est inaccessible.
+
 ## Valeurs de départ (gk2)
 
 Le TOML livré reproduit exactement l'état de gk2 : écoute `192.168.1.200`, accès `192.168.0.0/16`, IPv6 stable

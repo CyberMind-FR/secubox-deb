@@ -6,7 +6,9 @@ from pathlib import Path
 
 DOSSIER_UNBOUND = "/etc/unbound/unbound.conf.d"
 _NOM = re.compile(r"^(?=.{1,253}$)([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.)*[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$")
-CHEMIN_RESEAU = re.compile(r"^/[A-Za-z0-9_./-]+\.conf$")
+CHEMIN_SUR = re.compile(r"^/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$")                       # ni NUL, ni retour à la ligne, ni « // »
+CHEMIN_RESEAU = re.compile(r"^/etc/systemd/network/[A-Za-z0-9_.-]+\.network\.d/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.conf$")
+PREFIXE_MIN = {4: 8, 6: 32}                                                              # en deçà : un résolveur ouvert, jamais voulu
 
 
 class ErreurConfig(ValueError):
@@ -29,21 +31,29 @@ def _sec(brut: dict, nom: str, attendu: dict) -> dict | None:
 
 
 def adresse(v, quoi: str) -> str:
-    if not isinstance(v, str):
-        raise ErreurConfig(f"{quoi} : adresse attendue")
+    """Une adresse IP simple : pas d'identifiant de zone (« %eth0 », que CPython laisse passer avec n'importe quel caractère), pas
+    d'adresse non spécifiée ni multicast."""
+    if not isinstance(v, str) or not v.isascii() or not v.isprintable() or "%" in v or v != v.strip():
+        raise ErreurConfig(f"{quoi} : adresse IP invalide")
     try:
-        return str(ipaddress.ip_address(v))
+        a = ipaddress.ip_address(v)
     except ValueError:
         raise ErreurConfig(f"{quoi} : adresse IP invalide") from None
+    if a.is_unspecified or a.is_multicast:
+        raise ErreurConfig(f"{quoi} : adresse non utilisable ({a})")
+    return str(a)
 
 
 def reseau(v, quoi: str) -> str:
-    if not isinstance(v, str):
-        raise ErreurConfig(f"{quoi} : réseau attendu")
+    if not isinstance(v, str) or not v.isascii() or not v.isprintable() or "%" in v:
+        raise ErreurConfig(f"{quoi} : réseau CIDR invalide")
     try:
-        return str(ipaddress.ip_network(v, strict=False))
+        r = ipaddress.ip_network(v, strict=False)
     except ValueError:
         raise ErreurConfig(f"{quoi} : réseau CIDR invalide") from None
+    if r.prefixlen < PREFIXE_MIN[r.version]:
+        raise ErreurConfig(f"{quoi} : {r} est trop large (résolveur ouvert)")
+    return str(r)
 
 
 def nom_dns(v, quoi: str) -> str:
@@ -62,13 +72,14 @@ def _liste_reseaux(v, quoi: str, vide_ok: bool = False) -> list[str]:
 
 
 def _chemin_absolu(v, quoi: str) -> str:
-    if not isinstance(v, str) or not v.startswith("/") or "\n" in v or ".." in Path(v).parts:
+    if not isinstance(v, str) or not CHEMIN_SUR.match(v) or ".." in Path(v).parts:
         raise ErreurConfig(f"{quoi} : chemin absolu attendu")
     return v
 
 
-def valider(brut: dict) -> dict:
-    """TOML brut → configuration normalisée ; ErreurConfig au premier défaut."""
+def valider(brut: dict, confiner: bool = True) -> dict:
+    """TOML brut → configuration normalisée ; ErreurConfig au premier défaut. `confiner` : les fichiers écrits restent dans le dossier
+    des drop-ins d'Unbound et sous /etc/systemd/network/<x>.network.d/ ; les tests seuls le désactivent (dossiers temporaires)."""
     if not isinstance(brut, dict):
         raise ErreurConfig("fichier illisible")
     inconnu = set(brut) - {"unbound", "lan", "ipv6", "vue_locale", "hote"}
@@ -78,6 +89,8 @@ def valider(brut: dict) -> dict:
     s = _sec(brut, "unbound", {"dossier": True})
     if s:
         cfg["dossier"] = _chemin_absolu(s["dossier"], "[unbound] dossier")
+        if confiner and cfg["dossier"] != DOSSIER_UNBOUND:
+            raise ErreurConfig(f"[unbound] dossier : seul {DOSSIER_UNBOUND} est admis")
     s = _sec(brut, "lan", {"interface": True, "acces": True})
     if s:
         cfg["lan"] = {"interface": adresse(s["interface"], "[lan] interface"), "acces": _liste_reseaux(s["acces"], "[lan] acces")}
@@ -87,13 +100,15 @@ def valider(brut: dict) -> dict:
         if not isinstance(stable, str) or "/" not in stable:
             raise ErreurConfig("[ipv6] stable : adresse avec préfixe attendue (ex. 2001:db8::200/64)")
         a, _, p = stable.partition("/")
-        if not p.isdigit() or not 0 < int(p) <= 128:
+        if not re.fullmatch(r"[0-9]{1,3}", p) or not 0 < int(p) <= 128:
             raise ErreurConfig("[ipv6] stable : préfixe invalide")
         ifs = s["interfaces"]
         if not isinstance(ifs, list):
             raise ErreurConfig("[ipv6] interfaces : liste attendue")
         chemin = _chemin_absolu(s["dropin_reseau"], "[ipv6] dropin_reseau")
-        if not CHEMIN_RESEAU.match(chemin):
+        if confiner and not CHEMIN_RESEAU.match(chemin):
+            raise ErreurConfig("[ipv6] dropin_reseau : /etc/systemd/network/<nom>.network.d/<fichier>.conf attendu")
+        if not chemin.endswith(".conf"):
             raise ErreurConfig("[ipv6] dropin_reseau : un fichier .conf attendu")
         cfg["ipv6"] = {"stable": f"{adresse(a, '[ipv6] stable')}/{int(p)}", "interfaces": [adresse(x, "[ipv6] interfaces") for x in ifs],
                        "acces": _liste_reseaux(s["acces"], "[ipv6] acces"), "dropin_reseau": chemin}
@@ -118,4 +133,11 @@ def valider(brut: dict) -> dict:
             sortie.append({"nom": n, "adresse": adresse(h["adresse"], "[[hote]] adresse"), "ttl": ttl})
         if sortie:
             cfg["hote"] = sortie
+    zone = cfg.get("vue_locale", {}).get("zone")
+    for h in cfg.get("hote", []):
+        if zone and (h["nom"] == zone or h["nom"].endswith("." + zone)):
+            raise ErreurConfig(f"[[hote]] {h['nom']} : déjà couvert par la vue locale {zone}")
+    noms = [f"{cfg['dossier']}/{n}" for n in ("96-secubox-lan.conf", "96-secubox-lan-ipv6.conf", "96-secubox-gk2-local.conf", "98-secubox-voicestudio-lan.conf")]
+    if "ipv6" in cfg and cfg["ipv6"]["dropin_reseau"] in noms:
+        raise ErreurConfig("[ipv6] dropin_reseau : collision avec un fichier Unbound généré")
     return cfg
