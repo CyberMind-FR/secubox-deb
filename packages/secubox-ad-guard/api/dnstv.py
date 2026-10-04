@@ -526,6 +526,16 @@ class Magasin:
                 out.setdefault(client, {})[domaine] = int(n)
         return out
 
+    def compteurs_detail(self, depuis_jour: str) -> Dict[str, Dict[str, Tuple[int, int]]]:
+        """client -> domaine -> (requêtes, dont bloquées) depuis `depuis_jour` : la matière du fichier d'échange pour le DPI (#1960)."""
+        out: Dict[str, Dict[str, Tuple[int, int]]] = {}
+        with self._cx() as cx:
+            for client, domaine, n, b in cx.execute(
+                    "SELECT client, domaine, SUM(hits), SUM(CASE WHEN decision='BLOCKED' THEN hits ELSE 0 END) FROM dnstv_counts WHERE jour>=? GROUP BY client, domaine",
+                    (depuis_jour,)):
+                out.setdefault(client, {})[domaine] = (int(n), int(b))
+        return out
+
     def par_client(self) -> List[dict]:
         with self._cx() as cx:
             return [{"client": c, "premiere_vue": p, "derniere_vue": d, "requetes": t}

@@ -1,3 +1,16 @@
+secubox-dpi (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Données d'ad-guard (ref #1960), en LECTURE SEULE : le DPI lit les fichiers de DONNÉES d'ad-guard (`services.txt`, listes publicité/pistage/télémétrie/réseaux sociaux) et son fichier
+    d'échange ; il n'importe aucun code d'ad-guard, n'écrit pas `rules.json` et `sbxdpi` est inchangé.
+  * `GET /usage` : les destinations que le DPI ne classe pas (liste `unknown`) reçoivent une ÉTIQUETTE d'après ad-guard (organisation, type, catégorie, source « ad-guard ») et un
+    compteur `adguard`. Une règle du DPI qui connaît le nom GAGNE toujours. Données absentes : réponse inchangée.
+  * `GET /lan_dns` (JWT) : vue DNS des appareils du LAN (services, types, blocages), regroupés par MAC. Fichier absent, périmé (> 15 min), corrompu, énorme ou lien symbolique :
+    `disponible: false`, jamais de chiffre périmé. Aucun volume : le DNS n'en donne pas.
+  * Page : cartes « Destinations non classées » (étiquettes, source « d'après ad-guard », octets mesurés par le DPI) et « Appareils du LAN » (« vu au DNS », sans volumes),
+    rendues par textContent. NOTE DE DÉPLOIEMENT : redémarrer `secubox-aggregator`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 09:00:00 +0200
+
 secubox-dpi (1.4.19-1~bookworm2) bookworm; urgency=medium
 
   * Restauration (#1748, #1775) de ce que la fusion aff481735 (2026-08-17)

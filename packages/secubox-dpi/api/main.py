@@ -26,6 +26,10 @@ from enum import Enum
 import subprocess, json, socket, time, threading, asyncio
 from pathlib import Path
 import httpx
+try:
+    from . import adguard_enrich               # chargé dans l'agrégateur / un groupe : paquet synthétique, import relatif
+except ImportError:                         # lancé hors paquet (tests, uvicorn api.main) : import absolu
+    from api import adguard_enrich
 
 app = FastAPI(title="secubox-dpi", version="2.0.0", root_path="/api/v1/dpi")
 
@@ -243,6 +247,112 @@ def dpi_rules_ignore(domain: str, user=Depends(require_jwt)):
     return {"ok": True, "ignored": d}
 
 
+# ── DONNÉES D'AD-GUARD (#1960) — lecture seule, jamais de code d'ad-guard ────────────────────────────────────
+# Fichiers de DONNÉES livrés par secubox-ad-guard (classification par service et listes) et fichier d'échange `dpi-feed.json` (résumé par appareil du LAN, jour courant).
+# Aucune écriture. Données absentes, périmées (> 15 min) ou corrompues ⇒ `disponible: false` ou comportement inchangé : jamais de chiffre périmé présenté comme frais.
+ADGUARD_FEED = Path("/var/lib/secubox/ad-guard/dnstv/dpi-feed.json")
+ADGUARD_LISTES = Path("/usr/share/secubox/ad-guard/lists")
+FEED_PEREMPTION_S = 900
+FEED_MAX = 2 * 1024 * 1024
+_adguard_cache: dict = {"signature": None, "etiqueteur": None}
+
+
+def _usage_enrichi(usage):
+    """Enrichissement HORS de la boucle (lecture de fichiers, étiquetage de milliers de noms). Les règles du DPI sont chargées UNE fois pour tout l'appel."""
+    regles = _dpi_rules()
+    return adguard_enrich.enrichir_usage(usage, _etiqueteur_adguard(), lambda nom: _classify_avec(regles, adguard_enrich.normaliser(nom) or nom))
+
+
+def _usage_derive_enrichi():
+    return _usage_enrichi(_derive_usage())
+
+
+def _etiqueteur_adguard() -> "adguard_enrich.Etiqueteur":
+    """Étiqueteur d'après les fichiers de données d'ad-guard, rechargé quand l'un d'eux change (date de modification)."""
+    noms = ["services.txt", *[f"{c}.txt" for c in adguard_enrich.CATEGORIES]]
+    sig = []
+    for n in noms:
+        try:
+            st = ADGUARD_LISTES.joinpath(n).stat()
+            sig.append((n, st.st_mtime_ns, st.st_size, st.st_ino))          # une mise à jour à date identique (dpkg) change la taille ou l'inode
+        except OSError:
+            sig.append((n, None))
+    sig = tuple(sig)
+    if _adguard_cache["signature"] != sig:
+        _adguard_cache["signature"] = sig
+        _adguard_cache["etiqueteur"] = adguard_enrich.Etiqueteur.depuis_dossier(ADGUARD_LISTES)
+    return _adguard_cache["etiqueteur"]
+
+
+def _txt(v, n: int) -> str:
+    """Texte borné ; une chaîne qu'on ne sait pas encoder en UTF-8 (surrogate isolé d'un JSON valide) est écartée : elle ferait échouer le rendu de la réponse."""
+    if not isinstance(v, str):
+        return ""
+    s = v[:n]
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        return ""
+    return s
+
+
+def _entier(v) -> Optional[int]:
+    return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
+
+
+def _appareil_lan(a) -> Optional[dict]:
+    """Un appareil du fichier d'échange, borné et revalidé ; None s'il est mal formé. L'échappement HTML est du côté de la page."""
+    if not isinstance(a, dict) or not isinstance(a.get("nom"), str) or (a["nom"] and not _txt(a["nom"], 60)):
+        return None
+    chiffres = {k: _entier(a.get(k)) for k in ("requetes", "bloquees", "domaines")}
+    if any(v is None for v in chiffres.values()):
+        return None
+    services = []
+    for s in (a.get("services") if isinstance(a.get("services"), list) else [])[:10]:
+        if isinstance(s, dict) and _entier(s.get("requetes")) is not None and _entier(s.get("bloquees")) is not None:
+            services.append({"organisation": _txt(s.get("organisation"), 80), "type": _txt(s.get("type"), 20), "requetes": s["requetes"], "bloquees": s["bloquees"]})
+    types = {_txt(k, 20): v for k, v in list((a.get("types") if isinstance(a.get("types"), dict) else {}).items())[:12] if _entier(v) is not None}
+    adresses = [_txt(x, 64) for x in (a.get("adresses") if isinstance(a.get("adresses"), list) else [])[:8] if isinstance(x, str)]
+    return {"nom": _txt(a["nom"], 60), "mac": _txt(a.get("mac"), 17), "adresses": adresses, "mode": _txt(a.get("mode"), 20), "origine": _txt(a.get("origine"), 10),
+            **chiffres, "services": services, "types": types}
+
+
+@app.get("/lan_dns")
+def lan_dns(user=Depends(require_jwt)):
+    """Vue DNS des appareils du LAN d'après ad-guard : noms demandés regroupés par service et par type, taux de blocage. Le DNS ne donne NI volumes NI contenu :
+    cette vue ne se mélange jamais aux mesures du DPI (« vu au DNS » contre « mesuré par le DPI »). Lecture seule du fichier d'échange."""
+    import os as _os
+    import stat as _stat
+    try:
+        # O_NONBLOCK : un tube nommé posé à la place du fichier ne doit pas bloquer un fil du pool (partagé par les routes synchrones de tous les modules).
+        fd = _os.open(ADGUARD_FEED, _os.O_RDONLY | _os.O_NOFOLLOW | _os.O_NONBLOCK)
+    except FileNotFoundError:
+        return {"disponible": False, "raison": "absent"}
+    except OSError:
+        return {"disponible": False, "raison": "illisible"}
+    try:
+        if not _stat.S_ISREG(_os.fstat(fd).st_mode):
+            _os.close(fd)
+            return {"disponible": False, "raison": "illisible"}
+        with _os.fdopen(fd, "rb") as h:
+            brut = h.read(FEED_MAX + 1)
+        if len(brut) > FEED_MAX:
+            return {"disponible": False, "raison": "illisible"}
+        d = json.loads(brut.decode("utf-8"))
+    except (OSError, ValueError, RecursionError):
+        return {"disponible": False, "raison": "illisible"}
+    if not isinstance(d, dict) or d.get("version") != 1 or _entier(d.get("genere")) is None or not isinstance(d.get("appareils"), list):
+        return {"disponible": False, "raison": "illisible"}
+    maintenant = int(time.time())
+    if d["genere"] > maintenant + 60:                       # horodatage dans le futur : jamais présenté comme frais
+        return {"disponible": False, "raison": "horloge"}
+    age = max(0, maintenant - d["genere"])
+    if age > FEED_PEREMPTION_S:
+        return {"disponible": False, "raison": "périmé", "age_s": age}
+    appareils = [x for x in (_appareil_lan(a) for a in d["appareils"][:200]) if x is not None]
+    return {"disponible": True, "age_s": age, "fenetre": _txt(d.get("fenetre"), 40), "appareils": appareils}
+
+
 # ── PONT vers sbxdpi (moteur d'enrichissement live, lecture LAN) ─────────────
 # L'admin (sous JWT) doit voir suggestions/usage/sessions calculées par sbxdpi,
 # qui n'écoute qu'en LAN sur dpi-live.sock. On les PROXIFIE ici, sous JWT, en
@@ -305,8 +415,12 @@ def _host_suffix(host: str, suffix: str) -> bool:
 
 def _classify(host: str) -> dict:
     """Mirroir host-only de l'enrichisseur Go : meilleure règle par domain_suffix."""
+    return _classify_avec(_dpi_rules(), host)
+
+
+def _classify_avec(regles: list, host: str) -> dict:
     best = {}
-    for r in _dpi_rules():
+    for r in regles:
         ds = (r.get("match") or {}).get("domain_suffix") or []
         if any(_host_suffix(host, s) for s in ds):
             if not best or r.get("confidence", 0) >= best.get("confidence", 0):
@@ -613,11 +727,12 @@ def _derive_stats() -> dict:
 
 @app.get("/usage")
 async def dpi_usage(user=Depends(require_jwt)):
-    """Vue usage enrichie. sbxdpi si vivant, sinon dérivée du collector (réel)."""
+    """Vue usage enrichie. sbxdpi si vivant, sinon dérivée du collector (réel). Les destinations que le DPI ne classe pas reçoivent une ÉTIQUETTE d'ad-guard
+    (organisation, type, catégorie ; source « ad-guard ») quand ses fichiers de données existent : lecture seule, une règle du DPI gagne toujours (#1960)."""
     live = await _sbxdpi_get("/api/v1/dpi/usage", {})
     if live and (live.get("usages") or live.get("unknown")):
-        return live
-    return _derive_usage()
+        return await asyncio.to_thread(_usage_enrichi, live)
+    return await asyncio.to_thread(_usage_derive_enrichi)
 
 
 @app.get("/suggestions")

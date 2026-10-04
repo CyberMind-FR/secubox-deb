@@ -1,3 +1,13 @@
+secubox-ad-guard (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Fichier d'échange pour le DPI (ref #1960) : `/var/lib/secubox/ad-guard/dnstv/dpi-feed.json` (`0600`, écriture atomique), recalculé au plus toutes les 5 minutes par le moteur
+    (`secubox-adguard-auto`, même quand aucun appareil n'est en mode auto). Un RÉSUMÉ par appareil du LAN regroupé par MAC, jour courant (UTC) : requêtes, blocages, nombre de noms,
+    TOP 10 des services (organisation + type d'après `lists/services.txt`) et répartition par type. VIE PRIVÉE : aucun nom de domaine demandé, seulement des organisations et des
+    types ; ni volumes ni contenu (le DNS n'en donne pas). La box et la passerelle sont exclues. Une erreur ne fait jamais échouer le moteur.
+    NOTE DE DÉPLOIEMENT : redémarrer `secubox-aggregator` (il sert ce module dans son processus).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 09:00:00 +0200
+
 secubox-ad-guard (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Ajout AUTOMATIQUE des TV et streamers (ref #1959). Un appareil est reconnu à son comportement DNS (requêtes d'insertion publicitaire + au moins deux services de contenu ou de
