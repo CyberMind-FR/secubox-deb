@@ -19,7 +19,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_auto, dnstv_regles  # noqa: E402
+from api import dnstv, dnstv_ajout, dnstv_auto, dnstv_detecteur, dnstv_profil, dnstv_regles  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -29,31 +29,71 @@ def classeur() -> dnstv.Classifieur:
     return dnstv.Classifieur(dnstv.charger_listes(dnstv.DOSSIER_LISTES, perso if perso.is_file() and not perso.is_symlink() else None))
 
 
-def main(sudo=None, maintenant=None) -> int:
-    etat, erreur = dnstv.lire_etat()
-    if erreur:
-        print(erreur, file=sys.stderr)
-        return 1
-    if not etat["actif"] or not dnstv_auto.appareils(etat):
-        return 0
+def services() -> dnstv.ClasseurServices:
+    f = dnstv.DOSSIER_LISTES / "services.txt"
+    return dnstv.ClasseurServices(dnstv.charger_services(f) if f.is_file() else [])
+
+
+def voisins_du_lan() -> dict:
+    """Voisins de l'interface du LAN SEULEMENT (ni br-lxc ni wg*) ; interface inconnue : rien (jamais d'ajout à l'aveugle)."""
+    itf = dnstv.interface_lan()
+    return dnstv.lire_voisins(interface=itf) if itf else {}
+
+
+def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None) -> int:
+    now = maintenant or int(time.time())
     cl = classeur()
+    magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
+    etat_modifie, ajouts, res = False, [], {"changements": [], "applique": False}
     try:
-        with dnstv_regles.verrou():                           # lecture-modification-écriture exclusives avec l'API
+        with dnstv_regles.verrou():                           # lecture-modification-écriture exclusives avec l'API ; l'ÉTAT est lu ICI, sous le verrou
+            etat, erreur = dnstv.lire_etat()
+            if erreur:
+                print(erreur, file=sys.stderr)
+                return 1
+            if not etat["actif"] or (not dnstv_auto.appareils(etat) and not etat.get("ajout_auto")):
+                return 0
+            reglage = dnstv_auto.reglage_depuis(etat)
             regles = dnstv_regles.charger()
-            res = dnstv_auto.tick(etat, regles, dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"), lambda d: cl.classer(d)[0] or "",
-                                  dnstv_auto.reglage_depuis(etat), maintenant or int(time.time()))
+            if etat.get("ajout_auto"):
+                # 1. détection (compteurs des 2 derniers jours, regroupés par MAC) puis ajout automatique, garde-fous compris
+                try:
+                    vois = (voisins or voisins_du_lan)()
+                    exclus = (locales or dnstv.adresses_locales)() | (passerelles or dnstv.passerelles)()
+                    detections = dnstv_detecteur.detecter(magasin.compteurs_clients(dnstv._jour(now - 86400)), vois, services(), reglage.declencheurs, exclus,
+                                                          reglage.min_declencheurs, reglage.min_services)
+                    vues = {c["client"]: c["derniere_vue"] for c in magasin.par_client()}
+                    suivi = dnstv_ajout.charger_suivi()
+                    res_a = dnstv_ajout.appliquer(etat, regles, detections, vois, vues, dnstv_profil.profil_effectif(dnstv_profil.graine(), dnstv_profil.charger_agrege()),
+                                                  suivi, reglage, now, exclus)
+                    ajouts = res_a["changements"]
+                    if res_a["etat_modifie"]:
+                        dnstv_regles.ecrire(regles)       # règles d'abord, puis le suivi, puis l'état : un échec au milieu ne laisse pas un appareil sans son profil
+                        dnstv_ajout.ecrire_suivi(suivi)
+                        dnstv.ecrire_etat(etat)
+                        etat_modifie = True
+                except dnstv_regles.ErreurRegle as e:
+                    print(f"ajout automatique impossible : {e}", file=sys.stderr)     # plafond de règles : l'expiration et les signaux ci-dessous continuent
+            # 2. règles : candidats, essais, signaux, agrégation
+            res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now)
             if res["changements"]:
                 dnstv_regles.ecrire(regles)
+            if res["agrege"] != dnstv_profil.charger_agrege():
+                dnstv_profil.ecrire_agrege(res["agrege"])
     except dnstv_regles.ErreurRegle as e:
         print(f"règles illisibles, rien n'est changé : {e}", file=sys.stderr)
         return 1
+    for c in ajouts:
+        print(f"appareil {c['type']} {c['nom']} {c['detail']}")
     for c in res["changements"]:
         print(f"{c['appareil']} {c['domaine']} {c['de'] or '-'}→{c['vers']} ({c['motif']})")
-    # Le contrôleur est appelé dès qu'une règle change d'état autrement que par sa simple proposition : il applique ET audite.
-    # Une application qui a échoué reste DUE (marque `.a-appliquer`) et est relancée au passage suivant : regles.json est déjà à jour,
+    # Le contrôleur est appelé dès que le périmètre change ou qu'une règle change d'état autrement que par sa simple proposition : il applique ET audite.
+    # Une application qui a échoué reste DUE (marque `.a-appliquer`) et est relancée au passage suivant : les fichiers sont déjà à jour,
     # sans relance le DNS resterait périmé jusqu'à la prochaine transition.
     due = (dnstv.DOSSIER_ETAT / ".a-appliquer")
-    if res["applique"] or any(c["de"] for c in res["changements"]) or due.exists():
+    if etat_modifie:
+        due.touch()                                           # posée dès l'état écrit : même un arrêt brutal avant l'appel laisse l'application due
+    if etat_modifie or res["applique"] or any(c["de"] for c in res["changements"]) or due.exists():
         r = (sudo or (lambda: subprocess.run(["sudo", "-n", CTL, "regles-appliquer"], capture_output=True, text=True, timeout=180)))()
         if r.returncode != 0:
             due.touch()

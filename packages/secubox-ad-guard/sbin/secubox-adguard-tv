@@ -141,8 +141,9 @@ def instantane(etat: dict, actives: dict, regles: dict | None = None) -> dict:
     """Ce que le DNS a RÉELLEMENT chargé : modes + domaines de chaque vue auto + état de chaque règle (pour l'audit)."""
     vues = {f"sbx-tv-auto-{dnstv._slug(c['nom'])}": sorted(set(actives.get(dnstv._slug(c["nom"]), [])))
             for c in etat["clients"] if c["mode"] == "auto"}
-    return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")),
-            "modes": sorted([c["ip"], c["mode"], c["nom"]] for c in etat["clients"]), "vues": vues, "etats": regles or {}}
+    return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")), "ajout_auto": bool(etat.get("ajout_auto")), "mode_defaut": etat.get("mode_defaut", "auto"),
+            "modes": sorted([c["ip"], c["mode"], c["nom"], c.get("puits", True)] for c in etat["clients"]), "vues": vues, "etats": regles or {},
+            "ignores": sorted(etat.get("ignores", []))}
 
 
 def ecrire_instantane(inst: dict) -> None:
@@ -215,12 +216,38 @@ def etats_regles() -> dict:
 
 def appliquer() -> int:
     etat, table, actives = charger_avec_regles()
+    voulu = instantane(etat, actives, etats_regles())
+    avant = lire_instantane()
     ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))
     recharger()
-    ecrire_instantane(instantane(etat, actives, etats_regles()))
+    ecrire_instantane(voulu)
+    audit_appareils(avant, etat)                                         # `apply` trace AUSSI les changements de périmètre (revue #1959)
+    audit_transitions(avant, voulu)
     audit("apply", f"actif={etat['actif']} appareils={len(etat['clients'])} domaines={len(table)}")
     print(json.dumps({"ok": True, "actif": etat["actif"], "appareils": len(etat["clients"]), "domaines": len(table)}))
     return 0
+
+
+def audit_appareils(avant: dict | None, etat: dict) -> None:
+    """Une ligne d'audit par appareil (adresse) ajouté, retiré ou MODIFIÉ (mode, puits, nom) entre deux instantanés, avec son origine et sa preuve (#1959).
+    Sans instantané précédent (première application, ou réactivation après `disable`), tout le périmètre est tracé comme ajouté."""
+    anciennes = {m[0]: m for m in avant.get("modes", []) if isinstance(m, list) and len(m) >= 3} if avant else {}
+    courants = {c["ip"]: c for c in etat["clients"]}
+    n = 0
+    for ip, c in sorted(courants.items()):
+        if n >= 50:
+            break
+        vieux = anciennes.get(ip)
+        if vieux is None:
+            audit("appareil", f"+ {c['nom']} {ip} mode={c['mode']} puits={c.get('puits', True)} origine={c.get('origine', 'admin')} mac={c.get('mac', '-')} preuve={c.get('preuve', '')}"[:200])
+            n += 1
+        elif vieux[1] != c["mode"] or vieux[2] != c["nom"] or (len(vieux) > 3 and vieux[3] != c.get("puits", True)):
+            audit("appareil", f"~ {c['nom']} {ip} mode={c['mode']} puits={c.get('puits', True)}"[:200])
+            n += 1
+    for ip in sorted(set(anciennes) - set(courants)):
+        if n < 50:
+            audit("appareil", f"- {ip} retiré du périmètre")
+            n += 1
 
 
 def audit_transitions(avant: dict, voulu: dict) -> None:
@@ -244,6 +271,15 @@ def audit_transitions(avant: dict, voulu: dict) -> None:
             break
     if avant is not None and bool(avant.get("auto_essai")) != voulu["auto_essai"]:
         audit("auto_essai", f"actif={voulu['auto_essai']}")
+    ancien_aa, ancien_md = (bool(avant.get("ajout_auto")), avant.get("mode_defaut", "auto")) if avant else (False, "auto")
+    if ancien_aa != voulu["ajout_auto"] or ancien_md != voulu["mode_defaut"]:
+        audit("ajout_auto", f"actif={voulu['ajout_auto']} mode_defaut={voulu['mode_defaut']}")      # décision de sécurité : ajoute des appareils sans clic
+    nouveaux_ignores = sorted(set(voulu.get("ignores", [])) - set((avant or {}).get("ignores", [])))
+    retires_ignores = sorted(set((avant or {}).get("ignores", [])) - set(voulu.get("ignores", [])))
+    for mac in nouveaux_ignores[:20]:
+        audit("ignore", f"+ {mac} : ne sera plus jamais ajouté automatiquement")
+    for mac in retires_ignores[:20]:
+        audit("ignore", f"- {mac} : peut de nouveau être ajouté")
 
 
 def regles_appliquer() -> int:
@@ -261,6 +297,7 @@ def regles_appliquer() -> int:
             or set(avant.get("vues", {})) != set(voulu["vues"])):
         recharger()
         ecrire_instantane(voulu)
+        audit_appareils(avant, etat)
         audit_transitions(avant or {}, voulu)
         audit("regles-appliquer", "mode=rechargement")
         print(json.dumps({"ok": True, "ajoutes": 0, "retires": 0, "mode": "rechargement"}))

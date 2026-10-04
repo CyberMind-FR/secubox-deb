@@ -304,6 +304,23 @@
                 publicitaires appris pendant les coupures. <b>Rien n'est bloqué sans vous</b> : « Essayer » bloque pendant <span id="auto-essai-h">24</span> h, puis il faut « Confirmer » ;
                 sans confirmation, la règle est retirée toute seule. Les seuils de détection sont des valeurs de départ, mesurées sur un seul appareil.</p>
                 <label><input type="checkbox" id="auto-essai-auto" onchange="autoEssai(this.checked)"> Essai automatique : les candidats passent seuls à l'essai (la confirmation reste la vôtre)</label>
+
+                <!-- Ajout automatique des TV et streamers, puits complet, profil agrégé (#1959) : tout texte venu de l'API passe par textContent -->
+                <div id="det-bloc" style="margin:.8rem 0;padding:.6rem .8rem;border:1px solid var(--border,#8884);border-radius:6px;">
+                    <h3 style="margin:0 0 .4rem;">Ajout automatique des TV et streamers</h3>
+                    <div style="display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap;">
+                        <label><input type="checkbox" id="det-ajout" onchange="detAjout(this.checked)"> <b>Ajouter automatiquement</b> les appareils détectés</label>
+                        <label>Mode par défaut :
+                            <select id="det-mode" onchange="detMode(this.value)"><option value="auto">auto (profil de base)</option><option value="off">off (listé seulement)</option></select></label>
+                        <span id="det-plafond" style="color:var(--text-dim);font-size:.85rem;"></span>
+                    </div>
+                    <p id="det-aide" style="color:var(--text-dim);font-size:.8rem;margin:.4rem 0;">Un appareil est reconnu à son comportement DNS (insertion publicitaire + services de contenu), regroupé par adresse MAC. Un appareil en observe ou en block
+                    sort du puits de production ; en auto il le garde (case « puits complet » par appareil). Le DNS ne distingue pas une TV d'un téléphone qui regarde le même replay : « Retirer et ne plus ajouter » suffit.</p>
+                    <div id="det-etat" style="color:#d64545;font-size:.85rem;"></div>
+                    <table><thead><tr><th>Appareil</th><th>Adresses</th><th>MAC</th><th>Origine</th><th>Puits complet</th><th></th></tr></thead><tbody id="det-appareils"></tbody></table>
+                    <h4 style="margin:.8rem 0 .3rem;">Profil agrégé <small style="font-weight:400;color:var(--text-dim);">— confirmé par l'administrateur sur plusieurs appareils</small></h4>
+                    <table><thead><tr><th>Domaine</th><th>Appareils</th><th>Origine</th></tr></thead><tbody id="det-profil"></tbody></table>
+                </div>
                 <div id="auto-appareils" style="margin:.7rem 0;"></div>
                 <h3 style="margin:.8rem 0 .3rem;">À valider</h3>
                 <table><thead><tr><th>Appareil</th><th>Domaine</th><th>Score</th><th>Risque</th><th>Pourquoi</th><th></th></tr></thead><tbody id="auto-candidats"></tbody></table>
@@ -649,6 +666,54 @@
         }
         setInterval(() => { if (document.getElementById('adblocktv').classList.contains('active')) dnsBoxRender(); }, 15000);
 
+
+        // ── ajout automatique, puits complet et profil agrégé (#1959) ──────────────────────────────────────────────────────
+        function detNom(nom) { return encodeURIComponent(nom); }
+        async function detReglage(corps) {
+            const r = await api('/adblock-tv/auto/detection/reglage', 'POST', corps);
+            detRender(); autoRender(); tvRender();
+            return r;
+        }
+        async function detAjout(v) {
+            if (v && !confirm('L\u2019ajout automatique ajoute au périmètre, sans clic, les appareils détectés comme TV ou streamers, avec le profil de base. Continuer ?')) { detRender(); return; }
+            await detReglage({ ajout_auto: v });
+        }
+        async function detMode(m) { await detReglage({ mode_defaut: m }); }
+        async function detPuits(nom, actif) { await api('/adblock-tv/auto/appareils/' + detNom(nom) + '/puits', 'POST', { actif: actif }); detRender(); tvRender(); }
+        async function detIgnorer(nom) {
+            if (!confirm('Retirer cet appareil du périmètre (retour au puits de production), retirer ses règles et ne plus jamais l\u2019ajouter automatiquement ?')) return;
+            await api('/adblock-tv/auto/appareils/' + detNom(nom) + '/ignorer', 'POST'); detRender(); autoRender(); tvRender();
+        }
+        async function detRender() {
+            const [d, pr] = await Promise.all([api('/adblock-tv/auto/detection'), api('/adblock-tv/auto/profil')]);
+            const etat = document.getElementById('det-etat'), tb = document.getElementById('det-appareils'), tp = document.getElementById('det-profil');
+            etat.textContent = ''; tb.textContent = ''; tp.textContent = '';
+            if (!d || !Array.isArray(d.appareils)) { etat.textContent = '⚠ Détection indisponible (API DNS AdBlock TV non joignable)'; return; }
+            document.getElementById('det-ajout').checked = !!d.ajout_auto;
+            document.getElementById('det-mode').value = ['auto', 'off'].includes(d.mode_defaut) ? d.mode_defaut : 'auto';
+            const pl = d.plafond || {};
+            document.getElementById('det-plafond').textContent = 'ajouts sur 24 h : ' + (pl.ajouts_24h || 0) + ' / ' + (pl.max_par_jour || 0);
+            d.appareils.forEach(a => {
+                const tr = document.createElement('tr');
+                const origine = a.origine === 'auto' ? 'ajouté automatiquement le ' + new Date((a.ajoute || 0) * 1000).toLocaleString('fr-FR') + (a.preuve ? ' — ' + a.preuve : '') : 'déclaré par l\u2019administrateur';
+                const puits = document.createElement('td'), caseP = document.createElement('input');
+                caseP.type = 'checkbox'; caseP.checked = a.puits !== false; caseP.disabled = a.mode !== 'auto'; caseP.title = a.mode === 'auto' ? 'puits de production complet + règles de l\u2019appareil' : 'réservé au mode auto';
+                caseP.onchange = () => detPuits(a.nom, caseP.checked);
+                puits.appendChild(caseP);
+                const action = document.createElement('td'), bouton = tvEl('button', 'Retirer et ne plus ajouter', 'btn det-ignorer');
+                bouton.onclick = () => detIgnorer(a.nom);
+                action.appendChild(bouton);
+                [tvEl('td', a.nom), tvEl('td', (a.adresses || []).join(', '), null, 'font-family:monospace;font-size:.78rem;'), tvEl('td', a.mac || '—', null, 'font-family:monospace;'),
+                 tvEl('td', origine), puits, action].forEach(c => tr.appendChild(c));
+                tb.appendChild(tr);
+            });
+            if (!d.appareils.length) tvLigne(tb, [Object.assign(tvEl('td', 'Aucun appareil dans le périmètre', null, 'color:var(--text-dim);text-align:center;'), { colSpan: 6 })]);
+            const agr = (pr && pr.agrege) || {}, eff = (pr && Array.isArray(pr.effectif)) ? pr.effectif : [];
+            Object.keys(agr).sort().forEach(dom => tvLigne(tp, [dom, (agr[dom].appareils || []).join(', '), 'profil agrégé (' + (agr[dom].appareils || []).length + ' appareils)']));
+            if (!Object.keys(agr).length) tvLigne(tp, [Object.assign(tvEl('td', 'Aucun domaine agrégé : il en faut un confirmé par l\u2019administrateur sur ' + ((pr && pr.min_appareils) || 2) + ' appareils', null, 'color:var(--text-dim);'), { colSpan: 3 })]);
+        }
+        setInterval(() => { if (document.getElementById('adblocktv').classList.contains('active')) detRender(); }, 10000);
+
         // ── mode automatique (#1954) : règles apprises, essai, confirmation, retour arrière ──────────────────────────────────────
         const AUTO_RISQUE = { faible: 'faible', partage: 'peut servir aussi le contenu', variable: 'noms variables regroupés' };   // libellés locaux, jamais ceux de l'API
         const AUTO_ETAT = { rejete: 'rejetée', retire: 'retirée', candidat: 'candidat', essai: 'essai', confirme: 'confirmée' };
@@ -704,7 +769,7 @@
 
         // ── DNS AdBlock TV (POC #1943) ───────────────────────────────────────────────
         let tvSondeNom = '';
-        function tvEsc(t) { const d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML; }
+        function tvEsc(t) { const d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML.replace(/'/g, '&#39;').replace(/"/g, '&quot;'); }
         async function tvRender() {
             const st = await api('/adblock-tv/status');
             if (!st || !st.clients || !st.listes) {            // API absente ou ancien code servi par l'agrégateur : on le dit, on ne plante pas
@@ -757,7 +822,7 @@
             z.textContent = (r.recue ? '✅ ' : '❌ ') + r.lecture + (r.recue ? ' — client ' + r.evenements[0].client + ', décision ' + r.evenements[0].decision : '');
         }
 
-        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue(); autoRender(); dnsBoxRender();
+        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender(); tvRender(); tvVue(); autoRender(); dnsBoxRender(); detRender();
         setInterval(fetchStats, 30000);
     </script>
     <script src="/shared/crt-engine.js"></script>
