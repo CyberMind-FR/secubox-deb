@@ -13,6 +13,7 @@ Bloquer sur la navigation globale : adulte / porno / xxx, parking, « sensibles 
 
 Réponses aux trois questions de cadrage :
 
+0. **Défaut : « observe »** pour toutes les catégories et tout appareil non assigné (validé le 2026-10-04 ; le propriétaire aurait préféré un blocage par défaut, laissé à une bascule par catégorie ou par profil, par exemple `enfants`).
 1. **« Sensibles »** = jeux d'argent, violence, drogues, armes, haine, phishing/malware, « … » (liste ouverte : le catalogue de catégories doit pouvoir s'étendre).
 2. **Global pour tous avec exceptions par appareil, ET profils** (par exemple enfants / adultes) **associés aux appareils**.
 3. **Observe d'abord, puis blocage** ; le **blocage immédiat** reste possible, avec **cumul** (listes publiques + règles apprises) « comme pour les TV ».
@@ -69,9 +70,9 @@ Module indépendant `secubox-webfilter` (utilisateur dédié `secubox-webfilter`
 - **P3 — Apprentissage.** Candidats (lexique/TLD, parking, DPI), cycle essai/confirmation, agrégation.
 - **P4 — Association.** Catégories publiées au DPI ; flux d'ad-guard ; publicité audio (§7).
 
-## 7. Publicité audio des radios en flux (essai en cours)
+## 7. Publicité audio des radios en flux (décision du propriétaire, 2026-10-04)
 
-Constat du 2026-10-04 : une enceinte Google Cast (MAC `8c:de:f9:89:4f:dd`) joue des radios TuneIn/NRJ/Nova ; elle demande les points d'accès de TuneIn, le flux, et `tunein-ondemand.cdnstream1.com` (suspect : audio « on-demand » du pré-roll). Règle à l'essai posée pour cette seule enceinte ; **premier essai non concluant** (la réponse DNS de 300 s était encore en mémoire de l'enceinte). Limite de principe : une pub **insérée dans le flux audio** sort de la même adresse que le programme et ne se bloque pas par le DNS. La catégorie « publicité audio » ne contiendra que ce qui est mesuré comme séparé.
+Le blocage actuel d'ad-guard est **conservé** : les publicités des radios en flux ont été en grande majorité bloquées sur l'enceinte Google Cast de test (règle confirmée pour `tunein-ondemand.cdnstream1.com`), et les radios sans publicité fonctionnent. Limite de principe : une publicité **insérée dans le flux audio** sort de la même adresse que le programme et ne se bloque pas par le DNS. La catégorie « publicité audio » ne contiendra donc que ce qui est mesuré comme séparé du flux ; la publicité et le pistage restent à ad-guard.
 
 ## 8. Tests et livraison
 
