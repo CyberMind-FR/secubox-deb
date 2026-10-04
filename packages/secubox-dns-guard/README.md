@@ -45,3 +45,13 @@ Configuration file: `/etc/secubox/dns-guard.toml`
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+
+## Métriques du panneau (#1978)
+
+`GET /status` (`require_lecture`) porte `queries_24h`, `blocked_24h` et `blocklist_size`. Sources : les compteurs DNS d'ad-guard
+(`/var/lib/secubox/ad-guard/dnstv/dnstv.db`, ouvert en lecture seule, fenêtre « aujourd'hui (UTC) ») et l'état du puits
+(`/var/lib/secubox/ad-guard/sinkhole-status.json`) : le blocage réel vit dans Unbound, pas dans la liste dnsmasq propre au module. Un chiffre
+indisponible vaut `null` (le panneau écrit « — »). `malware_blocked` et `phishing_blocked` valent toujours `null` : le puits ne distingue pas ces
+catégories. `GET /top-blocked?limit=1..50` (`require_lecture`, aucun client dans la réponse) et `GET /threats?limit=1..100` (`require_jwt`, porte
+l'adresse du client).

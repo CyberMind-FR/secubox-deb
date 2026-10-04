@@ -1,3 +1,15 @@
+secubox-dns-guard (1.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau : les métriques ne sont plus à zéro (ref #1978). /status porte enfin les champs que le panneau lit (queries_24h, blocked_24h,
+    blocklist_size) : requêtes et blocages du jour d'après les compteurs DNS d'ad-guard, taille de la liste d'après l'état du puits (le blocage
+    réel vit dans Unbound, pas dans la liste dnsmasq du module). Malware et phishing, que le puits ne distingue pas, valent null et s'affichent
+    « — » : un chiffre absent est dit absent, jamais un zéro.
+  * Routes /top-blocked (domaines les plus bloqués du jour, sans adresse de client) et /threats (alertes du module, réservée à l'administrateur),
+    que le panneau appelait sans qu'elles existent. Routes synchrones : elles lisent des bases SQLite hors de la boucle partagée de l'agrégateur.
+  * Panneau : listes construites sans innerHTML (les valeurs de l'API sont du texte) ; le bouton « Allow » appelle la vraie route /whitelist.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 04 Oct 2026 21:00:00 +0200
+
 secubox-dns-guard (1.1.3-1~bookworm1) bookworm; urgency=high
 
   * SÉCURITÉ (ref #1416, audit #1405 S6) : UMask=0000 → 0002. L'unité créait

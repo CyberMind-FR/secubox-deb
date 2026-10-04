@@ -28,13 +28,18 @@ from typing import Optional, Dict, List, Any, Set
 from enum import Enum
 from collections import Counter
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from secubox_core.auth import require_lecture
 from pydantic import BaseModel, Field
 import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+
+try:
+    from . import metriques
+except ImportError:                                  # lancé hors paquet (tests, uvicorn api.main) : import absolu
+    from api import metriques
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/dns-guard.toml")
@@ -43,6 +48,11 @@ BLOCKLIST_FILE = DATA_DIR / "blocklist.txt"
 PENDING_FILE = DATA_DIR / "pending.json"
 ALERTS_FILE = DATA_DIR / "alerts.jsonl"
 STATS_FILE = DATA_DIR / "stats.json"
+
+# Sources des métriques du panneau (#1978) : le puits et les compteurs DNS d'ad-guard (le blocage réel vit dans Unbound).
+AD_GUARD_DB = Path("/var/lib/secubox/ad-guard/dnstv/dnstv.db")
+PUITS_STATUS = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
+FENETRE = "aujourd'hui (UTC)"
 
 # dnsmasq blocklist integration
 DNSMASQ_BLOCKLIST = Path("/etc/dnsmasq.d/secubox-blocklist.conf")
@@ -575,16 +585,42 @@ guard = DnsGuard(DATA_DIR)
 # ============================================================================
 
 @app.get("/status", dependencies=[Depends(require_lecture)])
-async def status():
-    """Public status endpoint."""
+def status():
+    """Public status endpoint. Route SYNCHRONE (exécutée dans un fil) : elle lit des bases SQLite, jamais sur la boucle partagée de l'agrégateur.
+
+    Les chiffres du panneau viennent du puits et des compteurs DNS d'ad-guard ; un chiffre absent est None (le panneau écrit « — »), jamais 0.
+    Le puits ne distingue pas malware et phishing : ces deux champs sont toujours None ici."""
     stats = guard.get_stats()
+    jour = time.strftime("%Y-%m-%d", time.gmtime())
+    dns = metriques.compteurs_dns(AD_GUARD_DB, jour)
+    puits = metriques.lire_puits(PUITS_STATUS)
     return {
         "module": "dns-guard",
         "status": "ok",
         "version": "1.0.0",
         "blocklist_count": stats["blocklist_count"],
-        "alerts_24h": stats["alerts_24h"]
+        "alerts_24h": stats["alerts_24h"],
+        "queries_24h": dns["requetes"] if dns else None,
+        "blocked_24h": dns["bloquees"] if dns else None,
+        "malware_blocked": None,
+        "phishing_blocked": None,
+        "blocklist_size": puits["blocklist_size"] if puits else stats["blocklist_count"],
+        "fenetre": FENETRE,
+        "sources": {"dns": dns is not None, "puits": puits is not None},
     }
+
+
+@app.get("/top-blocked", dependencies=[Depends(require_lecture)])
+def top_blocked(limit: int = Query(10, ge=1, le=metriques.TOP_MAX)):
+    """Domaines les plus bloqués du jour, tous appareils confondus (aucune adresse de client)."""
+    jour = time.strftime("%Y-%m-%d", time.gmtime())
+    return {"domains": metriques.top_bloques(AD_GUARD_DB, jour, limit), "fenetre": FENETRE}
+
+
+@app.get("/threats", dependencies=[Depends(require_jwt)])
+def threats(limit: int = Query(20, ge=1, le=100)):
+    """Menaces récentes (alertes du module, 24 h) : porte l'adresse du client, donc réservée à l'administrateur."""
+    return {"threats": metriques.menaces(guard.get_alerts(24))[-limit:][::-1]}
 
 
 @app.get("/health")
