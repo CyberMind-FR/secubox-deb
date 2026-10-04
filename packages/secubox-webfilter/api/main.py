@@ -55,6 +55,16 @@ def _meta(cat_id: str, source_nom: str) -> dict:
         return {}
 
 
+def _bloque_quelque_chose(cats) -> bool:
+    """Vrai si un profil ou une exception met une catégorie en `block` : l'agrégat dit « blocage actif », sans nom de profil ni d'appareil."""
+    try:
+        cfg = fichiers.lire_config(ETAT, {c.id for c in cats})
+    except profils.ErreurProfils:
+        return False
+    return (any(m == "block" for p in cfg["profils"].values() for m in p["categories"].values())
+            or any(m == "block" for a in cfg["appareils"].values() for m in a["exceptions"].values()))
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "module": "webfilter", "version": app.version}
@@ -77,7 +87,7 @@ def etat():
             srcs.append({"nom": s.nom, "licence": s.licence, "n": m.get("n"), "ts": m.get("ts")})
         sortie.append({"id": c.id, "libelle": c.libelle, "mode": c.mode, "requetes_7j": comptes.get(c.id, 0),
                        "bloque_7j": decisions.get(c.id, {}).get("bloque", 0), "sources": srcs})
-    return {"mode_global": "observe", "categories": sortie,
+    return {"mode_global": "block" if _bloque_quelque_chose(cats) else "observe", "categories": sortie,
             "dernier_evenement": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(dernier)) if dernier else None}
 
 

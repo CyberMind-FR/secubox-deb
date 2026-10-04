@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from urllib.parse import unquote
 
 import pytest
 
@@ -18,6 +19,18 @@ STATS = {"jours": 7, "par_categorie": {"adulte": 4}, "par_client": {"192.168.1.9
 DOMAINES = {"categorie": "adulte", "jours": 7, "domaines": [{"domaine": "a.evil.example.com", "n": 3}, {"domaine": "b.evil.example.com", "n": 1}]}
 
 
+PROFILS = {"version": 4, "profils": {
+    "defaut": {"categories": {"adulte": "observe", "jeux": "observe"}, "autorise": []},
+    "enfants": {"categories": {"adulte": "block", "jeux": "observe"}, "autorise": ["education.example.org"]}},
+    "modeles": {"enfants": {"categories": {"adulte": "block", "jeux": "block"}, "autorise": []}, "adultes": {"categories": {}, "autorise": []}}}
+APPAREILS = {"assignes": [
+    {"mac": "aa:bb:cc:dd:ee:01", "nom": "Tablette", "profil": "enfants", "exceptions": {"jeux": "block"}, "adresses": ["192.168.1.50"], "exclu": None},
+    {"mac": "aa:bb:cc:dd:ee:02", "nom": "TV salon", "profil": "defaut", "exceptions": {}, "adresses": ["192.168.1.95"], "exclu": "geree par ad-guard"}],
+    "connus": [{"mac": "aa:bb:cc:dd:ee:09", "adresses": ["192.168.1.77"], "vu": 1791090000, "exclu": None}]}
+APPLIQUER = {"en_attente": True, "version": 4, "appliquee": 2, "dernier": {"statut": "applique", "version": 2, "zones": 311000, "vues": 2, "duree_s": 9.4, "message": "ok"},
+             "estimation": {"zones": 311001, "memoire_mo": 106, "rechargement_s": 9.4}}
+
+
 @pytest.fixture(scope="module")
 def navigateur():
     with playwright.sync_playwright() as pw:
@@ -28,7 +41,10 @@ def navigateur():
 
 def _page(navigateur, rep=None, token="jeton-admin"):
     """`rep` : {(méthode, chemin): (statut, corps)} ; défaut = tout répond normalement."""
-    rep = {("GET", "/etat"): (200, ETAT), ("GET", "/stats"): (200, STATS), ("GET", "/categories/adulte/domaines"): (200, DOMAINES),
+    rep = {("GET", "/profils"): (200, PROFILS), ("GET", "/appareils"): (200, APPAREILS), ("GET", "/appliquer"): (200, APPLIQUER),
+           ("POST", "/profils"): (200, {"version": 5}), ("POST", "/appareils/aa:bb:cc:dd:ee:01"): (200, {"version": 6}), ("POST", "/appareils/aa:bb:cc:dd:ee:09"): (200, {"version": 7}),
+           ("DELETE", "/profils/enfants"): (200, {"version": 8}), ("DELETE", "/appareils/aa:bb:cc:dd:ee:01"): (200, {"version": 9}), ("POST", "/appliquer"): (202, {"statut": "demandee"}),
+           ("GET", "/etat"): (200, ETAT), ("GET", "/stats"): (200, STATS), ("GET", "/categories/adulte/domaines"): (200, DOMAINES),
            ("GET", "/categories/jeux/domaines"): (200, {"categorie": "jeux", "jours": 7, "domaines": []}), ("POST", "/sync"): (202, {"statut": "demandee"}),
            **(rep or {})}
     ctx = navigateur.new_context()
@@ -38,9 +54,13 @@ def _page(navigateur, rep=None, token="jeton-admin"):
     erreurs, requetes = [], []
     p.on("pageerror", lambda e: erreurs.append(str(e)))
 
+    p.corps = {}
+
     def api(route):
-        chemin = re.sub(r"^.*?/api/v1/webfilter", "", route.request.url).split("?")[0]
+        chemin = unquote(re.sub(r"^.*?/api/v1/webfilter", "", route.request.url).split("?")[0])          # le serveur décode %3A en « : »
         requetes.append((route.request.method, chemin, route.request.headers.get("authorization")))
+        if route.request.post_data:
+            p.corps[(route.request.method, chemin)] = json.loads(route.request.post_data)
         statut, corps = rep.get((route.request.method, chemin), (404, {"detail": "inconnu"}))
         route.fulfill(status=statut, content_type="application/json", body=json.dumps(corps))
     p.route("http://sbx.test/**", lambda r: r.fulfill(status=200, content_type="application/javascript", body=""))
@@ -137,4 +157,161 @@ def test_catalogue_illisible_message_persistant(navigateur):
     ctx, p, _, _ = _page(navigateur, rep={("GET", "/etat"): (503, {"detail": "catalogue illisible : x"})})
     p.wait_for_selector("#errtoast.show")
     assert "catalogue illisible" in p.inner_text("#errtoast")
+    ctx.close()
+
+
+# ── phase 2 : onglets Profils, Appareils, Appliquer ────────────────────────────────────────────────────────────────────────────────
+def onglet(p, nom):
+    p.click(f"[data-onglet='{nom}']")
+
+
+def test_onglet_profils_affiche_les_modes_et_les_autorisations(navigateur):
+    ctx, p, erreurs, _ = _page(navigateur)
+    onglet(p, "profils")
+    p.wait_for_selector("[data-profil='enfants']")
+    assert p.input_value("select[data-profil='enfants'][data-cat='adulte']") == "block" and p.input_value("select[data-profil='enfants'][data-cat='jeux']") == "observe"
+    assert "education.example.org" in p.text_content("[data-profil='enfants']") and not erreurs
+    assert p.locator("[data-action='supprimer-profil'][data-profil='defaut']").count() == 0         # « defaut » ne se supprime pas
+    ctx.close()
+
+
+def test_passer_en_block_demande_confirmation_et_envoie_le_bon_profil(navigateur):
+    ctx, p, _, _ = _page(navigateur)
+    messages = []
+    p.on("dialog", lambda d: (messages.append(d.message), d.accept()))
+    onglet(p, "profils")
+    p.wait_for_selector("[data-profil='enfants']")
+    p.select_option("select[data-profil='enfants'][data-cat='jeux']", "block")
+    p.click("[data-action='enregistrer-profil'][data-profil='enfants']")
+    p.wait_for_selector("#toast.show")
+    assert messages and "BLOCAGE" in messages[0] and "jeux" in messages[0].lower()
+    assert p.corps[("POST", "/profils")] == {"nom": "enfants", "categories": {"adulte": "block", "jeux": "block"}, "autorise": ["education.example.org"]}
+    ctx.close()
+
+
+def test_refuser_la_confirmation_n_envoie_rien(navigateur):
+    ctx, p, _, requetes = _page(navigateur)
+    p.on("dialog", lambda d: d.dismiss())
+    onglet(p, "profils")
+    p.wait_for_selector("[data-profil='enfants']")
+    p.select_option("select[data-profil='enfants'][data-cat='jeux']", "block")
+    p.click("[data-action='enregistrer-profil'][data-profil='enfants']")
+    p.wait_for_timeout(400)
+    assert not [r for r in requetes if r[0] == "POST" and r[1] == "/profils"]
+    ctx.close()
+
+
+def test_creer_un_profil_depuis_un_modele(navigateur):
+    ctx, p, _, _ = _page(navigateur)
+    p.on("dialog", lambda d: d.accept())
+    onglet(p, "profils")
+    p.wait_for_selector("#nouveau-nom")
+    p.fill("#nouveau-nom", "ados")
+    p.select_option("#nouveau-modele", "enfants")
+    p.click("#btn-creer-profil")
+    p.wait_for_selector("#toast.show")
+    assert p.corps[("POST", "/profils")] == {"nom": "ados", "categories": {"adulte": "block", "jeux": "block"}, "autorise": []}
+    ctx.close()
+
+
+def test_onglet_appareils_assigne_et_signale_ad_guard(navigateur):
+    ctx, p, _, _ = _page(navigateur)
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
+    assert p.input_value("select[data-mac='aa:bb:cc:dd:ee:01'][data-champ='profil']") == "enfants"
+    assert p.input_value("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='jeux']") == "block"
+    tv = "[data-mac='aa:bb:cc:dd:ee:02']"
+    assert "ad-guard" in p.text_content(tv) and p.locator("select[data-mac='aa:bb:cc:dd:ee:02']").count() == 0     # aucune assignation possible
+    ctx.close()
+
+
+def test_enregistrer_un_appareil_envoie_profil_et_exceptions(navigateur):
+    ctx, p, _, _ = _page(navigateur)
+    p.on("dialog", lambda d: d.accept())
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
+    p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='jeux']", "")                  # retire l'exception
+    p.select_option("select[data-mac='aa:bb:cc:dd:ee:01'][data-exc='adulte']", "observe")
+    p.click("[data-action='enregistrer-appareil'][data-mac='aa:bb:cc:dd:ee:01']")
+    p.wait_for_selector("#toast.show")
+    assert p.corps[("POST", "/appareils/aa:bb:cc:dd:ee:01")] == {"nom": "Tablette", "profil": "enfants", "exceptions": {"adulte": "observe"}}
+    ctx.close()
+
+
+def test_assigner_un_appareil_connu(navigateur):
+    ctx, p, _, _ = _page(navigateur)
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-connu='aa:bb:cc:dd:ee:09']")
+    p.fill("[data-connu='aa:bb:cc:dd:ee:09'] input", "Console")
+    p.select_option("[data-connu='aa:bb:cc:dd:ee:09'] select", "enfants")
+    p.click("[data-action='assigner'][data-mac='aa:bb:cc:dd:ee:09']")
+    p.wait_for_selector("#toast.show")
+    assert p.corps[("POST", "/appareils/aa:bb:cc:dd:ee:09")] == {"nom": "Console", "profil": "enfants", "exceptions": {}}
+    ctx.close()
+
+
+def test_onglet_appliquer_montre_l_attente_l_estimation_et_demande(navigateur):
+    ctx, p, _, requetes = _page(navigateur)
+    messages = []
+    p.on("dialog", lambda d: (messages.append(d.message), d.accept()))
+    onglet(p, "appliquer")
+    p.wait_for_selector("#appli-etat")
+    assert "en attente" in p.text_content("#appli-etat").lower() and "106" in p.text_content("#appli-estimation") and "9,4" in p.text_content("#appli-estimation").replace(".", ",")
+    p.click("#btn-appliquer")
+    p.wait_for_selector("#toast.show")
+    assert messages and "DNS" in messages[0] and any(m == "POST" and c == "/appliquer" and a == "Bearer jeton-admin" for m, c, a in requetes)
+    ctx.close()
+
+
+def test_application_deja_en_cours_reste_affichee(navigateur):
+    ctx, p, _, _ = _page(navigateur, rep={("POST", "/appliquer"): (409, {"detail": "une application est déjà demandée ou en cours"})})
+    p.on("dialog", lambda d: d.accept())
+    onglet(p, "appliquer")
+    p.wait_for_selector("#btn-appliquer")
+    p.click("#btn-appliquer")
+    p.wait_for_selector("#errtoast.show")
+    p.wait_for_timeout(3500)
+    assert p.is_visible("#errtoast") and "déjà" in p.inner_text("#errtoast")
+    ctx.close()
+
+
+def test_observation_distingue_bloque_et_aurait_bloque(navigateur):
+    stats = {"jours": 7, "par_categorie": {"adulte": 7}, "par_client": {"192.168.1.95": {"adulte": 3}},
+             "par_categorie_decision": {"adulte": {"bloque": 2, "observe": 5}}, "par_client_decision": {"192.168.1.95": {"adulte": {"bloque": 2, "observe": 1}}}}
+    etat = json.loads(json.dumps(ETAT))
+    etat["categories"][0]["bloque_7j"] = 2
+    etat["categories"][0]["requetes_7j"] = 7
+    ctx, p, _, _ = _page(navigateur, rep={("GET", "/stats"): (200, stats), ("GET", "/etat"): (200, etat)})
+    p.wait_for_selector("[data-client='192.168.1.95']")
+    assert "2" in p.text_content("[data-cat='adulte'] .bloque") and "bloqué" in p.text_content("[data-cat='adulte']").lower()
+    assert "2" in p.text_content("[data-client='192.168.1.95'] .bloque")
+    ctx.close()
+
+
+def test_aucun_html_venu_de_l_api_dans_les_nouveaux_onglets(navigateur):
+    mal = "<img src=x onerror=window.__pwned=1>"
+    profils = json.loads(json.dumps(PROFILS))
+    profils["profils"][mal.replace("<", "").replace(">", "")] = {"categories": {"adulte": "observe", "jeux": "observe"}, "autorise": [mal]}
+    apps = json.loads(json.dumps(APPAREILS))
+    apps["assignes"][0]["nom"] = mal
+    apps["connus"][0]["adresses"] = [mal]
+    ctx, p, _, _ = _page(navigateur, rep={("GET", "/profils"): (200, profils), ("GET", "/appareils"): (200, apps)})
+    onglet(p, "profils")
+    p.wait_for_selector("[data-profil='enfants']")
+    onglet(p, "appareils")
+    p.wait_for_selector("[data-mac='aa:bb:cc:dd:ee:01']")
+    p.wait_for_timeout(300)
+    assert p.evaluate("window.__pwned") is None and p.locator("img").count() == 0
+    assert mal in p.text_content("#onglet-profils") or mal in p.text_content("#onglet-appareils")
+    ctx.close()
+
+
+def test_sans_jeton_les_nouveaux_onglets_demandent_la_connexion(navigateur):
+    non = (401, {"detail": "Token manquant"})
+    ctx, p, erreurs, _ = _page(navigateur, rep={("GET", "/profils"): non, ("GET", "/appareils"): non, ("GET", "/appliquer"): non, ("GET", "/stats"): non}, token=None)
+    for o in ("profils", "appareils", "appliquer"):
+        onglet(p, o)
+        p.wait_for_selector(f"#note-admin-{o}")
+        assert "administrateur" in p.inner_text(f"#note-admin-{o}").lower()
+    assert p.locator("[data-mac]").count() == 0 and p.locator("[data-profil]").count() == 0 and not erreurs
     ctx.close()

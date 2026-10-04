@@ -323,3 +323,22 @@ def test_stats_et_etat_distinguent_bloque_et_observe(banc):
 def test_etat_inchange_pour_la_lecture_simple(banc2):
     lecteur()
     assert TestClient(main.app).get("/etat").status_code == 200
+
+
+def test_mode_global_devient_block_des_qu_un_profil_bloque(banc2):
+    lecteur()
+    c = TestClient(main.app)
+    assert c.get("/etat").json()["mode_global"] == "observe"
+    admin()
+    c.post("/profils", json={"nom": "enfants", "categories": {"adulte": "block"}, "autorise": []})
+    lecteur()
+    assert c.get("/etat").json()["mode_global"] == "block"
+    assert "enfants" not in json.dumps(c.get("/etat").json())                          # l'agrégat ne révèle ni profil ni appareil
+
+
+def test_mode_global_block_pour_une_exception_qui_bloque(banc2):
+    admin()
+    c = TestClient(main.app)
+    c.post(f"/appareils/{MAC1}", json={"nom": "T", "profil": "defaut", "exceptions": {"jeux": "block"}})
+    lecteur()
+    assert c.get("/etat").json()["mode_global"] == "block"
