@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Filtrage de contenus</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <style>
+        :root {
+            --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8); --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2); --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
+            --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
+        }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); margin: 0; }
+        .main { margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); margin: 0; }
+        .header .sub { color: var(--p31-dim); font-size: .8rem; margin-top: .25rem; }
+        .btn { font-family: inherit; text-transform: uppercase; letter-spacing: .05em; font-size: .7rem; padding: .5rem .9rem; border-radius: 6px;
+               border: 1px solid var(--border); background: var(--bg-row); color: var(--text); cursor: pointer; }
+        .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0, 212, 255, .4); }
+        .btn.primary { background: rgba(0, 212, 255, .15); color: var(--cyan); }
+        .btn:disabled { opacity: .5; cursor: default; }
+        .bandeau { border: 1px solid var(--orange); border-left: 4px solid var(--orange); background: rgba(255, 153, 68, .08); border-radius: 8px;
+                   padding: .75rem 1rem; margin-bottom: 1rem; font-size: .85rem; line-height: 1.5; }
+        .bandeau strong { color: var(--orange); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: .9rem; backdrop-filter: blur(10px); }
+        .stat-card .value { font-size: 1.8rem; color: var(--cyan); text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
+        .stat-card .label { font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; color: var(--p31-dim); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h3 { color: var(--cyan); margin: 0 0 .75rem; font-size: 1rem; }
+        .rangee { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; align-items: baseline; background: var(--bg-row); border-left: 3px solid var(--green);
+                  border-radius: 6px; padding: .5rem .75rem; margin-bottom: .4rem; font-size: .8rem; }
+        .rangee .nom { color: var(--cyan); }
+        .rangee .meta { color: var(--p31-dim); font-variant-numeric: tabular-nums; }
+        table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+        th { text-align: left; color: var(--p31-dim); text-transform: uppercase; letter-spacing: .05em; font-size: .65rem; padding: .35rem .5rem; }
+        td { padding: .4rem .5rem; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+        select { font-family: inherit; background: var(--bg-row); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .35rem .5rem; }
+        ul.top { list-style: none; padding: 0; margin: .75rem 0 0; }
+        ul.top li { display: flex; justify-content: space-between; gap: 1rem; background: var(--bg-row); border-left: 3px solid var(--orange); border-radius: 6px;
+                    padding: .4rem .75rem; margin-bottom: .3rem; font-size: .8rem; }
+        .note { color: var(--p31-dim); font-size: .8rem; }
+        .toast, .errtoast { position: fixed; right: 1rem; bottom: 1rem; max-width: 26rem; padding: .7rem 1rem; border-radius: 8px; display: none; z-index: 50; font-size: .85rem; }
+        .toast { background: var(--cyan); color: #04202a; }
+        .errtoast { background: var(--red); color: #fff; bottom: 4.5rem; }
+        .toast.show, .errtoast.show { display: block; }
+        .errtoast .fermer { margin-left: .75rem; background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; }
+        @media (max-width: 768px) { .main { margin-left: 0; } }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <div><h1>🛡️ Filtrage de contenus</h1><div class="sub" id="subline">Observation par catégorie — phase 1</div></div>
+            <div class="btn-group">
+                <button class="btn" id="btn-refresh">↻ Actualiser</button>
+                <button class="btn primary" id="btn-sync">⬇️ Synchroniser les listes</button>
+            </div>
+        </header>
+
+        <div class="bandeau" id="bandeau-observe">
+            <strong>👁️ Mode observe : rien n'est bloqué.</strong>
+            Ce panneau montre ce que le filtrage de contenus <em>aurait</em> bloqué. Limites connues : un résolveur DoH, un VPN ou une adresse IP
+            directe contournent un filtre DNS, et les requêtes de la box elle-même ne sont pas comptées.
+        </div>
+
+        <div class="grid" id="cartes"></div>
+
+        <div class="card">
+            <h3>📜 Listes publiques</h3>
+            <div class="note">Listes téléchargées à l'exécution, jamais livrées avec le paquet ; chaque licence est rappelée ci-dessous.</div>
+            <div id="listes"></div>
+        </div>
+
+        <div class="card">
+            <h3>📊 Aurait été bloqué, par appareil (7 jours)</h3>
+            <div class="note" id="note-admin" style="display:none">🔒 Connexion administrateur requise pour le détail par appareil et par domaine.</div>
+            <table id="table-appareils" style="display:none">
+                <thead><tr id="entete-appareils"><th>Appareil</th></tr></thead>
+                <tbody id="par-appareil"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>🔎 Domaines les plus vus</h3>
+            <label class="note" for="cat-select">Catégorie </label><select id="cat-select"></select>
+            <ul class="top" id="top-domaines"></ul>
+        </div>
+    </main>
+    <div class="toast" id="toast"></div>
+    <div class="errtoast" id="errtoast"><span class="texte"></span><button class="fermer" aria-label="Fermer">✕</button></div>
+    <script>
+        const API_BASE = '/api/v1/webfilter';
+        const TIRET = '—';
+
+        function el(tag, cls, texte) {                       // jamais d'innerHTML : tout ce qui vient de l'API est du TEXTE
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (texte !== undefined && texte !== null) e.textContent = texte;
+            return e;
+        }
+        const fmt = n => (n === null || n === undefined) ? TIRET : Number(n).toLocaleString('fr-FR');
+        const jour = ts => (ts === null || ts === undefined) ? TIRET : new Date(ts * 1000).toISOString().slice(0, 10);
+
+        let timerToast = null;
+        function toast(m) {
+            const t = document.getElementById('toast');
+            t.textContent = m; t.classList.add('show');
+            clearTimeout(timerToast); timerToast = setTimeout(() => t.classList.remove('show'), 3000);
+        }
+        function errorToast(m) {                              // message fatal : reste jusqu'à ce qu'on le ferme
+            const t = document.getElementById('errtoast');
+            t.querySelector('.texte').textContent = m; t.classList.add('show');
+        }
+        document.querySelector('#errtoast .fermer').addEventListener('click', () => document.getElementById('errtoast').classList.remove('show'));
+
+        async function api(endpoint, methode = 'GET') {
+            const h = {};
+            const jeton = localStorage.getItem('sbx_token');
+            if (jeton) h['Authorization'] = 'Bearer ' + jeton;
+            let r;
+            try {
+                r = await fetch(API_BASE + endpoint, { method: methode, headers: h });
+            } catch (e) {
+                return { ok: false, status: 0, data: { detail: 'réseau injoignable' } };
+            }
+            let data = {};
+            try { data = await r.json(); } catch (e) { data = {}; }
+            return { ok: r.ok, status: r.status, data };
+        }
+
+        function rendreEtat(etat) {
+            const cartes = document.getElementById('cartes'), listes = document.getElementById('listes'), sel = document.getElementById('cat-select');
+            cartes.replaceChildren(); listes.replaceChildren();
+            const choisie = sel.value;
+            sel.replaceChildren();
+            for (const c of etat.categories || []) {
+                const carte = el('div', 'stat-card'); carte.dataset.cat = c.id;
+                carte.append(el('div', 'value', fmt(c.requetes_7j)), el('div', 'label', c.libelle));
+                cartes.append(carte);
+                const o = el('option', '', c.libelle); o.value = c.id; sel.append(o);
+                for (const s of c.sources || []) {
+                    const r = el('div', 'rangee'); r.dataset.source = s.nom;
+                    r.append(el('span', 'nom', s.nom), el('span', 'meta', fmt(s.n) + ' domaines'), el('span', 'meta', 'mise à jour : ' + jour(s.ts)),
+                             el('span', 'meta', 'licence : ' + (s.licence || TIRET)));
+                    listes.append(r);
+                }
+            }
+            if (choisie && [...sel.options].some(o => o.value === choisie)) sel.value = choisie;
+            return (etat.categories || []).map(c => c.id);
+        }
+
+        function rendreAppareils(stats, ids) {
+            const noteAdmin = document.getElementById('note-admin'), table = document.getElementById('table-appareils');
+            noteAdmin.style.display = 'none'; table.style.display = '';
+            const entete = document.getElementById('entete-appareils');
+            entete.replaceChildren(el('th', '', 'Appareil'));
+            for (const id of ids) entete.append(el('th', '', id));
+            const corps = document.getElementById('par-appareil'); corps.replaceChildren();
+            for (const [client, cats] of Object.entries(stats.par_client || {})) {
+                const tr = el('tr'); tr.dataset.client = client;
+                tr.append(el('td', '', client));
+                for (const id of ids) tr.append(el('td', '', fmt((cats || {})[id] || 0)));
+                corps.append(tr);
+            }
+        }
+
+        function masquerAdmin() {
+            document.getElementById('note-admin').style.display = '';
+            document.getElementById('table-appareils').style.display = 'none';
+            document.getElementById('par-appareil').replaceChildren();
+            document.getElementById('top-domaines').replaceChildren();
+        }
+
+        async function chargerDomaines() {
+            const cat = document.getElementById('cat-select').value;
+            if (!cat) return;
+            const r = await api('/categories/' + encodeURIComponent(cat) + '/domaines?jours=7&n=20');
+            const ul = document.getElementById('top-domaines'); ul.replaceChildren();
+            if (r.status === 401 || r.status === 403) { masquerAdmin(); return; }
+            if (!r.ok) { errorToast('Domaines indisponibles : ' + (r.data.detail || r.status)); return; }
+            for (const d of r.data.domaines || []) {
+                const li = el('li'); li.append(el('span', '', d.domaine), el('span', 'meta', fmt(d.n))); ul.append(li);
+            }
+            if (!(r.data.domaines || []).length) ul.append(el('li', '', 'Aucune requête classée sur 7 jours'));
+        }
+
+        async function refresh() {
+            const e = await api('/etat');
+            if (!e.ok) { errorToast('État indisponible : ' + (e.data.detail || e.status)); return; }
+            const ids = rendreEtat(e.data);
+            const s = await api('/stats?jours=7');
+            if (s.status === 401 || s.status === 403) { masquerAdmin(); return; }
+            if (!s.ok) { errorToast('Statistiques indisponibles : ' + (s.data.detail || s.status)); return; }
+            rendreAppareils(s.data, ids);
+            await chargerDomaines();
+        }
+
+        async function synchroniser() {
+            const b = document.getElementById('btn-sync');
+            b.disabled = true;
+            try {
+                const r = await api('/sync', 'POST');
+                if (r.status === 401 || r.status === 403) errorToast('🔒 Connexion administrateur requise pour synchroniser les listes.');
+                else if (!r.ok) errorToast('Synchronisation refusée : ' + (r.data.detail || r.status));
+                else { toast('Synchronisation lancée : les listes se mettent à jour en arrière-plan.'); setTimeout(refresh, 15000); }
+            } finally { b.disabled = false; }
+        }
+
+        document.getElementById('btn-refresh').addEventListener('click', refresh);
+        document.getElementById('btn-sync').addEventListener('click', synchroniser);
+        document.getElementById('cat-select').addEventListener('change', chargerDomaines);
+        refresh();
+        setInterval(refresh, 60000);
+    </script>
+</body>
+</html>
