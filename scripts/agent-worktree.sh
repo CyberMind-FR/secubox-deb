@@ -222,7 +222,7 @@ cmd_finish() {
     echo "finish: git push failed" >&2; return 4
   fi
   "$GH_BIN" pr create --base master --head "$branch" \
-    --title "$issue_title" --body "Closes #$issue" \
+    --title "$issue_title" --body "Ref #$issue (la fermeture se fait par marqueur « closes #N » dans HISTORY/WIP après déploiement et validation, puis scripts/sync-issues.sh ; jamais à la fusion)" \
     || return 4
 }
 cmd_clean() {
