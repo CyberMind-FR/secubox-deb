@@ -131,3 +131,80 @@ def test_les_donnees_d_ad_guard_rechargees_quand_le_fichier_change(monde, monkey
     (monde / "listes" / "services.txt").write_text("example.org Exemple contenu\n")
     os.utime(monde / "listes" / "services.txt", (time.time() + 5, time.time() + 5))
     assert TestClient(m.app).get("/usage").json()["unknown"][0]["etiquette"]["organisation"] == "Exemple"
+
+
+# ── passe de correction après la relecture de sécurité (#1960) ───────────────────────────────────────────────────────────────
+import asyncio  # noqa: E402
+import threading  # noqa: E402
+
+
+def test_i1_une_date_future_ne_passe_pas_pour_fraiche(monde):
+    ecrire(monde, feed(genere=int(time.time()) + 3600))
+    j = lan_dns()
+    assert j["disponible"] is False and j["raison"] == "horloge"
+    ecrire(monde, feed(genere=10 ** 30))
+    assert lan_dns()["disponible"] is False
+    ecrire(monde, feed(genere=int(time.time()) + 30))                                   # une petite avance d'horloge est tolérée
+    assert lan_dns()["disponible"] is True
+
+
+def test_i3_un_tube_nomme_ne_bloque_pas_la_route(monde):
+    os.mkfifo(monde / "dpi-feed.json")
+    resultat = {}
+    th = threading.Thread(target=lambda: resultat.update(j=lan_dns()), daemon=True)
+    th.start()
+    th.join(5)
+    assert not th.is_alive() and resultat["j"]["disponible"] is False                    # sinon un fil du pool serait perdu pour toujours
+
+
+def test_i3_json_tres_imbrique_et_surrogate_isole_ne_donnent_pas_de_500(monde):
+    (monde / "dpi-feed.json").write_text("[" * 200_000)
+    r = TestClient(m.app).get("/lan_dns")
+    assert r.status_code == 200 and r.json()["raison"] == "illisible"
+    ecrire(monde, '{"version": 1, "genere": %d, "fenetre": "x", "appareils": [{"nom": "\\ud800", "requetes": 1, "bloquees": 0, "domaines": 1}]}' % int(time.time()))
+    r = TestClient(m.app).get("/lan_dns")
+    assert r.status_code == 200 and r.json()["disponible"] is True and r.json()["appareils"] == []     # l'appareil non encodable est écarté
+
+
+def test_i4_usage_fait_son_travail_hors_de_la_boucle(monde, monkeypatch):
+    appels = []
+    reel = asyncio.to_thread
+
+    async def espion(f, *a, **k):
+        appels.append(getattr(f, "__name__", "?"))
+        return await reel(f, *a, **k)
+    monkeypatch.setattr(m.asyncio, "to_thread", espion)
+    monkeypatch.setattr(m, "_sbxdpi_get", usage_live("7cd77.v.fwmrm.net"))
+    j = TestClient(m.app).get("/usage").json()
+    assert appels and j["adguard"]["etiquetes"] == 1
+
+
+def test_i4_classer_charge_les_regles_une_fois_pas_un_stat_par_nom(monde, monkeypatch):
+    monkeypatch.setattr(m, "_sbxdpi_get", usage_live(*[f"h{i}.sub{i % 40}.example.org" for i in range(5000)]))
+    stats = []
+    reel = Path.stat
+
+    def espion(self, *a, **k):
+        if self.name == "rules.json":
+            stats.append(1)
+        return reel(self, *a, **k)
+    monkeypatch.setattr(Path, "stat", espion)
+    t = time.perf_counter()
+    r = TestClient(m.app).get("/usage")
+    assert r.status_code == 200 and time.perf_counter() - t < 2.0
+    assert len(stats) <= 3                                                               # les règles du DPI relues UNE fois par appel, pas 5 000 fois
+
+
+def test_mineur_la_regle_du_dpi_gagne_aussi_avec_un_point_final(monde, monkeypatch):
+    monkeypatch.setattr(m, "_sbxdpi_get", usage_live("x.connu.example.org."))
+    assert "etiquette" not in TestClient(m.app).get("/usage").json()["unknown"][0]
+
+
+def test_mineur_cache_recharge_meme_a_date_egale(monde, monkeypatch):
+    monkeypatch.setattr(m, "_sbxdpi_get", usage_live("nouveau.example.org"))
+    f = monde / "listes" / "services.txt"
+    avant = f.stat()
+    assert "etiquette" not in TestClient(m.app).get("/usage").json()["unknown"][0]
+    f.write_text("example.org Exemple contenu\n" + " " * 40)                              # taille différente, date remise à l'identique
+    os.utime(f, ns=(avant.st_atime_ns, avant.st_mtime_ns))
+    assert TestClient(m.app).get("/usage").json()["unknown"][0]["etiquette"]["organisation"] == "Exemple"

@@ -11,7 +11,6 @@ partagé entre publicité et contenu peut se tromper. Aucune écriture, aucun ef
 """
 from __future__ import annotations
 
-import copy
 import re
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -104,7 +103,8 @@ def enrichir_usage(usage, etiqueteur: Etiqueteur, classer_dpi: Callable[[str], d
     Ne retire ni ne déplace rien. Sans données d'ad-guard, sans liste `unknown` ou si `usage` n'est pas un dict : rendu tel quel."""
     if not isinstance(usage, dict) or etiqueteur.vide or not isinstance(usage.get("unknown"), list):
         return usage
-    r = copy.deepcopy(usage)
+    r = dict(usage)                                                     # copie ciblée : seules les entrées `unknown` sont copiées (pas toute la réponse)
+    r["unknown"] = [dict(e) if isinstance(e, dict) else e for e in usage["unknown"]]
     n = 0
     for e in r["unknown"]:
         if not isinstance(e, dict) or not isinstance(e.get("name"), str):

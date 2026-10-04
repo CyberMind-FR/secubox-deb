@@ -257,13 +257,24 @@ FEED_MAX = 2 * 1024 * 1024
 _adguard_cache: dict = {"signature": None, "etiqueteur": None}
 
 
+def _usage_enrichi(usage):
+    """Enrichissement HORS de la boucle (lecture de fichiers, étiquetage de milliers de noms). Les règles du DPI sont chargées UNE fois pour tout l'appel."""
+    regles = _dpi_rules()
+    return adguard_enrich.enrichir_usage(usage, _etiqueteur_adguard(), lambda nom: _classify_avec(regles, adguard_enrich.normaliser(nom) or nom))
+
+
+def _usage_derive_enrichi():
+    return _usage_enrichi(_derive_usage())
+
+
 def _etiqueteur_adguard() -> "adguard_enrich.Etiqueteur":
     """Étiqueteur d'après les fichiers de données d'ad-guard, rechargé quand l'un d'eux change (date de modification)."""
     noms = ["services.txt", *[f"{c}.txt" for c in adguard_enrich.CATEGORIES]]
     sig = []
     for n in noms:
         try:
-            sig.append((n, ADGUARD_LISTES.joinpath(n).stat().st_mtime))
+            st = ADGUARD_LISTES.joinpath(n).stat()
+            sig.append((n, st.st_mtime_ns, st.st_size, st.st_ino))          # une mise à jour à date identique (dpkg) change la taille ou l'inode
         except OSError:
             sig.append((n, None))
     sig = tuple(sig)
@@ -274,7 +285,15 @@ def _etiqueteur_adguard() -> "adguard_enrich.Etiqueteur":
 
 
 def _txt(v, n: int) -> str:
-    return v[:n] if isinstance(v, str) else ""
+    """Texte borné ; une chaîne qu'on ne sait pas encoder en UTF-8 (surrogate isolé d'un JSON valide) est écartée : elle ferait échouer le rendu de la réponse."""
+    if not isinstance(v, str):
+        return ""
+    s = v[:n]
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        return ""
+    return s
 
 
 def _entier(v) -> Optional[int]:
@@ -283,7 +302,7 @@ def _entier(v) -> Optional[int]:
 
 def _appareil_lan(a) -> Optional[dict]:
     """Un appareil du fichier d'échange, borné et revalidé ; None s'il est mal formé. L'échappement HTML est du côté de la page."""
-    if not isinstance(a, dict) or not isinstance(a.get("nom"), str):
+    if not isinstance(a, dict) or not isinstance(a.get("nom"), str) or (a["nom"] and not _txt(a["nom"], 60)):
         return None
     chiffres = {k: _entier(a.get(k)) for k in ("requetes", "bloquees", "domaines")}
     if any(v is None for v in chiffres.values()):
@@ -303,23 +322,31 @@ def lan_dns(user=Depends(require_jwt)):
     """Vue DNS des appareils du LAN d'après ad-guard : noms demandés regroupés par service et par type, taux de blocage. Le DNS ne donne NI volumes NI contenu :
     cette vue ne se mélange jamais aux mesures du DPI (« vu au DNS » contre « mesuré par le DPI »). Lecture seule du fichier d'échange."""
     import os as _os
+    import stat as _stat
     try:
-        fd = _os.open(ADGUARD_FEED, _os.O_RDONLY | _os.O_NOFOLLOW)
+        # O_NONBLOCK : un tube nommé posé à la place du fichier ne doit pas bloquer un fil du pool (partagé par les routes synchrones de tous les modules).
+        fd = _os.open(ADGUARD_FEED, _os.O_RDONLY | _os.O_NOFOLLOW | _os.O_NONBLOCK)
     except FileNotFoundError:
         return {"disponible": False, "raison": "absent"}
     except OSError:
         return {"disponible": False, "raison": "illisible"}
     try:
+        if not _stat.S_ISREG(_os.fstat(fd).st_mode):
+            _os.close(fd)
+            return {"disponible": False, "raison": "illisible"}
         with _os.fdopen(fd, "rb") as h:
             brut = h.read(FEED_MAX + 1)
         if len(brut) > FEED_MAX:
             return {"disponible": False, "raison": "illisible"}
         d = json.loads(brut.decode("utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return {"disponible": False, "raison": "illisible"}
     if not isinstance(d, dict) or d.get("version") != 1 or _entier(d.get("genere")) is None or not isinstance(d.get("appareils"), list):
         return {"disponible": False, "raison": "illisible"}
-    age = max(0, int(time.time()) - d["genere"])
+    maintenant = int(time.time())
+    if d["genere"] > maintenant + 60:                       # horodatage dans le futur : jamais présenté comme frais
+        return {"disponible": False, "raison": "horloge"}
+    age = max(0, maintenant - d["genere"])
     if age > FEED_PEREMPTION_S:
         return {"disponible": False, "raison": "périmé", "age_s": age}
     appareils = [x for x in (_appareil_lan(a) for a in d["appareils"][:200]) if x is not None]
@@ -388,8 +415,12 @@ def _host_suffix(host: str, suffix: str) -> bool:
 
 def _classify(host: str) -> dict:
     """Mirroir host-only de l'enrichisseur Go : meilleure règle par domain_suffix."""
+    return _classify_avec(_dpi_rules(), host)
+
+
+def _classify_avec(regles: list, host: str) -> dict:
     best = {}
-    for r in _dpi_rules():
+    for r in regles:
         ds = (r.get("match") or {}).get("domain_suffix") or []
         if any(_host_suffix(host, s) for s in ds):
             if not best or r.get("confidence", 0) >= best.get("confidence", 0):
@@ -700,8 +731,8 @@ async def dpi_usage(user=Depends(require_jwt)):
     (organisation, type, catégorie ; source « ad-guard ») quand ses fichiers de données existent : lecture seule, une règle du DPI gagne toujours (#1960)."""
     live = await _sbxdpi_get("/api/v1/dpi/usage", {})
     if live and (live.get("usages") or live.get("unknown")):
-        return adguard_enrich.enrichir_usage(live, _etiqueteur_adguard(), _classify)
-    return adguard_enrich.enrichir_usage(_derive_usage(), _etiqueteur_adguard(), _classify)
+        return await asyncio.to_thread(_usage_enrichi, live)
+    return await asyncio.to_thread(_usage_derive_enrichi)
 
 
 @app.get("/suggestions")
