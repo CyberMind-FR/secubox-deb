@@ -66,14 +66,14 @@ def test_l_etat_est_conserve_apres_redemarrage(tmp_path):
     e = {"actif": True, "clients": [{"ip": "192.168.1.50", "nom": "Freebox TV salon", "mode": "block"}]}
     dnstv.ecrire_etat(e, tmp_path)
     relu, erreur = dnstv.lire_etat(tmp_path)                       # « redémarrage » : on relit depuis le disque
-    assert erreur is None and relu == dict(e, auto_essai=False)    # #1954 : champ ajouté, faux par défaut
+    assert erreur is None and relu == dict(e, auto_essai=False, mode_defaut="auto", ajout_auto=False, ignores=[])    # #1954/#1959 : champs ajoutés, à leur défaut
 
 
 def test_un_etat_absent_est_inactif_et_un_etat_corrompu_aussi_avec_son_erreur(tmp_path):
-    assert dnstv.lire_etat(tmp_path) == ({"actif": False, "clients": [], "auto_essai": False}, None)
+    assert dnstv.lire_etat(tmp_path) == ({"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": []}, None)
     (tmp_path / "etat.json").write_text('{"actif": true, "clients": [{"ip": "pas une ip"}]}')
     etat, erreur = dnstv.lire_etat(tmp_path)
-    assert etat == {"actif": False, "clients": [], "auto_essai": False} and "inactif" in erreur
+    assert etat == {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": []} and "inactif" in erreur
     (tmp_path / "etat.json").write_text("{ pas du json")
     assert dnstv.lire_etat(tmp_path)[1] is not None
 
@@ -304,3 +304,46 @@ def test_la_table_des_voisins_est_lue_en_json_ipv4_et_ipv6():
 def test_le_manifeste_couvre_aussi_les_services():
     assert dnstv.verifier_manifeste(LISTES) == []
     assert "services.txt" in json.loads((LISTES / "MANIFEST.json").read_text())
+
+
+# ── #1959 : le journal ignore les requêtes de la box elle-même ───────────────────────────────────────────────────────────────
+def test_adresses_locales_lit_toutes_les_adresses_de_la_box():
+    sortie = ('[{"ifname":"lo","addr_info":[{"local":"127.0.0.1"},{"local":"::1"}]},'
+              '{"ifname":"eth2","addr_info":[{"local":"192.168.1.200"},{"local":"2a01:e0a:dec:c4e0::200"},{"local":"fe80::f2ad:4eff:fe27:889b"}]}]')
+
+    class R:
+        stdout = sortie
+    loc = dnstv.adresses_locales(executer=lambda *a, **k: R())
+    assert {"127.0.0.1", "::1", "192.168.1.200", "2a01:e0a:dec:c4e0::200"} <= loc
+
+
+def test_les_requetes_de_la_box_ne_sont_pas_journalisees(tmp_path):
+    m = dnstv.Magasin(tmp_path / "m.db")
+    t = int(time.time())
+    evts = [(dnstv.Evenement(t, "192.168.1.200", "a.example.com", "A", "NOERROR", "ALLOWED"), ""),
+            (dnstv.Evenement(t, "192.168.1.95", "k7.ftven.fr", "A", "NOERROR", "ALLOWED"), "")]
+    assert m.ajouter(evts, exclus={"192.168.1.200"}) == 1
+    assert [x["client"] for x in m.recents(depuis=t - 5)] == ["192.168.1.95"]
+    assert [c["client"] for c in m.par_client()] == ["192.168.1.95"]
+
+
+def test_adresses_locales_commande_absente_donne_au_moins_le_bouclage():
+    def echec(*a, **k):
+        raise OSError("ip absent")
+    assert dnstv.adresses_locales(executer=echec) == {"127.0.0.1", "::1"}
+
+
+def test_le_demon_n_enregistre_pas_les_requetes_de_la_box(tmp_path):
+    import importlib.machinery
+    import importlib.util
+    chemin = Path(__file__).resolve().parents[1] / "sbin" / "secubox-adguard-dnsfeed"
+    loader = importlib.machinery.SourceFileLoader("feed_1959", str(chemin))
+    spec = importlib.util.spec_from_loader("feed_1959", loader)
+    feed = importlib.util.module_from_spec(spec)
+    loader.exec_module(feed)
+    m = dnstv.Magasin(tmp_path / "m.db")
+    ts = int(time.time())
+    lignes = [f"[{ts}] unbound[1:0] reply: 192.168.1.200 a.example.com. A IN NOERROR 0.001 0 50",
+              f"[{ts}] unbound[1:0] reply: 192.168.1.95 k7.ftven.fr. A IN NOERROR 0.001 0 50"]
+    n = feed.suivre(iter(lignes), m, dnstv.Classifieur({}), recharger=lambda: dnstv.Classifieur({}), locales=lambda: {"192.168.1.200"})
+    assert n == 1 and [c["client"] for c in m.par_client()] == ["192.168.1.95"]

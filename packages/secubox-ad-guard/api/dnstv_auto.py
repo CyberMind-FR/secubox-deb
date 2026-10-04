@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Dict, List
 
 try:
-    from . import dnstv, dnstv_detect, dnstv_regles, dnstv_signaux
+    from . import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux
 except ImportError:
-    from api import dnstv, dnstv_detect, dnstv_regles, dnstv_signaux
+    from api import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux
 
 HISTORIQUE_H = 48
 
@@ -22,6 +22,13 @@ class Reglage:
     seuil_refus_min: int = dnstv_signaux.SEUIL_REFUS_MIN
     duree_rafale_min: int = dnstv_signaux.DUREE_RAFALE_MIN
     min_requetes_actif: int = dnstv_signaux.MIN_REQUETES_ACTIF
+    # Ajout automatique et agrégation (#1959) — seuils de départ, à calibrer
+    max_par_jour: int = 3
+    delai_s: int = 3600
+    retrait_jours: int = 7
+    min_declencheurs: int = 5
+    min_services: int = 2
+    min_appareils_agreg: int = 2
 
 
 TOML = Path("/etc/secubox/ad-guard.toml")
@@ -39,7 +46,7 @@ def reglage_depuis(etat: dict, toml: Path = TOML) -> Reglage:
     decl = c.get("declencheurs")
     if isinstance(decl, list) and decl and all(isinstance(d, str) and dnstv.valider_domaine(d) == d for d in decl):
         r.declencheurs = tuple(decl)
-    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif"):
+    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif", "max_par_jour", "delai_s", "retrait_jours", "min_declencheurs", "min_services", "min_appareils_agreg"):
         v = c.get(k)
         if isinstance(v, int) and not isinstance(v, bool) and v > 0:
             setattr(r, k, v)
@@ -98,4 +105,14 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
                     and dnstv_signaux.contenu_disparu(jours, vus, len(depuis), min_requetes=reglage.min_requetes_actif)):
                 for r in restantes:
                     note(regles.transiter(r["id"], "retire", "auto", "contenu habituel plus demandé", maintenant), "essai", "retire", "contenu habituel plus demandé")
-    return {"changements": changements, "candidats": candidats, "applique": applique}
+    # Agrégation (#1959) : ce que l'administrateur a confirmé sur plusieurs appareils est PROPOSÉ (candidat, jamais actif) aux autres
+    agrege = dnstv_profil.agreger(regles, reglage.min_appareils_agreg)
+    avant_ids = {r["id"] for r in regles.liste()}
+    try:
+        candidats += dnstv_profil.candidats_agreges(regles, agrege, sorted(appareils(etat)), maintenant)
+    except dnstv_regles.ErreurRegle:
+        pass                                                 # plafond de règles atteint : on ne propose plus, le reste du passage est déjà fait
+    for r in regles.liste():
+        if r["id"] not in avant_ids:
+            changements.append({"appareil": r["appareil"], "domaine": r["domaine"], "de": "", "vers": "candidat", "motif": r["motif"]})
+    return {"changements": changements, "candidats": candidats, "applique": applique, "agrege": agrege}

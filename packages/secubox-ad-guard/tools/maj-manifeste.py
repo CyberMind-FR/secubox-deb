@@ -24,5 +24,6 @@ for cat in dnstv.CATEGORIES:
         sys.exit("liste invalide : " + "; ".join(mauvaises))
     man[f.name] = hashlib.sha256(f.read_bytes()).hexdigest()
 man["services.txt"] = hashlib.sha256((ICI / "lists" / "services.txt").read_bytes()).hexdigest()
+man["profil-tv-base.txt"] = hashlib.sha256((ICI / "lists" / "profil-tv-base.txt").read_bytes()).hexdigest()          # graine du profil (#1959)
 (ICI / "lists" / "MANIFEST.json").write_text(json.dumps(man, indent=2, sort_keys=True) + "\n")
 print("MANIFEST.json mis à jour :", ", ".join(sorted(man)))

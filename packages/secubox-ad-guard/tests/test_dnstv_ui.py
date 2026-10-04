@@ -41,6 +41,10 @@ def _page(navigateur, appels, etat):
             r = {"requetes": 10, "domaines_uniques": 4, "classes_resolus": {"tracking": 2}, "classes_bloques": {"advertising": 3},
                  "par_decision": {"BLOCKED": 3, "ALLOWED": 7},
                  "top_bloques": [{"domaine": "<img src=x onerror=window.__pwn=1>.example", "categorie": "advertising", "hits": 3}]}
+        elif chemin == "/adblock-tv/auto/detection":
+            r = etat.get("detection", {})
+        elif chemin == "/adblock-tv/auto/profil":
+            r = etat.get("profil", {})
         elif chemin == "/adblock-tv/dns-box":
             r = etat.get("dns_box", {})
         elif chemin == "/adblock-tv/auto/regles":
@@ -304,4 +308,98 @@ def test_fiche_dns_box_api_absente_ne_plante_pas(navigateur):
     p.wait_for_timeout(500)
     assert "indisponible" in p.inner_text("#dnsbox-alertes").lower()
     assert not erreurs
+    ctx.close()
+
+
+# ── ajout automatique, puits et profil agrégé (#1959) ───────────────────────────────────────────────────────────────────────
+def _detection():
+    import time
+    t = int(time.time())
+    return {"detection": {"ajout_auto": False, "mode_defaut": "auto", "ignores": [], "plafond": {"max_par_jour": 3, "ajouts_24h": 1},
+                          "appareils": [{"nom": "TV banc", "mode": "auto", "mac": "", "origine": "admin", "ajoute": 0, "preuve": "", "puits": True, "adresses": ["192.168.1.95"]},
+                                        {"nom": "TV fb5b", "mode": "auto", "mac": "38:07:16:94:fb:5b", "origine": "auto", "ajoute": t - 600, "puits": False,
+                                         "preuve": "12 requêtes vers fwmrm.net ; services : France Télévisions, NPAW", "adresses": ["192.168.1.128", "2a01:e0a::7"]}]},
+            "profil": {"min_appareils": 2, "graine": ["a.example.com"], "agrege": {"pub.example.com": {"appareils": ["tv-a", "tv-b"], "maj": t}},
+                       "effectif": [{"domaine": "a.example.com", "motif": "profil de base"}, {"domaine": "pub.example.com", "motif": "profil agrégé (2 appareils)"}]}}
+
+
+def _page_detection(navigateur, appels, extra=None):
+    etat = {"actif": True, "clients": [], **_detection(), **(extra or {})}
+    ctx, p, erreurs = _page(navigateur, appels, etat)
+    p.click("button[data-tab=adblocktv]")
+    return ctx, p, erreurs
+
+
+def test_panneau_detection_rendu_badges_puits_profil_et_avertissement(navigateur):
+    ctx, p, erreurs = _page_detection(navigateur, [])
+    p.wait_for_selector("#det-appareils tr")
+    texte = p.inner_text("#det-appareils")
+    assert "TV banc" in texte and "TV fb5b" in texte and "38:07:16:94:fb:5b" in texte and "fwmrm.net" in texte
+    assert "ajouté automatiquement" in p.locator("#det-appareils tr", has_text="TV fb5b").inner_text().lower()
+    assert "automatiquement" not in p.locator("#det-appareils tr", has_text="TV banc").inner_text().lower()
+    assert p.locator("#det-appareils tr", has_text="TV banc").locator("input[type=checkbox]").is_checked() is True
+    assert p.locator("#det-appareils tr", has_text="TV fb5b").locator("input[type=checkbox]").is_checked() is False
+    assert p.is_checked("#det-ajout") is False and p.input_value("#det-mode") == "auto" and "1 / 3" in p.inner_text("#det-plafond")
+    assert "sort du puits de production" in p.inner_text("#det-aide")
+    prof = p.inner_text("#det-profil")
+    assert "pub.example.com" in prof and "tv-a" in prof and "profil agrégé (2 appareils)" in prof
+    assert not erreurs
+    ctx.close()
+
+
+def test_panneau_detection_texte_piege_inoffensif(navigateur):
+    piege = "<img src=x onerror=window.__pwn=1>"
+    d = _detection()
+    d["detection"]["appareils"][1].update(nom="TV " + piege, preuve=piege, mac=piege, adresses=[piege])
+    d["profil"]["agrege"] = {piege + ".example.com": {"appareils": [piege], "maj": 1}}
+    d["profil"]["effectif"] = [{"domaine": piege, "motif": piege}]
+    ctx, p, erreurs = _page_detection(navigateur, [], d)
+    p.wait_for_selector("#det-appareils tr")
+    assert piege in p.inner_text("#det-appareils")
+    assert p.evaluate("window.__pwn === undefined") and p.evaluate("document.querySelectorAll('#auto-carte img').length") == 0
+    assert not erreurs
+    ctx.close()
+
+
+def test_panneau_detection_api_absente_ou_html_ne_plante_pas(navigateur):
+    ctx, p, erreurs = _page(navigateur, [], {"actif": True, "clients": [], "html_502": True})
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_timeout(600)
+    assert "indisponible" in p.inner_text("#det-etat").lower()
+    assert not erreurs
+    ctx.close()
+    ctx, p, erreurs = _page(navigateur, [], {"actif": True, "clients": []})                      # réponses vides {}
+    p.click("button[data-tab=adblocktv]")
+    p.wait_for_timeout(600)
+    assert not erreurs
+    ctx.close()
+
+
+def test_panneau_detection_actions_avec_confirmation(navigateur):
+    appels = []
+    ctx, p, _ = _page_detection(navigateur, appels)
+    p.wait_for_selector("#det-appareils tr")
+    posts = lambda: [(c, b) for (m, c, b) in appels if m == "POST"]          # noqa: E731
+    p.once("dialog", lambda d: d.dismiss())                                  # activer l'ajout automatique : refus → rien n'est envoyé
+    p.check("#det-ajout")
+    p.wait_for_timeout(300)
+    assert not [x for x in posts() if x[0].endswith("/detection/reglage")]
+    p.once("dialog", lambda d: d.accept())
+    p.check("#det-ajout")
+    p.wait_for_timeout(300)
+    assert ("/adblock-tv/auto/detection/reglage", {"ajout_auto": True}) in posts()
+    p.select_option("#det-mode", "off")
+    p.wait_for_timeout(300)
+    assert ("/adblock-tv/auto/detection/reglage", {"mode_defaut": "off"}) in posts()
+    p.locator("#det-appareils tr", has_text="TV banc").locator("input[type=checkbox]").uncheck()
+    p.wait_for_timeout(300)
+    assert ("/adblock-tv/auto/appareils/TV%20banc/puits", {"actif": False}) in posts()
+    p.once("dialog", lambda d: d.dismiss())
+    p.locator("#det-appareils tr", has_text="TV fb5b").locator("button.det-ignorer").click()
+    p.wait_for_timeout(300)
+    assert not [x for x in posts() if x[0].endswith("/ignorer")]
+    p.once("dialog", lambda d: d.accept())
+    p.locator("#det-appareils tr", has_text="TV fb5b").locator("button.det-ignorer").click()
+    p.wait_for_timeout(300)
+    assert ("/adblock-tv/auto/appareils/TV%20fb5b/ignorer", None) in posts()
     ctx.close()

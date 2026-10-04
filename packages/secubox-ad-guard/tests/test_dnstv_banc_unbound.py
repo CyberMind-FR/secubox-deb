@@ -214,3 +214,58 @@ remote-control:
         assert etat() == "NOERROR"
     finally:
         _sp.run([*ctl, "stop"], capture_output=True)
+
+
+@pytest.mark.skipif(not (shutil.which("unbound") and shutil.which("unbound-control") and shutil.which("dig")), reason="unbound/dig absents")
+def test_puits_complet_et_regles_de_la_vue(tmp_path):
+    """#1959, mesuré sur Unbound 1.17.1 (gk2) : `view-first: yes` garde le puits global ET applique les règles de la vue ; la vue transparente cache le puits."""
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    d = tmp_path
+    (d / "u.conf").write_text(f'''server:
+    interface: 127.0.0.1@{port}
+    access-control: 127.0.0.0/8 allow
+    access-control-view: 127.0.0.3/32 sbx-vf
+    access-control-view: 127.0.0.4/32 sbx-transparent
+    pidfile: {d}/u.pid
+    directory: {d}
+    use-syslog: no
+    logfile: {d}/u.log
+    local-zone: "bloque.sbx." always_nxdomain
+    local-zone: "ok.sbx." static
+    local-data: "ok.sbx. 60 IN A 192.0.2.7"
+view:
+    name: "sbx-vf"
+    view-first: yes
+    local-zone: "regle.sbx." always_nxdomain
+view:
+    name: "sbx-transparent"
+    local-zone: "." transparent
+    local-zone: "regle.sbx." always_nxdomain
+remote-control:
+    control-enable: yes
+    control-interface: {d}/ctl.sock
+    control-use-cert: no
+''')
+    ctl = ["unbound-control", "-c", str(d / "u.conf"), "-s", str(d / "ctl.sock")]
+
+    def etat(source, nom):
+        r = _sp.run(["dig", "+time=2", "+tries=1", "-b", source, "-p", str(port), "@127.0.0.1", nom], capture_output=True, text=True)
+        return "NXDOMAIN" if "NXDOMAIN" in r.stdout else ("NOERROR" if "192.0.2.7" in r.stdout else r.stdout[-120:])
+
+    _sp.run(["unbound", "-c", str(d / "u.conf")], check=True)
+    try:
+        for _ in range(20):
+            if (d / "ctl.sock").exists():
+                break
+            _t.sleep(0.2)
+        assert etat("127.0.0.3", "bloque.sbx") == "NXDOMAIN"            # le puits global s'applique
+        assert etat("127.0.0.3", "ok.sbx") == "NOERROR"                 # et sert ce qu'il sert (repli sur les zones globales)
+        assert etat("127.0.0.3", "regle.sbx") == "NXDOMAIN"             # la règle de la vue s'ajoute
+        assert etat("127.0.0.4", "ok.sbx") == "NXDOMAIN"                # vue transparente : le puits global est caché
+        _sp.run([*ctl, "view_local_zone", "sbx-vf", "chaud.sbx.", "always_nxdomain"], check=True, capture_output=True)
+        assert etat("127.0.0.3", "chaud.sbx") == "NXDOMAIN" and etat("127.0.0.3", "ok.sbx") == "NOERROR"    # l'ajout à chaud marche aussi
+    finally:
+        _sp.run([*ctl, "stop"], capture_output=True)
