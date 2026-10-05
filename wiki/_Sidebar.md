@@ -5,7 +5,7 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
-**[SecuBox](Home)** | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH) | **v3.0.0-alpha.8**
+**[SecuBox](Home)** | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH) | **v3.0.0-alpha.9**
 
 ---
 
