@@ -28,7 +28,9 @@ CONFIG_PHY_MVEBU_CP110_UTMI=y
 # tous les ports, et le PHY 88E1510 de eth2 est rattache une 2e fois sans jamais
 # remonter (constate au boot du 2026-10-05, aucune porteuse pendant 3 min). Integre, le
 # commutateur est pret avant userspace : eth2 n'est ouvert qu'une fois.
+# HSR est integre aussi : NET_DSA depend de « HSR || HSR=n », donc un HSR en module plafonne DSA a m.
 CONFIG_BRIDGE=y
+CONFIG_HSR=y
 CONFIG_NET_DSA=y
 CONFIG_NET_DSA_TAG_DSA=y
 CONFIG_NET_DSA_TAG_EDSA=y
