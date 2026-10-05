@@ -43,35 +43,56 @@ Les profils s'emboîtent : **isp = lite + hébergement simple**, **full = isp + 
 
 Conséquence pour **lite (2 Go)** : avec le WAF, le DPI et le MITM en plus, ad-guard et webfilter ne tiennent qu'avec les listes par défaut réduites et un seul profil de blocage. À mesurer sur une machine 2 Go.
 
-## 4. Prompt pour ChatGPT (vulgarisation et définitions)
+## 4. Modules liés à chaque profil
+
+Chaque profil contient celui du dessous : **full ⊃ isp ⊃ lite**.
+
+| Profil | Fonction | Modules |
+|---|---|---|
+| **lite** (28) | Pare-feu et accès | `vortex-firewall`, `ipblock`, `nac`, `mac-guard`, `wireguard`, `netmodes`, `hardening` |
+| | Protection web | `waf`, `waf-ng` (sbxwaf), `haproxy` |
+| | Analyse et interception | `dpi`, `ndpid-engine`, `toolbox`, `toolbox-ng` (sbxmitm) |
+| | Filtrage DNS | `dns`, `ad-guard`, `webfilter` |
+| | Détection | `threats`, `antirootkit`, `security-posture` |
+| | Base et supervision | `core`, `hub`, `portal`, `system`, `auth`, `profiles`, `watchdog`, `health-doctor` |
+| **isp** (+19) | Réseau d'opérateur | `routes`, `modem`, `qos`, `traffic`, `netdiag`, `mediaflow`, `vortex-dns`, `dns-provider` |
+| | Accès et exposition | `certs`, `exposure`, `vhost`, `users`, `defaults`, `tor` |
+| | Maillage | `mesh`, `meshname`, `p2p` |
+| | Hébergement simple | `metablogizer`, `publish` |
+| **full** (+44) | Cloud et collaboration | `nextcloud`, `gitea`, `webmail`, `mail`, `jitsi`, `jabber`, `matrix` |
+| | Médias | `jellyfin`, `lyrion`, `photoprism`, `peertube`, `podcaster`, `radio`, `torrent`, `ytsas`, `media` |
+| | Édition et réseaux sociaux | `bbs`, `billets`, `streamforge`, `streamlit`, `saas-relay` |
+| | Domotique et terrain | `zigbee`, `mqtt`, `picobrew`, `sentinelle-gsm` |
+| | Sécurité avancée | `soc`, `threatmesh`, `threat-analyst`, `network-anomaly`, `interceptor`, `reality`, `reporter` |
+| | Exploitation | `admin`, `aggregator`, `console`, `metacatalog`, `mirror`, `nettweak`, `assist`, `droplet`, `localrecall`, `turn`, `yacy`, `ndpid` |
+
+## 5. Prompt pour ChatGPT image (infographie à partager)
 
 ```text
-Tu es rédacteur technique et vulgarisateur. Tu t'adresses à un lecteur non
-spécialiste (commerçant, élu, particulier curieux) qui doit comprendre quel
-produit SecuBox choisir. Réponds en français, sans jargon non défini.
+Crée une infographie claire et simple, format paysage 16:9, style illustration
+plate moderne, fond clair, 3 couleurs principales (bleu nuit, vert menthe,
+orange doux), police sans empattement très lisible. Titre en haut :
+"SecuBox : choisissez votre niveau de protection".
 
-Contexte : SecuBox est un boîtier de sécurité réseau libre qui protège un
-réseau local (maison, petite structure). Il existe en trois niveaux selon la
-mémoire de la machine (lite 1 à 2 Go, standard 4 à 8 Go, pro 8 Go et plus) et
-en trois ensembles installables qui s'emboîtent : "lite" (les protections
-uniquement : pare-feu, WAF, analyse du trafic, filtrage), "isp" (lite plus un
-hébergement simple et limité, par exemple un blog) et "full" (tout le parc :
-Nextcloud, Jellyfin, courrier, radio, etc.).
-Deux modules touchent au DNS : "ad-guard" (retire publicités et traceurs sur
-les téléviseurs et appareils) et "webfilter" (contrôle parental et blocage de
-sites dangereux ou pour adultes, par appareil).
+Dessine trois étages d'une maison qui s'emboîtent, de bas en haut, chaque
+étage contenant celui du dessous :
 
-Tâches :
-1. Écris un glossaire de 15 à 20 termes, une phrase simple chacun, avec une
-   analogie du quotidien : DNS, résolveur, WAF, pare-feu, DPI, VPN/WireGuard,
-   NAC, QoS, HAProxy, TLS, LXC/conteneur, métapaquet, Tor, maillage (mesh),
-   liste de blocage, puits DNS (sinkhole), observation vs blocage.
-2. Explique en 10 lignes maximum la différence entre "niveau" et "ensemble".
-3. Pour chaque ensemble (lite, isp, full), donne : à qui il s'adresse, ce
-   qu'il protège, ce qu'il ne fait pas, la machine conseillée.
-4. Termine par un arbre de décision de 5 questions ("Avez-vous des enfants à
-   protéger ?", "Hébergez-vous vos propres services ?"...) menant au bon choix.
+1. Rez-de-chaussée, bouclier bleu, étiquette "LITE — Je me protège"
+   Pour une petite machine (2 Go). Icônes : pare-feu (mur de briques),
+   bouclier WAF, loupe sur le trafic (analyse), filtre de publicités,
+   cadenas parental, détecteur de menaces. Légende : "Protège le réseau.
+   N'héberge rien."
 
-Contraintes : aucun nom de marque de concurrent, pas de promesse de sécurité
-absolue, ton clair et rassurant, pas plus de 900 mots hors glossaire.
+2. Étage du milieu, vert menthe, étiquette "ISP — Je me protège et je publie"
+   Ajoute : routeur, VPN, certificat, petit blog/site web. Légende :
+   "Une couche protégée avec un hébergement simple et limité."
+
+3. Étage du haut, orange, étiquette "FULL — Je gère tout chez moi"
+   Ajoute : nuage de fichiers, films et musique, courrier, discussion,
+   domotique, radio. Légende : "Tous les services de la box de référence."
+
+À droite, une petite jauge de mémoire : 2 Go, 4 Go, 8 Go sous chaque étage.
+En bas, une phrase : "Vos données restent chez vous. Aucun cloud, aucun
+suivi." Pas de logo de marque tierce, pas de texte minuscule, pas plus de
+6 mots par bulle, ton rassurant et accessible à tous.
 ```
