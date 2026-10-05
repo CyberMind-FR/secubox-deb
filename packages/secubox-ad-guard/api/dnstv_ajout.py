@@ -94,9 +94,12 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
     nouveaux: List[Tuple[str, str]] = []                                       # (nom, motif) des appareils à équiper
 
     # 1. suivi des adresses des appareils AJOUTÉS AUTOMATIQUEMENT (les appareils déclarés par l'administrateur ne sont pas touchés)
+    # Les appareils DÉCLARÉS À LA MAIN qui portent une MAC sont suivis aussi (#2011) : leur IPv6 « de confidentialité » change,
+    # et sans suivi la TV sortait de sa vue au premier changement (replay sur sa roue). Les adresses qu'on leur ajoute sont
+    # marquées « suivi » : seules celles-là expirent ; les adresses déclarées ne sont jamais retirées.
     auto = {}
     for c in clients:
-        if c.get("origine") == "auto" and c.get("mac"):
+        if c.get("mac") and c.get("origine", "admin") in ("auto", "admin"):
             auto.setdefault(c["mac"], c)
     fenetre = maintenant - reglage.retrait_jours * 86400
     candidates = []
@@ -113,14 +116,17 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
             continue
         entree = {k: v for k, v in modele.items() if k not in ("ip", "ajoute", "preuve")}
         entree.update(ip=a, ajoute=maintenant)
+        if modele.get("origine", "admin") == "admin":
+            entree["origine"] = "suivi"
         clients.append(entree)
         ips.add(a)
         changements.append({"type": "adresse+", "nom": modele["nom"], "detail": a})
     for mac, modele in auto.items():
-        adr = [c for c in clients if c.get("mac") == mac and c.get("origine") == "auto"]
+        adr = [c for c in clients if c.get("mac") == mac and c.get("origine") in ("auto", "suivi")]
+        declarees = [c for c in clients if c.get("mac") == mac and c.get("origine", "admin") == "admin"]
         vue = {c["ip"]: max(vues.get(c["ip"], 0), c.get("ajoute", 0)) for c in adr}
         perimees = [c for c in adr if maintenant - vue[c["ip"]] > reglage.retrait_jours * 86400]
-        if len(perimees) >= len(adr):                                           # une adresse au moins reste : la plus récemment vue
+        if len(perimees) >= len(adr) and not declarees:                         # une adresse au moins reste : la plus récemment vue
             perimees = sorted(perimees, key=lambda c: vue[c["ip"]])[:-1]
         for c in perimees:
             clients.remove(c)
