@@ -137,7 +137,6 @@ class SystemHub:
             "secubox-ai-gateway",
             "secubox-localrecall",
             "secubox-master-link",
-            "secubox-threat-analyst",
             "secubox-network-anomaly",
             "secubox-dns-guard",
             "secubox-cve-triage",

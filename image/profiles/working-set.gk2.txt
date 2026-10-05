@@ -115,7 +115,6 @@ streamforge
 streamlit
 streamlit-routes
 system
-threat-analyst
 threatmesh
 threats
 toolbox

@@ -34,7 +34,6 @@
 | 📡 **Traffic Interceptor** | Security | Network traffic interception and analysis |
 | 🍪 **Cookie Manager** | Security | Cookie and session security management |
 | ⚠️ **Threat Dashboard** | Security | Unified threat visualization |
-| 🔬 **Threat Analyst** | Security | AI-powered threat analysis |
 | 🔴 **CVE Triage** | Security | CVE vulnerability tracking and triage |
 | 🛡️ **Wazuh SIEM** | Security | Wazuh SIEM integration |
 | 🔌 **IoT Guard** | Security | IoT device security monitoring |
@@ -939,13 +938,6 @@ Unified threat visualization
 
 ![Threat Dashboard](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/threats.png)
 
-#### 🔬 Threat Analyst
-
-AI-powered threat analysis
-
-**Features:** ML detection, Behavioral analysis, IOC extraction, Reports
-
-![Threat Analyst](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/threat-analyst.png)
 
 #### 🔴 CVE Triage
 

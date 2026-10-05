@@ -63,7 +63,7 @@ Chaque profil contient celui du dessous : **full ⊃ isp ⊃ lite**.
 | | Médias | `jellyfin`, `lyrion`, `photoprism`, `peertube`, `podcaster`, `radio`, `torrent`, `ytsas`, `media` |
 | | Édition et réseaux sociaux | `bbs`, `billets`, `streamforge`, `streamlit`, `saas-relay` |
 | | Domotique et terrain | `zigbee`, `mqtt`, `picobrew`, `sentinelle-gsm` |
-| | Sécurité avancée | `soc`, `threatmesh`, `threat-analyst`, `network-anomaly`, `interceptor`, `reality`, `reporter` |
+| | Sécurité avancée | `soc`, `threatmesh`, `network-anomaly`, `interceptor`, `reality`, `reporter` |
 | | Exploitation | `admin`, `aggregator`, `console`, `metacatalog`, `mirror`, `nettweak`, `assist`, `droplet`, `localrecall`, `turn`, `yacy`, `ndpid` |
 
 ## 5. Prompt pour ChatGPT image (infographie à partager)
