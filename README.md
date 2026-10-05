@@ -96,8 +96,8 @@ machine can carry. Pick the profile that matches your hardware and your needs.
 
 | | **lite** | **isp** | **full** |
 |---|---|---|---|
-| For | Small boards, 1–2 GB RAM | A complete gateway, 4 GB and up | A home server, 8 GB and up |
-| Includes | Hub, portal, WireGuard, network modes, NAC, hardening, ad-guard, webfilter | lite + DNS, firewall, WAF, HAProxy, QoS, DPI, certificates, Tor, mesh, supervision, site hosting | isp + Nextcloud, Gitea, Jellyfin, PeerTube, mail, radio, Zigbee, publishing… |
+| For | Protection only, 2 GB RAM | A protected layer with simple, limited hosting, 4 GB and up | The whole current fleet, like the reference box, 8 GB and up |
+| Includes | Firewall, WAF (`sbxwaf`), DPI, MITM engine (`sbxmitm`), ad-guard, webfilter, threat detection, anti-rootkit, access control, WireGuard | lite + routing, QoS, certificates, Tor, mesh, supervision, simple site hosting (`metablogizer`, `publish`) | isp + every module of the reference box: Nextcloud, Gitea, Jellyfin, PeerTube, mail, radio, Zigbee, AI, voice… |
 | Typical machine | ESPRESSObin | Raspberry Pi 400, MOCHAbin, x86 PC | MOCHAbin, x86 PC |
 
 Side-by-side table, glossary and a popularisation prompt:
@@ -153,13 +153,12 @@ Flashing, U-Boot and first-boot steps:
 This is a **pre-release line**: run it on a test box, not on the link your
 household depends on. What it brings, on top of the earlier alphas:
 
-- **Ad blocking and web filtering in the small profiles.** `ad-guard` and
-  `webfilter` are now part of `lite` and `isp`. Web filtering starts in
-  observe-only mode and blocks nothing until you configure it.
-- **Site hosting in `isp`.** Blog publishing (`metablogizer`, `publish`) joins
-  the gateway profile.
-- **Profiles that actually filter.** `lite`, `isp` and `full` differ by the
-  modules they install, not only by name.
+- **Profiles redefined.** `lite` is protection only (firewall, WAF, DPI, MITM,
+  DNS filtering, detection); `isp` is lite plus routing and simple, limited
+  hosting; `full` is the whole fleet of the reference box.
+- **Ad blocking and web filtering** (`ad-guard`, `webfilter`) are part of the
+  protection layer. Web filtering starts in observe-only mode and blocks
+  nothing until you configure it.
 - **zram swap and a collective memory ceiling.** SecuBox modules run under a
   `secubox.slice` capped as a percentage of physical RAM, so a module storm
   costs you a module — not the machine.

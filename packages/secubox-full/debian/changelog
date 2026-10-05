@@ -1,3 +1,9 @@
+secubox-full (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Reprend la totalite du parc gk2 (working-set) au-dessus de secubox-isp, hors modules propres a la carte ou au demarrage (ref #1982).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 05 Oct 2026 14:00:00 +0200
+
 secubox-full (1.3.2-1~bookworm3) bookworm; urgency=medium
 
   * bbs, billets, ytsas, radio sans contrainte (>= 1.0) : en 0.x, le profil
