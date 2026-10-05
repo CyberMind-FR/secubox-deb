@@ -22,8 +22,17 @@ CONFIG_MARVELL_10G_PHY=y
 CONFIG_MVPP2=y
 CONFIG_PHY_MVEBU_CP110_COMPHY=y
 CONFIG_PHY_MVEBU_CP110_UTMI=y
-# Commutateur DSA (ports lan0..lan3) : laisse en MODULE. NET_DSA depend de BRIDGE, un module chez
-# Debian, il ne peut donc pas etre integre ; le WAN (eth2) n'en depend pas.
+# Commutateur DSA (ports lan0..lan3) INTEGRE au noyau, comme BRIDGE dont il depend.
+# Charge en module, il arrive apres que networkd a ouvert eth2 : mvpp2 bascule alors ses
+# tampons (« all ports have a low MTU, switching to per-cpu buffers »), ferme et rouvre
+# tous les ports, et le PHY 88E1510 de eth2 est rattache une 2e fois sans jamais
+# remonter (constate au boot du 2026-10-05, aucune porteuse pendant 3 min). Integre, le
+# commutateur est pret avant userspace : eth2 n'est ouvert qu'une fois.
+CONFIG_BRIDGE=y
+CONFIG_NET_DSA=y
+CONFIG_NET_DSA_TAG_DSA=y
+CONFIG_NET_DSA_TAG_EDSA=y
+CONFIG_NET_DSA_MV88E6XXX=y
 # Démarrage de secours sans initrd : eMMC et racine ext4 intégrés.
 CONFIG_MMC_SDHCI_XENON=y
 CONFIG_MMC_BLOCK=y
