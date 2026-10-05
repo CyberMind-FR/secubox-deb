@@ -550,8 +550,8 @@ class MCPServer:
         """Execute tool and return result."""
         # Tool to module/endpoint mapping
         tool_mapping = {
-            "secubox.waf.status": ("threat-analyst", "/status", "GET", True),
-            "secubox.waf.threats": ("threat-analyst", "/alerts", "GET", True),
+            "secubox.waf.status": ("waf", "/status", "GET", True),
+            "secubox.waf.threats": ("waf", "/alerts", "GET", True),
             "secubox.dns.analyze": ("dns-guard", "/analyze", "POST", False),
             "secubox.dns.blocklist": ("dns-guard", "/blocklist", "GET", True),
             "secubox.network.anomalies": ("network-anomaly", "/alerts", "GET", True),

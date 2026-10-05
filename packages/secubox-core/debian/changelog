@@ -1,3 +1,9 @@
+secubox-core (1.5.56-1~bookworm1) bookworm; urgency=medium
+
+  * Les commentaires du champ Depends sont a la colonne 0 : indentes, dpkg-gencontrol les lisait comme des dependances et le paquet ne se construisait plus (Debian 13) (ref #1997).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 05 Oct 2026 11:30:00 +0200
+
 secubox-core (1.5.55-1~bookworm1) bookworm; urgency=medium
 
   * Compatibilité Debian 13 (ref #1294) : Depends `python3-python-multipart | python3-multipart | python3-pip`. Sous Debian 13,

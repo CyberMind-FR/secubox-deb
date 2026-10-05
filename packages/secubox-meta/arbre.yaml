@@ -319,6 +319,8 @@ recommande:
   - secubox-dns-guard
   - secubox-dns-provider
   - secubox-network-anomaly
+  - secubox-dns-lan
+  - secubox-webfilter
 
 meta: secubox-service-exposition
 niveau: service
@@ -402,7 +404,6 @@ recommande:
   - secubox-antirootkit
   - secubox-device-intel
 suggere:
-  - secubox-threat-analyst
   - secubox-ad-guard
   - secubox-cookies
   - secubox-ai-insights

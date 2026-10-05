@@ -302,7 +302,9 @@ Depends: ${misc:Depends},
          secubox-vortex-dns
 Recommends: secubox-dns-guard,
          secubox-dns-provider,
-         secubox-network-anomaly
+         secubox-network-anomaly,
+         secubox-dns-lan,
+         secubox-webfilter
 Description: SecuBox — service « Résolution DNS »
  Zones faisant autorité, résolveur récursif pare-feu, garde DNS.
  .
@@ -393,8 +395,7 @@ Recommends: secubox-cve-triage,
          secubox-threatmesh,
          secubox-antirootkit,
          secubox-device-intel
-Suggests: secubox-threat-analyst,
-         secubox-ad-guard,
+Suggests: secubox-ad-guard,
          secubox-cookies,
          secubox-ai-insights,
          secubox-toolbox
