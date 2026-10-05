@@ -68,33 +68,48 @@ Chaque profil contient celui du dessous : **full ⊃ isp ⊃ lite**.
 
 ## 5. Prompt pour ChatGPT image (infographie à partager)
 
+Version corrigée : seuls figurent des modules qui existent dans le dépôt, sans promesse de sauvegarde ni de conformité.
+
 ```text
-Crée une infographie claire et simple, format paysage 16:9, style illustration
-plate moderne, fond clair, 3 couleurs principales (bleu nuit, vert menthe,
-orange doux), police sans empattement très lisible. Titre en haut :
-"SecuBox : choisissez votre niveau de protection".
+Crée une infographie claire, format paysage 16:9, style illustration moderne et
+chaleureuse, fond clair, quatre couleurs de profil (vert LITE, bleu ISP, orange
+FULL, violet CUSTOM), police sans empattement très lisible. Aucun logo de marque
+tierce. Texte en français, peu de mots par bulle.
 
-Dessine trois étages d'une maison qui s'emboîtent, de bas en haut, chaque
-étage contenant celui du dessous :
+BANDEAU DU HAUT : "SecuBox / SBXOS — couche de sécurité intelligente". Trois ou
+quatre mots par fonction : ad-guard (blocage pubs et traceurs), DPI (analyse du
+trafic), WAF (protection des services), MITM (analyse HTTPS avec consentement
+explicite), filtrage par catégories, journalisation et rapports.
 
-1. Rez-de-chaussée, bouclier bleu, étiquette "LITE — Je me protège"
-   Pour une petite machine (2 Go). Icônes : pare-feu (mur de briques),
-   bouclier WAF, loupe sur le trafic (analyse), filtre de publicités,
-   cadenas parental, détecteur de menaces. Légende : "Protège le réseau.
-   N'héberge rien."
+DEUX MODES DE DÉPLOIEMENT (deux schémas côte à côte) :
+1. "Derrière une box existante" : Internet → box/routeur (Freebox, Livebox…) →
+   SecuBox → vos appareils (TV, ordinateur, mobile, console, objets connectés).
+   Légende : "Parfait pour la maison — profil LITE".
+2. "SecuBox comme passerelle" : Internet → SecuBox → vos appareils. Légende :
+   "La SecuBox remplace la box (DHCP, NAT, Wi-Fi) — profils ISP, FULL, CUSTOM".
 
-2. Étage du milieu, vert menthe, étiquette "ISP — Je me protège et je publie"
-   Ajoute : routeur, VPN, certificat, petit blog/site web. Légende :
-   "Une couche protégée avec un hébergement simple et limité."
+QUATRE CARTES DE PROFIL, côte à côte, chacune avec la mémoire conseillée :
+- LITE (2 Go) — "Couche de protections complète". ad-guard, DPI, WAF, MITM avec
+  consentement, filtrage par catégories, contrôle parental par profils,
+  journalisation et alertes, tableau de bord DNS Guard (compteurs par appareil).
+  Usage : maison, derrière une box.
+- ISP (4 Go) — "Protégé, avec hébergement simple et limité". Toutes les
+  protections de LITE + routeur/passerelle, VPN WireGuard, hébergement web simple
+  (blog, site vitrine, publication de sites), gestion des domaines et
+  certificats, supervision. Usage : association, petite structure.
+- FULL (8 Go et plus) — "Protections + services hébergés". Toutes les protections
+  + Nextcloud (fichiers, agenda), courrier et webmail, médias (PhotoPrism,
+  PeerTube, Jellyfin, radio), domotique Zigbee, Gitea, messagerie et blog.
+  Usage : domicile avancé, PME, communauté — son cloud privé.
+- CUSTOM — "À la carte". Modules choisis dans l'App Store SecuBox, configuration
+  sur mesure. Usage : experts, projets spécifiques.
 
-3. Étage du haut, orange, étiquette "FULL — Je gère tout chez moi"
-   Ajoute : nuage de fichiers, films et musique, courrier, discussion,
-   domotique, radio. Légende : "Tous les services de la box de référence."
+BANDEAU DU BAS : une rangée de petites icônes "Vie privée préservée", "Réseau plus
+sûr", "Contrôle par l'utilisateur", "Moins de pubs", "Modulaire et évolutif".
+Phrase finale : "SecuBox ajoute une couche de protection à votre réseau."
 
-À droite, une petite jauge de mémoire : 2 Go, 4 Go, 8 Go sous chaque étage.
-En bas, une phrase : "Vos données restent chez vous. Aucun cloud, aucun
-suivi." Pas de logo de marque tierce, pas de texte minuscule, pas plus de
-6 mots par bulle, ton rassurant et accessible à tous.
+À NE PAS REPRÉSENTER : Home Assistant, Kbin, "Forge", sauvegardes, mention du
+RGPD ou de toute conformité, promesse de sécurité absolue.
 ```
 
 ## 6. Prompt pour ChatGPT (vulgarisation et définitions)
