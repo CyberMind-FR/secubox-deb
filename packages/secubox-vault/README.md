@@ -153,6 +153,8 @@ coffrectl journal [N] [--verifier]
 coffrectl depot etat [--porcelaine]     # protégée ? en cache ?
 coffrectl depot proteger                # phrase aléatoire, rangée au Coffre AVANT d'être posée
 coffrectl depot session [--minutes N]   # la donne à gpg-agent, N ≤ 60, oubli planifié
+coffrectl depot deverrouiller --depuis-coffre [--si-ouvert]   # (#2007) la phrase est le secret box/depot-<empreinte> ;
+                                                                # la minuterie secubox-depot-coffre.timer le lance chaque minute
 coffrectl depot fin
 
 # P3 — niveau 0 : secrets de démarrage par systemd-creds

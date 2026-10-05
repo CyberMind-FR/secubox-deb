@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Déverrouille la clé de signature du dépôt apt depuis le Coffre (#2007). Lancé chaque minute
+# par la minuterie : sans effet tant que le Coffre est scellé ou que la clé signe déjà.
+[Unit]
+Description=SecuBox — déverrouille la clé du dépôt apt depuis le Coffre (#2007)
+After=secubox-vault.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/usr/lib/secubox/vault
+ExecStart=/usr/sbin/coffrectl depot deverrouiller --depuis-coffre --si-ouvert
+PrivateNetwork=yes
+NoNewPrivileges=true
