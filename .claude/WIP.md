@@ -44,7 +44,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-0a. **Alpha 9 = Trixie** (parent #1997, technique #1294) : image CI + restauration, pilote gk3 puis c3box puis gk2. Volets : boot MOCHAbin + noyau/DTB, suite apt trixie + 12 scripts, revalidation HAProxy/Unbound/nginx/systemd/LXC/pip, sauvegarde-restauration vérifiée (#1903). Alpha 8 en cours de release (#1982) ; CI à corriger : #1991.
+0a. **Alpha 9 = Trixie** (parent #1997, technique #1294) : image CI + restauration, pilote gk3 puis c3box puis gk2. Volets : boot MOCHAbin + noyau/DTB, suite apt trixie + 12 scripts, revalidation HAProxy/Unbound/nginx/systemd/LXC/pip, sauvegarde-restauration (#1995, optionnelle : gk3 migré en direct sans retour arrière). Alpha 8 en cours de release (#1982) ; CI à corriger : #1991.
 0b. **#1962** secubox-webfilter : **P1 et P2 livrées et déployées** (0.2.1, gk2 ; essai réel de blocage fait et validé). Reste P3 (apprentissage, parking), P4 (association DPI). Mineurs différés dans le registre de relecture. **#1973** DPI : étiquetage des destinations vues par IP seule. **#1974** export des compteurs du toolbox vers ad-guard. **#1938** : paquetage fait (`secubox-dns-lan` 0.1.0, déployé) ; reste le réglage Freebox (DNS IPv6), le certificat de gk3 et la plage DHCP. Règles RTL9 à l'essai jusqu'au 2026-10-05 matin.
 1. **#1748** audit des autres fusions suspectes (nextcloud c43ffe9b0, metrics/core 7ebe27403, toolbox,
    nac discovery) : lignes de master retirées toujours absentes, à examiner une à une.
