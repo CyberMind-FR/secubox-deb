@@ -96,3 +96,36 @@ En bas, une phrase : "Vos données restent chez vous. Aucun cloud, aucun
 suivi." Pas de logo de marque tierce, pas de texte minuscule, pas plus de
 6 mots par bulle, ton rassurant et accessible à tous.
 ```
+
+## 6. Prompt pour ChatGPT (vulgarisation et définitions)
+
+```text
+Tu es rédacteur technique et vulgarisateur. Tu t'adresses à un lecteur non
+spécialiste (commerçant, élu, particulier curieux) qui doit comprendre quel
+produit SecuBox choisir. Réponds en français, sans jargon non défini.
+
+Contexte : SecuBox est un boîtier de sécurité réseau libre qui protège un
+réseau local (maison, petite structure). Il existe en trois niveaux selon la
+mémoire de la machine (lite 2 Go, standard 4 à 8 Go, pro 8 Go et plus) et
+en trois ensembles installables qui s'emboîtent : "lite" (les protections
+uniquement : pare-feu, WAF, analyse du trafic, filtrage), "isp" (lite plus un
+hébergement simple et limité, par exemple un blog) et "full" (tout le parc :
+Nextcloud, Jellyfin, courrier, radio, etc.).
+Deux modules touchent au DNS : "ad-guard" (retire publicités et traceurs sur
+les téléviseurs et appareils) et "webfilter" (contrôle parental et blocage de
+sites dangereux ou pour adultes, par appareil).
+
+Tâches :
+1. Écris un glossaire de 15 à 20 termes, une phrase simple chacun, avec une
+   analogie du quotidien : DNS, résolveur, WAF, pare-feu, DPI, VPN/WireGuard,
+   NAC, QoS, HAProxy, TLS, LXC/conteneur, métapaquet, Tor, maillage (mesh),
+   liste de blocage, puits DNS (sinkhole), observation vs blocage.
+2. Explique en 10 lignes maximum la différence entre "niveau" et "ensemble".
+3. Pour chaque ensemble (lite, isp, full), donne : à qui il s'adresse, ce
+   qu'il protège, ce qu'il ne fait pas, la machine conseillée.
+4. Termine par un arbre de décision de 5 questions ("Avez-vous des enfants à
+   protéger ?", "Hébergez-vous vos propres services ?"...) menant au bon choix.
+
+Contraintes : aucun nom de marque de concurrent, pas de promesse de sécurité
+absolue, ton clair et rassurant, pas plus de 900 mots hors glossaire.
+```
