@@ -10,6 +10,7 @@
 # NE PAS regenerer a l'aveugle : un snapshot pris pendant que le sleeper
 # a endormi les modules on-demand RETIRE dns, hub, hardening et consorts,
 # et invalide les trois profils. Verifie le 2026-09-19 (#1308).
+ad-guard
 admin
 aggregator
 antirootkit
@@ -134,6 +135,7 @@ waf-ng
 waf-ratelimit
 waker
 watchdog
+webfilter
 webmail
 wireguard
 yacy

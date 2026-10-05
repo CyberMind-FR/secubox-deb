@@ -23,7 +23,9 @@ Depends: ${misc:Depends},
  secubox-netmodes (>= 1.0),
  secubox-nac (>= 1.0),
  secubox-system (>= 1.0),
- secubox-hardening (>= 1.0)
+ secubox-hardening (>= 1.0),
+ secubox-ad-guard (>= 1.6.2),
+ secubox-webfilter (>= 0.2.1)
 Recommends: wireguard-tools
 Suggests: secubox-qos, secubox-auth, secubox-watchdog, secubox-backup
 Description: SecuBox Lite — Essential modules for low-RAM devices
