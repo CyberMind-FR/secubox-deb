@@ -21,7 +21,6 @@
 |--------|----------|-------------|
 | 🏠 **SecuBox Hub** | Dashboard | Tableau de bord central et centre de contrôle |
 | 🛡️ **Security Operations Center** | Dashboard | SOC avec horloge mondiale, carte menaces, tickets |
-| 📋 **Migration Roadmap** | Dashboard | Suivi migration OpenWRT vers Debian |
 | 📈 **System Metrics** | Dashboard | Tableau de bord métriques système temps réel |
 | ⚙️ **Admin Panel** | Dashboard | Panneau d'administration système |
 | 🔥 **Web Application Firewall** | Security | WAF avec 300+ règles de sécurité OWASP |
@@ -373,13 +372,6 @@ SOC avec horloge mondiale, carte menaces, tickets
 
 ![Security Operations Center](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/soc.png)
 
-#### 📋 Migration Roadmap
-
-Suivi migration OpenWRT vers Debian
-
-**Fonctionnalités:** Suivi progression, État modules, Vue catégories
-
-![Migration Roadmap](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/roadmap.png)
 
 #### 📈 System Metrics
 

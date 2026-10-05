@@ -152,4 +152,3 @@ Terminal-based interface with 6-panel layout.
 
 - [Smart-Strip](Smart-Strip) — HMI module
 - [Eye-Remote](Eye-Remote) — Remote dashboard
-- [UI Comparison](UI-COMPARISON) — Interface comparison

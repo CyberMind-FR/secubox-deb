@@ -9,7 +9,7 @@
 
 **CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie** | [EN](Home) | [中文](Home-ZH)
 
-Solution complète d'appliance de sécurité portée d'OpenWrt vers Debian bookworm. Conçue pour les cartes ARM64 GlobalScale (MOCHAbin, ESPRESSObin) et les systèmes x86_64. **176 paquets** avec plus de **3000 points d'API**.
+Solution complète d'appliance de sécurité sous Debian bookworm, en trois profils (lite, isp, full). Conçue pour les cartes ARM64 GlobalScale (MOCHAbin, ESPRESSObin) et les systèmes x86_64. **environ 190 paquets** avec plus de **3000 points d'API**.
 
 ---
 
@@ -96,7 +96,7 @@ Voir [[Installation-FR]] pour les instructions détaillées.
 | 🟢 **ROOT** | Système, CLI, durcissement | core, hub, system, console |
 | 🔵 **MESH** | Réseau, WireGuard, QoS | wireguard, haproxy, netmodes, turn |
 
-**Total : 176 paquets**
+**Total : environ 190 paquets**
 
 Voir [[Modules|MODULES-FR]] pour la documentation complète des modules.
 

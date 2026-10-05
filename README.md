@@ -67,7 +67,7 @@ Raspberry Pi ([#1294](https://github.com/CyberMind-FR/secubox-deb/issues/1294)).
 | 🧬 **Actor intelligence** | Scanners correlated across addresses and countries; a walking subdomain dictionary is regrouped into one campaign instead of dozens of fragments |
 
 > A visual tour of the dashboard lives in the
-> [wiki gallery](https://github.com/CyberMind-FR/secubox-deb/wiki/UI-COMPARISON).
+> [wiki gallery](https://github.com/CyberMind-FR/secubox-deb/wiki/MODULES-EN).
 
 ---
 

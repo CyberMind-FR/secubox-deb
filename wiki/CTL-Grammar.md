@@ -13,7 +13,7 @@
 > SecuBox is a **modular tools box** — a security-affected modular
 > language system that acts as an interface between users and the world
 > of data publishing of each user around the connected humanities. The
-> 1991 concept matured through SecuBox-OpenWrt and now incarnates as
+> 1991 concept matured over the years and now incarnates as
 > SecuBox-Deb on Debian bookworm.
 
 ## The frame
