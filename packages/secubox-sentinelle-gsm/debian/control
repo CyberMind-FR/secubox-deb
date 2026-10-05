@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 Homepage: https://cybermind.fr/secubox
 
 Package: secubox-sentinelle-gsm
-Architecture: arm64
+Architecture: all
 Depends: ${misc:Depends},
          secubox-core (>= 1.4.0),
          python3-uvicorn,

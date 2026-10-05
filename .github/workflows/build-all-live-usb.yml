@@ -222,10 +222,11 @@ jobs:
             ls -la output/
             exit 1
           fi
-        # 120 min : l'update-initramfs sous QEMU (~10 min) + la construction de
+        # 240 min (alpha 9 : 120 min depasses sous QEMU arm64 avec le parc trixie complet) :
+        # l'update-initramfs sous QEMU (~10 min) + la construction de
         # l'image 8 Go dépassaient les 60 min précédents (#1131e). pigz réduit
         # fortement la compression ; la marge évite un échec sur pic de charge.
-        timeout-minutes: 120
+        timeout-minutes: 240
 
       - name: Build ${{ matrix.platform }} Live USB
         if: steps.filter.outputs.skip != 'true'
@@ -252,7 +253,7 @@ jobs:
             ${{ matrix.extra_args }}
 
           sudo chown -R $(id -u):$(id -g) output/
-        timeout-minutes: 120
+        timeout-minutes: 240
 
       - name: List output files
         if: steps.filter.outputs.skip != 'true'
