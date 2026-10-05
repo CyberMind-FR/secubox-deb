@@ -58,10 +58,23 @@ def _gpg(args, gnupghome, **k):
     return subprocess.run(["gpg", "--batch", *args], env=_env(gnupghome), capture_output=True, text=True, **k)
 
 
-def empreinte_signature(distributions: Path = Path("/srv/apt/conf/distributions"),
+# Le dépôt vit sous /srv/apt ou, sur gk2, sous /data/apt : on prend le premier qui existe.
+DISTRIBUTIONS_CANDIDATS = (Path("/srv/apt/conf/distributions"), Path("/data/apt/conf/distributions"))
+
+
+def distributions_par_defaut() -> Path:
+    for c in DISTRIBUTIONS_CANDIDATS:
+        if c.exists():
+            return c
+    return DISTRIBUTIONS_CANDIDATS[0]
+
+
+def empreinte_signature(distributions: Optional[Path] = None,
                         gnupghome: str = GNUPGHOME_DEFAUT) -> str:
     """La clé qui signe : `SignWith` de reprepro, ou la clé secrète par défaut."""
     choix = "default"
+    if distributions is None:
+        distributions = distributions_par_defaut()
     if distributions.exists():
         for ligne in distributions.read_text().splitlines():
             if ligne.startswith("SignWith:"):
@@ -245,6 +258,31 @@ def deverrouiller(empreinte: str, gnupghome: str = GNUPGHOME_DEFAUT) -> dict:
         oublier(empreinte, gnupghome)
         raise ErreurDepot("la phrase de niveau 0 ne déverrouille pas la clé")
     return etat(empreinte, gnupghome)
+
+
+def deverrouiller_depuis_coffre(empreinte: str, lire: Callable[[str], Optional[str]],
+                                gnupghome: str = GNUPGHOME_DEFAUT) -> dict:
+    """Donne à gpg-agent, sans échéance, la phrase de la clé RANGÉE AU COFFRE (#2007).
+
+    `lire(nom)` rend la phrase du secret `nom` du compartiment `box`, ou None. Elle n'est
+    appelée que si la clé ne signe pas déjà : tant que l'agent la tient, le Coffre n'est pas
+    sollicité. Aucune phrase n'est écrite sur le disque ; le preset vit dans la mémoire de
+    l'agent (TTL d'un an) jusqu'au prochain démarrage.
+    """
+    if _signe_essai(empreinte, gnupghome):
+        return dict(etat(empreinte, gnupghome), deja=True)
+    phrase = lire(nom_secret(empreinte))
+    if not phrase:
+        raise ErreurDepot(f"le secret {nom_secret(empreinte)} est absent du Coffre (compartiment box)")
+    grips = keygrips(empreinte, gnupghome)
+    _assure_preset(gnupghome)
+    _assure_ttl_long(gnupghome)
+    _preset(grips, phrase, gnupghome)
+    del phrase
+    if not _signe_essai(empreinte, gnupghome):
+        oublier(empreinte, gnupghome)
+        raise ErreurDepot("la phrase du Coffre ne déverrouille pas la clé")
+    return dict(etat(empreinte, gnupghome), deja=False)
 
 
 def session(empreinte: str, phrase: str, minutes: int, planifier: Optional[Callable[[int, list], None]] = None,

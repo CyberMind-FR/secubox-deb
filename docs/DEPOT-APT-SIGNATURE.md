@@ -1,60 +1,65 @@
 <!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-# Dépôt apt : signature automatique après démarrage
+# Dépôt apt : la clé de signature se déverrouille avec le Coffre
 
-Le dépôt `apt.secubox.in` est géré par `reprepro` sur gk2 (`/data/apt`). Chaque suite déclare
-`SignWith: default` dans `conf/distributions`, et la clé (`44E50F0178E8BC7E`, empreinte
-`219BA872E3933EAAC3486A1344E50F0178E8BC7E`) est protégée par une phrase de passe.
+Le dépôt `apt.secubox.in` (gk2, `/data/apt`) est géré par `reprepro` : chaque suite déclare
+`SignWith: default` et la clé (`44E50F0178E8BC7E`) est protégée par une phrase de passe.
+`reprepro` tourne sans terminal : la phrase doit déjà être dans la mémoire de `gpg-agent`, qui
+l'oublie à chaque redémarrage de gk2 (sinon : `Pinentry: Inappropriate ioctl for device`).
 
-## Le problème
+## Principe (#2007)
 
-`reprepro` tourne sans terminal. La phrase de passe doit donc déjà être dans la mémoire de
-`gpg-agent`. Un redémarrage de gk2 vide cette mémoire : toute inclusion ou tout `export` échoue
-avec `Pinentry: Inappropriate ioctl for device`, pour **toutes** les suites.
+1. La phrase de la clé est **un secret du Coffre** : compartiment `box`, nom `depot-<empreinte>`.
+   Elle n'existe nulle part ailleurs, ni en fichier ni en variable.
+2. Le Coffre est **scellé au démarrage**. La **connexion d'un administrateur l'ouvre** (#1855).
+3. `secubox-depot-coffre.timer` lance chaque minute
+   `coffrectl depot deverrouiller --depuis-coffre --si-ouvert` :
+   Coffre scellé → rien ; clé qui signe déjà → rien ; sinon la phrase est lue dans le Coffre et
+   donnée à `gpg-agent` (TTL d'un an, donc jusqu'au prochain démarrage).
 
-## La solution : un service qui la redonne à chaque démarrage
+Après un redémarrage de gk2, il suffit donc de **se connecter** : dans la minute, la signature
+fonctionne de nouveau, pour toutes les suites.
 
-`secubox-apt-gpg-preset` (script) et `secubox-apt-gpg-preset.service` (unité systemd) lisent la
-phrase dans `/etc/secubox/secrets/apt-gpg-passphrase` et la prérèglent dans `gpg-agent`, puis
-vérifient qu'une signature réussit sans invite.
+## Mise en place (une fois, par le propriétaire, sur gk2 en root)
 
-Le fichier secret est créé **par le propriétaire**. Aucun agent ni paquet ne le fabrique ni ne le lit.
-
-### Installation (une fois, sur gk2, en root)
-
-```bash
-install -m 0755 scripts/apt-infra/secubox-apt-gpg-preset /usr/local/sbin/
-install -m 0644 scripts/apt-infra/secubox-apt-gpg-preset.service /etc/systemd/system/
-
-# Le secret : saisie masquée, fichier 0600 root.
-umask 077
-read -rs -p "Phrase de passe de la clé du dépôt : " P; echo
-printf '%s\n' "$P" > /etc/secubox/secrets/apt-gpg-passphrase; unset P
-chmod 600 /etc/secubox/secrets/apt-gpg-passphrase
-
-systemctl daemon-reload
-systemctl enable --now secubox-apt-gpg-preset.service
-systemctl status secubox-apt-gpg-preset.service --no-pager | head -5
-```
-
-Succès attendu : `clé 44E50F0178E8BC7E déverrouillée, signature vérifiée`.
-
-### Vérification
+L'empreinte entière de la clé :
 
 ```bash
-echo test | gpg --batch --pinentry-mode error --local-user 44E50F0178E8BC7E --clearsign | head -2
-reprepro -b /data/apt export bookworm
+coffrectl depot etat
 ```
 
-## Limite à connaître
+Ranger la phrase de passe actuelle de la clé dans le Coffre (saisie masquée ; **jamais** en argument) :
 
-La phrase de passe est conservée en clair (0600 root) sur la machine qui porte aussi la clé :
-cela ne protège pas contre quelqu'un qui obtiendrait un accès root à gk2. Cela protège la clé
-d'un vol de sauvegarde de `~/.gnupg` seul, et rend la signature automatique. Une protection plus
-forte passe par un module matériel ou le TPM (voir #1902).
+```bash
+coffrectl poser box depot-219BA872E3933EAAC3486A1344E50F0178E8BC7E
+```
+
+(L'interface `/vault/` du Hall permet la même chose : compartiment `box`, même nom.)
+
+Vérifier :
+
+```bash
+coffrectl depot deverrouiller --depuis-coffre      # Coffre ouvert : « déverrouillée depuis le Coffre »
+coffrectl depot etat                               # « session ouverte (l'agent tient la phrase) »
+reprepro -b /data/apt export bookworm              # signe sans invite
+systemctl list-timers secubox-depot-coffre.timer
+```
+
+## Pourquoi pas un fichier secret
+
+Une phrase conservée en clair (0600) sur la machine qui porte la clé ne protège pas d'un accès
+root à gk2, et un agent ou un script pourrait la lire. Dans le Coffre, elle n'est lisible que
+Coffre ouvert, par root, et chaque lecture est inscrite au journal chaîné.
+
+## Autres chemins déjà prévus par le Coffre (P2, #1366)
+
+| Besoin | Commande |
+|---|---|
+| Session de signature limitée à N ≤ 60 minutes | `coffrectl depot session --minutes N` puis `coffrectl depot fin` |
+| Clé sans humain, déverrouillée à chaque démarrage (niveau 0, systemd-creds) | `coffrectl depot proteger --demarrage` |
 
 ## Suite `trixie`
 
-Sa strophe de `conf/distributions` doit porter `SignWith: default` comme les autres ; elle a été
-laissée non signée tant que le secret GPG n'existait pas côté CI. Après installation du service :
+Sa strophe de `conf/distributions` doit porter `SignWith: default` comme les autres. Elle est
+restée non signée tant que la signature ne marchait pas. Une fois la clé déverrouillée :
 ajouter la ligne, `reprepro -b /data/apt export trixie bookworm`, puis faire pointer les clients
 sur `https://apt.secubox.in trixie main` avec `signed-by=/usr/share/keyrings/secubox-archive-keyring.gpg`.

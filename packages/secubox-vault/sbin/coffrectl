@@ -137,6 +137,27 @@ def depot(args) -> None:
             d.proteger_demarrage(fpr)
             print(f"clé {_empreinte_lisible(fpr)} protégée : phrase aléatoire au niveau 0 (systemd-creds), "
                   "déverrouillée maintenant et à chaque démarrage. Aucune phrase humaine.")
+        elif sous == "deverrouiller" and "--depuis-coffre" in args:
+            # La phrase est un secret du Coffre (box / depot-<empreinte>) : la connexion d'un
+            # administrateur ouvre le Coffre, la minuterie lance cette commande, la clé se déverrouille.
+            if not appel("GET", "/etat").get("ouvert"):
+                if "--si-ouvert" in args:
+                    return                              # scellé : rien à faire, la minuterie réessaiera
+                sys.exit("coffrectl depot : le Coffre est scellé — ouvrez-le (connexion d'un administrateur)")
+
+            def _lire(nom):
+                try:
+                    return appel("GET", f"/secrets/box/{nom}/valeur")["valeur"]
+                except SystemExit:
+                    return None                         # secret absent : traité plus bas
+            try:
+                e = d.deverrouiller_depuis_coffre(fpr, _lire)
+            except d.ErreurDepot as err:
+                if "--si-ouvert" in args and "absent du Coffre" in str(err):
+                    return                              # pas encore rangée : silence, pas de bruit chaque minute
+                raise
+            if not e.get("deja"):
+                print(f"clé {_empreinte_lisible(fpr)} déverrouillée depuis le Coffre (en mémoire jusqu'au redémarrage)")
         elif sous == "deverrouiller":
             if "--si-present" in args:                  # démarrage : rien à faire sans crédence
                 from coffre import niveau0
@@ -160,7 +181,7 @@ def depot(args) -> None:
             d.oublier(fpr)
             print("session de signature close")
         else:
-            sys.exit("coffrectl depot : etat | proteger [--demarrage] | deverrouiller [--si-present] | session [--minutes N] | fin")
+            sys.exit("coffrectl depot : etat | proteger [--demarrage] | deverrouiller [--si-present | --depuis-coffre [--si-ouvert]] | session [--minutes N] | fin")
     except d.ErreurDepot as e:
         sys.exit(f"coffrectl depot : {e}")
 

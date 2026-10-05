@@ -30,3 +30,4 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system
 	install -m 644 debian/secubox-vault.service $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system/
 	install -m 644 debian/secubox-depot-deverrouille.service $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system/
+	install -m 644 debian/secubox-depot-coffre.service debian/secubox-depot-coffre.timer $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system/
