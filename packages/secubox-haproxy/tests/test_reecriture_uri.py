@@ -30,8 +30,9 @@ def _src() -> str:
 
 def test_la_reecriture_utilise_url_et_non_path_query():
     src = _src()
-    assert "http-request set-uri http://%[req.hdr(Host)]%[url]" in src, (
-        "la réécriture doit utiliser %[url], qui rend le chemin ET la requête"
+    assert "http-request set-uri http://%[req.hdr(Host)]%[pathq]" in src, (
+        "la réécriture doit utiliser %[pathq], qui rend le chemin ET la requête "
+        "sans l'adresse complète que %[url] contient en HTTP/2"
     )
 
 
@@ -49,4 +50,21 @@ def test_path_query_ne_reapparait_pas():
         assert "%[path]%[query]" not in nue, (
             f"ligne {numero} : %[query] omet le « ? » et casse toute URL "
             f"versionnée — utiliser %[url]"
+        )
+
+
+def test_url_complet_ne_sert_pas_a_reecrire_l_uri():
+    """HTTP/2 : %[url] est l'adresse ABSOLUE (https://hote/chemin), pas le chemin.
+
+    HAProxy 3.0 négocie HTTP/2 par défaut (2.6 ne le faisait pas). Une règle
+    `set-uri http://%[req.hdr(Host)]%[url]` produisait alors
+    `http://hote` + `https://hote/chemin` : hôte inconnu du WAF, donc un 421 sur
+    tous les domaines publics pour tout navigateur.
+    """
+    for numero, ligne in enumerate(_src().splitlines(), 1):
+        nue = ligne.strip()
+        if nue.startswith("#"):
+            continue
+        assert "set-uri http://%[req.hdr(Host)]%[url]" not in nue, (
+            f"ligne {numero} : %[url] est absolue en HTTP/2 — utiliser %[pathq]"
         )
