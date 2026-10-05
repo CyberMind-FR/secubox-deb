@@ -100,6 +100,8 @@ machine can carry. Pick the profile that matches your hardware and your needs.
 | Includes | Firewall, WAF (`sbxwaf`), DPI, MITM engine (`sbxmitm`), ad-guard, webfilter, threat detection, anti-rootkit, access control, WireGuard | lite + routing, QoS, certificates, Tor, mesh, supervision, simple site hosting (`metablogizer`, `publish`) | isp + every module of the reference box: Nextcloud, Gitea, Jellyfin, PeerTube, mail, radio, Zigbee, AI, voice… |
 | Typical machine | ESPRESSObin | Raspberry Pi 400, MOCHAbin, x86 PC | MOCHAbin, x86 PC |
 
+<p align="center"><img src="docs/assets/secubox-profils-infographie.jpg" alt="SecuBox: choose your protection level — lite, isp, full" width="800"></p>
+
 Side-by-side table, glossary and a popularisation prompt:
 [docs/PROFILS-COMPARATIF.md](docs/PROFILS-COMPARATIF.md).
 

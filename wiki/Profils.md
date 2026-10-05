@@ -9,6 +9,8 @@
 
 Deux notions se croisent : le **niveau** (ce que la machine peut porter selon sa mémoire) et le **profil** (ce qu'on installe). Un profil est un méta-paquet : il ne contient rien lui-même, il tire d'autres paquets par ses dépendances.
 
+![Choisissez votre niveau de protection](images/secubox-profils-infographie.jpg)
+
 ## Niveaux
 
 | | lite | standard | pro |
