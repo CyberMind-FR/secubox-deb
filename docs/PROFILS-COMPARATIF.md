@@ -14,24 +14,23 @@ Deux notions se croisent et se confondent facilement :
 |---|---|---|---|
 | Mémoire visée | 1 à 2 Go | 4 à 8 Go | 8 Go et plus |
 | Machine type | ESPRESSObin | Raspberry Pi 400, boîtes 4 Go | MOCHAbin |
-| Analyse du trafic (DPI) | non | en miroir (observe) | en ligne (inline) |
+| Analyse du trafic (DPI) | en miroir (léger) | en miroir (observe) | en ligne (inline) |
 | Conteneurs LXC | non | oui | oui |
 | Swap | 512 Mo | aucun | aucun |
 | Obligatoire | WireGuard, modes réseau, contrôle d'accès | + DPI, QoS, WAF, HAProxy, vhosts | `secubox-full` |
-| Exclus | DPI, Ollama, Jellyfin, Matrix, Nextcloud, Gitea | — | — |
+| Exclus | Ollama, Jellyfin, Matrix, Nextcloud, Gitea | — | — |
 
 ## 2. Méta-paquets (ce qui est installé)
 
-| | **secubox-lite** 1.1.0 | **secubox-isp** 1.0.1 | **secubox-full** 1.3.2 |
+Les profils s'emboîtent : **isp = lite + hébergement simple**, **full = isp + tout le parc gk2**.
+
+| | **secubox-lite** 1.3.0 | **secubox-isp** 1.2.0 | **secubox-full** 1.4.0 |
 |---|---|---|---|
-| Rôle | Essentiel pour petite machine | Socle routeur / fournisseur d'accès | ISP + applications en service |
-| Contient | Hub, portail, WireGuard, modes réseau, NAC, système, durcissement | Tout lite + DNS, pare-feu, WAF, HAProxy, QoS, DPI, certificats, exposition, Tor, maillage, supervision | Tout ISP + BBS, billets, Nextcloud, Gitea, Jellyfin, Lyrion, PeerTube, Podcaster, torrent, courrier, Zigbee, publication, radio |
-| WAF (`sbxwaf`) et HAProxy | non | oui | oui |
-| DPI | non | oui | oui (moteur nDPI) |
-| Applications (LXC) | non | non | oui |
-| **ad-guard** | non (prévu alpha 8) | non (prévu alpha 8) | via ISP si ajouté |
-| **webfilter** | non (prévu alpha 8) | non (prévu alpha 8) | via ISP si ajouté |
-| Niveau adapté | lite | standard | pro |
+| Rôle | Protections uniquement | Couche protégée, hébergement simple et limité | Totalité du parc actuel (comme gk2) |
+| Protections | Pare-feu nftables, WAF (`sbxwaf`, HAProxy), DPI, MITM (`sbxmitm`), ad-guard, webfilter, menaces, anti-rootkit, mac-guard, contrôle d'accès (NAC), WireGuard, durcissement | Celles de lite | Celles de lite |
+| Réseau / FAI | DNS | + routage, QoS, certificats, exposition, Tor, maillage, supervision | idem isp |
+| Hébergement | aucun | simple : metablogizer, publish | complet : Nextcloud, Gitea, Jellyfin, PeerTube, courrier, radio, BBS, billets, Zigbee, IA, voix… |
+| Niveau adapté | lite (2 Go) | standard (4 Go) | pro (8 Go) |
 
 ## 3. Coût mémoire des deux modules DNS (mesures du 2026-10-04)
 
@@ -42,7 +41,7 @@ Deux notions se croisent et se confondent facilement :
 | Webfilter, une vue qui bloque (≈ 312 000 zones) | ~+100 Mo, démarrage 9,4 s |
 | Chaque configuration de blocage distincte | +1 vue, donc ~+100 Mo |
 
-Conséquence pour **lite (1 à 2 Go)** : ad-guard complet et webfilter ne tiennent ensemble qu'avec une liste réduite ou un seul profil de blocage. À décider avant l'alpha 8.
+Conséquence pour **lite (2 Go)** : avec le WAF, le DPI et le MITM en plus, ad-guard et webfilter ne tiennent qu'avec les listes par défaut réduites et un seul profil de blocage. À mesurer sur une machine 2 Go.
 
 ## 4. Prompt pour ChatGPT (vulgarisation et définitions)
 
@@ -54,9 +53,10 @@ produit SecuBox choisir. Réponds en français, sans jargon non défini.
 Contexte : SecuBox est un boîtier de sécurité réseau libre qui protège un
 réseau local (maison, petite structure). Il existe en trois niveaux selon la
 mémoire de la machine (lite 1 à 2 Go, standard 4 à 8 Go, pro 8 Go et plus) et
-en trois ensembles installables : "lite" (l'essentiel), "isp" (un routeur
-complet de fournisseur d'accès) et "full" (isp plus des applications comme
-Nextcloud, Jellyfin, un serveur de courrier, un blog, une radio).
+en trois ensembles installables qui s'emboîtent : "lite" (les protections
+uniquement : pare-feu, WAF, analyse du trafic, filtrage), "isp" (lite plus un
+hébergement simple et limité, par exemple un blog) et "full" (tout le parc :
+Nextcloud, Jellyfin, courrier, radio, etc.).
 Deux modules touchent au DNS : "ad-guard" (retire publicités et traceurs sur
 les téléviseurs et appareils) et "webfilter" (contrôle parental et blocage de
 sites dangereux ou pour adultes, par appareil).
