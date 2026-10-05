@@ -87,7 +87,13 @@ PAQUET_DE = {
     # Le Coffre : la carte d'admin (/vault/) et « Mon coffre » (/coffre/) sont deux pages du MÊME
     # paquet, secubox-vault ; le défaut « secubox-<id> » désignait des paquets qui n'existent pas.
     "coffre": "secubox-vault", "mon-coffre": "secubox-vault",
+    # La carte « Voix » (dire, dicter) est servie par secubox-voice ; « secubox-voix » n'existe pas.
+    "voix": "secubox-voice",
 }
+
+# Cartes dont le paquet ne peut PAS être requis par sbxos : il n'existe qu'en amd64, et un requiert
+# le rendrait non installable sur une box arm64. Il reste suggéré (VoiceStudio vit sur gk3, #1917).
+SUGGERE_SEULEMENT = {"voicestudio": "secubox-voicestudio"}
 
 
 def _installe_par_sbxos(noeuds):
@@ -113,6 +119,8 @@ def test_sbxos_pose_tout_le_hall():
     manquants = []
     for i in sorted(set(ids)):
         p = PAQUET_DE.get(i, f"secubox-{i}")
+        if SUGGERE_SEULEMENT.get(i) == p:
+            continue
         if p not in pose:
             manquants.append(f"{i} → {p}")
     assert not manquants, "cartes du Hall que sbxos n'installe pas : " + ", ".join(manquants)

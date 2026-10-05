@@ -339,7 +339,7 @@ WorkingDirectory=/usr/lib/secubox/<module>
 ExecStart=/usr/bin/uvicorn api.main:app \
     --uds /run/secubox/<module>.sock \
     --log-level warning
-ExecStartPost=/bin/chmod 660 /run/secubox/<module>.sock
+UMask=0007            # le socket naît en 660 ; PAS de ExecStartPost chmod (course au démarrage, #2018)
 Restart=on-failure
 RestartSec=5
 

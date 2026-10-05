@@ -1,3 +1,9 @@
+secubox-toolbox (2.9.11-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-toolbox-tor-reconcile ne pose plus 48-secubox-onion.conf quand secubox-tor fournit déjà la zone onion. : plus de « duplicate forward zone onion. » à chaque démarrage d'Unbound (ref #2018).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 Oct 2026 17:00:00 +0200
+
 secubox-toolbox (2.9.10-1~bookworm1) bookworm; urgency=medium
 
   * Le proxy d'égress et le tunnel des visiteurs (wg-quick@wg-toolbox) ne démarrent qu'une fois la boîte à outils provisionnée : sur une box qui ne l'est pas, le proxy bouclait au redémarrage faute de la CA (#1819).

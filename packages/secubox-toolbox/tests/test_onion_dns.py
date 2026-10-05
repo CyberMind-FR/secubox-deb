@@ -17,3 +17,16 @@ def test_unbound_onion_forward_zone_valid():
     conf = (CONF / "48-secubox-onion.conf").read_text()
     assert 'name: "onion."' in conf
     assert "forward-addr: 127.0.0.1@9053" in conf
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "sbin" / "secubox-toolbox-tor-reconcile"
+
+
+def test_pas_de_doublon_forward_zone_onion_avec_torctl():
+    # secubox-tor (torctl) pose déjà secubox-onion-forward.conf, qui déclare la même zone `onion.`
+    # vers le même DNSPort : un second forward-zone fait écrire « duplicate forward zone onion. ignored »
+    # à Unbound au démarrage (#2018). Le script doit s'effacer devant lui et retirer son propre fichier.
+    texte = SCRIPT.read_text()
+    assert "secubox-onion-forward.conf" in texte
+    garde = texte.index("secubox-onion-forward.conf", texte.index("UNBOUND_ONION_DST="))
+    assert 'rm -f "$UNBOUND_ONION_DST"' in texte[garde:garde + 600]

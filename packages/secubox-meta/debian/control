@@ -446,10 +446,9 @@ Architecture: all
 Depends: ${misc:Depends}
 Suggests: secubox-c3box,
          secubox-daemon-c3box,
-         secubox-eye-remote,
-         secubox-eye-square
+         secubox-eye-remote
 Description: SecuBox — service « Écrans »
- Écrans de situation et déports USB (Eye Remote, C3BOX).
+ Écrans de situation et déports USB (Eye Remote, C3BOX). Le kiosque Pi « eye-square » n'est plus proposé par défaut.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.

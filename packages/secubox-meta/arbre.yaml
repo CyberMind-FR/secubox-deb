@@ -50,6 +50,7 @@ hors-arbre:
   - secubox-profil-reseau
   - secubox-profil-media
   - secubox-profil-provision
+  - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
   - secubox-profil-complet
 
 
@@ -443,12 +444,11 @@ suggere:
 meta: secubox-service-ecrans
 niveau: service
 label: Écrans
-description: "Écrans de situation et déports USB (Eye Remote, C3BOX)."
+description: "Écrans de situation et déports USB (Eye Remote, C3BOX). Le kiosque Pi « eye-square » n'est plus proposé par défaut."
 suggere:
   - secubox-c3box
   - secubox-daemon-c3box
   - secubox-eye-remote
-  - secubox-eye-square
 
 meta: secubox-service-mail
 niveau: service

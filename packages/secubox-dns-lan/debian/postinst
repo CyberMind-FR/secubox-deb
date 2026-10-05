@@ -3,6 +3,9 @@ set -e
 
 case "$1" in
     configure)
+        # Le drop-in de démarrage d'Unbound (TimeoutStartSec) est lu au prochain démarrage : on
+        # recharge systemd mais on ne redémarre PAS Unbound (coupure du DNS du LAN).
+        systemctl daemon-reload >/dev/null 2>&1 || true
         # Le paquet n'applique JAMAIS de valeurs par défaut : un autre réseau recevrait les adresses de gk2. La génération
         # n'a lieu que si l'exploitant a posé /etc/secubox/dns-lan.toml (modèle : /usr/share/secubox/dns-lan/dns-lan.toml.exemple).
         # Un échec ne bloque pas l'installation : la configuration précédente reste en place.

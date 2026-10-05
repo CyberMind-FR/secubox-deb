@@ -1,3 +1,9 @@
+secubox-zia (0.1.25-1~bookworm1) bookworm; urgency=medium
+
+  * Le socket naît en 660 par UMask=0007 : plus de chmod après coup en course avec le démarrage (ref #2018).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 Oct 2026 17:00:00 +0200
+
 secubox-zia (0.1.24-1~bookworm1) bookworm; urgency=medium
 
   * peertube_url par défaut : le PeerTube de cette box s'il y est installé, sinon la référence du maillage (#1723, #1713).

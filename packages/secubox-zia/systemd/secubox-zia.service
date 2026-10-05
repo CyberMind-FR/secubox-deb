@@ -7,6 +7,7 @@ Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1245
 [Service]
 Type=simple
 User=secubox
+UMask=0007
 Group=secubox
 WorkingDirectory=/usr/share/secubox/zia
 Environment="PYTHONDONTWRITEBYTECODE=1"
@@ -17,7 +18,8 @@ Environment="PYTHONUNBUFFERED=1"
 ExecStartPre=+/bin/rm -f /run/secubox/zia.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/zia.sock --workers 1 --log-level warning
 # nginx (www-data, groupe secubox) doit joindre la socket.
-ExecStartPost=/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/zia.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/zia.sock'
+# Le socket naît en 660 grâce à UMask=0007 : plus de chmod après coup (course au démarrage
+# sous charge : la boucle de 15 s expirait, l'unité échouait puis redémarrait, #2018).
 Restart=on-failure
 RestartSec=5
 

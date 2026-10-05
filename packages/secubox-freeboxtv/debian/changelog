@@ -1,3 +1,9 @@
+secubox-freeboxtv (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Le socket naît en 660 par UMask=0007 : plus de chmod après coup en course avec le démarrage (ref #2018).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 Oct 2026 17:00:00 +0200
+
 secubox-freeboxtv (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE GARDEE (#1256). Les routes d'affichage de ce module — status,

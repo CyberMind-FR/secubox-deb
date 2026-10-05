@@ -8,6 +8,7 @@ Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1370
 [Service]
 Type=simple
 User=secubox
+UMask=0007
 Group=secubox
 WorkingDirectory=/usr/share/secubox/devwatch
 Environment="PYTHONDONTWRITEBYTECODE=1"
@@ -21,7 +22,8 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/devwatch.s
 # nginx (www-data, membre du groupe secubox) doit joindre la socket : on la rend
 # lisible/ecrivable au groupe des qu'uvicorn l'a posee. On sonde jusqu'a ~15 s
 # plutot qu'un sleep fixe (le bind UDS peut trainer).
-ExecStartPost=/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/devwatch.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/devwatch.sock'
+# Le socket naît en 660 grâce à UMask=0007 : plus de chmod après coup (course au démarrage
+# sous charge : la boucle de 15 s expirait, l'unité échouait puis redémarrait, #2018).
 Restart=always
 RestartSec=5
 # Fuite mémoire rapide (~140 Mo/j) : redémarrage propre toutes les 6 h pour capper
