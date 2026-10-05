@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Redonne la phrase de passe de la clé du dépôt apt à gpg-agent après chaque démarrage.
+[Unit]
+Description=SecuBox — déverrouille la clé de signature du dépôt apt (gpg-agent)
+ConditionPathExists=/data/apt/conf/distributions
+ConditionPathExists=/etc/secubox/secrets/apt-gpg-passphrase
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+ExecStart=/usr/local/sbin/secubox-apt-gpg-preset
+# Le secret n'est lisible que par root ; aucune autre ressource n'est utile.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
