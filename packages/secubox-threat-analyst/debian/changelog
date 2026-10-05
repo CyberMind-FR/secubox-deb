@@ -1,3 +1,11 @@
+secubox-threat-analyst (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Collecteur : lit le format actuel du journal sbxwaf (action detect/warning/banned, severity, category). L'ancien filtre `blocked: true` ne correspondait a plus aucune ligne : le panneau etait vide.
+  * Vue d'ensemble calculee depuis le journal sbxwaf (l'ancienne socket du WAF ne repond plus).
+  * Analyse : l'IA locale est jointe sur le port ZIA (8091, configurable par THREAT_ANALYST_LLM_URL) et, modele absent, une synthese locale remplace le message d'indisponibilite (ref #1997).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 05 Oct 2026 10:30:00 +0200
+
 secubox-threat-analyst (1.5.5-1~bookworm1) bookworm; urgency=medium
 
   * OpenClaw, RezApp et Netdata décommissionnés : références retirées

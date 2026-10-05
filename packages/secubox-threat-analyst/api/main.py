@@ -30,6 +30,8 @@ import httpx
 
 from secubox_core.config import get_config
 
+from . import sbxwaf_log
+
 
 # v1.2.0: local no-op `require_jwt`. The previous import from
 # secubox_core.auth demanded an HTTP `Authorization: Bearer` header on
@@ -53,6 +55,8 @@ def require_jwt() -> dict:
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/threat-analyst.toml")
 DATA_DIR = Path("/var/lib/secubox/threat-analyst")
+LLM_URL = os.environ.get("THREAT_ANALYST_LLM_URL", "http://127.0.0.1:8091/v1/chat/completions")  # ZIA_PORT=8091
+WAF_LOG = Path("/var/log/secubox/waf/waf-threats.log")
 ALERTS_FILE = DATA_DIR / "alerts.jsonl"
 RULES_FILE = DATA_DIR / "generated_rules.json"
 QUEUE_FILE = DATA_DIR / "pending_rules.json"
@@ -140,6 +144,18 @@ class AnalysisRequest(BaseModel):
     alert_ids: Optional[List[str]] = None
     hours: int = 24
     auto_generate: bool = False
+
+
+def _dernieres_lignes_waf(n: int) -> List[str]:
+    """Dernières lignes du journal sbxwaf (tail, borné), liste vide si illisible."""
+    if not WAF_LOG.exists():
+        return []
+    try:
+        r = subprocess.run(["tail", "-n", str(n), str(WAF_LOG)], capture_output=True, text=True, timeout=10)
+        return r.stdout.splitlines()
+    except Exception as e:
+        logger.warning("lecture du journal WAF impossible : %s", e)
+        return []
 
 
 class ThreatAnalyzer:
@@ -240,43 +256,9 @@ class ThreatAnalyzer:
             logger.warning("compact_alerts failed: %s", e)
 
     async def collect_waf_alerts(self) -> List[ThreatAlert]:
-        """Collect alerts from the WAF (sbxwaf)."""
-        alerts = []
-        waf_log = Path("/var/log/secubox/waf/waf-threats.log")
-
-        if not waf_log.exists():
-            return alerts
-
-        try:
-            # Read last 100 lines
-            result = subprocess.run(
-                ["tail", "-100", str(waf_log)],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            for line in result.stdout.strip().split("\n"):
-                if not line:
-                    continue
-                try:
-                    data = json.loads(line)
-                    if data.get("blocked"):
-                        alert = ThreatAlert(
-                            id=f"waf-{data.get('id', '')}",
-                            source="waf",
-                            severity="high" if data.get("category") in ("sqli", "xss", "rce") else "medium",
-                            type=data.get("category", "unknown"),
-                            ip=data.get("client_ip"),
-                            details=data,
-                            timestamp=data.get("timestamp", datetime.utcnow().isoformat() + "Z")
-                        )
-                        alerts.append(alert)
-                except Exception:
-                    continue
-        except Exception as e:
-            logger.warning(f"WAF collection failed: {e}")
-
-        return alerts
+        """Collect alerts from the WAF (sbxwaf), format actuel du journal."""
+        lignes = await asyncio.to_thread(_dernieres_lignes_waf, 3000)
+        return [ThreatAlert(**a) for a in sbxwaf_log.alertes_depuis_lignes(lignes)]
 
     async def analyze_with_ai(self, alerts: List[ThreatAlert]) -> str:
         """Analyze alerts using LocalAI."""
@@ -294,7 +276,7 @@ class ThreatAnalyzer:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    "http://127.0.0.1:8081/v1/chat/completions",
+                    LLM_URL,
                     json={
                         "model": "mistral-7b-instruct-v0.3",
                         "messages": [
@@ -313,7 +295,9 @@ class ThreatAnalyzer:
         except Exception as e:
             logger.warning(f"AI analysis failed: {e}")
 
-        return "AI analysis unavailable."
+        # Modèle de langage absent (zia-llm se réveille à la demande) : une synthèse locale
+        # reste utile, au lieu d'un « indisponible » sec.
+        return sbxwaf_log.synthese_locale([(a.model_dump() if hasattr(a, "model_dump") else a.dict()) for a in alerts])
 
     async def generate_rule(
         self,
@@ -709,24 +693,10 @@ _OVERVIEW_TTL = 60
 
 
 async def _waf_overview() -> Dict[str, Any]:
-    """WAF /stats over its unix socket."""
+    """Compteurs WAF calculés sur les dernières lignes du journal sbxwaf."""
     try:
-        transport = httpx.AsyncHTTPTransport(uds="/run/secubox/waf.sock")
-        async with httpx.AsyncClient(transport=transport, timeout=4) as c:
-            r = await c.get("http://waf/stats")
-            if r.status_code == 200:
-                s = r.json()
-                return {
-                    "running": bool(s.get("running")),
-                    "threats_today": s.get("threats_today", 0),
-                    "threats_total": s.get("total_threats", 0),
-                    "blocked_24h": s.get("blocked_24h", 0),
-                    "rules_loaded": s.get("rules_loaded", 0),
-                    "by_category": s.get("by_category", {}),
-                    "by_severity": s.get("by_severity", {}),
-                    "top_countries": s.get("top_countries", [])[:5],
-                    "top_vhosts": s.get("top_vhosts", [])[:5],
-                }
+        lignes = await asyncio.to_thread(_dernieres_lignes_waf, 5000)
+        return sbxwaf_log.vue_d_ensemble(lignes, datetime.now().strftime("%Y-%m-%d"))
     except Exception as e:
         logger.debug("waf overview failed: %s", e)
     return {"running": False}
