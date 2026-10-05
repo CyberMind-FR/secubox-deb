@@ -121,7 +121,7 @@ jobs:
             "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12-stock-wan.fragment"
           make ARCH=arm64 olddefconfig
           # La chaine WAN doit etre INTEGREE (=y), pas module : c'est tout l'objet de ce noyau.
-          for o in I2C_MV64XXX I2C_MUX I2C_MUX_PCA954x GPIO_PCA953X MDIO_I2C PHYLINK SFP MARVELL_PHY MARVELL_10G_PHY MVPP2 CFS_BANDWIDTH BRIDGE NET_DSA NET_DSA_MV88E6XXX NET_DSA_TAG_EDSA; do
+          for o in I2C_MV64XXX I2C_MUX I2C_MUX_PCA954x GPIO_PCA953X MDIO_I2C PHYLINK SFP MARVELL_PHY MARVELL_10G_PHY MVPP2 CFS_BANDWIDTH BRIDGE HSR NET_DSA NET_DSA_MV88E6XXX NET_DSA_TAG_EDSA; do
             grep -q "^CONFIG_${o}=y" .config || (echo "FAIL: CONFIG_${o} n'est pas =y" && grep "CONFIG_${o}" .config; exit 1)
           done
           echo "config stock OK : chaine WAN integree"
