@@ -376,8 +376,9 @@ async def app(scope, receive, send):
             return
         await repond(204, [("content-type", "text/plain")], b"")
         return
-    base = "https://" + cible + "/"
-    cible_url = "https://" + cible + chemin + (("?" + qs) if qs else "")
+    schema = egress.schema_pour(cible)
+    base = schema + "://" + cible + "/"
+    cible_url = schema + "://" + cible + chemin + (("?" + qs) if qs else "")
     mode = "tor" if egress._onion(cible) else "direct"
 
     # On transmet la méthode et le corps (formulaires de recherche, etc.), mais
