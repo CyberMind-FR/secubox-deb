@@ -1,3 +1,9 @@
+secubox-lite (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Profil de PROTECTION uniquement : ajoute WAF (waf, waf-ng), HAProxy, DPI (dpi, ndpid-engine), MITM (toolbox, toolbox-ng), menaces, anti-rootkit, mac-guard, pare-feu, DNS ; aucun service heberge (ref #1982).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 05 Oct 2026 14:00:00 +0200
+
 secubox-lite (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Ajoute secubox-ad-guard et secubox-webfilter (listes par défaut réduites, système 2 Go, fonctionnalités minimales) (ref #1982).

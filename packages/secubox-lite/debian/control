@@ -10,27 +10,40 @@ Rules-Requires-Root: no
 Package: secubox-lite
 Architecture: all
 Depends: ${misc:Depends},
-# Gestion d'energie du parc : profilectl derive les manifestes de cycle
-# de vie, le sleeper endort les modules inactifs. Sans ce paquet, une
-# image neuve garde TOUT allume — sur un rpi400 (4 Go) la machine se
-# fige (#1308). Aucun profil ne le tirait, pas meme lite, que sa petite
-# cible rend pourtant le plus demandeur.
+# Gestion d'energie du parc (voir #1308) : sans elle, tout reste allume.
  secubox-profiles,
  secubox-core (>= 1.0),
  secubox-hub (>= 1.0),
  secubox-portal (>= 1.0),
+ secubox-system (>= 1.0),
+ secubox-auth (>= 1.0),
+ secubox-hardening (>= 1.0),
  secubox-wireguard (>= 1.0),
  secubox-netmodes (>= 1.0),
  secubox-nac (>= 1.0),
- secubox-system (>= 1.0),
- secubox-hardening (>= 1.0),
+ secubox-mac-guard (>= 1.0),
+ secubox-dns (>= 1.0),
+ secubox-vortex-firewall (>= 1.0),
+ secubox-ipblock (>= 1.0),
+ secubox-haproxy (>= 1.0),
+ secubox-waf (>= 1.0),
+ secubox-waf-ng (>= 1.0),
+ secubox-dpi (>= 1.0),
+ secubox-ndpid-engine,
+ secubox-toolbox (>= 1.0),
+ secubox-toolbox-ng,
+ secubox-threats (>= 1.0),
+ secubox-antirootkit (>= 1.0),
+ secubox-security-posture (>= 1.0),
  secubox-ad-guard (>= 1.6.2),
- secubox-webfilter (>= 0.2.1)
+ secubox-webfilter (>= 0.2.1),
+ secubox-watchdog (>= 1.0),
+ secubox-health-doctor (>= 1.0)
 Recommends: wireguard-tools
 Suggests: secubox-qos, secubox-auth, secubox-watchdog, secubox-backup
-Description: SecuBox Lite — Essential modules for low-RAM devices
- Metapackage installing essential SecuBox modules for ESPRESSObin
- and other devices with 1-2GB RAM.
+Description: SecuBox Lite — protections pour machine de 2 Go
+ Profil de PROTECTION uniquement : pare-feu nftables, WAF (sbxwaf),
+ DPI, interception MITM (sbxmitm), filtrage DNS (ad-guard, webfilter),
+ detection (menaces, anti-rootkit), controle d'acces et VPN.
  .
- Includes: Hub, WireGuard, Network Modes, NAC, and System.
- DPI, QoS, CDN and other heavy modules are excluded.
+ Aucun service heberge : pas d'applications, pas de publication de sites.

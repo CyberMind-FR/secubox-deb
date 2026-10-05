@@ -16,6 +16,7 @@ Depends: ${misc:Depends},
 # fige (#1308). Aucun profil ne le tirait, pas meme lite, que sa petite
 # cible rend pourtant le plus demandeur.
  secubox-profiles,
+ secubox-lite (>= 1.3.0),
  secubox-core (>= 1.0),
  secubox-defaults (>= 1.0),
  secubox-hub (>= 1.0),
@@ -62,7 +63,9 @@ Depends: ${misc:Depends},
  secubox-metablogizer (>= 1.0),
  secubox-publish (>= 1.0)
 Recommends: secubox-cdn, wireguard-tools
-Description: SecuBox ISP — socle routeur/FAI propre
+Description: SecuBox ISP — couche protégée avec hébergement simple
+ Hérite de secubox-lite (protections : WAF, DPI, MITM, filtrage DNS) et ajoute le
+ routage, l'exposition et un hébergement simple et limité (metablogizer, publish).
  Métapaquet du socle SecuBox pour un routeur/passerelle FAI : réseau, pare-feu
  (nftables, WAF, vortex-firewall, HAProxy), DNS, WireGuard, contrôle d'accès
  réseau, DPI, QoS, exposition (Tor), supervision et durcissement.
