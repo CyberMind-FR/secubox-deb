@@ -8,6 +8,9 @@
 [Unit]
 Description=SecuBox — déverrouille la clé du dépôt apt depuis le Coffre (#2007)
 After=secubox-vault.service
+# Seule la machine qui HÉBERGE le dépôt apt porte la clé de signature (gk2) : ailleurs l'unité est ignorée, pas en échec.
+ConditionPathExists=|/data/apt/conf/distributions
+ConditionPathExists=|/srv/apt/conf/distributions
 
 [Service]
 Type=oneshot
