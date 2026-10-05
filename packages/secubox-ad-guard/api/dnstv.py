@@ -218,8 +218,8 @@ def valider_etat(brut) -> dict:
         if mac == "" and "mac" in c and not isinstance(c["mac"], str):
             raise ErreurTV("adresse MAC invalide")
         origine = c.get("origine", "admin")
-        if origine not in ("admin", "auto"):
-            raise ErreurTV("origine inconnue (admin, auto)")
+        if origine not in ("admin", "auto", "suivi"):
+            raise ErreurTV("origine inconnue (admin, auto, suivi)")
         ajoute = c.get("ajoute", 0)
         if not isinstance(ajoute, int) or isinstance(ajoute, bool) or ajoute < 0:
             raise ErreurTV("date d'ajout invalide")
@@ -232,8 +232,8 @@ def valider_etat(brut) -> dict:
         # Un champ n'est écrit que s'il n'est pas à sa valeur par défaut : les anciens états gardent exactement le même format.
         if mac:
             entree["mac"] = mac
-        if origine == "auto":
-            entree["origine"] = "auto"
+        if origine in ("auto", "suivi"):          # « suivi » : adresse rattachée à un appareil DÉCLARÉ (#2011), expirable
+            entree["origine"] = origine
         if ajoute:
             entree["ajoute"] = ajoute
         if preuve:
