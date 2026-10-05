@@ -88,7 +88,7 @@ while [[ $# -gt 0 ]]; do
     --profile)     PROFILE_OVERRIDE="$2"; shift 2 ;;
     --suite)       SUITE="$2";        shift 2 ;;
     --out)         OUT_DIR="$2";      shift 2 ;;
-    --size)        IMG_SIZE="$2";     shift 2 ;;
+    --size)        IMG_SIZE="$2"; SIZE_EXPLICITE=1; shift 2 ;;
     --vdi)         CONVERT_VDI=1;      shift   ;;
     --local-cache) USE_LOCAL_CACHE=1;  shift   ;;
     --slipstream)  SLIPSTREAM_DEBS=1;  shift   ;;
@@ -1656,6 +1656,22 @@ if [[ -z "${IMG_SIZE}" ]]; then
     *)   IMG_SIZE="12G" ;;
   esac
   log "Taille non precisee — profil ${PROFILE_TAG} : ${IMG_SIZE}"
+fi
+
+# Le config.mk du board fixe parfois une taille (MOCHAbin : 8G, celle de son eMMC) qui
+# court-circuite la regle ci-dessus : l'image `full` de la MOCHAbin etait refusee a
+# l'alpha 9 (« ROOTFS TROP GROSSE : 5747 MiB pour 5184 MiB »). Sans --size explicite, `full`
+# garde donc au moins 12G ; elle se flashe alors sur USB/SATA, pas sur l'eMMC de 8 Go.
+if [[ "${PROFILE_TAG}" == "full" && "${SIZE_EXPLICITE:-0}" != "1" ]]; then
+  case "${IMG_SIZE}" in
+    *G|*g) _mib=$(( ${IMG_SIZE%[Gg]} * 1024 )) ;;
+    *M|*m) _mib=${IMG_SIZE%[Mm]} ;;
+    *)     _mib=$(( IMG_SIZE / 1048576 )) ;;
+  esac
+  if (( _mib < 12288 )); then
+    log "Profil full : ${IMG_SIZE} (config.mk du board) trop petit, porte a 12G"
+    IMG_SIZE="12G"
+  fi
 fi
 
 # Conversion en MiB, seule unite que parted manipule ici sans ambiguite.
