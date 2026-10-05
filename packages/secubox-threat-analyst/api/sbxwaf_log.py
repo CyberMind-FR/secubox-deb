@@ -120,3 +120,17 @@ def synthese_locale(alertes: List[Dict[str, Any]]) -> str:
     if bannies:
         lignes.append(f"{len(bannies)} bannissement(s) déjà appliqué(s) par le WAF.")
     return "\n".join(lignes)
+
+
+def horodatage_utc(texte: str):
+    """Horodatage ISO (avec « Z », décalage +02:00 ou sans fuseau) -> datetime UTC naïf.
+
+    sbxwaf écrit « 2026-10-05T09:57:57+02:00 ». Comparer cette valeur à datetime.utcnow()
+    levait « can't compare offset-naive and offset-aware datetimes », attrapée par un
+    `except Exception: continue` : chaque alerte était écartée en silence.
+    """
+    from datetime import datetime, timezone
+    d = datetime.fromisoformat(str(texte).replace("Z", "+00:00"))
+    if d.tzinfo is not None:
+        d = d.astimezone(timezone.utc).replace(tzinfo=None)
+    return d

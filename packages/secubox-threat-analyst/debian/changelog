@@ -1,3 +1,9 @@
+secubox-threat-analyst (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Les horodatages de sbxwaf portent un fuseau (+02:00) : leur comparaison a une date naive levait une exception avalee, et toute alerte etait ecartee en silence. Conversion en UTC testee (ref #1997).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 05 Oct 2026 10:45:00 +0200
+
 secubox-threat-analyst (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Collecteur : lit le format actuel du journal sbxwaf (action detect/warning/banned, severity, category). L'ancien filtre `blocked: true` ne correspondait a plus aucune ligne : le panneau etait vide.

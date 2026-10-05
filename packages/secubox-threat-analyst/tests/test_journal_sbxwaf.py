@@ -79,3 +79,15 @@ def test_la_synthese_locale_resume_les_alertes_sans_modele():
 
 def test_la_synthese_locale_sans_alerte():
     assert "Aucune alerte" in j.synthese_locale([])
+
+
+def test_l_horodatage_avec_fuseau_est_converti_en_utc_naif():
+    from datetime import datetime
+    assert j.horodatage_utc("2026-10-05T09:57:57+02:00") == datetime(2026, 10, 5, 7, 57, 57)
+    assert j.horodatage_utc("2026-10-05T07:57:57Z") == datetime(2026, 10, 5, 7, 57, 57)
+    assert j.horodatage_utc("2026-10-05T07:57:57") == datetime(2026, 10, 5, 7, 57, 57)
+
+
+def test_l_horodatage_est_comparable_a_une_date_naive():
+    from datetime import datetime, timedelta
+    assert j.horodatage_utc("2026-10-05T09:57:57+02:00") > datetime(2026, 10, 5, 7, 0, 0) - timedelta(hours=1)

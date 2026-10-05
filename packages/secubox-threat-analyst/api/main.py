@@ -211,7 +211,7 @@ class ThreatAnalyzer:
             for line in f:
                 try:
                     data = json.loads(line)
-                    ts = datetime.fromisoformat(data["timestamp"].rstrip("Z"))
+                    ts = sbxwaf_log.horodatage_utc(data["timestamp"])
                     if ts < cutoff:
                         continue
                     if source and data.get("source") != source:
@@ -238,7 +238,7 @@ class ThreatAnalyzer:
                 for line in f:
                     try:
                         data = json.loads(line)
-                        ts = datetime.fromisoformat(data["timestamp"].rstrip("Z"))
+                        ts = sbxwaf_log.horodatage_utc(data["timestamp"])
                         if ts < cutoff:
                             continue
                         aid = data.get("id") or f"_anon-{anon}"
