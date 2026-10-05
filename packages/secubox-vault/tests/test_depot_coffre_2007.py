@@ -91,3 +91,13 @@ def test_les_distributions_sont_cherchees_sur_srv_et_sur_data(tmp_path, monkeypa
     assert d.distributions_par_defaut() == alt
     monkeypatch.setattr(d, "DISTRIBUTIONS_CANDIDATS", (tmp_path / "a", tmp_path / "b"))
     assert d.distributions_par_defaut() == tmp_path / "a"
+
+
+def test_l_unite_ne_se_lance_que_sur_la_machine_qui_heberge_le_depot():
+    """gk3 n'a pas de clé de signature : sans condition la minuterie y échouait chaque minute."""
+    unite = (Path(__file__).resolve().parents[1] / "debian" / "secubox-depot-coffre.service").read_text()
+    conditions = [l for l in unite.splitlines() if l.startswith("ConditionPathExists=")]
+    assert conditions, "l'unité doit être conditionnée à la présence du dépôt apt"
+    assert all(l.startswith("ConditionPathExists=|") for l in conditions), "conditions en OU (préfixe |)"
+    assert any("/data/apt/conf/distributions" in l for l in conditions)
+    assert any("/srv/apt/conf/distributions" in l for l in conditions)
