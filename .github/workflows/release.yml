@@ -27,7 +27,7 @@ on:
         description: 'Suite Debian (bookworm = cible actuelle, trixie = portage)'
         type: choice
         options: [bookworm, trixie]
-        default: bookworm
+        default: trixie
   # Callable as a reusable workflow (sync-all.yml references it). Without this,
   # `uses: ./.github/workflows/release.yml` makes the CALLER fail to parse at
   # startup ("workflow file issue") — which is why sync-all was red at 0s. The
@@ -40,14 +40,14 @@ env:
   # Pour les ETAPES de create-release uniquement : le contexte `env` n'est pas
   # disponible dans le `with:` d'un appel de workflow reutilisable, d'ou
   # l'expression repetee en clair sur chaque appel ci-dessous (#1294).
-  DEBIAN_SUITE: ${{ github.event.inputs.suite || 'bookworm' }}
+  DEBIAN_SUITE: ${{ github.event.inputs.suite || 'trixie' }}
 
 jobs:
   # Build all packages
   build-packages:
     uses: ./.github/workflows/build-packages.yml
     with:
-      suite: ${{ github.event.inputs.suite || 'bookworm' }}
+      suite: ${{ github.event.inputs.suite || 'trixie' }}
       # Les .deb du tag sont publiés par le run propre de build-packages (#1507).
       publish: false
     secrets: inherit
@@ -67,7 +67,7 @@ jobs:
       # applicatif. Une image trixie `full` s'est remplie a ras bord —
       # 40 paquets non configures, dpkg incapable d'ecrire son propre fichier
       # d'etat.
-      suite: ${{ github.event.inputs.suite || 'bookworm' }}
+      suite: ${{ github.event.inputs.suite || 'trixie' }}
     secrets: inherit
 
   # Build Live USB images (all platforms) — partial-release resilient.
@@ -77,7 +77,7 @@ jobs:
     uses: ./.github/workflows/build-all-live-usb.yml
     with:
       platform: all
-      suite: ${{ github.event.inputs.suite || 'bookworm' }}
+      suite: ${{ github.event.inputs.suite || 'trixie' }}
     secrets: inherit
 
   # Publish to APT repository — partial-release resilient.
@@ -86,7 +86,7 @@ jobs:
     needs: build-packages
     uses: ./.github/workflows/publish-packages.yml
     with:
-      distribution: ${{ github.event.inputs.suite || 'bookworm' }}
+      distribution: ${{ github.event.inputs.suite || 'trixie' }}
     secrets: inherit
 
   # Create unified release. Ships whatever artifacts the upstream jobs

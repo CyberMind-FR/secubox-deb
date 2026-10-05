@@ -29,7 +29,7 @@ _sbx_version() {
 SECUBOX_VERSION="$(_sbx_version)"
 
 # ── Defaults ──────────────────────────────────────────────────────
-SUITE="bookworm"
+SUITE="trixie"
 # Repli sur la variable exportee par build-image.sh, puis sur "full" —
 # le profil entre dans le nom de l'image, il ne peut pas etre vide (#1294).
 # `${VAR#prefixe}` NE FOURNIT PAS de valeur par defaut sous `set -u` : si
@@ -60,7 +60,7 @@ usage() {
   cat <<EOF
 Usage: sudo bash build-rpi-usb.sh [OPTIONS]
 
-  --suite   SUITE    Debian suite (default: bookworm)
+  --suite   SUITE    Debian suite (default: trixie)
   --out     DIR      Output directory (default: ./output)
   --size    SIZE     Total image size (default: 8G)
   --local-cache      Use local APT cache

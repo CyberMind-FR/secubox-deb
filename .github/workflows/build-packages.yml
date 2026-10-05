@@ -17,7 +17,7 @@ on:
         description: 'Suite Debian (bookworm = cible actuelle, trixie = portage)'
         required: false
         type: string
-        default: 'bookworm'
+        default: 'trixie'
       publish:
         # #1507 : sur un tag, ce workflow tourne AUSSI par son propre
         # déclencheur ; l'appelant (release.yml) passe false pour ne pas
@@ -53,13 +53,13 @@ on:
         required: false
         type: choice
         options: [bookworm, trixie]
-        default: bookworm
+        default: trixie
 
 env:
   # SUITE PARAMETRABLE (#1294). Le repli litteral `bookworm` n'est pas
   # decoratif : un `push` ne porte aucun input, et sans lui la suite serait
   # VIDE — le retamponnage forgerait alors des versions en `~1`.
-  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'bookworm' }}
+  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'trixie' }}
 
 jobs:
   # Discover all packages dynamically.

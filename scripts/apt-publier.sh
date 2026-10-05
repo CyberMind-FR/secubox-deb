@@ -21,7 +21,7 @@
 set -euo pipefail
 readonly HOTE="${APT_HOTE:-root@192.168.1.200}"
 readonly BASE=/srv/apt
-readonly SUITE=bookworm
+readonly SUITE=trixie
 
 force=0
 [[ "${1:-}" == "--force" ]] && { force=1; shift; }

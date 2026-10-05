@@ -42,7 +42,7 @@ sudo bash image/build-image.sh [OPTIONS]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--board BOARD` | Target board | `mochabin` |
-| `--suite SUITE` | Debian suite | `bookworm` |
+| `--suite SUITE` | Debian suite | `trixie` |
 | `--out DIR` | Output directory | `./output` |
 | `--size SIZE` | Image size | `4G` |
 | `--vdi` | Also create VDI (VirtualBox) | - |
@@ -88,7 +88,7 @@ sudo bash image/build-live-usb.sh [OPTIONS]
 **Options:**
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--suite SUITE` | Debian suite | `bookworm` |
+| `--suite SUITE` | Debian suite | `trixie` |
 | `--out DIR` | Output directory | `./output` |
 | `--size SIZE` | Image size | `8G` |
 | `--local-cache` | Use local APT cache | - |
@@ -143,7 +143,7 @@ sudo bash image/build-installer-iso.sh [OPTIONS]
 **Options:**
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--suite SUITE` | Debian suite | `bookworm` |
+| `--suite SUITE` | Debian suite | `trixie` |
 | `--out DIR` | Output directory | `./output` |
 | `--name NAME` | ISO name prefix | `secubox-installer` |
 | `--local-cache` | Use local APT cache | - |
@@ -195,7 +195,7 @@ sudo bash image/build-rpi-usb.sh [OPTIONS]
 **Options:**
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--suite SUITE` | Debian suite | `bookworm` |
+| `--suite SUITE` | Debian suite | `trixie` |
 | `--out DIR` | Output directory | `./output` |
 | `--size SIZE` | Image size | `8G` |
 | `--local-cache` | Use local APT cache | - |
@@ -247,7 +247,7 @@ sudo bash image/build-c3box-clone.sh [OPTIONS]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--out DIR` | Output directory | `./output` |
-| `--suite SUITE` | Debian suite | `bookworm` |
+| `--suite SUITE` | Debian suite | `trixie` |
 | `--local-cache` | Use local APT cache | - |
 | `--slipstream` | Include local .deb packages | Enabled |
 | `--skip-export` | Use existing preseed | - |

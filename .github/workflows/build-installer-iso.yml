@@ -22,7 +22,7 @@ on:
         description: 'Suite Debian'
         type: choice
         options: [bookworm, trixie]
-        default: bookworm
+        default: trixie
   push:
     tags:
       - 'v*'
@@ -34,7 +34,7 @@ on:
 env:
   # SUITE PARAMETRABLE (#1294) : elle etait figee, donc une demande trixie
   # produisait un ISO BOOKWORM sous un nom annoncant trixie.
-  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'bookworm' }}
+  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'trixie' }}
 
 jobs:
   build-iso:

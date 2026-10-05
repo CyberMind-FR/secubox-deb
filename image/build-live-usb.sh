@@ -32,7 +32,7 @@ BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
 # ── Defaults ──────────────────────────────────────────────────────
-SUITE="bookworm"
+SUITE="trixie"
 IMG_SIZE="8G"
 OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
@@ -69,7 +69,7 @@ usage() {
   cat <<EOF
 Usage: sudo bash build-live-usb.sh [OPTIONS]
 
-  --suite   SUITE    Debian suite (default: bookworm)
+  --suite   SUITE    Debian suite (default: trixie)
   --out     DIR      Output directory (default: ./output)
   --size    SIZE     Total image size (default: 8G)
   --local-cache      Use local APT cache

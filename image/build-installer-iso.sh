@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Defaults ──────────────────────────────────────────────────────
-SUITE="bookworm"
+SUITE="trixie"
 OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
 APT_SECUBOX="https://apt.secubox.in"
@@ -38,7 +38,7 @@ usage() {
   cat <<EOF
 Usage: sudo bash build-installer-iso.sh [OPTIONS]
 
-  --suite   SUITE    Debian suite (default: bookworm)
+  --suite   SUITE    Debian suite (default: trixie)
   --out     DIR      Output directory (default: ./output)
   --name    NAME     ISO name prefix (default: secubox-installer)
   --local-cache      Use local APT cache (apt-cacher-ng + local repo)

@@ -19,7 +19,7 @@ C3BOX_HOST="${C3BOX_HOST:-localhost}"
 C3BOX_PORT="${C3BOX_PORT:-2222}"
 C3BOX_USER="${C3BOX_USER:-root}"
 OUT_DIR="${REPO_DIR}/output"
-SUITE="bookworm"
+SUITE="trixie"
 USE_LOCAL_CACHE=0
 SLIPSTREAM_DEBS=1
 SSH_KEY=""
@@ -46,7 +46,7 @@ Connection Options:
 
 Build Options:
   --out DIR        Output directory (default: ./output)
-  --suite SUITE    Debian suite (default: bookworm)
+  --suite SUITE    Debian suite (default: trixie)
   --local-cache    Use local APT cache
   --slipstream     Include .deb packages from output/debs/ (default: enabled)
   --no-slipstream  Don't include local packages

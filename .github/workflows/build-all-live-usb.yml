@@ -15,7 +15,7 @@ on:
       suite:
         description: 'Suite Debian (bookworm = cible actuelle, trixie = portage)'
         type: string
-        default: 'bookworm'
+        default: 'trixie'
     secrets:
       GPG_PRIVATE_KEY:
         required: false
@@ -38,7 +38,7 @@ on:
         description: 'Suite Debian'
         type: choice
         options: [bookworm, trixie]
-        default: bookworm
+        default: trixie
   push:
     tags:
       - 'v*'
@@ -48,7 +48,7 @@ env:
   # live USB trixie produisait donc une image BOOKWORM, le nom d'artefact
   # venant de l'entree et non du contenu. Le repli litteral couvre le push de
   # tag, qui ne porte aucun input.
-  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'bookworm' }}
+  DEBIAN_SUITE: ${{ inputs.suite || github.event.inputs.suite || 'trixie' }}
 
 jobs:
   # Matrix build for all platforms

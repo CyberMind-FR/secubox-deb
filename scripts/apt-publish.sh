@@ -15,7 +15,7 @@ readonly REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 readonly APT_LOCAL="/srv/apt"
 readonly APT_CONF="$REPO_ROOT/apt/conf"
 readonly HOOKS_DIR="$REPO_ROOT/apt/hooks"
-readonly CODENAME="${CODENAME:-bookworm}"
+readonly CODENAME="${CODENAME:-trixie}"
 readonly COMPONENT="${COMPONENT:-main}"
 
 # Colors
@@ -31,14 +31,14 @@ Usage: $(basename "$0") [OPTIONS] <package.deb> [package2.deb ...]
 Publish .deb packages to the SecuBox APT repository.
 
 Options:
-    -c, --codename NAME    Distribution codename (default: bookworm)
+    -c, --codename NAME    Distribution codename (default: trixie)
     -C, --component NAME   Component (default: main)
     -s, --skip-lintian     Skip lintian validation
     -n, --dry-run          Show what would be done
     -h, --help             Show this help message
 
 Environment:
-    CODENAME    Distribution codename (default: bookworm)
+    CODENAME    Distribution codename (default: trixie)
     COMPONENT   Component (default: main)
 
 Examples:
