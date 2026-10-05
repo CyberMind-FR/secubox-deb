@@ -1,3 +1,9 @@
+secubox-sentinelle-gsm (0.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * Architecture: all. Le module est du Python pur (capteur RTL-SDR passif) : l'avoir limite a arm64 le rendait introuvable pour secubox-full sur x64 et en VM (image vm-x64 full refusee, alpha 9) (ref #1997).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 Oct 2026 16:00:00 +0200
+
 secubox-sentinelle-gsm (0.4.5-1~bookworm1) bookworm; urgency=medium
 
   * La route /api/v1/sensor/gsm/ vise le socket du module, plus l'agrégateur.
