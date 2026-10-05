@@ -1,3 +1,9 @@
+secubox-dns-lan (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Drop-in unbound.service.d/10-secubox-demarrage.conf (TimeoutStartSec=600) : Unbound dépassait 90 s au démarrage de gk2 et le DNS du LAN restait coupé ~4 min (ref #2018). Unbound n'est pas redémarré à l'installation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 Oct 2026 17:00:00 +0200
+
 secubox-dns-lan (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Premier paquet (#1938) : le DNS du LAN de gk2, jusque-là posé à la main, devient reproductible.

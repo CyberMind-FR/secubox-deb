@@ -137,7 +137,12 @@ arm() {
     log "WARN tor failed to (re)start — egress fail-closed until it does"
   # Resolve .onion via the egress DNSPort (automap). Fail-safe: never abort
   # arm() on a rejected drop-in — just remove it and keep going.
-  if [ -f "$UNBOUND_ONION_SRC" ] && [ -d /etc/unbound/unbound.conf.d ]; then
+  # secubox-tor (torctl) pose deja secubox-onion-forward.conf, qui declare la MEME zone `onion.` vers
+  # le meme DNSPort : un second forward-zone ferait ecrire « duplicate forward zone onion. ignored »
+  # a Unbound a chaque demarrage (#2018). On s'efface devant lui et on retire notre fichier.
+  if [ -f /etc/unbound/unbound.conf.d/secubox-onion-forward.conf ]; then
+    rm -f "$UNBOUND_ONION_DST"
+  elif [ -f "$UNBOUND_ONION_SRC" ] && [ -d /etc/unbound/unbound.conf.d ]; then
     install -m 0644 "$UNBOUND_ONION_SRC" "$UNBOUND_ONION_DST"
     unbound-checkconf >/dev/null 2>&1 && systemctl reload unbound 2>/dev/null || \
       { rm -f "$UNBOUND_ONION_DST"; log "WARN unbound .onion forward-zone rejected — removed"; }

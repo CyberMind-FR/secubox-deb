@@ -1,3 +1,9 @@
+secubox-voice (0.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * Le socket naît en 660 par UMask=0007 : plus de chmod après coup, dont la boucle de 15 s expirait sous la charge du démarrage et faisait échouer l'unité (ref #2018).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 Oct 2026 17:00:00 +0200
+
 secubox-voice (0.1.8-1~bookworm1) bookworm; urgency=medium
 
   * Compatibilité Debian 13 (ref #1294) : python3-python-multipart (voir secubox-core 1.5.55).

@@ -1,3 +1,9 @@
+secubox-meta (0.1.17-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-eye-square n'est plus proposé par défaut (groupe Écrans) ; il reste installable à la demande. Le test du Hall reconnaît VoiceStudio (amd64 seul, suggéré) et la carte Voix (secubox-voice) (ref #2018).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 Oct 2026 17:00:00 +0200
+
 secubox-meta (0.1.16-1~bookworm1) bookworm; urgency=medium
 
   * Retire secubox-threat-analyst (module supprime) (ref #1997).
