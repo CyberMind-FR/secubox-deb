@@ -1,3 +1,9 @@
+secubox-billets (0.8.72-1~bookworm1) bookworm; urgency=medium
+
+  * Le venv est recree quand la version de Python du systeme change, l'ancien est conserve (Debian 13) (ref #1997).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 05 Oct 2026 09:00:00 +0200
+
 secubox-billets (0.8.71-1~bookworm1) bookworm; urgency=low
 
   * `from argon2.exceptions import InvalidHashError` échouait avec le python3-argon2 d'apt (21.1.0, Debian 12 comme Debian 13), où

@@ -581,6 +581,16 @@ def _onion(hote: str) -> bool:
     return hote.lower().rstrip(".").endswith(".onion")
 
 
+def schema_pour(hote: str) -> str:
+    """Schéma par défaut vers la cible : http pour un .onion, https sinon.
+
+    Un service caché n'expose en général pas de TLS (l'adresse authentifie déjà le
+    service) : forcer https:// sur le service caché de gk2, qui n'ouvre que le port 80,
+    donnait « destination refusée » côté Tor, donc un 502/504 dans le surfer.
+    """
+    return "http" if _onion(hote) else "https"
+
+
 def client_pour(hote: str, mode: str = "auto", timeout: float = 25.0) -> httpx.Client:
     """Le client httpx adapté à l'hôte et au mode — sortie gardée.
 

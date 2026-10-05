@@ -23,6 +23,15 @@ case "$1" in
     fi
 
     # Python venv with pinned deps (needs network or a local wheelhouse).
+    # Un venv construit pour une autre version mineure de Python (Debian 12 -> 13)
+    # ne voit plus ses bibliotheques : on le met de cote (jamais supprime) et on le recree.
+    if [ -x "$PREFIX/venv/bin/python" ]; then
+      venv_py="$("$PREFIX/venv/bin/python" -c 'import sys; print(sys.version_info[:2])' 2>/dev/null || echo ?)"
+      sys_py="$(python3 -c 'import sys; print(sys.version_info[:2])')"
+      if [ "$venv_py" != "$sys_py" ]; then
+        mv "$PREFIX/venv" "$PREFIX/venv.py-$(date +%Y%m%d%H%M%S)"
+      fi
+    fi
     if [ ! -x "$PREFIX/venv/bin/python" ]; then
       python3 -m venv "$PREFIX/venv"
     fi

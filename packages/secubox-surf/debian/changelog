@@ -1,3 +1,9 @@
+secubox-surf (1.0.30-1~bookworm1) bookworm; urgency=medium
+
+  * Un .onion se joint en http : le surfer forcait https:// vers toute cible, et le service cache de gk2 (port 80 seulement) repondait « destination refusee » (502/504) (ref #1997).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 05 Oct 2026 11:00:00 +0200
+
 secubox-surf (1.0.29-1~bookworm1) bookworm; urgency=high
 
   * Le relais ne transmet à l'amont que les cookies du site relayé : les cookies de la box (secubox*, sbx_*, sbx-*) ne sont ni transmis, ni appris d'une réponse, ni semés à la main (#1798).

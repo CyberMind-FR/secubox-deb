@@ -10,7 +10,7 @@
 # Usage:
 #   bash scripts/stage-apt-repo.sh [--tiers "base tier-lite tier-standard tier-pro"]
 #                                  [--archs "arm64 amd64"]
-#                                  [--suite bookworm]
+#                                  [--suite trixie]
 #                                  [--out output/repo]
 #                                  [--keep-going]
 #
@@ -25,7 +25,7 @@ source "$REPO/scripts/lib/tier-manifest.sh"
 
 TIERS=(base tier-lite tier-standard tier-pro)
 ARCHS=(arm64 amd64)
-SUITE="bookworm"
+SUITE="trixie"
 OUT="$REPO/output/repo"
 KEEP_GOING=0
 

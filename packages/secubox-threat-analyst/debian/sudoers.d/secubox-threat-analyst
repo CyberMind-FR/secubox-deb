@@ -1,5 +1,0 @@
-# SecuBox threat-analyst — sudoers.
-# The threat feed this file used to grant read access to has been removed from
-# the platform, so no privileged command is delegated here any more. The file
-# is kept (empty of grants) to reserve the drop-in path for future least-
-# privilege delegations; add scoped, exact-command NOPASSWD entries here.

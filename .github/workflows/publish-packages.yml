@@ -14,7 +14,7 @@ on:
         description: 'Target distribution'
         required: false
         type: string
-        default: 'bookworm'
+        default: 'trixie'
     secrets:
       GPG_PRIVATE_KEY:
         required: true
@@ -31,7 +31,7 @@ on:
       distribution:
         description: 'Target distribution'
         required: true
-        default: 'bookworm'
+        default: 'trixie'
         type: choice
         options:
           - bookworm
@@ -45,7 +45,7 @@ env:
   # d'un appel `workflow_call` : lu seul, il faisait toujours retomber sur
   # bookworm, y compris quand release.yml demandait trixie. Il faut les deux
   # formes, plus le repli litteral pour le declencheur `workflow_run`.
-  DEBIAN_SUITE: ${{ inputs.distribution || github.event.inputs.distribution || 'bookworm' }}
+  DEBIAN_SUITE: ${{ inputs.distribution || github.event.inputs.distribution || 'trixie' }}
   REPO_HOST: apt.secubox.in
   REPO_USER: deploy
   REPO_PATH: /var/www/apt.secubox.in

@@ -29,7 +29,7 @@ BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
 # ── Defaults ──────────────────────────────────────────────────────
 BOARD="espressobin-v7"
-SUITE="bookworm"
+SUITE="trixie"
 IMG_SIZE="2G"           # USB image size
 OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
@@ -55,7 +55,7 @@ Usage: sudo bash build-ebin-live-usb.sh [OPTIONS]
 Build a bootable live USB image for EspressoBin V7 with eMMC flasher.
 
 OPTIONS:
-    --suite SUITE       Debian suite (default: bookworm)
+    --suite SUITE       Debian suite (default: trixie)
     --out DIR           Output directory (default: ./output)
     --size SIZE         USB image size (default: 2G)
     --embed-image PATH  Embed eMMC image for flashing (recommended)

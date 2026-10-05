@@ -1,9 +1,0 @@
-{
-  "id": "threat-analyst",
-  "name": "Threat Analyst",
-  "category": "wall",
-  "icon": "🕵️",
-  "path": "/threat-analyst/",
-  "order": 130,
-  "description": "AI Threat Analysis Agent"
-}

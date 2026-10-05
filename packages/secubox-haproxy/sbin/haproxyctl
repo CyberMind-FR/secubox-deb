@@ -1313,8 +1313,12 @@ backend sbxwaf_inspector
     # URL « /a.css?v=3 » etait reecrite « /a.cssv=3 » et le backend repondait
     # 404. La panne touchait TOUT le trafic inspecte portant une chaine de
     # requete — donc chaque ressource versionnee du parc. %[url] rend le
-    # chemin ET la requete, separateur compris.
-    http-request set-uri http://%[req.hdr(Host)]%[url]
+    # chemin ET la requete, separateur compris — en HTTP/1.1 seulement : en
+    # HTTP/2 (negocie par defaut depuis HAProxy 3.0, Debian 13) %[url] est
+    # l'adresse ABSOLUE https://hote/chemin, d'ou « http://hotehttps://hote/ »
+    # et un 421 du WAF sur tous les domaines publics. %[pathq] rend le chemin
+    # et la requete (« ? » compris), quel que soit le protocole du client.
+    http-request set-uri http://%[req.hdr(Host)]%[pathq]
     server waf ${waf_ip}:${waf_port} check
 
 EOF

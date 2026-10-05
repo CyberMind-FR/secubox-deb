@@ -16,7 +16,7 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Defaults ──────────────────────────────────────────────────────
 BOARD="mochabin"
-SUITE="bookworm"
+SUITE="trixie"
 IMG_SIZE=""           # vide = calcule plus bas selon le profil (#1294)
 ROOT_SIZE="5.5G"      # Taille partition rootfs (needs ~4GB for full install)
 DATA_SIZE="2G"        # Taille partition data
@@ -58,7 +58,7 @@ Usage: sudo bash build-image.sh [OPTIONS]
 
   --board   BOARD    mochabin|espressobin-v7|espressobin-ultra|vm-x64 (défaut: mochabin)
   --profile PROFILE  isp|full — surcharge SECUBOX_PROFILE du board (défaut: du board)
-  --suite   SUITE    Debian suite (défaut: bookworm)
+  --suite   SUITE    Debian suite (défaut: trixie)
   --out     DIR      Répertoire de sortie (défaut: ./output)
   --size    SIZE     Taille totale image (défaut: 8G)
   --vdi               Convertir en VDI (VirtualBox) en plus du raw
@@ -126,7 +126,7 @@ PROFILE_TAG="${SECUBOX_PROFILE#secubox-}"
 if [[ "${USE_RPI_SCRIPT:-0}" == "1" ]] || [[ "$BOARD" == "rpi400" ]] || [[ "$BOARD" == "rpi4" ]]; then
   log "Raspberry Pi board detected - using build-rpi-usb.sh"
   # LA SUITE ET LE PROFIL DOIVENT SUIVRE (#1294). Ils ne l'etaient pas :
-  # build-rpi-usb.sh retombait sur son propre defaut SUITE="bookworm", donc un
+  # build-rpi-usb.sh retombait sur son propre defaut SUITE="trixie", donc un
   # `--suite trixie` produisait une image BOOKWORM dans un artefact nomme
   # `-trixie` — un mensonge silencieux, du genre qui coute une journee. Et sans
   # profil, les deux profils rpi ecrivaient le MEME nom de fichier et

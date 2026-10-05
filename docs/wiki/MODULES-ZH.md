@@ -35,7 +35,6 @@
 | 📡 **Traffic Interceptor** | Security | 网络流量拦截和分析 |
 | 🍪 **Cookie Manager** | Security | Cookie和会话安全管理 |
 | ⚠️ **Threat Dashboard** | Security | 统一威胁可视化 |
-| 🔬 **Threat Analyst** | Security | AI驱动的威胁分析 |
 | 🔴 **CVE Triage** | Security | CVE漏洞跟踪和分类 |
 | 🛡️ **Wazuh SIEM** | Security | Wazuh SIEM集成 |
 | 🔌 **IoT Guard** | Security | IoT设备安全监控 |
@@ -936,13 +935,6 @@ Cookie和会话安全管理
 
 ![Threat Dashboard](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/threats.png)
 
-#### 🔬 Threat Analyst
-
-AI驱动的威胁分析
-
-**功能:** ML检测, 行为分析, IOC提取, 报告
-
-![Threat Analyst](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/threat-analyst.png)
 
 #### 🔴 CVE Triage
 
