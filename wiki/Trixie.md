@@ -1,105 +1,51 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Debian 13 (Trixie)
 
-> Les images **Trixie** sont publiées depuis `v3.0.0-alpha.4`, pour la **VM
-> x86_64** et le **Raspberry Pi 4 / 400**. Les autres cibles — Live USB,
-> installeur, MOCHAbin — restent sur bookworm (12) pour l'instant.
+**Debian 13 (Trixie) est la base de SecuBox à partir de l'alpha 9.** Les paquets sont construits en `~trixie1` et publiés dans la suite `trixie` de `apt.secubox.in`. La suite `bookworm` n'évolue plus.
 
-## Ce qui change par rapport à bookworm
+## Ce qui change
 
 | | bookworm (12) | trixie (13) |
 |---|---|---|
 | Noyau | 6.6 LTS | 6.12 |
-| Cibles publiées | Live USB, installeur, MOCHAbin | **VM x64, Raspberry Pi 4/400** |
-| Profils | `isp` · `full` | `isp` · `full` |
+| Python | 3.11 | 3.13 |
+| nginx | 1.22 | 1.26 |
+| HAProxy | 2.6 | 3.0 |
+| Unbound | 1.17 | 1.26 |
+| LXC | 5.0 | 6.0 |
 
-## Les profils filtrent réellement
+## Mise à jour en place (testée sur deux machines)
 
-Jusqu'à l'alpha 4, `isp` et `full` produisaient la **même image** : le script de
-construction installait tous les `.deb` trouvés, le profil ne servant qu'à
-nommer le fichier. Deux artefacts d'un même run ne différaient que de 27 Ko sur
-676 Mo — le bruit des horodatages.
+La mise à jour d'une box Debian 12 vers Debian 13 a été faite et validée sur un PC amd64 et sur une MOCHAbin (environ 10 et 45 minutes, sans retrait de paquet SecuBox). Déroulé :
 
-Le profil suit désormais les dépendances de son méta-paquet et ne retient que
-les modules atteignables :
+1. Sauvegarder l'état de référence (services actifs, ports en écoute, conteneurs, `/etc/apt`).
+2. Pointer les sources apt vers `trixie`, `trixie-updates` et `trixie-security`.
+3. Bloquer par une préférence apt les paquets non voulus : `exim4*` (le courrier est dans un conteneur) et, sur la MOCHAbin, les noyaux Debian.
+4. Simuler (`apt-get -s full-upgrade`), puis `apt upgrade --without-new-pkgs` et `apt full-upgrade`, dans une unité systemd détachée, avec le cache apt sur un volume de données si la racine est petite.
+5. Installer `python3-python-multipart`, recréer les environnements virtuels Python restants, redémarrer, puis comparer à l'état de référence.
 
-| profil | modules |
-|---|---|
-| `lite` | 9 |
-| `isp` | 39 |
-| `full` | 58 |
+## Pièges rencontrés
 
-Un profil peut aussi être **composé à la main** : au lieu d'un nom, on passe un
-fichier listant les modules voulus, un par ligne. La fermeture transitive des
-dépendances fait le reste, et un module inconnu échoue au lieu d'être ignoré.
+| Symptôme | Cause | Remède |
+|---|---|---|
+| Plusieurs modules en boucle de redémarrage | `python-multipart` installé par pip pour Python 3.11 | `python3-python-multipart` (et non `python3-multipart`, une autre bibliothèque) |
+| Un module à environnement virtuel ne démarre plus | Venv construit pour Python 3.11 | Recréer le venv (le paquet billets le fait maintenant tout seul) |
+| `nftables` échoue, le maillage aussi | Les interfaces deviennent `end0` et `end1` | `net.ifnames=0` sur la ligne de commande du noyau |
+| 421 sur tous les sites publics en navigateur | HAProxy 3.0 négocie HTTP/2 ; la réécriture d'URI utilisait `%[url]` | `%[pathq]` (corrigé dans `secubox-haproxy` 1.8.26) |
+| `systemctl is-active` échoue pendant la mise à jour | `systemd` se met à jour lui-même | Suivre un message de fin dans le journal, pas l'état de l'unité |
+| Le surfer renvoie 502 sur un `.onion` | Il forçait https | http pour les `.onion` (corrigé dans `secubox-surf` 1.0.30) |
 
-## Mémoire : zram et plafond collectif
+## MOCHAbin : noyau
 
-Les images Trixie embarquent **zram** (`zram-size = ram`, zstd) et placent tous
-les modules SecuBox sous une slice systemd plafonnée :
+Le noyau Debian standard ne détecte pas le port WAN (eth2) de la MOCHAbin ; la carte reste sur son noyau 6.12 construit par SecuBox (fragments de configuration dans `board/mochabin/kernel/`). La carte démarre par `extlinux`, pas par `boot.scr`.
 
-```
-secubox.slice   MemoryHigh = 60 %   MemoryMax = 75 %
-```
+## Suite
 
-Les bornes sont en **pourcentage**, résolues au démarrage : la même image se
-borne correctement sur un Raspberry Pi 400 à 4 Go comme sur une VM à 16.
-
-Ce plafond n'est pas cosmétique. Sans lui, l'épuisement mémoire frappait la
-machine entière : le noyau répondait au ping, `sshd` acceptait le TCP — mais
-plus aucun `fork()` n'aboutissait, et un shell console se figeait à la première
-commande. Avec la slice, la pression reste **confinée** : on perd un module, pas
-la machine.
-
-## Cycle de vie des modules
-
-Au **premier démarrage**, `secubox-profilectl scan` dérive un manifeste par
-module dans `/etc/secubox/modules.d/`, puis le *sleeper* est activé. Les modules
-déclarés `on-demand` s'endorment après inactivité et se réveillent sur requête
-réelle, via les signaux de vhost émis par `sbxwaf`.
-
-La dérivation exige `root`, un systemd vivant et `lxc-ls` — d'où son exécution
-au premier démarrage plutôt qu'à la construction, où elle produirait un
-inventaire faux.
-
-Une politique par défaut est livrée dans
-`/usr/share/secubox/lifecycle-defaults.toml` ; une copie dans `/etc/secubox/`
-la remplace. Un module absent de la politique reste `always-on` : ne rien
-savoir ne justifie jamais d'endormir.
-
-## Moteur DPI
-
-`secubox-ndpid-engine` embarque **nDPI 6.x en statique** et fournit
-`/usr/sbin/nDPId` et `nDPIsrvd`. Il est désormais construit par la CI pour
-**amd64 et arm64** — l'arm64 en compilation native émulée, parce que le
-`debian/rules` du paquet appelle `cmake` directement, sans chaîne croisée : une
-construction croisée aurait produit des binaires amd64 sous une étiquette
-arm64.
-
-`secubox-dpi` en dépend désormais durement. En `Recommends`, il n'arrivait dans
-aucune image, la construction installant avec `--no-install-recommends`.
-
-## Vérifier une image
-
-```bash
-sha256sum -c SHA256SUMS --ignore-missing
-```
-
-Une fois démarrée, les points à contrôler :
-
-```bash
-swapon --show                      # /dev/zram0 doit apparaître
-systemctl show secubox.slice -p MemoryCurrent -p MemoryMax
-systemctl --failed                 # attendu : vide
-ls /etc/secubox/modules.d/*.toml | wc -l
-systemctl is-active secubox-sleeper
-```
-
-## Limites connues
-
-- Le provisionnement de certains conteneurs LXC demande que `/data` soit
-  monté — c'est le cas sur les images, pas nécessairement sur une installation
-  manuelle.
-- Les images ESPRESSObin ne sont pas publiées : à construire depuis les
-  sources (**[[Building]]**).
-
-Voir aussi **[[Installation]]** · **[[ARM-Installation]]** · **[[Building]]**
+Les conteneurs applicatifs restent en bookworm et passent à Trixie un par un.
+Suivi : [#1294](https://github.com/CyberMind-FR/secubox-deb/issues/1294) et [#1997](https://github.com/CyberMind-FR/secubox-deb/issues/1997).

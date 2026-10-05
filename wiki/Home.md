@@ -21,7 +21,7 @@ L'architecture repose sur six modules canoniques organisés en chemin hamiltonie
 
 ## 🔴 Démarrage rapide — Alpha 8
 
-> Tester, installer ou booter la release **`v3.0.0-alpha.8`** — en machine virtuelle ou sur matériel réel arm64. Toutes les commandes se lancent depuis un clone du dépôt (`git clone` puis `cd secubox-deb`).
+> Tester, installer ou booter la release **`v3.0.0-alpha.9`** — en machine virtuelle ou sur matériel réel arm64. Toutes les commandes se lancent depuis un clone du dépôt (`git clone` puis `cd secubox-deb`).
 
 ### 🖥️ A. En VM — le plus rapide (une commande)
 
@@ -29,7 +29,7 @@ VirtualBox amd64, image **téléchargée** depuis les releases GitHub, VM créé
 
 ```bash
 bash image/create-vbox-vm.sh --download
-# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.8
+# ou une release précise :  bash image/create-vbox-vm.sh --download v3.0.0-alpha.9
 ```
 
 La VM redirige les ports invité 22/80/443 vers l'hôte. Accès :
@@ -45,7 +45,7 @@ ssh -p 2222 root@localhost           # console
 
 ```bash
 # récupérer/construire une image arm64, puis :
-bash image/create-qemu-arm64-vm.sh output/secubox-*-mochabin-bookworm.img --convert
+bash image/create-qemu-arm64-vm.sh output/secubox-*-mochabin-trixie.img --convert
 ```
 
 Nécessite `qemu-system-aarch64` + `qemu-efi-aarch64` (`apt install qemu-system-arm qemu-efi-aarch64 ovmf`). → **[[QEMU-ARM64]]**
@@ -58,14 +58,14 @@ sudo bash image/build-image.sh --board mochabin --out ./output
 #    cibles : mochabin | espressobin-v7 | espressobin-ultra | vm-x64
 
 # 2) Flasher sur SD/eMMC — VÉRIFIEZ le device (lsblk) avant dd :
-sudo dd if=output/secubox-*-mochabin-bookworm.img of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=output/secubox-*-mochabin-trixie.img of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Ou **netboot U-Boot** (images `secubox-mochabin-bookworm.img.gz`) — voir **[[ARM-Installation]]** / **[[ESPRESSObin]]**.
+Ou **netboot U-Boot** (images `secubox-mochabin-trixie.img.gz`) — voir **[[ARM-Installation]]** / **[[ESPRESSObin]]**.
 
 **Premier boot** : `firstboot.sh` génère le secret JWT, importe la clé SSH depuis `/boot/authorized_keys` et applique le hostname depuis `/boot/hostname`.
 
-### 📦 D. Par APT (sur une Debian bookworm arm64 existante)
+### 📦 D. Par APT (sur une Debian 13 trixie arm64 existante)
 
 ```bash
 curl -fsSL https://apt.secubox.in/install.sh | sudo bash
@@ -112,9 +112,9 @@ SecuBox-Deb est un projet libre sans campagne de financement participatif, sans 
 
 | Élément | Valeur |
 |---------|--------|
-| Release courante | **v3.0.0-alpha.8** |
-| Base Debian | bookworm (12) · **trixie (13) pour VM et Raspberry Pi** |
-| Kernel | 6.6 LTS (bookworm) · 6.12 (trixie) |
+| Release courante | **v3.0.0-alpha.9** |
+| Base Debian | **trixie (13)** |
+| Kernel | 6.12 |
 | Paquets | environ 190 |
 | Endpoints API | 2000+ |
 | Profils d'image | `isp` (passerelle) · `full` (suite complète) |

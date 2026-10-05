@@ -34,9 +34,10 @@
 
 SecuBox turns a small ARM board — or any x86 PC — into a complete, self-hosted
 security appliance: firewall, VPN, intrusion detection, WAF, DNS filtering and a
-suite of sovereign services, all behind one web dashboard. It runs on Debian 12
-(bookworm); **Debian 13 (Trixie) images are also published** for VM and
-Raspberry Pi ([#1294](https://github.com/CyberMind-FR/secubox-deb/issues/1294)).
+suite of sovereign services, all behind one web dashboard. It runs on **Debian 13 (Trixie)**, the base
+of SecuBox from alpha 9 ([#1294](https://github.com/CyberMind-FR/secubox-deb/issues/1294)).
+Packages are built as `~trixie1` and published in the `trixie` suite of
+`apt.secubox.in`.
 
 ## Why SecuBox
 
@@ -119,7 +120,7 @@ Download the live image from the
 then write it to a USB stick:
 
 ```bash
-zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress   # /dev/sdX = your USB device
+zcat secubox-live-amd64-trixie.img.gz | sudo dd of=/dev/sdX bs=4M status=progress   # /dev/sdX = your USB device
 ```
 
 Boot from the stick, then reach the dashboard at `https://<device-ip>/`.
@@ -135,10 +136,10 @@ release actually ships.
 |---|---|---|---|
 | VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-trixie.img.gz` | Debian 13 |
 | Raspberry Pi 4 / 400 | Desktop appliance, kiosk | `secubox-full-rpi-arm64-trixie.img.gz` | Debian 13 |
-| Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-bookworm.img.gz` (live) | Debian 12 |
-| Any x86_64 PC | Permanent install | `secubox-installer-amd64-bookworm.iso.gz` | Debian 12 |
-| MOCHAbin | Enterprise | `secubox-mochabin-live-usb.img.gz` | Debian 12 |
-| ESPRESSObin v7 / Ultra | Small gateway | `lite` and `isp` images (7 GB, microSD) | Debian 12 |
+| Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-trixie.img.gz` (live) | Debian 13 |
+| Any x86_64 PC | Permanent install | `secubox-installer-amd64-trixie.iso.gz` | Debian 13 |
+| MOCHAbin | Enterprise | `secubox-mochabin-live-usb.img.gz` | Debian 13 |
+| ESPRESSObin v7 / Ultra | Small gateway | `lite` and `isp` images (7 GB, microSD) | Debian 13 |
 
 The profile genuinely selects which modules are installed. An ESPRESSObin
 image is written to a microSD card; `secubox-install-emmc` then copies the
@@ -150,11 +151,14 @@ Flashing, U-Boot and first-boot steps:
 [ARM / U-Boot](https://github.com/CyberMind-FR/secubox-deb/wiki/ARM-Installation) ·
 [Supported hardware](https://github.com/CyberMind-FR/secubox-deb/wiki/Hardware)
 
-### 🧪 Current release: `v3.0.0-alpha.8`
+### 🧪 Current release: `v3.0.0-alpha.9`
 
 This is a **pre-release line**: run it on a test box, not on the link your
 household depends on. What it brings, on top of the earlier alphas:
 
+- **Debian 13 (Trixie) is the base.** Two reference boxes (amd64 and the
+  MOCHAbin) were upgraded in place from Debian 12; the pitfalls found are
+  listed in the [Trixie page](https://github.com/CyberMind-FR/secubox-deb/wiki/Trixie).
 - **Profiles redefined.** `lite` is protection only (firewall, WAF, DPI, MITM,
   DNS filtering, detection); `isp` is lite plus routing and simple, limited
   hosting; `full` is the whole fleet of the reference box.
